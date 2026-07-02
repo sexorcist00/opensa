@@ -5,10 +5,10 @@ import type { ModelRef } from './partition';
 import { ideRefs, looseGroup, partitionEntries, placedModels, resolveSource } from './partition';
 
 const ide = new Map<number, ModelRef>([
-  [1, { model: 'house', txd: 'htex' }],
-  [2, { model: 'shed', txd: 'htex' }], // shares htex with house
-  [3, { model: 'tree', txd: 'ttex' }], // dff + txd only in gta_int
-  [4, { model: 'ghost', txd: 'gtex' }], // referenced but in neither img
+  [1, { drawDistance: 299, model: 'house', txd: 'htex' }],
+  [2, { drawDistance: 299, model: 'shed', txd: 'htex' }], // shares htex with house
+  [3, { drawDistance: 299, model: 'tree', txd: 'ttex' }], // dff + txd only in gta_int
+  [4, { drawDistance: 299, model: 'ghost', txd: 'gtex' }], // referenced but in neither img
 ]);
 
 const gta3 = new Set(['house.dff', 'htex.txd', 'la.ipl', 'nodes.dat', 'ped.ifp', 'roads.col', 'shed.dff']);
@@ -111,8 +111,9 @@ describe('ideRefs', () => {
   describe('positive cases', () => {
     it('includes both objs and tobj models (lowercased) keyed by id', () => {
       const refs = ideRefs(IDE);
-      expect(refs.get(100)).toEqual({ model: 'house', txd: 'htex' });
-      expect(refs.get(200)).toEqual({ model: 'lampwin_nt', txd: 'lamptex' }); // the tobj model — previously dropped
+      expect(refs.get(100)).toEqual({ drawDistance: 299, model: 'house', txd: 'htex' });
+      // the tobj model — previously dropped
+      expect(refs.get(200)).toEqual({ drawDistance: 299, model: 'lampwin_nt', txd: 'lamptex' });
     });
   });
 });

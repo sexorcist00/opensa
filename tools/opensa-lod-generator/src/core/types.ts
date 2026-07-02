@@ -15,6 +15,8 @@ import type { MergedMesh } from '@opensa/lod-common/mesh';
 export interface BakedCell {
   cx: number;
   cy: number;
+  /** Ready 2dfx section payload (light entries in cell space) — the cell's distant coronas, or absent. */
+  effects?: Uint8Array;
   /** The cell's merged geometry (Phase 1). Decimation + atlas refine this in place as later phases land. */
   mesh: MergedMesh;
 }
@@ -41,15 +43,48 @@ export interface LodConfig {
    */
   cellSize: number;
   /**
+   * Budget-checked QEM decimation (plan 003 tail): per cell, the most aggressive triangle target whose own
+   * render stays within this mean pixel-diff budget wins (0.01 = 1 %); cells that can't decimate cleanly keep
+   * their triangles. 0 disables the pass.
+   */
+  decimateBudget: number;
+  /**
    * Model names (lowercased, HD **and** LOD) owned by sibling generators — lod-trees/lod-procobj in the
    * perfect-map pipeline. These are neither baked into cells nor stripped, so opensa-lod never re-processes another
    * tool's finished LODs/impostors. See the pipeline's `collectGeneratedModels`.
    */
   excludeItems?: readonly string[];
+  /**
+   * The engine's `Config.streaming.hdDrawDistance` — the closest distance a cell renders as LOD (past it the
+   * cell flips HD→LOD). The screen-size cull judges "worth keeping in a LOD" at this pessimistic distance.
+   */
+  hdDrawDistance: number;
+  /**
+   * Visibility pass (plan 003, Track 2): raycast every face against deterministic cameras at `hdDrawDistance`.
+   * `'cull'` drops faces no camera sees + orients/masks the rest; `'orient'` never drops (holes impossible —
+   * unseen faces stay two-sided) but still wins the single-siding; `'off'` skips the pass (blanket two-sided).
+   */
+  hiddenFaces: 'cull' | 'off' | 'orient';
   /** Draw distance (world units) for emitted cell-LOD IDE defs — the original game's visibility gate. */
   lodDrawDistance: number;
   /** Max texture dimension (px) in a per-cell LOD TXD; sources are downscaled to it (plan 002, Phase 2). */
   lodTextureSize: number;
+  /**
+   * Coplanar remesh (plan 003, Track 3): re-triangulate flat same-texture clusters from their (byte-exact)
+   * boundary, deleting the dense interior — roads/roofs/terrain tiling shrink with zero visual change (clusters
+   * whose UV/prelit aren't affine over the plane are left untouched).
+   */
+  mergeCoplanar: boolean;
+  /**
+   * Screen-size cull (plan 003, Track 1): an instance whose bounding diameter covers fewer pixels than this at
+   * `hdDrawDistance` is dropped from the cell whole — a sub-pixel object can't hole the far view.
+   */
+  minLodPixels: number;
+  /**
+   * Transparent-group cull (plan 003, Track 1): a texture group whose opaque coverage (alpha ≥ 128 texels) is
+   * below this fraction is dropped from the cell mesh — chain-link/grates/wires are sub-pixel noise at LOD range.
+   */
+  minOpaqueCoverage: number;
   /** Output directory for the baked drop-in (the CLI passes `--out <path>`). */
   out?: string;
 }

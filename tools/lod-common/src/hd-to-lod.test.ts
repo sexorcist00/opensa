@@ -38,6 +38,20 @@ describe('applyModifiers', () => {
 
       expect(order).toEqual(['first', 'second']);
     });
+
+    it('passes the context to every modifier (empty object by default)', () => {
+      const seen: unknown[] = [];
+      const spy: LodModifier = (m, ctx) => {
+        seen.push(ctx);
+
+        return m;
+      };
+      const view = { fovYDeg: 60, minDistance: 300, viewportHeight: 1080 };
+      applyModifiers(mesh('a'), [spy]);
+      applyModifiers(mesh('a'), [spy], { view });
+
+      expect(seen).toEqual([{}, { view }]);
+    });
   });
 });
 

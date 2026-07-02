@@ -8,14 +8,22 @@ const TRIS: Record<string, number> = { hda: 10, hdb: 20, hdc: 50, lodx: 3, lodz:
 const tris = (model: string): number => TRIS[model] ?? 0;
 
 function link(hdModel: string, lodModel: string, instanceCount: number): LodLink {
-  return { hdModel, hdTxd: `${hdModel}txd`, instanceCount, lodId: 1, lodModel, lodTxd: 'txd' };
+  return { hdDrawDistance: 300, hdModel, hdTxd: `${hdModel}txd`, instanceCount, lodId: 1, lodModel, lodTxd: 'txd' };
 }
 
 describe('summarize', () => {
   describe('negative cases', () => {
     it('is all-zero with no links', () => {
       const r = summarize(
-        { excludedDualRole: 0, excludedGenerated: 0, excludedVegetation: 0, links: [], unresolved: 0 },
+        {
+          excludedDualRole: 0,
+          excludedGenerated: 0,
+          excludedTimed: 0,
+          excludedTiny: 0,
+          excludedVegetation: 0,
+          links: [],
+          unresolved: 0,
+        },
         tris,
       );
       expect(r).toMatchObject({
@@ -36,6 +44,8 @@ describe('summarize', () => {
         {
           excludedDualRole: 0,
           excludedGenerated: 0,
+          excludedTimed: 0,
+          excludedTiny: 0,
           excludedVegetation: 0,
           links: [link('hda', 'lodx', 2), link('hdb', 'lodx', 1), link('hdc', 'lodz', 3)],
           unresolved: 4,

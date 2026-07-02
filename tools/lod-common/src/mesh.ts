@@ -6,9 +6,21 @@
 
 /** One texture's triangles within a {@link MergedMesh} — `indices` are triples into the vertex arrays. */
 export interface MergedGroup {
+  /**
+   * Material RGBA (0–255) when the source material is tinted; absent = opaque white. Groups bucket by
+   * texture + colour, and the encoder writes it back — tinted glass/awnings keep their tint through the mesh
+   * path (plan 003, Phase 5; ~177 stock clone models carry a tint).
+   */
+  color?: readonly [number, number, number, number];
   indices: Uint32Array;
   /** Base texture name (lowercased), or '' for untextured materials. */
   texture: string;
+  /**
+   * Optional per-face two-sided flags (faceCount entries; 1 = emit both windings at encode) — produced by the
+   * visibility cull (plan 003, Phase 2), which orients each kept face toward its visible side and marks only the
+   * faces genuinely seen from both. Absent → the encoder's blanket `doubleSided` option applies to the group.
+   */
+  twoSided?: Uint8Array;
 }
 
 /**

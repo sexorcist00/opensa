@@ -34,7 +34,13 @@ export function rebuildMeshNormals(mesh: MergedMesh, options: SmoothNormalsOptio
   const groups: MergedGroup[] = [];
   let at = 0;
   for (const group of mesh.groups) {
-    groups.push({ indices: result.indices.slice(at, at + group.indices.length), texture: group.texture });
+    groups.push({
+      indices: result.indices.slice(at, at + group.indices.length),
+      texture: group.texture,
+      ...(group.color ? { color: group.color } : {}),
+      // The rebuild only re-points indices (same faces, same order) — a per-face two-sided mask stays valid.
+      ...(group.twoSided ? { twoSided: group.twoSided } : {}),
+    });
     at += group.indices.length;
   }
 

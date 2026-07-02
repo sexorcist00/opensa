@@ -8,6 +8,7 @@ import {
   RW_GEOMETRY,
   RW_GEOMETRY_LIST,
   RW_STRUCT,
+  RW_TWO_D_EFFECT,
   writeRw,
 } from '@opensa/rw-codec/chunk';
 import { encodeGeometryStruct } from '@opensa/rw-codec/geometry-struct';
@@ -22,6 +23,12 @@ export interface EncodeLodDffOptions {
    * real game, where doubling is just an unproven structural change + wasted triangles.
    */
   doubleSided?: boolean;
+  /**
+   * A ready 2dfx section payload (`u32 count` + raw entries, positions already in the mesh's space — see
+   * rw-codec `extract2dfxEntries`/`build2dfxSection`), written into the first geometry's extension. Carries the
+   * source models' coronas/lights into the LOD (plan 003, Phase 5).
+   */
+  effects?: Uint8Array;
 }
 
 /**
@@ -36,8 +43,15 @@ export interface EncodeLodDffOptions {
 export function encodeLodDff(rawMesh: MergedMesh, name: string, options: EncodeLodDffOptions = {}): Uint8Array {
   // u16 vertex indices cap a geometry at 65 535 verts; a dense mesh can exceed that, so split it across several
   // geometries/atomics (all sharing the one identity frame) instead of decimating harder. Double-side after the
-  // split (OpenSA only) — it only doubles indices, leaving the vertex count untouched.
-  const prepare = options.doubleSided ? doubleSided : (mesh: MergedMesh): MergedMesh => mesh;
+  // split (OpenSA only) — it only doubles indices, leaving the vertex count untouched. A mesh whose groups carry
+  // per-face `twoSided` masks (the visibility cull ran) doubles only the masked faces — the rest are already
+  // oriented toward their one visible side, so the blanket copy would be pure waste.
+  const masked = rawMesh.groups.some((group) => group.twoSided);
+  const prepare = masked
+    ? doubleSidedMasked
+    : options.doubleSided
+      ? doubleSided
+      : (mesh: MergedMesh): MergedMesh => mesh;
   const chunks = splitMesh(rawMesh, 0xffff).map(prepare);
 
   return writeRw({
@@ -47,7 +61,10 @@ export function encodeLodDff(rawMesh: MergedMesh, name: string, options: EncodeL
         frameList(name),
         container(RW_GEOMETRY_LIST, [
           leaf(RW_STRUCT, u32s([chunks.length])),
-          ...chunks.map((chunk) => geometry(chunk, chunk.positions.length / 3)),
+          // The 2dfx section (if any) rides on the first geometry — positions are mesh-space, one home is enough.
+          ...chunks.map((chunk, i) =>
+            geometry(chunk, chunk.positions.length / 3, i === 0 ? options.effects : undefined),
+          ),
         ]),
         ...chunks.map((_, i) => atomic(i)),
         container(RW_EXTENSION, []),
@@ -72,11 +89,18 @@ function splitMesh(mesh: MergedMesh, maxVerts: number): MergedMesh[] {
   const colors: number[] = [];
   const night: number[] = [];
   const normals: number[] = [];
-  let groups = new Map<string, number[]>();
+  const hasMask = mesh.groups.some((group) => group.twoSided);
+  interface Bucket {
+    color?: readonly [number, number, number, number];
+    indices: number[];
+    mask: number[];
+    texture: string;
+  }
+  let groups = new Map<string, Bucket>();
   const reset = (): void => {
     remap.fill(-1);
     positions.length = uvs.length = colors.length = night.length = normals.length = 0;
-    groups = new Map<string, number[]>();
+    groups = new Map<string, Bucket>();
   };
   reset();
   const addVertex = (v: number): number => {
@@ -96,7 +120,12 @@ function splitMesh(mesh: MergedMesh, maxVerts: number): MergedMesh[] {
   const flush = (): void => {
     chunks.push({
       colors: Uint8Array.from(colors),
-      groups: [...groups].map(([texture, indices]) => ({ indices: Uint32Array.from(indices), texture })),
+      groups: [...groups.values()].map(({ color, indices, mask, texture }) => ({
+        indices: Uint32Array.from(indices),
+        texture,
+        ...(color ? { color } : {}),
+        ...(hasMask ? { twoSided: Uint8Array.from(mask) } : {}),
+      })),
       ...(mesh.nightColors ? { nightColors: Uint8Array.from(night) } : {}),
       normals: Float32Array.from(normals),
       positions: Float32Array.from(positions),
@@ -104,21 +133,27 @@ function splitMesh(mesh: MergedMesh, maxVerts: number): MergedMesh[] {
     });
     reset();
   };
-  for (const group of mesh.groups) {
+  const appendGroup = (group: MergedMesh['groups'][number]): void => {
+    const key = group.color ? `${group.texture}|${group.color.join(',')}` : group.texture;
     for (let i = 0; i < group.indices.length; i += 3) {
       const tri = [group.indices[i], group.indices[i + 1], group.indices[i + 2]];
       const fresh = tri.reduce((n, v) => n + (remap[v] === -1 ? 1 : 0), 0);
       if (positions.length / 3 + fresh > maxVerts) {
         flush();
       }
-      let indices = groups.get(group.texture);
-      if (!indices) {
-        indices = [];
-        groups.set(group.texture, indices);
+      let bucket = groups.get(key);
+      if (!bucket) {
+        bucket = { indices: [], mask: [], texture: group.texture, ...(group.color ? { color: group.color } : {}) };
+        groups.set(key, bucket);
       }
-      indices.push(addVertex(tri[0]), addVertex(tri[1]), addVertex(tri[2]));
+      bucket.indices.push(addVertex(tri[0]), addVertex(tri[1]), addVertex(tri[2]));
+      if (hasMask) {
+        // A maskless group inside a masked mesh is unprocessed — treat its faces as two-sided (the safe blanket).
+        bucket.mask.push(group.twoSided ? group.twoSided[i / 3] : 1);
+      }
     }
-  }
+  };
+  mesh.groups.forEach(appendGroup);
   if (positions.length > 0) {
     flush();
   }
@@ -212,7 +247,37 @@ function doubleSided(mesh: MergedMesh): MergedMesh {
       indices.set([a, b, c, a, c, b], i * 2);
     }
 
-    return { indices, texture: group.texture };
+    return { indices, texture: group.texture, ...(group.color ? { color: group.color } : {}) };
+  });
+
+  return { ...mesh, groups };
+}
+
+/**
+ * Mask-aware {@link doubleSided}: the visibility cull oriented every kept face toward its visible side, so only
+ * the faces genuinely seen from both sides (`twoSided[f] === 1`) get the reversed copy — everything else stays a
+ * single, correctly-wound triangle. Cuts most of the blanket copy's index doubling.
+ */
+function doubleSidedMasked(mesh: MergedMesh): MergedMesh {
+  const groups = mesh.groups.map((group) => {
+    const src = group.indices;
+    const mask = group.twoSided;
+    const indices: number[] = [];
+    for (let i = 0; i < src.length; i += 3) {
+      const a = src[i];
+      const b = src[i + 1];
+      const c = src[i + 2];
+      indices.push(a, b, c);
+      if (!mask || mask[i / 3] === 1) {
+        indices.push(a, c, b);
+      }
+    }
+
+    return {
+      indices: Uint32Array.from(indices),
+      texture: group.texture,
+      ...(group.color ? { color: group.color } : {}),
+    };
   });
 
   return { ...mesh, groups };
@@ -237,7 +302,7 @@ function frameList(name: string): RwChunk {
   };
 }
 
-function geometry(mesh: MergedMesh, vertexCount: number): RwChunk {
+function geometry(mesh: MergedMesh, vertexCount: number, effects?: Uint8Array): RwChunk {
   const struct: GeometryStruct = {
     flags: GEOMETRY_FLAGS,
     morphs: [{ bounds: boundingSphere(mesh.positions), normals: mesh.normals, positions: mesh.positions }],
@@ -253,6 +318,9 @@ function geometry(mesh: MergedMesh, vertexCount: number): RwChunk {
   if (mesh.nightColors) {
     extension.push(nightColors(mesh.nightColors));
   }
+  if (effects) {
+    extension.push(leaf(RW_TWO_D_EFFECT, effects));
+  }
 
   return container(RW_GEOMETRY, [
     leaf(RW_STRUCT, encodeGeometryStruct(struct)),
@@ -265,11 +333,15 @@ function leaf(type: number, data: Uint8Array): RwChunk {
   return { data, type, version: RW_VERSION };
 }
 
-function material(texture: string): RwChunk {
+function material(texture: string, color?: readonly [number, number, number, number]): RwChunk {
   const struct = new Uint8Array(28);
   const view = new DataView(struct.buffer);
   // flags(0), colour RGBA, unused(0), textured, ambient, specular, diffuse.
-  struct[4] = struct[5] = struct[6] = struct[7] = 255;
+  const [r, g, b, a] = color ?? [255, 255, 255, 255];
+  struct[4] = r;
+  struct[5] = g;
+  struct[6] = b;
+  struct[7] = a;
   view.setUint32(12, texture ? 1 : 0, true);
   view.setFloat32(16, 1, true);
   view.setFloat32(20, 1, true);
@@ -284,7 +356,7 @@ function material(texture: string): RwChunk {
   return { children, type: RW_MATERIAL, version: RW_VERSION };
 }
 
-/** Material List: one material per texture group (textured white; '' groups untextured). */
+/** Material List: one material per group (its texture + tint; '' groups untextured, no tint = white). */
 function materialList(mesh: MergedMesh): RwChunk {
   const header = new Int32Array(1 + mesh.groups.length).fill(-1); // numMaterials + per-material index (-1 = inline)
   header[0] = mesh.groups.length;
@@ -292,7 +364,7 @@ function materialList(mesh: MergedMesh): RwChunk {
   return {
     children: [
       leaf(RW_STRUCT, new Uint8Array(header.buffer.slice(0))),
-      ...mesh.groups.map((group) => material(group.texture)),
+      ...mesh.groups.map((group) => material(group.texture, group.color)),
     ],
     type: RW_MATERIAL_LIST,
     version: RW_VERSION,

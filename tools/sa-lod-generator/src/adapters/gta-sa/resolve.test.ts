@@ -62,6 +62,18 @@ describe('resolveLodLinks', () => {
       expect(result.excludedGenerated).toBe(1);
     });
 
+    it('excludes a timed HD → untimed LOD link (cloning would glow round the clock)', () => {
+      // Rockstar's neutral always-on stand-ins for tobj HDs (`luxorlight_nt` → `lodorlight_nt`) must keep stock.
+      const ide = ['objs', '2, lod_a, txdlod, 1500, 0', 'end', 'tobj', '1, hd_a, txda, 300, 0, 22, 5', 'end'].join(
+        '\n',
+      );
+      const ipl = ['inst', '1, hd_a, 0, 0,0,0, 0,0,0,1, 1', '2, lod_a, 0, 0,0,0, 0,0,0,1, -1', 'end'].join('\n');
+      const result = resolve(ide, ipl);
+
+      expect(result.links).toHaveLength(0);
+      expect(result.excludedTimed).toBe(1);
+    });
+
     it('excludes a LOD owned by a sibling generator (txd lod_procobj/lodtrees)', () => {
       // lod-procobj emits `<hd> → lod<hd>` links with the LOD's txd set to `lod_procobj`; sa-lod must leave them be.
       const ide = ['objs', '1, sand_josh1, procobj, 300, 0', '2, lodsand_josh1, lod_procobj, 300, 0', 'end'].join('\n');
@@ -78,12 +90,30 @@ describe('resolveLodLinks', () => {
   });
 
   describe('positive cases', () => {
-    it('resolves a text HD→LOD link by index (name-agnostic), carrying ids + txds', () => {
+    it('still clones a timed HD → timed LOD pair (the game hour-gates both)', () => {
+      const ide = ['tobj', '1, hd_nt, txda, 300, 0, 20, 6', '2, lod_nt, txdlod, 1500, 0, 20, 6', 'end'].join('\n');
+      const ipl = ['inst', '1, hd_nt, 0, 0,0,0, 0,0,0,1, 1', '2, lod_nt, 0, 0,0,0, 0,0,0,1, -1', 'end'].join('\n');
+      const result = resolve(ide, ipl);
+
+      expect(result.links).toHaveLength(1);
+      expect(result.excludedTimed).toBe(0);
+    });
+
+    it('resolves a text HD→LOD link by index (name-agnostic), carrying ids + txds + the HD draw distance', () => {
       const ipl = ['inst', '1, hd_a, 0, 0,0,0, 0,0,0,1, 1', '2, lod_a, 0, 0,0,0, 0,0,0,1, -1', 'end'].join('\n');
       const result = resolve(IDE, ipl);
       expect(result.links).toEqual([
-        { hdModel: 'hd_a', hdTxd: 'txda', instanceCount: 1, lodId: 2, lodModel: 'lod_a', lodTxd: 'txdlod' },
+        {
+          hdDrawDistance: 300,
+          hdModel: 'hd_a',
+          hdTxd: 'txda',
+          instanceCount: 1,
+          lodId: 2,
+          lodModel: 'lod_a',
+          lodTxd: 'txdlod',
+        },
       ]);
+      expect(result.excludedTiny).toBe(0); // the screen-size skip runs in the adapter, not here
     });
 
     it('aggregates repeated placements into one link with an instance count', () => {

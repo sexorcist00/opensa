@@ -9,8 +9,10 @@ export interface Entry {
 /** The four build groups (asset buckets) the build emits — the runtime loaders/VFS fetch + store by these. */
 export type GroupName = 'data' | 'models' | 'others' | 'textures';
 
-/** A placed model's dff + txd base names (lowercased, no extension). */
+/** A placed model's dff + txd base names (lowercased, no extension) + its IDE draw distance. */
 export interface ModelRef {
+  /** The def's draw distance (world units; the max when the IDE row carries several) — 0 when absent. */
+  drawDistance: number;
   model: string;
   txd: string;
 }
@@ -49,7 +51,11 @@ const OTHER_WORLD_EXTENSIONS = ['.ipl', '.ifp', '.dat'] as const;
 export function ideRefs(ideText: string): Map<number, ModelRef> {
   const refs = new Map<number, ModelRef>();
   for (const def of [...parseIde(ideText), ...parseTimedObjects(ideText)]) {
-    refs.set(def.id, { model: def.modelName.toLowerCase(), txd: def.txdName.toLowerCase() });
+    refs.set(def.id, {
+      drawDistance: def.drawDistance,
+      model: def.modelName.toLowerCase(),
+      txd: def.txdName.toLowerCase(),
+    });
   }
 
   return refs;

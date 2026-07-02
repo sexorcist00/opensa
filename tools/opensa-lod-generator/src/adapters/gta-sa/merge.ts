@@ -1,9 +1,49 @@
+import type { ClumpEffect } from '@opensa/lod-common/clump-effects';
 import type { MergedMesh, Quat, Vec3 } from '@opensa/lod-common/mesh';
 import type { ModelSource } from '@opensa/lod-common/model-source';
 
 import { MeshBuilder, type VertexTransform } from '@opensa/lod-common/build-mesh';
+import { collectClumpEffects } from '@opensa/lod-common/clump-effects';
 
 import type { Cell } from '../../core/types';
+
+/** 2dfx entry type 0 — light/corona. Cells carry only these (rotation-bearing types can't ride a raw transplant). */
+const LIGHT_2DFX = new Set([0]);
+
+/**
+ * Gather the cell's 2dfx **light** entries (street lamps, casino lights) in cell-centre-relative space — the
+ * same instance transform {@link mergeCell} applies to vertices, so the baked cell's coronas glow exactly where
+ * the source models' did (plan 003, Phase 5: distant night city lights). Raw entry bytes stay verbatim
+ * (`collectClumpEffects`); only positions are rewritten. Per-model entries are memoized via `cache`.
+ */
+export function collectCellLightEffects(
+  cell: Cell,
+  cellSize: number,
+  loadRaw: (model: string) => null | Uint8Array,
+  source: ModelSource,
+  cache: Map<string, ClumpEffect[]>,
+): { bytes: Uint8Array; position: Vec3 }[] {
+  const origin: Vec3 = [(cell.cx + 0.5) * cellSize, (cell.cy + 0.5) * cellSize, 0];
+  const out: { bytes: Uint8Array; position: Vec3 }[] = [];
+  for (const instance of cell.instances) {
+    let effects = cache.get(instance.model);
+    if (!effects) {
+      const clump = source.load(instance.model);
+      const raw = clump ? loadRaw(instance.model) : null;
+      effects = clump && raw ? collectClumpEffects(raw, clump, LIGHT_2DFX) : [];
+      cache.set(instance.model, effects);
+    }
+    if (effects.length === 0) {
+      continue;
+    }
+    const transform = instanceTransform(conjugate(instance.rotation), instance.position, origin);
+    for (const effect of effects) {
+      out.push({ bytes: effect.bytes, position: transform.point(...effect.position) });
+    }
+  }
+
+  return out;
+}
 
 /**
  * Merge a cell's instances into one cell-centre-relative, native Z-up mesh (Phase 1), triangles bucketed by

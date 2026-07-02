@@ -9,7 +9,7 @@
  */
 export function stripTextIpl(
   text: string,
-  keep: (id: number, modelName: string) => boolean,
+  keep: (id: number, modelName: string, row: number) => boolean,
 ): { map: Int32Array; removed: number; text: string } {
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
   const lines = text.split(/\r?\n/);
@@ -87,12 +87,12 @@ function rebuild(
 /** Mark tree rows + their LOD rows (transitively) for removal; return the old→new index map + removed count. */
 function removalSet(
   rowCells: string[][],
-  keep: (id: number, modelName: string) => boolean,
+  keep: (id: number, modelName: string, row: number) => boolean,
 ): { map: Int32Array; removed: number } {
   const remove = new Uint8Array(rowCells.length);
   const stack: number[] = [];
   rowCells.forEach((cells, r) => {
-    if (!keep(Number(cells[0]), cells[1])) {
+    if (!keep(Number(cells[0]), cells[1], r)) {
       remove[r] = 1;
       stack.push(r);
     }

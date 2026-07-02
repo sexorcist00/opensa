@@ -26,7 +26,7 @@ export interface VertexTransform {
  */
 export class MeshBuilder {
   private readonly colors: number[] = [];
-  private readonly groups = new Map<string, number[]>();
+  private readonly groups = new Map<string, { color?: readonly [number, number, number, number]; indices: number[] }>();
   private hasNight = false;
   private readonly nightColors: number[] = [];
   private readonly normals: number[] = [];
@@ -64,15 +64,20 @@ export class MeshBuilder {
       this.pushRgba(this.nightColors, night ?? prelit, i, [255, 255, 255, 255]);
     }
     for (const tri of geometry.triangles) {
-      const texture = geometry.materials[tri.materialIndex]?.texture?.name.toLowerCase() ?? '';
-      this.group(texture).push(base + tri.a, base + tri.b, base + tri.c);
+      const material = geometry.materials[tri.materialIndex];
+      const texture = material?.texture?.name.toLowerCase() ?? '';
+      this.group(texture, material?.color).push(base + tri.a, base + tri.b, base + tri.c);
     }
   }
 
   finish(): MergedMesh {
     return {
       colors: Uint8Array.from(this.colors),
-      groups: [...this.groups].map(([texture, indices]) => ({ indices: Uint32Array.from(indices), texture })),
+      groups: [...this.groups.entries()].map(([key, group]) => ({
+        indices: Uint32Array.from(group.indices),
+        texture: key.split('|')[0],
+        ...(group.color ? { color: group.color } : {}),
+      })),
       normals: Float32Array.from(this.normals),
       positions: Float32Array.from(this.positions),
       uvs: Float32Array.from(this.uvs),
@@ -80,14 +85,20 @@ export class MeshBuilder {
     };
   }
 
-  private group(texture: string): number[] {
-    let indices = this.groups.get(texture);
-    if (!indices) {
-      indices = [];
-      this.groups.set(texture, indices);
+  /** Triangles bucket by texture + material tint (white tints collapse to the plain texture bucket). */
+  private group(texture: string, color?: readonly [number, number, number, number]): number[] {
+    const tinted =
+      color !== undefined && (color[0] !== 255 || color[1] !== 255 || color[2] !== 255 || color[3] !== 255)
+        ? color
+        : undefined;
+    const key = tinted ? `${texture}|${tinted.join(',')}` : texture;
+    let group = this.groups.get(key);
+    if (!group) {
+      group = tinted ? { color: tinted, indices: [] } : { indices: [] };
+      this.groups.set(key, group);
     }
 
-    return indices;
+    return group.indices;
   }
 
   private pushRgba(
@@ -122,6 +133,21 @@ export function buildClumpMesh(clump: RWClump): MergedMesh {
   }
 
   return builder.finish();
+}
+
+/** Per-geometry frame transforms of a clump (identity where a geometry has no atomic/frame) — the same placement
+ *  rule {@link buildClumpMesh} uses, exported so 2dfx entry positions can ride the same maths (plan 003, Phase 5). */
+export function clumpFrameTransforms(clump: RWClump): VertexTransform[] {
+  const identity = frameTransform(IDENTITY_BASIS, ZERO);
+  const transforms = clump.geometries.map(() => identity);
+  for (const atomic of clump.atomics) {
+    const frame = clump.frames[atomic.frameIndex];
+    if (frame && transforms[atomic.geometryIndex]) {
+      transforms[atomic.geometryIndex] = frameTransform(frame.rotation, frame.position);
+    }
+  }
+
+  return transforms;
 }
 
 /** The vertex map for one atomic's frame: a 3×3 rotation basis (right/up/at flatten) + translation. */

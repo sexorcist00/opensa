@@ -1,5 +1,6 @@
 import { ideRefs } from '@opensa/game-build/partition';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
+import { parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { isLodModel } from '@opensa/renderware/parsers/text/lod';
@@ -25,6 +26,8 @@ interface Instance {
 }
 
 interface ModelDef {
+  /** The def's IDE draw distance (0 when the IDE row had none). */
+  draw: number;
   id: number;
   txd: string;
 }
@@ -56,7 +59,8 @@ export function resolveLodLinks(
 ): ResolveResult {
   const idToModel = new Map<number, string>();
   const modelDef = new Map<string, ModelDef>();
-  readDefs(dataDir, idToModel, modelDef);
+  const timedModels = new Set<string>();
+  readDefs(dataDir, idToModel, modelDef, timedModels);
   const textByArea = readTextAreas(dataDir);
 
   // A model whose DFF we'd replace must be used **only** as a LOD target — if it also has a standalone (non-target)
@@ -67,6 +71,7 @@ export function resolveLodLinks(
   const counts = new Map<string, number>(); // `${hdModel}|${lodModel}`
   const excludedDualRole = new Set<string>();
   const excludedGenerated = new Set<string>();
+  const excludedTimed = new Set<string>();
   const excludedVegetation = new Set<string>();
   let unresolved = 0;
   const link = (hd: string | undefined, lod: string | undefined): void => {
@@ -94,6 +99,14 @@ export function resolveLodLinks(
 
       return;
     }
+    if (timedModels.has(hd) && !timedModels.has(lod)) {
+      // A timed (tobj) HD whose stock LOD is an UNTIMED neutral stand-in (Rockstar's `lodorlight_nt`-style):
+      // cloning would bake the lit night/day appearance into an always-on model — Luxor lights at noon. Timed
+      // HD → timed LOD pairs (the LV casino _dy/_nt sets) stay clonable; the game hour-gates them by IDE.
+      excludedTimed.add(lod);
+
+      return;
+    }
     if (hasStandalone(lod)) {
       excludedDualRole.add(lod); // also placed standalone → leave stock (cloning would corrupt those placements)
 
@@ -110,13 +123,24 @@ export function resolveLodLinks(
   for (const [key, count] of counts) {
     const [hdModel, lodModel] = key.split('|');
     const def = modelDef.get(lodModel)!;
-    const hdTxd = modelDef.get(hdModel)?.txd ?? '';
-    links.push({ hdModel, hdTxd, instanceCount: count, lodId: def.id, lodModel, lodTxd: def.txd });
+    const hd = modelDef.get(hdModel);
+    links.push({
+      hdDrawDistance: hd?.draw ?? 0,
+      hdModel,
+      hdTxd: hd?.txd ?? '',
+      instanceCount: count,
+      lodId: def.id,
+      lodModel,
+      lodTxd: def.txd,
+    });
   }
 
   return {
     excludedDualRole: excludedDualRole.size,
     excludedGenerated: excludedGenerated.size,
+    excludedTimed: excludedTimed.size,
+    // The screen-size skip runs in the adapter (it needs DFF radii) — see `createSaLodAdapter.resolvePairs`.
+    excludedTiny: 0,
     excludedVegetation: excludedVegetation.size,
     links,
     unresolved,
@@ -247,12 +271,22 @@ function linkTextIpls(
   }
 }
 
-/** IDE model defs, keyed by both numeric id (for binary IPLs) and model name (for text IPLs + LOD lookup). */
-function readDefs(dataDir: string, idToModel: Map<number, string>, modelDef: Map<string, ModelDef>): void {
+/** IDE model defs, keyed by both numeric id (for binary IPLs) and model name (for text IPLs + LOD lookup);
+ *  `timedModels` collects the `tobj` (hour-gated) model names. */
+function readDefs(
+  dataDir: string,
+  idToModel: Map<number, string>,
+  modelDef: Map<string, ModelDef>,
+  timedModels: Set<string>,
+): void {
   for (const file of walk(dataDir).filter((path) => path.toLowerCase().endsWith('.ide'))) {
-    for (const [id, ref] of ideRefs(readFileSync(file, 'utf8'))) {
+    const text = readFileSync(file, 'utf8');
+    for (const [id, ref] of ideRefs(text)) {
       idToModel.set(id, ref.model);
-      modelDef.set(ref.model, { id, txd: ref.txd });
+      modelDef.set(ref.model, { draw: ref.drawDistance, id, txd: ref.txd });
+    }
+    for (const def of parseTimedObjects(text)) {
+      timedModels.add(def.modelName.toLowerCase());
     }
   }
 }

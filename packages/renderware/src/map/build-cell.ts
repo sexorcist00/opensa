@@ -60,13 +60,13 @@ export function buildCell(
     // 2dfx escalators (plan 044): moving step rows instanced from the vanilla esc_step model.
     objects.push(...buildEscalatorMeshes(archive, defs, groups));
   }
-  // Coronas only on HD cells (LOD models carry no lights and the glow is a near-field effect). The ground
+  // Coronas on BOTH layers: HD models carry their own 2dfx lights, and the baked cell-LODs now transplant the
+  // source models' light entries (plan 003, Phase 5) — the distant night city glows. Stock lod* models carry no
+  // lights, so this is a no-op for them; HD/LOD cells are mutually exclusive, so nothing double-glows. The ground
   // glow under lamps is the road's baked night vertex colours, not a projected pool.
-  if (!lod) {
-    const coronas = buildCoronaPoints(collectCoronas(archive, groups));
-    if (coronas) {
-      objects.push(coronas);
-    }
+  const coronas = buildCoronaPoints(collectCoronas(archive, groups));
+  if (coronas) {
+    objects.push(coronas);
   }
 
   return objects;

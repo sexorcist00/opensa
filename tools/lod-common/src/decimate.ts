@@ -60,7 +60,11 @@ function regroup(faces: Int32Array, faceGroup: Int32Array, source: readonly Merg
   }
 
   return source
-    .map((group, g) => ({ indices: Uint32Array.from(byGroup[g]), texture: group.texture }))
+    .map((group, g) => ({
+      indices: Uint32Array.from(byGroup[g]),
+      texture: group.texture,
+      ...(group.color ? { color: group.color } : {}),
+    }))
     .filter((group) => group.indices.length > 0);
 }
 

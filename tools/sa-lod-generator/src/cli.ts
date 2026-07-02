@@ -39,7 +39,8 @@ function main(): void {
   printReport(label, adapter.report(resolved));
   console.log(
     `  excluded ${resolved.excludedDualRole} dual-role + ${resolved.excludedVegetation} vegetation + ` +
-      `${resolved.excludedGenerated} sibling-generated LODs (kept stock)`,
+      `${resolved.excludedGenerated} sibling-generated + ${resolved.excludedTiny} sub-pixel + ` +
+      `${resolved.excludedTimed} timed-mismatch LODs (kept stock)`,
   );
 
   const outArg = argValue('--out');
@@ -47,7 +48,8 @@ function main(): void {
     const outDir = fromCwd(outArg);
     const stats = adapter.finalize(outDir, resolved);
     console.log(
-      `  baked ${stats.clonedLods} LOD clones + ${stats.generatedTxds} TXDs @ ${texScale}× (shared ${stats.skippedShared}, missing HD ${stats.missingHd}, missing TXD ${stats.missingTxd})`,
+      `  baked ${stats.clonedLods} LOD clones (${stats.decimatedLods} decimated, rest verbatim) + ` +
+        `${stats.generatedTxds} TXDs @ ${texScale}× (shared ${stats.skippedShared}, missing HD ${stats.missingHd}, missing TXD ${stats.missingTxd})`,
     );
     console.log(`  retargeted ${stats.retransformedLods} LOD instances to their HD transform`);
     console.log(

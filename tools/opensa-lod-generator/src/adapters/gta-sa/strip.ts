@@ -17,18 +17,23 @@ import { join } from 'node:path';
 type GtaDat = ReturnType<typeof parseGtaDat>;
 
 /**
- * Strip the stock `lod*` building/terrain LODs from a finished build — the cell-LODs replace that far-LOD layer,
- * so the old per-object LODs are dead weight. Removes their instances from the text IPLs and the binary streams in
- * `models/gta3.img` (repairing the shared text↔binary `lod`-index space), then deletes their `.dff`/`.txd` from
- * `gta3.img`.
+ * Strip the stock far-LOD layer from a finished build — the cell-LODs replace it, so the old per-object LODs are
+ * dead weight. Removes their instances from the text IPLs and the binary streams in `models/gta3.img` (repairing
+ * the shared text↔binary `lod`-index space), then deletes fully-unplaced models' `.dff`/`.txd` from `gta3.img`.
  *
- * **A model is a stock LOD only when it is `lod*`-named, placed in the *exterior* world, and never placed inside an
- * interior.** The name alone is unreliable — `LODCJ_SLOT_BANK` is a real casino-*interior* prop, not a LOD, so it
- * (and any `lod*`-named model with an interior placement) is kept. Conversely, standalone exterior LODs (placed
- * directly, never pointed to by a `lod` index — e.g. `LODmcstraps_LAe2`) *are* stripped; an earlier "must be a
- * `lod`-target" rule wrongly kept those. The **same** `isOldLod` predicate gates instance-removal *and*
- * DFF-deletion, so a deleted model can't have surviving instances (no dangling refs). The cell-LOD `lods.*`
- * assets are `lod*`-named too, so they're skipped. IDE defs are left as-is. Returns the removed counts.
+ * Two complementary rules pick what goes (mirroring `resolve.ts`, which decides what gets *baked*):
+ *
+ * - **By name**: `lod*`-named models placed in the *exterior* world and never inside an interior. The name alone
+ *   is unreliable — `LODCJ_SLOT_BANK` is a casino-*interior* prop, so any `lod*` name with an interior placement
+ *   is kept whole. Standalone exterior LODs (never pointed at — `LODmcstraps_LAe2`) *are* stripped.
+ * - **By IPL `lod`-index target** (per instance, any name): rows some instance's `lod` field points at are the
+ *   far-LOD stand-ins the cells replace — this catches renamed/underscored LODs the name rule misses
+ *   (`lod_conhoos2`, `lodcepalcst02`, `nw_lodbit_18`), which otherwise stay in the engine's LOD bucket and
+ *   z-fight the cell-LODs. Only the *targeted rows* are removed — a dual-role model's standalone placements
+ *   survive, and its DFF/TXD is deleted **only when no placement of it survives anywhere**.
+ *
+ * The cell-LOD `lods.*` assets are `lod*`-named too, so they're skipped. IDE defs are left as-is. Returns the
+ * removed counts.
  */
 export function stripOldLods(
   buildDir: string,
@@ -48,43 +53,41 @@ export function stripOldLods(
     return lodExterior.has(model) && !interiorModels.has(model) && !exclude.has(model);
   };
   const lodIds = new Set([...idToModel].filter(([, model]) => isOldLod(model)).map(([id]) => id));
+  const binaryTargets = collectBinaryTargets(archive);
 
-  // Text IPLs first: each area's removal map is the LOD-index space its binary streams point into.
+  // Text IPLs first: each area's removal map is the LOD-index space its binary streams point into. Track which
+  // models lost target rows and which models still have surviving placements (guards the DFF/TXD deletion).
   const maps = new Map<string, Int32Array>();
+  const strippedTargets = new Set<string>();
+  const survivors = new Set<string>();
   let instances = 0;
   for (const iplPath of dat.ipl) {
     const file = datChildUrl(buildDir, iplPath);
     if (iplPath.toLowerCase().endsWith('.zon') || isCellLodFile(iplPath) || !existsSync(file)) {
       continue;
     }
-    const result = stripTextIpl(readFileSync(file, 'utf8'), (_id, name) => !isOldLod(name));
+    const result = stripOneTextIpl(file, binaryTargets.get(areaKey(iplPath)), {
+      exclude,
+      isOldLod,
+      strippedTargets,
+      survivors,
+    });
     if (result.removed > 0) {
-      writeFileSync(file, result.text);
       maps.set(areaKey(iplPath), result.map);
       instances += result.removed;
     }
   }
 
-  // Binary streams inside gta3.img: drop lod* insts + remap survivors' `lod` via the area map; then delete the
-  // confirmed-LOD DFF/TXD entries from the archive.
+  // Binary streams inside gta3.img: drop lod* insts + remap survivors' `lod` via the area map (binary instances
+  // are never lod-targets themselves — the index space is the text list); then delete the DFF/TXD entries of
+  // models that no longer have any placement.
   const img = editArchive(archive);
-  for (const name of archive.names) {
-    if (!name.toLowerCase().endsWith('.ipl')) {
-      continue;
-    }
-    const result = stripBinaryIpl(
-      new Uint8Array(archive.get(name) ?? new ArrayBuffer(0)),
-      (id) => !lodIds.has(id),
-      maps.get(areaKey(name)) ?? null,
-    );
-    if (result.changed) {
-      img.set(name, result.bytes);
-      instances += result.removed;
-    }
-  }
+  instances += stripBinaryStreams(archive, img, { idToModel, lodIds, maps, survivors });
   let entries = 0;
   for (const name of archive.names) {
-    if (/\.(?:dff|txd)$/i.test(name) && isOldLod(name.replace(/\.[^.]+$/, '')) && img.delete(name)) {
+    const model = name.replace(/\.[^.]+$/, '').toLowerCase();
+    const dead = isOldLod(model) || (strippedTargets.has(model) && !survivors.has(model));
+    if (/\.(?:dff|txd)$/i.test(name) && dead && img.delete(name)) {
       entries += 1;
     }
   }
@@ -148,6 +151,28 @@ function classifyPlacements(
   return { interiorModels, lodExterior };
 }
 
+/** Per-area target indices contributed by the binary streams (their `lod` points into the companion text IPL). */
+function collectBinaryTargets(archive: ImgArchive): Map<string, Set<number>> {
+  const byArea = new Map<string, Set<number>>();
+  for (const name of archive.names) {
+    if (!name.toLowerCase().endsWith('.ipl')) {
+      continue;
+    }
+    for (const inst of parseBinaryIpl(archive.get(name) ?? new ArrayBuffer(0))) {
+      if (inst.lod >= 0) {
+        let targets = byArea.get(areaKey(name));
+        if (!targets) {
+          targets = new Set();
+          byArea.set(areaKey(name), targets);
+        }
+        targets.add(inst.lod);
+      }
+    }
+  }
+
+  return byArea;
+}
+
 /** Object id → model name (lowercased) from every gta.dat IDE except our own `lods.ide`. */
 function idToModelMap(buildDir: string, dat: GtaDat): Map<number, string> {
   const map = new Map<number, string>();
@@ -174,6 +199,79 @@ function readBytes(path: string): Uint8Array {
   const buffer = readFileSync(path);
 
   return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+}
+
+/** Strip lod-id instances from every binary stream, remapping survivors' `lod` and noting surviving models. */
+function stripBinaryStreams(
+  archive: ImgArchive,
+  img: ReturnType<typeof editArchive>,
+  state: {
+    idToModel: ReadonlyMap<number, string>;
+    lodIds: ReadonlySet<number>;
+    maps: ReadonlyMap<string, Int32Array>;
+    survivors: Set<string>;
+  },
+): number {
+  let removed = 0;
+  for (const name of archive.names) {
+    if (!name.toLowerCase().endsWith('.ipl')) {
+      continue;
+    }
+    const bytes = new Uint8Array(archive.get(name) ?? new ArrayBuffer(0));
+    for (const inst of parseBinaryIpl(toArrayBuffer(bytes))) {
+      const model = state.idToModel.get(inst.id);
+      if (model && !state.lodIds.has(inst.id)) {
+        state.survivors.add(model);
+      }
+    }
+    const result = stripBinaryIpl(bytes, (id) => !state.lodIds.has(id), state.maps.get(areaKey(name)) ?? null);
+    if (result.changed) {
+      img.set(name, result.bytes);
+      removed += result.removed;
+    }
+  }
+
+  return removed;
+}
+
+/** Strip one text IPL in place: name-rule LODs + lod-index target rows (see {@link stripOldLods}). */
+function stripOneTextIpl(
+  file: string,
+  binaryTargets: ReadonlySet<number> | undefined,
+  rules: {
+    exclude: ReadonlySet<string>;
+    isOldLod: (name: string) => boolean;
+    strippedTargets: Set<string>;
+    survivors: Set<string>;
+  },
+): { map: Int32Array; removed: number } {
+  const text = readFileSync(file, 'utf8');
+  const rows = parseIpl(text);
+  const targets = new Set<number>(binaryTargets ?? []);
+  for (const row of rows) {
+    if (row.lod >= 0 && row.lod < rows.length) {
+      targets.add(row.lod);
+    }
+  }
+  const result = stripTextIpl(text, (_id, name, row) => {
+    const model = name.toLowerCase();
+    if (rules.isOldLod(model)) {
+      return false;
+    }
+    if (targets.has(row) && !rules.exclude.has(model) && !isInterior(rows[row]?.interior ?? 0)) {
+      rules.strippedTargets.add(model);
+
+      return false;
+    }
+    rules.survivors.add(model);
+
+    return true;
+  });
+  if (result.removed > 0) {
+    writeFileSync(file, result.text);
+  }
+
+  return result;
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

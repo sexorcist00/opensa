@@ -7,6 +7,12 @@
 /** Run configuration (the "what/where" knobs). */
 export interface LodConfig {
   /**
+   * Budget-checked QEM decimation for the clones (plan 003, Phase 5): per model, the most aggressive triangle
+   * target whose own render stays within this mean pixel-diff budget wins; models that can't decimate cleanly
+   * stay verbatim byte-copies. 0/absent = pure verbatim clones.
+   */
+  decimateBudget?: number;
+  /**
    * Model names (lowercased, HD **and** LOD) owned by sibling generators — lod-trees/lod-procobj in the
    * perfect-map pipeline. sa-lod skips cloning/hole-filling any link touching these so it never re-processes
    * another tool's finished LODs (which double the far-view geometry). See the pipeline's `collectGeneratedModels`.
@@ -16,6 +22,12 @@ export interface LodConfig {
   holeFillModels?: readonly string[];
   /** Draw distance for the generated hole-fill LODs (covers the far view once the HD unloads). */
   holeLodDraw?: number;
+  /**
+   * Screen-size skip (plan 003, Track 1): a LOD whose HD model's bounding diameter covers fewer pixels than
+   * this at the HD's own draw distance (where the HD unloads and the LOD appears) is not worth cloning — the
+   * stock LOD stays. Default 2.
+   */
+  minLodPixels?: number;
   /** Output directory for the drop-in build (the CLI passes `--out <path>`); absent → report only. */
   out?: string;
   /** Texture downscale factor for the clone LODs (0.5 = half each side = quarter the pixels). */
@@ -24,6 +36,11 @@ export interface LodConfig {
 
 /** One resolved HD→LOD relationship, aggregated over the instances that share it. */
 export interface LodLink {
+  /**
+   * The HD def's IDE draw distance — the closest distance the LOD is ever seen from (the HD unloads there).
+   * 0 when the HD has no def; consumers fall back to a sane default.
+   */
+  hdDrawDistance: number;
   /** The HD model whose far-view stand-in is `lodModel`. */
   hdModel: string;
   /** The HD model's IDE `txd` — the source atlas the 50 % clone TXD is downscaled from. */
@@ -44,6 +61,14 @@ export interface ResolveResult {
   excludedDualRole: number;
   /** LOD models skipped because they belong to a sibling generator (lod-trees/lod-procobj) — already final. */
   excludedGenerated: number;
+  /**
+   * LOD models skipped because their HD is a timed (`tobj`) object while the LOD is an untimed neutral stand-in
+   * — cloning would bake the lit appearance into an always-on model (Luxor lights at noon). Timed→timed pairs
+   * still clone (the game hour-gates them by their own IDE windows).
+   */
+  excludedTimed: number;
+  /** LOD models skipped because the HD is sub-pixel at its draw distance — not worth cloning (stock kept). */
+  excludedTiny: number;
   /** LOD models skipped because the HD or LOD is vegetation (trees get impostors, not HD clones). */
   excludedVegetation: number;
   links: LodLink[];

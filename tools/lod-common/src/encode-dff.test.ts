@@ -1,10 +1,25 @@
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { toArrayBuffer } from '@opensa/renderware/test-utils';
+import { build2dfxSection, extract2dfxEntries } from '@opensa/rw-codec/dff';
 import { describe, expect, it } from 'vitest';
 
 import type { MergedMesh } from './mesh';
 
 import { encodeLodDff } from './encode-dff';
+
+/** A raw 2dfx light entry (type 0): header pos+type+size, then the parser-known 49-byte light payload. */
+function lightEntry(): Uint8Array {
+  const bytes = new Uint8Array(20 + 49);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(12, 0, true); // type — light
+  view.setUint32(16, 49, true); // data size
+  bytes.set([255, 0, 0, 255], 20); // RGBA
+  view.setFloat32(24, 300, true); // corona far clip
+  view.setFloat32(32, 2, true); // corona size
+  bytes.set(new TextEncoder().encode('coronastar'), 45); // 24-char texture field
+
+  return bytes;
+}
 
 /** A unit quad (4 verts, 2 tris) split across two texture groups. */
 function sampleMesh(): MergedMesh {
@@ -84,6 +99,47 @@ describe('encodeLodDff', () => {
         [0, 1, 2],
         [0, 2, 1],
       ]);
+    });
+
+    it('doubles only the masked faces when groups carry per-face twoSided masks (plan 003, Phase 2)', () => {
+      const masked = sampleMesh();
+      masked.groups[0].twoSided = Uint8Array.of(1); // road face genuinely two-sided
+      masked.groups[1].twoSided = Uint8Array.of(0); // grass face oriented to its one visible side
+      // The blanket flag is on (OpenSA target), but the masks override it per face.
+      const clump = parseDff(toArrayBuffer(encodeLodDff(masked, 'lod_cell', { doubleSided: true })));
+
+      expect(clump.geometries[0].triangles).toHaveLength(3); // road ×2 windings + grass ×1
+      const road = clump.geometries[0].triangles.filter((t) => t.materialIndex === 0);
+      expect(road.map((t) => [t.a, t.b, t.c])).toEqual([
+        [0, 1, 2],
+        [0, 2, 1],
+      ]);
+    });
+
+    it('carries a transplanted 2dfx light section (round-trips through the engine parser + re-extraction)', () => {
+      const effects = build2dfxSection([{ bytes: lightEntry(), position: [1, 2, 3] }]);
+      const encoded = encodeLodDff(sampleMesh(), 'lod_cell', { effects: effects! });
+
+      const clump = parseDff(toArrayBuffer(encoded));
+      expect(clump.geometries[0].lights).toHaveLength(1);
+      expect(clump.geometries[0].lights[0].position).toEqual([1, 2, 3]);
+      expect(clump.geometries[0].lights[0].color).toEqual([255, 0, 0, 255]);
+      expect(clump.geometries[0].lights[0].coronaTexture).toBe('coronastar');
+
+      // And the raw entries can be lifted back out (the sa-clone transplant path).
+      const lifted = extract2dfxEntries(encoded);
+      expect(lifted).toHaveLength(1);
+      expect(lifted[0].type).toBe(0);
+      expect(lifted[0].position).toEqual([1, 2, 3]);
+    });
+
+    it('round-trips a group material tint (plan 003, Phase 5)', () => {
+      const tinted = sampleMesh();
+      tinted.groups[0].color = [64, 128, 255, 200];
+      const clump = parseDff(toArrayBuffer(encodeLodDff(tinted, 'lod_cell')));
+
+      expect(clump.geometries[0].materials[0].color).toEqual([64, 128, 255, 200]);
+      expect(clump.geometries[0].materials[1].color).toEqual([255, 255, 255, 255]);
     });
 
     it('writes the night-colour plugin (round-trips) when the mesh carries night colours', () => {

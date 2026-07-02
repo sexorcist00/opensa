@@ -6,6 +6,7 @@
   "exports": {
     "./mesh/smooth-normals": "./src/mesh/smooth-normals.ts",
     "./mesh/simplify": "./src/mesh/simplify.ts",
+    "./mesh/bvh": "./src/mesh/bvh.ts",
     "./archive/img": "./src/archive/img.ts"
   },
   "nx": {

@@ -16,6 +16,40 @@ const PARTICLE_2DFX = 1;
 /** A 2d-effect entry header before its type-specific data: `position` (3×f32) + `type` (u32) + `dataSize` (u32). */
 const ENTRY_HEADER_BYTES = 20;
 
+/** One raw 2d-effect entry lifted out of a geometry — `bytes` is the whole entry (header + data) verbatim. */
+export interface Raw2dfxEntry {
+  bytes: Uint8Array;
+  geometryIndex: number;
+  /** Geometry-local entry position (the first 12 bytes of the entry) — transform it, then re-emit. */
+  position: [number, number, number];
+  type: number;
+}
+
+/**
+ * Assemble a 2dfx section payload (`u32 count` + entries) from raw entries, overwriting each entry's first
+ * 12 bytes with its (transformed) `position`. Returns null for an empty list (write no section at all).
+ */
+export function build2dfxSection(
+  entries: readonly { bytes: Uint8Array; position: readonly [number, number, number] }[],
+): null | Uint8Array {
+  if (entries.length === 0) {
+    return null;
+  }
+  const header = new Uint8Array(4);
+  new DataView(header.buffer).setUint32(0, entries.length, true);
+  const blobs = entries.map((entry) => {
+    const copy = Uint8Array.from(entry.bytes);
+    const view = new DataView(copy.buffer);
+    view.setFloat32(0, entry.position[0], true);
+    view.setFloat32(4, entry.position[1], true);
+    view.setFloat32(8, entry.position[2], true);
+
+    return copy;
+  });
+
+  return concat([header, ...blobs]);
+}
+
 /** Every Geometry chunk, in document order (matches a clump's geometry-list order). */
 export function collectGeometries(chunks: readonly RwChunk[]): RwChunk[] {
   const geometries: RwChunk[] = [];
@@ -43,6 +77,51 @@ export function collectGeometryStructs(chunks: readonly RwChunk[]): RwChunk[] {
   return collectGeometries(chunks)
     .map((geometry) => geometry.children?.find((child) => child.type === RW_STRUCT && child.data))
     .filter((struct): struct is RwChunk => Boolean(struct));
+}
+
+/**
+ * Lift every 2d-effect entry out of a DFF's geometries as raw byte blobs (plan 003, Phase 5). The caller
+ * transforms each entry's `position` into its target space (frame / instance transform) and re-emits via
+ * {@link build2dfxSection} — everything except the 12 position bytes stays byte-for-byte intact, so fields our
+ * parsers don't even know about survive the round trip. `keepTypes` filters entries (e.g. lights only for cell
+ * bakes); omit it to keep everything except particles (type 1, deliberately stripped from far LODs).
+ */
+export function extract2dfxEntries(bytes: Uint8Array, keepTypes?: ReadonlySet<number>): Raw2dfxEntry[] {
+  const out: Raw2dfxEntry[] = [];
+  const file = readRw(bytes);
+  collectGeometries(file.chunks).forEach((geometry, geometryIndex) => {
+    const extension = geometry.children?.find((child) => child.type === RW_EXTENSION);
+    const fx = extension?.children?.find((child) => child.type === RW_TWO_D_EFFECT && child.data);
+    const data = fx?.data;
+    if (!data || data.length < 4) {
+      return;
+    }
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    const count = view.getUint32(0, true);
+    let pos = 4;
+    for (let i = 0; i < count; i += 1) {
+      if (pos + ENTRY_HEADER_BYTES > data.length) {
+        return; // malformed — skip the rest of this section
+      }
+      const entryType = view.getUint32(pos + 12, true);
+      const entryEnd = pos + ENTRY_HEADER_BYTES + view.getUint32(pos + 16, true);
+      if (entryEnd > data.length) {
+        return;
+      }
+      const keep = keepTypes ? keepTypes.has(entryType) : entryType !== PARTICLE_2DFX;
+      if (keep) {
+        out.push({
+          bytes: data.subarray(pos, entryEnd),
+          geometryIndex,
+          position: [view.getFloat32(pos, true), view.getFloat32(pos + 4, true), view.getFloat32(pos + 8, true)],
+          type: entryType,
+        });
+      }
+      pos = entryEnd;
+    }
+  });
+
+  return out;
 }
 
 /**

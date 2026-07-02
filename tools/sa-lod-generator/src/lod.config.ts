@@ -25,11 +25,16 @@ const holeFillModels = [
   'bbgroundbitc_sfs',
   'traintrax01b_sfs',
   'nuroad_sfse',
+  // Downtown LA Bonaventure tower (glass shell + body) — placed in lan_stream2 with lod=-1, holes the skyline.
+  'bonaventuragl_lan',
+  'bonaventura_lan',
 ];
 
 /** Default run config. `texScale` 0.5 = half each side (quarter the pixels) for the clone LODs (plan 002). */
 export const config: LodConfig = {
+  decimateBudget: 0.01,
   holeFillModels,
   holeLodDraw: 1500,
+  minLodPixels: 2,
   texScale: 0.5,
 };

@@ -5,11 +5,17 @@ import { describe, expect, it } from 'vitest';
 import { MeshBuilder, type VertexTransform } from './build-mesh';
 
 /** A one-triangle geometry with the given texture + optional prelit/night vertex colours. */
-function geometry(texture: string, positions: number[], colours?: { day?: number[]; night?: number[] }): RWGeometry {
+function geometry(
+  texture: string,
+  positions: number[],
+  colours?: { day?: number[]; material?: [number, number, number, number]; night?: number[] },
+): RWGeometry {
   return {
     flags: 0,
     lights: [],
-    materials: [{ color: [255, 255, 255, 255], texture: { maskName: '', name: texture }, textured: true }],
+    materials: [
+      { color: colours?.material ?? [255, 255, 255, 255], texture: { maskName: '', name: texture }, textured: true },
+    ],
     nightColors: colours?.night ? new Uint8Array(colours.night) : null,
     normals: null,
     numUVLayers: 0,
@@ -17,7 +23,7 @@ function geometry(texture: string, positions: number[], colours?: { day?: number
     prelitColors: colours?.day ? new Uint8Array(colours.day) : null,
     triangles: [{ a: 0, b: 1, c: 2, materialIndex: 0 }],
     uvLayers: [],
-  } as unknown as RWGeometry;
+  };
 }
 
 /** Translate-only transform (identity rotation), so assertions are exact. */
@@ -54,6 +60,18 @@ describe('MeshBuilder', () => {
 
       expect([...mesh.positions.slice(0, 3)]).toEqual([10, 20, 30]);
       expect(mesh.groups).toEqual([{ indices: Uint32Array.of(0, 1, 2), texture: 'wall' }]);
+    });
+
+    it('buckets tinted materials separately from the plain texture and carries the colour', () => {
+      const builder = new MeshBuilder();
+      builder.add(geometry('glass', TRI), shift(0, 0, 0));
+      builder.add(geometry('glass', TRI, { material: [64, 128, 255, 200] }), shift(5, 0, 0));
+      const mesh = builder.finish();
+
+      expect(mesh.groups).toHaveLength(2);
+      expect(mesh.groups[0].color).toBeUndefined(); // white stays the plain bucket
+      expect(mesh.groups[1].texture).toBe('glass');
+      expect(mesh.groups[1].color).toEqual([64, 128, 255, 200]);
     });
 
     it('re-bases triangle indices across successive add() calls', () => {

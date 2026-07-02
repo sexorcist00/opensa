@@ -1,3 +1,4 @@
+import type { ClumpEffect } from '@opensa/lod-common/clump-effects';
 import type { ModelSource } from '@opensa/lod-common/model-source';
 import type { RWClump, RWGeometry } from '@opensa/renderware/parsers/binary/types';
 
@@ -5,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Cell } from '../../core/types';
 
-import { mergeCell } from './merge';
+import { collectCellLightEffects, mergeCell } from './merge';
 
 /** A clump of one atomic → one geometry. */
 function clump(geom: RWGeometry): RWClump {
@@ -69,6 +70,22 @@ describe('mergeCell', () => {
       const mesh = mergeCell(cell, 256, source(models));
       expect(mesh.positions).toHaveLength(18); // 2 × 3 verts × 3
       expect([...mesh.groups[0].indices]).toEqual([0, 1, 2, 3, 4, 5]); // second instance re-based
+    });
+
+    it('collects cell light effects with the same instance transform as the vertices', () => {
+      // The model carries one light at model-local (1, 0, 0); the cache is pre-seeded (raw bytes unused).
+      const models = { lamp: clump(geometry('pole', [0, 0, 0, 1, 0, 0, 0, 1, 0])) };
+      const cache = new Map<string, ClumpEffect[]>([
+        ['lamp', [{ bytes: Uint8Array.of(9, 9, 9), position: [1, 0, 0], type: 0 }]],
+      ]);
+      const cell: Cell = { cx: 0, cy: 0, instances: [{ model: 'lamp', position: [130, 128, 5], rotation: IDENTITY }] };
+
+      const effects = collectCellLightEffects(cell, 256, () => null, source(models), cache);
+
+      expect(effects).toHaveLength(1);
+      // Instance (130,128,5) + local (1,0,0) − cell centre (128,128,0) = (3, 0, 5) — same maths as mergeCell.
+      expect(effects[0].position).toEqual([3, 0, 5]);
+      expect([...effects[0].bytes]).toEqual([9, 9, 9]); // raw entry bytes untouched
     });
 
     it('groups triangles by texture across materials', () => {

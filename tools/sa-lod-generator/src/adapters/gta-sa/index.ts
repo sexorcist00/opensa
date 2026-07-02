@@ -1,4 +1,6 @@
+import { clumpBoundingRadius } from '@opensa/lod-common/bounds';
 import { createTextureSource } from '@opensa/lod-common/texture-source';
+import { lodView, subtendsAtLeast } from '@opensa/lod-common/view';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { join } from 'node:path';
 
@@ -23,40 +25,75 @@ export function createSaLodAdapter(game: string, gameDir: string, config: LodCon
   const source = createTextureSource(archives.all);
   const halvings = halvingsFor(config.texScale);
   const exclude = new Set((config.excludeItems ?? []).map((name) => name.toLowerCase()));
-  const holeModels = new Set([...(config.holeFillModels ?? [])].filter((model) => !exclude.has(model.toLowerCase())));
+  // Lowercase defensively — the whole pipeline compares lowercased names, and a mixed-case curated entry would
+  // silently land in `skippedHoles` instead of filling its hole.
+  const holeModels = new Set(
+    [...(config.holeFillModels ?? [])].map((model) => model.toLowerCase()).filter((model) => !exclude.has(model)),
+  );
   const holeLodDraw = config.holeLodDraw ?? 1500;
+  const minLodPixels = config.minLodPixels ?? 2;
 
-  // Triangle count per model (DFF), cached — drives the sizing report.
-  const triCache = new Map<string, number>();
-  const tris = (model: string): number => {
-    const cached = triCache.get(model);
+  // Per-model triangle count + bounding radius (one cached DFF parse serves both) — the sizing report and the
+  // screen-size skip read these.
+  const statCache = new Map<string, { radius: number; tris: number }>();
+  const stats = (model: string): { radius: number; tris: number } => {
+    const cached = statCache.get(model);
     if (cached !== undefined) {
       return cached;
     }
-    let total = 0;
+    let result = { radius: 0, tris: 0 };
     const bytes = archives.get(`${model}.dff`);
     if (bytes) {
       try {
-        for (const geometry of parseDff(bytes).geometries) {
-          total += geometry.triangles.length;
-        }
+        const clump = parseDff(bytes);
+        result = {
+          radius: clumpBoundingRadius(clump),
+          tris: clump.geometries.reduce((sum, geometry) => sum + geometry.triangles.length, 0),
+        };
       } catch {
-        total = 0; // unparseable model — counts as 0, not a crash
+        result = { radius: 0, tris: 0 }; // unparseable model — counts as 0, not a crash
       }
     }
-    triCache.set(model, total);
+    statCache.set(model, result);
 
-    return total;
+    return result;
   };
 
   return {
     finalize: (outDir: string, resolved: ResolveResult): BuildStats =>
-      writeBuild({ archives, gameDir, halvings, holeLodDraw, holeModels, links: resolved.links, outDir, source }),
+      writeBuild({
+        archives,
+        decimateBudget: config.decimateBudget ?? 0,
+        gameDir,
+        halvings,
+        holeLodDraw,
+        holeModels,
+        links: resolved.links,
+        outDir,
+        source,
+      }),
     game,
-    report: (resolved: ResolveResult): SizingReport => summarize(resolved, tris),
-    resolvePairs: (): ResolveResult => resolveLodLinks(dataDir, archives.gta3, exclude),
+    report: (resolved: ResolveResult): SizingReport => summarize(resolved, (model) => stats(model).tris),
+    resolvePairs: (): ResolveResult => {
+      // Screen-size skip (plan 003, Track 1): an HD that is sub-pixel at its own draw distance (where its LOD
+      // takes over) isn't worth cloning — keep the stock LOD. Unloadable HDs (radius 0) are kept conservatively.
+      const resolved = resolveLodLinks(dataDir, archives.gta3, exclude);
+      const links = resolved.links.filter((link) => {
+        const radius = stats(link.hdModel).radius;
+        if (radius === 0) {
+          return true;
+        }
+
+        return subtendsAtLeast(lodView(link.hdDrawDistance || DEFAULT_HD_DRAW), radius, minLodPixels);
+      });
+
+      return { ...resolved, excludedTiny: resolved.links.length - links.length, links };
+    },
   };
 }
+
+/** Fallback closest-LOD distance for an HD def that carries no draw distance. */
+const DEFAULT_HD_DRAW = 300;
 
 /** Power-of-two downscale steps for a texture scale (0.5 → 1 halving, 0.25 → 2); clamped at 0. */
 function halvingsFor(texScale: number): number {

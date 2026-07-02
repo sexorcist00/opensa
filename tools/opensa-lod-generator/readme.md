@@ -2,10 +2,11 @@
 
 A separate, **custom** (non-lossless) tool that regenerates the map's distant LODs from the HD models. Unlike
 `map-optimizer` (which conditions existing assets without changing what's authored), this **bakes new content**:
-it cuts the world into square cells and, per cell, merges the HD geometry **verbatim** into one LOD mesh + one
-downscaled texture atlas — the modern open-world LOD scheme (cf. GTA V SLOD). (Geometry is copied as-is via the
-shared `@opensa/lod-common` core — QEM decimation was removed; see the Geometry section below.) Kept out of
-`map-optimizer` on purpose: it's additive and opinionated.
+it cuts the world into square cells and, per cell, merges the HD geometry into one LOD mesh + one downscaled
+texture atlas — the modern open-world LOD scheme (cf. GTA V SLOD). Geometry goes through the shared
+`@opensa/lod-common` **visibility-first chain** (invisible-face culls + budget-checked QEM + coplanar remesh —
+every step measured by a render diff; see the Geometry section below). Kept out of `map-optimizer` on purpose:
+it's additive and opinionated.
 
 It takes a game-data folder — `gta.dat` + `data/` + `models/` (e.g. `game-src/original/`) — processes it, and
 writes its own build.
@@ -22,7 +23,7 @@ writes its own build.
 # assemble the world into cells + print a sizing report (Phase 0):
 npx tsx opensa-lod-generator/src/cli.ts --game ./game-src/original --cell 256
 
-# bake every cell (merge verbatim → smooth normals → per-cell DFF/TXD) and emit a drop-in build under
+# bake every cell (merge → simplification chain → smooth normals → per-cell DFF/TXD) and emit a drop-in build under
 # --out (models/lods.img + data/lods.ide/.ipl + gta.dat lines):
 npx tsx opensa-lod-generator/src/cli.ts --game ./game-src/original --out ./build
 ```
@@ -56,20 +57,35 @@ Stripping the old `lod*` models is done via `--strip-lods` (**plan 002**, 1d-iii
 > real SA on stream-in (OpenSA has no such limits). The original-game caps were removed; see the
 > `opensa-lod-generator-decimation` memory if SA support is revisited.
 
-**Geometry: verbatim (no decimation).** Each cell LOD is the cell's real HD geometry **merged as-is** — QEM
-decimation was removed (it degraded the models: holes/spikes). Built via the shared `@opensa/lod-common` core
-(`MeshBuilder` → `applyModifiers([])` → encode; the modifier chain is the future home for simplification, shared
-with sa-lod-generator — see lod-common plan 002). Normals are re-derived after (most map geometry ships without
-them). The DFF is emitted **two-sided** (OpenSA back-face culling would otherwise hole SA's inconsistently-wound
-ground) and **split across multiple atomics** when a cell exceeds the 65 535-vertex DFF limit. The LOD win is
-draw-calls + a downscaled cell atlas + draw distance, not polycount (fine for OpenSA — no per-model limits). The
-`opensa-lod-generator-decimation` memory keeps the old decimation tuning history for when simplification returns.
+**Geometry: visibility-first simplification (lod-common plan 003).** Each cell LOD starts as the cell's real HD
+geometry merged via the shared `@opensa/lod-common` core, then runs the modifier chain — every step either
+removes what provably can't be seen or is self-checked by a render diff:
+
+1. **Screen-size instance cull** — sub-`minLodPixels` objects (bins/poles/wires at ≥ `hdDrawDistance`) are
+   dropped whole before the merge.
+2. **`dropDegenerateFaces`** — zero-area triangles (measured 0.000 % visual diff).
+3. **`dropTransparentGroups`** — texture groups under `minOpaqueCoverage` opaque texels (chain-link/wires).
+4. **`createBudgetedDecimate`** — per-cell QEM: aggressive→gentle targets, the first whose own CPU-preview diff
+   stays within `decimateBudget` wins; a cell that can't decimate cleanly keeps its triangles.
+5. **`createVisibilityCull`** — raycast against deterministic cameras (ring + a 3×3 top-down grid); faces no
+   camera sees are dropped (`hiddenFaces: 'cull' | 'orient' | 'off'`), front-only faces go single-sided, and
+   windings are **never flipped** (a wrong flip is a hole). See-through textures don't occlude rays.
+6. **`createCoplanarRemesh`** — flat same-texture clusters re-triangulated from their byte-exact boundary.
+
+Normals are re-derived after; tinted materials and the source models' **2dfx corona lights** ride along (the
+distant city glows at night). The DFF is emitted two-sided only where faces are genuinely seen from both sides
+(per-face masks) and **split across multiple atomics** past the 65 535-vertex limit. Full-map result vs the raw
+merge: ~−18 % triangles and ~−37 % encoded indices at ≈ 0.2 % mean pixel diff (see lod-common plan 003's
+Measurements). The **harness** (`src/harness.ts --game <path> [--cells 12]`) renders sampled cells against every
+stage from independent cameras — tune any knob by number, not by eye.
 
 **What's baked:** exterior building/terrain instances only. **Trees** (the `@opensa/map-placement/vegetation`
 roster) are excluded — they get billboard impostors from [`lod-trees-generator`](../lod-trees-generator/), and
 decimated alpha foliage looks bad / would duplicate those. **procobj** scatter is never seen here (it lives in
-`procobj.dat`, not the IPLs) — its LODs come from [`lod-procobj-generator`](../lod-procobj-generator/). Interiors
-and the stock `lod*` models are dropped too.
+`procobj.dat`, not the IPLs) — its LODs come from [`lod-procobj-generator`](../lod-procobj-generator/).
+Interiors are dropped; **IPL `lod`-target instances** are skipped by ground truth (their HD is baked — name
+matching missed renamed twins and z-fought); **tobj (timed) instances** are excluded — the engine renders the
+real hour-gated instance at LOD range instead (lit windows don't glow at noon).
 
 ## Layout
 

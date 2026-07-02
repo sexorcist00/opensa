@@ -66,5 +66,14 @@ describe('buildWorldGrid', () => {
       expect(cell?.hd[0].id).toBe(1);
       expect(cell?.lod[0].id).toBe(2);
     });
+
+    it('puts timed (tobj) instances into BOTH layers (cell LODs bake no hour gate)', () => {
+      const defs = mapDefs([def(1, 'house')], [inst(1, [10, 10, 0]), inst(7, [20, 20, 0])]);
+      defs.timedCatalog = new Map([[7, { ...def(7, 'lampwin_nt'), time: { off: 6, on: 20 } }]]);
+      const cell = buildWorldGrid(defs, 250).get(cellKey(0, 0));
+
+      expect(cell?.hd.map((i) => i.id)).toEqual([1, 7]);
+      expect(cell?.lod.map((i) => i.id)).toEqual([7]);
+    });
   });
 });

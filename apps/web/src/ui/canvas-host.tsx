@@ -90,7 +90,7 @@ import { Overlay } from './hud/overlay';
 
 const BASE = import.meta.env.VITE_STATIC_URL;
 
-const CELL_SIZE = 250; // streaming grid cell edge — shared by Config.streaming + the adapter
+const CELL_SIZE = 256; // streaming grid cell edge — shared by Config.streaming + the adapter; MUST match opensa-lod-generator's cellSize (its baked lod_<cx>_<cy> cells map 1:1 onto engine cells)
 const WORLD_READY_TIMEOUT_MS = 12000; // reveal the game even if grounding is delayed
 const FLY_GROUND_MAX_DROP = 2000; // max downward ray (m) to find the ground when leaving fly mode
 const GROUND_SNAP_LIFT = 1.5; // start the map-car ground ray this far above the generator (clears a floor it sits in)

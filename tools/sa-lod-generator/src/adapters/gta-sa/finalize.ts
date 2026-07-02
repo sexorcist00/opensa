@@ -1,27 +1,22 @@
-import type { LodModifier } from '@opensa/lod-common/hd-to-lod';
 import type { TextureSource } from '@opensa/lod-common/texture-source';
 import type { IplTransform } from '@opensa/map-placement/ipl-text-retransform';
 
+import { createBudgetedDecimate } from '@opensa/lod-common/budgeted-decimate';
 import { buildClumpMesh } from '@opensa/lod-common/build-mesh';
+import { collectClumpEffects } from '@opensa/lod-common/clump-effects';
 import { encodeLodDff } from '@opensa/lod-common/encode-dff';
 import { encodeHalvedTxd } from '@opensa/lod-common/encode-txd';
-import { hdToLod } from '@opensa/lod-common/hd-to-lod';
+import { lodView } from '@opensa/lod-common/view';
 import { retransformTextIpl } from '@opensa/map-placement/ipl-text-retransform';
 import { editIdeTxd } from '@opensa/map-placement/retxd';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
+import { build2dfxSection, stripParticleEffects } from '@opensa/rw-codec/dff';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-
-/**
- * The LOD geometry modifier chain — the shared `@opensa/lod-common` extension point. **Empty today**: a per-object
- * LOD is a dumb verbatim copy of its HD (so `hdToLod` takes its byte-copy fast-path, keeping coronas/materials).
- * Adding a modifier here (later) flips every clone onto the merged-mesh path — the same chain opensa-lod uses.
- */
-const LOD_MODIFIERS: readonly LodModifier[] = [];
 
 import type { LodLink } from '../../core/types';
 import type { Archives } from './io';
@@ -32,6 +27,8 @@ import { areaKey, walk } from './resolve';
 
 export interface BuildInput {
   archives: Archives;
+  /** Budget-checked QEM for the clones (mean pixel-diff fraction per model); 0 = pure verbatim clones. */
+  decimateBudget: number;
   gameDir: string;
   /** Power-of-two downscale steps for the clone TXDs (1 = ½ each side; from `texScale`). */
   halvings: number;
@@ -46,6 +43,8 @@ export interface BuildInput {
 
 export interface BuildStats {
   clonedLods: number;
+  /** Clones that took the decimated mesh path (within the pixel budget); the rest stay verbatim byte-copies. */
+  decimatedLods: number;
   filledHoles: number;
   filledInstances: number;
   generatedTxds: number;
@@ -100,6 +99,7 @@ export function writeBuild(input: BuildInput): BuildStats {
   const modelToTxd = new Map<string, string>();
   const stats: BuildStats = {
     clonedLods: 0,
+    decimatedLods: 0,
     filledHoles: 0,
     filledInstances: 0,
     generatedTxds: hdTxdToClone.size,
@@ -109,6 +109,7 @@ export function writeBuild(input: BuildInput): BuildStats {
     skippedHoles: 0,
     skippedShared,
   };
+  const decimate = input.decimateBudget > 0 ? createBudgetedDecimate({ pixelBudget: input.decimateBudget }) : null;
   for (const link of perObject) {
     const cloneTxd = hdTxdToClone.get(link.hdTxd);
     if (!cloneTxd) {
@@ -120,20 +121,7 @@ export function writeBuild(input: BuildInput): BuildStats {
       stats.missingHd += 1;
       continue;
     }
-    // Produce the LOD via the shared `hdToLod` core. With no modifiers it's the verbatim byte-copy fast-path (keeps
-    // coronas/materials, strips particle 2dfx so the far LOD doesn't re-emit factory smoke). A future modifier would
-    // route it onto the merged-mesh path — `mesh`/`encode` are supplied (lazily) for that day. See lod-common 002.
-    img.set(
-      `${link.lodModel}.dff`,
-      hdToLod(
-        {
-          encode: (mesh) => encodeLodDff(mesh, link.lodModel),
-          hdDff: new Uint8Array(hdDff),
-          mesh: () => buildClumpMesh(parseDff(hdDff)),
-        },
-        LOD_MODIFIERS,
-      ),
-    );
+    img.set(`${link.lodModel}.dff`, cloneLodDff(new Uint8Array(hdDff), link, decimate, input.source, stats));
     modelToTxd.set(link.lodModel, cloneTxd);
     stats.clonedLods += 1;
   }
@@ -160,6 +148,36 @@ export function writeBuild(input: BuildInput): BuildStats {
   stats.retransformedLods = retargetLodTransforms(input, new Set(modelToTxd.keys()));
 
   return stats;
+}
+
+/**
+ * One clone's DFF bytes (plan 003, Phase 5). With a decimator, the HD mesh is QEM-decimated under the pixel
+ * budget and re-encoded — night prelit and tinted materials ride the mesh path, and the HD's 2dfx entries
+ * (coronas etc., minus particles) are transplanted byte-for-byte with frame-transformed positions. When the
+ * budget rejects every target (or decimation is off), the clone stays the **verbatim byte-copy** — keeping
+ * plugins the mesh path can't carry (e.g. breakable) at zero risk.
+ */
+function cloneLodDff(
+  hdDff: Uint8Array,
+  link: LodLink,
+  decimate: null | ReturnType<typeof createBudgetedDecimate>,
+  textures: TextureSource,
+  stats: BuildStats,
+): Uint8Array {
+  if (decimate) {
+    const clump = parseDff(toArrayBuffer(hdDff));
+    const mesh = buildClumpMesh(clump);
+    const ctx = { textures, view: lodView(link.hdDrawDistance || 300) };
+    const decimated = decimate(mesh, ctx);
+    if (decimated !== mesh) {
+      stats.decimatedLods += 1;
+      const effects = build2dfxSection(collectClumpEffects(hdDff, clump));
+
+      return encodeLodDff(decimated, link.lodModel, { ...(effects ? { effects } : {}) });
+    }
+  }
+
+  return stripParticleEffects(hdDff);
 }
 
 /** Distinct LOD models across the given links. */
@@ -251,4 +269,8 @@ function retargetLodTransforms(input: BuildInput, clonedLods: ReadonlySet<string
   }
 
   return rewritten;
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
