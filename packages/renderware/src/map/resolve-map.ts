@@ -15,6 +15,14 @@ import {
 /** Path of `gta.dat` within the asset file system (loose, packed by relative path). */
 const GTA_DAT = 'data/gta.dat';
 
+/**
+ * Basename of opensa-lod-generator's per-cell LOD placement file (`data/maps/lods.ipl`). Its `lod_<cx>_<cy>`
+ * instances are the cell **far-LOD** layer, but they're standalone (`lod -1`) — nothing points at them, so the
+ * index-based LOD-target test never flags them. We flag them explicitly so the world grid buckets them as LOD
+ * (rendered as the far layer, not always-on HD-overlapping geometry).
+ */
+const CELL_LOD_IPL = 'lods';
+
 export interface ResolveMapOptions {
   /**
    * Extra standalone binary IPL groups (basenames, no extension). These are the script-gated placement
@@ -70,6 +78,9 @@ export function resolveMap(fs: AssetFileSystem, options: ResolveMapOptions = {})
     // Flag LOD-target instances before flattening — the `lod` index is per-area (text file + its companion
     // binary streams share one index space; see the `ipl-lod-index-coupling` memory).
     markLodTargets(textInstances, streamInstances);
+    // opensa-lod-generator's cell far-LODs (`lods.ipl`) are standalone (`lod -1`), so the target test above never
+    // flags them — mark them here so they bucket as LOD (far layer), not always-on HD overlap. See CELL_LOD_IPL.
+    markCellLods(iplBasename(iplPath), textInstances);
     instances.push(...textInstances, ...streamInstances);
   }
 
@@ -99,6 +110,17 @@ function loadBinaryStreams(
     carGenerators.push(...parseBinaryCarGenerators(buffer));
     index += 1;
     buffer = fs.get(`${basename}_stream${index}.ipl`);
+  }
+}
+
+/** Flag a cell far-LOD file's instances (opensa-lod's `lods.ipl`) as LOD — they're standalone (`lod -1`) so the
+ *  index target test can't; without this they'd bucket as always-on HD. No-op for any other IPL. */
+function markCellLods(iplBase: string, textInstances: IplInstance[]): void {
+  if (iplBase !== CELL_LOD_IPL) {
+    return;
+  }
+  for (const instance of textInstances) {
+    instance.isLod = true;
   }
 }
 

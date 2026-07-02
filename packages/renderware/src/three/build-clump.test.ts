@@ -220,6 +220,32 @@ interface ShaderStub {
   vertexShader: string;
 }
 
+describe('corrupt vertex-position sanitization (anti-rip garbage / bad exports)', () => {
+  describe('negative cases', () => {
+    it('leaves valid positions untouched', () => {
+      const geo = geometry();
+      const before = [...geo.positions];
+      buildClumpParts(clumpWith(geo));
+
+      expect([...geo.positions]).toEqual(before);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('collapses an out-of-range vertex onto the valid centroid (kills the spike, keeps bounds sane)', () => {
+      // vertex 3 is anti-rip garbage (~5.8e25); the other three form a valid triangle.
+      const geo = geometry({ positions: new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 5.82e25, 5.82e25, 5.82e25]) });
+      buildClumpParts(clumpWith(geo));
+      const repaired = [geo.positions[9], geo.positions[10], geo.positions[11]];
+
+      expect(repaired.every((v) => Number.isFinite(v) && Math.abs(v) < 1000)).toBe(true);
+      expect(repaired[0]).toBeCloseTo(2 / 3, 5); // centroid of the 3 valid verts: ((0+1+1)/3, (0+0+1)/3, 0)
+      expect(repaired[1]).toBeCloseTo(1 / 3, 5);
+      expect(repaired[2]).toBeCloseTo(0, 5);
+    });
+  });
+});
+
 describe('buildMaterial — SA env-map reflection (userData stays serializable)', () => {
   const ENV = 'generic_envmap9';
   // Translucent → also a glass material, so the vehicle glass-pass clones it (where the bug surfaced).

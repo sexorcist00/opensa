@@ -205,6 +205,7 @@ export function buildClumpParts(clump: RWClump, textures?: Map<string, Texture>)
     // (gta3-pf CE_grndPALCST05 shipped a stray (12.9, 317, −28.5) frame translation) would
     // otherwise render ~300 m away from their collision.
 
+    sanitizeVertexPositions(rw.positions);
     const position = new BufferAttribute(rw.positions, 3);
     const uv = rw.uvLayers.length > 0 ? new BufferAttribute(rw.uvLayers[0], 2) : null;
     // Floodlight beams carry their cone in the prelit ALPHA → keep it (vec4) so the material can blend it.
@@ -259,6 +260,7 @@ export function buildClumpParts(clump: RWClump, textures?: Map<string, Texture>)
 }
 
 export function buildGeometry(rw: RWGeometry): BufferGeometry {
+  sanitizeVertexPositions(rw.positions);
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(rw.positions, 3));
 
@@ -428,6 +430,11 @@ function installSaReflection(material: MeshPhysicalMaterial, saEnvMap: Texture):
   material.needsUpdate = true;
 }
 
+/** No legitimate SA model-local vertex sits anywhere near this far from the model origin (largest map plates are
+ *  a few hundred units); a coordinate beyond it is corrupt — anti-rip garbage (protected mods park a vertex at
+ *  ~5.8e25) or a bad export. */
+const MAX_VERTEX_COORD = 1_000_000;
+
 function prelitColorAttribute(prelit: Uint8Array, withAlpha = false): BufferAttribute {
   // `withAlpha` keeps the RGBA (vec4) — used for floodlight beams whose cone lives in the prelit alpha; the
   // default drops alpha (vec3), which is all the day/night prelit blend needs for normal geometry.
@@ -494,6 +501,52 @@ function sanitizeDegenerateNormals(normals: Float32Array, positions: Float32Arra
     normals[v * 3] = 0; // only-degenerate-triangle vertices: harmless up normal
     normals[v * 3 + 1] = 0;
     normals[v * 3 + 2] = 1;
+  }
+}
+
+/**
+ * Repair corrupt vertex positions in place — NaN/Infinity or absurd magnitudes. Anti-rip-protected vehicle mods
+ * (and some dirty exports) ship a garbage vertex (e.g. the funky comet's `top_on` roof part carries one at
+ * ~5.8e25); left as-is it stretches every triangle that uses it across the whole world (giant spikes) and blows
+ * up the bounding sphere (breaking frustum culling). Each bad vertex is collapsed onto the centroid of the
+ * geometry's **valid** vertices (origin if there are none), so its triangles become zero-area slivers inside the
+ * model — invisible — and the bounds stay sane. Valid vertices are untouched; idempotent, so it's safe on the
+ * cached parse (mirrors {@link sanitizeDegenerateNormals}).
+ */
+function sanitizeVertexPositions(positions: Float32Array): void {
+  const bad: number[] = [];
+  let sumX = 0;
+  let sumY = 0;
+  let sumZ = 0;
+  let good = 0;
+  for (let v = 0; v < positions.length / 3; v += 1) {
+    const x = positions[v * 3];
+    const y = positions[v * 3 + 1];
+    const z = positions[v * 3 + 2];
+    if (
+      Math.abs(x) > MAX_VERTEX_COORD ||
+      Math.abs(y) > MAX_VERTEX_COORD ||
+      Math.abs(z) > MAX_VERTEX_COORD ||
+      !Number.isFinite(x + y + z)
+    ) {
+      bad.push(v);
+    } else {
+      sumX += x;
+      sumY += y;
+      sumZ += z;
+      good += 1;
+    }
+  }
+  if (bad.length === 0) {
+    return;
+  }
+  const cx = good > 0 ? sumX / good : 0;
+  const cy = good > 0 ? sumY / good : 0;
+  const cz = good > 0 ? sumZ / good : 0;
+  for (const v of bad) {
+    positions[v * 3] = cx;
+    positions[v * 3 + 1] = cy;
+    positions[v * 3 + 2] = cz;
   }
 }
 

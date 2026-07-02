@@ -156,6 +156,30 @@ describe('resolveMap LOD flagging (isLod from the IPL lod index)', () => {
   });
 });
 
+describe('resolveMap cell LODs (opensa-lod-generator lods.ipl → LOD layer)', () => {
+  // A cell far-LOD (lod_<cx>_<cy>) placed standalone (lod -1) in lods.ipl — nothing points at it, so the
+  // index-based target test can't flag it; it's flagged by its source file instead.
+  const CELL_FILES: Record<string, ArrayBuffer | string> = {
+    'data/gta.dat': 'IDE DATA\\MAPS\\lods.ide\nIPL DATA\\MAPS\\lods.ipl',
+    'data/maps/lods.ide': ['objs', '5000, lod_8_-7, lod_8_-7, 1500, 0', 'end'].join('\n'),
+    'data/maps/lods.ipl': ['inst', '5000, lod_8_-7, 0, 100, 200, 0, 0, 0, 0, 1, -1', 'end'].join('\n'),
+  };
+
+  describe('negative cases', () => {
+    it('does not flag a standalone (lod -1) instance from a regular IPL', () => {
+      expect(index(resolveMap(fakeFs(FILES))).get(100)?.isLod).toBeFalsy(); // test.ipl house stays HD
+    });
+  });
+
+  describe('positive cases', () => {
+    it('flags lods.ipl cell LODs as isLod despite lod -1 (bucketed as the far layer)', () => {
+      const cell = index(resolveMap(fakeFs(CELL_FILES))).get(5000);
+      expect(cell?.lod).toBe(-1); // nothing points at it
+      expect(cell?.isLod).toBe(true); // still classified LOD, by source file
+    });
+  });
+});
+
 describe('resolveMap car generators (binary IPL CARS sections)', () => {
   describe('positive cases', () => {
     it('collects the stream CARS records into carGenerators (specific + random)', () => {

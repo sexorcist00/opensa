@@ -1,5 +1,11 @@
 # 002 — Chunked LOD generation with texture atlases
 
+> **Decimation superseded (~2026-07-02):** the per-cell QEM decimation described below was **removed** — it degraded
+> the models (holes/spikes). Cells are now baked **verbatim** (merged HD geometry, no simplification) through the
+> shared `@opensa/lod-common` core; the modifier chain is where future simplification goes. See
+> `tools/lod-common/docs/plans/002-shared-hd-to-lod-core.md` and the `opensa-lod-generator-decimation` memory. The
+> chunking / atlas / strip / emit design below still stands; only the decimation step is gone.
+
 **Status: 📝 Proposed (design).** Replace SA's per-instance LODs with **regenerated, grid-chunked** LODs baked
 from the HD models: cut the world into equal square cells, and for each cell emit **one decimated merged mesh +
 one atlas texture**. Strip the old LOD models, and emit fresh IPL placing the new cell-LODs. The modern

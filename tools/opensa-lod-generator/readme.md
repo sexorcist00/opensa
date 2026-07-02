@@ -2,9 +2,10 @@
 
 A separate, **custom** (non-lossless) tool that regenerates the map's distant LODs from the HD models. Unlike
 `map-optimizer` (which conditions existing assets without changing what's authored), this **bakes new content**:
-it cuts the world into square cells and, per cell, merges the HD geometry into **one decimated LOD mesh + one
-texture atlas** — the modern open-world LOD scheme (cf. GTA V SLOD). Kept out of `map-optimizer` on purpose: it's
-additive and opinionated.
+it cuts the world into square cells and, per cell, merges the HD geometry **verbatim** into one LOD mesh + one
+downscaled texture atlas — the modern open-world LOD scheme (cf. GTA V SLOD). (Geometry is copied as-is via the
+shared `@opensa/lod-common` core — QEM decimation was removed; see the Geometry section below.) Kept out of
+`map-optimizer` on purpose: it's additive and opinionated.
 
 It takes a game-data folder — `gta.dat` + `data/` + `models/` (e.g. `game-src/original/`) — processes it, and
 writes its own build.
@@ -21,7 +22,7 @@ writes its own build.
 # assemble the world into cells + print a sizing report (Phase 0):
 npx tsx opensa-lod-generator/src/cli.ts --game ./game-src/original --cell 256
 
-# bake every cell (merge → QEM decimate → smooth normals → per-cell DFF/TXD) and emit a drop-in build under
+# bake every cell (merge verbatim → smooth normals → per-cell DFF/TXD) and emit a drop-in build under
 # --out (models/lods.img + data/lods.ide/.ipl + gta.dat lines):
 npx tsx opensa-lod-generator/src/cli.ts --game ./game-src/original --out ./build
 ```
@@ -76,7 +77,7 @@ and the stock `lod*` models are dropped too.
 opensa-lod-generator/
   src/
     cli.ts                 # --game (Phase 0 report) / --out (full bake) / --strip-lods
-    lod.config.ts          # cell size (= engine streaming grid) + decimation budget (cell ratio + min tris)
+    lod.config.ts          # cell size (= engine streaming grid) + draw distance + atlas texture size
     core/                  # game-agnostic: Cell/grid types, the LodAdapter contract, summary
     adapters/gta-sa/       # RenderWare adapter — reuses ../src parsers READ-ONLY; bake/writers live here
   docs/plans/              # 001 architecture, 002 chunked-LOD-atlas

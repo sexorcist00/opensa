@@ -16,12 +16,12 @@ afterEach(() => {
 });
 
 /** Write a synthetic game-data dir (one IDE + one text IPL) and resolve it. */
-function resolve(ide: string, ipl: string): ReturnType<typeof resolveLodLinks> {
+function resolve(ide: string, ipl: string, exclude?: ReadonlySet<string>): ReturnType<typeof resolveLodLinks> {
   dir = mkdtempSync(join(tmpdir(), 'salod-resolve-'));
   writeFileSync(join(dir, 'x.ide'), ide);
   writeFileSync(join(dir, 'x.ipl'), ipl);
 
-  return resolveLodLinks(dir, noStreams);
+  return resolveLodLinks(dir, noStreams, exclude);
 }
 
 const IDE = ['objs', '1, hd_a, txda, 300, 0', '2, lod_a, txdlod, 1500, 0', 'end'].join('\n');
@@ -53,6 +53,13 @@ describe('resolveLodLinks', () => {
       const result = resolve(ide, ipl);
       expect(result.links).toHaveLength(0);
       expect(result.excludedVegetation).toBe(1);
+    });
+
+    it('excludes a link whose model is in the supplied excludeItems set (pipeline-passed)', () => {
+      const ipl = ['inst', '1, hd_a, 0, 0,0,0, 0,0,0,1, 1', '2, lod_a, 0, 0,0,0, 0,0,0,1, -1', 'end'].join('\n');
+      const result = resolve(IDE, ipl, new Set(['lod_a']));
+      expect(result.links).toHaveLength(0);
+      expect(result.excludedGenerated).toBe(1);
     });
 
     it('excludes a LOD owned by a sibling generator (txd lod_procobj/lodtrees)', () => {
