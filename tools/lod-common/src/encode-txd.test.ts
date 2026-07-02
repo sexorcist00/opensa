@@ -63,6 +63,20 @@ describe('encodeHalvedTxd', () => {
       const dot = parseTxd(toArrayBuffer(txd)).textures[0];
       expect([dot.width, dot.height]).toEqual([1, 1]);
     });
+
+    it('floors halving at 32px — a small source never turns to mush (plan 006)', () => {
+      const txd = encodeHalvedTxd(
+        ['small', 'tiny'],
+        source({ small: solid(64, 9, 9, 9), tiny: solid(32, 9, 9, 9) }),
+        3,
+      );
+      const parsed = parseTxd(toArrayBuffer(txd)).textures;
+      const small = parsed.find((t) => t.name === 'small')!;
+      const tiny = parsed.find((t) => t.name === 'tiny')!;
+
+      expect([small.width, small.height]).toEqual([32, 32]); // 64 → one step, then floored
+      expect([tiny.width, tiny.height]).toEqual([32, 32]); // already at the floor — untouched
+    });
   });
 
   describe('positive cases', () => {

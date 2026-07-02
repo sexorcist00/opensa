@@ -1,6 +1,41 @@
 # Changelog
 
-# 0.2.0 (2026-06-23)
+## 0.3.0
+
+### Tooling
+
+#### LOD generator
+
+**Added**
+
+- **Visibility-first simplification** (`@opensa/lod-common` shared core, used by `opensa-lod-generator` cell
+  bakes and `sa-lod-generator` per-object clones): screen-size / degenerate / transparent-group culls, sampled
+  **visibility culling** (deterministic camera raycasts; per-face sidedness, windings never flipped,
+  see-through textures don't occlude rays), coplanar remesh with byte-exact boundaries, and **budget-checked
+  QEM decimation** — every cell/model proves its own reduction with a render diff or stays verbatim.
+- **Measurement harness** — a deterministic CPU rasterizer + pixel diff renders every simplification stage
+  against the HD reference from independent cameras: every knob is tuned by number, not by eye; the same
+  self-check gates the decimation.
+- **LOD texture packaging** — one shared `lods.txd` for all OpenSA cell LODs; SA clone TXDs at 0.25 scale
+  (32 px floor) partitioned into a native `txdp` **parent dictionary** (`salodpar.txd` + slim children).
+- **Distant night city** — cell LODs carry the source models' 2dfx corona lights (street lamps, casino glow),
+  and hour-gated `tobj` objects render correctly at LOD range (lit windows no longer glow at noon).
+
+**Changed**
+
+- **Ground-truth LOD classification** — the cell resolver and the old-LOD strip use the IPL `lod` index
+  (per instance) instead of name matching, eliminating coplanar double surfaces (map-wide z-fighting) from
+  renamed/underscored LOD twins.
+- Engine streaming cell size aligned to the generator grid (250 → 256).
+
+**Effect** (vs the previous verbatim LOD builds, measured on an unmodified map)
+
+- Geometry: **−23 % triangles / −43 % encoded indices** at ≈ 0.2 % mean visual diff.
+- Textures: **−82 %** for OpenSA cells (~88 MB → 16 MB) and **−91 %** for SA clones (114.8 MB → 10.4 MB).
+- Plus distant corona lights the stock far view never had, correct day/night `tobj` windows, and LOD
+  z-fighting cleaned up at its source.
+
+## 0.2.0 (2026-06-23)
 
 ### Added
 
@@ -43,7 +78,7 @@
 
 - Added a **Legal & takedowns** section (README) and an in-app disclaimer with a rights-holder contact.
 
-# 0.1.0 (2026-06-18)
+## 0.1.0 (2026-06-18)
 
 ### Added
 

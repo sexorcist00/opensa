@@ -73,10 +73,17 @@ function downscale(rgba: Uint8Array, width: number, height: number, maxSize: num
   return level;
 }
 
-/** Halve RGBA (2× box) `halvings` times, but never below 1 px in either dimension. */
+/**
+ * Aggressive downscales must not turn small sources into mush: a 64 px texture at ¼ scale would be 16 px —
+ * unreadable on large tiled surfaces. Halving stops once the smaller dimension would drop below this
+ * (sa plan 006: LODs render from ≥ ~300 u where 32 px still covers the screen density).
+ */
+const MIN_HALVED_SIZE = 32;
+
+/** Halve RGBA (2× box) `halvings` times, flooring at {@link MIN_HALVED_SIZE} on the smaller dimension. */
 function halve(rgba: Uint8Array, width: number, height: number, halvings: number): Level {
   let level: Level = { data: rgba, height, width };
-  for (let i = 0; i < halvings && level.width > 1 && level.height > 1; i += 1) {
+  for (let i = 0; i < halvings && Math.min(level.width, level.height) >= MIN_HALVED_SIZE * 2; i += 1) {
     level = downsample(level.data, level.width, level.height);
   }
 

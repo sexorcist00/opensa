@@ -12,8 +12,8 @@ describe('finalize line emitters', () => {
       expect(cellCentre({ cx: 3, cy: -7 }, 256)).toEqual([896, -1664, 0]);
     });
 
-    it('emits an IDE objs line (id, model, txd, drawDist, flags)', () => {
-      expect(ideObjsLine(5000, 'lod_0_0', 1500)).toBe('5000, lod_0_0, lod_0_0, 1500, 0');
+    it('emits an IDE objs line pointing every cell at the shared TXD (plan 004)', () => {
+      expect(ideObjsLine(5000, 'lod_0_0', 1500)).toBe('5000, lod_0_0, lods, 1500, 0');
     });
 
     it('emits an IPL inst line with identity rotation and no LOD link', () => {

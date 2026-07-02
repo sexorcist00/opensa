@@ -51,6 +51,9 @@ function main(): void {
       `  baked ${stats.clonedLods} LOD clones (${stats.decimatedLods} decimated, rest verbatim) + ` +
         `${stats.generatedTxds} TXDs @ ${texScale}× (shared ${stats.skippedShared}, missing HD ${stats.missingHd}, missing TXD ${stats.missingTxd})`,
     );
+    console.log(
+      `  txdp parent: ${stats.parentTextures} shared textures → ${stats.parentTextures > 0 ? 'salodpar.txd + salod-txdp.ide' : 'not emitted'}`,
+    );
     console.log(`  retargeted ${stats.retransformedLods} LOD instances to their HD transform`);
     console.log(
       `  filled ${stats.filledHoles} missing-LOD holes (${stats.filledInstances} instances, ${stats.skippedHoles} skipped)`,

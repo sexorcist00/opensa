@@ -30,11 +30,15 @@ const holeFillModels = [
   'bonaventura_lan',
 ];
 
-/** Default run config. `texScale` 0.5 = half each side (quarter the pixels) for the clone LODs (plan 002). */
+/**
+ * Default run config. `texScale` 0.25 = quarter each side for the clone LODs (plan 006): the clones render only
+ * from ≥ the HD draw distance (~300 u), where 0.25 still oversamples the screen ~2×; `encodeHalvedTxd` floors
+ * small sources at 32 px so they don't turn to mush.
+ */
 export const config: LodConfig = {
   decimateBudget: 0.01,
   holeFillModels,
   holeLodDraw: 1500,
   minLodPixels: 2,
-  texScale: 0.5,
+  texScale: 0.25,
 };

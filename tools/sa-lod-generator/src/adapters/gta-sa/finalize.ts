@@ -7,6 +7,7 @@ import { collectClumpEffects } from '@opensa/lod-common/clump-effects';
 import { encodeLodDff } from '@opensa/lod-common/encode-dff';
 import { encodeHalvedTxd } from '@opensa/lod-common/encode-txd';
 import { lodView } from '@opensa/lod-common/view';
+import { patchGtaDat } from '@opensa/map-placement/ide';
 import { retransformTextIpl } from '@opensa/map-placement/ipl-text-retransform';
 import { editIdeTxd } from '@opensa/map-placement/retxd';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
@@ -50,14 +51,17 @@ export interface BuildStats {
   generatedTxds: number;
   missingHd: number;
   missingTxd: number;
+  /** Textures moved into the shared `salodpar.txd` txdp parent (used by ≥ 2 source atlases). */
+  parentTextures: number;
   retransformedLods: number;
   skippedHoles: number;
   skippedShared: number;
 }
 
 /**
- * The clone TXD name for a source HD atlas, generating + packing it (½-res DXT, deduped) on first use. Shared by
- * Phase 1 and the hole-fill phase so a given atlas is downscaled once. Returns `null` if the source TXD is missing.
+ * The clone TXD name for a source HD atlas, generating + packing it (`texScale` DXT, deduped) on first use —
+ * the hole-fill path (atlases the Phase-1 partition didn't cover get a full standalone TXD, no txdp line).
+ * Returns `null` if the source TXD is missing.
  */
 export function ensureCloneTxd(
   hdTxd: string,
@@ -84,9 +88,11 @@ export function ensureCloneTxd(
 /**
  * Emit the drop-in Phase-1 build (plan 002): mirror `gameDir` → `outDir`, then in the copied `models/gta3.img`
  * replace each **per-object** LOD's `.dff` with its HD model's bytes **verbatim** (no re-encode — a known-good SA
- * clone, no format-gotcha risk) and add one 50 %-downscaled TXD per source HD atlas (deduped, DXT + mips). Finally
- * retarget those LODs' IDE `txd` column to the clone TXD. Ids, names and every IPL `lod` link are left untouched, so
- * the map linkage never moves. Shared (multi-HD) LODs are left stock — Phase 1 covers only the 1:1 majority.
+ * clone, no format-gotcha risk — or a budget-decimated re-encode, see {@link cloneLodDff}) and add the
+ * `txdp`-partitioned clone TXDs (plan 006: one shared `salodpar.txd` parent + a slim `salodNNNN` child per
+ * source atlas, DXT + mips at `texScale`). Finally retarget those LODs' IDE `txd` column to the clone TXD and
+ * register the `txdp` IDE. Ids, names and every IPL `lod` link are left untouched, so the map linkage never
+ * moves. Shared (multi-HD) LODs are left stock — Phase 1 covers only the 1:1 majority.
  */
 export function writeBuild(input: BuildInput): BuildStats {
   const perObject = perObjectLinks(input.links);
@@ -95,7 +101,8 @@ export function writeBuild(input: BuildInput): BuildStats {
   cpSync(input.gameDir, input.outDir, { force: true, recursive: true });
   const img = editArchive(input.archives.gta3);
 
-  const hdTxdToClone = packCloneTxds(perObject, input, img);
+  const { hdTxdToClone, parentTextures } = packCloneTxds(perObject, input, img);
+  const txdpChildren = [...hdTxdToClone.values()]; // partitioned children — hole-fill atlases added later are full TXDs
   const modelToTxd = new Map<string, string>();
   const stats: BuildStats = {
     clonedLods: 0,
@@ -105,6 +112,7 @@ export function writeBuild(input: BuildInput): BuildStats {
     generatedTxds: hdTxdToClone.size,
     missingHd: 0,
     missingTxd: 0,
+    parentTextures,
     retransformedLods: 0,
     skippedHoles: 0,
     skippedShared,
@@ -145,6 +153,9 @@ export function writeBuild(input: BuildInput): BuildStats {
 
   writeFileSync(join(input.outDir, 'models', 'gta3.img'), img.build());
   retargetIdes(input.outDir, modelToTxd);
+  if (parentTextures > 0) {
+    writeTxdpIde(input.outDir, txdpChildren);
+  }
   stats.retransformedLods = retargetLodTransforms(input, new Set(modelToTxd.keys()));
 
   return stats;
@@ -185,21 +196,73 @@ function distinctLods(links: readonly LodLink[]): number {
   return new Set(links.map((link) => link.lodModel)).size;
 }
 
+/** The shared `txdp` parent dictionary every partitioned clone TXD points at (plan 006). */
+export const PARENT_TXD = 'salodpar';
+
 /**
- * One 50 % clone TXD per distinct HD source atlas (deduped — a shared area atlas is downscaled once, not per LOD),
- * packed into the img under a generated `salodNNNN` name. Returns `hdTxd → clone-txd name`.
+ * Partition the clone atlases' texture names for the `txdp` parent scheme (plan 006): a name used by **≥ 2**
+ * atlases goes to the shared parent; the rest stay in their child. Safe by construction — the build's
+ * {@link TextureSource} is name-keyed ("first TXD wins"), so every clone TXD already receives identical pixels
+ * for a given name; the parent changes packaging, not pixels.
+ */
+export function partitionCloneTextures(atlasNames: ReadonlyMap<string, readonly string[]>): {
+  perAtlasUnique: Map<string, string[]>;
+  shared: string[];
+} {
+  const counts = new Map<string, number>();
+  for (const names of atlasNames.values()) {
+    for (const name of new Set(names)) {
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  const shared = new Set([...counts].filter(([, count]) => count >= 2).map(([name]) => name));
+  const perAtlasUnique = new Map<string, string[]>();
+  for (const [atlas, names] of atlasNames) {
+    perAtlasUnique.set(atlas, [...new Set(names)].filter((name) => !shared.has(name)).sort());
+  }
+
+  return { perAtlasUnique, shared: [...shared].sort() };
+}
+
+/**
+ * The clone TXDs, `txdp`-partitioned (plan 006): one shared `salodpar.txd` for every texture used by ≥ 2 source
+ * atlases + one slim `salodNNNN` child per atlas holding only its unique textures (a child may be empty — it
+ * must still exist for the game to bind, and the parent chain supplies the rest). Returns `hdTxd → child name`
+ * and the shared-texture count for the stats/report.
  */
 function packCloneTxds(
   perObject: readonly LodLink[],
   input: BuildInput,
   img: ReturnType<typeof editArchive>,
-): Map<string, string> {
-  const hdTxdToClone = new Map<string, string>();
+): { hdTxdToClone: Map<string, string>; parentTextures: number } {
+  const atlasNames = new Map<string, string[]>();
   for (const hdTxd of [...new Set(perObject.map((link) => link.hdTxd))].sort()) {
-    ensureCloneTxd(hdTxd, input, img, hdTxdToClone);
+    const bytes = hdTxd ? input.archives.get(`${hdTxd}.txd`) : null;
+    if (!bytes) {
+      continue; // no source atlas → the LODs it would serve stay stock (counted as missingTxd per link)
+    }
+    try {
+      atlasNames.set(
+        hdTxd,
+        parseTxd(bytes).textures.map((texture) => texture.name.toLowerCase()),
+      );
+    } catch {
+      // unreadable atlas — same as missing
+    }
   }
 
-  return hdTxdToClone;
+  const { perAtlasUnique, shared } = partitionCloneTextures(atlasNames);
+  if (shared.length > 0) {
+    img.set(`${PARENT_TXD}.txd`, encodeHalvedTxd(shared, input.source, input.halvings));
+  }
+  const hdTxdToClone = new Map<string, string>();
+  for (const [hdTxd, unique] of perAtlasUnique) {
+    const cloneName = `salod${String(hdTxdToClone.size).padStart(4, '0')}`;
+    img.set(`${cloneName}.txd`, encodeHalvedTxd(unique, input.source, input.halvings));
+    hdTxdToClone.set(hdTxd, cloneName);
+  }
+
+  return { hdTxdToClone, parentTextures: shared.length };
 }
 
 /** Retarget every IDE `txd` column of a cloned LOD to its clone TXD (drop-in — no other IDE/IPL change). */
@@ -273,4 +336,16 @@ function retargetLodTransforms(input: BuildInput, clonedLods: ReadonlySet<string
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+/** Write the `txdp` IDE (child → parent per clone TXD) and register it in `gta.dat` before the first IPL. */
+function writeTxdpIde(outDir: string, children: readonly string[]): void {
+  if (children.length === 0) {
+    return;
+  }
+  const rel = join('maps', 'salod-txdp.ide');
+  const rows = children.map((child) => `${child}, ${PARENT_TXD}`);
+  writeFileSync(join(outDir, 'data', rel), `txdp\n${rows.join('\n')}\nend\n`);
+  const datPath = join(outDir, 'data', 'gta.dat');
+  writeFileSync(datPath, patchGtaDat(readFileSync(datPath, 'utf8'), 'DATA\\MAPS\\salod-txdp.ide'));
 }

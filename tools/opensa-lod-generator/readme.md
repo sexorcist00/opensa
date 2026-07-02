@@ -2,8 +2,9 @@
 
 A separate, **custom** (non-lossless) tool that regenerates the map's distant LODs from the HD models. Unlike
 `map-optimizer` (which conditions existing assets without changing what's authored), this **bakes new content**:
-it cuts the world into square cells and, per cell, merges the HD geometry into one LOD mesh + one downscaled
-texture atlas — the modern open-world LOD scheme (cf. GTA V SLOD). Geometry goes through the shared
+it cuts the world into square cells and, per cell, merges the HD geometry into one LOD mesh; all cells share
+**one** downscaled texture dictionary (`lods.txd`, plan 004) — the modern open-world LOD scheme (cf. GTA V
+SLOD). Geometry goes through the shared
 `@opensa/lod-common` **visibility-first chain** (invisible-face culls + budget-checked QEM + coplanar remesh —
 every step measured by a render diff; see the Geometry section below). Kept out of `map-optimizer` on purpose:
 it's additive and opinionated.

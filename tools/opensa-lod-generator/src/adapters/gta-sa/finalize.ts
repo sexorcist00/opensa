@@ -31,9 +31,12 @@ export function cellModelName(cx: number, cy: number): string {
   return `lod_${cx}_${cy}`;
 }
 
-/** An IDE `objs` line: `id, model, txd, drawDistance, flags`. */
+/** All cell defs share ONE texture dictionary (plan 004) — per-cell TXDs duplicated every texture ~5.5×. */
+export const SHARED_TXD = 'lods';
+
+/** An IDE `objs` line: `id, model, txd, drawDistance, flags` — every cell points at the shared TXD. */
 export function ideObjsLine(id: number, name: string, drawDistance: number): string {
-  return `${id}, ${name}, ${name}, ${drawDistance}, 0`;
+  return `${id}, ${name}, ${SHARED_TXD}, ${drawDistance}, 0`;
 }
 
 /** An IPL `inst` line: `id, model, interior, x, y, z, rx, ry, rz, rw, lod` (identity rotation, no LOD link). */
@@ -58,7 +61,8 @@ export function meshBounds(mesh: { positions: Float32Array }): { max: Vec3; min:
 
 /**
  * Emit the drop-in cell-LOD build (plan 002, 1d-ii). Mirror `gameDir` → `outDir`, then add a single
- * `models/lods.img` (one DFF + one TXD per baked cell, plus one shared `lods.col` of bounds-only COL3 models so
+ * `models/lods.img` (one DFF per baked cell + ONE shared `lods.txd` for all of them — plan 004 — plus one
+ * shared `lods.col` of bounds-only COL3 models so
  * SA has collision to stream them), `data/maps/lods.ide` (cell-LOD object defs) + `data/maps/lods.ipl`
  * (placements at each cell centre), and register all three in `data/gta.dat` — so both OpenSA (lod-prefix bucket) and the original
  * game (independent high-draw-distance objects) load them. **Additive**: old `lod*` models/refs are not yet
@@ -72,6 +76,7 @@ export function writeBuild(options: BuildOptions): void {
   const insts: string[] = [];
   const colNames: string[] = [];
   const colBounds: { max: Vec3; min: Vec3 }[] = [];
+  const sharedTextures = new Set<string>();
   options.baked.forEach((cell, i) => {
     const id = options.firstId + i;
     const name = cellModelName(cell.cx, cell.cy);
@@ -81,12 +86,19 @@ export function writeBuild(options: BuildOptions): void {
       `${name}.dff`,
       encodeLodDff(cell.mesh, name, { doubleSided: true, ...(cell.effects ? { effects: cell.effects } : {}) }),
     );
-    img.set(`${name}.txd`, encodeLodTxd(cellTextures(cell), options.textureSource, options.lodTextureSize));
+    for (const texture of cellTextures(cell)) {
+      sharedTextures.add(texture);
+    }
     objs.push(ideObjsLine(id, name, options.drawDistance));
     insts.push(iplInstLine(id, name, cellCentre(cell, options.cellSize)));
     colNames.push(name);
     colBounds.push(meshBounds(cell.mesh));
   });
+  // ONE shared TXD for every cell (plan 004): per-cell TXDs held ~5.5× duplicate copies (31,981 entries vs
+  // 5,805 unique on the stock map) — on disk AND as decoded/GPU textures at LOD range. The texture source is
+  // name-keyed ("first wins"), so cells already received identical pixels per name; sharing changes packaging,
+  // not pixels.
+  img.set(`${SHARED_TXD}.txd`, encodeLodTxd([...sharedTextures].sort(), options.textureSource, options.lodTextureSize));
   // SA faults on any streamed model with no collision (fastman92: MODEL_DOES_NOT_HAVE_COLLISION_LOADED). The LODs
   // need no real collision, so pack one bounds-only COL3 per cell (named to its model); SA auto-discovers .col in
   // the IMG. Same approach as lod-procobj-generator / lod-trees-generator.
