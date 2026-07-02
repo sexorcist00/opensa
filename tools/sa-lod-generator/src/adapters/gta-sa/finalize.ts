@@ -1,16 +1,27 @@
+import type { LodModifier } from '@opensa/lod-common/hd-to-lod';
+import type { TextureSource } from '@opensa/lod-common/texture-source';
 import type { IplTransform } from '@opensa/map-placement/ipl-text-retransform';
-import type { TextureSource } from '@opensa/sa-lod/texture-source';
 
+import { buildClumpMesh } from '@opensa/lod-common/build-mesh';
+import { encodeLodDff } from '@opensa/lod-common/encode-dff';
+import { encodeHalvedTxd } from '@opensa/lod-common/encode-txd';
+import { hdToLod } from '@opensa/lod-common/hd-to-lod';
 import { retransformTextIpl } from '@opensa/map-placement/ipl-text-retransform';
 import { editIdeTxd } from '@opensa/map-placement/retxd';
+import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
-import { stripParticleEffects } from '@opensa/rw-codec/dff';
-import { encodeHalvedTxd } from '@opensa/sa-lod/encode-txd';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+/**
+ * The LOD geometry modifier chain — the shared `@opensa/lod-common` extension point. **Empty today**: a per-object
+ * LOD is a dumb verbatim copy of its HD (so `hdToLod` takes its byte-copy fast-path, keeping coronas/materials).
+ * Adding a modifier here (later) flips every clone onto the merged-mesh path — the same chain opensa-lod uses.
+ */
+const LOD_MODIFIERS: readonly LodModifier[] = [];
 
 import type { LodLink } from '../../core/types';
 import type { Archives } from './io';
@@ -109,9 +120,20 @@ export function writeBuild(input: BuildInput): BuildStats {
       stats.missingHd += 1;
       continue;
     }
-    // Strip particle 2dfx (factory smoke/fire/fountains) from the clone — a far LOD must not re-emit them (double
-    // emitter + far-view overdraw). Coronas/lights are kept (distant night lights are wanted). See the FX memory.
-    img.set(`${link.lodModel}.dff`, stripParticleEffects(new Uint8Array(hdDff)));
+    // Produce the LOD via the shared `hdToLod` core. With no modifiers it's the verbatim byte-copy fast-path (keeps
+    // coronas/materials, strips particle 2dfx so the far LOD doesn't re-emit factory smoke). A future modifier would
+    // route it onto the merged-mesh path — `mesh`/`encode` are supplied (lazily) for that day. See lod-common 002.
+    img.set(
+      `${link.lodModel}.dff`,
+      hdToLod(
+        {
+          encode: (mesh) => encodeLodDff(mesh, link.lodModel),
+          hdDff: new Uint8Array(hdDff),
+          mesh: () => buildClumpMesh(parseDff(hdDff)),
+        },
+        LOD_MODIFIERS,
+      ),
+    );
     modelToTxd.set(link.lodModel, cloneTxd);
     stats.clonedLods += 1;
   }

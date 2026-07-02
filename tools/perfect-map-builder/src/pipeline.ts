@@ -1,3 +1,4 @@
+import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
 /**
  * The perfect-map build pipeline (plan 001): chain every map tool via its Node API, each stage's output feeding the
  * next as a **complete** game dir (full passthrough), then split the common build into the `sa` (real game) and
@@ -14,7 +15,6 @@ import { install as installPeds } from '@opensa/ped-installer/install';
 import { parseIde } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { buildSaLods } from '@opensa/sa-lod-generator/build';
-import { parsePrelightInfo, type PrelightInfo } from '@opensa/sa-lod/prelight';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';

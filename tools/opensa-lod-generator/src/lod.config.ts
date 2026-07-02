@@ -7,8 +7,6 @@ import type { LodConfig } from './core/types';
  */
 export const config: LodConfig = {
   cellSize: 256,
-  lodCellMinTris: 1000,
-  lodCellRatio: 0.2,
   lodDrawDistance: 1500,
   lodTextureSize: 64,
 };

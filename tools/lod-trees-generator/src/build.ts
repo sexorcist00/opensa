@@ -3,7 +3,7 @@
  * attaches them as far-LODs. In non-modloader mode the output is a **complete** game dir (full input mirror — see
  * `docs/plans/009-node-api-and-full-mirror.md`); `--modloader` mode emits only the `lod/` + `hd/` mods.
  */
-import type { PrelightInfo } from '@opensa/sa-lod/prelight';
+import type { PrelightInfo } from '@opensa/lod-common/prelight';
 
 import { mkdirSync } from 'node:fs';
 

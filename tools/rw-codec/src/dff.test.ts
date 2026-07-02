@@ -101,7 +101,7 @@ const ab = (u: Uint8Array): ArrayBuffer => u.buffer.slice(u.byteOffset, u.byteOf
 
 describe('stripParticleEffects (real fixture)', () => {
   describe('positive cases', () => {
-    const source = () => new Uint8Array(readFileSync(CHIMNEY));
+    const source = (): Uint8Array => new Uint8Array(readFileSync(CHIMNEY));
 
     it('drops the smoke particle but keeps the light coronas and the geometry', () => {
       const before = parseDff(ab(source())).geometries[0];

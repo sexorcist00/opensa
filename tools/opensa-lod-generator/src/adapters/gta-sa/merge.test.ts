@@ -1,5 +1,5 @@
+import type { ModelSource } from '@opensa/lod-common/model-source';
 import type { RWClump, RWGeometry } from '@opensa/renderware/parsers/binary/types';
-import type { ModelSource } from '@opensa/sa-lod/model-source';
 
 import { describe, expect, it } from 'vitest';
 

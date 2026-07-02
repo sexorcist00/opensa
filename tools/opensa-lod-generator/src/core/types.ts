@@ -5,7 +5,7 @@
  * live in the shared `@opensa/sa-lod` pipeline.
  */
 
-import type { MergedMesh } from '@opensa/sa-lod/mesh';
+import type { MergedMesh } from '@opensa/lod-common/mesh';
 
 /**
  * The baked output for one cell — a merged, decimated LOD mesh + its texture atlas + placement. The concrete
@@ -46,12 +46,6 @@ export interface LodConfig {
    * tool's finished LODs/impostors. See the pipeline's `collectGeneratedModels`.
    */
   excludeItems?: readonly string[];
-  /** Floor on a cell's kept triangle count — a cell with fewer HD triangles than this is left undecimated. Sparse
-   *  cells (e.g. open terrain / mountains) are already LOD-cheap; a flat ratio would over-thin them into holes. */
-  lodCellMinTris: number;
-  /** Fraction of a cell's merged triangles kept when decimating it as one welded mesh (the simplifier's group
-   *  floor + edge cap keep every surface present and unspiked, so a small fraction still covers the cell). */
-  lodCellRatio: number;
   /** Draw distance (world units) for emitted cell-LOD IDE defs — the original game's visibility gate. */
   lodDrawDistance: number;
   /** Max texture dimension (px) in a per-cell LOD TXD; sources are downscaled to it (plan 002, Phase 2). */

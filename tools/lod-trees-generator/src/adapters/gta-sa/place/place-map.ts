@@ -1,5 +1,6 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 
+import { applyStockPrelight, type PrelightInfo } from '@opensa/lod-common/prelight';
 import { allocateLodIds, buildLodIde, lodAlias, patchGtaDat } from '@opensa/map-placement/ide';
 import { retxdSwappedModels, writeTxdpHdMod } from '@opensa/map-placement/retxd';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
@@ -8,7 +9,6 @@ import { parseGtaDat } from '@opensa/renderware/parsers/text/gta-dat.parser';
 import { parseIde, parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
-import { applyStockPrelight, type PrelightInfo } from '@opensa/sa-lod/prelight';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

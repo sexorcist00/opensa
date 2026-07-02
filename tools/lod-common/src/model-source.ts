@@ -44,7 +44,7 @@ function tryParse(buffer: ArrayBuffer, name: string): null | RWClump {
   try {
     return parseDff(buffer);
   } catch (error) {
-    console.warn(`sa-lod: skipping ${name} — ${(error as Error).message}`);
+    console.warn(`lod-common: skipping ${name} — ${(error as Error).message}`);
 
     return null;
   }

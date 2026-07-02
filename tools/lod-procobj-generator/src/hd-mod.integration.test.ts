@@ -1,7 +1,7 @@
-import type { TextureSource } from '@opensa/sa-lod/texture-source';
+import type { TextureSource } from '@opensa/lod-common/texture-source';
 
+import { encodeLodTxd } from '@opensa/lod-common/encode-txd';
 import { writeTxdpHdMod } from '@opensa/map-placement/retxd';
-import { encodeLodTxd } from '@opensa/sa-lod/encode-txd';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

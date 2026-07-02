@@ -56,7 +56,7 @@ export default defineConfig({
       'tools/rw-codec/**/*.test.ts',
       'tools/lod-trees-generator/**/*.test.ts',
       'tools/map-placement/**/*.test.ts',
-      'tools/sa-lod/**/*.test.ts',
+      'tools/lod-common/**/*.test.ts',
       'tools/sa-lod-generator/**/*.test.ts',
       'tools/lod-procobj-generator/**/*.test.ts',
       'tools/mod-installer/**/*.test.ts',

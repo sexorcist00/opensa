@@ -223,7 +223,7 @@ const scriptsConfig = {
     'tools/rw-codec/**/*.{js,mjs,cjs,ts}',
     'tools/lod-trees-generator/**/*.{js,mjs,cjs,ts}',
     'tools/map-placement/**/*.{js,mjs,cjs,ts}',
-    'tools/sa-lod/**/*.{js,mjs,cjs,ts}',
+    'tools/lod-common/**/*.{js,mjs,cjs,ts}',
     'tools/sa-lod-generator/**/*.{js,mjs,cjs,ts}',
     'tools/perfect-map-builder/**/*.{js,mjs,cjs,ts}',
     'tools/lod-procobj-generator/**/*.{js,mjs,cjs,ts}',

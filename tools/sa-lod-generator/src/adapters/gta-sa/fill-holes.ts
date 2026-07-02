@@ -1,12 +1,12 @@
-import type { Vec3 } from '@opensa/sa-lod/mesh';
+import type { Vec3 } from '@opensa/lod-common/mesh';
 
 import { ideRefs } from '@opensa/game-build/partition';
+import { encodeColLibrary } from '@opensa/lod-common/encode-col';
 import { patchGtaDat } from '@opensa/map-placement/ide';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { stripParticleEffects } from '@opensa/rw-codec/dff';
-import { encodeColLibrary } from '@opensa/sa-lod/encode-col';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 

@@ -1,7 +1,7 @@
-import { decimateMesh } from '@opensa/sa-lod/decimate';
-import { createModelSource } from '@opensa/sa-lod/model-source';
-import { rebuildMeshNormals } from '@opensa/sa-lod/normals';
-import { createTextureSource } from '@opensa/sa-lod/texture-source';
+import { applyModifiers, type LodModifier } from '@opensa/lod-common/hd-to-lod';
+import { createModelSource } from '@opensa/lod-common/model-source';
+import { rebuildMeshNormals } from '@opensa/lod-common/normals';
+import { createTextureSource } from '@opensa/lod-common/texture-source';
 import { join } from 'node:path';
 
 import type { LodAdapter } from '../../core/adapter';
@@ -13,6 +13,13 @@ import { mergeCell } from './merge';
 import { maxObjectId, resolveCells } from './resolve';
 
 export { stripOldLods } from './strip';
+
+/**
+ * The LOD geometry modifier chain — the shared `@opensa/lod-common` extension point, **empty today**: a cell LOD is
+ * the merged real HD geometry verbatim (QEM decimation degraded the models and is gone). Future simplification goes
+ * here — the same chain sa-lod-generator's clone runs through.
+ */
+const LOD_MODIFIERS: readonly LodModifier[] = [];
 
 /**
  * GTA-SA (RenderWare) LOD adapter. Phase 0 (assemble HD instances → cell grid) + Phase 1's merge (HD geometry →
@@ -28,17 +35,11 @@ export function createGtaSaLodAdapter(game: string, gameDir: string, config: Lod
 
   return {
     bakeCell(cell: Cell): BakedCell {
-      // Merge the whole cell, then decimate it as one connected mesh (welded inside `decimateMesh`) to a fraction
-      // of its triangles. One shared budget across surfaces — and welded topology — keeps coverage far higher than
-      // decimating each model on its own did (which eroded every seam-split fragment → holes). Normals re-derived
-      // after.
-      const merged = mergeCell(cell, config.cellSize, source);
-      const faceCount = merged.groups.reduce((sum, group) => sum + group.indices.length / 3, 0);
-      // At least `min` triangles so sparse cells aren't over-thinned into holes; no upper cap — OpenSA has no
-      // per-model streaming/material limits (this tool targets OpenSA, not the original game's streamer).
-      const target = Math.max(Math.ceil(faceCount * config.lodCellRatio), config.lodCellMinTris);
-      const decimated = decimateMesh(merged, target);
-      const mesh = rebuildMeshNormals(decimated);
+      // Verbatim: the cell LOD is the cell's real HD geometry merged, with **no decimation** — QEM degraded the
+      // models (holes/spikes). Any future simplification runs through the shared modifier chain (empty today, same
+      // chain sa-lod uses). Normals are re-derived after (most map geometry ships without normals). The LOD win is
+      // draw-calls + a downscaled cell atlas + draw distance, not polycount — fine for OpenSA (no per-model limits).
+      const mesh = rebuildMeshNormals(applyModifiers(mergeCell(cell, config.cellSize, source), LOD_MODIFIERS));
 
       return { cx: cell.cx, cy: cell.cy, mesh };
     },

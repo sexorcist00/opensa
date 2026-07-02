@@ -1,8 +1,8 @@
+import { encodeColLibrary } from '@opensa/lod-common/encode-col';
+import { type PrelightInfo, stockPrelightColor } from '@opensa/lod-common/prelight';
 import { lodAlias } from '@opensa/map-placement/ide';
 import { isNonTreeModel, SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { readRw } from '@opensa/rw-codec/chunk';
-import { encodeColLibrary } from '@opensa/sa-lod/encode-col';
-import { type PrelightInfo, stockPrelightColor } from '@opensa/sa-lod/prelight';
 import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 

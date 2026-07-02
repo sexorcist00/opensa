@@ -1,5 +1,5 @@
+import { createTextureSource } from '@opensa/lod-common/texture-source';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
-import { createTextureSource } from '@opensa/sa-lod/texture-source';
 import { join } from 'node:path';
 
 import type { SaLodAdapter } from '../../core/adapter';

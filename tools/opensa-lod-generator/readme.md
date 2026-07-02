@@ -55,13 +55,14 @@ Stripping the old `lod*` models is done via `--strip-lods` (**plan 002**, 1d-iii
 > real SA on stream-in (OpenSA has no such limits). The original-game caps were removed; see the
 > `opensa-lod-generator-decimation` memory if SA support is revisited.
 
-**Decimation:** each cell is merged then QEM-decimated **as one mesh** (not per model) to `lodCellRatio` (0.2) of
-its triangles, floored at `lodCellMinTris` (1000) so sparse terrain isn't over-thinned. Two guards keep the far
-view clean — an edge-length cap (no flat-surface spikes) and a per-texture-group floor (no vanishing surfaces);
-vertices are **not** welded (welding smears textures / collapses stacked terrain). The DFF is emitted **two-sided**
-(OpenSA back-face culling would otherwise hole SA's inconsistently-wound ground) and **split across multiple
-atomics** when a cell exceeds the 65 535-vertex DFF limit. See plan 002 (Phase 1c/1d-i) and the
-`opensa-lod-generator-decimation` memory for the tuning history + the open flat-island-erosion issue.
+**Geometry: verbatim (no decimation).** Each cell LOD is the cell's real HD geometry **merged as-is** — QEM
+decimation was removed (it degraded the models: holes/spikes). Built via the shared `@opensa/lod-common` core
+(`MeshBuilder` → `applyModifiers([])` → encode; the modifier chain is the future home for simplification, shared
+with sa-lod-generator — see lod-common plan 002). Normals are re-derived after (most map geometry ships without
+them). The DFF is emitted **two-sided** (OpenSA back-face culling would otherwise hole SA's inconsistently-wound
+ground) and **split across multiple atomics** when a cell exceeds the 65 535-vertex DFF limit. The LOD win is
+draw-calls + a downscaled cell atlas + draw distance, not polycount (fine for OpenSA — no per-model limits). The
+`opensa-lod-generator-decimation` memory keeps the old decimation tuning history for when simplification returns.
 
 **What's baked:** exterior building/terrain instances only. **Trees** (the `@opensa/map-placement/vegetation`
 roster) are excluded — they get billboard impostors from [`lod-trees-generator`](../lod-trees-generator/), and

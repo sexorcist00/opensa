@@ -21,7 +21,7 @@
  *     --debug-png       also write a per-impostor PNG preview of each baked card atlas to `<out>` (default off)
  *   All paths are relative to the current working directory (absolute paths pass through).
  */
-import { parsePrelightInfo, type PrelightInfo } from '@opensa/sa-lod/prelight';
+import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/prelight';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 

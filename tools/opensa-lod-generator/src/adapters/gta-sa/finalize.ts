@@ -1,9 +1,9 @@
-import type { Vec3 } from '@opensa/sa-lod/mesh';
-import type { TextureSource } from '@opensa/sa-lod/texture-source';
+import type { Vec3 } from '@opensa/lod-common/mesh';
+import type { TextureSource } from '@opensa/lod-common/texture-source';
 
-import { encodeColLibrary } from '@opensa/sa-lod/encode-col';
-import { encodeLodDff } from '@opensa/sa-lod/encode-dff';
-import { encodeLodTxd } from '@opensa/sa-lod/encode-txd';
+import { encodeColLibrary } from '@opensa/lod-common/encode-col';
+import { encodeLodDff } from '@opensa/lod-common/encode-dff';
+import { encodeLodTxd } from '@opensa/lod-common/encode-txd';
 import { createImg } from '@opensa/tool-kit/archive/img';
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

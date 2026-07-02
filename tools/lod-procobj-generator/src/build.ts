@@ -1,7 +1,21 @@
+import type { MergedMesh, Vec3 } from '@opensa/lod-common/mesh';
+import type { SourceTexture, TextureSource } from '@opensa/lod-common/texture-source';
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
-import type { MergedMesh, Vec3 } from '@opensa/sa-lod/mesh';
-import type { SourceTexture, TextureSource } from '@opensa/sa-lod/texture-source';
 
+import { decimateMesh } from '@opensa/lod-common/decimate';
+import { encodeColLibrary } from '@opensa/lod-common/encode-col';
+import { encodeLodDff } from '@opensa/lod-common/encode-dff';
+import { encodeLodTxd } from '@opensa/lod-common/encode-txd';
+import { createModelSource } from '@opensa/lod-common/model-source';
+import { rebuildMeshNormals } from '@opensa/lod-common/normals';
+import {
+  applyMeshTrunkPrelight,
+  applyStockPrelight,
+  type FoliagePredicate,
+  type PrelightInfo,
+  stockPrelightColor,
+} from '@opensa/lod-common/prelight';
+import { createTextureSource } from '@opensa/lod-common/texture-source';
 import { allocateLodIds, buildLodIde, lodAlias, patchGtaDat } from '@opensa/map-placement/ide';
 import { convertProcObj, type ProcObjSpecies } from '@opensa/map-placement/procobj';
 import { UNDERWATER_PROCOBJ } from '@opensa/map-placement/procobj-strip';
@@ -12,20 +26,6 @@ import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { parseGtaDat } from '@opensa/renderware/parsers/text/gta-dat.parser';
 import { parseIde, parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
 import { decodeDxt } from '@opensa/rw-codec/dxt';
-import { decimateMesh } from '@opensa/sa-lod/decimate';
-import { encodeColLibrary } from '@opensa/sa-lod/encode-col';
-import { encodeLodDff } from '@opensa/sa-lod/encode-dff';
-import { encodeLodTxd } from '@opensa/sa-lod/encode-txd';
-import { createModelSource } from '@opensa/sa-lod/model-source';
-import { rebuildMeshNormals } from '@opensa/sa-lod/normals';
-import {
-  applyMeshTrunkPrelight,
-  applyStockPrelight,
-  type FoliagePredicate,
-  type PrelightInfo,
-  stockPrelightColor,
-} from '@opensa/sa-lod/prelight';
-import { createTextureSource } from '@opensa/sa-lod/texture-source';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

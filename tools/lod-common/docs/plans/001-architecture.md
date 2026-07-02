@@ -1,6 +1,10 @@
-# 001 — sa-lod: architecture & API
+# 001 — lod-common (was sa-lod): architecture & API
 
-**Status: ✅ As-built (shared library).** `@opensa/sa-lod` is a `type:tool` **library** (no CLI): the
+> **Renamed:** the package `@opensa/sa-lod` → `@opensa/lod-common` (dir `tools/sa-lod` → `tools/lod-common`) as it
+> became the shared HD→LOD home for both LOD generators — see [002](./002-shared-hd-to-lod-core.md). Older docs may
+> still say `sa-lod`.
+
+**Status: ✅ As-built (shared library).** `@opensa/lod-common` is a `type:tool` **library** (no CLI): the
 **simplified-copy LOD mesh pipeline** — QEM decimation, smooth-normal rebuild, and RenderWare DFF/TXD/COL encode
 from a merged mesh. Extracted from `opensa-lod-generator`'s adapter (+ a new `mesh.ts` types module) — see
 `lod-procobj-generator` [001 §extraction, phase 3](../../../lod-procobj-generator/docs/plans/001-architecture.md).
