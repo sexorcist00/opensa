@@ -7,6 +7,7 @@ const ZERO: Vec3 = [0, 0, 0];
 /** Mutable parallel attribute arrays accumulated across a clump's atomics. */
 interface Attributes {
   colors: number[];
+  nightColors: number[];
   normals: number[];
   positions: number[];
   uvs: number[];
@@ -20,8 +21,9 @@ interface Attributes {
  * texture name; prelit defaults to opaque white; normals are frame-rotated (or zeroed for the normals pass).
  */
 export function buildModelMesh(clump: RWClump): MergedMesh {
-  const out: Attributes = { colors: [], normals: [], positions: [], uvs: [] };
+  const out: Attributes = { colors: [], nightColors: [], normals: [], positions: [], uvs: [] };
   const groups = new Map<string, number[]>();
+  let hasNight = false;
 
   for (const atomic of clump.atomics) {
     const geometry = clump.geometries[atomic.geometryIndex];
@@ -30,7 +32,7 @@ export function buildModelMesh(clump: RWClump): MergedMesh {
     }
     const frame = clump.frames[atomic.frameIndex];
     const base = out.positions.length / 3;
-    appendVertices(out, geometry, frame?.rotation ?? IDENTITY, frame?.position ?? ZERO);
+    hasNight = appendVertices(out, geometry, frame?.rotation ?? IDENTITY, frame?.position ?? ZERO) || hasNight;
     for (const tri of geometry.triangles) {
       const texture = geometry.materials[tri.materialIndex]?.texture?.name.toLowerCase() ?? '';
       bucket(groups, texture).push(base + tri.a, base + tri.b, base + tri.c);
@@ -43,6 +45,9 @@ export function buildModelMesh(clump: RWClump): MergedMesh {
     normals: Float32Array.from(out.normals),
     positions: Float32Array.from(out.positions),
     uvs: Float32Array.from(out.uvs),
+    // Carry the source **night** prelit through so the decimated LOD darkens at night like the HD (else SA reuses
+    // the bright day prelit after dark). Only when a source geometry actually had a night set (`0x253F2F9`).
+    ...(hasNight ? { nightColors: Uint8Array.from(out.nightColors) } : {}),
   };
 }
 
@@ -60,11 +65,13 @@ export function meshBounds(mesh: MergedMesh): { max: Vec3; min: Vec3 } {
   return { max, min };
 }
 
-/** Append one geometry's frame-transformed vertices (position/normal/uv/colour) to the accumulator. */
-function appendVertices(out: Attributes, geometry: RWGeometry, r: readonly number[], t: Vec3): void {
+/** Append one geometry's frame-transformed vertices (position/normal/uv/colour + night colour) to the accumulator.
+ *  Returns whether this geometry carried a night set (drives whether the merged mesh emits `nightColors`). */
+function appendVertices(out: Attributes, geometry: RWGeometry, r: readonly number[], t: Vec3): boolean {
   const count = geometry.positions.length / 3;
   const uv = geometry.uvLayers[0] ?? null;
   const prelit = geometry.prelitColors;
+  const night = geometry.nightColors;
   const norm = geometry.normals;
   for (let i = 0; i < count; i += 1) {
     const x = geometry.positions[i * 3];
@@ -93,7 +100,17 @@ function appendVertices(out: Attributes, geometry: RWGeometry, r: readonly numbe
     } else {
       out.colors.push(255, 255, 255, 255);
     }
+    // Night colour per vertex: the source night set when present, else this geometry's day prelit (what SA itself
+    // falls back to at night) — so a model mixing night/no-night geometries keeps each part's correct dark value.
+    const src = night ?? prelit;
+    if (src) {
+      out.nightColors.push(src[i * 4], src[i * 4 + 1], src[i * 4 + 2], src[i * 4 + 3]);
+    } else {
+      out.nightColors.push(255, 255, 255, 255);
+    }
   }
+
+  return Boolean(night);
 }
 
 function bucket(groups: Map<string, number[]>, texture: string): number[] {

@@ -27,12 +27,34 @@ import {
 } from '@opensa/sa-lod/prelight';
 import { createTextureSource } from '@opensa/sa-lod/texture-source';
 import { editArchive } from '@opensa/tool-kit/archive/img';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type { ProcObjLodConfig } from './config';
 
+import { config as defaultConfig } from './config';
 import { buildModelMesh, meshBounds } from './mesh-builder';
+
+/** Convenience wrapper: partial `config` merged over the defaults (symmetry with lod-trees `buildTreeLods`). */
+export function buildProcobjLods(options: {
+  config?: Partial<ProcObjLodConfig>;
+  gamePath: string;
+  inPath?: string;
+  modloader?: boolean;
+  outPath: string;
+  prelight?: boolean;
+  prelightInfo?: PrelightInfo;
+}): void {
+  run({
+    config: { ...defaultConfig, ...options.config },
+    gamePath: options.gamePath,
+    inPath: options.inPath,
+    modloader: options.modloader ?? false,
+    outPath: options.outPath,
+    prelight: options.prelight ?? false,
+    prelightInfo: options.prelightInfo,
+  });
+}
 
 const IDE_REL = 'data/maps/lod_procobj.ide';
 const IDE_DAT = 'DATA\\MAPS\\LOD_PROCOBJ.IDE';
@@ -111,6 +133,13 @@ export function run(options: BuildOptions): void {
   const dat = parseGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'));
   const { idByModel, usedIds } = scanIdes(gamePath, dat.ide);
   const procModels = procObjModels(gamePath);
+
+  // Non-modloader: mirror the whole input game first so the drop-in is a **complete** build (our repacked gta3.img +
+  // static IPL/IDE below then overwrite the copies) — even when there are no species to convert. Keeps the pipeline
+  // lossless (see plan 005). `--modloader` writes only `lod/` + `hd/` mods, so it must NOT mirror.
+  if (!modloader) {
+    cpSync(gamePath, outPath, { force: true, recursive: true });
+  }
 
   // Candidate species: a procobj scatter species that has a stock object id. With `--in`, narrowed to the models
   // it ships; without it, **every** procobj species — converted straight from the game's own gta3.img. The

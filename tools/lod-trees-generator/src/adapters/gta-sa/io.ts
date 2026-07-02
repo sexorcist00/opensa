@@ -191,7 +191,9 @@ export function loadTree(dffBytes: Uint8Array, model: string, textures: Textures
     console.warn(`  ! ${model}: ${missing.size} texture(s) not in --txd → untextured: ${[...missing].join(', ')}`);
   }
 
-  return { bbox: { max, min }, name: model, textures, triangles };
+  const nightTint = computeNightTint(dff);
+
+  return { bbox: { max, min }, name: model, textures, triangles, ...(nightTint ? { nightTint } : {}) };
 }
 
 /** Open the game model archive (`gta3.img` + `gta_int.img` fallback) — used only to source the LOD template. */
@@ -207,6 +209,42 @@ export function openTemplateArchive(gamePath: string): ImgArchive {
     get: (name) => gta3.get(name) ?? gtaInt.get(name),
     names: [...new Set([...gta3.names, ...gtaInt.names])],
   };
+}
+
+/**
+ * A per-tree night tint for the impostor: `255 × nightAvg / dayAvg` per channel, averaged over every vertex that
+ * carries both a day (prelit) and night (`0x253F2F9`) colour. The impostor atlas bakes the **day** prelit, so this
+ * ratio (not the absolute night colour) is what darkens the billboard down to the HD's night look at render time.
+ * Returns `null` when the source has no night set (the HD is day-lit at night too — leave the impostor bright).
+ */
+function computeNightTint(dff: ReturnType<typeof parseDff>): null | Rgba {
+  let count = 0;
+  const day = [0, 0, 0];
+  const night = [0, 0, 0];
+  for (const geometry of dff.geometries) {
+    const d = geometry.prelitColors;
+    const n = geometry.nightColors;
+    if (!d || !n || d.length !== n.length) {
+      continue;
+    }
+    for (let i = 0; i < d.length; i += 4) {
+      for (let c = 0; c < 3; c += 1) {
+        day[c] += d[i + c];
+        night[c] += n[i + c];
+      }
+      count += 1;
+    }
+  }
+  if (count === 0) {
+    return null;
+  }
+  const tint = (c: number): number => {
+    const avgDay = day[c] / count;
+
+    return avgDay > 0 ? Math.max(0, Math.min(255, Math.round((255 * (night[c] / count)) / avgDay))) : 0;
+  };
+
+  return [tint(0), tint(1), tint(2), 255];
 }
 
 function decodeTexture(rw: RWTexture): DecodedTexture {

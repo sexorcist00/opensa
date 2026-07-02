@@ -94,11 +94,26 @@ describe('patchGtaDat', () => {
   });
 
   describe('positive cases', () => {
-    it('inserts after the last IDE line, before the IPLs', () => {
+    it('inserts before the first IPL line', () => {
       const dat = 'IDE a.ide\r\nIDE b.ide\r\nIPL x.ipl\r\n';
       const out = patchGtaDat(dat, 'DATA\\MAPS\\lodtrees.IDE').split('\r\n');
 
       expect(out).toEqual(['IDE a.ide', 'IDE b.ide', 'IDE DATA\\MAPS\\lodtrees.IDE', 'IPL x.ipl', '']);
+    });
+
+    it('inserts before the IPLs even when a later IDE sits past them (mod-appended)', () => {
+      const dat = 'IDE stock.ide\r\nIPL stock.ipl\r\nIDE mod.ide\r\nIPL mod.ipl\r\n';
+      const out = patchGtaDat(dat, 'DATA\\MAPS\\lodtrees.IDE').split('\r\n');
+
+      // Must land before `stock.ipl` (which may reference the new ids), NOT after the trailing `mod.ide`.
+      expect(out).toEqual([
+        'IDE stock.ide',
+        'IDE DATA\\MAPS\\lodtrees.IDE',
+        'IPL stock.ipl',
+        'IDE mod.ide',
+        'IPL mod.ipl',
+        '',
+      ]);
     });
   });
 });

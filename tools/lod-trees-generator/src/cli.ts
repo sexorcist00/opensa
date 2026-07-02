@@ -22,12 +22,11 @@
  *   All paths are relative to the current working directory (absolute paths pass through).
  */
 import { parsePrelightInfo, type PrelightInfo } from '@opensa/sa-lod/prelight';
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 
-import { createGtaSaTreeLodAdapter } from './adapters/gta-sa';
+import { buildTreeLods } from './build';
 import { config } from './config';
-import { run } from './core';
 
 function argValue(flag: string): string | undefined {
   const index = process.argv.indexOf(flag);
@@ -60,19 +59,8 @@ function main(): void {
   if (!statSync(gamePath, { throwIfNoEntry: false })?.isDirectory()) {
     throw new Error(`--game must be a game-data directory: ${gamePath}`);
   }
-  mkdirSync(outPath, { recursive: true });
 
-  const merged = {
-    ...config,
-    cards: Number(argValue('--cards') ?? config.cards),
-    drawDistance: Number(argValue('--draw') ?? config.drawDistance),
-    textureSize: Number(argValue('--tex') ?? config.textureSize),
-  };
-
-  const debugPng = process.argv.includes('--debug-png');
-  const modloader = process.argv.includes('--modloader');
   const prelight = process.argv.includes('--prelight');
-  const strip = process.argv.includes('--strip');
 
   // `--prelight` is a bare flag, OR `--prelight <info.json>` of per-model overrides (a following non-flag token).
   const prelightArg = argValue('--prelight');
@@ -85,20 +73,21 @@ function main(): void {
     prelightInfo = parsePrelightInfo(readFileSync(file, 'utf8'));
   }
 
-  run(
-    createGtaSaTreeLodAdapter({
-      config: merged,
-      debugPng,
-      gamePath,
-      inPath,
-      modloader,
-      outPath,
-      prelight,
-      prelightInfo,
-      strip,
-    }),
-    merged,
-  );
+  buildTreeLods({
+    config: {
+      cards: Number(argValue('--cards') ?? config.cards),
+      drawDistance: Number(argValue('--draw') ?? config.drawDistance),
+      textureSize: Number(argValue('--tex') ?? config.textureSize),
+    },
+    debugPng: process.argv.includes('--debug-png'),
+    gamePath,
+    inPath,
+    modloader: process.argv.includes('--modloader'),
+    outPath,
+    prelight,
+    prelightInfo,
+    strip: process.argv.includes('--strip'),
+  });
 }
 
 main();

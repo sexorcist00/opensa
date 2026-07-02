@@ -6,6 +6,12 @@
 
 /** Run configuration (the "what/where" knobs). */
 export interface LodConfig {
+  /**
+   * Model names (lowercased, HD **and** LOD) owned by sibling generators — lod-trees/lod-procobj in the
+   * perfect-map pipeline. sa-lod skips cloning/hole-filling any link touching these so it never re-processes
+   * another tool's finished LODs (which double the far-view geometry). See the pipeline's `collectGeneratedModels`.
+   */
+  excludeItems?: readonly string[];
   /** Curated HD models (lowercased) that have no LOD and hole the far view — a far-LOD is generated for each (plan 003). */
   holeFillModels?: readonly string[];
   /** Draw distance for the generated hole-fill LODs (covers the far view once the HD unloads). */
@@ -36,6 +42,8 @@ export interface LodLink {
 export interface ResolveResult {
   /** LOD models skipped because they also have a standalone (non-target) placement — cloning would corrupt it. */
   excludedDualRole: number;
+  /** LOD models skipped because they belong to a sibling generator (lod-trees/lod-procobj) — already final. */
+  excludedGenerated: number;
   /** LOD models skipped because the HD or LOD is vegetation (trees get impostors, not HD clones). */
   excludedVegetation: number;
   links: LodLink[];

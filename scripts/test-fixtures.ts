@@ -91,6 +91,12 @@ const MANIFEST: readonly Fixture[] = [
   extract('ws_floodbeams.dff', 'dff/floodbeams/ws_floodbeams.dff'),
   extract('ce_grndpalcst05.dff', 'dff/frame-offset-ignored/ce_grndpalcst05.dff'),
   extract('skullpillar01_lvs.dff', 'dff/particle/skullpillar01_lvs.dff'),
+  // A refinery chimney carrying BOTH a 2dfx particle emitter (smoke) AND light coronas — the `stripParticleEffects`
+  // fixture (drops the smoke, keeps the coronas). Also has day + night vertex colours.
+  extract('refchimny01.dff', 'dff/particle/refchimny01.dff'),
+  // A stock HD tree with day + night vertex colours — the night-tint fixtures (lod-trees `computeNightTint` and the
+  // lod-procobj mesh night-colour carry).
+  extract('cedar1_hi.dff', 'dff/night-colours/cedar1_hi.dff'),
   extract('dyntraffic.txd', 'dff/trafficlight-backface-culling/dyntraffic.txd'),
   extract('admiral.dff', 'dff/vehicle/admiral.dff'),
   extract('squalo.dff', 'dff/vehicle/squalo.dff'),

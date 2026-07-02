@@ -10,7 +10,7 @@ import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parse
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { applyStockPrelight, type PrelightInfo } from '@opensa/sa-lod/prelight';
 import { editArchive } from '@opensa/tool-kit/archive/img';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { linkBinaryLods } from './ipl-binary-link';
@@ -106,6 +106,10 @@ export function placeMap(options: PlaceOptions): void {
     return;
   }
 
+  // `--out` (non-modloader): mirror the whole input game first so the drop-in is a **complete** build (the repacked
+  // gta3.img + edited data below then overwrite the copies). Keeps the pipeline lossless — see plan 009.
+  cpSync(gamePath, outPath, { force: true, recursive: true });
+
   // `--out`: repack gta3.img + patch gta.dat, with the `--in` HD swap.
   const { retxd, swap } = computeSwap(options, result.placedSources, procModels, archive, dat);
   for (const [iplPath, text] of result.texts) {
@@ -125,7 +129,7 @@ export function placeMap(options: PlaceOptions): void {
     `place: ${result.attached} tree instances → impostor LODs ` +
       `(${result.appended} appended, ${result.repointed} repointed) · ${swap.size} HD DFFs swapped ` +
       `(${retxd.txds.size} custom TXD, ${retxd.ides.size} IDEs retxd'd) · ${registry.length} impostors ` +
-      `· LOD draw ${options.drawDistance} → ${outPath}/gta3.img`,
+      `· LOD draw ${options.drawDistance} → ${outPath}/models/gta3.img`,
   );
 }
 
@@ -372,7 +376,7 @@ function emitImg(
   for (const [name, bytes] of entries) {
     img.set(name, bytes);
   }
-  writeBytes(join(destDir, 'gta3.img'), img.build());
+  writeBytes(join(destDir, 'models', 'gta3.img'), img.build());
 }
 
 function groupStreams(archive: ImgArchive): Map<string, string[]> {

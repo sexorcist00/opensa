@@ -22,7 +22,8 @@ export function createSaLodAdapter(game: string, gameDir: string, config: LodCon
   const dataDir = join(gameDir, 'data');
   const source = createTextureSource(archives.all);
   const halvings = halvingsFor(config.texScale);
-  const holeModels = new Set(config.holeFillModels ?? []);
+  const exclude = new Set((config.excludeItems ?? []).map((name) => name.toLowerCase()));
+  const holeModels = new Set([...(config.holeFillModels ?? [])].filter((model) => !exclude.has(model.toLowerCase())));
   const holeLodDraw = config.holeLodDraw ?? 1500;
 
   // Triangle count per model (DFF), cached — drives the sizing report.
@@ -53,7 +54,7 @@ export function createSaLodAdapter(game: string, gameDir: string, config: LodCon
       writeBuild({ archives, gameDir, halvings, holeLodDraw, holeModels, links: resolved.links, outDir, source }),
     game,
     report: (resolved: ResolveResult): SizingReport => summarize(resolved, tris),
-    resolvePairs: (): ResolveResult => resolveLodLinks(dataDir, archives.gta3),
+    resolvePairs: (): ResolveResult => resolveLodLinks(dataDir, archives.gta3, exclude),
   };
 }
 

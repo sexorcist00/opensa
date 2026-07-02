@@ -4,7 +4,7 @@ import { collectGeometries } from '@opensa/rw-codec/dff';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { clearTristripFlag, setTextureName, stripExtraVertColour } from './dff-edit';
+import { clearTristripFlag, setNightColour, setTextureName, stripExtraVertColour } from './dff-edit';
 
 // A stock vegetation LOD DFF (the encoder's template): tristrip flag set + an extra-vertex-colour extension.
 const TEMPLATE = 'tests/original/dff/lod-template/lodroadscoast02.dff';
@@ -80,6 +80,26 @@ describe('stripExtraVertColour', () => {
 
       expect(geomExtTypes(out)).toContain(0x50e);
       expect(parseDff(ab(out)).geometries).toHaveLength(1);
+    });
+  });
+});
+
+describe('setNightColour', () => {
+  describe('positive cases', () => {
+    it('bakes a night (0x253f2f9) set of one RGBA per vertex', () => {
+      const out = setNightColour(stripExtraVertColour(template()), [12, 13, 14, 255]);
+
+      expect(geomExtTypes(out)).toContain(0x253f2f9);
+      const night = parseDff(ab(out)).geometries[0].nightColors!;
+      expect(night.length % 4).toBe(0);
+      expect([night[0], night[1], night[2], night[3]]).toEqual([12, 13, 14, 255]);
+    });
+
+    it('replaces an existing night set instead of duplicating it', () => {
+      const out = setNightColour(setNightColour(template(), [1, 2, 3, 255]), [9, 8, 7, 255]);
+
+      expect(geomExtTypes(out).filter((type) => type === 0x253f2f9)).toHaveLength(1);
+      expect([...parseDff(ab(out)).geometries[0].nightColors!].slice(0, 4)).toEqual([9, 8, 7, 255]);
     });
   });
 });

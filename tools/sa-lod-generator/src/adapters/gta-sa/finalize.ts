@@ -6,6 +6,7 @@ import { editIdeTxd } from '@opensa/map-placement/retxd';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
+import { stripParticleEffects } from '@opensa/rw-codec/dff';
 import { encodeHalvedTxd } from '@opensa/sa-lod/encode-txd';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { cpSync, readFileSync, writeFileSync } from 'node:fs';
@@ -108,7 +109,9 @@ export function writeBuild(input: BuildInput): BuildStats {
       stats.missingHd += 1;
       continue;
     }
-    img.set(`${link.lodModel}.dff`, new Uint8Array(hdDff));
+    // Strip particle 2dfx (factory smoke/fire/fountains) from the clone — a far LOD must not re-emit them (double
+    // emitter + far-view overdraw). Coronas/lights are kept (distant night lights are wanted). See the FX memory.
+    img.set(`${link.lodModel}.dff`, stripParticleEffects(new Uint8Array(hdDff)));
     modelToTxd.set(link.lodModel, cloneTxd);
     stats.clonedLods += 1;
   }

@@ -24,8 +24,10 @@ already a LOD source/target — validated, skip + warn otherwise):
 
 1. **New LOD model** — a fresh object id (`> maxObjectId`, needs **fastman92**; SA's 18 630 ceiling is already
    full), name `salodh<NNNN>`. DFF = the HD's bytes **verbatim** (same as Phase 1 — no format risk). TXD = the HD's
-   textures at `texScale` (deduped per source TXD, shared with Phase 1's clone TXDs). COL — none (LODs don't
-   collide). IDE `objs` line with a **high draw distance** (`holeLodDraw`, default 1500) so it covers the far view.
+   textures at `texScale` (deduped per source TXD, shared with Phase 1's clone TXDs). **COL — a bounds-only 112-byte
+   COL3** (the HD's AABB), packed as `salod-holes.col`: a **new** streamed model with no collision crashes SA
+   (`MODEL_DOES_NOT_HAVE_COLLISION_LOADED`) — every other LOD tool emits one; skipping it was the real-game crash.
+   IDE `objs` line with a **high draw distance** (`holeLodDraw`, default 1500) so it covers the far view.
 2. **Placement + link** — for every HD instance of the model (text IPL rows _and_ binary `_stream` records):
    append a leaf LOD instance (`lod -1`) at the **HD instance's transform** to the area's **companion text IPL**
    (append-only → never shifts the existing index space; see the `ipl-lod-index-coupling` memory), and point the HD

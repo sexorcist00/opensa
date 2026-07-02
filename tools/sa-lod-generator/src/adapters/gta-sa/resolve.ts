@@ -12,6 +12,13 @@ import type { Archive } from './io';
 /** Curated SA vegetation roster (lowercased) — trees get impostors from lod-trees-generator, not HD clones. */
 const TREE_MODELS = new Set(SA_TREE_MODELS);
 
+/**
+ * TXD atlases owned by the sibling LOD generators (lod-trees, lod-procobj). Their LODs are already final products —
+ * sa-lod must NOT re-clone them (doing so overwrites their DFF and repoints their TXD to a `salod*` clone that lacks
+ * the right textures → in-game null-deref when the LOD binds its dictionary; see `lod-detection-name-vs-target`).
+ */
+const GENERATED_LOD_TXDS = new Set(['lod_procobj', 'lodtrees']);
+
 interface Instance {
   lod: number;
   model: string;
@@ -42,7 +49,11 @@ export function areaKey(name: string): string {
  * Returns links aggregated per `(hdModel, lodModel)` with an instance count, each carrying the LOD's id + txd from
  * its IDE def (reused verbatim on the clone — a drop-in, no new id). Read-only reuse of the engine parsers.
  */
-export function resolveLodLinks(dataDir: string, gta3: Archive): ResolveResult {
+export function resolveLodLinks(
+  dataDir: string,
+  gta3: Archive,
+  exclude: ReadonlySet<string> = new Set(),
+): ResolveResult {
   const idToModel = new Map<number, string>();
   const modelDef = new Map<string, ModelDef>();
   readDefs(dataDir, idToModel, modelDef);
@@ -55,10 +66,16 @@ export function resolveLodLinks(dataDir: string, gta3: Archive): ResolveResult {
 
   const counts = new Map<string, number>(); // `${hdModel}|${lodModel}`
   const excludedDualRole = new Set<string>();
+  const excludedGenerated = new Set<string>();
   const excludedVegetation = new Set<string>();
   let unresolved = 0;
   const link = (hd: string | undefined, lod: string | undefined): void => {
     if (!hd || !lod || isLodModel(hd)) {
+      return;
+    }
+    if (exclude.has(hd) || exclude.has(lod)) {
+      excludedGenerated.add(lod); // explicitly owned by a sibling generator (pipeline-supplied) — leave untouched
+
       return;
     }
     if (TREE_MODELS.has(hd) || TREE_MODELS.has(lod)) {
@@ -66,8 +83,14 @@ export function resolveLodLinks(dataDir: string, gta3: Archive): ResolveResult {
 
       return;
     }
-    if (!modelDef.has(lod)) {
+    const def = modelDef.get(lod);
+    if (!def) {
       unresolved += 1; // the LOD target has no IDE def — can't clone it
+
+      return;
+    }
+    if (GENERATED_LOD_TXDS.has(def.txd)) {
+      excludedGenerated.add(lod); // already a finished LOD from lod-trees/lod-procobj — leave it untouched
 
       return;
     }
@@ -91,7 +114,13 @@ export function resolveLodLinks(dataDir: string, gta3: Archive): ResolveResult {
     links.push({ hdModel, hdTxd, instanceCount: count, lodId: def.id, lodModel, lodTxd: def.txd });
   }
 
-  return { excludedDualRole: excludedDualRole.size, excludedVegetation: excludedVegetation.size, links, unresolved };
+  return {
+    excludedDualRole: excludedDualRole.size,
+    excludedGenerated: excludedGenerated.size,
+    excludedVegetation: excludedVegetation.size,
+    links,
+    unresolved,
+  };
 }
 
 /** Recursively list every file under `dir`. */

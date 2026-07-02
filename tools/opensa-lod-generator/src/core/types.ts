@@ -40,6 +40,12 @@ export interface LodConfig {
    * exactly one engine cell (see plan 002 "Engine fit").
    */
   cellSize: number;
+  /**
+   * Model names (lowercased, HD **and** LOD) owned by sibling generators — lod-trees/lod-procobj in the
+   * perfect-map pipeline. These are neither baked into cells nor stripped, so opensa-lod never re-processes another
+   * tool's finished LODs/impostors. See the pipeline's `collectGeneratedModels`.
+   */
+  excludeItems?: readonly string[];
   /** Floor on a cell's kept triangle count — a cell with fewer HD triangles than this is left undecimated. Sparse
    *  cells (e.g. open terrain / mountains) are already LOD-cheap; a flat ratio would over-thin them into holes. */
   lodCellMinTris: number;

@@ -16,6 +16,10 @@ export interface DecodedTexture {
 export interface HdTree {
   bbox: { max: Vec3; min: Vec3 };
   name: string;
+  /** Per-tree night vertex tint (`255 × nightAvg/dayAvg` of the source, per channel) — baked onto the impostor so
+   *  it darkens at night like the HD (the atlas already carries the day prelit). Absent when the source has no
+   *  night colours (then the HD stays day-lit at night too, so the impostor should as well). */
+  nightTint?: Rgba;
   textures: Map<string, DecodedTexture>;
   triangles: HdTriangle[];
 }
@@ -38,6 +42,9 @@ export interface Impostor {
   height: number;
   image: Uint8Array;
   name: string;
+  /** Night vertex colour to bake onto every card vertex (from the source tree's {@link HdTree.nightTint}) so the
+   *  impostor isn't too bright at night; absent → no night set emitted (impostor stays day-lit, matching the HD). */
+  nightColor?: Rgba;
   width: number;
 }
 

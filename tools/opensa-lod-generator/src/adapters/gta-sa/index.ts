@@ -24,6 +24,7 @@ export function createGtaSaLodAdapter(game: string, gameDir: string, config: Lod
   const archives = openArchives(join(gameDir, 'models'));
   const source = createModelSource(archives);
   const textureSource = createTextureSource(archives);
+  const exclude = new Set((config.excludeItems ?? []).map((name) => name.toLowerCase()));
 
   return {
     bakeCell(cell: Cell): BakedCell {
@@ -55,7 +56,7 @@ export function createGtaSaLodAdapter(game: string, gameDir: string, config: Lod
     },
     game,
     resolveCells(): Cell[] {
-      return resolveCells(gameDir, archives, config.cellSize);
+      return resolveCells(gameDir, archives, config.cellSize, exclude);
     },
   };
 }

@@ -23,6 +23,7 @@ export const RW_TEXTURE_DICTIONARY = 0x16;
 export const RW_GEOMETRY_LIST = 0x1a;
 export const RW_SKIN = 0x116;
 export const RW_BIN_MESH_PLG = 0x50e;
+export const RW_TWO_D_EFFECT = 0x253f2f8;
 export const RW_NIGHT_VERTEX_COLORS = 0x253f2f9;
 
 /** Section types we descend into: down to a Geometry's Struct/Extension (BinMeshPLG / night rebuild) and a

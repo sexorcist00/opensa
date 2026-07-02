@@ -36,11 +36,16 @@ export function maxObjectId(gameDir: string): number {
  * (no placed HD twin) — redundant per-object `lod*` are skipped (their HD is baked instead). See
  * {@link collectInstances}.
  */
-export function resolveCells(gameDir: string, archives: readonly Archive[], cellSize: number): Cell[] {
+export function resolveCells(
+  gameDir: string,
+  archives: readonly Archive[],
+  cellSize: number,
+  exclude: ReadonlySet<string> = new Set(),
+): Cell[] {
   const dataDir = join(gameDir, 'data');
   const idToModel = buildIdMap(dataDir);
   const cells = new Map<string, Cell>();
-  for (const instance of collectInstances(dataDir, archives, idToModel)) {
+  for (const instance of collectInstances(dataDir, archives, idToModel, exclude)) {
     const [cx, cy] = cellOf(instance.position, cellSize);
     const key = cellKey(cx, cy);
     let cell = cells.get(key);
@@ -91,6 +96,7 @@ function collectInstances(
   dataDir: string,
   archives: readonly Archive[],
   idToModel: Map<number, string>,
+  exclude: ReadonlySet<string>,
 ): CellInstance[] {
   // First pass: every exterior, non-tree instance with a resolved model (+ the set of all placed model names).
   const raw: CellInstance[] = [];
@@ -100,8 +106,8 @@ function collectInstances(
       continue; // real interior (low byte ≠ 0, non-world) — `interior > 0` dropped area-coded exteriors like 1024
     }
     const model = idToModel.get(instance.id) ?? instance.modelName.toLowerCase();
-    if (!model || TREE_MODELS.has(model)) {
-      continue; // missing def, or a tree (→ lod-trees-generator impostor)
+    if (!model || TREE_MODELS.has(model) || exclude.has(model)) {
+      continue; // missing def, a tree (→ lod-trees), or owned by a sibling generator (lod-trees/lod-procobj)
     }
     placed.add(model);
     raw.push({ model, position: instance.position, rotation: instance.rotation });

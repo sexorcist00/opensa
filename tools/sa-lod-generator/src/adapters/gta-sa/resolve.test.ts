@@ -54,6 +54,20 @@ describe('resolveLodLinks', () => {
       expect(result.links).toHaveLength(0);
       expect(result.excludedVegetation).toBe(1);
     });
+
+    it('excludes a LOD owned by a sibling generator (txd lod_procobj/lodtrees)', () => {
+      // lod-procobj emits `<hd> → lod<hd>` links with the LOD's txd set to `lod_procobj`; sa-lod must leave them be.
+      const ide = ['objs', '1, sand_josh1, procobj, 300, 0', '2, lodsand_josh1, lod_procobj, 300, 0', 'end'].join('\n');
+      const ipl = [
+        'inst',
+        '1, sand_josh1, 0, 0,0,0, 0,0,0,1, 1',
+        '2, lodsand_josh1, 0, 0,0,0, 0,0,0,1, -1',
+        'end',
+      ].join('\n');
+      const result = resolve(ide, ipl);
+      expect(result.links).toHaveLength(0);
+      expect(result.excludedGenerated).toBe(1);
+    });
   });
 
   describe('positive cases', () => {

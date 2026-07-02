@@ -58,13 +58,24 @@ export function lodAlias(name: string, index: number, prefix = 'lodt'): string {
 export function patchGtaDat(dat: string, idePath: string): string {
   const eol = dat.includes('\r\n') ? '\r\n' : '\n';
   const lines = dat.split(/\r?\n/);
+  const insert = `IDE ${idePath}`;
+  // Insert **before the first IPL/ZON placement** — the game loads gta.dat top-down, so a model referenced by an
+  // (even stock) IPL must be defined by an IDE that appears earlier. Appending after the *last* IDE was wrong when
+  // a mod had already appended its own `IDE` lines past the IPL section (the new IDE then loaded too late → the
+  // placements that reference its ids hit `undefined ID` and crash).
+  const firstIpl = lines.findIndex((line) => /^\s*IPL\b/i.test(line));
+  if (firstIpl >= 0) {
+    lines.splice(firstIpl, 0, insert);
+
+    return lines.join(eol);
+  }
+  // No IPL section — keep the IDEs grouped (after the last one), else prepend.
   let lastIde = -1;
   lines.forEach((line, i) => {
     if (/^\s*IDE\b/i.test(line)) {
       lastIde = i;
     }
   });
-  const insert = `IDE ${idePath}`;
   if (lastIde < 0) {
     lines.unshift(insert);
   } else {

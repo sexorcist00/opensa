@@ -1,6 +1,12 @@
+import type { Vec3 } from '@opensa/sa-lod/mesh';
+
 import { ideRefs } from '@opensa/game-build/partition';
+import { patchGtaDat } from '@opensa/map-placement/ide';
+import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
+import { stripParticleEffects } from '@opensa/rw-codec/dff';
+import { encodeColLibrary } from '@opensa/sa-lod/encode-col';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -29,6 +35,8 @@ export interface FillStats {
 
 /** A LOD to generate for a curated HD-without-LOD model (plan 003). */
 interface HoleFill {
+  /** Local AABB (from the HD DFF) — the bounds-only COL3 SA needs so the new streamed model has collision. */
+  bounds: { max: Vec3; min: Vec3 };
   hdModel: string;
   hdTxd: string;
   lodId: number;
@@ -74,6 +82,17 @@ export function fillMissingLods(input: FillInput): FillStats {
   const fills = assignFills(input, modelDef, roles, maxId);
   const byHd = new Map(fills.map((fill) => [fill.hdModel, fill]));
   writeIde(input, fills);
+  // Each new LOD is a **new** streamed model — SA faults (`MODEL_DOES_NOT_HAVE_COLLISION_LOADED`) on any model
+  // with no collision, so pack one bounds-only COL3 per model (named to it). SA auto-discovers `.col` in the IMG.
+  if (fills.length > 0) {
+    input.setImg(
+      'salod-holes.col',
+      encodeColLibrary(
+        fills.map((fill) => fill.bounds),
+        fills.map((fill) => fill.lodModel),
+      ),
+    );
+  }
 
   let appended = 0;
   for (const [area, text] of textByArea) {
@@ -116,11 +135,35 @@ function assignFills(
     }
     nextId += 1;
     const lodModel = `salodh${String(fills.length).padStart(4, '0')}`;
-    input.setImg(`${lodModel}.dff`, new Uint8Array(dff));
-    fills.push({ hdModel, hdTxd: txd, lodId: nextId, lodModel });
+    // Same as Phase 1: the far-LOD clone must not carry particle emitters (smoke/fire) — strip them, keep coronas.
+    input.setImg(`${lodModel}.dff`, stripParticleEffects(new Uint8Array(dff)));
+    fills.push({ bounds: dffBounds(dff), hdModel, hdTxd: txd, lodId: nextId, lodModel });
   }
 
   return fills;
+}
+
+/** Local AABB over a DFF's vertices — the bounds for its (faces-less) COL3. */
+function dffBounds(dff: ArrayBuffer): { max: Vec3; min: Vec3 } {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  let seen = false;
+  try {
+    for (const geometry of parseDff(dff).geometries) {
+      const p = geometry.positions;
+      for (let i = 0; i < p.length; i += 3) {
+        seen = true;
+        for (let a = 0; a < 3; a += 1) {
+          min[a] = Math.min(min[a], p[i + a]);
+          max[a] = Math.max(max[a], p[i + a]);
+        }
+      }
+    }
+  } catch {
+    seen = false; // unparseable → zero bounds
+  }
+
+  return seen ? { max, min } : { max: [0, 0, 0], min: [0, 0, 0] };
 }
 
 /** Per-area: append a leaf LOD at each curated HD's transform and point that HD's `lod` (text row or stream record). */
@@ -283,10 +326,11 @@ function writeIde(input: FillInput, fills: readonly HoleFill[]): void {
   const rel = join('maps', 'salod-holes.ide');
   const rows = fills.map((fill) => `${fill.lodId}, ${fill.lodModel}, ${fill.hdTxd}, ${input.holeLodDraw}, 0`);
   writeFileSync(join(input.outDataDir, rel), `objs\n${rows.join('\n')}\nend\n`);
+  // Register the IDE **before the first IPL** (via patchGtaDat): the salodh instances live in stock text IPLs, so
+  // their ids must be defined before those IPLs load — appending at the end crashes with `undefined ID`.
   const datPath = join(input.outDataDir, 'gta.dat');
-  const line = 'IDE DATA\\MAPS\\salod-holes.ide';
   const dat = readFileSync(datPath, 'utf8');
-  if (!dat.includes(line)) {
-    writeFileSync(datPath, `${dat.trimEnd()}\n${line}\n`);
+  if (!/salod-holes\.ide/i.test(dat)) {
+    writeFileSync(datPath, patchGtaDat(dat, 'DATA\\MAPS\\salod-holes.ide'));
   }
 }

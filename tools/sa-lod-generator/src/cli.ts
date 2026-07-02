@@ -38,7 +38,8 @@ function main(): void {
   const resolved = adapter.resolvePairs();
   printReport(label, adapter.report(resolved));
   console.log(
-    `  excluded ${resolved.excludedDualRole} dual-role + ${resolved.excludedVegetation} vegetation LODs (kept stock)`,
+    `  excluded ${resolved.excludedDualRole} dual-role + ${resolved.excludedVegetation} vegetation + ` +
+      `${resolved.excludedGenerated} sibling-generated LODs (kept stock)`,
   );
 
   const outArg = argValue('--out');

@@ -69,7 +69,15 @@ export function renderImpostor(tree: HdTree, config: TreeLodConfig): Impostor {
     cards.push({ angle, uvRect: { h: tileH, w: tileW, x: gx, y: gy }, worldU: [uMin, uMax], worldZ: [zMin, zMax] });
   }
 
-  return { bbox: tree.bbox, cards, height, image, name: `lod${tree.name}`, width };
+  return {
+    bbox: tree.bbox,
+    cards,
+    height,
+    image,
+    name: `lod${tree.name}`,
+    width,
+    ...(tree.nightTint ? { nightColor: tree.nightTint } : {}),
+  };
 }
 
 /** Copy a `tileW×tileH` RGBA sub-image into `dst` (width `dstW`) at offset (`gx`, `gy`). */

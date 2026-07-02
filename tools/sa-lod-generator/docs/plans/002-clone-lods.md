@@ -55,9 +55,11 @@ as stock** (report the skipped count). Merging their HDs (a mini-cell) is a late
   `texScale` (½ dim → ¼ area), **DXT + full mip chain** (DXT5 if alpha, else DXT1), pack under the same texture
   **names**. Reuse `@opensa/sa-lod` `encode-txd`. This is the **only generated asset** → the only real risk
   surface (get DXT/mips/format right — the `sa-generated-asset-format` checklist).
-- **COL — skipped.** Stock world LODs are collision-less and already work, so replacing the `<lodModel>.dff` by
-  name inherits the stock no-COL — nothing to emit. (The empty-112-byte-COL3 path via `@opensa/sa-lod` `encode-col`
-  stays available if a future model needs it.)
+- **COL — inherited (Phase 1) / emitted (Phase 2).** Stock world LODs **do** carry collision (239 `lod*` COL3s in
+  vanilla `gta3.img`) — the earlier "collision-less" assumption was wrong. Phase 1 replaces the LOD `.dff` **by
+  name**, so the stock COL is preserved untouched → nothing to do. Phase 2's **new** models have no stock COL, so it
+  packs a bounds-only 112-byte COL3 per model (`salod-holes.col`, via `@opensa/sa-lod` `encode-col`) — SA faults
+  (`MODEL_DOES_NOT_HAVE_COLLISION_LOADED`) on any streamed model with no collision (see plan 003).
 
 ### 3. `finalize(outDir, cloned)` — repack + retarget, drop-in
 

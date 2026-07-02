@@ -30,7 +30,10 @@ type GtaDat = ReturnType<typeof parseGtaDat>;
  * DFF-deletion, so a deleted model can't have surviving instances (no dangling refs). The cell-LOD `lods.*`
  * assets are `lod*`-named too, so they're skipped. IDE defs are left as-is. Returns the removed counts.
  */
-export function stripOldLods(buildDir: string): { entries: number; instances: number } {
+export function stripOldLods(
+  buildDir: string,
+  exclude: ReadonlySet<string> = new Set(),
+): { entries: number; instances: number } {
   const dat = parseGtaDat(readFileSync(join(buildDir, 'data', 'gta.dat'), 'utf8'));
   const imgPath = join(buildDir, 'models', 'gta3.img');
   const archive = openArchive(readBytes(imgPath));
@@ -40,7 +43,9 @@ export function stripOldLods(buildDir: string): { entries: number; instances: nu
   const isOldLod = (name: string): boolean => {
     const model = name.toLowerCase();
 
-    return lodExterior.has(model) && !interiorModels.has(model);
+    // Sibling generators' LODs (lod-trees/lod-procobj) are `lod*`-named too but must survive — they're the far
+    // representation for content opensa-lod deliberately doesn't bake into cells.
+    return lodExterior.has(model) && !interiorModels.has(model) && !exclude.has(model);
   };
   const lodIds = new Set([...idToModel].filter(([, model]) => isOldLod(model)).map(([id]) => id));
 
