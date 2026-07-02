@@ -28,6 +28,9 @@ const holeFillModels = [
   // Downtown LA Bonaventure tower (glass shell + body) — placed in lan_stream2 with lod=-1, holes the skyline.
   'bonaventuragl_lan',
   'bonaventura_lan',
+  'bventuraENV_LAn',
+  // Roadsign
+  'lamotsig2_LA',
 ];
 
 /**

@@ -36,6 +36,11 @@
   cull edge is always hidden; the Fog slider can only pull fog closer (thicker), never expose the edge.
 - Picking: instanced map objects (`userData.region`), procobj clutter (`userData.procObj`),
   road-sign text meshes report their host model.
+- **Hide object** (Map screen, on a picked model): collapses that `InstancedMesh` instance to zero scale
+  (`game.hideSelectedObject`, `HiddenInstances` in `packages/game/src/debug/`) so you can peek behind it;
+  a hidden counter + **Restore all** appear, and every hide is restored automatically on map-viewer exit /
+  debugger close (`setMapViewer(false)` calls `restoreAll` — hides can't leak into gameplay). Transient by
+  design: a rebuilt cell brings the instance back.
 - Debug URL params: `?nocull=1`, `?shadowdebug=1`.
 
 ## Known gaps / candidates
@@ -46,4 +51,5 @@
 ## Test coverage anchors
 
 zone tests (`city`, `zone-name`, `city-zone` systems), GXT hash tests, debug overlay is mostly
-manual (UI), picking covered via adapter `describe` tests.
+manual (UI), picking covered via adapter `describe` tests, hide-object via `hidden-instances` tests
+(collapse/restore, idempotent re-hide, multiple meshes).

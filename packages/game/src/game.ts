@@ -1,6 +1,7 @@
 import {
   DoubleSide,
   Group,
+  InstancedMesh,
   type Mesh,
   MeshBasicMaterial,
   MeshNormalMaterial,
@@ -20,6 +21,7 @@ import { CameraController } from './core/camera-controller';
 import { Clock } from './core/clock';
 import { createRenderContext } from './core/renderer';
 import { type System, SystemRegistry } from './core/system';
+import { HiddenInstances } from './debug/hidden-instances';
 import { Logger } from './diagnostics/logger';
 import { EventBus } from './events/event-bus';
 import { type GameEvents } from './events/events.global';
@@ -95,7 +97,11 @@ export class Game {
   /** Debug wireframe view (Map → Show Faces): scene-wide wireframe override to inspect the mesh. Lazy. */
   private faceMaterial: MeshBasicMaterial | null = null;
   private readonly gameClock = new GameClock();
+  /** Map-inspector "Hide object" state — restored automatically when the map viewer turns off. */
+  private readonly hiddenInstances = new HiddenInstances();
   private input!: CombinedInput;
+  /** The last successful pick (map-inspector selection) — the target of {@link hideSelectedObject}. */
+  private lastPick: null | { instanceId: number; mesh: InstancedMesh } = null;
   private lastRequest: null | RegionRequest = null;
   private readonly logger: Logger;
   /** Debug normals view (plan: Map → Show Normals): scene-wide MeshNormalMaterial override, rendered
@@ -255,6 +261,19 @@ export class Game {
     return this.currentZone;
   }
 
+  /** Hide the last picked instance (map inspector) — restored automatically when the map viewer closes. */
+  hideSelectedObject(): number {
+    if (this.lastPick) {
+      const count = this.hiddenInstances.hide(this.lastPick.mesh, this.lastPick.instanceId);
+      this.lastPick = null;
+      this.events.emit('select', null); // the object is gone from view — clear the selection panel
+
+      return count;
+    }
+
+    return this.hiddenInstances.count;
+  }
+
   async init(): Promise<void> {
     if (this.context) {
       return; // already initialized
@@ -344,6 +363,11 @@ export class Game {
     const hit = this.raycaster
       .intersectObjects(this.streamingRoot.children, true)
       .find((it) => it.instanceId !== undefined);
+    this.lastPick = null;
+    if (hit && hit.instanceId !== undefined && hit.object instanceof InstancedMesh) {
+      // three's instanceof narrows to InstancedMesh<any, …> — pin the default generics for the field.
+      this.lastPick = { instanceId: hit.instanceId, mesh: hit.object as InstancedMesh };
+    }
     this.events.emit('select', hit ? this.adapter.describe(hit.object, hit.instanceId) : null);
   }
 
@@ -357,6 +381,13 @@ export class Game {
     for (const plugin of this.plugins) {
       plugin.resize?.(width, height);
     }
+  }
+
+  /** Put every debug-hidden instance back (also runs automatically on map-viewer exit). */
+  restoreHiddenObjects(): number {
+    this.hiddenInstances.restoreAll();
+
+    return 0;
   }
 
   /** Tune bloom (enabled/intensity/threshold) at runtime; merges into `graphics.bloom`. */
@@ -454,6 +485,11 @@ export class Game {
     // The debug normals / wireframe overrides stay available here, so the mesh can be inspected top-down.
     this.setConfig({ mapViewer: enabled });
     this.cameraController.setMode(enabled ? 'debug' : 'follow');
+    if (!enabled) {
+      // Debug-hidden instances must never leak into gameplay — leaving the map viewer restores them all.
+      this.hiddenInstances.restoreAll();
+      this.lastPick = null;
+    }
     this.events.emit('map-viewer', { enabled });
   }
 

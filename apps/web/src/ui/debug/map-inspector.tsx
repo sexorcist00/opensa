@@ -25,6 +25,7 @@ const REGION_COLOR: Record<Region, string> = {
 export function MapInspector({ game }: { game: Game }): ReactElement {
   const [showCollision, setShowCollision] = useState(false);
   const [selection, setSelection] = useState<null | WorldObjectInfo>(null);
+  const [hiddenCount, setHiddenCount] = useState(0);
   const [center, setCenter] = useState<CellCoord | null>(null);
   const [allCells, setAllCells] = useState<CellCoord[]>([]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -166,10 +167,25 @@ export function MapInspector({ game }: { game: Game }): ReactElement {
             <div style={styles.info}>name: {selection.modelName}</div>
             <div style={styles.info}>txd: {selection.txdName}</div>
             <div style={styles.info}>pos: {selection.position.map((n) => n.toFixed(1)).join(', ')}</div>
+            <button onClick={() => setHiddenCount(game.hideSelectedObject())} style={styles.actionButton} type="button">
+              Hide object
+            </button>
           </>
         ) : (
           <div style={styles.hint}>click a model…</div>
         )}
+        {hiddenCount > 0 ? (
+          <>
+            <div style={styles.hint}>hidden: {hiddenCount} (restored on exit)</div>
+            <button
+              onClick={() => setHiddenCount(game.restoreHiddenObjects())}
+              style={styles.actionButton}
+              type="button"
+            >
+              Restore all
+            </button>
+          </>
+        ) : null}
       </div>
     </>
   );

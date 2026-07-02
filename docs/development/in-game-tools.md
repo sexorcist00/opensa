@@ -15,7 +15,9 @@ multi-level menu:
 - **Vehicles** — spawn Admiral/Camper in front of you; Flip the car you're in (wheels ↔ roof).
 - **Game** — Show / Copy current coords.
 - **Map** — Activate **Map Viewer**: free-fly camera, click to pick objects, and render chosen map
-  sections (HD/LOD) + collision. Leaving the screen, closing (×), or pressing F2 exits it cleanly.
+  sections (HD/LOD) + collision. A picked object can be **hidden** (Hide object) to peek behind it — hides
+  are debug-only and everything is restored on Restore all / leaving the map viewer / closing the debugger.
+  Leaving the screen, closing (×), or pressing F2 exits it cleanly.
 - Plus live tuning of atmosphere/graphics/camera/weather/procobj/time (dev builds).
 
 **Screenshot camera** — press **K+M** to toggle a free-fly camera: it detaches from the player/car and
