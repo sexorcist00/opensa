@@ -312,3 +312,12 @@ is exactly what the tail guard protects. Two rounds in-game proved the mechanics
 
 Current user workflow: `--prelit-only broken-models.json` with `{"model": "newvic1_sfw", "nightMax": 20}`
 -style entries, dialling the ceiling in-game.
+
+### Iteration 7 — FORCE list restores the statistical pass (2026-07-03, user decision)
+
+Only-mode (iteration 5) proved too all-or-nothing in practice: the user asked to return to the originally
+offered hybrid — the **statistical pass corrects the whole map by default**, and the curated JSON
+_additionally_ forces its models past the skip-guards. New `PrelitContextOptions.force` (same `OnlyEntry`
+format: bare names = forced auto-verdicts, objects = explicit unguarded corrections incl. `nightMax`);
+`--prelit-force` in the CLI; perfect-map-builder's `broken-prelight.json` now feeds `force` instead of `only`.
+`--prelit-only` remains for full manual control; `only` wins when both are given.

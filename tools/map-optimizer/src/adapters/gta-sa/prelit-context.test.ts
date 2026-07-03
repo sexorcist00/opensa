@@ -229,6 +229,41 @@ describe('computePrelitContext', () => {
     });
   });
 
+  describe('force-list (statistical pass + curated extras)', () => {
+    it('keeps the statistical fixes for unlisted models AND forces the listed one', () => {
+      // Subject = the street-lamp class (healthy day, glowing night) that the normal pass protects.
+      const subject = print({ nightP50: 64 });
+      const { fingerprints, placements } = world(8, subject);
+      fingerprints.set('dark_outlier', print({ dayP50: 10 }));
+      placements.push({ modelName: 'dark_outlier', position: [15, 5, 0], rotation: [0, 0, 0, 1] });
+      const result = computePrelitContext(fingerprints, placements, { force: ['subject'] });
+
+      expect(result.verdicts.get('subject')?.night?.kind).toBe('repair'); // forced past the day-evidence guard
+      expect(result.verdicts.get('dark_outlier')?.level?.shift).toBeGreaterThan(0); // statistics still run
+    });
+
+    it('applies an explicit force entry (nightMax) while the rest of the map streams through normally', () => {
+      const subject = print({ nightP50: 19, nightP75: 57, nightP95: 114 });
+      const { fingerprints, placements } = world(8, subject);
+      const result = computePrelitContext(fingerprints, placements, {
+        force: [{ model: 'subject', nightMax: 20 }],
+      });
+
+      expect(result.verdicts.get('subject')?.night).toEqual({ kind: 'cap', max: 20 });
+      expect(result.stats.ok).toBeGreaterThan(0); // the hood models were judged (and passed) statistically
+    });
+
+    it('only-mode wins over force when both are given', () => {
+      const { fingerprints, placements } = world(8, print({ dayP50: 10 }));
+      const result = computePrelitContext(fingerprints, placements, {
+        force: ['subject'],
+        only: ['some_other_model'],
+      });
+
+      expect(result.verdicts.size).toBe(0); // only-mode excluded everything, force ignored
+    });
+  });
+
   describe('positive cases', () => {
     it('lifts a dark outlier hard to the hood median (clubgate case)', () => {
       const subject = print({ dayP50: 27, nightP50: 21 }); // hood day median is 80

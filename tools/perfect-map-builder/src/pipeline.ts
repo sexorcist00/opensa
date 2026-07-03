@@ -84,9 +84,10 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       run: (game, out) => installPeds({ gamePath: game, inPath: source(subfolders.peds), outPath: out }),
     });
   }
-  // map-optimizer prelight ONLY-mode: a `broken-prelight.json` at the mods-src root (or inside the mods
-  // subfolder) is the curated list — see map-optimizer plan 019 iteration 5/6 for the entry formats.
-  const prelitOnly = loadPrelitOnly(inPath, source(subfolders.mods));
+  // map-optimizer prelight FORCE list (user decision, reversing the earlier only-mode): the statistical pass
+  // corrects the whole map by default, and `broken-prelight.json` (mods-src root or the mods subfolder)
+  // ADDITIONALLY forces the listed models past the skip-guards — see plan 019 iterations 5/6 for the formats.
+  const prelitForce = loadPrelitOnly(inPath, source(subfolders.mods));
   chain.push({
     name: 'optimize',
     run: (game, out) =>
@@ -94,7 +95,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         gameDir: game,
         outDir: out,
         passes: config.optimizerPasses,
-        ...(prelitOnly ? { prelitOptions: { only: prelitOnly } } : {}),
+        ...(prelitForce ? { prelitOptions: { force: prelitForce } } : {}),
       }),
   });
   chain.push({
@@ -246,12 +247,12 @@ function loadPrelight(vegetationDir: string): PrelightInfo | undefined {
   return existsSync(file) ? parsePrelightInfo(readFileSync(file, 'utf8')) : undefined;
 }
 
-/** The first `broken-prelight.json` found among `dirs` → map-optimizer prelight ONLY-mode list, else null. */
+/** The first `broken-prelight.json` found among `dirs` → the map-optimizer prelight FORCE list, else null. */
 function loadPrelitOnly(...dirs: string[]): null | ReturnType<typeof parseOnlyList> {
   for (const dir of dirs) {
     const file = join(dir, 'broken-prelight.json');
     if (existsSync(file)) {
-      log(`optimize — prelight ONLY-mode from ${file}`);
+      log(`optimize — prelight force-list from ${file}`);
 
       return parseOnlyList(JSON.parse(readFileSync(file, 'utf8')));
     }

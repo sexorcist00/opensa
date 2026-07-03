@@ -33,6 +33,11 @@ export interface PrelitContextOptions {
   exclude?: readonly string[];
   /** Day spread at or below this = "flat" (broken export — no AO). Default 8. */
   flatSpread?: number;
+  /** **Force list** (runs ON TOP of the normal statistical pass, unlike {@link only}): the listed models are
+   *  treated as human-confirmed broken — bare names bypass the statistical skip-guards, object entries apply
+   *  their explicit corrections verbatim — while every other model still gets the regular verdicts. This is
+   *  what perfect-map-builder's `broken-prelight.json` feeds. Ignored when `only` is set. */
+  force?: readonly OnlyEntry[];
   /** Cap on the night/day ratio a synthesized night set may target — a brightly-lit hood (streetlights on the
    *  ground sheets) must not make a night-less building glow. Default 0.35 (vanilla night sets sit ~0.2–0.35). */
   maxSynthRatio?: number;
@@ -145,8 +150,8 @@ export function parseOnlyList(json: unknown): OnlyEntry[] {
   });
 }
 
-/** `only` has no default — its absence IS the mode switch (normal statistical run). */
-const DEFAULTS: Required<Omit<PrelitContextOptions, 'only'>> = {
+/** `only`/`force` have no defaults — their absence IS the mode switch (normal statistical run). */
+const DEFAULTS: Required<Omit<PrelitContextOptions, 'force' | 'only'>> = {
   dayTolerance: 0.4,
   exclude: [],
   flatSpread: 8,
@@ -184,20 +189,15 @@ export function computePrelitContext(
 
   // `?? []` guards callers spreading an explicitly-undefined option over the default.
   const excluded = new Set((opts.exclude ?? []).map((name) => name.toLowerCase()));
-  const only = opts.only
-    ? new Map(
-        opts.only.map((entry) =>
-          typeof entry === 'string' ? [entry.toLowerCase(), null] : [entry.model.toLowerCase(), entry],
-        ),
-      )
-    : null;
-  // A curated name that matches no placed prelit model is almost certainly a typo — fail loudly, not silently.
-  const warnings: string[] = [];
-  for (const name of [...(only?.keys() ?? []), ...excluded]) {
-    if (!fingerprints.has(name)) {
-      warnings.push(`curated model not found among placed prelit models (typo?): ${name}`);
-    }
-  }
+  const entryMap = (entries: readonly OnlyEntry[]): Map<string, Exclude<OnlyEntry, string> | null> =>
+    new Map(
+      entries.map((entry) =>
+        typeof entry === 'string' ? [entry.toLowerCase(), null] : [entry.model.toLowerCase(), entry],
+      ),
+    );
+  const only = opts.only ? entryMap(opts.only) : null;
+  const force = !only && opts.force ? entryMap(opts.force) : null;
+  const warnings = curationWarnings(fingerprints, [...(only?.keys() ?? []), ...(force?.keys() ?? []), ...excluded]);
   const neighboursOf = buildNeighbourQuery(fingerprints, placements, opts.radius);
   const byModel = groupByModel(fingerprints, placements);
 
@@ -206,9 +206,10 @@ export function computePrelitContext(
       stats.excluded += 1; // never corrected — but its placements above still feed the hood stats
       continue;
     }
-    // Explicit manual correction: applied verbatim, unguarded, no hood needed (protect bounds 256 disarm the
-    // tail guard in the appliers — "windows too bright at night" IS the tail).
-    const manual = only?.get(model);
+    // Explicit manual correction (only-mode entry or a force-list entry): applied verbatim, unguarded, no
+    // hood needed (protect bounds 256 disarm the tail guard in the appliers — "windows too bright at night"
+    // IS the tail).
+    const manual = only?.get(model) ?? force?.get(model);
     if (manual) {
       const verdict = manualVerdict(manual, fingerprint, stats);
       if (verdict) {
@@ -222,9 +223,9 @@ export function computePrelitContext(
       continue;
     }
 
-    // Only-mode: the human confirmed this model broken — bypass the statistical skip-guards (the within-model
-    // protections in the appliers still hold).
-    const forced = only !== null;
+    // Only-mode (every surviving model) or a bare-name force entry: the human confirmed this model broken —
+    // bypass the statistical skip-guards (the within-model protections in the appliers still hold).
+    const forced = only !== null || force?.has(model) === true;
     // Saturated-white flats (gang tags, emissive decals) are fullbright by design — not broken exports.
     const verdict: PrelitVerdict = {
       flat: fingerprint.daySpread <= opts.flatSpread && (forced || fingerprint.dayP50 < 250),
@@ -374,6 +375,18 @@ function concat(parts: readonly Uint8Array[]): Uint8Array {
   return out;
 }
 
+/** A curated name that matches no placed prelit model is almost certainly a typo — fail loudly, not silently. */
+function curationWarnings(fingerprints: ReadonlyMap<string, PrelitFingerprint>, names: readonly string[]): string[] {
+  const warnings: string[] = [];
+  for (const name of names) {
+    if (!fingerprints.has(name)) {
+      warnings.push(`curated model not found among placed prelit models (typo?): ${name}`);
+    }
+  }
+
+  return warnings;
+}
+
 /** Placements per model (verdicts are model-level; hood = median over the model's placements). */
 function groupByModel(
   fingerprints: ReadonlyMap<string, PrelitFingerprint>,
@@ -408,7 +421,7 @@ function judgeDay(
   hoodDay: number,
   flat: boolean,
   forced: boolean,
-  opts: Required<Omit<PrelitContextOptions, 'only'>>,
+  opts: Required<Omit<PrelitContextOptions, 'force' | 'only'>>,
   stats: PrelitContextResult['stats'],
 ): LevelVerdict | undefined {
   const deviation = fingerprint.dayP50 / Math.max(1, hoodDay);
@@ -443,7 +456,7 @@ function judgeNight(
   hoodRatio: null | number,
   dayEvidence: boolean,
   forced: boolean,
-  opts: Required<Omit<PrelitContextOptions, 'only'>>,
+  opts: Required<Omit<PrelitContextOptions, 'force' | 'only'>>,
   stats: PrelitContextResult['stats'],
 ): NightVerdict | undefined {
   if (hoodRatio === null) {

@@ -3,11 +3,12 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  * Map-optimizer CLI. Takes `--game <path>` (a game-data dir: `gta.dat` + `data/` + `models/`), runs the full
  * pipeline and emits a drop-in build under `--out <path>`. All passes (textures / weld-seams / prelit /
  * add-normals) are **on by default** — opt any out with `--no-textures` / `--no-weld-seams` / `--no-prelit` /
- * `--no-add-normals`. `--prelit-only <file.json>` (a JSON array of model names) switches the prelight pass to
- * **only-mode**: just the listed, human-confirmed models are corrected (skip-guards bypassed) and the rest of
- * the map passes through byte-identical. Usage: `tsx map-optimizer/src/cli.ts --game <path> --out <path>
- * [--prelit-only <file.json>] [--no-<pass>…]`. Paths are relative to the current working directory (absolute
- * paths pass through).
+ * `--no-add-normals`. Prelight curation (same JSON entry format, see the README):
+ * - `--prelit-force <file.json>` — the statistical pass runs map-wide AND the listed models are additionally
+ *   forced past the skip-guards (what perfect-map-builder's `broken-prelight.json` does);
+ * - `--prelit-only <file.json>` — ONLY the listed models are corrected, the rest passes byte-identical.
+ * Usage: `tsx map-optimizer/src/cli.ts --game <path> --out <path> [--prelit-force|--prelit-only <file.json>]
+ * [--no-<pass>…]`. Paths are relative to the current working directory (absolute paths pass through).
  */
 import { readFileSync, statSync } from 'node:fs';
 
@@ -33,14 +34,16 @@ async function main(): Promise<void> {
     textures: !process.argv.includes('--no-textures'),
     weldSeams: !process.argv.includes('--no-weld-seams'),
   };
+  // Entries: "name" (forced auto verdict) or {"model": "name", "nightMax": 20, "dayShift": -30} (explicit).
   const onlyArg = argValue('--prelit-only');
-  // Entries: "name" (forced auto verdict) or {"model": "name", "nightScale": 0.4, "dayShift": -30} (explicit).
+  const forceArg = argValue('--prelit-force');
   const only = onlyArg ? parseOnlyList(JSON.parse(readFileSync(fromCwd(onlyArg), 'utf8'))) : undefined;
+  const force = forceArg ? parseOnlyList(JSON.parse(readFileSync(fromCwd(forceArg), 'utf8'))) : undefined;
   const report = await runOptimizer({
     gameDir,
     outDir: fromCwd(outArg),
     passes,
-    ...(only ? { prelitOptions: { only } } : {}),
+    ...(only || force ? { prelitOptions: { ...(only ? { only } : {}), ...(force ? { force } : {}) } } : {}),
   });
   printReport(report);
   writeReport(report);

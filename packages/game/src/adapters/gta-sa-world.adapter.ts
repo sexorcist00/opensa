@@ -293,6 +293,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     const key = `${request.cx},${request.cy},${request.lod ? 'lod' : 'hd'}`;
     let meshes = this.cellCache.get(key);
     if (!meshes) {
+      const buildStart = performance.now(); // plan 060 Phase 0: the CPU hump of a first-visit cell build
       // Native Z-up; the streaming root applies the −90°X (so no per-cell group).
       meshes = buildCell(this.fs, this.defs, this.grid, request.cx, request.cy, request.lod, {
         breakableModels: this.breakableModels,
@@ -311,6 +312,11 @@ export class GtaSaWorldAdapter implements WorldAdapter {
         );
       }
       this.cellCache.set(key, meshes);
+      const buildMs = performance.now() - buildStart;
+      if (buildMs > 8) {
+        // eslint-disable-next-line no-console -- plan 060 Phase 0 measurement: cell-build CPU hump
+        console.log(`[stream] built ${key} in ${buildMs.toFixed(0)}ms (${meshes.length} objects)`);
+      }
     }
 
     return meshes;

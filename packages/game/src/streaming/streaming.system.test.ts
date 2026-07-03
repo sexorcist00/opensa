@@ -113,6 +113,13 @@ const has = (root: Object3D, key: string): boolean => root.children.some((c) => 
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** One streaming round under the budgeted ingest (plan 060 Phase 2): request → resolve → ingest frame. */
+const settle = async (system: StreamingSystem): Promise<void> => {
+  system.update();
+  await flush();
+  system.update(); // the built cells enter the scene on the NEXT frame, under the ingest budget
+};
+
 describe('StreamingSystem', () => {
   describe('negative cases', () => {
     it('ignores a manual selection while not in debug mode (keeps streaming)', async () => {
@@ -121,8 +128,7 @@ describe('StreamingSystem', () => {
       const system = new StreamingSystem(adapter, root, () => [125, 125, 0] as Vec3, config());
       system.setManualCells([[5, 5]], true);
 
-      system.update();
-      await flush();
+      await settle(system);
 
       expect(root.children).toHaveLength(9); // the stream rings, not the 1 manual cell
       expect(adapter.loadCell.mock.calls.some(([req]) => req.cx === 5)).toBe(false);
@@ -135,8 +141,7 @@ describe('StreamingSystem', () => {
       const root = new Object3D();
       const system = new StreamingSystem(adapter, root, () => [125, 125, 0] as Vec3, config());
 
-      system.update();
-      await flush();
+      await settle(system);
 
       // hd 100 → cell (0,0); lod 300 → 3×3 block minus (0,0) = 8 LOD cells
       expect(root.children.filter((c) => c.name === 'hd')).toHaveLength(1);
@@ -149,13 +154,12 @@ describe('StreamingSystem', () => {
       let view: Vec3 = [125, 125, 0];
       const system = new StreamingSystem(adapter, root, () => view, config());
 
-      system.update();
-      await flush();
+      await settle(system);
       const firstChildren = [...root.children];
 
       view = [100125, 100125, 0]; // centre of a far cell (same ring shape elsewhere)
-      system.update();
-      await flush();
+      await settle(system);
+      system.update(); // old cells drop once nothing for their cell is loading/ingesting
 
       expect(root.children.some((c) => firstChildren.includes(c))).toBe(false); // old gone
       expect(root.children).toHaveLength(firstChildren.length); // same ring size elsewhere
@@ -167,8 +171,7 @@ describe('StreamingSystem', () => {
       let view: Vec3 = [125, 400, 0]; // cell (0,0) is ~150 away → LOD
       const system = new StreamingSystem(adapter, root, () => view, config());
 
-      system.update();
-      await flush();
+      await settle(system);
       expect(has(root, '0,0,lod')).toBe(true);
       expect(has(root, '0,0,hd')).toBe(false);
 
@@ -177,7 +180,9 @@ describe('StreamingSystem', () => {
       expect(has(root, '0,0,lod')).toBe(true); // LOD held → no hole while HD loads
       expect(has(root, '0,0,hd')).toBe(false);
 
-      await flush(); // HD resolves → added, LOD removed in the same step
+      await flush(); // HD resolves → queued for ingest; LOD still held
+      expect(has(root, '0,0,lod')).toBe(true);
+      system.update(); // ingest frame: HD added, LOD removed in the same step
       expect(has(root, '0,0,hd')).toBe(true);
       expect(has(root, '0,0,lod')).toBe(false);
     });
@@ -188,18 +193,88 @@ describe('StreamingSystem', () => {
       let view: Vec3 = [125, 125, 0]; // inside cell (0,0) → HD
       const system = new StreamingSystem(adapter, root, () => view, config());
 
-      system.update();
-      await flush();
+      await settle(system);
       expect(has(root, '0,0,hd')).toBe(true);
 
       // Move to ~130 from cell (0,0): past hdDrawDistance (100) but within the dead-band
       // (hd 100 + 250×0.25 = 162.5), so an already-HD cell stays HD instead of downgrading to LOD.
       view = [125, 380, 0];
-      system.update();
-      await flush();
+      await settle(system);
       expect(has(root, '0,0,hd')).toBe(true);
       expect(has(root, '0,0,lod')).toBe(false);
       expect(adapter.loadCell.mock.calls.some(([r]) => r.cx === 0 && r.cy === 0 && r.lod)).toBe(false);
+    });
+
+    it('prefetches the cell ahead of the motion vector before the boundary (plan 060 Phase 1)', async () => {
+      const adapter = keyedAdapter();
+      const root = new Object3D();
+      let view: Vec3 = [125, 125, 0];
+      const system = new StreamingSystem(adapter, root, () => view, config());
+
+      await settle(system);
+      const before = adapter.loadCell.mock.calls.length;
+
+      // Two frames moving +y at 100 u/s: lookahead = min(100×3, 250) = 250 → the ring shifts one cell up.
+      view = [125, 225, 0];
+      system.update(0.1); // establishes velocity ~[0, 1000, 0]… clamped by reach to one cell
+      view = [125, 235, 0];
+      system.update(0.1);
+      await flush();
+
+      const requested = adapter.loadCell.mock.calls.slice(before).map(([r]) => `${r.cx},${r.cy},${r.lod}`);
+      expect(requested.some((key) => key.includes(',2,'))).toBe(true); // a cy=2 cell — beyond the stationary ring
+    });
+
+    it('spreads a big cell over frames under the ingest budget and holds the old level meanwhile', async () => {
+      const adapter = {
+        cellSize: 250,
+        loadCell: vi.fn((request: CellRequest): Promise<Object3D[]> => {
+          // Cell (0,0) HD = a 3-mesh batch; everything else = one named object (fresh per call).
+          if (!request.lod && request.cx === 0 && request.cy === 0) {
+            return Promise.resolve(
+              [0, 1, 2].map((i) => {
+                const part = new Object3D();
+                part.name = `hd_part_${i}`;
+
+                return part;
+              }),
+            );
+          }
+          const object = new Object3D();
+          object.name = request.lod ? `lod_${request.cx},${request.cy}` : 'hd_other';
+
+          return Promise.resolve([object]);
+        }),
+      };
+      const root = new Object3D();
+      let view: Vec3 = [125, 400, 0]; // cell (0,0) starts as LOD
+      let tick = 0;
+      // Injected clock: every now() call advances 10 ms → the 4 ms budget allows ONE add per frame.
+      const system = new StreamingSystem(
+        adapter,
+        root,
+        () => view,
+        config(),
+        () => (tick += 10),
+      );
+
+      await settle(system);
+      for (let i = 0; i < 12; i += 1) {
+        system.update(); // the 1-add-per-frame clock needs a frame per queued ring cell
+      }
+      expect(has(root, 'lod_0,0')).toBe(true);
+
+      view = [125, 125, 0]; // HD desired for (0,0)
+      system.update();
+      await flush(); // HD (3 objects) resolves → queued
+      system.update(); // ingest frame 1: one object in, batch unfinished → LOD still held
+      expect(root.children.filter((c) => c.name.startsWith('hd_part')).length).toBeLessThan(3);
+      expect(has(root, 'lod_0,0')).toBe(true);
+      for (let i = 0; i < 6; i += 1) {
+        system.update(); // ingest frames 2..N: batch completes → swap finalizes
+      }
+      expect(root.children.filter((c) => c.name.startsWith('hd_part'))).toHaveLength(3);
+      expect(has(root, 'lod_0,0')).toBe(false);
     });
 
     it('renders only the manual cells while in debug mode', async () => {
@@ -214,8 +289,7 @@ describe('StreamingSystem', () => {
         true,
       );
 
-      system.update();
-      await flush();
+      await settle(system);
 
       expect(root.children).toHaveLength(2);
       expect(adapter.loadCell.mock.calls.map(([req]) => req)).toContainEqual({

@@ -10,8 +10,9 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  *                      runs the WHOLE pipeline (both sa + opensa) while keeping every step.
  *     --keep-work      keep the intermediate `.work` builds even on a full run.
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
- * A `broken-prelight.json` at the mods-src root (or inside its `mods/` subfolder) switches the map-optimizer
- * prelight pass to ONLY-mode with that curated list (same format as `--prelit-only` — see map-optimizer README).
+ * A `broken-prelight.json` at the mods-src root (or inside its `mods/` subfolder) is the map-optimizer
+ * prelight FORCE list: the statistical pass runs map-wide and the listed models are additionally forced past
+ * the skip-guards (same entry format as `--prelit-force` — see the map-optimizer README).
  * A `lod-exclude.json` (same locations; a JSON array of model names) keeps the listed models out of BOTH LOD
  * targets — the tool for high-poly street-furniture replacement mods that would explode the cell bake.
  * A FULL build needs a bigger heap: the opensa cell bake holds the (mod-grown, ~1.3 GB) gta3.img + merged cells

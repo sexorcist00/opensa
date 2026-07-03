@@ -25,11 +25,17 @@ npx tsx map-optimizer/src/cli.ts --game ./game-src/original --out ./build --no-w
 npx tsx map-optimizer/src/cli.ts --game ./game-src/original --out ./build --no-prelit      # skip world-context prelight (plan 019)
 npx tsx map-optimizer/src/cli.ts --game ./game-src/original --out ./build --no-add-normals # don't create absent normals
 
-# prelight ONLY-mode: correct just the human-confirmed models, rest passes byte-identical.
-# Entries: "name" (forced auto verdict) or {"model": "name", "nightMax": 64, "nightScale": 0.4, "dayShift": -30}
-# — explicit corrections applied verbatim, unguarded. nightMax caps every night vertex at the ceiling (dims ONLY
-# the glow, dark walls untouched — usually what "windows too bright at night" needs); nightScale multiplies the
-# whole set; dayShift adds to day RGB. nightMax wins over nightScale.
+# prelight curation (same JSON entry format for both flags):
+#   "name"                                  → forced auto verdict (statistical skip-guards bypassed)
+#   {"model": "name", "nightMax": 64, "nightScale": 0.4, "dayShift": -30}
+#                                           → explicit corrections, applied verbatim and UNGUARDED
+#     nightMax caps every night vertex at the ceiling (dims ONLY the glow, dark walls untouched — what
+#     "windows too bright at night" needs); nightScale multiplies the whole set; dayShift adds to day RGB;
+#     nightMax wins over nightScale.
+# FORCE (default workflow — what perfect-map-builder's broken-prelight.json feeds): the statistical pass runs
+# map-wide AND the listed models are additionally forced:
+npx tsx map-optimizer/src/cli.ts --game ./game-src/original --out ./build --prelit-force broken-models.json
+# ONLY-mode: correct just the listed models, the rest passes byte-identical:
 npx tsx map-optimizer/src/cli.ts --game ./game-src/original --out ./build --prelit-only broken-models.json
 ```
 
@@ -57,11 +63,13 @@ map-optimizer gostown:
 
 ## Review workflow (plan 019)
 
-The prelight pass is **semi-automatic**: generate a review page, curate, feed the exclude list back. For the
-tightest control use **only-mode** (`--prelit-only <file.json>`): verdicts are computed just for the listed,
-human-confirmed models — their statistical skip-guards are bypassed (the listing is the evidence) while the
-within-model protections (tail guard, darken-only night, synth cap) still hold; every other model passes
-through byte-identical.
+The prelight pass is **semi-automatic**: generate a review page, curate, feed the lists back. The default
+workflow is the **force list** (`--prelit-force <file.json>`; perfect-map-builder's `broken-prelight.json`):
+the statistical pass corrects the whole map and the listed, human-confirmed models are additionally forced —
+their statistical skip-guards are bypassed (the listing is the evidence) while the within-model protections
+(tail guard, darken-only night, synth cap) still hold. For the tightest control there is **only-mode**
+(`--prelit-only <file.json>`): just the listed models are corrected, every other model passes through
+byte-identical (`only` wins when both are given).
 
 ```bash
 # 1. HTML review report — day/night before→after thumbnails per verdict (in-memory apply; no run needed)
