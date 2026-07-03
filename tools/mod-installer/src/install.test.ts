@@ -30,8 +30,9 @@ describe('guardOut', () => {
 
 describe('sortMods', () => {
   describe('positive cases', () => {
-    it('sorts plain alphabetical, not numeric (mod1, mod10, mod2)', () => {
-      expect(sortMods(['mod2', 'mod10', 'mod1'])).toEqual(['mod1', 'mod10', 'mod2']);
+    it('sorts numeric-aware: the number prefix is the apply priority (mod1, mod2, mod10)', () => {
+      expect(sortMods(['mod2', 'mod10', 'mod1'])).toEqual(['mod1', 'mod2', 'mod10']);
+      expect(sortMods(['10. b', '2. a', '1. c'])).toEqual(['1. c', '2. a', '10. b']);
     });
 
     it('is case-insensitive ascending', () => {

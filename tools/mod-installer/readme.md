@@ -1,7 +1,7 @@
 # @opensa/mod-installer
 
 Layer GTA-SA **mod folders** onto a base game into a single drop-in `--out`. Copy the game, then apply each mod on
-top in alphabetical order — plain files overwrite, `gta3img/` loose entries merge into `gta3.img`.
+top in numeric-aware alphabetical order — plain files overwrite, `gta3img/` loose entries merge into `gta3.img`.
 
 ```sh
 tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --out ./build
@@ -19,7 +19,7 @@ tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --
 ## How it applies
 
 1. `--out` is wiped, then the `--game` tree is copied in (the base).
-2. Mod subfolders of `--in` are sorted **plain alphabetical** (`mod1`, `mod10`, `mod2` — not numeric-aware) and
+2. Mod subfolders of `--in` are sorted **numeric-aware** alphabetical (`1. x`, `2. y`, `10. z` — the number prefix is the apply priority; later mods overwrite earlier ones) and
    applied in order; a later mod wins on a conflict.
 3. Per mod, one of two modes:
    - **Modloader mod** (its subtree carries a `loader.txt`-style file with `IDE`/`IPL`/`COLFILE` directives) — it is

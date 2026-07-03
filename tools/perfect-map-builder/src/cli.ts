@@ -12,6 +12,9 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
  * A `broken-prelight.json` at the mods-src root (or inside its `mods/` subfolder) switches the map-optimizer
  * prelight pass to ONLY-mode with that curated list (same format as `--prelit-only` — see map-optimizer README).
+ * A FULL build needs a bigger heap: the opensa cell bake holds the (mod-grown, ~1.3 GB) gta3.img + merged cells
+ * in memory — run with `NODE_OPTIONS=--max-old-space-size=12288` or the opensa stage dies mid-resolve with no
+ * output (the classic "hung with no progress bar" OOM).
  * Paths are relative to the current working directory (absolute paths pass through). See `docs/plans/001`.
  */
 import { statSync } from 'node:fs';

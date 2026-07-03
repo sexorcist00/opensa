@@ -62,7 +62,8 @@ export function install(options: InstallOptions): void {
   );
 }
 
-/** Mod folder names sorted plain case-insensitive ascending (`mod1`, `mod10`, `mod2` — **not** numeric-aware). */
+/** Mod folder names sorted case-insensitive **numeric-aware** ascending (`1. x`, `2. y`, `10. z`) — the
+ *  number prefix IS the apply priority: later mods overwrite earlier ones. */
 export function sortMods(names: readonly string[]): string[] {
-  return [...names].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en'));
+  return [...names].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), 'en', { numeric: true }));
 }

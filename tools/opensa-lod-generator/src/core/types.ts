@@ -87,6 +87,9 @@ export interface LodConfig {
   minOpaqueCoverage: number;
   /** Output directory for the baked drop-in (the CLI passes `--out <path>`). */
   out?: string;
+  /** Bake worker threads (the two hot stages — visibility-cull + decimate — are 96 % of the run and perfectly
+   *  per-cell parallel). Default: all cores minus one; `1` forces the in-process sequential path. */
+  workers?: number;
 }
 
 export type Quat = readonly [number, number, number, number];

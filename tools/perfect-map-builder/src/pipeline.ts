@@ -158,7 +158,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   if (until === undefined || until === 'opensa' || until === 'lod') {
     const opensa = join(outPath, 'opensa');
     log('opensa → opensa/ (baking cells — can take several minutes)');
-    buildOpensaLods({
+    await buildOpensaLods({
       cellSize: config.cellSize,
       config: { excludeItems },
       gameDir: game,
@@ -181,7 +181,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
  * the tree HD roster, `lod_procobj.ide` (procobj LODs) and `lod_procobj.ipl` (its HD species + LOD placements).
  * Missing files (a stage that was skipped) contribute nothing.
  */
-function collectGeneratedModels(gameDir: string): string[] {
+export function collectGeneratedModels(gameDir: string): string[] {
   const names = new Set<string>();
   const maps = join(gameDir, 'data', 'maps');
   const addIde = (rel: string): boolean => {
