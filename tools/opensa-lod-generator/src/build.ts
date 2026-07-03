@@ -27,7 +27,9 @@ export interface BuildOpensaLodsOptions {
 
 export async function buildOpensaLods(options: BuildOpensaLodsOptions): Promise<void> {
   const config = { ...defaultConfig, ...options.config, ...(options.cellSize ? { cellSize: options.cellSize } : {}) };
-  const workers = Math.max(1, config.workers ?? availableParallelism() - 1);
+  // Default HALF the cores: the bake saturates memory bandwidth long before core count, and cores−1
+  // made the machine unusable (user feedback) for little extra throughput.
+  const workers = Math.max(1, config.workers ?? Math.floor(availableParallelism() / 2));
   const profiler = createStageProfiler();
   const adapter = createGtaSaLodAdapter(basename(options.gameDir), options.gameDir, config, { profiler });
   const cells = adapter.resolveCells();

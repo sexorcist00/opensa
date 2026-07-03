@@ -12,18 +12,29 @@ function cell(models: string[]): Cell {
   return { cx: 0, cy: 0, instances: models.map((model) => ({ model, position: [0, 0, 0], rotation: [0, 0, 0, 1] })) };
 }
 
-/** A single-atomic clump whose farthest vertex sits `radius` from the origin. */
-function clumpOfRadius(radius: number): RWClump {
+/** A single-atomic clump whose farthest vertex sits `radius` from the origin, carrying `triangles` faces. */
+function clumpOfRadius(radius: number, triangles = 0): RWClump {
   return {
     atomics: [{ frameIndex: 0, geometryIndex: 0 }],
     frames: [{ position: [0, 0, 0], rotation: [1, 0, 0, 0, 1, 0, 0, 0, 1] }],
-    geometries: [{ positions: Float32Array.of(radius, 0, 0) }],
+    geometries: [
+      { positions: Float32Array.of(radius, 0, 0), triangles: new Array(triangles).fill({ a: 0, b: 0, c: 0 }) },
+    ],
   } as unknown as RWClump;
 }
 
-/** ModelSource stub: model name → bounding radius (absent → load failure / null). */
-function sourceOf(radii: Record<string, number>): ModelSource {
-  return { load: (model) => (model in radii ? clumpOfRadius(radii[model]) : null) };
+/** ModelSource stub: model name → bounding radius + optional triangle count (absent → load failure / null). */
+function sourceOf(models: Record<string, number | { radius: number; tris: number }>): ModelSource {
+  return {
+    load: (model): null | RWClump => {
+      const spec = models[model];
+      if (spec === undefined) {
+        return null;
+      }
+
+      return typeof spec === 'number' ? clumpOfRadius(spec) : clumpOfRadius(spec.radius, spec.tris);
+    },
+  };
 }
 
 // At 300 u / FOV 60 / 1080 px one pixel ≈ 0.32 u → a 2 px threshold cuts diameters under ~0.64 u.

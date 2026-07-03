@@ -20,6 +20,10 @@ export interface CullResult {
  * (`view.minDistance` = the engine's HD ring). A sub-pixel object is invisible at every LOD distance, so
  * removing it whole cannot hole the far view — it just stops spending cell triangles on bins/poles/wires.
  * Models that fail to load are kept (the merge skips them anyway). Radius is measured once per model.
+ *
+ * High-poly street-furniture replacement mods (a 22k-tri ELECTRICA traffic light placed 729×) are NOT
+ * auto-gated here — they are excluded explicitly via `lod-exclude.json` → `config.excludeItems` (user
+ * decision: an explicit curated list over a density heuristic).
  */
 export function cullTinyInstances(
   cells: readonly Cell[],

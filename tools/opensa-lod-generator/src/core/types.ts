@@ -88,7 +88,8 @@ export interface LodConfig {
   /** Output directory for the baked drop-in (the CLI passes `--out <path>`). */
   out?: string;
   /** Bake worker threads (the two hot stages — visibility-cull + decimate — are 96 % of the run and perfectly
-   *  per-cell parallel). Default: all cores minus one; `1` forces the in-process sequential path. */
+   *  per-cell parallel). Default: **half** the cores (keeps the machine usable); `1` forces the in-process
+   *  sequential path. */
   workers?: number;
 }
 

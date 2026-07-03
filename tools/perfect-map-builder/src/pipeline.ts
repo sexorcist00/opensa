@@ -147,8 +147,15 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // Split: the common baked build (`game`) feeds both final LOD generators. `lod` runs BOTH (keeping every step).
   // lod-trees/lod-procobj already gave their models final LODs/impostors — hand those names to both generators as
   // `excludeItems` so neither re-processes them (double far-view geometry → streaming overload; see the LOD memories).
-  const excludeItems = collectGeneratedModels(game);
-  log(`excluding ${excludeItems.length} sibling-generated HD/LOD models from sa/opensa`);
+  // User-curated LOD exclusions (`lod-exclude.json` at the mods-src root or inside mods/): models that must
+  // not enter the far LODs at all — e.g. HD street-furniture replacements (a 22k-tri ELECTRICA traffic light
+  // placed 729× exploded the cell bake ~50×; at 300+ u it is a few unreadable pixels anyway).
+  const userExcluded = loadLodExclude(inPath, source(subfolders.mods));
+  const excludeItems = [...collectGeneratedModels(game), ...userExcluded];
+  log(
+    `excluding ${excludeItems.length} models from sa/opensa LODs ` +
+      `(${userExcluded.length} user-curated via lod-exclude.json)`,
+  );
   if (until === undefined || until === 'sa' || until === 'lod') {
     const sa = join(outPath, 'sa');
     log('sa → sa/');
@@ -212,6 +219,24 @@ export function collectGeneratedModels(gameDir: string): string[] {
   addIpl('lod_procobj.ipl');
 
   return [...names];
+}
+
+/** The first `lod-exclude.json` found among `dirs` → lowercased model names kept out of the LOD bakes. */
+function loadLodExclude(...dirs: string[]): string[] {
+  for (const dir of dirs) {
+    const file = join(dir, 'lod-exclude.json');
+    if (existsSync(file)) {
+      const names = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+      if (!Array.isArray(names) || names.some((name) => typeof name !== 'string')) {
+        throw new Error(`${file} must be a JSON array of model names`);
+      }
+      log(`lod-exclude — ${names.length} model(s) from ${file}`);
+
+      return (names as string[]).map((name) => name.toLowerCase());
+    }
+  }
+
+  return [];
 }
 
 /** Parse `<vegetation>/prelight.json` if present (per-model prelight-skip overrides), else undefined. */
