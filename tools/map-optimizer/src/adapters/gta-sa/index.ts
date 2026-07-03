@@ -223,7 +223,9 @@ export function createGtaSaAdapter(
       }
       try {
         const result = optimizeTxd(new Uint8Array(bytes));
-        packed.push({ data: result.bytes, name: `${name}.txd` });
+        if (result.processed > 0) {
+          packed.push({ data: result.bytes, name: `${name}.txd` }); // untouched TXDs keep their archive entry
+        }
 
         return { failed: false, mipped: result.processed };
       } catch {
@@ -252,6 +254,11 @@ export function createGtaSaAdapter(
       return placed.txds;
     },
     write(asset: Asset): WriteResult {
+      if (!asset.dirty) {
+        // Identity (the adapter contract): the source bytes ARE the output — byte-exact by construction, no
+        // re-encode trust needed. Not pushed into `packed` either: the archive rebuild keeps the original entry.
+        return { bytes: asset.source, fileName: `${asset.name}.dff` };
+      }
       const bytes = encodeDff(asset.source, asset.ir);
       packed.push({ data: bytes, name: `${asset.name}.dff` });
 

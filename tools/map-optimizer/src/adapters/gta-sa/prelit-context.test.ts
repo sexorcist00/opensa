@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { PrelitFingerprint } from './prelit-context';
 import type { Placement } from './resolve';
 
-import { computePrelitContext } from './prelit-context';
+import { computePrelitContext, parseOnlyList } from './prelit-context';
 
 /** A fingerprint with sane defaults — override what the case needs. */
 function print(overrides: Partial<PrelitFingerprint>): PrelitFingerprint {
@@ -43,6 +43,36 @@ function world(
 
   return { fingerprints, placements };
 }
+
+describe('parseOnlyList', () => {
+  describe('negative cases', () => {
+    it('rejects a non-array root', () => {
+      expect(() => parseOnlyList({})).toThrow(/must be a JSON array/);
+    });
+
+    it('rejects an object entry without a model name', () => {
+      expect(() => parseOnlyList([{ nightMax: 20 }])).toThrow(/needs a non-empty string "model"/);
+    });
+
+    it('rejects an unknown key (the "nigthMax" typo class)', () => {
+      expect(() => parseOnlyList([{ model: 'x', nigthMax: 20 }])).toThrow(/unknown key "nigthMax"/);
+    });
+
+    it('rejects a non-numeric correction value', () => {
+      expect(() => parseOnlyList([{ model: 'x', nightMax: '20' }])).toThrow(/"nightMax" must be a number/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('accepts a mix of bare names and explicit entries', () => {
+      expect(parseOnlyList(['a', { model: 'b', nightMax: 20 }, { dayShift: -30, model: 'c' }])).toEqual([
+        'a',
+        { model: 'b', nightMax: 20 },
+        { dayShift: -30, model: 'c' },
+      ]);
+    });
+  });
+});
 
 describe('computePrelitContext', () => {
   describe('negative cases', () => {
@@ -112,6 +142,18 @@ describe('computePrelitContext', () => {
   });
 
   describe('only-mode (user-curated list)', () => {
+    it('warns about a curated name that matches no placed prelit model (typo)', () => {
+      const { fingerprints, placements } = world(8, print({}));
+      const result = computePrelitContext(fingerprints, placements, {
+        exclude: ['ghost_model'],
+        only: ['subject', 'newvic1_sfvv'],
+      });
+
+      expect(result.warnings).toHaveLength(2);
+      expect(result.warnings[0]).toContain('newvic1_sfvv');
+      expect(result.warnings[1]).toContain('ghost_model');
+    });
+
     it('skips every model not on the list, even clear outliers', () => {
       const subject = print({ dayP50: 10 }); // would be lifted in normal mode
       const { fingerprints, placements } = world(8, subject);

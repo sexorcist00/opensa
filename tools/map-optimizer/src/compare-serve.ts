@@ -11,9 +11,10 @@
  * - `/txd?side=before|after&model=m`  → the model's TXD bytes (txd name resolved from that side's IDEs)
  */
 import { openArchive } from '@opensa/renderware/archive/img-archive';
+import { argValue, fromCwd } from '@opensa/tool-kit/cli';
 import { readdirSync, readFileSync } from 'node:fs';
 import { createServer, type ServerResponse } from 'node:http';
-import { isAbsolute, join, resolve } from 'node:path';
+import { join } from 'node:path';
 
 import { modelTxdMap } from './adapters/gta-sa/resolve';
 
@@ -21,16 +22,6 @@ interface Side {
   get(name: string): ArrayBuffer | null;
   names: Set<string>;
   txdByModel: Map<string, string>;
-}
-
-function argValue(flag: string): string | undefined {
-  const index = process.argv.indexOf(flag);
-
-  return index >= 0 ? process.argv[index + 1] : undefined;
-}
-
-function fromCwd(value: string): string {
-  return isAbsolute(value) ? value : resolve(process.cwd(), value);
 }
 
 function main(): void {

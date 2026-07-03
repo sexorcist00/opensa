@@ -1,7 +1,10 @@
 import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
+import { readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { openImg } from './img';
+import { createImg, openImg, writeImgFile } from './img';
 
 /** Two-entry VER2 archive bytes to open + edit. */
 function sampleImg(): Uint8Array {
@@ -47,6 +50,32 @@ describe('EditableImg', () => {
       expect([...(rebuilt.get('alpha.dff') ?? []).slice(0, 2)]).toEqual([9, 9]);
       expect([...(rebuilt.get('gamma.dff') ?? []).slice(0, 1)]).toEqual([7]);
       expect(rebuilt.has('beta.dff')).toBe(false);
+    });
+  });
+});
+
+describe('writeImgFile', () => {
+  describe('negative cases', () => {
+    it('throws on a VER2 name longer than 23 bytes', () => {
+      const img = createImg();
+      img.set('a-very-long-entry-name-way-past-23.dff', Uint8Array.of(1));
+      expect(() => writeImgFile(img, join(tmpdir(), `img-${process.pid}-bad.img`))).toThrow(/name too long/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('streams bytes identical to build() — sector padding, directory and order included', () => {
+      const img = openImg(sampleImg());
+      img.set('alpha.dff', Uint8Array.of(9, 9)); // replace
+      img.set('gamma.dff', new Uint8Array(2049).fill(7)); // add spanning two sectors
+      img.delete('beta.dff');
+
+      const path = join(tmpdir(), `img-${process.pid}-roundtrip.img`);
+      writeImgFile(img, path);
+      const streamed = new Uint8Array(readFileSync(path));
+      rmSync(path);
+
+      expect(streamed).toEqual(img.build());
     });
   });
 });

@@ -6,8 +6,9 @@
  * `tsx map-optimizer/src/review-cli.ts --game <dir> --report <file.html> [--limit 200] [--exclude <file.json>]`.
  */
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
+import { argValue, fromCwd } from '@opensa/tool-kit/cli';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { basename, isAbsolute, resolve } from 'node:path';
+import { basename } from 'node:path';
 
 import type { PrelitVerdict } from './adapters/gta-sa/prelit-context';
 
@@ -15,16 +16,6 @@ import { createGtaSaAdapter } from './adapters/gta-sa';
 import { encodePng } from './review/png';
 import { renderVerdictThumbnails, type VerdictThumbnails } from './review/render-verdict';
 import { buildReviewHtml, type ReviewEntry, verdictSeverity } from './review/report';
-
-function argValue(flag: string): string | undefined {
-  const index = process.argv.indexOf(flag);
-
-  return index >= 0 ? process.argv[index + 1] : undefined;
-}
-
-function fromCwd(value: string): string {
-  return isAbsolute(value) ? value : resolve(process.cwd(), value);
-}
 
 async function main(): Promise<void> {
   const gameArg = argValue('--game');
@@ -40,7 +31,10 @@ async function main(): Promise<void> {
 
   const gameDir = fromCwd(gameArg);
   const adapter = createGtaSaAdapter(basename(gameDir), gameDir);
-  const { stats, verdicts } = adapter.buildPrelitContext(exclude ? { exclude } : {});
+  const { stats, verdicts, warnings } = adapter.buildPrelitContext(exclude ? { exclude } : {});
+  for (const warning of warnings) {
+    console.warn(`⚠ ${warning}`);
+  }
   console.log(
     `verdicts ${verdicts.size} — lift ${stats.liftDay}, lower ${stats.lowerDay}, flat ${stats.flat}, ` +
       `night repair ${stats.repairNight} / synth ${stats.synthesizeNight}, excluded ${stats.excluded}`,

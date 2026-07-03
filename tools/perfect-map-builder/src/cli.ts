@@ -1,5 +1,6 @@
 import type { OptimizerPasses } from '@opensa/map-optimizer/run';
 
+import { argValue, fromCwd } from '@opensa/tool-kit/cli';
 /**
  * perfect-map-builder CLI. Chains every map tool into one build and splits it into the `sa` (real game) and
  * `opensa` LOD targets. Usage:
@@ -14,19 +15,8 @@ import type { OptimizerPasses } from '@opensa/map-optimizer/run';
  * Paths are relative to the current working directory (absolute paths pass through). See `docs/plans/001`.
  */
 import { statSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
 
 import { buildPerfectMap, STAGE_NAMES, type StageName } from './pipeline';
-
-function argValue(flag: string): string | undefined {
-  const index = process.argv.indexOf(flag);
-
-  return index >= 0 ? process.argv[index + 1] : undefined;
-}
-
-function fromCwd(value: string): string {
-  return isAbsolute(value) ? value : resolve(process.cwd(), value);
-}
 
 async function main(): Promise<void> {
   const gameArg = argValue('--game');

@@ -1,19 +1,12 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 
-import { editArchive } from '@opensa/tool-kit/archive/img';
-import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { type EditableImg, editArchive, writeImgFile } from '@opensa/tool-kit/archive/img';
+import { copyFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 
-/** Rebuild a VER2 archive: every entry kept, those present in `optimized` swapped for the optimized bytes. */
+/** Rebuild a VER2 archive in memory: every entry kept, `optimized` swapped in. (Tests; the full build streams.) */
 export function rebuildArchive(archive: ImgArchive, optimized: Map<string, Uint8Array>): Uint8Array {
-  const img = editArchive(archive);
-  for (const [name, bytes] of optimized) {
-    if (img.has(name)) {
-      img.set(name, bytes); // swap an optimized entry in place; keep everything else
-    }
-  }
-
-  return img.build();
+  return swappedArchive(archive, optimized).build();
 }
 
 /**
@@ -40,13 +33,26 @@ export function writeFullBuild(
   const modelsOut = join(outDir, 'models');
   mkdirSync(modelsOut, { recursive: true });
   for (const [file, archive] of modelArchives) {
-    writeFileSync(join(modelsOut, file), rebuildArchive(archive, optimized));
+    // Streamed (A3): entry-at-a-time to disk — building a ~1 GB archive buffer in memory would double peak RSS.
+    writeImgFile(swappedArchive(archive, optimized), join(modelsOut, file));
   }
 }
 
 /** A top-level `models/<archive>.img` (rebuilt), vs a loose file or a nested `models/<sub>/…` (copied). */
 function isModelArchive(rel: string, modelArchives: Map<string, ImgArchive>): boolean {
   return dirname(rel) === 'models' && modelArchives.has(basename(rel));
+}
+
+/** An {@link EditableImg} over `archive` with the `optimized` entries swapped in (everything else kept). */
+function swappedArchive(archive: ImgArchive, optimized: Map<string, Uint8Array>): EditableImg {
+  const img = editArchive(archive);
+  for (const [name, bytes] of optimized) {
+    if (img.has(name)) {
+      img.set(name, bytes); // swap an optimized entry in place; keep everything else
+    }
+  }
+
+  return img;
 }
 
 function walk(dir: string, out: string[] = []): string[] {

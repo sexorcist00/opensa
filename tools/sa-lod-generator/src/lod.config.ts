@@ -31,6 +31,9 @@ const holeFillModels = [
   'bventuraENV_LAn',
   // Roadsign
   'lamotsig2_LA',
+  // GTA V Vinewood Sign
+  'CE_radarmast3',
+  'VineSign1_cunte01',
 ];
 
 /**

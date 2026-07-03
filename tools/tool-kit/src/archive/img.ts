@@ -1,6 +1,7 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 
 import { buildVer2Buffer, openArchive } from '@opensa/renderware/archive/img-archive';
+import { closeSync, ftruncateSync, openSync, writeSync } from 'node:fs';
 
 /**
  * An **editable** GTA IMG (VER2) archive: open, read, add-with-replace, delete, then rebuild a fresh `.img`.
@@ -82,4 +83,45 @@ export function editArchive(archive: ImgArchive): EditableImg {
 /** Open IMG bytes as an {@link EditableImg}. */
 export function openImg(bytes: Uint8Array): EditableImg {
   return editArchive(openArchive(bytes));
+}
+
+const SECTOR = 2048;
+
+/**
+ * Stream an {@link EditableImg} to a VER2 `.img` **file** — the low-memory sibling of `build()`: entries are
+ * pulled and written one at a time (peak extra memory = the largest single entry, not the whole archive), the
+ * directory lands in its reserved leading sectors afterwards. Byte-identical to
+ * `buildVer2Buffer(img.names().map(…))`. For the ~1 GB game archives `build()` alone doubles the run's peak
+ * RSS; this keeps the rebuild flat (map-optimizer plan 011 finalize).
+ */
+export function writeImgFile(img: EditableImg, path: string): void {
+  const names = img.names();
+  const dirSectors = Math.ceil((8 + names.length * 32) / SECTOR);
+  const directory = new Uint8Array(dirSectors * SECTOR);
+  const view = new DataView(directory.buffer);
+  directory.set(new TextEncoder().encode('VER2'), 0);
+  view.setUint32(4, names.length, true);
+
+  const fd = openSync(path, 'w');
+  try {
+    let cursor = dirSectors;
+    names.forEach((name, i) => {
+      const encoded = new TextEncoder().encode(name);
+      if (encoded.length > 23) {
+        throw new Error(`VER2 name too long (max 23 bytes): ${name}`);
+      }
+      const data = img.get(name) ?? new Uint8Array(0);
+      const sectors = Math.max(1, Math.ceil(data.length / SECTOR));
+      const base = 8 + i * 32;
+      view.setUint32(base, cursor, true);
+      view.setUint16(base + 4, sectors, true); // streamingSize (sectors); sizeInArchive stays 0
+      directory.set(encoded, base + 8);
+      writeSync(fd, data, 0, data.length, cursor * SECTOR);
+      cursor += sectors;
+    });
+    ftruncateSync(fd, cursor * SECTOR); // zero-fill the last entry's sector padding
+    writeSync(fd, directory, 0, directory.length, 0);
+  } finally {
+    closeSync(fd);
+  }
 }

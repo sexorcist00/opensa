@@ -7,7 +7,7 @@ import { parsePrelightInfo, type PrelightInfo } from '@opensa/lod-common/preligh
  */
 import { buildProcobjLods } from '@opensa/lod-procobj-generator/build';
 import { buildTreeLods } from '@opensa/lod-trees-generator/build';
-import { runOptimizer } from '@opensa/map-optimizer/run';
+import { parseOnlyList, runOptimizer } from '@opensa/map-optimizer/run';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { install as installMods } from '@opensa/mod-installer/install';
 import { buildOpensaLods } from '@opensa/opensa-lod-generator/build';
@@ -50,8 +50,6 @@ export interface BuildResult {
 }
 
 export type StageName = (typeof STAGE_NAMES)[number];
-
-type PrelitOnly = NonNullable<NonNullable<Parameters<typeof runOptimizer>[0]['prelitOptions']>['only']>;
 
 /** Run the pipeline (optionally up to `until`). Returns each produced stage build. */
 export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<BuildResult> {
@@ -224,13 +222,13 @@ function loadPrelight(vegetationDir: string): PrelightInfo | undefined {
 }
 
 /** The first `broken-prelight.json` found among `dirs` → map-optimizer prelight ONLY-mode list, else null. */
-function loadPrelitOnly(...dirs: string[]): null | PrelitOnly {
+function loadPrelitOnly(...dirs: string[]): null | ReturnType<typeof parseOnlyList> {
   for (const dir of dirs) {
     const file = join(dir, 'broken-prelight.json');
     if (existsSync(file)) {
       log(`optimize — prelight ONLY-mode from ${file}`);
 
-      return JSON.parse(readFileSync(file, 'utf8')) as PrelitOnly;
+      return parseOnlyList(JSON.parse(readFileSync(file, 'utf8')));
     }
   }
 

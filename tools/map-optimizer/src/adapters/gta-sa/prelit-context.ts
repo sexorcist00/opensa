@@ -67,6 +67,9 @@ export interface PrelitContextResult {
     synthesizeNight: number;
   };
   verdicts: Map<string, PrelitVerdict>;
+  /** Curation problems worth surfacing (e.g. an only/exclude name that matches no placed prelit model — a
+   *  likely typo that would otherwise fail silently). */
+  warnings: string[];
 }
 
 /**
@@ -104,6 +107,42 @@ export interface PrelitVerdict {
   flat: boolean;
   level?: LevelVerdict;
   night?: NightVerdict;
+}
+
+/**
+ * Validate a user-supplied only-list (the `--prelit-only` JSON) into {@link OnlyEntry}s. Throws with a precise
+ * message on shape errors — an unknown key (e.g. the `"nigthMax"` typo) or a missing `model` would otherwise
+ * be silently ignored and cost an in-game round to notice.
+ */
+export function parseOnlyList(json: unknown): OnlyEntry[] {
+  if (!Array.isArray(json)) {
+    throw new Error('prelit-only list must be a JSON array');
+  }
+
+  return json.map((entry, index) => {
+    if (typeof entry === 'string') {
+      return entry;
+    }
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error(`prelit-only entry #${index} must be a model name or an object`);
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.model !== 'string' || record.model.length === 0) {
+      throw new Error(`prelit-only entry #${index} needs a non-empty string "model"`);
+    }
+    for (const key of Object.keys(record)) {
+      if (key !== 'model' && key !== 'nightMax' && key !== 'nightScale' && key !== 'dayShift') {
+        throw new Error(
+          `prelit-only entry "${record.model}": unknown key "${key}" (model|nightMax|nightScale|dayShift)`,
+        );
+      }
+      if (key !== 'model' && typeof record[key] !== 'number') {
+        throw new Error(`prelit-only entry "${record.model}": "${key}" must be a number`);
+      }
+    }
+
+    return record as Exclude<OnlyEntry, string>;
+  });
 }
 
 /** `only` has no default — its absence IS the mode switch (normal statistical run). */
@@ -152,6 +191,13 @@ export function computePrelitContext(
         ),
       )
     : null;
+  // A curated name that matches no placed prelit model is almost certainly a typo — fail loudly, not silently.
+  const warnings: string[] = [];
+  for (const name of [...(only?.keys() ?? []), ...excluded]) {
+    if (!fingerprints.has(name)) {
+      warnings.push(`curated model not found among placed prelit models (typo?): ${name}`);
+    }
+  }
   const neighboursOf = buildNeighbourQuery(fingerprints, placements, opts.radius);
   const byModel = groupByModel(fingerprints, placements);
 
@@ -197,7 +243,7 @@ export function computePrelitContext(
     }
   }
 
-  return { stats, verdicts };
+  return { stats, verdicts, warnings };
 }
 
 /** Fingerprint a parsed clump's prelit, or null when it carries none (nothing to condition). */

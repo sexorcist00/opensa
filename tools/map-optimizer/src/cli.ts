@@ -1,3 +1,4 @@
+import { argValue, fromCwd } from '@opensa/tool-kit/cli';
 /**
  * Map-optimizer CLI. Takes `--game <path>` (a game-data dir: `gta.dat` + `data/` + `models/`), runs the full
  * pipeline and emits a drop-in build under `--out <path>`. All passes (textures / weld-seams / prelit /
@@ -9,22 +10,10 @@
  * paths pass through).
  */
 import { readFileSync, statSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
 
-import type { OnlyEntry } from './adapters/gta-sa/prelit-context';
-
+import { parseOnlyList } from './adapters/gta-sa/prelit-context';
 import { printReport, writeReport } from './core';
 import { type OptimizerPasses, runOptimizer } from './run';
-
-function argValue(flag: string): string | undefined {
-  const index = process.argv.indexOf(flag);
-
-  return index >= 0 ? process.argv[index + 1] : undefined;
-}
-
-function fromCwd(value: string): string {
-  return isAbsolute(value) ? value : resolve(process.cwd(), value);
-}
 
 async function main(): Promise<void> {
   const gameArg = argValue('--game');
@@ -46,7 +35,7 @@ async function main(): Promise<void> {
   };
   const onlyArg = argValue('--prelit-only');
   // Entries: "name" (forced auto verdict) or {"model": "name", "nightScale": 0.4, "dayShift": -30} (explicit).
-  const only = onlyArg ? (JSON.parse(readFileSync(fromCwd(onlyArg), 'utf8')) as OnlyEntry[]) : undefined;
+  const only = onlyArg ? parseOnlyList(JSON.parse(readFileSync(fromCwd(onlyArg), 'utf8'))) : undefined;
   const report = await runOptimizer({
     gameDir,
     outDir: fromCwd(outArg),

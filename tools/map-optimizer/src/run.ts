@@ -6,6 +6,8 @@
 import { basename } from 'node:path';
 
 import type { LevelVerdict, NightVerdict, PrelitContextOptions } from './adapters/gta-sa/prelit-context';
+
+export { type OnlyEntry, parseOnlyList, type PrelitContextOptions } from './adapters/gta-sa/prelit-context';
 import type { RunReport } from './core';
 
 import { createGtaSaAdapter } from './adapters/gta-sa';
@@ -71,12 +73,15 @@ export async function runOptimizer(options: RunOptimizerOptions): Promise<RunRep
   // word at shared borders), night LAST (the set derives from the final day). Level+night share one world
   // pre-pass (`buildPrelitContext`).
   if (passes.prelit) {
-    const { stats, verdicts } = adapter.buildPrelitContext(options.prelitOptions);
+    const { stats, verdicts, warnings } = adapter.buildPrelitContext(options.prelitOptions);
     console.log(
       `  prelit — lift ${stats.liftDay}, lower ${stats.lowerDay}, flat ${stats.flat}, ` +
         `night repair ${stats.repairNight} / synth ${stats.synthesizeNight}, ok ${stats.ok}, ` +
         `no-context ${stats.noContext}, excluded ${stats.excluded}`,
     );
+    for (const warning of warnings) {
+      console.warn(`  prelit ⚠ ${warning}`);
+    }
     const levels = new Map<string, LevelVerdict>();
     const nights = new Map<string, NightVerdict>();
     const flats = new Set<string>();

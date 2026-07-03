@@ -108,5 +108,25 @@ describe('runPipeline', () => {
 
       expect(seen).toEqual(['keep']);
     });
+
+    it('never exceeds the concurrency limit and still processes every model', async () => {
+      let inFlight = 0;
+      let peak = 0;
+      const gate: MapPlugin = {
+        name: 'gate',
+        transform: async (): Promise<void> => {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 1));
+          inFlight -= 1;
+        },
+      };
+      const names = Array.from({ length: 9 }, (_, i) => `m${i}`);
+      const report = await runPipeline(fakeAdapter(names), { concurrency: 2, plugins: [gate] }, outDir);
+
+      expect(report.assets).toHaveLength(9);
+      expect(peak).toBeLessThanOrEqual(2);
+      expect(peak).toBeGreaterThan(1); // the limit is actually used, not serialized
+    });
   });
 });
