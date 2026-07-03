@@ -110,10 +110,13 @@ const MANIFEST: readonly Fixture[] = [
   // (plan 016) real-asset pair: a genuine cross-model prelit seam (~455 boundary groups, differing prelit).
   extract('cf_ext_dem_sfs.dff', 'world/cf_ext_dem_sfs.dff'),
   extract('crackfact_sfs.dff', 'world/crackfact_sfs.dff'),
-  // A Vegas road ramp meeting a junction slab — the map-optimizer gap-stitch (plan 017) real-asset pair: their
-  // boundaries meet at a few points (variant A) then diverge, a genuine cross-model geometry seam.
+  // A Vegas road ramp meeting a junction slab — the map-optimizer gap-stitch (plan 017, retired) real-asset
+  // pair: their boundaries meet at a few points (variant A) then diverge, a genuine cross-model geometry seam.
   extract('vegassroad0522a.dff', 'world/vegassroad0522a.dff'),
   extract('vgssspagjun08.dff', 'world/vgssspagjun08.dff'),
+  // SF Chinatown victorian whose night set is dark at the median (~19) with the window glow in the p95 tail —
+  // the map-optimizer prelight (plan 019) "tail glow" class that motivated only-mode `nightMax` (capNightSet).
+  extract('newvic1_sfw.dff', 'world/newvic1_sfw.dff'),
 
   // --- Derived: a stock VER2 archive holding a single extracted vehicle ---
   { dest: `${OUT}/img/admiral.img`, entry: 'admiral.dff', type: 'archive' },

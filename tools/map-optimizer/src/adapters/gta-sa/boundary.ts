@@ -1,8 +1,9 @@
 /**
- * Shared world-boundary geometry helpers for the plan 016 seam weld and the plan 017 gap stitch: boundary-edge
- * detection, area-weighted normals, the engine's conjugated-quaternion placement transform (+ its inverse), and
- * a spatial-hash grouping. Pure + archive-free. The world transform matches the engine's map convention exactly
- * (position + **conjugated** IPL quaternion, unit scale, DFF frame transforms ignored — see `build-region.ts`).
+ * Shared world-boundary geometry helpers for the plan 016 seam weld (and formerly the retired plan 017 gap
+ * stitch): boundary-edge detection, area-weighted normals, the engine's conjugated-quaternion placement
+ * transform (+ its inverse), and a spatial-hash grouping. Pure + archive-free. The world transform matches the
+ * engine's map convention exactly (position + **conjugated** IPL quaternion, unit scale, DFF frame transforms
+ * ignored — see `build-region.ts`).
  */
 
 /** An open edge (used by exactly one triangle): its two vertices `a`,`b` + the owning triangle's third vertex. */

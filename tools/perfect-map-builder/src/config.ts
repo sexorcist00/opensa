@@ -16,7 +16,7 @@ export interface BuilderConfig {
 
 export const config: BuilderConfig = {
   cellSize: 256,
-  optimizerPasses: {}, // all passes on
+  optimizerPasses: { addNormals: true }, // all passes on; normals created for OpenSA's SSAO (plan 015)
   procobjTex: 128,
   subfolders: { mods: 'mods', peds: 'peds', procobj: 'procobj', vegetation: 'vegetation', vehicles: 'vehicles' },
   treeTex: 512,

@@ -1,6 +1,11 @@
 # 014 — Adaptive surface smoothing (roads / terrain)
 
-**Status: ⛔ Not viable for SA terrain — won't pursue.** Phases 0 + 1.1 built (`--refine`, off by default); both
+**Status: ❌ RETIRED (2026-07-03) — the `refine` pass and `plugins/refine-surface.ts` were deleted from the
+codebase** (already ⛔ not-viable and off-by-default; both smoothing families failed empirically, see the
+Verdict, and the dead opt-in only added surface area). The read-only `analyze-curvature.ts` measurement tool
+remains. Recoverable from git history.
+
+Original status: Phases 0 + 1.1 built (`--refine`, off by default); both
 geometric-smoothing families were then tried and **both fail** (see "Verdict" below). Goal was: make road/terrain
 surfaces look rounder by adding geometry only where there's real curvature. Conclusion: SA terrain has no
 recoverable curvature, and relaxing it is destructive — so this stays off-by-default and unfinished by design.

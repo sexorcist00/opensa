@@ -51,6 +51,8 @@ export interface BuildResult {
 
 export type StageName = (typeof STAGE_NAMES)[number];
 
+type PrelitOnly = NonNullable<NonNullable<Parameters<typeof runOptimizer>[0]['prelitOptions']>['only']>;
+
 /** Run the pipeline (optionally up to `until`). Returns each produced stage build. */
 export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<BuildResult> {
   const config = { ...defaultConfig, ...options.config };
@@ -84,9 +86,18 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       run: (game, out) => installPeds({ gamePath: game, inPath: source(subfolders.peds), outPath: out }),
     });
   }
+  // map-optimizer prelight ONLY-mode: a `broken-prelight.json` at the mods-src root (or inside the mods
+  // subfolder) is the curated list — see map-optimizer plan 019 iteration 5/6 for the entry formats.
+  const prelitOnly = loadPrelitOnly(inPath, source(subfolders.mods));
   chain.push({
     name: 'optimize',
-    run: (game, out) => runOptimizer({ gameDir: game, outDir: out, passes: config.optimizerPasses }),
+    run: (game, out) =>
+      runOptimizer({
+        gameDir: game,
+        outDir: out,
+        passes: config.optimizerPasses,
+        ...(prelitOnly ? { prelitOptions: { only: prelitOnly } } : {}),
+      }),
   });
   chain.push({
     name: 'trees',
@@ -210,6 +221,20 @@ function loadPrelight(vegetationDir: string): PrelightInfo | undefined {
   const file = join(vegetationDir, 'prelight.json');
 
   return existsSync(file) ? parsePrelightInfo(readFileSync(file, 'utf8')) : undefined;
+}
+
+/** The first `broken-prelight.json` found among `dirs` → map-optimizer prelight ONLY-mode list, else null. */
+function loadPrelitOnly(...dirs: string[]): null | PrelitOnly {
+  for (const dir of dirs) {
+    const file = join(dir, 'broken-prelight.json');
+    if (existsSync(file)) {
+      log(`optimize — prelight ONLY-mode from ${file}`);
+
+      return JSON.parse(readFileSync(file, 'utf8')) as PrelitOnly;
+    }
+  }
+
+  return null;
 }
 
 function log(message: string): void {

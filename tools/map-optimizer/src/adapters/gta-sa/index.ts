@@ -7,24 +7,33 @@ import { join } from 'node:path';
 import type { GameAdapter } from '../../core/adapter';
 import type { Asset, AssetRef, WriteResult } from '../../core/asset';
 
+import { shiftPrelit } from '../../plugins/apply-prelit-level';
 import { writeFullBuild } from './build';
 import { encodeDff } from './codec/dff';
-import { computeGapStitches, type GapModel, type GapStitchOptions, type GapStitchResult } from './gap-stitch';
+import {
+  computePrelitContext,
+  fingerprintClump,
+  type LevelVerdict,
+  type PrelitContextOptions,
+  type PrelitContextResult,
+  type PrelitFingerprint,
+} from './prelit-context';
 import { clumpToIr } from './read';
-import { type Placement, resolveMap, resolvePlacements } from './resolve';
+import { type Placement, resolveMap, resolvePlacements, timedModels } from './resolve';
 import { computeSeamOverrides, type SeamModel, type SeamWeldOptions, type SeamWeldResult } from './seam-weld';
 import { optimizeTxd } from './textures';
 
-/** GTA-SA gap-stitch op, exposed for the optional cross-model geometry stitch (plan 017). */
-export interface GtaSaGapOps {
-  /** Compute per-model position overrides that close hairline cross-model cracks (uniquely-placed models only). */
-  buildGapStitches(options?: GapStitchOptions): GapStitchResult;
+/** GTA-SA world-context prelight op (plan 019). */
+export interface GtaSaPrelitOps {
+  /** Fingerprint every placed model + compute neighbourhood correction verdicts (day level / night). */
+  buildPrelitContext(options?: PrelitContextOptions): PrelitContextResult;
 }
 
-/** GTA-SA seam-weld op, exposed for the optional cross-model prelit weld (plan 016). */
+/** GTA-SA seam-weld op, exposed for the optional cross-model prelit weld (plan 016 + feather band, plan 019). */
 export interface GtaSaSeamOps {
-  /** Compute per-model prelit overrides that close cross-model tile seams (uniquely-placed models only). */
-  buildSeamOverrides(options?: SeamWeldOptions): SeamWeldResult;
+  /** Compute per-model prelit overrides that close cross-model tile seams (uniquely-placed models only).
+   *  Pass the day-level verdicts so the weld/feather works in post-level space (plan 019 Phase 3). */
+  buildSeamOverrides(options?: SeamWeldOptions & { levelVerdicts?: ReadonlyMap<string, LevelVerdict> }): SeamWeldResult;
 }
 
 /** GTA-SA texture-pass ops, exposed alongside the {@link GameAdapter} for the optional mip pass (plan 010). */
@@ -55,7 +64,7 @@ export interface TextureOutcome {
 export function createGtaSaAdapter(
   game: string,
   gameDir: string,
-): GameAdapter & GtaSaGapOps & GtaSaSeamOps & GtaSaTextureOps {
+): GameAdapter & GtaSaPrelitOps & GtaSaSeamOps & GtaSaTextureOps {
   const modelsDir = join(gameDir, 'models');
   const dataDir = join(gameDir, 'data');
   // Open every models/*.img once, keyed by filename (so `finalize` can rebuild each in place). gta3.img is the
@@ -86,18 +95,40 @@ export function createGtaSaAdapter(
   // Optimized models + textures collected during the run, packed into a VER2 .img on finalize().
   const packed: { data: Uint8Array; name: string }[] = [];
 
+  // All exterior placements, resolved ONCE per adapter (plan 019 Phase 0) — three world pre-passes read them.
+  let placementsCache: null | Placement[] = null;
+  const allPlacements = (): Placement[] => {
+    placementsCache ??= resolvePlacements(dataDir, gta3);
+
+    return placementsCache;
+  };
+
+  // `tobj` (hour-gated) models — lit-window / neon night overlays, coplanar with their base building. Their
+  // prelit IS the lighting design and their geometry must not weld/stitch to the wall behind, so every
+  // world-context pass skips them (plan 019 — night repair dimmed skyscraper windows before this).
+  let timedCache: null | Set<string> = null;
+  const timed = (): Set<string> => {
+    timedCache ??= timedModels(dataDir);
+
+    return timedCache;
+  };
+
   // Uniquely-placed models (placed exactly once), for the world-context passes. `lod*` are dropped by default
   // (the engine's LOD gate — reused by every LOD tool): a far-LOD isn't co-visible with its HD, so editing that
   // pair is pointless (plan 016). `_lodbit`/`_lod` tiles are NOT `lod*`-prefixed → kept as HD-tier.
   const uniquePlacements = (includeLods?: boolean): Map<string, Placement> => {
-    const placements = resolvePlacements(dataDir, gta3);
+    const placements = allPlacements();
     const counts = new Map<string, number>();
     for (const placement of placements) {
       counts.set(placement.modelName, (counts.get(placement.modelName) ?? 0) + 1);
     }
     const unique = new Map<string, Placement>();
     for (const placement of placements) {
-      if (counts.get(placement.modelName) === 1 && (includeLods || !isLodModel(placement.modelName))) {
+      if (
+        counts.get(placement.modelName) === 1 &&
+        (includeLods || !isLodModel(placement.modelName)) &&
+        !timed().has(placement.modelName)
+      ) {
         unique.set(placement.modelName, placement);
       }
     }
@@ -106,39 +137,62 @@ export function createGtaSaAdapter(
   };
 
   return {
-    buildGapStitches(options?: GapStitchOptions): GapStitchResult {
-      const models: GapModel[] = [];
-      for (const [name, placement] of uniquePlacements(options?.includeLods)) {
-        const bytes = getModel(`${name}.dff`);
+    buildPrelitContext(options?: PrelitContextOptions): PrelitContextResult {
+      // Fingerprint every distinct placed HD-tier model (lod* excluded — far-LODs aren't co-visible with their
+      // HD and would double-count the hood brightness at the same coordinates; tobj excluded — a night-window
+      // overlay's prelit is lighting design, and it must not feed the hood stats either). Parse-and-discard:
+      // only the small fingerprint is retained per model.
+      const placements = allPlacements().filter(
+        (placement) => !isLodModel(placement.modelName) && !timed().has(placement.modelName),
+      );
+      const fingerprints = new Map<string, PrelitFingerprint>();
+      for (const placement of placements) {
+        if (fingerprints.has(placement.modelName)) {
+          continue;
+        }
+        const bytes = getModel(`${placement.modelName}.dff`);
         if (!bytes) {
           continue;
         }
         try {
-          const geometries = parseDff(bytes).geometries.map((geometry) => ({
-            positions: geometry.positions,
-            triangles: geometry.triangles.map((triangle) => ({ a: triangle.a, b: triangle.b, c: triangle.c })),
-          }));
-          models.push({ geometries, name, placement: { position: placement.position, rotation: placement.rotation } });
+          const fingerprint = fingerprintClump(parseDff(bytes));
+          if (fingerprint) {
+            fingerprints.set(placement.modelName, fingerprint);
+          }
         } catch {
-          continue; // unparseable model — skip it, the stitch is best-effort
+          continue; // unparseable model — best-effort, like the other pre-passes
         }
       }
 
-      return computeGapStitches(models, options);
+      return computePrelitContext(fingerprints, placements, options);
     },
-    buildSeamOverrides(options?: SeamWeldOptions): SeamWeldResult {
+    buildSeamOverrides(
+      options?: SeamWeldOptions & { levelVerdicts?: ReadonlyMap<string, LevelVerdict> },
+    ): SeamWeldResult {
       const models: SeamModel[] = [];
       for (const [name, placement] of uniquePlacements(options?.includeLods)) {
         const bytes = getModel(`${name}.dff`);
         if (!bytes) {
           continue;
         }
+        // The weld/feather must see the prelit the pipeline will have AFTER apply-prelit-level (its overrides
+        // are absolute and run later) — apply the model's day-level verdict to a copy (plan 019 Phase 3).
+        const levelVerdict = options?.levelVerdicts?.get(name);
+        const leveled = (prelit: Uint8Array): Uint8Array => {
+          if (!levelVerdict) {
+            return prelit;
+          }
+          const copy = new Uint8Array(prelit);
+          shiftPrelit(copy, levelVerdict);
+
+          return copy;
+        };
         try {
           const geometries = parseDff(bytes)
             .geometries.filter((geometry) => geometry.prelitColors)
             .map((geometry) => ({
               positions: geometry.positions,
-              prelit: geometry.prelitColors!,
+              prelit: leveled(geometry.prelitColors!),
               triangles: geometry.triangles.map((triangle) => ({ a: triangle.a, b: triangle.b, c: triangle.c })),
             }));
           if (geometries.length > 0) {

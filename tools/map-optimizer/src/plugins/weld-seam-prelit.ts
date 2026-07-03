@@ -5,12 +5,14 @@ import type { SubMesh } from '../core/ir';
  * Apply the cross-model seam-prelit overrides computed by the world pre-pass (`adapters/gta-sa/seam-weld.ts`,
  * plan 016, variant A). For the current model it overwrites the prelit **RGB** of every vertex at a welded
  * boundary position; **alpha is copied verbatim** (wind / floodlight / overlay data — same rule as the other
- * prelight passes).
+ * prelight passes). The feather band (plan 019 Phase 3) rides the same mechanism: the pre-pass emits absolute
+ * targets for interior vertices near the seam too, so this plugin needs no band logic of its own.
  *
  * Matching is by **local position**, not vertex index: the earlier stages (weld / prune / smooth-normals)
  * re-index and split vertices, but never move them, so a position key survives — and every split copy at a seam
- * position is corrected in one pass. Must run **after `smooth-normals`** (splits exist) and **before
- * `synthesize-night`** (so the night set derives from the welded day prelit).
+ * position is corrected in one pass. Must run **after `smooth-normals`** (splits exist), **after
+ * `apply-prelit-level`** (the seam line gets the final word at shared borders) and **before `conform-night`**
+ * (so the night set derives from the welded day prelit) — see the ordering in `run.ts` (plan 019).
  */
 
 /** One welded vertex: match by local position, overwrite RGB. Structurally the adapter's `VertexOverride`. */

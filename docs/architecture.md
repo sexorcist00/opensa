@@ -14,7 +14,7 @@ root and **all code lives in `<pkg>/src/`**. Cross-package imports go through th
 ```
 apps/
   web/      @opensa/web      React shell + game surface + game-config + controls-harness  (tag type:app)
-  viewer/   @opensa/viewer   standalone object/vehicle/character viewers — tabs in /viewer.html  (type:app)
+  viewer/   @opensa/viewer   standalone object/vehicle/character/compare viewers — tabs in /viewer.html  (type:app)
 packages/                    (tag type:engine)
   renderware/  @opensa/renderware   parsers (DFF/TXD/COL, IDE/IPL/DAT/GXT) + archive + map + three builders
   game/        @opensa/game         engine, ECS, systems, plugins, adapters

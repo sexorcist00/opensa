@@ -6,7 +6,7 @@ import { decodeGeometryStruct } from '@opensa/rw-codec/geometry-struct';
 
 import type { MeshIR } from '../../../core/ir';
 
-import { addNightColorsIfMissing, applyMeshToStruct, rebuildGeometry } from './geometry-rebuild';
+import { applyMeshToStruct, rebuildGeometry, syncNightColors } from './geometry-rebuild';
 
 /**
  * Serialize a (possibly edited) {@link MeshIR} back to DFF bytes. Reads the source into a faithful chunk tree,
@@ -38,7 +38,7 @@ export function encodeDff(source: Uint8Array, ir: MeshIR): Uint8Array {
     } else {
       rebuildGeometry(geometry, mesh);
     }
-    addNightColorsIfMissing(geometry, mesh); // synthesized night sets (plan 013); no-op otherwise
+    syncNightColors(geometry, mesh); // repaired (plan 019) or synthesized (plan 013) night sets; no-op otherwise
   });
 
   return writeRw(file);

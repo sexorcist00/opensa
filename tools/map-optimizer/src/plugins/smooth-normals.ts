@@ -22,18 +22,30 @@ import type { SubMesh } from '../core/ir';
 
 export type { SmoothNormalsOptions };
 
+/** Plugin options: the tool-kit smooth-group knobs + whether to CREATE normals on meshes that ship none. */
+export type SmoothNormalsPluginOptions = SmoothNormalsOptions & {
+  /** Add normals to meshes that have none. Default **false**: stock SA world geometry is prelit + LIGHT-flagged
+   *  WITHOUT normals (777 of 800 sampled geometries) — adding normals flips real SA into its dynamic vertex
+   *  lighting path and shades the whole map with giant triangle-interpolated fans. OpenSA builds opt in
+   *  (`addNormals` pass) — its renderer wants normals for SSAO (plan 015). */
+  addWhereAbsent?: boolean;
+};
+
 type Rebuilt = Pick<
   SubMesh,
   'extraUvs' | 'nightColors' | 'normals' | 'positions' | 'prelitColors' | 'triangles' | 'uvs'
 >;
 
-export function createSmoothNormals(options: SmoothNormalsOptions = {}): MapPlugin {
+export function createSmoothNormals(options: SmoothNormalsPluginOptions = {}): MapPlugin {
   return {
     name: 'smooth-normals',
     transform(asset, context): void {
       let meshes = 0;
       let split = 0;
       for (const mesh of asset.ir.meshes) {
+        if (!mesh.normals && !options.addWhereAbsent) {
+          continue; // source has no normals — real SA must not gain them (see addWhereAbsent)
+        }
         const before = mesh.positions.length / 3;
         const rebuilt = rebuildSmoothNormals(mesh, options);
         if (!rebuilt) {

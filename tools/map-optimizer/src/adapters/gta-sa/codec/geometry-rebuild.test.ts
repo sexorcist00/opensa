@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { SubMesh } from '../../../core/ir';
 
-import { addNightColorsIfMissing, rebuildGeometry } from './geometry-rebuild';
+import { rebuildGeometry, syncNightColors } from './geometry-rebuild';
 
 function geometryChunk(numVertices: number, numTriangles: number, extras: RwChunk[] = []): RwChunk {
   return {
@@ -99,6 +99,26 @@ describe('rebuildGeometry', () => {
       expect([view.getUint32(20, true), view.getUint32(24, true), view.getUint32(28, true)]).toEqual([0, 1, 2]);
     });
 
+    it('clears the TRISTRIP flag — the regenerated BinMesh is a trilist and SA trusts the geometry flag', () => {
+      const stripped = struct(3, 1);
+      stripped.flags |= 0x0001; // rpGEOMETRYTRISTRIP, common on stock world models
+      const geometry: RwChunk = {
+        children: [
+          { data: encodeGeometryStruct(stripped), type: RW_STRUCT, version: 0 },
+          {
+            children: [{ data: new Uint8Array(0), type: RW_BIN_MESH_PLG, version: 0 }],
+            type: RW_EXTENSION,
+            version: 0,
+          },
+        ],
+        type: 0x0f,
+        version: 0,
+      };
+      rebuildGeometry(geometry, mesh(3, [{ a: 0, b: 1, c: 2, material: 0 }]));
+
+      expect(decodeGeometryStruct(geometry.children![0].data!).flags & 0x0001).toBe(0);
+    });
+
     it('re-emits both UV layers of a dual-UV geometry (no longer refused)', () => {
       const dual = struct(3, 1);
       dual.uvLayers = [new Float32Array([0, 0, 1, 0, 1, 1]), new Float32Array([9, 9, 9, 9, 9, 9])];
@@ -128,30 +148,40 @@ describe('rebuildGeometry', () => {
   });
 });
 
-describe('addNightColorsIfMissing', () => {
+describe('syncNightColors', () => {
   describe('negative cases', () => {
-    it('does nothing when the mesh has no synthesized night set', () => {
+    it('does nothing when the mesh has no night set', () => {
       const geometry = geometryChunk(4, 2);
-      addNightColorsIfMissing(geometry, mesh(4, []));
+      syncNightColors(geometry, mesh(4, []));
       expect(nightChunkOf(geometry)).toBeUndefined();
     });
 
-    it('leaves an existing night chunk untouched (byte-faithful)', () => {
+    it('leaves an existing night chunk byte-faithful when the mesh carries no night set', () => {
       const existing = new Uint8Array([1, 0, 0, 0, 9, 9, 9, 9]);
       const geometry = geometryChunk(4, 2, [{ data: existing, type: RW_NIGHT_VERTEX_COLORS, version: 0 }]);
-      const withNight = mesh(4, []);
-      withNight.nightColors = new Uint8Array(16).fill(200);
-      addNightColorsIfMissing(geometry, withNight);
+      syncNightColors(geometry, mesh(4, []));
       expect(nightChunkOf(geometry)!.data).toBe(existing); // same reference — not rewritten
     });
   });
 
   describe('positive cases', () => {
+    it('rewrites an existing night chunk with the repaired set (plan 019 — the overlay path never touches it)', () => {
+      const existing = new Uint8Array([1, 0, 0, 0, 9, 9, 9, 9, 9, 9, 9, 9]);
+      const geometry = geometryChunk(2, 0, [{ data: existing, type: RW_NIGHT_VERTEX_COLORS, version: 0 }]);
+      const withNight = mesh(2, []);
+      withNight.nightColors = new Uint8Array([10, 20, 30, 255, 40, 50, 60, 255]);
+      syncNightColors(geometry, withNight);
+
+      const night = nightChunkOf(geometry)!.data!;
+      expect(new DataView(night.buffer, night.byteOffset).getUint32(0, true)).toBe(1);
+      expect([...night.subarray(4)]).toEqual([10, 20, 30, 255, 40, 50, 60, 255]);
+    });
+
     it('appends a NIGHT_VERTEX_COLORS chunk (present=1 + RGBA) that round-trips', () => {
       const geometry = geometryChunk(2, 0);
       const withNight = mesh(2, []);
       withNight.nightColors = new Uint8Array([10, 20, 30, 255, 40, 50, 60, 255]);
-      addNightColorsIfMissing(geometry, withNight);
+      syncNightColors(geometry, withNight);
 
       const roundTripped = readRw(writeRw({ chunks: [geometry], trailing: new Uint8Array(0) })).chunks[0];
       const night = nightChunkOf(roundTripped)!.data!;

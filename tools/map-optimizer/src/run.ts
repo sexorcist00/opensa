@@ -5,31 +5,39 @@
  */
 import { basename } from 'node:path';
 
+import type { LevelVerdict, NightVerdict, PrelitContextOptions } from './adapters/gta-sa/prelit-context';
 import type { RunReport } from './core';
 
 import { createGtaSaAdapter } from './adapters/gta-sa';
 import { runPipeline } from './core';
 import { config } from './optimizer.config';
-import { createRefineSurface } from './plugins/refine-surface';
-import { createSkirtBoundary } from './plugins/skirt-boundary';
-import { createStitchGapPosition } from './plugins/stitch-gap-position';
-import { createStitchGapSplit } from './plugins/stitch-gap-split';
+import { createApplyPrelitLevel } from './plugins/apply-prelit-level';
+import { createBakeVertexAo } from './plugins/bake-vertex-ao';
+import { createConformNight } from './plugins/conform-night';
+import { createSmoothNormals } from './plugins/smooth-normals';
 import { createWeldSeamPrelit } from './plugins/weld-seam-prelit';
 
-/** Optional pipeline passes on top of the base model pipeline (weld/dedupe/prune/normals/prelit/night). */
+/** Optional pipeline passes on top of the base model pipeline (weld/dedupe/prune/normals). */
 export interface OptimizerPasses {
-  /** Experimental surface-smoothing final stage (plan 014). */
-  refine: boolean;
-  /** Cross-model geometry gap stitch — split → move → skirt (plan 017). */
-  stitchGaps: boolean;
+  /** Let `smooth-normals` CREATE normals on meshes that ship none. Default **true** (user decision: graphics
+   *  mods — ENB/SkyGfx — want normals; the shard artifacts once blamed on this were actually the retired
+   *  gap-stitch skirts). `--no-add-normals` if vanilla-renderer vertex lighting looks off. */
+  addNormals: boolean;
+  /** World-context prelight — day level + night repair/synthesis by neighbourhood (plan 019). */
+  prelit: boolean;
   /** Texture mip pass before the model run (plan on `--textures`). */
   textures: boolean;
   /** Cross-model prelit seam weld (plan 016). */
   weldSeams: boolean;
 }
 
-/** Default passes: everything **except** the experimental `refine` (opt in with `--refine`). */
-export const DEFAULT_PASSES: OptimizerPasses = { refine: false, stitchGaps: true, textures: true, weldSeams: true };
+/** Default passes. (`refine`/plan 014 and `stitchGaps`/plan 017 were retired — see their plans for why.) */
+export const DEFAULT_PASSES: OptimizerPasses = {
+  addNormals: true,
+  prelit: true,
+  textures: true,
+  weldSeams: true,
+};
 
 export interface RunOptimizerOptions {
   concurrency?: number;
@@ -39,6 +47,8 @@ export interface RunOptimizerOptions {
   outDir: string;
   /** Pass toggles; unset passes default to {@link DEFAULT_PASSES}. */
   passes?: Partial<OptimizerPasses>;
+  /** Tuning for the prelit pass (tolerances, curated `exclude` list from the review report). */
+  prelitOptions?: PrelitContextOptions;
 }
 
 /** Run the optimizer with the given passes; returns the run report. Mirrors the full game tree to `outDir`. */
@@ -51,27 +61,46 @@ export async function runOptimizer(options: RunOptimizerOptions): Promise<RunRep
   }
 
   const plugins = [...config.plugins];
-  // Gap-stitch applies FIRST (split → move → skirt, unshift reverses) so later passes see stitched geometry.
-  if (passes.stitchGaps) {
-    const { moves, skirts, splits, stats } = adapter.buildGapStitches();
-    console.log(
-      `  gaps — stitched ${stats.stitched} pair(s), ${stats.tjunctions} T-junction(s), ${stats.skirted} skirt(s) over ${stats.modelsTouched} model(s)`,
-    );
-    plugins.unshift(createSkirtBoundary(skirts));
-    plugins.unshift(createStitchGapPosition(moves));
-    plugins.unshift(createStitchGapSplit(splits));
+  if (passes.addNormals) {
+    // OpenSA build: recreate smooth-normals with normals creation enabled (SSAO wants them, plan 015).
+    plugins[plugins.findIndex((plugin) => plugin.name === 'smooth-normals')] = createSmoothNormals({
+      addWhereAbsent: true,
+    });
   }
-  // Seam-weld applies after smooth-normals, before synthesize-night (so night inherits it).
-  if (passes.weldSeams) {
-    const { overrides, stats } = adapter.buildSeamOverrides();
+  // Prelight order (plan 019): level FIRST (whole-model shifts), seam-weld AFTER (the seam line gets the final
+  // word at shared borders), night LAST (the set derives from the final day). Level+night share one world
+  // pre-pass (`buildPrelitContext`).
+  if (passes.prelit) {
+    const { stats, verdicts } = adapter.buildPrelitContext(options.prelitOptions);
     console.log(
-      `  seams — welded ${stats.welded} group(s) over ${stats.modelsTouched} model(s), ${stats.skippedSpread} skipped (spread)`,
+      `  prelit — lift ${stats.liftDay}, lower ${stats.lowerDay}, flat ${stats.flat}, ` +
+        `night repair ${stats.repairNight} / synth ${stats.synthesizeNight}, ok ${stats.ok}, ` +
+        `no-context ${stats.noContext}, excluded ${stats.excluded}`,
     );
-    const before = plugins.findIndex((plugin) => plugin.name === 'synthesize-night');
-    plugins.splice(before >= 0 ? before : plugins.length, 0, createWeldSeamPrelit(overrides));
-  }
-  if (passes.refine) {
-    plugins.push(createRefineSurface());
+    const levels = new Map<string, LevelVerdict>();
+    const nights = new Map<string, NightVerdict>();
+    const flats = new Set<string>();
+    for (const [model, verdict] of verdicts) {
+      if (verdict.level) {
+        levels.set(model, verdict.level);
+      }
+      if (verdict.night) {
+        nights.set(model, verdict.night);
+      }
+      if (verdict.flat) {
+        flats.add(model);
+      }
+    }
+    plugins.push(createApplyPrelitLevel(levels));
+    // AO replaces the flat fill AFTER levelling (median stays at the hood level) and BEFORE the seam weld
+    // (the seam line/band keeps the final word at shared borders) — plan 019 Phase 4.
+    plugins.push(createBakeVertexAo(flats));
+    if (passes.weldSeams) {
+      pushSeamWeld(plugins, adapter, levels);
+    }
+    plugins.push(createConformNight(nights));
+  } else if (passes.weldSeams) {
+    pushSeamWeld(plugins, adapter);
   }
 
   return runPipeline(
@@ -100,4 +129,19 @@ function optimizeTextures(adapter: ReturnType<typeof createGtaSaAdapter>): void 
   console.log(
     `  textures — ${processed} TXD processed, ${mipped} textures mipped, ${failed} failed, ${missing} not found`,
   );
+}
+
+function pushSeamWeld(
+  plugins: (typeof config.plugins)[number][],
+  adapter: ReturnType<typeof createGtaSaAdapter>,
+  levelVerdicts?: ReadonlyMap<string, LevelVerdict>,
+): void {
+  // levelVerdicts put the weld + feather band in post-level space (plan 019 Phase 3) — the overrides are
+  // absolute and applied after apply-prelit-level.
+  const { overrides, stats } = adapter.buildSeamOverrides(levelVerdicts ? { levelVerdicts } : {});
+  console.log(
+    `  seams — welded ${stats.welded} group(s) over ${stats.modelsTouched} model(s), ` +
+      `feathered ${stats.feathered} vertex(es), ${stats.skippedSpread} skipped (spread)`,
+  );
+  plugins.push(createWeldSeamPrelit(overrides));
 }

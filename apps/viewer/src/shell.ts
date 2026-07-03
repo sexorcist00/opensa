@@ -1,11 +1,12 @@
 /**
- * Tab shell for the standalone viewers. One html (`viewer.html`) hosts three full-page viewers
- * (object/vehicle/character); the `?tab=` query selects which one. Each viewer module owns
+ * Tab shell for the standalone viewers. One html (`viewer.html`) hosts four full-page viewers
+ * (object/vehicle/character/compare); the `?tab=` query selects which one. Each viewer module owns
  * `document.body` and auto-runs on import, so a tab switch is a plain navigation (full reload) —
  * the side effects run exactly once per load, no mount/unmount juggling. Object is the default.
  */
 const VIEWERS = {
   character: () => import('./character-viewer'),
+  compare: () => import('./compare-viewer'),
   object: () => import('./object-viewer'),
   vehicle: () => import('./vehicle-viewer'),
 } as const;

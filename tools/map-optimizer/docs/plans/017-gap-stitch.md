@@ -1,7 +1,31 @@
 # 017 — Gap-stitch (close hairline cracks between adjacent objects)
 
-**Status: ✅ Variants A + B + D implemented (opt-in `--stitch-gaps`) — pending in-game visual verification; C
-deferred.** Everything lives in `adapters/gta-sa/gap-stitch.ts` (+ `boundary.ts` shared with plan 016), the
+**Status: ❌ RETIRED (2026-07-03) — removed from the codebase; the plan is kept for history.**
+
+Why it was removed (real-SA in-game findings, bisected with `--no-stitch-gaps`):
+
+- **Variant D (skirts) produced black triangle "fins"** standing on the ground across the whole map in real SA:
+  a skirt extrudes along the boundary **vertex** normals, but stock SA geometry has notoriously mixed triangle
+  winding — an edge whose two vertex normals average opposite/sideways gets a twisted quad, one end 1.5 u
+  (`skirtDepth`) ABOVE the surface. Double-sided by design, so the fin shows from everywhere.
+- **It never fixed the real problem.** The visible holes that motivated the plan are **wide stock gaps** (2+
+  units — the `vegassroad0522a` diagnosis below): beyond A/B's 0.4 u band by design and assigned to D (broken,
+  above); the honest fix — variant C, bridge geometry — was never built. A/B closed only hairline cracks whose
+  visual benefit was never confirmed in-game.
+- **Highest cost in the pipeline**: the pre-pass held the whole map's boundary in memory (the reason the CLI
+  needed `NODE_OPTIONS=--max-old-space-size=8192`, now gone), and B/D forced the count-changing
+  `rebuildGeometry` path on thousands of models — churn that surfaced two real-SA strictness bugs (the TRISTRIP
+  flag, the night-chunk sync).
+
+If map holes get revisited, the right task is **variant C — bridge geometry for wide stock gaps** as a new plan
+with mandatory real-SA verification. The A/B/D implementation is recoverable from git history.
+
+---
+
+## Original plan (historical)
+
+**Status then: ✅ Variants A + B + D implemented (opt-in `--stitch-gaps`) — pending in-game visual verification;
+C deferred.** Everything lives in `adapters/gta-sa/gap-stitch.ts` (+ `boundary.ts` shared with plan 016), the
 adapter's `buildGapStitches`, and three apply plugins run **first** (split → move → skirt):
 `plugins/stitch-gap-split.ts` (B), `stitch-gap-position.ts` (A), `skirt-boundary.ts` (D) — B and D both ride the
 count-changing `rebuildGeometry` path (no codec work). Things learned in build, folded in:

@@ -1,12 +1,17 @@
 /**
  * Map-optimizer CLI. Takes `--game <path>` (a game-data dir: `gta.dat` + `data/` + `models/`), runs the full
- * pipeline and emits a drop-in build under `--out <path>`. Textures + gap-stitch + weld-seams are **on by default**
- * (opt any out with `--no-textures` / `--no-stitch-gaps` / `--no-weld-seams`); the experimental `refine` pass is
- * **off** unless you pass `--refine`. Usage: `tsx map-optimizer/src/cli.ts --game <path> --out <path> [--refine]
- * [--no-<pass>…]`. Paths are relative to the current working directory (absolute paths pass through).
+ * pipeline and emits a drop-in build under `--out <path>`. All passes (textures / weld-seams / prelit /
+ * add-normals) are **on by default** — opt any out with `--no-textures` / `--no-weld-seams` / `--no-prelit` /
+ * `--no-add-normals`. `--prelit-only <file.json>` (a JSON array of model names) switches the prelight pass to
+ * **only-mode**: just the listed, human-confirmed models are corrected (skip-guards bypassed) and the rest of
+ * the map passes through byte-identical. Usage: `tsx map-optimizer/src/cli.ts --game <path> --out <path>
+ * [--prelit-only <file.json>] [--no-<pass>…]`. Paths are relative to the current working directory (absolute
+ * paths pass through).
  */
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
+
+import type { OnlyEntry } from './adapters/gta-sa/prelit-context';
 
 import { printReport, writeReport } from './core';
 import { type OptimizerPasses, runOptimizer } from './run';
@@ -34,12 +39,20 @@ async function main(): Promise<void> {
   }
 
   const passes: Partial<OptimizerPasses> = {
-    refine: process.argv.includes('--refine'), // experimental — opt-in
-    stitchGaps: !process.argv.includes('--no-stitch-gaps'),
+    addNormals: !process.argv.includes('--no-add-normals'), // graphics mods want normals (user decision)
+    prelit: !process.argv.includes('--no-prelit'),
     textures: !process.argv.includes('--no-textures'),
     weldSeams: !process.argv.includes('--no-weld-seams'),
   };
-  const report = await runOptimizer({ gameDir, outDir: fromCwd(outArg), passes });
+  const onlyArg = argValue('--prelit-only');
+  // Entries: "name" (forced auto verdict) or {"model": "name", "nightScale": 0.4, "dayShift": -30} (explicit).
+  const only = onlyArg ? (JSON.parse(readFileSync(fromCwd(onlyArg), 'utf8')) as OnlyEntry[]) : undefined;
+  const report = await runOptimizer({
+    gameDir,
+    outDir: fromCwd(outArg),
+    passes,
+    ...(only ? { prelitOptions: { only } } : {}),
+  });
   printReport(report);
   writeReport(report);
 }

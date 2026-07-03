@@ -8,8 +8,9 @@ import type { OptimizerPasses } from '@opensa/map-optimizer/run';
  *                      intermediate build under `<out>/.work` — for step-by-step in-game debugging. `--until lod`
  *                      runs the WHOLE pipeline (both sa + opensa) while keeping every step.
  *     --keep-work      keep the intermediate `.work` builds even on a full run.
- *     --refine         enable the experimental map-optimizer refine pass (off by default).
- *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-stitch-gaps | --no-weld-seams | --no-textures.
+ *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
+ * A `broken-prelight.json` at the mods-src root (or inside its `mods/` subfolder) switches the map-optimizer
+ * prelight pass to ONLY-mode with that curated list (same format as `--prelit-only` — see map-optimizer README).
  * Paths are relative to the current working directory (absolute paths pass through). See `docs/plans/001`.
  */
 import { statSync } from 'node:fs';
@@ -54,8 +55,6 @@ async function main(): Promise<void> {
   }
 
   const optimizerPasses: Partial<OptimizerPasses> = {
-    ...(process.argv.includes('--refine') ? { refine: true } : {}),
-    ...(process.argv.includes('--no-stitch-gaps') ? { stitchGaps: false } : {}),
     ...(process.argv.includes('--no-textures') ? { textures: false } : {}),
     ...(process.argv.includes('--no-weld-seams') ? { weldSeams: false } : {}),
   };

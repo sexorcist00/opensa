@@ -23,17 +23,17 @@ A stage whose source subfolder is missing/empty is **skipped** (its output = the
 
 ## Pipeline (each step's output = the next step's `--game`)
 
-| #   | Tool                                            | `--in`        | Key options                                                                                |
-| --- | ----------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------ |
-| 1   | mod-installer                                   | `mods/`       | —                                                                                          |
-| 2   | vehicle-installer                               | `vehicles/`   | (skip if empty)                                                                            |
-| 3   | ped-installer                                   | `peds/`       | (skip if empty)                                                                            |
-| 4   | map-optimizer                                   | —             | **all passes on** (textures + weld-seams + stitch-gaps + refine — shared config, plan 018) |
-| 5   | lod-trees-generator                             | `vegetation/` | non-modloader (**full mirror**), `prelight vegetation/prelight.json`, `tex 512`            |
-| 6   | lod-procobj-generator                           | `procobj/`    | non-modloader (**full mirror**), `prelight` (bare), `tex 128`                              |
-| —   | **split** from step 6 (the common baked build): |               |                                                                                            |
-| 7a  | sa-lod-generator                                | —             | `--game step6 --out <out>/sa`                                                              |
-| 7b  | opensa-lod-generator                            | —             | `--game step6 --out <out>/opensa`, `cell 256`, `strip-lods`                                |
+| #   | Tool                                            | `--in`        | Key options                                                                                                            |
+| --- | ----------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1   | mod-installer                                   | `mods/`       | —                                                                                                                      |
+| 2   | vehicle-installer                               | `vehicles/`   | (skip if empty)                                                                                                        |
+| 3   | ped-installer                                   | `peds/`       | (skip if empty)                                                                                                        |
+| 4   | map-optimizer                                   | —             | **all passes on** (textures + weld-seams + prelit + add-normals; stitch-gaps/refine retired — shared config, plan 018) |
+| 5   | lod-trees-generator                             | `vegetation/` | non-modloader (**full mirror**), `prelight vegetation/prelight.json`, `tex 512`                                        |
+| 6   | lod-procobj-generator                           | `procobj/`    | non-modloader (**full mirror**), `prelight` (bare), `tex 128`                                                          |
+| —   | **split** from step 6 (the common baked build): |               |                                                                                                                        |
+| 7a  | sa-lod-generator                                | —             | `--game step6 --out <out>/sa`                                                                                          |
+| 7b  | opensa-lod-generator                            | —             | `--game step6 --out <out>/opensa`, `cell 256`, `strip-lods`                                                            |
 
 lod-trees / lod-procobj run in **non-modloader** mode so their output is a **complete game dir** (they gain
 full-tree mirroring — their plans 009 / 005) and works for both targets. The only per-target divergence is the

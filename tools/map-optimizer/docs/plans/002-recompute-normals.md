@@ -1,5 +1,8 @@
 # 002 — Plugin: recompute normals (angle-weighted, crease-limited)
 
+> **⚠️ SUPERSEDED by [plan 015 — smooth normals](./015-smooth-normals.md)** (in the default pipeline) and
+> scheduled for deletion in [plan 019](./019-world-context-prelight.md) — the plugin is wired nowhere.
+
 **Status: ✅ Implemented.** The first real transform on top of the [001](./001-pipeline-architecture.md) base:
 recompute per-vertex normals so smooth surfaces read smooth and hard edges stay hard — fixing the flat /
 per-face / garbage normals that mod re-exports ship. Topology-preserving (overwrites the normal attribute

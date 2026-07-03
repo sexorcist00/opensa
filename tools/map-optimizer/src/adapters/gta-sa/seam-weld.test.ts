@@ -66,11 +66,61 @@ describe('computeSeamOverrides', () => {
 
   describe('positive cases', () => {
     it('averages the prelit RGB of two models coincident at a boundary vertex', () => {
-      const { overrides, stats } = computeSeamOverrides([model('a', A), model('b', B)]);
+      const { overrides, stats } = computeSeamOverrides([model('a', A), model('b', B)], { featherBand: 0 });
       expect(stats.welded).toBe(1);
       expect(stats.modelsTouched).toBe(2);
       expect(overrides.get('a')).toEqual([{ pos: [0, 0, 0], rgb: [150, 150, 150] }]);
       expect(overrides.get('b')).toEqual([{ pos: [0, 0, 0], rgb: [150, 150, 150] }]);
+    });
+  });
+});
+
+describe('computeSeamOverrides feather band (plan 019 Phase 3)', () => {
+  describe('negative cases', () => {
+    it('feathers nothing when featherBand is 0', () => {
+      const { overrides, stats } = computeSeamOverrides([model('a', A), model('b', B)], { featherBand: 0 });
+      expect(stats.feathered).toBe(0);
+      expect(overrides.get('a')).toHaveLength(1);
+    });
+
+    it('leaves vertices beyond the band untouched', () => {
+      // Band 0.5 — A's other vertices sit at distance 1 from the welded seam vertex.
+      const { stats } = computeSeamOverrides([model('a', A), model('b', B)], { featherBand: 0.5 });
+      expect(stats.feathered).toBe(0);
+    });
+
+    it('does not feather a wall that meets the ground seam (normal guard)', () => {
+      // A second geometry of model a: a vertical triangle (±Y normal) 0.5 u from the seam vertex.
+      const wall = triangle([0.5, 0, 0, 0.5, 0, 1, 0.6, 0, 0], [90, 90, 90, 255, 90, 90, 90, 255, 90, 90, 90, 255]);
+      const withWall: SeamModel = {
+        geometries: [A, wall],
+        name: 'a',
+        placement: { position: [0, 0, 0], rotation: [0, 0, 0, 1] },
+      };
+      const { overrides } = computeSeamOverrides([withWall, model('b', B)], { featherBand: 2 });
+
+      const wallOverrides = overrides
+        .get('a')!
+        .filter((override) => override.pos[0] === 0.5 || override.pos[0] === 0.6);
+      expect(wallOverrides).toHaveLength(0);
+    });
+
+    it('never overwrites the welded seam line with a feather value', () => {
+      const { overrides } = computeSeamOverrides([model('a', A), model('b', B)], { featherBand: 2 });
+      const seamEntries = overrides.get('a')!.filter((override) => override.pos.every((value) => value === 0));
+      expect(seamEntries).toEqual([{ pos: [0, 0, 0], rgb: [150, 150, 150] }]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it("fades each side's own seam delta into its interior linearly", () => {
+      // Seam mean 150: delta for a = +50, for b = −50. Interior vertices sit at distance 1; band 2 → weight 0.5.
+      const { overrides, stats } = computeSeamOverrides([model('a', A), model('b', B)], { featherBand: 2 });
+      expect(stats.feathered).toBe(4);
+      expect(overrides.get('a')).toContainEqual({ pos: [1, 0, 0], rgb: [35, 35, 35] }); // 10 + 50·0.5
+      expect(overrides.get('a')).toContainEqual({ pos: [0, 1, 0], rgb: [45, 45, 45] }); // 20 + 50·0.5
+      expect(overrides.get('b')).toContainEqual({ pos: [-1, 0, 0], rgb: [5, 5, 5] }); // 30 − 50·0.5
+      expect(overrides.get('b')).toContainEqual({ pos: [0, -1, 0], rgb: [15, 15, 15] }); // 40 − 50·0.5
     });
   });
 });

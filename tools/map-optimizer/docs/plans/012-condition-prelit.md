@@ -1,5 +1,10 @@
 # 012 — Condition prelit vertex colours (fix too-dark / too-bright)
 
+> **⚠️ SUPERSEDED by [plan 019 — world-context prelight](./019-world-context-prelight.md)** (~2026-07-03).
+> The global-threshold approach below judges each model in isolation and misses the real offenders
+> (measured: `clubgate01_lax` day-median 27 vs neighbourhood 81 slips the flat-black gate; `project2lae2`
+> flat 114 slips the 248 bright gate). Plan 019 replaces this pass with neighbourhood-driven verdicts.
+
 **Status: ✅ Implemented** (`plugins/condition-prelit.ts`, in the default pipeline). The implementation uses an
 **additive luma shift** (mean → `targetLuma`, default 200) rather than the multiplicative scale the draft
 sketched: the shift lifts a flat-black model cleanly to a neutral and preserves the **absolute** AO spread

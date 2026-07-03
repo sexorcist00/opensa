@@ -1,5 +1,10 @@
 # 013 — Synthesize night vertex colours for night-less models
 
+> **⚠️ SUPERSEDED by [plan 019 — world-context prelight](./019-world-context-prelight.md)** (~2026-07-03).
+> The global `nightScale` below ignores the neighbourhood (a bright day model like `washgaspump` would get a
+> night set ~4× its street's night level), and this pass never repairs broken **existing** night sets.
+> Plan 019 replaces it with `conform-night` (synthesis targeting the neighbourhood ratio + repair).
+
 **Status: ✅ Implemented** (`plugins/synthesize-night.ts` + `codec/geometry-rebuild.ts:addNightColorsIfMissing`,
 in the default pipeline). On stock `original` it round-trips cleanly (0 failures) and, e.g., gives all four
 `casroyale*_lvs` casino pieces the night set they lost on re-export.

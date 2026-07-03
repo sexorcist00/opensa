@@ -2,6 +2,7 @@ import type { ModelRef } from '@opensa/game-build/partition';
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 
 import { ideRefs, placedModels } from '@opensa/game-build/partition';
+import { parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -12,6 +13,16 @@ export interface Placement {
   modelName: string;
   position: [number, number, number];
   rotation: [number, number, number, number];
+}
+
+/** model → txd (lowercased) from every IDE under the game's data folder — for the compare server (plan 019). */
+export function modelTxdMap(dataDir: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const ref of ideIdMap(dataDir).values()) {
+    map.set(ref.model, ref.txd);
+  }
+
+  return map;
 }
 
 /**
@@ -63,6 +74,20 @@ export function resolvePlacements(dataDir: string, gta3: ImgArchive): Placement[
   }
 
   return placements;
+}
+
+/** The `tobj` (hour-gated) model names (lowercased) from every IDE — lit-window / neon night overlays. Their
+ *  prelit IS the lighting design (bright by purpose, coplanar with the base building), so the world-context
+ *  passes must neither judge nor touch them (plan 019 — night repair dimmed skyscraper windows). */
+export function timedModels(dataDir: string): Set<string> {
+  const timed = new Set<string>();
+  for (const file of walk(dataDir).filter((path) => path.toLowerCase().endsWith('.ide'))) {
+    for (const def of parseTimedObjects(readFileSync(file, 'utf8'))) {
+      timed.add(def.modelName.toLowerCase());
+    }
+  }
+
+  return timed;
 }
 
 /** id → {model, txd} (lowercased) from every IDE under the game's data folder. */
