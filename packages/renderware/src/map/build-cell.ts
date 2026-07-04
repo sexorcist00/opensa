@@ -6,6 +6,7 @@ import type { MapDefinitions } from '../parsers/text';
 import type { GridCell, WorldGrid } from './world-grid';
 
 import { getClump, getTextures } from '../archive';
+import { preparedAtomicsFor } from '../mesh/prepare-clump';
 import { buildParticleEmitters } from '../three/build-particles';
 import { buildCoronaPoints } from '../three/corona';
 import {
@@ -68,12 +69,15 @@ export function* buildCellSteps(
   const groups = [...cellGroups(defs, cell, lod).values()];
   const instancedMeshes: InstancedMesh[] = [];
   for (const group of groups) {
-    // Warm the parse caches as their own steps (plan 060 round 6): a big group's TXD parse (DXT decode)
-    // and DFF parse each rival the whole build — folded into one step they made 65–79 ms slices no
-    // deadline could see. Cache hits make these yields free.
+    // Warm the parse/prepare caches as their own steps (plan 060 rounds 6 + Phase 5): a big group's TXD
+    // parse, DFF parse and geometry prepare each rival the whole build — folded into one step they made
+    // 65–79 ms slices no deadline could see. When the streaming parse worker primed the caches (Phase 5),
+    // every yield here is a free cache hit.
     getTextures(archive, group.def.txdName);
     yield [];
-    getClump(archive, group.def.modelName);
+    const clump = getClump(archive, group.def.modelName);
+    yield [];
+    preparedAtomicsFor(group.def.modelName, clump);
     yield [];
     const meshes = buildGroupInstancedMeshes(archive, group, options);
     instancedMeshes.push(...meshes);
@@ -118,4 +122,18 @@ export function cellGroups(defs: MapDefinitions, cell: GridCell, lod: boolean): 
   }
 
   return groups;
+}
+
+/** Unique model names one cell's build needs (plan 060 Phase 5) — the parse worker preparses these. */
+export function cellModelNames(defs: MapDefinitions, grid: WorldGrid, cx: number, cy: number, lod: boolean): string[] {
+  const cell = grid.get(cellKey(cx, cy));
+  if (!cell) {
+    return [];
+  }
+  const names = new Set<string>();
+  for (const group of cellGroups(defs, cell, lod).values()) {
+    names.add(group.def.modelName);
+  }
+
+  return [...names];
 }

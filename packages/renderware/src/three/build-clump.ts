@@ -10,14 +10,24 @@ import {
   Mesh,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
+  Sphere,
   Vector3,
 } from 'three';
 
-import type { RWClump, RWGeometry, RWMaterial, RWTriangle } from '../parsers/binary/types';
+import type { PreparedAtomic, PreparedPart, PreparedSphere } from '../mesh/prepare-clump';
+import type { RWClump, RWGeometry, RWMaterial } from '../parsers/binary/types';
 
+import {
+  groupTrianglesByMaterial,
+  prepareClumpAtomics,
+  sanitizeDegenerateNormals,
+  sanitizeVertexPositions,
+} from '../mesh/prepare-clump';
 import { GeometryFlag } from '../parsers/binary/constants';
 import { applyWorldUvAnim, getUvAnimUniform, registerUvAnimations } from './uv-anim';
-import { buildWorldMaterial, isVertexAlphaBeam } from './world-material';
+import { buildWorldMaterial } from './world-material';
+
+export { groupTrianglesByMaterial } from '../mesh/prepare-clump';
 
 /**
  * Convert a parsed RWClump into a renderable three.js Group.
@@ -188,75 +198,7 @@ export function buildClumpParticles(clump: RWClump): ClumpParticle[] {
  * model's parts so the GPU uploads them once.
  */
 export function buildClumpParts(clump: RWClump, textures?: Map<string, Texture>): RenderPart[] {
-  const parts: RenderPart[] = [];
-  // UV-animated textures (plan 041): dict entries must be registered before the materials below
-  // look them up by name. Idempotent — re-building a streamed cell re-registers the same names.
-  if (clump.uvAnimations) {
-    registerUvAnimations(clump.uvAnimations);
-  }
-  for (const atomic of clump.atomics) {
-    const rw = clump.geometries[atomic.geometryIndex];
-    if (!rw) {
-      continue;
-    }
-    // NB the DFF's frame transform is deliberately IGNORED for map models, like SA: CFileLoader
-    // re-frames atomic-model atomics onto a fresh identity frame, so map geometry lives in raw
-    // model space (== its COL space). Vanilla frames are identity anyway; dirty re-exports
-    // (gta3-pf CE_grndPALCST05 shipped a stray (12.9, 317, −28.5) frame translation) would
-    // otherwise render ~300 m away from their collision.
-
-    sanitizeVertexPositions(rw.positions);
-    const position = new BufferAttribute(rw.positions, 3);
-    const uv = rw.uvLayers.length > 0 ? new BufferAttribute(rw.uvLayers[0], 2) : null;
-    // Floodlight beams carry their cone in the prelit ALPHA → keep it (vec4) so the material can blend it.
-    const beam = rw.materials.some((m) => isVertexAlphaBeam(m, rw));
-    const color = rw.prelitColors ? prelitColorAttribute(rw.prelitColors, beam) : null;
-    // SA night (extra) vertex colours — bright warm texels are lit windows; added as emissive at night.
-    const nightColor = rw.nightColors ? prelitColorAttribute(rw.nightColors) : null;
-    const normal = vertexNormalAttribute(position, rw);
-    // Wind-adapted vegetation encodes per-vertex sway weight in the day-prelit ALPHA (plan 039).
-    const sway = rw.prelitColors ? swayWeightAttribute(rw.prelitColors) : null;
-
-    groupTrianglesByMaterial(rw.triangles, rw.materials.length).forEach((tris, materialIndex) => {
-      if (tris.length === 0) {
-        return;
-      }
-      const geometry = new BufferGeometry();
-      geometry.setAttribute('position', position);
-      if (uv) {
-        geometry.setAttribute('uv', uv);
-      }
-      if (color) {
-        geometry.setAttribute('color', color);
-      }
-      if (nightColor) {
-        geometry.setAttribute('nightColor', nightColor);
-      }
-      if (sway) {
-        geometry.setAttribute('swayWeight', sway.attribute);
-      }
-      geometry.setAttribute('normal', normal);
-      const index: number[] = [];
-      for (const tri of tris) {
-        index.push(tri.a, tri.b, tri.c);
-      }
-      geometry.setIndex(index);
-      geometry.computeBoundingSphere();
-
-      // Unlit SA prelit blend (plan 038) — the night set is consumed by the material's dnBalance mix.
-      const rwMaterial = rw.materials[materialIndex] ?? rw.materials[0];
-      const material = buildWorldMaterial(rwMaterial ?? FALLBACK_RW_MATERIAL, rw, textures);
-      // UV Anim PLG: the material plays a dict entry (signs/waterfalls scroll their map UVs).
-      const uvAnimName = rwMaterial?.effects?.uvAnim?.names[0];
-      const uvAnimUniform = uvAnimName === undefined ? undefined : getUvAnimUniform(uvAnimName);
-      if (uvAnimUniform) {
-        applyWorldUvAnim(material, uvAnimUniform);
-      }
-      parts.push({ geometry, material, ...(sway ? { swayAlphaMin: sway.minAlpha } : {}) });
-    });
-  }
-
-  return parts;
+  return wrapClumpParts(clump, prepareClumpAtomics(clump), textures);
 }
 
 export function buildGeometry(rw: RWGeometry): BufferGeometry {
@@ -370,33 +312,53 @@ export function frameMatrix(rotation: number[], position: [number, number, numbe
   return matrix;
 }
 
-export function groupTrianglesByMaterial(triangles: RWTriangle[], materialCount: number): RWTriangle[][] {
-  const groups: RWTriangle[][] = Array.from({ length: Math.max(1, materialCount) }, () => []);
-  for (const tri of triangles) {
-    const slot = tri.materialIndex < groups.length ? tri.materialIndex : 0;
-    groups[slot].push(tri);
+/**
+ * The three.js half of {@link buildClumpParts} (plan 060 Phase 5): wrap prepared typed arrays into
+ * BufferGeometry + world materials. All per-vertex/per-triangle work already happened in
+ * `prepareClumpAtomics` (main thread or the streaming parse worker) — this only creates GPU-side objects,
+ * so it's cheap enough for the streamed build's frame slices.
+ */
+export function wrapClumpParts(
+  clump: RWClump,
+  atomics: readonly PreparedAtomic[],
+  textures?: Map<string, Texture>,
+): RenderPart[] {
+  const parts: RenderPart[] = [];
+  // UV-animated textures (plan 041): dict entries must be registered before the materials below
+  // look them up by name. Idempotent — re-building a streamed cell re-registers the same names.
+  if (clump.uvAnimations) {
+    registerUvAnimations(clump.uvAnimations);
+  }
+  for (const prepared of atomics) {
+    const rw = clump.geometries[prepared.geometryIndex];
+    if (!rw) {
+      continue;
+    }
+    // NB the DFF's frame transform is deliberately IGNORED for map models, like SA: CFileLoader
+    // re-frames atomic-model atomics onto a fresh identity frame, so map geometry lives in raw
+    // model space (== its COL space). Vanilla frames are identity anyway; dirty re-exports
+    // (gta3-pf CE_grndPALCST05 shipped a stray (12.9, 317, −28.5) frame translation) would
+    // otherwise render ~300 m away from their collision.
+
+    // Shared vertex attributes are reused across a model's parts so the GPU uploads them once.
+    const attributes = preparedAttributes(prepared);
+    for (const part of prepared.parts) {
+      const geometry = partGeometry(attributes, part, prepared.sphere);
+
+      // Unlit SA prelit blend (plan 038) — the night set is consumed by the material's dnBalance mix.
+      const rwMaterial = rw.materials[part.materialIndex] ?? rw.materials[0];
+      const material = buildWorldMaterial(rwMaterial ?? FALLBACK_RW_MATERIAL, rw, textures);
+      // UV Anim PLG: the material plays a dict entry (signs/waterfalls scroll their map UVs).
+      const uvAnimName = rwMaterial?.effects?.uvAnim?.names[0];
+      const uvAnimUniform = uvAnimName === undefined ? undefined : getUvAnimUniform(uvAnimName);
+      if (uvAnimUniform) {
+        applyWorldUvAnim(material, uvAnimUniform);
+      }
+      parts.push({ geometry, material, ...(prepared.sway ? { swayAlphaMin: prepared.sway.minAlpha } : {}) });
+    }
   }
 
-  return groups;
-}
-
-/** Normalised geometric normal of a triangle from its vertex positions, or null when degenerate (zero area). */
-function faceNormal(p: Float32Array, a: number, b: number, c: number): [number, number, number] | null {
-  const ux = p[b * 3] - p[a * 3];
-  const uy = p[b * 3 + 1] - p[a * 3 + 1];
-  const uz = p[b * 3 + 2] - p[a * 3 + 2];
-  const vx = p[c * 3] - p[a * 3];
-  const vy = p[c * 3 + 1] - p[a * 3 + 1];
-  const vz = p[c * 3 + 2] - p[a * 3 + 2];
-  const nx = uy * vz - uz * vy;
-  const ny = uz * vx - ux * vz;
-  const nz = ux * vy - uy * vx;
-  const len = Math.hypot(nx, ny, nz);
-  if (len < 1e-6) {
-    return null;
-  }
-
-  return [nx / len, ny / len, nz / len];
+  return parts;
 }
 
 /**
@@ -430,167 +392,42 @@ function installSaReflection(material: MeshPhysicalMaterial, saEnvMap: Texture):
   material.needsUpdate = true;
 }
 
-/** No legitimate SA model-local vertex sits anywhere near this far from the model origin (largest map plates are
- *  a few hundred units); a coordinate beyond it is corrupt — anti-rip garbage (protected mods park a vertex at
- *  ~5.8e25) or a bad export. */
-const MAX_VERTEX_COORD = 1_000_000;
+/** A part's BufferGeometry: the atomic's shared attributes + its own index and precomputed sphere. */
+function partGeometry(
+  attributes: Map<string, BufferAttribute>,
+  part: PreparedPart,
+  sphere: PreparedSphere,
+): BufferGeometry {
+  const geometry = new BufferGeometry();
+  attributes.forEach((attribute, name) => geometry.setAttribute(name, attribute));
+  geometry.setIndex(new BufferAttribute(part.index, 1));
+  geometry.boundingSphere = new Sphere(
+    new Vector3(sphere.center[0], sphere.center[1], sphere.center[2]),
+    sphere.radius,
+  );
 
-function prelitColorAttribute(prelit: Uint8Array, withAlpha = false): BufferAttribute {
-  // `withAlpha` keeps the RGBA (vec4) — used for floodlight beams whose cone lives in the prelit alpha; the
-  // default drops alpha (vec3), which is all the day/night prelit blend needs for normal geometry.
-  if (withAlpha) {
-    const rgba = new Float32Array(prelit.length);
-    for (let i = 0; i < prelit.length; i += 1) {
-      rgba[i] = prelit[i] / 255;
-    }
-
-    return new BufferAttribute(rgba, 4);
-  }
-  const colors = new Float32Array((prelit.length / 4) * 3);
-  for (let i = 0, j = 0; i < prelit.length; i += 4, j += 3) {
-    colors[j] = prelit[i] / 255;
-    colors[j + 1] = prelit[i + 1] / 255;
-    colors[j + 2] = prelit[i + 2] / 255;
-  }
-
-  return new BufferAttribute(colors, 3);
+  return geometry;
 }
 
-/**
- * Repair zero-length (or NaN/Infinity) vertex normals — both ones left by `computeVertexNormals` and ones
- * **stored in the DFF**. Computed normals cancel to zero when a vertex is shared by triangles with opposite
- * winding (coincident double-sided panels — neon signs — or unclean world meshes like some SA roads); stored
- * normals arrive zeroed from dirty re-exports (gta3-pf.img casroyale02/04 — SA's prelit-only map pipeline never
- * reads them, so the mod shipped garbage; plan 037). A zero normal yields no diffuse term, so the face renders
- * **pure black** under any light. We give each such vertex the geometric face normal of an incident triangle
- * (the flat surface direction; `DoubleSide` materials still flip it per back-face), falling back to +Z up only
- * if every incident triangle is degenerate. Valid normals are left untouched, so smooth shading elsewhere is
- * unchanged, and the repair is idempotent (safe on the cached parse).
- */
-function sanitizeDegenerateNormals(normals: Float32Array, positions: Float32Array, triangles: RWTriangle[]): void {
-  const bad = new Set<number>();
-  for (let v = 0; v < normals.length / 3; v += 1) {
-    const x = normals[v * 3];
-    const y = normals[v * 3 + 1];
-    const z = normals[v * 3 + 2];
-    const lengthSq = x * x + y * y + z * z;
-    if (!Number.isFinite(lengthSq) || lengthSq < 1e-8) {
-      bad.add(v); // zero-length or NaN/Infinity — both render black/undefined
-    }
+/** One BufferAttribute per prepared array — created once per atomic, shared by all its parts. */
+function preparedAttributes(prepared: PreparedAtomic): Map<string, BufferAttribute> {
+  const attributes = new Map<string, BufferAttribute>();
+  attributes.set('position', new BufferAttribute(prepared.positions, 3));
+  attributes.set('normal', new BufferAttribute(prepared.normals, 3));
+  if (prepared.uv) {
+    attributes.set('uv', new BufferAttribute(prepared.uv, 2));
   }
-  if (bad.size === 0) {
-    return;
+  if (prepared.color) {
+    attributes.set('color', new BufferAttribute(prepared.color.array, prepared.color.itemSize));
   }
-  for (const tri of triangles) {
-    if (!bad.has(tri.a) && !bad.has(tri.b) && !bad.has(tri.c)) {
-      continue;
-    }
-    const face = faceNormal(positions, tri.a, tri.b, tri.c);
-    if (!face) {
-      continue; // degenerate triangle — try another incident one
-    }
-    for (const v of [tri.a, tri.b, tri.c]) {
-      if (bad.delete(v)) {
-        normals[v * 3] = face[0];
-        normals[v * 3 + 1] = face[1];
-        normals[v * 3 + 2] = face[2];
-      }
-    }
+  // SA night (extra) vertex colours — bright warm texels are lit windows; added as emissive at night.
+  if (prepared.nightColor) {
+    attributes.set('nightColor', new BufferAttribute(prepared.nightColor, 3));
   }
-  for (const v of bad) {
-    normals[v * 3] = 0; // only-degenerate-triangle vertices: harmless up normal
-    normals[v * 3 + 1] = 0;
-    normals[v * 3 + 2] = 1;
-  }
-}
-
-/**
- * Repair corrupt vertex positions in place — NaN/Infinity or absurd magnitudes. Anti-rip-protected vehicle mods
- * (and some dirty exports) ship a garbage vertex (e.g. the funky comet's `top_on` roof part carries one at
- * ~5.8e25); left as-is it stretches every triangle that uses it across the whole world (giant spikes) and blows
- * up the bounding sphere (breaking frustum culling). Each bad vertex is collapsed onto the centroid of the
- * geometry's **valid** vertices (origin if there are none), so its triangles become zero-area slivers inside the
- * model — invisible — and the bounds stay sane. Valid vertices are untouched; idempotent, so it's safe on the
- * cached parse (mirrors {@link sanitizeDegenerateNormals}).
- */
-function sanitizeVertexPositions(positions: Float32Array): void {
-  const bad: number[] = [];
-  let sumX = 0;
-  let sumY = 0;
-  let sumZ = 0;
-  let good = 0;
-  for (let v = 0; v < positions.length / 3; v += 1) {
-    const x = positions[v * 3];
-    const y = positions[v * 3 + 1];
-    const z = positions[v * 3 + 2];
-    if (
-      Math.abs(x) > MAX_VERTEX_COORD ||
-      Math.abs(y) > MAX_VERTEX_COORD ||
-      Math.abs(z) > MAX_VERTEX_COORD ||
-      !Number.isFinite(x + y + z)
-    ) {
-      bad.push(v);
-    } else {
-      sumX += x;
-      sumY += y;
-      sumZ += z;
-      good += 1;
-    }
-  }
-  if (bad.length === 0) {
-    return;
-  }
-  const cx = good > 0 ? sumX / good : 0;
-  const cy = good > 0 ? sumY / good : 0;
-  const cz = good > 0 ? sumZ / good : 0;
-  for (const v of bad) {
-    positions[v * 3] = cx;
-    positions[v * 3 + 1] = cy;
-    positions[v * 3 + 2] = cz;
-  }
-}
-
-/**
- * Per-vertex sway weights from the day-prelit ALPHA channel, or null when every alpha is 255 (the
- * model is not wind-adapted). Weight = (255 − a) / 255: alpha 255 → 0 (rigid trunk), lower alpha →
- * more sway (cedar canopies ship 0xAA ≈ 0.33, dead trees 0xDC ≈ 0.14). `minAlpha` lets the caller
- * reject fade-style alpha gradients (skirts go near 0) as sway candidates.
- */
-function swayWeightAttribute(prelit: Uint8Array): null | { attribute: BufferAttribute; minAlpha: number } {
-  let minAlpha = 255;
-  for (let i = 3; i < prelit.length; i += 4) {
-    if (prelit[i] < minAlpha) {
-      minAlpha = prelit[i];
-    }
-  }
-  if (minAlpha === 255) {
-    return null;
-  }
-  const weights = new Float32Array(prelit.length / 4);
-  for (let i = 3, j = 0; i < prelit.length; i += 4, j += 1) {
-    weights[j] = (255 - prelit[i]) / 255;
+  // Wind-adapted vegetation encodes per-vertex sway weight in the day-prelit ALPHA (plan 039).
+  if (prepared.sway) {
+    attributes.set('swayWeight', new BufferAttribute(prepared.sway.weights, 1));
   }
 
-  return { attribute: new BufferAttribute(weights, 1), minAlpha };
-}
-
-function vertexNormalAttribute(position: BufferAttribute, rw: RWGeometry): BufferAttribute {
-  if (rw.normals) {
-    // Stored garbage too (zeroed PF re-exports) — see plan 037.
-    sanitizeDegenerateNormals(rw.normals, rw.positions, rw.triangles);
-
-    return new BufferAttribute(rw.normals, 3);
-  }
-  const temporary = new BufferGeometry();
-  temporary.setAttribute('position', position);
-  const index: number[] = [];
-  for (const tri of rw.triangles) {
-    index.push(tri.a, tri.b, tri.c);
-  }
-  temporary.setIndex(index);
-  temporary.computeVertexNormals();
-  const normal = temporary.getAttribute('normal') as BufferAttribute;
-  sanitizeDegenerateNormals(normal.array as Float32Array, rw.positions, rw.triangles);
-
-  return normal;
+  return attributes;
 }

@@ -1,10 +1,14 @@
 import type * as Renderware from '@opensa/renderware';
 
 import { withModloader } from '@opensa/modloader';
+import { parseDff, prepareClumpAtomics } from '@opensa/renderware';
 import { readFileSync } from 'node:fs';
 import { type InstancedMesh, Matrix4, type Object3D, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ParseResponse, ParseWorkerLike } from './dff-parser';
+
+import { DffParser } from './dff-parser';
 import { GtaSaWorldAdapter } from './gta-sa-world.adapter';
 
 /** Read a committed fixture as a fresh ArrayBuffer. */
@@ -95,6 +99,32 @@ function instancedMeshes(meshes: Object3D[]): InstancedMesh[] {
 
 describe('GtaSaWorldAdapter integration', () => {
   describe('positive cases', () => {
+    // First in the file on purpose: the renderware parse caches are module-level, and this test
+    // needs the cell's model to be UNCACHED so the preparse path actually sends it to the parser.
+    it('preparses cell models through the injected parse worker and builds from the primed caches', async () => {
+      const requested: string[] = [];
+      const worker: ParseWorkerLike = {
+        onmessage: null,
+        postMessage(message, options): void {
+          requested.push(...message.models.map((model) => model.name));
+          expect(options.transfer).toHaveLength(message.models.length);
+          // Run the REAL worker stages in-process (parse + pure geometry prepare), reply async like a worker.
+          const models = message.models.map(({ buffer: raw, name }) => {
+            const clump = parseDff(raw);
+
+            return { clump, name, prepared: prepareClumpAtomics(clump) };
+          });
+          queueMicrotask(() => worker.onmessage?.({ data: { id: message.id, models } } as MessageEvent<ParseResponse>));
+        },
+      };
+      const adapter = new GtaSaWorldAdapter({ ...cfg(), dffParser: new DffParser(worker) });
+      await adapter.prepare();
+
+      const meshes = await adapter.loadCell({ cx: 0, cy: 0, lod: false });
+      expect(requested).toContain('washer'); // the cell's model went through the worker path
+      expect(instancedMeshes(meshes).length).toBeGreaterThan(0); // and the build used the primed caches
+    });
+
     it('builds a real cell end-to-end (washer.dff → instanced mesh at the placed position)', async () => {
       const adapter = new GtaSaWorldAdapter(cfg());
       await adapter.prepare();

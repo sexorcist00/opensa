@@ -4,6 +4,7 @@ import { Color, DoubleSide, FrontSide, Matrix4, MeshBasicMaterial, Vector2 } fro
 
 import type { RWGeometry, RWMaterial } from '../parsers/binary/types';
 
+import { isVertexAlphaBeam } from '../mesh/prepare-clump';
 import { GeometryFlag } from '../parsers/binary/constants';
 
 /**
@@ -190,23 +191,4 @@ export function buildWorldMaterial(
  * set by `buildClumpParts`) the day prelit is blended toward them by {@link dnBalanceUniform};
  * everything is then multiplied by {@link worldTintUniform}.
  */
-/**
- * ASSUMPTION: a `white` placeholder texture + any prelit vertex with alpha < 255 means a "floodlight beam"
- * whose soft cone lives in the per-vertex prelit ALPHA (its only transparency signal). This is a HEURISTIC,
- * not read from SA — but verified by a full-map scan to match ONLY genuine beams (SF stadium floodbeams +
- * Vegas East site lights), never terrain blends (real textures) or foliage (texture alpha). build-clump emits
- * a vec4 `color` attribute for these so the cone alpha survives; `buildWorldMaterial` renders them
- * alpha-blended. If a future model trips this wrongly, tighten here (grep `ASSUMPTION`).
- */
-export function isVertexAlphaBeam(material: RWMaterial, geometry: RWGeometry): boolean {
-  if (material.texture?.name.toLowerCase() !== 'white' || !geometry.prelitColors) {
-    return false;
-  }
-  for (let i = 3; i < geometry.prelitColors.length; i += 4) {
-    if (geometry.prelitColors[i] < 255) {
-      return true;
-    }
-  }
-
-  return false;
-}
+export { isVertexAlphaBeam } from '../mesh/prepare-clump';

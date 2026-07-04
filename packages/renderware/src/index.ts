@@ -8,6 +8,13 @@ export * from './collision';
 
 // Framework-agnostic map resolution + region instancing
 export * from './map';
+export {
+  hasPreparedAtomics,
+  prepareClumpAtomics,
+  type PreparedAtomic,
+  preparedAtomicsFor,
+  primePreparedAtomics,
+} from './mesh/prepare-clump';
 // Parser layer (renderer-agnostic): binary RW geometry + collision + text map definitions.
 export { parseColLibrary, parseDffCollision } from './parsers/binary/col';
 export * from './parsers/binary/col-types';
@@ -15,10 +22,10 @@ export { parseDff } from './parsers/binary/dff';
 export { gxtKeyHash, parseGxt } from './parsers/binary/gxt';
 export { type IfpAnimation, type IfpBone, type IfpKeyframe, parseIfp } from './parsers/binary/ifp';
 export { parseTxd } from './parsers/binary/txd';
+
 export * from './parsers/binary/types';
 
 export * from './parsers/text';
-
 // three.js adapter layer
 export { updateAnimatedObjects } from './three/animated-objects';
 export {
@@ -44,6 +51,7 @@ export {
   type ClumpLight,
   type ClumpParticle,
   type RenderPart,
+  wrapClumpParts,
 } from './three/build-clump';
 export { buildCollisionWireframe } from './three/build-col-wireframe';
 export {

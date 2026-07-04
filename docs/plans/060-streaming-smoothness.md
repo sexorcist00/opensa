@@ -1,6 +1,7 @@
 # 060 — Streaming smoothness (cell-swap freeze)
 
-**Status: 🚧 Phases 0–4 + round-6 parse-step split shipped — awaiting round 7.** Crossing a cell boundary (LOD↔HD swap or a new LOD ring cell) produces
+**Status: ✅ Phases 0–5 shipped; round 7 confirmed subjectively smooth ("лагов на глаз не видно").
+Residual polish levers in Deferred.** Crossing a cell boundary (LOD↔HD swap or a new LOD ring cell) produces
 a visible frame hitch. The streaming _policy_ is already right (hysteresis dead-band, old level kept until the
 new one is in, cell cache); the hitch is _work placement_: `adapter.loadCell` is async only by signature — the
 whole `buildCell` (parse every DFF/TXD of the cell, build three.js meshes, procobj scatter) runs synchronously
@@ -34,14 +35,27 @@ compiles shaders in one more frame.
     `renderer.compileAsync` (KHR_parallel_shader_compile) against the live scene between build and ingest;
     the streaming system awaits it before queueing the batch.
 
+- **Phase 5 — worker parse (round 7).** Rounds 5–6 proved the remaining stalls are single indivisible CPU
+  units — `parseDff` of a baked cell-LOD plus the per-vertex geometry work — which no main-thread scheduling
+  can split. `buildClumpParts` is now two halves: `prepareClumpAtomics` (renderware `mesh/prepare-clump.ts`,
+  PURE — sanitizing, normal computation, prelit/sway conversion, per-material index buffers, bounding
+  sphere; results cached by model name) and `wrapClumpParts` (three side — BufferGeometry/material wrapping
+  only). A dedicated Web Worker (`game/adapters/dff-parse.worker.ts`) runs parse+prepare off-thread: the
+  adapter's `loadCell` collects the cell's uncached model names (`cellModelNames`), ships their raw DFF
+  buffers to the worker (transferred, `archive.get` returns fresh slices), and primes the renderware caches
+  (`primeClump`/`primePreparedAtomics`) with the transferable-typed-array results; in-flight models are
+  awaited, not re-sent. The sliced build then runs on cache hits. No Worker (node tests) → the old
+  synchronous path, unchanged. NOTE: TXD parse stays on the main thread — measured cheap (textures upload
+  as compressed S3TC, no CPU DXT decode; checked round 6).
+
 ## Deferred (next levers, in effect order)
 
-- **Worker parse** — move parseDff/parseTxd + mesh-array assembly into a Web Worker (archives shared via
-  SharedArrayBuffer, results transferable), main thread only wraps ready arrays into BufferGeometry. Removes
-  the CPU hump at its source (the sliced build merely interleaves it).
 - **GPU-ready cell format** — perfect-map-builder emits transcoded cells (raw vertex/index buffers +
-  KTX2/compressed textures): runtime parse becomes memcpy, uploads shrink. Biggest lever, biggest work; also
-  check whether TXD DXT is currently CPU-decoded to RGBA (S3TC upload would cut decode time and VRAM ×4).
+  KTX2/compressed textures): runtime parse becomes memcpy, uploads shrink. Confirmed already-S3TC for
+  textures (round 6); the remaining win would be pre-flattened vertex buffers (skip prepare entirely).
+- **Split oversized baked LODs at bake time** (opensa-lod-generator) — if a single LOD mesh's GPU upload
+  (~17 ms warm on one object) still drops a frame, emit the merged cell LOD as 2–4 sub-meshes so the
+  per-object warm unit shrinks. Asset-side fix; engine code is done.
 
 ## Measurements
 
@@ -103,6 +117,27 @@ and cluster around those builds — largely the same slices attributed to whiche
 `buildCellSteps` warms the parse caches as separate steps (`getTextures` → yield, `getClump` → yield, then
 `buildGroupInstancedMeshes` runs on cache hits) — a 79 ms monolith becomes ~3 slices of parse/decode/build.
 
-_(Round 7: re-drive — watch `max slice`: if it drops to ~25–40 ms the split worked but the ceiling is one
-TXD's DXT decode → next lever is worker parse (or S3TC compressed-texture upload, skipping the CPU decode);
-`post-add` lines should thin out in proportion to `max slice`.)_
+**Round 6b (after the parse-step split, user drive):** partial — cells whose weight was spread across sub-steps
+dropped (`10,-8,lod` max slice 79→50, `5,-3,lod` →8) but the worst cells didn't move (`3,-5,lod` 81 ms,
+`3,-6,lod` 78 ms): their whole cost is ONE indivisible unit (a big baked-LOD `parseDff` + per-vertex prepare).
+`post-add` values are vsync-quantized (33/42/50 = 2–3 × 16.7 ms) and cluster around `built` lines — they are
+those same slices landing in frames attributed to whichever cell swapped last. Texture check done: TXD DXT is
+NOT CPU-decoded (uploads as compressed S3TC), so textures are off the suspect list. Conclusion → Phase 5
+(worker parse): indivisible main-thread units can only be MOVED off the main thread, not sliced.
+
+**Round 7 (after the worker parse, user drive): SMOOTH — "лагов на глаз не видно вроде хорошо работает".**
+The numbers agree on the CPU side: `built` 47–54 ms wall with **max slice 5–7 ms** (was 100–250 ms wall with
+65–81 ms indivisible steps) — even 381-object HD cells and baked LOD cells now build in sub-frame slices on
+worker-primed caches. Remaining signals, for the record:
+
+- `warm frame 92 ms (9 objects)` / `32 ms (1 object)` — occasional oversized baked-LOD geometry uploads;
+  a single `bufferData` cannot be sliced from the engine. This is the bake-time LOD split lever (Deferred)
+  if it ever reads as a visible micro-stutter.
+- `post-add frame ~42–58 ms` lines still appear on most swaps, yet the drive FEELS smooth — consistent with
+  the established attribution caveat (these deltas absorb concurrent warm/build slices of OTHER cells and
+  vsync quantization; isolated single longer frames during motion are hard to perceive). If this is ever
+  chased further, the honest instrument is a per-frame profiler around the appearance frame, not this log.
+
+The plan's core goal — no visible freeze on cell swaps, no pop-in — is met: policy (hysteresis, lookahead,
+atomic appearance) + work placement (worker parse+prepare, sliced wrap, invisible time-budgeted warming,
+precompile) each removed a distinct hump the measurements attributed round by round.

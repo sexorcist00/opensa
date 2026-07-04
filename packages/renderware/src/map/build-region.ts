@@ -10,11 +10,18 @@ import type { ParticleEmitterEntry } from '../three/build-particles';
 import type { CoronaEntry } from '../three/corona';
 
 import { getClump, getIfp, getTextures, modelKey } from '../archive';
+import { preparedAtomicsFor } from '../mesh/prepare-clump';
 import { hasIdeFlag, IdeFlag } from '../parsers/text';
 import { registerAnimatedObject } from '../three/animated-objects';
 import { breakableFromGeometry, breakableInstanceKey, registerBreakable } from '../three/breakable';
 import { buildAnimatedClump } from '../three/build-animated-clump';
-import { buildClumpEscalators, buildClumpLights, buildClumpParticles, buildClumpParts } from '../three/build-clump';
+import {
+  buildClumpEscalators,
+  buildClumpLights,
+  buildClumpParticles,
+  buildClumpParts,
+  wrapClumpParts,
+} from '../three/build-clump';
 import { buildEscalatorSteps } from '../three/build-escalator';
 import { buildRoadsignParts, getRoadsignFont } from '../three/build-roadsign';
 import { applyWorldWindowGlow } from '../three/world-material';
@@ -115,7 +122,14 @@ export function buildGroupInstancedMeshes(
   const position = new Vector3();
   const quaternion = new Quaternion();
   const scale = new Vector3(1, 1, 1);
-  const parts = buildClumpParts(getClump(archive, group.def.modelName), getTextures(archive, group.def.txdName));
+  // Prepared atomics come from the name-keyed cache — primed by the streaming parse worker (plan 060
+  // Phase 5) or computed here on a miss; the wrap only creates BufferGeometry/materials.
+  const clump = getClump(archive, group.def.modelName);
+  const parts = wrapClumpParts(
+    clump,
+    preparedAtomicsFor(group.def.modelName, clump),
+    getTextures(archive, group.def.txdName),
+  );
   // Night-lit timed variants (lit-window / neon overlays, on across midnight) glow additively over
   // the world material's night blend so their bright window texels read in the dark.
   const nightLit = group.def.time !== undefined && isNightWindow(group.def.time.on, group.def.time.off);

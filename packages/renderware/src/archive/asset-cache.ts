@@ -65,6 +65,16 @@ export function getTextures(archive: ImgArchive, txdName: string): TextureDictio
   return resolved;
 }
 
+/** Whether a model's clump is already cached (the streaming parse worker skips re-parsing it). */
+export function hasClump(modelName: string): boolean {
+  return clumpCache.has(`${modelName.toLowerCase()}.dff`);
+}
+
+/** Seed the clump cache with a worker-parsed model (plan 060 Phase 5). */
+export function primeClump(modelName: string, clump: RWClump): void {
+  clumpCache.set(`${modelName.toLowerCase()}.dff`, clump);
+}
+
 /**
  * Walk a TXD's `txdp` parent chain, overlaying each child's own textures on its parent's so the **child
  * wins** (the inheritance the optimized map relies on). Pure — `ownOf` supplies each TXD's own map — and
