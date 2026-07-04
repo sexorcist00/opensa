@@ -101,6 +101,55 @@ export function buildAnimatedObjects(archive: ImgArchive, groups: Iterable<Regio
   return objects;
 }
 
+/** One model group → its InstancedMeshes (the sliced cell build yields between groups — plan 060 Phase 3). */
+export function buildGroupInstancedMeshes(
+  archive: ImgArchive,
+  group: RegionMeshData,
+  options: BuildRegionOptions = {},
+): InstancedMesh[] {
+  if (group.def.anim !== undefined) {
+    return []; // IDE anim objects animate per instance — see buildAnimatedObjects
+  }
+  const meshes: InstancedMesh[] = [];
+  const placement = new Matrix4();
+  const position = new Vector3();
+  const quaternion = new Quaternion();
+  const scale = new Vector3(1, 1, 1);
+  const parts = buildClumpParts(getClump(archive, group.def.modelName), getTextures(archive, group.def.txdName));
+  // Night-lit timed variants (lit-window / neon overlays, on across midnight) glow additively over
+  // the world material's night blend so their bright window texels read in the dark.
+  const nightLit = group.def.time !== undefined && isNightWindow(group.def.time.on, group.def.time.off);
+  const treatment = defTreatment(group.def);
+  for (const part of parts) {
+    applyTreatment(part.material, treatment, nightLit);
+    options.decoratePart?.(group.def, part); // game-layer mods (e.g. wind sway) — after vanilla
+    const mesh = new InstancedMesh(part.geometry, part.material, group.instances.length);
+    // The map neither casts nor uses the renderer's shadow receive (plan 038): only dynamics cast,
+    // and the unlit world material samples that map manually (worldShadowUniforms).
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    group.instances.forEach((instance, index) => {
+      position.set(instance.position[0], instance.position[1], instance.position[2]);
+      // GTA SA IPL quaternions are the inverse of three.js's convention — conjugate.
+      quaternion
+        .set(instance.rotation[0], instance.rotation[1], instance.rotation[2], instance.rotation[3])
+        .conjugate();
+      placement.compose(position, quaternion, scale);
+      mesh.setMatrixAt(index, placement); // parts are in raw model space (no DFF frame transform)
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    mesh.userData.region = group;
+    if (group.def.time) {
+      mesh.userData.timed = group.def.time; // { on, off } hour window — gated by TimedObjectSystem
+      mesh.visible = false; // hidden until the system applies the current hour (avoids a wrong-time flash)
+    }
+    meshes.push(mesh);
+  }
+
+  return meshes;
+}
+
 /**
  * Build one `InstancedMesh` per single-material part for each model group, placing
  * every instance with its GTA world transform (IPL quaternion conjugated, unit
@@ -112,46 +161,8 @@ export function buildInstancedMeshes(
   options: BuildRegionOptions = {},
 ): InstancedMesh[] {
   const meshes: InstancedMesh[] = [];
-  const placement = new Matrix4();
-  const position = new Vector3();
-  const quaternion = new Quaternion();
-  const scale = new Vector3(1, 1, 1);
-
   for (const group of groups) {
-    if (group.def.anim !== undefined) {
-      continue; // IDE anim objects animate per instance — see buildAnimatedObjects
-    }
-    const parts = buildClumpParts(getClump(archive, group.def.modelName), getTextures(archive, group.def.txdName));
-    // Night-lit timed variants (lit-window / neon overlays, on across midnight) glow additively over
-    // the world material's night blend so their bright window texels read in the dark.
-    const nightLit = group.def.time !== undefined && isNightWindow(group.def.time.on, group.def.time.off);
-    const treatment = defTreatment(group.def);
-    for (const part of parts) {
-      applyTreatment(part.material, treatment, nightLit);
-      options.decoratePart?.(group.def, part); // game-layer mods (e.g. wind sway) — after vanilla
-      const mesh = new InstancedMesh(part.geometry, part.material, group.instances.length);
-      // The map neither casts nor uses the renderer's shadow receive (plan 038): only dynamics cast,
-      // and the unlit world material samples that map manually (worldShadowUniforms).
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      group.instances.forEach((instance, index) => {
-        position.set(instance.position[0], instance.position[1], instance.position[2]);
-        // GTA SA IPL quaternions are the inverse of three.js's convention — conjugate.
-        quaternion
-          .set(instance.rotation[0], instance.rotation[1], instance.rotation[2], instance.rotation[3])
-          .conjugate();
-        placement.compose(position, quaternion, scale);
-        mesh.setMatrixAt(index, placement); // parts are in raw model space (no DFF frame transform)
-      });
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.computeBoundingSphere();
-      mesh.userData.region = group;
-      if (group.def.time) {
-        mesh.userData.timed = group.def.time; // { on, off } hour window — gated by TimedObjectSystem
-        mesh.visible = false; // hidden until the system applies the current hour (avoids a wrong-time flash)
-      }
-      meshes.push(mesh);
-    }
+    meshes.push(...buildGroupInstancedMeshes(archive, group, options));
   }
 
   return meshes;

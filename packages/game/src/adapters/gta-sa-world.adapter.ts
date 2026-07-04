@@ -3,8 +3,8 @@ import {
   type AssetFileSystem,
   breakableInstanceKey,
   buildAnimationClip,
-  buildCell,
   buildCellColliders,
+  buildCellSteps,
   buildClump,
   buildColliders,
   buildCollisionIndex,
@@ -136,6 +136,9 @@ interface VehiclePaint {
  * and resolves the map, then builds instanced regions and reports picked objects.
  * The −90°X (GTA Z-up → three Y-up) lives here, not in the engine.
  */
+/** Per-slice main-thread budget for the cooperative cell build (plan 060 Phase 3). */
+const CELL_SLICE_MS = 5;
+
 export class GtaSaWorldAdapter implements WorldAdapter {
   readonly cellSize: number;
 
@@ -294,11 +297,26 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     let meshes = this.cellCache.get(key);
     if (!meshes) {
       const buildStart = performance.now(); // plan 060 Phase 0: the CPU hump of a first-visit cell build
-      // Native Z-up; the streaming root applies the −90°X (so no per-cell group).
-      meshes = buildCell(this.fs, this.defs, this.grid, request.cx, request.cy, request.lod, {
+      // Native Z-up; the streaming root applies the −90°X (so no per-cell group). Built COOPERATIVELY
+      // (plan 060 Phase 3): the step generator yields per model group, and past the per-slice budget we
+      // yield the main thread — a heavy cell (100–250 ms) becomes many sub-frame slices instead of a freeze.
+      meshes = [];
+      let sliceStart = performance.now();
+      let deadline = sliceStart + CELL_SLICE_MS;
+      let maxSliceMs = 0; // plan 060 round 5: a single generator step (one model group) can dwarf the budget
+      for (const chunk of buildCellSteps(this.fs, this.defs, this.grid, request.cx, request.cy, request.lod, {
         breakableModels: this.breakableModels,
         decoratePart: this.decoratePart,
-      });
+      })) {
+        meshes.push(...chunk);
+        if (performance.now() > deadline) {
+          maxSliceMs = Math.max(maxSliceMs, performance.now() - sliceStart);
+          await nextTask();
+          sliceStart = performance.now();
+          deadline = sliceStart + CELL_SLICE_MS;
+        }
+      }
+      maxSliceMs = Math.max(maxSliceMs, performance.now() - sliceStart);
       // Procedural clutter (plan 042): deterministic scatter over the cell's collision faces.
       // HD cells only — the clutter draw distances are far below the LOD ring anyway.
       const batches = request.lod ? null : this.cellProcObjBatches(request.cx, request.cy);
@@ -314,8 +332,11 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       this.cellCache.set(key, meshes);
       const buildMs = performance.now() - buildStart;
       if (buildMs > 8) {
+        // Wall time — with the sliced build this spans many sub-frame slices, not one frozen frame.
         // eslint-disable-next-line no-console -- plan 060 Phase 0 measurement: cell-build CPU hump
-        console.log(`[stream] built ${key} in ${buildMs.toFixed(0)}ms (${meshes.length} objects)`);
+        console.log(
+          `[stream] built ${key} in ${buildMs.toFixed(0)}ms (${meshes.length} objects, max slice ${maxSliceMs.toFixed(0)}ms)`,
+        );
       }
     }
 
@@ -661,6 +682,11 @@ export function toModelColliders({ col, name, transforms }: RegionColliders): Mo
     },
     transforms,
   };
+}
+
+/** Yield the main thread (macrotask) so input/render frames interleave with a heavy cell build. */
+function nextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 /** Read a required binary asset from the file system (throws if absent). */

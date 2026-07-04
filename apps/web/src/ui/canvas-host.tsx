@@ -594,7 +594,12 @@ function bootstrap(
     game.addSystem(animationSystem);
 
     // Stream map cells around the player (full models near, LODs ringing out).
-    const streaming = new StreamingSystem(adapter, game.getStreamingRoot(), character.viewOf, game.getConfig());
+    const streaming = new StreamingSystem(adapter, game.getStreamingRoot(), character.viewOf, game.getConfig(), {
+      // Plan 060: shaders/textures compile off the appearance frame; geometry uploads are forced invisibly
+      // in slices, then the cell appears atomically (no piece-by-piece pop-in).
+      precompile: (objects): Promise<void> => game.precompile(objects),
+      warmUp: (objects): void => game.warmUp(objects),
+    });
     game.addSystem(streaming);
     game.setStreamingSystem(streaming);
 

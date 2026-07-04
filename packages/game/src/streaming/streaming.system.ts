@@ -8,6 +8,14 @@ import type { CellCoord } from './grid';
 import { CellFader } from './fade';
 import { cellDistanceSq, cellOf, cellsWithin } from './grid';
 
+/** Renderer-side hooks (plan 060 Phases 4 + round 3), injected by the host — absent in headless tests. */
+export interface GpuHooks {
+  /** Compile shader programs + upload textures for a built batch (renderer.compileAsync). */
+  precompile?(objects: readonly Object3D[]): Promise<void>;
+  /** Force the first-draw geometry uploads of a slice, invisibly (1×1 scissored render). */
+  warmUp?(objects: readonly Object3D[]): void;
+}
+
 interface ManualSelection {
   cells: CellCoord[];
   lod: boolean;
@@ -24,9 +32,17 @@ const HYSTERESIS = 0.25;
  *  first-visit cell builds BEFORE the boundary is crossed and the swap is a cache hit. */
 const LOOKAHEAD_SECONDS = 3;
 
-/** Budgeted ingest (plan 060 Phase 2): per-frame time budget for adding built cell meshes to the scene —
- *  an HD cell is dozens of meshes; adding them all in one frame is half the swap hitch. */
-const INGEST_BUDGET_MS = 4;
+/** Per-frame TIME budget for invisible GPU warming (plan 060, round 4): a fixed 24-obj slice just moved
+ *  the ~40–58 ms upload stall from the appearance frame into the warm frame. Warming is invisible, so
+ *  spreading it thinner is free — warm object-by-object and stop once the frame spent this much. */
+const WARM_BUDGET_MS = 3;
+
+/** Hard cap on objects warmed per frame — keeps warm pacing deterministic when uploads are instant
+ *  (headless tests, cached resources) and bounds the per-object render-call overhead. */
+const WARM_PER_FRAME = 24;
+
+/** Warm frames that cost more than this get logged (plan 060 measurement). */
+const WARM_LOG_MS = 8;
 
 /**
  * Streams map cells in/out of the streaming root as the view moves. Two modes:
@@ -52,13 +68,13 @@ export class StreamingSystem implements System {
   private readonly config: Readonly<Config>;
   private current = new Set<string>();
   private readonly fader = new CellFader();
+  private readonly gpu: GpuHooks;
   /** Built cells whose meshes are still being added under the frame budget (plan 060 Phase 2). */
   private readonly ingesting = new Map<string, { added: number; objects: Object3D[] }>();
   private lastView: null | Vec3 = null;
   private readonly loaded = new Map<string, Object3D[]>();
   private readonly loading = new Set<string>();
   private manual: ManualSelection | null = null;
-  private readonly now: () => number;
   /** Keys added last frame — their NEXT frame delta is the GPU-upload hump (plan 060 Phase 0). */
   private postAddWatch: null | string = null;
   private readonly root: Object3D;
@@ -70,13 +86,13 @@ export class StreamingSystem implements System {
     root: Object3D,
     viewOf: () => Vec3,
     config: Readonly<Config>,
-    now: () => number = () => performance.now(),
+    gpu: GpuHooks = {},
   ) {
     this.adapter = adapter;
     this.root = root;
     this.viewOf = viewOf;
     this.config = config;
-    this.now = now;
+    this.gpu = gpu;
   }
 
   /** Debug: render an explicit set of cells at one detail level (null resumes streaming). */
@@ -127,29 +143,41 @@ export class StreamingSystem implements System {
     return this.streamKeys();
   }
 
-  /** Phase 2: add queued cell meshes under the frame budget; finalize a cell's swap when its batch is in. */
+  /** Rounds 2–4: GPU-warm queued cells invisibly (object-by-object under a per-frame time budget, so a
+   *  heavy upload ends the frame's warming instead of stacking with the next one), then add each cell
+   *  ATOMICALLY once fully warm — uploads never land on the appearance frame, and nothing assembles
+   *  piece-by-piece on screen. */
   private drainIngest(): void {
     if (this.ingesting.size === 0) {
       return;
     }
-    const deadline = this.now() + INGEST_BUDGET_MS;
+    const start = performance.now();
+    let count = WARM_PER_FRAME;
+    let warmed = 0;
+    const overBudget = (): boolean => count <= 0 || performance.now() - start >= WARM_BUDGET_MS;
     for (const [key, batch] of this.ingesting) {
-      while (batch.added < batch.objects.length) {
-        this.root.add(batch.objects[batch.added]);
-        batch.added += 1;
-        if (this.now() >= deadline) {
-          break;
+      if (this.gpu.warmUp) {
+        while (batch.added < batch.objects.length) {
+          this.gpu.warmUp([batch.objects[batch.added]]);
+          batch.added += 1;
+          count -= 1;
+          warmed += 1;
+          if (overBudget() && batch.added < batch.objects.length) {
+            this.logWarm(start, warmed);
+
+            return; // continue this cell next frame — at least one object always warms per frame
+          }
         }
       }
-      if (batch.added < batch.objects.length) {
-        return; // budget exhausted — continue next frame
-      }
+      // Fully warmed (or no hook — headless): the whole cell appears in one step.
+      batch.objects.forEach((object) => this.root.add(object));
       this.ingesting.delete(key);
       this.finishSwap(key, batch.objects);
-      if (this.now() >= deadline) {
-        return;
+      if (overBudget()) {
+        break;
       }
     }
+    this.logWarm(start, warmed);
   }
 
   /** The seamless-swap tail: mark loaded, drop the other detail level, fade genuinely new cells. */
@@ -200,6 +228,12 @@ export class StreamingSystem implements System {
     const [cx, cy, kind] = key.split(',');
     void this.adapter
       .loadCell({ cx: Number(cx), cy: Number(cy), lod: kind === 'lod' })
+      .then(async (objects) => {
+        // Phase 4: compile shaders + upload textures OFF the appearance frame (no-op without the hook).
+        await this.gpu.precompile?.(objects);
+
+        return objects;
+      })
       .then((objects) => {
         this.loading.delete(key);
         if (!this.current.has(key) || this.loaded.has(key) || this.ingesting.has(key)) {
@@ -209,6 +243,14 @@ export class StreamingSystem implements System {
         this.ingesting.set(key, { added: 0, objects: [...objects] });
       })
       .catch(() => this.loading.delete(key));
+  }
+
+  private logWarm(start: number, warmed: number): void {
+    const spent = performance.now() - start;
+    if (warmed > 0 && spent > WARM_LOG_MS) {
+      // eslint-disable-next-line no-console -- plan 060 round 4 measurement: warm-frame cost attribution
+      console.log(`[stream] warm frame ${spent.toFixed(0)}ms (${warmed} objects)`);
+    }
   }
 
   private remove(key: string, objects: readonly Object3D[]): void {

@@ -225,14 +225,13 @@ describe('StreamingSystem', () => {
       expect(requested.some((key) => key.includes(',2,'))).toBe(true); // a cy=2 cell — beyond the stationary ring
     });
 
-    it('spreads a big cell over frames under the ingest budget and holds the old level meanwhile', async () => {
+    it('warms a big cell in slices and holds the old level until it appears atomically', async () => {
       const adapter = {
         cellSize: 250,
         loadCell: vi.fn((request: CellRequest): Promise<Object3D[]> => {
-          // Cell (0,0) HD = a 3-mesh batch; everything else = one named object (fresh per call).
           if (!request.lod && request.cx === 0 && request.cy === 0) {
             return Promise.resolve(
-              [0, 1, 2].map((i) => {
+              Array.from({ length: 60 }, (_, i) => {
                 const part = new Object3D();
                 part.name = `hd_part_${i}`;
 
@@ -248,32 +247,29 @@ describe('StreamingSystem', () => {
       };
       const root = new Object3D();
       let view: Vec3 = [125, 400, 0]; // cell (0,0) starts as LOD
-      let tick = 0;
-      // Injected clock: every now() call advances 10 ms → the 4 ms budget allows ONE add per frame.
-      const system = new StreamingSystem(
-        adapter,
-        root,
-        () => view,
-        config(),
-        () => (tick += 10),
-      );
+      const warmSlices: number[] = [];
+      const system = new StreamingSystem(adapter, root, () => view, config(), {
+        warmUp: (objects): void => {
+          warmSlices.push(objects.length);
+        },
+      });
 
       await settle(system);
-      for (let i = 0; i < 12; i += 1) {
-        system.update(); // the 1-add-per-frame clock needs a frame per queued ring cell
-      }
+      system.update();
       expect(has(root, 'lod_0,0')).toBe(true);
 
       view = [125, 125, 0]; // HD desired for (0,0)
       system.update();
-      await flush(); // HD (3 objects) resolves → queued
-      system.update(); // ingest frame 1: one object in, batch unfinished → LOD still held
-      expect(root.children.filter((c) => c.name.startsWith('hd_part')).length).toBeLessThan(3);
+      await flush(); // HD (60 objects) resolves → queued for warming
+      system.update(); // warm frame 1 (≤24 objects) — nothing visible yet, LOD held
+      expect(root.children.filter((c) => c.name.startsWith('hd_part'))).toHaveLength(0);
       expect(has(root, 'lod_0,0')).toBe(true);
       for (let i = 0; i < 6; i += 1) {
-        system.update(); // ingest frames 2..N: batch completes → swap finalizes
+        system.update(); // warm frames 2..N, then the ATOMIC appearance + swap
       }
-      expect(root.children.filter((c) => c.name.startsWith('hd_part'))).toHaveLength(3);
+      expect(warmSlices.every((size) => size <= 24)).toBe(true);
+      expect(warmSlices.reduce((sum, size) => sum + size, 0)).toBeGreaterThanOrEqual(60);
+      expect(root.children.filter((c) => c.name.startsWith('hd_part'))).toHaveLength(60); // all at once
       expect(has(root, 'lod_0,0')).toBe(false);
     });
 

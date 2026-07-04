@@ -1,5 +1,5 @@
 // Framework-agnostic GTA map resolution + streamed cell instancing.
-export { buildCell } from './build-cell';
+export { buildCell, buildCellSteps } from './build-cell';
 export { buildProcObjMeshes } from './build-procobj';
 export { type RegionMeshData } from './build-region';
 export { procObjCategory, type ProcObjCategoryName } from './procobj-categories';

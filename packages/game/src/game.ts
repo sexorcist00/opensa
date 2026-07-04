@@ -2,15 +2,17 @@ import {
   DoubleSide,
   Group,
   InstancedMesh,
+  type Light,
   type Mesh,
   MeshBasicMaterial,
   MeshNormalMaterial,
   type Object3D,
   type PerspectiveCamera,
   Raycaster,
-  type Scene,
+  Scene,
   Vector2,
   Vector3,
+  Vector4,
   type WebGLRenderer,
 } from 'three';
 
@@ -121,6 +123,9 @@ export class Game {
   private readonly streamingRoot = new Group();
   private streamingSystem: null | StreamingSystem = null;
   private readonly systems = new SystemRegistry();
+  /** Reused by {@link warmUp} — it runs many times per frame during streaming ingest. */
+  private readonly warmHolder = new Scene();
+  private readonly warmViewport = new Vector4();
   private readonly weatherTransition: WeatherTransition;
 
   private constructor(canvas: HTMLCanvasElement, config: Config) {
@@ -369,6 +374,22 @@ export class Game {
       this.lastPick = { instanceId: hit.instanceId, mesh: hit.object as InstancedMesh };
     }
     this.events.emit('select', hit ? this.adapter.describe(hit.object, hit.instanceId) : null);
+  }
+
+  /**
+   * Pre-compile a batch of freshly built cell objects BEFORE they enter the scene (plan 060 Phase 4):
+   * `compileAsync` compiles their shader programs and uploads their textures against the live scene's
+   * lighting, so the frame the cell appears in doesn't pay the upload/compile hitch.
+   */
+  async precompile(objects: readonly Object3D[]): Promise<void> {
+    const holder = new Group();
+    objects.forEach((object) => holder.add(object));
+    try {
+      await this.renderer.compileAsync(holder, this.camera, this.scene);
+    } finally {
+      // compileAsync only initializes GPU state; detach so the streaming system owns scene placement.
+      [...holder.children].forEach((object) => holder.remove(object));
+    }
   }
 
   resize(width: number, height: number): void {
@@ -645,6 +666,65 @@ export class Game {
   /** Snap the map-inspector (debug) camera back to top-down (undo a RIGHT-drag orbit). No-op outside it. */
   topDownView(): void {
     this.cameraController.topDownDebugView();
+  }
+
+  /**
+   * Force the FIRST-DRAW GPU upload of a batch's geometry buffers without showing anything (plan 060,
+   * round 3): render the objects once into a 1×1 scissored viewport with frustum culling off. `compileAsync`
+   * covers programs + textures but vertex/instance buffers upload only on an actual draw — this is that draw,
+   * off-screen for practical purposes. The streaming system warms a cell in slices across frames, then adds
+   * it to the scene ATOMICALLY (no piece-by-piece pop-in, no upload spike on the appearance frame).
+   */
+  warmUp(objects: readonly Object3D[]): void {
+    const holder = this.warmHolder;
+    // Mirror the live scene's lighting context (round 5): fog/environment/lights change the shader program
+    // cache key, so a bare holder scene made every material SYNC-compile a no-light/no-fog variant nobody
+    // renders with (measured 28 ms warm frames for ONE object). Borrowing them makes the warm draw resolve
+    // to the exact programs `precompile` already built — warming pays uploads only.
+    holder.fog = this.scene.fog;
+    holder.environment = this.scene.environment;
+    const lights: Object3D[] = [];
+    this.scene.traverse((node) => {
+      if ((node as Light).isLight) {
+        lights.push(node);
+      }
+    });
+    const lightParents = lights.map((light) => light.parent);
+    lights.forEach((light) => holder.add(light));
+    const culled: boolean[] = [];
+    objects.forEach((object) => {
+      holder.add(object);
+      object.traverse((node) => {
+        culled.push(node.frustumCulled);
+        node.frustumCulled = false; // guarantee a draw call regardless of where the cell sits
+      });
+    });
+    const viewport = this.warmViewport;
+    this.renderer.getViewport(viewport);
+    const scissorWasOn = this.renderer.getScissorTest();
+    const shadowAutoUpdate = this.renderer.shadowMap.autoUpdate;
+    try {
+      this.renderer.shadowMap.autoUpdate = false; // no shadow passes for a 1×1 warm draw
+      this.renderer.setScissorTest(true);
+      this.renderer.setScissor(0, 0, 1, 1);
+      this.renderer.setViewport(0, 0, 1, 1);
+      this.renderer.render(holder, this.camera);
+    } finally {
+      this.renderer.shadowMap.autoUpdate = shadowAutoUpdate;
+      this.renderer.setViewport(viewport);
+      this.renderer.setScissorTest(scissorWasOn);
+      let at = 0;
+      objects.forEach((object) => {
+        object.traverse((node) => {
+          node.frustumCulled = culled[at];
+          at += 1;
+        });
+        holder.remove(object);
+      });
+      lights.forEach((light, index) => lightParents[index]?.add(light));
+      holder.fog = null;
+      holder.environment = null;
+    }
   }
 
   /** Point the scene's override material at whichever debug view is active (faces / normals / none). */
