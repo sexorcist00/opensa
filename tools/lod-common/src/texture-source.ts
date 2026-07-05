@@ -14,13 +14,18 @@ export interface SourceTexture {
 /** Resolves a texture name to its decoded RGBA, loaded from the archives' TXDs and cached. */
 export interface TextureSource {
   get(name: string): null | SourceTexture;
+  /** Resolve inside one specific TXD (a model's IDE `txd`) — SA texture names are only unique per-TXD, and
+   *  the same name carries different pixels in different TXDs (area recolours; see plan 004). `null` when
+   *  that TXD doesn't hold the name. Optional so simple test fakes stay valid — use {@link resolveFrom}. */
+  getFrom?(txdName: string, name: string): null | SourceTexture;
 }
 
 /**
  * Build a {@link TextureSource} over every TXD in the archives (Phase 2a). On first use it indexes all
- * `TEXTURE_NATIVE`s by name (read-only reuse of the engine `parseTxd`); `get` decodes the requested texture's
- * top mip to RGBA (DXT via the map-optimizer decoder, or raw rgba8888) and memoizes it. Missing / unparseable
- * textures resolve to null so the atlas can fall back. First TXD wins on a name clash.
+ * `TEXTURE_NATIVE`s by TXD + name (read-only reuse of the engine `parseTxd`); `get` decodes the requested
+ * texture's top mip to RGBA (DXT via the map-optimizer decoder, or raw rgba8888) and memoizes it. Missing /
+ * unparseable textures resolve to null so the atlas can fall back. `get` keeps the legacy flat view (first
+ * TXD wins on a name clash); `getFrom` resolves within one TXD (plan 004 — the correct per-model path).
  */
 interface IndexedTexture {
   format: string;
@@ -31,7 +36,8 @@ interface IndexedTexture {
 }
 
 export function createTextureSource(archives: readonly ImgArchive[]): TextureSource {
-  const index = new Map<string, IndexedTexture>();
+  const flat = new Map<string, IndexedTexture>();
+  const byTxd = new Map<string, Map<string, IndexedTexture>>();
   const cache = new Map<string, null | SourceTexture>();
   let indexed = false;
 
@@ -40,11 +46,22 @@ export function createTextureSource(archives: readonly ImgArchive[]): TextureSou
       for (const name of archive.names.filter((entry) => entry.toLowerCase().endsWith('.txd'))) {
         const buffer = archive.get(name);
         if (buffer) {
-          indexDictionary(buffer, index);
+          indexDictionary(name.toLowerCase().replace(/\.txd$/, ''), buffer, flat, byTxd);
         }
       }
     }
     indexed = true;
+  };
+
+  const lookup = (cacheKey: string, entry: IndexedTexture | undefined): null | SourceTexture => {
+    const cached = cache.get(cacheKey);
+    if (cached !== undefined || cache.has(cacheKey)) {
+      return cached ?? null;
+    }
+    const texture = entry ? decode(entry) : null;
+    cache.set(cacheKey, texture);
+
+    return texture;
   };
 
   return {
@@ -53,17 +70,25 @@ export function createTextureSource(archives: readonly ImgArchive[]): TextureSou
         buildIndex();
       }
       const key = name.toLowerCase();
-      const cached = cache.get(key);
-      if (cached !== undefined || cache.has(key)) {
-        return cached ?? null;
-      }
-      const entry = index.get(key);
-      const texture = entry ? decode(entry) : null;
-      cache.set(key, texture);
 
-      return texture;
+      return lookup(`|${key}`, flat.get(key));
+    },
+    getFrom(txdName: string, name: string): null | SourceTexture {
+      if (!indexed) {
+        buildIndex();
+      }
+      const txd = txdName.toLowerCase();
+      const key = name.toLowerCase();
+
+      return lookup(`${txd}|${key}`, byTxd.get(txd)?.get(key));
     },
   };
+}
+
+/** Scoped-first resolution: the model's own TXD, then the global index (names genuinely absent from the
+ *  model's TXD resolve like SA's own TXD fallbacks do). */
+export function resolveFrom(source: TextureSource, txdName: string, name: string): null | SourceTexture {
+  return source.getFrom?.(txdName, name) ?? source.get(name);
 }
 
 function decode(entry: IndexedTexture): null | SourceTexture {
@@ -79,23 +104,40 @@ function decode(entry: IndexedTexture): null | SourceTexture {
   }
 }
 
-function indexDictionary(buffer: ArrayBuffer, index: Map<string, IndexedTexture>): void {
+function indexDictionary(
+  txdName: string,
+  buffer: ArrayBuffer,
+  flat: Map<string, IndexedTexture>,
+  byTxd: Map<string, Map<string, IndexedTexture>>,
+): void {
   let textures;
   try {
     textures = parseTxd(buffer).textures;
   } catch {
     return; // unreadable TXD — skip
   }
+  let own = byTxd.get(txdName);
+  if (!own) {
+    own = new Map();
+    byTxd.set(txdName, own);
+  }
   for (const texture of textures) {
     const key = texture.name.toLowerCase();
-    if (!index.has(key) && texture.mipmaps.length > 0) {
-      index.set(key, {
-        format: texture.format,
-        hasAlpha: texture.hasAlpha,
-        height: texture.height,
-        mip: texture.mipmaps[0].data,
-        width: texture.width,
-      });
+    if (texture.mipmaps.length === 0) {
+      continue;
+    }
+    const entry: IndexedTexture = {
+      format: texture.format,
+      hasAlpha: texture.hasAlpha,
+      height: texture.height,
+      mip: texture.mipmaps[0].data,
+      width: texture.width,
+    };
+    if (!flat.has(key)) {
+      flat.set(key, entry); // legacy flat view — first TXD wins
+    }
+    if (!own.has(key)) {
+      own.set(key, entry);
     }
   }
 }

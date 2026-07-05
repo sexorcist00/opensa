@@ -1,6 +1,8 @@
 # 004 — One shared TXD for all cell LODs
 
-**Status: ✅ Implemented (measured below).** Replace the 563 per-cell TXDs with **one shared `lods.txd`** holding every unique LOD
+**Status: ✅ Implemented (measured below). Revised 2026-07-05 by lod-common plan 004: texture names in the
+shared TXD are now SCOPED per source TXD (`<txd>_<name>`) — the original bare-name packing collapsed
+same-named different-pixel variants to a random winner.** Replace the 563 per-cell TXDs with **one shared `lods.txd`** holding every unique LOD
 texture once. Kills a measured **5.5× texture duplication** in `lods.img` and, more importantly, 5.5× duplicate
 decoded/GPU textures at LOD range.
 

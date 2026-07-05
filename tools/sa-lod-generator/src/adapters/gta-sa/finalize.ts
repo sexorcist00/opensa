@@ -6,6 +6,7 @@ import { buildClumpMesh } from '@opensa/lod-common/build-mesh';
 import { collectClumpEffects } from '@opensa/lod-common/clump-effects';
 import { encodeLodDff } from '@opensa/lod-common/encode-dff';
 import { encodeHalvedTxd } from '@opensa/lod-common/encode-txd';
+import { resolveFrom } from '@opensa/lod-common/texture-source';
 import { lodView } from '@opensa/lod-common/view';
 import { patchGtaDat } from '@opensa/map-placement/ide';
 import { retransformTextIpl } from '@opensa/map-placement/ipl-text-retransform';
@@ -79,7 +80,7 @@ export function ensureCloneTxd(
   }
   const names = parseTxd(bytes).textures.map((texture) => texture.name);
   const cloneName = `salod${String(hdTxdToClone.size).padStart(4, '0')}`;
-  img.set(`${cloneName}.txd`, encodeHalvedTxd(names, input.source, input.halvings));
+  img.set(`${cloneName}.txd`, encodeHalvedTxd(names, atlasView(input.source, hdTxd), input.halvings));
   hdTxdToClone.set(hdTxd, cloneName);
 
   return cloneName;
@@ -129,7 +130,10 @@ export function writeBuild(input: BuildInput): BuildStats {
       stats.missingHd += 1;
       continue;
     }
-    img.set(`${link.lodModel}.dff`, cloneLodDff(new Uint8Array(hdDff), link, decimate, input.source, stats));
+    img.set(
+      `${link.lodModel}.dff`,
+      cloneLodDff(new Uint8Array(hdDff), link, decimate, atlasView(input.source, link.hdTxd), stats),
+    );
     modelToTxd.set(link.lodModel, cloneTxd);
     stats.clonedLods += 1;
   }
@@ -159,6 +163,14 @@ export function writeBuild(input: BuildInput): BuildStats {
   stats.retransformedLods = retargetLodTransforms(input, new Set(modelToTxd.keys()));
 
   return stats;
+}
+
+/** A {@link TextureSource} view resolving every name inside ONE source atlas first (lod-common plan 004). */
+function atlasView(source: TextureSource, hdTxd: string): TextureSource {
+  return {
+    get: (name) => resolveFrom(source, hdTxd, name),
+    getFrom: (txd, name) => source.getFrom?.(txd, name) ?? null,
+  };
 }
 
 /**
@@ -196,32 +208,67 @@ function distinctLods(links: readonly LodLink[]): number {
   return new Set(links.map((link) => link.lodModel)).size;
 }
 
+/** Content key for a resolved texture (null when unresolvable) — dims + a cheap rolling hash of the pixels. */
+function variantKey(texture: null | { height: number; rgba: Uint8Array; width: number }): null | string {
+  if (!texture) {
+    return null;
+  }
+  let hash = 0x811c9dc5;
+  for (const byte of texture.rgba) {
+    hash ^= byte;
+    hash = Math.imul(hash, 0x01000193);
+  }
+
+  return `${texture.width}x${texture.height}:${(hash >>> 0).toString(16)}`;
+}
+
 /** The shared `txdp` parent dictionary every partitioned clone TXD points at (plan 006). */
 export const PARENT_TXD = 'salodpar';
 
 /**
- * Partition the clone atlases' texture names for the `txdp` parent scheme (plan 006): a name used by **≥ 2**
- * atlases goes to the shared parent; the rest stay in their child. Safe by construction — the build's
- * {@link TextureSource} is name-keyed ("first TXD wins"), so every clone TXD already receives identical pixels
- * for a given name; the parent changes packaging, not pixels.
+ * Partition the clone atlases' texture names for the `txdp` parent scheme (plan 006, revised by lod-common
+ * plan 004): a name used by **≥ 2** atlases goes to the shared parent **only when every owner carries the
+ * SAME pixels** (`keyOf` — a content key per (atlas, name)). SA reuses names across TXDs with different
+ * pixels (area recolours), so a multi-variant name stays in EACH owner's child TXD instead — the `txdp`
+ * chain resolves child-first, so every LOD keeps its own variant. Without `keyOf` (legacy tests) any
+ * multi-atlas name is treated as one variant.
  */
-export function partitionCloneTextures(atlasNames: ReadonlyMap<string, readonly string[]>): {
-  perAtlasUnique: Map<string, string[]>;
+export function partitionCloneTextures(
+  atlasNames: ReadonlyMap<string, readonly string[]>,
+  keyOf?: (atlas: string, name: string) => null | string,
+): {
+  perAtlas: Map<string, string[]>;
   shared: string[];
 } {
-  const counts = new Map<string, number>();
-  for (const names of atlasNames.values()) {
+  const owners = new Map<string, string[]>();
+  for (const [atlas, names] of atlasNames) {
     for (const name of new Set(names)) {
-      counts.set(name, (counts.get(name) ?? 0) + 1);
+      const list = owners.get(name) ?? [];
+      list.push(atlas);
+      owners.set(name, list);
     }
   }
-  const shared = new Set([...counts].filter(([, count]) => count >= 2).map(([name]) => name));
-  const perAtlasUnique = new Map<string, string[]>();
+  const shared = new Set(
+    [...owners]
+      .filter(([name, atlasList]) => {
+        if (atlasList.length < 2) {
+          return false;
+        }
+        if (!keyOf) {
+          return true;
+        }
+        const keys = new Set(atlasList.map((atlas) => keyOf(atlas, name) ?? `missing:${atlas}`));
+
+        return keys.size === 1; // one variant everywhere → safe in the shared parent
+      })
+      .map(([name]) => name),
+  );
+  const perAtlas = new Map<string, string[]>();
   for (const [atlas, names] of atlasNames) {
-    perAtlasUnique.set(atlas, [...new Set(names)].filter((name) => !shared.has(name)).sort());
+    perAtlas.set(atlas, [...new Set(names)].filter((name) => !shared.has(name)).sort());
   }
 
-  return { perAtlasUnique, shared: [...shared].sort() };
+  return { perAtlas, shared: [...shared].sort() };
 }
 
 /**
@@ -251,14 +298,26 @@ function packCloneTxds(
     }
   }
 
-  const { perAtlasUnique, shared } = partitionCloneTextures(atlasNames);
+  const { perAtlas, shared } = partitionCloneTextures(atlasNames, (atlas, name) =>
+    variantKey(resolveFrom(input.source, atlas, name)),
+  );
   if (shared.length > 0) {
-    img.set(`${PARENT_TXD}.txd`, encodeHalvedTxd(shared, input.source, input.halvings));
+    // All owners carry identical pixels — resolve each shared name through ANY owner (scoped, not flat).
+    const ownerOf = new Map<string, string>();
+    for (const [atlas, names] of atlasNames) {
+      for (const name of names) {
+        if (!ownerOf.has(name)) {
+          ownerOf.set(name, atlas);
+        }
+      }
+    }
+    const parentView: TextureSource = { get: (name) => resolveFrom(input.source, ownerOf.get(name) ?? '', name) };
+    img.set(`${PARENT_TXD}.txd`, encodeHalvedTxd(shared, parentView, input.halvings));
   }
   const hdTxdToClone = new Map<string, string>();
-  for (const [hdTxd, unique] of perAtlasUnique) {
+  for (const [hdTxd, names] of perAtlas) {
     const cloneName = `salod${String(hdTxdToClone.size).padStart(4, '0')}`;
-    img.set(`${cloneName}.txd`, encodeHalvedTxd(unique, input.source, input.halvings));
+    img.set(`${cloneName}.txd`, encodeHalvedTxd(names, atlasView(input.source, hdTxd), input.halvings));
     hdTxdToClone.set(hdTxd, cloneName);
   }
 

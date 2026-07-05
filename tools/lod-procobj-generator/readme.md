@@ -41,7 +41,9 @@ tsx tools/lod-procobj-generator/src/cli.ts --out <path> --game <path> [--in <dir
 ## What it does
 
 Per converted species (every `procobj.dat` species, or the subset shipped in `--in`): build a model-local mesh
-(frame-aware), **QEM-decimate** it, re-derive smooth normals, and encode a low-poly DFF. Then it reuses the engine's
+(frame-aware), **QEM-decimate** it, re-derive smooth normals, and encode a low-poly DFF. Textures resolve
+through each species' **own IDE TXD** and land in the shared `lod_procobj.txd` under **scoped names**
+(`<txd>_<name>` — SA reuses names across TXDs with different pixels; see lod-common plan 004). Then it reuses the engine's
 vanilla procobj scatter to place each species as **static IPL instances** (HD instance → its LOD, thinned by MINDIST
 
 - a cap), strips those species from `procobj.dat`, swaps their HD DFF for the `--in` model (only when `--in` is

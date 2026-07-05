@@ -25,8 +25,21 @@ function write(path: string, content: string | Uint8Array): void {
 }
 
 describe('install (end-to-end)', () => {
+  describe('negative cases', () => {
+    it('fails the install when a *.merge target does not exist', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+
+      write(join(game, 'data', 'stub.txt'), 'base');
+      write(join(mods, 'a_mod', 'data', 'missing.ide.merge'), 'add to "objs":\n1, a, b, 100, 0\n');
+
+      expect(() => install({ gamePath: game, inPath: mods, outPath: out })).toThrow(/\.merge target does not exist/);
+    });
+  });
+
   describe('positive cases', () => {
-    it('copies the base, overlays mods alphabetically, and merges gta3img into gta3.img', () => {
+    it('copies the base, overlays mods alphabetically, and merges gta3_img into gta3.img', () => {
       const game = join(root, 'game');
       const mods = join(root, 'mods');
       const out = join(root, 'out');
@@ -38,10 +51,10 @@ describe('install (end-to-end)', () => {
       baseImg.set('base.dff', Uint8Array.from([1]));
       write(join(game, 'models', 'gta3.img'), baseImg.build());
 
-      // a_mod (applied first): a new file, a conf override, and a gta3img entry.
+      // a_mod (applied first): a new file, a conf override, and a gta3_img entry.
       write(join(mods, 'a_mod', 'data', 'new.txt'), 'a-new');
       write(join(mods, 'a_mod', 'data', 'conf.txt'), 'a');
-      write(join(mods, 'a_mod', 'gta3img', 'x.dff'), Uint8Array.from([2, 2]));
+      write(join(mods, 'a_mod', 'gta3_img', 'x.dff'), Uint8Array.from([2, 2]));
 
       // b_mod (applied last): another conf override → wins.
       write(join(mods, 'b_mod', 'data', 'conf.txt'), 'b');
@@ -51,11 +64,62 @@ describe('install (end-to-end)', () => {
       expect(readFileSync(join(out, 'data', 'keep.txt'), 'utf8')).toBe('base'); // untouched base file
       expect(readFileSync(join(out, 'data', 'new.txt'), 'utf8')).toBe('a-new'); // added by a_mod
       expect(readFileSync(join(out, 'data', 'conf.txt'), 'utf8')).toBe('b'); // b_mod applied after a_mod → wins
-      expect(existsSync(join(out, 'gta3img'))).toBe(false); // gta3img is merged, never copied as a folder
+      expect(existsSync(join(out, 'gta3_img'))).toBe(false); // gta3_img is merged, never copied as a folder
 
       const img = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta3.img'))));
       expect(img.has('base.dff')).toBe(true); // base archive entry preserved
-      expect(img.has('x.dff')).toBe(true); // merged from a_mod/gta3img
+      expect(img.has('x.dff')).toBe(true); // merged from a_mod/gta3_img
+    });
+
+    it('merges gta_int_img into models/gta_int.img, seeding the archive when the base has none', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+
+      write(join(game, 'data', 'keep.txt'), 'base'); // minimal base — no gta_int.img on purpose
+      write(join(mods, 'a_mod', 'gta_int_img', 'int.dff'), Uint8Array.from([3, 3, 3]));
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      expect(existsSync(join(out, 'gta_int_img'))).toBe(false); // merged, never copied as a folder
+      const img = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta_int.img'))));
+      expect(img.has('int.dff')).toBe(true);
+    });
+
+    it('applies a *.merge data edit onto the installed file instead of copying it', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+
+      write(join(game, 'data', 'maps', 'generic', 'multiobj.ide'), 'objs\n1682, radar, tex, 100, 2097152\nend\n');
+      write(
+        join(mods, 'a_mod', 'data', 'maps', 'generic', 'multiobj.ide.merge'),
+        'remove from "objs":\n1682, radar, tex, 100, 2097152\n\nadd to "anim":\n1682, radar, tex, radar, 600, 0\n',
+      );
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      const ide = readFileSync(join(out, 'data', 'maps', 'generic', 'multiobj.ide'), 'utf8');
+      expect(existsSync(join(out, 'data', 'maps', 'generic', 'multiobj.ide.merge'))).toBe(false); // never copied
+      expect(ide).not.toMatch(/objs\n1682/); // moved out of objs
+      expect(ide).toContain('anim\n1682, radar, tex, radar, 600, 0\nend'); // into anim
+    });
+
+    it('applies a *.merge after the mod own-file overlay (the shipped target is edited)', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+
+      write(join(game, 'data', 'stub.txt'), 'base');
+      // The mod ships BOTH the target file and a merge editing it — the merge must see the shipped copy.
+      write(join(mods, 'a_mod', 'data', 'custom.ide'), 'objs\n7001, radar, tex, 100, 0\nend\n');
+      write(join(mods, 'a_mod', 'data', 'custom.ide.merge'), 'add to "anim":\n7002, dish, tex, spin, 300, 0\n');
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      const ide = readFileSync(join(out, 'data', 'custom.ide'), 'utf8');
+      expect(ide).toContain('7001, radar, tex, 100, 0'); // the mod's own copy survived
+      expect(ide).toContain('anim\n7002, dish, tex, spin, 300, 0\nend'); // and was edited by its merge
     });
 
     it('merges a mod PNG folder into a loose .txd matching its name (nested), not copying the folder', () => {
@@ -105,9 +169,9 @@ describe('install (end-to-end)', () => {
       write(join(mods, 'a_loader', 'files', 'extra.ide'), 'objs\n5000, ext, exttxd, 1500, 0\nend\n');
       write(join(mods, 'a_loader', 'deep', 'extra.dff'), Uint8Array.from([7, 7]));
 
-      // b_plain: a plain mod (file overlay + gta3img/) → OVERLAID.
+      // b_plain: a plain mod (file overlay + gta3_img/) → OVERLAID.
       write(join(mods, 'b_plain', 'data', 'extra-note.txt'), 'plain');
-      write(join(mods, 'b_plain', 'gta3img', 'plain.dff'), Uint8Array.from([8]));
+      write(join(mods, 'b_plain', 'gta3_img', 'plain.dff'), Uint8Array.from([8]));
 
       install({ gamePath: game, inPath: mods, outPath: out });
 
@@ -116,14 +180,14 @@ describe('install (end-to-end)', () => {
       expect(gtaDat).toContain('IDE DATA\\MAPS\\extra.ide');
       expect(readFileSync(join(out, 'data', 'maps', 'extra.ide'), 'utf8')).toContain('5000, ext');
       expect(existsSync(join(out, 'loader.txt'))).toBe(false); // loader parsed, never copied
-      // b_plain overlaid: its file copied, its gta3img/ merged (not copied as a folder).
+      // b_plain overlaid: its file copied, its gta3_img/ merged (not copied as a folder).
       expect(readFileSync(join(out, 'data', 'extra-note.txt'), 'utf8')).toBe('plain');
-      expect(existsSync(join(out, 'gta3img'))).toBe(false);
+      expect(existsSync(join(out, 'gta3_img'))).toBe(false);
       // both mods' assets + the base coexist in gta3.img.
       const img = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta3.img'))));
       expect(img.has('base.dff')).toBe(true);
       expect(img.has('extra.dff')).toBe(true); // baked (a_loader, scattered)
-      expect(img.has('plain.dff')).toBe(true); // overlaid (b_plain, gta3img/)
+      expect(img.has('plain.dff')).toBe(true); // overlaid (b_plain, gta3_img/)
     });
 
     it('applies a mod-shipped .txd file before merging its sibling PNG folder (files-first)', () => {

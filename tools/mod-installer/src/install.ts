@@ -27,7 +27,7 @@ export function guardOut(outPath: string, gamePath: string, inPath: string): voi
  * Build a merged install: wipe `--out`, copy the `--game` base into it, then apply every mod folder under `--in`
  * (alphabetical) on top. A mod carrying a **loader file** (a `loader.txt`-style mod) is **baked** — its loader's
  * defs/placements are registered in `gta.dat`, its scattered assets injected into `gta3.img`, its data files merged
- * ({@link bakeMod}); every other mod is a plain **overlay** (files overwrite, `gta3img/`/PNG-folders merge). Later
+ * ({@link bakeMod}); every other mod is a plain **overlay** (files overwrite, `gta3_img/`/`gta_int_img/`/PNG-folders merge). Later
  * mods win.
  */
 export function install(options: InstallOptions): void {

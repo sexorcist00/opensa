@@ -7,6 +7,7 @@ import { createDropTransparentGroups } from '@opensa/lod-common/drop-transparent
 import { applyModifiers, type LodContext, type LodModifier } from '@opensa/lod-common/hd-to-lod';
 import { createModelSource } from '@opensa/lod-common/model-source';
 import { rebuildMeshNormals } from '@opensa/lod-common/normals';
+import { type ScopedRegistry, scopedSource } from '@opensa/lod-common/scoped-texture';
 import { createTextureSource } from '@opensa/lod-common/texture-source';
 import { lodView } from '@opensa/lod-common/view';
 import { createVisibilityCull } from '@opensa/lod-common/visibility-cull';
@@ -72,7 +73,10 @@ export function createGtaSaLodAdapter(
       : []),
     ...(config.mergeCoplanar ? [profiled('coplanar-remesh', createCoplanarRemesh())] : []),
   ];
-  const ctx: LodContext = { textures: textureSource, view };
+  // Every texture lookup below happens through scoped names (lod-common plan 004): the registry fills as
+  // cells merge, and the scoped view resolves each name inside its own source TXD.
+  const scopedRegistry: ScopedRegistry = new Map();
+  const ctx: LodContext = { textures: scopedSource(textureSource, scopedRegistry), view };
 
   // Per-model 2dfx light entries (memoized) — baked into each cell as its distant coronas (plan 003, Phase 5).
   const effectsCache = new Map<string, ClumpEffect[]>();
@@ -94,14 +98,20 @@ export function createGtaSaLodAdapter(
       // re-derived after (most map geometry ships without normals). The source models' corona lights ride along
       // as a transplanted 2dfx section — the cell glows at night like the HD it replaces.
       return profiler.cell(`cell ${cell.cx},${cell.cy}`, () => {
-        const merged = profiler.time('merge', () => mergeCell(cell, config.cellSize, source));
+        const merged = profiler.time('merge', () => mergeCell(cell, config.cellSize, source, scopedRegistry));
         const shaped = applyModifiers(merged, modifiers, ctx); // each modifier records its own stage
         const mesh = profiler.time('normals', () => rebuildMeshNormals(shaped));
         const effects = profiler.time('2dfx', () =>
           build2dfxSection(collectCellLightEffects(cell, config.cellSize, loadRaw, source, effectsCache)),
         );
+        // The cell's scoped-name meanings ride along as plain data — bake workers each hold their own
+        // registry, and the coordinator/finalize re-merges the per-cell maps (plan 004).
+        const textureMap = mesh.groups
+          .map((group) => group.texture)
+          .filter((name) => scopedRegistry.has(name))
+          .map((name) => [name, scopedRegistry.get(name)!] as const);
 
-        return { cx: cell.cx, cy: cell.cy, mesh, ...(effects ? { effects } : {}) };
+        return { cx: cell.cx, cy: cell.cy, mesh, textureMap, ...(effects ? { effects } : {}) };
       });
     },
     finalize(outDir: string, baked: readonly BakedCell[]): void {

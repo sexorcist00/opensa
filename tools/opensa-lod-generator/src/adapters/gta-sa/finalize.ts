@@ -4,6 +4,7 @@ import type { TextureSource } from '@opensa/lod-common/texture-source';
 import { encodeColLibrary } from '@opensa/lod-common/encode-col';
 import { encodeLodDff } from '@opensa/lod-common/encode-dff';
 import { encodeLodTxd } from '@opensa/lod-common/encode-txd';
+import { type ScopedRegistry, scopedSource } from '@opensa/lod-common/scoped-texture';
 import { createImg } from '@opensa/tool-kit/archive/img';
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -95,10 +96,19 @@ export function writeBuild(options: BuildOptions): void {
     colBounds.push(meshBounds(cell.mesh));
   });
   // ONE shared TXD for every cell (plan 004): per-cell TXDs held ~5.5× duplicate copies (31,981 entries vs
-  // 5,805 unique on the stock map) — on disk AND as decoded/GPU textures at LOD range. The texture source is
-  // name-keyed ("first wins"), so cells already received identical pixels per name; sharing changes packaging,
-  // not pixels.
-  img.set(`${SHARED_TXD}.txd`, encodeLodTxd([...sharedTextures].sort(), options.textureSource, options.lodTextureSize));
+  // 5,805 unique on the stock map) — on disk AND as decoded/GPU textures at LOD range. Names are SCOPED per
+  // source TXD (lod-common plan 004): the merged per-cell registries resolve each scoped name inside its own
+  // dictionary, so same-named different-pixel variants coexist instead of collapsing to a random winner.
+  const registry: ScopedRegistry = new Map();
+  for (const cell of options.baked) {
+    for (const [scoped, entry] of cell.textureMap ?? []) {
+      registry.set(scoped, entry);
+    }
+  }
+  img.set(
+    `${SHARED_TXD}.txd`,
+    encodeLodTxd([...sharedTextures].sort(), scopedSource(options.textureSource, registry), options.lodTextureSize),
+  );
   // SA faults on any streamed model with no collision (fastman92: MODEL_DOES_NOT_HAVE_COLLISION_LOADED). The LODs
   // need no real collision, so pack one bounds-only COL3 per cell (named to its model); SA auto-discovers .col in
   // the IMG. Same approach as lod-procobj-generator / lod-trees-generator.

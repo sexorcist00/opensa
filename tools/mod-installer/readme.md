@@ -1,7 +1,7 @@
 # @opensa/mod-installer
 
 Layer GTA-SA **mod folders** onto a base game into a single drop-in `--out`. Copy the game, then apply each mod on
-top in numeric-aware alphabetical order — plain files overwrite, `gta3img/` loose entries merge into `gta3.img`.
+top in numeric-aware alphabetical order — plain files overwrite, `gta3_img/`/`gta_int_img/` loose entries merge into `gta3.img`/`gta_int.img`.
 
 ```sh
 tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --out ./build
@@ -11,7 +11,7 @@ tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --
 - `--in` — folder of mods; each immediate subfolder is a mod, mirroring the game tree:
   ```
   mods/
-    a-trees/   { data/  models/  gta3img/ }   # gta3img/ = loose IMG entries
+    a-trees/   { data/  models/  gta3_img/ }  # gta3_img/ = loose IMG entries (gta_int_img/ → gta_int.img)
     b-roads/   { data/ }
   ```
 - `--out` — output install dir (**wiped + rebuilt** each run)
@@ -24,13 +24,33 @@ tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --
 3. Per mod, one of two modes:
    - **Modloader mod** (its subtree carries a `loader.txt`-style file with `IDE`/`IPL`/`COLFILE` directives) — it is
      **baked** (see below).
-   - **Plain mod** (no loader) — **overlay**: copy every top-level entry except `gta3img/` over `--out` (overwrites
-     matching files, keeps the rest), then merge the mod's `gta3img/` loose files into `--out/models/gta3.img` (add
+   - **Plain mod** (no loader) — **overlay**: copy every top-level entry except the IMG folders over `--out` (overwrites
+     matching files, keeps the rest), then merge the mod's `gta3_img/` / `gta_int_img/` loose files into `--out/models/gta3.img` / `gta_int.img` (add
      or replace by name). A PNG folder beside a loose `<name>.txd` merges into that TXD (see below).
 
 Each mod applies onto the **accumulated** `--out`, so several mods that touch different files (or different
 textures / different `gta3.img` entries) all coexist; only when two mods change the **same** item does the later
-one win. `gta3img/` is a generic "loose IMG entries" convention — a binary `gta3.img` can't be patched file-by-file,
+**`*.merge` data edits.** A mod that needs to EDIT a stock data file (not replace it) ships `<target>.merge`
+at the target's game path — e.g. `data/maps/generic/multiobj.ide.merge`. Directives apply to the CURRENT
+`--out` state (after earlier mods), so merge-mods stack and never clobber other mods' lines:
+
+```
+remove from "objs":
+1682, ap_radar1_01, ap_misc1bit, 100, 2097152    # matched by ID; full line kept as documentation
+
+add to "anim":
+1682, ap_radar1_01, ap_misc1bit, radar, 600, 0
+```
+
+`remove` deletes by ID inside the named section (byte-matching would break on float reformatting); `add`
+appends to the section (created when absent) and replaces a same-ID entry. A missing remove-ID warns and
+continues; a malformed directive or an entry outside one fails the install. Applied after the mod's file
+overlay, so a target the mod also ships is in place first. Full spec + rationale:
+[docs/plans/006-merge-data-edits.md](docs/plans/006-merge-data-edits.md); a real example:
+`mods-src/mods/42. Animated Radars` (moves IDE id 1682 from `objs` to `anim` + ships the animated
+model/txd/ifp in `gta3_img/`).
+
+one win. The `*_img/` folder is a generic "loose IMG entries" convention — a binary `.img` can't be patched file-by-file,
 so a mod expresses "add/replace these entries" as a folder; any source (the LOD tools, hand-built mods, …) can ship
 one.
 

@@ -17,6 +17,7 @@ import { createDropTransparentGroups } from '@opensa/lod-common/drop-transparent
 import { applyModifiers } from '@opensa/lod-common/hd-to-lod';
 import { createModelSource } from '@opensa/lod-common/model-source';
 import { previewDiff, renderMeshPreview } from '@opensa/lod-common/preview';
+import { type ScopedRegistry, scopedSource } from '@opensa/lod-common/scoped-texture';
 import { createTextureSource } from '@opensa/lod-common/texture-source';
 import { createTextureStats } from '@opensa/lod-common/texture-stats';
 import { lodView } from '@opensa/lod-common/view';
@@ -105,7 +106,9 @@ function main(): void {
 
   const archives = openArchives(join(gameDir, 'models'));
   const source = createModelSource(archives);
-  const textures = createTextureSource(archives);
+  const rawTextures = createTextureSource(archives);
+  const harnessRegistry: ScopedRegistry = new Map();
+  const textures = scopedSource(rawTextures, harnessRegistry); // scoped names (lod-common plan 004)
   const stats = createTextureStats(textures);
   const view = lodView(config.hdDrawDistance);
   const ctx: LodContext = { textures, view };
@@ -131,7 +134,7 @@ function main(): void {
 
   const totals = new Map(stages.map((stage) => [stage.name, { count: 0, max: 0, sum: 0, worst: '' }]));
   for (const cell of sampled) {
-    const raw = mergeCell(cell, config.cellSize, source);
+    const raw = mergeCell(cell, config.cellSize, source, harnessRegistry);
     const cameras = harnessCameras(raw, view.minDistance);
     const renderOpts = {
       cull: 'back' as const,

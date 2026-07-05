@@ -26,7 +26,8 @@
     "./encode-col": "./src/encode-col.ts",
     "./model-source": "./src/model-source.ts",
     "./texture-source": "./src/texture-source.ts",
-    "./prelight": "./src/prelight.ts"
+    "./prelight": "./src/prelight.ts",
+    "./scoped-texture": "./src/scoped-texture.ts"
   },
   "nx": {
     "tags": [

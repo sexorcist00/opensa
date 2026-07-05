@@ -89,7 +89,8 @@ optimization.
 **Known limitation (Phase 1):** the downscale reads pixels through a global `TextureSource` over all archives
 ("first TXD wins on a name clash"), so a texture name shared across atlases could resolve to the wrong source. The
 name + UVs are still correct, so it's at worst a cosmetic far-LOD mismatch on colliding generic names; scope the
-source to the HD's own TXD if it ever shows.
+source to the HD's own TXD if it ever shows. _**It showed** (green procobj LODs) — FIXED 2026-07-05 by
+lod-common plan 004: clone TXDs now resolve through their own source atlas (`resolveFrom`)._
 
 ## Drop-in guarantee (why this is low-risk)
 

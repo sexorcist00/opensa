@@ -39,6 +39,7 @@ see the `lod-detection-name-vs-target` memory). The text↔binary `lod`-index co
   breakable). Textures: `texScale` (default 0.25, 32 px floor) DXT TXDs, **`txdp`-partitioned** (plan 006) —
   textures used by ≥ 2 source atlases live once in the shared `salodpar.txd` parent, children keep only their
   unique ones (`salod-txdp.ide` registers the links before the first IPL); retarget the LOD's IDE `txd`.
+  Same-named textures with DIFFERENT pixels stay per-child, each resolved from its own atlas (lod-common plan 004).
 - Retarget each cloned LOD **instance's** transform to its HD instance's — the stock LOD geometry was baked in a
   different local frame, so an HD clone under the stock rotation would skew (see `lod-clone-needs-hd-instance-transform`).
 - **Skipped** (kept stock): shared multi-HD LODs, dual-role LODs (also placed standalone — cloning corrupts them),

@@ -2,7 +2,7 @@
   "name": "@opensa/mod-installer",
   "version": "0.0.0",
   "private": true,
-  "description": "Layer GTA-SA mod folders onto a base game: plain mods overlay (files overwrite + gta3img/ and PNG-folder→.txd merges); Modloader mods (loader.txt) are baked (gta.dat patch + data merges + scattered assets into gta3.img). Cumulative, alphabetical.",
+  "description": "Layer GTA-SA mod folders onto a base game: plain mods overlay (files overwrite + gta3_img//gta_int_img/ and PNG-folder→.txd merges); Modloader mods (loader.txt) are baked (gta.dat patch + data merges + scattered assets into gta3.img). Cumulative, alphabetical.",
   "exports": {
     "./install": "./src/install.ts"
   },

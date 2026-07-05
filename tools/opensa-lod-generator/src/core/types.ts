@@ -19,6 +19,9 @@ export interface BakedCell {
   effects?: Uint8Array;
   /** The cell's merged geometry (Phase 1). Decimation + atlas refine this in place as later phases land. */
   mesh: MergedMesh;
+  /** What each scoped texture name in `mesh.groups` stands for — `[scopedName, {txd, name}]` pairs (plain
+   *  data so it survives the worker message; lod-common plan 004). The coordinator merges all cells' maps. */
+  textureMap?: readonly (readonly [string, { name: string; txd: string }])[];
 }
 
 /** A square grid cell and the HD instances whose origin falls in it. */
@@ -33,6 +36,8 @@ export interface CellInstance {
   model: string;
   position: Vec3;
   rotation: Quat;
+  /** The def's TXD (IDE `txd` column) — texture names are only unique per-TXD (lod-common plan 004). */
+  txd: string;
 }
 
 /** Run configuration (the "what/where" knobs). */

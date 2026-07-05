@@ -29,7 +29,10 @@
 - Verification is **in-game A/B** (`--tex-scale` flag): billboards / lit LV windows at night are the risk cases.
   The CPU harness renders mean colours and cannot judge texture resolution.
 
-**Parent (Phase 2) — dedup by name, which IS content-safe here:**
+**Parent (Phase 2) — dedup by name, which IS content-safe here:** _(SUPERSEDED 2026-07-05 by lod-common
+plan 004: the "identical pixels per name" premise below was the wrong-variant BUG, not a guarantee. The
+partition is now content-aware — a multi-atlas name shares only when every owner resolves to the same pixels;
+different variants stay in each child, which resolves first in the txdp chain.)_
 
 - Same-named textures in different SA atlases are not guaranteed identical in the _stock_ files — but the clone
   pipeline's `TextureSource` is **name-keyed, first-TXD-wins**: every clone TXD already receives identical

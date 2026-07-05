@@ -33,8 +33,9 @@ export class MeshBuilder {
   private readonly positions: number[] = [];
   private readonly uvs: number[] = [];
 
-  /** Append one geometry, its vertices mapped by `transform`. */
-  add(geometry: RWGeometry, transform: VertexTransform): void {
+  /** Append one geometry, its vertices mapped by `transform`; `textureName` maps each raw material texture
+   *  name into the bucket key (scoped per-TXD names — lod-common plan 004; identity when omitted). */
+  add(geometry: RWGeometry, transform: VertexTransform, textureName?: (raw: string) => string): void {
     const base = this.positions.length / 3;
     const count = geometry.positions.length / 3;
     const uv = geometry.uvLayers[0] ?? null;
@@ -65,7 +66,8 @@ export class MeshBuilder {
     }
     for (const tri of geometry.triangles) {
       const material = geometry.materials[tri.materialIndex];
-      const texture = material?.texture?.name.toLowerCase() ?? '';
+      const raw = material?.texture?.name.toLowerCase() ?? '';
+      const texture = raw.length > 0 && textureName ? textureName(raw) : raw;
       this.group(texture, material?.color).push(base + tri.a, base + tri.b, base + tri.c);
     }
   }

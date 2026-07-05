@@ -4,6 +4,7 @@ import type { ModelSource } from '@opensa/lod-common/model-source';
 
 import { MeshBuilder, type VertexTransform } from '@opensa/lod-common/build-mesh';
 import { collectClumpEffects } from '@opensa/lod-common/clump-effects';
+import { registerScopedName, type ScopedRegistry } from '@opensa/lod-common/scoped-texture';
 
 import type { Cell } from '../../core/types';
 
@@ -53,7 +54,7 @@ export function collectCellLightEffects(
  * for map atomics (`build-clump.ts`). The shared {@link MeshBuilder} (`@opensa/lod-common`) accumulates the
  * geometry so opensa and lod-procobj build LOD meshes by the same rules.
  */
-export function mergeCell(cell: Cell, cellSize: number, source: ModelSource): MergedMesh {
+export function mergeCell(cell: Cell, cellSize: number, source: ModelSource, registry?: ScopedRegistry): MergedMesh {
   const origin: Vec3 = [(cell.cx + 0.5) * cellSize, (cell.cy + 0.5) * cellSize, 0];
   const builder = new MeshBuilder();
   for (const instance of cell.instances) {
@@ -61,11 +62,16 @@ export function mergeCell(cell: Cell, cellSize: number, source: ModelSource): Me
     if (!clump) {
       continue;
     }
+    // Scoped texture names (lod-common plan 004): bucket triangles by the (def txd, name) pair, not the bare
+    // name — SA reuses names across TXDs with different pixels, and the bare-name bucket would merge two
+    // models' different variants into one group (and the shared LOD TXD would then pick a random one).
+    const textureName =
+      registry === undefined ? undefined : (raw: string): string => registerScopedName(registry, instance.txd, raw);
     const transform = instanceTransform(conjugate(instance.rotation), instance.position, origin);
     for (const atomic of clump.atomics) {
       const geometry = clump.geometries[atomic.geometryIndex];
       if (geometry) {
-        builder.add(geometry, transform);
+        builder.add(geometry, transform, textureName);
       }
     }
   }

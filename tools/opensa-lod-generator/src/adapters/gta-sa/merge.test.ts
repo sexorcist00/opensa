@@ -42,7 +42,11 @@ const IDENTITY = [0, 0, 0, 1] as const; // no rotation
 describe('mergeCell', () => {
   describe('negative cases', () => {
     it('skips instances whose model is missing', () => {
-      const cell: Cell = { cx: 0, cy: 0, instances: [{ model: 'absent', position: [0, 0, 0], rotation: IDENTITY }] };
+      const cell: Cell = {
+        cx: 0,
+        cy: 0,
+        instances: [{ model: 'absent', position: [0, 0, 0], rotation: IDENTITY, txd: '' }],
+      };
       const mesh = mergeCell(cell, 256, source({}));
       expect(mesh.positions).toHaveLength(0);
       expect(mesh.groups).toHaveLength(0);
@@ -53,10 +57,36 @@ describe('mergeCell', () => {
     it('offsets vertices to the cell centre and applies the instance position', () => {
       const models = { box: clump(geometry('wall', [0, 0, 0, 1, 0, 0, 0, 1, 0])) };
       // cell (0,0) @256 → centre (128,128,0); instance at (130,128,5) → first vertex relative = (2,0,5).
-      const cell: Cell = { cx: 0, cy: 0, instances: [{ model: 'box', position: [130, 128, 5], rotation: IDENTITY }] };
+      const cell: Cell = {
+        cx: 0,
+        cy: 0,
+        instances: [{ model: 'box', position: [130, 128, 5], rotation: IDENTITY, txd: '' }],
+      };
       const mesh = mergeCell(cell, 256, source(models));
       expect([...mesh.positions.slice(0, 3)]).toEqual([2, 0, 5]);
       expect(mesh.groups).toEqual([{ indices: Uint32Array.of(0, 1, 2), texture: 'wall' }]);
+    });
+
+    it('buckets same-named textures from different def TXDs into separate scoped groups (plan 004)', () => {
+      const models = {
+        bush: clump(geometry('leaves', [0, 0, 0, 1, 0, 0, 0, 1, 0])),
+        tree: clump(geometry('leaves', [0, 0, 0, 1, 0, 0, 0, 1, 0])),
+      };
+      const cell: Cell = {
+        cx: 0,
+        cy: 0,
+        instances: [
+          { model: 'bush', position: [0, 128, 0], rotation: IDENTITY, txd: 'badlands' },
+          { model: 'tree', position: [4, 128, 0], rotation: IDENTITY, txd: 'gta_proc_bush' },
+        ],
+      };
+      const registry = new Map();
+      const mesh = mergeCell(cell, 256, source(models), registry);
+
+      // Without the registry these merge into ONE 'leaves' bucket; scoped, each variant keeps its group.
+      expect(mesh.groups.map((g) => g.texture).sort()).toEqual(['badlands_leaves', 'gta_proc_bush_leaves']);
+      expect(registry.get('badlands_leaves')).toEqual({ name: 'leaves', txd: 'badlands' });
+      expect(registry.get('gta_proc_bush_leaves')).toEqual({ name: 'leaves', txd: 'gta_proc_bush' });
     });
 
     it('merges two instances of one model and re-bases triangle indices', () => {
@@ -65,6 +95,7 @@ describe('mergeCell', () => {
         model: 'box',
         position: [x, 128, 0],
         rotation: IDENTITY,
+        txd: '',
       });
       const cell: Cell = { cx: 0, cy: 0, instances: [at(128), at(138)] };
       const mesh = mergeCell(cell, 256, source(models));
@@ -78,7 +109,11 @@ describe('mergeCell', () => {
       const cache = new Map<string, ClumpEffect[]>([
         ['lamp', [{ bytes: Uint8Array.of(9, 9, 9), position: [1, 0, 0], type: 0 }]],
       ]);
-      const cell: Cell = { cx: 0, cy: 0, instances: [{ model: 'lamp', position: [130, 128, 5], rotation: IDENTITY }] };
+      const cell: Cell = {
+        cx: 0,
+        cy: 0,
+        instances: [{ model: 'lamp', position: [130, 128, 5], rotation: IDENTITY, txd: '' }],
+      };
 
       const effects = collectCellLightEffects(cell, 256, () => null, source(models), cache);
 
@@ -97,8 +132,8 @@ describe('mergeCell', () => {
         cx: 0,
         cy: 0,
         instances: [
-          { model: 'a', position: [128, 128, 0], rotation: IDENTITY },
-          { model: 'b', position: [128, 128, 0], rotation: IDENTITY },
+          { model: 'a', position: [128, 128, 0], rotation: IDENTITY, txd: '' },
+          { model: 'b', position: [128, 128, 0], rotation: IDENTITY, txd: '' },
         ],
       };
       const mesh = mergeCell(cell, 256, source(models));

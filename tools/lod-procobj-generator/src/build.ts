@@ -1,6 +1,7 @@
 import type { MergedMesh, Vec3 } from '@opensa/lod-common/mesh';
 import type { SourceTexture, TextureSource } from '@opensa/lod-common/texture-source';
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
+import type { RWClump } from '@opensa/renderware/parsers/binary/types';
 
 import { decimateMesh } from '@opensa/lod-common/decimate';
 import { encodeColLibrary } from '@opensa/lod-common/encode-col';
@@ -15,6 +16,7 @@ import {
   type PrelightInfo,
   stockPrelightColor,
 } from '@opensa/lod-common/prelight';
+import { registerScopedName, type ScopedRegistry, scopedSource } from '@opensa/lod-common/scoped-texture';
 import { createTextureSource } from '@opensa/lod-common/texture-source';
 import { allocateLodIds, buildLodIde, lodAlias, patchGtaDat } from '@opensa/map-placement/ide';
 import { convertProcObj, type ProcObjSpecies } from '@opensa/map-placement/procobj';
@@ -99,6 +101,37 @@ interface BuiltMesh {
   textures: string[];
 }
 
+/**
+ * Pass 1 for ONE species: model-local mesh (frame-aware) → height gate → QEM decimate → smooth normals →
+ * **scoped texture rename** (lod-common plan 004): SA texture names are only unique per-TXD, and the shared
+ * `lod_procobj.txd` mixes species from many TXDs — each texture becomes its (def txd, name) pair so every
+ * species keeps its OWN variant (the global first-wins index used to hand e.g. `sand_josh1` a green
+ * `sm_josh_leaf` from another dictionary). Null when the model is gated out (short clutter).
+ */
+export function buildSpeciesLod(
+  model: string,
+  clump: RWClump,
+  defTxd: string,
+  config: Pick<ProcObjLodConfig, 'procObjHeight' | 'tris'>,
+  registry: ScopedRegistry,
+): BuiltMesh | null {
+  const raw = buildModelMesh(clump);
+  const bbox = meshBounds(raw);
+  const height = bbox.max[2] - bbox.min[2];
+  if (config.procObjHeight > 0 && height < config.procObjHeight) {
+    return null; // short clutter (grass) — leave on the runtime scatter
+  }
+  const mesh = rebuildMeshNormals(decimateMesh(raw, config.tris));
+  for (const group of mesh.groups) {
+    if (group.texture.length > 0) {
+      group.texture = registerScopedName(registry, defTxd, group.texture);
+    }
+  }
+  const textures = [...new Set(mesh.groups.map((group) => group.texture).filter((t) => t.length > 0))];
+
+  return { bbox, height, mesh, model, textures };
+}
+
 /** The changed IMG entries to emit: LOD DFFs + lod_procobj.txd/col + the swapped HD DFFs + custom TXDs. */
 export function collectImgEntries(
   lods: readonly { alias: string; dff: Uint8Array }[],
@@ -131,7 +164,7 @@ export function run(options: BuildOptions): void {
   const { config, gamePath, inPath, modloader, outPath, prelight, prelightInfo } = options;
   const archive = openArchive(readBytes(join(gamePath, 'models', 'gta3.img')));
   const dat = parseGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'));
-  const { idByModel, usedIds } = scanIdes(gamePath, dat.ide);
+  const { idByModel, txdByModel, usedIds } = scanIdes(gamePath, dat.ide);
   const procModels = procObjModels(gamePath);
 
   // Non-modloader: mirror the whole input game first so the drop-in is a **complete** build (our repacked gta3.img +
@@ -151,21 +184,17 @@ export function run(options: BuildOptions): void {
   const textureSource = inPath === undefined ? createTextureSource([archive]) : combinedTextureSource(inPath, archive);
 
   // Per species: build the simplified-copy mesh + bounds (height gate); ids/DFFs are assigned in a second pass.
+  const scopedRegistry: ScopedRegistry = new Map();
   const built: BuiltMesh[] = [];
   for (const model of species) {
     const clump = modelSource.load(model);
     if (!clump) {
       continue;
     }
-    const raw = buildModelMesh(clump);
-    const bbox = meshBounds(raw);
-    const height = bbox.max[2] - bbox.min[2];
-    if (config.procObjHeight > 0 && height < config.procObjHeight) {
-      continue; // short clutter (grass) — leave on the runtime scatter
+    const one = buildSpeciesLod(model, clump, txdByModel.get(model) ?? '', config, scopedRegistry);
+    if (one) {
+      built.push(one);
     }
-    const mesh = rebuildMeshNormals(decimateMesh(raw, config.tris));
-    const textures = [...new Set(mesh.groups.map((group) => group.texture).filter((t) => t.length > 0))];
-    built.push({ bbox, height, mesh, model, textures });
   }
   if (built.length === 0) {
     console.log('lod-procobj-generator: no `--dff ∩ procobj` species to convert');
@@ -176,8 +205,9 @@ export function run(options: BuildOptions): void {
   // `--prelight`: recolour each LOD mesh's trunk to its stock model's ambient (foliage kept) so the simplified
   // copy isn't black/washed-out next to stock geometry — the procobj species are stock-present in gta3.img, so the
   // ambient comes from each model's own DFF. Alpha-cutout textures are foliage; opaque ones are trunk/bark.
+  const scoped = scopedSource(textureSource, scopedRegistry);
   const foliageTextures = new Set(
-    [...new Set(built.flatMap((b) => b.textures))].filter((t) => textureSource.get(t)?.hasAlpha),
+    [...new Set(built.flatMap((b) => b.textures))].filter((t) => scoped.get(t)?.hasAlpha),
   );
   const isFoliage: FoliagePredicate = (name) => foliageTextures.has(name);
   if (prelight) {
@@ -199,7 +229,7 @@ export function run(options: BuildOptions): void {
 
   // Shared LOD assets: one `lod_procobj.txd` (every texture, downscaled) + `lod_procobj.col` (empty-collision).
   const allTextures = [...new Set(lods.flatMap((lod) => lod.textures))];
-  const lodTxd = encodeLodTxd(allTextures, textureSource, config.textureSize);
+  const lodTxd = encodeLodTxd(allTextures, scoped, config.textureSize);
   const lodCol = encodeColLibrary(
     lods.map((lod) => lod.bbox),
     lods.map((lod) => lod.alias),
@@ -274,7 +304,10 @@ function combinedTextureSource(txdPath: string, archive: ImgArchive): TextureSou
   const custom = loadCustomTextures(txdPath);
   const stock = createTextureSource([archive]);
 
-  return { get: (name) => custom.get(name.toLowerCase()) ?? stock.get(name) };
+  return {
+    get: (name) => custom.get(name.toLowerCase()) ?? stock.get(name),
+    getFrom: (txd, name) => custom.get(name.toLowerCase()) ?? stock.getFrom!(txd, name),
+  };
 }
 
 /**
@@ -430,8 +463,9 @@ function readBytes(path: string): Uint8Array {
 function scanIdes(
   gamePath: string,
   idePaths: readonly string[],
-): { idByModel: Map<string, number>; usedIds: Set<number> } {
+): { idByModel: Map<string, number>; txdByModel: Map<string, string>; usedIds: Set<number> } {
   const idByModel = new Map<string, number>();
+  const txdByModel = new Map<string, string>();
   const usedIds = new Set<number>();
   for (const idePath of idePaths) {
     const file = datChildUrl(gamePath, idePath);
@@ -442,10 +476,11 @@ function scanIdes(
     for (const def of [...parseIde(text), ...parseTimedObjects(text)]) {
       usedIds.add(def.id);
       idByModel.set(def.modelName.toLowerCase(), def.id);
+      txdByModel.set(def.modelName.toLowerCase(), def.txdName.toLowerCase());
     }
   }
 
-  return { idByModel, usedIds };
+  return { idByModel, txdByModel, usedIds };
 }
 
 /**

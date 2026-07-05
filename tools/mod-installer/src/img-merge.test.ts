@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { mergeGta3Img } from './img-merge';
+import { mergeImgDir } from './img-merge';
 
 let dir: string;
 
@@ -16,9 +16,9 @@ afterEach(() => {
   rmSync(dir, { force: true, recursive: true });
 });
 
-/** Write a `gta3img/` folder with the given `name → bytes` entries; returns its path. */
-function gta3imgDir(entries: Record<string, Uint8Array>): string {
-  const path = join(dir, 'gta3img');
+/** Write a loose IMG folder with the given `name → bytes` entries; returns its path. */
+function imgDir(entries: Record<string, Uint8Array>): string {
+  const path = join(dir, 'gta3_img');
   mkdirSync(path, { recursive: true });
   for (const [name, bytes] of Object.entries(entries)) {
     writeFileSync(join(path, name), bytes);
@@ -27,20 +27,20 @@ function gta3imgDir(entries: Record<string, Uint8Array>): string {
   return path;
 }
 
-describe('mergeGta3Img', () => {
+describe('mergeImgDir', () => {
   describe('negative cases', () => {
-    it('does nothing for an empty gta3img folder', () => {
-      const path = join(dir, 'gta3img');
+    it('does nothing for an empty IMG folder', () => {
+      const path = join(dir, 'gta3_img');
       mkdirSync(path, { recursive: true });
 
-      expect(mergeGta3Img(path, join(dir, 'models', 'gta3.img'))).toBe(0);
+      expect(mergeImgDir(path, join(dir, 'models', 'gta3.img'))).toBe(0);
     });
   });
 
   describe('positive cases', () => {
     it('seeds a fresh archive when the target img does not exist', () => {
       const imgPath = join(dir, 'models', 'gta3.img');
-      const merged = mergeGta3Img(gta3imgDir({ 'a.dff': Uint8Array.from([1, 2, 3, 4]) }), imgPath);
+      const merged = mergeImgDir(imgDir({ 'a.dff': Uint8Array.from([1, 2, 3, 4]) }), imgPath);
 
       const img = openImg(new Uint8Array(readFileSync(imgPath)));
       expect(merged).toBe(1);
@@ -56,7 +56,7 @@ describe('mergeGta3Img', () => {
       base.set('keep.dff', Uint8Array.from([7]));
       writeFileSync(imgPath, base.build());
 
-      mergeGta3Img(gta3imgDir({ 'a.dff': Uint8Array.from([1, 1, 1, 1]) }), imgPath);
+      mergeImgDir(imgDir({ 'a.dff': Uint8Array.from([1, 1, 1, 1]) }), imgPath);
 
       const img = openImg(new Uint8Array(readFileSync(imgPath)));
       expect([...img.get('a.dff')!.slice(0, 4)]).toEqual([1, 1, 1, 1]); // replaced

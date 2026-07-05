@@ -118,6 +118,13 @@ const MANIFEST: readonly Fixture[] = [
   // the map-optimizer prelight (plan 019) "tail glow" class that motivated only-mode `nightMax` (capNightSet).
   extract('newvic1_sfw.dff', 'world/newvic1_sfw.dff'),
 
+  // --- Scoped texture resolution (lod-common plan 004): a bush whose texture NAME (`newtreeleaves128`)
+  // exists in many TXDs with different pixels — its def TXD (badlands, vegepart.ide) vs the flat-index
+  // first-wins winner (gta_proc_bush). ---
+  extract('sm_bush_large_1.dff', 'world/sm_bush_large_1.dff'),
+  extract('badlands.txd', 'txd/badlands.txd'),
+  extract('gta_proc_bush.txd', 'txd/gta_proc_bush.txd'),
+
   // --- Derived: a stock VER2 archive holding a single extracted vehicle ---
   { dest: `${OUT}/img/admiral.img`, entry: 'admiral.dff', type: 'archive' },
 ];

@@ -9,7 +9,11 @@ import type { Cell } from '../../core/types';
 import { cullTinyInstances } from './cull';
 
 function cell(models: string[]): Cell {
-  return { cx: 0, cy: 0, instances: models.map((model) => ({ model, position: [0, 0, 0], rotation: [0, 0, 0, 1] })) };
+  return {
+    cx: 0,
+    cy: 0,
+    instances: models.map((model) => ({ model, position: [0, 0, 0], rotation: [0, 0, 0, 1], txd: '' })),
+  };
 }
 
 /** A single-atomic clump whose farthest vertex sits `radius` from the origin, carrying `triangles` faces. */

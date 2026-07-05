@@ -82,12 +82,12 @@ function binaryInstancesByArea(archives: readonly Archive[]): Map<string, Return
   return byArea;
 }
 
-/** id → model name (lowercased) from every IDE under the game's data folder. */
-function buildIdMap(dataDir: string): Map<number, string> {
-  const map = new Map<number, string>();
+/** id → model/txd names (lowercased) from every IDE under the game's data folder. */
+function buildIdMap(dataDir: string): Map<number, { model: string; txd: string }> {
+  const map = new Map<number, { model: string; txd: string }>();
   for (const file of walk(dataDir).filter((path) => path.toLowerCase().endsWith('.ide'))) {
     for (const [id, ref] of ideRefs(readFileSync(file, 'utf8'))) {
-      map.set(id, ref.model.toLowerCase());
+      map.set(id, { model: ref.model.toLowerCase(), txd: ref.txd });
     }
   }
 
@@ -107,7 +107,7 @@ function buildIdMap(dataDir: string): Map<number, string> {
 function collectInstances(
   dataDir: string,
   archives: readonly Archive[],
-  idToModel: Map<number, string>,
+  idToModel: Map<number, { model: string; txd: string }>,
   exclude: ReadonlySet<string>,
 ): CellInstance[] {
   const areas = readTextAreas(dataDir);
@@ -137,7 +137,8 @@ function collectInstances(
     if (isInterior(instance.interior)) {
       return; // real interior (low byte ≠ 0, non-world) — `interior > 0` dropped area-coded exteriors like 1024
     }
-    const model = idToModel.get(instance.id) ?? instance.modelName.toLowerCase();
+    const ref = idToModel.get(instance.id);
+    const model = ref?.model ?? instance.modelName.toLowerCase();
     if (!model || TREE_MODELS.has(model) || exclude.has(model)) {
       return; // missing def, a tree (→ lod-trees), or owned by a sibling generator (lod-trees/lod-procobj)
     }
@@ -145,7 +146,7 @@ function collectInstances(
       return; // tobj (lit windows / neon): baking it would glow round the clock — the engine renders the real
       // hour-gated instance at LOD range instead (world-grid puts timed instances into both layers)
     }
-    out.push({ model, position: instance.position, rotation: instance.rotation });
+    out.push({ model, position: instance.position, rotation: instance.rotation, txd: ref?.txd ?? '' });
   };
   for (const [area, list] of areas) {
     list.forEach((instance, index) => {
