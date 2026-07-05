@@ -55,6 +55,7 @@ import { type WorldMod } from './mods/mod.interface';
 import { type Plugin, type PluginContext, type RenderPipeline } from './plugins/plugin';
 import { BasicRenderPipeline } from './plugins/render-pipeline';
 import { type CellCoord } from './streaming/grid';
+import { createSettleWatcher } from './streaming/settle-watcher';
 import { GameClock } from './time/game-clock';
 import { inHourWindow } from './time/hour-window';
 import { type WeatherBlend, WeatherTransition } from './weather/weather-transition';
@@ -91,6 +92,8 @@ export class Game {
   private readonly canvas: HTMLCanvasElement;
   private readonly clock = new Clock();
   private readonly collisionObjects: Object3D[] = [];
+  /** Collision streaming ref (plan 061) — the physics half of {@link worldSettled}. */
+  private collisionStreaming: null | { settled(): boolean } = null;
   private readonly config: Config;
   private context: null | PluginContext = null;
   private currentCity: City = 'COUNTRYSIDE';
@@ -438,6 +441,11 @@ export class Game {
     this.setConfig({ graphics: { ...this.config.graphics, clouds: { ...this.config.graphics.clouds, ...patch } } });
   }
 
+  /** Register the collision streaming system for {@link worldSettled} (plan 061). */
+  setCollisionStreaming(system: { settled(): boolean }): void {
+    this.collisionStreaming = system;
+  }
+
   setConfig(patch: Partial<Config>): void {
     Object.assign(this.config, patch); // mutate in place so PluginContext.config stays live
     this.broadcastConfigChanged();
@@ -663,6 +671,11 @@ export class Game {
     }
   }
 
+  /** Loading progress of the visual view ring — for the streaming veil (plan 061). */
+  streamingProgress(): { loaded: number; total: number } {
+    return this.streamingSystem?.progress() ?? { loaded: 0, total: 0 };
+  }
+
   /** Snap the map-inspector (debug) camera back to top-down (undo a RIGHT-drag orbit). No-op outside it. */
   topDownView(): void {
     this.cameraController.topDownDebugView();
@@ -725,6 +738,35 @@ export class Game {
       holder.fog = null;
       holder.environment = null;
     }
+  }
+
+  /**
+   * Freeze gameplay while the world streams in around a repositioned view (plan 061): enter `'streaming'`
+   * (clock/physics/controller/animation stop; render + streaming keep running — the GPU warm-up needs
+   * frames), run `move` (teleport/spawn placement), and restore `'play'` once {@link worldSettled} holds —
+   * or after `timeoutMs`, so one failed cell degrades to a warning instead of a forever-frozen game.
+   */
+  async withStreamingFreeze(move: () => void, timeoutMs = 15_000): Promise<'settled' | 'timeout'> {
+    this.setGameState('streaming');
+    move();
+    const watcher = createSettleWatcher(() => this.worldSettled(), timeoutMs);
+    this.systems.add(watcher);
+    const outcome = await watcher.result;
+    this.systems.remove(watcher);
+    if (outcome === 'timeout') {
+      this.logger.warn('streaming', 'world-ready timeout — revealing before the ring finished streaming');
+    }
+    // Only leave the freeze if nothing else changed the state meanwhile (e.g. the pause menu opened).
+    if (this.config.gameState === 'streaming') {
+      this.setGameState('play');
+    }
+
+    return outcome;
+  }
+
+  /** Whether the world around the view is fully IN (plan 061): visual ring loaded + collision loaded. */
+  worldSettled(): boolean {
+    return (this.streamingSystem?.settled() ?? false) && (this.collisionStreaming?.settled() ?? true);
   }
 
   /** Point the scene's override material at whichever debug view is active (faces / normals / none). */

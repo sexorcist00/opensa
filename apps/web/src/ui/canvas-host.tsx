@@ -91,7 +91,8 @@ import { Overlay } from './hud/overlay';
 const BASE = import.meta.env.VITE_STATIC_URL;
 
 const CELL_SIZE = 256; // streaming grid cell edge — shared by Config.streaming + the adapter; MUST match opensa-lod-generator's cellSize (its baked lod_<cx>_<cy> cells map 1:1 onto engine cells)
-const WORLD_READY_TIMEOUT_MS = 12000; // reveal the game even if grounding is delayed
+const WORLD_READY_TIMEOUT_MS = 12000; // reveal the game even if streaming never settles (failed cell)
+const GROUNDING_TIMEOUT_MS = 3000; // after the world settled, reveal even if grounding is delayed
 const FLY_GROUND_MAX_DROP = 2000; // max downward ray (m) to find the ground when leaving fly mode
 const GROUND_SNAP_LIFT = 1.5; // start the map-car ground ray this far above the generator (clears a floor it sits in)
 const GROUND_SNAP_DROP = 5; // max downward distance (m) to find the ground beneath a map-car generator
@@ -177,6 +178,8 @@ export function CanvasHost({ fs, gameId, onWorldReady, paused = false }: CanvasH
   const [touchInput, setTouchInput] = useState<null | TouchInputSource>(null);
   const [canEnterExit, setCanEnterExit] = useState<(() => boolean) | null>(null);
   const [phase, setPhase] = useState<'error' | 'loading' | 'ready'>('loading');
+  const [streamingVeil, setStreamingVeil] = useState(false);
+  const [streamingProgress, setStreamingProgress] = useState('');
   const [errorText, setErrorText] = useState('');
   const [locked, setLocked] = useState(false);
   const debugEnabledRef = useRef(false);
@@ -211,12 +214,44 @@ export function CanvasHost({ fs, gameId, onWorldReady, paused = false }: CanvasH
   }, [fs, gameId, onWorldReady]);
 
   // Pause/resume the game (frozen physics + control + clock) when the shell shows the pause menu.
+  // Never clobber a 'streaming' freeze (plan 061) — its watcher restores 'play' when the world settles.
   useEffect(() => {
-    game?.setGameState(paused ? 'pause' : 'play');
+    if (!game) {
+      return;
+    }
+    if (paused) {
+      game.setGameState('pause');
+    } else if (game.getConfig().gameState !== 'streaming') {
+      game.setGameState('play');
+    }
     if (paused && document.pointerLockElement) {
       document.exitPointerLock(); // free the cursor for the pause menu
     }
   }, [game, paused]);
+
+  // Streaming veil (plan 061): while the game freezes for a teleport/boot settle, cover the unfinished
+  // world with the load overlay and poll the ring progress for feedback.
+  useEffect(() => {
+    if (!game) {
+      return;
+    }
+
+    return game.events.on('game-state', ({ state }) => setStreamingVeil(state === 'streaming'));
+  }, [game]);
+  useEffect(() => {
+    if (!streamingVeil || !game) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      const { loaded, total } = game.streamingProgress();
+      setStreamingProgress(total > 0 ? ` ${loaded}/${total}` : '');
+    }, 250);
+
+    return (): void => {
+      window.clearInterval(timer);
+      setStreamingProgress(''); // stale count never leaks into the next veil
+    };
+  }, [streamingVeil, game]);
 
   // Track mouse capture (pointer lock) — the look uses movementX/Y, continuous + cursor-hidden while locked.
   useEffect(() => {
@@ -322,6 +357,7 @@ export function CanvasHost({ fs, gameId, onWorldReady, paused = false }: CanvasH
       ) : null}
       {game && touchInput && !paused && <TouchControls canEnterExit={canEnterExit ?? undefined} source={touchInput} />}
       {phase === 'loading' && <LoadOverlay text="Loading map…" />}
+      {phase === 'ready' && streamingVeil && <StreamingVeil text={`Loading world…${streamingProgress}`} />}
       {phase === 'error' && <LoadOverlay text={`Failed to load map: ${errorText}`} />}
       {game && (
         <Overlay>
@@ -349,6 +385,34 @@ export function LoadOverlay({ text }: { text: string }): ReactElement {
         position: 'fixed',
         top: 0,
         width: '100%',
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
+/** The streaming freeze veil (plan 061): opaque black cover (the world assembles invisibly behind it —
+ *  vanilla SA's far-teleport loading screen) with the progress caption bottom-centre. */
+export function StreamingVeil({ text }: { text: string }): ReactElement {
+  return (
+    <div
+      style={{
+        alignItems: 'center',
+        background: '#000',
+        color: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: 'sans-serif',
+        height: '100%',
+        justifyContent: 'flex-end',
+        left: 0,
+        letterSpacing: '0.08em',
+        paddingBottom: '8vh',
+        position: 'fixed',
+        top: 0,
+        width: '100%',
+        zIndex: 20,
       }}
     >
       {text}
@@ -564,8 +628,11 @@ function bootstrap(
     });
     game.frameEntity(player, 12);
 
-    // World-ready: signal once the player has landed (collision cell loaded → grounded), so the shell
-    // reveals the game only after the world has settled (a fallback timer guards a delayed grounding).
+    // World-ready (plan 061): freeze gameplay in the 'streaming' state until the visual ring + collision
+    // are fully IN (the game clock starts counting only then), then wait for the player to land before
+    // revealing the shell. Both steps carry timeouts — a failed cell degrades to a warning, never a
+    // forever-black screen. Runs after the streaming systems are registered below (microtask ordering:
+    // withStreamingFreeze's first settle check happens on a later frame).
     if (onWorldReady) {
       let fired = false;
       const fire = (): void => {
@@ -574,15 +641,18 @@ function bootstrap(
           onWorldReady();
         }
       };
-      game.addSystem({
-        name: 'world-ready',
-        update: (): void => {
-          if (Velocity.grounded[character.playerEid] === 1) {
-            fire();
-          }
-        },
+      const bootPlacement = (): void => undefined; // spawn already placed the player — the freeze only waits
+      void game.withStreamingFreeze(bootPlacement, WORLD_READY_TIMEOUT_MS).then(() => {
+        game.addSystem({
+          name: 'world-ready',
+          update: (): void => {
+            if (Velocity.grounded[character.playerEid] === 1) {
+              fire();
+            }
+          },
+        });
+        setTimeout(fire, GROUNDING_TIMEOUT_MS);
       });
-      setTimeout(fire, WORLD_READY_TIMEOUT_MS);
     }
 
     // Animations: ped.ifp loaded directly (like the original), driven by the movement state machine.
@@ -766,6 +836,7 @@ function bootstrap(
       game.getConfig(),
     );
     game.addSystem(collisionStreaming);
+    game.setCollisionStreaming(collisionStreaming); // the physics half of worldSettled (plan 061)
     // Clutter knob changes re-stream physics so collision matches the rendered set; debounced —
     // a slider drag fires many config patches, and a full collider rebuild per tick would stutter.
     let colliderReloadTimer: number | undefined;
@@ -1073,7 +1144,7 @@ function bootstrap(
       stars: () => game.getConfig().graphics.stars,
       streaming: () => game.getConfig().streaming,
       sunSize: () => game.getConfig().graphics.sun.sunSize,
-      teleport: (coords) => character.placePlayer(coords, true),
+      teleport: (coords) => void game.withStreamingFreeze(() => character.placePlayer(coords, true)),
       teleportToGanton: () => character.placePlayer(spawn, true),
       toneMapping: () => game.getConfig().graphics.toneMapping,
       topDownView: () => game.topDownView(),

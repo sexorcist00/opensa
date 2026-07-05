@@ -122,6 +122,18 @@ const settle = async (system: StreamingSystem): Promise<void> => {
 
 describe('StreamingSystem', () => {
   describe('negative cases', () => {
+    it('is not settled before the first update or while cells are still in flight (plan 061)', () => {
+      const adapter = stubAdapter();
+      const system = new StreamingSystem(adapter, new Object3D(), () => [125, 125, 0] as Vec3, config());
+      expect(system.settled()).toBe(false); // no update ran — the world cannot be ready
+
+      system.update(); // requests fired, nothing resolved yet
+      expect(system.settled()).toBe(false);
+      const progress = system.progress();
+      expect(progress.total).toBeGreaterThan(0);
+      expect(progress.loaded).toBe(0);
+    });
+
     it('ignores a manual selection while not in debug mode (keeps streaming)', async () => {
       const adapter = stubAdapter();
       const root = new Object3D();
@@ -203,6 +215,27 @@ describe('StreamingSystem', () => {
       expect(has(root, '0,0,hd')).toBe(true);
       expect(has(root, '0,0,lod')).toBe(false);
       expect(adapter.loadCell.mock.calls.some(([r]) => r.cx === 0 && r.cy === 0 && r.lod)).toBe(false);
+    });
+
+    it('settles once the view ring is loaded, drops on a teleport, settles again (plan 061)', async () => {
+      const adapter = keyedAdapter();
+      const root = new Object3D();
+      let view: Vec3 = [125, 125, 0];
+      const system = new StreamingSystem(adapter, root, () => view, config());
+
+      await settle(system);
+      system.update();
+      expect(system.settled()).toBe(true);
+      const progress = system.progress();
+      expect(progress.loaded).toBe(progress.total);
+
+      // Teleport far away: the whole view ring is new → not settled until it streams back in.
+      view = [100125, 100125, 0];
+      system.update();
+      expect(system.settled()).toBe(false);
+      await settle(system);
+      system.update();
+      expect(system.settled()).toBe(true); // the freeze can lift
     });
 
     it('prefetches the cell ahead of the motion vector before the boundary (plan 060 Phase 1)', async () => {

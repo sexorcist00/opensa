@@ -101,8 +101,10 @@ export interface FontsConfig {
   hud: { clock: string; zone: string };
 }
 
-/** Whether the simulation is running (physics + control) or frozen. */
-export type GameState = 'pause' | 'play';
+/** Whether the simulation is running (physics + control) or frozen. `'streaming'` (plan 061) freezes
+ *  gameplay exactly like `'pause'` (every gate checks `!== 'play'`) while the render loop + streaming
+ *  systems keep running — the world loads behind a veil (boot, teleports). */
+export type GameState = 'pause' | 'play' | 'streaming';
 
 /** Post-processing / graphics-effect toggles (cost-sensitive; off-able on weak machines). */
 export interface GraphicsConfig {

@@ -79,6 +79,8 @@ export class StreamingSystem implements System {
   private postAddWatch: null | string = null;
   private readonly root: Object3D;
   private velocity: Vec3 = [0, 0, 0];
+  /** The current view ring's keys (no lookahead) — the readiness set for {@link settled} (plan 061). */
+  private viewKeys = new Set<string>();
   private readonly viewOf: () => Vec3;
 
   constructor(
@@ -95,9 +97,44 @@ export class StreamingSystem implements System {
     this.gpu = gpu;
   }
 
+  /** How much of the view ring is on screen — for a loading veil (plan 061). */
+  progress(): { loaded: number; total: number } {
+    let loaded = 0;
+    for (const key of this.viewKeys) {
+      if (this.loaded.has(key)) {
+        loaded += 1;
+      }
+    }
+
+    return { loaded, total: this.viewKeys.size };
+  }
+
   /** Debug: render an explicit set of cells at one detail level (null resumes streaming). */
   setManualCells(cells: CellCoord[] | null, lod = false): void {
     this.manual = cells ? { cells, lod } : null;
+  }
+
+  /**
+   * Whether the CURRENT VIEW ring is fully on screen (plan 061): every view-ring key loaded (built +
+   * warmed + atomically added), none still loading/ingesting. Lookahead prefetch keys are ignored —
+   * though while MOVING, an in-flight prefetch cell can be adopted into the view ring by the hysteresis
+   * margin and briefly unsettle it; the freeze use case has zero velocity, so this never affects it.
+   * Meaningless (always true) in manual/map-viewer mode — the debug view never gates readiness.
+   */
+  settled(): boolean {
+    if (this.config.mapViewer && this.manual) {
+      return true;
+    }
+    if (this.viewKeys.size === 0) {
+      return false; // no update ran yet — the world cannot be ready
+    }
+    for (const key of this.viewKeys) {
+      if (!this.loaded.has(key)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   update(delta = 0): void {
@@ -188,8 +225,10 @@ export class StreamingSystem implements System {
     const otherObjects = this.loaded.get(otherKey);
     if (otherObjects) {
       this.remove(otherKey, otherObjects); // old level drops only now → no empty frame
-    } else if (!this.config.mapViewer) {
-      this.fader.start(key, objects); // genuinely new cell: fade in (swaps never fade)
+    } else if (!this.config.mapViewer && this.config.gameState !== 'streaming') {
+      // Genuinely new cell: fade in (swaps never fade). Behind the streaming veil (plan 061) cells appear
+      // at full opacity instead — the reveal shows a finished world, not a mass fade-in.
+      this.fader.start(key, objects);
     }
   }
 
@@ -264,6 +303,9 @@ export class StreamingSystem implements System {
    *  around the predicted view point only ADDS keys for cells the view pass didn't claim (Phase 1). */
   private streamKeys(): Set<string> {
     const keys = this.keysAround(this.viewOf(), null);
+    // Readiness is judged on the VIEW ring only (plan 061) — the lookahead keys below are prefetch and
+    // waiting on them would flap `settled()` with every move.
+    this.viewKeys = new Set(keys);
     const speed = Math.hypot(this.velocity[0], this.velocity[1], this.velocity[2]);
     if (speed > 1) {
       const size = this.adapter.cellSize;

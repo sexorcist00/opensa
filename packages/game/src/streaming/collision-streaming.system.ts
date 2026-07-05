@@ -79,6 +79,20 @@ export class CollisionStreamingSystem implements System {
     return true;
   }
 
+  /** Whether every desired collision cell is loaded (plan 061) — the physics half of world readiness. */
+  settled(): boolean {
+    if (this.current.size === 0) {
+      return false; // no update ran yet
+    }
+    for (const key of this.current) {
+      if (!this.loaded.has(key)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   update(): void {
     this.current = this.desiredKeys();
     for (const [key, handles] of this.loaded) {

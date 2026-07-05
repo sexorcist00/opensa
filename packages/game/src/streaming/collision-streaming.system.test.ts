@@ -130,6 +130,17 @@ const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 
 
 describe('CollisionStreamingSystem', () => {
   describe('negative cases', () => {
+    it('is not settled before the first update or while colliders are loading (plan 061)', async () => {
+      const adapter = stubAdapter();
+      const system = new CollisionStreamingSystem(adapter, stubPhysics(), () => [0, 0, 0] as Vec3, config(100));
+      expect(system.settled()).toBe(false); // no update ran yet
+
+      system.update(); // requested, unresolved
+      expect(system.settled()).toBe(false);
+      await flush();
+      expect(system.settled()).toBe(true); // all desired cells loaded
+    });
+
     it('removeBreakable is a no-op for an unknown key', () => {
       const system = new CollisionStreamingSystem(stubAdapter(), stubPhysics(), () => [0, 0, 0] as Vec3, config(100));
       expect(system.removeBreakable('nope')).toBe(false);
