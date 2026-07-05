@@ -21,9 +21,11 @@ compiles shaders in one more frame.
   view-pass already chose). First-visit builds then start seconds before the boundary and land in the cell
   cache; by the crossing the swap is a cache hit.
 - **Phase 2 — budgeted ingest.** Don't add a whole cell's meshes in one frame: the load handler queues the
-  built objects and `update()` drains the queue under a per-frame time budget (~4 ms). The seamless-swap
-  invariant is preserved — the old detail level is removed (and the cell marked loaded) only after its whole
-  batch is in; removal logic treats queued cells as still loading.
+  built objects and `update()` drains the queue per frame. The seamless-swap invariant is preserved — the old
+  detail level is removed (and the cell marked loaded) only after its whole batch is in; removal logic treats
+  queued cells as still loading. _(Historical: started as a ~4 ms add-time budget, then a 24-obj add cap —
+  both spread the visible appearance; rounds 3–4 replaced them with invisible time-budgeted WARMING +
+  atomic appearance, the shipped form.)_
 
 - **Phase 3 — sliced cell build.** Round 1 measured `built … 100–234 ms` — one synchronous main-thread block
   per first-visit cell, regardless of when the lookahead started it. `buildCellSteps` (renderware) exposes the

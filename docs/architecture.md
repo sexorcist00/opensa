@@ -89,7 +89,7 @@ flowchart LR
     core["core&nbsp;&middot; Game loop, renderer, camera"]:::engine
     sys["systems&nbsp;&middot; streaming, physics, character,<br/>vehicle, time, weather, zones"]:::engine
     plug["plugins&nbsp;&middot; sky, water, fog, post-FX, reflections"]:::engine
-    adp["adapters&nbsp;&middot; GtaSaWorldAdapter"]:::engine
+    adp["adapters&nbsp;&middot; GtaSaWorldAdapter,<br/>DFF parse worker (plan 060)"]:::engine
   end
 
   subgraph RW["renderware"]

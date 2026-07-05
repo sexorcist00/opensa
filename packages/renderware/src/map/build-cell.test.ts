@@ -4,7 +4,7 @@ import type { ImgArchive } from '../archive';
 import type { IdeObjectDef, IplInstance, MapDefinitions } from '../parsers/text';
 import type { GridCell, WorldGrid } from './world-grid';
 
-import { buildCell, cellGroups } from './build-cell';
+import { buildCell, cellGroups, cellModelNames } from './build-cell';
 import { cellKey } from './world-grid';
 
 type Vec3 = [number, number, number];
@@ -61,6 +61,24 @@ describe('buildCell', () => {
       const archive = {} as ImgArchive;
       const grid: WorldGrid = new Map([[cellKey(0, 0), cell([], [])]]);
       expect(buildCell(archive, mapDefs([]), grid, 0, 0, false)).toEqual([]);
+    });
+  });
+});
+
+describe('cellModelNames', () => {
+  describe('negative cases', () => {
+    it('returns nothing for a cell that is not in the grid', () => {
+      expect(cellModelNames(mapDefs([]), new Map(), 5, 5, false)).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('lists each model once for the requested detail level', () => {
+      const defs = mapDefs([def(1, 'house'), def(2, 'tree'), def(3, 'LODhouse')]);
+      const grid: WorldGrid = new Map([[cellKey(0, 0), cell([inst(1), inst(1), inst(2)], [inst(3)])]]);
+
+      expect(cellModelNames(defs, grid, 0, 0, false).sort()).toEqual(['house', 'tree']); // deduped HD set
+      expect(cellModelNames(defs, grid, 0, 0, true)).toEqual(['LODhouse']);
     });
   });
 });

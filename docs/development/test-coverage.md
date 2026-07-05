@@ -10,7 +10,8 @@ Run: `npm run test:coverage` (Vitest + v8). Scope (from `vitest.config.ts`): `ap
 `*.test.ts`, `index.ts`, `*.interface.ts`, `test-utils.ts`, `apps/viewer/src/**`, all `.tsx` UI, and the
 **GL / DOM / app-loop glue** (`game.ts`, `core/renderer`, `core/camera-controller`, `input/keyboard`, the
 sky/water/postfx/ambient/directional/vehicle-reflection GL plugins, `vehicle-headlight.system`,
-`setup-character`, `apps/web/src/ui/**`) — WebGL/browser code verified on the Playwright e2e lane (`e2e.md`), not by
+`setup-character`, `adapters/dff-parse.worker.ts` (Worker entry glue — its stages `parseDff`/
+`prepareClumpAtomics`/`collectTransferables` are unit-covered), `apps/web/src/ui/**`) — WebGL/browser code verified on the Playwright e2e lane (`e2e.md`), not by
 headless node units (same rationale as the `.tsx` exclusion). See plan 046 for the roadmap.
 
 ## Current (2026-06-13, after It.1–7 + coverage hardening)
