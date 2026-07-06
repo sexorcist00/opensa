@@ -1,8 +1,55 @@
 # Changelog
 
-## 0.3.0
+## 0.3.0 (2026-07-06)
+
+### Engine (brief, since the Nx migration)
+
+- **Nx monorepo** — the engine split into workspace packages (`renderware`, `game`, `loaders`, `vfs`,
+  `viewer`, `web`, `modloader`) + the `tools/` workspace for the pipeline above.
+- **Streaming smoothness** — DFF parsing moved to a **worker**, cells are GPU-warmed invisibly and appear
+  **atomically** (no more objects assembling on screen); worst frame slices went from ~65–81 ms to ~5–7 ms.
+- **World-ready state** — a `streaming` game state freezes the clock/physics behind an opaque loading veil
+  (`Loading world… N/M`) on boot and far teleports, revealing only a fully settled world.
+- **Fully-open world** — script-gated placement groups are a configured world state (Truth's farm on,
+  unlock roadblocks off) instead of leftovers, in parity with the LOD bake.
+- **Two-sided world rendering** — honors SA's disable-backface-culling material flag (fixes see-through
+  walls/holes on single-sided geometry).
+- **Map-baked parked cars** — the binary IPL `CARS` section and CLEO car-generator scripts both feed the
+  parked-vehicle spawner.
 
 ### Tooling
+
+#### Mod / content installers
+
+- **`mod-installer`** — bakes a numbered Modloader-style mod set into the game copy: file overlays,
+  `gta3_img/`/`gta_int_img/` IMG merges, PNG→TXD folders, a **`.merge` data-edit format** (`remove from
+"objs":` / `add to "anim":` line edits instead of whole-file overrides), loader-path re-homing, IDE id
+  dedupe, and **IPL slot economy** (mod-added instance IPLs fold into a stock host file; internal LOD links
+  rebased) so mods never eat SA's 40 IPL slots.
+- **`vehicle-installer` / `ped-installer`** — drop-in vehicle packs and ped replacements as pipeline stages.
+- **`map-optimizer`** — whole-map **prelight correction**: statistical day/night vertex-colour repair with
+  per-neighbourhood verdicts (fixes stock and mod models that are too bright/black at night).
+
+#### Vegetation LOD generators
+
+- **`lod-trees-generator`** — billboard impostors as real far-LODs for every placed tree: baked from the HD
+  models (aspect-aware textures, stock prelight + night-colour transfer), attached by editing the stock
+  streams/IPLs (repoint or append + link), with a per-area row budget that migrates overflow into its own
+  streamed areas.
+- **`lod-procobj-generator`** — converts procobj scatter species (bushes, rocks) into **static placements
+  with decimated-copy LODs**: QEM-decimated meshes, per-species scoped textures, trunk prelight transfer,
+  and the runtime scatter stripped for converted species.
+- **Vanilla-style binary-stream placement** (shared `@opensa/map-placement`) — generated placements ship as
+  per-area text LOD layers + binary `_stream` IPLs inside `gta3.img`, exactly how the stock map ships 35k+
+  instances; short species ship fully binary (zero permanent rows), only tall species keep a text LOD row +
+  lod-link for close-range suppression (`linkedHeight`).
+- **Scoped texture resolution** (`lod-common`) — LOD textures resolve through each model's own TXD and land
+  in shared dictionaries under `<txd>_<name>` scoped names (SA reuses texture names across TXDs with
+  different pixels — the global index used to paint the wrong species), plus **alpha-weighted mip
+  downsampling** (`rw-codec`) so cutout foliage keeps its silhouette colour.
+- **Script-gated group parity** (`opensa-lod-generator`) — the cell bake now includes exactly the binary IPL
+  groups the engine loads (`OPEN_SCRIPT_IPL`, single source of truth): mission-locked props (bridge
+  roadblocks) no longer get painted into the far LODs.
 
 #### LOD generator
 
@@ -34,6 +81,18 @@
 - Textures: **−82 %** for OpenSA cells (~88 MB → 16 MB) and **−91 %** for SA clones (114.8 MB → 10.4 MB).
 - Plus distant corona lights the stock far view never had, correct day/night `tobj` windows, and LOD
   z-fighting cleaned up at its source.
+
+#### Perfect-map builder (new)
+
+- **`perfect-map-builder`** — one command turns a clean game copy + a curated `mods-src/` into two complete
+  builds: **`sa/`** (drop-in for the real game) and **`opensa/`** (engine target with baked cell LODs). It
+  chains every map tool as pipeline stages (mods → vehicles → peds → optimize → trees → procobj → sa/opensa),
+  each stage producing a full bootable game dir (`--until <stage>` keeps intermediates for in-game bisection).
+- **SA-limit guards baked into the build** — the pipeline fails loudly (instead of corrupting the game
+  silently) when the output exceeds stock SA 1.0 placement limits: ≤ 4096 rows per area at boot, ≤ 39 text
+  IPLs with instances, **≤ 30,000 permanent text instances map-wide** (SA stores building-pool indexes as
+  `int16` — the "ghost barriers" corruption, bisected in-game to exactly 32,768; see
+  `docs/open-issues/ghost-barriers.md` for the full post-mortem).
 
 ## 0.2.0 (2026-06-23)
 
