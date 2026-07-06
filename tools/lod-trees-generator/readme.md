@@ -64,3 +64,7 @@ checklist of SA's strict DFF/TXD/COL/IDE requirements (tristrip flag, extra-vert
 id ≤ 18630) — each was a real "renders in the viewer, invisible/crashes in-game" bug.
 [`007-impostor-improvements.md`](./docs/plans/007-impostor-improvements.md) covers the quality work: aspect-aware
 (portrait) impostor textures for tall trees + the `--prelight` stock→custom prelight transfer.
+[`011-area-row-budget.md`](./docs/plans/011-area-row-budget.md) is the safety cap on impostor appends: an
+area's text + binary rows boot through SA's unbounded 4096-slot buffer (the "ghost barriers" corruption), so
+appends stop at 4000 rows per area and over-budget trees migrate — HD instance + impostor, still lod-linked —
+into `plotr<i>` streamed areas.

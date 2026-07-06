@@ -514,6 +514,8 @@ function bootstrap(
       // Script-gated placement groups (plan 042) — our permanent "world state". Available:
       // truthsfarm (Truth's weed farm), barriers1/2 (SF+LV unlock roadblocks — left off: the map
       // is fully open here), carter/crack (mission-state crack-palace pieces — left off).
+      // MUST equal renderware's OPEN_SCRIPT_IPL — opensa-lod-generator bakes exactly that set into
+      // the cell LODs, so a mismatch paints closed props (bridge roadblocks) into the far layer.
       extraIpl: ['truthsfarm'],
       fs,
       mods: [windMod],

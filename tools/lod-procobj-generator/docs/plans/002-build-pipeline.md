@@ -59,7 +59,7 @@ If no species survive → log + return (no output written).
   mesh's **trunk** vertices to its stock model's representative ambient (`stockPrelightColor` over the stock
   `<model>.dff` in `gta3.img`) before encode; foliage vertices (touched by an alpha-cutout group — `isFoliage`)
   keep their colour. Models in `prelightInfo.skip` are left as-is. (`@opensa/sa-lod/prelight`.)
-- `lodAlias('lod' + model, i, 'lpo')` per species — the LOD model name (falls back to `lpo<i>` when the name would
+- `lodAlias('plo' + model, i, 'plo')` per species — the LOD model name (falls back to `plo<i>` when the name would
   exceed the 19-char IMG-entry budget).
 - `allocateLodIds(aliases, usedIds)` — the lowest free ids in the **≤ 18630** window (see [003](./003-sa-asset-format.md)).
 - `encodeLodDff(mesh, alias)` (`@opensa/sa-lod/encode-dff`) → one-atomic multi-material low-poly DFF bytes.

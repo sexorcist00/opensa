@@ -25,6 +25,11 @@ const holeFillModels = [
   'bbgroundbitc_sfs',
   'traintrax01b_sfs',
   'nuroad_sfse',
+  // Fix hosptial lod
+  'laehospital1',
+  'laehospground1',
+  // Fix smooshed donut
+  'donut01_LAwN',
   // Downtown LA Bonaventure tower (glass shell + body) — placed in lan_stream2 with lod=-1, holes the skyline.
   'bonaventuragl_lan',
   'bonaventura_lan',

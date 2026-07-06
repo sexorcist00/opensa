@@ -95,6 +95,51 @@ describe('bakeMod', () => {
   });
 
   describe('positive cases', () => {
+    it('strips an id from stock IDEs when a baked IDE redefines it (Animal Statues anim case)', () => {
+      const out = stockOut();
+      // Stock defines 11470 in objs; the mod's NEW IDE moves it into anim (modloader merges by id at
+      // runtime — baked, both would load → duplicate model-info ids corrupt SA's heap on data load).
+      write(
+        'out/data/maps/countryn.ide',
+        'objs\n11470, des_bigbull, des_steakhouse, 299, 0\n700, keepme, tex, 100, 0\nend\n',
+      );
+      write('mod/loader.txt', 'IDE data/maps/asremastered.ide');
+      write('mod/asremastered.ide', 'anim\n11470, des_bigbull, des_steakhouse, ASRemastered, 299, 0\nend\n');
+
+      const result = bakeMod(join(dir, 'mod'), out);
+
+      expect(result.baked).toBe(true);
+      const stockIde = readFileSync(join(out, 'data', 'maps', 'countryn.ide'), 'utf8');
+      expect(stockIde).not.toContain('11470'); // superseded by the baked anim def
+      expect(stockIde).toContain('700, keepme'); // neighbours untouched
+      expect(readFileSync(join(out, 'data', 'maps', 'asremastered.ide'), 'utf8')).toContain('11470'); // the winner
+    });
+
+    it('re-homes a modloader-relative loader path into data/maps (the Smoke in factory pipes case)', () => {
+      const out = stockOut();
+      // Author ships the modloader convention: the path points into the mod's OWN modloader folder — and the
+      // loader.txt itself is UTF-16LE (also as shipped). Baked verbatim this used to create a literal
+      // `modloader/` dir in the build and a MODLOADER\ gta.dat line (double-load with a real modloader.asi).
+      const loader = 'IPL modloader\\Smoke in factory pipes\\tubsmoke.ipl\n';
+      const utf16 = new Uint8Array(2 + loader.length * 2);
+      utf16[0] = 0xff;
+      utf16[1] = 0xfe; // BOM
+      for (let i = 0; i < loader.length; i += 1) {
+        utf16[2 + i * 2] = loader.charCodeAt(i);
+      }
+      write('mod/loader.txt', utf16);
+      write('mod/tubsmoke.ipl', 'inst\n3256, dummy, 0, 1, 2, 3, 0, 0, 0, 1, -1\nend\n');
+
+      const result = bakeMod(join(dir, 'mod'), out);
+
+      expect(result.baked).toBe(true);
+      const gtaDat = readFileSync(join(out, 'data', 'gta.dat'), 'utf8');
+      expect(gtaDat).toContain('IPL DATA\\MAPS\\tubsmoke.ipl'); // re-homed, not MODLOADER\
+      expect(gtaDat).not.toMatch(/MODLOADER/i);
+      expect(readFileSync(join(out, 'data', 'maps', 'tubsmoke.ipl'), 'utf8')).toContain('3256, dummy');
+      expect(existsSync(join(out, 'modloader'))).toBe(false); // no literal modloader/ dir in the build
+    });
+
     it('patches gta.dat, places new + overwrites stock, merges procobj additively, injects gta3.img', () => {
       const out = stockOut();
       write('mod/loader.txt', 'IDE data/maps/newdefs.ide\nIPL data/maps/newplace.ipl\nCOLFILE 0 data/maps/new.col');

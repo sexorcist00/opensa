@@ -1,5 +1,6 @@
 import { ideRefs } from '@opensa/game-build/partition';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
+import { OPEN_SCRIPT_IPL } from '@opensa/renderware/map/resolve-map';
 import { parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
 import { isInterior } from '@opensa/renderware/parsers/text/interior';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
@@ -66,17 +67,34 @@ function areaKey(name: string): string {
     .toLowerCase();
 }
 
-/** Binary-stream instances grouped by area key (their `lod` field indexes the companion text IPL). */
-function binaryInstancesByArea(archives: readonly Archive[]): Map<string, ReturnType<typeof parseBinaryIpl>> {
+/**
+ * Binary-stream instances grouped by area key (their `lod` field indexes the companion text IPL).
+ * Areas with NO companion text IPL are **script-gated groups** (LOAD_IPL-toggled: `barriers1`/`barriers2`
+ * roadblocks, `carter`/`crack` mission pieces) — the engine loads only {@link OPEN_SCRIPT_IPL} of them, so
+ * the bake must too: baking a closed group paints its props (the bridge roadblocks) into the far LODs.
+ */
+function binaryInstancesByArea(
+  archives: readonly Archive[],
+  registered: ReadonlySet<string>,
+): Map<string, ReturnType<typeof parseBinaryIpl>> {
+  const open = new Set<string>(OPEN_SCRIPT_IPL);
   const byArea = new Map<string, ReturnType<typeof parseBinaryIpl>>();
+  const skipped: string[] = [];
   for (const archive of archives) {
     for (const name of archive.names.filter((entry) => entry.endsWith('.ipl'))) {
+      const area = areaKey(name);
+      if (!registered.has(area) && !open.has(area)) {
+        skipped.push(area);
+        continue;
+      }
       const buffer = archive.get(name);
       if (buffer) {
-        const area = areaKey(name);
         byArea.set(area, [...(byArea.get(area) ?? []), ...parseBinaryIpl(buffer)]);
       }
     }
+  }
+  if (skipped.length > 0) {
+    console.log(`  script-gated binary IPLs excluded from the bake: ${[...new Set(skipped)].sort().join(', ')}`);
   }
 
   return byArea;
@@ -111,7 +129,7 @@ function collectInstances(
   exclude: ReadonlySet<string>,
 ): CellInstance[] {
   const areas = readTextAreas(dataDir);
-  const binary = binaryInstancesByArea(archives);
+  const binary = binaryInstancesByArea(archives, new Set(areas.keys()));
   const timedModels = readTimedModels(dataDir);
 
   // Every (area, index) some instance's lod field points at — the far-LOD stand-ins whose HD we bake instead.

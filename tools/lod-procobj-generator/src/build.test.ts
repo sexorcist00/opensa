@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { buildArchiveBuffer, openArchive } from '@opensa/renderware/archive/img-archive';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { collectImgEntries } from './build';
+import { collectImgEntries, combinedModelSource } from './build';
 
 const bytes = (...values: number[]): Uint8Array => Uint8Array.from(values);
 
@@ -38,6 +42,48 @@ describe('collectImgEntries', () => {
       expect(entries.get('lodcedar1_po.dff')).toEqual(bytes(11));
       expect(entries.get('cedar1_po.dff')).toEqual(bytes(20));
       expect(entries.get('vegetation.txd')).toEqual(bytes(30));
+    });
+  });
+});
+
+const WASHER = 'tests/original/dff/building/washer.dff';
+const BUSH = 'tests/original/world/sm_bush_large_1.dff';
+
+describe.skipIf(!existsSync(WASHER) || !existsSync(BUSH))('combinedModelSource', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'lod-procobj-modelsrc-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('falls back to the archive for a model the pack does not ship (and null when nowhere)', () => {
+      const archive = openArchive(
+        buildArchiveBuffer([{ data: new Uint8Array(readFileSync(BUSH)), name: 'stockbush.dff' }]),
+      );
+      const source = combinedModelSource(dir, archive); // empty pack dir
+      expect(source.load('stockbush')).not.toBeNull(); // archive fallback
+      expect(source.load('ghost')).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('prefers the pack DFF over the archive model of the same name (the HD-swap source)', () => {
+      // Pack ships `plant.dff` = washer geometry; the archive carries a DIFFERENT `plant.dff` (the bush).
+      writeFileSync(join(dir, 'plant.dff'), readFileSync(WASHER));
+      const archive = openArchive(
+        buildArchiveBuffer([{ data: new Uint8Array(readFileSync(BUSH)), name: 'plant.dff' }]),
+      );
+      const source = combinedModelSource(dir, archive);
+
+      const fromPack = source.load('plant')!;
+      const stock = openArchive(buildArchiveBuffer([{ data: new Uint8Array(readFileSync(WASHER)), name: 'w.dff' }]));
+      const washerVerts = combinedModelSource(dir, stock).load('w')!.geometries[0].positions.length;
+      expect(fromPack.geometries[0].positions.length).toBe(washerVerts); // the pack's geometry, not the bush's
     });
   });
 });

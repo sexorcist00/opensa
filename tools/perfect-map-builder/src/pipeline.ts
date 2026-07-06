@@ -151,6 +151,8 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // User-curated LOD exclusions (`lod-exclude.json` at the mods-src root or inside mods/): models that must
   // not enter the far LODs at all — e.g. HD street-furniture replacements (a 22k-tri ELECTRICA traffic light
   // placed 729× exploded the cell bake ~50×; at 300+ u it is a few unreadable pixels anyway).
+  checkTextIplSlotBudget(game);
+
   const userExcluded = loadLodExclude(inPath, source(subfolders.mods));
   const excludeItems = [...collectGeneratedModels(game), ...userExcluded];
   log(
@@ -186,7 +188,8 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
 /**
  * The HD + LOD model names (lowercased) that lod-trees/lod-procobj produced in the common build — the set the final
  * sa/opensa LOD generators must skip. Sourced from the generated data files: `lodtrees.ide` (tree impostor LODs) +
- * the tree HD roster, `lod_procobj.ide` (procobj LODs) and `lod_procobj.ipl` (its HD species + LOD placements).
+ * the tree HD roster, `lod_procobj.ide` (procobj LODs), `lod_procobj.models` (converted HD species — the HD
+ * placement layer is binary streams now) and `lod_procobj.ipl` (legacy monolith builds).
  * Missing files (a stage that was skipped) contribute nothing.
  */
 export function collectGeneratedModels(gameDir: string): string[] {
@@ -217,9 +220,75 @@ export function collectGeneratedModels(gameDir: string): string[] {
     }
   }
   addIde('lod_procobj.ide');
-  addIpl('lod_procobj.ipl');
+  addIpl('lod_procobj.ipl'); // legacy monolith layout (pre-binary-streams builds)
+  // Binary-streams layout: HD species live in `<area>_streamN.ipl` (id-only), so their names come from the
+  // manifest convertProcObj writes alongside the area IPLs.
+  const manifest = join(maps, 'lod_procobj.models');
+  if (existsSync(manifest)) {
+    for (const line of readFileSync(manifest, 'utf8').split(/\r?\n/)) {
+      if (line.trim()) {
+        names.add(line.trim().toLowerCase());
+      }
+    }
+  }
 
   return [...names];
+}
+
+/** SA's `IplEntityIndexArrays` usable capacity: one slot per gta.dat text IPL with inst rows, and the game
+ *  writes past the array without a bounds check (the "ghost barriers" corruption family — lod-procobj plan
+ *  007, lod-trees plan 011). The struct is declared 40 long, but a build with EXACTLY 40 crashed in-game on
+ *  the 40th slot (perfect5) — treat 39 as the hard line. Stock uses 30 (mod-installer compacts int_cont +
+ *  gen_int1 down to 28 and folds mod IPLs into a stock host); the generators add ~9 (`plobj*`, `plotr*`). */
+const TEXT_IPL_SLOT_CAP = 39;
+
+/** SA truncates building-pool indexes to **int16** in `IplDef::firstBuilding/lastBuilding`
+ *  (`CIplStore::IncludeEntity`) — permanent text-IPL instances fill the pool's low indexes, and once they
+ *  push streamed binary instances past index 32,767 the wrap corrupts CIplStore's stream-out ranges (the
+ *  FINAL "ghost barriers" root cause; bisected to exactly 32,768 total rows). Cap at 30k to leave headroom
+ *  for the runtime-resident binary instances that share the pool. */
+const TEXT_ROW_CAP = 30000;
+
+/** Fail the build when the baked game registers more inst-bearing text IPLs than SA can hold. */
+export function checkTextIplSlotBudget(gameDir: string): void {
+  const datPath = join(gameDir, 'data', 'gta.dat');
+  if (!existsSync(datPath)) {
+    return;
+  }
+  const used: string[] = [];
+  let totalRows = 0;
+  for (const line of readFileSync(datPath, 'utf8').split(/\r?\n/)) {
+    const match = /^IPL\s+(\S.*)$/i.exec(line.trim());
+    if (!match || match[1].toLowerCase().endsWith('.zon')) {
+      continue;
+    }
+    const file = join(gameDir, match[1].replace(/\\/g, '/'));
+    const rows = existsSync(file) ? parseIpl(readFileSync(file, 'utf8')).length : 0;
+    if (rows > 0) {
+      used.push(match[1]);
+      totalRows += rows;
+    }
+  }
+  log(`text-IPL slots: ${used.length}/${TEXT_IPL_SLOT_CAP} (IplEntityIndexArrays), rows: ${totalRows}/${TEXT_ROW_CAP}`);
+  if (totalRows > TEXT_ROW_CAP) {
+    throw new Error(
+      `${totalRows} permanent text-IPL rows exceed the ${TEXT_ROW_CAP} budget: SA stores building-pool ` +
+        'indexes as int16 in IplDef (CIplStore::IncludeEntity) and permanent rows past ~32.7k corrupt ' +
+        'stream-out ranges. Convert placements to binary streams (unlinked pairs) or cull.',
+    );
+  }
+  if (used.length === TEXT_IPL_SLOT_CAP) {
+    console.warn(
+      '  ! zero slot headroom: any modloader mod adding a text IPL with inst rows will overflow ' +
+        'IplEntityIndexArrays in-game',
+    );
+  }
+  if (used.length > TEXT_IPL_SLOT_CAP) {
+    throw new Error(
+      `${used.length} text IPLs with inst rows exceed SA's ${TEXT_IPL_SLOT_CAP}-slot IplEntityIndexArrays ` +
+        `(unbounded — overflowing corrupts CIplStore). Merge or drop mod IPLs:\n  ${used.join('\n  ')}`,
+    );
+  }
 }
 
 /** The first `lod-exclude.json` found among `dirs` → lowercased model names kept out of the LOD bakes. */

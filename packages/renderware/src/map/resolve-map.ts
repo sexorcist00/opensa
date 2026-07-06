@@ -23,12 +23,22 @@ const GTA_DAT = 'data/gta.dat';
  */
 const CELL_LOD_IPL = 'lods';
 
+/**
+ * The script-gated standalone binary IPL groups the engine treats as ALWAYS OPEN (the map ships fully
+ * unlocked — no story gates): `truthsfarm` stays; `barriers1`/`barriers2` roadblocks and the mission-state
+ * `carter`/`crack` pieces stay OFF. Single source of truth shared by the runtime (`extraIpl` in canvas-host)
+ * and by `opensa-lod-generator`, whose cell bake must include exactly the same groups — baking a closed
+ * group paints its props (the bridge roadblocks) into the far LODs permanently.
+ */
+export const OPEN_SCRIPT_IPL = ['truthsfarm'] as const;
+
 export interface ResolveMapOptions {
   /**
    * Extra standalone binary IPL groups (basenames, no extension). These are the script-gated placement
    * groups vanilla toggles via LOAD_IPL/REMOVE_IPL (plan 042): `truthsfarm` (Truth's weed farm),
    * `barriers1`/`barriers2` (the SF/LV unlock roadblocks), `carter`/`crack` (mission-state crack-palace
    * pieces). They're not in gta.dat and carry no `_stream` suffix. Missing files are skipped.
+   * Pass {@link OPEN_SCRIPT_IPL} for the standard fully-open world.
    */
   extraIpl?: readonly string[];
 }

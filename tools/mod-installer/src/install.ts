@@ -3,6 +3,7 @@ import { join, parse, resolve, sep } from 'node:path';
 
 import { applyMod } from './apply-mod';
 import { bakeMod } from './bake-mod';
+import { compactStockInstIpls, mergeModInstIpls } from './ipl-slot-merge';
 
 export interface InstallOptions {
   gamePath: string;
@@ -56,9 +57,18 @@ export function install(options: InstallOptions): void {
     }
   }
 
+  // Slot economy: each gta.dat text IPL with inst rows costs one of SA's ~39 usable (unbounded!)
+  // IplEntityIndexArrays slots and the LOD generators downstream need ~9 — fold mod IPLs into a stock host
+  // and empty the stream-less stock inst blocks (int_cont/gen_int1) the same way.
+  const slots = mergeModInstIpls(gamePath, outPath);
+  const compact = compactStockInstIpls(gamePath, outPath);
+
   console.log(
     `mod-installer: ${mods.length} mod(s) (${baked} baked) → ${outPath} ` +
-      `(${merged} entries merged into gta3.img / loose .txd)`,
+      `(${merged} entries merged into gta3.img / loose .txd` +
+      (slots.merged > 0 ? `; ${slots.merged} mod IPLs folded into a stock host (${slots.rows} rows)` : '') +
+      (compact.compacted > 0 ? `; ${compact.compacted} stock inst blocks compacted (${compact.rows} rows)` : '') +
+      ')',
   );
 }
 

@@ -42,13 +42,18 @@ export function bakeMod(modPath: string, outPath: string): { assets: number; bak
   //    the stock convention (backslashes + UPPERCASE directory, filename as-is) so the baked file is consistent.
   //    Dedup keys are normalised by `mergeGtaDat` regardless, and the engine reads any slash/case.
   const datPath = join(outPath, 'data', 'gta.dat');
+  const rehomed = {
+    col: scan.refs.col,
+    ide: scan.refs.ide.map(rehomeDatPath),
+    ipl: scan.refs.ipl.map(rehomeDatPath),
+  };
   if (existsSync(datPath)) {
-    const refs = { ide: scan.refs.ide.map(canonicalDatPath), ipl: scan.refs.ipl.map(canonicalDatPath) };
+    const refs = { ide: rehomed.ide.map(canonicalDatPath), ipl: rehomed.ipl.map(canonicalDatPath) };
     writeFileSync(datPath, mergeGtaDat(readText(datPath), refs));
   }
 
   // 2. Place each text file: overwrite the stock file with this bare name, else the loader-declared path.
-  const declared = declaredPaths(scan.refs);
+  const declared = declaredPaths(rehomed);
   const stock = indexDataFiles(outPath);
   let texts = 0;
   for (const [base, src] of scan.texts) {
@@ -58,6 +63,25 @@ export function bakeMod(modPath: string, outPath: string): { assets: number; bak
       writeOut(dest, new Uint8Array(readFileSync(src)));
       texts += 1;
     }
+  }
+
+  // 2b. A baked IDE that REDEFINES an id (e.g. moving a stock `objs` def into `anim` — Animal Statues
+  //     Remastered does) must WIN: the real modloader merges IDE lines by id, but baking registers the mod's
+  //     IDE as an additional file, so the stock definition would load too — duplicate model-info ids corrupt
+  //     the heap during SA's data load (crash after shopping.dat). Strip the older definitions.
+  const newIdes = [...scan.texts.entries()]
+    .filter(([base]) => base.endsWith('.ide'))
+    .flatMap(([base]) => {
+      const rel = declared.get(base);
+      const dest = stock.get(base) ?? (rel ? join(outPath, rel) : undefined);
+
+      return dest && existsSync(dest) ? [dest] : [];
+    });
+  // Debug escape hatch: OPENSA_NO_IDE_DEDUPE=1 skips the id dedupe (bisecting whether a crash comes from it).
+  if (process.env.OPENSA_NO_IDE_DEDUPE === '1') {
+    console.warn('mod-installer: OPENSA_NO_IDE_DEDUPE=1 — baked-IDE id dedupe SKIPPED (duplicate ids may crash SA)');
+  } else {
+    dedupeIdeIds(outPath, newIdes);
   }
 
   // 3. Additively merge object.dat / procobj.dat onto stock.
@@ -143,6 +167,90 @@ function declaredPaths(refs: ModScan['refs']): Map<string, string> {
   return paths;
 }
 
+/**
+ * Make the freshly-baked IDEs' id definitions WIN over older ones: every id they define is stripped from
+ * every OTHER `.ide` under `<out>/data` (stock or an earlier mod's) — the modloader-equivalent id merge.
+ */
+function dedupeIdeIds(outPath: string, newIdeFiles: readonly string[]): void {
+  if (newIdeFiles.length === 0) {
+    return;
+  }
+  const newIds = new Set<number>();
+  const own = new Set(newIdeFiles.map((file) => file.toLowerCase()));
+  for (const file of newIdeFiles) {
+    for (const id of ideDefinedIds(readText(file))) {
+      newIds.add(id);
+    }
+  }
+  if (newIds.size === 0) {
+    return;
+  }
+  const dataDir = join(outPath, 'data');
+  if (!existsSync(dataDir)) {
+    return;
+  }
+  for (const file of walk(dataDir).filter((path) => path.toLowerCase().endsWith('.ide'))) {
+    if (own.has(file.toLowerCase())) {
+      continue;
+    }
+    const text = readText(file);
+    let inSection = false;
+    let removed = 0;
+    const kept = text.split(/\r?\n/).filter((raw) => {
+      const line = raw.trim();
+      if (!inSection) {
+        inSection = /^(?:objs|tobj|anim)$/i.test(line);
+
+        return true;
+      }
+      if (line.toLowerCase() === 'end') {
+        inSection = false;
+
+        return true;
+      }
+      const id = Number(line.split(',')[0]);
+      if (Number.isFinite(id) && newIds.has(id)) {
+        removed += 1;
+
+        return false; // the baked mod's definition wins
+      }
+
+      return true;
+    });
+    if (removed > 0) {
+      writeFileSync(file, kept.join('\n'));
+
+      console.log(`mod-installer: ${removed} id definition(s) in ${basename(file)} superseded by a baked IDE`);
+    }
+  }
+}
+
+/**
+ * The numeric ids an IDE text defines across its drawable sections (objs/anim/tobj — any line whose first
+ * cell parses as a number inside a section).
+ */
+function ideDefinedIds(text: string): Set<number> {
+  const ids = new Set<number>();
+  let inSection = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!inSection) {
+      inSection = /^(?:objs|tobj|anim)$/i.test(line);
+      continue;
+    }
+    if (line.toLowerCase() === 'end') {
+      inSection = false;
+      continue;
+    }
+    const id = Number(line.split(',')[0]);
+    if (Number.isFinite(id)) {
+      ids.add(id);
+    }
+  }
+
+  return ids;
+}
+
 /** Index every loose file under `<out>/data` by bare name → its path (first wins) — to overwrite stock in place. */
 function indexDataFiles(outPath: string): Map<string, string> {
   const index = new Map<string, string>();
@@ -171,6 +279,25 @@ function readText(path: string): string {
   }
 
   return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Re-home a loader path that points OUTSIDE `data/` to `data\maps\<basename>`. Modloader-style loaders declare
+ * paths relative to the mod's own `modloader\<Mod Name>\…` folder (Smoke in factory pipes did) — baked verbatim
+ * that writes the file into a literal `modloader/` dir: dead weight in the opensa pack (never packed) and a
+ * DOUBLE load on a real SA that also runs modloader.asi (gta.dat + modloader both register it). Paths already
+ * under `data/` pass through untouched.
+ */
+function rehomeDatPath(path: string): string {
+  const segments = path
+    .replace(/\\/g, '/')
+    .replace(/^\.?\//, '')
+    .split('/');
+  if (segments[0]?.toLowerCase() === 'data') {
+    return path;
+  }
+
+  return `data\\maps\\${segments[segments.length - 1]}`;
 }
 
 /** Every file under `dir`, recursively (absolute paths). */

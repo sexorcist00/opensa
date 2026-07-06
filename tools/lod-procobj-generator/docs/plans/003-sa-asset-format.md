@@ -11,7 +11,7 @@ matters for **procobj simplified-copy LODs** (a decimated mesh + a downscaled te
 `allocateLodIds` only hands out ids in the **`[ID_MIN, 18630]`** window (gaps allowed, deterministic). Ids above
 18630 **silently fail to load on stock SA** (no limit adjuster) → the "HD swapped, but no LOD shows" symptom. Do
 not widen the window. The LOD model name is the IMG entry base, so it must be ≤ 19 chars — `lodAlias` falls back to
-`lpo<index>` when `lod<model>` would overflow.
+`plo<index>` when `plo<model>` would overflow (the prefix is deliberately NOT `lod` — see the readme's big-building note).
 
 ## DFF (the decimated mesh)
 

@@ -24,6 +24,15 @@ tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --
 3. Per mod, one of two modes:
    - **Modloader mod** (its subtree carries a `loader.txt`-style file with `IDE`/`IPL`/`COLFILE` directives) — it is
      **baked** (see below).
+   - A baked IDE that **redefines an id** (e.g. moving a stock `objs` def into `anim` — Animal Statues
+     Remastered animates two stock statues this way) WINS: the older definition is stripped from every other
+     `.ide` in the install (`… id definition(s) … superseded` in the log). The real modloader merges IDE
+     lines by id at runtime; baked without this, both definitions load and duplicate model-info ids corrupt
+     SA's heap during the data load (crash right after `shopping.dat`).
+   - Loader paths pointing **outside `data/`** (the `modloader\<Mod Name>\file.ipl` convention some mods
+     ship) are re-homed to `DATA\MAPS\<basename>` — both the `gta.dat` line and the file destination. Baked
+     verbatim they'd create a literal `modloader/` dir: dead weight in the opensa pack and a DOUBLE load on a
+     real SA running modloader.asi.
    - **Plain mod** (no loader) — **overlay**: copy every top-level entry except the IMG folders over `--out` (overwrites
      matching files, keeps the rest), then merge the mod's `gta3_img/` / `gta_int_img/` loose files into `--out/models/gta3.img` / `gta_int.img` (add
      or replace by name). A PNG folder beside a loose `<name>.txd` merges into that TXD (see below).

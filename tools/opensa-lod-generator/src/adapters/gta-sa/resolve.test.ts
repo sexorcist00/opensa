@@ -1,3 +1,4 @@
+import { encodeBinaryIpl } from '@opensa/map-placement/ipl-binary-write';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,14 +11,29 @@ import { resolveCells } from './resolve';
 /** A gta3 archive with no binary streams — these tests exercise the text-IPL path only. */
 const noStreams = { get: () => null, names: [] } as unknown as Archive;
 
+/** A fake IMG archive serving the given binary IPL entries (one leaf instance per listed id). */
+function binaryArchive(entries: Record<string, number[]>): Archive {
+  const buffers = new Map(
+    Object.entries(entries).map(([name, ids]) => {
+      const bytes = encodeBinaryIpl(
+        ids.map((id) => ({ id, interior: 0, lod: -1, position: [10, 10, 10], rotation: [0, 0, 0, 1] })),
+      );
+
+      return [name, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer];
+    }),
+  );
+
+  return { get: (name: string) => buffers.get(name) ?? null, names: [...buffers.keys()] };
+}
+
 /** Write a synthetic game dir (one IDE + one text IPL under data/) and resolve its cells. */
-function resolve(ide: string, ipl: string): ReturnType<typeof resolveCells> {
+function resolve(ide: string, ipl: string, archive: Archive = noStreams): ReturnType<typeof resolveCells> {
   const dir = mkdtempSync(join(tmpdir(), 'opensa-resolve-'));
   mkdirSync(join(dir, 'data'));
   writeFileSync(join(dir, 'data', 'x.ide'), ide);
   writeFileSync(join(dir, 'data', 'x.ipl'), ipl);
 
-  return resolveCells(dir, [noStreams], 256);
+  return resolveCells(dir, [archive], 256);
 }
 
 const models = (cells: ReturnType<typeof resolveCells>): string[] =>
@@ -63,6 +79,13 @@ describe('resolveCells', () => {
 
       expect(resolve(ide, ipl)).toHaveLength(0);
     });
+
+    it('excludes script-gated binary groups (no companion text IPL) — barriers must not bake into cells', () => {
+      const ide = ['objs', '1, conhoos2, txda, 300, 0', '4, roadblock, txda, 100, 0', 'end'].join('\n');
+      const archive = binaryArchive({ 'barriers2.ipl': [4], 'x_stream0.ipl': [1] });
+
+      expect(models(resolve(ide, 'inst\nend', archive))).toEqual(['conhoos2']); // stream baked, barriers2 not
+    });
   });
 
   describe('positive cases', () => {
@@ -70,6 +93,13 @@ describe('resolveCells', () => {
       const ipl = ['inst', '3, lodplate, 0, 10,10,10, 0,0,0,1, -1', 'end'].join('\n');
 
       expect(models(resolve(IDE, ipl))).toEqual(['lodplate']);
+    });
+
+    it('bakes the always-open script groups (engine extraIpl parity: truthsfarm)', () => {
+      const ide = ['objs', '5, truthbarn, txda, 200, 0', 'end'].join('\n');
+      const archive = binaryArchive({ 'truthsfarm.ipl': [5] });
+
+      expect(models(resolve(ide, 'inst\nend', archive))).toEqual(['truthbarn']);
     });
 
     it('buckets instances into cells by position', () => {

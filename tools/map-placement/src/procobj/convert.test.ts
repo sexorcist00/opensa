@@ -1,8 +1,9 @@
 import type { ProcObjPlacement } from '@opensa/renderware/map/procobj-scatter';
 
+import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { describe, expect, it } from 'vitest';
 
-import { cullByMinDistance, iplQuaternion } from './convert';
+import { buildStreamedIpl, cullByMinDistance, iplQuaternion } from './convert';
 
 /** A placement at (x, y) with the given lottery — only the fields the cull reads matter. */
 function place(x: number, y: number, lottery: number): ProcObjPlacement {
@@ -57,3 +58,102 @@ describe('iplQuaternion', () => {
     });
   });
 });
+
+describe('buildStreamedIpl', () => {
+  const species = new Map([['bush', { hdId: 800, height: 2, lodId: 6500, lodModel: 'plobush' }]]);
+  const pair = (x: number): { model: string; placement: ProcObjPlacement } => ({
+    model: 'bush',
+    placement: { align: false, lottery: 0, normal: [0, 0, 1], position: [x, 0, 0], rotation: 0, scale: 1, scaleZ: 1 },
+  });
+  const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+
+  describe('negative cases', () => {
+    it('emits nothing for an empty placement list', () => {
+      const { datLines, files, imgFiles } = buildStreamedIpl([], species, 'plobj');
+      expect(files).toEqual([]);
+      expect(datLines).toEqual([]);
+      expect(imgFiles).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('linkedHeight splits species: tall keep the text link, short go fully binary', () => {
+      const mixed = new Map([
+        ['bush', { hdId: 800, height: 2, lodId: 6500, lodModel: 'plobush' }], // short → unlinked
+        ['cedar', { hdId: 801, height: 12, lodId: 6501, lodModel: 'plocedar' }], // tall → linked
+      ]);
+      const pairs = [
+        { model: 'bush', placement: pair(0).placement },
+        { model: 'cedar', placement: pair(1).placement },
+      ];
+      const { files, imgFiles } = buildStreamedIpl(pairs, mixed, 'plobj', 4);
+
+      const textRows = files[0][1].split('\r\n').filter((l) => /^\d/.test(l));
+      expect(textRows).toHaveLength(1); // only the cedar LOD is a permanent row
+      expect(textRows[0]).toMatch(/^6501, plocedar/);
+
+      const insts = parseBinaryIpl(toArrayBuffer(imgFiles[0][1]));
+      expect(insts).toHaveLength(3); // bush HD + bush LOD (both unlinked) + cedar HD (linked)
+      expect(
+        insts
+          .filter((i) => i.lod === -1)
+          .map((i) => i.id)
+          .sort((a, b) => a - b),
+      ).toEqual([800, 6500]);
+      expect(insts.find((i) => i.id === 801)?.lod).toBe(0); // cedar HD → its text row
+    });
+
+    it('emits a text LOD layer plus a binary HD stream whose lod indexes the text rows', () => {
+      const pairs = Array.from({ length: 3 }, (_, i) => pair(i));
+      const { datLines, files, imgFiles } = buildStreamedIpl(pairs, species, 'plobj');
+
+      expect(files.map(([name]) => name)).toEqual(['plobj0.ipl']);
+      expect(datLines).toEqual(['IPL DATA\\MAPS\\plobj0.IPL']);
+      expect(imgFiles.map(([name]) => name)).toEqual(['plobj0_stream0.ipl']);
+
+      const lodRows = files[0][1].split('\r\n').filter((l) => l.includes(','));
+      expect(lodRows).toHaveLength(3); // LOD layer only — HD lives in the stream
+      expect(lodRows[0]).toMatch(/^6500, plobush, 0, /);
+      expect(lodRows.every((row) => row.endsWith(', -1'))).toBe(true);
+
+      const hd = parseBinaryIpl(toArrayBuffer(imgFiles[0][1]));
+      expect(hd.map((i) => i.id)).toEqual([800, 800, 800]);
+      expect(hd.map((i) => i.lod)).toEqual([0, 1, 2]); // each HD → its LOD row in the area text IPL
+      expect(hd[1].position[0]).toBeCloseTo(lodFloat(lodRows[1], 3), 5);
+    });
+
+    it('splits areas so text+binary rows per area stay under the 4096 boot buffer', () => {
+      const pairs = Array.from({ length: 4000 }, (_, i) => pair(i));
+      const { datLines, files, imgFiles } = buildStreamedIpl(pairs, species, 'plobj');
+
+      expect(files.length).toBe(2); // exactly ⌈4000/2000⌉ — every area costs one of SA's 40 text-IPL slots
+      expect(datLines).toHaveLength(files.length);
+      for (const [, text] of files) {
+        const lodRows = text.split('\r\n').filter((l) => l.includes(',')).length;
+        expect(2 * lodRows).toBeLessThanOrEqual(4096); // text LOD rows + streamed HD rows share the boot buffer
+      }
+      for (const [name, bytes] of imgFiles) {
+        expect(name).toMatch(/^plobj\d+_stream\d+\.ipl$/);
+        expect(parseBinaryIpl(toArrayBuffer(bytes)).length).toBeLessThanOrEqual(512);
+      }
+
+      // Every HD instance's lod index stays inside its own area's text IPL.
+      files.forEach(([areaFile, text], areaIndex) => {
+        const areaRowCount = text.split('\r\n').filter((l) => l.includes(',')).length;
+        const areaName = areaFile.replace('.ipl', '');
+        for (const [name, bytes] of imgFiles.filter(([n]) => n.startsWith(`${areaName}_stream`))) {
+          for (const inst of parseBinaryIpl(toArrayBuffer(bytes))) {
+            expect(inst.lod, `${name} in area ${areaIndex}`).toBeGreaterThanOrEqual(0);
+            expect(inst.lod).toBeLessThan(areaRowCount);
+          }
+        }
+      });
+    });
+  });
+});
+
+/** The n-th comma field of a text inst row, as a float (0-based; field 3 = position X). */
+function lodFloat(row: string, field: number): number {
+  return Number(row.split(',')[field]);
+}

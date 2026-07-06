@@ -7,7 +7,7 @@ import { decimateMesh } from '@opensa/lod-common/decimate';
 import { encodeColLibrary } from '@opensa/lod-common/encode-col';
 import { encodeLodDff } from '@opensa/lod-common/encode-dff';
 import { encodeLodTxd } from '@opensa/lod-common/encode-txd';
-import { createModelSource } from '@opensa/lod-common/model-source';
+import { createModelSource, type ModelSource } from '@opensa/lod-common/model-source';
 import { rebuildMeshNormals } from '@opensa/lod-common/normals';
 import {
   applyMeshTrunkPrelight,
@@ -24,6 +24,7 @@ import { UNDERWATER_PROCOBJ } from '@opensa/map-placement/procobj-strip';
 import { retxdSwappedModels, writeTxdpHdMod } from '@opensa/map-placement/retxd';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { datChildUrl } from '@opensa/renderware/archive/resolve-paths';
+import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { parseGtaDat } from '@opensa/renderware/parsers/text/gta-dat.parser';
 import { parseIde, parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
@@ -61,6 +62,9 @@ export function buildProcobjLods(options: {
 const IDE_REL = 'data/maps/lod_procobj.ide';
 const IDE_DAT = 'DATA\\MAPS\\LOD_PROCOBJ.IDE';
 const IPL_NAME = 'lod_procobj';
+/** Area IPL base (`plobj<i>.ipl` + `plobj<i>_stream<k>.ipl`): short because IMG VER2 caps entry names at
+ *  23 bytes — `lod_procobj0_stream0.ipl` (24) does not fit. */
+const AREA_BASE = 'plobj';
 /** The HD mod (`<out>/hd/`) `txdp` IDE — parents each swapped model's stock TXD to the custom TXD, so the stock
  *  IDEs stay untouched (the `./5` approach; see {@link emitHdMod}). */
 const TXDP_IDE_REL = 'data/maps/lod_procobj_hd.ide';
@@ -132,13 +136,15 @@ export function buildSpeciesLod(
   return { bbox, height, mesh, model, textures };
 }
 
-/** The changed IMG entries to emit: LOD DFFs + lod_procobj.txd/col + the swapped HD DFFs + custom TXDs. */
+/** The changed IMG entries to emit: LOD DFFs + lod_procobj.txd/col + binary IPL streams (the HD placement
+ *  layer, `<area>_streamN.ipl`) + the swapped HD DFFs + custom TXDs. */
 export function collectImgEntries(
   lods: readonly { alias: string; dff: Uint8Array }[],
   lodTxd: Uint8Array,
   lodCol: Uint8Array,
   swap: ReadonlyMap<string, Uint8Array>,
   retxdTxds: ReadonlyMap<string, Uint8Array>,
+  streams: readonly [string, Uint8Array][] = [],
 ): Map<string, Uint8Array> {
   const entries = new Map<string, Uint8Array>();
   for (const lod of lods) {
@@ -146,11 +152,51 @@ export function collectImgEntries(
   }
   entries.set(`${IPL_NAME}.txd`, lodTxd);
   entries.set(`${IPL_NAME}.col`, lodCol);
+  for (const [name, bytes] of streams) {
+    entries.set(name, bytes);
+  }
   for (const [name, bytes] of [...swap, ...retxdTxds]) {
     entries.set(name, bytes);
   }
 
   return entries;
+}
+
+/** Combined model source: the `--in` pack's DFF first (the model the HD is swapped to), then the archive. */
+export function combinedModelSource(inPath: string, archive: ImgArchive): ModelSource {
+  const stock = createModelSource([archive]);
+  const files = new Map(
+    statSync(inPath).isDirectory()
+      ? readdirSync(inPath)
+          .filter((f) => f.toLowerCase().endsWith('.dff'))
+          .map((f) => [base(f), join(inPath, f)] as const)
+      : [[base(inPath), inPath] as const],
+  );
+  const cache = new Map<string, null | RWClump>();
+
+  return {
+    load(model: string): null | RWClump {
+      const key = base(model);
+      const cached = cache.get(key);
+      if (cached !== undefined || cache.has(key)) {
+        return cached ?? null;
+      }
+      const file = files.get(key);
+      let clump: null | RWClump = null;
+      if (file) {
+        try {
+          const bytes = readFileSync(file);
+          clump = parseDff(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+        } catch {
+          clump = null; // unparseable pack DFF — fall through to stock
+        }
+      }
+      clump = clump ?? stock.load(model);
+      cache.set(key, clump);
+
+      return clump;
+    },
+  };
 }
 
 /**
@@ -180,7 +226,9 @@ export function run(options: BuildOptions): void {
   // so without this filter the no-`--in` run would bake dead LOD DFFs/ids/IDE rows for seabed scatter.
   const candidates = inPath === undefined ? [...procModels] : listDffModels(inPath).filter((m) => procModels.has(m));
   const species = candidates.filter((m) => idByModel.has(m) && !UNDERWATER_PROCOBJ.has(m));
-  const modelSource = createModelSource([archive]);
+  // With `--in` the HD gets SWAPPED to the pack's model — so the LOD must decimate the PACK model too, or
+  // near/far show two different plants (stock silhouette + stock textures at LOD range vs the modded HD).
+  const modelSource = inPath === undefined ? createModelSource([archive]) : combinedModelSource(inPath, archive);
   const textureSource = inPath === undefined ? createTextureSource([archive]) : combinedTextureSource(inPath, archive);
 
   // Per species: build the simplified-copy mesh + bounds (height gate); ids/DFFs are assigned in a second pass.
@@ -215,7 +263,12 @@ export function run(options: BuildOptions): void {
   }
 
   // Register: allocate ids ≤ 18630 + a short alias each, then encode the LOD DFFs under their alias name.
-  const aliases = built.map((b, i) => lodAlias(`lod${b.model}`, i, 'lpo'));
+  // The alias must NOT start with `lod` (and the def's drawDistance stays < 300, see config): SA classifies
+  // lod-named OR dist ≥ 300 defs as BIG BUILDINGS, and MASS text-IPL instances of big-building defs corrupt
+  // that path's internal structures — script-gated IPLs (barriers2 bridge roadblocks) ghost-streamed in on any
+  // save. Verified by in-game bisection 2026-07-06: 30k instances of a STOCK lod def reproduce it; 30k of
+  // ordinary (non-LOD) defs are fine — which is also why Junior's 57k-instance vegetation mod never hits it.
+  const aliases = built.map((b, i) => lodAlias(`plo${b.model}`, i, 'plo'));
   const ids = allocateLodIds(aliases, usedIds);
   const lods: BuiltLod[] = built.map((b, i) => ({
     alias: aliases[i],
@@ -249,10 +302,12 @@ export function run(options: BuildOptions): void {
   const lodOut = modloader ? join(outPath, 'lod') : outPath;
   const procObj = convertProcObj({
     archive,
+    areaBase: AREA_BASE,
     disableScatter: modloader,
     gamePath,
     heightThreshold: config.procObjHeight,
     iplName: IPL_NAME,
+    linkedHeight: config.linkedHeight,
     outPath: lodOut,
     procObjMax: config.procObjMax,
     species: species_,
@@ -270,7 +325,12 @@ export function run(options: BuildOptions): void {
   if (modloader) {
     // LOD mod: only the LOD assets to `<out>/lod/gta3img/`; the HD swap is a separate `<out>/hd/` mod that parents
     // the stock TXDs to the custom one via `txdp` — so no stock IDE is rewritten (the `./5` approach).
-    emitImg(archive, collectImgEntries(lods, lodTxd, lodCol, new Map(), new Map()), lodOut, true);
+    emitImg(
+      archive,
+      collectImgEntries(lods, lodTxd, lodCol, new Map(), new Map(), procObj?.imgFiles ?? []),
+      lodOut,
+      true,
+    );
     const swapped = emitHdMod(inPath, gamePath, dat, swap, swapModels, outPath);
     console.log(
       `procobj→lod: ${lods.length} species · ${procObj?.objects ?? 0} static objects → ${outPath}/lod` +
@@ -288,7 +348,7 @@ export function run(options: BuildOptions): void {
   for (const [idePath, text] of retxd.ides) {
     writeText(join(outPath, idePath.replace(/\\/g, '/')), text);
   }
-  emitImg(archive, collectImgEntries(lods, lodTxd, lodCol, swap, retxd.txds), outPath, false);
+  emitImg(archive, collectImgEntries(lods, lodTxd, lodCol, swap, retxd.txds, procObj?.imgFiles ?? []), outPath, false);
   console.log(
     `procobj→lod: ${lods.length} species · ${procObj?.objects ?? 0} static objects · ` +
       `${swap.size} HD swapped (${retxd.txds.size} custom TXD) → ${outPath}/models/gta3.img`,
@@ -364,22 +424,22 @@ function emitRegistration(args: {
   gamePath: string;
   modloader: boolean;
   outPath: string;
-  procObj: null | { datLine: string };
+  procObj: null | { datLines: string[] };
 }): void {
   const { gamePath, modloader, outPath, procObj } = args;
   if (modloader) {
     const lines = [`IDE ${IDE_REL}`];
-    if (procObj) {
-      lines.push(`IPL data/maps/${IPL_NAME}.ipl`);
+    for (const datLine of procObj?.datLines ?? []) {
+      lines.push(datLine.replace(/\\/g, '/').replace('DATA/MAPS', 'data/maps'));
     }
     writeText(join(outPath, 'loader.txt'), `${lines.join('\n')}\n`);
 
     return;
   }
   let gtaDat = patchGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'), IDE_DAT);
-  if (procObj) {
+  if (procObj && procObj.datLines.length > 0) {
     const eol = gtaDat.includes('\r\n') ? '\r\n' : '\n';
-    gtaDat = `${gtaDat.replace(/\s*$/, '')}${eol}${procObj.datLine}${eol}`;
+    gtaDat = `${gtaDat.replace(/\s*$/, '')}${eol}${procObj.datLines.join(eol)}${eol}`;
   }
   writeText(join(outPath, 'data', 'gta.dat'), gtaDat);
 }

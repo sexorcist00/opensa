@@ -86,7 +86,11 @@ decimated alpha foliage looks bad / would duplicate those. **procobj** scatter i
 `procobj.dat`, not the IPLs) — its LODs come from [`lod-procobj-generator`](../lod-procobj-generator/).
 Interiors are dropped; **IPL `lod`-target instances** are skipped by ground truth (their HD is baked — name
 matching missed renamed twins and z-fought); **tobj (timed) instances** are excluded — the engine renders the
-real hour-gated instance at LOD range instead (lit windows don't glow at noon).
+real hour-gated instance at LOD range instead (lit windows don't glow at noon). **Script-gated binary IPL
+groups** (binary areas with no companion text IPL: `barriers1`/`barriers2` roadblocks, `carter`/`crack`) are
+excluded too, except renderware's `OPEN_SCRIPT_IPL` (`truthsfarm`) — the bake must match exactly what the
+engine loads via `extraIpl`, or closed props get painted into the far LODs (the bridge-roadblocks-in-`lod_2_1`
+bug).
 
 ## Layout
 

@@ -1,6 +1,10 @@
 /**
  * Mipmap downsampling on tightly-packed RGBA buffers (plan 010). A 2×2 box average per level, halving each
- * dimension (min 1), down to 1×1. Simple linear average for now; sRGB-correct averaging is a cheap follow-up.
+ * dimension (min 1), down to 1×1. RGB is **alpha-weighted** (Σ rgb·a / Σ a): transparent texels' RGB carries
+ * background garbage (white/black fill under alpha-cutout foliage, impostor atlas padding), and a plain
+ * average bleeds it into the visible texels — every mip level gets progressively LIGHTER/washed out (the
+ * lod-procobj joshua / lod-trees far-texture complaint). Alpha itself stays a plain average. sRGB-correct
+ * averaging remains a cheap follow-up.
  */
 
 /** One RGBA level: tightly-packed `width * height * 4` bytes. */
@@ -22,7 +26,7 @@ export function buildMipChain(base: Uint8Array, width: number, height: number): 
   return levels;
 }
 
-/** Halve an RGBA image (2×2 box average), each dimension floored at 1. */
+/** Halve an RGBA image (2×2 box, alpha-weighted RGB), each dimension floored at 1. */
 export function downsample(rgba: Uint8Array, width: number, height: number): MipLevel {
   const dstWidth = Math.max(1, width >> 1);
   const dstHeight = Math.max(1, height >> 1);
@@ -34,16 +38,17 @@ export function downsample(rgba: Uint8Array, width: number, height: number): Mip
       const x1 = Math.min(x * 2 + 1, width - 1);
       const y0 = Math.min(y * 2, height - 1);
       const y1 = Math.min(y * 2 + 1, height - 1);
+      const at = [(y0 * width + x0) * 4, (y0 * width + x1) * 4, (y1 * width + x0) * 4, (y1 * width + x1) * 4];
       const dst = (y * dstWidth + x) * 4;
-      for (let c = 0; c < 4; c += 1) {
-        data[dst + c] = Math.round(
-          (rgba[(y0 * width + x0) * 4 + c] +
-            rgba[(y0 * width + x1) * 4 + c] +
-            rgba[(y1 * width + x0) * 4 + c] +
-            rgba[(y1 * width + x1) * 4 + c]) /
-            4,
-        );
+      const alphaSum = at.reduce((sum, index) => sum + rgba[index + 3], 0);
+      for (let c = 0; c < 3; c += 1) {
+        // Alpha-weighted colour; a fully-transparent quad keeps the plain average (nothing visible to weight).
+        data[dst + c] =
+          alphaSum > 0
+            ? Math.round(at.reduce((sum, index) => sum + rgba[index + c] * rgba[index + 3], 0) / alphaSum)
+            : Math.round(at.reduce((sum, index) => sum + rgba[index + c], 0) / 4);
       }
+      data[dst + 3] = Math.round(alphaSum / 4);
     }
   }
 

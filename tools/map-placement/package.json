@@ -12,7 +12,9 @@
     "./vegetation": "./src/vegetation.ts",
     "./ipl-text-strip": "./src/ipl-text-strip.ts",
     "./ipl-text-retransform": "./src/ipl-text-retransform.ts",
-    "./ipl-binary-strip": "./src/ipl-binary-strip.ts"
+    "./ipl-binary-strip": "./src/ipl-binary-strip.ts",
+    "./streamed-areas": "./src/streamed-areas.ts",
+    "./ipl-binary-write": "./src/ipl-binary-write.ts"
   },
   "nx": {
     "tags": [

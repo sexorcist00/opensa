@@ -3,6 +3,7 @@ import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 import { applyStockPrelight, type PrelightInfo } from '@opensa/lod-common/prelight';
 import { allocateLodIds, buildLodIde, lodAlias, patchGtaDat } from '@opensa/map-placement/ide';
 import { retxdSwappedModels, writeTxdpHdMod } from '@opensa/map-placement/retxd';
+import { buildLinkedAreas, type LinkedPair } from '@opensa/map-placement/streamed-areas';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { datChildUrl } from '@opensa/renderware/archive/resolve-paths';
 import { parseGtaDat } from '@opensa/renderware/parsers/text/gta-dat.parser';
@@ -13,7 +14,7 @@ import { editArchive } from '@opensa/tool-kit/archive/img';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { linkBinaryLods } from './ipl-binary-link';
+import { rewriteBinaryStream } from './ipl-binary-link';
 import { type AppendInst, applyTextEdits, type Repoint } from './ipl-text-append';
 
 /** One generated impostor: the `lod<source>` name (DFF file + texture) for source model `source`. */
@@ -23,6 +24,10 @@ export interface ImpostorRef {
 }
 
 export interface PlaceOptions {
+  /** Per-area boot-row cap (text rows + appended impostors + binary-stream rows — they all pass through
+   *  SA's 4096-slot `gpLoadedBuildings` at boot). Trees over the cap migrate — HD instance + impostor —
+   *  into shared `plotr<i>` overflow areas. Default {@link AREA_ROW_CAP}; overridable for tests. */
+  areaRowCap?: number;
   /** Impostor LOD draw distance written to `lodtrees.ide` (`--draw`). */
   drawDistance: number;
   /** Lowercased names of the alpha-cutout (foliage) textures — the trunk-only `--prelight` split. */
@@ -55,6 +60,10 @@ interface Impostor {
 
 const IDE_REL = 'data/maps/lodtrees.ide';
 const IDE_DAT = 'DATA\\MAPS\\lodtrees.IDE';
+/** Default per-area boot-row cap: SA's static buffer holds 4096; leave margin for other mods' appends. */
+const AREA_ROW_CAP = 4000;
+/** Overflow area base (`plotr<i>.ipl` + `plotr<i>_stream<k>.ipl`) — short: IMG VER2 caps names at 23 bytes. */
+const OVERFLOW_AREA_BASE = 'plotr';
 /** `loader.txt` for the LOD mod (`<out>/lod/`): only the `IDE` line — the modified stock IPLs override their stock
  *  copies by name (no `IPL` line needed), and SA auto-discovers the `.col` embedded in `gta3.img` (no `COLFILE`). */
 const LOADER_TXT = `IDE ${IDE_REL}\n`;
@@ -69,6 +78,14 @@ interface AreaEdit {
   claimed: Map<number, number>;
   nextIdx: number;
   repoints: Map<number, Repoint>;
+}
+
+/** Where a pending stream rewrite is accumulated: the parsed instances + lod links + records to drop. */
+interface PendingStream {
+  bytes: Uint8Array;
+  insts: ReturnType<typeof parseBinaryIpl>;
+  links: Map<number, number>;
+  removes: Set<number>;
 }
 
 /** A placed HD instance (binary or text) — the transform the impostor LOD inherits. */
@@ -98,10 +115,12 @@ export function placeMap(options: PlaceOptions): void {
   const archive = openArchive(readBytes(join(gamePath, 'models', 'gta3.img')));
 
   // Attach impostors as far-LODs (edit stock streams + companion text IPLs) — shared by both output targets.
-  const result = editAreas(archive, gamePath, dat, idToImpostor);
+  const result = editAreas(archive, gamePath, dat, idToImpostor, options.areaRowCap ?? AREA_ROW_CAP);
+  // Over-budget trees, re-emitted as linked pairs in our own `plotr<i>` streamed areas.
+  const overflow = buildLinkedAreas(result.overflow, OVERFLOW_AREA_BASE);
 
   if (modloader) {
-    placeModloader(options, { archive, dat, procModels, registry, result });
+    placeModloader(options, { archive, dat, overflow, procModels, registry, result });
 
     return;
   }
@@ -115,19 +134,26 @@ export function placeMap(options: PlaceOptions): void {
   for (const [iplPath, text] of result.texts) {
     writeText(join(outPath, iplPath.replace(/\\/g, '/')), text);
   }
+  for (const [file, text] of overflow.files) {
+    writeText(join(outPath, 'data', 'maps', file), text);
+  }
   for (const [idePath, text] of retxd.ides) {
     writeText(join(outPath, idePath.replace(/\\/g, '/')), text);
   }
   const ids = new Map(registry.map((r) => [r.alias, r.id]));
   writeText(join(outPath, IDE_REL), buildLodIde(ids, 'lodtrees', options.drawDistance));
-  writeText(
-    join(outPath, 'data', 'gta.dat'),
-    patchGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'), IDE_DAT),
-  );
-  emitImg(archive, result.streams, registry, new Map([...swap, ...retxd.txds]), outPath, outPath, false);
+  let gtaDat = patchGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'), IDE_DAT);
+  if (overflow.datLines.length > 0) {
+    const eol = gtaDat.includes('\r\n') ? '\r\n' : '\n';
+    gtaDat = `${gtaDat.replace(/\s*$/, '')}${eol}${overflow.datLines.join(eol)}${eol}`;
+  }
+  writeText(join(outPath, 'data', 'gta.dat'), gtaDat);
+  const streams = new Map([...result.streams, ...overflow.imgFiles]);
+  emitImg(archive, streams, registry, new Map([...swap, ...retxd.txds]), outPath, outPath, false);
   console.log(
     `place: ${result.attached} tree instances → impostor LODs ` +
-      `(${result.appended} appended, ${result.repointed} repointed) · ${swap.size} HD DFFs swapped ` +
+      `(${result.appended} appended, ${result.repointed} repointed, ${result.moved} migrated to ` +
+      `${overflow.files.length} overflow area(s)) · ${swap.size} HD DFFs swapped ` +
       `(${retxd.txds.size} custom TXD, ${retxd.ides.size} IDEs retxd'd) · ${registry.length} impostors ` +
       `· LOD draw ${options.drawDistance} → ${outPath}/models/gta3.img`,
   );
@@ -238,15 +264,23 @@ function computeSwap(
  * text-IPL HDs (set the text row's `lod` column) alike — appending leaf LOD rows / repointing existing ones into
  * the area's companion text IPL. Areas iterated = every text IPL ∪ every binary-stream area (so text-only
  * placements are no longer skipped); binary streams without a companion text IPL can't host LODs and are skipped.
+ *
+ * Per-area row budget: an area's text rows + binary rows all pass through SA's unbounded 4096-slot boot buffer
+ * (the "ghost barriers" corruption — lod-procobj plan 007), and impostor appends were pushing `countrye`/`vegasw`
+ * past it. Appends beyond `rowCap` **migrate**: the HD instance is cut from its stock stream and re-emitted with
+ * its impostor as a linked pair in the shared `plotr<i>` overflow areas (each migration frees two rows here).
  */
 function editAreas(
   archive: ImgArchive,
   gamePath: string,
   dat: GtaDat,
   idToImpostor: ReadonlyMap<number, Impostor>,
+  rowCap: number,
 ): {
   appended: number;
   attached: number;
+  moved: number;
+  overflow: LinkedPair[];
   placedSources: Set<string>;
   repointed: number;
   streams: Map<string, Uint8Array>;
@@ -254,9 +288,10 @@ function editAreas(
 } {
   const streamsByArea = groupStreams(archive);
   const textByArea = textIplByArea(gamePath, dat);
-  const out = { appended: 0, attached: 0, placedSources: new Set<string>(), repointed: 0 };
+  const out = { appended: 0, attached: 0, moved: 0, placedSources: new Set<string>(), repointed: 0 };
   const streams = new Map<string, Uint8Array>();
   const texts = new Map<string, string>();
+  const overflow: LinkedPair[] = [];
 
   for (const area of new Set([...textByArea.keys(), ...streamsByArea.keys()])) {
     const textRef = textByArea.get(area);
@@ -264,33 +299,16 @@ function editAreas(
       continue; // binary streams without a companion text IPL can't host LOD instances — skip
     }
     const textRaw = readFileSync(datChildUrl(gamePath, textRef), 'utf8');
-    const baseCount = parseIpl(textRaw).length;
+    const textRows = parseIpl(textRaw);
+    const baseCount = textRows.length;
     const edit: AreaEdit = { appends: [], baseCount, claimed: new Map(), nextIdx: baseCount, repoints: new Map() };
+    /** Where each append's HD lives — parallel to `edit.appends`. Only binary-origin appends can migrate. */
+    const appendOrigins: ({ instIdx: number; stream: string } | { textRow: number })[] = [];
 
-    // Binary-stream HDs: link the stream instance's `lod` to its appended/repointed impostor row.
-    for (const name of streamsByArea.get(area) ?? []) {
-      const bytes = new Uint8Array(archive.get(name) ?? new ArrayBuffer(0));
-      const links = new Map<number, number>();
-      parseBinaryIpl(toArrayBuffer(bytes)).forEach((inst, i) => {
-        const imp = idToImpostor.get(inst.id);
-        if (!imp) {
-          return;
-        }
-        out.attached += 1;
-        out.placedSources.add(imp.source);
-        const idx = attachImpostor(edit, imp, inst, out);
-        if (idx !== null) {
-          links.set(i, idx);
-        }
-      });
-      if (links.size > 0) {
-        streams.set(name, linkBinaryLods(bytes, links));
-      }
-    }
-
-    // Text-IPL HDs (always-loaded placements): set the row's `lod` column to its appended impostor.
+    // Text-IPL HDs FIRST (their appends can't migrate — the HD row must stay), so binary-origin appends form
+    // the suffix of `edit.appends` and the budget pass below can pop them without disturbing earlier indexes.
     const setLods = new Map<number, number>();
-    parseIpl(textRaw).forEach((inst, row) => {
+    textRows.forEach((inst, row) => {
       const imp = idToImpostor.get(inst.id);
       if (!imp) {
         return;
@@ -300,8 +318,41 @@ function editAreas(
       const idx = attachImpostor(edit, imp, inst, out);
       if (idx !== null) {
         setLods.set(row, idx);
+        appendOrigins.push({ textRow: row });
       }
     });
+
+    // Binary-stream HDs: record pending links; the rewrites are applied after the budget pass.
+    const pending = new Map<string, PendingStream>();
+    let binaryTotal = 0;
+    for (const name of streamsByArea.get(area) ?? []) {
+      const bytes = new Uint8Array(archive.get(name) ?? new ArrayBuffer(0));
+      const insts = parseBinaryIpl(toArrayBuffer(bytes));
+      binaryTotal += insts.length;
+      const entry = { bytes, insts, links: new Map<number, number>(), removes: new Set<number>() };
+      pending.set(name, entry);
+      insts.forEach((inst, i) => {
+        const imp = idToImpostor.get(inst.id);
+        if (!imp) {
+          return;
+        }
+        out.attached += 1;
+        out.placedSources.add(imp.source);
+        const idx = attachImpostor(edit, imp, inst, out);
+        if (idx !== null) {
+          entry.links.set(i, idx);
+          appendOrigins.push({ instIdx: i, stream: name });
+        }
+      });
+    }
+
+    migrateOverBudget(area, rowCap, baseCount + binaryTotal, { appendOrigins, edit, out, overflow, pending });
+
+    for (const [name, entry] of pending) {
+      if (entry.links.size > 0 || entry.removes.size > 0) {
+        streams.set(name, rewriteBinaryStream(entry.bytes, entry.links, entry.removes));
+      }
+    }
 
     if (edit.appends.length === 0 && edit.repoints.size === 0 && setLods.size === 0) {
       continue; // no tree placements in this area — leave the stock text IPL untouched (don't ship a no-op copy)
@@ -309,7 +360,7 @@ function editAreas(
     texts.set(textRef, applyTextEdits(textRaw, { appends: edit.appends, repoints: edit.repoints, setLods }).text);
   }
 
-  return { ...out, streams, texts };
+  return { ...out, overflow, streams, texts };
 }
 
 /**
@@ -393,6 +444,54 @@ function groupStreams(archive: ImgArchive): Map<string, string[]> {
 }
 
 /**
+ * Budget pass of {@link editAreas}: while the area's boot rows (`fixedRows` = text base + binary, plus the
+ * pending appends) exceed `rowCap`, pop suffix appends (binary-origin only — a text HD's row must stay) and
+ * migrate each as an HD+impostor {@link LinkedPair} to the shared overflow areas. Each migration removes the
+ * appended impostor row AND cuts the HD instance from its stock stream — two rows freed per pair.
+ */
+function migrateOverBudget(
+  area: string,
+  rowCap: number,
+  fixedRows: number,
+  ctx: {
+    appendOrigins: ({ instIdx: number; stream: string } | { textRow: number })[];
+    edit: AreaEdit;
+    out: { appended: number; moved: number };
+    overflow: LinkedPair[];
+    pending: ReadonlyMap<string, PendingStream>;
+  },
+): void {
+  const { appendOrigins, edit, out, overflow, pending } = ctx;
+  let excess = fixedRows + edit.appends.length - rowCap;
+  while (excess > 0 && edit.appends.length > 0) {
+    const origin = appendOrigins[appendOrigins.length - 1];
+    if (!('stream' in origin)) {
+      break; // only text-origin appends left — their HD rows must stay, nothing more can migrate
+    }
+    appendOrigins.pop();
+    const append = edit.appends.pop()!;
+    const entry = pending.get(origin.stream)!;
+    entry.links.delete(origin.instIdx);
+    entry.removes.add(origin.instIdx);
+    const inst = entry.insts[origin.instIdx];
+    overflow.push({
+      hd: { id: inst.id, interior: inst.interior, position: inst.position, rotation: inst.rotation },
+      lod: { id: append.id, model: append.model },
+    });
+    edit.nextIdx -= 1;
+    out.appended -= 1;
+    out.moved += 1;
+    excess -= 2; // one impostor append + one binary HD row leave the area
+  }
+  if (excess > 0) {
+    console.warn(
+      `  ! ${area}: ${fixedRows + edit.appends.length} boot rows exceed the ${rowCap} cap ` +
+        'and nothing left to migrate',
+    );
+  }
+}
+
+/**
  * `--modloader` — emit **two** self-contained Modloader mods under `<out>`:
  * - **`lod/`** — the mode-A far-LOD attachment ({@link editAreas}), mirroring the MixMods "LOD Vegetation" layout:
  *   modified text IPLs as loose stock overrides, modified binary streams + impostor DFFs + `lodtrees.txd`/`.col`
@@ -408,12 +507,13 @@ function placeModloader(
   ctx: {
     archive: ImgArchive;
     dat: GtaDat;
+    overflow: ReturnType<typeof buildLinkedAreas>;
     procModels: ReadonlySet<string>;
     registry: readonly Impostor[];
     result: ReturnType<typeof editAreas>;
   },
 ): void {
-  const { archive, dat, procModels, registry, result } = ctx;
+  const { archive, dat, overflow, procModels, registry, result } = ctx;
   const { drawDistance, outPath } = options;
   const lodOut = join(outPath, 'lod');
 
@@ -421,17 +521,25 @@ function placeModloader(
   for (const [iplPath, text] of result.texts) {
     writeText(join(lodOut, iplPath.replace(/\\/g, '/')), text); // stock text IPL — overrides by name
   }
+  for (const [file, text] of overflow.files) {
+    writeText(join(lodOut, 'data', 'maps', file), text); // overflow areas — NEW files, registered via loader.txt
+  }
   const ids = new Map(registry.map((r) => [r.alias, r.id]));
   writeText(join(lodOut, IDE_REL), buildLodIde(ids, 'lodtrees', drawDistance));
-  writeText(join(lodOut, 'loader.txt'), LOADER_TXT);
-  emitImg(archive, result.streams, registry, new Map(), outPath, lodOut, true);
+  const loaderLines = [
+    LOADER_TXT.trimEnd(),
+    ...overflow.datLines.map((line) => line.replace(/\\/g, '/').replace('DATA/MAPS', 'data/maps')),
+  ];
+  writeText(join(lodOut, 'loader.txt'), `${loaderLines.join('\n')}\n`);
+  emitImg(archive, new Map([...result.streams, ...overflow.imgFiles]), registry, new Map(), outPath, lodOut, true);
 
   // hd/ — the swapped HD models (only with `--in`).
   const swapped = emitHdMod(options, result.placedSources, procModels, archive, dat);
 
   console.log(
     `place (modloader): ${result.attached} tree instances → impostor LODs ` +
-      `(${result.appended} appended, ${result.repointed} repointed) · ${registry.length} impostors → ${outPath}/lod` +
+      `(${result.appended} appended, ${result.repointed} repointed, ${result.moved} migrated to ` +
+      `${overflow.files.length} overflow area(s)) · ${registry.length} impostors → ${outPath}/lod` +
       (swapped > 0 ? ` · ${swapped} HD DFFs swapped (txdp) → ${outPath}/hd` : ''),
   );
 }

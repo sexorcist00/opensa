@@ -140,6 +140,84 @@ describe('placeMap --modloader (two-mod output)', () => {
   });
 });
 
+describe('placeMap per-area row budget (overflow migration)', () => {
+  let dir: string;
+  let out: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'lod-trees-budget-'));
+    out = join(dir, 'out');
+    const game = join(dir, 'game');
+    writeGame(game);
+    // Three HD trees in the stream + an empty text IPL: 0 text + 3 binary rows. With each tree gaining an
+    // appended impostor the area would boot 6 rows; cap 4 forces ⌈(6−4)/2⌉ = 1 pair to migrate to plotr0.
+    const img = buildVer2Buffer([
+      {
+        data: binaryIpl([
+          { id: HD_ID, lod: -1 },
+          { id: HD_ID, lod: -1 },
+          { id: HD_ID, lod: -1 },
+        ]),
+        name: 'marea_stream0.ipl',
+      },
+    ]);
+    writeFileSync(join(game, 'models', 'gta3.img'), img);
+    writeInputsAndBaked(join(dir, 'in'), out);
+    placeMap({
+      areaRowCap: 4,
+      drawDistance: 1500,
+      foliageTextures: new Set(),
+      gamePath: game,
+      impostors: [{ name: 'lodmytree', source: SOURCE }],
+      inPath: join(dir, 'in'),
+      modloader: true,
+      outPath: out,
+      prelight: false,
+    });
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('keeps the stock area at or under the cap', () => {
+      const text = readFileSync(join(out, 'lod', 'data', 'maps', 'marea.ipl'), 'utf8');
+      const textRows = text.split(/\r?\n/).filter((l) => l.trim() && /^\d/.test(l.trim())).length;
+      const stream = readFileSync(join(out, 'lod', 'gta3img', 'marea_stream0.ipl'));
+      const binRows = new DataView(stream.buffer, stream.byteOffset).getUint32(0x04, true);
+
+      expect(textRows + binRows).toBeLessThanOrEqual(4);
+      expect(binRows).toBe(2); // one HD migrated out of the stock stream
+    });
+  });
+
+  describe('positive cases', () => {
+    it('re-emits the migrated tree as a linked pair in the plotr0 overflow area', () => {
+      const text = readFileSync(join(out, 'lod', 'data', 'maps', 'plotr0.ipl'), 'utf8');
+      const rows = text.split(/\r?\n/).filter((l) => l.trim() && /^\d/.test(l.trim()));
+      expect(rows).toHaveLength(1); // the impostor LOD row
+      expect(rows[0]).toMatch(/, lodmytree, /);
+
+      const stream = readFileSync(join(out, 'lod', 'gta3img', 'plotr0_stream0.ipl'));
+      const view = new DataView(stream.buffer, stream.byteOffset);
+      expect(view.getUint32(0x04, true)).toBe(1); // the migrated HD instance
+      const instOffset = view.getUint32(0x1c, true);
+      expect(view.getUint32(instOffset + 28, true)).toBe(HD_ID);
+      expect(view.getInt32(instOffset + 36, true)).toBe(0); // lod → row 0 of plotr0.ipl
+    });
+
+    it('registers the overflow area in loader.txt after the IDE line', () => {
+      const loader = readFileSync(join(out, 'lod', 'loader.txt'), 'utf8')
+        .trim()
+        .split('\n');
+
+      expect(loader[0]).toBe('IDE data/maps/lodtrees.ide');
+      expect(loader).toContain('IPL data/maps/plotr0.IPL');
+    });
+  });
+});
+
 /** Every file under `root`, as `/`-joined paths relative to it. */
 function findFiles(root: string, prefix = ''): string[] {
   const out: string[] = [];

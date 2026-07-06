@@ -2,7 +2,7 @@ import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parse
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { linkBinaryLods } from './ipl-binary-link';
+import { linkBinaryLods, rewriteBinaryStream } from './ipl-binary-link';
 
 const HEADER_SIZE = 76;
 const INST_SIZE = 40;
@@ -66,6 +66,45 @@ describe('linkBinaryLods', () => {
 
       expect(parseBinaryIpl(ab(out))[0].lod).toBe(9999);
       expect(out.length).toBe(stream.length);
+    });
+  });
+});
+
+describe('rewriteBinaryStream', () => {
+  describe('negative cases', () => {
+    it('returns the input untouched when there is nothing to link or remove', () => {
+      const buffer = binaryIpl([{ id: 1, lod: -1 }]);
+
+      expect(rewriteBinaryStream(buffer, new Map(), new Set())).toBe(buffer);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('drops removed records and applies links by ORIGINAL index', () => {
+      const out = rewriteBinaryStream(
+        binaryIpl([
+          { id: 1, lod: -1 },
+          { id: 2, lod: -1 },
+          { id: 3, lod: -1 },
+        ]),
+        new Map([[2, 55]]), // link the THIRD record…
+        new Set([1]), // …while removing the second — the link must survive the shift
+      );
+      const insts = parseBinaryIpl(ab(out));
+
+      expect(insts.map((i) => i.id)).toEqual([1, 3]);
+      expect(insts.map((i) => i.lod)).toEqual([-1, 55]);
+      expect(out.length).toBe(HEADER_SIZE + 2 * INST_SIZE);
+    });
+
+    it('removes a real countrye_stream1 instance, keeping the rest parseable', () => {
+      const stream = new Uint8Array(readFileSync('tests/original/ipl_binary/countrye_stream1.ipl'));
+      const before = parseBinaryIpl(ab(stream));
+      const out = rewriteBinaryStream(stream, new Map(), new Set([0]));
+      const after = parseBinaryIpl(ab(out));
+
+      expect(after).toHaveLength(before.length - 1);
+      expect(after[0]).toEqual(before[1]);
     });
   });
 });
