@@ -36,6 +36,17 @@ export interface SimplifyOptions {
    */
   maxEdgeFactor?: number;
   /**
+   * Reject a collapse whose interpolated UV disagrees with any surviving incident face's own position→UV affine
+   * map at the target by more than this (UV units, i.e. texture tiles). GTA map surfaces are UV **patchwork** —
+   * each quad carries its own affine mapping (tiled roads reset V every couple of segments) — so a collapse that
+   * merges vertices across patch borders lerps between two different mappings and the error compounds over
+   * successive collapses into tile-scale smears (roads/bridge decks render as lengthwise stripes). The guard
+   * keeps every collapse consistent with the local mapping; cross-patch collapses are rejected, so texture seams
+   * survive like material seams do. Applies to the FIRST attribute stream, which must be the size-2 UV. Omit
+   * (default) to skip the check — existing callers are unchanged.
+   */
+  maxUvDrift?: number;
+  /**
    * Never collapse a face group (material/texture) below this many faces. A flat surface has zero in-plane quadric
    * error and its boundary pin only resists *perpendicular* motion, so QEM slides its boundary inward and collapses
    * the whole surface to nothing — the surface (and its texture) vanishes, leaving a hole. This floors every group
@@ -73,6 +84,7 @@ class Simplifier {
   private readonly groupLive = new Map<number, number>();
   private readonly heap: HeapEntry[] = [];
   private readonly maxEdgeLimit: number;
+  private readonly maxUvDrift: number;
   private readonly minFacesPerGroup: number;
   private readonly positions: Float64Array;
   private readonly quadrics: Float64Array;
@@ -91,6 +103,7 @@ class Simplifier {
     this.vertLive = new Uint8Array(vertexCount).fill(1);
     this.faceLive = new Uint8Array(this.faceCount).fill(1);
     this.maxEdgeLimit = options.maxEdgeFactor ? this.initialMaxEdge() * options.maxEdgeFactor : Infinity;
+    this.maxUvDrift = options.maxUvDrift ?? Infinity;
     this.minFacesPerGroup = options.minFacesPerGroup ?? 0;
     for (let f = 0; f < this.faceCount; f += 1) {
       this.groupLive.set(this.faceGroup[f], (this.groupLive.get(this.faceGroup[f]) ?? 0) + 1);
@@ -149,7 +162,8 @@ class Simplifier {
       if (
         !this.wouldFold(entry.u, entry.v, entry.target) &&
         !this.wouldStretch(entry.u, entry.v, entry.target) &&
-        !this.wouldStarveGroup(entry.u, entry.v)
+        !this.wouldStarveGroup(entry.u, entry.v) &&
+        !this.wouldDriftUv(entry.u, entry.v, entry.target)
       ) {
         this.collapse(entry.u, entry.v, entry.target);
       }
@@ -344,6 +358,35 @@ class Simplifier {
     return [nx, ny, nz, d];
   }
 
+  /**
+   * The UV that face `f`'s own affine position→UV map assigns to point `p` (barycentric over the face's edges,
+   * extrapolating outside the triangle), or null when the face is positionally degenerate.
+   */
+  private faceUvAt(f: number, p: [number, number, number]): [number, number] | null {
+    const uv = this.attributes[0].data;
+    const [a, b, c] = this.faceVerts(f);
+    const pos = this.positions;
+    const e1 = [pos[b * 3] - pos[a * 3], pos[b * 3 + 1] - pos[a * 3 + 1], pos[b * 3 + 2] - pos[a * 3 + 2]];
+    const e2 = [pos[c * 3] - pos[a * 3], pos[c * 3 + 1] - pos[a * 3 + 1], pos[c * 3 + 2] - pos[a * 3 + 2]];
+    const w = [p[0] - pos[a * 3], p[1] - pos[a * 3 + 1], p[2] - pos[a * 3 + 2]];
+    const d11 = e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2];
+    const d12 = e1[0] * e2[0] + e1[1] * e2[1] + e1[2] * e2[2];
+    const d22 = e2[0] * e2[0] + e2[1] * e2[1] + e2[2] * e2[2];
+    const det = d11 * d22 - d12 * d12;
+    if (det <= 1e-9 * d11 * d22 || det <= 0) {
+      return null; // sliver/zero-area face — no usable mapping
+    }
+    const w1 = e1[0] * w[0] + e1[1] * w[1] + e1[2] * w[2];
+    const w2 = e2[0] * w[0] + e2[1] * w[1] + e2[2] * w[2];
+    const b1 = (d22 * w1 - d12 * w2) / det;
+    const b2 = (d11 * w2 - d12 * w1) / det;
+
+    return [
+      uv[a * 2] + b1 * (uv[b * 2] - uv[a * 2]) + b2 * (uv[c * 2] - uv[a * 2]),
+      uv[a * 2 + 1] + b1 * (uv[b * 2 + 1] - uv[a * 2 + 1]) + b2 * (uv[c * 2 + 1] - uv[a * 2 + 1]),
+    ];
+  }
+
   private faceVerts(f: number): [number, number, number] {
     return [this.faces[f * 3], this.faces[f * 3 + 1], this.faces[f * 3 + 2]];
   }
@@ -501,6 +544,37 @@ class Simplifier {
 
   private vertex(v: number): [number, number, number] {
     return [this.positions[v * 3], this.positions[v * 3 + 1], this.positions[v * 3 + 2]];
+  }
+
+  /**
+   * True if collapsing v→u@target would assign the merged vertex a UV inconsistent with any surviving incident
+   * face's own affine mapping (beyond `maxUvDrift`) — blocks cross-patch collapses that smear tiled textures.
+   */
+  private wouldDriftUv(u: number, v: number, target: [number, number, number]): boolean {
+    if (this.maxUvDrift === Infinity || this.attributes.length === 0 || this.attributes[0].size !== 2) {
+      return false;
+    }
+    const uv = this.attributes[0].data;
+    const t = this.edgeRatio(u, v, target);
+    const newU = uv[u * 2] + (uv[v * 2] - uv[u * 2]) * t;
+    const newV = uv[u * 2 + 1] + (uv[v * 2 + 1] - uv[u * 2 + 1]) * t;
+    for (const origin of [u, v]) {
+      for (const f of this.vertFaces[origin]) {
+        const verts = this.faceVerts(f);
+        if (verts.includes(u) && verts.includes(v)) {
+          continue; // removed by the collapse
+        }
+        const expected = this.faceUvAt(f, target);
+        if (
+          expected &&
+          (Math.abs(expected[0] - newU) > this.maxUvDrift || Math.abs(expected[1] - newV) > this.maxUvDrift)
+        ) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   /** True if collapsing v→u@target would flip any surviving incident face (foldover). */

@@ -67,7 +67,9 @@ removes what provably can't be seen or is self-checked by a render diff:
 2. **`dropDegenerateFaces`** — zero-area triangles (measured 0.000 % visual diff).
 3. **`dropTransparentGroups`** — texture groups under `minOpaqueCoverage` opaque texels (chain-link/wires).
 4. **`createBudgetedDecimate`** — per-cell QEM: aggressive→gentle targets, the first whose own CPU-preview diff
-   stays within `decimateBudget` wins; a cell that can't decimate cleanly keeps its triangles.
+   stays within `decimateBudget` wins; a cell that can't decimate cleanly keeps its triangles. Collapses are
+   **UV-drift guarded** (GTA roads map their tiled V as per-segment patchwork; unguarded QEM smeared them into
+   lengthwise stripes — plan 003 "Road-stripes bug", fixed + verified in-game 2026-07-07).
 5. **`createVisibilityCull`** — raycast against deterministic cameras (ring + a 3×3 top-down grid); faces no
    camera sees are dropped (`hiddenFaces: 'cull' | 'orient' | 'off'`), front-only faces go single-sided, and
    windings are **never flipped** (a wrong flip is a hole). See-through textures don't occlude rays.

@@ -13,6 +13,12 @@ Today a plain folder of relative-imported modules; on the eventual monorepo move
   `positions` + flat triangle index-triples → `{ normals, indices, splitSources }`. Each caller re-expands its
   own attributes via `appendSplitsF32` / `appendSplitsU8`. Used by map-optimizer (SubMesh) + opensa-lod-generator
   (merged cell mesh).
+- **`mesh/simplify`** — QEM edge-collapse simplification (Garland–Heckbert) with boundary/material-seam pinning,
+  interpolated attribute streams, and opt-in collapse guards: `maxEdgeFactor` (anti-spike), `minFacesPerGroup`
+  (no vanishing surfaces), `maxUvDrift` (rejects collapses that disagree with an incident face's own position→UV
+  map — GTA's patchwork-mapped tiled surfaces smear without it; lod-common plan 003 "Road-stripes bug"). Used by
+  `@opensa/lod-common/decimate` (opensa cell LODs + lod-procobj clones).
+- **`mesh/bvh`** — triangle BVH raycaster backing lod-common's `visibility-cull`.
 - **`archive/img`** — an editable GTA IMG (VER2): `openImg(bytes)` / `editArchive(archive)` →
   open · get · set (add/replace) · delete · `build()` a fresh `.img`. Wraps the engine's `openArchive` +
   `buildVer2Buffer`. Used by map-optimizer (swap optimized entries) + opensa-lod-generator (emit the cell-LOD build).

@@ -97,5 +97,41 @@ describe('decimateMesh', () => {
     it('omits night colours when the mesh has none', () => {
       expect(decimateMesh(flatGrid(12), 50).nightColors).toBeUndefined();
     });
+
+    it('keeps patchwork-mapped UVs true to their local mapping (the road-stripes bug)', () => {
+      // A 1×12 road strip whose tiled V resets its gradient mid-strip (0.1/unit, then 1.0/unit) — how GTA maps
+      // roads. Unguarded QEM merges the two mappings and the road renders as lengthwise stripes; MAX_UV_DRIFT
+      // keeps every surviving face's map within 0.1 tile of the ground truth.
+      const truthV = (x: number): number => (x <= 6 ? 0.1 * x : 0.6 + (x - 6));
+      const positions: number[] = [];
+      const uvs: number[] = [];
+      for (let y = 0; y <= 1; y += 1) {
+        for (let x = 0; x <= 12; x += 1) {
+          positions.push(x, y, 0);
+          uvs.push(0.5, truthV(x));
+        }
+      }
+      const indices: number[] = [];
+      for (let x = 0; x < 12; x += 1) {
+        indices.push(x, x + 1, 13 + x + 1, x, 13 + x + 1, 13 + x);
+      }
+      const mesh: MergedMesh = {
+        colors: new Uint8Array(26 * 4),
+        groups: [{ indices: Uint32Array.from(indices), texture: 'road' }],
+        normals: new Float32Array(26 * 3),
+        positions: Float32Array.from(positions),
+        uvs: Float32Array.from(uvs),
+      };
+
+      const out = decimateMesh(mesh, 4);
+      for (const group of out.groups) {
+        for (let i = 0; i < group.indices.length; i += 3) {
+          const idx = [group.indices[i], group.indices[i + 1], group.indices[i + 2]];
+          const centroidX = idx.reduce((s, v) => s + out.positions[v * 3], 0) / 3;
+          const mappedV = idx.reduce((s, v) => s + out.uvs[v * 2 + 1], 0) / 3;
+          expect(Math.abs(mappedV - truthV(centroidX))).toBeLessThanOrEqual(0.1 + 1e-6);
+        }
+      }
+    });
   });
 });

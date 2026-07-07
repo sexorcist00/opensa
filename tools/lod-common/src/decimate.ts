@@ -18,11 +18,22 @@ const MAX_EDGE_FACTOR = 1.5;
 const MIN_FACES_PER_GROUP = 2;
 
 /**
+ * Max UV disagreement (texture tiles) a collapse may introduce against any surviving incident face's own
+ * position→UV mapping. GTA map surfaces are UV patchwork — roads/bridge decks reset their tiled V every couple of
+ * segments — and unguarded collapses across those patch borders compound into tile-scale smears (surfaces render
+ * as lengthwise stripes at LOD range; the budgeted-decimate self-check can't see it because its preview paints
+ * mean texture colour, not UVs). 0.1 tile ≈ 6px of a 64px LOD texture — invisible at LOD distances, while
+ * exact-affine merges (the common flat case) pass with ~0 drift.
+ */
+const MAX_UV_DRIFT = 0.1;
+
+/**
  * QEM-decimate a merged mesh to a triangle budget (plan 002, 1c) via the shared `tool-kit` simplifier. Each
  * per-texture group becomes a face group, so collapses across texture seams (and the open silhouette) are pinned
  * — the contour and material edges survive. UV + colour (+ night colour when present) ride along as interpolated
  * attributes; normals are dropped (the downstream normals pass re-derives them). Collapses are edge-length capped
- * ({@link MAX_EDGE_FACTOR}) so flat surfaces don't sliver into spikes, and every group keeps
+ * ({@link MAX_EDGE_FACTOR}) so flat surfaces don't sliver into spikes, UV-drift guarded ({@link MAX_UV_DRIFT}) so
+ * patchwork-mapped tiled surfaces (roads) don't smear, and every group keeps
  * {@link MIN_FACES_PER_GROUP} faces so no surface vanishes. Vertices are **not** welded — fusing coincident verts
  * across a UV seam smears textures, and across stacked terrain layers collapses coverage. A mesh already under
  * budget is returned unchanged.
@@ -35,6 +46,7 @@ export function decimateMesh(mesh: MergedMesh, targetTriangles: number): MergedM
 
   const result = simplify(toSimplifyMesh(mesh), targetTriangles, {
     maxEdgeFactor: MAX_EDGE_FACTOR,
+    maxUvDrift: MAX_UV_DRIFT,
     minFacesPerGroup: MIN_FACES_PER_GROUP,
   });
   const [uv, color, night] = result.attributes;

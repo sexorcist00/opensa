@@ -28,7 +28,10 @@ measurements).
   winding), see-through textures don't occlude.
 - `coplanar-remesh` — flat clusters re-triangulated from their byte-exact boundary.
 - `compact` — orphan-vertex compaction (used by the modifiers).
-- `decimate` — the raw QEM wrapper (used by `budgeted-decimate` and lod-procobj).
+- `decimate` — the raw QEM wrapper (used by `budgeted-decimate` and lod-procobj). Collapses are edge-length
+  capped (anti-spike), group-floored (no vanishing surfaces) and **UV-drift guarded** (`MAX_UV_DRIFT` 0.1 —
+  GTA surfaces are UV patchwork, roads reset their tiled V per segment; unguarded collapses smear them into
+  lengthwise stripes — see plan 003 "Road-stripes bug").
 
 **Encode / effects**
 
@@ -41,4 +44,6 @@ measurements).
 **Measurement**
 
 - `preview` — deterministic CPU rasterizer + `previewDiff`; the eye of the Phase-4 harness
-  (`opensa-lod-generator/src/harness.ts`) and of `budgeted-decimate`'s self-check.
+  (`opensa-lod-generator/src/harness.ts`) and of `budgeted-decimate`'s self-check. Caveat: it paints per-group
+  **mean texture colour**, not UV-sampled texels — it validates geometry, and is blind to UV damage (that's what
+  `decimate`'s UV-drift guard covers at the source).

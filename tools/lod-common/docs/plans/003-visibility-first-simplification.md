@@ -323,6 +323,37 @@ merged-cell slack. Knobs if more is wanted: lower `minFaces`, raise `decimateBud
 measured-not-guessed. The bigger sa win from Phase 5 is fidelity: decimated clones keep night prelit, tints and
 coronas; everything else stays byte-verbatim.
 
+### Road-stripes bug: UV-drift guard on QEM collapses (2026-07-07) — ✅ fixed, verified in-game
+
+**Field report (opensa cells): tiled repeat textures — road surfaces, the Hampton Barns bridge deck — rendered
+as lengthwise smeared stripes** (`lod_9_-7` @ 2432,−1664; `lod_2_1` @ 640,384). User-confirmed fixed in-game
+after regen (2026-07-07). Bisected with a textured CPU
+top-down render per stage (mean-colour previews can't see it — below): merge clean → budgeted-decimate smeared.
+
+Root cause: **GTA map surfaces are UV patchwork.** Roads reset their tiled V every couple of segments (a 250-unit
+road spans v ∈ [−4..4] via per-quad affine maps, seams duplicated), and rooftops/decks are stitched from quads
+with individually offset mappings. QEM's attribute lerp is exact only for a globally affine mapping; a collapse
+merging vertices across patch borders blends two different mappings, and the error compounds over successive
+collapses into tile-scale smears (measured: a vertex dragged 7.2 units carried v = −1.00 where its face's own map
+says −1.08 — one collapse; the shipped cells accumulated whole tiles). The budgeted-decimate self-check was blind
+to it: `renderMeshPreview` paints per-group mean colour, not UVs — the same harness-blindness class as plan 012's
+"relative diffs can't catch convention errors".
+
+Fix: `simplify` (tool-kit) gained **`maxUvDrift`** — a collapse is rejected when its interpolated UV disagrees
+with ANY surviving incident face's own position→UV affine map at the target by more than the limit (UV units).
+Cross-patch collapses are rejected, so texture seams now survive like material seams; exact-affine merges pass
+with ~0 drift. `decimateMesh` passes `MAX_UV_DRIFT = 0.1` (≈6 px of a 64 px LOD texture) — this also covers the
+lod-procobj clone path (same `decimateMesh`).
+
+Measured (cell 9,-7, the freeway/road cell): chain 52,529 → 42,023 tris (−20.0 %) with the guard — decimation
+keeps ~25 % more road-area triangles than unguarded, the price of correct texel flow; the budget harness still
+gates every cell. Textured re-render: roads/bridge deck clean at every stage, remaining top pixel-diff block is a
+0.08-tile rooftop shift (below the 0.1 guard, invisible at LOD range). Unit pin: an 8-quad patchwork strip
+decimated to 2 faces drifts 1.2 tiles unguarded vs ≤0.1 guarded (`simplify.test.ts`, `decimate.test.ts`).
+
+Caveat for future harness work: any decimation validator must sample REAL texels through UVs (or check UV drift
+directly) — mean-colour previews validate geometry only.
+
 ## Out of scope
 
 - Budget-driven decimation (error-bounded QEM as a tail modifier) — only revisit if Phases 1–3 leave cells over
