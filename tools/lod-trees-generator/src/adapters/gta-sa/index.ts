@@ -3,7 +3,7 @@ import { type PrelightInfo, stockPrelightColor } from '@opensa/lod-common/prelig
 import { lodAlias } from '@opensa/map-placement/ide';
 import { isNonTreeModel, SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { readRw } from '@opensa/rw-codec/chunk';
-import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import type { HdTree, Impostor, TreeLodAdapter, TreeLodConfig } from '../../core';
@@ -83,7 +83,11 @@ export function createGtaSaTreeLodAdapter(options: GtaSaTreeLodOptions): TreeLod
           );
         }
       }
-      writeFileSync(join(outPath, 'lodtrees.txd'), encodeAtlasTxd(impostors, version));
+      writeFileSync(join(outPath, 'lodtrees.txd'), encodeAtlasTxd(impostors, version, 'gamma'));
+      // The linear-convention variant for OpenSA (plan 012): the pmb opensa split swaps it into its own
+      // gta3.img; the game build (and every bootable .work stage) stays in the real-SA gamma convention.
+      mkdirSync(join(outPath, 'linear-txd'), { recursive: true });
+      writeFileSync(join(outPath, 'linear-txd', 'lodtrees.txd'), encodeAtlasTxd(impostors, version, 'linear'));
       // Col models are bound by the same model name SA registers (the IDE/IMG alias), not the impostor's own name.
       const aliases = impostors.map((impostor, i) => lodAlias(impostor.name, i));
       writeFileSync(

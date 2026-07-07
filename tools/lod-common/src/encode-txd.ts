@@ -1,7 +1,7 @@
 import type { RwChunk } from '@opensa/rw-codec/chunk';
 
 import { RW_EXTENSION, RW_STRUCT, RW_TEXTURE_DICTIONARY, RW_TEXTURE_NATIVE, writeRw } from '@opensa/rw-codec/chunk';
-import { buildMipChain, downsample } from '@opensa/rw-codec/mip';
+import { buildMipChain, downsample, type MipColorMath } from '@opensa/rw-codec/mip';
 import { encodeDxtStruct } from '@opensa/rw-codec/texture-native';
 
 import type { TextureSource } from './texture-source';
@@ -11,8 +11,13 @@ import type { TextureSource } from './texture-source';
  * instead of capping to a size budget — the sa-lod-generator "50 % textures" clone. Same DXT + full mips; the DFF's
  * material/texture **names** + UVs are untouched, so a verbatim HD-clone DFF resolves every texture from here.
  */
-export function encodeHalvedTxd(textures: readonly string[], source: TextureSource, halvings: number): Uint8Array {
-  return buildTxd(textures, source, (rgba, width, height) => halve(rgba, width, height, halvings));
+export function encodeHalvedTxd(
+  textures: readonly string[],
+  source: TextureSource,
+  halvings: number,
+  math: MipColorMath,
+): Uint8Array {
+  return buildTxd(textures, source, (rgba, width, height) => halve(rgba, width, height, halvings, math), math);
 }
 
 /**
@@ -23,8 +28,13 @@ export function encodeHalvedTxd(textures: readonly string[], source: TextureSour
  * Reuses the engine `parseTxd` (via the source) + `encodeDxtStruct` + chunk codec. Names missing from the source
  * are skipped.
  */
-export function encodeLodTxd(textures: readonly string[], source: TextureSource, maxSize: number): Uint8Array {
-  return buildTxd(textures, source, (rgba, width, height) => downscale(rgba, width, height, maxSize));
+export function encodeLodTxd(
+  textures: readonly string[],
+  source: TextureSource,
+  maxSize: number,
+  math: MipColorMath,
+): Uint8Array {
+  return buildTxd(textures, source, (rgba, width, height) => downscale(rgba, width, height, maxSize, math), math);
 }
 
 /** Assemble a TEXTURE_DICTIONARY from the source textures, each reduced to its top level by `reduce`, DXT + mips. */
@@ -32,13 +42,14 @@ function buildTxd(
   textures: readonly string[],
   source: TextureSource,
   reduce: (rgba: Uint8Array, width: number, height: number) => Level,
+  math: MipColorMath,
 ): Uint8Array {
   const natives: RwChunk[] = [];
   for (const name of textures) {
     const texture = source.get(name);
     if (texture) {
       const level = reduce(texture.rgba, texture.width, texture.height);
-      natives.push(textureNative(name, texture.hasAlpha, level));
+      natives.push(textureNative(name, texture.hasAlpha, level, math));
     }
   }
 
@@ -64,10 +75,10 @@ function container(type: number, children: RwChunk[]): RwChunk {
 }
 
 /** Downscale RGBA (2× box) until both dimensions are ≤ `maxSize`. */
-function downscale(rgba: Uint8Array, width: number, height: number, maxSize: number): Level {
+function downscale(rgba: Uint8Array, width: number, height: number, maxSize: number, math: MipColorMath): Level {
   let level: Level = { data: rgba, height, width };
   while (level.width > maxSize || level.height > maxSize) {
-    level = downsample(level.data, level.width, level.height);
+    level = downsample(level.data, level.width, level.height, math);
   }
 
   return level;
@@ -81,10 +92,10 @@ function downscale(rgba: Uint8Array, width: number, height: number, maxSize: num
 const MIN_HALVED_SIZE = 32;
 
 /** Halve RGBA (2× box) `halvings` times, flooring at {@link MIN_HALVED_SIZE} on the smaller dimension. */
-function halve(rgba: Uint8Array, width: number, height: number, halvings: number): Level {
+function halve(rgba: Uint8Array, width: number, height: number, halvings: number, math: MipColorMath): Level {
   let level: Level = { data: rgba, height, width };
   for (let i = 0; i < halvings && Math.min(level.width, level.height) >= MIN_HALVED_SIZE * 2; i += 1) {
-    level = downsample(level.data, level.width, level.height);
+    level = downsample(level.data, level.width, level.height, math);
   }
 
   return level;
@@ -94,8 +105,8 @@ function leaf(type: number, data: Uint8Array): RwChunk {
   return { data, type, version: RW_VERSION };
 }
 
-function textureNative(name: string, hasAlpha: boolean, level: Level): RwChunk {
-  const mips = buildMipChain(level.data, level.width, level.height);
+function textureNative(name: string, hasAlpha: boolean, level: Level, math: MipColorMath): RwChunk {
+  const mips = buildMipChain(level.data, level.width, level.height, math);
   const struct = encodeDxtStruct(name, hasAlpha ? 'dxt5' : 'dxt1', mips);
 
   return container(RW_TEXTURE_NATIVE, [leaf(RW_STRUCT, struct), container(RW_EXTENSION, [])]);

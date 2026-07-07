@@ -27,7 +27,7 @@ function source(textures: Record<string, SourceTexture>): TextureSource {
 describe('encodeLodTxd', () => {
   describe('negative cases', () => {
     it('skips names missing from the source, keeping the resolvable ones', () => {
-      const txd = encodeLodTxd(['absent', 'road'], source({ road: solid(64, 1, 2, 3) }), 64);
+      const txd = encodeLodTxd(['absent', 'road'], source({ road: solid(64, 1, 2, 3) }), 64, 'gamma');
       expect(parseTxd(toArrayBuffer(txd)).textures.map((t) => t.name)).toEqual(['road']);
     });
   });
@@ -35,7 +35,7 @@ describe('encodeLodTxd', () => {
   describe('positive cases', () => {
     it('round-trips downscaled, named, DXT-compressed textures (DXT1 opaque, DXT5 alpha)', () => {
       const textures = { grass: solid(128, 20, 180, 40), leaf: solid(64, 10, 90, 10, 128) };
-      const txd = encodeLodTxd(['grass', 'leaf'], source(textures), 64);
+      const txd = encodeLodTxd(['grass', 'leaf'], source(textures), 64, 'gamma');
       const parsed = parseTxd(toArrayBuffer(txd)).textures;
 
       expect(parsed.map((t) => t.name).sort()).toEqual(['grass', 'leaf']);
@@ -59,7 +59,7 @@ describe('encodeLodTxd', () => {
 describe('encodeHalvedTxd', () => {
   describe('negative cases', () => {
     it('never drops a dimension below 1px', () => {
-      const txd = encodeHalvedTxd(['dot'], source({ dot: solid(1, 5, 5, 5) }), 3);
+      const txd = encodeHalvedTxd(['dot'], source({ dot: solid(1, 5, 5, 5) }), 3, 'gamma');
       const dot = parseTxd(toArrayBuffer(txd)).textures[0];
       expect([dot.width, dot.height]).toEqual([1, 1]);
     });
@@ -69,6 +69,7 @@ describe('encodeHalvedTxd', () => {
         ['small', 'tiny'],
         source({ small: solid(64, 9, 9, 9), tiny: solid(32, 9, 9, 9) }),
         3,
+        'gamma',
       );
       const parsed = parseTxd(toArrayBuffer(txd)).textures;
       const small = parsed.find((t) => t.name === 'small')!;
@@ -85,6 +86,7 @@ describe('encodeHalvedTxd', () => {
         ['grass', 'leaf'],
         source({ grass: solid(128, 20, 180, 40), leaf: solid(64, 1, 2, 3, 128) }),
         1,
+        'gamma',
       );
       const parsed = parseTxd(toArrayBuffer(txd)).textures;
       const grass = parsed.find((t) => t.name === 'grass')!;
@@ -98,7 +100,7 @@ describe('encodeHalvedTxd', () => {
     });
 
     it('applies multiple halving steps', () => {
-      const txd = encodeHalvedTxd(['grass'], source({ grass: solid(128, 20, 180, 40) }), 2);
+      const txd = encodeHalvedTxd(['grass'], source({ grass: solid(128, 20, 180, 40) }), 2, 'gamma');
       const grass = parseTxd(toArrayBuffer(txd)).textures[0];
       expect([grass.width, grass.height]).toEqual([32, 32]); // 128 → ¼
     });

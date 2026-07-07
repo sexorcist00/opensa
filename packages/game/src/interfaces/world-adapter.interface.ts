@@ -117,6 +117,9 @@ export interface WorldAdapter {
 
 /** What a picked instance is (debug click-inspect). */
 export interface WorldObjectInfo {
+  /** Render diagnostics: the material's shader-variant cache key + whether the geometry carries the
+   *  `nightColor` attribute — tells which day/night path the instance actually takes at runtime. */
+  material?: string;
   modelName: string;
   position: Vec3;
   txdName: string;

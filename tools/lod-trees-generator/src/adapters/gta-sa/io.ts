@@ -154,18 +154,8 @@ export function loadTree(dffBytes: Uint8Array, model: string, textures: Textures
     const uv: Float32Array | undefined = geometry.uvLayers[0];
     const col = geometry.prelitColors;
 
-    // Frame-transform every vertex once into world space.
-    const world = new Float32Array(pos.length);
-    for (let i = 0; i < pos.length; i += 3) {
-      const p = frameTransformPoint(rot, fpos, [pos[i], pos[i + 1], pos[i + 2]]);
-      world[i] = p[0];
-      world[i + 1] = p[1];
-      world[i + 2] = p[2];
-      for (let axis = 0; axis < 3; axis += 1) {
-        min[axis] = Math.min(min[axis], p[axis]);
-        max[axis] = Math.max(max[axis], p[axis]);
-      }
-    }
+    // Frame-transform every vertex once into world space (growing the tree bbox as we go).
+    const world = transformVertices(pos, rot, fpos, min, max);
 
     const at = (i: number): Vec3 => [world[i * 3], world[i * 3 + 1], world[i * 3 + 2]];
     const uvAt = (i: number): Vec2 => (uv ? [uv[i * 2], uv[i * 2 + 1]] : [0, 0]);
@@ -191,9 +181,16 @@ export function loadTree(dffBytes: Uint8Array, model: string, textures: Textures
     console.warn(`  ! ${model}: ${missing.size} texture(s) not in --txd → untextured: ${[...missing].join(', ')}`);
   }
 
-  const nightTint = computeNightTint(dff);
+  const averages = computeDayNightAvg(dff);
 
-  return { bbox: { max, min }, name: model, textures, triangles, ...(nightTint ? { nightTint } : {}) };
+  return {
+    bbox: { max, min },
+    name: model,
+    textures,
+    triangles,
+    ...(averages.dayAvg ? { dayAvg: averages.dayAvg } : {}),
+    ...(averages.nightAvg ? { nightAvg: averages.nightAvg } : {}),
+  };
 }
 
 /** Open the game model archive (`gta3.img` + `gta_int.img` fallback) — used only to source the LOD template. */
@@ -211,40 +208,44 @@ export function openTemplateArchive(gamePath: string): ImgArchive {
   };
 }
 
+/** Sum an RGBA byte array's RGB channels into `sums`; returns the number of vertices added. */
+function accumulateRgb(colors: Uint8Array, sums: number[]): number {
+  for (let i = 0; i < colors.length; i += 4) {
+    sums[0] += colors[i];
+    sums[1] += colors[i + 1];
+    sums[2] += colors[i + 2];
+  }
+
+  return colors.length / 4;
+}
+
 /**
- * A per-tree night tint for the impostor: `255 × nightAvg / dayAvg` per channel, averaged over every vertex that
- * carries both a day (prelit) and night (`0x253F2F9`) colour. The impostor atlas bakes the **day** prelit, so this
- * ratio (not the absolute night colour) is what darkens the billboard down to the HD's night look at render time.
- * Returns `null` when the source has no night set (the HD is day-lit at night too — leave the impostor bright).
+ * Per-tree average DAY and NIGHT vertex colours (plan 012). The day average becomes the impostor's vertex
+ * prelit (the atlas keeps only the normalized `prelit/dayAvg` variation), the night average its absolute
+ * night set — the impostor then rides the target renderer's own prelit/day-night pipeline exactly like a
+ * stock model, so any per-pipeline multiplier (SA ×1, skygfx PS2 ×2, OpenSA linear) cancels between HD and
+ * LOD. `dayAvg` is averaged over every prelit vertex; `nightAvg` over vertices that carry a night colour.
  */
-function computeNightTint(dff: ReturnType<typeof parseDff>): null | Rgba {
-  let count = 0;
+function computeDayNightAvg(dff: ReturnType<typeof parseDff>): { dayAvg: null | Rgba; nightAvg: null | Rgba } {
   const day = [0, 0, 0];
   const night = [0, 0, 0];
+  let dayCount = 0;
+  let nightCount = 0;
   for (const geometry of dff.geometries) {
-    const d = geometry.prelitColors;
-    const n = geometry.nightColors;
-    if (!d || !n || d.length !== n.length) {
-      continue;
-    }
-    for (let i = 0; i < d.length; i += 4) {
-      for (let c = 0; c < 3; c += 1) {
-        day[c] += d[i + c];
-        night[c] += n[i + c];
-      }
-      count += 1;
-    }
+    dayCount += geometry.prelitColors ? accumulateRgb(geometry.prelitColors, day) : 0;
+    nightCount += geometry.nightColors ? accumulateRgb(geometry.nightColors, night) : 0;
   }
-  if (count === 0) {
-    return null;
-  }
-  const tint = (c: number): number => {
-    const avgDay = day[c] / count;
+  const avg = (sums: number[], count: number): Rgba => [
+    Math.round(sums[0] / count),
+    Math.round(sums[1] / count),
+    Math.round(sums[2] / count),
+    255,
+  ];
 
-    return avgDay > 0 ? Math.max(0, Math.min(255, Math.round((255 * (night[c] / count)) / avgDay))) : 0;
+  return {
+    dayAvg: dayCount > 0 ? avg(day, dayCount) : null,
+    nightAvg: nightCount > 0 ? avg(night, nightCount) : null,
   };
-
-  return [tint(0), tint(1), tint(2), 255];
 }
 
 function decodeTexture(rw: RWTexture): DecodedTexture {
@@ -265,4 +266,21 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   copy.set(bytes);
 
   return copy.buffer;
+}
+
+/** Frame-transform a geometry's vertices into world space, growing the `min`/`max` bbox in place. */
+function transformVertices(pos: Float32Array, rot: readonly number[], fpos: Vec3, min: Vec3, max: Vec3): Float32Array {
+  const world = new Float32Array(pos.length);
+  for (let i = 0; i < pos.length; i += 3) {
+    const p = frameTransformPoint(rot, fpos, [pos[i], pos[i + 1], pos[i + 2]]);
+    world[i] = p[0];
+    world[i + 1] = p[1];
+    world[i + 2] = p[2];
+    for (let axis = 0; axis < 3; axis += 1) {
+      min[axis] = Math.min(min[axis], p[axis]);
+      max[axis] = Math.max(max[axis], p[axis]);
+    }
+  }
+
+  return world;
 }

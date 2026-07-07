@@ -11,7 +11,8 @@ export interface CardGeometry {
 /**
  * Build the crossed-billboard geometry from a baked {@link Impostor}: per card, a quad spanning its world
  * extents (tangent `u` around the trunk centre, absolute `z`), UV-mapped to its atlas tile, doubled-sided so it
- * reads from both faces. Prelit is flat white — the atlas already has the HD lighting baked in.
+ * reads from both faces. Prelit = the source tree's average day colour ({@link Impostor.dayColor}) — the atlas
+ * is normalized (plan 012), so the mean lighting level rides the vertices like on any stock prelit model.
  */
 export function buildCardGeometry(impostor: Impostor): CardGeometry {
   const cx = (impostor.bbox.min[0] + impostor.bbox.max[0]) / 2;
@@ -45,9 +46,14 @@ export function buildCardGeometry(impostor: Impostor): CardGeometry {
     base += 4;
   }
 
+  const prelit = new Uint8Array((positions.length / 3) * 4);
+  for (let v = 0; v < positions.length / 3; v += 1) {
+    prelit.set(impostor.dayColor, v * 4);
+  }
+
   return {
     positions: new Float32Array(positions),
-    prelit: new Uint8Array((positions.length / 3) * 4).fill(255),
+    prelit,
     triangles,
     uvs: new Float32Array(uvs),
   };

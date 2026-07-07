@@ -103,17 +103,17 @@ function avgRgb(colours: Uint8Array): [number, number, number] {
 
 describe('loadTree night tint', () => {
   describe('positive cases', () => {
-    it('derives nightTint as 255 × nightAvg/dayAvg of the source (per channel)', () => {
+    it('derives dayAvg/nightAvg as the source averages (plan 012 — the impostor rides them as vertex prelit)', () => {
       const bytes = new Uint8Array(readFileSync(CEDAR));
       const geometry = parseDff(ab(bytes)).geometries[0];
       const day = avgRgb(geometry.prelitColors!);
       const night = avgRgb(geometry.nightColors!);
-      const expected = day.map((d, c) => (d > 0 ? Math.max(0, Math.min(255, Math.round((255 * night[c]) / d))) : 0));
 
       const tree = loadTree(bytes, 'cedar1_hi', new Map());
 
-      expect(tree.nightTint).toEqual([...expected, 255]);
-      expect(tree.nightTint![0]).toBeLessThan(255); // darker than full day (night < day)
+      expect(tree.dayAvg).toEqual([...day.map(Math.round), 255]);
+      expect(tree.nightAvg).toEqual([...night.map(Math.round), 255]);
+      expect(tree.nightAvg![0]).toBeLessThan(tree.dayAvg![0]); // night set is darker than day
     });
   });
 });

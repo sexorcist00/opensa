@@ -57,7 +57,7 @@ function solid(r: number, g: number, b: number): SourceTexture {
 function txdBytes(textures: Record<string, SourceTexture>): Uint8Array {
   const direct: TextureSource = { get: (name) => textures[name.toLowerCase()] ?? null };
 
-  return encodeLodTxd(Object.keys(textures), direct, 64);
+  return encodeLodTxd(Object.keys(textures), direct, 64, 'gamma');
 }
 
 describe('scoped LOD textures (plan 004 regression)', () => {
@@ -82,7 +82,12 @@ describe('scoped LOD textures (plan 004 regression)', () => {
       expect(badlandsBush.textures).toEqual(['badlands_leaves']);
 
       // The shared TXD carries BOTH variants with their own pixels.
-      const shared = encodeLodTxd([...bushLike.textures, ...badlandsBush.textures], scopedSource(source, registry), 64);
+      const shared = encodeLodTxd(
+        [...bushLike.textures, ...badlandsBush.textures],
+        scopedSource(source, registry),
+        64,
+        'gamma',
+      );
       const parsed = parseTxd(toArrayBuffer(shared)).textures;
       expect(parsed.map((t) => t.name).sort()).toEqual(['badlands_leaves', 'gta_proc_bush_leaves']);
 

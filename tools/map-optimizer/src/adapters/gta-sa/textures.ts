@@ -43,6 +43,7 @@ export function optimizeTxd(txdBytes: Uint8Array): TxdResult {
         decodeDxt(format, texture.mipmaps[0].data, texture.width, texture.height),
         texture.width,
         texture.height,
+        'gamma', // the optimizer edits the REAL-SA game build — D3D9-era gamma filtering (plan 012)
       );
       // Keep the original base level (lossless); re-encode only the downsampled mips to the same DXT format.
       const levels = [
@@ -53,7 +54,7 @@ export function optimizeTxd(txdBytes: Uint8Array): TxdResult {
     } else {
       struct.data = encodeRgba8888Struct(
         struct.data,
-        buildMipChain(texture.mipmaps[0].data, texture.width, texture.height),
+        buildMipChain(texture.mipmaps[0].data, texture.width, texture.height, 'gamma'),
         texture.hasAlpha,
       );
     }

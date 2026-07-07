@@ -232,7 +232,12 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       return null;
     }
 
-    return { modelName: data.def.modelName, position: instance.position, txdName: data.def.txdName };
+    return {
+      material: describeMaterial(object),
+      modelName: data.def.modelName,
+      position: instance.position,
+      txdName: data.def.txdName,
+    };
   }
 
   /** Drop the cached per-cell colliders (clutter knobs changed) — the collision streaming system
@@ -738,6 +743,18 @@ export function toModelColliders({ col, name, transforms }: RegionColliders): Mo
     },
     transforms,
   };
+}
+
+/** Runtime render diagnostics for the pick panel: shader-variant cache keys of the object's material(s)
+ *  (`saWorld|night` = day/night vertex blend active) + whether the geometry actually carries the
+ *  `nightColor` attribute — pins which lighting path an instance takes without guessing from files. */
+function describeMaterial(object: Object3D): string {
+  const mesh = object as Partial<InstancedMesh>;
+  const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+  const keys = [...new Set(materials.map((m) => m.customProgramCacheKey() || m.type))];
+  const night = Boolean(mesh.geometry?.getAttribute('nightColor'));
+
+  return `${keys.join(',')} nightAttr=${night ? 'yes' : 'no'}`;
 }
 
 /** Yield the main thread (macrotask) so input/render frames interleave with a heavy cell build. */

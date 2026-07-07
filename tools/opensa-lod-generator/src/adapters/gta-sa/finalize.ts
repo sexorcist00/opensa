@@ -107,7 +107,12 @@ export function writeBuild(options: BuildOptions): void {
   }
   img.set(
     `${SHARED_TXD}.txd`,
-    encodeLodTxd([...sharedTextures].sort(), scopedSource(options.textureSource, registry), options.lodTextureSize),
+    encodeLodTxd(
+      [...sharedTextures].sort(),
+      scopedSource(options.textureSource, registry),
+      options.lodTextureSize,
+      'linear',
+    ),
   );
   // SA faults on any streamed model with no collision (fastman92: MODEL_DOES_NOT_HAVE_COLLISION_LOADED). The LODs
   // need no real collision, so pack one bounds-only COL3 per cell (named to its model); SA auto-discovers .col in

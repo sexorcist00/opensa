@@ -43,8 +43,10 @@ function impostor(): Impostor {
   return {
     bbox: { max: [5, 5, 20], min: [-5, -5, 0] },
     cards: [card(0), card(Math.PI / 2)],
+    dayColor: [140, 150, 130, 255],
     height: 64,
     image: new Uint8Array(0),
+    imageLinear: new Uint8Array(0),
     name: 'lodtest',
     width: 64,
   };
@@ -61,6 +63,25 @@ describe('encodeLodDff', () => {
     it('drops the template extra-vertex-colour extension', () => {
       expect(geomExtTypes(template())).toContain(0x253f2f9); // template precondition
       expect(geomExtTypes(encodeLodDff(template(), impostor()))).not.toContain(0x253f2f9);
+    });
+
+    it('writes the impostor dayColor as every card vertex prelit (plan 012 — the mean lighting level rides the vertices)', () => {
+      const dff = parseDff(ab(encodeLodDff(template(), impostor())));
+      const prelit = dff.geometries[0].prelitColors!;
+
+      for (let v = 0; v < prelit.length; v += 4) {
+        expect([prelit[v], prelit[v + 1], prelit[v + 2]]).toEqual([140, 150, 130]);
+      }
+    });
+
+    it('writes the absolute night average as the night set (no ratio-on-white encoding)', () => {
+      const withNight = { ...impostor(), nightColor: [20, 22, 30, 255] as [number, number, number, number] };
+      const dff = parseDff(ab(encodeLodDff(template(), withNight)));
+      const night = dff.geometries[0].nightColors!;
+
+      for (let v = 0; v < night.length; v += 4) {
+        expect([night[v], night[v + 1], night[v + 2]]).toEqual([20, 22, 30]);
+      }
     });
 
     it('names the material texture after the impostor', () => {

@@ -15,11 +15,18 @@ export interface DecodedTexture {
 /** A loaded HD tree: its triangle soup + decoded textures + bounding box. */
 export interface HdTree {
   bbox: { max: Vec3; min: Vec3 };
+  /** Average DAY prelit of the source (per channel) — becomes the impostor's vertex prelit, while the atlas
+   *  keeps only the normalized per-texel variation (`tex × prelit/dayAvg`). This makes the impostor behave
+   *  like a NORMAL prelit model: whatever the target renderer multiplies prelit models by (SA ×1, skygfx
+   *  PS2 building pipe ×2, OpenSA's linear pipeline) applies equally to the HD and the LOD, so the pair
+   *  matches under any pipeline (plan 012). Absent when the source has no prelit (bake stays un-normalized,
+   *  vertices stay white). */
+  dayAvg?: Rgba;
   name: string;
-  /** Per-tree night vertex tint (`255 × nightAvg/dayAvg` of the source, per channel) — baked onto the impostor so
-   *  it darkens at night like the HD (the atlas already carries the day prelit). Absent when the source has no
-   *  night colours (then the HD stays day-lit at night too, so the impostor should as well). */
-  nightTint?: Rgba;
+  /** Average NIGHT (`0x253F2F9`) colour of the source — written verbatim as the impostor's night set, so the
+   *  engine's own day↔night vertex blend drives the impostor exactly like a stock model. Absent when the
+   *  source has no night colours (then the HD stays day-lit at night too, so the impostor should as well). */
+  nightAvg?: Rgba;
   textures: Map<string, DecodedTexture>;
   triangles: HdTriangle[];
 }
@@ -39,11 +46,20 @@ export interface HdTriangle {
 export interface Impostor {
   bbox: { max: Vec3; min: Vec3 };
   cards: ImpostorCard[];
+  /** DAY prelit for every card vertex (the source's {@link HdTree.dayAvg}; white when the source had none) —
+   *  the mean lighting level lives HERE, not in the atlas, so the target renderer's prelit pipeline applies
+   *  to the impostor exactly as to the HD. */
+  dayColor: Rgba;
   height: number;
+  /** The normalized atlas in the REAL-SA convention: `tex × prelit/dayAvg` multiplied in raw sRGB bytes
+   *  (gamma pipeline — D3D9-era RenderWare filters and modulates in gamma space). */
   image: Uint8Array;
+  /** The same atlas in the LINEAR convention for OpenSA/three.js: `lin2srgb(srgb2lin(tex) × prelit/dayAvg)`
+   *  — modern pipelines decode sRGB before multiplying. The pmb opensa split swaps this variant in. */
+  imageLinear: Uint8Array;
   name: string;
-  /** Night vertex colour to bake onto every card vertex (from the source tree's {@link HdTree.nightTint}) so the
-   *  impostor isn't too bright at night; absent → no night set emitted (impostor stays day-lit, matching the HD). */
+  /** Absolute night vertex colour ({@link HdTree.nightAvg}); absent → no night set emitted (impostor stays
+   *  day-lit at night, matching a night-less HD). */
   nightColor?: Rgba;
   width: number;
 }

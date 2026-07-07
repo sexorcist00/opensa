@@ -167,6 +167,7 @@ export function MapInspector({ game }: { game: Game }): ReactElement {
             <div style={styles.info}>name: {selection.modelName}</div>
             <div style={styles.info}>txd: {selection.txdName}</div>
             <div style={styles.info}>pos: {selection.position.map((n) => n.toFixed(1)).join(', ')}</div>
+            {selection.material === undefined ? null : <div style={styles.info}>mat: {selection.material}</div>}
             <button onClick={() => setHiddenCount(game.hideSelectedObject())} style={styles.actionButton} type="button">
               Hide object
             </button>

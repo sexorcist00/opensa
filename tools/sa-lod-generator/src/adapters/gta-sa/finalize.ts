@@ -80,7 +80,7 @@ export function ensureCloneTxd(
   }
   const names = parseTxd(bytes).textures.map((texture) => texture.name);
   const cloneName = `salod${String(hdTxdToClone.size).padStart(4, '0')}`;
-  img.set(`${cloneName}.txd`, encodeHalvedTxd(names, atlasView(input.source, hdTxd), input.halvings));
+  img.set(`${cloneName}.txd`, encodeHalvedTxd(names, atlasView(input.source, hdTxd), input.halvings, 'gamma'));
   hdTxdToClone.set(hdTxd, cloneName);
 
   return cloneName;
@@ -312,12 +312,12 @@ function packCloneTxds(
       }
     }
     const parentView: TextureSource = { get: (name) => resolveFrom(input.source, ownerOf.get(name) ?? '', name) };
-    img.set(`${PARENT_TXD}.txd`, encodeHalvedTxd(shared, parentView, input.halvings));
+    img.set(`${PARENT_TXD}.txd`, encodeHalvedTxd(shared, parentView, input.halvings, 'gamma'));
   }
   const hdTxdToClone = new Map<string, string>();
   for (const [hdTxd, names] of perAtlas) {
     const cloneName = `salod${String(hdTxdToClone.size).padStart(4, '0')}`;
-    img.set(`${cloneName}.txd`, encodeHalvedTxd(names, atlasView(input.source, hdTxd), input.halvings));
+    img.set(`${cloneName}.txd`, encodeHalvedTxd(names, atlasView(input.source, hdTxd), input.halvings, 'gamma'));
     hdTxdToClone.set(hdTxd, cloneName);
   }
 

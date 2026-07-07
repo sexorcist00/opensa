@@ -14,7 +14,7 @@ import { decodePng } from './png-decode';
 export function pngToTextureNative(name: string, pngBytes: Uint8Array, version: number): RwChunk {
   const { height, rgba, width } = decodePng(pngBytes);
   const format = hasAlpha(rgba) ? 'dxt5' : 'dxt1';
-  const levels = buildMipChain(rgba, width, height);
+  const levels = buildMipChain(rgba, width, height, 'gamma'); // installed into the real-SA build
 
   return {
     children: [

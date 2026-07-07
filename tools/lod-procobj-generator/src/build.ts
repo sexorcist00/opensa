@@ -282,7 +282,10 @@ export function run(options: BuildOptions): void {
 
   // Shared LOD assets: one `lod_procobj.txd` (every texture, downscaled) + `lod_procobj.col` (empty-collision).
   const allTextures = [...new Set(lods.flatMap((lod) => lod.textures))];
-  const lodTxd = encodeLodTxd(allTextures, scoped, config.textureSize);
+  // Build-convention (real SA, gamma) TXD into the game; the linear variant is a sidecar the pmb opensa
+  // split swaps into its own gta3.img (plan 012 — one placement, per-target texel encoding).
+  const lodTxd = encodeLodTxd(allTextures, scoped, config.textureSize, 'gamma');
+  const lodTxdLinear = encodeLodTxd(allTextures, scoped, config.textureSize, 'linear');
   const lodCol = encodeColLibrary(
     lods.map((lod) => lod.bbox),
     lods.map((lod) => lod.alias),
@@ -300,6 +303,8 @@ export function run(options: BuildOptions): void {
   // mod's files (IPL + procobj.dat from convertProcObj, the IDE, the IMG entries) go under `<out>/lod/`. Under
   // `--modloader` procobj.dat is emitted as disable rows (survives Modloader's additive `.dat` merge), not stripped.
   const lodOut = modloader ? join(outPath, 'lod') : outPath;
+  // Linear-convention TXD sidecar for the pmb opensa split (plan 012) — the packed gta3.img stays gamma (real SA).
+  writeBytes(join(lodOut, 'linear-txd', `${IPL_NAME}.txd`), lodTxdLinear);
   const procObj = convertProcObj({
     archive,
     areaBase: AREA_BASE,

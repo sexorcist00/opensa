@@ -15,6 +15,7 @@ export function renderImpostor(tree: HdTree, config: TreeLodConfig): Impostor {
   const cols = Math.ceil(Math.sqrt(count));
   const { height, tileH, tileW, width } = pickAtlasShape(tree, config, cols);
   const image = new Uint8Array(width * height * 4);
+  const imageLinear = new Uint8Array(width * height * 4);
   const cx = (tree.bbox.min[0] + tree.bbox.max[0]) / 2;
   const cy = (tree.bbox.min[1] + tree.bbox.max[1]) / 2;
   const cards: ImpostorCard[] = [];
@@ -60,23 +61,27 @@ export function renderImpostor(tree: HdTree, config: TreeLodConfig): Impostor {
         },
         texture,
         ALPHA_TEST,
+        tree.dayAvg,
       );
     }
 
     const gx = (i % cols) * tileW;
     const gy = Math.floor(i / cols) * tileH;
     blit(image, width, raster.color, tileW, tileH, gx, gy);
+    blit(imageLinear, width, raster.colorLinear, tileW, tileH, gx, gy);
     cards.push({ angle, uvRect: { h: tileH, w: tileW, x: gx, y: gy }, worldU: [uMin, uMax], worldZ: [zMin, zMax] });
   }
 
   return {
     bbox: tree.bbox,
     cards,
+    dayColor: tree.dayAvg ?? [255, 255, 255, 255],
     height,
     image,
+    imageLinear,
     name: `lod${tree.name}`,
     width,
-    ...(tree.nightTint ? { nightColor: tree.nightTint } : {}),
+    ...(tree.nightAvg ? { nightColor: tree.nightAvg } : {}),
   };
 }
 

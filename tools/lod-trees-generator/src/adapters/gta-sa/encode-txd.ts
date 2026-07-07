@@ -2,7 +2,7 @@ import type { RwChunk } from '@opensa/rw-codec/chunk';
 
 import { RW_EXTENSION, RW_STRUCT, RW_TEXTURE_DICTIONARY, RW_TEXTURE_NATIVE, writeRw } from '@opensa/rw-codec/chunk';
 import { encodeDxt } from '@opensa/rw-codec/dxt-encode';
-import { buildMipChain } from '@opensa/rw-codec/mip';
+import { buildMipChain, type MipColorMath } from '@opensa/rw-codec/mip';
 
 import type { Impostor } from '../../core';
 
@@ -22,14 +22,14 @@ const FLAGS_DXT_ALPHA = 0x09;
  * SA fails to load it; DXT5 brings it to a few MB, matching the reference LOD mod. `version` is the source game's
  * RW library version (from the template DFF) so the TXD matches.
  */
-export function encodeAtlasTxd(impostors: Impostor[], version: number): Uint8Array {
+export function encodeAtlasTxd(impostors: Impostor[], version: number, math: MipColorMath): Uint8Array {
   const struct = new Uint8Array(4);
   new DataView(struct.buffer).setUint16(0, impostors.length, true); // textureCount; deviceId stays 0 (any)
 
   const dictionary: RwChunk = {
     children: [
       { data: struct, type: RW_STRUCT, version },
-      ...impostors.map((impostor) => textureNative(impostor, version)),
+      ...impostors.map((impostor) => textureNative(impostor, version, math)),
       { children: [], type: RW_EXTENSION, version },
     ],
     type: RW_TEXTURE_DICTIONARY,
@@ -73,8 +73,9 @@ function encodeDxt5Struct(
   return out;
 }
 
-function textureNative(impostor: Impostor, version: number): RwChunk {
-  const levels = buildMipChain(impostor.image, impostor.width, impostor.height);
+function textureNative(impostor: Impostor, version: number, math: MipColorMath): RwChunk {
+  const image = math === 'linear' ? impostor.imageLinear : impostor.image;
+  const levels = buildMipChain(image, impostor.width, impostor.height, math);
 
   return {
     children: [

@@ -89,7 +89,7 @@ describe('encodeRgba8888Struct', () => {
 describe('encodeDxtStruct', () => {
   describe('positive cases', () => {
     it('round-trips an opaque image through parseTxd as DXT1 with its mip chain', () => {
-      const struct = encodeDxtStruct('body', 'dxt1', buildMipChain(solid(4, [200, 50, 25, 255]), 4, 4));
+      const struct = encodeDxtStruct('body', 'dxt1', buildMipChain(solid(4, [200, 50, 25, 255]), 4, 4, 'gamma'));
 
       expect(readTextureName(struct)).toBe('body');
 
@@ -105,7 +105,7 @@ describe('encodeDxtStruct', () => {
     });
 
     it('encodes an image with alpha as DXT5', () => {
-      const struct = encodeDxtStruct('glass', 'dxt5', buildMipChain(solid(4, [200, 50, 25, 128]), 4, 4));
+      const struct = encodeDxtStruct('glass', 'dxt5', buildMipChain(solid(4, [200, 50, 25, 128]), 4, 4, 'gamma'));
 
       const { textures } = parseTxd(wrapTxd(struct).buffer as ArrayBuffer);
       expect(textures[0].format).toBe('dxt5');

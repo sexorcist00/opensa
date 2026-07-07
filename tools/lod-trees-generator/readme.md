@@ -64,6 +64,11 @@ checklist of SA's strict DFF/TXD/COL/IDE requirements (tristrip flag, extra-vert
 id ≤ 18630) — each was a real "renders in the viewer, invisible/crashes in-game" bug.
 [`007-impostor-improvements.md`](./docs/plans/007-impostor-improvements.md) covers the quality work: aspect-aware
 (portrait) impostor textures for tall trees + the `--prelight` stock→custom prelight transfer.
+[`012-linear-prelit-bake.md`](./docs/plans/012-linear-prelit-bake.md) makes the impostor colour-correct in
+BOTH engines: the atlas stores only the **normalized** prelit variation (`tex × prelit/dayAvg`), the card
+vertices carry the source's average day prelit + absolute night set (so any renderer multiplier — SA ×1,
+skygfx PS2 ×2, OpenSA linear — applies to HD and LOD alike), and texels are encoded **per target**: gamma
+into the game build, a linear `linear-txd/` sidecar the pmb opensa split swaps into its own `gta3.img`.
 [`011-area-row-budget.md`](./docs/plans/011-area-row-budget.md) is the safety cap on impostor appends: an
 area's text + binary rows boot through SA's unbounded 4096-slot buffer (the "ghost barriers" corruption), so
 appends stop at 4000 rows per area and over-budget trees migrate — HD instance + impostor, still lod-linked —

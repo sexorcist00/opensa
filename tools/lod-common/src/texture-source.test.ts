@@ -35,7 +35,7 @@ function solid(size: number, r: number, g: number, b: number): SourceTexture {
 function txdBytes(textures: Record<string, SourceTexture>): Uint8Array {
   const direct: TextureSource = { get: (name) => textures[name.toLowerCase()] ?? null };
 
-  return encodeLodTxd(Object.keys(textures), direct, 64);
+  return encodeLodTxd(Object.keys(textures), direct, 64, 'gamma');
 }
 
 describe('createTextureSource', () => {

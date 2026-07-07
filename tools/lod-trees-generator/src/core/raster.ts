@@ -6,7 +6,10 @@ import type { DecodedTexture, Rgba } from './types';
  * divide). Background stays α=0; the texture's own alpha drives the foliage cutout.
  */
 export interface Raster {
+  /** The real-SA (gamma) encoding: `tex × prelit/dayAvg` in raw sRGB bytes. */
   color: Uint8Array;
+  /** The OpenSA (linear) encoding of the SAME fragments: `lin2srgb(srgb2lin(tex) × prelit/dayAvg)`. */
+  colorLinear: Uint8Array;
   depth: Float32Array;
   height: number;
   width: number;
@@ -23,9 +26,17 @@ type Vec3px = [number, number, number];
 
 const WHITE: Rgba = [255, 255, 255, 255];
 
+/** sRGB byte → linear (LUT): the space GPUs decode textures into before any math. */
+const SRGB_TO_LINEAR = new Float32Array(256).map((_, byte) => {
+  const c = byte / 255;
+
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+});
+
 export function createRaster(width: number, height: number): Raster {
   return {
     color: new Uint8Array(width * height * 4),
+    colorLinear: new Uint8Array(width * height * 4),
     depth: new Float32Array(width * height).fill(-Infinity),
     height,
     width,
@@ -38,6 +49,7 @@ export function rasterizeTriangle(
   tri: RasterTri,
   texture: DecodedTexture | null,
   alphaTest: number,
+  normalize: Rgba = WHITE,
 ): void {
   const [a, b, c] = tri.pixels;
   let area = edge(a, b, c);
@@ -70,27 +82,62 @@ export function rasterizeTriangle(
         continue; // behind an already-drawn fragment
       }
 
-      const colour = blend(tri, texture, l0, l1, l2);
-      if (colour[3] < alphaTest * 255) {
+      const [gamma, linear] = blend(tri, texture, l0, l1, l2, normalize);
+      if (gamma[3] < alphaTest * 255) {
         continue; // cutout
       }
       raster.depth[di] = depth;
       const o = di * 4;
-      raster.color[o] = colour[0];
-      raster.color[o + 1] = colour[1];
-      raster.color[o + 2] = colour[2];
-      raster.color[o + 3] = colour[3];
+      raster.color[o] = gamma[0];
+      raster.color[o + 1] = gamma[1];
+      raster.color[o + 2] = gamma[2];
+      raster.color[o + 3] = gamma[3];
+      raster.colorLinear[o] = linear[0];
+      raster.colorLinear[o + 1] = linear[1];
+      raster.colorLinear[o + 2] = linear[2];
+      raster.colorLinear[o + 3] = gamma[3];
     }
   }
 }
 
-function blend(tri: RasterTri, texture: DecodedTexture | null, l0: number, l1: number, l2: number): Rgba {
+/**
+ * Fragment colour = texture × the NORMALIZED prelit (`prelit / normalize`, where `normalize` is the tree's
+ * average day prelit that instead rides the card VERTICES — plan 012). Only the per-texel variation lands
+ * in the atlas, so the impostor behaves like a stock prelit model under any renderer multiplier. Emitted in
+ * BOTH conventions at once:
+ * - gamma (`[0]`): raw sRGB-byte product — what real SA's D3D9-era pipeline shows;
+ * - linear (`[1]`): `lin2srgb(srgb2lin(tex) × factor)` — what OpenSA/three.js (linear pipeline) shows.
+ * Alpha is coverage, not colour — a plain product, shared by both encodings.
+ */
+function blend(
+  tri: RasterTri,
+  texture: DecodedTexture | null,
+  l0: number,
+  l1: number,
+  l2: number,
+  normalize: Rgba,
+): [Rgba, Rgba] {
   const u = tri.uvs[0][0] * l0 + tri.uvs[1][0] * l1 + tri.uvs[2][0] * l2;
   const v = tri.uvs[0][1] * l0 + tri.uvs[1][1] * l1 + tri.uvs[2][1] * l2;
   const tex = texture ? sample(texture, u, v) : WHITE;
   const vc = tri.colors ? lerpColor(tri.colors, l0, l1, l2) : WHITE;
+  const alpha = (tex[3] * vc[3]) / 255;
+  const factor = (c: number): number => vc[c] / Math.max(1, normalize[c]);
 
-  return [(tex[0] * vc[0]) / 255, (tex[1] * vc[1]) / 255, (tex[2] * vc[2]) / 255, (tex[3] * vc[3]) / 255];
+  return [
+    [
+      Math.min(255, Math.round(tex[0] * factor(0))),
+      Math.min(255, Math.round(tex[1] * factor(1))),
+      Math.min(255, Math.round(tex[2] * factor(2))),
+      alpha,
+    ],
+    [
+      linearToSrgbByte(srgbToLinear(tex[0]) * factor(0)),
+      linearToSrgbByte(srgbToLinear(tex[1]) * factor(1)),
+      linearToSrgbByte(srgbToLinear(tex[2]) * factor(2)),
+      alpha,
+    ],
+  ];
 }
 
 function edge(p: Vec3px, q: Vec3px, r: Vec3px): number {
@@ -108,6 +155,14 @@ function lerpColor(colors: [Rgba, Rgba, Rgba], l0: number, l1: number, l2: numbe
     colors[0][2] * l0 + colors[1][2] * l1 + colors[2][2] * l2,
     colors[0][3] * l0 + colors[1][3] * l1 + colors[2][3] * l2,
   ];
+}
+
+/** Linear 0–1 → sRGB byte — the encoding the atlas is stored (and later sampled) in. */
+function linearToSrgbByte(value: number): number {
+  const clamped = Math.max(0, Math.min(1, value));
+  const srgb = clamped <= 0.0031308 ? clamped * 12.92 : 1.055 * clamped ** (1 / 2.4) - 0.055;
+
+  return Math.round(srgb * 255);
 }
 
 /** Bilinear texture sample with wrapping (matches the engine's RepeatWrapping) — softens the impostor. */
@@ -132,4 +187,12 @@ function sample(texture: DecodedTexture, u: number, v: number): Rgba {
   }
 
   return out;
+}
+
+/** sRGB byte (possibly fractional, from bilinear sampling) → linear, interpolating the LUT. */
+function srgbToLinear(byte: number): number {
+  const low = Math.max(0, Math.min(255, Math.floor(byte)));
+  const high = Math.min(255, low + 1);
+
+  return lerp(SRGB_TO_LINEAR[low], SRGB_TO_LINEAR[high], byte - low);
 }

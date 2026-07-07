@@ -12,11 +12,13 @@ import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { install as installMods } from '@opensa/mod-installer/install';
 import { buildOpensaLods } from '@opensa/opensa-lod-generator/build';
 import { install as installPeds } from '@opensa/ped-installer/install';
+import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseIde } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { buildSaLods } from '@opensa/sa-lod-generator/build';
+import { editArchive } from '@opensa/tool-kit/archive/img';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { BuilderConfig } from './config';
@@ -175,7 +177,12 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       outDir: opensa,
       stripLods: true,
     });
+    swapLinearTxds(game, opensa);
     produced.push({ dir: opensa, name: 'opensa' });
+  }
+  // The sidecars are split-time inputs, not game content — keep the final targets clean.
+  for (const target of produced.filter(({ name }) => name === 'sa' || name === 'opensa')) {
+    rmSync(join(target.dir, 'linear-txd'), { force: true, recursive: true });
   }
 
   if (!keepWork) {
@@ -233,6 +240,32 @@ export function collectGeneratedModels(gameDir: string): string[] {
   }
 
   return [...names];
+}
+
+/**
+ * Swap the linear-convention TXD sidecars (`<common build>/linear-txd/*.txd`) into the opensa target's
+ * `gta3.img` (lod-trees plan 012): the common build's generated TXDs (impostor atlas, lod_procobj) are
+ * encoded in the real-SA **gamma** convention — every bootable `.work` stage stays SA-correct — while
+ * OpenSA's linear pipeline needs the linear encoding of the same texels. One placement, two texel codings.
+ */
+export function swapLinearTxds(commonDir: string, opensaDir: string): void {
+  const sidecarDir = join(commonDir, 'linear-txd');
+  if (!existsSync(sidecarDir)) {
+    return;
+  }
+  const names = readdirSync(sidecarDir).filter((file) => file.toLowerCase().endsWith('.txd'));
+  if (names.length === 0) {
+    return;
+  }
+  const imgPath = join(opensaDir, 'models', 'gta3.img');
+  const buffer = readFileSync(imgPath);
+  const img = editArchive(openArchive(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)));
+  for (const name of names) {
+    const bytes = readFileSync(join(sidecarDir, name));
+    img.set(name.toLowerCase(), new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  }
+  writeFileSync(imgPath, img.build());
+  log(`opensa: swapped ${names.length} linear-convention TXD(s) (${names.join(', ')})`);
 }
 
 /** SA's `IplEntityIndexArrays` usable capacity: one slot per gta.dat text IPL with inst rows, and the game

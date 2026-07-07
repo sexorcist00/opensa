@@ -46,7 +46,7 @@ function mintTxd(texture: string): Uint8Array {
       name === texture ? { hasAlpha: false, height: 4, rgba: new Uint8Array(4 * 4 * 4), width: 4 } : null,
   };
 
-  return encodeLodTxd([texture], source, 64);
+  return encodeLodTxd([texture], source, 64, 'gamma');
 }
 
 /** Lay down a synthetic game-dir: gta.dat + stock IDE + companion text IPL + a gta3.img with one binary stream. */

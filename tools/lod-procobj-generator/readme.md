@@ -68,6 +68,10 @@ converted species for downstream generators. Note the LOD layer is ~15k permanen
 a `Buildings` pool raise (FLA `[IPL] Buildings` or OLA `Buildings`) — and only ONE limit adjuster may patch
 the IPL limits (FLA+OLA both active on those zones crash at load).
 
+`lod_procobj.txd` ships in the real-SA **gamma** convention; a **linear**-convention copy is written to
+`<out>/linear-txd/` for the pmb opensa split (texel colour math must match the target renderer — see
+lod-trees plan 012).
+
 A shared `--in` TXD is **trimmed** to just the textures the swapped procobj models use (via
 `@opensa/map-placement/retxd`), so a vegetation pack's tree/non-procobj textures don't bloat the output.
 `--prelight` optionally corrects the swapped HD + decimated LOD's trunk prelight from the stock model (see above).
