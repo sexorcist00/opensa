@@ -1,13 +1,19 @@
 # "Ghost barriers" — mass map instances corrupt real SA (int16 building-pool indexes)
 
-> **✅ SOLVED (2026-07-07).** After generating procobj/tree LODs for the real game, the script-gated
-> `barriers2.ipl` roadblocks ("DANGER NO ACCESS ACROSS BRIDGE", STOP signs, cones at the Hampton Barns
-> bridge) appeared **permanently, on any save**, plus teleport-save crashes near the bridge. The final
-> root cause is an **int16 truncation of building-pool indexes inside `IplDef`** — a stock SA 1.0 bug
-> with a hard ceiling of **32,767 permanent text-IPL instances map-wide**. Fixed by restructuring our
-> generated placement (binary streams + budgets + build guards). Verified in-game on the full
-> perfect-map build. Kept here as the reference for SA's four (!) unbounded placement structures and
-> for the epic of eliminated wrong theories.
+> **🟡 SOLVED BY BUDGETS, NOT AT THE ROOT (2026-07-07).** After generating procobj/tree LODs for the
+> real game, the script-gated `barriers2.ipl` roadblocks ("DANGER NO ACCESS ACROSS BRIDGE", STOP signs,
+> cones at the Hampton Barns bridge) appeared **permanently, on any save**, plus teleport-save crashes
+> near the bridge. The final root cause is an **int16 truncation of building-pool indexes inside
+> `IplDef`** — a stock SA 1.0 bug with a hard ceiling of **32,767 permanent text-IPL instances
+> map-wide**. Fixed by restructuring our generated placement (binary streams + budgets + build guards)
+> and verified in-game on the full perfect-map build — but that is a **work-around within the limit,
+> not a lift of it**. **Remaining goal (2026-07-07): pin the exact patch(es) that remove the ceiling
+> and ship a 100 % fix so any number of objects can be added** — candidates: our own minimal .asi /
+> engine-side patch widening the `IplDef` int16 ranges (+ the other three unbounded structures), or a
+> placement scheme that provably never touches the text-IPL path. ProperFixes.asi proves it is
+> code-patchable (obfuscated, license-restricted — can't be reused, only learned from behaviourally).
+> Kept as the reference for SA's four (!) unbounded placement structures and the epic of eliminated
+> wrong theories.
 
 ## Symptom
 

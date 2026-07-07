@@ -1,9 +1,11 @@
 # "Locked" (anti-rip protected) DFF models
 
-> **✅ SOLVED (2026-06-19; Variant D added 2026-06-24).** All four lock variants are handled; `cheetah.dff` /
-> `yosemite.dff` / `walton.dff` parse fully — geometry, frames, atomics **and** the embedded COL — and
-> gostown's `lodveg.txd` (TXD wrapper lock, variant C) recovers its textures. Kept here (not deleted) as a
-> reference for the lock formats and the recovery, in case related regressions surface.
+> **🟡 MOSTLY SOLVED (2026-06-19; Variant D added 2026-06-24) — cases remain.** The four known lock
+> variants are handled; `cheetah.dff` / `yosemite.dff` / `walton.dff` parse fully — geometry, frames,
+> atomics **and** the embedded COL — and gostown's `lodveg.txd` (TXD wrapper lock, variant C) recovers
+> its textures. **Remaining (2026-07-07): more locked-asset cases exist in the wild that the current
+> variants don't cover — to be finished later.** Also the byte-editing tools still need `unlockDff`
+> applied explicitly (the recovery lives in the engine parser, not in every tool path).
 
 Both locks bloat chunk **sizes** to swallow siblings; the data is all present (the game reads by count,
 ignoring sizes). Recovered the same way (see [Fix](#fix-2026-06-19) below). The spawn crash was already
