@@ -1,4 +1,6 @@
+import { encodeBinaryIpl } from '@opensa/map-placement/ipl-binary-write';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
+import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { createImg, openImg } from '@opensa/tool-kit/archive/img';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -84,6 +86,120 @@ describe('install (end-to-end)', () => {
       expect(existsSync(join(out, 'gta_int_img'))).toBe(false); // merged, never copied as a folder
       const img = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta_int.img'))));
       expect(img.has('int.dff')).toBe(true);
+    });
+
+    it('merges cutscene_img into models/cutscene.img (add + replace by name)', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+
+      write(join(game, 'data', 'keep.txt'), 'base');
+      const baseImg = createImg();
+      baseImg.set('csburgerbox.txd', Uint8Array.from([1]));
+      baseImg.set('cskeep.txd', Uint8Array.from([9]));
+      write(join(game, 'models', 'cutscene.img'), baseImg.build());
+      write(join(mods, 'a_mod', 'cutscene_img', 'csburgerbox.txd'), Uint8Array.from([2, 2]));
+      write(join(mods, 'a_mod', 'cutscene_img', 'csnew.dff'), Uint8Array.from([3]));
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      expect(existsSync(join(out, 'cutscene_img'))).toBe(false); // merged, never copied as a folder
+      const img = openImg(new Uint8Array(readFileSync(join(out, 'models', 'cutscene.img'))));
+      // entries come back sector-padded — compare the payload prefix
+      expect([...img.get('csburgerbox.txd')!.slice(0, 2)]).toEqual([2, 2]); // replaced by the mod
+      expect(img.get('cskeep.txd')![0]).toBe(9); // untouched neighbour
+      expect(img.has('csnew.dff')).toBe(true); // added
+    });
+
+    it("stacks an .ipl.merge over another mod's whole-file replacement of the same IPL (plan 007)", () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+
+      const vanillaIpl = [
+        'inst',
+        '710, vgs_palm01, 0, 100, 200, 30, 0, 0, 0, 1, -1',
+        '714, veg_bevtree2, 0, 120, 220, 32, 0, 0, 0, 1, -1',
+        'end',
+        '',
+      ].join('\n');
+      write(join(game, 'data', 'maps', 'la', 'lae.ipl'), vanillaIpl);
+
+      // mod a (first): sinks the palm via a replace merge.
+      const sinkMerge = [
+        'replace in "inst":',
+        '- 710, vgs_palm01, 0, 100, 200, 30, 0, 0, 0, 1, -1',
+        '+ 710, vgs_palm01, 0, 100, 200, -300.0, 0, 0, 0, 1, -1',
+        '',
+      ].join('\n');
+      write(join(mods, 'a_fixes', 'data', 'maps', 'la', 'lae.ipl.merge'), sinkMerge);
+
+      // mod b (second): replaces the IPL whole (adds a feature row) — this would erase mod a's sink…
+      write(
+        join(mods, 'b_features', 'data', 'maps', 'la', 'lae.ipl'),
+        vanillaIpl.replace('end', '999, xbox_tree, 0, 1, 2, 3, 0, 0, 0, 1, -1\nend'),
+      );
+      // …so mod b also carries the sink merge, re-applied after its own overlay.
+      write(join(mods, 'b_features', 'data', 'maps', 'la', 'lae.ipl.merge'), sinkMerge);
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      const final = readFileSync(join(out, 'data', 'maps', 'la', 'lae.ipl'), 'utf8');
+      expect(final).toContain('710, vgs_palm01, 0, 100, 200, -300.0, 0, 0, 0, 1, -1'); // sink survived
+      expect(final).toContain('999, xbox_tree, 0, 1, 2, 3, 0, 0, 0, 1, -1'); // feature row present
+      expect(final.split('\n')[1]).toContain('-300.0'); // sunk row kept its index (row 1 of inst)
+    });
+
+    it('inst removal rebases the text AND the area binary streams; a stream merge stacks on top (plan 008)', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+
+      // Base: a text IPL whose row 1 will be removed + a companion binary stream linking to rows 1 and 2.
+      write(
+        join(game, 'data', 'maps', 'la', 'lae.ipl'),
+        [
+          'inst',
+          '700, keep_a, 0, 1, 2, 3, 0, 0, 0, 1, -1',
+          '701, gone_b, 0, 4, 5, 6, 0, 0, 0, 1, -1',
+          '702, keep_c, 0, 7, 8, 9, 0, 0, 0, 1, -1',
+          'end',
+          '',
+        ].join('\n'),
+      );
+      const stream = encodeBinaryIpl([
+        { id: 800, interior: 0, lod: 2, position: [10, 20, 30], rotation: [0, 0, 0, 1] },
+        { id: 801, interior: 0, lod: 0, position: [11, 21, 31], rotation: [0, 0, 0, 1] },
+      ]);
+      const baseImg = createImg();
+      baseImg.set('lae_stream0.ipl', stream);
+      write(join(game, 'models', 'gta3.img'), baseImg.build());
+
+      // mod a: removes text row 1 → rebase must shift the stream's lod 2 → 1.
+      write(
+        join(mods, 'a_remove', 'data', 'maps', 'la', 'lae.ipl.merge'),
+        'remove from "inst":\n701, gone_b, 0, 4, 5, 6, 0, 0, 0, 1, -1\n',
+      );
+      // mod b: edits the stream itself — adds an instance in the FINAL (post-rebase) index space.
+      write(
+        join(mods, 'b_stream', 'gta3_img', 'lae_stream0.ipl.merge'),
+        'add to "inst":\n900, 0, 50, 60, 70, 0, 0, 0, 1, 1\n',
+      );
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      const text = readFileSync(join(out, 'data', 'maps', 'la', 'lae.ipl'), 'utf8');
+      expect(text).not.toContain('gone_b');
+      const img = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta3.img'))));
+      const entry = img.get('lae_stream0.ipl')!;
+      const inst = parseBinaryIpl(
+        entry.buffer.slice(entry.byteOffset, entry.byteOffset + entry.byteLength) as ArrayBuffer,
+      );
+      expect(inst.map((i) => [i.id, i.lod])).toEqual([
+        [800, 1], // was lod 2 — rebased past the removed row
+        [801, 0], // below the removal — untouched
+        [900, 1], // added by mod b's stream merge
+      ]);
     });
 
     it('applies a *.merge data edit onto the installed file instead of copying it', () => {

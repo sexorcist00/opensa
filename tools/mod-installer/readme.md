@@ -1,7 +1,7 @@
 # @opensa/mod-installer
 
 Layer GTA-SA **mod folders** onto a base game into a single drop-in `--out`. Copy the game, then apply each mod on
-top in numeric-aware alphabetical order — plain files overwrite, `gta3_img/`/`gta_int_img/` loose entries merge into `gta3.img`/`gta_int.img`.
+top in numeric-aware alphabetical order — plain files overwrite, `gta3_img/`/`gta_int_img/`/`cutscene_img/` loose entries merge into `gta3.img`/`gta_int.img`/`cutscene.img`.
 
 ```sh
 tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --out ./build
@@ -11,7 +11,7 @@ tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --
 - `--in` — folder of mods; each immediate subfolder is a mod, mirroring the game tree:
   ```
   mods/
-    a-trees/   { data/  models/  gta3_img/ }  # gta3_img/ = loose IMG entries (gta_int_img/ → gta_int.img)
+    a-trees/   { data/  models/  gta3_img/ }  # gta3_img/ = loose IMG entries (gta_int_img/ → gta_int.img, cutscene_img/ → cutscene.img)
     b-roads/   { data/ }
   ```
 - `--out` — output install dir (**wiped + rebuilt** each run)
@@ -34,11 +34,15 @@ tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --
      verbatim they'd create a literal `modloader/` dir: dead weight in the opensa pack and a DOUBLE load on a
      real SA running modloader.asi.
    - **Plain mod** (no loader) — **overlay**: copy every top-level entry except the IMG folders over `--out` (overwrites
-     matching files, keeps the rest), then merge the mod's `gta3_img/` / `gta_int_img/` loose files into `--out/models/gta3.img` / `gta_int.img` (add
-     or replace by name). A PNG folder beside a loose `<name>.txd` merges into that TXD (see below).
+     matching files, keeps the rest), then merge the mod's `gta3_img/` / `gta_int_img/` / `cutscene_img/` loose files into the matching
+     `--out/models/*.img` (add or replace by name). A PNG folder beside a loose `<name>.txd` merges into that TXD (see below).
 
 Each mod applies onto the **accumulated** `--out`, so several mods that touch different files (or different
 textures / different `gta3.img` entries) all coexist; only when two mods change the **same** item does the later
+one win. The `*_img/` folder is a generic "loose IMG entries" convention — a binary `.img` can't be patched file-by-file,
+so a mod expresses "add/replace these entries" as a folder; any source (the LOD tools, hand-built mods, …) can ship
+one.
+
 **`*.merge` data edits.** A mod that needs to EDIT a stock data file (not replace it) ships `<target>.merge`
 at the target's game path — e.g. `data/maps/generic/multiobj.ide.merge`. Directives apply to the CURRENT
 `--out` state (after earlier mods), so merge-mods stack and never clobber other mods' lines:
@@ -59,9 +63,28 @@ overlay, so a target the mod also ships is in place first. Full spec + rationale
 `mods-src/mods/42. Animated Radars` (moves IDE id 1682 from `objs` to `anim` + ships the animated
 model/txd/ifp in `gta3_img/`).
 
-one win. The `*_img/` folder is a generic "loose IMG entries" convention — a binary `.img` can't be patched file-by-file,
-so a mod expresses "add/replace these entries" as a folder; any source (the LOD tools, hand-built mods, …) can ship
-one.
+**`.ipl` merge targets** (plans 007/008) use different, ORDER-AWARE semantics — inst IDs repeat and row order
+is data (binary streams + `lod` columns reference rows by index): `replace in "inst":` swaps a row in place
+via `-`/`+` full-line pairs; `add to` appends verbatim before the section `end`; `remove from "inst"`
+performs the full REBASE a mod author does by hand — every surviving row's `lod` above the removed index is
+decremented (orphaned text link → error) AND the area's `<base>_streamN.ipl` entries in `gta3.img` are
+lod-patched the same way, byte-in-place (a stream instance pointing AT the removed row is unlinked with a
+warning); `remove from` other sections (`occl`, …) matches the full line.
+
+**Binary stream merges** (plan 008): `gta3_img/<name>.ipl.merge` EDITS the named stream entry instead of
+replacing it — same grammar, rows are the binary INST fields (`id, interior, x, y, z, rx, ry, rz, rw, lod`),
+matched canonically. `add` appends, `remove` deletes (stream rows are never index-referenced), `replace`
+swaps; the entry is rebuilt with its CARS (parked cars) block carried over. Stream merges apply AFTER the
+mod's data merges, so their rows live in the final (post-rebase) index space.
+
+`merge-gen` (`src/merge-gen.ts` — library + CLI) converts a whole-file stock replacement (or a whole stream
+entry) into the equivalent `.merge`: iterative remove-simulation collapses the author's hand-made rebase
+edits into plain removes; mid-section inserts are relocated to appends with their lod links remapped;
+float/quaternion re-export noise is canonicalized away. Everything gates on a roundtrip (semantic link
+equivalence for inst). Real examples: `0. Map Fixes Pack` + `1. SA Xbox Map Features` — fully converted, no
+whole-file data or stream replacements left; their 27 colliding stream files now stack instead of last-wins.
+Specs: [docs/plans/007-ipl-merge-level1.md](docs/plans/007-ipl-merge-level1.md) ·
+[docs/plans/008-ipl-merge-level2.md](docs/plans/008-ipl-merge-level2.md).
 
 A guard refuses to wipe a dangerous `--out` (the filesystem root, or a path that is/contains `--game` / `--in`).
 

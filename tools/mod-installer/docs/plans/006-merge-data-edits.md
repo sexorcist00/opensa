@@ -73,8 +73,10 @@ rotate in both real SA and the browser build.
 
 ## Scope notes
 
-- Section-based `key = first numeric cell` covers every IDE flavour (objs/tobj/anim/txdp/2dfx…) and text IPL
-  sections if ever needed. Non-sectioned keyed files (handling.cfg, carcols.dat) are OUT of scope until a mod
-  needs them — the directive grammar leaves room (`remove from "handling":` could map to a file region).
+- Section-based `key = first numeric cell` covers every IDE flavour (objs/tobj/anim/txdp/2dfx…). **Text IPLs
+  turned out to need different semantics** — inst IDs repeat and row ORDER is data (binary-stream lod
+  indexes); plan 007 added the `replace in` directive + order-preserving `.ipl` rules and the `merge-gen`
+  converter. Non-sectioned keyed files (handling.cfg, carcols.dat) remain OUT of scope until a mod needs
+  them — the directive grammar leaves room (`remove from "handling":` could map to a file region).
 - `bake-mod` (Modloader-style loader.txt mods) does not process `.merge` files — third-party Modloader mods
   don't ship them; the convention is ours, for `mods-src/mods` overlay mods.

@@ -2,11 +2,13 @@ import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { mergeIdeFile } from './ide-merge';
-import { mergeImgDir } from './img-merge';
+import { applyStreamMergeDir, mergeImgDir } from './img-merge';
+import { patchAreaStreams } from './stream-merge';
 import { mergeTxdFolder } from './txd-folder';
 
 /** Special-cased top-level mod folders — their loose files merge into the matching IMG instead of being copied. */
 const IMG_FOLDERS: ReadonlyMap<string, string> = new Map([
+  ['cutscene_img', join('models', 'cutscene.img')],
   ['gta3_img', join('models', 'gta3.img')],
   ['gta_int_img', join('models', 'gta_int.img')],
 ]);
@@ -42,10 +44,23 @@ export function applyMod(modPath: string, outPath: string): { copied: number; me
     if (!existsSync(merge.target)) {
       throw new Error(`.merge target does not exist in the install: ${merge.target}`);
     }
-    for (const warning of mergeIdeFile(merge.source, merge.target)) {
+    const { removedInst, warnings } = mergeIdeFile(merge.source, merge.target);
+    for (const warning of warnings) {
       console.warn(`mod-installer: ${merge.source}: ${warning}`);
     }
+    if (removedInst.length > 0) {
+      // mirror the text-row deletions into the area's binary streams (plan 008)
+      patchAreaStreams(outPath, merge.target, removedInst);
+    }
     merged += 1;
+  }
+
+  // Stream merges LAST — their rows are written in the final (post-rebase) index space.
+  for (const [folder, imgPath] of IMG_FOLDERS) {
+    const imgDir = join(modPath, folder);
+    if (existsSync(imgDir) && statSync(imgDir).isDirectory()) {
+      merged += applyStreamMergeDir(imgDir, join(outPath, imgPath));
+    }
   }
 
   return { copied, merged };
