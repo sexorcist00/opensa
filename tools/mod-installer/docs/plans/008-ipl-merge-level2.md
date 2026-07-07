@@ -1,5 +1,8 @@
 # 008 — IPL merge level 2: inst removal with lod rebase + binary-stream merges
 
+> Numbering note: `1. SA Xbox Map Features` was renumbered (it is `5.` as of 2026-07-07 after several
+> renumberings); this doc keeps the number it had at the time.
+
 **Status: ✅ shipped & verified in-game (2026-07-07)** — full 40-mod build boots real SA, all mods present. Level 1 (plan 007) made everything ORDER-PRESERVING mergeable. Level 2 removes the
 two remaining whole-file classes: text-IPL **row deletions** (auto-rebase of every lod index, in the text AND in
 the area's binary streams) and **binary stream replacements** (instance-set merges). After this, mods 0 and 1

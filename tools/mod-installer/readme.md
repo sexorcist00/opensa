@@ -41,7 +41,10 @@ Each mod applies onto the **accumulated** `--out`, so several mods that touch di
 textures / different `gta3.img` entries) all coexist; only when two mods change the **same** item does the later
 one win. The `*_img/` folder is a generic "loose IMG entries" convention — a binary `.img` can't be patched file-by-file,
 so a mod expresses "add/replace these entries" as a folder; any source (the LOD tools, hand-built mods, …) can ship
-one.
+one. A **`Remove original/` subfolder** inside an IMG folder DELETES its file names from the target archive (the
+contents are irrelevant — mods ship the retired originals for reference; a missing entry warns). The same
+convention works inside a Modloader-style mod (any `Remove original/` dir → names deleted from `gta3.img`,
+never injected) — the rotating-ferris-wheel pattern: retire the stock models a runtime script replaces.
 
 **`*.merge` data edits.** A mod that needs to EDIT a stock data file (not replace it) ships `<target>.merge`
 at the target's game path — e.g. `data/maps/generic/multiobj.ide.merge`. Directives apply to the CURRENT
@@ -60,7 +63,7 @@ appends to the section (created when absent) and replaces a same-ID entry. A mis
 continues; a malformed directive or an entry outside one fails the install. Applied after the mod's file
 overlay, so a target the mod also ships is in place first. Full spec + rationale:
 [docs/plans/006-merge-data-edits.md](docs/plans/006-merge-data-edits.md); a real example:
-`mods-src/mods/42. Animated Radars` (moves IDE id 1682 from `objs` to `anim` + ships the animated
+`mods-src/mods/46. Animated Radars` (moves IDE id 1682 from `objs` to `anim` + ships the animated
 model/txd/ifp in `gta3_img/`).
 
 **`.ipl` merge targets** (plans 007/008) use different, ORDER-AWARE semantics — inst IDs repeat and row order
@@ -81,7 +84,7 @@ mod's data merges, so their rows live in the final (post-rebase) index space.
 entry) into the equivalent `.merge`: iterative remove-simulation collapses the author's hand-made rebase
 edits into plain removes; mid-section inserts are relocated to appends with their lod links remapped;
 float/quaternion re-export noise is canonicalized away. Everything gates on a roundtrip (semantic link
-equivalence for inst). Real examples: `0. Map Fixes Pack` + `1. SA Xbox Map Features` — fully converted, no
+equivalence for inst). Real examples: `0. Map Fixes Pack` + `5. SA Xbox Map Features` — fully converted, no
 whole-file data or stream replacements left; their 27 colliding stream files now stack instead of last-wins.
 Specs: [docs/plans/007-ipl-merge-level1.md](docs/plans/007-ipl-merge-level1.md) ·
 [docs/plans/008-ipl-merge-level2.md](docs/plans/008-ipl-merge-level2.md).

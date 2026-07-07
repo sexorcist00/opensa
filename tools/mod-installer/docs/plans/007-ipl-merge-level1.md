@@ -1,5 +1,8 @@
 # 007 — IPL merge convention (level 1) + `cutscene_img`
 
+> Numbering note: `1. SA Xbox Map Features` was renumbered (it is `5.` as of 2026-07-07 after several
+> renumberings); this doc keeps the number it had at the time.
+
 **Status: ✅ shipped (2026-07-07). Superseded in part by [plan 008](008-ipl-merge-level2.md) (level 2)** —
 inst removals and binary-stream merges landed the same day; the whole-file packages and the overlay-merge
 workaround described below no longer exist in mods 0/1. Extend the `.merge` data-edit convention (plan 006) from IDE files to IPLs, add the

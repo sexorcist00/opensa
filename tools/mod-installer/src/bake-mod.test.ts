@@ -95,6 +95,30 @@ describe('bakeMod', () => {
   });
 
   describe('positive cases', () => {
+    it('deletes "Remove original/" names from gta3.img and never injects their contents (rotating ferris case)', () => {
+      const out = stockOut();
+      const img = createImg();
+      img.set('existing.dff', Uint8Array.of(9));
+      img.set('ferris01_law2.dff', Uint8Array.of(8));
+      write('out/models/gta3.img', img.build());
+
+      write('mod/loader.txt', 'IDE data/maps/ferriswheel.ide');
+      write('mod/data/maps/ferriswheel.ide', 'objs\n14644, ferriswheel_wheel, ferriswheel_wheel, 299, 0\nend\n');
+      write('mod/gta3_img/ferriswheel_wheel.dff', Uint8Array.of(1));
+      write('mod/gta3_img/Remove original/ferris01_LAw2.dff', Uint8Array.of(8)); // retired original
+
+      const scan = scanModloaderMod(join(dir, 'mod'));
+      expect([...scan.removals]).toEqual(['ferris01_law2.dff']);
+      expect(scan.assets.has('ferris01_law2.dff')).toBe(false); // never bucketed as an asset
+
+      const result = bakeMod(join(dir, 'mod'), out);
+      expect(result.baked).toBe(true);
+      const baked = openImg(new Uint8Array(readFileSync(join(out, 'models', 'gta3.img'))));
+      expect(baked.has('ferris01_law2.dff')).toBe(false); // deleted
+      expect(baked.has('ferriswheel_wheel.dff')).toBe(true); // new model injected
+      expect(baked.has('existing.dff')).toBe(true); // untouched neighbour
+    });
+
     it('strips an id from stock IDEs when a baked IDE redefines it (Animal Statues anim case)', () => {
       const out = stockOut();
       // Stock defines 11470 in objs; the mod's NEW IDE moves it into anim (modloader merges by id at
