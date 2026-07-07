@@ -39,17 +39,17 @@ function baseFiles(): Map<string, ArrayBuffer | string> {
     // Vehicle assets keyed by their BARE names only (no loose `vehicles/` folder) — exactly how the build packs
     // them and how `loadVehicle` reads them (`requireBuffer('<model>.dff'|'<txd>.txd')`).
     ['admiral.dff', buffer('tests/original/vehicles/admiral.dff')],
-    ['admiral.txd', buffer('game-src/original/vehicles/admiral.txd')],
+    ['admiral.txd', buffer('tests/original/vehicles/admiral.txd')],
     ['anim/ped.ifp', buffer('tests/original/dff/anim-clump/counxref.ifp')],
     ['bmypol1.dff', buffer('tests/original/character/bmypol1.dff')],
     ['bmypol1.txd', buffer('tests/original/character/bmypol1.txd')],
-    ['data/carcols.dat', readFileSync('game-src/original/data/carcols.dat', 'utf8')],
-    ['data/handling.cfg', readFileSync('game-src/original/data/handling.cfg', 'utf8')],
-    ['data/peds.ide', readFileSync('game-src/original/data/peds.ide', 'utf8')],
+    ['data/carcols.dat', readFileSync('tests/original/data/carcols.dat', 'utf8')],
+    ['data/handling.cfg', readFileSync('tests/original/data/handling.cfg', 'utf8')],
+    ['data/peds.ide', readFileSync('tests/original/data/peds.ide', 'utf8')],
     ['data/timecyc.dat', readFileSync('tests/original/data/timecyc.dat', 'utf8')],
-    ['data/vehicles.ide', readFileSync('game-src/original/data/vehicles.ide', 'utf8')],
+    ['data/vehicles.ide', readFileSync('tests/original/data/vehicles.ide', 'utf8')],
     ['junk.txd', buffer('tests/original/txd/junk.txd')],
-    ['models/generic/vehicle.txd', buffer('game-src/original/models/generic/vehicle.txd')],
+    ['models/generic/vehicle.txd', buffer('tests/original/models/generic/vehicle.txd')],
     ['washer.dff', buffer('tests/original/dff/building/washer.dff')],
   ]);
 }
