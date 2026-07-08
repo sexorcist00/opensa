@@ -51,7 +51,12 @@ function classify(line: string): 'carcols' | 'handling' | 'ide' | null {
       return parseVehicleDefs(`cars\n${line}\nend`).size > 0 ? 'ide' : null;
     }
 
-    return parseCarcols(`car\n${line}\nend`).cars.size > 0 ? 'carcols' : null;
+    // A real carcols line has NUMERIC palette-index pairs. A comma line whose values are part NAMES — the
+    // modloader tuning/extras list (`model, nto_b_l, nto_b_s, …`) — parses to NaN combos; it must NOT be taken
+    // as carcols (else it overrides the real paint line and every spawn goes white).
+    const combos = parseCarcols(`car\n${line}\nend`).cars.get(first.toLowerCase()) ?? [];
+
+    return combos.some((combo) => combo.every(Number.isFinite)) ? 'carcols' : null;
   }
   if (line.split(/\s+/).length < MIN_HANDLING_FIELDS) {
     return null; // too few columns to be a handling line (e.g. stray prose)

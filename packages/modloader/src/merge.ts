@@ -2,16 +2,30 @@
  * Merge mod vehicle lines into the stock vehicle data files, **replacing** the line for a vehicle in place (so the
  * file still parses) and appending genuinely new ones. The match key mirrors each engine parser:
  * - `vehicles.ide` — `cars` section, key = model (comma column 1).
- * - `carcols.dat`  — `car` section, key = model (comma column 0).
+ * - `carcols.dat`  — `car` / `car4` section (by colour-group size), key = model (comma column 0).
  * - `handling.cfg` — flat car table (lines starting with a letter), key = the id (first whitespace token).
  */
 
 import { normalizeDatPath } from '@opensa/renderware/archive';
 import { parseGtaDat } from '@opensa/renderware/parsers/text/gta-dat.parser';
 
-/** Replace `car`-section lines in `carcols.dat` by model (column 0). */
+/**
+ * Merge mod carcols lines into `carcols.dat`. A car is 2-colour OR 4-colour and the **section** decides how the
+ * engine reads it, so a line with **4-value colour groups** (`model, c1,c2,c3,c4, …` — a modded 4-colour car like
+ * broadway) goes into `car4`, a 2-value-group line into `car`; either move first removes the model from the OTHER
+ * section so a stock entry can't shadow it (`resolveVehicleColours` reads `car` before `car4`). Group size = the
+ * value count of the first colour group (groups are `, `-separated; values within a group `,`-separated).
+ */
 export function mergeCarcols(base: string, lines: readonly string[]): string {
-  return mergeSectioned(base, 'car', 0, lines);
+  const is4 = (line: string): boolean => (line.split(/,\s+/).slice(1)[0]?.split(',').length ?? 0) === 4;
+  const car = lines.filter((line) => !is4(line));
+  const car4 = lines.filter(is4);
+  const key = (line: string): string => keyOf(line, 0);
+  let out = removeFromSection(base, 'car4', 0, car.map(key));
+  out = removeFromSection(out, 'car', 0, car4.map(key));
+  out = mergeSectioned(out, 'car', 0, car);
+
+  return mergeSectioned(out, 'car4', 0, car4);
 }
 
 /**
@@ -135,4 +149,28 @@ function mergeSectioned(base: string, section: string, col: number, lines: reado
   }
 
   return out.join(eol);
+}
+
+/** Drop lines matched by comma column `col` from inside a `<section> … end` block (other sections untouched). */
+function removeFromSection(base: string, section: string, col: number, keys: readonly string[]): string {
+  const remove = new Set(keys);
+  if (remove.size === 0) {
+    return base;
+  }
+  const eol = base.includes('\r\n') ? '\r\n' : '\n';
+  const kept: string[] = [];
+  let inSection = false;
+  for (const line of base.split(/\r?\n/)) {
+    const token = line.trim().toLowerCase();
+    if (!inSection) {
+      inSection = token === section;
+    } else if (token === 'end') {
+      inSection = false;
+    } else if (remove.has(keyOf(line, col))) {
+      continue; // this vehicle moved to the other section — drop its line here
+    }
+    kept.push(line);
+  }
+
+  return kept.join(eol);
 }

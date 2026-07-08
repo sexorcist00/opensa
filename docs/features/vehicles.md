@@ -16,10 +16,11 @@ plans 015–021/025/030/033.
   so it renders four wheels instead of one. A third, wheel-mod convention is also handled: an
   `f_wheel_<mask>` container frame (e.g. `f_wheel_1111`, cheetah) whose child atomics are the wheel
   sub-model — its geometry is instanced at every dummy instead of rendered once as body.
-- **Paint**: carcols.dat palettes; SA editable-material markers — primary (60,255,0), secondary
-  (255,0,175), tertiary (255,175,0), quaternary (255,60,0); colour spec strings `"p,s[,t,q]"`
-  with omitted 3rd/4th defaulting to palette 0 (SA behaviour); RW modulate (texture × material
-  colour) for non-marker textured materials (dark interiors fix).
+- **Paint**: carcols.dat palettes (`car` = 2-colour, `car4` = 4-colour sections); SA editable-material
+  markers — primary (60,255,0), secondary (255,0,175), tertiary (0,255,255 cyan), quaternary
+  (255,255,0 yellow). NB (255,175,0)/(255,60,0) are per-lamp ids on the `vehiclelights` atlas, **not**
+  paint markers. Colour spec strings `"p,s[,t,q]"` with omitted 3rd/4th defaulting to palette 0 (SA
+  behaviour); RW modulate (texture × material colour) for non-marker textured materials (dark interiors fix).
 - **Reflections** (plan 030): MatFX env coefficient + SA reflection/specular plugin data carried
   per material; preset-driven plugin (`off`/SA sphere-map/`enhanced` clearcoat via
   MeshPhysicalMaterial), live intensity/preset switching, sky probe refresh on weather change.

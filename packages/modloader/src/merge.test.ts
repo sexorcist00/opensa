@@ -94,5 +94,17 @@ describe('mergeCarcols', () => {
       expect(lines).toContain('255,255,255'); // palette untouched
       expect(out).not.toContain('ambulan, 9,9');
     });
+
+    it('routes a 4-colour line (4-value groups) to car4 and removes the model from car (no shadowing)', () => {
+      // A mod turns a stock 2-colour car into 4-colour; it must move to car4 so its 3rd/4th paint applies and the
+      // stock car-section entry can't shadow it (resolveVehicleColours reads car before car4).
+      const base = 'car\nbroadway, 12,1, 19,96\nend\ncar4\nromero, 0,0,0,0\nend\n';
+      const out = mergeCarcols(base, ['broadway, 94,77,1,0, 37,77,1,0']);
+
+      expect(out).not.toMatch(/^broadway, 12,1/m); // stock 2-colour entry removed from car
+      const car4 = out.slice(out.indexOf('car4'));
+      expect(car4).toContain('broadway, 94,77,1,0, 37,77,1,0'); // added to car4
+      expect(car4).toContain('romero, 0,0,0,0'); // other car4 car untouched
+    });
   });
 });

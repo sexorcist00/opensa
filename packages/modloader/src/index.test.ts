@@ -81,6 +81,28 @@ describe('withModloader', () => {
       expect(mod.getText('data/carcols.dat')).not.toContain('admiral, 9,9');
     });
 
+    it('picks the real carcols line over a tuning/extras block and routes a 4-colour line to car4', () => {
+      // Mirrors the reported bug: a real mod settings.txt carries a 4th tuning/extras block (part names) after the
+      // carcols line, and the carcols line is 4-colour. The tuning block must be ignored (else every spawn goes
+      // white), and the 4-colour line must land in car4 with admiral removed from car (else the stock 2-colour
+      // entry shadows it — resolveVehicleColours reads car before car4).
+      const settings = [
+        '445, admiral, admiral, car, ADMIRAL, ADMIRAL, sedan, ignore, 7, 0, 0, -1, 0.7, 0.7, -1',
+        'admiral, 94,77,1,0, 37,77,1,0', // 4-colour carcols
+        'admiral, nto_b_l, nto_b_s, nto_b_tw', // tuning/extras parts list — must NOT be read as carcols
+      ].join('\n\n');
+      const fs = fakeFs({
+        [`${SUB}/admiral.dff`]: Uint8Array.from([1]),
+        [`${SUB}/admiral.settings.txt`]: settings,
+        'data/carcols.dat': 'car\nadmiral, 9,9\nend\ncar4\nromero, 0,0,0,0\nend\n',
+      });
+      const out = withModloader(fs).getText('data/carcols.dat') ?? '';
+
+      expect(out).not.toContain('nto_b_l'); // the tuning list was never written as a carcols line
+      expect(out).not.toMatch(/^admiral, 9,9/m); // stock 2-colour entry removed from car
+      expect(out.slice(out.indexOf('car4'))).toContain('admiral, 94,77,1,0, 37,77,1,0'); // 4-colour → car4
+    });
+
     it('passes through unrelated reads', () => {
       const fs = fakeFs({ [`${SUB}/admiral.dff`]: Uint8Array.from([1]), 'data/gta.dat': 'IMG x' });
       const mod = withModloader(fs);

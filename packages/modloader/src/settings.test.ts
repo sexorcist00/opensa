@@ -16,6 +16,12 @@ describe('parseVehicleSettings', () => {
     it('returns an empty object for empty text', () => {
       expect(parseVehicleSettings('')).toEqual({});
     });
+
+    it('drops a modloader tuning/extras line (part names, not palette indices) — not carcols', () => {
+      // `model, part, part, …` is a comma line with a name first, but its values are part names → NaN combos.
+      // Misreading it as carcols used to override the real paint line and spawn every car white.
+      expect(parseVehicleSettings('cheetah, nto_b_l, nto_b_s, nto_b_tw')).toEqual({});
+    });
   });
 
   describe('positive cases', () => {
@@ -36,6 +42,12 @@ describe('parseVehicleSettings', () => {
     it('distinguishes an ide line (numeric id) from a carcols line (model name)', () => {
       expect(parseVehicleSettings(IDE).ideLine).toBe(IDE);
       expect(parseVehicleSettings(CARCOLS).carcolsLine).toBe(CARCOLS);
+    });
+
+    it('keeps the real carcols line, not a trailing tuning/extras line for the same model', () => {
+      const result = parseVehicleSettings(`${CARCOLS}\n\nambulan, nto_b_l, nto_b_s\n`);
+
+      expect(result.carcolsLine).toBe(CARCOLS);
     });
   });
 });

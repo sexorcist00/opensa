@@ -50,6 +50,11 @@ ambulan, 1,3                                                                    
 ```
 
 The settings file may be **absent** (→ keep stock settings) or **partial** (only some of the three blocks).
+Real mods often carry **extra** blocks the merge ignores — notably a tuning/extras parts list (`model, part,
+part, …`), which is dropped because its comma values aren't numeric palette indices (else it would be mistaken
+for the carcols line and paint every spawn white). The carcols block may also be **4-colour** (`model,
+c1,c2,c3,c4, …`, e.g. broadway) → merged into the `car4` section (and the model removed from `car`, so a stock
+2-colour entry can't shadow it).
 
 ## Design — a thin `AssetFileSystem` decorator (between VFS and the engine)
 
