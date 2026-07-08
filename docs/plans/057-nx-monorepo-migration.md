@@ -3,7 +3,7 @@
 **Status: 📝 Proposed (design agreed).** Split the single `opensa` npm package into an **Nx** monorepo of
 `apps/` (web + viewer), `packages/` (the engine libs), and `tools/` (the offline tools), turning today's deep
 relative imports (`../../../../src/renderware/...`) into `@opensa/*` package imports with **enforced module
-boundaries**. Expands `docs/ideas/monorepo-packages.md` (which is now promoted from "later, maybe" to this plan).
+boundaries**. Expands the original `monorepo-packages` idea note — now promoted from "later, maybe" into this plan (the standalone idea doc has been removed; this plan is the record).
 
 ## Why Nx (vs Turborepo)
 
@@ -151,5 +151,5 @@ build` (viewer entry + 3 lazy chunks) + **25 e2e** (21 prior, all repointed; the
 
 ## Related
 
-- `docs/ideas/monorepo-packages.md` — the original idea (now this plan).
+- the original `monorepo-packages` idea note (folded into this plan; the standalone doc was removed).
 - `docs/plans/README.md` — the cross-repo plan index (engine + per-tool).

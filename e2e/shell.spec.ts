@@ -27,7 +27,11 @@ test.describe('ui shell', () => {
       /* never resolve → the load stays in the loading phase so the preloader is asserted deterministically */
     });
     await page.goto('/');
-    await page.getByRole('button', { name: GOSTOWN }).click();
+    const gostown = page.getByRole('button', { name: GOSTOWN });
+    // The only fetch game may be greyed out (game-config `disable`, e.g. "Demo is temporarily unavailable") —
+    // then the disclaimer→loading flow can't be exercised. Auto-skip until it's re-enabled.
+    test.skip(await gostown.isDisabled(), 'fetch demo disabled in game-config');
+    await gostown.click();
 
     const ok = page.getByRole('button', { name: 'OK' });
     await expect(ok).toBeVisible();
@@ -40,7 +44,9 @@ test.describe('ui shell', () => {
   test('shows the error panel with retry when the manifest fails', async ({ page }) => {
     await page.route('**/games/**/manifest.json', (route) => route.abort());
     await page.goto('/');
-    await page.getByRole('button', { name: GOSTOWN }).click();
+    const gostown = page.getByRole('button', { name: GOSTOWN });
+    test.skip(await gostown.isDisabled(), 'fetch demo disabled in game-config');
+    await gostown.click();
     await page.getByRole('button', { name: 'OK' }).click();
 
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible({ timeout: 30_000 });

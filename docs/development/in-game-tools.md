@@ -30,25 +30,21 @@ Diagnostics logging is off by default; set `showLogs` in the `canvas-host.tsx` c
 ## Development viewers
 
 Standalone debug pages, isolated from the game/streaming layers — each reuses the **real** build path, so
-what you see is what the game produces. Each is its own Vite HTML entry; run `npm run dev` +
-`npm run serve:static` and open the URL.
+what you see is what the game produces. Each is its own Vite HTML entry (`npm run dev`, then open the URL).
 
-- **`/viewer.html`** — map models. Toggles for prelit vertex colours, MODULATE2X, the lit/unlit
-  material, and **collision** (pre-extracted COL, see below).
-- **`/viewer.html?tab=vehicle`** — a car's parts. Pick a body part (highlighted, clamped to the COL bounds),
-  open/close its door (button or `E`), swap it to its damaged mesh, and toggle the collision wireframe and
-  the low-detail `chassis_vlo` LOD.
-- **`/viewer.html?tab=character`** — a skinned ped. Play any `ped.ifp` animation (looped), and toggle the
-  skeleton and the collision capsule.
+Models are loaded on demand from the **compare server** (`--after` side) via an autocomplete box — run it
+alongside the app: `npx tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>`.
 
-Each viewer reads its fixtures from a subfolder of `static/viewer/` (all of `static/` is gitignored —
-generated locally from a GTA copy): `objects/` (dff/txd + pre-baked COL — map objects keep their collision in
-`gta3.img`, not the DFF), `vehicles/`, and `character/` (bmypol1). Regenerate by extracting from
-`game-src/non-modified` with:
+- **`/viewer.html`** (object) — map models by name; adding an HD also lists its generated `lod<name>`.
+  Toggles for prelit vertex colours, MODULATE2X, the lit/unlit material, collision, and **wireframe**.
+- **`/viewer.html?tab=vehicle`** — a car by name (autocomplete from `vehicles.ide`). Pick a body part
+  (highlighted, clamped to the COL bounds), open/close its door (button or `E`), swap it to its damaged mesh,
+  and toggle collision, the low-detail `chassis_vlo` LOD, and **wireframe**.
+- **`/viewer.html?tab=character`** — a ped by name (autocomplete from `peds.ide`). Play any `ped.ifp`
+  animation (looped), and toggle the skeleton, the collision capsule, and **wireframe**.
 
-```bash
-npm run viewer:assets
-```
+The object-viewer's e2e (only) renders static fixtures from `tests/viewer/` (served at `/viewer` by
+`serve-static`, gitignored, extracted from `game-src/non-modified` by `npm run test:fixtures`).
 
-See [docs/plans/022-debug-viewers.md](../plans/022-debug-viewers.md) for the full design, and
+See [docs/plans/022-debug-viewers.md](../plans/022-debug-viewers.md) for the original design, and
 [scripts.md](./scripts.md) for the offline debug scripts under `scripts/debug/`.

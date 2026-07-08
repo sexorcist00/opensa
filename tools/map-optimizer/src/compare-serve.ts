@@ -1,3 +1,4 @@
+import { openArchive } from '@opensa/renderware/archive/img-archive';
 /**
  * Compare server for the before/after model viewer (plan 019 Phase 2). Serves raw DFF/TXD bytes out of two
  * game trees' IMG archives so the viewer's compare tab (`viewer.html?tab=compare`) can show one model
@@ -6,22 +7,35 @@
  * `tsx map-optimizer/src/compare-serve.ts --before <gameDir> --after <gameDir> [--port 3002]`.
  *
  * Endpoints (all GET, CORS `*`):
- * - `/models`                         → JSON sorted model names present in BOTH sides' archives
- * - `/dff?side=before|after&model=m`  → the model's DFF bytes from that side
- * - `/txd?side=before|after&model=m`  → the model's TXD bytes (txd name resolved from that side's IDEs)
+ * - `/models`                          → JSON sorted model names present in BOTH sides' archives
+ * - `/models?side=before|after`        → JSON sorted model names present on just that side (object tab uses `after`)
+ * - `/models?side=after&kind=vehicle`  → JSON sorted vehicle model names from that side's `vehicles.ide`
+ * - `/models?side=after&kind=ped`      → JSON sorted ped model names from that side's `peds.ide`
+ * - `/lod?side=after&model=m`          → JSON: the model's LOD name (via the IPL lod-index) if present, else ""
+ * - `/dff?side=before|after&model=m`   → the model's DFF bytes from that side
+ * - `/txd?side=before|after&model=m`   → the model's TXD bytes (txd name resolved from that side's IDEs)
+ * - `/ifp?side=before|after`           → that side's `anim/ped.ifp` bytes (character-tab animations)
  */
-import { openArchive } from '@opensa/renderware/archive/img-archive';
+import { parsePedDefs } from '@opensa/renderware/parsers/text/ped-defs.parser';
+import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 import { argValue, fromCwd } from '@opensa/tool-kit/cli';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createServer, type ServerResponse } from 'node:http';
 import { join } from 'node:path';
 
-import { modelTxdMap } from './adapters/gta-sa/resolve';
+import { lodModelMap, modelTxdMap } from './adapters/gta-sa/resolve';
 
 interface Side {
+  gameDir: string;
   get(name: string): ArrayBuffer | null;
+  /** HD model → its LOD model (both lowercased) via the IPL lod-index. */
+  lodByModel: Map<string, string>;
   names: Set<string>;
+  /** Model names from `peds.ide` present as `.dff` on this side (sorted). */
+  peds: string[];
   txdByModel: Map<string, string>;
+  /** Model names from `vehicles.ide` present as `.dff` on this side (sorted). */
+  vehicles: string[];
 }
 
 function main(): void {
@@ -35,23 +49,34 @@ function main(): void {
     after: openSide(fromCwd(afterArg)),
     before: openSide(fromCwd(beforeArg)),
   };
-  const models = [...sides.before.names]
-    .filter((name) => name.endsWith('.dff') && sides.after.names.has(name))
-    .map((name) => name.slice(0, -4))
-    .sort();
+  const models = modelNames(sides.before.names, sides.after.names);
 
   createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*'); // the viewer (Vite :5173) fetches cross-port
     const url = new URL(req.url ?? '/', 'http://localhost');
+    const sideParam = url.searchParams.get('side');
+    const side = sideParam === 'before' || sideParam === 'after' ? sides[sideParam] : null;
     if (url.pathname === '/models') {
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify(models));
+      res.end(JSON.stringify(modelListFor(side, url.searchParams.get('kind'), models)));
 
       return;
     }
-    const sideParam = url.searchParams.get('side');
+    if (side && url.pathname === '/lod') {
+      const model = (url.searchParams.get('model') ?? '').toLowerCase();
+      const lod = side.lodByModel.get(model);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify(lod && side.get(`${lod}.dff`) ? lod : ''));
+
+      return;
+    }
+    if (side && url.pathname === '/ifp') {
+      const path = join(side.gameDir, 'anim', 'ped.ifp');
+      sendBytes(res, existsSync(path) ? toArrayBuffer(readFileSync(path)) : null);
+
+      return;
+    }
     const model = (url.searchParams.get('model') ?? '').toLowerCase();
-    const side = sideParam === 'before' || sideParam === 'after' ? sides[sideParam] : null;
     if (!side || !model || (url.pathname !== '/dff' && url.pathname !== '/txd')) {
       res.statusCode = 404;
       res.end('not found');
@@ -70,7 +95,30 @@ function main(): void {
   });
 }
 
-/** Open every models/*.img of a game dir + its IDE model→txd map. */
+/** Resolve the `/models` response: a `kind` catalogue for a side, that side's full list, or the both-sides set. */
+function modelListFor(side: null | Side, kind: null | string, both: string[]): string[] {
+  if (!side) {
+    return both;
+  }
+  if (kind === 'vehicle') {
+    return side.vehicles;
+  }
+  if (kind === 'ped') {
+    return side.peds;
+  }
+
+  return modelNames(side.names);
+}
+
+/** Sorted `.dff` model names (no extension) in `names`, optionally intersected with `other`. */
+function modelNames(names: Set<string>, other?: Set<string>): string[] {
+  return [...names]
+    .filter((name) => name.endsWith('.dff') && (!other || other.has(name)))
+    .map((name) => name.slice(0, -4))
+    .sort();
+}
+
+/** Open every models/*.img of a game dir + its IDE model→txd map + the vehicle/ped catalogues. */
 function openSide(gameDir: string): Side {
   const modelsDir = join(gameDir, 'models');
   const archives = readdirSync(modelsDir)
@@ -83,8 +131,33 @@ function openSide(gameDir: string): Side {
       names.add(name);
     }
   }
+  const txdByModel = modelTxdMap(join(gameDir, 'data'));
+
+  // Vehicle/ped catalogues from their IDEs (cars/peds sections) — the model→txd map only covers world `objs`,
+  // so add these txds too, and list only the models actually present as `.dff` on this side.
+  const catalogue = (file: string, defs: Map<string, { model: string; txd: string }>): string[] => {
+    const path = join(gameDir, 'data', file);
+    if (!existsSync(path)) {
+      return [];
+    }
+    const list: string[] = [];
+    for (const def of defs.values()) {
+      const model = def.model.toLowerCase();
+      if (!txdByModel.has(model)) {
+        txdByModel.set(model, def.txd.toLowerCase());
+      }
+      if (names.has(`${model}.dff`)) {
+        list.push(model);
+      }
+    }
+
+    return [...new Set(list)].sort();
+  };
+  const vehicles = catalogue('vehicles.ide', parseVehicleDefs(readIdeText(gameDir, 'vehicles.ide')));
+  const peds = catalogue('peds.ide', parsePedDefs(readIdeText(gameDir, 'peds.ide')));
 
   return {
+    gameDir,
     get: (name): ArrayBuffer | null => {
       for (const archive of archives) {
         const bytes = archive.get(name);
@@ -95,9 +168,19 @@ function openSide(gameDir: string): Side {
 
       return null;
     },
+    lodByModel: lodModelMap(join(gameDir, 'data'), archives[0]),
     names,
-    txdByModel: modelTxdMap(join(gameDir, 'data')),
+    peds,
+    txdByModel,
+    vehicles,
   };
+}
+
+/** Read a `data/<file>` IDE as text, or '' when absent (a slim tree may not ship vehicles/peds). */
+function readIdeText(gameDir: string, file: string): string {
+  const path = join(gameDir, 'data', file);
+
+  return existsSync(path) ? readFileSync(path, 'utf8') : '';
 }
 
 function sendBytes(res: ServerResponse, bytes: ArrayBuffer | null): void {
@@ -109,6 +192,11 @@ function sendBytes(res: ServerResponse, bytes: ArrayBuffer | null): void {
   }
   res.setHeader('Content-Type', 'application/octet-stream');
   res.end(Buffer.from(bytes));
+}
+
+/** A Node Buffer view as a standalone ArrayBuffer (sliced to its exact bytes). */
+function toArrayBuffer(buffer: Buffer): ArrayBuffer {
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
 }
 
 main();

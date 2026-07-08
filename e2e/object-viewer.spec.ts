@@ -2,8 +2,9 @@ import { expect, test } from '@playwright/test';
 
 /**
  * Smoke + visual regression for the object-viewer — the asset-light real-pipeline page
- * (fetch → parseTxd/parseDff → build-texture/build-clump → instanced render). Boots from the
- * committed `static/viewer/` models, so it runs in CI without the full game archive.
+ * (fetch → parseTxd/parseDff → build-texture/build-clump → instanced render). In `--mode e2e` it renders
+ * the gitignored `tests/viewer/` fixtures (`npm run test:fixtures`, served at `/viewer`), so it runs in CI
+ * without the full game archive. (Interactive dev instead loads from the compare server.)
  */
 test.describe('object viewer', () => {
   test('boots and renders the default model without console/page errors', async ({ page }) => {

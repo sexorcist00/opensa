@@ -6,7 +6,10 @@
  * `parseIfp` -> `buildAnimationClip` -> `AnimationController`), so the rig and
  * animations behave exactly as in the game.
  *
- * Open at /viewer.html?tab=character (run `npm run dev` + `npm run serve:static`).
+ * Peds are loaded from the compare server (`--after` side); the autocomplete list comes from that side's
+ * `peds.ide` and animations from its `anim/ped.ifp`. Run
+ * `npx tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>` alongside `npm run dev`.
+ * Open at /viewer.html?tab=character.
  */
 import type { AnimationClip, Object3D } from 'three';
 
@@ -35,10 +38,6 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-/** Player ped (bmypol1) + the locomotion IFP (loaded directly, like the game). */
-const DFF = 'bmypol1.dff';
-const TXD = 'bmypol1.txd';
-const IFP = 'ped.ifp';
 const DEFAULT_CLIP = 'idle_stance';
 /** Stand the SA bind pose up (matches canvas-host's PLAYER_PLACEMENT). */
 const PLACEMENT = {
@@ -49,7 +48,9 @@ const PLACEMENT = {
 /** Player collision half-extents (Z-up) from the game (canvas-host PLAYER_HALF_EXTENTS). */
 const HALF = new Vector3(0.3, 0.3, 0.9);
 
-const BASE = import.meta.env.VITE_STATIC_URL;
+/** Compare server (same as the other tabs); peds load from its `--after` side. */
+const DEFAULT_SERVER = 'http://localhost:3002';
+let serverUrl = DEFAULT_SERVER;
 
 const renderer = new WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -77,10 +78,16 @@ const clipSelect = document.createElement('select');
 const loopToggle = document.createElement('input');
 const skeletonToggle = document.createElement('input');
 const collisionToggle = document.createElement('input');
+const wireframeToggle = document.createElement('input');
+/** Live triangle count of the current ped. */
+const polyLabel = Object.assign(document.createElement('div'), { className: 'hint' });
 
 let controller: AnimationController | null = null;
 let skeletonHelper: null | SkeletonHelper = null;
 let collisionBox: Box3Helper | null = null;
+let currentPlayer: null | Object3D = null;
+/** IFP clips, fetched once per server (cleared when the server URL changes). */
+let clipCache: Map<string, AnimationClip> | null = null;
 
 function addToggle(parent: HTMLElement, label: string, input: HTMLInputElement, onChange: () => void): void {
   const wrapper = document.createElement('label');
@@ -109,9 +116,51 @@ function applySkeleton(): void {
   }
 }
 
+/** Toggle the polygon wireframe on the current ped's materials. */
+function applyWireframe(): void {
+  currentPlayer?.traverse((node) => {
+    const mesh = node as { material?: { wireframe?: boolean } | { wireframe?: boolean }[] };
+    const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+    for (const material of materials) {
+      material.wireframe = wireframeToggle.checked;
+    }
+  });
+}
+
 function buildControls(): void {
   const panel = document.createElement('div');
   panel.className = 'panel';
+
+  const server = document.createElement('input');
+  server.value = DEFAULT_SERVER;
+  server.title = 'compare server URL';
+  const input = document.createElement('input');
+  input.placeholder = 'ped name…';
+  input.setAttribute('list', 'ped-models');
+  const datalist = document.createElement('datalist');
+  datalist.id = 'ped-models';
+  const status = document.createElement('div');
+  status.className = 'hint';
+  const submit = (): void => {
+    const name = input.value.trim().toLowerCase();
+    if (name) {
+      void loadCharacter(name, status);
+    }
+  };
+  const load = document.createElement('button');
+  load.textContent = 'Load';
+  load.addEventListener('click', submit);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      submit();
+    }
+  });
+  server.addEventListener('change', () => {
+    serverUrl = server.value.replace(/\/$/, '');
+    clipCache = null; // animations are per-side
+    void loadPedList(datalist, status);
+  });
+  panel.append(server, input, datalist, load, status);
 
   clipSelect.addEventListener('change', playSelected);
   panel.appendChild(clipSelect);
@@ -121,6 +170,8 @@ function buildControls(): void {
   skeletonToggle.checked = true;
   addToggle(panel, 'Skeleton', skeletonToggle, applySkeleton);
   addToggle(panel, 'Collision (capsule)', collisionToggle, applyCollision);
+  addToggle(panel, 'Wireframe (polygon mesh)', wireframeToggle, applyWireframe);
+  panel.appendChild(polyLabel);
 
   const hint = document.createElement('span');
   hint.className = 'hint';
@@ -128,12 +179,41 @@ function buildControls(): void {
   panel.appendChild(hint);
 
   document.body.appendChild(panel);
+  void loadPedList(datalist, status);
 }
 
-async function fetchBuffer(path: string): Promise<ArrayBuffer> {
-  const response = await fetch(`${BASE}/viewer/character/${path}`);
+/** Remove the current ped (mesh, skeleton, capsule, controller) before loading another. */
+function disposeCharacter(): void {
+  controller = null;
+  if (currentPlayer) {
+    content.remove(currentPlayer);
+    currentPlayer.traverse((node) => {
+      const mesh = node as { geometry?: { dispose(): void }; material?: { dispose(): void } | { dispose(): void }[] };
+      mesh.geometry?.dispose();
+      const material = mesh.material;
+      if (Array.isArray(material)) {
+        material.forEach((entry) => entry.dispose());
+      } else {
+        material?.dispose();
+      }
+    });
+    currentPlayer = null;
+  }
+  if (skeletonHelper) {
+    scene.remove(skeletonHelper);
+    skeletonHelper = null;
+  }
+  if (collisionBox) {
+    content.remove(collisionBox);
+    collisionBox = null;
+  }
+  clipSelect.replaceChildren();
+}
+
+async function fetchServer(endpoint: string): Promise<ArrayBuffer> {
+  const response = await fetch(`${serverUrl}/${endpoint}`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${path}: ${response.status}`);
+    throw new Error(`${endpoint}: not found on --after`);
   }
 
   return response.arrayBuffer();
@@ -150,37 +230,79 @@ function frameObject(object: Object3D): void {
 }
 
 async function loadAnimations(): Promise<Map<string, AnimationClip>> {
+  if (clipCache) {
+    return clipCache;
+  }
   const clips = new Map<string, AnimationClip>();
-  for (const anim of parseIfp(await fetchBuffer(IFP))) {
+  for (const anim of parseIfp(await fetchServer('ifp?side=after'))) {
     clips.set(anim.name.toLowerCase(), buildAnimationClip(anim));
   }
+  clipCache = clips;
 
   return clips;
 }
 
-async function loadCharacter(): Promise<void> {
-  const [dffBuffer, txdBuffer] = await Promise.all([fetchBuffer(DFF), fetchBuffer(TXD)]);
+async function loadCharacter(name: string, status: HTMLElement): Promise<void> {
+  status.textContent = `loading ${name}…`;
+  let dffBuffer: ArrayBuffer;
+  let txdBuffer: ArrayBuffer;
+  try {
+    [dffBuffer, txdBuffer] = await Promise.all([
+      fetchServer(`dff?side=after&model=${encodeURIComponent(name)}`),
+      fetchServer(`txd?side=after&model=${encodeURIComponent(name)}`),
+    ]);
+  } catch (error) {
+    status.textContent = error instanceof Error ? error.message : String(error);
+
+    return;
+  }
   const skinned = buildSkinnedClump(parseDff(dffBuffer), buildTextureMap(parseTxd(txdBuffer)));
   if (!skinned) {
-    throw new Error('bmypol1.dff is not skinned (no skeleton)');
+    status.textContent = `${name}: not skinned (no skeleton)`;
+
+    return;
   }
+
+  disposeCharacter();
   const player = orientCharacter(skinned.root, PLACEMENT);
+  currentPlayer = player;
   content.add(player);
+  updatePolyCount();
 
   skeletonHelper = new SkeletonHelper(skinned.root);
+  skeletonHelper.visible = skeletonToggle.checked;
   scene.add(skeletonHelper);
   // Capsule footprint as a box: feet at z=0, ±half on x/y, full height on z (Z-up).
   const bounds = new Box3(new Vector3(-HALF.x, -HALF.y, 0), new Vector3(HALF.x, HALF.y, HALF.z * 2));
   collisionBox = new Box3Helper(bounds, 0x00ff88);
-  collisionBox.visible = false;
+  collisionBox.visible = collisionToggle.checked;
   content.add(collisionBox);
 
   const clips = await loadAnimations();
   controller = new AnimationController(player, clips, skinned.bonesByName);
-  [...clips.keys()].sort().forEach((name) => clipSelect.append(new Option(name, name)));
+  [...clips.keys()].sort().forEach((clip) => clipSelect.append(new Option(clip, clip)));
   clipSelect.value = clips.has(DEFAULT_CLIP) ? DEFAULT_CLIP : (clipSelect.options[0]?.value ?? '');
   playSelected();
+  applyWireframe();
   frameObject(player);
+  status.textContent = name;
+}
+
+/** Fetch the `--after` ped list (from `peds.ide`) into the datalist. */
+async function loadPedList(datalist: HTMLDataListElement, status: HTMLElement): Promise<void> {
+  try {
+    const response = await fetch(`${serverUrl}/models?side=after&kind=ped`);
+    if (!response.ok) {
+      status.textContent = `compare server not reachable at ${serverUrl}`;
+
+      return;
+    }
+    const names = (await response.json()) as string[];
+    datalist.replaceChildren(...names.map((name) => Object.assign(document.createElement('option'), { value: name })));
+    status.textContent = `${names.length} ped(s) on --after`;
+  } catch {
+    status.textContent = `compare server not reachable at ${serverUrl}`;
+  }
 }
 
 function onResize(): void {
@@ -195,8 +317,23 @@ function playSelected(): void {
   }
 }
 
+/** Sum the triangle count of the current ped's meshes and show it. */
+function updatePolyCount(): void {
+  let triangles = 0;
+  currentPlayer?.traverse((node) => {
+    const mesh = node as {
+      geometry?: { getAttribute(name: string): undefined | { count: number }; getIndex(): null | { count: number } };
+    };
+    const geometry = mesh.geometry;
+    if (geometry) {
+      const index = geometry.getIndex();
+      triangles += (index ? index.count : (geometry.getAttribute('position')?.count ?? 0)) / 3;
+    }
+  });
+  polyLabel.textContent = currentPlayer ? `Triangles: ${Math.round(triangles).toLocaleString()}` : '';
+}
+
 window.addEventListener('resize', onResize);
 renderer.domElement.addEventListener('click', playSelected);
 buildControls();
-void loadCharacter();
 animate();

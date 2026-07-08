@@ -87,10 +87,9 @@
     "serve:static": "tsx scripts/serve-static.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:fixtures": "tsx scripts/test-fixtures.ts",
+    "test:fixtures": "tsx scripts/test-fixtures.ts && tsx scripts/build-viewer-assets.ts",
     "test:watch": "vitest",
-    "timecyc": "tsx ./tools/timecyc-builder/src/index.ts",
-    "viewer:assets": "tsx scripts/build-viewer-assets.ts"
+    "timecyc": "tsx ./tools/timecyc-builder/src/index.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.19.3",

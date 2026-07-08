@@ -43,16 +43,16 @@ Armed with a Max subscription to Claude Code, I first created a simple React + t
 
 Next, the map — I already had an IDE/IPL file parser, plus a walker that can traverse the coordinates and assemble the map.
 
-![First Map Progress](./assets/2026-06-18-first-map-progress.jpg)
+![First Map Progress](./assets/2026-06-18/2026-06-18-first-map-progress.jpg)
 
 After a few fixes — dropping the low-poly objects meant for distant rendering and fixing the quaternions (that's the object's rotation relative to the map) — I got something resembling an actually assembled map.
 
-![More Map Objects](./assets/2026-06-18-more-map-objects.jpg)
-![More Map Objects 2](./assets/2026-06-18-more-map-objects2.jpg)
+![More Map Objects](./assets/2026-06-18/2026-06-18-more-map-objects.jpg)
+![More Map Objects 2](./assets/2026-06-18/2026-06-18-more-map-objects2.jpg)
 
 Unfortunately, there were still issues with some buildings and surfaces missing from the map, but it was huge progress!
 
-![More Holes](./assets/2026-06-18-map-holes.jpg)
+![More Holes](./assets/2026-06-18/2026-06-18-map-holes.jpg)
 
 The MVP was ready. This stage showed me that it was all feasible in principle and that I'd be able to reproduce the game in the browser.
 
@@ -66,14 +66,14 @@ For debugging OpenSA I used several layers:
 
 **In-Game debugger.** Eventually this turned into a project within a project. A big editor that lets you control everything imaginable in real time: quickly teleport to a location, spawn vehicles, tweak weather and graphics. And most importantly — in this debugger we can enter map mode and instantly start hovering over the zone where the player is, toggle other zones, inspect which object is where, and so on. A full-blown map editor. The debugger keeps growing with new features.
 
-![In Game Map Debugger](./assets/2026-06-18-debugger-map.jpg)
-![In Game Collision Viewer](./assets/2026-06-18-debugger-collision.jpg)
+![In Game Map Debugger](./assets/2026-06-18/2026-06-18-debugger-map.jpg)
+![In Game Collision Viewer](./assets/2026-06-18/2026-06-18-debugger-collision.jpg)
 
 **Viewers.** Each object type has its own viewer — a separately built app whose job is to visualize an object and offer a few minimal actions. For example, playing an animation on a character:
 
-![Objects Viewer](./assets/2026-06-18-objects-viewer.jpg)
-![Vehicles Viewer](./assets/2026-06-18-vehicles-viewer.jpg)
-![Characters Viewer](./assets/2026-06-18-characters-viewer.jpg)
+![Objects Viewer](./assets/2026-06-18/2026-06-18-objects-viewer.jpg)
+![Vehicles Viewer](./assets/2026-06-18/2026-06-18-vehicles-viewer.jpg)
+![Characters Viewer](./assets/2026-06-18/2026-06-18-characters-viewer.jpg)
 
 Also, smaller stuff: there are debug scripts and the core's own event system, but more on that later, when we talk about the architecture.
 
@@ -85,13 +85,13 @@ So I came up with an indirect check — I wrote a script that examines all the m
 
 And, oddly enough, this was the fastest and most accurate way to solve the problem. After that the whole map was ready.
 
-![Full Map](./assets/2026-06-18-map-full.jpg)
+![Full Map](./assets/2026-06-18/2026-06-18-map-full.jpg)
 
 ## Architecture
 
 Having a complete map and confidence in the project, I started sketching the architecture. I'd designed complex multi-layered frontend systems before. In a project like this, the most important thing is to separate the UI, Game, and Engine logic.
 
-![Architecture. Beginning](./assets/2026-06-18-arch-begining.png)
+![Architecture. Beginning](./assets/2026-06-18/2026-06-18-arch-begining.png)
 
 This gave us a fully independent system:
 
@@ -110,23 +110,23 @@ The architecture will keep changing along the way.
 
 The original GTA San Andreas uses a modular system for the main character — it lets you change clothes, the player's style, and so on. For the test version I decided to limit myself to an ordinary skinned character model — like all the game's pedestrians. For recognizability, I took a converted Tommy Vercetti model from GTA Vice City.
 
-![Tommy](./assets/2026-06-18-tommy.jpg)
+![Tommy](./assets/2026-06-18/2026-06-18-tommy.jpg)
 
 The funniest part of working on any game is dealing with character animations. The things I saw over the whole development period…
 
-![Tommy. Animation Bug](./assets/2026-06-18-tommy-animation-bug.jpg)
-![Shrek](./assets/2026-06-18-shrek.jpg)
-![Shrek Bug](./assets/2026-06-18-shrek2.jpg)
+![Tommy. Animation Bug](./assets/2026-06-18/2026-06-18-tommy-animation-bug.jpg)
+![Shrek](./assets/2026-06-18/2026-06-18-shrek.jpg)
+![Shrek Bug](./assets/2026-06-18/2026-06-18-shrek2.jpg)
 
 Once the animation manager was done, it was time for physics. At first I used a cube as the character's collision while moving, and he'd get stuck on every step. Then I learned it's better to use a capsule — that way the legs don't catch on curbs and the body doesn't get stuck in fences, since it's all rounded and smooth. Essentially, instead of Tommy, a pill like this walks around the map:
 
-![Capsule](./assets/2026-06-18-capsule.png)
+![Capsule](./assets/2026-06-18/2026-06-18-capsule.png)
 
 ## Vehicles
 
 I didn't have much trouble with the stock cars. I converted quite a few vehicles back in my student years and remembered the nuances well. But I wanted more — the GTA community has tons of high-quality custom models. I want to support them all! Well, almost all. So after installing a bunch of models from third-party authors, I was, to put it mildly, surprised by the number of bugs. I fixed most of them, but a few remain as future fixes.
 
-![Vehicles](./assets/2026-06-18-vehicles.jpg)
+![Vehicles](./assets/2026-06-18/2026-06-18-vehicles.jpg)
 
 A particularly interesting bit is implementing entering a car. Seems like a simple task: here's the car, here's the animation of the character opening the door and getting in. What could be simpler?!
 
@@ -140,7 +140,7 @@ But of course it's not that simple!
 
 I also implemented a gameplay damage system.
 
-![Vehicle Damage System](./assets/2026-06-18-veh-damage.jpg)
+![Vehicle Damage System](./assets/2026-06-18/2026-06-18-veh-damage.jpg)
 
 ## Physics
 
@@ -172,11 +172,11 @@ Without realizing it, I'd built something closer to GTA 5 — later learning it'
 
 For this I merged the LOD objects into districts — at first at the game level, and later as a separate tool.
 
-![LODs](./assets/2026-06-18-lods.png)
+![LODs](./assets/2026-06-18/2026-06-18-lods.png)
 
 We hide the draw distance with fog — it looks nicer and keeps you from seeing holes in the map.
 
-![Fog](./assets/2026-06-18-fog.jpg)
+![Fog](./assets/2026-06-18/2026-06-18-fog.jpg)
 
 Of course, both the grid size and the draw distance for every object type are adjustable.
 
@@ -198,13 +198,13 @@ In the original GTA models, shadows and light are baked into the geometry. This 
 
 Since I'm developing from scratch, I can run any experiments I want. The first thing I tried was real sun and shadows.
 
-![Fog](./assets/2026-06-18-godrays.jpg)
+![Fog](./assets/2026-06-18/2026-06-18-godrays.jpg)
 
-![Shadows](./assets/2026-06-18-shadows.jpg)
+![Shadows](./assets/2026-06-18/2026-06-18-shadows.jpg)
 
-![Graphics 1](./assets/2026-06-18-graphics1.jpg)
+![Graphics 1](./assets/2026-06-18/2026-06-18-graphics1.jpg)
 
-![Graphics 2](./assets/2026-06-18-graphics2.jpg)
+![Graphics 2](./assets/2026-06-18/2026-06-18-graphics2.jpg)
 
 Overall it looked decent, but it required major reworks and the image lost its authenticity. The game started looking more like GTA 4 than San Andreas.
 
@@ -212,7 +212,7 @@ So I shelved that work for now and built the original-style graphics, but with s
 
 The result is a very warm and rich image — both by day and by night, in the spirit of the original.
 
-![Graphics Final](./assets/2026-06-18-graphics-final.jpg)
+![Graphics Final](./assets/2026-06-18/2026-06-18-graphics-final.jpg)
 
 I'll still be working on this a lot, so the result is intermediate for now — what it'll look like in the end is unclear.
 
@@ -224,11 +224,11 @@ I ran a test on two major mods.
 
 GTA Carcer City (2026):
 
-![GTA Carcer City](./assets/2026-06-18-carcer-city.jpg)
+![GTA Carcer City](./assets/2026-06-18/2026-06-18-carcer-city.jpg)
 
 GTA Anderius (2009):
 
-![GTA Anderius](./assets/2026-06-18-anderius.jpg)
+![GTA Anderius](./assets/2026-06-18/2026-06-18-anderius.jpg)
 
 The whole map works fine, all objects are in place.
 
@@ -246,7 +246,7 @@ The project's architecture changed, and two separate entities appeared:
 
 **Virtual File System.** In the initial version the demo worked directly with the img archive, which was about 1 gigabyte, but the VFS made it possible to work with ZIP chunks. Once the preloader has downloaded them, it hands the data to the VFS, and the game works against the VFS interface. This way, the game knows nothing about how our assets are packed. For convenient local development you can work with the game's archives directly, and at deploy time pack only what's needed into chunks and read from them:
 
-![Architecture Final](./assets/2026-06-18-architecture-final.png)
+![Architecture Final](./assets/2026-06-18/2026-06-18-architecture-final.png)
 
 ## Fatal Problems
 
@@ -300,15 +300,15 @@ As a result, there's of course no point in fully porting projects like this to t
 
 I've already made a tool that fixes chrome issues in some custom car models and can rescale them for the real game:
 
-![Veh Optimizer. Before](./assets/2026-06-18-veh-optimizer-before.jpg)
-![Veh Optimizer. After](./assets/2026-06-18-veh-optimizer-after.jpg)
+![Veh Optimizer. Before](./assets/2026-06-18/2026-06-18-veh-optimizer-before.jpg)
+![Veh Optimizer. After](./assets/2026-06-18/2026-06-18-veh-optimizer-after.jpg)
 
 In progress: a tool for generating a LOD system for the original game, like the one I made in this version.
 
 In progress: a tool that adds polygons to the low-poly parts of the map so everything looks smoother.
 
-![Map Optimizer. Before](./assets/2026-06-18-map-optimizer-before.jpg)
-![Map Optimizer. After](./assets/2026-06-18-map-optimizer-after.jpg)
+![Map Optimizer. Before](./assets/2026-06-18/2026-06-18-map-optimizer-before.jpg)
+![Map Optimizer. After](./assets/2026-06-18/2026-06-18-map-optimizer-after.jpg)
 
 And of course it would be really interesting to write my own renderer to see what the browser is capable of, adding fancy bits like:
 

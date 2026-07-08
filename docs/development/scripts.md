@@ -82,22 +82,22 @@ npx tsx scripts/gen-wind-list.ts
 
 ### build-viewer-assets.ts
 
-Builds the standalone viewers' fixtures into **`static/viewer/`** by extracting from a clean, unmodified GTA
-copy under `game-src/non-modified` (same source as `test-fixtures.ts`): `character/` (bmypol1 dff+txd + a
-copied `ped.ifp`), `vehicles/` (admiral, comet), and `objects/` (the object-viewer's models + their txds, plus
-a pre-baked `<model>.col.json` — map-object collision lives in the IMG, not the DFF). **Nothing under
-`static/` is committed** (all of `static/` is gitignored); regenerate locally after a fresh clone. Local/dev
-only (needs game-src). Re-run when the viewers' model lists or the COL parser change.
+Builds the object-viewer's **e2e fixtures** into **`tests/viewer/objects/`** by extracting from a clean,
+unmodified GTA copy under `game-src/non-modified`: the object-viewer's models + their txds, a pre-baked
+`<model>.col.json` (map-object collision lives in the IMG, not the DFF), and a `manifest.json`. Chained after
+`test-fixtures.ts` by **`npm run test:fixtures`** (not a separate command). `tests/viewer/` is gitignored (like
+`tests/original/`); regenerate locally after a fresh clone. At runtime the viewers load from the compare
+server — these fixtures exist only so the object-viewer e2e renders real geometry in CI without the full game.
 
 ```sh
-npm run viewer:assets               # tsx scripts/build-viewer-assets.ts
+npm run test:fixtures               # tsx scripts/test-fixtures.ts && tsx scripts/build-viewer-assets.ts
 ```
 
 ### serve-static.ts
 
-The local + e2e static origin (`npm run serve:static`, port 3001 = `VITE_STATIC_URL`). Serves `static/`,
-which holds the generated viewer fixtures (`/viewer/*`, `npm run viewer:assets`) and the built
-`static/games/<game>-<version>/` archives — all gitignored. CORS is on; dev mode reads files fresh.
+The local + e2e static origin (`npm run serve:static`, port 3001 = `VITE_STATIC_URL`). Serves the built
+`static/games/<game>-<version>/` archives, and maps `/viewer/*` → the object-viewer's `tests/viewer/` e2e
+fixtures (`npm run test:fixtures`) — all gitignored. CORS is on; dev mode reads files fresh.
 
 ```sh
 npm run serve:static                # tsx scripts/serve-static.ts

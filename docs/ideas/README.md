@@ -1,16 +1,18 @@
 # Ideas
 
-A parking lot for design directions we've discussed but **not scheduled** yet. Each doc captures the
-motivation, the approach that fits our current architecture, the dead-ends already ruled out, and the open
-questions — so when we pick it up we don't re-derive the discussion.
+A parking lot for design directions we've discussed but **not scheduled** yet, plus the scheduled cycles'
+plan chains. An idea doc captures the motivation, the approach that fits our current architecture, the
+dead-ends already ruled out, and the open questions — so when we pick it up we don't re-derive the discussion.
 
-Not plans (those live in [../plans/](../plans/) and are committed work). These are "later, maybe".
+## Scheduled cycles
 
-## Index
+- [0.4.0/](./0.4.0/) — the current cycle's plan chains: license plates, the rendering overhaul, our own
+  limit-adjuster ASI, basic CLEO support, and extended LOD generators. Start with
+  [0.4.0/overview.md](./0.4.0/overview.md) for the roadmap (pillars, dependency graph, suggested order).
 
-- [map-optimizer.md](./map-optimizer.md) — offline/in-memory DFF conditioning (normals, smoothing, weld,
-  duplicate faces, prelit) to clean up the map and enable map lighting.
-- [vehicle-headlights.md](./vehicle-headlights.md) — real headlight illumination on the road at night under
-  the unlit (plan 038) world.
-- [monorepo-packages.md](./monorepo-packages.md) — move the offline tools' shared code (`tool-kit`: normals,
-  IMG, codec) into real workspace packages instead of deep relative imports.
+## Parking lot
+
+_(empty — the previous parking-lot ideas have graduated: **map-optimizer** shipped as the
+`tools/map-optimizer` plugin conveyor, **monorepo packages** shipped via
+[plan 057](../plans/057-nx-monorepo-migration.md), and **real headlights** are scheduled in
+[0.4.0/02-rendering/008 — local lights](./0.4.0/plans/02-rendering/008-local-lights.md).)_

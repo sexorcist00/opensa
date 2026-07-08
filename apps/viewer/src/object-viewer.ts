@@ -11,7 +11,9 @@ import type { TextureDictionary } from '@opensa/renderware/three/build-texture';
  * main app). Toggles let you separate prelit vertex colours, MODULATE2X and the
  * lit/unlit shading model.
  *
- * Open at /viewer.html (?tab=object) (run `npm run dev` + `npm run serve:static`).
+ * Models are loaded on demand from the compare server (`--after` side) via the autocomplete box — run
+ * `npx tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>` alongside `npm run dev`.
+ * Open at /viewer.html?tab=object.
  */
 import type { BufferGeometry, Material } from 'three';
 
@@ -48,29 +50,23 @@ interface ModelEntry {
   col?: string;
   dff: string;
   name: string;
+  /** When set, DFF/TXD load from this compare server's `--after` side instead of the static `viewer/objects/` tree. */
+  server?: string;
   txd: string;
 }
 type SceneMesh = Mesh<BufferGeometry, Material | Material[]>;
-/** TEMP: the tree HD/LOD lists stream in from `trees-manifest.json` (staged by NO_COMMIT/stage.ts). */
-interface TreesManifest {
-  hd: ModelEntry[];
-  lod: ModelEntry[];
-}
 
 interface ViewOptions {
   lit: boolean;
   modulate2x: boolean;
   prelit: boolean;
+  wireframe: boolean;
 }
 
-/** Anchor models (the e2e fixtures); the HD/LOD tree lists are loaded from the manifest at startup. */
-const MODELS: readonly ModelEntry[] = [
-  { dff: 'wattspark1_lae2.dff', name: 'wattspark1_LAe2 (txd lae2tempshit)', txd: 'lae2tempshit.txd' },
-  { dff: 'lae2_ground08.dff', name: 'lae2_ground08 (txd burnsground)', txd: 'burnsground.txd' },
-];
-
 const BASE = import.meta.env.VITE_STATIC_URL;
-const options: ViewOptions = { lit: true, modulate2x: false, prelit: true };
+/** Compare server (same as the Compare tab); the object tab autocompletes + loads from its `--after` side. */
+const DEFAULT_SERVER = 'http://localhost:3002';
+const options: ViewOptions = { lit: true, modulate2x: false, prelit: true, wireframe: false };
 
 const renderer = new WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -99,6 +95,8 @@ interface LoadedModel {
 const loaded = new Map<string, LoadedModel>();
 // Every known model (anchors + manifest), keyed by dff — so "Clear all" can resolve loaded entries.
 const entriesByDff = new Map<string, ModelEntry>();
+/** Live triangle count of the loaded (overlaid) models. */
+const polyLabel = Object.assign(document.createElement('div'), { className: 'hint' });
 let collisionOn = false;
 const txdCache = new Map<string, Promise<TextureDictionary>>();
 /** Each geometry's original prelit colour array, so ×2/restore is lossless. */
@@ -159,25 +157,27 @@ function buildControls(): void {
   panel.className = 'panel';
 
   // Two multi-select lists split by the `lod` prefix — full-detail (HD) vs LOD — overlaid for comparison.
-  // Seeded with the anchor MODELS; the tree HD/LOD entries stream in from trees-manifest.json.
+  // Populated on demand from the compare server (`--after`) via the autocomplete box (an added HD also lists
+  // its LOD, resolved server-side from the IPL lod-index).
   const sections = { hd: makeSection(panel, 'HD'), lod: makeSection(panel, 'LOD') };
 
-  const addRow = (model: ModelEntry): void => {
+  const addRow = (model: ModelEntry, checked = false): void => {
+    if (entriesByDff.has(model.dff)) {
+      return; // already listed (e.g. typed twice into the compare-server box)
+    }
     entriesByDff.set(model.dff, model);
     const section = model.dff.toLowerCase().startsWith('lod') ? sections.lod : sections.hd;
     const row = document.createElement('label');
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.checked = model === MODELS[0];
+    checkbox.checked = checked;
     checkbox.addEventListener('change', () => (checkbox.checked ? void addModel(model) : removeModel(model)));
     row.append(checkbox, document.createTextNode(` ${model.name}`));
     section.list.appendChild(row);
     section.heading.textContent = `${section.title} (${section.list.childElementCount})`;
   };
 
-  for (const model of MODELS) {
-    addRow(model);
-  }
+  buildServerControls(panel, addRow);
 
   const frameButton = document.createElement('button');
   frameButton.textContent = 'Frame all';
@@ -213,9 +213,76 @@ function buildControls(): void {
     collisionOn = on;
     applyCollision();
   });
+  addToggle(panel, 'Wireframe (polygon mesh)', options.wireframe, (on) => {
+    options.wireframe = on;
+    applyOptions();
+  });
+
+  panel.appendChild(polyLabel);
+  updatePolyCount();
 
   document.body.appendChild(panel);
-  void loadManifest(addRow);
+  // e2e only: render the static fixtures (tests/viewer, served at /viewer). Dev stays compare-server-driven.
+  if (import.meta.env.MODE === 'e2e') {
+    void loadFixtures(addRow);
+  }
+}
+
+/**
+ * Compare-server autocomplete (same list as the Compare tab, but the `--after` side only). A model name typed
+ * here loads its `--after` DFF/TXD from the server and overlays it like any other object-tab model.
+ */
+function buildServerControls(panel: HTMLElement, addRow: (model: ModelEntry, checked?: boolean) => void): void {
+  const heading = document.createElement('div');
+  heading.className = 'list-title';
+  heading.textContent = 'Compare server (--after)';
+
+  const server = document.createElement('input');
+  server.value = DEFAULT_SERVER;
+  server.title = 'compare server URL';
+
+  const input = document.createElement('input');
+  input.placeholder = 'model name…';
+  input.setAttribute('list', 'object-server-models');
+  const datalist = document.createElement('datalist');
+  datalist.id = 'object-server-models';
+
+  const status = document.createElement('div');
+  status.className = 'hint';
+
+  const add = document.createElement('button');
+  add.textContent = 'Add';
+
+  const serverUrl = (): string => server.value.replace(/\/$/, '');
+  const submit = (): void => {
+    const name = input.value.trim().toLowerCase();
+    if (!name) {
+      return;
+    }
+    const model: ModelEntry = { dff: `${name}.dff`, name, server: serverUrl(), txd: '' };
+    addRow(model, true);
+    status.textContent = `loading ${name}…`;
+    addModel(model).then(
+      () => (status.textContent = name),
+      (error: unknown) => (status.textContent = error instanceof Error ? error.message : String(error)),
+    );
+    void listCompanionLod(name, serverUrl(), addRow);
+    input.value = '';
+  };
+
+  add.addEventListener('click', submit);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      submit();
+    }
+  });
+  server.addEventListener('change', () => void loadServerModels(serverUrl(), datalist, status, input));
+
+  panel.append(heading, server, input, datalist, add, status);
+  // Skip the compare-server probe under e2e (no server there — a refused fetch would log a console error).
+  if (import.meta.env.MODE !== 'e2e') {
+    void loadServerModels(serverUrl(), datalist, status, input);
+  }
 }
 
 function frameAll(): void {
@@ -237,15 +304,72 @@ function frameAll(): void {
   controls.update();
 }
 
-/** Stream the staged tree HD/LOD entries (trees-manifest.json) into the lists via `addRow`. */
-async function loadManifest(addRow: (model: ModelEntry) => void): Promise<void> {
-  const response = await fetch(`${BASE}/viewer/objects/trees-manifest.json`);
-  if (!response.ok) {
-    return; // no manifest staged — anchor models only
+/**
+ * After adding an HD model, also list its LOD so it shows in the LOD graph. The LOD is resolved server-side
+ * from the IPL lod-index (ground truth), since SA LOD names don't follow a reliable pattern (`carlshou1_LAe2`
+ * → `LOD1carlshou1_LAe`). Listed unchecked; tick it to overlay for comparison. Silent no-op if there's none.
+ */
+async function listCompanionLod(
+  name: string,
+  server: string,
+  addRow: (model: ModelEntry, checked?: boolean) => void,
+): Promise<void> {
+  if (name.startsWith('lod')) {
+    return; // already a LOD
   }
-  const manifest = (await response.json()) as TreesManifest;
-  for (const model of [...manifest.hd, ...manifest.lod]) {
-    addRow(model);
+  try {
+    const response = await fetch(`${server}/lod?side=after&model=${encodeURIComponent(name)}`);
+    if (!response.ok) {
+      return;
+    }
+    const lodName = (await response.json()) as string;
+    if (lodName) {
+      addRow({ dff: `${lodName}.dff`, name: lodName, server, txd: '' });
+    }
+  } catch {
+    /* server unreachable — no companion listed */
+  }
+}
+
+/**
+ * `--mode e2e` only: list + auto-render the object fixtures from `objects/manifest.json` (extracted by
+ * `npm run test:fixtures` into the gitignored `tests/viewer/`, served at `/viewer`). Lets the object-viewer
+ * e2e render real geometry without the compare server or the full game. A 404 (dev) is a silent no-op.
+ */
+async function loadFixtures(addRow: (model: ModelEntry, checked?: boolean) => void): Promise<void> {
+  const response = await fetch(`${BASE}/viewer/objects/manifest.json`);
+  if (!response.ok) {
+    return;
+  }
+  const models = (await response.json()) as ModelEntry[];
+  models.forEach((model, index) => {
+    addRow(model, index === 0);
+    if (index === 0) {
+      void addModel(model);
+    }
+  });
+}
+
+/** Fetch the `--after` model list into the datalist (autocomplete). */
+async function loadServerModels(
+  server: string,
+  datalist: HTMLDataListElement,
+  status: HTMLElement,
+  input: HTMLInputElement,
+): Promise<void> {
+  try {
+    const response = await fetch(`${server}/models?side=after`);
+    if (!response.ok) {
+      status.textContent = `compare server not reachable at ${server}`;
+
+      return;
+    }
+    const models = (await response.json()) as string[];
+    datalist.replaceChildren(...models.map((name) => Object.assign(document.createElement('option'), { value: name })));
+    status.textContent = `${models.length} model(s) on --after`;
+    input.placeholder = 'model name (autocomplete)…';
+  } catch {
+    status.textContent = `compare server not reachable at ${server}`;
   }
 }
 
@@ -264,6 +388,18 @@ function makeSection(
   return { heading, list, title };
 }
 
+/** Sum the triangle count of every loaded (overlaid) model and show it. */
+function updatePolyCount(): void {
+  let triangles = 0;
+  for (const entry of loaded.values()) {
+    for (const mesh of meshesOf(entry.group)) {
+      const index = mesh.geometry.getIndex();
+      triangles += (index ? index.count : mesh.geometry.getAttribute('position').count) / 3;
+    }
+  }
+  polyLabel.textContent = `Triangles: ${Math.round(triangles).toLocaleString()} (${loaded.size} obj)`;
+}
+
 /** Parsed COL library (e.g. LODvegetation.col) → ColModel by lowercased name; fetched once per file. */
 const colLibCache = new Map<string, Promise<Map<string, ColModel>>>();
 
@@ -271,8 +407,18 @@ async function addModel(model: ModelEntry): Promise<void> {
   if (loaded.has(model.dff)) {
     return;
   }
-  const textures = await loadTextures(model.txd);
-  const buffer = await fetch(`${BASE}/viewer/objects/${model.dff}`).then((response) => response.arrayBuffer());
+  const base = model.dff.replace(/\.dff$/i, '');
+  const textures = model.server ? await loadServerTextures(model.server, base) : await loadTextures(model.txd);
+  let buffer: ArrayBuffer;
+  if (model.server) {
+    const response = await fetch(`${model.server}/dff?side=after&model=${encodeURIComponent(base)}`);
+    if (!response.ok) {
+      throw new Error(`${base}: not found on --after`);
+    }
+    buffer = await response.arrayBuffer();
+  } else {
+    buffer = await fetch(`${BASE}/viewer/objects/${model.dff}`).then((response) => response.arrayBuffer());
+  }
   const group = buildClump(parseDff(buffer), textures);
   for (const mesh of meshesOf(group)) {
     const colour = mesh.geometry.getAttribute('color');
@@ -287,10 +433,11 @@ async function addModel(model: ModelEntry): Promise<void> {
   for (const mesh of meshesOf(group)) {
     applyToMesh(mesh);
   }
-  entry.collision = await buildCollision(model);
+  entry.collision = model.server ? null : await buildCollision(model);
   if (entry.collision) {
     scene.add(entry.collision);
   }
+  updatePolyCount();
   if (loaded.size === 1) {
     frameAll();
   }
@@ -348,6 +495,20 @@ function loadColLibrary(file: string): Promise<Map<string, ColModel>> {
   return promise;
 }
 
+/** Textures for a compare-server model: its TXD is resolved from the `--after` IDEs server-side (404 → none). */
+function loadServerTextures(server: string, base: string): Promise<TextureDictionary> {
+  const key = `server:${server}:${base}`;
+  let promise = txdCache.get(key);
+  if (!promise) {
+    promise = fetch(`${server}/txd?side=after&model=${encodeURIComponent(base)}`)
+      .then((response) => (response.ok ? response.arrayBuffer() : null))
+      .then((buffer) => (buffer ? buildTextureMap(parseTxd(buffer)) : new Map())) as Promise<TextureDictionary>;
+    txdCache.set(key, promise);
+  }
+
+  return promise;
+}
+
 function loadTextures(txd: string): Promise<TextureDictionary> {
   let promise = txdCache.get(txd);
   if (!promise) {
@@ -387,6 +548,7 @@ function rebuildMaterial(source: Material, hasPrelit: boolean): MeshBasicMateria
     side: previous.side,
     transparent: previous.transparent,
     vertexColors: options.prelit && hasPrelit,
+    wireframe: options.wireframe,
   };
   source.dispose();
 
@@ -407,9 +569,9 @@ function removeModel(model: ModelEntry): void {
     disposeObject(entry.collision);
   }
   loaded.delete(model.dff);
+  updatePolyCount();
 }
 
 window.addEventListener('resize', onResize);
 buildControls();
-void addModel(MODELS[0]);
 animate();

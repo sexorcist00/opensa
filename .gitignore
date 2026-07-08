@@ -62,27 +62,20 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 
 # Everything under static/ is generated from a local GTA copy and gitignored: the built game archives
-# (npm run build:game) and the viewer fixtures (npm run viewer:assets — extracted from game-src/non-modified).
-# No Rockstar assets are committed.
+# (npm run build:game). No Rockstar assets are committed.
 /static/
-game-src
-mods-src
-issues
-ideas
-blog-src
-NO_COMMIT
-
-# map-optimizer / opensa-lod-generator are tracked sub-projects; ignore only their generated output + local scratch.
-tools/map-optimizer/out/
-tools/map-optimizer/*.jpg
-tools/opensa-lod-generator/out/
-tools/vehicle-optimizer/out/
-tools/lod-trees-generator/out/
-
+/game-src/
+/mods-src/
+/issues/
+/blog-src/
+/NO_COMMIT/
 # Real GTA SA test fixtures (Rockstar assets — not redistributed): regenerated locally from a stock
 # copy at game-src/non-modified via `npm run test:fixtures`. Committed fixtures (mods + curated /
 # version-pinned test models) live in tests/custom/, which stays tracked.
 /tests/original/
+# The standalone-viewer e2e fixtures (extracted from game-src/non-modified by `npm run test:fixtures`,
+# served at `/viewer/*` by serve-static). Rockstar assets — regenerated locally, never committed.
+/tests/viewer/
 
 # Nx cache
 .nx/

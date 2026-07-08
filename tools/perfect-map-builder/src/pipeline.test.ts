@@ -1,9 +1,10 @@
+import { buildVer2Buffer } from '@opensa/renderware/archive/img-archive';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { checkTextIplSlotBudget } from './pipeline';
+import { checkImgIdBudgets, checkTextIplSlotBudget } from './pipeline';
 
 /** A game dir whose gta.dat registers `n` text IPLs with one inst row each. */
 function writeGame(dir: string, n: number): void {
@@ -51,6 +52,53 @@ describe('checkTextIplSlotBudget', () => {
       writeGame(dir, 39);
 
       expect(() => checkTextIplSlotBudget(dir)).not.toThrow();
+    });
+  });
+});
+
+describe('checkImgIdBudgets', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pmb-idbudget-'));
+    mkdirSync(join(dir, 'models'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  function writeImg(name: string, entries: string[]): void {
+    writeFileSync(
+      join(dir, 'models', name),
+      buildVer2Buffer(entries.map((entryName) => ({ data: Uint8Array.of(1), name: entryName }))),
+    );
+  }
+
+  describe('negative cases', () => {
+    it('throws when the TXD pool is within the runtime margin of the FLA cap (the shopping.dat crash class)', () => {
+      // 5,960 TXDs > 6,000 − 50 margin — exhausting an FLA FILE_TYPE_* pool boots into heap corruption.
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 5960 }, (_, i) => `t${i}.txd`),
+      );
+      expect(() => checkImgIdBudgets(dir)).toThrow(/TXD archives: 5960 of 6000/);
+    });
+
+    it('throws when binary IPL files approach the FILE_TYPE_IPL 280-slot pool (the field boot-crash case)', () => {
+      writeImg(
+        'gta3.img',
+        Array.from({ length: 275 }, (_, i) => `a${i}_stream0.ipl`),
+      );
+      expect(() => checkImgIdBudgets(dir)).toThrow(/binary IPL files: 275 of 280/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('passes a build comfortably under every pool, counting across all IMG archives', () => {
+      writeImg('gta3.img', ['a.txd', 'b.col', 'lae_stream0.ipl', 'x.dff']);
+      writeImg('gta_int.img', ['c.txd']);
+      expect(() => checkImgIdBudgets(dir)).not.toThrow();
     });
   });
 });

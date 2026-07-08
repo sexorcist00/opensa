@@ -165,6 +165,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     const sa = join(outPath, 'sa');
     log('sa → sa/');
     buildSaLods({ config: { excludeItems }, gameDir: game, outDir: sa });
+    checkImgIdBudgets(sa);
     produced.push({ dir: sa, name: 'sa' });
   }
   if (until === undefined || until === 'opensa' || until === 'lod') {
@@ -283,6 +284,46 @@ const TEXT_IPL_SLOT_CAP = 39;
 const TEXT_ROW_CAP = 30000;
 
 /** Fail the build when the baked game registers more inst-bearing text IPLs than SA can hold. */
+
+/** FLA ID-pool budgets for the real-SA build — mirrors the operative FILE_TYPE_* values in the target
+ *  install's fastman92limitAdjuster_GTASA.ini (TXD 6000, COL 275, IPL 280; stock pools: 5000/255/256).
+ *  Each counts ARCHIVE FILES = ID slots. The margins leave room for SA's runtime slots (script/generic/
+ *  ped-remap TXDs etc.) — exhausting a pool corrupts the heap during data load with a crash right after
+ *  `shopping.dat` (field-diagnosed 2026-07: FILE_TYPE_IPL exhaustion; raising the ini fixed the boot). */
+const IMG_ID_BUDGETS = [
+  { ext: '.txd', label: 'TXD archives', limit: 6000, margin: 50 },
+  { ext: '.col', label: 'COL archives', limit: 275, margin: 8 },
+  { ext: '.ipl', label: 'binary IPL files', limit: 280, margin: 8 },
+] as const;
+
+/**
+ * Fail the build when a real-SA ID pool is at (or within `margin` of) its cap — loud at build time instead of
+ * heap corruption at boot. Counts every entry across the build's IMG archives.
+ */
+export function checkImgIdBudgets(gameDir: string): void {
+  const names: string[] = [];
+  for (const img of ['gta3.img', 'gta_int.img', 'player.img', 'cutscene.img']) {
+    const path = join(gameDir, 'models', img);
+    if (!existsSync(path)) {
+      continue;
+    }
+    const buffer = readFileSync(path);
+    const archive = openArchive(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
+    names.push(...archive.names.map((name) => name.toLowerCase()));
+  }
+  for (const budget of IMG_ID_BUDGETS) {
+    const count = names.filter((name) => name.endsWith(budget.ext)).length;
+    const message = `${budget.label}: ${count} of ${budget.limit} ID slots (margin ${budget.margin} for SA's runtime slots)`;
+    if (count > budget.limit - budget.margin) {
+      throw new Error(
+        `real-SA ID pool nearly exhausted — ${message}. Raise the FLA limit in fastman92limitAdjuster_GTASA.ini ` +
+          'or trim the build (the salod txdp partition is the biggest TXD consumer).',
+      );
+    }
+    log(`  id budget — ${message}`);
+  }
+}
+
 export function checkTextIplSlotBudget(gameDir: string): void {
   const datPath = join(gameDir, 'data', 'gta.dat');
   if (!existsSync(datPath)) {

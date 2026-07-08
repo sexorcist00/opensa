@@ -6,13 +6,76 @@ import { parseTimedObjects } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 /** One placed instance: its (lowercased) model name + world transform, for the seam-weld pass (plan 016). */
 export interface Placement {
   modelName: string;
   position: [number, number, number];
   rotation: [number, number, number, number];
+}
+
+/**
+ * HD model → its LOD model (both lowercased), resolved from the **IPL lod-index** (ground truth), not names —
+ * SA LOD names don't follow a reliable pattern (`carlshou1_LAe2` → `LOD1carlshou1_LAe`). An instance's `lod`
+ * column indexes another inst row in its area's index space; that row's id → its IDE model is the LOD. Text
+ * IPLs index their own rows; binary streams (in gta3.img) index their area's **companion text IPL** rows — the
+ * shared per-area space. Interiors skipped. First mapping per HD model wins. Used by the compare server's `/lod`.
+ */
+export function lodModelMap(dataDir: string, gta3: ImgArchive): Map<string, string> {
+  const idMap = ideIdMap(dataDir);
+  const map = new Map<string, string>();
+  const areaInsts = new Map<string, { id: number }[]>(); // area (text IPL basename) → its inst list = lod-index space
+  const link = (hdId: number, lodId: number): void => {
+    const hd = idMap.get(hdId);
+    const lod = idMap.get(lodId);
+    if (hd && lod && hd.model !== lod.model && !map.has(hd.model)) {
+      map.set(hd.model, lod.model);
+    }
+  };
+
+  // Text IPLs: within-file lod links, and record each area's inst list for the binary streams below.
+  for (const file of walk(dataDir)) {
+    if (!file.toLowerCase().endsWith('.ipl') || /[/\\]interior[/\\]/i.test(file)) {
+      continue;
+    }
+    const instances = parseIpl(readFileSync(file, 'utf8'));
+    areaInsts.set(
+      basename(file)
+        .toLowerCase()
+        .replace(/\.ipl$/, ''),
+      instances,
+    );
+    for (const instance of instances) {
+      if (instance.lod >= 0 && instance.lod < instances.length) {
+        link(instance.id, instances[instance.lod].id);
+      }
+    }
+  }
+
+  // Binary streams (gta3.img): an instance's lod indexes its area's companion text IPL inst list.
+  for (const name of gta3.names) {
+    if (!name.toLowerCase().endsWith('.ipl')) {
+      continue;
+    }
+    const textInsts = areaInsts.get(
+      name
+        .toLowerCase()
+        .replace(/_stream\d+\.ipl$/, '')
+        .replace(/\.ipl$/, ''),
+    );
+    const buffer = gta3.get(name);
+    if (!textInsts || !buffer) {
+      continue;
+    }
+    for (const instance of parseBinaryIpl(buffer)) {
+      if (instance.lod >= 0 && instance.lod < textInsts.length) {
+        link(instance.id, textInsts[instance.lod].id);
+      }
+    }
+  }
+
+  return map;
 }
 
 /** model → txd (lowercased) from every IDE under the game's data folder — for the compare server (plan 019). */

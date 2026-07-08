@@ -7,7 +7,9 @@ import type { BuiltDoor, BuiltPart, BuiltVehicle } from '@opensa/renderware/thre
  * It reuses the real build path (`parseDff` -> `buildVehicle`, `parseDffCollision`
  * -> `buildCollisionWireframe`), so what you see is what the game builds.
  *
- * Open at /viewer.html?tab=vehicle (run `npm run dev` + `npm run serve:static`).
+ * Vehicles are loaded from the compare server (`--after` side); the autocomplete list comes from that side's
+ * `vehicles.ide`. Run `npx tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>` alongside
+ * `npm run dev`. Open at /viewer.html?tab=vehicle.
  */
 import type { Texture } from 'three';
 
@@ -35,8 +37,6 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-/** Cars extracted into static/viewer/vehicles/ (model name → `<name>.dff` + `<name>.txd`). */
-const VEHICLES: readonly string[] = ['admiral', 'comet'];
 /** Debug paint (the carcol markers become these) + a neutral wheel scale. */
 const PRIMARY: [number, number, number] = [200, 40, 40];
 const SECONDARY: [number, number, number] = [40, 50, 70];
@@ -44,7 +44,9 @@ const WHEEL_SCALE: [number, number] = [0.7, 0.7];
 const DOOR_OPEN_ANGLE = -Math.PI / 3;
 const HINGE = new Vector3(0, 0, 1);
 
-const BASE = import.meta.env.VITE_STATIC_URL;
+/** Compare server (same as the Compare/Object tabs); vehicles load from its `--after` side. */
+const DEFAULT_SERVER = 'http://localhost:3002';
+let serverUrl = DEFAULT_SERVER;
 
 const renderer = new WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -70,6 +72,9 @@ scene.add(content);
 const partSelect = document.createElement('select');
 const collisionToggle = document.createElement('input');
 const lodToggle = document.createElement('input');
+const wireframeToggle = document.createElement('input');
+/** Live triangle count of the current car. */
+const polyLabel = Object.assign(document.createElement('div'), { className: 'hint' });
 
 let current: BuiltVehicle | null = null;
 let collision: null | Object3D = null;
@@ -121,16 +126,48 @@ function applyLod(): void {
   }
 }
 
+/** Toggle the polygon wireframe on every material of the current car. */
+function applyWireframe(): void {
+  current?.root.traverse((node) => {
+    const mesh = node as { material?: { wireframe?: boolean } | { wireframe?: boolean }[] };
+    const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+    for (const material of materials) {
+      material.wireframe = wireframeToggle.checked;
+    }
+  });
+}
+
 function buildControls(): void {
   const panel = document.createElement('div');
   panel.className = 'panel';
 
-  const models = document.createElement('select');
-  for (const name of VEHICLES) {
-    models.append(new Option(name, name));
-  }
-  models.addEventListener('change', () => void loadVehicle(models.value));
-  panel.append(models, partSelect);
+  const server = document.createElement('input');
+  server.value = DEFAULT_SERVER;
+  server.title = 'compare server URL';
+  const input = document.createElement('input');
+  input.placeholder = 'vehicle name…';
+  input.setAttribute('list', 'vehicle-models');
+  const datalist = document.createElement('datalist');
+  datalist.id = 'vehicle-models';
+  const status = document.createElement('div');
+  status.className = 'hint';
+  const submit = (): void => {
+    const name = input.value.trim().toLowerCase();
+    if (name) {
+      void loadVehicle(name, status);
+    }
+  };
+  addButton(panel, 'Load', submit);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      submit();
+    }
+  });
+  server.addEventListener('change', () => {
+    serverUrl = server.value.replace(/\/$/, '');
+    void loadVehicleList(datalist, status);
+  });
+  panel.append(server, input, datalist, status, partSelect);
 
   partSelect.addEventListener('change', () => selectPart(Number(partSelect.value)));
 
@@ -141,8 +178,11 @@ function buildControls(): void {
   panel.appendChild(rule.cloneNode());
   addToggle(panel, 'Collision', collisionToggle, applyCollision);
   addToggle(panel, 'LOD (chassis_vlo)', lodToggle, applyLod);
+  addToggle(panel, 'Wireframe (polygon mesh)', wireframeToggle, applyWireframe);
+  panel.appendChild(polyLabel);
 
   document.body.appendChild(panel);
+  void loadVehicleList(datalist, status);
 }
 
 function disposeCurrent(): void {
@@ -175,10 +215,10 @@ function disposeTree(object: Object3D): void {
   });
 }
 
-async function fetchBuffer(file: string): Promise<ArrayBuffer> {
-  const response = await fetch(`${BASE}/viewer/vehicles/${file}`);
+async function fetchServer(endpoint: 'dff' | 'txd', model: string): Promise<ArrayBuffer> {
+  const response = await fetch(`${serverUrl}/${endpoint}?side=after&model=${encodeURIComponent(model)}`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${file}: ${response.status}`);
+    throw new Error(`${model}: ${endpoint} not found on --after`);
   }
 
   return response.arrayBuffer();
@@ -193,8 +233,21 @@ function frameBox(box: Box3): void {
   controls.update();
 }
 
-async function loadVehicle(name: string): Promise<void> {
-  const [dffBuffer, txdBuffer] = await Promise.all([fetchBuffer(`${name}.dff`), fetchBuffer(`${name}.txd`)]);
+async function loadVehicle(name: string, status?: HTMLElement): Promise<void> {
+  if (status) {
+    status.textContent = `loading ${name}…`;
+  }
+  let dffBuffer: ArrayBuffer;
+  let txdBuffer: ArrayBuffer;
+  try {
+    [dffBuffer, txdBuffer] = await Promise.all([fetchServer('dff', name), fetchServer('txd', name)]);
+  } catch (error) {
+    if (status) {
+      status.textContent = error instanceof Error ? error.message : String(error);
+    }
+
+    return;
+  }
   const textures: Map<string, Texture> = buildTextureMap(parseTxd(txdBuffer));
   const dff = parseDff(dffBuffer);
 
@@ -220,7 +273,29 @@ async function loadVehicle(name: string): Promise<void> {
 
   rebuildPartSelect();
   applyLod();
+  applyWireframe();
+  updatePolyCount();
   frameBox(colBox ?? new Box3().setFromObject(current.root));
+  if (status) {
+    status.textContent = name;
+  }
+}
+
+/** Fetch the `--after` vehicle list (from `vehicles.ide`) into the datalist. */
+async function loadVehicleList(datalist: HTMLDataListElement, status: HTMLElement): Promise<void> {
+  try {
+    const response = await fetch(`${serverUrl}/models?side=after&kind=vehicle`);
+    if (!response.ok) {
+      status.textContent = `compare server not reachable at ${serverUrl}`;
+
+      return;
+    }
+    const names = (await response.json()) as string[];
+    datalist.replaceChildren(...names.map((name) => Object.assign(document.createElement('option'), { value: name })));
+    status.textContent = `${names.length} vehicle(s) on --after`;
+  } catch {
+    status.textContent = `compare server not reachable at ${serverUrl}`;
+  }
 }
 
 function onResize(): void {
@@ -290,6 +365,22 @@ function updateHighlight(): void {
   scene.add(highlight);
 }
 
+/** Sum the triangle count of the current car's meshes and show it. */
+function updatePolyCount(): void {
+  let triangles = 0;
+  current?.root.traverse((node) => {
+    const mesh = node as {
+      geometry?: { getAttribute(name: string): undefined | { count: number }; getIndex(): null | { count: number } };
+    };
+    const geometry = mesh.geometry;
+    if (geometry) {
+      const index = geometry.getIndex();
+      triangles += (index ? index.count : (geometry.getAttribute('position')?.count ?? 0)) / 3;
+    }
+  });
+  polyLabel.textContent = current ? `Triangles: ${Math.round(triangles).toLocaleString()}` : '';
+}
+
 window.addEventListener('resize', onResize);
 window.addEventListener('keydown', (event) => {
   if (event.key.toLowerCase() === 'e') {
@@ -298,5 +389,4 @@ window.addEventListener('keydown', (event) => {
 });
 buildControls();
 collisionToggle.checked = false;
-void loadVehicle(VEHICLES[0]);
 animate();

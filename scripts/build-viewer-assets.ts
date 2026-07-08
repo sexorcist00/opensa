@@ -1,52 +1,46 @@
 import { type ImgArchive, openArchive } from '@opensa/renderware/archive/img-archive';
 import { buildCollisionIndex, getCollision } from '@opensa/renderware/collision/collision-index';
 /**
- * Build the standalone viewers' fixtures into `static/viewer/` by extracting from a clean, UNMODIFIED GTA
- * San Andreas copy under `game-src/non-modified` (the same source `test-fixtures.ts` uses). These are
- * Rockstar assets, so NOTHING under `static/` is committed (`static/` is gitignored) — every contributor
- * regenerates locally:
+ * Build the object-viewer's **e2e fixtures** into `tests/viewer/` by extracting from a clean, UNMODIFIED GTA
+ * San Andreas copy under `game-src/non-modified` (the same source `test-fixtures.ts` uses). Chained after
+ * `test-fixtures.ts` by `npm run test:fixtures`; the output is Rockstar assets, so `tests/viewer/` is
+ * gitignored (like `tests/original/`) and every contributor regenerates it locally.
  *
- *   npm run viewer:assets
+ * At runtime the viewers load from the compare server (`--after`); these static fixtures exist ONLY so the
+ * object-viewer e2e can render real geometry in CI without the full game archive. `serve-static` maps
+ * `/viewer/*` → `tests/viewer/*`, and the object-viewer loads `objects/manifest.json` only in `--mode e2e`.
  *
- * Produces (all extracted from `gta3.img`/`gta_int.img` unless noted):
- *   character/  bmypol1.dff + bmypol1.txd (the player ped) + ped.ifp (copied from `anim/`)
- *   vehicles/   admiral.dff/.txd, comet.dff/.txd
- *   objects/    the object-viewer's models + their txds, plus a pre-baked `<model>.col.json` (map-object
- *               collision lives in the IMG, not the DFF, so it is baked here for the asset-light viewer).
+ * Produces (extracted from `gta3.img`/`gta_int.img`):
+ *   objects/  the object-viewer's models + their txds, a pre-baked `<model>.col.json` (map-object collision
+ *             lives in the IMG, not the DFF), and `manifest.json` (the models the e2e viewer lists + renders).
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 const ROOT = join('game-src', 'non-modified');
 const ARCHIVES = ['models/gta3.img', 'models/gta_int.img'];
-const OUT = 'static/viewer';
+const OUT = 'tests/viewer';
 
-/** Object-viewer models whose COL is pre-baked to `<model>.col.json` (keep in sync with object-viewer.ts). */
-const COL_MODELS = ['lae2_ground08', 'wattspark1_lae2'];
+/** The object-viewer's fixture models (name + dff + txd) — the e2e list; index 0 is the default render. */
+const OBJECTS = [
+  { dff: 'wattspark1_lae2.dff', name: 'wattspark1_LAe2 (txd lae2tempshit)', txd: 'lae2tempshit.txd' },
+  { dff: 'lae2_ground08.dff', name: 'lae2_ground08 (txd burnsground)', txd: 'burnsground.txd' },
+] as const;
+/** Object-viewer models whose COL is pre-baked to `<model>.col.json`. */
+const COL_MODELS = OBJECTS.map((object) => object.dff.replace(/\.dff$/, ''));
 
-type Fixture =
-  | { readonly dest: string; readonly entry: string; readonly type: 'extract' }
-  | { readonly dest: string; readonly from: string; readonly type: 'copy' };
+interface Fixture {
+  readonly dest: string;
+  readonly entry: string;
+  readonly type: 'extract';
+}
 
 const extract = (entry: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, entry, type: 'extract' });
-const copy = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'copy' });
 
-const MANIFEST: readonly Fixture[] = [
-  // character — the player ped (bmypol1) + the locomotion anim (loaded directly, like the game)
-  extract('bmypol1.dff', 'character/bmypol1.dff'),
-  extract('bmypol1.txd', 'character/bmypol1.txd'),
-  copy('anim/ped.ifp', 'character/ped.ifp'),
-  // vehicles (vehicle-viewer's VEHICLES)
-  extract('admiral.dff', 'vehicles/admiral.dff'),
-  extract('admiral.txd', 'vehicles/admiral.txd'),
-  extract('comet.dff', 'vehicles/comet.dff'),
-  extract('comet.txd', 'vehicles/comet.txd'),
-  // objects (object-viewer's MODELS) — dff + txd; collision is baked below
-  extract('wattspark1_lae2.dff', 'objects/wattspark1_lae2.dff'),
-  extract('lae2tempshit.txd', 'objects/lae2tempshit.txd'),
-  extract('lae2_ground08.dff', 'objects/lae2_ground08.dff'),
-  extract('burnsground.txd', 'objects/burnsground.txd'),
-];
+const MANIFEST: readonly Fixture[] = OBJECTS.flatMap((object) => [
+  extract(object.dff, `objects/${object.dff}`),
+  extract(object.txd, `objects/${object.txd}`),
+]);
 
 let archives: ImgArchive[] | null = null;
 
@@ -67,10 +61,6 @@ function openArchives(): ImgArchive[] {
   return archives;
 }
 
-function produce(fixture: Fixture): null | Uint8Array {
-  return fixture.type === 'copy' ? new Uint8Array(readFileSync(join(ROOT, fixture.from))) : extractEntry(fixture.entry);
-}
-
 const missing: string[] = [];
 let written = 0;
 
@@ -88,7 +78,7 @@ function write(dest: string, data: null | Uint8Array): void {
 for (const fixture of MANIFEST) {
   let data: null | Uint8Array = null;
   try {
-    data = produce(fixture);
+    data = extractEntry(fixture.entry);
   } catch {
     data = null;
   }
@@ -109,7 +99,12 @@ for (const name of COL_MODELS) {
   written += 1;
 }
 
-console.log(`viewer:assets: wrote ${written}/${MANIFEST.length + COL_MODELS.length} into ${OUT}/`);
+// The manifest the object-viewer loads (in `--mode e2e`) to list + render these fixtures.
+mkdirSync(`${OUT}/objects`, { recursive: true });
+writeFileSync(`${OUT}/objects/manifest.json`, JSON.stringify(OBJECTS));
+written += 1;
+
+console.log(`test:fixtures (viewer): wrote ${written} into ${OUT}/`);
 if (missing.length > 0) {
   console.error(`\n  MISSING ${missing.length} — source not found in ${ROOT}:`);
   for (const dest of missing) {

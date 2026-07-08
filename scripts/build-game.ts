@@ -16,8 +16,7 @@ import { parsePedDefs } from '@opensa/renderware/parsers/text/ped-defs.parser';
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 /**
  * Game build (plan 048). Packs `game-src/<game>/` into content-hashed fflate chunks under
- * `static/games/<version>/` (one `manifest.json` lists them; `static/games` is gitignored, `static/viewer`
- * is committed):
+ * `static/games/<version>/` (one `manifest.json` lists them; all of `static/` is gitignored):
  *  - data     — the contents of the loose `data/` folder (ide/ipl/dat/cfg/zon); NO dff/txd/col.
  *  - models   — the `.dff` geometry the EXTERIOR map references (interiors excluded) + every `.col`.
  *  - textures — the `.txd` textures the EXTERIOR map references.
