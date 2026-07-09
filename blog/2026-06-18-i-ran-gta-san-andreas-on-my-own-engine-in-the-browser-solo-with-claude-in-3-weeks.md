@@ -1,5 +1,9 @@
 # I ran GTA San Andreas on my own engine in the browser — solo with Claude, in 3 weeks
 
+![Main Cover](./assets/2026-06-18/2026-06-18-main-cover.jpg)
+
+This is the story of how I built a game engine from scratch — one that's **compatible with RenderWare** (the engine behind GTA San Andreas) and runs in the browser. Solo, in three weeks, with Claude Code.
+
 ## Intro
 
 If you can't be bothered to read — here are the important links right away:
@@ -7,8 +11,7 @@ If you can't be bothered to read — here are the important links right away:
 - [Demo](https://opensa.cc)
 - [Repo](https://github.com/AlexSergey/opensa)
 
-And below is the detailed story of how I built it — a from-scratch game engine, made **compatible with
-RenderWare** (the engine behind GTA San Andreas), running in the browser.
+And below is how it happened, in detail.
 
 > **What this is — and what it isn't.** OpenSA is an **experiment** and a learning project. The goal is the
 > _engine_: a browser-based runtime built to be **compatible with the RenderWare formats** that GTA San
@@ -29,7 +32,7 @@ But all of it worked unstably. Debugging was hard. Anything could break at any m
 
 And one thought kept spinning in my head — man, if only this were on the Web, on my home turf, I could really dig into it properly.
 
-And then AI arrived. Gradually learning new AI-assisted development approaches, I rewrote a number of my projects, solved a range of problems of varying difficulty. And 3 weeks ago I thought: what if…
+And then AI arrived. Gradually learning new AI-assisted development approaches, I rewrote a number of my projects, solved problems of all kinds. And 3 weeks ago I thought: what if…
 
 ## The Beginning, MVP
 
@@ -112,7 +115,7 @@ The original GTA San Andreas uses a modular system for the main character — it
 
 ![Tommy](./assets/2026-06-18/2026-06-18-tommy.jpg)
 
-The funniest part of working on any game is dealing with character animations. The things I saw over the whole development period…
+The funniest part of any game is the character animations. Over the whole dev period, I saw it all…
 
 ![Tommy. Animation Bug](./assets/2026-06-18/2026-06-18-tommy-animation-bug.jpg)
 ![Shrek](./assets/2026-06-18/2026-06-18-shrek.jpg)
@@ -144,7 +147,7 @@ I also implemented a gameplay damage system.
 
 ## Physics
 
-The most important thing in physics for this type of game is paying special attention to the main protagonists: cars and characters. That's what I focused on first.
+In physics for this kind of game, what matters most are the two things that carry it — cars and characters. That's what I focused on first.
 
 I'd never built physics engines for games and honestly didn't understand it well, but the goal of this project was to reproduce realistic behavior. And here's how it goes:
 
@@ -158,7 +161,7 @@ There were bugs, of course, where would we be without them. **Video**:
 
 [![Video](https://img.youtube.com/vi/N9ku0aWYy80/hqdefault.jpg)](https://www.youtube.com/watch?v=N9ku0aWYy80)
 
-But those are trifles. Things got rolling.
+But those were minor. Things were rolling.
 
 For the character I used a kinematic controller with inertia: on a sharp change of direction the character doesn't react instantly — there's a slight acceleration and deceleration, which feels closer to the later games in the series. Not perfect yet, but a good start.
 
@@ -182,7 +185,7 @@ Of course, both the grid size and the draw distance for every object type are ad
 
 ## Time and Weather
 
-Before implementing the graphics, I did time. Time runs not in sync with real clocks but with a multiplier — one minute = 3 real seconds (also adjustable in the config).
+Before the graphics, I built the time system. It doesn't run in sync with a real clock but on a multiplier — one minute = 3 real seconds (also adjustable in the config).
 
 I also implemented a weather manager with procedurally generated "cheap" clouds. Full support for the game's internal timecyc system.
 
@@ -206,7 +209,7 @@ Since I'm developing from scratch, I can run any experiments I want. The first t
 
 ![Graphics 2](./assets/2026-06-18/2026-06-18-graphics2.jpg)
 
-Overall it looked decent, but it required major reworks and the image lost its authenticity. The game started looking more like GTA 4 than San Andreas.
+Overall it looked decent, but it needed major rework and the image lost its authenticity. The game started looking more like GTA 4 than San Andreas.
 
 So I shelved that work for now and built the original-style graphics, but with some cool effects added, like Sun, God Rays, Bloom, tonemapping.
 
@@ -214,7 +217,7 @@ The result is a very warm and rich image — both by day and by night, in the sp
 
 ![Graphics Final](./assets/2026-06-18/2026-06-18-graphics-final.jpg)
 
-I'll still be working on this a lot, so the result is intermediate for now — what it'll look like in the end is unclear.
+I'll still be working on this — it'd be interesting to write a custom rendering engine and see what it could look like with modern tech.
 
 ## Mod Support
 
@@ -242,7 +245,7 @@ Second, all assets are split into small chunks, packed into ZIP, so they can be 
 
 The project's architecture changed, and two separate entities appeared:
 
-**Preloader** — a component that downloads assets according to priority. It can re-download failed parts, cache, and read from cache. The current version is used for invalidation.
+**Preloader** — a component that downloads assets by priority. It retries failed parts, caches them, and reads from cache; cache invalidation is keyed off the current build version.
 
 **Virtual File System.** In the initial version the demo worked directly with the img archive, which was about 1 gigabyte, but the VFS made it possible to work with ZIP chunks. Once the preloader has downloaded them, it hands the data to the VFS, and the game works against the VFS interface. This way, the game knows nothing about how our assets are packed. For convenient local development you can work with the game's archives directly, and at deploy time pack only what's needed into chunks and read from them:
 
@@ -274,13 +277,13 @@ Very experimentally, I added mobile support. Personally I've never managed to en
 
 ## Working with Claude Code
 
-This project is 85% built with Claude Code — a great experiment showing how much development has changed. The active phase of the entire development process was done in spare time, over just 3 weeks. By one person. But you can't achieve results like that without following a set of rules:
+This project is 85% built with Claude Code — a great experiment showing how much development has changed. The active phase of the entire development process was done in spare time, over just 3 weeks. Just one person. But you can't get results like that without a few rules:
 
 Before starting work, I set up a very aggressive linting system that cut out all the noise and clutter of development.
 
 I had a firm grasp of the engine's algorithm, a firm grasp of how to build the roadmap and how to prioritize tasks. Without that understanding, a request like "make me a GTA clone" obviously won't work.
 
-Every task was accompanied by planning. All ideas, work-in-progress, and changes were strictly documented. Changes were reviewed. If context was lost, I knew exactly where that knowledge lived. I had to watch this very actively, because Claude Code tried with all its might to avoid documentation, even after it was added to memory.
+Every task was accompanied by planning. All ideas, work-in-progress, and changes were strictly documented. Changes were reviewed. If context was lost, I knew exactly where that knowledge lived. I had to watch this very actively, because Claude Code fought tooth and nail to avoid writing docs, even after I'd added it to memory.
 
 Tests, tests, and more tests. From the start I established a rule — use real data for tests: if we test a DFF model, we work at the level of the actual file, not an emulation. As a separate iteration, after the core features were done, I fully covered the missing areas with tests, built an e2e platform for testing, and verified all the documentation.
 
@@ -298,7 +301,7 @@ Second, the browser as a gaming platform isn't a great fit. Inside the browser w
 
 As a result, there's of course no point in fully porting projects like this to the browser. But the experience I gained here lets me build a number of useful tools, for example:
 
-I've already made a tool that fixes chrome issues in some custom car models and can rescale them for the real game:
+I've already made a tool that fixes chrome-material issues in some custom car models and can rescale them for the real game:
 
 ![Veh Optimizer. Before](./assets/2026-06-18/2026-06-18-veh-optimizer-before.jpg)
 ![Veh Optimizer. After](./assets/2026-06-18/2026-06-18-veh-optimizer-after.jpg)
