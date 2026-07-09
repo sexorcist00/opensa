@@ -57,7 +57,9 @@
     "tools/lod-procobj-generator",
     "tools/mod-installer",
     "tools/vehicle-installer",
-    "tools/ped-installer"
+    "tools/ped-installer",
+    "tools-debug/sa-int16-repro",
+    "asi/perfect-map"
   ],
   "scripts": {
     "arch": "tsx scripts/arch-graph.ts",

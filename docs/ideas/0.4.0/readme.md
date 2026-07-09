@@ -48,26 +48,29 @@ Chain overview, principles, and external library references: [plans/02-rendering
 
 Generate our OWN `.asi` engine-patch for real GTA:SA 1.0 that removes the hard limits behind the ghost-barriers bug (int16 `IplDef` pool-index truncation + three more unbounded structures), so perfect-map builds can add unlimited objects instead of staying under the ≤30k-text-row / ≤39-slot work-around. This is the "standing goal — own engine patch to LIFT the limit" recorded in the ghost-barriers post-mortem and memory. `ProperFixes.asi` proves the fix is code-patchable (built on injector + plugin-sdk) but is obfuscated + license-locked — we reverse-engineer it behaviourally and write our own patches from the decompiled engine ground truth. The tool cross-compiles a Win32 PE DLL from macOS (MinGW-w64) and is tested/debugged under Wine.
 
-Chain overview, constraints, and references: [plans/03-asi/readme.md](plans/03-asi/readme.md)
+This chain now lives as its own root project: **[`asi/perfect-map`](../../../asi/perfect-map)** (the repro
+oracle shipped separately as **[`tools-debug/sa-int16-repro`](../../../tools-debug/sa-int16-repro)**).
 
-| #   | Plan                                                                                   | Delivers                                                                                                                            | Status |
-| --- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 0   | [000 — Reproduce the ghost-barriers bug](plans/03-asi/000-reproduce-bug.md)            | **first task** — fast, deterministic, isolated repro of the int16 crash + detection oracle (the pass/fail gate for the whole chain) | idea   |
-| 1   | [001 — Reverse-engineering & patch catalogue](plans/03-asi/001-reverse-engineering.md) | RE of ProperFixes + decompiled engine → verified address/byte/change table                                                          | idea   |
-| 2   | [002 — Toolchain & architecture](plans/03-asi/002-toolchain-architecture.md)           | macOS→Win32 cross-compile, ASI skeleton, hook/patch primitives, repo layout                                                         | idea   |
-| 3   | [003 — Patch framework](plans/03-asi/003-patch-framework.md)                           | declarative patch table, exe fingerprint gate, original-byte verify, FLA/OLA coexistence                                            | idea   |
-| 4   | [004 — Limit-lift patches](plans/03-asi/004-limit-patches.md)                          | the payload: int16→int32 IplDef + array relocations; ghost-barriers repro clean                                                     | idea   |
-| 5   | [005 — Build, debug & test harness](plans/03-asi/005-build-debug-test.md)              | macOS byte-level tests, Wine boot ladder, logging, winedbg recipe, CI                                                               | idea   |
-| 6   | [006 — Pipeline integration & budget lift](plans/03-asi/006-pipeline-integration.md)   | ship the asi from pmb; relax `checkTextIplSlotBudget` in opensa-asi target mode                                                     | idea   |
+Chain overview, constraints, and references: [../../../asi/perfect-map/docs/plans/readme.md](../../../asi/perfect-map/docs/plans/readme.md)
+
+| #   | Plan                                                                                                          | Delivers                                                                                                                               | Status |
+| --- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| —   | [Reproduce the ghost-barriers bug](../../../tools-debug/sa-int16-repro/docs/reproducing-the-int16-bug.md)     | **prerequisite — SHIPPED** as `tools-debug/sa-int16-repro`: the repro dial + detection oracle (the pass/fail gate for the whole chain) | done   |
+| 1   | [001 — Reverse-engineering & patch catalogue](../../../asi/perfect-map/docs/plans/001-reverse-engineering.md) | RE of ProperFixes + decompiled engine → verified address/byte/change table                                                             | idea   |
+| 2   | [002 — Toolchain & architecture](../../../asi/perfect-map/docs/plans/002-toolchain-architecture.md)           | macOS→Win32 cross-compile, ASI skeleton, hook/patch primitives, repo layout                                                            | idea   |
+| 3   | [003 — Patch framework](../../../asi/perfect-map/docs/plans/003-patch-framework.md)                           | declarative patch table, exe fingerprint gate, original-byte verify, FLA/OLA coexistence                                               | idea   |
+| 4   | [004 — Limit-lift patches](../../../asi/perfect-map/docs/plans/004-limit-patches.md)                          | the payload: int16→int32 IplDef + array relocations; ghost-barriers repro clean                                                        | idea   |
+| 5   | [005 — Build, debug & test harness](../../../asi/perfect-map/docs/plans/005-build-debug-test.md)              | macOS byte-level tests, Wine boot ladder, logging, winedbg recipe, CI                                                                  | idea   |
+| 6   | [006 — Pipeline integration & budget lift](../../../asi/perfect-map/docs/plans/006-pipeline-integration.md)   | ship the asi from pmb; relax `checkTextIplSlotBudget` in opensa-asi target mode                                                        | idea   |
 
 Phase 2 — a second engine fix on the same framework: the **2dfx particle-emitter leak on LODs** ([lod-2dfx-particles.md](../../../docs/open-issues/lod-2dfx-particles.md)). Cloned-LOD emitters never unload → pool exhaustion → new-game crash (`0x004AA3A1`); we currently strip particles at build time, ProperFixes fixes the lifecycle in-engine. RE it, patch it in our asi, then let the pipeline keep distant smoke/fire on LODs (the issue's remaining goal) with a LOD-range emitter budget against overdraw.
 
-| #   | Plan                                                                                          | Delivers                                                                                             | Status |
-| --- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------ |
-| 7   | [007 — Reproduce the 2dfx emitter-leak crash](plans/03-asi/007-2dfx-reproduce.md)             | **first Phase-2 task** — deterministic un-stripped-emitter repro of `0x004AA3A1` + leak/crash oracle | idea   |
-| 8   | [008 — 2dfx emitter lifecycle: RE & root cause](plans/03-asi/008-2dfx-emitter-re.md)          | why cloned-LOD emitters leak; PF's patch located; catalogue rows                                     | idea   |
-| 9   | [009 — 2dfx emitter-lifecycle patch](plans/03-asi/009-2dfx-emitter-patch.md)                  | the fix in our asi; new-game crash gone with particle 2dfx present + emitters actually unload        | idea   |
-| 10  | [010 — Pipeline: keep 2dfx on LODs + far-view budget](plans/03-asi/010-pipeline-keep-2dfx.md) | stop stripping (opensa-asi target); LOD-range rate/sprite budgets kill overdraw                      | idea   |
+| #   | Plan                                                                                                                 | Delivers                                                                                             | Status |
+| --- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------ |
+| 7   | [007 — Reproduce the 2dfx emitter-leak crash](../../../asi/perfect-map/docs/plans/007-2dfx-reproduce.md)             | **first Phase-2 task** — deterministic un-stripped-emitter repro of `0x004AA3A1` + leak/crash oracle | idea   |
+| 8   | [008 — 2dfx emitter lifecycle: RE & root cause](../../../asi/perfect-map/docs/plans/008-2dfx-emitter-re.md)          | why cloned-LOD emitters leak; PF's patch located; catalogue rows                                     | idea   |
+| 9   | [009 — 2dfx emitter-lifecycle patch](../../../asi/perfect-map/docs/plans/009-2dfx-emitter-patch.md)                  | the fix in our asi; new-game crash gone with particle 2dfx present + emitters actually unload        | idea   |
+| 10  | [010 — Pipeline: keep 2dfx on LODs + far-view budget](../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md) | stop stripping (opensa-asi target); LOD-range rate/sprite budgets kill overdraw                      | idea   |
 
 ## Basic CLEO support
 

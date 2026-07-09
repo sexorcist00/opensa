@@ -1,6 +1,6 @@
 # 005 — Build, debug & test harness
 
-Part of the [opensa-asi chain](readme.md). Runs alongside 002–004 (the discipline they're tested WITH) and hardens it. Answers the user's explicit ask: _how to write, extend, maintain, and debug this_ — on a Mac, for a Windows target, with no Windows machine.
+Part of the [perfect-map ASI chain](readme.md). Runs alongside 002–004 (the discipline they're tested WITH) and hardens it. Answers the user's explicit ask: _how to write, extend, maintain, and debug this_ — on a Mac, for a Windows target, with no Windows machine.
 
 ## Context
 

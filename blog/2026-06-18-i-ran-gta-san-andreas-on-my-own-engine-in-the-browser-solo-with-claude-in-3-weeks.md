@@ -201,7 +201,7 @@ In the original GTA models, shadows and light are baked into the geometry. This 
 
 Since I'm developing from scratch, I can run any experiments I want. The first thing I tried was real sun and shadows.
 
-![Fog](./assets/2026-06-18/2026-06-18-godrays.jpg)
+![Godrays](./assets/2026-06-18/2026-06-18-godrays.jpg)
 
 ![Shadows](./assets/2026-06-18/2026-06-18-shadows.jpg)
 

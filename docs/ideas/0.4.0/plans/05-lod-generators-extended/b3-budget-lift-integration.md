@@ -1,6 +1,6 @@
 # B3 — Budget lift & integration (post-asi)
 
-Part of [05 — LOD generators, extended](readme.md), Part B. Depends on [B1](b1-procobj-density-model.md)/[B2](b2-biome-zone-density.md) (the density model) AND **Task 3** ([03-asi Phase 1](../03-asi/readme.md): the int16 limit lift) + [03-asi/006](../03-asi/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects" — raising the int16-era caps now that the engine no longer corrupts past them.
+Part of [05 — LOD generators, extended](readme.md), Part B. Depends on [B1](b1-procobj-density-model.md)/[B2](b2-biome-zone-density.md) (the density model) AND **Task 3** ([03-asi Phase 1](../../../../../asi/perfect-map/docs/plans/readme.md): the int16 limit lift) + [03-asi/006](../../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects" — raising the int16-era caps now that the engine no longer corrupts past them.
 
 ## Context
 

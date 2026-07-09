@@ -1,9 +1,9 @@
 # 05 — LOD generators, extended
 
-Two independent generator upgrades, each **unlocked by an ASI engine fix** from the [03-asi chain](../03-asi/readme.md). Both are worthless (crash the game) until their asi lands, so each plan is gated on the `opensa-asi` build target and keeps the stock-target behaviour byte-identical to today.
+Two independent generator upgrades, each **unlocked by an ASI engine fix** from the [03-asi chain](../../../../../asi/perfect-map/docs/plans/readme.md). Both are worthless (crash the game) until their asi lands, so each plan is gated on the `opensa-asi` build target and keeps the stock-target behaviour byte-identical to today.
 
-- **Part A — LODs carry 2dfx & more.** Unlocked by [03-asi Phase 2](../03-asi/readme.md) (the 2dfx emitter-leak fix, Task 4). Today the LOD generators strip particle 2dfx and cells keep only type-0 lights. With the emitter lifecycle fixed in-engine we can carry the FULL 2dfx richness onto LODs — distant coronas everywhere (already), plus street-name roadsigns, escalators, and rate-budgeted particle emitters (factory smoke/fire at range).
-- **Part B — procobj density & biomes.** Unlocked by [03-asi Phase 1](../03-asi/readme.md) (the int16 limit lift, Task 3). Today procobj scatter is pinned to vanilla density (`lottery < 1`) and capped by the int16 text-row budget. With the ceiling lifted we can place far more clutter and control density by biome — denser bushes in forest, rocks on mountain slopes, cacti/shrubs in the desert.
+- **Part A — LODs carry 2dfx & more.** Unlocked by [03-asi Phase 2](../../../../../asi/perfect-map/docs/plans/readme.md) (the 2dfx emitter-leak fix, Task 4). Today the LOD generators strip particle 2dfx and cells keep only type-0 lights. With the emitter lifecycle fixed in-engine we can carry the FULL 2dfx richness onto LODs — distant coronas everywhere (already), plus street-name roadsigns, escalators, and rate-budgeted particle emitters (factory smoke/fire at range).
+- **Part B — procobj density & biomes.** Unlocked by [03-asi Phase 1](../../../../../asi/perfect-map/docs/plans/readme.md) (the int16 limit lift, Task 3). Today procobj scatter is pinned to vanilla density (`lottery < 1`) and capped by the int16 text-row budget. With the ceiling lifted we can place far more clutter and control density by biome — denser bushes in forest, rocks on mountain slopes, cacti/shrubs in the desert.
 
 ## Grounding (current code)
 
@@ -15,7 +15,7 @@ Two independent generator upgrades, each **unlocked by an ASI engine fix** from 
 
 ## Boundary vs the 03-asi chain
 
-[03-asi/010](../03-asi/010-pipeline-keep-2dfx.md) is the **engine-integration flip** for particle 2dfx (stop stripping for the asi target + a far-view rate budget, gated on the emitter fix). Part A here is the **generator-side capability**: carrying a complete, correctly-transformed 2dfx set through every LOD representation (verbatim, decimate, AND baked cells incl. rotation-bearing types), of which particles are one case. A3 implements the emitter carry through the cell/decimate encoders and shares the budget model with 010.
+[03-asi/010](../../../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md) is the **engine-integration flip** for particle 2dfx (stop stripping for the asi target + a far-view rate budget, gated on the emitter fix). Part A here is the **generator-side capability**: carrying a complete, correctly-transformed 2dfx set through every LOD representation (verbatim, decimate, AND baked cells incl. rotation-bearing types), of which particles are one case. A3 implements the emitter carry through the cell/decimate encoders and shares the budget model with 010.
 
 ## Chains
 

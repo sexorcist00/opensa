@@ -10,6 +10,8 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  *                      runs the WHOLE pipeline (both sa + opensa) while keeping every step.
  *     --keep-work      keep the intermediate `.work` builds even on a full run.
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
+ *     --allow-text-row-overflow  build past the int16 30k text-row budget (the 03-asi ghost-barriers repro —
+ *                      an intentionally over-2^15 full build); the 39-slot guard stays hard. Never for shipping.
  * A `broken-prelight.json` at the mods-src root (or inside its `mods/` subfolder) is the map-optimizer
  * prelight FORCE list: the statistical pass runs map-wide and the listed models are additionally forced past
  * the skip-guards (same entry format as `--prelit-force` — see the map-optimizer README).
@@ -56,6 +58,7 @@ async function main(): Promise<void> {
   };
 
   const { produced, stoppedEarly } = await buildPerfectMap({
+    allowTextRowOverflow: process.argv.includes('--allow-text-row-overflow'),
     config: { optimizerPasses },
     gamePath,
     inPath,

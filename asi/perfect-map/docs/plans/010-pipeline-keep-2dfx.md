@@ -1,10 +1,10 @@
 # 010 — Pipeline: keep 2dfx on LODs + far-view budget
 
-Part of the [opensa-asi chain](readme.md), Phase 2. Depends on [009](009-2dfx-emitter-patch.md) (the engine leak fixed) and Phase 1's [006](006-pipeline-integration.md) (the stock-vs-opensa-asi target mode). Delivers the open issue's **remaining goal**: distant factory smoke/fire visible at LOD range instead of stripped — without the emitter leak (009) OR the far-view overdraw.
+Part of the [perfect-map ASI chain](readme.md), Phase 2. Depends on [009](009-2dfx-emitter-patch.md) (the engine leak fixed) and Phase 1's [006](006-pipeline-integration.md) (the stock-vs-opensa-asi target mode). Delivers the open issue's **remaining goal**: distant factory smoke/fire visible at LOD range instead of stripped — without the emitter leak (009) OR the far-view overdraw.
 
 ## Context
 
-Today ([lod-2dfx-particles.md](../../../../../docs/open-issues/lod-2dfx-particles.md)) both LOD targets drop particle 2dfx:
+Today ([lod-2dfx-particles.md](../../../../docs/open-issues/lod-2dfx-particles.md)) both LOD targets drop particle 2dfx:
 
 - **sa** — `stripParticleEffects(bytes)` wrapped around every clone in `finalize.ts` + `fill-holes.ts` (keeps type-0 coronas/lights, removes type-1 particles).
 - **opensa** — structurally immune (cell bake rebuilds from geometry; `build2dfxSection` re-adds only type-0 lights via `LIGHT_2DFX = new Set([0])`).

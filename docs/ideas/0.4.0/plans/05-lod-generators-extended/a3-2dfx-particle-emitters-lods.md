@@ -1,10 +1,10 @@
 # A3 — Particle emitters through the LOD generators
 
-Part of [05 — LOD generators, extended](readme.md), Part A. Depends on [A1](a1-2dfx-unified-carry.md)/[A2](a2-2dfx-rotation-bearing-cells.md) (unified carry + typed transforms) AND **Task 4** ([03-asi Phase 2](../03-asi/readme.md): the emitter-leak fix) + [03-asi/010](../03-asi/010-pipeline-keep-2dfx.md) (the pipeline flip + far-view budget). Delivers the generator-side capability for distant factory smoke/fire on LODs.
+Part of [05 — LOD generators, extended](readme.md), Part A. Depends on [A1](a1-2dfx-unified-carry.md)/[A2](a2-2dfx-rotation-bearing-cells.md) (unified carry + typed transforms) AND **Task 4** ([03-asi Phase 2](../../../../../asi/perfect-map/docs/plans/readme.md): the emitter-leak fix) + [03-asi/010](../../../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md) (the pipeline flip + far-view budget). Delivers the generator-side capability for distant factory smoke/fire on LODs.
 
 ## Context & boundary
 
-[03-asi/010](../03-asi/010-pipeline-keep-2dfx.md) owns the **pipeline decision** (stop stripping particle 2dfx for the asi target) and the **far-view rate budget** (LOD-range emission scaling to kill the smoke-storm overdraw), plus the installer/asi-presence safety. It focuses on the sa-lod strip flip (a single call site). A3 is the **generator plumbing** that makes particle 2dfx ride EVERY LOD representation correctly — specifically the paths 010 doesn't itself build out: the **decimate** and **cell** encoders, where emitters aren't a byte-copy but a rebuilt 2dfx section. The rate-budget model is shared (defined by 010, consumed here).
+[03-asi/010](../../../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md) owns the **pipeline decision** (stop stripping particle 2dfx for the asi target) and the **far-view rate budget** (LOD-range emission scaling to kill the smoke-storm overdraw), plus the installer/asi-presence safety. It focuses on the sa-lod strip flip (a single call site). A3 is the **generator plumbing** that makes particle 2dfx ride EVERY LOD representation correctly — specifically the paths 010 doesn't itself build out: the **decimate** and **cell** encoders, where emitters aren't a byte-copy but a rebuilt 2dfx section. The rate-budget model is shared (defined by 010, consumed here).
 
 Today: verbatim keeps particles only if unstripped; decimate re-attaches via `collectClumpEffects` (default drops particles); cells drop everything but type-0. So even with 010's un-strip, decimated and celled LODs still wouldn't carry emitters — A3 fixes that.
 
@@ -25,7 +25,7 @@ Today: verbatim keeps particles only if unstripped; decimate re-attaches via `co
 - [ ] Emitter-thinning in lod-common (keep a configured fraction/cap of a model's type-1 entries on the LOD); per-species/per-category thinning config with defaults.
 - [ ] (If needed) typed particle-payload scaling codec in rw-codec (rate field), beside A2's codecs; round-trip tests.
 - [ ] Decimate + cell encoders carry the scaled emitters (extend `collectClumpEffects` keep + `collectCellLightEffects`/`build2dfxSection`); positions via existing transforms (A1/A2).
-- [ ] Shared budget model with [03-asi/010](../03-asi/010-pipeline-keep-2dfx.md): one config for LOD-range emission factors, consumed by both the pipeline flip and these encoders.
+- [ ] Shared budget model with [03-asi/010](../../../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md): one config for LOD-range emission factors, consumed by both the pipeline flip and these encoders.
 - [ ] In-game (Wine, asi target): refinery/plant smoke visible at LOD range through decimated + celled LODs, new-game boots (Task 4), far-view frame cost within budget (measure). Record per-species factors + fps.
 - [ ] Stock-target regression: particles fully stripped, output safe on stock 1.0 (today's verified behaviour).
 

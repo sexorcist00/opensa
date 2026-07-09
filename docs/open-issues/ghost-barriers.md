@@ -1,19 +1,20 @@
 # "Ghost barriers" — mass map instances corrupt real SA (int16 building-pool indexes)
 
-> **🟡 SOLVED BY BUDGETS, NOT AT THE ROOT (2026-07-07).** After generating procobj/tree LODs for the
-> real game, the script-gated `barriers2.ipl` roadblocks ("DANGER NO ACCESS ACROSS BRIDGE", STOP signs,
-> cones at the Hampton Barns bridge) appeared **permanently, on any save**, plus teleport-save crashes
-> near the bridge. The final root cause is an **int16 truncation of building-pool indexes inside
-> `IplDef`** — a stock SA 1.0 bug with a hard ceiling of **32,767 permanent text-IPL instances
-> map-wide**. Fixed by restructuring our generated placement (binary streams + budgets + build guards)
-> and verified in-game on the full perfect-map build — but that is a **work-around within the limit,
-> not a lift of it**. **Remaining goal (2026-07-07): pin the exact patch(es) that remove the ceiling
-> and ship a 100 % fix so any number of objects can be added** — candidates: our own minimal .asi /
-> engine-side patch widening the `IplDef` int16 ranges (+ the other three unbounded structures), or a
-> placement scheme that provably never touches the text-IPL path. ProperFixes.asi proves it is
-> code-patchable (obfuscated, license-restricted — can't be reused, only learned from behaviourally).
-> Kept as the reference for SA's four (!) unbounded placement structures and the epic of eliminated
-> wrong theories.
+> **✅ ROOT-FIXED BY OUR OWN ASI (2026-07-09) — the int16 ceiling is LIFTED, not just budgeted.** The
+> script-gated `barriers2.ipl` roadblocks ("DANGER NO ACCESS ACROSS BRIDGE", STOP signs, cones at the
+> Hampton Barns bridge) that appeared permanently on any save past **32,767 permanent text-IPL instances
+> map-wide** — root cause an **int16 truncation of building-pool indexes inside `IplDef`** — are now
+> **removed by our own engine patch**: **[`asi/perfect-map`](../../asi/perfect-map)** (a from-scratch
+> Win32 `.asi`, MinGW-cross-compiled, no injector/plugin-sdk). It observes `CIplStore::IncludeEntity` into
+> an int32 sidecar and redirects `CIplStore::RemoveIpl`'s three building-bound reads (incl. the loop
+> back-edge re-read at 0x404BA8) to it. **Confirmed in-game on the 33k-row repro with BOTH FLA and OLA**
+> (it overlays FLA's incomplete int16 patch). The old placement work-around (binary streams + budgets +
+> `checkTextIplSlotBudget`) still ships for the stock target; the ASI is what LIFTS the limit for the
+> opensa-asi target. Full write-up: [`asi/perfect-map/docs/patch-catalogue.md`](../../asi/perfect-map/docs/patch-catalogue.md)
+> (#1) + the repro dial [`tools-debug/sa-int16-repro`](../../tools-debug/sa-int16-repro). **Remaining (004b):**
+> the other unbounded structures (`gpLoadedBuildings` 4096, `IplEntityIndexArrays` 40) still rely on
+> FLA/OLA; our ASI only widens the int16 ceiling so far. Kept as the reference for SA's four unbounded
+> placement structures + the epic of eliminated wrong theories.
 
 ## Symptom
 

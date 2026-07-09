@@ -31,6 +31,10 @@ import { config as defaultConfig } from './config';
  */
 export const STAGE_NAMES = ['mods', 'vehicles', 'peds', 'optimize', 'trees', 'procobj', 'sa', 'opensa', 'lod'] as const;
 export interface BuildPerfectMapOptions {
+  /** Downgrade the int16 text-ROW budget from a build-stopping error to a warning — the 03-asi ghost-barriers
+   *  repro path (an intentionally over-2^15 full build). The 39-slot guard stays hard so the other structures
+   *  remain in-bounds. Never set for a shipping build. */
+  allowTextRowOverflow?: boolean;
   config?: Partial<BuilderConfig>;
   /** Clean base game dir (`gta.dat` + `data/` + `models/`). */
   gamePath: string;
@@ -153,7 +157,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // User-curated LOD exclusions (`lod-exclude.json` at the mods-src root or inside mods/): models that must
   // not enter the far LODs at all — e.g. HD street-furniture replacements (a 22k-tri ELECTRICA traffic light
   // placed 729× exploded the cell bake ~50×; at 300+ u it is a few unreadable pixels anyway).
-  checkTextIplSlotBudget(game);
+  checkTextIplSlotBudget(game, options.allowTextRowOverflow);
 
   const userExcluded = loadLodExclude(inPath, source(subfolders.mods));
   const excludeItems = [...collectGeneratedModels(game), ...userExcluded];
@@ -324,7 +328,7 @@ export function checkImgIdBudgets(gameDir: string): void {
   }
 }
 
-export function checkTextIplSlotBudget(gameDir: string): void {
+export function checkTextIplSlotBudget(gameDir: string, allowTextRowOverflow = false): void {
   const datPath = join(gameDir, 'data', 'gta.dat');
   if (!existsSync(datPath)) {
     return;
@@ -345,11 +349,14 @@ export function checkTextIplSlotBudget(gameDir: string): void {
   }
   log(`text-IPL slots: ${used.length}/${TEXT_IPL_SLOT_CAP} (IplEntityIndexArrays), rows: ${totalRows}/${TEXT_ROW_CAP}`);
   if (totalRows > TEXT_ROW_CAP) {
-    throw new Error(
+    const message =
       `${totalRows} permanent text-IPL rows exceed the ${TEXT_ROW_CAP} budget: SA stores building-pool ` +
-        'indexes as int16 in IplDef (CIplStore::IncludeEntity) and permanent rows past ~32.7k corrupt ' +
-        'stream-out ranges. Convert placements to binary streams (unlinked pairs) or cull.',
-    );
+      'indexes as int16 in IplDef (CIplStore::IncludeEntity) and permanent rows past ~32.7k corrupt ' +
+      'stream-out ranges. Convert placements to binary streams (unlinked pairs) or cull.';
+    if (!allowTextRowOverflow) {
+      throw new Error(message);
+    }
+    console.warn(`  ! --allow-text-row-overflow: ${message}`);
   }
   if (used.length === TEXT_IPL_SLOT_CAP) {
     console.warn(

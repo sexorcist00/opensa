@@ -1,6 +1,6 @@
 # 006 — Pipeline integration & budget lift
 
-Part of the [opensa-asi chain](readme.md). Depends on [004](004-limit-patches.md) (a working ASI) + [005](005-build-debug-test.md) (it's trustworthy). Closes the loop: **ship the ASI with our builds and relax the work-around budgets that only existed because of the bug**.
+Part of the [perfect-map ASI chain](readme.md). Depends on [004](004-limit-patches.md) (a working ASI) + [005](005-build-debug-test.md) (it's trustworthy). Closes the loop: **ship the ASI with our builds and relax the work-around budgets that only existed because of the bug**.
 
 ## Context
 
@@ -8,7 +8,7 @@ Part of the [opensa-asi chain](readme.md). Depends on [004](004-limit-patches.md
 
 ## Decisions
 
-1. **The ASI ships as a build output, installed like other real-game mods.** perfect-map-builder's `sa` target (the real-game dir) drops `opensa.asi` into the game's ASI folder (`scripts/` or root per the ASI loader convention), alongside the map. It's OUR dependency now — no user-supplied ProperFixes/FLA needed for the limit fix (FLA still recommended for its pool sizes — document the division of labour).
+1. **The ASI ships as a build output, installed like other real-game mods.** perfect-map-builder's `sa` target (the real-game dir) drops `perfect-map.asi` into the game's ASI folder (`scripts/` or root per the ASI loader convention), alongside the map. It's OUR dependency now — no user-supplied ProperFixes/FLA needed for the limit fix (FLA still recommended for its pool sizes — document the division of labour).
 2. **Budgets become ASI-aware.** `checkTextIplSlotBudget` gains a mode: with the ASI shipped, the int16 ceiling guard (30k rows) and the 40-slot guard lift to the new effective ceiling (from 004's measured max) or off; without it, the stock guards stay (someone building for a vanilla exe). A build flag / config selects "target: stock" vs "target: opensa-asi". Loud, explicit, never silently over-budget.
 3. **Keep the economy, drop the ceiling fight.** `linkedHeight`, per-area row budgets, slot folding stay (they reduce memory/draw regardless). We stop MIGRATING/cutting content solely to dodge 2^15 — the generators can place freely up to the new headroom.
 4. **Version-pinned pairing.** The shipped `.asi` build hash is recorded in the build manifest so a map built for "opensa-asi target" is paired with the exact ASI that lifts its limits — a mismatch is detectable, not a mystery crash. (The ASI's own fingerprint gate already refuses the wrong exe; this pairs asi↔map.)
@@ -16,7 +16,7 @@ Part of the [opensa-asi chain](readme.md). Depends on [004](004-limit-patches.md
 
 ## Tasks
 
-- [ ] pmb `sa` target: emit `opensa.asi` (built by `tools/opensa-asi`) into the correct ASI-loader location; wire the native build into the pmb flow (or consume a pre-built artifact from CI — decide by build-time cost).
+- [ ] pmb `sa` target: emit `perfect-map.asi` (built by `tools/opensa-asi`) into the correct ASI-loader location; wire the native build into the pmb flow (or consume a pre-built artifact from CI — decide by build-time cost).
 - [ ] `checkTextIplSlotBudget`: add stock vs opensa-asi target modes; new ceilings from 004's measured max; tests for both modes (mirrors the `checkImgIdBudgets` test style).
 - [ ] Build manifest: record shipped `.asi` sha256 + the effective limits it grants; installer-side presence/version check with a loud warning on mismatch/absence.
 - [ ] Generator budget knobs (lod-trees per-area 4000, lod-procobj, slot folding): expose their ceilings so the opensa-asi target can raise them; keep stock defaults for the stock target.

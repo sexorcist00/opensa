@@ -1,6 +1,6 @@
 # 009 — 2dfx emitter-lifecycle patch
 
-Part of the [opensa-asi chain](readme.md), Phase 2. Depends on [008](008-2dfx-emitter-re.md) (the confirmed mechanism + catalogue rows), [007](007-2dfx-reproduce.md) (the repro fixture + detection oracle), and Phase 1's [003](003-patch-framework.md) (the patch framework) / [005](005-build-debug-test.md) (the test harness). Implements the fix in OUR asi so particle 2dfx can ride LODs without the leak.
+Part of the [perfect-map ASI chain](readme.md), Phase 2. Depends on [008](008-2dfx-emitter-re.md) (the confirmed mechanism + catalogue rows), [007](007-2dfx-reproduce.md) (the repro fixture + detection oracle), and Phase 1's [003](003-patch-framework.md) (the patch framework) / [005](005-build-debug-test.md) (the test harness). Implements the fix in OUR asi so particle 2dfx can ride LODs without the leak.
 
 ## Context
 

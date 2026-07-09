@@ -15,13 +15,13 @@ The through-line: two chains are pure capability (rendering, plates), one chain 
 
 ## The five chains at a glance
 
-| Chain                                                                       | Plans         | Pillar    | Gated on | Independent?                                               |
-| --------------------------------------------------------------------------- | ------------- | --------- | -------- | ---------------------------------------------------------- |
-| [01 — Vehicle license plates](plans/01-plates/)                             | 4             | Look      | —        | ✅ fully standalone                                        |
-| [02 — Rendering overhaul](plans/02-rendering/readme.md)                     | 10            | Look      | —        | ✅ standalone (but its perf harness is shared — see below) |
-| [03 — opensa-asi (own limit/engine patches)](plans/03-asi/readme.md)        | 11 (2 phases) | Limits    | —        | ✅ standalone; **enables 05**                              |
-| [04 — Basic CLEO support](plans/04-cleo-basic/readme.md)                    | 5             | Behaviour | —        | ✅ fully standalone                                        |
-| [05 — LOD generators, extended](plans/05-lod-generators-extended/readme.md) | 6 (A+B)       | Content   | **03**   | ❌ needs the ASI                                           |
+| Chain                                                                                       | Plans         | Pillar    | Gated on | Independent?                                               |
+| ------------------------------------------------------------------------------------------- | ------------- | --------- | -------- | ---------------------------------------------------------- |
+| [01 — Vehicle license plates](plans/01-plates/)                                             | 4             | Look      | —        | ✅ fully standalone                                        |
+| [02 — Rendering overhaul](plans/02-rendering/readme.md)                                     | 10            | Look      | —        | ✅ standalone (but its perf harness is shared — see below) |
+| [03 — opensa-asi (own limit/engine patches)](../../../asi/perfect-map/docs/plans/readme.md) | 11 (2 phases) | Limits    | —        | ✅ standalone; **enables 05**                              |
+| [04 — Basic CLEO support](plans/04-cleo-basic/readme.md)                                    | 5             | Behaviour | —        | ✅ fully standalone                                        |
+| [05 — LOD generators, extended](plans/05-lod-generators-extended/readme.md)                 | 6 (A+B)       | Content   | **03**   | ❌ needs the ASI                                           |
 
 **~36 plans total.** Only one hard cross-chain dependency (05 → 03), plus one shared foundation (02's perf harness).
 

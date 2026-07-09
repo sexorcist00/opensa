@@ -230,6 +230,8 @@ const scriptsConfig = {
     'tools/mod-installer/**/*.{js,mjs,cjs,ts}',
     'tools/vehicle-installer/**/*.{js,mjs,cjs,ts}',
     'tools/ped-installer/**/*.{js,mjs,cjs,ts}',
+    'tools-debug/sa-int16-repro/**/*.{js,mjs,cjs,ts}',
+    'asi/perfect-map/**/*.{js,mjs,cjs,ts}',
   ],
   languageOptions: {
     globals: {

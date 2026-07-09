@@ -1,0 +1,40 @@
+#pragma once
+// Apply orchestration (plan 004). Runs the enabled fixes, each gated by config.hpp and coexistence: int16 is
+// applied regardless of adjusters (none of them fix it); the two array relocations DEFER when FLA/OLA is present
+// (they own those zones). Compiled only into the APPLY build (PM_APPLY=1).
+#include "coexistence.hpp"
+#include "config.hpp"
+#include "log.hpp"
+
+#if PM_FIX_INT16
+#include "patches/int16.hpp"
+#endif
+
+namespace pm {
+
+inline void ApplyPatches(Log& log, unsigned adjusterMask) {
+#if PM_FIX_INT16
+  patches::ApplyInt16(log);  // no adjuster fixes int16 → always apply
+#endif
+
+#if PM_FIX_LOADEDBUILDINGS
+  if (adjusterMask != 0) {
+    log.Line("[perfect-map] loaded-buildings: adjuster present → DEFER");
+  } else {
+    log.Line("[perfect-map] loaded-buildings: TODO (004b)");
+  }
+#endif
+
+#if PM_FIX_IPLINDEX
+  if (adjusterMask != 0) {
+    log.Line("[perfect-map] ipl-entity-index: adjuster present → DEFER");
+  } else {
+    log.Line("[perfect-map] ipl-entity-index: TODO (004b)");
+  }
+#endif
+
+  (void)adjusterMask;
+  (void)log;
+}
+
+}  // namespace pm
