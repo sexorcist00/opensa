@@ -487,6 +487,7 @@ function bootstrap(
           coronaDrawDistance: 120,
           dynamicObjectsFill: { rim: 0.1, strength: 0.8 }, // plan 034: dynamic-object night fill
           litFade: { dawnEnd: 7, dawnStart: 6, duskEnd: 20, duskStart: 19 },
+          skyGlow: 1,
           skylight: 0.6,
           windowGlow: 1.0,
         },

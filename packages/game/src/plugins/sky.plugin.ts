@@ -162,6 +162,9 @@ const SKY_BASE_GLSL = `
   uniform float uCloudOpacity;
   uniform float uCloudDark;
   uniform vec3 uCloudSunTint; // timecyc sun colour × golden-hour strength — dawn/dusk cloud rims
+  uniform vec3 uMoonDirSky;   // moon direction (world) — the night sky's light source
+  uniform vec3 uMoonGlow;     // premultiplied cool moon-scatter colour (brightness × phase/cloud fade)
+  uniform vec3 uCityGlow;     // premultiplied warm urban skyglow (SA is a city — nights are never black)
 
   vec3 skyBase(vec3 dir) {
     float t = smoothstep(0.0, 1.0, clamp(dir.y, 0.0, 1.0));
@@ -172,7 +175,18 @@ const SKY_BASE_GLSL = `
     // Overcast hands the sky back to the AUTHORED timecyc gradient: under a full deck the atmosphere is
     // invisible anyway — the physical model degenerates into a milky Mie wash that fights the dark deck
     // (user report). Clear skies keep pure Preetham; the blend rides the same coverage the deck uses.
-    return mix(pbr, grad, max(uPbrNight, uCloudCoverage * 0.85));
+    vec3 res = mix(pbr, grad, max(uPbrNight, uCloudCoverage * 0.85));
+    // Night sky glow (the "PBR night"): the authored SA night gradient is near-black — add the moon's
+    // cool Rayleigh scatter (halo + a soft lift of its sky hemisphere) and the warm URBAN skyglow band at
+    // the horizon (San Andreas is a metropolis; city nights are never black). Rides uPbrNight so it fades
+    // in through twilight; also feeds the fog LUT → night fog matches the glowing horizon.
+    if (uPbrNight > 0.01) {
+      float moonHalo = pow(max(dot(dir, uMoonDirSky), 0.0), 8.0);
+      float moonHemi = 0.5 + 0.5 * dot(dir, uMoonDirSky);
+      float band = pow(1.0 - clamp(dir.y, 0.0, 1.0), 6.0);
+      res += (uMoonGlow * (moonHalo * 0.6 + moonHemi * moonHemi * 0.12) + uCityGlow * band) * uPbrNight;
+    }
+    return res;
   }
 
 
@@ -424,6 +438,7 @@ export class SkyPlugin implements Plugin {
     uBetaM: { value: new Vector3(1e-7, 1e-7, 1e-7) },
     uBetaR: { value: new Vector3(1e-5, 2e-5, 3e-5) },
     uBottom: { value: new Color() },
+    uCityGlow: { value: new Color(0, 0, 0) },
     uCloudBottom: { value: new Color() },
     uCloudCoverage: { value: 0.5 },
     uCloudDark: { value: 0 },
@@ -432,6 +447,8 @@ export class SkyPlugin implements Plugin {
     uCloudTop: { value: new Color() },
     uCloudVolumetric: { value: 0 },
     uMieG: { value: 0.8 },
+    uMoonDirSky: { value: new Vector3(0, 1, 0) },
+    uMoonGlow: { value: new Color(0, 0, 0) },
     uPbrMix: { value: 0 },
     uPbrNight: { value: 0 },
     uPbrTint: { value: new Color(1, 1, 1) },
@@ -677,6 +694,18 @@ export class SkyPlugin implements Plugin {
     // Moon: a static sprite at a fixed sky direction, fading in as night falls (× cloud cover so heavy
     // overcast hides it). `brightness` scales the additive contribution.
     const moonFade = this.night * cloudFade;
+    // Night sky glow (modern sky): the moon's cool scatter follows the sprite's direction & fade; the warm
+    // urban skyglow gets BRIGHTER under cloud (the deck reflects the city light — real light pollution).
+    const cosElGlow = Math.cos(MathUtils.degToRad(moon.elevationDeg));
+    this.skyBaseUniforms.uMoonDirSky.value
+      .set(MOON_AZIMUTH.x * cosElGlow, Math.sin(MathUtils.degToRad(moon.elevationDeg)), MOON_AZIMUTH.z * cosElGlow)
+      .normalize();
+    this.skyBaseUniforms.uMoonGlow.value
+      .setRGB(0.45, 0.62, 1.0)
+      .multiplyScalar(0.055 * moon.brightness * moonFade * nightCfg.skyGlow);
+    this.skyBaseUniforms.uCityGlow.value
+      .setRGB(1.0, 0.58, 0.3)
+      .multiplyScalar(0.03 * nightCfg.skyGlow * (1 + this.cloudCover * 1.2));
     this.moonDisc.visible = moonFade > 0.01;
     if (this.moonDisc.visible) {
       const cosEl = Math.cos(MathUtils.degToRad(moon.elevationDeg)); // height set by config (tuned in-browser)

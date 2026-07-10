@@ -700,6 +700,19 @@ export function DebugOverlay({
                 type="range"
                 value={night.coronaDrawDistance}
               />
+              <div style={styles.groupLabel}>NIGHT SKY GLOW (067): {night.skyGlow.toFixed(2)}</div>
+              <input
+                max={3}
+                min={0}
+                onChange={(e) => {
+                  const skyGlow = Number(e.target.value);
+                  setNight((prev) => ({ ...prev, skyGlow }));
+                  actions.setNight({ skyGlow });
+                }}
+                step={0.05}
+                type="range"
+                value={night.skyGlow}
+              />
               <div style={styles.groupLabel}>NIGHT SKYLIGHT: {night.skylight.toFixed(2)}</div>
               <input
                 max={2}

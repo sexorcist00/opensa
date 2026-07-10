@@ -248,6 +248,9 @@ export interface NightConfig {
   dynamicObjectsFill: DynamicObjectsFillConfig;
   /** Dusk/dawn fade schedule for the night vertex colours + the night tonemap (they share one window). */
   litFade: LitFadeConfig;
+  /** Night SKY glow (plan 067/071, modern sky): moon Rayleigh halo + urban horizon skyglow strength —
+   *  the authored SA night gradient is near-black; this lifts the sky physically-plausibly (0 = off). */
+  skyGlow: number;
   /** Night skylight (hemisphere "moonlight from above") strength — top-down fill that gives objects form. */
   skylight: number;
   /** Night-vertex-colour glow strength — how strongly the SA baked night lighting (lit windows / signs /
