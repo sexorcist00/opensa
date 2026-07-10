@@ -10,6 +10,7 @@ import { orientCharacter } from '@opensa/game/character/orient-character';
 import { setupCharacter } from '@opensa/game/character/setup-character';
 import { Velocity } from '@opensa/game/ecs/components';
 import { TouchInputSource } from '@opensa/game/input';
+import { StreetLightSystem } from '@opensa/game/lights/street-light.system';
 import { createWindMod } from '@opensa/game/mods/wind.mod';
 import { BenchPlugin, type BenchScene } from '@opensa/game/perf/bench';
 import { cloudProfile } from '@opensa/game/plugins/cloud-profile';
@@ -42,6 +43,7 @@ import {
   getBreakableByKey,
   GLOW_LAYER,
   gxtKeyHash,
+  LOCAL_LIGHT_POOL,
   type MapZone,
   nearestBreakable,
   nightFillRim,
@@ -66,6 +68,7 @@ import {
   windowGlowUniform,
   worldCsmUniforms,
   worldDayTintUniform,
+  worldEmissiveUniforms,
   worldFogUniforms,
   worldLocalLightUniforms,
   worldShadowUniforms,
@@ -494,6 +497,7 @@ function bootstrap(
         night: {
           coronaDrawDistance: 120,
           dynamicObjectsFill: { rim: 0.1, strength: 0.8 }, // plan 034: dynamic-object night fill
+          emissiveBoost: 1.6,
           litFade: { dawnEnd: 7, dawnStart: 6, duskEnd: 20, duskStart: 19 },
           skyGlow: 1,
           skylight: 0.6,
@@ -935,9 +939,17 @@ function bootstrap(
         coronaMaterial.uniforms.uViewportHeight.value = canvas.height || canvas.clientHeight;
         particleViewportUniform.value = canvas.height || canvas.clientHeight;
         coronaMaterial.uniforms.uDrawDistance.value = night.coronaDrawDistance;
+        // Corona demotion (plan 070): within pool range the lamp's real light carries the look, so the
+        // sprite dims instead of double-brightening. Classic pipeline keeps the full corona.
+        coronaMaterial.uniforms.uPoolHandover.value =
+          game.getConfig().graphics.pipeline === 'modern' && lights.enabled ? 45 : 0;
         // Timed window overlays glow additively over the world material's night blend; the existing
         // `night.windowGlow` debug knob keeps scaling them (1.0 = the authored 1.2 base inside the uniform).
         windowGlowUniform.value = WINDOW_GLOW_BASE * night.windowGlow;
+        // Night emissives (plan 071): baked night-vertex sources (lit windows/neon/signs) self-illuminate
+        // past the bloom threshold. Modern only — classic keeps the 038 look.
+        worldEmissiveUniforms.uEmissiveBoost.value =
+          game.getConfig().graphics.pipeline === 'modern' ? night.emissiveBoost : 0;
         // Dynamic objects (player/vehicles) self-illuminate at night via a shader fill (plan 034), faded by the
         // sun-height factor (how dark it actually is) × the configurable strength.
         nightFillUniform.value = nightFactor * night.dynamicObjectsFill.strength;
@@ -1070,6 +1082,18 @@ function bootstrap(
         GLOW_LAYER,
         game.getCamera(),
         worldLocalLightUniforms, // plan 070: lamp lights land on the road/walls via the world-shader pool
+      ),
+    );
+    // Street lamps (plan 070): the 2dfx lights already collected for the corona sprites become real pooled
+    // point lights on the road. Runs AFTER the vehicle system each frame — it owns slots 0–3, lamps take 4+.
+    game.addSystem(
+      new StreetLightSystem(
+        game.getStreamingRoot(),
+        character.viewOf,
+        () => (sky.godraysSource.userData.night as number | undefined) ?? 0,
+        () => game.getConfig().graphics.lights,
+        worldLocalLightUniforms,
+        LOCAL_LIGHT_POOL,
       ),
     );
 

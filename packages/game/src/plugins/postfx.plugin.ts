@@ -13,6 +13,7 @@ import {
   ToneMappingEffect,
   ToneMappingMode,
 } from 'postprocessing';
+import { HalfFloatType } from 'three';
 
 import type { BloomConfig, SkyConfig, SsaoConfig, ToneMappingModeName } from '../interfaces/config.interface';
 import type { Plugin, PluginContext, RenderPass, RenderPipeline } from './plugin';
@@ -81,7 +82,10 @@ export class PostFxPlugin implements Plugin {
     const { bloom: bloomCfg, sky, ssao: ssaoCfg } = context.config.graphics;
     // No MSAA on the composer: a multisampled depth/stencil resolve can't be blitted alongside the
     // god-rays depth texture (GL_INVALID_OPERATION). Antialiasing is done by an SMAAEffect instead.
-    const composer = new EffectComposer(context.renderer);
+    // HDR frame buffer (plan 071): bloom runs BEFORE tone mapping, so an UnsignedByte buffer clipped every
+    // emissive at 1.0 — lit windows, neon and car lamps could never bloom brighter than plain white paper.
+    // HalfFloat keeps their real intensity for the bloom threshold; the ACES pass compresses at the end.
+    const composer = new EffectComposer(context.renderer, { frameBufferType: HalfFloatType });
     composer.addPass(new PpRenderPass(context.scene, context.camera));
 
     // Ambient occlusion: a scene-normals pass feeds an SSAO effect that multiply-darkens corners/contacts.

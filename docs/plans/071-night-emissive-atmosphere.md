@@ -17,6 +17,24 @@ Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [0
 5. **Wet night stretch** (rain): screen-space wet-look (darker albedo + boosted spec/reflection on roads) — only if trivially composable with 007/008 results; otherwise noted for a future chain.
 6. **Nothing here replaces prelit** — every term is additive/multiplicative around the prelit core; classic pipeline unaffected.
 
+## Core SHIPPED (2026-07-10, user-confirmed "светятся отлично")
+
+1. **HDR frame buffer — the unlock.** Bloom runs BEFORE tone mapping and the composer buffer was
+   `UnsignedByte`, so EVERY emissive clipped at 1.0: a lamp at 5.0 and a sheet of white paper fed bloom the
+   same value. Nothing could ever "glow" more than white. `EffectComposer(..., { frameBufferType: HalfFloatType })`
+   keeps real intensities for the bloom threshold; the ACES pass compresses at the end. This was the plan's
+   "true emissive above 1.0" decision (#1/#2) — it needed the buffer, not a second pass.
+2. **Baked night sources glow (decision #1, no new data).** In `world-material.ts`: a vertex much brighter at
+   night than by day IS a lit window / neon / sign, so `saGlow = albedo × nightColor × mask × uEmissiveBoost ×
+dnBalance` with `mask = smoothstep(0.05, 0.32, luma(night) − luma(day))`. Free: both colours already exist
+   in the night program variant (no attribute, no texture, no pass); models without night colours compile the
+   term to a constant zero. Knob `night.emissiveBoost` (1.6) + Atmosphere slider. Modern only.
+3. **Vehicle lamps bloom too** (user ask): head 1.2 → 2.4, tail 0.6 → 1.0, brake 2 → 4 — clearly past the
+   bloom threshold now that HDR preserves it. Brake reads brighter than head, as in life.
+4. Regression guard: the shader tests assert that `uniform float uEmissiveBoost` and `const vec3 SA_LUMA` are
+   DECLARED in both program variants — a stale replace anchor silently dropped them once and only the live
+   GL compile caught it.
+
 ## Tasks
 
 - [ ] Emissive term in world material: mask source selection (004 attribute if present, else night/day delta heuristic — unit-test the heuristic on night-window fixtures like `newvic1_sfw`), `uEmissiveBoost` config.

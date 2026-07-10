@@ -47,13 +47,27 @@ The user asked for the vehicle side first, done properly:
    - Per-material lamp handling extracted to `applyLampState` (complexity cap).
 4. **Vehicle lamps feed the pool**: slots 0/1 = headlight SPOTS (forward-down ~38° cone, warm, radius 26 u,
    the road beam finally exists), slots 2/3 = tail POINTS (red: dim running → bright + wider on brake — the
-   asphalt behind glows red when braking). Street lamps join the pool with the LightDef registry (the rest
-   of this plan).
+   asphalt behind glows red when braking).
 5. **Calibrated after the first in-game look** (user: "работает супер", but overexposed): shader wrap term
    0.45 → 0.25, squared cone falloff (the plateau read as a hard searchlight blob), and the magnitudes moved
    into config — `headlights.beamIntensity` (2.2), `beamRange` (34), `brakeIntensity` (1.6) with sliders in
    Graphics. Measured why the first pool was invisible: a headlight grazes the road, so hard N·L gave
    L≈0.14 at 6 m (invisible); wrap lighting lifts it to ≈1.6 while walls/kerbs still respond to N·L.
+
+## Street-lamp slice SHIPPED (2026-07-10)
+
+6. **`LightDef` extraction — one collection, two consumers (as the plan demanded).** `collectCoronas` already
+   walked every model's 2dfx lights and placed them per instance; `buildCoronaPoints` now stashes that exact
+   array on the Points as `userData.lightDefs`. No second clump walk, no new parsing.
+7. **`StreetLightSystem`** (`packages/game/src/lights/`): lifts those defs from the streamed cells (rebuilt
+   every 30 frames — cells stream slowly), picks the nearest few within 34 u, and writes them into pool slots
+   **4+** (the vehicle system owns 0–3; the two systems never fight over `uLocalCount`). Lamp radius derives
+   from the authored corona size; colour from the 2dfx colour; strength scales with the night factor.
+   Selection policy is the pure, unit-tested `selectLamps` (`light-pool.ts`) with **hysteresis** — an
+   incumbent keeps its slot unless a rival is clearly nearer, so driving down a lamp row doesn't thrash slots.
+8. **Corona demotion, not deletion** (plan decision #4): `uPoolHandover` fades a corona sprite to 35 % as you
+   approach a pooled lamp — the real light carries the look up close, the corona stays THE representation at
+   distance (SA-correct, and free). Modern pipeline only; classic keeps full coronas.
 
 ## Tasks
 

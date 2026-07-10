@@ -40,6 +40,7 @@ function config(overrides: Partial<Config> = {}): Config {
       night: {
         coronaDrawDistance: 120,
         dynamicObjectsFill: { rim: 0.5, strength: 0.35 },
+        emissiveBoost: 1.6,
         litFade: { dawnEnd: 7, dawnStart: 6, duskEnd: 21, duskStart: 20 },
         skyGlow: 1,
         skylight: 0.6,

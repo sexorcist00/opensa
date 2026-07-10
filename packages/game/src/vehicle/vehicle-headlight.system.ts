@@ -29,10 +29,14 @@ export interface LocalLightSink {
 /** Glow / corona colours by light type (rendered colour, not the marker colour): warm-white head, red tail. */
 const HEAD_COLOR = 0xfff2d0;
 const TAIL_COLOR = 0xff1808;
-/** Lamp-glass emissive strengths (× config `intensity`). Modest so bloom gives a tight halo, not a wash. */
-const HEAD_EMISSIVE = 1.2;
-const TAIL_RUN_EMISSIVE = 0.6;
-const TAIL_BRAKE_EMISSIVE = 2;
+/**
+ * Lamp-glass emissive strengths (× config `intensity`). Pushed clearly PAST the bloom threshold (0.7) so the
+ * lamps bloom into a soft halo the way the baked night sources do (plan 071) — an emissive that only just
+ * reaches 1.0 clips in the LDR buffer and barely blooms. Brake > head so it reads as the brighter light.
+ */
+const HEAD_EMISSIVE = 2.4;
+const TAIL_RUN_EMISSIVE = 1;
+const TAIL_BRAKE_EMISSIVE = 4;
 /** Rear corona/glass is dim "running" at night, full when braking (× config). */
 const REAR_RUNNING = 0.4;
 

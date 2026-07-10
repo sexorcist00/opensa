@@ -98,9 +98,11 @@ export { updateUvAnimations } from './three/uv-anim';
 export {
   buildWorldMaterial,
   dnBalanceUniform,
+  LOCAL_LIGHT_POOL,
   windowGlowUniform,
   worldCsmUniforms,
   worldDayTintUniform,
+  worldEmissiveUniforms,
   worldFogUniforms,
   worldLocalLightUniforms,
   worldShadowUniforms,

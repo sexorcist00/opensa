@@ -252,6 +252,9 @@ export interface NightConfig {
   coronaDrawDistance: number;
   /** Cheap shader night-fill for dynamic objects (player/vehicles) so they aren't black at night (plan 034). */
   dynamicObjectsFill: DynamicObjectsFillConfig;
+  /** Night EMISSIVE glow (plan 071, modern pipeline): how brightly SA's baked night sources (lit windows,
+   *  neon, signs — the night-vertex hot spots) self-illuminate into bloom. 0 = off. Costs a few ALU. */
+  emissiveBoost: number;
   /** Dusk/dawn fade schedule for the night vertex colours + the night tonemap (they share one window). */
   litFade: LitFadeConfig;
   /** Night SKY glow (plan 067/071, modern sky): moon Rayleigh halo + urban horizon skyglow strength —

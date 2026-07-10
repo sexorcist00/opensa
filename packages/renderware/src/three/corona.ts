@@ -28,6 +28,7 @@ const VERTEX = `
   uniform float uScale;
   uniform float uDrawDistance; // global near-field cap: coronas fade out by this distance
   uniform float uBias; // view-space metres to pull the corona's DEPTH toward the camera (clears its own housing)
+  uniform float uPoolHandover; // plan 070: distance under which the world-shader light pool takes over
   varying vec3 vColor;
   varying float vFade;
   void main() {
@@ -48,7 +49,10 @@ const VERTEX = `
     // Fade toward the per-lamp far-clip AND the configurable global draw distance (whichever is nearer).
     float farFade = 1.0 - smoothstep(aFar * 0.75, aFar, dist);
     float distFade = 1.0 - smoothstep(uDrawDistance * 0.8, uDrawDistance, dist);
-    vFade = farFade * distFade;
+    // Corona DEMOTION (plan 070): close up, the lamp's real pooled light carries the look, so the sprite
+    // shrinks back to a modest bulb glare instead of double-brightening. 0 = feature off (classic).
+    float nearFade = uPoolHandover > 0.0 ? mix(0.35, 1.0, smoothstep(uPoolHandover * 0.4, uPoolHandover, dist)) : 1.0;
+    vFade = farFade * distFade * nearFade;
   }
 `;
 
@@ -79,6 +83,7 @@ export const coronaMaterial = new ShaderMaterial({
     uBias: { value: 1 }, // metres the corona's depth is pulled toward the camera (escape its own housing)
     uDrawDistance: { value: 120 },
     uOn: { value: 0 },
+    uPoolHandover: { value: 0 },
     uScale: { value: 1 },
     uViewportHeight: { value: 1080 },
   },
@@ -90,6 +95,8 @@ export function buildCoronaPoints(entries: readonly CoronaEntry[]): null | Point
   if (entries.length === 0) {
     return null;
   }
+  // The SAME entries also feed the world-shader light pool (plan 070: street lamps pool real light on the
+  // road). Stashed here so the game reads one collection instead of walking the clumps again.
   const count = entries.length;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
@@ -116,6 +123,7 @@ export function buildCoronaPoints(entries: readonly CoronaEntry[]): null | Point
   points.renderOrder = 2; // after opaque + transparent geometry
   points.name = 'Coronas';
   points.layers.set(GLOW_LAYER); // excluded from the AO normal prepass (see GLOW_LAYER)
+  points.userData.lightDefs = entries; // plan 070: the same lamps feed the world-shader light pool
 
   return points;
 }

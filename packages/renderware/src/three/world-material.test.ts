@@ -17,6 +17,7 @@ import {
   windowGlowUniform,
   worldCsmUniforms,
   worldDayTintUniform,
+  worldEmissiveUniforms,
   worldFogUniforms,
   worldLocalLightUniforms,
   worldShadowUniforms,
@@ -234,6 +235,27 @@ describe('buildWorldMaterial', () => {
       expect(shader.fragmentShader).toContain('saLocalLight()'); // added into the modern direct term
       expect(shader.fragmentShader).toContain('dot( vWsNormal, toL )'); // beams follow geometry (walls/slopes)
       expect(worldLocalLightUniforms.uLocalCount.value).toBe(0); // empty pool → early-out (day cost 0)
+    });
+
+    it('glows baked night sources (plan 071) only on night-prelit models, inert at boost 0', () => {
+      const lit = buildWorldMaterial(material(), geometry({ nightColors: new Uint8Array(12) }));
+      const litShader = shaderStub();
+      lit.onBeforeCompile(litShader, undefined as never);
+      expect(litShader.uniforms.uEmissiveBoost).toBe(worldEmissiveUniforms.uEmissiveBoost);
+      // the uniform + luma constant MUST be declared in the pars, or the program fails to compile
+      expect(litShader.fragmentShader).toContain('uniform float uEmissiveBoost;');
+      expect(litShader.fragmentShader).toContain('const vec3 SA_LUMA =');
+      // mask = night↔day luminance delta → only lit windows/neon glow, and only as night falls
+      expect(litShader.fragmentShader).toContain('dot( vNightColor, SA_LUMA ) - dot( vColor.rgb, SA_LUMA )');
+      expect(litShader.fragmentShader).toContain('smoothstep( 0.05, 0.32, saDelta ) * uEmissiveBoost * uDnBalance');
+
+      // day-only models carry no baked night sources: the term compiles to a constant zero
+      const plain = buildWorldMaterial(material(), geometry());
+      const plainShader = shaderStub();
+      plain.onBeforeCompile(plainShader, undefined as never);
+      expect(plainShader.fragmentShader).toContain('vec3 saGlow = vec3( 0.0 );');
+      expect(plainShader.fragmentShader).toContain('uniform float uEmissiveBoost;'); // declared in both variants
+      expect(worldEmissiveUniforms.uEmissiveBoost.value).toBe(0); // classic default: no glow
     });
 
     it('captures saTexel before the night prelit multiply (the direct term lights raw albedo)', () => {

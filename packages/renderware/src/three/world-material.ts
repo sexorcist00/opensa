@@ -136,9 +136,20 @@ export const worldFogUniforms = {
   uFogStartDistance: { value: 0 },
 };
 
+/**
+ * Night emissives (plan 071, modern pipeline): SA baked its lit windows / neon / sign glow into the NIGHT
+ * vertex colours. Where a vertex is much brighter at night than by day it IS a light source, so it should
+ * GLOW (feed bloom) rather than merely be tinted. Free by construction: both colours are already in the
+ * night program variant, so this is a handful of ALU on models that have night colours — nothing else.
+ */
+export const worldEmissiveUniforms = {
+  /** Glow strength above LDR (>1 pushes sources past the bloom threshold). 0 = off (classic look). */
+  uEmissiveBoost: { value: 0 },
+};
+
 /** Local-light pool size (plan 070): the world shader iterates this fixed array — vehicle lamps now,
  *  street lamps join later. Count 0 (day / no lights) exits immediately. */
-export const LOCAL_LIGHT_POOL = 8;
+export const LOCAL_LIGHT_POOL = 12;
 
 /**
  * Local lights on the world (plan 070, modern pipeline): a fixed pool of point/spot lights evaluated
@@ -157,21 +168,24 @@ export const worldLocalLightUniforms = {
 /** Fragment: the pool term — smooth radius falloff × optional cone × N·L (beams climb walls correctly). */
 const LOCAL_LIGHTS_FRAGMENT_PARS =
   'uniform int uLocalCount;\n' +
-  'uniform vec4 uLocalPos[ 8 ];\n' +
-  'uniform vec3 uLocalColor[ 8 ];\n' +
-  'uniform vec4 uLocalDir[ 8 ];\n' +
+  `uniform vec4 uLocalPos[ ${LOCAL_LIGHT_POOL} ];\n` +
+  `uniform vec3 uLocalColor[ ${LOCAL_LIGHT_POOL} ];\n` +
+  `uniform vec4 uLocalDir[ ${LOCAL_LIGHT_POOL} ];\n` +
   'varying vec3 vWsNormal;\n' +
   'vec3 saLocalLight() {\n' +
   '\tvec3 acc = vec3( 0.0 );\n' +
-  '\tfor ( int i = 0; i < 8; i++ ) {\n' +
+  `\tfor ( int i = 0; i < ${LOCAL_LIGHT_POOL}; i++ ) {\n` +
   '\t\tif ( i >= uLocalCount ) break;\n' +
   '\t\tvec3 toL = uLocalPos[ i ].xyz - vWsPos;\n' +
   '\t\tfloat d = length( toL );\n' +
   '\t\tfloat radius = uLocalPos[ i ].w;\n' +
   '\t\tif ( d >= radius ) continue;\n' +
   '\t\ttoL /= max( d, 0.001 );\n' +
-  '\t\tfloat atten = 1.0 - d / radius;\n' +
-  '\t\tatten *= atten;\n' +
+  // Smooth inverse-square-ish falloff windowed to the radius: reaches EXACTLY 0 at the rim (no popping
+  // when a lamp leaves the pool) while keeping a bright core.
+  '\t\tfloat t = d / radius;\n' +
+  '\t\tfloat window = 1.0 - t * t;\n' +
+  '\t\tfloat atten = window * window / ( 1.0 + 3.0 * t * t );\n' +
   // Cone falloff is SQUARED toward the rim: a flat plateau reads as a hard-edged searchlight blob.
   '\t\tfloat cone = 1.0;\n' +
   '\t\tif ( uLocalDir[ i ].w < 1.5 ) {\n' +
@@ -358,6 +372,7 @@ export function buildWorldMaterial(
     shader.uniforms.uCsmMix = worldCsmUniforms.uCsmMix;
     shader.uniforms.uCsmSlopeBias = worldCsmUniforms.uCsmSlopeBias;
     shader.uniforms.uCsmSplits = worldCsmUniforms.uCsmSplits;
+    shader.uniforms.uEmissiveBoost = worldEmissiveUniforms.uEmissiveBoost;
     shader.uniforms.uLocalColor = worldLocalLightUniforms.uLocalColor;
     shader.uniforms.uLocalCount = worldLocalLightUniforms.uLocalCount;
     shader.uniforms.uLocalDir = worldLocalLightUniforms.uLocalDir;
@@ -384,6 +399,7 @@ export function buildWorldMaterial(
       'uniform float uPipelineMix;\nvarying float vSunNdl;\n' +
       'uniform sampler2D uFogLut;\nuniform float uFogMix;\nuniform float uFogCutDistance;\n' +
       'uniform float uFogStartDistance;\nuniform float uFogHeightK;\nuniform float uFogHeightMin;\n' +
+      'uniform float uEmissiveBoost;\nconst vec3 SA_LUMA = vec3( 0.2126, 0.7152, 0.0722 );\n' +
       LOCAL_LIGHTS_FRAGMENT_PARS;
     let fragmentBody = shader.fragmentShader;
     // Classic (038): tint × dynamic-object shadow darkening over the whole term. Modern (064): prelit becomes
@@ -392,11 +408,19 @@ export function buildWorldMaterial(
     // classic look survives bit-exact at 0. The shadow factor comes from the CSM term when the cascades are
     // live (`uCsmMix`, plan 065), else the classic single map. Debug paints the term red (or R/G/B per
     // cascade when CSM is on).
+    // Night emissive (plan 071): a vertex much brighter at night than by day IS a lit window / neon / sign,
+    // so it GLOWS (past the bloom threshold via uEmissiveBoost) instead of being merely tinted. Inlined here
+    // because `vColor`/`saTexel` only exist inside main(). Models without night colours contribute nothing.
+    const glow = nightBlend
+      ? 'float saDelta = dot( vNightColor, SA_LUMA ) - dot( vColor.rgb, SA_LUMA );\n' +
+        'vec3 saGlow = saTexel * vNightColor * smoothstep( 0.05, 0.32, saDelta ) * uEmissiveBoost * uDnBalance;\n'
+      : 'vec3 saGlow = vec3( 0.0 );\n';
     const opaque =
+      glow +
       'float wsShadow = uCsmMix > 0.5 ? csmShadow( vSunNdl ) : worldShadow();\n' +
       'vec3 saClassic = outgoingLight * uWorldTint * mix( 1.0, wsShadow, uWorldShadowStrength );\n' +
       'vec3 saModern = outgoingLight * uWorldTint * uIndirectScale\n' +
-      '\t+ saTexel * ( uSunColor * vSunNdl * wsShadow * uDirectScale + saLocalLight() );\n' +
+      '\t+ saTexel * ( uSunColor * vSunNdl * wsShadow * uDirectScale + saLocalLight() ) + saGlow;\n' +
       'outgoingLight = mix( saClassic, saModern, uPipelineMix );\n' +
       'if ( uWorldShadowDebug > 0.5 ) outgoingLight = mix( csmDebugTint, outgoingLight, wsShadow );\n' +
       '#include <opaque_fragment>';
