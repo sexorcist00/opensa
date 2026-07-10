@@ -19,9 +19,33 @@ Today: scene `FogExp2` with density `2/config.fog.distance`, colour tracking a s
 
 ## Tasks
 
-- [ ] `fog.chunk.glsl` (shared include + uniform block: LUT, fogStart, farClip, heightParams) + TS helper managing the uniforms; unit-test the curve math (start/cut boundary values).
-- [ ] Inject into world material (both program variants), water shader (DELETE its private fog), procobj/instanced vegetation, particles/effects materials; corona far-fade coherence check.
-- [ ] timecyc wiring: `fogStart`/`farClip` sampled per weather/hour through the existing blend, × `config.fog` multipliers; keep the current `fog.distance` config as an override for the classic pipeline.
+- [x] Core shipped (2026-07-10, v1): **`worldFogUniforms` + a `fog_fragment` REPLACEMENT** in `world-material.ts`
+      (uniform-gated `uFogMix`; classic keeps three's exact exp² — asserted in tests). Modern: fog colour =
+      **067 horizon LUT sampled by view azimuth per fragment** (sun-side warm / anti-sun cool; the dawn glowing
+      silhouettes die — the fog now IS the sky behind it) + **the horizon cut** (smoothstep tail → factor 1.0 at
+      `fog.distance`; far geometry resolves to pure sky). Covers the whole streamed world incl. vegetation/procobj
+      (they use `buildWorldMaterial`).
+- [x] Water: private fog upgraded in place — same LUT-azimuth colour + cut on the modern path (`WaterPlugin`
+      gains a `getFog` closure); classic path untouched. The sea/sky horizon seam dies by construction.
+- [ ] Particles/effects/corona materials: still on scene FogExp2 / far-fade — coherence check pending.
+
+### v1 debug arc (2026-07-10, user A/B — all fixed same day, final state CONFIRMED "выглядит хорошо")
+
+- **White skyscraper silhouettes against the blue sky:** fog sampled the LUT at EYE LEVEL only — tall fogged
+  geometry got the bright horizon-haze band instead of the sky at its elevation. FIX: the LUT is now 2D
+  (512×32, azimuth × view-elevation to ~44°) and the fog samples by the fragment's own direction — cheap
+  aerial perspective.
+- **Still white after that:** an AZIMUTH PHASE bug — the shaders sample `atan/2π + 0.5` but the LUT rendered
+  без the half-turn → fog took the OPPOSITE side of the horizon (white dawn fog on the teal anti-sun sky).
+  One-line fix in the LUT fragment (`phi = (u − 0.5)·2π`). This also explains why the dawn silhouettes had
+  survived the first fog fix.
+- **Distant objects flickering every second:** the LUT refresh key quantized to the game minute — which is
+  ~1 REAL second in SA — so near-fully-fogged objects stepped while the dome moved smoothly. FIX: the LUT
+  (16 k px) renders EVERY frame — trivial cost, perfectly continuous. User: "мерцание ушло".
+- [ ] timecyc wiring: `fogStart`/`farClip` sampled per weather/hour through the existing blend, × `config.fog`
+      multipliers; keep the current `fog.distance` config as an override. _v1 uses `config.fog.distance` as the
+      cut (no draw-distance change); timecyc-driven range = the calibration step (SF fog weather showcase)._
+- [ ] Height fog (valleys/ocean haze first, Chiliad pokes out) — not in v1.
 - [ ] Sky/background: `scene.background` no longer needed on the modern path (dome covers all); verify god-rays/moon fade against fogged horizon.
 - [ ] The cut: clamped tail + far-plane link; verify the LS→ocean bench at multiple hours — the water horizon line must be GONE (screenshot the old artefact first for the doc).
 - [ ] SF fog weather + rain showcase calibration; height-fog params per weather class.

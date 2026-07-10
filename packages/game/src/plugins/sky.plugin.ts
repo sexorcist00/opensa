@@ -10,8 +10,11 @@ import {
   MathUtils,
   Mesh,
   MeshBasicMaterial,
+  OrthographicCamera,
   PCFSoftShadowMap,
   type PerspectiveCamera,
+  PlaneGeometry,
+  Scene,
   ShaderMaterial,
   SphereGeometry,
   Sprite,
@@ -19,11 +22,13 @@ import {
   SRGBColorSpace,
   type Texture,
   Vector3,
+  WebGLRenderTarget,
 } from 'three';
 
-import type { MoonConfig, NightConfig } from '../interfaces/config.interface';
+import type { MoonConfig, NightConfig, SkyConfig } from '../interfaces/config.interface';
 import type { Plugin, PluginContext } from './plugin';
 
+import { pbrSkyParams } from '../sky/sky-params';
 import { sunElevationAt } from './sun-position';
 
 /** The timecyc values the sky/sun need (RGB 0–255 + sun floats). Grows as graphics expand. */
@@ -106,6 +111,81 @@ const CORONA_RATIO = 4.5;
 const MOON_AZIMUTH = new Vector3(0.35, 0, 0.4).normalize();
 const MOON_DISTANCE = 3400;
 
+/**
+ * Shared sky-base GLSL (plan 067): the classic timecyc gradient + the Preetham physical sky behind
+ * `uPbrMix`, blended back to the gradient at night (`uPbrNight` — Preetham is a day model; SA's authored
+ * night palette stays). Used VERBATIM by both the dome fragment and the horizon-LUT fragment so the LUT
+ * always matches the visible sky. Output stays LDR-scaled (`uSkyExposure`) — the composer buffer is
+ * UnsignedByte, values above 1 would clip before the ACES pass (HDR buffers = a later upgrade).
+ */
+const SKY_BASE_GLSL = `
+  uniform vec3 uTop;
+  uniform vec3 uBottom;
+  uniform float uPbrMix;
+  uniform float uPbrNight;
+  uniform vec3 uBetaR;
+  uniform vec3 uBetaM;
+  uniform float uSunE;
+  uniform float uMieG;
+  uniform vec3 uPbrTint;
+  uniform vec3 uSunDirSky;
+  uniform float uSkyExposure;
+
+  vec3 pbrSky(vec3 rawDir) {
+    vec3 dir = normalize(vec3(rawDir.x, max(rawDir.y, 0.0015), rawDir.z)); // below horizon = horizon colour
+    float zenith = acos(min(1.0, dir.y));
+    float denom = cos(zenith) + 0.15 * pow(93.885 - degrees(zenith), -1.253);
+    vec3 fex = exp(-(uBetaR * (8400.0 / denom) + uBetaM * (1250.0 / denom)));
+    float cosTheta = dot(dir, uSunDirSky);
+    float rPhase = 0.0596831 * (1.0 + cosTheta * cosTheta);
+    float g2 = uMieG * uMieG;
+    float mPhase = 0.0795775 * (1.0 - g2) / pow(1.0 - 2.0 * uMieG * cosTheta + g2, 1.5);
+    vec3 betaTotal = max(uBetaR + uBetaM, vec3(1e-9));
+    vec3 scatter = (uBetaR * rPhase + uBetaM * mPhase) / betaTotal;
+    vec3 lin = pow(uSunE * scatter * (1.0 - fex), vec3(1.5));
+    lin *= mix(vec3(1.0), pow(uSunE * scatter * fex, vec3(0.5)),
+               clamp(pow(1.0 - uSunDirSky.y, 5.0), 0.0, 1.0));
+    vec3 l0 = 0.1 * fex;
+    return ((lin + l0) * 0.04 + vec3(0.0, 0.0003, 0.00075)) * uSkyExposure * uPbrTint;
+  }
+
+  vec3 skyBase(vec3 dir) {
+    float t = smoothstep(0.0, 1.0, clamp(dir.y, 0.0, 1.0));
+    vec3 grad = mix(uBottom, uTop, t);
+    if (uPbrMix < 0.5) return grad;
+    vec3 pbr = pbrSky(dir);
+    pbr = pbr / (1.0 + pbr); // Reinhard: the composer buffer is LDR — raw HDR would CLIP white before ACES
+    return mix(pbr, grad, uPbrNight);
+  }
+`;
+
+/** Horizon-LUT pass (plan 067): 512×1, azimuth → the sky's colour at eye level. Rendered only when the
+ *  sky STATE changes (hour/weather/model quantized), THE shared fog/water colour source from 068 on. */
+const LUT_VERTEX = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`;
+
+const LUT_FRAGMENT =
+  SKY_BASE_GLSL +
+  `
+  varying vec2 vUv;
+  void main() {
+    // u is sampled by the fog shaders as atan(z,x)/2pi + 0.5 — bake the SAME half-turn phase here, or the
+    // fog reads the OPPOSITE side of the horizon (white dawn fog against the teal anti-sun sky).
+    float phi = (vUv.x - 0.5) * 6.2831853;
+    // v: view elevation 0 (eye level) → ~44° (0.7 in dir.y) — tall fogged geometry (skyscrapers) must
+    // dissolve into the sky AT ITS OWN ELEVATION, not into the bright horizon haze band.
+    float dirY = max(0.035, vUv.y * 0.7);
+    float h = sqrt(max(1.0 - dirY * dirY, 1e-4));
+    vec3 dir = normalize(vec3(cos(phi) * h, dirY, sin(phi) * h));
+    gl_FragColor = vec4(skyBase(dir), 1.0);
+  }
+`;
+
 const VERTEX = `
   varying vec3 vDir;
   void main() {
@@ -114,9 +194,9 @@ const VERTEX = `
   }
 `;
 
-const FRAGMENT = `
-  uniform vec3 uTop;
-  uniform vec3 uBottom;
+const FRAGMENT =
+  SKY_BASE_GLSL +
+  `
   uniform vec3 uCloudTop;
   uniform vec3 uCloudBottom;
   uniform float uTime;
@@ -159,8 +239,7 @@ const FRAGMENT = `
 
   void main() {
     vec3 dir = normalize(vDir);
-    float t = smoothstep(0.0, 1.0, clamp(dir.y, 0.0, 1.0)); // horizon→zenith; below horizon = bottom
-    vec3 col = mix(uBottom, uTop, t);
+    vec3 col = skyBase(dir); // classic gradient or the Preetham sky (uPbrMix), night-blended back to SA
 
     // Stars: night-gated, and faded globally by cloud cover (uCloudClear) so overcast hides them like the
     // moon — not just where the procedural cloud noise happens to be dense. The cloud blend below still covers
@@ -218,10 +297,29 @@ export class SkyPlugin implements Plugin {
   private readonly corona: Sprite;
   private readonly dome: Mesh;
   private readonly getHour: () => number;
+  private readonly lutCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private readonly lutMaterial: ShaderMaterial;
+  private readonly lutScene = new Scene();
+  /** 512×32 sky LUT (plan 067/068): azimuth × view-elevation → sky colour; fog/water sample it. */
+  private readonly lutTarget = new WebGLRenderTarget(512, 32, { depthBuffer: false });
   private readonly material: ShaderMaterial;
   private readonly moonDisc: Sprite;
   private night = 0; // 0 day → 1 deep night (sun height); drives stars, moon, skylight + world tints/shadows
   private readonly sample: (hour: number) => SkySample;
+  /** Sky-base uniform entries shared by the dome material and the horizon-LUT material (plan 067). */
+  private readonly skyBaseUniforms = {
+    uBetaM: { value: new Vector3(1e-7, 1e-7, 1e-7) },
+    uBetaR: { value: new Vector3(1e-5, 2e-5, 3e-5) },
+    uBottom: { value: new Color() },
+    uMieG: { value: 0.8 },
+    uPbrMix: { value: 0 },
+    uPbrNight: { value: 0 },
+    uPbrTint: { value: new Color(1, 1, 1) },
+    uSkyExposure: { value: 0.55 },
+    uSunDirSky: { value: new Vector3(0, 1, 0) },
+    uSunE: { value: 0 },
+    uTop: { value: new Color() },
+  };
   /** Night "skylight" — a hemisphere fill from above, faded in at night for form (intensity set per frame). */
   private readonly skylight = new HemisphereLight(NIGHT_SKY_COLOR, NIGHT_GROUND_COLOR, 0);
   private readonly sun = new DirectionalLight(0xffffff, 1);
@@ -235,7 +333,6 @@ export class SkyPlugin implements Plugin {
       fragmentShader: FRAGMENT,
       side: BackSide,
       uniforms: {
-        uBottom: { value: new Color() },
         uCloudBottom: { value: new Color() },
         uCloudClear: { value: 1 },
         uCloudCoverage: { value: 0.5 },
@@ -245,10 +342,17 @@ export class SkyPlugin implements Plugin {
         uNight: { value: 0 },
         uStars: { value: 1 },
         uTime: { value: 0 },
-        uTop: { value: new Color() },
+        ...this.skyBaseUniforms,
       },
       vertexShader: VERTEX,
     });
+    this.lutMaterial = new ShaderMaterial({
+      depthWrite: false,
+      fragmentShader: LUT_FRAGMENT,
+      uniforms: this.skyBaseUniforms, // SHARED objects — one update drives the dome AND the LUT
+      vertexShader: LUT_VERTEX,
+    });
+    this.lutScene.add(new Mesh(new PlaneGeometry(2, 2), this.lutMaterial));
     this.dome = new Mesh(new SphereGeometry(RADIUS, 32, 16), this.material);
     this.dome.name = 'Sky';
     this.dome.renderOrder = -1;
@@ -303,6 +407,12 @@ export class SkyPlugin implements Plugin {
     this.moonDisc.material.map?.dispose();
   }
 
+  /** The 512×1 horizon LUT (plan 067): azimuth → sky colour at eye level; fog/water consume it (068+).
+   *  Alive in BOTH sky modes (the fog chunk needs one code path); valid from the first frame. */
+  getHorizonLut(): Texture {
+    return this.lutTarget.texture;
+  }
+
   /** Current sun direction in three world space (unit; points toward the sun). For water glints etc. */
   getSunDirection(): Vector3 {
     return this.sunDir;
@@ -339,6 +449,7 @@ export class SkyPlugin implements Plugin {
       context.config.graphics.sun.godraysSize,
       context.config.graphics.moon,
       context.config.graphics.night,
+      context.config.graphics.sky,
     );
     this.updateShadow(context.camera, context.config.graphics.shadows.enabled);
   }
@@ -350,6 +461,7 @@ export class SkyPlugin implements Plugin {
       context.config.graphics.sun.godraysSize,
       context.config.graphics.moon,
       context.config.graphics.night,
+      context.config.graphics.sky,
     ); // sets cloudCover/night
     const clouds = context.config.graphics.clouds;
     this.material.uniforms.uTime.value = context.clock.elapsed;
@@ -358,11 +470,19 @@ export class SkyPlugin implements Plugin {
     this.material.uniforms.uCloudCoverage.value = Math.min(1, this.cloudCover * clouds.coverage * 2);
     this.material.uniforms.uNight.value = this.night;
     this.material.uniforms.uStars.value = context.config.graphics.stars.enabled ? 1 : 0;
+    this.skyBaseUniforms.uPbrMix.value = context.config.graphics.sky.model === 'pbr' ? 1 : 0;
+    this.renderHorizonLut(context);
     this.updateShadow(context.camera, context.config.graphics.shadows.enabled);
   }
 
   /** Push the current time-of-day sky/sun state into the dome, lights and sun/moon sprites. */
-  private apply(sunScale: number, godraysScale: number, moon: MoonConfig, nightCfg: NightConfig): void {
+  private apply(
+    sunScale: number,
+    godraysScale: number,
+    moon: MoonConfig,
+    nightCfg: NightConfig,
+    skyCfg: SkyConfig,
+  ): void {
     const sky = this.sample(this.getHour());
     // Sky/cloud colours are authored in timecyc as 0–255 sRGB (like the sun colours), so decode them as
     // sRGB (managed) — NOT linear. Treating them as linear gamma-lifts the darks, which washed the near-black
@@ -445,6 +565,37 @@ export class SkyPlugin implements Plugin {
       this.moonDisc.material.opacity = moonFade;
       this.moonDisc.scale.setScalar(moon.size);
     }
+
+    // Preetham inputs (plan 067): timecyc stays the art director — cheap pure math, recomputed per frame;
+    // inert while `sky.model` is 'classic' (uPbrMix 0 skips the branch in the shader).
+    const pbr = pbrSkyParams({
+      cloudCover: sky.cloudCover,
+      cloudDark: sky.cloudDark,
+      mood: skyCfg.mood,
+      skyTop: sky.skyTop,
+      sunElevation: height,
+    });
+    this.skyBaseUniforms.uSkyExposure.value = skyCfg.pbrExposure;
+    this.skyBaseUniforms.uBetaR.value.set(pbr.betaR[0], pbr.betaR[1], pbr.betaR[2]);
+    this.skyBaseUniforms.uBetaM.value.set(pbr.betaM[0], pbr.betaM[1], pbr.betaM[2]);
+    this.skyBaseUniforms.uSunE.value = pbr.sunE;
+    this.skyBaseUniforms.uPbrTint.value.setRGB(pbr.tint[0], pbr.tint[1], pbr.tint[2]);
+    // Blend back to the SA gradient only once the sun is BELOW the horizon (twilight → night). The star/
+    // tint night factor ramps during golden hour — using it here killed the Preetham sunset (the whole
+    // point of the model), which is exactly what the first user A/B reported.
+    const sinElevation = Math.sin(elevation);
+    this.skyBaseUniforms.uPbrNight.value = 1 - MathUtils.smoothstep(sinElevation, -0.12, -0.02);
+    this.skyBaseUniforms.uSunDirSky.value.copy(this.sunDir);
+  }
+
+  /** Re-render the LUT every frame: 512×32 (≈16 k px) is trivial, and any quantized refresh key STEPS —
+   *  a SA game minute is ~1 real second, so heavily-fogged distant objects visibly popped each step while
+   *  the dome moved smoothly (user-reported flicker). Continuous = seamless. */
+  private renderHorizonLut(context: PluginContext): void {
+    const previous = context.renderer.getRenderTarget();
+    context.renderer.setRenderTarget(this.lutTarget);
+    context.renderer.render(this.lutScene, this.lutCamera);
+    context.renderer.setRenderTarget(previous);
   }
 
   /** Sun elevation (radians) for the hour over [`sunrise`, `sunset`] (= litFade dawnStart/duskEnd);

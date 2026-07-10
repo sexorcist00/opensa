@@ -276,6 +276,13 @@ export interface SkyConfig {
   density: number;
   /** Constant attenuation coefficient (overall brightness). */
   exposure: number;
+  /** Sky model (plan 067): `'classic'` = the timecyc gradient dome; `'pbr'` = the Preetham physical sky
+   *  (timecyc-driven inputs + mood tint), night-blended back to the SA gradient. */
+  model: 'classic' | 'pbr';
+  /** PBR-sky mood (plan 067): how strongly the timecyc palette tints the physical sky (0 = pure Preetham). */
+  mood: number;
+  /** PBR-sky exposure (plan 067): scales the physical sky before its in-shader Reinhard (LDR composer). */
+  pbrExposure: number;
   /** Per-sample light weight. */
   weight: number;
 }

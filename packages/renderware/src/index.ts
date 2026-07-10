@@ -101,6 +101,7 @@ export {
   windowGlowUniform,
   worldCsmUniforms,
   worldDayTintUniform,
+  worldFogUniforms,
   worldShadowUniforms,
   worldSunUniforms,
   worldTintUniform,

@@ -17,6 +17,7 @@ import {
   windowGlowUniform,
   worldCsmUniforms,
   worldDayTintUniform,
+  worldFogUniforms,
   worldShadowUniforms,
   worldSunUniforms,
   worldTintUniform,
@@ -48,7 +49,7 @@ function material(partial: Partial<RWMaterial> = {}): RWMaterial {
 /** Minimal shader stub holding the three.js chunk anchors the material injects around. */
 function shaderStub(): CompileShader {
   return {
-    fragmentShader: '#include <color_fragment>\n#include <opaque_fragment>',
+    fragmentShader: '#include <color_fragment>\n#include <opaque_fragment>\n#include <fog_fragment>',
     uniforms: {},
     vertexShader: '#include <begin_vertex>\n#include <project_vertex>',
   } as unknown as CompileShader;
@@ -204,6 +205,20 @@ describe('buildWorldMaterial', () => {
       expect(shader.fragmentShader).toContain('uCsmMix > 0.5 ? csmShadow( vSunNdl ) : worldShadow()');
       // classic default keeps the cascades mixed out
       expect(worldCsmUniforms.uCsmMix.value).toBe(0);
+    });
+
+    it('replaces the stock fog include with the LUT fog + horizon cut (plan 068), classic-exact at mix 0', () => {
+      const built = buildWorldMaterial(material(), geometry());
+      const shader = shaderStub();
+      built.onBeforeCompile(shader, undefined as never);
+      expect(shader.uniforms.uFogLut).toBe(worldFogUniforms.uFogLut);
+      expect(shader.uniforms.uFogMix).toBe(worldFogUniforms.uFogMix);
+      expect(shader.fragmentShader).not.toContain('#include <fog_fragment>'); // replaced, not doubled
+      expect(shader.fragmentShader).toContain('texture2D( uFogLut, vec2( saFogAzimuth, saFogElev ) )');
+      expect(shader.fragmentShader).toContain('smoothstep( uFogCutDistance * 0.85, uFogCutDistance, vViewDepth )');
+      // the classic branch keeps three's exact exp² term
+      expect(shader.fragmentShader).toContain('exp( - fogDensity * fogDensity * vFogDepth * vFogDepth )');
+      expect(worldFogUniforms.uFogMix.value).toBe(0); // classic default inert
     });
 
     it('captures saTexel before the night prelit multiply (the direct term lights raw albedo)', () => {

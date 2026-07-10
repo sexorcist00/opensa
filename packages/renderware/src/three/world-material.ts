@@ -113,6 +113,38 @@ export const worldCsmUniforms = {
   uCsmSplits: { value: new Vector3(45, 250, 800) },
 };
 
+/**
+ * Unified fog (plan 068, modern pipeline): the world's fog colour comes from the 067 horizon LUT — per
+ * fragment, by view AZIMUTH — so fully-fogged geometry always dissolves into the exact sky behind it
+ * (sun-side warm, anti-sun cool; the dawn "glowing silhouettes" die here). A clamped smoothstep tail forces
+ * the factor to 1.0 at the cut distance — geometry at the far plane resolves to PURE sky colour (the
+ * ocean-through-haze horizon artefact dies by construction). `uFogMix` 0 = three's stock FogExp2 untouched.
+ */
+export const worldFogUniforms = {
+  /** Distance (world units) where fog reaches EXACTLY 1.0 (the horizon cut). */
+  uFogCutDistance: { value: 1200 },
+  /** 512×1 horizon LUT from the SkyPlugin (azimuth → sky colour at eye level). */
+  uFogLut: { value: null as null | Texture },
+  /** 0 = stock scene FogExp2; 1 = the directional LUT fog + horizon cut. */
+  uFogMix: { value: 0 },
+};
+
+/** Replaces three's `fog_fragment`: the stock exp² factor (bit-exact classic) upgraded on the modern path
+ *  with the LUT colour + the horizon cut. Compiled under USE_FOG like the include it replaces. */
+const FOG_FRAGMENT =
+  '#ifdef USE_FOG\n' +
+  '\tfloat saFogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );\n' +
+  '\tvec3 saFogColor = fogColor;\n' +
+  '\tif ( uFogMix > 0.5 ) {\n' +
+  '\t\tvec3 saFogView = vWsPos - cameraPosition;\n' +
+  '\t\tfloat saFogAzimuth = atan( saFogView.z, saFogView.x ) / 6.2831853 + 0.5;\n' +
+  '\t\tfloat saFogElev = clamp( saFogView.y / max( length( saFogView ) * 0.7, 1e-3 ), 0.0, 1.0 );\n' +
+  '\t\tsaFogColor = texture2D( uFogLut, vec2( saFogAzimuth, saFogElev ) ).rgb;\n' +
+  '\t\tsaFogFactor = max( saFogFactor, smoothstep( uFogCutDistance * 0.85, uFogCutDistance, vViewDepth ) );\n' +
+  '\t}\n' +
+  '\tgl_FragColor.rgb = mix( gl_FragColor.rgb, saFogColor, saFogFactor );\n' +
+  '#endif';
+
 /** Fragment: the cascaded receive — per-cascade 4-tap PCF, split select by view depth, blend bands at the
  *  boundaries, and a fade-out tail at the far end. Sampler arrays must be indexed by CONSTANTS in GLSL ES,
  *  hence the if-chain. `csmDebugTint` feeds the `?shadowdebug` cascade visualization (R/G/B per cascade). */
@@ -256,6 +288,9 @@ export function buildWorldMaterial(
     shader.uniforms.uCsmMix = worldCsmUniforms.uCsmMix;
     shader.uniforms.uCsmSlopeBias = worldCsmUniforms.uCsmSlopeBias;
     shader.uniforms.uCsmSplits = worldCsmUniforms.uCsmSplits;
+    shader.uniforms.uFogCutDistance = worldFogUniforms.uFogCutDistance;
+    shader.uniforms.uFogLut = worldFogUniforms.uFogLut;
+    shader.uniforms.uFogMix = worldFogUniforms.uFogMix;
 
     // Both variants are tinted (the day arc must match across the street); they differ in WHICH
     // uniform feeds the slot — night-prelit models get the day-only tint that relaxes to white.
@@ -269,7 +304,8 @@ export function buildWorldMaterial(
     let fragmentPars =
       `${SHADOW_FRAGMENT_PARS}${CSM_FRAGMENT_PARS}uniform vec3 uWorldTint;\n` +
       'uniform vec3 uSunColor;\nuniform float uDirectScale;\nuniform float uIndirectScale;\n' +
-      'uniform float uPipelineMix;\nvarying float vSunNdl;\n';
+      'uniform float uPipelineMix;\nvarying float vSunNdl;\n' +
+      'uniform sampler2D uFogLut;\nuniform float uFogMix;\nuniform float uFogCutDistance;\n';
     let fragmentBody = shader.fragmentShader;
     // Classic (038): tint × dynamic-object shadow darkening over the whole term. Modern (064): prelit becomes
     // the INDIRECT term (shadowed areas keep their baked GI) and the real sun × NdotL × shadow is ADDED on the
@@ -309,7 +345,9 @@ export function buildWorldMaterial(
     }
 
     shader.vertexShader = vertexPars + vertexBody;
-    shader.fragmentShader = fragmentPars + fragmentBody.replace('#include <opaque_fragment>', opaque);
+    shader.fragmentShader =
+      fragmentPars +
+      fragmentBody.replace('#include <opaque_fragment>', opaque).replace('#include <fog_fragment>', FOG_FRAGMENT);
   };
 
   return material;

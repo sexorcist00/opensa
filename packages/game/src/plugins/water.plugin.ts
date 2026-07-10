@@ -1,4 +1,13 @@
-import { Color, DoubleSide, FogExp2, type Mesh, type MeshBasicMaterial, ShaderMaterial, type Vector3 } from 'three';
+import {
+  Color,
+  DoubleSide,
+  FogExp2,
+  type Mesh,
+  type MeshBasicMaterial,
+  ShaderMaterial,
+  type Texture,
+  type Vector3,
+} from 'three';
 
 import type { Plugin, PluginContext } from './plugin';
 
@@ -38,6 +47,9 @@ const FRAGMENT = `
   uniform float uWaterAlpha;
   uniform float uDarkness;
   uniform float uFogDensity;
+  uniform sampler2D uFogLut;
+  uniform float uFogMix;
+  uniform float uFogCut;
   varying vec3 vWorldPos;
   varying vec2 vUv;
 
@@ -78,10 +90,20 @@ const FRAGMENT = `
     float alpha = mix(uWaterAlpha, 1.0, fres); // timecyc opacity, fully opaque at the horizon
 
     // Distance fog (the map's FogExp2 doesn't reach this custom shader): fade the far ocean into the
-    // horizon colour (= the fog colour) so it dissolves like the terrain instead of staying sharp.
+    // horizon colour so it dissolves like the terrain. Modern path (plan 068): the colour comes from the
+    // horizon LUT by view azimuth and a smoothstep tail forces fog = 1.0 at the cut distance — the sea/sky
+    // seam at the horizon dies by construction (the reported ocean-through-haze artefact).
     float fogDist = distance(cameraPosition, vWorldPos);
     float fogFactor = 1.0 - exp(-fogDist * fogDist * uFogDensity * uFogDensity);
-    col = mix(col, uHorizonColor, fogFactor);
+    vec3 fogCol = uHorizonColor;
+    if (uFogMix > 0.5) {
+      vec3 fogView = vWorldPos - cameraPosition;
+      float fogAzimuth = atan(fogView.z, fogView.x) / 6.2831853 + 0.5;
+      float fogElev = clamp(fogView.y / max(length(fogView) * 0.7, 1e-3), 0.0, 1.0);
+      fogCol = texture2D(uFogLut, vec2(fogAzimuth, fogElev)).rgb;
+      fogFactor = max(fogFactor, smoothstep(uFogCut * 0.85, uFogCut, fogDist));
+    }
+    col = mix(col, fogCol, fogFactor);
     alpha = mix(alpha, 1.0, fogFactor);
 
     gl_FragColor = vec4(col, alpha);
@@ -99,13 +121,22 @@ const FRAGMENT = `
 export class WaterPlugin implements Plugin {
   readonly name = 'water';
 
+  private readonly getFog?: () => { cut: number; lut: null | Texture; mix: number };
   private readonly getHour: () => number;
   private readonly getSunDir: () => Vector3;
   private material: null | ShaderMaterial = null;
   private readonly mesh: Mesh;
+
   private readonly sample: (hour: number) => WaterSample;
 
-  constructor(mesh: Mesh, sample: (hour: number) => WaterSample, getHour: () => number, getSunDir: () => Vector3) {
+  constructor(
+    mesh: Mesh,
+    sample: (hour: number) => WaterSample,
+    getHour: () => number,
+    getSunDir: () => Vector3,
+    getFog?: () => { cut: number; lut: null | Texture; mix: number },
+  ) {
+    this.getFog = getFog;
     this.mesh = mesh;
     this.sample = sample;
     this.getHour = getHour;
@@ -126,7 +157,10 @@ export class WaterPlugin implements Plugin {
       transparent: true,
       uniforms: {
         uDarkness: { value: context.config.graphics.water.darkness },
+        uFogCut: { value: 1200 },
         uFogDensity: { value: 0 },
+        uFogLut: { value: null },
+        uFogMix: { value: 0 },
         uGlint: { value: context.config.graphics.water.glint },
         uHorizonColor: { value: new Color() },
         uMap: { value: map },
@@ -152,6 +186,12 @@ export class WaterPlugin implements Plugin {
     u.uTime.value = context.clock.elapsed;
     // Match the scene fog the FogPlugin set (FogExp2 density; 0 when off, e.g. map viewer).
     u.uFogDensity.value = context.scene.fog instanceof FogExp2 ? context.scene.fog.density : 0;
+    const fog = this.getFog?.();
+    if (fog) {
+      u.uFogCut.value = fog.cut;
+      u.uFogLut.value = fog.lut;
+      u.uFogMix.value = fog.mix;
+    }
     u.uDarkness.value = context.config.graphics.water.darkness;
     u.uGlint.value = context.config.graphics.water.glint;
     u.uReflection.value = context.config.graphics.water.reflection;

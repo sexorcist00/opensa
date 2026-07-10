@@ -43,6 +43,35 @@ export function PipelineToggle({
   );
 }
 
+/** The plan-067 sky-model switch (Graphics screen) — extracted to keep DebugOverlay under its complexity cap. */
+export function SkyModelToggle({
+  model,
+  onChange,
+  setModel,
+}: {
+  model: 'classic' | 'pbr';
+  onChange: (model: 'classic' | 'pbr') => void;
+  setModel: (model: 'classic' | 'pbr') => void;
+}): ReactElement {
+  const pbr = model === 'pbr';
+
+  return (
+    <label style={styles.label}>
+      <input
+        checked={pbr}
+        onChange={() => {
+          const next = pbr ? 'classic' : 'pbr';
+          setModel(next);
+          onChange(next);
+        }}
+        style={styles.radio}
+        type="checkbox"
+      />
+      <span style={pbr ? styles.optionActive : styles.option}>PBR sky (plan 067 — Preetham)</span>
+    </label>
+  );
+}
+
 /** The plan-063 colour-spike selector (Graphics screen): where tone mapping runs, live-switchable for A/B. */
 export function ToneMappingModeSelector({
   mode,

@@ -19,6 +19,7 @@ import { PostFxPlugin } from '@opensa/game/plugins/postfx.plugin';
 import { SkyPlugin, type SkySample } from '@opensa/game/plugins/sky.plugin';
 import { VehicleReflectionPlugin } from '@opensa/game/plugins/vehicle-reflection/vehicle-reflection.plugin';
 import { WaterPlugin, type WaterSample } from '@opensa/game/plugins/water.plugin';
+import { pbrHorizonAverage, pbrSkyParams } from '@opensa/game/sky/sky-params';
 import { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
 import { StreamingSystem } from '@opensa/game/streaming/streaming.system';
 import { clockNightFactor } from '@opensa/game/time/hour-window';
@@ -65,6 +66,7 @@ import {
   windowGlowUniform,
   worldCsmUniforms,
   worldDayTintUniform,
+  worldFogUniforms,
   worldShadowUniforms,
   worldSunUniforms,
   worldTintUniform,
@@ -84,6 +86,13 @@ import {
 import type { DebugActions } from './debug/debug-overlay';
 
 import { BENCH_SCENES } from '../bench-scenes';
+
+/** 0→1 smoothstep of a pre-normalized t (tiny local helper for the fog/sky twilight handover). */
+function smoothstep01(t: number): number {
+  const x = Math.min(1, Math.max(0, t));
+
+  return x * x * (3 - 2 * x);
+}
 import { GAME_CONFIG, type GameId, HUMAN_HALF_EXTENTS } from '../game-config';
 import { parseParkedVehicles } from '../parked-vehicles';
 import { vehicleModelsFromIde } from '../vehicle-models';
@@ -479,7 +488,7 @@ function bootstrap(
           underwater: { density: 1, drawDistance: 60, enabled: true },
         },
         shadows: { distance: 800, enabled: true },
-        sky: { density: 0.96, exposure: 0.5, weight: 0.4 },
+        sky: { density: 0.96, exposure: 0.5, model: 'classic', mood: 0.7, pbrExposure: 0.55, weight: 0.4 },
         ssao: { enabled: true, intensity: 1.5, radius: 0.2 },
         stars: { enabled: true },
         sun: { godrays: true, godraysSize: 30, sunSize: 15 },
@@ -604,7 +613,36 @@ function bootstrap(
 
     game
       .setWorldAdapter(adapter)
-      .addPlugin(new FogPlugin(() => skySample(game.getHours()).skyBot)) // fog fades into the sky horizon
+      // Fog fades into the sky horizon. On the PBR sky the classic skyBot no longer matches the dome —
+      // distant fogged objects glowed at dawn — so the CPU twin of the shader's horizon feeds it instead
+      // (interim until 068 samples the horizon LUT in-shader).
+      .addPlugin(
+        new FogPlugin((): readonly [number, number, number] => {
+          const sample = skySample(game.getHours());
+          const skyCfg = game.getConfig().graphics.sky;
+          if (skyCfg.model !== 'pbr') {
+            return sample.skyBot;
+          }
+          const sunDir = sky.getSunDirection();
+          const params = pbrSkyParams({
+            cloudCover: sample.cloudCover,
+            cloudDark: sample.cloudDark,
+            mood: skyCfg.mood,
+            skyTop: sample.skyTop,
+            sunElevation: Math.max(0, sunDir.y),
+          });
+          const linear = pbrHorizonAverage(params, [sunDir.x, sunDir.y, sunDir.z], skyCfg.pbrExposure);
+          // Same twilight handover as the dome (uPbrNight): below the horizon the SA palette takes over.
+          const night = 1 - smoothstep01((sunDir.y + 0.12) / 0.1);
+          const srgb = linear.map((value) => 255 * Math.min(1, value) ** (1 / 2.2)) as [number, number, number];
+
+          return [
+            srgb[0] + (sample.skyBot[0] - srgb[0]) * night,
+            srgb[1] + (sample.skyBot[1] - srgb[1]) * night,
+            srgb[2] + (sample.skyBot[2] - srgb[2]) * night,
+          ];
+        }),
+      )
       .addPlugin(sky)
       // Cascaded sun shadows (plan 065, modern pipeline): mid/far static cascades over the sun's near map.
       .addPlugin(
@@ -623,6 +661,11 @@ function bootstrap(
           waterSample,
           () => game.getHours(),
           () => sky.getSunDirection(),
+          () => ({
+            cut: game.getConfig().fog.distance,
+            lut: sky.getHorizonLut(),
+            mix: game.getConfig().graphics.pipeline === 'modern' ? 1 : 0,
+          }),
         ),
       )
       .addPlugin(reflection) // vehicle env-map reflections (preset-driven)
@@ -920,6 +963,11 @@ function bootstrap(
           SRGBColorSpace,
         );
         worldSunUniforms.uPipelineMix.value = game.getConfig().graphics.pipeline === 'modern' ? 1 : 0;
+        // Unified fog (plan 068): the world fog samples the 067 horizon LUT by azimuth on the modern path
+        // and cuts hard at the fog distance (geometry at the far plane resolves to pure sky colour).
+        worldFogUniforms.uFogMix.value = worldSunUniforms.uPipelineMix.value;
+        worldFogUniforms.uFogLut.value = sky.getHorizonLut();
+        worldFogUniforms.uFogCutDistance.value = game.getConfig().fog.distance;
         shadowHelper?.update(); // debug frustum follows the view-snapped shadow camera
         if (noCull) {
           // Diagnostic only: brute-force per frame so freshly streamed cells are covered too.
@@ -1291,6 +1339,10 @@ function bootstrap(
       setShowFaces: (enabled) => game.setShowFaces(enabled),
       setShowNormals: (enabled) => game.setShowNormals(enabled),
       setSky: (patch) => game.setSky(patch),
+      setSkyModel: (model) =>
+        game.setConfig({
+          graphics: { ...game.getConfig().graphics, sky: { ...game.getConfig().graphics.sky, model } },
+        }),
       setSsao: (patch) => game.setSsao(patch),
       setStars: (patch) => game.setStars(patch),
       setStreaming: (patch) => game.setStreaming(patch),
@@ -1303,6 +1355,7 @@ function bootstrap(
       setWorldLight: (patch) => game.setWorldLight(patch),
       shadows: () => game.getConfig().graphics.shadows,
       sky: () => game.getConfig().graphics.sky,
+      skyModel: () => game.getConfig().graphics.sky.model,
       spawnVehicle: async (model) => {
         const facing = animationSystem.getFacing();
         const from = character.viewOf();

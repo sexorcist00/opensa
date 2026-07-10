@@ -22,13 +22,46 @@ Today's sky (`sky.plugin.ts`): a gradient dome (`uBottom→uTop` from timecyc sk
 
 ## Tasks
 
-- [ ] Spike: Preetham vs Hosek-Wilkie vs takram on the dusk/dawn benches, timecyc-driven; screenshot matrix; user picks the model. Record decision + params mapping here.
-- [ ] Implement the chosen sky as the dome/quad replacement behind `graphics.sky.model: 'classic'|'pbr'`; map timecyc keys → model params (calibration table, unit-tested interpolation).
-- [ ] Horizon LUT: 512×1 RT capture on sky-state change; expose as a shared uniform/texture handle (`skyHorizonLut`) via the plugin context for fog/water consumers; debug view strip in the overlay.
-- [ ] Sun disc/corona/god-rays/moon/stars recolour integration; overcast behaviour parity.
-- [ ] Clouds Stage A: layered texture clouds per weather + transition blending; retire/repurpose the fbm dome noise; cloud-profile table update.
+- [~] Spike: **Preetham implemented FIRST** (cheapest, zero deps — the evaluation order's step 1): the model is
+  live-switchable in-game, so the "spike" is now an in-game A/B; Hosek-Wilkie/takram remain as upgrades IF
+  the user finds Preetham dusks lacking (the param-mapping + LUT infra is model-agnostic).
+- [x] Sky model: **shipped** — Preetham integrated INTO the existing dome shader (`SKY_BASE_GLSL` shared chunk,
+      uniform-gated `uPbrMix` — clouds/stars/dither stay on top, zero recompiles on toggle) behind
+      `graphics.sky.model: 'classic' | 'pbr'` (+ Graphics-screen toggle). Night blends BACK to the SA gradient
+      (`uPbrNight` — Preetham is a day model; the authored night palette stays). timecyc as art director:
+      `pbrSkyParams` (`packages/game/src/sky/sky-params.ts`, unit-tested) maps cloudCover/cloudDark/sunElevation
+      → turbidity/rayleigh/mie/sunE, and skyTop → a normalized MOOD tint (0.5 v1). LDR CAVEAT: the composer
+      buffer is UnsignedByte — the sky is exposure-scaled (`uSkyExposure` 1.2) to stay ≤1; an HDR
+      (HalfFloatType) composer upgrade is noted for later (071 emissives want it too).
+- [x] Horizon LUT: **shipped** — 512×1 RT rendered from the SAME `skyBase()` GLSL (always matches the visible
+      sky, works for BOTH models — fog gets one code path), re-rendered only when the quantized sky state steps
+      (game minute / cover / palette / model). Exposed as `SkyPlugin.getHorizonLut()` for 068 fog + 069 water.
+      Debug view strip in the overlay: later, with the 068 consumer.
+- [ ] Sun disc/corona/god-rays/moon/stars recolour integration; overcast behaviour parity. _After the user's
+      first PBR look._
+- [ ] Clouds Stage A: layered texture clouds per weather + transition blending; retire/repurpose the fbm dome
+      noise; cloud-profile table update.
 - [ ] (Stretch) Clouds Stage B spike: takram/three-clouds integration behind `graphics.clouds.volumetric`.
 - [ ] Bench + calibration sweep across all weathers × key hours; sign-off screenshots.
+
+### Calibration arc (2026-07-10, user A/B)
+
+1. First look: midday WASHED OUT white (raw Preetham HDR clipped by the LDR composer buffer before ACES) and
+   sunset ≈ classic (the night-blend used the golden-hour night factor → PBR was off exactly when it matters).
+   FIXES: in-shader Reinhard + exposure 1.2 → 0.55; twilight handover moved BELOW the horizon (sinEl −0.02…−0.12).
+2. Second look: midday good but paler than the original → `sky.mood` raised 0.5 → 0.7 and exposed as a live
+   slider (+ `sky.pbrExposure`) in Graphics. Dawn: distant objects glowed — FogExp2 colour was still classic
+   `skyBot`, mismatching the dark PBR dawn → CPU twin `pbrHorizonAverage` (same formula/tint/Reinhard/handover)
+   now feeds the fog colour in PBR mode (interim until 068's in-shader LUT fog).
+3. Third look (user): **"полдень стал лучше… в целом картинка очень хорошая"**; remaining dawn silhouettes →
+   handled by 068's directional LUT fog (started).
+
+### How to try it (user)
+
+F2 → Graphics → **PBR sky (plan 067)**. Compare vs classic at: **dawn ~6:30–7:30 и dusk ~19–20** (the whole
+point — scattering gradients vs the old two-colour lerp), noon (should stay believably SA), night (must look
+IDENTICAL to classic — the blend hands back), fog/rain weathers (haze physics). The mood tint keeps SA's
+palette at 50 % strength — report if the sky drifts too "real" or too flat.
 
 ## Verification
 

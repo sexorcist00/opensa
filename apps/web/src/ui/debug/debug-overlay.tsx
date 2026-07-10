@@ -33,7 +33,7 @@ import type { Teleport } from '../../game-config';
 
 import { styles } from './debug-styles';
 import { MapInspector } from './map-inspector';
-import { PerfPanel, PipelineToggle, ToneMappingModeSelector } from './perf-panel';
+import { PerfPanel, PipelineToggle, SkyModelToggle, ToneMappingModeSelector } from './perf-panel';
 
 /** Quick time-of-day presets for the debugger (label → minutes since midnight). */
 const TIME_PRESETS: [string, number][] = [
@@ -132,6 +132,8 @@ export interface DebugActions {
   setShowNormals(enabled: boolean): void;
   /** Tune the god-rays shader (density/exposure/weight). */
   setSky(patch: Partial<SkyConfig>): void;
+  /** Sky model switch (plan 067): classic gradient dome ↔ Preetham PBR sky. */
+  setSkyModel(model: 'classic' | 'pbr'): void;
   /** Tune SSAO (enabled/intensity/radius). */
   setSsao(patch: Partial<SsaoConfig>): void;
   /** Toggle night stars. */
@@ -156,6 +158,8 @@ export interface DebugActions {
   shadows(): ShadowsConfig;
   /** Current god-rays shader tuning. */
   sky(): SkyConfig;
+  /** Active sky model (plan 067). */
+  skyModel(): 'classic' | 'pbr';
   /** Spawn a car (by model name) just in front of the player. */
   spawnVehicle(model: string): Promise<void>;
   /** Current SSAO tuning. */
@@ -283,6 +287,7 @@ export function DebugOverlay({
   const [cameraZoom, setCameraZoom] = useState(() => actions.cameraDistance());
   const [clouds, setClouds] = useState<CloudsConfig>(() => actions.clouds());
   const [pipeline, setPipeline] = useState(() => actions.graphicsPipeline());
+  const [skyModel, setSkyModel] = useState(() => actions.skyModel());
   const [toneMode, setToneMode] = useState(() => actions.toneMappingMode());
   const [toneMapping, setToneMapping] = useState(() => actions.toneMapping());
   const [water, setWater] = useState<WaterConfig>(() => actions.water());
@@ -884,7 +889,7 @@ export function DebugOverlay({
                 type="range"
                 value={sunSize}
               />
-              {(['density', 'exposure', 'weight'] as const).map((key) => (
+              {(['density', 'exposure', 'weight', 'mood', 'pbrExposure'] as const).map((key) => (
                 <div key={key}>
                   <div style={styles.groupLabel}>
                     {key.toUpperCase()}: {sky[key].toFixed(2)}
@@ -1076,6 +1081,7 @@ export function DebugOverlay({
                 onChange={(next) => actions.setToneMappingMode(next)}
                 setMode={setToneMode}
               />
+              <SkyModelToggle model={skyModel} onChange={(next) => actions.setSkyModel(next)} setModel={setSkyModel} />
               <div style={styles.groupLabel}>WATER GLINT: {water.glint.toFixed(2)}</div>
               <input
                 max={5}
