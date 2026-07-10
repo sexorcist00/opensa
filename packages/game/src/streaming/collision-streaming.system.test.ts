@@ -25,7 +25,7 @@ function config(collisionDrawDistance: number): Config {
     gameState: 'play',
     graphics: {
       bloom: { enabled: true, intensity: 0.7, threshold: 0.7 },
-      clouds: { coverage: 0.5, opacity: 0.85 },
+      clouds: { coverage: 0.5, opacity: 0.85, volumetric: false },
       effects: { drawDistance: 150, enabled: true },
       headlights: {
         coronaIntensity: 0.8,

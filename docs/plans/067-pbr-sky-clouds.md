@@ -39,9 +39,26 @@ Today's sky (`sky.plugin.ts`): a gradient dome (`uBottom→uTop` from timecyc sk
       Debug view strip in the overlay: later, with the 068 consumer.
 - [ ] Sun disc/corona/god-rays/moon/stars recolour integration; overcast behaviour parity. _After the user's
       first PBR look._
-- [ ] Clouds Stage A: layered texture clouds per weather + transition blending; retire/repurpose the fbm dome
-      noise; cloud-profile table update.
-- [ ] (Stretch) Clouds Stage B spike: takram/three-clouds integration behind `graphics.clouds.volumetric`.
+- [x] Clouds Stage A **shipped (2026-07-10), procedural-layered (kept fbm, upgraded — no texture assets to
+      author, weather-blendable by construction):** - **CIRRUS layer**: thin stretched high wisps on their own slow heading; suppressed by coverage (they
+      belong to clear skies) — depth the single deck never had; - **Sun-lit deck**: `uCloudSunTint` = timecyc `sunCorona` × golden-hour strength (0.9 at the horizon
+      sun → 0.25 at noon, 0 below) → pink/orange cloud rims at dawn/dusk (`pow(dot(dir,sun),5)` rim +
+      silver lining on bright cores), driven entirely by the timecyc palette; - **timecyc `cloudAlpha` wired** (was parsed-unused): modulates ±40 % of the configured opacity over
+      the hour/weather arc — it stays a MODULATOR because raw cloudAlpha is too noisy to drive coverage
+      (the curated per-weather profile keeps that job — see cloud-profile.ts); - all in the shared `applyClouds` chunk → the dome and the sky/fog LUT stay consistent automatically.
+- [x] Clouds Stage B **shipped as our own compact raymarcher (2026-07-10)** behind `graphics.clouds.volumetric`
+      (default OFF, debug checkbox in Atmosphere; ultra-tier candidate for 072): a 24-step march through a
+      500–1000 u slab — 2D weather field with the SAME coverage threshold the flat deck uses (one driver for
+      both), height-profiled 3D value noise, two-tap sun light march (Beer's law, self-shadowed bases),
+      HG-phase silver lining toward the sun, timecyc colours as ambient + `uCloudSunTint` golden hour, heavy
+      weather darkens the unlit mass. Lives in the shared chunk → the fog LUT marches it too (fog dissolves
+      into VOLUMETRIC clouds). takram/three-clouds stays the documented upgrade if this stylized version
+      falls short (it drags their atmosphere stack — deliberately avoided as a dependency).
+      Also same-day: overcast fixes — cloudAlpha modulation gated to clear weathers (Rockstar's CLOUDY rows
+      carry low alphas → the deck went translucent), sun tint gated by clearness (no red smear through the
+      deck), a fine detail octave (the full-coverage deck read as giant soft smears), and the sky BASE hands
+      back to the authored timecyc gradient as coverage grows (the Preetham overcast is a milky Mie wash that
+      fought the dark deck — under a full deck you see cloud base, i.e. the authored gradient).
 - [ ] Bench + calibration sweep across all weathers × key hours; sign-off screenshots.
 
 ### Calibration arc (2026-07-10, user A/B)

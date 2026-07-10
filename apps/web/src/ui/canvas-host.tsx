@@ -476,7 +476,7 @@ function bootstrap(
       gameState: 'play',
       graphics: {
         bloom: { enabled: true, intensity: 0.7, threshold: 0.7 },
-        clouds: { coverage: 0.5, opacity: 0.85 },
+        clouds: { coverage: 0.5, opacity: 0.85, volumetric: false },
         // World 2dfx particle effects (plan 044) — drawDistance replaces the systems' authored
         // CULLDIST (vanilla culls fire at 35 m — too close).
         effects: { drawDistance: 150, enabled: true },
@@ -579,6 +579,7 @@ function bootstrap(
       return {
         amb: e.amb,
         ambObj: e.ambObj,
+        cloudAlpha: e.cloudAlpha,
         cloudBottom: e.bottomClouds,
         cloudCover: lerp(a.coverage, b.coverage, t),
         cloudDark: lerp(a.darkness, b.darkness, t),

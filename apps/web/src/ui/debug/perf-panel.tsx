@@ -12,6 +12,24 @@ export interface PerfPanelActions {
   setPerfEnabled: (enabled: boolean) => void;
 }
 
+/** Generic labelled checkbox row — extracted so DebugOverlay stays under its complexity cap. */
+export function DebugToggle({
+  checked,
+  label,
+  onToggle,
+}: {
+  checked: boolean;
+  label: string;
+  onToggle: (next: boolean) => void;
+}): ReactElement {
+  return (
+    <label style={styles.label}>
+      <input checked={checked} onChange={() => onToggle(!checked)} style={styles.radio} type="checkbox" />
+      <span style={checked ? styles.optionActive : styles.option}>{label}</span>
+    </label>
+  );
+}
+
 /** The Graphics-screen master-switch row (plan 063) — extracted so DebugOverlay stays under its complexity cap. */
 export function PipelineToggle({
   onChange,

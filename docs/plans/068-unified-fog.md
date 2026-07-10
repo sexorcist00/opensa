@@ -42,6 +42,13 @@ Today: scene `FogExp2` with density `2/config.fog.distance`, colour tracking a s
 - **Distant objects flickering every second:** the LUT refresh key quantized to the game minute — which is
   ~1 REAL second in SA — so near-fully-fogged objects stepped while the dome moved smoothly. FIX: the LUT
   (16 k px) renders EVERY frame — trivial cost, perfectly continuous. User: "мерцание ушло".
+- **(after the timecyc ranges) fog vs sky mismatch returned at dawn:** the LUT rendered the CLOUDLESS
+  `skyBase` while the dome layers clouds on top — with the closer timecyc cut, fully-fogged towers stood
+  milky against the cloudy sky. FIX: the cloud layer moved into the shared GLSL chunk (`applyClouds`) and
+  renders into the LUT too (stars stay dome-only). Fog now dissolves into the CLOUDY sky.
+- **Objects popping in/out of the cut on camera ROTATION:** the fog used view-Z, which shrinks toward the
+  screen edges — "боковым зрением видны, прямо — исчезают". FIX: RADIAL distance (like the water always
+  did) for the modern exp² + cut; rotation-invariant. **Final state user-confirmed: "хорошо выглядит".**
 - [x] timecyc wiring **shipped (2026-07-10)**: modern fog ranges = timecyc `fogStart`/`farClip` ×
       `fog.timecycScale` (new config, default 1; floor 350 so a broken row can't collapse the view; start
       clamped ≤ 0.8·cut). One `fogRangeFor()` source feeds the world shader (own exp² over [start, cut]),

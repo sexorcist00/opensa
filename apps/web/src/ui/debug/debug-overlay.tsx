@@ -33,7 +33,7 @@ import type { Teleport } from '../../game-config';
 
 import { styles } from './debug-styles';
 import { MapInspector } from './map-inspector';
-import { PerfPanel, PipelineToggle, SkyModelToggle, ToneMappingModeSelector } from './perf-panel';
+import { DebugToggle, PerfPanel, PipelineToggle, SkyModelToggle, ToneMappingModeSelector } from './perf-panel';
 
 /** Quick time-of-day presets for the debugger (label → minutes since midnight). */
 const TIME_PRESETS: [string, number][] = [
@@ -613,6 +613,14 @@ export function DebugOverlay({
                 step={0.01}
                 type="range"
                 value={clouds.opacity}
+              />
+              <DebugToggle
+                checked={clouds.volumetric}
+                label="Volumetric clouds (067 Stage B — heavy)"
+                onToggle={(volumetric) => {
+                  setClouds((prev) => ({ ...prev, volumetric }));
+                  actions.setClouds({ volumetric });
+                }}
               />
               <label style={styles.label}>
                 <input

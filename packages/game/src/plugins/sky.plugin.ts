@@ -37,6 +37,9 @@ export interface SkySample {
   /** Object ambient (timecyc ambObj) — SA's warm, bright fill that actually lights world objects (the plain
    *  `amb` is near-black). Drives the day AmbientLight colour so the day reads warm, not flat grey/white. */
   ambObj: Rgb;
+  /** Raw timecyc cloudAlpha 0–255 — the per-hour/weather opacity arc (modulates, never drives coverage:
+   *  it is too noisy for that — see cloud-profile.ts). */
+  cloudAlpha: number;
   /** Cloud underside / shadowed colour (timecyc bottomClouds). */
   cloudBottom: Rgb;
   /** Cloud cover 0–1 for this weather (curated per-weather profile, not raw cloudAlpha). */
@@ -152,21 +155,26 @@ const SKY_BASE_GLSL = `
     return ((lin + l0) * 0.04 + vec3(0.0, 0.0003, 0.00075)) * uSkyExposure * uPbrTint;
   }
 
-  vec3 skyBase(vec3 dir) {
-    float t = smoothstep(0.0, 1.0, clamp(dir.y, 0.0, 1.0));
-    vec3 grad = mix(uBottom, uTop, t);
-    if (uPbrMix < 0.5) return grad;
-    vec3 pbr = pbrSky(dir);
-    pbr = pbr / (1.0 + pbr); // Reinhard: the composer buffer is LDR — raw HDR would CLIP white before ACES
-    return mix(pbr, grad, uPbrNight);
-  }
-
   uniform vec3 uCloudTop;
   uniform vec3 uCloudBottom;
   uniform float uTime;
   uniform float uCloudCoverage;
   uniform float uCloudOpacity;
   uniform float uCloudDark;
+  uniform vec3 uCloudSunTint; // timecyc sun colour × golden-hour strength — dawn/dusk cloud rims
+
+  vec3 skyBase(vec3 dir) {
+    float t = smoothstep(0.0, 1.0, clamp(dir.y, 0.0, 1.0));
+    vec3 grad = mix(uBottom, uTop, t);
+    if (uPbrMix < 0.5) return grad;
+    vec3 pbr = pbrSky(dir);
+    pbr = pbr / (1.0 + pbr); // Reinhard: the composer buffer is LDR — raw HDR would CLIP white before ACES
+    // Overcast hands the sky back to the AUTHORED timecyc gradient: under a full deck the atmosphere is
+    // invisible anyway — the physical model degenerates into a milky Mie wash that fights the dark deck
+    // (user report). Clear skies keep pure Preetham; the blend rides the same coverage the deck uses.
+    return mix(pbr, grad, max(uPbrNight, uCloudCoverage * 0.85));
+  }
+
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
   float vnoise(vec2 p) {
@@ -181,21 +189,118 @@ const SKY_BASE_GLSL = `
     return v;
   }
 
-  // The cloud layer, shared by the dome AND the sky LUT (plan 068) — fully-fogged geometry must dissolve
-  // into the CLOUDY sky it stands against, not a cloudless one.
+  // The cloud layers, shared by the dome AND the sky LUT (plan 068) — fully-fogged geometry must dissolve
+  // into the CLOUDY sky it stands against, not a cloudless one. Stage A (plan 067): two layers + sun light.
   vec3 applyClouds(vec3 col, vec3 dir) {
     if (uCloudOpacity <= 0.0 || dir.y <= 0.0) return col;
+    float horizon = smoothstep(0.02, 0.30, dir.y);
+
+    // Layer 1 — CIRRUS: thin, high, stretched wisps drifting slowly on their own heading; they belong to
+    // clear skies, so coverage suppresses them (overcast hides cirrus behind the cumulus deck anyway).
+    vec2 cuv2 = dir.xz / max(dir.y, 0.12) * vec2(0.9, 0.35) + vec2(uTime * 0.0013, uTime * -0.0007) + 31.7;
+    float cirrus = smoothstep(0.60, 0.92, fbm(cuv2)) * (1.0 - uCloudCoverage) * 0.55;
+    vec3 cirrusCol = mix(uCloudBottom, uCloudTop, 0.85) + uCloudSunTint * 0.2;
+    col = mix(col, cirrusCol, cirrus * horizon * uCloudOpacity);
+
+    // Layer 2 — CUMULUS (the weather deck): coverage-thresholded fbm masses, lit tops / dark undersides.
     vec2 cuv = dir.xz / max(dir.y, 0.12) * 0.45 + vec2(uTime * 0.004, uTime * 0.002);
     float n = fbm(cuv);
     float mass = fbm(cuv * 0.4 + 19.0);
     float edge = mix(0.92, -0.25, uCloudCoverage);
     float density = smoothstep(edge, edge + 0.20, n);
-    float horizon = smoothstep(0.02, 0.30, dir.y);
     vec3 cloudCol = mix(uCloudBottom, uCloudTop, smoothstep(0.30, 0.80, n));
     float bright = smoothstep(0.20, 0.72, n) * mix(0.35, 1.0, smoothstep(0.30, 0.72, mass));
     float shade = mix(0.16, 1.0, bright);
     cloudCol *= mix(1.0, shade, uCloudDark);
+    // Fine detail octave: at full coverage the low-frequency masses degenerate into huge soft smears —
+    // one cheap high-frequency noise breaks them into readable cloud texture.
+    float det = vnoise(cuv * 5.7 + vec2(uTime * 0.006, 0.0));
+    cloudCol *= 0.88 + 0.24 * det;
+    // Sun light on the deck (timecyc sun colour): golden-hour rims near the sun, silver lining on the
+    // bright cores. Gated by CLEARNESS — an overcast deck blocks the sun, it must not glow through
+    // (a red smear over the whole cloudy sky otherwise).
+    float toSun = max(dot(dir, uSunDirSky), 0.0);
+    float rim = pow(toSun, 5.0);
+    float clearness = 1.0 - uCloudCoverage * 0.85;
+    cloudCol += uCloudSunTint * rim * (0.25 + 0.75 * bright) * clearness;
     return mix(col, cloudCol, density * horizon * uCloudOpacity);
+  }
+
+  // ---- Volumetric clouds (plan 067 Stage B, ultra tier; uCloudVolumetric gates) --------------------
+  uniform float uCloudVolumetric;
+
+  float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453123); }
+  float vnoise3(vec3 p) {
+    vec3 i = floor(p), f = fract(p);
+    vec3 u = f * f * (3.0 - 2.0 * f);
+    float a = hash3(i);
+    float b = hash3(i + vec3(1.0, 0.0, 0.0));
+    float c = hash3(i + vec3(0.0, 1.0, 0.0));
+    float d = hash3(i + vec3(1.0, 1.0, 0.0));
+    float e = hash3(i + vec3(0.0, 0.0, 1.0));
+    float g = hash3(i + vec3(1.0, 0.0, 1.0));
+    float h = hash3(i + vec3(0.0, 1.0, 1.0));
+    float k = hash3(i + vec3(1.0, 1.0, 1.0));
+    return mix(mix(mix(a, b, u.x), mix(c, d, u.x), u.y), mix(mix(e, g, u.x), mix(h, k, u.x), u.y), u.z);
+  }
+  float fbm3(vec3 p) {
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 3; i++) { v += a * vnoise3(p); p = p * 2.13 + 5.7; a *= 0.5; }
+    return v;
+  }
+
+  // Density in the cloud slab: a 2D weather field (same coverage threshold as the flat deck — the same
+  // timecyc/profile drives both) shaped vertically (rounded base, feathered top) and carved by 3D noise.
+  float volCloudDensity(vec3 pos) {
+    float hNorm = (pos.y - 500.0) / 500.0; // slab: 500..1000 world units
+    if (hNorm < 0.0 || hNorm > 1.0) return 0.0;
+    float heightProfile = smoothstep(0.0, 0.2, hNorm) * smoothstep(1.0, 0.5, hNorm);
+    vec2 wuv = pos.xz * 0.00042 + vec2(uTime * 0.0025, uTime * 0.0012);
+    float weather = fbm(wuv);
+    float edge = mix(0.92, -0.25, uCloudCoverage);
+    float coverage = smoothstep(edge, edge + 0.30, weather);
+    float base = fbm3(vec3(pos.x * 0.0011, pos.y * 0.0022, pos.z * 0.0011) + vec3(uTime * 0.012, 0.0, 0.0));
+    return coverage * heightProfile * smoothstep(0.32, 0.72, base);
+  }
+
+  vec3 applyVolumetricClouds(vec3 col, vec3 dir) {
+    if (uCloudOpacity <= 0.0 || dir.y <= 0.02) return col;
+    float horizon = smoothstep(0.02, 0.22, dir.y);
+    // March the slab [500, 1000] from the (slab-relative) ground: only sky pixels pay this. The slant is
+    // CAPPED — at grazing angles the slab stretches to tens of km (huge steps = coarse banding + wasted
+    // cost); the horizon fade hides the truncation.
+    float t0 = 500.0 / dir.y;
+    if (t0 > 14000.0) return col;
+    float t1 = min(1000.0 / dir.y, t0 + 5500.0);
+    const int STEPS = 24;
+    float stepT = (t1 - t0) / float(STEPS);
+    // Per-pixel jitter of the ray start: breaks the fixed-step iso-contour "onion rings" into
+    // imperceptible grain (the classic raymarch banding fix).
+    float jitter = hash(gl_FragCoord.xy + vec2(uTime * 61.7, 0.0));
+    float trans = 1.0;
+    vec3 acc = vec3(0.0);
+    // Lighting: timecyc keeps directing — sun tint (golden hour) + the authored deck colours as ambient.
+    vec3 sunCol = uCloudSunTint * 2.0 + uCloudTop * 0.5;
+    vec3 ambCol = mix(uCloudBottom, uCloudTop, 0.45);
+    float mu = dot(dir, uSunDirSky);
+    float g = 0.55;
+    float phase = 0.5 + (1.0 - g * g) / (12.566 * pow(1.0 + g * g - 2.0 * g * mu, 1.5)); // HG toward the sun
+    for (int i = 0; i < STEPS; i++) {
+      vec3 pos = dir * (t0 + (float(i) + jitter) * stepT);
+      float den = volCloudDensity(pos);
+      if (den <= 0.002) continue;
+      // two-tap light march toward the sun: self-shadowed bases, lit tops (Beer's law + a powder-ish lift)
+      float lightDen = volCloudDensity(pos + uSunDirSky * 130.0) * 0.65
+        + volCloudDensity(pos + uSunDirSky * 320.0) * 0.35;
+      float light = exp(-lightDen * 2.4);
+      vec3 sample_ = ambCol * (0.5 + 0.28 * light) + sunCol * light * phase;
+      sample_ *= mix(1.0, mix(0.25, 1.0, light), uCloudDark); // heavy weather darkens the unlit mass
+      float alpha = 1.0 - exp(-den * stepT * 0.010 * uCloudOpacity);
+      acc += trans * alpha * sample_;
+      trans *= 1.0 - alpha;
+      if (trans < 0.04) break;
+    }
+    return mix(col, col * trans + acc, horizon);
   }
 `;
 
@@ -222,7 +327,9 @@ const LUT_FRAGMENT =
     float dirY = max(0.035, vUv.y * 0.7);
     float h = sqrt(max(1.0 - dirY * dirY, 1e-4));
     vec3 dir = normalize(vec3(cos(phi) * h, dirY, sin(phi) * h));
-    gl_FragColor = vec4(applyClouds(skyBase(dir), dir), 1.0);
+    vec3 lutCol = skyBase(dir);
+    lutCol = uCloudVolumetric > 0.5 ? applyVolumetricClouds(lutCol, dir) : applyClouds(lutCol, dir);
+    gl_FragColor = vec4(lutCol, 1.0);
   }
 `;
 
@@ -269,7 +376,9 @@ const FRAGMENT =
       col += starField(dir) * uNight * uCloudClear;
     }
 
-    col = applyClouds(col, dir); // shared with the sky LUT — fog dissolves into the CLOUDY sky
+    // Shared with the sky LUT — fog dissolves into the CLOUDY sky. Volumetric (Stage B) replaces the
+    // flat deck when enabled; both ride the same timecyc/profile drivers.
+    col = uCloudVolumetric > 0.5 ? applyVolumetricClouds(col, dir) : applyClouds(col, dir);
 
     col += (hash(gl_FragCoord.xy) - 0.5) / 255.0; // dither to break gradient banding
     gl_FragColor = vec4(col, 1.0);
@@ -296,6 +405,7 @@ export class SkyPlugin implements Plugin {
   readonly sunSource: Mesh;
 
   private readonly ambient = new AmbientLight(0xffffff, 1);
+  private cloudAlpha = 255; // timecyc per-hour opacity arc (modulation only)
   private cloudCover = 0.5; // weather-driven (timecyc cloudAlpha); the dome's coverage base
   private readonly corona: Sprite;
   private readonly dome: Mesh;
@@ -318,7 +428,9 @@ export class SkyPlugin implements Plugin {
     uCloudCoverage: { value: 0.5 },
     uCloudDark: { value: 0 },
     uCloudOpacity: { value: 0.8 },
+    uCloudSunTint: { value: new Color(0, 0, 0) },
     uCloudTop: { value: new Color() },
+    uCloudVolumetric: { value: 0 },
     uMieG: { value: 0.8 },
     uPbrMix: { value: 0 },
     uPbrNight: { value: 0 },
@@ -468,7 +580,13 @@ export class SkyPlugin implements Plugin {
     ); // sets cloudCover/night
     const clouds = context.config.graphics.clouds;
     this.material.uniforms.uTime.value = context.clock.elapsed;
-    this.material.uniforms.uCloudOpacity.value = clouds.opacity;
+    // timecyc cloudAlpha modulates the opacity over the hour arc — but ONLY in clear weathers: it is too
+    // noisy to drive coverage (see cloud-profile.ts), and Rockstar's CLOUDY rows carry LOW alphas that made
+    // the overcast deck translucent (user report). Heavy cover keeps its authored opacity; clear skies breathe.
+    this.skyBaseUniforms.uCloudVolumetric.value = clouds.volumetric ? 1 : 0;
+    const alphaMod = 0.6 + 0.4 * (this.cloudAlpha / 255);
+    const heavy = Math.min(1, this.cloudCover);
+    this.material.uniforms.uCloudOpacity.value = clouds.opacity * (heavy + (1 - heavy) * alphaMod);
     // Cover = weather's cloudAlpha × the user multiplier (slider 0.5 = weather as-authored).
     this.material.uniforms.uCloudCoverage.value = Math.min(1, this.cloudCover * clouds.coverage * 2);
     this.material.uniforms.uNight.value = this.night;
@@ -496,6 +614,7 @@ export class SkyPlugin implements Plugin {
     setColor(this.material.uniforms.uCloudBottom.value as Color, sky.cloudBottom, true);
     this.material.uniforms.uCloudDark.value = sky.cloudDark;
     this.cloudCover = sky.cloudCover;
+    this.cloudAlpha = sky.cloudAlpha;
 
     // Sun rises at the litFade dawnStart and is fully below the horizon by duskEnd — same window the
     // world darkening uses, so the sun and the night stay in sync (and track a custom timecyc).
@@ -589,6 +708,11 @@ export class SkyPlugin implements Plugin {
     const sinElevation = Math.sin(elevation);
     this.skyBaseUniforms.uPbrNight.value = 1 - MathUtils.smoothstep(sinElevation, -0.12, -0.02);
     this.skyBaseUniforms.uSunDirSky.value.copy(this.sunDir);
+    // Sun light on the clouds (timecyc sunCorona): strongest at golden hour (low sun → orange/pink rims),
+    // a quarter-strength white lift at noon, off below the horizon.
+    const goldenStrength = above ? 0.25 + 0.65 * (1 - height) : 0;
+    setColor(this.skyBaseUniforms.uCloudSunTint.value, sky.sunCorona, true);
+    this.skyBaseUniforms.uCloudSunTint.value.multiplyScalar(goldenStrength);
   }
 
   /** Re-render the LUT every frame: 512×32 (≈16 k px) is trivial, and any quantized refresh key STEPS —

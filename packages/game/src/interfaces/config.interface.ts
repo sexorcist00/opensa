@@ -36,6 +36,9 @@ export interface CloudsConfig {
   coverage: number;
   /** Cloud opacity over the sky (0 = off, skips the cloud shader branch). */
   opacity: number;
+  /** Volumetric raymarched clouds (plan 067 Stage B, ultra tier): replaces the flat deck with a lit
+   *  3D layer. Default OFF — measurably heavier (march on every sky pixel). */
+  volumetric: boolean;
 }
 
 /** Top-level game configuration. Mutated in place so `PluginContext.config` stays live. */
