@@ -67,7 +67,16 @@ function config(gameState: Config['gameState']): Config {
       toneMapping: false,
       toneMappingMode: 'aces',
       vehicleReflection: { intensity: 1, preset: 'enhanced' },
-      water: { darkness: 0.55, glint: 1.5, reflection: 0.6 },
+      water: {
+        darkness: 0.55,
+        foam: 1,
+        glint: 1.5,
+        reflection: 0.6,
+        shore: true,
+        shoreClarity: 0.55,
+        shoreDepth: 6,
+        waves: 1,
+      },
       worldLight: {
         dayBrightness: 0.85,
         duskBrightness: 0.45,

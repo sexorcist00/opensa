@@ -379,10 +379,22 @@ export interface VehicleReflectionConfig {
 export interface WaterConfig {
   /** How much to darken the deep (top-down) water tint, 0 (raw timecyc) → 1 (black). */
   darkness: number;
+  /** Foam amount (plan 069): whitecaps on crests + the shoreline band. 0 = none. */
+  foam: number;
   /** Sun specular glint strength (sparkle along the sun direction). */
   glint: number;
-  /** How much the sky horizon reflects at grazing angles (0–1). */
+  /** How much the sky reflects at grazing angles (0–1). Modern samples the 067 sky LUT per direction. */
   reflection: number;
+  /** Depth-based shore (plan 069): clear shallows + surf foam. Needs a scene DepthPass (extra geometry render)
+   *  so it is OPT-IN (a quality-tier feature); off = deep water everywhere, no extra render cost. */
+  shore: boolean;
+  /** How CLEAR the shallows get, 0 (keeps the authored opacity) → 1 (near-glass). Guards against the
+   *  "water looks like glass" failure — the timecyc alpha stays the floor. */
+  shoreClarity: number;
+  /** Depth (world units) over which the shallows go from clear to the deep tint (plan 069 shore). */
+  shoreDepth: number;
+  /** Wave-height multiplier over the weather's sea state (plan 069). 0 = flat water. */
+  waves: number;
 }
 
 /**

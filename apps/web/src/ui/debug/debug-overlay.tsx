@@ -1141,6 +1141,32 @@ export function DebugOverlay({
                 setMode={setToneMode}
               />
               <SkyModelToggle model={skyModel} onChange={(next) => actions.setSkyModel(next)} setModel={setSkyModel} />
+              {(
+                [
+                  ['waves', 'WATER WAVES (069)', 0, 3, 0.05],
+                  ['foam', 'WATER FOAM (069)', 0, 3, 0.05],
+                  ['shoreDepth', 'SHORE DEPTH (069)', 1, 20, 0.5],
+                  ['shoreClarity', 'SHORE CLARITY (069)', 0, 1, 0.05],
+                ] as const
+              ).map(([key, label, min, max, step]) => (
+                <div key={key}>
+                  <div style={styles.groupLabel}>
+                    {label}: {water[key].toFixed(2)}
+                  </div>
+                  <input
+                    max={max}
+                    min={min}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      setWater((prev) => ({ ...prev, [key]: value }));
+                      actions.setWater({ [key]: value });
+                    }}
+                    step={step}
+                    type="range"
+                    value={water[key]}
+                  />
+                </div>
+              ))}
               <div style={styles.groupLabel}>WATER GLINT: {water.glint.toFixed(2)}</div>
               <input
                 max={5}

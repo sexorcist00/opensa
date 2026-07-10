@@ -27,6 +27,42 @@ Recommended composition: **Gerstner (3–4 octaves) + depth-based shore + planar
 5. **timecyc stays the colourist**: water RGBA per hour/weather keeps driving tint/alpha so lakes at dusk keep their SA mood.
 6. **Budget**: ≤ 1.5 ms base tier; planar reflection only if it fits in +1.5 ms half-res on reference.
 
+## v1 SHIPPED but PARKED (2026-07-10) — rework moved to 0.5.0
+
+**User verdict after several iterations: "вода в целом так себе".** The approach hit its ceiling: displacing only
+the NORMAL (the `water.dat` quads are too coarse to displace vertices) means the surface is geometrically FLAT — a
+moving glint but no travelling waves / silhouette / beach run-up ("волны стоят на месте"). The half-res depth-shore
+also flickered around pier piles (fixed partly with an `fwidth` edge-reject) and cost a full-scene DepthPass (made
+opt-in via `water.shore`). v1 stays in tree as a working baseline / `low`-tier surface; the real rework —
+**camera-following Gerstner-displaced grid, foam from the wave Jacobian (no depth buffer), baked shoreline** — is
+specced in **[docs/ideas/0.5.0/plans/01-water](../ideas/0.5.0/plans/01-water/readme.md)**. Keep-verbatim parts:
+`seaState()`, the sky-LUT reflection, GGX glint, underwater tint, timecyc colour, fog-chunk integration.
+
+### What v1 shipped (kept as the fallback)
+
+- **Shore depth (decision #2, "the biggest realism jump per ms") — landed, and cheaper than feared.** A pmndrs
+  `DepthPass` runs BEFORE the main render with the **water layer disabled** (its own render layer, `layers.set`
+  not `enable`, or it stays on layer 0 and the pass would capture the SURFACE's depth). So the water shader
+  reads the depth of the SEA FLOOR: shallow → clear + a scrolling foam band, deep → the timecyc tint. Half-res.
+- **Gerstner waves, analytically (decision #1, adapted).** The `water.dat` quads are far too coarse to displace,
+  so the four wind-aligned wave trains are summed as a SLOPE (normal), not a displacement — the shape reads
+  entirely through the lighting, at zero vertex cost. Steepness sharpens crests / flattens troughs (the
+  Gerstner signature) and crest height drives whitecaps. Sea state per weather from the pure, unit-tested
+  `seaState()` (`packages/game/src/water/wave-params.ts`): overcast raises a swell, rain/storm a real sea, and
+  each weather gets a stable wind heading (never time-dependent — the sea must not spin as hours pass).
+- **Reflection stage 1 (decision #3) — free.** The fresnel term now samples the **067 sky LUT by the reflected
+  direction** (azimuth × elevation) instead of a single horizon colour, so the water reflects the actual sky
+  above it, and matches it exactly at the horizon. The LUT was already bound for the fog.
+- **Sun glint upgraded to GGX** against the real sun direction, with roughness tied to the sea state: a calm
+  sea gives a tight highlight, a storm a long shattered sparkle path.
+- **Underwater state (decision #4)**: the camera below the surface flips the normal and drowns the sky in the
+  deep tint. Waterline meniscus strip not done (scope-boxed).
+- Config grew `water.waves` / `water.foam` / `water.shoreDepth` + Graphics sliders; classic pipeline untouched
+  (single horizon colour, no depth, no foam — `uFogMix`/`uDepth` gate everything).
+
+**Not in v1:** planar/SSR reflection (stage 2 — decided by measurement), a tessellated near-camera ring with
+real vertex displacement, the waterline strip.
+
 ## Tasks
 
 - [ ] Water grid: near-camera tessellated ring following the camera + far flat plane; seams verified (skirt/blend zone).

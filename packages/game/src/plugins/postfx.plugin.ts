@@ -1,8 +1,9 @@
-import type { Mesh } from 'three';
+import type { Mesh, Texture } from 'three';
 
 import {
   BlendFunction,
   BloomEffect,
+  DepthPass,
   EffectComposer,
   EffectPass,
   GodRaysEffect,
@@ -47,6 +48,8 @@ export class PostFxPlugin implements Plugin {
   /** Per-frame threshold override (plan 071 night profile); falls back to `config.graphics.bloom.threshold`. */
   private readonly bloomThreshold?: () => number;
   private composer: EffectComposer | null = null;
+  private readonly depthEnabled?: () => boolean;
+  private depthPass: DepthPass | null = null;
   private readonly glowLayer: number;
   private godRays: GodRaysEffect | null = null;
   private godraysPass: EffectPass | null = null;
@@ -59,6 +62,7 @@ export class PostFxPlugin implements Plugin {
   private readonly sunSource: Mesh;
   private toneMapping: null | ToneMappingEffect = null;
   private tonePass: EffectPass | null = null;
+  private readonly waterLayer?: number;
 
   /**
    * `glowLayer` — render layer of glow point clouds (street-lamp coronas). It is hidden during the
@@ -66,10 +70,18 @@ export class PostFxPlugin implements Plugin {
    * would smear undefined-size phantom quads into the normal buffer, and SSAO then multiplies large
    * flickering dark squares onto facades behind lamps.
    */
-  constructor(sunSource: Mesh, glowLayer: number, bloomThreshold?: () => number) {
+  constructor(
+    sunSource: Mesh,
+    glowLayer: number,
+    bloomThreshold?: () => number,
+    waterLayer?: number,
+    depthEnabled?: () => boolean,
+  ) {
     this.sunSource = sunSource;
     this.glowLayer = glowLayer;
     this.bloomThreshold = bloomThreshold;
+    this.waterLayer = waterLayer;
+    this.depthEnabled = depthEnabled;
   }
 
   configChanged(config: PluginContext['config']): void {
@@ -81,6 +93,17 @@ export class PostFxPlugin implements Plugin {
     this.composer?.dispose();
   }
 
+  /** Scene depth WITHOUT the water — the water shader reads it to know how deep the sea floor is
+   *  (plan 069 shore). `null` until installed, or when no water layer was supplied. */
+  getDepth(): null | { height: number; texture: null | Texture; width: number } {
+    if (!this.depthPass) {
+      return null;
+    }
+    const { height, width } = this.depthPass.resolution;
+
+    return { height, texture: this.depthPass.texture, width };
+  }
+
   install(context: PluginContext): void {
     const { bloom: bloomCfg, sky, ssao: ssaoCfg } = context.config.graphics;
     // No MSAA on the composer: a multisampled depth/stencil resolve can't be blitted alongside the
@@ -89,7 +112,27 @@ export class PostFxPlugin implements Plugin {
     // emissive at 1.0 — lit windows, neon and car lamps could never bloom brighter than plain white paper.
     // HalfFloat keeps their real intensity for the bloom threshold; the ACES pass compresses at the end.
     const composer = new EffectComposer(context.renderer, { frameBufferType: HalfFloatType });
-    composer.addPass(new PpRenderPass(context.scene, context.camera));
+    // Depth of the world WITHOUT the water (plan 069): the water shader compares its own depth against this
+    // to know how much water sits above the sea floor — shallow = clear + foam, deep = the timecyc tint.
+    // Skipping the water layer is what makes it the FLOOR's depth rather than the surface's.
+    if (this.waterLayer !== undefined) {
+      const waterLayer = this.waterLayer;
+      const depthPass = new DepthPass(context.scene, context.camera, { resolutionScale: 0.5 });
+      const renderDepth = depthPass.render.bind(depthPass);
+      const depthEnabled = this.depthEnabled;
+      depthPass.render = (...args: Parameters<DepthPass['render']>): void => {
+        if (!(depthEnabled?.() ?? true)) {
+          return; // shore off → skip the extra geometry render entirely (the perf cost)
+        }
+        context.camera.layers.disable(waterLayer);
+        renderDepth(...args);
+        context.camera.layers.enable(waterLayer);
+      };
+      composer.addPass(depthPass);
+      this.depthPass = depthPass;
+    }
+
+    composer.addPass(new PpRenderPass(context.scene, context.camera)); // water reads the depth captured above, this frame
 
     // Ambient occlusion: a scene-normals pass feeds an SSAO effect that multiply-darkens corners/contacts.
     const normalPass = new NormalPass(context.scene, context.camera);

@@ -31,6 +31,7 @@ import { VehicleDamageSystem } from '@opensa/game/vehicle/vehicle-damage.system'
 import { VehicleHeadlightSystem } from '@opensa/game/vehicle/vehicle-headlight.system';
 import { VehicleLodSystem } from '@opensa/game/vehicle/vehicle-lod.system';
 import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.system';
+import { seaState } from '@opensa/game/water/wave-params';
 import { weatherForCity } from '@opensa/game/weather/weather-zones';
 import { cityAt, type CityBox, cityFromLevel, isDesertZone } from '@opensa/game/zones/city';
 import { CityZoneSystem } from '@opensa/game/zones/city-zone.system';
@@ -127,6 +128,8 @@ import { Overlay } from './hud/overlay';
 const BASE = import.meta.env.VITE_STATIC_URL;
 
 const CELL_SIZE = 256; // streaming grid cell edge — shared by Config.streaming + the adapter; MUST match opensa-lod-generator's cellSize (its baked lod_<cx>_<cy> cells map 1:1 onto engine cells)
+/** Render layer holding the water surface — excluded from the shore DepthPass (plan 069). */
+const WATER_LAYER = 3;
 const WORLD_READY_TIMEOUT_MS = 12000; // reveal the game even if streaming never settles (failed cell)
 const GROUNDING_TIMEOUT_MS = 3000; // after the world settled, reveal even if grounding is delayed
 const FLY_GROUND_MAX_DROP = 2000; // max downward ray (m) to find the ground when leaving fly mode
@@ -525,7 +528,16 @@ function bootstrap(
         toneMapping: true,
         toneMappingMode: 'aces',
         vehicleReflection: { intensity: 0.25, preset: 'enhanced' },
-        water: { darkness: 0.9, glint: 0.5, reflection: 0.2 },
+        water: {
+          darkness: 0.9,
+          foam: 1,
+          glint: 0.5,
+          reflection: 0.2,
+          shore: true,
+          shoreClarity: 0.55,
+          shoreDepth: 6,
+          waves: 1,
+        },
         // SA prelit world (plan 038) calibration — live-tunable in debug → Atmosphere.
         worldLight: {
           dayBrightness: 0.85,
@@ -620,6 +632,7 @@ function bootstrap(
         sun: e.sunCore,
         water: [e.water[0], e.water[1], e.water[2]],
         waterAlpha: e.water[3] / 255,
+        waterFogAlpha: e.waterFogAlpha / 255, // authored underwater murk (plan 069)
       };
     };
     // The moon uses the SA `coronamoon` texture from particle.txd (alpha-shaped); null if it can't be loaded.
@@ -642,8 +655,15 @@ function bootstrap(
     // parented under the −90°X streaming root (which `game.init` adds to the scene).
     const water = await adapter.loadWater('data/water.dat', 'models/particle.txd');
     water.userData.skipShadowCaster = true; // translucent surface — a depth-material caster would shadow the sea floor
+    // Water sits on its own layer so the DepthPass can skip it: the water shader needs the depth of the
+    // SEA FLOOR, not of its own surface (plan 069 shore).
+    // `set`, not `enable`: the mesh must leave layer 0, or the DepthPass (which merely disables the water
+    // layer) would still draw it and read the SURFACE's depth instead of the sea floor's.
+    water.traverse((node) => node.layers.set(WATER_LAYER));
     game.getStreamingRoot().add(water);
 
+    // Held so the water plugin can read its shore DepthPass (plan 069).
+    let postFx: PostFxPlugin;
     game
       .setWorldAdapter(adapter)
       // Fog fades into the sky horizon. On the PBR sky the classic skyBot no longer matches the dome —
@@ -708,6 +728,19 @@ function bootstrap(
 
             return { cut: range.cut, lut: sky.getHorizonLut(), mix: modern ? 1 : 0, start: range.start };
           },
+          // Sea state from the weather (plan 069): cloud cover raises a swell, rain/storm a real sea.
+          () => {
+            const weather = game.getWeather();
+            const name = WEATHER_NAMES[weather] ?? '';
+            const profile = cloudProfile(name);
+
+            return seaState({
+              overcast: profile.coverage,
+              storm: /RAIN|STORM/.test(name) ? 1 : 0,
+              weather,
+            });
+          },
+          () => (game.getConfig().graphics.pipeline === 'modern' ? postFx.getDepth() : null),
         ),
       )
       .addPlugin(reflection) // vehicle env-map reflections (preset-driven)
@@ -715,21 +748,27 @@ function bootstrap(
       // Bloom threshold follows the time band (plan 071): low at night so lamps/neon/windows glow, high by
       // day so the sky doesn't smear. Classic keeps the configured constant.
       .addPlugin(
-        new PostFxPlugin(sky.godraysSource, GLOW_LAYER, () => {
-          const config = game.getConfig();
-          if (config.graphics.pipeline !== 'modern') {
-            return config.graphics.bloom.threshold;
-          }
-          const band = timeBandGrade({ overcast: 1 - sky.getSunShadow().intensity, sunSin: sky.getSunSin() });
+        (postFx = new PostFxPlugin(
+          sky.godraysSource,
+          GLOW_LAYER,
+          () => {
+            const config = game.getConfig();
+            if (config.graphics.pipeline !== 'modern') {
+              return config.graphics.bloom.threshold;
+            }
+            const band = timeBandGrade({ overcast: 1 - sky.getSunShadow().intensity, sunSin: sky.getSunSin() });
 
-          return band.bloomThreshold * (config.graphics.bloom.threshold / 0.7);
-        }),
+            return band.bloomThreshold * (config.graphics.bloom.threshold / 0.7);
+          },
+          WATER_LAYER,
+        )),
       );
 
     await loadFonts(game.getConfig().fonts); // register HUD fonts before the scene/HUD render
     await game.init();
     // Corona Points live on GLOW_LAYER (excluded from the SSAO normal prepass) — the camera must see it.
     game.getCamera().layers.enable(GLOW_LAYER);
+    game.getCamera().layers.enable(WATER_LAYER); // water lives on its own layer (plan 069 shore depth)
     // Single source of truth for where the player starts: the game's spawn seeds the initial collision zone
     // (so there's ground under the drop) AND the player capsule. Clock/weather are load/session params.
     const spawn = config.playerSpawn;
