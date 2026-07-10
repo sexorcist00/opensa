@@ -21,18 +21,18 @@ SA's prelit vertex colours already CONTAIN Rockstar's baked sun, sky and buildin
 
 ## The chain
 
-| #   | Plan                                                                                              | Delivers                                                                                 | Status |
-| --- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------ |
-| 1   | [063 — Foundations: instrumentation & colour pipeline](063-render-foundations-instrumentation.md) | perf HUD + benchmark harness + baselines; linear/tonemap decision; A/B scaffolding       | done   |
-| 2   | [064 — Hybrid world lighting](064-hybrid-world-lighting.md)                                       | real sun light on the prelit world without double-counting (indirect/direct split)       | idea   |
-| 3   | [065 — Cascaded shadows](065-cascaded-shadows.md)                                                 | buildings/cars/peds cast real shadows: CSM, static-caster caching, LOD shadow proxies    | idea   |
-| 4   | [066 — Modern asset step in perfect-map-builder](066-pmb-modern-asset-step.md)                    | opensa-native format (meshopt/KTX2) + baked channels: AO, sun visibility, emissive masks | idea   |
-| 5   | [067 — PBR sky & clouds](067-pbr-sky-clouds.md)                                                   | physically-based sky, 512×1 horizon LUT, weather clouds (skybox → volumetric)            | idea   |
-| 6   | [068 — Unified fog & aerial perspective](068-unified-fog.md)                                      | fog that cuts the horizon (no more ocean-through-haze), height fog, one shared fog chunk | idea   |
-| 7   | [069 — Water](069-water.md)                                                                       | realistic water: waves, depth-based shores, reflections (planar/SSR), underwater         | idea   |
-| 8   | [070 — Local lights: headlights & street lamps](070-local-lights.md)                              | real projected headlights + clustered lamp pool; coronas demoted to distant impostors    | idea   |
-| 9   | [071 — Night & emissive atmosphere](071-night-emissive-atmosphere.md)                             | glowing night vertex/tobj/neon, moon light, dawn/dusk grading calibration                | idea   |
-| 10  | [072 — Quality tiers & default flip](072-quality-tiers-default-flip.md)                           | low/med/high/ultra presets, budgets enforced, new pipeline becomes default, cleanup      | idea   |
+| #   | Plan                                                                                              | Delivers                                                                                 | Status                                  |
+| --- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1   | [063 — Foundations: instrumentation & colour pipeline](063-render-foundations-instrumentation.md) | perf HUD + benchmark harness + baselines; linear/tonemap decision; A/B scaffolding       | done                                    |
+| 2   | [064 — Hybrid world lighting](064-hybrid-world-lighting.md)                                       | real sun light on the prelit world without double-counting (indirect/direct split)       | done                                    |
+| 3   | [065 — Cascaded shadows](065-cascaded-shadows.md)                                                 | buildings/cars/peds cast real shadows: CSM, static-caster caching, LOD shadow proxies    | done (core)                             |
+| 4   | [066 — Modern asset step in perfect-map-builder](066-pmb-modern-asset-step.md)                    | opensa-native format (meshopt/KTX2) + baked channels: AO, sun visibility, emissive masks | idea (next)                             |
+| 5   | [067 — PBR sky & clouds](067-pbr-sky-clouds.md)                                                   | physically-based sky, 512×1 horizon LUT, weather clouds (skybox → volumetric)            | done                                    |
+| 6   | [068 — Unified fog & aerial perspective](068-unified-fog.md)                                      | fog that cuts the horizon (no more ocean-through-haze), height fog, one shared fog chunk | done                                    |
+| 7   | [069 — Water](069-water.md)                                                                       | realistic water: waves, depth-based shores, reflections (planar/SSR), underwater         | 🅿️ v1 parked → 0.5.0                    |
+| 8   | [070 — Local lights: headlights & street lamps](070-local-lights.md)                              | real projected headlights + clustered lamp pool; coronas demoted to distant impostors    | done                                    |
+| 9   | [071 — Night & emissive atmosphere](071-night-emissive-atmosphere.md)                             | glowing night vertex/tobj/neon, moon light, dawn/dusk grading calibration                | done                                    |
+| 10  | [072 — Quality tiers & default flip](072-quality-tiers-default-flip.md)                           | low/med/high/ultra presets, budgets enforced, new pipeline becomes default, cleanup      | 🅿️ parked (interim modern default live) |
 
 Dependencies: 063 → 064 → 065; 066 feeds 065 (shadow proxies) and upgrades 064/071 (baked channels) but starts after 065 proves what data is needed; 067 → 068 → 069 (LUT → fog → water); 070 needs 064 (a lit world to receive light); 071 needs 067 + 070; 072 closes.
 

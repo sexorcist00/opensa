@@ -508,8 +508,11 @@ function bootstrap(
           skylight: 0.6,
           windowGlow: 1.0,
         },
-        // Rendering-overhaul master switch (plan 063) — 'classic' until the modern stages land (064+).
-        pipeline: 'classic',
+        // Rendering-overhaul master switch (plan 063). DEFAULT-FLIPPED to 'modern' (2026-07-10): the whole
+        // chain (064–071) is on by default — hybrid sun, CSM shadows, PBR sky+LUT, unified fog, local lights,
+        // night emissives. Volumetric clouds stay OFF (heavy; ultra-tier). The formal quality-tier ladder +
+        // budget contract is plan 072, PARKED for now — this is a straight "everything but volumetric" flip.
+        pipeline: 'modern',
         // Procedural ground clutter (procobj.dat; plan 042) — per-category, live-tunable in debug → ProcObj.
         procobj: {
           bushes: { density: 1, drawDistance: 80, enabled: true },
@@ -521,7 +524,7 @@ function bootstrap(
           underwater: { density: 1, drawDistance: 60, enabled: true },
         },
         shadows: { distance: 800, enabled: true },
-        sky: { density: 0.96, exposure: 0.5, model: 'classic', mood: 0.7, pbrExposure: 0.55, weight: 0.4 },
+        sky: { density: 0.96, exposure: 0.5, model: 'pbr', mood: 0.7, pbrExposure: 0.55, weight: 0.4 },
         ssao: { enabled: true, intensity: 1.5, radius: 0.2 },
         stars: { enabled: true },
         sun: { godrays: true, godraysSize: 30, sunSize: 15 },

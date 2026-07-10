@@ -1,5 +1,14 @@
 # 072 — Quality tiers, default flip, cleanup
 
+**Status: 🅿️ PARKED (2026-07-10, user's call).** An INTERIM default flip is live instead: `graphics.pipeline`
+defaults to `'modern'` and `sky.model` to `'pbr'` — the whole 064–071 chain on by default, EXCEPT volumetric
+clouds (`clouds.volumetric` stays false — heavy). Every stage keeps its individual debug slider. The FORMAL
+work this plan still owns — the low/medium/high/ultra ladder, the ≤16.6 ms budget contract, the GPU-string
+auto-pick, and the classic-path cleanup — is deferred until after the user has lived with the modern default
+for a while. Volumetric clouds + water-shore + SSR are the natural ultra-tier members when it resumes.
+
+---
+
 Part of the [rendering overhaul chain](062-rendering-overhaul.md). The closing plan: depends on everything before it. The chain isn't "done" until the modern pipeline is the DEFAULT and the budgets hold on real hardware tiers.
 
 ## Context
