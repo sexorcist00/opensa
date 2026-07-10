@@ -20,6 +20,41 @@ Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [0
 6. **Budget**: ≤ 1.0 ms at night in LV (worst corona/lamp density) for the pool term + projector.
 7. **Wall-correct beams need normals; ground-only is the MVP.** Climbing the beam up walls uses N·L, so it wants decent normals — the map-optimizer conditioning (welded smooth normals, shipped) + 002's lit world provide them. A **ground-only** pool (assume an up-normal + cone) is the cheap fallback if per-fragment N·L is too costly or an area's normals are unreliable: ship the road pool first (the visible win), add the wall response after.
 
+## Vehicle-lamp slice SHIPPED (2026-07-10 — the user-requested first half)
+
+The user asked for the vehicle side first, done properly:
+
+1. **The classic SA lamp-texture swap wired**: `build-vehicle.tagHeadlights` had already paired
+   `vehiclelights128` ↔ `vehiclelightson128` (from vehicle.txd, same UVs) into `userData.lightsOnMap/OffMap`
+   — but nothing consumed it. `setLamps` now swaps the material map when the lights turn on/off, on top of
+   the existing per-type emissive (head warm-white / tail red, brake brightens).
+2. **The world-shader LOCAL-LIGHT POOL core landed** (`worldLocalLightUniforms`, 8 slots, plan 070's
+   central mechanism): per-fragment point/spot term with smooth radius falloff, cone, and **N·L via a new
+   `vWsNormal` varying — beams follow road/kerbs/walls** (the per-fragment approach the plan chose over
+   decals). Empty pool → `uLocalCount 0` → early-out (day cost ≈ 0). Modern pipeline only.
+3. **Lamp identification RE-DONE from the data (two user-found bugs; final state: "все супер выглядит").**
+   - _admiral (W123 mod) showed no lights._ Dumping both DFFs disproved this repo's own comment ("the marker
+     colour is a per-lamp id, NOT front/rear"): SA encodes the lamp in the **material MARKER COLOUR**, and
+     stock `admiral` and the mod use the identical four — `255,175,0` front-left, `0,255,200` front-right,
+     `185,255,0` rear-left, `255,60,0` rear-right. We were instead guessing by centroid-to-dummy distance,
+     which fails whenever the lamps live in a NON-identity frame (the mod puts them in `light_glass`; stock
+     keeps them in `chassis`, which is why only stock worked). `lightType` now comes from the marker
+     (transform-independent); the dummy heuristic stays as a fallback for unmarked models.
+   - _stock `benson` lit up as blank white slabs._ The emissive was a flat colour that swamped the texture.
+     Lamps now glow **through their own texture** (`emissiveMap = map`) — the lit atlas cell keeps its
+     reflector/bulb detail and the red tail hue; the emissive only drives how hard it blooms. The atlas swap
+     (`vehiclelights128` → `vehiclelightson128`, both in generic `vehicle.txd`) sets `needsUpdate` properly.
+   - Per-material lamp handling extracted to `applyLampState` (complexity cap).
+4. **Vehicle lamps feed the pool**: slots 0/1 = headlight SPOTS (forward-down ~38° cone, warm, radius 26 u,
+   the road beam finally exists), slots 2/3 = tail POINTS (red: dim running → bright + wider on brake — the
+   asphalt behind glows red when braking). Street lamps join the pool with the LightDef registry (the rest
+   of this plan).
+5. **Calibrated after the first in-game look** (user: "работает супер", but overexposed): shader wrap term
+   0.45 → 0.25, squared cone falloff (the plateau read as a hard searchlight blob), and the magnitudes moved
+   into config — `headlights.beamIntensity` (2.2), `beamRange` (34), `brakeIntensity` (1.6) with sliders in
+   Graphics. Measured why the first pool was invisible: a headlight grazes the road, so hard N·L gave
+   L≈0.14 at 6 m (invisible); wrap lighting lifts it to ≈1.6 while walls/kerbs still respond to N·L.
+
 ## Tasks
 
 - [ ] `LightDef` extraction from 2dfx light records (reuse `collectCoronas` walk — one collection, two consumers: corona points + light defs) incl. on-hours; unit tests on fixture models (streetlight DFFs).

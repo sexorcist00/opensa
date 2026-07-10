@@ -67,6 +67,7 @@ import {
   worldCsmUniforms,
   worldDayTintUniform,
   worldFogUniforms,
+  worldLocalLightUniforms,
   worldShadowUniforms,
   worldSunUniforms,
   worldTintUniform,
@@ -480,7 +481,14 @@ function bootstrap(
         // World 2dfx particle effects (plan 044) — drawDistance replaces the systems' authored
         // CULLDIST (vanilla culls fire at 35 m — too close).
         effects: { drawDistance: 150, enabled: true },
-        headlights: { coronaIntensity: 0.8, coronaSize: 0.28, intensity: 1 },
+        headlights: {
+          beamIntensity: 2.2,
+          beamRange: 34,
+          brakeIntensity: 1.6,
+          coronaIntensity: 0.8,
+          coronaSize: 0.28,
+          intensity: 1,
+        },
         lights: { enabled: true, nightEndHour: 6, nightStartHour: 20 },
         moon: { brightness: 1, elevationDeg: 5, size: 55 },
         night: {
@@ -1061,6 +1069,7 @@ function bootstrap(
         () => game.getConfig().graphics.headlights,
         GLOW_LAYER,
         game.getCamera(),
+        worldLocalLightUniforms, // plan 070: lamp lights land on the road/walls via the world-shader pool
       ),
     );
 

@@ -1040,6 +1040,31 @@ export function DebugOverlay({
                   actions.setEffects(patch);
                 }}
               />
+              {(
+                [
+                  ['beamIntensity', 'BEAM POWER (070)', 0, 6, 0.1],
+                  ['beamRange', 'BEAM RANGE (070)', 10, 60, 1],
+                  ['brakeIntensity', 'BRAKE POOL (070)', 0, 5, 0.1],
+                ] as const
+              ).map(([key, label, min, max, step]) => (
+                <div key={key}>
+                  <div style={styles.groupLabel}>
+                    {label}: {headlights[key].toFixed(2)}
+                  </div>
+                  <input
+                    max={max}
+                    min={min}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      setHeadlights((prev) => ({ ...prev, [key]: value }));
+                      actions.setHeadlights({ [key]: value });
+                    }}
+                    step={step}
+                    type="range"
+                    value={headlights[key]}
+                  />
+                </div>
+              ))}
               <div style={styles.groupLabel}>HEADLIGHT GLOW: {headlights.intensity.toFixed(2)}</div>
               <input
                 max={4}

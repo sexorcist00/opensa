@@ -28,6 +28,9 @@ function config(collisionDrawDistance: number): Config {
       clouds: { coverage: 0.5, opacity: 0.85, volumetric: false },
       effects: { drawDistance: 150, enabled: true },
       headlights: {
+        beamIntensity: 2.2,
+        beamRange: 34,
+        brakeIntensity: 1.6,
         coronaIntensity: 0.8,
         coronaSize: 0.28,
         intensity: 1,

@@ -102,6 +102,7 @@ export {
   worldCsmUniforms,
   worldDayTintUniform,
   worldFogUniforms,
+  worldLocalLightUniforms,
   worldShadowUniforms,
   worldSunUniforms,
   worldTintUniform,

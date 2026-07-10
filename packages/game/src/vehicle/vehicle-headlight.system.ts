@@ -2,17 +2,29 @@ import {
   AdditiveBlending,
   type Camera,
   CanvasTexture,
+  type Color,
   type Mesh,
   type MeshStandardMaterial,
   type Object3D,
   Sprite,
   SpriteMaterial,
+  type Texture,
   Vector3,
+  type Vector4,
 } from 'three';
 
 import type { System } from '../core/system';
 import type { HeadlightConfig } from '../interfaces/config.interface';
 import type { EnterableVehicle, EnterVehicleSystem } from './enter-vehicle.system';
+
+/** The world-shader local-light pool surface (structurally = renderware's `worldLocalLightUniforms`).
+ *  Slots this system fills: 0/1 = headlight spots, 2/3 = tail/brake points (plan 070, vehicle part). */
+export interface LocalLightSink {
+  uLocalColor: { value: Color[] };
+  uLocalCount: { value: number };
+  uLocalDir: { value: Vector4[] };
+  uLocalPos: { value: Vector4[] };
+}
 
 /** Glow / corona colours by light type (rendered colour, not the marker colour): warm-white head, red tail. */
 const HEAD_COLOR = 0xfff2d0;
@@ -38,6 +50,7 @@ const REAR_RUNNING = 0.4;
 export class VehicleHeadlightSystem implements System {
   readonly name = 'vehicle-headlights';
 
+  private readonly beamDir = new Vector3();
   private readonly camera: Camera;
   /** Camera position in the streaming root's local (GTA Z-up) space — for the per-lamp corona facing fade. */
   private readonly camLocal = new Vector3();
@@ -48,6 +61,7 @@ export class VehicleHeadlightSystem implements System {
   private readonly enter: EnterVehicleSystem;
   private readonly forward = new Vector3();
   private readonly isNight: () => boolean;
+  private readonly lights?: LocalLightSink;
   private lit: EnterableVehicle | null = null;
   private readonly root: Object3D;
   /** The lit car's tail/brake glass materials — their emissive brightens per-frame while braking. */
@@ -61,12 +75,14 @@ export class VehicleHeadlightSystem implements System {
     config: () => HeadlightConfig,
     glowLayer: number,
     camera: Camera,
+    lights?: LocalLightSink,
   ) {
     this.enter = enter;
     this.isNight = isNight;
     this.root = root;
     this.config = config;
     this.camera = camera;
+    this.lights = lights;
 
     const map = coronaTexture(); // soft round glow
     this.coronas = [HEAD_COLOR, HEAD_COLOR, TAIL_COLOR, TAIL_COLOR].map((color) => {
@@ -100,6 +116,9 @@ export class VehicleHeadlightSystem implements System {
       for (const corona of this.coronas) {
         corona.visible = false;
       }
+      if (this.lights) {
+        this.lights.uLocalCount.value = 0; // day / on foot: the pool term early-outs
+      }
 
       return;
     }
@@ -109,6 +128,57 @@ export class VehicleHeadlightSystem implements System {
       mat.emissiveIntensity = tail;
     }
     this.placeCoronas(target, cfg, braking);
+    this.fillLightPool(target, cfg, braking);
+  }
+
+  /** Feed the world-shader light pool (plan 070, vehicle part): two forward-down headlight SPOTS that pool
+   *  on the road/walls ahead, and two red tail POINTS behind (dim running, bright + wider while braking).
+   *  Positions/directions are lifted from root-local (GTA Z-up) lamp space into three world space. */
+  private fillLightPool(vehicle: EnterableVehicle, cfg: HeadlightConfig, braking: boolean): void {
+    const sink = this.lights;
+    if (!sink) {
+      return;
+    }
+    const [hx, hy, hz] = vehicle.halfExtents;
+    const front = (vehicle.object.userData.headlightDummy as [number, number, number] | null) ?? [
+      hx * 0.7,
+      hy * 0.9,
+      -hz * 0.3,
+    ];
+    const rear = (vehicle.object.userData.taillightDummy as [number, number, number] | null) ?? [
+      hx * 0.7,
+      -hy * 0.9,
+      -hz * 0.3,
+    ];
+    const { position, quaternion } = vehicle.object;
+    // Headlight beams aim forward and DOWN so the pool lands on the asphalt a few metres ahead.
+    this.beamDir.set(0, 1, -0.5).normalize().applyQuaternion(quaternion);
+    this.beamDir.transformDirection(this.root.matrixWorld);
+    const beam = cfg.intensity;
+    const slots: [number, number, number, number, boolean][] = [
+      [front[0], front[1], front[2], 0, false],
+      [-front[0], front[1], front[2], 1, false],
+      [rear[0], rear[1], rear[2], 2, true],
+      [-rear[0], rear[1], rear[2], 3, true],
+    ];
+    for (const [lx, ly, lz, index, isRear] of slots) {
+      this.tmp.set(lx, ly, lz).applyQuaternion(quaternion);
+      this.tmp.set(position.x + this.tmp.x, position.y + this.tmp.y, position.z + this.tmp.z);
+      this.root.localToWorld(this.tmp);
+      if (isRear) {
+        sink.uLocalPos.value[index].set(this.tmp.x, this.tmp.y, this.tmp.z, braking ? 10 : 5);
+        const rear = (braking ? cfg.brakeIntensity : cfg.brakeIntensity * 0.2) * beam;
+        sink.uLocalColor.value[index].setRGB(1, 0.08, 0.04).multiplyScalar(rear);
+        sink.uLocalDir.value[index].set(0, 0, 1, 2); // point light (no cone)
+      } else {
+        // A real headlight grazes the road — the shader's wrap term plus this range make the pool read at
+        // 3–25 m; intensity/range are config knobs (the first pass overshot badly, see plan 070).
+        sink.uLocalPos.value[index].set(this.tmp.x, this.tmp.y, this.tmp.z, cfg.beamRange);
+        sink.uLocalColor.value[index].setRGB(1, 0.93, 0.72).multiplyScalar(cfg.beamIntensity * beam);
+        sink.uLocalDir.value[index].set(this.beamDir.x, this.beamDir.y, this.beamDir.z, 0.55);
+      }
+    }
+    sink.uLocalCount.value = 4;
   }
 
   /** Place + fade the four lamp coronas at the model's `headlights`/`taillights` dummies (mirrored ±X), each
@@ -152,6 +222,47 @@ export class VehicleHeadlightSystem implements System {
   }
 }
 
+/**
+ * Turn ONE tagged lamp material on/off; returns its lamp type (or null when it is not a lamp).
+ *
+ * Two mechanisms, both authentic: stock cars swap SA's shared lamp atlas to its lit copy
+ * (`vehiclelights128` → `vehiclelightson128`, identical UVs, both in the generic vehicle.txd); and the lamp
+ * GLOWS THROUGH ITS OWN TEXTURE via `emissiveMap` — an emissive-only lamp renders as a blank white slab
+ * (stock `benson`), while the map keeps the reflector/bulb detail and the red tail hue. Custom models that
+ * build the lamp glass as their own object (admiral W123) have nothing to swap; the emissive does it alone.
+ */
+function applyLampState(mat: MeshStandardMaterial, on: boolean, intensity: number): 'head' | 'tail' | null {
+  const lightsOn = mat.userData.lightsOnMap as Texture | undefined;
+  const lightsOff = mat.userData.lightsOffMap as Texture | undefined;
+  if (lightsOn && lightsOff) {
+    mat.map = on ? lightsOn : lightsOff;
+    mat.needsUpdate = true;
+  }
+  const type = mat.userData.lightType as 'head' | 'tail' | undefined;
+  if (!type) {
+    return null;
+  }
+  if (!on) {
+    mat.emissive.setHex(0x000000);
+    mat.emissiveMap = null;
+    mat.emissiveIntensity = 1;
+    mat.needsUpdate = true;
+
+    return type;
+  }
+  if (mat.map) {
+    mat.emissiveMap = mat.map;
+    mat.emissive.setHex(0xffffff);
+  } else {
+    mat.emissiveMap = null;
+    mat.emissive.setHex(type === 'head' ? HEAD_COLOR : TAIL_COLOR);
+  }
+  mat.emissiveIntensity = (type === 'head' ? HEAD_EMISSIVE : TAIL_RUN_EMISSIVE) * intensity;
+  mat.needsUpdate = true;
+
+  return type;
+}
+
 /** A soft round corona (gentle glow, faint halo — NOT a solid disc) for the additive lamp flares. */
 function coronaTexture(): CanvasTexture {
   const size = 128;
@@ -183,18 +294,7 @@ function setLamps(vehicle: EnterableVehicle, on: boolean, intensity: number): Me
     }
     for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
       const mat = material as MeshStandardMaterial;
-      const type = mat.userData.lightType as 'head' | 'tail' | undefined;
-      if (!type) {
-        continue;
-      }
-      if (!on) {
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 1;
-        continue;
-      }
-      mat.emissive.setHex(type === 'head' ? HEAD_COLOR : TAIL_COLOR);
-      mat.emissiveIntensity = (type === 'head' ? HEAD_EMISSIVE : TAIL_RUN_EMISSIVE) * intensity;
-      if (type === 'tail') {
+      if (applyLampState(mat, on, intensity) === 'tail') {
         tails.push(mat);
       }
     }

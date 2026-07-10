@@ -105,7 +105,7 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
       </>
     ),
     label: 'Run Gostown Paradise [web]',
-    loadGame: { radius: 400, startMinutes: 360, weather: 'EXTRASUNNY_SMOG_LA' },
+    loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
     mainCharacter: 'BMYPOL1',
     playerSpawn: [1531.15, -1271.89, 581.74],
     teleports: [{ coords: [1531.15, -1271.89, 581.74], label: 'Downtown' }],
@@ -123,7 +123,7 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
       </>
     ),
     label: 'Run San Andreas [local only]',
-    loadGame: { radius: 400, startMinutes: 360, weather: 'EXTRASUNNY_SMOG_LA' },
+    loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
     mainCharacter: 'BMYPOL1',
     playerSpawn: [2495, -1675, 16],
     teleports: [...SA_TELEPORTS],

@@ -18,6 +18,7 @@ import {
   worldCsmUniforms,
   worldDayTintUniform,
   worldFogUniforms,
+  worldLocalLightUniforms,
   worldShadowUniforms,
   worldSunUniforms,
   worldTintUniform,
@@ -180,7 +181,9 @@ describe('buildWorldMaterial', () => {
         expect(shader.vertexShader).toContain('vSunNdl = mix( uSunFlat,');
         // fragment: albedo captured BEFORE the prelit multiply feeds the direct term
         expect(shader.fragmentShader).toContain('vec3 saTexel = diffuseColor.rgb;');
-        expect(shader.fragmentShader).toContain('saTexel * uSunColor * vSunNdl * wsShadow * uDirectScale');
+        expect(shader.fragmentShader).toContain(
+          'saTexel * ( uSunColor * vSunNdl * wsShadow * uDirectScale + saLocalLight() )',
+        );
       }
       // classic defaults keep the modern term mixed out entirely
       expect(worldSunUniforms.uPipelineMix.value).toBe(0);
@@ -219,6 +222,18 @@ describe('buildWorldMaterial', () => {
       // the classic branch keeps three's exact exp² term
       expect(shader.fragmentShader).toContain('exp( - fogDensity * fogDensity * vFogDepth * vFogDepth )');
       expect(worldFogUniforms.uFogMix.value).toBe(0); // classic default inert
+    });
+
+    it('injects the local-light pool (plan 070): headlight/lamp light lands on the world with N·L', () => {
+      const built = buildWorldMaterial(material(), geometry());
+      const shader = shaderStub();
+      built.onBeforeCompile(shader, undefined as never);
+      expect(shader.uniforms.uLocalCount).toBe(worldLocalLightUniforms.uLocalCount);
+      expect(shader.uniforms.uLocalPos).toBe(worldLocalLightUniforms.uLocalPos);
+      expect(shader.vertexShader).toContain('vWsNormal = wsNormal');
+      expect(shader.fragmentShader).toContain('saLocalLight()'); // added into the modern direct term
+      expect(shader.fragmentShader).toContain('dot( vWsNormal, toL )'); // beams follow geometry (walls/slopes)
+      expect(worldLocalLightUniforms.uLocalCount.value).toBe(0); // empty pool → early-out (day cost 0)
     });
 
     it('captures saTexel before the night prelit multiply (the direct term lights raw albedo)', () => {

@@ -1,6 +1,6 @@
 import type { Texture } from 'three';
 
-import { Color, DoubleSide, FrontSide, Matrix4, MeshBasicMaterial, Vector2, Vector3 } from 'three';
+import { Color, DoubleSide, FrontSide, Matrix4, MeshBasicMaterial, Vector2, Vector3, Vector4 } from 'three';
 
 import type { RWGeometry, RWMaterial } from '../parsers/binary/types';
 
@@ -91,6 +91,7 @@ const SHADOW_VERTEX =
   'wsN = mat3( modelMatrix ) * wsN;\n' +
   'float wsNLen = dot( wsN, wsN );\n' +
   'vec3 wsNormal = wsN * inversesqrt( max( wsNLen, 1e-8 ) );\n' +
+  'vWsNormal = wsNormal;\n' +
   'vSunNdl = mix( uSunFlat, max( dot( wsNormal, uSunDir ), 0.0 ), step( 0.25, wsNLen ) );';
 
 /**
@@ -134,6 +135,58 @@ export const worldFogUniforms = {
   /** Distance where fog starts ramping (timecyc `fogStart` × scale; 0 = classic exp² shape). */
   uFogStartDistance: { value: 0 },
 };
+
+/** Local-light pool size (plan 070): the world shader iterates this fixed array — vehicle lamps now,
+ *  street lamps join later. Count 0 (day / no lights) exits immediately. */
+export const LOCAL_LIGHT_POOL = 8;
+
+/**
+ * Local lights on the world (plan 070, modern pipeline): a fixed pool of point/spot lights evaluated
+ * per fragment inside the world shader — real projected light on roads/walls (headlight beams, brake
+ * pools), which three's own lights can never give the manual prelit material. Slots are filled by the
+ * game (vehicle lamps first; the street-lamp registry arrives with the full 070). Position/direction in
+ * three WORLD space; colour premultiplied by intensity; `uLocalDir[i].w` = cone cosine (2.0 = point).
+ */
+export const worldLocalLightUniforms = {
+  uLocalColor: { value: Array.from({ length: LOCAL_LIGHT_POOL }, () => new Color(0, 0, 0)) },
+  uLocalCount: { value: 0 },
+  uLocalDir: { value: Array.from({ length: LOCAL_LIGHT_POOL }, () => new Vector4(0, 0, 1, 2)) },
+  uLocalPos: { value: Array.from({ length: LOCAL_LIGHT_POOL }, () => new Vector4(0, 0, 0, 1)) },
+};
+
+/** Fragment: the pool term — smooth radius falloff × optional cone × N·L (beams climb walls correctly). */
+const LOCAL_LIGHTS_FRAGMENT_PARS =
+  'uniform int uLocalCount;\n' +
+  'uniform vec4 uLocalPos[ 8 ];\n' +
+  'uniform vec3 uLocalColor[ 8 ];\n' +
+  'uniform vec4 uLocalDir[ 8 ];\n' +
+  'varying vec3 vWsNormal;\n' +
+  'vec3 saLocalLight() {\n' +
+  '\tvec3 acc = vec3( 0.0 );\n' +
+  '\tfor ( int i = 0; i < 8; i++ ) {\n' +
+  '\t\tif ( i >= uLocalCount ) break;\n' +
+  '\t\tvec3 toL = uLocalPos[ i ].xyz - vWsPos;\n' +
+  '\t\tfloat d = length( toL );\n' +
+  '\t\tfloat radius = uLocalPos[ i ].w;\n' +
+  '\t\tif ( d >= radius ) continue;\n' +
+  '\t\ttoL /= max( d, 0.001 );\n' +
+  '\t\tfloat atten = 1.0 - d / radius;\n' +
+  '\t\tatten *= atten;\n' +
+  // Cone falloff is SQUARED toward the rim: a flat plateau reads as a hard-edged searchlight blob.
+  '\t\tfloat cone = 1.0;\n' +
+  '\t\tif ( uLocalDir[ i ].w < 1.5 ) {\n' +
+  '\t\t\tcone = smoothstep( uLocalDir[ i ].w, min( uLocalDir[ i ].w + 0.30, 1.0 ), dot( -toL, uLocalDir[ i ].xyz ) );\n' +
+  '\t\t\tcone *= cone;\n' +
+  '\t\t}\n' +
+  // WRAP lighting: a headlight grazes the road almost tangentially, so a hard N·L collapses the beam to
+  // nothing (measured: 0.08 at 6 m). Wrapping keeps the road pool readable while walls/kerbs still take
+  // more light when they face the lamp — the plan's "ground pool first, wall response too" in one term.
+  '\t\tfloat wrap = uLocalDir[ i ].w > 1.5 ? 0.0 : 0.25;\n' +
+  '\t\tfloat ndl = clamp( ( dot( vWsNormal, toL ) + wrap ) / ( 1.0 + wrap ), 0.0, 1.0 );\n' +
+  '\t\tacc += uLocalColor[ i ] * ( atten * cone * ndl );\n' +
+  '\t}\n' +
+  '\treturn acc;\n' +
+  '}\n';
 
 /** Replaces three's `fog_fragment`: the stock exp² factor (bit-exact classic) upgraded on the modern path
  *  with the LUT colour + the horizon cut. Compiled under USE_FOG like the include it replaces. */
@@ -305,6 +358,10 @@ export function buildWorldMaterial(
     shader.uniforms.uCsmMix = worldCsmUniforms.uCsmMix;
     shader.uniforms.uCsmSlopeBias = worldCsmUniforms.uCsmSlopeBias;
     shader.uniforms.uCsmSplits = worldCsmUniforms.uCsmSplits;
+    shader.uniforms.uLocalColor = worldLocalLightUniforms.uLocalColor;
+    shader.uniforms.uLocalCount = worldLocalLightUniforms.uLocalCount;
+    shader.uniforms.uLocalDir = worldLocalLightUniforms.uLocalDir;
+    shader.uniforms.uLocalPos = worldLocalLightUniforms.uLocalPos;
     shader.uniforms.uFogCutDistance = worldFogUniforms.uFogCutDistance;
     shader.uniforms.uFogHeightK = worldFogUniforms.uFogHeightK;
     shader.uniforms.uFogHeightMin = worldFogUniforms.uFogHeightMin;
@@ -318,7 +375,7 @@ export function buildWorldMaterial(
 
     let vertexPars =
       'uniform mat4 uWorldShadowMatrix;\nvarying vec4 vWorldShadowCoord;\n' +
-      'varying vec3 vWsPos;\nvarying float vViewDepth;\n' +
+      'varying vec3 vWsPos;\nvarying float vViewDepth;\nvarying vec3 vWsNormal;\n' +
       'uniform vec3 uSunDir;\nuniform float uSunFlat;\nvarying float vSunNdl;\n';
     let vertexBody = shader.vertexShader.replace('#include <project_vertex>', SHADOW_VERTEX);
     let fragmentPars =
@@ -326,7 +383,8 @@ export function buildWorldMaterial(
       'uniform vec3 uSunColor;\nuniform float uDirectScale;\nuniform float uIndirectScale;\n' +
       'uniform float uPipelineMix;\nvarying float vSunNdl;\n' +
       'uniform sampler2D uFogLut;\nuniform float uFogMix;\nuniform float uFogCutDistance;\n' +
-      'uniform float uFogStartDistance;\nuniform float uFogHeightK;\nuniform float uFogHeightMin;\n';
+      'uniform float uFogStartDistance;\nuniform float uFogHeightK;\nuniform float uFogHeightMin;\n' +
+      LOCAL_LIGHTS_FRAGMENT_PARS;
     let fragmentBody = shader.fragmentShader;
     // Classic (038): tint × dynamic-object shadow darkening over the whole term. Modern (064): prelit becomes
     // the INDIRECT term (shadowed areas keep their baked GI) and the real sun × NdotL × shadow is ADDED on the
@@ -338,7 +396,7 @@ export function buildWorldMaterial(
       'float wsShadow = uCsmMix > 0.5 ? csmShadow( vSunNdl ) : worldShadow();\n' +
       'vec3 saClassic = outgoingLight * uWorldTint * mix( 1.0, wsShadow, uWorldShadowStrength );\n' +
       'vec3 saModern = outgoingLight * uWorldTint * uIndirectScale\n' +
-      '\t+ saTexel * uSunColor * vSunNdl * wsShadow * uDirectScale;\n' +
+      '\t+ saTexel * ( uSunColor * vSunNdl * wsShadow * uDirectScale + saLocalLight() );\n' +
       'outgoingLight = mix( saClassic, saModern, uPipelineMix );\n' +
       'if ( uWorldShadowDebug > 0.5 ) outgoingLight = mix( csmDebugTint, outgoingLight, wsShadow );\n' +
       '#include <opaque_fragment>';

@@ -118,6 +118,19 @@ const GLASS_FRONT_ORDER = 2;
  *  share the `vehiclelights` atlas but are offset from the dummy. */
 const LAMP_DUMMY_RADIUS = 0.5;
 
+/**
+ * SA's per-lamp "magic" MATERIAL MARKER colours on the `vehiclelights*` atlas — they encode WHICH lamp the
+ * material is (verified on stock `admiral` and the W123 mod: identical four values). This is the primary,
+ * transform-independent signal; the dummy-distance heuristic below is only a fallback for models that use
+ * no markers. Everything else on the atlas (mirrors, `255,255,255`, `204,204,204` reflectors) stays dark.
+ */
+const LAMP_MARKERS = new Map<string, 'head' | 'tail'>([
+  ['0,255,200', 'head'], // front right
+  ['185,255,0', 'tail'], // rear left
+  ['255,60,0', 'tail'], // rear right
+  ['255,175,0', 'head'], // front left
+]);
+
 /** Shared inputs for building one body atomic (door / damageable panel / plain mesh). */
 interface BodyBuild {
   clump: RWClump;
@@ -582,9 +595,13 @@ function buildVehicleMaterial(
   if (isLight) {
     // Lamp materials (`vehiclelights*`) carry SA per-lamp "magic" marker colours that ALSO collide with carcol
     // markers — never render them (else garish flat green/red patches): show the lamp texture untinted. The
-    // marker colour is a per-lamp id (NOT front/rear/colour), so stash the lamp's centroid and let `tagLamps`
-    // decide head/tail by which dummy it sits at (mirrors/indicators/reverse, offset from a dummy, stay dark).
+    // marker identifies WHICH lamp (see LAMP_MARKERS) — the reliable, frame-transform-independent signal.
+    // Unmarked lamp faces fall back to `tagLamps`' nearest-dummy test (mirrors/indicators/reverse stay dark).
     material.color.setHex(0xffffff);
+    const marker = lampMarker(rw.color);
+    if (marker) {
+      material.userData.lightType = marker; // authoritative: the SA marker says which lamp this is
+    }
     const centroid = lightCentroid(geometry, materialIndex);
     if (centroid) {
       material.userData.lightCentroid = centroid;
@@ -794,6 +811,11 @@ function hiddenExtraFrames(clump: RWClump, rng: () => number): Set<number> {
   return new Set(extras.filter((a) => a !== shown).map((a) => a.frameIndex));
 }
 
+/** The lamp a `vehiclelights*` material's marker colour identifies, or null when it is not a lamp marker. */
+function lampMarker(color: readonly number[]): 'head' | 'tail' | null {
+  return LAMP_MARKERS.get(`${color[0]},${color[1]},${color[2]}`) ?? null;
+}
+
 /** Which light a lamp centroid belongs to: the nearer of the head/tail dummy within {@link LAMP_DUMMY_RADIUS},
  *  or null if it's too far from both (mirror / indicator / reverse / chrome). Falls back to the Y sign when the
  *  model has no light dummies. */
@@ -891,10 +913,28 @@ function tagHeadlights(root: Object3D, textures: Map<string, Texture>): void {
   });
 }
 
+/** Frames whose meshes ARE lamps on custom models: modders often build the headlight glass as its own
+ *  object with its own texture (`light_glass`, `stock_lights`, …) instead of using SA's shared
+ *  `vehiclelights*` atlas — those materials carry no `lightCentroid` and used to stay dark. */
+const LIGHT_FRAME_RE = /light/i;
+
+/** Bounding-box centre of a mesh in VEHICLE space (its frame transform is baked into the node). */
+function meshCentroid(mesh: Mesh, root: Object3D): [number, number, number] {
+  mesh.geometry.computeBoundingBox();
+  const box = mesh.geometry.boundingBox;
+  const centre = box ? box.getCenter(new Vector3()) : new Vector3();
+  mesh.localToWorld(centre);
+  root.worldToLocal(centre);
+
+  return [centre.x, centre.y, centre.z];
+}
+
 /**
- * Tag each candidate lamp material (those with a stashed `lightCentroid`) with `userData.lightType` by which
- * dummy it sits nearest — so the headlight system glows only real head/tail lamps, not mirrors/indicators/
- * reverse lights (which are offset from the dummies and left untagged).
+ * Tag each candidate lamp material with `userData.lightType` by which dummy it sits nearest — so the
+ * headlight system glows only real head/tail lamps, not mirrors/indicators/reverse lights (which are
+ * offset from a dummy and left untagged). Candidates are materials on SA's shared `vehiclelights*` atlas
+ * (they stashed a per-material `lightCentroid`) PLUS every material of a mesh living in a `*light*` frame
+ * (custom models: `light_glass`, `stock_lights`) — the latter fall back to the mesh's own centroid.
  */
 function tagLamps(root: Object3D, head: null | readonly number[], tail: null | readonly number[]): void {
   root.traverse((object) => {
@@ -902,10 +942,15 @@ function tagLamps(root: Object3D, head: null | readonly number[], tail: null | r
     if (!mesh.isMesh) {
       return;
     }
+    const lightFrame = LIGHT_FRAME_RE.test(mesh.name) || LIGHT_FRAME_RE.test(mesh.parent?.name ?? '');
+    const fallback = lightFrame ? meshCentroid(mesh, root) : null;
     for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-      const centroid = material.userData.lightCentroid as readonly number[] | undefined;
-      if (!centroid) {
-        continue;
+      if (material.userData.lightType) {
+        continue; // already identified by its SA marker colour — the authoritative signal
+      }
+      const centroid = (material.userData.lightCentroid as readonly number[] | undefined) ?? fallback;
+      if (!centroid || material.transparent) {
+        continue; // untextured glass panes stay glass; only opaque lamp faces glow
       }
       const type = lampSide(centroid, head, tail);
       if (type) {
