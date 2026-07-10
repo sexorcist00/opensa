@@ -20,6 +20,7 @@ import {
   worldEmissiveUniforms,
   worldFogUniforms,
   worldLocalLightUniforms,
+  worldMoonUniforms,
   worldShadowUniforms,
   worldSunUniforms,
   worldTintUniform,
@@ -182,9 +183,7 @@ describe('buildWorldMaterial', () => {
         expect(shader.vertexShader).toContain('vSunNdl = mix( uSunFlat,');
         // fragment: albedo captured BEFORE the prelit multiply feeds the direct term
         expect(shader.fragmentShader).toContain('vec3 saTexel = diffuseColor.rgb;');
-        expect(shader.fragmentShader).toContain(
-          'saTexel * ( uSunColor * vSunNdl * wsShadow * uDirectScale + saLocalLight() )',
-        );
+        expect(shader.fragmentShader).toContain('uSunColor * vSunNdl * wsShadow * uDirectScale');
       }
       // classic defaults keep the modern term mixed out entirely
       expect(worldSunUniforms.uPipelineMix.value).toBe(0);
@@ -235,6 +234,19 @@ describe('buildWorldMaterial', () => {
       expect(shader.fragmentShader).toContain('saLocalLight()'); // added into the modern direct term
       expect(shader.fragmentShader).toContain('dot( vWsNormal, toL )'); // beams follow geometry (walls/slopes)
       expect(worldLocalLightUniforms.uLocalCount.value).toBe(0); // empty pool → early-out (day cost 0)
+    });
+
+    it('adds an un-shadowed wrapped moon term (plan 071), inert at its zero default', () => {
+      const built = buildWorldMaterial(material(), geometry());
+      const shader = shaderStub();
+      built.onBeforeCompile(shader, undefined as never);
+      expect(shader.uniforms.uMoonColor).toBe(worldMoonUniforms.uMoonColor);
+      expect(shader.uniforms.uMoonDir).toBe(worldMoonUniforms.uMoonDir);
+      // wrapped: moonlight is a huge soft source, a hard terminator would read as a second harsh sun
+      expect(shader.vertexShader).toContain('( dot( wsNormal, uMoonDir ) + 0.6 ) / 1.6');
+      // NOT multiplied by wsShadow — the moon lifts form even inside a building's sun shadow
+      expect(shader.fragmentShader).toContain('uMoonColor * vMoonNdl');
+      expect(worldMoonUniforms.uMoonColor.value.getHex()).toBe(0x000000); // classic default: no moonlight
     });
 
     it('glows baked night sources (plan 071) only on night-prelit models, inert at boost 0', () => {

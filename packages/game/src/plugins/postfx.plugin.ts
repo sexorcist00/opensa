@@ -44,6 +44,8 @@ export class PostFxPlugin implements Plugin {
 
   private bloom: BloomEffect | null = null;
   private bloomPass: EffectPass | null = null;
+  /** Per-frame threshold override (plan 071 night profile); falls back to `config.graphics.bloom.threshold`. */
+  private readonly bloomThreshold?: () => number;
   private composer: EffectComposer | null = null;
   private readonly glowLayer: number;
   private godRays: GodRaysEffect | null = null;
@@ -64,9 +66,10 @@ export class PostFxPlugin implements Plugin {
    * would smear undefined-size phantom quads into the normal buffer, and SSAO then multiplies large
    * flickering dark squares onto facades behind lamps.
    */
-  constructor(sunSource: Mesh, glowLayer: number) {
+  constructor(sunSource: Mesh, glowLayer: number, bloomThreshold?: () => number) {
     this.sunSource = sunSource;
     this.glowLayer = glowLayer;
+    this.bloomThreshold = bloomThreshold;
   }
 
   configChanged(config: PluginContext['config']): void {
@@ -173,6 +176,10 @@ export class PostFxPlugin implements Plugin {
     }
     if (this.bloomPass) {
       this.bloomPass.enabled = bloom.enabled;
+    }
+    if (this.bloom && this.bloomThreshold) {
+      // Night bloom profile (plan 071): lamps/neon/windows bloom at night, the daytime sky does not.
+      this.bloom.luminanceMaterial.threshold = this.bloomThreshold();
     }
     if (this.normalPass && this.ssaoPass) {
       this.normalPass.enabled = ssao.enabled; // disabled = the extra normal render is skipped (zero cost)

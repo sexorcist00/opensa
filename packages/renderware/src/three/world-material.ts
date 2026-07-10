@@ -58,6 +58,13 @@ export const worldShadowUniforms = {
  * term is mixed out), 1 the hybrid — toggling `graphics.pipeline` never rebuilds the scene or recompiles.
  * Driven per frame by the game from {@link sunSplit} curves; all values inert at their defaults.
  */
+export const worldMoonUniforms = {
+  /** Moon colour × strength (plan 071): a cool, barely-there directional grounding at night. 0 = off. */
+  uMoonColor: { value: new Color(0, 0, 0) },
+  /** Moon direction in three world space (towards the moon). */
+  uMoonDir: { value: new Vector3(0, 1, 0) },
+};
+
 export const worldSunUniforms = {
   /** Multiplier on the sun NdotL term (0 = classic). From the {@link sunSplit} curves × config. */
   uDirectScale: { value: 0 },
@@ -92,7 +99,9 @@ const SHADOW_VERTEX =
   'float wsNLen = dot( wsN, wsN );\n' +
   'vec3 wsNormal = wsN * inversesqrt( max( wsNLen, 1e-8 ) );\n' +
   'vWsNormal = wsNormal;\n' +
-  'vSunNdl = mix( uSunFlat, max( dot( wsNormal, uSunDir ), 0.0 ), step( 0.25, wsNLen ) );';
+  'vSunNdl = mix( uSunFlat, max( dot( wsNormal, uSunDir ), 0.0 ), step( 0.25, wsNLen ) );\n' +
+  // Moon N·L, wrapped: moonlight is a huge soft source — a hard terminator reads as a second harsh sun.
+  'vMoonNdl = mix( 0.5, clamp( ( dot( wsNormal, uMoonDir ) + 0.6 ) / 1.6, 0.0, 1.0 ), step( 0.25, wsNLen ) );';
 
 /**
  * Cascaded shadows (plan 065): three view-sliced maps replace the single 45 m one on the modern pipeline.
@@ -365,6 +374,8 @@ export function buildWorldMaterial(
     shader.uniforms.uSunColor = worldSunUniforms.uSunColor;
     shader.uniforms.uSunDir = worldSunUniforms.uSunDir;
     shader.uniforms.uSunFlat = worldSunUniforms.uSunFlat;
+    shader.uniforms.uMoonColor = worldMoonUniforms.uMoonColor;
+    shader.uniforms.uMoonDir = worldMoonUniforms.uMoonDir;
     shader.uniforms.uCsmBias = worldCsmUniforms.uCsmBias;
     shader.uniforms.uCsmMaps = worldCsmUniforms.uCsmMaps;
     shader.uniforms.uCsmMapSize = worldCsmUniforms.uCsmMapSize;
@@ -391,7 +402,8 @@ export function buildWorldMaterial(
     let vertexPars =
       'uniform mat4 uWorldShadowMatrix;\nvarying vec4 vWorldShadowCoord;\n' +
       'varying vec3 vWsPos;\nvarying float vViewDepth;\nvarying vec3 vWsNormal;\n' +
-      'uniform vec3 uSunDir;\nuniform float uSunFlat;\nvarying float vSunNdl;\n';
+      'uniform vec3 uSunDir;\nuniform float uSunFlat;\nvarying float vSunNdl;\n' +
+      'uniform vec3 uMoonDir;\nvarying float vMoonNdl;\n';
     let vertexBody = shader.vertexShader.replace('#include <project_vertex>', SHADOW_VERTEX);
     let fragmentPars =
       `${SHADOW_FRAGMENT_PARS}${CSM_FRAGMENT_PARS}uniform vec3 uWorldTint;\n` +
@@ -400,6 +412,7 @@ export function buildWorldMaterial(
       'uniform sampler2D uFogLut;\nuniform float uFogMix;\nuniform float uFogCutDistance;\n' +
       'uniform float uFogStartDistance;\nuniform float uFogHeightK;\nuniform float uFogHeightMin;\n' +
       'uniform float uEmissiveBoost;\nconst vec3 SA_LUMA = vec3( 0.2126, 0.7152, 0.0722 );\n' +
+      'uniform vec3 uMoonColor;\nvarying float vMoonNdl;\n' +
       LOCAL_LIGHTS_FRAGMENT_PARS;
     let fragmentBody = shader.fragmentShader;
     // Classic (038): tint × dynamic-object shadow darkening over the whole term. Modern (064): prelit becomes
@@ -420,7 +433,8 @@ export function buildWorldMaterial(
       'float wsShadow = uCsmMix > 0.5 ? csmShadow( vSunNdl ) : worldShadow();\n' +
       'vec3 saClassic = outgoingLight * uWorldTint * mix( 1.0, wsShadow, uWorldShadowStrength );\n' +
       'vec3 saModern = outgoingLight * uWorldTint * uIndirectScale\n' +
-      '\t+ saTexel * ( uSunColor * vSunNdl * wsShadow * uDirectScale + saLocalLight() ) + saGlow;\n' +
+      '\t+ saTexel * ( uSunColor * vSunNdl * wsShadow * uDirectScale + uMoonColor * vMoonNdl\n' +
+      '\t\t+ saLocalLight() ) + saGlow;\n' +
       'outgoingLight = mix( saClassic, saModern, uPipelineMix );\n' +
       'if ( uWorldShadowDebug > 0.5 ) outgoingLight = mix( csmDebugTint, outgoingLight, wsShadow );\n' +
       '#include <opaque_fragment>';

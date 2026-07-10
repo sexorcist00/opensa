@@ -17,7 +17,7 @@ Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [0
 5. **Wet night stretch** (rain): screen-space wet-look (darker albedo + boosted spec/reflection on roads) — only if trivially composable with 007/008 results; otherwise noted for a future chain.
 6. **Nothing here replaces prelit** — every term is additive/multiplicative around the prelit core; classic pipeline unaffected.
 
-## Core SHIPPED (2026-07-10, user-confirmed "светятся отлично")
+## SHIPPED (2026-07-10) — user-confirmed: "светятся отлично", then "выглядит огонь" after the moon/grading pass
 
 1. **HDR frame buffer — the unlock.** Bloom runs BEFORE tone mapping and the composer buffer was
    `UnsignedByte`, so EVERY emissive clipped at 1.0: a lamp at 5.0 and a sheet of white paper fed bloom the
@@ -31,7 +31,20 @@ dnBalance` with `mask = smoothstep(0.05, 0.32, luma(night) − luma(day))`. Free
    term to a constant zero. Knob `night.emissiveBoost` (1.6) + Atmosphere slider. Modern only.
 3. **Vehicle lamps bloom too** (user ask): head 1.2 → 2.4, tail 0.6 → 1.0, brake 2 → 4 — clearly past the
    bloom threshold now that HDR preserves it. Brake reads brighter than head, as in life.
-4. Regression guard: the shader tests assert that `uniform float uEmissiveBoost` and `const vec3 SA_LUMA` are
+4. **Moonlight on the WORLD (decision #4).** Until now the moon only lit dynamics (a hemisphere fill); the
+   prelit map never saw it. `worldMoonUniforms` adds a cool directional term to the modern world shader,
+   **wrapped** (`(N·L + 0.6)/1.6`) because the moon is a huge soft source — a hard terminator reads as a
+   second harsh sun — and **un-shadowed** (it lifts form even inside a building's sun shadow). Zero cost: the
+   world-space normal was already computed for 064's sun term. Scales with `moon.brightness × night.skylight`.
+5. **Time-band grading (decision #3), driven by SUN ELEVATION — never the wall clock**, so a sunset reads
+   right whenever it happens (custom timecycs, sped-up clocks). Pure `timeBandGrade()`
+   (`packages/game/src/sky/time-bands.ts`, 14 unit tests) returns `{night, golden, moon, bloomThreshold}`,
+   continuous across every boundary. It is now the ONE source for the moon term and:
+6. **Night bloom profile (decision #2).** The threshold crossfades 0.70 (day) → 0.38 (deep night), scaled by
+   the user's configured value: at night lamps/neon/lit windows bloom while dark walls stay dark; by day the
+   sky doesn't smear. Applied per frame through a `PostFxPlugin` threshold closure (mutating the config each
+   frame would broadcast a config change to every plugin).
+7. Regression guard: the shader tests assert that `uniform float uEmissiveBoost` and `const vec3 SA_LUMA` are
    DECLARED in both program variants — a stale replace anchor silently dropped them once and only the live
    GL compile caught it.
 

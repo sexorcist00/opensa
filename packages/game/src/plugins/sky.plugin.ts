@@ -430,6 +430,7 @@ export class SkyPlugin implements Plugin {
   /** 512×32 sky LUT (plan 067/068): azimuth × view-elevation → sky colour; fog/water sample it. */
   private readonly lutTarget = new WebGLRenderTarget(512, 32, { depthBuffer: false });
   private readonly material: ShaderMaterial;
+  private readonly moonDir = new Vector3(0, 1, 0);
   private readonly moonDisc: Sprite;
   private night = 0; // 0 day → 1 deep night (sun height); drives stars, moon, skylight + world tints/shadows
   private readonly sample: (hour: number) => SkySample;
@@ -545,6 +546,11 @@ export class SkyPlugin implements Plugin {
     return this.lutTarget.texture;
   }
 
+  /** Unit direction toward the moon (three world space) — the world's night light source (plan 071). */
+  getMoonDirection(): Vector3 {
+    return this.moonDir;
+  }
+
   /** Current sun direction in three world space (unit; points toward the sun). For water glints etc. */
   getSunDirection(): Vector3 {
     return this.sunDir;
@@ -554,6 +560,11 @@ export class SkyPlugin implements Plugin {
    *  (plan 038) is driven from it each frame by the game layer. */
   getSunShadow(): DirectionalLightShadow {
     return this.sun.shadow;
+  }
+
+  /** Sine of the sun's elevation (1 zenith → negative below the horizon): the driver of every time band. */
+  getSunSin(): number {
+    return this.sunDir.y;
   }
 
   install(context: PluginContext): void {
@@ -697,9 +708,10 @@ export class SkyPlugin implements Plugin {
     // Night sky glow (modern sky): the moon's cool scatter follows the sprite's direction & fade; the warm
     // urban skyglow gets BRIGHTER under cloud (the deck reflects the city light — real light pollution).
     const cosElGlow = Math.cos(MathUtils.degToRad(moon.elevationDeg));
-    this.skyBaseUniforms.uMoonDirSky.value
+    this.moonDir
       .set(MOON_AZIMUTH.x * cosElGlow, Math.sin(MathUtils.degToRad(moon.elevationDeg)), MOON_AZIMUTH.z * cosElGlow)
       .normalize();
+    this.skyBaseUniforms.uMoonDirSky.value.copy(this.moonDir);
     this.skyBaseUniforms.uMoonGlow.value
       .setRGB(0.45, 0.62, 1.0)
       .multiplyScalar(0.055 * moon.brightness * moonFade * nightCfg.skyGlow);

@@ -21,6 +21,7 @@ import { SkyPlugin, type SkySample } from '@opensa/game/plugins/sky.plugin';
 import { VehicleReflectionPlugin } from '@opensa/game/plugins/vehicle-reflection/vehicle-reflection.plugin';
 import { WaterPlugin, type WaterSample } from '@opensa/game/plugins/water.plugin';
 import { pbrHorizonAverage, pbrSkyParams } from '@opensa/game/sky/sky-params';
+import { timeBandGrade } from '@opensa/game/sky/time-bands';
 import { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
 import { StreamingSystem } from '@opensa/game/streaming/streaming.system';
 import { clockNightFactor } from '@opensa/game/time/hour-window';
@@ -71,6 +72,7 @@ import {
   worldEmissiveUniforms,
   worldFogUniforms,
   worldLocalLightUniforms,
+  worldMoonUniforms,
   worldShadowUniforms,
   worldSunUniforms,
   worldTintUniform,
@@ -710,7 +712,19 @@ function bootstrap(
       )
       .addPlugin(reflection) // vehicle env-map reflections (preset-driven)
       // Post-FX host: god rays + bloom + tone mapping + SSAO (GLOW_LAYER is hidden from its normal prepass).
-      .addPlugin(new PostFxPlugin(sky.godraysSource, GLOW_LAYER));
+      // Bloom threshold follows the time band (plan 071): low at night so lamps/neon/windows glow, high by
+      // day so the sky doesn't smear. Classic keeps the configured constant.
+      .addPlugin(
+        new PostFxPlugin(sky.godraysSource, GLOW_LAYER, () => {
+          const config = game.getConfig();
+          if (config.graphics.pipeline !== 'modern') {
+            return config.graphics.bloom.threshold;
+          }
+          const band = timeBandGrade({ overcast: 1 - sky.getSunShadow().intensity, sunSin: sky.getSunSin() });
+
+          return band.bloomThreshold * (config.graphics.bloom.threshold / 0.7);
+        }),
+      );
 
     await loadFonts(game.getConfig().fonts); // register HUD fonts before the scene/HUD render
     await game.init();
@@ -1011,6 +1025,17 @@ function bootstrap(
           SRGBColorSpace,
         );
         worldSunUniforms.uPipelineMix.value = game.getConfig().graphics.pipeline === 'modern' ? 1 : 0;
+        // Time-band grading (plan 071 §3), driven by SUN ELEVATION — never the wall clock, so a sunset reads
+        // right whenever it happens. One source for the moon term and the night bloom profile.
+        const modern = worldSunUniforms.uPipelineMix.value > 0.5;
+        const band = timeBandGrade({ overcast: 1 - sunShadow.intensity, sunSin: sky.getSunSin() });
+        // Moonlight on the WORLD (plan 071 §4): a cool, wrapped, un-shadowed directional grounding — it is a
+        // huge soft source, so it lifts form without a second harsh terminator. Scales with the moon config.
+        worldMoonUniforms.uMoonDir.value.copy(sky.getMoonDirection());
+        worldMoonUniforms.uMoonColor.value
+          .setRGB(0.34, 0.44, 0.72)
+          .multiplyScalar(modern ? band.moon * game.getConfig().graphics.moon.brightness * night.skylight * 0.5 : 0);
+
         // Unified fog (plan 068): the world fog samples the 067 sky LUT (azimuth × elevation) on the
         // modern path, ranges from timecyc fogStart/farClip (fog distance = a weather/hour MOOD), and cuts
         // hard at the far bound (geometry there resolves to pure sky colour).

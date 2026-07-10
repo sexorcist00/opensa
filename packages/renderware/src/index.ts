@@ -105,6 +105,7 @@ export {
   worldEmissiveUniforms,
   worldFogUniforms,
   worldLocalLightUniforms,
+  worldMoonUniforms,
   worldShadowUniforms,
   worldSunUniforms,
   worldTintUniform,
