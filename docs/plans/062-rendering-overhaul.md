@@ -21,20 +21,20 @@ SA's prelit vertex colours already CONTAIN Rockstar's baked sun, sky and buildin
 
 ## The chain
 
-| #   | Plan                                                                                              | Delivers                                                                                 | Status                                  |
-| --- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------- |
-| 1   | [063 — Foundations: instrumentation & colour pipeline](063-render-foundations-instrumentation.md) | perf HUD + benchmark harness + baselines; linear/tonemap decision; A/B scaffolding       | done                                    |
-| 2   | [064 — Hybrid world lighting](064-hybrid-world-lighting.md)                                       | real sun light on the prelit world without double-counting (indirect/direct split)       | done                                    |
-| 3   | [065 — Cascaded shadows](065-cascaded-shadows.md)                                                 | buildings/cars/peds cast real shadows: CSM, static-caster caching, LOD shadow proxies    | done (core)                             |
-| 4   | [066 — Modern asset step in perfect-map-builder](066-pmb-modern-asset-step.md)                    | opensa-native format (meshopt/KTX2) + baked channels: AO, sun visibility, emissive masks | idea (next)                             |
-| 5   | [067 — PBR sky & clouds](067-pbr-sky-clouds.md)                                                   | physically-based sky, 512×1 horizon LUT, weather clouds (skybox → volumetric)            | done                                    |
-| 6   | [068 — Unified fog & aerial perspective](068-unified-fog.md)                                      | fog that cuts the horizon (no more ocean-through-haze), height fog, one shared fog chunk | done                                    |
-| 7   | [069 — Water](069-water.md)                                                                       | realistic water: waves, depth-based shores, reflections (planar/SSR), underwater         | 🅿️ v1 parked → 0.5.0                    |
-| 8   | [070 — Local lights: headlights & street lamps](070-local-lights.md)                              | real projected headlights + clustered lamp pool; coronas demoted to distant impostors    | done                                    |
-| 9   | [071 — Night & emissive atmosphere](071-night-emissive-atmosphere.md)                             | glowing night vertex/tobj/neon, moon light, dawn/dusk grading calibration                | done                                    |
-| 10  | [072 — Quality tiers & default flip](072-quality-tiers-default-flip.md)                           | low/med/high/ultra presets, budgets enforced, new pipeline becomes default, cleanup      | 🅿️ parked (interim modern default live) |
+| #   | Plan                                                                                              | Delivers                                                                                                                                                               | Status                                    |
+| --- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 1   | [063 — Foundations: instrumentation & colour pipeline](063-render-foundations-instrumentation.md) | perf HUD + benchmark harness + baselines; linear/tonemap decision; A/B scaffolding                                                                                     | done                                      |
+| 2   | [064 — Hybrid world lighting](064-hybrid-world-lighting.md)                                       | real sun light on the prelit world without double-counting (indirect/direct split)                                                                                     | done                                      |
+| 3   | [065 — Cascaded shadows](065-cascaded-shadows.md)                                                 | buildings/cars/peds cast real shadows: CSM, static-caster caching, LOD shadow proxies                                                                                  | done (core)                               |
+| 4   | [066 — Modern asset tool (pmb → native cells)](066-pmb-modern-tool/readme.md)                     | 5-plan tool chain: native format (meshopt/KTX2), **static batching** (draw-call cut), **baked static shadows** (CSM→dynamic-only), AO/sun-vis/emissive channels, tiers | **next — sub-chain, expanded 2026-07-10** |
+| 5   | [067 — PBR sky & clouds](067-pbr-sky-clouds.md)                                                   | physically-based sky, 512×1 horizon LUT, weather clouds (skybox → volumetric)                                                                                          | done                                      |
+| 6   | [068 — Unified fog & aerial perspective](068-unified-fog.md)                                      | fog that cuts the horizon (no more ocean-through-haze), height fog, one shared fog chunk                                                                               | done                                      |
+| 7   | [069 — Water](069-water.md)                                                                       | realistic water: waves, depth-based shores, reflections (planar/SSR), underwater                                                                                       | 🅿️ v1 parked → 0.5.0                      |
+| 8   | [070 — Local lights: headlights & street lamps](070-local-lights.md)                              | real projected headlights + clustered lamp pool; coronas demoted to distant impostors                                                                                  | done                                      |
+| 9   | [071 — Night & emissive atmosphere](071-night-emissive-atmosphere.md)                             | glowing night vertex/tobj/neon, moon light, dawn/dusk grading calibration                                                                                              | done                                      |
+| 10  | [072 — Quality tiers & default flip](072-quality-tiers-default-flip.md)                           | low/med/high/ultra presets, budgets enforced, new pipeline becomes default, cleanup                                                                                    | 🅿️ parked (interim modern default live)   |
 
-Dependencies: 063 → 064 → 065; 066 feeds 065 (shadow proxies) and upgrades 064/071 (baked channels) but starts after 065 proves what data is needed; 067 → 068 → 069 (LUT → fog → water); 070 needs 064 (a lit world to receive light); 071 needs 067 + 070; 072 closes.
+Dependencies: 063 → 064 → 065; 066 (now a 5-plan tool sub-chain) starts after 065 proved the runtime, **re-scopes 065's CSM to dynamic-only** (static shadows baked), upgrades 064/071 (baked channels), and is the main perf lever for 072 (batching + dropped static caster passes); 067 → 068 → 069 (LUT → fog → water); 070 needs 064 (a lit world to receive light); 071 needs 067 + 070; 072 closes.
 
 ## Execution order (prioritized 2026-07-10, promotion from ideas/)
 
@@ -51,8 +51,9 @@ design; night (071) composes on almost everything so it goes late; 072 closes.
 3. **Wave 1b (parallel with Wave 1) — [067](067-pbr-sky-clouds.md) → [068](068-unified-fog.md)** (sky + LUT, then
    the fog cut — fixes the reported ocean-through-haze artefact; 068 only needs 067's LUT, not 064/065).
 4. **Wave 2 — [069](069-water.md) ∥ [070](070-local-lights.md)** (water needs 068; local lights need 064).
-5. **Wave 3 — [066](066-pmb-modern-asset-step.md) ∥ [071](071-night-emissive-atmosphere.md)** (066 after 065
-   proved the runtime; 071 after 067+070 exist to compose against).
+5. **Wave 3 — [066 tool chain](066-pmb-modern-tool/readme.md) ∥ [071](071-night-emissive-atmosphere.md)** (066 after
+   065 proved the runtime; 071 after 067+070 exist to compose against). 066 is now the perf backbone — batching +
+   baked static shadows land before 072's tiers so the ladder is built on the post-batching numbers.
 6. **Wave 4 — [072](072-quality-tiers-default-flip.md)** (tiers from measured numbers, default flip, cleanup).
 
 ## Code recon (2026-07-10) — the plans' assumptions verified against the tree
