@@ -92,8 +92,13 @@ export interface EffectsConfig {
 
 /** Distance fog tuning. */
 export interface FogConfig {
-  /** Distance (world units) at which the world is fully fogged (the horizon); fog ramps in before it. */
+  /** Distance (world units) at which the world is fully fogged (the horizon); fog ramps in before it.
+   *  Classic pipeline: the only range knob. Modern (plan 068): the FALLBACK/cap — the live range comes
+   *  from timecyc `fogStart`/`farClip` × {@link timecycScale}. */
   distance: number;
+  /** Modern pipeline (plan 068): multiplier on the timecyc `farClip`/`fogStart` ranges — fog distance
+   *  becomes a per-weather/hour MOOD (SF fog actually rolls in). 1 = as authored. */
+  timecycScale: number;
 }
 
 /** Font family names per HUD widget (registered by the font loader before the scene). */

@@ -42,10 +42,17 @@ Today: scene `FogExp2` with density `2/config.fog.distance`, colour tracking a s
 - **Distant objects flickering every second:** the LUT refresh key quantized to the game minute — which is
   ~1 REAL second in SA — so near-fully-fogged objects stepped while the dome moved smoothly. FIX: the LUT
   (16 k px) renders EVERY frame — trivial cost, perfectly continuous. User: "мерцание ушло".
-- [ ] timecyc wiring: `fogStart`/`farClip` sampled per weather/hour through the existing blend, × `config.fog`
-      multipliers; keep the current `fog.distance` config as an override. _v1 uses `config.fog.distance` as the
-      cut (no draw-distance change); timecyc-driven range = the calibration step (SF fog weather showcase)._
-- [ ] Height fog (valleys/ocean haze first, Chiliad pokes out) — not in v1.
+- [x] timecyc wiring **shipped (2026-07-10)**: modern fog ranges = timecyc `fogStart`/`farClip` ×
+      `fog.timecycScale` (new config, default 1; floor 350 so a broken row can't collapse the view; start
+      clamped ≤ 0.8·cut). One `fogRangeFor()` source feeds the world shader (own exp² over [start, cut]),
+      the water shader, AND the scene FogExp2 density (FogPlugin `range` closure — dynamics match the world).
+      Classic pipeline: `fog.distance` untouched. **Fog distance is now a weather/hour MOOD — SF fog rolls in.**
+- [x] Height fog **shipped**: `exp(−max(worldY,0) × uFogHeightK)` (1/180) attenuates the distance term down to
+      `uFogHeightMin` (0.4) — sea-level haze first, peaks poke out; the horizon CUT stays absolute (nothing
+      renders past full fog, whatever the height). Constants = first-cut, calibrate in the sweep.
+- [x] Particles/effects/coronas coherence: checked — both fade out by their own draw distances (effects 150 u,
+      coronas ~120 u), far below any fog cut; additive sprites must NOT be fogged toward sky colour anyway
+      (they should fade, and they do). No change needed.
 - [ ] Sky/background: `scene.background` no longer needed on the modern path (dome covers all); verify god-rays/moon fade against fogged horizon.
 - [ ] The cut: clamped tail + far-plane link; verify the LS→ocean bench at multiple hours — the water horizon line must be GONE (screenshot the old artefact first for the doc).
 - [ ] SF fog weather + rain showcase calibration; height-fog params per weather class.

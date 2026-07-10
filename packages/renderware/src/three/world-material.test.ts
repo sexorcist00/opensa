@@ -215,7 +215,7 @@ describe('buildWorldMaterial', () => {
       expect(shader.uniforms.uFogMix).toBe(worldFogUniforms.uFogMix);
       expect(shader.fragmentShader).not.toContain('#include <fog_fragment>'); // replaced, not doubled
       expect(shader.fragmentShader).toContain('texture2D( uFogLut, vec2( saFogAzimuth, saFogElev ) )');
-      expect(shader.fragmentShader).toContain('smoothstep( uFogCutDistance * 0.85, uFogCutDistance, vViewDepth )');
+      expect(shader.fragmentShader).toContain('smoothstep( uFogCutDistance * 0.85, uFogCutDistance, saFogDist )');
       // the classic branch keeps three's exact exp² term
       expect(shader.fragmentShader).toContain('exp( - fogDensity * fogDensity * vFogDepth * vFogDepth )');
       expect(worldFogUniforms.uFogMix.value).toBe(0); // classic default inert

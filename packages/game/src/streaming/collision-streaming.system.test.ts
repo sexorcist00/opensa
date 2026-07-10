@@ -20,7 +20,7 @@ function config(collisionDrawDistance: number): Config {
       followZoomMin: 6,
     },
     controls: { back: 'KeyS', forward: 'KeyW', jump: 'Space', left: 'KeyA', right: 'KeyD' },
-    fog: { distance: 800 },
+    fog: { distance: 800, timecycScale: 1 },
     fonts: { hud: { clock: 'SixCaps-Regular', zone: 'SixCaps-Regular' } },
     gameState: 'play',
     graphics: {

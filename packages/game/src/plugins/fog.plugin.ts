@@ -25,11 +25,15 @@ export class FogPlugin implements Plugin {
   private readonly background = new Color(FOG_COLOR);
   private readonly fog = new FogExp2(FOG_COLOR);
   private readonly horizon?: () => readonly [number, number, number];
+  private readonly range?: () => number;
   private scene: null | PluginContext['scene'] = null;
 
-  /** `horizon` returns the current sky-horizon RGB (0–255) the fog/background fade into. */
-  constructor(horizon?: () => readonly [number, number, number]) {
+  /** `horizon` returns the current sky-horizon RGB (0–255) the fog/background fade into; `range` (plan 068)
+   *  returns the live full-fog distance (timecyc-driven on the modern pipeline) — when provided it drives the
+   *  density per frame so DYNAMIC objects (three's own fog path) match the world shader's fog range. */
+  constructor(horizon?: () => readonly [number, number, number], range?: () => number) {
     this.horizon = horizon;
+    this.range = range;
   }
 
   configChanged(config: Readonly<Config>): void {
@@ -49,6 +53,9 @@ export class FogPlugin implements Plugin {
   }
 
   update(): void {
+    if (this.range) {
+      this.fog.density = FOG_K / Math.max(this.range(), 1);
+    }
     if (!this.horizon) {
       return;
     }

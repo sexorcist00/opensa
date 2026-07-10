@@ -87,6 +87,21 @@ import type { DebugActions } from './debug/debug-overlay';
 
 import { BENCH_SCENES } from '../bench-scenes';
 
+/** Effective modern-fog range (plan 068): timecyc `fogStart`/`farClip` × the config scale, floored so a
+ *  broken/zero row can't collapse the view. Classic keeps `fog.distance` untouched. */
+function fogRangeFor(
+  sample: { farClip: number; fogStart: number },
+  fog: { distance: number; timecycScale: number },
+  modern: boolean,
+): { cut: number; start: number } {
+  if (!modern) {
+    return { cut: fog.distance, start: 0 };
+  }
+  const cut = Math.max(350, sample.farClip * fog.timecycScale);
+
+  return { cut, start: Math.min(Math.max(0, sample.fogStart * fog.timecycScale), cut * 0.8) };
+}
+
 /** 0→1 smoothstep of a pre-normalized t (tiny local helper for the fog/sky twilight handover). */
 function smoothstep01(t: number): number {
   const x = Math.min(1, Math.max(0, t));
@@ -456,7 +471,7 @@ function bootstrap(
         followZoomMin: 4,
       },
       controls: { back: 'KeyS', forward: 'KeyW', jump: 'Space', left: 'KeyA', right: 'KeyD', run: 'ShiftLeft' },
-      fog: { distance: 800 },
+      fog: { distance: 800, timecycScale: 1 },
       fonts: { hud: { clock: 'SixCaps-Regular', zone: 'SixCaps-Regular' } },
       gameState: 'play',
       graphics: {
@@ -569,6 +584,8 @@ function bootstrap(
         cloudDark: lerp(a.darkness, b.darkness, t),
         cloudTop: e.lowClouds,
         dir: e.dir,
+        farClip: e.farClip,
+        fogStart: e.fogStart,
         skyBot: e.skyBot,
         skyTop: e.skyTop,
         spriteBright: e.spriteBright,
@@ -617,31 +634,38 @@ function bootstrap(
       // distant fogged objects glowed at dawn — so the CPU twin of the shader's horizon feeds it instead
       // (interim until 068 samples the horizon LUT in-shader).
       .addPlugin(
-        new FogPlugin((): readonly [number, number, number] => {
-          const sample = skySample(game.getHours());
-          const skyCfg = game.getConfig().graphics.sky;
-          if (skyCfg.model !== 'pbr') {
-            return sample.skyBot;
-          }
-          const sunDir = sky.getSunDirection();
-          const params = pbrSkyParams({
-            cloudCover: sample.cloudCover,
-            cloudDark: sample.cloudDark,
-            mood: skyCfg.mood,
-            skyTop: sample.skyTop,
-            sunElevation: Math.max(0, sunDir.y),
-          });
-          const linear = pbrHorizonAverage(params, [sunDir.x, sunDir.y, sunDir.z], skyCfg.pbrExposure);
-          // Same twilight handover as the dome (uPbrNight): below the horizon the SA palette takes over.
-          const night = 1 - smoothstep01((sunDir.y + 0.12) / 0.1);
-          const srgb = linear.map((value) => 255 * Math.min(1, value) ** (1 / 2.2)) as [number, number, number];
+        new FogPlugin(
+          (): readonly [number, number, number] => {
+            const sample = skySample(game.getHours());
+            const skyCfg = game.getConfig().graphics.sky;
+            if (skyCfg.model !== 'pbr') {
+              return sample.skyBot;
+            }
+            const sunDir = sky.getSunDirection();
+            const params = pbrSkyParams({
+              cloudCover: sample.cloudCover,
+              cloudDark: sample.cloudDark,
+              mood: skyCfg.mood,
+              skyTop: sample.skyTop,
+              sunElevation: Math.max(0, sunDir.y),
+            });
+            const linear = pbrHorizonAverage(params, [sunDir.x, sunDir.y, sunDir.z], skyCfg.pbrExposure);
+            // Same twilight handover as the dome (uPbrNight): below the horizon the SA palette takes over.
+            const night = 1 - smoothstep01((sunDir.y + 0.12) / 0.1);
+            const srgb = linear.map((value) => 255 * Math.min(1, value) ** (1 / 2.2)) as [number, number, number];
 
-          return [
-            srgb[0] + (sample.skyBot[0] - srgb[0]) * night,
-            srgb[1] + (sample.skyBot[1] - srgb[1]) * night,
-            srgb[2] + (sample.skyBot[2] - srgb[2]) * night,
-          ];
-        }),
+            return [
+              srgb[0] + (sample.skyBot[0] - srgb[0]) * night,
+              srgb[1] + (sample.skyBot[1] - srgb[1]) * night,
+              srgb[2] + (sample.skyBot[2] - srgb[2]) * night,
+            ];
+          },
+          () => {
+            const config = game.getConfig();
+
+            return fogRangeFor(skySample(game.getHours()), config.fog, config.graphics.pipeline === 'modern').cut;
+          },
+        ),
       )
       .addPlugin(sky)
       // Cascaded sun shadows (plan 065, modern pipeline): mid/far static cascades over the sun's near map.
@@ -661,11 +685,13 @@ function bootstrap(
           waterSample,
           () => game.getHours(),
           () => sky.getSunDirection(),
-          () => ({
-            cut: game.getConfig().fog.distance,
-            lut: sky.getHorizonLut(),
-            mix: game.getConfig().graphics.pipeline === 'modern' ? 1 : 0,
-          }),
+          () => {
+            const config = game.getConfig();
+            const modern = config.graphics.pipeline === 'modern';
+            const range = fogRangeFor(skySample(game.getHours()), config.fog, modern);
+
+            return { cut: range.cut, lut: sky.getHorizonLut(), mix: modern ? 1 : 0, start: range.start };
+          },
         ),
       )
       .addPlugin(reflection) // vehicle env-map reflections (preset-driven)
@@ -963,11 +989,15 @@ function bootstrap(
           SRGBColorSpace,
         );
         worldSunUniforms.uPipelineMix.value = game.getConfig().graphics.pipeline === 'modern' ? 1 : 0;
-        // Unified fog (plan 068): the world fog samples the 067 horizon LUT by azimuth on the modern path
-        // and cuts hard at the fog distance (geometry at the far plane resolves to pure sky colour).
-        worldFogUniforms.uFogMix.value = worldSunUniforms.uPipelineMix.value;
+        // Unified fog (plan 068): the world fog samples the 067 sky LUT (azimuth × elevation) on the
+        // modern path, ranges from timecyc fogStart/farClip (fog distance = a weather/hour MOOD), and cuts
+        // hard at the far bound (geometry there resolves to pure sky colour).
+        const fogModern = worldSunUniforms.uPipelineMix.value > 0.5;
+        const fogRange = fogRangeFor(sample, game.getConfig().fog, fogModern);
+        worldFogUniforms.uFogMix.value = fogModern ? 1 : 0;
         worldFogUniforms.uFogLut.value = sky.getHorizonLut();
-        worldFogUniforms.uFogCutDistance.value = game.getConfig().fog.distance;
+        worldFogUniforms.uFogCutDistance.value = fogRange.cut;
+        worldFogUniforms.uFogStartDistance.value = fogRange.start;
         shadowHelper?.update(); // debug frustum follows the view-snapped shadow camera
         if (noCull) {
           // Diagnostic only: brute-force per frame so freshly streamed cells are covered too.

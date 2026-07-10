@@ -46,6 +46,9 @@ export interface SkySample {
   /** Cloud lit / top colour (timecyc lowClouds). */
   cloudTop: Rgb;
   dir: Rgb;
+  /** timecyc draw/fog range (plan 068): world units; the modern fog derives its cut/start from these. */
+  farClip: number;
+  fogStart: number;
   skyBot: Rgb;
   skyTop: Rgb;
   spriteBright: number;
@@ -157,6 +160,43 @@ const SKY_BASE_GLSL = `
     pbr = pbr / (1.0 + pbr); // Reinhard: the composer buffer is LDR — raw HDR would CLIP white before ACES
     return mix(pbr, grad, uPbrNight);
   }
+
+  uniform vec3 uCloudTop;
+  uniform vec3 uCloudBottom;
+  uniform float uTime;
+  uniform float uCloudCoverage;
+  uniform float uCloudOpacity;
+  uniform float uCloudDark;
+
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+  float vnoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+  float fbm(vec2 p) {
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 5; i++) { v += a * vnoise(p); p = p * 2.03 + 1.7; a *= 0.5; }
+    return v;
+  }
+
+  // The cloud layer, shared by the dome AND the sky LUT (plan 068) — fully-fogged geometry must dissolve
+  // into the CLOUDY sky it stands against, not a cloudless one.
+  vec3 applyClouds(vec3 col, vec3 dir) {
+    if (uCloudOpacity <= 0.0 || dir.y <= 0.0) return col;
+    vec2 cuv = dir.xz / max(dir.y, 0.12) * 0.45 + vec2(uTime * 0.004, uTime * 0.002);
+    float n = fbm(cuv);
+    float mass = fbm(cuv * 0.4 + 19.0);
+    float edge = mix(0.92, -0.25, uCloudCoverage);
+    float density = smoothstep(edge, edge + 0.20, n);
+    float horizon = smoothstep(0.02, 0.30, dir.y);
+    vec3 cloudCol = mix(uCloudBottom, uCloudTop, smoothstep(0.30, 0.80, n));
+    float bright = smoothstep(0.20, 0.72, n) * mix(0.35, 1.0, smoothstep(0.30, 0.72, mass));
+    float shade = mix(0.16, 1.0, bright);
+    cloudCol *= mix(1.0, shade, uCloudDark);
+    return mix(col, cloudCol, density * horizon * uCloudOpacity);
+  }
 `;
 
 /** Horizon-LUT pass (plan 067): 512×1, azimuth → the sky's colour at eye level. Rendered only when the
@@ -182,7 +222,7 @@ const LUT_FRAGMENT =
     float dirY = max(0.035, vUv.y * 0.7);
     float h = sqrt(max(1.0 - dirY * dirY, 1e-4));
     vec3 dir = normalize(vec3(cos(phi) * h, dirY, sin(phi) * h));
-    gl_FragColor = vec4(skyBase(dir), 1.0);
+    gl_FragColor = vec4(applyClouds(skyBase(dir), dir), 1.0);
   }
 `;
 
@@ -197,18 +237,10 @@ const VERTEX = `
 const FRAGMENT =
   SKY_BASE_GLSL +
   `
-  uniform vec3 uCloudTop;
-  uniform vec3 uCloudBottom;
-  uniform float uTime;
-  uniform float uCloudCoverage;
-  uniform float uCloudOpacity;
-  uniform float uCloudDark;
   uniform float uNight;  // 0 day → 1 deep night (drives the star fade)
   uniform float uStars;  // master toggle (0 = off, skip)
   uniform float uCloudClear;  // 1 = clear sky → 0 = overcast (fades stars globally, like the moon)
   varying vec3 vDir;
-
-  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
 
   // Procedural stars on the upper hemisphere: a gnomonic projection of the view direction tiled into
   // cells, ~one star per lit cell with a random brightness + gentle twinkle. Tapers toward the horizon.
@@ -225,17 +257,6 @@ const FRAGMENT =
     float taper = smoothstep(0.02, 0.35, dir.y); // fade out near the horizon haze
     return vec3(dot_ * bright * twinkle * taper);
   }
-  float vnoise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-  }
-  float fbm(vec2 p) {
-    float v = 0.0, a = 0.5;
-    for (int i = 0; i < 5; i++) { v += a * vnoise(p); p = p * 2.03 + 1.7; a *= 0.5; }
-    return v;
-  }
 
   void main() {
     vec3 dir = normalize(vDir);
@@ -248,25 +269,7 @@ const FRAGMENT =
       col += starField(dir) * uNight * uCloudClear;
     }
 
-    if (uCloudOpacity > 0.0 && dir.y > 0.0) {
-      // Project the view direction onto a flat cloud ceiling (clouds converge toward the horizon),
-      // drift over time, and fade out near the horizon.
-      vec2 cuv = dir.xz / max(dir.y, 0.12) * 0.45 + vec2(uTime * 0.004, uTime * 0.002);
-      float n = fbm(cuv);
-      float mass = fbm(cuv * 0.4 + 19.0); // large-scale cloud masses: where the sky goes dark vs light (0..1)
-      // fbm values cluster around the middle, so map coverage→threshold across that useful band:
-      // 0 sits above the noise (clear), 1 sits fully below it (solid overcast), 0.5 ≈ half sky.
-      float edge = mix(0.92, -0.25, uCloudCoverage);
-      float density = smoothstep(edge, edge + 0.20, n);
-      float horizon = smoothstep(0.02, 0.30, dir.y); // no clouds right at the horizon line
-      vec3 cloudCol = mix(uCloudBottom, uCloudTop, smoothstep(0.30, 0.80, n)); // lit tops, dark undersides
-      // Heavier weather: deepen the contrast and let whole low-mass regions drop to dark storm-grey
-      // while the thick cores stay lit — a fully overcast sky still reads as distinct clouds, not a flat fill.
-      float bright = smoothstep(0.20, 0.72, n) * mix(0.35, 1.0, smoothstep(0.30, 0.72, mass));
-      float shade = mix(0.16, 1.0, bright);
-      cloudCol *= mix(1.0, shade, uCloudDark);
-      col = mix(col, cloudCol, density * horizon * uCloudOpacity);
-    }
+    col = applyClouds(col, dir); // shared with the sky LUT — fog dissolves into the CLOUDY sky
 
     col += (hash(gl_FragCoord.xy) - 0.5) / 255.0; // dither to break gradient banding
     gl_FragColor = vec4(col, 1.0);
@@ -311,6 +314,11 @@ export class SkyPlugin implements Plugin {
     uBetaM: { value: new Vector3(1e-7, 1e-7, 1e-7) },
     uBetaR: { value: new Vector3(1e-5, 2e-5, 3e-5) },
     uBottom: { value: new Color() },
+    uCloudBottom: { value: new Color() },
+    uCloudCoverage: { value: 0.5 },
+    uCloudDark: { value: 0 },
+    uCloudOpacity: { value: 0.8 },
+    uCloudTop: { value: new Color() },
     uMieG: { value: 0.8 },
     uPbrMix: { value: 0 },
     uPbrNight: { value: 0 },
@@ -318,6 +326,7 @@ export class SkyPlugin implements Plugin {
     uSkyExposure: { value: 0.55 },
     uSunDirSky: { value: new Vector3(0, 1, 0) },
     uSunE: { value: 0 },
+    uTime: { value: 0 },
     uTop: { value: new Color() },
   };
   /** Night "skylight" — a hemisphere fill from above, faded in at night for form (intensity set per frame). */
@@ -333,15 +342,9 @@ export class SkyPlugin implements Plugin {
       fragmentShader: FRAGMENT,
       side: BackSide,
       uniforms: {
-        uCloudBottom: { value: new Color() },
         uCloudClear: { value: 1 },
-        uCloudCoverage: { value: 0.5 },
-        uCloudDark: { value: 0 },
-        uCloudOpacity: { value: 0.8 },
-        uCloudTop: { value: new Color() },
         uNight: { value: 0 },
         uStars: { value: 1 },
-        uTime: { value: 0 },
         ...this.skyBaseUniforms,
       },
       vertexShader: VERTEX,

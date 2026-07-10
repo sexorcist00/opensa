@@ -121,12 +121,18 @@ export const worldCsmUniforms = {
  * ocean-through-haze horizon artefact dies by construction). `uFogMix` 0 = three's stock FogExp2 untouched.
  */
 export const worldFogUniforms = {
-  /** Distance (world units) where fog reaches EXACTLY 1.0 (the horizon cut). */
+  /** Distance (world units) where fog reaches EXACTLY 1.0 (the horizon cut). timecyc-driven (plan 068). */
   uFogCutDistance: { value: 1200 },
-  /** 512×1 horizon LUT from the SkyPlugin (azimuth → sky colour at eye level). */
+  /** Height-fog falloff (1/world-units): haze hugs sea level, mountains poke out. */
+  uFogHeightK: { value: 1 / 180 },
+  /** Floor of the height attenuation — high geometry keeps at least this much distance fog. */
+  uFogHeightMin: { value: 0.4 },
+  /** 512×32 sky LUT from the SkyPlugin (azimuth × elevation → sky colour). */
   uFogLut: { value: null as null | Texture },
   /** 0 = stock scene FogExp2; 1 = the directional LUT fog + horizon cut. */
   uFogMix: { value: 0 },
+  /** Distance where fog starts ramping (timecyc `fogStart` × scale; 0 = classic exp² shape). */
+  uFogStartDistance: { value: 0 },
 };
 
 /** Replaces three's `fog_fragment`: the stock exp² factor (bit-exact classic) upgraded on the modern path
@@ -137,10 +143,21 @@ const FOG_FRAGMENT =
   '\tvec3 saFogColor = fogColor;\n' +
   '\tif ( uFogMix > 0.5 ) {\n' +
   '\t\tvec3 saFogView = vWsPos - cameraPosition;\n' +
+  // RADIAL distance, not view-Z: view-Z shrinks toward the screen edges, so a rotation made distant
+  // objects pop in/out of the cut (user report: "боковым зрением видны, прямо — исчезают").
+  '\t\tfloat saFogDist = length( saFogView );\n' +
   '\t\tfloat saFogAzimuth = atan( saFogView.z, saFogView.x ) / 6.2831853 + 0.5;\n' +
-  '\t\tfloat saFogElev = clamp( saFogView.y / max( length( saFogView ) * 0.7, 1e-3 ), 0.0, 1.0 );\n' +
+  '\t\tfloat saFogElev = clamp( saFogView.y / max( saFogDist * 0.7, 1e-3 ), 0.0, 1.0 );\n' +
   '\t\tsaFogColor = texture2D( uFogLut, vec2( saFogAzimuth, saFogElev ) ).rgb;\n' +
-  '\t\tsaFogFactor = max( saFogFactor, smoothstep( uFogCutDistance * 0.85, uFogCutDistance, vViewDepth ) );\n' +
+  // timecyc-driven exp² over [start, cut] (plan 068): fog distance is a per-weather/hour MOOD.
+  '\t\tfloat saFogD = max( saFogDist - uFogStartDistance, 0.0 );\n' +
+  '\t\tfloat saFogK = 2.0 / max( uFogCutDistance - uFogStartDistance, 1.0 );\n' +
+  '\t\tsaFogFactor = 1.0 - exp( - saFogK * saFogK * saFogD * saFogD );\n' +
+  // Height fog: haze hugs the sea level; peaks keep at least uFogHeightMin of the distance term.
+  '\t\tfloat saFogHeight = exp( - max( vWsPos.y, 0.0 ) * uFogHeightK );\n' +
+  '\t\tsaFogFactor *= mix( uFogHeightMin, 1.0, saFogHeight );\n' +
+  // The horizon CUT stays absolute — nothing renders past full fog, whatever the height.
+  '\t\tsaFogFactor = max( saFogFactor, smoothstep( uFogCutDistance * 0.85, uFogCutDistance, saFogDist ) );\n' +
   '\t}\n' +
   '\tgl_FragColor.rgb = mix( gl_FragColor.rgb, saFogColor, saFogFactor );\n' +
   '#endif';
@@ -289,8 +306,11 @@ export function buildWorldMaterial(
     shader.uniforms.uCsmSlopeBias = worldCsmUniforms.uCsmSlopeBias;
     shader.uniforms.uCsmSplits = worldCsmUniforms.uCsmSplits;
     shader.uniforms.uFogCutDistance = worldFogUniforms.uFogCutDistance;
+    shader.uniforms.uFogHeightK = worldFogUniforms.uFogHeightK;
+    shader.uniforms.uFogHeightMin = worldFogUniforms.uFogHeightMin;
     shader.uniforms.uFogLut = worldFogUniforms.uFogLut;
     shader.uniforms.uFogMix = worldFogUniforms.uFogMix;
+    shader.uniforms.uFogStartDistance = worldFogUniforms.uFogStartDistance;
 
     // Both variants are tinted (the day arc must match across the street); they differ in WHICH
     // uniform feeds the slot — night-prelit models get the day-only tint that relaxes to white.
@@ -305,7 +325,8 @@ export function buildWorldMaterial(
       `${SHADOW_FRAGMENT_PARS}${CSM_FRAGMENT_PARS}uniform vec3 uWorldTint;\n` +
       'uniform vec3 uSunColor;\nuniform float uDirectScale;\nuniform float uIndirectScale;\n' +
       'uniform float uPipelineMix;\nvarying float vSunNdl;\n' +
-      'uniform sampler2D uFogLut;\nuniform float uFogMix;\nuniform float uFogCutDistance;\n';
+      'uniform sampler2D uFogLut;\nuniform float uFogMix;\nuniform float uFogCutDistance;\n' +
+      'uniform float uFogStartDistance;\nuniform float uFogHeightK;\nuniform float uFogHeightMin;\n';
     let fragmentBody = shader.fragmentShader;
     // Classic (038): tint × dynamic-object shadow darkening over the whole term. Modern (064): prelit becomes
     // the INDIRECT term (shadowed areas keep their baked GI) and the real sun × NdotL × shadow is ADDED on the

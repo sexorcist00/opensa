@@ -50,6 +50,7 @@ const FRAGMENT = `
   uniform sampler2D uFogLut;
   uniform float uFogMix;
   uniform float uFogCut;
+  uniform float uFogStart;
   varying vec3 vWorldPos;
   varying vec2 vUv;
 
@@ -101,6 +102,9 @@ const FRAGMENT = `
       float fogAzimuth = atan(fogView.z, fogView.x) / 6.2831853 + 0.5;
       float fogElev = clamp(fogView.y / max(length(fogView) * 0.7, 1e-3), 0.0, 1.0);
       fogCol = texture2D(uFogLut, vec2(fogAzimuth, fogElev)).rgb;
+      float fogD = max(fogDist - uFogStart, 0.0);
+      float fogK = 2.0 / max(uFogCut - uFogStart, 1.0);
+      fogFactor = 1.0 - exp(-fogK * fogK * fogD * fogD);
       fogFactor = max(fogFactor, smoothstep(uFogCut * 0.85, uFogCut, fogDist));
     }
     col = mix(col, fogCol, fogFactor);
@@ -121,7 +125,7 @@ const FRAGMENT = `
 export class WaterPlugin implements Plugin {
   readonly name = 'water';
 
-  private readonly getFog?: () => { cut: number; lut: null | Texture; mix: number };
+  private readonly getFog?: () => { cut: number; lut: null | Texture; mix: number; start: number };
   private readonly getHour: () => number;
   private readonly getSunDir: () => Vector3;
   private material: null | ShaderMaterial = null;
@@ -134,7 +138,7 @@ export class WaterPlugin implements Plugin {
     sample: (hour: number) => WaterSample,
     getHour: () => number,
     getSunDir: () => Vector3,
-    getFog?: () => { cut: number; lut: null | Texture; mix: number },
+    getFog?: () => { cut: number; lut: null | Texture; mix: number; start: number },
   ) {
     this.getFog = getFog;
     this.mesh = mesh;
@@ -161,6 +165,7 @@ export class WaterPlugin implements Plugin {
         uFogDensity: { value: 0 },
         uFogLut: { value: null },
         uFogMix: { value: 0 },
+        uFogStart: { value: 0 },
         uGlint: { value: context.config.graphics.water.glint },
         uHorizonColor: { value: new Color() },
         uMap: { value: map },
@@ -191,6 +196,7 @@ export class WaterPlugin implements Plugin {
       u.uFogCut.value = fog.cut;
       u.uFogLut.value = fog.lut;
       u.uFogMix.value = fog.mix;
+      u.uFogStart.value = fog.start;
     }
     u.uDarkness.value = context.config.graphics.water.darkness;
     u.uGlint.value = context.config.graphics.water.glint;

@@ -485,7 +485,7 @@ export class Game {
 
   /** Change the distance fog range at runtime (world units to full fog). */
   setFogDistance(distance: number): void {
-    this.setConfig({ fog: { distance } });
+    this.setConfig({ fog: { ...this.config.fog, distance } });
   }
 
   setFollowAzimuth(azimuth: number): void {
