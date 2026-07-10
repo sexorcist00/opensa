@@ -22,7 +22,7 @@ So keeping particles on LODs needs both: the asi (009) AND a LOD-tuned emitter b
 2. **LOD emitters are RATE-REDUCED, not verbatim.** Distant smoke needs presence, not fidelity: cut emission rate / particle count / sprite budget hard for LOD-range emitters (candidate: a fraction of HD rate + a cap), so the whole-map sum stays cheap. Exact factors tuned in-game against the overdraw. Coronas/lights (type-0) policy unchanged — already kept.
 3. **Distance-appropriate transform.** LOD emitters may need repositioned/simplified emission (the cell bake repositions coordinates already for type-0; extend that for type-1). One smoke plume per stack at range, not the HD multi-emitter rig.
 4. **Reuse existing machinery.** `build2dfxSection` "already re-attaches arbitrary entries" (issue note) — widen the kept-type set to include rate-scaled type-1 for the opensa-asi target; `stripParticleEffects` gains a "scale instead of strip" sibling or a parameter. Minimal new surface.
-5. **Budget honesty.** Even with reduced rates, cap the number of concurrently-emitting LOD stacks if the frame budget (02-rendering's harness) demands — and `log()` what was capped (no silent truncation, per repo convention). Tie into the 02-rendering perf HUD to measure the far-view cost directly.
+5. **Budget honesty.** Even with reduced rates, cap the number of concurrently-emitting LOD stacks if the frame budget (the rendering chain's harness, plan 063) demands — and `log()` what was capped (no silent truncation, per repo convention). Tie into the rendering perf HUD (plan 063) to measure the far-view cost directly.
 6. **Fallback safety.** If someone runs the opensa-asi-target build (particles kept) WITHOUT the asi, it crashes exactly as the original bug — so the installer's asi-presence check from 006 covers this content too; loud warning.
 
 ## Tasks
@@ -31,7 +31,7 @@ So keeping particles on LODs needs both: the asi (009) AND a LOD-tuned emitter b
 - [ ] opensa-lod-generator: extend the cell 2dfx re-add (`LIGHT_2DFX`/`collectCellLightEffects`) to optionally include rate-scaled type-1 for the opensa-asi target (byte-verbatim transplant + coordinate reposition + rate scale).
 - [ ] Emitter rate/sprite-budget model: LOD-range scaling factors (rate, count, cap) as tunable config; sensible defaults, tuned in-game.
 - [ ] pmb wiring: the target flag (stock vs opensa-asi) already selects limit budgets in 006 — extend it to select particle policy; one flag, both behaviours.
-- [ ] In-game validation (Wine, opensa-asi target): distant refinery/plant smoke visible at LOD range, no new-game crash (009), and the far view holds frame budget (measure via 02-rendering HUD — before/after the rate scaling). Record factors + fps.
+- [ ] In-game validation (Wine, opensa-asi target): distant refinery/plant smoke visible at LOD range, no new-game crash (009), and the far view holds frame budget (measure via the plan-063 perf HUD — before/after the rate scaling). Record factors + fps.
 - [ ] Stock-target regression: particles still fully stripped, output still safe on stock 1.0 (today's verified behaviour unchanged).
 - [ ] Docs/memory: update lod-2dfx-particles.md status (🟡 → ✅ for the opensa-asi target: leak fixed in-engine + overdraw budgeted; stock target still strips), the sa-lod strip plan 005 cross-ref, and the sa-lod memory ("standing goal — make particles WORK at LOD range" resolves for the asi target).
 
@@ -85,7 +85,7 @@ The clean way to keep distant smoke visible WITHOUT the map-wide overdraw, since
    2dfx section — `build2dfxSection` already rewrites entries; add a name-remap param). HD keeps the full-rate name.
 3. **Pack the augmented `effects.fxp`** into the drop-in build (the pipeline already ships data overrides). Since the
    blueprint pool is generous and `_lod` blueprints are cheaper, map-wide concurrent LOD plumes stay within budget.
-4. **Tune in-game** against the 02-rendering perf HUD: dial the `_lod` rate until the whole-map far view holds frame
+4. **Tune in-game** against the rendering perf HUD (plan 063): dial the `_lod` rate until the whole-map far view holds frame
    budget while the plumes still read. Record factors + fps.
 
 This keeps decision #2 ("rate-reduced, not verbatim") intact and needs NO engine change beyond 009 — purely data

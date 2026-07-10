@@ -1,6 +1,6 @@
-# 008 — Local lights: headlights & street lamps (de-corona)
+# 070 — Local lights: headlights & street lamps (de-corona)
 
-Part of the [rendering overhaul chain](readme.md). Depends on [002](002-hybrid-world-lighting.md) — a world that can RECEIVE light is what makes real local lights possible at all (038's unlit world was why headlights became glow+corona MVP, plan 033). Delivers the requested move away from the corona concept — partially: coronas remain as distant impostors.
+Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [064](064-hybrid-world-lighting.md) — a world that can RECEIVE light is what makes real local lights possible at all (038's unlit world was why headlights became glow+corona MVP, plan 033). Delivers the requested move away from the corona concept — partially: coronas remain as distant impostors.
 
 ## Context
 

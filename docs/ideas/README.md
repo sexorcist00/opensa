@@ -15,4 +15,4 @@ dead-ends already ruled out, and the open questions — so when we pick it up we
 _(empty — the previous parking-lot ideas have graduated: **map-optimizer** shipped as the
 `tools/map-optimizer` plugin conveyor, **monorepo packages** shipped via
 [plan 057](../plans/057-nx-monorepo-migration.md), and **real headlights** are scheduled in
-[0.4.0/02-rendering/008 — local lights](./0.4.0/plans/02-rendering/008-local-lights.md).)_
+[plan 070 — local lights](../plans/070-local-lights.md).)_

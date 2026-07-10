@@ -11,7 +11,9 @@ import { setupCharacter } from '@opensa/game/character/setup-character';
 import { Velocity } from '@opensa/game/ecs/components';
 import { TouchInputSource } from '@opensa/game/input';
 import { createWindMod } from '@opensa/game/mods/wind.mod';
+import { BenchPlugin, type BenchScene } from '@opensa/game/perf/bench';
 import { cloudProfile } from '@opensa/game/plugins/cloud-profile';
+import { CSM_DYNAMIC_LAYER, CSM_STATIC_LAYER, CsmPlugin } from '@opensa/game/plugins/csm.plugin';
 import { FogPlugin } from '@opensa/game/plugins/fog.plugin';
 import { PostFxPlugin } from '@opensa/game/plugins/postfx.plugin';
 import { SkyPlugin, type SkySample } from '@opensa/game/plugins/sky.plugin';
@@ -52,6 +54,7 @@ import {
   sampleTimecycBlend,
   setFxLibrary,
   setRoadsignFont,
+  sunSplit,
   updateAnimatedObjects,
   updateDebris,
   updateEscalators,
@@ -60,8 +63,10 @@ import {
   updateUvAnimations,
   WEATHER_NAMES,
   windowGlowUniform,
+  worldCsmUniforms,
   worldDayTintUniform,
   worldShadowUniforms,
+  worldSunUniforms,
   worldTintUniform,
 } from '@opensa/renderware';
 import { type ReactElement, useEffect, useRef, useState } from 'react';
@@ -78,6 +83,7 @@ import {
 
 import type { DebugActions } from './debug/debug-overlay';
 
+import { BENCH_SCENES } from '../bench-scenes';
 import { GAME_CONFIG, type GameId, HUMAN_HALF_EXTENTS } from '../game-config';
 import { parseParkedVehicles } from '../parked-vehicles';
 import { vehicleModelsFromIde } from '../vehicle-models';
@@ -460,6 +466,8 @@ function bootstrap(
           skylight: 0.6,
           windowGlow: 1.0,
         },
+        // Rendering-overhaul master switch (plan 063) — 'classic' until the modern stages land (064+).
+        pipeline: 'classic',
         // Procedural ground clutter (procobj.dat; plan 042) — per-category, live-tunable in debug → ProcObj.
         procobj: {
           bushes: { density: 1, drawDistance: 80, enabled: true },
@@ -470,12 +478,13 @@ function bootstrap(
           trees: { density: 1, drawDistance: 150, enabled: true },
           underwater: { density: 1, drawDistance: 60, enabled: true },
         },
-        shadows: { enabled: true },
+        shadows: { distance: 800, enabled: true },
         sky: { density: 0.96, exposure: 0.5, weight: 0.4 },
         ssao: { enabled: true, intensity: 1.5, radius: 0.2 },
         stars: { enabled: true },
         sun: { godrays: true, godraysSize: 30, sunSize: 15 },
         toneMapping: true,
+        toneMappingMode: 'aces',
         vehicleReflection: { intensity: 0.25, preset: 'enhanced' },
         water: { darkness: 0.9, glint: 0.5, reflection: 0.2 },
         // SA prelit world (plan 038) calibration — live-tunable in debug → Atmosphere.
@@ -485,6 +494,8 @@ function bootstrap(
           lodNightAmbScale: 1.6,
           nightPrelitBrightness: 0.7,
           shadowStrength: 0.55,
+          sunDirect: 1,
+          sunIndirect: 0.7,
         },
       },
       hud: {
@@ -588,12 +599,24 @@ function bootstrap(
     // Water mesh (geometry from the adapter) loaded up front so the WaterPlugin can own its material;
     // parented under the −90°X streaming root (which `game.init` adds to the scene).
     const water = await adapter.loadWater('data/water.dat', 'models/particle.txd');
+    water.userData.skipShadowCaster = true; // translucent surface — a depth-material caster would shadow the sea floor
     game.getStreamingRoot().add(water);
 
     game
       .setWorldAdapter(adapter)
       .addPlugin(new FogPlugin(() => skySample(game.getHours()).skyBot)) // fog fades into the sky horizon
       .addPlugin(sky)
+      // Cascaded sun shadows (plan 065, modern pipeline): mid/far static cascades over the sun's near map.
+      .addPlugin(
+        new CsmPlugin(
+          () => sky.getSunDirection(),
+          () => sky.getSunShadow(),
+          worldCsmUniforms,
+          // Cell set version, SETTLE-gated (-1 while streaming is in flight): one cascade refresh when the
+          // world finishes loading, none per-cell during a drive/flyover.
+          () => (game.worldSettled() ? game.getStreamingRoot().children.length : -1),
+        ),
+      )
       .addPlugin(
         new WaterPlugin(
           water as Mesh,
@@ -770,6 +793,60 @@ function bootstrap(
       },
     });
 
+    // CSM casters (plan 065): streamed world meshes cast into the STATIC cascade layer on the modern
+    // pipeline (the sun's own per-frame map stays dynamics-only via CSM_DYNAMIC_LAYER — cheap). Tag each
+    // top-level cell group once (re-tag all on a pipeline flip). Alpha-BLENDED materials are excluded
+    // (floodlight beams, water — depth casters would turn them into solid blobs). Wind-swayed vegetation
+    // casts through its sway-matched depth material (`userData.swayDepthMaterial`, wind.mod) so the
+    // shadow moves with the canopy.
+    const casterTagged = new WeakSet<Object3D>();
+    let casterPipeline: 'classic' | 'modern' | null = null;
+    game.addSystem({
+      name: 'csm-casters',
+      update(): void {
+        const modern = game.getConfig().graphics.pipeline === 'modern';
+        const flip = casterPipeline !== (modern ? 'modern' : 'classic');
+        for (const child of game.getStreamingRoot().children) {
+          if (child.userData.skipShadowCaster || (!flip && casterTagged.has(child))) {
+            continue;
+          }
+          child.traverse((node) => {
+            const mesh = node as Mesh;
+            if (mesh.isMesh) {
+              interface CasterMaterial {
+                alphaTest: number;
+                transparent: boolean;
+                userData?: { swayDepthMaterial?: Mesh['customDepthMaterial'] };
+              }
+              // Multi-submesh parts carry a material ARRAY — treat the mesh as blended if ANY entry is.
+              const materials = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as CasterMaterial[];
+              const blended = materials.some((entry) => entry.transparent && entry.alphaTest === 0);
+              mesh.castShadow = modern && !blended;
+              const swayDepth = materials.find((entry) => entry.userData?.swayDepthMaterial)?.userData
+                ?.swayDepthMaterial;
+              if (swayDepth) {
+                mesh.customDepthMaterial = swayDepth; // shadow sways with the wind
+                // Near the camera the per-frame dynamic map animates the sway; beyond 45 m the cached
+                // static cascades keep a (frozen-phase) shadow for distance.
+                mesh.layers.enable(CSM_DYNAMIC_LAYER);
+              }
+              mesh.layers.enable(CSM_STATIC_LAYER); // static cascades render this layer only
+            }
+          });
+          casterTagged.add(child);
+        }
+        casterPipeline = modern ? 'modern' : 'classic';
+        // Dynamics (player/vehicles/peds under the entity root) feed the per-frame NEAR map: keep them on
+        // the dynamic shadow layer. Few objects — a per-frame walk is cheap and catches fresh spawns.
+        game.getEntityRoot().traverse((node) => {
+          const mesh = node as Mesh;
+          if (mesh.isMesh && mesh.castShadow) {
+            mesh.layers.enable(CSM_DYNAMIC_LAYER);
+          }
+        });
+      },
+    });
+
     game.addSystem({
       name: 'coronas',
       update(): void {
@@ -790,7 +867,8 @@ function bootstrap(
         // windows; the global tint dims models without night prelit toward the weather's timecyc ambient.
         // Driven unconditionally — the uniforms are inert in 'dynamic' mode (no world materials exist).
         dnBalanceUniform.value = clockNightFactor(game.getHours(), night.litFade);
-        const amb = skySample(game.getHours()).amb;
+        const sample = skySample(game.getHours());
+        const amb = sample.amb;
         worldTintNight
           .setRGB(amb[0] / 255, amb[1] / 255, amb[2] / 255, SRGBColorSpace)
           .multiplyScalar(worldLight.lodNightAmbScale);
@@ -820,6 +898,28 @@ function bootstrap(
           shadows.enabled && sunShadow.autoUpdate && worldShadowUniforms.uWorldShadowMap.value
             ? worldLight.shadowStrength * sunUp * sunShadow.intensity
             : 0;
+        // Hybrid world lighting (plan 064, modern pipeline): prelit-as-indirect + real sun on top. The
+        // uniforms are inert on 'classic' (uPipelineMix 0 → the exact 038 path). Overcast is read back from
+        // the SkyPlugin's shadow damping (intensity = 1 − overcast) so both terms fade together in weather.
+        const sunDir = sky.getSunDirection();
+        worldSunUniforms.uSunDir.value.copy(sunDir);
+        const sunElevation = Math.max(0, sunDir.y);
+        const split = sunSplit({
+          overcast: 1 - sunShadow.intensity,
+          sunDirect: worldLight.sunDirect,
+          sunElevation,
+          sunIndirect: worldLight.sunIndirect,
+        });
+        worldSunUniforms.uDirectScale.value = split.directScale;
+        worldSunUniforms.uIndirectScale.value = split.indirectScale;
+        worldSunUniforms.uSunFlat.value = sunElevation;
+        worldSunUniforms.uSunColor.value.setRGB(
+          sample.dir[0] / 255,
+          sample.dir[1] / 255,
+          sample.dir[2] / 255,
+          SRGBColorSpace,
+        );
+        worldSunUniforms.uPipelineMix.value = game.getConfig().graphics.pipeline === 'modern' ? 1 : 0;
         shadowHelper?.update(); // debug frustum follows the view-snapped shadow camera
         if (noCull) {
           // Diagnostic only: brute-force per frame so freshly streamed cells are covered too.
@@ -1066,6 +1166,59 @@ function bootstrap(
       return combos[index % combos.length].join(',');
     };
 
+    // Benchmark harness (plan 063): added AFTER game.init() on purpose — install() is a no-op, only the
+    // per-frame update matters (the plugin list is iterated live). Scenes/anchors are GTA Z-up coords;
+    // toWorld maps them through the streaming root into the camera's frame.
+    const bench = new BenchPlugin({
+      gpuTimings: (): ReadonlyMap<string, number> => game.getGpuTimer()?.timings() ?? new Map<string, number>(),
+      perf: game.getPerfMonitor(),
+      setFlyCamera: (enabled): void => game.setFlyCamera(enabled),
+      setTimeMinutes: (minutes): void => game.setTime(minutes),
+      setWeather: (weather): void => game.setWeather(weather),
+      teleport: (coords): Promise<unknown> =>
+        game.withStreamingFreeze(() => character.placePlayer([coords[0], coords[1], coords[2]], true)),
+      toWorld: (coords): readonly [number, number, number] => {
+        const world = game.getStreamingRoot().localToWorld(new Vector3(coords[0], coords[1], coords[2]));
+
+        return [world.x, world.y, world.z];
+      },
+    });
+    game.addPlugin(bench);
+    const runBench = async (scene: BenchScene): Promise<void> => {
+      const gpu = game.getGpuTimer();
+      const gpuWasEnabled = gpu?.enabled ?? false;
+      if (gpu?.available) {
+        gpu.enabled = true;
+      }
+      const report = await bench.run(scene);
+      if (gpu) {
+        gpu.enabled = gpuWasEnabled; // restore — an open Perf HUD keeps its gpu row after the bench
+      }
+      const json = JSON.stringify(report);
+      // eslint-disable-next-line no-console -- the bench deliverable IS this JSON line (plan 063)
+      console.log('[bench]', json);
+      await navigator.clipboard?.writeText(json).catch(() => undefined);
+    };
+    // `?bench=<key>` (or `?bench=all`) — run after the world settles at spawn, then report per scene.
+    const benchKey = new URLSearchParams(window.location.search).get('bench');
+    if (benchKey) {
+      const scenes = benchKey === 'all' ? BENCH_SCENES : BENCH_SCENES.filter((entry) => entry.key === benchKey);
+      if (scenes.length === 0) {
+        // eslint-disable-next-line no-console -- URL-driven dev tool; the warning must reach the console
+        console.warn(
+          `[bench] unknown scene '${benchKey}' — known: all, ${BENCH_SCENES.map((entry) => entry.key).join(', ')}`,
+        );
+      } else {
+        void game
+          .withStreamingFreeze(() => undefined, WORLD_READY_TIMEOUT_MS)
+          .then(async () => {
+            for (const scene of scenes) {
+              await runBench(scene);
+            }
+          });
+      }
+    }
+
     const debugActions: DebugActions = {
       bloom: () => game.getConfig().graphics.bloom,
       breakNearest: () => breakProp(nearestBreakable(character.viewOf(), 8)),
@@ -1079,11 +1232,18 @@ function bootstrap(
       gameTime: () => game.getTime(),
       godrays: () => game.getConfig().graphics.sun.godrays,
       godraysSize: () => game.getConfig().graphics.sun.godraysSize,
+      gpuTimings: () => {
+        const gpu = game.getGpuTimer();
+
+        return gpu?.available ? [...gpu.timings().entries()] : [];
+      },
+      graphicsPipeline: () => game.getConfig().graphics.pipeline,
       headlights: () => game.getConfig().graphics.headlights,
       isFlying: () => character.controllerSystem.isFlying(),
       lights: () => game.getConfig().graphics.lights,
       moon: () => game.getConfig().graphics.moon,
       night: () => game.getConfig().graphics.night,
+      perfStats: () => game.getPerfMonitor().stats(),
       playerCoords: () => character.viewOf(),
       procObj: () => game.getConfig().graphics.procobj,
       respawnPlayer: () => {
@@ -1109,10 +1269,18 @@ function bootstrap(
       setGameTime: (minutes) => game.setTime(minutes),
       setGodrays: (enabled) => game.setGodrays(enabled),
       setGodraysSize: (size) => game.setGodraysSize(size),
+      setGraphicsPipeline: (pipeline) => game.setGraphicsPipeline(pipeline),
       setHeadlights: (patch) => game.setHeadlights(patch),
       setLights: (patch) => game.setLights(patch),
       setMoon: (patch) => game.setMoon(patch),
       setNight: (patch) => game.setNight(patch),
+      setPerfEnabled: (enabled: boolean) => {
+        game.getPerfMonitor().enabled = enabled;
+        const gpu = game.getGpuTimer();
+        if (gpu?.available) {
+          gpu.enabled = enabled;
+        }
+      },
       setProcObj: (category, patch) => {
         game.setProcObj(category, patch);
         if (patch.density !== undefined || patch.enabled !== undefined) {
@@ -1128,6 +1296,7 @@ function bootstrap(
       setStreaming: (patch) => game.setStreaming(patch),
       setSunSize: (size) => game.setSunSize(size),
       setToneMapping: (enabled) => game.setToneMapping(enabled),
+      setToneMappingMode: (mode) => game.setToneMappingMode(mode),
       setVehicleReflection: (patch) => game.setVehicleReflection(patch),
       setWater: (patch) => game.setWater(patch),
       setWeather: (index) => game.setWeather(index),
@@ -1149,6 +1318,7 @@ function bootstrap(
       teleport: (coords) => void game.withStreamingFreeze(() => character.placePlayer(coords, true)),
       teleportToGanton: () => character.placePlayer(spawn, true),
       toneMapping: () => game.getConfig().graphics.toneMapping,
+      toneMappingMode: () => game.getConfig().graphics.toneMappingMode,
       topDownView: () => game.topDownView(),
       vehicleModels: () => vehicleModels,
       vehicleReflection: () => game.getConfig().graphics.vehicleReflection,

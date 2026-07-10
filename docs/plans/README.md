@@ -10,8 +10,20 @@ The map of planning docs across the repo. **Engine plans** live here (`docs/plan
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`059`. Newest first:
+`001`–`072`. Newest first:
 
+- **[062 — Rendering overhaul](./062-rendering-overhaul.md)** — the "modern lighting" fork (chain umbrella,
+  promoted from `ideas/0.4.0/02-rendering`): real sun on the prelit world without double-counting, CSM building
+  shadows with LOD proxies, PBR sky + 512×1 horizon LUT, unified fog (horizon cut), Gerstner water, world-shader
+  light pool (projected headlights), glowing night emissives, quality tiers + default flip. Stages:
+  [063 foundations/instrumentation](./063-render-foundations-instrumentation.md) ·
+  [064 hybrid lighting](./064-hybrid-world-lighting.md) · [065 shadows](./065-cascaded-shadows.md) ·
+  [066 pmb asset step](./066-pmb-modern-asset-step.md) · [067 sky](./067-pbr-sky-clouds.md) ·
+  [068 fog](./068-unified-fog.md) · [069 water](./069-water.md) · [070 local lights](./070-local-lights.md) ·
+  [071 night](./071-night-emissive-atmosphere.md) · [072 tiers/flip](./072-quality-tiers-default-flip.md).
+- [061 — World-ready state](./061-world-ready-state.md) — boot reveal + teleport freeze driven by streaming
+  `settled()`.
+- [060 — Streaming smoothness](./060-streaming-smoothness.md) — warm-invisibly + atomic-appear cell pipeline.
 - [059 — Map car generators](./059-map-car-generators.md) — spawn the binary-IPL `CARS` section (SA's map-baked
   parked cars in gta3.img): parser + specific-model + random (popcycle/cargrp, B1 city approximation) all done
   (lazy LOD register, ground-snap on spawn), in-game verified; B2 per-zone fidelity + random colour pending.

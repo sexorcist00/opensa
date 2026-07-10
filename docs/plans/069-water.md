@@ -1,6 +1,6 @@
-# 007 — Water
+# 069 — Water
 
-Part of the [rendering overhaul chain](readme.md). Depends on [006](006-unified-fog.md) (shared fog chunk + horizon LUT). Replaces the current water shader with a modern one.
+Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [068](068-unified-fog.md) (shared fog chunk + horizon LUT). Replaces the current water shader with a modern one.
 
 ## Context
 

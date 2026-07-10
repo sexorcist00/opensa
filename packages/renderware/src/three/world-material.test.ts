@@ -15,8 +15,10 @@ import {
   dnBalanceUniform,
   isVertexAlphaBeam,
   windowGlowUniform,
+  worldCsmUniforms,
   worldDayTintUniform,
   worldShadowUniforms,
+  worldSunUniforms,
   worldTintUniform,
 } from './world-material';
 
@@ -116,7 +118,7 @@ describe('buildWorldMaterial', () => {
       // The night prelit set already encodes the night look, so this variant rides the day-only tint
       // (driven to white as dnBalance → 1) — NOT the no-night tint that darkens into the night ambient.
       expect(shader.uniforms.uWorldTint).toBe(worldDayTintUniform);
-      expect(shader.fragmentShader).toContain('outgoingLight *= uWorldTint');
+      expect(shader.fragmentShader).toContain('outgoingLight = mix( saClassic, saModern, uPipelineMix )');
     });
 
     it('applyWorldWindowGlow adds the additive map glow after the (no-night) tint', () => {
@@ -128,7 +130,7 @@ describe('buildWorldMaterial', () => {
       expect(shader.uniforms.uWindowGlow).toBe(windowGlowUniform);
       expect(shader.uniforms.uWorldTint).toBe(worldTintUniform); // composed, not clobbered
       const glowAt = shader.fragmentShader.indexOf('uWindowGlow;\n#endif');
-      const tintAt = shader.fragmentShader.indexOf('outgoingLight *= uWorldTint');
+      const tintAt = shader.fragmentShader.indexOf('mix( saClassic, saModern, uPipelineMix )');
       expect(glowAt).toBeGreaterThan(-1);
       expect(tintAt).toBeGreaterThan(-1);
       expect(glowAt).toBeGreaterThan(tintAt); // glow injected after the tint → not dimmed by it
@@ -160,6 +162,59 @@ describe('buildWorldMaterial', () => {
       expect(shader.uniforms.uWindowGlow).toBe(windowGlowUniform);
       expect(shader.uniforms.uDnBalance).toBe(dnBalanceUniform); // composed, not clobbered
       expect(shader.fragmentShader).toContain('uWindowGlow');
+    });
+
+    it('injects the hybrid sun split (plan 064) into both variants, inert at classic defaults', () => {
+      for (const nightColors of [null, new Uint8Array(12)]) {
+        const built = buildWorldMaterial(material(), geometry({ nightColors }));
+        const shader = shaderStub();
+        built.onBeforeCompile(shader, undefined as never);
+        // shared live uniforms (single pump updates every cell material)
+        expect(shader.uniforms.uSunDir).toBe(worldSunUniforms.uSunDir);
+        expect(shader.uniforms.uDirectScale).toBe(worldSunUniforms.uDirectScale);
+        expect(shader.uniforms.uIndirectScale).toBe(worldSunUniforms.uIndirectScale);
+        expect(shader.uniforms.uPipelineMix).toBe(worldSunUniforms.uPipelineMix);
+        // vertex: world-space NdotL with the NaN-free degenerate-normal guard
+        expect(shader.vertexShader).toContain('inversesqrt( max( wsNLen, 1e-8 ) )');
+        expect(shader.vertexShader).toContain('vSunNdl = mix( uSunFlat,');
+        // fragment: albedo captured BEFORE the prelit multiply feeds the direct term
+        expect(shader.fragmentShader).toContain('vec3 saTexel = diffuseColor.rgb;');
+        expect(shader.fragmentShader).toContain('saTexel * uSunColor * vSunNdl * wsShadow * uDirectScale');
+      }
+      // classic defaults keep the modern term mixed out entirely
+      expect(worldSunUniforms.uPipelineMix.value).toBe(0);
+      expect(worldSunUniforms.uDirectScale.value).toBe(0);
+      expect(worldSunUniforms.uIndirectScale.value).toBe(1);
+    });
+
+    it('injects the cascaded shadow receive (plan 065), classic single-map term selectable by uCsmMix', () => {
+      const built = buildWorldMaterial(material(), geometry());
+      const shader = shaderStub();
+      built.onBeforeCompile(shader, undefined as never);
+      expect(shader.uniforms.uCsmMaps).toBe(worldCsmUniforms.uCsmMaps);
+      expect(shader.uniforms.uCsmMatrices).toBe(worldCsmUniforms.uCsmMatrices);
+      expect(shader.uniforms.uCsmMix).toBe(worldCsmUniforms.uCsmMix);
+      expect(shader.uniforms.uCsmSplits).toBe(worldCsmUniforms.uCsmSplits);
+      // vertex: one world-pos varying + the view depth; cascade projection happens per-FRAGMENT
+      expect(shader.vertexShader).toContain('vWsPos = wsWorldPos.xyz');
+      expect(shader.vertexShader).toContain('vViewDepth = -mvPosition.z');
+      expect(shader.fragmentShader).toContain('uCsmMatrices[ 1 ] * wsP');
+      // fragment: slope-biased cascaded term, selected over the classic single map by uCsmMix
+      expect(shader.fragmentShader).toContain('uCsmBias + uCsmSlopeBias * ( 1.0 - ndl )');
+      expect(shader.fragmentShader).toContain('uCsmMix > 0.5 ? csmShadow( vSunNdl ) : worldShadow()');
+      // classic default keeps the cascades mixed out
+      expect(worldCsmUniforms.uCsmMix.value).toBe(0);
+    });
+
+    it('captures saTexel before the night prelit multiply (the direct term lights raw albedo)', () => {
+      const built = buildWorldMaterial(material(), geometry({ nightColors: new Uint8Array(12) }));
+      const shader = shaderStub();
+      built.onBeforeCompile(shader, undefined as never);
+      const texelAt = shader.fragmentShader.indexOf('vec3 saTexel = diffuseColor.rgb;');
+      const prelitAt = shader.fragmentShader.indexOf('mix( vColor.rgb, vNightColor, uDnBalance )');
+      expect(texelAt).toBeGreaterThan(-1);
+      expect(prelitAt).toBeGreaterThan(-1);
+      expect(texelAt).toBeLessThan(prelitAt);
     });
 
     it('renders a floodlight beam (white texture + prelit vertex alpha) alpha-blended with the cone alpha', () => {

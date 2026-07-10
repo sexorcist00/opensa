@@ -122,6 +122,9 @@ export interface GraphicsConfig {
   moon: MoonConfig;
   /** Night ambient/atmosphere tuning (how dark + the moonlight tint). */
   night: NightConfig;
+  /** Rendering-overhaul master switch (plan 063): `'classic'` = the shipped 038 look; `'modern'` opts into
+   *  the new pipeline stages as plans 064+ land behind it. No stage branches on it yet. */
+  pipeline: 'classic' | 'modern';
   /** Procedural ground clutter (procobj.dat scatter; plan 042) — per-category tuning. */
   procobj: ProcObjConfig;
   /** Sun shadows (directional shadow map). */
@@ -137,6 +140,10 @@ export interface GraphicsConfig {
   /** ACES tone mapping. ON by design since the SA prelit pipeline (plan 038) — the night blend
    *  and world tints are calibrated against it; the toggle remains as a debug/perf escape hatch. */
   toneMapping: boolean;
+  /** Colour-pipeline spike selector (plan 063): the tone-mapping CURVE of the post pass. `'aces'` = today's
+   *  look; `'agx'`/`'neutral'` = alternative curves (same placement, applies to the whole frame incl.
+   *  sky/water); `'none'` = pass disabled (raw). The live A/B tool for the 063 decision — remove after. */
+  toneMappingMode: ToneMappingModeName;
   /** Vehicle env-map reflections (preset-driven; see plan 030). */
   vehicleReflection: VehicleReflectionConfig;
   /** Water surface shader tuning (reflection + sun glint). */
@@ -257,6 +264,8 @@ export interface ProcObjTypeConfig {
 
 /** Sun shadow (directional shadow map) tuning. */
 export interface ShadowsConfig {
+  /** CSM shadow reach (plan 065, modern pipeline): far-cascade end, world units. Dawn/dusk auto-clamps. */
+  distance: number;
   /** Master toggle (off = the sun stops casting → no shadow-map render, materials drop shadow code). */
   enabled: boolean;
 }
@@ -315,6 +324,12 @@ export interface TimeConfig {
   secondsPerGameMinute: number;
 }
 
+/** Tone-mapping CURVE for the plan-063 colour spike (see GraphicsConfig.toneMappingMode). Placement is
+ *  fixed by architecture: with the composer, three skips renderer-level (material-stage) tone mapping when
+ *  rendering into a render target — verified live (renderer modes were a no-op) — so the post pass is the
+ *  only place; the spike compares CURVES there. */
+export type ToneMappingModeName = 'aces' | 'agx' | 'neutral' | 'none';
+
 /** Vehicle distance-LOD thresholds (world units from the player view). */
 export interface VehicleConfig {
   /** Within this distance the full HD model is shown. */
@@ -359,4 +374,8 @@ export interface WorldLightConfig {
   nightPrelitBrightness: number;
   /** How dark dynamic-object (car/ped) shadows read on the unlit world (0 = off, 1 = black). */
   shadowStrength: number;
+  /** Hybrid lighting (plan 064, modern pipeline only): master direct-sun strength (0 = classic look). */
+  sunDirect: number;
+  /** Hybrid lighting (plan 064): prelit retention at full sun (1 = classic, ~0.7 = plan intuition). */
+  sunIndirect: number;
 }

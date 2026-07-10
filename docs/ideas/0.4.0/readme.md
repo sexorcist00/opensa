@@ -29,20 +29,7 @@ Key insight the chain is built on: plates are baked as a texture swap on the exi
 
 Full rework of vanilla rendering toward modern-game visuals while preserving the SA prelit/night-vertex vibe — the T3 fork plan 038 left out of scope. Real building shadows (CSM + LOD shadow proxies), PBR sky with a 512×1 horizon LUT feeding fog/water, fog that actually cuts the horizon, realistic water, real headlight/street-lamp lights (coronas demoted to distant impostors), glowing tobj/night-vertex emissives, and an opensa-native asset step in perfect-map-builder (meshopt/KTX2 + baked sun-visibility/AO channels — no longer bound to DFF/TXD). Every stage lands behind a toggle with measured frame budgets; the default flips only at the end.
 
-Chain overview, principles, and external library references: [plans/02-rendering/readme.md](plans/02-rendering/readme.md)
-
-| #   | Plan                                                                                       | Delivers                                                                     | Status |
-| --- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ------ |
-| 1   | [001 — Foundations](plans/02-rendering/001-foundations-instrumentation.md)                 | perf HUD, benchmark harness, colour-pipeline decision, A/B scaffolding       | idea   |
-| 2   | [002 — Hybrid world lighting](plans/02-rendering/002-hybrid-world-lighting.md)             | real sun on the prelit world (indirect/direct split, no double-count)        | idea   |
-| 3   | [003 — Cascaded shadows](plans/02-rendering/003-cascaded-shadows.md)                       | buildings/cars/peds cast shadows: CSM + static caching + LOD proxies         | idea   |
-| 4   | [004 — pmb modern asset step](plans/02-rendering/004-pmb-modern-asset-step.md)             | opensa-native cell format (meshopt/KTX2) + baked sunVis/AO/emissive channels | idea   |
-| 5   | [005 — PBR sky & clouds](plans/02-rendering/005-pbr-sky-clouds.md)                         | physically-based sky, horizon LUT, per-weather clouds → volumetric option    | idea   |
-| 6   | [006 — Unified fog](plans/02-rendering/006-unified-fog.md)                                 | one fog chunk everywhere, LUT-coloured, horizon cut (ocean-through-haze fix) | idea   |
-| 7   | [007 — Water](plans/02-rendering/007-water.md)                                             | Gerstner waves, depth shores + foam, staged reflections, underwater          | idea   |
-| 8   | [008 — Local lights](plans/02-rendering/008-local-lights.md)                               | light pool in the world shader: projected headlights, lamp pools, de-corona  | idea   |
-| 9   | [009 — Night & emissive atmosphere](plans/02-rendering/009-night-emissive-atmosphere.md)   | glowing night vertex/tobj/neon, moon light, dawn/dusk grading                | idea   |
-| 10  | [010 — Quality tiers & default flip](plans/02-rendering/010-quality-tiers-default-flip.md) | low/med/high/ultra presets, budget contract, default flip, cleanup           | idea   |
+**→ Promoted to working plans (2026-07-10): [docs/plans/062 — Rendering overhaul](../../plans/062-rendering-overhaul.md)** — the chain overview + the ten stage plans now live as `docs/plans/062–072` (foundations 063, hybrid lighting 064, shadows 065, pmb asset step 066, sky 067, fog 068, water 069, local lights 070, night 071, tiers/default-flip 072). Statuses tracked there.
 
 ## opensa-asi — our own limit-adjuster ASI
 

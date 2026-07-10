@@ -93,12 +93,15 @@ export {
 export { buildWater, oceanFrame } from './three/build-water';
 export { type CoronaEntry, coronaMaterial, GLOW_LAYER } from './three/corona';
 export { nightFillRim, nightFillUniform } from './three/night-fill';
+export { type SunSplit, sunSplit, type SunSplitInput } from './three/sun-split';
 export { updateUvAnimations } from './three/uv-anim';
 export {
   buildWorldMaterial,
   dnBalanceUniform,
   windowGlowUniform,
+  worldCsmUniforms,
   worldDayTintUniform,
   worldShadowUniforms,
+  worldSunUniforms,
   worldTintUniform,
 } from './three/world-material';

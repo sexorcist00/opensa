@@ -1,6 +1,6 @@
 import type { Texture } from 'three';
 
-import { Color, DoubleSide, FrontSide, Matrix4, MeshBasicMaterial, Vector2 } from 'three';
+import { Color, DoubleSide, FrontSide, Matrix4, MeshBasicMaterial, Vector2, Vector3 } from 'three';
 
 import type { RWGeometry, RWMaterial } from '../parsers/binary/types';
 
@@ -51,15 +51,115 @@ export const worldShadowUniforms = {
   uWorldShadowStrength: { value: 0 },
 };
 
-/** Vertex: project the (instanced) world position into the sun's shadow map space. */
+/**
+ * Hybrid world lighting (plan 064): prelit re-read as the INDIRECT term + a real timecyc-driven sun on top —
+ * `colour = albedo × (prelit × tint × uIndirectScale + uSunColor × NdotL × shadow × uDirectScale)`.
+ * Uniform-gated, not a program variant: `uPipelineMix` 0 renders the classic 038 path bit-exact (the modern
+ * term is mixed out), 1 the hybrid — toggling `graphics.pipeline` never rebuilds the scene or recompiles.
+ * Driven per frame by the game from {@link sunSplit} curves; all values inert at their defaults.
+ */
+export const worldSunUniforms = {
+  /** Multiplier on the sun NdotL term (0 = classic). From the {@link sunSplit} curves × config. */
+  uDirectScale: { value: 0 },
+  /** Multiplier on the prelit term (1 = classic). From the {@link sunSplit} curves. */
+  uIndirectScale: { value: 1 },
+  /** Master 0 = classic (exact 038) → 1 = modern hybrid; follows `graphics.pipeline`. */
+  uPipelineMix: { value: 0 },
+  /** Sun colour (linear), from the timecyc `dir` sample. */
+  uSunColor: { value: new Color(1, 1, 1) },
+  /** Sun direction in three world space (towards the sun), from SkyPlugin. */
+  uSunDir: { value: new Vector3(0, 1, 0) },
+  /** NdotL fallback for degenerate/missing normals — the sun-elevation flat response (plan 064 §3). */
+  uSunFlat: { value: 0 },
+};
+
+/** Vertex: project the (instanced) world position into the sun's shadow map space, and compute the
+ *  world-space sun NdotL (plan 064) with a degenerate-normal guard (`inversesqrt(max(…))` — NaN-free;
+ *  near-zero normals fall back to the flat elevation response instead). */
 const SHADOW_VERTEX =
   '#include <project_vertex>\n' +
   'vec4 wsWorldPos = vec4( transformed, 1.0 );\n' +
+  'vec3 wsN = normal;\n' +
   '#ifdef USE_INSTANCING\n' +
   '\twsWorldPos = instanceMatrix * wsWorldPos;\n' +
+  '\twsN = mat3( instanceMatrix ) * wsN;\n' +
   '#endif\n' +
   'wsWorldPos = modelMatrix * wsWorldPos;\n' +
-  'vWorldShadowCoord = uWorldShadowMatrix * wsWorldPos;';
+  'vWorldShadowCoord = uWorldShadowMatrix * wsWorldPos;\n' +
+  'vWsPos = wsWorldPos.xyz;\n' +
+  'vViewDepth = -mvPosition.z;\n' +
+  'wsN = mat3( modelMatrix ) * wsN;\n' +
+  'float wsNLen = dot( wsN, wsN );\n' +
+  'vec3 wsNormal = wsN * inversesqrt( max( wsNLen, 1e-8 ) );\n' +
+  'vSunNdl = mix( uSunFlat, max( dot( wsNormal, uSunDir ), 0.0 ), step( 0.25, wsNLen ) );';
+
+/**
+ * Cascaded shadows (plan 065): three view-sliced maps replace the single 45 m one on the modern pipeline.
+ * Slot 0 mirrors the sun's own (per-frame, dynamics + near HD) map; slots 1–2 are the static mid/far
+ * cascades the CSM plugin re-renders on its sun-delta/camera-move schedule. Uniform-gated by `uCsmMix`
+ * (0 = the classic single-map term, untouched); the game flips it only when all three maps exist.
+ */
+export const worldCsmUniforms = {
+  /** Constant depth bias (receivers now self-cast — the classic-tiny bias would acne). */
+  uCsmBias: { value: 0.0012 },
+  uCsmMaps: { value: [null, null, null] as (null | Texture)[] },
+  uCsmMapSize: { value: new Vector2(2048, 2048) },
+  uCsmMatrices: { value: [new Matrix4(), new Matrix4(), new Matrix4()] },
+  /** 0 = classic single-map shadow term; 1 = the cascaded term. */
+  uCsmMix: { value: 0 },
+  /** Slope-scaled bias term × (1 − NdotL) — grazing surfaces need more depth margin. */
+  uCsmSlopeBias: { value: 0.002 },
+  /** Cascade far bounds (view-space distance, world units). */
+  uCsmSplits: { value: new Vector3(45, 250, 800) },
+};
+
+/** Fragment: the cascaded receive — per-cascade 4-tap PCF, split select by view depth, blend bands at the
+ *  boundaries, and a fade-out tail at the far end. Sampler arrays must be indexed by CONSTANTS in GLSL ES,
+ *  hence the if-chain. `csmDebugTint` feeds the `?shadowdebug` cascade visualization (R/G/B per cascade). */
+const CSM_FRAGMENT_PARS =
+  'uniform sampler2D uCsmMaps[ 3 ];\n' +
+  'uniform mat4 uCsmMatrices[ 3 ];\n' +
+  'uniform vec2 uCsmMapSize;\n' +
+  'uniform vec3 uCsmSplits;\n' +
+  'uniform float uCsmMix;\n' +
+  'uniform float uCsmBias;\n' +
+  'uniform float uCsmSlopeBias;\n' +
+  'varying vec3 vWsPos;\n' +
+  'varying float vViewDepth;\n' +
+  'vec3 csmDebugTint = vec3( 1.0, 0.05, 0.05 );\n' +
+  'float csmPcf( sampler2D map, vec4 coord, float bias ) {\n' +
+  '\tvec3 sc = coord.xyz / coord.w;\n' +
+  '\tif ( sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z > 1.0 ) return 1.0;\n' +
+  '\tfloat d = sc.z - bias;\n' +
+  '\tvec2 t = 0.75 / uCsmMapSize;\n' +
+  '\treturn 0.25 * ( step( d, unpackRGBAToDepth( texture2D( map, sc.xy + vec2( -t.x, -t.y ) ) ) )\n' +
+  '\t\t+ step( d, unpackRGBAToDepth( texture2D( map, sc.xy + vec2( t.x, -t.y ) ) ) )\n' +
+  '\t\t+ step( d, unpackRGBAToDepth( texture2D( map, sc.xy + vec2( -t.x, t.y ) ) ) )\n' +
+  '\t\t+ step( d, unpackRGBAToDepth( texture2D( map, sc.xy + vec2( t.x, t.y ) ) ) ) );\n' +
+  '}\n' +
+  'float csmShadow( float ndl ) {\n' +
+  '\tfloat bias = uCsmBias + uCsmSlopeBias * ( 1.0 - ndl );\n' +
+  '\tfloat s = 1.0;\n' +
+  // Cascade coords are computed HERE, only for the branch taken — 3 mat4×vec4 per VERTEX (7 M-triangle
+  // scenes are vertex-bound) turned out far pricier than 1–2 per fragment.
+  '\tvec4 wsP = vec4( vWsPos, 1.0 );\n' +
+  // Static world shadows: cascade 1 covers the whole near/mid range, cascade 2 the far ring.
+  '\tif ( vViewDepth < uCsmSplits.y ) {\n' +
+  '\t\tcsmDebugTint = vec3( 0.1, 1.0, 0.1 );\n' +
+  '\t\ts = csmPcf( uCsmMaps[ 1 ], uCsmMatrices[ 1 ] * wsP, bias );\n' +
+  '\t\tfloat f = smoothstep( uCsmSplits.y * 0.85, uCsmSplits.y, vViewDepth );\n' +
+  '\t\tif ( f > 0.0 ) s = mix( s, csmPcf( uCsmMaps[ 2 ], uCsmMatrices[ 2 ] * wsP, bias ), f );\n' +
+  '\t} else if ( vViewDepth < uCsmSplits.z ) {\n' +
+  '\t\tcsmDebugTint = vec3( 0.1, 0.1, 1.0 );\n' +
+  '\t\ts = csmPcf( uCsmMaps[ 2 ], uCsmMatrices[ 2 ] * wsP, bias );\n' +
+  '\t\ts = mix( s, 1.0, smoothstep( uCsmSplits.z * 0.9, uCsmSplits.z, vViewDepth ) );\n' +
+  '\t}\n' +
+  // Dynamic casters (cars/peds, the sun's own per-frame map) OVERLAY the near range via min().
+  '\tif ( vViewDepth < uCsmSplits.x ) {\n' +
+  '\t\ts = min( s, csmPcf( uCsmMaps[ 0 ], uCsmMatrices[ 0 ] * wsP, bias ) );\n' +
+  '\t}\n' +
+  '\treturn s;\n' +
+  '}\n';
 
 /** Fragment: 4-tap PCF over the RGBA-packed depth map; 1.0 = lit (outside the frustum = lit). */
 const SHADOW_FRAGMENT_PARS =
@@ -143,22 +243,47 @@ export function buildWorldMaterial(
     shader.uniforms.uWorldShadowMapSize = worldShadowUniforms.uWorldShadowMapSize;
     shader.uniforms.uWorldShadowMatrix = worldShadowUniforms.uWorldShadowMatrix;
     shader.uniforms.uWorldShadowStrength = worldShadowUniforms.uWorldShadowStrength;
+    shader.uniforms.uDirectScale = worldSunUniforms.uDirectScale;
+    shader.uniforms.uIndirectScale = worldSunUniforms.uIndirectScale;
+    shader.uniforms.uPipelineMix = worldSunUniforms.uPipelineMix;
+    shader.uniforms.uSunColor = worldSunUniforms.uSunColor;
+    shader.uniforms.uSunDir = worldSunUniforms.uSunDir;
+    shader.uniforms.uSunFlat = worldSunUniforms.uSunFlat;
+    shader.uniforms.uCsmBias = worldCsmUniforms.uCsmBias;
+    shader.uniforms.uCsmMaps = worldCsmUniforms.uCsmMaps;
+    shader.uniforms.uCsmMapSize = worldCsmUniforms.uCsmMapSize;
+    shader.uniforms.uCsmMatrices = worldCsmUniforms.uCsmMatrices;
+    shader.uniforms.uCsmMix = worldCsmUniforms.uCsmMix;
+    shader.uniforms.uCsmSlopeBias = worldCsmUniforms.uCsmSlopeBias;
+    shader.uniforms.uCsmSplits = worldCsmUniforms.uCsmSplits;
 
     // Both variants are tinted (the day arc must match across the street); they differ in WHICH
     // uniform feeds the slot — night-prelit models get the day-only tint that relaxes to white.
     shader.uniforms.uWorldTint = nightBlend ? worldDayTintUniform : worldTintUniform;
 
-    let vertexPars = 'uniform mat4 uWorldShadowMatrix;\nvarying vec4 vWorldShadowCoord;\n';
+    let vertexPars =
+      'uniform mat4 uWorldShadowMatrix;\nvarying vec4 vWorldShadowCoord;\n' +
+      'varying vec3 vWsPos;\nvarying float vViewDepth;\n' +
+      'uniform vec3 uSunDir;\nuniform float uSunFlat;\nvarying float vSunNdl;\n';
     let vertexBody = shader.vertexShader.replace('#include <project_vertex>', SHADOW_VERTEX);
-    let fragmentPars = `${SHADOW_FRAGMENT_PARS}uniform vec3 uWorldTint;\n`;
+    let fragmentPars =
+      `${SHADOW_FRAGMENT_PARS}${CSM_FRAGMENT_PARS}uniform vec3 uWorldTint;\n` +
+      'uniform vec3 uSunColor;\nuniform float uDirectScale;\nuniform float uIndirectScale;\n' +
+      'uniform float uPipelineMix;\nvarying float vSunNdl;\n';
     let fragmentBody = shader.fragmentShader;
-    // Dynamic-object shadows darken the unlit world (cars/peds on roads); buildings cast nothing.
-    // Debug mode paints the term red so it can't be confused with SSAO or baked prelit darkening.
+    // Classic (038): tint × dynamic-object shadow darkening over the whole term. Modern (064): prelit becomes
+    // the INDIRECT term (shadowed areas keep their baked GI) and the real sun × NdotL × shadow is ADDED on the
+    // raw albedo — `saTexel`, captured before the prelit multiply. `uPipelineMix` blends the two paths, so the
+    // classic look survives bit-exact at 0. The shadow factor comes from the CSM term when the cascades are
+    // live (`uCsmMix`, plan 065), else the classic single map. Debug paints the term red (or R/G/B per
+    // cascade when CSM is on).
     const opaque =
-      'outgoingLight *= uWorldTint;\n' +
-      'float wsShadow = worldShadow();\n' +
-      'outgoingLight *= mix( 1.0, wsShadow, uWorldShadowStrength );\n' +
-      'if ( uWorldShadowDebug > 0.5 ) outgoingLight = mix( vec3( 1.0, 0.05, 0.05 ), outgoingLight, wsShadow );\n' +
+      'float wsShadow = uCsmMix > 0.5 ? csmShadow( vSunNdl ) : worldShadow();\n' +
+      'vec3 saClassic = outgoingLight * uWorldTint * mix( 1.0, wsShadow, uWorldShadowStrength );\n' +
+      'vec3 saModern = outgoingLight * uWorldTint * uIndirectScale\n' +
+      '\t+ saTexel * uSunColor * vSunNdl * wsShadow * uDirectScale;\n' +
+      'outgoingLight = mix( saClassic, saModern, uPipelineMix );\n' +
+      'if ( uWorldShadowDebug > 0.5 ) outgoingLight = mix( csmDebugTint, outgoingLight, wsShadow );\n' +
       '#include <opaque_fragment>';
 
     if (nightBlend) {
@@ -170,10 +295,16 @@ export function buildWorldMaterial(
       );
       fragmentPars += 'uniform float uDnBalance;\nvarying vec3 vNightColor;\n';
       // `vColor.rgb` works whether vColor is vec3 (normal geometry) or vec4 (beam, USE_COLOR_ALPHA); the beam
-      // also needs its per-vertex alpha (the cone) carried into the blended alpha.
+      // also needs its per-vertex alpha (the cone) carried into the blended alpha. `saTexel` = the albedo
+      // before the prelit multiply (the modern direct term lights it, not the prelit product).
       fragmentBody = fragmentBody.replace(
         '#include <color_fragment>',
-        `\tdiffuseColor.rgb *= mix( vColor.rgb, vNightColor, uDnBalance );${beam ? '\n\tdiffuseColor.a *= vColor.a;' : ''}`,
+        `\tvec3 saTexel = diffuseColor.rgb;\n\tdiffuseColor.rgb *= mix( vColor.rgb, vNightColor, uDnBalance );${beam ? '\n\tdiffuseColor.a *= vColor.a;' : ''}`,
+      );
+    } else {
+      fragmentBody = fragmentBody.replace(
+        '#include <color_fragment>',
+        '\tvec3 saTexel = diffuseColor.rgb;\n#include <color_fragment>',
       );
     }
 

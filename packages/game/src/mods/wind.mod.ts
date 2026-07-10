@@ -1,7 +1,8 @@
 import type { IdeObjectDef, RenderPart } from '@opensa/renderware';
-import type { MeshBasicMaterial } from 'three';
+import type { MeshBasicMaterial, WebGLProgramParametersWithUniforms } from 'three';
 
 import { hasIdeFlag, IdeFlag } from '@opensa/renderware';
+import { MeshDepthMaterial, RGBADepthPacking } from 'three';
 
 import type { WorldMod, WorldModUpdateContext } from './mod.interface';
 
@@ -54,11 +55,7 @@ export function createWindMod(): WorldMod {
  */
 function applyWindSway(material: MeshBasicMaterial, kind: keyof typeof SWAY, mode: 'height' | 'weight'): void {
   const { heightAmplitude, speed, weightAmplitude } = SWAY[kind];
-  const previousCompile = material.onBeforeCompile.bind(material);
-  const previousKey = material.customProgramCacheKey.bind(material);
-  material.customProgramCacheKey = (): string => `${previousKey()}|sway-${kind}-${mode}`;
-  material.onBeforeCompile = (shader, renderer): void => {
-    previousCompile(shader, renderer);
+  const injectSway = (shader: WebGLProgramParametersWithUniforms): void => {
     shader.uniforms.uWindTime = windTimeUniform;
     const amount =
       mode === 'weight'
@@ -81,7 +78,27 @@ function applyWindSway(material: MeshBasicMaterial, kind: keyof typeof SWAY, mod
           '}',
       );
   };
+  const previousCompile = material.onBeforeCompile.bind(material);
+  const previousKey = material.customProgramCacheKey.bind(material);
+  material.customProgramCacheKey = (): string => `${previousKey()}|sway-${kind}-${mode}`;
+  material.onBeforeCompile = (shader, renderer): void => {
+    previousCompile(shader, renderer);
+    injectSway(shader);
+  };
   material.needsUpdate = true;
+
+  // Matching SHADOW caster (plan 065): a depth material with the SAME sway displacement (shared wind
+  // clock), so the cast shadow moves with the canopy instead of being a static blob shimmering under it.
+  // Cutout foliage keeps its alpha test in the depth pass. The CSM caster system finds this in userData
+  // and attaches it as the mesh's customDepthMaterial.
+  const depth = new MeshDepthMaterial({ depthPacking: RGBADepthPacking });
+  depth.map = material.map;
+  depth.alphaTest = material.alphaTest > 0 ? material.alphaTest : 0;
+  depth.customProgramCacheKey = (): string => `swayDepth-${kind}-${mode}-${material.alphaTest > 0 ? 'cut' : 'solid'}`;
+  depth.onBeforeCompile = (shader): void => {
+    injectSway(shader);
+  };
+  material.userData.swayDepthMaterial = depth;
 }
 
 /** Sway kind for a def: IDE veg flags first, then the wind list ('palm' by name there — a tuning

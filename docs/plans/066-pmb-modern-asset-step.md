@@ -1,6 +1,6 @@
-# 004 — Modern asset step in perfect-map-builder
+# 066 — Modern asset step in perfect-map-builder
 
-Part of the [rendering overhaul chain](readme.md). Starts after [003](003-cascaded-shadows.md) proves the runtime (so we bake what's actually needed, not what's imagined). Upgrades [002](002-hybrid-world-lighting.md)'s quality and feeds [009](009-night-emissive-atmosphere.md). We are no longer bound to DFF/TXD for the opensa target — this plan uses that freedom.
+Part of the [rendering overhaul chain](062-rendering-overhaul.md). Starts after [065](065-cascaded-shadows.md) proves the runtime (so we bake what's actually needed, not what's imagined). Upgrades [064](064-hybrid-world-lighting.md)'s quality and feeds [071](071-night-emissive-atmosphere.md). We are no longer bound to DFF/TXD for the opensa target — this plan uses that freedom.
 
 ## Context
 

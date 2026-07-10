@@ -1,0 +1,89 @@
+import type { BenchScene } from '@opensa/game/perf/bench';
+
+/**
+ * Fixed benchmark scenes (plan 063) — deterministic camera paths over the SA map, selected via
+ * `?bench=<key>` (or `?bench=all` for the full baseline sweep). Coordinates are native GTA (Z-up), the
+ * same space the debug teleports use; `anchor` is where the PLAYER teleports (the streaming ring centre),
+ * so every path must stay within streaming range of it. Weather indexes follow `WEATHER_NAMES`.
+ */
+export const BENCH_SCENES: readonly BenchScene[] = [
+  {
+    // Downtown Los Santos at noon — the draw-call/triangle worst case (skyline + traffic area).
+    anchor: [1456, -1400, 30],
+    durationS: 15,
+    hour: 12,
+    key: 'ls-noon',
+    path: [
+      { look: [1456, -1600, 60], pos: [1250, -1250, 90] },
+      { look: [1456, -1600, 60], pos: [1456, -1180, 110] },
+      { look: [1456, -1600, 40], pos: [1660, -1250, 90] },
+    ],
+    weather: 1, // SUNNY_LA
+  },
+  {
+    // San Fierro dawn in fog — the fog/atmosphere calibration scene.
+    anchor: [-1980, 550, 40],
+    durationS: 15,
+    hour: 7,
+    key: 'sf-fog-dawn',
+    path: [
+      { look: [-1980, 800, 60], pos: [-2100, 300, 120] },
+      { look: [-1980, 800, 40], pos: [-1980, 420, 90] },
+      { look: [-2100, 800, 40], pos: [-1860, 300, 120] },
+    ],
+    weather: 9, // FOGGY_SF
+  },
+  {
+    // Las Venturas strip at midnight — corona/lamp/night-emissive worst case.
+    anchor: [2035, 1340, 15],
+    durationS: 15,
+    hour: 0,
+    key: 'lv-night',
+    path: [
+      { look: [2035, 1600, 25], pos: [2035, 1100, 45] },
+      { look: [2035, 1800, 25], pos: [2035, 1450, 35] },
+      { look: [2200, 1900, 25], pos: [2035, 1700, 45] },
+    ],
+    weather: 11, // EXTRASUNNY_VEGAS (clear night sky)
+  },
+  {
+    // Countryside dusk near Blueberry — long shadows + vegetation.
+    anchor: [230, -60, 5],
+    durationS: 15,
+    hour: 19,
+    key: 'country-dusk',
+    path: [
+      { look: [230, 140, 15], pos: [30, -220, 60] },
+      { look: [230, 140, 10], pos: [230, -140, 40] },
+      { look: [80, 140, 10], pos: [420, -220, 60] },
+    ],
+    weather: 4, // CLOUDY_LA
+  },
+  {
+    // Santa Maria beach looking out to open sea — the horizon/fog-cut scene (068's regression view).
+    // Anchor ON the sand (an over-water anchor drops the player into the sea and the run never settles).
+    anchor: [330, -2790, 5],
+    durationS: 15,
+    hour: 15,
+    key: 'ocean-horizon',
+    path: [
+      { look: [370, -3400, 5], pos: [370, -2820, 25] },
+      { look: [200, -3400, 5], pos: [300, -2830, 35] },
+      { look: [50, -3300, 5], pos: [220, -2850, 25] },
+    ],
+    weather: 5, // SUNNY_SF
+  },
+  {
+    // Downtown LS in rain at night — post-fx + wet-look worst case.
+    anchor: [1456, -1400, 30],
+    durationS: 15,
+    hour: 21,
+    key: 'ls-rain-night',
+    path: [
+      { look: [1456, -1600, 60], pos: [1250, -1250, 90] },
+      { look: [1456, -1600, 60], pos: [1456, -1180, 110] },
+      { look: [1456, -1600, 40], pos: [1660, -1250, 90] },
+    ],
+    weather: 8, // RAINY_SF
+  },
+];

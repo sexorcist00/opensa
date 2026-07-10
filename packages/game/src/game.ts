@@ -46,12 +46,15 @@ import {
   type SsaoConfig,
   type StarsConfig,
   type SunConfig,
+  type ToneMappingModeName,
   type VehicleReflectionConfig,
   type WaterConfig,
   type WorldLightConfig,
 } from './interfaces/config.interface';
 import { type RegionRequest, type Vec3, type WorldAdapter } from './interfaces/world-adapter.interface';
 import { type WorldMod } from './mods/mod.interface';
+import { GpuTimer } from './perf/gpu-timer';
+import { PerfMonitor } from './perf/perf-monitor';
 import { type Plugin, type PluginContext, type RenderPipeline } from './plugins/plugin';
 import { BasicRenderPipeline } from './plugins/render-pipeline';
 import { type CellCoord } from './streaming/grid';
@@ -102,6 +105,7 @@ export class Game {
   /** Debug wireframe view (Map → Show Faces): scene-wide wireframe override to inspect the mesh. Lazy. */
   private faceMaterial: MeshBasicMaterial | null = null;
   private readonly gameClock = new GameClock();
+  private gpuTimer: GpuTimer | null = null;
   /** Map-inspector "Hide object" state — restored automatically when the map viewer turns off. */
   private readonly hiddenInstances = new HiddenInstances();
   private input!: CombinedInput;
@@ -112,6 +116,7 @@ export class Game {
   /** Debug normals view (plan: Map → Show Normals): scene-wide MeshNormalMaterial override, rendered
    *  straight to the screen (bypassing post-FX) so the normals read clean. Lazily created. */
   private normalMaterial: MeshNormalMaterial | null = null;
+  private readonly perfMonitor = new PerfMonitor();
   private pipeline!: RenderPipeline;
   private readonly plugins: Plugin[] = [];
   private pointerSource!: PointerLookSource;
@@ -219,6 +224,11 @@ export class Game {
     return this.entityRoot;
   }
 
+  /** GPU pass timer (plan 063); `null` before init, no-op when the timer extension is missing. */
+  getGpuTimer(): GpuTimer | null {
+    return this.gpuTimer;
+  }
+
   /** Continuous in-game time of day in hours (0–24, fractional) — for smooth consumers (sun/sky). */
   getHours(): number {
     return this.gameClock.exactMinutes / 60;
@@ -232,6 +242,11 @@ export class Game {
   /** Shared diagnostics logger; pass to systems so they can emit gated `'log'` events. */
   getLogger(): Logger {
     return this.logger;
+  }
+
+  /** Frame-time / renderer.info sampler (plan 063) — the perf HUD and bench harness read/enable it. */
+  getPerfMonitor(): PerfMonitor {
+    return this.perfMonitor;
   }
 
   /** The scene root (read-only handle; e.g. for debug helpers that need world space, not a Z-up root). */
@@ -298,6 +313,11 @@ export class Game {
     this.input = new CombinedInput([this.pointerSource]);
     this.cameraController = new CameraController(camera, renderer.domElement, this.config, this.input);
     this.pipeline = new BasicRenderPipeline(renderer, scene, camera);
+    this.gpuTimer = GpuTimer.create(renderer.getContext() as WebGL2RenderingContext);
+    // Perf accuracy (plan 063): with the post-FX composer, three resets `renderer.info` on EVERY internal
+    // render call, so a post-frame sample would only see the last pass (1 draw / 1 triangle). Accumulate
+    // across the whole frame instead: manual reset at the top of the loop.
+    renderer.info.autoReset = false;
     this.context = {
       camera,
       clock: this.clock,
@@ -493,6 +513,11 @@ export class Game {
     this.setSun({ godraysSize });
   }
 
+  /** Flip the rendering-pipeline master switch (plan 063; later plans branch on it — no-op today). */
+  setGraphicsPipeline(pipeline: 'classic' | 'modern'): void {
+    this.setConfig({ graphics: { ...this.config.graphics, pipeline } });
+  }
+
   /** Tune vehicle headlights (beam size/reach/strength) at runtime; merges into `graphics.headlights`. */
   setHeadlights(patch: Partial<HeadlightConfig>): void {
     this.setConfig({
@@ -632,6 +657,11 @@ export class Game {
   /** Toggle ACES tone mapping at runtime. */
   setToneMapping(enabled: boolean): void {
     this.setConfig({ graphics: { ...this.config.graphics, toneMapping: enabled } });
+  }
+
+  /** Colour-spike selector (plan 063): move tone mapping between the post pass and the renderer. */
+  setToneMappingMode(toneMappingMode: ToneMappingModeName): void {
+    this.setConfig({ graphics: { ...this.config.graphics, toneMappingMode } });
   }
 
   /** Tune vehicle reflections (preset/intensity) at runtime; merges into `graphics.vehicleReflection`. */
@@ -820,6 +850,7 @@ export class Game {
     }
     this.started = true;
     this.renderer.setAnimationLoop((now) => {
+      this.renderer.info.reset(); // frame-total draw/triangle counters (autoReset is off — see init)
       const delta = this.clock.tick(now);
       this.accumulator += delta;
       while (this.accumulator >= FIXED_STEP) {
@@ -838,6 +869,7 @@ export class Game {
           plugin.update?.(this.context);
         }
       }
+      this.gpuTimer?.begin('frame');
       if (this.showNormalsMode || this.showFacesMode) {
         // Debug override (normals / wireframe): skip the post-FX pipeline and draw the scene straight to screen.
         this.renderer.setRenderTarget(null);
@@ -845,6 +877,9 @@ export class Game {
       } else {
         this.pipeline.render();
       }
+      this.gpuTimer?.end();
+      this.gpuTimer?.poll();
+      this.perfMonitor.frame(delta, this.renderer);
     });
   }
 }

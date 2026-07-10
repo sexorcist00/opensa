@@ -17,7 +17,7 @@ Today: verbatim keeps particles only if unstripped; decimate re-attaches via `co
      Start with emitter-thinning (safe, no FX authoring); add parameter-scaling only if thinning isn't enough. Factors come from 010's budget model, tuned in-game.
 3. **Per-species tuning.** The 38 particle-bearing models (refinery smoke, Vegas plants, fountains, fire) differ; the scaling config is per-category/per-species with sane defaults (one plume per smokestack at range; fountains maybe dropped entirely at LOD range — they read as noise). Expose as generator config.
 4. **Stock target: unchanged** — particles still fully stripped (no engine fix → mandatory). All A3 behaviour is asi-target only.
-5. **Correctness = emitters present, positioned, AND budgeted.** A distant refinery shows smoke; the whole-map sum stays within the frame budget (measured via 02-rendering's HUD, per 010); no new-game crash (Task 4).
+5. **Correctness = emitters present, positioned, AND budgeted.** A distant refinery shows smoke; the whole-map sum stays within the frame budget (measured via the rendering perf HUD — plan 063, tiers per 072); no new-game crash (Task 4).
 
 ## Tasks
 

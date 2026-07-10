@@ -22,6 +22,8 @@ import type {
   WaterConfig,
   WorldLightConfig,
 } from '@opensa/game';
+import type { ToneMappingModeName } from '@opensa/game/interfaces/config.interface';
+import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 
 import { PRESETS } from '@opensa/game/plugins/vehicle-reflection/presets';
 import { GameClock } from '@opensa/game/time/game-clock';
@@ -31,6 +33,7 @@ import type { Teleport } from '../../game-config';
 
 import { styles } from './debug-styles';
 import { MapInspector } from './map-inspector';
+import { PerfPanel, PipelineToggle, ToneMappingModeSelector } from './perf-panel';
 
 /** Quick time-of-day presets for the debugger (label → minutes since midnight). */
 const TIME_PRESETS: [string, number][] = [
@@ -67,6 +70,10 @@ export interface DebugActions {
   godrays(): boolean;
   /** Current god-rays light-source size (shaft strength). */
   godraysSize(): number;
+  /** EMA GPU pass timings (label → ms); empty when the timer extension is unavailable. */
+  gpuTimings(): readonly (readonly [string, number])[];
+  /** The rendering-overhaul master switch (plan 063). */
+  graphicsPipeline(): 'classic' | 'modern';
   /** Current vehicle-headlight config (lamp corona size + brightness). */
   headlights(): HeadlightConfig;
   /** Whether the debug fly mode is currently on. */
@@ -77,6 +84,8 @@ export interface DebugActions {
   moon(): MoonConfig;
   /** Current night ambient/atmosphere config (brightness/tint). */
   night(): NightConfig;
+  /** Rolling perf stats; `null` until sampling produced a frame (see setPerfEnabled). */
+  perfStats(): null | PerfStats;
   /** Live player position (native Z-up). */
   playerCoords(): Vec3;
   /** Current procedural-clutter tuning (per category; plan 042). */
@@ -101,6 +110,8 @@ export interface DebugActions {
   setGodrays(enabled: boolean): void;
   /** Set the god-rays light-source size (shaft strength). */
   setGodraysSize(size: number): void;
+  /** Flip the rendering-pipeline master switch (plan 063; no visual change until 064+ land). */
+  setGraphicsPipeline(pipeline: 'classic' | 'modern'): void;
   /** Tune vehicle headlights (lamp corona size + brightness). */
   setHeadlights(patch: Partial<HeadlightConfig>): void;
   /** Toggle night street-lamp lights (coronas). */
@@ -109,6 +120,8 @@ export interface DebugActions {
   setMoon(patch: Partial<MoonConfig>): void;
   /** Tune night ambient/atmosphere (brightness/tint). */
   setNight(patch: Partial<NightConfig>): void;
+  /** Enable/disable perf sampling (the Perf panel turns it on only while open). */
+  setPerfEnabled(enabled: boolean): void;
   /** Tune one procedural-clutter category (enabled/drawDistance/density). */
   setProcObj(category: ProcObjCategory, patch: Partial<ProcObjTypeConfig>): void;
   /** Toggle sun shadows. */
@@ -129,6 +142,8 @@ export interface DebugActions {
   setSunSize(size: number): void;
   /** Toggle ACES tone mapping. */
   setToneMapping(enabled: boolean): void;
+  /** Colour-spike selector (plan 063): move tone mapping between the post pass and the renderer. */
+  setToneMappingMode(mode: ToneMappingModeName): void;
   /** Tune vehicle reflections (preset/intensity). */
   setVehicleReflection(patch: Partial<VehicleReflectionConfig>): void;
   /** Tune the water shader (glint/reflection). */
@@ -157,6 +172,8 @@ export interface DebugActions {
   teleportToGanton(): void;
   /** Whether ACES tone mapping is on. */
   toneMapping(): boolean;
+  /** Active tone-mapping placement/curve (plan 063 colour spike). */
+  toneMappingMode(): ToneMappingModeName;
   /** Snap the map-inspector camera back to top-down (undo a right-drag orbit). */
   topDownView(): void;
   /** Spawnable car model names of the loaded game (from `vehicles.ide`) — for the spawn list. */
@@ -190,6 +207,7 @@ type Screen =
   | 'camera'
   | 'graphics'
   | 'map'
+  | 'perf'
   | 'player'
   | 'position'
   | 'procobj'
@@ -208,6 +226,7 @@ const ALL_MENU: { label: string; screen: Screen }[] = [
   { label: 'Atmosphere', screen: 'atmosphere' },
   { label: 'Camera', screen: 'camera' },
   { label: 'Graphics', screen: 'graphics' },
+  { label: 'Perf', screen: 'perf' },
   { label: 'ProcObj', screen: 'procobj' },
   { label: 'Weather', screen: 'weather' },
   { label: 'Position', screen: 'position' },
@@ -263,6 +282,8 @@ export function DebugOverlay({
   const [camera, setCamera] = useState<CameraConfig>(() => actions.camera());
   const [cameraZoom, setCameraZoom] = useState(() => actions.cameraDistance());
   const [clouds, setClouds] = useState<CloudsConfig>(() => actions.clouds());
+  const [pipeline, setPipeline] = useState(() => actions.graphicsPipeline());
+  const [toneMode, setToneMode] = useState(() => actions.toneMappingMode());
   const [toneMapping, setToneMapping] = useState(() => actions.toneMapping());
   const [water, setWater] = useState<WaterConfig>(() => actions.water());
   const [reflectionCfg, setReflectionCfg] = useState<VehicleReflectionConfig>(() => actions.vehicleReflection());
@@ -700,6 +721,8 @@ export function DebugOverlay({
                   ['nightPrelitBrightness', 'WORLD NIGHT PRELIT', 0.2, 1.5, 0.05],
                   ['lodNightAmbScale', 'LOD NIGHT AMB', 0.2, 4, 0.1],
                   ['shadowStrength', 'WORLD SHADOW', 0, 1, 0.05],
+                  ['sunDirect', 'SUN DIRECT (064, modern)', 0, 2, 0.05],
+                  ['sunIndirect', 'SUN INDIRECT KEEP (064)', 0, 1, 0.05],
                 ] as const
               ).map(([key, label, min, max, step]) => (
                 <div key={key}>
@@ -963,7 +986,7 @@ export function DebugOverlay({
                   checked={shadows.enabled}
                   onChange={() => {
                     const enabled = !shadows.enabled;
-                    setShadows({ enabled });
+                    setShadows((prev) => ({ ...prev, enabled }));
                     actions.setShadows({ enabled });
                   }}
                   style={styles.radio}
@@ -971,6 +994,19 @@ export function DebugOverlay({
                 />
                 <span style={shadows.enabled ? styles.optionActive : styles.option}>Sun shadows</span>
               </label>
+              <div style={styles.groupLabel}>CSM DISTANCE (065, modern): {shadows.distance}</div>
+              <input
+                max={1500}
+                min={200}
+                onChange={(e) => {
+                  const distance = Number(e.target.value);
+                  setShadows((prev) => ({ ...prev, distance }));
+                  actions.setShadows({ distance });
+                }}
+                step={50}
+                type="range"
+                value={shadows.distance}
+              />
               <WorldEffectsControls
                 effects={effects}
                 onPatch={(patch) => {
@@ -1030,6 +1066,16 @@ export function DebugOverlay({
                 />
                 <span style={toneMapping ? styles.optionActive : styles.option}>Tone map (ACES)</span>
               </label>
+              <PipelineToggle
+                onChange={(next) => actions.setGraphicsPipeline(next)}
+                pipeline={pipeline}
+                setPipeline={setPipeline}
+              />
+              <ToneMappingModeSelector
+                mode={toneMode}
+                onChange={(next) => actions.setToneMappingMode(next)}
+                setMode={setToneMode}
+              />
               <div style={styles.groupLabel}>WATER GLINT: {water.glint.toFixed(2)}</div>
               <input
                 max={5}
@@ -1098,6 +1144,8 @@ export function DebugOverlay({
               />
             </div>
           )}
+
+          {screen === 'perf' && <PerfPanel actions={actions} />}
 
           {screen === 'weather' && (
             <div style={styles.group}>

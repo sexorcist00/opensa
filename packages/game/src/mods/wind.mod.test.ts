@@ -1,7 +1,8 @@
 import type { IdeObjectDef, RenderPart } from '@opensa/renderware';
-import type { MeshBasicMaterial } from 'three';
+import type { MeshBasicMaterial, MeshDepthMaterial } from 'three';
 
 import { buildWorldMaterial, IdeFlag } from '@opensa/renderware';
+import { RGBADepthPacking } from 'three';
 import { describe, expect, it } from 'vitest';
 
 import { createWindMod } from './wind.mod';
@@ -75,6 +76,18 @@ describe('wind mod', () => {
       expect(swayAt).toBeGreaterThan(-1);
       expect(shadowAt).toBeGreaterThan(-1);
       expect(swayAt).toBeLessThan(shadowAt);
+    });
+
+    it('builds a sway-matched shadow depth material (plan 065 casters)', () => {
+      const target = part(170);
+      mod.decoratePart?.(def('cedar1_hi'), target);
+      const depth = target.material.userData.swayDepthMaterial as MeshDepthMaterial;
+      expect(depth).toBeDefined();
+      expect(depth.depthPacking).toBe(RGBADepthPacking);
+      const shader = shaderStub();
+      depth.onBeforeCompile(shader, undefined as never);
+      expect(shader.vertexShader).toContain('transformed.x +='); // the same sway displacement
+      expect(shader.uniforms.uWindTime).toBeDefined(); // shared wind clock — shadow in phase with the mesh
     });
 
     it('falls back to height mode for listed models without adapted alphas (cacti)', () => {

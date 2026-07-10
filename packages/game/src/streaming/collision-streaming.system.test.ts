@@ -41,6 +41,7 @@ function config(collisionDrawDistance: number): Config {
         skylight: 0.6,
         windowGlow: 1,
       },
+      pipeline: 'classic',
       procobj: {
         bushes: { density: 1, drawDistance: 80, enabled: true },
         cacti: { density: 1, drawDistance: 100, enabled: true },
@@ -50,12 +51,13 @@ function config(collisionDrawDistance: number): Config {
         trees: { density: 1, drawDistance: 150, enabled: true },
         underwater: { density: 1, drawDistance: 60, enabled: true },
       },
-      shadows: { enabled: true },
+      shadows: { distance: 800, enabled: true },
       sky: { density: 0.96, exposure: 0.5, weight: 0.4 },
       ssao: { enabled: true, intensity: 1.5, radius: 0.2 },
       stars: { enabled: true },
       sun: { godrays: true, godraysSize: 30, sunSize: 15 },
       toneMapping: false,
+      toneMappingMode: 'aces',
       vehicleReflection: { intensity: 1, preset: 'enhanced' },
       water: { darkness: 0.55, glint: 1.5, reflection: 0.6 },
       worldLight: {
@@ -64,6 +66,8 @@ function config(collisionDrawDistance: number): Config {
         lodNightAmbScale: 1.6,
         nightPrelitBrightness: 0.7,
         shadowStrength: 0.55,
+        sunDirect: 1,
+        sunIndirect: 0.7,
       },
     },
     hud: {

@@ -14,8 +14,17 @@ import {
   ToneMappingMode,
 } from 'postprocessing';
 
-import type { BloomConfig, SkyConfig, SsaoConfig } from '../interfaces/config.interface';
+import type { BloomConfig, SkyConfig, SsaoConfig, ToneMappingModeName } from '../interfaces/config.interface';
 import type { Plugin, PluginContext, RenderPass, RenderPipeline } from './plugin';
+
+/** The post pass's tone curve per colour-spike mode (plan 063). Renderer-level tone mapping is NOT an
+ *  option here: with the composer, three skips material-stage tone mapping when rendering into a render
+ *  target (verified live — renderer modes were a no-op), so the curve lives in the ToneMappingEffect. */
+const TONE_CURVES: Record<Exclude<ToneMappingModeName, 'none'>, ToneMappingMode> = {
+  aces: ToneMappingMode.ACES_FILMIC,
+  agx: ToneMappingMode.AGX,
+  neutral: ToneMappingMode.NEUTRAL,
+};
 
 /** Bloom blur radius (mipmap blur) and luminance smoothing — fixed; intensity/threshold are config. */
 const BLOOM_RADIUS = 0.7;
@@ -154,7 +163,7 @@ export class PostFxPlugin implements Plugin {
   }
 
   update(context: PluginContext): void {
-    const { bloom, ssao, sun, toneMapping } = context.config.graphics;
+    const { bloom, ssao, sun, toneMapping, toneMappingMode } = context.config.graphics;
     if (this.godraysPass) {
       this.godraysPass.enabled = sun.godrays && this.sunSource.visible; // shafts only when sun is up
     }
@@ -166,9 +175,13 @@ export class PostFxPlugin implements Plugin {
       this.ssaoPass.enabled = ssao.enabled;
     }
     if (this.tonePass && this.toneMapping) {
-      // ACES full-time (plan 038): one tone curve day and night over the unlit SA world.
+      // ACES full-time (plan 038): one tone curve day and night over the unlit SA world. The plan-063 colour
+      // spike swaps the CURVE live ('none' disables the pass — raw output).
       this.toneMapping.blendMode.opacity.value = 1;
-      this.tonePass.enabled = toneMapping;
+      this.tonePass.enabled = toneMapping && toneMappingMode !== 'none';
+      if (toneMappingMode !== 'none' && this.toneMapping.mode !== TONE_CURVES[toneMappingMode]) {
+        this.toneMapping.mode = TONE_CURVES[toneMappingMode];
+      }
     }
     this.ensurePass(!context.config.mapViewer); // plain render in the map inspector
   }

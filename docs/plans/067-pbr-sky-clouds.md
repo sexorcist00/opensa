@@ -1,6 +1,6 @@
-# 005 — PBR sky, horizon LUT, clouds
+# 067 — PBR sky, horizon LUT, clouds
 
-Part of the [rendering overhaul chain](readme.md). Independent of 002–004 (can run in parallel after [001](001-foundations-instrumentation.md)). Feeds [006 — fog](006-unified-fog.md) via the horizon LUT.
+Part of the [rendering overhaul chain](062-rendering-overhaul.md). Independent of 002–004 (can run in parallel after [063](063-render-foundations-instrumentation.md)). Feeds [068 — fog](068-unified-fog.md) via the horizon LUT.
 
 ## Context
 

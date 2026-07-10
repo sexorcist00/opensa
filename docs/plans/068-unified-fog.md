@@ -1,6 +1,6 @@
-# 006 — Unified fog & aerial perspective (cut the horizon)
+# 068 — Unified fog & aerial perspective (cut the horizon)
 
-Part of the [rendering overhaul chain](readme.md). Depends on [005](005-pbr-sky-clouds.md) (the horizon LUT). Fixes the reported bug-class: **the ocean/far world is visible through the haze at the horizon** — fog must actually terminate the world.
+Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [067](067-pbr-sky-clouds.md) (the horizon LUT). Fixes the reported bug-class: **the ocean/far world is visible through the haze at the horizon** — fog must actually terminate the world.
 
 ## Context
 

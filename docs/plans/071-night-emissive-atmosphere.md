@@ -1,6 +1,6 @@
-# 009 — Night & emissive atmosphere (dawn, dusk, night)
+# 071 — Night & emissive atmosphere (dawn, dusk, night)
 
-Part of the [rendering overhaul chain](readme.md). Depends on [005](005-pbr-sky-clouds.md) (sky/moon) and [008](008-local-lights.md) (local lights). The "make night actually beautiful" plan: keep prelit + night vertex colours AND make them glow.
+Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [067](067-pbr-sky-clouds.md) (sky/moon) and [070](070-local-lights.md) (local lights). The "make night actually beautiful" plan: keep prelit + night vertex colours AND make them glow.
 
 ## Context
 

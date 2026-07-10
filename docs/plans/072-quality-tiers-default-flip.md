@@ -1,6 +1,6 @@
-# 010 — Quality tiers, default flip, cleanup
+# 072 — Quality tiers, default flip, cleanup
 
-Part of the [rendering overhaul chain](readme.md). The closing plan: depends on everything before it. The chain isn't "done" until the modern pipeline is the DEFAULT and the budgets hold on real hardware tiers.
+Part of the [rendering overhaul chain](062-rendering-overhaul.md). The closing plan: depends on everything before it. The chain isn't "done" until the modern pipeline is the DEFAULT and the budgets hold on real hardware tiers.
 
 ## Context
 

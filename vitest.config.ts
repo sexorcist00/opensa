@@ -23,6 +23,7 @@ export default defineConfig({
         'packages/game/src/core/renderer.ts', // WebGLRenderer setup
         'packages/game/src/core/camera-controller.ts', // pointer/keyboard DOM camera rig
         'packages/game/src/input/keyboard/keyboard.ts', // DOM keyboard listeners
+        'packages/game/src/plugins/csm.plugin.ts', // cascade lights/shadow cameras (GL; math in shadows/csm-math)
         'packages/game/src/plugins/sky.plugin.ts', // ShaderMaterial sky dome (GL)
         'packages/game/src/plugins/water.plugin.ts', // GL water surface
         'packages/game/src/plugins/postfx.plugin.ts', // EffectComposer / postprocessing (GL)
