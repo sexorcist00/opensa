@@ -91,6 +91,7 @@ function runFill(models: string[]): {
     archives,
     ensureTxd: () => 'salod0000',
     holeLodDraw: 1500,
+    keepParticles: false,
     models: new Set(models),
     outDataDir: dir,
     setImg: (name, bytes) => img.set(name, bytes),

@@ -13,10 +13,16 @@ OUT      := $(OUT_DIR)/perfect-map.asi
 CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fno-tree-loop-distribute-patterns
 LDFLAGS  := -shared -nostdlib -Wl,--entry,_DllMain@12 -Wl,--exclude-all-symbols -s
 
-# `make APPLY=1` builds the patching variant (plan 004); default is verify-only (plan 003). Per-fix bisection:
-# `make APPLY=1 PM='-DPM_FIX_INT16=1 -DPM_FIX_LOADEDBUILDINGS=0'`.
+# `npm run build:asi` = the shipping build: APPLY with both fixes on (int16 + fx2dfx, per the PM_FIX_* defaults).
+# `make APPLY=1` alone builds the same; plain `make` (build:verify) is the plan-003 dry-run that patches nothing.
+# Per-fix bisection: `make APPLY=1 PM='-DPM_FIX_INT16=1 -DPM_FIX_FX2DFX=0'`.
 ifeq ($(APPLY),1)
 CXXFLAGS += -DPM_APPLY=1
+endif
+# `make DEBUG=1` (build:debug): verbose log — dump every patch site's verify status before applying + trace the
+# int16 sidecar and fx2dfx guard hits at runtime.
+ifeq ($(DEBUG),1)
+CXXFLAGS += -DPM_DEBUG=1 -DPM_INT16_LOG=1 -DPM_FX2DFX_LOG=1
 endif
 CXXFLAGS += $(PM)
 

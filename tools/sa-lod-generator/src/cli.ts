@@ -2,7 +2,10 @@
  * sa-lod-generator CLI. Takes `--game <path>` (a game-data dir: `data/` + `models/`), resolves the map's HD↔LOD
  * links and prints a sizing report — stock LODs vs full HD clones (plan 002, Phase 1). With `--out <path>` it bakes
  * the drop-in build: every per-object LOD becomes a verbatim HD clone with a `--tex-scale` (default 0.5) TXD. Usage:
- * `tsx sa-lod-generator/src/cli.ts --game <path> [--out <path>] [--tex-scale 0.5]`. Paths are relative to the
+ * `tsx sa-lod-generator/src/cli.ts --game <path> [--out <path>] [--tex-scale 0.5] [--strip-particles]`.
+ * By default the clones KEEP their type-1 particle emitters (smoke/fire) so distant factory smoke shows at LOD
+ * range — this REQUIRES perfect-map.asi (its 2dfx fix, plan 009); without it the game crashes at `0x004AA3A1`.
+ * `--strip-particles` restores the old strip behaviour for a STOCK target with no asi. Paths are relative to the
  * current working directory (absolute paths pass through).
  */
 import { statSync } from 'node:fs';
@@ -34,7 +37,10 @@ function main(): void {
 
   const label = basename(gameDir);
   const texScale = Number(argValue('--tex-scale') ?? config.texScale);
-  const adapter = createSaLodAdapter(label, gameDir, { ...config, texScale });
+  // Particles ride the LOD clones by default (plan 010) — needs perfect-map.asi's 2dfx fix (plan 009). Pass
+  // --strip-particles for a stock target with no asi (the pre-009 behaviour: type-1 emitters removed, coronas kept).
+  const keepParticles = !process.argv.includes('--strip-particles');
+  const adapter = createSaLodAdapter(label, gameDir, { ...config, keepParticles, texScale });
   const resolved = adapter.resolvePairs();
   printReport(label, adapter.report(resolved));
   console.log(

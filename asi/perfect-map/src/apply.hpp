@@ -10,11 +10,19 @@
 #include "patches/int16.hpp"
 #endif
 
+#if PM_FIX_FX2DFX
+#include "patches/fx2dfx.hpp"
+#endif
+
 namespace pm {
 
 inline void ApplyPatches(Log& log, unsigned adjusterMask) {
 #if PM_FIX_INT16
   patches::ApplyInt16(log);  // no adjuster fixes int16 → always apply
+#endif
+
+#if PM_FIX_FX2DFX
+  patches::ApplyFx2dfx(log);  // fx zone is disjoint from adjusters → always apply (internal verify-and-defer)
 #endif
 
 #if PM_FIX_LOADEDBUILDINGS

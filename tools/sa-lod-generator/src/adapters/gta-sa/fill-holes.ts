@@ -19,6 +19,8 @@ export interface FillInput {
   /** The clone-TXD provider (shared with Phase 1): source HD txd → packed ½-res clone txd name, or `null`. */
   ensureTxd: (hdTxd: string) => null | string;
   holeLodDraw: number;
+  /** REPRO: keep particle 2dfx on the hole-fill clones (default false strips) — see {@link LodConfig.keepParticles}. */
+  keepParticles: boolean;
   /** Curated HD models (lowercased) to give a far-LOD. */
   models: ReadonlySet<string>;
   /** The drop-in build's `data/` dir (IPLs/IDE/gta.dat edited in place). */
@@ -136,7 +138,9 @@ function assignFills(
     nextId += 1;
     const lodModel = `salodh${String(fills.length).padStart(4, '0')}`;
     // Same as Phase 1: the far-LOD clone must not carry particle emitters (smoke/fire) — strip them, keep coronas.
-    input.setImg(`${lodModel}.dff`, stripParticleEffects(new Uint8Array(dff)));
+    // (The repro switch keeps them: cloned-LOD emitters never unload → the 0x004AA3A1 crash we want to trigger.)
+    const clone = new Uint8Array(dff);
+    input.setImg(`${lodModel}.dff`, input.keepParticles ? clone : stripParticleEffects(clone));
     fills.push({ bounds: dffBounds(dff), hdModel, hdTxd: txd, lodId: nextId, lodModel });
   }
 

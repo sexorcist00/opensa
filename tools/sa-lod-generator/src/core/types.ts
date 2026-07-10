@@ -23,6 +23,14 @@ export interface LodConfig {
   /** Draw distance for the generated hole-fill LODs (covers the far view once the HD unloads). */
   holeLodDraw?: number;
   /**
+   * KEEP particle 2dfx (type-1 emitters: factory smoke, fire, fountains) on the far-LOD clones so distant smoke
+   * shows at LOD range (plan 010). Default true — but this REQUIRES perfect-map.asi's 2dfx fix (plan 009): without
+   * it the cloned-LOD emitters trigger the use-after-free crash at 0x004AA3A1 (see lod-2dfx-particles.md). Set
+   * false (`--strip-particles`) for a stock target with no asi — the pre-009 behaviour (type-1 stripped, coronas
+   * kept). NOTE: keeping them reintroduces the far-view emitter overdraw (plan 010's open budget task).
+   */
+  keepParticles?: boolean;
+  /**
    * Screen-size skip (plan 003, Track 1): a LOD whose HD model's bounding diameter covers fewer pixels than
    * this at the HD's own draw distance (where the HD unloads and the LOD appears) is not worth cloning — the
    * stock LOD stays. Default 2.

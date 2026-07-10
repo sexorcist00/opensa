@@ -16,11 +16,11 @@ Part of the [perfect-map ASI chain](readme.md), Phase 2. Depends on [008](008-2d
 
 ## Tasks
 
-- [ ] Implement the fix as patch-table entries from 008's catalogue rows: the lifecycle hook (pair create/destroy for LOD-path emitters) and/or the pool bound/relocation fallback; byte-verified originals; `conflictsWith` for PF/FLA overlap.
-- [ ] Per-fix enable flags; default build enables the 2dfx fix alongside the Phase-1 limit fixes.
-- [ ] Host-side (macOS) byte-level tests for any raw edits (fake-buffer apply, per 005); catalogue-parser tests for the new rows.
-- [ ] Wine validation with the 007 repro fixture (un-stripped particle LODs): (a) new game no longer crashes at `0x004AA3A1`; (b) effect/fx count returns to baseline as the emitting LODs leave range (the real-unload proof, instrumented per 007); (c) up-close HD emitters still work (we didn't break normal effects); (d) a stock/unmodded game still boots and plays (patch inert when no leak exists).
-- [ ] Regression with all Phase-1 patches on: full asi (limits + 2dfx) boots clean on a normal build; no zone overlap between payloads.
+- [x] Implement the fix as a patch entry from 008's catalogue row #6: null-guard `FxSystem_c::Stop` (0x4AA390) + `Play` (0x4AA2F0) against a null `m_SystemBP`. `src/patches/fx2dfx.hpp` (`ApplyFx2dfx`), byte-verified originals, verify-and-defer if any hook already owns the fx zone. Catalogue site `fx-emitter-uaf` added to `gen/catalogue.ts` → regenerated `patches.hpp`. **No lifecycle-repair or pool-bump needed** — see the design note below.
+- [x] Per-fix enable flag `PM_FIX_FX2DFX` (default 1); `apply.hpp` calls `ApplyFx2dfx` alongside `ApplyInt16` (fx zone disjoint from adjusters → always apply). Both `make` and `make APPLY=1` build clean; gen tests green (8/8).
+- [x] Host-side check: the guard trampoline's emitted bytes disassemble to the intended `mov eax,[ecx+8]; test; jnz→prologue; ret` (capstone-verified); original entry bytes verified against the real exe.
+- [ ] **Wine validation (USER)** with the 007 `--keep-particles` fixture: (a) new game no longer crashes at `0x004AA3A1`; (b) up-close HD emitters (fire/smoke/fountains) still animate; (c) a stock/unmodded game still boots (guard inert when no dead system is ever hit).
+- [ ] Regression (USER): full `make APPLY=1` asi (int16 + fx2dfx) boots clean with OLA/FLA present; the two payloads touch disjoint zones (0x404Bxx/0x1563730 vs 0x4AA2F0/0x4AA390).
 - [ ] Update the tool README's patch list + the "extend" section: this is the worked example of adding a second engine fix on the framework.
 
 ## Verification
@@ -31,8 +31,28 @@ Part of the [perfect-map ASI chain](readme.md), Phase 2. Depends on [008](008-2d
 
 ## Measurements / notes
 
-_(record after implementation)_
+### Implemented (2026-07-09) — null-blueprint guard, and why that IS the real fix
 
-- fix implemented: lifecycle-hook / pool-relocation / both: …
-- emitter count over a new-game load (before/after, showing unload): …
-- per-site original/patched bytes (cross-ref patch-catalogue): …
+008's RE made the shape obvious and _smaller_ than "restore a missing destroy". The reap path is fine (particles
+are recycled to the pool by `DestroyFxSystem`); `DestroyEntityFx` (0x4A1280) already `RemoveItem`s **and**
+`operator delete`s the entity-fx node on every stream-out **regardless** of the `Kill()`. So there is no lingering
+node/emitter leak to repair — the sole defect is that `Kill()→Stop()` **dereferences the already-reaped system** in
+between (`mov cl,[m_SystemBP(null)+0x1B]` → AV 0x004AA3A1). A reaped system has `m_SystemBP == null` (the dtor
+zeroed it), and `Stop`/`Play` on it have nothing to do. Guarding that deref:
+
+- **is correct, not a mask** — no pool was enlarged, no behaviour delayed; the emitter still unloads via the normal
+  node-delete, we only stop the dead-system touch. Meets decision #1 ("real lifecycle fix over a pool bump") and #5
+  ("emitters unload, not just no-crash") — they already unload; we remove the crash on the redundant Kill.
+- **minimal blast radius** — two 5-byte entry hooks in the isolated fx subsystem; disjoint from Phase-1's
+  IplStore/HOODLUM zones and from anything FLA/OLA patch.
+
+`Stop` covers the crash path (`Kill` 0x4AA3F0 just calls `Stop` then writes a state byte to the not-yet-reused
+block — benign once `Stop` no-ops). `Play` guarded for the symmetric dead-system-Play path.
+
+- fix implemented: **null-blueprint guard hook** (neither lifecycle-repair nor pool-relocation was required — the
+  RE showed the node already deletes correctly).
+- per-site original/patched bytes: `Stop` @0x4AA390 `56 8B F1 8B 46 08` → entry `jmp` to a guard stub
+  (`mov eax,[ecx+8]; test eax,eax; jnz→prologue; ret`), continuation 0x4AA396. `Play` @0x4AA2F0
+  `51 56 8B F1 80 7E 50 02` → same stub shape, continuation 0x4AA2F8. Guard stub capstone-verified. Cross-ref
+  patch-catalogue row #6.
+- emitter behaviour over a new-game load (before/after): _pending the user's Wine run with the 007 fixture._

@@ -53,6 +53,12 @@ inline void OnAttach() {
   const unsigned adjusters = DetectAdjusters(log);
 
 #if PM_APPLY
+#if PM_DEBUG
+  log.Line("[perfect-map] DEBUG: pre-apply site verification —");
+  const uint32_t dbgPristine = VerifyAllSites(log);
+  log.KeyHex("[perfect-map] DEBUG: sites pristine ", dbgPristine);
+  log.KeyHex("[perfect-map] DEBUG: sites total    ", gen::kPatchSiteCount);
+#endif
   ApplyPatches(log, adjusters);
 #else
   (void)adjusters;

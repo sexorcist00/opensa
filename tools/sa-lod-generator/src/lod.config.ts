@@ -50,6 +50,7 @@ export const config: LodConfig = {
   decimateBudget: 0.01,
   holeFillModels,
   holeLodDraw: 1500,
+  keepParticles: true,
   minLodPixels: 2,
   texScale: 0.25,
 };

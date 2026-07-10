@@ -43,8 +43,51 @@ So keeping particles on LODs needs both: the asi (009) AND a LOD-tuned emitter b
 
 ## Measurements / notes
 
-_(record after implementation)_
+### Step 1 shipped (2026-07-09) — keep particles by default; problem #1 (crash) closed, #2 (overdraw) open
 
-- LOD emitter scaling factors (rate/count/cap) shipped: …
-- far-view frame cost before/after scaling (map-wide smokestacks in view): …
-- models re-emitting at LOD range (of the 11 previously stripped): …
+With 009's engine fix confirmed in-game, `sa-lod-generator` now **keeps particle 2dfx on the LOD clones by
+default** (`LodConfig.keepParticles` default true; adapter fallback `?? true`; CLI inverted: opt-out
+`--strip-particles` for a stock/no-asi target, replacing the old opt-in `--keep-particles`). Green: sa-lod tests
+24/24, eslint, tsc. Distant factory smoke/fire now shows at LOD range without the `0x004AA3A1` crash.
+
+**Load diagnosis (user reported "game loads slower / LODs feel heavier"):** confirmed it is NOT a geometry
+regression — decimation still runs (`decimateBudget: 0.01`), so the clone meshes are byte-identical with or without
+particles; keeping them only adds a few tiny 2dfx entries. The cost is the **fx-emitter runtime**: every
+particle-bearing LOD instance spawns an `FxSystem` at stream-in (`CreateEntityFx` → heap alloc + a slot from the
+1000-`FxEmitterPrt_c` pool) and emits + overdraws every frame. Because particle LODs have large draw distances,
+they are all active map-wide = **exactly problem #2 (far-view overdraw)**, which 009 does not address. So the
+slowdown is inherent to keeping verbatim HD emitters at LOD range — the open budget task below.
+
+**Note on rate-scaling feasibility:** a type-1 2dfx entry only _names_ an `effects.fxp` blueprint (position + effect
+name); emission rate/particle-count live in the blueprint, not inline. So "rate-reduce" (decision #2) can't be a
+byte edit on the DFF — it needs either low-rate effect variants authored in `effects.fxp` (point the LOD entry at
+the lighter name), or a build-time lever that doesn't touch effects.fxp (cap which/how-many LODs keep particles, or
+shorten the particle-LOD draw distance so fewer emit at once). Direction is the pending user decision.
+
+- LOD emitter scaling factors (rate/count/cap) shipped: **none — user decision (2026-07-09): accept the overdraw
+  as-is for now.** The crash is fixed (009) and distant smoke is the desired look; the far-view frame cost is a known
+  tradeoff, not a blocker. Overdraw budgeting deferred (the low-rate approach below is the recorded path when we pick
+  it back up). No count/distance cap shipped.
+- far-view frame cost before/after scaling (map-wide smokestacks in view): _not measured — deferred._
+- models re-emitting at LOD range (of the 11 previously stripped): **all** (default keep).
+
+## Future enhancement — low-rate `effects.fxp` variants (recorded 2026-07-09, user-flagged as interesting)
+
+The clean way to keep distant smoke visible WITHOUT the map-wide overdraw, since a type-1 2dfx entry only _names_ an
+`effects.fxp` blueprint (rate/particle-count/sprite budget live in the blueprint, not inline in the DFF):
+
+1. **Author LOD variants in `effects.fxp`.** For each particle effect a LOD keeps (`smoke30m`, `smoke50lit`,
+   `ws_factorysmoke`, `fire`, `water_fountain`, `vent`, …), add a sibling blueprint (e.g. `smoke30m_lod`) with
+   emission rate / max-particles / sprite size scaled DOWN hard (candidate: ~10–25 % rate, fewer/larger sprites so a
+   single soft plume reads at range instead of a dense column). Same visual identity, a fraction of the fill cost.
+2. **Retarget the LOD's 2dfx entry to the `_lod` name.** In the sa-lod clone path (`finalize.ts`/`fill-holes.ts`),
+   when keeping a type-1 entry, rewrite its effect-name string to the `_lod` variant (a byte-level name swap in the
+   2dfx section — `build2dfxSection` already rewrites entries; add a name-remap param). HD keeps the full-rate name.
+3. **Pack the augmented `effects.fxp`** into the drop-in build (the pipeline already ships data overrides). Since the
+   blueprint pool is generous and `_lod` blueprints are cheaper, map-wide concurrent LOD plumes stay within budget.
+4. **Tune in-game** against the 02-rendering perf HUD: dial the `_lod` rate until the whole-map far view holds frame
+   budget while the plumes still read. Record factors + fps.
+
+This keeps decision #2 ("rate-reduced, not verbatim") intact and needs NO engine change beyond 009 — purely data
+(effects.fxp + a name-remap in the clone path). Bigger lift than a draw-distance cap, best fidelity/perf result.
+Deferred until we choose to budget the overdraw.

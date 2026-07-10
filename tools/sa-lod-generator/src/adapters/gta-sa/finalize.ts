@@ -38,6 +38,8 @@ export interface BuildInput {
   holeLodDraw: number;
   /** Curated HD models (lowercased) with no LOD to give a generated far-LOD (plan 003). */
   holeModels: ReadonlySet<string>;
+  /** REPRO: keep particle 2dfx on the clones (default false strips them) — see {@link LodConfig.keepParticles}. */
+  keepParticles: boolean;
   links: readonly LodLink[];
   outDir: string;
   source: TextureSource;
@@ -132,7 +134,14 @@ export function writeBuild(input: BuildInput): BuildStats {
     }
     img.set(
       `${link.lodModel}.dff`,
-      cloneLodDff(new Uint8Array(hdDff), link, decimate, atlasView(input.source, link.hdTxd), stats),
+      cloneLodDff(
+        new Uint8Array(hdDff),
+        link,
+        decimate,
+        atlasView(input.source, link.hdTxd),
+        stats,
+        input.keepParticles,
+      ),
     );
     modelToTxd.set(link.lodModel, cloneTxd);
     stats.clonedLods += 1;
@@ -145,6 +154,7 @@ export function writeBuild(input: BuildInput): BuildStats {
       archives: input.archives,
       ensureTxd: (hdTxd) => ensureCloneTxd(hdTxd, input, img, hdTxdToClone),
       holeLodDraw: input.holeLodDraw,
+      keepParticles: input.keepParticles,
       models: input.holeModels,
       outDataDir: join(input.outDir, 'data'),
       setImg: (name, bytes) => img.set(name, bytes),
@@ -186,6 +196,7 @@ function cloneLodDff(
   decimate: null | ReturnType<typeof createBudgetedDecimate>,
   textures: TextureSource,
   stats: BuildStats,
+  keepParticles: boolean,
 ): Uint8Array {
   if (decimate) {
     const clump = parseDff(toArrayBuffer(hdDff));
@@ -194,13 +205,18 @@ function cloneLodDff(
     const decimated = decimate(mesh, ctx);
     if (decimated !== mesh) {
       stats.decimatedLods += 1;
-      const effects = build2dfxSection(collectClumpEffects(hdDff, clump));
+      // Default drops particles (type 1); the repro switch adds them back so the decimated clones emit too.
+      const entries = collectClumpEffects(hdDff, clump);
+      if (keepParticles) {
+        entries.push(...collectClumpEffects(hdDff, clump, new Set([1])));
+      }
+      const effects = build2dfxSection(entries);
 
       return encodeLodDff(decimated, link.lodModel, { ...(effects ? { effects } : {}) });
     }
   }
 
-  return stripParticleEffects(hdDff);
+  return keepParticles ? hdDff : stripParticleEffects(hdDff);
 }
 
 /** Distinct LOD models across the given links. */

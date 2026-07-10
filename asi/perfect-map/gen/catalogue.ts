@@ -161,4 +161,24 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
     strategy: 'relocate',
     summary: 'IplEntityIndexArrays CEntity**[40] @0x8E3F08 — relocate+enlarge, raise the 40-slot ceiling',
   },
+  {
+    id: 'fx-emitter-uaf',
+    sites: [
+      {
+        address: 0x4aa390,
+        bytes: [0x56, 0x8b, 0xf1, 0x8b, 0x46, 0x08],
+        name: 'FxSystem_c.Stop',
+        note: 'push esi;mov esi,ecx;mov eax,[esi+8] — null-guard m_SystemBP (the 2dfx UAF crash 0x004AA3A1)',
+      },
+      {
+        address: 0x4aa2f0,
+        bytes: [0x51, 0x56, 0x8b, 0xf1, 0x80, 0x7e, 0x50, 0x02],
+        name: 'FxSystem_c.Play',
+        note: 'push ecx;push esi;mov esi,ecx;cmp byte[esi+0x50],2 — null-guard m_SystemBP (symmetric path)',
+      },
+    ],
+    strategy: 'hook',
+    summary:
+      'FxSystem_c::Stop/Play null-blueprint guard — fixes the 2dfx fx-system use-after-free (reaped system Kill()ed on stream-out → null m_SystemBP deref). Lets particle 2dfx ride LOD clones without the crash. Fx zone: no FLA/OLA overlap.',
+  },
 ];

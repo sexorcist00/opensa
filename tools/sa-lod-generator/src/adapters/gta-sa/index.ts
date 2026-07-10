@@ -68,6 +68,7 @@ export function createSaLodAdapter(game: string, gameDir: string, config: LodCon
         halvings,
         holeLodDraw,
         holeModels,
+        keepParticles: config.keepParticles ?? true,
         links: resolved.links,
         outDir,
         source,

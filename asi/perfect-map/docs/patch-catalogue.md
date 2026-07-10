@@ -37,13 +37,14 @@ way: Wine test 1 failed a memory anchor because the user's FLA patches `RemoveIp
 
 ## Summary table
 
-| #   | Logical fix                                                           | gta-reversed ref                                                  | address(es) — real exe                                                                                                       | original bytes                                                | change                                                                                                                 | FLA/OLA overlap                                   |
-| --- | --------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| 1   | `IplDef` building range int16 → int32 — **✅ SHIPPED, works in-game** | `IplStore.cpp` `IncludeEntity` + `RemoveIpl`                      | IncludeEntity **0x404C90**; RemoveIpl entry **0x404B20** + reads **0x404B4A** / **0x404B5D** / **0x404BA8** (loop back-edge) | see #1 detail                                                 | observe IncludeEntity → int32 sidecar; snapshot at RemoveIpl entry; redirect its 3 building-bound reads to the sidecar | FLA jmp-hooks the 3 reads → we overlay; OLA stock |
-| 2   | `RemoveIpl` reads the widened range                                   | `IplStore.cpp` `RemoveIpl`                                        | **0x404B20** (body clean)                                                                                                    | `0f bf 7b 22` / `0f bf 53 24` (`movsx …,word[ebx+0x22/0x24]`) | hook the entry; read the int32 range from the sidecar                                                                  | (same as #1)                                      |
-| 3   | `gpLoadedBuildings` 4096/scene overflow                               | `FileLoader.cpp` `LoadScene` INST case                            | store **0x5B8938**, count **0x5B8940** (array **0xBCC0E0**, count **0xBCC0D8**)                                              | `89 04 8d e0 c0 bc 00` (`mov [ecx*4+0xBCC0E0],eax`)           | relocate+enlarge the `CEntity*[4096]`; add the missing bound                                                           | FLA `Inst entries per file`                       |
-| 4   | `IplEntityIndexArrays` 40-slot cap                                    | `IplStore.cpp` `LoadIplBoundingBox` / `GetNewIplEntityIndexArray` | **0x405C00** (array **0x8E3F08**, count **0x8E3F00**, cursor **0x8E3EFC**)                                                   | `66 8b 43 2a` (`mov ax,word[ebx+0x2a]` = staticIdx)           | relocate+enlarge the `CEntity**[40]`; raise the ceiling                                                                | FLA `[IPL] Entity index array`                    |
-| 5   | `LinkLods` double-patch coexistence                                   | `FileLoader.cpp` `LinkLods`                                       | **0x5B51E0**                                                                                                                 | detection only                                                | skip if FLA/OLA own the same zone                                                                                      | the conflict itself                               |
+| #   | Logical fix                                                                            | gta-reversed ref                                                                                                     | address(es) — real exe                                                                                                                                                                    | original bytes                                                                                           | change                                                                                                                                                                                                                                                                     | FLA/OLA overlap                                   |
+| --- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| 1   | `IplDef` building range int16 → int32 — **✅ SHIPPED, works in-game**                  | `IplStore.cpp` `IncludeEntity` + `RemoveIpl`                                                                         | IncludeEntity **0x404C90**; RemoveIpl entry **0x404B20** + reads **0x404B4A** / **0x404B5D** / **0x404BA8** (loop back-edge)                                                              | see #1 detail                                                                                            | observe IncludeEntity → int32 sidecar; snapshot at RemoveIpl entry; redirect its 3 building-bound reads to the sidecar                                                                                                                                                     | FLA jmp-hooks the 3 reads → we overlay; OLA stock |
+| 2   | `RemoveIpl` reads the widened range                                                    | `IplStore.cpp` `RemoveIpl`                                                                                           | **0x404B20** (body clean)                                                                                                                                                                 | `0f bf 7b 22` / `0f bf 53 24` (`movsx …,word[ebx+0x22/0x24]`)                                            | hook the entry; read the int32 range from the sidecar                                                                                                                                                                                                                      | (same as #1)                                      |
+| 3   | `gpLoadedBuildings` 4096/scene overflow                                                | `FileLoader.cpp` `LoadScene` INST case                                                                               | store **0x5B8938**, count **0x5B8940** (array **0xBCC0E0**, count **0xBCC0D8**)                                                                                                           | `89 04 8d e0 c0 bc 00` (`mov [ecx*4+0xBCC0E0],eax`)                                                      | relocate+enlarge the `CEntity*[4096]`; add the missing bound                                                                                                                                                                                                               | FLA `Inst entries per file`                       |
+| 4   | `IplEntityIndexArrays` 40-slot cap                                                     | `IplStore.cpp` `LoadIplBoundingBox` / `GetNewIplEntityIndexArray`                                                    | **0x405C00** (array **0x8E3F08**, count **0x8E3F00**, cursor **0x8E3EFC**)                                                                                                                | `66 8b 43 2a` (`mov ax,word[ebx+0x2a]` = staticIdx)                                                      | relocate+enlarge the `CEntity**[40]`; raise the ceiling                                                                                                                                                                                                                    | FLA `[IPL] Entity index array`                    |
+| 5   | `LinkLods` double-patch coexistence                                                    | `FileLoader.cpp` `LinkLods`                                                                                          | **0x5B51E0**                                                                                                                                                                              | detection only                                                                                           | skip if FLA/OLA own the same zone                                                                                                                                                                                                                                          | the conflict itself                               |
+| 6   | 2dfx fx-system use-after-free (LOD emitter crash) — **✅ SHIPPED (009), Wine pending** | `Fx/FxSystem.cpp` `Stop`/`Play`/`Kill`; `Fx/FxManager.cpp` `Update`/`DestroyFxSystem`; `Fx/Fx.cpp` `DestroyEntityFx` | crash `FxSystem_c::Stop` **0x4AA390**; `Play` **0x4AA2F0**; `Kill` **0x4AA3F0**; `DestroyEntityFx` **0x4A1280**; reap `FxManager_c::Update` **0x4A9A80** / `DestroyFxSystem` **0x4A9810** | Stop `56 8b f1 8b 46 08`; Play `51 56 8b f1 80 7e 50 02` (both deref `[this+8]->[+0x1B]`, no null guard) | null-guard `m_SystemBP` (+8) on `Stop` + `Play` — early-return when the blueprint is null. No node-unlink needed: `DestroyEntityFx` already `RemoveItem`s + `delete`s the node every stream-out; the guard just neutralises the redundant `Kill→Stop` on the reaped system | none (fx zone; FLA/OLA don't touch it)            |
 
 ## Structure details
 
@@ -178,6 +179,53 @@ already relocated `gpLoadedBuildings`/the IPL arrays, our #3/#4 relocation would
 documented FLA×OLA `LinkLods` crash). So #3/#4 carry `conflictsWith` guards: detect the adjuster (module enumerate
 
 - byte probe, per [003](./plans/003-patch-framework.md)) and defer if it owns the zone.
+
+### #6 — 2dfx fx-system use-after-free (Phase 2 — full RE in [plan 008](./plans/008-2dfx-emitter-re.md))
+
+Two-source verified (gta-reversed-modern `Fx/*` + `Entity/Entity.cpp` **and** 1.0-US exe disasm — every offset
+cross-checked). Superseded the earlier mis-ID (`0x4AA390` was thought to be `CEntity::CreateEffects` reading a null
+model-info; it is not).
+
+```cpp
+// Fx/FxSystem.cpp — the crash
+// 0x4AA390
+void FxSystem_c::Stop() {
+    m_nPlayStatus  = FX_STOPPED;                 // [this+0x50] = 1
+    m_fCurrentTime = 0;                          // [this+0x54] = 0
+    for (auto* prim : GetPrims())                // span{ m_Prims (+0x78), m_SystemBP->m_nNumPrims }
+        prim->Reset();                           // [prim vtable +0xC]
+}   // m_SystemBP = [this+8] (FxSystemBP_c*); m_nNumPrims = [bp+0x1B] (u8)
+// 0x4AA3F0  Kill()  = { Stop(); m_nKillStatus(+0x51)=FX_KILLED; }
+// ctor 0x4AAF00 nulls m_SystemBP(+8), stores vtable 0x85AA94(+0x7C); dtor 0x4AA260 zeroes m_SystemBP.
+
+// Fx/FxManager.cpp — the reap that orphans the entity node
+// 0x4A9A80  Update(): walks m_FxSystems; if FxSystem_c::Update(0x4AAF70) reports finished → DestroyFxSystem.
+// 0x4A9810  DestroyFxSystem(): recycles the system's particles to the 1000-slot pool, RemoveItem, Exit, delete.
+//           NEITHER touches g_fx(0xA9AE00).m_FxEntities → the FxEntitySystem node is left dangling.
+
+// Fx/Fx.cpp / Entity/Entity.cpp — the create/destroy pair
+// g_fx = 0xA9AE00, g_fxMan = 0xA9AE80
+// CEntity::CreateEffects 0x533790 → EFFECT_PARTICLE → Fx_c::CreateEntityFx 0x4A11E0
+//     → g_fxMan.CreateFxSystem(…,ignoreBounds=1) 0x4A9BE0 → new FxEntitySystem{m_System,m_Entity} → AddItem → Play.
+// CEntity::DestroyEffects 0x533BF0 → EFFECT_PARTICLE → Fx_c::DestroyEntityFx 0x4A1280
+//     → node->m_System->Kill() @0x4A12A4  ← CRASH FRAME (return 0x4A12A9) when m_System was already reaped.
+```
+
+**Crash `0x004AA3A1`** = `mov cl,[eax+0x1B]` with `eax=m_SystemBP=null` — a dangling `FxSystem_c` (dtor-zeroed
+blueprint). **Bug:** `FxManager_c::Update`/`DestroyFxSystem` reap finished/`PlayAndKill` systems without unlinking
+`Fx_c::m_FxEntities`; stream-out then `Kill()`s the freed system. LOD clones that keep type-1 2dfx multiply
+entity-fx nodes (and drain the **1000-slot `FxEmitterPrt_c` pool**, `FX_MANAGER_NUM_EMITTERS`, alloc'd in `Init`
+0x4A98E0), so the race becomes reliable.
+
+**✅ Fix SHIPPED in 009 (`src/patches/fx2dfx.hpp`, `PM_FIX_FX2DFX`):** null-guard `m_SystemBP` on `Stop` (0x4AA390)
+and `Play` (0x4AA2F0) — 5-byte entry `jmp` → a guard stub (`mov eax,[ecx+8]; test; jnz→relocated-prologue; ret`).
+**No node-unlink is needed:** `Fx_c::DestroyEntityFx` (0x4A1280) already `RemoveItem`s **and** `operator delete`s the
+`FxEntitySystem` node on every stream-out regardless of the `Kill()`, so nothing leaks once the redundant
+`Kill→Stop` on the reaped system is neutralised. Guarding `Stop` covers the `Kill` path (`Kill` = `Stop()` + a state
+byte). This lets particle 2dfx ride LOD clones without the crash (plan 010), and is engine-safe on stock SA too.
+Behavioural PF cross-check (which site PF patches) + Wine confirmation of this fix still pending the user's run.
+
+**Original bytes (baseline for 003 byte-verify):** at `0x4AA390`: `56 8B F1 8B 46 08 C6 46 50 01 C7 46 54 00 00 00 00 8A 48 1B` (`push esi; mov esi,ecx; mov eax,[esi+8]; mov byte[esi+0x50],1; mov [esi+0x54],0; mov cl,[eax+0x1B]`).
 
 ## Exe fingerprint (⏳ TODO — needs the exe)
 
