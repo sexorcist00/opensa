@@ -11,6 +11,35 @@ support too immature to rely on).
 
 ---
 
+## ✅ Spike implemented (2026-07-11) — a synthetic harness
+
+Rather than integrate WebGPU into the whole engine (async renderer, material swaps, plugin disabling — weeks),
+the spike is a **standalone synthetic harness** that isolates the one variable: it renders `COUNT` separate
+boxes (shared geometry, culling **off** → every mesh submits every frame) so the **draw count** matches the
+engine's ~14.8k, and measures the synchronous `render()` CPU time across three runs.
+
+- File: `apps/web/src/standalone/webgpu-spike.ts` + `webgpu-spike.html` (vite entry `webgpuSpike`).
+- Verified: tsc + eslint clean, **vite build succeeds** (`three/webgpu` bundles as a 454 kB chunk).
+- Bundle path confirmed against three source: `BundleGroup` (`static = true` by default, version-gated reuse) →
+  the renderer records the bundle once and replays it while unchanged. The harness never mutates the group, so
+  it exercises the true record-once path.
+
+**Run it (needs a WebGPU browser — Chrome/Edge/Safari 18+):**
+```
+npm run dev   # then open:
+/webgpu-spike.html?mode=webgl        → WebGL baseline      (expect ≈ engine per-draw cost)
+/webgpu-spike.html?bundle=0          → WebGPU, no bundle   (Level-1: cheaper per-draw only)
+/webgpu-spike.html                   → WebGPU + BundleGroup (Level-2: record-once)
+# optional &count=15000
+```
+Read `render CPU` off the on-screen HUD for each and fill the table below.
+
+**What this covers / doesn't:** it answers the core question — *does bundling collapse submission for a large
+static draw list?* It does **not** test the **streaming re-record cost** (cell add/remove → bundle
+invalidation); that needs the real-engine integration and is a Phase-1 confirmation, not a Phase-0 gate.
+
+---
+
 ## Step 1 — WebGPU renderer behind a flag
 
 - [ ] Add `?webgpu=1` boot flag in `canvas-host.tsx` (next to existing URL flags).

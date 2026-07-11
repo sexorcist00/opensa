@@ -85,6 +85,7 @@ const isProdDeploy = excludeViewers && hideDebugger;
 const viewerInputs = {
   controlsHarness: resolve(__dirname, 'controls-harness.html'),
   viewer: resolve(__dirname, 'viewer.html'), // object/vehicle/character as ?tab= in one app
+  webgpuSpike: resolve(__dirname, 'webgpu-spike.html'), // Phase-0 WebGPU render-bundle spike (throwaway, dev only)
 };
 
 export default defineConfig(({ command }) => ({
