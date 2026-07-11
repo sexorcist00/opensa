@@ -135,6 +135,8 @@ export class Game {
   private readonly warmHolder = new Scene();
   private readonly warmViewport = new Vector4();
   private readonly weatherTransition: WeatherTransition;
+  /** Phase-1 WebGPU spike (`?webgpu=1`): renderer is WebGPU; plugins + GPU timer are skipped. */
+  private webgpu = false;
 
   private constructor(canvas: HTMLCanvasElement, config: Config) {
     this.canvas = canvas;
@@ -301,7 +303,8 @@ export class Game {
     if (this.context) {
       return; // already initialized
     }
-    const { camera, renderer, scene } = createRenderContext(this.canvas);
+    const { camera, renderer, scene, webgpu } = await createRenderContext(this.canvas);
+    this.webgpu = webgpu;
     this.camera = camera;
     this.renderer = renderer;
     this.scene = scene;
@@ -313,7 +316,8 @@ export class Game {
     this.input = new CombinedInput([this.pointerSource]);
     this.cameraController = new CameraController(camera, renderer.domElement, this.config, this.input);
     this.pipeline = new BasicRenderPipeline(renderer, scene, camera);
-    this.gpuTimer = GpuTimer.create(renderer.getContext() as WebGL2RenderingContext);
+    // WebGPU spike: no WebGL2 context → skip the WebGL GPU timer.
+    this.gpuTimer = webgpu ? null : GpuTimer.create(renderer.getContext() as WebGL2RenderingContext);
     // Perf accuracy (plan 063): with the post-FX composer, three resets `renderer.info` on EVERY internal
     // render call, so a post-frame sample would only see the last pass (1 draw / 1 triangle). Accumulate
     // across the whole frame instead: manual reset at the top of the loop.
@@ -328,8 +332,13 @@ export class Game {
       scene,
     };
 
-    for (const plugin of this.plugins) {
-      await plugin.install(this.context);
+    // WebGPU spike (Phase 1): the plugins author raw GLSL (sky/water/csm) or use the WebGL-only `postprocessing`
+    // lib (postfx) — none run on WebGPU yet. Skip their install so the raw streamed world renders under WebGPU
+    // with base (auto-converted) materials. Porting each to TSL is the rest of Phase 1.
+    if (!webgpu) {
+      for (const plugin of this.plugins) {
+        await plugin.install(this.context);
+      }
     }
 
     this.start();
