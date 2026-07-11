@@ -104,13 +104,10 @@ engine** (`world-material-tsl.ts` + `setWorldMaterialTslBuilder`; canvas-host re
 system under `?webgpu=1`): the world **renders beautifully** — prelit/night shading, detailed buildings, vegetation
 (screenshot captured). **Major milestone: the world material port works and looks right.**
 
-BUT the per-draw cost is bad. Measured in-engine at Ganton: **render CPU 125 ms for 4367 draws** — the world
-renders correctly, just at ~8 fps. That's **~28 µs/draw** vs the auto-converted path's **~4 µs/draw** (19 ms / 4597)
-— **the custom-`colorNode` TSL material is ~7× more expensive to submit per draw.** (Not compilation — the world
-does fully render; it's a steady per-frame CPU cost.) three's WebGPURenderer submits its optimized built-in
-materials far cheaper than a material with a custom `colorNode`; a shared-uniform node graph re-bound per draw is
-the likely culprit. This makes the TSL world material, as written, impractical until the per-draw cost is profiled
-and cut.
+A first in-engine reading showed **125 ms / 4367 draws** and I wrongly blamed the TSL material's per-draw cost.
+**Corrected below (see "Precise root cause"): standing still fully loaded is 30 ms — the TSL material is fine; the
+125 ms was the compilation tail during load, and the real problem is WebGPU compiling pipelines on the streaming
+frame.**
 
 Also parked here: **bundles are OFF by default** (`?bundle=1`/`root` to opt in) — the frustum-culling-off workaround
 for the bundle transform bug caused a no-cull perf spiral of its own.
