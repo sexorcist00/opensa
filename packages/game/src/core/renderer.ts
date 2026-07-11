@@ -1,7 +1,9 @@
-import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import { type Object3D, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 
 export interface RenderContext {
   camera: PerspectiveCamera;
+  /** WebGPU spike: a fresh per-cell `BundleGroup` factory (record-once) — streaming wraps each cell's objects. */
+  cellContainer?: () => Object3D;
   renderer: WebGLRenderer;
   scene: Scene;
   /** Phase-1 WebGPU spike (`?webgpu=1`, docs/concepts/webgpu-migration): the renderer is a `WebGPURenderer`.
@@ -21,13 +23,19 @@ export async function createRenderContext(canvas: HTMLCanvasElement): Promise<Re
     // three's WebGPURenderer auto-converts standard materials to nodes, so the world renders with base materials
     // (the onBeforeCompile GLSL just doesn't apply); plugins that author raw GLSL / use `postprocessing` are
     // skipped in game.ts. Typed as WebGLRenderer for the engine's sake — the API surface we use overlaps.
-    const { WebGPURenderer } = await import('three/webgpu');
+    const { BundleGroup, WebGPURenderer } = await import('three/webgpu');
     const renderer = new WebGPURenderer({ antialias: true, canvas });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height, false);
     await renderer.init();
 
-    return { camera, renderer: renderer as unknown as WebGLRenderer, scene, webgpu: true };
+    return {
+      camera,
+      cellContainer: () => new BundleGroup(),
+      renderer: renderer as unknown as WebGLRenderer,
+      scene,
+      webgpu: true,
+    };
   }
 
   const renderer = new WebGLRenderer({ antialias: true, canvas });

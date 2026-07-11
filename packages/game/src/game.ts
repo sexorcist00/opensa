@@ -96,6 +96,8 @@ export class Game {
   private camera!: PerspectiveCamera;
   private cameraController!: CameraController;
   private readonly canvas: HTMLCanvasElement;
+  /** WebGPU spike: per-cell `BundleGroup` factory the streaming system wraps each cell's objects in. */
+  private cellContainer: (() => Object3D) | null = null;
   private readonly clock = new Clock();
   private readonly collisionObjects: Object3D[] = [];
   /** Collision streaming ref (plan 061) — the physics half of {@link worldSettled}. */
@@ -216,6 +218,11 @@ export class Game {
     return this.cameraController.getDistance();
   }
 
+  /** WebGPU spike: the per-cell `BundleGroup` factory the streaming system wraps cells in (undefined on WebGL). */
+  getCellContainer(): (() => Object3D) | undefined {
+    return this.cellContainer ?? undefined;
+  }
+
   /** The city the player is currently in (driven by {@link CityZoneSystem}); Countryside until a world loads. */
   getCity(): City {
     return this.currentCity;
@@ -308,8 +315,10 @@ export class Game {
     if (this.context) {
       return; // already initialized
     }
-    const { camera, renderer, scene, webgpu } = await createRenderContext(this.canvas);
+    const { camera, cellContainer, renderer, scene, webgpu } = await createRenderContext(this.canvas);
     this.webgpu = webgpu;
+    this.cellContainer = cellContainer ?? null;
+    this.bundleCells = cellContainer != null; // per-cell BundleGroups are wired when the factory exists
     this.camera = camera;
     this.renderer = renderer;
     this.scene = scene;

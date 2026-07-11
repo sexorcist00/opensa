@@ -833,6 +833,8 @@ function bootstrap(
       // in slices, then the cell appears atomically (no piece-by-piece pop-in).
       precompile: (objects): Promise<void> => game.precompile(objects),
       warmUp: (objects): void => game.warmUp(objects),
+      // WebGPU spike: wrap each streamed cell in a per-cell BundleGroup (record-once); undefined on WebGL.
+      ...(game.getCellContainer() ? { cellContainer: game.getCellContainer() } : {}),
     });
     game.addSystem(streaming);
     game.setStreamingSystem(streaming);

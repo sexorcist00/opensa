@@ -10,6 +10,9 @@ import { cellDistanceSq, cellOf, cellsWithin } from './grid';
 
 /** Renderer-side hooks (plan 060 Phases 4 + round 3), injected by the host — absent in headless tests. */
 export interface GpuHooks {
+  /** WebGPU spike: a fresh per-cell container (a `BundleGroup`) — a cell's objects go inside it so the renderer
+   *  records the cell's draws once and replays them (docs/concepts/webgpu-migration). Absent → objects add to root. */
+  cellContainer?(): Object3D;
   /** Compile shader programs + upload textures for a built batch (renderer.compileAsync). */
   precompile?(objects: readonly Object3D[]): Promise<void>;
   /** Force the first-draw geometry uploads of a slice, invisibly (1×1 scissored render). */
@@ -66,6 +69,8 @@ export class StreamingSystem implements System {
 
   private readonly adapter: StreamAdapter;
   private readonly config: Readonly<Config>;
+  /** WebGPU spike: the per-cell `BundleGroup` a cell's objects live in, so removal drops the group not each object. */
+  private readonly containers = new Map<string, Object3D>();
   private current = new Set<string>();
   private readonly fader = new CellFader();
   private readonly gpu: GpuHooks;
@@ -206,8 +211,16 @@ export class StreamingSystem implements System {
           }
         }
       }
-      // Fully warmed (or no hook — headless): the whole cell appears in one step.
-      batch.objects.forEach((object) => this.root.add(object));
+      // Fully warmed (or no hook — headless): the whole cell appears in one step. Under WebGPU, the cell's objects
+      // go into a per-cell BundleGroup (record-once) added atomically to the root; else straight to the root.
+      const container = this.gpu.cellContainer?.();
+      if (container) {
+        batch.objects.forEach((object) => container.add(object));
+        this.root.add(container);
+        this.containers.set(key, container);
+      } else {
+        batch.objects.forEach((object) => this.root.add(object));
+      }
       this.ingesting.delete(key);
       this.finishSwap(key, batch.objects);
       if (overBudget()) {
@@ -294,7 +307,14 @@ export class StreamingSystem implements System {
 
   private remove(key: string, objects: readonly Object3D[]): void {
     this.fader.cancel(key); // restore materials before the cell mesh goes back to the cache
-    objects.forEach((object) => this.root.remove(object));
+    const container = this.containers.get(key);
+    if (container) {
+      container.clear(); // detach the (cached) objects before the group goes away
+      this.root.remove(container);
+      this.containers.delete(key);
+    } else {
+      objects.forEach((object) => this.root.remove(object));
+    }
     this.loaded.delete(key);
   }
 
