@@ -1,0 +1,63 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > frame 1`] = `
+"
+struct Frame {
+  viewProj: mat4x4f,
+  camera: vec4f,
+};
+@group(0) @binding(0) var<uniform> frame: Frame;
+"
+`;
+
+exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > world 1`] = `
+"
+
+struct Frame {
+  viewProj: mat4x4f,
+  camera: vec4f,
+};
+@group(0) @binding(0) var<uniform> frame: Frame;
+
+
+struct Cell {
+  origin: vec4f,
+};
+@group(1) @binding(0) var<uniform> cell: Cell;
+
+@group(2) @binding(0) var worldTexture: texture_2d_array<f32>;
+@group(2) @binding(1) var worldSampler: sampler;
+
+struct VsIn {
+  @location(0) position: vec3f,
+  @location(1) uv: vec2f,
+  @location(2) dayPrelit: vec4f,
+  @location(3) layerChannels: vec2u,
+};
+
+struct VsOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) dayPrelit: vec4f,
+  @location(2) @interpolate(flat) layer: u32,
+};
+
+@vertex
+fn vsWorld(in: VsIn) -> VsOut {
+  var out: VsOut;
+  out.clip = frame.viewProj * vec4f(in.position + cell.origin.xyz, 1.0);
+  out.uv = in.uv;
+  out.dayPrelit = in.dayPrelit;
+  out.layer = in.layerChannels.x;
+  return out;
+}
+
+@fragment
+fn fsWorld(in: VsOut) -> @location(0) vec4f {
+  // Textures ship PREMULTIPLIED (074/02): filtering is correct by construction, transparent texels
+  // contribute nothing — the alpha-edge fix. Alpha feeds coverage on the cutout pipeline (A2C).
+  let texel = textureSample(worldTexture, worldSampler, in.uv, in.layer);
+  return vec4f(texel.rgb * in.dayPrelit.rgb, texel.a);
+}
+"
+`;

@@ -1,0 +1,220 @@
+/**
+ * The offline ALPHA PIPELINE (plan 074/03) — where the alpha-edge open issue dies:
+ *   classify → dilate (flood transparent texels' RGB from nearest opaque) → premultiply →
+ *   alpha-weighted mip chain with per-mip COVERAGE PRESERVATION for cutouts.
+ * Pure RGBA8 raster ops (Uint8Array, row-major, no padding) — unit-tested without any GPU.
+ */
+
+export type AlphaClass = 'cutout' | 'opaque' | 'softBlend';
+
+/** Classify by alpha histogram: all ≈255 → opaque; bimodal (≤2 % mid values) → cutout; else soft blend. */
+export function classifyAlpha(rgba: Uint8Array, hasAlphaFlag: boolean): AlphaClass {
+  if (!hasAlphaFlag) {
+    return 'opaque';
+  }
+  let mid = 0;
+  let transparent = 0;
+  const texels = rgba.length / 4;
+  for (let index = 3; index < rgba.length; index += 4) {
+    const alpha = rgba[index];
+    if (alpha < 250 && alpha > 5) {
+      mid += 1;
+    }
+    if (alpha <= 5) {
+      transparent += 1;
+    }
+  }
+  if (transparent === 0 && mid === 0) {
+    return 'opaque';
+  }
+
+  return mid / texels <= 0.02 ? 'cutout' : 'softBlend';
+}
+
+/** Fraction of texels whose alpha passes `reference` (the A2C coverage metric). */
+export function coverage(rgba: Uint8Array, reference: number): number {
+  let passing = 0;
+  for (let index = 3; index < rgba.length; index += 4) {
+    if (rgba[index] >= reference) {
+      passing += 1;
+    }
+  }
+
+  return passing / (rgba.length / 4);
+}
+
+/** Flood every transparent texel's RGB from its nearest opaque neighbour (full BFS — a capped pass count
+ *  left leaf-gap black and the mips re-bled it; learned in the open issue). In place. */
+export function dilateEdges(rgba: Uint8Array, width: number, height: number): void {
+  const queue: number[] = [];
+  const visited = new Uint8Array(width * height);
+  const total = width * height;
+  for (let texel = 0; texel < total; texel += 1) {
+    if (rgba[texel * 4 + 3] > 5) {
+      visited[texel] = 1;
+      queue.push(texel);
+    }
+  }
+  if (queue.length === 0 || queue.length === width * height) {
+    return;
+  }
+  // Array iterators visit indexes appended during iteration — the BFS frontier grows in place.
+  for (const texel of queue) {
+    const x = texel % width;
+    const y = (texel / width) | 0;
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
+        continue;
+      }
+      const neighbour = ny * width + nx;
+      if (visited[neighbour]) {
+        continue;
+      }
+      visited[neighbour] = 1;
+      rgba[neighbour * 4] = rgba[texel * 4];
+      rgba[neighbour * 4 + 1] = rgba[texel * 4 + 1];
+      rgba[neighbour * 4 + 2] = rgba[texel * 4 + 2];
+      queue.push(neighbour);
+    }
+  }
+}
+
+/** One 2×-downsample step. Premultiplied data makes the PLAIN average correct for RGB; alpha averages too. */
+export function downsample(rgba: Uint8Array, width: number, height: number): Uint8Array {
+  const outWidth = Math.max(1, width >> 1);
+  const outHeight = Math.max(1, height >> 1);
+  const out = new Uint8Array(outWidth * outHeight * 4);
+  for (let y = 0; y < outHeight; y += 1) {
+    for (let x = 0; x < outWidth; x += 1) {
+      const x0 = Math.min(width - 1, x * 2);
+      const x1 = Math.min(width - 1, x * 2 + 1);
+      const y0 = Math.min(height - 1, y * 2);
+      const y1 = Math.min(height - 1, y * 2 + 1);
+      for (let channel = 0; channel < 4; channel += 1) {
+        const sum =
+          rgba[(y0 * width + x0) * 4 + channel] +
+          rgba[(y0 * width + x1) * 4 + channel] +
+          rgba[(y1 * width + x0) * 4 + channel] +
+          rgba[(y1 * width + x1) * 4 + channel];
+        out[(y * outWidth + x) * 4 + channel] = Math.round(sum / 4);
+      }
+    }
+  }
+
+  return out;
+}
+
+/** RGB ×= A — after this, filtering/blending are mathematically correct (the fringe fix's core). In place. */
+export function premultiply(rgba: Uint8Array): void {
+  for (let texel = 0; texel < rgba.length; texel += 4) {
+    const alpha = rgba[texel + 3] / 255;
+    rgba[texel] = Math.round(rgba[texel] * alpha);
+    rgba[texel + 1] = Math.round(rgba[texel + 1] * alpha);
+    rgba[texel + 2] = Math.round(rgba[texel + 2] * alpha);
+  }
+}
+
+/** Scale a mip's alpha so its coverage matches `target` (the classic fix for foliage thinning with
+ *  distance). Binary-search the scale; RGB stays premultiplied-consistent (it encodes ×original-alpha —
+ *  the small mismatch is invisible; correctness of the CUT is what matters). In place. */
+export function preserveCoverage(rgba: Uint8Array, reference: number, target: number): void {
+  if (target <= 0) {
+    return;
+  }
+  let low = 0.5;
+  let high = 4;
+  for (let step = 0; step < 12; step += 1) {
+    const scale = (low + high) / 2;
+    let passing = 0;
+    for (let index = 3; index < rgba.length; index += 4) {
+      if (Math.min(255, rgba[index] * scale) >= reference) {
+        passing += 1;
+      }
+    }
+    if (passing / (rgba.length / 4) < target) {
+      low = scale;
+    } else {
+      high = scale;
+    }
+  }
+  const scale = (low + high) / 2;
+  for (let index = 3; index < rgba.length; index += 4) {
+    rgba[index] = Math.min(255, Math.round(rgba[index] * scale));
+  }
+}
+
+/** The full chain for one alpha texture: dilate → premultiply → mips (+ coverage preservation for cutouts).
+ *  Returns mip levels (level 0 first), each tightly packed RGBA8. */
+export function processAlphaTexture(
+  rgba: Uint8Array,
+  width: number,
+  height: number,
+  alphaClass: AlphaClass,
+  cutoutRef = 128,
+  mipCount = 1,
+): Uint8Array[] {
+  const base: Uint8Array = new Uint8Array(rgba);
+  dilateEdges(base, width, height);
+  premultiply(base);
+  const targetCoverage = alphaClass === 'cutout' ? coverage(base, cutoutRef) : 0;
+  const mips: Uint8Array[] = [base];
+  let current = base;
+  let w = width;
+  let h = height;
+  for (let level = 1; level < mipCount; level += 1) {
+    current = downsample(current, w, h);
+    w = Math.max(1, w >> 1);
+    h = Math.max(1, h >> 1);
+    if (alphaClass === 'cutout') {
+      preserveCoverage(current, cutoutRef, targetCoverage);
+    }
+    mips.push(current);
+  }
+
+  return mips;
+}
+
+/** Bilinear resample to pow2 (kills WebGPU BC alignment problems at the root; odd sizes like 62×62). */
+export function resampleToPow2(
+  rgba: Uint8Array,
+  width: number,
+  height: number,
+): {
+  height: number;
+  rgba: Uint8Array;
+  width: number;
+} {
+  const pow2 = (value: number): number => 2 ** Math.round(Math.log2(value));
+  const outWidth = Math.max(4, pow2(width));
+  const outHeight = Math.max(4, pow2(height));
+  if (outWidth === width && outHeight === height) {
+    return { height, rgba: new Uint8Array(rgba), width };
+  }
+  const out = new Uint8Array(outWidth * outHeight * 4);
+  for (let y = 0; y < outHeight; y += 1) {
+    for (let x = 0; x < outWidth; x += 1) {
+      const sx = (x / (outWidth - 1)) * (width - 1);
+      const sy = (y / (outHeight - 1)) * (height - 1);
+      const x0 = Math.floor(sx);
+      const y0 = Math.floor(sy);
+      const x1 = Math.min(width - 1, x0 + 1);
+      const y1 = Math.min(height - 1, y0 + 1);
+      const fx = sx - x0;
+      const fy = sy - y0;
+      for (let channel = 0; channel < 4; channel += 1) {
+        const top = rgba[(y0 * width + x0) * 4 + channel] * (1 - fx) + rgba[(y0 * width + x1) * 4 + channel] * fx;
+        const bottom = rgba[(y1 * width + x0) * 4 + channel] * (1 - fx) + rgba[(y1 * width + x1) * 4 + channel] * fx;
+        out[(y * outWidth + x) * 4 + channel] = Math.round(top * (1 - fy) + bottom * fy);
+      }
+    }
+  }
+
+  return { height: outHeight, rgba: out, width: outWidth };
+}

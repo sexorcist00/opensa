@@ -71,3 +71,20 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
 
 - 2026-07-11 — chain created; WebGPU-only; texture ARRAYS over atlases (GTA UVs tile — measured −7 % on atlases);
   two-level LOD system kept as-is (already cell-based; the converter only re-groups its output).
+- 2026-07-11 (M0 build-out, session 1) — landed: `packages/engine-formats` (.oscell/.ostex/.ospak codecs,
+  20 tests; vertex stride refined 40→36 B — layer+ao+emissive pack into one uint16x2 attribute),
+  `packages/engine` (device/features, residency ledger, enumerated pipelines ×4 with compileAll + steady-miss
+  assertion, WGSL store with include resolver + naga guardrails as unit tests + golden snapshots, cell store
+  with per-cell GPURenderBundle record-at-load, sphere culling, MSAA4+A2C pass, GPU timestamps; 10 tests),
+  `apps/engine-lab` (synthetic district fixture through the REAL format path, orbit camera, gate HUD; port
+  4300). @webgpu/types added to the workspace.
+- 2026-07-11 (M0 build-out, session 2) — synthetic FIRST LIGHT on M3 Pro: **submit 0.1–0.2 ms, GPU pass
+  0.85–1.44 ms, 120 fps (vsync-capped), culling live** (04 ledger). Landed `tools/opensa-pack` (game-fs over a
+  local dir, texture planner: opaque DXT pass-through incl. BC2 + alpha pipeline
+  classify/dilate/premult/α-weighted-mips/coverage → RGBA8-in-M0, eager deterministic array bucketing; cell
+  welder: transform-baked GTA→engine axes, groups per (array × class × side), timed/anim skipped+counted;
+  convert orchestrator + CLI + report; 13 tests) and the lab's `?pak=1` mode (whole-pak fetch — the M0
+  shortcut; worker range-reads are plan 05). Converter ran on the real LS
+  district (rect 8,-9..11,-5): **P0 GATE PASSED** — 807 draws (~20× down), submit 0.2 ms, GPU 1.84 ms,
+  instant load, **and the alpha-edge halo is DEAD (user-confirmed)** — the years-old open issue fixed by
+  construction on first run. M0 ✅ → next milestone M1 (streaming proof, plan 05).

@@ -49,6 +49,7 @@ export default defineConfig({
     include: [
       'apps/web/**/*.test.ts',
       'packages/**/*.test.ts',
+      'tools/opensa-pack/**/*.test.ts',
       'tools/timecyc-builder/**/*.test.ts',
       'scripts/**/*.test.ts',
       'tools/map-optimizer/**/*.test.ts',

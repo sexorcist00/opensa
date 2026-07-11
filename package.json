@@ -37,6 +37,7 @@
   "workspaces": [
     "apps/web",
     "apps/viewer",
+    "apps/engine-lab",
     "tools/rw-codec",
     "tools/tool-kit",
     "packages/renderware",
@@ -45,6 +46,8 @@
     "packages/vfs",
     "packages/modloader",
     "packages/game",
+    "packages/engine-formats",
+    "packages/engine",
     "tools/map-optimizer",
     "tools/opensa-lod-generator",
     "tools/vehicle-optimizer",
@@ -58,6 +61,7 @@
     "tools/mod-installer",
     "tools/vehicle-installer",
     "tools/ped-installer",
+    "tools/opensa-pack",
     "tools-debug/sa-int16-repro",
     "asi/perfect-map"
   ],
@@ -129,6 +133,7 @@
     "@vitejs/plugin-react": "6.0.1",
     "@vitest/browser-playwright": "4.1.6",
     "@vitest/coverage-v8": "4.1.6",
+    "@webgpu/types": "0.1.71",
     "eslint": "10.3.0",
     "eslint-config-flat-gitignore": "2.3.0",
     "eslint-config-prettier": "10.1.8",

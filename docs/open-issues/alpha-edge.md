@@ -1,6 +1,12 @@
 # Alpha cutout black edge (foliage / fences)
 
-**Status: shelved.** Investigated thoroughly; every approach we tried either left a residual dark
+**Status: shelved on the WebGL prod path; ✅ FIXED BY CONSTRUCTION in the own-engine path (2026-07-11).**
+The [074 native texture pipeline](../plans/074-opensa-engine/03-converter-tool.md) implements exactly the
+"complete fix" this doc predicted: offline alpha-weighted (premultiplied) mips + full-BFS edge dilation +
+per-texture classification + alpha-to-coverage (the engine owns MSAA). Field-confirmed on the LS district:
+no halo on foliage/fences. The notes below remain for the WebGL path, which keeps the original behaviour.
+
+**Original status: shelved.** Investigated thoroughly; every approach we tried either left a residual dark
 artifact or regressed other cases. Reverted to the original behaviour (textured alpha = soft alpha
 blend, `transparent` + `alphaTest 0.5`, `DoubleSide`) until someone returns with a complete fix.
 
@@ -32,7 +38,7 @@ mismatches — an early scan miscounted flat `c0==c1` blocks as transparent; rea
 ## Approaches tried
 
 1. **Opaque alpha-test cutouts** (`transparent:false` + `alphaTest 0.5`). Cheapest. **Regressed**:
-   foliage textures have *soft* (anti-aliased) alpha; the hard 0.5 cutoff rendered their
+   foliage textures have _soft_ (anti-aliased) alpha; the hard 0.5 cutoff rendered their
    semi-transparent texels solid → **dark squares** on bushes/trees. Reverted.
 2. **Texture edge dilation** (`build-texture.ts` + a ported `dxt-decode.ts`): decode alpha textures
    DXT→RGBA, flood every transparent texel's RGB to its nearest opaque colour (full O(N) BFS, not a
