@@ -1,7 +1,6 @@
 import {
   DoubleSide,
   Group,
-  InstancedMesh,
   type Light,
   type Mesh,
   MeshBasicMaterial,
@@ -23,7 +22,7 @@ import { CameraController } from './core/camera-controller';
 import { Clock } from './core/clock';
 import { createRenderContext } from './core/renderer';
 import { type System, SystemRegistry } from './core/system';
-import { createWebgpuHud } from './core/webgpu-hud';
+import { createWebgpuHud, type WebgpuHudSample } from './core/webgpu-hud';
 import { HiddenInstances } from './debug/hidden-instances';
 import { Logger } from './diagnostics/logger';
 import { EventBus } from './events/event-bus';
@@ -65,6 +64,8 @@ import { inHourWindow } from './time/hour-window';
 import { type WeatherBlend, WeatherTransition } from './weather/weather-transition';
 
 const FIXED_STEP = 1 / 60;
+/** Max physics catch-up steps per frame — excess backlog is dropped (see the death-spiral note in start()). */
+const MAX_CATCHUP_STEPS = 5;
 /** Engine default weather before a world is loaded (loadGame seeds the real one). */
 const DEFAULT_WEATHER = 0;
 
@@ -115,7 +116,7 @@ export class Game {
   private readonly hiddenInstances = new HiddenInstances();
   private input!: CombinedInput;
   /** The last successful pick (map-inspector selection) — the target of {@link hideSelectedObject}. */
-  private lastPick: null | { instanceId: number; mesh: InstancedMesh } = null;
+  private lastPick: null | { instanceId: number; mesh: Mesh } = null;
   private lastRequest: null | RegionRequest = null;
   private readonly logger: Logger;
   /** Debug normals view (plan: Map → Show Normals): scene-wide MeshNormalMaterial override, rendered
@@ -143,7 +144,7 @@ export class Game {
   /** Phase-1 WebGPU spike (`?webgpu=1`): renderer is WebGPU; plugins + GPU timer are skipped. */
   private webgpu = false;
   /** WebGPU spike render-CPU meter (throwaway) — updated per frame under `?webgpu=1`. */
-  private webgpuHud: ((renderMs: number, drawCalls: number, bundled: boolean) => void) | null = null;
+  private webgpuHud: ((sample: WebgpuHudSample) => void) | null = null;
 
   private constructor(canvas: HTMLCanvasElement, config: Config) {
     this.canvas = canvas;
@@ -414,11 +415,11 @@ export class Game {
     this.raycaster.setFromCamera(new Vector2(ndcX, ndcY), this.camera);
     const hit = this.raycaster
       .intersectObjects(this.streamingRoot.children, true)
-      .find((it) => it.instanceId !== undefined);
+      // Instanced hits carry a slot id; single-placement plain-Mesh world parts (073/08) carry region data.
+      .find((it) => it.instanceId !== undefined || it.object.userData.region !== undefined);
     this.lastPick = null;
-    if (hit && hit.instanceId !== undefined && hit.object instanceof InstancedMesh) {
-      // three's instanceof narrows to InstancedMesh<any, …> — pin the default generics for the field.
-      this.lastPick = { instanceId: hit.instanceId, mesh: hit.object as InstancedMesh };
+    if (hit && (hit.instanceId !== undefined || hit.object.userData.region !== undefined)) {
+      this.lastPick = { instanceId: hit.instanceId ?? 0, mesh: hit.object as Mesh };
     }
     this.events.emit('select', hit ? this.adapter.describe(hit.object, hit.instanceId) : null);
   }
@@ -876,11 +877,18 @@ export class Game {
     this.renderer.setAnimationLoop((now) => {
       this.renderer.info.reset(); // frame-total draw/triangle counters (autoReset is off — see init)
       const delta = this.clock.tick(now);
-      this.accumulator += delta;
+      const loopStart = this.webgpuHud ? performance.now() : 0;
+      // Cap the physics catch-up: after a long frame (asset/pipeline storm) an unbounded while-loop turns
+      // the backlog into MORE long frames — a death spiral that never recovers (field: stable 3 fps at
+      // 4 ms render CPU). Dropping the excess slows game time briefly instead.
+      this.accumulator = Math.min(this.accumulator + delta, FIXED_STEP * MAX_CATCHUP_STEPS);
+      let fixedSteps = 0;
       while (this.accumulator >= FIXED_STEP) {
         this.systems.fixedUpdate(FIXED_STEP);
         this.accumulator -= FIXED_STEP;
+        fixedSteps += 1;
       }
+      const fixedEnd = this.webgpuHud ? performance.now() : 0;
       this.systems.update(delta);
       this.cameraController.update(delta);
       this.weatherTransition.tick(delta); // ease an in-progress weather change (real-time, runs while paused)
@@ -906,7 +914,15 @@ export class Game {
       }
       if (this.webgpuHud) {
         const info = this.renderer.info.render as { calls?: number; drawCalls?: number };
-        this.webgpuHud(performance.now() - renderStart, info.drawCalls ?? info.calls ?? 0, this.bundleCells);
+        this.webgpuHud({
+          bundled: this.bundleCells,
+          culled: this.streamingSystem?.cullStats() ?? { hidden: 0, total: 0 },
+          drawCalls: info.drawCalls ?? info.calls ?? 0,
+          fixedMs: fixedEnd - loopStart,
+          fixedSteps,
+          renderMs: performance.now() - renderStart,
+          updateMs: renderStart - fixedEnd,
+        });
       }
       this.gpuTimer?.end();
       this.gpuTimer?.poll();

@@ -1,7 +1,45 @@
-# 073 — WebGPU migration (chain umbrella)
+# 073 — WebGPU migration on three.js (chain umbrella)
 
-**Status: 🚧 ACTIVE (graduated from `docs/concepts/webgpu-migration/` on 2026-07-11).** The concept's make-or-break
-bets are field-proven; this chain turns the working spike into a real renderer mode.
+**Status: ❌ FAILED (2026-07-11) — the blocker is on three.js's side.** Renamed `073-webgpu-migration` →
+`073-webgpu-migration-threejs` to record WHICH WebGPU attempt failed: the one built on three's WebGPURenderer.
+The campaign solved everything reachable from outside the framework (CPU 65 → ~4 ms) and hit an irreducible
+GPU/present remainder inside three's Metal backend. **The path forward is our own framework:
+[docs/concepts/opensa-engine](../../concepts/opensa-engine/README.md).**
+
+**Code/flags disposition (temporary):** every runtime flag (`?webgpu/bundle/mat04/pool/fog/mesh1/cellcull/
+texfree/aa/dpr/appear/warm/bundledebug`) and the engine changes stay in-tree for debugging; their fate
+(keep / fold / delete) is decided when the own-framework work starts. Backend-independent wins (physics
+catch-up cap, bounded asset caches, texture-data freeing, frame-segment HUD) are prod material regardless.
+
+<details><summary>Park write-up (the original data-driven verdict)</summary>
+
+**Status: 🅿️ PARKED ON DATA (2026-07-11, evening).** The chain shipped plans 02/03-A/04-slices and a long
+field-debugging campaign (see [08](08-pipeline-sharing.md) — the full forensic log). The CPU side is SOLVED
+(render 65 → ~4-5 ms, physics catch-up capped, per-object pipeline compiles eliminated via the plain-Mesh path,
+asset memory bounded). What killed it: on an M3 Pro the frame stays 40-300 ms in GPU/present territory
+("unaccounted": resolution-INDEPENDENT, session-unstable, worse on interaction) across three peeled layers
+(uniform-array codegen ~250 ms → fixed; no-culling world draw → fixed; memory pressure → mostly fixed) — and a
+stubborn remainder attributable to the three-WebGPU backend on Metal, below our reach without owning the
+backend. The bar was a stable 40 fps; the field says no. Everything is preserved: this chain, the patch
+(`patches/three+0.185.1.patch`), the TSL materials, sky-lite, and the diagnostic toggles
+(`?webgpu/bundle/mat04/pool/fog/mesh1/cellcull/texfree/aa/dpr/appear/warm/bundledebug`).
+
+**What survives into PROD (WebGL) regardless:** the physics death-spiral cap (game.ts), the bounded asset
+caches + texture-data freeing groundwork (memory pressure hurts WebGL too), the frame-segment HUD, and the
+diagnosis that the path to 40 fps on ANY backend is fewer draw calls (art-side batching) — now with measured
+certainty about where every millisecond goes.
+
+**Revive conditions:** three lands the `referenceBuffer()` refactor + the WebGPU backend matures on Metal
+(re-run `/webgpu-spike.html` + this chain's toggles first), or we build the thin custom static-world WebGPU
+renderer (see the Babylon verdict's hybrid note).
+
+</details>
+
+<details><summary>Original ACTIVE status (2026-07-11 morning)</summary>
+
+The concept's make-or-break bets are field-proven; this chain turns the working spike into a real renderer mode.
+
+</details>
 
 ## Where we actually are (validated baseline)
 

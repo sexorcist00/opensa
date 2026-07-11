@@ -1,7 +1,14 @@
 import { MeshStandardMaterial } from 'three';
 import { describe, expect, it } from 'vitest';
 
-import { applyNightFill, nightFillGround, nightFillRim, nightFillSky, nightFillUniform } from './night-fill';
+import {
+  applyNightFill,
+  nightFillGround,
+  nightFillRim,
+  nightFillSky,
+  nightFillUniform,
+  setNightFillTslApplier,
+} from './night-fill';
 
 interface FakeShader {
   fragmentShader: string;
@@ -24,6 +31,23 @@ function compile(material: MeshStandardMaterial): FakeShader {
 }
 
 describe('applyNightFill', () => {
+  describe('negative cases', () => {
+    it('does not apply the GLSL patch when a TSL applier is registered (WebGPU mode delegates)', () => {
+      const material = new MeshStandardMaterial();
+      const applied: MeshStandardMaterial[] = [];
+      setNightFillTslApplier((m) => applied.push(m));
+      try {
+        applyNightFill(material);
+      } finally {
+        setNightFillTslApplier(null);
+      }
+      expect(applied).toEqual([material]); // delegated…
+      const shader = compile(material);
+      expect(shader.uniforms.uNightFill).toBeUndefined(); // …and the GLSL patch never landed
+      expect(material.customProgramCacheKey().endsWith('|nightFill')).toBe(false);
+    });
+  });
+
   describe('positive cases', () => {
     it('injects the night-fill uniforms (shared module-level references)', () => {
       const material = new MeshStandardMaterial();

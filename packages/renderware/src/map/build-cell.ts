@@ -1,5 +1,5 @@
 import type { Object3D } from 'three';
-import type { InstancedMesh } from 'three';
+import type { Mesh } from 'three';
 
 import type { ImgArchive } from '../archive';
 import type { MapDefinitions } from '../parsers/text';
@@ -67,7 +67,7 @@ export function* buildCellSteps(
     return;
   }
   const groups = [...cellGroups(defs, cell, lod).values()];
-  const instancedMeshes: InstancedMesh[] = [];
+  const instancedMeshes: Mesh[] = [];
   for (const group of groups) {
     // Warm the parse/prepare caches as their own steps (plan 060 rounds 6 + Phase 5): a big group's TXD
     // parse, DFF parse and geometry prepare each rival the whole build — folded into one step they made

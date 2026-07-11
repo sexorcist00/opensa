@@ -18,6 +18,20 @@ import { buildTextureMap } from '../three/build-texture';
 const EMPTY_CLUMP: RWClump = { atomics: [], frames: [], geometries: [] };
 
 const clumpCache = new Map<string, RWClump>();
+/** Parse caches are BOUNDED (plan 073/08 memory): unbounded, every model ever driven past stayed in the JS
+ *  heap forever (multi-GB — unified-memory pressure collapses the GPU on Apple Silicon). LRU by insertion
+ *  order: a hit re-inserts, overflow evicts the oldest — an evicted model simply re-parses on revisit. */
+const CLUMP_CACHE_MAX = 512;
+
+/** LRU touch: refresh `key`'s recency (Maps iterate in insertion order) and evict past `max`. */
+function lruSet<K, V>(cache: Map<K, V>, key: K, value: V, max: number): void {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > max) {
+    const oldest = cache.keys().next().value as K;
+    cache.delete(oldest);
+  }
+}
 
 /** Parsed IFP animation packages (zone object clips like `counxref.ifp`), by lowercased name. */
 const ifpCache = new Map<string, IfpAnimation[]>();
@@ -34,8 +48,8 @@ export function getClump(archive: ImgArchive, modelName: string): RWClump {
   let clump = clumpCache.get(key);
   if (!clump) {
     clump = parseOrEmpty(archive.get(key), parseDff, EMPTY_CLUMP);
-    clumpCache.set(key, clump);
   }
+  lruSet(clumpCache, key, clump, CLUMP_CACHE_MAX);
 
   return clump;
 }
@@ -72,7 +86,7 @@ export function hasClump(modelName: string): boolean {
 
 /** Seed the clump cache with a worker-parsed model (plan 060 Phase 5). */
 export function primeClump(modelName: string, clump: RWClump): void {
-  clumpCache.set(`${modelName.toLowerCase()}.dff`, clump);
+  lruSet(clumpCache, `${modelName.toLowerCase()}.dff`, clump, CLUMP_CACHE_MAX);
 }
 
 /**

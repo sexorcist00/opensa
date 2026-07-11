@@ -327,7 +327,16 @@ type TslBuilder = (
  * blend: `+ texture × windowGlow`, injected after the (no-night-variant) world tint so the glow is
  * never dimmed. Composes with the material's existing `onBeforeCompile` like `applyNightFill`.
  */
+/** WebGPU/TSL applier registered under `?webgpu=1` (world-material-tsl); when set, applyWorldWindowGlow
+ *  delegates — the GLSL `onBeforeCompile` below never runs on `WebGPURenderer`. */
+type WindowGlowApplier = (material: MeshBasicMaterial) => void;
+let windowGlowTslApplier: null | WindowGlowApplier = null;
 export function applyWorldWindowGlow(material: MeshBasicMaterial): void {
+  if (windowGlowTslApplier) {
+    windowGlowTslApplier(material);
+
+    return;
+  }
   const previousCompile = material.onBeforeCompile.bind(material);
   const previousKey = material.customProgramCacheKey.bind(material);
   material.customProgramCacheKey = (): string => `${previousKey()}|windowGlow`;
@@ -342,6 +351,10 @@ export function applyWorldWindowGlow(material: MeshBasicMaterial): void {
       );
   };
   material.needsUpdate = true;
+}
+
+export function setWorldWindowGlowTslApplier(applier: null | WindowGlowApplier): void {
+  windowGlowTslApplier = applier;
 }
 let tslBuilder: null | TslBuilder = null;
 export function buildWorldMaterial(

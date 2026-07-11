@@ -1,4 +1,4 @@
-import type { Object3D } from 'three';
+import { type Object3D, Sphere } from 'three';
 
 import type { System } from '../core/system';
 import type { Config } from '../interfaces/config.interface';
@@ -20,6 +20,11 @@ export interface GpuHooks {
   cellContainer?(): Object3D;
   /** Compile shader programs + upload textures for a built batch (renderer.compileAsync). */
   precompile?(objects: readonly Object3D[]): Promise<void>;
+  /** Camera frustum for BUNDLE-LEVEL culling (plan 073/08): recording a static bundle disables per-object
+   *  frustum culling, so without this the GPU rasterizes EVERY loaded cell all around, every frame
+   *  (field: ~50 ms GPU). Per frame each cell container's world bounding sphere is tested here — a hidden
+   *  container's bundle is simply not replayed (no re-record). */
+  viewFrustum?(): { intersectsSphere(sphere: Sphere): boolean };
   /** Force the first-draw geometry uploads of a slice, invisibly (1×1 scissored render). */
   warmUp?(objects: readonly Object3D[]): void;
 }
@@ -81,6 +86,7 @@ export class StreamingSystem implements System {
   /** WebGPU: the per-cell `BundleGroup`s a cell's objects live in (chunked — several small bundles per cell so
    *  each record stays cheap); removal drops the groups, not each object. */
   private readonly containers = new Map<string, Object3D[]>();
+  private cullStatsValue = { hidden: 0, total: 0 };
   private current = new Set<string>();
   private readonly fader = new CellFader();
   private readonly gpu: GpuHooks;
@@ -110,6 +116,11 @@ export class StreamingSystem implements System {
     this.viewOf = viewOf;
     this.config = config;
     this.gpu = gpu;
+  }
+
+  /** Last frame's bundle-culling result (webgpu HUD) — how many cell containers were hidden. */
+  cullStats(): { hidden: number; total: number } {
+    return this.cullStatsValue;
   }
 
   /** How much of the view ring is on screen — for a loading veil (plan 061). */
@@ -164,6 +175,7 @@ export class StreamingSystem implements System {
     this.trackVelocity(delta);
     this.fader.update(delta);
     this.drainIngest();
+    this.cullContainers();
     this.current = this.desiredKeys();
     // Load desired-but-missing cells (async; the handler queues them for the budgeted ingest).
     for (const key of this.current) {
@@ -226,6 +238,34 @@ export class StreamingSystem implements System {
     // already-live scene otherwise may never record its draws (three records what's present up front).
     (container as unknown as { needsUpdate: boolean }).needsUpdate = true;
     this.containers.set(key, [container]);
+  }
+
+  /** Bundle-level frustum culling (plan 073/08, see GpuHooks.viewFrustum): toggle each cell container's
+   *  visibility by its world bounding sphere. The sphere is cached per container and recomputed when its
+   *  child count changes (chunked wrap still adding) — cheap: ~hundreds of sphere-vs-frustum tests. */
+  private cullContainers(): void {
+    const frustum = this.gpu.viewFrustum?.();
+    if (!frustum) {
+      return;
+    }
+    let hidden = 0;
+    let total = 0;
+    for (const containers of this.containers.values()) {
+      for (const container of containers) {
+        const cache = container.userData as { cullCount?: number; cullSphere?: null | Sphere };
+        if (cache.cullSphere === undefined || cache.cullCount !== container.children.length) {
+          cache.cullSphere = containerSphere(container);
+          cache.cullCount = container.children.length;
+        }
+        // An empty/unbounded container stays visible (nothing to win by hiding it).
+        container.visible = cache.cullSphere === null || frustum.intersectsSphere(cache.cullSphere);
+        total += 1;
+        if (!container.visible) {
+          hidden += 1;
+        }
+      }
+    }
+    this.cullStatsValue = { hidden, total };
   }
 
   private desiredKeys(): Set<string> {
@@ -471,6 +511,34 @@ export class StreamingSystem implements System {
 /** The `cx,cy` of a stream key (drops the `hd`/`lod` level suffix). */
 function cellOfKey(key: string): string {
   return key.slice(0, key.lastIndexOf(','));
+}
+
+/** Union world-space bounding sphere of a container's meshes (geometry spheres × world matrices), or null
+ *  while it has no boundable children. A small margin absorbs matrix lag at the screen edge. */
+function containerSphere(container: Object3D): null | Sphere {
+  const union = new Sphere();
+  const child = new Sphere();
+  let seeded = false;
+  container.traverse((node) => {
+    const geometry = (node as { geometry?: { boundingSphere: null | Sphere } }).geometry;
+    if (!geometry?.boundingSphere) {
+      return;
+    }
+    node.updateWorldMatrix(true, false);
+    child.copy(geometry.boundingSphere).applyMatrix4(node.matrixWorld);
+    if (seeded) {
+      union.union(child);
+    } else {
+      union.copy(child);
+      seeded = true;
+    }
+  });
+  if (!seeded) {
+    return null;
+  }
+  union.radius *= 1.05;
+
+  return union;
 }
 
 /** The same cell's OTHER detail level key (`hd` ↔ `lod`). */

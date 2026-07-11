@@ -25,8 +25,12 @@ export async function createRenderContext(canvas: HTMLCanvasElement): Promise<Re
     // (the onBeforeCompile GLSL just doesn't apply); plugins that author raw GLSL / use `postprocessing` are
     // skipped in game.ts. Typed as WebGLRenderer for the engine's sake — the API surface we use overlaps.
     const { BundleGroup, WebGPURenderer } = await import('three/webgpu');
-    const renderer = new WebGPURenderer({ antialias: true, canvas });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // GPU A/B levers (plan 073/08 field debugging): `?aa=0` drops MSAA (the WebGL path renders through
+    // post-FX targets withOUT MSAA, so aa=0 is the fairer GPU comparison), `?dpr=N` caps the pixel ratio
+    // (fill-bound scenes scale ~linearly with pixels).
+    const renderer = new WebGPURenderer({ antialias: search.get('aa') !== '0', canvas });
+    const dprCap = Number(search.get('dpr') ?? 2) || 2;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, dprCap));
     renderer.setSize(width, height, false);
     await renderer.init();
 

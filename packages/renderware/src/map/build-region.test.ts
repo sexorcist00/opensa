@@ -1,4 +1,4 @@
-import type { MeshBasicMaterial } from 'three';
+import type { InstancedMesh, MeshBasicMaterial } from 'three';
 
 import { readFileSync } from 'node:fs';
 import { AdditiveBlending, DoubleSide, FrontSide, NormalBlending } from 'three';
@@ -10,7 +10,7 @@ import { buildArchiveBuffer, openArchive } from '../archive';
 import { parseDff } from '../parsers/binary/dff';
 import { IdeFlag } from '../parsers/text';
 import { toArrayBuffer } from '../test-utils';
-import { buildInstancedMeshes } from './build-region';
+import { buildInstancedMeshes, setSingleInstanceMeshes } from './build-region';
 
 // Real regression case: the gta3-pf.img re-export of trafficlight1 ships NO stored normals and
 // mixed face winding, so front-side culling dropped half its housing. SA renders it whole because
@@ -81,6 +81,49 @@ describe('buildInstancedMeshes (trafficlight1 backface-culling case)', () => {
         expect(material.customProgramCacheKey()).toContain('saWorld');
         expect(mesh.castShadow).toBe(false); // only dynamics cast
         expect(mesh.receiveShadow).toBe(false); // the world material samples the shadow map manually
+      }
+    });
+  });
+});
+
+describe('setSingleInstanceMeshes (plan 073/08 pipeline sharing)', () => {
+  describe('negative cases', () => {
+    it('keeps the instanced path for multi-placement groups even when enabled', () => {
+      setSingleInstanceMeshes(true);
+      try {
+        const second: IplInstance = { ...instance, position: [2360.2, -1664.7, 15.8] };
+        const meshes = buildInstancedMeshes(caseArchive(), [
+          { def: def(TRAFFICLIGHT_IDE_FLAGS), instances: [instance, second] },
+        ]);
+        expect(meshes.length).toBeGreaterThan(0);
+        expect(meshes.every((mesh) => (mesh as InstancedMesh).isInstancedMesh)).toBe(true);
+      } finally {
+        setSingleInstanceMeshes(false);
+      }
+    });
+
+    it('keeps the instanced path for single placements while disabled (the WebGL default)', () => {
+      const meshes = buildInstancedMeshes(caseArchive(), [{ def: def(TRAFFICLIGHT_IDE_FLAGS), instances: [instance] }]);
+      expect(meshes.length).toBeGreaterThan(0);
+      expect(meshes.every((mesh) => (mesh as InstancedMesh).isInstancedMesh)).toBe(true);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('builds single placements as plain meshes carrying the placement in the object matrix', () => {
+      setSingleInstanceMeshes(true);
+      try {
+        const meshes = buildInstancedMeshes(caseArchive(), [
+          { def: def(TRAFFICLIGHT_IDE_FLAGS), instances: [instance] },
+        ]);
+        expect(meshes.length).toBeGreaterThan(0);
+        for (const mesh of meshes) {
+          expect((mesh as InstancedMesh).isInstancedMesh).toBeUndefined();
+          expect(mesh.position.toArray()).toEqual(instance.position);
+          expect(mesh.userData.region).toBeDefined(); // picking still identifies the group
+        }
+      } finally {
+        setSingleInstanceMeshes(false);
       }
     });
   });
@@ -167,7 +210,9 @@ describe('buildInstancedMeshes (SA IDE render flags, plan 039)', () => {
         position: [2948.41, -951.77, -28.52], // the real lahills.ipl placement
         rotation: [0, 0, 0, 1],
       };
-      const meshes = buildInstancedMeshes(archive, [{ def: palcstDef, instances: [palcstInstance] }]);
+      const meshes = buildInstancedMeshes(archive, [
+        { def: palcstDef, instances: [palcstInstance] },
+      ]) as InstancedMesh[]; // flag off (default) → the stock instanced path
       expect(meshes.length).toBeGreaterThan(0);
       for (const mesh of meshes) {
         const center = mesh.boundingSphere?.center;

@@ -108,16 +108,23 @@ export function buildAnimatedObjects(archive: ImgArchive, groups: Iterable<Regio
   return objects;
 }
 
-/** One model group → its InstancedMeshes (the sliced cell build yields between groups — plan 060 Phase 3). */
+/** WebGPU mode (plan 073/08): single-placement groups build as plain `Mesh` instead of count-1
+ *  `InstancedMesh`. three's WebGPU render pipeline cache keys InstancedMesh by `object.uuid` (the
+ *  instanceMatrix buffer is captured into the bind group — PR 29066), so every count-1 InstancedMesh
+ *  compiles its OWN pipeline: tens of thousands of cold compiles per map instead of one per
+ *  (material × attribute layout). Plain Meshes share pipelines. Gated: on WebGL the switch would drop
+ *  USE_INSTANCING (wind sway anchors on instanceMatrix), so the classic path keeps InstancedMesh. */
+let singleInstanceMeshes = false;
+/** One model group → its part meshes (the sliced cell build yields between groups — plan 060 Phase 3). */
 export function buildGroupInstancedMeshes(
   archive: ImgArchive,
   group: RegionMeshData,
   options: BuildRegionOptions = {},
-): InstancedMesh[] {
+): Mesh[] {
   if (group.def.anim !== undefined) {
     return []; // IDE anim objects animate per instance — see buildAnimatedObjects
   }
-  const meshes: InstancedMesh[] = [];
+  const meshes: Mesh[] = [];
   const placement = new Matrix4();
   const position = new Vector3();
   const quaternion = new Quaternion();
@@ -134,25 +141,39 @@ export function buildGroupInstancedMeshes(
   // the world material's night blend so their bright window texels read in the dark.
   const nightLit = group.def.time !== undefined && isNightWindow(group.def.time.on, group.def.time.off);
   const treatment = defTreatment(group.def);
+  const single = singleInstanceMeshes && group.instances.length === 1;
   for (const part of parts) {
     applyTreatment(part.material, treatment, nightLit);
     options.decoratePart?.(group.def, part); // game-layer mods (e.g. wind sway) — after vanilla
-    const mesh = new InstancedMesh(part.geometry, part.material, group.instances.length);
+    let mesh: Mesh;
+    if (single) {
+      // Plain Mesh carries the placement in its OBJECT matrix (see setSingleInstanceMeshes).
+      mesh = new Mesh(part.geometry, part.material);
+      const instance = group.instances[0];
+      position.set(instance.position[0], instance.position[1], instance.position[2]);
+      quaternion
+        .set(instance.rotation[0], instance.rotation[1], instance.rotation[2], instance.rotation[3])
+        .conjugate();
+      mesh.applyMatrix4(placement.compose(position, quaternion, scale));
+    } else {
+      const instanced = new InstancedMesh(part.geometry, part.material, group.instances.length);
+      group.instances.forEach((instance, index) => {
+        position.set(instance.position[0], instance.position[1], instance.position[2]);
+        // GTA SA IPL quaternions are the inverse of three.js's convention — conjugate.
+        quaternion
+          .set(instance.rotation[0], instance.rotation[1], instance.rotation[2], instance.rotation[3])
+          .conjugate();
+        placement.compose(position, quaternion, scale);
+        instanced.setMatrixAt(index, placement); // parts are in raw model space (no DFF frame transform)
+      });
+      instanced.instanceMatrix.needsUpdate = true;
+      instanced.computeBoundingSphere();
+      mesh = instanced;
+    }
     // The map neither casts nor uses the renderer's shadow receive (plan 038): only dynamics cast,
     // and the unlit world material samples that map manually (worldShadowUniforms).
     mesh.castShadow = false;
     mesh.receiveShadow = false;
-    group.instances.forEach((instance, index) => {
-      position.set(instance.position[0], instance.position[1], instance.position[2]);
-      // GTA SA IPL quaternions are the inverse of three.js's convention — conjugate.
-      quaternion
-        .set(instance.rotation[0], instance.rotation[1], instance.rotation[2], instance.rotation[3])
-        .conjugate();
-      placement.compose(position, quaternion, scale);
-      mesh.setMatrixAt(index, placement); // parts are in raw model space (no DFF frame transform)
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere();
     mesh.userData.region = group;
     if (group.def.time) {
       mesh.userData.timed = group.def.time; // { on, off } hour window — gated by TimedObjectSystem
@@ -173,8 +194,8 @@ export function buildInstancedMeshes(
   archive: ImgArchive,
   groups: Iterable<RegionMeshData>,
   options: BuildRegionOptions = {},
-): InstancedMesh[] {
-  const meshes: InstancedMesh[] = [];
+): Mesh[] {
+  const meshes: Mesh[] = [];
   for (const group of groups) {
     meshes.push(...buildGroupInstancedMeshes(archive, group, options));
   }
@@ -222,10 +243,10 @@ export function buildRoadsignMeshes(archive: ImgArchive, groups: Iterable<Region
  */
 export function collectBreakables(
   archive: ImgArchive,
-  meshes: readonly InstancedMesh[],
+  meshes: readonly Mesh[],
   breakableModels?: ReadonlySet<string>,
 ): void {
-  const byGroup = new Map<RegionMeshData, InstancedMesh[]>();
+  const byGroup = new Map<RegionMeshData, Mesh[]>();
   for (const mesh of meshes) {
     const group = mesh.userData.region as RegionMeshData | undefined;
     if (!group) {
@@ -349,6 +370,10 @@ export function collectParticleEmitters(archive: ImgArchive, groups: Iterable<Re
   }
 
   return entries;
+}
+
+export function setSingleInstanceMeshes(enabled: boolean): void {
+  singleInstanceMeshes = enabled;
 }
 
 /** The step model SA's escalator code hardcodes (ModelIndices); its textures live in escstep.txd. */

@@ -30,6 +30,10 @@ const NIGHT_FILL_GLSL = `#include <emissivemap_fragment>
 \t\ttotalEmissiveRadiance += uFillRim * nfRim * uNightFill * uFillSky;
 \t}`;
 
+/** WebGPU/TSL applier registered under `?webgpu=1` (night-fill-tsl); when set, applyNightFill delegates —
+ *  the GLSL `onBeforeCompile` below never runs on `WebGPURenderer`. Mirrors `setWorldMaterialTslBuilder`. */
+type NightFillApplier = (material: MeshStandardMaterial) => void;
+let tslApplier: NightFillApplier | null = null;
 /**
  * Patch a dynamic-object material to self-illuminate at night (plan 034). **Composes** with any
  * existing `onBeforeCompile` (e.g. the vehicle env-map reflection) instead of clobbering it, and appends a
@@ -37,6 +41,11 @@ const NIGHT_FILL_GLSL = `#include <emissivemap_fragment>
  * Injected after `<emissivemap_fragment>` where `normal` + `vViewPosition` exist (same anchor as the reflection).
  */
 export function applyNightFill(material: MeshStandardMaterial): void {
+  if (tslApplier) {
+    tslApplier(material);
+
+    return;
+  }
   // Bind now (not capture) so chaining doesn't clobber the reflection's onBeforeCompile / lose `this`.
   const previousCompile = material.onBeforeCompile.bind(material);
   const previousKey = material.customProgramCacheKey.bind(material);
@@ -52,4 +61,8 @@ export function applyNightFill(material: MeshStandardMaterial): void {
       shader.fragmentShader.replace('#include <emissivemap_fragment>', NIGHT_FILL_GLSL);
   };
   material.needsUpdate = true;
+}
+
+export function setNightFillTslApplier(applier: NightFillApplier | null): void {
+  tslApplier = applier;
 }

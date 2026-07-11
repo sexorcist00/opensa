@@ -16,7 +16,9 @@ import { BenchPlugin, type BenchScene } from '@opensa/game/perf/bench';
 import { cloudProfile } from '@opensa/game/plugins/cloud-profile';
 import { CSM_DYNAMIC_LAYER, CSM_STATIC_LAYER, CsmPlugin } from '@opensa/game/plugins/csm.plugin';
 import { FogPlugin } from '@opensa/game/plugins/fog.plugin';
+import { type PluginContext } from '@opensa/game/plugins/plugin';
 import { PostFxPlugin } from '@opensa/game/plugins/postfx.plugin';
+import { SkyLiteSystem } from '@opensa/game/plugins/sky-lite.system';
 import { SkyPlugin, type SkySample } from '@opensa/game/plugins/sky.plugin';
 import { VehicleReflectionPlugin } from '@opensa/game/plugins/vehicle-reflection/vehicle-reflection.plugin';
 import { WaterPlugin, type WaterSample } from '@opensa/game/plugins/water.plugin';
@@ -37,8 +39,11 @@ import { cityAt, type CityBox, cityFromLevel, isDesertZone } from '@opensa/game/
 import { CityZoneSystem } from '@opensa/game/zones/city-zone.system';
 import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.system';
 import {
+  applyNightFillTsl,
+  applyWorldWindowGlowTsl,
   type AssetFileSystem,
   breakBreakable,
+  buildDynamicMaterialTsl,
   buildTextureMap,
   buildWorldMaterialTsl,
   coronaMaterial,
@@ -58,10 +63,16 @@ import {
   particleTimeUniform,
   particleViewportUniform,
   sampleTimecycBlend,
+  setDynamicMaterialTslFactory,
   setFxLibrary,
+  setNightFillTslApplier,
   setRoadsignFont,
+  setSingleInstanceMeshes,
+  setTextureDataFreeing,
   setWorldMaterialTslBuilder,
+  setWorldWindowGlowTslApplier,
   sunSplit,
+  syncNightFillTsl,
   syncWorldTsl,
   updateAnimatedObjects,
   updateDebris,
@@ -85,6 +96,8 @@ import { type ReactElement, useEffect, useRef, useState } from 'react';
 import {
   CameraHelper,
   Color,
+  Frustum,
+  Matrix4,
   type Mesh,
   type Object3D,
   Quaternion,
@@ -211,6 +224,15 @@ interface CanvasHostProps {
   onWorldReady?: () => void;
   /** Freeze the game (physics + control + clock) while the pause menu is up. */
   paused?: boolean;
+}
+
+interface SkyView {
+  horizonLut: () => null | ReturnType<SkyPlugin['getHorizonLut']>;
+  moonDirection: () => ReturnType<SkyPlugin['getMoonDirection']>;
+  nightFactor: () => number;
+  sunDirection: () => ReturnType<SkyPlugin['getSunDirection']>;
+  sunShadow: () => ReturnType<SkyPlugin['getSunShadow']>;
+  sunSin: () => number;
 }
 
 export function CanvasHost({ fs, gameId, onWorldReady, paused = false }: CanvasHostProps): ReactElement {
@@ -655,6 +677,10 @@ function bootstrap(
       setFxLibrary(parseFxp(fxpText), fxSprites);
     }
     const sky = new SkyPlugin(skySample, () => game.getHours(), moonTexture); // sky dome + sun/moon + lights
+    // WebGPU (plan 073/03 slice A): plugins are skipped, so a minimal light rig + sun tracker runs as a SYSTEM;
+    // `skyView` lets the world-uniform block below read the sun/night/shadow signals from whichever is live.
+    const skyLite = createSkyLite(game, skySample);
+    const skyView = createSkyView(sky, skyLite);
     const reflection = new VehicleReflectionPlugin(() => game.getHours()); // sky-probe reflections on spawned cars
 
     // Water mesh (geometry from the adapter) loaded up front so the WaterPlugin can own its material;
@@ -670,20 +696,22 @@ function bootstrap(
 
     // Held so the water plugin can read its shore DepthPass (plan 069).
     let postFx: PostFxPlugin;
+    // Held so the WebGPU mode (plugins skipped) can drive the same fog as a system — see registerSkyLite.
+    let fogPlugin: FogPlugin;
     game
       .setWorldAdapter(adapter)
       // Fog fades into the sky horizon. On the PBR sky the classic skyBot no longer matches the dome —
       // distant fogged objects glowed at dawn — so the CPU twin of the shader's horizon feeds it instead
       // (interim until 068 samples the horizon LUT in-shader).
       .addPlugin(
-        new FogPlugin(
+        (fogPlugin = new FogPlugin(
           (): readonly [number, number, number] => {
             const sample = skySample(game.getHours());
             const skyCfg = game.getConfig().graphics.sky;
             if (skyCfg.model !== 'pbr') {
               return sample.skyBot;
             }
-            const sunDir = sky.getSunDirection();
+            const sunDir = skyView.sunDirection();
             const params = pbrSkyParams({
               cloudCover: sample.cloudCover,
               cloudDark: sample.cloudDark,
@@ -707,7 +735,7 @@ function bootstrap(
 
             return fogRangeFor(skySample(game.getHours()), config.fog, config.graphics.pipeline === 'modern').cut;
           },
-        ),
+        )),
       )
       .addPlugin(sky)
       // Cascaded sun shadows (plan 065, modern pipeline): mid/far static cascades over the sun's near map.
@@ -779,10 +807,30 @@ function bootstrap(
         new URLSearchParams(window.location.search).get('bundledebug') === '1';
       // Cast: 0.185's types no longer treat MeshBasicNodeMaterial as a MeshBasicMaterial; runtime-compatible here.
       setWorldMaterialTslBuilder(buildWorldMaterialTsl as unknown as Parameters<typeof setWorldMaterialTslBuilder>[0]);
-      game.addSystem({ name: 'tsl-sync', update: (): void => syncWorldTsl() });
+      // Dynamics (plan 073/02): node materials + the night-fill as an emissiveNode (GLSL onBeforeCompile is
+      // dead under WebGPU) — same registration pattern as the world material.
+      setDynamicMaterialTslFactory(buildDynamicMaterialTsl);
+      setNightFillTslApplier(applyNightFillTsl);
+      // Plan 073/08 memory: free texture CPU payloads after GPU upload (`?texfree=0` off) — the JS heap
+      // otherwise holds every streamed texture forever (3-6 GB → unified-memory pressure kills the GPU).
+      setTextureDataFreeing(new URLSearchParams(window.location.search).get('texfree') !== '0');
+      // Plan 073/08: single-placement world parts build as plain Mesh — WebGPU pipelines are then shared
+      // per (material × layout) instead of compiled per InstancedMesh uuid (the cold-start compile storm).
+      setSingleInstanceMeshes(new URLSearchParams(window.location.search).get('mesh1') !== '0');
+      setWorldWindowGlowTslApplier(
+        applyWorldWindowGlowTsl as unknown as Parameters<typeof setWorldWindowGlowTslApplier>[0],
+      );
+      game.addSystem({
+        name: 'tsl-sync',
+        update: (): void => {
+          syncWorldTsl();
+          syncNightFillTsl();
+        },
+      });
     }
     await loadFonts(game.getConfig().fonts); // register HUD fonts before the scene/HUD render
     await game.init();
+    registerSkyLite(game, skyLite, fogPlugin);
     // Corona Points live on GLOW_LAYER (excluded from the SSAO normal prepass) — the camera must see it.
     game.getCamera().layers.enable(GLOW_LAYER);
     game.getCamera().layers.enable(WATER_LAYER); // water lives on its own layer (plan 069 shore depth)
@@ -862,6 +910,7 @@ function bootstrap(
           }),
       // WebGPU spike: wrap each streamed cell in a per-cell BundleGroup (record-once); undefined on WebGL.
       ...(game.getCellContainer() ? { cellContainer: game.getCellContainer() } : {}),
+      ...cellCullHook(game, webgpuSearch),
     });
     game.addSystem(streaming);
     game.setStreamingSystem(streaming);
@@ -1019,7 +1068,7 @@ function bootstrap(
       name: 'coronas',
       update(): void {
         const { lights, night, worldLight } = game.getConfig().graphics;
-        const nightFactor = (sky.godraysSource.userData.night as number | undefined) ?? 0;
+        const nightFactor = skyView.nightFactor();
         coronaMaterial.uniforms.uOn.value = lights.enabled ? nightFactor : 0;
         coronaMaterial.uniforms.uViewportHeight.value = canvas.height || canvas.clientHeight;
         particleViewportUniform.value = canvas.height || canvas.clientHeight;
@@ -1062,7 +1111,7 @@ function bootstrap(
         // `autoUpdate` gate: while the sun isn't actually casting (night / below horizon / heavy
         // overcast) the SkyPlugin freezes the shadow render — sampling that STALE map pointed dawn
         // shadows the wrong way (yesterday's sunset direction), so the term must be fully off.
-        const sunShadow = sky.getSunShadow();
+        const sunShadow = skyView.sunShadow();
         const { shadows } = game.getConfig().graphics;
         worldShadowUniforms.uWorldShadowMap.value = sunShadow.map?.texture ?? null;
         worldShadowUniforms.uWorldShadowMatrix.value = sunShadow.matrix;
@@ -1077,7 +1126,7 @@ function bootstrap(
         // Hybrid world lighting (plan 064, modern pipeline): prelit-as-indirect + real sun on top. The
         // uniforms are inert on 'classic' (uPipelineMix 0 → the exact 038 path). Overcast is read back from
         // the SkyPlugin's shadow damping (intensity = 1 − overcast) so both terms fade together in weather.
-        const sunDir = sky.getSunDirection();
+        const sunDir = skyView.sunDirection();
         worldSunUniforms.uSunDir.value.copy(sunDir);
         const sunElevation = Math.max(0, sunDir.y);
         const split = sunSplit({
@@ -1099,10 +1148,10 @@ function bootstrap(
         // Time-band grading (plan 071 §3), driven by SUN ELEVATION — never the wall clock, so a sunset reads
         // right whenever it happens. One source for the moon term and the night bloom profile.
         const modern = worldSunUniforms.uPipelineMix.value > 0.5;
-        const band = timeBandGrade({ overcast: 1 - sunShadow.intensity, sunSin: sky.getSunSin() });
+        const band = timeBandGrade({ overcast: 1 - sunShadow.intensity, sunSin: skyView.sunSin() });
         // Moonlight on the WORLD (plan 071 §4): a cool, wrapped, un-shadowed directional grounding — it is a
         // huge soft source, so it lifts form without a second harsh terminator. Scales with the moon config.
-        worldMoonUniforms.uMoonDir.value.copy(sky.getMoonDirection());
+        worldMoonUniforms.uMoonDir.value.copy(skyView.moonDirection());
         worldMoonUniforms.uMoonColor.value
           .setRGB(0.34, 0.44, 0.72)
           .multiplyScalar(modern ? band.moon * game.getConfig().graphics.moon.brightness * night.skylight * 0.5 : 0);
@@ -1112,8 +1161,10 @@ function bootstrap(
         // hard at the far bound (geometry there resolves to pure sky colour).
         const fogModern = worldSunUniforms.uPipelineMix.value > 0.5;
         const fogRange = fogRangeFor(sample, game.getConfig().fog, fogModern);
-        worldFogUniforms.uFogMix.value = fogModern ? 1 : 0;
-        worldFogUniforms.uFogLut.value = sky.getHorizonLut();
+        // LUT gate: under WebGPU the horizon LUT doesn't exist yet (073/03-C) — classic fog shape then.
+        const horizonLut = skyView.horizonLut();
+        worldFogUniforms.uFogMix.value = fogModern && horizonLut ? 1 : 0;
+        worldFogUniforms.uFogLut.value = horizonLut;
         worldFogUniforms.uFogCutDistance.value = fogRange.cut;
         worldFogUniforms.uFogStartDistance.value = fogRange.start;
         shadowHelper?.update(); // debug frustum follows the view-snapped shadow camera
@@ -1555,6 +1606,41 @@ function bootstrap(
   return bootstrapped;
 }
 
+/** WebGPU mode only (073/03): the light rig that replaces the skipped SkyPlugin. */
+function createSkyLite(game: Game, skySample: (hour: number) => SkySample): null | SkyLiteSystem {
+  return webgpuFlag()
+    ? new SkyLiteSystem(
+        skySample,
+        () => game.getHours(),
+        () => game.getConfig().graphics.night,
+        () => game.getConfig().graphics.moon.elevationDeg,
+      )
+    : null;
+}
+
+/** Sun/night/shadow signals for the world-uniform drive, from whichever sky owner is live (073/03). */
+function createSkyView(sky: SkyPlugin, skyLite: null | SkyLiteSystem): SkyView {
+  if (skyLite) {
+    return {
+      horizonLut: () => null, // arrives with plan 073/03 slice C (LUT without ShaderMaterial)
+      moonDirection: () => skyLite.moonDirection(),
+      nightFactor: () => skyLite.nightFactor(),
+      sunDirection: () => skyLite.sunDirection(),
+      sunShadow: () => skyLite.sun.shadow,
+      sunSin: () => skyLite.sunSin(),
+    };
+  }
+
+  return {
+    horizonLut: () => sky.getHorizonLut(),
+    moonDirection: () => sky.getMoonDirection(),
+    nightFactor: () => (sky.godraysSource.userData.night as number | undefined) ?? 0,
+    sunDirection: () => sky.getSunDirection(),
+    sunShadow: () => sky.getSunShadow(),
+    sunSin: () => sky.getSunSin(),
+  };
+}
+
 /** Free a despawned car's GPU buffers. Materials only — textures are shared (generic vehicle TXD). */
 function disposeVehicle(object: Object3D): void {
   object.traverse((node) => {
@@ -1567,4 +1653,45 @@ function disposeVehicle(object: Object3D): void {
       material?.dispose();
     }
   });
+}
+
+/** After `game.init()` (the scene exists): add the rig's lights + tick it (and the fog) as systems. */
+function registerSkyLite(game: Game, skyLite: null | SkyLiteSystem, fog: FogPlugin): void {
+  if (!skyLite) {
+    return;
+  }
+  skyLite.addTo(game.getScene());
+  game.addSystem(skyLite);
+  // Same FogExp2 + horizon drive as WebGL (node materials fog by default): the plugin only touches
+  // scene/config from the context, so a partial context is safe — plugins never install under WebGPU.
+  // `?fog=0` skips it entirely (perf-bisect switch: fog lands in every material's WGSL).
+  if (new URLSearchParams(window.location.search).get('fog') !== '0') {
+    fog.install({ config: game.getConfig(), scene: game.getScene() } as Partial<PluginContext> as PluginContext);
+    game.addSystem({ name: 'fog-lite', update: (): void => fog.update() });
+  }
+}
+
+// Reused by the streaming viewFrustum hook (no per-frame allocation).
+const frustumMatrix = new Matrix4();
+const viewFrustum = new Frustum();
+
+/** Bundle-level frustum culling hook (plan 073/08): recorded bundles bypass per-object culling, so without
+ *  this the GPU draws every loaded cell all around, every frame (~50 ms GPU measured). `?cellcull=0` off. */
+function cellCullHook(game: Game, search: URLSearchParams): { viewFrustum?: () => Frustum } {
+  if (!game.getCellContainer() || search.get('cellcull') === '0') {
+    return {};
+  }
+
+  return {
+    viewFrustum: (): Frustum => {
+      const camera = game.getCamera();
+      frustumMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+
+      return viewFrustum.setFromProjectionMatrix(frustumMatrix);
+    },
+  };
+}
+
+function webgpuFlag(): boolean {
+  return new URLSearchParams(window.location.search).get('webgpu') === '1';
 }

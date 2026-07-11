@@ -1,4 +1,4 @@
-import type { InstancedMesh, Object3D, Texture } from 'three';
+import type { InstancedMesh, Mesh, Object3D, Texture } from 'three';
 
 import { Matrix4 } from 'three';
 
@@ -22,8 +22,9 @@ export interface BreakableInstance {
   broken: boolean;
   /** Stable instance key (`model|cmX|cmY|cmZ`) — pairs the render prop with its static collider. */
   key: string;
-  /** Every part-mesh of the prop's model group (all collapsed to zero scale on break). */
-  meshes: InstancedMesh[];
+  /** Every part-mesh of the prop's model group (all collapsed/hidden on break). Instanced parts
+   *  collapse the slot's matrix; single-placement plain-Mesh parts (073/08 WebGPU) just hide. */
+  meshes: Mesh[];
   modelName: string;
   /** Placement world position (GTA Z-up) — for the nearest-prop search + collider match. */
   position: readonly [number, number, number];
@@ -107,8 +108,12 @@ export function breakBreakable(entry: BreakableInstance, parent: Object3D, optio
     entry.textures,
   );
   for (const mesh of entry.meshes) {
-    mesh.setMatrixAt(entry.slot, HIDDEN);
-    mesh.instanceMatrix.needsUpdate = true;
+    if ((mesh as InstancedMesh).isInstancedMesh) {
+      (mesh as InstancedMesh).setMatrixAt(entry.slot, HIDDEN);
+      (mesh as InstancedMesh).instanceMatrix.needsUpdate = true;
+    } else {
+      mesh.visible = false; // single-placement plain Mesh (073/08) — the prop IS the whole mesh
+    }
   }
   entry.broken = true;
   // Drop it from the registry so the nearest-prop scan stays cheap (a cell rebuild re-registers it).

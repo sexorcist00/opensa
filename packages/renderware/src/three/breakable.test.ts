@@ -124,7 +124,7 @@ describe('breakable registry', () => {
 
       // The prop's two part meshes collapse to zero scale (diagonal basis all 0 → invisible).
       const matrix = new Matrix4();
-      for (const mesh of entry.meshes) {
+      for (const mesh of entry.meshes as InstancedMesh[]) {
         mesh.getMatrixAt(0, matrix);
         expect([matrix.elements[0], matrix.elements[5], matrix.elements[10]]).toEqual([0, 0, 0]);
       }

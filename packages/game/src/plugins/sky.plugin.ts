@@ -838,6 +838,25 @@ function setColor(color: Color, [r, g, b]: Rgb, managed: boolean): void {
   color.setRGB(r / 255, g / 255, b / 255, managed ? SRGBColorSpace : undefined);
 }
 
+/** Light-rig tuning shared with the WebGPU sky-lite system (073/03) — the plugin remains the WebGL source of
+ *  truth; sky-lite reuses the exact same constants so both modes light dynamics identically. */
+export const SKY_LIGHT_TUNING = {
+  ambientDay: AMBIENT_DAY,
+  ambientNight: AMBIENT_NIGHT,
+  dayGroundColor: DAY_GROUND_COLOR,
+  daySkyColor: DAY_SKY_COLOR,
+  daySkylight: DAY_SKYLIGHT,
+  moonAzimuth: MOON_AZIMUTH,
+  nightGroundColor: NIGHT_GROUND_COLOR,
+  nightSkyColor: NIGHT_SKY_COLOR,
+  sunIntensity: SUN_INTENSITY,
+} as const;
+
+/** Timecyc `[r,g,b]` (0–255) → three Color; exported for sky-lite (same conversion both modes). */
+export function setSkyColor(color: Color, rgb: Rgb, managed: boolean): void {
+  setColor(color, rgb, managed);
+}
+
 function sunSprite(map: Texture): Sprite {
   return new Sprite(
     new SpriteMaterial({ blending: AdditiveBlending, depthWrite: false, fog: false, map, transparent: true }),

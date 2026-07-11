@@ -1,4 +1,4 @@
-import { Object3D } from 'three';
+import { Object3D, Sphere, Vector3 } from 'three';
 import { describe, expect, it, type Mock, vi } from 'vitest';
 
 import type { Config } from '../interfaces/config.interface';
@@ -431,6 +431,41 @@ describe('StreamingSystem', () => {
       expect(root.children.every((child) => child.name === 'bundle')).toBe(true);
       const wrapped = root.children.reduce((sum, child) => sum + child.children.length, 0);
       expect(wrapped).toBe(27); // 9 cells × 3 objects, all inside bundles, none lost
+    });
+
+    it('hides cell containers outside the view frustum and shows them back (bundle-level culling)', async () => {
+      const adapter = multiAdapter(1);
+      // Give the streamed objects a boundable "geometry" so containerSphere can union them.
+      adapter.loadCell.mockImplementation((request: CellRequest) => {
+        const object = new Object3D();
+        object.name = `${request.cx},${request.cy}`;
+        (object as unknown as { geometry: { boundingSphere: Sphere } }).geometry = {
+          boundingSphere: new Sphere(new Vector3(0, 0, 0), 10),
+        };
+
+        return Promise.resolve([object]);
+      });
+      const root = new Object3D();
+      let inView = true;
+      const system = new StreamingSystem(adapter, root, () => [125, 125, 0] as Vec3, config(), {
+        appearPerFrame: 2,
+        cellContainer: (): Object3D => new Object3D(),
+        viewFrustum: (): { intersectsSphere(): boolean } => ({ intersectsSphere: (): boolean => inView }),
+      });
+      while (!system.settled()) {
+        system.update();
+        await flush();
+      }
+      expect(root.children.length).toBeGreaterThan(0);
+      expect(root.children.every((container) => container.visible)).toBe(true);
+
+      inView = false;
+      system.update();
+      expect(root.children.every((container) => !container.visible)).toBe(true);
+
+      inView = true;
+      system.update();
+      expect(root.children.every((container) => container.visible)).toBe(true);
     });
 
     it('renders only the manual cells while in debug mode', async () => {

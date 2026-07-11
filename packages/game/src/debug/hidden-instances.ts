@@ -1,4 +1,4 @@
-import { type InstancedMesh, Matrix4, Vector3 } from 'three';
+import { type InstancedMesh, Matrix4, type Mesh, Vector3 } from 'three';
 
 const ZERO_SCALE = new Vector3(0, 0, 0);
 
@@ -14,16 +14,23 @@ export class HiddenInstances {
     return this.hidden.length;
   }
 
-  private readonly hidden: { instanceId: number; matrix: Matrix4; mesh: InstancedMesh }[] = [];
+  private readonly hidden: { instanceId: number; matrix: Matrix4 | null; mesh: Mesh }[] = [];
 
-  /** Collapse one instance (idempotent per mesh+id — re-hiding must not capture the collapsed matrix). */
-  hide(mesh: InstancedMesh, instanceId: number): number {
+  /** Collapse one instance (idempotent per mesh+id — re-hiding must not capture the collapsed matrix).
+   *  Single-placement plain-Mesh world parts (073/08 WebGPU) have no instance slots — they just hide. */
+  hide(mesh: Mesh, instanceId: number): number {
     if (!this.hidden.some((entry) => entry.mesh === mesh && entry.instanceId === instanceId)) {
-      const matrix = new Matrix4();
-      mesh.getMatrixAt(instanceId, matrix);
-      this.hidden.push({ instanceId, matrix, mesh });
-      mesh.setMatrixAt(instanceId, matrix.clone().scale(ZERO_SCALE));
-      mesh.instanceMatrix.needsUpdate = true;
+      if ((mesh as InstancedMesh).isInstancedMesh) {
+        const instanced = mesh as InstancedMesh;
+        const matrix = new Matrix4();
+        instanced.getMatrixAt(instanceId, matrix);
+        this.hidden.push({ instanceId, matrix, mesh });
+        instanced.setMatrixAt(instanceId, matrix.clone().scale(ZERO_SCALE));
+        instanced.instanceMatrix.needsUpdate = true;
+      } else {
+        this.hidden.push({ instanceId, matrix: null, mesh });
+        mesh.visible = false;
+      }
     }
 
     return this.hidden.length;
@@ -32,8 +39,12 @@ export class HiddenInstances {
   /** Put every hidden instance's original matrix back and forget them. */
   restoreAll(): void {
     for (const { instanceId, matrix, mesh } of this.hidden) {
-      mesh.setMatrixAt(instanceId, matrix);
-      mesh.instanceMatrix.needsUpdate = true;
+      if (matrix) {
+        (mesh as InstancedMesh).setMatrixAt(instanceId, matrix);
+        (mesh as InstancedMesh).instanceMatrix.needsUpdate = true;
+      } else {
+        mesh.visible = true;
+      }
     }
     this.hidden.length = 0;
   }

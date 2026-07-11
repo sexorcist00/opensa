@@ -68,6 +68,23 @@ export interface ClumpParticle {
   position: [number, number, number];
 }
 
+/** WebGPU/TSL factory registered under `?webgpu=1` (night-fill-tsl); when set, buildMaterial delegates so
+ *  dynamics get NODE materials (a `.emissiveNode` night-fill needs one — `onBeforeCompile` is dead on
+ *  `WebGPURenderer`). Mirrors `setWorldMaterialTslBuilder`; avoids importing three/webgpu here. */
+export type DynamicMaterialFactory = (params: DynamicMaterialParams, reflective: boolean) => MeshStandardMaterial;
+
+/** The `MeshStandardMaterial` constructor params buildMaterial resolves — what the TSL factory receives. */
+export interface DynamicMaterialParams {
+  alphaTest: number;
+  color: number;
+  map: null | Texture;
+  metalness: number;
+  roughness: number;
+  side: typeof DoubleSide | typeof FrontSide;
+  transparent: boolean;
+  vertexColors: boolean;
+}
+
 /** A single-material renderable slice of a clump (for InstancedMesh). */
 export interface RenderPart {
   geometry: BufferGeometry;
@@ -251,7 +268,7 @@ export function buildGeometry(rw: RWGeometry): BufferGeometry {
 
   return geometry;
 }
-
+let dynamicMaterialTslFactory: DynamicMaterialFactory | null = null;
 export function buildMaterial(
   rw: RWMaterial,
   geometry: RWGeometry,
@@ -261,7 +278,7 @@ export function buildMaterial(
   const hasVertexColors = (geometry.flags & GeometryFlag.PRELIT) !== 0;
   const transparent = map ? Boolean(map.userData.hasAlpha) : rw.color[3] < 255;
 
-  const params = {
+  const params: DynamicMaterialParams = {
     alphaTest: transparent ? 0.5 : 0,
     color: map ? 0xffffff : (rw.color[0] << 16) | (rw.color[1] << 8) | rw.color[2],
     map,
@@ -276,9 +293,11 @@ export function buildMaterial(
   // add a reflective **clearcoat** (glossy lacquer over the saturated paint) per the active preset.
   const env = rw.effects?.envMap;
   const reflective = env !== undefined && env.coefficient > 0;
-  const material = reflective
-    ? new MeshPhysicalMaterial({ ...params, clearcoat: 0 })
-    : new MeshStandardMaterial(params);
+  const material = dynamicMaterialTslFactory
+    ? dynamicMaterialTslFactory(params, reflective)
+    : reflective
+      ? new MeshPhysicalMaterial({ ...params, clearcoat: 0 })
+      : new MeshStandardMaterial(params);
   material.name = rw.texture?.name ?? 'material';
 
   // Carry the SA reflection-plugin data (preset-independent; shape matches `VehicleReflectionData` in
@@ -310,6 +329,10 @@ export function frameMatrix(rotation: number[], position: [number, number, numbe
   matrix.set(r0, r3, r6, position[0], r1, r4, r7, position[1], r2, r5, r8, position[2], 0, 0, 0, 1);
 
   return matrix;
+}
+
+export function setDynamicMaterialTslFactory(factory: DynamicMaterialFactory | null): void {
+  dynamicMaterialTslFactory = factory;
 }
 
 /**

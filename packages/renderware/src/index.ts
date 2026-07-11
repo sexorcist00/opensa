@@ -51,6 +51,7 @@ export {
   type ClumpLight,
   type ClumpParticle,
   type RenderPart,
+  setDynamicMaterialTslFactory,
   wrapClumpParts,
 } from './three/build-clump';
 export { buildCollisionWireframe } from './three/build-col-wireframe';
@@ -82,7 +83,7 @@ export {
 } from './three/build-particles';
 export { buildRoadsignParts, roadsignGlyphIndex, setRoadsignFont } from './three/build-roadsign';
 export { buildSkinnedClump, type SkinnedClump } from './three/build-skinned-clump';
-export { buildTextureMap, type TextureDictionary } from './three/build-texture';
+export { buildTextureMap, setTextureDataFreeing, type TextureDictionary } from './three/build-texture';
 export {
   buildVehicle,
   type BuiltDoor,
@@ -92,7 +93,8 @@ export {
 } from './three/build-vehicle';
 export { buildWater, oceanFrame } from './three/build-water';
 export { type CoronaEntry, coronaMaterial, GLOW_LAYER } from './three/corona';
-export { nightFillRim, nightFillUniform } from './three/night-fill';
+export { nightFillRim, nightFillUniform, setNightFillTslApplier } from './three/night-fill';
+export { applyNightFillTsl, buildDynamicMaterialTsl, syncNightFillTsl } from './three/night-fill-tsl';
 export { type SunSplit, sunSplit, type SunSplitInput } from './three/sun-split';
 export { updateUvAnimations } from './three/uv-anim';
 export {
@@ -100,6 +102,7 @@ export {
   dnBalanceUniform,
   LOCAL_LIGHT_POOL,
   setWorldMaterialTslBuilder,
+  setWorldWindowGlowTslApplier,
   windowGlowUniform,
   worldCsmUniforms,
   worldDayTintUniform,
@@ -111,4 +114,4 @@ export {
   worldSunUniforms,
   worldTintUniform,
 } from './three/world-material';
-export { buildWorldMaterialTsl, syncWorldTsl } from './three/world-material-tsl';
+export { applyWorldWindowGlowTsl, buildWorldMaterialTsl, syncWorldTsl } from './three/world-material-tsl';

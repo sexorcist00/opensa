@@ -12,11 +12,14 @@ The map of planning docs across the repo. **Engine plans** live here (`docs/plan
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
 `001`–`073`. Newest first:
 
-- **[073 — WebGPU migration](./073-webgpu-migration/readme.md)** — the WebGL→WebGPU renderer mode (graduated from
-  `docs/concepts/webgpu-migration/`): static render bundles field-proven (~13 ms vs 65 ms WebGL, live camera,
-  smooth streaming, patched three 0.185.1). Chain: 01 upstream contribution · 02 dynamics materials · 03 sky &
-  ambient · 04 world-material slices · 05 shadows · 06 remaining effects · 07 post-FX · 08 pipeline sharing ·
-  09 productionize.
+- **[073 — WebGPU migration (three.js) — FAILED](./073-webgpu-migration-threejs/readme.md)** — the WebGL→WebGPU
+  renderer mode on three.js: the CPU side was fully solved (render 65 → ~4 ms: bundles + patched three 0.185.1 +
+  plain-Mesh pipeline sharing + memory caps), but an irreducible GPU/present remainder in **three's WebGPU
+  backend on Metal** kept an M3 Pro under the 40 fps bar — the blocker is on three.js's side (per-object
+  pipelines, naga codegen traps, backend present overhead; full forensic log in sub-plan 08). **Conclusion: the
+  path forward is our own framework — [concepts/opensa-engine](../concepts/opensa-engine/README.md).** The
+  `?webgpu/bundle/...` flags and engine changes stay in-tree for debugging until the own-framework work decides
+  their fate.
 
 - **[062 — Rendering overhaul](./062-rendering-overhaul.md)** — the "modern lighting" fork (chain umbrella,
   promoted from `ideas/0.4.0/02-rendering`): real sun on the prelit world without double-counting, CSM building

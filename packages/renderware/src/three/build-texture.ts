@@ -26,6 +26,12 @@ const DXT_FORMAT = {
 /** A TXD's textures by lowercased name — the shape every texture consumer works with. */
 export type TextureDictionary = Map<string, Texture>;
 
+/** WebGPU mode (plan 073/08 memory): free each texture's CPU-side pixel payload right after its GPU upload
+ *  (`texture.onUpdate` fires then). The Texture OBJECT survives — material/pipeline sharing (keyed by texture
+ *  identity) is untouched — but the JS heap stops holding every mip of every texture ever streamed (field:
+ *  3–6 GB heap → unified-memory pressure → GPU collapse on Apple Silicon). Off on WebGL: its context-restore
+ *  path re-uploads from this data. Never re-set `needsUpdate` on a freed texture. */
+let freeTextureData = false;
 /** Build a name-keyed (lowercased) map of three.js textures from a TXD. */
 export function buildTextureMap(dict: RWTextureDictionary): TextureDictionary {
   const map = new Map<string, Texture>();
@@ -34,6 +40,10 @@ export function buildTextureMap(dict: RWTextureDictionary): TextureDictionary {
   }
 
   return map;
+}
+
+export function setTextureDataFreeing(enabled: boolean): void {
+  freeTextureData = enabled;
 }
 
 function buildCompressedTexture(rw: RWTexture): CompressedTexture {
@@ -79,6 +89,21 @@ function buildTexture(rw: RWTexture): Texture {
   texture.name = rw.name;
   texture.userData.hasAlpha = rw.hasAlpha;
   texture.needsUpdate = true;
+  if (freeTextureData) {
+    freeOnUpload(texture);
+  }
 
   return texture;
+}
+
+/** Release the CPU copies once the GPU has the texture (see {@link setTextureDataFreeing}). */
+function freeOnUpload(texture: Texture): void {
+  texture.onUpdate = (): void => {
+    texture.onUpdate = null;
+    texture.mipmaps = [];
+    const image = texture.image as { data?: null | Uint8Array };
+    if (image && image.data) {
+      image.data = null;
+    }
+  };
 }

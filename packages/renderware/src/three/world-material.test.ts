@@ -14,6 +14,7 @@ import {
   buildWorldMaterial,
   dnBalanceUniform,
   isVertexAlphaBeam,
+  setWorldWindowGlowTslApplier,
   windowGlowUniform,
   worldCsmUniforms,
   worldDayTintUniform,
@@ -93,6 +94,19 @@ describe('buildWorldMaterial', () => {
       );
       expect(built.transparent).toBe(false);
       expect(built.customProgramCacheKey()).not.toContain('beam');
+    });
+
+    it('does not apply the GLSL window glow when a TSL applier is registered (WebGPU mode delegates)', () => {
+      const built = buildWorldMaterial(material({ texture: { maskName: '', name: 'wall' } }), geometry(), textureMap());
+      const applied: MeshBasicMaterial[] = [];
+      setWorldWindowGlowTslApplier((m) => applied.push(m));
+      try {
+        applyWorldWindowGlow(built);
+      } finally {
+        setWorldWindowGlowTslApplier(null);
+      }
+      expect(applied).toEqual([built]); // delegated…
+      expect(built.customProgramCacheKey()).toBe('saWorld'); // …and the GLSL patch never landed
     });
   });
 

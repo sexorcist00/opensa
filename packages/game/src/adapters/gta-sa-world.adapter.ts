@@ -227,7 +227,8 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       };
     }
     const data = object.userData.region as RegionMeshData | undefined;
-    const instance = instanceId === undefined ? undefined : data?.instances[instanceId];
+    // Plain-Mesh world parts (073/08 WebGPU) raycast without an instanceId — their group has exactly one.
+    const instance = instanceId === undefined ? singleInstanceOf(data) : data?.instances[instanceId];
     if (!data || !instance) {
       return null;
     }
@@ -780,6 +781,11 @@ function requireText(fs: AssetFileSystem, name: string): string {
   }
 
   return text;
+}
+
+/** The group's sole placement, when it has exactly one (plain-Mesh world parts pick without a slot id). */
+function singleInstanceOf(data: RegionMeshData | undefined): RegionMeshData['instances'][number] | undefined {
+  return data?.instances.length === 1 ? data.instances[0] : undefined;
 }
 
 /** Tag a model's collider placements with breakable instance keys (plan 045); a pass-through for

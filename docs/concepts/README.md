@@ -6,7 +6,7 @@ A concept graduates to `docs/plans/` only once we decide to build it.
 ## Graduated
 
 - [webgpu-migration](webgpu-migration/) — move the renderer off WebGL2 onto WebGPU to break the CPU draw-call wall.
-  **Graduated to [docs/plans/073-webgpu-migration](../plans/073-webgpu-migration/readme.md) (2026-07-11):** briefly
+  **Graduated to [docs/plans/073-webgpu-migration](../plans/073-webgpu-migration-threejs/readme.md) (2026-07-11):** briefly
   parked mid-hunt, then the patched-three bundle hunt WON — static render bundles field-proven (~13 ms vs 65 ms
   WebGL, live camera, smooth streaming). The concept docs stay as the research record; work continues in the plan
   chain.

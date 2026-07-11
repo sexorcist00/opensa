@@ -45,6 +45,8 @@ const MAX_VERTEX_COORD = 1_000_000;
 
 /** Prepared atomics by lowercased model name — primed by the parse worker, filled on demand otherwise. */
 const preparedCache = new Map<string, PreparedAtomic[]>();
+/** Bounded like the clump cache (plan 073/08 memory) — prepared atomics duplicate the geometry arrays. */
+const PREPARED_CACHE_MAX = 512;
 
 /** Group a geometry's triangles into per-material index buffers, skipping empty slices. */
 export function groupTrianglesByMaterial(triangles: RWTriangle[], materialCount: number): RWTriangle[][] {
@@ -112,15 +114,15 @@ export function preparedAtomicsFor(modelName: string, clump: RWClump): PreparedA
   let prepared = preparedCache.get(key);
   if (!prepared) {
     prepared = prepareClumpAtomics(clump);
-    preparedCache.set(key, prepared);
   }
+  lruSetPrepared(key, prepared);
 
   return prepared;
 }
 
 /** Seed the cache with worker-prepared atomics (paired with the same worker's parsed clump). */
 export function primePreparedAtomics(modelName: string, prepared: PreparedAtomic[]): void {
-  preparedCache.set(modelName.toLowerCase(), prepared);
+  lruSetPrepared(modelName.toLowerCase(), prepared);
 }
 
 /**
@@ -306,6 +308,16 @@ function faceNormal(p: Float32Array, a: number, b: number, c: number): [number, 
   }
 
   return [nx / len, ny / len, nz / len];
+}
+
+/** LRU touch (see asset-cache): re-insert on hit, evict the oldest past the cap. */
+function lruSetPrepared(key: string, value: PreparedAtomic[]): void {
+  preparedCache.delete(key);
+  preparedCache.set(key, value);
+  while (preparedCache.size > PREPARED_CACHE_MAX) {
+    const oldest = preparedCache.keys().next().value as string;
+    preparedCache.delete(oldest);
+  }
 }
 
 /** Prelit RGBA bytes → float colours; `withAlpha` keeps vec4 (floodlight beams), default drops to vec3. */
