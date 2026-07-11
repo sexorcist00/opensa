@@ -120,7 +120,10 @@ async function main(): Promise<void> {
       const maxSpike = Math.max(0, ...spikes).toFixed(0);
       readout.textContent =
         `stream-compile | ${cfg}\ncells added ${cellIndex} | steady ${steady} ms\n` +
-        `appearance-frame ms (recent): ${spikes.slice(-8).map((s) => s.toFixed(0)).join(' ')}\n` +
+        `appearance-frame ms (recent): ${spikes
+          .slice(-8)
+          .map((s) => s.toFixed(0))
+          .join(' ')}\n` +
         `max spike ${maxSpike} ms  ← low = pipeline pre-warmed, high = compiles on appear`;
     }
     // One copyable summary line once all cells are in (log a few times so it's easy to grab).
