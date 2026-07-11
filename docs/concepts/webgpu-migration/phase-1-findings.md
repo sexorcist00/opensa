@@ -104,19 +104,23 @@ engine** (`world-material-tsl.ts` + `setWorldMaterialTslBuilder`; canvas-host re
 system under `?webgpu=1`): the world **renders beautifully** — prelit/night shading, detailed buildings, vegetation
 (screenshot captured). **Major milestone: the world material port works and looks right.**
 
-BUT full-engine perf is bad: the world loads over **minutes**, the near ring reads black/frozen, the camera stutters,
-Ganton never fully streams. Leading cause: **per-material pipeline compilation on the main thread** as cells stream —
-each new TSL node material compiles on first draw → stalls the frame → the frame-budgeted streaming starves → death
-spiral. (The auto-converted-material path was ~19 ms and loaded fast, so the TSL materials are the regression.)
+BUT the per-draw cost is bad. Measured in-engine at Ganton: **render CPU 125 ms for 4367 draws** — the world
+renders correctly, just at ~8 fps. That's **~28 µs/draw** vs the auto-converted path's **~4 µs/draw** (19 ms / 4597)
+— **the custom-`colorNode` TSL material is ~7× more expensive to submit per draw.** (Not compilation — the world
+does fully render; it's a steady per-frame CPU cost.) three's WebGPURenderer submits its optimized built-in
+materials far cheaper than a material with a custom `colorNode`; a shared-uniform node graph re-bound per draw is
+the likely culprit. This makes the TSL world material, as written, impractical until the per-draw cost is profiled
+and cut.
 
 Also parked here: **bundles are OFF by default** (`?bundle=1`/`root` to opt in) — the frustum-culling-off workaround
 for the bundle transform bug caused a no-cull perf spiral of its own.
 
 ### Resume points (deliberate, not blind rounds)
-1. **WebGPU pipeline pre-compilation.** Confirm the streaming `precompile`/`warmUp` hooks actually pre-warm TSL
-   pipelines under `WebGPURenderer` (they may be no-ops or behave differently than WebGL `compileAsync`). Pre-warm
-   the handful of world-material variants ONCE at boot so streaming never compiles on the appearance frame.
-2. **Material/pipeline sharing.** Ensure world materials that differ only by texture share ONE pipeline (bind-group,
-   not pipeline, should differ) — verify three isn't compiling per material instance.
-3. Then resume the material slices (CSM shadows → fog → emissive) and, separately, dynamic-object materials
-   (player/cars render as black silhouettes — they use lit/skinned materials, not the world material).
+1. **Profile the ~28 µs/draw TSL submit cost — the make-or-break gate.** Compare a custom-`colorNode`
+   `MeshBasicNodeMaterial` vs a plain built-in one at N draws in an isolated bench; find what three re-binds per
+   draw for custom node materials (the shared uniform group? a per-material bind group?). Options: one shared
+   material driven by instancing/attributes; a batched path; or `NodeMaterialObserver` to mark the graph static.
+   If custom node materials can't approach the built-in per-draw cost, the whole TSL port is in question.
+2. Then the material slices (CSM shadows → fog → emissive) + dynamic-object materials (player/cars are black
+   silhouettes — lit/skinned materials, not the world material).
+3. Bundles (transform bug) after static/dynamic separation, as before.
