@@ -61,6 +61,23 @@ more than single-digit %. One process mistake worth remembering: an early "LOD s
 **wrong** — a `.model` vs `.modelName` field bug in a headless probe. The engine's LOD swap works. Always verify
 the tool before the conclusion.
 
+## ⚠️ OPEN TASK — restore LOD stripping (live bug, independent of the parked tooling)
+
+During the investigation we confirmed a **real, current** defect in the LOD path: **stock SA per-instance LODs
+and our improved merged cells load at the same time** in OpenSA. The far ring renders BOTH — the stock `LOD*`
+per-object models (measured ~+2 k draws) *on top of* the merged `lod_<cx>_<cy>` cells that were meant to replace
+them. Pure waste (double geometry) and it muddies every LOD measurement.
+
+Cause: the **strip-lods step was rolled back** with the tooling commits, so the shipped builds no longer remove
+the stock `lod*` layer (and/or the engine no longer dedups it). To fix, restore ONE of:
+
+- **generator side:** re-run/keep `opensa-lod-generator --strip-lods` (`stripOldLods`) so the drop-in build removes
+  the stock `lod*` instances the merged cells replace; **or**
+- **engine side:** when a cell has an opensa merged `lod_*` in its LOD bucket, drop the stock `LOD*` instances for
+  that cell (dedup at `buildWorldGrid` / streaming time).
+
+This is separate from the WebGPU work and should be picked up whenever the LOD/build path is next touched.
+
 ## What survives as useful
 
 - The **diagnosis** → [webgpu-migration](webgpu-migration/) (the root-cause fix: WebGPU render bundles).
