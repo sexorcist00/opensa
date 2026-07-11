@@ -245,9 +245,11 @@ export class StreamingSystem implements System {
     const otherObjects = this.loaded.get(otherKey);
     if (otherObjects) {
       this.remove(otherKey, otherObjects); // old level drops only now → no empty frame
-    } else if (!this.config.mapViewer && this.config.gameState !== 'streaming') {
+    } else if (!this.config.mapViewer && this.config.gameState !== 'streaming' && !this.gpu.cellContainer) {
       // Genuinely new cell: fade in (swaps never fade). Behind the streaming veil (plan 061) cells appear
       // at full opacity instead — the reveal shows a finished world, not a mass fade-in.
+      // WebGPU bundles: skip the fade — a static BundleGroup bakes the opacity at record time, so a cell
+      // recorded mid-fade (opacity 0) would stay invisible forever. Cells just appear at full opacity.
       this.fader.start(key, objects);
     }
   }
