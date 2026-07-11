@@ -12,12 +12,19 @@ The map of planning docs across the repo. **Engine plans** live here (`docs/plan
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
 `001`–`073`. Newest first:
 
+- **[074 — OpenSA engine](./074-opensa-engine/readme.md)** — own WebGPU-only framework + native formats
+  (concept: [00-concept](./074-opensa-engine/00-concept.md)): target **60 fps with the full WebGL effect set**. Chain:
+  01 framework architecture · 02 native formats (`.oscell`/`.ostex`/`.ospak`, texture ARRAYS, alpha pipeline) ·
+  03 converter tool (`opensa-pack`) · 04 engine lab + P0 gate · 05 streaming/memory · 06 world effects ledger ·
+  07 baked channels (066 specs re-targeted) · 08 dynamics (early skinning probe) · 09 post-FX/MSAA+A2C ·
+  10 integration & flip. Vertical-slice roadmap M0–M4, every milestone gated on numbers.
+
 - **[073 — WebGPU migration (three.js) — FAILED](./073-webgpu-migration-threejs/readme.md)** — the WebGL→WebGPU
   renderer mode on three.js: the CPU side was fully solved (render 65 → ~4 ms: bundles + patched three 0.185.1 +
   plain-Mesh pipeline sharing + memory caps), but an irreducible GPU/present remainder in **three's WebGPU
   backend on Metal** kept an M3 Pro under the 40 fps bar — the blocker is on three.js's side (per-object
   pipelines, naga codegen traps, backend present overhead; full forensic log in sub-plan 08). **Conclusion: the
-  path forward is our own framework — [concepts/opensa-engine](../concepts/opensa-engine/README.md).** The
+  path forward is our own framework — [074 OpenSA engine](./074-opensa-engine/readme.md).** The
   `?webgpu/bundle/...` flags and engine changes stay in-tree for debugging until the own-framework work decides
   their fate.
 

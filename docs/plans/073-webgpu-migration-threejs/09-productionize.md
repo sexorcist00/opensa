@@ -13,7 +13,7 @@
       checklist for three upgrades (re-run both harnesses + a field smoke).
 - [ ] Memory/lifecycle audit: bundle containers vs cell cache (objects reparented on unload — verify no leaks via
       renderer.info.memory over a long drive).
-- [ ] Update `docs/concepts/webgpu-migration/` statuses → graduated pointers to this chain.
+- [ ] Update `concept/` (moved here from docs/concepts) statuses → graduated pointers to this chain.
 
 ## Done
 

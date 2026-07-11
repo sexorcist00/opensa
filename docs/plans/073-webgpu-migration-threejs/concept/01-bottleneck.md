@@ -28,13 +28,13 @@ uniform uploads, state changes, `gl.drawElements`). For comparison, a native D3D
 
 Every lever we measured during the 2026-07 tooling experiment, and why each failed to move the 65 ms:
 
-| Lever we tried | Measured result | Why it doesn't help |
-|---|---|---|
-| Cross-model texture merge | −23 % draws (ceiling) | Fights instancing (triangles↑), engine work, and 23 % of 65 ms is still 50 ms → still CPU-bound. |
-| Per-model texture atlas | **−7 %** draws | Tiling: SA walls/roads sample UVs outside `[0,1]`, can't be atlased in place. |
-| Baked static shadows | **−4 %** draws | Shadows aren't the draw source; CSM statics are already cached/staggered. |
-| Narrow the HD ring | **worse** (+14 % draws) | Merged LOD cells lose per-object frustum culling + carry ~155 texture-groups each. |
-| Proxy-bake cells to atlas | not built | Kilometre-long tiled roads/terrain smear or need a huge atlas — degenerates on exactly the surfaces that dominate. |
+| Lever we tried            | Measured result         | Why it doesn't help                                                                                                |
+| ------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Cross-model texture merge | −23 % draws (ceiling)   | Fights instancing (triangles↑), engine work, and 23 % of 65 ms is still 50 ms → still CPU-bound.                   |
+| Per-model texture atlas   | **−7 %** draws          | Tiling: SA walls/roads sample UVs outside `[0,1]`, can't be atlased in place.                                      |
+| Baked static shadows      | **−4 %** draws          | Shadows aren't the draw source; CSM statics are already cached/staggered.                                          |
+| Narrow the HD ring        | **worse** (+14 % draws) | Merged LOD cells lose per-object frustum culling + carry ~155 texture-groups each.                                 |
+| Proxy-bake cells to atlas | not built               | Kilometre-long tiled roads/terrain smear or need a huge atlas — degenerates on exactly the surfaces that dominate. |
 
 The pattern: **draws come from distinct materials/textures across many objects, and SA's tiled art resists every
 in-place merge.** You can shave 5–25 %, never the 3–4× we'd need. And even a perfect draw-count fix runs into the
@@ -55,7 +55,7 @@ So the draws are real, distributed, and tied to material count. There is no sing
 
 ## The only lever left
 
-If you can't reduce the *number* of draws (art resists) and you can't make each draw *cheaper* in JS/WebGL
+If you can't reduce the _number_ of draws (art resists) and you can't make each draw _cheaper_ in JS/WebGL
 (that's the API), then you change the **API**: WebGPU submits recorded draw bundles with a fraction of the CPU
 cost, and its **render bundles** let a static scene record its draw commands **once** and replay them each frame
 at near-zero CPU. That is what [03-webgpu-mechanism.md](03-webgpu-mechanism.md) covers.

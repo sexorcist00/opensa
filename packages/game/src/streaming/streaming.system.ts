@@ -10,13 +10,13 @@ import { cellDistanceSq, cellOf, cellsWithin } from './grid';
 
 /** Renderer-side hooks (plan 060 Phases 4 + round 3), injected by the host — absent in headless tests. */
 export interface GpuHooks {
-  /** WebGPU (docs/concepts/webgpu-migration): pipelines compile NATIVELY on an object's first draw, so an atomic
+  /** WebGPU (docs/plans/073-webgpu-migration-threejs/concept): pipelines compile NATIVELY on an object's first draw, so an atomic
    *  cell appearance stacks dozens of native compiles into one frame — the camera-move freeze (profiled as
    *  System-dominated 100 ms+ tasks). >0 spreads the appearance to this many objects per frame, amortizing the
    *  compiles. Unset/0 = the plan-060 atomic appearance (WebGL). */
   appearPerFrame?: number;
   /** WebGPU spike: a fresh per-cell container (a `BundleGroup`) — a cell's objects go inside it so the renderer
-   *  records the cell's draws once and replays them (docs/concepts/webgpu-migration). Absent → objects add to root. */
+   *  records the cell's draws once and replays them (docs/plans/073-webgpu-migration-threejs/concept). Absent → objects add to root. */
   cellContainer?(): Object3D;
   /** Compile shader programs + upload textures for a built batch (renderer.compileAsync). */
   precompile?(objects: readonly Object3D[]): Promise<void>;

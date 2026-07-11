@@ -14,11 +14,11 @@ guiding rule is the physical one:
 
 Precomputed per-vertex / per-texel channels our own format carries; the material samples them.
 
-| Channel | Replaces | Notes |
-|---|---|---|
-| **Ambient occlusion** (`skyVis`) | the screen-space **SSAO pass** | biggest win — removes a whole fullscreen pass; cheaper and stable |
-| **Emissive mask** | runtime luma-delta heuristic | marks lit windows; also the source that **bloom** picks up |
-| **Night vertex colours** | — | already baked (day/night prelit) |
+| Channel                          | Replaces                               | Notes                                                                      |
+| -------------------------------- | -------------------------------------- | -------------------------------------------------------------------------- |
+| **Ambient occlusion** (`skyVis`) | the screen-space **SSAO pass**         | biggest win — removes a whole fullscreen pass; cheaper and stable          |
+| **Emissive mask**                | runtime luma-delta heuristic           | marks lit windows; also the source that **bloom** picks up                 |
+| **Night vertex colours**         | —                                      | already baked (day/night prelit)                                           |
 | **Static sun-shadow** (optional) | part of CSM on the **far static** ring | baked soft shadow for distant static geometry; dynamic near stays live CSM |
 
 These are exactly the channels the parked modern-cell tooling already prototyped — if we return to that work, this
@@ -29,7 +29,7 @@ is where it plugs into the new renderer.
 Per-surface lighting/shading that varies with sun/time — computed in the world material's node graph:
 
 - **Direct sun term** (N·L × sun colour)
-- **CSM shadow sampling** (sample the cascade maps three renders — the *sampling* is in-material)
+- **CSM shadow sampling** (sample the cascade maps three renders — the _sampling_ is in-material)
 - **Unified fog** (distance fog blended in-material — already how we do it)
 - **Day/night balance**, **window/beam glow** (emissive drive)
 
@@ -37,12 +37,12 @@ Per-surface lighting/shading that varies with sun/time — computed in the world
 
 Physically cannot be a material; realized as WebGPU/TSL post passes after the scene:
 
-| Effect | Why it must be a pass |
-|---|---|
-| **Bloom** | blurs a neighbourhood of the rendered image |
-| **God-rays** | radial blur in screen space from the sun's screen position |
+| Effect            | Why it must be a pass                                                                          |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| **Bloom**         | blurs a neighbourhood of the rendered image                                                    |
+| **God-rays**      | radial blur in screen space from the sun's screen position                                     |
 | **Anti-aliasing** | edge detection on the final image — or replace with WebGPU **MSAA** (may remove the SMAA pass) |
-| **Tone mapping** | applied once as the final output step |
+| **Tone mapping**  | applied once as the final output step                                                          |
 
 ## Net effect on the port
 

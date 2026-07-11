@@ -1,5 +1,5 @@
 /**
- * Babylon.js spike (docs/concepts/webgpu-migration — the "leave three?" question). THROWAWAY. Mirrors the three
+ * Babylon.js spike (docs/plans/073-webgpu-migration-threejs/concept — the "leave three?" question). THROWAWAY. Mirrors the three
  * Phase-0/1a harnesses so the numbers are directly comparable: ~15k independent draws (cloned boxes, 8 unlit
  * materials, culling defeated), camera orbiting, and Babylon's **Snapshot Rendering** (the record-once analogue of
  * WebGPU render bundles) toggleable — plus a streaming scenario that adds mesh batches to a LIVE snapshot scene

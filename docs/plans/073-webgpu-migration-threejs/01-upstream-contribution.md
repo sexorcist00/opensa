@@ -5,7 +5,7 @@ means re-applying it. Landing the fixes upstream deletes that liability and help
 
 ## Context
 
-- Ready-to-file text: [upstream-issue-draft.md](../../concepts/webgpu-migration/upstream-issue-draft.md).
+- Ready-to-file text: [upstream-issue-draft.md](concept/upstream-issue-draft.md).
 - The patch carries FOUR pieces: (1) `needsRefresh` reorder (firstInit → static/bundle → hasNode), (2) stale-version
   sync inside static bundles, (3) replay heartbeat (first renderObject per bundle), (4) `?bundledebug` logging.
 

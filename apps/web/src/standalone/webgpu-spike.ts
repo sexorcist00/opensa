@@ -1,5 +1,5 @@
 /**
- * Phase-0/1a WebGPU spike (docs/concepts/webgpu-migration/phase-0-spike-checklist.md). THROWAWAY.
+ * Phase-0/1a WebGPU spike (docs/plans/073-webgpu-migration-threejs/concept/phase-0-spike-checklist.md). THROWAWAY.
  *
  * Phase 0 — does a WebGPU render bundle (`BundleGroup`) collapse CPU draw-submission for a large static draw list?
  *   /webgpu-spike.html                 → WebGPU + BundleGroup (record-once)

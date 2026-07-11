@@ -6,7 +6,7 @@ export interface RenderContext {
   cellContainer?: () => Object3D;
   renderer: WebGLRenderer;
   scene: Scene;
-  /** Phase-1 WebGPU spike (`?webgpu=1`, docs/concepts/webgpu-migration): the renderer is a `WebGPURenderer`.
+  /** Phase-1 WebGPU spike (`?webgpu=1`, docs/plans/073-webgpu-migration-threejs/concept): the renderer is a `WebGPURenderer`.
    *  Custom GLSL materials/plugins don't apply — game.ts skips plugin installs + the WebGL GPU timer. */
   webgpu: boolean;
 }

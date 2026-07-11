@@ -1,5 +1,5 @@
 /**
- * Throwaway on-screen frame profiler for the WebGPU spike (docs/concepts/webgpu-migration, plan 073/08 field
+ * Throwaway on-screen frame profiler for the WebGPU spike (docs/plans/073-webgpu-migration-threejs/concept, plan 073/08 field
  * debugging). Splits the game loop into its segments — fixed-step physics catch-up, per-frame systems, the
  * synchronous render call — next to the REAL frame interval (rAF-to-rAF): render CPU can be low while frames are
  * long, and the missing milliseconds are either in a loop segment (visible here) or on the GPU (no segment grows

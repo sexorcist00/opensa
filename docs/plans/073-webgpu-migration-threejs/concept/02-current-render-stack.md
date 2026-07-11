@@ -17,18 +17,18 @@ post-FX below are ported** — that's the actual work.
 ## Custom materials & shaders — the hard part
 
 three's WebGPU path does **not** run GLSL. There is **no `onBeforeCompile`** and no `gl_FragColor`. Materials are
-authored in **TSL** (Three Shading Language — a JS node graph that compiles to WGSL *and* GLSL). Every custom
+authored in **TSL** (Three Shading Language — a JS node graph that compiles to WGSL _and_ GLSL). Every custom
 shader below is GLSL-string-based today and must be **re-authored as a TSL node material**:
 
-| File | ~lines | What it does | Port difficulty |
-|---|---|---|---|
-| `renderware/src/three/world-material.ts` | 480 | **The main world material.** `MeshBasicMaterial` + `onBeforeCompile`: direct sun + CSM shadow sampling, night colours, window/beam glow, emissive, unified fog, day/night balance. Uniform-gated cache keys. | **Highest.** This is the engine's visual identity; must be pixel-faithful across day/night. |
-| `plugins/sky.plugin.ts` | 839 | PBR sky + LUT, sun disc, the sun's near shadow map. | High. |
-| `plugins/water.plugin.ts` | 392 | Animated water surface. | Medium-high. |
-| `three/build-particles.ts` | 298 | 2dfx particle systems. | Medium. |
-| `three/corona.ts` | 129 | Light coronas (Points). | Medium. |
-| `three/uv-anim.ts` | 103 | Scrolling-UV materials. | Low-medium. |
-| `three/night-fill.ts` | 55 | Night vertex-colour fill. | Low. |
+| File                                     | ~lines | What it does                                                                                                                                                                                                 | Port difficulty                                                                             |
+| ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `renderware/src/three/world-material.ts` | 480    | **The main world material.** `MeshBasicMaterial` + `onBeforeCompile`: direct sun + CSM shadow sampling, night colours, window/beam glow, emissive, unified fog, day/night balance. Uniform-gated cache keys. | **Highest.** This is the engine's visual identity; must be pixel-faithful across day/night. |
+| `plugins/sky.plugin.ts`                  | 839    | PBR sky + LUT, sun disc, the sun's near shadow map.                                                                                                                                                          | High.                                                                                       |
+| `plugins/water.plugin.ts`                | 392    | Animated water surface.                                                                                                                                                                                      | Medium-high.                                                                                |
+| `three/build-particles.ts`               | 298    | 2dfx particle systems.                                                                                                                                                                                       | Medium.                                                                                     |
+| `three/corona.ts`                        | 129    | Light coronas (Points).                                                                                                                                                                                      | Medium.                                                                                     |
+| `three/uv-anim.ts`                       | 103    | Scrolling-UV materials.                                                                                                                                                                                      | Low-medium.                                                                                 |
+| `three/night-fill.ts`                    | 55     | Night vertex-colour fill.                                                                                                                                                                                    | Low.                                                                                        |
 
 **5 `onBeforeCompile` sites** total. TSL can express all of it, but "express" = re-derive each shader as nodes and
 re-verify the look. The `world-material` alone is a multi-week task to port faithfully.
@@ -47,7 +47,7 @@ re-verify the look. The `world-material` alone is a multi-week task to port fait
   `GodRaysEffect`, `BloomEffect`, `SSAOEffect`, `SMAAEffect`, `ToneMappingEffect` (15 pass/effect sites).
 - **`postprocessing` is WebGL-only. It does not run on WebGPU.** There is no compatibility shim.
 - WebGPU replacement = three's **`three/webgpu` PostProcessing** (TSL-node passes). To be clear: **post-FX is NOT
-  impossible on WebGPU** — only the *`postprocessing` library* is dead. TSL fully covers screen-space passes.
+  impossible on WebGPU** — only the _`postprocessing` library_ is dead. TSL fully covers screen-space passes.
   Status of equivalents:
   - **Tone mapping, bloom** — available as TSL nodes.
   - **God-rays, SSAO, SMAA** — **no first-party WebGPU drop-in**; each is a custom TSL implementation or a

@@ -1,7 +1,7 @@
 # 073/07 — Post-FX under WebGPU
 
 **Priority: P2.** The `postprocessing` lib is WebGL-only. Rebuild the chain on three's WebGPU `PostProcessing`
-(TSL passes), applying the standing [bake-vs-pass decision](../../concepts/webgpu-migration/06-bake-vs-pass.md):
+(TSL passes), applying the standing [bake-vs-pass decision](concept/06-bake-vs-pass.md):
 SSAO → prefer BAKED AO (revives a slice of the parked 066 tooling), SMAA → likely MSAA, keep bloom/god-rays/tonemap
 as passes.
 

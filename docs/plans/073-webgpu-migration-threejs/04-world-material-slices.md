@@ -7,7 +7,7 @@ local light pool, window-glow overlay, beam handling nuances.
 ## Context
 
 - Source of truth: `packages/renderware/src/three/world-material.ts` (GLSL) — port term by term.
-- The bake-vs-pass decision ([06-bake-vs-pass](../../concepts/webgpu-migration/06-bake-vs-pass.md)) says: fog and
+- The bake-vs-pass decision ([06-bake-vs-pass](concept/06-bake-vs-pass.md)) says: fog and
   emissive live IN the material; AO may come baked (plan 07).
 - Uniform groups: everything shared per-frame goes to `renderGroup` (frozen-bundle rule — already the pattern).
 
@@ -20,7 +20,7 @@ local light pool, window-glow overlay, beam handling nuances.
       exists) and waits for 073/03 slice C; then port the LUT term into the TSL colorNode._
 - [x] Night emissive glow (`uEmissiveBoost`, luma-delta over night vertex colours) + window-glow overlay material.
       _Done 2026-07-11: glow term on nightBlend materials + `applyWorldWindowGlowTsl` (additive `texture ×
-    uWindowGlow` on colorNode; `applyWorldWindowGlow` delegates via `setWorldWindowGlowTslApplier`). The TSL
+  uWindowGlow` on colorNode; `applyWorldWindowGlow` delegates via `setWorldWindowGlowTslApplier`). The TSL
       builder now also sets `material.map` — build-region's treatment gate reads it. CAVEAT: TSL materials are
       cache-SHARED — a WeakSet guards double-application; if a timed-overlay texture is ever shared with plain
       geometry the glow leaks (candidate for a 'timed' variant key)._

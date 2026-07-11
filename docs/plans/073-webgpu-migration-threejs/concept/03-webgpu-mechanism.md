@@ -43,7 +43,7 @@ to de-risk before committing. Hence the spike.
 - **TSL** (Three Shading Language) is three's node-based material language. You compose materials from JS nodes
   (`positionWorld`, `texture()`, `mix()`, `uniform()`, custom functions via `Fn`), and three compiles the graph to
   **WGSL** for WebGPU (and can fall back to GLSL for WebGL).
-- **Advantage:** one material definition, both backends — so we *could* keep a WebGL fallback during migration.
+- **Advantage:** one material definition, both backends — so we _could_ keep a WebGL fallback during migration.
 - **Cost:** our shaders are currently hand-written GLSL strings patched into three's built-in material via
   `onBeforeCompile`. That mechanism **doesn't exist** in the node world. Each shader is re-expressed as a node
   graph and re-verified. The logic ports 1:1 conceptually; the effort is in the re-authoring + pixel matching.

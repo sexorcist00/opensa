@@ -4,7 +4,7 @@
 `073-webgpu-migration-threejs` to record WHICH WebGPU attempt failed: the one built on three's WebGPURenderer.
 The campaign solved everything reachable from outside the framework (CPU 65 → ~4 ms) and hit an irreducible
 GPU/present remainder inside three's Metal backend. **The path forward is our own framework:
-[docs/concepts/opensa-engine](../../concepts/opensa-engine/README.md).**
+[074 own-engine chain](../074-opensa-engine/readme.md).**
 
 **Code/flags disposition (temporary):** every runtime flag (`?webgpu/bundle/mat04/pool/fog/mesh1/cellcull/
 texfree/aa/dpr/appear/warm/bundledebug`) and the engine changes stay in-tree for debugging; their fate
@@ -48,7 +48,7 @@ Static render bundles **work in the real engine** behind `?webgpu=1&bundle=1` (t
 WebGL baseline (5×)** — frozen floor ~5 ms. The composed streaming pipeline: budgeted appearance (`?appear=N`,
 default 8; atomic behind the boot veil) → chunked wrap into ≤64-object `BundleGroup`s (one chunk/frame) →
 heartbeat keeps shared camera groups uploading. Non-block-aligned DXT decodes to RGBA (WebGPU strictness).
-Full chronology: [concept findings](../../concepts/webgpu-migration/phase-1-findings.md).
+Full chronology: [concept findings](concept/phase-1-findings.md).
 
 ## Concept audit — what survived, what changed
 

@@ -1,6 +1,6 @@
 import { BufferAttribute, CanvasTexture, Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Vector3 } from 'three';
 /**
- * Phase-1 TSL port (docs/concepts/webgpu-migration). THROWAWAY verification. Builds the SA world material as a TSL
+ * Phase-1 TSL port (docs/plans/073-webgpu-migration-threejs/concept). THROWAWAY verification. Builds the SA world material as a TSL
  * node graph slice by slice, on a lit sphere so lighting terms are visible, before wiring into the engine.
  *
  * Slice 1 — classic: `texel × mix(day prelit, night prelit, dnBalance) × tint`.

@@ -1,5 +1,5 @@
 /**
- * WebGPU/TSL world material (Phase 1, docs/concepts/webgpu-migration). The SA world material as a TSL node graph
+ * WebGPU/TSL world material (Phase 1, docs/plans/073-webgpu-migration-threejs/concept). The SA world material as a TSL node graph
  * for `WebGPURenderer` — three's auto-conversion of the GLSL `MeshBasicMaterial` drops all the custom shading, so
  * under `?webgpu=1` the engine builds this instead (registered via {@link setWorldMaterialTslBuilder}).
  *
@@ -53,7 +53,7 @@ import {
 
 // Shared TSL uniform nodes — one set for every world material; the engine drives them via syncWorldTsl().
 // `renderGroup`: updated once per render for ALL objects (not per-object) — required so objects frozen inside
-// static render bundles (docs/concepts/webgpu-migration) still receive live sun/night values every frame.
+// static render bundles (docs/plans/073-webgpu-migration-threejs/concept) still receive live sun/night values every frame.
 const uDn = uniform(0).setGroup(renderGroup);
 const uTint = uniform(new Color(1, 1, 1)).setGroup(renderGroup);
 const uDayTint = uniform(new Color(1, 1, 1)).setGroup(renderGroup);

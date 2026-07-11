@@ -3,7 +3,7 @@
 **Question:** can moving the OpenSA renderer from WebGL2 to WebGPU break the CPU draw-call wall and turn OpenSA
 into a genuinely AAA-capable browser engine?
 
-**Status: 🎓 GRADUATED to [docs/plans/073-webgpu-migration](../../plans/073-webgpu-migration-threejs/readme.md)
+**Status: 🎓 GRADUATED to [docs/plans/073-webgpu-migration](../readme.md)
 (2026-07-11).** The park below lasted hours: the focused bundle hunt (patched three, see
 [phase-1-findings.md](phase-1-findings.md)) made static render bundles WORK in the real engine — fast load, live
 camera, smooth driving, **~13 ms render CPU vs the 65 ms WebGL baseline**. These concept docs remain as the

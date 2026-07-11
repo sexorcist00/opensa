@@ -3,7 +3,9 @@
 **Question:** can a purpose-built engine (own WebGPU renderer + own texture/model formats + offline tools) deliver
 **60 fps with the FULL current WebGL effect set** on the same world data?
 
-**Status: 🌱 CONCEPT (2026-07-11).** Born from the parked [073 WebGPU migration](../../plans/073-webgpu-migration-threejs/readme.md):
+**Status: 🎓 GRADUATED — this is the research record behind [the 074 chain](readme.md) (2026-07-11); moved here
+from `docs/concepts/opensa-engine/`.** Born from the failed
+[073 three-WebGPU migration](../073-webgpu-migration-threejs/readme.md):
 the campaign proved the browser is NOT the limit — the framework and the data shape are. Every number below is a
 field measurement from that campaign, not an estimate.
 
@@ -11,12 +13,12 @@ field measurement from that campaign, not an estimate.
 
 ## Why this is credible (measured foundations)
 
-| Claim                                            | Evidence (ours, this hardware — M3 Pro)                                                                                                                                                                                            |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Browser WebGPU submits a full SA scene for ~free | Babylon Snapshot FAST: **0.12 ms** CPU @ 15k draws; our patched three bundles: 4–5 ms _while fighting the framework_                                                                                                               |
-| The GPU cost of the PICTURE is small             | vanilla SA runs 100+ fps on this class of hardware; our 31 ms WebGL GPU is state-churn + unbatched draws + retina post — not the pixels                                                                                            |
-| The pathologies were three's, not the platform's | per-object pipelines (uuid cache key), naga uniform-array occupancy collapse (~250 ms), unexplained Metal present overhead — all located INSIDE the framework (073/08 forensic log)                                                |
-| The data half is already designed                | the [066 tool chain](../../plans/066-pmb-modern-tool/readme.md) specs the native cell format, batching, baked shadows/AO/emissive — it was parked because it fed _three-WebGL_; it is exactly the asset pipeline this engine needs |
+| Claim                                            | Evidence (ours, this hardware — M3 Pro)                                                                                                                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Browser WebGPU submits a full SA scene for ~free | Babylon Snapshot FAST: **0.12 ms** CPU @ 15k draws; our patched three bundles: 4–5 ms _while fighting the framework_                                                                                                      |
+| The GPU cost of the PICTURE is small             | vanilla SA runs 100+ fps on this class of hardware; our 31 ms WebGL GPU is state-churn + unbatched draws + retina post — not the pixels                                                                                   |
+| The pathologies were three's, not the platform's | per-object pipelines (uuid cache key), naga uniform-array occupancy collapse (~250 ms), unexplained Metal present overhead — all located INSIDE the framework (073/08 forensic log)                                       |
+| The data half is already designed                | the [066 tool chain](../066-pmb-modern-tool/readme.md) specs the native cell format, batching, baked shadows/AO/emissive — it was parked because it fed _three-WebGL_; it is exactly the asset pipeline this engine needs |
 
 **Why 066 batching "didn't work" before and will now:** the tooling experiment measured −23 % against the 65 ms
 draw-submission wall — batching couldn't pay while every draw cost 4.4 µs of three-WebGL overhead. In an engine

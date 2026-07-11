@@ -1,6 +1,6 @@
 import { BoxGeometry, BufferAttribute, CanvasTexture, Group, Matrix4, PerspectiveCamera, Scene, Vector3 } from 'three';
 /**
- * Phase-1 focused repro (docs/concepts/webgpu-migration): the streaming-compile stall. Every SPAWN frames it adds a
+ * Phase-1 focused repro (docs/plans/073-webgpu-migration-threejs/concept): the streaming-compile stall. Every SPAWN frames it adds a
  * new InstancedMesh with a custom-colorNode node material (like a streamed world cell) under a −90°X parent, and
  * times the APPEARANCE frame. Reproduces the "camera-move freeze" = WebGPU compiling the pipeline on the frame the
  * cell appears, and tests whether `compileAsync` (and in which context) pre-warms it.

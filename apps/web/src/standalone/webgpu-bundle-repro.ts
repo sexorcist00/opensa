@@ -1,5 +1,5 @@
 /**
- * Phase-1 bug repro (docs/concepts/webgpu-migration/phase-1-findings.md). THROWAWAY. Isolates the one thing the
+ * Phase-1 bug repro (docs/plans/073-webgpu-migration-threejs/concept/phase-1-findings.md). THROWAWAY. Isolates the one thing the
  * engine's near ring does that the far ring doesn't: render an **InstancedMesh** inside a static **BundleGroup**
  * under a **rotated parent** (the streaming root is −90°X). If the instances collapse/stretch/vanish → the
  * InstancedMesh × static-bundle interaction is the bug.
