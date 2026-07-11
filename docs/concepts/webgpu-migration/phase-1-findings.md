@@ -204,3 +204,41 @@ shadow-binding fix for invisible dynamics, PCF). All WebGPU code stays behind `?
 **Resume conditions:** three fixes per-InstancedMesh pipeline caching (watch PR 29066) and static-bundle transform
 capture for streamed scenes — re-run the Phase-0/1a spikes on that version first. The alternative road to AAA is a
 custom WebGPU renderer outside three (a separate, months-scale decision).
+
+## Bundle bug hunt round 2 (2026-07-11, patched three) — the freeze WORKS, one problem left, and it has a name
+
+Instrumented three 0.185.1 via `patch-package` (`patches/three+0.185.1.patch`; `?bundledebug=1` logs RECORD/REPLAY/
+PROJECT). Chronology of findings — each one measured in the real engine:
+
+1. **The transform-baking garbage is GONE on r185** + our fixes: per-cell bundles render the world correctly
+   (`badMatrix=0` across all recorded objects; visual confirmed). Bug #1 of the hunt died with the upgrade.
+2. **Found why static bundles never froze:** `NodeMaterialObserver.needsRefresh` returns `true` unconditionally
+   for any material with custom nodes (`hasNode`) — BEFORE the static/bundle checks — and ALSO refreshes the first
+   renderObject of every observer per frame. Our world = custom-`colorNode` TSL materials → every bundled object
+   refreshed every frame (`REPLAY refreshed=N/N`) → the 30 ms steady cost.
+3. **Patched order** (`firstInitialization` → bundle-freeze → `hasNode`): freeze engaged, world renders,
+   **render CPU 30 ms → 5 ms** — the Phase-0 synthetic prediction (~6×) reproduced in the REAL engine. Shared
+   world uniforms moved to `renderGroup` (`world-material-tsl.ts`) so lighting values flow per-render.
+4. **The remaining problem: the frozen world GLUES to the camera.** Camera matrices (`cameraViewMatrix`,
+   renderGroup) upload through `Bindings._update` — which only runs for REFRESHED objects. All world objects
+   frozen → their programs' shared camera buffers never re-upload → static picture; dynamics (unfrozen programs)
+   move fine. **This is why stock three's once-per-observer refresh is LOAD-BEARING**: in their render-bundle
+   example (8k meshes / 2 materials) it refreshes ~2 objects/frame and keeps shared buffers alive ~free. Our
+   workload degenerates because **observers are per-OBJECT** — the r185 render-object cache key includes the
+   InstancedMesh uuid (the PR 29066 workaround) → program/observer per object → O(N) refreshes.
+5. Attempted fix (write shared uniform buffers in place for frozen objects, no bind-group recreation) **silently
+   kills rendering** (no JS error — GPU-process validation, presumably) — reverted to the working freeze state.
+
+**Everything traces to the same upstream root: uuid-in-cacheKey → per-object programs → per-object observers +
+per-object shared-buffer copies.** With the upstream `referenceBuffer()` refactor (the PR 29066 discussion), programs
+would be shared per material, the stock refresh would keep cameras alive at ~#materials cost, and bundles would
+work out of the box.
+
+### State banked
+
+- `patches/three+0.185.1.patch` = debug logs + the needsRefresh reorder (freeze works; **camera frozen** — not
+  shippable yet, gated behind `?webgpu=1&bundle=1` anyway).
+- Next-session options: (a) study backend `NodeUniformsGroup` sharing to make the in-place shared-buffer write
+  safe (find why it kills the frame); (b) neutralize the uuid key for statically-bundled objects and solve the
+  instanceMatrix-capture (the actual referenceBuffer problem) locally; (c) file the upstream issue with our
+  measurements — we now hold a complete, minimal, measured diagnosis worth a three.js issue/PR.

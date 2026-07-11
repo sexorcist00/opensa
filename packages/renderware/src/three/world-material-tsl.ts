@@ -11,7 +11,7 @@
 import type { Texture } from 'three';
 
 import { Color, DoubleSide, FrontSide, Vector3 } from 'three';
-import { attribute, mix, normalWorld, texture, uniform, vec3 } from 'three/tsl';
+import { attribute, mix, normalWorld, renderGroup, texture, uniform, vec3 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 
 import type { RWGeometry, RWMaterial } from '../parsers/binary/types';
@@ -27,14 +27,16 @@ import {
 } from './world-material';
 
 // Shared TSL uniform nodes — one set for every world material; the engine drives them via syncWorldTsl().
-const uDn = uniform(0);
-const uTint = uniform(new Color(1, 1, 1));
-const uDayTint = uniform(new Color(1, 1, 1));
-const uSunDir = uniform(new Vector3(0, 1, 0));
-const uSunColor = uniform(new Color(1, 1, 1));
-const uDirect = uniform(0);
-const uIndirect = uniform(1);
-const uPipelineMix = uniform(0);
+// `renderGroup`: updated once per render for ALL objects (not per-object) — required so objects frozen inside
+// static render bundles (docs/concepts/webgpu-migration) still receive live sun/night values every frame.
+const uDn = uniform(0).setGroup(renderGroup);
+const uTint = uniform(new Color(1, 1, 1)).setGroup(renderGroup);
+const uDayTint = uniform(new Color(1, 1, 1)).setGroup(renderGroup);
+const uSunDir = uniform(new Vector3(0, 1, 0)).setGroup(renderGroup);
+const uSunColor = uniform(new Color(1, 1, 1)).setGroup(renderGroup);
+const uDirect = uniform(0).setGroup(renderGroup);
+const uIndirect = uniform(1).setGroup(renderGroup);
+const uPipelineMix = uniform(0).setGroup(renderGroup);
 
 /** Shared material instances: node materials are EXPENSIVE per instance under WebGPU (the node builder generates
  *  WGSL per material, ~ms each — appearance-frame spikes as cells stream). Same texture + same flag combination →
