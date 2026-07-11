@@ -159,7 +159,7 @@ function makeCell(index: number): InstancedMesh {
  *  so three must compile a fresh pipeline (tests whether same-structure materials otherwise share one). */
 function makeMaterial(index: number): MeshBasicNodeMaterial {
   const material = new MeshBasicNodeMaterial();
-  const day = attribute('color', 'vec3');
+  const day = attribute<'vec3'>('color', 'vec3');
   const albedo = texture(map).rgb.mul(day);
   const sun = normalWorld.dot(uSun).max(0);
   const base = albedo.add(texture(map).rgb.mul(sun).mul(0.5));

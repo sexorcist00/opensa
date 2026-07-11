@@ -11,7 +11,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   OrthographicCamera,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   type PerspectiveCamera,
   PlaneGeometry,
   Scene,
@@ -574,7 +574,7 @@ export class SkyPlugin implements Plugin {
     // Directional sun shadows: a view-following orthographic shadow map. shadowMap.enabled stays on; the
     // runtime toggle is `sun.castShadow` (three recompiles materials when the shadow-light count changes).
     context.renderer.shadowMap.enabled = true;
-    context.renderer.shadowMap.type = PCFSoftShadowMap;
+    context.renderer.shadowMap.type = PCFShadowMap; // r183: PCFSoft deprecated — PCF is now soft
     const shadowCam = this.sun.shadow.camera;
     shadowCam.left = -SHADOW_SIZE;
     shadowCam.right = SHADOW_SIZE;
@@ -586,6 +586,12 @@ export class SkyPlugin implements Plugin {
     this.sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.6; // small — high values bloat thin objects' shadows
+    // three r185: shadow maps are DEPTH textures sampled with comparison samplers. `castShadow` stays true at
+    // night while `autoUpdate` is off (see updateShadow) — so at a night boot the map is bound WITHOUT ever being
+    // rendered → three binds a non-depth fallback into the shadow sampler → GL_INVALID_OPERATION → every lit
+    // receiveShadow draw (player/vehicles) is dropped. Render the map once up front; the frozen empty depth map
+    // is a valid binding and invisible at night anyway.
+    this.sun.shadow.needsUpdate = true;
 
     this.apply(
       context.config.graphics.sun.sunSize,

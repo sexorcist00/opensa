@@ -307,6 +307,21 @@ const SHADOW_FRAGMENT_PARS =
   '\t\t+ worldShadowTap( sc.xy + vec2( -t.x, t.y ), d ) + worldShadowTap( sc.xy + vec2( t.x, t.y ), d ) );\n' +
   '}\n';
 
+/** Separates the WebGPU material-cache pools per OBJECT KIND: three's WebGPU render-object cache key does NOT
+ *  distinguish a count-1 InstancedMesh from a plain Mesh, so one shared material across both compiles ONE vertex
+ *  stage and garbles the other's transforms (the giant-stretched-geometry anomaly). `static` = the instanced world
+ *  (build-clump); `animated` = plain-Mesh animated props (build-animated-clump). */
+export type WorldMaterialVariant = 'animated' | 'static';
+
+/** WebGPU/TSL builder registered under `?webgpu=1` (world-material-tsl); when set, buildWorldMaterial delegates to
+ *  it — the GLSL `onBeforeCompile` path below doesn't run on `WebGPURenderer`. Avoids a circular import. */
+type TslBuilder = (
+  rw: RWMaterial,
+  geometry: RWGeometry,
+  textures?: Map<string, Texture>,
+  variant?: WorldMaterialVariant,
+) => MeshBasicMaterial;
+
 /**
  * Patch a night-lit timed window overlay (build-region) to **glow** additively over the night
  * blend: `+ texture × windowGlow`, injected after the (no-night-variant) world tint so the glow is
@@ -328,18 +343,15 @@ export function applyWorldWindowGlow(material: MeshBasicMaterial): void {
   };
   material.needsUpdate = true;
 }
-
-/** WebGPU/TSL builder registered under `?webgpu=1` (world-material-tsl); when set, buildWorldMaterial delegates to
- *  it — the GLSL `onBeforeCompile` path below doesn't run on `WebGPURenderer`. Avoids a circular import. */
-let tslBuilder: ((rw: RWMaterial, geometry: RWGeometry, textures?: Map<string, Texture>) => MeshBasicMaterial) | null =
-  null;
+let tslBuilder: null | TslBuilder = null;
 export function buildWorldMaterial(
   rw: RWMaterial,
   geometry: RWGeometry,
   textures?: Map<string, Texture>,
+  variant: WorldMaterialVariant = 'static',
 ): MeshBasicMaterial {
   if (tslBuilder) {
-    return tslBuilder(rw, geometry, textures);
+    return tslBuilder(rw, geometry, textures, variant);
   }
   const map = rw.texture && textures ? (textures.get(rw.texture.name.toLowerCase()) ?? null) : null;
   const hasVertexColors = (geometry.flags & GeometryFlag.PRELIT) !== 0;
@@ -477,9 +489,7 @@ export function buildWorldMaterial(
   return material;
 }
 
-export function setWorldMaterialTslBuilder(
-  builder: ((rw: RWMaterial, geometry: RWGeometry, textures?: Map<string, Texture>) => MeshBasicMaterial) | null,
-): void {
+export function setWorldMaterialTslBuilder(builder: null | TslBuilder): void {
   tslBuilder = builder;
 }
 

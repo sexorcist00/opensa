@@ -773,7 +773,8 @@ function bootstrap(
     // WebGPU spike (Phase 1): build the world material as a TSL node graph (three drops the GLSL onBeforeCompile),
     // and sync its shared uniforms each frame via a system (plugins are skipped under WebGPU, systems still run).
     if (new URLSearchParams(window.location.search).get('webgpu') === '1') {
-      setWorldMaterialTslBuilder(buildWorldMaterialTsl);
+      // Cast: 0.185's types no longer treat MeshBasicNodeMaterial as a MeshBasicMaterial; runtime-compatible here.
+      setWorldMaterialTslBuilder(buildWorldMaterialTsl as unknown as Parameters<typeof setWorldMaterialTslBuilder>[0]);
       game.addSystem({ name: 'tsl-sync', update: (): void => syncWorldTsl() });
     }
     await loadFonts(game.getConfig().fonts); // register HUD fonts before the scene/HUD render

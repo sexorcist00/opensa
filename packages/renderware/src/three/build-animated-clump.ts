@@ -56,7 +56,9 @@ export function buildAnimatedClump(
     if (!rw || !node) {
       continue;
     }
-    const atomicMaterials = rw.materials.map((m) => buildWorldMaterial(m, rw, textures));
+    // 'animated' keeps these plain-Mesh materials out of the static InstancedMesh cache pool (WebGPU cache-key
+    // collision between a plain Mesh and a count-1 InstancedMesh garbles transforms — see WorldMaterialVariant).
+    const atomicMaterials = rw.materials.map((m) => buildWorldMaterial(m, rw, textures, 'animated'));
     materials.push(...atomicMaterials);
     const mesh = new Mesh(buildGeometry(rw), atomicMaterials.length > 0 ? atomicMaterials : undefined);
     // Map convention (plan 038): only dynamics cast; the world material samples the map manually.

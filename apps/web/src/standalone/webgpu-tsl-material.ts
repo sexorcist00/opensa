@@ -42,8 +42,8 @@ function buildWorldMaterialTsl(map: CanvasTexture): { material: MeshBasicNodeMat
   const indirectScale = uniform(1);
   const pipelineMix = uniform(PIPELINE);
 
-  const day = attribute('color', 'vec3');
-  const night = attribute('nightColor', 'vec3');
+  const day = attribute<'vec3'>('color', 'vec3');
+  const night = attribute<'vec3'>('nightColor', 'vec3');
   const texel = texture(map).rgb;
   const albedo = texel.mul(mix(day, night, dnBalance));
   const sunNdl = normalWorld.dot(sunDir).max(0); // world-space N·L

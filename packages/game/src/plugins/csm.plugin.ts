@@ -97,6 +97,12 @@ export class CsmPlugin implements Plugin {
       light.shadow.camera.near = 1;
       light.shadow.camera.layers.set(CSM_STATIC_LAYER); // static world only — dynamics would go stale in the cache
       light.shadow.bias = -0.0004;
+      // three r185: shadow maps are DEPTH textures sampled with comparison samplers. A castShadow light whose map
+      // was NEVER rendered makes three bind a non-depth fallback into the shadow sampler → GL_INVALID_OPERATION
+      // (format/sampler mismatch) → every lit receiveShadow draw is DROPPED (player/vehicles invisible while the
+      // CSM schedule is inactive — night / shadows off). Render each cascade once at install: an empty depth map
+      // keeps the binding valid forever; the needsRefresh schedule takes over from there.
+      light.shadow.needsUpdate = true;
       context.scene.add(light, light.target);
       this.cascades.push({ lastRadius: 0, light, state: null });
     }
