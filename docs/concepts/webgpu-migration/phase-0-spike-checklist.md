@@ -106,13 +106,35 @@ Measured (synthetic harness, boxes, culling off), 2026-07-11:
 - Low FPS at count=40000 in both WebGPU runs = GPU overdraw from 40k stacked synthetic boxes (an artifact of the
   harness geometry), not a CPU signal — ignore.
 
-### The one thing Phase 1 MUST de-risk (moved from R6 to critical)
+### Phase 1a — per-cell invalidation gate: ✅ GO (2026-07-11)
 
 Because the material cost now lives at **record time**, re-recording the **whole** world on every cell swap would
-spike (the 65 ms reappears as a hitch). Phase 1's gating question: **can we invalidate/re-record only the changed
-cell's bundle**, keeping the rest replayed? three's `BundleGroup` is version-gated per group, so the design is
-**one BundleGroup per streamed cell** — a cell swap re-records just that group. Prove this stays smooth before
-committing to the full material port.
+spike. Gate question: is `BundleGroup` invalidation **granular** — does re-recording one cell leave the rest
+replayed? Tested with `?cells=100&swap=30` (100 per-cell bundles, one re-records every 30 frames):
+
+| | render CPU |
+|---|---|
+| steady (all cells replayed) | **4.5 ms** |
+| swap frame (1 cell re-records) | **8.9 ms** max |
+
+**Granular — confirmed.** The swap frame is `steady + ~one cell` (8.9 ms), **not** a full-world re-record (which
+would be ~27 ms, the no-bundle cost). Re-recording one cell does not force the others → no world-wide hitch, and
+8.9 ms is still inside a 60 fps frame. Design validated: **one `BundleGroup` per streamed cell.**
+
+Honest caveats: the synthetic swap uses simple box materials, so the real per-cell re-record will cost more (heavy
+shaders + actual cell load creating meshes) — but it stays **bounded to one cell**, and the existing streaming
+pipeline (plan 060: warm-invisibly, atomic-appear) can run the re-record **off the appearance frame**, hiding it.
+
+---
+
+## Both gates GREEN — thesis validated
+
+- **Phase 0:** render bundles collapse per-frame submission ~6× and move per-draw material cost to record-time.
+- **Phase 1a:** per-cell bundle invalidation is granular — a cell swap re-records one cell, not the world.
+
+The two make-or-break **unknowns** are now measured YES. What remains is **execution risk**, not unknowns: the
+2–3-month material/post-FX port to TSL (Phases 1–5 in [04-migration-plan.md](04-migration-plan.md)). Green light to
+commit is justified whenever the 2–3-month investment is.
 
 <details><summary>original blank template</summary>
 
