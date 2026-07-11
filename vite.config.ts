@@ -83,6 +83,7 @@ const hideDebugger = process.env.OPENSA_DEBUGGER_HIDE === 'true';
 const isProdDeploy = excludeViewers && hideDebugger;
 
 const viewerInputs = {
+  babylonSpike: resolve(__dirname, 'babylon-spike.html'), // Babylon snapshot-rendering spike (throwaway; 'leave three?' question)
   controlsHarness: resolve(__dirname, 'controls-harness.html'),
   viewer: resolve(__dirname, 'viewer.html'), // object/vehicle/character as ?tab= in one app
   webgpuBundleRepro: resolve(__dirname, 'webgpu-bundle-repro.html'), // Phase-1 bundle+InstancedMesh bug repro (throwaway)

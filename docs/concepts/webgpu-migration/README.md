@@ -11,8 +11,12 @@ no working pre-warm — in practice the WebGPU path ended up **worse than WebGL*
 conditions in **[phase-1-findings.md](phase-1-findings.md)** (the FINAL VERDICT section).
 
 What the effort yielded on the shipping WebGL path: the **three 0.177 → 0.185.1 upgrade**, the r185
-invisible-dynamics shadow fix, PCF shadows, and a complete map of the upstream blockers. **Resume when three fixes
-instancing pipeline caching + bundle transform capture — re-run the Phase-0/1a spikes on that version first.**
+invisible-dynamics shadow fix, PCF shadows, and a complete map of the upstream blockers. **Correction (2026-07-11): PR 29066 itself MERGED in Aug 2024 — the uuid-in-key IS the merged workaround.** What's
+pending upstream is the structural `referenceBuffer()` refactor its discussion calls for, with no timeline; the same
+thread has a maintainer benchmark of WebGPURenderer ~3× slower than WebGL on complex scenes — matching our field
+result. Resume only when that architecture work lands (re-run the spikes first). Meanwhile the "leave three?"
+question is being measured: see the **Babylon spike** (`/babylon-spike.html`, snapshot rendering = mature
+record-once + a streaming reset-cost scenario).
 
 <details><summary>Pre-park status (the spike results that justified trying)</summary>
 
@@ -52,4 +56,5 @@ require sacrificing visual quality**. But it is a real engine rewrite — go in 
 5. [05-risks-and-verdict.md](05-risks-and-verdict.md) — every risk, what would kill the project, and the final honest go/no-go.
 6. [06-bake-vs-pass.md](06-bake-vs-pass.md) — fixed decision: which effects bake into the format, which shade in the material, which stay a fullscreen pass.
 7. [phase-0-spike-checklist.md](phase-0-spike-checklist.md) — the actionable Phase-0 spike: concrete tasks, the exact numbers to capture, and the GO/NO-GO criteria.
-8. [phase-1-findings.md](phase-1-findings.md) — real-engine integration: the engine runs under WebGPU (player walks); the static-BundleGroup transform-baking bug that blocks a clean bundle measurement; where to resume.
+8. [07-babylon-spike.md](07-babylon-spike.md) — the "leave three?" question measured: Babylon snapshot FAST = 0.12 ms steady but ~50 ms GLOBAL re-record per streaming swap; migration not justified.
+9. [phase-1-findings.md](phase-1-findings.md) — real-engine integration: the engine runs under WebGPU (player walks); the static-BundleGroup transform-baking bug that blocks a clean bundle measurement; where to resume.
