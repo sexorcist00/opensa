@@ -3,7 +3,10 @@
 **Question:** can moving the OpenSA renderer from WebGL2 to WebGPU break the CPU draw-call wall and turn OpenSA
 into a genuinely AAA-capable browser engine?
 
-**Status:** research / concept. No code. Decision pending.
+**Status:** Phase 0 spike **ran → ✅ GO** (2026-07-11). Render bundles cut per-frame draw submission ~6× and move
+the heavy per-draw material cost to record-time; WebGPU *without* bundles regresses vs WebGL (bundles are the whole
+win). Numbers + full verdict in [phase-0-spike-checklist.md](phase-0-spike-checklist.md). Next: Phase 1, gated on
+proving per-cell bundle invalidation stays smooth during streaming.
 
 ---
 

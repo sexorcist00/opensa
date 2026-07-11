@@ -82,11 +82,46 @@ invalidation); that needs the real-engine integration and is a Phase-1 confirmat
 
 Fill this table and decide:
 
+Measured (synthetic harness, boxes, culling off), 2026-07-11:
+
+| Run | render CPU @ 15k | render CPU @ 40k |
+|---|---|---|
+| WebGL baseline | 10.3 ms | — |
+| WebGPU, no bundle | 27 ms | 79 ms |
+| **WebGPU + BundleGroup** | **4.3 ms** | **13 ms** |
+
+### Verdict: ✅ GO
+
+- **Bundles are the entire win.** WebGPU *without* bundles is **worse** than WebGL (27 vs 10.3 ms) — a naive port
+  regresses. With bundles: ~**6× lower** per-frame submission at both scales, consistently.
+- **Not a flat record-once, but a large constant factor.** The bundle still scales gently (4.3→13 ms) because
+  three's **per-frame scene work OUTSIDE the bundle** — `updateMatrixWorld` over ~N nodes + render-list build —
+  isn't recorded. Only the **draw-command encoding** is bundled (and that's the expensive part: it's what makes
+  the no-bundle line 27→79). At our ~14.8k draw count, the bundle sits at **~4–5 ms**.
+- **Why it still fixes our real 65 ms:** the synthetic baseline (10.3 ms) is far below the engine's 65 ms because
+  our real `world-material` is heavy (custom shaders, textures, per-cell state). Render bundles move **all that
+  per-draw material cost to RECORD time** (once per streaming change) — off the per-frame path. So the real engine's
+  per-frame submission should collapse toward the bundle residual (~single-digit ms), **independent of material
+  complexity**. That is the structural fix for the 65 ms wall.
+- Low FPS at count=40000 in both WebGPU runs = GPU overdraw from 40k stacked synthetic boxes (an artifact of the
+  harness geometry), not a CPU signal — ignore.
+
+### The one thing Phase 1 MUST de-risk (moved from R6 to critical)
+
+Because the material cost now lives at **record time**, re-recording the **whole** world on every cell swap would
+spike (the 65 ms reappears as a hitch). Phase 1's gating question: **can we invalidate/re-record only the changed
+cell's bundle**, keeping the rest replayed? three's `BundleGroup` is version-gated per group, so the design is
+**one BundleGroup per streamed cell** — a cell swap re-records just that group. Prove this stays smooth before
+committing to the full material port.
+
+<details><summary>original blank template</summary>
+
 | Run | cpuMs.render | avgMs | fps |
 |---|---|---|---|
 | WebGL baseline | ~65 | ~71 | ~14 |
 | WebGPU, no bundle | ? | ? | ? |
 | WebGPU + bundle | ? | ? | ? |
+</details>
 
 **GO** — proceed to Phase 1 — if **WebGPU + bundle** brings `cpuMs.render` to **single-digit ms** (say **≤ 10 ms**),
 i.e. the submission wall is gone and the frame is now GPU-bound (~`gpuMs`), AND cell-swap re-record doesn't
