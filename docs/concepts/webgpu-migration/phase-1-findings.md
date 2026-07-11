@@ -54,6 +54,41 @@ browser rounds**:
 - read three's bundle recording path (`RenderBundles` / `_renderBundle`) re: when/how model matrices are captured;
 - check three examples/issues for streaming-scene bundle patterns and the correct invalidation API.
 
+## Isolated repro — what it ruled out (2026-07-11)
+
+`apps/web/src/standalone/webgpu-bundle-repro.ts` (`/webgpu-bundle-repro.html`) renders an InstancedMesh (400
+instances) in a static `BundleGroup`. Every isolated case rendered a **clean grid** — so these are NOT the cause:
+
+- InstancedMesh inside a static BundleGroup ✅
+- under a −90°X rotated parent ✅
+- added to an **already-live** scene after 60 frames (`?stream=60`) ✅ (dynamic add works)
+- `?fix=world` / `?fix=late` made no difference (already clean)
+
+So the bundle mechanism is fundamentally sound in this three version. The engine bug is **emergent from the full
+integration**, and the isolated repro doesn't contain it. By the "stretched triangles" symptom (some vertices
+collapse to origin), the leading remaining suspects are:
+
+1. **Animated / skinned meshes in a static bundle** — their bone/animation matrices aren't captured, collapsing
+   vertices (cf. the `barberpole2.quaternion` PropertyBinding warning). Static bundles must contain **static
+   geometry only**; animated props must stay out.
+2. **Re-record churn** — routing all cells through one shared bundle (or per-cell bundles) with `needsUpdate` on
+   every stream add/remove keeps the bundle perpetually re-recording mid-stream.
+3. **Auto-converted material quirks** — the world runs `MeshBasicMaterial` + dangling `onBeforeCompile` GLSL that
+   WebGPU ignores; those materials in a bundle may behave differently than a clean node material.
+
+## Recommendation (updated) — sequence bundles AFTER the TSL port
+
+Chasing the bundle bug on the **current auto-converted-material stopgap** is fighting a hack: the materials aren't
+real node materials, animated vs static geometry isn't separated, and the streaming churns the bundle. The clean
+path is the plan's original order:
+
+1. **Port materials to TSL** (Phase 1 proper) — real node materials, correct day/night/fog/shadow.
+2. **Separate static world geometry from dynamic/animated objects** — only the static world goes into bundles.
+3. **Then** wrap the static world in per-cell bundles — on a solid base, with the repro-proven mechanism.
+
+Trying to bundle before (1) and (2) is premature. The spike branch + repro have de-risked the **mechanism**
+thoroughly; the engine integration should resume in that order, not by bolting bundles onto the stopgap.
+
 ## Recommendation
 
 **Bank the progress; take the bundle bug as focused follow-up.** We have: the engine running under WebGPU (big),
