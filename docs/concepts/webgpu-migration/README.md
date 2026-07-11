@@ -39,3 +39,4 @@ require sacrificing visual quality**. But it is a real engine rewrite — go in 
 5. [05-risks-and-verdict.md](05-risks-and-verdict.md) — every risk, what would kill the project, and the final honest go/no-go.
 6. [06-bake-vs-pass.md](06-bake-vs-pass.md) — fixed decision: which effects bake into the format, which shade in the material, which stay a fullscreen pass.
 7. [phase-0-spike-checklist.md](phase-0-spike-checklist.md) — the actionable Phase-0 spike: concrete tasks, the exact numbers to capture, and the GO/NO-GO criteria.
+8. [phase-1-findings.md](phase-1-findings.md) — real-engine integration: the engine runs under WebGPU (player walks); the static-BundleGroup transform-baking bug that blocks a clean bundle measurement; where to resume.
