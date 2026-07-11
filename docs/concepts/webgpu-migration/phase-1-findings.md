@@ -95,3 +95,28 @@ thoroughly; the engine integration should resume in that order, not by bolting b
 the thesis proven, and a promising (if not apples-to-apples) no-bundle number. The remaining work — the TSL material
 port (Phase 1) and the bundle transform fix — is execution, best done deliberately with a minimal repro, not by
 one-fix-per-reload. The `webgpu` spike branch + this findings doc capture exactly where to resume.
+
+## TSL material integration (2026-07-11) — renders correctly, but a perf stall
+
+Slices verified in isolation (`/webgpu-tsl-material.html`): the SA world material's **classic path** (texel × mix(day,
+night, dnBalance) × tint) and the **modern sun N·L** term author cleanly in TSL and look right. **Integrated into the
+engine** (`world-material-tsl.ts` + `setWorldMaterialTslBuilder`; canvas-host registers it + a per-frame `syncWorldTsl`
+system under `?webgpu=1`): the world **renders beautifully** — prelit/night shading, detailed buildings, vegetation
+(screenshot captured). **Major milestone: the world material port works and looks right.**
+
+BUT full-engine perf is bad: the world loads over **minutes**, the near ring reads black/frozen, the camera stutters,
+Ganton never fully streams. Leading cause: **per-material pipeline compilation on the main thread** as cells stream —
+each new TSL node material compiles on first draw → stalls the frame → the frame-budgeted streaming starves → death
+spiral. (The auto-converted-material path was ~19 ms and loaded fast, so the TSL materials are the regression.)
+
+Also parked here: **bundles are OFF by default** (`?bundle=1`/`root` to opt in) — the frustum-culling-off workaround
+for the bundle transform bug caused a no-cull perf spiral of its own.
+
+### Resume points (deliberate, not blind rounds)
+1. **WebGPU pipeline pre-compilation.** Confirm the streaming `precompile`/`warmUp` hooks actually pre-warm TSL
+   pipelines under `WebGPURenderer` (they may be no-ops or behave differently than WebGL `compileAsync`). Pre-warm
+   the handful of world-material variants ONCE at boot so streaming never compiles on the appearance frame.
+2. **Material/pipeline sharing.** Ensure world materials that differ only by texture share ONE pipeline (bind-group,
+   not pipeline, should differ) — verify three isn't compiling per material instance.
+3. Then resume the material slices (CSM shadows → fog → emissive) and, separately, dynamic-object materials
+   (player/cars render as black silhouettes — they use lit/skinned materials, not the world material).
