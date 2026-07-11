@@ -57,4 +57,5 @@ require sacrificing visual quality**. But it is a real engine rewrite — go in 
 6. [06-bake-vs-pass.md](06-bake-vs-pass.md) — fixed decision: which effects bake into the format, which shade in the material, which stay a fullscreen pass.
 7. [phase-0-spike-checklist.md](phase-0-spike-checklist.md) — the actionable Phase-0 spike: concrete tasks, the exact numbers to capture, and the GO/NO-GO criteria.
 8. [07-babylon-spike.md](07-babylon-spike.md) — the "leave three?" question measured: Babylon snapshot FAST = 0.12 ms steady but ~50 ms GLOBAL re-record per streaming swap; migration not justified.
-9. [phase-1-findings.md](phase-1-findings.md) — real-engine integration: the engine runs under WebGPU (player walks); the static-BundleGroup transform-baking bug that blocks a clean bundle measurement; where to resume.
+9. [upstream-issue-draft.md](upstream-issue-draft.md) — ready-to-file three.js issue: the three BundleGroup defects + our measured fixes (30→5 ms).
+10. [phase-1-findings.md](phase-1-findings.md) — real-engine integration: the engine runs under WebGPU (player walks); the static-BundleGroup transform-baking bug that blocks a clean bundle measurement; where to resume.

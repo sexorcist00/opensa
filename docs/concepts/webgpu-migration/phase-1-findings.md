@@ -242,3 +242,22 @@ work out of the box.
   safe (find why it kills the frame); (b) neutralize the uuid key for statically-bundled objects and solve the
   instanceMatrix-capture (the actual referenceBuffer problem) locally; (c) file the upstream issue with our
   measurements — we now hold a complete, minimal, measured diagnosis worth a three.js issue/PR.
+
+## Round 3 (2026-07-11 evening) — HEARTBEAT WORKS: world + live camera + 5 ms; the last root named
+
+- **Camera unglued via heartbeat** (patch r8): shared bind groups are cached ACROSS programs by uniform node ids
+  (`_getBindGroup`), so refreshing the FIRST renderObject of each bundle per frame re-uploads camera/shared
+  uniforms for everyone. Field-confirmed: **world renders, camera live, render CPU ~5 ms** (was 30–65).
+- **Streaming smoothing shipped:** budgeted appearance now composes with bundles — objects appear N/frame
+  (culling disabled AT appearance, or first-draw compiles hide behind the frustum and explode on camera turns),
+  then wrap into CHUNKED BundleGroups (≤64 objects, one chunk/frame) so each record's full-update pass stays
+  small. Cell-hole fill confirmed fixed.
+- **WebGPU DXT strictness fixed:** SA ships non-block-aligned DXT (62×62); WebGPU rejects them (BC needs
+  multiples of 4) → `GPUValidationError` + missing textures. `build-texture.ts` now decodes those to RGBA
+  (decoder moved `tools/rw-codec` → `packages/renderware/src/textures/dxt.ts`, re-exported for tools).
+- **Remaining stutter root (named, next session):** ~100 ms appearance frames = per-object PIPELINE COMPILES —
+  the uuid-in-cacheKey makes every InstancedMesh compile its own pipeline even with shared materials, so the
+  appear budget only trades fill speed vs frame weight (16/frame ≈ 100 ms, 8 = compromise, tunable `?appear=N`).
+  The fix is pipeline sharing: neutralize the uuid key for statically-bundled instanced meshes + solve the
+  instanceMatrix capture (the actual `referenceBuffer()` problem from PR 29066). That is the LAST lever between
+  the current state and a smooth drive.

@@ -855,7 +855,7 @@ function bootstrap(
       ...(skipWarm
         ? // WebGPU: budgeted appearance instead — N objects/frame (`?appear=N` tunes, 0 = atomic) so first-draw
           // native pipeline compiles amortize across frames (the camera-move freeze fix; see GpuHooks).
-          { appearPerFrame: Number(webgpuSearch.get('appear') ?? 4) || 0 }
+          { appearPerFrame: Number(webgpuSearch.get('appear') ?? 8) || 0 }
         : {
             precompile: (objects: readonly Object3D[]): Promise<void> => game.precompile(objects),
             warmUp: (objects: readonly Object3D[]): void => game.warmUp(objects),

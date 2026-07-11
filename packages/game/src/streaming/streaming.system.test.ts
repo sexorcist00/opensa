@@ -406,6 +406,33 @@ describe('StreamingSystem', () => {
       expect(has(root, '0,0,lod#0')).toBe(false); // old level dropped only after the full appearance
     });
 
+    it('wraps a budget-appeared cell into its per-cell container once complete (WebGPU bundles)', async () => {
+      const adapter = multiAdapter(3);
+      const root = new Object3D();
+      const containers: Object3D[] = [];
+      const system = new StreamingSystem(adapter, root, () => [125, 125, 0] as Vec3, config(), {
+        appearPerFrame: 2,
+        cellContainer: (): Object3D => {
+          const container = new Object3D();
+          container.name = 'bundle';
+          containers.push(container);
+
+          return container;
+        },
+      });
+
+      while (!system.settled()) {
+        system.update();
+        await flush();
+      }
+
+      // Every cell's objects were reparented into a per-cell container; the root holds ONLY containers.
+      expect(containers.length).toBeGreaterThan(0);
+      expect(root.children.every((child) => child.name === 'bundle')).toBe(true);
+      const wrapped = root.children.reduce((sum, child) => sum + child.children.length, 0);
+      expect(wrapped).toBe(27); // 9 cells × 3 objects, all inside bundles, none lost
+    });
+
     it('renders only the manual cells while in debug mode', async () => {
       const adapter = stubAdapter();
       const root = new Object3D();

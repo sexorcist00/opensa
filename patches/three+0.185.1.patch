@@ -1,8 +1,8 @@
 diff --git a/node_modules/three/build/three.webgpu.js b/node_modules/three/build/three.webgpu.js
-index 2e49079..1f870a8 100644
+index 2e49079..c453cac 100644
 --- a/node_modules/three/build/three.webgpu.js
 +++ b/node_modules/three/build/three.webgpu.js
-@@ -724,7 +724,25 @@ class NodeMaterialObserver {
+@@ -724,7 +724,35 @@ class NodeMaterialObserver {
  	 */
  	needsRefresh( renderObject, nodeFrame ) {
  
@@ -20,16 +20,26 @@ index 2e49079..1f870a8 100644
 +			return true;
 +
 +		const isStatic = renderObject.object.static === true;
-+		const isBundle = renderObject.bundle !== null && renderObject.bundle.static === true && this.getRenderObjectData( renderObject ).version === renderObject.bundle.version;
++		const staticBundle = renderObject.bundle !== null && renderObject.bundle.static === true;
 +
-+		if ( isStatic || isBundle )
++		if ( isStatic || ( staticBundle && this.getRenderObjectData( renderObject ).version === renderObject.bundle.version ) )
 +			return false;
++
++		if ( staticBundle ) {
++
++			// Stale version inside a static bundle (object first seen unbundled, or the bundle re-recorded):
++			// refresh ONCE and sync, so the freeze engages from the next frame.
++			this.getRenderObjectData( renderObject ).version = renderObject.bundle.version;
++
++			return true;
++
++		}
 +
 +		if ( this.hasNode || this.hasAnimation || this.needsVelocity( nodeFrame.renderer ) )
  			return true;
  
  		const { renderId } = nodeFrame;
-@@ -737,12 +755,6 @@ class NodeMaterialObserver {
+@@ -737,12 +765,6 @@ class NodeMaterialObserver {
  
  		}
  
@@ -42,7 +52,7 @@ index 2e49079..1f870a8 100644
  		const lightsData = this.getLights( renderObject.lightsNode, renderId );
  		const notEqual = this.equals( renderObject, lightsData, renderId ) !== true;
  
-@@ -32775,6 +32787,47 @@ class Bindings extends DataMap {
+@@ -32775,6 +32797,47 @@ class Bindings extends DataMap {
  
  	}
  
@@ -90,7 +100,7 @@ index 2e49079..1f870a8 100644
  	/**
  	 * Deletes the bindings for the given compute node.
  	 *
-@@ -60470,6 +60523,13 @@ class Renderer {
+@@ -60470,6 +60533,13 @@ class Renderer {
  
  		//
  
@@ -104,7 +114,7 @@ index 2e49079..1f870a8 100644
  		const renderBundle = this._bundles.get( bundleGroup, camera, renderContext );
  		const renderBundleData = this.backend.get( renderBundle );
  		const renderBundleNeedsUpdate = this._bundleNeedsUpdate( bundleGroup, renderBundleData );
-@@ -60497,15 +60557,39 @@ class Renderer {
+@@ -60497,15 +60567,45 @@ class Renderer {
  
  			renderBundleData.version = bundleGroup.version;
  
@@ -141,11 +151,17 @@ index 2e49079..1f870a8 100644
  				const renderObject = renderObjects[ i ];
  
 -				if ( this._nodes.needsRefresh( renderObject ) ) {
-+				if ( this._nodes.needsRefresh( renderObject ) && ( ++ __bundleRefreshed || true ) ) {
++				// OpenSA patch (upstream candidate): HEARTBEAT — run the standard update path for the FIRST bundled
++				// object every frame. Shared (render/frame) bind groups are cached ACROSS programs by uniform node
++				// ids (_getBindGroup), so one refreshed object re-uploads the camera/shared uniforms for every
++				// frozen object in the scene — a static bundle otherwise glues the world to the recorded view.
++				const heartbeat = ( i === 0 );
++
++				if ( heartbeat || ( this._nodes.needsRefresh( renderObject ) && ( ++ __bundleRefreshed || true ) ) ) {
  
  					this._nodes.updateBefore( renderObject );
  
-@@ -60519,6 +60603,30 @@ class Renderer {
+@@ -60519,6 +60619,30 @@ class Renderer {
  
  			}
  
@@ -176,7 +192,7 @@ index 2e49079..1f870a8 100644
  		}
  
  		this.backend.addBundle( renderContext, renderBundle );
-@@ -62392,6 +62500,12 @@ class Renderer {
+@@ -62392,6 +62516,12 @@ class Renderer {
  
  				renderList.finish();
  

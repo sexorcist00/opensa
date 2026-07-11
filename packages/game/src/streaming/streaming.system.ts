@@ -52,6 +52,10 @@ const WARM_PER_FRAME = 24;
 /** Warm frames that cost more than this get logged (plan 060 measurement). */
 const WARM_LOG_MS = 8;
 
+/** WebGPU chunked bundle wrap: objects per small BundleGroup — each record's full per-object update pass stays
+ *  a few ms (Phase-1a: record cost scales with the bundle's own draw count, not the world). */
+const WRAP_CHUNK = 64;
+
 /**
  * Streams map cells in/out of the streaming root as the view moves. Two modes:
  * - **stream** (default): cells within `hdDrawDistance` render HD, cells within
@@ -74,13 +78,14 @@ export class StreamingSystem implements System {
 
   private readonly adapter: StreamAdapter;
   private readonly config: Readonly<Config>;
-  /** WebGPU spike: the per-cell `BundleGroup` a cell's objects live in, so removal drops the group not each object. */
-  private readonly containers = new Map<string, Object3D>();
+  /** WebGPU: the per-cell `BundleGroup`s a cell's objects live in (chunked — several small bundles per cell so
+   *  each record stays cheap); removal drops the groups, not each object. */
+  private readonly containers = new Map<string, Object3D[]>();
   private current = new Set<string>();
   private readonly fader = new CellFader();
   private readonly gpu: GpuHooks;
   /** Built cells whose meshes are still being added under the frame budget (plan 060 Phase 2). */
-  private readonly ingesting = new Map<string, { added: number; objects: Object3D[] }>();
+  private readonly ingesting = new Map<string, { added: number; objects: Object3D[]; wrapped: number }>();
   private lastView: null | Vec3 = null;
   private readonly loaded = new Map<string, Object3D[]>();
   private readonly loading = new Set<string>();
@@ -182,11 +187,16 @@ export class StreamingSystem implements System {
     return cellOf(this.viewOf(), this.adapter.cellSize);
   }
 
-  /** WebGPU budgeted appearance: add up to `budget` of the batch's remaining objects; returns how many appeared. */
+  /** WebGPU budgeted appearance: add up to `budget` of the batch's remaining objects; returns how many appeared.
+   *  Culling is disabled AT APPEARANCE: a culled object defers its first-draw pipeline compile until the camera
+   *  turns onto it — a compile-storm lag spike exactly when looking around. Paying the compile now, under the
+   *  budget, keeps frames deterministic (the wrap into a static bundle needs culling off anyway). */
   private appearSlice(batch: { added: number; objects: Object3D[] }, budget: number): number {
     let appeared = 0;
     while (batch.added < batch.objects.length && appeared < budget) {
-      this.root.add(batch.objects[batch.added]);
+      const object = batch.objects[batch.added];
+      object.traverse((child) => (child.frustumCulled = false));
+      this.root.add(object);
       batch.added += 1;
       appeared += 1;
     }
@@ -215,7 +225,7 @@ export class StreamingSystem implements System {
     // Force the bundle to (re)record now that the cell's objects are in it — a BundleGroup added to an
     // already-live scene otherwise may never record its draws (three records what's present up front).
     (container as unknown as { needsUpdate: boolean }).needsUpdate = true;
-    this.containers.set(key, container);
+    this.containers.set(key, [container]);
   }
 
   private desiredKeys(): Set<string> {
@@ -255,10 +265,22 @@ export class StreamingSystem implements System {
       // compiles amortize across frames instead of freezing one. The cell's `added` counter carries progress
       // (the warm loop is skipped under WebGPU, so the counter is free); the swap finalizes only when complete —
       // the old detail level keeps rendering meanwhile (`ingesting` blocks its removal), so no hole appears.
-      const budgeted = (this.gpu.appearPerFrame ?? 0) > 0 && !this.gpu.warmUp && !this.gpu.cellContainer;
+      // With per-cell bundles the appeared objects are then WRAPPED into small BundleGroups in CHUNKS (one
+      // chunk per frame): a bundle record runs full per-object updates in its record frame, so wrapping a big
+      // cell as ONE bundle would re-create the ~100 ms post-add hitch — many small records amortize instead
+      // (Phase-1a: record cost scales with the bundle's own draw count).
+      // Behind the initial streaming veil everything is hidden — appear atomically there (the budget would
+      // throttle the initial fill of thousands of objects to minutes); budget only during live play.
+      const budgeted = (this.gpu.appearPerFrame ?? 0) > 0 && !this.gpu.warmUp && this.config.gameState !== 'streaming';
       if (budgeted) {
         appearedThisFrame += this.appearSlice(batch, (this.gpu.appearPerFrame ?? 0) - appearedThisFrame);
-        if (batch.added < batch.objects.length) {
+        const complete = batch.added === batch.objects.length;
+        if (this.gpu.cellContainer) {
+          this.wrapChunk(key, batch, complete);
+          if (!complete || batch.wrapped < batch.objects.length) {
+            return; // keep appearing/wrapping next frame
+          }
+        } else if (!complete) {
           return; // budget spent — continue this cell next frame
         }
       } else {
@@ -337,7 +359,7 @@ export class StreamingSystem implements System {
           return; // no longer wanted, or already loaded/ingesting
         }
         // Queue for the budgeted ingest (Phase 2); the swap finalizes when the whole batch is in.
-        this.ingesting.set(key, { added: 0, objects: [...objects] });
+        this.ingesting.set(key, { added: 0, objects: [...objects], wrapped: 0 });
       })
       .catch(() => this.loading.delete(key));
   }
@@ -352,17 +374,16 @@ export class StreamingSystem implements System {
 
   private remove(key: string, objects: readonly Object3D[]): void {
     this.fader.cancel(key); // restore materials before the cell mesh goes back to the cache
-    const container = this.containers.get(key);
-    if (container) {
-      objects.forEach((object) => container.remove(object)); // detach only this cell's objects (shared-bundle safe)
-      (container as unknown as { needsUpdate: boolean }).needsUpdate = true; // re-record the bundle without them
-      if (container.children.length === 0) {
-        this.root.remove(container); // per-cell container emptied → drop it
+    const cellContainers = this.containers.get(key);
+    if (cellContainers) {
+      for (const container of cellContainers) {
+        [...container.children].forEach((object) => container.remove(object)); // objects go back to the cell cache
+        this.root.remove(container);
       }
       this.containers.delete(key);
-    } else {
-      objects.forEach((object) => this.root.remove(object));
     }
+    // Any objects not (yet) wrapped into a container — plain path or a mid-appearance cell — leave via the root.
+    objects.forEach((object) => this.root.remove(object));
     this.loaded.delete(key);
   }
 
@@ -414,6 +435,36 @@ export class StreamingSystem implements System {
     }
 
     return true;
+  }
+
+  /** Wrap up to one {@link WRAP_CHUNK}-sized slice of the batch's APPEARED objects into a fresh small BundleGroup
+   *  (`Object3D.add` reparents them out of the root). One chunk per frame keeps each bundle's record cheap. */
+  private wrapChunk(
+    key: string,
+    batch: { added: number; objects: Object3D[]; wrapped: number },
+    complete: boolean,
+  ): void {
+    const remaining = batch.added - batch.wrapped;
+    if (remaining <= 0 || (!complete && remaining < WRAP_CHUNK)) {
+      return; // wait until a full chunk (or the cell's tail) is on screen
+    }
+    const container = this.gpu.cellContainer?.();
+    if (!container) {
+      return;
+    }
+    const size = Math.min(remaining, WRAP_CHUNK);
+    container.frustumCulled = false;
+    for (let i = batch.wrapped; i < batch.wrapped + size; i += 1) {
+      const object = batch.objects[i];
+      object.traverse((child) => (child.frustumCulled = false));
+      container.add(object);
+    }
+    batch.wrapped += size;
+    this.root.add(container);
+    (container as unknown as { needsUpdate: boolean }).needsUpdate = true;
+    const list = this.containers.get(key) ?? [];
+    list.push(container);
+    this.containers.set(key, list);
   }
 }
 

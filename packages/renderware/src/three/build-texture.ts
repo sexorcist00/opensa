@@ -15,6 +15,8 @@ import {
 
 import type { RWTexture, RWTextureDictionary } from '../parsers/binary/types';
 
+import { decodeDxt, type DxtFormat } from '../textures/dxt';
+
 const DXT_FORMAT = {
   dxt1: RGBA_S3TC_DXT1_Format,
   dxt3: RGBA_S3TC_DXT3_Format,
@@ -50,8 +52,26 @@ function buildDataTexture(rw: RWTexture): DataTexture {
   return new DataTexture(base.data, base.width, base.height, RGBAFormat, UnsignedByteType);
 }
 
+/** DXT with non-block-aligned dimensions (SA has 62×62 etc.): WebGL tolerated them, WebGPU REJECTS the texture
+ *  (BC width/height must be multiples of 4) — decode the base level to RGBA instead and let mips regenerate. */
+function buildDecodedTexture(rw: RWTexture): DataTexture {
+  const base = rw.mipmaps[0];
+  const rgba = decodeDxt(rw.format as DxtFormat, base.data, base.width, base.height);
+  const texture = new DataTexture(rgba, base.width, base.height, RGBAFormat, UnsignedByteType);
+  texture.generateMipmaps = true;
+  texture.minFilter = LinearMipmapLinearFilter;
+
+  return texture;
+}
+
 function buildTexture(rw: RWTexture): Texture {
-  const texture = rw.format === 'rgba8888' ? buildDataTexture(rw) : buildCompressedTexture(rw);
+  const blockAligned = rw.width % 4 === 0 && rw.height % 4 === 0;
+  const texture =
+    rw.format === 'rgba8888'
+      ? buildDataTexture(rw)
+      : blockAligned
+        ? buildCompressedTexture(rw)
+        : buildDecodedTexture(rw);
   texture.wrapS = RepeatWrapping;
   texture.wrapT = RepeatWrapping;
   texture.colorSpace = SRGBColorSpace;
