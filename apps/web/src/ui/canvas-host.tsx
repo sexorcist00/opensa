@@ -40,6 +40,7 @@ import {
   type AssetFileSystem,
   breakBreakable,
   buildTextureMap,
+  buildWorldMaterialTsl,
   coronaMaterial,
   dnBalanceUniform,
   getBreakableByKey,
@@ -59,7 +60,9 @@ import {
   sampleTimecycBlend,
   setFxLibrary,
   setRoadsignFont,
+  setWorldMaterialTslBuilder,
   sunSplit,
+  syncWorldTsl,
   updateAnimatedObjects,
   updateDebris,
   updateEscalators,
@@ -767,6 +770,12 @@ function bootstrap(
         )),
       );
 
+    // WebGPU spike (Phase 1): build the world material as a TSL node graph (three drops the GLSL onBeforeCompile),
+    // and sync its shared uniforms each frame via a system (plugins are skipped under WebGPU, systems still run).
+    if (new URLSearchParams(window.location.search).get('webgpu') === '1') {
+      setWorldMaterialTslBuilder(buildWorldMaterialTsl);
+      game.addSystem({ name: 'tsl-sync', update: (): void => syncWorldTsl() });
+    }
     await loadFonts(game.getConfig().fonts); // register HUD fonts before the scene/HUD render
     await game.init();
     // Corona Points live on GLOW_LAYER (excluded from the SSAO normal prepass) — the camera must see it.

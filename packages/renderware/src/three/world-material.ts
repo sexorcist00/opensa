@@ -329,11 +329,18 @@ export function applyWorldWindowGlow(material: MeshBasicMaterial): void {
   material.needsUpdate = true;
 }
 
+/** WebGPU/TSL builder registered under `?webgpu=1` (world-material-tsl); when set, buildWorldMaterial delegates to
+ *  it — the GLSL `onBeforeCompile` path below doesn't run on `WebGPURenderer`. Avoids a circular import. */
+let tslBuilder: ((rw: RWMaterial, geometry: RWGeometry, textures?: Map<string, Texture>) => MeshBasicMaterial) | null =
+  null;
 export function buildWorldMaterial(
   rw: RWMaterial,
   geometry: RWGeometry,
   textures?: Map<string, Texture>,
 ): MeshBasicMaterial {
+  if (tslBuilder) {
+    return tslBuilder(rw, geometry, textures);
+  }
   const map = rw.texture && textures ? (textures.get(rw.texture.name.toLowerCase()) ?? null) : null;
   const hasVertexColors = (geometry.flags & GeometryFlag.PRELIT) !== 0;
   // SA "floodlight beam" geometry: a `white` placeholder texture whose soft cone is baked into the per-vertex
@@ -468,6 +475,12 @@ export function buildWorldMaterial(
   };
 
   return material;
+}
+
+export function setWorldMaterialTslBuilder(
+  builder: ((rw: RWMaterial, geometry: RWGeometry, textures?: Map<string, Texture>) => MeshBasicMaterial) | null,
+): void {
+  tslBuilder = builder;
 }
 
 /**

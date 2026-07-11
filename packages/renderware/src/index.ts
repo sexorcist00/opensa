@@ -99,6 +99,7 @@ export {
   buildWorldMaterial,
   dnBalanceUniform,
   LOCAL_LIGHT_POOL,
+  setWorldMaterialTslBuilder,
   windowGlowUniform,
   worldCsmUniforms,
   worldDayTintUniform,
@@ -110,3 +111,4 @@ export {
   worldSunUniforms,
   worldTintUniform,
 } from './three/world-material';
+export { buildWorldMaterialTsl, syncWorldTsl } from './three/world-material-tsl';
