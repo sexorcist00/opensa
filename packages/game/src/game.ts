@@ -23,6 +23,7 @@ import { CameraController } from './core/camera-controller';
 import { Clock } from './core/clock';
 import { createRenderContext } from './core/renderer';
 import { type System, SystemRegistry } from './core/system';
+import { createWebgpuHud } from './core/webgpu-hud';
 import { HiddenInstances } from './debug/hidden-instances';
 import { Logger } from './diagnostics/logger';
 import { EventBus } from './events/event-bus';
@@ -90,6 +91,8 @@ export class Game {
 
   private accumulator = 0;
   private adapter: null | WorldAdapter = null;
+  /** WebGPU spike: whether streamed cells are wrapped in per-cell `BundleGroup`s (set once bundles are wired). */
+  private bundleCells = false;
   private camera!: PerspectiveCamera;
   private cameraController!: CameraController;
   private readonly canvas: HTMLCanvasElement;
@@ -137,6 +140,8 @@ export class Game {
   private readonly weatherTransition: WeatherTransition;
   /** Phase-1 WebGPU spike (`?webgpu=1`): renderer is WebGPU; plugins + GPU timer are skipped. */
   private webgpu = false;
+  /** WebGPU spike render-CPU meter (throwaway) — updated per frame under `?webgpu=1`. */
+  private webgpuHud: ((renderMs: number, drawCalls: number, bundled: boolean) => void) | null = null;
 
   private constructor(canvas: HTMLCanvasElement, config: Config) {
     this.canvas = canvas;
@@ -316,8 +321,9 @@ export class Game {
     this.input = new CombinedInput([this.pointerSource]);
     this.cameraController = new CameraController(camera, renderer.domElement, this.config, this.input);
     this.pipeline = new BasicRenderPipeline(renderer, scene, camera);
-    // WebGPU spike: no WebGL2 context → skip the WebGL GPU timer.
+    // WebGPU spike: no WebGL2 context → skip the WebGL GPU timer; show the throwaway render-CPU meter instead.
     this.gpuTimer = webgpu ? null : GpuTimer.create(renderer.getContext() as WebGL2RenderingContext);
+    this.webgpuHud = webgpu ? createWebgpuHud() : null;
     // Perf accuracy (plan 063): with the post-FX composer, three resets `renderer.info` on EVERY internal
     // render call, so a post-frame sample would only see the last pass (1 draw / 1 triangle). Accumulate
     // across the whole frame instead: manual reset at the top of the loop.
@@ -881,12 +887,17 @@ export class Game {
         }
       }
       this.gpuTimer?.begin('frame');
+      const renderStart = this.webgpu ? performance.now() : 0;
       if (this.showNormalsMode || this.showFacesMode) {
         // Debug override (normals / wireframe): skip the post-FX pipeline and draw the scene straight to screen.
         this.renderer.setRenderTarget(null);
         this.renderer.render(this.scene, this.camera);
       } else {
         this.pipeline.render();
+      }
+      if (this.webgpuHud) {
+        const info = this.renderer.info.render as { calls?: number; drawCalls?: number };
+        this.webgpuHud(performance.now() - renderStart, info.drawCalls ?? info.calls ?? 0, this.bundleCells);
       }
       this.gpuTimer?.end();
       this.gpuTimer?.poll();
