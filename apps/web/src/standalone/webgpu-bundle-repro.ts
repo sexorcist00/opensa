@@ -17,6 +17,7 @@ const params = new URLSearchParams(window.location.search);
 const BUNDLE = params.get('bundle') !== '0';
 const ROT = params.get('rot') !== '0';
 const FIX = params.get('fix') ?? '';
+const STREAM = Number(params.get('stream') ?? 0); // >0 → add the bundle to a LIVE scene after N frames (like streaming)
 const SIDE = 20; // 20×20 = 400 instances
 
 const canvas = document.createElement('canvas');
@@ -58,30 +59,36 @@ async function main(): Promise<void> {
   }
   scene.add(parent);
 
-  const mesh = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshBasicNodeMaterial(), SIDE * SIDE);
-  mesh.frustumCulled = false;
   const container = BUNDLE ? new BundleGroup() : new Group();
-
-  if (FIX === 'late') {
-    // populate AFTER the mesh is live in the scene (mimics streaming filling a cell post-add)
-    container.add(mesh);
+  const populate = (): void => {
+    const mesh = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshBasicNodeMaterial(), SIDE * SIDE);
+    mesh.frustumCulled = false;
+    if (FIX === 'late') {
+      container.add(mesh);
+      fillInstances(mesh);
+    } else {
+      fillInstances(mesh);
+      container.add(mesh);
+    }
     parent.add(container);
-    fillInstances(mesh);
+    if (FIX === 'world') {
+      scene.updateMatrixWorld(true);
+    }
     (container as unknown as { needsUpdate: boolean }).needsUpdate = true;
-  } else {
-    fillInstances(mesh);
-    container.add(mesh);
-    parent.add(container);
-  }
+  };
 
-  if (FIX === 'world') {
-    scene.updateMatrixWorld(true); // finalize matrices before the bundle records
-    (container as unknown as { needsUpdate: boolean }).needsUpdate = true;
+  // STREAM: leave the scene empty, add the bundle live after N frames (mimics a cell streaming into a running
+  // renderer — the suspected real cause). Otherwise populate up front (the case that already rendered clean).
+  if (STREAM <= 0) {
+    populate();
   }
 
   let frame = 0;
   const loop = (): void => {
     frame += 1;
+    if (STREAM > 0 && frame === STREAM) {
+      populate();
+    }
     if (ROT) {
       // The parent is −90°X; spin the camera a touch so the grid is clearly framed.
       camera.position.x = Math.sin(frame * 0.002) * 4;
@@ -91,9 +98,9 @@ async function main(): Promise<void> {
     if (frame % 30 === 0) {
       const info = renderer.info.render as { drawCalls?: number };
       readout.textContent =
-        `InstancedMesh | bundle=${BUNDLE} | rot=${ROT} | fix=${FIX || 'none'}\n` +
-        `${SIDE * SIDE} instances | drawCalls ${info.drawCalls ?? '?'}\n` +
-        `EXPECT: a clean ${SIDE}×${SIDE} colour grid. Distorted/collapsed = bug reproduced.`;
+        `InstancedMesh | bundle=${BUNDLE} | rot=${ROT} | fix=${FIX || 'none'} | stream=${STREAM || 'off'}\n` +
+        `${SIDE * SIDE} instances | drawCalls ${info.drawCalls ?? '?'} | frame ${frame}\n` +
+        `EXPECT: a clean ${SIDE}×${SIDE} colour grid. Empty/distorted = bug reproduced.`;
     }
     requestAnimationFrame(loop);
   };
