@@ -321,8 +321,11 @@ export class StreamingSystem implements System {
     this.fader.cancel(key); // restore materials before the cell mesh goes back to the cache
     const container = this.containers.get(key);
     if (container) {
-      container.clear(); // detach the (cached) objects before the group goes away
-      this.root.remove(container);
+      objects.forEach((object) => container.remove(object)); // detach only this cell's objects (shared-bundle safe)
+      (container as unknown as { needsUpdate: boolean }).needsUpdate = true; // re-record the bundle without them
+      if (container.children.length === 0) {
+        this.root.remove(container); // per-cell container emptied → drop it
+      }
       this.containers.delete(key);
     } else {
       objects.forEach((object) => this.root.remove(object));

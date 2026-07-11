@@ -30,12 +30,15 @@ export async function createRenderContext(canvas: HTMLCanvasElement): Promise<Re
     renderer.setSize(width, height, false);
     await renderer.init();
 
-    // `?bundle=0` disables the per-cell BundleGroups — the in-engine A/B for the render-bundle win.
-    const bundles = search.get('bundle') !== '0';
+    // `?bundle=0` off (A/B baseline) · `?bundle=root` one shared bundle for the whole world (diagnostic) · else
+    // one BundleGroup per streamed cell (the design). `root` localizes whether the empty-world bug is per-cell
+    // dynamic add vs something deeper.
+    const bundleMode = search.get('bundle');
+    const shared = bundleMode === 'root' ? new BundleGroup() : null;
 
     return {
       camera,
-      ...(bundles ? { cellContainer: (): Object3D => new BundleGroup() } : {}),
+      ...(bundleMode === '0' ? {} : { cellContainer: (): Object3D => shared ?? new BundleGroup() }),
       renderer: renderer as unknown as WebGLRenderer,
       scene,
       webgpu: true,
