@@ -92,23 +92,31 @@ async function main(): Promise<void> {
     const t0 = performance.now();
     void renderer.render(scene, camera);
     const dt = performance.now() - t0;
+    const cfg = `precompile=${PRECOMPILE} ctx=${CTX} variant=${VARIANT}`;
     if (appearing) {
       spikes.push(dt);
       appearing = false;
+      // eslint-disable-next-line no-console -- throwaway repro: the copyable measurement
+      console.log(`[stream-compile] ${cfg} | appearance-frame #${spikes.length} = ${dt.toFixed(1)} ms`);
     } else if (frame > 30) {
       steadySum += dt;
       steadyN += 1;
     }
     if (frame % 10 === 0) {
-      const recent = spikes
-        .slice(-8)
-        .map((s) => s.toFixed(0))
-        .join(' ');
+      const steady = (steadyN ? steadySum / steadyN : 0).toFixed(1);
+      const maxSpike = Math.max(0, ...spikes).toFixed(0);
       readout.textContent =
-        `stream-compile | precompile=${PRECOMPILE} ctx=${CTX} variant=${VARIANT}\n` +
-        `cells added ${cellIndex} | steady ${(steadyN ? steadySum / steadyN : 0).toFixed(1)} ms\n` +
-        `appearance-frame ms (recent): ${recent}\n` +
-        `max spike ${Math.max(0, ...spikes).toFixed(0)} ms  ← low = pipeline pre-warmed, high = compiles on appear`;
+        `stream-compile | ${cfg}\ncells added ${cellIndex} | steady ${steady} ms\n` +
+        `appearance-frame ms (recent): ${spikes.slice(-8).map((s) => s.toFixed(0)).join(' ')}\n` +
+        `max spike ${maxSpike} ms  ← low = pipeline pre-warmed, high = compiles on appear`;
+    }
+    // One copyable summary line once all cells are in (log a few times so it's easy to grab).
+    if (cellIndex >= 30 && frame % 120 === 0) {
+      // eslint-disable-next-line no-console -- throwaway repro summary
+      console.log(
+        `[stream-compile] SUMMARY ${cfg} | steady ${(steadyN ? steadySum / steadyN : 0).toFixed(1)} ms | ` +
+          `spikes [${spikes.map((s) => s.toFixed(0)).join(',')}] | max ${Math.max(0, ...spikes).toFixed(0)} ms`,
+      );
     }
     requestAnimationFrame(loop);
   };
