@@ -1,19 +1,21 @@
-import { BufferAttribute, CanvasTexture, Color, Mesh, PerspectiveCamera, PlaneGeometry, Scene } from 'three';
+import { BufferAttribute, CanvasTexture, Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Vector3 } from 'three';
 /**
- * Phase-1 TSL port — slice 1 (docs/concepts/webgpu-migration). THROWAWAY verification. Authors the SA world
- * material's CLASSIC path as a TSL node graph and renders it on a textured, vertex-coloured quad so the node
- * syntax + the day↔night look can be dialled in isolation before wiring into the engine.
+ * Phase-1 TSL port (docs/concepts/webgpu-migration). THROWAWAY verification. Builds the SA world material as a TSL
+ * node graph slice by slice, on a lit sphere so lighting terms are visible, before wiring into the engine.
  *
- * Classic path (world-material.ts 038): `texel × mix(dayPrelit vColor, nightPrelit nightColor, dnBalance) × tint`.
+ * Slice 1 — classic: `texel × mix(day prelit, night prelit, dnBalance) × tint`.
+ * Slice 2 — modern sun: `mix(classic, albedo×tint×indirect + texel×sunColor×N·L×direct, pipelineMix)`.
  *
- *   /webgpu-tsl-material.html            → animates dnBalance 0→1 (day → night)
- *   /webgpu-tsl-material.html?dn=0.0     → hold at a value (0 day … 1 night)
+ *   /webgpu-tsl-material.html                 → modern path, sun orbiting (terminator moves)
+ *   /webgpu-tsl-material.html?pipeline=0      → classic (no sun) for A/B
+ *   /webgpu-tsl-material.html?dn=1            → hold night
  */
-import { attribute, mix, texture, uniform } from 'three/tsl';
+import { attribute, mix, normalWorld, texture, uniform } from 'three/tsl';
 import { MeshBasicNodeMaterial, WebGPURenderer } from 'three/webgpu';
 
 const params = new URLSearchParams(window.location.search);
-const HOLD = params.has('dn') ? Number(params.get('dn')) : null;
+const HOLD_DN = params.has('dn') ? Number(params.get('dn')) : null;
+const PIPELINE = params.has('pipeline') ? Number(params.get('pipeline')) : 1;
 
 const canvas = document.createElement('canvas');
 canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:block';
@@ -25,34 +27,52 @@ readout.style.cssText =
   'font:12px monospace;border-radius:6px;white-space:pre;z-index:10';
 document.body.append(readout);
 
-/** The SA classic world material, in TSL: texel × mix(day, night, dnBalance) × tint. */
-function buildWorldMaterialTsl(map: CanvasTexture): { dnBalance: { value: number }; material: MeshBasicNodeMaterial } {
-  const dnBalance = uniform(0);
-  const worldTint = uniform(new Color(1, 1, 1));
-  const dayColor = attribute('color', 'vec3'); // prelit day (the stock vertexColors slot)
-  const nightColor = attribute('nightColor', 'vec3'); // SA night prelit set
-  const material = new MeshBasicNodeMaterial();
-  material.colorNode = texture(map)
-    .rgb.mul(mix(dayColor, nightColor, dnBalance))
-    .mul(worldTint);
-
-  return { dnBalance: dnBalance, material };
+interface WorldUniforms {
+  dnBalance: { value: number };
+  sunDir: { value: Vector3 };
 }
 
-/** A simple checker texture (the "map") so we see texel × vertex-colour, not a flat quad. */
+/** The SA world material in TSL — classic base + modern sun term, `uPipelineMix`-blended. */
+function buildWorldMaterialTsl(map: CanvasTexture): { material: MeshBasicNodeMaterial; uniforms: WorldUniforms } {
+  const dnBalance = uniform(0);
+  const tint = uniform(new Color(1, 1, 1));
+  const sunDir = uniform(new Vector3(0, 1, 0));
+  const sunColor = uniform(new Color(1, 0.95, 0.85));
+  const directScale = uniform(PIPELINE); // 0 classic, 1 modern
+  const indirectScale = uniform(1);
+  const pipelineMix = uniform(PIPELINE);
+
+  const day = attribute('color', 'vec3');
+  const night = attribute('nightColor', 'vec3');
+  const texel = texture(map).rgb;
+  const albedo = texel.mul(mix(day, night, dnBalance));
+  const sunNdl = normalWorld.dot(sunDir).max(0); // world-space N·L
+
+  const classic = albedo.mul(tint);
+  const modern = albedo.mul(tint).mul(indirectScale).add(texel.mul(sunColor).mul(sunNdl).mul(directScale));
+  const material = new MeshBasicNodeMaterial();
+  material.colorNode = mix(classic, modern, pipelineMix);
+
+  return {
+    material,
+    uniforms: { dnBalance: dnBalance, sunDir: sunDir },
+  };
+}
+
+/** A checker texture so we see texel × light, not a flat sphere. */
 function checkerTexture(): CanvasTexture {
   const size = 256;
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d')!;
+  const element = document.createElement('canvas');
+  element.width = element.height = size;
+  const ctx = element.getContext('2d')!;
   for (let y = 0; y < 8; y += 1) {
     for (let x = 0; x < 8; x += 1) {
-      ctx.fillStyle = (x + y) % 2 ? '#ffffff' : '#b0b0b0';
+      ctx.fillStyle = (x + y) % 2 ? '#ffffff' : '#a8a8a8';
       ctx.fillRect((x * size) / 8, (y * size) / 8, size / 8, size / 8);
     }
   }
 
-  return new CanvasTexture(c);
+  return new CanvasTexture(element);
 }
 
 async function main(): Promise<void> {
@@ -62,28 +82,34 @@ async function main(): Promise<void> {
 
   const scene = new Scene();
   const camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.set(0, 0, 3);
+  camera.position.set(0, 0, 4);
 
-  const geometry = new PlaneGeometry(3, 3, 1, 1);
-  // Day prelit: warm; night prelit: cool blue. Per-vertex so we can see the blend, not a flat multiply.
-  const day = new Float32Array([1, 0.85, 0.6, 1, 0.6, 0.4, 0.8, 0.7, 0.5, 0.6, 0.5, 0.4]);
-  const night = new Float32Array([0.1, 0.15, 0.4, 0.05, 0.05, 0.2, 0.15, 0.2, 0.5, 0.05, 0.1, 0.3]);
+  const geometry = new SphereGeometry(1.4, 48, 32);
+  const count = geometry.attributes.position.count;
+  const day = new Float32Array(count * 3);
+  const night = new Float32Array(count * 3);
+  for (let i = 0; i < count; i += 1) {
+    day.set([0.95, 0.8, 0.6], i * 3); // warm day prelit
+    night.set([0.1, 0.15, 0.4], i * 3); // cool blue night prelit
+  }
   geometry.setAttribute('color', new BufferAttribute(day, 3));
   geometry.setAttribute('nightColor', new BufferAttribute(night, 3));
 
-  const { dnBalance, material } = buildWorldMaterialTsl(checkerTexture());
+  const { material, uniforms } = buildWorldMaterialTsl(checkerTexture());
   scene.add(new Mesh(geometry, material));
 
   let frame = 0;
   const loop = (): void => {
     frame += 1;
-    dnBalance.value = HOLD ?? Math.sin(frame * 0.01) * 0.5 + 0.5; // animate day↔night unless held
+    uniforms.dnBalance.value = HOLD_DN ?? 0;
+    const a = frame * 0.01; // orbit the sun so the terminator sweeps the sphere
+    uniforms.sunDir.value.set(Math.cos(a), 0.35, Math.sin(a)).normalize();
     void renderer.render(scene, camera);
     if (frame % 15 === 0) {
       readout.textContent =
-        'TSL world material (classic path)\n' +
-        `dnBalance ${dnBalance.value.toFixed(2)} (0 day → 1 night)\n` +
-        'EXPECT: warm checker by day → cool blue by night, texture visible throughout.';
+        `TSL world material — classic + sun | pipeline=${PIPELINE}\n` +
+        `dnBalance ${uniforms.dnBalance.value.toFixed(2)} | sun orbiting\n` +
+        'EXPECT (pipeline=1): a lit sphere, bright sun side, dark terminator sweeping. pipeline=0: flat, no sun.';
     }
     requestAnimationFrame(loop);
   };
