@@ -873,7 +873,9 @@ export class Game {
       if (this.config.gameState === 'play' && this.gameClock.advance(delta, this.config.time.secondsPerGameMinute)) {
         this.emitTime();
       }
-      if (this.context) {
+      // WebGPU spike: plugins are neither installed nor updated (they author GLSL / render ShaderMaterial LUTs
+      // that three's NodeMaterial path rejects). Skip their per-frame update too — the raw world still renders.
+      if (this.context && !this.webgpu) {
         for (const plugin of this.plugins) {
           plugin.update?.(this.context);
         }
