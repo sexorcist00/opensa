@@ -215,7 +215,14 @@ export class StreamingSystem implements System {
       // go into a per-cell BundleGroup (record-once) added atomically to the root; else straight to the root.
       const container = this.gpu.cellContainer?.();
       if (container) {
-        batch.objects.forEach((object) => container.add(object));
+        container.frustumCulled = false;
+        batch.objects.forEach((object) => {
+          // A static BundleGroup bakes frustum culling at RECORD time — a child culled when the bundle records
+          // stays absent forever. Disable per-child culling so every cell object is recorded + replayed. Streaming
+          // already bounds the loaded set to the view ring, so drawing all loaded cells is acceptable.
+          object.traverse((child) => (child.frustumCulled = false));
+          container.add(object);
+        });
         this.root.add(container);
         this.containers.set(key, container);
       } else {
