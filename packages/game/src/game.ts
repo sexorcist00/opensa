@@ -431,6 +431,22 @@ export class Game {
   async precompile(objects: readonly Object3D[]): Promise<void> {
     const holder = new Group();
     objects.forEach((object) => holder.add(object));
+    // WebGPU: the pipeline key depends on the REAL render context. A DETACHED bare holder (the WebGL path) compiles
+    // a pipeline that doesn't match, so the cell re-compiles on its appearance frame — the camera-move freeze. The
+    // stream-compile repro proved the cheap fix: parent the batch UNDER the live streaming root (so it's in the
+    // scene graph with the real context) and compile ONLY that subtree — ~0.5 ms/cell vs ~4 ms detached, and O(cell)
+    // not O(scene). (compileAsync compiles visible objects; the sub-ms window makes any pre-ingest flash negligible.)
+    if (this.webgpu) {
+      this.streamingRoot.add(holder);
+      try {
+        await this.renderer.compileAsync(holder, this.camera, this.scene);
+      } finally {
+        this.streamingRoot.remove(holder);
+        [...holder.children].forEach((object) => holder.remove(object));
+      }
+
+      return;
+    }
     try {
       await this.renderer.compileAsync(holder, this.camera, this.scene);
     } finally {
