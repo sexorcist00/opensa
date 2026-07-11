@@ -431,23 +431,6 @@ export class Game {
   async precompile(objects: readonly Object3D[]): Promise<void> {
     const holder = new Group();
     objects.forEach((object) => holder.add(object));
-    // WebGPU: the pipeline key depends on the REAL render context — compiling a bare holder (as WebGL does) builds
-    // a pipeline that doesn't match, so the cell re-compiles on its appearance frame (the camera-move freeze; the
-    // stream-compile repro measured ~4 ms/cell for bare vs ~0.5 ms compiling in-scene). Compile with the objects
-    // parented under the real (rotated) streaming root and target the live scene, so the pre-warmed pipeline is the
-    // one the appearance frame uses. (compileAsync only compiles VISIBLE objects, so they briefly sit in the scene —
-    // any 1–2 frame flash before the atomic ingest re-adds them is a later refinement; killing the freeze first.)
-    if (this.webgpu) {
-      this.streamingRoot.add(holder);
-      try {
-        await this.renderer.compileAsync(this.scene, this.camera);
-      } finally {
-        this.streamingRoot.remove(holder);
-        [...holder.children].forEach((object) => holder.remove(object));
-      }
-
-      return;
-    }
     try {
       await this.renderer.compileAsync(holder, this.camera, this.scene);
     } finally {

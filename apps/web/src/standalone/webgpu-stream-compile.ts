@@ -78,6 +78,19 @@ async function main(): Promise<void> {
       appearing = true; // it's already in the scene; next frame is its first draw
 
       return;
+    } else if (PRECOMPILE && CTX === 'holder') {
+      // Compile ONLY the new objects (cheap, not the whole scene) but parented under the rotated root — tests
+      // whether that alone pre-warms the real pipeline, or whether the whole-scene compile is what matters.
+      const h = new Group();
+      h.add(cell);
+      root.add(h);
+      await renderer.compileAsync(h, camera, scene);
+      root.remove(h);
+      h.remove(cell);
+      root.add(cell);
+      appearing = true;
+
+      return;
     }
     root.add(cell);
     appearing = true;
