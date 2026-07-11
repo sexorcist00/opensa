@@ -1,5 +1,10 @@
 # 04 — Migration plan (phased, step-by-step)
 
+> **🅿️ PARKED (2026-07-11).** Phases 0/1a passed synthetically; Phase 1 (real engine) failed in the field on
+> upstream three limitations (bundle transform baking, per-InstancedMesh pipeline compiles). See
+> [phase-1-findings.md](phase-1-findings.md) for the final verdict + resume conditions. The plan below remains the
+> blueprint for when three matures.
+
 Ground rule: **the spike gates everything.** Do not port a single production shader until Phase 0 proves render
 bundles collapse the submission cost on real hardware. All work happens on a `webgpu` branch off `new-rendering`.
 
@@ -7,10 +12,11 @@ bundles collapse the submission cost on real hardware. All work happens on a `we
 
 ## Phase 0 — the spike (1–2 weeks) — GO/NO-GO GATE
 
-**Goal:** answer the only question that matters — *do render bundles remove the CPU submission wall in three
-`0.177`, for a streaming static world?* — with the least possible code.
+**Goal:** answer the only question that matters — _do render bundles remove the CPU submission wall in three
+`0.177`, for a streaming static world?_ — with the least possible code.
 
 Steps:
+
 1. Branch `webgpu-spike`. Add `three/webgpu` `WebGPURenderer` behind a `?webgpu=1` flag next to the existing
    `WebGLRenderer` (both constructible; pick at boot).
 2. Render **only the static world** — no post-FX, no sky, one **flat unlit TSL material** (texture × vertex colour)
@@ -21,6 +27,7 @@ Steps:
    `cpuMs.render` with bundles ON vs OFF.
 
 **Decision:**
+
 - `cpuMs.render` drops from ~65 ms to **single-digit ms** → **GO.** The thesis holds; proceed to Phase 1.
 - Bundles don't invalidate granularly, or submission stays >30 ms → **NO-GO.** Stop here. Cost: ~2 weeks, and we
   keep the WebGL engine untouched. This is the cheap insurance that makes the whole concept safe to explore.

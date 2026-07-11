@@ -4,7 +4,7 @@ Branch: `webgpu-migration`. **Throwaway code** — the goal is a single measured
 Do **not** touch the WebGL engine path; add WebGPU alongside it behind a flag.
 
 **The one question:** does a WebGPU **render bundle** collapse the ~65 ms/frame CPU draw-submission cost for our
-*streaming* static world in three `^0.177`?
+_streaming_ static world in three `^0.177`?
 
 Time box: **1–2 weeks.** If it slips past 2 weeks without a clear number, that itself is a NO-GO signal (bundle
 support too immature to rely on).
@@ -25,6 +25,7 @@ engine's ~14.8k, and measures the synchronous `render()` CPU time across three r
   it exercises the true record-once path.
 
 **Run it (needs a WebGPU browser — Chrome/Edge/Safari 18+):**
+
 ```
 npm run dev   # then open:
 /webgpu-spike.html?mode=webgl        → WebGL baseline      (expect ≈ engine per-draw cost)
@@ -32,10 +33,11 @@ npm run dev   # then open:
 /webgpu-spike.html                   → WebGPU + BundleGroup (Level-2: record-once)
 # optional &count=15000
 ```
+
 Read `render CPU` off the on-screen HUD for each and fill the table below.
 
-**What this covers / doesn't:** it answers the core question — *does bundling collapse submission for a large
-static draw list?* It does **not** test the **streaming re-record cost** (cell add/remove → bundle
+**What this covers / doesn't:** it answers the core question — _does bundling collapse submission for a large
+static draw list?_ It does **not** test the **streaming re-record cost** (cell add/remove → bundle
 invalidation); that needs the real-engine integration and is a Phase-1 confirmation, not a Phase-0 gate.
 
 ---
@@ -45,8 +47,7 @@ invalidation); that needs the real-engine integration and is a Phase-1 confirmat
 - [ ] Add `?webgpu=1` boot flag in `canvas-host.tsx` (next to existing URL flags).
 - [ ] In `core/renderer.ts`, when the flag is set, construct `WebGPURenderer` from `three/webgpu` instead of
       `WebGLRenderer` (both paths compile; pick at boot). `await renderer.init()` if required by the API.
-- [ ] Confirm a **cleared canvas** renders (blank scene) under WebGPU — proves the renderer + canvas + `setSize`
-      + animation loop work before any geometry.
+- [ ] Confirm a **cleared canvas** renders (blank scene) under WebGPU — proves the renderer + canvas + `setSize` + animation loop work before any geometry.
 - [ ] Confirm `renderer.info` (draw calls / triangles) still reports under WebGPU so `PerfMonitor` keeps working;
       if the field names differ, adapt the sampler for the spike.
 
@@ -84,15 +85,15 @@ Fill this table and decide:
 
 Measured (synthetic harness, boxes, culling off), 2026-07-11:
 
-| Run | render CPU @ 15k | render CPU @ 40k |
-|---|---|---|
-| WebGL baseline | 10.3 ms | — |
-| WebGPU, no bundle | 27 ms | 79 ms |
-| **WebGPU + BundleGroup** | **4.3 ms** | **13 ms** |
+| Run                      | render CPU @ 15k | render CPU @ 40k |
+| ------------------------ | ---------------- | ---------------- |
+| WebGL baseline           | 10.3 ms          | —                |
+| WebGPU, no bundle        | 27 ms            | 79 ms            |
+| **WebGPU + BundleGroup** | **4.3 ms**       | **13 ms**        |
 
 ### Verdict: ✅ GO
 
-- **Bundles are the entire win.** WebGPU *without* bundles is **worse** than WebGL (27 vs 10.3 ms) — a naive port
+- **Bundles are the entire win.** WebGPU _without_ bundles is **worse** than WebGL (27 vs 10.3 ms) — a naive port
   regresses. With bundles: ~**6× lower** per-frame submission at both scales, consistently.
 - **Not a flat record-once, but a large constant factor.** The bundle still scales gently (4.3→13 ms) because
   three's **per-frame scene work OUTSIDE the bundle** — `updateMatrixWorld` over ~N nodes + render-list build —
@@ -112,9 +113,9 @@ Because the material cost now lives at **record time**, re-recording the **whole
 spike. Gate question: is `BundleGroup` invalidation **granular** — does re-recording one cell leave the rest
 replayed? Tested with `?cells=100&swap=30` (100 per-cell bundles, one re-records every 30 frames):
 
-| | render CPU |
-|---|---|
-| steady (all cells replayed) | **4.5 ms** |
+|                                | render CPU     |
+| ------------------------------ | -------------- |
+| steady (all cells replayed)    | **4.5 ms**     |
 | swap frame (1 cell re-records) | **8.9 ms** max |
 
 **Granular — confirmed.** The swap frame is `steady + ~one cell` (8.9 ms), **not** a full-world re-record (which
@@ -124,10 +125,10 @@ would be ~27 ms, the no-bundle cost). Re-recording one cell does not force the o
 Scaling across cell sizes (steady stays **4.5 ms** in every run — it depends on total draws, not cell count):
 
 | cells | draws/cell | swap max | re-record delta |
-|---|---|---|---|
-| 200 | 75 | 7.4 ms | ~2.9 ms |
-| 100 | 150 | 8.9 ms | ~4.4 ms |
-| 50 | 300 | 13.4 ms | ~8.9 ms |
+| ----- | ---------- | -------- | --------------- |
+| 200   | 75         | 7.4 ms   | ~2.9 ms         |
+| 100   | 150        | 8.9 ms   | ~4.4 ms         |
+| 50    | 300        | 13.4 ms  | ~8.9 ms         |
 
 The swap cost scales **linearly with one cell's draw count**, not the world → design lever: **smaller cells =
 cheaper re-record**. Our real cells (~155 draws) sit at the cheap end (~the 150-draw row), and the re-record can
@@ -138,6 +139,10 @@ shaders + actual cell load creating meshes) — but it stays **bounded to one ce
 pipeline (plan 060: warm-invisibly, atomic-appear) can run the re-record **off the appearance frame**, hiding it.
 
 ---
+
+> **Postscript (2026-07-11):** both gates were green _synthetically_, but the real-engine Phase 1 failed in the
+> field (bundle transform baking + per-InstancedMesh pipeline compiles) and the effort is **parked** — see
+> [phase-1-findings.md](phase-1-findings.md). The numbers below remain valid for the mechanism.
 
 ## Both gates GREEN — thesis validated
 
@@ -150,11 +155,12 @@ commit is justified whenever the 2–3-month investment is.
 
 <details><summary>original blank template</summary>
 
-| Run | cpuMs.render | avgMs | fps |
-|---|---|---|---|
-| WebGL baseline | ~65 | ~71 | ~14 |
-| WebGPU, no bundle | ? | ? | ? |
-| WebGPU + bundle | ? | ? | ? |
+| Run               | cpuMs.render | avgMs | fps |
+| ----------------- | ------------ | ----- | --- |
+| WebGL baseline    | ~65          | ~71   | ~14 |
+| WebGPU, no bundle | ?            | ?     | ?   |
+| WebGPU + bundle   | ?            | ?     | ?   |
+
 </details>
 
 **GO** — proceed to Phase 1 — if **WebGPU + bundle** brings `cpuMs.render` to **single-digit ms** (say **≤ 10 ms**),

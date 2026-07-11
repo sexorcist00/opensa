@@ -115,6 +115,27 @@ function keyedAdapter(): { cellSize: number; loadCell: Mock<(request: CellReques
   };
 }
 
+/** Adapter returning `perCell` objects per cell (named `key#i`) — exercises the WebGPU budgeted appearance. */
+function multiAdapter(perCell: number): {
+  cellSize: number;
+  loadCell: Mock<(request: CellRequest) => Promise<Object3D[]>>;
+} {
+  return {
+    cellSize: 250,
+    loadCell: vi.fn(
+      (request: CellRequest): Promise<Object3D[]> =>
+        Promise.resolve(
+          Array.from({ length: perCell }, (_, i) => {
+            const object = new Object3D();
+            object.name = `${request.cx},${request.cy},${request.lod ? 'lod' : 'hd'}#${i}`;
+
+            return object;
+          }),
+        ),
+    ),
+  };
+}
+
 function stubAdapter(): { cellSize: number; loadCell: Mock<(request: CellRequest) => Promise<Object3D[]>> } {
   return {
     cellSize: 250,
@@ -150,6 +171,20 @@ describe('StreamingSystem', () => {
       const progress = system.progress();
       expect(progress.total).toBeGreaterThan(0);
       expect(progress.loaded).toBe(0);
+    });
+
+    it('ignores appearPerFrame while the warm hook is present (the WebGL path keeps the atomic appearance)', async () => {
+      const adapter = multiAdapter(3);
+      const root = new Object3D();
+      const system = new StreamingSystem(adapter, root, () => [125, 125, 0] as Vec3, config(), {
+        appearPerFrame: 1,
+        warmUp: vi.fn(),
+      });
+
+      await settle(system);
+
+      // Cells appeared atomically under the warm/ingest budget — more than 1 object entered in the ingest frame.
+      expect(root.children.length).toBeGreaterThan(1);
     });
 
     it('ignores a manual selection while not in debug mode (keeps streaming)', async () => {
@@ -322,6 +357,53 @@ describe('StreamingSystem', () => {
       expect(warmSlices.reduce((sum, size) => sum + size, 0)).toBeGreaterThanOrEqual(60);
       expect(root.children.filter((c) => c.name.startsWith('hd_part'))).toHaveLength(60); // all at once
       expect(has(root, 'lod_0,0')).toBe(false);
+    });
+
+    it('spreads a cell appearance across frames under appearPerFrame (WebGPU budgeted appearance)', async () => {
+      const adapter = multiAdapter(3);
+      const root = new Object3D();
+      const system = new StreamingSystem(adapter, root, () => [125, 125, 0] as Vec3, config(), {
+        appearPerFrame: 2,
+      });
+
+      system.update(); // requests fired
+      await flush(); // all 9 cells resolved and queued for ingest
+      system.update(); // first ingest frame — the global budget admits only 2 objects
+      expect(root.children).toHaveLength(2);
+      expect(system.settled()).toBe(false);
+
+      for (let frame = 0; frame < 20; frame += 1) {
+        system.update(); // 27 objects at 2/frame → fully in well within 20 frames
+      }
+
+      expect(root.children).toHaveLength(27); // 9 cells × 3 objects, nothing lost
+      expect(system.settled()).toBe(true);
+    });
+
+    it('keeps the old level rendering while its replacement appears under the budget (no hole)', async () => {
+      const adapter = multiAdapter(3);
+      const root = new Object3D();
+      let view: Vec3 = [125, 400, 0]; // cell (0,0) is ~150 away → LOD
+      const system = new StreamingSystem(adapter, root, () => view, config(), { appearPerFrame: 1 });
+
+      while (!system.settled()) {
+        system.update();
+        await flush();
+      }
+      expect(has(root, '0,0,lod#0')).toBe(true);
+
+      view = [125, 125, 0]; // now inside cell (0,0) → HD desired
+      system.update(); // HD load started
+      await flush(); // HD resolved → queued
+      system.update(); // first budgeted frame: 1 of 3 HD objects in — swap NOT finished
+      expect(has(root, '0,0,lod#0')).toBe(true); // old level held → no hole mid-appearance
+
+      while (!system.settled()) {
+        system.update(); // the global 1/frame budget is shared across cells — drain until the ring settles
+        await flush();
+      }
+      expect(has(root, '0,0,hd#0') && has(root, '0,0,hd#1') && has(root, '0,0,hd#2')).toBe(true);
+      expect(has(root, '0,0,lod#0')).toBe(false); // old level dropped only after the full appearance
     });
 
     it('renders only the manual cells while in debug mode', async () => {

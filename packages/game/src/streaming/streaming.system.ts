@@ -10,6 +10,11 @@ import { cellDistanceSq, cellOf, cellsWithin } from './grid';
 
 /** Renderer-side hooks (plan 060 Phases 4 + round 3), injected by the host — absent in headless tests. */
 export interface GpuHooks {
+  /** WebGPU (docs/concepts/webgpu-migration): pipelines compile NATIVELY on an object's first draw, so an atomic
+   *  cell appearance stacks dozens of native compiles into one frame — the camera-move freeze (profiled as
+   *  System-dominated 100 ms+ tasks). >0 spreads the appearance to this many objects per frame, amortizing the
+   *  compiles. Unset/0 = the plan-060 atomic appearance (WebGL). */
+  appearPerFrame?: number;
   /** WebGPU spike: a fresh per-cell container (a `BundleGroup`) — a cell's objects go inside it so the renderer
    *  records the cell's draws once and replays them (docs/concepts/webgpu-migration). Absent → objects add to root. */
   cellContainer?(): Object3D;
@@ -177,6 +182,42 @@ export class StreamingSystem implements System {
     return cellOf(this.viewOf(), this.adapter.cellSize);
   }
 
+  /** WebGPU budgeted appearance: add up to `budget` of the batch's remaining objects; returns how many appeared. */
+  private appearSlice(batch: { added: number; objects: Object3D[] }, budget: number): number {
+    let appeared = 0;
+    while (batch.added < batch.objects.length && appeared < budget) {
+      this.root.add(batch.objects[batch.added]);
+      batch.added += 1;
+      appeared += 1;
+    }
+
+    return appeared;
+  }
+
+  /** Atomic appearance: the whole cell enters the scene in one step — into a per-cell BundleGroup (record-once)
+   *  under WebGPU bundles, else straight to the root. */
+  private attachCell(key: string, objects: readonly Object3D[]): void {
+    const container = this.gpu.cellContainer?.();
+    if (!container) {
+      objects.forEach((object) => this.root.add(object));
+
+      return;
+    }
+    container.frustumCulled = false;
+    objects.forEach((object) => {
+      // A static BundleGroup bakes frustum culling at RECORD time — a child culled when the bundle records
+      // stays absent forever. Disable per-child culling so every cell object is recorded + replayed. Streaming
+      // already bounds the loaded set to the view ring, so drawing all loaded cells is acceptable.
+      object.traverse((child) => (child.frustumCulled = false));
+      container.add(object);
+    });
+    this.root.add(container);
+    // Force the bundle to (re)record now that the cell's objects are in it — a BundleGroup added to an
+    // already-live scene otherwise may never record its draws (three records what's present up front).
+    (container as unknown as { needsUpdate: boolean }).needsUpdate = true;
+    this.containers.set(key, container);
+  }
+
   private desiredKeys(): Set<string> {
     if (this.config.mapViewer && this.manual) {
       return new Set(this.manual.cells.map(([cx, cy]) => streamKey(cx, cy, this.manual!.lod)));
@@ -196,40 +237,32 @@ export class StreamingSystem implements System {
     const start = performance.now();
     let count = WARM_PER_FRAME;
     let warmed = 0;
+    let appearedThisFrame = 0; // WebGPU budgeted appearance — one budget across all ingesting cells
     const overBudget = (): boolean => count <= 0 || performance.now() - start >= WARM_BUDGET_MS;
-    for (const [key, batch] of this.ingesting) {
-      if (this.gpu.warmUp) {
-        while (batch.added < batch.objects.length) {
-          this.gpu.warmUp([batch.objects[batch.added]]);
-          batch.added += 1;
-          count -= 1;
-          warmed += 1;
-          if (overBudget() && batch.added < batch.objects.length) {
-            this.logWarm(start, warmed);
+    const spend = (): boolean => {
+      count -= 1;
+      warmed += 1;
 
-            return; // continue this cell next frame — at least one object always warms per frame
-          }
-        }
+      return overBudget();
+    };
+    for (const [key, batch] of this.ingesting) {
+      if (this.gpu.warmUp && !this.warmBatch(batch, spend)) {
+        this.logWarm(start, warmed);
+
+        return; // budget spent — continue this cell next frame (at least one object always warms per frame)
       }
-      // Fully warmed (or no hook — headless): the whole cell appears in one step. Under WebGPU, the cell's objects
-      // go into a per-cell BundleGroup (record-once) added atomically to the root; else straight to the root.
-      const container = this.gpu.cellContainer?.();
-      if (container) {
-        container.frustumCulled = false;
-        batch.objects.forEach((object) => {
-          // A static BundleGroup bakes frustum culling at RECORD time — a child culled when the bundle records
-          // stays absent forever. Disable per-child culling so every cell object is recorded + replayed. Streaming
-          // already bounds the loaded set to the view ring, so drawing all loaded cells is acceptable.
-          object.traverse((child) => (child.frustumCulled = false));
-          container.add(object);
-        });
-        this.root.add(container);
-        // Force the bundle to (re)record now that the cell's objects are in it — a BundleGroup added to an
-        // already-live scene otherwise may never record its draws (three records what's present up front).
-        (container as unknown as { needsUpdate: boolean }).needsUpdate = true;
-        this.containers.set(key, container);
+      // WebGPU budgeted appearance: add at most `appearPerFrame` objects per frame so their first-draw pipeline
+      // compiles amortize across frames instead of freezing one. The cell's `added` counter carries progress
+      // (the warm loop is skipped under WebGPU, so the counter is free); the swap finalizes only when complete —
+      // the old detail level keeps rendering meanwhile (`ingesting` blocks its removal), so no hole appears.
+      const budgeted = (this.gpu.appearPerFrame ?? 0) > 0 && !this.gpu.warmUp && !this.gpu.cellContainer;
+      if (budgeted) {
+        appearedThisFrame += this.appearSlice(batch, (this.gpu.appearPerFrame ?? 0) - appearedThisFrame);
+        if (batch.added < batch.objects.length) {
+          return; // budget spent — continue this cell next frame
+        }
       } else {
-        batch.objects.forEach((object) => this.root.add(object));
+        this.attachCell(key, batch.objects);
       }
       this.ingesting.delete(key);
       this.finishSwap(key, batch.objects);
@@ -368,6 +401,19 @@ export class StreamingSystem implements System {
       ];
     }
     this.lastView = [view[0], view[1], view[2]];
+  }
+
+  /** Warm the batch's remaining objects one by one; false = the frame budget ran out mid-batch (stop draining). */
+  private warmBatch(batch: { added: number; objects: Object3D[] }, spend: () => boolean): boolean {
+    while (batch.added < batch.objects.length) {
+      this.gpu.warmUp?.([batch.objects[batch.added]]);
+      batch.added += 1;
+      if (spend() && batch.added < batch.objects.length) {
+        return false;
+      }
+    }
+
+    return true;
   }
 }
 

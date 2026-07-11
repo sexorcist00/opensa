@@ -1,7 +1,8 @@
-# Phase 1 — real-engine integration findings (in progress)
+# Phase 1 — real-engine integration findings (🅿️ PARKED — see FINAL VERDICT at the bottom)
 
-Branch `webgpu-migration`. What the real-engine WebGPU integration (behind `?webgpu=1`) established, and the one
-bug that blocks a clean bundle measurement. Stopped here deliberately rather than iterating blind.
+Branch `webgpu-migration`. The chronological log of the real-engine WebGPU integration (behind `?webgpu=1`):
+milestones, bugs, fix attempts, and the final parked verdict with resume conditions. Historical sections below are
+kept as written — read the FINAL VERDICT last section for the outcome.
 
 ## ✅ Milestones reached
 
@@ -28,6 +29,7 @@ A static `BundleGroup` renders the world, but **incorrectly**:
   each cell's bundle records at a different (often bad) moment as it streams in.
 
 Two things three's static bundles fight with in this engine:
+
 - **Transforms:** cells live under a rotated (−90°X) streaming root; the bundle must record after `matrixWorld` is
   finalized for every child, or it bakes garbage.
 - **Dynamic streaming:** bundles added to an already-live scene, one per frame, aren't picked up cleanly (needsUpdate
@@ -39,7 +41,7 @@ CPU` under bundles are **unreliable** — a proper bundle measurement needs GPU-
 ## Fix attempts (didn't crack it via browser rounds)
 
 `frustumCulled = false` on bundled objects · skip the cell fade under bundles (static bundle bakes opacity) ·
-`needsUpdate = true` after populating · single shared root bundle. Each improved *something* but none produced a
+`needsUpdate = true` after populating · single shared root bundle. Each improved _something_ but none produced a
 correct full-world bundle render.
 
 ## Assessment
@@ -113,6 +115,7 @@ Also parked here: **bundles are OFF by default** (`?bundle=1`/`root` to opt in) 
 for the bundle transform bug caused a no-cull perf spiral of its own.
 
 ### Resume points (deliberate, not blind rounds)
+
 1. **Profile the ~28 µs/draw TSL submit cost — the make-or-break gate.** Compare a custom-`colorNode`
    `MeshBasicNodeMaterial` vs a plain built-in one at N draws in an isolated bench; find what three re-binds per
    draw for custom node materials (the shared uniform group? a per-material bind group?). Options: one shared
@@ -136,7 +139,9 @@ pipeline key** (real objects render under the −90°X `streamingRoot`, as `Inst
 render-pass state) → cache miss → resync-compile on appearance → freeze.
 
 ### THE gate (resume point #1, corrected)
+
 Make WebGPU pre-compile the pipeline that the REAL render will use, off the appearance frame. Investigate:
+
 - does `compileAsync` need the objects compiled in their real parent (rotated root) / as InstancedMesh, not a bare
   holder? Compile against a matching context.
 - what does three key the WebGPU pipeline by — confirm the holder-compile and the real-render produce the same key.
@@ -150,6 +155,7 @@ dynamic materials, bundles) is downstream of it.
 
 The `webgpu-stream-compile.ts` repro **cracked the mechanism**: `compileAsync` only pre-warms the pipeline the real
 render uses if the objects are **in the scene graph (real render context)** during compile — measured max spike:
+
 - `ctx=bare` (detached holder, what `game.precompile` does): **~5 ms/cell** — barely pre-warms.
 - `ctx=holder` (holder parented under the rotated root, compile only that subtree): **~1 ms** — pre-warms, and O(cell).
 - `ctx=scene` (compile the whole scene): ~1 ms but O(scene). `variant=new` (different material structure): ~5 ms —
@@ -158,6 +164,7 @@ render uses if the objects are **in the scene graph (real render context)** duri
 
 **But applying it to the engine did NOT fix the freeze — and made it worse.** Two engine factors the single-cell
 repro doesn't contain:
+
 1. **Concurrent streaming.** Several cells precompile at once; parenting each batch under `streamingRoot` during its
    async compile puts many (visible) holders in the scene at once → the whole loaded map renders during the compile
    window → "loads the whole map, slowly". The repro (one cell, tiny scene) never showed this.
@@ -168,9 +175,32 @@ repro doesn't contain:
 Reverted the precompile experiments (back to the known 30 ms-steady / freeze-on-move state — no whole-map flash).
 
 ### The engine fix (focused, next session)
+
 Apply "compile/warm in the REAL render context" **consistently across BOTH `precompile` and `warmUp`**, and solve
 "in the scene graph for the pipeline context, but NOT rendered during the async window" (concurrency-safe):
+
 - render `warmUp` against `this.scene` (objects temporarily parented under `streamingRoot`), scissored 1×1, instead
   of the detached `warmHolder` — that single pass both compiles the right pipeline AND uploads geometry, invisibly;
 - OR pre-warm the handful of world-material variants ONCE at boot with representative in-scene geometry.
-This is the make-or-break gate; everything downstream (material slices, dynamic materials, bundles) waits on it.
+  This is the make-or-break gate; everything downstream (material slices, dynamic materials, bundles) waits on it.
+
+## FINAL VERDICT (2026-07-11) — parked: three's WebGPU renderer is not ready for this workload
+
+Field test after every fix (r185 upgrade, TSL material + cache, skipWarm, budgeted appearance): **in practice the
+WebGPU path is WORSE than WebGL** — long world loads, constant stutter (camera/walking), heavy lag at LOD swaps
+while driving. The user's read is correct and the mechanism is understood:
+
+1. **The win lived in render bundles** (Phase 0: ~6×) — and bundles never worked in-engine (static-bundle
+   transform baking). Without bundles WebGPU submission is _more_ expensive than WebGL (27 vs 10 ms synthetic).
+2. **Pipeline compilation dominates streaming**: three builds shaders per-InstancedMesh (uuid in the render-object
+   cache key — their own TODO, PR 29066), in-engine pre-warm doesn't match the real context, and spreading the
+   appearance only smears the cost across frames (permanent stutter + slow loads) instead of removing it.
+3. Everything else (plugins, post-FX, dynamic materials) is still unported — months of work on top of an
+   immature foundation.
+
+**Decision: bank.** WebGL stays the shipping path (and came out IMPROVED: three 0.185 upgrade, the r185
+shadow-binding fix for invisible dynamics, PCF). All WebGPU code stays behind `?webgpu=1`, harmless.
+
+**Resume conditions:** three fixes per-InstancedMesh pipeline caching (watch PR 29066) and static-bundle transform
+capture for streamed scenes — re-run the Phase-0/1a spikes on that version first. The alternative road to AAA is a
+custom WebGPU renderer outside three (a separate, months-scale decision).
