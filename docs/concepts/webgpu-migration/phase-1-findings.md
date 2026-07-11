@@ -124,3 +124,27 @@ for the bundle transform bug caused a no-cull perf spiral of its own.
 2. Then the material slices (CSM shadows → fog → emissive) + dynamic-object materials (player/cars are black
    silhouettes — lit/skinned materials, not the world material).
 3. Bundles (transform bug) after static/dynamic separation, as before.
+
+## Precise root cause (2026-07-11) — WebGPU pipeline compilation on the streaming frame
+
+Corrected by testing: standing still fully loaded, render CPU is **30 ms** (~33 fps) — the TSL material is fine.
+The earlier 125 ms was the **compilation tail** during load. The real problem: **moving the camera near-freezes**
+the tab. Standing still = no new cells = smooth; moving = new cells stream = freeze. So the stall is
+**WebGPU compiling pipelines synchronously on the cell-appearance frame** — material-agnostic (would hit the
+auto-converted path too), NOT the TSL material and NOT bundles.
+
+`game.precompile` DOES call `renderer.compileAsync(holder, camera, scene)` and `WebGPURenderer` supports it, yet the
+stall persists → the pre-compiled pipeline (compiled in a plain `holder` group) **doesn't match the real render
+pipeline key** (real objects render under the −90°X `streamingRoot`, as `InstancedMesh`, in a different bind-group /
+render-pass state) → cache miss → resync-compile on appearance → freeze.
+
+### THE gate (resume point #1, corrected)
+Make WebGPU pre-compile the pipeline that the REAL render will use, off the appearance frame. Investigate:
+- does `compileAsync` need the objects compiled in their real parent (rotated root) / as InstancedMesh, not a bare
+  holder? Compile against a matching context.
+- what does three key the WebGPU pipeline by — confirm the holder-compile and the real-render produce the same key.
+- fallback: pre-warm each world-material variant at boot with representative geometry/instancing so streaming never
+  compiles live.
+
+This is material-agnostic and the single make-or-break issue for WebGPU streaming. Everything else (TSL slices,
+dynamic materials, bundles) is downstream of it.
