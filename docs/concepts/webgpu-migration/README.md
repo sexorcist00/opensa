@@ -30,3 +30,4 @@ require sacrificing visual quality**. But it is a real engine rewrite — go in 
 4. [04-migration-plan.md](04-migration-plan.md) — the phased, step-by-step plan (spike first, then material-by-material).
 5. [05-risks-and-verdict.md](05-risks-and-verdict.md) — every risk, what would kill the project, and the final honest go/no-go.
 6. [06-bake-vs-pass.md](06-bake-vs-pass.md) — fixed decision: which effects bake into the format, which shade in the material, which stay a fullscreen pass.
+7. [phase-0-spike-checklist.md](phase-0-spike-checklist.md) — the actionable Phase-0 spike: concrete tasks, the exact numbers to capture, and the GO/NO-GO criteria.
