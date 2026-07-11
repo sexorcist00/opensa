@@ -30,15 +30,16 @@ export async function createRenderContext(canvas: HTMLCanvasElement): Promise<Re
     renderer.setSize(width, height, false);
     await renderer.init();
 
-    // `?bundle=0` off (A/B baseline) · `?bundle=root` one shared bundle for the whole world (diagnostic) · else
-    // one BundleGroup per streamed cell (the design). `root` localizes whether the empty-world bug is per-cell
-    // dynamic add vs something deeper.
+    // Bundles are OFF by default now (see phase-1-findings.md): they carry a static-bundle transform-baking bug
+    // AND the frustum-culling-off workaround caused a no-cull perf death spiral. Sequence: TSL material first,
+    // then bundles. `?bundle=1` opts into per-cell bundles, `?bundle=root` into one shared bundle (diagnostics).
     const bundleMode = search.get('bundle');
     const shared = bundleMode === 'root' ? new BundleGroup() : null;
+    const useBundles = bundleMode === '1' || bundleMode === 'root';
 
     return {
       camera,
-      ...(bundleMode === '0' ? {} : { cellContainer: (): Object3D => shared ?? new BundleGroup() }),
+      ...(useBundles ? { cellContainer: (): Object3D => shared ?? new BundleGroup() } : {}),
       renderer: renderer as unknown as WebGLRenderer,
       scene,
       webgpu: true,
