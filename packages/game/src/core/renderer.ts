@@ -19,7 +19,8 @@ export async function createRenderContext(canvas: HTMLCanvasElement): Promise<Re
   camera.position.set(0, 50, 100);
   const scene = new Scene();
 
-  if (new URLSearchParams(window.location.search).get('webgpu') === '1') {
+  const search = new URLSearchParams(window.location.search);
+  if (search.get('webgpu') === '1') {
     // three's WebGPURenderer auto-converts standard materials to nodes, so the world renders with base materials
     // (the onBeforeCompile GLSL just doesn't apply); plugins that author raw GLSL / use `postprocessing` are
     // skipped in game.ts. Typed as WebGLRenderer for the engine's sake — the API surface we use overlaps.
@@ -29,9 +30,12 @@ export async function createRenderContext(canvas: HTMLCanvasElement): Promise<Re
     renderer.setSize(width, height, false);
     await renderer.init();
 
+    // `?bundle=0` disables the per-cell BundleGroups — the in-engine A/B for the render-bundle win.
+    const bundles = search.get('bundle') !== '0';
+
     return {
       camera,
-      cellContainer: () => new BundleGroup(),
+      ...(bundles ? { cellContainer: (): Object3D => new BundleGroup() } : {}),
       renderer: renderer as unknown as WebGLRenderer,
       scene,
       webgpu: true,
