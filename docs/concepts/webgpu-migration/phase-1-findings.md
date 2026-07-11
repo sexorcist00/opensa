@@ -145,3 +145,32 @@ Make WebGPU pre-compile the pipeline that the REAL render will use, off the appe
 
 This is material-agnostic and the single make-or-break issue for WebGPU streaming. Everything else (TSL slices,
 dynamic materials, bundles) is downstream of it.
+
+## Compile gate — direction proven in isolation, engine fix still open (2026-07-11)
+
+The `webgpu-stream-compile.ts` repro **cracked the mechanism**: `compileAsync` only pre-warms the pipeline the real
+render uses if the objects are **in the scene graph (real render context)** during compile — measured max spike:
+- `ctx=bare` (detached holder, what `game.precompile` does): **~5 ms/cell** — barely pre-warms.
+- `ctx=holder` (holder parented under the rotated root, compile only that subtree): **~1 ms** — pre-warms, and O(cell).
+- `ctx=scene` (compile the whole scene): ~1 ms but O(scene). `variant=new` (different material structure): ~5 ms —
+  distinct structures each compile a pipeline; same-structure cells share (so the world's few variants matter, not
+  every cell).
+
+**But applying it to the engine did NOT fix the freeze — and made it worse.** Two engine factors the single-cell
+repro doesn't contain:
+1. **Concurrent streaming.** Several cells precompile at once; parenting each batch under `streamingRoot` during its
+   async compile puts many (visible) holders in the scene at once → the whole loaded map renders during the compile
+   window → "loads the whole map, slowly". The repro (one cell, tiny scene) never showed this.
+2. **`warmUp` uses a SEPARATE context.** It renders each object scissored into `this.warmHolder` (a different Scene),
+   so even a fixed precompile is undone — the warm draw compiles/uses a warmHolder-context pipeline, still not the
+   real `this.scene` one.
+
+Reverted the precompile experiments (back to the known 30 ms-steady / freeze-on-move state — no whole-map flash).
+
+### The engine fix (focused, next session)
+Apply "compile/warm in the REAL render context" **consistently across BOTH `precompile` and `warmUp`**, and solve
+"in the scene graph for the pipeline context, but NOT rendered during the async window" (concurrency-safe):
+- render `warmUp` against `this.scene` (objects temporarily parented under `streamingRoot`), scissored 1×1, instead
+  of the detached `warmHolder` — that single pass both compiles the right pipeline AND uploads geometry, invisibly;
+- OR pre-warm the handful of world-material variants ONCE at boot with representative in-scene geometry.
+This is the make-or-break gate; everything downstream (material slices, dynamic materials, bundles) waits on it.
