@@ -224,6 +224,9 @@ export class StreamingSystem implements System {
           container.add(object);
         });
         this.root.add(container);
+        // Force the bundle to (re)record now that the cell's objects are in it — a BundleGroup added to an
+        // already-live scene otherwise may never record its draws (three records what's present up front).
+        (container as unknown as { needsUpdate: boolean }).needsUpdate = true;
         this.containers.set(key, container);
       } else {
         batch.objects.forEach((object) => this.root.add(object));
