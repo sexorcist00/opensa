@@ -121,9 +121,17 @@ replayed? Tested with `?cells=100&swap=30` (100 per-cell bundles, one re-records
 would be ~27 ms, the no-bundle cost). Re-recording one cell does not force the others → no world-wide hitch, and
 8.9 ms is still inside a 60 fps frame. Design validated: **one `BundleGroup` per streamed cell.**
 
-Scaling confirms it: `?cells=50` (300 draws/cell, 2× bigger) → swap **13.4 ms** (re-record delta ~8.9 ms, 2× the
-150-draw cell's ~4.4 ms). The swap cost scales with **one cell's draw count**, not the world → design lever:
-**smaller cells = cheaper re-record**. Our real cells (~155 draws) sit at the cheap end.
+Scaling across cell sizes (steady stays **4.5 ms** in every run — it depends on total draws, not cell count):
+
+| cells | draws/cell | swap max | re-record delta |
+|---|---|---|---|
+| 200 | 75 | 7.4 ms | ~2.9 ms |
+| 100 | 150 | 8.9 ms | ~4.4 ms |
+| 50 | 300 | 13.4 ms | ~8.9 ms |
+
+The swap cost scales **linearly with one cell's draw count**, not the world → design lever: **smaller cells =
+cheaper re-record**. Our real cells (~155 draws) sit at the cheap end (~the 150-draw row), and the re-record can
+still be hidden in the warm phase. Granularity is thoroughly confirmed.
 
 Honest caveats: the synthetic swap uses simple box materials, so the real per-cell re-record will cost more (heavy
 shaders + actual cell load creating meshes) — but it stays **bounded to one cell**, and the existing streaming
