@@ -837,11 +837,22 @@ function bootstrap(
     game.addSystem(animationSystem);
 
     // Stream map cells around the player (full models near, LODs ringing out).
+    // WebGPU: the plan-060 precompile/warmUp machinery is WebGL-era and actively HARMFUL here — the warm draw
+    // renders into a SEPARATE warmHolder scene, which under WebGPU sync-compiles a wrong-context pipeline per
+    // object (~5 ms each, blowing the 3 ms warm budget → 1 object/frame → minutes-long loads), and the appearance
+    // frame then compiles AGAIN for the real scene. Skip both hooks under ?webgpu=1 (`&warm=1` re-enables for A/B);
+    // cells then pay one compile on their appearance frame only (same-structure materials share pipelines).
+    const webgpuSearch = new URLSearchParams(window.location.search);
+    const skipWarm = webgpuSearch.get('webgpu') === '1' && webgpuSearch.get('warm') !== '1';
     const streaming = new StreamingSystem(adapter, game.getStreamingRoot(), character.viewOf, game.getConfig(), {
       // Plan 060: shaders/textures compile off the appearance frame; geometry uploads are forced invisibly
       // in slices, then the cell appears atomically (no piece-by-piece pop-in).
-      precompile: (objects): Promise<void> => game.precompile(objects),
-      warmUp: (objects): void => game.warmUp(objects),
+      ...(skipWarm
+        ? {}
+        : {
+            precompile: (objects: readonly Object3D[]): Promise<void> => game.precompile(objects),
+            warmUp: (objects: readonly Object3D[]): void => game.warmUp(objects),
+          }),
       // WebGPU spike: wrap each streamed cell in a per-cell BundleGroup (record-once); undefined on WebGL.
       ...(game.getCellContainer() ? { cellContainer: game.getCellContainer() } : {}),
     });
