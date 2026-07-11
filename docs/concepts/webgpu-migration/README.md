@@ -3,6 +3,14 @@
 **Question:** can moving the OpenSA renderer from WebGL2 to WebGPU break the CPU draw-call wall and turn OpenSA
 into a genuinely AAA-capable browser engine?
 
+**Status: 🎓 GRADUATED to [docs/plans/073-webgpu-migration](../../plans/073-webgpu-migration/readme.md)
+(2026-07-11).** The park below lasted hours: the focused bundle hunt (patched three, see
+[phase-1-findings.md](phase-1-findings.md)) made static render bundles WORK in the real engine — fast load, live
+camera, smooth driving, **~13 ms render CPU vs the 65 ms WebGL baseline**. These concept docs remain as the
+research record; actionable work lives in the plan chain.
+
+<details><summary>Superseded park note (kept for history)</summary>
+
 **Status: 🅿️ PARKED (2026-07-11) — three's WebGPU renderer is not ready for this streaming workload.**
 The synthetic spikes said GO (render bundles cut submission ~6×, per-cell invalidation granular), but the
 **real-engine integration failed in the field**: bundles never rendered correctly in-engine (static-bundle
@@ -17,6 +25,8 @@ thread has a maintainer benchmark of WebGPURenderer ~3× slower than WebGL on co
 result. Resume only when that architecture work lands (re-run the spikes first). Meanwhile the "leave three?"
 question is being measured: see the **Babylon spike** (`/babylon-spike.html`, snapshot rendering = mature
 record-once + a streaming reset-cost scenario).
+
+</details>
 
 <details><summary>Pre-park status (the spike results that justified trying)</summary>
 

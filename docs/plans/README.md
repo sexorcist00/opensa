@@ -10,7 +10,13 @@ The map of planning docs across the repo. **Engine plans** live here (`docs/plan
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`072`. Newest first:
+`001`–`073`. Newest first:
+
+- **[073 — WebGPU migration](./073-webgpu-migration/readme.md)** — the WebGL→WebGPU renderer mode (graduated from
+  `docs/concepts/webgpu-migration/`): static render bundles field-proven (~13 ms vs 65 ms WebGL, live camera,
+  smooth streaming, patched three 0.185.1). Chain: 01 upstream contribution · 02 dynamics materials · 03 sky &
+  ambient · 04 world-material slices · 05 shadows · 06 remaining effects · 07 post-FX · 08 pipeline sharing ·
+  09 productionize.
 
 - **[062 — Rendering overhaul](./062-rendering-overhaul.md)** — the "modern lighting" fork (chain umbrella,
   promoted from `ideas/0.4.0/02-rendering`): real sun on the prelit world without double-counting, CSM building

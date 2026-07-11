@@ -3,12 +3,16 @@
 Exploratory design docs for large, not-yet-committed directions — research + honest go/no-go before any code.
 A concept graduates to `docs/plans/` only once we decide to build it.
 
-## Parked
+## Graduated
 
 - [webgpu-migration](webgpu-migration/) — move the renderer off WebGL2 onto WebGPU to break the CPU draw-call wall.
-  **Parked 2026-07-11:** the synthetic spikes said GO, but three r185's WebGPU renderer failed the real streaming
-  workload (bundle transform baking + per-InstancedMesh pipeline compiles). Yielded the three 0.185 upgrade + WebGL
-  shadow fixes. Resume conditions in [webgpu-migration/phase-1-findings.md](webgpu-migration/phase-1-findings.md).
+  **Graduated to [docs/plans/073-webgpu-migration](../plans/073-webgpu-migration/readme.md) (2026-07-11):** briefly
+  parked mid-hunt, then the patched-three bundle hunt WON — static render bundles field-proven (~13 ms vs 65 ms
+  WebGL, live camera, smooth streaming). The concept docs stay as the research record; work continues in the plan
+  chain.
+
+## Parked
+
 - [modern-cell-tooling-postmortem](modern-cell-tooling-postmortem.md) — the parked modern-cell tooling experiment
   (no perf/quality gain; code on `backup/tooling-experiment`) + the OPEN strip-lods double-load task.
 

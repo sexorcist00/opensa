@@ -261,3 +261,20 @@ work out of the box.
   The fix is pipeline sharing: neutralize the uuid key for statically-bundled instanced meshes + solve the
   instanceMatrix capture (the actual `referenceBuffer()` problem from PR 29066). That is the LAST lever between
   the current state and a smooth drive.
+
+## ✅ FIELD-CONFIRMED WORKING STATE (2026-07-11, end of the hunt)
+
+Round-4 fixes (r9): version-sync for objects first seen unbundled (staged wrap left them permanently refreshing —
+CPU crept back to 30 ms), and the appear budget bypassed behind the initial streaming veil (it throttled the
+initial fill to minutes).
+
+**Final field result (`?webgpu=1&bundle=1`, appear=8 default):**
+
+- fast initial load ✓ · world + textures correct (incl. the DXT fix) ✓ · **live camera** ✓ · smooth driving, no
+  freezes ✓ · **render CPU ~13 ms** (vs 65 ms WebGL baseline — **5×**; pure-frozen floor is ~5 ms, the delta is
+  heartbeat across ~200 chunked bundles + live streaming work + unbundled dynamics/vegetation).
+
+The full patch lives in `patches/three+0.185.1.patch` (needsRefresh reorder + version-sync + heartbeat + debug
+logs) — upstream-candidate material, see [upstream-issue-draft.md](upstream-issue-draft.md). Bundles remain
+opt-in (`?bundle=1`) pending soak. Remaining known lever: per-object pipeline compiles at appearance (uuid cache
+key → `referenceBuffer()` problem) — would lighten cell appearances further; a separate focused session.
