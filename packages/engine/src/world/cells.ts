@@ -3,7 +3,7 @@
  * replayed while the cell is frustum-visible. Record happens ONCE at load (we own record time — no version
  * dances); unload destroys everything and the residency ledger must return to its prior line.
  */
-import { decodeOscell, type OscellGroup } from '@opensa/engine-formats';
+import { decodeOscell, OscellChannel, type OscellGroup } from '@opensa/engine-formats';
 
 import type { Resources } from '../core/resources';
 import type { PipelineSet } from '../render/pipelines';
@@ -88,7 +88,10 @@ export class CellStore {
       size: 16,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    this.device.queue.writeBuffer(uniform, 0, new Float32Array([...cell.origin, 0]));
+    // origin.w = 1 when this cell carries a baked sunVis channel (074/07) — the shader gates on it, so a
+    // channel-less pak never misreads the reserved normal.w byte (no in-data sentinel needed).
+    const sunVisBaked = (cell.channelMask & OscellChannel.SUN_VIS) !== 0 ? 1 : 0;
+    this.device.queue.writeBuffer(uniform, 0, new Float32Array([...cell.origin, sunVisBaked]));
     const cellBindGroup = this.device.createBindGroup({
       entries: [{ binding: 0, resource: { buffer: uniform } }],
       label: `${key}:cell`,

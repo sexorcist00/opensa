@@ -9,7 +9,8 @@ import { buildOspak, type OspakInput, type OspakManifest } from '@opensa/engine-
 import { OPEN_SCRIPT_IPL, resolveMap } from '@opensa/renderware/map/resolve-map';
 import { buildWorldGrid, cellKey } from '@opensa/renderware/map/world-grid';
 
-import { bakeAo, type BakeAoReport } from './ao';
+import { bakeAo, type BakeAoReport, buildOccluderBvh } from './ao';
+import { bakeSunVis, type BakeSunVisReport } from './sunvis';
 import { TexturePlanner } from './textures';
 import { assembleCell, weldCellParts, type WeldedCell, type WeldStats } from './weld';
 
@@ -19,6 +20,8 @@ export interface ConvertOptions {
   cellSize?: number;
   /** Inclusive GTA cell-coordinate rect [x0, y0, x1, y1]. */
   rect: readonly [number, number, number, number];
+  /** Bake per-vertex sun visibility (074/07); on by default, `--no-sunvis` skips it. */
+  sunVis?: boolean;
 }
 
 export interface ConvertReport {
@@ -27,6 +30,7 @@ export interface ConvertReport {
   pakBytes: number;
   skippedAnimated: number;
   skippedTimed: number;
+  sunVis: (BakeSunVisReport & { ms: number }) | null;
   textures: TexturePlanner['report'] & { arrays: number };
 }
 
@@ -46,17 +50,27 @@ export function convertDistrict(
     pakBytes: 0,
     skippedAnimated: 0,
     skippedTimed: 0,
+    sunVis: null,
     textures: { arrays: 0, colors: 0, dedup: 0, opaquePass: 0, processed: 0 },
   };
 
   // Phase 1 — weld every cell into scratch buckets (kept in memory: the bake needs the whole district).
   const welded = weldRect(fs, defs, grid, planner, options.rect, cellSize);
 
-  // Phase 2 — bake AO/skyVis against the district BVH (074/07), then encode.
-  if (options.ao !== false) {
-    const aoStarted = Date.now();
-    const bake = bakeAo(welded.map((entry) => entry.cell));
-    report.ao = { ...bake, ms: Date.now() - aoStarted };
+  // Phase 2 — bake AO/skyVis + sun visibility against ONE district BVH (074/07), then encode.
+  if (options.ao !== false || options.sunVis !== false) {
+    const cellsOnly = welded.map((entry) => entry.cell);
+    const bvh = buildOccluderBvh(cellsOnly);
+    if (options.ao !== false) {
+      const aoStarted = Date.now();
+      const bake = bakeAo(cellsOnly, { bvh });
+      report.ao = { ...bake, ms: Date.now() - aoStarted };
+    }
+    if (options.sunVis !== false) {
+      const sunStarted = Date.now();
+      const bake = bakeSunVis(cellsOnly, bvh);
+      report.sunVis = { ...bake, ms: Date.now() - sunStarted };
+    }
   }
   for (const entry of welded) {
     const bytes = assembleCell(entry.cell);

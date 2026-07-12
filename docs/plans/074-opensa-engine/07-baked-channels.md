@@ -29,8 +29,9 @@ reserved since v0 (02 — no format bump). 066 stays the spec source; this doc o
 
 - [x] District BVH + raycaster in the tool (`bvh.ts`: median-split over triangle AABBs, iterative any-hit
       Möller–Trumbore; occlusion queries only).
-- [ ] Sun-vis bake (K-sample) + channel writer + WGSL consumer swap in 06·3; A/B vs runtime CSM screenshots
-      (the original 066 complaint — angular/jittery — is the acceptance test).
+- [x] Sun-vis bake v1 (scalar, 066/03 v1) + channel writer + WGSL consumer in 06·3. No runtime CSM exists in
+      this engine to A/B against — the acceptance test becomes "under-bridge/canyon direct sun dies, smooth
+      under camera motion". The directional (moving-sun) representation stays the 066/03 v2 follow-up.
 - [x] skyVis/AO bake + consumer (v1 — see decisions below). SSAO never existed in this engine, so the
       "SSAO dies" comparison is against the WebGL prod pass when plan 10's A/B lands.
 - [ ] Emissive mask bake (night-window detection from the existing night-prelit data) + 06·8 swap.
@@ -53,6 +54,20 @@ reserved since v0 (02 — no format bump). 066 stays the spec source; this doc o
   carries baked darkening, full strength double-darkens). Lab A/B: `?ao=<float>`, `?ao=0` disables.
 - `--no-ao` CLI flag skips the bake; `report.json` gains the `ao` block (ms, rays, verts, tris).
 
+## v1 decisions (sun-vis, 2026-07-12)
+
+- Scalar sunVis (066/03 v1): elevation-weighted average visibility over the day arc — kills the direct term
+  where the sun NEVER reaches (bridges, canyons); does not track the moving sun (v2 = directional).
+- The arc mirrors the lab drivers: azimuth FIXED (0.35, e, 0.25), e = sin((hour−6)/12·π) → only 5 unique
+  elevations {0.259, 0.5, 0.707, 0.866, 1} (the parametric arc is noon-symmetric). **When the arc gains real
+  azimuth traversal, the bake table must follow + reconvert.**
+- 2 disc-jittered rays per elevation (±0.03 elevation → baked penumbra), 400-unit reach. Arc samples behind
+  the face are SKIPPED (N·L zeroes them at runtime) — halves the rays; a never-lit vertex costs none.
+- Storage: `normal.w` (snorm8, 0..127 used) + `SUN_VIS` channel bit; the ENGINE gates per cell via
+  `cell.origin.w` (set from channelMask at load) — **no in-data sentinel**, the AO byte-0 lesson applied.
+- Consumer: `sunNdl ×= mix(1, sunVis, cell.origin.w × sunVisStrength)` — direct term only. Default strength
+  1 (a shadow is a shadow); lab A/B `?sunvis=N`. One district BVH shared by both bakes.
+
 ## Measurement ledger
 
 | Date       | What                              | Numbers                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -61,3 +76,6 @@ reserved since v0 (02 — no format bump). 066 stays the spec source; this doc o
 | 2026-07-12 | Baked distribution sanity         | cell 9,-7 hd: full 0..255 spread (27.8 k fully-occluded verts = undersides/interiors), channel bit set; lod: all 255, bit absent                                                                                                                                                                                                                                                                                          |
 | 2026-07-12 | **GOTCHA: sentinel collision**    | field report «под мостами не вижу» — fully-occluded verts encode byte 0 = the WGSL "unbaked" sentinel → the DARKEST verts rendered fully OPEN. District-wide: 262 k verts (23 %!) were byte-0. Fix: bake floors visibility at 1/255. Second cause is expected v1 behaviour: at noon the DIRECT sun term dominates an up-facing road — AO modulates indirect only; under-bridge sun darkness arrives with the sun-vis bake |
 | 2026-07-12 | drive bench (+AO, pinned profile) | bench/series row 07·AO — BASELINE RESET to `game-src/non-modified` (earlier rows ran the user's modded pak); AO GPU cost ≈ free (one per-vertex mix)                                                                                                                                                                                                                                                                      |
+| 2026-07-12 | sun-vis bake v1, ls-bench rect    | bake 9.0 s (backface skip halves rays: 5.59 M actual vs 10.4 M theoretical), convert total 35.1 s with both bakes on ONE shared BVH; pak 99.5 MB (normal.w was reserved)                                                                                                                                                                                                                                                  |
+| 2026-07-12 | sunVis distribution sanity        | cell 9,-7 hd: bimodal as expected — 63.3 k fully lit / 18.9 k in permanent shade / penumbra tail between; SUN_VIS bit set; lod: all open, bit absent                                                                                                                                                                                                                                                                      |
+| 2026-07-12 | **FIELD VERDICT: sun-vis v1 ✅**  | user: under-bridge/canyon shadows look right («выглядит хорошо»); bench row 07·sunVis accepted (GPU avg +0.13 ms). Dark palm canopies A/B-checked with `?sunvis=0` → UNCHANGED = source low-poly prelit, NOT the bakes; expected to be fixed by the pmb prelight pipeline, not here                                                                                                                                       |

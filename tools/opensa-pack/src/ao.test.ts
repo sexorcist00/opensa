@@ -21,6 +21,7 @@ function cell(buckets: WeldBucket[], lod = false): WeldedCell {
     buckets,
     hasAo: false,
     hasNight: false,
+    hasSunVis: false,
     hasSway: false,
     lod,
     origin: [0, 0, 0],

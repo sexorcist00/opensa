@@ -10,7 +10,7 @@ struct Frame {
   // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
-  // params2 = [aoStrength (074/07 baked skyVis → indirect), unused ×3].
+  // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows), unused ×2].
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -46,7 +46,7 @@ struct Frame {
   // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
-  // params2 = [aoStrength (074/07 baked skyVis → indirect), unused ×3].
+  // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows), unused ×2].
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -107,7 +107,7 @@ struct Frame {
   // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
-  // params2 = [aoStrength (074/07 baked skyVis → indirect), unused ×3].
+  // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows), unused ×2].
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -131,6 +131,7 @@ fn skyColorFor(dir: vec3f) -> vec3f {
 }
 
 
+// origin.w = 1 when the cell carries a baked sunVis channel (074/07), else 0 (normal.w is then ignored).
 struct Cell {
   origin: vec4f,
 };
@@ -176,7 +177,10 @@ fn vsWorld(in: VsIn) -> VsOut {
   out.glow = in.nightPrelit.rgb * (smoothstep(0.05, 0.32, delta) * frame.params.w * frame.params.x);
   out.layer = in.layerChannels.x;
   // Sun N·L per vertex (074/06 row 3) — GTA geometry is low-poly; per-vertex matches the shipped look.
-  out.sunNdl = max(dot(normalize(in.normal.xyz), frame.sunDir.xyz), 0.0);
+  // Baked sun visibility (074/07, 066/03 v1 scalar): normal.w = arc-averaged sun occlusion — the STATIC
+  // shadow term (under bridges / canyons the direct sun dies), smooth by construction, no shadow map.
+  let sunVis = mix(1.0, clamp(in.normal.w, 0.0, 1.0), cell.origin.w * frame.params2.y);
+  out.sunNdl = max(dot(normalize(in.normal.xyz), frame.sunDir.xyz), 0.0) * sunVis;
   // Baked AO/skyVis (074/07): low byte of channels; 0 means UNBAKED (old paks) → fully open, not black.
   let aoByte = in.layerChannels.y & 0xffu;
   let aoVis = select(f32(aoByte) / 255.0, 1.0, aoByte == 0u);

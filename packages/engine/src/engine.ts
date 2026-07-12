@@ -70,6 +70,8 @@ export interface Environment {
   sunDirect: number;
   /** Indirect (prelit) scale. */
   sunIndirect: number;
+  /** Baked sun-shadow strength on the direct term (074/07): 0 = off, 1 = raw bake. */
+  sunVisStrength: number;
 }
 
 export class Engine {
@@ -90,6 +92,7 @@ export class Engine {
     sunDir: [0.35, 0.85, 0.25],
     sunDirect: 0.9,
     sunIndirect: 0.75,
+    sunVisStrength: 1,
   };
 
   /** Flat sky clear (M0 stand-in for the sky pass). LINEAR values — the sRGB target encodes on write. */
@@ -151,7 +154,7 @@ export class Engine {
     frameData.set([...env.skyTop, 1], 48);
     frameData.set([...env.skyHorizon, 1], 52);
     frameData.set([env.fogCutDistance, env.fogStartDistance, env.fogHeightK, env.fogHeightMin], 56);
-    frameData.set([env.aoStrength, 0, 0, 0], 60);
+    frameData.set([env.aoStrength, env.sunVisStrength, 0, 0], 60);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
 
     frustumFromViewProj(this.frustumPlanes, this.viewProj);

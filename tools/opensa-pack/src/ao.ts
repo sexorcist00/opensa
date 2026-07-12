@@ -10,10 +10,12 @@
  * - Vertices are deduped by quantized world position+normal: welding duplicates verts per instance/part, the
  *   rays are the cost, and identical (pos, normal) pairs get identical answers by construction.
  */
-import { buildBvh, occluded } from './bvh';
+import { buildBvh, type Bvh, occluded } from './bvh';
 import { WELD_AO, WELD_ROW, type WeldedCell } from './weld';
 
 export interface BakeAoOptions {
+  /** Prebuilt district BVH (shared with the sun-vis bake); built from `cells` when absent. */
+  bvh?: Bvh;
   /** Ray length: geometry farther than this never darkens a vertex. */
   maxDistance?: number;
   /** Hemisphere rays per unique vertex. */
@@ -33,11 +35,10 @@ const RAY_OFFSET = 0.08; // push origins off the surface — neighbouring coplan
 export function bakeAo(cells: WeldedCell[], options: BakeAoOptions = {}): BakeAoReport {
   const samples = options.samples ?? 12;
   const maxDistance = options.maxDistance ?? 60;
-  const triangles = collectOccluders(cells);
-  const bvh = buildBvh(triangles);
+  const bvh = options.bvh ?? buildOccluderBvh(cells);
   const fan = sampleFan(samples);
   const cache = new Map<string, number>();
-  const report: BakeAoReport = { rays: 0, triangles: triangles.length / 9, uniqueVertices: 0, vertices: 0 };
+  const report: BakeAoReport = { rays: 0, triangles: bvh.triangles.length / 9, uniqueVertices: 0, vertices: 0 };
 
   for (const cell of cells) {
     if (cell.lod) {
@@ -65,6 +66,16 @@ export function bakeAo(cells: WeldedCell[], options: BakeAoOptions = {}): BakeAo
   }
 
   return report;
+}
+
+/** District occluder BVH — HD opaque/cutout triangles only; shared by the AO and sun-vis bakes. */
+export function buildOccluderBvh(cells: WeldedCell[]): Bvh {
+  return buildBvh(collectOccluders(cells));
+}
+
+/** Quantized (world position, normal) dedup key — identical pairs get identical bake answers. */
+export function quantKey(x: number, y: number, z: number, nx: number, ny: number, nz: number): string {
+  return `${Math.round(x * 50)},${Math.round(y * 50)},${Math.round(z * 50)},${Math.round(nx * 30)},${Math.round(ny * 30)},${Math.round(nz * 30)}`;
 }
 
 /** HD opaque/cutout triangles in ENGINE WORLD space, 9 floats each. */
@@ -101,10 +112,6 @@ function collectOccluders(cells: WeldedCell[]): Float32Array {
   }
 
   return triangles;
-}
-
-function quantKey(x: number, y: number, z: number, nx: number, ny: number, nz: number): string {
-  return `${Math.round(x * 50)},${Math.round(y * 50)},${Math.round(z * 50)},${Math.round(nx * 30)},${Math.round(ny * 30)},${Math.round(nz * 30)}`;
 }
 
 /** Deterministic cosine-weighted hemisphere fan (tangent space, +Z = normal), 3 floats per sample. */

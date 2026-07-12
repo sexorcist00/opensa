@@ -33,10 +33,14 @@ async function main(): Promise<void> {
   const dayCycle = params.get('daycycle') === '1';
   const weather = Number(params.get('weather') ?? 0) || 0;
   let hour = Number.isFinite(hourParam) ? hourParam : 12;
-  // `?ao=N` (074/07 A/B): baked-AO strength override; 0 disables (drivers never touch aoStrength).
+  // `?ao=N` / `?sunvis=N` (074/07 A/B): baked-channel strength overrides; 0 disables (drivers never touch them).
   const aoParam = Number(params.get('ao') ?? Number.NaN);
   if (Number.isFinite(aoParam)) {
     engine.environment.aoStrength = aoParam;
+  }
+  const sunVisParam = Number(params.get('sunvis') ?? Number.NaN);
+  if (Number.isFinite(sunVisParam)) {
+    engine.environment.sunVisStrength = sunVisParam;
   }
   // Row 14: the environment driver — real timecyc when the manifest carries it, parametric fallback else.
   // Swapped in after the pak loads (the manifest arrives there); parametric until then.

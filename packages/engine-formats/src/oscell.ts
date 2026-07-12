@@ -4,7 +4,7 @@
  *
  * Vertex layout v0 — interleaved, stride 36 B (all offsets 4-aligned where WebGPU requires):
  *   0  position  float32x3   cell-local (header carries the cell origin)
- *   12 normal    snorm8x4    .w unused
+ *   12 normal    snorm8x4    .w = baked sunVis 0..1 (074/07; meaningful only with the SUN_VIS channel bit)
  *   16 uv        float32x2   GTA UVs tile far outside [0,1]
  *   24 dayPrelit unorm8x4    RGB day prelight, A = beam/cone alpha where used
  *   28 nightPrelit unorm8x4  RGB night set, A = sway weight (wind)
@@ -28,6 +28,7 @@ export const OscellChannel = {
   AO_SKY_VIS: 1 << 2,
   EMISSIVE: 1 << 3,
   NIGHT_PRELIT: 1 << 0,
+  SUN_VIS: 1 << 4,
   SWAY: 1 << 1,
 } as const;
 

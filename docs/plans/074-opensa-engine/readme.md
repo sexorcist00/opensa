@@ -116,3 +116,9 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   open, old paks render unchanged). WGSL modulates the INDIRECT term only via `env.aoStrength` (default 0.6;
   lab `?ao=N` A/B, `--no-ao` skips the bake). LS rect: bake 20.6 s, 12.5 M rays / 1.16 M verts, pak size
   unchanged. Reconvert required to see it; sun-vis + emissive-mask bakes remain (07 continues).
+- 2026-07-12 (07 sun-vis v1) — baked static sun shadows landed (066/03 v1 scalar): elevation-weighted arc
+  visibility per HD vertex (5 unique elevations of the fixed-azimuth parametric arc, disc-jittered pairs →
+  baked penumbra, backface skip halves rays), stored in `normal.w` + `SUN_VIS` bit, gated per cell via
+  `cell.origin.w` (no in-data sentinel — the AO byte-0 lesson). WGSL: direct term × sunVis; `?sunvis=N` A/B,
+  `--no-sunvis`. Both bakes share ONE district BVH: convert 35.1 s total (AO 20.4 + sun 9.0). Under-bridge /
+  canyon direct sun now dies at noon; the moving-sun directional bake is the v2 follow-up.

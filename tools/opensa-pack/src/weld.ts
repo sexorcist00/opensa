@@ -24,7 +24,7 @@ export interface WeldBucket {
   pipelineClass: number;
   side: number;
   textureArrayRef: number;
-  vertices: number[]; // scratch rows: px py pz nx ny nz u v dr dg db da nr ng nb sway layer ao
+  vertices: number[]; // scratch rows: px py pz nx ny nz u v dr dg db da nr ng nb sway layer ao sunVis
 }
 
 /** The welded-but-not-yet-encoded cell — the bake stages (074/07) mutate scratch rows between the phases. */
@@ -32,6 +32,7 @@ export interface WeldedCell {
   buckets: WeldBucket[];
   hasAo: boolean;
   hasNight: boolean;
+  hasSunVis: boolean;
   hasSway: boolean;
   lod: boolean;
   origin: readonly [number, number, number];
@@ -47,8 +48,9 @@ export interface WeldStats {
 }
 
 /** Scratch-row layout (floats per welded vertex) + the slots the bakers touch. */
-export const WELD_ROW = 18;
+export const WELD_ROW = 19;
 export const WELD_AO = 17;
+export const WELD_SUNVIS = 18;
 
 /** Synthesized night ambient for geometry without an authored night set (slightly cool, ~SA night level). */
 const NIGHT_AMBIENT_R = 0.3;
@@ -110,6 +112,7 @@ export function weldCellParts(
     buckets: ordered,
     hasAo: false,
     hasNight: flags.hasNight,
+    hasSunVis: false,
     hasSway: flags.hasSway,
     lod,
     origin: originEngine,
@@ -177,7 +180,8 @@ function appendInstance(
       atomic.nightColor ? atomic.nightColor[source * 3 + 2] : dayB * NIGHT_AMBIENT_B,
       atomic.sway ? atomic.sway.weights[source] : 0,
       layer,
-      // aoSkyVis default = fully open; the bake stage (074/07) overwrites HD rows in place.
+      // aoSkyVis + sunVis defaults = fully open; the bake stages (074/07) overwrite HD rows in place.
+      1,
       1,
     );
     bucket.min[0] = Math.min(bucket.min[0], ex);
@@ -201,7 +205,7 @@ function appendInstance(
 function assemble(
   ordered: WeldBucket[],
   origin: readonly [number, number, number],
-  channels: { hasAo: boolean; hasNight: boolean; hasSway: boolean },
+  channels: { hasAo: boolean; hasNight: boolean; hasSunVis: boolean; hasSway: boolean },
   stats: WeldStats,
 ): Uint8Array {
   let vertexCount = 0;
@@ -231,7 +235,8 @@ function assemble(
       view.setInt8(at + 12, snorm(bucket.vertices[row + 3]));
       view.setInt8(at + 13, snorm(bucket.vertices[row + 4]));
       view.setInt8(at + 14, snorm(bucket.vertices[row + 5]));
-      view.setInt8(at + 15, 0);
+      // normal.w carries baked sunVis (074/07) — snorm, only 0..127 used; gated by the SUN_VIS channel bit.
+      view.setInt8(at + 15, snorm(Math.max(0, Math.min(1, bucket.vertices[row + WELD_SUNVIS]))));
       view.setFloat32(at + 16, bucket.vertices[row + 6], true);
       view.setFloat32(at + 20, bucket.vertices[row + 7], true);
       view.setUint8(at + 24, unorm(bucket.vertices[row + 8]));
@@ -289,7 +294,8 @@ function assemble(
     channelMask:
       (channels.hasNight ? OscellChannel.NIGHT_PRELIT : 0) |
       (channels.hasSway ? OscellChannel.SWAY : 0) |
-      (channels.hasAo ? OscellChannel.AO_SKY_VIS : 0),
+      (channels.hasAo ? OscellChannel.AO_SKY_VIS : 0) |
+      (channels.hasSunVis ? OscellChannel.SUN_VIS : 0),
     groups,
     index16,
     indexCount,
