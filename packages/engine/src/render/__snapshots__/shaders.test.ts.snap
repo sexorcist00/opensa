@@ -11,7 +11,8 @@ struct Frame {
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
-  //            time seconds (the wind clock), windStrength (074/06 row 10)].
+  //            time seconds (the wind clock), windStrength (074/06 row 10)],
+  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -19,6 +20,8 @@ struct Frame {
   skyHorizon: vec4f,
   fog: vec4f,
   params2: vec4f,
+  moonDir: vec4f,
+  moonColor: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -48,7 +51,8 @@ struct Frame {
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
-  //            time seconds (the wind clock), windStrength (074/06 row 10)].
+  //            time seconds (the wind clock), windStrength (074/06 row 10)],
+  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -56,6 +60,8 @@ struct Frame {
   skyHorizon: vec4f,
   fog: vec4f,
   params2: vec4f,
+  moonDir: vec4f,
+  moonColor: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -110,7 +116,8 @@ struct Frame {
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
-  //            time seconds (the wind clock), windStrength (074/06 row 10)].
+  //            time seconds (the wind clock), windStrength (074/06 row 10)],
+  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -118,6 +125,8 @@ struct Frame {
   skyHorizon: vec4f,
   fog: vec4f,
   params2: vec4f,
+  moonDir: vec4f,
+  moonColor: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -162,6 +171,7 @@ struct VsOut {
   @location(5) glow: vec3f,
   @location(6) ao: f32,
   @location(7) cone: f32,
+  @location(8) moonNdl: f32,
 };
 
 @vertex
@@ -191,7 +201,11 @@ fn vsWorld(in: VsIn) -> VsOut {
   // Baked sun visibility (074/07, 066/03 v1 scalar): normal.w = arc-averaged sun occlusion — the STATIC
   // shadow term (under bridges / canyons the direct sun dies), smooth by construction, no shadow map.
   let sunVis = mix(1.0, clamp(in.normal.w, 0.0, 1.0), cell.origin.w * frame.params2.y);
-  out.sunNdl = max(dot(normalize(in.normal.xyz), frame.sunDir.xyz), 0.0) * sunVis;
+  let worldNormal = normalize(in.normal.xyz);
+  out.sunNdl = max(dot(worldNormal, frame.sunDir.xyz), 0.0) * sunVis;
+  // Moon N·L, WRAPPED (074/06 row 6, the 073 model): moonlight is a huge soft source — a hard terminator
+  // reads as a second harsh sun. The baked sunVis gates it too: static occlusion blocks moonlight as well.
+  out.moonNdl = clamp((dot(worldNormal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0) * sunVis;
   // Baked AO/skyVis (074/07): low byte of channels; 0 means UNBAKED (old paks) → fully open, not black.
   let aoByte = in.layerChannels.y & 0xffu;
   let aoVis = select(f32(aoByte) / 255.0, 1.0, aoByte == 0u);
@@ -209,7 +223,9 @@ fn fsWorld(in: VsOut) -> @location(0) vec4f {
   // Hybrid lighting (074/06 row 3, the shipped 064 model): prelit is the INDIRECT term, the sun adds a real
   // direct term on the raw albedo. indirect/direct ride frame params — day arcs are a CPU concern.
   // Baked AO modulates ONLY the indirect term (074/07) — sun shadowing is the separate sunVis bake.
-  let lit = in.prelit * (frame.params.y * in.ao) + frame.sunColor.rgb * (in.sunNdl * frame.params.z);
+  let lit = in.prelit * (frame.params.y * in.ao) +
+    frame.sunColor.rgb * (in.sunNdl * frame.params.z) +
+    frame.moonColor.rgb * in.moonNdl;
   var color = texel.rgb * (lit + in.glow);
   // Unified fog (074/06 row 5, the 068 shape): RADIAL distance (view-Z pops at screen edges), exp² over
   // [start, cut], height attenuation (haze hugs the ground), hard horizon cut — and the fog colour is the

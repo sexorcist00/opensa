@@ -30,6 +30,7 @@ export function parametricDriver(engine: Engine): EnvironmentDriver {
       engine.environment.sunIndirect = 0.75 * (1 - dn) + 0.35 * dn;
       engine.environment.skyTop = mix3([0.12, 0.32, 0.65], [0.002, 0.004, 0.012], dn);
       engine.environment.skyHorizon = mix3([0.42, 0.55, 0.72], [0.01, 0.012, 0.03], dn);
+      applyMoon(engine, hour, dn);
     },
   };
 }
@@ -64,8 +65,18 @@ export function timecycDriver(
       // timecyc mood needs a scale (`?fogscale=N`); the game integration (street camera) drops it toward 1.
       engine.environment.fogStartDistance = Math.max(0, sample.fogStart * fogScale);
       engine.environment.fogCutDistance = Math.max(sample.farClip * fogScale, 1200);
+      applyMoon(engine, hour, dn);
     },
   };
+}
+
+/** Moon arc (074/06 row 6): rises ~20:00, sets ~5:00, opposite azimuth to the sun; colour is a dim cool
+ *  wash gated by BOTH darkness (dn) and moon elevation — black all day, so the shader term is a no-op. */
+function applyMoon(engine: Engine, hour: number, dn: number): void {
+  const elevation = Math.sin((((hour - 20 + 24) % 24) / 9) * Math.PI);
+  engine.environment.moonDir = [-0.3, Math.max(0.05, elevation), -0.25];
+  const gate = dn * Math.min(1, Math.max(0, elevation * 3));
+  engine.environment.moonColor = [0.045 * gate, 0.06 * gate, 0.105 * gate];
 }
 
 function mix3(a: readonly number[], b: readonly number[], t: number): [number, number, number] {

@@ -85,7 +85,7 @@ BC7 for everything · KTX2 container compatibility.
       by tool and runtime; ZERO deps) — after chain approval.
 - [ ] Golden-file round-trip tests (write → read → deep-equal) + hexdump fixtures for one tiny synthetic cell.
 - [ ] Version/`channelMask` negative tests (unknown major rejected; absent channels get the zero-buffer path).
-- [ ] Measure & record: bytes/cell HD и LOD (vs today's DFF+TXD slice), groups/cell histogram for the M0
+- [ ] Measure & record: bytes/cell HD and LOD (vs today's DFF+TXD slice), groups/cell histogram for the M0
       district (target: HD ≤ 8, LOD ≤ 4 after array grouping).
 - [ ] Written note per deferred v1 item with the bench number that would justify it.
 

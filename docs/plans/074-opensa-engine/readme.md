@@ -144,3 +144,9 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   behind the veil. LS rect exercises the blend pair (242 groups leave the cutout placeholder); beam groups =
   0 there — field verification waits for an SF stadium/airport rect. v1 limitation noted: cross-cell blended
   order arbitrary (class-sorted within a bundle only). No reconvert needed (classes were in the pak).
+- 2026-07-12 (06 row 6 moon + doc sweep) — plan docs swept clean of Cyrillic (quoted field verdicts now
+  paraphrased in English; user request). Moon landed: per-vertex WRAPPED N·L `clamp((N·moonDir+0.6)/1.6)`
+  (the 073 formula), gated by the baked sunVis (static occlusion blocks moonlight too), added into the lit
+  sum next to the sun term. Frame UBO 256→288 B (moonDir/moonColor vec4s). Lab drivers grew a moon arc
+  (rises ~20:00, sets ~5:00, azimuth opposite the sun) with a dim cool colour gated by dn × elevation —
+  black all day, so the day path is untouched. No reconvert needed.

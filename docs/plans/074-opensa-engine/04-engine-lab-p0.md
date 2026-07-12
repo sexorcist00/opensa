@@ -71,7 +71,7 @@ Real-district gates: submit <1 ms ✅ · **GPU 1.84 ms < 5 ms ✅** · load inst
 prod path for comparable area (~20×). Draws/entry ≈ 20 — above the ≤8 aspiration (texture-array size buckets
 fragment the groups; consolidation is an M1 knob, not a gate). Look: geometry/textures/palms/roads correct;
 dark = prelit-only by design (sun/tints = plan 06). **Alpha verdict (user, zoomed):
-«альфа исправлена» — no black halo on foliage/fences. The shelved
+"alpha is fixed" (user) — no black halo on foliage/fences. The shelved
 [alpha-edge open issue](../../open-issues/alpha-edge.md) is FIXED on the native path by construction
 (classification + dilation + premultiply + offline mips + A2C).** PENDING: Safari row (informational).
 

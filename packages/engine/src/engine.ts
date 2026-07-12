@@ -60,6 +60,10 @@ export interface Environment {
   fogStartDistance: number;
   /** Game hour 0..24 — gates the timed objectTable draws (074/06 row 9). */
   hour: number;
+  /** Moonlight colour, linear (BLACK by day — the host arc gates it). */
+  moonColor: readonly [number, number, number];
+  /** Unit direction TOWARDS the moon (engine space). */
+  moonDir: readonly [number, number, number];
   /** LINEAR sky gradient horizon colour (sky pass + world fog share it). */
   skyHorizon: readonly [number, number, number];
   /** LINEAR sky gradient zenith colour. */
@@ -91,6 +95,8 @@ export class Engine {
     fogHeightMin: 0.35,
     fogStartDistance: 250,
     hour: 12,
+    moonColor: [0, 0, 0],
+    moonDir: [-0.3, 0.8, -0.25],
     skyHorizon: [0.42, 0.55, 0.72],
     skyTop: [0.12, 0.32, 0.65],
     sunColor: [1, 0.96, 0.88],
@@ -149,7 +155,7 @@ export class Engine {
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);
-    const frameData = new Float32Array(64);
+    const frameData = new Float32Array(72);
     frameData.set(this.viewProj, 0);
     frameData.set(this.invViewProj, 16);
     frameData.set([...camera.eye, 1], 32);
@@ -165,6 +171,9 @@ export class Engine {
       [env.aoStrength, env.sunVisStrength, (performance.now() - this.startedMs) / 1000, env.windStrength],
       60,
     );
+    const moonLen = Math.hypot(env.moonDir[0], env.moonDir[1], env.moonDir[2]) || 1;
+    frameData.set([env.moonDir[0] / moonLen, env.moonDir[1] / moonLen, env.moonDir[2] / moonLen, 0], 64);
+    frameData.set([...env.moonColor, 1], 68);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
 
     frustumFromViewProj(this.frustumPlanes, this.viewProj);
@@ -238,7 +247,7 @@ export class Engine {
     this.pipelines = compileAll(this.device, this.engineDevice.colorFormat, DEPTH_FORMAT);
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
-      size: 256, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2 (8 × 16) — FULL
+      size: 288, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2/moon×2 (10 × 16)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this.frameBindGroup = this.device.createBindGroup({
