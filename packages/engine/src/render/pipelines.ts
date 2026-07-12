@@ -3,8 +3,9 @@
  * `compileAll()` behind the load veil. A steady-state miss throws — cold-start compile storms are impossible
  * by design, not unlikely (the 073 lesson as an assertion).
  *
- * M0 set: world opaque/cutout × front/double = 4 pipelines. The cutout pair enables alpha-to-coverage
- * (MSAA 4×) — the third leg of the alpha-edge fix.
+ * World set: opaque/cutout/blend/beam × front/double = 8 pipelines + sky. The cutout pair enables
+ * alpha-to-coverage (MSAA 4×) — the third leg of the alpha-edge fix. Blend/beam pipelines blend
+ * PREMULTIPLIED output (one, one-minus-src-alpha) with depth READ-ONLY (074/06 rows 9/11).
  */
 import { OSCELL_VERTEX_STRIDE } from '@opensa/engine-formats';
 
@@ -14,6 +15,10 @@ export const MSAA_SAMPLES = 4;
 
 export type PipelineId =
   | 'sky'
+  | 'world-beam-double'
+  | 'world-beam-front'
+  | 'world-blend-double'
+  | 'world-blend-front'
   | 'world-cutout-double'
   | 'world-cutout-front'
   | 'world-opaque-double'
@@ -69,12 +74,21 @@ export function compileAll(
   ];
 
   const pipelines = new Map<PipelineId, GPURenderPipeline>();
-  const variants: { cull: GPUCullMode; cutout: boolean; id: PipelineId }[] = [
-    { cull: 'back', cutout: false, id: 'world-opaque-front' },
-    { cull: 'none', cutout: false, id: 'world-opaque-double' },
-    { cull: 'back', cutout: true, id: 'world-cutout-front' },
-    { cull: 'none', cutout: true, id: 'world-cutout-double' },
+  const variants: { blend: boolean; cull: GPUCullMode; cutout: boolean; entry: string; id: PipelineId }[] = [
+    { blend: false, cull: 'back', cutout: false, entry: 'fsWorld', id: 'world-opaque-front' },
+    { blend: false, cull: 'none', cutout: false, entry: 'fsWorld', id: 'world-opaque-double' },
+    { blend: false, cull: 'back', cutout: true, entry: 'fsWorld', id: 'world-cutout-front' },
+    { blend: false, cull: 'none', cutout: true, entry: 'fsWorld', id: 'world-cutout-double' },
+    { blend: true, cull: 'back', cutout: false, entry: 'fsWorld', id: 'world-blend-front' },
+    { blend: true, cull: 'none', cutout: false, entry: 'fsWorld', id: 'world-blend-double' },
+    { blend: true, cull: 'back', cutout: false, entry: 'fsBeam', id: 'world-beam-front' },
+    { blend: true, cull: 'none', cutout: false, entry: 'fsBeam', id: 'world-beam-double' },
   ];
+  // Premultiplied-alpha compositing (textures ship premultiplied; fsBeam premultiplies the cone).
+  const premultBlend: GPUBlendState = {
+    alpha: { dstFactor: 'one-minus-src-alpha', operation: 'add', srcFactor: 'one' },
+    color: { dstFactor: 'one-minus-src-alpha', operation: 'add', srcFactor: 'one' },
+  };
   const skyModule = device.createShaderModule({ code: resolveShader('sky'), label: 'sky' });
   const skyLayout = device.createPipelineLayout({ bindGroupLayouts: [frameLayout], label: 'sky' });
   pipelines.set(
@@ -93,8 +107,13 @@ export function compileAll(
     pipelines.set(
       variant.id,
       device.createRenderPipeline({
-        depthStencil: { depthCompare: 'less', depthWriteEnabled: true, format: depthFormat },
-        fragment: { entryPoint: 'fsWorld', module, targets: [{ format: colorFormat }] },
+        // Blended classes read depth but never write it — they can't occlude, only composite.
+        depthStencil: { depthCompare: 'less', depthWriteEnabled: !variant.blend, format: depthFormat },
+        fragment: {
+          entryPoint: variant.entry,
+          module,
+          targets: [{ format: colorFormat, ...(variant.blend ? { blend: premultBlend } : {}) }],
+        },
         label: variant.id,
         layout,
         multisample: { alphaToCoverageEnabled: variant.cutout, count: MSAA_SAMPLES },
@@ -119,10 +138,9 @@ export function compileAll(
   };
 }
 
-/** `.oscell` group → pipeline id (pipelineClass 0 opaque | 1 cutout; side 0 front | 1 double). M0 renders
- *  blend/beam classes as cutout placeholders — plan 06 gives them real pipelines. */
+/** `.oscell` group → pipeline id (pipelineClass 0 opaque | 1 cutout | 2 blend | 3 beam; side 0 front | 1 double). */
 export function pipelineIdFor(pipelineClass: number, side: number): PipelineId {
-  const cutout = pipelineClass !== 0;
+  const kind = (['opaque', 'cutout', 'blend', 'beam'] as const)[pipelineClass] ?? 'cutout';
 
-  return `world-${cutout ? 'cutout' : 'opaque'}-${side === 1 ? 'double' : 'front'}`;
+  return `world-${kind}-${side === 1 ? 'double' : 'front'}`;
 }

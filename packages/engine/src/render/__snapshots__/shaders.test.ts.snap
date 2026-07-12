@@ -161,6 +161,7 @@ struct VsOut {
   @location(4) world: vec3f,
   @location(5) glow: vec3f,
   @location(6) ao: f32,
+  @location(7) cone: f32,
 };
 
 @vertex
@@ -195,6 +196,8 @@ fn vsWorld(in: VsIn) -> VsOut {
   let aoByte = in.layerChannels.y & 0xffu;
   let aoVis = select(f32(aoByte) / 255.0, 1.0, aoByte == 0u);
   out.ao = mix(1.0, aoVis, frame.params2.x);
+  // Beam cone alpha (074/06 row 11): dayPrelit.a — 1 everywhere except floodlight-cone geometry.
+  out.cone = in.dayPrelit.a;
   return out;
 }
 
@@ -220,8 +223,26 @@ fn fsWorld(in: VsOut) -> @location(0) vec4f {
   let heightAtten = mix(frame.fog.w, 1.0, exp(-max(in.world.y, 0.0) * frame.fog.z));
   fogFactor = fogFactor * heightAtten;
   fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
-  color = mix(color, skyColorFor(viewDir), fogFactor);
+  // Sky term scaled by texel.a: colour is PREMULTIPLIED, so the blend pipelines (074/06 rows 9/11) stay
+  // premult-correct in fog; opaque/cutout (a ≈ 1) are unchanged.
+  color = mix(color, skyColorFor(viewDir) * texel.a, fogFactor);
   return vec4f(color, texel.a);
+}
+
+@fragment
+fn fsBeam(in: VsOut) -> @location(0) vec4f {
+  // Floodlight cones (074/06 row 11, plan 032): 'white'-textured geometry whose soft cone lives in the
+  // per-vertex prelit ALPHA. Output is PREMULTIPLIED for the (one, one-minus-src-alpha) blend pipeline.
+  // No sun/glow terms — a beam is self-lit, tinted only by the dn-mixed prelit colour.
+  let texel = textureSample(worldTexture, worldSampler, in.uv, in.layer);
+  let alpha = texel.a * in.cone;
+  let color = texel.rgb * in.prelit * in.cone;
+  // Fog FADES a beam out (scales the premultiplied pair) — mixing toward the sky would tint thin air.
+  let dist = length(in.world - frame.camera.xyz);
+  let fogD = max(dist - frame.fog.y, 0.0);
+  let fogK = 2.0 / max(frame.fog.x - frame.fog.y, 1.0);
+  let fade = exp(-(fogK * fogD) * (fogK * fogD)) * (1.0 - smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
+  return vec4f(color * fade, alpha * fade);
 }
 "
 `;

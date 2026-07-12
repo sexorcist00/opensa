@@ -40,7 +40,8 @@ describe('shader store', () => {
       expect(pipelineIdFor(0, 0)).toBe('world-opaque-front');
       expect(pipelineIdFor(0, 1)).toBe('world-opaque-double');
       expect(pipelineIdFor(1, 0)).toBe('world-cutout-front');
-      expect(pipelineIdFor(2, 1)).toBe('world-cutout-double'); // blend renders as cutout until plan 06
+      expect(pipelineIdFor(2, 1)).toBe('world-blend-double');
+      expect(pipelineIdFor(3, 0)).toBe('world-beam-front');
     });
   });
 });

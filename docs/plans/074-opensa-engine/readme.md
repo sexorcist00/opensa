@@ -137,3 +137,10 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   `executeBundles`, gated by the new `env.hour` (midnight-wrapping window; lab drivers feed the hour). Timed
   geometry is excluded from the bake occluder set (night windows are coplanar overlays; timed props are
   sometimes-absent). LS rect: 10 timed objects (night windows + scrapyard-style props return). Reconvert done.
+- 2026-07-12 (06 row 11 beams + blend) — the last two pipelineClasses got REAL pipelines: `world-blend-*`
+  (fsWorld, premultiplied (one, 1−src-α), depth read-only) and `world-beam-*` (new fsBeam: dn-mixed prelit
+  tint × cone alpha from dayPrelit.a, no sun/glow, fog FADES the premult pair instead of tinting toward sky).
+  fsWorld's fog term made premult-correct (sky × texel.a — opaque unchanged). Registry 5 → 9 pipelines, all
+  behind the veil. LS rect exercises the blend pair (242 groups leave the cutout placeholder); beam groups =
+  0 there — field verification waits for an SF stadium/airport rect. v1 limitation noted: cross-cell blended
+  order arbitrary (class-sorted within a bundle only). No reconvert needed (classes were in the pak).

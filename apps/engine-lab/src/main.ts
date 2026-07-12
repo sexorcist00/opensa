@@ -62,7 +62,8 @@ async function main(): Promise<void> {
   let title: string;
   let streaming: null | StreamingDriver = null;
   if (useStream) {
-    const setup = await setupStreaming(engine);
+    // `?src=pak-sf` streams an alternative converted district (default /pak) — e.g. the SF beams rect.
+    const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak'}`);
     streaming = setup.driver;
     focus = setup.center;
     orbitRadius = setup.radius * 1.4;
