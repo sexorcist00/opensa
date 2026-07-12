@@ -20,6 +20,7 @@ export function parametricDriver(engine: Engine): EnvironmentDriver {
   return {
     apply(hour: number): void {
       const { dn, elevation } = sunArc(hour);
+      engine.environment.hour = hour;
       engine.environment.dn = dn;
       engine.environment.sunDir = [0.35, Math.max(0.05, elevation), 0.25];
       const warm = Math.min(1, Math.max(0, 1 - elevation));
@@ -48,6 +49,7 @@ export function timecycDriver(
     apply(hour: number): void {
       const sample = sampleTimecycBlend(timecyc, weather, weather, hour, 0);
       const { dn, elevation } = sunArc(hour);
+      engine.environment.hour = hour;
       engine.environment.dn = dn;
       engine.environment.sunDir = [0.35, Math.max(0.05, elevation), 0.25];
       const dayGate = Math.min(1, Math.max(0, elevation * 4)); // sun glow/colour die below the horizon

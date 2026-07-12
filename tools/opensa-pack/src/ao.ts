@@ -86,7 +86,8 @@ function collectOccluders(cells: WeldedCell[]): Float32Array {
       continue;
     }
     for (const bucket of cell.buckets) {
-      if (bucket.pipelineClass <= 1) {
+      // Timed buckets are sometimes-absent AND often coplanar overlays (night windows) — never occluders.
+      if (bucket.pipelineClass <= 1 && !bucket.timed) {
         indexCount += bucket.indices.length;
       }
     }
@@ -98,7 +99,7 @@ function collectOccluders(cells: WeldedCell[]): Float32Array {
       continue;
     }
     for (const bucket of cell.buckets) {
-      if (bucket.pipelineClass > 1) {
+      if (bucket.pipelineClass > 1 || bucket.timed) {
         continue;
       }
       for (const index of bucket.indices) {

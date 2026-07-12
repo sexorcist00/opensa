@@ -2,7 +2,8 @@
  * Cell welder (plan 074/03): one grid cell (HD or LOD level) → one `.oscell`. Every mergeable model instance
  * is transform-BAKED into cell-local ENGINE coordinates (GTA Z-up → engine Y-up: e = (x, z, −y)) and welded
  * into draw groups keyed by (texture array, pipeline class, side) — the offline batching that IS the thesis.
- * Timed / IDE-anim defs are skipped in M0 (counted in the stats; the objectTable path lands with M2).
+ * Timed defs weld into trailing `timed` buckets → objectTable entries (074/06 row 9, hour-gated at runtime);
+ * IDE-anim defs stay skipped (counted in the stats).
  */
 import type { Oscell, OscellGroup } from '@opensa/engine-formats';
 import type { AssetFileSystem, IplInstance, MapDefinitions } from '@opensa/renderware';
@@ -25,6 +26,8 @@ export interface WeldBucket {
   pipelineClass: number;
   side: number;
   textureArrayRef: number;
+  /** Timed-object window (074/06 row 9) — this bucket becomes an objectTable draw, not part of the bundle. */
+  timed: null | { off: number; on: number };
   vertices: number[]; // scratch rows: px py pz nx ny nz u v dr dg db da nr ng nb sway layer ao sunVis
 }
 
@@ -45,6 +48,8 @@ export interface WeldStats {
   indices: number;
   skippedAnimated: number;
   skippedTimed: number;
+  /** ObjectTable entries produced (timed windows / scrapyard piles …). */
+  timedObjects: number;
   vertices: number;
 }
 
@@ -97,7 +102,7 @@ export function weldCellParts(
   originEngine: readonly [number, number, number],
 ): null | WeldedCell {
   const buckets = new Map<string, WeldBucket>();
-  const stats: WeldStats = { groups: 0, indices: 0, skippedAnimated: 0, skippedTimed: 0, vertices: 0 };
+  const stats: WeldStats = { groups: 0, indices: 0, skippedAnimated: 0, skippedTimed: 0, timedObjects: 0, vertices: 0 };
   const flags = { hasNight: false, hasSway: false };
 
   const groups = [...cellGroups(defs, cell, lod).values()].sort((a, b) => (a.def.modelName < b.def.modelName ? -1 : 1));
@@ -107,13 +112,12 @@ export function weldCellParts(
       stats.skippedAnimated += group.instances.length;
       continue;
     }
-    if (def.time !== undefined) {
-      stats.skippedTimed += group.instances.length;
-      continue;
-    }
+    // Timed defs (074/06 row 9) weld like everything else, but into `timed` buckets → objectTable draws.
     weldGroup(fs, group.def, group.instances, buckets, planner, originEngine, flags);
   }
 
+  // Bundle buckets first, then timed buckets grouped by their (on, off) window — the objectTable references
+  // a CONTIGUOUS group run per window, so the sort key keeps equal windows adjacent.
   const ordered = [...buckets.values()].sort((a, b) => (a.key < b.key ? -1 : 1));
   if (ordered.length === 0) {
     return null;
@@ -297,9 +301,32 @@ function assemble(
     indexBase += bucket.indices.length;
   }
 
+  // ObjectTable (074/06 row 9): one timed object per contiguous (on, off) run of trailing timed groups.
+  const objects: Oscell['objects'] = [];
+  const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0] as const;
+  for (let index = 0; index < ordered.length; index += 1) {
+    const timed = ordered[index].timed;
+    if (!timed) {
+      continue;
+    }
+    const last = objects[objects.length - 1];
+    if (last && last.groupStart + last.groupCount === index && samePreviousWindow(ordered, index)) {
+      last.groupCount += 1;
+    } else {
+      objects.push({
+        groupCount: 1,
+        groupStart: index,
+        kind: 0,
+        params: timed.on | (timed.off << 8),
+        transform: IDENTITY,
+      });
+    }
+  }
+
   stats.groups = groups.length;
   stats.vertices = vertexCount;
   stats.indices = indexCount;
+  stats.timedObjects = objects.length;
   const center: [number, number, number] = [
     (cellMin[0] + cellMax[0]) / 2,
     (cellMin[1] + cellMax[1]) / 2,
@@ -322,7 +349,7 @@ function assemble(
     indexCount,
     indexData: new Uint8Array(indexArray.buffer),
     lights: [],
-    objects: [],
+    objects,
     origin,
     vertexCount,
     vertexData,
@@ -336,8 +363,11 @@ function bucketFor(
   arrayRef: number,
   pipelineClass: number,
   side: number,
+  timed: null | { off: number; on: number },
 ): WeldBucket {
-  const key = `${String(arrayRef).padStart(4, '0')}|${pipelineClass}|${side}`;
+  // '~' sorts after digits: timed buckets land AFTER the bundle ones, contiguous per (on, off) window.
+  const window = timed ? `~t${String(timed.on).padStart(2, '0')}-${String(timed.off).padStart(2, '0')}|` : '';
+  const key = `${window}${String(arrayRef).padStart(4, '0')}|${pipelineClass}|${side}`;
   let bucket = buckets.get(key);
   if (!bucket) {
     bucket = {
@@ -348,6 +378,7 @@ function bucketFor(
       pipelineClass,
       side,
       textureArrayRef: arrayRef,
+      timed,
       vertices: [],
     };
     buckets.set(key, bucket);
@@ -377,6 +408,14 @@ function quatToMat3(x: number, y: number, z: number, w: number): number[] {
     2 * (y * z + w * x),
     1 - 2 * (x * x + y * y),
   ];
+}
+
+/** True when the bucket at `index` shares the previous bucket's timed window (merge into one object). */
+function samePreviousWindow(ordered: WeldBucket[], index: number): boolean {
+  const current = ordered[index].timed;
+  const previous = ordered[index - 1]?.timed;
+
+  return current !== null && previous != null && previous.on === current.on && previous.off === current.off;
 }
 
 function snorm(value: number): number {
@@ -418,6 +457,7 @@ function weldGroup(
   const atomics = prepareClumpAtomics(clump);
   const doubleSided = (def.flags & IdeFlag.DISABLE_BACKFACE_CULLING) !== 0 ? 1 : 0;
   const swayKind = swayKindFor(def);
+  const timed = def.time !== undefined ? { off: def.time.off, on: def.time.on } : null;
   for (const atomic of atomics) {
     const geometry = clump.geometries[atomic.geometryIndex];
     if (!geometry) {
@@ -431,7 +471,7 @@ function weldGroup(
       };
       const beam = isVertexAlphaBeam(material, geometry);
       const resolved = planner.resolve(def.txdName, material.texture?.name ?? null, material.color);
-      const bucket = bucketFor(buckets, resolved.arrayRef, classOf(beam, resolved.alphaClass), doubleSided);
+      const bucket = bucketFor(buckets, resolved.arrayRef, classOf(beam, resolved.alphaClass), doubleSided, timed);
       for (const instance of instances) {
         appendInstance(bucket, atomic, part.index, instance, resolved.layer, originEngine, swayKind);
         flags.hasNight ||= atomic.nightColor !== null;

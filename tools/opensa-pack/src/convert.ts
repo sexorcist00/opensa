@@ -34,6 +34,8 @@ export interface ConvertReport {
   skippedTimed: number;
   sunVis: (BakeSunVisReport & { ms: number }) | null;
   textures: TexturePlanner['report'] & { arrays: number };
+  /** ObjectTable entries across cells (074/06 row 9: timed windows / props). */
+  timedObjects: number;
 }
 
 export function convertDistrict(
@@ -54,6 +56,7 @@ export function convertDistrict(
     skippedTimed: 0,
     sunVis: null,
     textures: { arrays: 0, colors: 0, dedup: 0, opaquePass: 0, processed: 0 },
+    timedObjects: 0,
   };
 
   // Phase 1 — weld every cell into scratch buckets (kept in memory: the bake needs the whole district).
@@ -107,6 +110,7 @@ function accumulate(report: ConvertReport, key: string, bytes: number, stats: We
   });
   report.skippedAnimated += stats.skippedAnimated;
   report.skippedTimed += stats.skippedTimed;
+  report.timedObjects += stats.timedObjects;
 }
 
 function weldRect(

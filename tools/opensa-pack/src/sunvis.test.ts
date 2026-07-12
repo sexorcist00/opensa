@@ -13,6 +13,7 @@ function bucket(vertices: number[], indices: number[], pipelineClass = 0): WeldB
     pipelineClass,
     side: 0,
     textureArrayRef: 0,
+    timed: null,
     vertices,
   };
 }
@@ -26,7 +27,7 @@ function cell(buckets: WeldBucket[], lod = false): WeldedCell {
     hasSway: false,
     lod,
     origin: [0, 0, 0],
-    stats: { groups: 0, indices: 0, skippedAnimated: 0, skippedTimed: 0, vertices: 0 },
+    stats: { groups: 0, indices: 0, skippedAnimated: 0, skippedTimed: 0, timedObjects: 0, vertices: 0 },
   };
 }
 

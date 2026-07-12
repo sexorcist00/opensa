@@ -17,7 +17,7 @@ import {
 } from './core/math';
 import { Resources } from './core/resources';
 import { GpuTimers } from './debug/gpu-timers';
-import { compileAll, MSAA_SAMPLES, type PipelineSet } from './render/pipelines';
+import { compileAll, MSAA_SAMPLES, pipelineIdFor, type PipelineSet } from './render/pipelines';
 import { CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
 
@@ -58,6 +58,8 @@ export interface Environment {
   fogHeightMin: number;
   /** Fog ramp start distance. */
   fogStartDistance: number;
+  /** Game hour 0..24 — gates the timed objectTable draws (074/06 row 9). */
+  hour: number;
   /** LINEAR sky gradient horizon colour (sky pass + world fog share it). */
   skyHorizon: readonly [number, number, number];
   /** LINEAR sky gradient zenith colour. */
@@ -88,6 +90,7 @@ export class Engine {
     fogHeightK: 1 / 180,
     fogHeightMin: 0.35,
     fogStartDistance: 250,
+    hour: 12,
     skyHorizon: [0.42, 0.55, 0.72],
     skyTop: [0.12, 0.32, 0.65],
     sunColor: [1, 0.96, 0.88],
@@ -206,6 +209,8 @@ export class Engine {
     if (bundles.length > 0) {
       pass.executeBundles(bundles);
     }
+    // ObjectTable draws (074/06 row 9): hour-gated timed objects of visible cells, outside the bundles.
+    draws += this.drawObjects(pass);
     // Sky AFTER the world: depth-test less-equal at far depth touches only background pixels (074/06 row 4).
     pass.setPipeline(this.pipelines.get('sky'));
     pass.setBindGroup(0, this.frameBindGroup);
@@ -259,6 +264,38 @@ export class Engine {
     return this.resources.ledger();
   }
 
+  /** ObjectTable draws for visible cells (074/06 row 9). Timed: render when `hour` is inside [on, off). */
+  private drawObjects(pass: GPURenderPassEncoder): number {
+    const hour = ((this.environment.hour % 24) + 24) % 24;
+    let draws = 0;
+    for (const cell of this.cells.all()) {
+      if (!cell.visible || cell.objects.length === 0) {
+        continue;
+      }
+      let bound = false;
+      for (const object of cell.objects) {
+        if (object.kind !== 0 || !timedActive(object.params, hour)) {
+          continue;
+        }
+        if (!bound) {
+          pass.setBindGroup(0, this.frameBindGroup);
+          pass.setBindGroup(1, cell.cellBindGroup);
+          pass.setVertexBuffer(0, cell.vertexBuffer);
+          pass.setIndexBuffer(cell.indexBuffer, cell.index16 ? 'uint16' : 'uint32');
+          bound = true;
+        }
+        for (const group of object.groups) {
+          pass.setPipeline(this.pipelines.get(pipelineIdFor(group.pipelineClass, group.side)));
+          pass.setBindGroup(2, this.textures.get(group.textureArrayRef).bindGroup);
+          pass.drawIndexed(group.indexCount, 1, group.indexOffset, 0, 0);
+          draws += 1;
+        }
+      }
+    }
+
+    return draws;
+  }
+
   private ensureTargets(width: number, height: number): void {
     if (this.targetSize.width === width && this.targetSize.height === height) {
       return;
@@ -290,4 +327,12 @@ export class Engine {
     this.msaaView = msaa.createView();
     this.depthView = depth.createView();
   }
+}
+
+/** SA timed-object gate: params = on | off << 8; the window wraps midnight when on > off. */
+function timedActive(params: number, hour: number): boolean {
+  const on = params & 0xff;
+  const off = (params >> 8) & 0xff;
+
+  return on < off ? hour >= on && hour < off : hour >= on || hour < off;
 }

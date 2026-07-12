@@ -72,16 +72,35 @@ describe('weldCell', () => {
       expect(weldCell(fs, fixtureDefs(), { cx: 0, cy: 0, hd: [], lod: [] }, false, planner, [0, 0, 0])).toBeNull();
     });
 
-    it('skips timed defs and counts them', () => {
+    it('skips animated defs and counts them', () => {
       const fs = fixtureFs();
       const planner = new TexturePlanner(fs, new Map());
-      const welded = weldCell(fs, fixtureDefs({ time: { off: 6, on: 20 } }), fixtureCell(2), false, planner, [0, 0, 0]);
+      const welded = weldCell(fs, fixtureDefs({ anim: 'trafficlight' }), fixtureCell(2), false, planner, [0, 0, 0]);
 
       expect(welded).toBeNull(); // nothing mergeable remained
     });
   });
 
   describe('positive cases', () => {
+    it('welds timed defs into trailing objectTable entries (074/06 row 9)', () => {
+      const fs = fixtureFs();
+      const planner = new TexturePlanner(fs, new Map());
+      const welded = weldCell(fs, fixtureDefs({ time: { off: 6, on: 20 } }), fixtureCell(2), false, planner, [0, 0, 0]);
+
+      expect(welded).not.toBeNull();
+      const cell = decodeOscell(welded!.bytes);
+      expect(cell.objects.length).toBeGreaterThan(0);
+      for (const object of cell.objects) {
+        expect(object.kind).toBe(0);
+        expect(object.params & 0xff).toBe(20); // on hour
+        expect((object.params >> 8) & 0xff).toBe(6); // off hour
+        expect(object.groupStart + object.groupCount).toBeLessThanOrEqual(cell.groups.length);
+      }
+      // Every group is owned by an object here (the whole cell is timed).
+      const owned = cell.objects.reduce((sum, object) => sum + object.groupCount, 0);
+      expect(owned).toBe(cell.groups.length);
+      expect(welded!.stats.timedObjects).toBe(cell.objects.length);
+    });
     it('bakes multiple instances into merged groups (few draws, correct totals)', () => {
       const fs = fixtureFs();
       const planner = new TexturePlanner(fs, new Map());

@@ -3,7 +3,7 @@
  * replayed while the cell is frustum-visible. Record happens ONCE at load (we own record time — no version
  * dances); unload destroys everything and the residency ledger must return to its prior line.
  */
-import { decodeOscell, OscellChannel, type OscellGroup } from '@opensa/engine-formats';
+import { decodeOscell, OscellChannel, type OscellGroup, type OscellObject } from '@opensa/engine-formats';
 
 import type { Resources } from '../core/resources';
 import type { PipelineSet } from '../render/pipelines';
@@ -15,9 +15,13 @@ export interface CellHandle {
   /** World-space bounding sphere [x, y, z, r] (cell bounds shifted by origin). */
   bounds: readonly [number, number, number, number];
   bundle: GPURenderBundle;
+  cellBindGroup: GPUBindGroup;
   draws: number;
+  index16: boolean;
   indexBuffer: GPUBuffer;
   key: string;
+  /** ObjectTable draws (074/06 row 9) — outside the bundle; the frame gates them (timed by hour). */
+  objects: { groups: OscellGroup[]; kind: number; params: number }[];
   uniform: GPUBuffer;
   vertexBuffer: GPUBuffer;
   visible: boolean;
@@ -98,7 +102,15 @@ export class CellStore {
       layout: this.pipelines.cellLayout,
     });
 
-    const bundle = this.record(key, cell.groups, cell.index16, vertexBuffer, indexBuffer, cellBindGroup);
+    // ObjectTable groups render OUTSIDE the bundle (hour-gated); the bundle records the rest.
+    const objectOwned = new Set<number>();
+    for (const object of cell.objects) {
+      for (let own = object.groupStart; own < object.groupStart + object.groupCount; own += 1) {
+        objectOwned.add(own);
+      }
+    }
+    const bundleGroups = cell.groups.filter((_, index) => !objectOwned.has(index));
+    const bundle = this.record(key, bundleGroups, cell.index16, vertexBuffer, indexBuffer, cellBindGroup);
     const handle: CellHandle = {
       bounds: [
         cell.bounds[0] + cell.origin[0],
@@ -107,9 +119,16 @@ export class CellStore {
         cell.bounds[3],
       ],
       bundle,
-      draws: cell.groups.length,
+      cellBindGroup,
+      draws: bundleGroups.length,
+      index16: cell.index16,
       indexBuffer,
       key,
+      objects: cell.objects.map((object: OscellObject) => ({
+        groups: cell.groups.slice(object.groupStart, object.groupStart + object.groupCount),
+        kind: object.kind,
+        params: object.params,
+      })),
       uniform,
       vertexBuffer,
       visible: true,

@@ -130,3 +130,10 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   strength in params2.zw, `?wind=N`. The overlay also swaps in the HD vegetation geometry: district verts
   1.16 M → 3.13 M, pak 99.5 → 245.7 MB, convert 92 s (bakes 81 s) — the price of the user's real build.
   894 k sway verts. v1 limitation: one sway speed for all kinds (no per-vertex speed byte).
+- 2026-07-12 (06 row 9 objectTable) — timed objects land end-to-end: the welder no longer skips `time` defs —
+  they weld into TRAILING `timed` buckets (sort key keeps equal (on,off) windows contiguous) and become
+  objectTable entries (kind 0, params = on|off<<8, identity transform — instances are transform-baked like
+  everything). The engine excludes object-owned groups from the recorded bundle and draws them after
+  `executeBundles`, gated by the new `env.hour` (midnight-wrapping window; lab drivers feed the hour). Timed
+  geometry is excluded from the bake occluder set (night windows are coplanar overlays; timed props are
+  sometimes-absent). LS rect: 10 timed objects (night windows + scrapyard-style props return). Reconvert done.
