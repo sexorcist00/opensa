@@ -1,0 +1,77 @@
+# 074·12 — Stochastic texturing (de-tiling, the skygfx way, offline-selected)
+
+[← chain](readme.md) · relates: [02 formats](02-native-formats.md) · [03 converter](03-converter-tool.md) ·
+[06 effects](06-world-effects-parity.md)
+
+Revives the parked [improvements/stochastic-texturing](../../improvements/stochastic-texturing.md) research:
+large tiled surfaces (ground, grass, sand, roads) show macro-repetition; stochastic tiling-and-blending hides
+it. The old investigation parked on two blockers — **both die in the own-engine architecture**. Reference
+implementation researched 2026-07-12: the JuniorDjjr skygfx fork
+(<https://github.com/JuniorDjjr/skygfx>), which ships this exact feature for SA on PC.
+
+## What skygfx actually does (research findings)
+
+- **Shader** (`shaders/include/StochasticSamplerPS.hlsl`): the classic Deliot–Heitz _tiling and blending_
+  WITHOUT histogram preservation — UVs skewed into a triangular grid (`[[1,0],[-0.577,1.155]] × UV × 3.464`),
+  each of the 3 surrounding grid vertices hashes (`hash2D2D`: sin/dot magic-number hash) to a random UV
+  offset, 3 texture taps blended by the barycentric weights. Explicit `ddx/ddy` gradients passed to every
+  tap so the discontinuous per-triangle UV offsets don't break mip selection (grid-seam artifacts).
+- **Selection** (`src/texdb.cpp`): a curated per-texture database `models/texdb.txt` — lines tag texture
+  NAMES with `stochastic=1` (plus detail/alpha attributes; _siblings/affiliates_ inherit the flag). At draw
+  time (`src/buildingPipe.cpp`) the pixel shader is swapped per texture (`simpleStochasticPS`,
+  `xboxBuildingStochasticPS`) when `texinfo->stochastic && config->stochastic`.
+- **Knobs**: global ini toggle `stochasticTexturing`, debug-menu bool, a ×1.2 UV scale fudge in the simple
+  pixel shader.
+
+The load-bearing lesson: **selection is editorial, not inferred.** skygfx never solved the "which textures
+tile" problem with a signal — it ships a curated list keyed by texture name. That is exactly the answer the
+old research refused to commit to at runtime, and exactly what our offline converter is built for.
+
+## Why the two old blockers die here
+
+| Old blocker (WebGL/three prod)                                                                                                                   | Own engine + own format                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No clean selection signal** — UV-span gating applies to ~everything (heavy tiling is the SA norm); per-material shader swaps fight the batcher | Selection moves OFFLINE where it belongs: the planner resolves every texture **by name** — a curated list (texdb-style, start from the community's tagged ground/grass/sand/road sets) marks layers at convert time. The tool can additionally PROPOSE candidates by content analysis (autocorrelation periodicity × observed UV span × mostly-horizontal usage) — affordable offline, impossible per frame |
+| **Histogram-preserving conflicts with DXT** (needs decode + Gaussianize + LUT)                                                                   | v1 doesn't need it (skygfx ships the plain 3-tap on DXT and reads fine at gameplay distance). If contrast wash shows, the converter ALREADY owns full texel processing (decode → process → re-encode + offline mips) — Gaussianized layers + an inverse-LUT texture are a tool stage, not an engine hack                                                                                                    |
+
+And the batching problem inverts: skygfx swaps pixel shaders per texture; we CAN'T (one merged group mixes
+many layers) — but we don't need to. The flag rides the DATA per vertex, and one world shader branches on it.
+
+## Design (v1)
+
+- **Format**: no bump. The layer u16 of `layerChannels` carries indexes ≤ 255 — the TOP BIT (bit 15) becomes
+  `LAYER_STOCHASTIC` (engine masks the index with `& 0xff`). Set by the welder from the planner's resolution.
+- **Converter**: `data/stochastic.txt` (name list, texdb-inspired: bare texture names + `#` comments) or a
+  `--stochastic <file>` override; planner marks `ResolvedTexture.stochastic`; report counts flagged layers.
+  Later (pmb integration): the auto-candidate analyzer emits a REVIEW list, humans promote entries.
+- **WGSL**: port `tex2DStochastic` — same skew/hash/3-tap math; **`textureSampleGrad`** with `dpdx/dpdy` of
+  the ORIGINAL UV (mandatory twice over: grid-seam mips + WGSL forbids implicit-grad `textureSample` in the
+  non-uniform branch). Branch on the per-vertex flag (flat varying); non-flagged pixels keep the single tap.
+- **Mips**: fully covered by the grad path — `textureSampleGrad` with the ORIGINAL UV's derivatives gives
+  correct mip selection per tap (the hash offsets are discontinuous at grid seams; implicit gradients there
+  pick garbage mips — the exact artifact skygfx's explicit `ddx/ddy` exists for). Our offline `.ostex` mip
+  chains need NO change for v1 (offsets live in wrap-sampled UV space; deep mips converging toward the
+  texture mean is the method's normal far-field behaviour). The histogram-preserving upgrade, if taken,
+  must Gaussianize EVERY mip level (per-mip transform in the converter), not just level 0.
+- **Fog/lighting unchanged** — this replaces only the texel fetch.
+- **Knobs**: `?stoch=0` lab A/B toggle (env flag in `params2` spare... none left — grow the UBO or pack into
+  windStrength sign? decide at build time; a compile-time constant + reconvert-free toggle is acceptable v1).
+- **Cost gate**: 3 taps only on flagged layers (ground/grass/sand/road — a minority of pixels but often
+  screen-dominant). Bench ritual before/after on `drive`; budget ≤ +0.5 ms GPU p95 at 2× retina.
+
+## Tasks
+
+- [ ] WGSL port of the sampler (skew + hash2D2D + 3-tap `textureSampleGrad`) behind the per-vertex flag +
+      golden snapshot + guardrail pass.
+- [ ] Planner/welder: name-list → `ResolvedTexture.stochastic` → layer bit 15; engine masks the index.
+- [ ] Seed `data/stochastic.txt` for the LS rect (grass/pavement/road/dirt textures — eyeball the worst
+      offenders from the aerial screens).
+- [ ] Field A/B + bench row; acceptance = macro-repetition visibly gone on ground planes at the aerial
+      camera, no seam/mip artifacts up close, gate ≤ +0.5 ms GPU p95.
+- [ ] (later) Histogram-preserving upgrade if contrast wash is objectionable: Gaussianize + inverse LUT as a
+      converter stage (the format already buckets arbitrary layer payloads).
+- [ ] (later, pmb) Auto-candidate analyzer: periodicity × UV-span × slope → proposed list for curation.
+
+## Measurement ledger
+
+_(fill as landed: flagged layers count, GPU Δ, screenshots before/after)_

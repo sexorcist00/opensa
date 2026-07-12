@@ -26,6 +26,7 @@ non-WebGPU browsers during the whole build-out (additive, no flag day — the 06
 | 09  | [Post-FX & AA](09-postfx-aa.md)                        | MSAA+A2C, bloom, ACES, god-rays; render-scale tiers.                                        |
 | 10  | [Integration & flip](10-integration-flip.md)           | Boundary refactor, game-app integration, flip criteria, 073-flags cleanup decision.         |
 | 11  | [Performance testing](11-performance-testing.md)       | Pinned `game-src` input + bench scenes + committed series — every engine change perf-gated. |
+| 12  | [Stochastic texturing](12-stochastic-texturing.md)     | De-tiling ground/grass/roads (skygfx-researched 3-tap blend); offline name-list selection.  |
 
 ## Roadmap — vertical slices with numeric gates (plans ≠ phases; each milestone cuts across plans)
 
@@ -158,3 +159,9 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   keeps day frames untouched, and fogged geometry dissolves into the moon behind it — the 068 invariant).
   (3) Weather-driven wind DEFERRED to 0.5.0 by user decision — idea stub at
   docs/ideas/0.5.0/plans/02-weather-wind/.
+- 2026-07-12 (plan 12 added) — stochastic texturing researched against the JuniorDjjr skygfx fork (shader =
+  Deliot–Heitz 3-tap tiling-and-blending with ddx/ddy, selection = CURATED texdb name list — editorial, not
+  inferred). Both blockers that parked improvements/stochastic-texturing die in this architecture: selection
+  moves offline into the converter (name list + optional auto-candidate analysis), and the DXT/LUT conflict
+  is moot (v1 needs no LUT; the tool already owns full texel processing for the upgrade). Flag rides bit 15
+  of the layer u16 — no format bump. Plan doc: 12-stochastic-texturing.md.

@@ -52,3 +52,13 @@ prototype (perf cost). Owner chose to defer rather than commit to a fuzzy allow-
   `#include <map_fragment>` with a triangle-grid stochastic sample (textureGrad for correct mips),
   composing with the existing world-material `onBeforeCompile`. Skip alpha cutouts + UV-anim materials.
 - Histogram-preserving only if the simple variant's contrast loss is too visible.
+
+## 2026-07-12 — revived for the own engine
+
+The two blockers above are architecture-specific to the WebGL/three prod path. The own-engine chain
+(plan 074) re-researched the feature against the shipping reference — the JuniorDjjr skygfx fork
+(https://github.com/JuniorDjjr/skygfx): its shader is the plain 3-tap tiling-and-blend (no histogram
+preservation, works on DXT), and its selection is a CURATED per-texture name list (`models/texdb.txt`,
+`stochastic=1`) — i.e. the "fuzzy allow-list" this doc balked at is exactly what ships in practice, and the
+074 converter is the natural owner of such a list (offline, by texture name, with room for an auto-candidate
+analyzer). Plan: [074/12](../plans/074-opensa-engine/12-stochastic-texturing.md).
