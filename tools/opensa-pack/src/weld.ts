@@ -56,9 +56,10 @@ export interface WeldStats {
 }
 
 /** Scratch-row layout (floats per welded vertex) + the slots the bakers touch. */
-export const WELD_ROW = 19;
+export const WELD_ROW = 20;
 export const WELD_AO = 17;
 export const WELD_SUNVIS = 18;
+export const WELD_SUNSOFT = 19;
 
 /** Synthesized night ambient for geometry without an authored night set (slightly cool, ~SA night level). */
 const NIGHT_AMBIENT_R = 0.3;
@@ -213,9 +214,10 @@ function appendInstance(
               : Math.max(pz, 0) * SWAY_TUNING[swayKind].height,
           ),
       layer,
-      // aoSkyVis + sunVis defaults = fully open; the bake stages (074/07) overwrite HD rows in place.
+      // aoSkyVis + sunVis threshold/softness defaults = fully open; the bakes (074/07) overwrite HD rows.
       1,
-      1,
+      0,
+      0.05,
     );
     bucket.min[0] = Math.min(bucket.min[0], ex);
     bucket.min[1] = Math.min(bucket.min[1], ey);
@@ -526,7 +528,8 @@ function writeBucketVertices(bucket: WeldBucket, vertexBase: number, view: DataV
     view.setInt8(at + 12, snorm(bucket.vertices[row + 3]));
     view.setInt8(at + 13, snorm(bucket.vertices[row + 4]));
     view.setInt8(at + 14, snorm(bucket.vertices[row + 5]));
-    // normal.w carries baked sunVis (074/07) — snorm, only 0..127 used; gated by the SUN_VIS channel bit.
+    // normal.w = sun-vis v2 THRESHOLD elevation (074/07, /1.1-encoded; 1.0 = never lit) — snorm 0..127,
+    // gated by the SUN_VIS channel bit. Penumbra softness rides the layer u16 bits 8–14 (below).
     view.setInt8(at + 15, snorm(Math.max(0, Math.min(1, bucket.vertices[row + WELD_SUNVIS]))));
     view.setFloat32(at + 16, bucket.vertices[row + 6], true);
     view.setFloat32(at + 20, bucket.vertices[row + 7], true);
@@ -538,7 +541,9 @@ function writeBucketVertices(bucket: WeldBucket, vertexBase: number, view: DataV
     view.setUint8(at + 29, unorm(bucket.vertices[row + 13]));
     view.setUint8(at + 30, unorm(bucket.vertices[row + 14]));
     view.setUint8(at + 31, unorm(bucket.vertices[row + 15]));
-    view.setUint16(at + 32, bucket.vertices[row + 16], true);
+    // layer u16 = index (bits 0–7) | sun-vis softness ×127/0.5 (bits 8–14, 074/07 v2) | stochastic (bit 15).
+    const softness7 = Math.max(0, Math.min(127, Math.round((bucket.vertices[row + WELD_SUNSOFT] / 0.5) * 127)));
+    view.setUint16(at + 32, bucket.vertices[row + 16] | (softness7 << 8), true);
     // channels u16 = aoSkyVis | emissive << 8 (074/02). Emissive mask (07): baked night-window detection —
     // the same luma-delta the runtime heuristic used, computed OFFLINE per vertex (refinable later without
     // engine changes). Synthesized night sets (day × ambient) always yield a negative delta → mask 0.

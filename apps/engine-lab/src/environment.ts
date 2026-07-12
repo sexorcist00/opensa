@@ -22,7 +22,11 @@ export function parametricDriver(engine: Engine): EnvironmentDriver {
       const { dn, elevation } = sunArc(hour);
       engine.environment.hour = hour;
       engine.environment.dn = dn;
-      engine.environment.sunDir = [0.35, Math.max(0.05, elevation), 0.25];
+      // Azimuth converges to zenith as the sun climbs — MIRRORS the sun-vis bake arc (074/07 field fix:
+      // fixed azimuth put noon bridge shadows BESIDE the bridges).
+      const azScale = 1 - 0.75 * Math.max(0, Math.min(1, elevation));
+      engine.environment.sunDir = [0.35 * azScale, Math.max(0.05, elevation), 0.25 * azScale];
+      engine.environment.sunElevation = Math.max(0, Math.min(1, elevation));
       const warm = Math.min(1, Math.max(0, 1 - elevation));
       const dayGate = Math.min(1, Math.max(0, elevation * 4));
       engine.environment.sunColor = [dayGate, (0.96 - warm * 0.15) * dayGate, (0.88 - warm * 0.3) * dayGate];
@@ -52,7 +56,11 @@ export function timecycDriver(
       const { dn, elevation } = sunArc(hour);
       engine.environment.hour = hour;
       engine.environment.dn = dn;
-      engine.environment.sunDir = [0.35, Math.max(0.05, elevation), 0.25];
+      // Azimuth converges to zenith as the sun climbs — MIRRORS the sun-vis bake arc (074/07 field fix:
+      // fixed azimuth put noon bridge shadows BESIDE the bridges).
+      const azScale = 1 - 0.75 * Math.max(0, Math.min(1, elevation));
+      engine.environment.sunDir = [0.35 * azScale, Math.max(0.05, elevation), 0.25 * azScale];
+      engine.environment.sunElevation = Math.max(0, Math.min(1, elevation));
       const dayGate = Math.min(1, Math.max(0, elevation * 4)); // sun glow/colour die below the horizon
       engine.environment.sunColor = lin3(sample.dir).map((v) => v * dayGate) as [number, number, number];
       engine.environment.sunDirect = Math.max(0, elevation) * 0.9;

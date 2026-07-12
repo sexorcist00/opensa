@@ -7,7 +7,8 @@ struct Frame {
   viewProj: mat4x4f,
   invViewProj: mat4x4f,
   camera: vec4f,
-  // Environment (plan 074/06): sun direction (unit, towards the sun), sun colour,
+  // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
+  // the sun-vis v2 threshold input — 074/07), sun colour,
   // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
@@ -92,7 +93,8 @@ struct Frame {
   viewProj: mat4x4f,
   invViewProj: mat4x4f,
   camera: vec4f,
-  // Environment (plan 074/06): sun direction (unit, towards the sun), sun colour,
+  // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
+  // the sun-vis v2 threshold input — 074/07), sun colour,
   // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
@@ -138,7 +140,8 @@ struct Frame {
   viewProj: mat4x4f,
   invViewProj: mat4x4f,
   camera: vec4f,
-  // Environment (plan 074/06): sun direction (unit, towards the sun), sun colour,
+  // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
+  // the sun-vis v2 threshold input — 074/07), sun colour,
   // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
@@ -188,7 +191,8 @@ fn vsSky(@builtin(vertex_index) index: u32) -> SkyOut {
   var out: SkyOut;
   let x = f32(i32(index & 1u) * 4 - 1);
   let y = f32(i32(index >> 1u) * 4 - 1);
-  out.clip = vec4f(x, y, 1.0, 1.0);
+  // Reversed-Z: the far plane is depth 0.
+  out.clip = vec4f(x, y, 0.0, 1.0);
   out.ndc = vec2f(x, y);
   return out;
 }
@@ -209,7 +213,8 @@ struct Frame {
   viewProj: mat4x4f,
   invViewProj: mat4x4f,
   camera: vec4f,
-  // Environment (plan 074/06): sun direction (unit, towards the sun), sun colour,
+  // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
+  // the sun-vis v2 threshold input — 074/07), sun colour,
   // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
@@ -310,11 +315,14 @@ fn vsWorld(in: VsIn) -> VsOut {
   // Sun N·L per vertex (074/06 row 3) — GTA geometry is low-poly; per-vertex matches the shipped look.
   // Baked sun visibility (074/07, 066/03 v1 scalar): normal.w = arc-averaged sun occlusion — the STATIC
   // shadow term (under bridges / canyons the direct sun dies), smooth by construction, no shadow map.
-  let sunVis = mix(1.0, clamp(in.normal.w, 0.0, 1.0), f32(cellFlags & 1u) * frame.params2.y);
+  // Sun-vis SCALAR (074/07 v1, the accepted look): normal.w = arc-averaged sun visibility — soft static
+  // occlusion (dark under bridges/canyons), does NOT track the moving sun. The directional v2 is PARKED
+  // until the converter can subdivide large receiver polys (see plan 07).
+  let sunGate = f32(cellFlags & 1u) * frame.params2.y;
+  let sunVis = mix(1.0, clamp(in.normal.w, 0.0, 1.0), sunGate);
   let worldNormal = normalize(in.normal.xyz);
   out.sunNdl = max(dot(worldNormal, frame.sunDir.xyz), 0.0) * sunVis;
-  // Moon N·L, WRAPPED (074/06 row 6, the 073 model): moonlight is a huge soft source — a hard terminator
-  // reads as a second harsh sun. The baked sunVis gates it too: static occlusion blocks moonlight as well.
+  // Moon N·L, WRAPPED (074/06 row 6): the same static occlusion gates moonlight.
   out.moonNdl = clamp((dot(worldNormal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0) * sunVis;
   // Baked AO/skyVis (074/07): low byte of channels; 0 means UNBAKED (old paks) → fully open, not black.
   let aoByte = in.layerChannels.y & 0xffu;

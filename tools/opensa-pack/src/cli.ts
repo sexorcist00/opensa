@@ -73,12 +73,11 @@ function main(): void {
   const fallbackTxds = windDirs.flatMap((dir) =>
     findFiles(dir, '.txd').map((file) => basename(file, '.txd').toLowerCase()),
   );
-  // Stochastic de-tiling lists (074/12): repo defaults next to the tool (our curated list + the skygfx
-  // mod's texdb — 307 stochastic-tagged names); `--stochastic <file>[,<file>…]` overrides.
+  // Stochastic de-tiling list (074/12): the CURATED uniform-noise list is the ONLY default — the skygfx
+  // texdb (data/skygfx-texdb.txt) scrambled structured textures in the field; opt back in via
+  // `--stochastic <file>[,<file>…]`.
   const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'data');
-  const stochasticPaths = (
-    arg('stochastic') ?? `${join(dataDir, 'stochastic.txt')},${join(dataDir, 'skygfx-texdb.txt')}`
-  )
+  const stochasticPaths = (arg('stochastic') ?? join(dataDir, 'stochastic.txt'))
     .split(',')
     .map((path) => path.trim())
     .filter(Boolean);

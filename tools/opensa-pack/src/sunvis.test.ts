@@ -56,12 +56,13 @@ function row(x: number, y: number, z: number, nx = 0, ny = 1, nz = 0): number[] 
 
 describe('bakeSunVis', () => {
   describe('negative cases', () => {
-    it('leaves LOD cells at the fully-open default', () => {
+    it('bakes LOD cells but never uses LOD geometry as an occluder', () => {
+      // The plate lives in a LOD cell → not an occluder; the probe bakes a near-zero threshold (open sky).
       const lodCell = cell([plate(), bucket(row(0, 0, 0), [])], true);
       bakeSunVis([lodCell], buildOccluderBvh([lodCell]));
 
-      expect(lodCell.hasSunVis).toBe(false);
-      expect(lodCell.buckets[1].vertices[WELD_SUNVIS]).toBe(1);
+      expect(lodCell.hasSunVis).toBe(true); // LOD verts bake too (HD/LOD seam fix)
+      expect(lodCell.buckets[1].vertices[WELD_SUNVIS]).toBe(1); // LOD plate is not an occluder
     });
 
     it('keeps a sun-averted vertex neutral without spending rays', () => {
@@ -70,7 +71,7 @@ describe('bakeSunVis', () => {
       const probeCell = cell([probe]);
       const report = bakeSunVis([probeCell], buildOccluderBvh([probeCell]));
 
-      expect(probe.vertices[WELD_SUNVIS]).toBe(1);
+      expect(probe.vertices[WELD_SUNVIS]).toBe(1); // scalar: neutral = fully visible
       expect(report.rays).toBe(0);
     });
   });
@@ -84,7 +85,7 @@ describe('bakeSunVis', () => {
       const report = bakeSunVis([probeCell], buildOccluderBvh([probeCell]));
 
       expect(probeCell.hasSunVis).toBe(true);
-      expect(covered.vertices[WELD_SUNVIS]).toBe(0); // the plate blocks the whole arc
+      expect(covered.vertices[WELD_SUNVIS]).toBe(0); // scalar: the plate blocks the whole arc
       expect(open.vertices[WELD_SUNVIS]).toBe(1);
       expect(report.vertices).toBeGreaterThan(0);
     });

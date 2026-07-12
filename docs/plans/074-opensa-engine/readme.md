@@ -179,3 +179,24 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   later; depth-read so geometry occludes coronas; night gate dn×1.5; farClip fade with a 350-unit floor for
   the high lab camera — the game integration restores authored clips). Registry grew to 10 pipelines.
   Remaining in row 13: textured sprites (coronastar/coronamoon) + 2dfx particles (factory smoke/fire).
+- 2026-07-12 (07 sun-vis v2 directional) — the moving-sun static shadow landed (066/03 v2): the bake finds a
+  per-vertex THRESHOLD elevation (8-sample ascending scan, disc-jittered) + penumbra softness; runtime is one
+  smoothstep against the current arc elevation (spare sunDir.w) — shadows recede/grow with the sun, no map,
+  no jitter. Threshold lives in normal.w (/1.1 encoding, 1.1 = never lit), softness in layer-u16 bits 8–14.
+  Moon now gates on noon visibility (open-sky proxy). v1's scalar average is superseded; both paks
+  reconverted (LS bake 38 s / 27.5 M rays).
+- 2026-07-12 (07 v2 revert) — directional sun-vis was built, field-tested and REVERTED the same day: on
+  SA's metre-sparse receiver meshes, threshold shadows lose narrow occluders entirely (a bridge falls
+  between road vertices), punch holes and darken LODs — five noon field screens documented in plan 07.
+  The accepted scalar v1 consumer is restored; the round's KEEPERS: wire/sliver occluder filter, LOD-cell
+  baking (kills HD/LOD shadow seams), zenith-converging sun arc (noon shadows sit under bridges), and the
+  known-limit note that small-object shadows need texel-space baking or the dynamic near cascade. v2
+  un-parks when the converter learns receiver subdivision (pmb-grade).
+- 2026-07-12 (field cleanup round) — three fixes from the noon/night reports: (1) stochastic texturing
+  marked UNSTABLE and default-OFF (`Environment.stochastic = 0`, `?stoch=1` A/B; data stays flagged) —
+  grazing-angle ghosting joined the structured-texture scrambles; finish = histogram-preserving pass.
+  (2) LOD bake artifacts capped: LOD ray push-off 0.6 → 1.0 + result FLOORS (sunVis ≥ 0.4, AO ≥ 0.5) —
+  LOD self-shadow noise bounded while the HD/LOD seam stays soft. (3) REVERSED-Z landed engine-wide
+  (depth32float, swapped near/far projection, clear 0, `greater` compares; blended classes get
+  `greater-equal` so exactly-coplanar overlays — night windows, wall signs — composite stably): the
+  systemic fix for the sign z-fighting and flickering tobj windows.

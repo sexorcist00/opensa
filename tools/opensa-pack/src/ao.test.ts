@@ -53,11 +53,12 @@ function row(x: number, y: number, z: number): number[] {
 
 describe('bakeAo', () => {
   describe('negative cases', () => {
-    it('leaves LOD cells at the fully-open default', () => {
+    it('bakes LOD cells but never uses LOD geometry as an occluder', () => {
+      // The plate lives in a LOD cell → it is NOT in the occluder set; the probe stays fully open.
       const lodCell = cell([plate(), bucket(row(0, 0, 0), [])], true);
       bakeAo([lodCell]);
 
-      expect(lodCell.hasAo).toBe(false);
+      expect(lodCell.hasAo).toBe(true); // LOD verts bake too (HD/LOD seam fix)
       expect(lodCell.buckets[1].vertices[WELD_AO]).toBe(1);
     });
 

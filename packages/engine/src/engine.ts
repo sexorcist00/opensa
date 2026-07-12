@@ -21,7 +21,9 @@ import { compileAll, MSAA_SAMPLES, pipelineIdFor, type PipelineSet } from './ren
 import { CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
 
-const DEPTH_FORMAT: GPUTextureFormat = 'depth24plus';
+// Reversed-Z (z-fighting fix): FLOAT depth + swapped near/far + clear 0 + greater compares — hugely
+// better far-field precision (SA signs sit centimetres off walls hundreds of metres from the camera).
+const DEPTH_FORMAT: GPUTextureFormat = 'depth32float';
 /** Corona instance cap per frame (074/06 row 13) — far beyond any district's lamp count. */
 const CORONA_CAP = 2048;
 
@@ -70,7 +72,8 @@ export interface Environment {
   skyHorizon: readonly [number, number, number];
   /** LINEAR sky gradient zenith colour. */
   skyTop: readonly [number, number, number];
-  /** Stochastic de-tiling toggle (074/12): 1 = on for flagged layers, 0 = plain sampling. */
+  /** Stochastic de-tiling toggle (074/12): 0 = plain sampling (DEFAULT — field issues pending the
+   *  histogram-preserving pass; see plan 12), 1 = 3-tap blend on flagged layers. */
   stochastic: number;
   /** Sun colour, linear 0..1. */
   sunColor: readonly [number, number, number];
@@ -78,6 +81,8 @@ export interface Environment {
   sunDir: readonly [number, number, number];
   /** Direct sun scale (the N·L term). */
   sunDirect: number;
+  /** Current day-arc elevation 0..1 (the sun-vis v2 threshold input — 074/07). */
+  sunElevation: number;
   /** Indirect (prelit) scale. */
   sunIndirect: number;
   /** Baked sun-shadow strength on the direct term (074/07): 0 = off, 1 = raw bake. */
@@ -103,10 +108,11 @@ export class Engine {
     moonDir: [-0.3, 0.8, -0.25],
     skyHorizon: [0.42, 0.55, 0.72],
     skyTop: [0.12, 0.32, 0.65],
-    stochastic: 1,
+    stochastic: 0,
     sunColor: [1, 0.96, 0.88],
     sunDir: [0.35, 0.85, 0.25],
     sunDirect: 0.9,
+    sunElevation: 1,
     sunIndirect: 0.75,
     sunVisStrength: 1,
     windStrength: 1,
@@ -159,7 +165,8 @@ export class Engine {
     const canvasTexture = this.canvasContext.getCurrentTexture();
     this.ensureTargets(canvasTexture.width, canvasTexture.height);
 
-    mat4PerspectiveZO(this.proj, camera.fovYRad, camera.aspect, camera.near, camera.far);
+    // Swapped near/far = the reversed-Z projection (near maps to depth 1, far to 0).
+    mat4PerspectiveZO(this.proj, camera.fovYRad, camera.aspect, camera.far, camera.near);
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);
@@ -169,7 +176,8 @@ export class Engine {
     frameData.set([...camera.eye, 1], 32);
     const env = this.environment;
     const sunLen = Math.hypot(env.sunDir[0], env.sunDir[1], env.sunDir[2]) || 1;
-    frameData.set([env.sunDir[0] / sunLen, env.sunDir[1] / sunLen, env.sunDir[2] / sunLen, 0], 36);
+    // sunDir.w = current arc elevation (the sun-vis v2 threshold input — 074/07).
+    frameData.set([env.sunDir[0] / sunLen, env.sunDir[1] / sunLen, env.sunDir[2] / sunLen, env.sunElevation], 36);
     frameData.set([...env.sunColor, 1], 40);
     frameData.set([env.dn, env.sunIndirect, env.sunDirect, env.emissiveBoost], 44);
     frameData.set([...env.skyTop, 1], 48);
@@ -216,7 +224,7 @@ export class Engine {
         },
       ],
       depthStencilAttachment: {
-        depthClearValue: 1,
+        depthClearValue: 0, // reversed-Z far plane
         depthLoadOp: 'clear',
         depthStoreOp: 'discard',
         view: this.depthView,

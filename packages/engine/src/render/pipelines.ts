@@ -97,7 +97,8 @@ export function compileAll(
   pipelines.set(
     'corona',
     device.createRenderPipeline({
-      depthStencil: { depthCompare: 'less', depthWriteEnabled: false, format: depthFormat },
+      // Reversed-Z everywhere (z-fighting fix): float depth, clear 0, GREATER passes nearer fragments.
+      depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
       fragment: {
         entryPoint: 'fsCorona',
         module: coronaModule,
@@ -139,7 +140,8 @@ export function compileAll(
   pipelines.set(
     'sky',
     device.createRenderPipeline({
-      depthStencil: { depthCompare: 'less-equal', depthWriteEnabled: false, format: depthFormat },
+      // Reversed-Z: the sky triangle sits at depth 0 (the far plane) and passes only background pixels.
+      depthStencil: { depthCompare: 'greater-equal', depthWriteEnabled: false, format: depthFormat },
       fragment: { entryPoint: 'fsSky', module: skyModule, targets: [{ format: colorFormat }] },
       label: 'sky',
       layout: skyLayout,
@@ -152,8 +154,13 @@ export function compileAll(
     pipelines.set(
       variant.id,
       device.createRenderPipeline({
-        // Blended classes read depth but never write it — they can't occlude, only composite.
-        depthStencil: { depthCompare: 'less', depthWriteEnabled: !variant.blend, format: depthFormat },
+        // Reversed-Z: GREATER for depth-written classes; blended classes read-only AND pass EQUAL depths —
+        // coplanar overlays (night windows, wall signs) composite stably instead of shimmering.
+        depthStencil: {
+          depthCompare: variant.blend ? 'greater-equal' : 'greater',
+          depthWriteEnabled: !variant.blend,
+          format: depthFormat,
+        },
         fragment: {
           entryPoint: variant.entry,
           module,
