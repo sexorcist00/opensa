@@ -8,6 +8,48 @@
  */
 
 const MODULES: Record<string, string> = {
+  corona: /* wgsl */ `
+#include <frame>
+
+// 2dfx coronas (074/06 row 13 v1): instanced camera-facing quads, PROCEDURAL radial glow (the particle.txd
+// sprites arrive with the texture path later), additive premultiplied blending, depth READ (occluders hide
+// coronas). Night-gated on the CPU side (dn scales the instance colour before upload).
+struct CoronaIn {
+  @location(0) corner: vec2f,
+  @location(1) center: vec3f,
+  @location(2) size: f32,
+  @location(3) color: vec4f,
+};
+
+struct CoronaOut {
+  @builtin(position) clip: vec4f,
+  @location(0) offset: vec2f,
+  @location(1) color: vec4f,
+};
+
+@vertex
+fn vsCorona(in: CoronaIn) -> CoronaOut {
+  var out: CoronaOut;
+  // Camera basis from the inverse view-projection is overkill — build right/up from the view matrix baked
+  // into viewProj via the camera position: cheap billboard using the eye-to-center frame.
+  let toEye = normalize(frame.camera.xyz - in.center);
+  let right = normalize(cross(vec3f(0.0, 1.0, 0.0), toEye));
+  let up = cross(toEye, right);
+  let world = in.center + (right * in.corner.x + up * in.corner.y) * in.size;
+  out.clip = frame.viewProj * vec4f(world, 1.0);
+  out.offset = in.corner;
+  out.color = in.color;
+  return out;
+}
+
+@fragment
+fn fsCorona(in: CoronaOut) -> @location(0) vec4f {
+  // Soft radial glow: bright core + wide falloff; premultiplied for the additive pipeline.
+  let r = length(in.offset);
+  let glow = pow(max(1.0 - r, 0.0), 2.2) + pow(max(1.0 - r, 0.0), 8.0) * 0.7;
+  return vec4f(in.color.rgb * (glow * in.color.a), 0.0);
+}
+`,
   frame: /* wgsl */ `
 struct Frame {
   viewProj: mat4x4f,

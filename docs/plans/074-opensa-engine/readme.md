@@ -165,3 +165,17 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   moves offline into the converter (name list + optional auto-candidate analysis), and the DXT/LUT conflict
   is moot (v1 needs no LUT; the tool already owns full texel processing for the upgrade). Flag rides bit 15
   of the layer u16 — no format bump. Plan doc: 12-stochastic-texturing.md.
+- 2026-07-12 (12 v1 shipped + field-accepted) — stochastic de-tiling landed end-to-end: curated
+  `data/stochastic.txt` + the skygfx mod's full `texdb.txt` (user-supplied, 307 tagged names) MERGED as
+  default sources; planner → layer-u16 bit 15 → WGSL 3-tap `textureSampleGrad` behind a per-vertex flag
+  (sample-then-override keeps the common path uniform); `?stoch=0` A/B via the spare moonDir.w. Round-1 field
+  miss (LS beach = `sandnew_law`) produced the curation loop: `stochastic-candidates.ts` ranks a rect's
+  textures by covered area and prints unlisted ones. LS 172.8 k flagged verts. User accepted v1 as-is;
+  the ritual bench row is still owed (more flagged pixels now — watch the +0.5 ms gate).
+- 2026-07-12 (06 row 13 v1 coronas) — the format's dormant light table came alive: the welder transforms
+  every instance's DFF 2dfx corona anchors into cell-local engine coords (HD cells only — LOD would double
+  lamps; LS 2,426 / SF 1,084 anchors), the engine draws ONE instanced additive billboard pass after the sky
+  (unit quad + CPU-filled instance buffer capped at 2,048; procedural radial glow — particle.txd sprites
+  later; depth-read so geometry occludes coronas; night gate dn×1.5; farClip fade with a 350-unit floor for
+  the high lab camera — the game integration restores authored clips). Registry grew to 10 pipelines.
+  Remaining in row 13: textured sprites (coronastar/coronamoon) + 2dfx particles (factory smoke/fire).

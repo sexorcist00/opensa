@@ -22,6 +22,8 @@ import { CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
 
 const DEPTH_FORMAT: GPUTextureFormat = 'depth24plus';
+/** Corona instance cap per frame (074/06 row 13) — far beyond any district's lamp count. */
+const CORONA_CAP = 2048;
 
 export interface CameraState {
   aspect: number;
@@ -122,6 +124,9 @@ export class Engine {
     return this.engineDevice.device;
   }
   private canvasContext!: GPUCanvasContext;
+  private coronaInstances!: GPUBuffer;
+  private coronaQuad!: GPUBuffer;
+  private readonly coronaScratch = new Float32Array(CORONA_CAP * 8);
   private depthView!: GPUTextureView;
   private engineDevice!: EngineDevice;
   private frameBindGroup!: GPUBindGroup;
@@ -228,6 +233,8 @@ export class Engine {
     pass.setPipeline(this.pipelines.get('sky'));
     pass.setBindGroup(0, this.frameBindGroup);
     pass.draw(3);
+    // 2dfx coronas last (074/06 row 13): additive on top of everything, depth-read hides occluded ones.
+    draws += this.drawCoronas(pass, camera);
     pass.end();
     this.timers.resolve(encoder);
     this.device.queue.submit([encoder.finish()]);
@@ -260,6 +267,18 @@ export class Engine {
       layout: this.pipelines.frameLayout,
     });
     this.textures = new TextureArrays(this.device, this.resources, this.pipelines.materialLayout);
+    // Corona pass buffers (074/06 row 13): a unit quad + a per-frame instance buffer (CPU-filled, tiny).
+    this.coronaQuad = this.resources.createBuffer('cellVertex', {
+      label: 'corona-quad',
+      size: 48,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(this.coronaQuad, 0, new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]));
+    this.coronaInstances = this.resources.createBuffer('cellVertex', {
+      label: 'corona-instances',
+      size: CORONA_CAP * 32,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
     this.cells = new CellStore({
       colorFormat: this.engineDevice.colorFormat,
       depthFormat: DEPTH_FORMAT,
@@ -275,6 +294,59 @@ export class Engine {
   /** Residency ledger passthrough (HUD + leak assertions). */
   ledger(): ReturnType<Resources['ledger']> {
     return this.resources.ledger();
+  }
+
+  /** 2dfx corona billboards of visible cells (074/06 row 13): CPU-gated by night + farClip, one
+   *  instanced draw. Colour is premultiplied by the dn gate — coronas are a NIGHT phenomenon (v1). */
+  private drawCoronas(pass: GPURenderPassEncoder, camera: CameraState): number {
+    const gate = Math.min(1, Math.max(0, this.environment.dn * 1.5));
+    if (gate <= 0.02) {
+      return 0;
+    }
+    let count = 0;
+    const scratch = this.coronaScratch;
+    for (const cell of this.cells.all()) {
+      if (!cell.visible || cell.lights.length === 0) {
+        continue;
+      }
+      for (const light of cell.lights) {
+        if (count >= CORONA_CAP) {
+          break;
+        }
+        const dx = light.x - camera.eye[0];
+        const dy = light.y - camera.eye[1];
+        const dz = light.z - camera.eye[2];
+        const dist = Math.hypot(dx, dy, dz);
+        // farClip floor: SA clips street coronas ~100 units (street-level tuning) — the lab camera flies
+        // high, so v1 keeps them alive to 350; the game integration restores the authored clip.
+        const reach = Math.max(light.farClip, 350);
+        if (dist > reach) {
+          continue;
+        }
+        const fade = gate * Math.min(1, (1 - dist / reach) * 4) * (light.color[3] / 255);
+        const at = count * 8;
+        scratch[at] = light.x;
+        scratch[at + 1] = light.y;
+        scratch[at + 2] = light.z;
+        scratch[at + 3] = light.size * 1.5;
+        scratch[at + 4] = (light.color[0] / 255) ** 2.2;
+        scratch[at + 5] = (light.color[1] / 255) ** 2.2;
+        scratch[at + 6] = (light.color[2] / 255) ** 2.2;
+        scratch[at + 7] = fade;
+        count += 1;
+      }
+    }
+    if (count === 0) {
+      return 0;
+    }
+    this.device.queue.writeBuffer(this.coronaInstances, 0, scratch, 0, count * 8);
+    pass.setPipeline(this.pipelines.get('corona'));
+    pass.setBindGroup(0, this.frameBindGroup);
+    pass.setVertexBuffer(0, this.coronaQuad);
+    pass.setVertexBuffer(1, this.coronaInstances);
+    pass.draw(6, count);
+
+    return 1;
   }
 
   /** ObjectTable draws for visible cells (074/06 row 9). Timed: render when `hour` is inside [on, off). */

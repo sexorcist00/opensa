@@ -20,6 +20,15 @@ export interface CellHandle {
   index16: boolean;
   indexBuffer: GPUBuffer;
   key: string;
+  /** 2dfx corona anchors (074/06 row 13), WORLD-space positions precomputed at load. */
+  lights: {
+    color: readonly [number, number, number, number];
+    farClip: number;
+    size: number;
+    x: number;
+    y: number;
+    z: number;
+  }[];
   /** ObjectTable draws (074/06 row 9) — outside the bundle; the frame gates them (timed by hour). */
   objects: { groups: OscellGroup[]; kind: number; params: number }[];
   uniform: GPUBuffer;
@@ -127,6 +136,14 @@ export class CellStore {
       index16: cell.index16,
       indexBuffer,
       key,
+      lights: cell.lights.map((light) => ({
+        color: light.color,
+        farClip: light.farClip,
+        size: light.size,
+        x: light.position[0] + cell.origin[0],
+        y: light.position[1] + cell.origin[1],
+        z: light.position[2] + cell.origin[2],
+      })),
       objects: cell.objects.map((object: OscellObject) => ({
         groups: cell.groups.slice(object.groupStart, object.groupStart + object.groupCount),
         kind: object.kind,

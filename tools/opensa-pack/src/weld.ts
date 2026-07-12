@@ -5,7 +5,7 @@
  * Timed defs weld into trailing `timed` buckets → objectTable entries (074/06 row 9, hour-gated at runtime);
  * IDE-anim defs stay skipped (counted in the stats).
  */
-import type { Oscell, OscellGroup } from '@opensa/engine-formats';
+import type { Oscell, OscellGroup, OscellLight } from '@opensa/engine-formats';
 import type { AssetFileSystem, IplInstance, MapDefinitions } from '@opensa/renderware';
 
 import { encodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
@@ -38,6 +38,8 @@ export interface WeldedCell {
   hasNight: boolean;
   hasSunVis: boolean;
   hasSway: boolean;
+  /** 2dfx corona anchors (074/06 row 13), cell-local engine coords — HD cells only. */
+  lights: OscellLight[];
   lod: boolean;
   origin: readonly [number, number, number];
   stats: WeldStats;
@@ -104,6 +106,7 @@ export function weldCellParts(
   const buckets = new Map<string, WeldBucket>();
   const stats: WeldStats = { groups: 0, indices: 0, skippedAnimated: 0, skippedTimed: 0, timedObjects: 0, vertices: 0 };
   const flags = { hasNight: false, hasSway: false };
+  const lights: OscellLight[] = [];
 
   const groups = [...cellGroups(defs, cell, lod).values()].sort((a, b) => (a.def.modelName < b.def.modelName ? -1 : 1));
   for (const group of groups) {
@@ -114,6 +117,10 @@ export function weldCellParts(
     }
     // Timed defs (074/06 row 9) weld like everything else, but into `timed` buckets → objectTable draws.
     weldGroup(fs, group.def, group.instances, buckets, planner, originEngine, flags);
+    // 2dfx corona anchors (074/06 row 13) — HD level only (LOD duplicates would double every lamp).
+    if (!lod) {
+      collectLights(fs, group.def, group.instances, originEngine, lights);
+    }
   }
 
   // Bundle buckets first, then timed buckets grouped by their (on, off) window — the objectTable references
@@ -129,6 +136,7 @@ export function weldCellParts(
     hasNight: flags.hasNight,
     hasSunVis: false,
     hasSway: flags.hasSway,
+    lights,
     lod,
     origin: originEngine,
     stats,
@@ -230,7 +238,7 @@ function appendInstance(
 function assemble(
   ordered: WeldBucket[],
   origin: readonly [number, number, number],
-  channels: { hasAo: boolean; hasNight: boolean; hasSunVis: boolean; hasSway: boolean },
+  channels: { hasAo: boolean; hasNight: boolean; hasSunVis: boolean; hasSway: boolean; lights: OscellLight[] },
   stats: WeldStats,
 ): Uint8Array {
   let vertexCount = 0;
@@ -326,7 +334,7 @@ function assemble(
     index16,
     indexCount,
     indexData: new Uint8Array(indexArray.buffer),
-    lights: [],
+    lights: channels.lights,
     objects,
     origin,
     vertexCount,
@@ -372,6 +380,40 @@ function classOf(beam: boolean, alphaClass: 'cutout' | 'opaque' | 'softBlend'): 
   }
 
   return alphaClass === 'cutout' ? 1 : alphaClass === 'softBlend' ? 2 : 0;
+}
+
+/** Transform every instance's 2dfx corona anchors into cell-local ENGINE coords (074/06 row 13). */
+function collectLights(
+  fs: AssetFileSystem,
+  def: NonNullable<ReturnType<MapDefinitions['catalog']['get']>>,
+  instances: readonly IplInstance[],
+  origin: readonly [number, number, number],
+  out: OscellLight[],
+): void {
+  const clump = getClump(fs, def.modelName);
+  for (const geometry of clump.geometries) {
+    for (const light of geometry.lights) {
+      for (const instance of instances) {
+        const [qx, qy, qz, qw] = [
+          -instance.rotation[0],
+          -instance.rotation[1],
+          -instance.rotation[2],
+          instance.rotation[3],
+        ];
+        const m = quatToMat3(qx, qy, qz, qw);
+        const [px, py, pz] = light.position;
+        const gx = m[0] * px + m[1] * py + m[2] * pz + instance.position[0];
+        const gy = m[3] * px + m[4] * py + m[5] * pz + instance.position[1];
+        const gz = m[6] * px + m[7] * py + m[8] * pz + instance.position[2];
+        out.push({
+          color: light.color,
+          farClip: light.coronaFarClip,
+          position: [gx - origin[0], gz - origin[1], -gy - origin[2]],
+          size: light.coronaSize,
+        });
+      }
+    }
+  }
 }
 
 function lumaOf(r: number, g: number, b: number): number {

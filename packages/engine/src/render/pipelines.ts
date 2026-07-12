@@ -14,6 +14,7 @@ import { resolveShader } from './shaders';
 export const MSAA_SAMPLES = 4;
 
 export type PipelineId =
+  | 'corona'
   | 'sky'
   | 'world-beam-double'
   | 'world-beam-front'
@@ -91,6 +92,50 @@ export function compileAll(
   };
   const skyModule = device.createShaderModule({ code: resolveShader('sky'), label: 'sky' });
   const skyLayout = device.createPipelineLayout({ bindGroupLayouts: [frameLayout], label: 'sky' });
+  // 2dfx coronas (074/06 row 13): instanced additive billboards, depth READ (occluders hide them).
+  const coronaModule = device.createShaderModule({ code: resolveShader('corona'), label: 'corona' });
+  pipelines.set(
+    'corona',
+    device.createRenderPipeline({
+      depthStencil: { depthCompare: 'less', depthWriteEnabled: false, format: depthFormat },
+      fragment: {
+        entryPoint: 'fsCorona',
+        module: coronaModule,
+        targets: [
+          {
+            blend: {
+              alpha: { dstFactor: 'one', operation: 'add', srcFactor: 'one' },
+              color: { dstFactor: 'one', operation: 'add', srcFactor: 'one' },
+            },
+            format: colorFormat,
+          },
+        ],
+      },
+      label: 'corona',
+      layout: skyLayout,
+      multisample: { count: MSAA_SAMPLES },
+      primitive: { topology: 'triangle-list' },
+      vertex: {
+        buffers: [
+          {
+            arrayStride: 8,
+            attributes: [{ format: 'float32x2', offset: 0, shaderLocation: 0 }],
+          },
+          {
+            arrayStride: 32,
+            attributes: [
+              { format: 'float32x3', offset: 0, shaderLocation: 1 },
+              { format: 'float32', offset: 12, shaderLocation: 2 },
+              { format: 'float32x4', offset: 16, shaderLocation: 3 },
+            ],
+            stepMode: 'instance',
+          },
+        ],
+        entryPoint: 'vsCorona',
+        module: coronaModule,
+      },
+    }),
+  );
   pipelines.set(
     'sky',
     device.createRenderPipeline({
