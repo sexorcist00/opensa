@@ -40,10 +40,12 @@ export function bakeAo(cells: WeldedCell[], options: BakeAoOptions = {}): BakeAo
   const maxDistance = options.maxDistance ?? 60;
   const bvh = options.bvh ?? buildOccluderBvh(cells);
   const fan = sampleFan(samples);
-  const cache = new Map<string, number>();
   const report: BakeAoReport = { rays: 0, triangles: bvh.triangles.length / 9, uniqueVertices: 0, vertices: 0 };
 
   for (const cell of cells) {
+    // Dedup cache is PER CELL: V8 Maps cap at ~16.7 M entries (a full-city bake overflows a global one),
+    // and cross-cell duplicates were negligible anyway (GTA verts are heavily split).
+    const cache = new Map<string, number>();
     // LOD cells bake TOO (field fix: unbaked LOD = visible HD/LOD seams); bigger push-off — LOD verts sit
     // near-but-not-on the HD occluder surfaces.
     const offset = cell.lod ? LOD_RAY_OFFSET : RAY_OFFSET;

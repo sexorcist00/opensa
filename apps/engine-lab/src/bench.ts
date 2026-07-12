@@ -8,6 +8,11 @@ import type { CameraState, EngineStats } from '@opensa/engine';
 export const BENCH_WARMUP_FRAMES = 120;
 export const BENCH_MEASURE_FRAMES = 600;
 
+/** Per-scene measure-window overrides (default {@link BENCH_MEASURE_FRAMES}). */
+export const BENCH_SCENE_MEASURE: Record<string, number> = {
+  city: 3600, // ~30 s at 120 Hz — the full-city traverse needs the long window
+};
+
 export type BenchCameraScript = (frame: number, context: BenchContext) => CameraState;
 
 export interface BenchContext {
@@ -19,6 +24,18 @@ export interface BenchContext {
 /** Pinned scenes. `orbit` = the M0 baseline; `close` = fill/A2C zoom; `drive` = the streaming stress
  *  (focus translates through the district — pairs with the M1 streaming driver). */
 export const BENCH_SCENES: Record<string, BenchCameraScript> = {
+  city(frame, { aspect, focus, radius }) {
+    // FULL-CITY diagonal traverse (pairs with `?src=pak-ls`): corner-to-corner across the loaded district
+    // at ~135 u/s, low altitude — the long-haul streaming + draw-distance stress. Deterministic by frame.
+    const total = BENCH_WARMUP_FRAMES + BENCH_SCENE_MEASURE.city;
+    const t = Math.min(1, frame / total);
+    const span = radius * 0.9;
+    const x = focus[0] - span + t * span * 2;
+    const z = focus[2] + span - t * span * 2;
+    const eye: [number, number, number] = [x, focus[1] + 60, z];
+
+    return camera(aspect, eye, [x + 80, focus[1] + 20, z - 80]);
+  },
   close(frame, { aspect, focus, radius }) {
     // Far → close zoom onto the district centre over the run (fill-rate + alpha inspection distances).
     const t = frame / (BENCH_WARMUP_FRAMES + BENCH_MEASURE_FRAMES);
@@ -51,6 +68,8 @@ export const BENCH_SCENES: Record<string, BenchCameraScript> = {
 };
 
 export interface BenchRecord {
+  /** Converter metrics of the measured pak (074/11: tool regressions ride the same record). */
+  converter?: { aoMs?: number; cells: number; pakMb: number; sunVisMs?: number; timedObjects?: number };
   date: string;
   draws: { avg: number; max: number };
   env: { adapter: string; dpr: number; height: number; search: string; width: number };
@@ -70,16 +89,18 @@ export class BenchCollector {
   }
   /** True while more frames are needed. */
   get running(): boolean {
-    return this.frame < BENCH_WARMUP_FRAMES + BENCH_MEASURE_FRAMES;
+    return this.frame < BENCH_WARMUP_FRAMES + this.measureFrames;
   }
+
   private readonly draws: number[] = [];
   private frame = 0;
   private readonly frameMs: number[] = [];
   private readonly gpu: number[] = [];
-
   private lastStats: EngineStats | null = null;
 
   private readonly submit: number[] = [];
+
+  constructor(private readonly measureFrames: number = BENCH_MEASURE_FRAMES) {}
 
   finish(scene: string, adapter: string, canvas: HTMLCanvasElement): BenchRecord {
     const heap = (performance as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0;
@@ -122,7 +143,6 @@ export class BenchCollector {
   }
 }
 
-/** Trigger a JSON download of the record (the committed-series artifact). */
 export function downloadRecord(record: BenchRecord): void {
   const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' });
   const anchor = document.createElement('a');
@@ -130,6 +150,34 @@ export function downloadRecord(record: BenchRecord): void {
   anchor.download = `bench-${record.scene}-${record.date.slice(0, 10)}.json`;
   anchor.click();
   URL.revokeObjectURL(anchor.href);
+}
+
+/** Trigger a JSON download of the record (the committed-series artifact). */
+/** Converter metrics from the pak's `report.json` (best-effort — absent for the synthetic district). */
+export async function fetchConverterMetrics(baseUrl: string): Promise<BenchRecord['converter']> {
+  try {
+    const response = await fetch(`${baseUrl}/report.json`);
+    if (!response.ok) {
+      return undefined;
+    }
+    const report = (await response.json()) as {
+      ao?: null | { ms: number };
+      cells: unknown[];
+      pakBytes: number;
+      sunVis?: null | { ms: number };
+      timedObjects?: number;
+    };
+
+    return {
+      ...(report.ao ? { aoMs: report.ao.ms } : {}),
+      cells: report.cells.length,
+      pakMb: Math.round(report.pakBytes / (1024 * 1024)),
+      ...(report.sunVis ? { sunVisMs: report.sunVis.ms } : {}),
+      ...(report.timedObjects !== undefined ? { timedObjects: report.timedObjects } : {}),
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 export function formatRecord(record: BenchRecord): string {

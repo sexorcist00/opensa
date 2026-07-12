@@ -60,10 +60,11 @@ export function bakeSunVis(cells: WeldedCell[], bvh: Bvh, options: BakeSunVisOpt
   const maxDistance = options.maxDistance ?? 400;
   const discJitter = options.discJitter ?? 0.03;
   const arc = buildArc(discJitter);
-  const cache = new Map<string, number>();
   const report: BakeSunVisReport = { rays: 0, uniqueVertices: 0, vertices: 0 };
 
   for (const cell of cells) {
+    // Per-cell dedup cache — the V8 Map size cap lesson (see the AO bake).
+    const cache = new Map<string, number>();
     // LOD cells bake TOO (field fix: unbaked LOD = visible HD/LOD shadow seams — "sidewalk shadowed, road
     // not"). Their verts sit NEAR but not ON the HD surfaces, so the ray origin pushes off much further.
     const offset = cell.lod ? LOD_RAY_OFFSET : RAY_OFFSET;

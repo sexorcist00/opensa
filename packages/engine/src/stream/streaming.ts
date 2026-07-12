@@ -1,11 +1,11 @@
+import type { OspakManifest } from '@opensa/engine-formats';
+
 /**
  * Thin streaming driver (plan 074/05): plan-060 semantics re-implemented three-free — rings + hysteresis,
  * keep-old-level-until-replacement, atomic HD↔LOD swap, bounded creates (≤1 cell/frame), eviction outside the
  * outer ring. Cells come from the pak worker as transferable blobs; textures load up-front (district-shared).
  */
-import type { Engine } from '@opensa/engine';
-import type { OspakManifest } from '@opensa/engine-formats';
-
+import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
 
 const HD_RADIUS = 380;

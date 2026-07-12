@@ -1,12 +1,12 @@
-/**
- * Streaming-mode bootstrap (plan 074/05): manifest → worker (pak lives worker-side) → texture arrays up-front
- * (district-shared; cells can't record without them) → a ready StreamingDriver.
- */
-import type { Engine } from '@opensa/engine';
 import type { OspakManifest } from '@opensa/engine-formats';
 
 import { validateOspakManifest } from '@opensa/engine-formats';
 
+/**
+ * Streaming-mode bootstrap (plan 074/05): manifest → worker (pak lives worker-side) → texture arrays up-front
+ * (district-shared; cells can't record without them) → a ready StreamingDriver.
+ */
+import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
 
 import { StreamingDriver } from './streaming';

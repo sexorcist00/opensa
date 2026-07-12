@@ -200,3 +200,10 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   (depth32float, swapped near/far projection, clear 0, `greater` compares; blended classes get
   `greater-equal` so exactly-coplanar overlays — night windows, wall signs — composite stably): the
   systemic fix for the sign z-fighting and flickering tobj windows.
+- 2026-07-12 (10 phase 1 + full-LS numbers) — the integration track opened: boundary table audited against
+  code; the FULL-LS scaling measurement landed (pak 1.15 GB = 82 % GEOMETRY / 18 % textures → priority
+  inversion: meshopt wire compression + bake worker-pool before any BC work; V8-Map-cap gotcha fixed with
+  per-cell bake caches); the streaming driver graduated from the lab into `packages/engine/src/stream/`;
+  and the first own-engine boot INSIDE the web app shipped (`opensa-engine.html`, free-fly over full LS,
+  `?src=pak-ls`). The lab also streams the whole city now (`?src=pak-ls`). Bench JSON carries converter
+  metrics (plan 11 task closed).

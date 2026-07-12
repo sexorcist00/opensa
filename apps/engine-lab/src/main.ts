@@ -3,15 +3,18 @@
  * bundles → culling → MSAA+A2C pass), orbiting camera, the gate HUD. `?cells=N` (grid side, default 8),
  * `?boxes=N` (boxes per cell side, default 12), `?freeze=1` stops the orbit.
  */
-import { type CameraState, Engine } from '@opensa/engine';
+import { type CameraState, Engine, setupStreaming, type StreamingDriver, type StreamStats } from '@opensa/engine';
 
-import type { StreamingDriver } from './stream/streaming';
-
-import { BENCH_SCENES, BenchCollector, downloadRecord, formatRecord } from './bench';
+import {
+  BENCH_SCENE_MEASURE,
+  BENCH_SCENES,
+  BenchCollector,
+  downloadRecord,
+  fetchConverterMetrics,
+  formatRecord,
+} from './bench';
 import { type EnvironmentDriver, parametricDriver, timecycDriver } from './environment';
 import { loadPak } from './pak-loader';
-import { setupStreaming } from './stream/setup';
-import { type StreamStats } from './stream/streaming';
 import { syntheticCell, syntheticTextureArray } from './synthetic';
 
 const CELL_SIZE = 250;
@@ -124,7 +127,7 @@ async function main(): Promise<void> {
   if (benchScene && !benchScript) {
     throw new Error(`unknown bench scene '${benchScene}' (have: ${Object.keys(BENCH_SCENES).join(', ')})`);
   }
-  const collector = new BenchCollector();
+  const collector = new BenchCollector(benchScene ? BENCH_SCENE_MEASURE[benchScene] : undefined);
   let benchDone = false;
 
   const loop = (): void => {
@@ -174,7 +177,13 @@ async function main(): Promise<void> {
       if (!collector.running) {
         benchDone = true;
         const record = collector.finish(benchScene ?? '?', engine.adapterInfo, canvas);
-        downloadRecord(record);
+        // Converter metrics ride the record (074/11) — tool regressions get caught by the same ritual.
+        void fetchConverterMetrics(`/${params.get('src') ?? 'pak'}`).then((converter) => {
+          if (converter) {
+            record.converter = converter;
+          }
+          downloadRecord(record);
+        });
         hud.textContent = formatRecord(record);
 
         return; // freeze the loop on the summary

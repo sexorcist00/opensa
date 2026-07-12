@@ -28,15 +28,55 @@ it is not.
    decide keep/fold/delete for `?webgpu/bundle/mat04/...` and the three patch — a dedicated cleanup PR with the
    user, per the agreement.
 
+## Phase 1 — the side-by-side start (2026-07-12 audit)
+
+Audited against code; the integration STARTS now, the flip waits for its criteria:
+
+- **Entry point verified**: `packages/game/src/game.ts` owns the renderer via
+  `core/renderer.ts#createRenderContext` (the `?webgpu=1` spike branch lives there — the precedent for a
+  capability branch). `apps/web/src/standalone/webgpu-spike.ts` is the precedent for a SEPARATE boot path.
+- **Phase-1 shape**: a standalone own-engine boot in `apps/web` (like the spike): game VFS → pak source →
+  `@opensa/engine` + the lab's streaming driver + the game's camera/controls — NO gameplay yet. One flag
+  switches the WHOLE renderer; two renderers never share a canvas.
+- **Flip blockers (assessed 2026-07-12)**: full-map pak (BC-encode of the processed α-subset gates size —
+  measurement running), M3 dynamics (own IFP sampler — plan 08's early probe), water v1 (user-deferred,
+  idea 0.5.0/01), production range-read pak delivery (05's noted follow-up).
+
 ## Tasks
 
-- [ ] Boundary inventory verified against code (the table above audited item by item when M3 lands).
+- [x] Boundary inventory verified against code (2026-07-12: StreamingSystem three-shaped ✓ superseded by 05;
+      game loop framework-agnostic ✓; physics = three math only ✓; character/vehicle three-refs ✓ awaits 08;
+      UI/config renderer-independent ✓; picking = three raycaster ✓ needs the 07 BVH reuse).
 - [ ] Entity-handle adapter for character/vehicle gameplay; remove three mesh refs from logic paths.
 - [ ] Engine-side ray query (picking + the map-inspector tools).
-- [ ] Capability-gated loader in the web app (native pak + WebGPU → new engine; else three-WebGL).
+- [x] Phase-1 standalone boot in the web app (2026-07-12): `opensa-engine.html` +
+      `apps/web/src/standalone/opensa-engine.ts` — `@opensa/engine` + the (now package-level) streaming
+      driver + a free-fly camera over the FULL-LS pak (`?src=pak-ls`; root `public/pak-ls` symlinks the
+      lab's). The streaming modules moved `apps/engine-lab/src/stream/*` → `packages/engine/src/stream/*`
+      (exported: `setupStreaming`, `StreamingDriver`) — both apps consume the same driver now.
+- [ ] Capability-gated loader in the web app (native pak + WebGPU → new engine; else three-WebGL) — the
+      phase-1 page becomes its target.
 - [ ] Bench + soak + parity sweeps; the flip decision doc with all ledgers linked.
 - [ ] Post-flip cleanup: 073 flags/patch disposition PR (discussed with the user first — standing agreement).
 
 ## Measurement ledger
+
+| Date       | What                            | Numbers                                                                                                                                                                                                                                                                                                              |
+| ---------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-12 | FULL-LS convert (rect −1,−12…11,1 = 182 rect cells → 345 entries, HD-vegetation overlay on, both bakes) | **pak 1.15 GB — geometry 939 MB (82 %!), textures 212 MB (18 %)**; 20.5 M verts, 82 arrays, 66 timed objects; convert 833 s of which bakes 760 s (AO 418 + sunVis 342, 423 M rays vs 13.9 M occluder tris); 16 GB node heap survived. GOTCHA fixed en route: the global bake dedup cache exceeded V8's Map size cap (~16.7 M) — caches are per-cell now |
+
+**What the numbers mean for the flip (assessment 2026-07-12):**
+
+- The texture-side BC-encode is NOT the first lever (212 MB total; halving it saves ~100 MB). **Geometry
+  dominates**: 20.5 M verts × 36 B ≈ 740 MB + indexes. Levers in order: (1) WIRE compression — meshopt
+  vertex/index encoding + HTTP brotli (the 066 concept named meshopt for exactly this), pak stays GPU-layout
+  after a worker-side decode; (2) the HD-vegetation overlay is ~3× the stock vert count (measured on the
+  bench rect) — a stock-vegetation profile would put full-map geometry near ~1 GB before compression;
+  (3) BC for the α-subset comes after both.
+- Full map ≈ 3.2× LS ⇒ ~3.5 GB uncompressed pak, ~45 min single-threaded convert. Bakes are 91 % of the
+  time and embarrassingly parallel per cell → a worker pool is the convert-time lever. The full-map
+  convert will also need CHUNKED welding (16 GB heap held for LS; 3.2× the scratch will not).
+- Runtime residency is ring-bounded regardless of pak size (360 MB on the bench rect) — pak size is a
+  HOSTING/DOWNLOAD concern, solved by range-reads (users stream what they visit) + wire compression.
 
 (final matrix: every bench scene × both engines × fps/CPU/GPU; the flip verdict)
