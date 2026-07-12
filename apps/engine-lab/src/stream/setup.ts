@@ -15,6 +15,9 @@ export interface StreamSetup {
   center: [number, number, number];
   driver: StreamingDriver;
   radius: number;
+  /** Raw timecyc.dat from the manifest (row 14), when the converter embedded it. */
+  timecyc?: string;
+  timecyc24: boolean;
 }
 
 export async function setupStreaming(engine: Engine, baseUrl = '/pak'): Promise<StreamSetup> {
@@ -90,5 +93,7 @@ export async function setupStreaming(engine: Engine, baseUrl = '/pak'): Promise<
     center: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
     driver: new StreamingDriver(engine, manifest, worker),
     radius: Math.max((maxX - minX) / 2, (maxZ - minZ) / 2, 400),
+    ...(manifest.timecyc !== undefined ? { timecyc: manifest.timecyc } : {}),
+    timecyc24: manifest.timecyc24 ?? false,
   };
 }

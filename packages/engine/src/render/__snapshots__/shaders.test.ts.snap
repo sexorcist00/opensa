@@ -7,15 +7,17 @@ struct Frame {
   invViewProj: mat4x4f,
   camera: vec4f,
   // Environment (plan 074/06): sun direction (unit, towards the sun), sun colour,
-  // params  = [dn (0 day → 1 night), indirectScale, directScale, unused],
+  // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
-  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape).
+  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
+  // params2 = [aoStrength (074/07 baked skyVis → indirect), unused ×3].
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
   skyTop: vec4f,
   skyHorizon: vec4f,
   fog: vec4f,
+  params2: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -41,15 +43,17 @@ struct Frame {
   invViewProj: mat4x4f,
   camera: vec4f,
   // Environment (plan 074/06): sun direction (unit, towards the sun), sun colour,
-  // params  = [dn (0 day → 1 night), indirectScale, directScale, unused],
+  // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
-  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape).
+  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
+  // params2 = [aoStrength (074/07 baked skyVis → indirect), unused ×3].
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
   skyTop: vec4f,
   skyHorizon: vec4f,
   fog: vec4f,
+  params2: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -100,15 +104,17 @@ struct Frame {
   invViewProj: mat4x4f,
   camera: vec4f,
   // Environment (plan 074/06): sun direction (unit, towards the sun), sun colour,
-  // params  = [dn (0 day → 1 night), indirectScale, directScale, unused],
+  // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
-  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape).
+  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
+  // params2 = [aoStrength (074/07 baked skyVis → indirect), unused ×3].
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
   skyTop: vec4f,
   skyHorizon: vec4f,
   fog: vec4f,
+  params2: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -149,6 +155,8 @@ struct VsOut {
   @location(2) @interpolate(flat) layer: u32,
   @location(3) sunNdl: f32,
   @location(4) world: vec3f,
+  @location(5) glow: vec3f,
+  @location(6) ao: f32,
 };
 
 @vertex
@@ -161,9 +169,18 @@ fn vsWorld(in: VsIn) -> VsOut {
   // Day↔night prelit blend (074/06 row 1): cells without an authored night set carry a converter-synthesized
   // night (day × ambient) — one formula for the whole world, per vertex.
   out.prelit = mix(in.dayPrelit.rgb, in.nightPrelit.rgb, frame.params.x);
+  // Night emissives (074/06 rows 8-9, the 071 model): a vertex much brighter at night than by day IS a lit
+  // window / neon / sign — it GLOWS instead of being merely tinted. Luma delta gates it; dn fades it in.
+  let luma = vec3f(0.2126, 0.7152, 0.0722);
+  let delta = dot(in.nightPrelit.rgb, luma) - dot(in.dayPrelit.rgb, luma);
+  out.glow = in.nightPrelit.rgb * (smoothstep(0.05, 0.32, delta) * frame.params.w * frame.params.x);
   out.layer = in.layerChannels.x;
   // Sun N·L per vertex (074/06 row 3) — GTA geometry is low-poly; per-vertex matches the shipped look.
   out.sunNdl = max(dot(normalize(in.normal.xyz), frame.sunDir.xyz), 0.0);
+  // Baked AO/skyVis (074/07): low byte of channels; 0 means UNBAKED (old paks) → fully open, not black.
+  let aoByte = in.layerChannels.y & 0xffu;
+  let aoVis = select(f32(aoByte) / 255.0, 1.0, aoByte == 0u);
+  out.ao = mix(1.0, aoVis, frame.params2.x);
   return out;
 }
 
@@ -174,8 +191,9 @@ fn fsWorld(in: VsOut) -> @location(0) vec4f {
   let texel = textureSample(worldTexture, worldSampler, in.uv, in.layer);
   // Hybrid lighting (074/06 row 3, the shipped 064 model): prelit is the INDIRECT term, the sun adds a real
   // direct term on the raw albedo. indirect/direct ride frame params — day arcs are a CPU concern.
-  let lit = in.prelit * frame.params.y + frame.sunColor.rgb * (in.sunNdl * frame.params.z);
-  var color = texel.rgb * lit;
+  // Baked AO modulates ONLY the indirect term (074/07) — sun shadowing is the separate sunVis bake.
+  let lit = in.prelit * (frame.params.y * in.ao) + frame.sunColor.rgb * (in.sunNdl * frame.params.z);
+  var color = texel.rgb * (lit + in.glow);
   // Unified fog (074/06 row 5, the 068 shape): RADIAL distance (view-Z pops at screen edges), exp² over
   // [start, cut], height attenuation (haze hugs the ground), hard horizon cut — and the fog colour is the
   // SKY at this direction, so distant geometry dissolves into exactly what's behind it.

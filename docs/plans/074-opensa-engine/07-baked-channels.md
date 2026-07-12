@@ -27,13 +27,37 @@ reserved since v0 (02 — no format bump). 066 stays the spec source; this doc o
 
 ## Tasks
 
-- [ ] District BVH + raycaster in the tool (reuse collision BVH code where it fits).
+- [x] District BVH + raycaster in the tool (`bvh.ts`: median-split over triangle AABBs, iterative any-hit
+      Möller–Trumbore; occlusion queries only).
 - [ ] Sun-vis bake (K-sample) + channel writer + WGSL consumer swap in 06·3; A/B vs runtime CSM screenshots
       (the original 066 complaint — angular/jittery — is the acceptance test).
-- [ ] skyVis/AO bake + consumer; compare vs SSAO prepass visually and in GPU ms (SSAO pass should DIE here).
+- [x] skyVis/AO bake + consumer (v1 — see decisions below). SSAO never existed in this engine, so the
+      "SSAO dies" comparison is against the WebGL prod pass when plan 10's A/B lands.
 - [ ] Emissive mask bake (night-window detection from the existing night-prelit data) + 06·8 swap.
-- [ ] Ledger: bake wall-time, channel bytes, GPU ms saved (CSM casters + SSAO pass removed).
+- [x] Ledger: bake wall-time + ray counts recorded below (GPU Δ = per-vertex attribute, expected ≈ free;
+      confirmed by the ritual bench after reconvert).
+
+## v1 decisions (AO/skyVis, 2026-07-12)
+
+- Two-phase convert: `weldCellParts` (scratch rows, `WELD_ROW` grew 17→18 with an `ao` slot defaulting open)
+  → `bakeAo` mutates rows in place → `assembleCell` encodes. `weldCell` keeps the one-shot no-bake path.
+- Occluders = HD opaque+cutout groups only; blend glass and beam cones never darken the sky.
+- Only HD vertices are baked. LOD keeps the fully-open default: LOD verts sit NEAR but not ON the HD surfaces
+  (self-occlusion noise), and LOD is viewed from ≥380 units — revisit only if the HD↔LOD swap pops visibly.
+- 12 cosine-weighted rays (fixed golden-ratio fan — deterministic, no RNG), 60-unit reach, origins pushed
+  0.08 off the surface. Unique-(pos,normal) dedup cache cuts repeat rays (~10 % on LS — GTA verts are
+  already heavily split).
+- Storage: low byte of the `layerChannels` u16 (074/02, no format bump) + `AO_SKY_VIS` channel bit.
+  WGSL treats byte 0 as UNBAKED → fully open, so pre-bake paks render unchanged.
+- Consumer: modulates ONLY the indirect (prelit) term — `env.aoStrength` (default 0.6; SA prelit already
+  carries baked darkening, full strength double-darkens). Lab A/B: `?ao=<float>`, `?ao=0` disables.
+- `--no-ao` CLI flag skips the bake; `report.json` gains the `ao` block (ms, rays, verts, tris).
 
 ## Measurement ledger
 
-(per bake: tool time, bytes, GPU Δ, screenshot verdicts)
+| Date       | What                              | Numbers                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-12 | AO/skyVis bake, ls-bench rect     | convert 23.4 s total, bake 20.6 s — 1,157,279 verts (1,044,940 unique), 12.5 M rays vs 738,880 tris, pak 99.5 MB (unchanged — the byte was reserved)                                                                                                                                                                                                                                                                      |
+| 2026-07-12 | Baked distribution sanity         | cell 9,-7 hd: full 0..255 spread (27.8 k fully-occluded verts = undersides/interiors), channel bit set; lod: all 255, bit absent                                                                                                                                                                                                                                                                                          |
+| 2026-07-12 | **GOTCHA: sentinel collision**    | field report «под мостами не вижу» — fully-occluded verts encode byte 0 = the WGSL "unbaked" sentinel → the DARKEST verts rendered fully OPEN. District-wide: 262 k verts (23 %!) were byte-0. Fix: bake floors visibility at 1/255. Second cause is expected v1 behaviour: at noon the DIRECT sun term dominates an up-facing road — AO modulates indirect only; under-bridge sun darkness arrives with the sun-vis bake |
+| 2026-07-12 | drive bench (+AO, pinned profile) | bench/series row 07·AO — BASELINE RESET to `game-src/non-modified` (earlier rows ran the user's modded pak); AO GPU cost ≈ free (one per-vertex mix)                                                                                                                                                                                                                                                                      |

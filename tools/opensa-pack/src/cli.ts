@@ -1,7 +1,7 @@
 /**
  * `opensa-pack` CLI (plan 074/03).
  *
- *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1 [--cell-size 250]
+ *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1 [--cell-size 250] [--no-ao]
  *
  * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / cellSize)). Writes `world.ospak` +
  * `manifest.json` + `report.json` into `--out`.
@@ -33,12 +33,14 @@ function main(): void {
     throw new Error(`bad --rect '${rectRaw}' (want x0,y0,x1,y1 in cell coords)`);
   }
   const cellSize = Number(arg('cell-size') ?? 250) || 250;
+  const ao = !process.argv.includes('--no-ao');
 
   const started = Date.now();
   console.log(`[opensa-pack] loading game dir ${game} …`);
   const fs = openGameDir(game);
-  console.log(`[opensa-pack] converting rect ${rectRaw} (cellSize ${cellSize}) …`);
+  console.log(`[opensa-pack] converting rect ${rectRaw} (cellSize ${cellSize}, ao ${ao ? 'on' : 'off'}) …`);
   const { manifest, pak, report } = convertDistrict(fs, {
+    ao,
     cellSize,
     rect: rect as unknown as readonly [number, number, number, number],
   });
@@ -59,6 +61,12 @@ function main(): void {
       `colors=${report.textures.colors} dedup=${report.textures.dedup} arrays=${report.textures.arrays}, ` +
       `skipped timed=${report.skippedTimed} animated=${report.skippedAnimated}`,
   );
+  if (report.ao) {
+    console.log(
+      `[opensa-pack] ao bake: ${(report.ao.ms / 1000).toFixed(1)}s — ${report.ao.vertices} verts ` +
+        `(${report.ao.uniqueVertices} unique), ${report.ao.rays} rays vs ${report.ao.triangles} tris`,
+    );
+  }
 }
 
 main();

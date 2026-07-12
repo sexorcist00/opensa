@@ -31,13 +31,17 @@ export interface OspakManifest {
   cellSize: number;
   /** Texture-array entries: `"array-<id>"` → range; meta mirrors the .ostex headers for scheduling. */
   textures: Record<string, OspakEntry & { format: number; height: number; layers: number; width: number }>;
+  /** Raw `timecyc.dat` text (row 14) — the runtime samples it with the same renderware parser as prod. */
+  timecyc?: string;
+  /** True when `timecyc` is already the 24-hour variant (`timecyc_24h.dat`). */
+  timecyc24?: boolean;
   version: number;
 }
 
 /** Assemble a pak deterministically: entries sorted by key, 4 KiB aligned, zero-padded. */
 export function buildOspak(
   inputs: readonly OspakInput[],
-  options: { cellSize?: number } = {},
+  options: { cellSize?: number; timecyc?: string; timecyc24?: boolean } = {},
 ): { manifest: OspakManifest; pak: Uint8Array } {
   const sorted = [...inputs].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   const cells: OspakManifest['cells'] = {};
@@ -74,6 +78,7 @@ export function buildOspak(
       cells,
       cellSize: options.cellSize ?? 250,
       textures,
+      ...(options.timecyc !== undefined ? { timecyc: options.timecyc, timecyc24: options.timecyc24 ?? false } : {}),
       version: OSPAK_VERSION,
     },
     pak,

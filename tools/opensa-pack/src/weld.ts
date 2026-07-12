@@ -16,6 +16,28 @@ import { IdeFlag } from '@opensa/renderware/parsers/text/index';
 
 import type { TexturePlanner } from './textures';
 
+export interface WeldBucket {
+  indices: number[];
+  key: string;
+  max: [number, number, number];
+  min: [number, number, number];
+  pipelineClass: number;
+  side: number;
+  textureArrayRef: number;
+  vertices: number[]; // scratch rows: px py pz nx ny nz u v dr dg db da nr ng nb sway layer ao
+}
+
+/** The welded-but-not-yet-encoded cell — the bake stages (074/07) mutate scratch rows between the phases. */
+export interface WeldedCell {
+  buckets: WeldBucket[];
+  hasAo: boolean;
+  hasNight: boolean;
+  hasSway: boolean;
+  lod: boolean;
+  origin: readonly [number, number, number];
+  stats: WeldStats;
+}
+
 export interface WeldStats {
   groups: number;
   indices: number;
@@ -24,25 +46,21 @@ export interface WeldStats {
   vertices: number;
 }
 
-interface WeldBucket {
-  indices: number[];
-  key: string;
-  max: [number, number, number];
-  min: [number, number, number];
-  pipelineClass: number;
-  side: number;
-  textureArrayRef: number;
-  vertices: number[]; // scratch rows: px py pz nx ny nz u v dr dg db da nr ng nb sway layer
-}
-
-const ROW = 17;
+/** Scratch-row layout (floats per welded vertex) + the slots the bakers touch. */
+export const WELD_ROW = 18;
+export const WELD_AO = 17;
 
 /** Synthesized night ambient for geometry without an authored night set (slightly cool, ~SA night level). */
 const NIGHT_AMBIENT_R = 0.3;
 const NIGHT_AMBIENT_G = 0.32;
 const NIGHT_AMBIENT_B = 0.4;
 
-/** Convert one cell; returns null when it contains nothing mergeable. */
+/** Phase 2: encode the (possibly baked) scratch buckets into `.oscell` bytes. */
+export function assembleCell(welded: WeldedCell): Uint8Array {
+  return assemble(welded.buckets, welded.origin, welded, welded.stats);
+}
+
+/** Convert one cell in one shot (weld + encode, no bake) — the tests' and no-bake path. */
 export function weldCell(
   fs: AssetFileSystem,
   defs: MapDefinitions,
@@ -51,6 +69,20 @@ export function weldCell(
   planner: TexturePlanner,
   originEngine: readonly [number, number, number],
 ): null | { bytes: Uint8Array; stats: WeldStats } {
+  const welded = weldCellParts(fs, defs, cell, lod, planner, originEngine);
+
+  return welded ? { bytes: assembleCell(welded), stats: welded.stats } : null;
+}
+
+/** Phase 1: weld into scratch buckets; returns null when the cell contains nothing mergeable. */
+export function weldCellParts(
+  fs: AssetFileSystem,
+  defs: MapDefinitions,
+  cell: GridCell,
+  lod: boolean,
+  planner: TexturePlanner,
+  originEngine: readonly [number, number, number],
+): null | WeldedCell {
   const buckets = new Map<string, WeldBucket>();
   const stats: WeldStats = { groups: 0, indices: 0, skippedAnimated: 0, skippedTimed: 0, vertices: 0 };
   const flags = { hasNight: false, hasSway: false };
@@ -74,7 +106,15 @@ export function weldCell(
     return null;
   }
 
-  return { bytes: assemble(ordered, originEngine, flags.hasNight, flags.hasSway, stats), stats };
+  return {
+    buckets: ordered,
+    hasAo: false,
+    hasNight: flags.hasNight,
+    hasSway: flags.hasSway,
+    lod,
+    origin: originEngine,
+    stats,
+  };
 }
 
 /** Bake one instance of one part into the bucket (GTA→engine axes + cell-local offset). */
@@ -89,7 +129,7 @@ function appendInstance(
   // GTA IPL quaternions are the conjugate of the usual convention (parity with build-region).
   const [qx, qy, qz, qw] = [-instance.rotation[0], -instance.rotation[1], -instance.rotation[2], instance.rotation[3]];
   const m = quatToMat3(qx, qy, qz, qw);
-  const base = bucket.vertices.length / ROW;
+  const base = bucket.vertices.length / WELD_ROW;
   const used = new Map<number, number>(); // source vertex → welded row (per instance/part)
   const remap = (source: number): number => {
     const existing = used.get(source);
@@ -137,6 +177,8 @@ function appendInstance(
       atomic.nightColor ? atomic.nightColor[source * 3 + 2] : dayB * NIGHT_AMBIENT_B,
       atomic.sway ? atomic.sway.weights[source] : 0,
       layer,
+      // aoSkyVis default = fully open; the bake stage (074/07) overwrites HD rows in place.
+      1,
     );
     bucket.min[0] = Math.min(bucket.min[0], ex);
     bucket.min[1] = Math.min(bucket.min[1], ey);
@@ -159,14 +201,13 @@ function appendInstance(
 function assemble(
   ordered: WeldBucket[],
   origin: readonly [number, number, number],
-  hasNight: boolean,
-  hasSway: boolean,
+  channels: { hasAo: boolean; hasNight: boolean; hasSway: boolean },
   stats: WeldStats,
 ): Uint8Array {
   let vertexCount = 0;
   let indexCount = 0;
   for (const bucket of ordered) {
-    vertexCount += bucket.vertices.length / ROW;
+    vertexCount += bucket.vertices.length / WELD_ROW;
     indexCount += bucket.indices.length;
   }
   const index16 = vertexCount <= 0xffff;
@@ -180,9 +221,9 @@ function assemble(
   let vertexBase = 0;
   let indexBase = 0;
   for (const bucket of ordered) {
-    const bucketVertices = bucket.vertices.length / ROW;
+    const bucketVertices = bucket.vertices.length / WELD_ROW;
     for (let vertex = 0; vertex < bucketVertices; vertex += 1) {
-      const row = vertex * ROW;
+      const row = vertex * WELD_ROW;
       const at = (vertexBase + vertex) * OSCELL_VERTEX_STRIDE;
       view.setFloat32(at, bucket.vertices[row], true);
       view.setFloat32(at + 4, bucket.vertices[row + 1], true);
@@ -202,7 +243,8 @@ function assemble(
       view.setUint8(at + 30, unorm(bucket.vertices[row + 14]));
       view.setUint8(at + 31, unorm(bucket.vertices[row + 15]));
       view.setUint16(at + 32, bucket.vertices[row + 16], true);
-      view.setUint16(at + 34, 0, true);
+      // channels u16 = aoSkyVis | emissive << 8 (074/02); emissive mask is a later bake.
+      view.setUint16(at + 34, unorm(bucket.vertices[row + WELD_AO]), true);
     }
     for (let entry = 0; entry < bucket.indices.length; entry += 1) {
       indexArray[indexBase + entry] = bucket.indices[entry] + vertexBase;
@@ -244,7 +286,10 @@ function assemble(
       center[2],
       Math.hypot(cellMax[0] - center[0], cellMax[1] - center[1], cellMax[2] - center[2]),
     ],
-    channelMask: (hasNight ? OscellChannel.NIGHT_PRELIT : 0) | (hasSway ? OscellChannel.SWAY : 0),
+    channelMask:
+      (channels.hasNight ? OscellChannel.NIGHT_PRELIT : 0) |
+      (channels.hasSway ? OscellChannel.SWAY : 0) |
+      (channels.hasAo ? OscellChannel.AO_SKY_VIS : 0),
     groups,
     index16,
     indexCount,

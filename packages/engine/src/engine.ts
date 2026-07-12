@@ -44,8 +44,12 @@ export interface EngineStats {
 
 /** Per-frame environment (074/06): drives the world lighting uniforms. All CPU-side arcs live in the host. */
 export interface Environment {
+  /** Baked AO/skyVis strength on the indirect term (074/07): 0 = off, 1 = raw bake. */
+  aoStrength: number;
   /** 0 day → 1 deep night (the prelit blend). */
   dn: number;
+  /** Night-emissive glow strength (lit windows / neon self-illuminate; 0 = off). */
+  emissiveBoost: number;
   /** Fog full-fog distance (the horizon cut, engine units). */
   fogCutDistance: number;
   /** Height-fog falloff (1/units) — haze hugs the ground. */
@@ -72,7 +76,10 @@ export class Engine {
   cells!: CellStore;
   /** Live environment — host mutates freely; written into the frame UBO every frame. Noon defaults. */
   readonly environment: Environment = {
+    // Modest by default: SA prelit already carries baked darkening — full-strength AO double-darkens.
+    aoStrength: 0.6,
     dn: 0,
+    emissiveBoost: 1.6,
     fogCutDistance: 2400,
     fogHeightK: 1 / 180,
     fogHeightMin: 0.35,
@@ -140,10 +147,11 @@ export class Engine {
     const sunLen = Math.hypot(env.sunDir[0], env.sunDir[1], env.sunDir[2]) || 1;
     frameData.set([env.sunDir[0] / sunLen, env.sunDir[1] / sunLen, env.sunDir[2] / sunLen, 0], 36);
     frameData.set([...env.sunColor, 1], 40);
-    frameData.set([env.dn, env.sunIndirect, env.sunDirect, 0], 44);
+    frameData.set([env.dn, env.sunIndirect, env.sunDirect, env.emissiveBoost], 44);
     frameData.set([...env.skyTop, 1], 48);
     frameData.set([...env.skyHorizon, 1], 52);
     frameData.set([env.fogCutDistance, env.fogStartDistance, env.fogHeightK, env.fogHeightMin], 56);
+    frameData.set([env.aoStrength, 0, 0, 0], 60);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
 
     frustumFromViewProj(this.frustumPlanes, this.viewProj);
@@ -215,7 +223,7 @@ export class Engine {
     this.pipelines = compileAll(this.device, this.engineDevice.colorFormat, DEPTH_FORMAT);
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
-      size: 256, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog (7 × 16), padded
+      size: 256, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2 (8 × 16) — FULL
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this.frameBindGroup = this.device.createBindGroup({

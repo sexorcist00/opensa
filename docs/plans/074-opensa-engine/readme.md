@@ -105,3 +105,14 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   (drive GPU p95 1.77→1.84 ms, gate clean; series row added). Field screens exposed the LINEAR→sRGB output
   bug (world gamma-crushed dark): fixed by rendering into the swapchain's sRGB VIEW (viewFormats) + linear
   sky constants — the project's standing linear-space lesson, now encoded in `EngineDevice.colorFormat`.
+- 2026-07-12 (M2 slices 2-4) — sky pass + unified fog (rows 4-5 v1, +0.39 ms GPU p95 ACCEPTED, fog-into-sky
+  invariant field-confirmed on noon/dawn/dusk screens); REAL timecyc (row 14: converter embeds
+  timecyc(\_24h).dat into the manifest, the lab samples with prod's own parser chain, `?weather=N`); night
+  emissives (row 8: per-vertex luma-delta glow — lit windows/neon at night, ~free). Reconvert required
+  (manifest grew timecyc).
+- 2026-07-12 (07 v1) — baked AO/skyVis landed: district triangle BVH + 12-ray cosine hemisphere bake in
+  `opensa-pack` (two-phase weld→bake→assemble; HD only, opaque+cutout occluders, unique-vertex dedup),
+  stored in the reserved `layerChannels` low byte + `AO_SKY_VIS` bit (no format bump; byte 0 = unbaked →
+  open, old paks render unchanged). WGSL modulates the INDIRECT term only via `env.aoStrength` (default 0.6;
+  lab `?ao=N` A/B, `--no-ao` skips the bake). LS rect: bake 20.6 s, 12.5 M rays / 1.16 M verts, pak size
+  unchanged. Reconvert required to see it; sun-vis + emissive-mask bakes remain (07 continues).
