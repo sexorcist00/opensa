@@ -27,12 +27,25 @@ Deliverable = a lab toggle + a one-page "what it forced us to change" note in th
 | Procobj clutter                         | TRUE instancing (one draw per batch × placements) — the natural instancing case                                             | procobj placement/wind data                                         |
 | Physics/gameplay                        | NOT here — the lab drives entities from recorded paths; real gameplay arrives in 10                                         |                                                                     |
 
+## Coverage matrix (user checklist, 2026-07-12 — where each concern lives)
+
+| Concern                         | Covered?               | Where                                                                                                                                                                                          |
+| ------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Camera                          | ✅ plan 10 (B3)        | The game camera is GAMEPLAY code (renderer-agnostic per the plan-10 audit) — it produces a `CameraState` per frame; the engine consumes it. Follow-cam/collision logic reuses as-is            |
+| Vehicles (render)               | ✅ here                | rigid part hierarchy → per-frame flatten into the transform storage buffer                                                                                                                     |
+| Vehicle damage                  | ✅ here                | SA's ok/dam GEOMETRY STATES per part — damage = part-visibility swaps in the entity's part list (render side); the deformation physics idea is separate (ideas 0.6.0/01 VehDeform)             |
+| Dummy hierarchies               | ✅ here (explicit now) | DFF frame/dummy tree (wheel*\*, door*\*, exhaust, headlight dummies) parses into the part hierarchy; dummies drive part transforms, light/exhaust anchor points, and the 2dfx attachment slots |
+| Reflections (vehicle paint/env) | ✅ here                | SA sphere-map env WGSL port + carcols; per-pixel on the vehicle pipeline variant                                                                                                               |
+| Reflections (world/planar)      | ❌ out of scope        | SA has no world planar reflections; if ever wanted → post-M4 idea                                                                                                                              |
+| Character rigging               | ✅ here                | skinned pipeline variant, bone palette in storage buffer, DFF skin data                                                                                                                        |
+| Character animation             | ✅ here                | OWN IFP sampler + thin crossfade re-implementation (three's AnimationMixer not portable) — THE early probe                                                                                     |
+
 ## Tasks
 
 - [ ] **Skinning probe (early — gate M1→M2 boundary)**: storage palettes + WGSL skin + IFP sampler + probe note.
 - [ ] Transform buffer + dynamic-offset draw path + entity registry (01 dynamics module made real).
 - [ ] Character full: sampler crossfades, retarget (port the pure logic, drop the three mixer).
-- [ ] Vehicles: part flattening, paint/env WGSL, night fill module, damage part-swap hooks (render side only).
+- [ ] Vehicles: DUMMY-tree parse → part hierarchy, part flattening, paint/env WGSL, night fill module, ok/dam damage part-swap hooks (render side only).
 - [ ] Dynamics-only near shadow map pass + world/dynamics sampling.
 - [ ] Particles/coronas instanced pass; procobj instancing.
 - [ ] Ledger: skinning CPU+GPU ms (gate ≤ 1 ms), dynamics draw counts, near-shadow pass ms.

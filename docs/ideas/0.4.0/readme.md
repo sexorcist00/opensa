@@ -87,3 +87,18 @@ Chain overview + code grounding + boundary vs 03-asi: [plans/05-lod-generators-e
 | B1  | [procobj density model](plans/05-lod-generators-extended/b1-procobj-density-model.md)                | build-time per-category/per-surface density, replaces vanilla cutoff         | idea   |
 | B2  | [biome/zone density](plans/05-lod-generators-extended/b2-biome-zone-density.md)                      | zone×scatter join + slope proxy: desert cacti, forest bushes, mountain rocks | idea   |
 | B3  | [budget lift & integration](plans/05-lod-generators-extended/b3-budget-lift-integration.md)          | raise int16-era caps for the asi target; perf becomes the new limiter        | idea   |
+
+## Normals & smoothing groups in map-optimizer
+
+Auto-recomputed normals produce a faceted, per-face-darkened world — and the 074 engine's real per-vertex
+sun makes it worse. Plan: preserve sane source normals, crease-angle recompute for the rest, split-topology
+smoothing inheritance, HD→LOD normal transfer. Full plan:
+[plans/06-normals-smoothing/readme.md](plans/06-normals-smoothing/readme.md).
+
+## Vehicle driving physics overhaul (THE priority gameplay task)
+
+Driving feel rebuilt on Rapier: raycast-vehicle model (Rapier's DynamicRayCastVehicleController or own),
+handling.cfg as the tuning source of truth (centreOfMass fixes rollover at the root), load transfer +
+anti-dive (fixes brake nose-lift), anti-roll bars, slip-curve tyres, rate-limited speed-sensitive steering.
+Telemetry harness + scripted test track FIRST — nothing tuned blind. Renderer-agnostic: survives the 074
+flip untouched. Full plan: [plans/07-vehicle-physics/readme.md](plans/07-vehicle-physics/readme.md).

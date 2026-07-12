@@ -73,3 +73,23 @@ Target steady numbers (M1 ledger): JS heap **< 500 MB and flat** while driving; 
 
 **M1 core gates: PASSED.** Remaining M1 scenarios (quick follow-ups, not blockers): camera-whip 360°,
 teleport (full ring turnover), 30-min soak (heap/residency flat lines), unload-all leak assertion.
+
+## Range-read IO landed (2026-07-12, integration round)
+
+The pak worker auto-detects at init (probe `Range: bytes=0-0` → 206): RANGE mode fetches entries on demand
+(the multi-GB pak never resides in memory — the 4 KiB alignment finally earns its keep); servers that ignore
+`Range` fall back to the M1 whole-pak mode. Verified against the vite dev server: GET honours ranges
+(`bytes=0-15` → exactly 16 bytes; NB its HEAD handler misreports Content-Length — probe uses GET).
+Startup transfer for full-LS drops 1.15 GB → ~212 MB (the district-wide texture arrays; per-ring texture
+laziness is a later option).
+
+## Post-integration tuning candidates (parked 2026-07-12, user decision — revisit AFTER the flip)
+
+The full-city `city` bench (135 u/s traverse) held 120 Hz for ~3595/3600 frames; the couple of 21.9 ms
+spikes trace to the ≤1-create/frame budget at speed (submit max 7.1 ms). Two candidates, deliberately NOT
+taken now:
+
+- **2 cell-creates per frame** when the pending queue backs up (double the worst-frame create cost — needs
+  the bench to confirm it stays under budget);
+- **velocity-vector ring prefetch**: bias the HD/LOD rings ahead along the camera's velocity so cells are
+  requested earlier at speed (cheap, pure driver logic).

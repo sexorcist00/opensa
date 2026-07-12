@@ -13,20 +13,23 @@ non-WebGPU browsers during the whole build-out (additive, no flag day — the 06
 
 ## The chain
 
-| #   | Plan                                                   | One-liner                                                                                   |
-| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| 01  | [Framework architecture](01-framework-architecture.md) | The renderer design: module map, bind model, frame graph, shader system, extension points.  |
-| 02  | [Native formats](02-native-formats.md)                 | `.oscell` / `.ostex` / `.ospak` — GPU-ready, versioned, batching + texture arrays + alpha.  |
-| 03  | [Converter tool](03-converter-tool.md)                 | `tools/opensa-pack`: game-ready set → native pak; the ALPHA PIPELINE lives here (early).    |
-| 04  | [Engine lab + P0 gate](04-engine-lab-p0.md)            | `apps/engine-lab`: the vertical-slice spike, bench parity, numeric gates, Safari check.     |
-| 05  | [Streaming runtime](05-streaming-runtime.md)           | Cell lifecycle, worker IO, range reads, GPU residency/eviction — the memory model.          |
-| 06  | [World effects parity](06-world-effects-parity.md)     | Effect-by-effect WGSL ledger: sun/fog/sky/lights/emissives/wind/water, each measured.       |
-| 07  | [Baked channels](07-baked-channels.md)                 | Static shadows + AO/skyVis + emissive mask — 066/03-04 executed against the new target.     |
-| 08  | [Dynamics](08-dynamics.md)                             | Skinning (EARLY probe), character + IFP, vehicles, particles, procobj instancing.           |
-| 09  | [Post-FX & AA](09-postfx-aa.md)                        | MSAA+A2C, bloom, ACES, god-rays; render-scale tiers.                                        |
-| 10  | [Integration & flip](10-integration-flip.md)           | Boundary refactor, game-app integration, flip criteria, 073-flags cleanup decision.         |
-| 11  | [Performance testing](11-performance-testing.md)       | Pinned `game-src` input + bench scenes + committed series — every engine change perf-gated. |
-| 12  | [Stochastic texturing](12-stochastic-texturing.md)     | De-tiling ground/grass/roads (skygfx-researched 3-tap blend); offline name-list selection.  |
+| #   | Plan                                                     | One-liner                                                                                             |
+| --- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 01  | [Framework architecture](01-framework-architecture.md)   | The renderer design: module map, bind model, frame graph, shader system, extension points.            |
+| 02  | [Native formats](02-native-formats.md)                   | `.oscell` / `.ostex` / `.ospak` — GPU-ready, versioned, batching + texture arrays + alpha.            |
+| 03  | [Converter tool](03-converter-tool.md)                   | `tools/opensa-pack`: game-ready set → native pak; the ALPHA PIPELINE lives here (early).              |
+| 04  | [Engine lab + P0 gate](04-engine-lab-p0.md)              | `apps/engine-lab`: the vertical-slice spike, bench parity, numeric gates, Safari check.               |
+| 05  | [Streaming runtime](05-streaming-runtime.md)             | Cell lifecycle, worker IO, range reads, GPU residency/eviction — the memory model.                    |
+| 06  | [World effects parity](06-world-effects-parity.md)       | Effect-by-effect WGSL ledger: sun/fog/sky/lights/emissives/wind/water, each measured.                 |
+| 07  | [Baked channels](07-baked-channels.md)                   | Static shadows + AO/skyVis + emissive mask — 066/03-04 executed against the new target.               |
+| 08  | [Dynamics](08-dynamics.md)                               | Skinning (EARLY probe), character + IFP, vehicles, particles, procobj instancing.                     |
+| 09  | [Post-FX & AA](09-postfx-aa.md)                          | MSAA+A2C, bloom, ACES, god-rays; render-scale tiers.                                                  |
+| 10  | [Integration & flip](10-integration-flip.md)             | Boundary refactor, game-app integration, flip criteria, 073-flags cleanup decision.                   |
+| 11  | [Performance testing](11-performance-testing.md)         | Pinned `game-src` input + bench scenes + committed series — every engine change perf-gated.           |
+| 12  | [Stochastic texturing](12-stochastic-texturing.md)       | De-tiling ground/grass/roads (skygfx-researched 3-tap blend); offline name-list selection.            |
+| 13  | [Post-flip cleanup](13-cleanup.md)                       | AFTER the flip: drop the three-WebGL path, the 073 debug-flag zoo, three/babylon/postprocessing deps. |
+| 14  | [pmb integration + final measure](14-pmb-integration.md) | Embed opensa-pack into perfect-map-builder; full modded-map conversion + the chain's exit-exam bench. |
+| 15  | [LOD baked lights](15-lod-baked-lights.md)               | Bake 2dfx lamp light into LOD night prelit — far-field streetlight pools / billboard glow at night.   |
 
 ## Roadmap — vertical slices with numeric gates (plans ≠ phases; each milestone cuts across plans)
 
@@ -68,6 +71,32 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
 - **Instrumentation**: the 073 HUD (frame/fixed/update/unaccounted/heap/longtasks) + bench scenes/paths.
 - **The alpha-edge groundwork**: dilation BFS + DXT software decode exist from the
   [open issue](../../open-issues/alpha-edge.md).
+
+## Handoff status (2026-07-12, end of the Fable session — resume from here)
+
+**The execution order lives in [priority.md](priority.md)** — milestones A (map deliverable) → B (player
+in the world) → C (flip + endgame), each step with its plan link and a done-definition.
+
+**Shipped & field-confirmed:** M0 (P0 gate) · M1 streaming core · effects ledger 06 = 12/14 (rows 1,2,3,6,
+8,9,10,11,14 ✅; 4,5 sky/fog v1; 13 coronas v1 — textured sprites + 2dfx particles remain; 7 light pool
+waits for M3 producers; 12 water user-deferred → ideas 0.5.0/01) · plan 07 closed (scalar sun-vis + AO
+shipping; directional v2 built-and-reverted → ideas 0.5.0/03, prerequisite = receiver densification) ·
+plan 12 built but UNSTABLE/default-off · reversed-Z engine-wide · plan 10 phase 1 (boundary audit, the
+`opensa-engine.html` standalone boot in the web app, full-LS pak `?src=pak-ls`, range-read pak IO) ·
+plan 11 harness + committed series incl. the three-engine comparison table.
+
+**The integration queue (in order):** ① meshopt wire compression (+brotli; geometry = 82 % of the 1.15 GB
+full-LS pak — the measured top lever) → ② bake worker pool + chunked welding (full-map convert; bakes = 91 %
+of time, 16 GB heap held ONE city) → ③ capability-gated loader (the phase-1 page is its target) → ④ M3
+dynamics (own IFP skinning probe FIRST — plan 08 schedules the risk early) → ⑤ water v1 for the game →
+⑥ flip criteria (plan 10) → ⑦ cleanup (13) → ⑧ pmb + final measure (14).
+
+**Parked with prerequisites written down:** directional shadows (ideas 0.5.0/03 — receiver-mesh
+densification), weather wind (ideas 0.5.0/02), stochastic default-on (12 — histogram-preserving pass),
+streaming create-budget tuning (05 — post-integration section).
+
+**Test/verification state at handoff:** 61 tests green across engine-formats/engine/opensa-pack; golden
+WGSL snapshots current; tsc + eslint clean; benches committed through the `city` full-LS run.
 
 ## Decision log
 
@@ -207,3 +236,11 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   and the first own-engine boot INSIDE the web app shipped (`opensa-engine.html`, free-fly over full LS,
   `?src=pak-ls`). The lab also streams the whole city now (`?src=pak-ls`). Bench JSON carries converter
   metrics (plan 11 task closed).
+- 2026-07-12 (session close: plans 13/14 + handoff) — the chain gained its endgame plans: 13 post-flip
+  CLEANUP (user decision: after a successful integration the old graphics DROP entirely — three-WebGL path,
+  the 073 debug-flag zoo, three/babylon/postprocessing dependencies; supersedes flip criterion 4's WebGL
+  fallback) and 14 PMB INTEGRATION (opensa-pack becomes a perfect-map-builder stage — wind/stochastic/
+  subdivision data move into pmb config — plus the exit-exam measurement: full modded map, all profiles,
+  60 fps verdict). Fixed open-issues moved to docs/open-issues/fixed/ (alpha-edge, ghost-barriers,
+  lod-2dfx-particles — the latter two root-fixed by perfect-map.asi). A "Handoff status" section snapshots
+  the resume point.
