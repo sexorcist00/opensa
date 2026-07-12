@@ -42,6 +42,10 @@ async function main(): Promise<void> {
   if (Number.isFinite(sunVisParam)) {
     engine.environment.sunVisStrength = sunVisParam;
   }
+  const windParam = Number(params.get('wind') ?? Number.NaN);
+  if (Number.isFinite(windParam)) {
+    engine.environment.windStrength = windParam;
+  }
   // Row 14: the environment driver — real timecyc when the manifest carries it, parametric fallback else.
   // Swapped in after the pak loads (the manifest arrives there); parametric until then.
   let environmentDriver: EnvironmentDriver = parametricDriver(engine);

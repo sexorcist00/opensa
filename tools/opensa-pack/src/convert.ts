@@ -18,6 +18,8 @@ export interface ConvertOptions {
   /** Bake per-vertex AO/skyVis (074/07); on by default, `--no-ao` skips it. */
   ao?: boolean;
   cellSize?: number;
+  /** Shared overlay TXDs (basenames, no extension) searched when a def's own txdp chain misses. */
+  fallbackTxds?: readonly string[];
   /** Inclusive GTA cell-coordinate rect [x0, y0, x1, y1]. */
   rect: readonly [number, number, number, number];
   /** Bake per-vertex sun visibility (074/07); on by default, `--no-sunvis` skips it. */
@@ -41,7 +43,7 @@ export function convertDistrict(
   const cellSize = options.cellSize ?? 250;
   const defs = resolveMap(fs, { extraIpl: OPEN_SCRIPT_IPL });
   const grid = buildWorldGrid(defs, cellSize);
-  const planner = new TexturePlanner(fs, defs.txdParents ?? new Map<string, string>());
+  const planner = new TexturePlanner(fs, defs.txdParents ?? new Map<string, string>(), options.fallbackTxds ?? []);
 
   const inputs: OspakInput[] = [];
   const report: ConvertReport = {

@@ -2,13 +2,16 @@
  * `opensa-pack` CLI (plan 074/03).
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1
- *     [--cell-size 250] [--no-ao] [--no-sunvis]
+ *     [--cell-size 250] [--no-ao] [--no-sunvis] [--wind <dir>[,<dir>…]]
+ *
+ * `--wind` — overlay dirs of wind-ADAPTED DFFs (prelit alpha = sway weights), e.g.
+ * `--wind "mods-src/vegetation,mods-src/mods/21. Wind Project 1.0.2"`; they shadow the game's assets.
  *
  * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / cellSize)). Writes `world.ospak` +
  * `manifest.json` + `report.json` into `--out`.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
@@ -17,6 +20,20 @@ function arg(name: string): null | string {
   const index = process.argv.indexOf(`--${name}`);
 
   return index >= 0 ? (process.argv[index + 1] ?? null) : null;
+}
+
+function findFiles(dir: string, extension: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      found.push(...findFiles(full, extension));
+    } else if (entry.toLowerCase().endsWith(extension)) {
+      found.push(full);
+    }
+  }
+
+  return found;
 }
 
 function main(): void {
@@ -36,17 +53,29 @@ function main(): void {
   const cellSize = Number(arg('cell-size') ?? 250) || 250;
   const ao = !process.argv.includes('--no-ao');
   const sunVis = !process.argv.includes('--no-sunvis');
+  const windDirs = (arg('wind') ?? '')
+    .split(',')
+    .map((dir) => dir.trim())
+    .filter(Boolean);
 
   const started = Date.now();
-  console.log(`[opensa-pack] loading game dir ${game} …`);
-  const fs = openGameDir(game);
+  console.log(
+    `[opensa-pack] loading game dir ${game}${windDirs.length > 0 ? ` + wind overlays ${windDirs.join(' | ')}` : ''} …`,
+  );
+  const fs = openGameDir(game, windDirs);
   console.log(
     `[opensa-pack] converting rect ${rectRaw} (cellSize ${cellSize}, ao ${ao ? 'on' : 'off'}, ` +
       `sunvis ${sunVis ? 'on' : 'off'}) …`,
   );
+  // Overlay mods ship shared TXDs (vegetation.txd) the installed game wires via txdp — offline they become
+  // planner fallbacks.
+  const fallbackTxds = windDirs.flatMap((dir) =>
+    findFiles(dir, '.txd').map((file) => basename(file, '.txd').toLowerCase()),
+  );
   const { manifest, pak, report } = convertDistrict(fs, {
     ao,
     cellSize,
+    fallbackTxds,
     rect: rect as unknown as readonly [number, number, number, number],
     sunVis,
   });

@@ -72,6 +72,8 @@ export interface Environment {
   sunIndirect: number;
   /** Baked sun-shadow strength on the direct term (074/07): 0 = off, 1 = raw bake. */
   sunVisStrength: number;
+  /** Wind multiplier on the baked sway amplitudes (074/06 row 10): 0 = still air, 1 = baked metres. */
+  windStrength: number;
 }
 
 export class Engine {
@@ -93,6 +95,7 @@ export class Engine {
     sunDirect: 0.9,
     sunIndirect: 0.75,
     sunVisStrength: 1,
+    windStrength: 1,
   };
 
   /** Flat sky clear (M0 stand-in for the sky pass). LINEAR values — the sRGB target encodes on write. */
@@ -117,6 +120,7 @@ export class Engine {
   private pipelines!: PipelineSet;
   private readonly proj: Mat4 = mat4Identity();
   private resources!: Resources;
+  private readonly startedMs = performance.now();
   private readonly statsValue: EngineStats = {
     cellsTotal: 0,
     cellsVisible: 0,
@@ -154,7 +158,10 @@ export class Engine {
     frameData.set([...env.skyTop, 1], 48);
     frameData.set([...env.skyHorizon, 1], 52);
     frameData.set([env.fogCutDistance, env.fogStartDistance, env.fogHeightK, env.fogHeightMin], 56);
-    frameData.set([env.aoStrength, env.sunVisStrength, 0, 0], 60);
+    frameData.set(
+      [env.aoStrength, env.sunVisStrength, (performance.now() - this.startedMs) / 1000, env.windStrength],
+      60,
+    );
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
 
     frustumFromViewProj(this.frustumPlanes, this.viewProj);

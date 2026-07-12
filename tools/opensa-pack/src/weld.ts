@@ -8,6 +8,7 @@ import type { Oscell, OscellGroup } from '@opensa/engine-formats';
 import type { AssetFileSystem, IplInstance, MapDefinitions } from '@opensa/renderware';
 
 import { encodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
+import { WIND_MODELS } from '@opensa/game/mods/wind-mode';
 import { getClump } from '@opensa/renderware/archive/asset-cache';
 import { cellGroups } from '@opensa/renderware/map/build-cell';
 import { type GridCell } from '@opensa/renderware/map/world-grid';
@@ -56,6 +57,16 @@ export const WELD_SUNVIS = 18;
 const NIGHT_AMBIENT_R = 0.3;
 const NIGHT_AMBIENT_G = 0.32;
 const NIGHT_AMBIENT_B = 0.4;
+
+/**
+ * Wind-sway tuning per vegetation kind (074/06 row 10 — the plan-039 prod model baked offline). The vertex
+ * carries the final amplitude in METRES (unorm8, 1 m ceiling): `weight` scales the adapted DFFs' prelit-alpha
+ * weights (wind overlay dirs), `height` scales metres-above-base for unadapted vegetation.
+ */
+const SWAY_TUNING = {
+  palm: { height: 0.035, weight: 0.5 },
+  tree: { height: 0.02, weight: 0.35 },
+} as const;
 
 /** Phase 2: encode the (possibly baked) scratch buckets into `.oscell` bytes. */
 export function assembleCell(welded: WeldedCell): Uint8Array {
@@ -128,6 +139,7 @@ function appendInstance(
   instance: IplInstance,
   layer: number,
   origin: readonly [number, number, number],
+  swayKind: keyof typeof SWAY_TUNING | null,
 ): void {
   // GTA IPL quaternions are the conjugate of the usual convention (parity with build-region).
   const [qx, qy, qz, qw] = [-instance.rotation[0], -instance.rotation[1], -instance.rotation[2], instance.rotation[3]];
@@ -178,7 +190,16 @@ function appendInstance(
       atomic.nightColor ? atomic.nightColor[source * 3] : dayR * NIGHT_AMBIENT_R,
       atomic.nightColor ? atomic.nightColor[source * 3 + 1] : dayG * NIGHT_AMBIENT_G,
       atomic.nightColor ? atomic.nightColor[source * 3 + 2] : dayB * NIGHT_AMBIENT_B,
-      atomic.sway ? atomic.sway.weights[source] : 0,
+      // Sway amplitude in metres (074/06 row 10): adapted DFFs carry per-vertex weights (prelit alpha),
+      // unadapted vegetation falls back to height-above-base (pz = model-space GTA Z, up).
+      swayKind === null
+        ? 0
+        : Math.min(
+            1,
+            atomic.sway
+              ? atomic.sway.weights[source] * SWAY_TUNING[swayKind].weight
+              : Math.max(pz, 0) * SWAY_TUNING[swayKind].height,
+          ),
       layer,
       // aoSkyVis + sunVis defaults = fully open; the bake stages (074/07) overwrite HD rows in place.
       1,
@@ -362,6 +383,23 @@ function snorm(value: number): number {
   return Math.max(-127, Math.min(127, Math.round(value * 127)));
 }
 
+/** Sway kind for a def — IDE veg flags first, then the wind list (plan 039: list membership is the TRIGGER;
+ *  prelit alpha alone must not trigger — roads/night overlays use it too). */
+function swayKindFor(def: { flags: number; modelName: string }): keyof typeof SWAY_TUNING | null {
+  if ((def.flags & IdeFlag.IS_PALM) !== 0) {
+    return 'palm';
+  }
+  if ((def.flags & IdeFlag.IS_TREE) !== 0) {
+    return 'tree';
+  }
+  const model = def.modelName.toLowerCase();
+  if (!WIND_MODELS.has(model)) {
+    return null;
+  }
+
+  return model.includes('palm') ? 'palm' : 'tree';
+}
+
 function unorm(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value * 255)));
 }
@@ -379,6 +417,7 @@ function weldGroup(
   const clump = getClump(fs, def.modelName);
   const atomics = prepareClumpAtomics(clump);
   const doubleSided = (def.flags & IdeFlag.DISABLE_BACKFACE_CULLING) !== 0 ? 1 : 0;
+  const swayKind = swayKindFor(def);
   for (const atomic of atomics) {
     const geometry = clump.geometries[atomic.geometryIndex];
     if (!geometry) {
@@ -394,9 +433,9 @@ function weldGroup(
       const resolved = planner.resolve(def.txdName, material.texture?.name ?? null, material.color);
       const bucket = bucketFor(buckets, resolved.arrayRef, classOf(beam, resolved.alphaClass), doubleSided);
       for (const instance of instances) {
-        appendInstance(bucket, atomic, part.index, instance, resolved.layer, originEngine);
+        appendInstance(bucket, atomic, part.index, instance, resolved.layer, originEngine, swayKind);
         flags.hasNight ||= atomic.nightColor !== null;
-        flags.hasSway ||= atomic.sway !== null;
+        flags.hasSway ||= swayKind !== null;
       }
     }
   }

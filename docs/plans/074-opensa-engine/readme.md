@@ -122,3 +122,11 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   `cell.origin.w` (no in-data sentinel — the AO byte-0 lesson). WGSL: direct term × sunVis; `?sunvis=N` A/B,
   `--no-sunvis`. Both bakes share ONE district BVH: convert 35.1 s total (AO 20.4 + sun 9.0). Under-bridge /
   canyon direct sun now dies at noon; the moving-sun directional bake is the v2 follow-up.
+- 2026-07-12 (06 row 10 wind) — sway landed OFFLINE-first: converter bakes the final amplitude in METRES into
+  nightPrelit.a (trigger = IDE IS_TREE/IS_PALM + plan-039 WIND_MODELS; per-vertex weights from wind-ADAPTED
+  overlay DFFs via `--wind "mods-src/vegetation,mods-src/mods/21. Wind Project 1.0.2"`, height-above-base
+  fallback for unadapted vegetation; the mods' shared `vegetation.txd` became a planner FALLBACK TXD — the
+  offline twin of the installed txdp wiring). WGSL: two world-space sines phased by position, wind clock +
+  strength in params2.zw, `?wind=N`. The overlay also swaps in the HD vegetation geometry: district verts
+  1.16 M → 3.13 M, pak 99.5 → 245.7 MB, convert 92 s (bakes 81 s) — the price of the user's real build.
+  894 k sway verts. v1 limitation: one sway speed for all kinds (no per-vertex speed byte).

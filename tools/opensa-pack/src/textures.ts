@@ -58,15 +58,20 @@ export class TexturePlanner {
   readonly report = { colors: 0, dedup: 0, opaquePass: 0, processed: 0 };
   private readonly buckets = new Map<string, Bucket>();
   private readonly byContent = new Map<number, ResolvedTexture>();
+  /** Global fallback TXDs (074/06 row 10): overlay mods ship one shared TXD (e.g. `vegetation.txd`) that the
+   *  installed game wires via txdp; offline we search it when the def's own chain misses. */
+  private readonly fallbackTxds: readonly string[];
   private readonly fs: AssetFileSystem;
   private nextArrayRef = 0;
+
   private readonly rawCache = new Map<string, Map<string, RWTexture>>();
 
   private readonly txdParents: Map<string, string>;
 
-  constructor(fs: AssetFileSystem, txdParents: Map<string, string>) {
+  constructor(fs: AssetFileSystem, txdParents: Map<string, string>, fallbackTxds: readonly string[] = []) {
     this.fs = fs;
     this.txdParents = txdParents;
+    this.fallbackTxds = fallbackTxds;
   }
 
   /** Assemble every planned array into `.ostex` blobs (deterministic ref order). */
@@ -99,7 +104,13 @@ export class TexturePlanner {
     if (!textureName) {
       return this.resolveColor(color);
     }
-    const rw = this.rawTexture(txdName.toLowerCase(), textureName.toLowerCase());
+    let rw = this.rawTexture(txdName.toLowerCase(), textureName.toLowerCase());
+    for (const fallback of this.fallbackTxds) {
+      if (rw) {
+        break;
+      }
+      rw = this.rawTexture(fallback, textureName.toLowerCase());
+    }
     if (!rw) {
       return this.resolveColor([255, 0, 255, 255]); // loud missing-texture magenta
     }

@@ -17,7 +17,8 @@ struct Frame {
   // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
   // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
-  // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows), unused ×2].
+  // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
+  //            time seconds (the wind clock), windStrength (074/06 row 10)].
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -102,7 +103,14 @@ struct VsOut {
 @vertex
 fn vsWorld(in: VsIn) -> VsOut {
   var out: VsOut;
-  let world = in.position + cell.origin.xyz;
+  var world = in.position + cell.origin.xyz;
+  // Wind sway (074/06 row 10, the plan-039 model baked offline): nightPrelit.a = amplitude in METRES
+  // (0 for everything rigid — the displacement is a data-driven no-op there). Phase rides world-space
+  // position with LOW frequency so one canopy moves nearly as a unit but a row of palms doesn't lockstep.
+  let sway = in.nightPrelit.a * frame.params2.w;
+  let swayT = frame.params2.z * 1.2 + world.x * 0.05 + world.z * 0.04;
+  world.x += sin(swayT) * sway;
+  world.z += cos(swayT * 0.7) * sway * 0.6;
   out.clip = frame.viewProj * vec4f(world, 1.0);
   out.world = world;
   out.uv = in.uv;
