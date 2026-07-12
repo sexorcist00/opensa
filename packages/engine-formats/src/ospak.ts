@@ -27,13 +27,18 @@ export interface OspakManifest {
   byteLength: number;
   /** Cell entries: `"x,y,hd"` / `"x,y,lod"` → range. */
   cells: Record<string, OspakEntry>;
+  /** World-grid cell size (engine units) — key "cx,cy,…" → engine-space centre mapping for streaming. */
+  cellSize: number;
   /** Texture-array entries: `"array-<id>"` → range; meta mirrors the .ostex headers for scheduling. */
   textures: Record<string, OspakEntry & { format: number; height: number; layers: number; width: number }>;
   version: number;
 }
 
 /** Assemble a pak deterministically: entries sorted by key, 4 KiB aligned, zero-padded. */
-export function buildOspak(inputs: readonly OspakInput[]): { manifest: OspakManifest; pak: Uint8Array } {
+export function buildOspak(
+  inputs: readonly OspakInput[],
+  options: { cellSize?: number } = {},
+): { manifest: OspakManifest; pak: Uint8Array } {
   const sorted = [...inputs].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   const cells: OspakManifest['cells'] = {};
   const textures: OspakManifest['textures'] = {};
@@ -63,7 +68,16 @@ export function buildOspak(inputs: readonly OspakInput[]): { manifest: OspakMani
     pak.set(span.bytes, span.offset);
   }
 
-  return { manifest: { byteLength: pak.byteLength, cells, textures, version: OSPAK_VERSION }, pak };
+  return {
+    manifest: {
+      byteLength: pak.byteLength,
+      cells,
+      cellSize: options.cellSize ?? 250,
+      textures,
+      version: OSPAK_VERSION,
+    },
+    pak,
+  };
 }
 
 /** Validate a manifest a runtime just fetched (shape + version + range sanity). Throws with specifics. */

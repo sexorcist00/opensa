@@ -44,8 +44,14 @@ Target steady numbers (M1 ledger): JS heap **< 500 MB and flat** while driving; 
 
 ## Tasks
 
-- [ ] Worker IO: range reader + prefetch queue (ring-ordered, velocity lookahead as today) + transfer path.
-- [ ] Thin streaming driver in the lab: rings/hysteresis/atomic-swap (port plan-060 unit tests' semantics).
+- [x] Worker IO (M1 v1, 2026-07-12): `pak-worker.ts` — pak bytes live WORKER-side (main never holds them),
+      range slices arrive as transferables. NOTE: worker fetches the whole pak once (vite dev middleware
+      doesn't guarantee HTTP Range) — true Range-only reads move to the production-server task below.
+      Prefetch/velocity-lookahead not yet (rings request on demand).
+- [x] Thin streaming driver (M1 v1): `stream/streaming.ts` — rings (HD 380 / LOD 1000 engine units) +
+      hysteresis 60 + atomic HD↔LOD swap (unload same frame) + bounded ≤1 create/frame + eviction with margin;
+      HUD line: loaded/pending/created/evicted/worst-create. Modes: `?pak=1&stream=1`, stress =
+      `&bench=drive`.
 - [ ] Residency ledger + HUD panel + leak assertions (unload-all test).
 - [ ] Texture-array refcounting + border-thrash hysteresis.
 - [ ] Record-cost measurement; split-record fallback only if the number demands it.
@@ -53,4 +59,17 @@ Target steady numbers (M1 ledger): JS heap **< 500 MB and flat** while driving; 
 
 ## Measurement ledger
 
-(per scenario: worst frame, heap curve, residency curve, record ms/cell, fetch→live latency)
+**2026-07-12 — drive bench (M3 Pro, 2× retina, wider LS rect, `?pak=1&stream=1&bench=drive`, 600 frames):**
+
+| Metric                                              | Value                                                        | Gate                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------- |
+| frame max                                           | **9.80 ms** (p95 9.30, avg 8.33 = vsync)                     | <20 ms ✅ — streaming never broke a 120 Hz beat                 |
+| worst cell create (load+upload+record)              | **1.1 ms**                                                   | the "split record" fallback is unnecessary — decided on numbers |
+| submit p95 / max                                    | 0.30 / 1.0 ms                                                | ✅                                                              |
+| GPU p95 / max                                       | 1.77 / 4.19 ms                                               | ✅                                                              |
+| main-thread JS heap                                 | **8 MB** (pak lives in the worker; blobs freed after upload) | vs 3.4–6.2 GB on the 073 path                                   |
+| GPU residency                                       | 288 MB, stable                                               | bounded ✅                                                      |
+| 42 cells created during the drive, 0 pending at end |                                                              | atomic swaps invisible                                          |
+
+**M1 core gates: PASSED.** Remaining M1 scenarios (quick follow-ups, not blockers): camera-whip 360°,
+teleport (full ring turnover), 30-min soak (heap/residency flat lines), unload-all leak assertion.

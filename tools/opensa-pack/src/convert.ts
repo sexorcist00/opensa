@@ -71,7 +71,7 @@ export function convertDistrict(
   }
   Object.assign(report.textures, planner.report, { arrays: report.textures.arrays });
 
-  const { manifest, pak } = buildOspak(inputs);
+  const { manifest, pak } = buildOspak(inputs, { cellSize });
   report.pakBytes = pak.byteLength;
 
   return { manifest, pak, report };

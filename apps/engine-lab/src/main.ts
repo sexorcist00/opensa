@@ -5,7 +5,12 @@
  */
 import { type CameraState, Engine } from '@opensa/engine';
 
+import type { StreamingDriver } from './stream/streaming';
+
+import { BENCH_SCENES, BenchCollector, downloadRecord, formatRecord } from './bench';
 import { loadPak } from './pak-loader';
+import { setupStreaming } from './stream/setup';
+import { type StreamStats } from './stream/streaming';
 import { syntheticCell, syntheticTextureArray } from './synthetic';
 
 const CELL_SIZE = 250;
@@ -22,6 +27,7 @@ async function main(): Promise<void> {
   const engine = new Engine();
   await engine.init(canvas);
   const usePak = params.get('pak') === '1';
+  const useStream = usePak && params.get('stream') === '1';
   hud.textContent = `device: ${engine.adapterInfo}\n${usePak ? 'loading pak…' : 'building synthetic district…'}`;
 
   const buildStart = performance.now();
@@ -29,7 +35,14 @@ async function main(): Promise<void> {
   let focus: [number, number, number];
   let orbitRadius: number;
   let title: string;
-  if (usePak) {
+  let streaming: null | StreamingDriver = null;
+  if (useStream) {
+    const setup = await setupStreaming(engine);
+    streaming = setup.driver;
+    focus = setup.center;
+    orbitRadius = setup.radius * 1.4;
+    title = 'STREAMING district (worker pak, rings live)';
+  } else if (usePak) {
     const district = await loadPak(engine);
     recordedDraws = district.drawsRecorded;
     focus = district.center;
@@ -69,9 +82,19 @@ async function main(): Promise<void> {
     }
   });
 
+  // Bench mode (074/11): deterministic scene script + warmup/measure collection, then a JSON record.
+  const benchScene = params.get('bench');
+  const benchScript = benchScene ? BENCH_SCENES[benchScene] : null;
+  if (benchScene && !benchScript) {
+    throw new Error(`unknown bench scene '${benchScene}' (have: ${Object.keys(BENCH_SCENES).join(', ')})`);
+  }
+  const collector = new BenchCollector();
+  let benchDone = false;
+
   const loop = (): void => {
     const now = performance.now();
-    frames.push(now - previous);
+    const frameDt = now - previous;
+    frames.push(frameDt);
     previous = now;
     if (frames.length > 120) {
       frames.shift();
@@ -80,20 +103,43 @@ async function main(): Promise<void> {
       angle += 0.003;
     }
     const radius = orbitRadius * zoom;
-    const camera: CameraState = {
-      aspect: canvas.width / Math.max(1, canvas.height),
-      eye: [
-        focus[0] + Math.cos(angle) * radius,
-        focus[1] + Math.max(4, radius * heightFactor * 0.45),
-        focus[2] + Math.sin(angle) * radius,
-      ],
-      far: 10000,
-      fovYRad: Math.PI / 3,
-      near: 0.5,
-      target: focus,
-      up: [0, 1, 0],
-    };
+    const camera: CameraState = benchScript
+      ? benchScript(collector.currentFrame, {
+          aspect: canvas.width / Math.max(1, canvas.height),
+          focus,
+          radius: orbitRadius,
+        })
+      : {
+          aspect: canvas.width / Math.max(1, canvas.height),
+          eye: [
+            focus[0] + Math.cos(angle) * radius,
+            focus[1] + Math.max(4, radius * heightFactor * 0.45),
+            focus[2] + Math.sin(angle) * radius,
+          ],
+          far: 10000,
+          fovYRad: Math.PI / 3,
+          near: 0.5,
+          target: focus,
+          up: [0, 1, 0],
+        };
+    let streamStats: null | StreamStats = null;
+    if (streaming) {
+      // Rings follow the camera TARGET (the ground focus — the "player"), not the eye: an orbiting eye sits
+      // outside the LOD ring and would stream nothing.
+      streamStats = streaming.update(camera.target);
+    }
     const stats = engine.frame(camera);
+    if (benchScript && !benchDone) {
+      collector.sample(frameDt, stats);
+      if (!collector.running) {
+        benchDone = true;
+        const record = collector.finish(benchScene ?? '?', engine.adapterInfo, canvas);
+        downloadRecord(record);
+        hud.textContent = formatRecord(record);
+
+        return; // freeze the loop on the summary
+      }
+    }
     const frameAvg = frames.reduce((sum, value) => sum + value, 0) / frames.length;
     hud.textContent =
       `engine lab — ${title}\n` +
@@ -103,7 +149,11 @@ async function main(): Promise<void> {
       `GPU pass    ${stats.gpuPassMs > 0 ? stats.gpuPassMs.toFixed(2) : 'n/a'} ms\n` +
       `cells       ${stats.cellsVisible}/${stats.cellsTotal} visible, draws ${stats.drawsRecorded}\n` +
       `residency   ${(stats.residencyBytes / (1024 * 1024)).toFixed(1)} MB\n` +
-      `build       ${buildMs.toFixed(0)} ms (fixture, off the P0 clock)`;
+      `build       ${buildMs.toFixed(0)} ms (fixture, off the P0 clock)` +
+      (streamStats
+        ? `\nstream      ${streamStats.loadedCells} loaded, ${streamStats.pendingCells} pending, ` +
+          `${streamStats.created} created / ${streamStats.evicted} evicted, worst create ${streamStats.worstCreateMs.toFixed(1)} ms`
+        : '');
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

@@ -13,18 +13,19 @@ non-WebGPU browsers during the whole build-out (additive, no flag day — the 06
 
 ## The chain
 
-| #   | Plan                                                   | One-liner                                                                                  |
-| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| 01  | [Framework architecture](01-framework-architecture.md) | The renderer design: module map, bind model, frame graph, shader system, extension points. |
-| 02  | [Native formats](02-native-formats.md)                 | `.oscell` / `.ostex` / `.ospak` — GPU-ready, versioned, batching + texture arrays + alpha. |
-| 03  | [Converter tool](03-converter-tool.md)                 | `tools/opensa-pack`: game-ready set → native pak; the ALPHA PIPELINE lives here (early).   |
-| 04  | [Engine lab + P0 gate](04-engine-lab-p0.md)            | `apps/engine-lab`: the vertical-slice spike, bench parity, numeric gates, Safari check.    |
-| 05  | [Streaming runtime](05-streaming-runtime.md)           | Cell lifecycle, worker IO, range reads, GPU residency/eviction — the memory model.         |
-| 06  | [World effects parity](06-world-effects-parity.md)     | Effect-by-effect WGSL ledger: sun/fog/sky/lights/emissives/wind/water, each measured.      |
-| 07  | [Baked channels](07-baked-channels.md)                 | Static shadows + AO/skyVis + emissive mask — 066/03-04 executed against the new target.    |
-| 08  | [Dynamics](08-dynamics.md)                             | Skinning (EARLY probe), character + IFP, vehicles, particles, procobj instancing.          |
-| 09  | [Post-FX & AA](09-postfx-aa.md)                        | MSAA+A2C, bloom, ACES, god-rays; render-scale tiers.                                       |
-| 10  | [Integration & flip](10-integration-flip.md)           | Boundary refactor, game-app integration, flip criteria, 073-flags cleanup decision.        |
+| #   | Plan                                                   | One-liner                                                                                   |
+| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| 01  | [Framework architecture](01-framework-architecture.md) | The renderer design: module map, bind model, frame graph, shader system, extension points.  |
+| 02  | [Native formats](02-native-formats.md)                 | `.oscell` / `.ostex` / `.ospak` — GPU-ready, versioned, batching + texture arrays + alpha.  |
+| 03  | [Converter tool](03-converter-tool.md)                 | `tools/opensa-pack`: game-ready set → native pak; the ALPHA PIPELINE lives here (early).    |
+| 04  | [Engine lab + P0 gate](04-engine-lab-p0.md)            | `apps/engine-lab`: the vertical-slice spike, bench parity, numeric gates, Safari check.     |
+| 05  | [Streaming runtime](05-streaming-runtime.md)           | Cell lifecycle, worker IO, range reads, GPU residency/eviction — the memory model.          |
+| 06  | [World effects parity](06-world-effects-parity.md)     | Effect-by-effect WGSL ledger: sun/fog/sky/lights/emissives/wind/water, each measured.       |
+| 07  | [Baked channels](07-baked-channels.md)                 | Static shadows + AO/skyVis + emissive mask — 066/03-04 executed against the new target.     |
+| 08  | [Dynamics](08-dynamics.md)                             | Skinning (EARLY probe), character + IFP, vehicles, particles, procobj instancing.           |
+| 09  | [Post-FX & AA](09-postfx-aa.md)                        | MSAA+A2C, bloom, ACES, god-rays; render-scale tiers.                                        |
+| 10  | [Integration & flip](10-integration-flip.md)           | Boundary refactor, game-app integration, flip criteria, 073-flags cleanup decision.         |
+| 11  | [Performance testing](11-performance-testing.md)       | Pinned `game-src` input + bench scenes + committed series — every engine change perf-gated. |
 
 ## Roadmap — vertical slices with numeric gates (plans ≠ phases; each milestone cuts across plans)
 
@@ -88,3 +89,12 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   district (rect 8,-9..11,-5): **P0 GATE PASSED** — 807 draws (~20× down), submit 0.2 ms, GPU 1.84 ms,
   instant load, **and the alpha-edge halo is DEAD (user-confirmed)** — the years-old open issue fixed by
   construction on first run. M0 ✅ → next milestone M1 (streaming proof, plan 05).
+- 2026-07-12 (M1 build-out, session 1) — bench harness landed (074/11: `?bench=orbit|close|drive`, warmup 120 +
+  measure 600, p50/p95/max, JSON download + `bench-compare.ts` with the >10 % gate; `bench/series.md` seeded)
+  and the M1 streaming core: pak WORKER (bytes worker-side, transferable slices), thin driver (rings 380/1000 +
+  hysteresis + atomic swap + ≤1 create/frame + eviction), manifest grew `cellSize`. Modes: `?pak=1&stream=1`,
+  stress `&bench=drive`. Field drive bench:
+  **M1 CORE GATES PASSED** — frame max 9.80 ms during active streaming (gate <20), worst cell create 1.1 ms,
+  main-thread heap **8 MB** (vs GB on 073), 42 cells created invisibly at 120 Hz. Remaining M1: whip/teleport/
+  soak scenarios + leak assertion (follow-ups). NEXT: M2 — world effects (plan 06 ledger order) + baked
+  channels (07).
