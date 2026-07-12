@@ -460,8 +460,10 @@ function weldGroup(
       const beam = isVertexAlphaBeam(material, geometry);
       const resolved = planner.resolve(def.txdName, material.texture?.name ?? null, material.color);
       const bucket = bucketFor(buckets, resolved.arrayRef, classOf(beam, resolved.alphaClass), doubleSided, timed);
+      // Bit 15 of the layer u16 flags stochastic de-tiling layers (074/12) — the engine masks the index.
+      const layerValue = resolved.layer | (resolved.stochastic ? 0x8000 : 0);
       for (const instance of instances) {
-        appendInstance(bucket, atomic, part.index, instance, resolved.layer, originEngine, swayKind);
+        appendInstance(bucket, atomic, part.index, instance, layerValue, originEngine, swayKind);
         flags.hasNight ||= atomic.nightColor !== null;
         flags.hasSway ||= swayKind !== null;
       }

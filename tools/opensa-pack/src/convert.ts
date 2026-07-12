@@ -22,6 +22,8 @@ export interface ConvertOptions {
   fallbackTxds?: readonly string[];
   /** Inclusive GTA cell-coordinate rect [x0, y0, x1, y1]. */
   rect: readonly [number, number, number, number];
+  /** Curated stochastic de-tiling texture names, lowercased (074/12). */
+  stochasticNames?: ReadonlySet<string>;
   /** Bake per-vertex sun visibility (074/07); on by default, `--no-sunvis` skips it. */
   sunVis?: boolean;
 }
@@ -45,7 +47,12 @@ export function convertDistrict(
   const cellSize = options.cellSize ?? 250;
   const defs = resolveMap(fs, { extraIpl: OPEN_SCRIPT_IPL });
   const grid = buildWorldGrid(defs, cellSize);
-  const planner = new TexturePlanner(fs, defs.txdParents ?? new Map<string, string>(), options.fallbackTxds ?? []);
+  const planner = new TexturePlanner(
+    fs,
+    defs.txdParents ?? new Map<string, string>(),
+    options.fallbackTxds ?? [],
+    options.stochasticNames ?? new Set(),
+  );
 
   const inputs: OspakInput[] = [];
   const report: ConvertReport = {

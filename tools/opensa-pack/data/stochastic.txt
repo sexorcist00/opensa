@@ -1,0 +1,39 @@
+# Stochastic de-tiling texture list (plan 074/12) — texture NAMES (case-insensitive), one per line.
+# Curated like skygfx's texdb.txt: editorial, not inferred. Seeded from the LS bench rect's most-used
+# ground textures. ROADS WITH LANE MARKINGS ARE EXCLUDED on purpose (dt_road, craproad*, laroad*):
+# randomized tile offsets scramble the painted lines — repetition there is the lesser evil.
+grass
+yardgrass1
+sidewgrass1
+sidewgrass4
+sidewgrass_fuked
+grass_dry_64hv
+grasspatch_64hv
+grassdeadbrn256
+grassdry_path_128hv
+crackedgroundb
+dirtkb_64hv
+waljundirt1
+dirtgaz64b
+dirt64b2
+pavemiddirt_law
+greyground256
+greyground256128
+trainground1
+trainground2
+ws_traingravel
+pavebsand256
+sw_sand
+ws_sandstone2
+kbpavement_test
+bow_abpave_gen
+plaintarmac1
+tarmacplain_bank
+ws_rooftarmac1
+# Area-scan additions (2026-07-12): the LS beach + the big lawns/ground planes both rects actually use.
+sandnew_law
+desgreengrass
+planta256
+sjmhoodlawn41
+sjmscorclawn
+snpedtest1

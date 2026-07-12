@@ -46,6 +46,11 @@ async function main(): Promise<void> {
   if (Number.isFinite(windParam)) {
     engine.environment.windStrength = windParam;
   }
+  // `?stoch=0` (074/12 A/B): plain sampling on de-tiling-flagged layers.
+  const stochParam = Number(params.get('stoch') ?? Number.NaN);
+  if (Number.isFinite(stochParam)) {
+    engine.environment.stochastic = stochParam;
+  }
   // Row 14: the environment driver — real timecyc when the manifest carries it, parametric fallback else.
   // Swapped in after the pak loads (the manifest arrives there); parametric until then.
   let environmentDriver: EnvironmentDriver = parametricDriver(engine);

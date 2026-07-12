@@ -29,6 +29,8 @@ export interface ResolvedTexture {
   alphaClass: AlphaClass;
   arrayRef: number;
   layer: number;
+  /** De-tiling candidate (074/12): the welder sets bit 15 of the layer u16 for these. */
+  stochastic: boolean;
 }
 
 interface Bucket {
@@ -66,12 +68,21 @@ export class TexturePlanner {
 
   private readonly rawCache = new Map<string, Map<string, RWTexture>>();
 
+  /** Curated de-tiling texture names (074/12) — lowercased. */
+  private readonly stochasticNames: ReadonlySet<string>;
+
   private readonly txdParents: Map<string, string>;
 
-  constructor(fs: AssetFileSystem, txdParents: Map<string, string>, fallbackTxds: readonly string[] = []) {
+  constructor(
+    fs: AssetFileSystem,
+    txdParents: Map<string, string>,
+    fallbackTxds: readonly string[] = [],
+    stochasticNames: ReadonlySet<string> = new Set(),
+  ) {
     this.fs = fs;
     this.txdParents = txdParents;
     this.fallbackTxds = fallbackTxds;
+    this.stochasticNames = stochasticNames;
   }
 
   /** Assemble every planned array into `.ostex` blobs (deterministic ref order). */
@@ -121,7 +132,10 @@ export class TexturePlanner {
 
       return existing;
     }
-    const planned = this.plan(rw, textureName.toLowerCase());
+    const planned = {
+      ...this.plan(rw, textureName.toLowerCase()),
+      stochastic: this.stochasticNames.has(textureName.toLowerCase()),
+    };
     this.byContent.set(contentKey, planned);
 
     return planned;
@@ -148,7 +162,12 @@ export class TexturePlanner {
       this.nextArrayRef += 1;
     }
 
-    return { alphaClass: layer.alphaClass, arrayRef: bucket.refs[chunk], layer: layerIndex % MAX_LAYERS };
+    return {
+      alphaClass: layer.alphaClass,
+      arrayRef: bucket.refs[chunk],
+      layer: layerIndex % MAX_LAYERS,
+      stochastic: false,
+    };
   }
 
   private plan(rw: RWTexture, name: string): ResolvedTexture {

@@ -10,8 +10,9 @@
  * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / cellSize)). Writes `world.ospak` +
  * `manifest.json` + `report.json` into `--out`.
  */
-import { mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
@@ -72,11 +73,27 @@ function main(): void {
   const fallbackTxds = windDirs.flatMap((dir) =>
     findFiles(dir, '.txd').map((file) => basename(file, '.txd').toLowerCase()),
   );
+  // Stochastic de-tiling lists (074/12): repo defaults next to the tool (our curated list + the skygfx
+  // mod's texdb — 307 stochastic-tagged names); `--stochastic <file>[,<file>…]` overrides.
+  const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'data');
+  const stochasticPaths = (
+    arg('stochastic') ?? `${join(dataDir, 'stochastic.txt')},${join(dataDir, 'skygfx-texdb.txt')}`
+  )
+    .split(',')
+    .map((path) => path.trim())
+    .filter(Boolean);
+  const stochasticNames = new Set<string>();
+  for (const path of stochasticPaths) {
+    for (const name of parseStochasticList(readFileSync(path, 'utf8'))) {
+      stochasticNames.add(name);
+    }
+  }
   const { manifest, pak, report } = convertDistrict(fs, {
     ao,
     cellSize,
     fallbackTxds,
     rect: rect as unknown as readonly [number, number, number, number],
+    stochasticNames,
     sunVis,
   });
 
@@ -108,6 +125,31 @@ function main(): void {
         `(${report.sunVis.uniqueVertices} unique), ${report.sunVis.rays} rays`,
     );
   }
+}
+
+/** Parse a de-tiling list: plain names (one per line, `#` comments) OR skygfx `texdb.txt` lines
+ *  (`"name" … stochastic=1`) — drop the mod's own database in via `--stochastic` and it just works. */
+function parseStochasticList(text: string): Set<string> {
+  const names = new Set<string>();
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (line.length === 0 || line.startsWith('#') || line.startsWith('//')) {
+      continue;
+    }
+    if (line.startsWith('"')) {
+      // skygfx texdb entry: only the stochastic-tagged ones matter here.
+      if (/stochastic=0*[1-9]/.test(line)) {
+        const quoted = /^"([^"]+)"/.exec(line);
+        if (quoted) {
+          names.add(quoted[1].toLowerCase());
+        }
+      }
+    } else {
+      names.add(line.toLowerCase());
+    }
+  }
+
+  return names;
 }
 
 main();

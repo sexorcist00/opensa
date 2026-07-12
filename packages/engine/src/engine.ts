@@ -68,6 +68,8 @@ export interface Environment {
   skyHorizon: readonly [number, number, number];
   /** LINEAR sky gradient zenith colour. */
   skyTop: readonly [number, number, number];
+  /** Stochastic de-tiling toggle (074/12): 1 = on for flagged layers, 0 = plain sampling. */
+  stochastic: number;
   /** Sun colour, linear 0..1. */
   sunColor: readonly [number, number, number];
   /** Unit direction TOWARDS the sun (engine space). */
@@ -99,6 +101,7 @@ export class Engine {
     moonDir: [-0.3, 0.8, -0.25],
     skyHorizon: [0.42, 0.55, 0.72],
     skyTop: [0.12, 0.32, 0.65],
+    stochastic: 1,
     sunColor: [1, 0.96, 0.88],
     sunDir: [0.35, 0.85, 0.25],
     sunDirect: 0.9,
@@ -172,7 +175,8 @@ export class Engine {
       60,
     );
     const moonLen = Math.hypot(env.moonDir[0], env.moonDir[1], env.moonDir[2]) || 1;
-    frameData.set([env.moonDir[0] / moonLen, env.moonDir[1] / moonLen, env.moonDir[2] / moonLen, 0], 64);
+    // moonDir.w doubles as the stochastic de-tiling toggle (074/12) — the vec4 slot was spare.
+    frameData.set([env.moonDir[0] / moonLen, env.moonDir[1] / moonLen, env.moonDir[2] / moonLen, env.stochastic], 64);
     frameData.set([...env.moonColor, 1], 68);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
 

@@ -61,17 +61,26 @@ many layers) — but we don't need to. The flag rides the DATA per vertex, and o
 
 ## Tasks
 
-- [ ] WGSL port of the sampler (skew + hash2D2D + 3-tap `textureSampleGrad`) behind the per-vertex flag +
+- [x] WGSL port of the sampler (skew + hash2D2D + 3-tap `textureSampleGrad`) behind the per-vertex flag +
       golden snapshot + guardrail pass.
-- [ ] Planner/welder: name-list → `ResolvedTexture.stochastic` → layer bit 15; engine masks the index.
-- [ ] Seed `data/stochastic.txt` for the LS rect (grass/pavement/road/dirt textures — eyeball the worst
-      offenders from the aerial screens).
+- [x] Planner/welder: name-list → `ResolvedTexture.stochastic` → layer bit 15; engine masks the index.
+- [x] Seed `data/stochastic.txt` for the LS rect — 28 names (grass/dirt/gravel/pavement/tarmac); ROADS
+      WITH LANE MARKINGS excluded on purpose (offsets scramble painted lines).
 - [ ] Field A/B + bench row; acceptance = macro-repetition visibly gone on ground planes at the aerial
       camera, no seam/mip artifacts up close, gate ≤ +0.5 ms GPU p95.
 - [ ] (later) Histogram-preserving upgrade if contrast wash is objectionable: Gaussianize + inverse LUT as a
       converter stage (the format already buckets arbitrary layer payloads).
-- [ ] (later, pmb) Auto-candidate analyzer: periodicity × UV-span × slope → proposed list for curation.
+- [x] (v0 shipped 2026-07-12) Auto-candidate analyzer: `stochastic-candidates.ts` ranks a rect's textures
+      by COVERED TRIANGLE AREA and prints the top entries not yet listed — the curation loop is run/eyeball/
+      promote/reconvert (found the LS beach `sandnew_law` + the big lawns on first run). Periodicity × slope
+      refinement stays a later pmb upgrade.
+- [x] skygfx interop: the list loader also parses the mod's own `texdb.txt` format (`"name" … stochastic=1`).
+      The mod's FULL database (user-supplied, 307 tagged names — metals/wood/plaster beyond ground) now lives
+      at `data/skygfx-texdb.txt` and is merged with our curated list BY DEFAULT
+      (`--stochastic <file>[,<file>…]` overrides). LS flagged verts: 23 k → 172.8 k with the merge.
 
 ## Measurement ledger
 
-_(fill as landed: flagged layers count, GPU Δ, screenshots before/after)_
+| Date       | What           | Numbers                                                                                                                                                                                                                                                                                          |
+| ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-07-12 | v1 implemented | 23,045 flagged verts in the LS rect (ground planes: few verts, many pixels); toggle rides `moonDir.w` (spare slot), lab `?stoch=0`; sample-then-override keeps the common path uniform (flagged pixels cost 4 taps total); both paks reconverted. GPU Δ + field verdict pending the ritual bench |

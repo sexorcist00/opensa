@@ -12,7 +12,8 @@ struct Frame {
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
-  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it).
+  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
+  // moonDir.w = stochastic de-tiling toggle (074/12; the vec4 slot was spare).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -57,7 +58,8 @@ struct Frame {
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
-  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it).
+  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
+  // moonDir.w = stochastic de-tiling toggle (074/12; the vec4 slot was spare).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -127,7 +129,8 @@ struct Frame {
   // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
-  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it).
+  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
+  // moonDir.w = stochastic de-tiling toggle (074/12; the vec4 slot was spare).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -236,11 +239,46 @@ fn vsWorld(in: VsIn) -> VsOut {
   return out;
 }
 
+// Stochastic de-tiling (074/12, the skygfx 3-tap tiling-and-blend): UVs skew into a triangular grid, each
+// grid vertex hashes to a random UV offset, 3 taps blend by barycentric weights — macro-repetition dies,
+// micro-detail stays. Explicit grads are mandatory twice over: the offsets are DISCONTINUOUS at grid seams
+// (implicit gradients pick garbage mips there), and this runs in a non-uniform branch.
+fn hash2D2D(s: vec2f) -> vec2f {
+  return fract(sin(vec2f(dot(s, vec2f(127.1, 311.7)), dot(s, vec2f(269.5, 183.3))) % 3.14159) * 43758.5453);
+}
+
+fn stochasticTexel(uv: vec2f, layer: u32, uvDx: vec2f, uvDy: vec2f) -> vec4f {
+  let skew = mat2x2f(vec2f(1.0, -0.57735027), vec2f(0.0, 1.15470054)) * (uv * 3.464);
+  let vxID = floor(skew);
+  let fracts = fract(skew);
+  let bz = 1.0 - fracts.x - fracts.y;
+  var v0 = vxID + vec2f(1.0, 1.0);
+  var v1 = vxID + vec2f(1.0, 0.0);
+  var v2 = vxID + vec2f(0.0, 1.0);
+  var w = vec3f(-bz, 1.0 - fracts.y, 1.0 - fracts.x);
+  if (bz > 0.0) {
+    v0 = vxID;
+    v1 = vxID + vec2f(0.0, 1.0);
+    v2 = vxID + vec2f(1.0, 0.0);
+    w = vec3f(bz, fracts.y, fracts.x);
+  }
+  return textureSampleGrad(worldTexture, worldSampler, uv + hash2D2D(v0), layer, uvDx, uvDy) * w.x +
+    textureSampleGrad(worldTexture, worldSampler, uv + hash2D2D(v1), layer, uvDx, uvDy) * w.y +
+    textureSampleGrad(worldTexture, worldSampler, uv + hash2D2D(v2), layer, uvDx, uvDy) * w.z;
+}
+
 @fragment
 fn fsWorld(in: VsOut) -> @location(0) vec4f {
   // Textures ship PREMULTIPLIED (074/02): filtering is correct by construction, transparent texels
   // contribute nothing — the alpha-edge fix. Alpha feeds coverage on the cutout pipeline (A2C).
-  let texel = textureSample(worldTexture, worldSampler, in.uv, in.layer);
+  // Layer bit 15 = stochastic flag (074/12); grads + the plain tap stay in UNIFORM control flow.
+  let layer = in.layer & 0xffu;
+  let uvDx = dpdx(in.uv);
+  let uvDy = dpdy(in.uv);
+  var texel = textureSample(worldTexture, worldSampler, in.uv, layer);
+  if ((in.layer & 0x8000u) != 0u && frame.moonDir.w > 0.5) {
+    texel = stochasticTexel(in.uv, layer, uvDx, uvDy);
+  }
   // Hybrid lighting (074/06 row 3, the shipped 064 model): prelit is the INDIRECT term, the sun adds a real
   // direct term on the raw albedo. indirect/direct ride frame params — day arcs are a CPU concern.
   // Baked AO modulates ONLY the indirect term (074/07) — sun shadowing is the separate sunVis bake.
@@ -271,7 +309,7 @@ fn fsBeam(in: VsOut) -> @location(0) vec4f {
   // Floodlight cones (074/06 row 11, plan 032): 'white'-textured geometry whose soft cone lives in the
   // per-vertex prelit ALPHA. Output is PREMULTIPLIED for the (one, one-minus-src-alpha) blend pipeline.
   // No sun/glow terms — a beam is self-lit, tinted only by the dn-mixed prelit colour.
-  let texel = textureSample(worldTexture, worldSampler, in.uv, in.layer);
+  let texel = textureSample(worldTexture, worldSampler, in.uv, in.layer & 0xffu);
   let alpha = texel.a * in.cone;
   let color = texel.rgb * in.prelit * in.cone;
   // Fog FADES a beam out (scales the premultiplied pair) — mixing toward the sky would tint thin air.
