@@ -26,6 +26,32 @@ async function main(): Promise<void> {
 
   const engine = new Engine();
   await engine.init(canvas);
+  // `?hour=N` (default 12): a simple parametric day arc drives the environment — real timecyc sampling is
+  // effects-ledger row 14. `?daycycle=1` animates the hour for eyeballing the blend.
+  const hourParam = Number(params.get('hour') ?? 12);
+  const dayCycle = params.get('daycycle') === '1';
+  let hour = Number.isFinite(hourParam) ? hourParam : 12;
+  const applyEnvironment = (): void => {
+    const elevation = Math.sin(((hour - 6) / 12) * Math.PI); // -1..1 across 6:00→18:00
+    const dn = 1 - Math.min(1, Math.max(0, (elevation + 0.15) / 0.3));
+    engine.environment.dn = dn;
+    engine.environment.sunDir = [0.35, Math.max(0.05, elevation), 0.25];
+    const warm = Math.min(1, Math.max(0, 1 - elevation)); // low sun → warm
+    engine.environment.sunColor = [1, 0.96 - warm * 0.15, 0.88 - warm * 0.3];
+    engine.environment.sunDirect = Math.max(0, elevation) * 0.9;
+    engine.environment.sunIndirect = 0.75 * (1 - dn) + 0.35 * dn;
+    // LINEAR-space sky gradient (sky pass + world fog share it; the flat clear is behind the sky pass now).
+    const lerp3 = (a: readonly number[], b: readonly number[], t: number): [number, number, number] => [
+      a[0] + (b[0] - a[0]) * t,
+      a[1] + (b[1] - a[1]) * t,
+      a[2] + (b[2] - a[2]) * t,
+    ];
+    engine.environment.skyTop = lerp3([0.12, 0.32, 0.65], [0.002, 0.004, 0.012], dn);
+    engine.environment.skyHorizon = lerp3([0.42, 0.55, 0.72], [0.01, 0.012, 0.03], dn);
+    engine.environment.fogCutDistance = 2400;
+    engine.environment.fogStartDistance = 250;
+  };
+  applyEnvironment();
   const usePak = params.get('pak') === '1';
   const useStream = usePak && params.get('stream') === '1';
   hud.textContent = `device: ${engine.adapterInfo}\n${usePak ? 'loading pak…' : 'building synthetic district…'}`;
@@ -101,6 +127,10 @@ async function main(): Promise<void> {
     }
     if (!freeze && !dragging) {
       angle += 0.003;
+    }
+    if (dayCycle) {
+      hour = (hour + 0.005) % 24;
+      applyEnvironment();
     }
     const radius = orbitRadius * zoom;
     const camera: CameraState = benchScript

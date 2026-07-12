@@ -98,3 +98,10 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   main-thread heap **8 MB** (vs GB on 073), 42 cells created invisibly at 120 Hz. Remaining M1: whip/teleport/
   soak scenarios + leak assertion (follow-ups). NEXT: M2 — world effects (plan 06 ledger order) + baked
   channels (07).
+- 2026-07-12 (M2 slice 1) — effects rows 1-3 landed: frame UBO grew to 128 B (sunDir/sunColor/dn/split),
+  world WGSL consumes normal + nightPrelit (per-vertex N·L + day↔night blend), converter synthesizes a night
+  set (day × cool ambient) for geometry without one, `Engine.environment` API, lab `?hour=N`/`?daycycle=1`.
+  Golden shader snapshots reviewed+updated (the mechanism works). Ritual run: effects cost ≈ FREE
+  (drive GPU p95 1.77→1.84 ms, gate clean; series row added). Field screens exposed the LINEAR→sRGB output
+  bug (world gamma-crushed dark): fixed by rendering into the swapchain's sRGB VIEW (viewFormats) + linear
+  sky constants — the project's standing linear-space lesson, now encoded in `EngineDevice.colorFormat`.

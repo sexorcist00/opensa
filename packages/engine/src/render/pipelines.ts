@@ -12,7 +12,12 @@ import { resolveShader } from './shaders';
 
 export const MSAA_SAMPLES = 4;
 
-export type PipelineId = 'world-cutout-double' | 'world-cutout-front' | 'world-opaque-double' | 'world-opaque-front';
+export type PipelineId =
+  | 'sky'
+  | 'world-cutout-double'
+  | 'world-cutout-front'
+  | 'world-opaque-double'
+  | 'world-opaque-front';
 
 export interface PipelineSet {
   /** group(1): per-cell uniform (origin). */
@@ -54,9 +59,11 @@ export function compileAll(
       arrayStride: OSCELL_VERTEX_STRIDE,
       attributes: [
         { format: 'float32x3', offset: 0, shaderLocation: 0 }, // position
-        { format: 'float32x2', offset: 16, shaderLocation: 1 }, // uv (normal at 12 is not consumed in M0)
+        { format: 'float32x2', offset: 16, shaderLocation: 1 }, // uv
         { format: 'unorm8x4', offset: 24, shaderLocation: 2 }, // dayPrelit
         { format: 'uint16x2', offset: 32, shaderLocation: 3 }, // layer + packed channels
+        { format: 'snorm8x4', offset: 12, shaderLocation: 4 }, // normal (sun N·L — 074/06)
+        { format: 'unorm8x4', offset: 28, shaderLocation: 5 }, // nightPrelit + sway alpha
       ],
     },
   ];
@@ -68,6 +75,20 @@ export function compileAll(
     { cull: 'back', cutout: true, id: 'world-cutout-front' },
     { cull: 'none', cutout: true, id: 'world-cutout-double' },
   ];
+  const skyModule = device.createShaderModule({ code: resolveShader('sky'), label: 'sky' });
+  const skyLayout = device.createPipelineLayout({ bindGroupLayouts: [frameLayout], label: 'sky' });
+  pipelines.set(
+    'sky',
+    device.createRenderPipeline({
+      depthStencil: { depthCompare: 'less-equal', depthWriteEnabled: false, format: depthFormat },
+      fragment: { entryPoint: 'fsSky', module: skyModule, targets: [{ format: colorFormat }] },
+      label: 'sky',
+      layout: skyLayout,
+      multisample: { count: MSAA_SAMPLES },
+      primitive: { topology: 'triangle-list' },
+      vertex: { entryPoint: 'vsSky', module: skyModule },
+    }),
+  );
   for (const variant of variants) {
     pipelines.set(
       variant.id,

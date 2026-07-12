@@ -11,9 +11,59 @@ const MODULES: Record<string, string> = {
   frame: /* wgsl */ `
 struct Frame {
   viewProj: mat4x4f,
+  invViewProj: mat4x4f,
   camera: vec4f,
+  // Environment (plan 074/06): sun direction (unit, towards the sun), sun colour,
+  // params  = [dn (0 day → 1 night), indirectScale, directScale, unused],
+  // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
+  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape).
+  sunDir: vec4f,
+  sunColor: vec4f,
+  params: vec4f,
+  skyTop: vec4f,
+  skyHorizon: vec4f,
+  fog: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
+
+// Shared sky colour by view direction (the sky pass AND the world fog sample the same gradient — fully
+// fogged geometry dissolves into exactly the sky behind it, the 068 invariant).
+fn skyColorFor(dir: vec3f) -> vec3f {
+  let elevation = clamp(dir.y, 0.0, 1.0);
+  let base = mix(frame.skyHorizon.rgb, frame.skyTop.rgb, pow(elevation, 0.55));
+  // Sun glow: a soft forward-scatter blob around the sun direction (day only — sunColor premultiplied
+  // by the day arc on the CPU side).
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+  let glow = frame.sunColor.rgb * (pow(sunDot, 256.0) * 0.9 + pow(sunDot, 8.0) * 0.06);
+  return base + glow;
+}
+`,
+  sky: /* wgsl */ `
+#include <frame>
+
+// Fullscreen sky (074/06 row 4 v1): a big triangle at far depth; depth-test LESS-EQUAL against 1.0 keeps it
+// behind everything drawn. The gradient + sun glow live in <frame> (shared with the world fog).
+struct SkyOut {
+  @builtin(position) clip: vec4f,
+  @location(0) ndc: vec2f,
+};
+
+@vertex
+fn vsSky(@builtin(vertex_index) index: u32) -> SkyOut {
+  var out: SkyOut;
+  let x = f32(i32(index & 1u) * 4 - 1);
+  let y = f32(i32(index >> 1u) * 4 - 1);
+  out.clip = vec4f(x, y, 1.0, 1.0);
+  out.ndc = vec2f(x, y);
+  return out;
+}
+
+@fragment
+fn fsSky(in: SkyOut) -> @location(0) vec4f {
+  let far = frame.invViewProj * vec4f(in.ndc, 1.0, 1.0);
+  let dir = normalize(far.xyz / far.w - frame.camera.xyz);
+  return vec4f(skyColorFor(dir), 1.0);
+}
 `,
   world: /* wgsl */ `
 #include <frame>
@@ -31,22 +81,32 @@ struct VsIn {
   @location(1) uv: vec2f,
   @location(2) dayPrelit: vec4f,
   @location(3) layerChannels: vec2u,
+  @location(4) normal: vec4f,
+  @location(5) nightPrelit: vec4f,
 };
 
 struct VsOut {
   @builtin(position) clip: vec4f,
   @location(0) uv: vec2f,
-  @location(1) dayPrelit: vec4f,
+  @location(1) prelit: vec3f,
   @location(2) @interpolate(flat) layer: u32,
+  @location(3) sunNdl: f32,
+  @location(4) world: vec3f,
 };
 
 @vertex
 fn vsWorld(in: VsIn) -> VsOut {
   var out: VsOut;
-  out.clip = frame.viewProj * vec4f(in.position + cell.origin.xyz, 1.0);
+  let world = in.position + cell.origin.xyz;
+  out.clip = frame.viewProj * vec4f(world, 1.0);
+  out.world = world;
   out.uv = in.uv;
-  out.dayPrelit = in.dayPrelit;
+  // Day↔night prelit blend (074/06 row 1): cells without an authored night set carry a converter-synthesized
+  // night (day × ambient) — one formula for the whole world, per vertex.
+  out.prelit = mix(in.dayPrelit.rgb, in.nightPrelit.rgb, frame.params.x);
   out.layer = in.layerChannels.x;
+  // Sun N·L per vertex (074/06 row 3) — GTA geometry is low-poly; per-vertex matches the shipped look.
+  out.sunNdl = max(dot(normalize(in.normal.xyz), frame.sunDir.xyz), 0.0);
   return out;
 }
 
@@ -55,7 +115,24 @@ fn fsWorld(in: VsOut) -> @location(0) vec4f {
   // Textures ship PREMULTIPLIED (074/02): filtering is correct by construction, transparent texels
   // contribute nothing — the alpha-edge fix. Alpha feeds coverage on the cutout pipeline (A2C).
   let texel = textureSample(worldTexture, worldSampler, in.uv, in.layer);
-  return vec4f(texel.rgb * in.dayPrelit.rgb, texel.a);
+  // Hybrid lighting (074/06 row 3, the shipped 064 model): prelit is the INDIRECT term, the sun adds a real
+  // direct term on the raw albedo. indirect/direct ride frame params — day arcs are a CPU concern.
+  let lit = in.prelit * frame.params.y + frame.sunColor.rgb * (in.sunNdl * frame.params.z);
+  var color = texel.rgb * lit;
+  // Unified fog (074/06 row 5, the 068 shape): RADIAL distance (view-Z pops at screen edges), exp² over
+  // [start, cut], height attenuation (haze hugs the ground), hard horizon cut — and the fog colour is the
+  // SKY at this direction, so distant geometry dissolves into exactly what's behind it.
+  let toCamera = in.world - frame.camera.xyz;
+  let dist = length(toCamera);
+  let viewDir = toCamera / max(dist, 0.001);
+  let fogD = max(dist - frame.fog.y, 0.0);
+  let fogK = 2.0 / max(frame.fog.x - frame.fog.y, 1.0);
+  var fogFactor = 1.0 - exp(-(fogK * fogD) * (fogK * fogD));
+  let heightAtten = mix(frame.fog.w, 1.0, exp(-max(in.world.y, 0.0) * frame.fog.z));
+  fogFactor = fogFactor * heightAtten;
+  fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
+  color = mix(color, skyColorFor(viewDir), fogFactor);
+  return vec4f(color, texel.a);
 }
 `,
 };

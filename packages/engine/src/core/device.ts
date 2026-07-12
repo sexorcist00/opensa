@@ -5,6 +5,9 @@
 
 export interface EngineDevice {
   adapterInfo: string;
+  /** The RENDER color format: the sRGB view of the swapchain — lighting is computed in linear space and the
+   *  sRGB view encodes on write (without it the frame displays gamma-crushed / too dark). */
+  colorFormat: GPUTextureFormat;
   device: GPUDevice;
   /** BC (DXT/BC7) compressed textures — required (the world's textures ship BC). */
   hasBc: boolean;
@@ -22,7 +25,12 @@ export function configureCanvas(canvas: HTMLCanvasElement, engineDevice: EngineD
   const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   canvas.width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
   canvas.height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
-  context.configure({ alphaMode: 'opaque', device: engineDevice.device, format: engineDevice.presentationFormat });
+  context.configure({
+    alphaMode: 'opaque',
+    device: engineDevice.device,
+    format: engineDevice.presentationFormat,
+    viewFormats: [engineDevice.colorFormat], // resolve into the sRGB view (linear→sRGB encode on write)
+  });
 
   return context;
 }
@@ -47,11 +55,14 @@ export async function initDevice(): Promise<EngineDevice> {
   const device = await adapter.requestDevice({ requiredFeatures: required });
   const info = adapter.info;
 
+  const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+
   return {
     adapterInfo: `${info?.vendor ?? '?'} ${info?.architecture ?? ''}`.trim(),
+    colorFormat: `${presentationFormat}-srgb` as GPUTextureFormat,
     device,
     hasBc,
     hasTimestamps,
-    presentationFormat: navigator.gpu.getPreferredCanvasFormat(),
+    presentationFormat,
   };
 }

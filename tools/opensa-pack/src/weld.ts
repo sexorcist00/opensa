@@ -37,6 +37,11 @@ interface WeldBucket {
 
 const ROW = 17;
 
+/** Synthesized night ambient for geometry without an authored night set (slightly cool, ~SA night level). */
+const NIGHT_AMBIENT_R = 0.3;
+const NIGHT_AMBIENT_G = 0.32;
+const NIGHT_AMBIENT_B = 0.4;
+
 /** Convert one cell; returns null when it contains nothing mergeable. */
 export function weldCell(
   fs: AssetFileSystem,
@@ -125,9 +130,11 @@ function appendInstance(
       dayG,
       dayB,
       dayA,
-      atomic.nightColor ? atomic.nightColor[source * 3] : 0,
-      atomic.nightColor ? atomic.nightColor[source * 3 + 1] : 0,
-      atomic.nightColor ? atomic.nightColor[source * 3 + 2] : 0,
+      // No authored night set → synthesize night = day × ambient (074/06 row 1: one blend formula for the
+      // whole world; the weather-reactive ambient of the old dual-tint path is a later refinement).
+      atomic.nightColor ? atomic.nightColor[source * 3] : dayR * NIGHT_AMBIENT_R,
+      atomic.nightColor ? atomic.nightColor[source * 3 + 1] : dayG * NIGHT_AMBIENT_G,
+      atomic.nightColor ? atomic.nightColor[source * 3 + 2] : dayB * NIGHT_AMBIENT_B,
       atomic.sway ? atomic.sway.weights[source] : 0,
       layer,
     );

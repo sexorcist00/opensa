@@ -9,6 +9,7 @@ import {
   frustumIntersectsSphere,
   type Mat4,
   mat4Identity,
+  mat4Invert,
   mat4LookAt,
   mat4Multiply,
   mat4PerspectiveZO,
@@ -41,10 +42,51 @@ export interface EngineStats {
   submitMs: number;
 }
 
+/** Per-frame environment (074/06): drives the world lighting uniforms. All CPU-side arcs live in the host. */
+export interface Environment {
+  /** 0 day → 1 deep night (the prelit blend). */
+  dn: number;
+  /** Fog full-fog distance (the horizon cut, engine units). */
+  fogCutDistance: number;
+  /** Height-fog falloff (1/units) — haze hugs the ground. */
+  fogHeightK: number;
+  /** Floor of the height attenuation (high geometry keeps at least this much fog). */
+  fogHeightMin: number;
+  /** Fog ramp start distance. */
+  fogStartDistance: number;
+  /** LINEAR sky gradient horizon colour (sky pass + world fog share it). */
+  skyHorizon: readonly [number, number, number];
+  /** LINEAR sky gradient zenith colour. */
+  skyTop: readonly [number, number, number];
+  /** Sun colour, linear 0..1. */
+  sunColor: readonly [number, number, number];
+  /** Unit direction TOWARDS the sun (engine space). */
+  sunDir: readonly [number, number, number];
+  /** Direct sun scale (the N·L term). */
+  sunDirect: number;
+  /** Indirect (prelit) scale. */
+  sunIndirect: number;
+}
+
 export class Engine {
   cells!: CellStore;
-  /** Flat sky clear (M0 stand-in for the sky pass). */
-  skyColor: GPUColor = { a: 1, b: 0.86, g: 0.71, r: 0.53 };
+  /** Live environment — host mutates freely; written into the frame UBO every frame. Noon defaults. */
+  readonly environment: Environment = {
+    dn: 0,
+    fogCutDistance: 2400,
+    fogHeightK: 1 / 180,
+    fogHeightMin: 0.35,
+    fogStartDistance: 250,
+    skyHorizon: [0.42, 0.55, 0.72],
+    skyTop: [0.12, 0.32, 0.65],
+    sunColor: [1, 0.96, 0.88],
+    sunDir: [0.35, 0.85, 0.25],
+    sunDirect: 0.9,
+    sunIndirect: 0.75,
+  };
+
+  /** Flat sky clear (M0 stand-in for the sky pass). LINEAR values — the sRGB target encodes on write. */
+  skyColor: GPUColor = { a: 1, b: 0.71, g: 0.46, r: 0.24 };
 
   textures!: TextureArrays;
 
@@ -60,6 +102,7 @@ export class Engine {
   private frameBindGroup!: GPUBindGroup;
   private frameUniform!: GPUBuffer;
   private readonly frustumPlanes = new Float32Array(24);
+  private readonly invViewProj: Mat4 = mat4Identity();
   private msaaView!: GPUTextureView;
   private pipelines!: PipelineSet;
   private readonly proj: Mat4 = mat4Identity();
@@ -88,9 +131,19 @@ export class Engine {
     mat4PerspectiveZO(this.proj, camera.fovYRad, camera.aspect, camera.near, camera.far);
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
-    const frameData = new Float32Array(20);
+    mat4Invert(this.invViewProj, this.viewProj);
+    const frameData = new Float32Array(64);
     frameData.set(this.viewProj, 0);
-    frameData.set([...camera.eye, 1], 16);
+    frameData.set(this.invViewProj, 16);
+    frameData.set([...camera.eye, 1], 32);
+    const env = this.environment;
+    const sunLen = Math.hypot(env.sunDir[0], env.sunDir[1], env.sunDir[2]) || 1;
+    frameData.set([env.sunDir[0] / sunLen, env.sunDir[1] / sunLen, env.sunDir[2] / sunLen, 0], 36);
+    frameData.set([...env.sunColor, 1], 40);
+    frameData.set([env.dn, env.sunIndirect, env.sunDirect, 0], 44);
+    frameData.set([...env.skyTop, 1], 48);
+    frameData.set([...env.skyHorizon, 1], 52);
+    frameData.set([env.fogCutDistance, env.fogStartDistance, env.fogHeightK, env.fogHeightMin], 56);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
 
     frustumFromViewProj(this.frustumPlanes, this.viewProj);
@@ -118,7 +171,7 @@ export class Engine {
         {
           clearValue: this.skyColor,
           loadOp: 'clear',
-          resolveTarget: canvasTexture.createView(),
+          resolveTarget: canvasTexture.createView({ format: this.engineDevice.colorFormat }),
           storeOp: 'discard',
           view: this.msaaView,
         },
@@ -135,6 +188,10 @@ export class Engine {
     if (bundles.length > 0) {
       pass.executeBundles(bundles);
     }
+    // Sky AFTER the world: depth-test less-equal at far depth touches only background pixels (074/06 row 4).
+    pass.setPipeline(this.pipelines.get('sky'));
+    pass.setBindGroup(0, this.frameBindGroup);
+    pass.draw(3);
     pass.end();
     this.timers.resolve(encoder);
     this.device.queue.submit([encoder.finish()]);
@@ -155,10 +212,10 @@ export class Engine {
     this.canvasContext = configureCanvas(canvas, this.engineDevice);
     this.resources = new Resources(this.device);
     this.timers = new GpuTimers(this.device, this.engineDevice.hasTimestamps);
-    this.pipelines = compileAll(this.device, this.engineDevice.presentationFormat, DEPTH_FORMAT);
+    this.pipelines = compileAll(this.device, this.engineDevice.colorFormat, DEPTH_FORMAT);
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
-      size: 80, // mat4 (64) + camera vec4 (16)
+      size: 256, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog (7 × 16), padded
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this.frameBindGroup = this.device.createBindGroup({
@@ -168,7 +225,7 @@ export class Engine {
     });
     this.textures = new TextureArrays(this.device, this.resources, this.pipelines.materialLayout);
     this.cells = new CellStore({
-      colorFormat: this.engineDevice.presentationFormat,
+      colorFormat: this.engineDevice.colorFormat,
       depthFormat: DEPTH_FORMAT,
       device: this.device,
       frameBindGroup: this.frameBindGroup,
@@ -193,7 +250,7 @@ export class Engine {
     const msaa = this.resources.createTexture(
       'target',
       {
-        format: this.engineDevice.presentationFormat,
+        format: this.engineDevice.colorFormat,
         label: 'msaa-color',
         sampleCount: MSAA_SAMPLES,
         size: { height, width },
