@@ -150,3 +150,11 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
   sum next to the sun term. Frame UBO 256→288 B (moonDir/moonColor vec4s). Lab drivers grew a moon arc
   (rises ~20:00, sets ~5:00, azimuth opposite the sun) with a dim cool colour gated by dn × elevation —
   black all day, so the day path is untouched. No reconvert needed.
+- 2026-07-12 (07 emissive mask + moon disc + 0.5.0 stub) — three closers: (1) the emissive-mask bake landed —
+  the night-window luma-delta detection moved OFFLINE into the welder (layerChannels high byte + EMISSIVE
+  bit), WGSL glow consumes the mask when the cell carries it (cell.origin.w became FLAG BITS: 1 sunVis,
+  2 emissive; heuristic = old-pak fallback); LS rect 77.6 k masked verts, both paks reconverted. (2) The
+  moon DISC joined the shared skyColorFor (smoothstep disc + faint halo on moonDir; moonColor black by day
+  keeps day frames untouched, and fogged geometry dissolves into the moon behind it — the 068 invariant).
+  (3) Weather-driven wind DEFERRED to 0.5.0 by user decision — idea stub at
+  docs/ideas/0.5.0/plans/02-weather-wind/.

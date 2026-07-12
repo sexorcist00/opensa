@@ -34,7 +34,11 @@ reserved since v0 (02 — no format bump). 066 stays the spec source; this doc o
       under camera motion". The directional (moving-sun) representation stays the 066/03 v2 follow-up.
 - [x] skyVis/AO bake + consumer (v1 — see decisions below). SSAO never existed in this engine, so the
       "SSAO dies" comparison is against the WebGL prod pass when plan 10's A/B lands.
-- [ ] Emissive mask bake (night-window detection from the existing night-prelit data) + 06·8 swap.
+- [x] Emissive mask bake (night-window detection from the existing night-prelit data) + 06·8 swap.
+      2026-07-12: the luma-delta detection moved OFFLINE into the welder (high byte of `layerChannels` +
+      `EMISSIVE` channel bit; refinable later without engine changes); the WGSL glow uses the baked mask
+      when the cell carries it (per-cell flag bits in `cell.origin.w`: bit 0 sunVis, bit 1 emissive) and
+      falls back to the runtime heuristic for old paks. LS rect: 77,601 masked verts across 20/20 HD cells.
 - [x] Ledger: bake wall-time + ray counts recorded below (GPU Δ = per-vertex attribute, expected ≈ free;
       confirmed by the ritual bench after reconvert).
 

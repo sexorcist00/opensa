@@ -74,7 +74,10 @@ export function timecycDriver(
  *  wash gated by BOTH darkness (dn) and moon elevation — black all day, so the shader term is a no-op. */
 function applyMoon(engine: Engine, hour: number, dn: number): void {
   const elevation = Math.sin((((hour - 20 + 24) % 24) / 9) * Math.PI);
-  engine.environment.moonDir = [-0.3, Math.max(0.05, elevation), -0.25];
+  // Keep the disc JUST over the horizon (~13–18°): the lab orbit camera looks down at the district and its
+  // sky is a band near the horizon — anything higher never enters the frame. The real look is the ROW-13
+  // coronamoon sprite anyway.
+  engine.environment.moonDir = [-0.5, 0.16 + Math.max(0, elevation) * 0.08, -0.45];
   const gate = dn * Math.min(1, Math.max(0, elevation * 3));
   engine.environment.moonColor = [0.045 * gate, 0.06 * gate, 0.105 * gate];
 }

@@ -249,33 +249,10 @@ function assemble(
 
   let vertexBase = 0;
   let indexBase = 0;
+  let hasEmissive = false;
   for (const bucket of ordered) {
     const bucketVertices = bucket.vertices.length / WELD_ROW;
-    for (let vertex = 0; vertex < bucketVertices; vertex += 1) {
-      const row = vertex * WELD_ROW;
-      const at = (vertexBase + vertex) * OSCELL_VERTEX_STRIDE;
-      view.setFloat32(at, bucket.vertices[row], true);
-      view.setFloat32(at + 4, bucket.vertices[row + 1], true);
-      view.setFloat32(at + 8, bucket.vertices[row + 2], true);
-      view.setInt8(at + 12, snorm(bucket.vertices[row + 3]));
-      view.setInt8(at + 13, snorm(bucket.vertices[row + 4]));
-      view.setInt8(at + 14, snorm(bucket.vertices[row + 5]));
-      // normal.w carries baked sunVis (074/07) — snorm, only 0..127 used; gated by the SUN_VIS channel bit.
-      view.setInt8(at + 15, snorm(Math.max(0, Math.min(1, bucket.vertices[row + WELD_SUNVIS]))));
-      view.setFloat32(at + 16, bucket.vertices[row + 6], true);
-      view.setFloat32(at + 20, bucket.vertices[row + 7], true);
-      view.setUint8(at + 24, unorm(bucket.vertices[row + 8]));
-      view.setUint8(at + 25, unorm(bucket.vertices[row + 9]));
-      view.setUint8(at + 26, unorm(bucket.vertices[row + 10]));
-      view.setUint8(at + 27, unorm(bucket.vertices[row + 11]));
-      view.setUint8(at + 28, unorm(bucket.vertices[row + 12]));
-      view.setUint8(at + 29, unorm(bucket.vertices[row + 13]));
-      view.setUint8(at + 30, unorm(bucket.vertices[row + 14]));
-      view.setUint8(at + 31, unorm(bucket.vertices[row + 15]));
-      view.setUint16(at + 32, bucket.vertices[row + 16], true);
-      // channels u16 = aoSkyVis | emissive << 8 (074/02); emissive mask is a later bake.
-      view.setUint16(at + 34, unorm(bucket.vertices[row + WELD_AO]), true);
-    }
+    hasEmissive = writeBucketVertices(bucket, vertexBase, view) || hasEmissive;
     for (let entry = 0; entry < bucket.indices.length; entry += 1) {
       indexArray[indexBase + entry] = bucket.indices[entry] + vertexBase;
     }
@@ -343,7 +320,8 @@ function assemble(
       (channels.hasNight ? OscellChannel.NIGHT_PRELIT : 0) |
       (channels.hasSway ? OscellChannel.SWAY : 0) |
       (channels.hasAo ? OscellChannel.AO_SKY_VIS : 0) |
-      (channels.hasSunVis ? OscellChannel.SUN_VIS : 0),
+      (channels.hasSunVis ? OscellChannel.SUN_VIS : 0) |
+      (hasEmissive ? OscellChannel.EMISSIVE : 0),
     groups,
     index16,
     indexCount,
@@ -396,6 +374,10 @@ function classOf(beam: boolean, alphaClass: 'cutout' | 'opaque' | 'softBlend'): 
   return alphaClass === 'cutout' ? 1 : alphaClass === 'softBlend' ? 2 : 0;
 }
 
+function lumaOf(r: number, g: number, b: number): number {
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
 function quatToMat3(x: number, y: number, z: number, w: number): number[] {
   return [
     1 - 2 * (y * y + z * z),
@@ -416,6 +398,12 @@ function samePreviousWindow(ordered: WeldBucket[], index: number): boolean {
   const previous = ordered[index - 1]?.timed;
 
   return current !== null && previous != null && previous.on === current.on && previous.off === current.off;
+}
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+
+  return t * t * (3 - 2 * t);
 }
 
 function snorm(value: number): number {
@@ -479,4 +467,44 @@ function weldGroup(
       }
     }
   }
+}
+
+/** Encode one bucket's scratch rows into the interleaved payload; true when any emissive mask fired. */
+function writeBucketVertices(bucket: WeldBucket, vertexBase: number, view: DataView): boolean {
+  let hasEmissive = false;
+  const bucketVertices = bucket.vertices.length / WELD_ROW;
+  for (let vertex = 0; vertex < bucketVertices; vertex += 1) {
+    const row = vertex * WELD_ROW;
+    const at = (vertexBase + vertex) * OSCELL_VERTEX_STRIDE;
+    view.setFloat32(at, bucket.vertices[row], true);
+    view.setFloat32(at + 4, bucket.vertices[row + 1], true);
+    view.setFloat32(at + 8, bucket.vertices[row + 2], true);
+    view.setInt8(at + 12, snorm(bucket.vertices[row + 3]));
+    view.setInt8(at + 13, snorm(bucket.vertices[row + 4]));
+    view.setInt8(at + 14, snorm(bucket.vertices[row + 5]));
+    // normal.w carries baked sunVis (074/07) — snorm, only 0..127 used; gated by the SUN_VIS channel bit.
+    view.setInt8(at + 15, snorm(Math.max(0, Math.min(1, bucket.vertices[row + WELD_SUNVIS]))));
+    view.setFloat32(at + 16, bucket.vertices[row + 6], true);
+    view.setFloat32(at + 20, bucket.vertices[row + 7], true);
+    view.setUint8(at + 24, unorm(bucket.vertices[row + 8]));
+    view.setUint8(at + 25, unorm(bucket.vertices[row + 9]));
+    view.setUint8(at + 26, unorm(bucket.vertices[row + 10]));
+    view.setUint8(at + 27, unorm(bucket.vertices[row + 11]));
+    view.setUint8(at + 28, unorm(bucket.vertices[row + 12]));
+    view.setUint8(at + 29, unorm(bucket.vertices[row + 13]));
+    view.setUint8(at + 30, unorm(bucket.vertices[row + 14]));
+    view.setUint8(at + 31, unorm(bucket.vertices[row + 15]));
+    view.setUint16(at + 32, bucket.vertices[row + 16], true);
+    // channels u16 = aoSkyVis | emissive << 8 (074/02). Emissive mask (07): baked night-window detection —
+    // the same luma-delta the runtime heuristic used, computed OFFLINE per vertex (refinable later without
+    // engine changes). Synthesized night sets (day × ambient) always yield a negative delta → mask 0.
+    const delta =
+      lumaOf(bucket.vertices[row + 12], bucket.vertices[row + 13], bucket.vertices[row + 14]) -
+      lumaOf(bucket.vertices[row + 8], bucket.vertices[row + 9], bucket.vertices[row + 10]);
+    const emissive = smoothstep(0.05, 0.32, delta);
+    hasEmissive ||= emissive > 0;
+    view.setUint16(at + 34, unorm(bucket.vertices[row + WELD_AO]) | (unorm(emissive) << 8), true);
+  }
+
+  return hasEmissive;
 }

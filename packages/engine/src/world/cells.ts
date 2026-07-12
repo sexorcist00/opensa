@@ -92,10 +92,13 @@ export class CellStore {
       size: 16,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    // origin.w = 1 when this cell carries a baked sunVis channel (074/07) — the shader gates on it, so a
-    // channel-less pak never misreads the reserved normal.w byte (no in-data sentinel needed).
-    const sunVisBaked = (cell.channelMask & OscellChannel.SUN_VIS) !== 0 ? 1 : 0;
-    this.device.queue.writeBuffer(uniform, 0, new Float32Array([...cell.origin, sunVisBaked]));
+    // origin.w = per-cell channel FLAG BITS (small ints are exact in f32): bit 0 = baked sunVis, bit 1 =
+    // baked emissive mask (074/07) — the shader gates on them, so a channel-less pak never misreads the
+    // reserved bytes (no in-data sentinels needed).
+    const cellFlags =
+      ((cell.channelMask & OscellChannel.SUN_VIS) !== 0 ? 1 : 0) |
+      ((cell.channelMask & OscellChannel.EMISSIVE) !== 0 ? 2 : 0);
+    this.device.queue.writeBuffer(uniform, 0, new Float32Array([...cell.origin, cellFlags]));
     const cellBindGroup = this.device.createBindGroup({
       entries: [{ binding: 0, resource: { buffer: uniform } }],
       label: `${key}:cell`,

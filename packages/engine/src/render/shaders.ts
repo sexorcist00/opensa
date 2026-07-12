@@ -41,7 +41,12 @@ fn skyColorFor(dir: vec3f) -> vec3f {
   // by the day arc on the CPU side).
   let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
   let glow = frame.sunColor.rgb * (pow(sunDot, 256.0) * 0.9 + pow(sunDot, 8.0) * 0.06);
-  return base + glow;
+  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it;
+  // the disc lives in the shared sky so fogged geometry dissolves into the moon behind it (068 invariant).
+  let moonDot = max(dot(dir, frame.moonDir.xyz), 0.0);
+  // Wide soft halo (pow 96) marks the spot in the horizon band; the disc itself stays small and bright.
+  let moon = frame.moonColor.rgb * (smoothstep(0.9985, 0.9993, moonDot) * 14.0 + pow(moonDot, 96.0) * 2.2);
+  return base + glow + moon;
 }
 `,
   sky: /* wgsl */ `
@@ -74,7 +79,8 @@ fn fsSky(in: SkyOut) -> @location(0) vec4f {
   world: /* wgsl */ `
 #include <frame>
 
-// origin.w = 1 when the cell carries a baked sunVis channel (074/07), else 0 (normal.w is then ignored).
+// origin.w = per-cell channel flag bits: bit 0 = baked sunVis (normal.w meaningful), bit 1 = baked
+// emissive mask (high channels byte meaningful). Zero = neither (old paks render unchanged).
 struct Cell {
   origin: vec4f,
 };
@@ -123,15 +129,20 @@ fn vsWorld(in: VsIn) -> VsOut {
   // night (day × ambient) — one formula for the whole world, per vertex.
   out.prelit = mix(in.dayPrelit.rgb, in.nightPrelit.rgb, frame.params.x);
   // Night emissives (074/06 rows 8-9, the 071 model): a vertex much brighter at night than by day IS a lit
-  // window / neon / sign — it GLOWS instead of being merely tinted. Luma delta gates it; dn fades it in.
+  // window / neon / sign — it GLOWS instead of being merely tinted. The BAKED mask (07, high channels byte)
+  // replaces the runtime luma-delta heuristic when the cell carries it; dn fades either in.
+  let cellFlags = u32(cell.origin.w + 0.5);
   let luma = vec3f(0.2126, 0.7152, 0.0722);
   let delta = dot(in.nightPrelit.rgb, luma) - dot(in.dayPrelit.rgb, luma);
-  out.glow = in.nightPrelit.rgb * (smoothstep(0.05, 0.32, delta) * frame.params.w * frame.params.x);
+  let heuristic = smoothstep(0.05, 0.32, delta);
+  let baked = f32(in.layerChannels.y >> 8u) / 255.0;
+  let emissive = mix(heuristic, baked, f32((cellFlags >> 1u) & 1u));
+  out.glow = in.nightPrelit.rgb * (emissive * frame.params.w * frame.params.x);
   out.layer = in.layerChannels.x;
   // Sun N·L per vertex (074/06 row 3) — GTA geometry is low-poly; per-vertex matches the shipped look.
   // Baked sun visibility (074/07, 066/03 v1 scalar): normal.w = arc-averaged sun occlusion — the STATIC
   // shadow term (under bridges / canyons the direct sun dies), smooth by construction, no shadow map.
-  let sunVis = mix(1.0, clamp(in.normal.w, 0.0, 1.0), cell.origin.w * frame.params2.y);
+  let sunVis = mix(1.0, clamp(in.normal.w, 0.0, 1.0), f32(cellFlags & 1u) * frame.params2.y);
   let worldNormal = normalize(in.normal.xyz);
   out.sunNdl = max(dot(worldNormal, frame.sunDir.xyz), 0.0) * sunVis;
   // Moon N·L, WRAPPED (074/06 row 6, the 073 model): moonlight is a huge soft source — a hard terminator
