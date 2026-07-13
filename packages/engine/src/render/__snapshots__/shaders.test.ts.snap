@@ -6,6 +6,7 @@ exports[`shader store > positive cases > golden snapshot per module (shader diff
 struct Frame {
   viewProj: mat4x4f,
   invViewProj: mat4x4f,
+  // camera.w = cloud dome slot A→B crossfade blend (row 15 weather fade; spare vec4 slot).
   camera: vec4f,
   // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
   // the sun-vis v2 threshold input — 074/07), sun colour,
@@ -15,7 +16,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12; the vec4 slot was spare).
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
+  // both spare vec4 slots.
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -25,39 +27,67 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (074/06 row 7), spare, spare, spare].
+  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
   params3: vec4f,
+  // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
+  // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
+  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
+  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  sunCore: vec4f,
+  sunCorona: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
+// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
+// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
+// horizon band barely carries them).
+@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
+@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
 
 // Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
 // fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
 // Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
-fn skyColorFor(dir: vec3f) -> vec3f {
-  let elevation = clamp(dir.y, 0.0, 1.0);
+fn skyBaseFor(dir: vec3f) -> vec3f {
   let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
   let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
   let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
   let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
-  let base = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
-  // Structured sun (074/06 row 4 polish): a hot angular DISC (~0.5°) + tight corona + circumsolar glow +
-  // wide forward-scatter haze. The disc overshoots 1.0 on purpose — the un-tonemapped sRGB output clips the
-  // core to white while the fringe keeps the timecyc sun colour (orange limb at dusk for free); plan 09's
-  // HDR chain will feed the same overshoot into bloom/god-rays instead of clipping.
-  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
-  let disc = smoothstep(0.99985, 0.99997, sunDot) * 12.0;
-  let corona = pow(sunDot, 600.0) * 2.2;
-  let circumsolar = pow(sunDot, 32.0) * 0.5;
-  let haze = pow(sunDot, 8.0) * 0.08;
-  let glow = frame.sunColor.rgb * (disc + corona + circumsolar + haze);
-  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it;
-  // the disc lives in the shared sky so fogged geometry dissolves into the moon behind it (068 invariant).
+  return textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+}
+
+// Sun + moon discs, split from the gradient so the cloud layer can OCCLUDE them (row 15): the disc
+// overshoot survives a partial alpha mix, so clouds must attenuate this term, not blend over it.
+fn skyCelestialFor(dir: vec3f) -> vec3f {
+  // The prod-look sun (field round 3): a FILLED disc in the timecyc sunCore colour (yellow/orange —
+  // prod colours its sun mesh with exactly this column) + an exponential warm corona in sunCorona.
+  // Angular sizing comes from timecyc sunSize via sunCore.w. The 3–6× overshoot feeds the godrays
+  // post pass (bright-pass threshold) and clips to a hot centre in the swapchain.
+  let sunDot = clamp(dot(dir, frame.sunDir.xyz), -1.0, 1.0);
+  let ang = acos(sunDot);
+  let coreR = max(frame.sunCore.w, 1e-4);
+  let disc = (1.0 - smoothstep(coreR * 0.75, coreR, ang)) * 6.0;
+  let corona = exp(-ang / (coreR * 2.2)) * 2.6;
+  let glow = exp(-ang / (coreR * 8.0)) * 0.5;
+  let sun = frame.sunCore.rgb * disc + frame.sunCorona.rgb * (corona + glow);
+  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it.
   let moonDot = max(dot(dir, frame.moonDir.xyz), 0.0);
   // Wide soft halo (pow 96) marks the spot in the horizon band; the disc itself stays small and bright.
   let moon = frame.moonColor.rgb * (smoothstep(0.9985, 0.9993, moonDot) * 14.0 + pow(moonDot, 96.0) * 2.2);
-  return base + glow + moon;
+  // The sea-horizon line CLIPS the discs (field: the sun used to just fade out at ground level): drivers
+  // now let the arcs sink below y=0, and pixels under the horizon drop the disc — the sun/moon visibly
+  // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
+  let horizonClip = smoothstep(-0.003, 0.005, dir.y);
+  return (sun + moon) * horizonClip;
+}
+
+// The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
+// disc/corona must NOT be here — fogged silhouettes picked it up and the sun "shone through buildings"
+// (field round 3). Prod's disc is a separate mesh for the same reason.
+fn skyFogFor(dir: vec3f) -> vec3f {
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+
+  return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
 }
 
 // Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
@@ -134,6 +164,7 @@ exports[`shader store > positive cases > golden snapshot per module (shader diff
 struct Frame {
   viewProj: mat4x4f,
   invViewProj: mat4x4f,
+  // camera.w = cloud dome slot A→B crossfade blend (row 15 weather fade; spare vec4 slot).
   camera: vec4f,
   // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
   // the sun-vis v2 threshold input — 074/07), sun colour,
@@ -143,7 +174,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12; the vec4 slot was spare).
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
+  // both spare vec4 slots.
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -153,39 +185,67 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (074/06 row 7), spare, spare, spare].
+  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
   params3: vec4f,
+  // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
+  // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
+  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
+  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  sunCore: vec4f,
+  sunCorona: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
+// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
+// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
+// horizon band barely carries them).
+@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
+@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
 
 // Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
 // fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
 // Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
-fn skyColorFor(dir: vec3f) -> vec3f {
-  let elevation = clamp(dir.y, 0.0, 1.0);
+fn skyBaseFor(dir: vec3f) -> vec3f {
   let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
   let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
   let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
   let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
-  let base = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
-  // Structured sun (074/06 row 4 polish): a hot angular DISC (~0.5°) + tight corona + circumsolar glow +
-  // wide forward-scatter haze. The disc overshoots 1.0 on purpose — the un-tonemapped sRGB output clips the
-  // core to white while the fringe keeps the timecyc sun colour (orange limb at dusk for free); plan 09's
-  // HDR chain will feed the same overshoot into bloom/god-rays instead of clipping.
-  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
-  let disc = smoothstep(0.99985, 0.99997, sunDot) * 12.0;
-  let corona = pow(sunDot, 600.0) * 2.2;
-  let circumsolar = pow(sunDot, 32.0) * 0.5;
-  let haze = pow(sunDot, 8.0) * 0.08;
-  let glow = frame.sunColor.rgb * (disc + corona + circumsolar + haze);
-  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it;
-  // the disc lives in the shared sky so fogged geometry dissolves into the moon behind it (068 invariant).
+  return textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+}
+
+// Sun + moon discs, split from the gradient so the cloud layer can OCCLUDE them (row 15): the disc
+// overshoot survives a partial alpha mix, so clouds must attenuate this term, not blend over it.
+fn skyCelestialFor(dir: vec3f) -> vec3f {
+  // The prod-look sun (field round 3): a FILLED disc in the timecyc sunCore colour (yellow/orange —
+  // prod colours its sun mesh with exactly this column) + an exponential warm corona in sunCorona.
+  // Angular sizing comes from timecyc sunSize via sunCore.w. The 3–6× overshoot feeds the godrays
+  // post pass (bright-pass threshold) and clips to a hot centre in the swapchain.
+  let sunDot = clamp(dot(dir, frame.sunDir.xyz), -1.0, 1.0);
+  let ang = acos(sunDot);
+  let coreR = max(frame.sunCore.w, 1e-4);
+  let disc = (1.0 - smoothstep(coreR * 0.75, coreR, ang)) * 6.0;
+  let corona = exp(-ang / (coreR * 2.2)) * 2.6;
+  let glow = exp(-ang / (coreR * 8.0)) * 0.5;
+  let sun = frame.sunCore.rgb * disc + frame.sunCorona.rgb * (corona + glow);
+  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it.
   let moonDot = max(dot(dir, frame.moonDir.xyz), 0.0);
   // Wide soft halo (pow 96) marks the spot in the horizon band; the disc itself stays small and bright.
   let moon = frame.moonColor.rgb * (smoothstep(0.9985, 0.9993, moonDot) * 14.0 + pow(moonDot, 96.0) * 2.2);
-  return base + glow + moon;
+  // The sea-horizon line CLIPS the discs (field: the sun used to just fade out at ground level): drivers
+  // now let the arcs sink below y=0, and pixels under the horizon drop the disc — the sun/moon visibly
+  // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
+  let horizonClip = smoothstep(-0.003, 0.005, dir.y);
+  return (sun + moon) * horizonClip;
+}
+
+// The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
+// disc/corona must NOT be here — fogged silhouettes picked it up and the sun "shone through buildings"
+// (field round 3). Prod's disc is a separate mesh for the same reason.
+fn skyFogFor(dir: vec3f) -> vec3f {
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+
+  return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
 }
 
 // Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
@@ -223,6 +283,7 @@ exports[`shader store > positive cases > golden snapshot per module (shader diff
 struct Frame {
   viewProj: mat4x4f,
   invViewProj: mat4x4f,
+  // camera.w = cloud dome slot A→B crossfade blend (row 15 weather fade; spare vec4 slot).
   camera: vec4f,
   // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
   // the sun-vis v2 threshold input — 074/07), sun colour,
@@ -232,7 +293,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12; the vec4 slot was spare).
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
+  // both spare vec4 slots.
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -242,39 +304,67 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (074/06 row 7), spare, spare, spare].
+  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
   params3: vec4f,
+  // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
+  // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
+  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
+  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  sunCore: vec4f,
+  sunCorona: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
+// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
+// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
+// horizon band barely carries them).
+@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
+@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
 
 // Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
 // fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
 // Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
-fn skyColorFor(dir: vec3f) -> vec3f {
-  let elevation = clamp(dir.y, 0.0, 1.0);
+fn skyBaseFor(dir: vec3f) -> vec3f {
   let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
   let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
   let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
   let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
-  let base = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
-  // Structured sun (074/06 row 4 polish): a hot angular DISC (~0.5°) + tight corona + circumsolar glow +
-  // wide forward-scatter haze. The disc overshoots 1.0 on purpose — the un-tonemapped sRGB output clips the
-  // core to white while the fringe keeps the timecyc sun colour (orange limb at dusk for free); plan 09's
-  // HDR chain will feed the same overshoot into bloom/god-rays instead of clipping.
-  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
-  let disc = smoothstep(0.99985, 0.99997, sunDot) * 12.0;
-  let corona = pow(sunDot, 600.0) * 2.2;
-  let circumsolar = pow(sunDot, 32.0) * 0.5;
-  let haze = pow(sunDot, 8.0) * 0.08;
-  let glow = frame.sunColor.rgb * (disc + corona + circumsolar + haze);
-  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it;
-  // the disc lives in the shared sky so fogged geometry dissolves into the moon behind it (068 invariant).
+  return textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+}
+
+// Sun + moon discs, split from the gradient so the cloud layer can OCCLUDE them (row 15): the disc
+// overshoot survives a partial alpha mix, so clouds must attenuate this term, not blend over it.
+fn skyCelestialFor(dir: vec3f) -> vec3f {
+  // The prod-look sun (field round 3): a FILLED disc in the timecyc sunCore colour (yellow/orange —
+  // prod colours its sun mesh with exactly this column) + an exponential warm corona in sunCorona.
+  // Angular sizing comes from timecyc sunSize via sunCore.w. The 3–6× overshoot feeds the godrays
+  // post pass (bright-pass threshold) and clips to a hot centre in the swapchain.
+  let sunDot = clamp(dot(dir, frame.sunDir.xyz), -1.0, 1.0);
+  let ang = acos(sunDot);
+  let coreR = max(frame.sunCore.w, 1e-4);
+  let disc = (1.0 - smoothstep(coreR * 0.75, coreR, ang)) * 6.0;
+  let corona = exp(-ang / (coreR * 2.2)) * 2.6;
+  let glow = exp(-ang / (coreR * 8.0)) * 0.5;
+  let sun = frame.sunCore.rgb * disc + frame.sunCorona.rgb * (corona + glow);
+  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it.
   let moonDot = max(dot(dir, frame.moonDir.xyz), 0.0);
   // Wide soft halo (pow 96) marks the spot in the horizon band; the disc itself stays small and bright.
   let moon = frame.moonColor.rgb * (smoothstep(0.9985, 0.9993, moonDot) * 14.0 + pow(moonDot, 96.0) * 2.2);
-  return base + glow + moon;
+  // The sea-horizon line CLIPS the discs (field: the sun used to just fade out at ground level): drivers
+  // now let the arcs sink below y=0, and pixels under the horizon drop the disc — the sun/moon visibly
+  // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
+  let horizonClip = smoothstep(-0.003, 0.005, dir.y);
+  return (sun + moon) * horizonClip;
+}
+
+// The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
+// disc/corona must NOT be here — fogged silhouettes picked it up and the sun "shone through buildings"
+// (field round 3). Prod's disc is a separate mesh for the same reason.
+fn skyFogFor(dir: vec3f) -> vec3f {
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+
+  return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
 }
 
 // Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
@@ -373,8 +463,62 @@ fn fsPed(in: PedVsOut) -> @location(0) vec4f {
   let heightAtten = mix(frame.fog.w, 1.0, exp(-max(in.world.y, 0.0) * frame.fog.z));
   fogFactor = fogFactor * heightAtten;
   fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
-  color = mix(color, skyColorFor(viewDir), fogFactor);
+  color = mix(color, skyFogFor(viewDir), fogFactor);
   return vec4f(color, 1.0);
+}
+"
+`;
+
+exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > post 1`] = `
+"
+// Godrays composite (074/09 stage 1): the scene renders into a LINEAR rgba16float target (the sun disc's
+// 3–6× overshoot survives), and this fullscreen pass radial-blurs the thresholded brightness toward the
+// sun's screen position — occlusion is inherent (geometry in front of the sun leaves no bright pixels, so
+// rays only stream through gaps: the prod GodRaysEffect look). Output goes to the sRGB swapchain view.
+struct Post {
+  // sun = [uv.x, uv.y, intensity (0 = off), decay per tap]; tint = [rgb godray colour, brightness threshold].
+  sun: vec4f,
+  tint: vec4f,
+};
+@group(0) @binding(0) var<uniform> post: Post;
+@group(0) @binding(1) var scene: texture_2d<f32>;
+@group(0) @binding(2) var sceneSampler: sampler;
+
+struct PostOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+};
+
+@vertex
+fn vsPost(@builtin(vertex_index) index: u32) -> PostOut {
+  // One oversized triangle covers the viewport (no vertex buffer).
+  var corners = array<vec2f, 3>(vec2f(-1.0, -3.0), vec2f(3.0, 1.0), vec2f(-1.0, 1.0));
+  let corner = corners[index];
+  var out: PostOut;
+  out.clip = vec4f(corner, 0.0, 1.0);
+  out.uv = vec2f(corner.x * 0.5 + 0.5, 0.5 - corner.y * 0.5);
+  return out;
+}
+
+const GODRAY_TAPS = 20u;
+
+@fragment
+fn fsPost(in: PostOut) -> @location(0) vec4f {
+  var col = textureSampleLevel(scene, sceneSampler, in.uv, 0.0).rgb;
+  if (post.sun.z > 0.0) {
+    let delta = (post.sun.xy - in.uv) / f32(GODRAY_TAPS);
+    var uv = in.uv;
+    var weight = 1.0;
+    var acc = vec3f(0.0);
+    for (var tap = 0u; tap < GODRAY_TAPS; tap += 1u) {
+      uv += delta;
+      let sample_ = textureSampleLevel(scene, sceneSampler, uv, 0.0).rgb;
+      acc += max(sample_ - vec3f(post.tint.w), vec3f(0.0)) * weight;
+      weight *= post.sun.w;
+    }
+    col += acc * post.tint.rgb * (post.sun.z / f32(GODRAY_TAPS));
+  }
+  return vec4f(col, 1.0);
 }
 "
 `;
@@ -385,6 +529,7 @@ exports[`shader store > positive cases > golden snapshot per module (shader diff
 struct Frame {
   viewProj: mat4x4f,
   invViewProj: mat4x4f,
+  // camera.w = cloud dome slot A→B crossfade blend (row 15 weather fade; spare vec4 slot).
   camera: vec4f,
   // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
   // the sun-vis v2 threshold input — 074/07), sun colour,
@@ -394,7 +539,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12; the vec4 slot was spare).
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
+  // both spare vec4 slots.
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -404,39 +550,67 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (074/06 row 7), spare, spare, spare].
+  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
   params3: vec4f,
+  // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
+  // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
+  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
+  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  sunCore: vec4f,
+  sunCorona: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
+// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
+// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
+// horizon band barely carries them).
+@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
+@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
 
 // Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
 // fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
 // Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
-fn skyColorFor(dir: vec3f) -> vec3f {
-  let elevation = clamp(dir.y, 0.0, 1.0);
+fn skyBaseFor(dir: vec3f) -> vec3f {
   let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
   let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
   let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
   let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
-  let base = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
-  // Structured sun (074/06 row 4 polish): a hot angular DISC (~0.5°) + tight corona + circumsolar glow +
-  // wide forward-scatter haze. The disc overshoots 1.0 on purpose — the un-tonemapped sRGB output clips the
-  // core to white while the fringe keeps the timecyc sun colour (orange limb at dusk for free); plan 09's
-  // HDR chain will feed the same overshoot into bloom/god-rays instead of clipping.
-  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
-  let disc = smoothstep(0.99985, 0.99997, sunDot) * 12.0;
-  let corona = pow(sunDot, 600.0) * 2.2;
-  let circumsolar = pow(sunDot, 32.0) * 0.5;
-  let haze = pow(sunDot, 8.0) * 0.08;
-  let glow = frame.sunColor.rgb * (disc + corona + circumsolar + haze);
-  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it;
-  // the disc lives in the shared sky so fogged geometry dissolves into the moon behind it (068 invariant).
+  return textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+}
+
+// Sun + moon discs, split from the gradient so the cloud layer can OCCLUDE them (row 15): the disc
+// overshoot survives a partial alpha mix, so clouds must attenuate this term, not blend over it.
+fn skyCelestialFor(dir: vec3f) -> vec3f {
+  // The prod-look sun (field round 3): a FILLED disc in the timecyc sunCore colour (yellow/orange —
+  // prod colours its sun mesh with exactly this column) + an exponential warm corona in sunCorona.
+  // Angular sizing comes from timecyc sunSize via sunCore.w. The 3–6× overshoot feeds the godrays
+  // post pass (bright-pass threshold) and clips to a hot centre in the swapchain.
+  let sunDot = clamp(dot(dir, frame.sunDir.xyz), -1.0, 1.0);
+  let ang = acos(sunDot);
+  let coreR = max(frame.sunCore.w, 1e-4);
+  let disc = (1.0 - smoothstep(coreR * 0.75, coreR, ang)) * 6.0;
+  let corona = exp(-ang / (coreR * 2.2)) * 2.6;
+  let glow = exp(-ang / (coreR * 8.0)) * 0.5;
+  let sun = frame.sunCore.rgb * disc + frame.sunCorona.rgb * (corona + glow);
+  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it.
   let moonDot = max(dot(dir, frame.moonDir.xyz), 0.0);
   // Wide soft halo (pow 96) marks the spot in the horizon band; the disc itself stays small and bright.
   let moon = frame.moonColor.rgb * (smoothstep(0.9985, 0.9993, moonDot) * 14.0 + pow(moonDot, 96.0) * 2.2);
-  return base + glow + moon;
+  // The sea-horizon line CLIPS the discs (field: the sun used to just fade out at ground level): drivers
+  // now let the arcs sink below y=0, and pixels under the horizon drop the disc — the sun/moon visibly
+  // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
+  let horizonClip = smoothstep(-0.003, 0.005, dir.y);
+  return (sun + moon) * horizonClip;
+}
+
+// The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
+// disc/corona must NOT be here — fogged silhouettes picked it up and the sun "shone through buildings"
+// (field round 3). Prod's disc is a separate mesh for the same reason.
+fn skyFogFor(dir: vec3f) -> vec3f {
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+
+  return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
 }
 
 // Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
@@ -537,7 +711,7 @@ fn rigidFog(world: vec3f) -> f32 {
 fn fsRigid(in: RigidVsOut) -> @location(0) vec4f {
   let fog = rigidFog(in.world);
   let viewDir = normalize(in.world - frame.camera.xyz);
-  let color = mix(rigidShade(in), skyColorFor(viewDir), fog);
+  let color = mix(rigidShade(in), skyFogFor(viewDir), fog);
   return vec4f(color, 1.0);
 }
 
@@ -547,7 +721,7 @@ fn fsRigidBlend(in: RigidVsOut) -> @location(0) vec4f {
   let fog = rigidFog(in.world);
   let viewDir = normalize(in.world - frame.camera.xyz);
   let alpha = in.color.a;
-  let color = mix(rigidShade(in) * alpha, skyColorFor(viewDir) * alpha, fog);
+  let color = mix(rigidShade(in) * alpha, skyFogFor(viewDir) * alpha, fog);
   return vec4f(color, alpha);
 }
 "
@@ -559,6 +733,7 @@ exports[`shader store > positive cases > golden snapshot per module (shader diff
 struct Frame {
   viewProj: mat4x4f,
   invViewProj: mat4x4f,
+  // camera.w = cloud dome slot A→B crossfade blend (row 15 weather fade; spare vec4 slot).
   camera: vec4f,
   // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
   // the sun-vis v2 threshold input — 074/07), sun colour,
@@ -568,7 +743,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12; the vec4 slot was spare).
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
+  // both spare vec4 slots.
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -578,39 +754,67 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (074/06 row 7), spare, spare, spare].
+  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
   params3: vec4f,
+  // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
+  // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
+  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
+  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  sunCore: vec4f,
+  sunCorona: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
+// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
+// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
+// horizon band barely carries them).
+@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
+@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
 
 // Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
 // fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
 // Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
-fn skyColorFor(dir: vec3f) -> vec3f {
-  let elevation = clamp(dir.y, 0.0, 1.0);
+fn skyBaseFor(dir: vec3f) -> vec3f {
   let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
   let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
   let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
   let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
-  let base = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
-  // Structured sun (074/06 row 4 polish): a hot angular DISC (~0.5°) + tight corona + circumsolar glow +
-  // wide forward-scatter haze. The disc overshoots 1.0 on purpose — the un-tonemapped sRGB output clips the
-  // core to white while the fringe keeps the timecyc sun colour (orange limb at dusk for free); plan 09's
-  // HDR chain will feed the same overshoot into bloom/god-rays instead of clipping.
-  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
-  let disc = smoothstep(0.99985, 0.99997, sunDot) * 12.0;
-  let corona = pow(sunDot, 600.0) * 2.2;
-  let circumsolar = pow(sunDot, 32.0) * 0.5;
-  let haze = pow(sunDot, 8.0) * 0.08;
-  let glow = frame.sunColor.rgb * (disc + corona + circumsolar + haze);
-  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it;
-  // the disc lives in the shared sky so fogged geometry dissolves into the moon behind it (068 invariant).
+  return textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+}
+
+// Sun + moon discs, split from the gradient so the cloud layer can OCCLUDE them (row 15): the disc
+// overshoot survives a partial alpha mix, so clouds must attenuate this term, not blend over it.
+fn skyCelestialFor(dir: vec3f) -> vec3f {
+  // The prod-look sun (field round 3): a FILLED disc in the timecyc sunCore colour (yellow/orange —
+  // prod colours its sun mesh with exactly this column) + an exponential warm corona in sunCorona.
+  // Angular sizing comes from timecyc sunSize via sunCore.w. The 3–6× overshoot feeds the godrays
+  // post pass (bright-pass threshold) and clips to a hot centre in the swapchain.
+  let sunDot = clamp(dot(dir, frame.sunDir.xyz), -1.0, 1.0);
+  let ang = acos(sunDot);
+  let coreR = max(frame.sunCore.w, 1e-4);
+  let disc = (1.0 - smoothstep(coreR * 0.75, coreR, ang)) * 6.0;
+  let corona = exp(-ang / (coreR * 2.2)) * 2.6;
+  let glow = exp(-ang / (coreR * 8.0)) * 0.5;
+  let sun = frame.sunCore.rgb * disc + frame.sunCorona.rgb * (corona + glow);
+  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it.
   let moonDot = max(dot(dir, frame.moonDir.xyz), 0.0);
   // Wide soft halo (pow 96) marks the spot in the horizon band; the disc itself stays small and bright.
   let moon = frame.moonColor.rgb * (smoothstep(0.9985, 0.9993, moonDot) * 14.0 + pow(moonDot, 96.0) * 2.2);
-  return base + glow + moon;
+  // The sea-horizon line CLIPS the discs (field: the sun used to just fade out at ground level): drivers
+  // now let the arcs sink below y=0, and pixels under the horizon drop the disc — the sun/moon visibly
+  // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
+  let horizonClip = smoothstep(-0.003, 0.005, dir.y);
+  return (sun + moon) * horizonClip;
+}
+
+// The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
+// disc/corona must NOT be here — fogged silhouettes picked it up and the sun "shone through buildings"
+// (field round 3). Prod's disc is a separate mesh for the same reason.
+fn skyFogFor(dir: vec3f) -> vec3f {
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+
+  return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
 }
 
 // Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
@@ -661,7 +865,7 @@ fn vsSky(@builtin(vertex_index) index: u32) -> SkyOut {
 
 // Procedural night starfield (074/06 row 16, the prod sky.plugin port): gnomonic-projected cell hash —
 // ~one star per 10 % of cells, random brightness, gentle twinkle, horizon taper. SKY PASS ONLY: fog and
-// world fragments share skyColorFor and must NOT twinkle.
+// world fragments share skyFogFor and must NOT twinkle.
 fn hash21(cell: vec2f) -> f32 {
   return fract(sin(dot(cell, vec2f(127.1, 311.7))) * 43758.5453);
 }
@@ -687,9 +891,51 @@ fn starField(dir: vec3f) -> f32 {
 fn fsSky(in: SkyOut) -> @location(0) vec4f {
   let far = frame.invViewProj * vec4f(in.ndc, 1.0, 1.0);
   let dir = normalize(far.xyz / far.w - frame.camera.xyz);
-  var col = skyColorFor(dir);
-  // Stars gate on dn only in v1 — the row-15 cloud work adds the overcast fade (prod's uCloudClear).
-  col += vec3f(starField(dir)) * frame.params.x;
+  var col = skyBaseFor(dir);
+  // Cloud dome (074/06 row 15, the RealSkybox model without the mesh): azimuthal-equidistant mapping
+  // measured off the mod's sphere (uv = 0.5 ∓ dir_horiz·k·θ, k ≈ 0.297/rad), slow rotation on the wind
+  // clock (moonColor.w = rad/s from env.cloudSpeed), brightness follows the sky horizon (timecyc mood)
+  // with a night floor, dark from env. Two slots crossfaded by camera.w (weather change fade);
+  // params3.y = cloud layer enable (0 = no texture bound).
+  var occl = 0.0;
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+  if (frame.params3.y > 0.5 && dir.y > 0.0) {
+    let theta = acos(clamp(dir.y, -1.0, 1.0));
+    let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
+    let spin = frame.params2.z * frame.moonColor.w;
+    let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
+    let spun = rot * horiz;
+    let radius = theta * 0.297;
+    let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
+    let cloud = mix(
+      textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
+      textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
+      frame.camera.w,
+    );
+    // Luminance-scaled by the horizon colour so clouds live in the timecyc mood; night floor keeps them
+    // from black; cloudDark flattens storm layers.
+    let mood = frame.skyHorizon.rgb;
+    let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+    let horizonFade = smoothstep(0.0, 0.12, dir.y);
+    let alpha = cloud.a * horizonFade;
+    col = mix(col, cloud.rgb * brightness, alpha * frame.params3.w);
+    // Celestial occlusion uses the TEXTURE alpha, only gated (not scaled) by the layer-alpha knob: an
+    // opaque overcast deck must fully hide the discs (field: the moon glowed through CLOUDY at 0.85).
+    occl = alpha * clamp(frame.params3.w * 1.6, 0.0, 1.0);
+    // Forward scatter through the deck (godrays proper land with plan 09's HDR chain): a silver lining
+    // where half-opaque cloud edges sit near the sun + a milky diffuse blob through thick cover.
+    let scatter = pow(sunDot, 12.0) * occl * (1.0 - occl) * 1.6 +
+      pow(sunDot, 24.0) * occl * 0.35 * (1.0 - frame.params3.z);
+    col += frame.sunCorona.rgb * scatter * horizonFade;
+  }
+  // Sun/moon discs and stars sit BEHIND the cloud layer: squared falloff kills the disc overshoot under
+  // thick cover while thin wisps still let a dimmed disc through (prod's uCloudClear analogue).
+  let clear = (1.0 - occl) * (1.0 - occl);
+  col += skyCelestialFor(dir) * clear;
+  // Stars fade GLOBALLY with the weather's cloud cover (prod uCloudClear; sunCorona.w) — the panoramas
+  // leave alpha gaps between painted puffs, and per-pixel occlusion alone let stars leak through them.
+  let cloudClear = 1.0 - clamp(frame.sunCorona.w * 1.15, 0.0, 1.0);
+  col += vec3f(starField(dir)) * frame.params.x * clear * cloudClear;
   return vec4f(col, 1.0);
 }
 "
@@ -701,6 +947,7 @@ exports[`shader store > positive cases > golden snapshot per module (shader diff
 struct Frame {
   viewProj: mat4x4f,
   invViewProj: mat4x4f,
+  // camera.w = cloud dome slot A→B crossfade blend (row 15 weather fade; spare vec4 slot).
   camera: vec4f,
   // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
   // the sun-vis v2 threshold input — 074/07), sun colour,
@@ -710,7 +957,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12; the vec4 slot was spare).
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
+  // both spare vec4 slots.
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -720,39 +968,67 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (074/06 row 7), spare, spare, spare].
+  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
   params3: vec4f,
+  // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
+  // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
+  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
+  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  sunCore: vec4f,
+  sunCorona: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
+// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
+// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
+// horizon band barely carries them).
+@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
+@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
 
 // Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
 // fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
 // Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
-fn skyColorFor(dir: vec3f) -> vec3f {
-  let elevation = clamp(dir.y, 0.0, 1.0);
+fn skyBaseFor(dir: vec3f) -> vec3f {
   let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
   let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
   let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
   let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
-  let base = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
-  // Structured sun (074/06 row 4 polish): a hot angular DISC (~0.5°) + tight corona + circumsolar glow +
-  // wide forward-scatter haze. The disc overshoots 1.0 on purpose — the un-tonemapped sRGB output clips the
-  // core to white while the fringe keeps the timecyc sun colour (orange limb at dusk for free); plan 09's
-  // HDR chain will feed the same overshoot into bloom/god-rays instead of clipping.
-  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
-  let disc = smoothstep(0.99985, 0.99997, sunDot) * 12.0;
-  let corona = pow(sunDot, 600.0) * 2.2;
-  let circumsolar = pow(sunDot, 32.0) * 0.5;
-  let haze = pow(sunDot, 8.0) * 0.08;
-  let glow = frame.sunColor.rgb * (disc + corona + circumsolar + haze);
-  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it;
-  // the disc lives in the shared sky so fogged geometry dissolves into the moon behind it (068 invariant).
+  return textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+}
+
+// Sun + moon discs, split from the gradient so the cloud layer can OCCLUDE them (row 15): the disc
+// overshoot survives a partial alpha mix, so clouds must attenuate this term, not blend over it.
+fn skyCelestialFor(dir: vec3f) -> vec3f {
+  // The prod-look sun (field round 3): a FILLED disc in the timecyc sunCore colour (yellow/orange —
+  // prod colours its sun mesh with exactly this column) + an exponential warm corona in sunCorona.
+  // Angular sizing comes from timecyc sunSize via sunCore.w. The 3–6× overshoot feeds the godrays
+  // post pass (bright-pass threshold) and clips to a hot centre in the swapchain.
+  let sunDot = clamp(dot(dir, frame.sunDir.xyz), -1.0, 1.0);
+  let ang = acos(sunDot);
+  let coreR = max(frame.sunCore.w, 1e-4);
+  let disc = (1.0 - smoothstep(coreR * 0.75, coreR, ang)) * 6.0;
+  let corona = exp(-ang / (coreR * 2.2)) * 2.6;
+  let glow = exp(-ang / (coreR * 8.0)) * 0.5;
+  let sun = frame.sunCore.rgb * disc + frame.sunCorona.rgb * (corona + glow);
+  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it.
   let moonDot = max(dot(dir, frame.moonDir.xyz), 0.0);
   // Wide soft halo (pow 96) marks the spot in the horizon band; the disc itself stays small and bright.
   let moon = frame.moonColor.rgb * (smoothstep(0.9985, 0.9993, moonDot) * 14.0 + pow(moonDot, 96.0) * 2.2);
-  return base + glow + moon;
+  // The sea-horizon line CLIPS the discs (field: the sun used to just fade out at ground level): drivers
+  // now let the arcs sink below y=0, and pixels under the horizon drop the disc — the sun/moon visibly
+  // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
+  let horizonClip = smoothstep(-0.003, 0.005, dir.y);
+  return (sun + moon) * horizonClip;
+}
+
+// The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
+// disc/corona must NOT be here — fogged silhouettes picked it up and the sun "shone through buildings"
+// (field round 3). Prod's disc is a separate mesh for the same reason.
+fn skyFogFor(dir: vec3f) -> vec3f {
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+
+  return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
 }
 
 // Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
@@ -936,7 +1212,7 @@ fn worldShade(in: VsOut, cutout: bool) -> vec4f {
   fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
   // Sky term scaled by texel.a: colour is PREMULTIPLIED, so the blend pipelines (074/06 rows 9/11) stay
   // premult-correct in fog; opaque/cutout (a ≈ 1) are unchanged.
-  color = mix(color, skyColorFor(viewDir) * texel.a, fogFactor);
+  color = mix(color, skyFogFor(viewDir) * texel.a, fogFactor);
   return vec4f(color, texel.a);
 }
 

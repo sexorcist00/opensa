@@ -79,8 +79,13 @@ closed) · bake pool + chunked welding (532 s / 5.2 GB; bakes now OPT-IN via `--
 pool) · FIRST FULL-MAP pak (71 s bakeless, `?src=pak-map`, whole-map `?bench=map` row committed) · B1
 skinning probe (own IFP sampler — the chain's riskiest unknown retired) · B2 rigid entities (vehicle with
 wheels/paint/lamp texture twins + the 06 row 7 light pool) · B3 the GAME boots on the engine
-(`?engine=opensa`: reused physics/collision/input, ped-probe player, data-driven feet). NEXT: B4 water v1 +
-effect tails, then the C flip ladder. The 2026-07-12 snapshot below is kept for history.
+(`?engine=opensa`: reused physics/collision/input, ped-probe player, data-driven feet). **Row 15 clouds +
+sun/sky/godrays CLOSED (2026-07-13, 4 field rounds, user verdict "an order of magnitude better"):** cloud
+dome with weather crossfade, timecyc sunCore/sunCorona disc, ocean-horizon sun/moon set, real moon arc,
+global star fade, and plan-09 stage 1 pulled forward (16f scene target + godrays post pass) — full log in
+plan 06. NEXT: B4 water v1 + effect tails, then the C flip ladder (which gained the config-API parity
+audit task — prod's litFade/sun/moon/sky/clouds tunables must survive the flip; see plan 10). The
+2026-07-12 snapshot below is kept for history.
 
 ## Handoff status (2026-07-12, end of the Fable session — history)
 

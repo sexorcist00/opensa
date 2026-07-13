@@ -74,9 +74,12 @@ export function buildSkyLut(input: SkyLutInput): Uint16Array {
         lin *= 1 + (Math.max(0, sunE * scatter * fex) ** 0.5 - 1) * sunFresnel;
         const value = ((lin + 0.1 * fex) * 0.04 + base[channel]) * EXPOSURE * tint[channel];
         const preetham = value / (1 + value); // Reinhard, matching the prod dome
-        // Night blend: the timecyc gradient IS the night sky (its colours already darken with the hour).
+        // Timecyc gradient blend: at night it IS the sky (Preetham has no night model); by DAY it still
+        // mixes in via mood — prod's dome is essentially the timecyc gradient, and pure Preetham read as
+        // pale/washed in the field (round 3). mood 0.7 default → 42 % timecyc colourist by day.
         const gradient = input.skyHorizon[channel] + (input.skyTop[channel] - input.skyHorizon[channel]) * gradientT;
-        out[at + channel] = f32ToF16(preetham + (gradient - preetham) * clamp01(input.dn));
+        const gradientW = Math.max(clamp01(input.dn), clamp01(input.mood) * 0.6);
+        out[at + channel] = f32ToF16(preetham + (gradient - preetham) * gradientW);
       }
       out[at + 3] = f32ToF16(1);
       at += 4;

@@ -15,10 +15,11 @@
  * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / cellSize)). Writes `world.ospak` +
  * `manifest.json` + `report.json` into `--out`.
  */
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { convertClouds } from './clouds';
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
 
@@ -109,6 +110,28 @@ async function main(): Promise<void> {
   });
 
   mkdirSync(out, { recursive: true });
+  // Cloud dome layer (074/06 row 15): `--clouds <dir>` reads a RealSkybox-layout mod and emits loose
+  // per-weather RGBA domes next to the manifest. LICENSE-PENDING assets (docs/licenses/realskybox-clouds.md)
+  // — user-local paks only.
+  const cloudsDir = arg('clouds');
+  if (cloudsDir) {
+    const datPath = [join(cloudsDir, 'realskybox/skyboxes.dat'), join(cloudsDir, 'skyboxes.dat')].find((path) =>
+      existsSync(path),
+    );
+    const txdPath = [join(cloudsDir, 'realskybox/skyboxes.txd'), join(cloudsDir, 'skyboxes.txd')].find((path) =>
+      existsSync(path),
+    );
+    if (!datPath || !txdPath) {
+      throw new Error(`--clouds ${cloudsDir}: skyboxes.dat / skyboxes.txd not found`);
+    }
+    const txdBytes = readFileSync(txdPath);
+    manifest.clouds = convertClouds(
+      readFileSync(datPath, 'utf8'),
+      txdBytes.buffer.slice(txdBytes.byteOffset, txdBytes.byteOffset + txdBytes.byteLength),
+      out,
+      (message) => console.log(`[opensa-pack] ${message}`),
+    );
+  }
   writeFileSync(join(out, 'world.ospak'), pak);
   writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest));
   writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2));

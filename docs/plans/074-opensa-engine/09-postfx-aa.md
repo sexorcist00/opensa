@@ -25,7 +25,13 @@ scene (MSAA4, HDR RGBA16F) → resolve → bloom: threshold+downsample chain+ups
 
 ## Tasks
 
-- [ ] Target pool + resolve wiring in the graph (01 infra made real); HDR format A/B.
+- [x] **STAGE 1 PULLED FORWARD (2026-07-13, field round 3 of 074/06):** the scene renders into a LINEAR
+      rgba16float offscreen (`SCENE_FORMAT`: MSAA + resolve; every scene pipeline + cell bundle retargeted)
+      and a fullscreen `post` pipeline composites into the sRGB swapchain with brightness-threshold
+      godrays (20-tap radial blur toward the sun's screen UV, decay 0.93, threshold 1.25, sunCorona tint;
+      CPU gates: sun in front + above horizon + soft screen-edge fade). Occlusion is inherent — geometry
+      leaves no bright pixels. Bloom/ACES/tier knobs still open below; the HDR A/B is settled (16f shipped).
+- [ ] Target pool + resolve wiring in the graph (01 infra made real). ~~HDR format A/B~~ → 16f shipped.
 - [ ] Bloom (dual-filter) + ledger row; threshold matched to prod config values.
 - [ ] ACES tonemap (port the exact curve — prod look is calibrated against it; screenshot parity).
 - [ ] God-rays; dusk bench-scene parity shots.

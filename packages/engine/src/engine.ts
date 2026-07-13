@@ -18,7 +18,7 @@ import {
 import { Resources } from './core/resources';
 import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
-import { compileAll, MSAA_SAMPLES, pipelineIdFor, type PipelineSet } from './render/pipelines';
+import { compileAll, MSAA_SAMPLES, pipelineIdFor, type PipelineSet, SCENE_FORMAT } from './render/pipelines';
 import { buildSkyLut, SKY_LUT_HEIGHT, SKY_LUT_WIDTH, skyLutKey } from './render/sky-lut';
 import { CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
@@ -28,6 +28,15 @@ import { TextureArrays } from './world/textures';
 const DEPTH_FORMAT: GPUTextureFormat = 'depth32float';
 /** Corona instance cap per frame (074/06 row 13) — far beyond any district's lamp count. */
 const CORONA_CAP = 2048;
+/** Cloud dome side (074/06 row 15) — the converter emits exactly this; the texture never reallocates. */
+const CLOUD_DOME_SIZE = 1024;
+/** timecyc `sunSize` (≈3–5) → angular core radius in radians (~1° at sunSize 4, prod-matched by eye). */
+const SUN_SIZE_TO_RAD = 0.0045;
+/** Godrays (074/09 stage 1): ray strength, per-tap decay, and the bright-pass floor (the sun disc's HDR
+ *  overshoot sits at 3–6; lit world pixels stay under ~1.2, so they never feed rays). */
+const GODRAY_INTENSITY = 0.9;
+const GODRAY_DECAY = 0.93;
+const GODRAY_THRESHOLD = 1.25;
 
 export interface CameraState {
   aspect: number;
@@ -60,10 +69,16 @@ export interface EngineStats {
 export interface Environment {
   /** Baked AO/skyVis strength on the indirect term (074/07): 0 = off, 1 = raw bake. */
   aoStrength: number;
-  /** Cloud cover 0..1 (haze driver for the PBR sky — row 15 will feed it per weather). */
+  /** Cloud dome layer alpha 0..1 (how strongly the panorama composites; the textures carry the look). */
+  cloudAlpha: number;
+  /** Cloud cover 0..1 — the LUT haze driver, fed per weather (cloud-profile port); NOT the layer alpha. */
   cloudCover: number;
   /** Cloud heaviness 0..1 (storm/fog weathers). */
   cloudDark: number;
+  /** Weather-change crossfade duration, seconds (dome slot A→B blend). */
+  cloudFadeSeconds: number;
+  /** Cloud dome rotation speed (rad/s on the frame clock — SA's slow wind drift). */
+  cloudSpeed: number;
   /** 0 day → 1 deep night (the prelit blend). */
   dn: number;
   /** Night-emissive glow strength (lit windows / neon self-illuminate; 0 = off). */
@@ -91,8 +106,12 @@ export interface Environment {
   /** Stochastic de-tiling toggle (074/12): 0 = plain sampling (DEFAULT — field issues pending the
    *  histogram-preserving pass; see plan 12), 1 = 3-tap blend on flagged layers. */
   stochastic: number;
-  /** Sun colour, linear 0..1. */
+  /** Sun LIGHT colour, linear 0..1 (the N·L term — near-white; the visible disc uses sunCoreColor). */
   sunColor: readonly [number, number, number];
+  /** Sun DISC core colour, linear (timecyc `sunCore` — yellow/orange; hosts gate to black at night). */
+  sunCoreColor: readonly [number, number, number];
+  /** Sun corona/glow colour, linear (timecyc `sunCorona` — the warm halo + godray tint). */
+  sunCoronaColor: readonly [number, number, number];
   /** Unit direction TOWARDS the sun (engine space). */
   sunDir: readonly [number, number, number];
   /** Direct sun scale (the N·L term). */
@@ -101,6 +120,8 @@ export interface Environment {
   sunElevation: number;
   /** Indirect (prelit) scale. */
   sunIndirect: number;
+  /** timecyc `sunSize` (≈3–5) — scales the visible disc's angular radius. */
+  sunSize: number;
   /** Baked sun-shadow strength on the direct term (074/07): 0 = off, 1 = raw bake. */
   sunVisStrength: number;
   /** Wind multiplier on the baked sway amplitudes (074/06 row 10): 0 = still air, 1 = baked metres. */
@@ -157,8 +178,11 @@ export class Engine {
   readonly environment: Environment = {
     // Modest by default: SA prelit already carries baked darkening — full-strength AO double-darkens.
     aoStrength: 0.6,
+    cloudAlpha: 0.9,
     cloudCover: 0.12,
     cloudDark: 0,
+    cloudFadeSeconds: 4,
+    cloudSpeed: 0.004,
     dn: 0,
     emissiveBoost: 1.6,
     fogCutDistance: 2400,
@@ -173,10 +197,13 @@ export class Engine {
     skyTop: [0.12, 0.32, 0.65],
     stochastic: 0,
     sunColor: [1, 0.96, 0.88],
+    sunCoreColor: [1, 0.95, 0.68],
+    sunCoronaColor: [1, 0.8, 0.4],
     sunDir: [0.35, 0.85, 0.25],
     sunDirect: 0.9,
     sunElevation: 1,
     sunIndirect: 0.75,
+    sunSize: 4,
     sunVisStrength: 1,
     windStrength: 1,
   };
@@ -193,6 +220,16 @@ export class Engine {
     return this.engineDevice.device;
   }
   private canvasContext!: GPUCanvasContext;
+  /** Crossfade state: blend 0 = slot A shows, 1 = slot B; animated from `cloudFadeFrom` toward
+   *  `cloudFadeTarget` on the frame clock over env.cloudFadeSeconds. */
+  private cloudFadeFrom = 0;
+  private cloudFadeStartMs = 0;
+  private cloudFadeTarget = 0;
+  private cloudLayerOn = 0;
+  /** Both slots allocated ONCE at CLOUD_DOME_SIZE² and only ever written in place — the frame bind group
+   *  is recorded inside cell bundles and must stay immutable after init. */
+  private cloudTextureA: GPUTexture | null = null;
+  private cloudTextureB: GPUTexture | null = null;
   private coronaInstances!: GPUBuffer;
   private coronaQuad!: GPUBuffer;
   private readonly coronaScratch = new Float32Array(CORONA_CAP * 8);
@@ -217,8 +254,14 @@ export class Engine {
   private pedTexture: GPUTexture | null = null;
   private pedTextureBytes = 0;
   private pipelines!: PipelineSet;
+  /** Resolved scene (16f) + the godrays composite resources (074/09 stage 1); bind group is rebuilt on
+   *  resize — it is NOT referenced by any bundle, so this is safe (unlike the frame bind group). */
+  private postBindGroup!: GPUBindGroup;
+  private postSampler!: GPUSampler;
+  private postUniform!: GPUBuffer;
   private readonly proj: Mat4 = mat4Identity();
   private resources!: Resources;
+  private sceneColorView!: GPUTextureView;
   private skyLutCurrentKey = '';
   private skyLutTexture!: GPUTexture;
   private readonly startedMs = performance.now();
@@ -259,10 +302,11 @@ export class Engine {
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);
-    const frameData = new Float32Array(76);
+    const frameData = new Float32Array(84);
     frameData.set(this.viewProj, 0);
     frameData.set(this.invViewProj, 16);
-    frameData.set([...camera.eye, 1], 32);
+    // camera.w = cloud slot A→B crossfade blend (spare vec4 slot; row 15 weather fade).
+    frameData.set([...camera.eye, this.currentCloudBlend()], 32);
     const env = this.environment;
     const sunLen = Math.hypot(env.sunDir[0], env.sunDir[1], env.sunDir[2]) || 1;
     // sunDir.w = current arc elevation (the sun-vis v2 threshold input — 074/07).
@@ -279,9 +323,18 @@ export class Engine {
     const moonLen = Math.hypot(env.moonDir[0], env.moonDir[1], env.moonDir[2]) || 1;
     // moonDir.w doubles as the stochastic de-tiling toggle (074/12) — the vec4 slot was spare.
     frameData.set([env.moonDir[0] / moonLen, env.moonDir[1] / moonLen, env.moonDir[2] / moonLen, env.stochastic], 64);
-    frameData.set([...env.moonColor, 1], 68);
-    // params3.x = local light count (074/06 row 7): host dynamics + nearest 2dfx lamps at night.
+    // moonColor.w carries the cloud rotation speed (spare vec4 slot, same pattern as moonDir.w).
+    frameData.set([...env.moonColor, env.cloudSpeed], 68);
+    // params3 = [light count (row 7), cloud layer on, cloudDark, cloud layer alpha] — row 15.
     frameData[72] = this.fillLightPool(camera.eye);
+    frameData[73] = this.cloudLayerOn;
+    frameData[74] = env.cloudDark;
+    frameData[75] = Math.min(1, Math.max(0, env.cloudAlpha));
+    // sunCore/sunCorona = the SUN VISUAL (timecyc columns — the disc is yellow/orange; the white-ish
+    // env.sunColor stays the LIGHT). sunCore.w = angular core radius (rad) from timecyc sunSize;
+    // sunCorona.w = weather cloud COVER (prod's uCloudClear source — hides stars globally under overcast).
+    frameData.set([...env.sunCoreColor, env.sunSize * SUN_SIZE_TO_RAD], 76);
+    frameData.set([...env.sunCoronaColor, Math.min(1, Math.max(0, env.cloudCover))], 80);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
     this.refreshSkyLut();
 
@@ -323,7 +376,7 @@ export class Engine {
         {
           clearValue: this.skyColor,
           loadOp: 'clear',
-          resolveTarget: canvasTexture.createView({ format: this.engineDevice.colorFormat }),
+          resolveTarget: this.sceneColorView,
           storeOp: 'discard',
           view: this.msaaView,
         },
@@ -359,6 +412,24 @@ export class Engine {
     // 2dfx coronas last (074/06 row 13): additive on top of everything, depth-read hides occluded ones.
     draws += this.drawCoronas(pass, camera);
     pass.end();
+    // Godrays composite (074/09 stage 1): radial blur of the resolved scene toward the sun's screen
+    // position, written to the sRGB swapchain. Uniform updated first (sun UV + gates).
+    this.device.queue.writeBuffer(this.postUniform, 0, this.fillPostUniform());
+    const postPass = encoder.beginRenderPass({
+      colorAttachments: [
+        {
+          clearValue: { a: 1, b: 0, g: 0, r: 0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+          view: canvasTexture.createView({ format: this.engineDevice.colorFormat }),
+        },
+      ],
+      label: 'post',
+    });
+    postPass.setPipeline(this.pipelines.get('post'));
+    postPass.setBindGroup(0, this.postBindGroup);
+    postPass.draw(3);
+    postPass.end();
     this.timers.resolve(encoder);
     this.device.queue.submit([encoder.finish()]);
     this.timers.read();
@@ -378,10 +449,12 @@ export class Engine {
     this.canvasContext = configureCanvas(canvas, this.engineDevice);
     this.resources = new Resources(this.device);
     this.timers = new GpuTimers(this.device, this.engineDevice.hasTimestamps);
-    this.pipelines = compileAll(this.device, this.engineDevice.colorFormat, DEPTH_FORMAT);
+    // Scene pipelines target the 16-float offscreen (godrays bright-pass needs the HDR overshoot); only
+    // the post pipeline writes the sRGB swapchain.
+    this.pipelines = compileAll(this.device, SCENE_FORMAT, DEPTH_FORMAT, this.engineDevice.colorFormat);
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
-      size: 304, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2/moon×2/params3 (11 × 16)
+      size: 336, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona (13 × 16)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     // Local light pool (074/06 row 7): CPU-filled point lights, shared by every frame-layout pipeline.
@@ -401,6 +474,22 @@ export class Engine {
       },
       SKY_LUT_WIDTH * SKY_LUT_HEIGHT * 8,
     );
+    // Cloud dome slots A/B (074/06 row 15): BOTH allocated up front — the frame bind group is recorded
+    // inside cell bundles and is immutable after init. Weather changes write into the idle slot and the
+    // camera.w blend crossfades (env.cloudFadeSeconds).
+    const cloudSlot = (label: string): GPUTexture =>
+      this.resources.createTexture(
+        'texture',
+        {
+          format: 'rgba8unorm-srgb',
+          label,
+          size: { height: CLOUD_DOME_SIZE, width: CLOUD_DOME_SIZE },
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        },
+        CLOUD_DOME_SIZE * CLOUD_DOME_SIZE * 4,
+      );
+    this.cloudTextureA = cloudSlot('cloud-dome-a');
+    this.cloudTextureB = cloudSlot('cloud-dome-b');
     this.frameBindGroup = this.device.createBindGroup({
       entries: [
         { binding: 0, resource: { buffer: this.frameUniform } },
@@ -410,6 +499,8 @@ export class Engine {
           resource: this.device.createSampler({ label: 'sky-lut', magFilter: 'linear', minFilter: 'linear' }),
         },
         { binding: 3, resource: { buffer: this.lightPoolBuffer } },
+        { binding: 4, resource: this.cloudTextureA.createView() },
+        { binding: 5, resource: this.cloudTextureB.createView() },
       ],
       label: 'frame',
       layout: this.pipelines.frameLayout,
@@ -428,8 +519,14 @@ export class Engine {
       size: CORONA_CAP * 32,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
+    this.postUniform = this.resources.createBuffer('uniform', {
+      label: 'post',
+      size: 32,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.postSampler = this.device.createSampler({ label: 'post', magFilter: 'linear', minFilter: 'linear' });
     this.cells = new CellStore({
-      colorFormat: this.engineDevice.colorFormat,
+      colorFormat: SCENE_FORMAT,
       depthFormat: DEPTH_FORMAT,
       device: this.device,
       frameBindGroup: this.frameBindGroup,
@@ -472,6 +569,40 @@ export class Engine {
     this.resources.destroyBuffer('uniform', this.vehicle.matrixBuffer);
     this.resources.destroyTexture('texture', this.vehicle.texture, this.vehicle.textureBytes);
     this.vehicle = null;
+  }
+
+  /** Install a weather's cloud dome (074/06 row 15); RGBA8, EXACTLY CLOUD_DOME_SIZE² (the converter's
+   *  contract). The persistent slot textures are overwritten IN PLACE — cell bundles record the frame bind
+   *  group at create time, so the group (and every view in it) must never be rebuilt/destroyed. The first
+   *  install fills both slots (no fade from garbage); later installs write the idle slot and crossfade
+   *  over env.cloudFadeSeconds. Pass null to gate the layer off. */
+  setCloudTexture(texture: null | { height: number; rgba: Uint8Array; width: number }): void {
+    if (texture && this.cloudTextureA && this.cloudTextureB) {
+      if (texture.width !== CLOUD_DOME_SIZE || texture.height !== CLOUD_DOME_SIZE) {
+        throw new Error(`cloud dome must be ${CLOUD_DOME_SIZE}² (got ${texture.width}×${texture.height})`);
+      }
+      const write = (target: GPUTexture): void =>
+        this.device.queue.writeTexture(
+          { texture: target },
+          texture.rgba,
+          { bytesPerRow: texture.width * 4 },
+          { height: texture.height, width: texture.width },
+        );
+      if (this.cloudLayerOn === 0) {
+        write(this.cloudTextureA);
+        write(this.cloudTextureB);
+        this.cloudFadeFrom = 0;
+        this.cloudFadeTarget = 0;
+      } else {
+        const from = this.currentCloudBlend();
+        const target = from < 0.5 ? 1 : 0;
+        write(target === 1 ? this.cloudTextureB : this.cloudTextureA);
+        this.cloudFadeFrom = from;
+        this.cloudFadeTarget = target;
+        this.cloudFadeStartMs = performance.now();
+      }
+    }
+    this.cloudLayerOn = texture ? 1 : 0;
   }
 
   /** Create (or replace) the skinning probe entity (074/08 B1). Returns the live palette handle. */
@@ -633,6 +764,14 @@ export class Engine {
     }
   }
 
+  /** Cloud slot blend on the frame clock (0 = slot A, 1 = slot B) — written into camera.w each frame. */
+  private currentCloudBlend(): number {
+    const fadeMs = Math.max(1, this.environment.cloudFadeSeconds * 1000);
+    const t = Math.min(1, (performance.now() - this.cloudFadeStartMs) / fadeMs);
+
+    return this.cloudFadeFrom + (this.cloudFadeTarget - this.cloudFadeFrom) * t;
+  }
+
   /** 2dfx corona billboards of visible cells (074/06 row 13): CPU-gated by night + farClip, one
    *  instanced draw. Colour is premultiplied by the dn gate — coronas are a NIGHT phenomenon (v1). */
   private drawCoronas(pass: GPURenderPassEncoder, camera: CameraState): number {
@@ -764,11 +903,11 @@ export class Engine {
       return;
     }
     this.targetSize = { height, width };
-    const bytes = width * height * (4 + 4) * MSAA_SAMPLES; // color + depth estimate
+    const bytes = width * height * (8 + 4) * MSAA_SAMPLES; // 16f color + depth estimate
     const msaa = this.resources.createTexture(
       'target',
       {
-        format: this.engineDevice.colorFormat,
+        format: SCENE_FORMAT,
         label: 'msaa-color',
         sampleCount: MSAA_SAMPLES,
         size: { height, width },
@@ -776,6 +915,27 @@ export class Engine {
       },
       bytes / 2,
     );
+    // The MSAA resolve lands here; the godrays post pass samples it and writes the swapchain.
+    const sceneColor = this.resources.createTexture(
+      'target',
+      {
+        format: SCENE_FORMAT,
+        label: 'scene-color',
+        size: { height, width },
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      },
+      width * height * 8,
+    );
+    this.sceneColorView = sceneColor.createView();
+    this.postBindGroup = this.device.createBindGroup({
+      entries: [
+        { binding: 0, resource: { buffer: this.postUniform } },
+        { binding: 1, resource: this.sceneColorView },
+        { binding: 2, resource: this.postSampler },
+      ],
+      label: 'post',
+      layout: this.pipelines.postLayout,
+    });
     const depth = this.resources.createTexture(
       'target',
       {
@@ -845,6 +1005,36 @@ export class Engine {
     }
 
     return count;
+  }
+
+  /** Godrays uniform (074/09 stage 1): [sunU, sunV, intensity, decay] + [tint rgb, threshold]. Intensity
+   *  gates on the sun being in front of the camera, above the horizon (sunCoreColor is black at night),
+   *  and near/inside the frame (soft edge fade — rays die gracefully as the sun leaves the screen). */
+  private fillPostUniform(): Float32Array {
+    const out = new Float32Array(8);
+    const env = this.environment;
+    const vp = this.viewProj;
+    const len = Math.hypot(env.sunDir[0], env.sunDir[1], env.sunDir[2]) || 1;
+    const [dx, dy, dz] = [env.sunDir[0] / len, env.sunDir[1] / len, env.sunDir[2] / len];
+    // Direction at infinity: clip = viewProj × (dir, 0) — column-major, translation column skipped.
+    const clipX = vp[0] * dx + vp[4] * dy + vp[8] * dz;
+    const clipY = vp[1] * dx + vp[5] * dy + vp[9] * dz;
+    const clipW = vp[3] * dx + vp[7] * dy + vp[11] * dz;
+    let intensity = 0;
+    let u = 0.5;
+    let v = 0.5;
+    if (clipW > 1e-4 && dy > 0) {
+      u = 0.5 + (0.5 * clipX) / clipW;
+      v = 0.5 - (0.5 * clipY) / clipW;
+      const outside = Math.max(0, -u, u - 1, -v, v - 1);
+      const edgeFade = Math.max(0, 1 - outside / 0.45);
+      const dayGate = Math.min(1, Math.max(...env.sunCoreColor));
+      intensity = GODRAY_INTENSITY * edgeFade * dayGate;
+    }
+    out.set([u, v, intensity, GODRAY_DECAY], 0);
+    out.set([...env.sunCoronaColor, GODRAY_THRESHOLD], 4);
+
+    return out;
   }
 
   /** Rebuild the sky LUT when its environment inputs moved (quantized key — ~a few rebuilds per game

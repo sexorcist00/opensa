@@ -5,8 +5,9 @@
  */
 import type { Engine } from '@opensa/engine';
 
+import { cloudProfile } from '@opensa/game/plugins/cloud-profile';
 import { buildTimecyc, sampleTimecycBlend } from '@opensa/renderware/parsers/text/timecyc';
-import { convertTo24h, parseTimecyc } from '@opensa/renderware/parsers/text/timecyc.parser';
+import { convertTo24h, parseTimecyc, WEATHER_NAMES } from '@opensa/renderware/parsers/text/timecyc.parser';
 
 export interface EnvironmentDriver {
   apply(hour: number): void;
@@ -27,11 +28,14 @@ export function parametricDriver(engine: Engine): EnvironmentDriver {
       // MIRRORS the sun-vis bake arc (074/07) — change one, change both.
       const azScale = 1 - 0.75 * Math.max(0, Math.min(1, elevation));
       const azX = -Math.cos(((Math.max(6, Math.min(18, hour)) - 6) / 12) * Math.PI);
-      engine.environment.sunDir = [azX, Math.max(0.05, elevation), 0.25 * azScale];
+      engine.environment.sunDir = [azX, Math.max(-0.25, elevation), 0.25 * azScale];
       engine.environment.sunElevation = Math.max(0, Math.min(1, elevation));
       const warm = Math.min(1, Math.max(0, 1 - elevation));
-      const dayGate = Math.min(1, Math.max(0, elevation * 4));
+      const dayGate = Math.min(1, Math.max(0, (elevation + 0.05) * 5)); // disc glows until it fully sinks
       engine.environment.sunColor = [dayGate, (0.96 - warm * 0.15) * dayGate, (0.88 - warm * 0.3) * dayGate];
+      // Parametric disc: yellow core warming to orange at low sun (timecyc drives this in stream mode).
+      engine.environment.sunCoreColor = [dayGate, (0.95 - warm * 0.25) * dayGate, (0.68 - warm * 0.4) * dayGate];
+      engine.environment.sunCoronaColor = [dayGate, (0.8 - warm * 0.25) * dayGate, (0.4 - warm * 0.3) * dayGate];
       engine.environment.sunDirect = Math.max(0, elevation) * 0.9;
       engine.environment.sunIndirect = 0.75 * (1 - dn) + 0.35 * dn;
       engine.environment.skyTop = mix3([0.12, 0.32, 0.65], [0.002, 0.004, 0.012], dn);
@@ -51,10 +55,16 @@ export function timecycDriver(
 ): EnvironmentDriver {
   const rows = parseTimecyc(timecycText);
   const timecyc = buildTimecyc(is24h ? rows : convertTo24h(rows));
+  // Per-weather cloud look (row 15): prod's curated profiles keyed by weather NAME — raw timecyc
+  // cloudAlpha is noisy (EXTRASUNNY still reads cloudy). Drives the LUT haze + storm darkening; the dome
+  // textures themselves already differ per weather.
+  const clouds = cloudProfile(WEATHER_NAMES[weather] ?? '');
 
   return {
     apply(hour: number): void {
       const sample = sampleTimecycBlend(timecyc, weather, weather, hour, 0);
+      engine.environment.cloudCover = clouds.coverage;
+      engine.environment.cloudDark = clouds.darkness;
       const { dn, elevation } = sunArc(hour);
       engine.environment.hour = hour;
       engine.environment.dn = dn;
@@ -63,10 +73,14 @@ export function timecycDriver(
       // MIRRORS the sun-vis bake arc (074/07) — change one, change both.
       const azScale = 1 - 0.75 * Math.max(0, Math.min(1, elevation));
       const azX = -Math.cos(((Math.max(6, Math.min(18, hour)) - 6) / 12) * Math.PI);
-      engine.environment.sunDir = [azX, Math.max(0.05, elevation), 0.25 * azScale];
+      engine.environment.sunDir = [azX, Math.max(-0.25, elevation), 0.25 * azScale];
       engine.environment.sunElevation = Math.max(0, Math.min(1, elevation));
-      const dayGate = Math.min(1, Math.max(0, elevation * 4)); // sun glow/colour die below the horizon
+      const dayGate = Math.min(1, Math.max(0, (elevation + 0.05) * 5)); // disc glows until it fully sinks
       engine.environment.sunColor = lin3(sample.dir).map((v) => v * dayGate) as [number, number, number];
+      // The visible disc rides the timecyc SUN columns (prod parity — yellow core, warm corona, sunSize).
+      engine.environment.sunCoreColor = lin3(sample.sunCore).map((v) => v * dayGate) as [number, number, number];
+      engine.environment.sunCoronaColor = lin3(sample.sunCorona).map((v) => v * dayGate) as [number, number, number];
+      engine.environment.sunSize = sample.sunSize;
       engine.environment.sunDirect = Math.max(0, elevation) * 0.9;
       engine.environment.sunIndirect = 0.85 * (1 - dn) + 0.4 * dn;
       engine.environment.skyTop = lin3(sample.skyTop);
@@ -82,15 +96,16 @@ export function timecycDriver(
   };
 }
 
-/** Moon arc (074/06 row 6): rises ~20:00, sets ~5:00, opposite azimuth to the sun; colour is a dim cool
- *  wash gated by BOTH darkness (dn) and moon elevation — black all day, so the shader term is a no-op. */
+/** Moon arc (074/06 row 6, field round 4 — a REAL arc): rises ~20:00 in the east, peaks ~0:30, sets ~5:00
+ *  in the west; elevation starts below the sea horizon so the disc visibly climbs out of / sinks into the
+ *  water (the sky shader's horizon clip). Colour gated by darkness (dn) AND elevation — black all day. */
 function applyMoon(engine: Engine, hour: number, dn: number): void {
-  const elevation = Math.sin((((hour - 20 + 24) % 24) / 9) * Math.PI);
-  // Keep the disc JUST over the horizon (~13–18°): the lab orbit camera looks down at the district and its
-  // sky is a band near the horizon — anything higher never enters the frame. The real look is the ROW-13
-  // coronamoon sprite anyway.
-  engine.environment.moonDir = [-0.5, 0.16 + Math.max(0, elevation) * 0.08, -0.45];
-  const gate = dn * Math.min(1, Math.max(0, elevation * 3));
+  const t = ((hour - 20 + 24) % 24) / 9;
+  const arc = t <= 1 ? Math.sin(t * Math.PI) : 0;
+  const elevation = -0.08 + arc * 0.7;
+  const azX = Math.cos(Math.min(1, Math.max(0, t)) * Math.PI) * 0.85;
+  engine.environment.moonDir = [azX, elevation, -0.4];
+  const gate = dn * Math.min(1, Math.max(0, elevation * 5));
   engine.environment.moonColor = [0.045 * gate, 0.06 * gate, 0.105 * gate];
 }
 

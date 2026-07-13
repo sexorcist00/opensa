@@ -21,10 +21,10 @@ row in the ledger (frame + per-pass GPU ms). Order = by risk/dependency, cheapes
 | 9   | Timed window glow overlays                              | ObjectRecord draws + uniform                                        | applyWorldWindowGlow semantics                                                                              | ~0    | ✅ v1 2026-07-12: timed defs weld into trailing `timed` buckets → objectTable entries (kind 0, params = on\|off<<8, contiguous group runs); engine draws them AFTER the bundles, gated by `env.hour` (midnight wrap handled); timed geometry EXCLUDED from bake occluders (coplanar overlays / sometimes-absent). LS rect: 10 objects. Field ✅ (user: "tobj in place", daycycle works, night windows on the 22:00 screen); bench 06·tobj ≈ free. Glow refinement = the emissive-mask bake (07)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | 10  | Wind sway                                               | vertex WGSL (sway weight channel)                                   | wind.mod GLSL                                                                                               | ~free | ✅ 2026-07-12: amplitude baked OFFLINE in metres into nightPrelit.a (trigger = IS_TREE/IS_PALM/WIND_MODELS; weights from wind-ADAPTED overlay DFFs `--wind`, height-fallback else; shared `vegetation.txd` = planner fallback); WGSL world-space sin pair, clock+strength in params2.zw, `?wind=N`. v1 note: single sway speed (prod had palm 0.9 / tree 1.6 — no per-vertex speed byte)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 11  | Beam floodlights (vertex-alpha cones)                   | `beam` pipelineClass                                                | plan 032 semantics (premultiplied now)                                                                      | ~0    | ✅ engine-side 2026-07-12: `world-beam-*` pipelines (premult (one, 1−src-α) blend, depth READ-ONLY, `fsBeam`: prelit tint × cone α from dayPrelit.a, fog FADES not tints) + the class-2 BLEND pair landed with it (242 groups in the LS rect switch from the cutout placeholder to true translucency; fsWorld fog made premult-correct via sky×texel.a). Blend pair field ✅ on LS (user: "nothing broke, looks beautiful"). Beams: map-scan → `WS_floodbeams` (SF stadium) + `vgsEcnstrct*` (Vegas East); SF rect −9,−2…−5,1 converted to `public/pak-sf` (14 beam groups), lab `?src=pak-sf` — field ✅ 2026-07-12 (night screens: soft translucent cones, layered-shell look up close = the source geometry, matches vanilla; fog FADES them and geometry reads through the cone — all three acceptance checks passed (user-confirmed)). v1 limitation: blended draws sort by class within a cell bundle; cross-cell the TWO-PHASE frame (all opaque → sky → all blends, blend bundles back-to-front by cell distance, 2026-07-12 night round) fixes repaint/ordering; within-bundle order stays baked (standard transparency caveat) |
-| 12  | Water (waves/shore depth/glint)                         | water pass                                                          | water.plugin GLSL port                                                                                      |       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 12  | Water (waves/shore depth/glint)                         | water pass                                                          | OWN design (B4) — see 'Water v1 design' below; the plugin GLSL is reference only                            |       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | 13  | Coronas + 2dfx particles                                | particle pass (instanced billboards)                                | corona/particles shaders                                                                                    | ~0    | 🟡 v1 2026-07-12 (coronas only): converter fills the `.oscell` light table from the DFF 2dfx plugin (instance-transformed, HD cells only — LS 2,426 / SF 1,084 anchors); engine draws ONE instanced additive billboard pass after the sky (procedural radial glow, depth-read hides occluded, CPU night-gate dn×1.5 + farClip fade with a 350-unit lab floor). Textured sprites (particle.txd: coronastar/coronamoon) + 2dfx PARTICLES (smoke/fire) remain                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |     |
-| 15  | Sky dome clouds (2D layer, weather profiles)            | sky pass (noise layer in `fsSky`)                                   | sky.plugin cloud math + cloud-profile.ts (cover/dark/alpha per weather — the curated profiles port as data) |       | GAP found in the 2026-07-12 modern-set audit — the prod sky carries a 2D cloud layer the ledger missed. Volumetric clouds stay EXCLUDED (prod default-off). Lands with the row-4 PBR LUT half                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| 16  | Night starfield                                         | sky pass only (`fsSky` — fog must not twinkle)                      | sky.plugin `starField` GLSL (gnomonic cell hash)                                                            | ~0    | ✅ 2026-07-12 (second audit gap, found by the user's question): prod's procedural starfield ported to WGSL — cell-hash points, twinkle on the wind clock, horizon taper, dn-gated. v1 gates on dn only; the overcast fade (prod `uCloudClear`) lands with row 15                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 15  | Sky dome clouds (2D layer, weather profiles)            | sky pass (RealSkybox-style dome layer in `fsSky`)                   | sky.plugin cloud math + cloud-profile.ts (cover/dark/alpha per weather — the curated profiles port as data) |       | ✅ 2026-07-13 (4 field rounds, user verdict: "an order of magnitude better" → CLOSED): RealSkybox-approach dome (converter `--clouds`, azimuthal fsSky composite, two persistent slots + crossfade, per-weather cloud-profile cover/dark, celestial occlusion, forward scatter) + pulled plan-09 stage 1 forward (16f scene + godrays post pass) + timecyc sunCore/sunCorona disc + horizon-clipped sun/moon arcs. Full log in the field-round notes below. Volumetric stays EXCLUDED (prod default-off)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 16  | Night starfield                                         | sky pass only (`fsSky` — fog must not twinkle)                      | sky.plugin `starField` GLSL (gnomonic cell hash)                                                            | ~0    | ✅ 2026-07-12 (second audit gap, found by the user's question): prod's procedural starfield ported to WGSL — cell-hash points, twinkle on the wind clock, horizon taper, dn-gated. the overcast fade (prod `uCloudClear`) landed 2026-07-13 with row 15 (global cover gate via sunCorona.w — the panoramas' alpha gaps made per-pixel occlusion insufficient)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | 14  | Weather/timecyc drive                                   | frame UBO fill (CPU)                                                | existing sampling code (pure TS, reused as-is)                                                              | 0     | ✅ 2026-07-12: converter embeds timecyc(\_24h).dat in the manifest; lab samples via prod's parser chain (`?weather=N`, `?fogscale=N`); dayGate kills night sun glow                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 17  | IDE anim objects (windmills, spinning signs)            | static weld now; runtime IFP rides plan 08                          | plan 041 IFP clips (old path)                                                                               | 0     | 🟡 static v1 2026-07-12 (field fix): anim defs used to be SKIPPED — which deleted whole BUILDINGS (`burger01_LAw`, the 22×35 m Burger Shot diner, sits in the anim section because its sign spins → the "blue hole" field report). They now weld at bind pose with the frame chain applied (`frameWorldTransform` — weld had ignored RW frames; identity fast-path keeps static DFFs byte-identical). Frozen, not animated: runtime IFP playback = plan 08 dynamic entities. Needs a reconvert to appear                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
@@ -51,8 +51,144 @@ row in the ledger (frame + per-pass GPU ms). Order = by risk/dependency, cheapes
       code moved into the lab (pure TS, reused).
 - [ ] Land effects in ledger order, one toggle + one ledger row each; stop and measure at every step.
 - [ ] LUT compute pass + oracle test vs the TS twin.
-- [ ] Water port (biggest chunk — its own sub-checklist when reached).
+- [ ] Water v1 (B4) per the design below: converter shore-field bake + tessellated shore strips →
+      `water` pass (Gerstner + depth alpha + foam band + skyColorFor/fresnel) · gate ≤ +1.5 ms GPU on
+      coastal scenes · acceptance reference = the user's beach photo (2026-07-13, foam lace + translucent
+      run-up + wet sand).
+- [ ] Water v1.5: oscillating run-up (waterline breathes by Gerstner arrival phase) + the WET-SAND band on
+      beach materials (shared 'wetness' concept with ideas/0.5.0/05 weather-rain — the beach is its first
+      consumer).
+- [x] Row 15 clouds per the design below (2026-07-13 — shipped BEFORE water; user-confirmed over 4 field rounds).
 - [ ] M2 screenshot-parity sweep (noon/dusk/night × bench scenes) archived next to this doc.
+
+## Water v1 design (B4, agreed 2026-07-13 — build OWN, no closed deps)
+
+Closed three-based products (e.g. threejs-water-pro, $200) are rejected on TECHNICAL grounds: they ship
+three materials for a renderer we do not run; the value is the techniques, which are public. Our unfair
+advantage is the CONVERTER — everything expensive about believable coastal water is DATA, and we bake data:
+
+1. **Offline (opensa-pack)**: from `water.dat` (parser exists) + the COL terrain, bake per water-grid
+   vertex: **shore distance (SDF), depth, direction-to-shore** (SDF gradient). The converter TESSELLATES
+   the shore strip denser (we own geometry offline) — the "waves need geometry at the beach" requirement
+   solved as data.
+2. **Runtime (WGSL `water` pass)**: Gerstner 2–3 octaves with phase/direction from the shore field (waves
+   turn toward and grow at the beach), scrolling normal textures for ripple, **foam** = shore-SDF band +
+   wave crests × a tiling foam texture broken by world-space noise (the puddle-mask mechanism from
+   ideas/0.5.0/05), colour/alpha by depth (sand reads THROUGH the last metres of water), sky reflection via
+   the shared `skyColorFor` + fresnel — the 068 fog invariant for free.
+3. **v1.5 additions** (split decided after the first field session): oscillating run-up (the waterline
+   advances/retreats with wave arrival) and the WET-SAND band on beach terrain (darkened albedo + sky-gloss
+   above the waterline — half the realism of the reference photo is the BEACH shader, not the water; no
+   bought water asset can deliver it because the terrain is ours).
+4. **OCEAN vs INNER water (user spec 2026-07-13)**: Gerstner waves/foam run only on the OUTER Water
+   contour — the sea around the state. Inner water (rivers, lakes, pools) stays CALM: flat surface +
+   ripple normals + depth colour, no wave displacement. Classification is baked offline: flood-fill the
+   `water.dat` quads — everything connected to the map-boundary sea is `ocean`, the rest is `inner`
+   (a per-vertex flag in the water mesh; the shader gates the wave/foam terms on it).
+5. **Seabed rendering DEFERRED (user decision 2026-07-13)**: we barely render an underwater floor today —
+   keep it that way for v1. The DEPTH bake still happens (it drives shore alpha/colour and exists in the
+   COL near shores); away from shore the depth clamps and the water goes opaque, so no seabed is needed.
+   A real underwater pass (floor, caustics, fog) is a separate later row.
+6. **Assets**: foam tile + ripple normals — own/CC0 (Polyhaven-class) or purchased TEXTURES if needed
+   (buying assets is fine; buying closed CODE is not).
+
+## Row 15 clouds design (agreed 2026-07-13 — the RealSkybox approach, not the ASI)
+
+`mods-src/zen` (RealSkybox by Junior_Djjr — the skygfx-fork author) proves the model: a sky DOME layer with
+per-weather cloud textures, slow rotation, brightness modulated by the sky's low colour, a night-darkening
+limit. We take the APPROACH, not the mod:
+
+- **No mesh, no ASI**: the cloud layer samples in `fsSky` as a second dome OVER the Preetham LUT (our sky
+  stays the owner of colour/sun/fog — the layer composites, never replaces); weather picks the texture,
+  `cloudCover/cloudDark` (already in Environment) drive blend; dn caps night brightness; fog dissolves
+  geometry into the CLOUDED sky automatically (068).
+- **Assets — three routes, any works**: (a) Junior_Djjr's textures with permission (user is asking; NB the
+  TXD mixes authors — Ezekiel + Terragen renders — permission must cover the specific textures);
+  (b) CC0 sky HDRIs (Polyhaven-class) sliced into weather domes by our own tool — the clean route for the
+  CDN-distributed demo; (c) purchased similar textures (assets-only purchases acceptable).
+- **Size caveat**: the reference TXD is 256 MB — ours ships BC-compressed with lazy per-weather loading.
+- **Volumetric clouds stay ultra-tier, post-flip** (plans 072/09); Cloudworks noted as a technique
+  reference only, never a dependency.
+
+**Row 15 v1 SHIPPED engine-side (2026-07-13, awaiting field):** converter step `--clouds mods-src/clouds`
+(RealSkybox layout: skyboxes.dat weather map + skyboxes.txd → 15 loose 1024² RGBA domes + `manifest.clouds`;
+LICENSE-PENDING — docs/licenses/realskybox-clouds.md, user-local paks only). Engine: frame binding 4 =
+cloud dome texture, `Engine.setCloudTexture`, `loadCloudWeather` helper (lazy per-weather fetch); `fsSky`
+composites with the azimuthal mapping measured off the mod's sphere mesh (uv = 0.5 ∓ dir·0.297·θ, upper
+hemisphere, horizon fade), slow rotation on the wind clock, brightness follows `skyHorizon` (timecyc mood)
+with a 0.10 night floor, `cloudDark` flattens storms, `cloudCover` = layer alpha (hosts set 0.85 when a
+dome is loaded; `?cloudcover=` A/B in the lab). Known v1 deviation from the 068 invariant, documented in
+the shader: clouds live in fsSky ONLY — fog dissolves geometry into the cloudless dome (clouds sit high;
+the horizon band barely carries them). Bench + field pending; stars-under-overcast fade is the row-16 tie-in.
+
+**Field round 1 (2026-07-13) — fixes landed:**
+
+- Destroyed-texture crash: cell bundles record the frame bind group at create time, so the group is
+  IMMUTABLE after init. The cloud dome is now ONE persistent 1024² texture allocated in init;
+  `setCloudTexture` writes into it in place (size-asserted against the converter contract) and only toggles
+  the `params3.y` gate. Never destroy/rebuild anything referenced by a bundle.
+- weather=7 invisible: RealSkybox's full-overcast `cloudy` panorama ships with a ZEROED alpha channel (the
+  mod renders those domes opaque). Converter now detects an all-zero alpha and fills it opaque, logged.
+- Sun/moon/stars drew OVER the clouds: `skyColorFor` split into `skyBaseFor` + `skyCelestialFor`; `fsSky`
+  mixes clouds over the base, then adds celestial+stars scaled by `(1-cover)²` — the 12× disc overshoot
+  dies under thick cover, thin wisps pass a dimmed disc (prod `uCloudClear` analogue, closes the row-16
+  tie-in). Fog callers keep the combined `skyColorFor` (068 invariant untouched).
+- Rotation speed → config: `Environment.cloudSpeed` (rad/s, default 0.004), wired through the spare
+  `moonColor.w` slot.
+- Runtime weather switching in the lab: `[` / `]` cycle weather 0–19 — timecyc mood re-samples and the dome
+  crossfades in.
+
+**Field round 2 (2026-07-13) — sun/sky/fade round:**
+
+- Weather-change CROSSFADE (was a hard swap): the dome now has TWO persistent slots (bindings 4+5, both
+  allocated at init — the bind-group immutability rule); a weather change writes the incoming panorama
+  into the idle slot and `camera.w` (spare slot) blends A→B over `Environment.cloudFadeSeconds`
+  (default 4 s) on the frame clock. First install fills both slots (no fade from garbage).
+- Celestial bodies STILL bled through overcast: occlusion was scaled by the layer-alpha knob (hosts set
+  0.85 → `clear` never hit 0, the 12–16× discs survived 0.0225). Occlusion now uses the TEXTURE alpha,
+  only gated by the knob (`alpha · saturate(knob·1.6)`) — an opaque deck fully hides sun/moon/stars.
+- Sun profile retuned (field: big orange ball with clip-boundary rings vs prod's compact disc): core
+  whitened toward vec3(1) (hue-neutral sRGB clip — no orange→yellow→white banding), tighter/weaker fringe
+  terms (limb pow 1200, circumsolar pow 48·0.28, haze pow 7·0.045) so the timecyc colour lives at the limb.
+- Forward-scatter approximation (godrays proper land with plan 09's HDR chain): silver lining at
+  half-opaque cloud edges near the sun (`pow(sunDot,12)·occl·(1−occl)`) + a milky diffuse blob through
+  thick cover (`pow(sunDot,24)·occl·(1−cloudDark)`).
+- Washed-out sky root cause: hosts set `cloudCover=0.85` blanket → LUT turbidity ~7.3 (milky) in EVERY
+  weather. Environment gained `cloudAlpha` (the dome layer alpha, default 0.9) and `cloudCover` reverted
+  to the LUT-haze driver fed per weather from prod's curated `cloud-profile.ts` (both hosts import it):
+  EXTRASUNNY 0.14 → crisp blue, CLOUDY 1.0/0.9 → heavy grey. `?cloudcover=` now overrides `cloudAlpha`.
+
+**Field round 3 (2026-07-13) — prod-parity sun + godrays:**
+
+- Sun was pale/white, not yellow (prod comparison shots): the disc was coloured by `env.sunColor` — the
+  LIGHT colour (timecyc `dir`, near-white). Prod colours its sun mesh with the timecyc `sunCore`/`sunCorona`
+  columns. Frame UBO grew to 336 B with `sunCore` (rgb + angular radius from timecyc `sunSize`) and
+  `sunCorona` vec4s; `skyCelestialFor` is now a FILLED sunCore disc + exponential sunCorona halo. Both
+  drivers wire the columns (timecyc: `sample.sunCore/sunCorona/sunSize`; parametric: warm-shifted defaults).
+- Sun shone THROUGH buildings (mid-turn field report): the 068 "disc in the shared fog sky" decision —
+  fogged silhouettes mixed the hot disc in. New `skyFogFor` = gradient + wide haze only; all 4 world/rigid
+  fog callers moved to it (prod's disc is a separate mesh for the same reason). The disc lives only in fsSky.
+- Sky still pale: prod's dome is essentially the timecyc gradient; pure Preetham reads washed. The LUT now
+  blends the timecyc gradient by `max(dn, mood·0.6)` — 42 % timecyc colourist by day at the default mood.
+- **GODRAYS (plan 09 stage 1, pulled forward)**: the scene now renders into a LINEAR rgba16float offscreen
+  (MSAA + resolve in `SCENE_FORMAT`; all scene pipelines + cell bundles retarget it) and a new fullscreen
+  `post` pipeline radial-blurs thresholded brightness (20 taps, decay 0.93, threshold 1.25 — only the
+  disc's 3–6× HDR overshoot passes) toward the sun's screen position, tinted `sunCorona`, into the sRGB
+  swapchain. Occlusion is inherent (geometry leaves no bright pixels — rays stream through gaps, the prod
+  GodRaysEffect look). Post bind group rebuilds on resize (NOT bundle-referenced — safe, unlike the frame
+  group). Full HDR/bloom/tonemap remain plan 09.
+
+**Field round 4 (2026-07-13, user verdict: "an order of magnitude better", + 3 asks):**
+
+- Sun sets INTO the ocean (was: faded out at ground level): drivers let the arc sink to −0.25 elevation
+  and keep the disc coloured until it fully submerges (`dayGate = (elev+0.05)·5`); the sky shader clips
+  celestial discs at the sea-horizon line (`smoothstep(-0.003, 0.005, dir.y)`) — the upper sliver
+  disappears last, no water geometry needed.
+- Real moon arc: rises ~20:00 in the east, peaks ~0:30, sets ~5:00 in the west (azimuth sweeps, elevation
+  −0.08→0.62), climbing out of / sinking into the same horizon clip. Both hosts.
+- Stars leaked through overcast (weather 7): the panoramas leave alpha GAPS between painted puffs, so
+  per-pixel occlusion alone can't hide stars. Ported prod's global `uCloudClear`: weather cloud COVER
+  rides `sunCorona.w` and fades the starfield globally (CLOUDY 1.0 → zero stars, EXTRASUNNY 0.14 → ~84 %).
 
 ## Measurement ledger
 

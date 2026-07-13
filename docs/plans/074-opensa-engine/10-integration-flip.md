@@ -49,6 +49,18 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
       UI/config renderer-independent ✓; picking = three raycaster ✓ needs the 07 BVH reuse).
 - [ ] Entity-handle adapter for character/vehicle gameplay; remove three mesh refs from logic paths.
 - [ ] Engine-side ray query (picking + the map-inspector tools).
+- [ ] **Config-API parity audit (noted 2026-07-13, user ask — do BEFORE the flip):** prod exposes a rich
+      externally-tunable graphics config that the new-engine hosts currently hardcode. Inventory everything
+      configurable that touches the new engine and design one config API so the flip preserves tunability.
+      Known surface (from `game-runtime-config.ts` / prod plugins): `night.litFade`
+      (dawnStart/dawnEnd/duskStart/duskEnd — prod builds the SUN ARC dynamically from these; our hosts
+      hardcode 6:00→18:00 in `sunArc()` and the moon window 20:00→5:00 in `applyMoon`), `sun`
+      (godrays/godraysSize/sunSize — our GODRAY_INTENSITY/DECAY/THRESHOLD are engine consts), `moon`
+      (brightness/elevationDeg/size), `sky` (mood/exposure/weight — env.skyMood exists but isn't fed),
+      `clouds` (coverage/opacity — plus our cloudSpeed/cloudFadeSeconds/cloudAlpha env defaults), `fog`
+      (distance/timecycScale — the lab's `?fogscale=`), `bloom` (plan 09), `lights` night hours,
+      `night.emissiveBoost`. Engine `Environment` is already the right sink — the API maps config → env +
+      a small engine-consts block (godrays); hosts share the mapping like they share game-runtime-config.
 - [x] Phase-1 standalone boot in the web app (2026-07-12): `opensa-engine.html` +
       `apps/web/src/standalone/opensa-engine.ts` — `@opensa/engine` + the (now package-level) streaming
       driver + a free-fly camera over the FULL-LS pak (`?src=pak-ls`; root `public/pak-ls` symlinks the

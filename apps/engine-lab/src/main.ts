@@ -7,8 +7,10 @@ import {
   type CameraState,
   Engine,
   type EngineStats,
+  loadCloudWeather,
   setupStreaming,
   type StreamingDriver,
+  type StreamSetup,
   type StreamStats,
 } from '@opensa/engine';
 
@@ -46,6 +48,15 @@ function applyEnvironmentOverrides(engine: Engine, params: URLSearchParams): voi
   if (Number.isFinite(stochParam)) {
     engine.environment.stochastic = stochParam;
   }
+}
+
+/** '[' / ']' weather cycling — the callback receives the id delta (+1 / +19 ≡ −1 mod 20). */
+function bindWeatherKeys(onSwitch: (delta: number) => void): void {
+  window.addEventListener('keydown', (event) => {
+    if (event.code === 'BracketLeft' || event.code === 'BracketRight') {
+      onSwitch(event.code === 'BracketRight' ? 1 : 19);
+    }
+  });
 }
 
 /** The M0 synthetic fixture: a grid of box cells through the real format path; returns recorded draws. */
@@ -138,7 +149,7 @@ async function main(): Promise<void> {
   // effects-ledger row 14. `?daycycle=1` animates the hour for eyeballing the blend.
   const hourParam = Number(params.get('hour') ?? 12);
   const dayCycle = params.get('daycycle') === '1';
-  const weather = Number(params.get('weather') ?? 0) || 0;
+  let weather = Number(params.get('weather') ?? 0) || 0;
   let hour = Number.isFinite(hourParam) ? hourParam : 12;
   applyEnvironmentOverrides(engine, params);
   // Row 14: the environment driver — real timecyc when the manifest carries it, parametric fallback else.
@@ -163,11 +174,18 @@ async function main(): Promise<void> {
     focus = setup.center;
     orbitRadius = setup.radius * 1.4;
     title = 'STREAMING district (worker pak, rings live)';
-    if (setup.timecyc !== undefined) {
-      const fogScale = Number(params.get('fogscale') ?? 2.5) || 2.5;
-      environmentDriver = timecycDriver(engine, setup.timecyc, setup.timecyc24, weather, fogScale);
+    const applyWeather = wireWeather(engine, setup, params, (driver) => {
+      environmentDriver = driver;
       applyEnvironment();
-    }
+    });
+    applyWeather(weather);
+    // '[' / ']' cycle the weather at runtime: timecyc mood re-samples and the incoming cloud dome
+    // crossfades in (engine slot A/B blend over env.cloudFadeSeconds).
+    bindWeatherKeys((next) => {
+      weather = (weather + next) % 20;
+      title = `STREAMING district (worker pak, rings live) — weather ${weather}`;
+      applyWeather(weather);
+    });
   } else if (usePak) {
     const district = await loadPak(engine);
     recordedDraws = district.drawsRecorded;
@@ -361,6 +379,32 @@ function pick(
   ledger: Record<string, { bytes: number; count: number }>,
 ): Record<string, { bytes: number; count: number }> {
   return { cellIndex: ledger.cellIndex, cellVertex: ledger.cellVertex, uniform: ledger.uniform };
+}
+
+/** Stream-mode weather wiring: returns an applier that re-creates the timecyc driver for the weather and
+ *  (cross)fades the matching cloud dome in (074/06 rows 14+15). `?cloudcover=` overrides the dome layer
+ *  alpha; per-weather cover/dark come from the cloud profile inside the timecyc driver. */
+function wireWeather(
+  engine: Engine,
+  setup: StreamSetup,
+  params: URLSearchParams,
+  onDriver: (driver: EnvironmentDriver) => void,
+): (weather: number) => void {
+  const fogScale = Number(params.get('fogscale') ?? 2.5) || 2.5;
+  const pakBase = `/${params.get('src') ?? 'pak'}`;
+  const alphaOverride = params.get('cloudcover');
+  if (setup.clouds && alphaOverride !== null) {
+    engine.environment.cloudAlpha = Number(alphaOverride) || 0;
+  }
+
+  return (weather: number): void => {
+    if (setup.timecyc !== undefined) {
+      onDriver(timecycDriver(engine, setup.timecyc, setup.timecyc24, weather, fogScale));
+    }
+    if (setup.clouds) {
+      void loadCloudWeather(engine, pakBase, setup.clouds, weather);
+    }
+  };
 }
 
 main().catch((error: unknown) => {

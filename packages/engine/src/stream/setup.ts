@@ -13,11 +13,40 @@ import { StreamingDriver } from './streaming';
 
 export interface StreamSetup {
   center: [number, number, number];
+  /** Cloud dome section (074/06 row 15): weather id → texture key + loose-file table, when converted. */
+  clouds?: OspakManifest['clouds'];
   driver: StreamingDriver;
   radius: number;
   /** Raw timecyc.dat from the manifest (row 14), when the converter embedded it. */
   timecyc?: string;
   timecyc24: boolean;
+}
+
+/** Fetch + install one weather's cloud dome (loose RGBA next to the manifest); null id clears the layer. */
+export async function loadCloudWeather(
+  engine: Engine,
+  baseUrl: string,
+  clouds: NonNullable<OspakManifest['clouds']>,
+  weatherId: number,
+): Promise<void> {
+  const key = clouds.weathers[String(weatherId)];
+  const texture = key ? clouds.textures[key] : undefined;
+  if (!texture) {
+    engine.setCloudTexture(null);
+
+    return;
+  }
+  const response = await fetch(`${baseUrl}/${texture.file}`);
+  if (!response.ok) {
+    engine.setCloudTexture(null);
+
+    return;
+  }
+  engine.setCloudTexture({
+    height: texture.height,
+    rgba: new Uint8Array(await response.arrayBuffer()),
+    width: texture.width,
+  });
 }
 
 export async function setupStreaming(engine: Engine, baseUrl = '/pak'): Promise<StreamSetup> {
@@ -97,6 +126,7 @@ export async function setupStreaming(engine: Engine, baseUrl = '/pak'): Promise<
 
   return {
     center: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
+    ...(manifest.clouds !== undefined ? { clouds: manifest.clouds } : {}),
     driver: new StreamingDriver(engine, manifest, worker),
     radius: Math.max((maxX - minX) / 2, (maxZ - minZ) / 2, 400),
     ...(manifest.timecyc !== undefined ? { timecyc: manifest.timecyc } : {}),

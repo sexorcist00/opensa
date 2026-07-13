@@ -9,7 +9,7 @@
 import type { AssetFileSystem } from '@opensa/renderware';
 import type { ReactElement } from 'react';
 
-import { type CameraState, Engine, setupStreaming, type StreamStats } from '@opensa/engine';
+import { type CameraState, Engine, loadCloudWeather, setupStreaming, type StreamStats } from '@opensa/engine';
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { CharacterControllerSystem } from '@opensa/game/character/character-controller.system';
 import { PlayerControlled, RigidBody, Transform, Velocity } from '@opensa/game/ecs/components';
@@ -18,7 +18,9 @@ import { CombinedInput, Keyboard, KeyboardSource } from '@opensa/game/input';
 import { PhysicsWorld } from '@opensa/game/physics/physics-world';
 import { PhysicsSystem } from '@opensa/game/physics/physics.system';
 import { initRapier } from '@opensa/game/physics/rapier';
+import { cloudProfile } from '@opensa/game/plugins/cloud-profile';
 import { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
+import { WEATHER_NAMES } from '@opensa/renderware/parsers/text/timecyc.parser';
 import { addComponent, addEntity } from 'bitecs';
 import { useEffect, useRef } from 'react';
 
@@ -91,15 +93,25 @@ function applyHour(engine: Engine, hour: number): void {
   const dn = 1 - Math.min(1, Math.max(0, (elevation + 0.15) / 0.3));
   const azScale = 1 - 0.75 * Math.max(0, Math.min(1, elevation));
   const azX = -Math.cos(((Math.max(6, Math.min(18, hour)) - 6) / 12) * Math.PI);
-  const dayGate = Math.min(1, Math.max(0, elevation * 4));
+  const dayGate = Math.min(1, Math.max(0, (elevation + 0.05) * 5)); // disc glows until it fully sinks
   engine.environment.hour = hour;
   engine.environment.dn = dn;
-  engine.environment.sunDir = [azX, Math.max(0.05, elevation), 0.25 * azScale];
+  // The arc dips below the sea horizon — the sky shader's horizon clip makes the disc SET into the ocean.
+  engine.environment.sunDir = [azX, Math.max(-0.25, elevation), 0.25 * azScale];
   engine.environment.sunElevation = Math.max(0, Math.min(1, elevation));
   engine.environment.sunColor = [dayGate, 0.96 * dayGate, 0.88 * dayGate];
+  // The visible disc (timecyc parity lands with the engine-host timecyc driver; parametric till then).
+  const warm = Math.min(1, Math.max(0, 1 - elevation));
+  engine.environment.sunCoreColor = [dayGate, (0.95 - warm * 0.25) * dayGate, (0.68 - warm * 0.4) * dayGate];
+  engine.environment.sunCoronaColor = [dayGate, (0.8 - warm * 0.25) * dayGate, (0.4 - warm * 0.3) * dayGate];
   engine.environment.sunDirect = Math.max(0, elevation) * 0.9;
   engine.environment.sunIndirect = 0.75 * (1 - dn) + 0.35 * dn;
-  const moonUp = dn > 0.5 ? 0.35 : 0;
+  // Real moon arc (rises ~20:00 east, peaks ~0:30, sets ~5:00 west; starts below the horizon).
+  const moonT = ((hour - 20 + 24) % 24) / 9;
+  const moonArc = moonT <= 1 ? Math.sin(moonT * Math.PI) : 0;
+  const moonElevation = -0.08 + moonArc * 0.7;
+  engine.environment.moonDir = [Math.cos(Math.min(1, Math.max(0, moonT)) * Math.PI) * 0.85, moonElevation, -0.4];
+  const moonUp = dn * Math.min(1, Math.max(0, moonElevation * 5)) * 0.7;
   engine.environment.moonColor = [0.08 * moonUp, 0.1 * moonUp, 0.16 * moonUp];
 }
 
@@ -128,6 +140,16 @@ async function boot(
   const engine = new Engine();
   await engine.init(canvas);
   const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak-map'}`);
+  // Cloud dome layer (074/06 row 15): pick the ?weather dome when the pak carries clouds. Per-weather
+  // cover/dark for the LUT haze come from prod's curated profiles (the engine-host timecyc driver is a
+  // remaining leftover — until it lands, the profile is the whole weather mood here).
+  if (setup.clouds) {
+    const weather = Number(params.get('weather') ?? 0) || 0;
+    void loadCloudWeather(engine, `/${params.get('src') ?? 'pak-map'}`, setup.clouds, weather);
+    const clouds = cloudProfile(WEATHER_NAMES[weather] ?? '');
+    engine.environment.cloudCover = clouds.coverage;
+    engine.environment.cloudDark = clouds.darkness;
+  }
 
   // Physics + collision streaming (REUSED, pure): the adapter prepares the map defs once, then streams
   // COL cells around the player on the game's own 256-unit grid (independent of the pak's render grid).

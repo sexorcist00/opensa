@@ -13,9 +13,15 @@ import { resolveShader } from './shaders';
 
 export const MSAA_SAMPLES = 4;
 
+/** The SCENE render target format (074/09 stage 1): the world/sky/entities render into a linear 16-float
+ *  offscreen so the sun's HDR overshoot survives for the godrays bright-pass; the post pipeline composites
+ *  into the sRGB swapchain view. */
+export const SCENE_FORMAT: GPUTextureFormat = 'rgba16float';
+
 export type PipelineId =
   | 'corona'
   | 'ped'
+  | 'post'
   | 'rigid-blend'
   | 'rigid-opaque'
   | 'sky'
@@ -38,6 +44,8 @@ export interface PipelineSet {
   materialLayout: GPUBindGroupLayout;
   /** group(1) of the ped pipeline: matrix storage (model + bone palette) + texture + sampler (074/08 B1). */
   pedLayout: GPUBindGroupLayout;
+  /** group(0) of the post pipeline: post uniform + scene texture + sampler (godrays, 074/09 stage 1). */
+  postLayout: GPUBindGroupLayout;
   /** group(1) of the rigid-entity pipelines: part matrices + texture ARRAY + sampler (074/08 B2). */
   rigidLayout: GPUBindGroupLayout;
 }
@@ -46,6 +54,7 @@ export function compileAll(
   device: GPUDevice,
   colorFormat: GPUTextureFormat,
   depthFormat: GPUTextureFormat,
+  outputFormat: GPUTextureFormat = colorFormat,
 ): PipelineSet {
   const frameLayout = device.createBindGroupLayout({
     entries: [
@@ -59,6 +68,10 @@ export function compileAll(
         buffer: { type: 'read-only-storage' },
         visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
       },
+      // Cloud dome layer (074/06 row 15): per-weather panoramas sampled by fsSky over the Preetham LUT.
+      // Two slots — weather changes write the idle one and camera.w crossfades between them.
+      { binding: 4, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 5, texture: {}, visibility: GPUShaderStage.FRAGMENT },
     ],
     label: 'frame',
   });
@@ -249,6 +262,28 @@ export function compileAll(
       },
     }),
   );
+  // Godrays post pass (074/09 stage 1, field round 3 — prod parity via postprocessing's GodRaysEffect):
+  // fullscreen triangle, radial blur of thresholded scene brightness toward the sun's screen position,
+  // composited into the sRGB swapchain. No depth, no MSAA — it reads the RESOLVED scene.
+  const postLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 1, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'post',
+  });
+  const postModule = device.createShaderModule({ code: resolveShader('post'), label: 'post' });
+  pipelines.set(
+    'post',
+    device.createRenderPipeline({
+      fragment: { entryPoint: 'fsPost', module: postModule, targets: [{ format: outputFormat }] },
+      label: 'post',
+      layout: device.createPipelineLayout({ bindGroupLayouts: [postLayout], label: 'post' }),
+      primitive: { topology: 'triangle-list' },
+      vertex: { entryPoint: 'vsPost', module: postModule },
+    }),
+  );
   pipelines.set(
     'sky',
     device.createRenderPipeline({
@@ -301,6 +336,7 @@ export function compileAll(
     },
     materialLayout,
     pedLayout,
+    postLayout,
     rigidLayout,
   };
 }
