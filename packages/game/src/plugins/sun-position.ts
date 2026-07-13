@@ -1,7 +1,5 @@
-import { MathUtils } from 'three';
-
-/** Sun height at solar noon (radians). */
-export const MAX_ELEVATION = MathUtils.degToRad(80);
+/** Sun height at solar noon (radians). (Kept three-free so renderer-agnostic hosts can import it.) */
+export const MAX_ELEVATION = (80 * Math.PI) / 180;
 
 /** Sun elevation (radians) + unit direction for `hour`, over the day window `[sunrise, sunset]`
  *  (= the `litFade` dawnStart/duskEnd, so the sun tracks the world darkening and custom timecyc):

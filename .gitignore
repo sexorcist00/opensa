@@ -4,7 +4,7 @@ apps/engine-lab/dist
 apps/engine-lab/public/pak*/*.ospak
 apps/engine-lab/public/pak*/manifest.json
 apps/engine-lab/public/pak*/report.json
-/node_modules
+node_modules/
 /build
 
 # Logs

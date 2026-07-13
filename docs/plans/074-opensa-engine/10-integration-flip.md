@@ -23,6 +23,12 @@ it is not.
 1. **60 fps ls-noon @2× retina on M3 Pro**, and ≥ WebGL-prod fps on EVERY bench scene (night included).
 2. Visual parity sign-off per bench scene (noon/dusk/night screenshot sets archived).
 3. Stress matrix (05) green in Chrome + Safari; 30-min soak clean.
+   **Safari SMOKE TEST ✅ 2026-07-13 (the row's first visit — the chain's biggest unvisited risk retired):**
+   Safari 26.5.2 on the M3, `?pak=1&stream=1&src=pak-ls`: boots, streams, full visual stack works (clouds/
+   sun/godrays); `texture-compression-bc` present (Apple-silicon Metal carries BCn), `timestamp-query`
+   present too (HUD showed real GPU numbers). GPU pass 2–4 ms vs Chrome's ~1.8–2.1 (WebKit's WebGPU is
+   less optimized) — comfortably inside the 8.3 ms/120 Hz budget. Remaining for the criteria run: the FULL
+   bench matrix + stress scenes + soak in Safari, numbers into the series.
 4. Prod fallback: non-WebGPU browsers keep the three-WebGL path untouched; the loader picks per capability.
 5. **073 flags & code disposition executed** (the promise from the 073 park): once the new engine is default,
    decide keep/fold/delete for `?webgpu/bundle/mat04/...` and the three patch — a dedicated cleanup PR with the
@@ -49,7 +55,16 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
       UI/config renderer-independent ✓; picking = three raycaster ✓ needs the 07 BVH reuse).
 - [ ] Entity-handle adapter for character/vehicle gameplay; remove three mesh refs from logic paths.
 - [ ] Engine-side ray query (picking + the map-inspector tools).
-- [ ] **Config-API parity audit (noted 2026-07-13, user ask — do BEFORE the flip):** prod exposes a rich
+- [x] **Config-API parity audit — DONE 2026-07-13 (same day):** ONE shared driver
+      `@opensa/game/adapters/engine-environment-driver` (renderware allowed there by the layer rule) maps
+      config→`Engine.environment` for BOTH hosts: sun/moon arcs build DYNAMICALLY from `night.litFade`
+      (prod's own `sunElevationAt`, now three-free, extended past the window so the disc sinks below the
+      sea horizon), timecyc colours when the pak carries them (parametric fallback else), per-weather
+      cloud profile, and the prod tunables live on: `sky.mood` (now actually fed to the LUT),
+      `clouds.opacity`→cloudAlpha, `moon.brightness`, `sun.godrays`→`env.godrayStrength` (new engine
+      field gating the post pass), `night.emissiveBoost`, `fog.timecycScale` (× the lab's `?fogscale=`).
+      The game host dropped its parametric `applyHour` — REAL timecyc in `?engine=opensa`; the lab's
+      drivers are thin wrappers. 8 driver unit tests. Original inventory kept below for reference:
       externally-tunable graphics config that the new-engine hosts currently hardcode. Inventory everything
       configurable that touches the new engine and design one config API so the flip preserves tunability.
       Known surface (from `game-runtime-config.ts` / prod plugins): `night.litFade`

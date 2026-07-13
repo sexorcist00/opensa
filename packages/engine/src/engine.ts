@@ -91,6 +91,8 @@ export interface Environment {
   fogHeightMin: number;
   /** Fog ramp start distance. */
   fogStartDistance: number;
+  /** Godrays post-pass strength multiplier (0 = off — the config toggle; 1 = default). */
+  godrayStrength: number;
   /** Game hour 0..24 — gates the timed objectTable draws (074/06 row 9). */
   hour: number;
   /** Moonlight colour, linear (BLACK by day — the host arc gates it). */
@@ -189,6 +191,7 @@ export class Engine {
     fogHeightK: 1 / 180,
     fogHeightMin: 0.35,
     fogStartDistance: 250,
+    godrayStrength: 1,
     hour: 12,
     moonColor: [0, 0, 0],
     moonDir: [-0.3, 0.8, -0.25],
@@ -1029,7 +1032,7 @@ export class Engine {
       const outside = Math.max(0, -u, u - 1, -v, v - 1);
       const edgeFade = Math.max(0, 1 - outside / 0.45);
       const dayGate = Math.min(1, Math.max(...env.sunCoreColor));
-      intensity = GODRAY_INTENSITY * edgeFade * dayGate;
+      intensity = GODRAY_INTENSITY * edgeFade * dayGate * Math.max(0, env.godrayStrength);
     }
     out.set([u, v, intensity, GODRAY_DECAY], 0);
     out.set([...env.sunCoronaColor, GODRAY_THRESHOLD], 4);

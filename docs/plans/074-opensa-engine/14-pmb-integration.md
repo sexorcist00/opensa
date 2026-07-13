@@ -105,5 +105,20 @@ next lever (ring re-welds ≈ 2× border cells).
 fast-iteration mode), one command: **71.4 s wall, 1121 cell entries, 769.7 MB wire** (vs the ~1.6 GB
 pre-meshopt projection), 106 texture arrays, 176 timed objects, 64 anim-static welds, 12 GB heap flag.
 Served as `pak-map` (lab + standalone `?src=pak-map`; root symlink like pak-ls). Convert progress lines
-(chunk n/N, %, ETA) landed the same round — `ConvertOptions.log`, CLI-wired. The `--bakes` full-map convert
-(~28 min at quarter-cores) is still owed for the shadows/AO version of this pak.
+(chunk n/N, %, ETA) landed the same round — `ConvertOptions.log`, CLI-wired.
+
+**POST-FLIP QUALITY PASS (user directive 2026-07-13):** after the engine flip, do a thorough pass over
+`map-optimizer` + `opensa-pack` in THIS order: (1) FIRST the normals / smoothing-groups problem (SA DFFs
+carry split-vertex per-face normals; welding and per-vertex N·L expose faceting, and bake rays fire along
+those same normals — bad normals poison everything downstream), (2) THEN the baked shadows. Related open
+mystery (2026-07-13): a fully-baked pak-map VERIFIED to carry real sunVis data (Grove Street cell: 26 k
+full-shadow verts, channel flags set, shader gate present, env strengths at defaults) shows NO visible
+shadow difference in the field — root cause not found, investigation parked with bakes staying opt-in.
+
+**2026-07-13 — FULL-MAP `--bakes` CONVERT (A3 tail closed): 202.6 s wall** (the ~28 min projection was
+~8× pessimistic — ocean chunks are near-free and the pool scales), rect −12,−12..11,11 + `--clouds`:
+1121 cell entries, **pak 287.1 MB**, groups avg 15.0 max 73, 98 texture arrays; AO bake 124.4 s
+(13.25 M verts / 12.04 M unique, 144.5 M rays vs 17.5 M tris), sun-vis 124.4 s (107 M rays; the two ran
+in the same pooled pass). NOTE: the earlier bakeless log recorded "769.7 MB wire" for the same rect —
+the 2.7× delta is suspicious (different measurement or a since-fixed encode path); re-verify if pak size
+ever becomes a decision input. Field check of baked shadows/AO on the full map = user's next look.

@@ -60,7 +60,9 @@ transform updates; light pool lit at night.
 
 **B3. Game boots on the engine (integration phase 2)** — ✅ v1 DONE 2026-07-13 (FIELD ✅: walk/run/jump
 around Grove Street with `?engine=opensa`; physics/collision/input REUSED, shared runtime Config, ped-probe
-player, data-driven feet. REMAINING: timecyc driver, zones/HUD adapter, pointer lock, in-game benches) ·
+player, data-driven feet. Timecyc driver ✅ 2026-07-13 — the SHARED config→Environment driver
+(engine-environment-driver adapter, litFade-dynamic arcs, prod tunables preserved; plan 10 config-API task
+closed same day). REMAINING: zones/HUD adapter, pointer lock, in-game benches) ·
 size L
 `Game.create` grows the capability branch: own engine renderer behind a flag, three-WebGL still default.
 Physics/zones/time/logic reuse as-is (audited renderer-agnostic); streaming follows the PLAYER; picking

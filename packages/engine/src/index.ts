@@ -17,6 +17,7 @@ export {
   type DynamicLight,
   Engine,
   type EngineStats,
+  type Environment,
   type PedProbe,
   type PedProbeInit,
   type VehicleProbeInit,
