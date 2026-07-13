@@ -120,9 +120,25 @@ async function main(): Promise<void> {
       heightFactor = Math.min(4, Math.max(0.05, heightFactor + event.movementY * 0.004));
     }
   });
+  // WASD pans the orbit FOCUS — the streaming rings follow the focus, so this is how you travel the
+  // full-city pak in the lab (the standalone page has the true fly camera).
+  const held = new Set<string>();
+  window.addEventListener('keydown', (event) => held.add(event.code));
+  window.addEventListener('keyup', (event) => held.delete(event.code));
+
+  // Leak assertion (M1 tail, `?test=leak` with streaming): load a sweep of cells, unload ALL, and the
+  // residency ledger must return to its post-texture baseline — buffers leak loudly, not silently.
+  const leakTest = params.get('test') === 'leak' && streaming !== null;
+  const leakBaseline = leakTest ? JSON.stringify(pick(engine.ledger())) : '';
+  let leakFrame = 0;
 
   // Bench mode (074/11): deterministic scene script + warmup/measure collection, then a JSON record.
   const benchScene = params.get('bench');
+  if (benchScene && leakTest) {
+    throw new Error(
+      '`?test=leak` and `?bench=` are mutually exclusive — the leak phases halt streaming and invalidate the bench window',
+    );
+  }
   const benchScript = benchScene ? BENCH_SCENES[benchScene] : null;
   if (benchScene && !benchScript) {
     throw new Error(`unknown bench scene '${benchScene}' (have: ${Object.keys(BENCH_SCENES).join(', ')})`);
@@ -140,6 +156,27 @@ async function main(): Promise<void> {
     }
     if (!freeze && !dragging) {
       angle += 0.003;
+    }
+    if (held.size > 0) {
+      const pan = Math.min(2000, Math.max(60, orbitRadius * zoom)) * (frameDt / 1000) * 1.2;
+      const fx = -Math.cos(angle);
+      const fz = -Math.sin(angle);
+      if (held.has('KeyW')) {
+        focus[0] += fx * pan;
+        focus[2] += fz * pan;
+      }
+      if (held.has('KeyS')) {
+        focus[0] -= fx * pan;
+        focus[2] -= fz * pan;
+      }
+      if (held.has('KeyA')) {
+        focus[0] += fz * pan;
+        focus[2] -= fx * pan;
+      }
+      if (held.has('KeyD')) {
+        focus[0] -= fz * pan;
+        focus[2] += fx * pan;
+      }
     }
     if (dayCycle) {
       hour = (hour + 0.005) % 24;
@@ -165,10 +202,29 @@ async function main(): Promise<void> {
           target: focus,
           up: [0, 1, 0],
         };
+    if (leakTest && streaming) {
+      leakFrame += 1;
+      if (leakFrame < 600) {
+        // Phase 1: sweep the focus across the district — load a wide set of cells.
+        const t01 = leakFrame / 600;
+        focus[0] += Math.sin(t01 * Math.PI * 2) * 6;
+        focus[2] += Math.cos(t01 * Math.PI * 3) * 6;
+      } else if (leakFrame === 600) {
+        streaming.unloadAll();
+        console.log('[leak] unloadAll issued');
+      } else if (leakFrame === 660) {
+        // Phase 3: settle 60 frames, then compare.
+        const now = JSON.stringify(pick(engine.ledger()));
+        const pass = now === leakBaseline;
+        console[pass ? 'log' : 'error'](`[leak] ${pass ? 'PASS' : 'FAIL'}\nbaseline ${leakBaseline}\nnow      ${now}`);
+        hud.style.background = pass ? 'rgba(10,60,16,0.85)' : 'rgba(80,10,10,0.85)';
+      }
+    }
     let streamStats: null | StreamStats = null;
-    if (streaming) {
+    if (streaming && !(leakTest && leakFrame >= 600)) {
       // Rings follow the camera TARGET (the ground focus — the "player"), not the eye: an orbiting eye sits
-      // outside the LOD ring and would stream nothing.
+      // outside the LOD ring and would stream nothing. In leak mode the driver STOPS after unloadAll —
+      // otherwise it would immediately re-stream the rings and fail the comparison by design.
       streamStats = streaming.update(camera.target);
     }
     const stats = engine.frame(camera);
@@ -206,6 +262,13 @@ async function main(): Promise<void> {
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
+}
+
+/** Leak-relevant ledger categories (targets resize with the canvas; textures persist by design). */
+function pick(
+  ledger: Record<string, { bytes: number; count: number }>,
+): Record<string, { bytes: number; count: number }> {
+  return { cellIndex: ledger.cellIndex, cellVertex: ledger.cellVertex, uniform: ledger.uniform };
 }
 
 main().catch((error: unknown) => {

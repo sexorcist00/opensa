@@ -22,6 +22,10 @@ Merged into groups: plain static geometry (the ~90 % single-placement world + re
 their transform BAKED into vertices at convert time; no runtime instancing needed for statics).
 Kept as ObjectRecords: `timed` (on/off hours), `breakable` (must vanish independently), IDE-`anim`, roadsign
 text, 2dfx anchors. DoubleSided (0x200000) merges into `side=double` groups — never mixed with front-side.
+Implementation status: `timed` and 2dfx-light anchors are live; IDE-`anim` currently welds into the plain
+STATIC groups at bind pose (2026-07-12 field fix, 06 row 17 — skipping deleted whole buildings), and moves
+to ObjectRecords when plan 08 promotes them to animated entities; `breakable`/roadsign kinds land with
+plan 08 (see its coverage matrix).
 
 ### The ALPHA PIPELINE (early, M0 — this is where [alpha-edge](../../open-issues/alpha-edge.md) dies)
 

@@ -111,6 +111,15 @@ export function downsample(rgba: Uint8Array, width: number, height: number): Uin
   return out;
 }
 
+/**
+ * The final class after the caller's preference: vegetation welds request cutout (vanilla SA alpha-tests
+ * foliage; soft-classed canopies wrote no depth → trees showed through trees). Only softBlend upgrades —
+ * opaque/cutout classifications are already correct.
+ */
+export function effectiveAlphaClass(classified: AlphaClass, preferCutout: boolean): AlphaClass {
+  return preferCutout && classified === 'softBlend' ? 'cutout' : classified;
+}
+
 /** RGB ×= A — after this, filtering/blending are mathematically correct (the fringe fix's core). In place. */
 export function premultiply(rgba: Uint8Array): void {
   for (let texel = 0; texel < rgba.length; texel += 4) {

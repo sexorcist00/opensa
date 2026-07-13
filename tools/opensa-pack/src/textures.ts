@@ -20,7 +20,7 @@ import {
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';
 
-import { type AlphaClass, classifyAlpha, processAlphaTexture, resampleToPow2 } from './alpha';
+import { type AlphaClass, classifyAlpha, effectiveAlphaClass, processAlphaTexture, resampleToPow2 } from './alpha';
 
 const MAX_LAYERS = 256;
 const CUTOUT_REF = 128;
@@ -110,8 +110,15 @@ export class TexturePlanner {
     return out.sort((a, b) => a.ref - b.ref);
   }
 
-  /** Resolve a material's texture (or its flat colour) to an array layer, planning it on first use. */
-  resolve(txdName: string, textureName: null | string, color: readonly number[]): ResolvedTexture {
+  /** Resolve a material's texture (or its flat colour) to an array layer, planning it on first use.
+   *  `preferCutout` (vegetation callers) upgrades a soft-blend classification to cutout — vanilla SA
+   *  alpha-tests foliage; blend-classed canopies wrote no depth (trees showed through trees). */
+  resolve(
+    txdName: string,
+    textureName: null | string,
+    color: readonly number[],
+    preferCutout = false,
+  ): ResolvedTexture {
     if (!textureName) {
       return this.resolveColor(color);
     }
@@ -133,7 +140,7 @@ export class TexturePlanner {
       return existing;
     }
     const planned = {
-      ...this.plan(rw, textureName.toLowerCase()),
+      ...this.plan(rw, textureName.toLowerCase(), preferCutout),
       stochastic: this.stochasticNames.has(textureName.toLowerCase()),
     };
     this.byContent.set(contentKey, planned);
@@ -170,7 +177,7 @@ export class TexturePlanner {
     };
   }
 
-  private plan(rw: RWTexture, name: string): ResolvedTexture {
+  private plan(rw: RWTexture, name: string, preferCutout = false): ResolvedTexture {
     const blockAligned = rw.width % 4 === 0 && rw.height % 4 === 0;
     const pow2 = Number.isInteger(Math.log2(rw.width)) && Number.isInteger(Math.log2(rw.height));
     const dxtFormat = DXT_TO_FORMAT[rw.format];
@@ -191,7 +198,8 @@ export class TexturePlanner {
     const decoded =
       rw.format === 'rgba8888' ? new Uint8Array(base.data) : decodeDxt(rw.format, base.data, base.width, base.height);
     const sized = resampleToPow2(decoded, base.width, base.height);
-    const alphaClass = classifyAlpha(sized.rgba, rw.hasAlpha);
+    // Foliage scans carry a soft alpha skirt that mis-classes them softBlend; the caller knows better.
+    const alphaClass = effectiveAlphaClass(classifyAlpha(sized.rgba, rw.hasAlpha), preferCutout);
     const mipCount = ostexMaxMips(OstexFormat.RGBA8, sized.width, sized.height);
     const mips = processAlphaTexture(sized.rgba, sized.width, sized.height, alphaClass, CUTOUT_REF, mipCount);
     let width = sized.width;

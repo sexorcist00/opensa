@@ -74,6 +74,19 @@ Target steady numbers (M1 ledger): JS heap **< 500 MB and flat** while driving; 
 **M1 core gates: PASSED.** Remaining M1 scenarios (quick follow-ups, not blockers): camera-whip 360°,
 teleport (full ring turnover), 30-min soak (heap/residency flat lines), unload-all leak assertion.
 
+## M1 stress tails CLOSED (2026-07-12, after the revisit field bug)
+
+The field caught a driver-lifecycle bug the one-way benches never could: `requested` marked keys forever
+while blobs are consumed on create → REVISITED cells could never re-fetch their level (stuck at LOD on
+approach). Fixed (`requested` = in-flight only; error responses clear it and retry with a console warning)
+— and the missing stress scenarios landed the same day so this class stays caught:
+
+- `?bench=whip` — fast 360° street-height spins (frustum churn, promote/demote storms);
+- `?bench=teleport` — six district-corner jumps, 300 frames each, INCLUDING a revisit hop (the exact
+  pattern of the field bug);
+- `?test=leak` (streaming mode) — sweep-load → `unloadAll()` → the residency ledger must return to its
+  post-texture baseline; HUD turns green/red, console prints the diff. The driver gained `unloadAll()`.
+
 ## Range-read IO landed (2026-07-12, integration round)
 
 The pak worker auto-detects at init (probe `Range: bytes=0-0` → 206): RANGE mode fetches entries on demand
@@ -92,4 +105,7 @@ taken now:
 - **2 cell-creates per frame** when the pending queue backs up (double the worst-frame create cost — needs
   the bench to confirm it stays under budget);
 - **velocity-vector ring prefetch**: bias the HD/LOD rings ahead along the camera's velocity so cells are
-  requested earlier at speed (cheap, pure driver logic).
+  requested earlier at speed (cheap, pure driver logic);
+- **in-flight request cap**: teleport hops queue a full ring of wanted blobs (~257 MB transient heap while
+  the 1-create/frame budget drains) — capping outstanding fetches (~8) bounds the transient at the cost of
+  slightly slower rebuilds. Field rows: whip heap 736 → 55 MB after stale-blob pruning; teleport max 13.8 ms.

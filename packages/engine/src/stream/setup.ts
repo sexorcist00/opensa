@@ -69,7 +69,13 @@ export async function setupStreaming(engine: Engine, baseUrl = '/pak'): Promise<
     };
     worker.addEventListener('message', listener);
     for (const [key, entry] of textureEntries) {
-      worker.postMessage({ key, length: entry.length, offset: entry.offset, type: 'fetch' } satisfies PakWorkerRequest);
+      worker.postMessage({
+        ...(entry.enc !== undefined ? { enc: entry.enc } : {}),
+        key,
+        length: entry.length,
+        offset: entry.offset,
+        type: 'fetch',
+      } satisfies PakWorkerRequest);
     }
   });
 

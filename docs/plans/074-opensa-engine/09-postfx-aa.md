@@ -16,7 +16,10 @@ scene (MSAA4, HDR RGBA16F) → resolve → bloom: threshold+downsample chain+ups
 
 - HDR target format decision (rgba16float vs bgra8+dither) — measure both; night bloom quality is the judge.
 - God-rays: current look is the target (screenshot parity); the source is the sun disc occlusion from depth,
-  not a separate godraysSource render (simpler than the WebGL plugin's approach).
+  not a separate godraysSource render (simpler than the WebGL plugin's approach). NOTE 2026-07-12: the sky
+  already emits a STRUCTURED sun (hot disc ~0.5° + corona + circumsolar + haze, deliberately overshooting
+  1.0) — today the sRGB output clips the core; this chain's HDR target turns that same overshoot into the
+  bloom/god-rays energy source, no sky-side change needed.
 - Tiers (the 072 idea, minimal here): render scale (0.75/1.0) + bloom quality + MSAA 2×/4× as the three knobs;
   wired to the same config surface prod uses.
 

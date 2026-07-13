@@ -36,6 +36,7 @@ export class StreamingDriver {
   private readonly blobs = new Map<string, Uint8Array>();
   private readonly cells = new Map<string, CellSlot>();
   private readonly engine: Engine;
+  private readonly keyToSlot = new Map<string, CellSlot>();
   private readonly manifest: OspakManifest;
   private readonly requested = new Set<string>();
   private readonly stats: StreamStats = { created: 0, evicted: 0, loadedCells: 0, pendingCells: 0, worstCreateMs: 0 };
@@ -64,13 +65,32 @@ export class StreamingDriver {
         this.cells.set(slotKey, slot);
       }
       slot.keys[level as Level] = key;
+      this.keyToSlot.set(key, slot);
     }
     worker.addEventListener('message', (event: MessageEvent<PakWorkerResponse>) => {
       const message = event.data;
-      if (message.type === 'blob' && message.buffer) {
+      if (message.type !== 'blob') {
+        return;
+      }
+      if (message.buffer) {
         this.blobs.set(message.key, new Uint8Array(message.buffer));
+      } else {
+        // Failed fetch/inflate: clear the in-flight mark so the slot RETRIES next time it wants the level
+        // (a permanently-poisoned key was the original stuck-at-LOD failure mode).
+        this.requested.delete(message.key);
+        console.warn(`[stream] entry ${message.key} failed: ${message.error ?? 'unknown'} — will retry`);
       }
     });
+  }
+
+  /** Tear down every loaded cell (the leak-assertion hook: the residency ledger must return to its
+   *  post-texture baseline afterwards). */
+  unloadAll(): void {
+    for (const slot of this.cells.values()) {
+      this.unload(slot);
+    }
+    this.blobs.clear();
+    this.requested.clear();
   }
 
   /** Per frame: retarget rings at `focus` (engine coords) and advance at most ONE create + its swap. */
@@ -92,6 +112,7 @@ export class StreamingDriver {
     }
     this.stats.pendingCells = pendingCells;
     this.stats.loadedCells = loadedCells;
+    this.pruneStaleBlobs();
 
     return this.stats;
   }
@@ -138,10 +159,14 @@ export class StreamingDriver {
     const previousKey = slot.current ? slot.keys[slot.current] : undefined;
     if (previousKey !== undefined && previousKey !== key) {
       this.engine.cells.unload(previousKey);
+      this.requested.delete(previousKey);
     }
     slot.current = level;
     slot.pending = null;
+    // `requested` marks IN-FLIGHT fetches only: clear it with the blob, or a demoted level can never be
+    // re-fetched on return (the field bug: revisited areas stuck at LOD — blob consumed, mark kept).
     this.blobs.delete(key); // the CPU copy dies immediately after upload (memory model)
+    this.requested.delete(key);
     this.stats.created += 1;
     this.stats.worstCreateMs = Math.max(this.stats.worstCreateMs, performance.now() - start);
   }
@@ -160,10 +185,24 @@ export class StreamingDriver {
     return null;
   }
 
+  /** Backpressure (whip-bench finding: 736 MB heap): fetched blobs whose slot no longer wants that level
+   *  are DROPPED (with their in-flight mark, so a future desire re-fetches). Camera whips order far more
+   *  data than the 1-create/frame budget can consume — without pruning it piles up in the worker handoff. */
+  private pruneStaleBlobs(): void {
+    for (const key of this.blobs.keys()) {
+      const slot = this.keyToSlot.get(key);
+      if (!slot || slot.keys[slot.pending ?? 'hd'] !== key || slot.pending === null) {
+        this.blobs.delete(key);
+        this.requested.delete(key);
+      }
+    }
+  }
+
   private requestBlob(key: string): void {
     this.requested.add(key);
     const entry = this.manifest.cells[key];
     this.worker.postMessage({
+      ...(entry.enc !== undefined ? { enc: entry.enc } : {}),
       key,
       length: entry.length,
       offset: entry.offset,

@@ -110,7 +110,7 @@ function main(): void {
       `pak ${(report.pakBytes / (1024 * 1024)).toFixed(1)} MB, groups avg ${avgGroups.toFixed(1)} max ${maxGroups}, ` +
       `textures pass=${report.textures.opaquePass} processed=${report.textures.processed} ` +
       `colors=${report.textures.colors} dedup=${report.textures.dedup} arrays=${report.textures.arrays}, ` +
-      `timed objects=${report.timedObjects}, skipped animated=${report.skippedAnimated}`,
+      `timed objects=${report.timedObjects}, animated(static)=${report.animatedStatic}`,
   );
   if (report.ao) {
     console.log(

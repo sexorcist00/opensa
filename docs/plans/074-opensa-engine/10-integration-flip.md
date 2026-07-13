@@ -65,6 +65,8 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
 | ---------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-07-12 | FULL-LS convert (rect −1,−12…11,1 = 182 rect cells → 345 entries, HD-vegetation overlay on, both bakes) | **pak 1.15 GB — geometry 939 MB (82 %!), textures 212 MB (18 %)**; 20.5 M verts, 82 arrays, 66 timed objects; convert 833 s of which bakes 760 s (AO 418 + sunVis 342, 423 M rays vs 13.9 M occluder tris); 16 GB node heap survived. GOTCHA fixed en route: the global bake dedup cache exceeded V8's Map size cap (~16.7 M) — caches are per-cell now |
 
+| 2026-07-12 | A1 stage 1: per-entry deflate-raw wire compression | measured on real cells first: deflate 2.18× / brotli-q6 3.06×; SHIPPED deflate-raw (native `DecompressionStream` in the worker, zero deps): bench rects 246.5 → 93.8 MB and 135.3 → 52.5 MB (**2.6×** — textures compress too); inflation worker-side, main thread still receives GPU-ready bytes. meshopt (vertex/index reorder+quantize) = A1 stage 2, multiplies ON TOP of deflate. FULL-LS reconverted: **1.15 GB → 500 MB (2.3×)**; full-map projection ≈ 1.6 GB wire before meshopt |
+
 **What the numbers mean for the flip (assessment 2026-07-12):**
 
 - The texture-side BC-encode is NOT the first lever (212 MB total; halving it saves ~100 MB). **Geometry

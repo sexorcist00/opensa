@@ -1,13 +1,14 @@
-/**
- * District conversion orchestrator (plan 074/03): resolve the map → world grid → for every cell in the rect,
- * weld HD + LOD levels → build texture arrays → deterministic pak + manifest + the measurement report the
- * plan docs consume.
- */
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { buildOspak, type OspakInput, type OspakManifest } from '@opensa/engine-formats';
 import { OPEN_SCRIPT_IPL, resolveMap } from '@opensa/renderware/map/resolve-map';
 import { buildWorldGrid, cellKey } from '@opensa/renderware/map/world-grid';
+/**
+ * District conversion orchestrator (plan 074/03): resolve the map → world grid → for every cell in the rect,
+ * weld HD + LOD levels → build texture arrays → deterministic pak + manifest + the measurement report the
+ * plan docs consume.
+ */
+import { deflateRawSync } from 'node:zlib';
 
 import { bakeAo, type BakeAoReport, buildOccluderBvh } from './ao';
 import { bakeSunVis, type BakeSunVisReport } from './sunvis';
@@ -29,10 +30,11 @@ export interface ConvertOptions {
 }
 
 export interface ConvertReport {
+  /** IDE-anim instances welded at bind pose (frozen — no runtime animation yet). */
+  animatedStatic: number;
   ao: (BakeAoReport & { ms: number }) | null;
   cells: { groups: number; indices: number; kbytes: number; key: string; vertices: number }[];
   pakBytes: number;
-  skippedAnimated: number;
   skippedTimed: number;
   sunVis: (BakeSunVisReport & { ms: number }) | null;
   textures: TexturePlanner['report'] & { arrays: number };
@@ -56,10 +58,10 @@ export function convertDistrict(
 
   const inputs: OspakInput[] = [];
   const report: ConvertReport = {
+    animatedStatic: 0,
     ao: null,
     cells: [],
     pakBytes: 0,
-    skippedAnimated: 0,
     skippedTimed: 0,
     sunVis: null,
     textures: { arrays: 0, colors: 0, dedup: 0, opaquePass: 0, processed: 0 },
@@ -86,12 +88,12 @@ export function convertDistrict(
   }
   for (const entry of welded) {
     const bytes = assembleCell(entry.cell);
-    inputs.push({ bytes, key: entry.key, kind: 'cell' });
+    inputs.push(wireCompress({ bytes, key: entry.key, kind: 'cell' }));
     accumulate(report, entry.key, bytes.byteLength, entry.cell.stats);
   }
 
   for (const array of planner.build()) {
-    inputs.push({ bytes: array.bytes, key: `array-${array.ref}`, kind: 'texture', meta: array.meta });
+    inputs.push(wireCompress({ bytes: array.bytes, key: `array-${array.ref}`, kind: 'texture', meta: array.meta }));
     report.textures.arrays += 1;
   }
   Object.assign(report.textures, planner.report, { arrays: report.textures.arrays });
@@ -115,7 +117,7 @@ function accumulate(report: ConvertReport, key: string, bytes: number, stats: We
     key,
     vertices: stats.vertices,
   });
-  report.skippedAnimated += stats.skippedAnimated;
+  report.animatedStatic += stats.animatedStatic;
   report.skippedTimed += stats.skippedTimed;
   report.timedObjects += stats.timedObjects;
 }
@@ -148,4 +150,15 @@ function weldRect(
   }
 
   return welded;
+}
+
+/** Per-entry wire compression (074/10 A1): deflate-raw — natively inflatable in the pak worker via
+ *  `DecompressionStream`, zero dependencies. Skipped when it doesn't pay (already-compressed payloads). */
+function wireCompress(input: OspakInput): OspakInput {
+  const wire = deflateRawSync(input.bytes, { level: 6 });
+  if (wire.byteLength >= input.bytes.byteLength * 0.95) {
+    return input;
+  }
+
+  return { ...input, bytes: wire, enc: 'deflate-raw', rawLength: input.bytes.byteLength };
 }

@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { TexturePlanner } from './textures';
-import { weldCell } from './weld';
+import { frameWorldTransform, weldCell } from './weld';
 
 // Real committed fixtures (same case build-region tests use).
 const DFF = 'tests/custom/proper-fixes-models/trafficlight1.dff';
@@ -71,17 +71,19 @@ describe('weldCell', () => {
 
       expect(weldCell(fs, fixtureDefs(), { cx: 0, cy: 0, hd: [], lod: [] }, false, planner, [0, 0, 0])).toBeNull();
     });
+  });
 
-    it('skips animated defs and counts them', () => {
+  describe('positive cases', () => {
+    it('welds animated defs statically and counts them (field fix: anim skip left building-sized holes)', () => {
       const fs = fixtureFs();
       const planner = new TexturePlanner(fs, new Map());
       const welded = weldCell(fs, fixtureDefs({ anim: 'trafficlight' }), fixtureCell(2), false, planner, [0, 0, 0]);
 
-      expect(welded).toBeNull(); // nothing mergeable remained
+      expect(welded).not.toBeNull();
+      expect(welded!.stats.animatedStatic).toBe(2);
+      expect(decodeOscell(welded!.bytes).vertexCount).toBeGreaterThan(0);
     });
-  });
 
-  describe('positive cases', () => {
     it('welds timed defs into trailing objectTable entries (074/06 row 9)', () => {
       const fs = fixtureFs();
       const planner = new TexturePlanner(fs, new Map());
@@ -139,6 +141,52 @@ describe('weldCell', () => {
       const b = weldCell(fs, fixtureDefs(), fixtureCell(3), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
 
       expect([...a!.bytes]).toEqual([...b!.bytes]);
+    });
+  });
+});
+
+describe('frameWorldTransform', () => {
+  const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+
+  describe('negative cases', () => {
+    it('returns null for an identity chain (the static-world fast path)', () => {
+      const frames = [
+        { name: 'root', parentIndex: -1, position: [0, 0, 0] as [number, number, number], rotation: IDENTITY },
+        { name: 'mesh', parentIndex: 0, position: [0, 0, 0] as [number, number, number], rotation: IDENTITY },
+      ];
+
+      expect(frameWorldTransform(frames, 1)).toBeNull();
+      expect(frameWorldTransform(frames, -1)).toBeNull();
+      expect(frameWorldTransform([], 5)).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('composes the parent chain root→leaf (translation + RW column-basis rotation)', () => {
+      // Child rotates 90° about Z (RW columns: right=(0,1,0), up=(−1,0,0), at=(0,0,1)), root lifts by 5.
+      const frames = [
+        { name: 'root', parentIndex: -1, position: [0, 0, 5] as [number, number, number], rotation: IDENTITY },
+        {
+          name: 'part',
+          parentIndex: 0,
+          position: [0, 0, 0] as [number, number, number],
+          rotation: [0, 1, 0, -1, 0, 0, 0, 0, 1],
+        },
+      ];
+      const transform = frameWorldTransform(frames, 1);
+
+      expect(transform).not.toBeNull();
+      const { pos, rot } = transform!;
+      // v = (1, 0, 0) → rotated (0, 1, 0) → lifted (0, 1, 5).
+      const v = [1, 0, 0];
+      const world = [
+        rot[0] * v[0] + rot[1] * v[1] + rot[2] * v[2] + pos[0],
+        rot[3] * v[0] + rot[4] * v[1] + rot[5] * v[2] + pos[1],
+        rot[6] * v[0] + rot[7] * v[1] + rot[8] * v[2] + pos[2],
+      ];
+      expect(world[0]).toBeCloseTo(0);
+      expect(world[1]).toBeCloseTo(1);
+      expect(world[2]).toBeCloseTo(5);
     });
   });
 });

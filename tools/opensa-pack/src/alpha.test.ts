@@ -5,6 +5,7 @@ import {
   coverage,
   dilateEdges,
   downsample,
+  effectiveAlphaClass,
   premultiply,
   preserveCoverage,
   processAlphaTexture,
@@ -53,9 +54,19 @@ describe('alpha pipeline', () => {
 
       expect([...rgba]).toEqual(before);
     });
+
+    it('effectiveAlphaClass never upgrades opaque/cutout or an unrequested softBlend', () => {
+      expect(effectiveAlphaClass('opaque', true)).toBe('opaque');
+      expect(effectiveAlphaClass('cutout', true)).toBe('cutout');
+      expect(effectiveAlphaClass('softBlend', false)).toBe('softBlend');
+    });
   });
 
   describe('positive cases', () => {
+    it('effectiveAlphaClass upgrades softBlend to cutout for vegetation callers (trees-through-trees fix)', () => {
+      expect(effectiveAlphaClass('softBlend', true)).toBe('cutout');
+    });
+
     it('classifies a hard-edged leaf texture as cutout', () => {
       expect(classifyAlpha(leafPatch(), true)).toBe('cutout');
     });

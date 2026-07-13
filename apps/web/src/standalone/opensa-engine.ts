@@ -15,10 +15,11 @@ function applyHour(engine: Engine, hour: number): void {
   const elevation = Math.sin(((hour - 6) / 12) * Math.PI);
   const dn = 1 - Math.min(1, Math.max(0, (elevation + 0.15) / 0.3));
   const azScale = 1 - 0.75 * Math.max(0, Math.min(1, elevation));
+  const azX = -Math.cos(((Math.max(6, Math.min(18, hour)) - 6) / 12) * Math.PI);
   const dayGate = Math.min(1, Math.max(0, elevation * 4));
   engine.environment.hour = hour;
   engine.environment.dn = dn;
-  engine.environment.sunDir = [0.35 * azScale, Math.max(0.05, elevation), 0.25 * azScale];
+  engine.environment.sunDir = [azX, Math.max(0.05, elevation), 0.25 * azScale];
   engine.environment.sunElevation = Math.max(0, Math.min(1, elevation));
   engine.environment.sunColor = [dayGate, 0.96 * dayGate, 0.88 * dayGate];
   engine.environment.sunDirect = Math.max(0, elevation) * 0.9;
@@ -106,6 +107,7 @@ async function main(): Promise<void> {
       `cells     ${stats.cellsVisible}/${stats.cellsTotal} visible · draws ${stats.drawsRecorded}\n` +
       `stream    ${streamStats.loadedCells} loaded / ${streamStats.pendingCells} pending · worst create ${streamStats.worstCreateMs.toFixed(1)} ms\n` +
       `residency ${(stats.residencyBytes / (1024 * 1024)).toFixed(0)} MB\n` +
+      `pos       engine ${eye[0].toFixed(0)}, ${eye[1].toFixed(0)}, ${eye[2].toFixed(0)} · GTA ${eye[0].toFixed(0)}, ${(-eye[2]).toFixed(0)}, ${eye[1].toFixed(0)}\n` +
       `WASD+QE fly · drag look · Shift ×4`;
     requestAnimationFrame(loop);
   };

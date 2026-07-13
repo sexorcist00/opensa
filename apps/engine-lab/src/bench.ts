@@ -11,6 +11,7 @@ export const BENCH_MEASURE_FRAMES = 600;
 /** Per-scene measure-window overrides (default {@link BENCH_MEASURE_FRAMES}). */
 export const BENCH_SCENE_MEASURE: Record<string, number> = {
   city: 3600, // ~30 s at 120 Hz — the full-city traverse needs the long window
+  teleport: 1800, // 6 jumps × 300 frames — streaming teardown/rebuild stress
 };
 
 export type BenchCameraScript = (frame: number, context: BenchContext) => CameraState;
@@ -64,6 +65,34 @@ export const BENCH_SCENES: Record<string, BenchCameraScript> = {
       [focus[0] + Math.cos(angle) * radius, focus[1] + radius * 0.42, focus[2] + Math.sin(angle) * radius],
       focus,
     );
+  },
+  teleport(frame, { aspect, focus, radius }) {
+    // M1 stress: jump between district corners every 300 frames — full ring teardown + rebuild each hop.
+    // The revisit pattern (corner 0 recurs) is exactly what caught the requested-mark lifecycle bug.
+    const CORNERS: [number, number][] = [
+      [-0.8, -0.8],
+      [0.8, -0.8],
+      [0.8, 0.8],
+      [-0.8, 0.8],
+      [0, 0],
+      [-0.8, -0.8],
+    ];
+    const hop = Math.min(CORNERS.length - 1, Math.floor(frame / 300));
+    const [ox, oz] = CORNERS[hop];
+    const eye: [number, number, number] = [focus[0] + ox * radius, focus[1] + 90, focus[2] + oz * radius + 60];
+
+    return camera(aspect, eye, [eye[0], focus[1] + 10, eye[2] - 120]);
+  },
+  whip(frame, { aspect, focus, radius }) {
+    // M1 stress: fast 360° spins at street height — frustum churn, promote/demote storms at the ring edges.
+    const angle = frame * 0.06; // ~full turn every 105 frames
+    const eye: [number, number, number] = [focus[0], focus[1] + 25, focus[2]];
+
+    return camera(aspect, eye, [
+      focus[0] + Math.cos(angle) * radius * 0.6,
+      focus[1] + 10 + Math.sin(frame * 0.013) * 30,
+      focus[2] + Math.sin(angle) * radius * 0.6,
+    ]);
   },
 };
 

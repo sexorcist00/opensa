@@ -12,6 +12,9 @@ import type { TextureArrays } from './textures';
 import { MSAA_SAMPLES, pipelineIdFor } from '../render/pipelines';
 
 export interface CellHandle {
+  /** Blended classes (blend/beam) — executed in the frame's SECOND phase, after every cell's opaque
+   *  (blends write no depth; interleaving them per cell let later cells' opaque repaint them — field bug). */
+  blendBundle: GPURenderBundle | null;
   /** World-space bounding sphere [x, y, z, r] (cell bounds shifted by origin). */
   bounds: readonly [number, number, number, number];
   bundle: GPURenderBundle;
@@ -122,8 +125,15 @@ export class CellStore {
       }
     }
     const bundleGroups = cell.groups.filter((_, index) => !objectOwned.has(index));
-    const bundle = this.record(key, bundleGroups, cell.index16, vertexBuffer, indexBuffer, cellBindGroup);
+    const opaqueGroups = bundleGroups.filter((group) => group.pipelineClass <= 1);
+    const blendGroups = bundleGroups.filter((group) => group.pipelineClass >= 2);
+    const bundle = this.record(key, opaqueGroups, cell.index16, vertexBuffer, indexBuffer, cellBindGroup);
+    const blendBundle =
+      blendGroups.length > 0
+        ? this.record(`${key}:blend`, blendGroups, cell.index16, vertexBuffer, indexBuffer, cellBindGroup)
+        : null;
     const handle: CellHandle = {
+      blendBundle,
       bounds: [
         cell.bounds[0] + cell.origin[0],
         cell.bounds[1] + cell.origin[1],

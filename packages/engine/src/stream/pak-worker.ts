@@ -9,6 +9,8 @@
  *   from worker memory (the M1 behaviour).
  */
 export interface PakWorkerRequest {
+  /** Wire encoding of the entry (074/10 A1) — the worker inflates before transfer. */
+  enc?: 'deflate-raw';
   key?: string;
   length?: number;
   offset?: number;
@@ -48,7 +50,7 @@ async function init(url: string): Promise<void> {
   self.postMessage({ key: '', mode: 'whole', type: 'ready' } satisfies PakWorkerResponse);
 }
 
-async function serve(key: string, offset: number, length: number): Promise<void> {
+async function serve(key: string, offset: number, length: number, enc?: 'deflate-raw'): Promise<void> {
   let buffer: ArrayBuffer;
   if (rangeMode) {
     const response = await fetch(pakUrl, { headers: { Range: `bytes=${offset}-${offset + length - 1}` } });
@@ -62,6 +64,12 @@ async function serve(key: string, offset: number, length: number): Promise<void>
     }
     // slice() copies out of the worker-resident pak; the copy transfers (zero-copy handoff to main).
     buffer = (pak.buffer as ArrayBuffer).slice(offset, offset + length);
+  }
+  if (enc === 'deflate-raw') {
+    // Inflate WORKER-side (074/10 A1): main thread keeps receiving GPU-ready bytes.
+    buffer = await new Response(
+      new Blob([buffer]).stream().pipeThrough(new DecompressionStream('deflate-raw')),
+    ).arrayBuffer();
   }
   (self as unknown as Worker).postMessage({ buffer, key, type: 'blob' } satisfies PakWorkerResponse, [buffer]);
 }
@@ -86,7 +94,7 @@ self.onmessage = (event: MessageEvent<PakWorkerRequest>): void => {
     message.length !== undefined
   ) {
     const key = message.key;
-    serve(key, message.offset, message.length).catch((error: unknown) => {
+    serve(key, message.offset, message.length, message.enc).catch((error: unknown) => {
       self.postMessage({
         error: error instanceof Error ? error.message : String(error),
         key,

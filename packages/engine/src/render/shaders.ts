@@ -75,16 +75,29 @@ struct Frame {
   moonColor: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
+@group(0) @binding(1) var skyLut: texture_2d<f32>;
+@group(0) @binding(2) var skyLutSampler: sampler;
 
-// Shared sky colour by view direction (the sky pass AND the world fog sample the same gradient — fully
-// fogged geometry dissolves into exactly the sky behind it, the 068 invariant).
+// Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
+// fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
+// Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
 fn skyColorFor(dir: vec3f) -> vec3f {
   let elevation = clamp(dir.y, 0.0, 1.0);
-  let base = mix(frame.skyHorizon.rgb, frame.skyTop.rgb, pow(elevation, 0.55));
-  // Sun glow: a soft forward-scatter blob around the sun direction (day only — sunColor premultiplied
-  // by the day arc on the CPU side).
+  let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
+  let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
+  let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
+  let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
+  let base = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+  // Structured sun (074/06 row 4 polish): a hot angular DISC (~0.5°) + tight corona + circumsolar glow +
+  // wide forward-scatter haze. The disc overshoots 1.0 on purpose — the un-tonemapped sRGB output clips the
+  // core to white while the fringe keeps the timecyc sun colour (orange limb at dusk for free); plan 09's
+  // HDR chain will feed the same overshoot into bloom/god-rays instead of clipping.
   let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
-  let glow = frame.sunColor.rgb * (pow(sunDot, 256.0) * 0.9 + pow(sunDot, 8.0) * 0.06);
+  let disc = smoothstep(0.99985, 0.99997, sunDot) * 12.0;
+  let corona = pow(sunDot, 600.0) * 2.2;
+  let circumsolar = pow(sunDot, 32.0) * 0.5;
+  let haze = pow(sunDot, 8.0) * 0.08;
+  let glow = frame.sunColor.rgb * (disc + corona + circumsolar + haze);
   // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it;
   // the disc lives in the shared sky so fogged geometry dissolves into the moon behind it (068 invariant).
   let moonDot = max(dot(dir, frame.moonDir.xyz), 0.0);
@@ -114,11 +127,38 @@ fn vsSky(@builtin(vertex_index) index: u32) -> SkyOut {
   return out;
 }
 
+// Procedural night starfield (074/06 row 16, the prod sky.plugin port): gnomonic-projected cell hash —
+// ~one star per 10 % of cells, random brightness, gentle twinkle, horizon taper. SKY PASS ONLY: fog and
+// world fragments share skyColorFor and must NOT twinkle.
+fn hash21(cell: vec2f) -> f32 {
+  return fract(sin(dot(cell, vec2f(127.1, 311.7))) * 43758.5453);
+}
+
+fn starField(dir: vec3f) -> f32 {
+  if (dir.y <= 0.02) {
+    return 0.0;
+  }
+  let uv = dir.xz / dir.y * 6.0;
+  let cell = floor(uv);
+  let f = fract(uv);
+  let present = step(0.90, hash21(cell));
+  let star = vec2f(hash21(cell + 1.7), hash21(cell + 4.3));
+  let d = length(f - star);
+  let point = smoothstep(0.06, 0.0, d) * present;
+  let bright = 0.35 + 0.65 * hash21(cell + 8.1);
+  let twinkle = 0.6 + 0.4 * sin(frame.params2.z * 2.5 + hash21(cell) * 90.0);
+  let taper = smoothstep(0.02, 0.35, dir.y);
+  return point * bright * twinkle * taper;
+}
+
 @fragment
 fn fsSky(in: SkyOut) -> @location(0) vec4f {
   let far = frame.invViewProj * vec4f(in.ndc, 1.0, 1.0);
   let dir = normalize(far.xyz / far.w - frame.camera.xyz);
-  return vec4f(skyColorFor(dir), 1.0);
+  var col = skyColorFor(dir);
+  // Stars gate on dn only in v1 — the row-15 cloud work adds the overcast fade (prod's uCloudClear).
+  col += vec3f(starField(dir)) * frame.params.x;
+  return vec4f(col, 1.0);
 }
 `,
   world: /* wgsl */ `

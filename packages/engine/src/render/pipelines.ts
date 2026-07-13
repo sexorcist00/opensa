@@ -41,7 +41,12 @@ export function compileAll(
   depthFormat: GPUTextureFormat,
 ): PipelineSet {
   const frameLayout = device.createBindGroupLayout({
-    entries: [{ binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT }],
+    entries: [
+      { binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT },
+      // PBR sky LUT (074/06 row 4): sampled by the sky pass AND the world fog (the 068 invariant).
+      { binding: 1, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
     label: 'frame',
   });
   const cellLayout = device.createBindGroupLayout({
@@ -140,7 +145,8 @@ export function compileAll(
   pipelines.set(
     'sky',
     device.createRenderPipeline({
-      // Reversed-Z: the sky triangle sits at depth 0 (the far plane) and passes only background pixels.
+      // Reversed-Z far plane (depth 0). The sky draws FIRST in the frame (vs the cleared buffer): blended
+      // classes write no depth, so a late sky would repaint them wherever their background is sky.
       depthStencil: { depthCompare: 'greater-equal', depthWriteEnabled: false, format: depthFormat },
       fragment: { entryPoint: 'fsSky', module: skyModule, targets: [{ format: colorFormat }] },
       label: 'sky',

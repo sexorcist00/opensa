@@ -39,6 +39,8 @@ Deliverable = a lab toggle + a one-page "what it forced us to change" note in th
 | Reflections (world/planar)      | ❌ out of scope        | SA has no world planar reflections; if ever wanted → post-M4 idea                                                                                                                              |
 | Character rigging               | ✅ here                | skinned pipeline variant, bone palette in storage buffer, DFF skin data                                                                                                                        |
 | Character animation             | ✅ here                | OWN IFP sampler + thin crossfade re-implementation (three's AnimationMixer not portable) — THE early probe                                                                                     |
+| IDE anim objects (world)        | 🟡 static now → here   | Welded STATIC at bind pose since the 2026-07-12 field fix (06 row 17 — skipping them deleted whole buildings). Runtime IFP playback = promote the instance to a dynamic entity (same IFP sampler as characters, frame-tree transforms per clip frame); the welder then needs an `--anim-dynamic` exclusion so promoted defs stop being baked into bundles |
+| Breakable props (plan 045)      | ✅ here (explicit now) | Old path registers smashables per HD cell (`collectBreakables`). Own engine: breakables are welded into the static bundle until HIT — on break, carve = per-instance groups stay addressable via the objectTable mechanism (06 row 9's kind byte has room for a `breakable` kind: hide the intact run, spawn debris as dynamic entities). Same promote-on-interaction pattern as anim objects |
 
 ## Tasks
 
@@ -47,6 +49,9 @@ Deliverable = a lab toggle + a one-page "what it forced us to change" note in th
 - [ ] Character full: sampler crossfades, retarget (port the pure logic, drop the three mixer).
 - [ ] Vehicles: DUMMY-tree parse → part hierarchy, part flattening, paint/env WGSL, night fill module, ok/dam damage part-swap hooks (render side only).
 - [ ] Dynamics-only near shadow map pass + world/dynamics sampling.
+- [ ] IDE anim objects: dynamic-entity promotion + IFP playback on the frame tree (replaces the static-weld
+      freeze of 06 row 17; converter grows the exclusion/objectTable flag for promoted defs).
+- [ ] Breakables: objectTable `breakable` kind (hide intact run on hit) + debris entities (plan-045 parity).
 - [ ] Particles/coronas instanced pass; procobj instancing.
 - [ ] Ledger: skinning CPU+GPU ms (gate ≤ 1 ms), dynamics draw counts, near-shadow pass ms.
 

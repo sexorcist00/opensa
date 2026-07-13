@@ -31,7 +31,6 @@ export interface BakeSunVisReport {
 
 /** Ascending day-arc elevations sampled for the threshold scan (azimuth fixed — mirrors the lab drivers). */
 const ARC_ELEVATIONS = [0.13, 0.25, 0.38, 0.5, 0.63, 0.75, 0.88, 1];
-const ARC_AZIMUTH_X = 0.35;
 const ARC_AZIMUTH_Z = 0.25;
 
 const RAY_OFFSET = 0.08; // same surface push-off as the AO bake
@@ -127,30 +126,21 @@ function arcVisibility(
   let visibleWeight = 0;
   let totalWeight = 0;
   for (const sample of arc) {
-    // The sun behind the face contributes nothing at runtime (N·L clamps) — skip its rays entirely.
-    if (nx * sample.x + ny * sample.y + nz * sample.z <= 0) {
-      continue;
-    }
-    totalWeight += sample.elevation;
-    let visible = 0;
-    for (let jitter = 0; jitter < 2; jitter += 1) {
+    // Morning and evening passes face OPPOSITE half-spaces — test each ray, not the pair (an east wall
+    // must keep its morning sun). A ray behind the face contributes nothing at runtime (N·L clamps).
+    for (let pass = 0; pass < 2; pass += 1) {
+      const dx = sample.dirs[pass * 3];
+      const dy = sample.dirs[pass * 3 + 1];
+      const dz = sample.dirs[pass * 3 + 2];
+      if (nx * dx + ny * dy + nz * dz <= 0) {
+        continue;
+      }
+      totalWeight += sample.elevation / 2;
       rays += 1;
-      if (
-        !occluded(
-          bvh,
-          ox,
-          oy,
-          oz,
-          sample.dirs[jitter * 3],
-          sample.dirs[jitter * 3 + 1],
-          sample.dirs[jitter * 3 + 2],
-          maxDistance,
-        )
-      ) {
-        visible += 1;
+      if (!occluded(bvh, ox, oy, oz, dx, dy, dz, maxDistance)) {
+        visibleWeight += sample.elevation / 2;
       }
     }
-    visibleWeight += sample.elevation * (visible / 2);
   }
 
   // The sun never faces this vertex → the direct term is already zero; keep the byte neutral.
@@ -158,16 +148,20 @@ function arcVisibility(
 }
 
 function buildArc(discJitter: number): ArcSample[] {
+  void discJitter; // superseded: the pair is now morning+evening instead of a disc jitter
+
   return ARC_ELEVATIONS.map((elevation) => {
-    // Azimuth CONVERGES to zenith as the sun climbs (field fix: with a fixed azimuth the noon sun sits
-    // ~19° off vertical and bridge shadows land BESIDE the bridge). Mirrored in the lab drivers.
+    // TRUE east→west arc (mirrors the runtime drivers — change one, change both): at elevation e the sun
+    // passes twice, at azimuth x = ∓√(1−e²) (morning/evening); z keeps the small zenith-converging tilt.
+    // The scalar average samples BOTH passes — this replaces the old disc-jitter pair at the same ray cost.
     const s = azimuthScale(elevation);
-    const base = normalize(ARC_AZIMUTH_X * s, elevation, ARC_AZIMUTH_Z * s);
-    const low = normalize(ARC_AZIMUTH_X * s, elevation - discJitter, ARC_AZIMUTH_Z * s);
-    const high = normalize(ARC_AZIMUTH_X * s, elevation + discJitter, ARC_AZIMUTH_Z * s);
+    const azX = Math.sqrt(Math.max(0, 1 - elevation * elevation));
+    const morning = normalize(-azX, elevation, ARC_AZIMUTH_Z * s);
+    const evening = normalize(azX, elevation, ARC_AZIMUTH_Z * s);
+    const base = normalize(0, elevation, ARC_AZIMUTH_Z * s);
 
     return {
-      dirs: new Float32Array([...low, ...high]),
+      dirs: new Float32Array([...morning, ...evening]),
       elevation,
       x: base[0],
       y: base[1],

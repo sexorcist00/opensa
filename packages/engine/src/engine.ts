@@ -18,6 +18,7 @@ import {
 import { Resources } from './core/resources';
 import { GpuTimers } from './debug/gpu-timers';
 import { compileAll, MSAA_SAMPLES, pipelineIdFor, type PipelineSet } from './render/pipelines';
+import { buildSkyLut, SKY_LUT_HEIGHT, SKY_LUT_WIDTH, skyLutKey } from './render/sky-lut';
 import { CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
 
@@ -50,6 +51,10 @@ export interface EngineStats {
 export interface Environment {
   /** Baked AO/skyVis strength on the indirect term (074/07): 0 = off, 1 = raw bake. */
   aoStrength: number;
+  /** Cloud cover 0..1 (haze driver for the PBR sky — row 15 will feed it per weather). */
+  cloudCover: number;
+  /** Cloud heaviness 0..1 (storm/fog weathers). */
+  cloudDark: number;
   /** 0 day → 1 deep night (the prelit blend). */
   dn: number;
   /** Night-emissive glow strength (lit windows / neon self-illuminate; 0 = off). */
@@ -70,6 +75,8 @@ export interface Environment {
   moonDir: readonly [number, number, number];
   /** LINEAR sky gradient horizon colour (sky pass + world fog share it). */
   skyHorizon: readonly [number, number, number];
+  /** SA mood strength: how strongly timecyc's skyTop tints the physical sky (0 = pure Preetham). */
+  skyMood: number;
   /** LINEAR sky gradient zenith colour. */
   skyTop: readonly [number, number, number];
   /** Stochastic de-tiling toggle (074/12): 0 = plain sampling (DEFAULT — field issues pending the
@@ -97,6 +104,8 @@ export class Engine {
   readonly environment: Environment = {
     // Modest by default: SA prelit already carries baked darkening — full-strength AO double-darkens.
     aoStrength: 0.6,
+    cloudCover: 0.12,
+    cloudDark: 0,
     dn: 0,
     emissiveBoost: 1.6,
     fogCutDistance: 2400,
@@ -107,6 +116,7 @@ export class Engine {
     moonColor: [0, 0, 0],
     moonDir: [-0.3, 0.8, -0.25],
     skyHorizon: [0.42, 0.55, 0.72],
+    skyMood: 0.7,
     skyTop: [0.12, 0.32, 0.65],
     stochastic: 0,
     sunColor: [1, 0.96, 0.88],
@@ -143,6 +153,8 @@ export class Engine {
   private pipelines!: PipelineSet;
   private readonly proj: Mat4 = mat4Identity();
   private resources!: Resources;
+  private skyLutCurrentKey = '';
+  private skyLutTexture!: GPUTexture;
   private readonly startedMs = performance.now();
   private readonly statsValue: EngineStats = {
     cellsTotal: 0,
@@ -192,9 +204,11 @@ export class Engine {
     frameData.set([env.moonDir[0] / moonLen, env.moonDir[1] / moonLen, env.moonDir[2] / moonLen, env.stochastic], 64);
     frameData.set([...env.moonColor, 1], 68);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
+    this.refreshSkyLut();
 
     frustumFromViewProj(this.frustumPlanes, this.viewProj);
     const bundles: GPURenderBundle[] = [];
+    const blendCells: { bundle: GPURenderBundle; distanceSq: number }[] = [];
     let draws = 0;
     let total = 0;
     for (const cell of this.cells.all()) {
@@ -208,9 +222,21 @@ export class Engine {
       );
       if (cell.visible) {
         bundles.push(cell.bundle);
+        if (cell.blendBundle) {
+          blendCells.push({
+            bundle: cell.blendBundle,
+            distanceSq:
+              (cell.bounds[0] - camera.eye[0]) ** 2 +
+              (cell.bounds[1] - camera.eye[1]) ** 2 +
+              (cell.bounds[2] - camera.eye[2]) ** 2,
+          });
+        }
         draws += cell.draws;
       }
     }
+    // Blend phase back-to-front by CELL distance — cross-cell transparency ordering (per-group order inside
+    // a cell stays baked; the standard within-bundle transparency caveat).
+    const blendBundles = blendCells.sort((a, b) => b.distanceSq - a.distanceSq).map((entry) => entry.bundle);
 
     const encoder = this.device.createCommandEncoder({ label: 'frame' });
     const pass = encoder.beginRenderPass({
@@ -232,15 +258,21 @@ export class Engine {
       label: 'world',
       ...this.timers.passTimestampWrites(),
     });
+    // TWO-PHASE frame (field fix): every cell's OPAQUE first (complete depth), then the sky (background
+    // pixels only), then every cell's BLENDS over the finished depth — a later cell's opaque can no longer
+    // repaint an earlier cell's foliage/glass, and blends depth-test against the whole world.
     if (bundles.length > 0) {
       pass.executeBundles(bundles);
     }
-    // ObjectTable draws (074/06 row 9): hour-gated timed objects of visible cells, outside the bundles.
+    // ObjectTable draws (074/06 row 9): hour-gated timed objects, in the opaque phase (their blend groups
+    // sort with the world blends only approximately — the standard transparency caveat).
     draws += this.drawObjects(pass);
-    // Sky AFTER the world: depth-test less-equal at far depth touches only background pixels (074/06 row 4).
     pass.setPipeline(this.pipelines.get('sky'));
     pass.setBindGroup(0, this.frameBindGroup);
     pass.draw(3);
+    if (blendBundles.length > 0) {
+      pass.executeBundles(blendBundles);
+    }
     // 2dfx coronas last (074/06 row 13): additive on top of everything, depth-read hides occluded ones.
     draws += this.drawCoronas(pass, camera);
     pass.end();
@@ -269,11 +301,30 @@ export class Engine {
       size: 288, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2/moon×2 (10 × 16)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    // PBR sky LUT (074/06 row 4): CPU-built Preetham dome, refreshed when the environment moves.
+    this.skyLutTexture = this.resources.createTexture(
+      'texture',
+      {
+        format: 'rgba16float',
+        label: 'sky-lut',
+        size: { height: SKY_LUT_HEIGHT, width: SKY_LUT_WIDTH },
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      },
+      SKY_LUT_WIDTH * SKY_LUT_HEIGHT * 8,
+    );
     this.frameBindGroup = this.device.createBindGroup({
-      entries: [{ binding: 0, resource: { buffer: this.frameUniform } }],
+      entries: [
+        { binding: 0, resource: { buffer: this.frameUniform } },
+        { binding: 1, resource: this.skyLutTexture.createView() },
+        {
+          binding: 2,
+          resource: this.device.createSampler({ label: 'sky-lut', magFilter: 'linear', minFilter: 'linear' }),
+        },
+      ],
       label: 'frame',
       layout: this.pipelines.frameLayout,
     });
+    this.refreshSkyLut();
     this.textures = new TextureArrays(this.device, this.resources, this.pipelines.materialLayout);
     // Corona pass buffers (074/06 row 13): a unit quad + a per-frame instance buffer (CPU-filled, tiny).
     this.coronaQuad = this.resources.createBuffer('cellVertex', {
@@ -419,6 +470,32 @@ export class Engine {
     );
     this.msaaView = msaa.createView();
     this.depthView = depth.createView();
+  }
+
+  /** Rebuild the sky LUT when its environment inputs moved (quantized key — ~a few rebuilds per game
+   *  minute under a day cycle; each build is ~5 k texels of scalar math + a 72 KB upload). */
+  private refreshSkyLut(): void {
+    const env = this.environment;
+    const input = {
+      cloudCover: env.cloudCover,
+      cloudDark: env.cloudDark,
+      dn: env.dn,
+      mood: env.skyMood,
+      skyHorizon: env.skyHorizon,
+      skyTop: env.skyTop,
+      sunElevation: env.sunElevation,
+    };
+    const key = skyLutKey(input);
+    if (key === this.skyLutCurrentKey) {
+      return;
+    }
+    this.skyLutCurrentKey = key;
+    this.device.queue.writeTexture(
+      { texture: this.skyLutTexture },
+      buildSkyLut(input),
+      { bytesPerRow: SKY_LUT_WIDTH * 8 },
+      { height: SKY_LUT_HEIGHT, width: SKY_LUT_WIDTH },
+    );
   }
 }
 

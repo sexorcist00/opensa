@@ -244,3 +244,27 @@ WGSL snapshots current; tsc + eslint clean; benches committed through the `city`
   60 fps verdict). Fixed open-issues moved to docs/open-issues/fixed/ (alpha-edge, ghost-barriers,
   lod-2dfx-particles — the latter two root-fixed by perfect-map.asi). A "Handoff status" section snapshots
   the resume point.
+- 2026-07-12 (sky day, evening close) — the sky became REAL: row 4 ✅ (Preetham dome as a CPU-built 96×48
+  LUT shared by sky AND fog — the 068 invariant by construction; env gained cloudCover/cloudDark/skyMood),
+  row 16 ✅ (procedural starfield, second audit gap — found by the user's question), structured sun
+  (disc + corona + circumsolar + haze; deliberate HDR overshoot that plan 09's bloom/god-rays will consume),
+  dn night-blend (Preetham has no night model — the post-sunset horizon glow fix), and the TRUE east→west
+  sun arc (runtime + standalone + the sun-vis bake's morning/evening ray pairs with a per-ray facing test).
+  Also this evening: wire compression stage 1 (2.3–2.6×, deflate-raw + range-aware entries), the streaming
+  revisit-lifecycle fix + whip/teleport/leak stress suite (leak PASS; whip heap 736 → 55 MB after the
+  stale-blob backpressure fix), the lab WASD focus pan, and plans 13/14/15/16-rows + priority.md for the
+  Opus handoff.
+- 2026-07-12 (night field round: transparency + missing-object root causes) — three fixes off the user's
+  screenshots, ALL AWAITING THE NEXT RECONVERT (converter-side; the engine sort is live immediately):
+  (1) TWO-PHASE frame — every cell's opaque bundle, then sky, then every cell's blend bundle (cells now
+  record separate opaque/blend bundles): a later cell's opaque could repaint an earlier cell's canopies
+  (the "несовсем" screenshots), and the engine now also sorts blend bundles back-to-front by cell distance.
+  (2) MISSING OBJECT solved — the "blue hole" at GTA (804, −1619) was `burger01_LAw`, a 22×35 m diner in the
+  IDE **anim** section (its sign spins), and the welder SKIPPED all anim defs; the earlier "skipped-animated
+  are all signs" reading was wrong. Anim defs now weld STATICALLY at bind pose with the frame chain applied
+  (`frameWorldTransform` — the weld path had ignored RW frames entirely; identity for static DFFs so nothing
+  else moves; report stat `animatedStatic`). Runtime IFP animation = a later dynamic-entity feature (row 17).
+  (3) FOLIAGE → CUTOUT — trees-through-trees was blend-classed canopies writing no depth: `classifyAlpha`'s
+  2 % mid-alpha bound mis-classes scanned foliage skirts; the welder now passes `preferCutout` for
+  sway-kind (vegetation) defs, upgrading softBlend → cutout (vanilla SA alpha-tests foliage; our
+  A2C + MSAA + coverage-preserved mips are the modern equivalent).

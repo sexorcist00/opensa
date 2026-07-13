@@ -9,17 +9,25 @@ export const OSPAK_VERSION = 1;
 export const OSPAK_ALIGN = 4096;
 
 export interface OspakEntry {
+  /** Wire encoding of the stored bytes (074/10 A1): absent = raw payload. */
+  enc?: 'deflate-raw';
   hash: number;
   length: number;
   offset: number;
+  /** Decoded payload size when `enc` is set (progress/validation on the reader side). */
+  rawLength?: number;
 }
 
 export interface OspakInput {
   bytes: Uint8Array;
+  /** Wire encoding the producer applied to `bytes` (the reader inflates before use). */
+  enc?: 'deflate-raw';
   key: string;
   kind: 'cell' | 'texture';
   /** Texture meta (required for kind 'texture'). */
   meta?: { format: number; height: number; layers: number; width: number };
+  /** Decoded size of `bytes` when `enc` is set. */
+  rawLength?: number;
 }
 
 export interface OspakManifest {
@@ -49,7 +57,12 @@ export function buildOspak(
   let offset = 0;
   const spans: { bytes: Uint8Array; offset: number }[] = [];
   for (const input of sorted) {
-    const entry: OspakEntry = { hash: fnv1a(input.bytes), length: input.bytes.byteLength, offset };
+    const entry: OspakEntry = {
+      ...(input.enc !== undefined ? { enc: input.enc, rawLength: input.rawLength ?? 0 } : {}),
+      hash: fnv1a(input.bytes),
+      length: input.bytes.byteLength,
+      offset,
+    };
     if (input.kind === 'cell') {
       if (cells[input.key]) {
         throw new Error(`duplicate cell key ${input.key}`);

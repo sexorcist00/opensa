@@ -3,10 +3,12 @@
  * is transform-BAKED into cell-local ENGINE coordinates (GTA Z-up → engine Y-up: e = (x, z, −y)) and welded
  * into draw groups keyed by (texture array, pipeline class, side) — the offline batching that IS the thesis.
  * Timed defs weld into trailing `timed` buckets → objectTable entries (074/06 row 9, hour-gated at runtime);
- * IDE-anim defs stay skipped (counted in the stats).
+ * IDE-anim defs weld STATICALLY at bind pose (field fix: skipping them left building-sized holes —
+ * burger01_LAw is a 22×35 m diner, not a sign; their IFP animation is a later dynamic-entity feature).
  */
 import type { Oscell, OscellGroup, OscellLight } from '@opensa/engine-formats';
 import type { AssetFileSystem, IplInstance, MapDefinitions } from '@opensa/renderware';
+import type { RWFrame } from '@opensa/renderware/parsers/binary/types';
 
 import { encodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
 import { WIND_MODELS } from '@opensa/game/mods/wind-mode';
@@ -46,9 +48,10 @@ export interface WeldedCell {
 }
 
 export interface WeldStats {
+  /** IDE-anim instances welded at bind pose (no runtime animation yet — 074/06 ledger note). */
+  animatedStatic: number;
   groups: number;
   indices: number;
-  skippedAnimated: number;
   skippedTimed: number;
   /** ObjectTable entries produced (timed windows / scrapyard piles …). */
   timedObjects: number;
@@ -81,6 +84,40 @@ export function assembleCell(welded: WeldedCell): Uint8Array {
   return assemble(welded.buckets, welded.origin, welded, welded.stats);
 }
 
+/**
+ * An atomic's model-space transform: its frame chain composed root→leaf, in the row-major mat3 convention
+ * `appendInstance` uses (RW stores right/up/at basis vectors as COLUMNS → each local mat transposes in).
+ * Null for the identity (the common case — static world DFFs bake geometry in model space), so the hot
+ * per-vertex path skips it. Anim-hierarchy models (windmills, the Burger Shot sign) place parts here.
+ */
+export function frameWorldTransform(
+  frames: readonly RWFrame[],
+  frameIndex: number,
+): null | { pos: [number, number, number]; rot: number[] } {
+  let rot = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  let pos: [number, number, number] = [0, 0, 0];
+  let hops = 0;
+  for (let at = frameIndex; at >= 0 && at < frames.length && hops <= frames.length; at = frames[at].parentIndex) {
+    const frame = frames[at];
+    const [r0, r1, r2, r3, r4, r5, r6, r7, r8] = frame.rotation;
+    const local = [r0, r3, r6, r1, r4, r7, r2, r5, r8];
+    // accumulated = local ∘ accumulated (walking leaf → root).
+    rot = mulMat3(local, rot);
+    pos = [
+      local[0] * pos[0] + local[1] * pos[1] + local[2] * pos[2] + frame.position[0],
+      local[3] * pos[0] + local[4] * pos[1] + local[5] * pos[2] + frame.position[1],
+      local[6] * pos[0] + local[7] * pos[1] + local[8] * pos[2] + frame.position[2],
+    ];
+    hops += 1;
+  }
+  const identityRot = rot.every((value, index) => Math.abs(value - (index % 4 === 0 ? 1 : 0)) < 1e-6);
+  if (identityRot && Math.hypot(pos[0], pos[1], pos[2]) < 1e-6) {
+    return null;
+  }
+
+  return { pos, rot };
+}
+
 /** Convert one cell in one shot (weld + encode, no bake) — the tests' and no-bake path. */
 export function weldCell(
   fs: AssetFileSystem,
@@ -105,16 +142,16 @@ export function weldCellParts(
   originEngine: readonly [number, number, number],
 ): null | WeldedCell {
   const buckets = new Map<string, WeldBucket>();
-  const stats: WeldStats = { groups: 0, indices: 0, skippedAnimated: 0, skippedTimed: 0, timedObjects: 0, vertices: 0 };
+  const stats: WeldStats = { animatedStatic: 0, groups: 0, indices: 0, skippedTimed: 0, timedObjects: 0, vertices: 0 };
   const flags = { hasNight: false, hasSway: false };
   const lights: OscellLight[] = [];
 
   const groups = [...cellGroups(defs, cell, lod).values()].sort((a, b) => (a.def.modelName < b.def.modelName ? -1 : 1));
   for (const group of groups) {
     const def = group.def;
+    // IDE-anim defs weld at bind pose (their frame chain places the parts) — skipping them left holes.
     if (def.anim !== undefined) {
-      stats.skippedAnimated += group.instances.length;
-      continue;
+      stats.animatedStatic += group.instances.length;
     }
     // Timed defs (074/06 row 9) weld like everything else, but into `timed` buckets → objectTable draws.
     weldGroup(fs, group.def, group.instances, buckets, planner, originEngine, flags);
@@ -153,6 +190,7 @@ function appendInstance(
   layer: number,
   origin: readonly [number, number, number],
   swayKind: keyof typeof SWAY_TUNING | null,
+  frame: null | { pos: [number, number, number]; rot: number[] },
 ): void {
   // GTA IPL quaternions are the conjugate of the usual convention (parity with build-region).
   const [qx, qy, qz, qw] = [-instance.rotation[0], -instance.rotation[1], -instance.rotation[2], instance.rotation[3]];
@@ -164,9 +202,26 @@ function appendInstance(
     if (existing !== undefined) {
       return existing;
     }
-    const px = atomic.positions[source * 3];
-    const py = atomic.positions[source * 3 + 1];
-    const pz = atomic.positions[source * 3 + 2];
+    let px = atomic.positions[source * 3];
+    let py = atomic.positions[source * 3 + 1];
+    let pz = atomic.positions[source * 3 + 2];
+    let nx = atomic.normals[source * 3];
+    let ny = atomic.normals[source * 3 + 1];
+    let nz = atomic.normals[source * 3 + 2];
+    // Frame chain first (anim-hierarchy models place parts via frames; null = identity fast path).
+    if (frame) {
+      const f = frame.rot;
+      [px, py, pz] = [
+        f[0] * px + f[1] * py + f[2] * pz + frame.pos[0],
+        f[3] * px + f[4] * py + f[5] * pz + frame.pos[1],
+        f[6] * px + f[7] * py + f[8] * pz + frame.pos[2],
+      ];
+      [nx, ny, nz] = [
+        f[0] * nx + f[1] * ny + f[2] * nz,
+        f[3] * nx + f[4] * ny + f[5] * nz,
+        f[6] * nx + f[7] * ny + f[8] * nz,
+      ];
+    }
     // world (GTA) = R·v + t → engine (Y-up) = (x, z, −y) → cell-local.
     const gx = m[0] * px + m[1] * py + m[2] * pz + instance.position[0];
     const gy = m[3] * px + m[4] * py + m[5] * pz + instance.position[1];
@@ -174,9 +229,6 @@ function appendInstance(
     const ex = gx - origin[0];
     const ey = gz - origin[1];
     const ez = -gy - origin[2];
-    const nx = atomic.normals[source * 3];
-    const ny = atomic.normals[source * 3 + 1];
-    const nz = atomic.normals[source * 3 + 2];
     const gnx = m[0] * nx + m[1] * ny + m[2] * nz;
     const gny = m[3] * nx + m[4] * ny + m[5] * nz;
     const gnz = m[6] * nx + m[7] * ny + m[8] * nz;
@@ -422,6 +474,17 @@ function lumaOf(r: number, g: number, b: number): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+function mulMat3(a: number[], b: number[]): number[] {
+  const out = new Array<number>(9);
+  for (let row = 0; row < 3; row += 1) {
+    for (let col = 0; col < 3; col += 1) {
+      out[row * 3 + col] = a[row * 3] * b[col] + a[row * 3 + 1] * b[3 + col] + a[row * 3 + 2] * b[6 + col];
+    }
+  }
+
+  return out;
+}
+
 function quatToMat3(x: number, y: number, z: number, w: number): number[] {
   return [
     1 - 2 * (y * y + z * z),
@@ -495,6 +558,7 @@ function weldGroup(
     if (!geometry) {
       continue;
     }
+    const frame = frameWorldTransform(clump.frames, atomic.frameIndex);
     for (const part of atomic.parts) {
       const material = geometry.materials[part.materialIndex] ?? {
         color: [255, 255, 255, 255] as const,
@@ -502,12 +566,14 @@ function weldGroup(
         textured: false,
       };
       const beam = isVertexAlphaBeam(material, geometry);
-      const resolved = planner.resolve(def.txdName, material.texture?.name ?? null, material.color);
+      // Vegetation prefers CUTOUT (field fix: soft-classed canopies wrote no depth → trees showed through
+      // trees). Vanilla SA alpha-TESTS foliage; our A2C+MSAA equivalent needs the cutout texture pipeline.
+      const resolved = planner.resolve(def.txdName, material.texture?.name ?? null, material.color, swayKind !== null);
       const bucket = bucketFor(buckets, resolved.arrayRef, classOf(beam, resolved.alphaClass), doubleSided, timed);
       // Bit 15 of the layer u16 flags stochastic de-tiling layers (074/12) — the engine masks the index.
       const layerValue = resolved.layer | (resolved.stochastic ? 0x8000 : 0);
       for (const instance of instances) {
-        appendInstance(bucket, atomic, part.index, instance, layerValue, originEngine, swayKind);
+        appendInstance(bucket, atomic, part.index, instance, layerValue, originEngine, swayKind, frame);
         flags.hasNight ||= atomic.nightColor !== null;
         flags.hasSway ||= swayKind !== null;
       }

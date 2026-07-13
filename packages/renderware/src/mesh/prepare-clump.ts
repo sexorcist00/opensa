@@ -12,6 +12,8 @@ import type { RWClump, RWGeometry, RWMaterial, RWTriangle } from '../parsers/bin
 export interface PreparedAtomic {
   /** Prelit colours (vec4 when a floodlight beam lives in the prelit alpha, else vec3), or null. */
   color: null | { array: Float32Array; itemSize: 3 | 4 };
+  /** The clump frame this atomic hangs from — anim-hierarchy models place parts via frame transforms. */
+  frameIndex: number;
   geometryIndex: number;
   /** SA night (extra) vertex colours as vec3, or null. */
   nightColor: Float32Array | null;
@@ -94,6 +96,7 @@ export function prepareClumpAtomics(clump: RWClump): PreparedAtomic[] {
     const beam = rw.materials.some((m) => isVertexAlphaBeam(m, rw));
     atomics.push({
       color: rw.prelitColors ? prelitColorArray(rw.prelitColors, beam) : null,
+      frameIndex: atomic.frameIndex,
       geometryIndex: atomic.geometryIndex,
       nightColor: rw.nightColors ? prelitColorArray(rw.nightColors, false).array : null,
       normals: vertexNormals(rw),
