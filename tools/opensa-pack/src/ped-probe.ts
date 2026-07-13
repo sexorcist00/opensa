@@ -1,5 +1,6 @@
 import type { IfpAnimation, RWClump, RWFrame, RWSkin } from '@opensa/renderware';
 
+import { IfpSampler } from '@opensa/engine';
 import { parseDff, parseIfp } from '@opensa/renderware';
 import { groupTrianglesByMaterial } from '@opensa/renderware/mesh/prepare-clump';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
@@ -34,6 +35,10 @@ export interface PedFixture {
     uvs: number;
     weights: number;
   };
+  /** Lowest POSED vertex (GTA Z-up, bind palette applied — SA bind meshes lie along X; the skeleton
+   *  stands them up) — the FEET level; hosts align it to the physics capsule bottom so ANY player model
+   *  stands exactly on the surface (no per-model lift constants). */
+  minZ: number;
   name: string;
   submeshes: { indexCount: number; indexOffset: number; texture: string }[];
   textures: { height: number; name: string; offset: number; width: number }[];
@@ -165,6 +170,7 @@ function assemble(
     clips,
     indexCount: indices.length,
     layout,
+    minZ: 0, // filled below (needs the assembled bones)
     name,
     submeshes,
     textures,
@@ -232,16 +238,29 @@ function extractClips(
   });
 }
 
-/** Local bind from the FRAME (pos + rotation→quat), inverse bind from the SKIN plugin (pad rows fixed). */
+/** Local bind from the FRAME (pos + rotation→quat), inverse bind from the SKIN plugin (pad rows fixed).
+ *  The ROOT bone is ANCHORED to the skin-bind translation (prod anchorRootBone, plan 052): IFP root
+ *  translation is dropped (in-place locomotion) and standard SA frames put the root at the ORIGIN while
+ *  the skin bind holds the real pelvis height — without the anchor the whole body sits ~0.9 too low. */
 function fixtureBone(bone: SkinBone, skin: RWSkin, skinIndex: number): PedFixtureBone {
   const inverseBind = [...skin.inverseBindMatrices.slice(skinIndex * 16, skinIndex * 16 + 16)];
   inverseBind[3] = 0;
   inverseBind[7] = 0;
   inverseBind[11] = 0;
   inverseBind[15] = 1;
+  let bindPosition: [number, number, number] = [bone.frame.position[0], bone.frame.position[1], bone.frame.position[2]];
+  if (bone.parent < 0) {
+    // bind = inverse(inverseBind); for affine [R|t]: translation(bind) = −Rᵀ·t.
+    const m = inverseBind;
+    bindPosition = [
+      -(m[0] * m[12] + m[1] * m[13] + m[2] * m[14]),
+      -(m[4] * m[12] + m[5] * m[13] + m[6] * m[14]),
+      -(m[8] * m[12] + m[9] * m[13] + m[10] * m[14]),
+    ];
+  }
 
   return {
-    bindPosition: [bone.frame.position[0], bone.frame.position[1], bone.frame.position[2]],
+    bindPosition,
     bindRotation: rowMajorRotationToQuat(bone.frame.rotation),
     boneId: bone.frame.boneId ?? -1,
     inverseBind,
@@ -298,6 +317,7 @@ function main(): void {
   const bones = skinOrderBones(clump, skin);
   const clips = extractClips(fs, game, clipNames, bones);
   const { bin, fixture } = assemble(model, rw, skin, bones, clips, fs, `${model}.txd`);
+  fixture.minZ = posedMinZ(fixture, rw.positions, skin);
 
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'ped.json'), JSON.stringify(fixture));
@@ -307,6 +327,41 @@ function main(): void {
       `${bones.length} bones, clips ${fixture.clips.map((clip) => `${clip.name}(${clip.duration.toFixed(2)}s)`).join(' ')}, ` +
       `${fixture.submeshes.length} submeshes, bin ${(bin.byteLength / 1024).toFixed(0)} KB → ${out}`,
   );
+}
+
+/** Feet level: pose the mesh with the FIRST clip (idle) at t=0 through the own sampler and take the
+ *  lowest 4-bone-blended vertex. Neither raw mesh bounds (SA bind meshes lie along X) nor the frame-bind
+ *  pose (the model "lies" until a clip stands it up) measure the STANDING feet — only a played clip does
+ *  (measured: bind z −0.20..0.16 vs idle z −1.00..0.89 on male01). */
+function posedMinZ(fixture: PedFixture, positions: Float32Array, skin: RWSkin): number {
+  const sampler = new IfpSampler(fixture.bones);
+  const palette = new Float32Array((1 + fixture.bones.length) * 16);
+  const pose = fixture.clips[0] ?? { duration: 0, tracks: fixture.bones.map(() => ({ quats: [], times: [] })) };
+  sampler.sample(pose, 0, palette, 1);
+  let minZ = Infinity;
+  const vertexCount = positions.length / 3;
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const px = positions[vertex * 3];
+    const py = positions[vertex * 3 + 1];
+    const pz = positions[vertex * 3 + 2];
+    let z = 0;
+    let weightSum = 0;
+    for (let slot = 0; slot < 4; slot += 1) {
+      const weight = skin.boneWeights[vertex * 4 + slot];
+      if (weight <= 0) {
+        continue;
+      }
+      const bone = skin.boneIndices[vertex * 4 + slot];
+      const m = (1 + bone) * 16;
+      z += weight * (palette[m + 2] * px + palette[m + 6] * py + palette[m + 10] * pz + palette[m + 14]);
+      weightSum += weight;
+    }
+    if (weightSum > 0.5) {
+      minZ = Math.min(minZ, z / weightSum);
+    }
+  }
+
+  return Number.isFinite(minZ) ? minZ : 0;
 }
 
 /** unorm8 weights, renormalized so each vertex's four sum to exactly 255 (largest gets the remainder). */

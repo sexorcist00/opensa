@@ -54,6 +54,27 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
       driver + a free-fly camera over the FULL-LS pak (`?src=pak-ls`; root `public/pak-ls` symlinks the
       lab's). The streaming modules moved `apps/engine-lab/src/stream/*` → `packages/engine/src/stream/*`
       (exported: `setupStreaming`, `StreamingDriver`) — both apps consume the same driver now.
+- [x] **Phase 2 — the game boots on the engine (B3 v1, 2026-07-13, FIELD ✅ same day — walk/run/jump around Grove Street, feet data-exact on the road):** `?engine=opensa` on
+      the REAL app. The branch lives at the shell's code-split boundary (`app.tsx` — lazy-selects
+      `EngineCanvasHost` instead of `CanvasHost`; the two hosts never share a canvas). REUSED unchanged:
+      the runtime Config (extracted from canvas-host into `game-runtime-config.ts` — one source of truth,
+      both paths consume it), Rapier `PhysicsWorld` + `CharacterControllerSystem` (its only three seam —
+      `camera.getWorldDirection` — is fed by a shim over the host's follow camera) + `PhysicsSystem` +
+      `CollisionStreamingSystem` (COL cells stream around the player on the game's 256 grid, independent
+      of the pak's 250 render grid), keyboard input, the ECS player entity (mirrors setup-character minus
+      the three mesh). NEW: follow-orbit camera producing a `CameraState` (drag = look, wheel = zoom,
+      config's followDistance/zoom bounds), the render-streaming driver follows the PLAYER (`?src=pak-map`
+      default), the player body = the B1 ped probe driven by gameplay state (position from Transform,
+      heading from planar velocity, idle↔walk by speed; `/ped` root symlink). Parametric day arc v1;
+      timecyc driver + zones/HUD adapter + pointer-lock look are follow-ups. KNOWN LIMIT: the pak is the
+      non-modified conversion while the VFS may be a modded profile — collision and render can disagree
+      where mods move geometry; parity testing wants the matching profile. Field-round fixes that closed
+      it: canvas sizing (no wrapper — the shell's .sa-game sizes it, + ResizeObserver for the hidden
+      warmup mount), FULL bitECS field init (plain-array stores: an unwritten Velocity field NaN-poisons
+      the whole controller chain — no movement AND no gravity), run clip + speed thresholds, and the
+      data-driven feet placement (fixture minZ from the IDLE-POSED mesh — the bind pose lies along an
+      axis and is useless — plus a centre-origin ground ray excluding the own capsule: rays started under
+      the capsule slip beneath thin road COL shells into basements).
 - [ ] Capability-gated loader in the web app (native pak + WebGPU → new engine; else three-WebGL) — the
       phase-1 page becomes its target.
 - [ ] Bench + soak + parity sweeps; the flip decision doc with all ledgers linked.
@@ -61,8 +82,8 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
 
 ## Measurement ledger
 
-| Date       | What                            | Numbers                                                                                                                                                                                                                                                                                                              |
-| ---------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date       | What                                                                                                    | Numbers                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-07-12 | FULL-LS convert (rect −1,−12…11,1 = 182 rect cells → 345 entries, HD-vegetation overlay on, both bakes) | **pak 1.15 GB — geometry 939 MB (82 %!), textures 212 MB (18 %)**; 20.5 M verts, 82 arrays, 66 timed objects; convert 833 s of which bakes 760 s (AO 418 + sunVis 342, 423 M rays vs 13.9 M occluder tris); 16 GB node heap survived. GOTCHA fixed en route: the global bake dedup cache exceeded V8's Map size cap (~16.7 M) — caches are per-cell now |
 
 | 2026-07-12 | A1 stage 1: per-entry deflate-raw wire compression | measured on real cells first: deflate 2.18× / brotli-q6 3.06×; SHIPPED deflate-raw (native `DecompressionStream` in the worker, zero deps): bench rects 246.5 → 93.8 MB and 135.3 → 52.5 MB (**2.6×** — textures compress too); inflation worker-side, main thread still receives GPU-ready bytes. meshopt (vertex/index reorder+quantize) = A1 stage 2, multiplies ON TOP of deflate. FULL-LS reconverted: **1.15 GB → 500 MB (2.3×)**; full-map projection ≈ 1.6 GB wire before meshopt |

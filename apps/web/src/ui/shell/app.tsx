@@ -15,7 +15,14 @@ import { useFullscreen } from './use-fullscreen';
 import './shell.css';
 
 // The heavy game surface (three.js/Rapier) is code-split — fetched only past the menu.
-const GameCanvas = lazy(() => import('../canvas-host').then((module) => ({ default: module.CanvasHost })));
+// `?engine=opensa` (plan 074/10 B3): the world boots on the OWN WebGPU engine instead of three-WebGL —
+// one flag switches the whole renderer; the two hosts never share a canvas.
+const OWN_ENGINE = new URLSearchParams(window.location.search).get('engine') === 'opensa';
+const GameCanvas = lazy(() =>
+  OWN_ENGINE
+    ? import('../engine-canvas-host').then((module) => ({ default: module.EngineCanvasHost }))
+    : import('../canvas-host').then((module) => ({ default: module.CanvasHost })),
+);
 
 const SUBTITLED = 'sa-logo--small sa-logo--titled sa-logo--described';
 
