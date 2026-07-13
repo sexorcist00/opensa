@@ -16,6 +16,8 @@ export const MSAA_SAMPLES = 4;
 export type PipelineId =
   | 'corona'
   | 'ped'
+  | 'rigid-blend'
+  | 'rigid-opaque'
   | 'sky'
   | 'world-beam-double'
   | 'world-beam-front'
@@ -36,6 +38,8 @@ export interface PipelineSet {
   materialLayout: GPUBindGroupLayout;
   /** group(1) of the ped pipeline: matrix storage (model + bone palette) + texture + sampler (074/08 B1). */
   pedLayout: GPUBindGroupLayout;
+  /** group(1) of the rigid-entity pipelines: part matrices + texture ARRAY + sampler (074/08 B2). */
+  rigidLayout: GPUBindGroupLayout;
 }
 
 export function compileAll(
@@ -49,6 +53,12 @@ export function compileAll(
       // PBR sky LUT (074/06 row 4): sampled by the sky pass AND the world fog (the 068 invariant).
       { binding: 1, texture: {}, visibility: GPUShaderStage.FRAGMENT },
       { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+      // Local light pool (074/06 row 7): world samples it in the VERTEX stage, dynamics per pixel.
+      {
+        binding: 3,
+        buffer: { type: 'read-only-storage' },
+        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+      },
     ],
     label: 'frame',
   });
@@ -110,6 +120,66 @@ export function compileAll(
     ],
     label: 'ped',
   });
+  // Rigid dynamics (074/08 B2): part matrices in storage, texture ARRAY (vehicle TXD layers), opaque +
+  // premultiplied-glass variants. Vertex layout family #3 (pos/normal/uv/color/meta tight buffers).
+  const rigidLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, buffer: { type: 'read-only-storage' }, visibility: GPUShaderStage.VERTEX },
+      { binding: 1, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'rigid',
+  });
+  const rigidModule = device.createShaderModule({ code: resolveShader('rigid'), label: 'rigid' });
+  const rigidPipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [frameLayout, rigidLayout],
+    label: 'rigid',
+  });
+  const rigidBuffers: GPUVertexBufferLayout[] = [
+    { arrayStride: 12, attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }] },
+    { arrayStride: 12, attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 1 }] },
+    { arrayStride: 8, attributes: [{ format: 'float32x2', offset: 0, shaderLocation: 2 }] },
+    { arrayStride: 4, attributes: [{ format: 'unorm8x4', offset: 0, shaderLocation: 3 }] },
+    { arrayStride: 4, attributes: [{ format: 'uint8x4', offset: 0, shaderLocation: 4 }] },
+  ];
+  for (const variant of [
+    { blend: false, entry: 'fsRigid', id: 'rigid-opaque' as const },
+    { blend: true, entry: 'fsRigidBlend', id: 'rigid-blend' as const },
+  ]) {
+    pipelines.set(
+      variant.id,
+      device.createRenderPipeline({
+        depthStencil: {
+          depthCompare: variant.blend ? 'greater-equal' : 'greater',
+          depthWriteEnabled: !variant.blend,
+          format: depthFormat,
+        },
+        fragment: {
+          entryPoint: variant.entry,
+          module: rigidModule,
+          targets: [
+            {
+              format: colorFormat,
+              ...(variant.blend
+                ? {
+                    blend: {
+                      alpha: { dstFactor: 'one-minus-src-alpha', operation: 'add', srcFactor: 'one' },
+                      color: { dstFactor: 'one-minus-src-alpha', operation: 'add', srcFactor: 'one' },
+                    } satisfies GPUBlendState,
+                  }
+                : {}),
+            },
+          ],
+        },
+        label: variant.id,
+        layout: rigidPipelineLayout,
+        multisample: { count: MSAA_SAMPLES },
+        // Double-sided: SA vehicle interiors/glass are single-sided shells viewed from both sides.
+        primitive: { cullMode: 'none', frontFace: 'ccw', topology: 'triangle-list' },
+        vertex: { buffers: rigidBuffers, entryPoint: 'vsRigid', module: rigidModule },
+      }),
+    );
+  }
   const pedModule = device.createShaderModule({ code: resolveShader('ped'), label: 'ped' });
   pipelines.set(
     'ped',
@@ -231,6 +301,7 @@ export function compileAll(
     },
     materialLayout,
     pedLayout,
+    rigidLayout,
   };
 }
 

@@ -17,6 +17,7 @@ import {
 } from './core/math';
 import { Resources } from './core/resources';
 import { GpuTimers } from './debug/gpu-timers';
+import { RigidEntity, type RigidPartInit } from './entities/rigid';
 import { compileAll, MSAA_SAMPLES, pipelineIdFor, type PipelineSet } from './render/pipelines';
 import { buildSkyLut, SKY_LUT_HEIGHT, SKY_LUT_WIDTH, skyLutKey } from './render/sky-lut';
 import { CellStore } from './world/cells';
@@ -36,6 +37,14 @@ export interface CameraState {
   near: number;
   target: Vec3;
   up: Vec3;
+}
+
+/** One CPU-side local light (074/06 row 7); hosts push these into `Engine.dynamicLights` each frame. */
+export interface DynamicLight {
+  /** Linear RGB × intensity. */
+  color: readonly [number, number, number];
+  position: readonly [number, number, number];
+  radius: number;
 }
 
 export interface EngineStats {
@@ -118,8 +127,32 @@ export interface PedProbeInit {
   weights: Uint8Array;
 }
 
+/** Rigid-entity upload (074/08 B2) — raw byte views over the vehicle fixture's bin sections. */
+export interface VehicleProbeInit {
+  colors: Uint8Array;
+  indexCount: number;
+  /** uint16 index payload. */
+  indices: Uint8Array;
+  meta: Uint8Array;
+  normals: Uint8Array;
+  parts: readonly RigidPartInit[];
+  positions: Uint8Array;
+  submeshes: readonly { indexCount: number; indexOffset: number; part: number; translucent: boolean }[];
+  /** RGBA8 layers, all the same size, packed sequentially. */
+  texture: { height: number; layers: number; rgba: Uint8Array; width: number };
+  uvs: Uint8Array;
+  vertexCount: number;
+}
+
+/** Light-pool capacity (074/06 row 7) — mirrored by the WGSL loop bound. */
+const LIGHT_POOL_CAP = 64;
+/** 2dfx lamps farther than this never enter the pool (pixel reach is bounded by the radius anyway). */
+const LIGHT_POOL_REACH = 130;
+
 export class Engine {
   cells!: CellStore;
+  /** Host-owned dynamic lights (vehicle head/taillights …) — replace the contents each frame. */
+  readonly dynamicLights: DynamicLight[] = [];
   /** Live environment — host mutates freely; written into the frame UBO every frame. Noon defaults. */
   readonly environment: Environment = {
     // Modest by default: SA prelit already carries baked darkening — full-strength AO double-darkens.
@@ -169,6 +202,8 @@ export class Engine {
   private frameUniform!: GPUBuffer;
   private readonly frustumPlanes = new Float32Array(24);
   private readonly invViewProj: Mat4 = mat4Identity();
+  private lightPoolBuffer!: GPUBuffer;
+  private readonly lightPoolScratch = new Float32Array(LIGHT_POOL_CAP * 8);
   private msaaView!: GPUTextureView;
   /** Skinning probe (074/08 B1) — a single skinned entity outside the static bundles. */
   private ped: null | {
@@ -197,6 +232,17 @@ export class Engine {
   };
   private targetSize = { height: 0, width: 0 };
   private timers!: GpuTimers;
+  /** Rigid-entity probe (074/08 B2) — one vehicle-style part hierarchy outside the static bundles. */
+  private vehicle: null | {
+    bindGroup: GPUBindGroup;
+    buffers: GPUBuffer[];
+    entity: RigidEntity;
+    indexBuffer: GPUBuffer;
+    matrixBuffer: GPUBuffer;
+    submeshes: readonly { indexCount: number; indexOffset: number; part: number; translucent: boolean }[];
+    texture: GPUTexture;
+    textureBytes: number;
+  } = null;
 
   private readonly view: Mat4 = mat4Identity();
 
@@ -213,7 +259,7 @@ export class Engine {
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);
-    const frameData = new Float32Array(72);
+    const frameData = new Float32Array(76);
     frameData.set(this.viewProj, 0);
     frameData.set(this.invViewProj, 16);
     frameData.set([...camera.eye, 1], 32);
@@ -234,6 +280,8 @@ export class Engine {
     // moonDir.w doubles as the stochastic de-tiling toggle (074/12) — the vec4 slot was spare.
     frameData.set([env.moonDir[0] / moonLen, env.moonDir[1] / moonLen, env.moonDir[2] / moonLen, env.stochastic], 64);
     frameData.set([...env.moonColor, 1], 68);
+    // params3.x = local light count (074/06 row 7): host dynamics + nearest 2dfx lamps at night.
+    frameData[72] = this.fillLightPool(camera.eye);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
     this.refreshSkyLut();
 
@@ -299,12 +347,15 @@ export class Engine {
     // sort with the world blends only approximately — the standard transparency caveat).
     draws += this.drawObjects(pass);
     draws += this.drawPed(pass);
+    draws += this.drawVehicle(pass, false);
     pass.setPipeline(this.pipelines.get('sky'));
     pass.setBindGroup(0, this.frameBindGroup);
     pass.draw(3);
     if (blendBundles.length > 0) {
       pass.executeBundles(blendBundles);
     }
+    // Entity glass after the world blends (074/08 B2): composites over the finished frame.
+    draws += this.drawVehicle(pass, true);
     // 2dfx coronas last (074/06 row 13): additive on top of everything, depth-read hides occluded ones.
     draws += this.drawCoronas(pass, camera);
     pass.end();
@@ -330,8 +381,14 @@ export class Engine {
     this.pipelines = compileAll(this.device, this.engineDevice.colorFormat, DEPTH_FORMAT);
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
-      size: 288, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2/moon×2 (10 × 16)
+      size: 304, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2/moon×2/params3 (11 × 16)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    // Local light pool (074/06 row 7): CPU-filled point lights, shared by every frame-layout pipeline.
+    this.lightPoolBuffer = this.resources.createBuffer('uniform', {
+      label: 'light-pool',
+      size: this.lightPoolScratch.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     // PBR sky LUT (074/06 row 4): CPU-built Preetham dome, refreshed when the environment moves.
     this.skyLutTexture = this.resources.createTexture(
@@ -352,6 +409,7 @@ export class Engine {
           binding: 2,
           resource: this.device.createSampler({ label: 'sky-lut', magFilter: 'linear', minFilter: 'linear' }),
         },
+        { binding: 3, resource: { buffer: this.lightPoolBuffer } },
       ],
       label: 'frame',
       layout: this.pipelines.frameLayout,
@@ -401,6 +459,19 @@ export class Engine {
       this.pedTexture = null;
     }
     this.ped = null;
+  }
+
+  removeVehicleProbe(): void {
+    if (!this.vehicle) {
+      return;
+    }
+    for (const buffer of this.vehicle.buffers) {
+      this.resources.destroyBuffer('cellVertex', buffer);
+    }
+    this.resources.destroyBuffer('cellVertex', this.vehicle.indexBuffer);
+    this.resources.destroyBuffer('uniform', this.vehicle.matrixBuffer);
+    this.resources.destroyTexture('texture', this.vehicle.texture, this.vehicle.textureBytes);
+    this.vehicle = null;
   }
 
   /** Create (or replace) the skinning probe entity (074/08 B1). Returns the live palette handle. */
@@ -469,10 +540,96 @@ export class Engine {
     return { palette };
   }
 
+  /** Create (or replace) the rigid-entity probe (074/08 B2). Returns the CPU-side entity handle. */
+  setVehicleProbe(init: VehicleProbeInit): RigidEntity {
+    this.removeVehicleProbe();
+    const upload = (label: string, bytes: Uint8Array, usage: number): GPUBuffer => {
+      const size = Math.ceil(bytes.byteLength / 4) * 4;
+      const buffer = this.resources.createBuffer('cellVertex', {
+        label: `vehicle-${label}`,
+        size,
+        usage: usage | GPUBufferUsage.COPY_DST,
+      });
+      let payload = bytes;
+      if (bytes.byteLength !== size) {
+        payload = new Uint8Array(size);
+        payload.set(bytes);
+      }
+      this.device.queue.writeBuffer(buffer, 0, payload);
+
+      return buffer;
+    };
+    const buffers = [
+      upload('positions', init.positions, GPUBufferUsage.VERTEX),
+      upload('normals', init.normals, GPUBufferUsage.VERTEX),
+      upload('uvs', init.uvs, GPUBufferUsage.VERTEX),
+      upload('colors', init.colors, GPUBufferUsage.VERTEX),
+      upload('meta', init.meta, GPUBufferUsage.VERTEX),
+    ];
+    const indexBuffer = upload('indices', init.indices, GPUBufferUsage.INDEX);
+    const entity = new RigidEntity(init.parts);
+    const matrixBuffer = this.resources.createBuffer('uniform', {
+      label: 'vehicle-matrices',
+      size: entity.matrices.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    const layerBytes = init.texture.width * init.texture.height * 4;
+    const texture = this.resources.createTexture(
+      'texture',
+      {
+        format: 'rgba8unorm-srgb',
+        label: 'vehicle-texture',
+        size: { depthOrArrayLayers: init.texture.layers, height: init.texture.height, width: init.texture.width },
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      },
+      init.texture.rgba.byteLength,
+    );
+    for (let layer = 0; layer < init.texture.layers; layer += 1) {
+      this.device.queue.writeTexture(
+        { origin: { x: 0, y: 0, z: layer }, texture },
+        init.texture.rgba.subarray(layer * layerBytes, (layer + 1) * layerBytes),
+        { bytesPerRow: init.texture.width * 4 },
+        { height: init.texture.height, width: init.texture.width },
+      );
+    }
+    const bindGroup = this.device.createBindGroup({
+      entries: [
+        { binding: 0, resource: { buffer: matrixBuffer } },
+        { binding: 1, resource: texture.createView({ dimension: '2d-array' }) },
+        {
+          binding: 2,
+          resource: this.device.createSampler({ label: 'vehicle', magFilter: 'linear', minFilter: 'linear' }),
+        },
+      ],
+      label: 'vehicle',
+      layout: this.pipelines.rigidLayout,
+    });
+    this.vehicle = {
+      bindGroup,
+      buffers,
+      entity,
+      indexBuffer,
+      matrixBuffer,
+      submeshes: init.submeshes,
+      texture,
+      textureBytes: init.texture.rgba.byteLength,
+    };
+
+    return entity;
+  }
+
   /** Upload the probe's palette after the host wrote it (model matrix slot 0 + sampled bones). */
   updatePedPalette(): void {
     if (this.ped) {
       this.device.queue.writeBuffer(this.ped.paletteBuffer, 0, this.ped.palette);
+    }
+  }
+
+  /** Flatten the part hierarchy and upload the matrix buffer (call after mutating the entity). */
+  updateVehicle(): void {
+    if (this.vehicle) {
+      this.vehicle.entity.flatten();
+      this.device.queue.writeBuffer(this.vehicle.matrixBuffer, 0, this.vehicle.entity.matrices);
     }
   }
 
@@ -577,6 +734,31 @@ export class Engine {
     return this.ped.submeshes.length;
   }
 
+  private drawVehicle(pass: GPURenderPassEncoder, translucent: boolean): number {
+    if (!this.vehicle) {
+      return 0;
+    }
+    let draws = 0;
+    let bound = false;
+    for (const submesh of this.vehicle.submeshes) {
+      if (submesh.translucent !== translucent) {
+        continue;
+      }
+      if (!bound) {
+        pass.setPipeline(this.pipelines.get(translucent ? 'rigid-blend' : 'rigid-opaque'));
+        pass.setBindGroup(0, this.frameBindGroup);
+        pass.setBindGroup(1, this.vehicle.bindGroup);
+        this.vehicle.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
+        pass.setIndexBuffer(this.vehicle.indexBuffer, 'uint16');
+        bound = true;
+      }
+      pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset, 0, submesh.part);
+      draws += 1;
+    }
+
+    return draws;
+  }
+
   private ensureTargets(width: number, height: number): void {
     if (this.targetSize.width === width && this.targetSize.height === height) {
       return;
@@ -607,6 +789,62 @@ export class Engine {
     );
     this.msaaView = msaa.createView();
     this.depthView = depth.createView();
+  }
+
+  /** Fill the local light pool (074/06 row 7): host dynamics first, then 2dfx lamps at night by distance.
+   *  Returns the light count (params3.x — bounds the WGSL loop). */
+  private fillLightPool(eye: Vec3): number {
+    const scratch = this.lightPoolScratch;
+    let count = 0;
+    const push = (x: number, y: number, z: number, radius: number, r: number, g: number, b: number): void => {
+      if (count >= LIGHT_POOL_CAP) {
+        return;
+      }
+      const at = count * 8;
+      scratch[at] = x;
+      scratch[at + 1] = y;
+      scratch[at + 2] = z;
+      scratch[at + 3] = radius;
+      scratch[at + 4] = r;
+      scratch[at + 5] = g;
+      scratch[at + 6] = b;
+      scratch[at + 7] = 0;
+      count += 1;
+    };
+    for (const light of this.dynamicLights) {
+      push(light.position[0], light.position[1], light.position[2], light.radius, ...light.color);
+    }
+    // 2dfx street lamps join at night (the same anchors the corona pass draws), distance-bounded.
+    const gate = this.environment.dn * 1.4;
+    if (gate > 0.03) {
+      for (const cell of this.cells.all()) {
+        if (count >= LIGHT_POOL_CAP) {
+          break;
+        }
+        for (const light of cell.lights) {
+          const dx = light.x - eye[0];
+          const dy = light.y - eye[1];
+          const dz = light.z - eye[2];
+          if (dx * dx + dy * dy + dz * dz > LIGHT_POOL_REACH * LIGHT_POOL_REACH) {
+            continue;
+          }
+          push(
+            light.x,
+            light.y,
+            light.z,
+            Math.max(14, light.size * 8),
+            (light.color[0] / 255) ** 2.2 * gate,
+            (light.color[1] / 255) ** 2.2 * gate,
+            (light.color[2] / 255) ** 2.2 * gate,
+          );
+        }
+      }
+    }
+    if (count > 0) {
+      this.device.queue.writeBuffer(this.lightPoolBuffer, 0, scratch, 0, count * 8);
+    }
+
+    return count;
   }
 
   /** Rebuild the sky LUT when its environment inputs moved (quantized key — ~a few rebuilds per game

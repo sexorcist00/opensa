@@ -1,0 +1,297 @@
+{
+  "dummies": [
+    { "name": "landstal", "position": [0, 0, 0], "rotation": [0, 0, 0, 1] },
+    {
+      "name": "wheel_lf_dummy",
+      "position": [-0.8843156099319458, 1.3819999694824219, -0.6121106147766113],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "wheel_lb_dummy",
+      "position": [-0.8843157291412354, -1.391038179397583, -0.6121107339859009],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "wheel_rb_dummy",
+      "position": [0.8839998245239258, -1.391038179397583, -0.6121107339859009],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "headlights",
+      "position": [0.6388447880744934, 2.0992226600646973, -0.07126122713088989],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "taillights",
+      "position": [0.8703758716583252, -2.319025993347168, -0.043353259563446045],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "ped_frontseat",
+      "position": [0.32899999618530273, 0.03282995894551277, -0.1999342441558838],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "ped_backseat",
+      "position": [0.4359999895095825, -0.6957221031188965, -0.21799999475479126],
+      "rotation": [0, 0, 0, 1]
+    },
+    { "name": "chassis_dummy", "position": [0, 0, 0], "rotation": [0, 0, 0, 1] },
+    {
+      "name": "exhaust",
+      "position": [0.3584296703338623, -2.348867893218994, -0.6653761863708496],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "ped_arm",
+      "position": [-0.9582383632659912, 0.15864068269729614, 0.24413323402404785],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "petrolcap",
+      "position": [-1.0990681648254395, -2.062734842300415, -0.06667470932006836],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "wheel_rf_dummy",
+      "position": [0.8835482001304626, 1.3819999694824219, -0.6121106147766113],
+      "rotation": [0, 0, 0, 1]
+    },
+    { "name": "engine", "position": [0, 1.5366990566253662, -0.04243886470794678], "rotation": [0, 0, 0, 1] },
+    {
+      "name": "door_lf_dummy",
+      "position": [-1.016699194908142, 0.8941141963005066, 0.027553677558898926],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "door_rf_dummy",
+      "position": [1.0169999599456787, 0.8941141963005066, 0.027553677558898926],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "door_lr_dummy",
+      "position": [-1.0166903734207153, -0.2514377236366272, 0.027553796768188477],
+      "rotation": [0, 0, 0, 1]
+    },
+    { "name": "bonnet_dummy", "position": [0, 0.9871745705604553, 0.2247086763381958], "rotation": [0, 0, 0, 1] },
+    {
+      "name": "boot_dummy",
+      "position": [-0.00004183521377854049, -2.0714149475097656, 0.7061495780944824],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "door_rr_dummy",
+      "position": [1.0170000791549683, -0.2514377236366272, 0.027553796768188477],
+      "rotation": [0, 0, 0, 1]
+    },
+    { "name": "windscreen_dummy", "position": [0, 0.7666873335838318, 0.46241462230682373], "rotation": [0, 0, 0, 1] },
+    {
+      "name": "bump_rear_dummy",
+      "position": [-1.0286451578140259, -1.8333855867385864, -0.46061182022094727],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "name": "bump_front_dummy",
+      "position": [1.0231006145477295, 1.7897653579711914, -0.4931381344795227],
+      "rotation": [0, 0, 0, 1]
+    },
+    { "name": "ug_lights", "position": [0, 2.161191940307617, -0.3482097387313843], "rotation": [0, 0, 0, 1] },
+    {
+      "name": "ug_lights_dam",
+      "position": [0, 2.179340362548828, -0.4203488826751709],
+      "rotation": [0, -0.026879810420863442, 0, 0.999638670968682]
+    },
+    {
+      "name": "ug_nitro",
+      "position": [-0.12525124847888947, -1.4749492406845093, -0.12746864557266235],
+      "rotation": [0, 0, 0, 1]
+    }
+  ],
+  "indexCount": 8355,
+  "layout": { "colors": 123904, "indices": 154880, "meta": 139392, "normals": 46464, "positions": 0, "uvs": 92928 },
+  "name": "landstal",
+  "parts": [
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [-1.016699194908142, 0.8941141963005066, 0.027553677558898926],
+      "name": "door_lf_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [1.0169999599456787, 0.8941141963005066, 0.027553677558898926],
+      "name": "door_rf_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [-1.0166903734207153, -0.2514377236366272, 0.027553796768188477],
+      "name": "door_lr_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [0, 0.9871745705604553, 0.2247086763381958],
+      "name": "bonnet_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [-0.00004183521377854049, -2.0714149475097656, 0.7061495780944824],
+      "name": "boot_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [1.0170000791549683, -0.2514377236366272, 0.027553796768188477],
+      "name": "door_rr_ok"
+    },
+    { "localRotation": [0, 0, 0, 1], "localTranslation": [0, 0, 0], "name": "chassis" },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [0.36022138595581055, -1.321432113647461, -0.6603416800498962],
+      "name": "exhaust_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [0, 0.7666873335838318, 0.46241462230682373],
+      "name": "windscreen_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [-1.0286451578140259, -1.8333855867385864, -0.46061182022094727],
+      "name": "bump_rear_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [-1.0286451578140259, -1.8333855867385864, -0.46061182022094727],
+      "name": "plate_rear_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [1.0231006145477295, 1.7897653579711914, -0.4931381344795227],
+      "name": "bump_front_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [1.0231006145477295, 1.7897653579711914, -0.4931381344795227],
+      "name": "plate_front_ok"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [-0.8843156099319458, 1.3819999694824219, -0.6121106147766113],
+      "name": "wheel_lf_dummy"
+    },
+    {
+      "localRotation": [0, 0, 0, 1],
+      "localTranslation": [-0.8843157291412354, -1.391038179397583, -0.6121107339859009],
+      "name": "wheel_lb_dummy"
+    },
+    {
+      "localRotation": [0, 0, 1, 0],
+      "localTranslation": [0.8839998245239258, -1.391038179397583, -0.6121107339859009],
+      "name": "wheel_rb_dummy"
+    },
+    {
+      "localRotation": [0, 0, 1, 0],
+      "localTranslation": [0.8835482001304626, 1.3819999694824219, -0.6121106147766113],
+      "name": "wheel_rf_dummy"
+    }
+  ],
+  "submeshes": [
+    { "indexCount": 6, "indexOffset": 0, "lamp": null, "part": 0, "translucent": false },
+    { "indexCount": 12, "indexOffset": 6, "lamp": null, "part": 0, "translucent": false },
+    { "indexCount": 54, "indexOffset": 18, "lamp": null, "part": 0, "translucent": false },
+    { "indexCount": 111, "indexOffset": 72, "lamp": null, "part": 0, "translucent": false },
+    { "indexCount": 6, "indexOffset": 183, "lamp": null, "part": 0, "translucent": false },
+    { "indexCount": 90, "indexOffset": 189, "lamp": null, "part": 0, "translucent": false },
+    { "indexCount": 12, "indexOffset": 279, "lamp": null, "part": 0, "translucent": false },
+    { "indexCount": 15, "indexOffset": 291, "lamp": null, "part": 0, "translucent": true },
+    { "indexCount": 6, "indexOffset": 306, "lamp": null, "part": 1, "translucent": false },
+    { "indexCount": 12, "indexOffset": 312, "lamp": null, "part": 1, "translucent": false },
+    { "indexCount": 54, "indexOffset": 324, "lamp": null, "part": 1, "translucent": false },
+    { "indexCount": 111, "indexOffset": 378, "lamp": null, "part": 1, "translucent": false },
+    { "indexCount": 6, "indexOffset": 489, "lamp": null, "part": 1, "translucent": false },
+    { "indexCount": 90, "indexOffset": 495, "lamp": null, "part": 1, "translucent": false },
+    { "indexCount": 12, "indexOffset": 585, "lamp": null, "part": 1, "translucent": false },
+    { "indexCount": 15, "indexOffset": 597, "lamp": null, "part": 1, "translucent": true },
+    { "indexCount": 6, "indexOffset": 612, "lamp": null, "part": 2, "translucent": false },
+    { "indexCount": 15, "indexOffset": 618, "lamp": null, "part": 2, "translucent": false },
+    { "indexCount": 48, "indexOffset": 633, "lamp": null, "part": 2, "translucent": false },
+    { "indexCount": 123, "indexOffset": 681, "lamp": null, "part": 2, "translucent": false },
+    { "indexCount": 54, "indexOffset": 804, "lamp": null, "part": 2, "translucent": false },
+    { "indexCount": 12, "indexOffset": 858, "lamp": null, "part": 2, "translucent": false },
+    { "indexCount": 12, "indexOffset": 870, "lamp": null, "part": 2, "translucent": true },
+    { "indexCount": 150, "indexOffset": 882, "lamp": null, "part": 3, "translucent": false },
+    { "indexCount": 36, "indexOffset": 1032, "lamp": null, "part": 4, "translucent": false },
+    { "indexCount": 66, "indexOffset": 1068, "lamp": null, "part": 4, "translucent": false },
+    { "indexCount": 126, "indexOffset": 1134, "lamp": null, "part": 4, "translucent": false },
+    { "indexCount": 54, "indexOffset": 1260, "lamp": null, "part": 4, "translucent": false },
+    { "indexCount": 36, "indexOffset": 1314, "lamp": null, "part": 4, "translucent": true },
+    { "indexCount": 6, "indexOffset": 1350, "lamp": null, "part": 5, "translucent": false },
+    { "indexCount": 15, "indexOffset": 1356, "lamp": null, "part": 5, "translucent": false },
+    { "indexCount": 48, "indexOffset": 1371, "lamp": null, "part": 5, "translucent": false },
+    { "indexCount": 123, "indexOffset": 1419, "lamp": null, "part": 5, "translucent": false },
+    { "indexCount": 54, "indexOffset": 1542, "lamp": null, "part": 5, "translucent": false },
+    { "indexCount": 12, "indexOffset": 1596, "lamp": null, "part": 5, "translucent": false },
+    { "indexCount": 12, "indexOffset": 1608, "lamp": null, "part": 5, "translucent": true },
+    { "indexCount": 72, "indexOffset": 1620, "lamp": null, "part": 6, "translucent": false },
+    { "indexCount": 12, "indexOffset": 1692, "lamp": null, "part": 6, "translucent": false },
+    { "indexCount": 144, "indexOffset": 1704, "lamp": null, "part": 6, "translucent": false },
+    { "indexCount": 252, "indexOffset": 1848, "lamp": null, "part": 6, "translucent": false },
+    { "indexCount": 741, "indexOffset": 2100, "lamp": null, "part": 6, "translucent": false },
+    { "indexCount": 483, "indexOffset": 2841, "lamp": null, "part": 6, "translucent": false },
+    { "indexCount": 78, "indexOffset": 3324, "lamp": null, "part": 6, "translucent": false },
+    { "indexCount": 6, "indexOffset": 3402, "lamp": "head", "part": 6, "translucent": false },
+    { "indexCount": 18, "indexOffset": 3408, "lamp": "tail", "part": 6, "translucent": false },
+    { "indexCount": 6, "indexOffset": 3426, "lamp": "head", "part": 6, "translucent": false },
+    { "indexCount": 18, "indexOffset": 3432, "lamp": "tail", "part": 6, "translucent": false },
+    { "indexCount": 12, "indexOffset": 3450, "lamp": null, "part": 6, "translucent": true },
+    { "indexCount": 18, "indexOffset": 3462, "lamp": null, "part": 6, "translucent": true },
+    { "indexCount": 1644, "indexOffset": 3480, "lamp": null, "part": 6, "translucent": false },
+    { "indexCount": 528, "indexOffset": 5124, "lamp": null, "part": 6, "translucent": false },
+    { "indexCount": 60, "indexOffset": 5652, "lamp": null, "part": 6, "translucent": true },
+    { "indexCount": 48, "indexOffset": 5712, "lamp": null, "part": 7, "translucent": false },
+    { "indexCount": 36, "indexOffset": 5760, "lamp": null, "part": 8, "translucent": true },
+    { "indexCount": 186, "indexOffset": 5796, "lamp": null, "part": 9, "translucent": false },
+    { "indexCount": 192, "indexOffset": 5982, "lamp": null, "part": 9, "translucent": false },
+    { "indexCount": 6, "indexOffset": 6174, "lamp": null, "part": 10, "translucent": false },
+    { "indexCount": 6, "indexOffset": 6180, "lamp": null, "part": 10, "translucent": false },
+    { "indexCount": 12, "indexOffset": 6186, "lamp": null, "part": 11, "translucent": false },
+    { "indexCount": 12, "indexOffset": 6198, "lamp": null, "part": 11, "translucent": false },
+    { "indexCount": 24, "indexOffset": 6210, "lamp": null, "part": 11, "translucent": true },
+    { "indexCount": 174, "indexOffset": 6234, "lamp": null, "part": 11, "translucent": false },
+    { "indexCount": 231, "indexOffset": 6408, "lamp": null, "part": 11, "translucent": false },
+    { "indexCount": 12, "indexOffset": 6639, "lamp": null, "part": 12, "translucent": false },
+    { "indexCount": 12, "indexOffset": 6651, "lamp": null, "part": 12, "translucent": false },
+    { "indexCount": 207, "indexOffset": 6663, "lamp": null, "part": 13, "translucent": false },
+    { "indexCount": 216, "indexOffset": 6870, "lamp": null, "part": 13, "translucent": false },
+    { "indexCount": 207, "indexOffset": 7086, "lamp": null, "part": 14, "translucent": false },
+    { "indexCount": 216, "indexOffset": 7293, "lamp": null, "part": 14, "translucent": false },
+    { "indexCount": 207, "indexOffset": 7509, "lamp": null, "part": 15, "translucent": false },
+    { "indexCount": 216, "indexOffset": 7716, "lamp": null, "part": 15, "translucent": false },
+    { "indexCount": 207, "indexOffset": 7932, "lamp": null, "part": 16, "translucent": false },
+    { "indexCount": 216, "indexOffset": 8139, "lamp": null, "part": 16, "translucent": false }
+  ],
+  "textures": {
+    "height": 256,
+    "names": [
+      "white",
+      "landstal92wood",
+      "vehiclegrunge256",
+      "landstal92interior128",
+      "vehiclelights128",
+      "vehiclelightson128",
+      "vehiclegeneric256",
+      "vehiclesteering128",
+      "vehicledash32",
+      "carpback",
+      "carplate",
+      "vehicletyres128"
+    ],
+    "offset": 171592,
+    "width": 256
+  },
+  "vertexCount": 3872,
+  "wheels": [
+    { "front": true, "part": 13, "radius": 0.38760350162154295 },
+    { "front": false, "part": 14, "radius": 0.38760350162154295 },
+    { "front": false, "part": 15, "radius": 0.38760350162154295 },
+    { "front": true, "part": 16, "radius": 0.38760350162154295 }
+  ]
+}

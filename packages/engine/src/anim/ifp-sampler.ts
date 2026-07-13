@@ -58,6 +58,20 @@ export class IfpSampler {
   }
 }
 
+/** out = translation(position) × rotation(quat), column-major mat4. Shared with the rigid-entity layer. */
+export function composePosQuat(
+  out: Float32Array,
+  quat: ArrayLike<number>,
+  position: readonly [number, number, number],
+): void {
+  composeLocal(out, quat, position);
+}
+
+/** out = a × b (column-major 4×4); `out` must not alias inputs. Shared with the rigid-entity layer. */
+export function mulMat4(out: Float32Array, a: ArrayLike<number>, b: ArrayLike<number>): void {
+  multiply(out, a, b);
+}
+
 /** local = translation(bindPosition) × rotation(quat), column-major. */
 function composeLocal(out: Float32Array, quat: ArrayLike<number>, position: readonly [number, number, number]): void {
   const [x, y, z, w] = [quat[0], quat[1], quat[2], quat[3]];

@@ -3,7 +3,14 @@
  * bundles → culling → MSAA+A2C pass), orbiting camera, the gate HUD. `?cells=N` (grid side, default 8),
  * `?boxes=N` (boxes per cell side, default 12), `?freeze=1` stops the orbit.
  */
-import { type CameraState, Engine, setupStreaming, type StreamingDriver, type StreamStats } from '@opensa/engine';
+import {
+  type CameraState,
+  Engine,
+  type EngineStats,
+  setupStreaming,
+  type StreamingDriver,
+  type StreamStats,
+} from '@opensa/engine';
 
 import {
   BENCH_SCENE_MEASURE,
@@ -17,6 +24,7 @@ import { type EnvironmentDriver, parametricDriver, timecycDriver } from './envir
 import { loadPak } from './pak-loader';
 import { loadPedProbe } from './ped';
 import { syntheticCell, syntheticTextureArray } from './synthetic';
+import { loadVehicleProbe } from './vehicle';
 
 const CELL_SIZE = 250;
 
@@ -52,6 +60,39 @@ function buildSyntheticDistrict(engine: Engine, gridSide: number, boxesPerSide: 
   }
 
   return recordedDraws;
+}
+
+/** The steady-state HUD block (bench/leak modes replace it wholesale). */
+function hudText(input: {
+  buildMs: number;
+  engineInfo: string;
+  frames: readonly number[];
+  pedLine: null | { ms: number; position: readonly [number, number, number] };
+  stats: EngineStats;
+  streamStats: null | StreamStats;
+  title: string;
+  vehicleMs: null | number;
+}): string {
+  const frameAvg = input.frames.reduce((sum, value) => sum + value, 0) / Math.max(1, input.frames.length);
+
+  return (
+    `engine lab — ${input.title}\n` +
+    `device      ${input.engineInfo}\n` +
+    `frame       ${frameAvg.toFixed(2)} ms (${(1000 / Math.max(frameAvg, 0.001)).toFixed(0)} fps), max ${Math.max(...input.frames).toFixed(0)}\n` +
+    `submit CPU  ${input.stats.submitMs.toFixed(2)} ms\n` +
+    `GPU pass    ${input.stats.gpuPassMs > 0 ? input.stats.gpuPassMs.toFixed(2) : 'n/a'} ms\n` +
+    `cells       ${input.stats.cellsVisible}/${input.stats.cellsTotal} visible, draws ${input.stats.drawsRecorded}\n` +
+    `residency   ${(input.stats.residencyBytes / (1024 * 1024)).toFixed(1)} MB\n` +
+    `build       ${input.buildMs.toFixed(0)} ms (fixture, off the P0 clock)` +
+    (input.pedLine
+      ? `\nped sampler ${input.pedLine.ms.toFixed(2)} ms @ [${input.pedLine.position.map((value) => value.toFixed(0)).join(', ')}] (074/08 probe)`
+      : '') +
+    (input.vehicleMs !== null ? `\nvehicle upd ${input.vehicleMs.toFixed(2)} ms (074/08 B2 rigid entity)` : '') +
+    (input.streamStats
+      ? `\nstream      ${input.streamStats.loadedCells} loaded, ${input.streamStats.pendingCells} pending, ` +
+        `${input.streamStats.created} created / ${input.streamStats.evicted} evicted, worst create ${input.streamStats.worstCreateMs.toFixed(1)} ms`
+      : '')
+  );
 }
 
 /** One frame of the `?test=leak` phases: sweep 600 frames → unloadAll → settle 60 → ledger compare. */
@@ -156,6 +197,14 @@ async function main(): Promise<void> {
     pedHost = await loadPedProbe(engine, pedPosition);
     zoom = Math.min(1, 14 / orbitRadius);
   }
+  // Rigid-entity probe (074/08 B2c): `?vehicle=1` drives the fixture vehicle in a circle around the focus.
+  let vehicleHost: Awaited<ReturnType<typeof loadVehicleProbe>> | null = null;
+  let vehicleMs = 0;
+  if (params.get('vehicle') === '1') {
+    const vehicleY = Number(params.get('pedy') ?? focus[1]) || focus[1];
+    vehicleHost = await loadVehicleProbe(engine, [focus[0], vehicleY, focus[2]]);
+    zoom = Math.min(zoom, 55 / orbitRadius);
+  }
   let heightFactor = 0.9;
   let dragging = false;
   // Wheel = zoom (the alpha-edge inspection needs to get CLOSE to foliage/fences); drag = orbit/height.
@@ -249,6 +298,9 @@ async function main(): Promise<void> {
     if (pedHost) {
       pedMs = pedHost.update(now / 1000);
     }
+    if (vehicleHost) {
+      vehicleMs = vehicleHost.update(now / 1000);
+    }
     const stats = engine.frame(camera);
     if (benchScript && !benchDone) {
       collector.sample(frameDt, stats);
@@ -267,23 +319,16 @@ async function main(): Promise<void> {
         return; // freeze the loop on the summary
       }
     }
-    const frameAvg = frames.reduce((sum, value) => sum + value, 0) / frames.length;
-    hud.textContent =
-      `engine lab — ${title}\n` +
-      `device      ${engine.adapterInfo}\n` +
-      `frame       ${frameAvg.toFixed(2)} ms (${(1000 / Math.max(frameAvg, 0.001)).toFixed(0)} fps), max ${Math.max(...frames).toFixed(0)}\n` +
-      `submit CPU  ${stats.submitMs.toFixed(2)} ms\n` +
-      `GPU pass    ${stats.gpuPassMs > 0 ? stats.gpuPassMs.toFixed(2) : 'n/a'} ms\n` +
-      `cells       ${stats.cellsVisible}/${stats.cellsTotal} visible, draws ${stats.drawsRecorded}\n` +
-      `residency   ${(stats.residencyBytes / (1024 * 1024)).toFixed(1)} MB\n` +
-      `build       ${buildMs.toFixed(0)} ms (fixture, off the P0 clock)` +
-      (pedHost && pedPosition
-        ? `\nped sampler ${pedMs.toFixed(2)} ms @ [${pedPosition.map((value) => value.toFixed(0)).join(', ')}] (074/08 probe)`
-        : '') +
-      (streamStats
-        ? `\nstream      ${streamStats.loadedCells} loaded, ${streamStats.pendingCells} pending, ` +
-          `${streamStats.created} created / ${streamStats.evicted} evicted, worst create ${streamStats.worstCreateMs.toFixed(1)} ms`
-        : '');
+    hud.textContent = hudText({
+      buildMs,
+      engineInfo: engine.adapterInfo,
+      frames,
+      pedLine: pedHost && pedPosition ? { ms: pedMs, position: pedPosition } : null,
+      stats,
+      streamStats,
+      title,
+      vehicleMs: vehicleHost ? vehicleMs : null,
+    });
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

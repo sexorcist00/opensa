@@ -73,6 +73,8 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
+  // params3 = [localLightCount (074/06 row 7), spare, spare, spare].
+  params3: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -104,6 +106,33 @@ fn skyColorFor(dir: vec3f) -> vec3f {
   // Wide soft halo (pow 96) marks the spot in the horizon band; the disc itself stays small and bright.
   let moon = frame.moonColor.rgb * (smoothstep(0.9985, 0.9993, moonDot) * 14.0 + pow(moonDot, 96.0) * 2.2);
   return base + glow + moon;
+}
+
+// Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
+// headlights), CPU-filled each frame. The world consumes it in the VERTEX shader (SA is vertex-lit and
+// world verts ≪ pixels); small dynamic entities sample it per pixel. Bounded loop (count ≤ 64 — guardrail).
+struct LocalLight {
+  position: vec4f, // xyz world + radius
+  color: vec4f,    // linear RGB × intensity; w spare
+};
+@group(0) @binding(3) var<storage, read> localLights: array<LocalLight>;
+
+fn localLightSum(world: vec3f, normal: vec3f) -> vec3f {
+  var sum = vec3f(0.0);
+  let count = min(u32(frame.params3.x), 64u);
+  for (var index = 0u; index < count; index += 1u) {
+    let light = localLights[index];
+    let toLight = light.position.xyz - world;
+    let dist = length(toLight);
+    let radius = light.position.w;
+    if (dist < radius) {
+      // Wrapped N·L (lamps bleed around corners a little — the SA look) × smooth quadratic falloff.
+      let ndl = clamp((dot(normal, toLight / max(dist, 0.01)) + 0.4) / 1.4, 0.0, 1.0);
+      let falloff = 1.0 - dist / radius;
+      sum += light.color.rgb * (ndl * falloff * falloff);
+    }
+  }
+  return sum;
 }
 `,
   ped: /* wgsl */ `
@@ -164,7 +193,8 @@ fn fsPed(in: PedVsOut) -> @location(0) vec4f {
   let normal = normalize(in.normal);
   let sunNdl = max(dot(normal, frame.sunDir.xyz), 0.0);
   let moonNdl = clamp((dot(normal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
-  let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl;
+  let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
+    localLightSum(in.world, normal);
   var color = texel.rgb * lit;
   // Same unified fog shape as fsWorld (068 invariant: distant peds dissolve into the sky behind them).
   let toCamera = in.world - frame.camera.xyz;
@@ -178,6 +208,93 @@ fn fsPed(in: PedVsOut) -> @location(0) vec4f {
   fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
   color = mix(color, skyColorFor(viewDir), fogFactor);
   return vec4f(color, 1.0);
+}
+`,
+  rigid: /* wgsl */ `
+#include <frame>
+
+// Rigid-part dynamics (074/08 B2): vehicle-style entities — CPU-flattened part matrices in a storage
+// buffer, parts drawn with firstInstance = part index (instance_index reads the matrix). Paint colours
+// ride per-vertex (carcols markers resolved offline); slots.x = texture-array layer. fsRigid = opaque
+// (alpha forced 1), fsRigidBlend = premultiplied glass on the blend pipeline.
+struct RigidVsIn {
+  @builtin(instance_index) instance: u32,
+  @location(0) position: vec3f,
+  @location(1) normal: vec3f,
+  @location(2) uv: vec2f,
+  @location(3) color: vec4f,
+  @location(4) slots: vec4<u32>,
+};
+
+struct RigidVsOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) normal: vec3f,
+  @location(2) world: vec3f,
+  @location(3) color: vec4f,
+  @location(4) @interpolate(flat) layer: u32,
+  @location(5) @interpolate(flat) nightLayer: u32,
+};
+
+@group(1) @binding(0) var<storage, read> rigidMatrices: array<mat4x4f>;
+@group(1) @binding(1) var rigidTexture: texture_2d_array<f32>;
+@group(1) @binding(2) var rigidSampler: sampler;
+
+@vertex
+fn vsRigid(in: RigidVsIn) -> RigidVsOut {
+  let model = rigidMatrices[in.instance];
+  let world = model * vec4f(in.position, 1.0);
+  var out: RigidVsOut;
+  out.clip = frame.viewProj * world;
+  out.uv = in.uv;
+  out.normal = normalize((model * vec4f(in.normal, 0.0)).xyz);
+  out.world = world.xyz;
+  out.color = in.color;
+  out.layer = in.slots.x;
+  out.nightLayer = in.slots.y;
+  return out;
+}
+
+fn rigidShade(in: RigidVsOut) -> vec3f {
+  // Lamp materials carry a lamps-on TWIN layer (SA's vehiclelights → vehiclelightson swap): pick it at
+  // night. Per-vehicle lamp state replaces the dn gate when real gameplay owns the entity (plan 10 B3).
+  let lampsOn = frame.params.x > 0.5 && in.nightLayer != 0u;
+  let layer = select(in.layer, in.nightLayer, lampsOn);
+  let texel = textureSample(rigidTexture, rigidSampler, in.uv, layer);
+  let normal = normalize(in.normal);
+  let sunNdl = max(dot(normal, frame.sunDir.xyz), 0.0);
+  let moonNdl = clamp((dot(normal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
+  let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
+    localLightSum(in.world, normal);
+  return texel.rgb * in.color.rgb * lit;
+}
+
+fn rigidFog(world: vec3f) -> f32 {
+  let toCamera = world - frame.camera.xyz;
+  let dist = length(toCamera);
+  let fogD = max(dist - frame.fog.y, 0.0);
+  let fogK = 2.0 / max(frame.fog.x - frame.fog.y, 1.0);
+  var fogFactor = 1.0 - exp(-(fogK * fogD) * (fogK * fogD));
+  fogFactor = fogFactor * mix(frame.fog.w, 1.0, exp(-max(world.y, 0.0) * frame.fog.z));
+  return max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
+}
+
+@fragment
+fn fsRigid(in: RigidVsOut) -> @location(0) vec4f {
+  let fog = rigidFog(in.world);
+  let viewDir = normalize(in.world - frame.camera.xyz);
+  let color = mix(rigidShade(in), skyColorFor(viewDir), fog);
+  return vec4f(color, 1.0);
+}
+
+@fragment
+fn fsRigidBlend(in: RigidVsOut) -> @location(0) vec4f {
+  // Glass: premultiplied for the (one, 1−src-α) pipeline; fog scales the pair (068 semantics for blends).
+  let fog = rigidFog(in.world);
+  let viewDir = normalize(in.world - frame.camera.xyz);
+  let alpha = in.color.a;
+  let color = mix(rigidShade(in) * alpha, skyColorFor(viewDir) * alpha, fog);
+  return vec4f(color, alpha);
 }
 `,
   sky: /* wgsl */ `
@@ -268,6 +385,7 @@ struct VsOut {
   @location(6) ao: f32,
   @location(7) cone: f32,
   @location(8) moonNdl: f32,
+  @location(9) localLight: vec3f,
 };
 
 @vertex
@@ -316,6 +434,8 @@ fn vsWorld(in: VsIn) -> VsOut {
   out.ao = mix(1.0, aoVis, frame.params2.x);
   // Beam cone alpha (074/06 row 11): dayPrelit.a — 1 everywhere except floodlight-cone geometry.
   out.cone = in.dayPrelit.a;
+  // Local light pool (074/06 row 7): VERTEX-lit like everything else in SA.
+  out.localLight = localLightSum(world, worldNormal);
   return out;
 }
 
@@ -371,7 +491,8 @@ fn worldShade(in: VsOut, cutout: bool) -> vec4f {
   // Baked AO modulates ONLY the indirect term (074/07) — sun shadowing is the separate sunVis bake.
   let lit = in.prelit * (frame.params.y * in.ao) +
     frame.sunColor.rgb * (in.sunNdl * frame.params.z) +
-    frame.moonColor.rgb * in.moonNdl;
+    frame.moonColor.rgb * in.moonNdl +
+    in.localLight;
   var color = texel.rgb * (lit + in.glow);
   // Unified fog (074/06 row 5, the 068 shape): RADIAL distance (view-Z pops at screen edges), exp² over
   // [start, cut], height attenuation (haze hugs the ground), hard horizon cut — and the fog colour is the

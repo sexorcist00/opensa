@@ -77,6 +77,16 @@ sun/indirect + shared fog); lab `?ped=1` (+`?pedy=` height), HUD `ped sampler` m
       and the default probe height sat below the terrain — `?pedy=` overrides). The ≤1 ms sampler ledger
       row: HUD reads the cost per frame; record it with the B2 entity-count measurements.
 - [ ] Transform buffer + dynamic-offset draw path + entity registry (01 dynamics module made real).
+- [ ] **Vehicle lamp STATE** (user spec 2026-07-13): lamp submeshes carry `head`/`tail` tags from the SA
+      marker colours (extractor done); runtime needs per-vehicle state — headlights on/off (texture twin
+      swap is currently dn-gated globally), BRAKE lights (tail lamps glow bright on braking, like a real
+      car), reverse later. Lands with the B3 game wiring (the entity gains gameplay inputs there).
+- [ ] **Headlight beams v2**: today's pool entry is a forward-offset POINT light; upgrade to a directional
+      cone (the prod modern-pipeline 070 headlight look) — spot term in the pool struct (direction + angle
+      in the spare w slots).
+- [ ] **Vehicle LOD** (user spec): swap to the `chassis_vlo` mesh at range (extractor currently SKIPS
+      `_vlo` atomics — carry them as a fixture LOD part set) and drop lamp submeshes to CORONA-only
+      rendering (the 2dfx corona pass already exists; lamp dummies are in the fixture).
 - [ ] Character full: sampler crossfades, retarget (port the pure logic, drop the three mixer).
 - [ ] Vehicles: DUMMY-tree parse → part hierarchy, part flattening, paint/env WGSL, night fill module, ok/dam damage part-swap hooks (render side only).
 - [ ] Dynamics-only near shadow map pass + world/dynamics sampling.
