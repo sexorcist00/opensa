@@ -44,7 +44,9 @@ own engine, benchmarked**.
 ## Tasks
 
 - [ ] pmb stage wrapper around `convertDistrict` (config in pmb, no CLI flags in the pipeline path).
-- [ ] Chunked welding + bake worker pool (unblocks full-map; measure on one full profile).
+- [x] Chunked welding + bake worker pool — 2026-07-13, see ledger (A2). Full-map single-command convert
+      unblocked: peak RSS 5.2 GB (vs 16 GB monolithic for ONE city), bakes 2.7× on a QUARTER of the cores
+      (`--bake-workers` raises it when thermals allow).
 - [x] meshopt wire stage (+ worker-side decode) — 2026-07-13, see ledger. Brotli deliberately NOT taken:
       `DecompressionStream` has no brotli, a WASM brotli decoder would outweigh its gain over
       meshopt+deflate, and static hosting can still serve `Content-Encoding: br` transparently.
@@ -76,3 +78,32 @@ the smaller meshopt streams. All 40 entries verified decodable in Node against t
 structure checks). **Full-LS measured: 497.5 → 311.2 MB (A1 ≤ ~400 MB gate CLOSED)**; `pak-sf` 52.3 → 40.9 MB.
 Same day: bakes went OPT-IN (`--bakes`, see plan 03) — the bakeless full-LS iteration convert is **31.8 s**
 (vs 939 s with bakes; bakes don't change pak size — their channels live in reserved vertex bytes).
+
+**2026-07-13 — A2 landed: bake worker pool + chunked welding.**
+Pool: `bake-pool.ts`/`bake-worker.ts` (worker_threads; the occluder BVH crosses as SharedArrayBuffers — never
+copied per worker; cells go as transferred f64 flat arrays — an f32 hop would break bit-parity with the
+serial path, which `bake-flat.test.ts` pins). Default = a QUARTER of `availableParallelism()` (user decision:
+thermals; `--bake-workers N` overrides). **Serial vs pooled pak: SHA1-identical** (SF rect, full bakes).
+Chunking: convertDistrict welds → bakes → encodes per 6×6-cell chunk (`--chunk-cells`), occluder ring =
+2 cells (500 u ≥ the 400 u sun-vis ray reach — chunk BVHs shadow exactly like the district BVH; ray counters
+matched the monolith to the digit). Chunked reruns are byte-identical (determinism contract).
+
+| Full-LS `--bakes` convert | monolithic serial (12 Jul) | chunked + pooled (13 Jul, 3 workers) |
+| ------------------------- | -------------------------- | ------------------------------------ |
+| wall time                 | 939 s                      | **532 s** (bakes 832 → 307 s = 2.7×) |
+| peak RSS                  | ~16 GB (held ONE city)     | **5.2 GB**                           |
+| pak                       | 311.2 MB (meshopt)         | 332.8 MB (+7 %)                      |
+| groups avg                | 17.7                       | 18.1 (+2 %)                          |
+
+Chunking price v1 (accepted): ring cells re-plan textures → array-layer ORDER differs from the monolith →
+slightly more groups/cell and a worse meshopt vertex-order ratio (+7 % pak). Known fix if it ever matters:
+a global texture pre-pass before the chunk loop. Full-MAP projection: ~3.3× LS ≈ 28 min at quarter-cores,
+~18 min with `--bake-workers 6` — the "one command on the M3" criterion is met; the weld itself is now the
+next lever (ring re-welds ≈ 2× border cells).
+
+**2026-07-13 — FIRST FULL-MAP CONVERT (A3 opens).** Rect −12,−12..11,11 (all of SA), bakeless (user's
+fast-iteration mode), one command: **71.4 s wall, 1121 cell entries, 769.7 MB wire** (vs the ~1.6 GB
+pre-meshopt projection), 106 texture arrays, 176 timed objects, 64 anim-static welds, 12 GB heap flag.
+Served as `pak-map` (lab + standalone `?src=pak-map`; root symlink like pak-ls). Convert progress lines
+(chunk n/N, %, ETA) landed the same round — `ConvertOptions.log`, CLI-wired. The `--bakes` full-map convert
+(~28 min at quarter-cores) is still owed for the shadows/AO version of this pak.

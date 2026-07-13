@@ -47,7 +47,7 @@ runs of identical WGSL — which is what made the slowdown look random. THIS pla
 - [x] **THE architectural finding — unbounded asset memory (field: js heap 3.4–6.2 GB, long tasks 0):** every
       parsed DFF/TXD/prepared-atomic ever streamed stayed in the JS heap forever; on Apple Silicon's unified
       memory the pressure collapses GPU timings (resolution-independent "unaccounted", session-to-session
-      variance, device-losts, "еле загрузилось"). Fixes: (a) `setTextureDataFreeing` — texture CPU payloads
+      variance, device-losts, "barely managed to load"). Fixes: (a) `setTextureDataFreeing` — texture CPU payloads
       (mipmaps + image.data) freed on `texture.onUpdate` after GPU upload; Texture identity survives →
       material/pipeline sharing intact; webgpu-gated (`?texfree=0` off; WebGL keeps data for context restore);
       (b) clump + prepared-atomics caches LRU-capped at 512 (re-parse on revisit). FOLLOW-UP: the IMG archive

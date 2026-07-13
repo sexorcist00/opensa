@@ -78,6 +78,7 @@ export class StreamingDriver {
         // Failed fetch/inflate: clear the in-flight mark so the slot RETRIES next time it wants the level
         // (a permanently-poisoned key was the original stuck-at-LOD failure mode).
         this.requested.delete(message.key);
+        // eslint-disable-next-line no-console -- deliberate field diagnostic: a silent retry loop hid the stuck-at-LOD bug once already
         console.warn(`[stream] entry ${message.key} failed: ${message.error ?? 'unknown'} — will retry`);
       }
     });

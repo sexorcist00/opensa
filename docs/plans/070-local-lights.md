@@ -32,7 +32,7 @@ The user asked for the vehicle side first, done properly:
    central mechanism): per-fragment point/spot term with smooth radius falloff, cone, and **N·L via a new
    `vWsNormal` varying — beams follow road/kerbs/walls** (the per-fragment approach the plan chose over
    decals). Empty pool → `uLocalCount 0` → early-out (day cost ≈ 0). Modern pipeline only.
-3. **Lamp identification RE-DONE from the data (two user-found bugs; final state: "все супер выглядит").**
+3. **Lamp identification RE-DONE from the data (two user-found bugs; final state confirmed: looks superb).**
    - _admiral (W123 mod) showed no lights._ Dumping both DFFs disproved this repo's own comment ("the marker
      colour is a per-lamp id, NOT front/rear"): SA encodes the lamp in the **material MARKER COLOUR**, and
      stock `admiral` and the mod use the identical four — `255,175,0` front-left, `0,255,200` front-right,
@@ -48,7 +48,7 @@ The user asked for the vehicle side first, done properly:
 4. **Vehicle lamps feed the pool**: slots 0/1 = headlight SPOTS (forward-down ~38° cone, warm, radius 26 u,
    the road beam finally exists), slots 2/3 = tail POINTS (red: dim running → bright + wider on brake — the
    asphalt behind glows red when braking).
-5. **Calibrated after the first in-game look** (user: "работает супер", but overexposed): shader wrap term
+5. **Calibrated after the first in-game look** (user: works great, but overexposed): shader wrap term
    0.45 → 0.25, squared cone falloff (the plateau read as a hard searchlight blob), and the magnitudes moved
    into config — `headlights.beamIntensity` (2.2), `beamRange` (34), `brakeIntensity` (1.6) with sliders in
    Graphics. Measured why the first pool was invisible: a headlight grazes the road, so hard N·L gave

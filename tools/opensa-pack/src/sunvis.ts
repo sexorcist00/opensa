@@ -36,7 +36,11 @@ const ARC_AZIMUTH_Z = 0.25;
 const RAY_OFFSET = 0.08; // same surface push-off as the AO bake
 const LOD_RAY_OFFSET = 1.0; // LOD verts sit near-but-not-on the HD surfaces — push well clear of them
 /** LOD visibility floor: LOD meshes self-shadow noisily against the HD BVH — cap the damage (field). */
-const LOD_VIS_FLOOR = 0.4;
+export const LOD_VIS_FLOOR = 0.4;
+export const SUNVIS_MAX_DISTANCE = 400;
+export const SUNVIS_DISC_JITTER = 0.03;
+/** Scalar-v1 filler for the (parked v2) softness slot. */
+export const SUNSOFT_FILL = 0.05;
 
 interface ArcSample {
   /** Jittered unit directions (the sun disc pair), 3 floats each. */
@@ -49,63 +53,8 @@ interface ArcSample {
   z: number;
 }
 
-/** 1 at the horizon → 0.25 at noon: the sun pitches toward the zenith as it climbs. */
-export function azimuthScale(elevation: number): number {
-  return 1 - 0.75 * Math.max(0, Math.min(1, elevation));
-}
-
-/** Mutates the HD cells' scratch rows in place; returns the bake counters for the report. */
-export function bakeSunVis(cells: WeldedCell[], bvh: Bvh, options: BakeSunVisOptions = {}): BakeSunVisReport {
-  const maxDistance = options.maxDistance ?? 400;
-  const discJitter = options.discJitter ?? 0.03;
-  const arc = buildArc(discJitter);
-  const report: BakeSunVisReport = { rays: 0, uniqueVertices: 0, vertices: 0 };
-
-  for (const cell of cells) {
-    // Per-cell dedup cache — the V8 Map size cap lesson (see the AO bake).
-    const cache = new Map<string, number>();
-    // LOD cells bake TOO (field fix: unbaked LOD = visible HD/LOD shadow seams — "sidewalk shadowed, road
-    // not"). Their verts sit NEAR but not ON the HD surfaces, so the ray origin pushes off much further.
-    const offset = cell.lod ? LOD_RAY_OFFSET : RAY_OFFSET;
-    for (const bucket of cell.buckets) {
-      const rows = bucket.vertices;
-      for (let row = 0; row < rows.length; row += WELD_ROW) {
-        const wx = rows[row] + cell.origin[0];
-        const wy = rows[row + 1] + cell.origin[1];
-        const wz = rows[row + 2] + cell.origin[2];
-        const key = quantKey(wx, wy, wz, rows[row + 3], rows[row + 4], rows[row + 5]);
-        let visibility = cache.get(key);
-        if (visibility === undefined) {
-          const scan = arcVisibility(
-            bvh,
-            wx,
-            wy,
-            wz,
-            rows[row + 3],
-            rows[row + 4],
-            rows[row + 5],
-            arc,
-            maxDistance,
-            offset,
-          );
-          visibility = scan.visibility;
-          cache.set(key, visibility);
-          report.uniqueVertices += 1;
-          report.rays += scan.rays;
-        }
-        rows[row + WELD_SUNVIS] = cell.lod ? Math.max(visibility, LOD_VIS_FLOOR) : visibility;
-        rows[row + WELD_SUNSOFT] = 0.05; // unused by the scalar consumer (kept for the parked v2)
-        report.vertices += 1;
-      }
-    }
-    cell.hasSunVis = true;
-  }
-
-  return report;
-}
-
 /** Elevation-weighted average visibility over the arc (the v1 scalar — the accepted look). */
-function arcVisibility(
+export function arcVisibility(
   bvh: Bvh,
   x: number,
   y: number,
@@ -147,7 +96,62 @@ function arcVisibility(
   return { rays, visibility: totalWeight === 0 ? 1 : visibleWeight / totalWeight };
 }
 
-function buildArc(discJitter: number): ArcSample[] {
+/** 1 at the horizon → 0.25 at noon: the sun pitches toward the zenith as it climbs. */
+export function azimuthScale(elevation: number): number {
+  return 1 - 0.75 * Math.max(0, Math.min(1, elevation));
+}
+
+/** Mutates the HD cells' scratch rows in place; returns the bake counters for the report. */
+export function bakeSunVis(cells: WeldedCell[], bvh: Bvh, options: BakeSunVisOptions = {}): BakeSunVisReport {
+  const maxDistance = options.maxDistance ?? SUNVIS_MAX_DISTANCE;
+  const discJitter = options.discJitter ?? SUNVIS_DISC_JITTER;
+  const arc = buildArc(discJitter);
+  const report: BakeSunVisReport = { rays: 0, uniqueVertices: 0, vertices: 0 };
+
+  for (const cell of cells) {
+    // Per-cell dedup cache — the V8 Map size cap lesson (see the AO bake).
+    const cache = new Map<string, number>();
+    // LOD cells bake TOO (field fix: unbaked LOD = visible HD/LOD shadow seams — "sidewalk shadowed, road
+    // not"). Their verts sit NEAR but not ON the HD surfaces, so the ray origin pushes off much further.
+    const offset = cell.lod ? LOD_RAY_OFFSET : RAY_OFFSET;
+    for (const bucket of cell.buckets) {
+      const rows = bucket.vertices;
+      for (let row = 0; row < rows.length; row += WELD_ROW) {
+        const wx = rows[row] + cell.origin[0];
+        const wy = rows[row + 1] + cell.origin[1];
+        const wz = rows[row + 2] + cell.origin[2];
+        const key = quantKey(wx, wy, wz, rows[row + 3], rows[row + 4], rows[row + 5]);
+        let visibility = cache.get(key);
+        if (visibility === undefined) {
+          const scan = arcVisibility(
+            bvh,
+            wx,
+            wy,
+            wz,
+            rows[row + 3],
+            rows[row + 4],
+            rows[row + 5],
+            arc,
+            maxDistance,
+            offset,
+          );
+          visibility = scan.visibility;
+          cache.set(key, visibility);
+          report.uniqueVertices += 1;
+          report.rays += scan.rays;
+        }
+        rows[row + WELD_SUNVIS] = cell.lod ? Math.max(visibility, LOD_VIS_FLOOR) : visibility;
+        rows[row + WELD_SUNSOFT] = SUNSOFT_FILL; // unused by the scalar consumer (kept for the parked v2)
+        report.vertices += 1;
+      }
+    }
+    cell.hasSunVis = true;
+  }
+
+  return report;
+}
+
+export function buildArc(discJitter: number): ArcSample[] {
   void discJitter; // superseded: the pair is now morning+evening instead of a disc jitter
 
   return ARC_ELEVATIONS.map((elevation) => {

@@ -65,6 +65,9 @@ become the first entries of a permanent series.
 - [ ] A tiny compare script (`npx tsx tools/opensa-pack/src/bench-compare.ts a.json b.json`) printing deltas
       with the >10 % gate colored — the ritual's step 2 in one command.
 - [ ] Document the ritual in CONTRIBUTING-style form inside this doc once the harness lands (checklist form).
+- [ ] Series CHART (user request 2026-07-13 — a trend chart at the end of the chain): a small generator that reads
+      the committed bench JSONs and renders the trend lines (frame/GPU/draws/residency per scene over time)
+      — the series is the data source of record, the chart is the exit-report artifact.
 
 ## Measurement ledger
 

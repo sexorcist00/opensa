@@ -91,8 +91,8 @@ mid/far cascade refreshes after fast travel (cadence knobs), and stale shadows a
 
 ### Second run (2026-07-10) — stable, but flyover artefacts → cadence fixes
 
-- Bench after the first fix round: ls-noon 60.9 ms avg / GPU 47.0 / p95 **95.4** ms. Shadows "стали более
-  стабильные" (matrix-reference fix confirmed), but during the flyover shadows of big buildings drew IN
+- Bench after the first fix round: ls-noon 60.9 ms avg / GPU 47.0 / p95 **95.4** ms. Shadows became more
+  stable (matrix-reference fix confirmed), but during the flyover shadows of big buildings drew IN
   PARTS. Root cause of both the p95 spikes and the partial shadows: the world-change invalidation fired on
   EVERY cell add/remove — during a flyover streaming churns constantly, so the "cached" cascades re-rendered
   nearly every frame (cache defeated), and each render caught a half-loaded world.

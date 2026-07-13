@@ -185,7 +185,7 @@ const recommendedTypeScriptConfigs = [
 const jsonCustomConfig: Linter.Config = {
   ...json.configs.recommended,
   files: ['**/*.json'],
-  ignores: ['**/*-lock.json', 'package.json'],
+  ignores: ['**/*-lock.json', 'package.json', 'mods-src/**/*.json', 'tests/**/*.json', '**/dist/manifest.json'],
   language: 'json/json',
 };
 
@@ -302,6 +302,13 @@ const dtsOverrides: Linter.Config = {
   },
 };
 
+const jsonPrettierOverrides: Linter.Config = {
+  files: ['**/manifest.json', '**/report.json'],
+  rules: {
+    'prettier/prettier': 'off',
+  },
+};
+
 const disableDefaultExportBlockingForStorybook = {
   files: [
     '**/*.stories.@(js|jsx|ts|tsx|mdx)',
@@ -346,4 +353,5 @@ export default [
   ...storybook.configs['flat/recommended'],
   disableDefaultExportBlockingForStorybook,
   dtsOverrides,
+  jsonPrettierOverrides,
 ];

@@ -52,10 +52,10 @@ compare classic↔modern live (the toggle is instant — uniform only). Night sh
 
 ## Measurements
 
-- **First in-game look (2026-07-10, user): POSITIVE.** "Разница видна, солнце работает… картинка стала более
-  живой, светлее… поиграл с силой солнца — красиво." Defaults (sunDirect 1 / sunIndirect 0.7) read well.
+- **First in-game look (2026-07-10, user): POSITIVE.** The difference is visible, the sun works, the picture reads
+  livelier and brighter; tweaking the sun strength looks beautiful. Defaults (sunDirect 1 / sunIndirect 0.7) read well.
 - **World-pass delta: ≈ 0** (ls-noon modern 53.71 ms avg / GPU 39.52 vs classic 53.47 / 39.46 — noise).
-- **Night too dark (user):** wants a SKY-LIGHT ambient lift at night — deferred by the user ("позже"); natural
+- **Night too dark (user):** wants a SKY-LIGHT ambient lift at night — deferred by the user (later); natural
   home is [071 — night & emissive](071-night-emissive-atmosphere.md) (moon term + skylight) — noted there via
   the chain. Interim knob: `worldLight.lodNightAmbScale`/`nightPrelitBrightness` sliders.
 - **NEW FINDING — the hybrid sun is a live normals validator.** The unlit 038 world never READ normals, so

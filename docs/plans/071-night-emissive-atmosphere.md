@@ -10,14 +10,14 @@ Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [0
 
 ## Decisions
 
-1. **True emissive channel for night sources.** World shader outputs `emissive = nightPrelit × emissiveMask × uEmissiveBoost` ADDED after the lighting model (unaffected by fog dimming until the fog term, immune to tone-map crush via boost >1). Sources: night-vertex hot spots (windows baked bright by Rockstar), tobj lit-window variants, neon 2dfx materials. This is the user ask verbatim: "чтобы tobj, night vertex светились".
+1. **True emissive channel for night sources.** World shader outputs `emissive = nightPrelit × emissiveMask × uEmissiveBoost` ADDED after the lighting model (unaffected by fog dimming until the fog term, immune to tone-map crush via boost >1). Sources: night-vertex hot spots (windows baked bright by Rockstar), tobj lit-window variants, neon 2dfx materials. This is the user ask verbatim: tobj and night-vertex sources must glow.
 2. **Selective bloom over a real HDR threshold**: emissive boost pushes sources above 1.0 so the EXISTING bloom picks them up naturally (no second render pass, no layer juggling — threshold does the selection). Bloom params get a night profile (larger radius, lower threshold) cross-faded by the night factor.
 3. **Dawn/dusk are first-class**: a grading calibration pass per time band (dawn/day/dusk/night) — exposure/saturation curves on top of the 001-frozen tone mapping, driven by sun elevation (NOT wall clock — sunset must look right whenever it happens). Golden-hour warmth on the sun term (002 curves), long-shadow mood (003) verified together here.
 4. **Moon as a light**: tiny cool `DirectionalLight` at night (dynamics) + a `uMoonTerm` in the world shader indirect (barely-visible blue grounding); full moon nights slightly brighter (moon phase already exists in config).
 5. **Wet night stretch** (rain): screen-space wet-look (darker albedo + boosted spec/reflection on roads) — only if trivially composable with 007/008 results; otherwise noted for a future chain.
 6. **Nothing here replaces prelit** — every term is additive/multiplicative around the prelit core; classic pipeline unaffected.
 
-## SHIPPED (2026-07-10) — user-confirmed: "светятся отлично", then "выглядит огонь" after the moon/grading pass
+## SHIPPED (2026-07-10) — user-confirmed: emissives glow great, then "looks fire" after the moon/grading pass
 
 1. **HDR frame buffer — the unlock.** Bloom runs BEFORE tone mapping and the composer buffer was
    `UnsignedByte`, so EVERY emissive clipped at 1.0: a lamp at 5.0 and a sheet of white paper fed bloom the

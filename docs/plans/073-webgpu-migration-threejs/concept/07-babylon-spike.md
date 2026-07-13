@@ -24,8 +24,8 @@ matrices, orbiting camera) so the numbers are directly comparable on the same ma
    is production-mature; the record-once thesis (our Phase 0) is real and shipping in Babylon today.
 2. **But the streaming cost is the SAME wall that killed the three attempt.** Babylon's snapshot is **engine-global**:
    `snapshotRenderingReset()` re-records the WHOLE world (~54 ms at 15k draws, scaling with total draws), on **every**
-   cell add/remove. Our game swaps cells continuously while moving → a ~50 ms hitch per swap = the exact "сильные
-   лаги при прогрузке" experience. STANDARD mode doesn't help: expensive steady (38.5 ms) AND the same reset cost.
+   cell add/remove. Our game swaps cells continuously while moving → a ~50 ms hitch per swap = the exact
+   "heavy streaming lag" experience. STANDARD mode doesn't help: expensive steady (38.5 ms) AND the same reset cost.
 3. **Babylon's WebGL fallback is a 3× regression** vs three WebGL (30.8 vs 10.3 ms) — migrating and staying on WebGL
    would make the shipping path worse.
 4. Architectural irony: **three's `BundleGroup` design is the RIGHT shape for streaming** (per-cell granular

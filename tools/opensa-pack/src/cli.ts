@@ -2,7 +2,8 @@
  * `opensa-pack` CLI (plan 074/03).
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1
- *     [--cell-size 250] [--bakes [--no-ao] [--no-sunvis]] [--wind <dir>[,<dir>…]]
+ *     [--cell-size 250] [--bakes [--no-ao] [--no-sunvis] [--bake-workers N]] [--chunk-cells 6]
+ *     [--wind <dir>[,<dir>…]]
  *
  * `--bakes` — enable the HEAVY offline channels (AO/skyVis + sun-vis, 074/07): ~90 % of convert wall-time
  * (full LS ≈ 14 of 15.7 min). OFF by default for iteration speed (2026-07-13 user decision); production,
@@ -60,6 +61,8 @@ async function main(): Promise<void> {
   const bakes = process.argv.includes('--bakes');
   const ao = bakes && !process.argv.includes('--no-ao');
   const sunVis = bakes && !process.argv.includes('--no-sunvis');
+  const bakeWorkers = Number(arg('bake-workers') ?? 0) || undefined; // default: a quarter of the cores
+  const chunkCells = Number(arg('chunk-cells') ?? 0) || undefined; // default: 6 (chunked welding, A2)
   const windDirs = (arg('wind') ?? '')
     .split(',')
     .map((dir) => dir.trim())
@@ -95,8 +98,11 @@ async function main(): Promise<void> {
   }
   const { manifest, pak, report } = await convertDistrict(fs, {
     ao,
+    ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
     cellSize,
+    ...(chunkCells !== undefined ? { chunkCells } : {}),
     fallbackTxds,
+    log: (message) => console.log(`[opensa-pack] ${message}`),
     rect: rect as unknown as readonly [number, number, number, number],
     stochasticNames,
     sunVis,

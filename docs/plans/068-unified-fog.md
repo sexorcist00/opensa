@@ -29,26 +29,26 @@ Today: scene `FogExp2` with density `2/config.fog.distance`, colour tracking a s
       gains a `getFog` closure); classic path untouched. The sea/sky horizon seam dies by construction.
 - [ ] Particles/effects/corona materials: still on scene FogExp2 / far-fade — coherence check pending.
 
-### v1 debug arc (2026-07-10, user A/B — all fixed same day, final state CONFIRMED "выглядит хорошо")
+### v1 debug arc (2026-07-10, user A/B — all fixed same day, final state CONFIRMED looking good)
 
 - **White skyscraper silhouettes against the blue sky:** fog sampled the LUT at EYE LEVEL only — tall fogged
   geometry got the bright horizon-haze band instead of the sky at its elevation. FIX: the LUT is now 2D
   (512×32, azimuth × view-elevation to ~44°) and the fog samples by the fragment's own direction — cheap
   aerial perspective.
 - **Still white after that:** an AZIMUTH PHASE bug — the shaders sample `atan/2π + 0.5` but the LUT rendered
-  без the half-turn → fog took the OPPOSITE side of the horizon (white dawn fog on the teal anti-sun sky).
+  without the half-turn → fog took the OPPOSITE side of the horizon (white dawn fog on the teal anti-sun sky).
   One-line fix in the LUT fragment (`phi = (u − 0.5)·2π`). This also explains why the dawn silhouettes had
   survived the first fog fix.
 - **Distant objects flickering every second:** the LUT refresh key quantized to the game minute — which is
   ~1 REAL second in SA — so near-fully-fogged objects stepped while the dome moved smoothly. FIX: the LUT
-  (16 k px) renders EVERY frame — trivial cost, perfectly continuous. User: "мерцание ушло".
+  (16 k px) renders EVERY frame — trivial cost, perfectly continuous. User confirmed the flicker is gone.
 - **(after the timecyc ranges) fog vs sky mismatch returned at dawn:** the LUT rendered the CLOUDLESS
   `skyBase` while the dome layers clouds on top — with the closer timecyc cut, fully-fogged towers stood
   milky against the cloudy sky. FIX: the cloud layer moved into the shared GLSL chunk (`applyClouds`) and
   renders into the LUT too (stars stay dome-only). Fog now dissolves into the CLOUDY sky.
 - **Objects popping in/out of the cut on camera ROTATION:** the fog used view-Z, which shrinks toward the
-  screen edges — "боковым зрением видны, прямо — исчезают". FIX: RADIAL distance (like the water always
-  did) for the modern exp² + cut; rotation-invariant. **Final state user-confirmed: "хорошо выглядит".**
+  screen edges — visible in peripheral vision, gone when looked at directly. FIX: RADIAL distance (like the water always
+  did) for the modern exp² + cut; rotation-invariant. **Final state user-confirmed as looking good.**
 - [x] timecyc wiring **shipped (2026-07-10)**: modern fog ranges = timecyc `fogStart`/`farClip` ×
       `fog.timecycScale` (new config, default 1; floor 350 so a broken row can't collapse the view; start
       clamped ≤ 0.8·cut). One `fogRangeFor()` source feeds the world shader (own exp² over [start, cut]),

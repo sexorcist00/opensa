@@ -11,8 +11,35 @@ export const BENCH_MEASURE_FRAMES = 600;
 /** Per-scene measure-window overrides (default {@link BENCH_MEASURE_FRAMES}). */
 export const BENCH_SCENE_MEASURE: Record<string, number> = {
   city: 3600, // ~30 s at 120 Hz — the full-city traverse needs the long window
+  map: 9000, // ~75 s at 120 Hz — the whole-map tour (LS → LV → SF → LS, ~14 k units at ~190 u/s)
   teleport: 1800, // 6 jumps × 300 frames — streaming teardown/rebuild stress
 };
+
+/** Whole-map tour waypoints in ENGINE coords (x, height, z = −gtaY): LS beach → downtown → east LS →
+ *  countryside north → the LV strip → west LV → the long desert crossing → SF downtown → SF south →
+ *  countryside east → back to LS. Pairs with `?src=pak-map`. Altitude clears the route's terrain. */
+const MAP_TOUR: readonly [number, number, number][] = [
+  [800, 120, 1900],
+  [1600, 120, 1600],
+  [2500, 120, 1500],
+  [2500, 140, -300],
+  [2000, 120, -900],
+  [2100, 120, -2300],
+  [1000, 140, -2000],
+  [-1700, 180, -1200],
+  [-1980, 140, -500],
+  [-2200, 140, 400],
+  [-1000, 200, 800],
+  [400, 140, 1500],
+];
+
+/** Cumulative arc lengths over {@link MAP_TOUR} — constant ground speed along the whole route. */
+const MAP_TOUR_LENGTHS: number[] = [0];
+for (let index = 1; index < MAP_TOUR.length; index += 1) {
+  const [ax, ay, az] = MAP_TOUR[index - 1];
+  const [bx, by, bz] = MAP_TOUR[index];
+  MAP_TOUR_LENGTHS.push(MAP_TOUR_LENGTHS[index - 1] + Math.hypot(bx - ax, by - ay, bz - az));
+}
 
 export type BenchCameraScript = (frame: number, context: BenchContext) => CameraState;
 
@@ -20,6 +47,25 @@ export interface BenchContext {
   aspect: number;
   focus: readonly [number, number, number];
   radius: number;
+}
+
+/** Position + look-ahead direction at arc-length parameter t ∈ [0, 1] of the tour. */
+function mapTourAt(t: number): { eye: [number, number, number]; forward: [number, number, number] } {
+  const distance = t * MAP_TOUR_LENGTHS[MAP_TOUR_LENGTHS.length - 1];
+  let segment = 1;
+  while (segment < MAP_TOUR_LENGTHS.length - 1 && MAP_TOUR_LENGTHS[segment] < distance) {
+    segment += 1;
+  }
+  const [ax, ay, az] = MAP_TOUR[segment - 1];
+  const [bx, by, bz] = MAP_TOUR[segment];
+  const span = MAP_TOUR_LENGTHS[segment] - MAP_TOUR_LENGTHS[segment - 1] || 1;
+  const local = Math.min(1, Math.max(0, (distance - MAP_TOUR_LENGTHS[segment - 1]) / span));
+  const forwardLength = Math.hypot(bx - ax, by - ay, bz - az) || 1;
+
+  return {
+    eye: [ax + (bx - ax) * local, ay + (by - ay) * local, az + (bz - az) * local],
+    forward: [(bx - ax) / forwardLength, (by - ay) / forwardLength, (bz - az) / forwardLength],
+  };
 }
 
 /** Pinned scenes. `orbit` = the M0 baseline; `close` = fill/A2C zoom; `drive` = the streaming stress
@@ -56,6 +102,15 @@ export const BENCH_SCENES: Record<string, BenchCameraScript> = {
     const eye: [number, number, number] = [x, focus[1] + 18, focus[2] + 40];
 
     return camera(aspect, eye, [x + 60, focus[1] + 4, focus[2] - 20]);
+  },
+  map(frame, { aspect }) {
+    // WHOLE-MAP drive-style tour (pairs with `?src=pak-map`): LS → LV → SF → LS along pinned waypoints at
+    // constant ~190 u/s — the cross-city streaming stress (ring turnover in every region, ocean legs
+    // included). Absolute coords; the district focus/radius context is ignored on purpose.
+    const total = BENCH_WARMUP_FRAMES + BENCH_SCENE_MEASURE.map;
+    const { eye, forward } = mapTourAt(Math.min(1, frame / total));
+
+    return camera(aspect, eye, [eye[0] + forward[0] * 150, eye[1] + forward[1] * 150 - 30, eye[2] + forward[2] * 150]);
   },
   orbit(frame, { aspect, focus, radius }) {
     const angle = frame * 0.003;

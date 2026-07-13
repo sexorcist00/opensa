@@ -220,7 +220,7 @@ const FOG_FRAGMENT =
   '\tif ( uFogMix > 0.5 ) {\n' +
   '\t\tvec3 saFogView = vWsPos - cameraPosition;\n' +
   // RADIAL distance, not view-Z: view-Z shrinks toward the screen edges, so a rotation made distant
-  // objects pop in/out of the cut (user report: "боковым зрением видны, прямо — исчезают").
+  // objects pop in/out of the cut (user report: visible in peripheral vision, gone when looked at directly).
   '\t\tfloat saFogDist = length( saFogView );\n' +
   '\t\tfloat saFogAzimuth = atan( saFogView.z, saFogView.x ) / 6.2831853 + 0.5;\n' +
   '\t\tfloat saFogElev = clamp( saFogView.y / max( saFogDist * 0.7, 1e-3 ), 0.0, 1.0 );\n' +

@@ -39,14 +39,14 @@ Today's sky (`sky.plugin.ts`): a gradient dome (`uBottom→uTop` from timecyc sk
       Debug view strip in the overlay: later, with the 068 consumer.
 - [ ] Sun disc/corona/god-rays/moon/stars recolour integration; overcast behaviour parity. _After the user's
       first PBR look._
-- [x] **Night sky glow (2026-07-10, user ask "PBR для ночного неба — оно очень тёмное"):** the authored SA
+- [x] **Night sky glow (2026-07-10, user ask: PBR for the night sky — it is far too dark):** the authored SA
       night gradient is near-black, so the modern sky adds two physically-plausible terms over it — the
       MOON's cool Rayleigh scatter (halo + soft lift of its hemisphere, follows the moon sprite's direction,
       brightness × phase/cloud fade) and the warm URBAN skyglow horizon band (SA is a metropolis; brighter
       under cloud — the deck reflects city light, real light-pollution behaviour). Rides `uPbrNight`
       (fades in through twilight), lives in the shared chunk → night fog matches the glowing horizon.
       Knob: `night.skyGlow` (default 1) + NIGHT SKY GLOW slider in Atmosphere. Classic pipeline untouched.
-      **User-confirmed: "ночь выглядит отлично".**
+      **User-confirmed: the night looks great.**
       NOTE: user dropped a candidate 24h timecyc into `./1/timecyc_24h.dat` — its night rows are equally
       dark (skyTop 9 11 13), so the glow complements rather than replaces it; wiring that file through
       timecyc-builder = a separate task.
@@ -81,12 +81,12 @@ Today's sky (`sky.plugin.ts`): a gradient dome (`uBottom→uTop` from timecyc sk
    slider (+ `sky.pbrExposure`) in Graphics. Dawn: distant objects glowed — FogExp2 colour was still classic
    `skyBot`, mismatching the dark PBR dawn → CPU twin `pbrHorizonAverage` (same formula/tint/Reinhard/handover)
    now feeds the fog colour in PBR mode (interim until 068's in-shader LUT fog).
-3. Third look (user): **"полдень стал лучше… в целом картинка очень хорошая"**; remaining dawn silhouettes →
+3. Third look (user): **noon improved, the overall picture is very good**; remaining dawn silhouettes →
    handled by 068's directional LUT fog (started).
 
 ### How to try it (user)
 
-F2 → Graphics → **PBR sky (plan 067)**. Compare vs classic at: **dawn ~6:30–7:30 и dusk ~19–20** (the whole
+F2 → Graphics → **PBR sky (plan 067)**. Compare vs classic at: **dawn ~6:30–7:30 and dusk ~19–20** (the whole
 point — scattering gradients vs the old two-colour lerp), noon (should stay believably SA), night (must look
 IDENTICAL to classic — the blend hands back), fog/rain weathers (haze physics). The mood tint keeps SA's
 palette at 50 % strength — report if the sky drifts too "real" or too flat.

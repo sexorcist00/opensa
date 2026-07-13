@@ -29,9 +29,9 @@ Recommended composition: **Gerstner (3–4 octaves) + depth-based shore + planar
 
 ## v1 SHIPPED but PARKED (2026-07-10) — rework moved to 0.5.0
 
-**User verdict after several iterations: "вода в целом так себе".** The approach hit its ceiling: displacing only
+**User verdict after several iterations: the water is mediocre overall.** The approach hit its ceiling: displacing only
 the NORMAL (the `water.dat` quads are too coarse to displace vertices) means the surface is geometrically FLAT — a
-moving glint but no travelling waves / silhouette / beach run-up ("волны стоят на месте"). The half-res depth-shore
+moving glint but no travelling waves / silhouette / beach run-up (waves stand in place). The half-res depth-shore
 also flickered around pier piles (fixed partly with an `fwidth` edge-reject) and cost a full-scene DepthPass (made
 opt-in via `water.shore`). v1 stays in tree as a working baseline / `low`-tier surface; the real rework —
 **camera-following Gerstner-displaced grid, foam from the wave Jacobian (no depth buffer), baked shoreline** — is

@@ -89,7 +89,7 @@ doesn't, you get a **crack**. Two ways out:
 - **Phase 1 (safe):** refine **interiors only** — leave every boundary/crease edge straight. Zero cracks, no
   cross-tile coordination, immediately shippable. Loses the seams themselves.
 - **Phase 2:** assemble IPL instances → world space, position-key shared border vertices, compute a **shared
-  boundary normal** so both tiles subdivide the seam into the _same_ curve. This is the "поднять часть карты"
+  boundary normal** so both tiles subdivide the seam into the _same_ curve. This is the "raise part of the map"
   step — needed only for seam-spanning curvature.
 
 ## Reuse vs. new

@@ -49,19 +49,19 @@ _(record before closing the chain)_
 - final tier × scene frame-ms matrix: …
 - auto-pick decisions on tested GPUs: …
 
-## Measurements — ДО (classic) → ПОСЛЕ (modern) (2026-07-10, M3 Pro, "everything but volumetric")
+## Measurements — BEFORE (classic) → AFTER (modern) (2026-07-10, M3 Pro, "everything but volumetric")
 
-**ДО** = the classic 063 baselines (pre-overhaul pipeline). **ПОСЛЕ** = the interim modern default with the full
+**BEFORE** = the classic 063 baselines (pre-overhaul pipeline). **AFTER** = the interim modern default with the full
 064–071 chain on, volumetric clouds off. Same machine, same 6 bench scenes. This is the data the tier ladder derives from.
 
-| scene         | avg ms — ДО → ПОСЛЕ     | draws — ДО → ПОСЛЕ     | GPU ms — ДО → ПОСЛЕ |
-| ------------- | ----------------------- | ---------------------- | ------------------- |
-| ls-noon       | 53.5 → **90.4** (+69%)  | 10 394 → 14 454 (+39%) | 39.5 → 53.9         |
-| sf-fog-dawn   | 33.2 → **71.2** (+114%) | 7 116 → 10 774 (+51%)  | 21.6 → 48.8         |
-| lv-night      | 33.3 → **54.0** (+62%)  | 7 373 → 9 142 (+24%)   | 12.7 → 21.6         |
-| country-dusk  | 23.0 → **37.8** (+64%)  | 3 978 → 5 696 (+43%)   | 14.8 → 19.0         |
-| ocean-horizon | 12.8 → **33.5** (+162%) | 62 → 86 (≈0)           | 18.4 → 43.7         |
-| ls-rain-night | 47.9 → **97.3** (+103%) | 10 445 → 15 165 (+45%) | 16.6 → 44.1         |
+| scene         | avg ms — BEFORE → AFTER | draws — BEFORE → AFTER | GPU ms — BEFORE → AFTER |
+| ------------- | ----------------------- | ---------------------- | ----------------------- |
+| ls-noon       | 53.5 → **90.4** (+69%)  | 10 394 → 14 454 (+39%) | 39.5 → 53.9             |
+| sf-fog-dawn   | 33.2 → **71.2** (+114%) | 7 116 → 10 774 (+51%)  | 21.6 → 48.8             |
+| lv-night      | 33.3 → **54.0** (+62%)  | 7 373 → 9 142 (+24%)   | 12.7 → 21.6             |
+| country-dusk  | 23.0 → **37.8** (+64%)  | 3 978 → 5 696 (+43%)   | 14.8 → 19.0             |
+| ocean-horizon | 12.8 → **33.5** (+162%) | 62 → 86 (≈0)           | 18.4 → 43.7             |
+| ls-rain-night | 47.9 → **97.3** (+103%) | 10 445 → 15 165 (+45%) | 16.6 → 44.1             |
 
 **Cost attribution (drives the tier ladder):**
 

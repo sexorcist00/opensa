@@ -18,17 +18,24 @@ import { MeshoptEncoder } from 'meshoptimizer';
  */
 import { deflateRawSync } from 'node:zlib';
 
-import { bakeAo, type BakeAoReport, buildOccluderBvh } from './ao';
-import { bakeSunVis, type BakeSunVisReport } from './sunvis';
+import { AO_MAX_DISTANCE, bakeAo, type BakeAoReport, buildOccluderBvh } from './ao';
+import { bakeCellsPooled, defaultBakeWorkers } from './bake-pool';
+import { bakeSunVis, type BakeSunVisReport, SUNVIS_MAX_DISTANCE } from './sunvis';
 import { TexturePlanner } from './textures';
-import { assembleCell, weldCellParts, type WeldedCell, type WeldStats } from './weld';
+import { assembleCell, WELD_ROW, weldCellParts, type WeldedCell, type WeldStats } from './weld';
 
 export interface ConvertOptions {
   /** Bake per-vertex AO/skyVis (074/07); on by default, `--no-ao` skips it. */
   ao?: boolean;
+  /** Bake pool size (074/14 A2); 1 = the serial in-process path. Default: a quarter of the cores. */
+  bakeWorkers?: number;
   cellSize?: number;
+  /** Chunk side in cells (074/14 A2 chunked welding); the full map cannot hold one welded heap. */
+  chunkCells?: number;
   /** Shared overlay TXDs (basenames, no extension) searched when a def's own txdp chain misses. */
   fallbackTxds?: readonly string[];
+  /** Progress sink (chunk/bake/assembly lines with an ETA); silent when absent — tests stay quiet. */
+  log?: (message: string) => void;
   /** Inclusive GTA cell-coordinate rect [x0, y0, x1, y1]. */
   rect: readonly [number, number, number, number];
   /** Curated stochastic de-tiling texture names, lowercased (074/12). */
@@ -77,35 +84,86 @@ export async function convertDistrict(
     timedObjects: 0,
   };
 
-  // Phase 1 — weld every cell into scratch buckets (kept in memory: the bake needs the whole district).
-  const welded = weldRect(fs, defs, grid, planner, options.rect, cellSize);
+  // Phases 1-2, CHUNKED (074/14 A2): weld → bake → encode per chunk of cells, releasing the weld scratch
+  // between chunks — the full map cannot hold one welded heap (16 GB held ONE city). The bake ring
+  // (2 cells @250) covers the longest bake ray (sun-vis 400 u), so a chunk BVH shadows exactly like the
+  // old district BVH; ring cells weld ONLY as occluders (HD, uncounted) and re-weld in their own chunk.
+  // NB chunking changes texture-array layer ORDER vs the monolithic path (ring cells plan textures early)
+  // — reruns stay byte-identical, which is the determinism contract.
+  const ao = options.ao !== false;
+  const sunVis = options.sunVis !== false;
+  const chunkSide = Math.max(1, options.chunkCells ?? 6);
+  const ringCells = ao || sunVis ? Math.ceil(Math.max(AO_MAX_DISTANCE, SUNVIS_MAX_DISTANCE) / cellSize) : 0;
+  const workers = options.bakeWorkers ?? defaultBakeWorkers();
+  const log = options.log ?? ((): void => undefined);
+  const [x0, y0, x1, y1] = normalizedRect(options.rect);
 
-  // Phase 2 — bake AO/skyVis + sun visibility against ONE district BVH (074/07), then encode.
-  if (options.ao !== false || options.sunVis !== false) {
-    const cellsOnly = welded.map((entry) => entry.cell);
-    const bvh = buildOccluderBvh(cellsOnly);
-    if (options.ao !== false) {
-      const aoStarted = Date.now();
-      const bake = bakeAo(cellsOnly, { bvh });
-      report.ao = { ...bake, ms: Date.now() - aoStarted };
-    }
-    if (options.sunVis !== false) {
-      const sunStarted = Date.now();
-      const bake = bakeSunVis(cellsOnly, bvh);
-      report.sunVis = { ...bake, ms: Date.now() - sunStarted };
+  // Progress accounting (user ask: long converts must say where they are and what's left): the grid knows
+  // which cells have content up front, so the ETA weights chunks by their cell counts, not chunk counts.
+  const chunks: { cells: number; rect: readonly [number, number, number, number] }[] = [];
+  for (let chunkY = y0; chunkY <= y1; chunkY += chunkSide) {
+    for (let chunkX = x0; chunkX <= x1; chunkX += chunkSide) {
+      const rect = [
+        chunkX,
+        chunkY,
+        Math.min(chunkX + chunkSide - 1, x1),
+        Math.min(chunkY + chunkSide - 1, y1),
+      ] as const;
+      const cells = countRectCells(grid, rect);
+      if (cells > 0) {
+        chunks.push({ cells, rect });
+      }
     }
   }
-  for (const entry of welded) {
-    const bytes = assembleCell(entry.cell);
-    inputs.push(wireCompress({ bytes, key: entry.key, kind: 'cell' }));
-    accumulate(report, entry.key, bytes.byteLength, entry.cell.stats);
+  const totalCells = chunks.reduce((sum, entry) => sum + entry.cells, 0);
+  log(`plan: ${chunks.length} chunks / ${totalCells} grid cells (chunk ${chunkSide}², bake ring ${ringCells})`);
+  const startedMs = Date.now();
+  let doneCells = 0;
+
+  for (const [chunkIndex, chunk] of chunks.entries()) {
+    const tag = `chunk ${chunkIndex + 1}/${chunks.length} [${chunk.rect.join(',')}]`;
+    const chunkStarted = Date.now();
+    const welded = weldRect(fs, defs, grid, planner, chunk.rect, cellSize);
+    if (welded.length === 0) {
+      doneCells += chunk.cells;
+      continue;
+    }
+    if (ao || sunVis) {
+      // Occluder ring: HD-only welds of the surrounding cells (clipped to the convert rect — geometry
+      // outside it never occluded in the monolithic path either).
+      const ring = weldRing(fs, defs, grid, planner, chunk.rect, [x0, y0, x1, y1], ringCells, cellSize);
+      const cellsOnly = welded.map((entry) => entry.cell);
+      const bvh = buildOccluderBvh([...cellsOnly, ...ring]);
+      // Bucket rows, not stats (stats.vertices only fills during the later encode pass).
+      const verts = cellsOnly.reduce(
+        (sum, cell) => sum + cell.buckets.reduce((rows, bucket) => rows + bucket.vertices.length / WELD_ROW, 0),
+        0,
+      );
+      log(`${tag}: welded ${welded.length} entries (${(verts / 1e6).toFixed(2)} M verts), baking …`);
+      await bakeChunk(cellsOnly, bvh, { ao, sunVis, workers }, report);
+    }
+    for (const entry of welded) {
+      const bytes = assembleCell(entry.cell);
+      inputs.push(wireCompress({ bytes, key: entry.key, kind: 'cell' }));
+      accumulate(report, entry.key, bytes.byteLength, entry.cell.stats);
+    }
+    doneCells += chunk.cells;
+    const elapsed = (Date.now() - startedMs) / 1000;
+    const eta = doneCells > 0 ? (elapsed * (totalCells - doneCells)) / doneCells : 0;
+    log(
+      `${tag}: done in ${((Date.now() - chunkStarted) / 1000).toFixed(1)}s — ` +
+        `${doneCells}/${totalCells} cells (${((doneCells / totalCells) * 100).toFixed(0)} %), ` +
+        `elapsed ${elapsed.toFixed(0)}s, eta ~${eta.toFixed(0)}s`,
+    );
   }
 
+  log('encoding texture arrays …');
   for (const array of planner.build()) {
     inputs.push(wireCompress({ bytes: array.bytes, key: `array-${array.ref}`, kind: 'texture', meta: array.meta }));
     report.textures.arrays += 1;
   }
   Object.assign(report.textures, planner.report, { arrays: report.textures.arrays });
+  log(`assembling pak (${inputs.length} entries) …`);
 
   const timecyc24 = fs.getText('data/timecyc_24h.dat');
   const timecyc = timecyc24 ?? fs.getText('data/timecyc.dat') ?? undefined;
@@ -129,6 +187,85 @@ function accumulate(report: ConvertReport, key: string, bytes: number, stats: We
   report.animatedStatic += stats.animatedStatic;
   report.skippedTimed += stats.skippedTimed;
   report.timedObjects += stats.timedObjects;
+}
+
+/** Bake one chunk's cells (pooled when workers > 1) and fold the counters into the report. */
+async function bakeChunk(
+  cells: WeldedCell[],
+  bvh: ReturnType<typeof buildOccluderBvh>,
+  options: { ao: boolean; sunVis: boolean; workers: number },
+  report: ConvertReport,
+): Promise<void> {
+  const started = Date.now();
+  if (options.workers > 1) {
+    // Pooled path: both bakes run interleaved per cell across the pool — the wall time is one shared
+    // number, attributed to both report rows.
+    const pooled = await bakeCellsPooled(cells, bvh, options);
+    mergeBakeReports(report, pooled.ao, pooled.sunVis, Date.now() - started);
+
+    return;
+  }
+  const aoBake = options.ao ? bakeAo(cells, { bvh }) : null;
+  const aoMs = Date.now() - started;
+  const sunStarted = Date.now();
+  const sunBake = options.sunVis ? bakeSunVis(cells, bvh) : null;
+  mergeBakeReports(report, aoBake, sunBake, aoMs, Date.now() - sunStarted);
+}
+
+/** Grid cells with content inside a rect — the progress/ETA weight (cheap: pure map lookups). */
+function countRectCells(
+  grid: ReturnType<typeof buildWorldGrid>,
+  rect: readonly [number, number, number, number],
+): number {
+  let count = 0;
+  for (let cy = rect[1]; cy <= rect[3]; cy += 1) {
+    for (let cx = rect[0]; cx <= rect[2]; cx += 1) {
+      if (grid.has(cellKey(cx, cy))) {
+        count += 1;
+      }
+    }
+  }
+
+  return count;
+}
+
+/** Fold one chunk's bake counters into the report (ms accumulates; both pooled rows share one wall time). */
+function mergeBakeReports(
+  report: ConvertReport,
+  aoBake: BakeAoReport | null,
+  sunBake: BakeSunVisReport | null,
+  aoMs: number,
+  sunMs = aoMs,
+): void {
+  if (aoBake) {
+    const prev = report.ao ?? { ms: 0, rays: 0, triangles: 0, uniqueVertices: 0, vertices: 0 };
+    report.ao = {
+      ms: prev.ms + aoMs,
+      rays: prev.rays + aoBake.rays,
+      // Ring occluders overlap between chunks — the sum overcounts shared border triangles.
+      triangles: prev.triangles + aoBake.triangles,
+      uniqueVertices: prev.uniqueVertices + aoBake.uniqueVertices,
+      vertices: prev.vertices + aoBake.vertices,
+    };
+  }
+  if (sunBake) {
+    const prev = report.sunVis ?? { ms: 0, rays: 0, uniqueVertices: 0, vertices: 0 };
+    report.sunVis = {
+      ms: prev.ms + sunMs,
+      rays: prev.rays + sunBake.rays,
+      uniqueVertices: prev.uniqueVertices + sunBake.uniqueVertices,
+      vertices: prev.vertices + sunBake.vertices,
+    };
+  }
+}
+
+function normalizedRect(rect: readonly [number, number, number, number]): [number, number, number, number] {
+  return [
+    Math.min(rect[0], rect[2]),
+    Math.min(rect[1], rect[3]),
+    Math.max(rect[0], rect[2]),
+    Math.max(rect[1], rect[3]),
+  ];
 }
 
 function weldRect(
@@ -159,6 +296,38 @@ function weldRect(
   }
 
   return welded;
+}
+
+/** HD-only occluder welds of the ring around `inner` (clipped to the convert rect, inner cells excluded). */
+function weldRing(
+  fs: AssetFileSystem,
+  defs: ReturnType<typeof resolveMap>,
+  grid: ReturnType<typeof buildWorldGrid>,
+  planner: TexturePlanner,
+  inner: readonly [number, number, number, number],
+  rect: readonly [number, number, number, number],
+  ring: number,
+  cellSize: number,
+): WeldedCell[] {
+  const cells: WeldedCell[] = [];
+  for (let cy = Math.max(inner[1] - ring, rect[1]); cy <= Math.min(inner[3] + ring, rect[3]); cy += 1) {
+    for (let cx = Math.max(inner[0] - ring, rect[0]); cx <= Math.min(inner[2] + ring, rect[2]); cx += 1) {
+      if (cx >= inner[0] && cx <= inner[2] && cy >= inner[1] && cy <= inner[3]) {
+        continue;
+      }
+      const cell = grid.get(cellKey(cx, cy));
+      if (!cell) {
+        continue;
+      }
+      const origin: [number, number, number] = [(cx + 0.5) * cellSize, 0, -(cy + 0.5) * cellSize];
+      const parts = weldCellParts(fs, defs, cell, false, planner, origin);
+      if (parts) {
+        cells.push(parts);
+      }
+    }
+  }
+
+  return cells;
 }
 
 /** Per-entry wire compression (074/10 A1 + 074/14 stage 2): cells go meshopt (vertex + index streams in an

@@ -258,7 +258,7 @@ WGSL snapshots current; tsc + eslint clean; benches committed through the `city`
   screenshots, ALL AWAITING THE NEXT RECONVERT (converter-side; the engine sort is live immediately):
   (1) TWO-PHASE frame — every cell's opaque bundle, then sky, then every cell's blend bundle (cells now
   record separate opaque/blend bundles): a later cell's opaque could repaint an earlier cell's canopies
-  (the "несовсем" screenshots), and the engine now also sorts blend bundles back-to-front by cell distance.
+  (the "not quite right" screenshots), and the engine now also sorts blend bundles back-to-front by cell distance.
   (2) MISSING OBJECT solved — the "blue hole" at GTA (804, −1619) was `burger01_LAw`, a 22×35 m diner in the
   IDE **anim** section (its sign spins), and the welder SKIPPED all anim defs; the earlier "skipped-animated
   are all signs" reading was wrong. Anim defs now weld STATICALLY at bind pose with the frame chain applied

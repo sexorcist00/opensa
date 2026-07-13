@@ -96,6 +96,28 @@ The pak worker auto-detects at init (probe `Range: bytes=0-0` → 206): RANGE mo
 Startup transfer for full-LS drops 1.15 GB → ~212 MB (the district-wide texture arrays; per-ring texture
 laziness is a later option).
 
+## Full-map field note (2026-07-13)
+
+First whole-map flight (`pak-map`, bakeless) field-checked: overall verdict positive; the user sees
+OCCASIONAL DRAW/STREAMING GLITCHES and explicitly deferred them to the
+in-game integration phase (plan 10 B3 — streaming follows the PLAYER there, different rings/velocities).
+Revisit together with the parked tuning candidates below; the `?bench=map` whole-map tour (074/11) is the
+reproduction harness. The `map` bench itself was CLEAN (no holes, no stuck LODs across 9000 frames).
+
+Specific field symptoms to fix in that round (both re-observed on the free-fly, not the bench path):
+
+1. **Late objects** — a cell sometimes stays unloaded until the camera MOVES slightly, then appears.
+   Suspect: rings request on demand + the hysteresis dead-band — a stationary/straight-line camera can sit
+   just outside the request edge; the parked velocity-lookahead prefetch likely covers it. NB tested
+   WITHOUT the opensa-lods chain — re-evaluate once lod-generator cells join the pak.
+2. **Magenta-before-texture** — on first appearance an object briefly renders PINK, then the texture lands.
+   Magenta is the converter's missing-texture colour, so the CELL bundle is drawing before its texture
+   ARRAY is GPU-resident — a hole in the warm-invisibly/atomic-appear invariant (plan 060): cell create
+   must WAIT for (or be gated on) its referenced arrays' residency instead of falling back to the
+   placeholder layer.
+3. **HD↔LOD swap visibly steps** at speed — user explicitly defers until the full game mechanics are
+   wired on top; tune with the post-integration candidates below.
+
 ## Post-integration tuning candidates (parked 2026-07-12, user decision — revisit AFTER the flip)
 
 The full-city `city` bench (135 u/s traverse) held 120 Hz for ~3595/3600 frames; the couple of 21.9 ms

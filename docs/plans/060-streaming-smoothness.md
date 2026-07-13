@@ -1,6 +1,6 @@
 # 060 — Streaming smoothness (cell-swap freeze)
 
-**Status: ✅ Phases 0–5 shipped; round 7 confirmed subjectively smooth ("лагов на глаз не видно").
+**Status: ✅ Phases 0–5 shipped; round 7 confirmed subjectively smooth (no lag visible to the eye).
 Residual polish levers in Deferred.** Crossing a cell boundary (LOD↔HD swap or a new LOD ring cell) produces
 a visible frame hitch. The streaming _policy_ is already right (hysteresis dead-band, old level kept until the
 new one is in, cell cache); the hitch is _work placement_: `adapter.loadCell` is async only by signature — the
@@ -75,7 +75,7 @@ Fix: **hard count cap, 24 objects/frame** on top of the time budget — first-dr
 
 **Round 3 (after the count cap, user drive):** `built` 48–249 ms wall (sliced, unchanged), `post-add frame`
 33–58 ms — DOWN from 50–100 (spreading works), but jerks remain AND the cap created a new, worse artifact:
-cells now assemble piece-by-piece on screen ("все объекты прям на глазах строятся") because the 24-obj/frame
+cells now assemble piece-by-piece on screen (objects visibly build up one by one) because the 24-obj/frame
 budget spread the VISIBLE adds. Root cause of the whole round-2/3 tension: `root.add()` is free, the cost is
 the first DRAW of each object (geometry/instance-buffer upload) — so any scheme that spreads real adds spreads
 the appearance too. Fix: decouple them. `game.warmUp(objects)` renders a slice into a 1×1 scissored viewport
@@ -127,7 +127,7 @@ those same slices landing in frames attributed to whichever cell swapped last. T
 NOT CPU-decoded (uploads as compressed S3TC), so textures are off the suspect list. Conclusion → Phase 5
 (worker parse): indivisible main-thread units can only be MOVED off the main thread, not sliced.
 
-**Round 7 (after the worker parse, user drive): SMOOTH — "лагов на глаз не видно вроде хорошо работает".**
+**Round 7 (after the worker parse, user drive): SMOOTH — no lag visible to the eye, works well.**
 The numbers agree on the CPU side: `built` 47–54 ms wall with **max slice 5–7 ms** (was 100–250 ms wall with
 65–81 ms indivisible steps) — even 381-object HD cells and baked LOD cells now build in sub-frame slices on
 worker-primed caches. Remaining signals, for the record:

@@ -1,6 +1,6 @@
 # A2 — Rotation-bearing 2dfx on baked cells (roadsigns & escalators)
 
-Part of [05 — LOD generators, extended](readme.md), Part A. Depends on [A1](a1-2dfx-unified-carry.md) (the unified policy). Delivers the "и прочее" — 2dfx types that today can't ride a baked cell because they carry orientation, not just a position.
+Part of [05 — LOD generators, extended](readme.md), Part A. Depends on [A1](a1-2dfx-unified-carry.md) (the unified policy). Delivers the "and the rest" — 2dfx types that today can't ride a baked cell because they carry orientation, not just a position.
 
 ## Context
 

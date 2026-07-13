@@ -86,6 +86,8 @@ full modded profiles (anderius/carcer/gostown) convert and run the final bench m
 - Reconvert BOTH paks (`pak`, `pak-sf`, later full-map) whenever the converter or manifest changes.
 - Golden WGSL snapshots: change → review the diff → `vitest -u`; naga guardrails stay (no uniform-space
   arrays, no unbounded loops).
-- Plans stay English-only; every field verdict and measurement goes into the owning plan's ledger.
+- ALL project docs and code stay English-only — repo-wide, not just plans (user rule, broadened
+  2026-07-13); field verdicts get paraphrased in English; every verdict and measurement goes into the
+  owning plan's ledger.
 - Parked items have written prerequisites — check ideas/0.5.0 before re-attempting directional shadows,
   weather wind, or stochastic default-on.
