@@ -199,9 +199,13 @@ export class TexturePlanner {
       rw.format === 'rgba8888' ? new Uint8Array(base.data) : decodeDxt(rw.format, base.data, base.width, base.height);
     const sized = resampleToPow2(decoded, base.width, base.height);
     // Foliage scans carry a soft alpha skirt that mis-classes them softBlend; the caller knows better.
-    const alphaClass = effectiveAlphaClass(classifyAlpha(sized.rgba, rw.hasAlpha), preferCutout);
+    const classified = classifyAlpha(sized.rgba, rw.hasAlpha);
+    const alphaClass = effectiveAlphaClass(classified, preferCutout);
+    // Upgraded textures can be broadly semi-transparent (hipoly mod canopies) — sharpen their alpha or A2C
+    // renders the whole crown as a screen-door stipple; natural cutouts keep their authored alpha.
+    const sharpen = alphaClass !== classified;
     const mipCount = ostexMaxMips(OstexFormat.RGBA8, sized.width, sized.height);
-    const mips = processAlphaTexture(sized.rgba, sized.width, sized.height, alphaClass, CUTOUT_REF, mipCount);
+    const mips = processAlphaTexture(sized.rgba, sized.width, sized.height, alphaClass, CUTOUT_REF, mipCount, sharpen);
     let width = sized.width;
     let height = sized.height;
     const levels = mips.map((data) => {

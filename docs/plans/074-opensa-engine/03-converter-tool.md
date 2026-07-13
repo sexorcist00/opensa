@@ -64,6 +64,11 @@ nondeterminism); same input ⇒ byte-identical pak (hash-tested in CI).
 — district/rect filtering is what makes M0 (one district) and incremental work cheap; `--report` emits the
 measurement ledger tables (bytes, groups, arrays) the plan docs consume.
 
+**Heavy bakes are OPT-IN since 2026-07-13** (user decision, iteration speed — bakes were ~90 % of convert
+wall-time): `--bakes` enables AO/skyVis + sun-vis (074/07), then `--no-ao` / `--no-sunvis` subtract.
+Iteration reconverts run bakeless (full LS ≈ 2 min instead of ~16); bench-ritual, field shadow checks and
+production/flip paks MUST pass `--bakes` — unbaked paks render open/unshadowed by design.
+
 ## Tasks
 
 - [ ] Scaffold `tools/opensa-pack` (nx package; deps: renderware parsers + engine-formats) — after approval.

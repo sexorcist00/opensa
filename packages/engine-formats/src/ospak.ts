@@ -10,7 +10,7 @@ export const OSPAK_ALIGN = 4096;
 
 export interface OspakEntry {
   /** Wire encoding of the stored bytes (074/10 A1): absent = raw payload. */
-  enc?: 'deflate-raw';
+  enc?: OspakWireEnc;
   hash: number;
   length: number;
   offset: number;
@@ -21,7 +21,7 @@ export interface OspakEntry {
 export interface OspakInput {
   bytes: Uint8Array;
   /** Wire encoding the producer applied to `bytes` (the reader inflates before use). */
-  enc?: 'deflate-raw';
+  enc?: OspakWireEnc;
   key: string;
   kind: 'cell' | 'texture';
   /** Texture meta (required for kind 'texture'). */
@@ -45,6 +45,9 @@ export interface OspakManifest {
   timecyc24?: boolean;
   version: number;
 }
+
+/** Wire encodings a pak entry can carry (074/10 A1 / 074/14 stage 2). */
+export type OspakWireEnc = 'deflate-raw' | 'oswire-deflate-raw';
 
 /** Assemble a pak deterministically: entries sorted by key, 4 KiB aligned, zero-padded. */
 export function buildOspak(

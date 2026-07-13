@@ -45,7 +45,9 @@ own engine, benchmarked**.
 
 - [ ] pmb stage wrapper around `convertDistrict` (config in pmb, no CLI flags in the pipeline path).
 - [ ] Chunked welding + bake worker pool (unblocks full-map; measure on one full profile).
-- [ ] meshopt + brotli wire stage (+ worker-side decode); size ledger raw vs wire.
+- [x] meshopt wire stage (+ worker-side decode) — 2026-07-13, see ledger. Brotli deliberately NOT taken:
+      `DecompressionStream` has no brotli, a WASM brotli decoder would outweigh its gain over
+      meshopt+deflate, and static hosting can still serve `Content-Encoding: br` transparently.
 - [ ] BC α-subset encode (after the size ledger says how much it still matters).
 - [ ] Wind/stochastic/subdivision data moved into pmb config; `--wind` CLI removed.
 - [ ] Full-profile conversions (non-modified, anderius, carcer, gostown) + the final bench matrix.
@@ -53,3 +55,24 @@ own engine, benchmarked**.
 ## Measurement ledger
 
 _(per profile: pak raw/wire MB, convert minutes, verts, bench matrix rows; the 60 fps verdict)_
+
+**2026-07-13 — meshopt wire stage (A1 stage 2) landed.** Cells travel as an `.oswire` container
+(header/tables verbatim, vertex payload = meshopt vertex stream @ stride 36, index payload = meshopt index
+stream) with deflate-raw on top; entry `enc: 'oswire-deflate-raw'`; the pak worker inflates + meshopt-decodes
+and hands the main thread the exact raw `.oscell` (old `deflate-raw` paks still readable). The meshopt index
+codec canonicalizes per-triangle cyclic rotation (order + winding survive) — safe because the only
+flat-interpolated attribute (texture layer) is per-material-uniform within a triangle; the wire test asserts
+rotation-normalized equality.
+
+| Metric (ls-bench rect, wind overlay, full bakes)      | deflate-only (12 Jul) | meshopt+deflate (13 Jul)                 |
+| ----------------------------------------------------- | --------------------- | ---------------------------------------- |
+| pak total                                             | 93.9 MB               | **68.9 MB** (−27 %)                      |
+| cell geometry raw → wire                              | 147.5 → 60 MB (~2.4×) | 147.5 → **34.9 MB (4.23×)**              |
+| worst-cell decode (9,-7,hd, 14 MB raw, Node ≈ worker) | inflate 24.9 ms       | inflate 12.7 + meshopt 6.0 = **18.7 ms** |
+| convert wall                                          | 145.1 s               | 143.8 s (encode cost noise-level)        |
+
+Decode is WORKER-side (blob latency, not frame time) and NET FASTER than the old path — deflate now inflates
+the smaller meshopt streams. All 40 entries verified decodable in Node against the real pak (rawLength +
+structure checks). **Full-LS measured: 497.5 → 311.2 MB (A1 ≤ ~400 MB gate CLOSED)**; `pak-sf` 52.3 → 40.9 MB.
+Same day: bakes went OPT-IN (`--bakes`, see plan 03) — the bakeless full-LS iteration convert is **31.8 s**
+(vs 939 s with bakes; bakes don't change pak size — their channels live in reserved vertex bytes).

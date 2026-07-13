@@ -21,6 +21,7 @@ export {
   type OspakEntry,
   type OspakInput,
   type OspakManifest,
+  type OspakWireEnc,
   validateOspakManifest,
 } from './ospak';
 export {
@@ -39,3 +40,13 @@ export {
   ostexMaxMips,
   ostexMipLayout,
 } from './ostex';
+export {
+  decodeOswire,
+  encodeOswire,
+  type OscellSections,
+  oscellSections,
+  OSWIRE_MAGIC,
+  type OswireDecoder,
+  type OswireParts,
+  rebuildOscell,
+} from './oswire';

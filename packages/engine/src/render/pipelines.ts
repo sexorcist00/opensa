@@ -83,8 +83,8 @@ export function compileAll(
   const variants: { blend: boolean; cull: GPUCullMode; cutout: boolean; entry: string; id: PipelineId }[] = [
     { blend: false, cull: 'back', cutout: false, entry: 'fsWorld', id: 'world-opaque-front' },
     { blend: false, cull: 'none', cutout: false, entry: 'fsWorld', id: 'world-opaque-double' },
-    { blend: false, cull: 'back', cutout: true, entry: 'fsWorld', id: 'world-cutout-front' },
-    { blend: false, cull: 'none', cutout: true, entry: 'fsWorld', id: 'world-cutout-double' },
+    { blend: false, cull: 'back', cutout: true, entry: 'fsWorldCutout', id: 'world-cutout-front' },
+    { blend: false, cull: 'none', cutout: true, entry: 'fsWorldCutout', id: 'world-cutout-double' },
     { blend: true, cull: 'back', cutout: false, entry: 'fsWorld', id: 'world-blend-front' },
     { blend: true, cull: 'none', cutout: false, entry: 'fsWorld', id: 'world-blend-double' },
     { blend: true, cull: 'back', cutout: false, entry: 'fsBeam', id: 'world-beam-front' },

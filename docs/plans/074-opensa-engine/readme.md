@@ -268,3 +268,19 @@ WGSL snapshots current; tsc + eslint clean; benches committed through the `city`
   2 % mid-alpha bound mis-classes scanned foliage skirts; the welder now passes `preferCutout` for
   sway-kind (vegetation) defs, upgrading softBlend → cutout (vanilla SA alpha-tests foliage; our
   A2C + MSAA + coverage-preserved mips are the modern equivalent).
+- 2026-07-13 (night-fix reconvert + A1 meshopt wire) — all three paks reconverted with the night fixes
+  (`pak` 93.9 MB / `pak-sf` 52.3 MB / `pak-ls` 497.5 MB, full-LS 939 s; `animatedStatic` 0/1/4 — the
+  burger01_LAw diner and three siblings weld again; field verdict pending). Then integration-queue item ①
+  landed: meshopt wire compression (`.oswire` container + `enc: 'oswire-deflate-raw'`, worker-side meshopt
+  decode via `meshoptimizer/decoder`, old paks stay readable) — ls-bench pak 93.9 → 68.9 MB, cell geometry
+  4.23× over raw (deflate-only was ~2.4×), worst-cell decode NET FASTER (18.7 vs 24.9 ms, worker-side);
+  numbers + the triangle-rotation safety note in the 14 ledger. Brotli consciously skipped (no
+  DecompressionStream support; serve-time `Content-Encoding: br` remains available).
+- 2026-07-13 (field round: hipoly stipple + bakes opt-in) — trees/diner field-CONFIRMED (night fixes hold);
+  new report: `tree_hipoly07`-class trees semi-transparent at range = the preferCutout upgrade meeting
+  BROADLY semi-transparent mod-canopy alpha (α≈0.5 everywhere → A2C = uniform screen-door). Fix: offline
+  alpha SHARPENING (gain 8 around ref 128, before premultiply so RGB scales by the remapped alpha) applied
+  ONLY to upgraded softBlend→cutout textures — natural cutouts untouched. Same round: heavy bakes went
+  OPT-IN (`--bakes`, plan 03 note) — bakeless full-LS convert 31.8 s vs 939 s; bench/production converts
+  must re-enable. A1 gate CLOSED with the measured full-LS wire: 497.5 → 311.2 MB. Bench row A1·meshopt
+  accepted (GPU p95 +6 % vs 06·wind, inside gate; submit untouched — decode worker-side).

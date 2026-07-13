@@ -120,6 +120,10 @@ export function effectiveAlphaClass(classified: AlphaClass, preferCutout: boolea
   return preferCutout && classified === 'softBlend' ? 'cutout' : classified;
 }
 
+/** Alpha-test-style remap gain for UPGRADED cutouts: band 128 ± 128/gain stays a gradient (A2C antialiases
+ *  it), everything outside snaps to 0/255 — vanilla SA alpha-tested this foliage at ~128. */
+export const SHARPEN_GAIN = 8;
+
 /** RGB ×= A — after this, filtering/blending are mathematically correct (the fringe fix's core). In place. */
 export function premultiply(rgba: Uint8Array): void {
   for (let texel = 0; texel < rgba.length; texel += 4) {
@@ -168,8 +172,12 @@ export function processAlphaTexture(
   alphaClass: AlphaClass,
   cutoutRef = 128,
   mipCount = 1,
+  sharpen = false,
 ): Uint8Array[] {
   const base: Uint8Array = new Uint8Array(rgba);
+  if (sharpen) {
+    sharpenAlpha(base, cutoutRef);
+  }
   dilateEdges(base, width, height);
   premultiply(base);
   const targetCoverage = alphaClass === 'cutout' ? coverage(base, cutoutRef) : 0;
@@ -226,4 +234,14 @@ export function resampleToPow2(
   }
 
   return { height: outHeight, rgba: out, width: outWidth };
+}
+
+/** Steepen alpha around `reference` (in place). For preferCutout-upgraded textures whose alpha is broadly
+ *  semi-transparent (hipoly mod canopies ≈ 0.5 everywhere): raw mid alpha through A2C = a uniform
+ *  screen-door stipple over the whole crown, worsening down the mip chain. Run BEFORE premultiply so RGB
+ *  scales by the remapped alpha. Naturally-bimodal cutouts are untouched by their callers. */
+export function sharpenAlpha(rgba: Uint8Array, reference = 128, gain = SHARPEN_GAIN): void {
+  for (let index = 3; index < rgba.length; index += 4) {
+    rgba[index] = Math.max(0, Math.min(255, Math.round((rgba[index] - reference) * gain + reference)));
+  }
 }

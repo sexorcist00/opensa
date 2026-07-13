@@ -10,6 +10,7 @@ import {
   preserveCoverage,
   processAlphaTexture,
   resampleToPow2,
+  sharpenAlpha,
 } from './alpha';
 
 /** 4×4 RGBA8: three columns opaque green, one transparent BLACK — the boundary straddles a mip texel
@@ -59,6 +60,24 @@ describe('alpha pipeline', () => {
       expect(effectiveAlphaClass('opaque', true)).toBe('opaque');
       expect(effectiveAlphaClass('cutout', true)).toBe('cutout');
       expect(effectiveAlphaClass('softBlend', false)).toBe('softBlend');
+    });
+
+    it('sharpenAlpha leaves fully transparent and fully opaque texels untouched', () => {
+      const rgba = new Uint8Array([10, 10, 10, 0, 20, 20, 20, 255]);
+      sharpenAlpha(rgba);
+
+      expect(rgba[3]).toBe(0);
+      expect(rgba[7]).toBe(255);
+    });
+
+    it('processAlphaTexture keeps mid alpha raw when sharpen is off', () => {
+      const rgba = new Uint8Array(4 * 4 * 4);
+      for (let texel = 0; texel < 16; texel += 1) {
+        rgba.set([100, 160, 100, 150], texel * 4);
+      }
+      const [base] = processAlphaTexture(rgba, 4, 4, 'cutout', 128, 1);
+
+      expect(base[3]).toBe(150);
     });
   });
 
@@ -114,6 +133,27 @@ describe('alpha pipeline', () => {
       expect(mips).toHaveLength(3);
       expect(mips[1]).toHaveLength(2 * 2 * 4);
       expect(mips[2]).toHaveLength(1 * 1 * 4);
+    });
+
+    it('sharpenAlpha pushes broad semi-transparency toward the alpha-test look (hipoly canopy fix)', () => {
+      // Interior α = 150 (the "whole crown at half coverage" A2C stipple source) → near-opaque.
+      const rgba = new Uint8Array([0, 128, 0, 150, 0, 128, 0, 110, 0, 128, 0, 132]);
+      sharpenAlpha(rgba);
+
+      expect(rgba[3]).toBe(255); // 150 → solid
+      expect(rgba[7]).toBe(0); // 110 → cut
+      expect(rgba[11]).toBe(160); // 132 stays inside the AA band (128 ± 128/gain)
+    });
+
+    it('processAlphaTexture with sharpen premultiplies by the REMAPPED alpha (colour stays consistent)', () => {
+      const rgba = new Uint8Array(4 * 4 * 4);
+      for (let texel = 0; texel < 16; texel += 1) {
+        rgba.set([100, 160, 100, 150], texel * 4); // uniform semi-transparent green
+      }
+      const [base] = processAlphaTexture(rgba, 4, 4, 'cutout', 128, 1, true);
+
+      expect(base[3]).toBe(255); // sharpened before premultiply…
+      expect(base[1]).toBe(160); // …so RGB is multiplied by 1.0, not 0.59
     });
 
     it('resampleToPow2 fixes 62×62-style sizes (the WebGPU BC alignment killer)', () => {

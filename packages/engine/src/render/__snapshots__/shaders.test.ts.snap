@@ -440,8 +440,7 @@ fn stochasticTexel(uv: vec2f, layer: u32, uvDx: vec2f, uvDy: vec2f) -> vec4f {
     textureSampleGrad(worldTexture, worldSampler, uv + hash2D2D(v2), layer, uvDx, uvDy) * w.z;
 }
 
-@fragment
-fn fsWorld(in: VsOut) -> @location(0) vec4f {
+fn worldShade(in: VsOut, cutout: bool) -> vec4f {
   // Textures ship PREMULTIPLIED (074/02): filtering is correct by construction, transparent texels
   // contribute nothing — the alpha-edge fix. Alpha feeds coverage on the cutout pipeline (A2C).
   // Layer bit 15 = stochastic flag (074/12); grads + the plain tap stay in UNIFORM control flow.
@@ -451,6 +450,14 @@ fn fsWorld(in: VsOut) -> @location(0) vec4f {
   var texel = textureSample(worldTexture, worldSampler, in.uv, layer);
   if ((in.layer & 0x8000u) != 0u && frame.moonDir.w > 0.5) {
     texel = stochasticTexel(in.uv, layer, uvDx, uvDy);
+  }
+  if (cutout) {
+    // Needle-fine foliage minifies to FRACTIONAL sampled alpha across the whole crown (each pixel covers
+    // many leaf/gap texels) — raw A2C turns that into a uniform screen-door stipple. Sharpen the SAMPLED
+    // alpha toward the vanilla alpha-test look (fwidth keeps real silhouettes antialiased) and
+    // un-premultiply the colour so boosted coverage does not render the ×alpha-darkened RGB.
+    let sharpened = clamp((texel.a - 0.5) / max(fwidth(texel.a), 0.0001) + 0.5, 0.0, 1.0);
+    texel = vec4f(texel.rgb / max(texel.a, 0.05), sharpened);
   }
   // Hybrid lighting (074/06 row 3, the shipped 064 model): prelit is the INDIRECT term, the sun adds a real
   // direct term on the raw albedo. indirect/direct ride frame params — day arcs are a CPU concern.
@@ -475,6 +482,16 @@ fn fsWorld(in: VsOut) -> @location(0) vec4f {
   // premult-correct in fog; opaque/cutout (a ≈ 1) are unchanged.
   color = mix(color, skyColorFor(viewDir) * texel.a, fogFactor);
   return vec4f(color, texel.a);
+}
+
+@fragment
+fn fsWorld(in: VsOut) -> @location(0) vec4f {
+  return worldShade(in, false);
+}
+
+@fragment
+fn fsWorldCutout(in: VsOut) -> @location(0) vec4f {
+  return worldShade(in, true);
 }
 
 @fragment

@@ -1,8 +1,16 @@
 import type { AssetFileSystem } from '@opensa/renderware';
 
-import { buildOspak, type OspakInput, type OspakManifest } from '@opensa/engine-formats';
+import {
+  buildOspak,
+  encodeOswire,
+  OSCELL_VERTEX_STRIDE,
+  oscellSections,
+  type OspakInput,
+  type OspakManifest,
+} from '@opensa/engine-formats';
 import { OPEN_SCRIPT_IPL, resolveMap } from '@opensa/renderware/map/resolve-map';
 import { buildWorldGrid, cellKey } from '@opensa/renderware/map/world-grid';
+import { MeshoptEncoder } from 'meshoptimizer';
 /**
  * District conversion orchestrator (plan 074/03): resolve the map → world grid → for every cell in the rect,
  * weld HD + LOD levels → build texture arrays → deterministic pak + manifest + the measurement report the
@@ -42,10 +50,11 @@ export interface ConvertReport {
   timedObjects: number;
 }
 
-export function convertDistrict(
+export async function convertDistrict(
   fs: AssetFileSystem,
   options: ConvertOptions,
-): { manifest: OspakManifest; pak: Uint8Array; report: ConvertReport } {
+): Promise<{ manifest: OspakManifest; pak: Uint8Array; report: ConvertReport }> {
+  await MeshoptEncoder.ready;
   const cellSize = options.cellSize ?? 250;
   const defs = resolveMap(fs, { extraIpl: OPEN_SCRIPT_IPL });
   const grid = buildWorldGrid(defs, cellSize);
@@ -152,9 +161,37 @@ function weldRect(
   return welded;
 }
 
-/** Per-entry wire compression (074/10 A1): deflate-raw — natively inflatable in the pak worker via
- *  `DecompressionStream`, zero dependencies. Skipped when it doesn't pay (already-compressed payloads). */
+/** Per-entry wire compression (074/10 A1 + 074/14 stage 2): cells go meshopt (vertex + index streams in an
+ *  `.oswire` container) then deflate-raw; everything else plain deflate-raw — natively inflatable in the pak
+ *  worker via `DecompressionStream`. Skipped when it doesn't pay (already-compressed payloads). */
 function wireCompress(input: OspakInput): OspakInput {
+  if (input.kind === 'cell') {
+    const sections = oscellSections(input.bytes);
+    // The meshopt index codec is triangle-list-only; every welded cell is one (guard stays for safety).
+    // NB the codec canonicalizes each triangle's cyclic rotation (order + winding preserved, provoking
+    // vertex not) — safe here because the only flat-interpolated attribute is the texture layer, and a
+    // triangle never mixes layers (vertex dedup keys the full 36-byte content; one triangle = one material).
+    if (sections.indexCount % 3 === 0 && sections.vertexCount > 0 && sections.indexCount > 0) {
+      const vertexBlock = MeshoptEncoder.encodeVertexBuffer(
+        input.bytes.subarray(
+          sections.vertexOffset,
+          sections.vertexOffset + sections.vertexCount * OSCELL_VERTEX_STRIDE,
+        ),
+        sections.vertexCount,
+        OSCELL_VERTEX_STRIDE,
+      );
+      const indexBlock = MeshoptEncoder.encodeIndexBuffer(
+        input.bytes.subarray(sections.indexOffset, sections.tailOffset),
+        sections.indexCount,
+        sections.indexElemSize,
+      );
+      const container = encodeOswire(input.bytes, vertexBlock, indexBlock);
+      const wire = deflateRawSync(container, { level: 6 });
+      if (wire.byteLength < input.bytes.byteLength * 0.95) {
+        return { ...input, bytes: wire, enc: 'oswire-deflate-raw', rawLength: input.bytes.byteLength };
+      }
+    }
+  }
   const wire = deflateRawSync(input.bytes, { level: 6 });
   if (wire.byteLength >= input.bytes.byteLength * 0.95) {
     return input;

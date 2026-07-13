@@ -2,7 +2,11 @@
  * `opensa-pack` CLI (plan 074/03).
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1
- *     [--cell-size 250] [--no-ao] [--no-sunvis] [--wind <dir>[,<dir>…]]
+ *     [--cell-size 250] [--bakes [--no-ao] [--no-sunvis]] [--wind <dir>[,<dir>…]]
+ *
+ * `--bakes` — enable the HEAVY offline channels (AO/skyVis + sun-vis, 074/07): ~90 % of convert wall-time
+ * (full LS ≈ 14 of 15.7 min). OFF by default for iteration speed (2026-07-13 user decision); production,
+ * bench-ritual and pre-flip converts MUST pass it — unbaked paks render open/unshadowed by design.
  *
  * `--wind` — overlay dirs of wind-ADAPTED DFFs (prelit alpha = sway weights), e.g.
  * `--wind "mods-src/vegetation,mods-src/mods/21. Wind Project 1.0.2"`; they shadow the game's assets.
@@ -37,7 +41,7 @@ function findFiles(dir: string, extension: string): string[] {
   return found;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const game = arg('game');
   const out = arg('out');
   const rectRaw = arg('rect');
@@ -52,8 +56,10 @@ function main(): void {
     throw new Error(`bad --rect '${rectRaw}' (want x0,y0,x1,y1 in cell coords)`);
   }
   const cellSize = Number(arg('cell-size') ?? 250) || 250;
-  const ao = !process.argv.includes('--no-ao');
-  const sunVis = !process.argv.includes('--no-sunvis');
+  // Bakes are OPT-IN (--bakes): they are ~90 % of convert time and iteration reconverts don't need them.
+  const bakes = process.argv.includes('--bakes');
+  const ao = bakes && !process.argv.includes('--no-ao');
+  const sunVis = bakes && !process.argv.includes('--no-sunvis');
   const windDirs = (arg('wind') ?? '')
     .split(',')
     .map((dir) => dir.trim())
@@ -87,7 +93,7 @@ function main(): void {
       stochasticNames.add(name);
     }
   }
-  const { manifest, pak, report } = convertDistrict(fs, {
+  const { manifest, pak, report } = await convertDistrict(fs, {
     ao,
     cellSize,
     fallbackTxds,
@@ -151,4 +157,7 @@ function parseStochasticList(text: string): Set<string> {
   return names;
 }
 
-main();
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
