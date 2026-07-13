@@ -1,3 +1,4 @@
+export { IfpSampler, type SamplerBone, type SamplerClip } from './anim/ifp-sampler';
 export { configureCanvas, type EngineDevice, initDevice } from './core/device';
 export {
   frustumFromViewProj,
@@ -11,7 +12,7 @@ export {
 } from './core/math';
 export { type ResidencyCategory, Resources } from './core/resources';
 export { GpuTimers } from './debug/gpu-timers';
-export { type CameraState, Engine, type EngineStats } from './engine';
+export { type CameraState, Engine, type EngineStats, type PedProbe, type PedProbeInit } from './engine';
 export { compileAll, MSAA_SAMPLES, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';
 export { assertGuardrails, resolveShader, shaderModuleNames } from './render/shaders';
 export { setupStreaming, type StreamSetup } from './stream/setup';

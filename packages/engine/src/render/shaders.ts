@@ -106,6 +106,80 @@ fn skyColorFor(dir: vec3f) -> vec3f {
   return base + glow + moon;
 }
 `,
+  ped: /* wgsl */ `
+#include <frame>
+
+// Skinning probe (074/08 B1): one skinned entity through the intended dynamics path — matrices in a
+// STORAGE buffer (slot 0 = the model matrix carrying the GTA→engine axis change, bone palettes follow),
+// 4-bone vertex blend, textured sun/indirect lighting + the shared fog. No prelit — peds are dynamically
+// lit (the plan-034 night fill joins in M3).
+struct PedVsIn {
+  @location(0) position: vec3f,
+  @location(1) normal: vec3f,
+  @location(2) uv: vec2f,
+  @location(3) joints: vec4<u32>,
+  @location(4) weights: vec4f,
+};
+
+struct PedVsOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) normal: vec3f,
+  @location(2) world: vec3f,
+};
+
+@group(1) @binding(0) var<storage, read> pedMatrices: array<mat4x4f>;
+@group(1) @binding(1) var pedTexture: texture_2d<f32>;
+@group(1) @binding(2) var pedSampler: sampler;
+
+@vertex
+fn vsPed(in: PedVsIn) -> PedVsOut {
+  let source = vec4f(in.position, 1.0);
+  let skinned =
+    (pedMatrices[1u + in.joints.x] * source) * in.weights.x +
+    (pedMatrices[1u + in.joints.y] * source) * in.weights.y +
+    (pedMatrices[1u + in.joints.z] * source) * in.weights.z +
+    (pedMatrices[1u + in.joints.w] * source) * in.weights.w;
+  let sourceNormal = vec4f(in.normal, 0.0);
+  let skinnedNormal =
+    (pedMatrices[1u + in.joints.x] * sourceNormal) * in.weights.x +
+    (pedMatrices[1u + in.joints.y] * sourceNormal) * in.weights.y +
+    (pedMatrices[1u + in.joints.z] * sourceNormal) * in.weights.z +
+    (pedMatrices[1u + in.joints.w] * sourceNormal) * in.weights.w;
+  let world = pedMatrices[0] * vec4f(skinned.xyz, 1.0);
+  var out: PedVsOut;
+  out.clip = frame.viewProj * world;
+  out.uv = in.uv;
+  out.normal = normalize((pedMatrices[0] * vec4f(skinnedNormal.xyz, 0.0)).xyz);
+  out.world = world.xyz;
+  return out;
+}
+
+@fragment
+fn fsPed(in: PedVsOut) -> @location(0) vec4f {
+  let texel = textureSample(pedTexture, pedSampler, in.uv);
+  if (texel.a < 0.5) {
+    discard;
+  }
+  let normal = normalize(in.normal);
+  let sunNdl = max(dot(normal, frame.sunDir.xyz), 0.0);
+  let moonNdl = clamp((dot(normal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
+  let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl;
+  var color = texel.rgb * lit;
+  // Same unified fog shape as fsWorld (068 invariant: distant peds dissolve into the sky behind them).
+  let toCamera = in.world - frame.camera.xyz;
+  let dist = length(toCamera);
+  let viewDir = toCamera / max(dist, 0.001);
+  let fogD = max(dist - frame.fog.y, 0.0);
+  let fogK = 2.0 / max(frame.fog.x - frame.fog.y, 1.0);
+  var fogFactor = 1.0 - exp(-(fogK * fogD) * (fogK * fogD));
+  let heightAtten = mix(frame.fog.w, 1.0, exp(-max(in.world.y, 0.0) * frame.fog.z));
+  fogFactor = fogFactor * heightAtten;
+  fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
+  color = mix(color, skyColorFor(viewDir), fogFactor);
+  return vec4f(color, 1.0);
+}
+`,
   sky: /* wgsl */ `
 #include <frame>
 

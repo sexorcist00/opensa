@@ -15,6 +15,7 @@ export const MSAA_SAMPLES = 4;
 
 export type PipelineId =
   | 'corona'
+  | 'ped'
   | 'sky'
   | 'world-beam-double'
   | 'world-beam-front'
@@ -33,6 +34,8 @@ export interface PipelineSet {
   get(id: PipelineId): GPURenderPipeline;
   /** group(2): texture array + sampler. */
   materialLayout: GPUBindGroupLayout;
+  /** group(1) of the ped pipeline: matrix storage (model + bone palette) + texture + sampler (074/08 B1). */
+  pedLayout: GPUBindGroupLayout;
 }
 
 export function compileAll(
@@ -97,6 +100,40 @@ export function compileAll(
   };
   const skyModule = device.createShaderModule({ code: resolveShader('sky'), label: 'sky' });
   const skyLayout = device.createPipelineLayout({ bindGroupLayouts: [frameLayout], label: 'sky' });
+  // Skinning probe (074/08 B1): storage palette + 4-bone blend; separate tight attribute buffers (the
+  // dynamics vertex layout is NOT the .oscell layout — that consequence is exactly what the probe freezes).
+  const pedLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, buffer: { type: 'read-only-storage' }, visibility: GPUShaderStage.VERTEX },
+      { binding: 1, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'ped',
+  });
+  const pedModule = device.createShaderModule({ code: resolveShader('ped'), label: 'ped' });
+  pipelines.set(
+    'ped',
+    device.createRenderPipeline({
+      depthStencil: { depthCompare: 'greater', depthWriteEnabled: true, format: depthFormat },
+      fragment: { entryPoint: 'fsPed', module: pedModule, targets: [{ format: colorFormat }] },
+      label: 'ped',
+      layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, pedLayout], label: 'ped' }),
+      multisample: { count: MSAA_SAMPLES },
+      // Double-sided for the probe: SA ped meshes carry single-sided skirts/hair shells.
+      primitive: { cullMode: 'none', frontFace: 'ccw', topology: 'triangle-list' },
+      vertex: {
+        buffers: [
+          { arrayStride: 12, attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }] },
+          { arrayStride: 12, attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 1 }] },
+          { arrayStride: 8, attributes: [{ format: 'float32x2', offset: 0, shaderLocation: 2 }] },
+          { arrayStride: 4, attributes: [{ format: 'uint8x4', offset: 0, shaderLocation: 3 }] },
+          { arrayStride: 4, attributes: [{ format: 'unorm8x4', offset: 0, shaderLocation: 4 }] },
+        ],
+        entryPoint: 'vsPed',
+        module: pedModule,
+      },
+    }),
+  );
   // 2dfx coronas (074/06 row 13): instanced additive billboards, depth READ (occluders hide them).
   const coronaModule = device.createShaderModule({ code: resolveShader('corona'), label: 'corona' });
   pipelines.set(
@@ -193,6 +230,7 @@ export function compileAll(
       return pipeline;
     },
     materialLayout,
+    pedLayout,
   };
 }
 

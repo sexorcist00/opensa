@@ -98,6 +98,26 @@ export interface Environment {
   windStrength: number;
 }
 
+/** Live probe handle: write the palette ([model, bone 0, …], column-major), then `updatePedPalette()`. */
+export interface PedProbe {
+  palette: Float32Array;
+}
+
+/** Skinning-probe upload (074/08 B1) — raw byte views over the probe fixture's bin sections. */
+export interface PedProbeInit {
+  boneCount: number;
+  indexCount: number;
+  /** uint16 index payload. */
+  indices: Uint8Array;
+  joints: Uint8Array;
+  normals: Uint8Array;
+  positions: Uint8Array;
+  submeshes: readonly { indexCount: number; indexOffset: number }[];
+  texture: { height: number; rgba: Uint8Array; width: number };
+  uvs: Uint8Array;
+  weights: Uint8Array;
+}
+
 export class Engine {
   cells!: CellStore;
   /** Live environment — host mutates freely; written into the frame UBO every frame. Noon defaults. */
@@ -150,6 +170,17 @@ export class Engine {
   private readonly frustumPlanes = new Float32Array(24);
   private readonly invViewProj: Mat4 = mat4Identity();
   private msaaView!: GPUTextureView;
+  /** Skinning probe (074/08 B1) — a single skinned entity outside the static bundles. */
+  private ped: null | {
+    bindGroup: GPUBindGroup;
+    buffers: GPUBuffer[];
+    indexBuffer: GPUBuffer;
+    palette: Float32Array;
+    paletteBuffer: GPUBuffer;
+    submeshes: readonly { indexCount: number; indexOffset: number }[];
+  } = null;
+  private pedTexture: GPUTexture | null = null;
+  private pedTextureBytes = 0;
   private pipelines!: PipelineSet;
   private readonly proj: Mat4 = mat4Identity();
   private resources!: Resources;
@@ -267,6 +298,7 @@ export class Engine {
     // ObjectTable draws (074/06 row 9): hour-gated timed objects, in the opaque phase (their blend groups
     // sort with the world blends only approximately — the standard transparency caveat).
     draws += this.drawObjects(pass);
+    draws += this.drawPed(pass);
     pass.setPipeline(this.pipelines.get('sky'));
     pass.setBindGroup(0, this.frameBindGroup);
     pass.draw(3);
@@ -355,6 +387,95 @@ export class Engine {
     return this.resources.ledger();
   }
 
+  removePedProbe(): void {
+    if (!this.ped) {
+      return;
+    }
+    for (const buffer of this.ped.buffers) {
+      this.resources.destroyBuffer('cellVertex', buffer);
+    }
+    this.resources.destroyBuffer('cellVertex', this.ped.indexBuffer);
+    this.resources.destroyBuffer('uniform', this.ped.paletteBuffer);
+    if (this.pedTexture) {
+      this.resources.destroyTexture('texture', this.pedTexture, this.pedTextureBytes);
+      this.pedTexture = null;
+    }
+    this.ped = null;
+  }
+
+  /** Create (or replace) the skinning probe entity (074/08 B1). Returns the live palette handle. */
+  setPedProbe(init: PedProbeInit): PedProbe {
+    this.removePedProbe();
+    const upload = (label: string, bytes: Uint8Array, usage: number): GPUBuffer => {
+      const size = Math.ceil(bytes.byteLength / 4) * 4;
+      const buffer = this.resources.createBuffer('cellVertex', {
+        label: `ped-${label}`,
+        size,
+        usage: usage | GPUBufferUsage.COPY_DST,
+      });
+      // writeBuffer length must be %4 (the M0 lesson) — odd u16 index payloads get a zero-padded copy.
+      let payload = bytes;
+      if (bytes.byteLength !== size) {
+        payload = new Uint8Array(size);
+        payload.set(bytes);
+      }
+      this.device.queue.writeBuffer(buffer, 0, payload);
+
+      return buffer;
+    };
+    const buffers = [
+      upload('positions', init.positions, GPUBufferUsage.VERTEX),
+      upload('normals', init.normals, GPUBufferUsage.VERTEX),
+      upload('uvs', init.uvs, GPUBufferUsage.VERTEX),
+      upload('joints', init.joints, GPUBufferUsage.VERTEX),
+      upload('weights', init.weights, GPUBufferUsage.VERTEX),
+    ];
+    const indexBuffer = upload('indices', init.indices, GPUBufferUsage.INDEX);
+    const palette = new Float32Array((1 + init.boneCount) * 16);
+    const paletteBuffer = this.resources.createBuffer('uniform', {
+      label: 'ped-palette',
+      size: palette.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    const texture = this.resources.createTexture(
+      'texture',
+      {
+        format: 'rgba8unorm-srgb',
+        label: 'ped-texture',
+        size: { height: init.texture.height, width: init.texture.width },
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      },
+      init.texture.rgba.byteLength,
+    );
+    this.device.queue.writeTexture(
+      { texture },
+      init.texture.rgba,
+      { bytesPerRow: init.texture.width * 4 },
+      { height: init.texture.height, width: init.texture.width },
+    );
+    const bindGroup = this.device.createBindGroup({
+      entries: [
+        { binding: 0, resource: { buffer: paletteBuffer } },
+        { binding: 1, resource: texture.createView() },
+        { binding: 2, resource: this.device.createSampler({ label: 'ped', magFilter: 'linear', minFilter: 'linear' }) },
+      ],
+      label: 'ped',
+      layout: this.pipelines.pedLayout,
+    });
+    this.ped = { bindGroup, buffers, indexBuffer, palette, paletteBuffer, submeshes: init.submeshes };
+    this.pedTexture = texture;
+    this.pedTextureBytes = init.texture.rgba.byteLength;
+
+    return { palette };
+  }
+
+  /** Upload the probe's palette after the host wrote it (model matrix slot 0 + sampled bones). */
+  updatePedPalette(): void {
+    if (this.ped) {
+      this.device.queue.writeBuffer(this.ped.paletteBuffer, 0, this.ped.palette);
+    }
+  }
+
   /** 2dfx corona billboards of visible cells (074/06 row 13): CPU-gated by night + farClip, one
    *  instanced draw. Colour is premultiplied by the dn gate — coronas are a NIGHT phenomenon (v1). */
   private drawCoronas(pass: GPURenderPassEncoder, camera: CameraState): number {
@@ -438,6 +559,22 @@ export class Engine {
     }
 
     return draws;
+  }
+
+  private drawPed(pass: GPURenderPassEncoder): number {
+    if (!this.ped) {
+      return 0;
+    }
+    pass.setPipeline(this.pipelines.get('ped'));
+    pass.setBindGroup(0, this.frameBindGroup);
+    pass.setBindGroup(1, this.ped.bindGroup);
+    this.ped.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
+    pass.setIndexBuffer(this.ped.indexBuffer, 'uint16');
+    for (const submesh of this.ped.submeshes) {
+      pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset);
+    }
+
+    return this.ped.submeshes.length;
   }
 
   private ensureTargets(width: number, height: number): void {

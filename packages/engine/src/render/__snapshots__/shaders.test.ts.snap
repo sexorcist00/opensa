@@ -159,6 +159,138 @@ fn skyColorFor(dir: vec3f) -> vec3f {
 "
 `;
 
+exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > ped 1`] = `
+"
+
+struct Frame {
+  viewProj: mat4x4f,
+  invViewProj: mat4x4f,
+  camera: vec4f,
+  // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
+  // the sun-vis v2 threshold input — 074/07), sun colour,
+  // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
+  // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
+  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
+  // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
+  //            time seconds (the wind clock), windStrength (074/06 row 10)],
+  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
+  // moonDir.w = stochastic de-tiling toggle (074/12; the vec4 slot was spare).
+  sunDir: vec4f,
+  sunColor: vec4f,
+  params: vec4f,
+  skyTop: vec4f,
+  skyHorizon: vec4f,
+  fog: vec4f,
+  params2: vec4f,
+  moonDir: vec4f,
+  moonColor: vec4f,
+};
+@group(0) @binding(0) var<uniform> frame: Frame;
+@group(0) @binding(1) var skyLut: texture_2d<f32>;
+@group(0) @binding(2) var skyLutSampler: sampler;
+
+// Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
+// fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
+// Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
+fn skyColorFor(dir: vec3f) -> vec3f {
+  let elevation = clamp(dir.y, 0.0, 1.0);
+  let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
+  let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
+  let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
+  let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
+  let base = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+  // Structured sun (074/06 row 4 polish): a hot angular DISC (~0.5°) + tight corona + circumsolar glow +
+  // wide forward-scatter haze. The disc overshoots 1.0 on purpose — the un-tonemapped sRGB output clips the
+  // core to white while the fringe keeps the timecyc sun colour (orange limb at dusk for free); plan 09's
+  // HDR chain will feed the same overshoot into bloom/god-rays instead of clipping.
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+  let disc = smoothstep(0.99985, 0.99997, sunDot) * 12.0;
+  let corona = pow(sunDot, 600.0) * 2.2;
+  let circumsolar = pow(sunDot, 32.0) * 0.5;
+  let haze = pow(sunDot, 8.0) * 0.08;
+  let glow = frame.sunColor.rgb * (disc + corona + circumsolar + haze);
+  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it;
+  // the disc lives in the shared sky so fogged geometry dissolves into the moon behind it (068 invariant).
+  let moonDot = max(dot(dir, frame.moonDir.xyz), 0.0);
+  // Wide soft halo (pow 96) marks the spot in the horizon band; the disc itself stays small and bright.
+  let moon = frame.moonColor.rgb * (smoothstep(0.9985, 0.9993, moonDot) * 14.0 + pow(moonDot, 96.0) * 2.2);
+  return base + glow + moon;
+}
+
+
+// Skinning probe (074/08 B1): one skinned entity through the intended dynamics path — matrices in a
+// STORAGE buffer (slot 0 = the model matrix carrying the GTA→engine axis change, bone palettes follow),
+// 4-bone vertex blend, textured sun/indirect lighting + the shared fog. No prelit — peds are dynamically
+// lit (the plan-034 night fill joins in M3).
+struct PedVsIn {
+  @location(0) position: vec3f,
+  @location(1) normal: vec3f,
+  @location(2) uv: vec2f,
+  @location(3) joints: vec4<u32>,
+  @location(4) weights: vec4f,
+};
+
+struct PedVsOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) normal: vec3f,
+  @location(2) world: vec3f,
+};
+
+@group(1) @binding(0) var<storage, read> pedMatrices: array<mat4x4f>;
+@group(1) @binding(1) var pedTexture: texture_2d<f32>;
+@group(1) @binding(2) var pedSampler: sampler;
+
+@vertex
+fn vsPed(in: PedVsIn) -> PedVsOut {
+  let source = vec4f(in.position, 1.0);
+  let skinned =
+    (pedMatrices[1u + in.joints.x] * source) * in.weights.x +
+    (pedMatrices[1u + in.joints.y] * source) * in.weights.y +
+    (pedMatrices[1u + in.joints.z] * source) * in.weights.z +
+    (pedMatrices[1u + in.joints.w] * source) * in.weights.w;
+  let sourceNormal = vec4f(in.normal, 0.0);
+  let skinnedNormal =
+    (pedMatrices[1u + in.joints.x] * sourceNormal) * in.weights.x +
+    (pedMatrices[1u + in.joints.y] * sourceNormal) * in.weights.y +
+    (pedMatrices[1u + in.joints.z] * sourceNormal) * in.weights.z +
+    (pedMatrices[1u + in.joints.w] * sourceNormal) * in.weights.w;
+  let world = pedMatrices[0] * vec4f(skinned.xyz, 1.0);
+  var out: PedVsOut;
+  out.clip = frame.viewProj * world;
+  out.uv = in.uv;
+  out.normal = normalize((pedMatrices[0] * vec4f(skinnedNormal.xyz, 0.0)).xyz);
+  out.world = world.xyz;
+  return out;
+}
+
+@fragment
+fn fsPed(in: PedVsOut) -> @location(0) vec4f {
+  let texel = textureSample(pedTexture, pedSampler, in.uv);
+  if (texel.a < 0.5) {
+    discard;
+  }
+  let normal = normalize(in.normal);
+  let sunNdl = max(dot(normal, frame.sunDir.xyz), 0.0);
+  let moonNdl = clamp((dot(normal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
+  let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl;
+  var color = texel.rgb * lit;
+  // Same unified fog shape as fsWorld (068 invariant: distant peds dissolve into the sky behind them).
+  let toCamera = in.world - frame.camera.xyz;
+  let dist = length(toCamera);
+  let viewDir = toCamera / max(dist, 0.001);
+  let fogD = max(dist - frame.fog.y, 0.0);
+  let fogK = 2.0 / max(frame.fog.x - frame.fog.y, 1.0);
+  var fogFactor = 1.0 - exp(-(fogK * fogD) * (fogK * fogD));
+  let heightAtten = mix(frame.fog.w, 1.0, exp(-max(in.world.y, 0.0) * frame.fog.z));
+  fogFactor = fogFactor * heightAtten;
+  fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
+  color = mix(color, skyColorFor(viewDir), fogFactor);
+  return vec4f(color, 1.0);
+}
+"
+`;
+
 exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > sky 1`] = `
 "
 

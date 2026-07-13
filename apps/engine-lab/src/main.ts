@@ -15,9 +15,72 @@ import {
 } from './bench';
 import { type EnvironmentDriver, parametricDriver, timecycDriver } from './environment';
 import { loadPak } from './pak-loader';
+import { loadPedProbe } from './ped';
 import { syntheticCell, syntheticTextureArray } from './synthetic';
 
 const CELL_SIZE = 250;
+
+/** `?ao=` / `?sunvis=` / `?wind=` / `?stoch=` A/B overrides (074/07, 074/06 row 10, 074/12). */
+function applyEnvironmentOverrides(engine: Engine, params: URLSearchParams): void {
+  const aoParam = Number(params.get('ao') ?? Number.NaN);
+  if (Number.isFinite(aoParam)) {
+    engine.environment.aoStrength = aoParam;
+  }
+  const sunVisParam = Number(params.get('sunvis') ?? Number.NaN);
+  if (Number.isFinite(sunVisParam)) {
+    engine.environment.sunVisStrength = sunVisParam;
+  }
+  const windParam = Number(params.get('wind') ?? Number.NaN);
+  if (Number.isFinite(windParam)) {
+    engine.environment.windStrength = windParam;
+  }
+  const stochParam = Number(params.get('stoch') ?? Number.NaN);
+  if (Number.isFinite(stochParam)) {
+    engine.environment.stochastic = stochParam;
+  }
+}
+
+/** The M0 synthetic fixture: a grid of box cells through the real format path; returns recorded draws. */
+function buildSyntheticDistrict(engine: Engine, gridSide: number, boxesPerSide: number): number {
+  engine.textures.load(0, syntheticTextureArray());
+  let recordedDraws = 0;
+  for (let cx = 0; cx < gridSide; cx += 1) {
+    for (let cy = 0; cy < gridSide; cy += 1) {
+      const handle = engine.cells.load(`${cx},${cy},hd`, syntheticCell(cx, cy, CELL_SIZE, boxesPerSide));
+      recordedDraws += handle.draws;
+    }
+  }
+
+  return recordedDraws;
+}
+
+/** One frame of the `?test=leak` phases: sweep 600 frames → unloadAll → settle 60 → ledger compare. */
+function leakStep(
+  leakFrame: number,
+  focus: [number, number, number],
+  streaming: StreamingDriver,
+  engine: Engine,
+  leakBaseline: string,
+  hud: HTMLPreElement,
+): void {
+  if (leakFrame < 600) {
+    // Phase 1: sweep the focus across the district — load a wide set of cells.
+    const t01 = leakFrame / 600;
+    focus[0] += Math.sin(t01 * Math.PI * 2) * 6;
+    focus[2] += Math.cos(t01 * Math.PI * 3) * 6;
+  } else if (leakFrame === 600) {
+    streaming.unloadAll();
+    // eslint-disable-next-line no-console -- the leak test's phase marker IS its console protocol
+    console.log('[leak] unloadAll issued');
+  } else if (leakFrame === 660) {
+    // Phase 3: settle 60 frames, then compare.
+    const now = JSON.stringify(pick(engine.ledger()));
+    const pass = now === leakBaseline;
+    // eslint-disable-next-line no-console -- the leak verdict prints the ledger diff by design
+    console[pass ? 'log' : 'error'](`[leak] ${pass ? 'PASS' : 'FAIL'}\nbaseline ${leakBaseline}\nnow      ${now}`);
+    hud.style.background = pass ? 'rgba(10,60,16,0.85)' : 'rgba(80,10,10,0.85)';
+  }
+}
 
 async function main(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
@@ -36,24 +99,7 @@ async function main(): Promise<void> {
   const dayCycle = params.get('daycycle') === '1';
   const weather = Number(params.get('weather') ?? 0) || 0;
   let hour = Number.isFinite(hourParam) ? hourParam : 12;
-  // `?ao=N` / `?sunvis=N` (074/07 A/B): baked-channel strength overrides; 0 disables (drivers never touch them).
-  const aoParam = Number(params.get('ao') ?? Number.NaN);
-  if (Number.isFinite(aoParam)) {
-    engine.environment.aoStrength = aoParam;
-  }
-  const sunVisParam = Number(params.get('sunvis') ?? Number.NaN);
-  if (Number.isFinite(sunVisParam)) {
-    engine.environment.sunVisStrength = sunVisParam;
-  }
-  const windParam = Number(params.get('wind') ?? Number.NaN);
-  if (Number.isFinite(windParam)) {
-    engine.environment.windStrength = windParam;
-  }
-  // `?stoch=0` (074/12 A/B): plain sampling on de-tiling-flagged layers.
-  const stochParam = Number(params.get('stoch') ?? Number.NaN);
-  if (Number.isFinite(stochParam)) {
-    engine.environment.stochastic = stochParam;
-  }
+  applyEnvironmentOverrides(engine, params);
   // Row 14: the environment driver — real timecyc when the manifest carries it, parametric fallback else.
   // Swapped in after the pak loads (the manifest arrives there); parametric until then.
   let environmentDriver: EnvironmentDriver = parametricDriver(engine);
@@ -88,13 +134,7 @@ async function main(): Promise<void> {
     orbitRadius = Math.max(district.radius * 1.6, 400);
     title = `converted district (${district.cellCount} cells, ${recordedDraws} recorded draws)`;
   } else {
-    engine.textures.load(0, syntheticTextureArray());
-    for (let cx = 0; cx < gridSide; cx += 1) {
-      for (let cy = 0; cy < gridSide; cy += 1) {
-        const handle = engine.cells.load(`${cx},${cy},hd`, syntheticCell(cx, cy, CELL_SIZE, boxesPerSide));
-        recordedDraws += handle.draws;
-      }
-    }
+    recordedDraws = buildSyntheticDistrict(engine, gridSide, boxesPerSide);
     const half = (gridSide * CELL_SIZE) / 2;
     focus = [half, 0, half];
     orbitRadius = half * 1.7;
@@ -105,6 +145,17 @@ async function main(): Promise<void> {
   let previous = performance.now();
   let angle = 0;
   let zoom = 1;
+  // Skinning probe (074/08 B1): `?ped=1` drops the animated fixture ped at the focus point and STARTS the
+  // camera zoomed onto it (a 1.8-unit ped is subpixel at a full-city orbit radius); wheel out to leave.
+  let pedHost: Awaited<ReturnType<typeof loadPedProbe>> | null = null;
+  let pedMs = 0;
+  let pedPosition: [number, number, number] | null = null;
+  if (params.get('ped') === '1') {
+    const pedY = Number(params.get('pedy') ?? focus[1]) || focus[1];
+    pedPosition = [focus[0], pedY, focus[2]];
+    pedHost = await loadPedProbe(engine, pedPosition);
+    zoom = Math.min(1, 14 / orbitRadius);
+  }
   let heightFactor = 0.9;
   let dragging = false;
   // Wheel = zoom (the alpha-edge inspection needs to get CLOSE to foliage/fences); drag = orbit/height.
@@ -158,25 +209,7 @@ async function main(): Promise<void> {
       angle += 0.003;
     }
     if (held.size > 0) {
-      const pan = Math.min(2000, Math.max(60, orbitRadius * zoom)) * (frameDt / 1000) * 1.2;
-      const fx = -Math.cos(angle);
-      const fz = -Math.sin(angle);
-      if (held.has('KeyW')) {
-        focus[0] += fx * pan;
-        focus[2] += fz * pan;
-      }
-      if (held.has('KeyS')) {
-        focus[0] -= fx * pan;
-        focus[2] -= fz * pan;
-      }
-      if (held.has('KeyA')) {
-        focus[0] += fz * pan;
-        focus[2] -= fx * pan;
-      }
-      if (held.has('KeyD')) {
-        focus[0] -= fz * pan;
-        focus[2] += fx * pan;
-      }
+      panFocus(focus, held, angle, Math.min(2000, Math.max(60, orbitRadius * zoom)) * (frameDt / 1000) * 1.2);
     }
     if (dayCycle) {
       hour = (hour + 0.005) % 24;
@@ -204,21 +237,7 @@ async function main(): Promise<void> {
         };
     if (leakTest && streaming) {
       leakFrame += 1;
-      if (leakFrame < 600) {
-        // Phase 1: sweep the focus across the district — load a wide set of cells.
-        const t01 = leakFrame / 600;
-        focus[0] += Math.sin(t01 * Math.PI * 2) * 6;
-        focus[2] += Math.cos(t01 * Math.PI * 3) * 6;
-      } else if (leakFrame === 600) {
-        streaming.unloadAll();
-        console.log('[leak] unloadAll issued');
-      } else if (leakFrame === 660) {
-        // Phase 3: settle 60 frames, then compare.
-        const now = JSON.stringify(pick(engine.ledger()));
-        const pass = now === leakBaseline;
-        console[pass ? 'log' : 'error'](`[leak] ${pass ? 'PASS' : 'FAIL'}\nbaseline ${leakBaseline}\nnow      ${now}`);
-        hud.style.background = pass ? 'rgba(10,60,16,0.85)' : 'rgba(80,10,10,0.85)';
-      }
+      leakStep(leakFrame, focus, streaming, engine, leakBaseline, hud);
     }
     let streamStats: null | StreamStats = null;
     if (streaming && !(leakTest && leakFrame >= 600)) {
@@ -226,6 +245,9 @@ async function main(): Promise<void> {
       // outside the LOD ring and would stream nothing. In leak mode the driver STOPS after unloadAll —
       // otherwise it would immediately re-stream the rings and fail the comparison by design.
       streamStats = streaming.update(camera.target);
+    }
+    if (pedHost) {
+      pedMs = pedHost.update(now / 1000);
     }
     const stats = engine.frame(camera);
     if (benchScript && !benchDone) {
@@ -255,6 +277,9 @@ async function main(): Promise<void> {
       `cells       ${stats.cellsVisible}/${stats.cellsTotal} visible, draws ${stats.drawsRecorded}\n` +
       `residency   ${(stats.residencyBytes / (1024 * 1024)).toFixed(1)} MB\n` +
       `build       ${buildMs.toFixed(0)} ms (fixture, off the P0 clock)` +
+      (pedHost && pedPosition
+        ? `\nped sampler ${pedMs.toFixed(2)} ms @ [${pedPosition.map((value) => value.toFixed(0)).join(', ')}] (074/08 probe)`
+        : '') +
       (streamStats
         ? `\nstream      ${streamStats.loadedCells} loaded, ${streamStats.pendingCells} pending, ` +
           `${streamStats.created} created / ${streamStats.evicted} evicted, worst create ${streamStats.worstCreateMs.toFixed(1)} ms`
@@ -262,6 +287,28 @@ async function main(): Promise<void> {
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
+}
+
+/** WASD pans the orbit FOCUS — streaming rings follow it (how you travel a full-city pak in the lab). */
+function panFocus(focus: [number, number, number], held: ReadonlySet<string>, angle: number, pan: number): void {
+  const fx = -Math.cos(angle);
+  const fz = -Math.sin(angle);
+  if (held.has('KeyW')) {
+    focus[0] += fx * pan;
+    focus[2] += fz * pan;
+  }
+  if (held.has('KeyS')) {
+    focus[0] -= fx * pan;
+    focus[2] -= fz * pan;
+  }
+  if (held.has('KeyA')) {
+    focus[0] += fz * pan;
+    focus[2] -= fx * pan;
+  }
+  if (held.has('KeyD')) {
+    focus[0] -= fz * pan;
+    focus[2] += fx * pan;
+  }
 }
 
 /** Leak-relevant ledger categories (targets resize with the canvas; textures persist by design). */
