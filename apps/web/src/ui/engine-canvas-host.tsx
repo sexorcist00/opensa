@@ -221,6 +221,7 @@ async function boot(
   let readySent = false;
   let debugError: null | string = null;
   let groundDelta = 0;
+  let pedMs = 0;
   const runFixedSteps = (pending: number): number => {
     let steps = 0;
     while (pending >= FIXED_STEP && steps < MAX_CATCHUP_STEPS) {
@@ -278,7 +279,9 @@ async function boot(
       heading = Math.atan2(-vx, vy);
     }
     if (!hostState.paused) {
+      const pedStarted = performance.now();
       player.update(playerRender, heading, speed, dt);
+      pedMs = performance.now() - pedStarted;
     }
 
     // Streaming follows the PLAYER (the B3 contract), not the camera.
@@ -313,7 +316,7 @@ async function boot(
       `stream  ${streamStats.loadedCells} cells, ${streamStats.pendingCells} pending · residency ${(stats.residencyBytes / 1048576).toFixed(0)} MB\n` +
       `GTA     ${gta[0].toFixed(1)}, ${gta[1].toFixed(1)}, ${gta[2].toFixed(1)} · ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')}\n` +
       `debug   vel ${vx.toFixed(2)},${vy.toFixed(2)},${Velocity.z[playerEid].toFixed(2)} grounded ${Velocity.grounded[playerEid]} ` +
-      `move ${JSON.stringify(input.move())}` +
+      `move ${JSON.stringify(input.move())} · ped sampler ${pedMs.toFixed(2)} ms` +
       (debugError ? `\nFIXED-STEP ERROR: ${debugError}` : '') +
       (hostState.paused ? '\nPAUSED' : '');
     requestAnimationFrame(loop);

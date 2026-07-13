@@ -72,7 +72,17 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
 - **The alpha-edge groundwork**: dilation BFS + DXT software decode exist from the
   [open issue](../../open-issues/alpha-edge.md).
 
-## Handoff status (2026-07-12, end of the Fable session — resume from here)
+## Handoff status (2026-07-13 — resume from here)
+
+**Milestones A + B1–B3 are DONE (2026-07-13, all field-confirmed):** meshopt wire (full-LS 311 MB, gate
+closed) · bake pool + chunked welding (532 s / 5.2 GB; bakes now OPT-IN via `--bakes`, quarter-of-cores
+pool) · FIRST FULL-MAP pak (71 s bakeless, `?src=pak-map`, whole-map `?bench=map` row committed) · B1
+skinning probe (own IFP sampler — the chain's riskiest unknown retired) · B2 rigid entities (vehicle with
+wheels/paint/lamp texture twins + the 06 row 7 light pool) · B3 the GAME boots on the engine
+(`?engine=opensa`: reused physics/collision/input, ped-probe player, data-driven feet). NEXT: B4 water v1 +
+effect tails, then the C flip ladder. The 2026-07-12 snapshot below is kept for history.
+
+## Handoff status (2026-07-12, end of the Fable session — history)
 
 **The execution order lives in [priority.md](priority.md)** — milestones A (map deliverable) → B (player
 in the world) → C (flip + endgame), each step with its plan link and a done-definition.

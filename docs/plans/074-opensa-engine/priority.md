@@ -5,26 +5,33 @@ session). Each step names its plan doc, why it sits where it sits, and what "don
 milestones structure it: **A — the whole map is deliverable · B — the player lives in the world ·
 C — the flip and the endgame.**
 
-Current state (see [readme → Handoff status](readme.md)): the static world streams and renders — full Los
-Santos flies in the lab and in the web app's standalone page at 120 Hz vsync with ~3× GPU headroom; effects
-parity is 12/14; the game itself has not touched the engine yet.
+Current state (2026-07-13): milestones A and B1–B3 are DONE — the FULL map converts in one command and
+streams everywhere, and the PLAYER walks/runs/jumps around Los Santos in the real app on the own engine
+(`?engine=opensa`) with reused physics/collision/input at 120 Hz vsync. Next up: B4 (water v1 + effect
+tails), then the C flip ladder.
 
 ---
 
 ## Milestone A — the whole map is deliverable
 
-**A1. meshopt + brotli wire compression** — [14](14-pmb-integration.md) task, built now, not at the end
-· size M
+**A1. meshopt + brotli wire compression** — ✅ DONE 2026-07-13 (14 ledger: geometry 4.23×, full-LS
+497.5 → 311.2 MB ≤ the 400 MB gate; worker-side decode NET faster than deflate-only; brotli deliberately
+skipped — serve-time `Content-Encoding: br` remains) · size M
 Geometry is the measured 82 % of the 1.15 GB full-LS pak; this is the top lever and it touches the format
 boundary (encode in `opensa-pack`, decode in the pak worker), so it lands BEFORE more paks get produced.
 **Done:** full-LS pak ≤ ~400 MB on the wire; decode adds < 1 ms to worst cell create; bench unchanged.
 
-**A2. Bake worker pool + chunked welding** — [14](14-pmb-integration.md) tasks · size M
+**A2. Bake worker pool + chunked welding** — ✅ DONE 2026-07-13 (14 ledger: full-LS --bakes 939 → 532 s,
+peak RSS 16 → 5.2 GB; serial ≡ pooled SHA-identical; chunk ring = 2 cells ≥ the 400 u sun ray; bakes are
+OPT-IN since the same day — `--bakes`, quarter-of-cores default) · size M
 Bakes are 91 % of convert time (parallel per cell); welding the whole map cannot hold in one 16 GB heap
 (one city already held it). Chunk = region-sized weld scratch with an overlap margin for the bake BVH.
 **Done:** the FULL non-modified map converts on the M3 in one command, wall-time recorded (~target ≤ 15 min).
 
-**A3. Full-map pak in the standalone page** — [10](10-integration-flip.md) · size S
+**A3. Full-map pak in the standalone page** — ✅ CORE DONE 2026-07-13 (first FULL-MAP pak: 71.4 s
+bakeless, 1121 entries, 769.7 MB wire, `?src=pak-map` in the lab/standalone/game; whole-map `?bench=map`
+tour committed to the series — max 14 ms. REMAINING here: the `--bakes` full-map convert and the 30-min
+soak) · size S
 Convert the full map (A2), serve via range-reads (already landed), fly SF→LV→LS in `opensa-engine.html`.
 This is the "whole world on the new engine" demo and the long-haul streaming soak in one.
 **Done:** cross-map flight, no leaks (ledger returns to baseline after unload-all), `city`-style bench rows
@@ -32,14 +39,18 @@ recorded per region; the M1 stress tails (whip/teleport/30-min soak) close here 
 
 ## Milestone B — the player lives in the world
 
-**B1. Skinning probe — own IFP sampler** — [08](08-dynamics.md), scheduled FIRST inside B deliberately
-· size L, the riskiest unknown of the whole chain
+**B1. Skinning probe — own IFP sampler** — ✅ DONE 2026-07-13 (08 probe note: own sampler + storage
+palettes + dynamics vertex-layout family; FIELD ✅ animated ped; the riskiest unknown of the chain is
+retired) · size L
 Own skinned-mesh path: DFF skin data → engine skinned pipeline (bone matrices in a storage buffer), own IFP
 keyframe sampler (three's AnimationMixer is not portable). Probe = CJ idle/walk cycle rendering in the LAB.
 **Done:** one animated ped at 120 Hz; the pipeline count stays enumerated; sampler unit-tested against
 known IFP curves.
 
-**B2. Dynamic entity API + vehicles** — [08](08-dynamics.md) · size L
+**B2. Dynamic entity API + vehicles** — ✅ v1 DONE 2026-07-13 (rigid-entity layer + vehicle fixture:
+parts/wheels/4-colour carcols/lamp day-night texture twins/26 verbatim dummies; light pool 06 row 7 with
+headlight producers, bench row accepted. REMAINING in 08: lamp state on braking, headlight cones v2,
+chassis_vlo LOD, ok/dam) · size L
 The engine grows a small dynamic-object layer next to the static cells: per-frame transforms (storage
 buffer), rigid part hierarchies for vehicles (doors/wheels), the entity HANDLES that plan 10's audit said
 will replace three mesh refs in gameplay code. Local light pool (06 row 7) lands here — its producers
@@ -47,7 +58,10 @@ will replace three mesh refs in gameplay code. Local light pool (06 row 7) lands
 **Done:** a drivable-looking vehicle + walking ped rendered by the engine in the lab, moved by game-style
 transform updates; light pool lit at night.
 
-**B3. Game boots on the engine (integration phase 2)** — [10](10-integration-flip.md) · size L
+**B3. Game boots on the engine (integration phase 2)** — ✅ v1 DONE 2026-07-13 (FIELD ✅: walk/run/jump
+around Grove Street with `?engine=opensa`; physics/collision/input REUSED, shared runtime Config, ped-probe
+player, data-driven feet. REMAINING: timecyc driver, zones/HUD adapter, pointer lock, in-game benches) ·
+size L
 `Game.create` grows the capability branch: own engine renderer behind a flag, three-WebGL still default.
 Physics/zones/time/logic reuse as-is (audited renderer-agnostic); streaming follows the PLAYER; picking
 goes through an engine-side ray query against the 07 cell BVHs; HUD/UI unchanged (DOM).

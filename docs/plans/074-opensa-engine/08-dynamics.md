@@ -98,4 +98,9 @@ sun/indirect + shared fog); lab `?ped=1` (+`?pedy=` height), HUD `ped sampler` m
 
 ## Measurement ledger
 
-(probe results; per-piece ms rows as they land)
+| Date       | Piece                                     | Number                                                                                                                                        | Gate                       |
+| ---------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| 2026-07-13 | B1 IFP sampler + palette upload (in-game) | **0.00 ms/frame** (below the 0.005 ms display resolution; male01, 32 bones, idle — HUD field reading on the B3 host, Grove Street live scene) | ≤ 1 ms ✅ (~200× headroom) |
+| 2026-07-13 | B3 whole-frame context of that reading    | frame 8.33 ms vsync · submit 0.10 ms · GPU 1.70–2.10 ms · draws ~450 · residency ~540–590 MB                                                  | vs three-WebGL ~31 ms GPU  |
+
+(vehicle-entity flatten/update ms + per-piece rows join as M3 pieces land)

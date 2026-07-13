@@ -71,6 +71,19 @@ describe('PhysicsWorld.groundBelow', () => {
       expect(physics.groundBelow([0, 0, 10], 100)).toBeCloseTo(0.5, 3);
       physics.dispose();
     });
+
+    it('excludeBody skips the caster so a ray can start inside its own capsule (074/10 B3 feet ray)', async () => {
+      const physics = await makeWorld();
+      physics.createStaticBox([0, 0, 0], [10, 10, 0.5]); // top surface at z = 0.5
+      const capsule = physics.createKinematicCapsule([0, 0, 1.4], 0.35, 0.55); // resting on the ground
+      physics.step(STEP);
+
+      // From inside the capsule: without the exclusion the ray reports the capsule itself (its own
+      // surface right at the origin); with it, the true ground below.
+      expect(physics.groundBelow([0, 0, 1.4], 5)).toBeCloseTo(1.4, 2);
+      expect(physics.groundBelow([0, 0, 1.4], 5, capsule.body)).toBeCloseTo(0.5, 3);
+      physics.dispose();
+    });
   });
 });
 
