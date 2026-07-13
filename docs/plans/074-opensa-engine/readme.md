@@ -83,9 +83,15 @@ wheels/paint/lamp texture twins + the 06 row 7 light pool) · B3 the GAME boots 
 sun/sky/godrays CLOSED (2026-07-13, 4 field rounds, user verdict "an order of magnitude better"):** cloud
 dome with weather crossfade, timecyc sunCore/sunCorona disc, ocean-horizon sun/moon set, real moon arc,
 global star fade, and plan-09 stage 1 pulled forward (16f scene target + godrays post pass) — full log in
-plan 06. NEXT: B4 water v1 + effect tails, then the C flip ladder (which gained the config-API parity
-audit task — prod's litFade/sun/moon/sky/clouds tunables must survive the flip; see plan 10). The
-2026-07-12 snapshot below is kept for history.
+plan 06. **Late 2026-07-13 batch:** Safari smoke ✅ (26.5.2 boots+streams, BC+timestamps present, GPU
+2–4 ms) · full-map --bakes convert 202.6 s (pak-map baked; the shadows-invisible mystery is PARKED — see
+plan 14 note) · config-API parity DONE (shared engine-environment-driver, litFade-dynamic arcs) ·
+zones/HUD + pointer lock + in-game benches wired (B3 FULLY CLOSED; first in-game sweep: all 6 scenes
+vsync-120, GPU 1.1–2.5 ms — vanilla map, effects missing, see series B3·ingame caveats) · WATER v3
+shipped then PARKED as leftover (baked depth field + oscillating foam front + swash surge; the look
+ceiling is the 2005 sprite textures — resume via docs/ideas/0.6.0/plans/02-water-realism). NEXT:
+vehicles-in-game (entity handles, plan 10), then the C1 criteria run; C2 cleanup is GATED on a separate
+explicit user command. The 2026-07-12 snapshot below is kept for history.
 
 ## Handoff status (2026-07-12, end of the Fable session — history)
 

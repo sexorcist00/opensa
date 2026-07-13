@@ -110,6 +110,9 @@ export function createEngineEnvironmentDriver(
         environment.skyHorizon = lin3(sample.skyBot);
         environment.fogStartDistance = Math.max(0, sample.fogStart * fogScale);
         environment.fogCutDistance = Math.max(sample.farClip * fogScale, 1200);
+        // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint + opacity per hour/weather.
+        environment.waterColor = lin3(sample.water);
+        environment.waterAlpha = sample.water[3] / 255;
       } else {
         // Parametric fallback (old paks without timecyc): warm-shifting disc, fixed day/night gradients.
         const warm = clamp01(1 - sun.elevationRatio);

@@ -3,6 +3,10 @@ import type { Game } from '@opensa/game';
 import { GameClock } from '@opensa/game/time/game-clock';
 import { type CSSProperties, type ReactElement, useEffect, useRef, useState } from 'react';
 
+/** The narrow Game surface the HUD reads (074/10 reuse-not-duplicate): the three-owned `Game` satisfies it
+ *  structurally, and the own-engine host provides a tiny implementation over the same EventBus/Config. */
+export type HudGame = Pick<Game, 'events' | 'getConfig' | 'getTime' | 'getZone'>;
+
 /** District label: full opacity for this long, then it fades over {@link ZONE_FADE_MS}. */
 const ZONE_HOLD_MS = 3000;
 const ZONE_FADE_MS = 1000;
@@ -12,7 +16,7 @@ const ZONE_FADE_MS = 1000;
  * (updated on the `'time'` event, frozen while paused) and the **district name** bottom-right, which appears on
  * entering a zone, holds ~3 s, then fades out (GTA-style). Hidden in map-viewer and screenshot (fly) modes.
  */
-export function Hud({ game }: { game: Game }): null | ReactElement {
+export function Hud({ game }: { game: HudGame }): null | ReactElement {
   const [minutes, setMinutes] = useState(() => game.getTime());
   const [zone, setZone] = useState(() => game.getZone());
   const [zoneShown, setZoneShown] = useState(() => game.getZone() !== '');

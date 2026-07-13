@@ -50,6 +50,9 @@ export interface OspakManifest {
   /** True when `timecyc` is already the 24-hour variant (`timecyc_24h.dat`). */
   timecyc24?: boolean;
   version: number;
+  /** Water mesh (074/06 row 12 v2): a LOOSE binary next to the manifest — tessellated water.dat polygons
+   *  with the baked per-vertex shore-distance field ([u32 V][u32 I][f32×4 × V: x,y,z,shore][u32 × I]). */
+  water?: { file: string; indexCount: number; vertexCount: number };
 }
 
 /** Wire encodings a pak entry can carry (074/10 A1 / 074/14 stage 2). */

@@ -5,10 +5,12 @@ session). Each step names its plan doc, why it sits where it sits, and what "don
 milestones structure it: **A — the whole map is deliverable · B — the player lives in the world ·
 C — the flip and the endgame.**
 
-Current state (2026-07-13): milestones A and B1–B3 are DONE — the FULL map converts in one command and
-streams everywhere, and the PLAYER walks/runs/jumps around Los Santos in the real app on the own engine
-(`?engine=opensa`) with reused physics/collision/input at 120 Hz vsync. Next up: B4 (water v1 + effect
-tails), then the C flip ladder.
+Current state (end of 2026-07-13): milestones A and B1–B4 are DONE/PARKED — the FULL map converts in one
+command (~30 s bakeless incl. clouds+water; 202.6 s with shadow bakes) and streams everywhere; the PLAYER
+walks/runs/jumps in the real app with prod HUD/zones/pointer-lock and in-game benches (all 6 scenes
+vsync-120); Safari smoke ✅; the config-API parity module ships prod tunables to the engine; water v3
+PARKED as leftover (0.6.0 plan). NEXT: vehicles-in-game (entity handles) → C1 criteria run (needs the
+WebGL-prod `?bench=all` baseline for the side-by-side) → flip; C2 cleanup GATED on an explicit command.
 
 ---
 
@@ -62,7 +64,13 @@ transform updates; light pool lit at night.
 around Grove Street with `?engine=opensa`; physics/collision/input REUSED, shared runtime Config, ped-probe
 player, data-driven feet. Timecyc driver ✅ 2026-07-13 — the SHARED config→Environment driver
 (engine-environment-driver adapter, litFade-dynamic arcs, prod tunables preserved; plan 10 config-API task
-closed same day). REMAINING: zones/HUD adapter, pointer lock, in-game benches) ·
+closed same day). Zones/HUD + pointer lock ✅ 2026-07-13 (reuse-not-duplicate: prod's DOM <Hud> narrowed to
+a HudGame surface — the three Game satisfies it structurally; ZoneNameSystem + info.zon/gxt loaders shared
+via ui/zone-data.ts; click = mouse capture, Esc frees, pause exits the lock). In-game benches ✅ 2026-07-13
+(`?engine=opensa&bench=<key|all>`: prod's BENCH_SCENES + samplePath reused, host-specific harness —
+physics.teleport anchor, per-scene weather via the shared driver + dome crossfade, settle→warmup→timed
+capture of engine stats, SAME `[bench] {json}` console protocol → C1 compares own-engine vs WebGL rows
+directly). **B3 is now FULLY closed** — next: vehicles-in-game (entity handles), water v1, C1 criteria run) ·
 size L
 `Game.create` grows the capability branch: own engine renderer behind a flag, three-WebGL still default.
 Physics/zones/time/logic reuse as-is (audited renderer-agnostic); streaming follows the PLAYER; picking
@@ -71,6 +79,10 @@ goes through an engine-side ray query against the 07 cell BVHs; HUD/UI unchanged
 the WebGL path for movement/camera/streaming; benches from inside the GAME, not the lab.
 
 **B4. Water v1 + remaining world effects** — [06](06-world-effects-parity.md) rows 12/13 tails · size M
+✅/PARKED 2026-07-13: water went v1→v2→v3 in one day (runtime flat → shore-field bake → TRUE-depth bake
+with surf/foam/swash; 12 field rounds logged in plan 06) and is PARKED as a leftover at v3 — the look
+ceiling is the 2005 sprite textures; resume = docs/ideas/0.6.0/plans/02-water-realism (authored textures
+first). Coronas textured + 2dfx particles (row 13 tails) remain open here.
 The game needs a sea surface; v1 = flat animated surface with the sky-shared fog (the "real waves" rework
 stays the 0.5.0 idea). Textured corona sprites + coronamoon land with the particle.txd path; 2dfx particles
 (factory smoke) close row 13.
@@ -85,7 +97,9 @@ sign-off; stress matrix + 30-min soak green in Chrome and Safari (the Safari row
 
 **C2. Cleanup** — [13](13-cleanup.md) · size M
 Drop the three-WebGL path, the 073 flag zoo, three/babylon/postprocessing (user decision: no WebGL
-fallback). Every deletion PR bench-gated.
+fallback). Every deletion PR bench-gated. **GATED on a separate explicit user command (2026-07-13
+directive): after the flip the old path STAYS for a side-by-side comparison period (settings/picture/
+anything forgotten) — C2 never auto-starts from C1 passing.**
 **Done:** dependency/bundle ledger recorded; one renderer in the tree.
 
 **C3. pmb integration + the exit exam** — [14](14-pmb-integration.md) · size L

@@ -126,6 +126,10 @@ export interface Environment {
   sunSize: number;
   /** Baked sun-shadow strength on the direct term (074/07): 0 = off, 1 = raw bake. */
   sunVisStrength: number;
+  /** Water base opacity 0..1 (timecyc WaterRGBA alpha). */
+  waterAlpha: number;
+  /** Water deep tint, linear (timecyc WaterRGBA). */
+  waterColor: readonly [number, number, number];
   /** Wind multiplier on the baked sway amplitudes (074/06 row 10): 0 = still air, 1 = baked metres. */
   windStrength: number;
 }
@@ -208,6 +212,8 @@ export class Engine {
     sunIndirect: 0.75,
     sunSize: 4,
     sunVisStrength: 1,
+    waterAlpha: 0.72,
+    waterColor: [0.05, 0.14, 0.18],
     windStrength: 1,
   };
 
@@ -289,10 +295,17 @@ export class Engine {
     texture: GPUTexture;
     textureBytes: number;
   } = null;
-
   private readonly view: Mat4 = mat4Identity();
 
   private readonly viewProj: Mat4 = mat4Identity();
+
+  /** Water surface (074/06 row 12 v1) — one static translucent mesh; null until the host installs it. */
+  private water: null | {
+    bindGroup: GPUBindGroup;
+    indexCount: number;
+    indices: GPUBuffer;
+    vertices: GPUBuffer;
+  } = null;
 
   /** Render one frame. Returns the stats snapshot (the HUD's input). */
   frame(camera: CameraState): EngineStats {
@@ -305,7 +318,7 @@ export class Engine {
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);
-    const frameData = new Float32Array(84);
+    const frameData = new Float32Array(88);
     frameData.set(this.viewProj, 0);
     frameData.set(this.invViewProj, 16);
     // camera.w = cloud slot A→B crossfade blend (spare vec4 slot; row 15 weather fade).
@@ -338,6 +351,8 @@ export class Engine {
     // sunCorona.w = weather cloud COVER (prod's uCloudClear source — hides stars globally under overcast).
     frameData.set([...env.sunCoreColor, env.sunSize * SUN_SIZE_TO_RAD], 76);
     frameData.set([...env.sunCoronaColor, Math.min(1, Math.max(0, env.cloudCover))], 80);
+    // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint + base opacity.
+    frameData.set([...env.waterColor, Math.min(1, Math.max(0, env.waterAlpha))], 84);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
     this.refreshSkyLut();
 
@@ -407,6 +422,9 @@ export class Engine {
     pass.setPipeline(this.pipelines.get('sky'));
     pass.setBindGroup(0, this.frameBindGroup);
     pass.draw(3);
+    // Water v1 (074/06 row 12): after the sky (fresnel reflects the finished dome direction-wise), before
+    // the blends (foliage/glass then sort over the surface); depth READ hides it under land.
+    draws += this.drawWater(pass);
     if (blendBundles.length > 0) {
       pass.executeBundles(blendBundles);
     }
@@ -457,7 +475,7 @@ export class Engine {
     this.pipelines = compileAll(this.device, SCENE_FORMAT, DEPTH_FORMAT, this.engineDevice.colorFormat);
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
-      size: 336, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona (13 × 16)
+      size: 352, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona/water (14 × 16)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     // Local light pool (074/06 row 7): CPU-filled point lights, shared by every frame-layout pipeline.
@@ -752,6 +770,73 @@ export class Engine {
     return entity;
   }
 
+  /** Install the water surface (074/06 row 12 v2): interleaved [x,y,z,shoreDist] vertices (ENGINE space —
+   *  the baked tessellated mesh, or the flat runtime fallback with a constant deep field); `ripple` /
+   *  `foam` = the authored particle.txd textures (waterclear256 / waterwake), 1×1 stubs when absent.
+   *  One static mesh — call once at load (re-call replaces it). */
+  setWater(
+    vertexData: Float32Array,
+    indices: Uint32Array,
+    ripple: null | { height: number; rgba: Uint8Array; width: number },
+    foam: null | { height: number; rgba: Uint8Array; width: number },
+  ): void {
+    const vertices = this.resources.createBuffer('cellVertex', {
+      label: 'water-vertices',
+      size: vertexData.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(vertices, 0, vertexData);
+    const indexBuffer = this.resources.createBuffer('cellIndex', {
+      label: 'water-indices',
+      size: indices.byteLength,
+      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(indexBuffer, 0, indices);
+    const upload = (
+      source: null | { height: number; rgba: Uint8Array; width: number },
+      label: string,
+      stub: Uint8Array,
+    ): GPUTexture => {
+      const width = source?.width ?? 1;
+      const height = source?.height ?? 1;
+      const texture = this.resources.createTexture(
+        'texture',
+        {
+          format: 'rgba8unorm',
+          label,
+          size: { height, width },
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        },
+        width * height * 4,
+      );
+      this.device.queue.writeTexture({ texture }, source?.rgba ?? stub, { bytesPerRow: width * 4 }, { height, width });
+
+      return texture;
+    };
+    const rippleTexture = upload(ripple, 'water-ripple', new Uint8Array([128, 128, 128, 255]));
+    const foamTexture = upload(foam, 'water-foam', new Uint8Array([0, 0, 0, 0]));
+    const bindGroup = this.device.createBindGroup({
+      entries: [
+        { binding: 0, resource: rippleTexture.createView() },
+        {
+          binding: 1,
+          // The ripple/foam TILE across the sea — repeat addressing (the default clamp smears them).
+          resource: this.device.createSampler({
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+            label: 'water',
+            magFilter: 'linear',
+            minFilter: 'linear',
+          }),
+        },
+        { binding: 2, resource: foamTexture.createView() },
+      ],
+      label: 'water',
+      layout: this.pipelines.waterLayout,
+    });
+    this.water = { bindGroup, indexCount: indices.length, indices: indexBuffer, vertices };
+  }
+
   /** Upload the probe's palette after the host wrote it (model matrix slot 0 + sampled bones). */
   updatePedPalette(): void {
     if (this.ped) {
@@ -899,6 +984,20 @@ export class Engine {
     }
 
     return draws;
+  }
+
+  private drawWater(pass: GPURenderPassEncoder): number {
+    if (!this.water) {
+      return 0;
+    }
+    pass.setPipeline(this.pipelines.get('water'));
+    pass.setBindGroup(0, this.frameBindGroup);
+    pass.setBindGroup(1, this.water.bindGroup);
+    pass.setVertexBuffer(0, this.water.vertices);
+    pass.setIndexBuffer(this.water.indices, 'uint32');
+    pass.drawIndexed(this.water.indexCount);
+
+    return 1;
   }
 
   private ensureTargets(width: number, height: number): void {

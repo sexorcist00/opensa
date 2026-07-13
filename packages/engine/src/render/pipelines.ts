@@ -25,6 +25,7 @@ export type PipelineId =
   | 'rigid-blend'
   | 'rigid-opaque'
   | 'sky'
+  | 'water'
   | 'world-beam-double'
   | 'world-beam-front'
   | 'world-blend-double'
@@ -48,6 +49,8 @@ export interface PipelineSet {
   postLayout: GPUBindGroupLayout;
   /** group(1) of the rigid-entity pipelines: part matrices + texture ARRAY + sampler (074/08 B2). */
   rigidLayout: GPUBindGroupLayout;
+  /** group(1) of the water pipeline: the ripple texture + sampler (074/06 row 12 v1). */
+  waterLayout: GPUBindGroupLayout;
 }
 
 export function compileAll(
@@ -123,6 +126,46 @@ export function compileAll(
   };
   const skyModule = device.createShaderModule({ code: resolveShader('sky'), label: 'sky' });
   const skyLayout = device.createPipelineLayout({ bindGroupLayouts: [frameLayout], label: 'sky' });
+  // Water v1 (074/06 row 12): frame group + the ripple texture; one big translucent surface drawn after
+  // the sky, before the blend bundles (foliage/glass then sort over it; depth READ hides it under land).
+  const waterLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 1, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 2, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'water',
+  });
+  const waterModule = device.createShaderModule({ code: resolveShader('water'), label: 'water' });
+  pipelines.set(
+    'water',
+    device.createRenderPipeline({
+      depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
+      fragment: {
+        entryPoint: 'fsWater',
+        module: waterModule,
+        targets: [{ blend: premultBlend, format: colorFormat }],
+      },
+      label: 'water',
+      layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, waterLayout], label: 'water' }),
+      multisample: { count: MSAA_SAMPLES },
+      primitive: { cullMode: 'none', topology: 'triangle-list' },
+      vertex: {
+        // Stride 16: engine-space position + the baked shore distance (074/06 row 12 v2).
+        buffers: [
+          {
+            arrayStride: 16,
+            attributes: [
+              { format: 'float32x3', offset: 0, shaderLocation: 0 },
+              { format: 'float32', offset: 12, shaderLocation: 1 },
+            ],
+          },
+        ],
+        entryPoint: 'vsWater',
+        module: waterModule,
+      },
+    }),
+  );
   // Skinning probe (074/08 B1): storage palette + 4-bone blend; separate tight attribute buffers (the
   // dynamics vertex layout is NOT the .oscell layout — that consequence is exactly what the probe freezes).
   const pedLayout = device.createBindGroupLayout({
@@ -338,6 +381,7 @@ export function compileAll(
     pedLayout,
     postLayout,
     rigidLayout,
+    waterLayout,
   };
 }
 

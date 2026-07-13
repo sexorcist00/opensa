@@ -52,12 +52,10 @@ import {
   GLOW_LAYER,
   gxtKeyHash,
   LOCAL_LIGHT_POOL,
-  type MapZone,
   nearestBreakable,
   nightFillRim,
   nightFillUniform,
   parseFxp,
-  parseGxt,
   parseTxd,
   parseZones,
   particleTimeUniform,
@@ -141,6 +139,7 @@ import { createGameRuntimeConfig, GAME_CELL_SIZE } from './game-runtime-config';
 import { Hud } from './hud/hud';
 import { loadFonts } from './hud/load-fonts';
 import { Overlay } from './hud/overlay';
+import { loadGxt, loadInfoZones } from './zone-data';
 
 const CELL_SIZE = GAME_CELL_SIZE; // streaming grid cell edge — see game-runtime-config.ts (shared with the own-engine host)
 /** Render layer holding the water surface — excluded from the shore DepthPass (plan 069). */
@@ -183,20 +182,6 @@ function loadCityBoxes(fs: AssetFileSystem, name: string): CityBox[] {
 
     return city ? [{ city, max: zone.max, min: zone.min }] : [];
   });
-}
-
-/** Parse a `.gxt` text archive into a `hash → text` map (null when absent). */
-function loadGxt(fs: AssetFileSystem, name: string): Map<number, string> | null {
-  const buffer = fs.get(name);
-
-  return buffer ? parseGxt(buffer) : null;
-}
-
-/** Read info.zon's zones ([] when absent). Drives both the desert boxes (by name) and the zone-name HUD. */
-function loadInfoZones(fs: AssetFileSystem, name: string): MapZone[] {
-  const text = fs.getText(name);
-
-  return text === null ? [] : parseZones(text);
 }
 
 /** Parse a standalone .txd into a name→Texture map (null when absent). */

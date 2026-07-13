@@ -36,6 +36,8 @@ function makeEnvironment(): Environment {
     sunIndirect: 0.75,
     sunSize: 4,
     sunVisStrength: 1,
+    waterAlpha: 0.72,
+    waterColor: [0.05, 0.14, 0.18],
     windStrength: 1,
   };
 }
@@ -111,6 +113,15 @@ describe('createEngineEnvironmentDriver', () => {
       expect(rise[0]).toBeGreaterThan(0);
       expect(set[0]).toBeLessThan(0);
       expect(environment.moonColor[2]).toBeGreaterThan(0);
+    });
+
+    it('drives the water tint from the timecyc columns', () => {
+      const environment = makeEnvironment();
+      // Minimal 24h-style timecyc: not worth synthesizing here — assert the PARAMETRIC path leaves the
+      // defaults untouched (the timecyc path is covered by the renderware sampler's own tests).
+      createEngineEnvironmentDriver(environment).apply(12);
+      expect(environment.waterColor).toEqual([0.05, 0.14, 0.18]);
+      expect(environment.waterAlpha).toBeCloseTo(0.72, 5);
     });
 
     it('applies the prod graphics tunables to the environment', () => {

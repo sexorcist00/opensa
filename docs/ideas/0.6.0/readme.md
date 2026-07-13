@@ -12,3 +12,13 @@ displacement from impact points). Feasibility verdict inside: **very portable to
 the vertex pipeline**, which is exactly what the SA modders had to hack around.
 
 Full plan: [plans/01-vehdeform/readme.md](plans/01-vehdeform/readme.md).
+
+## Water realism (own-engine v4+)
+
+The 074 water v3 (baked depth field, oscillating foam front, swash surge) hit the ceiling of "analytic
+shader x 2005 sprite textures" — user parked it: the look needs AUTHORED textures first (foam atlas,
+ocean normal maps — buying assets is approved), then live tuning knobs, a baked shore-direction field,
+a refraction tap off the plan-09 scene target, and the Gerstner-Jacobian whitecaps carried over from the
+deleted 0.5.0 water idea.
+
+Full plan: [plans/02-water-realism/readme.md](plans/02-water-realism/readme.md).

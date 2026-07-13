@@ -83,6 +83,8 @@ struct Frame {
   // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
+  // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
+  waterColor: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -473,6 +475,199 @@ fn fsSky(in: SkyOut) -> @location(0) vec4f {
   let cloudClear = 1.0 - clamp(frame.sunCorona.w * 1.15, 0.0, 1.0);
   col += vec3f(starField(dir)) * frame.params.x * clear * cloudClear;
   return vec4f(col, 1.0);
+}
+`,
+  water: /* wgsl */ `
+#include <frame>
+
+// Water v1 (074/06 row 12; plan 069's look, RUNTIME-ONLY — no converter bake): flat water.dat quads +
+// the ocean frame, Gerstner SLOPES only (prod's approach — the quads are far too coarse to displace),
+// fresnel between the timecyc deep tint and the shared sky dome, sun glint off the wave normal, and the
+// 068 fog — the sea dissolves into the horizon exactly like land does.
+// group(1): the authored textures (particle.txd, runtime-parsed by the host): waterclear256 = the
+// close-up ripple (real detail where the analytic trains are too smooth), waterwake = the shore foam.
+@group(1) @binding(0) var waterRipple: texture_2d<f32>;
+@group(1) @binding(1) var waterSampler: sampler;
+@group(1) @binding(2) var waterFoam: texture_2d<f32>;
+
+struct WaterOut {
+  @builtin(position) clip: vec4f,
+  @location(0) world: vec3f,
+  @location(1) shore: f32,
+  @location(2) swell: f32,
+};
+
+// The two LONGEST trains DISPLACE the tessellated grid (074/06 row 12 v2 — the baked ~16 u mesh finally
+// moves); the short trains stay slope-only in the fragment normal. Damped to a calm sheet at the beach
+// by the baked shore field.
+fn swellHeight(p: vec2f, t: f32) -> f32 {
+  let wind = vec2f(0.825, 0.565);
+  let side = vec2f(-wind.y, wind.x);
+  let d1 = normalize(wind * 0.8 + side * 0.6);
+  return sin(dot(p, wind) * 0.045 + t * 0.9) * 1.0 + sin(dot(p, d1) * 0.083 + t * 1.2) * 0.62;
+}
+
+// The BREAKING wave (074/06 row 12 v3): a front running toward the beach along the DEPTH field
+// (phase = depth·k − t·speed → crests follow depth contours, parallel to the visual waterline — the
+// reference look), peaked in the surf band (0.3–4 m) and dying right at the waterline.
+fn surfPhase(depth: f32, t: f32) -> f32 {
+  // +t: the constant-phase contour moves toward depth 0 — the front runs AT the beach (field round 5:
+  // −t read as waves leaving the shore).
+  return sin(depth * 1.4 + t * 1.6);
+}
+
+@vertex
+fn vsWater(@location(0) position: vec3f, @location(1) depth: f32) -> WaterOut {
+  var out: WaterOut;
+  let damp = smoothstep(1.0, 9.0, depth);
+  let swell = swellHeight(vec2f(position.x, position.z), frame.params2.z) * damp;
+  // The lower gate keeps the WAVE trains out of the swash zone (field round 7: short-wavelength
+  // displacement tore a jagged waterline) — but the SURGE below is smooth and constant there, so it
+  // moves the waterline cleanly.
+  let surf = surfPhase(depth, frame.params2.z) *
+    (1.0 - smoothstep(1.8, 6.0, depth)) * smoothstep(0.5, 1.5, depth);
+  // Swash SURGE (round 12 — "move the ocean itself back and forth"): a flat plane's edge only moves via
+  // HEIGHT, so the whole shore zone breathes ±0.25 m on the foam clock. The waterline physically runs
+  // metres up the sand exactly when the foam front lands (same runup), then pulls back out. The water
+  // quads extend under the beach with baked depth 0 there — the revealed strip arrives pre-foamed and
+  // near-transparent: the swash sheet on the sand for free.
+  let surgeRunup = 0.5 + 0.5 * sin(frame.params2.z * 0.85);
+  let surge = (surgeRunup - 0.5) * 0.5 * (1.0 - smoothstep(0.5, 3.0, depth));
+  var displaced = position;
+  displaced.y += swell * 0.32 + surf * 0.45 + surge;
+  out.clip = frame.viewProj * vec4f(displaced, 1.0);
+  out.world = displaced;
+  out.shore = depth;
+  out.swell = swell;
+  return out;
+}
+
+// Four analytic wave trains (the prod waterNormal port, slopes only) + the same distance-LOD fade:
+// a high-frequency train aliases into moiré bands once a pixel spans many wavelengths.
+// Field round 1 fixes: a large-scale DOMAIN WARP breaks the fixed-frequency interference grid (the water
+// read as tiled rows), gentler slope amplitude kills the bright "pillow" bands, and the LOD fade range is
+// wider so train transitions smear instead of banding by camera distance.
+fn waveGradient(p0: vec2f, t: f32, viewDist: f32) -> vec2f {
+  let p = p0 + vec2f(sin(p0.y * 0.013 + t * 0.26), sin(p0.x * 0.011 - t * 0.21)) * 9.0;
+  let wind = vec2f(0.825, 0.565); // fixed wind heading in v1 (prod exposes uWindAngle — config later)
+  let side = vec2f(-wind.y, wind.x);
+  var dirs = array<vec2f, 4>(
+    wind,
+    normalize(wind * 0.8 + side * 0.6),
+    normalize(wind * 0.9 - side * 0.5),
+    normalize(wind * 0.4 + side * 1.0),
+  );
+  var freqs = array<f32, 4>(0.045, 0.083, 0.150, 0.260);
+  var speeds = array<f32, 4>(0.9, 1.2, 1.6, 2.1);
+  var weights = array<f32, 4>(1.0, 0.62, 0.38, 0.22);
+  var grad = vec2f(0.0);
+  for (var i = 0u; i < 4u; i += 1u) {
+    let wavelength = 6.2831853 / freqs[i];
+    let fade = smoothstep(wavelength * 90.0, wavelength * 10.0, viewDist);
+    let phase = dot(p, dirs[i]) * freqs[i] + t * speeds[i];
+    // The two LONG (displaced) trains barely tilt the LIGHTING normal (0.3×): their slopes reflected the
+    // bright horizon sky as wide colour bands mid-distance (field round 3); their job is the silhouette.
+    let slopeWeight = select(3.5, 1.0, i < 2u);
+    grad += dirs[i] * cos(phase) * freqs[i] * weights[i] * slopeWeight * fade;
+  }
+  // Slow cross-swell keeps the far water alive when the trains have LOD-faded out.
+  grad += vec2f(0.011) * cos((p.x + p.y) * 0.022 + t * 0.9);
+  return grad;
+}
+
+@fragment
+fn fsWater(in: WaterOut) -> @location(0) vec4f {
+  let toEye = frame.camera.xyz - in.world;
+  let dist = length(toEye);
+  let view = toEye / max(dist, 1e-4);
+  // The wave field lives on the horizontal plane: GTA xy == engine xz.
+  let p = vec2f(in.world.x, in.world.z);
+  let t = frame.params2.z;
+  var grad = waveGradient(p, t, dist);
+  // Close-up detail from the authored waterclear256 ripple (prod's term): two scrolled taps read as a
+  // slope — always on, so the surface shimmers even in a dead calm. Sampled UNCONDITIONALLY (implicit-LOD
+  // textureSample is illegal in non-uniform control flow) and weighted by the near fade.
+  let near = smoothstep(200.0, 20.0, dist);
+  let duv = p * 0.09;
+  let flow = vec2f(0.825, 0.565) * t * 0.022; // field fix: 0.004 read as frozen
+  let e = 0.06;
+  let h0 = textureSample(waterRipple, waterSampler, duv + flow).r +
+    textureSample(waterRipple, waterSampler, duv * 1.7 - flow * 1.3).r;
+  let hx = textureSample(waterRipple, waterSampler, duv + vec2f(e, 0.0) + flow).r +
+    textureSample(waterRipple, waterSampler, (duv + vec2f(e, 0.0)) * 1.7 - flow * 1.3).r;
+  let hy = textureSample(waterRipple, waterSampler, duv + vec2f(0.0, e) + flow).r +
+    textureSample(waterRipple, waterSampler, (duv + vec2f(0.0, e)) * 1.7 - flow * 1.3).r;
+  grad += vec2f(hx - h0, hy - h0) * (1.1 * near);
+  // Far-field FLATTEN (field round 2 — swell faces mirrored the bright fog horizon as huge white bands):
+  // distant water reads as a calm mirror; the swell survives in the silhouette via the displacement.
+  var normal = normalize(vec3f(-grad.x, 1.0, -grad.y));
+  normal = normalize(mix(normal, vec3f(0.0, 1.0, 0.0), smoothstep(120.0, 500.0, dist)));
+  let fresnel = pow(1.0 - clamp(dot(normal, view), 0.0, 1.0), 5.0);
+  var refl = reflect(-view, normal);
+  refl.y = abs(refl.y); // the sky dome has no below-horizon content
+  let sky = skyBaseFor(refl);
+  var color = mix(frame.waterColor.rgb, sky, 0.2 + 0.55 * fresnel);
+  // Sun glint: TIGHT Blinn toward the sun, whitened (field round 1: raw sunCorona painted pink patches;
+  // a real glitter path is near-white with only a warm cast) and modulated by the fine ripple so it
+  // sparkles instead of pooling on the smooth train slopes.
+  let h = normalize(view + frame.sunDir.xyz);
+  let glint = pow(max(dot(normal, h), 0.0), 650.0);
+  color += mix(frame.sunCorona.rgb, vec3f(1.0), 0.55) * glint * (0.25 + 0.45 * near);
+  var alpha = clamp(frame.waterColor.a + fresnel * 0.25, 0.0, 1.0);
+  // Shore water (074/06 row 12 v3, the baked DEPTH field): shallow = brighter and MUCH more
+  // transparent (the sand reads through the last metre — the wet-swash look of the reference).
+  let shallow = 1.0 - smoothstep(0.0, 4.0, in.shore);
+  color = mix(color, color * 1.2 + vec3f(0.01, 0.03, 0.03), shallow * 0.35);
+  alpha *= mix(1.0, 0.4, shallow * shallow);
+  // waterwake is a WHITE sprite with the shape in ALPHA (field: .r alone painted solid white bands) —
+  // shape = a·r. Foam lives in TWO places (the reference look): the WASH at the waterline (depth < 0.8 m,
+  // pulsing with the surf runup) and the BREAKING LINE offshore — the crest of the incoming front in the
+  // 0.8–3.5 m band, a bright irregular stripe travelling shoreward.
+  // Foam, round 8 — TWO synchronized actors on one clock (t·1.6):
+  //  · the INCOMING crest carries foam from 3.5 m down to the landing depth (~0.9 m), continuous;
+  //  · the SWASH SHEET: its leading edge PHYSICALLY oscillates between 1.4 m and 0.1 m of depth,
+  //    delayed to pick up where the crest lands — foam visibly runs up the beach AND pulls back out
+  //    (the field ask), dimming on the retreat.
+  // Shape mixes waterwake with the waterclear ripple for organic, non-repeating edges.
+  let foamUv = p * 0.15 + flow * 6.0;
+  let tapA = textureSample(waterFoam, waterSampler, foamUv);
+  let tapB = textureSample(waterFoam, waterSampler, foamUv * 0.57 + vec2f(0.37));
+  let foamNoise = textureSample(waterRipple, waterSampler, p * 0.045 - flow * 2.0).r;
+  let foamShape = clamp(max(tapA.a * tapA.r, tapB.a * tapB.r) * (0.55 + 0.75 * foamNoise), 0.0, 1.0);
+  // ONE foam front, round 10 (the field kept seeing TWO events — a crest dying mid-way and a separate
+  // shore sheet). A single wave: its FRONT POSITION travels the whole 3 m → 0.08 m and back on one slow
+  // clock; the foam mass trails ~1.5–3 m of depth behind the front. Envelopes per the user's spec:
+  //  · intensity fades IN as the front leaves deep water (soft birth) and dims on the retreat;
+  //  · hardness peaks exactly when the front reaches the edge, melts back to milky as it withdraws.
+  // Round 11: BOTH envelopes ride the front POSITION only — no phase-direction terms. The old advancing
+  // dimmer killed the foam exactly at the turning point ("reaches the edge and dies"); now brightness
+  // stays FULL at the edge and through the retreat, dissolving only once the front is back out deep,
+  // and hardness decays purely with distance from the edge (hard at the sand, melting on the way out).
+  let cycle = t * 0.85;
+  let runup = 0.5 + 0.5 * sin(cycle);
+  let front = mix(3.0, 0.08, runup);
+  let mass = smoothstep(front - 0.2, front + 0.15, in.shore) *
+    (1.0 - smoothstep(front + 1.5, front + 3.2, in.shore));
+  let intensity = smoothstep(0.02, 0.3, runup);
+  let rim = (1.0 - smoothstep(0.05, 0.3, in.shore)) * 0.35;
+  let crest = smoothstep(1.15, 1.55, in.swell) * 0.12;
+  let soft = clamp(foamShape * (mass * intensity + rim) * 1.5 + foamShape * crest, 0.0, 1.0);
+  let hard = smoothstep(0.35, 0.6, soft);
+  let hardness = smoothstep(0.45, 0.97, runup);
+  let foam = mix(soft * 0.85, max(soft, hard), hardness);
+  color = mix(color, vec3f(0.95, 0.97, 0.97), foam);
+  alpha = max(alpha, foam * 0.95);
+  // Unified fog (the 068 shape — identical math to the world shaders).
+  let fogD = max(dist - frame.fog.y, 0.0);
+  let fogK = 2.0 / max(frame.fog.x - frame.fog.y, 1.0);
+  var fogFactor = 1.0 - exp(-(fogK * fogD) * (fogK * fogD));
+  fogFactor = fogFactor * mix(frame.fog.w, 1.0, exp(-max(in.world.y, 0.0) * frame.fog.z));
+  fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
+  color = mix(color, skyFogFor(-view), fogFactor);
+  // Fully fogged water must MATCH the sky behind it — fade the surface out with the fog so the horizon
+  // line dissolves instead of drawing a hard sea edge (the ocean-horizon regression view).
+  alpha = mix(alpha, 1.0, fogFactor);
+  return vec4f(color * alpha, alpha);
 }
 `,
   world: /* wgsl */ `

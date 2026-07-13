@@ -20,6 +20,8 @@ export interface StreamSetup {
   /** Raw timecyc.dat from the manifest (row 14), when the converter embedded it. */
   timecyc?: string;
   timecyc24: boolean;
+  /** Baked water mesh pointer (074/06 row 12 v2) — a loose binary next to the manifest. */
+  water?: OspakManifest['water'];
 }
 
 /** Fetch + install one weather's cloud dome (loose RGBA next to the manifest); null id clears the layer. */
@@ -127,6 +129,7 @@ export async function setupStreaming(engine: Engine, baseUrl = '/pak'): Promise<
   return {
     center: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
     ...(manifest.clouds !== undefined ? { clouds: manifest.clouds } : {}),
+    ...(manifest.water !== undefined ? { water: manifest.water } : {}),
     driver: new StreamingDriver(engine, manifest, worker),
     radius: Math.max((maxX - minX) / 2, (maxZ - minZ) / 2, 400),
     ...(manifest.timecyc !== undefined ? { timecyc: manifest.timecyc } : {}),

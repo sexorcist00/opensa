@@ -8,6 +8,12 @@ weight: two renderers to maintain, a debug-flag zoo, and heavyweight dependencie
 three-WebGL fallback**; the shipped app's minimum requirement becomes WebGPU (this supersedes flip
 criterion 4's "keep three-WebGL for non-WebGPU browsers" — revisit ONLY if usage data demands it).
 
+**GATE (user directive 2026-07-13): the flip does NOT trigger this plan.** After the default switches to
+the own engine, the three-WebGL path STAYS IN THE TREE for a comparison period — the user wants to A/B
+settings and the picture side-by-side and catch anything forgotten (the old path remains reachable behind
+a flag for exactly that). Deletion starts ONLY on a separate explicit user command; nothing in this plan
+is "automatically next" after C1 passes.
+
 ## What drops
 
 1. **The old graphics path** — the three-WebGL render pipeline in `packages/game`/`packages/renderware`:

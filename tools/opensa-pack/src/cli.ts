@@ -22,6 +22,8 @@ import { fileURLToPath } from 'node:url';
 import { convertClouds } from './clouds';
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
+import { WaterHeightGrid } from './height-grid';
+import { bakeWater } from './water';
 
 function arg(name: string): null | string {
   const index = process.argv.indexOf(`--${name}`);
@@ -97,6 +99,7 @@ async function main(): Promise<void> {
       stochasticNames.add(name);
     }
   }
+  const waterHeights = new WaterHeightGrid();
   const { manifest, pak, report } = await convertDistrict(fs, {
     ao,
     ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
@@ -107,6 +110,7 @@ async function main(): Promise<void> {
     rect: rect as unknown as readonly [number, number, number, number],
     stochasticNames,
     sunVis,
+    waterHeights,
   });
 
   mkdirSync(out, { recursive: true });
@@ -130,6 +134,18 @@ async function main(): Promise<void> {
       txdBytes.buffer.slice(txdBytes.byteOffset, txdBytes.byteOffset + txdBytes.byteLength),
       out,
       (message) => console.log(`[opensa-pack] ${message}`),
+    );
+  }
+  // Water bake (074/06 row 12 v2, user directive — water WITHOUT the shadow bakes): shore-field
+  // tessellation from water.dat, pure 2D geometry (no rays, no BVH), always on — it costs seconds.
+  const waterText = fs.getText('data/water.dat');
+  if (waterText !== null) {
+    const water = bakeWater(waterText, (x, y) => waterHeights.heightAt(x, y));
+    writeFileSync(join(out, 'water.bin'), water.bin);
+    manifest.water = { ...water.manifest, file: 'water.bin' };
+    console.log(
+      `[opensa-pack] water: ${water.manifest.vertexCount} verts / ${water.manifest.indexCount / 3} tris ` +
+        `(shore field baked, ${(water.bin.byteLength / 1048576).toFixed(1)} MB)`,
     );
   }
   writeFileSync(join(out, 'world.ospak'), pak);

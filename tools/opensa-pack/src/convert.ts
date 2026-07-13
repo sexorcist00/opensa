@@ -18,6 +18,8 @@ import { MeshoptEncoder } from 'meshoptimizer';
  */
 import { deflateRawSync } from 'node:zlib';
 
+import type { WaterHeightGrid } from './height-grid';
+
 import { AO_MAX_DISTANCE, bakeAo, type BakeAoReport, buildOccluderBvh } from './ao';
 import { bakeCellsPooled, defaultBakeWorkers } from './bake-pool';
 import { bakeSunVis, type BakeSunVisReport, SUNVIS_MAX_DISTANCE } from './sunvis';
@@ -42,6 +44,9 @@ export interface ConvertOptions {
   stochasticNames?: ReadonlySet<string>;
   /** Bake per-vertex sun visibility (074/07); on by default, `--no-sunvis` skips it. */
   sunVis?: boolean;
+  /** Sea-level height sink (074/06 row 12 v3): welded triangles near sea level rasterize into it — the
+   *  water bake then computes TRUE depth. Costs a linear pass per chunk, no rays. */
+  waterHeights?: WaterHeightGrid;
 }
 
 export interface ConvertReport {
@@ -142,6 +147,9 @@ export async function convertDistrict(
       log(`${tag}: welded ${welded.length} entries (${(verts / 1e6).toFixed(2)} M verts), baking …`);
       await bakeChunk(cellsOnly, bvh, { ao, sunVis, workers }, report);
     }
+    if (options.waterHeights) {
+      collectWaterHeights(options.waterHeights, welded);
+    }
     for (const entry of welded) {
       const bytes = assembleCell(entry.cell);
       inputs.push(wireCompress({ bytes, key: entry.key, kind: 'cell' }));
@@ -210,6 +218,31 @@ async function bakeChunk(
   const sunStarted = Date.now();
   const sunBake = options.sunVis ? bakeSunVis(cells, bvh) : null;
   mergeBakeReports(report, aoBake, sunBake, aoMs, Date.now() - sunStarted);
+}
+
+/** Feed HD welded triangles into the sea-level height grid (074/06 row 12 v3). Cell-local ENGINE coords →
+ *  GTA: gx = ox+px, gy = −(oz+pz), gz = oy+py. LOD entries skip — they duplicate the HD ground. */
+function collectWaterHeights(gridSink: WaterHeightGrid, welded: readonly { cell: WeldedCell; key: string }[]): void {
+  for (const { cell } of welded) {
+    if (cell.lod) {
+      continue;
+    }
+    const [ox, oy, oz] = cell.origin;
+    for (const bucket of cell.buckets) {
+      const rows = bucket.vertices;
+      const gta = (index: number): [number, number, number] => {
+        const at = index * WELD_ROW;
+
+        return [ox + rows[at], -(oz + rows[at + 2]), oy + rows[at + 1]];
+      };
+      for (let tri = 0; tri + 2 < bucket.indices.length; tri += 3) {
+        const a = gta(bucket.indices[tri]);
+        const b = gta(bucket.indices[tri + 1]);
+        const c = gta(bucket.indices[tri + 2]);
+        gridSink.addTriangle(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      }
+    }
+  }
 }
 
 /** Grid cells with content inside a rect — the progress/ETA weight (cheap: pure map lookups). */
