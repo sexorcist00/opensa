@@ -54,7 +54,15 @@ export interface VehicleFixture {
   doors: VehicleDoor[];
   dummies: VehicleDummy[];
   indexCount: number;
-  layout: { colors: number; indices: number; meta: number; normals: number; positions: number; uvs: number };
+  layout: {
+    colors: number;
+    indices: number;
+    meta: number;
+    normals: number;
+    positions: number;
+    reflect: number;
+    uvs: number;
+  };
   name: string;
   parts: VehicleModelPart[];
   submeshes: VehicleModelSubmesh[];
@@ -75,6 +83,17 @@ export interface VehicleModelData {
   normals: Float32Array;
   parts: readonly VehicleModelPart[];
   positions: Float32Array;
+  /**
+   * Per-vertex REFLECTION slots (B5r), straight from the DFF's material-effect plugins:
+   *   x = env-map layer in the texture array (0 = the material is not reflective),
+   *   y = env-map coefficient × 255 (RpMatFX strength),
+   *   z = SA reflection-plugin intensity × 255,
+   *   w = SA specular-plugin level × 255.
+   * SA's own env textures are BAKED DAYTIME images (a painted horizon for paint, a sunset photo for glass) —
+   * the engine keeps their PATTERN and their settings but takes the reflection's COLOUR from the live sky, so
+   * a car does not reflect a sunset at midnight.
+   */
+  reflect: Uint8Array;
   submeshes: readonly VehicleModelSubmesh[];
   texture: VehicleTextureArray;
   uvs: Float32Array;

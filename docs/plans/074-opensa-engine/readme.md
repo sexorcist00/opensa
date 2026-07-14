@@ -13,23 +13,24 @@ non-WebGPU browsers during the whole build-out (additive, no flag day — the 06
 
 ## The chain
 
-| #   | Plan                                                     | One-liner                                                                                             |
-| --- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 01  | [Framework architecture](01-framework-architecture.md)   | The renderer design: module map, bind model, frame graph, shader system, extension points.            |
-| 02  | [Native formats](02-native-formats.md)                   | `.oscell` / `.ostex` / `.ospak` — GPU-ready, versioned, batching + texture arrays + alpha.            |
-| 03  | [Converter tool](03-converter-tool.md)                   | `tools/opensa-pack`: game-ready set → native pak; the ALPHA PIPELINE lives here (early).              |
-| 04  | [Engine lab + P0 gate](04-engine-lab-p0.md)              | `apps/engine-lab`: the vertical-slice spike, bench parity, numeric gates, Safari check.               |
-| 05  | [Streaming runtime](05-streaming-runtime.md)             | Cell lifecycle, worker IO, range reads, GPU residency/eviction — the memory model.                    |
-| 06  | [World effects parity](06-world-effects-parity.md)       | Effect-by-effect WGSL ledger: sun/fog/sky/lights/emissives/wind/water, each measured.                 |
-| 07  | [Baked channels](07-baked-channels.md)                   | Static shadows + AO/skyVis + emissive mask — 066/03-04 executed against the new target.               |
-| 08  | [Dynamics](08-dynamics.md)                               | Skinning (EARLY probe), character + IFP, vehicles, particles, procobj instancing.                     |
-| 09  | [Post-FX & AA](09-postfx-aa.md)                          | MSAA+A2C, bloom, ACES, god-rays; render-scale tiers.                                                  |
-| 10  | [Integration & flip](10-integration-flip.md)             | Boundary refactor, game-app integration, flip criteria, 073-flags cleanup decision.                   |
-| 11  | [Performance testing](11-performance-testing.md)         | Pinned `game-src` input + bench scenes + committed series — every engine change perf-gated.           |
-| 12  | [Stochastic texturing](12-stochastic-texturing.md)       | De-tiling ground/grass/roads (skygfx-researched 3-tap blend); offline name-list selection.            |
-| 13  | [Post-flip cleanup](13-cleanup.md)                       | AFTER the flip: drop the three-WebGL path, the 073 debug-flag zoo, three/babylon/postprocessing deps. |
-| 14  | [pmb integration + final measure](14-pmb-integration.md) | Embed opensa-pack into perfect-map-builder; full modded-map conversion + the chain's exit-exam bench. |
-| 15  | [LOD baked lights](15-lod-baked-lights.md)               | Bake 2dfx lamp light into LOD night prelit — far-field streetlight pools / billboard glow at night.   |
+| #   | Plan                                                     | One-liner                                                                                                    |
+| --- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| 01  | [Framework architecture](01-framework-architecture.md)   | The renderer design: module map, bind model, frame graph, shader system, extension points.                   |
+| 02  | [Native formats](02-native-formats.md)                   | `.oscell` / `.ostex` / `.ospak` — GPU-ready, versioned, batching + texture arrays + alpha.                   |
+| 03  | [Converter tool](03-converter-tool.md)                   | `tools/opensa-pack`: game-ready set → native pak; the ALPHA PIPELINE lives here (early).                     |
+| 04  | [Engine lab + P0 gate](04-engine-lab-p0.md)              | `apps/engine-lab`: the vertical-slice spike, bench parity, numeric gates, Safari check.                      |
+| 05  | [Streaming runtime](05-streaming-runtime.md)             | Cell lifecycle, worker IO, range reads, GPU residency/eviction — the memory model.                           |
+| 06  | [World effects parity](06-world-effects-parity.md)       | Effect-by-effect WGSL ledger: sun/fog/sky/lights/emissives/wind/water, each measured.                        |
+| 07  | [Baked channels](07-baked-channels.md)                   | Static shadows + AO/skyVis + emissive mask — 066/03-04 executed against the new target.                      |
+| 08  | [Dynamics](08-dynamics.md)                               | Skinning (EARLY probe), character + IFP, vehicles, particles, procobj instancing.                            |
+| 09  | [Post-FX & AA](09-postfx-aa.md)                          | MSAA+A2C, bloom, ACES, god-rays; render-scale tiers.                                                         |
+| 10  | [Integration & flip](10-integration-flip.md)             | Boundary refactor, game-app integration, flip criteria, 073-flags cleanup decision.                          |
+| 11  | [Performance testing](11-performance-testing.md)         | Pinned `game-src` input + bench scenes + committed series — every engine change perf-gated.                  |
+| 12  | [Stochastic texturing](12-stochastic-texturing.md)       | De-tiling ground/grass/roads (skygfx-researched 3-tap blend); offline name-list selection.                   |
+| 13  | [Post-flip cleanup](13-cleanup.md)                       | AFTER the flip: drop the three-WebGL path, the 073 debug-flag zoo, three/babylon/postprocessing deps.        |
+| 14  | [pmb integration + final measure](14-pmb-integration.md) | Embed opensa-pack into perfect-map-builder; full modded-map conversion + the chain's exit-exam bench.        |
+| 16  | [Vehicle paint](16-vehicle-paint.md)                     | Deep vehicle reflections — PARKED with a rejected v1; the rework plan (tonemapper, env probe, SSR, normals). |
+| 15  | [LOD baked lights](15-lod-baked-lights.md)               | Bake 2dfx lamp light into LOD night prelit — far-field streetlight pools / billboard glow at night.          |
 
 ## Roadmap — vertical slices with numeric gates (plans ≠ phases; each milestone cuts across plans)
 

@@ -205,6 +205,8 @@ export function compileAll(
     { arrayStride: 8, attributes: [{ format: 'float32x2', offset: 0, shaderLocation: 2 }] },
     { arrayStride: 4, attributes: [{ format: 'unorm8x4', offset: 0, shaderLocation: 3 }] },
     { arrayStride: 4, attributes: [{ format: 'uint8x4', offset: 0, shaderLocation: 4 }] },
+    // Reflection slots (B5r): env layer + coefficient + intensity + specular level, all from the DFF.
+    { arrayStride: 4, attributes: [{ format: 'uint8x4', offset: 0, shaderLocation: 5 }] },
   ];
   for (const variant of [
     { blend: false, entry: 'fsRigid', id: 'rigid-opaque' as const },

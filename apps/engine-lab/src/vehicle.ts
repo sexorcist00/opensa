@@ -55,6 +55,7 @@ export async function loadVehicleProbe(
     normals: slice(fixture.layout.normals, fixture.vertexCount * 12),
     parts: fixture.parts,
     positions: slice(fixture.layout.positions, fixture.vertexCount * 12),
+    reflect: slice(fixture.layout.reflect, fixture.vertexCount * 4),
     submeshes: fixture.submeshes,
     texture: {
       height: fixture.textures.height,

@@ -188,6 +188,40 @@ describe('buildVehicleModel', () => {
       expect(door.offset?.slice(12, 15)).toEqual([0.5, 0, 0]); // the door, relative to the hinge
     });
 
+    it('carries the DFF reflection settings per vertex (env layer, coefficient, intensity, specular)', () => {
+      const reflective = material({
+        effects: {
+          envMap: { coefficient: 1, texture: 'xvehicleenv128', useFrameBufferAlpha: false },
+          reflection: { intensity: 0.09, offset: [1, 1], scale: [1, 1] },
+          specular: { level: 0.18, texture: 'vehiclespecdot64' },
+        },
+      });
+      const built = buildVehicleModel(
+        clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [geometry([reflective])]),
+        textures(),
+      );
+
+      expect(built.reflect[0]).toBeGreaterThan(0); // the env map resolved to a real layer
+      expect(built.reflect[1]).toBe(255); // coefficient 1
+      expect(built.reflect[2]).toBe(Math.round(0.09 * 255));
+      expect(built.reflect[3]).toBe(Math.round(0.18 * 255));
+    });
+
+    it('a coefficient of 0 means NOT reflective — SA leaves the plugin on wheels and tyres', () => {
+      const matte = material({
+        effects: {
+          envMap: { coefficient: 0, texture: null, useFrameBufferAlpha: false },
+          reflection: { intensity: 0, offset: [1, 1], scale: [1, 1] },
+        },
+      });
+      const built = buildVehicleModel(
+        clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [geometry([matte])]),
+        textures(),
+      );
+
+      expect([...built.reflect.subarray(0, 4)]).toEqual([0, 0, 0, 0]);
+    });
+
     it('a lone corner wheel with real dummies is a MIS-NAMED shared wheel (the comet case)', () => {
       const built = buildVehicleModel(
         clump(

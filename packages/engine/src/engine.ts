@@ -119,6 +119,8 @@ export interface Environment {
   moonColor: readonly [number, number, number];
   /** Unit direction TOWARDS the moon (engine space). */
   moonDir: readonly [number, number, number];
+  /** Vehicle reflection strength (B5r) — the global multiplier over the DFF's per-material settings. */
+  reflectionStrength: number;
   /** LINEAR sky gradient horizon colour (sky pass + world fog share it). */
   skyHorizon: readonly [number, number, number];
   /** SA mood strength: how strongly timecyc's skyTop tints the physical sky (0 = pure Preetham). */
@@ -205,6 +207,8 @@ export interface VehicleModelInit {
   normals: Uint8Array;
   parts: readonly RigidPartInit[];
   positions: Uint8Array;
+  /** Per-vertex DFF reflection slots (B5r): env layer, env coefficient, reflect intensity, specular level. */
+  reflect: Uint8Array;
   submeshes: readonly VehicleSubmesh[];
   /** RGBA8 layers, all the same size, packed sequentially. */
   texture: { height: number; layers: number; rgba: Uint8Array; width: number };
@@ -301,6 +305,7 @@ export class Engine {
     hour: 12,
     moonColor: [0, 0, 0],
     moonDir: [-0.3, 0.8, -0.25],
+    reflectionStrength: 1,
     skyHorizon: [0.42, 0.55, 0.72],
     skyMood: 0.7,
     skyTop: [0.12, 0.32, 0.65],
@@ -472,6 +477,7 @@ export class Engine {
       upload('uvs', init.uvs, GPUBufferUsage.VERTEX),
       upload('colors', init.colors, GPUBufferUsage.VERTEX),
       upload('meta', init.meta, GPUBufferUsage.VERTEX),
+      upload('reflect', init.reflect, GPUBufferUsage.VERTEX),
     ];
     const indexBuffer = upload('indices', init.indices, GPUBufferUsage.INDEX);
     const matrixBuffer = this.createVehicleMatrixBuffer(init.parts.length, VEHICLE_CAPACITY);
@@ -587,6 +593,7 @@ export class Engine {
     // polygon has no vertex near it to light: the beam breaks into blotches that follow the road's normals
     // and vanishes entirely once the car sits mid-polygon. Dynamic lights must be shaded per PIXEL.
     frameData[88] = this.dynamicLights.length;
+    frameData[90] = env.reflectionStrength;
     frameData[73] = this.cloudLayerOn;
     frameData[74] = env.cloudDark;
     frameData[75] = Math.min(1, Math.max(0, env.cloudAlpha));

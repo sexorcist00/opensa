@@ -37,9 +37,9 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, spare, spare, spare]. The pool is ordered DYNAMIC first, then static 2dfx:
-  // the world shades the static half per vertex and the dynamic half per pixel; vehicles and peds take the
-  // STATIC half only, so a car is never lit by its own lamps.
+  // params4 = [dynamicLightCount, spare, reflectionStrength (B5r global knob), spare]. The pool is ordered
+  // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
+  // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -85,6 +85,32 @@ fn skyCelestialFor(dir: vec3f) -> vec3f {
   // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
   let horizonClip = smoothstep(-0.003, 0.005, dir.y);
   return (sun + moon) * horizonClip;
+}
+
+// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
+// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
+// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
+// timecyc horizon mood with a night floor. Zero when no dome is bound or below the horizon.
+fn cloudLayerFor(dir: vec3f) -> vec4f {
+  if (frame.params3.y <= 0.5 || dir.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  let theta = acos(clamp(dir.y, -1.0, 1.0));
+  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
+  let spin = frame.params2.z * frame.moonColor.w;
+  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
+  let spun = rot * horiz;
+  let radius = theta * 0.297;
+  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
+  let cloud = mix(
+    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
+    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
+    frame.camera.w,
+  );
+  let mood = frame.skyHorizon.rgb;
+  let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
+  return vec4f(cloud.rgb * brightness, alpha);
 }
 
 // The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
@@ -232,9 +258,9 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, spare, spare, spare]. The pool is ordered DYNAMIC first, then static 2dfx:
-  // the world shades the static half per vertex and the dynamic half per pixel; vehicles and peds take the
-  // STATIC half only, so a car is never lit by its own lamps.
+  // params4 = [dynamicLightCount, spare, reflectionStrength (B5r global knob), spare]. The pool is ordered
+  // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
+  // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -280,6 +306,32 @@ fn skyCelestialFor(dir: vec3f) -> vec3f {
   // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
   let horizonClip = smoothstep(-0.003, 0.005, dir.y);
   return (sun + moon) * horizonClip;
+}
+
+// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
+// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
+// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
+// timecyc horizon mood with a night floor. Zero when no dome is bound or below the horizon.
+fn cloudLayerFor(dir: vec3f) -> vec4f {
+  if (frame.params3.y <= 0.5 || dir.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  let theta = acos(clamp(dir.y, -1.0, 1.0));
+  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
+  let spin = frame.params2.z * frame.moonColor.w;
+  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
+  let spun = rot * horiz;
+  let radius = theta * 0.297;
+  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
+  let cloud = mix(
+    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
+    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
+    frame.camera.w,
+  );
+  let mood = frame.skyHorizon.rgb;
+  let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
+  return vec4f(cloud.rgb * brightness, alpha);
 }
 
 // The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
@@ -388,9 +440,9 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, spare, spare, spare]. The pool is ordered DYNAMIC first, then static 2dfx:
-  // the world shades the static half per vertex and the dynamic half per pixel; vehicles and peds take the
-  // STATIC half only, so a car is never lit by its own lamps.
+  // params4 = [dynamicLightCount, spare, reflectionStrength (B5r global knob), spare]. The pool is ordered
+  // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
+  // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -436,6 +488,32 @@ fn skyCelestialFor(dir: vec3f) -> vec3f {
   // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
   let horizonClip = smoothstep(-0.003, 0.005, dir.y);
   return (sun + moon) * horizonClip;
+}
+
+// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
+// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
+// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
+// timecyc horizon mood with a night floor. Zero when no dome is bound or below the horizon.
+fn cloudLayerFor(dir: vec3f) -> vec4f {
+  if (frame.params3.y <= 0.5 || dir.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  let theta = acos(clamp(dir.y, -1.0, 1.0));
+  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
+  let spin = frame.params2.z * frame.moonColor.w;
+  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
+  let spun = rot * horiz;
+  let radius = theta * 0.297;
+  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
+  let cloud = mix(
+    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
+    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
+    frame.camera.w,
+  );
+  let mood = frame.skyHorizon.rgb;
+  let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
+  return vec4f(cloud.rgb * brightness, alpha);
 }
 
 // The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
@@ -673,9 +751,9 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, spare, spare, spare]. The pool is ordered DYNAMIC first, then static 2dfx:
-  // the world shades the static half per vertex and the dynamic half per pixel; vehicles and peds take the
-  // STATIC half only, so a car is never lit by its own lamps.
+  // params4 = [dynamicLightCount, spare, reflectionStrength (B5r global knob), spare]. The pool is ordered
+  // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
+  // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -721,6 +799,32 @@ fn skyCelestialFor(dir: vec3f) -> vec3f {
   // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
   let horizonClip = smoothstep(-0.003, 0.005, dir.y);
   return (sun + moon) * horizonClip;
+}
+
+// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
+// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
+// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
+// timecyc horizon mood with a night floor. Zero when no dome is bound or below the horizon.
+fn cloudLayerFor(dir: vec3f) -> vec4f {
+  if (frame.params3.y <= 0.5 || dir.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  let theta = acos(clamp(dir.y, -1.0, 1.0));
+  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
+  let spin = frame.params2.z * frame.moonColor.w;
+  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
+  let spun = rot * horiz;
+  let radius = theta * 0.297;
+  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
+  let cloud = mix(
+    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
+    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
+    frame.camera.w,
+  );
+  let mood = frame.skyHorizon.rgb;
+  let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
+  return vec4f(cloud.rgb * brightness, alpha);
 }
 
 // The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
@@ -803,6 +907,9 @@ struct RigidVsIn {
   @location(2) uv: vec2f,
   @location(3) color: vec4f,
   @location(4) slots: vec4<u32>,
+  // Reflection slots straight from the DFF material-effect plugins (B5r): env layer, env coefficient,
+  // SA reflection intensity, SA specular level. x = 0 means the material is simply not reflective.
+  @location(5) reflect: vec4<u32>,
 };
 
 struct RigidVsOut {
@@ -816,6 +923,12 @@ struct RigidVsOut {
   // slots.w: 0 = body, 1 = head lamp, 2 = tail lamp; lamps = [headlights, brakes, config intensity].
   @location(6) @interpolate(flat) lampTag: u32,
   @location(7) @interpolate(flat) lamps: vec3f,
+  @location(8) @interpolate(flat) envLayer: u32,
+  // [env coefficient, SA reflection intensity, SA specular level] — all 0..1, all authored per material.
+  @location(9) @interpolate(flat) reflect: vec3f,
+  // MODEL-space position: the flake hash is anchored to the CAR, so the sparkle rides with it. A world-space
+  // hash would make the flakes crawl across the paint as the car drives.
+  @location(10) local: vec3f,
 };
 
 @group(1) @binding(0) var<storage, read> rigidMatrices: array<mat4x4f>;
@@ -847,6 +960,9 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   out.nightLayer = in.slots.y;
   out.lampTag = in.slots.w;
   out.lamps = rigidLamp[in.instance].xyz;
+  out.envLayer = in.reflect.x;
+  out.reflect = vec3f(in.reflect.yzw) / 255.0;
+  out.local = in.position;
   return out;
 }
 
@@ -873,6 +989,141 @@ fn rigidLampGlow(in: RigidVsOut) -> f32 {
 const LAMP_HEAD_GLOW = 2.4;
 const LAMP_TAIL_RUN = 1.0;
 const LAMP_TAIL_BRAKE = 4.0;
+
+// Vehicle reflections (B5r). SA's env maps are BAKED DAYTIME IMAGES — a painted horizon (xvehicleenv128) for
+// paint, a sunset photograph (vehicleenvmap128) for glass. Sampling them raw means a car reflects a sunset at
+// midnight. So the DFF gives us the SHAPE and the SETTINGS (which texture, coefficient, intensity, specular
+// level) and the LIVE SKY gives the colour: the same Preetham LUT the sky pass and the fog already share, so
+// the reflection tracks the hour, the sun and the weather for free.
+/**
+ * AUTOMOTIVE PAINT (B5r round 2). The first two attempts read as matte, and the reasons are worth keeping:
+ *
+ *  1. OUR SKY IS LDR. A physically-honest Fresnel (F0 ~ 0.05) times a sky that peaks near 0.3 in linear is
+ *     ~0.015 — invisible. Real paint mirrors because the real sky is TENS of times brighter than the paint's
+ *     own diffuse. So the reflected environment gets a real HDR gain here; blown-out sky on a wing is not a
+ *     bug, it is what a car looks like.
+ *  2. NOTHING SWEPT ACROSS THE PANEL. A reflection with no dark ground and no horizon LINE has no contrast to
+ *     move — it reads as a tint. The environment now has a hard horizon and a dark road under it.
+ *  3. SA PANELS ARE FLAT. On a flat quad the mirror direction is CONSTANT, so a perfect mirror still paints a
+ *     constant colour. AAA cars are dense and curved and carry normal maps. Our stand-in is METALLIC FLAKE:
+ *     a per-pixel micro-normal, anchored in MODEL space so it rides with the car instead of crawling. It is
+ *     what makes a flat SA bonnet sparkle under a street lamp — and it is what real car paint actually is.
+ */
+const REFLECT_HDR = 4.5; // the sky's missing dynamic range, restored where it matters
+const REFLECT_GROUND = 0.10; // the road under the car: dark, so the horizon reads as a hard line
+const CLEARCOAT_F0 = 0.05; // dielectric lacquer — barely mirrors head-on, near-mirror at grazing
+const PAINT_ROUGHNESS = 0.35; // paint blurs its reflection; glass does not (see rigidClearcoat)
+const PATTERN_MIX = 0.30; // how much of SA's painted env texture rides on top of the live sky
+const FLAKE_SCALE = 220.0;
+const FLAKE_AMOUNT = 0.22;
+const SPEC_POWER = 120.0;
+const SPEC_LAMP_POWER = 220.0; // street lamps and headlights make TIGHTER highlights than the sun
+const SPEC_GAIN = 6.0;
+
+/** Cheap 3D hash -> a unit-ish vector, for the flake micro-normals. */
+fn flakeHash(p: vec3f) -> vec3f {
+  let h = fract(sin(vec3f(dot(p, vec3f(127.1, 311.7, 74.7)), dot(p, vec3f(269.5, 183.3, 246.1)), dot(p, vec3f(113.5, 271.9, 124.6)))) * 43758.5453);
+  return h * 2.0 - vec3f(1.0);
+}
+
+/**
+ * Metallic flake: perturb the normal per pixel with a stable, model-space hash. Anchored to the CAR, not the
+ * world — a world-space hash would make the flakes crawl across the paint as the car drives.
+ */
+fn flakeNormal(normal: vec3f, local: vec3f) -> vec3f {
+  let cell = floor(local * FLAKE_SCALE);
+  return normalize(normal + flakeHash(cell) * FLAKE_AMOUNT);
+}
+
+/**
+ * The world a car reflects: the LIVE sky with its sun/moon discs AND the cloud dome above, the dark road
+ * below, split by a hard horizon. The discs are the point — a gradient alone gives a dull sheen; it is the
+ * bright blob and the horizon line sliding across a wing as you turn that read as polished lacquer. HDR, so
+ * it also feeds the bloom/godray pass for free.
+ */
+fn reflectedWorld(dir: vec3f) -> vec3f {
+  let sky = skyBaseFor(dir) + skyCelestialFor(dir);
+  let cloud = cloudLayerFor(dir);
+  let above = mix(sky, cloud.rgb, cloud.a * frame.params3.w) * REFLECT_HDR;
+  // The road: the ambient sky bounced off asphalt. Dark on purpose — the CONTRAST with the sky is what makes
+  // a reflection look like a reflection instead of a tint.
+  let ground = skyBaseFor(vec3f(dir.x, 0.15, dir.z)) * REFLECT_GROUND;
+  return mix(ground, above, smoothstep(-0.03, 0.03, dir.y));
+}
+
+/**
+ * The SA env texture, sampled the SA way: a sphere map indexed by the VIEW-SPACE normal, so the highlight
+ * band sweeps across the bodywork as the car turns. We keep only its LUMINANCE — the streaks and the horizon
+ * band, i.e. the "hand-painted studio" character — and let the sky supply the colour.
+ */
+fn envPattern(in: RigidVsOut, normal: vec3f) -> f32 {
+  let toEye = normalize(frame.camera.xyz - in.world);
+  let right = normalize(cross(vec3f(0.0, 1.0, 0.0), toEye));
+  let up = cross(toEye, right);
+  let uv = vec2f(dot(normal, right), dot(normal, up)) * 0.5 + vec2f(0.5);
+  let texel = textureSample(rigidTexture, rigidSampler, uv, in.envLayer);
+  return dot(texel.rgb, vec3f(0.2126, 0.7152, 0.0722));
+}
+
+/**
+ * The full reflection term. NB the env tap happens BEFORE the reflective/matte branch: textureSample needs
+ * UNIFORM control flow (implicit derivatives), and the coefficient is a per-material varying — the same rule
+ * the stochastic world sampler had to obey.
+ */
+fn rigidClearcoat(in: RigidVsOut, normal: vec3f) -> vec3f {
+  let flaked = flakeNormal(normal, in.local);
+  let pattern = mix(1.0, envPattern(in, normal) * 2.0, PATTERN_MIX);
+  let coefficient = in.reflect.x;
+  // The flakes ride the SPECULAR lobes only — they are microscopic mirrors, not a bumpy body.
+  let specular = rigidSpecular(in, flaked, in.reflect.z * frame.params4.z);
+  if (coefficient <= 0.0 || frame.params4.z <= 0.0) {
+    return specular; // tyres, rubber, matte trim — SA leaves the plugin on them with a coefficient of 0
+  }
+  let toEye = normalize(frame.camera.xyz - in.world);
+  let mirror = reflect(-toEye, flaked);
+  // Prefiltered-IBL stand-in: paint blurs what it reflects, so blend the sharp mirror tap toward the sky in
+  // the NORMAL direction (a maximally blurred sample). Roughness 0 would be chrome; glass keeps it sharper.
+  let sharp = reflectedWorld(mirror);
+  let blurred = reflectedWorld(normalize(mix(mirror, normal, 0.65)));
+  let env = mix(sharp, blurred, PAINT_ROUGHNESS);
+  let fresnel = CLEARCOAT_F0 + (1.0 - CLEARCOAT_F0) * pow(1.0 - max(dot(flaked, toEye), 0.0), 5.0);
+  let strength = coefficient * frame.params4.z * fresnel * pattern;
+  return env * strength + specular;
+}
+
+/**
+ * Specular highlights. The sun/moon give the broad sheen; the LIGHT POOL gives the tight ones that slide
+ * along a bonnet as you drive under street lamps — which is what actually makes a car read as glossy at
+ * night, when the sky reflection has almost nothing left to give.
+ */
+fn rigidSpecular(in: RigidVsOut, normal: vec3f, level: f32) -> vec3f {
+  if (level <= 0.0) {
+    return vec3f(0.0);
+  }
+  let toEye = normalize(frame.camera.xyz - in.world);
+  let sun = pow(max(dot(normal, normalize(frame.sunDir.xyz + toEye)), 0.0), SPEC_POWER);
+  let moon = pow(max(dot(normal, normalize(frame.moonDir.xyz + toEye)), 0.0), SPEC_POWER);
+  var sum = (frame.sunColor.rgb * sun + frame.moonColor.rgb * moon) * SPEC_GAIN;
+  // The sky itself is a light: a sheen along the whole upper surface, which is what keeps a roof from
+  // reading as flat paint even with no sun in frame.
+  sum += skyBaseFor(normal) * (pow(max(normal.y, 0.0), 3.0) * 0.35);
+  // Bounded loop over the WHOLE pool — a car should catch its own headlights' bounce off a wall as much as
+  // the street lamp overhead, and the pool is where both live.
+  let count = min(u32(frame.params3.x), 64u);
+  for (var index = 0u; index < count; index += 1u) {
+    let light = localLights[index];
+    let toLight = light.position.xyz - in.world;
+    let dist = length(toLight);
+    if (dist < light.position.w) {
+      let halfway = normalize(toLight / max(dist, 0.001) + toEye);
+      let falloff = 1.0 - dist / light.position.w;
+      sum += light.color.rgb * (pow(max(dot(normal, halfway), 0.0), SPEC_LAMP_POWER) * falloff * falloff);
+    }
+  }
+  return sum * level;
+}
+
+
 
 fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   let normal = normalize(in.normal);
@@ -922,7 +1173,11 @@ fn fsRigidBlend(in: RigidVsOut) -> @location(0) vec4f {
   let texel = rigidTexel(in);
   let fog = rigidFog(in.world);
   let viewDir = normalize(in.world - frame.camera.xyz);
-  let alpha = texel.a * in.color.a;
+  let normal = normalize(in.normal);
+  // Glass turns MIRROR at grazing angles — that is what glass does, and a windscreen you can see straight
+  // through from every angle looks like a hole in the car. The clearcoat fresnel drives the opacity itself.
+  let fresnel = pow(1.0 - max(dot(normal, -viewDir), 0.0), 5.0);
+  let alpha = clamp(texel.a * in.color.a + fresnel * in.reflect.x * frame.params4.z, 0.0, 1.0);
   let color = mix(rigidShade(in, texel) * alpha, skyFogFor(viewDir) * alpha, fog);
   return vec4f(color, alpha);
 }
@@ -966,9 +1221,9 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, spare, spare, spare]. The pool is ordered DYNAMIC first, then static 2dfx:
-  // the world shades the static half per vertex and the dynamic half per pixel; vehicles and peds take the
-  // STATIC half only, so a car is never lit by its own lamps.
+  // params4 = [dynamicLightCount, spare, reflectionStrength (B5r global knob), spare]. The pool is ordered
+  // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
+  // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -1014,6 +1269,32 @@ fn skyCelestialFor(dir: vec3f) -> vec3f {
   // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
   let horizonClip = smoothstep(-0.003, 0.005, dir.y);
   return (sun + moon) * horizonClip;
+}
+
+// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
+// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
+// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
+// timecyc horizon mood with a night floor. Zero when no dome is bound or below the horizon.
+fn cloudLayerFor(dir: vec3f) -> vec4f {
+  if (frame.params3.y <= 0.5 || dir.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  let theta = acos(clamp(dir.y, -1.0, 1.0));
+  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
+  let spin = frame.params2.z * frame.moonColor.w;
+  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
+  let spun = rot * horiz;
+  let radius = theta * 0.297;
+  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
+  let cloud = mix(
+    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
+    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
+    frame.camera.w,
+  );
+  let mood = frame.skyHorizon.rgb;
+  let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
+  return vec4f(cloud.rgb * brightness, alpha);
 }
 
 // The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
@@ -1217,9 +1498,9 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, spare, spare, spare]. The pool is ordered DYNAMIC first, then static 2dfx:
-  // the world shades the static half per vertex and the dynamic half per pixel; vehicles and peds take the
-  // STATIC half only, so a car is never lit by its own lamps.
+  // params4 = [dynamicLightCount, spare, reflectionStrength (B5r global knob), spare]. The pool is ordered
+  // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
+  // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -1265,6 +1546,32 @@ fn skyCelestialFor(dir: vec3f) -> vec3f {
   // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
   let horizonClip = smoothstep(-0.003, 0.005, dir.y);
   return (sun + moon) * horizonClip;
+}
+
+// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
+// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
+// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
+// timecyc horizon mood with a night floor. Zero when no dome is bound or below the horizon.
+fn cloudLayerFor(dir: vec3f) -> vec4f {
+  if (frame.params3.y <= 0.5 || dir.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  let theta = acos(clamp(dir.y, -1.0, 1.0));
+  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
+  let spin = frame.params2.z * frame.moonColor.w;
+  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
+  let spun = rot * horiz;
+  let radius = theta * 0.297;
+  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
+  let cloud = mix(
+    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
+    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
+    frame.camera.w,
+  );
+  let mood = frame.skyHorizon.rgb;
+  let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
+  return vec4f(cloud.rgb * brightness, alpha);
 }
 
 // The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
@@ -1564,9 +1871,9 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, spare, spare, spare]. The pool is ordered DYNAMIC first, then static 2dfx:
-  // the world shades the static half per vertex and the dynamic half per pixel; vehicles and peds take the
-  // STATIC half only, so a car is never lit by its own lamps.
+  // params4 = [dynamicLightCount, spare, reflectionStrength (B5r global knob), spare]. The pool is ordered
+  // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
+  // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -1612,6 +1919,32 @@ fn skyCelestialFor(dir: vec3f) -> vec3f {
   // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
   let horizonClip = smoothstep(-0.003, 0.005, dir.y);
   return (sun + moon) * horizonClip;
+}
+
+// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
+// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
+// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
+// timecyc horizon mood with a night floor. Zero when no dome is bound or below the horizon.
+fn cloudLayerFor(dir: vec3f) -> vec4f {
+  if (frame.params3.y <= 0.5 || dir.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  let theta = acos(clamp(dir.y, -1.0, 1.0));
+  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
+  let spin = frame.params2.z * frame.moonColor.w;
+  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
+  let spun = rot * horiz;
+  let radius = theta * 0.297;
+  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
+  let cloud = mix(
+    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
+    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
+    frame.camera.w,
+  );
+  let mood = frame.skyHorizon.rgb;
+  let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
+  return vec4f(cloud.rgb * brightness, alpha);
 }
 
 // The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot

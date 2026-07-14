@@ -60,6 +60,7 @@ interface Scratch {
   normals: number[];
   parts: VehicleModelPart[];
   positions: number[];
+  reflect: number[];
   submeshes: VehicleModelSubmesh[];
   uvs: number[];
 }
@@ -77,6 +78,7 @@ export function buildVehicleModel(
     normals: [],
     parts: [],
     positions: [],
+    reflect: [],
     submeshes: [],
     uvs: [],
   };
@@ -127,6 +129,7 @@ export function buildVehicleModel(
     normals: new Float32Array(scratch.normals),
     parts: scratch.parts,
     positions: new Float32Array(scratch.positions),
+    reflect: new Uint8Array(scratch.reflect),
     submeshes: scratch.submeshes,
     texture: textures.pack(),
     uvs: new Float32Array(scratch.uvs),
@@ -269,6 +272,7 @@ function appendGeometry(
   }
   const colorFill = new Array<number>(vertexCount * 4).fill(255);
   const metaFill = new Array<number>(vertexCount * 4).fill(0);
+  const reflectFill = new Array<number>(vertexCount * 4).fill(0);
 
   groupTrianglesByMaterial(rw.triangles, rw.materials.length).forEach((tris, materialIndex) => {
     if (tris.length === 0) {
@@ -286,6 +290,7 @@ function appendGeometry(
       : [material.color[0], material.color[1], material.color[2], material.color[3]];
     const layer = textures.resolve(material);
     const nightLayer = textures.resolveNightTwin(material);
+    const reflect = reflectionOf(material, textures);
     const indexOffset = scratch.indices.length;
     for (const tri of tris) {
       scratch.indices.push(baseVertex + tri.a, baseVertex + tri.b, baseVertex + tri.c);
@@ -298,6 +303,10 @@ function appendGeometry(
         metaFill[corner * 4 + 1] = nightLayer;
         metaFill[corner * 4 + 2] = paint;
         metaFill[corner * 4 + 3] = lamp === null ? LampTag.none : LampTag[lamp];
+        reflectFill[corner * 4] = reflect[0];
+        reflectFill[corner * 4 + 1] = reflect[1];
+        reflectFill[corner * 4 + 2] = reflect[2];
+        reflectFill[corner * 4 + 3] = reflect[3];
       }
     }
     scratch.submeshes.push({
@@ -315,6 +324,7 @@ function appendGeometry(
   });
   scratch.colors.push(...colorFill);
   scratch.meta.push(...metaFill);
+  scratch.reflect.push(...reflectFill);
 }
 
 /** SA scales the axles separately (vehicles.ide gives [front, rear]); the in-engine boost rides on top. */
@@ -455,6 +465,26 @@ function lampTag(material: RWMaterial): 'head' | 'tail' | null {
 
 function paintSlot(material: RWMaterial): number {
   return PAINT_MARKERS.get(`${material.color[0]},${material.color[1]},${material.color[2]}`) ?? PaintSlot.none;
+}
+
+/**
+ * The material's DFF reflection settings → the per-vertex reflect slots. `envMap.coefficient` gates the whole
+ * thing: SA leaves the plugin on wheels and tyres with a coefficient of 0, which means "not reflective".
+ */
+function reflectionOf(material: RWMaterial, textures: VehicleTextures): [number, number, number, number] {
+  const effects = material.effects;
+  const env = effects?.envMap;
+  if (!env || env.coefficient <= 0 || !env.texture) {
+    return [0, 0, 0, 0];
+  }
+  const byte = (value: number): number => Math.max(0, Math.min(255, Math.round(value * 255)));
+
+  return [
+    textures.resolveNamed(env.texture),
+    byte(env.coefficient),
+    byte(effects?.reflection?.intensity ?? 0),
+    byte(effects?.specular?.level ?? 0),
+  ];
 }
 
 function wheelRadius(geometry: RWGeometry | undefined): number {

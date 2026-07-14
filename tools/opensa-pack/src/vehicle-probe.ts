@@ -75,12 +75,13 @@ function packFixture(
 
     return offset;
   };
-  const layout = { colors: 0, indices: 0, meta: 0, normals: 0, positions: 0, uvs: 0 };
+  const layout = { colors: 0, indices: 0, meta: 0, normals: 0, positions: 0, reflect: 0, uvs: 0 };
   layout.positions = reserve(built.positions.byteLength);
   layout.normals = reserve(built.normals.byteLength);
   layout.uvs = reserve(built.uvs.byteLength);
   layout.colors = reserve(built.colors.byteLength);
   layout.meta = reserve(built.meta.byteLength);
+  layout.reflect = reserve(built.reflect.byteLength);
   layout.indices = reserve(built.indices.byteLength);
   const textureOffset = reserve(built.texture.rgba.byteLength);
 
@@ -93,6 +94,7 @@ function packFixture(
   bin.set(new Uint8Array(built.uvs.buffer, built.uvs.byteOffset, built.uvs.byteLength), layout.uvs);
   bin.set(built.colors, layout.colors);
   bin.set(built.meta, layout.meta);
+  bin.set(built.reflect, layout.reflect);
   bin.set(new Uint8Array(built.indices.buffer, built.indices.byteOffset, built.indices.byteLength), layout.indices);
   bin.set(built.texture.rgba, textureOffset);
 

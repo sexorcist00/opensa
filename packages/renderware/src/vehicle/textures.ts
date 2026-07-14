@@ -83,6 +83,11 @@ export class VehicleTextures {
     return this.ensureLayer(material.texture?.name.toLowerCase() ?? 'white');
   }
 
+  /** Layer index for a texture named by a MATERIAL EFFECT (env map, specular map) rather than the material. */
+  resolveNamed(name: string): number {
+    return this.ensureLayer(name.toLowerCase());
+  }
+
   /**
    * Lamp textures have a lamps-on TWIN (`vehiclelights128` → `vehiclelightson128` — SA swaps the texture at
    * night). Returns its layer, or 0 for "none": layer 0 is always claimed by the first body material, so it

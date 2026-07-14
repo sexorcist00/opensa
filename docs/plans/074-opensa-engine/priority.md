@@ -11,10 +11,16 @@ walks/runs/jumps in the real app with prod HUD/zones/pointer-lock and in-game be
 vsync-120); Safari smoke ✅; the config-API parity module ships prod tunables to the engine; water v3
 PARKED as leftover (0.6.0 plan).
 
-**NEXT — the ladder the user set on 2026-07-14:** B5 vehicles-in-game → B6 2dfx particles + textured
-coronas → B7 destruction objects → B7 animation objects → then the WebGL-prod `?bench=all` baseline and
-the C1 criteria run → flip. C2 cleanup stays GATED on an explicit command. B6/B7 are prod-PARITY gaps
-(prod renders all three classes), so they land BEFORE the C1 parity sign-off, not after it.
+**NEXT — the ladder (user, 2026-07-14; B5 done, reflections inserted the same day):**
+B5 vehicles ✅ → **B5r VEHICLE REFLECTIONS — v1 SHIPPED but REJECTED in the field; the deep rework is now
+its own plan, [16](16-vehicle-paint.md)** (the gap is structural: no tonemapper, no environment probe — both
+of which the three path HAS, which is why prod looked better. Not a tuning problem) → B6 2dfx particles +
+textured coronas →
+**B6.5 MAP-LIGHTING BUGS** (user, 2026-07-14: the world-lighting oddities that surfaced while field-testing
+the headlights — the per-vertex pool artefacts were only the first; collect and fix the rest) → B7
+destruction objects → B7 animation objects → then the WebGL-prod `?bench=all` baseline and the C1 criteria
+run → flip. C2 cleanup stays GATED on an explicit command. B6/B7 are prod-PARITY gaps (prod renders all
+three classes), so they land BEFORE the C1 parity sign-off, not after it.
 
 ---
 

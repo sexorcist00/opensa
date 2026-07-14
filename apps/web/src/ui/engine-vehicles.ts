@@ -152,6 +152,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         normals: bytesOf(data.model.normals),
         parts: data.model.parts,
         positions: bytesOf(data.model.positions),
+        reflect: data.model.reflect,
         submeshes: data.model.submeshes,
         texture: {
           height: data.model.texture.height,

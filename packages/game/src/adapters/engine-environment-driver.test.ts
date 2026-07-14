@@ -23,6 +23,7 @@ function makeEnvironment(): Environment {
     hour: 12,
     moonColor: [0, 0, 0],
     moonDir: [0, 1, 0],
+    reflectionStrength: 1,
     skyHorizon: [0.42, 0.55, 0.72],
     skyMood: 0.7,
     skyTop: [0.12, 0.32, 0.65],

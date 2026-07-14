@@ -28,6 +28,8 @@ export interface EngineEnvConfig {
     };
     sky: { mood: number };
     sun: { godrays: boolean };
+    /** Vehicle env-map reflections (plan 030): `preset: 'off'` = matte, intensity multiplies the DFF values. */
+    vehicleReflection: { intensity: number; preset: string };
   };
 }
 
@@ -40,6 +42,7 @@ export const DEFAULT_ENGINE_ENV_CONFIG: EngineEnvConfig = {
     night: { emissiveBoost: 1.6, litFade: { dawnEnd: 7, dawnStart: 6, duskEnd: 20, duskStart: 19 } },
     sky: { mood: 0.7 },
     sun: { godrays: true },
+    vehicleReflection: { intensity: 1, preset: 'default' },
   },
 };
 
@@ -100,6 +103,10 @@ export function createEngineEnvironmentDriver(
       environment.cloudDark = clouds.darkness;
       environment.cloudAlpha = config.graphics.clouds.opacity;
       environment.godrayStrength = config.graphics.sun.godrays ? 1 : 0;
+      // Vehicle reflections (B5r): the prod knob multiplies the DFF's per-material coefficients, exactly as
+      // it multiplies the three path's preset values — one config, both renderers.
+      const reflection = config.graphics.vehicleReflection;
+      environment.reflectionStrength = reflection.preset === 'off' ? 0 : reflection.intensity;
       if (timecyc) {
         const sample = sampleTimecycBlend(timecyc, weather, weather, hour, 0);
         environment.sunColor = scale3(lin3(sample.dir), dayGate);
