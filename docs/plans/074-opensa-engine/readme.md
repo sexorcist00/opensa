@@ -90,7 +90,9 @@ zones/HUD + pointer lock + in-game benches wired (B3 FULLY CLOSED; first in-game
 vsync-120, GPU 1.1–2.5 ms — vanilla map, effects missing, see series B3·ingame caveats) · WATER v3
 shipped then PARKED as leftover (baked depth field + oscillating foam front + swash surge; the look
 ceiling is the 2005 sprite textures — resume via docs/ideas/0.6.0/plans/02-water-realism). NEXT:
-vehicles-in-game (entity handles, plan 10), then the C1 criteria run; C2 cleanup is GATED on a separate
+**B5 vehicles-in-game is DONE + field-confirmed (2026-07-14)** — cars drive in `?engine=opensa`. Next per
+priority.md: B6 2dfx particles + textured coronas → B7 destruction/animation objects → the WebGL-prod
+`?bench=all` baseline, then the C1 criteria run; C2 cleanup is GATED on a separate
 explicit user command. The 2026-07-12 snapshot below is kept for history.
 
 ## Handoff status (2026-07-12, end of the Fable session — history)

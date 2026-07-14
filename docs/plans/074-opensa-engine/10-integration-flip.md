@@ -53,7 +53,13 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
 - [x] Boundary inventory verified against code (2026-07-12: StreamingSystem three-shaped ✓ superseded by 05;
       game loop framework-agnostic ✓; physics = three math only ✓; character/vehicle three-refs ✓ awaits 08;
       UI/config renderer-independent ✓; picking = three raycaster ✓ needs the 07 BVH reuse).
-- [ ] Entity-handle adapter for character/vehicle gameplay; remove three mesh refs from logic paths.
+- [x] **Entity-handle adapter for vehicle gameplay — DONE 2026-07-14 (B5 steps 3-4, ledger in [08](08-dynamics.md)).**
+      `VehicleHandle` (game/src/vehicle/vehicle-handle.ts) is the renderer-agnostic contract; `ThreeVehicleHandle`
+      and `EngineVehicleHandle` implement it. A grep for `from 'three'` across `game/src/vehicle/` now returns
+      only `Vector3`/`Quaternion` MATH — no `Object3D`, no `.visible`, no `.attach`, no `.traverse`. The one
+      exception is `VehicleHeadlightSystem` (sprites/materials/uniform arrays: three-only by nature; the
+      DECISION half of it was extracted to the shared `vehicle-lamps.ts` in step 5). The CHARACTER half of this
+      task was already served by the B3 host (ECS Transform + the ped probe — no mesh ref in the loop).
 - [ ] Engine-side ray query (picking + the map-inspector tools).
 - [x] **Config-API parity audit — DONE 2026-07-13 (same day):** ONE shared driver
       `@opensa/game/adapters/engine-environment-driver` (renderware allowed there by the layer rule) maps

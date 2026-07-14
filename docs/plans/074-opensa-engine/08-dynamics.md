@@ -190,10 +190,35 @@ sun/indirect + shared fog); lab `?ped=1` (+`?pedy=` height), HUD `ped sampler` m
       **existing** corona pass and light pool through `Engine.dynamicCoronas` / `dynamicLights` — no second
       corona renderer. Host coronas fill BEFORE the world's dn early-out: they carry their own night gate.
       `VehicleLampSystem` (renderer-agnostic, sink-driven) wires it in the engine host.
-      Field: `?engine=opensa` at night — drive, brake, get out (the lamps must go dark when the driver
-      leaves: lamp state lives on the VEHICLE, not on the system).
-      REMAINING in 08 (unchanged): headlight cone v2 (the pool entry is still a forward-offset POINT light),
-      vehicle reflections (deferred out of B5 by the user), map car generators on the engine host.
+      **FIELD ✅ 2026-07-14 after 6 rounds — B5 CLOSED.** The rounds, because every one of them corrected a
+      wrong belief: 1. _"The whole street glows."_ The pool had POINT lights only; a headlight with no cone lights the road
+      behind the car too. Ported prod's cone (dir + cos half-angle in `dir.w`, 2 = point), squared toward
+      the rim, plus prod's WRAP term — a headlight grazes the road tangentially and a hard N·L collapses
+      the beam to nothing. 2. _"Light lies strangely on the road / broken normals / drove forward and the light vanished."_ THE
+      REAL ARCHITECTURAL BUG: the world consumed the pool in the VERTEX shader (a deliberate optimisation —
+      SA is vertex-lit). Fine for static 2dfx lamps, fatal for a MOVING one: SA road polygons are tens of
+      metres wide, so the beam lands between vertices — it blotches along the mesh normals and disappears
+      outright when the car sits mid-polygon. Split the pool: DYNAMIC lights first and shaded per PIXEL
+      (world VsOut gained a normal), static lamps still per vertex. `params4.x` = the dynamic count. 3. _"Light is far in front of the car / leaks through fences."_ The 4.5 m forward push came from the LAB
+      demo, which had no cone to aim with. Prod puts the source AT the lamp. Removed. 4. _"Beams merge into one blob under the nose."_ Prod's cone (57°, 27° down) was tuned for a source
+      shoved metres ahead; at the lamp it must be narrower and flatter (≈38° / ≈18°) to read as two beams. 5. _"Tail lights are cropped"_ (five rounds, three wrong theories — each killed by DATA, not by eye):
+      sampler wrap (UVs proved to be inside [0,1]); texture packing (dumped the packed atlas — clean); the
+      env-mapped glass (its bbox is in the FRONT of the car). Then the clue that cracked it: the seam ran
+      STRAIGHT ACROSS BODY AND LENS — across two different materials — so it could not be geometry, UV or
+      shading. It was the CORONA: the lamp dummy sits ON the lens surface, so a camera-facing quad centred
+      there is half-buried in the bodywork and the depth test slices it along the car's own silhouette.
+      Fix = nudge the corona along the VIEW RAY (pure depth, no screen movement), NOT outward along the
+      lamp facing — which fixes the clipping but detaches the glow, leaving it floating behind the bumper. 6. En route, two more prod-parity rules: a lit lamp is a SOURCE, not a surface (emissive-dominant; a
+      nearby street lamp was painting the lens's ~90° normal sweep straight onto the glass), and a car is
+      never lit by its OWN lamps — vehicles and peds take the STATIC half of the pool only, exactly as prod
+      does by construction (its pool lives in the world material alone).
+      GUARDRAIL ADDED: `assertGuardrails` now rejects WGSL RESERVED WORDS in declarations. `from` broke the
+      build this session; `meta` broke it in B2. naga does not catch them and the browser was our linter
+      twice. (The first reserved-word list I wrote from memory was itself wrong — `out`/`in`/`vec` are NOT
+      reserved and our shaders use them; the test caught me. It is now the spec's list.)
+      REMAINING in 08: vehicle reflections (deferred out of B5 by the user), map car generators on the engine
+      host, headlight SHADOWS (the pool casts none — prod does not either, so a beam still passes through a
+      fence).
 - [ ] Transform buffer + dynamic-offset draw path + entity registry (01 dynamics module made real).
 - [ ] **Vehicle lamp STATE** (user spec 2026-07-13): lamp submeshes carry `head`/`tail` tags from the SA
       marker colours (extractor done); runtime needs per-vehicle state — headlights on/off (texture twin

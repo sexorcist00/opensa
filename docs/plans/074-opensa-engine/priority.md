@@ -92,11 +92,14 @@ The game needs a sea surface; v1 = flat animated surface with the sky-shared fog
 stays the 0.5.0 idea).
 **Done:** coastline looks intentional (water v3 accepted as a leftover).
 
-**B5. Vehicles in the game** — [10](10-integration-flip.md) task "entity-handle adapter" + [08](08-dynamics.md) · size M
-The last big gameplay seam: prod's vehicle logic still holds three mesh refs. Replace them with engine
-entity handles; the B2 fixture already renders parts/wheels/4-colour carcols/lamp day-night swap, and the
-B2d light pool feeds headlights. Per plan 08's recorded user specs: per-vehicle lamp state (brake glow on
-braking), headlight cone v2, vehicle LOD (`chassis_vlo` swap at range, lamp submeshes → corona-only).
+**B5. Vehicles in the game** — ✅ DONE 2026-07-14, FIELD ✅ (5 steps, all in the 08 ledger) · size M
+1 engine capability (model↔instance split — ONE upload per car TYPE, instances share it; per-submesh
+visibility; pivot/scale/world-override on the rigid entity) · 2 shared browser BUILDER in renderware (all
+four wheel conventions, `_ok`/`_dam`, `_vlo`, `extraN`, door hinges, lamp tags; **paint is a per-vertex SLOT,
+not a bake** — one model, many colours) · 3 `VehicleHandle`: three is OUT of vehicle gameplay (a grep for
+`from 'three'` in `game/src/vehicle/` returns only Vector3/Quaternion MATH) · 4 cars drive in
+`?engine=opensa` (systems REUSED verbatim; new seam found and narrowed: `VehicleAnimator`) · 5 lamps
+(per-vehicle state, cones, coronas on the EXISTING corona pass).
 **Done:** drive around Los Santos with `?engine=opensa`; no three types left in the vehicle logic path.
 
 **B6. 2dfx particles + textured coronas** — [06](06-world-effects-parity.md) row 13 tails · size M

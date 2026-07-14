@@ -11,7 +11,7 @@
 import type { System } from '../core/system';
 import type { HeadlightConfig } from '../interfaces/config.interface';
 import type { Vec3 } from '../interfaces/world-adapter.interface';
-import type { EnterVehicleSystem } from './enter-vehicle.system';
+import type { EnterableVehicle, EnterVehicleSystem } from './enter-vehicle.system';
 import type { VehicleLamp } from './vehicle-lamps';
 
 import { lampsOf, lampStateFor } from './vehicle-lamps';
@@ -85,6 +85,12 @@ export class VehicleLampSystem implements System {
   private readonly config: () => HeadlightConfig;
   private readonly enter: EnterVehicleSystem;
   private readonly isNight: () => boolean;
+  /**
+   * The car we lit LAST frame. It cannot be re-derived from the enter system: by the time the driver is out,
+   * `getActive()` is already null, so there would be nobody left to switch off — and the car would drive away
+   * with its lamps burning forever. Lamp state lives on the VEHICLE, not here.
+   */
+  private lit: EnterableVehicle | null = null;
   private readonly sinks: VehicleLampSinks;
 
   constructor(
@@ -102,14 +108,19 @@ export class VehicleLampSystem implements System {
   update(): void {
     const cfg = this.config();
     const braking = this.enter.isBraking();
-    const previous = this.enter.getActive();
-    const { car, state } = lampStateFor(previous, this.enter.isSeated(), braking, this.isNight(), cfg.intensity);
+    const { car, state } = lampStateFor(
+      this.enter.getActive(),
+      this.enter.isSeated(),
+      braking,
+      this.isNight(),
+      cfg.intensity,
+    );
     this.sinks.reset();
+    if (this.lit && this.lit !== car) {
+      this.lit.handle.setLamps({ brakes: false, headlights: false, intensity: cfg.intensity });
+    }
+    this.lit = car;
     if (!car) {
-      // The car that WAS lit must be told to go dark — otherwise its lamps stay burning after the driver
-      // steps out (the lamp state lives on the vehicle, not on this system).
-      previous?.handle.setLamps({ brakes: false, headlights: false, intensity: cfg.intensity });
-
       return;
     }
     car.handle.setLamps(state);
