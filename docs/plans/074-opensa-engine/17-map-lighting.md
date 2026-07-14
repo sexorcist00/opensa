@@ -76,10 +76,13 @@ makes the sign dimmer, not better. The two changes are a package: authored range
    term by term with real numbers from one identical vertex, rather than reading the shaders and reasoning.
    Candidates not yet ruled out: which pipeline mix prod actually runs at (`uPipelineMix`), the world tint,
    whether prod's instanced map path really uploads the computed normals, SSAO, the CSM shadow term.
-2. **Frame time: 120 → 90 fps, source unknown.** After the full revert the engine measures ~90 fps where it
-   used to hold 120. This predates the reverted work, so **something earlier in the session regressed it**
-   (B5 vehicles / B6 particles are the candidates). **Bisect it.** Do not start new rendering work on top of an
-   unexplained regression.
+2. ~~**Frame time: 120 → 90 fps.**~~ **CLOSED 2026-07-14 — not a code regression.** The user bisected
+   `33c74c9` (vehicles), `936e897` (reflections) and `a0a4919` (HEAD, the full revert) after rebuilding the
+   map: **120 fps on all of them.** `a0a4919` contains only docs and the spawn coordinate — no code at all —
+   so the 90 fps reading was taken against the PAK left on disk by the reverted experiment (short normals,
+   `.oscell` minor 3), not against any shipped change. B5 and B6 did NOT regress the frame time.
+   LESSON: **the pak is part of the build.** When a perf number moves, reconvert before blaming a commit — and
+   when reverting converter/format work, reconverting is not optional cleanup, it is the revert.
 3. **The 2dfx light model itself.** Even done right, a point light is probably the wrong primitive: in SA the
    building reads as lit from far away because of its **night prelit vertex colours** (emissive) plus the
    corona sprite — not because a dynamic light reaches it. Check what carries the look before adding lights.

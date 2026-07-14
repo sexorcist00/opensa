@@ -21,8 +21,8 @@ textured coronas →
 (per-pixel 2dfx lamps fixed the polygon-shaped light patches but cost 120 fps → 25; prod affords per-pixel
 only because its pool is 12 and ours is 64). The plan carries the measurements (12 004 of 12 964 map models
 ship NO normals; SA's authored light ranges; the 14 % of lights that illuminate nothing) and the two open
-blockers: **why prod renders the same map clean**, and an unexplained **120 → 90 fps** regression that
-predates the revert and must be bisected first. Original scope: (user, 2026-07-14: the world-lighting oddities that surfaced while field-testing
+blocker: **why prod renders the same map clean on identical data**. (The feared 120 → 90 fps regression was
+CLOSED — it was the experiment's PAK left on disk, not any commit; B5/B6 cost nothing.) Original scope: (user, 2026-07-14: the world-lighting oddities that surfaced while field-testing
 the headlights — the per-vertex pool artefacts were only the first; collect and fix the rest) → B7
 destruction objects → B7 animation objects → then the WebGL-prod `?bench=all` baseline and the C1 criteria
 run → flip. C2 cleanup stays GATED on an explicit command. B6/B7 are prod-PARITY gaps (prod renders all
