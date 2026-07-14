@@ -381,3 +381,12 @@ naming, descendants, translation), `opensa-pack/weld.test.ts` (moving frames lea
 welds the model whole, so a lost clip can never delete a building again).
 
 **Not in scope, planned separately: UV-scroll animation — [18](18-uv-anim.md) (B7·c).**
+
+**B7·b field round — the stall that was NOT the animation.** The countryside sat at 12 fps and the animated
+windmill was the obvious suspect. It was innocent: `anim` measured **0.00 ms**. Per-block CPU timers (now
+permanent, behind a slow-frame threshold in `engine-canvas-host.tsx`) showed `physics` eating 17 ms PER STEP,
+with the fixed loop's 5 catch-up steps turning that into 85 ms frames — a spiral that hid its own cause and
+made the recovery look mysterious. The bodies: **9 803 static clutter colliders** the engine host had asked
+for by passing NONE of prod's clutter knobs — for clutter it does not even draw. Written up as
+[19](19-procobj.md) (B7·d). Lesson: **a catch-up spiral makes the loudest thing on screen look guilty; measure
+the blocks.**

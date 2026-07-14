@@ -75,23 +75,30 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
 - **The alpha-edge groundwork**: dilation BFS + DXT software decode exist from the
   [open issue](../../open-issues/alpha-edge.md).
 
-## Handoff status (2026-07-14 — resume from here)
+## Handoff status (2026-07-14, end of day — resume from here)
 
-- **B5 vehicles-in-game — DONE, field ✅.** Vehicle gameplay talks to a renderer-agnostic `VehicleHandle`
-  (`game/src/vehicle/vehicle-handle.ts`) with a three and an engine adapter; cars drive, take damage, light
-  their lamps and stream LODs under `?engine=opensa`. Ledger: [08](08-dynamics.md).
-- **B5r vehicle reflections — v1 shipped, REJECTED in the field, deep rework parked in
-  [16](16-vehicle-paint.md).** The engine has no tonemapper and no prefiltered cube probe; prod has both,
-  which is why prod's paint looked better. Structural, not a tuning problem. The user wants this redone
-  ("very much needed") once the parity ladder is finished — do NOT retry it by tweaking constants.
-- **B6 2dfx particles + textured coronas — DONE, field ✅.** Particles ride `.oscell` minor 2, bake through
-  the shared `renderware/src/fx/bake-fx.ts`, and simulate in the vertex shader; coronas and the moon are
-  textured from `particle.txd`. Ledger + the five field bugs: [06](06-world-effects-parity.md) row 13.
+**Done and field-confirmed today:** B5 vehicles · B5r reflections (SHIPPED but REJECTED — deep rework parked
+in [16](16-vehicle-paint.md), do NOT retry by tuning constants: the engine has no tonemapper and no env probe,
+prod has both) · B6 2dfx particles + textured coronas · **B7·a destruction objects** (shatter + topple as real
+dynamic bodies + coronas die with the prop) · **B7·b animation objects** (garage doors, windmills, spinning
+signs — no new engine machinery: an IFP's bones ARE the clump's frames).
 
-NEXT, in the user's order: **B6.5 map-lighting bugs** (the world-lighting oddities that surfaced while
-field-testing the headlights) → B7 destruction objects → B7 animation objects → the WebGL-prod `?bench=all`
-baseline → the C1 criteria run → flip. C2 cleanup (deleting the three path) stays GATED on an explicit
-command. See [priority.md](priority.md).
+**Ladder from here** — see [priority.md](priority.md):
+
+1. **B7·c UV-scroll animation** — [18](18-uv-anim.md). Parsed already, prod renders it, engine ignores it.
+2. **B7·d procedural clutter** — [19](19-procobj.md). The countryside is bald; its colliders are OFF on the
+   engine host until the rendering lands (they were costing 17 ms per Rapier step).
+3. **B6.5 map lighting** — [17](17-map-lighting.md). Round 1 REVERTED. Two blockers: explain why prod renders
+   the same map clean, and do NOT re-attempt per-pixel lamps without shrinking the pool first.
+4. Then the WebGL-prod `?bench=all` baseline → the C1 criteria run → flip. **C2 cleanup stays GATED** on an
+   explicit command.
+
+**Standing debts before a parity sign-off:** vehicle paint (16) and map lighting (17) both look worse than
+prod today.
+
+**Tooling that earned its place today:** a slow-frame console log with per-block CPU timers in
+`engine-canvas-host.tsx` (quiet on healthy frames). It ended a three-round guessing game in one reload — a
+fixed-step catch-up spiral makes whatever is on screen look guilty.
 
 ## Handoff status (2026-07-12, end of the Fable session — history)
 

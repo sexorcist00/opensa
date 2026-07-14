@@ -165,7 +165,17 @@ async function boot(
   // Physics + collision streaming (REUSED, pure): the adapter prepares the map defs once, then streams
   // COL cells around the player on the game's own 256-unit grid (independent of the pak's render grid).
   hud.textContent = 'own engine: preparing collision…';
-  const adapter = new GtaSaWorldAdapter({ cellSize: GAME_CELL_SIZE, extraIpl: ['truthsfarm'], fs });
+  const adapter = new GtaSaWorldAdapter({
+    cellSize: GAME_CELL_SIZE,
+    // The own engine does not RENDER the procedural clutter yet, so colliding it would be invisible walls —
+    // and it is anything but free. This host passed NONE of prod's clutter knobs, so the countryside handed
+    // Rapier 9 803 static bodies: 17 ms per Rapier step, the fixed loop spiralling, 12 fps standing still on
+    // an empty screen. Turn this back on together with clutter RENDERING, and take prod's budget with it:
+    // a per-category density lottery capped at 150/cell, driving render and collision from ONE number.
+    clutterColliders: false,
+    extraIpl: ['truthsfarm'],
+    fs,
+  });
   await adapter.prepare();
   const physics = new PhysicsWorld(await initRapier());
   const controller = physics.createCharacterController();

@@ -132,6 +132,15 @@ export interface EngineVehicleData {
 
 export interface GtaSaWorldConfig {
   cellSize: number;
+  /**
+   * Give the procedural clutter (grass, rocks, cacti) COLLIDERS at all.
+   *
+   * A renderer that does not DRAW the clutter must not collide it either — that is this file's own rule
+   * ("no invisible obstacles"). And the price is not theoretical: with none of the knobs below set, the
+   * countryside handed Rapier **9 803 static bodies**, which measured **17 ms per step** and drove the
+   * fixed-step loop into a catch-up spiral (12 fps, standing still, on an empty screen). Default: on.
+   */
+  clutterColliders?: boolean;
   /** Off-thread DFF parse+prepare for cell builds (plan 060 Phase 5). Defaults to the real parse
    *  worker where Workers exist; null falls back to synchronous in-generator parsing (node tests). */
   dffParser?: DffParser | null;
@@ -438,8 +447,9 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       );
       // Clutter collision (plan 042): models that ship a COL collide (rocks/cacti/trees);
       // grass and flower patches have none, so they stay walk-through — like vanilla. The
-      // collidable subset follows the live per-category density (no invisible obstacles).
-      const batches = this.cellProcObjBatches(cx, cy);
+      // collidable subset follows the live per-category density (no invisible obstacles) — and a renderer
+      // that draws no clutter at all asks for none of it.
+      const batches = this.config.clutterColliders === false ? null : this.cellProcObjBatches(cx, cy);
       if (batches) {
         const clutter = procObjColliders(index, batches, {
           densityOf: this.config.procObjDensityOf,

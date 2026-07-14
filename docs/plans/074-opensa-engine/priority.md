@@ -153,6 +153,13 @@ REAL SA game via the ASI — a different target).
   that lives in the anim section purely because its sign spins, and both dropping it (the plan-041 "blue
   hole") and promoting it whole are bad trades. Ledger + lessons: [08](08-dynamics.md).
 
+- **B7·d PROCEDURAL CLUTTER — OPEN, see [19](19-procobj.md).** The countryside is bald: prod scatters and
+  renders grass/rocks/cacti (a per-category density lottery, 150/cell), the engine draws none of it. Found in
+  the field because the engine host was passing NONE of prod's clutter knobs, so the adapter collided every
+  blade of grass it never drew: **9 803 static bodies → 17 ms per Rapier step → 12 fps standing still**, with
+  the fixed-step spiral hiding the cause. Colliders are off on the engine host until the rendering lands (the
+  adapter's own rule: no invisible obstacles) — turn them back on TOGETHER, with prod's budget.
+
 - **B7·c UV-SCROLL animation — OPEN, see [18](18-uv-anim.md).** A prod-parity gap the own engine has never
   had: the crawling neon (LV skull sign), conveyor belts. A DIFFERENT mechanism from B7·b — marked in the
   DFF (UVAnimDict + the material's UV Anim PLG), plays globally in sync, and is already fully PARSED; the
