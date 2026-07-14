@@ -183,6 +183,14 @@ export function compileAll(
       { binding: 0, buffer: { type: 'read-only-storage' }, visibility: GPUShaderStage.VERTEX },
       { binding: 1, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
       { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+      // Per-instance carcols paint (074/08 B5) — 4 colours per matrix row.
+      { binding: 3, buffer: { type: 'read-only-storage' }, visibility: GPUShaderStage.VERTEX },
+      // Per-instance lamp state (074/08 B5 step 5) — headlights + brakes, one vec4 per matrix row.
+      {
+        binding: 4,
+        buffer: { type: 'read-only-storage' },
+        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+      },
     ],
     label: 'rigid',
   });

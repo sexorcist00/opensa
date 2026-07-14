@@ -14,13 +14,18 @@ export { type ResidencyCategory, Resources } from './core/resources';
 export { GpuTimers } from './debug/gpu-timers';
 export {
   type CameraState,
+  type DynamicCorona,
   type DynamicLight,
   Engine,
   type EngineStats,
   type Environment,
   type PedProbe,
   type PedProbeInit,
-  type VehicleProbeInit,
+  type VehicleInstance,
+  type VehicleModelId,
+  type VehicleModelInit,
+  type VehiclePaint,
+  type VehicleSubmesh,
 } from './engine';
 export { quatMultiply, RigidEntity, type RigidPartInit } from './entities/rigid';
 export { compileAll, MSAA_SAMPLES, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';

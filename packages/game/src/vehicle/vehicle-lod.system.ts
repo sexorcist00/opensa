@@ -1,16 +1,13 @@
-import type { Object3D } from 'three';
-
 import type { System } from '../core/system';
 import type { Config } from '../interfaces/config.interface';
 import type { Vec3 } from '../interfaces/world-adapter.interface';
+import type { VehicleBand, VehicleHandle } from './vehicle-handle';
 
-/** A live, spawned car: its render object + LOD group, live position, and how to despawn it. */
+/** A live, spawned car: its render handle, live position, and how to despawn it. */
 export interface SpawnedVehicle {
   /** Remove from the scene, physics and the vehicle systems (frees memory). */
   despawn: () => void;
-  /** Hidden `_vlo` group under `object` (null if the model has no LOD). */
-  lod: null | Object3D;
-  object: Object3D;
+  handle: VehicleHandle;
   /** Live world position (native Z-up); kept updated by the physics system. */
   position: Vec3;
 }
@@ -26,9 +23,6 @@ export interface VehiclePlacement {
   model: string;
   position: Vec3;
 }
-
-/** Distance band a car falls into, near → far. */
-type Band = 'culled' | 'hd' | 'vlo';
 
 interface LodEntry {
   /** The spawned car, or null while unloaded. */
@@ -92,7 +86,7 @@ export class VehicleLodSystem implements System {
       const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
       this.stream(entry, distance, lodDistance, unloadDistance);
       if (entry.current) {
-        applyBand(entry.current, bandFor(distance, hdDistance, lodDistance, entry.current.lod !== null));
+        entry.current.handle.setLodBand(bandFor(distance, hdDistance, lodDistance, entry.current.handle.hasLod));
       }
     }
   }
@@ -115,27 +109,8 @@ export class VehicleLodSystem implements System {
   }
 }
 
-/** Show the HD body, the `_vlo`, or nothing for one car. */
-function applyBand(car: SpawnedVehicle, band: Band): void {
-  if (band === 'culled') {
-    car.object.visible = false;
-
-    return;
-  }
-  car.object.visible = true;
-  const showLod = band === 'vlo';
-  if (car.lod) {
-    car.lod.visible = showLod;
-  }
-  for (const child of car.object.children) {
-    if (child !== car.lod) {
-      child.visible = !showLod; // HD parts off while the LOD is shown
-    }
-  }
-}
-
 /** The band for a distance; falls back to HD when the model has no `_vlo` (`hasLod` false). */
-function bandFor(distance: number, hdDistance: number, lodDistance: number, hasLod: boolean): Band {
+function bandFor(distance: number, hdDistance: number, lodDistance: number, hasLod: boolean): VehicleBand {
   if (distance < hdDistance) {
     return 'hd';
   }

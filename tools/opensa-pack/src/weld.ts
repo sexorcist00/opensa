@@ -8,13 +8,13 @@
  */
 import type { Oscell, OscellGroup, OscellLight } from '@opensa/engine-formats';
 import type { AssetFileSystem, IplInstance, MapDefinitions } from '@opensa/renderware';
-import type { RWFrame } from '@opensa/renderware/parsers/binary/types';
 
 import { encodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
 import { WIND_MODELS } from '@opensa/game/mods/wind-mode';
 import { getClump } from '@opensa/renderware/archive/asset-cache';
 import { cellGroups } from '@opensa/renderware/map/build-cell';
 import { type GridCell } from '@opensa/renderware/map/world-grid';
+import { frameWorldTransform } from '@opensa/renderware/mesh/frame-transform';
 import { isVertexAlphaBeam, prepareClumpAtomics } from '@opensa/renderware/mesh/prepare-clump';
 import { IdeFlag } from '@opensa/renderware/parsers/text/index';
 
@@ -82,40 +82,6 @@ const SWAY_TUNING = {
 /** Phase 2: encode the (possibly baked) scratch buckets into `.oscell` bytes. */
 export function assembleCell(welded: WeldedCell): Uint8Array {
   return assemble(welded.buckets, welded.origin, welded, welded.stats);
-}
-
-/**
- * An atomic's model-space transform: its frame chain composed root→leaf, in the row-major mat3 convention
- * `appendInstance` uses (RW stores right/up/at basis vectors as COLUMNS → each local mat transposes in).
- * Null for the identity (the common case — static world DFFs bake geometry in model space), so the hot
- * per-vertex path skips it. Anim-hierarchy models (windmills, the Burger Shot sign) place parts here.
- */
-export function frameWorldTransform(
-  frames: readonly RWFrame[],
-  frameIndex: number,
-): null | { pos: [number, number, number]; rot: number[] } {
-  let rot = [1, 0, 0, 0, 1, 0, 0, 0, 1];
-  let pos: [number, number, number] = [0, 0, 0];
-  let hops = 0;
-  for (let at = frameIndex; at >= 0 && at < frames.length && hops <= frames.length; at = frames[at].parentIndex) {
-    const frame = frames[at];
-    const [r0, r1, r2, r3, r4, r5, r6, r7, r8] = frame.rotation;
-    const local = [r0, r3, r6, r1, r4, r7, r2, r5, r8];
-    // accumulated = local ∘ accumulated (walking leaf → root).
-    rot = mulMat3(local, rot);
-    pos = [
-      local[0] * pos[0] + local[1] * pos[1] + local[2] * pos[2] + frame.position[0],
-      local[3] * pos[0] + local[4] * pos[1] + local[5] * pos[2] + frame.position[1],
-      local[6] * pos[0] + local[7] * pos[1] + local[8] * pos[2] + frame.position[2],
-    ];
-    hops += 1;
-  }
-  const identityRot = rot.every((value, index) => Math.abs(value - (index % 4 === 0 ? 1 : 0)) < 1e-6);
-  if (identityRot && Math.hypot(pos[0], pos[1], pos[2]) < 1e-6) {
-    return null;
-  }
-
-  return { pos, rot };
 }
 
 /** Convert one cell in one shot (weld + encode, no bake) — the tests' and no-bake path. */
@@ -472,17 +438,6 @@ function collectLights(
 
 function lumaOf(r: number, g: number, b: number): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-function mulMat3(a: number[], b: number[]): number[] {
-  const out = new Array<number>(9);
-  for (let row = 0; row < 3; row += 1) {
-    for (let col = 0; col < 3; col += 1) {
-      out[row * 3 + col] = a[row * 3] * b[col] + a[row * 3 + 1] * b[3 + col] + a[row * 3 + 2] * b[6 + col];
-    }
-  }
-
-  return out;
 }
 
 function quatToMat3(x: number, y: number, z: number, w: number): number[] {

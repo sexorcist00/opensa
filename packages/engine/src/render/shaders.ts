@@ -85,6 +85,10 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
+  // params4 = [dynamicLightCount, spare, spare, spare]. The pool is ordered DYNAMIC first, then static 2dfx:
+  // the world shades the static half per vertex and the dynamic half per pixel; vehicles and peds take the
+  // STATIC half only, so a car is never lit by its own lamps.
+  params4: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -146,25 +150,56 @@ fn skyFogFor(dir: vec3f) -> vec3f {
 struct LocalLight {
   position: vec4f, // xyz world + radius
   color: vec4f,    // linear RGB × intensity; w spare
+  // xyz = the direction a SPOT points, w = the cosine of its half-angle. w >= 1.5 means POINT (no cone) —
+  // the same sentinel the three pool uses. Headlights NEED this: as a point light a headlight floods the
+  // whole street, the road behind the car included.
+  dir: vec4f,
 };
 @group(0) @binding(3) var<storage, read> localLights: array<LocalLight>;
 
-fn localLightSum(world: vec3f, normal: vec3f) -> vec3f {
+// A RANGE of the pool, so the world can split it: static lamps per vertex (they never move, and world verts
+// ≪ pixels), moving lights per pixel. A headlight shaded per vertex is a disaster — SA's road polygons are
+// tens of metres wide, so the beam lands between vertices: it blotches along the mesh normals and disappears
+// outright when the car sits mid-polygon.
+// NB: "from" is a WGSL RESERVED KEYWORD (so is "meta", which bit the B2 vertex layout) — hence first/last.
+// The naga guardrails do not catch reserved words; assertGuardrails now does, so the browser stops being
+// the first thing to notice.
+fn localLightRange(world: vec3f, normal: vec3f, first: u32, last: u32) -> vec3f {
   var sum = vec3f(0.0);
-  let count = min(u32(frame.params3.x), 64u);
-  for (var index = 0u; index < count; index += 1u) {
+  let count = min(last, 64u);
+  for (var index = first; index < count; index += 1u) {
     let light = localLights[index];
-    let toLight = light.position.xyz - world;
+    var toLight = light.position.xyz - world;
     let dist = length(toLight);
     let radius = light.position.w;
     if (dist < radius) {
-      // Wrapped N·L (lamps bleed around corners a little — the SA look) × smooth quadratic falloff.
-      let ndl = clamp((dot(normal, toLight / max(dist, 0.01)) + 0.4) / 1.4, 0.0, 1.0);
+      toLight = toLight / max(dist, 0.001);
+      let spot = light.dir.w < 1.5;
+      // Cone falloff SQUARED toward the rim — a flat plateau reads as a hard-edged searchlight blob.
+      var cone = 1.0;
+      if (spot) {
+        cone = smoothstep(light.dir.w, min(light.dir.w + 0.30, 1.0), dot(-toLight, light.dir.xyz));
+        cone = cone * cone;
+      }
+      // WRAP: a headlight grazes the road almost tangentially, so a hard N·L collapses the beam to nothing.
+      // Wrapping keeps the road pool readable while walls still take more light when they face the lamp.
+      let wrap = select(0.4, 0.25, spot);
+      let ndl = clamp((dot(normal, toLight) + wrap) / (1.0 + wrap), 0.0, 1.0);
       let falloff = 1.0 - dist / radius;
-      sum += light.color.rgb * (ndl * falloff * falloff);
+      sum += light.color.rgb * (ndl * cone * falloff * falloff);
     }
   }
   return sum;
+}
+
+/** Dynamic half only — the world's PER-PIXEL term. */
+fn localLightDynamic(world: vec3f, normal: vec3f) -> vec3f {
+  return localLightRange(world, normal, 0u, u32(frame.params4.x));
+}
+
+/** Static 2dfx half only — the world's PER-VERTEX term. */
+fn localLightStatic(world: vec3f, normal: vec3f) -> vec3f {
+  return localLightRange(world, normal, u32(frame.params4.x), u32(frame.params3.x));
 }
 `,
   ped: /* wgsl */ `
@@ -225,8 +260,10 @@ fn fsPed(in: PedVsOut) -> @location(0) vec4f {
   let normal = normalize(in.normal);
   let sunNdl = max(dot(normal, frame.sunDir.xyz), 0.0);
   let moonNdl = clamp((dot(normal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
+  // STATIC lamps only, like the vehicles: the driver sits a metre in FRONT of his own tail lights, and the
+  // dynamic pool would wash him red from behind every time he brakes.
   let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
-    localLightSum(in.world, normal);
+    localLightStatic(in.world, normal);
   var color = texel.rgb * lit;
   // Same unified fog shape as fsWorld (068 invariant: distant peds dissolve into the sky behind them).
   let toCamera = in.world - frame.camera.xyz;
@@ -296,10 +333,11 @@ fn fsPost(in: PostOut) -> @location(0) vec4f {
   rigid: /* wgsl */ `
 #include <frame>
 
-// Rigid-part dynamics (074/08 B2): vehicle-style entities — CPU-flattened part matrices in a storage
-// buffer, parts drawn with firstInstance = part index (instance_index reads the matrix). Paint colours
-// ride per-vertex (carcols markers resolved offline); slots.x = texture-array layer. fsRigid = opaque
-// (alpha forced 1), fsRigidBlend = premultiplied glass on the blend pipeline.
+// Rigid-part dynamics (074/08 B2→B5): vehicle-style entities — CPU-flattened part matrices in a storage
+// buffer, parts drawn with firstInstance = slot × partCount + part (instance_index reads the matrix).
+// slots.x = texture-array layer, slots.y = the lamps-on twin, slots.z = the carcols PAINT slot (resolved
+// per instance — B5 shares one model across differently-painted cars). fsRigid = opaque (alpha forced 1),
+// fsRigidBlend = premultiplied glass on the blend pipeline.
 struct RigidVsIn {
   @builtin(instance_index) instance: u32,
   @location(0) position: vec3f,
@@ -317,11 +355,21 @@ struct RigidVsOut {
   @location(3) color: vec4f,
   @location(4) @interpolate(flat) layer: u32,
   @location(5) @interpolate(flat) nightLayer: u32,
+  // slots.w: 0 = body, 1 = head lamp, 2 = tail lamp; lamps = [headlights, brakes, config intensity].
+  @location(6) @interpolate(flat) lampTag: u32,
+  @location(7) @interpolate(flat) lamps: vec3f,
 };
 
 @group(1) @binding(0) var<storage, read> rigidMatrices: array<mat4x4f>;
 @group(1) @binding(1) var rigidTexture: texture_2d_array<f32>;
 @group(1) @binding(2) var rigidSampler: sampler;
+// Carcols paint (074/08 B5), 4 colours per matrix ROW — indexed by instance_index exactly like the
+// matrices, so one uploaded model paints a whole street of differently-coloured cars. slots.z picks:
+// 0 = the material's own colour, 1..4 = primary/secondary/tertiary/quaternary.
+@group(1) @binding(3) var<storage, read> rigidPaint: array<vec4f>;
+// Per-instance lamp state (074/08 B5 step 5): x = headlights on, y = braking. Was a GLOBAL day/night gate,
+// which lit every parked car in the city at once; only the DRIVEN car should light up.
+@group(1) @binding(4) var<storage, read> rigidLamp: array<vec4f>;
 
 @vertex
 fn vsRigid(in: RigidVsIn) -> RigidVsOut {
@@ -332,24 +380,61 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   out.uv = in.uv;
   out.normal = normalize((model * vec4f(in.normal, 0.0)).xyz);
   out.world = world.xyz;
-  out.color = in.color;
+  var color = in.color;
+  if (in.slots.z > 0u) {
+    color = vec4f(rigidPaint[in.instance * 4u + (in.slots.z - 1u)].rgb, in.color.a);
+  }
+  out.color = color;
   out.layer = in.slots.x;
   out.nightLayer = in.slots.y;
+  out.lampTag = in.slots.w;
+  out.lamps = rigidLamp[in.instance].xyz;
   return out;
 }
 
-fn rigidShade(in: RigidVsOut) -> vec3f {
-  // Lamp materials carry a lamps-on TWIN layer (SA's vehiclelights → vehiclelightson swap): pick it at
-  // night. Per-vehicle lamp state replaces the dn gate when real gameplay owns the entity (plan 10 B3).
-  let lampsOn = frame.params.x > 0.5 && in.nightLayer != 0u;
+// Lamp materials carry a lamps-on TWIN layer (SA's vehiclelights → vehiclelightson swap): pick it when THIS
+// car's headlights are on — a per-vehicle state, not the global day/night blend.
+fn rigidTexel(in: RigidVsOut) -> vec4f {
+  let lampsOn = in.lamps.x > 0.5 && in.nightLayer != 0u;
   let layer = select(in.layer, in.nightLayer, lampsOn);
-  let texel = textureSample(rigidTexture, rigidSampler, in.uv, layer);
+  return textureSample(rigidTexture, rigidSampler, in.uv, layer);
+}
+
+// A lit lamp SELF-ILLUMINATES: shading it like painted metal leaves it a dull grey patch at night. Tails run
+// dim and go bright on the brakes — the one cue that reads as a car stopping ahead of you.
+fn rigidLampGlow(in: RigidVsOut) -> f32 {
+  if (in.lampTag == 0u || in.lamps.x <= 0.5) {
+    return 0.0;
+  }
+  if (in.lampTag == 2u) {
+    return select(LAMP_TAIL_RUN, LAMP_TAIL_BRAKE, in.lamps.y > 0.5) * in.lamps.z;
+  }
+  return LAMP_HEAD_GLOW * in.lamps.z;
+}
+
+const LAMP_HEAD_GLOW = 2.4;
+const LAMP_TAIL_RUN = 1.0;
+const LAMP_TAIL_BRAKE = 4.0;
+
+fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   let normal = normalize(in.normal);
   let sunNdl = max(dot(normal, frame.sunDir.xyz), 0.0);
   let moonNdl = clamp((dot(normal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
+  let base = texel.rgb * in.color.rgb;
+  // A LIT lamp is a SOURCE, not a surface: it emits, and its diffuse response is irrelevant. Shading it like
+  // painted metal is what "cropped" the tail lights — the lens wraps around the car's corner, so its normal
+  // swings ~90° across the lens, and a nearby street lamp painted that swing straight onto the glass as a
+  // hard gradient broken at the triangle edge. Prod never showed it because its lamp glass is emissive-
+  // dominant (emissiveMap × 1..4), which drowns the diffuse term. Ambient keeps the unlit texel detail alive.
+  let glow = rigidLampGlow(in);
+  if (glow > 0.0) {
+    return base * (frame.params.y + glow);
+  }
+  // STATIC lamps only. A car must not be lit by its OWN headlights (the tail lamp sits a metre behind its own
+  // lens); prod has the same rule by construction — its pool lives in the WORLD material only.
   let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
-    localLightSum(in.world, normal);
-  return texel.rgb * in.color.rgb * lit;
+    localLightStatic(in.world, normal);
+  return base * lit;
 }
 
 fn rigidFog(world: vec3f) -> f32 {
@@ -366,17 +451,21 @@ fn rigidFog(world: vec3f) -> f32 {
 fn fsRigid(in: RigidVsOut) -> @location(0) vec4f {
   let fog = rigidFog(in.world);
   let viewDir = normalize(in.world - frame.camera.xyz);
-  let color = mix(rigidShade(in), skyFogFor(viewDir), fog);
+  let color = mix(rigidShade(in, rigidTexel(in)), skyFogFor(viewDir), fog);
   return vec4f(color, 1.0);
 }
 
 @fragment
 fn fsRigidBlend(in: RigidVsOut) -> @location(0) vec4f {
-  // Glass: premultiplied for the (one, 1−src-α) pipeline; fog scales the pair (068 semantics for blends).
+  // Premultiplied for the (one, 1−src-α) pipeline; fog scales the pair (068 semantics for blends).
+  // The alpha is BOTH sources: glass carries it in the material colour, body decals (scratch/crack overlays)
+  // carry it in the TEXEL. Taking only the material's would render a decal opaque — its transparent black
+  // texels then paint a black panel over the door.
+  let texel = rigidTexel(in);
   let fog = rigidFog(in.world);
   let viewDir = normalize(in.world - frame.camera.xyz);
-  let alpha = in.color.a;
-  let color = mix(rigidShade(in) * alpha, skyFogFor(viewDir) * alpha, fog);
+  let alpha = texel.a * in.color.a;
+  let color = mix(rigidShade(in, texel) * alpha, skyFogFor(viewDir) * alpha, fog);
   return vec4f(color, alpha);
 }
 `,
@@ -704,6 +793,9 @@ struct VsOut {
   @location(7) cone: f32,
   @location(8) moonNdl: f32,
   @location(9) localLight: vec3f,
+  // World-space normal — the world is vertex-lit (sunNdl/moonNdl are precomputed), but a MOVING light must
+  // be shaded per pixel, and that needs the normal here.
+  @location(10) normal: vec3f,
 };
 
 @vertex
@@ -753,7 +845,8 @@ fn vsWorld(in: VsIn) -> VsOut {
   // Beam cone alpha (074/06 row 11): dayPrelit.a — 1 everywhere except floodlight-cone geometry.
   out.cone = in.dayPrelit.a;
   // Local light pool (074/06 row 7): VERTEX-lit like everything else in SA.
-  out.localLight = localLightSum(world, worldNormal);
+  out.localLight = localLightStatic(world, worldNormal);
+  out.normal = worldNormal;
   return out;
 }
 
@@ -810,7 +903,8 @@ fn worldShade(in: VsOut, cutout: bool) -> vec4f {
   let lit = in.prelit * (frame.params.y * in.ao) +
     frame.sunColor.rgb * (in.sunNdl * frame.params.z) +
     frame.moonColor.rgb * in.moonNdl +
-    in.localLight;
+    in.localLight +
+    localLightDynamic(in.world, normalize(in.normal));
   var color = texel.rgb * (lit + in.glow);
   // Unified fog (074/06 row 5, the 068 shape): RADIAL distance (view-Z pops at screen edges), exp² over
   // [start, cut], height attenuation (haze hugs the ground), hard horizon cut — and the fog colour is the
@@ -859,6 +953,49 @@ fn fsBeam(in: VsOut) -> @location(0) vec4f {
 };
 
 /** The naga/Metal guardrails as an assertion (unit-tested; runs on every resolve in dev). */
+/**
+ * WGSL reserved words that read like perfectly ordinary identifiers — the ones a shader author actually
+ * reaches for. (The full spec list is long and mostly implausible; these are the traps.)
+ */
+const WGSL_RESERVED = new Set([
+  'as',
+  'do',
+  'enum',
+  'filter',
+  'from',
+  'get',
+  'inline',
+  'layout',
+  'match',
+  'meta',
+  'mod',
+  'module',
+  'move',
+  'new',
+  'null',
+  'of',
+  'pass',
+  'precise',
+  'ref',
+  'require',
+  'resource',
+  'self',
+  'set',
+  'shared',
+  'static',
+  'std',
+  'target',
+  'template',
+  'this',
+  'type',
+  'typedef',
+  'union',
+  'unless',
+  'use',
+  'using',
+  'where',
+]);
+
 export function assertGuardrails(name: string, wgsl: string): void {
   // Dynamically-indexed uniform-space ARRAYS in fragment code collapsed occupancy on Metal (073: ~250 ms).
   // Uniform structs are fine; `var<uniform>` holding an array type is the banned shape.
@@ -867,6 +1004,21 @@ export function assertGuardrails(name: string, wgsl: string): void {
   }
   if (/\bloop\s*\{/.test(wgsl) && !/break/.test(wgsl)) {
     throw new Error(`<${name}>: unbounded loop detected (073 guardrail)`);
+  }
+  // WGSL RESERVED WORDS used as identifiers. Twice now the browser compiler has been the first thing to
+  // catch one — `meta` (the B2 vertex attribute) and `from` (a light-pool parameter) — because naga's
+  // guardrails don't look for them and neither did we. A declared name is enough to check: WGSL reserves
+  // these outright, so `let`/`var`/parameter/attribute uses all trip the same error.
+  const declared = [
+    ...wgsl.matchAll(
+      /(?:let|var|const)\s+([A-Za-z_]\w*)|(\w+)\s*:\s*(?:vec|mat|f32|u32|i32|bool|array|texture|sampler|ptr)/g,
+    ),
+  ];
+  for (const match of declared) {
+    const identifier = match[1] ?? match[2];
+    if (identifier && WGSL_RESERVED.has(identifier)) {
+      throw new Error(`<${name}>: '${identifier}' is a WGSL RESERVED WORD — rename it (the browser is not our linter)`);
+    }
   }
 }
 

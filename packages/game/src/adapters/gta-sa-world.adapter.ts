@@ -14,6 +14,7 @@ import {
   buildTextureMap,
   buildTimecyc,
   buildVehicle,
+  buildVehicleModel,
   buildWater,
   buildWorldGrid,
   type CarGroup,
@@ -61,6 +62,9 @@ import {
   type Timecyc,
   type VehicleColours,
   type VehicleDef,
+  type VehicleDummy,
+  type VehicleModelData,
+  VehicleTextures,
   type WorldGrid,
 } from '@opensa/renderware';
 import { type AnimationClip, Group, type InstancedMesh, Matrix4, type Object3D, type Texture, Vector3 } from 'three';
@@ -84,6 +88,7 @@ import { VehicleRig } from '../vehicle/vehicle-rig';
 import { carGeneratorPlacements } from './car-generators';
 import { createDffParser, type DffParser } from './dff-parser';
 import { randomCarPlacements } from './popcycle-cars';
+import { ThreeVehicleHandle } from './three-vehicle-handle';
 
 /** Sea level (Z) + a large background plane half-size so the ocean reaches the horizon. */
 const SEA_LEVEL = 0;
@@ -109,6 +114,22 @@ const BREAKABLE_EFFECTS = new Set<number>([
   ColDamageEffect.smashCompletely,
 ]);
 
+/**
+ * The own engine's vehicle load product (074/08 B5 step 4): renderer-agnostic geometry + the same collision,
+ * handling and paint the three path gets. The host uploads `model` ONCE per car type and spawns instances.
+ */
+export interface EngineVehicleData {
+  colliders: ModelColliders | null;
+  halfExtents: [number, number, number];
+  handling: VehicleHandling;
+  model: VehicleModelData;
+  /** Carcols colours as 0..1 (the engine's `setPaint` space). */
+  paint: { primary: Rgb; quaternary: Rgb; secondary: Rgb; tertiary: Rgb };
+  /** `ped_frontseat` dummy in vehicle space, or null. */
+  seat: [number, number, number] | null;
+  wheels: { connection: [number, number, number]; front: boolean; index: number; radius: number }[];
+}
+
 export interface GtaSaWorldConfig {
   cellSize: number;
   /** Off-thread DFF parse+prepare for cell builds (plan 060 Phase 5). Defaults to the real parse
@@ -131,6 +152,8 @@ export interface GtaSaWorldConfig {
    *  Default: unlimited. */
   procObjLimit?: number;
 }
+
+type Rgb = [number, number, number];
 
 /** Resolved carcol paint (RGB per slot); 3rd/4th present only for 4-colour cars. */
 interface VehiclePaint {
@@ -440,54 +463,64 @@ export class GtaSaWorldAdapter implements WorldAdapter {
    * Native Z-up — the caller parents it under the −90°X streaming root.
    */
   async loadVehicle(modelName: string, colour?: string): Promise<VehicleModel> {
-    await this.ensureVehicleData();
-    const name = modelName.toLowerCase();
-    const def = this.vehicleDefs?.get(name);
-    if (!def) {
-      throw new Error(`No vehicle definition for '${modelName}' in vehicles.ide`);
-    }
-
+    const { def, dffBuffer, paint, ...common } = await this.vehicleCommon(modelName, colour);
     const genericTextures = await this.loadGenericVehicleTextures();
-    // Bare archive names — straight from gta3.img (or shadowed by a modloader override). No loose `vehicles/`
-    // folder: the roster comes from vehicles.ide, so models live under their plain `<model>.dff`/`<txd>.txd` key.
-    const dffBuffer = requireBuffer(this.fs, `${def.model.toLowerCase()}.dff`);
     const carTxdBuffer = requireBuffer(this.fs, `${def.txd.toLowerCase()}.txd`);
     const textures = new Map<string, Texture>([...genericTextures, ...buildTextureMap(parseTxd(carTxdBuffer))]);
-    const indices = colour
-      ? colour
-          .split(',')
-          .map((cell) => Number(cell.trim()))
-          .filter((value) => Number.isFinite(value))
-      : undefined;
-    const paint = this.resolveVehicleColours(name, indices);
 
     const built = buildVehicle(parseDff(dffBuffer), textures, { ...paint, wheelScale: def.wheelScale });
-    const col = parseDffCollision(dffBuffer);
-    const colliders = col ? toModelColliders({ col, name: col.name, transforms: [] }) : null;
-    // Half-extents from the collision bounds — robust to stray vertices in modded DFFs
-    // (a mesh bbox can blow up); the COL is authored clean.
-    const halfExtents: [number, number, number] = col
-      ? [
-          Math.max(Math.abs(col.bounds.min[0]), Math.abs(col.bounds.max[0])),
-          Math.max(Math.abs(col.bounds.min[1]), Math.abs(col.bounds.max[1])),
-          Math.max(Math.abs(col.bounds.min[2]), Math.abs(col.bounds.max[2])),
-        ]
-      : [1.2, 2.5, 0.7];
+    const handle = new ThreeVehicleHandle(built);
 
     return {
-      colliders,
-      doors: built.doors,
-      halfExtents,
-      handling: this.vehicleHandling(def.handlingId),
-      lod: built.lod,
+      colliders: common.colliders,
+      halfExtents: common.halfExtents,
+      handle,
+      handling: common.handling,
       object: built.root,
-      parts: built.parts,
       reflectiveMaterials: built.reflectiveMaterials,
-      rig: new VehicleRig(built.wheels),
+      rig: new VehicleRig(handle),
       seats: built.seats,
       wheels: built.wheels.map((wheel) => ({
         connection: wheel.connection,
         front: wheel.front,
+        radius: wheel.radius,
+      })),
+    };
+  }
+
+  /**
+   * The renderer-agnostic vehicle load (074/08 B5 step 4): the same definition/collision/handling/paint work
+   * as {@link loadVehicle}, but the renderable is a {@link VehicleModelData} the OWN ENGINE uploads as a
+   * model (one per car type — instances share it). The three path keeps its `Object3D` tree.
+   */
+  async loadVehicleData(modelName: string, colour?: string): Promise<EngineVehicleData> {
+    const { def, dffBuffer, paint, ...common } = await this.vehicleCommon(modelName, colour);
+    const txds = [`${def.txd.toLowerCase()}.txd`, 'models/generic/vehicle.txd']
+      .map((txdName) => this.fs.get(txdName))
+      .filter((bytes): bytes is ArrayBuffer => bytes !== null && bytes !== undefined);
+    const model = buildVehicleModel(parseDff(dffBuffer), new VehicleTextures(txds), {
+      wheelScale: def.wheelScale,
+    });
+    const seat = model.dummies.find((dummy: VehicleDummy) => dummy.name === 'ped_frontseat') ?? null;
+
+    return {
+      colliders: common.colliders,
+      halfExtents: common.halfExtents,
+      handling: common.handling,
+      model,
+      // The engine takes 0..1 colours; carcols is bytes. Same values the builder writes into the non-marker
+      // vertex colours, so a painted panel and a plain one sit in the same colour space.
+      paint: {
+        primary: scale255(paint.primary),
+        quaternary: scale255(paint.quaternary ?? paint.secondary),
+        secondary: scale255(paint.secondary),
+        tertiary: scale255(paint.tertiary ?? paint.primary),
+      },
+      seat: seat ? seat.position : null,
+      wheels: model.wheels.map((wheel, index) => ({
+        connection: [...model.parts[wheel.part].localTranslation] as [number, number, number],
+        front: wheel.front,
+        index,
         radius: wheel.radius,
       })),
     };
@@ -588,6 +621,29 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return [...(colours?.cars.get(name) ?? []), ...(colours?.cars4.get(name) ?? [])].map((combo) => [...combo]);
   }
 
+  /** The shared generic `vehicle.txd` texture map, parsed once. */
+  /**
+   * Resolve JUST a car's carcols paint (074/08 B5) — the own engine shares ONE uploaded model across every
+   * car of a type and paints each instance, so a spawn needs the colours without re-parsing the DFF.
+   */
+  async vehiclePaint(modelName: string, colour?: string): Promise<EngineVehicleData['paint']> {
+    await this.ensureVehicleData();
+    const indices = colour
+      ? colour
+          .split(',')
+          .map((cell) => Number(cell.trim()))
+          .filter((value) => Number.isFinite(value))
+      : undefined;
+    const paint = this.resolveVehicleColours(modelName.toLowerCase(), indices);
+
+    return {
+      primary: scale255(paint.primary),
+      quaternary: scale255(paint.quaternary ?? paint.secondary),
+      secondary: scale255(paint.secondary),
+      tertiary: scale255(paint.tertiary ?? paint.primary),
+    };
+  }
+
   /** Deterministic clutter batches for one cell (plan 042), or null when the procobj data files
    *  were absent. Shared by the render path (loadCell) and the collider path (loadCellColliders) —
    *  same inputs give byte-identical batches, so visuals and collision always agree. */
@@ -628,7 +684,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     this.handling = parseHandling(handling); // stored for the later vehicle-physics phase
   }
 
-  /** The shared generic `vehicle.txd` texture map, parsed once. */
   private async loadGenericVehicleTextures(): Promise<Map<string, Texture>> {
     await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
     if (!this.genericVehicleTextures) {
@@ -706,6 +761,53 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return { primary: white, secondary: white };
   }
 
+  /** Everything both vehicle load paths need: the IDE def, the DFF bytes, its collision and its paint. */
+  private async vehicleCommon(
+    modelName: string,
+    colour?: string,
+  ): Promise<{
+    colliders: ModelColliders | null;
+    def: VehicleDef;
+    dffBuffer: ArrayBuffer;
+    halfExtents: [number, number, number];
+    handling: VehicleHandling;
+    paint: VehiclePaint;
+  }> {
+    await this.ensureVehicleData();
+    const name = modelName.toLowerCase();
+    const def = this.vehicleDefs?.get(name);
+    if (!def) {
+      throw new Error(`No vehicle definition for '${modelName}' in vehicles.ide`);
+    }
+    // Bare archive names — straight from gta3.img (or shadowed by a modloader override). No loose `vehicles/`
+    // folder: the roster comes from vehicles.ide, so models live under their plain `<model>.dff` key.
+    const dffBuffer = requireBuffer(this.fs, `${def.model.toLowerCase()}.dff`);
+    const indices = colour
+      ? colour
+          .split(',')
+          .map((cell) => Number(cell.trim()))
+          .filter((value) => Number.isFinite(value))
+      : undefined;
+    const col = parseDffCollision(dffBuffer);
+
+    return {
+      colliders: col ? toModelColliders({ col, name: col.name, transforms: [] }) : null,
+      def,
+      dffBuffer,
+      // Half-extents from the collision bounds — robust to stray vertices in modded DFFs
+      // (a mesh bbox can blow up); the COL is authored clean.
+      halfExtents: col
+        ? [
+            Math.max(Math.abs(col.bounds.min[0]), Math.abs(col.bounds.max[0])),
+            Math.max(Math.abs(col.bounds.min[1]), Math.abs(col.bounds.max[1])),
+            Math.max(Math.abs(col.bounds.min[2]), Math.abs(col.bounds.max[2])),
+          ]
+        : [1.2, 2.5, 0.7],
+      handling: this.vehicleHandling(def.handlingId),
+      paint: this.resolveVehicleColours(name, indices),
+    };
+  }
+
   /** Driving feel for a handling id (handling.cfg columns), with sane fallbacks. */
   private vehicleHandling(handlingId: string): VehicleHandling {
     const fields = this.handling?.get(handlingId)?.fields;
@@ -763,7 +865,6 @@ function nextTask(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/** Read a required binary asset from the file system (throws if absent). */
 function requireBuffer(fs: AssetFileSystem, name: string): ArrayBuffer {
   const buffer = fs.get(name);
   if (!buffer) {
@@ -781,6 +882,12 @@ function requireText(fs: AssetFileSystem, name: string): string {
   }
 
   return text;
+}
+
+/** Read a required binary asset from the file system (throws if absent). */
+/** carcols bytes → the engine's 0..1 colour space. */
+function scale255(rgb: readonly [number, number, number]): Rgb {
+  return [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255];
 }
 
 /** The group's sole placement, when it has exactly one (plain-Mesh world parts pick without a slot id). */

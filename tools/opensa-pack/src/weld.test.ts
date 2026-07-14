@@ -3,11 +3,12 @@ import type { GridCell } from '@opensa/renderware/map/world-grid';
 
 import { decodeOscell } from '@opensa/engine-formats';
 import { buildArchiveBuffer, openArchive } from '@opensa/renderware';
+import { frameWorldTransform } from '@opensa/renderware/mesh/frame-transform';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { TexturePlanner } from './textures';
-import { frameWorldTransform, weldCell } from './weld';
+import { weldCell } from './weld';
 
 // Real committed fixtures (same case build-region tests use).
 const DFF = 'tests/custom/proper-fixes-models/trafficlight1.dff';

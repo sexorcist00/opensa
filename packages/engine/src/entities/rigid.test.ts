@@ -78,6 +78,75 @@ describe('RigidEntity', () => {
       expect(right[2]).toBeCloseTo(4, 5); // 3 + 1 — the flip does not change Z
     });
 
+    it('a door swings about its hinge pivot, carrying the mesh offset (B5 doors)', () => {
+      // Hinge dummy at x=1 (the pivot); the door mesh sits 1 unit further out (offset). A 90° swing about Z
+      // must carry the mesh origin AROUND the hinge — to (1, 1, 0) — not spin it in place at (2, 0, 0).
+      const half = Math.SQRT1_2;
+      const offset = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1]; // T(1,0,0) relative to the hinge
+      const entity = new RigidEntity([
+        { localRotation: [0, 0, 0, 1], localTranslation: [1, 0, 0], name: 'door_lf', offset },
+      ]);
+      entity.setPartRotation(0, [0, 0, half, half]);
+
+      entity.flatten();
+
+      const origin = apply(entity.matrices, 0, [0, 0, 0]);
+      expect(origin[0]).toBeCloseTo(1, 5);
+      expect(origin[1]).toBeCloseTo(1, 5);
+      expect(origin[2]).toBeCloseTo(0, 5);
+    });
+
+    it('the swing runs in the HINGE frame axes — a 180° hinge opens the far-side door the other world way', () => {
+      // The right-side door's hinge frame is turned 180° about Z (SA's mirrored convention). Prod composes
+      // pivot.quaternion = closed ⊗ swing, so the SAME swing quaternion sends this door the opposite world
+      // direction — outward, on its own side. A world-axis rotation about the hinge POINT would send both
+      // doors the same way, which is wrong on exactly half the car.
+      const half = Math.SQRT1_2;
+      const offset = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1];
+      const left = new RigidEntity([
+        { localRotation: [0, 0, 0, 1], localTranslation: [0, 0, 0], name: 'door_lf', offset },
+      ]);
+      const right = new RigidEntity([
+        { localRotation: [0, 0, 1, 0], localTranslation: [0, 0, 0], name: 'door_rf', offset }, // 180° about Z
+      ]);
+      left.setPartRotation(0, [0, 0, half, half]);
+      right.setPartRotation(0, [0, 0, half, half]);
+
+      left.flatten();
+      right.flatten();
+
+      // Left door's tip swings to +Y; the mirrored hinge sends the right door's tip to −Y.
+      expect(apply(left.matrices, 0, [0, 0, 0])[1]).toBeCloseTo(1, 5);
+      expect(apply(right.matrices, 0, [0, 0, 0])[1]).toBeCloseTo(-1, 5);
+    });
+
+    it('a uniform scale sizes the part without moving it (B5 wheelScale)', () => {
+      const entity = new RigidEntity([
+        { localRotation: [0, 0, 0, 1], localTranslation: [1, 2, 3], name: 'wheel', scale: 2 },
+      ]);
+
+      entity.flatten();
+
+      expect(apply(entity.matrices, 0, [0, 0, 0])).toEqual([1, 2, 3]); // origin pinned
+      expect(apply(entity.matrices, 0, [1, 0, 0])).toEqual([3, 2, 3]); // rim doubled out
+    });
+
+    it('a detached part ignores the root and carries its own world matrix (B5 debris)', () => {
+      const entity = new RigidEntity(parts());
+      entity.setRoot([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 10, 20, 30, 1]);
+      entity.setPartWorldMatrix(1, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 7, 8, 9, 1]);
+
+      entity.flatten();
+
+      expect(apply(entity.matrices, 1, [0, 0, 0])).toEqual([7, 8, 9]); // debris in world space
+      expect(apply(entity.matrices, 0, [0, 0, 0])).toEqual([10, 20, 30]); // the car still follows the root
+
+      entity.setPartWorldMatrix(1, null);
+      entity.flatten();
+
+      expect(apply(entity.matrices, 1, [0, 0, 0])).toEqual([11, 22, 33]); // re-attached
+    });
+
     it('quatMultiply matches the Hamilton product (unit axes)', () => {
       const out = new Float32Array(4);
       const half = Math.SQRT1_2;

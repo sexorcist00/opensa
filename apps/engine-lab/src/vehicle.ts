@@ -1,48 +1,53 @@
 /**
- * Rigid-entity probe host (074/08 B2c, `?vehicle=1`): fetch the vehicle fixture
+ * Rigid-entity probe host (074/08 B2c, `?vehicle=N`): fetch the vehicle fixture
  * (tools/opensa-pack/src/vehicle-probe.ts), feed it to the engine, and drive a circle around the focus with
  * game-style transform updates — root matrix per frame, wheels spin by arc distance and hold the turn's
- * steer angle. Pairs with `?ped=1` for the full B2 scene.
+ * steer angle. `?vehicle=N` spawns N instances of the ONE model (B5 multi-instance check — they share the
+ * geometry and the texture array, only their part matrices differ). Pairs with `?ped=1`.
  */
-import type { Engine, RigidEntity } from '@opensa/engine';
+import type { Engine, VehicleInstance, VehiclePaint } from '@opensa/engine';
+import type { VehicleFixture } from '@opensa/renderware/vehicle/types';
 
 export interface VehicleProbeHost {
   /** Advance the drive loop to `nowSec`, flatten + upload; returns the CPU cost in ms. */
   update(nowSec: number): number;
 }
 
-interface VehicleFixtureJson {
-  /** Named anchors (headlights/taillights/exhaust/seats/…) — the B2d light pool consumes these. */
-  dummies: { name: string; position: [number, number, number]; rotation: [number, number, number, number] }[];
-  indexCount: number;
-  layout: { colors: number; indices: number; meta: number; normals: number; positions: number; uvs: number };
-  name: string;
-  parts: {
-    localRotation: [number, number, number, number];
-    localTranslation: [number, number, number];
-    name: string;
-  }[];
-  submeshes: { indexCount: number; indexOffset: number; part: number; translucent: boolean }[];
-  textures: { height: number; names: string[]; offset: number; width: number };
-  vertexCount: number;
-  wheels: { front: boolean; part: number; radius: number }[];
-}
-
 const CIRCLE_RADIUS = 22;
 const SPEED = 9; // engine units per second
 const STEER = 0.32; // constant turn — matches the circle visually
 
+/** Convoy paints (linear RGB) — one per car, so the shared-model paint slots are visible at a glance. */
+const CONVOY_PAINTS: VehiclePaint[] = [
+  {
+    primary: [0.05, 0.16, 0.45],
+    quaternary: [0.6, 0.6, 0.6],
+    secondary: [0.62, 0.62, 0.62],
+    tertiary: [0.05, 0.16, 0.45],
+  },
+  { primary: [0.5, 0.03, 0.03], quaternary: [0.2, 0.2, 0.2], secondary: [0.2, 0.2, 0.2], tertiary: [0.5, 0.03, 0.03] },
+  { primary: [0.02, 0.3, 0.1], quaternary: [0.8, 0.8, 0.8], secondary: [0.8, 0.8, 0.8], tertiary: [0.02, 0.3, 0.1] },
+  { primary: [0.85, 0.6, 0.02], quaternary: [0.1, 0.1, 0.1], secondary: [0.1, 0.1, 0.1], tertiary: [0.85, 0.6, 0.02] },
+  {
+    primary: [0.75, 0.75, 0.78],
+    quaternary: [0.3, 0.3, 0.3],
+    secondary: [0.3, 0.3, 0.3],
+    tertiary: [0.75, 0.75, 0.78],
+  },
+];
+
 export async function loadVehicleProbe(
   engine: Engine,
   center: readonly [number, number, number],
+  count = 1,
 ): Promise<VehicleProbeHost> {
   const [fixture, bin] = await Promise.all([
-    fetch('/vehicle/vehicle.json').then((response) => response.json() as Promise<VehicleFixtureJson>),
+    fetch('/vehicle/vehicle.json').then((response) => response.json() as Promise<VehicleFixture>),
     fetch('/vehicle/vehicle.bin').then((response) => response.arrayBuffer()),
   ]);
   const bytes = new Uint8Array(bin);
   const slice = (offset: number, length: number): Uint8Array => bytes.subarray(offset, offset + length);
-  const entity: RigidEntity = engine.setVehicleProbe({
+  const model = engine.createVehicleModel({
     colors: slice(fixture.layout.colors, fixture.vertexCount * 4),
     indexCount: fixture.indexCount,
     indices: slice(fixture.layout.indices, fixture.indexCount * 2),
@@ -63,6 +68,19 @@ export async function loadVehicleProbe(
     uvs: slice(fixture.layout.uvs, fixture.vertexCount * 8),
     vertexCount: fixture.vertexCount,
   });
+  const cars: VehicleInstance[] = [];
+  for (let index = 0; index < Math.max(1, count); index += 1) {
+    const car = engine.createVehicle(model);
+    car.setPaint(CONVOY_PAINTS[index % CONVOY_PAINTS.length]);
+    // The `_dam` twins and the `_vlo` LOD ride in the same buffers — hide them until damage/LOD drive them
+    // (B5 steps 3-4). This is the visibility primitive doing exactly what prod's `.visible` flags did.
+    fixture.submeshes.forEach((submesh, index) => {
+      if (submesh.kind !== 'body') {
+        car.setSubmeshVisible(index, false);
+      }
+    });
+    cars.push(car);
+  }
 
   const root = new Float32Array(16);
   const headlight = fixture.dummies.find((dummy) => dummy.name === 'headlights') ?? null;
@@ -71,22 +89,26 @@ export async function loadVehicleProbe(
   return {
     update(nowSec: number): number {
       const started = performance.now();
-      // Circle drive: heading tangent to the circle, wheels roll by arc distance.
-      const angular = SPEED / CIRCLE_RADIUS;
-      const angle = nowSec * angular;
-      const x = center[0] + Math.cos(angle) * CIRCLE_RADIUS;
-      const z = center[2] + Math.sin(angle) * CIRCLE_RADIUS;
-      // Tangent direction in the engine XZ plane; GTA vehicles face +y (engine −z after the axis change).
-      const heading = -angle - Math.PI / 2;
-      writeRoot(root, [x, center[1], z], heading);
-      entity.setRoot(root);
-      const spin = (nowSec * SPEED) / Math.max(0.1, fixture.wheels[0]?.radius ?? 0.35);
-      for (const wheel of fixture.wheels) {
-        const spinQuat = axisAngle(1, 0, 0, spin);
-        entity.setPartRotation(wheel.part, wheel.front ? quatMul(axisAngle(0, 0, 1, STEER), spinQuat) : spinQuat);
-      }
-      engine.updateVehicle();
-      pushLampLights(engine, root, heading, headlight, taillight);
+      engine.dynamicLights.length = 0;
+      cars.forEach((car, index) => {
+        // Circle drive: heading tangent to the circle, wheels roll by arc distance. Extra cars ride the same
+        // circle, evenly spaced — a convoy, so multi-instance is obvious at a glance.
+        const angular = SPEED / CIRCLE_RADIUS;
+        const angle = nowSec * angular + (index * 2 * Math.PI) / cars.length;
+        const x = center[0] + Math.cos(angle) * CIRCLE_RADIUS;
+        const z = center[2] + Math.sin(angle) * CIRCLE_RADIUS;
+        // Tangent direction in the engine XZ plane; GTA vehicles face +y (engine −z after the axis change).
+        const heading = -angle - Math.PI / 2;
+        writeRoot(root, [x, center[1], z], heading);
+        car.entity.setRoot(root);
+        const spin = (nowSec * SPEED) / Math.max(0.1, fixture.wheels[0]?.radius ?? 0.35);
+        for (const wheel of fixture.wheels) {
+          const spinQuat = axisAngle(1, 0, 0, spin);
+          car.entity.setPartRotation(wheel.part, wheel.front ? quatMul(axisAngle(0, 0, 1, STEER), spinQuat) : spinQuat);
+        }
+        pushLampLights(engine, root, heading, headlight, taillight);
+      });
+      engine.updateVehicles();
 
       return performance.now() - started;
     },
@@ -119,7 +141,6 @@ function pushLampLights(
   headlight: null | { position: [number, number, number] },
   taillight: null | { position: [number, number, number] },
 ): void {
-  engine.dynamicLights.length = 0;
   if (engine.environment.dn <= 0.4) {
     return;
   }

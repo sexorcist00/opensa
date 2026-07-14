@@ -12,6 +12,7 @@ import { type CameraState, Engine, loadCloudWeather, setupStreaming, type Stream
 import { createEngineEnvironmentDriver } from '@opensa/game/adapters/engine-environment-driver';
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { CharacterControllerSystem } from '@opensa/game/character/character-controller.system';
+import { Logger } from '@opensa/game/diagnostics/logger';
 import { PlayerControlled, RigidBody, Transform, Velocity } from '@opensa/game/ecs/components';
 import { createEcsWorld } from '@opensa/game/ecs/world';
 import { EventBus } from '@opensa/game/events/event-bus';
@@ -34,6 +35,7 @@ import type { GameId } from '../game-config';
 import { BENCH_SCENES } from '../bench-scenes';
 import { GAME_CONFIG } from '../game-config';
 import { loadEnginePlayer } from './engine-player';
+import { type EngineVehicles, setupEngineVehicles } from './engine-vehicles';
 import { createGameRuntimeConfig, GAME_CELL_SIZE } from './game-runtime-config';
 import { Hud, type HudGame } from './hud/hud';
 import { loadFonts } from './hud/load-fonts';
@@ -53,6 +55,8 @@ const WORLD_READY_TIMEOUT_MS = 12000;
 const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HALF_HEIGHT = 0.55;
 const EYE_HEIGHT = 0.9; // camera target above the player origin (engine units)
+/** Default spawn hour — night, so vehicle lamps and coronas are visible on boot (`?hour=` overrides). */
+const NIGHT_HOUR = 22;
 
 /** Shared mutable flags between React props and the boot closure. */
 const hostState = { paused: false };
@@ -239,8 +243,58 @@ async function boot(
   const collision = new CollisionStreamingSystem(adapter, physics, viewOf, config);
 
   const player = await loadEnginePlayer(engine);
+  let debugError: null | string = null;
+  /** Last frame's camera eye (engine space) — the lamp coronas need it, one frame stale is invisible. */
+  const cameraEye: [number, number, number] = [0, 0, 0];
+  const logger = new Logger({ emit: (): undefined => undefined }, { showLogs: false });
 
-  let hour = Number(params.get('hour') ?? 10) || 10;
+  // Vehicles (074/08 B5 step 4): the SAME gameplay systems the three host runs — they speak VehicleHandle
+  // now, so the only host-specific piece is the wiring.
+  const placePlayer = (position: [number, number, number], moveBody = true): void => {
+    if (moveBody) {
+      physics.teleport(RigidBody.handle[playerEid], position);
+    }
+    Transform.x[playerEid] = position[0];
+    Transform.y[playerEid] = position[1];
+    Transform.z[playerEid] = position[2];
+  };
+  let vehicles: EngineVehicles | null = null;
+  try {
+    vehicles = await setupEngineVehicles({
+      adapter,
+      aimCamera: (azimuth: number): void => {
+        yaw = azimuth;
+      },
+      animator: player,
+      config,
+      engine,
+      // The camera in NATIVE (Z-up) space — the lamp coronas fade by how squarely each lamp faces it.
+      eye: (): [number, number, number] => {
+        const [ex, ey, ez] = cameraEye;
+
+        return [ex, -ez, ey];
+      },
+      fs,
+      input,
+      isNight: (): boolean => engine.environment.dn > 0.35,
+      logger,
+      physics,
+      placePlayer,
+      playerCollider: capsule.collider,
+      playerController: controllerSystem,
+      playerPosition: viewOf,
+      viewOf,
+    });
+  } catch (error) {
+    // A car that fails to load must not take the whole world down — walking still works.
+    debugError ??= error instanceof Error ? error.message : String(error);
+  }
+
+  // Spawn at NIGHT: the headlights, brake lights and lamp coronas (B5 step 5) are the whole point of the
+  // vehicle work right now, and a noon spawn hides all three. `?hour=` still overrides — and it accepts 0:
+  // the old `|| DEFAULT` fallback treated midnight as "unset" and silently bounced it back to daytime.
+  const hourParam = Number(params.get('hour'));
+  let hour = Number.isFinite(hourParam) && params.get('hour') !== null ? hourParam : NIGHT_HOUR;
   environmentDriver.apply(hour);
 
   // Prod HUD + district names (074/10 reuse-not-duplicate): the SAME DOM <Hud> component fed through the
@@ -270,7 +324,6 @@ async function boot(
   let previous = performance.now();
   let accumulator = 0;
   let readySent = false;
-  let debugError: null | string = null;
   let groundDelta = 0;
   let pedMs = 0;
   // In-game bench state (074/10 B3 tail): the loop consumes these; the runner below owns them.
@@ -283,6 +336,9 @@ async function boot(
       try {
         controllerSystem.fixedUpdate(FIXED_STEP);
         physicsSystem.fixedUpdate(FIXED_STEP);
+        // Enter/exit places the rider and DRIVES here — after the physics step, exactly where prod's Game
+        // runs it. Without this the climb-in freezes mid-phase (the whole sequence lives in fixedUpdate).
+        vehicles?.fixedUpdate(FIXED_STEP);
       } catch (error) {
         debugError ??= error instanceof Error ? error.message : String(error);
       }
@@ -291,6 +347,50 @@ async function boot(
     }
 
     return pending;
+  };
+  /**
+   * Pose the ped for this frame. On foot: data-driven feet placement (a ground ray from the body CENTRE, own
+   * capsule excluded — starting under the capsule slips through thin road shells into basements) plus a
+   * heading from planar velocity. RIDING: both rules must be switched OFF. Enter/exit teleports the rider
+   * onto the seat every fixed step, so the ground snap would lift the seated pose to `ground − minZ` (about a
+   * metre — the driver ends up sitting on the ROOF), and a velocity-derived heading leaves him facing his old
+   * walk direction while the car turns under him. The seat IS the pose: no lift, the car's own heading, and
+   * zero speed so the scripted CAR_sit clip is not dragged back into locomotion.
+   */
+  const posePlayer = (
+    gta: [number, number, number],
+    playerEngine: [number, number, number],
+    ridingCar: null | { heading: number },
+    dt: number,
+  ): void => {
+    const vx = Velocity.x[playerEid];
+    const vy = Velocity.y[playerEid];
+    const speed = Math.hypot(vx, vy);
+    if (ridingCar) {
+      groundDelta = 0;
+      heading = ridingCar.heading;
+    } else {
+      if (Velocity.grounded[playerEid] === 1) {
+        const ground = physics.groundBelow([gta[0], gta[1], gta[2]], 4, RigidBody.handle[playerEid]);
+        if (ground !== null) {
+          groundDelta = ground - player.minZ - gta[2];
+        }
+      }
+      if (speed > 0.3) {
+        heading = Math.atan2(-vx, vy); // hold the last heading while standing
+      }
+    }
+    const render: [number, number, number] = [playerEngine[0], playerEngine[1] + groundDelta, playerEngine[2]];
+    player.update(render, heading, ridingCar ? 0 : speed, dt);
+  };
+
+  /** A car system throwing must not kill the frame loop — surface it in the HUD and keep walking. */
+  const tickVehicles = (delta: number): void => {
+    try {
+      vehicles?.update(delta);
+    } catch (error) {
+      debugError ??= error instanceof Error ? error.message : String(error);
+    }
   };
   const bootStarted = performance.now();
   let heading = Math.PI;
@@ -308,6 +408,7 @@ async function boot(
     if (!hostState.paused) {
       accumulator = runFixedSteps(accumulator + dt);
       collision.update();
+      tickVehicles(dt);
       hour = (hour + dt / (config.time.secondsPerGameMinute * 60)) % 24;
       environmentDriver.apply(hour);
       zoneSystem.update();
@@ -320,29 +421,13 @@ async function boot(
     }
 
     const gta = viewOf();
-    // Data-driven feet placement (no per-model constants): a physics ray from just BELOW the capsule
-    // bottom finds the actual ground; the render origin sits so the model's posed feet (fixture minZ)
-    // touch it. The last delta holds while airborne (jumps keep visual continuity).
-    if (Velocity.grounded[playerEid] === 1) {
-      // From the body CENTRE, own capsule excluded — starting under the capsule skips thin road shells
-      // (the ray then hits basements metres below and buries the model; field lesson).
-      const ground = physics.groundBelow([gta[0], gta[1], gta[2]], 4, RigidBody.handle[playerEid]);
-      if (ground !== null) {
-        groundDelta = ground - player.minZ - gta[2];
-      }
-    }
+    const seatedCar = vehicles?.activeVehicle() ?? null;
+    // Pose follows the RIDING car (climb-in included); the camera follows only the SEATED one.
+    const ridingCar = vehicles?.ridingVehicle() ?? null;
     const playerEngine = toEngine(gta);
-    const playerRender: [number, number, number] = [playerEngine[0], playerEngine[1] + groundDelta, playerEngine[2]];
-    // Heading from planar velocity (GTA vx, vy); hold the last one while standing.
-    const vx = Velocity.x[playerEid];
-    const vy = Velocity.y[playerEid];
-    const speed = Math.hypot(vx, vy);
-    if (speed > 0.3) {
-      heading = Math.atan2(-vx, vy);
-    }
     if (!hostState.paused) {
       const pedStarted = performance.now();
-      player.update(playerRender, heading, speed, dt);
+      posePlayer(gta, playerEngine, ridingCar, dt);
       pedMs = performance.now() - pedStarted;
     }
 
@@ -350,7 +435,10 @@ async function boot(
     const streamStats: StreamStats = setup.driver.update(playerEngine);
     lastStream = streamStats;
 
-    const target: [number, number, number] = [playerEngine[0], playerEngine[1] + EYE_HEIGHT, playerEngine[2]];
+    // While seated the camera trails the CAR (the rider is teleported into the seat every frame — following
+    // the ped would judder); on foot it trails the player.
+    const focus = seatedCar ? toEngine(seatedCar.position) : playerEngine;
+    const target: [number, number, number] = [focus[0], focus[1] + EYE_HEIGHT, focus[2]];
     const [fx, fy, fz] = forwardOf();
     // A running bench owns the camera (the prod BenchPlugin contract — deterministic path, player parked).
     const camera: CameraState = {
@@ -364,6 +452,7 @@ async function boot(
       target: benchCamera ? benchCamera.target : target,
       up: [0, 1, 0],
     };
+    [cameraEye[0], cameraEye[1], cameraEye[2]] = camera.eye;
     const stats = engine.frame(camera);
     benchSamples?.push({
       draws: stats.drawsRecorded,
@@ -387,7 +476,8 @@ async function boot(
       `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${stats.gpuPassMs > 0 ? stats.gpuPassMs.toFixed(2) : 'n/a'} ms · draws ${stats.drawsRecorded}\n` +
       `stream  ${streamStats.loadedCells} cells, ${streamStats.pendingCells} pending · residency ${(stats.residencyBytes / 1048576).toFixed(0)} MB\n` +
       `GTA     ${gta[0].toFixed(1)}, ${gta[1].toFixed(1)}, ${gta[2].toFixed(1)} · ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')}\n` +
-      `debug   vel ${vx.toFixed(2)},${vy.toFixed(2)},${Velocity.z[playerEid].toFixed(2)} grounded ${Velocity.grounded[playerEid]} ` +
+      `debug   vel ${Velocity.x[playerEid].toFixed(2)},${Velocity.y[playerEid].toFixed(2)},${Velocity.z[playerEid].toFixed(2)} ` +
+      `grounded ${Velocity.grounded[playerEid]} ${seatedCar ? '· SEATED ' : ''}` +
       `move ${JSON.stringify(input.move())} · ped sampler ${pedMs.toFixed(2)} ms` +
       (debugError ? `\nFIXED-STEP ERROR: ${debugError}` : '') +
       (hostState.paused ? '\nPAUSED' : '');

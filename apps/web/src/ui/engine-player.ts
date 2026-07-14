@@ -6,10 +6,22 @@
 import type { Engine, PedProbe, SamplerClip } from '@opensa/engine';
 
 import { IfpSampler } from '@opensa/engine';
+import { writeGtaRoot } from '@opensa/game/adapters/engine-vehicle-handle';
 
 export interface EnginePlayer {
+  /** Face a yaw directly (enter/exit uses it on the way out of the car). */
+  faceTo(yaw: number): void;
   /** Lowest posed vertex of the model (GTA Z-up) — the host aligns it to the physics ground. */
   minZ: number;
+  /**
+   * Play a named clip (climb-in / sit / climb-out) instead of the speed-driven locomotion, or `null` to hand
+   * control back. This is the {@link VehicleAnimator} surface `EnterVehicleSystem` drives — the same contract
+   * the three `CharacterAnimationSystem` satisfies.
+   */
+  setScripted(
+    clip: null | string,
+    options?: { facing?: number; loop?: boolean; orientation?: readonly [number, number, number, number] },
+  ): void;
   /** Advance the clip clock and upload the palette for this frame (`speed` = planar GTA m/s). */
   update(positionEngine: readonly [number, number, number], headingYaw: number, speed: number, dt: number): void;
 }
@@ -64,25 +76,82 @@ export async function loadEnginePlayer(engine: Engine): Promise<EnginePlayer> {
   });
   const sampler = new IfpSampler(fixture.bones);
   const clips: SamplerClip[] = fixture.clips;
+  // The fixture names its clips (`CAR_getin_LHS`, …); the engine's SamplerClip is name-free, so index them here.
+  const clipByName = new Map(fixture.clips.map((clip, index) => [clip.name.toLowerCase(), index]));
   let clipTime = 0;
   let activeClip = IDLE_CLIP;
+  let scripted: null | { index: number; loop: boolean } = null;
+  let scriptedFacing = 0;
+  /**
+   * The car's FULL orientation while riding (prod passes it every fixed step). It OVERRIDES the yaw: a
+   * yaw-only root cannot express the body's tilt and roll, and rebuilding the angle from our own atan2
+   * leaves the driver turning out of sync with the car he is bolted into.
+   */
+  let scriptedOrientation: null | readonly [number, number, number, number] = null;
+  const root = new Float32Array(16);
 
   return {
+    faceTo(yaw: number): void {
+      scriptedFacing = yaw;
+    },
     minZ: fixture.minZ ?? 0,
-    update(positionEngine, headingYaw, speed, dt): void {
-      const wanted = speed > RUN_SPEED_THRESHOLD ? RUN_CLIP : speed > 0.3 ? WALK_CLIP : IDLE_CLIP;
-      if (wanted !== activeClip) {
-        activeClip = wanted;
-        clipTime = 0; // v1: hard switch — the crossfade is the plan-08 sampler follow-up
+    setScripted(clip, options = {}): void {
+      if (clip === null) {
+        scripted = null;
+        scriptedOrientation = null;
+        clipTime = 0;
+
+        return;
       }
-      clipTime += dt;
-      sampler.sample(clips[activeClip] ?? clips[0], clipTime, probe.palette, 1);
-      const c = Math.cos(headingYaw);
-      const s = Math.sin(headingYaw);
-      probe.palette.set(
-        [c, 0, -s, 0, -s, 0, -c, 0, 0, 1, 0, 0, positionEngine[0], positionEngine[1], positionEngine[2], 1],
-        0,
-      );
+      const index = clipByName.get(clip.toLowerCase());
+      if (index === undefined) {
+        scripted = null; // the fixture lacks the clip — locomotion keeps running rather than freezing
+        scriptedOrientation = null;
+
+        return;
+      }
+      // Re-issued EVERY fixed step while seated (with a fresh orientation) — restarting the clock on each
+      // call would freeze the sit clip on its first frame, so only a CHANGE of clip rewinds it.
+      if (scripted?.index !== index) {
+        clipTime = 0;
+      }
+      scripted = { index, loop: options.loop ?? false };
+      scriptedOrientation = options.orientation ?? null;
+      if (options.facing !== undefined) {
+        scriptedFacing = options.facing;
+      }
+    },
+    update(positionEngine, headingYaw, speed, dt): void {
+      if (scripted) {
+        const clip = clips[scripted.index];
+        clipTime += dt;
+        // A one-shot clip HOLDS its last pose (the seated driver stays seated); a looping one wraps.
+        const time = scripted.loop ? clipTime : Math.min(clipTime, clip.duration);
+        sampler.sample(clip, time, probe.palette, 1);
+      } else {
+        const wanted = speed > RUN_SPEED_THRESHOLD ? RUN_CLIP : speed > 0.3 ? WALK_CLIP : IDLE_CLIP;
+        if (wanted !== activeClip) {
+          activeClip = wanted;
+          clipTime = 0; // v1: hard switch — the crossfade is the plan-08 sampler follow-up
+        }
+        clipTime += dt;
+        sampler.sample(clips[activeClip] ?? clips[0], clipTime, probe.palette, 1);
+        scriptedFacing = headingYaw;
+      }
+      if (scriptedOrientation) {
+        // Riding: the car's full transform — the same matrix its own parts ride, so the driver is welded to
+        // the seat through turns, lean and flips.
+        writeGtaRoot(root, positionEngine, [...scriptedOrientation] as [number, number, number, number]);
+        probe.palette.set(root, 0);
+      } else {
+        const yaw = scripted ? scriptedFacing : headingYaw;
+        const c = Math.cos(yaw);
+        const s = Math.sin(yaw);
+        probe.palette.set(
+          [c, 0, -s, 0, -s, 0, -c, 0, 0, 1, 0, 0, positionEngine[0], positionEngine[1], positionEngine[2], 1],
+          0,
+        );
+      }
       engine.updatePedPalette();
     },
   };

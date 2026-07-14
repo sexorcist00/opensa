@@ -1,12 +1,10 @@
-import type { Object3D } from 'three';
-
 import { Quaternion, Vector3 } from 'three';
 
 import type { System } from '../core/system';
 import type { Logger } from '../diagnostics/logger';
 import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { Impact, PhysicsWorld } from '../physics/physics-world';
-import type { VehiclePart } from './vehicle-part';
+import type { VehicleHandle, VehiclePartInfo } from './vehicle-handle';
 
 /** Contact force (N) above which a hit damages a panel (calibrated in-browser: light≈207k, crash≈377k). */
 const STRONG_HIT = 300000;
@@ -19,15 +17,28 @@ const FALL_UP = 1.5;
 const FALL_OUT = 1.5;
 const FALL_SPIN = 6;
 
+/** Tumble axes (a detached part's own frame). */
+const AXIS_X = new Vector3(1, 0, 0);
+const AXIS_Y = new Vector3(0, 1, 0);
+const AXIS_Z = new Vector3(0, 0, 1);
+
 interface DamageVehicle {
   body: number;
-  damaged: Set<VehiclePart>;
-  object: Object3D;
-  parts: VehiclePart[];
+  damaged: Set<VehiclePartInfo>;
+  handle: VehicleHandle;
+  parts: VehiclePartInfo[];
 }
 
+/**
+ * A detached part, integrated as PLAIN DATA and posed through the handle each frame. Prod re-parented the
+ * three node into the scene graph and let the graph carry it; the own engine has no graph, so the fall lives
+ * here and the renderer only receives a world pose.
+ */
 interface FallingPart {
-  object: Object3D;
+  handle: VehicleHandle;
+  name: string;
+  position: Vector3;
+  rotation: Quaternion;
   spin: Vector3;
   ttl: number;
   velocity: Vector3;
@@ -54,8 +65,13 @@ export class VehicleDamageSystem implements System {
     this.logger = logger;
   }
 
-  add(vehicle: { body: number; object: Object3D; parts: VehiclePart[] }): void {
-    this.vehicles.push({ body: vehicle.body, damaged: new Set(), object: vehicle.object, parts: [...vehicle.parts] });
+  add(vehicle: { body: number; handle: VehicleHandle }): void {
+    this.vehicles.push({
+      body: vehicle.body,
+      damaged: new Set(),
+      handle: vehicle.handle,
+      parts: [...vehicle.handle.parts],
+    });
   }
 
   remove(body: number): void {
@@ -68,7 +84,7 @@ export class VehicleDamageSystem implements System {
   update(delta: number): void {
     // One state change per part per frame: a multi-contact crash shouldn't deform AND
     // detach the same panel in the same instant.
-    const touched = new Set<VehiclePart>();
+    const touched = new Set<VehiclePartInfo>();
     for (const impact of this.physics.takeImpacts()) {
       this.handleImpact(impact, touched);
     }
@@ -80,32 +96,48 @@ export class VehicleDamageSystem implements System {
     for (let i = this.falling.length - 1; i >= 0; i -= 1) {
       const part = this.falling[i];
       part.velocity.z += FALL_GRAVITY * delta;
-      part.object.position.addScaledVector(part.velocity, delta);
-      part.object.rotateX(part.spin.x * delta);
-      part.object.rotateY(part.spin.y * delta);
-      part.object.rotateZ(part.spin.z * delta);
+      part.position.addScaledVector(part.velocity, delta);
+      // Tumble about the part's OWN axes, in x-y-z order — three's rotateX/Y/Z, which this replaces.
+      for (const [axis, rate] of [
+        [AXIS_X, part.spin.x],
+        [AXIS_Y, part.spin.y],
+        [AXIS_Z, part.spin.z],
+      ] as const) {
+        this.quat.setFromAxisAngle(axis, rate * delta);
+        part.rotation.multiply(this.quat);
+      }
+      part.handle.setDetachedPose(part.name, {
+        position: [part.position.x, part.position.y, part.position.z],
+        rotation: [part.rotation.x, part.rotation.y, part.rotation.z, part.rotation.w],
+      });
       part.ttl -= delta;
       if (part.ttl <= 0) {
-        part.object.parent?.remove(part.object);
+        part.handle.removeDetached(part.name);
         this.falling.splice(i, 1);
       }
     }
   }
 
-  /** Detach a damaged part: reparent to the world, knock it loose, schedule removal. */
-  private detach(car: DamageVehicle, part: VehiclePart): void {
+  /** Detach a damaged part: cut it loose in world space, knock it, schedule removal. */
+  private detach(car: DamageVehicle, part: VehiclePartInfo): void {
     car.parts = car.parts.filter((p) => p !== part);
     car.damaged.delete(part);
-    car.object.parent?.attach(part.pivot); // keep its world transform under the streaming root
+    const pose = car.handle.detachPart(part.name);
+    if (!pose) {
+      return;
+    }
     this.falling.push({
-      object: part.pivot,
+      handle: car.handle,
+      name: part.name,
+      position: new Vector3(...pose.position),
+      rotation: new Quaternion(...pose.rotation),
       spin: new Vector3(rand(FALL_SPIN), rand(FALL_SPIN), rand(FALL_SPIN)),
       ttl: FALL_TTL,
       velocity: new Vector3(rand(FALL_OUT), rand(FALL_OUT), FALL_UP),
     });
   }
 
-  private handleImpact(impact: Impact, touched: Set<VehiclePart>): void {
+  private handleImpact(impact: Impact, touched: Set<VehiclePartInfo>): void {
     // Every contact force, gated to `debug` — turn on `showLogs: 'debug'` to recalibrate STRONG_HIT.
     this.logger.debug('damage', `impact force=${impact.force.toFixed(0)}`, impact);
     if (impact.force < STRONG_HIT || !impact.point) {
@@ -124,22 +156,21 @@ export class VehicleDamageSystem implements System {
       this.detach(car, part); // already damaged → second hit knocks it off
       this.logger.log('damage', `detach ${part.name}`, { force: impact.force, part: part.name });
     } else {
-      part.ok.visible = false;
-      part.dam.visible = true;
+      car.handle.setPartDamaged(part.name, true);
       car.damaged.add(part);
       this.logger.log('damage', `deform ${part.name}`, { force: impact.force, part: part.name });
     }
   }
 
   /** The damageable part nearest the world-space contact point (mapped into the car's frame). */
-  private hitPart(car: DamageVehicle, worldPoint: Vec3): null | VehiclePart {
+  private hitPart(car: DamageVehicle, worldPoint: Vec3): null | VehiclePartInfo {
     const { position, quaternion } = this.physics.readBody(car.body);
     this.quat.set(quaternion[0], quaternion[1], quaternion[2], quaternion[3]).invert();
     // World contact point → car-local space (so we compare against parts' vehicle-space positions).
     this.dir.set(worldPoint[0] - position[0], worldPoint[1] - position[1], worldPoint[2] - position[2]);
     this.dir.applyQuaternion(this.quat);
 
-    let best: null | VehiclePart = null;
+    let best: null | VehiclePartInfo = null;
     let bestDistance = Infinity;
     for (const part of car.parts) {
       const dx = part.position[0] - this.dir.x;

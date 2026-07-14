@@ -48,10 +48,30 @@ export interface CameraState {
   up: Vec3;
 }
 
+/**
+ * A host-fed corona (074/08 B5 step 5) — vehicle head/tail lamps ride the EXISTING instanced corona pass
+ * rather than a second one. Hosts replace `Engine.dynamicCoronas` each frame; already faded/gated by the
+ * caller (a lamp's corona dims as you look at it from behind).
+ */
+export interface DynamicCorona {
+  /** Linear RGB. */
+  color: readonly [number, number, number];
+  /** 0..1 opacity — the caller's facing/brake fade. */
+  fade: number;
+  position: readonly [number, number, number];
+  size: number;
+}
+
 /** One CPU-side local light (074/06 row 7); hosts push these into `Engine.dynamicLights` each frame. */
 export interface DynamicLight {
   /** Linear RGB × intensity. */
   color: readonly [number, number, number];
+  /**
+   * SPOT cone (074/08 B5 step 5 — headlight beams v2): the cosine of the half-angle, with the unit
+   * `direction` the light points. Omit for a POINT light. A headlight rendered as a point lights the whole
+   * street, including the road BEHIND the car — a cone is what makes it a headlight.
+   */
+  cone?: { cosAngle: number; direction: readonly [number, number, number] };
   position: readonly [number, number, number];
   radius: number;
 }
@@ -154,8 +174,29 @@ export interface PedProbeInit {
   weights: Uint8Array;
 }
 
+/**
+ * One drawable vehicle (074/08 B5). Geometry and textures belong to the MODEL — many instances of the same
+ * car share them; per-instance state is the part transforms plus submesh visibility (the `_ok`/`_dam` damage
+ * swap, the `_vlo` LOD band and detached parts are all visibility operations).
+ */
+export interface VehicleInstance {
+  readonly entity: RigidEntity;
+  readonly model: VehicleModelId;
+  /**
+   * Per-vehicle lamp state (074/08 B5 step 5): headlights swap the lamp texture to its lit twin and glow the
+   * glass; brakes take the tail lamps to full. Was a GLOBAL day/night gate — every parked car lit up at once.
+   */
+  setLamps(headlights: boolean, brakes: boolean, intensity: number): void;
+  /** Carcols colours (linear 0..1) the vertex paint slots resolve to — this car's own paint job. */
+  setPaint(paint: VehiclePaint): void;
+  setSubmeshVisible(submesh: number, visible: boolean): void;
+}
+
+/** Opaque handle returned by `createVehicleModel`. */
+export type VehicleModelId = number;
+
 /** Rigid-entity upload (074/08 B2) — raw byte views over the vehicle fixture's bin sections. */
-export interface VehicleProbeInit {
+export interface VehicleModelInit {
   colors: Uint8Array;
   indexCount: number;
   /** uint16 index payload. */
@@ -164,20 +205,81 @@ export interface VehicleProbeInit {
   normals: Uint8Array;
   parts: readonly RigidPartInit[];
   positions: Uint8Array;
-  submeshes: readonly { indexCount: number; indexOffset: number; part: number; translucent: boolean }[];
+  submeshes: readonly VehicleSubmesh[];
   /** RGBA8 layers, all the same size, packed sequentially. */
   texture: { height: number; layers: number; rgba: Uint8Array; width: number };
   uvs: Uint8Array;
   vertexCount: number;
 }
 
+/** The four editable carcols colours; a vertex's `slots.z` picks one (0 = the material's own colour). */
+export interface VehiclePaint {
+  primary: readonly [number, number, number];
+  quaternary: readonly [number, number, number];
+  secondary: readonly [number, number, number];
+  tertiary: readonly [number, number, number];
+}
+
+export interface VehicleSubmesh {
+  indexCount: number;
+  indexOffset: number;
+  part: number;
+  translucent: boolean;
+}
+
+/** Instances a model starts with room for; the matrix buffer doubles when it runs out. */
+const VEHICLE_CAPACITY = 8;
+/** 4 carcols colours × vec4f per matrix row. */
+const PAINT_ROW_BYTES = 64;
+/** One vec4f of lamp state per matrix row (headlights, brakes, spare, spare). */
+const LAMP_ROW_BYTES = 16;
+
+/** Unpainted default — a car that never calls `setPaint` renders its marker slots plain white. */
+const DEFAULT_PAINT: VehiclePaint = {
+  primary: [1, 1, 1],
+  quaternary: [1, 1, 1],
+  secondary: [1, 1, 1],
+  tertiary: [1, 1, 1],
+};
+
+interface VehicleInstanceState {
+  entity: RigidEntity;
+  lamps: { brakes: boolean; headlights: boolean; intensity: number };
+  /** Kept so a capacity grow (which reallocates the buffer) can restore it — paint is not re-sent per frame. */
+  paint: VehiclePaint;
+  slot: number;
+  submeshVisible: Uint8Array;
+}
+
+interface VehicleModel {
+  bindGroup: GPUBindGroup;
+  buffers: GPUBuffer[];
+  capacity: number;
+  indexBuffer: GPUBuffer;
+  /** Slot-indexed; `null` = free. A live instance owns matrix rows [slot × partCount, +partCount). */
+  instances: (null | VehicleInstanceState)[];
+  lampBuffer: GPUBuffer;
+  matrixBuffer: GPUBuffer;
+  paintBuffer: GPUBuffer;
+  partCount: number;
+  submeshes: readonly VehicleSubmesh[];
+  texture: GPUTexture;
+  textureBytes: number;
+}
+
 /** Light-pool capacity (074/06 row 7) — mirrored by the WGSL loop bound. */
 const LIGHT_POOL_CAP = 64;
 /** 2dfx lamps farther than this never enter the pool (pixel reach is bounded by the radius anyway). */
 const LIGHT_POOL_REACH = 130;
+/** Floats per pooled light: position+radius, colour, direction+cone cosine (2 = point, no cone). */
+const LIGHT_STRIDE = 12;
+/** `dir.w` sentinel for "no cone" — mirrors the three pool's convention exactly. */
+const LIGHT_POINT = 2;
 
 export class Engine {
   cells!: CellStore;
+  /** Host-owned coronas (vehicle lamps) — replace the contents each frame; drawn with the 2dfx ones. */
+  readonly dynamicCoronas: DynamicCorona[] = [];
   /** Host-owned dynamic lights (vehicle head/taillights …) — replace the contents each frame. */
   readonly dynamicLights: DynamicLight[] = [];
   /** Live environment — host mutates freely; written into the frame UBO every frame. Noon defaults. */
@@ -249,7 +351,7 @@ export class Engine {
   private readonly frustumPlanes = new Float32Array(24);
   private readonly invViewProj: Mat4 = mat4Identity();
   private lightPoolBuffer!: GPUBuffer;
-  private readonly lightPoolScratch = new Float32Array(LIGHT_POOL_CAP * 8);
+  private readonly lightPoolScratch = new Float32Array(LIGHT_POOL_CAP * LIGHT_STRIDE);
   private msaaView!: GPUTextureView;
   /** Skinning probe (074/08 B1) — a single skinned entity outside the static bundles. */
   private ped: null | {
@@ -284,17 +386,11 @@ export class Engine {
   };
   private targetSize = { height: 0, width: 0 };
   private timers!: GpuTimers;
-  /** Rigid-entity probe (074/08 B2) — one vehicle-style part hierarchy outside the static bundles. */
-  private vehicle: null | {
-    bindGroup: GPUBindGroup;
-    buffers: GPUBuffer[];
-    entity: RigidEntity;
-    indexBuffer: GPUBuffer;
-    matrixBuffer: GPUBuffer;
-    submeshes: readonly { indexCount: number; indexOffset: number; part: number; translucent: boolean }[];
-    texture: GPUTexture;
-    textureBytes: number;
-  } = null;
+  /** Rigid-entity models (074/08 B2→B5) — vehicle part hierarchies, always outside the static bundles. */
+  private readonly vehicleModels = new Map<VehicleModelId, VehicleModel>();
+  private vehicleModelSeq = 0;
+  /** Part definitions per model — every instance builds its own `RigidEntity` from these. */
+  private readonly vehicleParts = new Map<VehicleModelId, readonly RigidPartInit[]>();
   private readonly view: Mat4 = mat4Identity();
 
   private readonly viewProj: Mat4 = mat4Identity();
@@ -307,6 +403,149 @@ export class Engine {
     vertices: GPUBuffer;
   } = null;
 
+  /** Spawn one instance of an uploaded model (074/08 B5). Every instance owns its own part transforms. */
+  createVehicle(id: VehicleModelId): VehicleInstance {
+    const model = this.vehicleModels.get(id);
+    const parts = this.vehicleParts.get(id);
+    if (!model || !parts) {
+      throw new Error(`createVehicle: unknown model ${id}`);
+    }
+    let slot = model.instances.indexOf(null);
+    if (slot === -1) {
+      slot = model.capacity;
+      this.growVehicleModel(model, model.capacity * 2);
+    }
+    const state: VehicleInstanceState = {
+      entity: new RigidEntity(parts),
+      lamps: { brakes: false, headlights: false, intensity: 1 },
+      paint: DEFAULT_PAINT,
+      slot,
+      submeshVisible: new Uint8Array(model.submeshes.length).fill(1),
+    };
+    model.instances[slot] = state;
+    this.writeVehiclePaint(model, slot, DEFAULT_PAINT);
+
+    return {
+      entity: state.entity,
+      model: id,
+      setLamps: (headlights: boolean, brakes: boolean, intensity: number): void => {
+        const lamps = state.lamps;
+        if (lamps.headlights === headlights && lamps.brakes === brakes && lamps.intensity === intensity) {
+          return; // lamp state is written on CHANGE, not per frame
+        }
+        state.lamps = { brakes, headlights, intensity };
+        this.writeVehicleLamps(model, state.slot, state.lamps);
+      },
+      setPaint: (paint: VehiclePaint): void => {
+        this.writeVehiclePaint(model, state.slot, paint);
+      },
+      setSubmeshVisible: (submesh: number, visible: boolean): void => {
+        state.submeshVisible[submesh] = visible ? 1 : 0;
+      },
+    };
+  }
+
+  /**
+   * Upload a vehicle MODEL (074/08 B5): geometry + texture array, shared by every instance of that car.
+   * Instances come from `createVehicle`.
+   */
+  createVehicleModel(init: VehicleModelInit): VehicleModelId {
+    const upload = (label: string, bytes: Uint8Array, usage: number): GPUBuffer => {
+      const size = Math.ceil(bytes.byteLength / 4) * 4;
+      const buffer = this.resources.createBuffer('cellVertex', {
+        label: `vehicle-${label}`,
+        size,
+        usage: usage | GPUBufferUsage.COPY_DST,
+      });
+      let payload = bytes;
+      if (bytes.byteLength !== size) {
+        payload = new Uint8Array(size);
+        payload.set(bytes);
+      }
+      this.device.queue.writeBuffer(buffer, 0, payload);
+
+      return buffer;
+    };
+    const buffers = [
+      upload('positions', init.positions, GPUBufferUsage.VERTEX),
+      upload('normals', init.normals, GPUBufferUsage.VERTEX),
+      upload('uvs', init.uvs, GPUBufferUsage.VERTEX),
+      upload('colors', init.colors, GPUBufferUsage.VERTEX),
+      upload('meta', init.meta, GPUBufferUsage.VERTEX),
+    ];
+    const indexBuffer = upload('indices', init.indices, GPUBufferUsage.INDEX);
+    const matrixBuffer = this.createVehicleMatrixBuffer(init.parts.length, VEHICLE_CAPACITY);
+    const paintBuffer = this.createVehiclePaintBuffer(init.parts.length, VEHICLE_CAPACITY);
+    const lampBuffer = this.createVehicleLampBuffer(init.parts.length, VEHICLE_CAPACITY);
+    const layerBytes = init.texture.width * init.texture.height * 4;
+    const texture = this.resources.createTexture(
+      'texture',
+      {
+        format: 'rgba8unorm-srgb',
+        label: 'vehicle-texture',
+        size: { depthOrArrayLayers: init.texture.layers, height: init.texture.height, width: init.texture.width },
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      },
+      init.texture.rgba.byteLength,
+    );
+    for (let layer = 0; layer < init.texture.layers; layer += 1) {
+      this.device.queue.writeTexture(
+        { origin: { x: 0, y: 0, z: layer }, texture },
+        init.texture.rgba.subarray(layer * layerBytes, (layer + 1) * layerBytes),
+        { bytesPerRow: init.texture.width * 4 },
+        { height: init.texture.height, width: init.texture.width },
+      );
+    }
+    const id = this.vehicleModelSeq;
+    this.vehicleModelSeq += 1;
+    const model: VehicleModel = {
+      bindGroup: this.createVehicleBindGroup({ lampBuffer, matrixBuffer, paintBuffer, texture }),
+      buffers,
+      capacity: VEHICLE_CAPACITY,
+      indexBuffer,
+      instances: new Array<null | VehicleInstanceState>(VEHICLE_CAPACITY).fill(null),
+      lampBuffer,
+      matrixBuffer,
+      paintBuffer,
+      partCount: init.parts.length,
+      submeshes: init.submeshes,
+      texture,
+      textureBytes: init.texture.rgba.byteLength,
+    };
+    this.vehicleModels.set(id, model);
+    this.vehicleParts.set(id, init.parts);
+
+    return id;
+  }
+
+  destroyVehicle(instance: VehicleInstance): void {
+    const model = this.vehicleModels.get(instance.model);
+    if (!model) {
+      return;
+    }
+    const slot = model.instances.findIndex((state) => state?.entity === instance.entity);
+    if (slot !== -1) {
+      model.instances[slot] = null;
+    }
+  }
+
+  destroyVehicleModel(id: VehicleModelId): void {
+    const model = this.vehicleModels.get(id);
+    if (!model) {
+      return;
+    }
+    for (const buffer of model.buffers) {
+      this.resources.destroyBuffer('cellVertex', buffer);
+    }
+    this.resources.destroyBuffer('cellVertex', model.indexBuffer);
+    this.resources.destroyBuffer('uniform', model.matrixBuffer);
+    this.resources.destroyBuffer('uniform', model.paintBuffer);
+    this.resources.destroyBuffer('uniform', model.lampBuffer);
+    this.resources.destroyTexture('texture', model.texture, model.textureBytes);
+    this.vehicleModels.delete(id);
+    this.vehicleParts.delete(id);
+  }
+
   /** Render one frame. Returns the stats snapshot (the HUD's input). */
   frame(camera: CameraState): EngineStats {
     const submitStart = performance.now();
@@ -318,7 +557,7 @@ export class Engine {
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);
-    const frameData = new Float32Array(88);
+    const frameData = new Float32Array(92);
     frameData.set(this.viewProj, 0);
     frameData.set(this.invViewProj, 16);
     // camera.w = cloud slot A→B crossfade blend (spare vec4 slot; row 15 weather fade).
@@ -343,6 +582,11 @@ export class Engine {
     frameData.set([...env.moonColor, env.cloudSpeed], 68);
     // params3 = [light count (row 7), cloud layer on, cloudDark, cloud layer alpha] — row 15.
     frameData[72] = this.fillLightPool(camera.eye);
+    // params4.x = how many of those lights are DYNAMIC (they come first in the pool). The world shades the
+    // static 2dfx lamps per VERTEX (cheap, and they never move), but a headlight sweeping a 30-metre road
+    // polygon has no vertex near it to light: the beam breaks into blotches that follow the road's normals
+    // and vanishes entirely once the car sits mid-polygon. Dynamic lights must be shaded per PIXEL.
+    frameData[88] = this.dynamicLights.length;
     frameData[73] = this.cloudLayerOn;
     frameData[74] = env.cloudDark;
     frameData[75] = Math.min(1, Math.max(0, env.cloudAlpha));
@@ -418,7 +662,7 @@ export class Engine {
     // sort with the world blends only approximately — the standard transparency caveat).
     draws += this.drawObjects(pass);
     draws += this.drawPed(pass);
-    draws += this.drawVehicle(pass, false);
+    draws += this.drawVehicles(pass, false);
     pass.setPipeline(this.pipelines.get('sky'));
     pass.setBindGroup(0, this.frameBindGroup);
     pass.draw(3);
@@ -429,7 +673,7 @@ export class Engine {
       pass.executeBundles(blendBundles);
     }
     // Entity glass after the world blends (074/08 B2): composites over the finished frame.
-    draws += this.drawVehicle(pass, true);
+    draws += this.drawVehicles(pass, true);
     // 2dfx coronas last (074/06 row 13): additive on top of everything, depth-read hides occluded ones.
     draws += this.drawCoronas(pass, camera);
     pass.end();
@@ -475,7 +719,7 @@ export class Engine {
     this.pipelines = compileAll(this.device, SCENE_FORMAT, DEPTH_FORMAT, this.engineDevice.colorFormat);
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
-      size: 352, // viewProj + invViewProj (128) + camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona/water (14 × 16)
+      size: 368, // viewProj + invViewProj (128) + 15 × vec4 (camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona/water/params4)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     // Local light pool (074/06 row 7): CPU-filled point lights, shared by every frame-layout pipeline.
@@ -579,19 +823,6 @@ export class Engine {
     this.ped = null;
   }
 
-  removeVehicleProbe(): void {
-    if (!this.vehicle) {
-      return;
-    }
-    for (const buffer of this.vehicle.buffers) {
-      this.resources.destroyBuffer('cellVertex', buffer);
-    }
-    this.resources.destroyBuffer('cellVertex', this.vehicle.indexBuffer);
-    this.resources.destroyBuffer('uniform', this.vehicle.matrixBuffer);
-    this.resources.destroyTexture('texture', this.vehicle.texture, this.vehicle.textureBytes);
-    this.vehicle = null;
-  }
-
   /** Install a weather's cloud dome (074/06 row 15); RGBA8, EXACTLY CLOUD_DOME_SIZE² (the converter's
    *  contract). The persistent slot textures are overwritten IN PLACE — cell bundles record the frame bind
    *  group at create time, so the group (and every view in it) must never be rebuilt/destroyed. The first
@@ -692,84 +923,6 @@ export class Engine {
     return { palette };
   }
 
-  /** Create (or replace) the rigid-entity probe (074/08 B2). Returns the CPU-side entity handle. */
-  setVehicleProbe(init: VehicleProbeInit): RigidEntity {
-    this.removeVehicleProbe();
-    const upload = (label: string, bytes: Uint8Array, usage: number): GPUBuffer => {
-      const size = Math.ceil(bytes.byteLength / 4) * 4;
-      const buffer = this.resources.createBuffer('cellVertex', {
-        label: `vehicle-${label}`,
-        size,
-        usage: usage | GPUBufferUsage.COPY_DST,
-      });
-      let payload = bytes;
-      if (bytes.byteLength !== size) {
-        payload = new Uint8Array(size);
-        payload.set(bytes);
-      }
-      this.device.queue.writeBuffer(buffer, 0, payload);
-
-      return buffer;
-    };
-    const buffers = [
-      upload('positions', init.positions, GPUBufferUsage.VERTEX),
-      upload('normals', init.normals, GPUBufferUsage.VERTEX),
-      upload('uvs', init.uvs, GPUBufferUsage.VERTEX),
-      upload('colors', init.colors, GPUBufferUsage.VERTEX),
-      upload('meta', init.meta, GPUBufferUsage.VERTEX),
-    ];
-    const indexBuffer = upload('indices', init.indices, GPUBufferUsage.INDEX);
-    const entity = new RigidEntity(init.parts);
-    const matrixBuffer = this.resources.createBuffer('uniform', {
-      label: 'vehicle-matrices',
-      size: entity.matrices.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    const layerBytes = init.texture.width * init.texture.height * 4;
-    const texture = this.resources.createTexture(
-      'texture',
-      {
-        format: 'rgba8unorm-srgb',
-        label: 'vehicle-texture',
-        size: { depthOrArrayLayers: init.texture.layers, height: init.texture.height, width: init.texture.width },
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      },
-      init.texture.rgba.byteLength,
-    );
-    for (let layer = 0; layer < init.texture.layers; layer += 1) {
-      this.device.queue.writeTexture(
-        { origin: { x: 0, y: 0, z: layer }, texture },
-        init.texture.rgba.subarray(layer * layerBytes, (layer + 1) * layerBytes),
-        { bytesPerRow: init.texture.width * 4 },
-        { height: init.texture.height, width: init.texture.width },
-      );
-    }
-    const bindGroup = this.device.createBindGroup({
-      entries: [
-        { binding: 0, resource: { buffer: matrixBuffer } },
-        { binding: 1, resource: texture.createView({ dimension: '2d-array' }) },
-        {
-          binding: 2,
-          resource: this.device.createSampler({ label: 'vehicle', magFilter: 'linear', minFilter: 'linear' }),
-        },
-      ],
-      label: 'vehicle',
-      layout: this.pipelines.rigidLayout,
-    });
-    this.vehicle = {
-      bindGroup,
-      buffers,
-      entity,
-      indexBuffer,
-      matrixBuffer,
-      submeshes: init.submeshes,
-      texture,
-      textureBytes: init.texture.rgba.byteLength,
-    };
-
-    return entity;
-  }
-
   /** Install the water surface (074/06 row 12 v2): interleaved [x,y,z,shoreDist] vertices (ENGINE space —
    *  the baked tessellated mesh, or the flat runtime fallback with a constant deep field); `ripple` /
    *  `foam` = the authored particle.txd textures (waterclear256 / waterwake), 1×1 stubs when absent.
@@ -844,12 +997,76 @@ export class Engine {
     }
   }
 
-  /** Flatten the part hierarchy and upload the matrix buffer (call after mutating the entity). */
-  updateVehicle(): void {
-    if (this.vehicle) {
-      this.vehicle.entity.flatten();
-      this.device.queue.writeBuffer(this.vehicle.matrixBuffer, 0, this.vehicle.entity.matrices);
+  /** Flatten every live instance and upload its matrix rows (call once after mutating the entities). */
+  updateVehicles(): void {
+    for (const model of this.vehicleModels.values()) {
+      const rowBytes = model.partCount * 64;
+      for (const state of model.instances) {
+        if (!state) {
+          continue;
+        }
+        state.entity.flatten();
+        this.device.queue.writeBuffer(model.matrixBuffer, state.slot * rowBytes, state.entity.matrices);
+      }
     }
+  }
+
+  private createVehicleBindGroup(model: {
+    lampBuffer: GPUBuffer;
+    matrixBuffer: GPUBuffer;
+    paintBuffer: GPUBuffer;
+    texture: GPUTexture;
+  }): GPUBindGroup {
+    return this.device.createBindGroup({
+      entries: [
+        { binding: 0, resource: { buffer: model.matrixBuffer } },
+        { binding: 1, resource: model.texture.createView({ dimension: '2d-array' }) },
+        {
+          binding: 2,
+          // REPEAT, like prod's vehicle textures (`build-texture.ts` sets RepeatWrapping). SA vehicle UVs run
+          // outside [0,1] — the lamp atlas addresses its quadrants that way — and the default clamp-to-edge
+          // smears them into the border, which reads as lamps CUT OFF at a straight edge. The water shader
+          // was bitten by exactly this.
+          resource: this.device.createSampler({
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+            label: 'vehicle',
+            magFilter: 'linear',
+            minFilter: 'linear',
+          }),
+        },
+        { binding: 3, resource: { buffer: model.paintBuffer } },
+        { binding: 4, resource: { buffer: model.lampBuffer } },
+      ],
+      label: 'vehicle',
+      layout: this.pipelines.rigidLayout,
+    });
+  }
+
+  /** One lamp-state vec4 per matrix row — indexed by the same `instance_index` as matrices and paint. */
+  private createVehicleLampBuffer(partCount: number, capacity: number): GPUBuffer {
+    return this.resources.createBuffer('uniform', {
+      label: 'vehicle-lamps',
+      size: partCount * capacity * LAMP_ROW_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+  }
+
+  private createVehicleMatrixBuffer(partCount: number, capacity: number): GPUBuffer {
+    return this.resources.createBuffer('uniform', {
+      label: 'vehicle-matrices',
+      size: partCount * capacity * 64,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+  }
+
+  /** 4 paint colours per matrix row — indexed by the same `instance_index` the matrices are (B5). */
+  private createVehiclePaintBuffer(partCount: number, capacity: number): GPUBuffer {
+    return this.resources.createBuffer('uniform', {
+      label: 'vehicle-paint',
+      size: partCount * capacity * PAINT_ROW_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
   }
 
   /** Cloud slot blend on the frame clock (0 = slot A, 1 = slot B) — written into camera.w each frame. */
@@ -864,12 +1081,26 @@ export class Engine {
    *  instanced draw. Colour is premultiplied by the dn gate — coronas are a NIGHT phenomenon (v1). */
   private drawCoronas(pass: GPURenderPassEncoder, camera: CameraState): number {
     const gate = Math.min(1, Math.max(0, this.environment.dn * 1.5));
-    if (gate <= 0.02) {
-      return 0;
-    }
     let count = 0;
     const scratch = this.coronaScratch;
-    for (const cell of this.cells.all()) {
+    // Host coronas (vehicle lamps) are already gated and faded by the caller — they do NOT ride the world's
+    // day/night gate, so they must be filled before the 2dfx early-out.
+    for (const corona of this.dynamicCoronas) {
+      if (count >= CORONA_CAP) {
+        break;
+      }
+      const at = count * 8;
+      scratch[at] = corona.position[0];
+      scratch[at + 1] = corona.position[1];
+      scratch[at + 2] = corona.position[2];
+      scratch[at + 3] = corona.size;
+      scratch[at + 4] = corona.color[0];
+      scratch[at + 5] = corona.color[1];
+      scratch[at + 6] = corona.color[2];
+      scratch[at + 7] = corona.fade;
+      count += 1;
+    }
+    for (const cell of gate <= 0.02 ? [] : this.cells.all()) {
       if (!cell.visible || cell.lights.length === 0) {
         continue;
       }
@@ -961,26 +1192,44 @@ export class Engine {
     return this.ped.submeshes.length;
   }
 
-  private drawVehicle(pass: GPURenderPassEncoder, translucent: boolean): number {
-    if (!this.vehicle) {
-      return 0;
-    }
+  /** One model's live instances. Binds the shared geometry once, then draws each visible submesh per car. */
+  private drawVehicleModel(pass: GPURenderPassEncoder, model: VehicleModel, translucent: boolean): number {
     let draws = 0;
     let bound = false;
-    for (const submesh of this.vehicle.submeshes) {
-      if (submesh.translucent !== translucent) {
+    for (const state of model.instances) {
+      if (!state) {
         continue;
       }
-      if (!bound) {
-        pass.setPipeline(this.pipelines.get(translucent ? 'rigid-blend' : 'rigid-opaque'));
-        pass.setBindGroup(0, this.frameBindGroup);
-        pass.setBindGroup(1, this.vehicle.bindGroup);
-        this.vehicle.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
-        pass.setIndexBuffer(this.vehicle.indexBuffer, 'uint16');
-        bound = true;
+      for (let index = 0; index < model.submeshes.length; index += 1) {
+        const submesh = model.submeshes[index];
+        if (submesh.translucent !== translucent || state.submeshVisible[index] === 0) {
+          continue;
+        }
+        if (!bound) {
+          pass.setPipeline(this.pipelines.get(translucent ? 'rigid-blend' : 'rigid-opaque'));
+          pass.setBindGroup(0, this.frameBindGroup);
+          pass.setBindGroup(1, model.bindGroup);
+          model.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
+          pass.setIndexBuffer(model.indexBuffer, 'uint16');
+          bound = true;
+        }
+        pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset, 0, state.slot * model.partCount + submesh.part);
+        draws += 1;
       }
-      pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset, 0, submesh.part);
-      draws += 1;
+    }
+
+    return draws;
+  }
+
+  /**
+   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
+   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
+   * the known cost knob if a street full of parked cars ever pushes the draw budget.
+   */
+  private drawVehicles(pass: GPURenderPassEncoder, translucent: boolean): number {
+    let draws = 0;
+    for (const model of this.vehicleModels.values()) {
+      draws += this.drawVehicleModel(pass, model, translucent);
     }
 
     return draws;
@@ -1058,11 +1307,20 @@ export class Engine {
   private fillLightPool(eye: Vec3): number {
     const scratch = this.lightPoolScratch;
     let count = 0;
-    const push = (x: number, y: number, z: number, radius: number, r: number, g: number, b: number): void => {
+    const push = (
+      x: number,
+      y: number,
+      z: number,
+      radius: number,
+      r: number,
+      g: number,
+      b: number,
+      cone?: DynamicLight['cone'],
+    ): void => {
       if (count >= LIGHT_POOL_CAP) {
         return;
       }
-      const at = count * 8;
+      const at = count * LIGHT_STRIDE;
       scratch[at] = x;
       scratch[at + 1] = y;
       scratch[at + 2] = z;
@@ -1071,10 +1329,14 @@ export class Engine {
       scratch[at + 5] = g;
       scratch[at + 6] = b;
       scratch[at + 7] = 0;
+      scratch[at + 8] = cone ? cone.direction[0] : 0;
+      scratch[at + 9] = cone ? cone.direction[1] : 0;
+      scratch[at + 10] = cone ? cone.direction[2] : 1;
+      scratch[at + 11] = cone ? cone.cosAngle : LIGHT_POINT;
       count += 1;
     };
     for (const light of this.dynamicLights) {
-      push(light.position[0], light.position[1], light.position[2], light.radius, ...light.color);
+      push(light.position[0], light.position[1], light.position[2], light.radius, ...light.color, light.cone);
     }
     // 2dfx street lamps join at night (the same anchors the corona pass draws), distance-bounded.
     const gate = this.environment.dn * 1.4;
@@ -1103,7 +1365,7 @@ export class Engine {
       }
     }
     if (count > 0) {
-      this.device.queue.writeBuffer(this.lightPoolBuffer, 0, scratch, 0, count * 8);
+      this.device.queue.writeBuffer(this.lightPoolBuffer, 0, scratch, 0, count * LIGHT_STRIDE);
     }
 
     return count;
@@ -1139,6 +1401,31 @@ export class Engine {
     return out;
   }
 
+  /** Grow the matrix + paint buffers (and the bind group — vehicles are never inside a bundle: safe). */
+  private growVehicleModel(model: VehicleModel, capacity: number): void {
+    this.resources.destroyBuffer('uniform', model.matrixBuffer);
+    this.resources.destroyBuffer('uniform', model.paintBuffer);
+    this.resources.destroyBuffer('uniform', model.lampBuffer);
+    model.matrixBuffer = this.createVehicleMatrixBuffer(model.partCount, capacity);
+    model.paintBuffer = this.createVehiclePaintBuffer(model.partCount, capacity);
+    model.lampBuffer = this.createVehicleLampBuffer(model.partCount, capacity);
+    model.bindGroup = this.createVehicleBindGroup(model);
+    model.instances.length = capacity;
+    model.instances.fill(null, model.capacity, capacity);
+    model.capacity = capacity;
+    // The fresh buffers are uninitialized: re-upload the live instances NOW, or a frame drawn before the
+    // next `updateVehicles()` reads garbage matrices and flings the existing cars across the map. Paint has
+    // no such flush (it is written on demand, not per frame), so it MUST be restored here too.
+    const rowBytes = model.partCount * 64;
+    for (const state of model.instances) {
+      if (state) {
+        this.device.queue.writeBuffer(model.matrixBuffer, state.slot * rowBytes, state.entity.matrices);
+        this.writeVehiclePaint(model, state.slot, state.paint);
+        this.writeVehicleLamps(model, state.slot, state.lamps);
+      }
+    }
+  }
+
   /** Rebuild the sky LUT when its environment inputs moved (quantized key — ~a few rebuilds per game
    *  minute under a day cycle; each build is ~5 k texels of scalar math + a 72 KB upload). */
   private refreshSkyLut(): void {
@@ -1163,6 +1450,42 @@ export class Engine {
       { bytesPerRow: SKY_LUT_WIDTH * 8 },
       { height: SKY_LUT_HEIGHT, width: SKY_LUT_WIDTH },
     );
+  }
+
+  private writeVehicleLamps(
+    model: VehicleModel,
+    slot: number,
+    lamps: { brakes: boolean; headlights: boolean; intensity: number },
+  ): void {
+    const row = new Float32Array(model.partCount * 4);
+    for (let part = 0; part < model.partCount; part += 1) {
+      row[part * 4] = lamps.headlights ? 1 : 0;
+      row[part * 4 + 1] = lamps.brakes ? 1 : 0;
+      row[part * 4 + 2] = lamps.intensity;
+    }
+    this.device.queue.writeBuffer(model.lampBuffer, slot * model.partCount * LAMP_ROW_BYTES, row);
+  }
+
+  /**
+   * Write one instance's four carcols colours. The shader indexes paint by `instance_index` — the same row
+   * index as the matrices — so the colours are REPLICATED across the instance's part rows. That costs a few
+   * hundred bytes per car and buys the alternative's absence: no partCount uniform and no integer division
+   * in the vertex shader. Paint is written on spawn/change, never per frame.
+   */
+  private writeVehiclePaint(model: VehicleModel, slot: number, paint: VehiclePaint): void {
+    const state = model.instances[slot];
+    if (state) {
+      state.paint = paint;
+    }
+    const row = new Float32Array(model.partCount * 16);
+    for (let part = 0; part < model.partCount; part += 1) {
+      const at = part * 16;
+      row.set(paint.primary, at);
+      row.set(paint.secondary, at + 4);
+      row.set(paint.tertiary, at + 8);
+      row.set(paint.quaternary, at + 12);
+    }
+    this.device.queue.writeBuffer(model.paintBuffer, slot * model.partCount * PAINT_ROW_BYTES, row);
   }
 }
 

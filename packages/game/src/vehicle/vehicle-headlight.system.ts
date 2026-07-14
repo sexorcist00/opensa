@@ -3,19 +3,19 @@ import {
   type Camera,
   CanvasTexture,
   type Color,
-  type Mesh,
-  type MeshStandardMaterial,
   type Object3D,
   Sprite,
   SpriteMaterial,
-  type Texture,
   Vector3,
   type Vector4,
 } from 'three';
 
+import type { ThreeVehicleHandle } from '../adapters/three-vehicle-handle';
 import type { System } from '../core/system';
 import type { HeadlightConfig } from '../interfaces/config.interface';
 import type { EnterableVehicle, EnterVehicleSystem } from './enter-vehicle.system';
+
+import { lampAnchorsOf, lampStateFor } from './vehicle-lamps';
 
 /** The world-shader local-light pool surface (structurally = renderware's `worldLocalLightUniforms`).
  *  Slots this system fills: 0/1 = headlight spots, 2/3 = tail/brake points (plan 070, vehicle part). */
@@ -29,14 +29,6 @@ export interface LocalLightSink {
 /** Glow / corona colours by light type (rendered colour, not the marker colour): warm-white head, red tail. */
 const HEAD_COLOR = 0xfff2d0;
 const TAIL_COLOR = 0xff1808;
-/**
- * Lamp-glass emissive strengths (× config `intensity`). Pushed clearly PAST the bloom threshold (0.7) so the
- * lamps bloom into a soft halo the way the baked night sources do (plan 071) — an emissive that only just
- * reaches 1.0 clips in the LDR buffer and barely blooms. Brake > head so it reads as the brighter light.
- */
-const HEAD_EMISSIVE = 2.4;
-const TAIL_RUN_EMISSIVE = 1;
-const TAIL_BRAKE_EMISSIVE = 4;
 /** Rear corona/glass is dim "running" at night, full when braking (× config). */
 const REAR_RUNNING = 0.4;
 
@@ -68,8 +60,6 @@ export class VehicleHeadlightSystem implements System {
   private readonly lights?: LocalLightSink;
   private lit: EnterableVehicle | null = null;
   private readonly root: Object3D;
-  /** The lit car's tail/brake glass materials — their emissive brightens per-frame while braking. */
-  private tails: MeshStandardMaterial[] = [];
   private readonly tmp = new Vector3();
 
   constructor(
@@ -103,19 +93,20 @@ export class VehicleHeadlightSystem implements System {
   }
 
   update(): void {
-    const active = this.enter.getActive();
-    const target = active && this.enter.isSeated() && this.isNight() ? active : null;
     const cfg = this.config();
-    if (target !== this.lit) {
-      if (this.lit) {
-        this.tails = [];
-        setLamps(this.lit, false, cfg.intensity);
-      }
-      if (target) {
-        this.tails = setLamps(target, true, cfg.intensity);
-      }
-      this.lit = target;
+    const braking = this.enter.isBraking();
+    // WHICH car lights up (and how) is renderer-agnostic — the shared decision the own engine uses too.
+    const { car: target, state } = lampStateFor(
+      this.enter.getActive(),
+      this.enter.isSeated(),
+      braking,
+      this.isNight(),
+      cfg.intensity,
+    );
+    if (this.lit && this.lit !== target) {
+      this.lit.handle.setLamps({ brakes: false, headlights: false, intensity: cfg.intensity });
     }
+    this.lit = target;
     if (!target) {
       for (const corona of this.coronas) {
         corona.visible = false;
@@ -126,11 +117,7 @@ export class VehicleHeadlightSystem implements System {
 
       return;
     }
-    const braking = this.enter.isBraking();
-    const tail = (braking ? TAIL_BRAKE_EMISSIVE : TAIL_RUN_EMISSIVE) * cfg.intensity;
-    for (const mat of this.tails) {
-      mat.emissiveIntensity = tail;
-    }
+    target.handle.setLamps(state); // the glass swap/glow now lives in the three handle
     this.placeCoronas(target, cfg, braking);
     this.fillLightPool(target, cfg, braking);
   }
@@ -143,18 +130,8 @@ export class VehicleHeadlightSystem implements System {
     if (!sink) {
       return;
     }
-    const [hx, hy, hz] = vehicle.halfExtents;
-    const front = (vehicle.object.userData.headlightDummy as [number, number, number] | null) ?? [
-      hx * 0.7,
-      hy * 0.9,
-      -hz * 0.3,
-    ];
-    const rear = (vehicle.object.userData.taillightDummy as [number, number, number] | null) ?? [
-      hx * 0.7,
-      -hy * 0.9,
-      -hz * 0.3,
-    ];
-    const { position, quaternion } = vehicle.object;
+    const { front, rear } = lampAnchorsOf(vehicle);
+    const { position, quaternion } = threeObject(vehicle);
     // Headlight beams aim forward and DOWN so the pool lands on the asphalt a few metres ahead.
     this.beamDir.set(0, 1, -0.5).normalize().applyQuaternion(quaternion);
     this.beamDir.transformDirection(this.root.matrixWorld);
@@ -189,18 +166,8 @@ export class VehicleHeadlightSystem implements System {
    *  dimmed by how much its lamp faces the camera (front +Y, rear −Y) so it only shows from the right side.
    *  Rear coronas run dim and brighten on braking. */
   private placeCoronas(vehicle: EnterableVehicle, cfg: HeadlightConfig, braking: boolean): void {
-    const [hx, hy, hz] = vehicle.halfExtents;
-    const front = (vehicle.object.userData.headlightDummy as [number, number, number] | null) ?? [
-      hx * 0.7,
-      hy * 0.9,
-      -hz * 0.3,
-    ];
-    const rear = (vehicle.object.userData.taillightDummy as [number, number, number] | null) ?? [
-      hx * 0.7,
-      -hy * 0.9,
-      -hz * 0.3,
-    ];
-    const { position, quaternion } = vehicle.object;
+    const { front, rear } = lampAnchorsOf(vehicle);
+    const { position, quaternion } = threeObject(vehicle);
     this.camLocal.copy(this.camera.getWorldPosition(this.tmp));
     this.root.worldToLocal(this.camLocal); // camera in root-local (Z-up) space, where the lamps live
     const rearIntensity = cfg.coronaIntensity * (braking ? 1 : REAR_RUNNING);
@@ -226,47 +193,6 @@ export class VehicleHeadlightSystem implements System {
   }
 }
 
-/**
- * Turn ONE tagged lamp material on/off; returns its lamp type (or null when it is not a lamp).
- *
- * Two mechanisms, both authentic: stock cars swap SA's shared lamp atlas to its lit copy
- * (`vehiclelights128` → `vehiclelightson128`, identical UVs, both in the generic vehicle.txd); and the lamp
- * GLOWS THROUGH ITS OWN TEXTURE via `emissiveMap` — an emissive-only lamp renders as a blank white slab
- * (stock `benson`), while the map keeps the reflector/bulb detail and the red tail hue. Custom models that
- * build the lamp glass as their own object (admiral W123) have nothing to swap; the emissive does it alone.
- */
-function applyLampState(mat: MeshStandardMaterial, on: boolean, intensity: number): 'head' | 'tail' | null {
-  const lightsOn = mat.userData.lightsOnMap as Texture | undefined;
-  const lightsOff = mat.userData.lightsOffMap as Texture | undefined;
-  if (lightsOn && lightsOff) {
-    mat.map = on ? lightsOn : lightsOff;
-    mat.needsUpdate = true;
-  }
-  const type = mat.userData.lightType as 'head' | 'tail' | undefined;
-  if (!type) {
-    return null;
-  }
-  if (!on) {
-    mat.emissive.setHex(0x000000);
-    mat.emissiveMap = null;
-    mat.emissiveIntensity = 1;
-    mat.needsUpdate = true;
-
-    return type;
-  }
-  if (mat.map) {
-    mat.emissiveMap = mat.map;
-    mat.emissive.setHex(0xffffff);
-  } else {
-    mat.emissiveMap = null;
-    mat.emissive.setHex(type === 'head' ? HEAD_COLOR : TAIL_COLOR);
-  }
-  mat.emissiveIntensity = (type === 'head' ? HEAD_EMISSIVE : TAIL_RUN_EMISSIVE) * intensity;
-  mat.needsUpdate = true;
-
-  return type;
-}
-
 /** A soft round corona (gentle glow, faint halo — NOT a solid disc) for the additive lamp flares. */
 function coronaTexture(): CanvasTexture {
   const size = 128;
@@ -286,23 +212,10 @@ function coronaTexture(): CanvasTexture {
 }
 
 /**
- * Glow (or clear) the car's tagged lamp glass. Head goes warm-white at full; tail goes red at its dim running
- * level (returned so the caller brightens it while braking). Off resets emissive. Returns the tail materials.
+ * This system is three-only (sprites, materials, three uniform arrays) and is the LAST vehicle system still
+ * to be ported (074/08 B5 step 5 — lamp state + coronas move onto the engine's own corona pass). Until then
+ * it reaches the render object through the three handle rather than through gameplay state.
  */
-function setLamps(vehicle: EnterableVehicle, on: boolean, intensity: number): MeshStandardMaterial[] {
-  const tails: MeshStandardMaterial[] = [];
-  vehicle.object.traverse((object) => {
-    const mesh = object as Mesh;
-    if (!mesh.isMesh) {
-      return;
-    }
-    for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-      const mat = material as MeshStandardMaterial;
-      if (applyLampState(mat, on, intensity) === 'tail') {
-        tails.push(mat);
-      }
-    }
-  });
-
-  return tails;
+function threeObject(vehicle: EnterableVehicle): Object3D {
+  return (vehicle.handle as ThreeVehicleHandle).object;
 }

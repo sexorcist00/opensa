@@ -1,3 +1,4 @@
+import type { ThreeVehicleHandle } from '@opensa/game/adapters/three-vehicle-handle';
 import type { CharacterPlacement } from '@opensa/game/character/orient-character';
 import type { Vec3 } from '@opensa/game/interfaces/world-adapter.interface';
 import type { SpawnedVehicle, VehiclePlacement } from '@opensa/game/vehicle/vehicle-lod.system';
@@ -1093,7 +1094,9 @@ function bootstrap(
       character.placePlayer,
       animationSystem,
       (azimuth) => game.setFollowAzimuth(azimuth),
-      (object) => game.setFollowTarget(object ?? player), // follow the car while seated, else the player
+      // Follow the car while seated, else the player. The handle owns the render object — gameplay hands us
+      // the vehicle, and the HOST resolves it to something three can track.
+      (vehicle) => game.setFollowTarget(vehicle ? (vehicle.handle as ThreeVehicleHandle).object : player),
       game.getConfig(),
       character.physics,
       character.playerCollider,
@@ -1184,7 +1187,7 @@ function bootstrap(
       anchor?: { facing: number; from: Vec3 },
     ): Promise<SpawnedVehicle> => {
       const { heading, model } = placement;
-      const { colliders, doors, halfExtents, handling, lod, object, parts, reflectiveMaterials, rig, seats, wheels } =
+      const { colliders, halfExtents, handle, handling, object, reflectiveMaterials, rig, seats, wheels } =
         await adapter.loadVehicle(model, placement.colour);
       const gap = halfExtents[1] + 2; // car half-length (COL bounds) + clearance, so it clears the player
       let position: Vec3 = anchor
@@ -1227,11 +1230,10 @@ function bootstrap(
       const vehicle = {
         body,
         controller,
-        doors,
         halfExtents,
+        handle,
         handling,
         heading,
-        object,
         position: live,
         rig,
         seatLocal,
@@ -1239,7 +1241,7 @@ function bootstrap(
       };
       vehiclePhysics.add(vehicle);
       enterVehicle.add(vehicle);
-      vehicleDamage.add({ body, object, parts });
+      vehicleDamage.add({ body, handle });
 
       return {
         despawn: (): void => {
@@ -1250,10 +1252,9 @@ function bootstrap(
           character.physics.removeBodies([body]);
           reflection.unregister(reflectiveMaterials);
           game.getStreamingRoot().remove(object);
-          disposeVehicle(object);
+          handle.dispose();
         },
-        lod,
-        object,
+        handle,
         position: live,
       };
     };
@@ -1521,20 +1522,6 @@ function createSkyView(sky: SkyPlugin, skyLite: null | SkyLiteSystem): SkyView {
     sunShadow: () => sky.getSunShadow(),
     sunSin: () => sky.getSunSin(),
   };
-}
-
-/** Free a despawned car's GPU buffers. Materials only — textures are shared (generic vehicle TXD). */
-function disposeVehicle(object: Object3D): void {
-  object.traverse((node) => {
-    const mesh = node as Partial<Mesh>;
-    mesh.geometry?.dispose();
-    const material = mesh.material;
-    if (Array.isArray(material)) {
-      material.forEach((entry) => entry.dispose());
-    } else {
-      material?.dispose();
-    }
-  });
 }
 
 /** After `game.init()` (the scene exists): add the rig's lights + tick it (and the fog) as systems. */

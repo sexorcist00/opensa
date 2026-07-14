@@ -9,8 +9,12 @@ Current state (end of 2026-07-13): milestones A and B1–B4 are DONE/PARKED — 
 command (~30 s bakeless incl. clouds+water; 202.6 s with shadow bakes) and streams everywhere; the PLAYER
 walks/runs/jumps in the real app with prod HUD/zones/pointer-lock and in-game benches (all 6 scenes
 vsync-120); Safari smoke ✅; the config-API parity module ships prod tunables to the engine; water v3
-PARKED as leftover (0.6.0 plan). NEXT: vehicles-in-game (entity handles) → C1 criteria run (needs the
-WebGL-prod `?bench=all` baseline for the side-by-side) → flip; C2 cleanup GATED on an explicit command.
+PARKED as leftover (0.6.0 plan).
+
+**NEXT — the ladder the user set on 2026-07-14:** B5 vehicles-in-game → B6 2dfx particles + textured
+coronas → B7 destruction objects → B7 animation objects → then the WebGL-prod `?bench=all` baseline and
+the C1 criteria run → flip. C2 cleanup stays GATED on an explicit command. B6/B7 are prod-PARITY gaps
+(prod renders all three classes), so they land BEFORE the C1 parity sign-off, not after it.
 
 ---
 
@@ -82,11 +86,45 @@ the WebGL path for movement/camera/streaming; benches from inside the GAME, not 
 ✅/PARKED 2026-07-13: water went v1→v2→v3 in one day (runtime flat → shore-field bake → TRUE-depth bake
 with surf/foam/swash; 12 field rounds logged in plan 06) and is PARKED as a leftover at v3 — the look
 ceiling is the 2005 sprite textures; resume = docs/ideas/0.6.0/plans/02-water-realism (authored textures
-first). Coronas textured + 2dfx particles (row 13 tails) remain open here.
+first). Coronas textured + 2dfx particles (row 13 tails) LEFT B4 UNFINISHED — they are now **B6** below
+(the tails were nearly lost when B4 closed; that is why they get their own step).
 The game needs a sea surface; v1 = flat animated surface with the sky-shared fog (the "real waves" rework
-stays the 0.5.0 idea). Textured corona sprites + coronamoon land with the particle.txd path; 2dfx particles
-(factory smoke) close row 13.
-**Done:** coastline looks intentional; night coronas textured; ledger 06 = 14/14 (some rows v1-marked).
+stays the 0.5.0 idea).
+**Done:** coastline looks intentional (water v3 accepted as a leftover).
+
+**B5. Vehicles in the game** — [10](10-integration-flip.md) task "entity-handle adapter" + [08](08-dynamics.md) · size M
+The last big gameplay seam: prod's vehicle logic still holds three mesh refs. Replace them with engine
+entity handles; the B2 fixture already renders parts/wheels/4-colour carcols/lamp day-night swap, and the
+B2d light pool feeds headlights. Per plan 08's recorded user specs: per-vehicle lamp state (brake glow on
+braking), headlight cone v2, vehicle LOD (`chassis_vlo` swap at range, lamp submeshes → corona-only).
+**Done:** drive around Los Santos with `?engine=opensa`; no three types left in the vehicle logic path.
+
+**B6. 2dfx particles + textured coronas** — [06](06-world-effects-parity.md) row 13 tails · size M
+A REAL flip-parity gap, not a nice-to-have: prod renders these (plan [044](../044-world-effects.md),
+`renderware/src/three/build-particles.ts`, `graphics.effects` config with a master toggle) and the map
+carries **113 type-1 entries** — 20 `WS_factorysmoke` columns, 8 fires, 6 fountains, vents, insects,
+waterfall mist. Our side is empty from the CONVERTER up: `weld.ts#collectLights` extracts type-0 (corona)
+anchors ONLY, so the pak holds no particle data at all. Work = converter (type-1 anchors + `effects.fxp`
+params — the text parser exists at `renderware/src/parsers/text/fxp.parser.ts` — into the `.oscell` light
+table) + engine (instanced billboard pass, shares the corona pass; emitter simulation). Textured corona
+sprites (`particle.txd` coronastar/coronamoon — the moon disc is still procedural) ride the same path.
+NOT to be confused with `docs/ideas/0.4.0/.../a3-2dfx-particle-emitters-lods.md` (emitters on LODs for the
+REAL SA game via the ASI — a different target).
+**Done:** chimneys smoke and fountains run in `?engine=opensa`; ledger 06 row 13 closed → 14/14.
+
+**B7. Destruction objects, then animation objects** — [08](08-dynamics.md) · size M each
+Two more prod-parity object classes the own engine has never had, in the user's order:
+
+- **Destruction (breakable) objects** — prod: `renderware/src/three/breakable.ts` + `build-debris.ts` +
+  the `object.dat` parser (damage/debris data). Engine: breakables must leave the static cell bundle
+  (a bundle is immutable — the row-15 lesson) and live as objectTable/rigid entities that can swap to a
+  damaged model and spawn debris on a physics impulse.
+- **Animation objects** — the converter TODAY welds IDE-anim defs at BIND POSE and only counts them
+  (`weld.ts:153`, `animatedStatic` = **64 instances on the full map**): garage doors, windmills and
+  friends stand frozen. Work = carry the anim clip + frame chain into the format and drive them with the
+  B1 IFP sampler (the rigid-entity path already flattens frame hierarchies). Prod also ships UV-scroll
+  animation (`renderware/src/three/uv-anim.ts`) — inventory it here.
+  **Done:** breakables break, animated statics move; the `animatedStatic` counter stops meaning "frozen".
 
 ## Milestone C — the flip and the endgame
 

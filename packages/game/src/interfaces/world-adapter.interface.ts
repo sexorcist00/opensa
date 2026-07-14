@@ -1,8 +1,7 @@
 import type { AnimationClip, Bone, Matrix4, MeshStandardMaterial, Object3D, Skeleton } from 'three';
 
 import type { CellCoord } from '../streaming/grid';
-import type { VehicleDoor } from '../vehicle/vehicle-door';
-import type { VehiclePart } from '../vehicle/vehicle-part';
+import type { VehicleHandle } from '../vehicle/vehicle-handle';
 import type { VehicleRig } from '../vehicle/vehicle-rig';
 import type { ModelColliders } from './collider.interface';
 
@@ -48,17 +47,14 @@ export interface VehicleModel {
   /** Collision in model space (`transforms` empty — the caller sets the placement). The convex
    * hull of its vertices is the dynamic chassis collider; the full COL is kept for damage. */
   colliders: ModelColliders | null;
-  /** Swinging doors (open/close about the hinge). */
-  doors: VehicleDoor[];
   /** Half-extents `[hx, hy, hz]` (vehicle space) from the collision bounds (door/seat routing). */
   halfExtents: [number, number, number];
+  /** The renderer-agnostic render handle (B5): doors, wheels, damage parts, LOD bands all live behind it. */
+  handle: VehicleHandle;
   /** Driving feel from handling.cfg. */
   handling: VehicleHandling;
-  /** Low-detail LOD group (hidden `*_vlo` meshes under `object`), shown at distance, or null. */
-  lod: null | Object3D;
+  /** The render root — the HOST wires it into the scene; gameplay drives the car through `handle`. */
   object: Object3D;
-  /** Damageable body parts (`_ok`/`_dam` panels + doors) for the collision-damage system. */
-  parts: VehiclePart[];
   /** Env-map-reflective materials (for the vehicle-reflection plugin to apply the active preset). */
   reflectiveMaterials: MeshStandardMaterial[];
   /** Animatable wheels (spin/steer); register with the vehicle system. */

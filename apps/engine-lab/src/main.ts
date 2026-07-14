@@ -215,12 +215,14 @@ async function main(): Promise<void> {
     pedHost = await loadPedProbe(engine, pedPosition);
     zoom = Math.min(1, 14 / orbitRadius);
   }
-  // Rigid-entity probe (074/08 B2c): `?vehicle=1` drives the fixture vehicle in a circle around the focus.
+  // Rigid-entity probe (074/08 B2c → B5): `?vehicle=N` drives N instances of the fixture model in a convoy
+  // around the focus (N > 1 exercises the multi-instance pool: shared geometry, per-instance matrices).
   let vehicleHost: Awaited<ReturnType<typeof loadVehicleProbe>> | null = null;
   let vehicleMs = 0;
-  if (params.get('vehicle') === '1') {
+  const vehicleCount = Number(params.get('vehicle') ?? 0) || 0;
+  if (vehicleCount > 0) {
     const vehicleY = Number(params.get('pedy') ?? focus[1]) || focus[1];
-    vehicleHost = await loadVehicleProbe(engine, [focus[0], vehicleY, focus[2]]);
+    vehicleHost = await loadVehicleProbe(engine, [focus[0], vehicleY, focus[2]], vehicleCount);
     zoom = Math.min(zoom, 55 / orbitRadius);
   }
   let heightFactor = 0.9;

@@ -8,6 +8,7 @@ export * from './collision';
 
 // Framework-agnostic map resolution + region instancing
 export * from './map';
+export { frameWorldTransform, mulMat3, rotationToQuat } from './mesh/frame-transform';
 export {
   hasPreparedAtomics,
   prepareClumpAtomics,
@@ -22,12 +23,12 @@ export { parseDff } from './parsers/binary/dff';
 export { gxtKeyHash, parseGxt } from './parsers/binary/gxt';
 export { type IfpAnimation, type IfpBone, type IfpKeyframe, parseIfp } from './parsers/binary/ifp';
 export { parseTxd } from './parsers/binary/txd';
-
 export * from './parsers/binary/types';
-
 export * from './parsers/text';
+
 // three.js adapter layer
 export { updateAnimatedObjects } from './three/animated-objects';
+
 export {
   breakableFromGeometry,
   type BreakableInstance,
@@ -87,6 +88,7 @@ export { buildTextureMap, setTextureDataFreeing, type TextureDictionary } from '
 export {
   buildVehicle,
   type BuiltDoor,
+  type BuiltPart,
   type BuiltVehicle,
   type BuiltWheel,
   type VehicleOptions,
@@ -115,3 +117,7 @@ export {
   worldTintUniform,
 } from './three/world-material';
 export { applyWorldWindowGlowTsl, buildWorldMaterialTsl, syncWorldTsl } from './three/world-material-tsl';
+// Renderer-agnostic vehicle model (074/08 B5) — the own engine's spawn-time builder.
+export { buildVehicleModel } from './vehicle/build-vehicle-model';
+export { VehicleTextures } from './vehicle/textures';
+export * from './vehicle/types';

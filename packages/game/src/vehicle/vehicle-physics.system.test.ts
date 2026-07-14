@@ -1,4 +1,4 @@
-import { Object3D, Quaternion, Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Vec3 } from '../interfaces/world-adapter.interface';
@@ -6,6 +6,7 @@ import type { PhysicsWorld } from '../physics/physics-world';
 import type { EnterableVehicle } from './enter-vehicle.system';
 import type { VehicleRig } from './vehicle-rig';
 
+import { FakeVehicleHandle } from './vehicle-handle.fake';
 import { VehiclePhysicsSystem } from './vehicle-physics.system';
 
 interface Transform {
@@ -36,8 +37,8 @@ function fakeRig(): { rig: VehicleRig; speed: number } {
 function vehicle(rig: VehicleRig, position: Vec3 = [0, 0, 0]): EnterableVehicle {
   return {
     body: CAR_BODY,
+    handle: new FakeVehicleHandle(),
     heading: 0,
-    object: new Object3D(),
     position: [...position],
     rig,
   } as unknown as EnterableVehicle;
@@ -85,13 +86,13 @@ describe('VehiclePhysicsSystem', () => {
   });
 
   describe('positive cases', () => {
-    it('copies the body transform onto the car and its object', () => {
+    it('copies the body transform onto the car and pushes it through the handle', () => {
       const system = new VehiclePhysicsSystem(fakePhysics({ position: [10, 20, 30], quaternion: yaw(0) }));
       const car = vehicle(rig.rig);
       system.add(car);
       system.update(1);
       expect(car.position).toEqual([10, 20, 30]);
-      expect(car.object.position.toArray()).toEqual([10, 20, 30]);
+      expect((car.handle as FakeVehicleHandle).position).toEqual([10, 20, 30]);
     });
 
     it('derives heading about Z from the body forward (+Y)', () => {
