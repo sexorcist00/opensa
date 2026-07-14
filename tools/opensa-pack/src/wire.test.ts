@@ -57,6 +57,7 @@ function sampleCell(index16: boolean): Oscell {
     lights: [],
     objects: [],
     origin: [0, 0, 0],
+    particles: [],
     vertexCount,
     vertexData,
   };

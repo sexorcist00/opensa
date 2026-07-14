@@ -73,28 +73,23 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
 - **The alpha-edge groundwork**: dilation BFS + DXT software decode exist from the
   [open issue](../../open-issues/alpha-edge.md).
 
-## Handoff status (2026-07-13 — resume from here)
+## Handoff status (2026-07-14 — resume from here)
 
-**Milestones A + B1–B3 are DONE (2026-07-13, all field-confirmed):** meshopt wire (full-LS 311 MB, gate
-closed) · bake pool + chunked welding (532 s / 5.2 GB; bakes now OPT-IN via `--bakes`, quarter-of-cores
-pool) · FIRST FULL-MAP pak (71 s bakeless, `?src=pak-map`, whole-map `?bench=map` row committed) · B1
-skinning probe (own IFP sampler — the chain's riskiest unknown retired) · B2 rigid entities (vehicle with
-wheels/paint/lamp texture twins + the 06 row 7 light pool) · B3 the GAME boots on the engine
-(`?engine=opensa`: reused physics/collision/input, ped-probe player, data-driven feet). **Row 15 clouds +
-sun/sky/godrays CLOSED (2026-07-13, 4 field rounds, user verdict "an order of magnitude better"):** cloud
-dome with weather crossfade, timecyc sunCore/sunCorona disc, ocean-horizon sun/moon set, real moon arc,
-global star fade, and plan-09 stage 1 pulled forward (16f scene target + godrays post pass) — full log in
-plan 06. **Late 2026-07-13 batch:** Safari smoke ✅ (26.5.2 boots+streams, BC+timestamps present, GPU
-2–4 ms) · full-map --bakes convert 202.6 s (pak-map baked; the shadows-invisible mystery is PARKED — see
-plan 14 note) · config-API parity DONE (shared engine-environment-driver, litFade-dynamic arcs) ·
-zones/HUD + pointer lock + in-game benches wired (B3 FULLY CLOSED; first in-game sweep: all 6 scenes
-vsync-120, GPU 1.1–2.5 ms — vanilla map, effects missing, see series B3·ingame caveats) · WATER v3
-shipped then PARKED as leftover (baked depth field + oscillating foam front + swash surge; the look
-ceiling is the 2005 sprite textures — resume via docs/ideas/0.6.0/plans/02-water-realism). NEXT:
-**B5 vehicles-in-game is DONE + field-confirmed (2026-07-14)** — cars drive in `?engine=opensa`. Next per
-priority.md: B6 2dfx particles + textured coronas → B7 destruction/animation objects → the WebGL-prod
-`?bench=all` baseline, then the C1 criteria run; C2 cleanup is GATED on a separate
-explicit user command. The 2026-07-12 snapshot below is kept for history.
+- **B5 vehicles-in-game — DONE, field ✅.** Vehicle gameplay talks to a renderer-agnostic `VehicleHandle`
+  (`game/src/vehicle/vehicle-handle.ts`) with a three and an engine adapter; cars drive, take damage, light
+  their lamps and stream LODs under `?engine=opensa`. Ledger: [08](08-dynamics.md).
+- **B5r vehicle reflections — v1 shipped, REJECTED in the field, deep rework parked in
+  [16](16-vehicle-paint.md).** The engine has no tonemapper and no prefiltered cube probe; prod has both,
+  which is why prod's paint looked better. Structural, not a tuning problem. The user wants this redone
+  ("very much needed") once the parity ladder is finished — do NOT retry it by tweaking constants.
+- **B6 2dfx particles + textured coronas — DONE, field ✅.** Particles ride `.oscell` minor 2, bake through
+  the shared `renderware/src/fx/bake-fx.ts`, and simulate in the vertex shader; coronas and the moon are
+  textured from `particle.txd`. Ledger + the five field bugs: [06](06-world-effects-parity.md) row 13.
+
+NEXT, in the user's order: **B6.5 map-lighting bugs** (the world-lighting oddities that surfaced while
+field-testing the headlights) → B7 destruction objects → B7 animation objects → the WebGL-prod `?bench=all`
+baseline → the C1 criteria run → flip. C2 cleanup (deleting the three path) stays GATED on an explicit
+command. See [priority.md](priority.md).
 
 ## Handoff status (2026-07-12, end of the Fable session — history)
 

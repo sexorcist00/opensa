@@ -88,6 +88,10 @@ const MANIFEST: readonly Fixture[] = [
   extract('lodroadscoast02.dff', 'dff/lod-template/lodroadscoast02.dff'),
   extract('esc_step.dff', 'dff/escalator/esc_step.dff'),
   extract('escl_la.dff', 'dff/escalator/escl_la.dff'),
+  // The SF fountain (IDE 9833, txd fountain_sfw): a stock model carrying THREE 2dfx type-1 particle anchors
+  // (`water_fountain`) — the converter's only real-asset case for welding emitters into a cell (074/06 row 13).
+  extract('fountain_sfw.dff', 'dff/particles/fountain_sfw.dff'),
+  extract('fountain_sfw.txd', 'dff/particles/fountain_sfw.txd'),
   extract('ws_floodbeams.dff', 'dff/floodbeams/ws_floodbeams.dff'),
   extract('ce_grndpalcst05.dff', 'dff/frame-offset-ignored/ce_grndpalcst05.dff'),
   extract('skullpillar01_lvs.dff', 'dff/particle/skullpillar01_lvs.dff'),

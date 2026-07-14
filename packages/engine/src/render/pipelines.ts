@@ -20,6 +20,8 @@ export const SCENE_FORMAT: GPUTextureFormat = 'rgba16float';
 
 export type PipelineId =
   | 'corona'
+  | 'particle-add'
+  | 'particle-blend'
   | 'ped'
   | 'post'
   | 'rigid-blend'
@@ -43,6 +45,8 @@ export interface PipelineSet {
   get(id: PipelineId): GPURenderPipeline;
   /** group(2): texture array + sampler. */
   materialLayout: GPUBindGroupLayout;
+  /** group(1) of the particle pipelines: system params (storage) + the FX sprite ARRAY + sampler (B6). */
+  particleLayout: GPUBindGroupLayout;
   /** group(1) of the ped pipeline: matrix storage (model + bone palette) + texture + sampler (074/08 B1). */
   pedLayout: GPUBindGroupLayout;
   /** group(0) of the post pipeline: post uniform + scene texture + sampler (godrays, 074/09 stage 1). */
@@ -75,6 +79,10 @@ export function compileAll(
       // Two slots — weather changes write the idle one and camera.w crossfades between them.
       { binding: 4, texture: {}, visibility: GPUShaderStage.FRAGMENT },
       { binding: 5, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      // SA corona sprites (particle.txd): layer 0 = coronastar (lamps/headlights), layer 1 = coronamoon.
+      // Created ONCE at init and written in place — the frame bind group is recorded inside cell bundles and
+      // is immutable (the row-15 lesson: never destroy or rebuild anything a bundle references).
+      { binding: 6, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
     ],
     label: 'frame',
   });
@@ -271,6 +279,64 @@ export function compileAll(
     }),
   );
   // 2dfx coronas (074/06 row 13): instanced additive billboards, depth READ (occluders hide them).
+  // 2dfx particles (B6): instanced camera-facing sprites whose whole lifecycle runs in the vertex shader.
+  // Two blend variants — smoke ALPHA-blends, fire/sparks add — over one shared sprite array.
+  const particleLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, buffer: { type: 'read-only-storage' }, visibility: GPUShaderStage.VERTEX },
+      { binding: 1, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'particle',
+  });
+  const particleModule = device.createShaderModule({ code: resolveShader('particle'), label: 'particle' });
+  const particleBuffers: GPUVertexBufferLayout[] = [
+    { arrayStride: 8, attributes: [{ format: 'float32x2', offset: 0, shaderLocation: 0 }] },
+    {
+      arrayStride: 36,
+      attributes: [
+        { format: 'float32x3', offset: 0, shaderLocation: 1 }, // spawn
+        { format: 'float32x3', offset: 12, shaderLocation: 2 }, // velocity
+        { format: 'float32x3', offset: 24, shaderLocation: 3 }, // life, phase, system
+      ],
+      stepMode: 'instance',
+    },
+  ];
+  for (const variant of [
+    { add: true, id: 'particle-add' as const },
+    { add: false, id: 'particle-blend' as const },
+  ]) {
+    pipelines.set(
+      variant.id,
+      device.createRenderPipeline({
+        depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
+        fragment: {
+          entryPoint: 'fsParticle',
+          module: particleModule,
+          targets: [
+            {
+              blend: variant.add
+                ? {
+                    alpha: { dstFactor: 'one', operation: 'add', srcFactor: 'one' },
+                    color: { dstFactor: 'one', operation: 'add', srcFactor: 'one' },
+                  }
+                : premultBlend,
+              format: colorFormat,
+            },
+          ],
+        },
+        label: variant.id,
+        layout: device.createPipelineLayout({
+          bindGroupLayouts: [frameLayout, particleLayout],
+          label: 'particle',
+        }),
+        multisample: { count: MSAA_SAMPLES },
+        primitive: { topology: 'triangle-list' },
+        vertex: { buffers: particleBuffers, entryPoint: 'vsParticle', module: particleModule },
+      }),
+    );
+  }
+
   const coronaModule = device.createShaderModule({ code: resolveShader('corona'), label: 'corona' });
   pipelines.set(
     'corona',
@@ -388,6 +454,7 @@ export function compileAll(
       return pipeline;
     },
     materialLayout,
+    particleLayout,
     pedLayout,
     postLayout,
     rigidLayout,

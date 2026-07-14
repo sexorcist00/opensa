@@ -14,11 +14,13 @@ export { type ResidencyCategory, Resources } from './core/resources';
 export { GpuTimers } from './debug/gpu-timers';
 export {
   type CameraState,
+  type CoronaSprites,
   type DynamicCorona,
   type DynamicLight,
   Engine,
   type EngineStats,
   type Environment,
+  type ParticleUpload,
   type PedProbe,
   type PedProbeInit,
   type VehicleInstance,

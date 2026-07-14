@@ -55,10 +55,12 @@ export interface ConvertReport {
   ao: (BakeAoReport & { ms: number }) | null;
   cells: { groups: number; indices: number; kbytes: number; key: string; vertices: number }[];
   pakBytes: number;
+  /** ObjectTable entries across cells (074/06 row 9: timed windows / props). */
+  /** 2dfx PARTICLE emitters welded into the pak (B6). */
+  particles: number;
   skippedTimed: number;
   sunVis: (BakeSunVisReport & { ms: number }) | null;
   textures: TexturePlanner['report'] & { arrays: number };
-  /** ObjectTable entries across cells (074/06 row 9: timed windows / props). */
   timedObjects: number;
 }
 
@@ -83,6 +85,7 @@ export async function convertDistrict(
     ao: null,
     cells: [],
     pakBytes: 0,
+    particles: 0,
     skippedTimed: 0,
     sunVis: null,
     textures: { arrays: 0, colors: 0, dedup: 0, opaquePass: 0, processed: 0 },
@@ -194,6 +197,7 @@ function accumulate(report: ConvertReport, key: string, bytes: number, stats: We
   });
   report.animatedStatic += stats.animatedStatic;
   report.skippedTimed += stats.skippedTimed;
+  report.particles += stats.particles;
   report.timedObjects += stats.timedObjects;
 }
 

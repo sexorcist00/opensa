@@ -44,10 +44,11 @@ fn vsCorona(in: CoronaIn) -> CoronaOut {
 
 @fragment
 fn fsCorona(in: CoronaOut) -> @location(0) vec4f {
-  // Soft radial glow: bright core + wide falloff; premultiplied for the additive pipeline.
-  let r = length(in.offset);
-  let glow = pow(max(1.0 - r, 0.0), 2.2) + pow(max(1.0 - r, 0.0), 8.0) * 0.7;
-  return vec4f(in.color.rgb * (glow * in.color.a), 0.0);
+  // The real SA coronastar sprite (particle.txd) — it has the cross flare a procedural blob cannot fake.
+  // The host normalises the alpha (SA ships these shape-in-RGB with alpha pinned at 255), so trust it here.
+  let uv = in.offset * 0.5 + vec2f(0.5); // the quad spans [-1, 1] — see the particle shader's note
+  let texel = textureSample(coronaSprites, skyLutSampler, uv, 0u);
+  return vec4f(in.color.rgb * texel.rgb * (texel.a * in.color.a), 0.0);
 }
 `,
   frame: /* wgsl */ `
@@ -85,7 +86,7 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, spare, reflectionStrength (B5r global knob), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -98,10 +99,17 @@ struct Frame {
 // horizon band barely carries them).
 @group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
 @group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
+@group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 
 // Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
 // fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
 // Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
+// The moon's angular radius as a multiple of the sun's (they are famously close in the real sky; SA draws a
+// bigger, friendlier moon). MOON_BODY_GAIN keeps the lit disc HDR so it feeds the bloom/godray pass.
+const MOON_DISC_SCALE = 3.2;
+const MOON_BODY_GAIN = 10.0;
+
 fn skyBaseFor(dir: vec3f) -> vec3f {
   let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
   let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
@@ -124,10 +132,7 @@ fn skyCelestialFor(dir: vec3f) -> vec3f {
   let corona = exp(-ang / (coreR * 2.2)) * 2.6;
   let glow = exp(-ang / (coreR * 8.0)) * 0.5;
   let sun = frame.sunCore.rgb * disc + frame.sunCorona.rgb * (corona + glow);
-  // Moon disc + faint halo (074/06 row 6): moonColor is BLACK by day, so this whole term dies with it.
-  let moonDot = max(dot(dir, frame.moonDir.xyz), 0.0);
-  // Wide soft halo (pow 96) marks the spot in the horizon band; the disc itself stays small and bright.
-  let moon = frame.moonColor.rgb * (smoothstep(0.9985, 0.9993, moonDot) * 14.0 + pow(moonDot, 96.0) * 2.2);
+  let moon = moonFor(dir);
   // The sea-horizon line CLIPS the discs (field: the sun used to just fade out at ground level): drivers
   // now let the arcs sink below y=0, and pixels under the horizon drop the disc — the sun/moon visibly
   // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
@@ -159,6 +164,44 @@ fn cloudLayerFor(dir: vec3f) -> vec4f {
   let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
   let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
   return vec4f(cloud.rgb * brightness, alpha);
+}
+
+/**
+ * The MOON (074/06 row 6, B6): the real SA coronamoon sprite plus a PHASE.
+ *
+ * Vanilla SA fakes its phases by cropping the sprite, which gives a sliced disc rather than a crescent. We
+ * light a sphere instead: the moon's surface normal is reconstructed from the disc coordinates, and the lit
+ * fraction follows a phase angle (params4.y, advanced by the host with the in-game days). That yields a real
+ * terminator — waxing crescent through full and back — for the cost of a dot product.
+ *
+ * moonColor is BLACK by day, so this whole term dies with it.
+ */
+fn moonFor(dir: vec3f) -> vec3f {
+  let moonDot = dot(dir, frame.moonDir.xyz);
+  // Local disc frame: where in the moon's face this view direction lands, in [-1, 1].
+  let right = normalize(cross(vec3f(0.0, 1.0, 0.0), frame.moonDir.xyz));
+  let up = cross(frame.moonDir.xyz, right);
+  let radius = max(frame.sunCore.w * MOON_DISC_SCALE, 1e-4);
+  let disc = vec2f(dot(dir, right), dot(dir, up)) / radius;
+  let r = length(disc);
+
+  // The sprite across the disc: rgb carries the CRATERS, alpha the round shape (normalised by the host).
+  let uv = disc * 0.5 + vec2f(0.5);
+  let texel = textureSample(coronaSprites, skyLutSampler, uv, 1u);
+  let face = texel.a;
+
+  // Phase: rebuild the surface normal of the sphere at this point and light it from the phase direction.
+  let z = sqrt(max(0.0, 1.0 - min(r * r, 1.0)));
+  let normal = normalize(right * disc.x + up * disc.y + frame.moonDir.xyz * z);
+  let angle = frame.params4.y * 6.2831853;
+  let sunward = normalize(right * sin(angle) + frame.moonDir.xyz * (-cos(angle)));
+  // A soft terminator: earthshine keeps the dark limb faintly visible, as it is in life.
+  let lit = smoothstep(-0.08, 0.12, dot(normal, sunward)) * 0.92 + 0.08;
+
+  let body = texel.rgb * (face * lit * step(r, 1.0) * MOON_BODY_GAIN);
+  // A wide soft halo marks the moon's place in the horizon band even when the disc is a thin crescent.
+  let halo = pow(max(moonDot, 0.0), 96.0) * 2.2;
+  return frame.moonColor.rgb * (body + vec3f(halo));
 }
 
 // The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
@@ -226,6 +269,95 @@ fn localLightDynamic(world: vec3f, normal: vec3f) -> vec3f {
 /** Static 2dfx half only — the world's PER-VERTEX term. */
 fn localLightStatic(world: vec3f, normal: vec3f) -> vec3f {
   return localLightRange(world, normal, u32(frame.params4.x), u32(frame.params3.x));
+}
+`,
+  particle: /* wgsl */ `
+#include <frame>
+
+// 2dfx PARTICLES (074/06 row 13, B6). The FX system's keyframed tracks are BAKED by the host into a small
+// per-system record; the whole lifecycle then loops in the VERTEX shader, so a hundred smoke plumes cost
+// zero CPU per frame. One draw per blend mode for the entire map (the system index rides per instance).
+//
+// A particle's life: it is born at its emitter, is thrown by its velocity, is pulled by the system's force
+// (gravity for sparks, buoyancy for smoke), and grows/fades along piecewise-linear envelopes sampled at
+// age 0 / 0.5 / 1 — exactly the shape the prod path bakes out of effects.fxp.
+struct ParticleSystem {
+  // xyz = force (gravity/buoyancy), w = texture layer.
+  force: vec4f,
+  // Size envelope at age 0 / 0.5 / 1, w = draw distance.
+  size: vec4f,
+  color0: vec4f, // rgb at age 0, a = alpha at age 0
+  color1: vec4f, // rgb at age 0.5, a = alpha at 0.5
+  color2: vec4f, // rgb at age 1, a = alpha at 1
+};
+@group(1) @binding(0) var<storage, read> systems: array<ParticleSystem>;
+@group(1) @binding(1) var fxTexture: texture_2d_array<f32>;
+@group(1) @binding(2) var fxSampler: sampler;
+
+struct ParticleIn {
+  @location(0) corner: vec2f,
+  @location(1) spawn: vec3f,
+  @location(2) velocity: vec3f,
+  // x = lifetime seconds, y = phase offset (so a plume is a continuous stream, not a pulse), z = system.
+  @location(3) params: vec3f,
+};
+
+struct ParticleOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) color: vec4f,
+  @location(2) @interpolate(flat) layer: u32,
+};
+
+/** Piecewise-linear envelope through three keys at age 0 / 0.5 / 1. */
+fn envelope3(k0: f32, k1: f32, k2: f32, age: f32) -> f32 {
+  return select(mix(k1, k2, (age - 0.5) * 2.0), mix(k0, k1, age * 2.0), age < 0.5);
+}
+
+fn envelope3v(k0: vec3f, k1: vec3f, k2: vec3f, age: f32) -> vec3f {
+  return select(mix(k1, k2, (age - 0.5) * 2.0), mix(k0, k1, age * 2.0), age < 0.5);
+}
+
+@vertex
+fn vsParticle(in: ParticleIn) -> ParticleOut {
+  let system = systems[u32(in.params.z)];
+  let life = max(in.params.x, 0.01);
+  // The phase staggers the stream: every particle of a plume is at a different point of the SAME loop.
+  let age = fract((frame.params2.z + in.params.y) / life);
+  let t = age * life;
+  let world = in.spawn + in.velocity * t + system.force.xyz * (0.5 * t * t);
+  let size = envelope3(system.size.x, system.size.y, system.size.z, age);
+  let rgb = envelope3v(system.color0.rgb, system.color1.rgb, system.color2.rgb, age);
+  let alpha = envelope3(system.color0.a, system.color1.a, system.color2.a, age);
+
+  // Camera-facing quad, like the coronas. The quad spans [-1, 1], and the authored size is a DIAMETER (prod
+  // projects it as a point-sprite width) — so the half-extent is size*0.5. Scaling by the full size makes
+  // every particle twice as wide as authored, and a fire turns into a soft glowing cloud.
+  let toEye = normalize(frame.camera.xyz - world);
+  let right = normalize(cross(vec3f(0.0, 1.0, 0.0), toEye));
+  let up = cross(toEye, right);
+  let corner = world + (right * in.corner.x + up * in.corner.y) * (size * 0.5);
+
+  var out: ParticleOut;
+  out.clip = frame.viewProj * vec4f(corner, 1.0);
+  // The unit quad spans [-1, 1], so the UV is corner*0.5 + 0.5. Using corner + 0.5 sends it to [-0.5, 1.5],
+  // and the clamp-to-edge sampler then smears the sprite's border texels into a SQUARE of solid colour.
+  out.uv = in.corner * 0.5 + vec2f(0.5);
+  // Distance cull: collapse the quad rather than branch (a degenerate triangle costs nothing).
+  let dist = length(world - frame.camera.xyz);
+  let visible = f32(dist < system.size.w && size > 0.0);
+  out.clip = select(vec4f(0.0, 0.0, -1.0, 1.0), out.clip, visible > 0.5);
+  out.color = vec4f(rgb, alpha * visible);
+  out.layer = u32(system.force.w);
+  return out;
+}
+
+@fragment
+fn fsParticle(in: ParticleOut) -> @location(0) vec4f {
+  let texel = textureSample(fxTexture, fxSampler, in.uv, in.layer);
+  let a = texel.a * in.color.a;
+  // PREMULTIPLIED: one pipeline blends (one, 1-src-a) for smoke, the other (one, one) for fire/sparks.
+  return vec4f(texel.rgb * in.color.rgb * a, a);
 }
 `,
   ped: /* wgsl */ `

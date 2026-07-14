@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { parsePedDefs } from './ped-defs.parser';
@@ -28,6 +29,21 @@ describe('parsePedDefs', () => {
       expect(defs.get('bmypol1')).toEqual({ id: 66, model: 'BMYPOL1', txd: 'BMYpol1' });
       expect(defs.get('cesar')).toEqual({ id: 9, model: 'CESAR', txd: 'CESAR' });
       expect(defs.has('tree')).toBe(false); // objs rows are ignored
+    });
+  });
+});
+
+const STOCK = 'tests/original/data/peds.ide';
+
+describe.skipIf(!existsSync(STOCK))('parsePedDefs (real stock peds.ide)', () => {
+  describe('positive cases', () => {
+    it('reads the whole stock roster, including the player model the character tests boot with', () => {
+      const defs = parsePedDefs(readFileSync(STOCK, 'utf8'));
+
+      expect(defs.size).toBeGreaterThan(100);
+      // bmypol1 is the ped fixture the character path loads — the id must agree with the DFF it streams.
+      expect(defs.get('bmypol1')?.id).toBe(66);
+      expect([...defs.values()].every((def) => Number.isInteger(def.id) && def.model.length > 0)).toBe(true);
     });
   });
 });

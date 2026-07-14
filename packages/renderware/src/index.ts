@@ -6,6 +6,17 @@ export * from './archive';
 // Collision (COL) index over the archive
 export * from './collision';
 
+// 2dfx particles (074/06 row 13, B6): the shared FX baking both renderers run.
+export {
+  bakeFxInstances,
+  bakeFxSystem,
+  FX_INSTANCE_STRIDE,
+  FX_SYSTEM_STRIDE,
+  type FxBakedEmitter,
+  type FxPlacement,
+  writeFxSystemRecord,
+} from './fx/bake-fx';
+export { normalizeSpriteAlpha } from './fx/sprites';
 // Framework-agnostic map resolution + region instancing
 export * from './map';
 export { frameWorldTransform, mulMat3, rotationToQuat } from './mesh/frame-transform';

@@ -13,6 +13,9 @@ import { weldCell } from './weld';
 // Real committed fixtures (same case build-region tests use).
 const DFF = 'tests/custom/proper-fixes-models/trafficlight1.dff';
 const TXD = 'tests/original/dff/trafficlight-backface-culling/dyntraffic.txd';
+// The SF fountain (IDE 9833): a stock model with THREE 2dfx type-1 particle anchors (`water_fountain`).
+const FOUNTAIN_DFF = 'tests/original/dff/particles/fountain_sfw.dff';
+const FOUNTAIN_TXD = 'tests/original/dff/particles/fountain_sfw.txd';
 
 function fixtureCell(count: number): GridCell {
   const hd = Array.from({ length: count }, (_, index) => ({
@@ -63,6 +66,97 @@ function fixtureFs(): AssetFileSystem {
     has: (name) => archive.get(name) !== null,
   };
 }
+
+/** One fountain at a known spot, so the welded anchors can be checked against the instance. */
+function fountainCell(): GridCell {
+  return {
+    cx: 0,
+    cy: 0,
+    hd: [
+      {
+        id: 9833,
+        interior: 0,
+        lod: -1,
+        modelName: 'fountain_sfw',
+        position: [-1900, 900, 20],
+        rotation: [0, 0, 0, 1],
+      },
+    ],
+    lod: [],
+  };
+}
+
+function fountainDefs(): MapDefinitions {
+  const catalog = new Map<number, IdeObjectDef>();
+  catalog.set(9833, {
+    drawDistance: 40,
+    flags: 0,
+    id: 9833,
+    modelName: 'fountain_sfw',
+    txdName: 'fountain_sfw',
+  });
+
+  return {
+    carGenerators: [],
+    catalog,
+    imgDirs: [],
+    instances: [],
+    timedCatalog: new Map<number, IdeObjectDef>(),
+    txdParents: new Map<string, string>(),
+  };
+}
+
+function fountainFs(): AssetFileSystem {
+  const archive = openArchive(
+    buildArchiveBuffer([
+      { data: readFileSync(FOUNTAIN_DFF), name: 'fountain_sfw.dff' },
+      { data: readFileSync(FOUNTAIN_TXD), name: 'fountain_sfw.txd' },
+    ]),
+  );
+
+  return {
+    get: (name: string) => archive.get(name.split('/').pop() ?? name),
+    getText: () => null,
+    has: (name: string) => archive.get(name.split('/').pop() ?? name) !== null,
+  } as unknown as AssetFileSystem;
+}
+
+describe('weldCell 2dfx particles', () => {
+  describe('negative cases', () => {
+    it('welds NO particles into a LOD cell — the anchors would double every emitter', () => {
+      const fs = fountainFs();
+      const cell: GridCell = { ...fountainCell(), hd: [], lod: fountainCell().hd };
+
+      const welded = weldCell(fs, fountainDefs(), cell, true, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      expect(welded!.stats.particles).toBe(0);
+      expect(decodeOscell(welded!.bytes).particles).toHaveLength(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('welds the DFF 2dfx anchors into the cell, in ENGINE space, relative to the cell origin', () => {
+      const fs = fountainFs();
+      const origin: [number, number, number] = [-1900, 0, -900];
+
+      const welded = weldCell(fs, fountainDefs(), fountainCell(), false, new TexturePlanner(fs, new Map()), origin);
+
+      const particles = decodeOscell(welded!.bytes).particles;
+      expect(welded!.stats.particles).toBe(3);
+      expect(particles).toHaveLength(3);
+      expect(new Set(particles.map((particle) => particle.effectName))).toEqual(new Set(['water_fountain']));
+      // GTA (-1900, 900, 20) → engine (-1900, 20, -900), minus the origin ⇒ the anchors sit near the cell's
+      // local zero, the Y (engine up) a few metres above the instance. A left-behind basis change lands them
+      // hundreds of metres out, which is how the fountain sprayed sideways in the first place.
+      for (const particle of particles) {
+        expect(Math.abs(particle.position[0])).toBeLessThan(10);
+        expect(Math.abs(particle.position[2])).toBeLessThan(10);
+        expect(particle.position[1]).toBeGreaterThan(15); // 20 m up (engine Y), give or take the anchor height
+        expect(particle.position[1]).toBeLessThan(30);
+      }
+    });
+  });
+});
 
 describe('weldCell', () => {
   describe('negative cases', () => {

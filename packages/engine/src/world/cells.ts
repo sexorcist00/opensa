@@ -34,6 +34,9 @@ export interface CellHandle {
   }[];
   /** ObjectTable draws (074/06 row 9) — outside the bundle; the frame gates them (timed by hour). */
   objects: { groups: OscellGroup[]; kind: number; params: number }[];
+  /** 2dfx PARTICLE emitters (B6), WORLD-space. The HOST resolves the name against effects.fxp and builds
+   *  the instance buffers; the cell only carries the anchors. */
+  particles: { effectName: string; x: number; y: number; z: number }[];
   uniform: GPUBuffer;
   vertexBuffer: GPUBuffer;
   visible: boolean;
@@ -158,6 +161,12 @@ export class CellStore {
         groups: cell.groups.slice(object.groupStart, object.groupStart + object.groupCount),
         kind: object.kind,
         params: object.params,
+      })),
+      particles: cell.particles.map((particle) => ({
+        effectName: particle.effectName,
+        x: particle.position[0] + cell.origin[0],
+        y: particle.position[1] + cell.origin[1],
+        z: particle.position[2] + cell.origin[2],
       })),
       uniform,
       vertexBuffer,

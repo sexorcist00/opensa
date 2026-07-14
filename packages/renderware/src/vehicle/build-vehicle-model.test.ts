@@ -1,8 +1,11 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { RWClump, RWFrame, RWGeometry, RWMaterial } from '../parsers/binary/types';
 
 import { GeometryFlag } from '../parsers/binary/constants';
+import { parseDff } from '../parsers/binary/dff';
+import { toArrayBuffer } from '../test-utils';
 import { buildVehicleModel } from './build-vehicle-model';
 import { VehicleTextures } from './textures';
 import { PaintSlot } from './types';
@@ -242,6 +245,81 @@ describe('buildVehicleModel', () => {
 
       // Instanced at BOTH dummies rather than rendered once at its own corner.
       expect(built.wheels).toHaveLength(2);
+    });
+  });
+});
+
+// The engine-side builder must agree with its three twin (`three/build-vehicle.test.ts`, which already runs on
+// these files) — a synthetic clump only ever re-states this module's own assumptions about SA's conventions.
+const ADMIRAL = 'tests/original/dff/vehicle/admiral.dff';
+const ADMIRAL_TXD = 'tests/original/vehicles/admiral.txd';
+const GENERIC_TXD = 'tests/original/models/generic/vehicle.txd';
+
+describe.skipIf(!existsSync(ADMIRAL) || !existsSync(GENERIC_TXD))('buildVehicleModel (real admiral.dff)', () => {
+  const built = buildVehicleModel(
+    parseDff(toArrayBuffer(readFileSync(ADMIRAL))),
+    new VehicleTextures([toArrayBuffer(readFileSync(ADMIRAL_TXD)), toArrayBuffer(readFileSync(GENERIC_TXD))]),
+    { wheelScale: [0.7, 0.7] },
+  );
+
+  describe('positive cases', () => {
+    it('builds the full stock rig: 4 wheels, 4 doors, and the lamp dummies', () => {
+      expect(built.wheels).toHaveLength(4);
+      expect(built.wheels.filter((wheel) => wheel.front)).toHaveLength(2);
+      // SA names the REAR doors `lr`/`rr` but the rear WHEELS `lb`/`rb` — two conventions in one file.
+      expect(built.doors.map((door) => door.side).sort()).toEqual(['lf', 'lr', 'rf', 'rr']);
+      const dummies = built.dummies.map((dummy) => dummy.name);
+      expect(dummies).toContain('headlights');
+      expect(dummies).toContain('taillights');
+    });
+
+    it('tags BOTH lamp ends — head at the front, tail at the rear', () => {
+      const lamps = new Set(built.submeshes.map((submesh) => submesh.lamp).filter(Boolean));
+
+      expect(lamps).toEqual(new Set(['head', 'tail']));
+    });
+
+    it('carries a real paint slot: the carcols markers are per-vertex, not baked colours', () => {
+      const slots = new Set<number>();
+      for (let at = 2; at < built.meta.length; at += 4) {
+        slots.add(built.meta[at]);
+      }
+
+      // The stock admiral marks its PRIMARY colour only — a 2-colour entry in carcols.dat does NOT imply a
+      // secondary marker in the DFF. The rest of the body is unpainted (slot 0) and keeps its own texture.
+      expect(slots).toEqual(new Set([PaintSlot.none, PaintSlot.primary]));
+    });
+
+    it('the DFF ships env-map settings on the paint — the reflect channel is populated from the file', () => {
+      let reflective = 0;
+      for (let at = 0; at < built.reflect.length; at += 4) {
+        if (built.reflect[at] > 0) {
+          reflective += 1;
+        }
+      }
+
+      expect(reflective).toBeGreaterThan(0);
+    });
+
+    it('pairs every `_dam` twin with its `_ok` body on ONE part (damage = a visibility flip)', () => {
+      const damaged = built.submeshes.filter((submesh) => submesh.kind === 'dam');
+      expect(damaged.length).toBeGreaterThan(0);
+      for (const submesh of damaged) {
+        const body = built.submeshes.find(
+          (other) => other.kind === 'body' && other.damageGroup === submesh.damageGroup,
+        );
+        expect(body).toBeDefined();
+        expect(body!.part).toBe(submesh.part);
+      }
+    });
+
+    it('every index addresses a real vertex and no position is NaN (the upload invariant)', () => {
+      const vertices = built.positions.length / 3;
+      expect(vertices).toBeGreaterThan(0);
+      for (const index of built.indices) {
+        expect(index).toBeLessThan(vertices);
+      }
+      expect([...built.positions].every(Number.isFinite)).toBe(true);
     });
   });
 });

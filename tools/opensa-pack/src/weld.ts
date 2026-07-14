@@ -6,7 +6,7 @@
  * IDE-anim defs weld STATICALLY at bind pose (field fix: skipping them left building-sized holes —
  * burger01_LAw is a 22×35 m diner, not a sign; their IFP animation is a later dynamic-entity feature).
  */
-import type { Oscell, OscellGroup, OscellLight } from '@opensa/engine-formats';
+import type { Oscell, OscellGroup, OscellLight, OscellParticle } from '@opensa/engine-formats';
 import type { AssetFileSystem, IplInstance, MapDefinitions } from '@opensa/renderware';
 
 import { encodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
@@ -44,6 +44,8 @@ export interface WeldedCell {
   lights: OscellLight[];
   lod: boolean;
   origin: readonly [number, number, number];
+  /** 2dfx PARTICLE emitters (row 13, B6): factory smoke, fires, fountains — HD cells only, like coronas. */
+  particles: OscellParticle[];
   stats: WeldStats;
 }
 
@@ -52,6 +54,8 @@ export interface WeldStats {
   animatedStatic: number;
   groups: number;
   indices: number;
+  /** 2dfx PARTICLE emitter anchors welded into this cell (B6). */
+  particles: number;
   skippedTimed: number;
   /** ObjectTable entries produced (timed windows / scrapyard piles …). */
   timedObjects: number;
@@ -108,9 +112,18 @@ export function weldCellParts(
   originEngine: readonly [number, number, number],
 ): null | WeldedCell {
   const buckets = new Map<string, WeldBucket>();
-  const stats: WeldStats = { animatedStatic: 0, groups: 0, indices: 0, skippedTimed: 0, timedObjects: 0, vertices: 0 };
+  const stats: WeldStats = {
+    animatedStatic: 0,
+    groups: 0,
+    indices: 0,
+    particles: 0,
+    skippedTimed: 0,
+    timedObjects: 0,
+    vertices: 0,
+  };
   const flags = { hasNight: false, hasSway: false };
   const lights: OscellLight[] = [];
+  const particles: OscellParticle[] = [];
 
   const groups = [...cellGroups(defs, cell, lod).values()].sort((a, b) => (a.def.modelName < b.def.modelName ? -1 : 1));
   for (const group of groups) {
@@ -124,6 +137,7 @@ export function weldCellParts(
     // 2dfx corona anchors (074/06 row 13) — HD level only (LOD duplicates would double every lamp).
     if (!lod) {
       collectLights(fs, group.def, group.instances, originEngine, lights);
+      collectParticles(fs, group.def, group.instances, originEngine, particles);
     }
   }
 
@@ -134,6 +148,8 @@ export function weldCellParts(
     return null;
   }
 
+  stats.particles = particles.length;
+
   return {
     buckets: ordered,
     hasAo: false,
@@ -143,6 +159,7 @@ export function weldCellParts(
     lights,
     lod,
     origin: originEngine,
+    particles,
     stats,
   };
 }
@@ -258,7 +275,14 @@ function appendInstance(
 function assemble(
   ordered: WeldBucket[],
   origin: readonly [number, number, number],
-  channels: { hasAo: boolean; hasNight: boolean; hasSunVis: boolean; hasSway: boolean; lights: OscellLight[] },
+  channels: {
+    hasAo: boolean;
+    hasNight: boolean;
+    hasSunVis: boolean;
+    hasSway: boolean;
+    lights: OscellLight[];
+    particles: OscellParticle[];
+  },
   stats: WeldStats,
 ): Uint8Array {
   let vertexCount = 0;
@@ -357,6 +381,7 @@ function assemble(
     lights: channels.lights,
     objects,
     origin,
+    particles: channels.particles,
     vertexCount,
     vertexData,
   };
@@ -430,6 +455,45 @@ function collectLights(
           farClip: light.coronaFarClip,
           position: [gx - origin[0], gz - origin[1], -gy - origin[2]],
           size: light.coronaSize,
+        });
+      }
+    }
+  }
+}
+
+/**
+ * 2dfx PARTICLE emitters (type 1) → cell-local ENGINE coords (B6). The FX SYSTEM itself lives in
+ * `effects.fxp` (tracks, sprite, blend mode) and the host parses that; the cell only records WHERE an
+ * emitter of a given name sits. HD level only, exactly like the coronas — a LOD copy would double every
+ * factory chimney's smoke.
+ */
+function collectParticles(
+  fs: AssetFileSystem,
+  def: NonNullable<ReturnType<MapDefinitions['catalog']['get']>>,
+  instances: readonly IplInstance[],
+  origin: readonly [number, number, number],
+  out: OscellParticle[],
+): void {
+  const clump = getClump(fs, def.modelName);
+  for (const geometry of clump.geometries) {
+    for (const particle of geometry.particles ?? []) {
+      for (const instance of instances) {
+        // GTA IPL quaternions are the conjugate of the usual convention (parity with appendInstance).
+        const [qx, qy, qz, qw] = [
+          -instance.rotation[0],
+          -instance.rotation[1],
+          -instance.rotation[2],
+          instance.rotation[3],
+        ];
+        const m = quatToMat3(qx, qy, qz, qw);
+        const [px, py, pz] = particle.position;
+        const gx = m[0] * px + m[1] * py + m[2] * pz + instance.position[0];
+        const gy = m[3] * px + m[4] * py + m[5] * pz + instance.position[1];
+        const gz = m[6] * px + m[7] * py + m[8] * pz + instance.position[2];
+        out.push({
+          effectName: particle.effectName.toLowerCase(),
+          // GTA Z-up → engine Y-up (e = x, z, -y), then cell-local: the same change the vertices take.
+          position: [gx - origin[0], gz - origin[1], -gy - origin[2]],
         });
       }
     }

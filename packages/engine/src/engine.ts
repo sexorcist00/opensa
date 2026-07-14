@@ -26,6 +26,18 @@ import { TextureArrays } from './world/textures';
 // Reversed-Z (z-fighting fix): FLOAT depth + swapped near/far + clear 0 + greater compares — hugely
 // better far-field precision (SA signs sit centimetres off walls hundreds of metres from the camera).
 const DEPTH_FORMAT: GPUTextureFormat = 'depth32float';
+/**
+ * The SA corona billboards from particle.txd (074/06 row 13): layer 0 = `coronastar`, layer 1 = `coronamoon`.
+ * Any size — the moon can be swapped for a higher-resolution one without touching the engine.
+ */
+export interface CoronaSprites {
+  height: number;
+  layers: number;
+  /** RGBA8 layers, all one size, packed sequentially. */
+  rgba: Uint8Array;
+  width: number;
+}
+
 /** Corona instance cap per frame (074/06 row 13) — far beyond any district's lamp count. */
 const CORONA_CAP = 2048;
 /** Cloud dome side (074/06 row 15) — the converter emits exactly this; the texture never reallocates. */
@@ -119,6 +131,11 @@ export interface Environment {
   moonColor: readonly [number, number, number];
   /** Unit direction TOWARDS the moon (engine space). */
   moonDir: readonly [number, number, number];
+  /**
+   * Moon phase 0..1 (B6): 0 = new, 0.5 = full. The host advances it with the in-game days; the sky shader
+   * lights the moon's sphere from it, so the terminator is real rather than a cropped sprite.
+   */
+  moonPhase: number;
   /** Vehicle reflection strength (B5r) — the global multiplier over the DFF's per-material settings. */
   reflectionStrength: number;
   /** LINEAR sky gradient horizon colour (sky pass + world fog share it). */
@@ -235,6 +252,8 @@ export interface VehicleSubmesh {
 const VEHICLE_CAPACITY = 8;
 /** 4 carcols colours × vec4f per matrix row. */
 const PAINT_ROW_BYTES = 64;
+/** Floats per particle instance: spawn(3) + velocity(3) + life/phase/system(3). */
+const PARTICLE_STRIDE = 9;
 /** One vec4f of lamp state per matrix row (headlights, brakes, spare, spare). */
 const LAMP_ROW_BYTES = 16;
 
@@ -245,6 +264,23 @@ const DEFAULT_PAINT: VehiclePaint = {
   secondary: [1, 1, 1],
   tertiary: [1, 1, 1],
 };
+
+/**
+ * The FX library + placed emitters (074/06 row 13, B6). The HOST owns `effects.fxp` and `effectsPC.txd`: it
+ * bakes each system's keyframed tracks into a flat record and each placed emitter into a stream of particle
+ * instances. The engine just draws them — and because the lifecycle loops in the vertex shader, "drawing"
+ * them costs nothing per frame.
+ */
+export interface ParticleUpload {
+  /** RGBA8 sprite layers, all one size, packed sequentially (from effectsPC.txd). */
+  atlas: { height: number; layers: number; rgba: Uint8Array; width: number };
+  /** Instances for the ADDITIVE pipeline (fire, sparks): 9 floats each — spawn, velocity, life/phase/system. */
+  instancesAdd: Float32Array;
+  /** Instances for the ALPHA-BLEND pipeline (smoke, steam, mist). */
+  instancesBlend: Float32Array;
+  /** Baked systems, 20 floats each: force+layer, size envelope+drawDistance, and three colour+alpha keys. */
+  systems: Float32Array;
+}
 
 interface VehicleInstanceState {
   entity: RigidEntity;
@@ -305,6 +341,7 @@ export class Engine {
     hour: 12,
     moonColor: [0, 0, 0],
     moonDir: [-0.3, 0.8, -0.25],
+    moonPhase: 0.5,
     reflectionStrength: 1,
     skyHorizon: [0.42, 0.55, 0.72],
     skyMood: 0.7,
@@ -349,6 +386,7 @@ export class Engine {
   private coronaInstances!: GPUBuffer;
   private coronaQuad!: GPUBuffer;
   private readonly coronaScratch = new Float32Array(CORONA_CAP * 8);
+  private coronaTexture!: GPUTexture;
   private depthView!: GPUTextureView;
   private engineDevice!: EngineDevice;
   private frameBindGroup!: GPUBindGroup;
@@ -358,6 +396,17 @@ export class Engine {
   private lightPoolBuffer!: GPUBuffer;
   private readonly lightPoolScratch = new Float32Array(LIGHT_POOL_CAP * LIGHT_STRIDE);
   private msaaView!: GPUTextureView;
+  /** 2dfx particles (B6) — the whole map's emitters in two instance buffers, one per blend mode. */
+  private particles: null | {
+    bindGroup: GPUBindGroup;
+    countAdd: number;
+    countBlend: number;
+    instancesAdd: GPUBuffer;
+    instancesBlend: GPUBuffer;
+    systems: GPUBuffer;
+    texture: GPUTexture;
+    textureBytes: number;
+  } = null;
   /** Skinning probe (074/08 B1) — a single skinned entity outside the static bundles. */
   private ped: null | {
     bindGroup: GPUBindGroup;
@@ -593,6 +642,7 @@ export class Engine {
     // polygon has no vertex near it to light: the beam breaks into blotches that follow the road's normals
     // and vanishes entirely once the car sits mid-polygon. Dynamic lights must be shaded per PIXEL.
     frameData[88] = this.dynamicLights.length;
+    frameData[89] = env.moonPhase;
     frameData[90] = env.reflectionStrength;
     frameData[73] = this.cloudLayerOn;
     frameData[74] = env.cloudDark;
@@ -682,6 +732,7 @@ export class Engine {
     // Entity glass after the world blends (074/08 B2): composites over the finished frame.
     draws += this.drawVehicles(pass, true);
     // 2dfx coronas last (074/06 row 13): additive on top of everything, depth-read hides occluded ones.
+    draws += this.drawParticles(pass);
     draws += this.drawCoronas(pass, camera);
     pass.end();
     // Godrays composite (074/09 stage 1): radial blur of the resolved scene toward the sun's screen
@@ -716,7 +767,13 @@ export class Engine {
     return this.statsValue;
   }
 
-  async init(canvas: HTMLCanvasElement): Promise<void> {
+  /**
+   * `coronaSprites` are the SA billboards (particle.txd): layer 0 = `coronastar` for lamps and headlights,
+   * layer 1 = `coronamoon`. They arrive at INIT because the frame bind group is recorded into every cell
+   * bundle and is immutable afterwards — the texture must exist before the first cell loads. Its size comes
+   * from the DATA, not from a constant, so a higher-resolution moon drops straight in.
+   */
+  async init(canvas: HTMLCanvasElement, coronaSprites?: CoronaSprites): Promise<void> {
     this.engineDevice = await initDevice();
     this.canvasContext = configureCanvas(canvas, this.engineDevice);
     this.resources = new Resources(this.device);
@@ -762,6 +819,26 @@ export class Engine {
       );
     this.cloudTextureA = cloudSlot('cloud-dome-a');
     this.cloudTextureB = cloudSlot('cloud-dome-b');
+    const sprites = coronaSprites ?? proceduralCoronaSprites();
+    this.coronaTexture = this.resources.createTexture(
+      'texture',
+      {
+        format: 'rgba8unorm-srgb',
+        label: 'corona-sprites',
+        size: { depthOrArrayLayers: sprites.layers, height: sprites.height, width: sprites.width },
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      },
+      sprites.rgba.byteLength,
+    );
+    const spriteLayerBytes = sprites.width * sprites.height * 4;
+    for (let layer = 0; layer < sprites.layers; layer += 1) {
+      this.device.queue.writeTexture(
+        { origin: { x: 0, y: 0, z: layer }, texture: this.coronaTexture },
+        sprites.rgba.subarray(layer * spriteLayerBytes, (layer + 1) * spriteLayerBytes),
+        { bytesPerRow: sprites.width * 4 },
+        { height: sprites.height, width: sprites.width },
+      );
+    }
     this.frameBindGroup = this.device.createBindGroup({
       entries: [
         { binding: 0, resource: { buffer: this.frameUniform } },
@@ -773,6 +850,7 @@ export class Engine {
         { binding: 3, resource: { buffer: this.lightPoolBuffer } },
         { binding: 4, resource: this.cloudTextureA.createView() },
         { binding: 5, resource: this.cloudTextureB.createView() },
+        { binding: 6, resource: this.coronaTexture.createView({ dimension: '2d-array' }) },
       ],
       label: 'frame',
       layout: this.pipelines.frameLayout,
@@ -814,6 +892,17 @@ export class Engine {
     return this.resources.ledger();
   }
 
+  removeParticles(): void {
+    if (!this.particles) {
+      return;
+    }
+    this.resources.destroyBuffer('cellVertex', this.particles.instancesAdd);
+    this.resources.destroyBuffer('cellVertex', this.particles.instancesBlend);
+    this.resources.destroyBuffer('cellVertex', this.particles.systems);
+    this.resources.destroyTexture('texture', this.particles.texture, this.particles.textureBytes);
+    this.particles = null;
+  }
+
   removePedProbe(): void {
     if (!this.ped) {
       return;
@@ -830,22 +919,22 @@ export class Engine {
     this.ped = null;
   }
 
-  /** Install a weather's cloud dome (074/06 row 15); RGBA8, EXACTLY CLOUD_DOME_SIZE² (the converter's
-   *  contract). The persistent slot textures are overwritten IN PLACE — cell bundles record the frame bind
-   *  group at create time, so the group (and every view in it) must never be rebuilt/destroyed. The first
-   *  install fills both slots (no fade from garbage); later installs write the idle slot and crossfade
-   *  over env.cloudFadeSeconds. Pass null to gate the layer off. */
+  /** Install a weather's cloud dome (074/06 row 15), RGBA8 at ANY size. The two persistent slots are
+   *  allocated ONCE at CLOUD_DOME_SIZE² and overwritten IN PLACE — cell bundles record the frame bind group
+   *  at create time, so the group (and every view in it) must never be rebuilt — which is why the slot size
+   *  is fixed and a differently-sized source is RESAMPLED onto it rather than rejected (the converter only
+   *  ever downscales, so a 512² cloud TXD used to crash here). The first install fills both slots (no fade
+   *  from garbage); later installs write the idle slot and crossfade over env.cloudFadeSeconds. Pass null to
+   *  gate the layer off. */
   setCloudTexture(texture: null | { height: number; rgba: Uint8Array; width: number }): void {
     if (texture && this.cloudTextureA && this.cloudTextureB) {
-      if (texture.width !== CLOUD_DOME_SIZE || texture.height !== CLOUD_DOME_SIZE) {
-        throw new Error(`cloud dome must be ${CLOUD_DOME_SIZE}² (got ${texture.width}×${texture.height})`);
-      }
+      const rgba = fitRgba(texture, CLOUD_DOME_SIZE);
       const write = (target: GPUTexture): void =>
         this.device.queue.writeTexture(
           { texture: target },
-          texture.rgba,
-          { bytesPerRow: texture.width * 4 },
-          { height: texture.height, width: texture.width },
+          rgba,
+          { bytesPerRow: CLOUD_DOME_SIZE * 4 },
+          { height: CLOUD_DOME_SIZE, width: CLOUD_DOME_SIZE },
         );
       if (this.cloudLayerOn === 0) {
         write(this.cloudTextureA);
@@ -862,6 +951,73 @@ export class Engine {
       }
     }
     this.cloudLayerOn = texture ? 1 : 0;
+  }
+
+  /**
+   * Replace the whole particle set (B6). Called when the streamed cell set changes — rarely, and never per
+   * frame: the lifecycle itself lives in the shader, so a static upload animates forever.
+   */
+  setParticles(upload: ParticleUpload): void {
+    this.removeParticles();
+    if (upload.systems.length === 0) {
+      return;
+    }
+    const buffer = (label: string, data: Float32Array, usage: number): GPUBuffer => {
+      const size = Math.max(16, Math.ceil(data.byteLength / 4) * 4);
+      const gpu = this.resources.createBuffer('cellVertex', {
+        label: `particle-${label}`,
+        size,
+        usage: usage | GPUBufferUsage.COPY_DST,
+      });
+      this.device.queue.writeBuffer(gpu, 0, data);
+
+      return gpu;
+    };
+    const layerBytes = upload.atlas.width * upload.atlas.height * 4;
+    const texture = this.resources.createTexture(
+      'texture',
+      {
+        format: 'rgba8unorm-srgb',
+        label: 'particle-atlas',
+        size: {
+          depthOrArrayLayers: Math.max(1, upload.atlas.layers),
+          height: upload.atlas.height,
+          width: upload.atlas.width,
+        },
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      },
+      upload.atlas.rgba.byteLength,
+    );
+    for (let layer = 0; layer < upload.atlas.layers; layer += 1) {
+      this.device.queue.writeTexture(
+        { origin: { x: 0, y: 0, z: layer }, texture },
+        upload.atlas.rgba.subarray(layer * layerBytes, (layer + 1) * layerBytes),
+        { bytesPerRow: upload.atlas.width * 4 },
+        { height: upload.atlas.height, width: upload.atlas.width },
+      );
+    }
+    const systems = buffer('systems', upload.systems, GPUBufferUsage.STORAGE);
+    this.particles = {
+      bindGroup: this.device.createBindGroup({
+        entries: [
+          { binding: 0, resource: { buffer: systems } },
+          { binding: 1, resource: texture.createView({ dimension: '2d-array' }) },
+          {
+            binding: 2,
+            resource: this.device.createSampler({ label: 'particle', magFilter: 'linear', minFilter: 'linear' }),
+          },
+        ],
+        label: 'particle',
+        layout: this.pipelines.particleLayout,
+      }),
+      countAdd: upload.instancesAdd.length / PARTICLE_STRIDE,
+      countBlend: upload.instancesBlend.length / PARTICLE_STRIDE,
+      instancesAdd: buffer('add', upload.instancesAdd, GPUBufferUsage.VERTEX),
+      instancesBlend: buffer('blend', upload.instancesBlend, GPUBufferUsage.VERTEX),
+      systems,
+      texture,
+      textureBytes: upload.atlas.rgba.byteLength,
+    };
   }
 
   /** Create (or replace) the skinning probe entity (074/08 B1). Returns the live palette handle. */
@@ -1183,6 +1339,39 @@ export class Engine {
     return draws;
   }
 
+  /**
+   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
+   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
+   * the known cost knob if a street full of parked cars ever pushes the draw budget.
+   */
+  /**
+   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
+   * so this is genuinely all there is to it per frame.
+   */
+  private drawParticles(pass: GPURenderPassEncoder): number {
+    if (!this.particles) {
+      return 0;
+    }
+    let draws = 0;
+    for (const [id, instances, count] of [
+      ['particle-blend', this.particles.instancesBlend, this.particles.countBlend],
+      ['particle-add', this.particles.instancesAdd, this.particles.countAdd],
+    ] as const) {
+      if (count === 0) {
+        continue;
+      }
+      pass.setPipeline(this.pipelines.get(id));
+      pass.setBindGroup(0, this.frameBindGroup);
+      pass.setBindGroup(1, this.particles.bindGroup);
+      pass.setVertexBuffer(0, this.coronaQuad); // the same unit quad the coronas billboard with
+      pass.setVertexBuffer(1, instances);
+      pass.draw(6, count);
+      draws += 1;
+    }
+
+    return draws;
+  }
+
   private drawPed(pass: GPURenderPassEncoder): number {
     if (!this.ped) {
       return 0;
@@ -1228,11 +1417,6 @@ export class Engine {
     return draws;
   }
 
-  /**
-   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
-   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
-   * the known cost knob if a street full of parked cars ever pushes the draw budget.
-   */
   private drawVehicles(pass: GPURenderPassEncoder, translucent: boolean): number {
     let draws = 0;
     for (const model of this.vehicleModels.values()) {
@@ -1494,6 +1678,50 @@ export class Engine {
     }
     this.device.queue.writeBuffer(model.paintBuffer, slot * model.partCount * PAINT_ROW_BYTES, row);
   }
+}
+
+/**
+ * Fallback billboards when no particle.txd is supplied (the lab): a soft radial glow for lamps and a plain
+ * disc for the moon. The real SA sprites are far better — this only keeps the engine standalone.
+ */
+/** Nearest-resample an RGBA image onto a square slot (clouds are soft — a box filter buys nothing visible). */
+function fitRgba(source: { height: number; rgba: Uint8Array; width: number }, size: number): Uint8Array {
+  if (source.width === size && source.height === size) {
+    return source.rgba;
+  }
+  const out = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    const sy = Math.min(source.height - 1, Math.floor((y / size) * source.height));
+    for (let x = 0; x < size; x += 1) {
+      const sx = Math.min(source.width - 1, Math.floor((x / size) * source.width));
+      const at = (sy * source.width + sx) * 4;
+      out.set(source.rgba.subarray(at, at + 4), (y * size + x) * 4);
+    }
+  }
+
+  return out;
+}
+
+function proceduralCoronaSprites(): CoronaSprites {
+  const size = 128;
+  const rgba = new Uint8Array(size * size * 4 * 2);
+  const centre = (size - 1) / 2;
+  for (let layer = 0; layer < 2; layer += 1) {
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const r = Math.hypot(x - centre, y - centre) / centre;
+        // Layer 0 = a soft glow (bright core, wide falloff); layer 1 = a hard-edged disc for the moon.
+        const value = layer === 0 ? Math.max(0, 1 - r) ** 2.2 + Math.max(0, 1 - r) ** 8 * 0.7 : r < 0.92 ? 1 : 0;
+        const at = (layer * size * size + y * size + x) * 4;
+        rgba[at] = 255;
+        rgba[at + 1] = 255;
+        rgba[at + 2] = 255;
+        rgba[at + 3] = Math.round(Math.min(1, value) * 255);
+      }
+    }
+  }
+
+  return { height: size, layers: 2, rgba, width: size };
 }
 
 /** SA timed-object gate: params = on | off << 8; the window wraps midnight when on > off. */

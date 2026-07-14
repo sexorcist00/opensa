@@ -34,6 +34,7 @@ import type { GameId } from '../game-config';
 
 import { BENCH_SCENES } from '../bench-scenes';
 import { GAME_CONFIG } from '../game-config';
+import { loadCoronaSprites, setupEngineParticles } from './engine-particles';
 import { loadEnginePlayer } from './engine-player';
 import { type EngineVehicles, setupEngineVehicles } from './engine-vehicles';
 import { createGameRuntimeConfig, GAME_CELL_SIZE } from './game-runtime-config';
@@ -134,7 +135,9 @@ async function boot(
   new ResizeObserver(resize).observe(canvas);
 
   const engine = new Engine();
-  await engine.init(canvas);
+  // SA corona billboards (B6): coronastar for lamps/headlights, coronamoon for the moon. They must exist
+  // BEFORE the first cell loads — the frame bind group is baked into every cell bundle.
+  await engine.init(canvas, loadCoronaSprites(fs));
   const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak-map'}`);
   // Environment drive (074/10 config-API parity): the SHARED config→Environment driver — real timecyc
   // colours when the pak carries them, sun/moon arcs built dynamically from config night.litFade, prod
@@ -243,6 +246,9 @@ async function boot(
   const collision = new CollisionStreamingSystem(adapter, physics, viewOf, config);
 
   const player = await loadEnginePlayer(engine);
+  // 2dfx particles (B6): the pak carries the emitter anchors, this reads effects.fxp + effectsPC.txd and
+  // bakes them. Absent-tolerant — a profile without the FX files simply renders no particles.
+  const particles = setupEngineParticles(engine, fs);
   let debugError: null | string = null;
   /** Last frame's camera eye (engine space) — the lamp coronas need it, one frame stale is invisible. */
   const cameraEye: [number, number, number] = [0, 0, 0];
@@ -409,7 +415,12 @@ async function boot(
       accumulator = runFixedSteps(accumulator + dt);
       collision.update();
       tickVehicles(dt);
+      const previousHour = hour;
       hour = (hour + dt / (config.time.secondsPerGameMinute * 60)) % 24;
+      if (hour < previousHour) {
+        // A day passed: the moon walks its ~29.5-day cycle, so a week of play changes its face.
+        engine.environment.moonPhase = (engine.environment.moonPhase + 1 / 29.5) % 1;
+      }
       environmentDriver.apply(hour);
       zoneSystem.update();
       if (minutesNow() !== lastMinutes) {
@@ -433,6 +444,8 @@ async function boot(
 
     // Streaming follows the PLAYER (the B3 contract), not the camera.
     const streamStats: StreamStats = setup.driver.update(playerEngine);
+    // Emitters follow the streamed cell set; the call self-gates on a signature, so this is not per-frame work.
+    particles?.rebuild();
     lastStream = streamStats;
 
     // While seated the camera trails the CAR (the rider is teleported into the seat every frame — following

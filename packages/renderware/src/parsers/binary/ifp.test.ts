@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { concat, fixedString, i16, i32, toArrayBuffer } from '../../test-utils';
@@ -87,6 +88,45 @@ describe('parseIfp', () => {
       const spine = parseIfp(buildAnp3())[0].bones[1];
       expect(spine.frames[0].rotation).toEqual([0.5, 0, 0, 1]);
       expect(spine.frames[0].translation).toBeUndefined();
+    });
+  });
+});
+
+// Every other binary parser here has a real-file case; this one had only the synthetic ANP3 above (which is
+// still the right unit for the type-3 vs type-4 frame-kind assertions — a real file cannot isolate those).
+const COUNXREF = 'tests/original/dff/anim-clump/counxref.ifp';
+
+describe.skipIf(!existsSync(COUNXREF))('parseIfp (real counxref.ifp)', () => {
+  const animations = parseIfp(toArrayBuffer(readFileSync(COUNXREF)));
+
+  describe('positive cases', () => {
+    it('reads every animation in the stock block, each with named bones and real keyframes', () => {
+      expect(animations.length).toBeGreaterThan(0);
+      for (const animation of animations) {
+        expect(animation.name.length).toBeGreaterThan(0);
+        expect(animation.bones.length).toBeGreaterThan(0);
+        for (const bone of animation.bones) {
+          expect(bone.name.trim().length).toBeGreaterThan(0);
+          expect(bone.frames.length).toBeGreaterThan(0);
+        }
+      }
+    });
+
+    it('keyframe times run FORWARD within a track — the clip builder scales them straight to seconds', () => {
+      for (const animation of animations) {
+        for (const bone of animation.bones) {
+          const times = bone.frames.map((frame) => frame.time);
+          expect(times).toEqual([...times].sort((a, b) => a - b));
+        }
+      }
+    });
+
+    it('every rotation is a unit quaternion (a mis-read stride would produce garbage lengths)', () => {
+      for (const bone of animations[0].bones) {
+        for (const frame of bone.frames) {
+          expect(Math.hypot(...frame.rotation)).toBeCloseTo(1, 2);
+        }
+      }
     });
   });
 });

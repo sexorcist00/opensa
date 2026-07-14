@@ -4,6 +4,7 @@ import type { GeometryStruct } from '@opensa/rw-codec/geometry-struct';
 import { readRw, RW_CLUMP, RW_GEOMETRY, RW_GEOMETRY_LIST, RW_STRUCT, writeRw } from '@opensa/rw-codec/chunk';
 import { collectGeometryStructs } from '@opensa/rw-codec/dff';
 import { decodeGeometryStruct, encodeGeometryStruct } from '@opensa/rw-codec/geometry-struct';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { MergedMesh } from './mesh';
@@ -165,6 +166,23 @@ describe('parsePrelightInfo', () => {
       );
 
       expect([...info.skip].sort()).toEqual(['tree_hipoly09b', 'vbg_fir_copse', 'vegassedge24']);
+    });
+  });
+});
+
+// A real stock tree: the LOD takes its prelit colour from the HD model, and a wrong average is exactly how the
+// re-encoded LODs ended up brighter than their HD at night.
+const CEDAR = 'tests/original/dff/night-colours/cedar1_hi.dff';
+
+describe.skipIf(!existsSync(CEDAR))('stockPrelightColor (real cedar1_hi.dff)', () => {
+  describe('positive cases', () => {
+    it('reads a plausible prelit colour straight out of the stock tree', () => {
+      const colour = stockPrelightColor(new Uint8Array(readFileSync(CEDAR)));
+
+      expect(colour).not.toBeNull();
+      expect(colour!).toHaveLength(4);
+      expect(colour!.every((channel) => channel >= 0 && channel <= 255)).toBe(true);
+      expect(colour!.slice(0, 3).some((channel) => channel > 0)).toBe(true); // not a black model
     });
   });
 });

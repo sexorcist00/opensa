@@ -13,6 +13,7 @@ export {
   type OscellGroup,
   type OscellLight,
   type OscellObject,
+  type OscellParticle,
 } from './oscell';
 export {
   buildOspak,

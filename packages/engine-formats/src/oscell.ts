@@ -14,7 +14,9 @@ import { ByteReader, ByteWriter } from './binary';
 
 export const OSCELL_MAGIC = 0x3143534f; // 'OSC1' little-endian
 export const OSCELL_VERSION_MAJOR = 0;
-export const OSCELL_VERSION_MINOR = 1;
+/** Minor 2 (B6): the cell gained a PARTICLE table (2dfx type-1 emitter anchors). Readers accept minor 1
+ *  paks — they simply carry no particles. */
+export const OSCELL_VERSION_MINOR = 2;
 export const OSCELL_VERTEX_STRIDE = 36;
 
 /** Header `flags` bits. */
@@ -43,6 +45,8 @@ export interface Oscell {
   lights: OscellLight[];
   objects: OscellObject[];
   origin: readonly [number, number, number];
+  /** 2dfx PARTICLE emitters (074/06 row 13, B6): factory smoke, fires, fountains, vents, insects. */
+  particles: OscellParticle[];
   vertexCount: number;
   /** Interleaved vertex payload, stride {@link OSCELL_VERTEX_STRIDE}. */
   vertexData: Uint8Array;
@@ -82,6 +86,18 @@ export interface OscellObject {
   transform: readonly number[];
 }
 
+/**
+ * One 2dfx particle emitter anchor. The FX SYSTEM itself (its keyframed tracks, sprite and blend mode) lives
+ * in `effects.fxp`, which the host parses — the cell only says WHERE an emitter of a given name sits. The
+ * whole map carries ~113 of these, so the name rides inline rather than through a string table.
+ */
+export interface OscellParticle {
+  /** FX system name, lowercased (`ws_factorysmoke`, `fire`, `water_fountain` …). */
+  effectName: string;
+  /** Cell-local ENGINE coordinates. */
+  position: readonly [number, number, number];
+}
+
 const GROUP_RECORD_BYTES = 32;
 const OBJECT_RECORD_BYTES = 64;
 const LIGHT_RECORD_BYTES = 24;
@@ -93,7 +109,7 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
     throw new Error(`not an .oscell (magic 0x${magic.toString(16)})`);
   }
   const major = r.u16();
-  r.u16(); // minor — additive only
+  const minor = r.u16();
   if (major !== OSCELL_VERSION_MAJOR) {
     throw new Error(`unsupported .oscell major ${major} (reader supports ${OSCELL_VERSION_MAJOR})`);
   }
@@ -107,6 +123,9 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
   const groupCount = r.u32();
   const objectCount = r.u32();
   const lightCount = r.u32();
+  // Minor 2 (B6) inserted the particle count here. Minor-1 paks simply have no particles — read them as 0
+  // and DO NOT consume a word, or every offset after this point shifts.
+  const particleCount = minor >= 2 ? r.u32() : 0;
   const vertexOffset = r.u32();
   const indexOffset = r.u32();
   const tableOffset = r.u32();
@@ -136,28 +155,9 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
       textureArrayRef,
     });
   }
-  const objects: OscellObject[] = [];
-  for (let index = 0; index < objectCount; index += 1) {
-    const kind = r.u8();
-    r.u8();
-    r.u16();
-    const params = r.u32();
-    const groupStart = r.u32();
-    const groupCountOwn = r.u32();
-    const transform: number[] = [];
-    for (let component = 0; component < 12; component += 1) {
-      transform.push(r.f32());
-    }
-    objects.push({ groupCount: groupCountOwn, groupStart, kind, params, transform });
-  }
-  const lights: OscellLight[] = [];
-  for (let index = 0; index < lightCount; index += 1) {
-    const position = [r.f32(), r.f32(), r.f32()] as const;
-    const color = [r.u8(), r.u8(), r.u8(), r.u8()] as const;
-    const size = r.f32();
-    const farClip = r.f32();
-    lights.push({ color, farClip, position, size });
-  }
+  const objects = readObjects(r, objectCount);
+  const lights = readLights(r, lightCount);
+  const particles = readParticles(r, particleCount);
 
   return {
     bounds,
@@ -169,6 +169,7 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
     lights,
     objects,
     origin,
+    particles,
     vertexCount,
     vertexData,
   };
@@ -202,6 +203,7 @@ export function encodeOscell(cell: Oscell): Uint8Array {
   w.u32(cell.groups.length);
   w.u32(cell.objects.length);
   w.u32(cell.lights.length);
+  w.u32(cell.particles.length);
   const vertexOffsetSlot = w.reserveU32();
   const indexOffsetSlot = w.reserveU32();
   const tableOffsetSlot = w.reserveU32();
@@ -239,16 +241,8 @@ export function encodeOscell(cell: Oscell): Uint8Array {
       w.f32(value);
     }
   }
-  for (const light of cell.lights) {
-    for (const value of light.position) {
-      w.f32(value);
-    }
-    for (const value of light.color) {
-      w.u8(value);
-    }
-    w.f32(light.size);
-    w.f32(light.farClip);
-  }
+  writeLights(w, cell.lights);
+  writeParticles(w, cell.particles);
 
   return w.bytes();
 }
@@ -259,3 +253,77 @@ export const OSCELL_RECORD_BYTES = {
   light: LIGHT_RECORD_BYTES,
   object: OBJECT_RECORD_BYTES,
 } as const;
+
+function readLights(r: ByteReader, count: number): OscellLight[] {
+  const lights: OscellLight[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const position = [r.f32(), r.f32(), r.f32()] as const;
+    const color = [r.u8(), r.u8(), r.u8(), r.u8()] as const;
+    const size = r.f32();
+    const farClip = r.f32();
+    lights.push({ color, farClip, position, size });
+  }
+
+  return lights;
+}
+
+function readObjects(r: ByteReader, count: number): OscellObject[] {
+  const objects: OscellObject[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const kind = r.u8();
+    r.u8();
+    r.u16();
+    const params = r.u32();
+    const groupStart = r.u32();
+    const groupCountOwn = r.u32();
+    const transform: number[] = [];
+    for (let component = 0; component < 12; component += 1) {
+      transform.push(r.f32());
+    }
+    objects.push({ groupCount: groupCountOwn, groupStart, kind, params, transform });
+  }
+
+  return objects;
+}
+
+/** The 2dfx emitter anchors (B6): position + an inline effect name (the map carries only ~113 of them). */
+function readParticles(r: ByteReader, count: number): OscellParticle[] {
+  const particles: OscellParticle[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const position = [r.f32(), r.f32(), r.f32()] as const;
+    const nameLength = r.u8();
+    let effectName = '';
+    for (let at = 0; at < nameLength; at += 1) {
+      effectName += String.fromCharCode(r.u8());
+    }
+    particles.push({ effectName, position });
+  }
+
+  return particles;
+}
+
+function writeLights(w: ByteWriter, lights: readonly OscellLight[]): void {
+  for (const light of lights) {
+    for (const value of light.position) {
+      w.f32(value);
+    }
+    for (const value of light.color) {
+      w.u8(value);
+    }
+    w.f32(light.size);
+    w.f32(light.farClip);
+  }
+}
+
+function writeParticles(w: ByteWriter, particles: readonly OscellParticle[]): void {
+  for (const particle of particles) {
+    for (const value of particle.position) {
+      w.f32(value);
+    }
+    const name = particle.effectName.slice(0, 255);
+    w.u8(name.length);
+    for (let at = 0; at < name.length; at += 1) {
+      w.u8(name.charCodeAt(at));
+    }
+  }
+}

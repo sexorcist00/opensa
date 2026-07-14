@@ -22,6 +22,7 @@ function sampleCellBytes(index16 = false): Uint8Array {
     lights: [{ color: [255, 200, 100, 255], farClip: 120, position: [10, 20, 30], size: 1.5 }],
     objects: [],
     origin: [2500, -1600, 0],
+    particles: [],
     vertexCount,
     vertexData,
   };

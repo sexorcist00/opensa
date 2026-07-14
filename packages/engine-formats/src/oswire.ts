@@ -106,12 +106,17 @@ export function oscellSections(raw: Uint8Array): OscellSections {
   if (magic !== OSCELL_MAGIC) {
     throw new Error(`not an .oscell (magic 0x${magic.toString(16)})`);
   }
+  // NB this walks the header by HARD OFFSETS — it duplicates encodeOscell's layout knowledge, so any new
+  // header field must be reflected here or the wire codec silently slices the payload in the wrong place.
+  // Minor 2 (B6) inserted `particleCount` between the light count and the offsets.
+  r.seek(6); // major is at 4, minor at 6
+  const minor = r.u16();
   r.seek(8);
   const flags = r.u32();
   r.seek(48);
   const vertexCount = r.u32();
   const indexCount = r.u32();
-  r.seek(68);
+  r.seek(minor >= 2 ? 72 : 68);
   const vertexOffset = r.u32();
   const indexOffset = r.u32();
   const indexElemSize = (flags & OscellFlag.INDEX16) !== 0 ? 2 : 4;

@@ -11,7 +11,8 @@ walks/runs/jumps in the real app with prod HUD/zones/pointer-lock and in-game be
 vsync-120); Safari smoke ✅; the config-API parity module ships prod tunables to the engine; water v3
 PARKED as leftover (0.6.0 plan).
 
-**NEXT — the ladder (user, 2026-07-14; B5 done, reflections inserted the same day):**
+**NEXT — the ladder (user, 2026-07-14; B5 + B6 done, reflections inserted the same day):**
+**HERE → B6.5 map-lighting bugs.**
 B5 vehicles ✅ → **B5r VEHICLE REFLECTIONS — v1 SHIPPED but REJECTED in the field; the deep rework is now
 its own plan, [16](16-vehicle-paint.md)** (the gap is structural: no tonemapper, no environment probe — both
 of which the three path HAS, which is why prod looked better. Not a tuning problem) → B6 2dfx particles +
@@ -108,7 +109,17 @@ not a bake** — one model, many colours) · 3 `VehicleHandle`: three is OUT of 
 (per-vehicle state, cones, coronas on the EXISTING corona pass).
 **Done:** drive around Los Santos with `?engine=opensa`; no three types left in the vehicle logic path.
 
-**B6. 2dfx particles + textured coronas** — [06](06-world-effects-parity.md) row 13 tails · size M
+**B6. 2dfx particles + textured coronas** — ✅ DONE 2026-07-14, FIELD ✅ (ledger: 06 row 13) · size M
+Shipped: `.oscell` minor 2 carries a particle table (converter `weld.ts#collectParticles`, HD cells only);
+the FX baking is shared at `renderware/src/fx/bake-fx.ts` (the three path still keeps its own copy — that
+collapse is C2 work); the engine loops the particle lifecycle entirely in the vertex shader; coronas and the
+MOON are textured from `particle.txd` (sprite sizes read from the DATA — swapping in a higher-res moon just
+works) with a real terminator for the phase. FIVE field rounds, every one a convention I assumed instead of
+checked (GTA Z-up force/direction, SA sprites with no alpha channel, heat-haze prims, the UV range on a ±1
+quad, size-is-a-diameter) — all five are written up in the 06 row 13 ledger.
+Tests: `renderware/fx/{bake-fx,sprites}.test.ts`, `apps/web/.../engine-particles.test.ts` (the axis swap),
+and the converter on the real SF fountain (`weld.test.ts`, new `dff/particles/fountain_sfw.*` fixture).
+OLD SCOPE (kept for the record):
 A REAL flip-parity gap, not a nice-to-have: prod renders these (plan [044](../044-world-effects.md),
 `renderware/src/three/build-particles.ts`, `graphics.effects` config with a master toggle) and the map
 carries **113 type-1 entries** — 20 `WS_factorysmoke` columns, 8 fires, 6 fountains, vents, insects,
@@ -119,7 +130,7 @@ table) + engine (instanced billboard pass, shares the corona pass; emitter simul
 sprites (`particle.txd` coronastar/coronamoon — the moon disc is still procedural) ride the same path.
 NOT to be confused with `docs/ideas/0.4.0/.../a3-2dfx-particle-emitters-lods.md` (emitters on LODs for the
 REAL SA game via the ASI — a different target).
-**Done:** chimneys smoke and fountains run in `?engine=opensa`; ledger 06 row 13 closed → 14/14.
+**Done:** ✅ chimneys smoke and fountains run in `?engine=opensa`; ledger 06 row 13 closed → 14/14.
 
 **B7. Destruction objects, then animation objects** — [08](08-dynamics.md) · size M each
 Two more prod-parity object classes the own engine has never had, in the user's order:

@@ -45,6 +45,10 @@ function sampleCell(overrides: Partial<Oscell> = {}): Oscell {
       },
     ],
     origin: [2500, -1600, 0],
+    particles: [
+      { effectName: 'ws_factorysmoke', position: [12, 3, -4] },
+      { effectName: 'fire', position: [-1, 0, 2] },
+    ],
     vertexCount,
     vertexData,
     ...overrides,
@@ -88,7 +92,7 @@ describe('oscell codec', () => {
   });
 
   describe('positive cases', () => {
-    it('round-trips a cell byte-exactly (payloads, groups, objects, lights)', () => {
+    it('round-trips a cell byte-exactly (payloads, groups, objects, lights, particles)', () => {
       const cell = sampleCell();
 
       const decoded = decodeOscell(encodeOscell(cell));
@@ -97,6 +101,8 @@ describe('oscell codec', () => {
       expect([...decoded.indexData]).toEqual([...cell.indexData]);
       expect(decoded.groups).toEqual(cell.groups);
       expect(decoded.objects).toEqual(cell.objects);
+      // B6: the 2dfx emitter anchors, names and all (the host resolves the name against effects.fxp).
+      expect(decoded.particles).toEqual(cell.particles);
       expect(decoded.lights).toEqual(cell.lights);
       expect(decoded.bounds).toEqual(cell.bounds);
       expect(decoded.origin).toEqual(cell.origin);

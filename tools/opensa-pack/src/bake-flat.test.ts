@@ -93,7 +93,8 @@ function testCell(lod = false): WeldedCell {
     lights: [],
     lod,
     origin: [1000, 0, -500],
-    stats: { animatedStatic: 0, groups: 2, indices: 6, skippedTimed: 0, timedObjects: 0, vertices: 42 },
+    particles: [],
+    stats: { animatedStatic: 0, groups: 2, indices: 6, particles: 0, skippedTimed: 0, timedObjects: 0, vertices: 42 },
   };
 }
 
