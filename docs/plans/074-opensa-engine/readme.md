@@ -31,6 +31,7 @@ non-WebGPU browsers during the whole build-out (additive, no flag day — the 06
 | 14  | [pmb integration + final measure](14-pmb-integration.md) | Embed opensa-pack into perfect-map-builder; full modded-map conversion + the chain's exit-exam bench.                 |
 | 16  | [Vehicle paint](16-vehicle-paint.md)                     | Deep vehicle reflections — PARKED with a rejected v1; the rework plan (tonemapper, env probe, SSR, normals).          |
 | 17  | [Map lighting](17-map-lighting.md)                       | B6.5 — broken normals + 2dfx lamps. Round 1 REVERTED (per-pixel lamps cost 120→25 fps); measurements + open blockers. |
+| 18  | [UV-scroll animation](18-uv-anim.md)                     | B7·c — the crawling neon / conveyor belts. Parsed already, rendered by prod, ignored by the engine.                   |
 | 15  | [LOD baked lights](15-lod-baked-lights.md)               | Bake 2dfx lamp light into LOD night prelit — far-field streetlight pools / billboard glow at night.                   |
 
 ## Roadmap — vertical slices with numeric gates (plans ≠ phases; each milestone cuts across plans)

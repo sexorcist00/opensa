@@ -158,6 +158,108 @@ describe('weldCell 2dfx particles', () => {
   });
 });
 
+// The nodding donkey: a 6-frame clump whose arm swings (clip in counxref.ifp, named after the MODEL).
+const ANIM_DFF = 'tests/original/dff/anim-clump/nt_noddonkbase.dff';
+const ANIM_IFP = 'tests/original/dff/anim-clump/counxref.ifp';
+
+function animCell(): GridCell {
+  return {
+    cx: 0,
+    cy: 0,
+    hd: [
+      {
+        id: 1315,
+        interior: 0,
+        lod: -1,
+        modelName: 'nt_noddonkbase',
+        position: [10, 20, 30],
+        rotation: [0, 0, 0, 1],
+      },
+    ],
+    lod: [],
+  };
+}
+
+/** `anim: null` = a plain static def (passing `undefined` would hit the default — a trap this test fell in). */
+function animDefs(anim: null | string = 'counxref'): MapDefinitions {
+  const catalog = new Map<number, IdeObjectDef>();
+  catalog.set(1315, {
+    ...(anim !== null ? { anim } : {}),
+    drawDistance: 100,
+    flags: 0,
+    id: 1315,
+    modelName: 'nt_noddonkbase',
+    txdName: 'dyntraffic',
+  });
+
+  return {
+    carGenerators: [],
+    catalog,
+    imgDirs: [],
+    instances: [],
+    timedCatalog: new Map<number, IdeObjectDef>(),
+    txdParents: new Map<string, string>(),
+  };
+}
+
+function animFs(): AssetFileSystem {
+  const archive = openArchive(
+    buildArchiveBuffer([
+      { data: readFileSync(ANIM_DFF), name: 'nt_noddonkbase.dff' },
+      { data: readFileSync(ANIM_IFP), name: 'counxref.ifp' },
+      { data: readFileSync(TXD), name: 'dyntraffic.txd' },
+    ]),
+  );
+
+  return {
+    get: (name: string) => archive.get(name.split('/').pop() ?? name),
+    getText: () => null,
+    has: (name: string) => archive.get(name.split('/').pop() ?? name) !== null,
+  } as unknown as AssetFileSystem;
+}
+
+describe('weldCell animated objects (B7·b)', () => {
+  describe('negative cases', () => {
+    it('welds the WHOLE model when its IFP is missing — a lost clip must not delete a building', () => {
+      // The "blue hole": anim defs used to be skipped wholesale, which deleted burger01_LAw — a 22x35 m diner
+      // that sits in the anim section only because its sign spins.
+      const fs = animFs();
+
+      const whole = weldCell(fs, animDefs(null), animCell(), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+      const missing = weldCell(
+        fs,
+        animDefs('no_such_ifp'),
+        animCell(),
+        false,
+        new TexturePlanner(fs, new Map()),
+        [0, 0, 0],
+      );
+
+      expect(decodeOscell(missing!.bytes).vertexCount).toBe(decodeOscell(whole!.bytes).vertexCount);
+      expect(missing!.stats.animatedStatic).toBe(1);
+      expect(missing!.stats.animatedObjects).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('leaves the MOVING frames out of the bundle and welds the rest (the host draws the moving part live)', () => {
+      const fs = animFs();
+
+      const still = weldCell(fs, animDefs(null), animCell(), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+      const animated = weldCell(fs, animDefs(), animCell(), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      const whole = decodeOscell(still!.bytes).vertexCount;
+      const staticOnly = decodeOscell(animated!.bytes).vertexCount;
+      // Some geometry left (the moving arm) — and some stayed (the pump's base). Weld ALL of it and the arm
+      // shows twice: a frozen copy in the bundle plus the live one on top of it.
+      expect(staticOnly).toBeGreaterThan(0);
+      expect(staticOnly).toBeLessThan(whole);
+      expect(animated!.stats.animatedObjects).toBe(1);
+      expect(animated!.stats.animatedStatic).toBe(0);
+    });
+  });
+});
+
 describe('weldCell breakables', () => {
   describe('negative cases', () => {
     it('records NO smashable ranges for a LOD cell — a far prop is never hit', () => {

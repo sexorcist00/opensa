@@ -111,6 +111,11 @@ export class PhysicsWorld {
     this.events = new rapier.EventQueue(true);
   }
 
+  /** What the solver is actually chewing on — a stall needs a count, not a guess. */
+  census(): { bodies: number; colliders: number } {
+    return { bodies: this.world.bodies.len(), colliders: this.world.colliders.len() };
+  }
+
   /** A dynamic box (half-extents) at a Z-up position; returns its body handle. */
   createBox(position: Vec3, halfExtents: Vec3): number {
     const body = this.world.createRigidBody(this.rapier.RigidBodyDesc.dynamic().setTranslation(...position));

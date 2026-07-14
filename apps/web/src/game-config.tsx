@@ -57,6 +57,10 @@ const SA_TELEPORTS: readonly Teleport[] = [
   { coords: [-1045.0, -1620.0, 76.4], label: "Country - Truth's Farm" },
   { coords: [-1696.8, -748.0, 100.0], label: 'Country - Flint Hills' },
   { coords: [1139.0, -1490.0, 18.5], label: 'LS - Escalators' },
+  // Animated map objects (074/08 B7·b): the Burger Shot's sign SPINS — and the diner itself is the building
+  // that once vanished when anim defs were skipped wholesale ("the blue hole", plan 041).
+  { coords: [815.0, -1613.0, 20.0], label: 'LS - Burger Shot (spinning sign)' },
+  { coords: [-1494.0, 1941.0, 58.0], label: 'Country - Windmill' },
 ];
 
 /** A launchable game id. */
@@ -125,7 +129,7 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
     label: 'Run San Andreas [local only]',
     loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
     mainCharacter: 'BMYPOL1',
-    playerSpawn: [2495, -1675, 16], // LS - Ganton
+    playerSpawn: [-1494.0, 1941.0, 58.0], // Country - Windmill: ~20 m clear of the tower (B7·b)
     teleports: [...SA_TELEPORTS],
   },
 };

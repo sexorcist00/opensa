@@ -1,8 +1,11 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { RWBreakable } from '../parsers/binary/types';
 
+import { toArrayBuffer } from '../test-utils';
 import { bakeDebris, DEBRIS_LIFETIME } from './bake-debris';
+import { getBreakable } from './mesh';
 
 /** Two triangles sharing one texture, sitting flat at z = 0 in model space. */
 function shatterMesh(textures: [string, string] = ['crate', 'crate']): RWBreakable {
@@ -99,6 +102,33 @@ describe('bakeDebris', () => {
       const rammed = bakeDebris(shatterMesh(), AT_HEIGHT, { impact: [20, 0, 0], seed: 1 });
 
       expect(rammed.velocity[0]).toBeGreaterThan(still.velocity[0] + 5);
+    });
+  });
+});
+
+// A REAL shatter mesh: trafficlight1 ships an RW Breakable atomic (SA authors 238 of them). The synthetic mesh
+// above pins the arithmetic; this one proves the arithmetic survives contact with SA's own data.
+const TRAFFICLIGHT = 'tests/custom/proper-fixes-models/trafficlight1.dff';
+
+describe.skipIf(!existsSync(TRAFFICLIGHT))('bakeDebris (a real SA shatter mesh)', () => {
+  const shatter = getBreakable(
+    { get: () => toArrayBuffer(readFileSync(TRAFFICLIGHT)), names: [] },
+    'trafficlight1',
+  ) as RWBreakable;
+
+  describe('positive cases', () => {
+    it('shatters SA’s own mesh into per-triangle shards, all finite, one draw per texture', () => {
+      const baked = bakeDebris(shatter, AT_HEIGHT, { groundZ: 0, impact: [12, 0, 0] });
+
+      expect(baked.vertexCount).toBe(shatter.triangleMaterials.length * 3);
+      expect(baked.vertexCount).toBeGreaterThan(30); // a real prop, not a toy
+      expect([...baked.position].every(Number.isFinite)).toBe(true);
+      expect([...baked.velocity].every(Number.isFinite)).toBe(true);
+      // Every shard lands within its lifetime — thrown from 10 m, with a real ground to land on.
+      expect([...baked.landTime].every((time) => time > 0 && time < DEBRIS_LIFETIME)).toBe(true);
+      // The groups partition the mesh: SA authors several identical materials, and they collapse.
+      expect(baked.groups.reduce((sum, group) => sum + group.count, 0)).toBe(baked.vertexCount * 3);
+      expect(baked.groups.length).toBeLessThanOrEqual(shatter.materials.length);
     });
   });
 });

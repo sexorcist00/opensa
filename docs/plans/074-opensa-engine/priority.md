@@ -146,12 +146,19 @@ REAL SA game via the ASI — a different target).
   Breakables stay INSIDE the merged bundle — the engine degenerates their index ranges in place, so the break
   costs no draw call (splitting them out per placement measured 4.5× the draws). Five field rounds and every
   lesson is in the 08 ledger — read it before touching this.
-- **Animation objects** — the converter TODAY welds IDE-anim defs at BIND POSE and only counts them
-  (`weld.ts:153`, `animatedStatic` = **64 instances on the full map**): garage doors, windmills and
-  friends stand frozen. Work = carry the anim clip + frame chain into the format and drive them with the
-  B1 IFP sampler (the rigid-entity path already flattens frame hierarchies). Prod also ships UV-scroll
-  animation (`renderware/src/three/uv-anim.ts`) — inventory it here.
-  **Done:** breakables break, animated statics move; the `animatedStatic` counter stops meaning "frozen".
+- **B7·b Animation objects — ✅ DONE 2026-07-14, FIELD ✅.** Garage doors, windmills and the spinning signs
+  move (64 placements). No new engine machinery was needed: an IFP's "bones" ARE the clump's frames, so the
+  B1 `IfpSampler` composes the chain and `setPartWorldMatrix` (written for damage debris) drives each atomic.
+  The converter leaves ONLY the frames the clip moves out of the bundle — `burger01_LAw` is a 22×35 m diner
+  that lives in the anim section purely because its sign spins, and both dropping it (the plan-041 "blue
+  hole") and promoting it whole are bad trades. Ledger + lessons: [08](08-dynamics.md).
+
+- **B7·c UV-SCROLL animation — OPEN, see [18](18-uv-anim.md).** A prod-parity gap the own engine has never
+  had: the crawling neon (LV skull sign), conveyor belts. A DIFFERENT mechanism from B7·b — marked in the
+  DFF (UVAnimDict + the material's UV Anim PLG), plays globally in sync, and is already fully PARSED; the
+  converter and the engine simply ignore it. The design decision is where a scrolling material's two floats
+  live when the world samples a baked texture array (a per-vertex anim slot + a global table is the likely
+  answer, and it costs a `.oscell` minor bump).
 
 ## Milestone C — the flip and the endgame
 

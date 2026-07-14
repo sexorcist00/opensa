@@ -11,7 +11,8 @@ import type { AssetFileSystem, IplInstance, MapDefinitions } from '@opensa/rende
 
 import { encodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
 import { WIND_MODELS } from '@opensa/game/mods/wind-mode';
-import { getClump } from '@opensa/renderware/archive/asset-cache';
+import { animatedFrames, clipForModel } from '@opensa/renderware/anim/frame-clip';
+import { getClump, getIfp } from '@opensa/renderware/archive/asset-cache';
 import { breakableInstanceKey, breakableKeyHash } from '@opensa/renderware/breakable/key';
 import { cellGroups } from '@opensa/renderware/map/build-cell';
 import { type GridCell } from '@opensa/renderware/map/world-grid';
@@ -62,6 +63,8 @@ export interface WeldedCell {
 }
 
 export interface WeldStats {
+  /** Placements whose MOVING frames were left out of the bundle for the host to animate (B7·b). */
+  animatedObjects: number;
   /** IDE-anim instances welded at bind pose (no runtime animation yet — 074/06 ledger note). */
   animatedStatic: number;
   /** Smashable placements recorded (B7·a) — index ranges the engine can degenerate on a hit. */
@@ -130,6 +133,7 @@ export function weldCellParts(
 ): null | WeldedCell {
   const buckets = new Map<string, WeldBucket>();
   const stats: WeldStats = {
+    animatedObjects: 0,
     animatedStatic: 0,
     breakables: 0,
     groups: 0,
@@ -147,9 +151,15 @@ export function weldCellParts(
   const groups = [...cellGroups(defs, cell, lod).values()].sort((a, b) => (a.def.modelName < b.def.modelName ? -1 : 1));
   for (const group of groups) {
     const def = group.def;
-    // IDE-anim defs weld at bind pose (their frame chain places the parts) — skipping them left holes.
-    if (def.anim !== undefined) {
-      stats.animatedStatic += group.instances.length;
+    // IDE-anim defs (B7·b): the frames the clip MOVES are left out of the bundle — the host renders those as
+    // live entities. Everything else welds as usual, which is the point: `burger01_LAw` is a 22x35 m diner
+    // that sits in the anim section only because its sign spins. Skipping the whole def deleted the building
+    // (the "blue hole" field report, plan 041) — and promoting the whole def would drag the diner out of the
+    // merged batch for the sake of one sign.
+    const animated = def.anim !== undefined ? movingFrames(fs, def) : null;
+    if (animated) {
+      stats.animatedObjects += animated.size > 0 ? group.instances.length : 0;
+      stats.animatedStatic += animated.size === 0 ? group.instances.length : 0;
     }
     // Timed defs (074/06 row 9) weld like everything else, but into `timed` buckets → objectTable draws.
     // Breakable props (B7·a) stay INSIDE the merged bundle — splitting them out per placement measured 4.5x
@@ -165,6 +175,7 @@ export function weldCellParts(
       flags,
       lod ? undefined : breakables,
       breakableModels,
+      animated,
     );
     // 2dfx corona anchors (074/06 row 13) — HD level only (LOD duplicates would double every lamp).
     if (!lod) {
@@ -572,6 +583,21 @@ function lumaOf(r: number, g: number, b: number): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/**
+ * Which of an anim def's frames actually MOVE. Empty when the model's IFP or its clip is missing — the def
+ * then welds whole, at bind pose, exactly as before (that fallback is what keeps a missing IFP from deleting a
+ * building).
+ */
+function movingFrames(
+  fs: AssetFileSystem,
+  def: NonNullable<ReturnType<MapDefinitions['catalog']['get']>>,
+): ReadonlySet<number> {
+  const clump = getClump(fs, def.modelName);
+  const animation = clipForModel(getIfp(fs, def.anim ?? ''), def.modelName);
+
+  return animation ? animatedFrames(clump, animation) : new Set<number>();
+}
+
 function quatToMat3(x: number, y: number, z: number, w: number): number[] {
   return [
     1 - 2 * (y * y + z * z),
@@ -638,6 +664,8 @@ function weldGroup(
   breakables?: WeldBreakableRange[],
   /** Models object.dat marks as smashable (prod's secondary gate); omit and only the DFF shatter mesh gates. */
   breakableModels?: ReadonlySet<string>,
+  /** Frames an IFP clip moves (B7·b): their atomics are NOT welded — the host renders them live. */
+  animated?: null | ReadonlySet<number>,
 ): void {
   const clump = getClump(fs, def.modelName);
   const atomics = prepareClumpAtomics(clump);
@@ -652,6 +680,9 @@ function weldGroup(
     const geometry = clump.geometries[atomic.geometryIndex];
     if (!geometry) {
       continue;
+    }
+    if (animated?.has(atomic.frameIndex)) {
+      continue; // a moving part: the host draws it as a live entity, so welding it would double it
     }
     const frame = frameWorldTransform(clump.frames, atomic.frameIndex);
     for (const part of atomic.parts) {

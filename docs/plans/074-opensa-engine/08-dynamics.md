@@ -345,3 +345,39 @@ was already reading the quaternion and throwing it away), and the lamps ride tha
 this exact class of bug has landed: the seated ped rotated with a yaw in B5, and now the lamps.** Anything
 bolted to a BODY must ride the body's quaternion, never its heading. Fixes the three path too — it shared the
 same helper. Test: `vehicle-lamps.test.ts`, "the lamps ride the BODY, not the heading".
+
+---
+
+## B7·b — Animation objects — ✅ DONE 2026-07-14, FIELD ✅
+
+**No new engine machinery.** SA's animated map objects are not skinned: the DFF is a multi-frame CLUMP and the
+IFP's "bones" are its FRAMES, matched by name — each atomic rides one frame rigidly. A frame tree is therefore
+a skeleton where every vertex has weight 1 on one bone, so the pieces already in the tree do the whole job:
+the B1 `IfpSampler` composes the chain (fed IDENTITY inverse-binds, so it yields frame WORLD matrices rather
+than skinning matrices), and `setPartWorldMatrix` — written for damage debris — drives each atomic from it.
+
+**The converter promotes only what MOVES.** `burger01_LAw` is a 22 × 35 m diner that sits in the anim section
+purely because its sign spins. Skipping anim defs wholesale once deleted it (the "blue hole" of plan 041);
+promoting the whole def would drag the diner out of the merged batch for one sign. So `weld.ts` computes the
+frames the clip touches (plus their descendants — a windmill's blades are not in the clip, its hub is) and
+leaves ONLY those atomics out. Measured on the real `nt_noddonkbase`: 854 vertices whole → **294 welded**
+(the pump's base), the swinging arm goes to the host. Map-wide: **64 live, 0 static**, groups/cell 15.1 —
+unchanged, the batching is intact.
+
+**Two SA facts, both encoded in `renderware/anim/frame-clip.ts` (shared, so the two renderers cannot drift):**
+the clip inside an IFP is named after the **MODEL** (not the def, not the file); and object clips KEEP their
+translation — a garage door SLIDES. Ped clips drop it (locomotion is in-place), which is why the sampler
+gained optional translation tracks rather than assuming them.
+
+**The field round, and its lesson:** the sign spun with a FROZEN COPY of itself inside it. The converter was
+computing the moving-frame set correctly (it reported `animated(live)=64`) but **never passing it to
+`weldGroup`** — an edit that did not apply, and an OPTIONAL parameter, so `tsc` was silent and the lint was
+silent. **A missing optional argument is invisible to every static check we run.** Only a test comparing
+NUMBERS caught it (welded vertex count with vs without the anim). The same test also caught a trap in itself:
+`animDefs(undefined)` hits the parameter's DEFAULT — passing `undefined` is not passing "nothing".
+
+**Tests:** `renderware/anim/frame-clip.test.ts` (the real `nt_noddonkbase` + `counxref.ifp` — hierarchy, clip
+naming, descendants, translation), `opensa-pack/weld.test.ts` (moving frames leave the bundle; a MISSING IFP
+welds the model whole, so a lost clip can never delete a building again).
+
+**Not in scope, planned separately: UV-scroll animation — [18](18-uv-anim.md) (B7·c).**

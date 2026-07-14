@@ -34,6 +34,7 @@ import type { GameId } from '../game-config';
 
 import { BENCH_SCENES } from '../bench-scenes';
 import { GAME_CONFIG } from '../game-config';
+import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
 import { loadCoronaSprites, setupEngineParticles } from './engine-particles';
 import { loadEnginePlayer } from './engine-player';
@@ -54,6 +55,9 @@ interface EngineCanvasHostProps {
 const FIXED_STEP = 1 / 60;
 const MAX_CATCHUP_STEPS = 5;
 const WORLD_READY_TIMEOUT_MS = 12000;
+/** A frame slower than this gets its CPU breakdown logged (vsync is 8.3 ms at 120 Hz). */
+const SLOW_FRAME_MS = 20;
+
 /** Player capsule (metres, GTA Z-up): the setup-character defaults for a human. */
 const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HALF_HEIGHT = 0.55;
@@ -254,6 +258,8 @@ async function boot(
   // Smashable props (B7·a): the colliders are already tagged with their placement key by the shared adapter.
   // Uproot props (lampposts, meters) fall as real dynamic bodies; the rest shatter into analytic debris.
   const props = setupEngineProps(engine, fs, physics);
+  // Animated map objects (B7·b): the converter left their MOVING frames out of the bundle; these are them.
+  const animObjects = setupEngineAnimObjects(engine, fs, adapter);
   const breakables = setupEngineBreakables(engine, physics, collision, adapter, fs, props);
   let debugError: null | string = null;
   /** Last frame's camera eye (engine space) — the lamp coronas need it, one frame stale is invisible. */
@@ -338,16 +344,31 @@ async function boot(
   let readySent = false;
   let groundDelta = 0;
   let pedMs = 0;
+  /** Per-frame block timers (B7·b field stall): a stall must have a NUMBER, not a theory. */
+  let animMs = 0;
+  let fixedMs = 0;
+  let fixedSteps = 0;
+  let controllerMs = 0;
+  let physicsMs = 0;
+  let collisionMs = 0;
+  let vehiclesMs = 0;
   // In-game bench state (074/10 B3 tail): the loop consumes these; the runner below owns them.
   let benchCamera: null | { eye: [number, number, number]; target: [number, number, number] } = null;
   let benchSamples: null | { draws: number; frameMs: number; gpuMs: number; submitMs: number }[] = null;
   let lastStream: null | StreamStats = null;
   const runFixedSteps = (pending: number): number => {
     let steps = 0;
+    fixedSteps = 0;
+    controllerMs = 0;
+    physicsMs = 0;
     while (pending >= FIXED_STEP && steps < MAX_CATCHUP_STEPS) {
       try {
+        const controllerStarted = performance.now();
         controllerSystem.fixedUpdate(FIXED_STEP);
+        const physicsStarted = performance.now();
+        controllerMs += physicsStarted - controllerStarted;
         physicsSystem.fixedUpdate(FIXED_STEP);
+        physicsMs += performance.now() - physicsStarted;
         // Enter/exit places the rider and DRIVES here — after the physics step, exactly where prod's Game
         // runs it. Without this the climb-in freezes mid-phase (the whole sequence lives in fixedUpdate).
         vehicles?.fixedUpdate(FIXED_STEP);
@@ -359,6 +380,7 @@ async function boot(
       }
       pending -= FIXED_STEP;
       steps += 1;
+      fixedSteps = steps;
     }
 
     return pending;
@@ -421,11 +443,20 @@ async function boot(
     }
 
     if (!hostState.paused) {
+      const fixedStarted = performance.now();
       accumulator = runFixedSteps(accumulator + dt);
+      fixedMs = performance.now() - fixedStarted;
+      const collisionStarted = performance.now();
       collision.update();
+      collisionMs = performance.now() - collisionStarted;
       // Felled props follow their physics bodies (B7·a) — after the step, like every other body-driven visual.
       props.update();
+      const animStarted = performance.now();
+      animObjects.update(animStarted / 1000, [Transform.x[playerEid], Transform.y[playerEid], Transform.z[playerEid]]);
+      animMs = performance.now() - animStarted;
+      const vehiclesStarted = performance.now();
       tickVehicles(dt);
+      vehiclesMs = performance.now() - vehiclesStarted;
       const previousHour = hour;
       hour = (hour + dt / (config.time.secondsPerGameMinute * 60)) % 24;
       if (hour < previousHour) {
@@ -478,6 +509,18 @@ async function boot(
     };
     [cameraEye[0], cameraEye[1], cameraEye[2]] = camera.eye;
     const stats = engine.frame(camera);
+    // B7·b field stall: the CPU breakdown of the frames that actually hitch — a stall must arrive as a NUMBER,
+    // not a theory. Quiet on a healthy frame. (The timings are last frame's; the stall is what matters.)
+    if (dt * 1000 > SLOW_FRAME_MS) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · submit ${stats.submitMs.toFixed(2)} · ` +
+          `fixed ${fixedMs.toFixed(1)} (${fixedSteps} steps: controller ${controllerMs.toFixed(1)} + physics ${physicsMs.toFixed(1)}) · ` +
+          `collision ${collisionMs.toFixed(1)} · vehicles ${vehiclesMs.toFixed(1)} · ` +
+          `ped ${pedMs.toFixed(2)} · anim ${animMs.toFixed(2)} · draws ${stats.drawsRecorded} · cells ${streamStats.loadedCells} · ` +
+          `bodies ${physics.census().bodies} colliders ${physics.census().colliders}`,
+      );
+    }
     benchSamples?.push({
       draws: stats.drawsRecorded,
       frameMs: dt * 1000,
@@ -502,7 +545,7 @@ async function boot(
       `GTA     ${gta[0].toFixed(1)}, ${gta[1].toFixed(1)}, ${gta[2].toFixed(1)} · ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')}\n` +
       `debug   vel ${Velocity.x[playerEid].toFixed(2)},${Velocity.y[playerEid].toFixed(2)},${Velocity.z[playerEid].toFixed(2)} ` +
       `grounded ${Velocity.grounded[playerEid]} ${seatedCar ? '· SEATED ' : ''}` +
-      `move ${JSON.stringify(input.move())} · ped sampler ${pedMs.toFixed(2)} ms` +
+      `move ${JSON.stringify(input.move())} · ped sampler ${pedMs.toFixed(2)} ms · anim ${animMs.toFixed(2)} ms` +
       (debugError ? `\nFIXED-STEP ERROR: ${debugError}` : '') +
       (hostState.paused ? '\nPAUSED' : '');
     requestAnimationFrame(loop);

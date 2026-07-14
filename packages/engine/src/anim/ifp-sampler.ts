@@ -21,13 +21,20 @@ export interface SamplerBone {
 
 export interface SamplerClip {
   duration: number;
-  /** Per skin-order bone: keyframe times (seconds, ascending) + quats (x,y,z,w × keyCount). */
-  tracks: readonly { quats: readonly number[]; times: readonly number[] }[];
+  /**
+   * Per skin-order bone: keyframe times (seconds, ascending) + quats (x,y,z,w × keyCount), and — for MAP
+   * OBJECTS (074/08 B7·b) — an optional translation track (x,y,z × keyCount).
+   *
+   * A ped's clip deliberately has none: its locomotion is in-place and gameplay owns the position. A garage
+   * door, though, SLIDES; drop its translation and the door merely rotates on the spot.
+   */
+  tracks: readonly { positions?: readonly number[]; quats: readonly number[]; times: readonly number[] }[];
 }
 
 /** Scratch reused across frames (bone count fixed per fixture) — the steady-state frame allocates zero. */
 export class IfpSampler {
   private readonly local = new Float32Array(16);
+  private readonly position = new Float32Array(3);
   private readonly quat = new Float32Array(4);
   private readonly worlds: Float32Array;
 
@@ -46,7 +53,13 @@ export class IfpSampler {
       } else {
         this.quat.set(definition.bindRotation);
       }
-      composeLocal(this.local, this.quat, definition.bindPosition);
+      // A translated bone only exists on map-object clips; a ped's bones keep their bind position.
+      if (track?.positions && track.times.length > 0) {
+        samplePosition(track, looped, this.position);
+      } else {
+        this.position.set(definition.bindPosition);
+      }
+      composeLocal(this.local, this.quat, this.position);
       const world = this.worlds.subarray(bone * 16, bone * 16 + 16);
       if (definition.parent >= 0) {
         multiply(world, this.worlds.subarray(definition.parent * 16, definition.parent * 16 + 16), this.local);
@@ -73,7 +86,7 @@ export function mulMat4(out: Float32Array, a: ArrayLike<number>, b: ArrayLike<nu
 }
 
 /** local = translation(bindPosition) × rotation(quat), column-major. */
-function composeLocal(out: Float32Array, quat: ArrayLike<number>, position: readonly [number, number, number]): void {
+function composeLocal(out: Float32Array, quat: ArrayLike<number>, position: ArrayLike<number>): void {
   const [x, y, z, w] = [quat[0], quat[1], quat[2], quat[3]];
   const x2 = x + x;
   const y2 = y + y;
@@ -123,6 +136,45 @@ function multiply(out: Float32Array, a: ArrayLike<number>, b: ArrayLike<number>)
     out[column * 4 + 1] = a[1] * b0 + a[5] * b1 + a[9] * b2 + a[13] * b3;
     out[column * 4 + 2] = a[2] * b0 + a[6] * b1 + a[10] * b2 + a[14] * b3;
     out[column * 4 + 3] = a[3] * b0 + a[7] * b1 + a[11] * b2 + a[15] * b3;
+  }
+}
+
+/** Linear keyframe lerp of a bone's TRANSLATION track (map objects only — a garage door slides). */
+function samplePosition(
+  track: { positions?: readonly number[]; times: readonly number[] },
+  time: number,
+  out: Float32Array,
+): void {
+  const positions = track.positions;
+  if (!positions) {
+    return;
+  }
+  const times = track.times;
+  const last = times.length - 1;
+  if (time <= times[0]) {
+    out.set(positions.slice(0, 3));
+
+    return;
+  }
+  if (time >= times[last]) {
+    out.set(positions.slice(last * 3, last * 3 + 3));
+
+    return;
+  }
+  let low = 0;
+  let high = last;
+  while (high - low > 1) {
+    const mid = (low + high) >> 1;
+    if (times[mid] <= time) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  const span = times[high] - times[low] || 1;
+  const t = (time - times[low]) / span;
+  for (let axis = 0; axis < 3; axis += 1) {
+    out[axis] = positions[low * 3 + axis] + (positions[high * 3 + axis] - positions[low * 3 + axis]) * t;
   }
 }
 

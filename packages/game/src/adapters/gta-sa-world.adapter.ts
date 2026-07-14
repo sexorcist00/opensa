@@ -104,6 +104,16 @@ const CITY_POPCYCLE_ZONE: Record<City, string> = {
   VEGAS: 'RESIDENTIAL_AVERAGE',
 };
 
+/** One placed animated map object (074/08 B7·b) — native GTA coords and the IPL quaternion, verbatim. */
+export interface AnimatedPlacement {
+  /** The IFP file holding the model's clip (the clip inside is named after the MODEL). */
+  anim: string;
+  modelName: string;
+  position: [number, number, number];
+  rotation: [number, number, number, number];
+  txdName: string;
+}
+
 /**
  * The own engine's vehicle load product (074/08 B5 step 4): renderer-agnostic geometry + the same collision,
  * handling and paint the three path gets. The host uploads `model` ONCE per car type and spawns instances.
@@ -217,6 +227,33 @@ export class GtaSaWorldAdapter implements WorldAdapter {
           };
   }
 
+  /**
+   * Every ANIMATED map object placed on the map (074/08 B7·b): garage doors, windmills, the spinning signs.
+   * There are only ~64 of them map-wide, so the host holds the whole list and spawns the ones in range —
+   * no per-cell streaming machinery for a set this small.
+   */
+  animatedPlacements(): AnimatedPlacement[] {
+    if (!this.defs) {
+      return [];
+    }
+    const placed: AnimatedPlacement[] = [];
+    for (const instance of this.defs.instances) {
+      const def = this.defs.catalog.get(instance.id);
+      if (def?.anim === undefined) {
+        continue;
+      }
+      placed.push({
+        anim: def.anim,
+        modelName: def.modelName,
+        position: [...instance.position],
+        rotation: [...instance.rotation],
+        txdName: def.txdName,
+      });
+    }
+
+    return placed;
+  }
+
   /** `object.dat` collision-damage tuning for a model (plan 045), or undefined when absent. The
    *  break system gates on RW Breakable mesh data; this only tunes the impact threshold + marks
    *  indestructible (huge-mass) props. */
@@ -319,21 +356,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     }
 
     return this.loadCharacter(`${def.model}.dff`, `${def.txd}.txd`);
-  }
-
-  /**
-   * Load the timecyc (per-weather, per-hour colour/lighting table), always as 24h.
-   * Uses the optional `timecyc_24h.dat` as-is when present, else converts the
-   * mandatory vanilla `timecyc.dat` (8 keyframes/weather) to 24h.
-   */
-  async loadTimecyc(): Promise<Timecyc> {
-    await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
-    const text24 = this.fs.getText('data/timecyc_24h.dat');
-    if (text24 !== null) {
-      return buildTimecyc(parseTimecyc(text24));
-    }
-
-    return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
   }
 
   // eslint-disable-next-line
@@ -443,6 +465,21 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     root.add(buildCollisionWireframe(colliders));
 
     return [root];
+  }
+
+  /**
+   * Load the timecyc (per-weather, per-hour colour/lighting table), always as 24h.
+   * Uses the optional `timecyc_24h.dat` as-is when present, else converts the
+   * mandatory vanilla `timecyc.dat` (8 keyframes/weather) to 24h.
+   */
+  async loadTimecyc(): Promise<Timecyc> {
+    await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
+    const text24 = this.fs.getText('data/timecyc_24h.dat');
+    if (text24 !== null) {
+      return buildTimecyc(parseTimecyc(text24));
+    }
+
+    return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
   }
 
   /**

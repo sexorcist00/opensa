@@ -96,6 +96,7 @@ function testCell(lod = false): WeldedCell {
     origin: [1000, 0, -500],
     particles: [],
     stats: {
+      animatedObjects: 0,
       animatedStatic: 0,
       breakables: 0,
       groups: 2,

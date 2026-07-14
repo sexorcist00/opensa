@@ -52,6 +52,8 @@ export interface ConvertOptions {
 
 export interface ConvertReport {
   /** IDE-anim instances welded at bind pose (frozen — no runtime animation yet). */
+  /** Placements whose moving frames left the bundle for the host to animate (B7·b). */
+  animatedObjects: number;
   animatedStatic: number;
   ao: (BakeAoReport & { ms: number }) | null;
   /** Smashable placements recorded (B7·a). */
@@ -87,6 +89,7 @@ export async function convertDistrict(
 
   const inputs: OspakInput[] = [];
   const report: ConvertReport = {
+    animatedObjects: 0,
     animatedStatic: 0,
     ao: null,
     breakables: 0,
@@ -203,6 +206,7 @@ function accumulate(report: ConvertReport, key: string, bytes: number, stats: We
     vertices: stats.vertices,
   });
   report.animatedStatic += stats.animatedStatic;
+  report.animatedObjects += stats.animatedObjects;
   report.skippedTimed += stats.skippedTimed;
   report.particles += stats.particles;
   report.timedObjects += stats.timedObjects;
