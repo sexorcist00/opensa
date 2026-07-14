@@ -23,7 +23,13 @@ function car(): EnterableVehicle {
   handle.lampAnchors.set('head', [0.8, 1.8, 0]);
   handle.lampAnchors.set('tail', [0.6, -2.4, 0]);
 
-  return { halfExtents: [1, 2, 0.7], handle, heading: 0, position: [0, 0, 0] } as unknown as EnterableVehicle;
+  return {
+    halfExtents: [1, 2, 0.7],
+    handle,
+    heading: 0,
+    orientation: [0, 0, 0, 1],
+    position: [0, 0, 0],
+  } as unknown as EnterableVehicle;
 }
 
 /** The enter/exit system, reduced to what the lamps actually ask it. */

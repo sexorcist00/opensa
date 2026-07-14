@@ -52,7 +52,9 @@ export function lampAnchorsOf(vehicle: EnterableVehicle): { front: Vec3; rear: V
  */
 export function lampsOf(vehicle: EnterableVehicle): VehicleLamp[] {
   const { front: head, rear: tail } = lampAnchorsOf(vehicle);
-  const quat = quatFromHeading(vehicle.heading);
+  // The car's FULL orientation, not its heading: a yaw cannot express a car on its roof, and the lamps (and
+  // the coronas on them) then float off the body the moment it rolls.
+  const quat = vehicle.orientation;
   const lamps: VehicleLamp[] = [];
   for (const [anchor, kind] of [
     [head, 'head'],
@@ -86,13 +88,14 @@ export function lampStateFor(
   return { car: lit, state: { brakes: lit ? braking : false, headlights: lit !== null, intensity } };
 }
 
-function add(a: Vec3, b: [number, number, number]): Vec3 {
-  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+/** Yaw about GTA +Z (the car's heading) as a quaternion. */
+/** A yaw-only quaternion — the SEED for a freshly placed car; the physics system replaces it every step. */
+export function quatFromHeading(heading: number): VehicleQuat {
+  return [0, 0, Math.sin(heading / 2), Math.cos(heading / 2)];
 }
 
-/** Yaw about GTA +Z (the car's heading) as a quaternion. */
-function quatFromHeading(heading: number): VehicleQuat {
-  return [0, 0, Math.sin(heading / 2), Math.cos(heading / 2)];
+function add(a: Vec3, b: [number, number, number]): Vec3 {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 }
 
 function rotate(v: readonly [number, number, number], q: VehicleQuat): [number, number, number] {

@@ -213,6 +213,8 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       handle,
       handling: data.handling,
       heading,
+      // Seeded from the placement; the physics system keeps it live from the body.
+      orientation: headingQuat(heading),
       position: live,
       rig,
       seatLocal,

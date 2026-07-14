@@ -32,6 +32,7 @@ import { TimedObjectSystem } from '@opensa/game/time/timed-object.system';
 import { EnterVehicleSystem } from '@opensa/game/vehicle/enter-vehicle.system';
 import { VehicleDamageSystem } from '@opensa/game/vehicle/vehicle-damage.system';
 import { VehicleHeadlightSystem } from '@opensa/game/vehicle/vehicle-headlight.system';
+import { quatFromHeading } from '@opensa/game/vehicle/vehicle-lamps';
 import { VehicleLodSystem } from '@opensa/game/vehicle/vehicle-lod.system';
 import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.system';
 import { seaState } from '@opensa/game/water/wave-params';
@@ -1234,6 +1235,9 @@ function bootstrap(
         handle,
         handling,
         heading,
+        // Seeded from the placement; the physics system keeps it live from the body (a yaw cannot express a
+        // car on its roof, and the lamps ride this).
+        orientation: quatFromHeading(heading),
         position: live,
         rig,
         seatLocal,

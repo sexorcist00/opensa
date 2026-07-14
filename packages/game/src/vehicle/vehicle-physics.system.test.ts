@@ -39,6 +39,7 @@ function vehicle(rig: VehicleRig, position: Vec3 = [0, 0, 0]): EnterableVehicle 
     body: CAR_BODY,
     handle: new FakeVehicleHandle(),
     heading: 0,
+    orientation: [0, 0, 0, 1] as [number, number, number, number],
     position: [...position],
     rig,
   } as unknown as EnterableVehicle;

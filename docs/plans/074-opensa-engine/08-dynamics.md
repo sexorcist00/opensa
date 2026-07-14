@@ -336,3 +336,12 @@ VALUE — it fails on the rotated reader).
 
 **Deliberately not done:** shards do not collide with anything (they are analytic, and prod's don't either);
 a felled prop is cleaned up after 8 s rather than persisting until the cell streams out.
+
+**B5 follow-up — coronas slid off a rolled car (fixed 2026-07-14, FIELD-reported).** `lampsOf` placed the
+lamps with `quatFromHeading(vehicle.heading)` — a YAW. A yaw cannot express a car on its roof, so the lamps
+(and the coronas riding them) stayed in a flat frame while the wreck did not, and the glows floated beside the
+body. `EnterableVehicle` now carries the chassis's FULL `orientation`, kept live by the physics system (which
+was already reading the quaternion and throwing it away), and the lamps ride that. **This is the THIRD time
+this exact class of bug has landed: the seated ped rotated with a yaw in B5, and now the lamps.** Anything
+bolted to a BODY must ride the body's quaternion, never its heading. Fixes the three path too — it shared the
+same helper. Test: `vehicle-lamps.test.ts`, "the lamps ride the BODY, not the heading".

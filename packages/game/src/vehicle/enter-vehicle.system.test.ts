@@ -140,6 +140,7 @@ function vehicleAt(position: Vec3): EnterableVehicle {
     handle,
     handling: { brakeDecel: 9, engineAccel: 20, mass: 1500, maxVelocity: 160, steeringLock: 30 },
     heading: 0,
+    orientation: [0, 0, 0, 1] as [number, number, number, number],
     position,
     rig,
     seatLocal: [-0.4, 0, -0.16],

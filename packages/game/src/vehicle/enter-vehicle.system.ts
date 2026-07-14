@@ -25,6 +25,14 @@ export interface EnterableVehicle {
   handling: VehicleHandling;
   /** Heading about Z (native) — kept live from the body by the physics system. */
   heading: number;
+  /**
+   * The chassis's FULL orientation (native GTA quaternion), kept live by the physics system.
+   *
+   * `heading` alone is a yaw, and a yaw cannot describe a car that is upside down. Anything bolted to the
+   * BODY — its lamps, and the coronas that sit on them — has to ride this, or it slides off the car the
+   * moment the car rolls.
+   */
+  orientation: [number, number, number, number];
   /** World position (native Z-up) — kept live from the body by the physics system. */
   position: Vec3;
   /** Wheel rig (spin/steer). */

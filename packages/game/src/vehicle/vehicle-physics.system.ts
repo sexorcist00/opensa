@@ -54,6 +54,10 @@ export class VehiclePhysicsSystem implements System {
         [position[0], position[1], position[2]],
         [quaternion[0], quaternion[1], quaternion[2], quaternion[3]],
       );
+      car.orientation[0] = quaternion[0];
+      car.orientation[1] = quaternion[1];
+      car.orientation[2] = quaternion[2];
+      car.orientation[3] = quaternion[3];
       this.quaternion.set(quaternion[0], quaternion[1], quaternion[2], quaternion[3]);
       // Heading about Z from the body's forward (+Y) projected onto the ground plane.
       this.forward.copy(FORWARD).applyQuaternion(this.quaternion);
