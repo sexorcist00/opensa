@@ -51,6 +51,77 @@ fn fsCorona(in: CoronaOut) -> @location(0) vec4f {
   return vec4f(in.color.rgb * texel.rgb * (texel.a * in.color.a), 0.0);
 }
 `,
+  /**
+   * Prop debris (074/08 B7·a step 4) — one draw per break, and NOTHING per frame on the CPU.
+   *
+   * Every vertex carries its shard's whole flight: centroid, velocity, spin axis x speed, and the age at
+   * which the centroid reaches the ground. The shard flies a ballistic arc about its centroid, spins, then
+   * FREEZES the moment it lands (translation and spin both) — which is why the arithmetic clamps age at
+   * landTime rather than stopping the draw. The three path shipped without a ground probe and its shards sank
+   * through the floor; here the host probes the ground, so they come to rest on it.
+   */
+  debris: /* wgsl */ `
+#include <frame>
+
+struct DebrisUniform {
+  spawn: vec4f,   // x = spawn time (frame clock), y = lifetime, z = fade seconds, w = gravity
+};
+@group(1) @binding(0) var<uniform> debris: DebrisUniform;
+@group(1) @binding(1) var shards: texture_2d_array<f32>;
+@group(1) @binding(2) var shardSampler: sampler;
+
+struct DebrisIn {
+  @location(0) position: vec3f,
+  @location(1) uv: vec2f,
+  @location(2) color: vec4f,
+  @location(3) center: vec3f,
+  @location(4) velocity: vec3f,
+  @location(5) angular: vec3f,
+  @location(6) landLayer: vec2f,   // x = land time (s), y = texture layer
+};
+
+struct DebrisOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) color: vec4f,
+  @location(2) @interpolate(flat) layer: u32,
+  @location(3) fade: f32,
+};
+
+/** Rodrigues: rotate v about a unit axis by the given angle. */
+fn rotateAxis(v: vec3f, axis: vec3f, angle: f32) -> vec3f {
+  let c = cos(angle);
+  let s = sin(angle);
+  return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
+}
+
+@vertex
+fn vsDebris(in: DebrisIn) -> DebrisOut {
+  var out: DebrisOut;
+  let age = max(frame.params2.z - debris.spawn.x, 0.0);
+  // Frozen once it lands: both the arc and the spin stop at the same instant, or a resting shard would
+  // keep twitching on the ground.
+  let t = min(age, in.landLayer.x);
+  let speed = length(in.angular);
+  let axis = select(vec3f(0.0, 1.0, 0.0), in.angular / max(speed, 1e-5), speed > 1e-5);
+  let spun = rotateAxis(in.position - in.center, axis, speed * t);
+  let center = in.center + in.velocity * t + vec3f(0.0, -0.5 * debris.spawn.w, 0.0) * t * t;
+  out.clip = frame.viewProj * vec4f(center + spun, 1.0);
+  out.uv = in.uv;
+  out.color = in.color;
+  out.layer = u32(in.landLayer.y);
+  out.fade = 1.0 - smoothstep(debris.spawn.y - debris.spawn.z, debris.spawn.y, age);
+  return out;
+}
+
+@fragment
+fn fsDebris(in: DebrisOut) -> @location(0) vec4f {
+  let texel = textureSample(shards, shardSampler, in.uv, in.layer);
+  let color = texel.rgb * in.color.rgb;
+  let alpha = texel.a * in.color.a * in.fade;
+  return vec4f(color * alpha, alpha);   // premultiplied, like every other blended pass here
+}
+`,
   frame: /* wgsl */ `
 struct Frame {
   viewProj: mat4x4f,

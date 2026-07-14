@@ -3,10 +3,13 @@
 // IMG archive + asset resolution
 export * from './archive';
 
+// 2dfx particles (074/06 row 13, B6): the shared FX baking both renderers run.
+export { breakableKeyHash } from './breakable/key';
+
+export { breakableModelsFromText, breakableModelsOf } from './breakable/models';
 // Collision (COL) index over the archive
 export * from './collision';
 
-// 2dfx particles (074/06 row 13, B6): the shared FX baking both renderers run.
 export {
   bakeFxInstances,
   bakeFxSystem,

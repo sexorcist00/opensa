@@ -20,6 +20,7 @@ export const SCENE_FORMAT: GPUTextureFormat = 'rgba16float';
 
 export type PipelineId =
   | 'corona'
+  | 'debris'
   | 'particle-add'
   | 'particle-blend'
   | 'ped'
@@ -40,6 +41,8 @@ export type PipelineId =
 export interface PipelineSet {
   /** group(1): per-cell uniform (origin). */
   cellLayout: GPUBindGroupLayout;
+  /** group(1) of the debris pipeline: the break's uniform + its shard texture ARRAY + sampler (B7·a). */
+  debrisLayout: GPUBindGroupLayout;
   /** group(0): per-frame uniform. */
   frameLayout: GPUBindGroupLayout;
   get(id: PipelineId): GPURenderPipeline;
@@ -337,6 +340,52 @@ export function compileAll(
     );
   }
 
+  // Prop debris (B7·a): one draw per break. Every vertex carries its shard's whole flight, so the pass is
+  // pure geometry + a 16-byte uniform; the shards are alpha-blended and write no depth (they overlap).
+  const debrisLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT },
+      { binding: 1, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'debris',
+  });
+  const debrisModule = device.createShaderModule({ code: resolveShader('debris'), label: 'debris' });
+  pipelines.set(
+    'debris',
+    device.createRenderPipeline({
+      depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
+      fragment: {
+        entryPoint: 'fsDebris',
+        module: debrisModule,
+        targets: [{ blend: premultBlend, format: colorFormat }],
+      },
+      label: 'debris',
+      layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, debrisLayout], label: 'debris' }),
+      multisample: { count: MSAA_SAMPLES },
+      // Shards are single-sided triangles torn out of a closed mesh — both faces must draw.
+      primitive: { cullMode: 'none', topology: 'triangle-list' },
+      vertex: {
+        buffers: [
+          {
+            arrayStride: 80,
+            attributes: [
+              { format: 'float32x3', offset: 0, shaderLocation: 0 }, // position (world, engine space)
+              { format: 'float32x2', offset: 12, shaderLocation: 1 }, // uv
+              { format: 'float32x4', offset: 20, shaderLocation: 2 }, // colour
+              { format: 'float32x3', offset: 36, shaderLocation: 3 }, // shard centroid
+              { format: 'float32x3', offset: 48, shaderLocation: 4 }, // velocity
+              { format: 'float32x3', offset: 60, shaderLocation: 5 }, // spin axis x speed
+              { format: 'float32x2', offset: 72, shaderLocation: 6 }, // land time, texture layer
+            ],
+          },
+        ],
+        entryPoint: 'vsDebris',
+        module: debrisModule,
+      },
+    }),
+  );
+
   const coronaModule = device.createShaderModule({ code: resolveShader('corona'), label: 'corona' });
   pipelines.set(
     'corona',
@@ -444,6 +493,7 @@ export function compileAll(
 
   return {
     cellLayout,
+    debrisLayout,
     frameLayout,
     get(id: PipelineId): GPURenderPipeline {
       const pipeline = pipelines.get(id);

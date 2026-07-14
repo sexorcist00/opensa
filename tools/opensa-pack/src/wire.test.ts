@@ -44,6 +44,7 @@ function sampleCell(index16: boolean): Oscell {
 
   return {
     bounds: [0, 0, 0, 100],
+    breakables: [],
     channelMask: 0,
     groups: [
       { bounds: [0, 0, 0, 50], indexCount: 60, indexOffset: 0, pipelineClass: 0, side: 0, textureArrayRef: 0 },

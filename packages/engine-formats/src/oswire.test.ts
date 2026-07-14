@@ -12,6 +12,7 @@ function sampleCellBytes(index16 = false): Uint8Array {
   const indices = [0, 1, 2, 2, 3, 4, 4, 5, 6];
   const cell: Oscell = {
     bounds: [1, 2, 3, 40],
+    breakables: [],
     channelMask: OscellChannel.NIGHT_PRELIT,
     groups: [{ bounds: [1, 2, 3, 10], indexCount: 9, indexOffset: 0, pipelineClass: 0, side: 0, textureArrayRef: 2 }],
     index16,
@@ -19,7 +20,7 @@ function sampleCellBytes(index16 = false): Uint8Array {
     indexData: index16
       ? new Uint8Array(new Uint16Array(indices).buffer)
       : new Uint8Array(new Uint32Array(indices).buffer),
-    lights: [{ color: [255, 200, 100, 255], farClip: 120, position: [10, 20, 30], size: 1.5 }],
+    lights: [{ color: [255, 200, 100, 255], farClip: 120, owner: 3913926212, position: [10, 20, 30], size: 1.5 }],
     objects: [],
     origin: [2500, -1600, 0],
     particles: [],

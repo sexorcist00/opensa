@@ -35,6 +35,14 @@ const UP_AXIS = 2; // +Z
 // (so climbing into the dynamic car doesn't shove it), without affecting on-foot collision.
 const VEHICLE_GROUP = 0x0002;
 const VEHICLE_GROUPS = ((VEHICLE_GROUP << 16) | 0xffff) >>> 0;
+const PROP_GROUP = 0x0004;
+/**
+ * A knocked-over prop (074/08 B7·a): collides with the WORLD but NOT with vehicles. It is spawned at the very
+ * instant a car is embedded in it — the bumper is already inside the pole's volume — so letting the two solve
+ * against each other launches the pole through the ground and bogs the car down in it. It falls, it lands, it
+ * lies there; the car drives on.
+ */
+const PROP_GROUPS = ((PROP_GROUP << 16) | (0xffff & ~VEHICLE_GROUP)) >>> 0;
 const PLAYER_GROUPS_DEFAULT = 0xffffffff; // collide with everything (incl. standing on a car)
 const PLAYER_GROUPS_IGNORE_VEHICLES = ((0xffff << 16) | (0xffff & ~VEHICLE_GROUP)) >>> 0;
 
@@ -211,6 +219,36 @@ export class PhysicsWorld {
   }
 
   /**
+   * A knocked-over prop (074/08 B7·a): a dynamic box that keeps the prop's placed heading, falls under
+   * gravity, lands on the world — and passes THROUGH vehicles (see {@link PROP_GROUPS}).
+   */
+  createFalling(
+    position: Vec3,
+    rotation: Quat,
+    mass: number,
+    /** The prop's own vertices (MODEL space) — the collider is its convex hull, not a bounding box. */
+    hull: Float32Array,
+    /** Box fallback (centre + half extents, model space) for a mesh Rapier cannot hull. */
+    box: { centre: Vec3; half: Vec3 },
+  ): number {
+    const body = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.dynamic()
+        .setTranslation(...position)
+        // Without the placed heading, a lamppost standing at an angle snaps upright the instant it becomes
+        // a body.
+        .setRotation({ w: rotation[3], x: rotation[0], y: rotation[1], z: rotation[2] }),
+    );
+    // A CONVEX HULL, because a bounding box lies: a lamppost's arm makes its box 2.8 m wide, so the box came
+    // to rest on that phantom face and left the actual pole hanging in the air. The hull is the shape you see.
+    const desc =
+      this.rapier.ColliderDesc.convexHull(hull) ??
+      this.rapier.ColliderDesc.cuboid(...box.half).setTranslation(...box.centre);
+    this.world.createCollider(desc.setMass(mass).setCollisionGroups(PROP_GROUPS), body);
+
+    return body.handle;
+  }
+
+  /**
    * A kinematic, position-based **capsule** body (Z-aligned) at a Z-up position —
    * the player's movement collider. Returns the body + collider handles. Kinematic
    * bodies ignore world gravity; the caller integrates it and drives the body via
@@ -366,6 +404,25 @@ export class PhysicsWorld {
     }
   }
 
+  /** Set a body's linear velocity (Z-up). */
+  /** Spin a dynamic body — a toppling prop is knocked over about a hinge rather than shoved sideways. */
+  /**
+   * Shove a dynamic body at a POINT (world space) — the honest way to knock a prop over.
+   *
+   * Spinning it about its own centre instead drives the bottom half of a tall body straight into the ground:
+   * an 8 m lamppost given an angular velocity buries its base, the solver ejects it, and the pole rockets off.
+   * A push high up lets the GROUND be the pivot, which is what topples a real post.
+   */
+  pushAt(handle: number, impulse: Vec3, point: Vec3): void {
+    this.world
+      .getRigidBody(handle)
+      .applyImpulseAtPoint(
+        { x: impulse[0], y: impulse[1], z: impulse[2] },
+        { x: point[0], y: point[1], z: point[2] },
+        true,
+      );
+  }
+
   readBody(handle: number): BodyTransform {
     const body = this.world.getRigidBody(handle);
     const t = body.translation();
@@ -415,7 +472,6 @@ export class PhysicsWorld {
     this.world.getCollider(handle).setSensor(sensor);
   }
 
-  /** Set a body's linear velocity (Z-up). */
   setLinvel(handle: number, velocity: Vec3): void {
     this.world.getRigidBody(handle).setLinvel({ x: velocity[0], y: velocity[1], z: velocity[2] }, true);
   }
@@ -444,7 +500,9 @@ export class PhysicsWorld {
   step(dt: number): void {
     this.world.timestep = dt;
     for (const vehicle of this.vehicles) {
-      vehicle.updateVehicle(dt); // writes the chassis velocity from suspension/engine before the step
+      // The suspension RAYS must respect collision groups too, or the wheels ride on things the chassis
+      // passes through — a felled lamppost is invisible to the car's body but the wheels climbed it.
+      vehicle.updateVehicle(dt, undefined, VEHICLE_GROUPS); // chassis velocity from suspension/engine
     }
     this.world.step(this.events);
     this.events.drainContactForceEvents((event) => {

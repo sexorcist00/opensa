@@ -8,6 +8,7 @@ import {
   type OspakInput,
   type OspakManifest,
 } from '@opensa/engine-formats';
+import { breakableModelsFromText } from '@opensa/renderware/breakable/models';
 import { OPEN_SCRIPT_IPL, resolveMap } from '@opensa/renderware/map/resolve-map';
 import { buildWorldGrid, cellKey } from '@opensa/renderware/map/world-grid';
 import { MeshoptEncoder } from 'meshoptimizer';
@@ -53,6 +54,8 @@ export interface ConvertReport {
   /** IDE-anim instances welded at bind pose (frozen — no runtime animation yet). */
   animatedStatic: number;
   ao: (BakeAoReport & { ms: number }) | null;
+  /** Smashable placements recorded (B7·a). */
+  breakables: number;
   cells: { groups: number; indices: number; kbytes: number; key: string; vertices: number }[];
   pakBytes: number;
   /** ObjectTable entries across cells (074/06 row 9: timed windows / props). */
@@ -71,6 +74,9 @@ export async function convertDistrict(
   await MeshoptEncoder.ready;
   const cellSize = options.cellSize ?? 250;
   const defs = resolveMap(fs, { extraIpl: OPEN_SCRIPT_IPL });
+  // Smashable props (B7·a): object.dat's smash effects are the second half of the gate (the first is the DFF's
+  // own shatter mesh). Absent-tolerant, and the SAME helper the runtime adapter gates with.
+  const breakableModels = breakableModelsFromText(fs.getText('data/object.dat'));
   const grid = buildWorldGrid(defs, cellSize);
   const planner = new TexturePlanner(
     fs,
@@ -83,6 +89,7 @@ export async function convertDistrict(
   const report: ConvertReport = {
     animatedStatic: 0,
     ao: null,
+    breakables: 0,
     cells: [],
     pakBytes: 0,
     particles: 0,
@@ -131,7 +138,7 @@ export async function convertDistrict(
   for (const [chunkIndex, chunk] of chunks.entries()) {
     const tag = `chunk ${chunkIndex + 1}/${chunks.length} [${chunk.rect.join(',')}]`;
     const chunkStarted = Date.now();
-    const welded = weldRect(fs, defs, grid, planner, chunk.rect, cellSize);
+    const welded = weldRect(fs, defs, grid, planner, chunk.rect, cellSize, breakableModels);
     if (welded.length === 0) {
       doneCells += chunk.cells;
       continue;
@@ -199,6 +206,7 @@ function accumulate(report: ConvertReport, key: string, bytes: number, stats: We
   report.skippedTimed += stats.skippedTimed;
   report.particles += stats.particles;
   report.timedObjects += stats.timedObjects;
+  report.breakables += stats.breakables;
 }
 
 /** Bake one chunk's cells (pooled when workers > 1) and fold the counters into the report. */
@@ -312,6 +320,7 @@ function weldRect(
   planner: TexturePlanner,
   rect: readonly [number, number, number, number],
   cellSize: number,
+  breakableModels: ReadonlySet<string>,
 ): { cell: WeldedCell; key: string }[] {
   const [x0, y0, x1, y1] = rect;
   const welded: { cell: WeldedCell; key: string }[] = [];
@@ -324,7 +333,7 @@ function weldRect(
       // Cell origin in ENGINE coords: GTA cell centre (x, y) → engine (x, 0, −y).
       const origin: [number, number, number] = [(cx + 0.5) * cellSize, 0, -(cy + 0.5) * cellSize];
       for (const lod of [false, true]) {
-        const parts = weldCellParts(fs, defs, cell, lod, planner, origin);
+        const parts = weldCellParts(fs, defs, cell, lod, planner, origin, breakableModels);
         if (parts) {
           welded.push({ cell: parts, key: `${cx},${cy},${lod ? 'lod' : 'hd'}` });
         }

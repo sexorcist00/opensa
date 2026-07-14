@@ -19,6 +19,7 @@ function bucket(vertices: number[], indices: number[], pipelineClass = 0): WeldB
 
 function cell(buckets: WeldBucket[], lod = false): WeldedCell {
   return {
+    breakables: [],
     buckets,
     hasAo: false,
     hasNight: false,
@@ -28,7 +29,16 @@ function cell(buckets: WeldBucket[], lod = false): WeldedCell {
     lod,
     origin: [0, 0, 0],
     particles: [],
-    stats: { animatedStatic: 0, groups: 0, indices: 0, particles: 0, skippedTimed: 0, timedObjects: 0, vertices: 0 },
+    stats: {
+      animatedStatic: 0,
+      breakables: 0,
+      groups: 0,
+      indices: 0,
+      particles: 0,
+      skippedTimed: 0,
+      timedObjects: 0,
+      vertices: 0,
+    },
   };
 }
 

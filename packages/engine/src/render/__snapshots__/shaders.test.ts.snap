@@ -265,6 +265,290 @@ fn fsCorona(in: CoronaOut) -> @location(0) vec4f {
 "
 `;
 
+exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > debris 1`] = `
+"
+
+struct Frame {
+  viewProj: mat4x4f,
+  invViewProj: mat4x4f,
+  // camera.w = cloud dome slot A→B crossfade blend (row 15 weather fade; spare vec4 slot).
+  camera: vec4f,
+  // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
+  // the sun-vis v2 threshold input — 074/07), sun colour,
+  // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
+  // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
+  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
+  // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
+  //            time seconds (the wind clock), windStrength (074/06 row 10)],
+  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
+  // both spare vec4 slots.
+  sunDir: vec4f,
+  sunColor: vec4f,
+  params: vec4f,
+  skyTop: vec4f,
+  skyHorizon: vec4f,
+  fog: vec4f,
+  params2: vec4f,
+  moonDir: vec4f,
+  moonColor: vec4f,
+  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  params3: vec4f,
+  // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
+  // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
+  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
+  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  sunCore: vec4f,
+  sunCorona: vec4f,
+  // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
+  waterColor: vec4f,
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
+  // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
+  params4: vec4f,
+};
+@group(0) @binding(0) var<uniform> frame: Frame;
+@group(0) @binding(1) var skyLut: texture_2d<f32>;
+@group(0) @binding(2) var skyLutSampler: sampler;
+// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
+// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
+// horizon band barely carries them).
+@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
+@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
+@group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
+
+// Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
+// fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
+// Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
+// The moon's angular radius as a multiple of the sun's (they are famously close in the real sky; SA draws a
+// bigger, friendlier moon). MOON_BODY_GAIN keeps the lit disc HDR so it feeds the bloom/godray pass.
+const MOON_DISC_SCALE = 3.2;
+const MOON_BODY_GAIN = 10.0;
+
+fn skyBaseFor(dir: vec3f) -> vec3f {
+  let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
+  let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
+  let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
+  let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
+  return textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+}
+
+// Sun + moon discs, split from the gradient so the cloud layer can OCCLUDE them (row 15): the disc
+// overshoot survives a partial alpha mix, so clouds must attenuate this term, not blend over it.
+fn skyCelestialFor(dir: vec3f) -> vec3f {
+  // The prod-look sun (field round 3): a FILLED disc in the timecyc sunCore colour (yellow/orange —
+  // prod colours its sun mesh with exactly this column) + an exponential warm corona in sunCorona.
+  // Angular sizing comes from timecyc sunSize via sunCore.w. The 3–6× overshoot feeds the godrays
+  // post pass (bright-pass threshold) and clips to a hot centre in the swapchain.
+  let sunDot = clamp(dot(dir, frame.sunDir.xyz), -1.0, 1.0);
+  let ang = acos(sunDot);
+  let coreR = max(frame.sunCore.w, 1e-4);
+  let disc = (1.0 - smoothstep(coreR * 0.75, coreR, ang)) * 6.0;
+  let corona = exp(-ang / (coreR * 2.2)) * 2.6;
+  let glow = exp(-ang / (coreR * 8.0)) * 0.5;
+  let sun = frame.sunCore.rgb * disc + frame.sunCorona.rgb * (corona + glow);
+  let moon = moonFor(dir);
+  // The sea-horizon line CLIPS the discs (field: the sun used to just fade out at ground level): drivers
+  // now let the arcs sink below y=0, and pixels under the horizon drop the disc — the sun/moon visibly
+  // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
+  let horizonClip = smoothstep(-0.003, 0.005, dir.y);
+  return (sun + moon) * horizonClip;
+}
+
+// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
+// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
+// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
+// timecyc horizon mood with a night floor. Zero when no dome is bound or below the horizon.
+fn cloudLayerFor(dir: vec3f) -> vec4f {
+  if (frame.params3.y <= 0.5 || dir.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  let theta = acos(clamp(dir.y, -1.0, 1.0));
+  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
+  let spin = frame.params2.z * frame.moonColor.w;
+  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
+  let spun = rot * horiz;
+  let radius = theta * 0.297;
+  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
+  let cloud = mix(
+    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
+    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
+    frame.camera.w,
+  );
+  let mood = frame.skyHorizon.rgb;
+  let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
+  return vec4f(cloud.rgb * brightness, alpha);
+}
+
+/**
+ * The MOON (074/06 row 6, B6): the real SA coronamoon sprite plus a PHASE.
+ *
+ * Vanilla SA fakes its phases by cropping the sprite, which gives a sliced disc rather than a crescent. We
+ * light a sphere instead: the moon's surface normal is reconstructed from the disc coordinates, and the lit
+ * fraction follows a phase angle (params4.y, advanced by the host with the in-game days). That yields a real
+ * terminator — waxing crescent through full and back — for the cost of a dot product.
+ *
+ * moonColor is BLACK by day, so this whole term dies with it.
+ */
+fn moonFor(dir: vec3f) -> vec3f {
+  let moonDot = dot(dir, frame.moonDir.xyz);
+  // Local disc frame: where in the moon's face this view direction lands, in [-1, 1].
+  let right = normalize(cross(vec3f(0.0, 1.0, 0.0), frame.moonDir.xyz));
+  let up = cross(frame.moonDir.xyz, right);
+  let radius = max(frame.sunCore.w * MOON_DISC_SCALE, 1e-4);
+  let disc = vec2f(dot(dir, right), dot(dir, up)) / radius;
+  let r = length(disc);
+
+  // The sprite across the disc: rgb carries the CRATERS, alpha the round shape (normalised by the host).
+  let uv = disc * 0.5 + vec2f(0.5);
+  let texel = textureSample(coronaSprites, skyLutSampler, uv, 1u);
+  let face = texel.a;
+
+  // Phase: rebuild the surface normal of the sphere at this point and light it from the phase direction.
+  let z = sqrt(max(0.0, 1.0 - min(r * r, 1.0)));
+  let normal = normalize(right * disc.x + up * disc.y + frame.moonDir.xyz * z);
+  let angle = frame.params4.y * 6.2831853;
+  let sunward = normalize(right * sin(angle) + frame.moonDir.xyz * (-cos(angle)));
+  // A soft terminator: earthshine keeps the dark limb faintly visible, as it is in life.
+  let lit = smoothstep(-0.08, 0.12, dot(normal, sunward)) * 0.92 + 0.08;
+
+  let body = texel.rgb * (face * lit * step(r, 1.0) * MOON_BODY_GAIN);
+  // A wide soft halo marks the moon's place in the horizon band even when the disc is a thin crescent.
+  let halo = pow(max(moonDot, 0.0), 96.0) * 2.2;
+  return frame.moonColor.rgb * (body + vec3f(halo));
+}
+
+// The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
+// disc/corona must NOT be here — fogged silhouettes picked it up and the sun "shone through buildings"
+// (field round 3). Prod's disc is a separate mesh for the same reason.
+fn skyFogFor(dir: vec3f) -> vec3f {
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+
+  return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
+}
+
+// Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
+// headlights), CPU-filled each frame. The world consumes it in the VERTEX shader (SA is vertex-lit and
+// world verts ≪ pixels); small dynamic entities sample it per pixel. Bounded loop (count ≤ 64 — guardrail).
+struct LocalLight {
+  position: vec4f, // xyz world + radius
+  color: vec4f,    // linear RGB × intensity; w spare
+  // xyz = the direction a SPOT points, w = the cosine of its half-angle. w >= 1.5 means POINT (no cone) —
+  // the same sentinel the three pool uses. Headlights NEED this: as a point light a headlight floods the
+  // whole street, the road behind the car included.
+  dir: vec4f,
+};
+@group(0) @binding(3) var<storage, read> localLights: array<LocalLight>;
+
+// A RANGE of the pool, so the world can split it: static lamps per vertex (they never move, and world verts
+// ≪ pixels), moving lights per pixel. A headlight shaded per vertex is a disaster — SA's road polygons are
+// tens of metres wide, so the beam lands between vertices: it blotches along the mesh normals and disappears
+// outright when the car sits mid-polygon.
+// NB: "from" is a WGSL RESERVED KEYWORD (so is "meta", which bit the B2 vertex layout) — hence first/last.
+// The naga guardrails do not catch reserved words; assertGuardrails now does, so the browser stops being
+// the first thing to notice.
+fn localLightRange(world: vec3f, normal: vec3f, first: u32, last: u32) -> vec3f {
+  var sum = vec3f(0.0);
+  let count = min(last, 64u);
+  for (var index = first; index < count; index += 1u) {
+    let light = localLights[index];
+    var toLight = light.position.xyz - world;
+    let dist = length(toLight);
+    let radius = light.position.w;
+    if (dist < radius) {
+      toLight = toLight / max(dist, 0.001);
+      let spot = light.dir.w < 1.5;
+      // Cone falloff SQUARED toward the rim — a flat plateau reads as a hard-edged searchlight blob.
+      var cone = 1.0;
+      if (spot) {
+        cone = smoothstep(light.dir.w, min(light.dir.w + 0.30, 1.0), dot(-toLight, light.dir.xyz));
+        cone = cone * cone;
+      }
+      // WRAP: a headlight grazes the road almost tangentially, so a hard N·L collapses the beam to nothing.
+      // Wrapping keeps the road pool readable while walls still take more light when they face the lamp.
+      let wrap = select(0.4, 0.25, spot);
+      let ndl = clamp((dot(normal, toLight) + wrap) / (1.0 + wrap), 0.0, 1.0);
+      let falloff = 1.0 - dist / radius;
+      sum += light.color.rgb * (ndl * cone * falloff * falloff);
+    }
+  }
+  return sum;
+}
+
+/** Dynamic half only — the world's PER-PIXEL term. */
+fn localLightDynamic(world: vec3f, normal: vec3f) -> vec3f {
+  return localLightRange(world, normal, 0u, u32(frame.params4.x));
+}
+
+/** Static 2dfx half only — the world's PER-VERTEX term. */
+fn localLightStatic(world: vec3f, normal: vec3f) -> vec3f {
+  return localLightRange(world, normal, u32(frame.params4.x), u32(frame.params3.x));
+}
+
+
+struct DebrisUniform {
+  spawn: vec4f,   // x = spawn time (frame clock), y = lifetime, z = fade seconds, w = gravity
+};
+@group(1) @binding(0) var<uniform> debris: DebrisUniform;
+@group(1) @binding(1) var shards: texture_2d_array<f32>;
+@group(1) @binding(2) var shardSampler: sampler;
+
+struct DebrisIn {
+  @location(0) position: vec3f,
+  @location(1) uv: vec2f,
+  @location(2) color: vec4f,
+  @location(3) center: vec3f,
+  @location(4) velocity: vec3f,
+  @location(5) angular: vec3f,
+  @location(6) landLayer: vec2f,   // x = land time (s), y = texture layer
+};
+
+struct DebrisOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) color: vec4f,
+  @location(2) @interpolate(flat) layer: u32,
+  @location(3) fade: f32,
+};
+
+/** Rodrigues: rotate v about a unit axis by the given angle. */
+fn rotateAxis(v: vec3f, axis: vec3f, angle: f32) -> vec3f {
+  let c = cos(angle);
+  let s = sin(angle);
+  return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
+}
+
+@vertex
+fn vsDebris(in: DebrisIn) -> DebrisOut {
+  var out: DebrisOut;
+  let age = max(frame.params2.z - debris.spawn.x, 0.0);
+  // Frozen once it lands: both the arc and the spin stop at the same instant, or a resting shard would
+  // keep twitching on the ground.
+  let t = min(age, in.landLayer.x);
+  let speed = length(in.angular);
+  let axis = select(vec3f(0.0, 1.0, 0.0), in.angular / max(speed, 1e-5), speed > 1e-5);
+  let spun = rotateAxis(in.position - in.center, axis, speed * t);
+  let center = in.center + in.velocity * t + vec3f(0.0, -0.5 * debris.spawn.w, 0.0) * t * t;
+  out.clip = frame.viewProj * vec4f(center + spun, 1.0);
+  out.uv = in.uv;
+  out.color = in.color;
+  out.layer = u32(in.landLayer.y);
+  out.fade = 1.0 - smoothstep(debris.spawn.y - debris.spawn.z, debris.spawn.y, age);
+  return out;
+}
+
+@fragment
+fn fsDebris(in: DebrisOut) -> @location(0) vec4f {
+  let texel = textureSample(shards, shardSampler, in.uv, in.layer);
+  let color = texel.rgb * in.color.rgb;
+  let alpha = texel.a * in.color.a * in.fade;
+  return vec4f(color * alpha, alpha);   // premultiplied, like every other blended pass here
+}
+"
+`;
+
 exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > frame 1`] = `
 "
 struct Frame {

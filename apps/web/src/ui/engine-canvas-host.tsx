@@ -34,8 +34,10 @@ import type { GameId } from '../game-config';
 
 import { BENCH_SCENES } from '../bench-scenes';
 import { GAME_CONFIG } from '../game-config';
+import { setupEngineBreakables } from './engine-breakables';
 import { loadCoronaSprites, setupEngineParticles } from './engine-particles';
 import { loadEnginePlayer } from './engine-player';
+import { setupEngineProps } from './engine-props';
 import { type EngineVehicles, setupEngineVehicles } from './engine-vehicles';
 import { createGameRuntimeConfig, GAME_CELL_SIZE } from './game-runtime-config';
 import { Hud, type HudGame } from './hud/hud';
@@ -249,6 +251,10 @@ async function boot(
   // 2dfx particles (B6): the pak carries the emitter anchors, this reads effects.fxp + effectsPC.txd and
   // bakes them. Absent-tolerant — a profile without the FX files simply renders no particles.
   const particles = setupEngineParticles(engine, fs);
+  // Smashable props (B7·a): the colliders are already tagged with their placement key by the shared adapter.
+  // Uproot props (lampposts, meters) fall as real dynamic bodies; the rest shatter into analytic debris.
+  const props = setupEngineProps(engine, fs, physics);
+  const breakables = setupEngineBreakables(engine, physics, collision, adapter, fs, props);
   let debugError: null | string = null;
   /** Last frame's camera eye (engine space) — the lamp coronas need it, one frame stale is invisible. */
   const cameraEye: [number, number, number] = [0, 0, 0];
@@ -345,6 +351,9 @@ async function boot(
         // Enter/exit places the rider and DRIVES here — after the physics step, exactly where prod's Game
         // runs it. Without this the climb-in freezes mid-phase (the whole sequence lives in fixedUpdate).
         vehicles?.fixedUpdate(FIXED_STEP);
+        // Contact-force impacts are produced BY the physics step, so drain them here — one step late and a
+        // hard hit's forces are already gone.
+        breakables.update();
       } catch (error) {
         debugError ??= error instanceof Error ? error.message : String(error);
       }
@@ -414,6 +423,8 @@ async function boot(
     if (!hostState.paused) {
       accumulator = runFixedSteps(accumulator + dt);
       collision.update();
+      // Felled props follow their physics bodies (B7·a) — after the step, like every other body-driven visual.
+      props.update();
       tickVehicles(dt);
       const previousHour = hour;
       hour = (hour + dt / (config.time.secondsPerGameMinute * 60)) % 24;

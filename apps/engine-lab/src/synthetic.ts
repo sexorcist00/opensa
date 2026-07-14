@@ -111,6 +111,7 @@ export function syntheticCell(cx: number, cy: number, cellSize: number, boxesPer
 
   return encodeOscell({
     bounds: [cellSize / 2, cellSize / 4, cellSize / 2, cellSize * 0.75],
+    breakables: [],
     channelMask: 0,
     groups,
     index16: false,

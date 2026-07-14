@@ -251,3 +251,88 @@ sun/indirect + shared fog); lab `?ped=1` (+`?pedy=` height), HUD `ped sampler` m
 | 2026-07-13 | B3 whole-frame context of that reading    | frame 8.33 ms vsync · submit 0.10 ms · GPU 1.70–2.10 ms · draws ~450 · residency ~540–590 MB                                                  | vs three-WebGL ~31 ms GPU  |
 
 (vehicle-entity flatten/update ms + per-piece rows join as M3 pieces land)
+
+---
+
+## B7·a — Destruction (breakable) objects — LEDGER
+
+**Step 1 — converter: `.oscell` minor 3 carries a BREAKABLE table. ✅ DONE 2026-07-14.**
+
+The design question was how a single crate disappears when the cell's render bundle is IMMUTABLE.
+
+- **Attempt 1 (rejected on measurement):** give every smashable PLACEMENT its own objectTable run, so it can be
+  hidden individually — the obvious reading of the plan's own note. Measured on the same Ganton rect
+  (`--rect 8,-8,10,-6`): **groups/cell 21.8 → 99.1 avg, 49 → 294 max; objectTable entries 6 → 886.** That is
+  **4.5× the draw calls** — it dismantles the very batching the bundle exists for. Reverted.
+- **Shipped instead:** breakables stay welded INSIDE the merged bundle, and the cell records each placement's
+  **index RANGES** (`OscellBreakable { keyHash, indexOffset, indexCount }`). A bundle references the index
+  BUFFER, not its bytes — so the engine shatters one prop by writing degenerate triangles over its range. No
+  bundle rebuild, no extra draw, and a cell reload restores the prop for free (the pak is the source of truth).
+  Re-measured: **groups/cell 21.8 avg, 49 max — identical to baseline. Zero draw-call cost.**
+- Gate = prod's gate, both halves: the DFF carries an RW Breakable shatter mesh, OR object.dat gives the model
+  a smash damage effect (`breakableModels`, optional — absent object.dat still works on the mesh gate alone).
+- `keyHash` = FNV-1a of `breakableInstanceKey(model, gtaPosition)` — the SAME key the physics collider is
+  tagged with, so a contact-force event resolves to a range with no lookup table. The key now lives in
+  `renderware/src/breakable/key.ts` and the three path imports it — one definition, not two (the heat-haze
+  lesson).
+- Counts on the Ganton rect: **1 636 smashable placements** across 9 HD cells.
+
+**Steps 2–5 — engine, host, debris, TOPPLE. ✅ DONE 2026-07-14, FIELD ✅** (props smash, poles fall over,
+coronas go with them, the car drives on).
+
+**Shipped**
+
+- **Engine:** `CellStore.breakPlacement(keyHash)` overwrites the placement's triangles with degenerate ones.
+  The bundle references the index BUFFER, not its bytes, so this respects the immutability rule and costs one
+  `writeBuffer`. No restore path by design: a cell reload rebuilds the buffer from the pak — which is exactly
+  how SA respawns props.
+- **Host:** `engine-breakables.ts` — prod's impact gate (3 000 N scaled by object.dat's colDamageMultiplier;
+  mass ≥ 90 000 = a fixture). Contact-force events fire only on the vehicle chassis, so as in vanilla you
+  cannot smash a crate on foot.
+- **Debris:** the shard arithmetic is SHARED (`renderware/breakable/bake-debris.ts`) and prod consumes it. One
+  draw per break; every vertex carries its shard's centroid, velocity, spin and landing time, and the whole
+  flight is an analytic function of age in the vertex shader. **Prod's own defect is FIXED, not copied:** it
+  never probes the ground, so its shards fall through the floor and sink; here `physics.groundBelow` gives
+  them something to land on.
+- **TOPPLE (`engine-props.ts`):** object.dat's **uproot limit** (column G — a lamppost carries 240, a crate 0)
+  is SA's own "knock it over" flag, and our parser had been discarding it. Uproot props do not shatter: they
+  become real dynamic Rapier bodies, and physics decides where they fall and what they land on.
+- **`.oscell` minor 4:** a light knows which placement OWNS it, so a smashed traffic light takes its coronas
+  down with it instead of leaving them lit in the sky.
+
+**The field cost five rounds. Every one was a lesson worth keeping:**
+
+1. **Nothing broke at all** — while the pak provably carried the ranges and the physics keys matched. The
+   reader was `push({ keyHash: r.u32(), indexOffset: r.u32(), indexCount: r.u32() })`, and **the linter sorted
+   the object literal's keys alphabetically, reordering the SIDE-EFFECTING reads with them.** The bytes were
+   right; the fields were rotated. Neither tsc, nor eslint, nor the round-trip test saw it — the test counted
+   rows instead of comparing values. **RULE: never read a binary record inline in an object literal. Read into
+   locals, and assert VALUES.**
+2. **The felled pole was invisible.** `writeGtaRoot` converts the ROTATION into engine space but takes the
+   position ALREADY converted (the vehicle handle and the player both do this). Raw GTA coordinates put the
+   pole 1 656 units under the world. Its name promises more than it does.
+3. **The pole rocketed away and the car bogged down in it.** It was spawned as a dynamic body at the instant
+   the car was embedded in it, and given an angular velocity about its own centre — which drives the bottom
+   half of an 8 m body into the asphalt. Fixes: its own collision group (collides with the WORLD, passes
+   through vehicles — including the suspension RAYS, which do not honour collision groups unless you pass
+   them), and a point impulse instead of a spin, so the GROUND is the hinge.
+4. **The pole fell TOWARDS the car, and landed on a phantom edge.** Both were the bounding box: a lamppost's
+   arm makes its box 2.8 m wide, which shifted the centre of mass off the pole (so the shove landed BELOW it
+   and kicked the base out, like a rug) and gave the body a face to rest on that the eye cannot see. The
+   collider is now the mesh's own CONVEX HULL. **The user's own clue cracked it: "the fence falls correctly" —
+   a fence IS its bounding box.**
+5. **`BufferOffset is not a multiple of 4`.** WebGPU REJECTS an unaligned `writeBuffer` (the browser only
+   warns), so with u16 indices any prop whose range began on an odd index silently refused to break.
+   `alignedErase` widens the write to the 4-byte window and writes the neighbour's dragged-in bytes back
+   verbatim — zeroing them would degenerate a triangle of the prop next door.
+
+**Measured:** converter cost unchanged (groups/cell 21.8 avg, 49 max — identical to baseline; splitting props
+out per placement had measured 4.5×). 27 355 smashable placements on the full map.
+
+**Tests:** `engine/world/degenerate.test.ts` (the alignment window), `renderware/breakable/bake-debris.test.ts`
+(shard flight, ground landing, determinism), `opensa-pack/weld.test.ts` (per-placement ranges + light
+ownership + the LOD negative), `engine-formats/oscell.test.ts` (the breakable/light records round-trip by
+VALUE — it fails on the rotated reader).
+
+**Deliberately not done:** shards do not collide with anything (they are analytic, and prod's don't either);
+a felled prop is cleaned up after 8 s rather than persisting until the cell streams out.

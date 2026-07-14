@@ -2,6 +2,7 @@
 import {
   type AssetFileSystem,
   breakableInstanceKey,
+  breakableModelsOf,
   buildAnimationClip,
   buildCellColliders,
   buildCellSteps,
@@ -19,7 +20,6 @@ import {
   buildWorldGrid,
   type CarGroup,
   cellModelNames,
-  ColDamageEffect,
   convertTo24h,
   getBreakable,
   groupRulesBySurface,
@@ -103,16 +103,6 @@ const CITY_POPCYCLE_ZONE: Record<City, string> = {
   SF: 'RESIDENTIAL_AVERAGE',
   VEGAS: 'RESIDENTIAL_AVERAGE',
 };
-
-/** object.dat collision-damage effects that smash a prop on impact (plan 045). Props with one of
- *  these but no RW Breakable atomic shatter their render geometry; props WITH an atomic break
- *  regardless. `none`/`changeModel` are excluded (not a shatter). */
-const BREAKABLE_EFFECTS = new Set<number>([
-  ColDamageEffect.breakable,
-  ColDamageEffect.breakableThenRemoved,
-  ColDamageEffect.changeThenSmash,
-  ColDamageEffect.smashCompletely,
-]);
 
 /**
  * The own engine's vehicle load product (074/08 B5 step 4): renderer-agnostic geometry + the same collision,
@@ -331,6 +321,21 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return this.loadCharacter(`${def.model}.dff`, `${def.txd}.txd`);
   }
 
+  /**
+   * Load the timecyc (per-weather, per-hour colour/lighting table), always as 24h.
+   * Uses the optional `timecyc_24h.dat` as-is when present, else converts the
+   * mandatory vanilla `timecyc.dat` (8 keyframes/weather) to 24h.
+   */
+  async loadTimecyc(): Promise<Timecyc> {
+    await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
+    const text24 = this.fs.getText('data/timecyc_24h.dat');
+    if (text24 !== null) {
+      return buildTimecyc(parseTimecyc(text24));
+    }
+
+    return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
+  }
+
   // eslint-disable-next-line
   async loadCell(request: CellRequest): Promise<Object3D[]> {
     if (!this.defs || !this.grid) {
@@ -438,21 +443,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     root.add(buildCollisionWireframe(colliders));
 
     return [root];
-  }
-
-  /**
-   * Load the timecyc (per-weather, per-hour colour/lighting table), always as 24h.
-   * Uses the optional `timecyc_24h.dat` as-is when present, else converts the
-   * mandatory vanilla `timecyc.dat` (8 keyframes/weather) to 24h.
-   */
-  async loadTimecyc(): Promise<Timecyc> {
-    await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
-    const text24 = this.fs.getText('data/timecyc_24h.dat');
-    if (text24 !== null) {
-      return buildTimecyc(parseTimecyc(text24));
-    }
-
-    return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
   }
 
   /**
@@ -602,13 +592,17 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     const objectDatText = this.fs.getText('data/object.dat');
     if (objectDatText !== null) {
       this.objectDat = parseObjectDat(objectDatText);
-      for (const [name, entry] of this.objectDat) {
-        if (BREAKABLE_EFFECTS.has(entry.colDamageEffect)) {
-          this.breakableModels.add(name); // render-geometry shatter for atomic-less smash props
-        }
+      // The SAME gate the converter records smashable ranges with — one definition, or the two disagree.
+      for (const name of breakableModelsOf(this.objectDat)) {
+        this.breakableModels.add(name);
       }
     }
     onProgress?.(1);
+  }
+
+  /** The model's TXD name — the own engine needs it to texture a smashed prop's shards (074/08 B7·a). */
+  txdOf(modelName: string): string | undefined {
+    return this.defByName?.get(modelName.toLowerCase())?.txdName;
   }
 
   /** Every carcol paint combo for a model (palette-index tuples) — 2-colour entries then 4-colour;

@@ -158,6 +158,53 @@ describe('weldCell 2dfx particles', () => {
   });
 });
 
+describe('weldCell breakables', () => {
+  describe('negative cases', () => {
+    it('records NO smashable ranges for a LOD cell — a far prop is never hit', () => {
+      const fs = fixtureFs();
+      const cell: GridCell = { ...fixtureCell(2), hd: [], lod: fixtureCell(2).hd };
+
+      const welded = weldCell(fs, fixtureDefs(), cell, true, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      expect(decodeOscell(welded!.bytes).breakables).toHaveLength(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('records each smashable placement’s index ranges, keyed so a physics hit resolves to one prop', () => {
+      // trafficlight1 ships an RW Breakable shatter mesh. The prop stays INSIDE the merged bundle (splitting
+      // it out per placement measured 4.5x the draw calls) — the engine shatters it by degenerating exactly
+      // these index ranges.
+      const fs = fixtureFs();
+
+      const welded = weldCell(fs, fixtureDefs(), fixtureCell(3), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      const cell = decodeOscell(welded!.bytes);
+      expect(cell.breakables.length).toBeGreaterThan(0);
+      expect(new Set(cell.breakables.map((breakable) => breakable.keyHash)).size).toBe(3); // 3 placements
+      for (const breakable of cell.breakables) {
+        expect(breakable.indexCount).toBeGreaterThan(0);
+        expect(breakable.indexOffset + breakable.indexCount).toBeLessThanOrEqual(cell.indexCount);
+      }
+    });
+
+    it('tags a smashable prop’s 2dfx lights with its placement — a smashed traffic light takes its coronas', () => {
+      // Without the owner tag the coronas stayed lit in mid-air after the pole itself was gone.
+      const fs = fixtureFs();
+
+      const welded = weldCell(fs, fixtureDefs(), fixtureCell(2), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      const cell = decodeOscell(welded!.bytes);
+      expect(cell.lights.length).toBeGreaterThan(0);
+      expect(cell.lights.every((light) => light.owner !== 0)).toBe(true);
+      const placements = new Set(cell.breakables.map((breakable) => breakable.keyHash));
+      for (const light of cell.lights) {
+        expect(placements.has(light.owner)).toBe(true);
+      }
+    });
+  });
+});
+
 describe('weldCell', () => {
   describe('negative cases', () => {
     it('returns null for an empty cell', () => {

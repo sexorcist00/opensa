@@ -116,7 +116,8 @@ export function oscellSections(raw: Uint8Array): OscellSections {
   r.seek(48);
   const vertexCount = r.u32();
   const indexCount = r.u32();
-  r.seek(minor >= 2 ? 72 : 68);
+  // Header words: … counts …, then the three section offsets. Each minor that ADDS a count pushes them by 4.
+  r.seek(68 + (minor >= 2 ? 4 : 0) + (minor >= 3 ? 4 : 0));
   const vertexOffset = r.u32();
   const indexOffset = r.u32();
   const indexElemSize = (flags & OscellFlag.INDEX16) !== 0 ? 2 : 4;

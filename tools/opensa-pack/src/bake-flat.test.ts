@@ -62,6 +62,7 @@ function testCell(lod = false): WeldedCell {
   }
 
   return {
+    breakables: [],
     buckets: [
       {
         indices: [0, 1, 2, 3, 4, 5],
@@ -94,7 +95,16 @@ function testCell(lod = false): WeldedCell {
     lod,
     origin: [1000, 0, -500],
     particles: [],
-    stats: { animatedStatic: 0, groups: 2, indices: 6, particles: 0, skippedTimed: 0, timedObjects: 0, vertices: 42 },
+    stats: {
+      animatedStatic: 0,
+      breakables: 0,
+      groups: 2,
+      indices: 6,
+      particles: 0,
+      skippedTimed: 0,
+      timedObjects: 0,
+      vertices: 42,
+    },
   };
 }
 

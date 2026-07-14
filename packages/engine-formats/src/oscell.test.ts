@@ -20,6 +20,12 @@ function sampleCell(overrides: Partial<Oscell> = {}): Oscell {
 
   return {
     bounds: [1, 2, 3, 40],
+    // B7: distinct values per field — an equal-count assertion would have missed the field ROTATION the
+    // linter introduced by sorting an object literal whose values were side-effecting reads.
+    breakables: [
+      { indexCount: 207, indexOffset: 14121, keyHash: 2449560454 },
+      { indexCount: 33, indexOffset: 14328, keyHash: 1901043656 },
+    ],
     channelMask: OscellChannel.NIGHT_PRELIT | OscellChannel.SWAY,
     groups: [
       {
@@ -34,7 +40,7 @@ function sampleCell(overrides: Partial<Oscell> = {}): Oscell {
     index16: false,
     indexCount: 3,
     indexData,
-    lights: [{ color: [255, 200, 100, 255], farClip: 120, position: [10, 20, 30], size: 1.5 }],
+    lights: [{ color: [255, 200, 100, 255], farClip: 120, owner: 3913926212, position: [10, 20, 30], size: 1.5 }],
     objects: [
       {
         groupCount: 1,
@@ -104,6 +110,9 @@ describe('oscell codec', () => {
       // B6: the 2dfx emitter anchors, names and all (the host resolves the name against effects.fxp).
       expect(decoded.particles).toEqual(cell.particles);
       expect(decoded.lights).toEqual(cell.lights);
+      // B7·a: the smashable index ranges — a physics hit resolves against `keyHash`, so a rotated field here
+      // makes every prop unbreakable while everything still decodes and renders.
+      expect(decoded.breakables).toEqual(cell.breakables);
       expect(decoded.bounds).toEqual(cell.bounds);
       expect(decoded.origin).toEqual(cell.origin);
       expect(decoded.channelMask).toBe(cell.channelMask);

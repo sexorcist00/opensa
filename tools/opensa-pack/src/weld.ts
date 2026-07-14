@@ -6,12 +6,13 @@
  * IDE-anim defs weld STATICALLY at bind pose (field fix: skipping them left building-sized holes —
  * burger01_LAw is a 22×35 m diner, not a sign; their IFP animation is a later dynamic-entity feature).
  */
-import type { Oscell, OscellGroup, OscellLight, OscellParticle } from '@opensa/engine-formats';
+import type { Oscell, OscellBreakable, OscellGroup, OscellLight, OscellParticle } from '@opensa/engine-formats';
 import type { AssetFileSystem, IplInstance, MapDefinitions } from '@opensa/renderware';
 
 import { encodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
 import { WIND_MODELS } from '@opensa/game/mods/wind-mode';
 import { getClump } from '@opensa/renderware/archive/asset-cache';
+import { breakableInstanceKey, breakableKeyHash } from '@opensa/renderware/breakable/key';
 import { cellGroups } from '@opensa/renderware/map/build-cell';
 import { type GridCell } from '@opensa/renderware/map/world-grid';
 import { frameWorldTransform } from '@opensa/renderware/mesh/frame-transform';
@@ -19,6 +20,16 @@ import { isVertexAlphaBeam, prepareClumpAtomics } from '@opensa/renderware/mesh/
 import { IdeFlag } from '@opensa/renderware/parsers/text/index';
 
 import type { TexturePlanner } from './textures';
+
+/** The welded-but-not-yet-encoded cell — the bake stages (074/07) mutate scratch rows between the phases. */
+/** A smashable placement's triangles inside ONE bucket, before the cell layout turns it into an absolute
+ *  index range (B7·a). A prop split across materials contributes one of these per bucket. */
+export interface WeldBreakableRange {
+  bucket: WeldBucket;
+  count: number;
+  keyHash: number;
+  start: number;
+}
 
 export interface WeldBucket {
   indices: number[];
@@ -33,8 +44,9 @@ export interface WeldBucket {
   vertices: number[]; // scratch rows: px py pz nx ny nz u v dr dg db da nr ng nb sway layer ao sunVis
 }
 
-/** The welded-but-not-yet-encoded cell — the bake stages (074/07) mutate scratch rows between the phases. */
 export interface WeldedCell {
+  /** Smashable placements' index ranges (B7·a) — HD cells only; a LOD prop is never hit. */
+  breakables: WeldBreakableRange[];
   buckets: WeldBucket[];
   hasAo: boolean;
   hasNight: boolean;
@@ -52,6 +64,8 @@ export interface WeldedCell {
 export interface WeldStats {
   /** IDE-anim instances welded at bind pose (no runtime animation yet — 074/06 ledger note). */
   animatedStatic: number;
+  /** Smashable placements recorded (B7·a) — index ranges the engine can degenerate on a hit. */
+  breakables: number;
   groups: number;
   indices: number;
   /** 2dfx PARTICLE emitter anchors welded into this cell (B6). */
@@ -96,8 +110,9 @@ export function weldCell(
   lod: boolean,
   planner: TexturePlanner,
   originEngine: readonly [number, number, number],
+  breakableModels?: ReadonlySet<string>,
 ): null | { bytes: Uint8Array; stats: WeldStats } {
-  const welded = weldCellParts(fs, defs, cell, lod, planner, originEngine);
+  const welded = weldCellParts(fs, defs, cell, lod, planner, originEngine, breakableModels);
 
   return welded ? { bytes: assembleCell(welded), stats: welded.stats } : null;
 }
@@ -110,10 +125,13 @@ export function weldCellParts(
   lod: boolean,
   planner: TexturePlanner,
   originEngine: readonly [number, number, number],
+  /** Models object.dat marks as smashable (B7·a) — omit and only the DFF shatter mesh gates. */
+  breakableModels?: ReadonlySet<string>,
 ): null | WeldedCell {
   const buckets = new Map<string, WeldBucket>();
   const stats: WeldStats = {
     animatedStatic: 0,
+    breakables: 0,
     groups: 0,
     indices: 0,
     particles: 0,
@@ -124,6 +142,7 @@ export function weldCellParts(
   const flags = { hasNight: false, hasSway: false };
   const lights: OscellLight[] = [];
   const particles: OscellParticle[] = [];
+  const breakables: WeldBreakableRange[] = [];
 
   const groups = [...cellGroups(defs, cell, lod).values()].sort((a, b) => (a.def.modelName < b.def.modelName ? -1 : 1));
   for (const group of groups) {
@@ -133,10 +152,23 @@ export function weldCellParts(
       stats.animatedStatic += group.instances.length;
     }
     // Timed defs (074/06 row 9) weld like everything else, but into `timed` buckets → objectTable draws.
-    weldGroup(fs, group.def, group.instances, buckets, planner, originEngine, flags);
+    // Breakable props (B7·a) stay INSIDE the merged bundle — splitting them out per placement measured 4.5x
+    // the draw calls. Instead the weld records each placement's index RANGES; the engine degenerates those
+    // triangles in place on a hit, which the immutable bundle allows (it references the buffer, not its bytes).
+    weldGroup(
+      fs,
+      group.def,
+      group.instances,
+      buckets,
+      planner,
+      originEngine,
+      flags,
+      lod ? undefined : breakables,
+      breakableModels,
+    );
     // 2dfx corona anchors (074/06 row 13) — HD level only (LOD duplicates would double every lamp).
     if (!lod) {
-      collectLights(fs, group.def, group.instances, originEngine, lights);
+      collectLights(fs, group.def, group.instances, originEngine, lights, isBreakable(fs, group.def, breakableModels));
       collectParticles(fs, group.def, group.instances, originEngine, particles);
     }
   }
@@ -151,6 +183,7 @@ export function weldCellParts(
   stats.particles = particles.length;
 
   return {
+    breakables,
     buckets: ordered,
     hasAo: false,
     hasNight: flags.hasNight,
@@ -276,6 +309,8 @@ function assemble(
   ordered: WeldBucket[],
   origin: readonly [number, number, number],
   channels: {
+    /** Bucket-relative ranges from the weld (B7·a) — resolved to absolute index offsets by the layout below. */
+    breakables?: WeldBreakableRange[];
     hasAo: boolean;
     hasNight: boolean;
     hasSunVis: boolean;
@@ -302,7 +337,9 @@ function assemble(
   let vertexBase = 0;
   let indexBase = 0;
   let hasEmissive = false;
+  const bucketIndexBase = new Map<WeldBucket, number>();
   for (const bucket of ordered) {
+    bucketIndexBase.set(bucket, indexBase);
     const bucketVertices = bucket.vertices.length / WELD_ROW;
     hasEmissive = writeBucketVertices(bucket, vertexBase, view) || hasEmissive;
     for (let entry = 0; entry < bucket.indices.length; entry += 1) {
@@ -356,6 +393,16 @@ function assemble(
   stats.vertices = vertexCount;
   stats.indices = indexCount;
   stats.timedObjects = objects.length;
+  // The weld recorded each smashable placement's triangles as an offset INSIDE its bucket; the layout above
+  // is what finally decides where that bucket's indices live, so the absolute range can only be resolved here.
+  const breakables: OscellBreakable[] = (channels.breakables ?? [])
+    .filter((range) => range.count > 0)
+    .map((range) => ({
+      indexCount: range.count,
+      indexOffset: (bucketIndexBase.get(range.bucket) ?? 0) + range.start,
+      keyHash: range.keyHash,
+    }));
+  stats.breakables = breakables.length;
   const center: [number, number, number] = [
     (cellMin[0] + cellMax[0]) / 2,
     (cellMin[1] + cellMax[1]) / 2,
@@ -368,6 +415,7 @@ function assemble(
       center[2],
       Math.hypot(cellMax[0] - center[0], cellMax[1] - center[1], cellMax[2] - center[2]),
     ],
+    breakables,
     channelMask:
       (channels.hasNight ? OscellChannel.NIGHT_PRELIT : 0) |
       (channels.hasSway ? OscellChannel.SWAY : 0) |
@@ -434,6 +482,9 @@ function collectLights(
   instances: readonly IplInstance[],
   origin: readonly [number, number, number],
   out: OscellLight[],
+  /** Set when this def is smashable: the light is tagged with its placement, so a smashed traffic light takes
+   *  its coronas down with it instead of leaving them hanging in the sky. */
+  breakable = false,
 ): void {
   const clump = getClump(fs, def.modelName);
   for (const geometry of clump.geometries) {
@@ -453,6 +504,7 @@ function collectLights(
         out.push({
           color: light.color,
           farClip: light.coronaFarClip,
+          owner: breakable ? breakableKeyHash(breakableInstanceKey(def.modelName, instance.position)) : 0,
           position: [gx - origin[0], gz - origin[1], -gy - origin[2]],
           size: light.coronaSize,
         });
@@ -498,6 +550,22 @@ function collectParticles(
       }
     }
   }
+}
+
+/**
+ * SA marks a smashable prop two ways and prod gates on EITHER: the DFF carries an RW Breakable shatter mesh
+ * (238 models do), or object.dat gives it a smash damage effect (the bins and boxes that shatter their visible
+ * mesh instead). Absent object.dat → the shatter-mesh gate alone still works.
+ */
+function isBreakable(
+  fs: AssetFileSystem,
+  def: NonNullable<ReturnType<MapDefinitions['catalog']['get']>>,
+  breakableModels?: ReadonlySet<string>,
+): boolean {
+  return (
+    getClump(fs, def.modelName).geometries.some((geometry) => geometry.breakable !== undefined) ||
+    (breakableModels?.has(def.modelName.toLowerCase()) ?? false)
+  );
 }
 
 function lumaOf(r: number, g: number, b: number): number {
@@ -566,9 +634,17 @@ function weldGroup(
   planner: TexturePlanner,
   originEngine: readonly [number, number, number],
   flags: { hasNight: boolean; hasSway: boolean },
+  /** Set on HD cells: smashable placements append their index ranges here. */
+  breakables?: WeldBreakableRange[],
+  /** Models object.dat marks as smashable (prod's secondary gate); omit and only the DFF shatter mesh gates. */
+  breakableModels?: ReadonlySet<string>,
 ): void {
   const clump = getClump(fs, def.modelName);
   const atomics = prepareClumpAtomics(clump);
+  // SA marks a smashable prop two ways and prod gates on EITHER: the DFF carries a RW Breakable shatter mesh
+  // (238 models do), or object.dat gives it a smash damage effect (the bins and boxes that shatter their
+  // visible mesh instead). Absent object.dat → the shatter-mesh gate alone still works.
+  const breakable = breakables !== undefined && isBreakable(fs, def, breakableModels);
   const doubleSided = (def.flags & IdeFlag.DISABLE_BACKFACE_CULLING) !== 0 ? 1 : 0;
   const swayKind = swayKindFor(def);
   const timed = def.time !== undefined ? { off: def.time.off, on: def.time.on } : null;
@@ -592,7 +668,16 @@ function weldGroup(
       // Bit 15 of the layer u16 flags stochastic de-tiling layers (074/12) — the engine masks the index.
       const layerValue = resolved.layer | (resolved.stochastic ? 0x8000 : 0);
       for (const instance of instances) {
+        const start = bucket.indices.length;
         appendInstance(bucket, atomic, part.index, instance, layerValue, originEngine, swayKind, frame);
+        if (breakable) {
+          breakables.push({
+            bucket,
+            count: bucket.indices.length - start,
+            keyHash: breakableKeyHash(breakableInstanceKey(def.modelName, instance.position)),
+            start,
+          });
+        }
         flags.hasNight ||= atomic.nightColor !== null;
         flags.hasSway ||= swayKind !== null;
       }

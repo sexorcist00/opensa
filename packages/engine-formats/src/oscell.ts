@@ -14,9 +14,14 @@ import { ByteReader, ByteWriter } from './binary';
 
 export const OSCELL_MAGIC = 0x3143534f; // 'OSC1' little-endian
 export const OSCELL_VERSION_MAJOR = 0;
-/** Minor 2 (B6): the cell gained a PARTICLE table (2dfx type-1 emitter anchors). Readers accept minor 1
+/** Minor 4 (B7·a): a light knows which smashable placement OWNS it — a smashed traffic light must take its
+ *  coronas with it, and they were left hanging in the sky.
+ *  Minor 3 (B7·a): the cell gained a BREAKABLE table — the index RANGES of each smashable placement, so the
+ *  engine can shatter one crate by degenerating its triangles in place, without rebuilding the immutable
+ *  bundle and without splitting the prop out of the merged batch (which measured 4.5x the draw calls).
+ *  Minor 2 (B6): the cell gained a PARTICLE table (2dfx type-1 emitter anchors). Readers accept minor 1
  *  paks — they simply carry no particles. */
-export const OSCELL_VERSION_MINOR = 2;
+export const OSCELL_VERSION_MINOR = 4;
 export const OSCELL_VERTEX_STRIDE = 36;
 
 /** Header `flags` bits. */
@@ -36,6 +41,8 @@ export const OscellChannel = {
 
 export interface Oscell {
   bounds: readonly [number, number, number, number];
+  /** Smashable placements (B7·a): index ranges the engine degenerates in place when a prop breaks. */
+  breakables: OscellBreakable[];
   channelMask: number;
   groups: OscellGroup[];
   index16: boolean;
@@ -50,6 +57,19 @@ export interface Oscell {
   vertexCount: number;
   /** Interleaved vertex payload, stride {@link OSCELL_VERTEX_STRIDE}. */
   vertexData: Uint8Array;
+}
+
+/**
+ * One smashable placement's triangles inside the cell's merged index buffer (B7·a).
+ *
+ * A prop's geometry is split across buckets by material, so ONE placement can own SEVERAL ranges — the table
+ * simply carries a row per range, all sharing the placement's `keyHash` (FNV-1a of the same
+ * `breakableInstanceKey` the physics collider is tagged with, so a contact event resolves with no lookup).
+ */
+export interface OscellBreakable {
+  indexCount: number;
+  indexOffset: number;
+  keyHash: number;
 }
 
 /** One GPU draw (the unit of offline merging — plan 074/02). */
@@ -70,6 +90,8 @@ export interface OscellGroup {
 export interface OscellLight {
   color: readonly [number, number, number, number];
   farClip: number;
+  /** Key hash of the smashable placement this light belongs to; 0 when nothing can smash it (minor 4). */
+  owner: number;
   position: readonly [number, number, number];
   size: number;
 }
@@ -100,7 +122,7 @@ export interface OscellParticle {
 
 const GROUP_RECORD_BYTES = 32;
 const OBJECT_RECORD_BYTES = 64;
-const LIGHT_RECORD_BYTES = 24;
+const LIGHT_RECORD_BYTES = 28;
 
 export function decodeOscell(bytes: Uint8Array): Oscell {
   const r = new ByteReader(bytes);
@@ -126,6 +148,8 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
   // Minor 2 (B6) inserted the particle count here. Minor-1 paks simply have no particles — read them as 0
   // and DO NOT consume a word, or every offset after this point shifts.
   const particleCount = minor >= 2 ? r.u32() : 0;
+  // Minor 3 (B7) appends the breakable count on the same rule — an older pak has none, and must not lose a word.
+  const breakableCount = minor >= 3 ? r.u32() : 0;
   const vertexOffset = r.u32();
   const indexOffset = r.u32();
   const tableOffset = r.u32();
@@ -156,11 +180,13 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
     });
   }
   const objects = readObjects(r, objectCount);
-  const lights = readLights(r, lightCount);
+  const lights = readLights(r, lightCount, minor);
   const particles = readParticles(r, particleCount);
+  const breakables = readBreakables(r, breakableCount);
 
   return {
     bounds,
+    breakables,
     channelMask,
     groups,
     index16,
@@ -204,6 +230,7 @@ export function encodeOscell(cell: Oscell): Uint8Array {
   w.u32(cell.objects.length);
   w.u32(cell.lights.length);
   w.u32(cell.particles.length);
+  w.u32(cell.breakables.length);
   const vertexOffsetSlot = w.reserveU32();
   const indexOffsetSlot = w.reserveU32();
   const tableOffsetSlot = w.reserveU32();
@@ -243,6 +270,11 @@ export function encodeOscell(cell: Oscell): Uint8Array {
   }
   writeLights(w, cell.lights);
   writeParticles(w, cell.particles);
+  for (const breakable of cell.breakables) {
+    w.u32(breakable.keyHash);
+    w.u32(breakable.indexOffset);
+    w.u32(breakable.indexCount);
+  }
 
   return w.bytes();
 }
@@ -254,14 +286,32 @@ export const OSCELL_RECORD_BYTES = {
   object: OBJECT_RECORD_BYTES,
 } as const;
 
-function readLights(r: ByteReader, count: number): OscellLight[] {
+function readBreakables(r: ByteReader, count: number): OscellBreakable[] {
+  const breakables: OscellBreakable[] = [];
+  for (let index = 0; index < count; index += 1) {
+    // Read into locals FIRST. Reads are side-effecting and an object literal evaluates its values in KEY
+    // order, which the linter sorts alphabetically — writing them inline silently rotated the three fields
+    // (the key hash landed in `indexCount`) and every hit missed. Same rule as every other reader here.
+    const keyHash = r.u32();
+    const indexOffset = r.u32();
+    const indexCount = r.u32();
+    breakables.push({ indexCount, indexOffset, keyHash });
+  }
+
+  return breakables;
+}
+
+function readLights(r: ByteReader, count: number, minor: number): OscellLight[] {
   const lights: OscellLight[] = [];
   for (let index = 0; index < count; index += 1) {
+    // Read into locals: an object literal evaluates its values in KEY order, which the linter sorts — inlining
+    // side-effecting reads once rotated three fields of the breakable table and cost a field round.
     const position = [r.f32(), r.f32(), r.f32()] as const;
     const color = [r.u8(), r.u8(), r.u8(), r.u8()] as const;
     const size = r.f32();
     const farClip = r.f32();
-    lights.push({ color, farClip, position, size });
+    const owner = minor >= 4 ? r.u32() : 0;
+    lights.push({ color, farClip, owner, position, size });
   }
 
   return lights;
@@ -312,6 +362,7 @@ function writeLights(w: ByteWriter, lights: readonly OscellLight[]): void {
     }
     w.f32(light.size);
     w.f32(light.farClip);
+    w.u32(light.owner);
   }
 }
 

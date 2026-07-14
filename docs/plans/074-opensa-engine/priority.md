@@ -138,12 +138,14 @@ REAL SA game via the ASI — a different target).
 **Done:** ✅ chimneys smoke and fountains run in `?engine=opensa`; ledger 06 row 13 closed → 14/14.
 
 **B7. Destruction objects, then animation objects** — [08](08-dynamics.md) · size M each
-Two more prod-parity object classes the own engine has never had, in the user's order:
 
-- **Destruction (breakable) objects** — prod: `renderware/src/three/breakable.ts` + `build-debris.ts` +
-  the `object.dat` parser (damage/debris data). Engine: breakables must leave the static cell bundle
-  (a bundle is immutable — the row-15 lesson) and live as objectTable/rigid entities that can swap to a
-  damaged model and spawn debris on a physics impulse.
+- **B7·a Destruction (breakable) objects — ✅ DONE 2026-07-14, FIELD ✅.** Props shatter into analytic shards
+  (shared baker with the three path; the ground probe FIXES prod's sinking-shards defect), uproot props
+  (lampposts, meters — object.dat column G, which our parser had been discarding) fall over as real dynamic
+  bodies with a convex-hull collider, and a smashed prop takes its 2dfx coronas with it (`.oscell` minor 4).
+  Breakables stay INSIDE the merged bundle — the engine degenerates their index ranges in place, so the break
+  costs no draw call (splitting them out per placement measured 4.5× the draws). Five field rounds and every
+  lesson is in the 08 ledger — read it before touching this.
 - **Animation objects** — the converter TODAY welds IDE-anim defs at BIND POSE and only counts them
   (`weld.ts:153`, `animatedStatic` = **64 instances on the full map**): garage doors, windmills and
   friends stand frozen. Work = carry the anim clip + frame chain into the format and drive them with the

@@ -60,6 +60,19 @@ export interface CameraState {
   up: Vec3;
 }
 
+/** One break, baked (see `renderware/breakable/bake-debris`) and converted to ENGINE space by the host. */
+export interface DebrisUpload {
+  /** Seconds of fade at the tail of the lifetime. */
+  fade: number;
+  /** Gravity the shards fall under (engine units/s²) — the shader integrates it analytically. */
+  gravity: number;
+  lifetime: number;
+  /** The shard textures, one layer per draw group; the layer rides in each vertex. */
+  texture: { height: number; layers: number; rgba: Uint8Array; width: number };
+  /** Interleaved, 80 bytes per vertex — the layout the debris pipeline declares. */
+  vertices: Float32Array;
+}
+
 /**
  * A host-fed corona (074/08 B5 step 5) — vehicle head/tail lamps ride the EXISTING instanced corona pass
  * rather than a second one. Hosts replace `Engine.dynamicCoronas` each frame; already faded/gated by the
@@ -97,7 +110,6 @@ export interface EngineStats {
   submitMs: number;
 }
 
-/** Per-frame environment (074/06): drives the world lighting uniforms. All CPU-side arcs live in the host. */
 export interface Environment {
   /** Baked AO/skyVis strength on the indirect term (074/07): 0 = off, 1 = raw bake. */
   aoStrength: number;
@@ -248,6 +260,18 @@ export interface VehicleSubmesh {
   translucent: boolean;
 }
 
+/** Per-frame environment (074/06): drives the world lighting uniforms. All CPU-side arcs live in the host. */
+/** One live break's GPU resources. */
+interface DebrisEntry {
+  bindGroup: GPUBindGroup;
+  expiresAt: number;
+  texture: GPUTexture;
+  textureBytes: number;
+  uniform: GPUBuffer;
+  vertexBuffer: GPUBuffer;
+  vertexCount: number;
+}
+
 /** Instances a model starts with room for; the matrix buffer doubles when it runs out. */
 const VEHICLE_CAPACITY = 8;
 /** 4 carcols colours × vec4f per matrix row. */
@@ -306,6 +330,11 @@ interface VehicleModel {
   texture: GPUTexture;
   textureBytes: number;
 }
+
+/** Interleaved debris vertex (B7·a): position, uv, colour, centroid, velocity, spin, (landTime, layer). */
+const DEBRIS_STRIDE = 80;
+/** Simultaneous breaks. Each is one draw and one small texture; a pile-up must not creep the frame. */
+const MAX_ACTIVE_DEBRIS = 8;
 
 /** Light-pool capacity (074/06 row 7) — mirrored by the WGSL loop bound. */
 const LIGHT_POOL_CAP = 64;
@@ -387,6 +416,7 @@ export class Engine {
   private coronaQuad!: GPUBuffer;
   private readonly coronaScratch = new Float32Array(CORONA_CAP * 8);
   private coronaTexture!: GPUTexture;
+  private readonly debris: DebrisEntry[] = [];
   private depthView!: GPUTextureView;
   private engineDevice!: EngineDevice;
   private frameBindGroup!: GPUBindGroup;
@@ -733,6 +763,7 @@ export class Engine {
     draws += this.drawVehicles(pass, true);
     // 2dfx coronas last (074/06 row 13): additive on top of everything, depth-read hides occluded ones.
     draws += this.drawParticles(pass);
+    draws += this.drawDebris(pass);
     draws += this.drawCoronas(pass, camera);
     pass.end();
     // Godrays composite (074/09 stage 1): radial blur of the resolved scene toward the sun's screen
@@ -1153,6 +1184,68 @@ export class Engine {
     this.water = { bindGroup, indexCount: indices.length, indices: indexBuffer, vertices };
   }
 
+  /**
+   * Spawn one break's debris (B7·a). The shards' whole flight is baked into the vertices, so this uploads
+   * once and costs one draw per frame until it expires — no simulation, no per-frame writes.
+   *
+   * `vertices` is the interleaved layout the debris pipeline declares (80 bytes/vertex), already in ENGINE
+   * space. Oldest breaks are evicted past the budget: a pile-up of smashes must not creep the frame.
+   */
+  spawnDebris(upload: DebrisUpload): void {
+    if (this.debris.length >= MAX_ACTIVE_DEBRIS) {
+      this.destroyDebris(this.debris.shift()!);
+    }
+    const vertexBuffer = this.resources.createBuffer('debris', {
+      label: 'debris:vb',
+      size: upload.vertices.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(vertexBuffer, 0, upload.vertices);
+    const uniform = this.resources.createBuffer('uniform', {
+      label: 'debris:uniform',
+      size: 16,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const spawn = (performance.now() - this.startedMs) / 1000;
+    this.device.queue.writeBuffer(uniform, 0, new Float32Array([spawn, upload.lifetime, upload.fade, upload.gravity]));
+    const texture = this.resources.createTexture(
+      'texture',
+      {
+        format: 'rgba8unorm-srgb',
+        label: 'debris:shards',
+        size: { depthOrArrayLayers: upload.texture.layers, height: upload.texture.height, width: upload.texture.width },
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      },
+      upload.texture.rgba.byteLength,
+    );
+    this.device.queue.writeTexture(
+      { texture },
+      upload.texture.rgba,
+      { bytesPerRow: upload.texture.width * 4, rowsPerImage: upload.texture.height },
+      { depthOrArrayLayers: upload.texture.layers, height: upload.texture.height, width: upload.texture.width },
+    );
+    this.debris.push({
+      bindGroup: this.device.createBindGroup({
+        entries: [
+          { binding: 0, resource: { buffer: uniform } },
+          { binding: 1, resource: texture.createView({ dimension: '2d-array' }) },
+          {
+            binding: 2,
+            resource: this.device.createSampler({ label: 'debris', magFilter: 'linear', minFilter: 'linear' }),
+          },
+        ],
+        label: 'debris',
+        layout: this.pipelines.debrisLayout,
+      }),
+      expiresAt: spawn + upload.lifetime,
+      texture,
+      textureBytes: upload.texture.rgba.byteLength,
+      uniform,
+      vertexBuffer,
+      vertexCount: upload.vertices.byteLength / DEBRIS_STRIDE,
+    });
+  }
+
   /** Upload the probe's palette after the host wrote it (model matrix slot 0 + sampled bones). */
   updatePedPalette(): void {
     if (this.ped) {
@@ -1240,6 +1333,12 @@ export class Engine {
     return this.cloudFadeFrom + (this.cloudFadeTarget - this.cloudFadeFrom) * t;
   }
 
+  private destroyDebris(entry: DebrisEntry): void {
+    this.resources.destroyBuffer('debris', entry.vertexBuffer);
+    this.resources.destroyBuffer('uniform', entry.uniform);
+    this.resources.destroyTexture('texture', entry.texture, entry.textureBytes);
+  }
+
   /** 2dfx corona billboards of visible cells (074/06 row 13): CPU-gated by night + farClip, one
    *  instanced draw. Colour is premultiplied by the dn gate — coronas are a NIGHT phenomenon (v1). */
   private drawCoronas(pass: GPURenderPassEncoder, camera: CameraState): number {
@@ -1307,6 +1406,35 @@ export class Engine {
     return 1;
   }
 
+  /**
+   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
+   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
+   * the known cost knob if a street full of parked cars ever pushes the draw budget.
+   */
+  /**
+   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
+   * so this is genuinely all there is to it per frame.
+   */
+  /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
+  private drawDebris(pass: GPURenderPassEncoder): number {
+    const now = (performance.now() - this.startedMs) / 1000;
+    while (this.debris.length > 0 && this.debris[0].expiresAt <= now) {
+      this.destroyDebris(this.debris.shift()!);
+    }
+    if (this.debris.length === 0) {
+      return 0;
+    }
+    pass.setPipeline(this.pipelines.get('debris'));
+    pass.setBindGroup(0, this.frameBindGroup);
+    for (const entry of this.debris) {
+      pass.setBindGroup(1, entry.bindGroup);
+      pass.setVertexBuffer(0, entry.vertexBuffer);
+      pass.draw(entry.vertexCount);
+    }
+
+    return this.debris.length;
+  }
+
   /** ObjectTable draws for visible cells (074/06 row 9). Timed: render when `hour` is inside [on, off). */
   private drawObjects(pass: GPURenderPassEncoder): number {
     const hour = ((this.environment.hour % 24) + 24) % 24;
@@ -1339,15 +1467,6 @@ export class Engine {
     return draws;
   }
 
-  /**
-   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
-   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
-   * the known cost knob if a street full of parked cars ever pushes the draw budget.
-   */
-  /**
-   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
-   * so this is genuinely all there is to it per frame.
-   */
   private drawParticles(pass: GPURenderPassEncoder): number {
     if (!this.particles) {
       return 0;

@@ -4,7 +4,7 @@
  * tests and visible in the HUD). This is the 073 3.5-GB lesson turned into an API.
  */
 
-export type ResidencyCategory = 'cellIndex' | 'cellVertex' | 'target' | 'texture' | 'uniform';
+export type ResidencyCategory = 'cellIndex' | 'cellVertex' | 'debris' | 'target' | 'texture' | 'uniform';
 
 export class Resources {
   private readonly bytes = new Map<ResidencyCategory, number>();

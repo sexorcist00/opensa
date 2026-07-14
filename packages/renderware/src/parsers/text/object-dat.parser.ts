@@ -28,6 +28,12 @@ export interface ObjectDatEntry {
   colDamageMultiplier: number;
   /** Mass (column B); huge values (cutscene/fixed props) mark a prop as effectively indestructible. */
   mass: number;
+  /**
+   * Uproot limit (column G) — the force needed to KNOCK THE PROP OVER. Non-zero means SA topples it rather
+   * than shattering it: `lamppost1` carries 240 here (and still declares a breakable effect), which is why a
+   * street lamp in the real game bends and falls instead of bursting into shards. 0 for crates and bags.
+   */
+  uprootLimit: number;
 }
 
 /**
@@ -49,6 +55,7 @@ export function parseObjectDat(text: string): Map<string, ObjectDatEntry> {
       continue;
     }
     const mass = Number(cells[1]);
+    const uprootLimit = Number(cells[6]);
     const colDamageMultiplier = Number(cells[7]);
     const colDamageEffect = Number(cells[8]);
     if (!Number.isFinite(colDamageMultiplier) || !Number.isFinite(colDamageEffect)) {
@@ -58,6 +65,7 @@ export function parseObjectDat(text: string): Map<string, ObjectDatEntry> {
       colDamageEffect,
       colDamageMultiplier,
       mass: Number.isFinite(mass) ? mass : 0,
+      uprootLimit: Number.isFinite(uprootLimit) ? uprootLimit : 0,
     });
   }
 

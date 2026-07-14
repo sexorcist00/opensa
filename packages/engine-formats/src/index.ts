@@ -8,6 +8,7 @@ export {
   OSCELL_VERSION_MAJOR,
   OSCELL_VERSION_MINOR,
   OSCELL_VERTEX_STRIDE,
+  type OscellBreakable,
   OscellChannel,
   OscellFlag,
   type OscellGroup,

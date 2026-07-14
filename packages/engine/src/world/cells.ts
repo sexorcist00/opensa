@@ -3,13 +3,20 @@
  * replayed while the cell is frustum-visible. Record happens ONCE at load (we own record time — no version
  * dances); unload destroys everything and the residency ledger must return to its prior line.
  */
-import { decodeOscell, OscellChannel, type OscellGroup, type OscellObject } from '@opensa/engine-formats';
+import {
+  decodeOscell,
+  type OscellBreakable,
+  OscellChannel,
+  type OscellGroup,
+  type OscellObject,
+} from '@opensa/engine-formats';
 
 import type { Resources } from '../core/resources';
 import type { PipelineSet } from '../render/pipelines';
 import type { TextureArrays } from './textures';
 
 import { MSAA_SAMPLES, pipelineIdFor } from '../render/pipelines';
+import { alignedErase } from './degenerate';
 
 export interface CellHandle {
   /** Blended classes (blend/beam) — executed in the frame's SECOND phase, after every cell's opaque
@@ -17,16 +24,30 @@ export interface CellHandle {
   blendBundle: GPURenderBundle | null;
   /** World-space bounding sphere [x, y, z, r] (cell bounds shifted by origin). */
   bounds: readonly [number, number, number, number];
+  /**
+   * Smashable placements (B7·a): key hash → the placement's triangles inside THIS cell's index buffer.
+   *
+   * A prop breaks by having its indices overwritten with degenerate ones — the cell's render bundle is
+   * recorded once and never rebuilt, but it only REFERENCES the index buffer, so rewriting the buffer's bytes
+   * is legal and costs one `writeBuffer`. Keeping the props inside the merged batch is what keeps the draw
+   * count flat (splitting them out per placement measured 4.5x the draws).
+   */
+  breakables: Map<number, { indexCount: number; indexOffset: number }[]>;
   bundle: GPURenderBundle;
   cellBindGroup: GPUBindGroup;
   draws: number;
   index16: boolean;
   indexBuffer: GPUBuffer;
+  /** The cell's index bytes, kept ONLY when it has smashable props: erasing one needs its neighbours' bytes
+   *  (see `alignedErase`). Cells with nothing to smash keep nothing. */
+  indexData: Uint8Array;
   key: string;
   /** 2dfx corona anchors (074/06 row 13), WORLD-space positions precomputed at load. */
   lights: {
     color: readonly [number, number, number, number];
     farClip: number;
+    /** Key hash of the smashable placement that owns this light; 0 when nothing can smash it. */
+    owner: number;
     size: number;
     x: number;
     y: number;
@@ -77,6 +98,42 @@ export class CellStore {
   /** All loaded cells (culling + HUD iterate this). */
   all(): IterableIterator<CellHandle> {
     return this.cells.values();
+  }
+
+  /**
+   * Smash the placement with this key: overwrite its triangles with degenerate ones (every index → 0, so each
+   * triangle collapses to a point and rasterizes nothing). The render bundle is untouched — it references the
+   * index BUFFER, and we are only rewriting its bytes. Returns false when no loaded cell owns the key (the
+   * prop streamed out, or it was already broken and its cell has not reloaded).
+   *
+   * There is no explicit restore: a cell reload rebuilds the index buffer straight from the pak, which is
+   * exactly SA's behaviour — streaming out and back in respawns the prop.
+   */
+  breakPlacement(keyHash: number): boolean {
+    for (const cell of this.cells.values()) {
+      const ranges = cell.breakables.get(keyHash);
+      if (!ranges) {
+        continue;
+      }
+      const stride = cell.index16 ? 2 : 4;
+      for (const range of ranges) {
+        // 4-byte alignment is not a detail here: an unaligned writeBuffer is REJECTED (the browser only warns),
+        // so with u16 indices a prop whose range started on an odd index simply refused to break.
+        const erase = alignedErase(cell.indexData, range.indexOffset, range.indexCount, stride);
+        this.device.queue.writeBuffer(cell.indexBuffer, erase.byteOffset, erase.bytes);
+      }
+      cell.breakables.delete(keyHash);
+      // The prop's own 2dfx lights go with it: a smashed traffic light left its coronas hanging in the sky.
+      const lights = cell.lights.filter((light) => light.owner !== keyHash);
+      if (lights.length !== cell.lights.length) {
+        cell.lights.length = 0;
+        cell.lights.push(...lights);
+      }
+
+      return true;
+    }
+
+    return false;
   }
 
   has(key: string): boolean {
@@ -143,15 +200,18 @@ export class CellStore {
         cell.bounds[2] + cell.origin[2],
         cell.bounds[3],
       ],
+      breakables: groupBreakables(cell.breakables),
       bundle,
       cellBindGroup,
       draws: bundleGroups.length,
       index16: cell.index16,
       indexBuffer,
+      indexData: cell.breakables.length > 0 ? cell.indexData : new Uint8Array(0),
       key,
       lights: cell.lights.map((light) => ({
         color: light.color,
         farClip: light.farClip,
+        owner: light.owner,
         size: light.size,
         x: light.position[0] + cell.origin[0],
         y: light.position[1] + cell.origin[1],
@@ -221,6 +281,18 @@ export class CellStore {
 
 function align4(bytes: number): number {
   return Math.ceil(bytes / 4) * 4;
+}
+
+/** One row per RANGE in the pak (a prop split across materials owns several) — group them by placement. */
+function groupBreakables(rows: readonly OscellBreakable[]): CellHandle['breakables'] {
+  const breakables: CellHandle['breakables'] = new Map();
+  for (const row of rows) {
+    const ranges = breakables.get(row.keyHash) ?? [];
+    ranges.push({ indexCount: row.indexCount, indexOffset: row.indexOffset });
+    breakables.set(row.keyHash, ranges);
+  }
+
+  return breakables;
 }
 
 /** `writeBuffer` requires a multiple-of-4 byte length — odd uint16 index counts need a padded copy. */
