@@ -125,8 +125,7 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
     label: 'Run San Andreas [local only]',
     loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
     mainCharacter: 'BMYPOL1',
-    // LV - Pirate: a 2dfx-dense spot (B6 field check — fires, fountains, vents in view).
-    playerSpawn: [2031.09, 1539.7, 10.74],
+    playerSpawn: [2495, -1675, 16], // LS - Ganton
     teleports: [...SA_TELEPORTS],
   },
 };
