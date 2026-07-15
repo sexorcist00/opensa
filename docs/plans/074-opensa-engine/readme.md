@@ -96,10 +96,10 @@ signs — no new engine machinery: an IFP's bones ARE the clump's frames).
    explicit command.
 
 **Standing debts before a parity sign-off:** vehicle paint (16) and map lighting (17) both look worse than
-prod today. Two field-found prod-parity gaps pulled OUT of this chain into their own plans (2026-07-15):
-[075 water SEA/INLAND classes](../075-water-body-classes.md) (inland pools get ocean waves + spillover) and
-[076 roadsign/billboard text](../076-roadsign-text.md) (2dfx type-7 text plates render blank). 075 is queued
-next (user pick), then 076.
+prod today. Two field-found prod-parity gaps pulled OUT of this chain into their own plans (2026-07-15), BOTH
+SHIPPED + FIELD-CONFIRMED + CLOSED: [075 water SEA/INLAND classes](../075-water-body-classes.md) (inland pools
+calm + livelier ripple — no ocean waves/spillover) and [076 roadsign/billboard text](../076-roadsign-text.md)
+(2dfx type-7 text plates welded as unlit beam text). Back to the ladder: B7·d procobj next.
 
 **Tooling that earned its place today:** a slow-frame console log with per-block CPU timers in
 `engine-canvas-host.tsx` (quiet on healthy frames). It ended a three-round guessing game in one reload — a

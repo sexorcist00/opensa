@@ -28,8 +28,12 @@ export function openGameDir(root: string, overlayDirs: readonly string[] = []): 
   for (const dir of overlayDirs) {
     walkOverlay(dir);
   }
-  // Loose files indexed by lowercased relative path with forward slashes ('data/gta.dat').
+  // Loose files indexed by lowercased relative path with forward slashes ('data/gta.dat'), PLUS by bare
+  // basename — img members resolve by basename, and a loose model TXD (e.g. `models/particle.txd`, which the
+  // roadsign-font planner asks for as `particle.txd`) must resolve the same way. Path wins; basename is a
+  // last-resort fallback (first walk order wins on a collision).
   const loose = new Map<string, string>();
+  const looseByBase = new Map<string, string>();
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir)) {
       const full = join(dir, entry);
@@ -38,6 +42,10 @@ export function openGameDir(root: string, overlayDirs: readonly string[] = []): 
         walk(full);
       } else if (!entry.toLowerCase().endsWith('.img')) {
         loose.set(relative(root, full).split(sep).join('/').toLowerCase(), full);
+        const base = basename(full).toLowerCase();
+        if (!looseByBase.has(base)) {
+          looseByBase.set(base, full);
+        }
       }
     }
   };
@@ -61,7 +69,7 @@ export function openGameDir(root: string, overlayDirs: readonly string[] = []): 
         return bytes;
       }
     }
-    const loosePath = loose.get(name.toLowerCase());
+    const loosePath = loose.get(name.toLowerCase()) ?? looseByBase.get(name.toLowerCase());
     if (loosePath) {
       const buffer = readFileSync(loosePath);
 
@@ -86,6 +94,7 @@ export function openGameDir(root: string, overlayDirs: readonly string[] = []): 
       return (
         overlay.has(name.toLowerCase()) ||
         loose.has(name.toLowerCase()) ||
+        looseByBase.has(name.toLowerCase()) ||
         archives.some((archive) => archive.get(name) !== null)
       );
     },

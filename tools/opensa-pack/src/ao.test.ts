@@ -37,6 +37,7 @@ function cell(buckets: WeldBucket[], lod = false): WeldedCell {
       groups: 0,
       indices: 0,
       particles: 0,
+      roadsigns: 0,
       skippedTimed: 0,
       timedObjects: 0,
       uvAnimObjects: 0,

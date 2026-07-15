@@ -3,7 +3,21 @@
 [← plans index](README.md) · prod source: `packages/renderware/src/three/build-roadsign.ts` (plan 042 item 5) ·
 engine home: [074/06](074-opensa-engine/06-world-effects-parity.md) · pattern precedent: [074/18 UV-scroll](074-opensa-engine/18-uv-anim.md)
 
-**Status: OPEN, not started.** Field report (2026-07-15): the LV overhead sign/billboard panels render BLANK
+**Status: SHIPPED + FIELD-CONFIRMED (2026-07-15) — CLOSED.** User: "все супер". The glyph builder is now a
+shared three-free module; a global converter pre-pass buckets each roadsign by the cell of its WORLD position
+(deduped by model) and welds the glyph quads as **BEAM-class** geometry — unlit + full-bright (readable day AND
+night, the field bug), palette colour in the prelit, `roadsignfont` (particle.txd) as one texture-array layer.
+Beam rides the blend phase (after all opaque) so text composites OVER its plate, never before it (the user's
+prior-decoupling concern). pak-map reconverted: **roadsigns=488** welded, +1 texture array. 739 pkg tests green,
+tsc + eslint clean.
+
+GOTCHA fixed en route: `particle.txd` is a LOOSE `models/` file, so `game-fs.get('particle.txd')` (by basename,
+how img members resolve) returned null and `roadsignfont` fell back to magenta. Fix: game-fs now indexes loose
+files by basename too (last-resort, after path + img) — the roadsign font, and any loose model TXD, resolve.
+
+<details><summary>Original field report + design (2026-07-15)</summary>
+
+Field report (2026-07-15): the LV overhead sign/billboard panels render BLANK
 (bare dark plates) in `?engine=opensa`. Their text is a **2dfx ROADSIGN (type 7)** overlay — the same
 mechanism as freeway direction boards and street-name plates — which prod draws and the own engine ignores.
 
@@ -70,3 +84,5 @@ the text is static geometry with a normal texture; welding it as cutout costs ze
   right regardless, but the exact boards should be confirmed.
 - **Font atlas layout** already reverse-engineered in `build-roadsign.ts` (4 cols × 32 rows, `ATLAS_ORDER`) —
   reuse verbatim.
+
+</details>

@@ -174,7 +174,8 @@ async function main(): Promise<void> {
       `colors=${report.textures.colors} dedup=${report.textures.dedup} arrays=${report.textures.arrays}, ` +
       `timed objects=${report.timedObjects}, animated(live)=${report.animatedObjects}, ` +
       `animated(static)=${report.animatedStatic}, particles=${report.particles}, ` +
-      `breakables=${report.breakables}, uv-scroll=${report.uvAnimObjects}/${report.uvAnimations}`,
+      `breakables=${report.breakables}, uv-scroll=${report.uvAnimObjects}/${report.uvAnimations}, ` +
+      `roadsigns=${report.roadsigns}`,
   );
   if (report.ao) {
     console.log(

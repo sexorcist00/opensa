@@ -8,9 +8,11 @@ import {
   type OspakInput,
   type OspakManifest,
 } from '@opensa/engine-formats';
+import { getClump } from '@opensa/renderware/archive/asset-cache';
 import { breakableModelsFromText } from '@opensa/renderware/breakable/models';
 import { OPEN_SCRIPT_IPL, resolveMap } from '@opensa/renderware/map/resolve-map';
 import { buildWorldGrid, cellKey } from '@opensa/renderware/map/world-grid';
+import { type RoadsignGlyphQuads, roadsignGlyphQuads } from '@opensa/renderware/roadsign/glyph-quads';
 import { MeshoptEncoder } from 'meshoptimizer';
 /**
  * District conversion orchestrator (plan 074/03): resolve the map → world grid → for every cell in the rect,
@@ -72,6 +74,8 @@ export interface ConvertReport {
   /** ObjectTable entries across cells (074/06 row 9: timed windows / props). */
   /** 2dfx PARTICLE emitters welded into the pak (B6). */
   particles: number;
+  /** 2dfx roadsign entries welded as beam-class text (plan 076). */
+  roadsigns: number;
   skippedTimed: number;
   sunVis: (BakeSunVisReport & { ms: number }) | null;
   textures: TexturePlanner['report'] & { arrays: number };
@@ -79,6 +83,18 @@ export interface ConvertReport {
   uvAnimations: number;
   /** UV-scroll draws welded (B7·c) + distinct animations registered map-wide. */
   uvAnimObjects: number;
+}
+
+/** The invariant context of a `weldRect` pass — everything constant across its cells. */
+interface WeldRectContext {
+  breakableModels: ReadonlySet<string>;
+  cellSize: number;
+  defs: ReturnType<typeof resolveMap>;
+  fs: AssetFileSystem;
+  grid: ReturnType<typeof buildWorldGrid>;
+  planner: TexturePlanner;
+  roadsignsByCell: ReadonlyMap<string, RoadsignGlyphQuads[]>;
+  uvAnimRegistry: UvAnimRegistry;
 }
 
 export async function convertDistrict(
@@ -108,6 +124,7 @@ export async function convertDistrict(
     cells: [],
     pakBytes: 0,
     particles: 0,
+    roadsigns: 0,
     skippedTimed: 0,
     sunVis: null,
     textures: { arrays: 0, colors: 0, dedup: 0, opaquePass: 0, processed: 0 },
@@ -118,6 +135,10 @@ export async function convertDistrict(
   // UV-scroll (B7·c / plan 074/18): one registry for the whole convert — dict names are global, so every
   // material referencing one shares a slot; only the HD (non-occluder) weld feeds it.
   const uvAnims = createUvAnimRegistry();
+  // Roadsign text (plan 076): a GLOBAL pre-pass — 2dfx roadsigns store WORLD coords (not instance-local), so
+  // each is bucketed by the cell containing its position (near its instance, ≤~60 m in the data) and welded
+  // there; deduped by model (its coords are the same for every instance).
+  const roadsignsByCell = collectRoadsigns(fs, defs, cellSize);
 
   // Phases 1-2, CHUNKED (074/14 A2): weld → bake → encode per chunk of cells, releasing the weld scratch
   // between chunks — the full map cannot hold one welded heap (16 GB held ONE city). The bake ring
@@ -158,7 +179,7 @@ export async function convertDistrict(
   for (const [chunkIndex, chunk] of chunks.entries()) {
     const tag = `chunk ${chunkIndex + 1}/${chunks.length} [${chunk.rect.join(',')}]`;
     const chunkStarted = Date.now();
-    const welded = weldRect(fs, defs, grid, planner, chunk.rect, cellSize, breakableModels, uvAnims);
+    const welded = weldRect(fs, defs, grid, planner, chunk.rect, cellSize, breakableModels, uvAnims, roadsignsByCell);
     if (welded.length === 0) {
       doneCells += chunk.cells;
       continue;
@@ -231,6 +252,7 @@ function accumulate(report: ConvertReport, key: string, bytes: number, stats: We
   report.particles += stats.particles;
   report.timedObjects += stats.timedObjects;
   report.uvAnimObjects += stats.uvAnimObjects;
+  report.roadsigns += stats.roadsigns;
   report.breakables += stats.breakables;
 }
 
@@ -255,6 +277,53 @@ async function bakeChunk(
   const sunStarted = Date.now();
   const sunBake = options.sunVis ? bakeSunVis(cells, bvh) : null;
   mergeBakeReports(report, aoBake, sunBake, aoMs, Date.now() - sunStarted);
+}
+
+/** Build one roadsign's glyph quads and file them under the cell containing its WORLD position. */
+function bucketRoadsign(
+  sign: Parameters<typeof roadsignGlyphQuads>[0],
+  cellSize: number,
+  byCell: Map<string, RoadsignGlyphQuads[]>,
+): void {
+  const quads = roadsignGlyphQuads(sign);
+  if (!quads) {
+    return;
+  }
+  const key = cellKey(Math.floor(sign.position[0] / cellSize), Math.floor(sign.position[1] / cellSize));
+  const list = byCell.get(key);
+  if (list) {
+    list.push(quads);
+  } else {
+    byCell.set(key, [quads]);
+  }
+}
+
+/**
+ * Global roadsign pre-pass (plan 076): each unique placed model's 2dfx roadsign entries → world-space glyph
+ * quads, bucketed by the cell that contains the sign's WORLD position (roadsigns store world coords, not
+ * instance-local). Deduped by model id — a roadsign's coords are the same for every instance, so it welds ONCE
+ * regardless of placement count (matching prod, which adds the parts once with an identity transform).
+ */
+function collectRoadsigns(
+  fs: AssetFileSystem,
+  defs: ReturnType<typeof resolveMap>,
+  cellSize: number,
+): Map<string, RoadsignGlyphQuads[]> {
+  const byCell = new Map<string, RoadsignGlyphQuads[]>();
+  const seen = new Set<number>();
+  for (const instance of defs.instances) {
+    if (instance.isLod || seen.has(instance.id)) {
+      continue;
+    }
+    seen.add(instance.id);
+    const def = defs.catalog.get(instance.id);
+    const clump = def ? tryGetClump(fs, def.modelName) : null;
+    for (const sign of clump?.geometries.flatMap((geometry) => geometry.roadsigns ?? []) ?? []) {
+      bucketRoadsign(sign, cellSize, byCell);
+    }
+  }
+
+  return byCell;
 }
 
 /** Feed HD welded triangles into the sea-level height grid (074/06 row 12 v3). Cell-local ENGINE coords →
@@ -338,6 +407,43 @@ function normalizedRect(rect: readonly [number, number, number, number]): [numbe
   ];
 }
 
+/** `getClump` that swallows a missing/broken DFF (returns null) — the roadsign pre-pass skips it. */
+function tryGetClump(fs: AssetFileSystem, modelName: string): null | ReturnType<typeof getClump> {
+  try {
+    return getClump(fs, modelName);
+  } catch {
+    return null;
+  }
+}
+
+/** Weld one grid cell's HD + LOD levels (skips empty cells); appends the results to `welded`. */
+function weldGridCell(ctx: WeldRectContext, cx: number, cy: number, welded: { cell: WeldedCell; key: string }[]): void {
+  const cell = ctx.grid.get(cellKey(cx, cy));
+  if (!cell) {
+    return;
+  }
+  // Cell origin in ENGINE coords: GTA cell centre (x, y) → engine (x, 0, −y).
+  const origin: [number, number, number] = [(cx + 0.5) * ctx.cellSize, 0, -(cy + 0.5) * ctx.cellSize];
+  const roadsigns = ctx.roadsignsByCell.get(cellKey(cx, cy));
+  for (const lod of [false, true]) {
+    // Roadsigns are HD-only (world-space text — a LOD copy would double it).
+    const parts = weldCellParts(
+      ctx.fs,
+      ctx.defs,
+      cell,
+      lod,
+      ctx.planner,
+      origin,
+      ctx.breakableModels,
+      ctx.uvAnimRegistry,
+      lod ? undefined : roadsigns,
+    );
+    if (parts) {
+      welded.push({ cell: parts, key: `${cx},${cy},${lod ? 'lod' : 'hd'}` });
+    }
+  }
+}
+
 function weldRect(
   fs: AssetFileSystem,
   defs: ReturnType<typeof resolveMap>,
@@ -347,23 +453,14 @@ function weldRect(
   cellSize: number,
   breakableModels: ReadonlySet<string>,
   uvAnimRegistry: UvAnimRegistry,
+  roadsignsByCell: ReadonlyMap<string, RoadsignGlyphQuads[]>,
 ): { cell: WeldedCell; key: string }[] {
+  const ctx: WeldRectContext = { breakableModels, cellSize, defs, fs, grid, planner, roadsignsByCell, uvAnimRegistry };
   const [x0, y0, x1, y1] = rect;
   const welded: { cell: WeldedCell; key: string }[] = [];
   for (let cx = Math.min(x0, x1); cx <= Math.max(x0, x1); cx += 1) {
     for (let cy = Math.min(y0, y1); cy <= Math.max(y0, y1); cy += 1) {
-      const cell = grid.get(cellKey(cx, cy));
-      if (!cell) {
-        continue;
-      }
-      // Cell origin in ENGINE coords: GTA cell centre (x, y) → engine (x, 0, −y).
-      const origin: [number, number, number] = [(cx + 0.5) * cellSize, 0, -(cy + 0.5) * cellSize];
-      for (const lod of [false, true]) {
-        const parts = weldCellParts(fs, defs, cell, lod, planner, origin, breakableModels, uvAnimRegistry);
-        if (parts) {
-          welded.push({ cell: parts, key: `${cx},${cy},${lod ? 'lod' : 'hd'}` });
-        }
-      }
+      weldGridCell(ctx, cx, cy, welded);
     }
   }
 

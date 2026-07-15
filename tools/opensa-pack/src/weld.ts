@@ -19,6 +19,7 @@ import { type GridCell } from '@opensa/renderware/map/world-grid';
 import { frameWorldTransform } from '@opensa/renderware/mesh/frame-transform';
 import { isVertexAlphaBeam, prepareClumpAtomics } from '@opensa/renderware/mesh/prepare-clump';
 import { IdeFlag } from '@opensa/renderware/parsers/text/index';
+import { ROADSIGN_PALETTE, type RoadsignGlyphQuads } from '@opensa/renderware/roadsign/glyph-quads';
 
 import type { TexturePlanner } from './textures';
 
@@ -85,6 +86,8 @@ export interface WeldStats {
   indices: number;
   /** 2dfx PARTICLE emitter anchors welded into this cell (B6). */
   particles: number;
+  /** 2dfx roadsign entries welded as beam-class text (plan 076). */
+  roadsigns: number;
   skippedTimed: number;
   /** ObjectTable entries produced (timed windows / scrapyard piles …). */
   timedObjects: number;
@@ -157,6 +160,9 @@ export function weldCellParts(
   breakableModels?: ReadonlySet<string>,
   /** UV-scroll registry (B7·c): omit on occluder welds — a scroller then welds as ordinary static geometry. */
   uvAnimRegistry?: UvAnimRegistry,
+  /** 2dfx roadsign glyph quads (plan 076) whose WORLD position falls in THIS cell — collected globally in a
+   *  pre-pass (they are world-space, not instance-local), welded here as beam-class text. HD cells only. */
+  roadsigns?: readonly RoadsignGlyphQuads[],
 ): null | WeldedCell {
   const buckets = new Map<string, WeldBucket>();
   const stats: WeldStats = {
@@ -166,6 +172,7 @@ export function weldCellParts(
     groups: 0,
     indices: 0,
     particles: 0,
+    roadsigns: 0,
     skippedTimed: 0,
     timedObjects: 0,
     uvAnimObjects: 0,
@@ -212,6 +219,14 @@ export function weldCellParts(
       collectLights(fs, group.def, group.instances, originEngine, lights, isBreakable(fs, group.def, breakableModels));
       collectParticles(fs, group.def, group.instances, originEngine, particles);
     }
+  }
+
+  // Roadsign text (plan 076): world-space glyph quads collected in the pre-pass for THIS cell weld into beam
+  // buckets — unlit + full-bright (readable day AND night), drawn in the blend phase AFTER all opaque so the
+  // text composites over its plate, never before it. HD only.
+  if (!lod && roadsigns && roadsigns.length > 0) {
+    weldRoadsigns(roadsigns, buckets, planner, originEngine);
+    stats.roadsigns = roadsigns.length;
   }
 
   // Bundle buckets first, then timed buckets grouped by their (on, off) window — the objectTable references
@@ -805,6 +820,65 @@ function weldGroup(
         flags.hasNight ||= atomic.nightColor !== null;
         flags.hasSway ||= swayKind !== null;
       }
+    }
+  }
+}
+
+/**
+ * Weld a cell's roadsign glyph quads (plan 076) as BEAM-class geometry: unlit and full-bright (the palette
+ * colour rides both the day AND night prelit, so a sign reads at night — the world-cutout path would darken it
+ * into the dark boards the field reported), with the `roadsignfont` atlas as one texture-array layer and the
+ * quads' atlas UVs. Double-sided (the three path used DoubleSide). Beam sits in the blend phase, after opaque.
+ */
+function weldRoadsigns(
+  roadsigns: readonly RoadsignGlyphQuads[],
+  buckets: Map<string, WeldBucket>,
+  planner: TexturePlanner,
+  origin: readonly [number, number, number],
+): void {
+  const resolved = planner.resolve('particle', 'roadsignfont', [255, 255, 255, 255], false);
+  const layerValue = resolved.layer | (resolved.stochastic ? 0x8000 : 0);
+  for (const sign of roadsigns) {
+    const [pr, pg, pb] = ROADSIGN_PALETTE[sign.colour] ?? ROADSIGN_PALETTE[0];
+    const bucket = bucketFor(buckets, resolved.arrayRef, 3, 1, null, null); // beam class (3), double-sided (1)
+    const quadCount = sign.positions.length / 12;
+    for (let q = 0; q < quadCount; q += 1) {
+      const base = bucket.vertices.length / WELD_ROW;
+      for (let c = 0; c < 4; c += 1) {
+        // World GTA → engine (x, z, −y) → cell-local — the same change the model vertices take.
+        const ex = sign.positions[q * 12 + c * 3] - origin[0];
+        const ey = sign.positions[q * 12 + c * 3 + 2] - origin[1];
+        const ez = -sign.positions[q * 12 + c * 3 + 1] - origin[2];
+        bucket.vertices.push(
+          ex,
+          ey,
+          ez,
+          0,
+          1,
+          0, // normal — beam ignores it
+          sign.uvs[q * 8 + c * 2],
+          sign.uvs[q * 8 + c * 2 + 1],
+          pr,
+          pg,
+          pb,
+          1, // dayPrelit RGB + cone alpha 1 (fsBeam multiplies by cone)
+          pr,
+          pg,
+          pb, // nightPrelit RGB — same colour, so the text stays full-bright at night
+          0, // sway
+          layerValue,
+          1,
+          0,
+          0.05, // ao / sunVis threshold / softness — unused by beam
+        );
+        bucket.min[0] = Math.min(bucket.min[0], ex);
+        bucket.min[1] = Math.min(bucket.min[1], ey);
+        bucket.min[2] = Math.min(bucket.min[2], ez);
+        bucket.max[0] = Math.max(bucket.max[0], ex);
+        bucket.max[1] = Math.max(bucket.max[1], ey);
+        bucket.max[2] = Math.max(bucket.max[2], ez);
+      }
+      bucket.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
   }
 }
