@@ -664,15 +664,17 @@ async function installWater(
       const view = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
       const vertexCount = view.getUint32(0, true);
       const indexCount = view.getUint32(4, true);
-      const gta = new Float32Array(bin.buffer, bin.byteOffset + 8, vertexCount * 4);
-      const indices = new Uint32Array(bin.buffer.slice(bin.byteOffset + 8 + vertexCount * 16), 0, indexCount);
-      // GTA Z-up → engine Y-up in place; the shore field rides along untouched.
-      const vertices = new Float32Array(vertexCount * 4);
+      // Vertex = [x, y, z, depth, class] (plan 075: class 0 = sea, 1 = inland) — stride 20.
+      const gta = new Float32Array(bin.buffer, bin.byteOffset + 8, vertexCount * 5);
+      const indices = new Uint32Array(bin.buffer.slice(bin.byteOffset + 8 + vertexCount * 20), 0, indexCount);
+      // GTA Z-up → engine Y-up in place; the shore field + water class ride along untouched.
+      const vertices = new Float32Array(vertexCount * 5);
       for (let v = 0; v < vertexCount; v += 1) {
-        vertices[v * 4] = gta[v * 4];
-        vertices[v * 4 + 1] = gta[v * 4 + 2];
-        vertices[v * 4 + 2] = -gta[v * 4 + 1];
-        vertices[v * 4 + 3] = gta[v * 4 + 3];
+        vertices[v * 5] = gta[v * 5];
+        vertices[v * 5 + 1] = gta[v * 5 + 2];
+        vertices[v * 5 + 2] = -gta[v * 5 + 1];
+        vertices[v * 5 + 3] = gta[v * 5 + 3];
+        vertices[v * 5 + 4] = gta[v * 5 + 4];
       }
       engine.setWater(vertices, indices, ripple, foam);
 
@@ -687,9 +689,11 @@ async function installWater(
   const positions: number[] = [];
   const indices: number[] = [];
   for (const quad of [...quads, ...oceanFrame(quads, 6000, 0)]) {
-    const base = positions.length / 4;
+    const base = positions.length / 5;
+    // Class from height (plan 075): elevated pools/reservoirs = inland (calm); the flat fallback has no bake.
+    const waterClass = quad.vertices[0][2] > 1 ? 1 : 0;
     for (const [x, y, z] of quad.vertices) {
-      positions.push(x, z, -y, 120); // constant "deep" shore field — no foam/damping without the bake
+      positions.push(x, z, -y, 120, waterClass); // constant "deep" field — no foam/damping without the bake
     }
     if (quad.vertices.length >= 4) {
       indices.push(base, base + 1, base + 2, base + 2, base + 1, base + 3);

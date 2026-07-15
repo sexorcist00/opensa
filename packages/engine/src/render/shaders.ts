@@ -964,6 +964,9 @@ struct WaterOut {
   @location(0) world: vec3f,
   @location(1) shore: f32,
   @location(2) swell: f32,
+  // Water class (plan 075): 0 = sea (full dynamics), 1 = inland (calm — no swell/surf/swash/foam so a pool
+  // doesn't spill its waves past its edges).
+  @location(3) @interpolate(flat) inland: f32,
 };
 
 // The two LONGEST trains DISPLACE the tessellated grid (074/06 row 12 v2 — the baked ~16 u mesh finally
@@ -986,8 +989,9 @@ fn surfPhase(depth: f32, t: f32) -> f32 {
 }
 
 @vertex
-fn vsWater(@location(0) position: vec3f, @location(1) depth: f32) -> WaterOut {
+fn vsWater(@location(0) position: vec3f, @location(1) depth: f32, @location(2) waterClass: f32) -> WaterOut {
   var out: WaterOut;
+  let inland = waterClass > 0.5;
   let damp = smoothstep(1.0, 9.0, depth);
   let swell = swellHeight(vec2f(position.x, position.z), frame.params2.z) * damp;
   // The lower gate keeps the WAVE trains out of the swash zone (field round 7: short-wavelength
@@ -1003,11 +1007,13 @@ fn vsWater(@location(0) position: vec3f, @location(1) depth: f32) -> WaterOut {
   let surgeRunup = 0.5 + 0.5 * sin(frame.params2.z * 0.85);
   let surge = (surgeRunup - 0.5) * 0.5 * (1.0 - smoothstep(0.5, 3.0, depth));
   var displaced = position;
-  displaced.y += swell * 0.32 + surf * 0.45 + surge;
+  // INLAND water gets NO vertical displacement — a still pool must not heave its surface over the rim.
+  displaced.y += select(swell * 0.32 + surf * 0.45 + surge, 0.0, inland);
   out.clip = frame.viewProj * vec4f(displaced, 1.0);
   out.world = displaced;
   out.shore = depth;
-  out.swell = swell;
+  out.swell = select(swell, 0.0, inland);
+  out.inland = select(0.0, 1.0, inland);
   return out;
 }
 
@@ -1044,15 +1050,32 @@ fn waveGradient(p0: vec2f, t: f32, viewDist: f32) -> vec2f {
   return grad;
 }
 
+// INLAND liveliness (plan 075): a still pool must not be a dead mirror. Two gentle criss-crossing ripple
+// trains + a lazy large-scale drift perturb the LIGHTING NORMAL only (no height displacement → no spillover),
+// so the reflection and the sun glint shimmer and slide across the surface. Amplitudes are small on purpose.
+fn calmRipple(p: vec2f, t: f32) -> vec2f {
+  let a = normalize(vec2f(0.7, 0.3));
+  let b = normalize(vec2f(-0.35, 0.6));
+  var g = vec2f(0.0);
+  g += a * cos(dot(p, a) * 0.55 + t * 1.1) * 0.020;
+  g += b * cos(dot(p, b) * 0.90 - t * 0.9) * 0.014;
+  // A slow, wide drift of the normal — the lazy "breathing" of a calm sheet.
+  g += vec2f(cos(p.x * 0.13 + t * 0.5), sin(p.y * 0.11 - t * 0.4)) * 0.010;
+  return g;
+}
+
 @fragment
 fn fsWater(in: WaterOut) -> @location(0) vec4f {
   let toEye = frame.camera.xyz - in.world;
   let dist = length(toEye);
   let view = toEye / max(dist, 1e-4);
+  let inland = in.inland > 0.5;
   // The wave field lives on the horizontal plane: GTA xy == engine xz.
   let p = vec2f(in.world.x, in.world.z);
   let t = frame.params2.z;
-  var grad = waveGradient(p, t, dist);
+  // INLAND (plan 075): swap the OCEAN wave trains for a gentle calm-ripple (normal-only, no displacement) so
+  // a pool shimmers and moves its reflection without heaving its surface. SEA keeps the full train gradient.
+  var grad = select(waveGradient(p, t, dist), calmRipple(p, t), inland);
   // Close-up detail from the authored waterclear256 ripple (prod's term): two scrolled taps read as a
   // slope — always on, so the surface shimmers even in a dead calm. Sampled UNCONDITIONALLY (implicit-LOD
   // textureSample is illegal in non-uniform control flow) and weighted by the near fade.
@@ -1066,7 +1089,7 @@ fn fsWater(in: WaterOut) -> @location(0) vec4f {
     textureSample(waterRipple, waterSampler, (duv + vec2f(e, 0.0)) * 1.7 - flow * 1.3).r;
   let hy = textureSample(waterRipple, waterSampler, duv + vec2f(0.0, e) + flow).r +
     textureSample(waterRipple, waterSampler, (duv + vec2f(0.0, e)) * 1.7 - flow * 1.3).r;
-  grad += vec2f(hx - h0, hy - h0) * (1.1 * near);
+  grad += vec2f(hx - h0, hy - h0) * (1.1 * near) * select(1.0, 0.6, inland);
   // Far-field FLATTEN (field round 2 — swell faces mirrored the bright fog horizon as huge white bands):
   // distant water reads as a calm mirror; the swell survives in the silhouette via the displacement.
   var normal = normalize(vec3f(-grad.x, 1.0, -grad.y));
@@ -1123,7 +1146,8 @@ fn fsWater(in: WaterOut) -> @location(0) vec4f {
   let soft = clamp(foamShape * (mass * intensity + rim) * 1.5 + foamShape * crest, 0.0, 1.0);
   let hard = smoothstep(0.35, 0.6, soft);
   let hardness = smoothstep(0.45, 0.97, runup);
-  let foam = mix(soft * 0.85, max(soft, hard), hardness);
+  // INLAND water carries NO foam (no surf, no swash) — the whole breaking-wave chain is a SEA effect.
+  let foam = mix(soft * 0.85, max(soft, hard), hardness) * select(1.0, 0.0, inland);
   color = mix(color, vec3f(0.95, 0.97, 0.97), foam);
   alpha = max(alpha, foam * 0.95);
   // Unified fog (the 068 shape — identical math to the world shaders).

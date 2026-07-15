@@ -162,13 +162,15 @@ export function compileAll(
       multisample: { count: MSAA_SAMPLES },
       primitive: { cullMode: 'none', topology: 'triangle-list' },
       vertex: {
-        // Stride 16: engine-space position + the baked shore distance (074/06 row 12 v2).
+        // Stride 20: engine-space position + baked shore distance (074/06 row 12 v2) + water class (plan 075:
+        // 0 = sea, 1 = inland — inland renders calm so pools don't spill their waves).
         buffers: [
           {
-            arrayStride: 16,
+            arrayStride: 20,
             attributes: [
               { format: 'float32x3', offset: 0, shaderLocation: 0 },
               { format: 'float32', offset: 12, shaderLocation: 1 },
+              { format: 'float32', offset: 16, shaderLocation: 2 },
             ],
           },
         ],

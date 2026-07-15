@@ -21,9 +21,25 @@ function decode(bin: Uint8Array): { indices: Uint32Array; vertices: Float32Array
   const indexCount = view.getUint32(4, true);
 
   return {
-    indices: new Uint32Array(bin.buffer, bin.byteOffset + 8 + vertexCount * 16, indexCount),
-    vertices: new Float32Array(bin.buffer, bin.byteOffset + 8, vertexCount * 4),
+    indices: new Uint32Array(bin.buffer, bin.byteOffset + 8 + vertexCount * 20, indexCount),
+    // Vertex = [x, y, z, depth, class] (plan 075) — stride 20.
+    vertices: new Float32Array(bin.buffer, bin.byteOffset + 8, vertexCount * 5),
   };
+}
+
+/** A flat water square at height `z`, water.dat 7-float layout. */
+function square(z: number): string {
+  return [
+    'processed',
+    [
+      [0, 0, z],
+      [200, 0, z],
+      [0, 200, z],
+      [200, 200, z],
+    ]
+      .map(([x, y, level]) => `${x} ${y} ${level} 0 0 0 0`)
+      .join('   ') + ' 1',
+  ].join('\n');
 }
 
 describe('bakeWater', () => {
@@ -45,7 +61,7 @@ describe('bakeWater', () => {
       // Pseudo-depth = shore distance × 0.15: ~15 m mid-square, ~0 at the corner shoreline.
       let centreDepth = 0;
       let cornerDepth = Number.POSITIVE_INFINITY;
-      for (let v = 0; v < vertices.length; v += 4) {
+      for (let v = 0; v < vertices.length; v += 5) {
         const [x, y, , depth] = [vertices[v], vertices[v + 1], vertices[v + 2], vertices[v + 3]];
         if (Math.abs(x - 96) < 9 && Math.abs(y - 96) < 9) {
           centreDepth = Math.max(centreDepth, depth);
@@ -70,7 +86,7 @@ describe('bakeWater', () => {
       const { vertices } = decode(bin);
       let atStart = 0;
       let atEnd = Number.POSITIVE_INFINITY;
-      for (let v = 0; v < vertices.length; v += 4) {
+      for (let v = 0; v < vertices.length; v += 5) {
         const [x, y, , depth] = [vertices[v], vertices[v + 1], vertices[v + 2], vertices[v + 3]];
         if (y < 0 || y > 200 || x < -1 || x > 201) {
           continue; // ocean frame (constant deep)
@@ -86,6 +102,34 @@ describe('bakeWater', () => {
       expect(atStart).toBeGreaterThan(13);
       expect(atStart).toBeLessThan(16);
       expect(atEnd).toBeLessThan(0.5); // the visual waterline
+    });
+
+    it('classifies water above sea level as INLAND (class 1) and sea-level water as SEA (class 0)', () => {
+      // A z=0 square + the always-sea ocean frame → every vertex is SEA.
+      const seaVerts = decode(bakeWater(square(0)).bin).vertices;
+      const seaClasses = new Set<number>();
+      for (let v = 0; v < seaVerts.length; v += 5) {
+        seaClasses.add(seaVerts[v + 4]);
+      }
+      expect([...seaClasses]).toEqual([0]);
+
+      // A z=5 square → its own vertices are INLAND; the surrounding ocean frame stays SEA.
+      const verts = decode(bakeWater(square(5)).bin).vertices;
+      let sawElevated = false;
+      let elevatedAllInland = true;
+      let frameAllSea = true;
+      for (let v = 0; v < verts.length; v += 5) {
+        const [z, cls] = [verts[v + 2], verts[v + 4]];
+        if (z > 1) {
+          sawElevated = true;
+          elevatedAllInland &&= cls === 1;
+        } else {
+          frameAllSea &&= cls === 0;
+        }
+      }
+      expect(sawElevated).toBe(true);
+      expect(elevatedAllInland).toBe(true);
+      expect(frameAllSea).toBe(true);
     });
   });
 });

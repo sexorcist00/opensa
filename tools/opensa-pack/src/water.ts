@@ -5,7 +5,11 @@
  * (edges not shared with a neighbouring quad, map-border edges excluded). The runtime uses the field for
  * Gerstner DISPLACEMENT damping (calm at the beach, swell offshore), the waterwake foam band and the
  * shallow tint. Output = a loose `water.bin` next to the manifest (the clouds convention):
- * [u32 vertexCount][u32 indexCount][f32×4 × V: x,y,z,shoreDist (GTA coords)][u32 × I].
+ * [u32 vertexCount][u32 indexCount][f32×5 × V: x,y,z,depth,class (GTA coords)][u32 × I].
+ *
+ * `class` (plan 075) splits water bodies: 0 = SEA (the open ocean at z≈0, full swell/surf/swash/foam),
+ * 1 = INLAND (pools/reservoirs/mountain lakes ABOVE sea level — the runtime renders them calm so waves don't
+ * spill past a pool's edges). The signal is elevation: SA's ocean sits at z≈0, everything enclosed sits above.
  */
 import { parseWater, type WaterQuad } from '@opensa/renderware/parsers/text/water.parser';
 import { oceanFrame } from '@opensa/renderware/three/build-water';
@@ -31,6 +35,13 @@ const PSEUDO_DEPTH_SLOPE = 0.15;
 const MAP_EDGE = 2990;
 /** Ocean-frame half extent (matches the runtime oceanFrame the flat v1 used). */
 const OCEAN_HALF = 6000;
+/** SEA/INLAND cut (plan 075): a water polygon above this height (metres) is INLAND (pool/reservoir/lake) and
+ *  renders calm; the ocean sits at z≈0. 1 m clears float noise on the sea sheet. */
+const SEA_LEVEL_MAX = 1;
+const WATER_SEA = 0;
+const WATER_INLAND = 1;
+/** Floats per baked water vertex: x, y, z, depth, class. */
+const VERTEX_FLOATS = 5;
 
 type Edge = readonly [number, number, number, number];
 
@@ -55,15 +66,17 @@ export function bakeWater(
     return Math.min(DEPTH_CLAMP, shoreDistance(x, y, buckets) * PSEUDO_DEPTH_SLOPE);
   };
   for (const quad of quads) {
-    tessellate(quad, positions, indices, GRID, fieldAt);
+    // Flat water quads: the polygon's z is its water level. Above sea → INLAND (calm at runtime).
+    const waterClass = quad.vertices[0][2] > SEA_LEVEL_MAX ? WATER_INLAND : WATER_SEA;
+    tessellate(quad, positions, indices, GRID, fieldAt, waterClass);
   }
   // The ocean frame lives beyond the map: coarse grid (displacement only needs vertices every few
-  // wavelengths) and a constant "deep" field — no shoreline out there.
+  // wavelengths), a constant "deep" field, and always SEA — no shoreline out there.
   for (const quad of oceanFrame(quads, OCEAN_HALF, 0)) {
-    tessellate(quad, positions, indices, FRAME_GRID, () => DEPTH_CLAMP);
+    tessellate(quad, positions, indices, FRAME_GRID, () => DEPTH_CLAMP, WATER_SEA);
   }
 
-  const vertexCount = positions.length / 4;
+  const vertexCount = positions.length / VERTEX_FLOATS;
   const bin = new Uint8Array(8 + positions.length * 4 + indices.length * 4);
   const view = new DataView(bin.buffer);
   view.setUint32(0, vertexCount, true);
@@ -181,11 +194,12 @@ function tessellate(
   indices: number[],
   grid: number,
   fieldAt: (x: number, y: number, waterZ: number) => number,
+  waterClass: number,
 ): void {
   const push = (x: number, y: number, z: number): number => {
-    positions.push(x, y, z, fieldAt(x, y, z));
+    positions.push(x, y, z, fieldAt(x, y, z), waterClass);
 
-    return positions.length / 4 - 1;
+    return positions.length / VERTEX_FLOATS - 1;
   };
   if (quad.vertices.length < 4) {
     const [a, b, c] = quad.vertices;

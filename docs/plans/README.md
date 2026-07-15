@@ -10,7 +10,13 @@ The map of planning docs across the repo. **Engine plans** live here (`docs/plan
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`073`. Newest first:
+`001`–`076`. Newest first:
+
+- **[076 — Roadsign / billboard text](./076-roadsign-text.md)** — 2dfx type-7 text plates (roadsignfont glyph
+  atlas, world-space) that prod renders and the own engine skips → blank boards. Bake into the cutout pipeline.
+
+- **[075 — Water body classes: SEA vs INLAND](./075-water-body-classes.md)** — split water.dat by height so
+  inland pools/reservoirs render calm (no swell/foam/spillover) while the ocean keeps its full dynamics.
 
 - **[074 — OpenSA engine](./074-opensa-engine/readme.md)** — own WebGPU-only framework + native formats
   (concept: [00-concept](./074-opensa-engine/00-concept.md)): target **60 fps with the full WebGL effect set**. Chain:
