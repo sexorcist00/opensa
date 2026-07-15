@@ -1,6 +1,46 @@
 # 19 — Procedural clutter (procobj) — B7·d
 
-**Status: OPEN, not started.** A prod-parity gap found in the field on 2026-07-14: the three path scatters and
+**Status: SHIPPED + FIELD-CONFIRMED (2026-07-15), CLOSED.** Decision (user pick): **host-generated + instanced**
+(Option B) — the adapter's ONE memoized scatter drives both the engine's instanced render AND the colliders, so
+they can never diverge (the field lesson). Built across four layers, `tsc` + eslint clean. No reconvert (clutter
+is host-generated from the game FS, not baked in the pak).
+
+**Field fix (2026-07-15) — the clutter had never actually rendered under the local loader.** The browser VFS
+selection (`asset-local-loader/build-vfs.ts`) only ingests IPL-**placed** models plus peds/vehicles. Procobj
+species are scattered from `procobj.dat` and never IPL-placed, so their DFF+TXD were dropped → `getClump` returned
+`EMPTY_CLUMP` → `buildVehicleModel` produced 0 geometry → nothing drawn (and `getBreakable` failed too, breaking
+plan 20). Fix: `procObjModelRefs` adds every `procobj.dat` model (+ IDE TXD) to the VFS, like peds/vehicles;
+covered by a `build-vfs` test. NOT applicable to `lod-procobj-generator` (a Node CLI that reads full `gta3.img`
+directly and iterates `procobj.dat` itself). After the fix: clutter renders, density sane, body count bounded.
+
+## What shipped
+
+- **Engine** — a new `clutter` WGSL module + pipeline (opaque + A2C cutout), per-instance world matrix from a
+  storage buffer (`instance_index`), world-material lighting (vertex-colour prelit + sun/moon + 068 fog).
+  `Engine.createClutterModel` / `setCellClutter(key)` / `removeCellClutter(key)`; drawn in the opaque phase.
+  Geometry is the shared vehicle-model layout (texture array + `slots.x` layer — `meta` is a WGSL reserved
+  word), so `buildVehicleModel` builds a clutter model with zero new extractor.
+- **Adapter** (`GtaSaWorldAdapter`) — `cellClutter(cx, cy)`: renderer-agnostic instances (modelName/txdName +
+  GTA matrices), cut by the SAME per-category density × `procObjLimit` cap as the colliders; the scatter is now
+  MEMOIZED per cell so render + collision share one scatter (`invalidateColliderCache` clears it too).
+- **Host** — `engine-clutter.ts` (model cache via `buildVehicleModel`, cutout = texture-has-alpha, GTA→engine
+  matrix per instance) + a clutter-streaming loop in `engine-canvas-host` (same view/cells as collision, ≤2 new
+  cells/frame). Colliders RE-ENABLED: `clutterColliders: true`, `procObjLimit: 150`.
+- **Strict `procobj.dat` (user directive):** the scatter reads ONLY procobj.dat rules — surfaces/types absent
+  from it produce no clutter (some clutter is already baked statically into the map; do not double it). This is
+  `scatterProcObjects`'s existing behaviour, preserved.
+
+## Field verification owed
+
+- Countryside: grass + rocks render, sit ON the ground (the GTA→engine axis change is the risk), density looks
+  vanilla, and the HUD's `bodies` count stays in the hundreds. Rocks/cacti collide (they have COL); grass is
+  walk-through (no COL), like vanilla.
+- v1 limits: no per-cell frustum cull (bounded by the collision draw distance); one sway speed; no wind on
+  clutter yet.
+
+<details><summary>Original field story + spec (2026-07-14)</summary>
+
+A prod-parity gap found in the field on 2026-07-14: the three path scatters and
 renders SA's procedural clutter (grass, bushes, rocks, cacti); the own engine draws **none of it**. The
 countryside reads as bald.
 
@@ -55,3 +95,5 @@ Two lessons worth keeping:
 
 The countryside has grass and rocks in `?engine=opensa`, the density knobs work, and the physics body count
 stays in the hundreds, not the thousands.
+
+</details>

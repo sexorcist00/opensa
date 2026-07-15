@@ -14,6 +14,9 @@ export { type ResidencyCategory, Resources } from './core/resources';
 export { GpuTimers } from './debug/gpu-timers';
 export {
   type CameraState,
+  type CellClutter,
+  type ClutterModelId,
+  type ClutterModelInit,
   type CoronaSprites,
   type DynamicCorona,
   type DynamicLight,

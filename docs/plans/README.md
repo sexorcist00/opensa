@@ -10,7 +10,7 @@ The map of planning docs across the repo. **Engine plans** live here (`docs/plan
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`076`. Newest first:
+`001`–`076` (+074 sub-plans). Newest first:
 
 - **[076 — Roadsign / billboard text](./076-roadsign-text.md)** — 2dfx type-7 text plates (roadsignfont glyph
   atlas, world-space) that prod renders and the own engine skips → blank boards. Bake into the cutout pipeline.

@@ -62,6 +62,38 @@ export interface CameraState {
   up: Vec3;
 }
 
+/** One cell's clutter (074/19): per model, the instance world matrices (16 floats each, engine space). */
+export interface CellClutter {
+  /** Per-instance breakable key hash (074/20), aligned with `matrices`; present only for breakable models
+   *  (cactus/rubble/rock). A hit resolves to the hash and `breakClutterInstance` collapses that instance. */
+  keyHashes?: Uint32Array;
+  matrices: Float32Array;
+  model: ClutterModelId;
+}
+
+/** Opaque handle returned by `createClutterModel`. */
+export type ClutterModelId = number;
+
+/**
+ * One procedural-clutter MODEL (074/19 B7·d): a scattered grass/bush/rock mesh, shared by every instance.
+ * Geometry is tight per-attribute byte views (the dynamics vertex layout, NOT the .oscell one). `cutout` picks
+ * the A2C variant (grass/bushes) vs opaque (rocks). Per-instance placement comes later via `setCellClutter`.
+ */
+export interface ClutterModelInit {
+  colors: Uint8Array; // unorm8x4
+  /** Grass/bushes (alpha edges) → A2C cutout; rocks → opaque. */
+  cutout: boolean;
+  /** uint16 index payload (the shared vehicle-model format). */
+  indices: Uint8Array;
+  /** The shared vehicle-model meta (uint8x4); only meta.x = texture-array layer is read. */
+  meta: Uint8Array;
+  normals: Uint8Array; // float32x3
+  positions: Uint8Array; // float32x3
+  /** RGBA8 layers (all one size, packed sequentially) — the model's textures as a texture array. */
+  texture: { height: number; layers: number; rgba: Uint8Array; width: number };
+  uvs: Uint8Array; // float32x2
+}
+
 /** One break, baked (see `renderware/breakable/bake-debris`) and converted to ENGINE space by the host. */
 export interface DebrisUpload {
   /** Seconds of fade at the tail of the lifetime. */
@@ -308,6 +340,28 @@ export interface ParticleUpload {
   systems: Float32Array;
 }
 
+/** One cell × model clutter draw (074/19): its instance-matrix storage buffer + bind group. */
+interface ClutterCellDraw {
+  bindGroup: GPUBindGroup;
+  /** World-space bounding sphere [x, y, z, r] of the instances — frustum-culled per frame. */
+  bounds: readonly [number, number, number, number];
+  instanceCount: number;
+  /** Registered breakable key hashes (074/20) — purged from `clutterBreakables` when the cell unloads. */
+  keyHashes: number[];
+  matrixBuffer: GPUBuffer;
+  model: ClutterModelId;
+}
+
+/** A loaded clutter model's GPU resources (074/19). */
+interface ClutterModel {
+  buffers: GPUBuffer[]; // positions, normals, uvs, colors
+  cutout: boolean;
+  indexBuffer: GPUBuffer;
+  indexCount: number;
+  texture: GPUTexture;
+  textureBytes: number;
+}
+
 interface VehicleInstanceState {
   entity: RigidEntity;
   lamps: { brakes: boolean; headlights: boolean; intensity: number };
@@ -337,6 +391,10 @@ interface VehicleModel {
 const DEBRIS_STRIDE = 80;
 /** Simultaneous breaks. Each is one draw and one small texture; a pile-up must not creep the frame. */
 const MAX_ACTIVE_DEBRIS = 8;
+
+/** A smashed clutter instance's matrix (074/20): every vertex collapses to the engine origin, so the
+ *  triangles are zero-area and rasterize nothing — the instance vanishes without changing the draw's count. */
+const DEGENERATE_CLUTTER_MATRIX = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
 
 /** Light-pool capacity (074/06 row 7) — mirrored by the WGSL loop bound. */
 const LIGHT_POOL_CAP = 64;
@@ -414,6 +472,14 @@ export class Engine {
    *  is recorded inside cell bundles and must stay immutable after init. */
   private cloudTextureA: GPUTexture | null = null;
   private cloudTextureB: GPUTexture | null = null;
+  /** Breakable clutter instances (074/20): key hash → the matrix slot to degenerate on a hit. */
+  private readonly clutterBreakables = new Map<number, { matrixBuffer: GPUBuffer; offset: number }>();
+  /** Per streamed cell → its clutter draws (one per model). Replaced/removed as cells stream. */
+  private readonly clutterCells = new Map<string, ClutterCellDraw[]>();
+  /** Procedural-clutter models (074/19 B7·d) — shared grass/bush/rock geometry + texture, drawn instanced. */
+  private readonly clutterModels = new Map<ClutterModelId, ClutterModel>();
+  private clutterModelSeq = 0;
+  private clutterSampler!: GPUSampler;
   private coronaInstances!: GPUBuffer;
   private coronaQuad!: GPUBuffer;
   private readonly coronaScratch = new Float32Array(CORONA_CAP * 8);
@@ -494,6 +560,84 @@ export class Engine {
     indices: GPUBuffer;
     vertices: GPUBuffer;
   } = null;
+
+  /**
+   * Smash one breakable clutter instance (074/20): collapse its matrix to a zero-area point so it stops
+   * rendering, without touching the draw's instance count. Returns false when the key is unknown (its cell
+   * streamed out, or it was already broken). The host removes the collider and spawns debris alongside.
+   */
+  breakClutterInstance(keyHash: number): boolean {
+    const entry = this.clutterBreakables.get(keyHash);
+    if (!entry) {
+      return false;
+    }
+    this.device.queue.writeBuffer(entry.matrixBuffer, entry.offset, DEGENERATE_CLUTTER_MATRIX);
+    this.clutterBreakables.delete(keyHash);
+
+    return true;
+  }
+
+  /**
+   * Upload a procedural-clutter MODEL (074/19 B7·d): geometry + texture, shared by every scattered instance.
+   * Per-instance placement arrives via {@link setCellClutter}. `cutout` picks the A2C variant (grass/bushes).
+   */
+  createClutterModel(init: ClutterModelInit): ClutterModelId {
+    const upload = (label: string, bytes: Uint8Array, usage: number): GPUBuffer => {
+      const size = Math.max(4, Math.ceil(bytes.byteLength / 4) * 4);
+      const buffer = this.resources.createBuffer('cellVertex', {
+        label: `clutter-${label}`,
+        size,
+        usage: usage | GPUBufferUsage.COPY_DST,
+      });
+      let payload = bytes;
+      if (bytes.byteLength !== size) {
+        payload = new Uint8Array(size);
+        payload.set(bytes);
+      }
+      this.device.queue.writeBuffer(buffer, 0, payload);
+
+      return buffer;
+    };
+    const buffers = [
+      upload('positions', init.positions, GPUBufferUsage.VERTEX),
+      upload('normals', init.normals, GPUBufferUsage.VERTEX),
+      upload('uvs', init.uvs, GPUBufferUsage.VERTEX),
+      upload('colors', init.colors, GPUBufferUsage.VERTEX),
+      upload('meta', init.meta, GPUBufferUsage.VERTEX),
+    ];
+    const indexBuffer = upload('indices', init.indices, GPUBufferUsage.INDEX);
+    const layerBytes = init.texture.width * init.texture.height * 4;
+    const texture = this.resources.createTexture(
+      'texture',
+      {
+        format: 'rgba8unorm-srgb',
+        label: 'clutter-texture',
+        size: { depthOrArrayLayers: init.texture.layers, height: init.texture.height, width: init.texture.width },
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      },
+      init.texture.rgba.byteLength,
+    );
+    for (let layer = 0; layer < init.texture.layers; layer += 1) {
+      this.device.queue.writeTexture(
+        { origin: { x: 0, y: 0, z: layer }, texture },
+        init.texture.rgba.subarray(layer * layerBytes, (layer + 1) * layerBytes),
+        { bytesPerRow: init.texture.width * 4 },
+        { height: init.texture.height, width: init.texture.width },
+      );
+    }
+    const id = this.clutterModelSeq;
+    this.clutterModelSeq += 1;
+    this.clutterModels.set(id, {
+      buffers,
+      cutout: init.cutout,
+      indexBuffer,
+      indexCount: init.indices.byteLength / 2,
+      texture,
+      textureBytes: init.texture.rgba.byteLength,
+    });
+
+    return id;
+  }
 
   /** Spawn one instance of an uploaded model (074/08 B5). Every instance owns its own part transforms. */
   createVehicle(id: VehicleModelId): VehicleInstance {
@@ -755,6 +899,8 @@ export class Engine {
     // phase (their blend groups sort with the world blends only approximately — the standard caveat).
     this.advanceUvAnimations(seconds);
     draws += this.drawObjects(pass);
+    // Procedural clutter (074/19): grass/bushes/rocks, instanced, in the opaque phase before the sky.
+    draws += this.drawClutter(pass);
     draws += this.drawPed(pass);
     draws += this.drawVehicles(pass, false);
     pass.setPipeline(this.pipelines.get('sky'));
@@ -913,6 +1059,14 @@ export class Engine {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this.postSampler = this.device.createSampler({ label: 'post', magFilter: 'linear', minFilter: 'linear' });
+    // Clutter (074/19): mip + repeat so scattered grass/bush cards filter and their UVs tile like the world.
+    this.clutterSampler = this.device.createSampler({
+      addressModeU: 'repeat',
+      addressModeV: 'repeat',
+      label: 'clutter',
+      magFilter: 'linear',
+      minFilter: 'linear',
+    });
     this.cells = new CellStore({
       colorFormat: SCENE_FORMAT,
       depthFormat: DEPTH_FORMAT,
@@ -928,6 +1082,21 @@ export class Engine {
   /** Residency ledger passthrough (HUD + leak assertions). */
   ledger(): ReturnType<Resources['ledger']> {
     return this.resources.ledger();
+  }
+
+  /** Drop a streamed-out cell's clutter (074/19). */
+  removeCellClutter(key: string): void {
+    const draws = this.clutterCells.get(key);
+    if (!draws) {
+      return;
+    }
+    for (const draw of draws) {
+      for (const hash of draw.keyHashes) {
+        this.clutterBreakables.delete(hash);
+      }
+      this.resources.destroyBuffer('uniform', draw.matrixBuffer);
+    }
+    this.clutterCells.delete(key);
   }
 
   removeParticles(): void {
@@ -955,6 +1124,59 @@ export class Engine {
       this.pedTexture = null;
     }
     this.ped = null;
+  }
+
+  /**
+   * Install (replacing) one streamed cell's clutter (074/19): per model, its instance world matrices (engine
+   * space). Call when a cell streams in; `removeCellClutter` on unload. The instance count is bounded by the
+   * host's per-cell budget (prod's `procObjLimit`), so this stays cheap.
+   */
+  setCellClutter(key: string, entries: readonly CellClutter[]): void {
+    this.removeCellClutter(key);
+    const draws: ClutterCellDraw[] = [];
+    for (const entry of entries) {
+      const model = this.clutterModels.get(entry.model);
+      if (!model || entry.matrices.length === 0) {
+        continue;
+      }
+      const matrixBuffer = this.resources.createBuffer('uniform', {
+        label: `clutter-matrices:${key}:${entry.model}`,
+        size: entry.matrices.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      this.device.queue.writeBuffer(matrixBuffer, 0, entry.matrices);
+      // Breakable clutter (074/20): register each instance's key → its matrix slot, so a hit can degenerate it.
+      const keyHashes: number[] = [];
+      const instanceCount = entry.matrices.length / 16;
+      if (entry.keyHashes) {
+        for (let index = 0; index < instanceCount; index += 1) {
+          const hash = entry.keyHashes[index];
+          if (hash !== 0) {
+            this.clutterBreakables.set(hash, { matrixBuffer, offset: index * 64 });
+            keyHashes.push(hash);
+          }
+        }
+      }
+      draws.push({
+        bindGroup: this.device.createBindGroup({
+          entries: [
+            { binding: 0, resource: { buffer: matrixBuffer } },
+            { binding: 1, resource: model.texture.createView({ dimension: '2d-array' }) },
+            { binding: 2, resource: this.clutterSampler },
+          ],
+          label: `clutter:${key}:${entry.model}`,
+          layout: this.pipelines.clutterLayout,
+        }),
+        bounds: clutterBounds(entry.matrices),
+        instanceCount,
+        keyHashes,
+        matrixBuffer,
+        model: entry.model,
+      });
+    }
+    if (draws.length > 0) {
+      this.clutterCells.set(key, draws);
+    }
   }
 
   /** Install a weather's cloud dome (074/06 row 15), RGBA8 at ANY size. The two persistent slots are
@@ -1388,6 +1610,36 @@ export class Engine {
     this.resources.destroyBuffer('debris', entry.vertexBuffer);
     this.resources.destroyBuffer('uniform', entry.uniform);
     this.resources.destroyTexture('texture', entry.texture, entry.textureBytes);
+  }
+
+  private drawClutter(pass: GPURenderPassEncoder): number {
+    let draws = 0;
+    for (const cellDraws of this.clutterCells.values()) {
+      for (const draw of cellDraws) {
+        const model = this.clutterModels.get(draw.model);
+        // Frustum-cull each cell-model group — clutter is streamed by DISTANCE (all around the player), so
+        // most groups are off-screen; without this a dense area pays hundreds of behind-camera draws. Also skip
+        // empty groups: a clutter DFF that built no geometry (indexCount 0) or a fully-broken cell (every
+        // instance degenerated, instanceCount 0) would otherwise issue a zero-count draw WebGPU warns on.
+        if (
+          !model ||
+          model.indexCount === 0 ||
+          draw.instanceCount === 0 ||
+          !frustumIntersectsSphere(this.frustumPlanes, draw.bounds[0], draw.bounds[1], draw.bounds[2], draw.bounds[3])
+        ) {
+          continue;
+        }
+        pass.setPipeline(this.pipelines.get(model.cutout ? 'clutter-cutout' : 'clutter-opaque'));
+        pass.setBindGroup(0, this.frameBindGroup);
+        pass.setBindGroup(1, draw.bindGroup);
+        model.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
+        pass.setIndexBuffer(model.indexBuffer, 'uint16');
+        pass.drawIndexed(model.indexCount, draw.instanceCount);
+        draws += 1;
+      }
+    }
+
+    return draws;
   }
 
   /** 2dfx corona billboards of visible cells (074/06 row 13): CPU-gated by night + farClip, one
@@ -1890,6 +2142,36 @@ function fitRgba(source: { height: number; rgba: Uint8Array; width: number }, si
 }
 
 /** SA timed-object gate: params = on | off << 8; the window wraps midnight when on > off. */
+/** Margin (m) added to a clutter group's sphere for the models' own extent (a bush/cactus/rock/small tree). */
+const CLUTTER_MODEL_RADIUS = 8;
+
+/** Bounding sphere [x, y, z, r] of clutter instances, from their matrices' translations (074/19 culling). */
+function clutterBounds(matrices: Float32Array): [number, number, number, number] {
+  let minX = Infinity;
+  let minY = Infinity;
+  let minZ = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let maxZ = -Infinity;
+  for (let at = 0; at < matrices.length; at += 16) {
+    const [x, y, z] = [matrices[at + 12], matrices[at + 13], matrices[at + 14]];
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    minZ = Math.min(minZ, z);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+    maxZ = Math.max(maxZ, z);
+  }
+  const center: [number, number, number] = [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2];
+
+  return [
+    center[0],
+    center[1],
+    center[2],
+    Math.hypot(maxX - center[0], maxY - center[1], maxZ - center[2]) + CLUTTER_MODEL_RADIUS,
+  ];
+}
+
 function lerp(a: number, b: number, f: number): number {
   return a + (b - a) * f;
 }

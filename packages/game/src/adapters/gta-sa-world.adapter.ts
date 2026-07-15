@@ -2,6 +2,7 @@
 import {
   type AssetFileSystem,
   breakableInstanceKey,
+  breakableKeyHash,
   breakableModelsOf,
   buildAnimationClip,
   buildCellColliders,
@@ -45,6 +46,7 @@ import {
   parseTxd,
   parseVehicleDefs,
   parseWater,
+  placementMatrix,
   type PopcycleZone,
   primeClump,
   primePreparedAtomics,
@@ -111,6 +113,17 @@ export interface AnimatedPlacement {
   modelName: string;
   position: [number, number, number];
   rotation: [number, number, number, number];
+  txdName: string;
+}
+
+/** One clutter model's instances in a cell (074/19), for the own-engine host to render instanced. */
+export interface CellClutterRender {
+  /** Per-instance breakable key hash (074/20), aligned with `matrices` — present only for breakable clutter
+   *  models (cactus/rubble/rock), so a hit can resolve to the instance to degenerate. */
+  keyHashes?: Uint32Array;
+  /** 16 floats per instance, GTA-space column-major (model→GTA world); the host applies the axis change. */
+  matrices: Float32Array;
+  modelName: string;
   txdName: string;
 }
 
@@ -213,6 +226,9 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   private popcycle: Map<string, PopcycleZone> | null = null;
   /** Whether {@link ensurePopulationData} has run (popcycle/cargrp may legitimately be absent → null). */
   private populationLoaded = false;
+  /** Memoized scatter per cell (074/19): the render (engine clutter) AND collider paths share it, so ONE
+   *  scatter drives both — the render/collision divergence that cost 17 ms/step cannot recur. */
+  private readonly procObjBatchCache = new Map<string, null | readonly ProcObjBatch[]>();
   /** procobj.dat rules by surface name; null when the data files are absent (no scatter). */
   private procObjRules: Map<string, ProcObjRule[]> | null = null;
   /** Surface-name table from surfinfo.dat (index = COL material id); pairs with procObjRules. */
@@ -270,6 +286,55 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return this.objectDat?.get(modelName.toLowerCase());
   }
 
+  /**
+   * Renderer-agnostic procedural clutter for a cell (074/19 B7·d), for the own-engine host to render INSTANCED.
+   * Uses the SAME memoized scatter and the SAME per-category density × `procObjLimit` cap as the colliders, so
+   * what the engine draws is exactly what physics collides — one budget, no divergence. GTA-space matrices (the
+   * host applies the axis change); empty before the map is ready or where nothing scatters.
+   */
+  cellClutter(cx: number, cy: number): CellClutterRender[] {
+    const batches = this.cellProcObjBatches(cx, cy);
+    if (!batches || batches.length === 0 || !this.defByName) {
+      return [];
+    }
+    const cap = procObjLotteryCap(batches, this.config.procObjLimit);
+    const out: CellClutterRender[] = [];
+    const matrix = new Matrix4();
+    for (const batch of batches) {
+      const def = this.defByName.get(batch.model);
+      if (!def) {
+        continue;
+      }
+      const cutoff = Math.min(this.config.procObjDensityOf?.(batch.category) ?? 1, cap);
+      const breakable = this.isClutterBreakable(def.modelName);
+      const floats: number[] = [];
+      const hashes: number[] = [];
+      for (const placement of batch.placements) {
+        if (placement.lottery >= cutoff) {
+          break; // placements are sorted by lottery ascending — the rest are all excluded
+        }
+        const elements = placementMatrix(placement, matrix).elements;
+        floats.push(...elements);
+        if (breakable) {
+          // 074/20: the SAME key the collider carries (tagBreakable also reads the matrix translation).
+          hashes.push(
+            breakableKeyHash(breakableInstanceKey(def.modelName, [elements[12], elements[13], elements[14]])),
+          );
+        }
+      }
+      if (floats.length > 0) {
+        out.push({
+          ...(breakable ? { keyHashes: new Uint32Array(hashes) } : {}),
+          matrices: new Float32Array(floats),
+          modelName: def.modelName,
+          txdName: def.txdName,
+        });
+      }
+    }
+
+    return out;
+  }
+
   /** Identify a picked object: placed map instances via `userData.region`, scattered clutter
    *  via `userData.procObj` (position decomposed from the instance matrix). */
   describe(object: Object3D, instanceId?: number): null | WorldObjectInfo {
@@ -304,6 +369,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
    *  then re-streams physics via {@link loadCellColliders}, rebuilding with the new density. */
   invalidateColliderCache(): void {
     this.colliderCache.clear();
+    this.procObjBatchCache.clear();
   }
 
   listCells(): CellCoord[] {
@@ -365,6 +431,21 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     }
 
     return this.loadCharacter(`${def.model}.dff`, `${def.txd}.txd`);
+  }
+
+  /**
+   * Load the timecyc (per-weather, per-hour colour/lighting table), always as 24h.
+   * Uses the optional `timecyc_24h.dat` as-is when present, else converts the
+   * mandatory vanilla `timecyc.dat` (8 keyframes/weather) to 24h.
+   */
+  async loadTimecyc(): Promise<Timecyc> {
+    await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
+    const text24 = this.fs.getText('data/timecyc_24h.dat');
+    if (text24 !== null) {
+      return buildTimecyc(parseTimecyc(text24));
+    }
+
+    return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
   }
 
   // eslint-disable-next-line
@@ -455,7 +536,11 @@ export class GtaSaWorldAdapter implements WorldAdapter {
           densityOf: this.config.procObjDensityOf,
           lotteryCap: procObjLotteryCap(batches, this.config.procObjLimit),
         });
-        colliders.push(...clutter.map(toModelColliders));
+        // Breakable clutter (074/20): 6 of 56 procobj models shatter (cactus/rubble/rock) — tag their colliders
+        // with the SAME per-instance key the render carries, so a hit resolves to the instance to degenerate.
+        colliders.push(
+          ...clutter.map((region) => tagBreakable(toModelColliders(region), this.isClutterBreakable(region.name))),
+        );
       }
       this.colliderCache.set(key, colliders);
     }
@@ -475,21 +560,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     root.add(buildCollisionWireframe(colliders));
 
     return [root];
-  }
-
-  /**
-   * Load the timecyc (per-weather, per-hour colour/lighting table), always as 24h.
-   * Uses the optional `timecyc_24h.dat` as-is when present, else converts the
-   * mandatory vanilla `timecyc.dat` (8 keyframes/weather) to 24h.
-   */
-  async loadTimecyc(): Promise<Timecyc> {
-    await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
-    const text24 = this.fs.getText('data/timecyc_24h.dat');
-    if (text24 !== null) {
-      return buildTimecyc(parseTimecyc(text24));
-    }
-
-    return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
   }
 
   /**
@@ -692,9 +762,16 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     if (!this.defs || !this.grid || !this.procObjRules || !this.surfaceNames) {
       return null;
     }
+    const key = `${cx},${cy}`;
+    const cached = this.procObjBatchCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
     const colliders = buildCellColliders(buildCollisionIndex(this.fs), this.defs, this.grid, cx, cy);
+    const batches = scatterProcObjects(colliders, this.procObjRules, this.surfaceNames, cx, cy);
+    this.procObjBatchCache.set(key, batches);
 
-    return scatterProcObjects(colliders, this.procObjRules, this.surfaceNames, cx, cy);
+    return batches;
   }
 
   /** Lazily load popcycle.dat + cargrp.dat for random map-car resolution (plan 059) — absent-tolerant: either
@@ -723,6 +800,12 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     this.vehicleDefs = parseVehicleDefs(ide);
     this.vehicleColours = parseCarcols(carcols);
     this.handling = parseHandling(handling); // stored for the later vehicle-physics phase
+  }
+
+  /** A clutter model that shatters (074/20): a DFF Breakable shatter mesh or an object.dat smash effect —
+   *  the SAME gate the static breakable props use. */
+  private isClutterBreakable(name: string): boolean {
+    return getBreakable(this.fs, name) !== undefined || this.breakableModels.has(name);
   }
 
   private async loadGenericVehicleTextures(): Promise<Map<string, Texture>> {

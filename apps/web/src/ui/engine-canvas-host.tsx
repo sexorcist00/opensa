@@ -23,6 +23,7 @@ import { PhysicsWorld } from '@opensa/game/physics/physics-world';
 import { PhysicsSystem } from '@opensa/game/physics/physics.system';
 import { initRapier } from '@opensa/game/physics/rapier';
 import { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
+import { cellsWithin } from '@opensa/game/streaming/grid';
 import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.system';
 import { type AssetFileSystem, gxtKeyHash, oceanFrame, parseTxd } from '@opensa/renderware';
 import { parseWater } from '@opensa/renderware/parsers/text/water.parser';
@@ -36,6 +37,7 @@ import { BENCH_SCENES } from '../bench-scenes';
 import { GAME_CONFIG } from '../game-config';
 import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
+import { setupEngineClutter } from './engine-clutter';
 import { loadCoronaSprites, setupEngineParticles } from './engine-particles';
 import { loadEnginePlayer } from './engine-player';
 import { setupEngineProps } from './engine-props';
@@ -167,14 +169,15 @@ async function boot(
   hud.textContent = 'own engine: preparing collision…';
   const adapter = new GtaSaWorldAdapter({
     cellSize: GAME_CELL_SIZE,
-    // The own engine does not RENDER the procedural clutter yet, so colliding it would be invisible walls —
-    // and it is anything but free. This host passed NONE of prod's clutter knobs, so the countryside handed
-    // Rapier 9 803 static bodies: 17 ms per Rapier step, the fixed loop spiralling, 12 fps standing still on
-    // an empty screen. Turn this back on together with clutter RENDERING, and take prod's budget with it:
-    // a per-category density lottery capped at 150/cell, driving render and collision from ONE number.
-    clutterColliders: false,
+    // Procedural clutter (074/19 B7·d): the engine now RENDERS the clutter (instanced), so it collides it too —
+    // driven by ONE budget with the render (a per-category density lottery capped at 150/cell, lowest lotteries
+    // win). Without the cap the countryside handed Rapier 9 803 static bodies (17 ms/step, 12 fps standing
+    // still); the cap keeps the body count in the hundreds. Render and collision share the adapter's memoized
+    // scatter, so they can never diverge (that divergence is what cost the 17 ms).
+    clutterColliders: true,
     extraIpl: ['truthsfarm'],
     fs,
+    procObjLimit: 150,
   });
   await adapter.prepare();
   const physics = new PhysicsWorld(await initRapier());
@@ -271,6 +274,34 @@ async function boot(
   // Animated map objects (B7·b): the converter left their MOVING frames out of the bundle; these are them.
   const animObjects = setupEngineAnimObjects(engine, fs, adapter);
   const breakables = setupEngineBreakables(engine, physics, collision, adapter, fs, props);
+  // Procedural clutter (074/19 B7·d): grass/bushes/rocks scattered per cell, rendered instanced. Streamed on
+  // the SAME cells + budget as the colliders (adapter memoizes the scatter), so render and collision agree.
+  const engineClutter = setupEngineClutter(engine, fs);
+  const clutterLoaded = new Set<string>();
+  const updateClutter = (): void => {
+    const cells = cellsWithin(viewOf(), config.streaming.collisionDrawDistance, adapter.cellSize);
+    const desired = new Set(cells.map(([cx, cy]) => `${cx},${cy}`));
+    for (const key of clutterLoaded) {
+      if (!desired.has(key)) {
+        engineClutter.removeCell(key);
+        clutterLoaded.delete(key);
+      }
+    }
+    // Bound the per-frame scatter+upload spike — new cells fill in over a few frames (the ring has a margin).
+    let budget = 2;
+    for (const [cx, cy] of cells) {
+      const key = `${cx},${cy}`;
+      if (clutterLoaded.has(key)) {
+        continue;
+      }
+      engineClutter.applyCell(key, adapter.cellClutter(cx, cy));
+      clutterLoaded.add(key);
+      budget -= 1;
+      if (budget <= 0) {
+        break;
+      }
+    }
+  };
   let debugError: null | string = null;
   /** Last frame's camera eye (engine space) — the lamp coronas need it, one frame stale is invisible. */
   const cameraEye: [number, number, number] = [0, 0, 0];
@@ -458,6 +489,7 @@ async function boot(
       fixedMs = performance.now() - fixedStarted;
       const collisionStarted = performance.now();
       collision.update();
+      updateClutter();
       collisionMs = performance.now() - collisionStarted;
       // Felled props follow their physics bodies (B7·a) — after the step, like every other body-driven visual.
       props.update();

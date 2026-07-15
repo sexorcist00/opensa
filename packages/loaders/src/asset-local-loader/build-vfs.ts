@@ -11,6 +11,7 @@ import { ideRefs, partitionEntries, placedModels } from '@opensa/game-build/part
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { parsePedDefs } from '@opensa/renderware/parsers/text/ped-defs.parser';
+import { parseProcObj } from '@opensa/renderware/parsers/text/procobj.parser';
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 
 import type { LazyImgArchive } from './img-reader';
@@ -60,7 +61,11 @@ export async function readEntry(source: InstallSource, entry: Entry): Promise<Ui
 export async function selectInstallEntries(source: InstallSource): Promise<InstallPlan> {
   const placed = placedModels(await placedInstanceIds(source), await ideById(source));
   const extra = await dynamicModelRefs(source);
-  const refs = { models: [...placed.models, ...extra.models], txds: [...placed.txds, ...extra.txds] };
+  const clutter = await procObjModelRefs(source);
+  const refs = {
+    models: [...placed.models, ...extra.models, ...clutter.models],
+    txds: [...placed.txds, ...extra.txds, ...clutter.txds],
+  };
   const { models, others, textures } = partitionEntries(
     refs,
     new Set(source.gta3.names),
@@ -132,6 +137,34 @@ async function placedInstanceIds(source: InstallSource): Promise<number[]> {
   }
 
   return ids;
+}
+
+/** Model + txd base names for the procedurally-SCATTERED clutter (plan 042 / 074/19): `procobj.dat` names
+ *  the models the game scatters over collision surfaces (grass, rocks, cacti). Like peds/vehicles, they are
+ *  never IPL-placed, so the partition would miss their DFF+TXD and the clutter would silently not render. */
+async function procObjModelRefs(source: InstallSource): Promise<{ models: string[]; txds: string[] }> {
+  const loose = await source.looseFiles();
+  const procObjPath = loose.find((path) => path.endsWith('procobj.dat'));
+  if (!procObjPath) {
+    return { models: [], txds: [] };
+  }
+  // procobj.dat carries only model NAMES; the TXD lives in the model's IDE row — build a name → txd map.
+  const txdByModel = new Map<string, string>();
+  for (const ref of (await ideById(source)).values()) {
+    txdByModel.set(ref.model.toLowerCase(), ref.txd.toLowerCase());
+  }
+  const models: string[] = [];
+  const txds: string[] = [];
+  for (const rule of parseProcObj(await source.readLooseText(procObjPath))) {
+    const model = rule.model.toLowerCase();
+    models.push(model);
+    const txd = txdByModel.get(model);
+    if (txd) {
+      txds.push(txd);
+    }
+  }
+
+  return { models, txds };
 }
 
 /** A tight `ArrayBuffer` view of `bytes` (copying only when it is a sub-range of a larger buffer). */

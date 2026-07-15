@@ -19,6 +19,8 @@ export const MSAA_SAMPLES = 4;
 export const SCENE_FORMAT: GPUTextureFormat = 'rgba16float';
 
 export type PipelineId =
+  | 'clutter-cutout'
+  | 'clutter-opaque'
   | 'corona'
   | 'debris'
   | 'particle-add'
@@ -41,6 +43,8 @@ export type PipelineId =
 export interface PipelineSet {
   /** group(1): per-cell uniform (origin). */
   cellLayout: GPUBindGroupLayout;
+  /** group(1) of the clutter pipeline (074/19): per-instance matrices (storage) + the model texture + sampler. */
+  clutterLayout: GPUBindGroupLayout;
   /** group(1) of the debris pipeline: the break's uniform + its shard texture ARRAY + sampler (B7·a). */
   debrisLayout: GPUBindGroupLayout;
   /** group(0): per-frame uniform. */
@@ -468,6 +472,49 @@ export function compileAll(
       vertex: { entryPoint: 'vsSky', module: skyModule },
     }),
   );
+  // Procedural clutter (074/19 B7·d): per-instance matrices in storage + the model texture; opaque (rocks) +
+  // cutout (A2C — grass/bushes) variants, both depth-written in the opaque phase like the static world.
+  const clutterLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, buffer: { type: 'read-only-storage' }, visibility: GPUShaderStage.VERTEX },
+      { binding: 1, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'clutter',
+  });
+  const clutterModule = device.createShaderModule({ code: resolveShader('clutter'), label: 'clutter' });
+  const clutterPipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [frameLayout, clutterLayout],
+    label: 'clutter',
+  });
+  // The shared vehicle-model vertex layout (buildVehicleModel): pos/normal/uv/color + meta (meta.x = layer).
+  const clutterBuffers: GPUVertexBufferLayout[] = [
+    { arrayStride: 12, attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }] },
+    { arrayStride: 12, attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 1 }] },
+    { arrayStride: 8, attributes: [{ format: 'float32x2', offset: 0, shaderLocation: 2 }] },
+    { arrayStride: 4, attributes: [{ format: 'unorm8x4', offset: 0, shaderLocation: 3 }] },
+    { arrayStride: 4, attributes: [{ format: 'uint8x4', offset: 0, shaderLocation: 4 }] },
+  ];
+  for (const cutout of [false, true]) {
+    pipelines.set(
+      cutout ? 'clutter-cutout' : 'clutter-opaque',
+      device.createRenderPipeline({
+        depthStencil: { depthCompare: 'greater', depthWriteEnabled: true, format: depthFormat },
+        fragment: {
+          entryPoint: cutout ? 'fsClutterCutout' : 'fsClutter',
+          module: clutterModule,
+          targets: [{ format: colorFormat }],
+        },
+        label: cutout ? 'clutter-cutout' : 'clutter-opaque',
+        layout: clutterPipelineLayout,
+        multisample: { alphaToCoverageEnabled: cutout, count: MSAA_SAMPLES },
+        // Double-sided: SA grass/bush cards are single-sided planes viewed from both sides.
+        primitive: { cullMode: 'none', frontFace: 'ccw', topology: 'triangle-list' },
+        vertex: { buffers: clutterBuffers, entryPoint: 'vsClutter', module: clutterModule },
+      }),
+    );
+  }
+
   for (const variant of variants) {
     pipelines.set(
       variant.id,
@@ -495,6 +542,7 @@ export function compileAll(
 
   return {
     cellLayout,
+    clutterLayout,
     debrisLayout,
     frameLayout,
     get(id: PipelineId): GPURenderPipeline {

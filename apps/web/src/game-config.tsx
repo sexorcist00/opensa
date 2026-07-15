@@ -66,6 +66,10 @@ const SA_TELEPORTS: readonly Teleport[] = [
   { coords: [2370.1, 2164.7, 12.8], label: 'LV - Scrolling sign (UV-scroll)' },
   { coords: [2088.0, 1901.5, 13.5], label: 'LV - Vegas waterfall (UV-scroll)' },
   { coords: [2105.5, 1916.3, 14.9], label: 'LV - Mirage sign (UV-scroll)' },
+  // Procedural clutter (074/19-20): a DENSE field of breakable cacti (sjmcacti2, ~5.3 m tall — unmissable,
+  // unlike the ~1 m rocks a car drives over) in Bone County desert (cell 0,9, ~150 of them at z 15.3). Spawn is
+  // just west of the field; the Admiral (6 m east) faces a wall of cacti — drive in to smash them.
+  { coords: [5.0, 2415.0, 17.0], label: 'Desert - Breakable cacti' },
 ];
 
 /** A launchable game id. */
@@ -134,9 +138,7 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
     label: 'Run San Andreas [local only]',
     loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
     mainCharacter: 'BMYPOL1',
-    playerSpawn: [2031.09, 1539.7, 10.74], // LV vgsN_scrollsgn01 (UV-scroll, 074/18 B7·c): ~25 m south of the
-    // running-neon sign, dropped a couple metres above ground so it settles onto the road with the sign ahead.
-    // Restore to Ganton / Windmill once the field check is done.
+    playerSpawn: [2495.0, -1675.0, 16.0], // LS - Ganton (default). Debug teleports below cover feature spots.
     teleports: [...SA_TELEPORTS],
   },
 };

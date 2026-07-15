@@ -48,6 +48,8 @@ export interface EngineVehicles {
    * (ground snap, locomotion heading), else the rider floats above the roof through the whole climb-in.
    */
   ridingVehicle(): EnterableVehicle | null;
+  /** Spawn a car and register it with the LOD system (persists like a parked car) — used for test spawns. */
+  spawn(placement: VehiclePlacement): Promise<void>;
   /** Per-frame (variable dt): input/approach/doors, damage, LOD streaming. */
   update(delta: number): void;
 }
@@ -251,6 +253,9 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       enterVehicle.fixedUpdate(step);
     },
     ridingVehicle: (): EnterableVehicle | null => (enterVehicle.isRiding() ? enterVehicle.getActive() : null),
+    async spawn(placement: VehiclePlacement): Promise<void> {
+      vehicleLod.add(placement, await spawnVehicle(placement));
+    },
     update(delta: number): void {
       // Same order the three host registers them in: physics writes the chassis pose and rolls the wheels,
       // damage reacts to this step's impacts, enter/exit handles input and doors, LOD streams last.

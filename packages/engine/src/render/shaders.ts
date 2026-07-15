@@ -8,6 +8,95 @@
  */
 
 const MODULES: Record<string, string> = {
+  /**
+   * Procedural clutter (074/19 B7·d): grass/bushes/rocks scattered per cell from procobj.dat, drawn INSTANCED —
+   * thousands of copies of a handful of models, one draw per (cell × model). Per-instance world matrix in a
+   * storage buffer (instance_index), world-material lighting (vertex-colour prelit + sun/moon + the 068 fog).
+   * Two variants: opaque (rocks) and cutout (A2C — grass/bushes alpha edges). No baked channels (clutter is
+   * scattered, not welded), no local lights (v1 — the pool is for the static world).
+   */
+  clutter: /* wgsl */ `
+#include <frame>
+
+@group(1) @binding(0) var<storage, read> clutterMatrices: array<mat4x4f>;
+@group(1) @binding(1) var clutterTexture: texture_2d_array<f32>;
+@group(1) @binding(2) var clutterSampler: sampler;
+
+// Geometry is the shared vehicle-model layout (buildVehicleModel): slots.x = texture-array layer (the only
+// meta clutter uses — paint slot / lamp tags are ignored). One draw covers every submesh; the per-vertex
+// layer selects the right texture, exactly like the rigid path. Named slots (not meta) — meta is a WGSL
+// reserved word, the same rename the rigid shader made.
+struct ClutterIn {
+  @builtin(instance_index) instance: u32,
+  @location(0) position: vec3f,
+  @location(1) normal: vec3f,
+  @location(2) uv: vec2f,
+  @location(3) color: vec4f,
+  @location(4) slots: vec4<u32>,
+};
+
+struct ClutterOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) prelit: vec3f,
+  @location(2) world: vec3f,
+  @location(3) sunNdl: f32,
+  @location(4) moonNdl: f32,
+  @location(5) @interpolate(flat) layer: u32,
+};
+
+@vertex
+fn vsClutter(in: ClutterIn) -> ClutterOut {
+  let model = clutterMatrices[in.instance];
+  let world = model * vec4f(in.position, 1.0);
+  var out: ClutterOut;
+  out.clip = frame.viewProj * world;
+  out.world = world.xyz;
+  out.uv = in.uv;
+  out.layer = in.slots.x;
+  // Clutter carries no authored night set — dim the day vertex colour toward a cool ambient at night (the
+  // converter's world-synthesis constant), so a bush darkens with the world instead of glowing.
+  out.prelit = mix(in.color.rgb, in.color.rgb * vec3f(0.3, 0.32, 0.4), frame.params.x);
+  let n = normalize((model * vec4f(in.normal, 0.0)).xyz);
+  out.sunNdl = max(dot(n, frame.sunDir.xyz), 0.0);
+  out.moonNdl = clamp((dot(n, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
+  return out;
+}
+
+fn clutterShade(in: ClutterOut, cutout: bool) -> vec4f {
+  var texel = textureSample(clutterTexture, clutterSampler, in.uv, in.layer);
+  if (cutout) {
+    // Sharpen the sampled alpha toward the vanilla alpha-test look (the world-cutout trick), so minified grass
+    // does not turn into a uniform A2C screen-door.
+    texel.a = clamp((texel.a - 0.5) / max(fwidth(texel.a), 0.0001) + 0.5, 0.0, 1.0);
+  }
+  let lit = in.prelit * frame.params.y +
+    frame.sunColor.rgb * (in.sunNdl * frame.params.z) +
+    frame.moonColor.rgb * in.moonNdl;
+  var color = texel.rgb * lit;
+  // Unified fog (the 068 shape — identical math to fsWorld).
+  let toCamera = in.world - frame.camera.xyz;
+  let dist = length(toCamera);
+  let viewDir = toCamera / max(dist, 0.001);
+  let fogD = max(dist - frame.fog.y, 0.0);
+  let fogK = 2.0 / max(frame.fog.x - frame.fog.y, 1.0);
+  var fogFactor = 1.0 - exp(-(fogK * fogD) * (fogK * fogD));
+  fogFactor = fogFactor * mix(frame.fog.w, 1.0, exp(-max(in.world.y, 0.0) * frame.fog.z));
+  fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
+  color = mix(color, skyFogFor(viewDir), fogFactor);
+  return vec4f(color, texel.a);
+}
+
+@fragment
+fn fsClutter(in: ClutterOut) -> @location(0) vec4f {
+  return clutterShade(in, false);
+}
+
+@fragment
+fn fsClutterCutout(in: ClutterOut) -> @location(0) vec4f {
+  return clutterShade(in, true);
+}
+`,
   corona: /* wgsl */ `
 #include <frame>
 

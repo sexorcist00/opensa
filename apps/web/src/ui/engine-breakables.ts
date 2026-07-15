@@ -73,7 +73,11 @@ export function setupEngineBreakables(
     if (survives(modelName, impact.force)) {
       return;
     }
-    if (!engine.cells.breakPlacement(breakableKeyHash(prop.key))) {
+    // Welded prop (degenerate its index range) OR breakable clutter (074/20 — degenerate its instance matrix).
+    const hash = breakableKeyHash(prop.key);
+    const welded = engine.cells.breakPlacement(hash);
+    const clutter = welded ? false : engine.breakClutterInstance(hash);
+    if (!welded && !clutter) {
       return; // the prop's cell has streamed out, or it is already broken
     }
     // The collider must go with the geometry, or the car keeps hitting a ghost.
@@ -116,7 +120,8 @@ export function setupEngineBreakables(
 
   return {
     update(): void {
-      for (const impact of physics.takeBreakableImpacts()) {
+      const impacts = physics.takeBreakableImpacts();
+      for (const impact of impacts) {
         smash(impact);
       }
     },

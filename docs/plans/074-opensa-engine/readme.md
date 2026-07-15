@@ -88,8 +88,15 @@ signs — no new engine machinery: an IFP's bones ARE the clump's frames).
 1. ~~**B7·c UV-scroll animation** — [18](18-uv-anim.md).~~ **SHIPPED + FIELD-CONFIRMED 2026-07-15, CLOSED**
    (kind-4 objectTable draws + per-object cell uvAnim uniform; NO vertex-format growth; speed = prod-exact).
    Side change: opensa-pack `--clouds <dir>` retired → auto-detected from `--in <mods-src>/clouds`.
-2. **B7·d procedural clutter** — [19](19-procobj.md). ← NEXT. The countryside is bald; its colliders are OFF on the
-   engine host until the rendering lands (they were costing 17 ms per Rapier step).
+2. ~~**B7·d procedural clutter** — [19](19-procobj.md).~~ **SHIPPED + FIELD-CONFIRMED 2026-07-15, CLOSED**:
+   host-generated + instanced (Option B), ONE memoized scatter drives render + colliders (re-enabled, cap 150) so
+   they can't diverge; new engine `clutter` pipeline reusing the vehicle-model geometry. No reconvert. **Field
+   fix that unblocked it (and 20):** the browser VFS (`asset-local-loader/build-vfs.ts`) only ingested IPL-placed
+   models + peds/vehicles, so procobj species (scattered from `procobj.dat`, never placed) had NO DFF at runtime
+   → clutter silently didn't render. `procObjModelRefs` now adds them.
+   2b. ~~**B7·d breakable clutter** — [20](20-breakable-clutter.md).~~ **SHIPPED + FIELD-CONFIRMED 2026-07-15,
+   CLOSED**: cacti/rocks/rubble shatter on a car hit (per-instance keyHash → `breakClutterInstance` degenerates
+   the instance matrix); welded props unaffected; body count bounded. Same VFS fix above was the blocker.
 3. **B6.5 map lighting** — [17](17-map-lighting.md). Round 1 REVERTED. Two blockers: explain why prod renders
    the same map clean, and do NOT re-attempt per-pixel lamps without shrinking the pool first.
 4. Then the WebGL-prod `?bench=all` baseline → the C1 criteria run → flip. **C2 cleanup stays GATED** on an
@@ -99,7 +106,8 @@ signs — no new engine machinery: an IFP's bones ARE the clump's frames).
 prod today. Two field-found prod-parity gaps pulled OUT of this chain into their own plans (2026-07-15), BOTH
 SHIPPED + FIELD-CONFIRMED + CLOSED: [075 water SEA/INLAND classes](../075-water-body-classes.md) (inland pools
 calm + livelier ripple — no ocean waves/spillover) and [076 roadsign/billboard text](../076-roadsign-text.md)
-(2dfx type-7 text plates welded as unlit beam text). Back to the ladder: B7·d procobj next.
+(2dfx type-7 text plates welded as unlit beam text). B7·d procobj + breakable clutter (19, 20) now SHIPPED +
+FIELD-CONFIRMED. Back to the ladder: B6.5 map lighting (17) next.
 
 **Tooling that earned its place today:** a slow-frame console log with per-block CPU timers in
 `engine-canvas-host.tsx` (quiet on healthy frames). It ended a three-round guessing game in one reload — a
