@@ -23,6 +23,7 @@ export async function loadPak(engine: Engine, baseUrl = '/pak'): Promise<LoadedD
   }
   const manifest = (await manifestResponse.json()) as OspakManifest;
   validateOspakManifest(manifest);
+  engine.setUvAnimations(manifest.uvAnimations ?? []); // UV-scroll (B7·c / plan 074/18)
   const pak = new Uint8Array(await (await fetch(`${baseUrl}/world.ospak`)).arrayBuffer());
 
   for (const [key, entry] of Object.entries(manifest.textures)) {

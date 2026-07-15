@@ -67,5 +67,13 @@ describe('ospak', () => {
 
       expect(manifest.textures['array-0']).toMatchObject({ format: 1, height: 256, layers: 12, width: 256 });
     });
+
+    it('carries UV-scroll animations into the manifest, and omits the key when there are none (B7·c)', () => {
+      const animations = [{ duration: 3, keyframes: [{ time: 0, uv: [0, 1, 1, 0, 0, 0] }], name: 'DolSign' }];
+
+      expect(buildOspak(inputs(), { uvAnimations: animations }).manifest.uvAnimations).toEqual(animations);
+      expect(buildOspak(inputs(), { uvAnimations: [] }).manifest).not.toHaveProperty('uvAnimations');
+      expect(buildOspak(inputs()).manifest).not.toHaveProperty('uvAnimations');
+    });
   });
 });

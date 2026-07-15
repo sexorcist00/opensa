@@ -1144,8 +1144,12 @@ fn fsWater(in: WaterOut) -> @location(0) vec4f {
 
 // origin.w = per-cell channel flag bits: bit 0 = baked sunVis (normal.w meaningful), bit 1 = baked
 // emissive mask (high channels byte meaningful). Zero = neither (old paks render unchanged).
+// uvAnim (B7·c / plan 074/18) = the UV-scroll transform applied to every vertex: uv·uvAnim.zw + uvAnim.xy.
+// IDENTITY (0,0,1,1) for ordinary cells (a uniform-gated no-op); a kind-4 objectTable draw binds a per-object
+// cell buffer whose uvAnim the host advances each frame (the LV skull sign's crawling neon).
 struct Cell {
   origin: vec4f,
+  uvAnim: vec4f,
 };
 @group(1) @binding(0) var<uniform> cell: Cell;
 
@@ -1191,7 +1195,9 @@ fn vsWorld(in: VsIn) -> VsOut {
   world.z += cos(swayT * 0.7) * sway * 0.6;
   out.clip = frame.viewProj * vec4f(world, 1.0);
   out.world = world;
-  out.uv = in.uv;
+  // UV-scroll (B7·c): identity for ordinary geometry; a kind-4 draw's per-object cell buffer carries the
+  // animated transform. Applied here so it composes with the far-outside-[0,1] GTA UVs the world tiles.
+  out.uv = in.uv * cell.uvAnim.zw + cell.uvAnim.xy;
   // Day↔night prelit blend (074/06 row 1): cells without an authored night set carry a converter-synthesized
   // night (day × ambient) — one formula for the whole world, per vertex.
   out.prelit = mix(in.dayPrelit.rgb, in.nightPrelit.rgb, frame.params.x);

@@ -3,6 +3,8 @@
  * MSAA pass (opaque/cutout world, flat sky clear) with per-pass GPU timestamps. Later milestones grow the
  * fixed frame graph (sky/transparent/water/post) — the facade's API stays.
  */
+import type { OspakUvAnimation } from '@opensa/engine-formats';
+
 import { configureCanvas, type EngineDevice, initDevice } from './core/device';
 import {
   frustumFromViewProj,
@@ -20,7 +22,7 @@ import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
 import { compileAll, MSAA_SAMPLES, pipelineIdFor, type PipelineSet, SCENE_FORMAT } from './render/pipelines';
 import { buildSkyLut, SKY_LUT_HEIGHT, SKY_LUT_WIDTH, skyLutKey } from './render/sky-lut';
-import { CellStore } from './world/cells';
+import { type CellHandle, CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
 
 // Reversed-Z (z-fighting fix): FLOAT depth + swapped near/far + clear 0 + greater compares — hugely
@@ -470,6 +472,12 @@ export class Engine {
   };
   private targetSize = { height: 0, width: 0 };
   private timers!: GpuTimers;
+  /** UV-scroll animations (B7·c / plan 074/18): the pak's global UVAnimDict entries, keyframes time-sorted.
+   *  A kind-4 objectTable draw stores a slot index into this list; the engine advances all of them per frame. */
+  private uvAnimations: { duration: number; keyframes: { time: number; uv: number[] }[] }[] = [];
+  private readonly uvAnimScratch = new Float32Array(4);
+  /** Current transform per animation, slot-indexed: (offsetX, offsetY, scaleX, scaleY) for `uv·zw + xy`. */
+  private uvAnimTransforms = new Float32Array(0);
   /** Rigid-entity models (074/08 B2→B5) — vehicle part hierarchies, always outside the static bundles. */
   private readonly vehicleModels = new Map<VehicleModelId, VehicleModel>();
   private vehicleModelSeq = 0;
@@ -648,6 +656,7 @@ export class Engine {
     // camera.w = cloud slot A→B crossfade blend (spare vec4 slot; row 15 weather fade).
     frameData.set([...camera.eye, this.currentCloudBlend()], 32);
     const env = this.environment;
+    const seconds = (performance.now() - this.startedMs) / 1000;
     const sunLen = Math.hypot(env.sunDir[0], env.sunDir[1], env.sunDir[2]) || 1;
     // sunDir.w = current arc elevation (the sun-vis v2 threshold input — 074/07).
     frameData.set([env.sunDir[0] / sunLen, env.sunDir[1] / sunLen, env.sunDir[2] / sunLen, env.sunElevation], 36);
@@ -656,10 +665,7 @@ export class Engine {
     frameData.set([...env.skyTop, 1], 48);
     frameData.set([...env.skyHorizon, 1], 52);
     frameData.set([env.fogCutDistance, env.fogStartDistance, env.fogHeightK, env.fogHeightMin], 56);
-    frameData.set(
-      [env.aoStrength, env.sunVisStrength, (performance.now() - this.startedMs) / 1000, env.windStrength],
-      60,
-    );
+    frameData.set([env.aoStrength, env.sunVisStrength, seconds, env.windStrength], 60);
     const moonLen = Math.hypot(env.moonDir[0], env.moonDir[1], env.moonDir[2]) || 1;
     // moonDir.w doubles as the stochastic de-tiling toggle (074/12) — the vec4 slot was spare.
     frameData.set([env.moonDir[0] / moonLen, env.moonDir[1] / moonLen, env.moonDir[2] / moonLen, env.stochastic], 64);
@@ -745,8 +751,9 @@ export class Engine {
     if (bundles.length > 0) {
       pass.executeBundles(bundles);
     }
-    // ObjectTable draws (074/06 row 9): hour-gated timed objects, in the opaque phase (their blend groups
-    // sort with the world blends only approximately — the standard transparency caveat).
+    // ObjectTable draws (074/06 row 9): hour-gated timed objects + kind-4 UV-scroll (B7·c), in the opaque
+    // phase (their blend groups sort with the world blends only approximately — the standard caveat).
+    this.advanceUvAnimations(seconds);
     draws += this.drawObjects(pass);
     draws += this.drawPed(pass);
     draws += this.drawVehicles(pass, false);
@@ -1117,6 +1124,22 @@ export class Engine {
     return { palette };
   }
 
+  /**
+   * Install the pak's UV-scroll animations (B7·c / plan 074/18) — call once after the manifest loads. A cell's
+   * kind-4 objectTable draw stores a slot index into this list; the engine advances every entry each frame and
+   * feeds each visible scroller its current transform. Empty is fine (scrollers render static).
+   */
+  setUvAnimations(animations: readonly OspakUvAnimation[]): void {
+    this.uvAnimations = animations.map((animation) => ({
+      duration: animation.duration,
+      keyframes: [...animation.keyframes].sort((a, b) => a.time - b.time),
+    }));
+    this.uvAnimTransforms = new Float32Array(this.uvAnimations.length * 4);
+    for (let index = 0; index < this.uvAnimations.length; index += 1) {
+      this.uvAnimTransforms.set([0, 0, 1, 1], index * 4);
+    }
+  }
+
   /** Install the water surface (074/06 row 12 v2): interleaved [x,y,z,shoreDist] vertices (ENGINE space —
    *  the baked tessellated mesh, or the flat runtime fallback with a constant deep field); `ripple` /
    *  `foam` = the authored particle.txd textures (waterclear256 / waterwake), 1×1 stubs when absent.
@@ -1264,6 +1287,34 @@ export class Engine {
         state.entity.flatten();
         this.device.queue.writeBuffer(model.matrixBuffer, state.slot * rowBytes, state.entity.matrices);
       }
+    }
+  }
+
+  /** ObjectTable draws for visible cells (074/06 row 9). Timed: render when `hour` is inside [on, off). */
+  /** Advance every UV-scroll animation to wall-clock `seconds` (B7·c / plan 074/18). The prod lerp: equal-time
+   *  keyframe pairs snap (DolSign's stepped flipbook), the rest lerp. A handful of entries — cheap per frame. */
+  private advanceUvAnimations(seconds: number): void {
+    for (let index = 0; index < this.uvAnimations.length; index += 1) {
+      const entry = this.uvAnimations[index];
+      const keys = entry.keyframes;
+      if (keys.length === 0) {
+        continue;
+      }
+      const time = entry.duration > 0 ? seconds % entry.duration : 0;
+      let k = keys.length - 1;
+      while (k > 0 && keys[k].time > time) {
+        k -= 1;
+      }
+      const k0 = keys[k];
+      const k1 = keys[Math.min(k + 1, keys.length - 1)];
+      const span = k1.time - k0.time;
+      const f = span > 1e-6 ? Math.min(Math.max((time - k0.time) / span, 0), 1) : 0;
+      const at = index * 4;
+      // uv params: [rotation, scaleX, scaleY, skew, translateX, translateY] → the shader wants (tx, ty, sx, sy).
+      this.uvAnimTransforms[at] = lerp(k0.uv[4] ?? 0, k1.uv[4] ?? 0, f);
+      this.uvAnimTransforms[at + 1] = lerp(k0.uv[5] ?? 0, k1.uv[5] ?? 0, f);
+      this.uvAnimTransforms[at + 2] = lerp(k0.uv[1] ?? 1, k1.uv[1] ?? 1, f);
+      this.uvAnimTransforms[at + 3] = lerp(k0.uv[2] ?? 1, k1.uv[2] ?? 1, f);
     }
   }
 
@@ -1435,7 +1486,28 @@ export class Engine {
     return this.debris.length;
   }
 
-  /** ObjectTable draws for visible cells (074/06 row 9). Timed: render when `hour` is inside [on, off). */
+  /** One out-of-bundle object's draws: kind-4 scrollers first refresh their live uvAnim uniform (offset 16),
+   *  then every object binds its own group 1 (the cell bind group for timed, the per-object one for scroll). */
+  private drawObjectGroups(pass: GPURenderPassEncoder, object: CellHandle['objects'][number]): number {
+    if (object.kind === 4 && object.uvAnimUniform) {
+      const at = object.params * 4;
+      if (at + 4 <= this.uvAnimTransforms.length) {
+        this.uvAnimScratch.set(this.uvAnimTransforms.subarray(at, at + 4));
+        this.device.queue.writeBuffer(object.uvAnimUniform, 16, this.uvAnimScratch);
+      }
+    }
+    pass.setBindGroup(1, object.bindGroup);
+    let draws = 0;
+    for (const group of object.groups) {
+      pass.setPipeline(this.pipelines.get(pipelineIdFor(group.pipelineClass, group.side)));
+      pass.setBindGroup(2, this.textures.get(group.textureArrayRef).bindGroup);
+      pass.drawIndexed(group.indexCount, 1, group.indexOffset, 0, 0);
+      draws += 1;
+    }
+
+    return draws;
+  }
+
   private drawObjects(pass: GPURenderPassEncoder): number {
     const hour = ((this.environment.hour % 24) + 24) % 24;
     let draws = 0;
@@ -1445,22 +1517,18 @@ export class Engine {
       }
       let bound = false;
       for (const object of cell.objects) {
-        if (object.kind !== 0 || !timedActive(object.params, hour)) {
+        // kind 0 = timed (hour-gated), kind 4 = UV-scroll (always on). Both draw OUTSIDE the recorded bundle.
+        if (object.kind !== 4 && (object.kind !== 0 || !timedActive(object.params, hour))) {
           continue;
         }
         if (!bound) {
+          // Cell-shared bindings (the geometry lives in the cell's buffers even for out-of-bundle draws).
           pass.setBindGroup(0, this.frameBindGroup);
-          pass.setBindGroup(1, cell.cellBindGroup);
           pass.setVertexBuffer(0, cell.vertexBuffer);
           pass.setIndexBuffer(cell.indexBuffer, cell.index16 ? 'uint16' : 'uint32');
           bound = true;
         }
-        for (const group of object.groups) {
-          pass.setPipeline(this.pipelines.get(pipelineIdFor(group.pipelineClass, group.side)));
-          pass.setBindGroup(2, this.textures.get(group.textureArrayRef).bindGroup);
-          pass.drawIndexed(group.indexCount, 1, group.indexOffset, 0, 0);
-          draws += 1;
-        }
+        draws += this.drawObjectGroups(pass, object);
       }
     }
 
@@ -1821,6 +1889,11 @@ function fitRgba(source: { height: number; rgba: Uint8Array; width: number }, si
   return out;
 }
 
+/** SA timed-object gate: params = on | off << 8; the window wraps midnight when on > off. */
+function lerp(a: number, b: number, f: number): number {
+  return a + (b - a) * f;
+}
+
 function proceduralCoronaSprites(): CoronaSprites {
   const size = 128;
   const rgba = new Uint8Array(size * size * 4 * 2);
@@ -1843,7 +1916,6 @@ function proceduralCoronaSprites(): CoronaSprites {
   return { height: size, layers: 2, rgba, width: size };
 }
 
-/** SA timed-object gate: params = on | off << 8; the window wraps midnight when on > off. */
 function timedActive(params: number, hour: number): boolean {
   const on = params & 0xff;
   const off = (params >> 8) & 0xff;

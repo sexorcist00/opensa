@@ -160,12 +160,13 @@ REAL SA game via the ASI — a different target).
   the fixed-step spiral hiding the cause. Colliders are off on the engine host until the rendering lands (the
   adapter's own rule: no invisible obstacles) — turn them back on TOGETHER, with prod's budget.
 
-- **B7·c UV-SCROLL animation — OPEN, see [18](18-uv-anim.md).** A prod-parity gap the own engine has never
-  had: the crawling neon (LV skull sign), conveyor belts. A DIFFERENT mechanism from B7·b — marked in the
-  DFF (UVAnimDict + the material's UV Anim PLG), plays globally in sync, and is already fully PARSED; the
-  converter and the engine simply ignore it. The design decision is where a scrolling material's two floats
-  live when the world samples a baked texture array (a per-vertex anim slot + a global table is the likely
-  answer, and it costs a `.oscell` minor bump).
+- **B7·c UV-SCROLL animation — SHIPPED + FIELD-CONFIRMED 2026-07-15, CLOSED, see [18](18-uv-anim.md).** The
+  crawling neon + Vegas waterfalls. Resolved the design fork NOT with a per-vertex slot (the packed 36 B vertex
+  was not worth +11 % for a rare feature) but by leaving the scroller OUT of the merged bundle as an
+  **objectTable kind-4 draw** — a per-object cell uniform carries the live `uvAnim` transform the engine
+  advances each frame (global by dict name, the prod keyframe lerp; speed is prod-exact). `.oscell` minor 4→5,
+  `OspakManifest.uvAnimations`. The plan's skull sign turned out unplaced; real scrollers are `vgsN_scrollsgn01`
+  / `vegaswaterfall02` / `visagesign1` (teleports in `game-config.tsx`).
 
 ## Milestone C — the flip and the endgame
 

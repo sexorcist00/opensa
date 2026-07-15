@@ -7,7 +7,7 @@
  * burger01_LAw is a 22×35 m diner, not a sign; their IFP animation is a later dynamic-entity feature).
  */
 import type { Oscell, OscellBreakable, OscellGroup, OscellLight, OscellParticle } from '@opensa/engine-formats';
-import type { AssetFileSystem, IplInstance, MapDefinitions } from '@opensa/renderware';
+import type { AssetFileSystem, IplInstance, MapDefinitions, RWUvAnimation } from '@opensa/renderware';
 
 import { encodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
 import { WIND_MODELS } from '@opensa/game/mods/wind-mode';
@@ -21,6 +21,15 @@ import { isVertexAlphaBeam, prepareClumpAtomics } from '@opensa/renderware/mesh/
 import { IdeFlag } from '@opensa/renderware/parsers/text/index';
 
 import type { TexturePlanner } from './textures';
+
+/**
+ * The whole convert's UV-scroll animations (B7·c / plan 074/18), de-duped by dict name in encounter order —
+ * SA's UVAnimDict names are GLOBAL, so every material referencing one shares a single slot. `slot` is the
+ * manifest `uvAnimations` index a kind-4 objectTable entry stores; the runtime advances them in sync.
+ */
+export interface UvAnimRegistry {
+  byName: Map<string, { anim: RWUvAnimation; slot: number }>;
+}
 
 /** The welded-but-not-yet-encoded cell — the bake stages (074/07) mutate scratch rows between the phases. */
 /** A smashable placement's triangles inside ONE bucket, before the cell layout turns it into an absolute
@@ -42,6 +51,9 @@ export interface WeldBucket {
   textureArrayRef: number;
   /** Timed-object window (074/06 row 9) — this bucket becomes an objectTable draw, not part of the bundle. */
   timed: null | { off: number; on: number };
+  /** UV-scroll dict entry (B7·c / plan 074/18) — this bucket leaves the bundle and becomes a kind-4 objectTable
+   *  draw whose UVs crawl on the manifest animation at `slot`. Null for ordinary geometry. */
+  uvAnim: null | { name: string; slot: number };
   vertices: number[]; // scratch rows: px py pz nx ny nz u v dr dg db da nr ng nb sway layer ao sunVis
 }
 
@@ -76,7 +88,19 @@ export interface WeldStats {
   skippedTimed: number;
   /** ObjectTable entries produced (timed windows / scrapyard piles …). */
   timedObjects: number;
+  /** UV-scroll objectTable entries (B7·c): kind-4 draws whose UVs crawl at runtime. */
+  uvAnimObjects: number;
   vertices: number;
+}
+
+/** A fresh registry — one per convert, threaded through the real (non-occluder) weld. */
+export function createUvAnimRegistry(): UvAnimRegistry {
+  return { byName: new Map() };
+}
+
+/** Manifest-order list (slot ascending) — convert.ts feeds this to `buildOspak`. */
+export function uvAnimList(registry: UvAnimRegistry): RWUvAnimation[] {
+  return [...registry.byName.values()].sort((a, b) => a.slot - b.slot).map((entry) => entry.anim);
 }
 
 /** Scratch-row layout (floats per welded vertex) + the slots the bakers touch. */
@@ -114,8 +138,9 @@ export function weldCell(
   planner: TexturePlanner,
   originEngine: readonly [number, number, number],
   breakableModels?: ReadonlySet<string>,
+  uvAnimRegistry?: UvAnimRegistry,
 ): null | { bytes: Uint8Array; stats: WeldStats } {
-  const welded = weldCellParts(fs, defs, cell, lod, planner, originEngine, breakableModels);
+  const welded = weldCellParts(fs, defs, cell, lod, planner, originEngine, breakableModels, uvAnimRegistry);
 
   return welded ? { bytes: assembleCell(welded), stats: welded.stats } : null;
 }
@@ -130,6 +155,8 @@ export function weldCellParts(
   originEngine: readonly [number, number, number],
   /** Models object.dat marks as smashable (B7·a) — omit and only the DFF shatter mesh gates. */
   breakableModels?: ReadonlySet<string>,
+  /** UV-scroll registry (B7·c): omit on occluder welds — a scroller then welds as ordinary static geometry. */
+  uvAnimRegistry?: UvAnimRegistry,
 ): null | WeldedCell {
   const buckets = new Map<string, WeldBucket>();
   const stats: WeldStats = {
@@ -141,6 +168,7 @@ export function weldCellParts(
     particles: 0,
     skippedTimed: 0,
     timedObjects: 0,
+    uvAnimObjects: 0,
     vertices: 0,
   };
   const flags = { hasNight: false, hasSway: false };
@@ -176,6 +204,8 @@ export function weldCellParts(
       lod ? undefined : breakables,
       breakableModels,
       animated,
+      // UV-scroll is HD-only: a LOD copy of the LV skull sign would scroll a second ghost behind it.
+      lod ? undefined : uvAnimRegistry,
     );
     // 2dfx corona anchors (074/06 row 13) — HD level only (LOD duplicates would double every lamp).
     if (!lod) {
@@ -378,32 +408,13 @@ function assemble(
     indexBase += bucket.indices.length;
   }
 
-  // ObjectTable (074/06 row 9): one timed object per contiguous (on, off) run of trailing timed groups.
-  const objects: Oscell['objects'] = [];
-  const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0] as const;
-  for (let index = 0; index < ordered.length; index += 1) {
-    const timed = ordered[index].timed;
-    if (!timed) {
-      continue;
-    }
-    const last = objects[objects.length - 1];
-    if (last && last.groupStart + last.groupCount === index && samePreviousWindow(ordered, index)) {
-      last.groupCount += 1;
-    } else {
-      objects.push({
-        groupCount: 1,
-        groupStart: index,
-        kind: 0,
-        params: timed.on | (timed.off << 8),
-        transform: IDENTITY,
-      });
-    }
-  }
+  const objects = buildObjectTable(ordered);
+  stats.timedObjects = objects.filter((object) => object.kind === 0).length;
+  stats.uvAnimObjects = objects.filter((object) => object.kind === 4).length;
 
   stats.groups = groups.length;
   stats.vertices = vertexCount;
   stats.indices = indexCount;
-  stats.timedObjects = objects.length;
   // The weld recorded each smashable placement's triangles as an offset INSIDE its bucket; the layout above
   // is what finally decides where that bucket's indices live, so the absolute range can only be resolved here.
   const breakables: OscellBreakable[] = (channels.breakables ?? [])
@@ -454,10 +465,13 @@ function bucketFor(
   pipelineClass: number,
   side: number,
   timed: null | { off: number; on: number },
+  uvAnim: null | { name: string; slot: number },
 ): WeldBucket {
-  // '~' sorts after digits: timed buckets land AFTER the bundle ones, contiguous per (on, off) window.
+  // '~' sorts after digits: timed / uv-scroll buckets land AFTER the bundle ones. uv-scroll keys by dict name
+  // so distinct animations never merge; both families leave the recorded bundle (each is its own objectTable draw).
   const window = timed ? `~t${String(timed.on).padStart(2, '0')}-${String(timed.off).padStart(2, '0')}|` : '';
-  const key = `${window}${String(arrayRef).padStart(4, '0')}|${pipelineClass}|${side}`;
+  const scroll = uvAnim ? `~u${uvAnim.name}|` : '';
+  const key = `${scroll}${window}${String(arrayRef).padStart(4, '0')}|${pipelineClass}|${side}`;
   let bucket = buckets.get(key);
   if (!bucket) {
     bucket = {
@@ -469,12 +483,49 @@ function bucketFor(
       side,
       textureArrayRef: arrayRef,
       timed,
+      uvAnim,
       vertices: [],
     };
     buckets.set(key, bucket);
   }
 
   return bucket;
+}
+
+/**
+ * The out-of-bundle draws for a cell's trailing buckets: timed windows merge into contiguous runs (074/06
+ * row 9), and each UV-scroll dict bucket is one kind-4 row (B7·c, params = the manifest animation slot).
+ * Both families sort AFTER the bundle buckets, so the engine's object-owned exclusion is a trailing set.
+ */
+function buildObjectTable(ordered: WeldBucket[]): Oscell['objects'] {
+  const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0] as const;
+  const objects: Oscell['objects'] = [];
+  for (let index = 0; index < ordered.length; index += 1) {
+    const timed = ordered[index].timed;
+    if (!timed) {
+      continue;
+    }
+    const last = objects[objects.length - 1];
+    if (last && last.groupStart + last.groupCount === index && samePreviousWindow(ordered, index)) {
+      last.groupCount += 1;
+    } else {
+      objects.push({
+        groupCount: 1,
+        groupStart: index,
+        kind: 0,
+        params: timed.on | (timed.off << 8),
+        transform: IDENTITY,
+      });
+    }
+  }
+  for (let index = 0; index < ordered.length; index += 1) {
+    const uvAnim = ordered[index].uvAnim;
+    if (uvAnim) {
+      objects.push({ groupCount: 1, groupStart: index, kind: 4, params: uvAnim.slot, transform: IDENTITY });
+    }
+  }
+
+  return objects;
 }
 
 /** Part → `.oscell` pipelineClass: beam (3) wins; else the texture's alpha class decides. */
@@ -612,6 +663,35 @@ function quatToMat3(x: number, y: number, z: number, w: number): number[] {
   ];
 }
 
+/**
+ * UV-scroll slot for a material (B7·c): the first UVAnimDict name it references that the clump actually carries,
+ * registered GLOBALLY by name (SA dict names are global identifiers, so every reference shares one slot). Null
+ * when there is no plugin, no registry (occluder weld), or the named entry is missing / empty — render static
+ * rather than invent a scroll (the same fallback philosophy as a missing IFP welding at bind pose).
+ */
+function resolveUvAnim(
+  clump: ReturnType<typeof getClump>,
+  material: { effects?: { uvAnim?: { names: string[] } } },
+  registry?: UvAnimRegistry,
+): null | { name: string; slot: number } {
+  const name = material.effects?.uvAnim?.names[0];
+  if (!registry || name === undefined) {
+    return null;
+  }
+  const existing = registry.byName.get(name);
+  if (existing) {
+    return { name, slot: existing.slot };
+  }
+  const anim = clump.uvAnimations?.find((entry) => entry.name === name);
+  if (!anim || anim.keyframes.length === 0) {
+    return null;
+  }
+  const slot = registry.byName.size;
+  registry.byName.set(name, { anim, slot });
+
+  return { name, slot };
+}
+
 /** True when the bucket at `index` shares the previous bucket's timed window (merge into one object). */
 function samePreviousWindow(ordered: WeldBucket[], index: number): boolean {
   const current = ordered[index].timed;
@@ -666,6 +746,8 @@ function weldGroup(
   breakableModels?: ReadonlySet<string>,
   /** Frames an IFP clip moves (B7·b): their atomics are NOT welded — the host renders them live. */
   animated?: null | ReadonlySet<number>,
+  /** UV-scroll registry (B7·c): a material referencing a UVAnimDict entry leaves the merged bundle. */
+  uvAnimRegistry?: UvAnimRegistry,
 ): void {
   const clump = getClump(fs, def.modelName);
   const atomics = prepareClumpAtomics(clump);
@@ -692,10 +774,21 @@ function weldGroup(
         textured: false,
       };
       const beam = isVertexAlphaBeam(material, geometry);
+      // UV-scroll (B7·c): a material referencing a UVAnimDict entry the clump actually carries becomes a kind-4
+      // objectTable draw whose UVs crawl at runtime. Route it to its own per-dict bucket (out of the merged
+      // bundle); an unknown name or a missing registry (occluder weld) falls back to ordinary static geometry.
+      const uvAnim = resolveUvAnim(clump, material, uvAnimRegistry);
       // Vegetation prefers CUTOUT (field fix: soft-classed canopies wrote no depth → trees showed through
       // trees). Vanilla SA alpha-TESTS foliage; our A2C+MSAA equivalent needs the cutout texture pipeline.
       const resolved = planner.resolve(def.txdName, material.texture?.name ?? null, material.color, swayKind !== null);
-      const bucket = bucketFor(buckets, resolved.arrayRef, classOf(beam, resolved.alphaClass), doubleSided, timed);
+      const bucket = bucketFor(
+        buckets,
+        resolved.arrayRef,
+        classOf(beam, resolved.alphaClass),
+        doubleSided,
+        timed,
+        uvAnim,
+      );
       // Bit 15 of the layer u16 flags stochastic de-tiling layers (074/12) — the engine masks the index.
       const layerValue = resolved.layer | (resolved.stochastic ? 0x8000 : 0);
       for (const instance of instances) {

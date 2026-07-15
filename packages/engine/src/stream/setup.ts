@@ -58,6 +58,8 @@ export async function setupStreaming(engine: Engine, baseUrl = '/pak'): Promise<
   }
   const manifest = (await manifestResponse.json()) as OspakManifest;
   validateOspakManifest(manifest);
+  // UV-scroll animations (B7·c / plan 074/18): global by dict name, advanced engine-side; kind-4 draws slot in.
+  engine.setUvAnimations(manifest.uvAnimations ?? []);
 
   const worker = new Worker(new URL('./pak-worker.ts', import.meta.url), { type: 'module' });
   await new Promise<void>((resolve, reject) => {

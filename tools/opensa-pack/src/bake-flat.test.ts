@@ -73,6 +73,7 @@ function testCell(lod = false): WeldedCell {
         side: 0,
         textureArrayRef: 0,
         timed: null,
+        uvAnim: null,
         vertices: wallRows,
       },
       {
@@ -84,6 +85,7 @@ function testCell(lod = false): WeldedCell {
         side: 0,
         textureArrayRef: 0,
         timed: null,
+        uvAnim: null,
         vertices,
       },
     ],
@@ -104,6 +106,7 @@ function testCell(lod = false): WeldedCell {
       particles: 0,
       skippedTimed: 0,
       timedObjects: 0,
+      uvAnimObjects: 0,
       vertices: 42,
     },
   };

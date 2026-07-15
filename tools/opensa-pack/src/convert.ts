@@ -25,7 +25,16 @@ import { AO_MAX_DISTANCE, bakeAo, type BakeAoReport, buildOccluderBvh } from './
 import { bakeCellsPooled, defaultBakeWorkers } from './bake-pool';
 import { bakeSunVis, type BakeSunVisReport, SUNVIS_MAX_DISTANCE } from './sunvis';
 import { TexturePlanner } from './textures';
-import { assembleCell, WELD_ROW, weldCellParts, type WeldedCell, type WeldStats } from './weld';
+import {
+  assembleCell,
+  createUvAnimRegistry,
+  uvAnimList,
+  type UvAnimRegistry,
+  WELD_ROW,
+  weldCellParts,
+  type WeldedCell,
+  type WeldStats,
+} from './weld';
 
 export interface ConvertOptions {
   /** Bake per-vertex AO/skyVis (074/07); on by default, `--no-ao` skips it. */
@@ -67,6 +76,9 @@ export interface ConvertReport {
   sunVis: (BakeSunVisReport & { ms: number }) | null;
   textures: TexturePlanner['report'] & { arrays: number };
   timedObjects: number;
+  uvAnimations: number;
+  /** UV-scroll draws welded (B7·c) + distinct animations registered map-wide. */
+  uvAnimObjects: number;
 }
 
 export async function convertDistrict(
@@ -100,7 +112,12 @@ export async function convertDistrict(
     sunVis: null,
     textures: { arrays: 0, colors: 0, dedup: 0, opaquePass: 0, processed: 0 },
     timedObjects: 0,
+    uvAnimations: 0,
+    uvAnimObjects: 0,
   };
+  // UV-scroll (B7·c / plan 074/18): one registry for the whole convert — dict names are global, so every
+  // material referencing one shares a slot; only the HD (non-occluder) weld feeds it.
+  const uvAnims = createUvAnimRegistry();
 
   // Phases 1-2, CHUNKED (074/14 A2): weld → bake → encode per chunk of cells, releasing the weld scratch
   // between chunks — the full map cannot hold one welded heap (16 GB held ONE city). The bake ring
@@ -141,7 +158,7 @@ export async function convertDistrict(
   for (const [chunkIndex, chunk] of chunks.entries()) {
     const tag = `chunk ${chunkIndex + 1}/${chunks.length} [${chunk.rect.join(',')}]`;
     const chunkStarted = Date.now();
-    const welded = weldRect(fs, defs, grid, planner, chunk.rect, cellSize, breakableModels);
+    const welded = weldRect(fs, defs, grid, planner, chunk.rect, cellSize, breakableModels, uvAnims);
     if (welded.length === 0) {
       doneCells += chunk.cells;
       continue;
@@ -188,8 +205,11 @@ export async function convertDistrict(
 
   const timecyc24 = fs.getText('data/timecyc_24h.dat');
   const timecyc = timecyc24 ?? fs.getText('data/timecyc.dat') ?? undefined;
+  const uvAnimations = uvAnimList(uvAnims);
+  report.uvAnimations = uvAnimations.length;
   const { manifest, pak } = buildOspak(inputs, {
     cellSize,
+    uvAnimations, // buildOspak drops the key when the list is empty
     ...(timecyc !== undefined ? { timecyc, timecyc24: timecyc24 !== null } : {}),
   });
   report.pakBytes = pak.byteLength;
@@ -210,6 +230,7 @@ function accumulate(report: ConvertReport, key: string, bytes: number, stats: We
   report.skippedTimed += stats.skippedTimed;
   report.particles += stats.particles;
   report.timedObjects += stats.timedObjects;
+  report.uvAnimObjects += stats.uvAnimObjects;
   report.breakables += stats.breakables;
 }
 
@@ -325,6 +346,7 @@ function weldRect(
   rect: readonly [number, number, number, number],
   cellSize: number,
   breakableModels: ReadonlySet<string>,
+  uvAnimRegistry: UvAnimRegistry,
 ): { cell: WeldedCell; key: string }[] {
   const [x0, y0, x1, y1] = rect;
   const welded: { cell: WeldedCell; key: string }[] = [];
@@ -337,7 +359,7 @@ function weldRect(
       // Cell origin in ENGINE coords: GTA cell centre (x, y) → engine (x, 0, −y).
       const origin: [number, number, number] = [(cx + 0.5) * cellSize, 0, -(cy + 0.5) * cellSize];
       for (const lod of [false, true]) {
-        const parts = weldCellParts(fs, defs, cell, lod, planner, origin, breakableModels);
+        const parts = weldCellParts(fs, defs, cell, lod, planner, origin, breakableModels, uvAnimRegistry);
         if (parts) {
           welded.push({ cell: parts, key: `${cx},${cy},${lod ? 'lod' : 'hd'}` });
         }

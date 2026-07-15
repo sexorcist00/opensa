@@ -14,14 +14,17 @@ import { ByteReader, ByteWriter } from './binary';
 
 export const OSCELL_MAGIC = 0x3143534f; // 'OSC1' little-endian
 export const OSCELL_VERSION_MAJOR = 0;
-/** Minor 4 (B7·a): a light knows which smashable placement OWNS it — a smashed traffic light must take its
+/** Minor 5 (B7·c): objectTable gained kind 4 = UV-SCROLL — a material whose UVs crawl (LV skull sign, conveyor
+ *  belts). Its `params` is an INDEX into the pak manifest's `uvAnimations`; the transform is identity (the scroll
+ *  rides a runtime uniform, not the vertex). No record layout change — older readers just never draw the kind.
+ *  Minor 4 (B7·a): a light knows which smashable placement OWNS it — a smashed traffic light must take its
  *  coronas with it, and they were left hanging in the sky.
  *  Minor 3 (B7·a): the cell gained a BREAKABLE table — the index RANGES of each smashable placement, so the
  *  engine can shatter one crate by degenerating its triangles in place, without rebuilding the immutable
  *  bundle and without splitting the prop out of the merged batch (which measured 4.5x the draw calls).
  *  Minor 2 (B6): the cell gained a PARTICLE table (2dfx type-1 emitter anchors). Readers accept minor 1
  *  paks — they simply carry no particles. */
-export const OSCELL_VERSION_MINOR = 4;
+export const OSCELL_VERSION_MINOR = 5;
 export const OSCELL_VERTEX_STRIDE = 36;
 
 /** Header `flags` bits. */
@@ -100,9 +103,9 @@ export interface OscellLight {
 export interface OscellObject {
   groupCount: number;
   groupStart: number;
-  /** 0 timed | 1 breakable | 2 animated | 3 roadsign. */
+  /** 0 timed | 1 breakable | 2 animated | 3 roadsign | 4 uvScroll. */
   kind: number;
-  /** kind-specific packed params (timed: onHour | offHour << 8). */
+  /** kind-specific packed params (timed: onHour | offHour << 8; uvScroll: manifest uvAnimations index). */
   params: number;
   /** Row-major 3×4 affine transform (cell-local). */
   transform: readonly number[];

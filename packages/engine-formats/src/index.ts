@@ -23,6 +23,7 @@ export {
   type OspakEntry,
   type OspakInput,
   type OspakManifest,
+  type OspakUvAnimation,
   type OspakWireEnc,
   validateOspakManifest,
 } from './ospak';

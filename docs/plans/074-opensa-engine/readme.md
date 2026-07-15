@@ -85,8 +85,10 @@ signs — no new engine machinery: an IFP's bones ARE the clump's frames).
 
 **Ladder from here** — see [priority.md](priority.md):
 
-1. **B7·c UV-scroll animation** — [18](18-uv-anim.md). Parsed already, prod renders it, engine ignores it.
-2. **B7·d procedural clutter** — [19](19-procobj.md). The countryside is bald; its colliders are OFF on the
+1. ~~**B7·c UV-scroll animation** — [18](18-uv-anim.md).~~ **SHIPPED + FIELD-CONFIRMED 2026-07-15, CLOSED**
+   (kind-4 objectTable draws + per-object cell uvAnim uniform; NO vertex-format growth; speed = prod-exact).
+   Side change: opensa-pack `--clouds <dir>` retired → auto-detected from `--in <mods-src>/clouds`.
+2. **B7·d procedural clutter** — [19](19-procobj.md). ← NEXT. The countryside is bald; its colliders are OFF on the
    engine host until the rendering lands (they were costing 17 ms per Rapier step).
 3. **B6.5 map lighting** — [17](17-map-lighting.md). Round 1 REVERTED. Two blockers: explain why prod renders
    the same map clean, and do NOT re-attempt per-pixel lamps without shrinking the pool first.

@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { TexturePlanner } from './textures';
-import { weldCell } from './weld';
+import { createUvAnimRegistry, uvAnimList, weldCell } from './weld';
 
 // Real committed fixtures (same case build-region tests use).
 const DFF = 'tests/custom/proper-fixes-models/trafficlight1.dff';
@@ -385,6 +385,143 @@ describe('weldCell', () => {
       const b = weldCell(fs, fixtureDefs(), fixtureCell(3), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
 
       expect([...a!.bytes]).toEqual([...b!.bytes]);
+    });
+  });
+});
+
+// visagesign04: a stock UV-animated sign whose DFF opens with a UVAnimDict — three materials each scroll a
+// dict entry (Money, DolSign, Material #2065564020). The exact case the parser's uvAnim support was built on.
+const UVANIM_DFF = 'tests/custom/dff/uv-anim/visagesign04.dff';
+
+function uvAnimCell(): GridCell {
+  return {
+    cx: 0,
+    cy: 0,
+    hd: [{ id: 5000, interior: 0, lod: -1, modelName: 'visagesign04', position: [10, 20, 30], rotation: [0, 0, 0, 1] }],
+    lod: [],
+  };
+}
+
+function uvAnimDefs(): MapDefinitions {
+  const catalog = new Map<number, IdeObjectDef>();
+  catalog.set(5000, { drawDistance: 100, flags: 0, id: 5000, modelName: 'visagesign04', txdName: 'visagesign04' });
+
+  return {
+    carGenerators: [],
+    catalog,
+    imgDirs: [],
+    instances: [],
+    timedCatalog: new Map<number, IdeObjectDef>(),
+    txdParents: new Map<string, string>(),
+  };
+}
+
+function uvAnimFs(): AssetFileSystem {
+  const archive = openArchive(buildArchiveBuffer([{ data: readFileSync(UVANIM_DFF), name: 'visagesign04.dff' }]));
+
+  return {
+    get: (name: string) => archive.get(name.split('/').pop() ?? name),
+    getText: () => null,
+    has: (name: string) => archive.get(name.split('/').pop() ?? name) !== null,
+  } as unknown as AssetFileSystem;
+}
+
+describe('weldCell UV-scroll (B7·c)', () => {
+  describe('negative cases', () => {
+    it('welds a scroller STATICALLY with no registry (occluder weld) — no kind-4 objects, geometry still drawn', () => {
+      const fs = uvAnimFs();
+
+      const welded = weldCell(fs, uvAnimDefs(), uvAnimCell(), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      const cell = decodeOscell(welded!.bytes);
+      expect(cell.objects.filter((object) => object.kind === 4)).toHaveLength(0);
+      expect(cell.vertexCount).toBeGreaterThan(0);
+    });
+
+    it('never scrolls a LOD copy — a second ghost sign would crawl behind the HD one', () => {
+      const fs = uvAnimFs();
+      const registry = createUvAnimRegistry();
+      const cell: GridCell = { ...uvAnimCell(), hd: [], lod: uvAnimCell().hd };
+
+      const welded = weldCell(
+        fs,
+        uvAnimDefs(),
+        cell,
+        true,
+        new TexturePlanner(fs, new Map()),
+        [0, 0, 0],
+        undefined,
+        registry,
+      );
+
+      expect(decodeOscell(welded!.bytes).objects.filter((object) => object.kind === 4)).toHaveLength(0);
+      expect(registry.byName.size).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('routes each UVAnimDict material to a kind-4 objectTable draw and registers the animation globally', () => {
+      const fs = uvAnimFs();
+      const registry = createUvAnimRegistry();
+
+      const welded = weldCell(
+        fs,
+        uvAnimDefs(),
+        uvAnimCell(),
+        false,
+        new TexturePlanner(fs, new Map()),
+        [0, 0, 0],
+        undefined,
+        registry,
+      );
+
+      const cell = decodeOscell(welded!.bytes);
+      const scrollers = cell.objects.filter((object) => object.kind === 4);
+      expect(scrollers).toHaveLength(3);
+      expect(welded!.stats.uvAnimObjects).toBe(3);
+      const list = uvAnimList(registry);
+      expect(new Set(list.map((animation) => animation.name))).toEqual(
+        new Set(['DolSign', 'Material #2065564020', 'Money']),
+      );
+      // Each scroller's slot indexes the manifest list; the groups leave the merged bundle (object-owned).
+      const slots = scrollers.map((object) => object.params);
+      expect(new Set(slots).size).toBe(3);
+      for (const object of scrollers) {
+        expect(object.params).toBeGreaterThanOrEqual(0);
+        expect(object.params).toBeLessThan(list.length);
+        expect(object.groupCount).toBe(1);
+        expect(object.groupStart + object.groupCount).toBeLessThanOrEqual(cell.groups.length);
+      }
+    });
+
+    it('shares one slot across cells — SA dict names are global identifiers', () => {
+      const fs = uvAnimFs();
+      const registry = createUvAnimRegistry();
+
+      weldCell(
+        fs,
+        uvAnimDefs(),
+        uvAnimCell(),
+        false,
+        new TexturePlanner(fs, new Map()),
+        [0, 0, 0],
+        undefined,
+        registry,
+      );
+      const afterFirst = registry.byName.size;
+      weldCell(
+        fs,
+        uvAnimDefs(),
+        uvAnimCell(),
+        false,
+        new TexturePlanner(fs, new Map()),
+        [500, 0, 0],
+        undefined,
+        registry,
+      );
+
+      expect(afterFirst).toBe(3);
+      expect(registry.byName.size).toBe(3); // the second cell adds no new names
     });
   });
 });

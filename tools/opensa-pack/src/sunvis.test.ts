@@ -14,6 +14,7 @@ function bucket(vertices: number[], indices: number[], pipelineClass = 0): WeldB
     side: 0,
     textureArrayRef: 0,
     timed: null,
+    uvAnim: null,
     vertices,
   };
 }
@@ -39,6 +40,7 @@ function cell(buckets: WeldBucket[], lod = false): WeldedCell {
       particles: 0,
       skippedTimed: 0,
       timedObjects: 0,
+      uvAnimObjects: 0,
       vertices: 0,
     },
   };

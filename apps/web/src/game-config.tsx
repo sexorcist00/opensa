@@ -61,6 +61,11 @@ const SA_TELEPORTS: readonly Teleport[] = [
   // that once vanished when anim defs were skipped wholesale ("the blue hole", plan 041).
   { coords: [815.0, -1613.0, 20.0], label: 'LS - Burger Shot (spinning sign)' },
   { coords: [-1494.0, 1941.0, 58.0], label: 'Country - Windmill' },
+  // UV-scroll animation (074/18 B7·c): the actual placed scrollers (found by scanning the map for models whose
+  // DFF carries a UVAnimDict — the plan's skull sign `visagesign04` turned out to have ZERO world placements).
+  { coords: [2370.1, 2164.7, 12.8], label: 'LV - Scrolling sign (UV-scroll)' },
+  { coords: [2088.0, 1901.5, 13.5], label: 'LV - Vegas waterfall (UV-scroll)' },
+  { coords: [2105.5, 1916.3, 14.9], label: 'LV - Mirage sign (UV-scroll)' },
 ];
 
 /** A launchable game id. */
@@ -129,7 +134,9 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
     label: 'Run San Andreas [local only]',
     loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
     mainCharacter: 'BMYPOL1',
-    playerSpawn: [-1494.0, 1941.0, 58.0], // Country - Windmill: ~20 m clear of the tower (B7·b)
+    playerSpawn: [2031.09, 1539.7, 10.74], // LV vgsN_scrollsgn01 (UV-scroll, 074/18 B7·c): ~25 m south of the
+    // running-neon sign, dropped a couple metres above ground so it settles onto the road with the sign ahead.
+    // Restore to Ganton / Windmill once the field check is done.
     teleports: [...SA_TELEPORTS],
   },
 };

@@ -53,8 +53,16 @@ export interface CellHandle {
     y: number;
     z: number;
   }[];
-  /** ObjectTable draws (074/06 row 9) — outside the bundle; the frame gates them (timed by hour). */
-  objects: { groups: OscellGroup[]; kind: number; params: number }[];
+  /** ObjectTable draws (074/06 row 9) — outside the bundle; the frame gates them (timed by hour). kind-4
+   *  UV-scroll draws (B7·c) carry their OWN cell uniform + bind group: the origin is shared with the cell but
+   *  the uvAnim transform is rewritten each frame, so they cannot ride the immutable cell bind group. */
+  objects: {
+    bindGroup: GPUBindGroup;
+    groups: OscellGroup[];
+    kind: number;
+    params: number;
+    uvAnimUniform: GPUBuffer | null;
+  }[];
   /** 2dfx PARTICLE emitters (B6), WORLD-space. The HOST resolves the name against effects.fxp and builds
    *  the instance buffers; the cell only carries the anchors. */
   particles: { effectName: string; x: number; y: number; z: number }[];
@@ -161,7 +169,7 @@ export class CellStore {
     this.device.queue.writeBuffer(indexBuffer, 0, pad4(cell.indexData));
     const uniform = this.resources.createBuffer('uniform', {
       label: `${key}:cell`,
-      size: 16,
+      size: 32, // origin+flags (16) + uvAnim vec4 (B7·c) — identity for the bundle, per-object for kind-4 draws
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     // origin.w = per-cell channel FLAG BITS (small ints are exact in f32): bit 0 = baked sunVis, bit 1 =
@@ -170,7 +178,8 @@ export class CellStore {
     const cellFlags =
       ((cell.channelMask & OscellChannel.SUN_VIS) !== 0 ? 1 : 0) |
       ((cell.channelMask & OscellChannel.EMISSIVE) !== 0 ? 2 : 0);
-    this.device.queue.writeBuffer(uniform, 0, new Float32Array([...cell.origin, cellFlags]));
+    // Bundle geometry gets IDENTITY uvAnim (0,0,1,1) — a uniform-gated no-op in vsWorld.
+    this.device.queue.writeBuffer(uniform, 0, new Float32Array([...cell.origin, cellFlags, 0, 0, 1, 1]));
     const cellBindGroup = this.device.createBindGroup({
       entries: [{ binding: 0, resource: { buffer: uniform } }],
       label: `${key}:cell`,
@@ -217,11 +226,37 @@ export class CellStore {
         y: light.position[1] + cell.origin[1],
         z: light.position[2] + cell.origin[2],
       })),
-      objects: cell.objects.map((object: OscellObject) => ({
-        groups: cell.groups.slice(object.groupStart, object.groupStart + object.groupCount),
-        kind: object.kind,
-        params: object.params,
-      })),
+      objects: cell.objects.map((object: OscellObject) => {
+        // kind-4 UV-scroll (B7·c): its own cell uniform (origin shared, uvAnim rewritten per frame) + bind group.
+        // Every other kind rides the immutable cell bind group and stores no per-object GPU state.
+        if (object.kind !== 4) {
+          return {
+            bindGroup: cellBindGroup,
+            groups: cell.groups.slice(object.groupStart, object.groupStart + object.groupCount),
+            kind: object.kind,
+            params: object.params,
+            uvAnimUniform: null,
+          };
+        }
+        const uvAnimUniform = this.resources.createBuffer('uniform', {
+          label: `${key}:uvscroll:${object.params}`,
+          size: 32,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        this.device.queue.writeBuffer(uvAnimUniform, 0, new Float32Array([...cell.origin, cellFlags, 0, 0, 1, 1]));
+
+        return {
+          bindGroup: this.device.createBindGroup({
+            entries: [{ binding: 0, resource: { buffer: uvAnimUniform } }],
+            label: `${key}:uvscroll:${object.params}`,
+            layout: this.pipelines.cellLayout,
+          }),
+          groups: cell.groups.slice(object.groupStart, object.groupStart + object.groupCount),
+          kind: object.kind,
+          params: object.params,
+          uvAnimUniform,
+        };
+      }),
       particles: cell.particles.map((particle) => ({
         effectName: particle.effectName,
         x: particle.position[0] + cell.origin[0],
@@ -246,6 +281,12 @@ export class CellStore {
     this.resources.destroyBuffer('cellVertex', handle.vertexBuffer);
     this.resources.destroyBuffer('cellIndex', handle.indexBuffer);
     this.resources.destroyBuffer('uniform', handle.uniform);
+    // kind-4 UV-scroll draws own a per-object cell uniform (B7·c) — release each with the cell.
+    for (const object of handle.objects) {
+      if (object.uvAnimUniform) {
+        this.resources.destroyBuffer('uniform', object.uvAnimUniform);
+      }
+    }
     // The recorded bundle holds no destroyable GPU objects of its own; it dies with GC.
   }
 
