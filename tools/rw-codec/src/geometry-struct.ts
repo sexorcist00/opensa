@@ -10,6 +10,8 @@
  */
 
 const PRELIT_FLAG = 0x0008;
+const TEXTURED_FLAG = 0x0004;
+const TEXTURED2_FLAG = 0x0080;
 
 /** The decoded RpGeometry Struct — everything the Struct body holds, ready to re-encode. */
 export interface GeometryStruct {
@@ -41,7 +43,11 @@ interface StructTriangle {
 export function decodeGeometryStruct(bytes: Uint8Array): GeometryStruct {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const flags = view.getUint16(0, true);
-  const numUVLayers = bytes[2];
+  // The layer-count byte may legally be 0 with TEXTURED/TEXTURED2 carrying the truth (RW derives the count
+  // from the flags then; 2015-era exports like casroyale01_lvs ship this). Trusting the bare byte read the
+  // triangles out of UV data — the "Offset is outside the bounds of the DataView" failures.
+  const layerByte = bytes[2];
+  const numUVLayers = layerByte > 0 ? layerByte : flags & TEXTURED2_FLAG ? 2 : flags & TEXTURED_FLAG ? 1 : 0;
   const native = bytes[3];
   const numTriangles = view.getUint32(4, true);
   const numVertices = view.getUint32(8, true);

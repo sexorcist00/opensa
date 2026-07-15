@@ -47,5 +47,18 @@ describe('Geometry Struct codec', () => {
         expect(Buffer.from(encodeGeometryStruct(decodeGeometryStruct(data))).equals(Buffer.from(data))).toBe(true);
       }
     });
+
+    it('derives the UV-layer count from TEXTURED flags when the byte is 0 (casroyale01_lvs family)', () => {
+      // The 2015-era exports write the layer-count byte as 0 with TEXTURED carrying the truth — trusting
+      // the bare byte read the triangles out of UV data ("Offset is outside the bounds of the DataView").
+      const bytes = new Uint8Array(readFileSync('tests/custom/locked-models/casroyale01_lvs.dff'));
+      const structs = collectGeometryStructs(readRw(bytes).chunks);
+      expect(structs.length).toBe(1);
+      const decoded = decodeGeometryStruct(structs[0].data!);
+      expect(decoded.uvLayers).toHaveLength(1);
+      expect(decoded.numVertices).toBe(1418);
+      expect(decoded.numTriangles).toBe(1011);
+      expect(decoded.triangles.every((t) => t.a < 1418 && t.b < 1418 && t.c < 1418)).toBe(true);
+    });
   });
 });

@@ -83,8 +83,8 @@ existing depth + scene colour, composited UNDER the probe where it has no hit.
 
 The flat-panel problem is upstream of the renderer:
 
-- **normal smoothing / crease-angle recompute** for vehicle bodies (the deferred idea
-  `docs/ideas/0.4.0/plans/06-normals-smoothing` covers the world; vehicles need the same treatment and are a
+- **normal smoothing / crease-angle recompute** for vehicle bodies (the WORLD half shipped as
+  map-optimizer plans 020-023, `tools/map-optimizer/docs/plans/`; vehicles need the same treatment and are a
   better first target — the panels are large and the artefact is obvious);
 - optional **body normal maps** (procedural panel-line/orange-peel detail, or authored) — orange peel is a
   real property of car paint and reads instantly;

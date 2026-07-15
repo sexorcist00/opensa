@@ -1,6 +1,16 @@
 # 001 — Guard: world models arriving without normals
 
-**Status: planned.** Companion to the map-optimizer normals batch (its plans 020–023).
+**Status: SHIPPED 2026-07-15.** Companion to the map-optimizer normals batch (its plans 020–023).
+
+## Measured (rect 9,-7 — one Ganton cell, 2026-07-15)
+
+| input                                       | authored | computed       | guard           |
+| ------------------------------------------- | -------- | -------------- | --------------- |
+| `game-src/non-modified` (vanilla)           | 21       | **170 (89 %)** | ⚠ warning fires |
+| `NO_COMMIT/optimized` (map-optimizer build) | 176      | 15 (7.9 %)     | silent          |
+
+The conditioned map's residual 15 = models outside the optimizer's selection (its `resolve()` set is
+narrower than the converter's `resolveMap` + script IPL) — under the 10 % threshold by design.
 
 ## Problem
 
@@ -37,7 +47,9 @@ Cheap detection at weld time, no behaviour change:
 
 ## Tasks
 
-- [ ] Normals-provenance flag through clump preparation (parse-level `rw.normals == null`).
-- [ ] Counters + summary line + `report.json` field.
-- [ ] Threshold warning with the map-optimizer pointer.
-- [ ] Measure vanilla vs optimized map, record both numbers here (standing rule).
+- [x] Normals provenance at parse level (`geometry.normals == null` on the cached clump — no prepare-clump
+      threading needed; implemented as `convert.ts#countNormalsProvenance` over the rect's unique placed
+      models, clump parses shared with the weld via the asset cache).
+- [x] Counters + summary line (`normals authored=N computed=M`) + `report.json` field (`report.normals`).
+- [x] Threshold warning (>10 % computed) with the map-optimizer pointer (`cli.ts#printReport`).
+- [x] Measured vanilla vs optimized (table above).

@@ -1,7 +1,7 @@
 # 020 — Preserve authored normals (sanity-gated, auto-detected)
 
 **Status: BUILT 2026-07-15 (gate + point-repair + counters + tests; field A/B owed).** Implements option 1 of
-`docs/ideas/0.4.0/plans/06-normals-smoothing` (plans 020–023 are the normals batch).
+the 0.4.0 normals-smoothing idea (graduated here, idea doc deleted) (plans 020–023 are the normals batch).
 
 ## Measured (vanilla `game-src/non-modified`, 2026-07-15 probe — the phase-0 numbers)
 

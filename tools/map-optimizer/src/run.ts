@@ -43,6 +43,8 @@ export const DEFAULT_PASSES: OptimizerPasses = {
 
 export interface RunOptimizerOptions {
   concurrency?: number;
+  /** Per-model crease-angle overrides in degrees, lowercased names (plan 023A — the `--crease` list). */
+  creaseOverrides?: ReadonlyMap<string, number>;
   /** Label for the adapter (default: `gameDir` basename). */
   game?: string;
   gameDir: string;
@@ -66,8 +68,12 @@ export async function runOptimizer(options: RunOptimizerOptions): Promise<RunRep
   // Recreate smooth-normals with run-owned counters (plan 020) and, for OpenSA builds, normals creation
   // enabled (SSAO wants them, plan 015).
   const normalsStats = emptySmoothNormalsStats();
+  const creaseOverrides = options.creaseOverrides;
   plugins[plugins.findIndex((plugin) => plugin.name === 'smooth-normals')] = createSmoothNormals(
-    { addWhereAbsent: passes.addNormals },
+    {
+      addWhereAbsent: passes.addNormals,
+      ...(creaseOverrides ? { creaseFor: (model: string): number | undefined => creaseOverrides.get(model) } : {}),
+    },
     normalsStats,
   );
   // Prelight order (plan 019): level FIRST (whole-model shifts), seam-weld AFTER (the seam line gets the final

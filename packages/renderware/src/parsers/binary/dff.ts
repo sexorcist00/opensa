@@ -225,7 +225,13 @@ function parseGeometry(stream: BinaryStream, header: ChunkHeader): RWGeometry {
 
   stream.seek(struct.dataStart);
   const flags = stream.u16();
-  const numUVLayers = stream.u8();
+  // The layer-count BYTE may legally be 0 with the texture flags carrying the truth — RenderWare derives
+  // the count from TEXTURED/TEXTURED2 then (2015-era exports ship this; casroyale01_lvs). Trusting the
+  // bare byte skipped the UV block and read the TRIANGLES out of UV data — garbage indices that looked
+  // like an anti-rip lock (shard-field field bug, 2026-07-15).
+  const layerByte = stream.u8();
+  const numUVLayers =
+    layerByte > 0 ? layerByte : flags & GeometryFlag.TEXTURED2 ? 2 : flags & GeometryFlag.TEXTURED ? 1 : 0;
   stream.u8(); // native flag (unused: SA stores non-native data here)
   const numTriangles = stream.u32();
   const numVertices = stream.u32();

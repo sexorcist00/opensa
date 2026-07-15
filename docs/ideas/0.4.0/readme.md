@@ -88,12 +88,18 @@ Chain overview + code grounding + boundary vs 03-asi: [plans/05-lod-generators-e
 | B2  | [biome/zone density](plans/05-lod-generators-extended/b2-biome-zone-density.md)                      | zone×scatter join + slope proxy: desert cacti, forest bushes, mountain rocks | idea   |
 | B3  | [budget lift & integration](plans/05-lod-generators-extended/b3-budget-lift-integration.md)          | raise int16-era caps for the asi target; perf becomes the new limiter        | idea   |
 
-## Normals & smoothing groups in map-optimizer
+## Normals & smoothing groups in map-optimizer — SHIPPED (2026-07-15, idea plan deleted)
 
-Auto-recomputed normals produce a faceted, per-face-darkened world — and the 074 engine's real per-vertex
-sun makes it worse. Plan: preserve sane source normals, crease-angle recompute for the rest, split-topology
-smoothing inheritance, HD→LOD normal transfer. Full plan:
-[plans/06-normals-smoothing/readme.md](plans/06-normals-smoothing/readme.md).
+Graduated and built as map-optimizer plans
+[020](../../../tools/map-optimizer/docs/plans/020-preserve-authored-normals.md) (preserve authored normals,
+sanity-gated) · [021](../../../tools/map-optimizer/docs/plans/021-angle-weighted-normals.md) (corner-angle
+weighting) · [022](../../../tools/map-optimizer/docs/plans/022-two-sided-smooth-groups.md) (two-sided
+twin-quad smoothing) · [023](../../../tools/map-optimizer/docs/plans/023-crease-weld-robustness.md)
+(per-model crease overrides + neighbour-cell weld), plus the opensa-pack
+[001 missing-normals guard](../../../tools/opensa-pack/docs/plans/001-missing-normals-guard.md).
+**Leftover, unowned:** HD→LOD normal transfer (decimated LODs sample nearest-surface normals from their HD
+source instead of recomputing on the coarse mesh) — belongs to the `@opensa/lod-common` chain when someone
+picks it up.
 
 ## Vehicle driving physics overhaul (THE priority gameplay task)
 

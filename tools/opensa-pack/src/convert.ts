@@ -70,6 +70,10 @@ export interface ConvertReport {
   /** Smashable placements recorded (B7·a). */
   breakables: number;
   cells: { groups: number; indices: number; kbytes: number; key: string; vertices: number }[];
+  /** Normals provenance over the rect's unique placed models (opensa-pack plan 001): `computed` = at least
+   *  one triangle geometry ships NO normals block, so the runtime invented them — a conditioned
+   *  (map-optimizer) input has ~0, vanilla ~93 %. */
+  normals: { authored: number; computed: number };
   pakBytes: number;
   /** ObjectTable entries across cells (074/06 row 9: timed windows / props). */
   /** 2dfx PARTICLE emitters welded into the pak (B6). */
@@ -122,6 +126,7 @@ export async function convertDistrict(
     ao: null,
     breakables: 0,
     cells: [],
+    normals: countNormalsProvenance(fs, defs, options.rect, cellSize),
     pakBytes: 0,
     particles: 0,
     roadsigns: 0,
@@ -351,6 +356,48 @@ function collectWaterHeights(gridSink: WaterHeightGrid, welded: readonly { cell:
   }
 }
 
+/** `getClump` that swallows a missing/broken DFF (returns null) — the roadsign pre-pass skips it. */
+/**
+ * Normals provenance over the rect's unique placed models (opensa-pack plan 001): a model counts `computed`
+ * when ANY triangle geometry ships no normals block — the runtime then invents them (naive index average,
+ * the plan-17 polygon-patch cause). Clump parses are cached, so the weld re-uses every one of these reads.
+ */
+function countNormalsProvenance(
+  fs: AssetFileSystem,
+  defs: ReturnType<typeof resolveMap>,
+  rect: readonly [number, number, number, number],
+  cellSize: number,
+): { authored: number; computed: number } {
+  const [x0, y0, x1, y1] = normalizedRect(rect);
+  const [minX, minY, maxX, maxY] = [x0 * cellSize, y0 * cellSize, (x1 + 1) * cellSize, (y1 + 1) * cellSize];
+  const seen = new Set<number>();
+  let authored = 0;
+  let computed = 0;
+  for (const instance of defs.instances) {
+    const [ix, iy] = instance.position;
+    if (ix < minX || ix >= maxX || iy < minY || iy >= maxY || seen.has(instance.id)) {
+      continue;
+    }
+    seen.add(instance.id);
+    const def = defs.catalog.get(instance.id);
+    const clump = def ? tryGetClump(fs, def.modelName) : null;
+    if (!clump) {
+      continue;
+    }
+    const meshes = clump.geometries.filter((geometry) => geometry.triangles.length > 0);
+    if (meshes.length === 0) {
+      continue;
+    }
+    if (meshes.some((geometry) => !geometry.normals)) {
+      computed += 1;
+    } else {
+      authored += 1;
+    }
+  }
+
+  return { authored, computed };
+}
+
 /** Grid cells with content inside a rect — the progress/ETA weight (cheap: pure map lookups). */
 function countRectCells(
   grid: ReturnType<typeof buildWorldGrid>,
@@ -407,7 +454,6 @@ function normalizedRect(rect: readonly [number, number, number, number]): [numbe
   ];
 }
 
-/** `getClump` that swallows a missing/broken DFF (returns null) — the roadsign pre-pass skips it. */
 function tryGetClump(fs: AssetFileSystem, modelName: string): null | ReturnType<typeof getClump> {
   try {
     return getClump(fs, modelName);

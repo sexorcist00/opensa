@@ -37,6 +37,10 @@ export type SmoothNormalsPluginOptions = SmoothNormalsOptions & {
    *  lighting path and shades the whole map with giant triangle-interpolated fans. OpenSA builds opt in
    *  (`addNormals` pass) — its renderer wants normals for SSAO (plan 015). */
   addWhereAbsent?: boolean;
+  /** Per-model crease-angle override in degrees (plan 023A — organic statues want a higher threshold than
+   *  the 45° default; `sphinx01_lvs` was the first demanded entry). Resolved by lowercased model name;
+   *  `undefined` keeps `creaseAngleDeg`. */
+  creaseFor?: (modelName: string) => number | undefined;
   /** Failing-vertex fraction at or below which an authored mesh is point-repaired instead of fully rebuilt.
    *  Default 0.05. Set to a negative value to force the pre-020 behaviour (always rebuild). */
   repairFraction?: number;
@@ -72,8 +76,10 @@ export function createSmoothNormals(
     name: 'smooth-normals',
     transform(asset, context): void {
       const tally = { created: 0, preserved: 0, recomputed: 0, repairedMeshes: 0, repairedVerts: 0, split: 0 };
+      const crease = options.creaseFor?.(asset.name.toLowerCase());
+      const meshOptions = crease === undefined ? options : { ...options, creaseAngleDeg: crease };
       for (const mesh of asset.ir.meshes) {
-        const outcome = mesh.normals ? gateAuthoredMesh(mesh, options) : createWhereAbsent(mesh, options);
+        const outcome = mesh.normals ? gateAuthoredMesh(mesh, meshOptions) : createWhereAbsent(mesh, meshOptions);
         if (outcome.kind === 'created' || outcome.kind === 'recomputed') {
           tally[outcome.kind === 'created' ? 'created' : 'recomputed'] += 1;
           tally.split += outcome.split;

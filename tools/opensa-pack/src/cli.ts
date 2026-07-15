@@ -163,32 +163,7 @@ async function main(): Promise<void> {
   writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest));
   writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2));
 
-  const cellCount = report.cells.length;
-  const groupHistogram = report.cells.map((cell) => cell.groups);
-  const maxGroups = Math.max(0, ...groupHistogram);
-  const avgGroups = groupHistogram.reduce((sum, value) => sum + value, 0) / Math.max(1, cellCount);
-  console.log(
-    `[opensa-pack] done in ${((Date.now() - started) / 1000).toFixed(1)}s: ${cellCount} cell entries, ` +
-      `pak ${(report.pakBytes / (1024 * 1024)).toFixed(1)} MB, groups avg ${avgGroups.toFixed(1)} max ${maxGroups}, ` +
-      `textures pass=${report.textures.opaquePass} processed=${report.textures.processed} ` +
-      `colors=${report.textures.colors} dedup=${report.textures.dedup} arrays=${report.textures.arrays}, ` +
-      `timed objects=${report.timedObjects}, animated(live)=${report.animatedObjects}, ` +
-      `animated(static)=${report.animatedStatic}, particles=${report.particles}, ` +
-      `breakables=${report.breakables}, uv-scroll=${report.uvAnimObjects}/${report.uvAnimations}, ` +
-      `roadsigns=${report.roadsigns}`,
-  );
-  if (report.ao) {
-    console.log(
-      `[opensa-pack] ao bake: ${(report.ao.ms / 1000).toFixed(1)}s — ${report.ao.vertices} verts ` +
-        `(${report.ao.uniqueVertices} unique), ${report.ao.rays} rays vs ${report.ao.triangles} tris`,
-    );
-  }
-  if (report.sunVis) {
-    console.log(
-      `[opensa-pack] sunvis bake: ${(report.sunVis.ms / 1000).toFixed(1)}s — ${report.sunVis.vertices} verts ` +
-        `(${report.sunVis.uniqueVertices} unique), ${report.sunVis.rays} rays`,
-    );
-  }
+  printReport(report, started);
 }
 
 /** Parse a de-tiling list: plain names (one per line, `#` comments) OR skygfx `texdb.txt` lines
@@ -214,6 +189,45 @@ function parseStochasticList(text: string): Set<string> {
   }
 
   return names;
+}
+
+/** The end-of-convert summary block, incl. the plan-001 missing-normals guard. */
+function printReport(report: Awaited<ReturnType<typeof convertDistrict>>['report'], started: number): void {
+  const cellCount = report.cells.length;
+  const groupHistogram = report.cells.map((cell) => cell.groups);
+  const maxGroups = Math.max(0, ...groupHistogram);
+  const avgGroups = groupHistogram.reduce((sum, value) => sum + value, 0) / Math.max(1, cellCount);
+  console.log(
+    `[opensa-pack] done in ${((Date.now() - started) / 1000).toFixed(1)}s: ${cellCount} cell entries, ` +
+      `pak ${(report.pakBytes / (1024 * 1024)).toFixed(1)} MB, groups avg ${avgGroups.toFixed(1)} max ${maxGroups}, ` +
+      `textures pass=${report.textures.opaquePass} processed=${report.textures.processed} ` +
+      `colors=${report.textures.colors} dedup=${report.textures.dedup} arrays=${report.textures.arrays}, ` +
+      `timed objects=${report.timedObjects}, animated(live)=${report.animatedObjects}, ` +
+      `animated(static)=${report.animatedStatic}, particles=${report.particles}, ` +
+      `breakables=${report.breakables}, uv-scroll=${report.uvAnimObjects}/${report.uvAnimations}, ` +
+      `roadsigns=${report.roadsigns}, normals authored=${report.normals.authored} computed=${report.normals.computed}`,
+  );
+  const normalsTotal = report.normals.authored + report.normals.computed;
+  if (normalsTotal > 0 && report.normals.computed / normalsTotal > 0.1) {
+    // opensa-pack plan 001: computed normals = the runtime invents them (naive average, no crease model) —
+    // the plan-17 polygon-patch lighting bugs. A map-optimizer build ships normals on every world model.
+    console.warn(
+      `[opensa-pack] ⚠ ${report.normals.computed} of ${normalsTotal} models have no authored normals — ` +
+        `run the map through map-optimizer first (its plans 020-023) or expect polygon-patch lighting`,
+    );
+  }
+  if (report.ao) {
+    console.log(
+      `[opensa-pack] ao bake: ${(report.ao.ms / 1000).toFixed(1)}s — ${report.ao.vertices} verts ` +
+        `(${report.ao.uniqueVertices} unique), ${report.ao.rays} rays vs ${report.ao.triangles} tris`,
+    );
+  }
+  if (report.sunVis) {
+    console.log(
+      `[opensa-pack] sunvis bake: ${(report.sunVis.ms / 1000).toFixed(1)}s — ${report.sunVis.vertices} verts ` +
+        `(${report.sunVis.uniqueVertices} unique), ${report.sunVis.rays} rays`,
+    );
+  }
 }
 
 main().catch((error: unknown) => {

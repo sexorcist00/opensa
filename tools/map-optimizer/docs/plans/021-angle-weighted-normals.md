@@ -1,7 +1,7 @@
 # 021 — Angle-weighted normal accumulation
 
 **Status: BUILT 2026-07-15 (core + tests; field A/B owed together with 020's).** Implements the weighting
-half of option 2 of `docs/ideas/0.4.0/plans/06-normals-smoothing` (plans 020–023 are the normals batch).
+half of option 2 of the 0.4.0 normals-smoothing idea (graduated here, idea doc deleted) (plans 020–023 are the normals batch).
 
 Landed: `accumulateGroupNormals` weight = `area × cornerAngle` (`cornerAngle` from the two edges leaving the
 corner, acos-clamped; degenerate corners weigh 0). Both consumers get it (map-optimizer rebuild/point-repair
