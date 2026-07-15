@@ -16,7 +16,7 @@ import { config } from './optimizer.config';
 import { createApplyPrelitLevel } from './plugins/apply-prelit-level';
 import { createBakeVertexAo } from './plugins/bake-vertex-ao';
 import { createConformNight } from './plugins/conform-night';
-import { createSmoothNormals } from './plugins/smooth-normals';
+import { createSmoothNormals, emptySmoothNormalsStats } from './plugins/smooth-normals';
 import { createWeldSeamPrelit } from './plugins/weld-seam-prelit';
 
 /** Optional pipeline passes on top of the base model pipeline (weld/dedupe/prune/normals). */
@@ -63,12 +63,13 @@ export async function runOptimizer(options: RunOptimizerOptions): Promise<RunRep
   }
 
   const plugins = [...config.plugins];
-  if (passes.addNormals) {
-    // OpenSA build: recreate smooth-normals with normals creation enabled (SSAO wants them, plan 015).
-    plugins[plugins.findIndex((plugin) => plugin.name === 'smooth-normals')] = createSmoothNormals({
-      addWhereAbsent: true,
-    });
-  }
+  // Recreate smooth-normals with run-owned counters (plan 020) and, for OpenSA builds, normals creation
+  // enabled (SSAO wants them, plan 015).
+  const normalsStats = emptySmoothNormalsStats();
+  plugins[plugins.findIndex((plugin) => plugin.name === 'smooth-normals')] = createSmoothNormals(
+    { addWhereAbsent: passes.addNormals },
+    normalsStats,
+  );
   // Prelight order (plan 019): level FIRST (whole-model shifts), seam-weld AFTER (the seam line gets the final
   // word at shared borders), night LAST (the set derives from the final day). Level+night share one world
   // pre-pass (`buildPrelitContext`).
@@ -108,11 +109,18 @@ export async function runOptimizer(options: RunOptimizerOptions): Promise<RunRep
     pushSeamWeld(plugins, adapter);
   }
 
-  return runPipeline(
+  const report = await runPipeline(
     adapter,
     { ...config, concurrency: options.concurrency ?? config.concurrency, plugins },
     options.outDir,
   );
+  console.log(
+    `  normals — preserved ${normalsStats.preservedMeshes}, point-repaired ${normalsStats.repairedVertices} ` +
+      `vert(s) in ${normalsStats.repairedMeshes} mesh(es), recomputed ${normalsStats.recomputedMeshes}, ` +
+      `created ${normalsStats.createdMeshes} (plan 020)`,
+  );
+
+  return report;
 }
 
 function optimizeTextures(adapter: ReturnType<typeof createGtaSaAdapter>): void {

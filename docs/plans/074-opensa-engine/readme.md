@@ -106,7 +106,18 @@ signs — no new engine machinery: an IFP's bones ARE the clump's frames).
    3b. **map-optimizer normals batch** — queued by the user: map-optimizer plans 020 (preserve authored
    normals) · 021 (angle weighting) · 022 (two-sided groups, fixture-gated) · 023 (crease/weld knobs,
    fixture-gated) + opensa-pack plan 001 (missing-normals guard).
-4. Then the WebGL-prod `?bench=all` baseline → the C1 criteria run → flip. **C2 cleanup stays GATED** on an
+4. **09 COMPLETION — ACES + bloom + tiers (user decision 2026-07-15: the next engineering block).**
+   The "graphics transfer" gap audit found most of prod-modern already landed or homed (HDR 16f ✅,
+   MSAA4+A2C replaces SMAA ✅, godrays v1 ✅, LUT/config-API ✅, SSAO deliberately baked-instead) — the real
+   gap is that [09](09-postfx-aa.md) is unfinished: **ACES tonemap and bloom are missing**, and ACES is the
+   transfer curve the whole prod look is calibrated against. **RULE: no more look VERDICTS (plan 16 paint,
+   plan 17 lighting, the HD-realtime concept decision) until ACES+bloom land** — every constant judged
+   pre-tonemap is suspect (the B5r lesson generalized). Order inside: ACES (port the exact ACES_FILMIC
+   curve, screenshot parity) → bloom (dual-filter, prod threshold + the 071 night profile) → tier knobs.
+   Expected one-time cost: an env-constant re-judging round (sky/fog/moon were tuned against linear→sRGB).
+   Budget already set: post chain ≤ 3 ms at 2× retina. Plan 16's first rung is this item — it unblocks
+   vehicle paint automatically.
+5. Then the WebGL-prod `?bench=all` baseline → the C1 criteria run → flip. **C2 cleanup stays GATED** on an
    explicit command.
 
 **Standing debts before a parity sign-off:** vehicle paint (16) and map lighting (17) both look worse than

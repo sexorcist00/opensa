@@ -1,7 +1,22 @@
 # 020 — Preserve authored normals (sanity-gated, auto-detected)
 
-**Status: planned.** Implements option 1 of `docs/ideas/0.4.0/plans/06-normals-smoothing` (queued right after
-the current lighting bug; plans 020–023 are the normals batch).
+**Status: BUILT 2026-07-15 (gate + point-repair + counters + tests; field A/B owed).** Implements option 1 of
+`docs/ideas/0.4.0/plans/06-normals-smoothing` (plans 020–023 are the normals batch).
+
+## Measured (vanilla `game-src/non-modified`, 2026-07-15 probe — the phase-0 numbers)
+
+Of 11 462 world models the optimizer processes, **103 carry authored normals** on at least one triangle mesh
+(plan 17's "960 of 12 964" counted a wider model set). Gate verdicts at `repairFraction` 0.05:
+
+| verdict                            | models                                                                        |
+| ---------------------------------- | ----------------------------------------------------------------------------- |
+| preserved (all vertices pass)      | **83**                                                                        |
+| point-repaired (isolated failures) | **15** (369 verts total)                                                      |
+| mass failure → full recompute      | **5** (`lodport01_lvs`, `crack_int1`, `y_generator`, `cardboardbox`, `rack2`) |
+
+So 80 % of authored intent was being destroyed for nothing — now preserved byte-identical; actual garbage
+still rebuilds. Note plan 17 measured all stored normals as unit-length: the 20 flagged models fail on the
+WINDING check (normals pointing into the surface), which unit-length screening cannot see.
 
 ## Problem
 
@@ -44,17 +59,21 @@ The full-map numbers go into this doc after each phase (standing rule).
 
 ## Tasks
 
-- [ ] Phase 0 — forensic fixtures (shared with 021–023): 6–8 known locations from the field screenshot set,
-      dump source vs rebuilt normals per failure mode; at least one authored-smooth > 45° surface and one
-      dirty-export (zeroed block) model. Wire as `test:fixtures` manifest entries (real assets, not
-      hand-built).
-- [ ] Sanity gate + per-mesh verdict in the `smooth-normals` plugin (tool-kit core gains a
-      `validateNormals(positions, indices, normals)` helper; the plugin owns the policy).
-- [ ] Point-repair path (selective apply of group normals, no splits for passing vertices).
-- [ ] Counters in `context.log` + `RunReport`.
-- [ ] Verification: A/B the fixture set on the 074 engine (noon — per-vertex N·L is the harsh judge) AND the
-      three path; re-run the opensa-lod-generator harness fixtures (tool-kit core is shared — map-optimizer
-      and the LOD chain always ship in tandem).
+- [x] Phase 0 — map-wide verdict probe (numbers above). The screenshot-location fixture walk was replaced by
+      the statistical probe + the 5-model recompute sample; per-location fixtures move to 021/022 where the
+      look actually changes.
+- [x] Sanity gate + per-mesh verdict: `tool-kit/mesh/validate-normals.ts` (`validateNormals` — unit-ish +
+      winding agreement; two-sided cancellation/faceless = unverifiable → trusted), policy in the
+      `smooth-normals` plugin (`gateAuthoredMesh`, `repairFraction` default 0.05; negative = pre-020
+      always-rebuild).
+- [x] Point-repair path: `repairNormalsInPlace` in the tool-kit core (smooth-group normal of the first
+      incident face's group, applied ONLY to failing vertices, never splits).
+- [x] Counters: per-asset `context.log` line + run-level `SmoothNormalsStats` printed by `run.ts`
+      (`normals — preserved / point-repaired / recomputed / created`).
+- [x] Tests: `validate-normals.test.ts` (7) + plugin gate cases (5) — 196 green across
+      map-optimizer/tool-kit/opensa-lod-generator; tsc + eslint clean.
+- [ ] Verification in the field: rebuild the map + pak, A/B the 5 recomputed + a few preserved models on the
+      074 engine (noon N·L) — and re-run the in-game bench sweep (the 2026-07-15 ritual).
 
 ## Non-goals
 

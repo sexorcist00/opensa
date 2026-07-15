@@ -2,6 +2,16 @@
 
 [← chain](readme.md) · prev: [08 dynamics](08-dynamics.md) · next: [10 integration](10-integration-flip.md)
 
+> **PRIORITIZED 2026-07-15 (user): completing this plan is the next engineering block after the
+> map-optimizer normals batch.** The "graphics transfer" audit (prod ACES + SSAO + tonemapping + modern
+> pipeline vs 074) found the remaining real gap is HERE: ACES + bloom. **Look-verdict gate: no field
+> judgments on plan 16 (vehicle paint), plan 17 (map lighting) or the concept/hd-realtime-lod-baked
+> decision until ACES+bloom ship** — the prod look is calibrated against ACES, so every constant tuned
+> against today's linear→sRGB output is suspect (the B5r "check the structure exists first" lesson).
+> Expected one-time cost after landing: an env-constant re-judging round (sky/fog/moon tuned pre-tonemap).
+> SSAO stays out (baked AO/skyVis answers) unless the HD-realtime concept is adopted — its doc owns that
+> question.
+
 The post chain re-imagined for a renderer that OWNS its targets. Headline change vs WebGL prod: **MSAA 4× replaces
 SMAA** — simpler, better, and it's what unlocks alpha-to-coverage for the cutout world (the alpha fix's third leg).
 SSAO is expected to be REPLACED by the baked skyVis channel (07) — it only returns if screenshots demand it.

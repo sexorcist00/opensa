@@ -86,13 +86,77 @@ export function rebuildSmoothNormals(
   const canonId = weld(positions, options.weldEpsilon ?? DEFAULTS.weldEpsilon);
   const faces = faceData(positions, indices, triangleCount);
   const groupOf = smoothGroups(indices, triangleCount, canonId, faces, cosCrease);
-  const groupNormals = accumulateGroupNormals(indices, triangleCount, canonId, groupOf, faces);
+  const groupNormals = accumulateGroupNormals(positions, indices, triangleCount, canonId, groupOf, faces);
 
   return emitSplitVertices(positions.length / 3, indices, triangleCount, canonId, groupOf, groupNormals);
 }
 
-/** Area-weighted normal per `(welded vertex, group)`, keyed `${canonVertex}|${group}`. */
+/**
+ * Point-repair (plan 020): overwrite ONLY the `failing` vertices' normals with their smooth-group normal,
+ * keeping every other vertex byte-identical and NEVER splitting (the failing vertex gets the group of its
+ * first incident face — deterministic, face order is stable). Returns the number of vertices repaired
+ * (a failing vertex with no non-degenerate incident face keeps its value and is not counted).
+ */
+export function repairNormalsInPlace(
+  positions: Float32Array,
+  indices: ArrayLike<number>,
+  normals: Float32Array,
+  failing: readonly number[],
+  options: SmoothNormalsOptions = {},
+): number {
+  const triangleCount = Math.floor(indices.length / 3);
+  if (triangleCount === 0 || failing.length === 0) {
+    return 0;
+  }
+  const cosCrease = Math.cos(((options.creaseAngleDeg ?? DEFAULTS.creaseAngleDeg) * Math.PI) / 180);
+  const canonId = weld(positions, options.weldEpsilon ?? DEFAULTS.weldEpsilon);
+  const faces = faceData(positions, indices, triangleCount);
+  const groupOf = smoothGroups(indices, triangleCount, canonId, faces, cosCrease);
+  const groupNormals = accumulateGroupNormals(positions, indices, triangleCount, canonId, groupOf, faces);
+
+  // First non-degenerate incident face per FAILING vertex only (one pass, no full adjacency).
+  const wanted = new Set(failing);
+  const faceFor = new Map<number, number>();
+  for (let f = 0; f < triangleCount && faceFor.size < wanted.size; f += 1) {
+    if (faces.area[f] < 1e-9) {
+      continue;
+    }
+    for (let c = 0; c < 3; c += 1) {
+      const v = indices[f * 3 + c];
+      if (wanted.has(v) && !faceFor.has(v)) {
+        faceFor.set(v, f);
+      }
+    }
+  }
+
+  let repaired = 0;
+  for (const v of failing) {
+    const face = faceFor.get(v);
+    if (face === undefined) {
+      continue; // only-degenerate faces — no evidence to repair with
+    }
+    const sum = groupNormals.get(`${canonId[v]}|${groupOf[face]}`);
+    if (!sum) {
+      continue;
+    }
+    const [nx, ny, nz] = normalize(sum);
+    normals[v * 3] = nx;
+    normals[v * 3 + 1] = ny;
+    normals[v * 3 + 2] = nz;
+    repaired += 1;
+  }
+
+  return repaired;
+}
+
+/**
+ * Corner-angle × area weighted normal per `(welded vertex, group)`, keyed `${canonVertex}|${group}`
+ * (plan 021): area alone lets long thin triangles dominate — a 100 m road strip outvotes every local face at
+ * a junction corner and tilts the vertex normal along the strip. The corner angle cancels a sliver's huge
+ * area (its angle at the junction is tiny) while leaving equilateral fans unchanged.
+ */
 function accumulateGroupNormals(
+  positions: Float32Array,
   indices: ArrayLike<number>,
   triangleCount: number,
   canonId: Int32Array,
@@ -103,16 +167,32 @@ function accumulateGroupNormals(
   for (let f = 0; f < triangleCount; f += 1) {
     const group = groupOf[f];
     for (let c = 0; c < 3; c += 1) {
-      const key = `${canonId[indices[f * 3 + c]]}|${group}`;
+      const vertex = indices[f * 3 + c];
+      const weight = faces.area[f] * cornerAngle(positions, indices, f, c);
+      const key = `${canonId[vertex]}|${group}`;
       const sum = accum.get(key) ?? [0, 0, 0];
-      sum[0] += faces.normal[f * 3] * faces.area[f];
-      sum[1] += faces.normal[f * 3 + 1] * faces.area[f];
-      sum[2] += faces.normal[f * 3 + 2] * faces.area[f];
+      sum[0] += faces.normal[f * 3] * weight;
+      sum[1] += faces.normal[f * 3 + 1] * weight;
+      sum[2] += faces.normal[f * 3 + 2] * weight;
       accum.set(key, sum);
     }
   }
 
   return accum;
+}
+
+/** The triangle's interior angle (radians) at corner `c` — the two edges leaving that corner. */
+function cornerAngle(positions: Float32Array, indices: ArrayLike<number>, face: number, c: number): number {
+  const at = vertexAt(positions, indices[face * 3 + c]);
+  const next = sub(vertexAt(positions, indices[face * 3 + ((c + 1) % 3)]), at);
+  const prev = sub(vertexAt(positions, indices[face * 3 + ((c + 2) % 3)]), at);
+  const lengths = Math.hypot(next[0], next[1], next[2]) * Math.hypot(prev[0], prev[1], prev[2]);
+  if (lengths < 1e-12) {
+    return 0;
+  }
+  const cos = (next[0] * prev[0] + next[1] * prev[1] + next[2] * prev[2]) / lengths;
+
+  return Math.acos(Math.max(-1, Math.min(1, cos)));
 }
 
 function crossProduct(a: Vec3, b: Vec3): Vec3 {

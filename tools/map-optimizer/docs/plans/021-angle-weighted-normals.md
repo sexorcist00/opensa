@@ -1,7 +1,15 @@
 # 021 — Angle-weighted normal accumulation
 
-**Status: planned.** Implements the weighting half of option 2 of
-`docs/ideas/0.4.0/plans/06-normals-smoothing` (plans 020–023 are the normals batch).
+**Status: BUILT 2026-07-15 (core + tests; field A/B owed together with 020's).** Implements the weighting
+half of option 2 of `docs/ideas/0.4.0/plans/06-normals-smoothing` (plans 020–023 are the normals batch).
+
+Landed: `accumulateGroupNormals` weight = `area × cornerAngle` (`cornerAngle` from the two edges leaving the
+corner, acos-clamped; degenerate corners weigh 0). Both consumers get it (map-optimizer rebuild/point-repair
+
+- opensa-lod-generator via the shared core). Unit test: a 200 u road-strip sliver (4× the area) sharing a
+  junction edge with a 30°-tilted unit face — area-only lands at nz ≈ 0.99, angle×area keeps the tilt
+  (asserted analytically, not a snapshot). 337 tests green across the five consumer suites (no snapshot
+  re-baselining was needed — no existing fixture pinned exact rebuilt normals).
 
 ## Problem
 
@@ -30,9 +38,10 @@ same change, with before/after screenshots in this doc.
 
 ## Tasks
 
-- [ ] Corner-angle weight in `accumulateGroupNormals` (tool-kit core; both consumers get it).
-- [ ] Unit test: sliver + equilateral sharing a vertex — sliver no longer dominates (compare against the
-      analytic expectation, not a snapshot).
-- [ ] Re-baseline affected fixtures (map-optimizer + opensa-lod-generator harness — the two always ship in
-      tandem).
-- [ ] Field A/B on a road junction from the phase-0 fixture set (020); record numbers/screens here.
+- [x] Corner-angle weight in `accumulateGroupNormals` (tool-kit core; both consumers get it).
+- [x] Unit test: sliver + tilted face sharing a junction EDGE — sliver no longer dominates (analytic
+      expectation, not a snapshot).
+- [x] Re-baseline affected fixtures — none needed: no existing fixture pins exact rebuilt normals
+      (map-optimizer + lod suites green unchanged).
+- [ ] Field A/B on a road junction; record numbers/screens here (rides the same rebuild+reconvert+bench
+      round as 020).
