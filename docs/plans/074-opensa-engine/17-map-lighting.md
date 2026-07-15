@@ -1,8 +1,25 @@
 # 17 — Map lighting: broken normals, 2dfx lamps, and a frame-time regression
 
-**Status: OPEN. Round 1 was attempted on 2026-07-14 and FULLY REVERTED** (code back to `9a9d156`, pak
-reconverted). Nothing here shipped. Read the whole file before touching map lighting again — the measurements
-stand, and the failed attempts are the point of the document.
+**Status: OPEN — deliberately.** Round 1 was attempted on 2026-07-14 and FULLY REVERTED (code back to
+`9a9d156`, pak reconverted). Nothing here shipped. Read the whole file before touching map lighting again —
+the measurements stand, and the failed attempts are the point of the document.
+
+**2026-07-15 update — both symptoms are now EXPLAINED; the user chose to keep the bug open while a bigger
+architecture decision is thought through** (see [concept/hd-realtime-lod-baked.md](concept/hd-realtime-lod-baked.md),
+which carries the full Ten Green Bottles diagnosis):
+
+- **Symptom 1 (polygon patches): RESOLVED BY DATA.** The engine was benched on the UNCONDITIONED vanilla map;
+  feeding a map-optimizer build (smooth-group normals) removes the patches. Prod was "clean on the same data"
+  because the data was NOT the same. Durability work = map-optimizer plans 020–023 + opensa-pack plan 001
+  (missing-normals guard).
+- **Symptom 2 (2dfx neon range): DIAGNOSED, open.** Four distance states of Ten Green Bottles = corona
+  farClip floor 350 (far glow) · camera-ranged pool paints near · hard `LIGHT_POOL_REACH=130` cut (fade-out)
+  · unsorted `cells.all()` pool fill, cap 64 (side asymmetry). Open question №1 (why is prod clean) is
+  ANSWERED for this symptom: prod's `street-light.system.ts` has nearest-sort + hysteresis, range fade
+  0.72×90→90 u, ~0.4 s per-slot temporal ramp, and corona↔pool handover — we have none of the four.
+- **Tail owed regardless of the architecture decision:** the game host must restore AUTHORED corona farClip
+  (the 350 floor is a lab-camera accommodation — 06 row 13's "game integration restores the authored clip"
+  was never done).
 
 Owner step in the ladder: **B6.5**, between B6 (2dfx particles, done) and B7 (destruction/animation objects).
 The user has scoped **normal cleanup as its own later plan** — this one must first explain the delta with prod.

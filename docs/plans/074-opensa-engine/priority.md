@@ -153,12 +153,12 @@ REAL SA game via the ASI — a different target).
   that lives in the anim section purely because its sign spins, and both dropping it (the plan-041 "blue
   hole") and promoting it whole are bad trades. Ledger + lessons: [08](08-dynamics.md).
 
-- **B7·d PROCEDURAL CLUTTER — OPEN, see [19](19-procobj.md).** The countryside is bald: prod scatters and
-  renders grass/rocks/cacti (a per-category density lottery, 150/cell), the engine draws none of it. Found in
-  the field because the engine host was passing NONE of prod's clutter knobs, so the adapter collided every
-  blade of grass it never drew: **9 803 static bodies → 17 ms per Rapier step → 12 fps standing still**, with
-  the fixed-step spiral hiding the cause. Colliders are off on the engine host until the rendering lands (the
-  adapter's own rule: no invisible obstacles) — turn them back on TOGETHER, with prod's budget.
+- **B7·d PROCEDURAL CLUTTER — ✅ DONE + FIELD ✅ 2026-07-15, see [19](19-procobj.md) + [20](20-breakable-clutter.md).**
+  Host-generated + instanced (Option B): ONE memoized scatter drives render AND colliders (re-enabled, cap 150) so they cannot diverge; new engine `clutter` pipeline reuses the vehicle-model geometry; breakable
+  clutter (cacti/rocks/rubble) shatters via per-instance keyHash → `breakClutterInstance` degenerates the
+  instance matrix. The blocker for both was the browser VFS dropping never-IPL-placed procobj DFFs —
+  `procObjModelRefs` in `build-vfs.ts` fixed it. (The original 9 803-body / 17 ms-per-step spiral is
+  documented in [19](19-procobj.md).)
 
 - **B7·c UV-SCROLL animation — SHIPPED + FIELD-CONFIRMED 2026-07-15, CLOSED, see [18](18-uv-anim.md).** The
   crawling neon + Vegas waterfalls. Resolved the design fork NOT with a per-vertex slot (the packed 36 B vertex

@@ -97,8 +97,15 @@ signs — no new engine machinery: an IFP's bones ARE the clump's frames).
    2b. ~~**B7·d breakable clutter** — [20](20-breakable-clutter.md).~~ **SHIPPED + FIELD-CONFIRMED 2026-07-15,
    CLOSED**: cacti/rocks/rubble shatter on a car hit (per-instance keyHash → `breakClutterInstance` degenerates
    the instance matrix); welded props unaffected; body count bounded. Same VFS fix above was the blocker.
-3. **B6.5 map lighting** — [17](17-map-lighting.md). Round 1 REVERTED. Two blockers: explain why prod renders
-   the same map clean, and do NOT re-attempt per-pixel lamps without shrinking the pool first.
+3. **B6.5 map lighting** — [17](17-map-lighting.md). **UPDATE 2026-07-15: both symptoms EXPLAINED, bug left
+   OPEN deliberately** while the user thinks over an architecture rethink —
+   [concept/hd-realtime-lod-baked.md](concept/hd-realtime-lod-baked.md) (HD segment real-time light+shadows,
+   opensa-pack bakes ONLY LODs, pipeline = full pmb chain incl. opensa-lod-generator; nothing scheduled).
+   Patches = the UNCONDITIONED map (map-optimizer input fixes them); the Ten Green Bottles neon = pool
+   hard-cut/no-sort + corona 350 floor (full diagnosis in the concept doc and plan 17). Do not fix piecemeal.
+   3b. **map-optimizer normals batch** — queued by the user: map-optimizer plans 020 (preserve authored
+   normals) · 021 (angle weighting) · 022 (two-sided groups, fixture-gated) · 023 (crease/weld knobs,
+   fixture-gated) + opensa-pack plan 001 (missing-normals guard).
 4. Then the WebGL-prod `?bench=all` baseline → the C1 criteria run → flip. **C2 cleanup stays GATED** on an
    explicit command.
 

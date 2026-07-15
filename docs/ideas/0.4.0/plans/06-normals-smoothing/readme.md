@@ -1,5 +1,16 @@
 # 06 — Normals & smoothing groups in map-optimizer (kill the faceted look)
 
+> **GRADUATED into concrete plans (2026-07-15)** — queued right after the current lighting bug:
+> [map-optimizer 020 preserve authored normals](../../../../../tools/map-optimizer/docs/plans/020-preserve-authored-normals.md) ·
+> [021 angle-weighted accumulation](../../../../../tools/map-optimizer/docs/plans/021-angle-weighted-normals.md) ·
+> [022 two-sided smooth groups](../../../../../tools/map-optimizer/docs/plans/022-two-sided-smooth-groups.md) ·
+> [023 crease/weld robustness](../../../../../tools/map-optimizer/docs/plans/023-crease-weld-robustness.md) ·
+> [opensa-pack 001 missing-normals guard](../../../../../tools/opensa-pack/docs/plans/001-missing-normals-guard.md).
+> Context update: the 2026-07-15 field round proved the mechanism — the vanilla map converted directly
+> (naive runtime normals) showed polygon light/dark patches; the same map through map-optimizer fixed them.
+> Option 4 (HD→LOD transfer) stays here, unowned. map-optimizer and opensa-lod-generator always ship in
+> tandem (shared tool-kit core); direct map-optimizer runs are a time-saving shortcut only.
+
 **Problem (user report, 2026-07-12):** map-optimizer's auto-computed normals and smoothing behave badly —
 under real lighting the world shows visible polygon facets, per-face darkening and hard creases where the
 surface should read smooth. **This got MORE visible, not less, with the 074 own engine**: its hybrid sun
