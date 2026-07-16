@@ -10,11 +10,26 @@
  * into vertex colours — with geometry now shared across instances that would force one geometry copy per
  * colour combination, and every parked car on a block would come out the same colour.)
  */
-/** Per-vertex lamp tag (`meta.w`): the shader needs to know a lamp texel from a body texel. */
+/** Per-vertex lamp tag (`meta.w` LOW nibble): the shader needs to know a lamp texel from a body texel. */
 export const LampTag = {
   head: 1,
   none: 0,
   tail: 2,
+} as const;
+
+/**
+ * Per-vertex material CLASS (`meta.w` HIGH nibble — 074/16 field round 2): paint, chrome and glass are not
+ * the same surface and must reflect differently. Classified from the DFF material at build time:
+ * carcols paint slots / the `xvehicleenv*` env map → paint (clearcoat + flakes); a chrome texture or the
+ * `vehicleenvmap*` env map → chrome (near-mirror, the material's OWN sphere map supplies the authentic SA
+ * tint); translucent → glass (sharp, no flakes); `_vlo` LOD meshes, lamps and coefficient-0 materials
+ * (tyres, rubber, trim) → matte — excluded from reflections entirely.
+ */
+export const MaterialClass = {
+  chrome: 2,
+  glass: 3,
+  matte: 0,
+  paint: 1,
 } as const;
 
 export const PaintSlot = {
@@ -78,7 +93,7 @@ export interface VehicleModelData {
   dummies: readonly VehicleDummy[];
   indices: Uint16Array;
   /** Per-vertex slots: x = texture layer, y = lamps-on twin layer (0 = none), z = {@link PaintSlot},
-   *  w = {@link LampTag}. */
+   *  w = {@link LampTag} (low nibble) | {@link MaterialClass} << 4 (high nibble). */
   meta: Uint8Array;
   normals: Float32Array;
   parts: readonly VehicleModelPart[];
@@ -110,6 +125,9 @@ export interface VehicleModelPart {
 }
 
 export interface VehicleModelSubmesh {
+  /** Model-space centroid of the submesh's triangles (074/16 round 6) — the engine sorts TRANSLUCENT
+   *  submeshes back-to-front by this each frame, or the steering wheel draws over the windscreen. */
+  center: [number, number, number];
   /** Pairing key for the `_ok`/`_dam` twins (`door_lf`, `bonnet`, …); null when the part cannot deform. */
   damageGroup: null | string;
   indexCount: number;

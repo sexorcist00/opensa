@@ -23,7 +23,7 @@ import type {
 
 import { frameWorldTransform, rotationToQuat } from '../mesh/frame-transform';
 import { groupTrianglesByMaterial } from '../mesh/prepare-clump';
-import { LampTag, PaintSlot } from './types';
+import { LampTag, MaterialClass, PaintSlot } from './types';
 
 /** SA per-lamp marker colours on the `vehiclelights*` atlas: they say WHICH lamp a material is — engine
  *  metadata, NEVER rendered (else garish green/yellow lamp patches). */
@@ -279,21 +279,17 @@ function appendGeometry(
       return;
     }
     const material = rw.materials[materialIndex];
-    const lamp = lampTag(material);
-    const paint = lamp === null ? paintSlot(material) : PaintSlot.none;
-    // Marker colours (lamp IDs and carcols slots) are METADATA and must never reach a pixel: both render
-    // white and carry their meaning elsewhere (the lamp tag / the paint slot). Leaving the marker in the
-    // vertex colour would paint the car marker-green the moment a slot lookup missed.
-    const marker = lamp !== null || paint !== PaintSlot.none;
-    const color: [number, number, number, number] = marker
-      ? [255, 255, 255, material.color[3]]
-      : [material.color[0], material.color[1], material.color[2], material.color[3]];
-    const layer = textures.resolve(material);
-    const nightLayer = textures.resolveNightTwin(material);
-    const reflect = reflectionOf(material, textures);
+    const surface = materialSurface(material, textures, kind);
+    const { color, klass, lamp, layer, nightLayer, paint, reflect } = surface;
     const indexOffset = scratch.indices.length;
+    const center: [number, number, number] = [0, 0, 0];
     for (const tri of tris) {
       scratch.indices.push(baseVertex + tri.a, baseVertex + tri.b, baseVertex + tri.c);
+      for (const corner of [tri.a, tri.b, tri.c]) {
+        center[0] += rw.positions[corner * 3];
+        center[1] += rw.positions[corner * 3 + 1];
+        center[2] += rw.positions[corner * 3 + 2];
+      }
       for (const corner of [tri.a, tri.b, tri.c]) {
         colorFill[corner * 4] = color[0];
         colorFill[corner * 4 + 1] = color[1];
@@ -302,24 +298,23 @@ function appendGeometry(
         metaFill[corner * 4] = layer;
         metaFill[corner * 4 + 1] = nightLayer;
         metaFill[corner * 4 + 2] = paint;
-        metaFill[corner * 4 + 3] = lamp === null ? LampTag.none : LampTag[lamp];
+        metaFill[corner * 4 + 3] = (lamp === null ? LampTag.none : LampTag[lamp]) | (klass << 4);
         reflectFill[corner * 4] = reflect[0];
         reflectFill[corner * 4 + 1] = reflect[1];
         reflectFill[corner * 4 + 2] = reflect[2];
         reflectFill[corner * 4 + 3] = reflect[3];
       }
     }
+    const corners = tris.length * 3;
     scratch.submeshes.push({
+      center: [center[0] / corners, center[1] / corners, center[2] / corners],
       damageGroup,
       indexCount: tris.length * 3,
       indexOffset,
       kind,
       lamp,
       part,
-      // Glass carries its opacity in the MATERIAL colour; body decals (scratch/crack overlays, badges) carry
-      // it in the TEXTURE's texels. Both must blend — a decal drawn opaque paints its transparent (black)
-      // texels straight over the door.
-      translucent: color[3] < 250 || textures.hasAlpha(material),
+      translucent: surface.translucent,
     });
   });
   scratch.colors.push(...colorFill);
@@ -461,6 +456,101 @@ function lampTag(material: RWMaterial): 'head' | 'tail' | null {
   }
 
   return LAMP_MARKERS.get(`${material.color[0]},${material.color[1]},${material.color[2]}`) ?? null;
+}
+
+/**
+ * Material CLASS (074/16 field round 2 — see {@link MaterialClass}): which reflection model a texel gets.
+ * Signals, in priority order:
+ *   - `_vlo` LOD meshes, lamps, non-reflective materials (env coefficient 0 — SA's own "not reflective"
+ *     marker on tyres/rubber/trim) → MATTE, excluded from reflections entirely;
+ *   - translucency → GLASS (sharp mirror, no flakes; the blend pipeline);
+ *   - a chrome base texture or the `vehicleenvmap*` env map (SA's chrome/glass sphere photo) → CHROME;
+ *   - carcols paint slots and the `xvehicleenv*` env map (SA's painted-horizon sphere map) → PAINT.
+ * Custom cars ship their OWN chrome/env textures — the texture-name check catches the common `chrome`
+ * naming, and anything env-mapped that matches nothing else stays PAINT (its own sphere map still supplies
+ * the pattern).
+ */
+/**
+ * Material CLASS (074/16 rounds 2–4 — see {@link MaterialClass}): which reflection model a texel gets.
+ * Priority: lod/lamps/non-reflective (env coefficient 0 — SA's "not reflective" marker on tyres/trim) →
+ * MATTE; translucent → GLASS; carcols slots → PAINT; UNTEXTURED neutral-grey env-mapped → CHROME; any
+ * other env-mapped material → PAINT.
+ *
+ * Deliberately NO texture/env NAME matching (user directive, round 4): mods combine arbitrary names, so
+ * the only chrome signal is a pure DATA one — bare grey + an env map is how the surveyed ./1 mods author
+ * bumpers and trim (rgb ≈ 153, no base texture). Textured chrome sheets simply stay PAINT: under the neo
+ * reflection model (one LERP law for every material) the difference is only the mip and the coefficient
+ * floor, and their grey texture reads metallic through the same formula — exactly how skygfx treats them.
+ */
+function materialClass(
+  material: RWMaterial,
+  flags: {
+    kind: VehicleModelSubmesh['kind'];
+    lamp: null | string;
+    paint: number;
+    reflective: boolean;
+    translucent: boolean;
+  },
+): number {
+  if (flags.kind === 'lod' || flags.lamp !== null || !flags.reflective) {
+    return MaterialClass.matte;
+  }
+  if (flags.translucent) {
+    return MaterialClass.glass;
+  }
+  if (flags.paint !== PaintSlot.none) {
+    return MaterialClass.paint; // carcols marker is authoritative
+  }
+  const [r, g, b] = material.color;
+  const bareMetal = material.texture === null && Math.max(r, g, b) - Math.min(r, g, b) <= 20 && (r + g + b) / 3 >= 90;
+
+  return bareMetal ? MaterialClass.chrome : MaterialClass.paint;
+}
+
+/**
+ * Everything one MATERIAL contributes to its vertices/submesh, resolved once per triangle group.
+ * Marker colours (lamp IDs and carcols slots) are METADATA and must never reach a pixel: both render white
+ * and carry their meaning elsewhere (the lamp tag / the paint slot). Glass carries its opacity in the
+ * MATERIAL colour; body decals (scratch/crack overlays, badges) carry it in the TEXTURE's texels — both
+ * must blend, or a decal's transparent black texels paint straight over the door.
+ */
+function materialSurface(
+  material: RWMaterial,
+  textures: VehicleTextures,
+  kind: VehicleModelSubmesh['kind'],
+): {
+  color: [number, number, number, number];
+  klass: number;
+  lamp: 'head' | 'tail' | null;
+  layer: number;
+  nightLayer: number;
+  paint: number;
+  reflect: [number, number, number, number];
+  translucent: boolean;
+} {
+  const lamp = lampTag(material);
+  const paint = lamp === null ? paintSlot(material) : PaintSlot.none;
+  const marker = lamp !== null || paint !== PaintSlot.none;
+  const color: [number, number, number, number] = marker
+    ? [255, 255, 255, material.color[3]]
+    : [material.color[0], material.color[1], material.color[2], material.color[3]];
+  // Layer allocation ORDER is load-bearing: the base texture must resolve BEFORE the env map, or the env
+  // texture can land on layer 0 — and `reflect.x == 0` is the "not reflective" sentinel.
+  const layer = textures.resolve(material);
+  const nightLayer = textures.resolveNightTwin(material);
+  const reflect = reflectionOf(material, textures);
+  const translucent = color[3] < 250 || textures.hasAlpha(material);
+
+  return {
+    color,
+    klass: materialClass(material, { kind, lamp, paint, reflective: reflect[1] > 0, translucent }),
+    lamp,
+    layer,
+    nightLayer,
+    paint,
+    reflect,
+    translucent,
+  };
 }
 
 function paintSlot(material: RWMaterial): number {

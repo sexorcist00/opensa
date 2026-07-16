@@ -134,6 +134,10 @@ async function boot(
       config.graphics.bloom.intensity = bloomParam;
     }
   }
+  // `?probe=0` — the 074/16 env-probe A/B: keeps reflections on the analytic-sky fallback.
+  const probeEnabled = params.get('probe') !== '0';
+  // `?probeview=1` — replace the frame with the probe cube panorama (orientation/content debug).
+  const probeViewEnabled = params.get('probeview') === '1';
   // Tier knob (074/09): `?scale=0.75` render scale (live). MSAA/bloomq knobs were field-tested and
   // dropped (WebGPU allows sampleCount 1|4 only; bloom levels saved ~0.05 ms).
   const scaleParam = Number(params.get('scale') ?? Number.NaN);
@@ -412,7 +416,9 @@ async function boot(
   let vehiclesMs = 0;
   // In-game bench state (074/10 B3 tail): the loop consumes these; the runner below owns them.
   let benchCamera: null | { eye: [number, number, number]; target: [number, number, number] } = null;
-  let benchSamples: null | { draws: number; frameMs: number; gpuMs: number; postMs: number; submitMs: number }[] = null;
+  let benchSamples:
+    | null
+    | { draws: number; frameMs: number; gpuMs: number; postMs: number; probeMs: number; submitMs: number }[] = null;
   let lastStream: null | StreamStats = null;
   const runFixedSteps = (pending: number): number => {
     let steps = 0;
@@ -567,6 +573,8 @@ async function boot(
       up: [0, 1, 0],
     };
     [cameraEye[0], cameraEye[1], cameraEye[2]] = camera.eye;
+    engine.probeCenter = probeCenterOf(probeEnabled, focus);
+    engine.probeView = probeViewEnabled;
     // Live tier knob (074/09): the config value drives the target size; the engine rebuilds on change.
     engine.renderScale = config.graphics.renderScale;
     const stats = engine.frame(camera);
@@ -575,7 +583,7 @@ async function boot(
     if (dt * 1000 > SLOW_FRAME_MS) {
       // eslint-disable-next-line no-console
       console.log(
-        `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · post ${stats.gpuPostMs.toFixed(2)} · submit ${stats.submitMs.toFixed(2)} · ` +
+        `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · post ${stats.gpuPostMs.toFixed(2)} · probe ${stats.gpuProbeMs.toFixed(2)} · submit ${stats.submitMs.toFixed(2)} · ` +
           `fixed ${fixedMs.toFixed(1)} (${fixedSteps} steps: controller ${controllerMs.toFixed(1)} + physics ${physicsMs.toFixed(1)}) · ` +
           `collision ${collisionMs.toFixed(1)} · vehicles ${vehiclesMs.toFixed(1)} · ` +
           `ped ${pedMs.toFixed(2)} · anim ${animMs.toFixed(2)} · draws ${stats.drawsRecorded} · cells ${streamStats.loadedCells} · ` +
@@ -587,6 +595,7 @@ async function boot(
       frameMs: dt * 1000,
       gpuMs: stats.gpuPassMs,
       postMs: stats.gpuPostMs,
+      probeMs: stats.gpuProbeMs,
       submitMs: stats.submitMs,
     });
 
@@ -602,7 +611,7 @@ async function boot(
     hud.textContent =
       `OWN ENGINE (074/10 B3) — walk: WASD, run: Shift, jump: Space, click = capture mouse (Esc frees)\n` +
       `frame   ${frameAvg.toFixed(2)} ms (${(1000 / Math.max(frameAvg, 0.001)).toFixed(0)} fps)\n` +
-      `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${stats.gpuPassMs > 0 ? stats.gpuPassMs.toFixed(2) : 'n/a'} ms · post ${stats.gpuPostMs > 0 ? stats.gpuPostMs.toFixed(2) : 'n/a'} ms · draws ${stats.drawsRecorded}\n` +
+      `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${stats.gpuPassMs > 0 ? stats.gpuPassMs.toFixed(2) : 'n/a'} ms · post ${stats.gpuPostMs > 0 ? stats.gpuPostMs.toFixed(2) : 'n/a'} ms · probe ${stats.gpuProbeMs > 0 ? stats.gpuProbeMs.toFixed(2) : 'off'} ms · draws ${stats.drawsRecorded}\n` +
       `stream  ${streamStats.loadedCells} cells, ${streamStats.pendingCells} pending · residency ${(stats.residencyBytes / 1048576).toFixed(0)} MB\n` +
       `GTA     ${gta[0].toFixed(1)}, ${gta[1].toFixed(1)}, ${gta[2].toFixed(1)} · ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')}\n` +
       `debug   vel ${Velocity.x[playerEid].toFixed(2)},${Velocity.y[playerEid].toFixed(2)},${Velocity.z[playerEid].toFixed(2)} ` +
@@ -668,6 +677,7 @@ async function boot(
       const avgMs = avg(sortedMs);
       const gpuSamples = samples.filter((sample) => sample.gpuMs > 0).map((sample) => sample.gpuMs);
       const postSamples = samples.filter((sample) => sample.postMs > 0).map((sample) => sample.postMs);
+      const probeSamples = samples.filter((sample) => sample.probeMs > 0).map((sample) => sample.probeMs);
       const report = {
         avgDrawCalls: Math.round(avg(samples.map((sample) => sample.draws))),
         avgMs: Number(avgMs.toFixed(3)),
@@ -677,6 +687,7 @@ async function boot(
         gpuMs: {
           pass: Number(avg(gpuSamples).toFixed(3)),
           post: Number(avg(postSamples).toFixed(3)),
+          probe: Number(avg(probeSamples).toFixed(3)),
           submit: Number(avg(samples.map((sample) => sample.submitMs)).toFixed(3)),
         },
         key: scene.key,
@@ -780,6 +791,15 @@ function loadWaterTexture(
   }
 
   return null;
+}
+
+/**
+ * Env-probe centre (074/16 step 2): the FOLLOWED thing — the seated car while driving, the player on foot
+ * (nearby parked cars share the same probe, like prod's camera-centred cube). Lifted ~1 unit so the ground
+ * plane doesn't split the cube in half at the centre. `?probe=0` keeps the analytic-sky fallback.
+ */
+function probeCenterOf(enabled: boolean, focus: readonly [number, number, number]): [number, number, number] | null {
+  return enabled ? [focus[0], focus[1] + 1.0, focus[2]] : null;
 }
 
 /** GTA Z-up point → engine Y-up: (x, y, z) → (x, z, −y). */

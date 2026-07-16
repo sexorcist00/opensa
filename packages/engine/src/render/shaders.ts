@@ -345,7 +345,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -812,6 +813,83 @@ fn fsPost(in: PostOut) -> @location(0) vec4f {
   return vec4f(col, 1.0);
 }
 `,
+  /**
+   * Environment-probe mip pass (074/16 step 2): a fullscreen triangle whose single BILINEAR tap at the
+   * destination texel centre is an exact 2x2 box filter between power-of-two cube-face mips. Run per face
+   * per level, it builds the prefiltered-roughness ladder the rigid clearcoat samples with
+   * `textureSampleLevel` — the own-engine twin of prod's `generateMipmaps` cube probe.
+   */
+  probe: /* wgsl */ `
+@group(0) @binding(0) var probeInput: texture_2d<f32>;
+@group(0) @binding(1) var probeInputSampler: sampler;
+
+struct ProbeMipOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+};
+
+@vertex
+fn vsProbeMip(@builtin(vertex_index) index: u32) -> ProbeMipOut {
+  var corners = array<vec2f, 3>(vec2f(-1.0, -3.0), vec2f(3.0, 1.0), vec2f(-1.0, 1.0));
+  let corner = corners[index];
+  var out: ProbeMipOut;
+  out.clip = vec4f(corner, 0.0, 1.0);
+  out.uv = vec2f(corner.x * 0.5 + 0.5, 0.5 - corner.y * 0.5);
+  return out;
+}
+
+@fragment
+fn fsProbeMip(in: ProbeMipOut) -> @location(0) vec4f {
+  return textureSampleLevel(probeInput, probeInputSampler, in.uv, 0.0);
+}
+
+// Face blit, V-FLIPPED: cube faces are stored in the GL convention (t = 0 at the face's TOP direction),
+// but a WebGPU render pass puts NDC y = +1 in row 0 — rendering straight into the face would come out
+// upside-down, and fixing it in the projection would flip the triangle winding and break back-face culling
+// inside the recorded bundles. The flip lives here instead: a pure-rotation camera renders the face, the
+// resolve lands in a scratch target, and this pass writes it into the cube the right way up.
+@fragment
+fn fsProbeBlit(in: ProbeMipOut) -> @location(0) vec4f {
+  return textureSampleLevel(probeInput, probeInputSampler, vec2f(in.uv.x, 1.0 - in.uv.y), 0.0);
+}
+`,
+  /**
+   * Probe DEBUG view (074/16): replaces the frame with the cube sampled along the camera ray — look around
+   * and the probe's content must match the world's orientation exactly. This is how the face table is
+   * verified by EYE instead of by convention-table archaeology. Lab/game: append the probeview URL flag.
+   */
+  'probe-view': /* wgsl */ `
+#include <frame>
+
+@group(1) @binding(0) var probeViewCube: texture_cube<f32>;
+@group(1) @binding(1) var probeViewSampler: sampler;
+
+struct ProbeViewOut {
+  @builtin(position) clip: vec4f,
+  @location(0) ndc: vec2f,
+};
+
+@vertex
+fn vsProbeView(@builtin(vertex_index) index: u32) -> ProbeViewOut {
+  var corners = array<vec2f, 3>(vec2f(-1.0, -3.0), vec2f(3.0, 1.0), vec2f(-1.0, 1.0));
+  let corner = corners[index];
+  var out: ProbeViewOut;
+  // Reversed-Z near plane — the debug view overdraws everything.
+  out.clip = vec4f(corner, 1.0, 1.0);
+  out.ndc = corner;
+  return out;
+}
+
+@fragment
+fn fsProbeView(in: ProbeViewOut) -> @location(0) vec4f {
+  let near = frame.invViewProj * vec4f(in.ndc, 1.0, 1.0);
+  let far = frame.invViewProj * vec4f(in.ndc, 0.0, 1.0);
+  let dir = normalize(far.xyz / far.w - near.xyz / near.w);
+  // Left half = sharp mip, right half = the roughness mip the paint samples — both must look like the world.
+  let lod = select(0.0, 1.2, in.ndc.x > 0.0);
+  return vec4f(textureSampleLevel(probeViewCube, probeViewSampler, dir, lod).rgb, 1.0);
+}
+`,
   rigid: /* wgsl */ `
 #include <frame>
 
@@ -840,7 +918,7 @@ struct RigidVsOut {
   @location(3) color: vec4f,
   @location(4) @interpolate(flat) layer: u32,
   @location(5) @interpolate(flat) nightLayer: u32,
-  // slots.w: 0 = body, 1 = head lamp, 2 = tail lamp; lamps = [headlights, brakes, config intensity].
+  // slots.w LOW nibble: 0 = body, 1 = head lamp, 2 = tail lamp; lamps = [headlights, brakes, intensity].
   @location(6) @interpolate(flat) lampTag: u32,
   @location(7) @interpolate(flat) lamps: vec3f,
   @location(8) @interpolate(flat) envLayer: u32,
@@ -849,6 +927,14 @@ struct RigidVsOut {
   // MODEL-space position: the flake hash is anchored to the CAR, so the sparkle rides with it. A world-space
   // hash would make the flakes crawl across the paint as the car drives.
   @location(10) local: vec3f,
+  // slots.w HIGH nibble (074/16 round 2): the material CLASS — 0 matte, 1 paint, 2 chrome, 3 glass.
+  @location(11) @interpolate(flat) matClass: u32,
+  // Light-pool response, computed per VERTEX (074/16 round 5 — the night-fps fix): the original neo car
+  // pipe evaluates ALL of its lighting in the vertex shader, and a per-PIXEL pool loop on a close-up car
+  // at 2× retina was the difference between 120 and 60 fps at night. Cars are 3–5 k verts — free there.
+  @location(12) poolDiffuse: vec3f,
+  // Pool specular (neo pass 2's point-light half), already scaled by the material's specular level.
+  @location(13) poolSpec: vec3f,
 };
 
 @group(1) @binding(0) var<storage, read> rigidMatrices: array<mat4x4f>;
@@ -861,6 +947,11 @@ struct RigidVsOut {
 // Per-instance lamp state (074/08 B5 step 5): x = headlights on, y = braking. Was a GLOBAL day/night gate,
 // which lit every parked car in the city at once; only the DRIVEN car should light up.
 @group(1) @binding(4) var<storage, read> rigidLamp: array<vec4f>;
+// The scene environment probe (074/16 step 2): a mipped cubemap of the ACTUAL world around the player car,
+// refreshed one face per frame. frame.params4.w = probe mix (0 until all six faces exist, then 1) — the
+// analytic sky reflection stays the fallback for the lab and the first frames after a teleport.
+@group(1) @binding(5) var probeTexture: texture_cube<f32>;
+@group(1) @binding(6) var probeSampler: sampler;
 
 @vertex
 fn vsRigid(in: RigidVsIn) -> RigidVsOut {
@@ -878,11 +969,30 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   out.color = color;
   out.layer = in.slots.x;
   out.nightLayer = in.slots.y;
-  out.lampTag = in.slots.w;
+  out.lampTag = in.slots.w & 0xFu;
+  out.matClass = in.slots.w >> 4u;
   out.lamps = rigidLamp[in.instance].xyz;
   out.envLayer = in.reflect.x;
   out.reflect = vec3f(in.reflect.yzw) / 255.0;
   out.local = in.position;
+  // Light pool per VERTEX (round 5): diffuse from the STATIC half (a car is never lit by its own
+  // headlights) + neo pass 2's point-light specular over the WHOLE pool (it SHOULD catch its own
+  // headlights' bounce off a wall), scaled by the material's specular level here so the fragment adds it raw.
+  out.poolDiffuse = localLightStatic(world.xyz, out.normal);
+  var poolSpec = vec3f(0.0);
+  let toEyeV = normalize(frame.camera.xyz - world.xyz);
+  let poolCount = min(u32(frame.params3.x), 64u);
+  for (var index = 0u; index < poolCount; index += 1u) {
+    let light = localLights[index];
+    let toLight = light.position.xyz - world.xyz;
+    let dist = length(toLight);
+    if (dist < light.position.w) {
+      let halfway = normalize(toLight / max(dist, 0.001) + toEyeV);
+      let falloff = 1.0 - dist / light.position.w;
+      poolSpec += light.color.rgb * (pow(max(dot(out.normal, halfway), 0.0), SPEC_LAMP_POWER) * falloff * falloff);
+    }
+  }
+  out.poolSpec = poolSpec * (out.reflect.z * frame.params4.z);
   return out;
 }
 
@@ -931,14 +1041,33 @@ const LAMP_TAIL_BRAKE = 4.0;
  */
 const REFLECT_HDR = 4.5; // the sky's missing dynamic range, restored where it matters
 const REFLECT_GROUND = 0.10; // the road under the car: dark, so the horizon reads as a hard line
-const CLEARCOAT_F0 = 0.05; // dielectric lacquer — barely mirrors head-on, near-mirror at grazing
-const PAINT_ROUGHNESS = 0.35; // paint blurs its reflection; glass does not (see rigidClearcoat)
-const PATTERN_MIX = 0.30; // how much of SA's painted env texture rides on top of the live sky
+const PAINT_ROUGHNESS = 0.35; // analytic-fallback blur only (mix of the sharp and normal-direction taps)
+// THE REFLECTION MODEL IS SKYGFX'S NEO CAR PIPE (074/16 round 4, user-directed — aap's neoVehiclePass1VS):
+//   amount = lerp(b⁵, 1, NEO_FRESNEL) × shininess,  b = 1 − saturate(N·V)
+//   colour = LERP(lit base, environment, amount)   ← replace, never add: reflections cannot glow
+// plus a separate broad specular pass (neo pass 2: power 18 default, point lights at power × 2). The env
+// SOURCE is where we go beyond skygfx: their static neo.txd sphere map becomes our live scene probe.
+// NEO_FRESNEL 0.4 = the shipped carTweakingTable value (flat across weather/hour in the distribution).
+const NEO_FRESNEL = 0.4;
+// Prefiltered mips per material class: paint ≈ prod's enhanced preset (roughness 0.15 × 8 mips ≈ 1.2);
+// glass and chrome reflect nearly sharp.
+const PROBE_PAINT_LOD = 1.2;
+const PROBE_GLASS_LOD = 0.5;
+const PROBE_CHROME_LOD = 0.4;
+// Glass runs the neo curve DAMPED: at the paint's strength a windscreen read as a mirror sheet and hid
+// the interior (field round 5) — half strength keeps the street in the glass and the wheel visible through.
+const GLASS_REFLECT = 0.5;
+// Chrome floors the authored coefficient: the surveyed mods ship ~0.5 everywhere, but bare-metal trim
+// should sit near-mirror (neo expresses this through per-material shininess; our class supplies the floor).
+const CHROME_COEFFICIENT_FLOOR = 0.85;
 const FLAKE_SCALE = 220.0;
-const FLAKE_AMOUNT = 0.22;
-const SPEC_POWER = 120.0;
-const SPEC_LAMP_POWER = 220.0; // street lamps and headlights make TIGHTER highlights than the sun
-const SPEC_GAIN = 6.0;
+// Field rounds 1–3: 0.22 read as dense white noise, 0.10 still frosted the bonnet at close range — the
+// flakes must SUGGEST sparkle, not coat the paint. Glass gets none at all.
+const FLAKE_AMOUNT = 0.05;
+// neo pass 2: broad highlights (power 18 default; the weather table runs 10–70), point lights ×2.
+const SPEC_POWER = 18.0;
+const SPEC_LAMP_POWER = 36.0;
+const SPEC_GAIN = 1.0;
 
 /** Cheap 3D hash -> a unit-ish vector, for the flake micro-normals. */
 fn flakeHash(p: vec3f) -> vec3f {
@@ -972,49 +1101,34 @@ fn reflectedWorld(dir: vec3f) -> vec3f {
 }
 
 /**
- * The SA env texture, sampled the SA way: a sphere map indexed by the VIEW-SPACE normal, so the highlight
- * band sweeps across the bodywork as the car turns. We keep only its LUMINANCE — the streaks and the horizon
- * band, i.e. the "hand-painted studio" character — and let the sky supply the colour.
+ * The ENVIRONMENT a car reflects (content only — the neo amount decides how much of it shows): the live
+ * scene probe when it has faces, the analytic sky as the fallback (the lab without a pak, the first frames
+ * after a teleport). NB every tap runs UNCONDITIONALLY: textureSample needs UNIFORM control flow and the
+ * class/coefficient are per-vertex varyings — gates multiply, never branch (branching black-canvased both
+ * rigid pipelines).
  */
-fn envPattern(in: RigidVsOut, normal: vec3f) -> f32 {
+fn rigidEnv(in: RigidVsOut, normal: vec3f, shadingNormal: vec3f, probeLod: f32) -> vec3f {
   let toEye = normalize(frame.camera.xyz - in.world);
-  let right = normalize(cross(vec3f(0.0, 1.0, 0.0), toEye));
-  let up = cross(toEye, right);
-  let uv = vec2f(dot(normal, right), dot(normal, up)) * 0.5 + vec2f(0.5);
-  let texel = textureSample(rigidTexture, rigidSampler, uv, in.envLayer);
-  return dot(texel.rgb, vec3f(0.2126, 0.7152, 0.0722));
-}
-
-/**
- * The full reflection term. NB the env tap happens BEFORE the reflective/matte branch: textureSample needs
- * UNIFORM control flow (implicit derivatives), and the coefficient is a per-material varying — the same rule
- * the stochastic world sampler had to obey.
- */
-fn rigidClearcoat(in: RigidVsOut, normal: vec3f) -> vec3f {
-  let flaked = flakeNormal(normal, in.local);
-  let pattern = mix(1.0, envPattern(in, normal) * 2.0, PATTERN_MIX);
-  let coefficient = in.reflect.x;
-  // The flakes ride the SPECULAR lobes only — they are microscopic mirrors, not a bumpy body.
-  let specular = rigidSpecular(in, flaked, in.reflect.z * frame.params4.z);
-  if (coefficient <= 0.0 || frame.params4.z <= 0.0) {
-    return specular; // tyres, rubber, matte trim — SA leaves the plugin on them with a coefficient of 0
-  }
-  let toEye = normalize(frame.camera.xyz - in.world);
-  let mirror = reflect(-toEye, flaked);
-  // Prefiltered-IBL stand-in: paint blurs what it reflects, so blend the sharp mirror tap toward the sky in
-  // the NORMAL direction (a maximally blurred sample). Roughness 0 would be chrome; glass keeps it sharper.
+  let mirror = reflect(-toEye, shadingNormal);
   let sharp = reflectedWorld(mirror);
   let blurred = reflectedWorld(normalize(mix(mirror, normal, 0.65)));
-  let env = mix(sharp, blurred, PAINT_ROUGHNESS);
-  let fresnel = CLEARCOAT_F0 + (1.0 - CLEARCOAT_F0) * pow(1.0 - max(dot(flaked, toEye), 0.0), 5.0);
-  let strength = coefficient * frame.params4.z * fresnel * pattern;
-  return env * strength + specular;
+  let analytic = mix(sharp, blurred, PAINT_ROUGHNESS);
+  let probed = textureSampleLevel(probeTexture, probeSampler, mirror, probeLod).rgb;
+  return mix(analytic, probed, frame.params4.w);
+}
+
+/** neo pass 1's reflection amount: lerp(b⁵, 1, fresnel) × shininess — the LERP weight toward the env. */
+fn neoReflAmount(nDotV: f32, coefficient: f32) -> f32 {
+  let b = 1.0 - saturate(nDotV);
+  let b2 = b * b;
+  return clamp(mix(b2 * b2 * b, 1.0, NEO_FRESNEL) * coefficient * frame.params4.z, 0.0, 1.0);
 }
 
 /**
- * Specular highlights. The sun/moon give the broad sheen; the LIGHT POOL gives the tight ones that slide
- * along a bonnet as you drive under street lamps — which is what actually makes a car read as glossy at
- * night, when the sky reflection has almost nothing left to give.
+ * neo pass 2, the per-PIXEL half: broad Blinn highlights from the sun and moon only — they ride the FLAKED
+ * normal, which is what sparkles. The light-pool half lives in the VERTEX shader (round 5): a per-pixel
+ * pool loop on a close-up car halved the night frame rate, and the original neo evaluates its whole pass 2
+ * per vertex anyway. Callers add in.poolSpec on top.
  */
 fn rigidSpecular(in: RigidVsOut, normal: vec3f, level: f32) -> vec3f {
   if (level <= 0.0) {
@@ -1023,24 +1137,7 @@ fn rigidSpecular(in: RigidVsOut, normal: vec3f, level: f32) -> vec3f {
   let toEye = normalize(frame.camera.xyz - in.world);
   let sun = pow(max(dot(normal, normalize(frame.sunDir.xyz + toEye)), 0.0), SPEC_POWER);
   let moon = pow(max(dot(normal, normalize(frame.moonDir.xyz + toEye)), 0.0), SPEC_POWER);
-  var sum = (frame.sunColor.rgb * sun + frame.moonColor.rgb * moon) * SPEC_GAIN;
-  // The sky itself is a light: a sheen along the whole upper surface, which is what keeps a roof from
-  // reading as flat paint even with no sun in frame.
-  sum += skyBaseFor(normal) * (pow(max(normal.y, 0.0), 3.0) * 0.35);
-  // Bounded loop over the WHOLE pool — a car should catch its own headlights' bounce off a wall as much as
-  // the street lamp overhead, and the pool is where both live.
-  let count = min(u32(frame.params3.x), 64u);
-  for (var index = 0u; index < count; index += 1u) {
-    let light = localLights[index];
-    let toLight = light.position.xyz - in.world;
-    let dist = length(toLight);
-    if (dist < light.position.w) {
-      let halfway = normalize(toLight / max(dist, 0.001) + toEye);
-      let falloff = 1.0 - dist / light.position.w;
-      sum += light.color.rgb * (pow(max(dot(normal, halfway), 0.0), SPEC_LAMP_POWER) * falloff * falloff);
-    }
-  }
-  return sum * level;
+  return (frame.sunColor.rgb * sun + frame.moonColor.rgb * moon) * (SPEC_GAIN * level);
 }
 
 
@@ -1059,10 +1156,10 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   if (glow > 0.0) {
     return base * (frame.params.y + glow);
   }
-  // STATIC lamps only. A car must not be lit by its OWN headlights (the tail lamp sits a metre behind its own
-  // lens); prod has the same rule by construction — its pool lives in the WORLD material only.
+  // STATIC lamps only, computed per VERTEX (round 5). A car must not be lit by its OWN headlights (the
+  // tail lamp sits a metre behind its own lens); prod has the same rule by construction.
   let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
-    localLightStatic(in.world, normal);
+    in.poolDiffuse;
   return base * lit;
 }
 
@@ -1080,12 +1177,26 @@ fn rigidFog(world: vec3f) -> f32 {
 fn fsRigid(in: RigidVsOut) -> @location(0) vec4f {
   let fog = rigidFog(in.world);
   let viewDir = normalize(in.world - frame.camera.xyz);
-  let color = mix(rigidShade(in, rigidTexel(in)), skyFogFor(viewDir), fog);
+  let normal = normalize(in.normal);
+  // The neo car pipe, branch-free per class: PAINT = flaked normal + the paint mip; CHROME = plain normal,
+  // near-sharp mip, coefficient floored toward mirror; MATTE (tyres, trim, the vlo LOD, lamps) = amount 0.
+  // The LERP is the model's heart — the reflection REPLACES the paint by its amount instead of adding to
+  // it, so it can never glow; specular rides on top; fog dissolves the finished surface.
+  let isPaint = f32(in.matClass == 1u);
+  let isChrome = f32(in.matClass == 2u);
+  let shadingNormal = normalize(mix(normal, flakeNormal(normal, in.local), isPaint));
+  let toEye = normalize(frame.camera.xyz - in.world);
+  let coefficient = mix(in.reflect.x, max(in.reflect.x, CHROME_COEFFICIENT_FLOOR), isChrome);
+  let amount = neoReflAmount(dot(shadingNormal, toEye), coefficient) * (isPaint + isChrome);
+  let env = rigidEnv(in, normal, shadingNormal, mix(PROBE_PAINT_LOD, PROBE_CHROME_LOD, isChrome));
+  let specular = rigidSpecular(in, shadingNormal, in.reflect.z * frame.params4.z) + in.poolSpec;
+  let shaded = mix(rigidShade(in, rigidTexel(in)), env, amount) + specular;
+  let color = mix(shaded, skyFogFor(viewDir), fog);
   return vec4f(color, 1.0);
 }
 
 @fragment
-fn fsRigidBlend(in: RigidVsOut) -> @location(0) vec4f {
+fn fsRigidBlend(in: RigidVsOut, @builtin(front_facing) frontFacing: bool) -> @location(0) vec4f {
   // Premultiplied for the (one, 1−src-α) pipeline; fog scales the pair (068 semantics for blends).
   // The alpha is BOTH sources: glass carries it in the material colour, body decals (scratch/crack overlays)
   // carry it in the TEXEL. Taking only the material's would render a decal opaque — its transparent black
@@ -1094,11 +1205,22 @@ fn fsRigidBlend(in: RigidVsOut) -> @location(0) vec4f {
   let fog = rigidFog(in.world);
   let viewDir = normalize(in.world - frame.camera.xyz);
   let normal = normalize(in.normal);
-  // Glass turns MIRROR at grazing angles — that is what glass does, and a windscreen you can see straight
-  // through from every angle looks like a hole in the car. The clearcoat fresnel drives the opacity itself.
-  let fresnel = pow(1.0 - max(dot(normal, -viewDir), 0.0), 5.0);
-  let alpha = clamp(texel.a * in.color.a + fresnel * in.reflect.x * frame.params4.z, 0.0, 1.0);
-  let color = mix(rigidShade(in, texel) * alpha, skyFogFor(viewDir) * alpha, fog);
+  // The reflection belongs to the OUTER surface only: glass is drawn double-sided, and adding the mirrored
+  // world onto BACK faces painted warped ghosts over the view from inside the car ("dioptric glass" —
+  // bench round 3). A branch-free gate; back faces keep plain tinted transparency.
+  let outside = f32(frontFacing);
+  let toEye = normalize(frame.camera.xyz - in.world);
+  // GLASS on the neo curve: plain normal (no flakes), a near-sharp probe mip. The neo amount drives BOTH
+  // the mirrored colour and the opacity swell — glass turns mirror at grazing angles, and a windscreen you
+  // can see straight through from every angle looks like a hole in the car.
+  let amount = neoReflAmount(dot(normal, toEye), in.reflect.x) * GLASS_REFLECT * outside;
+  let alpha = clamp(texel.a * in.color.a + amount, 0.0, 1.0);
+  let env = rigidEnv(in, normal, normal, PROBE_GLASS_LOD);
+  let specular = (rigidSpecular(in, normal, in.reflect.z * frame.params4.z) + in.poolSpec) * outside;
+  // Premultiplied compositing: the reflected env replaces the tinted glass by its amount, then fog takes
+  // the finished pair (068 semantics).
+  let glass = mix(rigidShade(in, texel) * alpha, env, amount) + specular;
+  let color = mix(glass, skyFogFor(viewDir) * alpha, fog);
   return vec4f(color, alpha);
 }
 `,

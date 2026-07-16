@@ -28,6 +28,7 @@ import {
   type PipelineSet,
   SCENE_FORMAT,
 } from './render/pipelines';
+import { EnvProbe, PROBE_RANGE } from './render/probe';
 import { buildSkyLut, SKY_LUT_HEIGHT, SKY_LUT_WIDTH, skyLutKey } from './render/sky-lut';
 import { type CellHandle, CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
@@ -153,6 +154,8 @@ export interface EngineStats {
   gpuPassMs: number;
   /** Post-chain GPU time (bloom passes + composite), ms — the plan-09 ≤3 ms budget is measured. */
   gpuPostMs: number;
+  /** Env-probe span (face render + mips), ms — the plan-16 ≤0.5 ms gate is measured. 0 when skipped. */
+  gpuProbeMs: number;
   residencyBytes: number;
   submitMs: number;
 }
@@ -313,6 +316,9 @@ export interface VehiclePaint {
 }
 
 export interface VehicleSubmesh {
+  /** Model-space centroid (074/16 round 6) — translucent submeshes sort back-to-front by it per frame.
+   *  Optional: fixtures built before the field carry none and sort at the origin. */
+  center?: readonly [number, number, number];
   indexCount: number;
   indexOffset: number;
   part: number;
@@ -421,10 +427,22 @@ const MAX_ACTIVE_DEBRIS = 8;
  *  triangles are zero-area and rasterize nothing — the instance vanishes without changing the draw's count. */
 const DEGENERATE_CLUTTER_MATRIX = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
 
+/** Env-probe cadence (074/16 step 2): one face every N frames. 2 halves the probe's ~1 ms face cost to
+ *  ~0.5 ms amortised (the plan gate); a full cube refresh is 12 frames = 100 ms at 120 Hz — invisible on
+ *  blurred paint. 1 = every frame if the budget ever allows. */
+const PROBE_FRAME_INTERVAL = 2;
+
 /** Light-pool capacity (074/06 row 7) — mirrored by the WGSL loop bound. */
 const LIGHT_POOL_CAP = 64;
-/** 2dfx lamps farther than this never enter the pool (pixel reach is bounded by the radius anyway). */
-const LIGHT_POOL_REACH = 130;
+/** 2dfx lamps farther than this never enter the pool (prod's street-light system fades at 90). */
+const LIGHT_POOL_REACH = 100;
+/**
+ * Static 2dfx lamps admitted per frame, NEAREST FIRST (074/16 round 4 — the night fps fix). The world
+ * shades the whole pool per VERTEX: at 64 lights a dense street multiplies every world vertex by the full
+ * loop and night lost half the frame rate at 2× retina. 24 nearest lamps light the same street visually —
+ * far entries contributed a vertex-invisible fraction of a lumen.
+ */
+const LIGHT_POOL_STATIC_CAP = 24;
 /** Floats per pooled light: position+radius, colour, direction+cone cosine (2 = point, no cone). */
 const LIGHT_STRIDE = 12;
 /** `dir.w` sentinel for "no cone" — mirrors the three pool's convention exactly. */
@@ -480,6 +498,17 @@ export class Engine {
     waterColor: [0.05, 0.14, 0.18],
     windStrength: 1,
   };
+
+  /**
+   * Env-probe centre (074/16 step 2), ENGINE space — the host feeds the followed car (or the player) every
+   * frame; `null` skips the probe entirely (the lab, reflections off) and the rigid shader falls back to the
+   * analytic sky. One cube face refreshes per frame while set.
+   */
+  probeCenter: null | Vec3 = null;
+
+  /** Probe DEBUG view (074/16): replaces the frame with the cube sampled along the camera ray — the
+   *  orientation/content check. Hosts wire a URL flag; never on in normal play. */
+  probeView = false;
 
   /** Render scale (074/09 tiers): scene targets = canvas × scale (clamped 0.5–1), the post pass upscales
    *  to the swapchain. Live — the next frame rebuilds the targets. */
@@ -578,6 +607,16 @@ export class Engine {
   private postBindGroup!: GPUBindGroup;
   private postSampler!: GPUSampler;
   private postUniform!: GPUBuffer;
+  /** Scene env probe (074/16 step 2) + its per-frame scratch (zero steady-state allocations). */
+  private probe!: EnvProbe;
+  private readonly probeFrameData = new Float32Array(100);
+  private readonly probeFrustum = new Float32Array(24);
+  private readonly probeInvViewProj: Mat4 = mat4Identity();
+  /** Face-render cadence counter (renders when it wraps to 0 — see PROBE_FRAME_INTERVAL). */
+  private probeTick = -1;
+  /** Probe DEBUG view bind group (cube + sampler), created once at init. */
+  private probeViewBindGroup!: GPUBindGroup;
+  private readonly probeViewProj: Mat4 = mat4Identity();
   private readonly proj: Mat4 = mat4Identity();
   private resources!: Resources;
   private sceneColorView!: GPUTextureView;
@@ -593,6 +632,7 @@ export class Engine {
     drawsRecorded: 0,
     gpuPassMs: 0,
     gpuPostMs: 0,
+    gpuProbeMs: 0,
     residencyBytes: 0,
     submitMs: 0,
   };
@@ -898,8 +938,9 @@ export class Engine {
     // turns the WHOLE sky's clouds pink (both sides of the sun), noon reads bright, night near-black.
     frameData.set([...env.cloudTopColor, 1], 92);
     frameData.set([...env.cloudBottomColor, 1], 96);
+    this.refreshSkyLut(); // before the probe submit — the probe's sky pass samples the LUT too
+    this.scheduleProbe(frameData);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
-    this.refreshSkyLut();
 
     frustumFromViewProj(this.frustumPlanes, this.viewProj);
     const bundles: GPURenderBundle[] = [];
@@ -966,7 +1007,7 @@ export class Engine {
     // Procedural clutter (074/19): grass/bushes/rocks, instanced, in the opaque phase before the sky.
     draws += this.drawClutter(pass);
     draws += this.drawPed(pass);
-    draws += this.drawVehicles(pass, false);
+    draws += this.drawVehicles(pass, false, camera.eye);
     pass.setPipeline(this.pipelines.get('sky'));
     pass.setBindGroup(0, this.frameBindGroup);
     pass.draw(3);
@@ -977,11 +1018,18 @@ export class Engine {
       pass.executeBundles(blendBundles);
     }
     // Entity glass after the world blends (074/08 B2): composites over the finished frame.
-    draws += this.drawVehicles(pass, true);
+    draws += this.drawVehicles(pass, true, camera.eye);
     // 2dfx coronas last (074/06 row 13): additive on top of everything, depth-read hides occluded ones.
     draws += this.drawParticles(pass);
     draws += this.drawDebris(pass);
     draws += this.drawCoronas(pass, camera);
+    // Probe DEBUG view (074/16): overdraw the frame with the cube panorama — orientation checked by eye.
+    if (this.probeView) {
+      pass.setPipeline(this.pipelines.get('probe-view'));
+      pass.setBindGroup(0, this.frameBindGroup);
+      pass.setBindGroup(1, this.probeViewBindGroup);
+      pass.draw(3);
+    }
     pass.end();
     // Bloom chain (074/09): full-res luminance prefilter → 13-tap down mips → tent upsamples. Skipped
     // ENTIRELY at intensity 0 (the composite multiplies the stale texture by 0, so it can't leak in).
@@ -1031,6 +1079,7 @@ export class Engine {
     this.statsValue.submitMs = performance.now() - submitStart;
     this.statsValue.gpuPassMs = this.timers.lastPassMs;
     this.statsValue.gpuPostMs = this.timers.lastPostMs;
+    this.statsValue.gpuProbeMs = this.timers.lastProbeMs;
     this.statsValue.cellsTotal = total;
     this.statsValue.cellsVisible = bundles.length;
     this.statsValue.drawsRecorded = draws;
@@ -1053,6 +1102,16 @@ export class Engine {
     // Scene pipelines target the 16-float offscreen (godrays bright-pass needs the HDR overshoot); only
     // the post pipeline writes the sRGB swapchain.
     this.pipelines = compileAll(this.device, SCENE_FORMAT, DEPTH_FORMAT, this.engineDevice.colorFormat);
+    // Scene env probe (074/16 step 2) — fixed-size, allocated once, BEFORE any vehicle model binds its cube.
+    this.probe = new EnvProbe(this.device, this.resources, this.pipelines);
+    this.probeViewBindGroup = this.device.createBindGroup({
+      entries: [
+        { binding: 0, resource: this.probe.cubeView },
+        { binding: 1, resource: this.probe.sampler },
+      ],
+      label: 'probe-view',
+      layout: this.pipelines.probeViewLayout,
+    });
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
       size: 400, // viewProj + invViewProj (128) + 17 × vec4 (camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona/water/params4/cloudTop/cloudBottom)
@@ -1774,6 +1833,10 @@ export class Engine {
         },
         { binding: 3, resource: { buffer: model.paintBuffer } },
         { binding: 4, resource: { buffer: model.lampBuffer } },
+        // The scene env probe (074/16 step 2): one shared cube, allocated at init — the view is immutable,
+        // only its CONTENTS refresh, so per-model bind groups can hold it safely.
+        { binding: 5, resource: this.probe.cubeView },
+        { binding: 6, resource: this.probe.sampler },
       ],
       label: 'vehicle',
       layout: this.pipelines.rigidLayout,
@@ -2035,19 +2098,18 @@ export class Engine {
     return this.ped.submeshes.length;
   }
 
-  /** One model's live instances. Binds the shared geometry once, then draws each visible submesh per car. */
-  private drawVehicleModel(pass: GPURenderPassEncoder, model: VehicleModel, translucent: boolean): number {
+  /** One model's live instances. Binds the shared geometry once, then draws each visible submesh per car.
+   *  The TRANSLUCENT phase draws back-to-front by each submesh's part-transformed centroid (074/16 round 6 —
+   *  unsorted, the steering wheel drew OVER the windscreen whenever it followed it in model order). */
+  private drawVehicleModel(pass: GPURenderPassEncoder, model: VehicleModel, translucent: boolean, eye: Vec3): number {
     let draws = 0;
     let bound = false;
     for (const state of model.instances) {
       if (!state) {
         continue;
       }
-      for (let index = 0; index < model.submeshes.length; index += 1) {
+      for (const index of this.submeshDrawOrder(state, model, translucent, eye)) {
         const submesh = model.submeshes[index];
-        if (submesh.translucent !== translucent || state.submeshVisible[index] === 0) {
-          continue;
-        }
         if (!bound) {
           pass.setPipeline(this.pipelines.get(translucent ? 'rigid-blend' : 'rigid-opaque'));
           pass.setBindGroup(0, this.frameBindGroup);
@@ -2064,10 +2126,10 @@ export class Engine {
     return draws;
   }
 
-  private drawVehicles(pass: GPURenderPassEncoder, translucent: boolean): number {
+  private drawVehicles(pass: GPURenderPassEncoder, translucent: boolean, eye: Vec3): number {
     let draws = 0;
     for (const model of this.vehicleModels.values()) {
-      draws += this.drawVehicleModel(pass, model, translucent);
+      draws += this.drawVehicleModel(pass, model, translucent, eye);
     }
 
     return draws;
@@ -2195,30 +2257,35 @@ export class Engine {
     for (const light of this.dynamicLights) {
       push(light.position[0], light.position[1], light.position[2], light.radius, ...light.color, light.cone);
     }
-    // 2dfx street lamps join at night (the same anchors the corona pass draws), distance-bounded.
+    // 2dfx street lamps join at night (the same anchors the corona pass draws) — NEAREST FIRST, hard-capped:
+    // the world pays the whole pool per vertex, so admission order IS the perf knob (074/16 round 4).
     const gate = this.environment.dn * 1.4;
     if (gate > 0.03) {
+      const candidates: { distSq: number; light: CellHandle['lights'][number] }[] = [];
       for (const cell of this.cells.all()) {
-        if (count >= LIGHT_POOL_CAP) {
-          break;
-        }
         for (const light of cell.lights) {
           const dx = light.x - eye[0];
           const dy = light.y - eye[1];
           const dz = light.z - eye[2];
-          if (dx * dx + dy * dy + dz * dz > LIGHT_POOL_REACH * LIGHT_POOL_REACH) {
-            continue;
+          const distSq = dx * dx + dy * dy + dz * dz;
+          if (distSq <= LIGHT_POOL_REACH * LIGHT_POOL_REACH) {
+            candidates.push({ distSq, light });
           }
-          push(
-            light.x,
-            light.y,
-            light.z,
-            Math.max(14, light.size * 8),
-            (light.color[0] / 255) ** 2.2 * gate,
-            (light.color[1] / 255) ** 2.2 * gate,
-            (light.color[2] / 255) ** 2.2 * gate,
-          );
         }
+      }
+      candidates.sort((a, b) => a.distSq - b.distSq);
+      const statics = Math.min(candidates.length, LIGHT_POOL_STATIC_CAP, LIGHT_POOL_CAP - count);
+      for (let index = 0; index < statics; index += 1) {
+        const light = candidates[index].light;
+        push(
+          light.x,
+          light.y,
+          light.z,
+          Math.max(14, light.size * 8),
+          (light.color[0] / 255) ** 2.2 * gate,
+          (light.color[1] / 255) ** 2.2 * gate,
+          (light.color[2] / 255) ** 2.2 * gate,
+        );
       }
     }
     if (count > 0) {
@@ -2322,6 +2389,44 @@ export class Engine {
     );
   }
 
+  private renderProbeFace(center: Vec3, frameData: Float32Array): number {
+    const { face, mix } = this.probe.beginFrame(center);
+    this.probe.faceMatrices(face, center, this.probeViewProj, this.probeInvViewProj);
+    const probeData = this.probeFrameData;
+    probeData.set(frameData);
+    probeData.set(this.probeViewProj, 0);
+    probeData.set(this.probeInvViewProj, 16);
+    probeData[32] = center[0];
+    probeData[33] = center[1];
+    probeData[34] = center[2];
+    probeData[91] = mix;
+    this.device.queue.writeBuffer(this.frameUniform, 0, probeData);
+    // OPAQUE bundles only, culled to the face frustum AND the probe range — a 128² reflection has no use
+    // for the far field (the sky pass still fills the horizon), and vertex cost is resolution-independent.
+    frustumFromViewProj(this.probeFrustum, this.probeViewProj);
+    const bundles: GPURenderBundle[] = [];
+    for (const cell of this.cells.all()) {
+      const dx = cell.bounds[0] - center[0];
+      const dy = cell.bounds[1] - center[1];
+      const dz = cell.bounds[2] - center[2];
+      const reach = PROBE_RANGE + cell.bounds[3];
+      if (dx * dx + dy * dy + dz * dz > reach * reach) {
+        continue;
+      }
+      if (frustumIntersectsSphere(this.probeFrustum, cell.bounds[0], cell.bounds[1], cell.bounds[2], cell.bounds[3])) {
+        bundles.push(cell.bundle);
+      }
+    }
+    const encoder = this.device.createCommandEncoder({ label: 'env-probe' });
+    this.probe.encodeFace(encoder, face, bundles, this.frameBindGroup, this.skyColor, {
+      begin: this.timers.probeBeginTimestampWrites(),
+      end: this.timers.probeEndTimestampWrites(),
+    });
+    this.device.queue.submit([encoder.finish()]);
+
+    return mix;
+  }
+
   /** One fullscreen-triangle pass into `view` (the bloom chain's unit of work — no depth, no MSAA). */
   private runFullscreenPass(
     encoder: GPUCommandEncoder,
@@ -2339,6 +2444,63 @@ export class Engine {
     pass.setBindGroup(0, bindGroup);
     pass.draw(3);
     pass.end();
+  }
+
+  /**
+   * Render one env-probe face (074/16 step 2) in its own submit and return the probe mix for params4.w.
+   * The face camera is written into the SHARED frame uniform first — queue ordering guarantees the probe
+   * submit sees it and the main pass (whose write follows) sees the real camera again.
+   */
+  /**
+   * Env-probe scheduling (074/16 step 2): one face every PROBE_FRAME_INTERVAL frames, in its OWN submit
+   * before the main pass. writeBuffer is queue-ordered against submits, so the ONE frame uniform (recorded
+   * into every bundle) holds the face camera for the probe submit and the main camera for the frame submit —
+   * no second bind group needed. Off frames still write the CURRENT mix into params4.w, or the paint would
+   * flicker between the probe and the analytic fallback at half the frame rate.
+   */
+  private scheduleProbe(frameData: Float32Array): void {
+    const probeCenter = this.probeCenter;
+    if (!probeCenter || this.environment.reflectionStrength <= 0) {
+      this.timers.probeSkipped();
+
+      return;
+    }
+    this.probeTick = (this.probeTick + 1) % PROBE_FRAME_INTERVAL;
+    frameData[91] = this.probeTick === 0 ? this.renderProbeFace(probeCenter, frameData) : this.probe.mix();
+  }
+
+  /** Squared eye distance of a submesh's centroid under its part's CURRENT world matrix (CPU copy). */
+  private submeshDistanceSq(state: VehicleInstanceState, model: VehicleModel, index: number, eye: Vec3): number {
+    const submesh = model.submeshes[index];
+    const center = submesh.center ?? [0, 0, 0];
+    const m = state.entity.matrices;
+    const at = submesh.part * 16;
+    const x = m[at] * center[0] + m[at + 4] * center[1] + m[at + 8] * center[2] + m[at + 12];
+    const y = m[at + 1] * center[0] + m[at + 5] * center[1] + m[at + 9] * center[2] + m[at + 13];
+    const z = m[at + 2] * center[0] + m[at + 6] * center[1] + m[at + 10] * center[2] + m[at + 14];
+
+    return (x - eye[0]) ** 2 + (y - eye[1]) ** 2 + (z - eye[2]) ** 2;
+  }
+
+  /** Visible submesh indices for one phase; the translucent phase comes back-to-front (074/16 round 6). */
+  private submeshDrawOrder(
+    state: VehicleInstanceState,
+    model: VehicleModel,
+    translucent: boolean,
+    eye: Vec3,
+  ): number[] {
+    const order: { distSq: number; index: number }[] = [];
+    for (let index = 0; index < model.submeshes.length; index += 1) {
+      const submesh = model.submeshes[index];
+      if (submesh.translucent === translucent && state.submeshVisible[index] !== 0) {
+        order.push({ distSq: translucent ? this.submeshDistanceSq(state, model, index, eye) : 0, index });
+      }
+    }
+    if (translucent) {
+      order.sort((a, b) => b.distSq - a.distSq);
+    }
+
+    return order.map((entry) => entry.index);
   }
 
   private writeVehicleLamps(

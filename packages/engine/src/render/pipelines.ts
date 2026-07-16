@@ -32,6 +32,9 @@ export type PipelineId =
   | 'particle-blend'
   | 'ped'
   | 'post'
+  | 'probe-blit'
+  | 'probe-mip'
+  | 'probe-view'
   | 'rigid-blend'
   | 'rigid-opaque'
   | 'sky'
@@ -67,6 +70,10 @@ export interface PipelineSet {
   pedLayout: GPUBindGroupLayout;
   /** group(0) of the post pipeline: post uniform + scene texture + sampler (godrays, 074/09 stage 1). */
   postLayout: GPUBindGroupLayout;
+  /** group(0) of the probe mip pass (074/16 step 2): the previous mip level + sampler. */
+  probeMipLayout: GPUBindGroupLayout;
+  /** group(1) of the probe DEBUG view: the cube + sampler (074/16 — orientation verified by eye). */
+  probeViewLayout: GPUBindGroupLayout;
   /** group(1) of the rigid-entity pipelines: part matrices + texture ARRAY + sampler (074/08 B2). */
   rigidLayout: GPUBindGroupLayout;
   /** group(1) of the water pipeline: the ripple texture + sampler (074/06 row 12 v1). */
@@ -217,6 +224,11 @@ export function compileAll(
         buffer: { type: 'read-only-storage' },
         visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
       },
+      // The scene environment probe (074/16 step 2): a mipped cubemap of the ACTUAL world around the player
+      // car — the reflection SOURCE. Created once at init (fixed size — probes are constants), so binding its
+      // view here is bundle-safe even though its CONTENTS refresh one face per frame.
+      { binding: 5, texture: { viewDimension: 'cube' }, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 6, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
     ],
     label: 'rigid',
   });
@@ -470,6 +482,29 @@ export function compileAll(
     }),
   );
   const { bloomLayout, bloomUpLayout } = compileBloomPipelines(device, colorFormat, pipelines);
+  const probeMipLayout = compileProbePipelines(device, colorFormat, pipelines);
+  // Probe DEBUG view (074/16): fullscreen cube-by-camera-ray, drawn at the END of the world pass over
+  // everything (depth 'always') — the orientation check that beats convention-table archaeology.
+  const probeViewLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, texture: { viewDimension: 'cube' }, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 1, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'probe-view',
+  });
+  const probeViewModule = device.createShaderModule({ code: resolveShader('probe-view'), label: 'probe-view' });
+  pipelines.set(
+    'probe-view',
+    device.createRenderPipeline({
+      depthStencil: { depthCompare: 'always', depthWriteEnabled: false, format: depthFormat },
+      fragment: { entryPoint: 'fsProbeView', module: probeViewModule, targets: [{ format: colorFormat }] },
+      label: 'probe-view',
+      layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, probeViewLayout], label: 'probe-view' }),
+      multisample: { count: MSAA_SAMPLES },
+      primitive: { topology: 'triangle-list' },
+      vertex: { entryPoint: 'vsProbeView', module: probeViewModule },
+    }),
+  );
   pipelines.set(
     'sky',
     device.createRenderPipeline({
@@ -571,6 +606,8 @@ export function compileAll(
     particleLayout,
     pedLayout,
     postLayout,
+    probeMipLayout,
+    probeViewLayout,
     rigidLayout,
     waterLayout,
   };
@@ -627,4 +664,43 @@ function compileBloomPipelines(
   }
 
   return { bloomLayout, bloomUpLayout };
+}
+
+/**
+ * Env-probe passes (074/16 step 2): 'probe-blit' = the V-flipped face copy (GL cube-face row order vs WebGPU
+ * render row order — see fsProbeBlit); 'probe-mip' = one bilinear tap at the destination texel centre, an
+ * exact 2×2 box downsample between power-of-two cube-face mips (the prefiltered-roughness ladder the rigid
+ * shader samples with `textureSampleLevel`). No uniform — the sampler footprint does the work.
+ */
+function compileProbePipelines(
+  device: GPUDevice,
+  colorFormat: GPUTextureFormat,
+  pipelines: Map<PipelineId, GPURenderPipeline>,
+): GPUBindGroupLayout {
+  const probeMipLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 1, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'probe-mip',
+  });
+  const probeModule = device.createShaderModule({ code: resolveShader('probe'), label: 'probe' });
+  const probePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [probeMipLayout], label: 'probe-mip' });
+  for (const [id, entryPoint] of [
+    ['probe-blit', 'fsProbeBlit'],
+    ['probe-mip', 'fsProbeMip'],
+  ] as const) {
+    pipelines.set(
+      id,
+      device.createRenderPipeline({
+        fragment: { entryPoint, module: probeModule, targets: [{ format: colorFormat }] },
+        label: id,
+        layout: probePipelineLayout,
+        primitive: { topology: 'triangle-list' },
+        vertex: { entryPoint: 'vsProbeMip', module: probeModule },
+      }),
+    );
+  }
+
+  return probeMipLayout;
 }

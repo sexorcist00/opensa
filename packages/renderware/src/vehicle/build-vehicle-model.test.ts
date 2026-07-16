@@ -8,7 +8,7 @@ import { parseDff } from '../parsers/binary/dff';
 import { toArrayBuffer } from '../test-utils';
 import { buildVehicleModel } from './build-vehicle-model';
 import { VehicleTextures } from './textures';
-import { PaintSlot } from './types';
+import { MaterialClass, PaintSlot } from './types';
 
 const PRIMARY_MARKER: [number, number, number, number] = [60, 255, 0, 255];
 const HEAD_LAMP_MARKER: [number, number, number, number] = [0, 255, 200, 255];
@@ -104,6 +104,107 @@ describe('buildVehicleModel', () => {
 
       expect(built.submeshes[0].lamp).toBe('head');
       expect([...built.colors.subarray(0, 3)]).toEqual([255, 255, 255]);
+    });
+
+    it('materials classify into meta.w high nibble: paint / chrome / glass / matte (074/16)', () => {
+      const envMap = (texture: string): RWMaterial['effects'] => ({
+        envMap: { coefficient: 0.5, texture, useFrameBufferAlpha: false },
+      });
+      const paint = material({ color: PRIMARY_MARKER, effects: envMap('xvehicleenv128') });
+      // Chrome is a DATA signal, never a name: untextured neutral grey + an env map (the ./1 mod convention).
+      const chrome = material({ color: [153, 153, 153, 255], effects: envMap('vehicleenvmap128') });
+      const glass = material({ color: [200, 200, 200, 120], effects: envMap('vehicleenvmap128') });
+      const tyre = material(); // no env plugin — SA's "not reflective" marker
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis')],
+          [{ frame: 0, geometry: 0 }],
+          [
+            {
+              ...geometry([paint, chrome, glass, tyre]),
+              positions: new Float32Array(Array.from({ length: 12 * 3 }, () => 0)),
+              triangles: [
+                { a: 0, b: 1, c: 2, materialIndex: 0 },
+                { a: 3, b: 4, c: 5, materialIndex: 1 },
+                { a: 6, b: 7, c: 8, materialIndex: 2 },
+                { a: 9, b: 10, c: 11, materialIndex: 3 },
+              ],
+            },
+          ],
+        ),
+        textures(),
+      );
+
+      const classOf = (vertex: number): number => built.meta[vertex * 4 + 3] >> 4;
+      expect(classOf(0)).toBe(MaterialClass.paint);
+      expect(classOf(3)).toBe(MaterialClass.chrome);
+      expect(classOf(6)).toBe(MaterialClass.glass);
+      expect(classOf(9)).toBe(MaterialClass.matte);
+    });
+
+    it('chrome never comes from NAMES: bare grey trim is chrome, textured chrome sheets stay paint', () => {
+      const envMap = (texture: string): RWMaterial['effects'] => ({
+        envMap: { coefficient: 0.5, texture, useFrameBufferAlpha: false },
+      });
+      // Round-4 user directive: mods combine arbitrary names — only DATA signals classify. Untextured
+      // grey trim → chrome; a chrome-NAMED sheet with a base texture → paint (the neo model reads its grey
+      // texture as metal through the same formula); a carcols panel on a chrome-named env map → paint.
+      const modChrome = material({ effects: envMap('vehicle_generic_chromeprts2') });
+      const chromeSheet = material({
+        effects: envMap('env_chrome128'),
+        texture: { name: 'ch75_chrmap' } as RWMaterial['texture'],
+      });
+      const paintedBody = material({ color: PRIMARY_MARKER, effects: envMap('chrom_body') });
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis')],
+          [{ frame: 0, geometry: 0 }],
+          [
+            {
+              ...geometry([modChrome, chromeSheet, paintedBody]),
+              positions: new Float32Array(Array.from({ length: 9 * 3 }, () => 0)),
+              triangles: [
+                { a: 0, b: 1, c: 2, materialIndex: 0 },
+                { a: 3, b: 4, c: 5, materialIndex: 1 },
+                { a: 6, b: 7, c: 8, materialIndex: 2 },
+              ],
+            },
+          ],
+        ),
+        textures(),
+      );
+
+      const classOf = (vertex: number): number => built.meta[vertex * 4 + 3] >> 4;
+      expect(classOf(0)).toBe(MaterialClass.chrome);
+      expect(classOf(3)).toBe(MaterialClass.paint);
+      expect(classOf(6)).toBe(MaterialClass.paint);
+    });
+
+    it('`_vlo` LOD meshes and lamps classify MATTE, and the lamp tag survives in the low nibble', () => {
+      const env: RWMaterial['effects'] = {
+        envMap: { coefficient: 0.6, texture: 'xvehicleenv128', useFrameBufferAlpha: false },
+      };
+      const lamp = material({
+        color: HEAD_LAMP_MARKER,
+        effects: env,
+        texture: { name: 'vehiclelights128' } as RWMaterial['texture'],
+      });
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis'), frame('chassis_vlo')],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 1, geometry: 1 },
+          ],
+          [geometry([lamp]), geometry([material({ effects: env })])],
+        ),
+        textures(),
+      );
+
+      expect(built.meta[3] >> 4).toBe(MaterialClass.matte); // lamp
+      expect(built.meta[3] & 0xf).toBe(1); // LampTag.head survives the packing
+      const lodVertex = built.submeshes.find((submesh) => submesh.kind === 'lod')!.indexOffset;
+      expect(built.meta[built.indices[lodVertex] * 4 + 3] >> 4).toBe(MaterialClass.matte);
     });
 
     it('the shared `wheel` atomic instances at every dummy, right side turned 180°, scaled by wheelScale', () => {

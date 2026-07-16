@@ -59,7 +59,7 @@ export const DEFAULT_ENGINE_ENV_CONFIG: EngineEnvConfig = {
     sun: { godrays: true },
     toneMapping: true,
     toneMappingMode: 'aces',
-    vehicleReflection: { intensity: 1, preset: 'default' },
+    vehicleReflection: { intensity: 0.25, preset: 'default' },
     worldLight: { dayBrightness: 0.85, nightPrelitBrightness: 0.7 },
   },
 };
@@ -132,10 +132,12 @@ export function createEngineEnvironmentDriver(
       const band = timeBandGrade({ overcast: clouds.coverage, sunSin: sun.dir[1] });
       environment.bloomIntensity = bloom.enabled ? bloom.intensity : 0;
       environment.bloomThreshold = band.bloomThreshold * (bloom.threshold / 0.7);
-      // Vehicle reflections (B5r): the prod knob multiplies the DFF's per-material coefficients, exactly as
-      // it multiplies the three path's preset values — one config, both renderers.
+      // Vehicle reflections (B5r → 074/16): the prod knob multiplies the DFF's per-material coefficients.
+      // CALIBRATION: prod's default intensity is 0.25 in three's envMapIntensity units; the engine shader's
+      // neutral is 1.0 — map 0.25 ↔ 1.0 (×4). Without this the whole clearcoat term ran at a quarter
+      // strength in the game and the field read "no reflections" (2026-07-16 bench round).
       const reflection = config.graphics.vehicleReflection;
-      environment.reflectionStrength = reflection.preset === 'off' ? 0 : reflection.intensity;
+      environment.reflectionStrength = reflection.preset === 'off' ? 0 : reflection.intensity * 4;
       if (timecyc) {
         const sample = sampleTimecycBlend(timecyc, weather, weather, hour, 0);
         environment.sunColor = scale3(lin3(sample.dir), dayGate);

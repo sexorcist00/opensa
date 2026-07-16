@@ -109,9 +109,19 @@ the golden cloud tint ×2) that snapped the sky the frame the sun crossed. Bench
 country-dusk world pass 3.86 ms = new high, plausibly the by-design longer dusk (see the series row's
 WATCH note). Full history in the [06 ledger row 6].
 
-**Resume:** the look round continues (day sky options above) → deferred verdicts: **16 vehicle paint is
-UNBLOCKED** (its step 1, ACES+bloom, shipped with plan 09 — next real work = step 2, the environment probe)
-· 17 lighting · hd-realtime concept → WebGL-prod `?bench=all` baseline → C1 → flip (C2 gated).
+**Plan 16 steps 1–2 CLOSED, field-ACCEPTED (2026-07-16, six field rounds in one day):** the scene
+ENVIRONMENT PROBE (128²×6×8-mip cube of the ACTUAL streamed world, one face / 2 frames in its own submit
+reusing the recorded cell bundles; V-flip blit; mip ladder) + the **skygfx neo car reflection model**
+(LERP the lit base toward the live probe by `lerp(b⁵, 1, 0.4) × coefficient`; broad specular, pool half
+per VERTEX), material classes with a NO-NAME classifier (chrome = untextured neutral grey, a pure data
+signal), the engine-lab **vehicle look bench** (`?vehicle=1&vmodel=…&at=…&orbit=…`, live hour buttons,
+probe toggles), translucent-submesh sorting (the wheel-through-windscreen fix) and the night-fps roots
+(config ×4 calibration, per-pixel pool loops off the car, pool nearest-cap 24). Full history in
+[16 § step 2 rounds 1–6](16-vehicle-paint.md).
+
+**Resume:** plan 16 step 4 — VEHICLE NORMALS (queued by the user: low-poly bodies read as melting facets)
+→ step 3 SSR → step 6 grounding · the look round day-sky verdict · 17 lighting · hd-realtime concept →
+WebGL-prod `?bench=all` baseline → C1 → flip (C2 gated).
 
 ## Handoff status (2026-07-14 — history)
 

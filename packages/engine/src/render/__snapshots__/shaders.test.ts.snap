@@ -131,7 +131,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -464,7 +465,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -758,7 +760,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -1070,7 +1073,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -1323,7 +1327,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -1663,7 +1668,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -2044,6 +2050,327 @@ fn fsPost(in: PostOut) -> @location(0) vec4f {
 "
 `;
 
+exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > probe 1`] = `
+"
+@group(0) @binding(0) var probeInput: texture_2d<f32>;
+@group(0) @binding(1) var probeInputSampler: sampler;
+
+struct ProbeMipOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+};
+
+@vertex
+fn vsProbeMip(@builtin(vertex_index) index: u32) -> ProbeMipOut {
+  var corners = array<vec2f, 3>(vec2f(-1.0, -3.0), vec2f(3.0, 1.0), vec2f(-1.0, 1.0));
+  let corner = corners[index];
+  var out: ProbeMipOut;
+  out.clip = vec4f(corner, 0.0, 1.0);
+  out.uv = vec2f(corner.x * 0.5 + 0.5, 0.5 - corner.y * 0.5);
+  return out;
+}
+
+@fragment
+fn fsProbeMip(in: ProbeMipOut) -> @location(0) vec4f {
+  return textureSampleLevel(probeInput, probeInputSampler, in.uv, 0.0);
+}
+
+// Face blit, V-FLIPPED: cube faces are stored in the GL convention (t = 0 at the face's TOP direction),
+// but a WebGPU render pass puts NDC y = +1 in row 0 — rendering straight into the face would come out
+// upside-down, and fixing it in the projection would flip the triangle winding and break back-face culling
+// inside the recorded bundles. The flip lives here instead: a pure-rotation camera renders the face, the
+// resolve lands in a scratch target, and this pass writes it into the cube the right way up.
+@fragment
+fn fsProbeBlit(in: ProbeMipOut) -> @location(0) vec4f {
+  return textureSampleLevel(probeInput, probeInputSampler, vec2f(in.uv.x, 1.0 - in.uv.y), 0.0);
+}
+"
+`;
+
+exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > probe-view 1`] = `
+"
+
+struct Frame {
+  viewProj: mat4x4f,
+  invViewProj: mat4x4f,
+  // camera.w = cloud dome slot A→B crossfade blend (row 15 weather fade; spare vec4 slot).
+  camera: vec4f,
+  // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
+  // the sun-vis v2 threshold input — 074/07), sun colour,
+  // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
+  // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
+  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
+  // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
+  //            time seconds (the wind clock), windStrength (074/06 row 10)],
+  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
+  // both spare vec4 slots.
+  sunDir: vec4f,
+  sunColor: vec4f,
+  params: vec4f,
+  skyTop: vec4f,
+  skyHorizon: vec4f,
+  fog: vec4f,
+  params2: vec4f,
+  moonDir: vec4f,
+  moonColor: vec4f,
+  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  params3: vec4f,
+  // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
+  // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
+  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
+  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  sunCore: vec4f,
+  sunCorona: vec4f,
+  // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
+  waterColor: vec4f,
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
+  // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
+  // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
+  params4: vec4f,
+  // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
+  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // the sun side (prod applyClouds colours its deck from exactly these columns).
+  cloudTop: vec4f,
+  cloudBottom: vec4f,
+};
+@group(0) @binding(0) var<uniform> frame: Frame;
+@group(0) @binding(1) var skyLut: texture_2d<f32>;
+@group(0) @binding(2) var skyLutSampler: sampler;
+// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
+// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
+// horizon band barely carries them).
+@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
+@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
+@group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
+
+// Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
+// fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
+// Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
+// The moon's angular radius as a multiple of the sun's (they are famously close in the real sky; SA draws a
+// bigger, friendlier moon). MOON_BODY_GAIN keeps the lit disc HDR so it feeds the bloom/godray pass.
+const MOON_DISC_SCALE = 3.2;
+const MOON_BODY_GAIN = 10.0;
+
+fn skyBaseFor(dir: vec3f) -> vec3f {
+  let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
+  let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
+  let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
+  let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
+  var col = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+  // Night sky glow (074/09 sky round — the prod skyBase port): the authored SA night gradient is
+  // near-black, so prod adds the moon's cool Rayleigh scatter (halo + a soft lift of its hemisphere) and
+  // the warm URBAN skyglow band at the horizon (San Andreas is a metropolis — city nights are never
+  // black; the deck reflects the city light, so overcast makes it BRIGHTER). Living in the shared base,
+  // it feeds the world fog too — night fog matches the glowing horizon, the 068 invariant.
+  // FADE (sky round 3 — "включается резко"): the sink window is widened to the whole post-sunset margin
+  // AND the glow rides dn (the hour-long dusk ramp) — the city light breathes in with the darkness
+  // instead of snapping on in the ~40 s the sun needs to cross a narrow horizon band.
+  let pbrNight = (1.0 - smoothstep(-0.22, -0.01, frame.sunDir.y)) * frame.params.x;
+  if (pbrNight > 0.01) {
+    // env.moonColor ≈ (0.34, 0.44, 0.72) × its CPU gate (peak 0.5 × skylight 0.6 → b = 0.216) — recover
+    // the gate so the glow follows the night band/cloud fade without a new UBO slot.
+    let moonGate = clamp(frame.moonColor.b / 0.216, 0.0, 1.0);
+    let moonGlow = vec3f(0.45, 0.62, 1.0) * (0.055 * moonGate);
+    let cityGlow = vec3f(1.0, 0.58, 0.3) * (0.03 * (1.0 + frame.sunCorona.w * 1.2));
+    let moonHalo = pow(max(dot(dir, frame.moonDir.xyz), 0.0), 8.0);
+    let moonHemi = 0.5 + 0.5 * dot(dir, frame.moonDir.xyz);
+    let band = pow(1.0 - clamp(dir.y, 0.0, 1.0), 6.0);
+    col += (moonGlow * (moonHalo * 0.6 + moonHemi * moonHemi * 0.12) + cityGlow * band) * pbrNight;
+  }
+  return col;
+}
+
+// Sun + moon discs, split from the gradient so the cloud layer can OCCLUDE them (row 15): the disc
+// overshoot survives a partial alpha mix, so clouds must attenuate this term, not blend over it.
+fn skyCelestialFor(dir: vec3f) -> vec3f {
+  // The prod-look sun (field round 3): a FILLED disc in the timecyc sunCore colour (yellow/orange —
+  // prod colours its sun mesh with exactly this column) + an exponential warm corona in sunCorona.
+  // Angular sizing comes from timecyc sunSize via sunCore.w. The 3–6× overshoot feeds the godrays
+  // post pass (bright-pass threshold) and clips to a hot centre in the swapchain.
+  let sunDot = clamp(dot(dir, frame.sunDir.xyz), -1.0, 1.0);
+  let ang = acos(sunDot);
+  let coreR = max(frame.sunCore.w, 1e-4);
+  let disc = (1.0 - smoothstep(coreR * 0.75, coreR, ang)) * 6.0;
+  let corona = exp(-ang / (coreR * 2.2)) * 2.6;
+  let glow = exp(-ang / (coreR * 8.0)) * 0.5;
+  let sun = frame.sunCore.rgb * disc + frame.sunCorona.rgb * (corona + glow);
+  let moon = moonFor(dir);
+  // The sea-horizon line CLIPS the discs (field: the sun used to just fade out at ground level): drivers
+  // now let the arcs sink below y=0, and pixels under the horizon drop the disc — the sun/moon visibly
+  // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
+  let horizonClip = smoothstep(-0.003, 0.005, dir.y);
+  return (sun + moon) * horizonClip;
+}
+
+// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
+// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
+// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
+// timecyc horizon mood with a night floor. Zero when no dome is bound or below the horizon.
+fn cloudLayerFor(dir: vec3f) -> vec4f {
+  if (frame.params3.y <= 0.5 || dir.y <= 0.0) {
+    return vec4f(0.0);
+  }
+  let theta = acos(clamp(dir.y, -1.0, 1.0));
+  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
+  let spin = frame.params2.z * frame.moonColor.w;
+  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
+  let spun = rot * horiz;
+  let radius = theta * 0.297;
+  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
+  let cloud = mix(
+    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
+    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
+    frame.camera.w,
+  );
+  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
+  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
+    (1.0 - frame.params3.z * 0.6);
+  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
+  return vec4f(cloud.rgb * tint, alpha);
+}
+
+/**
+ * The MOON (074/06 row 6, B6): the real SA coronamoon sprite plus a PHASE.
+ *
+ * Vanilla SA fakes its phases by cropping the sprite, which gives a sliced disc rather than a crescent. We
+ * light a sphere instead: the moon's surface normal is reconstructed from the disc coordinates, and the lit
+ * fraction follows a phase angle (params4.y, advanced by the host with the in-game days). That yields a real
+ * terminator — waxing crescent through full and back — for the cost of a dot product.
+ *
+ * moonColor is BLACK by day, so this whole term dies with it.
+ */
+fn moonFor(dir: vec3f) -> vec3f {
+  let moonDot = dot(dir, frame.moonDir.xyz);
+  // Local disc frame: where in the moon's face this view direction lands, in [-1, 1].
+  let right = normalize(cross(vec3f(0.0, 1.0, 0.0), frame.moonDir.xyz));
+  let up = cross(frame.moonDir.xyz, right);
+  let radius = max(frame.sunCore.w * MOON_DISC_SCALE, 1e-4);
+  let disc = vec2f(dot(dir, right), dot(dir, up)) / radius;
+  let r = length(disc);
+
+  // The sprite across the disc: rgb carries the CRATERS, alpha the round shape (normalised by the host).
+  let uv = disc * 0.5 + vec2f(0.5);
+  let texel = textureSample(coronaSprites, skyLutSampler, uv, 1u);
+  let face = texel.a;
+
+  // Phase: rebuild the surface normal of the sphere at this point and light it from the phase direction.
+  let z = sqrt(max(0.0, 1.0 - min(r * r, 1.0)));
+  let normal = normalize(right * disc.x + up * disc.y + frame.moonDir.xyz * z);
+  let angle = frame.params4.y * 6.2831853;
+  let sunward = normalize(right * sin(angle) + frame.moonDir.xyz * (-cos(angle)));
+  // A soft terminator: earthshine keeps the dark limb faintly visible, as it is in life.
+  let lit = smoothstep(-0.08, 0.12, dot(normal, sunward)) * 0.92 + 0.08;
+
+  let body = texel.rgb * (face * lit * step(r, 1.0) * MOON_BODY_GAIN);
+  // A wide soft halo marks the moon's place in the horizon band even when the disc is a thin crescent.
+  let halo = pow(max(moonDot, 0.0), 96.0) * 2.2;
+  // moonColor now carries the prod-strength LIGHT (peak b 0.216, was 0.105) — rescale so the shipped
+  // disc/halo brightness stays exactly as field-accepted.
+  return frame.moonColor.rgb * 0.486 * (body + vec3f(halo));
+}
+
+// The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
+// disc/corona must NOT be here — fogged silhouettes picked it up and the sun "shone through buildings"
+// (field round 3). Prod's disc is a separate mesh for the same reason.
+fn skyFogFor(dir: vec3f) -> vec3f {
+  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+
+  return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
+}
+
+// Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
+// headlights), CPU-filled each frame. The world consumes it in the VERTEX shader (SA is vertex-lit and
+// world verts ≪ pixels); small dynamic entities sample it per pixel. Bounded loop (count ≤ 64 — guardrail).
+struct LocalLight {
+  position: vec4f, // xyz world + radius
+  color: vec4f,    // linear RGB × intensity; w spare
+  // xyz = the direction a SPOT points, w = the cosine of its half-angle. w >= 1.5 means POINT (no cone) —
+  // the same sentinel the three pool uses. Headlights NEED this: as a point light a headlight floods the
+  // whole street, the road behind the car included.
+  dir: vec4f,
+};
+@group(0) @binding(3) var<storage, read> localLights: array<LocalLight>;
+
+// A RANGE of the pool, so the world can split it: static lamps per vertex (they never move, and world verts
+// ≪ pixels), moving lights per pixel. A headlight shaded per vertex is a disaster — SA's road polygons are
+// tens of metres wide, so the beam lands between vertices: it blotches along the mesh normals and disappears
+// outright when the car sits mid-polygon.
+// NB: "from" is a WGSL RESERVED KEYWORD (so is "meta", which bit the B2 vertex layout) — hence first/last.
+// The naga guardrails do not catch reserved words; assertGuardrails now does, so the browser stops being
+// the first thing to notice.
+fn localLightRange(world: vec3f, normal: vec3f, first: u32, last: u32) -> vec3f {
+  var sum = vec3f(0.0);
+  let count = min(last, 64u);
+  for (var index = first; index < count; index += 1u) {
+    let light = localLights[index];
+    var toLight = light.position.xyz - world;
+    let dist = length(toLight);
+    let radius = light.position.w;
+    if (dist < radius) {
+      toLight = toLight / max(dist, 0.001);
+      let spot = light.dir.w < 1.5;
+      // Cone falloff SQUARED toward the rim — a flat plateau reads as a hard-edged searchlight blob.
+      var cone = 1.0;
+      if (spot) {
+        cone = smoothstep(light.dir.w, min(light.dir.w + 0.30, 1.0), dot(-toLight, light.dir.xyz));
+        cone = cone * cone;
+      }
+      // WRAP: a headlight grazes the road almost tangentially, so a hard N·L collapses the beam to nothing.
+      // Wrapping keeps the road pool readable while walls still take more light when they face the lamp.
+      let wrap = select(0.4, 0.25, spot);
+      let ndl = clamp((dot(normal, toLight) + wrap) / (1.0 + wrap), 0.0, 1.0);
+      let falloff = 1.0 - dist / radius;
+      sum += light.color.rgb * (ndl * cone * falloff * falloff);
+    }
+  }
+  return sum;
+}
+
+/** Dynamic half only — the world's PER-PIXEL term. */
+fn localLightDynamic(world: vec3f, normal: vec3f) -> vec3f {
+  return localLightRange(world, normal, 0u, u32(frame.params4.x));
+}
+
+/** Static 2dfx half only — the world's PER-VERTEX term. */
+fn localLightStatic(world: vec3f, normal: vec3f) -> vec3f {
+  return localLightRange(world, normal, u32(frame.params4.x), u32(frame.params3.x));
+}
+
+
+@group(1) @binding(0) var probeViewCube: texture_cube<f32>;
+@group(1) @binding(1) var probeViewSampler: sampler;
+
+struct ProbeViewOut {
+  @builtin(position) clip: vec4f,
+  @location(0) ndc: vec2f,
+};
+
+@vertex
+fn vsProbeView(@builtin(vertex_index) index: u32) -> ProbeViewOut {
+  var corners = array<vec2f, 3>(vec2f(-1.0, -3.0), vec2f(3.0, 1.0), vec2f(-1.0, 1.0));
+  let corner = corners[index];
+  var out: ProbeViewOut;
+  // Reversed-Z near plane — the debug view overdraws everything.
+  out.clip = vec4f(corner, 1.0, 1.0);
+  out.ndc = corner;
+  return out;
+}
+
+@fragment
+fn fsProbeView(in: ProbeViewOut) -> @location(0) vec4f {
+  let near = frame.invViewProj * vec4f(in.ndc, 1.0, 1.0);
+  let far = frame.invViewProj * vec4f(in.ndc, 0.0, 1.0);
+  let dir = normalize(far.xyz / far.w - near.xyz / near.w);
+  // Left half = sharp mip, right half = the roughness mip the paint samples — both must look like the world.
+  let lod = select(0.0, 1.2, in.ndc.x > 0.0);
+  return vec4f(textureSampleLevel(probeViewCube, probeViewSampler, dir, lod).rgb, 1.0);
+}
+"
+`;
+
 exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > rigid 1`] = `
 "
 
@@ -2081,7 +2408,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -2321,7 +2649,7 @@ struct RigidVsOut {
   @location(3) color: vec4f,
   @location(4) @interpolate(flat) layer: u32,
   @location(5) @interpolate(flat) nightLayer: u32,
-  // slots.w: 0 = body, 1 = head lamp, 2 = tail lamp; lamps = [headlights, brakes, config intensity].
+  // slots.w LOW nibble: 0 = body, 1 = head lamp, 2 = tail lamp; lamps = [headlights, brakes, intensity].
   @location(6) @interpolate(flat) lampTag: u32,
   @location(7) @interpolate(flat) lamps: vec3f,
   @location(8) @interpolate(flat) envLayer: u32,
@@ -2330,6 +2658,14 @@ struct RigidVsOut {
   // MODEL-space position: the flake hash is anchored to the CAR, so the sparkle rides with it. A world-space
   // hash would make the flakes crawl across the paint as the car drives.
   @location(10) local: vec3f,
+  // slots.w HIGH nibble (074/16 round 2): the material CLASS — 0 matte, 1 paint, 2 chrome, 3 glass.
+  @location(11) @interpolate(flat) matClass: u32,
+  // Light-pool response, computed per VERTEX (074/16 round 5 — the night-fps fix): the original neo car
+  // pipe evaluates ALL of its lighting in the vertex shader, and a per-PIXEL pool loop on a close-up car
+  // at 2× retina was the difference between 120 and 60 fps at night. Cars are 3–5 k verts — free there.
+  @location(12) poolDiffuse: vec3f,
+  // Pool specular (neo pass 2's point-light half), already scaled by the material's specular level.
+  @location(13) poolSpec: vec3f,
 };
 
 @group(1) @binding(0) var<storage, read> rigidMatrices: array<mat4x4f>;
@@ -2342,6 +2678,11 @@ struct RigidVsOut {
 // Per-instance lamp state (074/08 B5 step 5): x = headlights on, y = braking. Was a GLOBAL day/night gate,
 // which lit every parked car in the city at once; only the DRIVEN car should light up.
 @group(1) @binding(4) var<storage, read> rigidLamp: array<vec4f>;
+// The scene environment probe (074/16 step 2): a mipped cubemap of the ACTUAL world around the player car,
+// refreshed one face per frame. frame.params4.w = probe mix (0 until all six faces exist, then 1) — the
+// analytic sky reflection stays the fallback for the lab and the first frames after a teleport.
+@group(1) @binding(5) var probeTexture: texture_cube<f32>;
+@group(1) @binding(6) var probeSampler: sampler;
 
 @vertex
 fn vsRigid(in: RigidVsIn) -> RigidVsOut {
@@ -2359,11 +2700,30 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   out.color = color;
   out.layer = in.slots.x;
   out.nightLayer = in.slots.y;
-  out.lampTag = in.slots.w;
+  out.lampTag = in.slots.w & 0xFu;
+  out.matClass = in.slots.w >> 4u;
   out.lamps = rigidLamp[in.instance].xyz;
   out.envLayer = in.reflect.x;
   out.reflect = vec3f(in.reflect.yzw) / 255.0;
   out.local = in.position;
+  // Light pool per VERTEX (round 5): diffuse from the STATIC half (a car is never lit by its own
+  // headlights) + neo pass 2's point-light specular over the WHOLE pool (it SHOULD catch its own
+  // headlights' bounce off a wall), scaled by the material's specular level here so the fragment adds it raw.
+  out.poolDiffuse = localLightStatic(world.xyz, out.normal);
+  var poolSpec = vec3f(0.0);
+  let toEyeV = normalize(frame.camera.xyz - world.xyz);
+  let poolCount = min(u32(frame.params3.x), 64u);
+  for (var index = 0u; index < poolCount; index += 1u) {
+    let light = localLights[index];
+    let toLight = light.position.xyz - world.xyz;
+    let dist = length(toLight);
+    if (dist < light.position.w) {
+      let halfway = normalize(toLight / max(dist, 0.001) + toEyeV);
+      let falloff = 1.0 - dist / light.position.w;
+      poolSpec += light.color.rgb * (pow(max(dot(out.normal, halfway), 0.0), SPEC_LAMP_POWER) * falloff * falloff);
+    }
+  }
+  out.poolSpec = poolSpec * (out.reflect.z * frame.params4.z);
   return out;
 }
 
@@ -2412,14 +2772,33 @@ const LAMP_TAIL_BRAKE = 4.0;
  */
 const REFLECT_HDR = 4.5; // the sky's missing dynamic range, restored where it matters
 const REFLECT_GROUND = 0.10; // the road under the car: dark, so the horizon reads as a hard line
-const CLEARCOAT_F0 = 0.05; // dielectric lacquer — barely mirrors head-on, near-mirror at grazing
-const PAINT_ROUGHNESS = 0.35; // paint blurs its reflection; glass does not (see rigidClearcoat)
-const PATTERN_MIX = 0.30; // how much of SA's painted env texture rides on top of the live sky
+const PAINT_ROUGHNESS = 0.35; // analytic-fallback blur only (mix of the sharp and normal-direction taps)
+// THE REFLECTION MODEL IS SKYGFX'S NEO CAR PIPE (074/16 round 4, user-directed — aap's neoVehiclePass1VS):
+//   amount = lerp(b⁵, 1, NEO_FRESNEL) × shininess,  b = 1 − saturate(N·V)
+//   colour = LERP(lit base, environment, amount)   ← replace, never add: reflections cannot glow
+// plus a separate broad specular pass (neo pass 2: power 18 default, point lights at power × 2). The env
+// SOURCE is where we go beyond skygfx: their static neo.txd sphere map becomes our live scene probe.
+// NEO_FRESNEL 0.4 = the shipped carTweakingTable value (flat across weather/hour in the distribution).
+const NEO_FRESNEL = 0.4;
+// Prefiltered mips per material class: paint ≈ prod's enhanced preset (roughness 0.15 × 8 mips ≈ 1.2);
+// glass and chrome reflect nearly sharp.
+const PROBE_PAINT_LOD = 1.2;
+const PROBE_GLASS_LOD = 0.5;
+const PROBE_CHROME_LOD = 0.4;
+// Glass runs the neo curve DAMPED: at the paint's strength a windscreen read as a mirror sheet and hid
+// the interior (field round 5) — half strength keeps the street in the glass and the wheel visible through.
+const GLASS_REFLECT = 0.5;
+// Chrome floors the authored coefficient: the surveyed mods ship ~0.5 everywhere, but bare-metal trim
+// should sit near-mirror (neo expresses this through per-material shininess; our class supplies the floor).
+const CHROME_COEFFICIENT_FLOOR = 0.85;
 const FLAKE_SCALE = 220.0;
-const FLAKE_AMOUNT = 0.22;
-const SPEC_POWER = 120.0;
-const SPEC_LAMP_POWER = 220.0; // street lamps and headlights make TIGHTER highlights than the sun
-const SPEC_GAIN = 6.0;
+// Field rounds 1–3: 0.22 read as dense white noise, 0.10 still frosted the bonnet at close range — the
+// flakes must SUGGEST sparkle, not coat the paint. Glass gets none at all.
+const FLAKE_AMOUNT = 0.05;
+// neo pass 2: broad highlights (power 18 default; the weather table runs 10–70), point lights ×2.
+const SPEC_POWER = 18.0;
+const SPEC_LAMP_POWER = 36.0;
+const SPEC_GAIN = 1.0;
 
 /** Cheap 3D hash -> a unit-ish vector, for the flake micro-normals. */
 fn flakeHash(p: vec3f) -> vec3f {
@@ -2453,49 +2832,34 @@ fn reflectedWorld(dir: vec3f) -> vec3f {
 }
 
 /**
- * The SA env texture, sampled the SA way: a sphere map indexed by the VIEW-SPACE normal, so the highlight
- * band sweeps across the bodywork as the car turns. We keep only its LUMINANCE — the streaks and the horizon
- * band, i.e. the "hand-painted studio" character — and let the sky supply the colour.
+ * The ENVIRONMENT a car reflects (content only — the neo amount decides how much of it shows): the live
+ * scene probe when it has faces, the analytic sky as the fallback (the lab without a pak, the first frames
+ * after a teleport). NB every tap runs UNCONDITIONALLY: textureSample needs UNIFORM control flow and the
+ * class/coefficient are per-vertex varyings — gates multiply, never branch (branching black-canvased both
+ * rigid pipelines).
  */
-fn envPattern(in: RigidVsOut, normal: vec3f) -> f32 {
+fn rigidEnv(in: RigidVsOut, normal: vec3f, shadingNormal: vec3f, probeLod: f32) -> vec3f {
   let toEye = normalize(frame.camera.xyz - in.world);
-  let right = normalize(cross(vec3f(0.0, 1.0, 0.0), toEye));
-  let up = cross(toEye, right);
-  let uv = vec2f(dot(normal, right), dot(normal, up)) * 0.5 + vec2f(0.5);
-  let texel = textureSample(rigidTexture, rigidSampler, uv, in.envLayer);
-  return dot(texel.rgb, vec3f(0.2126, 0.7152, 0.0722));
-}
-
-/**
- * The full reflection term. NB the env tap happens BEFORE the reflective/matte branch: textureSample needs
- * UNIFORM control flow (implicit derivatives), and the coefficient is a per-material varying — the same rule
- * the stochastic world sampler had to obey.
- */
-fn rigidClearcoat(in: RigidVsOut, normal: vec3f) -> vec3f {
-  let flaked = flakeNormal(normal, in.local);
-  let pattern = mix(1.0, envPattern(in, normal) * 2.0, PATTERN_MIX);
-  let coefficient = in.reflect.x;
-  // The flakes ride the SPECULAR lobes only — they are microscopic mirrors, not a bumpy body.
-  let specular = rigidSpecular(in, flaked, in.reflect.z * frame.params4.z);
-  if (coefficient <= 0.0 || frame.params4.z <= 0.0) {
-    return specular; // tyres, rubber, matte trim — SA leaves the plugin on them with a coefficient of 0
-  }
-  let toEye = normalize(frame.camera.xyz - in.world);
-  let mirror = reflect(-toEye, flaked);
-  // Prefiltered-IBL stand-in: paint blurs what it reflects, so blend the sharp mirror tap toward the sky in
-  // the NORMAL direction (a maximally blurred sample). Roughness 0 would be chrome; glass keeps it sharper.
+  let mirror = reflect(-toEye, shadingNormal);
   let sharp = reflectedWorld(mirror);
   let blurred = reflectedWorld(normalize(mix(mirror, normal, 0.65)));
-  let env = mix(sharp, blurred, PAINT_ROUGHNESS);
-  let fresnel = CLEARCOAT_F0 + (1.0 - CLEARCOAT_F0) * pow(1.0 - max(dot(flaked, toEye), 0.0), 5.0);
-  let strength = coefficient * frame.params4.z * fresnel * pattern;
-  return env * strength + specular;
+  let analytic = mix(sharp, blurred, PAINT_ROUGHNESS);
+  let probed = textureSampleLevel(probeTexture, probeSampler, mirror, probeLod).rgb;
+  return mix(analytic, probed, frame.params4.w);
+}
+
+/** neo pass 1's reflection amount: lerp(b⁵, 1, fresnel) × shininess — the LERP weight toward the env. */
+fn neoReflAmount(nDotV: f32, coefficient: f32) -> f32 {
+  let b = 1.0 - saturate(nDotV);
+  let b2 = b * b;
+  return clamp(mix(b2 * b2 * b, 1.0, NEO_FRESNEL) * coefficient * frame.params4.z, 0.0, 1.0);
 }
 
 /**
- * Specular highlights. The sun/moon give the broad sheen; the LIGHT POOL gives the tight ones that slide
- * along a bonnet as you drive under street lamps — which is what actually makes a car read as glossy at
- * night, when the sky reflection has almost nothing left to give.
+ * neo pass 2, the per-PIXEL half: broad Blinn highlights from the sun and moon only — they ride the FLAKED
+ * normal, which is what sparkles. The light-pool half lives in the VERTEX shader (round 5): a per-pixel
+ * pool loop on a close-up car halved the night frame rate, and the original neo evaluates its whole pass 2
+ * per vertex anyway. Callers add in.poolSpec on top.
  */
 fn rigidSpecular(in: RigidVsOut, normal: vec3f, level: f32) -> vec3f {
   if (level <= 0.0) {
@@ -2504,24 +2868,7 @@ fn rigidSpecular(in: RigidVsOut, normal: vec3f, level: f32) -> vec3f {
   let toEye = normalize(frame.camera.xyz - in.world);
   let sun = pow(max(dot(normal, normalize(frame.sunDir.xyz + toEye)), 0.0), SPEC_POWER);
   let moon = pow(max(dot(normal, normalize(frame.moonDir.xyz + toEye)), 0.0), SPEC_POWER);
-  var sum = (frame.sunColor.rgb * sun + frame.moonColor.rgb * moon) * SPEC_GAIN;
-  // The sky itself is a light: a sheen along the whole upper surface, which is what keeps a roof from
-  // reading as flat paint even with no sun in frame.
-  sum += skyBaseFor(normal) * (pow(max(normal.y, 0.0), 3.0) * 0.35);
-  // Bounded loop over the WHOLE pool — a car should catch its own headlights' bounce off a wall as much as
-  // the street lamp overhead, and the pool is where both live.
-  let count = min(u32(frame.params3.x), 64u);
-  for (var index = 0u; index < count; index += 1u) {
-    let light = localLights[index];
-    let toLight = light.position.xyz - in.world;
-    let dist = length(toLight);
-    if (dist < light.position.w) {
-      let halfway = normalize(toLight / max(dist, 0.001) + toEye);
-      let falloff = 1.0 - dist / light.position.w;
-      sum += light.color.rgb * (pow(max(dot(normal, halfway), 0.0), SPEC_LAMP_POWER) * falloff * falloff);
-    }
-  }
-  return sum * level;
+  return (frame.sunColor.rgb * sun + frame.moonColor.rgb * moon) * (SPEC_GAIN * level);
 }
 
 
@@ -2540,10 +2887,10 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   if (glow > 0.0) {
     return base * (frame.params.y + glow);
   }
-  // STATIC lamps only. A car must not be lit by its OWN headlights (the tail lamp sits a metre behind its own
-  // lens); prod has the same rule by construction — its pool lives in the WORLD material only.
+  // STATIC lamps only, computed per VERTEX (round 5). A car must not be lit by its OWN headlights (the
+  // tail lamp sits a metre behind its own lens); prod has the same rule by construction.
   let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
-    localLightStatic(in.world, normal);
+    in.poolDiffuse;
   return base * lit;
 }
 
@@ -2561,12 +2908,26 @@ fn rigidFog(world: vec3f) -> f32 {
 fn fsRigid(in: RigidVsOut) -> @location(0) vec4f {
   let fog = rigidFog(in.world);
   let viewDir = normalize(in.world - frame.camera.xyz);
-  let color = mix(rigidShade(in, rigidTexel(in)), skyFogFor(viewDir), fog);
+  let normal = normalize(in.normal);
+  // The neo car pipe, branch-free per class: PAINT = flaked normal + the paint mip; CHROME = plain normal,
+  // near-sharp mip, coefficient floored toward mirror; MATTE (tyres, trim, the vlo LOD, lamps) = amount 0.
+  // The LERP is the model's heart — the reflection REPLACES the paint by its amount instead of adding to
+  // it, so it can never glow; specular rides on top; fog dissolves the finished surface.
+  let isPaint = f32(in.matClass == 1u);
+  let isChrome = f32(in.matClass == 2u);
+  let shadingNormal = normalize(mix(normal, flakeNormal(normal, in.local), isPaint));
+  let toEye = normalize(frame.camera.xyz - in.world);
+  let coefficient = mix(in.reflect.x, max(in.reflect.x, CHROME_COEFFICIENT_FLOOR), isChrome);
+  let amount = neoReflAmount(dot(shadingNormal, toEye), coefficient) * (isPaint + isChrome);
+  let env = rigidEnv(in, normal, shadingNormal, mix(PROBE_PAINT_LOD, PROBE_CHROME_LOD, isChrome));
+  let specular = rigidSpecular(in, shadingNormal, in.reflect.z * frame.params4.z) + in.poolSpec;
+  let shaded = mix(rigidShade(in, rigidTexel(in)), env, amount) + specular;
+  let color = mix(shaded, skyFogFor(viewDir), fog);
   return vec4f(color, 1.0);
 }
 
 @fragment
-fn fsRigidBlend(in: RigidVsOut) -> @location(0) vec4f {
+fn fsRigidBlend(in: RigidVsOut, @builtin(front_facing) frontFacing: bool) -> @location(0) vec4f {
   // Premultiplied for the (one, 1−src-α) pipeline; fog scales the pair (068 semantics for blends).
   // The alpha is BOTH sources: glass carries it in the material colour, body decals (scratch/crack overlays)
   // carry it in the TEXEL. Taking only the material's would render a decal opaque — its transparent black
@@ -2575,11 +2936,22 @@ fn fsRigidBlend(in: RigidVsOut) -> @location(0) vec4f {
   let fog = rigidFog(in.world);
   let viewDir = normalize(in.world - frame.camera.xyz);
   let normal = normalize(in.normal);
-  // Glass turns MIRROR at grazing angles — that is what glass does, and a windscreen you can see straight
-  // through from every angle looks like a hole in the car. The clearcoat fresnel drives the opacity itself.
-  let fresnel = pow(1.0 - max(dot(normal, -viewDir), 0.0), 5.0);
-  let alpha = clamp(texel.a * in.color.a + fresnel * in.reflect.x * frame.params4.z, 0.0, 1.0);
-  let color = mix(rigidShade(in, texel) * alpha, skyFogFor(viewDir) * alpha, fog);
+  // The reflection belongs to the OUTER surface only: glass is drawn double-sided, and adding the mirrored
+  // world onto BACK faces painted warped ghosts over the view from inside the car ("dioptric glass" —
+  // bench round 3). A branch-free gate; back faces keep plain tinted transparency.
+  let outside = f32(frontFacing);
+  let toEye = normalize(frame.camera.xyz - in.world);
+  // GLASS on the neo curve: plain normal (no flakes), a near-sharp probe mip. The neo amount drives BOTH
+  // the mirrored colour and the opacity swell — glass turns mirror at grazing angles, and a windscreen you
+  // can see straight through from every angle looks like a hole in the car.
+  let amount = neoReflAmount(dot(normal, toEye), in.reflect.x) * GLASS_REFLECT * outside;
+  let alpha = clamp(texel.a * in.color.a + amount, 0.0, 1.0);
+  let env = rigidEnv(in, normal, normal, PROBE_GLASS_LOD);
+  let specular = (rigidSpecular(in, normal, in.reflect.z * frame.params4.z) + in.poolSpec) * outside;
+  // Premultiplied compositing: the reflected env replaces the tinted glass by its amount, then fog takes
+  // the finished pair (068 semantics).
+  let glass = mix(rigidShade(in, texel) * alpha, env, amount) + specular;
+  let color = mix(glass, skyFogFor(viewDir) * alpha, fog);
   return vec4f(color, alpha);
 }
 "
@@ -2622,7 +2994,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -3029,7 +3402,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
@@ -3497,7 +3871,8 @@ struct Frame {
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
   waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), spare]. The pool is ordered
+  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
+  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,

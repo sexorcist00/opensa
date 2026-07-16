@@ -22,6 +22,7 @@ import {
   fetchConverterMetrics,
   formatRecord,
 } from './bench';
+import { type DebugPanelState, mountDebugPanel } from './debug-panel';
 import { type EnvironmentDriver, parametricDriver, timecycDriver } from './environment';
 import { loadPak } from './pak-loader';
 import { loadPedProbe } from './ped';
@@ -54,6 +55,11 @@ function applyEnvironmentOverrides(engine: Engine, params: URLSearchParams): voi
   }
 }
 
+/** Bench/leak runs own the HUD and the camera — the debug panel would fight them. */
+function benchRequested(params: URLSearchParams): boolean {
+  return params.get('bench') !== null || params.get('test') === 'leak';
+}
+
 /** '[' / ']' weather cycling — the callback receives the id delta (+1 / +19 ≡ −1 mod 20). */
 function bindWeatherKeys(onSwitch: (delta: number) => void): void {
   window.addEventListener('keydown', (event) => {
@@ -77,6 +83,15 @@ function buildSyntheticDistrict(engine: Engine, gridSide: number, boxesPerSide: 
   return recordedDraws;
 }
 
+/** `?at=gtaX,gtaY,gtaZ` moves the orbit focus to a GTA-coordinate spot (the web host's `?spawn` twin) —
+ *  the vehicle bench wants a street corner, not the pak's geometric centre (downtown canyon walls). */
+function focusOverride(params: URLSearchParams): [number, number, number] | null {
+  const at = (params.get('at') ?? '').split(',').map(Number);
+
+  // GTA (x, y, z-up) → engine (x, y-up, z).
+  return at.length === 3 && at.every(Number.isFinite) ? [at[0], at[2], -at[1]] : null;
+}
+
 /** The steady-state HUD block (bench/leak modes replace it wholesale). */
 function hudText(input: {
   buildMs: number;
@@ -95,7 +110,7 @@ function hudText(input: {
     `device      ${input.engineInfo}\n` +
     `frame       ${frameAvg.toFixed(2)} ms (${(1000 / Math.max(frameAvg, 0.001)).toFixed(0)} fps), max ${Math.max(...input.frames).toFixed(0)}\n` +
     `submit CPU  ${input.stats.submitMs.toFixed(2)} ms\n` +
-    `GPU pass    ${input.stats.gpuPassMs > 0 ? input.stats.gpuPassMs.toFixed(2) : 'n/a'} ms · post ${input.stats.gpuPostMs > 0 ? input.stats.gpuPostMs.toFixed(2) : 'n/a'} ms\n` +
+    `GPU pass    ${input.stats.gpuPassMs > 0 ? input.stats.gpuPassMs.toFixed(2) : 'n/a'} ms · post ${input.stats.gpuPostMs > 0 ? input.stats.gpuPostMs.toFixed(2) : 'n/a'} ms · probe ${input.stats.gpuProbeMs > 0 ? input.stats.gpuProbeMs.toFixed(2) : 'off'} ms\n` +
     `cells       ${input.stats.cellsVisible}/${input.stats.cellsTotal} visible, draws ${input.stats.drawsRecorded}\n` +
     `residency   ${(input.stats.residencyBytes / (1024 * 1024)).toFixed(1)} MB\n` +
     `build       ${input.buildMs.toFixed(0)} ms (fixture, off the P0 clock)` +
@@ -136,6 +151,25 @@ function leakStep(
     console[pass ? 'log' : 'error'](`[leak] ${pass ? 'PASS' : 'FAIL'}\nbaseline ${leakBaseline}\nnow      ${now}`);
     hud.style.background = pass ? 'rgba(10,60,16,0.85)' : 'rgba(80,10,10,0.85)';
   }
+}
+
+/**
+ * `?vehicle=N` setup (074/16 round 2): `?vmodel=<dir>` picks an alternative fixture (vehicle-probe CLI
+ * `--out`); the bench default is PARKED at the focus with a close camera — `?drive=1` restores the convoy
+ * circle and its wider framing.
+ */
+async function loadVehicleBench(
+  engine: Engine,
+  params: URLSearchParams,
+  focus: readonly [number, number, number],
+  vehicleCount: number,
+): Promise<{ host: Awaited<ReturnType<typeof loadVehicleProbe>>; startDistance: number }> {
+  const vehicleY = Number(params.get('pedy') ?? focus[1]) || focus[1];
+  const vehicleBase = params.get('vmodel') ?? 'vehicle';
+  const drive = params.get('drive') === '1';
+  const host = await loadVehicleProbe(engine, [focus[0], vehicleY, focus[2]], vehicleCount, vehicleBase, drive);
+
+  return { host, startDistance: drive ? 55 : 14 };
 }
 
 async function main(): Promise<void> {
@@ -207,11 +241,13 @@ async function main(): Promise<void> {
     orbitRadius = half * 1.7;
     title = `synthetic district (${gridSide}×${gridSide} cells, ${recordedDraws} recorded draws)`;
   }
+  focus = focusOverride(params) ?? focus;
   const buildMs = performance.now() - buildStart;
   const frames: number[] = [];
   let previous = performance.now();
   let angle = 0;
-  let zoom = 1;
+  // `?orbit=N` starts the camera N engine units from the focus (the bench close-up; wheel still zooms).
+  let zoom = (orbitOverride(params) ?? orbitRadius) / orbitRadius;
   // Skinning probe (074/08 B1): `?ped=1` drops the animated fixture ped at the focus point and STARTS the
   // camera zoomed onto it (a 1.8-unit ped is subpixel at a full-city orbit radius); wheel out to leave.
   let pedHost: Awaited<ReturnType<typeof loadPedProbe>> | null = null;
@@ -229,16 +265,22 @@ async function main(): Promise<void> {
   let vehicleMs = 0;
   const vehicleCount = Number(params.get('vehicle') ?? 0) || 0;
   if (vehicleCount > 0) {
-    const vehicleY = Number(params.get('pedy') ?? focus[1]) || focus[1];
-    vehicleHost = await loadVehicleProbe(engine, [focus[0], vehicleY, focus[2]], vehicleCount);
-    zoom = Math.min(zoom, 55 / orbitRadius);
+    const bench = await loadVehicleBench(engine, params, focus, vehicleCount);
+    vehicleHost = bench.host;
+    zoom = Math.min(zoom, bench.startDistance / orbitRadius);
   }
+  const panelState = mountLookBench(params, vehicleCount, hour, (nextHour) => {
+    hour = nextHour;
+    applyEnvironment();
+  });
   let heightFactor = 0.9;
   let dragging = false;
   // Wheel = zoom (the alpha-edge inspection needs to get CLOSE to foliage/fences); drag = orbit/height.
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
-    zoom = Math.min(20, Math.max(0.02, zoom * (event.deltaY > 0 ? 1.1 : 0.9)));
+    // The floor is in ENGINE UNITS, not a ratio: on a full-city pak orbitRadius is thousands of units and
+    // a ratio floor of 0.02 stopped the wheel ~100 u out — you could never zoom INTO a car (074/16 bench).
+    zoom = Math.min(20, Math.max(2.2 / orbitRadius, zoom * (event.deltaY > 0 ? 1.1 : 0.9)));
   });
   canvas.addEventListener('pointerdown', () => (dragging = true));
   window.addEventListener('pointerup', () => (dragging = false));
@@ -274,6 +316,16 @@ async function main(): Promise<void> {
   const collector = new BenchCollector(benchScene ? BENCH_SCENE_MEASURE[benchScene] : undefined);
   let benchDone = false;
 
+  // Env probe (074/16): follows the orbit focus (the vehicle convoy circles it within the reset margin).
+  const applyProbeState = (): void => {
+    engine.probeCenter = panelState.probe ? [focus[0], focus[1] + 1, focus[2]] : null;
+    engine.probeView = panelState.probeView;
+  };
+  // The vehicle bench holds the camera still (the LOOK is the point — 074/16); drag still orbits, and
+  // bench close-ups need a street-level eye where city orbits keep the old 4 u floor.
+  const autoSpin = !freeze && vehicleCount === 0;
+  const eyeFloor = vehicleCount > 0 ? 1.2 : 4;
+
   const loop = (): void => {
     const now = performance.now();
     const frameDt = now - previous;
@@ -282,7 +334,7 @@ async function main(): Promise<void> {
     if (frames.length > 120) {
       frames.shift();
     }
-    if (!freeze && !dragging) {
+    if (autoSpin && !dragging) {
       angle += 0.003;
     }
     if (held.size > 0) {
@@ -303,7 +355,7 @@ async function main(): Promise<void> {
           aspect: canvas.width / Math.max(1, canvas.height),
           eye: [
             focus[0] + Math.cos(angle) * radius,
-            focus[1] + Math.max(4, radius * heightFactor * 0.45),
+            focus[1] + Math.max(eyeFloor, radius * heightFactor * 0.45),
             focus[2] + Math.sin(angle) * radius,
           ],
           far: 10000,
@@ -329,6 +381,7 @@ async function main(): Promise<void> {
     if (vehicleHost) {
       vehicleMs = vehicleHost.update(now / 1000);
     }
+    applyProbeState();
     const stats = engine.frame(camera);
     if (benchScript && !benchDone) {
       collector.sample(frameDt, stats);
@@ -360,6 +413,37 @@ async function main(): Promise<void> {
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
+}
+
+/**
+ * The vehicle look bench (074/16 round 2): live time-of-day buttons + the env-probe toggles. The probe
+ * defaults ON when a vehicle is present (reflections are what the bench is FOR) — with a streamed pak the
+ * cube shows the real city around the focus; without one the analytic sky fallback still exercises the
+ * material classes.
+ */
+function mountLookBench(
+  params: URLSearchParams,
+  vehicleCount: number,
+  hour: number,
+  onHour: (hour: number) => void,
+): DebugPanelState {
+  const panelState: DebugPanelState = {
+    hour,
+    probe: vehicleCount > 0 ? params.get('probe') !== '0' : params.get('probe') === '1',
+    probeView: params.get('probeview') === '1',
+  };
+  if (!benchRequested(params)) {
+    mountDebugPanel(panelState, () => onHour(panelState.hour));
+  }
+
+  return panelState;
+}
+
+/** `?orbit=N` — the starting camera distance in engine units (the bench close-up). */
+function orbitOverride(params: URLSearchParams): null | number {
+  const orbit = Number(params.get('orbit') ?? Number.NaN);
+
+  return Number.isFinite(orbit) && orbit > 0 ? orbit : null;
 }
 
 /** WASD pans the orbit FOCUS — streaming rings follow it (how you travel a full-city pak in the lab). */

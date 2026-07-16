@@ -40,10 +40,12 @@ export async function loadVehicleProbe(
   engine: Engine,
   center: readonly [number, number, number],
   count = 1,
+  base = 'vehicle',
+  drive = false,
 ): Promise<VehicleProbeHost> {
   const [fixture, bin] = await Promise.all([
-    fetch('/vehicle/vehicle.json').then((response) => response.json() as Promise<VehicleFixture>),
-    fetch('/vehicle/vehicle.bin').then((response) => response.arrayBuffer()),
+    fetch(`/${base}/vehicle.json`).then((response) => response.json() as Promise<VehicleFixture>),
+    fetch(`/${base}/vehicle.bin`).then((response) => response.arrayBuffer()),
   ]);
   const bytes = new Uint8Array(bin);
   const slice = (offset: number, length: number): Uint8Array => bytes.subarray(offset, offset + length);
@@ -92,22 +94,35 @@ export async function loadVehicleProbe(
       const started = performance.now();
       engine.dynamicLights.length = 0;
       cars.forEach((car, index) => {
-        // Circle drive: heading tangent to the circle, wheels roll by arc distance. Extra cars ride the same
-        // circle, evenly spaced — a convoy, so multi-instance is obvious at a glance.
-        const angular = SPEED / CIRCLE_RADIUS;
-        const angle = nowSec * angular + (index * 2 * Math.PI) / cars.length;
-        const x = center[0] + Math.cos(angle) * CIRCLE_RADIUS;
-        const z = center[2] + Math.sin(angle) * CIRCLE_RADIUS;
-        // Tangent direction in the engine XZ plane; GTA vehicles face +y (engine −z after the axis change).
-        const heading = -angle - Math.PI / 2;
-        writeRoot(root, [x, center[1], z], heading);
-        car.entity.setRoot(root);
-        const spin = (nowSec * SPEED) / Math.max(0.1, fixture.wheels[0]?.radius ?? 0.35);
-        for (const wheel of fixture.wheels) {
-          const spinQuat = axisAngle(1, 0, 0, spin);
-          car.entity.setPartRotation(wheel.part, wheel.front ? quatMul(axisAngle(0, 0, 1, STEER), spinQuat) : spinQuat);
+        if (drive) {
+          // Circle drive: heading tangent to the circle, wheels roll by arc distance. Extra cars ride the
+          // same circle, evenly spaced — a convoy, so multi-instance is obvious at a glance.
+          const angular = SPEED / CIRCLE_RADIUS;
+          const angle = nowSec * angular + (index * 2 * Math.PI) / cars.length;
+          const x = center[0] + Math.cos(angle) * CIRCLE_RADIUS;
+          const z = center[2] + Math.sin(angle) * CIRCLE_RADIUS;
+          // Tangent in the engine XZ plane; GTA vehicles face +y (engine −z after the axis change).
+          const heading = -angle - Math.PI / 2;
+          writeRoot(root, [x, center[1], z], heading);
+          car.entity.setRoot(root);
+          const spin = (nowSec * SPEED) / Math.max(0.1, fixture.wheels[0]?.radius ?? 0.35);
+          for (const wheel of fixture.wheels) {
+            const spinQuat = axisAngle(1, 0, 0, spin);
+            car.entity.setPartRotation(
+              wheel.part,
+              wheel.front ? quatMul(axisAngle(0, 0, 1, STEER), spinQuat) : spinQuat,
+            );
+          }
+          pushLampLights(engine, root, heading, headlight, taillight);
+
+          return;
         }
-        pushLampLights(engine, root, heading, headlight, taillight);
+        // The look bench (074/16 round 2 default): PARKED at the focus — the camera orbits/zooms the car
+        // itself. Extra cars line up side by side; wheels neutral. NO lamp pool lights: a parked SA car
+        // runs no headlights, and four per-pixel dynamic lights halved the night frame rate (bench round 3).
+        const heading = Math.PI / 4;
+        writeRoot(root, [center[0] + (index - (cars.length - 1) / 2) * 3.4, center[1], center[2]], heading);
+        car.entity.setRoot(root);
       });
       engine.updateVehicles();
 
