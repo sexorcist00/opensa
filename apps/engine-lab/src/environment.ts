@@ -5,15 +5,19 @@
  */
 import type { Engine } from '@opensa/engine';
 
-import { createEngineEnvironmentDriver } from '@opensa/game/adapters/engine-environment-driver';
+import {
+  createEngineEnvironmentDriver,
+  DEFAULT_ENGINE_ENV_CONFIG,
+  type EngineEnvConfig,
+} from '@opensa/game/adapters/engine-environment-driver';
 
 export interface EnvironmentDriver {
   apply(hour: number): void;
 }
 
 /** Fallback parametric arc (no timecyc in the manifest — old paks). */
-export function parametricDriver(engine: Engine): EnvironmentDriver {
-  return createEngineEnvironmentDriver(engine.environment);
+export function parametricDriver(engine: Engine, aces = true, bloom: null | number = null): EnvironmentDriver {
+  return createEngineEnvironmentDriver(engine.environment, { config: labConfig(aces, bloom) });
 }
 
 /** The real thing: timecyc colours + fog ranges per hour/weather.
@@ -25,10 +29,38 @@ export function timecycDriver(
   is24h: boolean,
   weather: number,
   fogScale = 2.5,
+  aces = true,
+  bloom: null | number = null,
 ): EnvironmentDriver {
   return createEngineEnvironmentDriver(engine.environment, {
+    config: labConfig(aces, bloom),
     fogScale,
     timecyc: { is24h, text: timecycText },
     weather,
   });
+}
+
+/** Lab standalone config with the `?aces=0` / `?bloom=` A/B folded in (074/09): `bloom` null = default,
+ *  0 = off, any other number = intensity override. */
+function labConfig(aces: boolean, bloom: null | number): EngineEnvConfig {
+  if (aces && bloom === null) {
+    return DEFAULT_ENGINE_ENV_CONFIG;
+  }
+  const base = DEFAULT_ENGINE_ENV_CONFIG.graphics;
+
+  return {
+    ...DEFAULT_ENGINE_ENV_CONFIG,
+    graphics: {
+      ...base,
+      bloom:
+        bloom === null
+          ? base.bloom
+          : {
+              enabled: bloom > 0,
+              intensity: bloom > 0 ? bloom : base.bloom.intensity,
+              threshold: base.bloom.threshold,
+            },
+      toneMapping: aces,
+    },
+  };
 }

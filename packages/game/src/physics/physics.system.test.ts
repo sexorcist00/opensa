@@ -59,6 +59,7 @@ function config(gameState: Config['gameState']): Config {
         trees: { density: 1, drawDistance: 150, enabled: true },
         underwater: { density: 1, drawDistance: 60, enabled: true },
       },
+      renderScale: 1,
       shadows: { distance: 800, enabled: true },
       sky: { density: 0.96, exposure: 0.5, model: 'classic', mood: 0.7, pbrExposure: 0.55, weight: 0.4 },
       ssao: { enabled: true, intensity: 1.5, radius: 0.2 },

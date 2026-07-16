@@ -9,6 +9,105 @@
 
 const MODULES: Record<string, string> = {
   /**
+   * Bloom (074/09 — prod parity with postprocessing's BloomEffect, mipmapBlur path). Three entry points
+   * share the fullscreen-triangle vertex: PREFILTER (full-res luminance threshold — prod thresholds BEFORE
+   * the chain, texel-wise, so sub-pixel emitters survive), DOWNSAMPLE (the 13-tap kernel: 4 inner ×0.125 +
+   * 8 outer + centre ×0.05556, out-of-frame taps zeroed like prod's clampToBorder) and UPSAMPLE (9-tap
+   * tent 1-2-1/16, blended over the same-size downsample mip with `mix(support, tent, radius)`).
+   * All passes run on rgba16float targets — HDR overshoot IS the bloom energy (the plan-071 lesson).
+   */
+  bloom: /* wgsl */ `
+struct Bloom {
+  // texel = [1/inputW, 1/inputH, 0, 0] of the INPUT texture; params = [threshold, smoothing, radius, 0].
+  texel: vec4f,
+  params: vec4f,
+};
+@group(0) @binding(0) var<uniform> bloom: Bloom;
+@group(0) @binding(1) var inputTex: texture_2d<f32>;
+@group(0) @binding(2) var inputSampler: sampler;
+// Upsample only: the same-size DOWNSAMPLE mip the tent result composites over.
+@group(0) @binding(3) var supportTex: texture_2d<f32>;
+
+struct BloomOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+};
+
+@vertex
+fn vsBloom(@builtin(vertex_index) index: u32) -> BloomOut {
+  var corners = array<vec2f, 3>(vec2f(-1.0, -3.0), vec2f(3.0, 1.0), vec2f(-1.0, 1.0));
+  let corner = corners[index];
+  var out: BloomOut;
+  out.clip = vec4f(corner, 0.0, 1.0);
+  out.uv = vec2f(corner.x * 0.5 + 0.5, 0.5 - corner.y * 0.5);
+  return out;
+}
+
+// Rec709 luminance — three's luminance() (the prod threshold is measured on this).
+fn bloomLuma(rgb: vec3f) -> f32 {
+  return dot(rgb, vec3f(0.2126, 0.7152, 0.0722));
+}
+
+@fragment
+fn fsBloomPrefilter(in: BloomOut) -> @location(0) vec4f {
+  let texel = textureSampleLevel(inputTex, inputSampler, in.uv, 0.0);
+  let mask = smoothstep(bloom.params.x, bloom.params.x + bloom.params.y, bloomLuma(texel.rgb));
+  return texel * mask;
+}
+
+// 1 inside [0,1]², 0 outside — prod's clampToBorder (edge taps must not smear the frame border).
+fn insideFrame(uv: vec2f) -> f32 {
+  let inside = step(vec2f(0.0), uv) * step(uv, vec2f(1.0));
+  return inside.x * inside.y;
+}
+
+fn borderTap(uv: vec2f) -> vec4f {
+  return textureSampleLevel(inputTex, inputSampler, uv, 0.0) * insideFrame(uv);
+}
+
+const DOWN_INNER = 0.125;
+const DOWN_OUTER = 0.05556;
+
+@fragment
+fn fsBloomDown(in: BloomOut) -> @location(0) vec4f {
+  let t = bloom.texel.xy;
+  var c = vec4f(0.0);
+  // Inner ring (half-texel corners at the input resolution).
+  c += borderTap(in.uv + t * vec2f(-1.0, 1.0)) * DOWN_INNER;
+  c += borderTap(in.uv + t * vec2f(1.0, 1.0)) * DOWN_INNER;
+  c += borderTap(in.uv + t * vec2f(-1.0, -1.0)) * DOWN_INNER;
+  c += borderTap(in.uv + t * vec2f(1.0, -1.0)) * DOWN_INNER;
+  // Outer ring + centre.
+  c += borderTap(in.uv + t * vec2f(-2.0, 2.0)) * DOWN_OUTER;
+  c += borderTap(in.uv + t * vec2f(0.0, 2.0)) * DOWN_OUTER;
+  c += borderTap(in.uv + t * vec2f(2.0, 2.0)) * DOWN_OUTER;
+  c += borderTap(in.uv + t * vec2f(-2.0, 0.0)) * DOWN_OUTER;
+  c += borderTap(in.uv + t * vec2f(2.0, 0.0)) * DOWN_OUTER;
+  c += borderTap(in.uv + t * vec2f(-2.0, -2.0)) * DOWN_OUTER;
+  c += borderTap(in.uv + t * vec2f(0.0, -2.0)) * DOWN_OUTER;
+  c += borderTap(in.uv + t * vec2f(2.0, -2.0)) * DOWN_OUTER;
+  c += textureSampleLevel(inputTex, inputSampler, in.uv, 0.0) * DOWN_OUTER;
+  return c;
+}
+
+@fragment
+fn fsBloomUp(in: BloomOut) -> @location(0) vec4f {
+  let t = bloom.texel.xy;
+  var c = vec4f(0.0);
+  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(-1.0, 1.0), 0.0) * 0.0625;
+  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(0.0, 1.0), 0.0) * 0.125;
+  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(1.0, 1.0), 0.0) * 0.0625;
+  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(-1.0, 0.0), 0.0) * 0.125;
+  c += textureSampleLevel(inputTex, inputSampler, in.uv, 0.0) * 0.25;
+  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(1.0, 0.0), 0.0) * 0.125;
+  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(-1.0, -1.0), 0.0) * 0.0625;
+  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(0.0, -1.0), 0.0) * 0.125;
+  c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(1.0, -1.0), 0.0) * 0.0625;
+  let support = textureSampleLevel(supportTex, inputSampler, in.uv, 0.0);
+  return mix(support, c, bloom.params.z);
+}
+`,
+  /**
    * Procedural clutter (074/19 B7·d): grass/bushes/rocks scattered per cell from procobj.dat, drawn INSTANCED —
    * thousands of copies of a handful of models, one draw per (cell × model). Per-instance world matrix in a
    * storage buffer (instance_index), world-material lighting (vertex-colour prelit + sun/moon + the 068 fog).
@@ -250,6 +349,11 @@ struct Frame {
   // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
+  // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
+  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // the sun side (prod applyClouds colours its deck from exactly these columns).
+  cloudTop: vec4f,
+  cloudBottom: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -275,7 +379,28 @@ fn skyBaseFor(dir: vec3f) -> vec3f {
   let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
   let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
   let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
-  return textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+  var col = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
+  // Night sky glow (074/09 sky round — the prod skyBase port): the authored SA night gradient is
+  // near-black, so prod adds the moon's cool Rayleigh scatter (halo + a soft lift of its hemisphere) and
+  // the warm URBAN skyglow band at the horizon (San Andreas is a metropolis — city nights are never
+  // black; the deck reflects the city light, so overcast makes it BRIGHTER). Living in the shared base,
+  // it feeds the world fog too — night fog matches the glowing horizon, the 068 invariant.
+  // FADE (sky round 3 — "включается резко"): the sink window is widened to the whole post-sunset margin
+  // AND the glow rides dn (the hour-long dusk ramp) — the city light breathes in with the darkness
+  // instead of snapping on in the ~40 s the sun needs to cross a narrow horizon band.
+  let pbrNight = (1.0 - smoothstep(-0.22, -0.01, frame.sunDir.y)) * frame.params.x;
+  if (pbrNight > 0.01) {
+    // env.moonColor ≈ (0.34, 0.44, 0.72) × its CPU gate (peak 0.5 × skylight 0.6 → b = 0.216) — recover
+    // the gate so the glow follows the night band/cloud fade without a new UBO slot.
+    let moonGate = clamp(frame.moonColor.b / 0.216, 0.0, 1.0);
+    let moonGlow = vec3f(0.45, 0.62, 1.0) * (0.055 * moonGate);
+    let cityGlow = vec3f(1.0, 0.58, 0.3) * (0.03 * (1.0 + frame.sunCorona.w * 1.2));
+    let moonHalo = pow(max(dot(dir, frame.moonDir.xyz), 0.0), 8.0);
+    let moonHemi = 0.5 + 0.5 * dot(dir, frame.moonDir.xyz);
+    let band = pow(1.0 - clamp(dir.y, 0.0, 1.0), 6.0);
+    col += (moonGlow * (moonHalo * 0.6 + moonHemi * moonHemi * 0.12) + cityGlow * band) * pbrNight;
+  }
+  return col;
 }
 
 // Sun + moon discs, split from the gradient so the cloud layer can OCCLUDE them (row 15): the disc
@@ -320,10 +445,11 @@ fn cloudLayerFor(dir: vec3f) -> vec4f {
     textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
     frame.camera.w,
   );
-  let mood = frame.skyHorizon.rgb;
-  let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
+  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
+    (1.0 - frame.params3.z * 0.6);
   let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * brightness, alpha);
+  return vec4f(cloud.rgb * tint, alpha);
 }
 
 /**
@@ -361,7 +487,9 @@ fn moonFor(dir: vec3f) -> vec3f {
   let body = texel.rgb * (face * lit * step(r, 1.0) * MOON_BODY_GAIN);
   // A wide soft halo marks the moon's place in the horizon band even when the disc is a thin crescent.
   let halo = pow(max(moonDot, 0.0), 96.0) * 2.2;
-  return frame.moonColor.rgb * (body + vec3f(halo));
+  // moonColor now carries the prod-strength LIGHT (peak b 0.216, was 0.105) — rescale so the shipped
+  // disc/halo brightness stays exactly as field-accepted.
+  return frame.moonColor.rgb * 0.486 * (body + vec3f(halo));
 }
 
 // The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
@@ -606,10 +734,14 @@ struct Post {
   // sun = [uv.x, uv.y, intensity (0 = off), decay per tap]; tint = [rgb godray colour, brightness threshold].
   sun: vec4f,
   tint: vec4f,
+  // params = [ACES tonemap 0/1, bloom intensity (0 = off), reserved, reserved].
+  params: vec4f,
 };
 @group(0) @binding(0) var<uniform> post: Post;
 @group(0) @binding(1) var scene: texture_2d<f32>;
 @group(0) @binding(2) var sceneSampler: sampler;
+// Bloom chain result (half-res 16f, 074/09) — bilinear-upsampled here by the sampler.
+@group(0) @binding(3) var bloomTex: texture_2d<f32>;
 
 struct PostOut {
   @builtin(position) clip: vec4f,
@@ -629,6 +761,30 @@ fn vsPost(@builtin(vertex_index) index: u32) -> PostOut {
 
 const GODRAY_TAPS = 20u;
 
+// ACES filmic (074/09): the EXACT curve prod is calibrated against — three's Stephen Hill fit as consumed
+// by postprocessing's ToneMappingEffect (exposure 1). Matrices carry sRGB↔AP1 (columns, transposed from
+// the source like three's); the /0.6 scale is three's brighter-viewing-environment adjustment (#19621).
+fn rrtAndOdtFit(v: vec3f) -> vec3f {
+  let a = v * (v + vec3f(0.0245786)) - vec3f(0.000090537);
+  let b = v * (0.983729 * v + vec3f(0.4329510)) + vec3f(0.238081);
+  return a / b;
+}
+
+fn acesFilmic(color: vec3f) -> vec3f {
+  let inputMat = mat3x3f(
+    vec3f(0.59719, 0.07600, 0.02840),
+    vec3f(0.35458, 0.90834, 0.13383),
+    vec3f(0.04823, 0.01566, 0.83777),
+  );
+  let outputMat = mat3x3f(
+    vec3f(1.60475, -0.10208, -0.00327),
+    vec3f(-0.53108, 1.10813, -0.07276),
+    vec3f(-0.07367, -0.00605, 1.07602),
+  );
+  let mapped = outputMat * rrtAndOdtFit(inputMat * (color / 0.6));
+  return clamp(mapped, vec3f(0.0), vec3f(1.0));
+}
+
 @fragment
 fn fsPost(in: PostOut) -> @location(0) vec4f {
   var col = textureSampleLevel(scene, sceneSampler, in.uv, 0.0).rgb;
@@ -644,6 +800,14 @@ fn fsPost(in: PostOut) -> @location(0) vec4f {
       weight *= post.sun.w;
     }
     col += acc * post.tint.rgb * (post.sun.z / f32(GODRAY_TAPS));
+  }
+  // Bloom composite (prod SCREEN blend: dst + src − min(dst·src, 1)); intensity 0 = a no-op.
+  let bloomSrc = textureSampleLevel(bloomTex, sceneSampler, in.uv, 0.0).rgb * post.params.y;
+  col = col + bloomSrc - min(col * bloomSrc, vec3f(1.0));
+  // Tonemap LAST (prod order: godrays → bloom → ACES) — the HDR overshoot feeds the effects above,
+  // ACES compresses the sum; the sRGB swapchain view encodes on write.
+  if (post.params.x > 0.5) {
+    col = acesFilmic(col);
   }
   return vec4f(col, 1.0);
 }
@@ -983,6 +1147,51 @@ fn starField(dir: vec3f) -> f32 {
   return point * bright * twinkle * taper;
 }
 
+// Value-noise fbm (074/09 sky round 3 — the prod SKY_BASE port): drives the CIRRUS layer below.
+fn skyVnoise(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash21(i), hash21(i + vec2f(1.0, 0.0)), u.x),
+    mix(hash21(i + vec2f(0.0, 1.0)), hash21(i + vec2f(1.0, 1.0)), u.x),
+    u.y,
+  );
+}
+
+fn skyFbm(p: vec2f) -> f32 {
+  var v = 0.0;
+  var a = 0.5;
+  var q = p;
+  for (var i = 0u; i < 5u; i += 1u) {
+    v += a * skyVnoise(q);
+    q = q * 2.03 + vec2f(1.7);
+    a *= 0.5;
+  }
+  return v;
+}
+
+// CIRRUS (prod applyClouds layer 1): thin, high, stretched wisps drifting slowly on their own heading —
+// what makes a clear day sky read ALIVE without touching the painted panorama deck (the user keeps the
+// skybox). They belong to clear skies, so coverage suppresses them; timecyc cloud colours tint them.
+fn cirrusFor(dir: vec3f, sunDot: f32) -> vec4f {
+  if (dir.y <= 0.02) {
+    return vec4f(0.0);
+  }
+  let t = frame.params2.z;
+  let cuv = dir.xz / max(dir.y, 0.12) * vec2f(0.9, 0.35) + vec2f(t * 0.0013, t * -0.0007) + vec2f(31.7);
+  let cover = clamp(frame.sunCorona.w, 0.0, 1.0);
+  let amount = smoothstep(0.60, 0.92, skyFbm(cuv)) * (1.0 - cover) * 0.55;
+  // The golden term peaks AT the horizon, so a hard y-above-0 select SNAPPED it (0 → 0.9) the frame the
+  // sun crossed — the 19:59/5:59 sky jump. ~8 game-minutes of climb (y 0 → 0.045) ease it in/out instead.
+  let golden = (0.25 + 0.65 * (1.0 - clamp(frame.sunDir.y, 0.0, 1.0))) *
+    smoothstep(0.0, 0.045, frame.sunDir.y);
+  let tint = mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.85) * 1.5 +
+    frame.sunCorona.rgb * (golden * 0.2 + pow(sunDot, 5.0) * golden * 0.5);
+  let horizon = smoothstep(0.02, 0.30, dir.y);
+  return vec4f(tint, amount * horizon);
+}
+
 @fragment
 fn fsSky(in: SkyOut) -> @location(0) vec4f {
   let far = frame.invViewProj * vec4f(in.ndc, 1.0, 1.0);
@@ -995,6 +1204,10 @@ fn fsSky(in: SkyOut) -> @location(0) vec4f {
   // params3.y = cloud layer enable (0 = no texture bound).
   var occl = 0.0;
   let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+  // CIRRUS wisps UNDER the painted deck (074/09 sky round 3): the clear-day sky motion the panorama
+  // cannot provide; rides the cloud-layer alpha knob so graphics.clouds.opacity still governs.
+  let cirrus = cirrusFor(dir, sunDot);
+  col = mix(col, cirrus.rgb, cirrus.a * frame.params3.w);
   if (frame.params3.y > 0.5 && dir.y > 0.0) {
     let theta = acos(clamp(dir.y, -1.0, 1.0));
     let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
@@ -1008,13 +1221,23 @@ fn fsSky(in: SkyOut) -> @location(0) vec4f {
       textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
       frame.camera.w,
     );
-    // Luminance-scaled by the horizon colour so clouds live in the timecyc mood; night floor keeps them
-    // from black; cloudDark flattens storm layers.
-    let mood = frame.skyHorizon.rgb;
-    let brightness = max((mood.r + mood.g + mood.b) / 3.0 * 1.4, 0.10) * (1.0 - frame.params3.z * 0.6);
+    // timecyc cloud tint (074/09 sky round 2 — prod applyClouds colours): lowClouds/bottomClouds carry
+    // the authored per-hour palette, so dawn/dusk turns the WHOLE deck pink on BOTH sides of the sky
+    // (the old horizon-luminance scale was grey and one-sided with the rim). Night floor keeps the deck
+    // from pure black; cloudDark flattens storm layers.
+    let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
+      (1.0 - frame.params3.z * 0.6);
     let horizonFade = smoothstep(0.0, 0.12, dir.y);
     let alpha = cloud.a * horizonFade;
-    col = mix(col, cloud.rgb * brightness, alpha * frame.params3.w);
+    // Golden-hour sun tint on the deck (074/09 sky round — the prod applyClouds port): strongest at a
+    // low sun (dawn/dusk pink-orange rims toward the sun), a quarter-strength lift at noon, off below
+    // the horizon; gated by clearness — an overcast deck blocks the sun and must not glow through.
+    // Same horizon EASE as the cirrus golden term (the hard select snapped the whole deck at 20:00/6:00).
+    let golden = (0.25 + 0.65 * (1.0 - clamp(frame.sunDir.y, 0.0, 1.0))) *
+      smoothstep(0.0, 0.045, frame.sunDir.y);
+    let clearness = 1.0 - clamp(frame.sunCorona.w, 0.0, 1.0) * 0.85;
+    let goldenRim = frame.sunCorona.rgb * (pow(sunDot, 5.0) * golden * clearness);
+    col = mix(col, cloud.rgb * tint + goldenRim, alpha * frame.params3.w);
     // Celestial occlusion uses the TEXTURE alpha, only gated (not scaled) by the layer-alpha knob: an
     // opaque overcast deck must fully hide the discs (field: the moon glowed through CLOUDY at 0.85).
     occl = alpha * clamp(frame.params3.w * 1.6, 0.0, 1.0);
@@ -1335,8 +1558,12 @@ fn vsWorld(in: VsIn) -> VsOut {
   let sunVis = mix(1.0, clamp(in.normal.w, 0.0, 1.0), sunGate);
   let worldNormal = normalize(in.normal.xyz);
   out.sunNdl = max(dot(worldNormal, frame.sunDir.xyz), 0.0) * sunVis;
-  // Moon N·L, WRAPPED (074/06 row 6): the same static occlusion gates moonlight.
-  out.moonNdl = clamp((dot(worldNormal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0) * sunVis;
+  // Moon N·L, WRAPPED (074/06 row 6): the same static occlusion gates moonlight. Prod's moon sits at a
+  // FIXED 5° elevation (sin ≈ 0.087) while our disc arcs to the zenith — unnormalized, the wrapped term
+  // makes deep night ~1.7× hotter on up-facing ground than prod (field: "night too bright"). The last
+  // factor pins the UP-FACING response to prod's geometry; the direction still sweeps with the disc.
+  out.moonNdl = clamp((dot(worldNormal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0) * sunVis *
+    (0.687 / (max(frame.moonDir.y, 0.0) + 0.6));
   // Baked AO/skyVis (074/07): low byte of channels; 0 means UNBAKED (old paks) → fully open, not black.
   let aoByte = in.layerChannels.y & 0xffu;
   let aoVis = select(f32(aoByte) / 255.0, 1.0, aoByte == 0u);

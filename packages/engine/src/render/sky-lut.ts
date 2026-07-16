@@ -9,15 +9,23 @@
  */
 
 export interface SkyLutInput {
-  /** Cloud cover 0 (clear) → 1 (overcast) — drives haze. */
+  /** Cloud cover 0 (clear) → 1 (overcast) — drives haze AND hands the sky back to the authored gradient
+   *  (prod: under a full deck the atmosphere is invisible; Preetham degenerates into a milky Mie wash). */
   cloudCover: number;
   /** Cloud heaviness 0–1 (storm/fog weathers). */
   cloudDark: number;
-  /** 0 day → 1 deep night: blends the physical dome back to the flat timecyc gradient — Preetham has no
-   *  night model and would keep a sunset glow at the horizon all night (field report). */
-  dn: number;
+  /** Exposure on the Preetham dome (prod `sky.pbrExposure`, default 0.55). The old hardcoded 0.25 was a
+   *  pre-ACES constant — it read as a dark, lifeless navy once the tonemap landed (074/09 field round). */
+  exposure: number;
   /** How strongly the timecyc palette tints the physical sky (0 = pure Preetham, 1 = full SA mood). */
   mood: number;
+  /**
+   * Sun-BELOW-HORIZON factor 0..1 (prod's `uPbrNight`): blends the physical dome back to the flat timecyc
+   * gradient only once the sun has sunk — Preetham has no night model. MUST NOT be the litFade darkness
+   * (`dn`): that ramps DURING golden hour and suppressed the Preetham sunrise/sunset entirely (the exact
+   * bug prod fixed — "using the night factor here killed the Preetham sunset"; 074/09 sky field round).
+   */
+  pbrNight: number;
   /** LINEAR horizon colour (the night-gradient blend partner). */
   skyHorizon: readonly [number, number, number];
   /** LINEAR sky-top tint source (the environment's `skyTop`). */
@@ -34,7 +42,6 @@ const MIE_K = [1.8399918514433978e14, 2.7798023919660528e14, 4.0790479543861094e
 const SUN_EE = 1000;
 const SUN_CUTOFF = Math.PI / 1.95;
 const SUN_STEEPNESS = 1.5;
-const EXPOSURE = 0.25;
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
@@ -72,13 +79,14 @@ export function buildSkyLut(input: SkyLutInput): Uint16Array {
         const scatter = (betaR[channel] * rPhase + betaM[channel] * mPhase) / (betaR[channel] + betaM[channel]);
         let lin = Math.max(0, sunE * scatter * (1 - fex)) ** 1.5;
         lin *= 1 + (Math.max(0, sunE * scatter * fex) ** 0.5 - 1) * sunFresnel;
-        const value = ((lin + 0.1 * fex) * 0.04 + base[channel]) * EXPOSURE * tint[channel];
+        const value = ((lin + 0.1 * fex) * 0.04 + base[channel]) * input.exposure * tint[channel];
         const preetham = value / (1 + value); // Reinhard, matching the prod dome
-        // Timecyc gradient blend: at night it IS the sky (Preetham has no night model); by DAY it still
-        // mixes in via mood — prod's dome is essentially the timecyc gradient, and pure Preetham read as
-        // pale/washed in the field (round 3). mood 0.7 default → 42 % timecyc colourist by day.
+        // Timecyc gradient blend — PROD-EXACT (skyBase): the gradient takes over at NIGHT (pbrNight — sun
+        // below the horizon; Preetham has no night model) and under OVERCAST (the deck hides the atmosphere;
+        // pure Preetham fights it as a milky Mie wash). By a clear day the sky IS Preetham + the mood TINT —
+        // the old extra `mood × 0.6` gradient mix was a pre-ACES hack that flattened the dome into a fill.
         const gradient = input.skyHorizon[channel] + (input.skyTop[channel] - input.skyHorizon[channel]) * gradientT;
-        const gradientW = Math.max(clamp01(input.dn), clamp01(input.mood) * 0.6);
+        const gradientW = Math.max(clamp01(input.pbrNight), clamp01(input.cloudCover) * 0.85);
         out[at + channel] = f32ToF16(preetham + (gradient - preetham) * gradientW);
       }
       out[at + 3] = f32ToF16(1);
@@ -95,7 +103,8 @@ export function skyLutKey(input: SkyLutInput): string {
 
   return [
     q(input.sunElevation, 200),
-    q(input.dn, 100),
+    q(input.pbrNight, 100),
+    q(input.exposure, 100),
     q(input.cloudCover, 50),
     q(input.cloudDark, 50),
     q(input.mood, 50),

@@ -123,6 +123,23 @@ async function boot(
   const params = new URLSearchParams(window.location.search);
   const hud = document.getElementById('engine-hud') as HTMLPreElement;
   const config = createGameRuntimeConfig();
+  // `?aces=0` / `?bloom=0|N` — the 074/09 post A/Bs (fold into the live config, so debug stays truthful).
+  if (params.get('aces') === '0') {
+    config.graphics.toneMapping = false;
+  }
+  const bloomParam = Number(params.get('bloom') ?? Number.NaN);
+  if (Number.isFinite(bloomParam)) {
+    config.graphics.bloom.enabled = bloomParam > 0;
+    if (bloomParam > 0) {
+      config.graphics.bloom.intensity = bloomParam;
+    }
+  }
+  // Tier knob (074/09): `?scale=0.75` render scale (live). MSAA/bloomq knobs were field-tested and
+  // dropped (WebGPU allows sampleCount 1|4 only; bloom levels saved ~0.05 ms).
+  const scaleParam = Number(params.get('scale') ?? Number.NaN);
+  if (Number.isFinite(scaleParam)) {
+    config.graphics.renderScale = scaleParam;
+  }
   // `?spawn=x,y,z` (GTA coords) overrides the config spawn — field checks at arbitrary spots
   // (e.g. Santa Maria Beach for the water: `?spawn=342,-1803,4.8`).
   const spawnParam = (params.get('spawn') ?? '').split(',').map(Number);
@@ -395,7 +412,7 @@ async function boot(
   let vehiclesMs = 0;
   // In-game bench state (074/10 B3 tail): the loop consumes these; the runner below owns them.
   let benchCamera: null | { eye: [number, number, number]; target: [number, number, number] } = null;
-  let benchSamples: null | { draws: number; frameMs: number; gpuMs: number; submitMs: number }[] = null;
+  let benchSamples: null | { draws: number; frameMs: number; gpuMs: number; postMs: number; submitMs: number }[] = null;
   let lastStream: null | StreamStats = null;
   const runFixedSteps = (pending: number): number => {
     let steps = 0;
@@ -550,13 +567,15 @@ async function boot(
       up: [0, 1, 0],
     };
     [cameraEye[0], cameraEye[1], cameraEye[2]] = camera.eye;
+    // Live tier knob (074/09): the config value drives the target size; the engine rebuilds on change.
+    engine.renderScale = config.graphics.renderScale;
     const stats = engine.frame(camera);
     // B7·b field stall: the CPU breakdown of the frames that actually hitch — a stall must arrive as a NUMBER,
     // not a theory. Quiet on a healthy frame. (The timings are last frame's; the stall is what matters.)
     if (dt * 1000 > SLOW_FRAME_MS) {
       // eslint-disable-next-line no-console
       console.log(
-        `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · submit ${stats.submitMs.toFixed(2)} · ` +
+        `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · post ${stats.gpuPostMs.toFixed(2)} · submit ${stats.submitMs.toFixed(2)} · ` +
           `fixed ${fixedMs.toFixed(1)} (${fixedSteps} steps: controller ${controllerMs.toFixed(1)} + physics ${physicsMs.toFixed(1)}) · ` +
           `collision ${collisionMs.toFixed(1)} · vehicles ${vehiclesMs.toFixed(1)} · ` +
           `ped ${pedMs.toFixed(2)} · anim ${animMs.toFixed(2)} · draws ${stats.drawsRecorded} · cells ${streamStats.loadedCells} · ` +
@@ -567,6 +586,7 @@ async function boot(
       draws: stats.drawsRecorded,
       frameMs: dt * 1000,
       gpuMs: stats.gpuPassMs,
+      postMs: stats.gpuPostMs,
       submitMs: stats.submitMs,
     });
 
@@ -582,7 +602,7 @@ async function boot(
     hud.textContent =
       `OWN ENGINE (074/10 B3) — walk: WASD, run: Shift, jump: Space, click = capture mouse (Esc frees)\n` +
       `frame   ${frameAvg.toFixed(2)} ms (${(1000 / Math.max(frameAvg, 0.001)).toFixed(0)} fps)\n` +
-      `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${stats.gpuPassMs > 0 ? stats.gpuPassMs.toFixed(2) : 'n/a'} ms · draws ${stats.drawsRecorded}\n` +
+      `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${stats.gpuPassMs > 0 ? stats.gpuPassMs.toFixed(2) : 'n/a'} ms · post ${stats.gpuPostMs > 0 ? stats.gpuPostMs.toFixed(2) : 'n/a'} ms · draws ${stats.drawsRecorded}\n` +
       `stream  ${streamStats.loadedCells} cells, ${streamStats.pendingCells} pending · residency ${(stats.residencyBytes / 1048576).toFixed(0)} MB\n` +
       `GTA     ${gta[0].toFixed(1)}, ${gta[1].toFixed(1)}, ${gta[2].toFixed(1)} · ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')}\n` +
       `debug   vel ${Velocity.x[playerEid].toFixed(2)},${Velocity.y[playerEid].toFixed(2)},${Velocity.z[playerEid].toFixed(2)} ` +
@@ -647,6 +667,7 @@ async function boot(
       const sortedMs = samples.map((sample) => sample.frameMs).sort((a, b) => a - b);
       const avgMs = avg(sortedMs);
       const gpuSamples = samples.filter((sample) => sample.gpuMs > 0).map((sample) => sample.gpuMs);
+      const postSamples = samples.filter((sample) => sample.postMs > 0).map((sample) => sample.postMs);
       const report = {
         avgDrawCalls: Math.round(avg(samples.map((sample) => sample.draws))),
         avgMs: Number(avgMs.toFixed(3)),
@@ -655,6 +676,7 @@ async function boot(
         frames: samples.length,
         gpuMs: {
           pass: Number(avg(gpuSamples).toFixed(3)),
+          post: Number(avg(postSamples).toFixed(3)),
           submit: Number(avg(samples.map((sample) => sample.submitMs)).toFixed(3)),
         },
         key: scene.key,

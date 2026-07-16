@@ -20,7 +20,14 @@ import {
 import { Resources } from './core/resources';
 import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
-import { compileAll, MSAA_SAMPLES, pipelineIdFor, type PipelineSet, SCENE_FORMAT } from './render/pipelines';
+import {
+  compileAll,
+  MSAA_SAMPLES,
+  type PipelineId,
+  pipelineIdFor,
+  type PipelineSet,
+  SCENE_FORMAT,
+} from './render/pipelines';
 import { buildSkyLut, SKY_LUT_HEIGHT, SKY_LUT_WIDTH, skyLutKey } from './render/sky-lut';
 import { type CellHandle, CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
@@ -51,6 +58,10 @@ const SUN_SIZE_TO_RAD = 0.0045;
 const GODRAY_INTENSITY = 0.9;
 const GODRAY_DECAY = 0.93;
 const GODRAY_THRESHOLD = 1.25;
+/** Bloom (074/09 — prod BloomEffect values): 8 mip levels, tent-blend radius 0.7, threshold knee 0.3. */
+const BLOOM_LEVELS = 8;
+const BLOOM_RADIUS = 0.7;
+const BLOOM_SMOOTHING = 0.3;
 
 export interface CameraState {
   aspect: number;
@@ -140,6 +151,8 @@ export interface EngineStats {
   cellsVisible: number;
   drawsRecorded: number;
   gpuPassMs: number;
+  /** Post-chain GPU time (bloom passes + composite), ms — the plan-09 ≤3 ms budget is measured. */
+  gpuPostMs: number;
   residencyBytes: number;
   submitMs: number;
 }
@@ -147,8 +160,14 @@ export interface EngineStats {
 export interface Environment {
   /** Baked AO/skyVis strength on the indirect term (074/07): 0 = off, 1 = raw bake. */
   aoStrength: number;
+  /** Bloom strength on the composite (074/09): 0 = off (the chain passes are skipped entirely). */
+  bloomIntensity: number;
+  /** Bloom luminance threshold (074/09) — hosts drive the prod night profile (0.70 day → 0.38 night). */
+  bloomThreshold: number;
   /** Cloud dome layer alpha 0..1 (how strongly the panorama composites; the textures carry the look). */
   cloudAlpha: number;
+  /** Cloud underside/shadow tint, linear (timecyc `bottomClouds`) — dawn turns the WHOLE deck pink. */
+  cloudBottomColor: readonly [number, number, number];
   /** Cloud cover 0..1 — the LUT haze driver, fed per weather (cloud-profile port); NOT the layer alpha. */
   cloudCover: number;
   /** Cloud heaviness 0..1 (storm/fog weathers). */
@@ -157,6 +176,8 @@ export interface Environment {
   cloudFadeSeconds: number;
   /** Cloud dome rotation speed (rad/s on the frame clock — SA's slow wind drift). */
   cloudSpeed: number;
+  /** Cloud lit/top tint, linear (timecyc `lowClouds`) — white at noon, warm at golden hours. */
+  cloudTopColor: readonly [number, number, number];
   /** 0 day → 1 deep night (the prelit blend). */
   dn: number;
   /** Night-emissive glow strength (lit windows / neon self-illuminate; 0 = off). */
@@ -184,6 +205,8 @@ export interface Environment {
   moonPhase: number;
   /** Vehicle reflection strength (B5r) — the global multiplier over the DFF's per-material settings. */
   reflectionStrength: number;
+  /** Preetham dome exposure (prod `sky.pbrExposure`; 074/09 sky round — 0.25 was a pre-ACES constant). */
+  skyExposure: number;
   /** LINEAR sky gradient horizon colour (sky pass + world fog share it). */
   skyHorizon: readonly [number, number, number];
   /** SA mood strength: how strongly timecyc's skyTop tints the physical sky (0 = pure Preetham). */
@@ -211,6 +234,8 @@ export interface Environment {
   sunSize: number;
   /** Baked sun-shadow strength on the direct term (074/07): 0 = off, 1 = raw bake. */
   sunVisStrength: number;
+  /** ACES filmic tonemap in the post pass (074/09): 1 = the prod curve, 0 = raw linear→sRGB. */
+  tonemap: number;
   /** Water base opacity 0..1 (timecyc WaterRGBA alpha). */
   waterAlpha: number;
   /** Water deep tint, linear (timecyc WaterRGBA). */
@@ -415,11 +440,15 @@ export class Engine {
   readonly environment: Environment = {
     // Modest by default: SA prelit already carries baked darkening — full-strength AO double-darkens.
     aoStrength: 0.6,
+    bloomIntensity: 0.7,
+    bloomThreshold: 0.7,
     cloudAlpha: 0.9,
+    cloudBottomColor: [0.45, 0.48, 0.55],
     cloudCover: 0.12,
     cloudDark: 0,
     cloudFadeSeconds: 4,
     cloudSpeed: 0.004,
+    cloudTopColor: [0.78, 0.8, 0.85],
     dn: 0,
     emissiveBoost: 1.6,
     fogCutDistance: 2400,
@@ -432,6 +461,7 @@ export class Engine {
     moonDir: [-0.3, 0.8, -0.25],
     moonPhase: 0.5,
     reflectionStrength: 1,
+    skyExposure: 0.55,
     skyHorizon: [0.42, 0.55, 0.72],
     skyMood: 0.7,
     skyTop: [0.12, 0.32, 0.65],
@@ -445,10 +475,15 @@ export class Engine {
     sunIndirect: 0.75,
     sunSize: 4,
     sunVisStrength: 1,
+    tonemap: 1,
     waterAlpha: 0.72,
     waterColor: [0.05, 0.14, 0.18],
     windStrength: 1,
   };
+
+  /** Render scale (074/09 tiers): scene targets = canvas × scale (clamped 0.5–1), the post pass upscales
+   *  to the swapchain. Live — the next frame rebuilds the targets. */
+  renderScale = 1;
 
   /** Flat sky clear (M0 stand-in for the sky pass). LINEAR values — the sRGB target encodes on write. */
   skyColor: GPUColor = { a: 1, b: 0.71, g: 0.46, r: 0.24 };
@@ -461,6 +496,27 @@ export class Engine {
   get device(): GPUDevice {
     return this.engineDevice.device;
   }
+  /**
+   * Bloom chain resources (074/09): prefilter (full res) + `levels` downsample mips + `levels−1` upsample
+   * mips, all 16f, rebuilt with the targets on resize (with the previous chain destroyed — unlike the
+   * one-off scene targets these are many small textures). `result` (up mip 0, half res) feeds the composite.
+   */
+  private bloomChain: null | {
+    downBindGroups: GPUBindGroup[];
+    downSizes: { height: number; width: number }[];
+    downViews: GPUTextureView[];
+    prefilterBindGroup: GPUBindGroup;
+    prefilterView: GPUTextureView;
+    resultView: GPUTextureView;
+    textures: { bytes: number; texture: GPUTexture }[];
+    uniforms: GPUBuffer[];
+    upBindGroups: GPUBindGroup[];
+    upViews: GPUTextureView[];
+  } = null;
+  /** Persistent scratch for the prefilter uniform (zero steady-state allocations — ground rule 3). */
+  private readonly bloomPrefilterScratch = new Float32Array(8);
+  /** Prefilter params (threshold animates with the night profile) — written every bloom frame. */
+  private bloomPrefilterUniform!: GPUBuffer;
   private canvasContext!: GPUCanvasContext;
   /** Crossfade state: blend 0 = slot A shows, 1 = slot B; animated from `cloudFadeFrom` toward
    *  `cloudFadeTarget` on the frame clock over env.cloudFadeSeconds. */
@@ -525,6 +581,9 @@ export class Engine {
   private readonly proj: Mat4 = mat4Identity();
   private resources!: Resources;
   private sceneColorView!: GPUTextureView;
+  /** Scene targets (msaa colour + resolve + depth) with byte estimates — destroyed on rebuild: the
+   *  renderScale knob rebuilds targets LIVE, so leaking a 4×MSAA target per change is real. */
+  private readonly sceneTargets: { bytes: number; texture: GPUTexture }[] = [];
   private skyLutCurrentKey = '';
   private skyLutTexture!: GPUTexture;
   private readonly startedMs = performance.now();
@@ -533,10 +592,11 @@ export class Engine {
     cellsVisible: 0,
     drawsRecorded: 0,
     gpuPassMs: 0,
+    gpuPostMs: 0,
     residencyBytes: 0,
     submitMs: 0,
   };
-  private targetSize = { height: 0, width: 0 };
+  private targetKey = '';
   private timers!: GpuTimers;
   /** UV-scroll animations (B7·c / plan 074/18): the pak's global UVAnimDict entries, keyframes time-sorted.
    *  A kind-4 objectTable draw stores a slot index into this list; the engine advances all of them per frame. */
@@ -794,7 +854,7 @@ export class Engine {
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);
-    const frameData = new Float32Array(92);
+    const frameData = new Float32Array(100);
     frameData.set(this.viewProj, 0);
     frameData.set(this.invViewProj, 16);
     // camera.w = cloud slot A→B crossfade blend (spare vec4 slot; row 15 weather fade).
@@ -834,6 +894,10 @@ export class Engine {
     frameData.set([...env.sunCoronaColor, Math.min(1, Math.max(0, env.cloudCover))], 80);
     // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint + base opacity.
     frameData.set([...env.waterColor, Math.min(1, Math.max(0, env.waterAlpha))], 84);
+    // timecyc cloud colours (074/09 sky round 2): lowClouds/bottomClouds tint the panorama deck — dawn
+    // turns the WHOLE sky's clouds pink (both sides of the sun), noon reads bright, night near-black.
+    frameData.set([...env.cloudTopColor, 1], 92);
+    frameData.set([...env.cloudBottomColor, 1], 96);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
     this.refreshSkyLut();
 
@@ -919,8 +983,30 @@ export class Engine {
     draws += this.drawDebris(pass);
     draws += this.drawCoronas(pass, camera);
     pass.end();
-    // Godrays composite (074/09 stage 1): radial blur of the resolved scene toward the sun's screen
-    // position, written to the sRGB swapchain. Uniform updated first (sun UV + gates).
+    // Bloom chain (074/09): full-res luminance prefilter → 13-tap down mips → tent upsamples. Skipped
+    // ENTIRELY at intensity 0 (the composite multiplies the stale texture by 0, so it can't leak in).
+    const bloomChain = this.bloomChain;
+    const bloomOn = bloomChain !== null && this.environment.bloomIntensity > 0;
+    if (bloomChain && bloomOn) {
+      const scratch = this.bloomPrefilterScratch;
+      scratch[4] = this.environment.bloomThreshold;
+      scratch[5] = BLOOM_SMOOTHING;
+      this.device.queue.writeBuffer(this.bloomPrefilterUniform, 0, scratch);
+      this.runFullscreenPass(
+        encoder,
+        'bloom-prefilter',
+        bloomChain.prefilterBindGroup,
+        bloomChain.prefilterView,
+        this.timers.postBeginTimestampWrites(),
+      );
+      for (let i = 0; i < bloomChain.downViews.length; i += 1) {
+        this.runFullscreenPass(encoder, 'bloom-down', bloomChain.downBindGroups[i], bloomChain.downViews[i], {});
+      }
+      for (let i = bloomChain.upViews.length - 1; i >= 0; i -= 1) {
+        this.runFullscreenPass(encoder, 'bloom-up', bloomChain.upBindGroups[i], bloomChain.upViews[i], {});
+      }
+    }
+    // Godrays + bloom composite + ACES (074/09): written to the sRGB swapchain. Uniform updated first.
     this.device.queue.writeBuffer(this.postUniform, 0, this.fillPostUniform());
     const postPass = encoder.beginRenderPass({
       colorAttachments: [
@@ -932,6 +1018,7 @@ export class Engine {
         },
       ],
       label: 'post',
+      ...(bloomOn ? this.timers.postEndTimestampWrites() : this.timers.postOnlyTimestampWrites()),
     });
     postPass.setPipeline(this.pipelines.get('post'));
     postPass.setBindGroup(0, this.postBindGroup);
@@ -943,6 +1030,7 @@ export class Engine {
 
     this.statsValue.submitMs = performance.now() - submitStart;
     this.statsValue.gpuPassMs = this.timers.lastPassMs;
+    this.statsValue.gpuPostMs = this.timers.lastPostMs;
     this.statsValue.cellsTotal = total;
     this.statsValue.cellsVisible = bundles.length;
     this.statsValue.drawsRecorded = draws;
@@ -967,7 +1055,7 @@ export class Engine {
     this.pipelines = compileAll(this.device, SCENE_FORMAT, DEPTH_FORMAT, this.engineDevice.colorFormat);
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
-      size: 368, // viewProj + invViewProj (128) + 15 × vec4 (camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona/water/params4)
+      size: 400, // viewProj + invViewProj (128) + 17 × vec4 (camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona/water/params4/cloudTop/cloudBottom)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     // Local light pool (074/06 row 7): CPU-filled point lights, shared by every frame-layout pipeline.
@@ -1055,10 +1143,15 @@ export class Engine {
     });
     this.postUniform = this.resources.createBuffer('uniform', {
       label: 'post',
-      size: 32,
+      size: 48,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     this.postSampler = this.device.createSampler({ label: 'post', magFilter: 'linear', minFilter: 'linear' });
+    this.bloomPrefilterUniform = this.resources.createBuffer('uniform', {
+      label: 'bloom-prefilter',
+      size: 32,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
     // Clutter (074/19): mip + repeat so scattered grass/bush cards filter and their UVs tile like the world.
     this.clutterSampler = this.device.createSampler({
       addressModeU: 'repeat',
@@ -1540,6 +1633,121 @@ export class Engine {
     }
   }
 
+  /**
+   * (Re)build the bloom mip chain for the current target size (074/09 — prod BloomEffect geometry:
+   * iterative `round(size/2)`, 8 levels). The previous chain IS destroyed on resize — unlike the two
+   * scene targets this is a dozen-and-a-half small textures and uniforms.
+   */
+  private buildBloomChain(width: number, height: number): void {
+    const previous = this.bloomChain;
+    if (previous) {
+      for (const { bytes, texture } of previous.textures) {
+        this.resources.destroyTexture('target', texture, bytes);
+      }
+      for (const uniform of previous.uniforms) {
+        this.resources.destroyBuffer('uniform', uniform);
+      }
+    }
+    const textures: { bytes: number; texture: GPUTexture }[] = [];
+    const uniforms: GPUBuffer[] = [];
+    const makeTarget = (label: string, w: number, h: number): GPUTextureView => {
+      const bytes = w * h * 8;
+      const texture = this.resources.createTexture(
+        'target',
+        {
+          format: SCENE_FORMAT,
+          label,
+          size: { height: h, width: w },
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        },
+        bytes,
+      );
+      textures.push({ bytes, texture });
+
+      return texture.createView();
+    };
+    // Static per-level params: texel = 1/INPUT size (the kernels step in input texels), radius for tents.
+    const makeUniform = (label: string, inputW: number, inputH: number, radius: number): GPUBuffer => {
+      const buffer = this.resources.createBuffer('uniform', {
+        label,
+        size: 32,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      this.device.queue.writeBuffer(buffer, 0, new Float32Array([1 / inputW, 1 / inputH, 0, 0, 0, 0, radius, 0]));
+      uniforms.push(buffer);
+
+      return buffer;
+    };
+    // Prefilter (FULL res — prod thresholds texel-wise before the chain so sub-pixel emitters survive).
+    const prefilterView = makeTarget('bloom-prefilter', width, height);
+    const prefilterBindGroup = this.device.createBindGroup({
+      entries: [
+        { binding: 0, resource: { buffer: this.bloomPrefilterUniform } },
+        { binding: 1, resource: this.sceneColorView },
+        { binding: 2, resource: this.postSampler },
+      ],
+      label: 'bloom-prefilter',
+      layout: this.pipelines.bloomLayout,
+    });
+    const downSizes: { height: number; width: number }[] = [];
+    const downViews: GPUTextureView[] = [];
+    const downBindGroups: GPUBindGroup[] = [];
+    let w = width;
+    let h = height;
+    for (let i = 0; i < BLOOM_LEVELS; i += 1) {
+      const inputW = w;
+      const inputH = h;
+      w = Math.max(1, Math.round(w * 0.5));
+      h = Math.max(1, Math.round(h * 0.5));
+      downSizes.push({ height: h, width: w });
+      downViews.push(makeTarget(`bloom-down-${i}`, w, h));
+      downBindGroups.push(
+        this.device.createBindGroup({
+          entries: [
+            { binding: 0, resource: { buffer: makeUniform(`bloom-down-${i}`, inputW, inputH, 0) } },
+            { binding: 1, resource: i === 0 ? prefilterView : downViews[i - 1] },
+            { binding: 2, resource: this.postSampler },
+          ],
+          label: `bloom-down-${i}`,
+          layout: this.pipelines.bloomLayout,
+        }),
+      );
+    }
+    // Upsample mips: up[i] = tent(coarser) blended over down[i]; the coarsest input is down[levels−1].
+    const upViews: GPUTextureView[] = [];
+    const upBindGroups: GPUBindGroup[] = [];
+    for (let i = 0; i < BLOOM_LEVELS - 1; i += 1) {
+      upViews.push(makeTarget(`bloom-up-${i}`, downSizes[i].width, downSizes[i].height));
+    }
+    for (let i = 0; i < BLOOM_LEVELS - 1; i += 1) {
+      const input = downSizes[i + 1];
+      upBindGroups.push(
+        this.device.createBindGroup({
+          entries: [
+            { binding: 0, resource: { buffer: makeUniform(`bloom-up-${i}`, input.width, input.height, BLOOM_RADIUS) } },
+            { binding: 1, resource: i === BLOOM_LEVELS - 2 ? downViews[BLOOM_LEVELS - 1] : upViews[i + 1] },
+            { binding: 2, resource: this.postSampler },
+            { binding: 3, resource: downViews[i] },
+          ],
+          label: `bloom-up-${i}`,
+          layout: this.pipelines.bloomUpLayout,
+        }),
+      );
+    }
+    this.bloomChain = {
+      downBindGroups,
+      downSizes,
+      downViews,
+      prefilterBindGroup,
+      prefilterView,
+      resultView: upViews[0],
+      textures,
+      uniforms,
+      upBindGroups,
+      upViews,
+    };
+  }
+
   private createVehicleBindGroup(model: {
     lampBuffer: GPUBuffer;
     matrixBuffer: GPUBuffer;
@@ -1879,11 +2087,21 @@ export class Engine {
     return 1;
   }
 
-  private ensureTargets(width: number, height: number): void {
-    if (this.targetSize.width === width && this.targetSize.height === height) {
+  private ensureTargets(canvasWidth: number, canvasHeight: number): void {
+    // Tier knob (074/09): render scale shrinks the scene targets (the post pass upscales to the
+    // swapchain). LIVE — a key change rebuilds everything.
+    const scale = Math.min(1, Math.max(0.5, this.renderScale));
+    const width = Math.max(2, Math.round(canvasWidth * scale));
+    const height = Math.max(2, Math.round(canvasHeight * scale));
+    const key = `${width}x${height}`;
+    if (this.targetKey === key) {
       return;
     }
-    this.targetSize = { height, width };
+    this.targetKey = key;
+    for (const { bytes, texture } of this.sceneTargets) {
+      this.resources.destroyTexture('target', texture, bytes);
+    }
+    this.sceneTargets.length = 0;
     const bytes = width * height * (8 + 4) * MSAA_SAMPLES; // 16f color + depth estimate
     const msaa = this.resources.createTexture(
       'target',
@@ -1896,6 +2114,7 @@ export class Engine {
       },
       bytes / 2,
     );
+    this.sceneTargets.push({ bytes: bytes / 2, texture: msaa });
     // The MSAA resolve lands here; the godrays post pass samples it and writes the swapchain.
     const sceneColor = this.resources.createTexture(
       'target',
@@ -1907,12 +2126,19 @@ export class Engine {
       },
       width * height * 8,
     );
+    this.sceneTargets.push({ bytes: width * height * 8, texture: sceneColor });
     this.sceneColorView = sceneColor.createView();
+    this.buildBloomChain(width, height);
+    const bloomChain = this.bloomChain;
+    if (!bloomChain) {
+      throw new Error('bloom chain must exist after buildBloomChain');
+    }
     this.postBindGroup = this.device.createBindGroup({
       entries: [
         { binding: 0, resource: { buffer: this.postUniform } },
         { binding: 1, resource: this.sceneColorView },
         { binding: 2, resource: this.postSampler },
+        { binding: 3, resource: bloomChain.resultView },
       ],
       label: 'post',
       layout: this.pipelines.postLayout,
@@ -1928,6 +2154,7 @@ export class Engine {
       },
       bytes / 2,
     );
+    this.sceneTargets.push({ bytes: bytes / 2, texture: depth });
     this.msaaView = msaa.createView();
     this.depthView = depth.createView();
   }
@@ -2001,11 +2228,12 @@ export class Engine {
     return count;
   }
 
-  /** Godrays uniform (074/09 stage 1): [sunU, sunV, intensity, decay] + [tint rgb, threshold]. Intensity
-   *  gates on the sun being in front of the camera, above the horizon (sunCoreColor is black at night),
-   *  and near/inside the frame (soft edge fade — rays die gracefully as the sun leaves the screen). */
+  /** Godrays uniform (074/09 stage 1): [sunU, sunV, intensity, decay] + [tint rgb, threshold] +
+   *  [ACES tonemap 0/1, reserved ×3]. Intensity gates on the sun being in front of the camera, above the
+   *  horizon (sunCoreColor is black at night), and near/inside the frame (soft edge fade — rays die
+   *  gracefully as the sun leaves the screen). */
   private fillPostUniform(): Float32Array {
-    const out = new Float32Array(8);
+    const out = new Float32Array(12);
     const env = this.environment;
     const vp = this.viewProj;
     const len = Math.hypot(env.sunDir[0], env.sunDir[1], env.sunDir[2]) || 1;
@@ -2023,10 +2251,16 @@ export class Engine {
       const outside = Math.max(0, -u, u - 1, -v, v - 1);
       const edgeFade = Math.max(0, 1 - outside / 0.45);
       const dayGate = Math.min(1, Math.max(...env.sunCoreColor));
-      intensity = GODRAY_INTENSITY * edgeFade * dayGate * Math.max(0, env.godrayStrength);
+      // The bare `dy > 0` gate snapped the whole radial-ray term on/off the frame the sun crossed the
+      // horizon (field: the picture jumps at 5:59→6:00 / 19:59→20:00). ~8 game-minutes of climb
+      // (sin-elevation 0 → 0.045) ease the rays in at dawn and out before the disc sinks at dusk.
+      const horizonFade = Math.min(1, dy / 0.045);
+      intensity = GODRAY_INTENSITY * edgeFade * dayGate * horizonFade * Math.max(0, env.godrayStrength);
     }
     out.set([u, v, intensity, GODRAY_DECAY], 0);
     out.set([...env.sunCoronaColor, GODRAY_THRESHOLD], 4);
+    out[8] = env.tonemap;
+    out[9] = Math.max(0, env.bloomIntensity);
 
     return out;
   }
@@ -2060,11 +2294,17 @@ export class Engine {
    *  minute under a day cycle; each build is ~5 k texels of scalar math + a 72 KB upload). */
   private refreshSkyLut(): void {
     const env = this.environment;
+    // pbrNight (prod's uPbrNight): the gradient takes over only once the sun is BELOW the horizon — NOT
+    // the litFade `dn`, which ramps during golden hour and suppressed the Preetham sunrise (074/09 sky
+    // field round; prod fixed the same bug). Widened to [−0.22, −0.01] (sky round 3): the handover to the
+    // night gradient spans the whole post-sunset sinking margin instead of snapping in ~40 real seconds.
+    const sinkT = Math.min(1, Math.max(0, (env.sunDir[1] + 0.22) / 0.21));
     const input = {
       cloudCover: env.cloudCover,
       cloudDark: env.cloudDark,
-      dn: env.dn,
+      exposure: env.skyExposure,
       mood: env.skyMood,
+      pbrNight: 1 - sinkT * sinkT * (3 - 2 * sinkT),
       skyHorizon: env.skyHorizon,
       skyTop: env.skyTop,
       sunElevation: env.sunElevation,
@@ -2080,6 +2320,25 @@ export class Engine {
       { bytesPerRow: SKY_LUT_WIDTH * 8 },
       { height: SKY_LUT_HEIGHT, width: SKY_LUT_WIDTH },
     );
+  }
+
+  /** One fullscreen-triangle pass into `view` (the bloom chain's unit of work — no depth, no MSAA). */
+  private runFullscreenPass(
+    encoder: GPUCommandEncoder,
+    id: PipelineId,
+    bindGroup: GPUBindGroup,
+    view: GPUTextureView,
+    timestamps: { timestampWrites?: GPURenderPassTimestampWrites },
+  ): void {
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{ clearValue: { a: 0, b: 0, g: 0, r: 0 }, loadOp: 'clear', storeOp: 'store', view }],
+      label: id,
+      ...timestamps,
+    });
+    pass.setPipeline(this.pipelines.get(id));
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(3);
+    pass.end();
   }
 
   private writeVehicleLamps(

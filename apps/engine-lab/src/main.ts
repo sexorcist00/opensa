@@ -30,11 +30,15 @@ import { loadVehicleProbe } from './vehicle';
 
 const CELL_SIZE = 250;
 
-/** `?ao=` / `?sunvis=` / `?wind=` / `?stoch=` A/B overrides (074/07, 074/06 row 10, 074/12). */
+/** `?ao=` / `?sunvis=` / `?wind=` / `?stoch=` / `?scale=` A/B overrides (074/07, 06 row 10, 074/12, 074/09). */
 function applyEnvironmentOverrides(engine: Engine, params: URLSearchParams): void {
   const aoParam = Number(params.get('ao') ?? Number.NaN);
   if (Number.isFinite(aoParam)) {
     engine.environment.aoStrength = aoParam;
+  }
+  const scaleParam = Number(params.get('scale') ?? Number.NaN);
+  if (Number.isFinite(scaleParam)) {
+    engine.renderScale = scaleParam;
   }
   const sunVisParam = Number(params.get('sunvis') ?? Number.NaN);
   if (Number.isFinite(sunVisParam)) {
@@ -91,7 +95,7 @@ function hudText(input: {
     `device      ${input.engineInfo}\n` +
     `frame       ${frameAvg.toFixed(2)} ms (${(1000 / Math.max(frameAvg, 0.001)).toFixed(0)} fps), max ${Math.max(...input.frames).toFixed(0)}\n` +
     `submit CPU  ${input.stats.submitMs.toFixed(2)} ms\n` +
-    `GPU pass    ${input.stats.gpuPassMs > 0 ? input.stats.gpuPassMs.toFixed(2) : 'n/a'} ms\n` +
+    `GPU pass    ${input.stats.gpuPassMs > 0 ? input.stats.gpuPassMs.toFixed(2) : 'n/a'} ms · post ${input.stats.gpuPostMs > 0 ? input.stats.gpuPostMs.toFixed(2) : 'n/a'} ms\n` +
     `cells       ${input.stats.cellsVisible}/${input.stats.cellsTotal} visible, draws ${input.stats.drawsRecorded}\n` +
     `residency   ${(input.stats.residencyBytes / (1024 * 1024)).toFixed(1)} MB\n` +
     `build       ${input.buildMs.toFixed(0)} ms (fixture, off the P0 clock)` +
@@ -154,7 +158,11 @@ async function main(): Promise<void> {
   applyEnvironmentOverrides(engine, params);
   // Row 14: the environment driver — real timecyc when the manifest carries it, parametric fallback else.
   // Swapped in after the pak loads (the manifest arrives there); parametric until then.
-  let environmentDriver: EnvironmentDriver = parametricDriver(engine);
+  // `?aces=0` / `?bloom=0|N` — the 074/09 post A/Bs (raw output; bloom off or intensity override).
+  const aces = params.get('aces') !== '0';
+  const bloomParam = Number(params.get('bloom') ?? Number.NaN);
+  const bloom = Number.isFinite(bloomParam) ? bloomParam : null;
+  let environmentDriver: EnvironmentDriver = parametricDriver(engine, aces, bloom);
   const applyEnvironment = (): void => environmentDriver.apply(hour);
   applyEnvironment();
   const usePak = params.get('pak') === '1';
@@ -393,6 +401,9 @@ function wireWeather(
   onDriver: (driver: EnvironmentDriver) => void,
 ): (weather: number) => void {
   const fogScale = Number(params.get('fogscale') ?? 2.5) || 2.5;
+  const aces = params.get('aces') !== '0';
+  const bloomParam = Number(params.get('bloom') ?? Number.NaN);
+  const bloom = Number.isFinite(bloomParam) ? bloomParam : null;
   const pakBase = `/${params.get('src') ?? 'pak'}`;
   const alphaOverride = params.get('cloudcover');
   if (setup.clouds && alphaOverride !== null) {
@@ -401,7 +412,7 @@ function wireWeather(
 
   return (weather: number): void => {
     if (setup.timecyc !== undefined) {
-      onDriver(timecycDriver(engine, setup.timecyc, setup.timecyc24, weather, fogScale));
+      onDriver(timecycDriver(engine, setup.timecyc, setup.timecyc24, weather, fogScale, aces, bloom));
     }
     if (setup.clouds) {
       void loadCloudWeather(engine, pakBase, setup.clouds, weather);

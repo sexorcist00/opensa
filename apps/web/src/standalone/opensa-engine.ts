@@ -40,8 +40,22 @@ async function main(): Promise<void> {
 
   const engine = new Engine();
   await engine.init(canvas);
+  // Tier knob (074/09): `?scale=0.75` — live target scale.
+  const scaleParam = Number(params.get('scale') ?? Number.NaN);
+  if (Number.isFinite(scaleParam)) {
+    engine.renderScale = scaleParam;
+  }
   const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak-ls'}`);
   applyHour(engine, Number(params.get('hour') ?? 12) || 12);
+  // `?aces=0` / `?bloom=0|N` — the 074/09 post A/Bs (the inline applyHour never touches them, so one
+  // set persists; the standalone keeps the fixed day threshold — no night profile here).
+  if (params.get('aces') === '0') {
+    engine.environment.tonemap = 0;
+  }
+  const bloomParam = Number(params.get('bloom') ?? Number.NaN);
+  if (Number.isFinite(bloomParam)) {
+    engine.environment.bloomIntensity = Math.max(0, bloomParam);
+  }
 
   // Free-fly camera state: start above the district centre looking north-ish.
   const eye: [number, number, number] = [setup.center[0], 120, setup.center[2] + 60];

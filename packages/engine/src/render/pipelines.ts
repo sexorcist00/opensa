@@ -11,6 +11,8 @@ import { OSCELL_VERTEX_STRIDE } from '@opensa/engine-formats';
 
 import { resolveShader } from './shaders';
 
+/** MSAA sample count — FIXED at 4: WebGPU allows only 1|4, and 1 would disable alpha-to-coverage
+ *  (the cutout alpha fix). The 074/09 msaa tier knob was field-tested and dropped. */
 export const MSAA_SAMPLES = 4;
 
 /** The SCENE render target format (074/09 stage 1): the world/sky/entities render into a linear 16-float
@@ -19,6 +21,9 @@ export const MSAA_SAMPLES = 4;
 export const SCENE_FORMAT: GPUTextureFormat = 'rgba16float';
 
 export type PipelineId =
+  | 'bloom-down'
+  | 'bloom-prefilter'
+  | 'bloom-up'
   | 'clutter-cutout'
   | 'clutter-opaque'
   | 'corona'
@@ -41,6 +46,10 @@ export type PipelineId =
   | 'world-opaque-front';
 
 export interface PipelineSet {
+  /** group(0) of bloom prefilter/downsample: uniform + input texture + sampler (074/09). */
+  bloomLayout: GPUBindGroupLayout;
+  /** group(0) of bloom upsample: + the same-size downsample mip (the tent blends over it). */
+  bloomUpLayout: GPUBindGroupLayout;
   /** group(1): per-cell uniform (origin). */
   cellLayout: GPUBindGroupLayout;
   /** group(1) of the clutter pipeline (074/19): per-instance matrices (storage) + the model texture + sampler. */
@@ -444,6 +453,8 @@ export function compileAll(
       { binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.FRAGMENT },
       { binding: 1, texture: {}, visibility: GPUShaderStage.FRAGMENT },
       { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+      // Bloom chain result (074/09) — sampled by the composite even at intensity 0 (bind something).
+      { binding: 3, texture: {}, visibility: GPUShaderStage.FRAGMENT },
     ],
     label: 'post',
   });
@@ -458,6 +469,7 @@ export function compileAll(
       vertex: { entryPoint: 'vsPost', module: postModule },
     }),
   );
+  const { bloomLayout, bloomUpLayout } = compileBloomPipelines(device, colorFormat, pipelines);
   pipelines.set(
     'sky',
     device.createRenderPipeline({
@@ -541,6 +553,8 @@ export function compileAll(
   }
 
   return {
+    bloomLayout,
+    bloomUpLayout,
     cellLayout,
     clutterLayout,
     debrisLayout,
@@ -567,4 +581,50 @@ export function pipelineIdFor(pipelineClass: number, side: number): PipelineId {
   const kind = (['opaque', 'cutout', 'blend', 'beam'] as const)[pipelineClass] ?? 'cutout';
 
   return `world-${kind}-${side === 1 ? 'double' : 'front'}`;
+}
+
+/** Bloom chain (074/09 — prod BloomEffect, mipmapBlur path): full-res luminance prefilter → 13-tap
+ *  downsample mips → 9-tap tent upsamples blending over the same-size down mip. All 16f, no depth/MSAA. */
+function compileBloomPipelines(
+  device: GPUDevice,
+  colorFormat: GPUTextureFormat,
+  pipelines: Map<PipelineId, GPURenderPipeline>,
+): { bloomLayout: GPUBindGroupLayout; bloomUpLayout: GPUBindGroupLayout } {
+  const bloomLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 1, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'bloom',
+  });
+  const bloomUpLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 1, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 2, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 3, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'bloom-up',
+  });
+  const bloomModule = device.createShaderModule({ code: resolveShader('bloom'), label: 'bloom' });
+  const entries: readonly [PipelineId, string, GPUBindGroupLayout][] = [
+    ['bloom-prefilter', 'fsBloomPrefilter', bloomLayout],
+    ['bloom-down', 'fsBloomDown', bloomLayout],
+    ['bloom-up', 'fsBloomUp', bloomUpLayout],
+  ];
+  for (const [id, entryPoint, groupLayout] of entries) {
+    pipelines.set(
+      id,
+      device.createRenderPipeline({
+        fragment: { entryPoint, module: bloomModule, targets: [{ format: colorFormat }] },
+        label: id,
+        layout: device.createPipelineLayout({ bindGroupLayouts: [groupLayout], label: id }),
+        primitive: { topology: 'triangle-list' },
+        vertex: { entryPoint: 'vsBloom', module: bloomModule },
+      }),
+    );
+  }
+
+  return { bloomLayout, bloomUpLayout };
 }

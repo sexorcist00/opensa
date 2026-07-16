@@ -11,12 +11,14 @@ walks/runs/jumps in the real app with prod HUD/zones/pointer-lock and in-game be
 vsync-120); Safari smoke ✅; the config-API parity module ships prod tunables to the engine; water v3
 PARKED as leftover (0.6.0 plan).
 
-**NEXT — the ladder (updated 2026-07-15; B7·c/B7·d closed, map lighting parked-open):**
-**HERE → ① map-optimizer normals batch (its plans 020–023 + opensa-pack 001) → ② 09 COMPLETION: ACES
-tonemap + bloom + tiers.** ACES is the transfer curve the prod look is calibrated against — **no more look
-verdicts (16 paint, 17 lighting, the concept/hd-realtime-lod-baked decision) until it lands**; every
-constant judged pre-tonemap is suspect (the B5r lesson generalized). B6.5 (17) stays OPEN deliberately
-while the concept is considered. Then the WebGL-prod `?bench=all` baseline → C1.
+**NEXT — the ladder (updated 2026-07-16; 09 SHIPPED, the look round is running):**
+① ~~map-optimizer normals batch~~ ✅ (2026-07-15) → ② ~~09 COMPLETION: ACES + bloom + tiers~~ ✅
+**FULLY SHIPPED + benched 2026-07-16** (ACES ≈ free; post chain 1.05–1.25 ms ≤ 3 ms budget; renderScale =
+the ONE tier knob — msaa/bloomq field-tested and removed; series rows 09·ACES/bloom/post-fix/tiers) →
+**③ HERE: the LOOK ROUND (gate lifted)** — sky rounds 1–3 shipped same day (dawn/dusk accepted; day sky
+verdict pending — skybox stays, options: panorama parallax / prod cumulus port / faster spin; night
+suspect: the hemisphere skylight fill the engine world lacks) → then the deferred verdicts (16 paint /
+17 lighting / hd-realtime concept) → the WebGL-prod `?bench=all` baseline → C1.
 B5 vehicles ✅ → **B5r VEHICLE REFLECTIONS — v1 SHIPPED but REJECTED in the field; the deep rework is now
 its own plan, [16](16-vehicle-paint.md)** (the gap is structural: no tonemapper, no environment probe — both
 of which the three path HAS, which is why prod looked better. Not a tuning problem) → B6 2dfx particles +

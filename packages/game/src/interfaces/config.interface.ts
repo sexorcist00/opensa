@@ -135,6 +135,9 @@ export interface GraphicsConfig {
   pipeline: 'classic' | 'modern';
   /** Procedural ground clutter (procobj.dat scatter; plan 042) — per-category tuning. */
   procobj: ProcObjConfig;
+  /** Own-engine render scale (074/09 tiers): scene targets sized `canvas × scale` (0.5–1), the post pass
+   *  upscales to the swapchain. 1 = native. Live — no reload needed. The three path ignores it. */
+  renderScale: number;
   /** Sun shadows (directional shadow map). */
   shadows: ShadowsConfig;
   /** Sky/sun god-rays shader tuning (shaft look). */

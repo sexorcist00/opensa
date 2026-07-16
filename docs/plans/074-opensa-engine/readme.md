@@ -75,7 +75,45 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
 - **The alpha-edge groundwork**: dilation BFS + DXT software decode exist from the
   [open issue](../../open-issues/alpha-edge.md).
 
-## Handoff status (2026-07-14, end of day — resume from here)
+## Handoff status (2026-07-16, end of day — resume from here)
+
+**Plan [09](09-postfx-aa.md) FULLY SHIPPED + benched (2026-07-16):** ACES (prod-exact curve, `?aces=0`) ≈
+free; bloom (prod dual-filter chain + plan-071 night threshold profile, `?bloom=`) — full post chain
+1.05–1.25 ms at 2× retina (2.6× inside the ≤3 ms budget; **gpuMs.post is now a measured column** — the
+post pass was untimed before, and the first post metric was a Metal TBDR overlap artifact, fixed as
+`postEnd − worldEnd`); tiers — **`renderScale` is the ONE knob** (0.75 → −16…−25 % world GPU; msaa/bloomq
+knobs field-tested and REMOVED: WebGPU sampleCount is 1|4 only + A2C needs 4; bloom levels saved ~0.05 ms).
+All six bench scenes stayed vsync-locked 120 Hz through every step (series rows 09·ACES/bloom/post-fix/tiers).
+
+**The look round is OPEN (gate lifted) — sky rounds 1–3 shipped the same day** (see the
+[06 ledger row 4](06-world-effects-parity.md)): dawn/dusk ACCEPTED by the user (Preetham un-suppressed —
+the dn-blend bug prod had already fixed; exposure 0.25→prod 0.55; timecyc lowClouds/bottomClouds tint the
+whole deck both sides; night city glow + moon scatter + golden rims; night-glow FADE over the dusk hour;
+prod cirrus wisps UNDER the panorama — the skybox stays per the user). Night world un-blackened
+(`sunIndirect` night 0.4 → prod worldLight 0.7). **Day sky verdict still "не то" — the user keeps the
+skybox; next options offered: panorama parallax second sample · prod cumulus fbm port · faster dome spin.**
+
+**Night brightness DIAGNOSED + FIXED (2026-07-16, awaiting field):** a controlled headless A/B (both
+renderers, same spawn/hour, pixel-metered) showed deep night already ≈ prod but **20:00–21:30 ran 3–5×
+darker** — the engine's moon LIGHT was gated by the moon DISC's arc elevation (zero until ~20:30), while
+prod's world moonlight rides the sun-based night band (plan 071 §4) and is full within an hour of sunset.
+The driver now ships prod's term verbatim (`(0.34,0.44,0.72) × band.moon × moon.brightness ×
+night.skylight × 0.5` — this is also where prod's `night.skylight` reaches the world); the disc keeps its
+arc, `moonFor` rescaled so the shipped disc look is untouched. Details in the [06 ledger row 6].
+
+**Night arc CLOSED — field-ACCEPTED 2026-07-16 ("выглядит отлично") + benched (series 06·night-rounds).**
+Four rounds total: prod moonlight band term (+ `night.skylight` reaches the world through it) → deep-night
+normalization to prod's fixed-5° moon geometry → moon-park/sun-park continuity (the 19:59 azimuth teleport,
+the 20:45 pbrNight step) → ~8-game-minute horizon eases on the three hard `sunDir.y > 0` gates (godrays +
+the golden cloud tint ×2) that snapped the sky the frame the sun crossed. Bench: frame budget untouched;
+country-dusk world pass 3.86 ms = new high, plausibly the by-design longer dusk (see the series row's
+WATCH note). Full history in the [06 ledger row 6].
+
+**Resume:** the look round continues (day sky options above) → deferred verdicts: **16 vehicle paint is
+UNBLOCKED** (its step 1, ACES+bloom, shipped with plan 09 — next real work = step 2, the environment probe)
+· 17 lighting · hd-realtime concept → WebGL-prod `?bench=all` baseline → C1 → flip (C2 gated).
+
+## Handoff status (2026-07-14 — history)
 
 **Done and field-confirmed today:** B5 vehicles · B5r reflections (SHIPPED but REJECTED — deep rework parked
 in [16](16-vehicle-paint.md), do NOT retry by tuning constants: the engine has no tonemapper and no env probe,
