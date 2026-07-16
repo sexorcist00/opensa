@@ -119,9 +119,17 @@ probe toggles), translucent-submesh sorting (the wheel-through-windscreen fix) a
 (config ×4 calibration, per-pixel pool loops off the car, pool nearest-cap 24). Full history in
 [16 § step 2 rounds 1–6](16-vehicle-paint.md).
 
-**Resume:** plan 16 step 4 — VEHICLE NORMALS (queued by the user: low-poly bodies read as melting facets)
-→ step 3 SSR → step 6 grounding · the look round day-sky verdict · 17 lighting · hd-realtime concept →
-WebGL-prod `?bench=all` baseline → C1 → flip (C2 gated).
+**BENCH ROAD CARS SHIPPED + FIELD-MEASURED (2026-07-16):** typed vehicles.ide cars on the NODES.DAT road
+graph per bench scene (city 30 u / country 90 u spacing, lazy vehicle-lod streaming, `?benchcar=` pin);
+the user's real-display sweep with 841 cars kept every scene vsync-locked 120 Hz (series row
+11·bench-cars — draws ~2.4×, world pass +0.3–0.5 ms). Spawn robustness lessons live in
+[11 § bench road cars](11-performance-testing.md). Vehicle normals SKIPPED to ideas 0.6.0/03 (user call);
+a first-cut paths parser is noted in ideas 0.5.0/06-city-life plan 01 as its head start.
+
+**Resume (the ladder):** ① wire road cars into canvas-host and run the WebGL-prod `?bench=all` BASELINE
+(same population, or the C1 comparison is invalid) → ② the C1 criteria run → flip (C2 stays gated).
+In parallel/after: plan 16 step 3 SSR / step 6 grounding · the look round day-sky verdict · 17 lighting /
+the hd-realtime concept decision.
 
 ## Handoff status (2026-07-14 — history)
 

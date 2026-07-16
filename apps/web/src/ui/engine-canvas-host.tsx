@@ -11,6 +11,7 @@ import type { ReactElement } from 'react';
 import { type CameraState, Engine, loadCloudWeather, setupStreaming, type StreamStats } from '@opensa/engine';
 import { createEngineEnvironmentDriver } from '@opensa/game/adapters/engine-environment-driver';
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
+import { roadCarPlacements } from '@opensa/game/adapters/road-cars';
 import { CharacterControllerSystem } from '@opensa/game/character/character-controller.system';
 import { Logger } from '@opensa/game/diagnostics/logger';
 import { PlayerControlled, RigidBody, Transform, Velocity } from '@opensa/game/ecs/components';
@@ -25,7 +26,8 @@ import { initRapier } from '@opensa/game/physics/rapier';
 import { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
 import { cellsWithin } from '@opensa/game/streaming/grid';
 import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.system';
-import { type AssetFileSystem, gxtKeyHash, oceanFrame, parseTxd } from '@opensa/renderware';
+import { type AssetFileSystem, gxtKeyHash, oceanFrame, parseTxd, vehiclePathNodes } from '@opensa/renderware';
+import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 import { parseWater } from '@opensa/renderware/parsers/text/water.parser';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';
 import { addComponent, addEntity } from 'bitecs';
@@ -702,6 +704,12 @@ async function boot(
       console.warn(`[bench] unknown scene '${benchKey}' — known: all, ${BENCH_SCENES.map((s) => s.key).join(', ')}`);
     }
     void (async (): Promise<void> => {
+      // Road cars (074 bench realism): typed cars from vehicles.ide on the path-node road graph around
+      // every measured scene, registered LAZILY — the vehicle-lod system streams them exactly like the
+      // game's own parked cars, so each scene measures a realistic vehicle load.
+      const cars = registerBenchRoadCars(fs, vehicles, scenes);
+      // eslint-disable-next-line no-console -- bench CLI feedback (the record's context, same protocol)
+      console.log(`[bench] road cars registered: ${cars}`);
       for (const scene of scenes) {
         await runScene(scene);
       }
@@ -800,6 +808,52 @@ function loadWaterTexture(
  */
 function probeCenterOf(enabled: boolean, focus: readonly [number, number, number]): [number, number, number] | null {
   return enabled ? [focus[0], focus[1] + 1.0, focus[2]] : null;
+}
+
+/**
+ * Bench road cars (074 bench realism): parse the game's own road graph (`data/Paths/NODES*.DAT`) and
+ * vehicles.ide, scatter TYPE-`car` models along the roads around every measured scene (per-scene
+ * radius/spacing — cities dense, countryside sparse), and register them for lazy distance streaming.
+ * Deterministic — the same install measures the same street every sweep. Returns the placement count.
+ */
+function registerBenchRoadCars(
+  fs: AssetFileSystem,
+  vehicles: EngineVehicles | null,
+  scenes: readonly BenchScene[],
+): number {
+  if (!vehicles) {
+    return 0;
+  }
+  const regions = scenes
+    .filter((scene) => scene.cars !== undefined)
+    .map((scene) => ({ position: scene.anchor, radius: scene.cars!.radius, spacing: scene.cars!.spacing }));
+  if (regions.length === 0) {
+    return 0;
+  }
+  const areas = new Map<number, ArrayBuffer>();
+  for (let area = 0; area < 64; area += 1) {
+    const bytes = fs.get(`data/paths/nodes${area}.dat`) ?? fs.get(`data/Paths/NODES${area}.DAT`);
+    if (bytes) {
+      areas.set(area, bytes);
+    }
+  }
+  const defs = parseVehicleDefs(fs.getText('data/vehicles.ide') ?? '');
+  // `?benchcar=<model>` pins every road car to ONE model — the per-model isolation knob (a flipped car is
+  // either a bad spot or a bad collider; one model across all spots answers which).
+  const pinned = new URLSearchParams(window.location.search).get('benchcar');
+  const models = pinned
+    ? [pinned.toLowerCase()]
+    : [...defs.values()].filter((def) => def.type === 'car').map((def) => def.model.toLowerCase());
+  if (areas.size === 0 || models.length === 0) {
+    // eslint-disable-next-line no-console -- a silent empty street would read as a false measurement
+    console.warn(`[bench] road cars SKIPPED: path areas ${areas.size}, car models ${models.length}`);
+
+    return 0;
+  }
+  const placements = roadCarPlacements(vehiclePathNodes(areas), { models, regions });
+  vehicles.register(placements);
+
+  return placements.length;
 }
 
 /** GTA Z-up point → engine Y-up: (x, y, z) → (x, z, −y). */

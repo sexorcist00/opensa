@@ -4,8 +4,9 @@
 
 **Status: steps 1–2 CLOSED, field-ACCEPTED 2026-07-16** — step 1 (ACES+bloom) shipped with plan 09;
 step 2 (the scene environment probe + the skygfx-neo reflection model, six field rounds — see the round
-records below) accepted by the user as the direction to build on. Next: step 4 vehicle normals (queued
-first — the low-poly "melting normals" complaint), then step 3 SSR and step 6 grounding. The escape hatch
+records below) accepted by the user as the direction to build on. Step 4 vehicle normals SKIPPED by the
+user (2026-07-16) — design parked at docs/ideas/0.6.0/plans/03-vehicle-normals. Remaining here: step 3 SSR
+and step 6 grounding. The escape hatch
 stands: `graphics.vehicleReflection.preset: 'off'` sets `env.reflectionStrength = 0` and the whole term
 (probe included) dies.
 

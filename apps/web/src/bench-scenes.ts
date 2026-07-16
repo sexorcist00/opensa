@@ -10,6 +10,7 @@ export const BENCH_SCENES: readonly BenchScene[] = [
   {
     // Downtown Los Santos at noon — the draw-call/triangle worst case (skyline + traffic area).
     anchor: [1456, -1400, 30],
+    cars: { radius: 500, spacing: 30 },
     durationS: 15,
     hour: 12,
     key: 'ls-noon',
@@ -23,6 +24,7 @@ export const BENCH_SCENES: readonly BenchScene[] = [
   {
     // San Fierro dawn in fog — the fog/atmosphere calibration scene.
     anchor: [-1980, 550, 40],
+    cars: { radius: 500, spacing: 30 },
     durationS: 15,
     hour: 7,
     key: 'sf-fog-dawn',
@@ -36,6 +38,7 @@ export const BENCH_SCENES: readonly BenchScene[] = [
   {
     // Las Venturas strip at midnight — corona/lamp/night-emissive worst case.
     anchor: [2035, 1340, 15],
+    cars: { radius: 500, spacing: 30 },
     durationS: 15,
     hour: 0,
     key: 'lv-night',
@@ -49,6 +52,7 @@ export const BENCH_SCENES: readonly BenchScene[] = [
   {
     // Countryside dusk near Blueberry — long shadows + vegetation.
     anchor: [230, -60, 5],
+    cars: { radius: 500, spacing: 90 },
     durationS: 15,
     hour: 19,
     key: 'country-dusk',
@@ -76,6 +80,7 @@ export const BENCH_SCENES: readonly BenchScene[] = [
   {
     // Downtown LS in rain at night — post-fx + wet-look worst case.
     anchor: [1456, -1400, 30],
+    cars: { radius: 500, spacing: 30 },
     durationS: 15,
     hour: 21,
     key: 'ls-rain-night',

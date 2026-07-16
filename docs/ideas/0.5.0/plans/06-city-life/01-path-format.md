@@ -33,8 +33,15 @@ Everything in city life reads ONE graph. SA's own path data is the seed; our for
 
 ## Tasks
 
+> **HEAD START (2026-07-16):** a first-cut `nodes*.dat` parser already SHIPPED as
+> `packages/renderware/src/parsers/binary/paths.ts` (`vehiclePathNodes`) for the 074 bench road cars —
+> it reads the header, the 28-byte VEHICLE nodes (÷8 fixed-point positions, link count + the boats flag)
+> and the link table, and resolves a heading toward each node's first link (cross-area links included).
+> Verified against the real install (unit tests + a field run placing 841 cars on the roads). This plan's
+> importer EXTENDS it: ped nodes, navi/carpathlink lane data, full flag decode, `tracks*.dat`.
+
 - [ ] `nodes*.dat` importer (car + ped graphs, flags, lanes) with a round-trip test against known
-      community-documented samples.
+      community-documented samples — extend the shipped `vehiclePathNodes` (see above).
 - [ ] `tracks*.dat` importer.
 - [ ] popcycle/zone density importer → density fields.
 - [ ] `.ospath` codec (encode/decode + validation: connectivity, lane consistency, orphan nodes) in

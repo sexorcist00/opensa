@@ -179,8 +179,14 @@ export class PhysicsWorld {
     mass: number,
     wheels: readonly VehicleWheelSpec[],
     halfExtents: [number, number, number],
+    pitch = 0,
   ): { body: number; controller: VehicleController } {
-    const q = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), heading);
+    // `pitch` (about the body's LOCAL right axis, nose-up positive) aligns a spawn to a sloped street —
+    // a horizontal spawn at a slope break drops nose-first and the parking brake freezes it on its snout
+    // (074 bench road cars). Applied AFTER the yaw, in the body frame.
+    const q = new Quaternion()
+      .setFromAxisAngle(new Vector3(0, 0, 1), heading)
+      .multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), pitch));
     // No CCD: on the detailed streamed world trimesh it sweeps the body's leading (front) edge
     // and catches on triangle seams → a launch "pop from the front". The chassis spheres are big
     // and the per-step motion is small, so it can't tunnel anyway.
@@ -397,6 +403,20 @@ export class PhysicsWorld {
     rigidBody.setNextKinematicTranslation({ x: p.x + m.x, y: p.y + m.y, z: p.z + m.z });
 
     return { grounded: controller.computedGrounded(), movement: [m.x, m.y, m.z] };
+  }
+
+  /**
+   * True when a heading-aligned box at `position` overlaps ANY collider (074 bench road cars): the
+   * pre-spawn "is this spot free" probe. A car spawned intersecting a lamp post or another car is ejected
+   * by the solver and lands on its roof — the caller tests before creating the body and slides the spot.
+   */
+  overlapsBox(position: Vec3, heading: number, halfExtents: Vec3): boolean {
+    const shape = new this.rapier.Cuboid(halfExtents[0], halfExtents[1], halfExtents[2]);
+    const rotation = { w: Math.cos(heading / 2), x: 0, y: 0, z: Math.sin(heading / 2) };
+
+    return (
+      this.world.intersectionWithShape({ x: position[0], y: position[1], z: position[2] }, rotation, shape) !== null
+    );
   }
 
   /** Re-park a vehicle: engine off, wheels straight, parking brake on all wheels. */

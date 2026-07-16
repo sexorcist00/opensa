@@ -42,6 +42,8 @@ export interface EngineVehicles {
    * open and the car never drives — the phase machine simply never advances.
    */
   fixedUpdate(step: number): void;
+  /** Register placements to spawn LAZILY by distance (the LOD system streams them) — the bench road cars. */
+  register(placements: readonly VehiclePlacement[]): void;
   /**
    * The car whose pose OWNS the player right now — from the start of the climb-in slide to the end of the
    * climb-out one, not merely while walking to the door. The host must switch its walking rules off for it
@@ -177,13 +179,60 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     const paint = await adapter.vehiclePaint(model, placement.colour); // the model is shared; the paint is not
 
     let position: Vec3 = placement.position;
-    // Map car generators (plan 059): seat the body on the ground beneath the IPL spot so it doesn't
-    // penetrate terrain/props and get launched.
+    let pitch = 0;
+    // Map car generators (plan 059) + bench road cars (074): seat the body on the ground so it doesn't
+    // penetrate terrain/props and get launched. Two slope lessons from the bench field run: the body must
+    // PITCH with the street (a horizontal spawn at a slope break drops nose-first and the parking brake
+    // freezes it on its snout), and the spot may be BLOCKED sideways (a lamp post, another car — vertical
+    // probes can't see those), so candidates slide along the heading until the upper half is clear.
     if (placement.groundSnap) {
-      const ground = physics.groundBelow([position[0], position[1], position[2] + GROUND_SNAP_LIFT], GROUND_SNAP_DROP);
-      if (ground !== null) {
-        position = [position[0], position[1], ground + data.halfExtents[2] + 0.1];
+      const forward: [number, number] = [-Math.sin(placement.heading), Math.cos(placement.heading)];
+      const reach = data.halfExtents[1];
+      const seatAt = (along: number): null | { pitch: number; spot: Vec3 } => {
+        const x = position[0] + forward[0] * along;
+        const y = position[1] + forward[1] * along;
+        const groundAt = (shift: number): null | number =>
+          physics.groundBelow(
+            [x + forward[0] * shift, y + forward[1] * shift, position[2] + GROUND_SNAP_LIFT],
+            GROUND_SNAP_DROP,
+          );
+        const centre = groundAt(0);
+        const nose = groundAt(reach) ?? centre;
+        const tail = groundAt(-reach) ?? centre;
+        if (centre === null || nose === null || tail === null) {
+          return null;
+        }
+
+        return {
+          pitch: Math.atan2(nose - tail, 2 * reach),
+          spot: [x, y, Math.max(centre, (nose + tail) / 2) + data.halfExtents[2] + 0.1],
+        };
+      };
+      const clearAt = (spot: Vec3): boolean =>
+        // The UPPER HALF of the body only: slopes pass under it, poles and other cars intersect it.
+        !physics.overlapsBox([spot[0], spot[1], spot[2] + data.halfExtents[2] * 0.6], placement.heading, [
+          data.halfExtents[0] * 0.9,
+          data.halfExtents[1] * 0.9,
+          data.halfExtents[2] * 0.4,
+        ]);
+      let seated: null | { pitch: number; spot: Vec3 } = null;
+      for (const along of [0, 3, -3]) {
+        const candidate = seatAt(along);
+        if (candidate && clearAt(candidate.spot)) {
+          seated = candidate;
+          break;
+        }
       }
+      seated ??= seatAt(0);
+      if (!seated) {
+        // No ground under the spot — its collision cell hasn't streamed/parsed yet (the boot race, or the
+        // spot sits in the vehicle-lod ring beyond collisionDrawDistance). Spawning anyway drops the car
+        // through the void and it lands ON ITS NOSE when the ground appears (bench field run). The LOD
+        // system retries every frame, so the car materialises the moment the collision does.
+        throw new Error(`vehicle spawn deferred: no ground at ${position[0]},${position[1]} yet`);
+      }
+      position = seated.spot;
+      pitch = seated.pitch;
     }
 
     const instance = engine.createVehicle(id);
@@ -202,6 +251,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       data.handling.mass,
       wheels,
       data.halfExtents,
+      pitch,
     );
     // Driver seat = the front-seat dummy mirrored to the −X (driver) side.
     const seatLocal: [number, number, number] = data.seat
@@ -251,6 +301,11 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     activeVehicle: (): EnterableVehicle | null => seated,
     fixedUpdate(step: number): void {
       enterVehicle.fixedUpdate(step);
+    },
+    register(placements: readonly VehiclePlacement[]): void {
+      for (const placement of placements) {
+        vehicleLod.register(placement);
+      }
     },
     ridingVehicle: (): EnterableVehicle | null => (enterVehicle.isRiding() ? enterVehicle.getActive() : null),
     async spawn(placement: VehiclePlacement): Promise<void> {

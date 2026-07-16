@@ -72,3 +72,28 @@ become the first entries of a permanent series.
 ## Measurement ledger
 
 (the series lives in `bench/series.md`; this doc keeps only decisions about the harness itself)
+
+## Bench road cars (2026-07-16 — user-directed bench realism)
+
+Every in-game bench scene now measures with a REALISTIC vehicle load: cars from `vehicles.ide` scattered on
+the game's own road graph around each scene anchor.
+
+- **Road source** = `data/Paths/NODES0..63.DAT` (loose in the install, ingested by the VFS): the new
+  `vehiclePathNodes` parser (`renderware/parsers/binary/paths.ts`) reads VEHICLE nodes (+ links for the
+  heading toward the first linked node; water/boat nodes skipped via flags bit 7).
+- **Placement** = `roadCarPlacements` (`game/adapters/road-cars.ts`): per-scene regions from
+  `BenchScene.cars { radius, spacing }` — cities 30 u spacing, countryside 90, the ocean scene none;
+  spacing enforced by a 3×3-neighbourhood distance check (a plain cell test let two opposite-lane nodes
+  spawn inside each other and the ejected pair froze leaning together); lane offset 2.5 u right of the
+  heading; deterministic model pick (position-seeded) from `vehicles.ide` TYPE `car` only — never a plane.
+  `?benchcar=<model>` pins one model (the isolation knob).
+- **Streaming** = the placements register LAZILY with the existing VehicleLodSystem (`register`), so the
+  scenes stream cars exactly like the game's parked cars — near = HD + physics, far = vlo, out = unloaded.
+- **Spawn robustness lessons** (field round): a spawn must DEFER until its ground collision exists — the
+  boot race (COL cells parse async) dropped cars through the void and they landed planted on their noses
+  (`vehicle spawn deferred` throw → the LOD system retries every frame); seating pitches with the street
+  (nose/tail ground probes → `createDynamicVehicle` gained an optional `pitch`); blocked spots (lamp posts,
+  other cars) slide ±3 u along the heading via the new `PhysicsWorld.overlapsBox` upper-half probe.
+- **Measured** (headless 1×, ls-noon): 296 cars registered, draws 468 → ~1100 with the population, still
+  vsync 120 Hz. The C1 WebGL-prod baseline must run with the SAME population for comparability — the
+  module is renderer-agnostic, wire it into canvas-host before the baseline sweep.

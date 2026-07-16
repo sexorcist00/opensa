@@ -38,6 +38,10 @@ export interface BenchReport extends PerfCapture {
 export interface BenchScene {
   /** Player teleport target — the streaming/collision anchor the camera path must stay near. */
   anchor: Vec3Tuple;
+  /** Road-car population around the anchor (074 bench realism): cars from `vehicles.ide` (type `car`)
+   *  scattered on the path-node road graph. `spacing` is the density knob — cities run dense (~30),
+   *  the countryside sparse (~90). Omit for scenes with no reachable roads (the ocean). */
+  cars?: { radius: number; spacing: number };
   /** Timed run length, seconds. */
   durationS: number;
   /** Game hour (fractional ok). */
