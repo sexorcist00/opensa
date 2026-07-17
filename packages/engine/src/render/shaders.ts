@@ -215,7 +215,7 @@ fn clutterShade(in: ClutterOut, cutout: bool) -> vec4f {
   var fogFactor = 1.0 - exp(-(fogK * fogD) * (fogK * fogD));
   fogFactor = fogFactor * mix(frame.fog.w, 1.0, exp(-max(in.world.y, 0.0) * frame.fog.z));
   fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
-  color = mix(color, skyFogFor(viewDir), fogFactor);
+  color = mix(color, fogColorFor(viewDir, fogFactor), fogFactor);
   return vec4f(color, texel.a);
 }
 
@@ -558,6 +558,32 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
+// CIRRUS (prod applyClouds layer 1): thin, high, stretched wisps drifting slowly on their own heading —
+// what makes a clear day sky read ALIVE. They belong to clear skies, so coverage suppresses them;
+// timecyc cloud colours tint them. Lives in the FRAME include (074/21 P2): the fog colour composites it
+// too, and a sky-module-only helper would be an unresolved call target for world/rigid/water consumers
+// (the black-canvas gotcha, twice already).
+fn cirrusFor(dir: vec3f, sunDot: f32) -> vec4f {
+  if (dir.y <= 0.02) {
+    return vec4f(0.0);
+  }
+  let t = frame.params2.z;
+  // Same softened projection as the cumulus (a hard floor froze the band under it into vertical smears).
+  let cuv = dir.xz / (dir.y + 0.18) * vec2f(0.9, 0.35) + vec2f(t * 0.0013, t * -0.0007) + vec2f(31.7);
+  let cover = clamp(frame.sunCorona.w, 0.0, 1.0);
+  let amount = smoothstep(0.60, 0.92, skyFbm(cuv)) * (1.0 - cover) * 0.55;
+  // The golden term peaks AT the horizon, so a hard y-above-0 select SNAPPED it (0 → 0.9) the frame the
+  // sun crossed — the 19:59/5:59 sky jump. ~8 game-minutes of climb (y 0 → 0.045) ease it in/out instead.
+  let golden = (0.25 + 0.65 * (1.0 - clamp(frame.sunDir.y, 0.0, 1.0))) *
+    smoothstep(0.0, 0.045, frame.sunDir.y);
+  // The normalized palette (sky v2) — the raw timecyc luminance read as dark smears under linear+ACES.
+  let palette = cloudPalette();
+  let tint = mix(palette.bottom, palette.top, 0.85) +
+    frame.sunCorona.rgb * (golden * 0.2 + pow(sunDot, 5.0) * golden * 0.5);
+  let horizon = smoothstep(0.02, 0.30, dir.y);
+  return vec4f(tint, amount * horizon);
+}
+
 // The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
 // cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
 // probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
@@ -616,6 +642,26 @@ fn skyFogFor(dir: vec3f) -> vec3f {
   let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
 
   return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
+}
+
+// Fog v2 (074/21 P2): a fogged pixel must dissolve into the sky INCLUDING its procedural cloud decks —
+// with the base-only colour, distant towers read as flat pale silhouettes against any clouded sky, and
+// close-fog weathers (FOGGY farClip 250) seam hard against a coloured dawn deck. Same cirrus+cumulus
+// composite as fsSky; discs/stars stay excluded (the sun-through-buildings regression, field round 3).
+// The cloud math only runs on meaningfully fogged pixels — the branch is legal in non-uniform control
+// flow because every cloud tap uses explicit-LOD sampling — and cumulus/cirrus carry their own
+// early-outs, so the clear-range majority of the frame pays one comparison.
+fn fogColorFor(dir: vec3f, fogFactor: f32) -> vec3f {
+  var col = skyFogFor(dir);
+  if (fogFactor > 0.02) {
+    let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
+    let cirrus = cirrusFor(dir, sunDot);
+    col = mix(col, cirrus.rgb, cirrus.a * frame.params3.w);
+    let cumulus = cumulusFor(dir, sunDot);
+    col = mix(col, cumulus.rgb, cumulus.a * frame.params3.w);
+  }
+
+  return col;
 }
 
 // Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
@@ -838,7 +884,7 @@ fn fsPed(in: PedVsOut) -> @location(0) vec4f {
   let heightAtten = mix(frame.fog.w, 1.0, exp(-max(in.world.y, 0.0) * frame.fog.z));
   fogFactor = fogFactor * heightAtten;
   fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
-  color = mix(color, skyFogFor(viewDir), fogFactor);
+  color = mix(color, fogColorFor(viewDir, fogFactor), fogFactor);
   return vec4f(color, 1.0);
 }
 `,
@@ -1308,7 +1354,7 @@ fn fsRigid(in: RigidVsOut) -> @location(0) vec4f {
   let env = rigidEnv(in, normal, shadingNormal, mix(PROBE_PAINT_LOD, PROBE_CHROME_LOD, isChrome));
   let specular = rigidSpecular(in, shadingNormal, in.reflect.z * frame.params4.z) + in.poolSpec;
   let shaded = mix(rigidShade(in, rigidTexel(in)), env, amount) + specular;
-  let color = mix(shaded, skyFogFor(viewDir), fog);
+  let color = mix(shaded, fogColorFor(viewDir, fog), fog);
   return vec4f(color, 1.0);
 }
 
@@ -1337,7 +1383,7 @@ fn fsRigidBlend(in: RigidVsOut, @builtin(front_facing) frontFacing: bool) -> @lo
   // Premultiplied compositing: the reflected env replaces the tinted glass by its amount, then fog takes
   // the finished pair (068 semantics).
   let glass = mix(rigidShade(in, texel) * alpha, env, amount) + specular;
-  let color = mix(glass, skyFogFor(viewDir) * alpha, fog);
+  let color = mix(glass, fogColorFor(viewDir, fog) * alpha, fog);
   return vec4f(color, alpha);
 }
 `,
@@ -1382,31 +1428,6 @@ fn starField(dir: vec3f) -> f32 {
   let taper = smoothstep(0.02, 0.35, dir.y);
   return point * bright * twinkle * taper;
 }
-
-// CIRRUS (prod applyClouds layer 1): thin, high, stretched wisps drifting slowly on their own heading —
-// what makes a clear day sky read ALIVE. They belong to clear skies, so coverage suppresses them;
-// timecyc cloud colours tint them.
-fn cirrusFor(dir: vec3f, sunDot: f32) -> vec4f {
-  if (dir.y <= 0.02) {
-    return vec4f(0.0);
-  }
-  let t = frame.params2.z;
-  // Same softened projection as the cumulus (a hard floor froze the band under it into vertical smears).
-  let cuv = dir.xz / (dir.y + 0.18) * vec2f(0.9, 0.35) + vec2f(t * 0.0013, t * -0.0007) + vec2f(31.7);
-  let cover = clamp(frame.sunCorona.w, 0.0, 1.0);
-  let amount = smoothstep(0.60, 0.92, skyFbm(cuv)) * (1.0 - cover) * 0.55;
-  // The golden term peaks AT the horizon, so a hard y-above-0 select SNAPPED it (0 → 0.9) the frame the
-  // sun crossed — the 19:59/5:59 sky jump. ~8 game-minutes of climb (y 0 → 0.045) ease it in/out instead.
-  let golden = (0.25 + 0.65 * (1.0 - clamp(frame.sunDir.y, 0.0, 1.0))) *
-    smoothstep(0.0, 0.045, frame.sunDir.y);
-  // The normalized palette (sky v2) — the raw timecyc luminance read as dark smears under linear+ACES.
-  let palette = cloudPalette();
-  let tint = mix(palette.bottom, palette.top, 0.85) +
-    frame.sunCorona.rgb * (golden * 0.2 + pow(sunDot, 5.0) * golden * 0.5);
-  let horizon = smoothstep(0.02, 0.30, dir.y);
-  return vec4f(tint, amount * horizon);
-}
-
 
 @fragment
 fn fsSky(in: SkyOut) -> @location(0) vec4f {
@@ -1644,7 +1665,7 @@ fn fsWater(in: WaterOut) -> @location(0) vec4f {
   var fogFactor = 1.0 - exp(-(fogK * fogD) * (fogK * fogD));
   fogFactor = fogFactor * mix(frame.fog.w, 1.0, exp(-max(in.world.y, 0.0) * frame.fog.z));
   fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
-  color = mix(color, skyFogFor(-view), fogFactor);
+  color = mix(color, fogColorFor(-view, fogFactor), fogFactor);
   // Fully fogged water must MATCH the sky behind it — fade the surface out with the fog so the horizon
   // line dissolves instead of drawing a hard sea edge (the ocean-horizon regression view).
   alpha = mix(alpha, 1.0, fogFactor);
@@ -1821,8 +1842,11 @@ fn worldShade(in: VsOut, cutout: bool) -> vec4f {
   fogFactor = fogFactor * heightAtten;
   fogFactor = max(fogFactor, smoothstep(frame.fog.x * 0.85, frame.fog.x, dist));
   // Sky term scaled by texel.a: colour is PREMULTIPLIED, so the blend pipelines (074/06 rows 9/11) stay
-  // premult-correct in fog; opaque/cutout (a ≈ 1) are unchanged.
-  color = mix(color, skyFogFor(viewDir) * texel.a, fogFactor);
+  // premult-correct in fog; opaque (a ≈ 1) is unchanged. CUTOUT must NOT scale it (074/21 P2 field fix):
+  // A2C coverage already owns the alpha shape, and ×a double-counts it on edge/minified pixels — fully
+  // fogged trees left ghost OUTLINES against the sky where the body correctly dissolved.
+  let fogAlpha = select(texel.a, 1.0, cutout);
+  color = mix(color, fogColorFor(viewDir, fogFactor) * fogAlpha, fogFactor);
   return vec4f(color, texel.a);
 }
 

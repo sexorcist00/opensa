@@ -9,7 +9,11 @@
 import type { ReactElement } from 'react';
 
 import { type CameraState, Engine, setupStreaming, type StreamStats } from '@opensa/engine';
-import { createEngineEnvironmentDriver } from '@opensa/game/adapters/engine-environment-driver';
+import {
+  createEngineEnvironmentDriver,
+  DEFAULT_DRAW_DISTANCE,
+  FOG_RING_MARGIN,
+} from '@opensa/game/adapters/engine-environment-driver';
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { benchRoadCarPlacements } from '@opensa/game/adapters/road-cars';
 import { CharacterControllerSystem } from '@opensa/game/character/character-controller.system';
@@ -164,6 +168,11 @@ async function boot(
   if (Number.isFinite(scaleParam)) {
     config.graphics.renderScale = scaleParam;
   }
+  // Draw distance (074/21 P1): ONE knob → the LOD streaming ring, with the fog cut capped at
+  // `drawDistance − FOG_RING_MARGIN` — the outer margin band is always loaded before it leaves the fog,
+  // so streaming pops are impossible by construction. `?draw=N` = live A/B (min 400 keeps rings sane).
+  const drawParam = Number(params.get('draw') ?? Number.NaN);
+  const drawDistance = Number.isFinite(drawParam) ? Math.max(400, drawParam) : DEFAULT_DRAW_DISTANCE;
   // `?spawn=x,y,z` (GTA coords) overrides the config spawn — field checks at arbitrary spots
   // (e.g. Santa Maria Beach for the water: `?spawn=342,-1803,4.8`).
   const spawnParam = (params.get('spawn') ?? '').split(',').map(Number);
@@ -188,7 +197,7 @@ async function boot(
   // SA corona billboards (B6): coronastar for lamps/headlights, coronamoon for the moon. They must exist
   // BEFORE the first cell loads — the frame bind group is baked into every cell bundle.
   await engine.init(canvas, loadCoronaSprites(fs));
-  const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak-map'}`);
+  const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak-map'}`, { lodRadius: drawDistance });
   // Environment drive (074/10 config-API parity): the SHARED config→Environment driver — real timecyc
   // colours when the pak carries them, sun/moon arcs built dynamically from config night.litFade, prod
   // graphics tunables (sky mood, cloud opacity, moon brightness, godrays, fog timecycScale) live on.
@@ -198,6 +207,7 @@ async function boot(
   const weatherTransition = new WeatherTransition(weather);
   const environmentDriver = createEngineEnvironmentDriver(engine.environment, {
     config,
+    fogCap: drawDistance - FOG_RING_MARGIN,
     ...(setup.timecyc !== undefined ? { timecyc: { is24h: setup.timecyc24 ?? false, text: setup.timecyc } } : {}),
     weather,
     weatherBlend: () => weatherTransition.blend(),

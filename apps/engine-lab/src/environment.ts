@@ -9,7 +9,10 @@ import {
   createEngineEnvironmentDriver,
   DEFAULT_ENGINE_ENV_CONFIG,
   type EngineEnvConfig,
+  FOG_RING_MARGIN,
 } from '@opensa/game/adapters/engine-environment-driver';
+
+export { FOG_RING_MARGIN };
 
 export interface EnvironmentDriver {
   apply(hour: number): void;
@@ -22,7 +25,8 @@ export function parametricDriver(engine: Engine, aces = true, bloom: null | numb
 
 /** The real thing: timecyc colours + fog ranges per hour/weather.
  *  The lab camera flies hundreds of units up — radial ground distances dwarf street-level ones, so the
- *  timecyc fog mood needs a scale (`?fogscale=N`, default 2.5); the game host runs it at 1. */
+ *  timecyc fog mood needs a scale (`?fogscale=N`, default 2.5); the game host runs it at 1.
+ *  `fogCap` (074/21, `?draw=` opt-in) clamps the cut to the streaming ring's margin — see the game host. */
 export function timecycDriver(
   engine: Engine,
   timecycText: string,
@@ -31,9 +35,11 @@ export function timecycDriver(
   fogScale = 2.5,
   aces = true,
   bloom: null | number = null,
+  fogCap?: number,
 ): EnvironmentDriver {
   return createEngineEnvironmentDriver(engine.environment, {
     config: labConfig(aces, bloom),
+    ...(fogCap !== undefined ? { fogCap } : {}),
     fogScale,
     timecyc: { is24h, text: timecycText },
     weather,

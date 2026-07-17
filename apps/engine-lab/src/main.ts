@@ -22,7 +22,7 @@ import {
   formatRecord,
 } from './bench';
 import { type DebugPanelState, mountDebugPanel } from './debug-panel';
-import { type EnvironmentDriver, parametricDriver, timecycDriver } from './environment';
+import { type EnvironmentDriver, FOG_RING_MARGIN, parametricDriver, timecycDriver } from './environment';
 import { loadPak } from './pak-loader';
 import { loadPedProbe } from './ped';
 import { syntheticCell, syntheticTextureArray } from './synthetic';
@@ -89,6 +89,15 @@ function buildSyntheticDistrict(engine: Engine, gridSide: number, boxesPerSide: 
   }
 
   return recordedDraws;
+}
+
+/** `?draw=N` (074/21, OPT-IN in the lab — the orbit viewer wants the whole city visible by default):
+ *  LOD ring = N, fog capped at N − margin — the game host's fog-masked streaming scheme, reproducible
+ *  here. Null = knob absent (historical 1000 ring, uncapped fog). */
+function drawDistanceParam(params: URLSearchParams): null | number {
+  const raw = Number(params.get('draw') ?? Number.NaN);
+
+  return Number.isFinite(raw) ? Math.max(400, raw) : null;
 }
 
 /** `?at=gtaX,gtaY,gtaZ` moves the orbit focus to a GTA-coordinate spot (the web host's `?spawn` twin) —
@@ -219,7 +228,7 @@ async function main(): Promise<void> {
   let streaming: null | StreamingDriver = null;
   if (useStream) {
     // `?src=pak-sf` streams an alternative converted district (default /pak) — e.g. the SF beams rect.
-    const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak'}`);
+    const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak'}`, streamRadiiParam(params));
     streaming = setup.driver;
     focus = setup.center;
     orbitRadius = setup.radius * 1.4;
@@ -482,6 +491,13 @@ function pick(
   return { cellIndex: ledger.cellIndex, cellVertex: ledger.cellVertex, uniform: ledger.uniform };
 }
 
+/** The `?draw=` knob as StreamingRadii — empty when absent (defaults). */
+function streamRadiiParam(params: URLSearchParams): { lodRadius?: number } {
+  const drawDistance = drawDistanceParam(params);
+
+  return drawDistance !== null ? { lodRadius: drawDistance } : {};
+}
+
 /** Stream-mode weather wiring: returns an applier that re-creates the timecyc driver for the weather
  *  (074/06 row 14); per-weather cover/dark come from the cloud profile inside the timecyc driver. */
 function wireWeather(
@@ -494,10 +510,13 @@ function wireWeather(
   const aces = params.get('aces') !== '0';
   const bloomParam = Number(params.get('bloom') ?? Number.NaN);
   const bloom = Number.isFinite(bloomParam) ? bloomParam : null;
+  // `?draw=N` opt-in (074/21): mirror the game host's fog ⊂ LOD-ring invariant in the lab.
+  const drawDistance = drawDistanceParam(params);
+  const fogCap = drawDistance !== null ? drawDistance - FOG_RING_MARGIN : undefined;
 
   return (weather: number): void => {
     if (setup.timecyc !== undefined) {
-      onDriver(timecycDriver(engine, setup.timecyc, setup.timecyc24, weather, fogScale, aces, bloom));
+      onDriver(timecycDriver(engine, setup.timecyc, setup.timecyc24, weather, fogScale, aces, bloom, fogCap));
     }
   };
 }

@@ -9,7 +9,7 @@ import { validateOspakManifest } from '@opensa/engine-formats';
 import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
 
-import { StreamingDriver } from './streaming';
+import { StreamingDriver, type StreamingRadii } from './streaming';
 
 export interface StreamSetup {
   center: [number, number, number];
@@ -22,7 +22,11 @@ export interface StreamSetup {
   water?: OspakManifest['water'];
 }
 
-export async function setupStreaming(engine: Engine, baseUrl = '/pak'): Promise<StreamSetup> {
+export async function setupStreaming(
+  engine: Engine,
+  baseUrl = '/pak',
+  radii: StreamingRadii = {},
+): Promise<StreamSetup> {
   const manifestResponse = await fetch(`${baseUrl}/manifest.json`);
   if (!manifestResponse.ok) {
     throw new Error(`no pak at ${baseUrl}/manifest.json — run opensa-pack and copy its output there`);
@@ -102,7 +106,7 @@ export async function setupStreaming(engine: Engine, baseUrl = '/pak'): Promise<
   return {
     center: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
     ...(manifest.water !== undefined ? { water: manifest.water } : {}),
-    driver: new StreamingDriver(engine, manifest, worker),
+    driver: new StreamingDriver(engine, manifest, worker, radii),
     radius: Math.max((maxX - minX) / 2, (maxZ - minZ) / 2, 400),
     ...(manifest.timecyc !== undefined ? { timecyc: manifest.timecyc } : {}),
     timecyc24: manifest.timecyc24 ?? false,

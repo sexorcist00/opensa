@@ -66,12 +66,21 @@ export const DEFAULT_ENGINE_ENV_CONFIG: EngineEnvConfig = {
   },
 };
 
+/** The default LOD-ring radius when a host opts into the fog-masked streaming scheme (plan 074/21). */
+export const DEFAULT_DRAW_DISTANCE = 1200;
+/** Streaming-latency margin between the fog cut and the LOD ring: `fogCap = drawDistance − this`.
+ *  The ring's cell-RECT test makes the margin pure latency budget (no geometry slack needed). */
+export const FOG_RING_MARGIN = 100;
+
 export interface EngineEnvironmentDriver {
   apply(hour: number): void;
 }
 
 export interface EngineEnvironmentOptions {
   config?: EngineEnvConfig;
+  /** The fog ⊂ LOD-ring invariant (plan 074/21): hard ceiling on the fog cut, `drawDistance −
+   *  FOG_RING_MARGIN`. Weather may pull fog CLOSER (authored farClip), never past this. Omit = uncapped. */
+  fogCap?: number;
   /** Extra multiplier on the timecyc fog distances (the lab's high camera needs `?fogscale=`). */
   fogScale?: number;
   /** Raw timecyc text from the pak manifest; colours go parametric when absent. */
@@ -166,8 +175,11 @@ export function createEngineEnvironmentDriver(
         environment.sunSize = sample.sunSize;
         environment.skyTop = lin3(sample.skyTop);
         environment.skyHorizon = lin3(sample.skyBot);
+        // Authored fog mood, unfloored (074/21): the old `max(…, 1200)` floor flattened every weather —
+        // FOGGY_SF's 250 u farClip was stretched to 1200, and clear-LA's 800 pushed past the 1000 LOD ring,
+        // which is exactly why streaming pops were visible. Prod runs the raw farClip; so do we now.
         environment.fogStartDistance = Math.max(0, sample.fogStart * fogScale);
-        environment.fogCutDistance = Math.max(sample.farClip * fogScale, 1200);
+        environment.fogCutDistance = sample.farClip * fogScale;
         // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint + opacity per hour/weather.
         environment.waterColor = lin3(sample.water);
         environment.waterAlpha = sample.water[3] / 255;
@@ -186,6 +198,13 @@ export function createEngineEnvironmentDriver(
         environment.skyHorizon = mix3([0.42, 0.55, 0.72], [0.01, 0.012, 0.03], dn);
         environment.cloudTopColor = mul3(mix3([0.78, 0.8, 0.85], [0.06, 0.07, 0.1], dn), clouds.tint);
         environment.cloudBottomColor = mul3(mix3([0.45, 0.48, 0.55], [0.03, 0.035, 0.05], dn), clouds.tint);
+      }
+      // The fog ⊂ LOD-ring invariant (074/21): whatever the weather authored, the cut never crosses the
+      // streaming ring's margin — everything past the cap is loaded-but-fogged, so pops are impossible.
+      // Start is kept under the (possibly clamped) cut so the exp² ramp never degenerates.
+      if (options.fogCap !== undefined) {
+        environment.fogCutDistance = Math.min(environment.fogCutDistance, options.fogCap);
+        environment.fogStartDistance = Math.min(environment.fogStartDistance, environment.fogCutDistance * 0.8);
       }
       applyMoon(environment, hour, band.moon, litFade, config.graphics);
     },

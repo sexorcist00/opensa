@@ -33,6 +33,7 @@ non-WebGPU browsers during the whole build-out (additive, no flag day — the 06
 | 17  | [Map lighting](17-map-lighting.md)                       | B6.5 — broken normals + 2dfx lamps. Round 1 REVERTED (per-pixel lamps cost 120→25 fps); measurements + open blockers. |
 | 18  | [UV-scroll animation](18-uv-anim.md)                     | B7·c — the crawling neon / conveyor belts. Parsed already, rendered by prod, ignored by the engine.                   |
 | 15  | [LOD baked lights](15-lod-baked-lights.md)               | Bake 2dfx lamp light into LOD night prelit — far-field streetlight pools / billboard glow at night.                   |
+| 21  | [Fog draw-distance](21-fog-draw-distance.md)             | Fog ⊂ LOD-ring invariant (streaming becomes invisible) + fog-into-clouds v2 + distance cull + 05's parked prefetch.   |
 
 ## Roadmap — vertical slices with numeric gates (plans ≠ phases; each milestone cuts across plans)
 
@@ -105,7 +106,13 @@ BAKE (256² rg16float per frame — full decks stopped scaling with the swapchai
 freezing the horizon band — softened to `dir.xz/(dir.y + 0.18)` → (6) prod's `WeatherTransition` wired
 through the driver (`weatherBlend` getter + `lerpCloudProfiles`) — smooth 6 s weather changes are back.
 Full history in the [06 ledger row 4](06-world-effects-parity.md); cost points in
-[bench/series.md](bench/series.md) § Sky v2. NEXT look item = FOG (the user's pre-C1 arc #2).**
+[bench/series.md](bench/series.md) § Sky v2. FOG (the user's pre-C1 arc #2) = **plan
+[21](21-fog-draw-distance.md): P1 (fog ⊂ LOD-ring invariant + `?draw=` knob + distance cull) and P2
+(clouds composite into the fog colour) both FIELD-ACCEPTED 2026-07-17 across two rounds («подгрузки
+почти незаметны» → «все супер»), including the round-2 fixes: cutout fog no longer scales by texel.a
+(ghost tree outlines) and the VEHICLE-MODEL BUILD WORKER (the ~170 ms new-car-type freeze — the
+plan-060 dff-parse.worker pattern). P3 next = 2-create + velocity-prefetch + `lateCreates = 0` + the
+residency-2666-MB investigation (see the plan ledger).\*\*
 
 **Night brightness DIAGNOSED + FIXED (2026-07-16, awaiting field):** a controlled headless A/B (both
 renderers, same spawn/hour, pixel-metered) showed deep night already ≈ prod but **20:00–21:30 ran 3–5×

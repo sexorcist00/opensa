@@ -15,6 +15,7 @@ import {
   mat4LookAt,
   mat4Multiply,
   mat4PerspectiveZO,
+  sphereFullyBeyond,
   type Vec3,
 } from './core/math';
 import { Resources } from './core/resources';
@@ -946,13 +947,19 @@ export class Engine {
     let total = 0;
     for (const cell of this.cells.all()) {
       total += 1;
-      cell.visible = frustumIntersectsSphere(
-        this.frustumPlanes,
-        cell.bounds[0],
-        cell.bounds[1],
-        cell.bounds[2],
-        cell.bounds[3],
-      );
+      // Fog distance cull (plan 074/21 P1): a cell entirely at/past the fog cut is 100 % fog = pixel-equal
+      // to the sky behind it — skip its bundles (and, via cell.visible, its coronas/objects/lights). With
+      // the fog ⊂ LOD-ring invariant the streaming margin band becomes loaded-but-not-drawn warm-up.
+      cell.visible =
+        !sphereFullyBeyond(
+          camera.eye,
+          cell.bounds[0],
+          cell.bounds[1],
+          cell.bounds[2],
+          cell.bounds[3],
+          env.fogCutDistance,
+        ) &&
+        frustumIntersectsSphere(this.frustumPlanes, cell.bounds[0], cell.bounds[1], cell.bounds[2], cell.bounds[3]);
       if (cell.visible) {
         bundles.push(cell.bundle);
         if (cell.blendBundle) {

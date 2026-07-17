@@ -98,6 +98,14 @@ describe('createEngineEnvironmentDriver', () => {
       expect(environment.bloomIntensity).toBe(0);
     });
 
+    it('leaves the fog ranges alone when no fogCap is given', () => {
+      const environment = makeEnvironment();
+      createEngineEnvironmentDriver(environment).apply(12);
+
+      expect(environment.fogCutDistance).toBe(2400);
+      expect(environment.fogStartDistance).toBe(250);
+    });
+
     it('kills the world moonlight when night.skylight is zero', () => {
       const environment = makeEnvironment();
       const config = structuredClone(DEFAULT_ENGINE_ENV_CONFIG);
@@ -227,6 +235,15 @@ describe('createEngineEnvironmentDriver', () => {
       createEngineEnvironmentDriver(environment).apply(12);
       expect(environment.waterColor).toEqual([0.05, 0.14, 0.18]);
       expect(environment.waterAlpha).toBeCloseTo(0.72, 5);
+    });
+
+    it('clamps the fog cut and start to the fogCap (the fog ⊂ LOD-ring invariant, 074/21)', () => {
+      const environment = makeEnvironment();
+      environment.fogStartDistance = 1000; // authored start past the cap's ramp — must clamp under the cut
+      createEngineEnvironmentDriver(environment, { fogCap: 1100 }).apply(12);
+
+      expect(environment.fogCutDistance).toBe(1100);
+      expect(environment.fogStartDistance).toBeCloseTo(880, 5); // 0.8 × cut — the exp² ramp never degenerates
     });
 
     it('applies the prod graphics tunables to the environment', () => {

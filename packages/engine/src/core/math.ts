@@ -180,3 +180,22 @@ export function mat4PerspectiveZO(out: Mat4, fovY: number, aspect: number, near:
 
   return out;
 }
+
+/** Sphere entirely at/past `distance` from `eye` (3D) — every point of it is ≥ that far. The fog cut test
+ *  (plan 074/21): the world shader's hard cut reaches fogFactor 1 exactly at the cut distance, so a sphere
+ *  that passes this against the effective fog cut renders as pure sky and can be culled. */
+export function sphereFullyBeyond(
+  eye: Vec3,
+  x: number,
+  y: number,
+  z: number,
+  radius: number,
+  distance: number,
+): boolean {
+  const dx = x - eye[0];
+  const dy = y - eye[1];
+  const dz = z - eye[2];
+  const reach = distance + radius;
+
+  return dx * dx + dy * dy + dz * dz >= reach * reach;
+}

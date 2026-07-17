@@ -118,7 +118,11 @@ Specific field symptoms to fix in that round (both re-observed on the free-fly, 
 3. **HD↔LOD swap visibly steps** at speed — user explicitly defers until the full game mechanics are
    wired on top; tune with the post-integration candidates below.
 
-## Post-integration tuning candidates (parked 2026-07-12, user decision — revisit AFTER the flip)
+## Post-integration tuning candidates (parked 2026-07-12 — **UN-PARKED 2026-07-17 into plan [21](21-fog-draw-distance.md)**)
+
+> The 2-creates/frame and velocity-prefetch candidates below (plus a `lateCreates = 0` gate and the
+> fog ⊂ LOD-ring invariant that makes them matter) are now plan 21 phase 3. The in-flight request cap
+> stays optional there. This section remains as the original analysis.
 
 The full-city `city` bench (135 u/s traverse) held 120 Hz for ~3595/3600 frames; the couple of 21.9 ms
 spikes trace to the ≤1-create/frame budget at speed (submit max 7.1 ms). Two candidates, deliberately NOT

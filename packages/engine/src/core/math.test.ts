@@ -7,6 +7,7 @@ import {
   mat4LookAt,
   mat4Multiply,
   mat4PerspectiveZO,
+  sphereFullyBeyond,
 } from './math';
 
 function viewProj(eye: [number, number, number], target: [number, number, number]): Float32Array {
@@ -34,6 +35,13 @@ describe('engine math', () => {
 
       expect(frustumIntersectsSphere(planes, 500, 0, 0, 5)).toBe(false);
     });
+
+    it('does not report a sphere beyond when any part of it is inside the distance', () => {
+      // Centre at 1150 with radius 100 → closest point 1050 < 1100: still (partly) visible.
+      expect(sphereFullyBeyond([0, 0, 0], 1150, 0, 0, 100, 1100)).toBe(false);
+      // The eye is inside the sphere.
+      expect(sphereFullyBeyond([0, 0, 0], 10, 0, 0, 50, 1100)).toBe(false);
+    });
   });
 
   describe('positive cases', () => {
@@ -56,6 +64,13 @@ describe('engine math', () => {
       expect(frustumIntersectsSphere(planes, 0, 0, 0, 1)).toBe(true);
       // Far to the side but with a huge radius → still intersects.
       expect(frustumIntersectsSphere(planes, 500, 0, 0, 600)).toBe(true);
+    });
+
+    it('reports a sphere fully beyond the fog cut (closest point at/past the distance)', () => {
+      // Closest point exactly AT the cut: the shader's hard cut is 1 there — cullable.
+      expect(sphereFullyBeyond([0, 0, 0], 1200, 0, 0, 100, 1100)).toBe(true);
+      // 3D distance counts: a high cell over the horizon is farther than its ground distance.
+      expect(sphereFullyBeyond([0, 200, 0], 1150, 0, 0, 50, 1100)).toBe(true);
     });
   });
 });

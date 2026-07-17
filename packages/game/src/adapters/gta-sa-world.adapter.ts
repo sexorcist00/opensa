@@ -91,6 +91,7 @@ import { carGeneratorPlacements } from './car-generators';
 import { createDffParser, type DffParser } from './dff-parser';
 import { randomCarPlacements } from './popcycle-cars';
 import { ThreeVehicleHandle } from './three-vehicle-handle';
+import { createVehicleModelBuilder, type VehicleModelBuilder } from './vehicle-model-builder';
 
 /** Sea level (Z) + a large background plane half-size so the ocean reaches the horizon. */
 const SEA_LEVEL = 0;
@@ -173,6 +174,10 @@ export interface GtaSaWorldConfig {
    *  lotteries win). The vanilla CProcObjectMan pools at ~300 for the same perf reason.
    *  Default: unlimited. */
   procObjLimit?: number;
+  /** Off-thread vehicle model builds for {@link GtaSaWorldAdapter.loadVehicleData} (074/21 field fix):
+   *  parse + TXD decode + weld is ~100–200 ms per car TYPE and froze the frame whenever a new type first
+   *  streamed in. Defaults to the real build worker where Workers exist; null = synchronous (node tests). */
+  vehicleModelBuilder?: null | VehicleModelBuilder;
 }
 
 type Rgb = [number, number, number];
@@ -235,12 +240,15 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   private surfaceNames: null | string[] = null;
   private vehicleColours: null | VehicleColours = null;
   private vehicleDefs: Map<string, VehicleDef> | null = null;
+  private readonly vehicleModelBuilder: null | VehicleModelBuilder;
 
   constructor(config: GtaSaWorldConfig) {
     this.config = config;
     this.fs = config.fs;
     this.cellSize = config.cellSize;
     this.dffParser = config.dffParser === undefined ? createDffParser() : config.dffParser;
+    this.vehicleModelBuilder =
+      config.vehicleModelBuilder === undefined ? createVehicleModelBuilder() : config.vehicleModelBuilder;
     const mods = config.mods ?? [];
     this.decoratePart =
       mods.length === 0
@@ -605,9 +613,17 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     const txds = [`${def.txd.toLowerCase()}.txd`, 'models/generic/vehicle.txd']
       .map((txdName) => this.fs.get(txdName))
       .filter((bytes): bytes is ArrayBuffer => bytes !== null && bytes !== undefined);
-    const model = buildVehicleModel(parseDff(dffBuffer), new VehicleTextures(txds), {
-      wheelScale: def.wheelScale,
-    });
+    // Off-thread build when the worker exists (074/21 field fix — a new car type froze the frame ~170 ms):
+    // buffers are COPIED before the transfer so the VFS keeps its originals.
+    const model = this.vehicleModelBuilder
+      ? await this.vehicleModelBuilder.build(
+          dffBuffer.slice(0),
+          txds.map((bytes) => bytes.slice(0)),
+          def.wheelScale,
+        )
+      : buildVehicleModel(parseDff(dffBuffer), new VehicleTextures(txds), {
+          wheelScale: def.wheelScale,
+        });
     const seat = model.dummies.find((dummy: VehicleDummy) => dummy.name === 'ped_frontseat') ?? null;
 
     return {

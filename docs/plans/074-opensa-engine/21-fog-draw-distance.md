@@ -1,0 +1,137 @@
+# 21 — Fog-masked streaming: the draw-distance system (fog v2 + ring invariant + prefetch)
+
+**Status: P1 + P2 FIELD-ACCEPTED (2026-07-17, two field rounds + the vehicle-build-worker fix — user:
+"все супер") · NEXT = P3 (2-create + velocity prefetch + `lateCreates` + the residency investigation) · P4 pending.**
+Owns three coupled changes: the **fog ⊂ LOD-ring invariant** (fog hides streaming, pops become impossible
+by construction), **fog v2 visuals** (fogged geometry dissolves into the sky _including clouds_ — no pale
+silhouettes; water inherits), and the **parked plan-05 streaming tuning** (2 creates/frame +
+velocity-vector prefetch), which turns the invariant's paper margin into a field guarantee.
+
+## The problem (user field report, 2026-07-17)
+
+Driving through the city you SEE the LOD ring load in front of you. Wanted instead:
+
+- Player stands in an HD cell; the LOD ring reaches out to a **Draw Distance** (e.g. 1200 u, a live knob).
+- Fog fully cuts the world _before_ the ring edge (e.g. 1100 u) — the outer ~100 u of loaded cells sit
+  entirely inside full fog, so everything that ever emerges from the fog is already resident. Streaming
+  becomes invisible.
+- Fog must dissolve objects into the sky **with its clouds** — no white silhouettes against cloud decks
+  (prod has this artifact today) — and cut water the same way.
+
+## Ground truth (measured, 2026-07-17)
+
+| Fact                                                                                                                                                                                                            | Where                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Engine rings: `HD_RADIUS 380`, `LOD_RADIUS 1000`, `HYSTERESIS 60`, `EVICT_MARGIN 150` — module constants, **centre-distance** test                                                                              | `packages/engine/src/stream/streaming.ts`       |
+| Driver fog: `fogCutDistance = max(farClip × fogScale, 1200)` — a **1200 FLOOR**                                                                                                                                 | `engine-environment-driver.ts`                  |
+| ⇒ **The invariant is inverted today**: fog cut (≥1200) > LOD ring (1000). The ring edge sits in clear air — pops are visible _by construction_.                                                                 | —                                               |
+| Prod already runs the user's scheme: `fog.distance 800` < `lodDrawDistance 1000`, "geometry is culled shortly after it's fully fogged, so the distant skyline isn't rendered as pale ghosts (and it's cheaper)" | `game-runtime-config.ts`                        |
+| Fog shape: radial exp² over `[start, cut]` + height atten + hard `smoothstep(0.85·cut, cut, dist)` — fogFactor is exactly **1 at the cut**                                                                      | `shaders.ts` (fsWorld/ped/rigid/water share it) |
+| Fog colour `skyFogFor` = `skyBaseFor` + wide sun haze — **no cirrus, no cumulus** ⇒ fogged silhouettes mismatch any clouded sky (the white-silhouette artifact; worst under CLOUDY/RAINY decks)                 | `shaders.ts:612`                                |
+| Engine frame culls by **frustum only** — every loaded in-frustum cell is drawn, however fogged                                                                                                                  | `engine.ts` (frame loop)                        |
+| Streaming budget ≤1 create/frame; city bench (135 u/s) spikes to 21.9 ms traced to that budget; 2-creates + velocity prefetch + request cap parked in plan 05 §post-integration                                 | plan 05, bench series                           |
+| Water: fog drives `alpha → 1` at the horizon (068) — inherits any cut change through the shared fog fn                                                                                                          | `shaders.ts` water module                       |
+
+## Design
+
+### 1. The invariant (the whole feature in one line)
+
+```
+effectiveFogCut + FOG_MARGIN ≤ lodRingRadius        (checked every frame, clamped in the driver)
+```
+
+Plus the geometric proof that makes it real: fog distance is 3D (`length(world − eye)`) and the ring
+distance is horizontal, and 3D ≥ horizontal always — so **any geometry whose horizontal distance ≥ fogCut
+is fully fogged (invisible)**. If unloaded cells can only exist at horizontal distance ≥ ring =
+fogCut + margin, an unloaded cell is invisible. QED — but only if the ring test is honest:
+
+- **The centre-distance ring test leaks.** A 250 u cell has a 177 u half-diagonal: a cell whose CENTRE is
+  just outside a 1200 ring can own geometry at ~1023 u — deep inside a 1100 fog cut. The ring must test
+  the **cell rect** (closest point), like prod's `cellsWithin` grid walk. With a rect test, `FOG_MARGIN`
+  buys pure streaming latency, not geometry slack.
+
+### 2. One knob: `drawDistance`
+
+- `drawDistance` (default **1200**) → `lodRingRadius = drawDistance`; fog cap = `drawDistance − FOG_MARGIN`
+  (**100**). Effective cut = `min(timecyc farClip × fogScale, cap)` — the **1200 floor dies**. Weather
+  moods only pull fog _closer_ (SF fog still rolls in; margin only grows), never past the cap.
+- `StreamingDriver` constants become constructor options (`{hdRadius, lodRadius}`); hosts feed them from
+  config — engine host maps `config.streaming.lodDrawDistance`-style semantics; `?draw=N` = live A/B.
+- HD ring (380) unchanged — HD↔LOD swap quality pops are a different problem (bakes/plan 05 §3), out of
+  scope here.
+- Margin sizing sanity: fast car ~65 u/s × (fetch+decode ~0.2 s) ≈ 13 u; a 10-cell ring-row burst at
+  1 create/frame ≈ 83 ms ≈ 5 u. 100 u ≈ 5–7× safety at play speeds; the 135 u/s bench flyover ≈ 27 u of
+  latency — still inside. Phase 3 (prefetch + 2-create) is what keeps bursts from stacking.
+
+### 3. Fog v2 — dissolve into the sky WITH clouds
+
+`skyFogFor` gains exactly what `fsSky` composites minus the celestial terms: cirrus and cumulus mixed by
+the same `params3.w` alphas. A fully fogged pixel then equals the sky that would be behind it — silhouettes
+vanish against clear sky AND cloud decks. Deliberately still excluded (unchanged): the sun disc/corona
+(the "sun shines through buildings" regression, field round 3) and stars (also per-pixel cost); both keep
+silhouetting through full fog exactly as prod's separate sun mesh does — accepted.
+
+Perf care: `skyFogFor` runs per WORLD pixel. Cumulus is one baked-field tap + palette math behind its
+density early-out; cirrus is the fbm — gate the whole cloud addition behind a fog threshold
+(`fogFactor > ~0.02`; the clear-range majority of pixels skip it). **Cost gate: ≤ +0.3 ms world pass at
+2× retina** (bench ritual, worst = RAINY full deck).
+
+### 4. Distance cull — the feature pays for itself
+
+Cells whose closest-point distance > effective cut are 100 % fog = pixel-identical to the sky — **skip
+their bundles** (opaque + blend) in the frame loop, next to the frustum test (per-cell bounds spheres
+already exist). The outer margin band becomes loaded-but-not-drawn: pure streaming warm-up, zero GPU.
+Expected a street-level draw-count WIN vs today (cells out to 2400 currently draw); high-camera scenes
+(lab orbit, city flyover at +60) change little. Coronas already farClip-fade; clutter ring (150) ≪ cut;
+water keeps its geometry in v1 (the shader's `alpha → 1` cut is the visual truth; clamping the ocean mesh
+is a follow-up if it ever shows in a profile).
+
+Weather transitions: the cull threshold follows the SAME per-frame effective cut the shader gets — while a
+6 s transition eases fog outward, re-admitted cells were already loaded (ring is static), so nothing pops.
+
+### 5. Streaming tuning (un-parks plan 05 §post-integration, user directive)
+
+- **Adaptive 2 creates/frame**: second create only if the first stayed under a time budget (~1.5 ms) —
+  bounds the worst frame instead of doubling it. (M1 worst create ≈ 1.1 ms.)
+- **Velocity-vector prefetch**: `update(focus, velocity)` — _requests_ test distance from
+  `focus + velocity × τ` (τ ≈ 1.5 s, capped ~1 cell; huge delta = teleport ⇒ no bias), _eviction_ keeps the
+  true focus (symmetric safety). Cheap, pure driver logic; also expected to fix plan-05 field symptom #1
+  ("late objects" on a stationary/straight camera).
+- **The honesty metric — `lateCreates`**: a create whose cell already sits INSIDE the effective fog cut
+  at create time = a pop the player could have seen. Counted in `StreamStats`, shown in the HUD, carried
+  into bench JSON. **Gate: 0 late creates** across drive/city/whip (teleport scenes exempt — a teleport
+  legitimately creates inside the visible zone behind the settle veil).
+- Optional (only if teleport transient heap resurfaces): the in-flight request cap (~8) from plan 05.
+
+## Phases (each lands alone, bench ritual after each)
+
+| #   | Scope                                                                                                                                                           | Gate                                                                                                                                                    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1  | Invariant + knob + cull: driver fog cap (floor removed), `StreamingDriver` radii options + **rect ring test**, host wiring + `?draw=`, frame-loop distance cull | benches level or better (expect street-level draws ↓); headless A/B at the fog boundary shows no visual diff from culling; invariant assert never fires |
+| P2  | Fog v2 visuals: cirrus+cumulus into `skyFogFor` behind the fog gate                                                                                             | silhouette headless check (CLOUDY/RAINY skyline: fogged-edge pixel ≈ adjacent sky pixel); world pass ≤ +0.3 ms @2×; goldens reviewed                    |
+| P3  | Streaming: adaptive 2-create + velocity prefetch + `lateCreates`                                                                                                | drive/city/whip/teleport: frame max < 20 ms, **lateCreates = 0**, heap flat (leak test), city 21.9 ms spikes gone or reduced                            |
+| P4  | Field round: user drives LS at speed, weathers cycled `[`/`]`, `?draw=` sweep (800/1200/1600)                                                                   | user verdict; series rows committed                                                                                                                     |
+
+## Risks / notes
+
+- **Residency**: ring 1000 → 1200 ≈ ×1.44 area ⇒ full-map residency ~409 → ~590 MB estimate. Acceptable on
+  desktop; `drawDistance` doubles as the STREAMING/VRAM tier knob (renderScale owns GPU) — low tiers set
+  1000/900 or below.
+- The lab's `?fogscale=2.5` default exists for its high orbit camera — re-judge after the cap lands (the
+  cap may bite before the scale matters at altitude).
+- Env probe renders the world with the same fog — reflections inherit the cut for free; godrays/bloom read
+  the sky pass, untouched.
+- Stars/sun disc through fully-fogged towers: accepted deviation (see §3), same as prod.
+- The knob's config home (reuse `config.streaming.lodDrawDistance` + `config.fog.distance` vs one new
+  `graphics.drawDistance`) is decided at P1 — must stay config-API-parity clean (the shared driver owns
+  the mapping either way).
+
+## Measurement ledger
+
+(standing rule: numbers after every phase)
+
+| Date       | Phase                         | Numbers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-07-17 | P2 field round 2              | User: fog «стало лучше»; two new findings, both fixed same day. (1) **Cutout ghost outlines** — fully fogged trees left sketch-like OUTLINES against the sky: the world fog term scaled the sky colour by `texel.a` (premult-correct for the BLEND pipelines), but on CUTOUT the A2C coverage already owns the alpha shape, so ×a double-counted it on edge/minified crown pixels; the body (a≈1) dissolved correctly — which is exactly why the outlines became visible only after P2 made the body match the sky. Fix: `fogAlpha = select(texel.a, 1.0, cutout)`. (2) **~170 ms freezes on `chassis_vlo`→HD** (repeated `[slow] frame ~170` with GPU only ~5 ms while driving night LS): the first spawn of each new car TYPE ran `parseDff + VehicleTextures (TXD parse + DXT decode) + buildVehicleModel` synchronously on the main thread — the band switch was just the visible coincidence. Fix: **vehicle-model build WORKER** (the dff-parse.worker / plan-060 pattern): `vehicle-model.worker.ts` + `VehicleModelBuilder` client + adapter injection (`vehicleModelBuilder`, default = real worker in browsers, null → sync path in node tests; source buffers COPIED before transfer — the VFS keeps its originals). Headless ls-noon bench (296 cars, many types): `[slow]` lines dropped to the boot spawn burst + two settle frames — **zero model-build freezes**; 120 fps, pass 2.128. Fog-trees screenshot clean. Full suite 2099/324 green.                                                                                                                                                                                                                                                            |
+| 2026-07-17 | P1 field verdict + P2 shipped | **P1 ACCEPTED by the user** («выглядит все круто, подгрузки почти незаметны»); follow-up idea noted: try the scheme against the opensa-lod-generator LOD chain later. User sweep (real display, 841 cars) vs the 11·bench-cars row: sf-fog-dawn +0.08 (noise) · country-dusk **−0.92 (the cull win — authored 1500 capped at 1100)** · ocean −0.13 · **ls-noon 2.18 → 2.89 (+32 %)**. Headless attribution of ls-noon (one environment, 296 cars): default 1.912 · `?clouds=0` 1.679 · `?draw=1000` 1.937 → **the ring/cull is GPU-free; ~0.23 ms is the sky-v2 cumulus (the 11·bench-cars row predates it)** — the rest is display-vs-headless and population variance. **The "странный туман" на sf-fog-dawn = authored data restored, not a bug**: FOGGY_SF farClip 250 (night 150), fogStart −30 — the old 1200 floor had flattened it; SA foggy IS pea soup. The two real look bugs in the user's shots were P2's exact scope and shipped same day: `fogColorFor(dir, fogFactor)` composites cirrus+cumulus (same mixes as fsSky, discs/stars excluded) behind a `fogFactor > 0.02` branch (explicit-LOD taps = legal non-uniform flow); `cirrusFor` MOVED sky→frame include (the unresolved-call black-canvas gotcha); all six fog consumers (world/clutter/ped/rigid/glass/water/debris) switched. Headless foggy-dawn shot at the user's spot: the dawn deck now colours the fog — no horizon seam, no grey silhouettes; heavy-fog GPU 3.15 → 3.39 ANGLE (+0.24, inside the ≤+0.3 gate). **WATCH (P3): residency 2666 MB on the SF scene after a full sweep** (vs 975 at LS spawn) — suspect lazy vehicle-model accumulation across scenes + dense SF cells at ring 1200; needs a ledger-category HUD breakdown. |
+| 2026-07-17 | P1 shipped                    | Authored farClip measured from the shipped pak-map timecyc (scale 1): LA 700–800 · SF 250–1150 · countryside/desert 1500 · FOGGY 250/150 · SANDSTORM 150 — the old 1200 FLOOR had flattened every one of these; removing it restores the prod fog moods, and the 1100 cap only bites countryside/desert (knob-recoverable via `?draw=1600`). Headless lab drive bench (pak-ls, ANGLE 1×): baseline frame avg 8.33 / GPU 2.87 / draws 105 → `?draw=1200` frame avg 8.33 / GPU 2.75 / draws 126 (+20 % draws = the new 1000→1100 visible band that was never loaded before; GPU level) / residency 328→331 MB. Lab orbit with the cap = city fully fogged from altitude (1/92 cells drawn, smooth gradient, no holes) — why the lab keeps `?draw` OPT-IN. Game host headless boot (default ring 1200, LA cut 800): Ganton spawn 67 cells / 975 MB residency / 105 fps ANGLE; observatory vista 120 fps, draws 315, distant tower dissolves into the fog, zero console errors. Full suite 2095/323 green (+10: streaming rect-ring, sphereFullyBeyond, fogCap clamps), tsc + eslint clean. NOTE for the field round: residency at the 1200 ring runs ~950–980 MB in-game at LS spawn — watch it on the real display; `?draw=1000` is the fallback compare.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
