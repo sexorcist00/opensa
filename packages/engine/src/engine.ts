@@ -438,17 +438,10 @@ const DEGENERATE_CLUTTER_MATRIX = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0
  *  blurred paint. 1 = every frame if the budget ever allows. */
 const PROBE_FRAME_INTERVAL = 2;
 
-/** Light-pool capacity (074/06 row 7) — mirrored by the WGSL loop bound. */
+/** Light-pool capacity (074/06 row 7) — mirrored by the WGSL loop bound. Holds HOST DYNAMICS only since
+ *  2026-07-17 (static 2dfx lamps removed — their binary pool admission read as "lamps igniting ahead of
+ *  the car"; the redesign is plan 17's, the corona glow still marks every lamp). */
 const LIGHT_POOL_CAP = 64;
-/** 2dfx lamps farther than this never enter the pool (prod's street-light system fades at 90). */
-const LIGHT_POOL_REACH = 100;
-/**
- * Static 2dfx lamps admitted per frame, NEAREST FIRST (074/16 round 4 — the night fps fix). The world
- * shades the whole pool per VERTEX: at 64 lights a dense street multiplies every world vertex by the full
- * loop and night lost half the frame rate at 2× retina. 24 nearest lamps light the same street visually —
- * far entries contributed a vertex-invisible fraction of a lumen.
- */
-const LIGHT_POOL_STATIC_CAP = 24;
 /** Floats per pooled light: position+radius, colour, direction+cone cosine (2 = point, no cone). */
 const LIGHT_STRIDE = 12;
 /** `dir.w` sentinel for "no cone" — mirrors the three pool's convention exactly. */
@@ -915,7 +908,7 @@ export class Engine {
     // moonColor.w = spare (held the retired cloud-panorama rotation speed).
     frameData.set([...env.moonColor, 0], 68);
     // params3 = [light count (row 7), cloud layer on, cloudDark, cloud layer alpha] — row 15.
-    frameData[72] = this.fillLightPool(camera.eye);
+    frameData[72] = this.fillLightPool();
     // params4.x = how many of those lights are DYNAMIC (they come first in the pool). The world shades the
     // static 2dfx lamps per VERTEX (cheap, and they never move), but a headlight sweeping a 30-metre road
     // polygon has no vertex near it to light: the beam breaks into blotches that follow the road's normals
@@ -2196,9 +2189,17 @@ export class Engine {
     this.depthView = depth.createView();
   }
 
-  /** Fill the local light pool (074/06 row 7): host dynamics first, then 2dfx lamps at night by distance.
-   *  Returns the light count (params3.x — bounds the WGSL loop). */
-  private fillLightPool(eye: Vec3): number {
+  /**
+   * Fill the local light pool (074/06 row 7) with the HOST DYNAMICS only (vehicle head/taillights).
+   * Returns the light count (params3.x — bounds the WGSL loop).
+   *
+   * Static 2dfx street lamps were REMOVED from the pool (2026-07-17, user decision): the nearest-24 /
+   * 100 u admission made lamp pools visibly IGNITE ahead of a driving car — binary pool entry has no
+   * fade, and in dense streets the nearest-set rotation popped mid-distance lamps on and off. Lamp
+   * surface lighting returns with plan 17's redesign (smooth admission weight or baked pools — plan 15);
+   * the corona pass still draws every lamp's glow, so the night look keeps its lights.
+   */
+  private fillLightPool(): number {
     const scratch = this.lightPoolScratch;
     let count = 0;
     const push = (
@@ -2231,37 +2232,6 @@ export class Engine {
     };
     for (const light of this.dynamicLights) {
       push(light.position[0], light.position[1], light.position[2], light.radius, ...light.color, light.cone);
-    }
-    // 2dfx street lamps join at night (the same anchors the corona pass draws) — NEAREST FIRST, hard-capped:
-    // the world pays the whole pool per vertex, so admission order IS the perf knob (074/16 round 4).
-    const gate = this.environment.dn * 1.4;
-    if (gate > 0.03) {
-      const candidates: { distSq: number; light: CellHandle['lights'][number] }[] = [];
-      for (const cell of this.cells.all()) {
-        for (const light of cell.lights) {
-          const dx = light.x - eye[0];
-          const dy = light.y - eye[1];
-          const dz = light.z - eye[2];
-          const distSq = dx * dx + dy * dy + dz * dz;
-          if (distSq <= LIGHT_POOL_REACH * LIGHT_POOL_REACH) {
-            candidates.push({ distSq, light });
-          }
-        }
-      }
-      candidates.sort((a, b) => a.distSq - b.distSq);
-      const statics = Math.min(candidates.length, LIGHT_POOL_STATIC_CAP, LIGHT_POOL_CAP - count);
-      for (let index = 0; index < statics; index += 1) {
-        const light = candidates[index].light;
-        push(
-          light.x,
-          light.y,
-          light.z,
-          Math.max(14, light.size * 8),
-          (light.color[0] / 255) ** 2.2 * gate,
-          (light.color[1] / 255) ** 2.2 * gate,
-          (light.color[2] / 255) ** 2.2 * gate,
-        );
-      }
     }
     if (count > 0) {
       this.device.queue.writeBuffer(this.lightPoolBuffer, 0, scratch, 0, count * LIGHT_STRIDE);

@@ -24,6 +24,28 @@ which carries the full Ten Green Bottles diagnosis):
 Owner step in the ladder: **B6.5**, between B6 (2dfx particles, done) and B7 (destruction/animation objects).
 The user has scoped **normal cleanup as its own later plan** — this one must first explain the delta with prod.
 
+**2026-07-17 update — static 2dfx lamps REMOVED from the light pool entirely (user decision).** The
+binary pool admission (100 u reach + nearest-24 cap, no fade, no hysteresis) read in the field as "lamps
+igniting ahead of the driving car", and the interim tuning knobs were not worth more rounds. Current
+state: the pool carries HOST DYNAMICS only (head/brake lights — untouched, per-pixel); the corona pass
+still draws every lamp's glow, night windows keep their emissive. Symptom 2's machinery is therefore
+GONE rather than fixed — when this plan executes, lamp SURFACE lighting starts from zero, and the redesign
+must include prod's four missing pieces (nearest-sort + hysteresis + range fade + per-slot temporal ramp)
+or go the baked route (plan 15 for LOD, possibly HD too per the hd-realtime concept). Two measured data
+points from the removal, and they point OPPOSITE ways — reconcile them when this plan executes:
+
+- headless 2×, standing at the Ganton spawn: night GPU pass 2.9–3.8 → 1.4 ms — the static pool looked
+  like the biggest night line item;
+- **the user's real display, free roam: fps did NOT noticeably change** — so on the real machine the
+  night bottleneck sits elsewhere (per-pixel dynamics / bloom / coronas / something unprofiled), and the
+  per-vertex static pool was comparatively cheap there.
+
+**User's conclusion for the redesign (2026-07-17, information only — nothing scheduled): the budget
+likely exists to light ALL lamps of the loaded HD cells at once** (no reach, no cap, no admission → no
+ignition pops by construction), instead of the 24-nearest scheme. If the redesign takes that route it
+still wants the per-slot ramp for dusk, and it must be verified on the REAL display (the headless-1×/2×
+A/B under-reports per-vertex world costs — the same lesson the rolled-back SSR taught for per-pixel).
+
 ---
 
 ## 1. The symptoms (field, `?engine=opensa`)
