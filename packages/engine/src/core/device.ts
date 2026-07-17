@@ -37,7 +37,7 @@ export function configureCanvas(canvas: HTMLCanvasElement, engineDevice: EngineD
 
 export async function initDevice(): Promise<EngineDevice> {
   if (!('gpu' in navigator)) {
-    throw new Error('WebGPU is not available in this browser (the prod app serves the WebGL path instead)');
+    throw new Error('WebGPU is not available in this browser (WebGPU is required — there is no fallback renderer)');
   }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) {

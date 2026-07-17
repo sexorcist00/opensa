@@ -7,6 +7,7 @@ plans lived scattered in the 074 chain). Convention mirrors the other tools (`ma
 | --- | ----------------------------------------------------- | ------------------------------------------------------------------- |
 | 000 | [Converter tool](000-converter-tool.md)               | SHIPPED (the founding plan, was 074·03) + living bake-defaults note |
 | 001 | [Missing-normals guard](001-missing-normals-guard.md) | SHIPPED 2026-07-15                                                  |
+| 002 | [Fetch-game paks](002-fetch-game-paks.md)             | STUB — post-migration (user refines scope; gostown & co)            |
 
 ## Cross-cutting plans that STAY in the 074 chain (tool + engine halves)
 

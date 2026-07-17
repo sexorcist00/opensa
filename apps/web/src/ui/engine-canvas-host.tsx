@@ -15,7 +15,6 @@ import {
   FOG_RING_MARGIN,
 } from '@opensa/game/adapters/engine-environment-driver';
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
-import { benchRoadCarPlacements } from '@opensa/game/adapters/road-cars';
 import { CharacterControllerSystem } from '@opensa/game/character/character-controller.system';
 import { Logger } from '@opensa/game/diagnostics/logger';
 import { PlayerControlled, RigidBody, Transform, Velocity } from '@opensa/game/ecs/components';
@@ -23,7 +22,6 @@ import { createEcsWorld } from '@opensa/game/ecs/world';
 import { EventBus } from '@opensa/game/events/event-bus';
 import { type GameEvents } from '@opensa/game/events/events.global';
 import { CombinedInput, Keyboard, KeyboardSource } from '@opensa/game/input';
-import { type BenchScene, samplePath } from '@opensa/game/perf/bench';
 import { PhysicsWorld } from '@opensa/game/physics/physics-world';
 import { PhysicsSystem } from '@opensa/game/physics/physics.system';
 import { initRapier } from '@opensa/game/physics/rapier';
@@ -39,12 +37,12 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { GameId } from '../game-config';
 
-import { BENCH_SCENES } from '../bench-scenes';
 import { GAME_CONFIG } from '../game-config';
 import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
 import { setupEngineClutter } from './engine-clutter';
 import { loadCoronaSprites, setupEngineParticles } from './engine-particles';
+import { ledgerBreakdown, type LegSample, setupPerfRuns } from './engine-perf-runs';
 import { loadEnginePlayer } from './engine-player';
 import { setupEngineProps } from './engine-props';
 import { type EngineVehicles, setupEngineVehicles } from './engine-vehicles';
@@ -456,10 +454,11 @@ async function boot(
   let vehiclesMs = 0;
   // In-game bench state (074/10 B3 tail): the loop consumes these; the runner below owns them.
   let benchCamera: null | { eye: [number, number, number]; target: [number, number, number] } = null;
-  let benchSamples:
-    | null
-    | { draws: number; frameMs: number; gpuMs: number; postMs: number; probeMs: number; submitMs: number }[] = null;
+  let benchSamples: LegSample[] | null = null;
   let lastStream: null | StreamStats = null;
+  // Soak-mode HUD line (074/10 ③) — progress while running, the verdict when done (the Safari
+  // read-off). Carries its own leading newline so the HUD appends it unconditionally.
+  let soakStatus = '';
   const runFixedSteps = (pending: number): number => {
     let steps = 0;
     fixedSteps = 0;
@@ -659,117 +658,53 @@ async function boot(
       `debug   vel ${Velocity.x[playerEid].toFixed(2)},${Velocity.y[playerEid].toFixed(2)},${Velocity.z[playerEid].toFixed(2)} ` +
       `grounded ${Velocity.grounded[playerEid]} ${seatedCar ? '· SEATED ' : ''}` +
       `move ${JSON.stringify(input.move())} · ped sampler ${pedMs.toFixed(2)} ms · anim ${animMs.toFixed(2)} ms` +
+      soakStatus +
       (debugError ? `\nFIXED-STEP ERROR: ${debugError}` : '') +
       (hostState.paused ? '\nPAUSED' : '');
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
 
-  // In-game benches (074/10 B3 last tail → the C1 comparability requirement): SAME scenes + path sampler
-  // as prod's BenchPlugin, SAME `[bench] {json}` report protocol — only the harness is host-specific
-  // (teleport via physics, weather via the shared env driver, camera override, engine stats capture).
-  const benchKey = params.get('bench');
-  if (benchKey) {
-    const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
-    const flyAt = (scene: BenchScene, t: number): void => {
-      const pose = samplePath(scene.path, t);
-      benchCamera = {
-        eye: toEngine(pose.pos),
-        target: toEngine(pose.look),
-      };
-    };
-    const runScene = async (scene: BenchScene): Promise<void> => {
-      hour = scene.hour;
-      weatherTransition.begin(scene.weather, 0); // instant — bench scenes must not sample mid-blend
-      physics.teleport(RigidBody.handle[playerEid], [scene.anchor[0], scene.anchor[1], scene.anchor[2]]);
-      Transform.x[playerEid] = scene.anchor[0];
-      Transform.y[playerEid] = scene.anchor[1];
-      Transform.z[playerEid] = scene.anchor[2];
-      // Settle: the streaming ring around the anchor must drain before sampling (prod's teleport contract).
-      const settleStart = performance.now();
-      flyAt(scene, 0);
-      while (performance.now() - settleStart < WORLD_READY_TIMEOUT_MS) {
-        await nextFrame();
-        if (lastStream !== null && lastStream.pendingCells === 0) {
-          break;
-        }
-      }
-      // Warmup (prod WARMUP_S): shader compiles / fresh-ring uploads drain outside the capture.
-      const warmupStart = performance.now();
-      while (performance.now() - warmupStart < 1500) {
-        await nextFrame();
-      }
+  // In-game perf runs (bench `?bench=` + soak `?soak=`) — the runners live in ./engine-perf-runs; this
+  // host only wires thin accessors over its loop state (camera override, sampling, teleport, env).
+  setupPerfRuns({
+    beginSamples: (): void => {
       benchSamples = [];
-      const lateStart = lastStream?.lateCreates ?? 0; // late-create DELTA over the measure window (074/21 P3)
-      const runStart = performance.now();
-      let t = 0;
-      while (t < 1) {
-        t = Math.min(1, (performance.now() - runStart) / 1000 / scene.durationS);
-        flyAt(scene, t);
-        await nextFrame();
-      }
-      const samples = benchSamples;
+    },
+    engine,
+    fs,
+    getStream: (): null | StreamStats => lastStream,
+    getVehicles: (): EngineVehicles | null => vehicles,
+    params,
+    setBenchCamera: (camera): void => {
+      benchCamera = camera;
+    },
+    setHour: (value): void => {
+      hour = value;
+    },
+    setSoakStatus: (text): void => {
+      soakStatus = `\n${text}`;
+    },
+    settleTimeoutMs: WORLD_READY_TIMEOUT_MS,
+    setWeather: (value): void => {
+      weatherTransition.begin(value, 0);
+    },
+    slowFrameMs: SLOW_FRAME_MS,
+    takeSamples: (): LegSample[] => {
+      const samples = benchSamples ?? [];
       benchSamples = null;
       benchCamera = null;
-      const avg = (values: readonly number[]): number =>
-        values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
-      const sortedMs = samples.map((sample) => sample.frameMs).sort((a, b) => a - b);
-      const avgMs = avg(sortedMs);
-      const gpuSamples = samples.filter((sample) => sample.gpuMs > 0).map((sample) => sample.gpuMs);
-      const postSamples = samples.filter((sample) => sample.postMs > 0).map((sample) => sample.postMs);
-      const probeSamples = samples.filter((sample) => sample.probeMs > 0).map((sample) => sample.probeMs);
-      const report = {
-        avgDrawCalls: Math.round(avg(samples.map((sample) => sample.draws))),
-        avgMs: Number(avgMs.toFixed(3)),
-        avgTriangles: 0,
-        fps: Number((1000 / Math.max(0.001, avgMs)).toFixed(1)),
-        frames: samples.length,
-        gpuMs: {
-          pass: Number(avg(gpuSamples).toFixed(3)),
-          post: Number(avg(postSamples).toFixed(3)),
-          probe: Number(avg(probeSamples).toFixed(3)),
-          submit: Number(avg(samples.map((sample) => sample.submitMs)).toFixed(3)),
-        },
-        key: scene.key,
-        // The fog-mask honesty gate (074/21 P3): creates inside the fog cut during the measure window.
-        lateCreates: (lastStream?.lateCreates ?? 0) - lateStart,
-        p95Ms: Number((sortedMs[Math.floor(sortedMs.length * 0.95)] ?? 0).toFixed(3)),
-        // Residency at scene end + its category breakdown — the sweep-accumulation diagnosis (074/21 P3).
-        residency: ledgerBreakdown(engine),
-      };
-      // eslint-disable-next-line no-console -- the bench deliverable IS this JSON line (plan 063 protocol)
-      console.log('[bench]', JSON.stringify(report));
-    };
-    const scenes = benchKey === 'all' ? BENCH_SCENES : BENCH_SCENES.filter((scene) => scene.key === benchKey);
-    if (scenes.length === 0) {
-      // eslint-disable-next-line no-console -- bench CLI feedback, same as prod
-      console.warn(`[bench] unknown scene '${benchKey}' — known: all, ${BENCH_SCENES.map((s) => s.key).join(', ')}`);
-    }
-    void (async (): Promise<void> => {
-      // Road cars (074 bench realism): typed cars from vehicles.ide on the path-node road graph around
-      // every measured scene, registered LAZILY — the vehicle-lod system streams them exactly like the
-      // game's own parked cars, so each scene measures a realistic vehicle load. Shared with the prod
-      // three host (canvas-host) so the C1 baseline sweeps the SAME population.
-      const placements = benchRoadCarPlacements(
-        fs,
-        scenes,
-        new URLSearchParams(window.location.search).get('benchcar'),
-      );
-      if (vehicles && placements.length > 0) {
-        vehicles.register(placements);
-      } else if (scenes.some((scene) => scene.cars !== undefined)) {
-        // eslint-disable-next-line no-console -- a silent empty street would read as a false measurement
-        console.warn('[bench] road cars SKIPPED: no vehicle system, path graph or car models');
-      }
-      // eslint-disable-next-line no-console -- bench CLI feedback (the record's context, same protocol)
-      console.log(`[bench] road cars registered: ${vehicles ? placements.length : 0}`);
-      for (const scene of scenes) {
-        await runScene(scene);
-      }
-      // eslint-disable-next-line no-console -- bench CLI feedback, same as prod
-      console.log('[bench] sweep complete');
-    })();
-  }
+
+      return samples;
+    },
+    teleportPlayer: (anchor): void => {
+      physics.teleport(RigidBody.handle[playerEid], [anchor[0], anchor[1], anchor[2]]);
+      Transform.x[playerEid] = anchor[0];
+      Transform.y[playerEid] = anchor[1];
+      Transform.z[playerEid] = anchor[2];
+    },
+    toEngine,
+  });
 }
 
 /** Water (074/06 row 12): prefer the BAKED tessellated mesh (`water.bin` — per-vertex shore field →
@@ -828,14 +763,6 @@ async function installWater(
     }
   }
   engine.setWater(new Float32Array(positions), new Uint32Array(indices), ripple, foam);
-}
-
-/** Residency by ledger category, MB (074/21 P3 — the sweep-accumulation diagnosis): non-zero buckets only. */
-function ledgerBreakdown(engine: Engine): string {
-  return Object.entries(engine.ledger())
-    .filter(([, entry]) => entry.bytes > 0)
-    .map(([category, entry]) => `${category} ${(entry.bytes / 1048576).toFixed(0)}`)
-    .join(' · ');
 }
 
 /** Decode one particle.txd texture to RGBA (null when the archive/texture is absent). */

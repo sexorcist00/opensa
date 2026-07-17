@@ -34,6 +34,7 @@ non-WebGPU browsers during the whole build-out (additive, no flag day — the 06
 | 18  | [UV-scroll animation](18-uv-anim.md)                                          | B7·c — the crawling neon / conveyor belts. Parsed already, rendered by prod, ignored by the engine.                   |
 | 15  | [LOD baked lights](15-lod-baked-lights.md)                                    | Bake 2dfx lamp light into LOD night prelit — far-field streetlight pools / billboard glow at night.                   |
 | 21  | [Fog draw-distance](21-fog-draw-distance.md)                                  | Fog ⊂ LOD-ring invariant (streaming becomes invisible) + fog-into-clouds v2 + distance cull + 05's parked prefetch.   |
+| 22  | [Debug tools port](22-debug-tools.md)                                         | The LAST pre-flip BLOCKER: F2 debugger port (7 phases) + photo mode K+M + pointer-capture button.                     |
 
 ## Roadmap — vertical slices with numeric gates (plans ≠ phases; each milestone cuts across plans)
 
@@ -74,7 +75,7 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
 - **Streaming design**: rings/hysteresis/atomic-swap semantics (plan 060) — reimplemented thin, three-free.
 - **Instrumentation**: the 073 HUD (frame/fixed/update/unaccounted/heap/longtasks) + bench scenes/paths.
 - **The alpha-edge groundwork**: dilation BFS + DXT software decode exist from the
-  [open issue](../../open-issues/alpha-edge.md).
+  [open issue](../../open-issues/fixed/alpha-edge.md).
 
 ## Handoff status (2026-07-16, end of day — resume from here)
 
@@ -171,10 +172,58 @@ preserved record + constraints for the next attempt live in [16](16-vehicle-pain
 16·ssr-grounding / 16·display-sweep in the series measure the ROLLED-BACK build; the display sweep also
 tripped the country-dusk WATCH (pass 4.50 twice) — profile country-dusk before new dusk-hour effects.
 
-**Resume (the ladder, 2026-07-17):** the pre-C1 look arcs (sky v2, fog/plan 21) are BOTH closed; plan 16
-steps 3+6 rolled back above (redesign parked for a future iteration) — next: 17 lighting / the
-hd-realtime concept decision (start with profiling the night car-dense free-roam scenes — the field
-input recorded there) → then ② the C1 criteria run → flip (C2 stays gated).
+**Evening close (2026-07-17) — the "simple stable fast version" batch, all field-confirmed:**
+
+- **Static 2dfx lamps REMOVED from the light pool** (user decision — binary admission read as "lamps
+  igniting ahead of the car"; pool = host dynamics only, coronas/emissives untouched; the
+  [17 record](17-map-lighting.md) carries the two OPPOSITE cost data points: headless pass 2.9–3.8 → 1.4 ms vs the
+  user's display "fps unchanged" — the real night bottleneck is elsewhere and unprofiled. User's field
+  conclusion recorded as a DRAFT idea: light ALL lamps of loaded HD cells at once).
+- **WEBGPU-FIRST, FINAL** (user: no dual-renderer support): flip criterion 4 replaced — the loader is a
+  boot GATE (WebGPU → the engine IS the game; else a "sorry" screen); `?engine=three` = comparison
+  override only, dies at C2.
+- **opensa-pack: AO/skyVis bake ON BY DEFAULT** (`--no-ao` to skip — it replaces prod's SSAO; `--bakes`
+  now gates only sun-vis) + the tool OWNS ITS PLANS (`tools/opensa-pack/docs/plans/`, the founding
+  074/03 doc moved there as 000).
+- **The baked-shadows open mystery DROPPED** (user: the whole shadow mechanic gets redesigned later —
+  see the [0.6.0/04-graphic-improvements DRAFT bundle](../../ideas/0.6.0/plans/04-graphic-improvements/readme.md):
+  directional shadows + HD-cell lamps + dynamic contact darkening, one thinking round).
+- **Vehicle-model texture LRU SHIPPED** (pre-flip item 1; series 21·vehicle-lru): 256 MB texture trim
+  floor over the per-TYPE cache, live types pinned, worker rebuild on re-encounter; sweep texture bucket
+  plateaus 1161 MB vs 2657 monotonic (−1.5 GB), 120 Hz, `lateCreates 0`. Round-1 lesson (claim-before-
+  evict or fresh builds die "unknown model") in the plan-21 ledger. Awaiting the user's field ride.
+
+**Resume (pre-flip order, 2026-07-17 close):** ~~① country-dusk PROFILE~~ **DONE 2026-07-17 — WATCH
+RETIRED** (re-measured on the current build at retina-equivalent DPR-2 headless: country-dusk 2.17–2.36
+ms sits inside the scene band 2.01–2.36, no longer the outlier; the 3.48 → 3.86 → 4.50 display trend was
+measured on builds carrying SSR + the static lamp pool, both since removed; 4× pixels moved pass only
++0.0–0.45 ms so the cost was never resolution-bound — series row 06·dusk-watch; formal close rides the
+C1 display sweep) → ~~② the WebGPU boot gate~~ **DONE 2026-07-17 — the ENGINE is now the DEFAULT host**
+(webgpu-gate.ts probes adapter + BC mirroring initDevice; no WebGPU → sorry screen, menu never shows;
+`?engine=three` = the comparison override, `?engine=opensa` still accepted; all three branches
+harness-verified — plan 10 task note) → ~~③ the SOAK mode~~ **DONE 2026-07-17** (`?soak=<minutes>`
+cycles the 6 bench scenes to the deadline; one `[soak] {json}` per leg + a final SELF-JUDGED verdict —
+8 checks all relative to the run itself: coverage / heapFlat / residencyFlat / textureFlat / lateBounded /
+longTasksBounded / frameStable / slowBounded; heap+longtask probes Chromium-only, judge skips them
+elsewhere; verdict also lands on the HUD for the Safari read-off. Machinery: `soak.ts` pure judge +
+14 unit tests, bench+soak legs SHARED via the extracted `engine-perf-runs.ts` (bench report verified
+byte-shape-identical after the refactor). Mechanism field-checked: 4-min headless run = 15 legs, PASS,
+heap flat 2661 MB, late 0, longTasks 0, slow 0.01 %) → ④ the C1 criteria run, RESCOPED by the user
+2026-07-17: **parity screenshots SKIPPED for now · Safari NOT relevant** — what remains is (a) the
+user's formal display `?bench=all` row, (b) **plan [22 debug tools](22-debug-tools.md) — RAISED TO
+BLOCKER (user, late 2026-07-17): full F2 debugger PORT (the overlay is not mounted on the engine host
+at all) + photo mode K+M + the pointer-capture button; 7 phases, detailed tasks in the plan**, (c) the
+flip decision doc. THE AGREED SEQUENCE: plan 22 ships → remind the user to run display `?bench=all` +
+parity screenshots → FLIP. 30-min Chrome soak DONE 2026-07-17: PASS all 8 checks (heap SHRANK
+2661→2499 MB over 107 legs — series 10·soak30). Post-migration queue: opensa-pack plan 002 (fetch-game
+paks — gostown & co, user refines scope) + bucket D debugger knobs. Flip → (C2 stays GATED).
+Post-flip residency follow-up: per-ring texture laziness (~767 MB world-array boot baseline).
+
+**Parity debts RESOLVED by user decision 2026-07-17: vehicle paint (16) CLOSED (user verdict — the
+paint is good now) · map lighting (17) DEFERRED to the next iteration, not a pre-flip blocker (the
+no-lamp-pool state is the accepted flip baseline).** Testing/bench knowledge extracted to
+[docs/development/benchmarks.md](../../development/benchmarks.md) + the committed harness
+`tools-debug/bench-harness/`.
 
 ## Handoff status (2026-07-14 — history)
 

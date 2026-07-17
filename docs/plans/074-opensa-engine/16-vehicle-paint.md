@@ -2,7 +2,11 @@
 
 [← chain](readme.md) · owner of the rework the B5r v1 could not deliver
 
-**Status: steps 1–2 CLOSED, field-ACCEPTED 2026-07-16** — step 1 (ACES+bloom) shipped with plan 09;
+**PLAN CLOSED 2026-07-17 — user verdict: vehicle paint is good now; the parity debt is retired and
+nothing here blocks the flip.** Steps 3+6 (SSR/grounding) stay recorded below as constraints for a
+FUTURE beyond-parity iteration only.
+
+**Status history: steps 1–2 CLOSED, field-ACCEPTED 2026-07-16** — step 1 (ACES+bloom) shipped with plan 09;
 step 2 (the scene environment probe + the skygfx-neo reflection model, six field rounds — see the round
 records below) accepted by the user as the direction to build on. Step 4 vehicle normals SKIPPED by the
 user (2026-07-16) — design parked at docs/ideas/0.6.0/plans/03-vehicle-normals. **Steps 3 (SSR) + 6

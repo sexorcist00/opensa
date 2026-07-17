@@ -1,8 +1,14 @@
 # 17 — Map lighting: broken normals, 2dfx lamps, and a frame-time regression
 
-**Status: OPEN — deliberately.** Round 1 was attempted on 2026-07-14 and FULLY REVERTED (code back to
-`9a9d156`, pak reconverted). Nothing here shipped. Read the whole file before touching map lighting again —
-the measurements stand, and the failed attempts are the point of the document.
+**Status: DEFERRED to the next iteration (user decision 2026-07-17) — NOT a pre-flip blocker.** The
+whole lamp-lighting question moves to the post-flip graphics round (the
+[0.6.0/04-graphic-improvements](../../ideas/0.6.0/plans/04-graphic-improvements/readme.md) DRAFT bundle:
+directional shadows + HD-cell lamps + contact darkening, one thinking round). The current shipped state
+(coronas + emissives, NO static lamp pool — removed 2026-07-17) is the accepted flip baseline.
+
+**Pre-2026-07-17 history: OPEN — deliberately.** Round 1 was attempted on 2026-07-14 and FULLY REVERTED
+(code back to `9a9d156`, pak reconverted). Nothing here shipped. Read the whole file before touching map
+lighting again — the measurements stand, and the failed attempts are the point of the document.
 
 **2026-07-15 update — both symptoms are now EXPLAINED; the user chose to keep the bug open while a bigger
 architecture decision is thought through** (see [concept/hd-realtime-lod-baked.md](concept/hd-realtime-lod-baked.md),

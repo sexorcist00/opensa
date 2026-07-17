@@ -1,4 +1,4 @@
-import { lazy, type ReactElement, Suspense, useEffect } from 'react';
+import { lazy, type ReactElement, Suspense, useEffect, useState } from 'react';
 
 import type { BootPhase } from './boot-machine';
 
@@ -12,16 +12,18 @@ import { Menu } from './menu';
 import { Preloader } from './preloader';
 import { useAssetBoot } from './use-asset-boot';
 import { useFullscreen } from './use-fullscreen';
+import { probeWebGpuSupport } from './webgpu-gate';
 import './shell.css';
 
-// The heavy game surface (three.js/Rapier) is code-split — fetched only past the menu.
-// `?engine=opensa` (plan 074/10 B3): the world boots on the OWN WebGPU engine instead of three-WebGL —
-// one flag switches the whole renderer; the two hosts never share a canvas.
-const OWN_ENGINE = new URLSearchParams(window.location.search).get('engine') === 'opensa';
+// The heavy game surface is code-split — fetched only past the menu.
+// WebGPU-first (plan 074/10, user decision 2026-07-17): the own engine IS the game; browsers without
+// WebGPU get the sorry screen, not a fallback renderer. `?engine=three` remains a manual comparison
+// override for the post-flip period only (dies at C2); the two hosts never share a canvas.
+const THREE_OVERRIDE = new URLSearchParams(window.location.search).get('engine') === 'three';
 const GameCanvas = lazy(() =>
-  OWN_ENGINE
-    ? import('../engine-canvas-host').then((module) => ({ default: module.EngineCanvasHost }))
-    : import('../canvas-host').then((module) => ({ default: module.CanvasHost })),
+  THREE_OVERRIDE
+    ? import('../canvas-host').then((module) => ({ default: module.CanvasHost }))
+    : import('../engine-canvas-host').then((module) => ({ default: module.EngineCanvasHost })),
 );
 
 const SUBTITLED = 'sa-logo--small sa-logo--titled sa-logo--described';
@@ -31,10 +33,28 @@ export function App(): ReactElement {
   const fullscreen = useFullscreen();
   const { phase } = boot.state;
   const { pause, resume } = boot;
+  // null = probe in flight (resolves in ms, well before the folder pick); the three override skips it.
+  const [webGpuOk, setWebGpuOk] = useState<boolean | null>(THREE_OVERRIDE ? true : null);
 
   // Count the visit (no-op unless VITE_GA_ID is set).
   useEffect(() => {
     initAnalytics();
+  }, []);
+
+  useEffect(() => {
+    if (THREE_OVERRIDE) {
+      return;
+    }
+    let cancelled = false;
+    void probeWebGpuSupport().then((ok) => {
+      if (!cancelled) {
+        setWebGpuOk(ok);
+      }
+    });
+
+    return (): void => {
+      cancelled = true;
+    };
   }, []);
 
   // Esc toggles pause ↔ play.
@@ -56,6 +76,20 @@ export function App(): ReactElement {
 
   const showGame = phase === 'warmup' || phase === 'playing' || phase === 'paused';
   const showLoadingScreen = phase === 'loading' || phase === 'warmup';
+
+  if (webGpuOk === false) {
+    return (
+      <div className="sa-shell">
+        <div className="sa-stage sa-stage--col">
+          <Logo className={SUBTITLED} />
+          <p className="sa-tagline">
+            Sorry — OpenSA runs on WebGPU, and this browser or device does not support it. Please use a recent Chrome or
+            Edge, or Safari 26+ on macOS.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="sa-shell">

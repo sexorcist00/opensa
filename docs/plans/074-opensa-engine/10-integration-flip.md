@@ -114,10 +114,28 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
       data-driven feet placement (fixture minZ from the IDLE-POSED mesh — the bind pose lies along an
       axis and is useless — plus a centre-origin ground ray excluding the own capsule: rays started under
       the capsule slip beneath thin road COL shells into basements).
-- [ ] WebGPU boot GATE in the web app (2026-07-17 rescope of the old capability-gated loader — criterion 4
-      above): `navigator.gpu` + adapter request succeed → the engine host is THE game; otherwise a clear
-      "sorry, WebGPU required" screen. NO three-WebGL fallback branch (WebGPU-first, user decision);
-      `?engine=three` stays as a manual override for the post-flip comparison period only, and dies at C2.
+- [x] **WebGPU boot GATE in the web app — DONE 2026-07-17** (rescope of the old capability-gated loader —
+      criterion 4 above): `apps/web/src/ui/shell/webgpu-gate.ts` probes adapter + `texture-compression-bc`
+      (mirrors `initDevice`'s hard requirements so passing the gate means the engine actually boots), and
+      `app.tsx` flips the lazy-host default — the ENGINE host is now THE game; no WebGPU → the sorry
+      screen (logo + message, menu never shows). NO three-WebGL fallback branch (WebGPU-first, user
+      decision); `?engine=three` is the manual comparison override only and dies at C2 (`?engine=opensa`
+      still accepted — harness URLs unchanged). All three branches verified in the headless harness:
+      default boot → webgpu canvas (world renders, 120 fps HUD), `?engine=three` → webgl2 canvas,
+      `--disable-features=WebGPU` → sorry screen with the menu hidden (the null-adapter path — navigator.gpu
+      existed). 5 unit tests (probe: absent gpu / null adapter / throw / no BC / ok).
+- [x] **Soak MODE built — DONE 2026-07-17** (pre-flip ③; the criteria-3 instrument): `?soak=<minutes>`
+      cycles the 6 bench scenes until the deadline reusing the SAME leg mechanics as the bench (extracted
+      to `engine-perf-runs.ts`; the bench `[bench]` report verified unchanged after the refactor). One
+      `[soak] {json}` line per leg (frames/avg/p95/slow, heap MB, residency+texture MB, cells, late
+      creates, long tasks) + a final SELF-JUDGED verdict — 8 checks relative to the run itself
+      (display-independent): coverage, heapFlat (first→last quarter mean), residencyFlat + textureFlat
+      (peak-in-last-quarter = the leak signature), lateBounded, longTasksBounded (budget minutes/5),
+      frameStable (p95 median drift ≤1.5×), slowBounded (≤0.5 %). Heap/longtask probes are
+      Chromium-only — the judge marks them skipped elsewhere (the Safari flow: open the tab with
+      `?soak=30`, read the verdict off the HUD `soakStatus` line). Judge = pure `soak.ts` + 8 unit tests.
+      Mechanism check (4-min headless): 15 legs, PASS, heap flat 2661 MB, texture plateau 1253 MB,
+      late 0, longTasks 0, slow 3/27010. The FORMAL 30-min Chrome+Safari runs are the C1 item below.
 - [ ] Bench + soak + parity sweeps; the flip decision doc with all ledgers linked.
 - [ ] Post-flip cleanup: 073 flags/patch disposition PR (discussed with the user first — standing agreement).
 
