@@ -653,7 +653,8 @@ async function boot(
       `OWN ENGINE (074/10 B3) — walk: WASD, run: Shift, jump: Space, click = capture mouse (Esc frees)\n` +
       `frame   ${frameAvg.toFixed(2)} ms (${(1000 / Math.max(frameAvg, 0.001)).toFixed(0)} fps)\n` +
       `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${stats.gpuPassMs > 0 ? stats.gpuPassMs.toFixed(2) : 'n/a'} ms · post ${stats.gpuPostMs > 0 ? stats.gpuPostMs.toFixed(2) : 'n/a'} ms · probe ${stats.gpuProbeMs > 0 ? stats.gpuProbeMs.toFixed(2) : 'off'} ms · draws ${stats.drawsRecorded}\n` +
-      `stream  ${streamStats.loadedCells} cells, ${streamStats.pendingCells} pending · residency ${(stats.residencyBytes / 1048576).toFixed(0)} MB\n` +
+      `stream  ${streamStats.loadedCells} cells, ${streamStats.pendingCells} pending, late ${streamStats.lateCreates} · ` +
+      `residency ${(stats.residencyBytes / 1048576).toFixed(0)} MB (${ledgerBreakdown(engine)})\n` +
       `GTA     ${gta[0].toFixed(1)}, ${gta[1].toFixed(1)}, ${gta[2].toFixed(1)} · ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')}\n` +
       `debug   vel ${Velocity.x[playerEid].toFixed(2)},${Velocity.y[playerEid].toFixed(2)},${Velocity.z[playerEid].toFixed(2)} ` +
       `grounded ${Velocity.grounded[playerEid]} ${seatedCar ? '· SEATED ' : ''}` +
@@ -699,6 +700,7 @@ async function boot(
         await nextFrame();
       }
       benchSamples = [];
+      const lateStart = lastStream?.lateCreates ?? 0; // late-create DELTA over the measure window (074/21 P3)
       const runStart = performance.now();
       let t = 0;
       while (t < 1) {
@@ -729,7 +731,11 @@ async function boot(
           submit: Number(avg(samples.map((sample) => sample.submitMs)).toFixed(3)),
         },
         key: scene.key,
+        // The fog-mask honesty gate (074/21 P3): creates inside the fog cut during the measure window.
+        lateCreates: (lastStream?.lateCreates ?? 0) - lateStart,
         p95Ms: Number((sortedMs[Math.floor(sortedMs.length * 0.95)] ?? 0).toFixed(3)),
+        // Residency at scene end + its category breakdown — the sweep-accumulation diagnosis (074/21 P3).
+        residency: ledgerBreakdown(engine),
       };
       // eslint-disable-next-line no-console -- the bench deliverable IS this JSON line (plan 063 protocol)
       console.log('[bench]', JSON.stringify(report));
@@ -822,6 +828,14 @@ async function installWater(
     }
   }
   engine.setWater(new Float32Array(positions), new Uint32Array(indices), ripple, foam);
+}
+
+/** Residency by ledger category, MB (074/21 P3 — the sweep-accumulation diagnosis): non-zero buckets only. */
+function ledgerBreakdown(engine: Engine): string {
+  return Object.entries(engine.ledger())
+    .filter(([, entry]) => entry.bytes > 0)
+    .map(([category, entry]) => `${category} ${(entry.bytes / 1048576).toFixed(0)}`)
+    .join(' · ');
 }
 
 /** Decode one particle.txd texture to RGBA (null when the archive/texture is absent). */

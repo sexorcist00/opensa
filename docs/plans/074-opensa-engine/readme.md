@@ -111,8 +111,11 @@ Full history in the [06 ledger row 4](06-world-effects-parity.md); cost points i
 (clouds composite into the fog colour) both FIELD-ACCEPTED 2026-07-17 across two rounds («подгрузки
 почти незаметны» → «все супер»), including the round-2 fixes: cutout fog no longer scales by texel.a
 (ghost tree outlines) and the VEHICLE-MODEL BUILD WORKER (the ~170 ms new-car-type freeze — the
-plan-060 dff-parse.worker pattern). P3 next = 2-create + velocity-prefetch + `lateCreates = 0` + the
-residency-2666-MB investigation (see the plan ledger).\*\*
+plan-060 dff-parse.worker pattern). P3 (adaptive 2-create + velocity prefetch + `lateCreates` metric +
+the residency diagnosis: texture arrays, not cells) SHIPPED and FIELD-ACCEPTED the same day — user rode
+LS with `late 0` everywhere: **the fog ARC IS CLOSED**. Owed as formalities: the ritual display sweep
+row + the `?draw=` 800/1200/1600 sweep. Follow-ups in the plan-21 ledger: per-ring texture laziness
+(~1.7 GB world arrays at boot) + vehicle-model LRU (+950 MB/sweep).\*\*
 
 **Night brightness DIAGNOSED + FIXED (2026-07-16, awaiting field):** a controlled headless A/B (both
 renderers, same spawn/hour, pixel-metered) showed deep night already ≈ prod but **20:00–21:30 ran 3–5×
@@ -155,9 +158,9 @@ everywhere — frame-time ratio 4.5–8.9× on land, engine vsync-capped so the 
 same-environment headless control (both renderers, one harness) confirms the gap is not display-specific.
 Full tables in [bench/series.md](bench/series.md) § C1 WebGL-prod baseline.
 
-**Resume (the ladder):** ② the C1 criteria run → flip (C2 stays gated). In parallel/after: plan 16
-step 3 SSR / step 6 grounding · the look round day-sky verdict · 17 lighting / the hd-realtime concept
-decision.
+**Resume (the ladder, 2026-07-17):** the pre-C1 look arcs (sky v2, fog/plan 21) are BOTH closed —
+next are the deferred verdicts: plan 16 step 3 SSR / step 6 grounding · 17 lighting / the hd-realtime
+concept decision → then ② the C1 criteria run → flip (C2 stays gated).
 
 ## Handoff status (2026-07-14 — history)
 

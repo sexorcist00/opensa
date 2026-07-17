@@ -9,6 +9,7 @@ import { StreamingDriver, type StreamingRadii } from './streaming';
 function harness(
   cells: string[],
   radii: StreamingRadii = {},
+  fogCutDistance = 2400,
 ): {
   deliver: (key: string) => void;
   driver: StreamingDriver;
@@ -28,6 +29,7 @@ function harness(
         unloaded.push(key);
       },
     },
+    environment: { fogCutDistance },
   } as unknown as Engine;
   let onMessage: ((event: { data: unknown }) => void) | null = null;
   const worker = {
@@ -71,14 +73,30 @@ describe('StreamingDriver rings (074/21 P1)', () => {
       expect(h.requested).toEqual([]);
     });
 
-    it('does not create more than one cell per update', () => {
-      const h = harness(['3,3,lod', '4,3,lod'], { lodRadius: 2000 });
+    it('creates at most two cells per update even when more are delivered (the adaptive budget cap)', () => {
+      const h = harness(['3,3,lod', '4,3,lod', '5,3,lod'], { lodRadius: 2000 });
       h.driver.update([0, 0, 0]);
       h.deliver('3,3,lod');
       h.deliver('4,3,lod');
+      h.deliver('5,3,lod');
       h.driver.update([0, 0, 0]);
 
-      expect(h.loaded).toHaveLength(1);
+      // Test creates are ~0 ms, so the time budget admits the second — never a third.
+      expect(h.loaded).toHaveLength(2);
+
+      h.driver.update([0, 0, 0]);
+
+      expect(h.loaded).toHaveLength(3);
+    });
+
+    it('does not prefetch ahead of a STATIC focus (velocity decays to zero)', () => {
+      // Rect closest point from (100, −100) → 919.2; ring 800 leaves it out while nothing moves.
+      const h = harness(['3,3,lod'], { lodRadius: 800 });
+      for (let step = 0; step < 30; step += 1) {
+        h.driver.update([100, 0, -100]);
+      }
+
+      expect(h.requested).toEqual([]);
     });
   });
 
@@ -118,6 +136,53 @@ describe('StreamingDriver rings (074/21 P1)', () => {
       h.driver.update([875, 0, -875]);
 
       expect(h.requested).toEqual(['3,3,hd']);
+    });
+
+    it('prefetches a cell ahead of a MOVING focus before the true ring reaches it (074/21 P3)', () => {
+      // Same spot as the static test — but arrived at speed: the smoothed velocity biases the request
+      // focus ahead, and the cell is fetched while the TRUE rect distance (919) is still outside 800.
+      const h = harness(['3,3,lod'], { lodRadius: 800 });
+      for (let step = 0; step <= 10; step += 1) {
+        h.driver.update([step * 10, 0, -step * 10]);
+      }
+
+      expect(h.requested).toEqual(['3,3,lod']);
+    });
+
+    it('counts a create inside the fog cut as LATE — but graces boot and teleports (074/21 P3)', () => {
+      // fogCut 2000 > the cell's 1060 rect distance: this create is inside the visible zone.
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2000);
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.driver.update([0, 0, 0]);
+
+      // Boot grace: the initial fill is not a pop.
+      expect(h.driver.update([0, 0, 0]).lateCreates).toBe(0);
+
+      // Teleport far away (evicts), then teleport BACK: the recreate is graced too.
+      h.driver.update([10000, 0, 0]);
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.driver.update([0, 0, 0]);
+
+      expect(h.driver.update([0, 0, 0]).lateCreates).toBe(0);
+    });
+
+    it('counts a late create once steady streaming resumes after the grace closes', () => {
+      // Two cells; the far one (5,3 — rect 1600) stays outside the 1200 ring until the focus WALKS
+      // toward it in sub-teleport steps; with fogCut 2000 its create then lands inside the visible zone.
+      const h = harness(['3,3,lod', '5,3,lod'], { lodRadius: 1200 }, 2000);
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.driver.update([0, 0, 0]);
+      h.driver.update([0, 0, 0]); // grace closes here (nothing pending)
+      for (let step = 1; step <= 2; step += 1) {
+        h.driver.update([step * 200, 0, 0]); // 200 u steps — motion, not teleports
+      }
+      h.deliver('5,3,lod');
+      const stats = h.driver.update([400, 0, 0]);
+
+      expect(stats.lateCreates).toBe(1);
     });
   });
 });

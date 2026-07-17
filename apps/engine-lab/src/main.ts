@@ -137,7 +137,8 @@ function hudText(input: {
     (input.vehicleMs !== null ? `\nvehicle upd ${input.vehicleMs.toFixed(2)} ms (074/08 B2 rigid entity)` : '') +
     (input.streamStats
       ? `\nstream      ${input.streamStats.loadedCells} loaded, ${input.streamStats.pendingCells} pending, ` +
-        `${input.streamStats.created} created / ${input.streamStats.evicted} evicted, worst create ${input.streamStats.worstCreateMs.toFixed(1)} ms`
+        `${input.streamStats.created} created / ${input.streamStats.evicted} evicted, worst create ${input.streamStats.worstCreateMs.toFixed(1)} ms` +
+        `, late ${input.streamStats.lateCreates}`
       : '')
   );
 }

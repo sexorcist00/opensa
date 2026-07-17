@@ -19,9 +19,10 @@ the ONE tier knob — msaa/bloomq field-tested and removed; series rows 09·ACES
 2026-07-17** (Hosek-Wilkie LUT · painted panorama retired, then fully REMOVED same day on user command
 (row 15 dome path deleted engine+converter, docs/licenses gone — see the 06 ledger row-15 banner) ·
 procedural cirrus/cumulus with per-weather identities · cloud-field bake · softened horizon projection ·
-prod WeatherTransition wired — see the readme handoff + 06 ledger row 4). **NEXT look item = FOG — scoped into plan [21](21-fog-draw-distance.md) 2026-07-17** (fog ⊂ LOD-ring
-invariant + drawDistance knob + fog-into-clouds + distance cull + the parked plan-05 streaming tuning;
-P1 invariant/cull → P2 visuals → P3 prefetch/2-create → P4 field) → then the
+prod WeatherTransition wired — see the readme handoff + 06 ledger row 4). **FOG = plan [21](21-fog-draw-distance.md) — ARC CLOSED, all phases FIELD-ACCEPTED 2026-07-17** (fog ⊂
+LOD-ring invariant + drawDistance knob + distance cull + fog-into-clouds + 2-create/velocity-prefetch
+with `lateCreates 0` field-verified; bonus: the vehicle-model build worker killed the new-car-type
+freezes; ritual sweep row + `?draw=` sweep owed as formalities) → then the
 deferred verdicts (16 paint / 17 lighting / hd-realtime concept) → ~~the WebGL-prod `?bench=all`
 baseline~~ ✅ **CAPTURED 2026-07-17** (road cars wired into canvas-host, same 841-car population; prod
 13.5–26.8 fps on land vs engine 120 Hz everywhere — series.md § C1 WebGL-prod baseline) → C1.

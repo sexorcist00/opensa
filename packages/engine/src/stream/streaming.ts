@@ -16,6 +16,19 @@ const HD_RADIUS = 380;
 const LOD_RADIUS = 1000;
 const HYSTERESIS = 60;
 const EVICT_MARGIN = 150;
+/** Adaptive create budget (074/21 P3): a second create in one frame only while total create time stays
+ *  under this — bounds the worst frame instead of doubling it (M1 worst create ≈ 1.1 ms). */
+const CREATE_BUDGET_MS = 1.5;
+/** Velocity prefetch (074/21 P3): request rings test a focus biased AHEAD along the smoothed per-frame
+ *  motion — cells are fetched before the true focus reaches them. Lead ≈ 1.25 s at 120 Hz, capped so a
+ *  fast flyover can't drag the request ring a district ahead. Eviction always uses the TRUE focus. */
+const PREFETCH_LEAD_FRAMES = 150;
+const PREFETCH_MAX = 300;
+/** A focus jump of a cell-plus in ONE update is a teleport, not motion: zero the velocity and open the
+ *  late-create GRACE (everything legitimately creates inside the fog after a teleport/boot). */
+const TELEPORT_JUMP = 260;
+/** Velocity EMA smoothing (per update) — frame-time jitter must not wobble the request ring. */
+const VELOCITY_SMOOTH = 0.1;
 
 /** Ring radii (engine units). Defaults keep the historical 380/1000 when a host passes nothing. */
 export interface StreamingRadii {
@@ -26,6 +39,10 @@ export interface StreamingRadii {
 export interface StreamStats {
   created: number;
   evicted: number;
+  /** Creates whose cell already sat INSIDE the effective fog cut (074/21 P3) — each one is a pop the
+   *  player could have seen. The fog-mask honesty metric: 0 in steady driving; teleports/boot are
+   *  graced until their pending queue drains. */
+  lateCreates: number;
   loadedCells: number;
   pendingCells: number;
   worstCreateMs: number;
@@ -50,10 +67,23 @@ export class StreamingDriver {
   private readonly engine: Engine;
   private readonly hdRadius: number;
   private readonly keyToSlot = new Map<string, CellSlot>();
+  /** Previous update's focus (engine XZ) — velocity source; null until the first update. */
+  private lastFocus: [number, number] | null = null;
   private readonly lodRadius: number;
   private readonly manifest: OspakManifest;
   private readonly requested = new Set<string>();
-  private readonly stats: StreamStats = { created: 0, evicted: 0, loadedCells: 0, pendingCells: 0, worstCreateMs: 0 };
+  private readonly stats: StreamStats = {
+    created: 0,
+    evicted: 0,
+    lateCreates: 0,
+    loadedCells: 0,
+    pendingCells: 0,
+    worstCreateMs: 0,
+  };
+  /** Late-create grace: open at boot and after every teleport jump, closes once pending drains. */
+  private teleportGrace = true;
+  /** Smoothed per-update focus delta (engine XZ) — the prefetch direction. */
+  private readonly velocity: [number, number] = [0, 0];
   private readonly worker: Worker;
 
   constructor(engine: Engine, manifest: OspakManifest, worker: Worker, radii: StreamingRadii = {}) {
@@ -110,18 +140,29 @@ export class StreamingDriver {
     }
     this.blobs.clear();
     this.requested.clear();
+    this.teleportGrace = true; // the re-stream is boot-like — its creates are not pops
   }
 
-  /** Per frame: retarget rings at `focus` (engine coords) and advance at most ONE create + its swap. */
+  /** Per frame: retarget rings at `focus` (engine coords) and advance the bounded creates + swaps. */
   update(focus: readonly [number, number, number]): StreamStats {
+    // Velocity prefetch (074/21 P3): REQUESTS test a focus biased ahead along the smoothed motion;
+    // EVICTION stays on the true focus (symmetric safety — the ring behind never thrashes).
+    const [biasX, biasZ] = this.advanceVelocity(focus[0], focus[2]);
     let pendingCells = 0;
     let loadedCells = 0;
-    let createdThisFrame = false;
+    let createSpentMs = 0;
+    let creates = 0;
     for (const slot of this.cells.values()) {
-      const centreDistance = Math.hypot(slot.centre[0] - focus[0], slot.centre[1] - focus[2]);
-      const rectDistance = rectDistanceOf(slot.rect, focus[0], focus[2]);
-      if (this.advanceSlot(slot, centreDistance, rectDistance, createdThisFrame)) {
-        createdThisFrame = true;
+      const biasedCentre = Math.hypot(slot.centre[0] - biasX, slot.centre[1] - biasZ);
+      const biasedRect = rectDistanceOf(slot.rect, biasX, biasZ);
+      const trueRect = rectDistanceOf(slot.rect, focus[0], focus[2]);
+      // Adaptive budget: up to two creates while the total stays under CREATE_BUDGET_MS — a heavy first
+      // create keeps the old 1/frame behaviour, two light ones drain ring-entry bursts twice as fast.
+      const canCreate = creates === 0 || (creates < 2 && createSpentMs < CREATE_BUDGET_MS);
+      const spent = this.advanceSlot(slot, biasedCentre, biasedRect, trueRect, canCreate);
+      if (spent !== null) {
+        creates += 1;
+        createSpentMs += spent;
       }
       if (slot.pending !== null) {
         pendingCells += 1;
@@ -132,53 +173,95 @@ export class StreamingDriver {
     }
     this.stats.pendingCells = pendingCells;
     this.stats.loadedCells = loadedCells;
+    if (this.teleportGrace && pendingCells === 0) {
+      this.teleportGrace = false; // the boot/teleport queue drained — late creates count again
+    }
     this.pruneStaleBlobs();
 
     return this.stats;
   }
 
-  /** One slot's step: evict / request / create-swap. Returns true when a create consumed this frame's budget. */
+  /** One slot's step: evict / request / create-swap. Returns the create's duration (ms), null otherwise. */
   private advanceSlot(
     slot: CellSlot,
-    centreDistance: number,
-    rectDistance: number,
-    createdThisFrame: boolean,
-  ): boolean {
-    const desired = this.desiredLevel(slot, centreDistance, rectDistance);
+    biasedCentre: number,
+    biasedRect: number,
+    trueRect: number,
+    canCreate: boolean,
+  ): null | number {
+    const desired = this.desiredLevel(slot, biasedCentre, biasedRect);
     if (desired === null) {
       slot.pending = null;
-      if (slot.current !== null && rectDistance > this.lodRadius + EVICT_MARGIN) {
+      if (slot.current !== null && trueRect > this.lodRadius + EVICT_MARGIN) {
         this.unload(slot);
       }
 
-      return false;
+      return null;
     }
     const key = slot.keys[desired];
     if (desired === slot.current || key === undefined) {
       slot.pending = null;
 
-      return false;
+      return null;
     }
     slot.pending = desired;
     if (!this.requested.has(key)) {
       this.requestBlob(key);
 
-      return false;
+      return null;
     }
-    if (createdThisFrame) {
-      return false;
+    if (!canCreate) {
+      return null;
     }
     const blob = this.blobs.get(key);
     if (!blob) {
-      return false;
+      return null;
     }
-    this.create(slot, desired, key, blob);
 
-    return true;
+    return this.create(slot, desired, key, blob, trueRect);
   }
 
-  private create(slot: CellSlot, level: Level, key: string, blob: Uint8Array): void {
+  /** Smooth the per-update focus delta; returns the REQUEST focus (true focus + capped lead vector). */
+  private advanceVelocity(fx: number, fz: number): [number, number] {
+    if (this.lastFocus === null) {
+      this.lastFocus = [fx, fz];
+    } else {
+      const dx = fx - this.lastFocus[0];
+      const dz = fz - this.lastFocus[1];
+      this.lastFocus[0] = fx;
+      this.lastFocus[1] = fz;
+      if (Math.hypot(dx, dz) > TELEPORT_JUMP) {
+        // A teleport: yesterday's heading is meaningless, and everything about to create sits inside
+        // the fog by necessity — grace the late-create metric until the queue drains.
+        this.velocity[0] = 0;
+        this.velocity[1] = 0;
+        this.teleportGrace = true;
+      } else {
+        this.velocity[0] += (dx - this.velocity[0]) * VELOCITY_SMOOTH;
+        this.velocity[1] += (dz - this.velocity[1]) * VELOCITY_SMOOTH;
+      }
+    }
+    let leadX = this.velocity[0] * PREFETCH_LEAD_FRAMES;
+    let leadZ = this.velocity[1] * PREFETCH_LEAD_FRAMES;
+    const lead = Math.hypot(leadX, leadZ);
+    if (lead > PREFETCH_MAX) {
+      leadX *= PREFETCH_MAX / lead;
+      leadZ *= PREFETCH_MAX / lead;
+    }
+
+    return [fx + leadX, fz + leadZ];
+  }
+
+  /** Load a delivered blob into the engine; returns the create's duration for the frame budget. */
+  private create(slot: CellSlot, level: Level, key: string, blob: Uint8Array, trueRect: number): number {
     const start = performance.now();
+    // The honesty metric (074/21 P3): a cell APPEARING (current === null) inside the effective fog cut
+    // was visible while absent — a pop the fog failed to mask. Steady driving must keep this at zero.
+    // HD↔LOD swaps are exempt by design: they happen deep inside the clear zone and swap atomically —
+    // the old level renders until the replacement is live, so nothing pops.
+    if (!this.teleportGrace && slot.current === null && trueRect < this.engine.environment.fogCutDistance) {
+      this.stats.lateCreates += 1;
+    }
     this.engine.cells.load(key, blob);
     // Atomic swap: the replacement is live — drop the old level the same frame (no hole, no double-draw).
     const previousKey = slot.current ? slot.keys[slot.current] : undefined;
@@ -193,7 +276,10 @@ export class StreamingDriver {
     this.blobs.delete(key); // the CPU copy dies immediately after upload (memory model)
     this.requested.delete(key);
     this.stats.created += 1;
-    this.stats.worstCreateMs = Math.max(this.stats.worstCreateMs, performance.now() - start);
+    const duration = performance.now() - start;
+    this.stats.worstCreateMs = Math.max(this.stats.worstCreateMs, duration);
+
+    return duration;
   }
 
   /** Ring pick with a hysteresis dead-band: keep the current level near the boundary (no flip-flop).
