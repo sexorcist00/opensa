@@ -185,8 +185,11 @@ REAL SA game via the ASI — a different target).
 
 **C1. Flip criteria run** — [10](10-integration-flip.md) · size M
 The pre-agreed gates: 60 fps ls-noon @2× retina; ≥ WebGL fps on EVERY bench scene; parity screenshot
-sign-off; stress matrix + 30-min soak green in Chrome and Safari (the Safari row is still unvisited!).
-**Done:** the flip decision doc with every ledger linked; own engine becomes the default renderer.
+sign-off; stress matrix + 30-min soak green in Chrome and Safari (smoke ✅ 2026-07-13; full matrix/soak
+still owed). **Criterion 4 replaced 2026-07-17: WebGPU-FIRST, no dual-renderer support** — the loader is
+a boot GATE (WebGPU → the engine IS the game; else a "sorry, WebGPU required" screen), `?engine=three`
+stays only as the manual comparison override until C2.
+**Done:** the flip decision doc with every ledger linked; own engine becomes THE renderer.
 
 **C2. Cleanup** — [13](13-cleanup.md) · size M
 Drop the three-WebGL path, the 073 flag zoo, three/babylon/postprocessing (user decision: no WebGL

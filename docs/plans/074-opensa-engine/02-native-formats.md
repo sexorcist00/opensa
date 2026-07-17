@@ -1,6 +1,6 @@
 # 074·02 — Native formats (`.oscell` / `.ostex` / `.ospak`)
 
-[← chain](readme.md) · prev: [01 architecture](01-framework-architecture.md) · next: [03 converter](03-converter-tool.md)
+[← chain](readme.md) · prev: [01 architecture](01-framework-architecture.md) · next: [03 converter](../../../tools/opensa-pack/docs/plans/000-converter-tool.md)
 
 GPU-ready by construction: the runtime "codec" is a header parse + `queue.writeBuffer/writeTexture`. Little-endian,
 4-byte aligned sections, every file starts `magic u32 | versionMajor u16 | versionMinor u16`. Readers reject unknown

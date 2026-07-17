@@ -2,15 +2,16 @@
  * `opensa-pack` CLI (plan 074/03).
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1
- *     [--cell-size 250] [--bakes [--no-ao] [--no-sunvis] [--bake-workers N]]
+ *     [--cell-size 250] [--no-ao] [--bakes [--no-sunvis]] [--bake-workers N]
  *     [--chunk-cells 6] [--wind <dir>[,<dir>…]]
  *
  * (`--in <mods-src>` and its only consumer — the `clouds/` skybox dome stage — were REMOVED 2026-07-17
  * together with the engine's painted cloud panorama.)
  *
- * `--bakes` — enable the HEAVY offline channels (AO/skyVis + sun-vis, 074/07): ~90 % of convert wall-time
- * (full LS ≈ 14 of 15.7 min). OFF by default for iteration speed (2026-07-13 user decision); production,
- * bench-ritual and pre-flip converts MUST pass it — unbaked paks render open/unshadowed by design.
+ * AO/skyVis is ON BY DEFAULT (2026-07-17 user decision — it replaces prod's SSAO, so a default pak must
+ * carry it; `--no-ao` skips it for fast iteration reconverts). `--bakes` now gates only the HEAVY shadow
+ * bake (sun-vis, 074/07): production, bench-ritual and pre-flip converts MUST pass it — without it the
+ * direct sun renders unshadowed (bridges/canyons) by design.
  *
  * `--wind` — overlay dirs of wind-ADAPTED DFFs (prelit alpha = sway weights), e.g.
  * `--wind "mods-src/vegetation,mods-src/mods/21. Wind Project 1.0.2"`; they shadow the game's assets.
@@ -62,9 +63,10 @@ async function main(): Promise<void> {
     throw new Error(`bad --rect '${rectRaw}' (want x0,y0,x1,y1 in cell coords)`);
   }
   const cellSize = Number(arg('cell-size') ?? 250) || 250;
-  // Bakes are OPT-IN (--bakes): they are ~90 % of convert time and iteration reconverts don't need them.
+  // AO is ON by default (it stands in for prod's SSAO — a default pak must carry it; `--no-ao` for fast
+  // iteration reconverts). The heavy SHADOW bake (sun-vis) stays opt-in behind `--bakes`.
   const bakes = process.argv.includes('--bakes');
-  const ao = bakes && !process.argv.includes('--no-ao');
+  const ao = !process.argv.includes('--no-ao');
   const sunVis = bakes && !process.argv.includes('--no-sunvis');
   const bakeWorkers = Number(arg('bake-workers') ?? 0) || undefined; // default: a quarter of the cores
   const chunkCells = Number(arg('chunk-cells') ?? 0) || undefined; // default: 6 (chunked welding, A2)

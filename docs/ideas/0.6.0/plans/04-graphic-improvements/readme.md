@@ -11,10 +11,8 @@ bundle exists so the next attempt starts from the full record of what failed and
 | --- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | 01  | [Baked directional sun shadows](01-baked-directional-shadows.md) | 074/07 v2, built + field-reverted 2026-07-12 (receiver-densification prerequisite inside); moved from 0.5.0/03    |
 | 02  | [Light ALL lamps of loaded HD cells](02-hd-cell-lamps.md)        | The 2026-07-17 lamp-pool removal + the user's field observation that the budget likely allows lighting everything |
+| 03  | [Contact darkening for dynamics](03-dynamic-contact-shadows.md)  | The "SSAO for cars/peds" question reformulated (2026-07-17); the rolled-back plan-16 blob is one candidate inside |
 
-Adjacent open questions to fold into the same thinking round: vehicle/dynamic-entity grounding (the
-rolled-back plan-16 contact blob — record + constraints in
-[074/16 § steps 3+6](../../../../plans/074-opensa-engine/16-vehicle-paint.md)) and the
-[hd-realtime-lod-baked concept](../../../../plans/074-opensa-engine/concept/hd-realtime-lod-baked.md)
-(HD segment real-time light+shadows, bakes only for LODs) — a decision there may answer both members at
-once.
+The [hd-realtime-lod-baked concept](../../../../plans/074-opensa-engine/concept/hd-realtime-lod-baked.md)
+(HD segment real-time light+shadows, bakes only for LODs) cuts across all three members — a decision
+there may answer the bundle at once.

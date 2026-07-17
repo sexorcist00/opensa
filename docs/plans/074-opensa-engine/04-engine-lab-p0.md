@@ -1,6 +1,6 @@
 # 074·04 — Engine lab + the P0 gate
 
-[← chain](readme.md) · prev: [03 converter](03-converter-tool.md) · next: [05 streaming](05-streaming-runtime.md)
+[← chain](readme.md) · prev: [03 converter](../../../tools/opensa-pack/docs/plans/000-converter-tool.md) · next: [05 streaming](05-streaming-runtime.md)
 
 `apps/engine-lab` — the renderer laboratory. NOT a second game: no React shell, no gameplay, no physics; a
 canvas, the engine, a scripted camera and the HUD. Import boundary enforced by nx tags: lab → `packages/engine`

@@ -129,17 +129,45 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     },
   });
 
-  /** One uploaded engine model per car TYPE — instances share geometry, textures and the pipeline. */
-  const models = new Map<string, { data: EngineVehicleData; id: VehicleModelId }>();
-  const modelFor = async (name: string): Promise<{ data: EngineVehicleData; id: VehicleModelId }> => {
-    const cached = models.get(name);
-    if (cached) {
-      return cached;
+  /**
+   * One uploaded engine model per car TYPE — instances share geometry, textures and the pipeline. LRU-BOUNDED
+   * (074/21 follow-up, pre-flip fix): types accumulated forever (+950 MB of texture arrays over one bench
+   * sweep — the residency field report), so despawning the last instance of a type makes it evictable and
+   * the cache trims back to {@link MODEL_CACHE_TEXTURE_BYTES} oldest-first. A re-encountered type rebuilds
+   * through the existing worker (spawns already defer, so the ~100–200 ms build never blocks the frame).
+   */
+  const models = new Map<string, VehicleModelEntry>();
+  /** In-flight builds by type — two simultaneous spawns of a NEW type must share one build (the loser used
+   *  to overwrite the winner's map entry, leaking the winner's GPU model — harmless before eviction existed,
+   *  a real leak now). */
+  const pendingModels = new Map<string, Promise<VehicleModelEntry>>();
+  const evictModels = (): void => {
+    let total = 0;
+    for (const entry of models.values()) {
+      total += entry.textureBytes;
     }
+    while (total > MODEL_CACHE_TEXTURE_BYTES) {
+      let lruName: null | string = null;
+      let lru: null | VehicleModelEntry = null;
+      for (const [name, entry] of models) {
+        if (entry.instances === 0 && (lru === null || entry.lastUsed < lru.lastUsed)) {
+          lru = entry;
+          lruName = name;
+        }
+      }
+      if (lruName === null || lru === null) {
+        break; // every cached type has live instances — the budget is a trim floor, not a hard cap
+      }
+      engine.destroyVehicleModel(lru.id);
+      models.delete(lruName);
+      total -= lru.textureBytes;
+    }
+  };
+  const buildModel = async (name: string): Promise<VehicleModelEntry> => {
     // The model is colour-AGNOSTIC by construction (paint is a per-vertex slot resolved per instance), so
     // one upload serves every colour of this car — and the DFF is parsed exactly once per type.
     const data = await adapter.loadVehicleData(name);
-    const entry = {
+    const entry: VehicleModelEntry = {
       data,
       id: engine.createVehicleModel({
         colors: data.model.colors,
@@ -164,82 +192,124 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         uvs: bytesOf(data.model.uvs),
         vertexCount: data.model.positions.length / 3,
       }),
+      instances: 0,
+      lastUsed: performance.now(),
+      textureBytes: data.model.texture.rgba.byteLength,
     };
     models.set(name, entry);
+
+    return entry;
+  };
+  /**
+   * Resolve a type's model AND claim one instance on it, atomically from eviction's point of view: the
+   * increment happens with no await between the entry becoming visible and the claim, and `evictModels`
+   * only ever runs AFTER a claim (or on release) — so a fresh build can never be evicted before its
+   * requester claims it. (The first version evicted the just-built entry inside `buildModel` whenever the
+   * budget was already full of pinned types — the boot's parked cars died with "unknown model".)
+   */
+  const acquireModel = async (name: string): Promise<VehicleModelEntry> => {
+    const cached = models.get(name);
+    if (cached) {
+      cached.instances += 1;
+      cached.lastUsed = performance.now();
+
+      return cached;
+    }
+    let pending = pendingModels.get(name);
+    if (!pending) {
+      pending = buildModel(name).finally(() => pendingModels.delete(name));
+      pendingModels.set(name, pending);
+    }
+    const entry = await pending;
+    entry.instances += 1;
+    entry.lastUsed = performance.now();
+    evictModels();
 
     return entry;
   };
 
   const spawnVehicle = async (placement: VehiclePlacement): Promise<SpawnedVehicle> => {
     const { heading, model } = placement;
-    const { data, id } = await modelFor(model);
-    const paint = await adapter.vehiclePaint(model, placement.colour); // the model is shared; the paint is not
+    const entry = await acquireModel(model);
+    const { data, id } = entry;
+    const release = (): void => {
+      entry.instances = Math.max(0, entry.instances - 1);
+      entry.lastUsed = performance.now();
+      evictModels();
+    };
+    try {
+      const paint = await adapter.vehiclePaint(model, placement.colour); // the model is shared; the paint is not
 
-    let position: Vec3 = placement.position;
-    let pitch = 0;
-    // Map car generators (plan 059) + bench road cars (074): seat the body on the ground so it doesn't
-    // penetrate terrain/props and get launched (pitch with the street, slide off blocked spots, defer
-    // until the collision cell exists — the shared helper carries the bench field lessons).
-    if (placement.groundSnap) {
-      const seated = seatVehicleOnGround(physics, position, placement.heading, data.halfExtents);
-      position = seated.position;
-      pitch = seated.pitch;
+      let position: Vec3 = placement.position;
+      let pitch = 0;
+      // Map car generators (plan 059) + bench road cars (074): seat the body on the ground so it doesn't
+      // penetrate terrain/props and get launched (pitch with the street, slide off blocked spots, defer
+      // until the collision cell exists — the shared helper carries the bench field lessons).
+      if (placement.groundSnap) {
+        const seated = seatVehicleOnGround(physics, position, placement.heading, data.halfExtents);
+        position = seated.position;
+        pitch = seated.pitch;
+      }
+
+      const instance = engine.createVehicle(id);
+      instance.setPaint(paint);
+      const handle = new EngineVehicleHandle(instance, data.model, () => engine.destroyVehicle(instance));
+      const rig = new VehicleRig(handle);
+      const wheels = data.wheels.map((wheel) => ({
+        connection: wheel.connection,
+        front: wheel.front,
+        radius: wheel.radius,
+      }));
+      const { body, controller } = physics.createDynamicVehicle(
+        position,
+        heading,
+        data.colliders?.shape ?? null,
+        data.handling.mass,
+        wheels,
+        data.halfExtents,
+        pitch,
+      );
+      // Driver seat = the front-seat dummy mirrored to the −X (driver) side.
+      const seatLocal: [number, number, number] = data.seat
+        ? [-Math.abs(data.seat[0]), data.seat[1], data.seat[2]]
+        : [-0.4, 0, 0];
+      const live: Vec3 = [position[0], position[1], position[2]];
+      const vehicle: EnterableVehicle = {
+        body,
+        controller,
+        halfExtents: data.halfExtents,
+        handle,
+        handling: data.handling,
+        heading,
+        // Seeded from the placement; the physics system keeps it live from the body.
+        orientation: headingQuat(heading),
+        position: live,
+        rig,
+        seatLocal,
+        wheels,
+      };
+      handle.setTransform(position, headingQuat(heading)); // pose it before the first frame draws it
+      vehiclePhysics.add(vehicle);
+      enterVehicle.add(vehicle);
+      vehicleDamage.add({ body, handle });
+
+      return {
+        despawn: (): void => {
+          vehiclePhysics.remove(vehicle);
+          enterVehicle.remove(vehicle);
+          vehicleDamage.remove(body);
+          physics.removeVehicle(controller); // drop the raycast controller before its body
+          physics.removeBodies([body]);
+          handle.dispose();
+          release(); // the type becomes evictable once its last instance is gone
+        },
+        handle,
+        position: live,
+      };
+    } catch (error) {
+      release(); // a failed spawn must not pin the type in the cache forever
+      throw error;
     }
-
-    const instance = engine.createVehicle(id);
-    instance.setPaint(paint);
-    const handle = new EngineVehicleHandle(instance, data.model, () => engine.destroyVehicle(instance));
-    const rig = new VehicleRig(handle);
-    const wheels = data.wheels.map((wheel) => ({
-      connection: wheel.connection,
-      front: wheel.front,
-      radius: wheel.radius,
-    }));
-    const { body, controller } = physics.createDynamicVehicle(
-      position,
-      heading,
-      data.colliders?.shape ?? null,
-      data.handling.mass,
-      wheels,
-      data.halfExtents,
-      pitch,
-    );
-    // Driver seat = the front-seat dummy mirrored to the −X (driver) side.
-    const seatLocal: [number, number, number] = data.seat
-      ? [-Math.abs(data.seat[0]), data.seat[1], data.seat[2]]
-      : [-0.4, 0, 0];
-    const live: Vec3 = [position[0], position[1], position[2]];
-    const vehicle: EnterableVehicle = {
-      body,
-      controller,
-      halfExtents: data.halfExtents,
-      handle,
-      handling: data.handling,
-      heading,
-      // Seeded from the placement; the physics system keeps it live from the body.
-      orientation: headingQuat(heading),
-      position: live,
-      rig,
-      seatLocal,
-      wheels,
-    };
-    handle.setTransform(position, headingQuat(heading)); // pose it before the first frame draws it
-    vehiclePhysics.add(vehicle);
-    enterVehicle.add(vehicle);
-    vehicleDamage.add({ body, handle });
-
-    return {
-      despawn: (): void => {
-        vehiclePhysics.remove(vehicle);
-        enterVehicle.remove(vehicle);
-        vehicleDamage.remove(body);
-        physics.removeVehicle(controller); // drop the raycast controller before its body
-        physics.removeBodies([body]);
-        handle.dispose();
-      },
-      handle,
-      position: live,
-    };
   };
 
   const vehicleLod = new VehicleLodSystem(deps.viewOf, config, spawnVehicle);
@@ -273,6 +343,26 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       engine.updateVehicles(); // ONE flatten+upload for every car, after all of them have moved
     },
   };
+}
+
+/**
+ * Cached-model TEXTURE budget, bytes (the dominant per-type cost — geometry is small next to a 512²×16
+ * RGBA array at ~16 MB). Types with live instances never evict, so this is a trim FLOOR, not a hard cap:
+ * ~15 modded or ~70 stock idle types stay warm; beyond it the least-recently-used idle type is destroyed
+ * and rebuilds through the worker on the next encounter.
+ */
+const MODEL_CACHE_TEXTURE_BYTES = 256 * 1024 * 1024;
+
+/** One cached car TYPE: the adapter data + the uploaded engine model + the LRU bookkeeping. */
+interface VehicleModelEntry {
+  data: EngineVehicleData;
+  id: VehicleModelId;
+  /** Live engine instances of this type — non-zero pins the entry (never evicted under it). */
+  instances: number;
+  /** `performance.now()` of the last build/spawn/despawn touch — the LRU ordering key. */
+  lastUsed: number;
+  /** The texture-array payload size — what the budget actually meters. */
+  textureBytes: number;
 }
 
 function bytesOf(array: Float32Array): Uint8Array {

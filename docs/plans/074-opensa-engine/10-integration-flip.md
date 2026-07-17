@@ -29,7 +29,13 @@ it is not.
    present too (HUD showed real GPU numbers). GPU pass 2–4 ms vs Chrome's ~1.8–2.1 (WebKit's WebGPU is
    less optimized) — comfortably inside the 8.3 ms/120 Hz budget. Remaining for the criteria run: the FULL
    bench matrix + stress scenes + soak in Safari, numbers into the series.
-4. Prod fallback: non-WebGPU browsers keep the three-WebGL path untouched; the loader picks per capability.
+4. ~~Prod fallback: non-WebGPU browsers keep the three-WebGL path untouched; the loader picks per
+   capability.~~ **REPLACED 2026-07-17 (user decision, final): the game is WebGPU-FIRST — no dual-renderer
+   support.** Non-WebGPU browsers get a clear "sorry, your hardware/browser doesn't support WebGPU"
+   screen instead of a fallback renderer ("иначе придётся две версии поддерживать — не стоит оно того").
+   This reaffirms plan 13's 2026-07-12 supersession of the old criterion; the "loader" therefore shrinks
+   to a boot GATE: `navigator.gpu` + adapter → the engine host, else the message. The three-WebGL path's
+   only remaining role is the post-flip comparison period until the C2 deletion command.
 5. **073 flags & code disposition executed** (the promise from the 073 park): once the new engine is default,
    decide keep/fold/delete for `?webgpu/bundle/mat04/...` and the three patch — a dedicated cleanup PR with the
    user, per the agreement.
@@ -108,8 +114,10 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
       data-driven feet placement (fixture minZ from the IDLE-POSED mesh — the bind pose lies along an
       axis and is useless — plus a centre-origin ground ray excluding the own capsule: rays started under
       the capsule slip beneath thin road COL shells into basements).
-- [ ] Capability-gated loader in the web app (native pak + WebGPU → new engine; else three-WebGL) — the
-      phase-1 page becomes its target.
+- [ ] WebGPU boot GATE in the web app (2026-07-17 rescope of the old capability-gated loader — criterion 4
+      above): `navigator.gpu` + adapter request succeed → the engine host is THE game; otherwise a clear
+      "sorry, WebGPU required" screen. NO three-WebGL fallback branch (WebGPU-first, user decision);
+      `?engine=three` stays as a manual override for the post-flip comparison period only, and dies at C2.
 - [ ] Bench + soak + parity sweeps; the flip decision doc with all ledgers linked.
 - [ ] Post-flip cleanup: 073 flags/patch disposition PR (discussed with the user first — standing agreement).
 

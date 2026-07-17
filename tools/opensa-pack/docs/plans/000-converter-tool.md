@@ -1,6 +1,12 @@
-# 074·03 — Converter tool (`tools/opensa-pack`)
+# 000 — Converter tool (the founding plan; was 074·03)
 
-[← chain](readme.md) · prev: [02 formats](02-native-formats.md) · next: [04 lab+P0](04-engine-lab-p0.md)
+[← tool plans](readme.md) · chain context: [074 readme](../../../../docs/plans/074-opensa-engine/readme.md) ·
+prev: [074/02 formats](../../../../docs/plans/074-opensa-engine/02-native-formats.md) ·
+next: [074/04 lab+P0](../../../../docs/plans/074-opensa-engine/04-engine-lab-p0.md)
+
+Moved from `docs/plans/074-opensa-engine/03-converter-tool.md` on 2026-07-17 — opensa-pack now owns its
+plan folder (user decision); the 074 chain keeps the cross-cutting docs (02 formats, 07 baked channels,
+12 stochastic, 14 pmb integration) because each spans the tool AND the engine.
 
 Game-ready file set → `.ospak`. Sits AFTER the whole existing chain (map-optimizer prelight → lod-generator →
 installer output); consumes the exact files the prod web app loads (gta3.img + IDE/IPL + timecyc), so the new
@@ -27,7 +33,7 @@ STATIC groups at bind pose (2026-07-12 field fix, 06 row 17 — skipping deleted
 to ObjectRecords when plan 08 promotes them to animated entities; `breakable`/roadsign kinds land with
 plan 08 (see its coverage matrix).
 
-### The ALPHA PIPELINE (early, M0 — this is where [alpha-edge](../../open-issues/alpha-edge.md) dies)
+### The ALPHA PIPELINE (early, M0 — this is where [alpha-edge](../../../../docs/open-issues/fixed/alpha-edge.md) dies)
 
 1. **Classification** per texture (decoded alpha histogram): `opaque` (all 255 — pass through untouched),
    `cutout` (bimodal: leaves/fences/gratings), `softBlend` (everything else). Manual override list in the
@@ -64,10 +70,13 @@ nondeterminism); same input ⇒ byte-identical pak (hash-tested in CI).
 — district/rect filtering is what makes M0 (one district) and incremental work cheap; `--report` emits the
 measurement ledger tables (bytes, groups, arrays) the plan docs consume.
 
-**Heavy bakes are OPT-IN since 2026-07-13** (user decision, iteration speed — bakes were ~90 % of convert
-wall-time): `--bakes` enables AO/skyVis + sun-vis (074/07), then `--no-ao` / `--no-sunvis` subtract.
-Iteration reconverts run bakeless (full LS ≈ 2 min instead of ~16); bench-ritual, field shadow checks and
-production/flip paks MUST pass `--bakes` — unbaked paks render open/unshadowed by design.
+**Bake defaults (revised 2026-07-17, user decision): AO/skyVis is ON by default** — it stands in for
+prod's SSAO, so a default pak must carry it; `--no-ao` skips it for fast iteration reconverts. **The
+heavy SHADOW bake (sun-vis) stays opt-in behind `--bakes`** (`--no-sunvis` subtracts): bench-ritual,
+field shadow checks and production/flip paks MUST pass it — without it the direct sun renders
+unshadowed (bridges/canyons) by design. History: 2026-07-13 both bakes went opt-in for iteration speed
+(bakes were ~90 % of convert wall-time); AO returned to default-on when it became the engine's only AO
+story (no runtime SSAO exists).
 
 ## Tasks
 
