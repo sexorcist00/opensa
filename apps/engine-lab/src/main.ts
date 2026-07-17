@@ -262,7 +262,9 @@ async function main(): Promise<void> {
   const buildMs = performance.now() - buildStart;
   const frames: number[] = [];
   let previous = performance.now();
-  let angle = 0;
+  // `?az=DEG` / `?el=N` pin the orbit view — headless look checks reproduce a field angle exactly
+  // (074/16 wheel-through-windscreen round); drag still adjusts both live.
+  let angle = orbitAngleOverride(params, 'az', 0);
   // `?orbit=N` starts the camera N engine units from the focus (the bench close-up; wheel still zooms).
   let zoom = (orbitOverride(params) ?? orbitRadius) / orbitRadius;
   // Skinning probe (074/08 B1): `?ped=1` drops the animated fixture ped at the focus point and STARTS the
@@ -290,7 +292,7 @@ async function main(): Promise<void> {
     hour = nextHour;
     applyEnvironment();
   });
-  let heightFactor = 0.9;
+  let heightFactor = orbitHeightOverride(params, 'el', 0.9);
   let dragging = false;
   // Wheel = zoom (the alpha-edge inspection needs to get CLOSE to foliage/fences); drag = orbit/height.
   canvas.addEventListener('wheel', (event) => {
@@ -454,6 +456,20 @@ function mountLookBench(
   }
 
   return panelState;
+}
+
+/** `?az=DEG` — pinned starting orbit azimuth (headless look checks reproduce a field angle exactly). */
+function orbitAngleOverride(params: URLSearchParams, key: string, fallback: number): number {
+  const value = Number(params.get(key) ?? Number.NaN);
+
+  return Number.isFinite(value) ? (value * Math.PI) / 180 : fallback;
+}
+
+/** `?el=N` — pinned starting orbit height factor (the drag-vertical state). */
+function orbitHeightOverride(params: URLSearchParams, key: string, fallback: number): number {
+  const value = Number(params.get(key) ?? Number.NaN);
+
+  return Number.isFinite(value) ? value : fallback;
 }
 
 /** `?orbit=N` — the starting camera distance in engine units (the bench close-up). */

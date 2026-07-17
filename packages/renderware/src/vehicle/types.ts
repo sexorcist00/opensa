@@ -141,6 +141,10 @@ export interface VehicleModelSubmesh {
   /** Head/tail lamp tag from the SA marker colours — lamp materials render WHITE and carry this instead. */
   lamp: 'head' | 'tail' | null;
   part: number;
+  /** Bounding radius about `center` (074/16 sort fix) — the translucent sort subtracts it so a raked
+   *  windscreen counts by its NEAREST extent, not its centre (the wheel drew over the glass overhang).
+   *  Optional: old fixtures sort by the centre alone. */
+  radius?: number;
   translucent: boolean;
 }
 

@@ -158,9 +158,23 @@ everywhere — frame-time ratio 4.5–8.9× on land, engine vsync-capped so the 
 same-environment headless control (both renderers, one harness) confirms the gap is not display-specific.
 Full tables in [bench/series.md](bench/series.md) § C1 WebGL-prod baseline.
 
-**Resume (the ladder, 2026-07-17):** the pre-C1 look arcs (sky v2, fog/plan 21) are BOTH closed —
-next are the deferred verdicts: plan 16 step 3 SSR / step 6 grounding · 17 lighting / the hd-realtime
-concept decision → then ② the C1 criteria run → flip (C2 stays gated).
+**Plan 16 steps 3+6 BUILT AND ROLLED BACK (2026-07-17, user decision):** vehicle SSR (history-reproject
+march) + contact blob shadows went through a full build + three field rounds in one day (night fps
+110→60–70 → tuned to a clean 5/6-scene display sweep; "бегущие полосы" step-geometry bug; the decal
+sinking under the road until a physics raycast placed it) — and the user called it: the stack worsened
+the experience; a DIFFERENT approach next iteration; today stays the simple stable fast version. The
+code is fully reverted; what survived the day: the translucent SORT fix (centroid − bounding radius —
+the raked-windscreen wheel regression, an independent bug) and the lab's `?az/?el` orbit pins. The full
+preserved record + constraints for the next attempt live in [16](16-vehicle-paint.md) § steps 3+6
+(key ones: prod has NO SSR/blob — both are beyond-parity so they must be free or opt-in; march step-gap
+≤ thickness-slope by construction; decal height from physics, never bind pose). Bench rows
+16·ssr-grounding / 16·display-sweep in the series measure the ROLLED-BACK build; the display sweep also
+tripped the country-dusk WATCH (pass 4.50 twice) — profile country-dusk before new dusk-hour effects.
+
+**Resume (the ladder, 2026-07-17):** the pre-C1 look arcs (sky v2, fog/plan 21) are BOTH closed; plan 16
+steps 3+6 rolled back above (redesign parked for a future iteration) — next: 17 lighting / the
+hd-realtime concept decision (start with profiling the night car-dense free-roam scenes — the field
+input recorded there) → then ② the C1 criteria run → flip (C2 stays gated).
 
 ## Handoff status (2026-07-14 — history)
 

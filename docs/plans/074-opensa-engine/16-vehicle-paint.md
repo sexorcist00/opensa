@@ -5,10 +5,11 @@
 **Status: steps 1–2 CLOSED, field-ACCEPTED 2026-07-16** — step 1 (ACES+bloom) shipped with plan 09;
 step 2 (the scene environment probe + the skygfx-neo reflection model, six field rounds — see the round
 records below) accepted by the user as the direction to build on. Step 4 vehicle normals SKIPPED by the
-user (2026-07-16) — design parked at docs/ideas/0.6.0/plans/03-vehicle-normals. Remaining here: step 3 SSR
-and step 6 grounding. The escape hatch
-stands: `graphics.vehicleReflection.preset: 'off'` sets `env.reflectionStrength = 0` and the whole term
-(probe included) dies.
+user (2026-07-16) — design parked at docs/ideas/0.6.0/plans/03-vehicle-normals. **Steps 3 (SSR) + 6
+(grounding) were BUILT, field-tested and ROLLED BACK the same day (2026-07-17, user decision)** — the
+record below is preserved for the next attempt; do NOT retry the same shapes. The escape hatch stands:
+`graphics.vehicleReflection.preset: 'off'` sets `env.reflectionStrength = 0` and the whole term (probe
+included) dies.
 
 The user's brief, verbatim in intent: **the car is the most important part of the game; the paint must read
 like real automotive paint, AAA-grade, day and night — not a coloured fill with a highlight.**
@@ -316,6 +317,112 @@ classes + the lab look bench → the config quarter + inside-glass + the ./1 sur
 reflection model** (LERP toward the live probe, fresnel 0.4, broad specular) + the no-name classifier +
 the light-pool caps → per-vertex car pool lighting + glass damping + the transparency sort. Remaining
 plan-16 steps: SSR (3), vehicle normals (4 — the low-poly "melting normals"), grounding (6).
+
+## Steps 3 + 6 — BUILT AND ROLLED BACK (2026-07-17, user decision)
+
+**Verdict: the whole SSR + contact-shadow build was reverted the same day it shipped — "it worsened the
+experience; a completely different approach next iteration; for now the simple stable fast version".**
+What stayed in the tree from the day: the translucent SORT fix (centroid − bounding radius — the raked-
+windscreen/steering-wheel regression, a real bug independent of this arc) and the lab's `?az=DEG&el=N`
+orbit pins. Everything below is the preserved record of what was built and what the field taught —
+read it before the next attempt.
+
+Field history compressed: v1 cost 110 → 60–70 fps at night on the real display (march at any distance +
+MSAA depth store every frame); tuning (near-field 45 u gate, 12 steps, capture every 2nd frame offset
+from the probe) brought it to 80–90 and a clean `?bench=all` display sweep (5/6 scenes vsync 120) — but
+free-roam night still dipped and a step-geometry bug ("бегущие полосы": step gap outgrowing the
+thickness window at growth 1.5) burned trust. The shadow's own field round: bind-pose placement sank the
+decal under the road (physics settling) → needed a per-car physics raycast; the falloff knee had to sit
+at the sill line or the blob read as absent. Each fix worked, but the stack of caveats is exactly what
+"надо другой подход" means.
+
+**Constraints for the next attempt (so it starts ahead):** prod has NO SSR and no contact blob (its cars
+ground via CSM; its reflections are a sky-only cube probe) — both features are beyond-parity, so they
+must be FREE and artifact-free or opt-in; any march must respect step-gap ≤ thickness-window slope by
+construction; any ground decal must take its height from physics, not bind pose; and the night frame at
+2× retina has no per-pixel budget left (the pool/headlight territory of plan 17 already owns it).
+
+## The original steps 3 + 6 implementation record (ROLLED BACK — for reference)
+
+**Step 3 SSR — reprojection against LAST frame's scene** (vehicles draw INSIDE the world pass, so the
+current frame's colour/depth are unreadable there; one-frame-old history is the standard answer):
+
+- **History capture** (`'ssr-capture'` pipeline + module): after the world pass, one fullscreen pass
+  writes a FIXED-size (1024×512 rgba16float) snapshot — rgb = the resolved HDR scene, a = each pixel's
+  camera DISTANCE reconstructed from the multisampled depth (sample 0, reversed-Z unproject through
+  `invViewProj`; sky depth 0 → sentinel 60 000, finite because rgba16float overflows to inf at 65 505).
+  Fixed size for the probe-cube reason: the view sits inside every vehicle bind group (rigid binding 7)
+  and must never rebuild on resize. The capture (and the world pass's `depthStoreOp: 'store'` + the
+  depth's TEXTURE_BINDING) runs ONLY on frames with live vehicle models and `env.ssr > 0` — no cars, no
+  depth writeback, no cost.
+- **Frame UBO tail** (400 → 480 B): `prevViewProj` + `prevCamera` (`.w` = the `?ssr=` gate). The engine
+  copies the current camera into them AFTER submit, so the shader always projects into the frame the
+  history was captured under. First frame: prev = current, history zero-initialized → every march misses.
+- **The march** (`ssrTrace` in the rigid module): 16 geometric steps (t₀ 0.3, ×1.4 → reach ~46 u — the
+  probe owns the far field), thickness window `0.55 + t×0.4` (must grow with the step gap or thin
+  surfaces fall between samples), camera-facing fade (rays bending back toward the camera reflect what
+  the history never saw), screen-border fade over 0.1 uv (the "no smearing at screen edges" gate). Every
+  tap is `textureSampleLevel` — explicit LOD, so the early-outs are legal in non-uniform control flow,
+  and the whole march is GATED on `amount × ssr > 0.004` (only pixels whose neo amount will show it pay;
+  the implicit-derivative taps in `reflectedWorld` all happen before the branch — the uniformity rule).
+- **Composite**: inside `rigidEnv`, `env = mix(probe/analytic, ssr.rgb, ssr.a × gate)` — SSR sits OVER
+  the probe by hit confidence, a miss falls back with zero seam. Both fsRigid (paint/chrome) and
+  fsRigidBlend (glass) get it, glass through its own damped amount.
+- **Headless verdict** (Ganton comet, noon): the on/off diff is confined EXACTLY to the car (road/kerb
+  content appears in the deck and glass; zero off-car pixels touched), no WebGPU validation warnings,
+  120 Hz held (lab GPU pass 2.55 → 2.57 ms with probe on).
+
+**Step 6 grounding — the contact blob** (SA's own under-car shadow, an ambient-occlusion decal, not a
+sun shadow):
+
+- **Data**: `buildVehicleModel` now computes the MODEL-space bind-pose AABB (every submesh's vertices
+  through its part's bind transform — raw positions are part-local, a wheel's box would land at the
+  origin). `VehicleModelData.bounds` required; `VehicleFixture.bounds` optional (old fixtures cast
+  nothing); the four lab fixtures regenerated.
+- **Engine**: host-fed `engine.groundShadows` (the dynamicCoronas pattern — the host owns car transforms
+  and bounds), drawn as ONE instanced quad draw (`'vehicle-shadow'` pipeline) after the opaque vehicles,
+  before the sky: multiply blend `(zero, 1−src-α)` darkens the road, depth-read `greater` rejects pixels
+  the body covers, cap 512.
+- **Falloff — the field lesson of the round**: superellipse `d = |u|³+|v|³`, fade `1 − smoothstep(0.55,
+1, d)`. The first knee (0.3) produced an invisible shadow: the dark CORE is hidden under the body — the
+  eye only sees the margin ring (body edge at d ≈ 0.6), and an early knee put the whole visible ring in
+  the fade tail. Diagnosed headless with an alpha=1 nuclear quad (drew correctly → the maths, not the
+  pipeline).
+- **Hosts**: engine-vehicles pushes one decal per live car (GTA-space maths → `gtaPositionToEngine`,
+  pitch/roll follow the chassis so slopes stay glued; strength 0.45, distance fade 70→115 u); the lab
+  bench pushes for parked/convoy fixture cars (lift 0.1 above the wheel-bottom plane).
+- **Headless verdict**: noon — a soft dark ring hugs the sills and bumpers, car reads seated; night
+  21:00 — blends into the dark road, no double-darkening, 120 Hz, GPU pass 2.91 ms night.
+
+Bench: see [bench/series.md](bench/series.md) § 16·ssr-grounding (headless in-game `?bench=all`, on/off).
+
+## Steps 3+6 field round 1 (2026-07-17) — night fps + wheel sort + the sunken shadow (ROLLED BACK except item 2)
+
+Three reports off the first field build, all root-caused and fixed the same session (items 1 and 3 were
+then reverted with the arc; item 2 — the sort fix — STAYED, it is not part of SSR/shadows):
+
+1. **Night fps 110 → 60–70.** The v1 march ran on every reflective car pixel at any distance, and the
+   capture stored the MSAA depth every frame. Tuned: march gated to the NEAR FIELD (`SSR_RANGE` 45 u —
+   beyond it the paint mip buries SSR content in the probe anyway), 16 → 12 steps (reach ~26 u), capture
+   - depth store every 2ND frame, offset from the probe's frames so the two extra passes never stack.
+     Field: back to 80–90 at night, then the user's full display sweep (16·display-sweep) read five scenes
+     vsync-locked 120 Hz. Cost scales with car SCREEN AREA within 45 u, not car count — a wall of close
+     cars is bounded by one fullscreen march.
+2. **Wheel through the windscreen again at down-looking angles.** The round-6 centroid sort can't
+   represent a raked glass sheet: the windscreen's CENTRE sat behind the wheel while its overhang was in
+   front. Sort key is now `centroid distance − bounding radius` (the submesh's nearest extent; builder
+   computes the radius, fixtures regenerated) — large sheets bias LATER in the back-to-front order, the
+   correct side of every near-tie. Verified across 5 pinned azimuths (lab `?az=DEG&el=N`, new).
+3. **No shadow under cars in the game.** The decal rode the bind-pose wheel-bottom plane under the root —
+   physics settling/suspension drops the chassis below that, so the quad sank under the road and the
+   depth test ate it whole (the lab's ideally-seated bench car hid this). The host now raycasts the
+   ACTUAL ground (`physics.groundBelow`, own body excluded) and lifts the quad 8 cm above the hit; an
+   airborne car casts nothing.
+
+**Remaining night variance (70–110 by location, NIGHT ONLY — day stable, no `?ssr=0` attribution):** the
+known night-lighting territory — the per-vertex street-lamp pool over the world, per-pixel dynamic
+headlights while driving, the night bloom profile — i.e. plan 17's subject, not this plan's. Field input
+recorded for the plan-17 round.
 
 ## Decision log
 

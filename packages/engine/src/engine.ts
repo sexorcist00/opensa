@@ -325,6 +325,9 @@ export interface VehicleSubmesh {
   indexCount: number;
   indexOffset: number;
   part: number;
+  /** Bounding radius about the centroid — the sort counts a submesh by its NEAREST extent (centroid
+   *  distance − radius), so a raked windscreen beats the wheel under its overhang (074/16 field fix). */
+  radius?: number;
   translucent: boolean;
 }
 
@@ -2442,19 +2445,6 @@ export class Engine {
     frameData[91] = this.probeTick === 0 ? this.renderProbeFace(probeCenter, frameData) : this.probe.mix();
   }
 
-  /** Squared eye distance of a submesh's centroid under its part's CURRENT world matrix (CPU copy). */
-  private submeshDistanceSq(state: VehicleInstanceState, model: VehicleModel, index: number, eye: Vec3): number {
-    const submesh = model.submeshes[index];
-    const center = submesh.center ?? [0, 0, 0];
-    const m = state.entity.matrices;
-    const at = submesh.part * 16;
-    const x = m[at] * center[0] + m[at + 4] * center[1] + m[at + 8] * center[2] + m[at + 12];
-    const y = m[at + 1] * center[0] + m[at + 5] * center[1] + m[at + 9] * center[2] + m[at + 13];
-    const z = m[at + 2] * center[0] + m[at + 6] * center[1] + m[at + 10] * center[2] + m[at + 14];
-
-    return (x - eye[0]) ** 2 + (y - eye[1]) ** 2 + (z - eye[2]) ** 2;
-  }
-
   /** Visible submesh indices for one phase; the translucent phase comes back-to-front (074/16 round 6). */
   private submeshDrawOrder(
     state: VehicleInstanceState,
@@ -2466,7 +2456,7 @@ export class Engine {
     for (let index = 0; index < model.submeshes.length; index += 1) {
       const submesh = model.submeshes[index];
       if (submesh.translucent === translucent && state.submeshVisible[index] !== 0) {
-        order.push({ distSq: translucent ? this.submeshDistanceSq(state, model, index, eye) : 0, index });
+        order.push({ distSq: translucent ? this.submeshSortDistance(state, model, index, eye) : 0, index });
       }
     }
     if (translucent) {
@@ -2474,6 +2464,26 @@ export class Engine {
     }
 
     return order.map((entry) => entry.index);
+  }
+
+  /**
+   * Translucent sort key: eye distance of the submesh's centroid (under its part's CURRENT world matrix)
+   * MINUS its bounding radius — the submesh counts by its nearest extent. A raked windscreen's centre sits
+   * behind the wheel at down-looking angles while its overhang is in front; the plain centroid distance
+   * drew the wheel OVER the glass there (074/16 field round). Subtracting the radius biases large sheets
+   * later in the back-to-front order, which is the correct side of every near-tie: glass composites over
+   * the interior it covers.
+   */
+  private submeshSortDistance(state: VehicleInstanceState, model: VehicleModel, index: number, eye: Vec3): number {
+    const submesh = model.submeshes[index];
+    const center = submesh.center ?? [0, 0, 0];
+    const m = state.entity.matrices;
+    const at = submesh.part * 16;
+    const x = m[at] * center[0] + m[at + 4] * center[1] + m[at + 8] * center[2] + m[at + 12];
+    const y = m[at + 1] * center[0] + m[at + 5] * center[1] + m[at + 9] * center[2] + m[at + 13];
+    const z = m[at + 2] * center[0] + m[at + 6] * center[1] + m[at + 10] * center[2] + m[at + 14];
+
+    return Math.hypot(x - eye[0], y - eye[1], z - eye[2]) - (submesh.radius ?? 0);
   }
 
   private writeVehicleLamps(

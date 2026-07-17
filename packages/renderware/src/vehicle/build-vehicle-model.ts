@@ -306,14 +306,30 @@ function appendGeometry(
       }
     }
     const corners = tris.length * 3;
+    const centroid: [number, number, number] = [center[0] / corners, center[1] / corners, center[2] / corners];
+    // Bounding radius about the centroid (074/16 sort fix): the translucent sort subtracts it, so a LARGE
+    // sheet (a raked windscreen) counts as nearer than its centre — a single centroid put the wheel OVER
+    // the glass overhang at down-looking angles.
+    let radiusSq = 0;
+    for (const tri of tris) {
+      for (const corner of [tri.a, tri.b, tri.c]) {
+        radiusSq = Math.max(
+          radiusSq,
+          (rw.positions[corner * 3] - centroid[0]) ** 2 +
+            (rw.positions[corner * 3 + 1] - centroid[1]) ** 2 +
+            (rw.positions[corner * 3 + 2] - centroid[2]) ** 2,
+        );
+      }
+    }
     scratch.submeshes.push({
-      center: [center[0] / corners, center[1] / corners, center[2] / corners],
+      center: centroid,
       damageGroup,
       indexCount: tris.length * 3,
       indexOffset,
       kind,
       lamp,
       part,
+      radius: Math.sqrt(radiusSq),
       translucent: surface.translucent,
     });
   });
