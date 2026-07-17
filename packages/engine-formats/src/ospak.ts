@@ -37,12 +37,6 @@ export interface OspakManifest {
   cells: Record<string, OspakEntry>;
   /** World-grid cell size (engine units) — key "cx,cy,…" → engine-space centre mapping for streaming. */
   cellSize: number;
-  /** Cloud dome layer (074/06 row 15): SA weather id → texture key; textures are LOOSE RGBA files next to
-   *  the manifest (lazy per-weather fetch — folding them into the pak is a later step). */
-  clouds?: {
-    textures: Record<string, { file: string; height: number; width: number }>;
-    weathers: Record<string, string>;
-  };
   /** Texture-array entries: `"array-<id>"` → range; meta mirrors the .ostex headers for scheduling. */
   textures: Record<string, OspakEntry & { format: number; height: number; layers: number; width: number }>;
   /** Raw `timecyc.dat` text (row 14) — the runtime samples it with the same renderware parser as prod. */

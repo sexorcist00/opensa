@@ -7,7 +7,6 @@ import {
   type CameraState,
   Engine,
   type EngineStats,
-  loadCloudWeather,
   setupStreaming,
   type StreamingDriver,
   type StreamSetup,
@@ -61,10 +60,6 @@ function applyEnvironmentOverrides(engine: Engine, params: URLSearchParams): voi
   const cloudsParam = Number(params.get('clouds') ?? Number.NaN);
   if (Number.isFinite(cloudsParam)) {
     engine.environment.cloudAlpha = cloudsParam;
-  }
-  // `?panorama=1` — re-composite the painted mod panorama (sky v2 retired it by default).
-  if (params.get('panorama') === '1') {
-    engine.environment.cloudPanorama = 1;
   }
 }
 
@@ -234,8 +229,7 @@ async function main(): Promise<void> {
       applyEnvironment();
     });
     applyWeather(weather);
-    // '[' / ']' cycle the weather at runtime: timecyc mood re-samples and the incoming cloud dome
-    // crossfades in (engine slot A/B blend over env.cloudFadeSeconds).
+    // '[' / ']' cycle the weather at runtime: timecyc mood re-samples live.
     bindWeatherKeys((next) => {
       weather = (weather + next) % 20;
       title = `STREAMING district (worker pak, rings live) — weather ${weather}`;
@@ -488,9 +482,8 @@ function pick(
   return { cellIndex: ledger.cellIndex, cellVertex: ledger.cellVertex, uniform: ledger.uniform };
 }
 
-/** Stream-mode weather wiring: returns an applier that re-creates the timecyc driver for the weather and
- *  (cross)fades the matching cloud dome in (074/06 rows 14+15). `?cloudcover=` overrides the dome layer
- *  alpha; per-weather cover/dark come from the cloud profile inside the timecyc driver. */
+/** Stream-mode weather wiring: returns an applier that re-creates the timecyc driver for the weather
+ *  (074/06 row 14); per-weather cover/dark come from the cloud profile inside the timecyc driver. */
 function wireWeather(
   engine: Engine,
   setup: StreamSetup,
@@ -501,18 +494,10 @@ function wireWeather(
   const aces = params.get('aces') !== '0';
   const bloomParam = Number(params.get('bloom') ?? Number.NaN);
   const bloom = Number.isFinite(bloomParam) ? bloomParam : null;
-  const pakBase = `/${params.get('src') ?? 'pak'}`;
-  const alphaOverride = params.get('cloudcover');
-  if (setup.clouds && alphaOverride !== null) {
-    engine.environment.cloudAlpha = Number(alphaOverride) || 0;
-  }
 
   return (weather: number): void => {
     if (setup.timecyc !== undefined) {
       onDriver(timecycDriver(engine, setup.timecyc, setup.timecyc24, weather, fogScale, aces, bloom));
-    }
-    if (setup.clouds) {
-      void loadCloudWeather(engine, pakBase, setup.clouds, weather);
     }
   };
 }

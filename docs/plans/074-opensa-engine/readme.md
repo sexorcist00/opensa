@@ -94,7 +94,9 @@ prod cirrus wisps UNDER the panorama — the skybox stays per the user). Night w
 replaces Preetham inside the sky LUT (the fit ran an INVERTED noon gradient, double-compressed by
 Reinhard-then-ACES; verbatim BSD-3 reference port, linear HDR, `?sky=preetham` A/B) → (2) the painted
 panorama RETIRED (byte analysis: a ~0.45-alpha grey veil over the whole dome buried any radiance model;
-`?panorama=1` comparison) → (3) procedural CUMULUS port of prod's applyClouds layer 2 + the normalized
+`?panorama=1` comparison — the whole dome path was then REMOVED 2026-07-17 on user command: engine
+bindings + converter `clouds/` stage + `manifest.clouds` + flags + docs/licenses, see the 06 ledger
+row-15 banner) → (3) procedural CUMULUS port of prod's applyClouds layer 2 + the normalized
 cloud palette (timecyc = HUE only; raw luminance is authored for SA's gamma multiply — the 3rd hit of
 that lesson) → (4) per-weather cloud IDENTITIES (profile grew scale+tint: EXTRASUNNY sparse · SUNNY =
 the accepted look · CLOUDY dark broken banks · RAINY storm slate · SMOG dirty clumps) + the cloud-field
@@ -162,7 +164,8 @@ signs — no new engine machinery: an IFP's bones ARE the clump's frames).
 
 1. ~~**B7·c UV-scroll animation** — [18](18-uv-anim.md).~~ **SHIPPED + FIELD-CONFIRMED 2026-07-15, CLOSED**
    (kind-4 objectTable draws + per-object cell uvAnim uniform; NO vertex-format growth; speed = prod-exact).
-   Side change: opensa-pack `--clouds <dir>` retired → auto-detected from `--in <mods-src>/clouds`.
+   Side change: opensa-pack `--clouds <dir>` retired → auto-detected from `--in <mods-src>/clouds`
+   (the whole clouds stage + `--in` were later REMOVED 2026-07-17 with the painted panorama).
 2. ~~**B7·d procedural clutter** — [19](19-procobj.md).~~ **SHIPPED + FIELD-CONFIRMED 2026-07-15, CLOSED**:
    host-generated + instanced (Option B), ONE memoized scatter drives render + colliders (re-enabled, cap 150) so
    they can't diverge; new engine `clutter` pipeline reusing the vehicle-model geometry. No reconvert. **Field

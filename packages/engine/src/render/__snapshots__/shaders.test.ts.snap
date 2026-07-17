@@ -110,8 +110,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -121,12 +121,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -137,7 +136,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -145,11 +144,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -264,7 +260,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -315,36 +311,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -496,8 +471,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -507,12 +482,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -523,7 +497,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -531,11 +505,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -650,7 +621,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -701,36 +672,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -938,8 +888,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -949,12 +899,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -965,7 +914,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -973,11 +922,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -1092,7 +1038,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -1143,36 +1089,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -1341,8 +1266,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -1352,12 +1277,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -1368,7 +1292,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -1376,11 +1300,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -1495,7 +1416,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -1546,36 +1467,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -1762,8 +1662,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -1773,12 +1673,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -1789,7 +1688,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -1797,11 +1696,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -1916,7 +1812,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -1967,36 +1863,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -2124,8 +1999,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -2135,12 +2010,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -2151,7 +2025,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -2159,11 +2033,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -2278,7 +2149,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -2329,36 +2200,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -2573,8 +2423,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -2584,12 +2434,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -2600,7 +2449,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -2608,11 +2457,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -2727,7 +2573,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -2778,36 +2624,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -3137,8 +2962,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -3148,12 +2973,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -3164,7 +2988,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -3172,11 +2996,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -3291,7 +3112,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -3342,36 +3163,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -3529,8 +3329,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -3540,12 +3340,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -3556,7 +3355,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -3564,11 +3363,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -3683,7 +3479,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -3734,36 +3530,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -4223,8 +3998,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -4234,12 +4009,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -4250,7 +4024,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -4258,11 +4032,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -4377,7 +4148,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -4428,36 +4199,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -4637,68 +4387,22 @@ fn fsSky(in: SkyOut) -> @location(0) vec4f {
   let far = frame.invViewProj * vec4f(in.ndc, 1.0, 1.0);
   let dir = normalize(far.xyz / far.w - frame.camera.xyz);
   var col = skyBaseFor(dir);
-  // Cloud dome (074/06 row 15, the RealSkybox model without the mesh): azimuthal-equidistant mapping
-  // measured off the mod's sphere (uv = 0.5 ∓ dir_horiz·k·θ, k ≈ 0.297/rad), slow rotation on the wind
-  // clock (moonColor.w = rad/s from env.cloudSpeed), brightness follows the sky horizon (timecyc mood)
-  // with a night floor, dark from env. Two slots crossfaded by camera.w (weather change fade);
-  // params3.y = cloud layer enable (0 = no texture bound).
-  var occl = 0.0;
   let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
   // CIRRUS wisps (074/09 sky round 3): thin high streaks; rides the cloud-layer alpha knob so
   // graphics.clouds.opacity still governs.
   let cirrus = cirrusFor(dir, sunDot);
   col = mix(col, cirrus.rgb, cirrus.a * frame.params3.w);
-  // CUMULUS deck (sky v2): the procedural weather clouds that replace the painted panorama. Dense masses
+  // CUMULUS deck (sky v2): the procedural weather clouds (the painted panorama is REMOVED). Dense masses
   // occlude the sun/moon discs and stars exactly like the old deck alpha did.
   let cumulus = cumulusFor(dir, sunDot);
   col = mix(col, cumulus.rgb, cumulus.a * frame.params3.w);
-  occl = cumulus.a * clamp(frame.params3.w * 1.6, 0.0, 1.0);
-  if (frame.params3.y > 0.5 && dir.y > 0.0) {
-    let theta = acos(clamp(dir.y, -1.0, 1.0));
-    let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-    let spin = frame.params2.z * frame.moonColor.w;
-    let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-    let spun = rot * horiz;
-    let radius = theta * 0.297;
-    let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-    let cloud = mix(
-      textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-      textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-      frame.camera.w,
-    );
-    // timecyc cloud tint (074/09 sky round 2 — prod applyClouds colours): lowClouds/bottomClouds carry
-    // the authored per-hour palette, so dawn/dusk turns the WHOLE deck pink on BOTH sides of the sky
-    // (the old horizon-luminance scale was grey and one-sided with the rim). Night floor keeps the deck
-    // from pure black; cloudDark flattens storm layers.
-    let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-      (1.0 - frame.params3.z * 0.6);
-    let horizonFade = smoothstep(0.0, 0.12, dir.y);
-    let alpha = cloud.a * horizonFade;
-    // Golden-hour sun tint on the deck (074/09 sky round — the prod applyClouds port): strongest at a
-    // low sun (dawn/dusk pink-orange rims toward the sun), a quarter-strength lift at noon, off below
-    // the horizon; gated by clearness — an overcast deck blocks the sun and must not glow through.
-    // Same horizon EASE as the cirrus golden term (the hard select snapped the whole deck at 20:00/6:00).
-    let golden = (0.25 + 0.65 * (1.0 - clamp(frame.sunDir.y, 0.0, 1.0))) *
-      smoothstep(0.0, 0.045, frame.sunDir.y);
-    let clearness = 1.0 - clamp(frame.sunCorona.w, 0.0, 1.0) * 0.85;
-    let goldenRim = frame.sunCorona.rgb * (pow(sunDot, 5.0) * golden * clearness);
-    col = mix(col, cloud.rgb * tint + goldenRim, alpha * frame.params3.w);
-    // Celestial occlusion uses the TEXTURE alpha, only gated (not scaled) by the layer-alpha knob: an
-    // opaque overcast deck must fully hide the discs (field: the moon glowed through CLOUDY at 0.85).
-    // max() — the procedural cumulus underneath keeps its own occlusion when the panorama is thin.
-    occl = max(occl, alpha * clamp(frame.params3.w * 1.6, 0.0, 1.0));
-    // Forward scatter through the deck (godrays proper land with plan 09's HDR chain): a silver lining
-    // where half-opaque cloud edges sit near the sun + a milky diffuse blob through thick cover.
-    let scatter = pow(sunDot, 12.0) * occl * (1.0 - occl) * 1.6 +
-      pow(sunDot, 24.0) * occl * 0.35 * (1.0 - frame.params3.z);
-    col += frame.sunCorona.rgb * scatter * horizonFade;
-  }
+  let occl = cumulus.a * clamp(frame.params3.w * 1.6, 0.0, 1.0);
   // Sun/moon discs and stars sit BEHIND the cloud layer: squared falloff kills the disc overshoot under
   // thick cover while thin wisps still let a dimmed disc through (prod's uCloudClear analogue).
   let clear = (1.0 - occl) * (1.0 - occl);
   col += skyCelestialFor(dir) * clear;
-  // Stars fade GLOBALLY with the weather's cloud cover (prod uCloudClear; sunCorona.w) — the panoramas
-  // leave alpha gaps between painted puffs, and per-pixel occlusion alone let stars leak through them.
+  // Stars fade GLOBALLY with the weather's cloud cover (prod uCloudClear; sunCorona.w) — per-pixel
+  // occlusion alone let stars leak through gaps in the deck.
   let cloudClear = 1.0 - clamp(frame.sunCorona.w * 1.15, 0.0, 1.0);
   col += vec3f(starField(dir)) * frame.params.x * clear * cloudClear;
   return vec4f(col, 1.0);
@@ -4722,8 +4426,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -4733,12 +4437,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -4749,7 +4452,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -4757,11 +4460,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -4876,7 +4576,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -4927,36 +4627,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**
@@ -5299,8 +4978,8 @@ struct Frame {
   // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
   //            time seconds (the wind clock), windStrength (074/06 row 10)],
   // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = cloud rotation speed rad/s (row 15) —
-  // both spare vec4 slots.
+  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
+  // cloud-panorama rotation speed).
   sunDir: vec4f,
   sunColor: vec4f,
   params: vec4f,
@@ -5310,12 +4989,11 @@ struct Frame {
   params2: vec4f,
   moonDir: vec4f,
   moonColor: vec4f,
-  // params3 = [localLightCount (row 7), cloudLayerOn (row 15), cloudDark, cloudLayerAlpha].
+  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
   params3: vec4f,
   // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
   // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast, not just where the panorama paints a puff — the panoramas
-  // leave alpha gaps between clouds and stars leaked through them). env.sunColor above stays the LIGHT.
+  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
   sunCore: vec4f,
   sunCorona: vec4f,
   // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
@@ -5326,7 +5004,7 @@ struct Frame {
   // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
   params4: vec4f,
   // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the panorama deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
+  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
@@ -5334,11 +5012,8 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
 @group(0) @binding(2) var skyLutSampler: sampler;
-// Cloud dome layer (074/06 row 15): per-weather panorama; sampled ONLY by fsSky (a known v1 deviation
-// from the 068 fog invariant — fogged geometry dissolves into the CLOUDLESS dome; clouds sit high, the
-// horizon band barely carries them).
-@group(0) @binding(4) var cloudDomeA: texture_2d<f32>;
-@group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
+// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
+// carry the clouds); the numbers stay vacant so the rest never renumbers.
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
@@ -5453,7 +5128,7 @@ fn cloudPalette() -> CloudPalette {
   return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
 }
 
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
 // coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
 // by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
 // huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
@@ -5504,36 +5179,15 @@ fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
   return vec4f(cloud, density * horizon);
 }
 
-// The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
-// rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
-// (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
+// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
+// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
+// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
+// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
 fn cloudLayerFor(dir: vec3f) -> vec4f {
   if (dir.y <= 0.0) {
     return vec4f(0.0);
   }
-  if (frame.params3.y <= 0.5) {
-    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
-    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
-    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-  }
-  let theta = acos(clamp(dir.y, -1.0, 1.0));
-  let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
-  let spin = frame.params2.z * frame.moonColor.w;
-  let rot = mat2x2f(vec2f(cos(spin), sin(spin)), vec2f(-sin(spin), cos(spin)));
-  let spun = rot * horiz;
-  let radius = theta * 0.297;
-  let uv = vec2f(0.5 - spun.x * radius, 0.5 + spun.y * radius);
-  let cloud = mix(
-    textureSampleLevel(cloudDomeA, skyLutSampler, uv, 0.0),
-    textureSampleLevel(cloudDomeB, skyLutSampler, uv, 0.0),
-    frame.camera.w,
-  );
-  // Same timecyc cloud tint as fsSky (074/09 sky round 2) — reflections must match the visible deck.
-  let tint = max(mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.7) * 1.5, vec3f(0.05)) *
-    (1.0 - frame.params3.z * 0.6);
-  let alpha = cloud.a * smoothstep(0.0, 0.12, dir.y);
-  return vec4f(cloud.rgb * tint, alpha);
+  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
 }
 
 /**

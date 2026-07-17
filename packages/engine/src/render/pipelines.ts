@@ -101,10 +101,8 @@ export function compileAll(
         buffer: { type: 'read-only-storage' },
         visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
       },
-      // Cloud dome layer (074/06 row 15): per-weather panoramas sampled by fsSky over the Preetham LUT.
-      // Two slots — weather changes write the idle one and camera.w crossfades between them.
-      { binding: 4, texture: {}, visibility: GPUShaderStage.FRAGMENT },
-      { binding: 5, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      // Bindings 4/5 held the painted cloud-panorama dome slots — REMOVED 2026-07-17 (procedural
+      // cirrus+cumulus carry the clouds); the numbers stay vacant so the rest never renumbers.
       // SA corona sprites (particle.txd): layer 0 = coronastar (lamps/headlights), layer 1 = coronamoon.
       // Created ONCE at init and written in place — the frame bind group is recorded inside cell bundles and
       // is immutable (the row-15 lesson: never destroy or rebuild anything a bundle references).

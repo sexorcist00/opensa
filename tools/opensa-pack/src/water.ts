@@ -4,7 +4,7 @@
  * SHORE-DISTANCE field from pure 2D geometry — the shoreline is the set of water-quad boundary edges
  * (edges not shared with a neighbouring quad, map-border edges excluded). The runtime uses the field for
  * Gerstner DISPLACEMENT damping (calm at the beach, swell offshore), the waterwake foam band and the
- * shallow tint. Output = a loose `water.bin` next to the manifest (the clouds convention):
+ * shallow tint. Output = a loose `water.bin` next to the manifest:
  * [u32 vertexCount][u32 indexCount][f32×5 × V: x,y,z,depth,class (GTA coords)][u32 × I].
  *
  * `class` (plan 075) splits water bodies: 0 = SEA (the open ocean at z≈0, full swell/surf/swash/foam),

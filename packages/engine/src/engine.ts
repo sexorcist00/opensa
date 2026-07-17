@@ -50,8 +50,6 @@ export interface CoronaSprites {
 
 /** Corona instance cap per frame (074/06 row 13) — far beyond any district's lamp count. */
 const CORONA_CAP = 2048;
-/** Cloud dome side (074/06 row 15) — the converter emits exactly this; the texture never reallocates. */
-const CLOUD_DOME_SIZE = 1024;
 /** Cumulus field bake resolution (sky v2 perf) — the fbm is low-frequency, 256² resolves it fully. */
 const CLOUD_FIELD_SIZE = 256;
 /** timecyc `sunSize` (≈3–5) → angular core radius in radians (~1° at sunSize 4, prod-matched by eye). */
@@ -169,7 +167,7 @@ export interface Environment {
   bloomIntensity: number;
   /** Bloom luminance threshold (074/09) — hosts drive the prod night profile (0.70 day → 0.38 night). */
   bloomThreshold: number;
-  /** Cloud dome layer alpha 0..1 (how strongly the panorama composites; the textures carry the look). */
+  /** Cloud layer alpha 0..1 — how strongly the procedural cirrus + cumulus composite over the sky dome. */
   cloudAlpha: number;
   /** Cloud underside/shadow tint, linear (timecyc `bottomClouds`) — dawn turns the WHOLE deck pink. */
   cloudBottomColor: readonly [number, number, number];
@@ -177,17 +175,9 @@ export interface Environment {
   cloudCover: number;
   /** Cloud heaviness 0..1 (storm/fog weathers). */
   cloudDark: number;
-  /** Weather-change crossfade duration, seconds (dome slot A→B blend). */
-  cloudFadeSeconds: number;
-  /** Painted cloud PANORAMA enable (074/06 row 4 sky v2): 0 = retired (default — the mod textures are a
-   *  ~0.45-alpha grey veil over the whole dome that buried the radiance model; procedural cirrus+cumulus
-   *  carry the clouds), 1 = composite the painted deck (`?panorama=1` comparison). */
-  cloudPanorama: number;
   /** Cumulus clump-size multiplier (sky v2 weather identity): >1 = smaller scattered puffs, <1 = big
    *  banks (SMOG clumps, storm decks). Neutral 1. */
   cloudScale: number;
-  /** Cloud dome rotation speed (rad/s on the frame clock — SA's slow wind drift). */
-  cloudSpeed: number;
   /** Cloud lit/top tint, linear (timecyc `lowClouds`) — white at noon, warm at golden hours. */
   cloudTopColor: readonly [number, number, number];
   /** 0 day → 1 deep night (the prelit blend). */
@@ -476,10 +466,7 @@ export class Engine {
     cloudBottomColor: [0.45, 0.48, 0.55],
     cloudCover: 0.12,
     cloudDark: 0,
-    cloudFadeSeconds: 4,
-    cloudPanorama: 0,
     cloudScale: 1,
-    cloudSpeed: 0.004,
     cloudTopColor: [0.78, 0.8, 0.85],
     dn: 0,
     emissiveBoost: 1.6,
@@ -562,19 +549,9 @@ export class Engine {
   /** Prefilter params (threshold animates with the night profile) — written every bloom frame. */
   private bloomPrefilterUniform!: GPUBuffer;
   private canvasContext!: GPUCanvasContext;
-  /** Crossfade state: blend 0 = slot A shows, 1 = slot B; animated from `cloudFadeFrom` toward
-   *  `cloudFadeTarget` on the frame clock over env.cloudFadeSeconds. */
-  private cloudFadeFrom = 0;
-  private cloudFadeStartMs = 0;
-  private cloudFadeTarget = 0;
-  /** Both slots allocated ONCE at CLOUD_DOME_SIZE² and only ever written in place — the frame bind group
-   *  is recorded inside cell bundles and must stay immutable after init. */
   private cloudFieldBindGroup!: GPUBindGroup;
   private cloudFieldTexture!: GPUTexture;
   private cloudFieldView!: GPUTextureView;
-  private cloudLayerOn = 0;
-  private cloudTextureA: GPUTexture | null = null;
-  private cloudTextureB: GPUTexture | null = null;
   /** Breakable clutter instances (074/20): key hash → the matrix slot to degenerate on a hit. */
   private readonly clutterBreakables = new Map<number, { matrixBuffer: GPUBuffer; offset: number }>();
   /** Per streamed cell → its clutter draws (one per model). Replaced/removed as cells stream. */
@@ -915,8 +892,8 @@ export class Engine {
     const frameData = new Float32Array(100);
     frameData.set(this.viewProj, 0);
     frameData.set(this.invViewProj, 16);
-    // camera.w = cloud slot A→B crossfade blend (spare vec4 slot; row 15 weather fade).
-    frameData.set([...camera.eye, this.currentCloudBlend()], 32);
+    // camera.w = spare (held the retired cloud-panorama crossfade blend).
+    frameData.set([...camera.eye, 0], 32);
     const env = this.environment;
     const seconds = (performance.now() - this.startedMs) / 1000;
     const sunLen = Math.hypot(env.sunDir[0], env.sunDir[1], env.sunDir[2]) || 1;
@@ -931,8 +908,8 @@ export class Engine {
     const moonLen = Math.hypot(env.moonDir[0], env.moonDir[1], env.moonDir[2]) || 1;
     // moonDir.w doubles as the stochastic de-tiling toggle (074/12) — the vec4 slot was spare.
     frameData.set([env.moonDir[0] / moonLen, env.moonDir[1] / moonLen, env.moonDir[2] / moonLen, env.stochastic], 64);
-    // moonColor.w carries the cloud rotation speed (spare vec4 slot, same pattern as moonDir.w).
-    frameData.set([...env.moonColor, env.cloudSpeed], 68);
+    // moonColor.w = spare (held the retired cloud-panorama rotation speed).
+    frameData.set([...env.moonColor, 0], 68);
     // params3 = [light count (row 7), cloud layer on, cloudDark, cloud layer alpha] — row 15.
     frameData[72] = this.fillLightPool(camera.eye);
     // params4.x = how many of those lights are DYNAMIC (they come first in the pool). The world shades the
@@ -942,9 +919,8 @@ export class Engine {
     frameData[88] = this.dynamicLights.length;
     frameData[89] = env.moonPhase;
     frameData[90] = env.reflectionStrength;
-    // The painted panorama composites only when textures are bound AND the env opts in (sky v2 default =
-    // procedural cirrus+cumulus; the mod deck is a grey veil kept for `?panorama=1` comparison).
-    frameData[73] = this.cloudLayerOn * (env.cloudPanorama > 0.5 ? 1 : 0);
+    // params3.y = spare (held the retired cloud-panorama enable).
+    frameData[73] = 0;
     frameData[74] = env.cloudDark;
     frameData[75] = Math.min(1, Math.max(0, env.cloudAlpha));
     // sunCore/sunCorona = the SUN VISUAL (timecyc columns — the disc is yellow/orange; the white-ish
@@ -954,7 +930,7 @@ export class Engine {
     frameData.set([...env.sunCoronaColor, Math.min(1, Math.max(0, env.cloudCover))], 80);
     // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint + base opacity.
     frameData.set([...env.waterColor, Math.min(1, Math.max(0, env.waterAlpha))], 84);
-    // timecyc cloud colours (074/09 sky round 2): lowClouds/bottomClouds tint the panorama deck — dawn
+    // timecyc cloud colours (074/09 sky round 2): lowClouds/bottomClouds tint the cloud deck — dawn
     // turns the WHOLE sky's clouds pink (both sides of the sun), noon reads bright, night near-black.
     // cloudTop.w = the cumulus clump-size multiplier (sky v2 weather identity).
     frameData.set([...env.cloudTopColor, env.cloudScale], 92);
@@ -1165,22 +1141,6 @@ export class Engine {
       },
       SKY_LUT_WIDTH * SKY_LUT_HEIGHT * 8,
     );
-    // Cloud dome slots A/B (074/06 row 15): BOTH allocated up front — the frame bind group is recorded
-    // inside cell bundles and is immutable after init. Weather changes write into the idle slot and the
-    // camera.w blend crossfades (env.cloudFadeSeconds).
-    const cloudSlot = (label: string): GPUTexture =>
-      this.resources.createTexture(
-        'texture',
-        {
-          format: 'rgba8unorm-srgb',
-          label,
-          size: { height: CLOUD_DOME_SIZE, width: CLOUD_DOME_SIZE },
-          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-        },
-        CLOUD_DOME_SIZE * CLOUD_DOME_SIZE * 4,
-      );
-    this.cloudTextureA = cloudSlot('cloud-dome-a');
-    this.cloudTextureB = cloudSlot('cloud-dome-b');
     // Cumulus field (sky v2 perf): the tiny bake target the cloud-field pass rewrites each frame.
     this.cloudFieldTexture = this.resources.createTexture(
       'texture',
@@ -1227,8 +1187,6 @@ export class Engine {
           resource: this.device.createSampler({ label: 'sky-lut', magFilter: 'linear', minFilter: 'linear' }),
         },
         { binding: 3, resource: { buffer: this.lightPoolBuffer } },
-        { binding: 4, resource: this.cloudTextureA.createView() },
-        { binding: 5, resource: this.cloudTextureB.createView() },
         { binding: 6, resource: this.coronaTexture.createView({ dimension: '2d-array' }) },
         { binding: 7, resource: this.cloudFieldView },
       ],
@@ -1378,40 +1336,6 @@ export class Engine {
     if (draws.length > 0) {
       this.clutterCells.set(key, draws);
     }
-  }
-
-  /** Install a weather's cloud dome (074/06 row 15), RGBA8 at ANY size. The two persistent slots are
-   *  allocated ONCE at CLOUD_DOME_SIZE² and overwritten IN PLACE — cell bundles record the frame bind group
-   *  at create time, so the group (and every view in it) must never be rebuilt — which is why the slot size
-   *  is fixed and a differently-sized source is RESAMPLED onto it rather than rejected (the converter only
-   *  ever downscales, so a 512² cloud TXD used to crash here). The first install fills both slots (no fade
-   *  from garbage); later installs write the idle slot and crossfade over env.cloudFadeSeconds. Pass null to
-   *  gate the layer off. */
-  setCloudTexture(texture: null | { height: number; rgba: Uint8Array; width: number }): void {
-    if (texture && this.cloudTextureA && this.cloudTextureB) {
-      const rgba = fitRgba(texture, CLOUD_DOME_SIZE);
-      const write = (target: GPUTexture): void =>
-        this.device.queue.writeTexture(
-          { texture: target },
-          rgba,
-          { bytesPerRow: CLOUD_DOME_SIZE * 4 },
-          { height: CLOUD_DOME_SIZE, width: CLOUD_DOME_SIZE },
-        );
-      if (this.cloudLayerOn === 0) {
-        write(this.cloudTextureA);
-        write(this.cloudTextureB);
-        this.cloudFadeFrom = 0;
-        this.cloudFadeTarget = 0;
-      } else {
-        const from = this.currentCloudBlend();
-        const target = from < 0.5 ? 1 : 0;
-        write(target === 1 ? this.cloudTextureB : this.cloudTextureA);
-        this.cloudFadeFrom = from;
-        this.cloudFadeTarget = target;
-        this.cloudFadeStartMs = performance.now();
-      }
-    }
-    this.cloudLayerOn = texture ? 1 : 0;
   }
 
   /**
@@ -1916,14 +1840,6 @@ export class Engine {
       size: partCount * capacity * PAINT_ROW_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-  }
-
-  /** Cloud slot blend on the frame clock (0 = slot A, 1 = slot B) — written into camera.w each frame. */
-  private currentCloudBlend(): number {
-    const fadeMs = Math.max(1, this.environment.cloudFadeSeconds * 1000);
-    const t = Math.min(1, (performance.now() - this.cloudFadeStartMs) / fadeMs);
-
-    return this.cloudFadeFrom + (this.cloudFadeTarget - this.cloudFadeFrom) * t;
   }
 
   private destroyDebris(entry: DebrisEntry): void {
@@ -2590,28 +2506,6 @@ export class Engine {
   }
 }
 
-/**
- * Fallback billboards when no particle.txd is supplied (the lab): a soft radial glow for lamps and a plain
- * disc for the moon. The real SA sprites are far better — this only keeps the engine standalone.
- */
-/** Nearest-resample an RGBA image onto a square slot (clouds are soft — a box filter buys nothing visible). */
-function fitRgba(source: { height: number; rgba: Uint8Array; width: number }, size: number): Uint8Array {
-  if (source.width === size && source.height === size) {
-    return source.rgba;
-  }
-  const out = new Uint8Array(size * size * 4);
-  for (let y = 0; y < size; y += 1) {
-    const sy = Math.min(source.height - 1, Math.floor((y / size) * source.height));
-    for (let x = 0; x < size; x += 1) {
-      const sx = Math.min(source.width - 1, Math.floor((x / size) * source.width));
-      const at = (sy * source.width + sx) * 4;
-      out.set(source.rgba.subarray(at, at + 4), (y * size + x) * 4);
-    }
-  }
-
-  return out;
-}
-
 /** SA timed-object gate: params = on | off << 8; the window wraps midnight when on > off. */
 /** Margin (m) added to a clutter group's sphere for the models' own extent (a bush/cactus/rock/small tree). */
 const CLUTTER_MODEL_RADIUS = 8;
@@ -2647,6 +2541,10 @@ function lerp(a: number, b: number, f: number): number {
   return a + (b - a) * f;
 }
 
+/**
+ * Fallback billboards when no particle.txd is supplied (the lab): a soft radial glow for lamps and a plain
+ * disc for the moon. The real SA sprites are far better — this only keeps the engine standalone.
+ */
 function proceduralCoronaSprites(): CoronaSprites {
   const size = 128;
   const rgba = new Uint8Array(size * size * 4 * 2);

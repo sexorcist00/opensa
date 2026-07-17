@@ -8,7 +8,7 @@
  */
 import type { ReactElement } from 'react';
 
-import { type CameraState, Engine, loadCloudWeather, setupStreaming, type StreamStats } from '@opensa/engine';
+import { type CameraState, Engine, setupStreaming, type StreamStats } from '@opensa/engine';
 import { createEngineEnvironmentDriver } from '@opensa/game/adapters/engine-environment-driver';
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { benchRoadCarPlacements } from '@opensa/game/adapters/road-cars';
@@ -118,8 +118,7 @@ export function EngineCanvasHost({ fs, gameId, onWorldReady, paused = false }: E
 
 /**
  * Sky A/B overrides (074/06 row 4 sky v2): `?sky=preetham` = the legacy dome vs the Hosek-Wilkie default;
- * `?clouds=N` = cloud-layer opacity (0 = the naked dome, kills cirrus+cumulus too); `?panorama=1` =
- * re-composite the retired painted mod panorama (a ~0.45-alpha grey veil that buried the radiance model).
+ * `?clouds=N` = cloud-layer opacity (0 = the naked dome, kills cirrus+cumulus too).
  */
 function applySkyOverrides(
   engine: Engine,
@@ -132,9 +131,6 @@ function applySkyOverrides(
   const cloudsParam = Number(params.get('clouds') ?? Number.NaN);
   if (Number.isFinite(cloudsParam)) {
     config.graphics.clouds.opacity = cloudsParam;
-  }
-  if (params.get('panorama') === '1') {
-    engine.environment.cloudPanorama = 1;
   }
 }
 
@@ -206,10 +202,6 @@ async function boot(
     weather,
     weatherBlend: () => weatherTransition.blend(),
   });
-  // Cloud dome layer (074/06 row 15): pick the ?weather dome when the pak carries clouds.
-  if (setup.clouds) {
-    void loadCloudWeather(engine, `/${params.get('src') ?? 'pak-map'}`, setup.clouds, weather);
-  }
   // '[' / ']' cycle the weather LIVE (sky v2 field iteration — a URL change costs a whole VFS reboot).
   let liveWeather = weather;
   window.addEventListener('keydown', (event) => {
@@ -218,9 +210,6 @@ async function boot(
     }
     liveWeather = (liveWeather + (event.code === 'BracketRight' ? 1 : 19)) % 20;
     weatherTransition.begin(liveWeather, config.weatherTransitionSeconds);
-    if (setup.clouds) {
-      void loadCloudWeather(engine, `/${params.get('src') ?? 'pak-map'}`, setup.clouds, liveWeather);
-    }
     // eslint-disable-next-line no-console -- field-iteration feedback (which weather id is on screen)
     console.log(`[engine-host] weather ${liveWeather}`);
   });
@@ -681,9 +670,6 @@ async function boot(
     const runScene = async (scene: BenchScene): Promise<void> => {
       hour = scene.hour;
       weatherTransition.begin(scene.weather, 0); // instant — bench scenes must not sample mid-blend
-      if (setup.clouds) {
-        await loadCloudWeather(engine, `/${params.get('src') ?? 'pak-map'}`, setup.clouds, scene.weather);
-      }
       physics.teleport(RigidBody.handle[playerEid], [scene.anchor[0], scene.anchor[1], scene.anchor[2]]);
       Transform.x[playerEid] = scene.anchor[0];
       Transform.y[playerEid] = scene.anchor[1];

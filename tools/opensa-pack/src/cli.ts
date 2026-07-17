@@ -2,11 +2,11 @@
  * `opensa-pack` CLI (plan 074/03).
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1
- *     [--in <mods-src>] [--cell-size 250] [--bakes [--no-ao] [--no-sunvis] [--bake-workers N]]
+ *     [--cell-size 250] [--bakes [--no-ao] [--no-sunvis] [--bake-workers N]]
  *     [--chunk-cells 6] [--wind <dir>[,<dir>…]]
  *
- * `--in <mods-src>` — the mods-source root. Conventional subfolders under it are auto-detected: a `clouds/`
- * subfolder supplies the cloud dome (074/06 row 15). Missing folder ⇒ that feature is simply skipped.
+ * (`--in <mods-src>` and its only consumer — the `clouds/` skybox dome stage — were REMOVED 2026-07-17
+ * together with the engine's painted cloud panorama.)
  *
  * `--bakes` — enable the HEAVY offline channels (AO/skyVis + sun-vis, 074/07): ~90 % of convert wall-time
  * (full LS ≈ 14 of 15.7 min). OFF by default for iteration speed (2026-07-13 user decision); production,
@@ -18,11 +18,10 @@
  * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / cellSize)). Writes `world.ospak` +
  * `manifest.json` + `report.json` into `--out`.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { convertClouds } from './clouds';
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
 import { WaterHeightGrid } from './height-grid';
@@ -48,10 +47,6 @@ function findFiles(dir: string, extension: string): string[] {
   return found;
 }
 
-function isDir(path: string): boolean {
-  return existsSync(path) && statSync(path).isDirectory();
-}
-
 async function main(): Promise<void> {
   const game = arg('game');
   const out = arg('out');
@@ -66,9 +61,6 @@ async function main(): Promise<void> {
   if (rect.length !== 4 || rect.some(Number.isNaN)) {
     throw new Error(`bad --rect '${rectRaw}' (want x0,y0,x1,y1 in cell coords)`);
   }
-  // `--in <mods-src>`: the mods-source root; conventional subfolders under it are auto-detected (clouds/ → the
-  // cloud dome). A missing subfolder just skips that feature.
-  const modsIn = arg('in');
   const cellSize = Number(arg('cell-size') ?? 250) || 250;
   // Bakes are OPT-IN (--bakes): they are ~90 % of convert time and iteration reconverts don't need them.
   const bakes = process.argv.includes('--bakes');
@@ -124,29 +116,6 @@ async function main(): Promise<void> {
   });
 
   mkdirSync(out, { recursive: true });
-  // Cloud dome layer (074/06 row 15): the RealSkybox-layout mod at `<mods-src>/clouds` (RGBA domes emitted
-  // loose next to the manifest; LICENSE-PENDING assets, docs/licenses/realskybox-clouds.md — user-local paks
-  // only). No `--in`, or no `clouds/` under it ⇒ skipped, no dome in the manifest.
-  const cloudsDir = modsIn && isDir(join(modsIn, 'clouds')) ? join(modsIn, 'clouds') : null;
-  if (cloudsDir) {
-    console.log(`[opensa-pack] clouds: ${cloudsDir}`);
-    const datPath = [join(cloudsDir, 'realskybox/skyboxes.dat'), join(cloudsDir, 'skyboxes.dat')].find((path) =>
-      existsSync(path),
-    );
-    const txdPath = [join(cloudsDir, 'realskybox/skyboxes.txd'), join(cloudsDir, 'skyboxes.txd')].find((path) =>
-      existsSync(path),
-    );
-    if (!datPath || !txdPath) {
-      throw new Error(`clouds ${cloudsDir}: skyboxes.dat / skyboxes.txd not found`);
-    }
-    const txdBytes = readFileSync(txdPath);
-    manifest.clouds = convertClouds(
-      readFileSync(datPath, 'utf8'),
-      txdBytes.buffer.slice(txdBytes.byteOffset, txdBytes.byteOffset + txdBytes.byteLength),
-      out,
-      (message) => console.log(`[opensa-pack] ${message}`),
-    );
-  }
   // Water bake (074/06 row 12 v2, user directive — water WITHOUT the shadow bakes): shore-field
   // tessellation from water.dat, pure 2D geometry (no rays, no BVH), always on — it costs seconds.
   const waterText = fs.getText('data/water.dat');

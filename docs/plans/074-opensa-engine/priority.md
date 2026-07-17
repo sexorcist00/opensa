@@ -16,9 +16,10 @@ PARKED as leftover (0.6.0 plan).
 **FULLY SHIPPED + benched 2026-07-16** (ACES ≈ free; post chain 1.05–1.25 ms ≤ 3 ms budget; renderScale =
 the ONE tier knob — msaa/bloomq field-tested and removed; series rows 09·ACES/bloom/post-fix/tiers) →
 **③ the LOOK ROUND** — sky rounds 1–3 shipped (dawn/dusk accepted) → **SKY v2 CLOSED, field-ACCEPTED
-2026-07-17** (Hosek-Wilkie LUT · painted panorama retired · procedural cirrus/cumulus with per-weather
-identities · cloud-field bake · softened horizon projection · prod WeatherTransition wired — see the
-readme handoff + 06 ledger row 4). **NEXT look item = FOG (the user's pre-C1 arc #2)** → then the
+2026-07-17** (Hosek-Wilkie LUT · painted panorama retired, then fully REMOVED same day on user command
+(row 15 dome path deleted engine+converter, docs/licenses gone — see the 06 ledger row-15 banner) ·
+procedural cirrus/cumulus with per-weather identities · cloud-field bake · softened horizon projection ·
+prod WeatherTransition wired — see the readme handoff + 06 ledger row 4). **NEXT look item = FOG (the user's pre-C1 arc #2)** → then the
 deferred verdicts (16 paint / 17 lighting / hd-realtime concept) → ~~the WebGL-prod `?bench=all`
 baseline~~ ✅ **CAPTURED 2026-07-17** (road cars wired into canvas-host, same 841-car population; prod
 13.5–26.8 fps on land vs engine 120 Hz everywhere — series.md § C1 WebGL-prod baseline) → C1.
