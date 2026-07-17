@@ -22,3 +22,14 @@ a refraction tap off the plan-09 scene target, and the Gerstner-Jacobian whiteca
 deleted 0.5.0 water idea.
 
 Full plan: [plans/02-water-realism/readme.md](plans/02-water-realism/readme.md).
+
+## Graphic improvements — shadows + street-lamp lighting (DRAFT)
+
+A draft bundle of two parked look features, both built-then-removed during the 074 chain by user
+decision, kept together because one thinking round (possibly the hd-realtime concept decision) may
+answer both: (01) baked directional sun shadows, second attempt — moved from ideas/0.5.0/03, the
+receiver-densification prerequisite stands; (02) street-lamp surface lighting v2 — light ALL lamps of
+the loaded HD cells at once (the 2026-07-17 field observation says the budget likely exists), killing
+the ignition-pop artifact class by construction.
+
+Full bundle: [plans/04-graphic-improvements/readme.md](plans/04-graphic-improvements/readme.md).

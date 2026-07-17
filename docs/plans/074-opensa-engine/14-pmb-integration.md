@@ -17,7 +17,7 @@ own engine, benchmarked**.
     report; the skygfx texdb import stays an input option) — plan 12 stays default-off until its
     histogram-preserving pass regardless;
   - **receiver-mesh densification hook** — the prerequisite recorded in
-    [ideas/0.5.0/03-baked-directional-shadows](../../ideas/0.5.0/plans/03-baked-directional-shadows/readme.md);
+    [ideas/0.6.0/04-graphic-improvements/01](../../ideas/0.6.0/plans/04-graphic-improvements/01-baked-directional-shadows.md);
     pmb owns mesh surgery, so the subdivision stage belongs here even if the shadows v2 lands later;
   - pmb's existing bakes (prelight/night sets) run BEFORE the converter so the pak carries final colours.
 - **Full-map conversion engineering** (the measured blockers from the plan-10 ledger):

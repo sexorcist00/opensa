@@ -12,15 +12,11 @@ environment drivers) — this is a drive-rule + field-tuning task.
 
 Full plan: [plans/02-weather-wind/readme.md](plans/02-weather-wind/readme.md).
 
-## Baked directional sun shadows, second attempt (own engine)
+## Baked directional sun shadows — MOVED to 0.6.0 (2026-07-17)
 
-The 074/07 directional (moving-sun) baked shadows were built and field-reverted in one day: per-vertex
-thresholds on SA's metre-sparse ground meshes lose narrow occluders entirely and punch interpolation
-artifacts. The shipping engine keeps the accepted scalar bake. **The prerequisite is converter-side
-receiver-mesh densification (~2–4 m grid on shadow-relevant surfaces)** — once that exists, the v2 design
-(preserved in 074/07) un-parks. Small casters (lamp posts) stay with the dynamic near cascade.
-
-Full plan: [plans/03-baked-directional-shadows/readme.md](plans/03-baked-directional-shadows/readme.md).
+The second-attempt plan now lives in the 0.6.0 "graphic improvements" draft bundle, together with the
+street-lamp lighting v2 idea:
+[../0.6.0/plans/04-graphic-improvements/01-baked-directional-shadows.md](../0.6.0/plans/04-graphic-improvements/01-baked-directional-shadows.md).
 
 ## All land vehicle types
 

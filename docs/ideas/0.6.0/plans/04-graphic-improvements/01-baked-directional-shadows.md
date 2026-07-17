@@ -1,9 +1,16 @@
-# 03 — Baked directional sun shadows, second attempt (deferred from 074/07)
+# 01 — Baked directional sun shadows, second attempt (deferred from 074/07)
+
+**STATUS: DRAFT** — part of the [04-graphic-improvements](readme.md) idea bundle (0.6.0). Moved here from
+ideas/0.5.0/plans/03 on 2026-07-17; to be thought through properly later — nothing scheduled.
 
 Deferred on 2026-07-12 (user decision after a same-day build → field-test → revert cycle). The own engine
 ships the SCALAR baked sun-visibility (074/07 v1, field-accepted); the DIRECTIONAL version — static shadows
 that track the moving sun — was built, produced unacceptable noon artifacts, and was reverted.
 **The prerequisite that must be solved first is written in bold below; everything else already exists.**
+
+Related 2026-07-17 context: the plan-16 SSR + contact-shadow build was also rolled back the same cycle
+("другой подход на след итерацию") — vehicle/dynamic-entity shadows are an OPEN question this bundle
+should answer together with the static ones (prod grounds its cars via CSM; we deleted CSM by design).
 
 ## What was tried (the full 2026-07-12 record)
 
