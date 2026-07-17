@@ -90,8 +90,20 @@ All six bench scenes stayed vsync-locked 120 Hz through every step (series rows 
 the dn-blend bug prod had already fixed; exposure 0.25→prod 0.55; timecyc lowClouds/bottomClouds tint the
 whole deck both sides; night city glow + moon scatter + golden rims; night-glow FADE over the dusk hour;
 prod cirrus wisps UNDER the panorama — the skybox stays per the user). Night world un-blackened
-(`sunIndirect` night 0.4 → prod worldLight 0.7). **Day sky verdict still "не то" — the user keeps the
-skybox; next options offered: panorama parallax second sample · prod cumulus fbm port · faster dome spin.**
+(`sunIndirect` night 0.4 → prod worldLight 0.7). **SKY v2 CLOSED — field-ACCEPTED 2026-07-17 («все супер»), six rounds in one day: (1) Hosek-Wilkie
+replaces Preetham inside the sky LUT (the fit ran an INVERTED noon gradient, double-compressed by
+Reinhard-then-ACES; verbatim BSD-3 reference port, linear HDR, `?sky=preetham` A/B) → (2) the painted
+panorama RETIRED (byte analysis: a ~0.45-alpha grey veil over the whole dome buried any radiance model;
+`?panorama=1` comparison) → (3) procedural CUMULUS port of prod's applyClouds layer 2 + the normalized
+cloud palette (timecyc = HUE only; raw luminance is authored for SA's gamma multiply — the 3rd hit of
+that lesson) → (4) per-weather cloud IDENTITIES (profile grew scale+tint: EXTRASUNNY sparse · SUNNY =
+the accepted look · CLOUDY dark broken banks · RAINY storm slate · SMOG dirty clumps) + the cloud-field
+BAKE (256² rg16float per frame — full decks stopped scaling with the swapchain: 3.10 → 1.33 ms) + live
+`[`/`]` weather keys → (5) the "clouds melting down" bug (prod has it too) = the hard projection floor
+freezing the horizon band — softened to `dir.xz/(dir.y + 0.18)` → (6) prod's `WeatherTransition` wired
+through the driver (`weatherBlend` getter + `lerpCloudProfiles`) — smooth 6 s weather changes are back.
+Full history in the [06 ledger row 4](06-world-effects-parity.md); cost points in
+[bench/series.md](bench/series.md) § Sky v2. NEXT look item = FOG (the user's pre-C1 arc #2).**
 
 **Night brightness DIAGNOSED + FIXED (2026-07-16, awaiting field):** a controlled headless A/B (both
 renderers, same spawn/hour, pixel-metered) showed deep night already ≈ prod but **20:00–21:30 ran 3–5×
@@ -126,10 +138,17 @@ the user's real-display sweep with 841 cars kept every scene vsync-locked 120 Hz
 [11 § bench road cars](11-performance-testing.md). Vehicle normals SKIPPED to ideas 0.6.0/03 (user call);
 a first-cut paths parser is noted in ideas 0.5.0/06-city-life plan 01 as its head start.
 
-**Resume (the ladder):** ① wire road cars into canvas-host and run the WebGL-prod `?bench=all` BASELINE
-(same population, or the C1 comparison is invalid) → ② the C1 criteria run → flip (C2 stays gated).
-In parallel/after: plan 16 step 3 SSR / step 6 grounding · the look round day-sky verdict · 17 lighting /
-the hd-realtime concept decision.
+**① DONE (2026-07-17): road cars WIRED into canvas-host + the WebGL-prod `?bench=all` BASELINE captured**
+— shared `benchRoadCarPlacements` + `seatVehicleOnGround` in `packages/game` (both hosts assemble the
+identical 841-car population; prod's map car generators inherited pitch/slide/defer seating). The user's
+real-display prod sweep: 13.5–26.8 fps on land (54 fps empty ocean) vs the engine's vsync-locked 120 Hz
+everywhere — frame-time ratio 4.5–8.9× on land, engine vsync-capped so the true ratio is larger. A
+same-environment headless control (both renderers, one harness) confirms the gap is not display-specific.
+Full tables in [bench/series.md](bench/series.md) § C1 WebGL-prod baseline.
+
+**Resume (the ladder):** ② the C1 criteria run → flip (C2 stays gated). In parallel/after: plan 16
+step 3 SSR / step 6 grounding · the look round day-sky verdict · 17 lighting / the hd-realtime concept
+decision.
 
 ## Handoff status (2026-07-14 — history)
 

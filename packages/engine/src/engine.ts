@@ -52,6 +52,8 @@ export interface CoronaSprites {
 const CORONA_CAP = 2048;
 /** Cloud dome side (074/06 row 15) — the converter emits exactly this; the texture never reallocates. */
 const CLOUD_DOME_SIZE = 1024;
+/** Cumulus field bake resolution (sky v2 perf) — the fbm is low-frequency, 256² resolves it fully. */
+const CLOUD_FIELD_SIZE = 256;
 /** timecyc `sunSize` (≈3–5) → angular core radius in radians (~1° at sunSize 4, prod-matched by eye). */
 const SUN_SIZE_TO_RAD = 0.0045;
 /** Godrays (074/09 stage 1): ray strength, per-tap decay, and the bright-pass floor (the sun disc's HDR
@@ -177,6 +179,13 @@ export interface Environment {
   cloudDark: number;
   /** Weather-change crossfade duration, seconds (dome slot A→B blend). */
   cloudFadeSeconds: number;
+  /** Painted cloud PANORAMA enable (074/06 row 4 sky v2): 0 = retired (default — the mod textures are a
+   *  ~0.45-alpha grey veil over the whole dome that buried the radiance model; procedural cirrus+cumulus
+   *  carry the clouds), 1 = composite the painted deck (`?panorama=1` comparison). */
+  cloudPanorama: number;
+  /** Cumulus clump-size multiplier (sky v2 weather identity): >1 = smaller scattered puffs, <1 = big
+   *  banks (SMOG clumps, storm decks). Neutral 1. */
+  cloudScale: number;
   /** Cloud dome rotation speed (rad/s on the frame clock — SA's slow wind drift). */
   cloudSpeed: number;
   /** Cloud lit/top tint, linear (timecyc `lowClouds`) — white at noon, warm at golden hours. */
@@ -208,11 +217,14 @@ export interface Environment {
   moonPhase: number;
   /** Vehicle reflection strength (B5r) — the global multiplier over the DFF's per-material settings. */
   reflectionStrength: number;
-  /** Preetham dome exposure (prod `sky.pbrExposure`; 074/09 sky round — 0.25 was a pre-ACES constant). */
+  /** Physical dome exposure (prod `sky.pbrExposure`; 074/09 sky round — 0.25 was a pre-ACES constant). */
   skyExposure: number;
   /** LINEAR sky gradient horizon colour (sky pass + world fog share it). */
   skyHorizon: readonly [number, number, number];
-  /** SA mood strength: how strongly timecyc's skyTop tints the physical sky (0 = pure Preetham). */
+  /** Sky dome radiance model (074/06 row 4): Hosek-Wilkie (default) or the legacy Preetham fit — kept
+   *  for A/B (`?sky=preetham`) while the day-sky verdict is out. */
+  skyModel: 'hosek' | 'preetham';
+  /** SA mood strength: how strongly timecyc's skyTop tints the physical sky (0 = pure physical). */
   skyMood: number;
   /** LINEAR sky gradient zenith colour. */
   skyTop: readonly [number, number, number];
@@ -465,6 +477,8 @@ export class Engine {
     cloudCover: 0.12,
     cloudDark: 0,
     cloudFadeSeconds: 4,
+    cloudPanorama: 0,
+    cloudScale: 1,
     cloudSpeed: 0.004,
     cloudTopColor: [0.78, 0.8, 0.85],
     dn: 0,
@@ -481,6 +495,7 @@ export class Engine {
     reflectionStrength: 1,
     skyExposure: 0.55,
     skyHorizon: [0.42, 0.55, 0.72],
+    skyModel: 'hosek',
     skyMood: 0.7,
     skyTop: [0.12, 0.32, 0.65],
     stochastic: 0,
@@ -552,9 +567,12 @@ export class Engine {
   private cloudFadeFrom = 0;
   private cloudFadeStartMs = 0;
   private cloudFadeTarget = 0;
-  private cloudLayerOn = 0;
   /** Both slots allocated ONCE at CLOUD_DOME_SIZE² and only ever written in place — the frame bind group
    *  is recorded inside cell bundles and must stay immutable after init. */
+  private cloudFieldBindGroup!: GPUBindGroup;
+  private cloudFieldTexture!: GPUTexture;
+  private cloudFieldView!: GPUTextureView;
+  private cloudLayerOn = 0;
   private cloudTextureA: GPUTexture | null = null;
   private cloudTextureB: GPUTexture | null = null;
   /** Breakable clutter instances (074/20): key hash → the matrix slot to degenerate on a hit. */
@@ -924,7 +942,9 @@ export class Engine {
     frameData[88] = this.dynamicLights.length;
     frameData[89] = env.moonPhase;
     frameData[90] = env.reflectionStrength;
-    frameData[73] = this.cloudLayerOn;
+    // The painted panorama composites only when textures are bound AND the env opts in (sky v2 default =
+    // procedural cirrus+cumulus; the mod deck is a grey veil kept for `?panorama=1` comparison).
+    frameData[73] = this.cloudLayerOn * (env.cloudPanorama > 0.5 ? 1 : 0);
     frameData[74] = env.cloudDark;
     frameData[75] = Math.min(1, Math.max(0, env.cloudAlpha));
     // sunCore/sunCorona = the SUN VISUAL (timecyc columns — the disc is yellow/orange; the white-ish
@@ -936,7 +956,8 @@ export class Engine {
     frameData.set([...env.waterColor, Math.min(1, Math.max(0, env.waterAlpha))], 84);
     // timecyc cloud colours (074/09 sky round 2): lowClouds/bottomClouds tint the panorama deck — dawn
     // turns the WHOLE sky's clouds pink (both sides of the sun), noon reads bright, night near-black.
-    frameData.set([...env.cloudTopColor, 1], 92);
+    // cloudTop.w = the cumulus clump-size multiplier (sky v2 weather identity).
+    frameData.set([...env.cloudTopColor, env.cloudScale], 92);
     frameData.set([...env.cloudBottomColor, 1], 96);
     this.refreshSkyLut(); // before the probe submit — the probe's sky pass samples the LUT too
     this.scheduleProbe(frameData);
@@ -975,6 +996,16 @@ export class Engine {
     const blendBundles = blendCells.sort((a, b) => b.distanceSq - a.distanceSq).map((entry) => entry.bundle);
 
     const encoder = this.device.createCommandEncoder({ label: 'frame' });
+    // Cumulus field bake (sky v2 perf): rewrite the tiny fbm field before anything samples it this frame
+    // (256² × 10 vnoise ≈ fixed ~0.05 ms — full-deck weathers stopped scaling with the swapchain).
+    const cloudFieldPass = encoder.beginRenderPass({
+      colorAttachments: [{ loadOp: 'clear', storeOp: 'store', view: this.cloudFieldView }],
+      label: 'cloud-field',
+    });
+    cloudFieldPass.setPipeline(this.pipelines.get('cloud-field'));
+    cloudFieldPass.setBindGroup(0, this.cloudFieldBindGroup);
+    cloudFieldPass.draw(3);
+    cloudFieldPass.end();
     const pass = encoder.beginRenderPass({
       colorAttachments: [
         {
@@ -1150,6 +1181,23 @@ export class Engine {
       );
     this.cloudTextureA = cloudSlot('cloud-dome-a');
     this.cloudTextureB = cloudSlot('cloud-dome-b');
+    // Cumulus field (sky v2 perf): the tiny bake target the cloud-field pass rewrites each frame.
+    this.cloudFieldTexture = this.resources.createTexture(
+      'texture',
+      {
+        format: 'rg16float',
+        label: 'cloud-field',
+        size: { height: CLOUD_FIELD_SIZE, width: CLOUD_FIELD_SIZE },
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      },
+      CLOUD_FIELD_SIZE * CLOUD_FIELD_SIZE * 4,
+    );
+    this.cloudFieldView = this.cloudFieldTexture.createView();
+    this.cloudFieldBindGroup = this.device.createBindGroup({
+      entries: [{ binding: 0, resource: { buffer: this.frameUniform } }],
+      label: 'cloud-field',
+      layout: this.pipelines.cloudFieldLayout,
+    });
     const sprites = coronaSprites ?? proceduralCoronaSprites();
     this.coronaTexture = this.resources.createTexture(
       'texture',
@@ -1182,6 +1230,7 @@ export class Engine {
         { binding: 4, resource: this.cloudTextureA.createView() },
         { binding: 5, resource: this.cloudTextureB.createView() },
         { binding: 6, resource: this.coronaTexture.createView({ dimension: '2d-array' }) },
+        { binding: 7, resource: this.cloudFieldView },
       ],
       label: 'frame',
       layout: this.pipelines.frameLayout,
@@ -2370,6 +2419,7 @@ export class Engine {
       cloudCover: env.cloudCover,
       cloudDark: env.cloudDark,
       exposure: env.skyExposure,
+      model: env.skyModel,
       mood: env.skyMood,
       pbrNight: 1 - sinkT * sinkT * (3 - 2 * sinkT),
       skyHorizon: env.skyHorizon,

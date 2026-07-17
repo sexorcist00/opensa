@@ -15,6 +15,8 @@ function makeEnvironment(): Environment {
     cloudCover: 0.12,
     cloudDark: 0,
     cloudFadeSeconds: 4,
+    cloudPanorama: 0,
+    cloudScale: 1,
     cloudSpeed: 0.004,
     cloudTopColor: [0.78, 0.8, 0.85],
     dn: 0,
@@ -31,6 +33,7 @@ function makeEnvironment(): Environment {
     reflectionStrength: 1,
     skyExposure: 0.55,
     skyHorizon: [0.42, 0.55, 0.72],
+    skyModel: 'hosek',
     skyMood: 0.7,
     skyTop: [0.12, 0.32, 0.65],
     stochastic: 0,
@@ -152,6 +155,35 @@ describe('createEngineEnvironmentDriver', () => {
       expect(Math.abs(environment.moonDir[0] - before)).toBeLessThan(0.05);
     });
 
+    it('maps the weather cloud identity (coverage/scale/tint) into the environment', () => {
+      const cloudy = makeEnvironment();
+      createEngineEnvironmentDriver(cloudy, { weather: 4 }).apply(12); // CLOUDY_LA
+      expect(cloudy.cloudCover).toBeCloseTo(0.9, 5);
+      expect(cloudy.cloudScale).toBeCloseTo(0.75, 5);
+
+      const rainy = makeEnvironment();
+      createEngineEnvironmentDriver(rainy, { weather: 8 }).apply(12); // RAINY_SF
+      expect(rainy.cloudCover).toBe(1);
+      expect(rainy.cloudDark).toBeCloseTo(0.92, 5);
+      // Storm tint = colder palette than the neutral sunny one (parametric fallback carries it too).
+      const sunny = makeEnvironment();
+      createEngineEnvironmentDriver(sunny, { weather: 1 }).apply(12); // SUNNY_LA
+      expect(rainy.cloudTopColor[2] / rainy.cloudTopColor[0]).toBeGreaterThan(
+        sunny.cloudTopColor[2] / sunny.cloudTopColor[0],
+      );
+    });
+
+    it('blends the cloud identity mid weather transition (prod-parity smooth changes)', () => {
+      const environment = makeEnvironment();
+      // Halfway from SUNNY_LA (cover 0.14) to CLOUDY_LA (cover 0.9) → the midpoint identity.
+      createEngineEnvironmentDriver(environment, {
+        weather: 1,
+        weatherBlend: () => ({ from: 1, t: 0.5, to: 4 }),
+      }).apply(12);
+      expect(environment.cloudCover).toBeCloseTo((0.14 + 0.9) / 2, 5);
+      expect(environment.cloudScale).toBeCloseTo((1 + 0.75) / 2, 5);
+    });
+
     it('ramps darkness across the dusk window', () => {
       const environment = makeEnvironment();
       const driver = createEngineEnvironmentDriver(environment);
@@ -184,11 +216,11 @@ describe('createEngineEnvironmentDriver', () => {
       // disc-elevation gate left the whole 20:00–21:30 window with ZERO moonlight (field: "very dark").
       driver.apply(20.1);
       expect(environment.moonColor[2]).toBeGreaterThan(0.1);
-      // Deep night: (0.34, 0.44, 0.72) × band.moon (1 × the EXTRASUNNY cover fade 1 − 0.14 × 0.85 = 0.881)
-      // × brightness 1 × skylight 0.6 × 0.5 — prod's canvas-host term verbatim.
+      // Deep night: (0.34, 0.44, 0.72) × band.moon (1 × the EXTRASUNNY cover fade 1 − 0.05 × 0.85 = 0.9575,
+      // sky-v2 profile) × brightness 1 × skylight 0.6 × 0.5 — prod's canvas-host term verbatim.
       driver.apply(2);
-      expect(environment.moonColor[0]).toBeCloseTo(0.34 * 0.881 * 0.3, 3);
-      expect(environment.moonColor[2]).toBeCloseTo(0.72 * 0.881 * 0.3, 3);
+      expect(environment.moonColor[0]).toBeCloseTo(0.34 * 0.9575 * 0.3, 3);
+      expect(environment.moonColor[2]).toBeCloseTo(0.72 * 0.9575 * 0.3, 3);
     });
 
     it('drives the water tint from the timecyc columns', () => {
@@ -210,8 +242,8 @@ describe('createEngineEnvironmentDriver', () => {
       expect(environment.skyMood).toBe(0.3);
       expect(environment.cloudAlpha).toBe(0.5);
       expect(environment.emissiveBoost).toBe(2.5);
-      // Weather 7 = CLOUDY → the curated profile's full cover.
-      expect(environment.cloudCover).toBe(1);
+      // Weather 7 = CLOUDY → the curated profile's broken deck (sky v2: 0.9 leaves readable gaps).
+      expect(environment.cloudCover).toBeCloseTo(0.9, 5);
       // ACES on by default (074/09 — prod parity).
       expect(environment.tonemap).toBe(1);
     });

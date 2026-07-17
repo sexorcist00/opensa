@@ -11,7 +11,7 @@ import type { ReactElement } from 'react';
 import { type CameraState, Engine, loadCloudWeather, setupStreaming, type StreamStats } from '@opensa/engine';
 import { createEngineEnvironmentDriver } from '@opensa/game/adapters/engine-environment-driver';
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
-import { roadCarPlacements } from '@opensa/game/adapters/road-cars';
+import { benchRoadCarPlacements } from '@opensa/game/adapters/road-cars';
 import { CharacterControllerSystem } from '@opensa/game/character/character-controller.system';
 import { Logger } from '@opensa/game/diagnostics/logger';
 import { PlayerControlled, RigidBody, Transform, Velocity } from '@opensa/game/ecs/components';
@@ -25,9 +25,9 @@ import { PhysicsSystem } from '@opensa/game/physics/physics.system';
 import { initRapier } from '@opensa/game/physics/rapier';
 import { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
 import { cellsWithin } from '@opensa/game/streaming/grid';
+import { WeatherTransition } from '@opensa/game/weather/weather-transition';
 import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.system';
-import { type AssetFileSystem, gxtKeyHash, oceanFrame, parseTxd, vehiclePathNodes } from '@opensa/renderware';
-import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
+import { type AssetFileSystem, gxtKeyHash, oceanFrame, parseTxd } from '@opensa/renderware';
 import { parseWater } from '@opensa/renderware/parsers/text/water.parser';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';
 import { addComponent, addEntity } from 'bitecs';
@@ -116,6 +116,28 @@ export function EngineCanvasHost({ fs, gameId, onWorldReady, paused = false }: E
   );
 }
 
+/**
+ * Sky A/B overrides (074/06 row 4 sky v2): `?sky=preetham` = the legacy dome vs the Hosek-Wilkie default;
+ * `?clouds=N` = cloud-layer opacity (0 = the naked dome, kills cirrus+cumulus too); `?panorama=1` =
+ * re-composite the retired painted mod panorama (a ~0.45-alpha grey veil that buried the radiance model).
+ */
+function applySkyOverrides(
+  engine: Engine,
+  config: ReturnType<typeof createGameRuntimeConfig>,
+  params: URLSearchParams,
+): void {
+  if (params.get('sky') === 'preetham') {
+    engine.environment.skyModel = 'preetham';
+  }
+  const cloudsParam = Number(params.get('clouds') ?? Number.NaN);
+  if (Number.isFinite(cloudsParam)) {
+    config.graphics.clouds.opacity = cloudsParam;
+  }
+  if (params.get('panorama') === '1') {
+    engine.environment.cloudPanorama = 1;
+  }
+}
+
 async function boot(
   canvas: HTMLCanvasElement,
   fs: AssetFileSystem,
@@ -166,6 +188,7 @@ async function boot(
   new ResizeObserver(resize).observe(canvas);
 
   const engine = new Engine();
+  applySkyOverrides(engine, config, params);
   // SA corona billboards (B6): coronastar for lamps/headlights, coronamoon for the moon. They must exist
   // BEFORE the first cell loads — the frame bind group is baked into every cell bundle.
   await engine.init(canvas, loadCoronaSprites(fs));
@@ -174,17 +197,33 @@ async function boot(
   // colours when the pak carries them, sun/moon arcs built dynamically from config night.litFade, prod
   // graphics tunables (sky mood, cloud opacity, moon brightness, godrays, fog timecycScale) live on.
   const weather = Number(params.get('weather') ?? 0) || 0;
-  const driverFor = (weatherId: number): ReturnType<typeof createEngineEnvironmentDriver> =>
-    createEngineEnvironmentDriver(engine.environment, {
-      config,
-      ...(setup.timecyc !== undefined ? { timecyc: { is24h: setup.timecyc24 ?? false, text: setup.timecyc } } : {}),
-      weather: weatherId,
-    });
-  let environmentDriver = driverFor(weather);
+  // Weather transitions (prod parity): the SAME WeatherTransition class prod's Game runs — one driver,
+  // its blend getter eases from→to over config.weatherTransitionSeconds (smoothstep, like prod).
+  const weatherTransition = new WeatherTransition(weather);
+  const environmentDriver = createEngineEnvironmentDriver(engine.environment, {
+    config,
+    ...(setup.timecyc !== undefined ? { timecyc: { is24h: setup.timecyc24 ?? false, text: setup.timecyc } } : {}),
+    weather,
+    weatherBlend: () => weatherTransition.blend(),
+  });
   // Cloud dome layer (074/06 row 15): pick the ?weather dome when the pak carries clouds.
   if (setup.clouds) {
     void loadCloudWeather(engine, `/${params.get('src') ?? 'pak-map'}`, setup.clouds, weather);
   }
+  // '[' / ']' cycle the weather LIVE (sky v2 field iteration — a URL change costs a whole VFS reboot).
+  let liveWeather = weather;
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== 'BracketLeft' && event.code !== 'BracketRight') {
+      return;
+    }
+    liveWeather = (liveWeather + (event.code === 'BracketRight' ? 1 : 19)) % 20;
+    weatherTransition.begin(liveWeather, config.weatherTransitionSeconds);
+    if (setup.clouds) {
+      void loadCloudWeather(engine, `/${params.get('src') ?? 'pak-map'}`, setup.clouds, liveWeather);
+    }
+    // eslint-disable-next-line no-console -- field-iteration feedback (which weather id is on screen)
+    console.log(`[engine-host] weather ${liveWeather}`);
+  });
   void installWater(engine, fs, setup.water, `/${params.get('src') ?? 'pak-map'}`);
 
   // Physics + collision streaming (REUSED, pure): the adapter prepares the map defs once, then streams
@@ -530,6 +569,7 @@ async function boot(
         // A day passed: the moon walks its ~29.5-day cycle, so a week of play changes its face.
         engine.environment.moonPhase = (engine.environment.moonPhase + 1 / 29.5) % 1;
       }
+      weatherTransition.tick(dt);
       environmentDriver.apply(hour);
       zoneSystem.update();
       if (minutesNow() !== lastMinutes) {
@@ -640,7 +680,7 @@ async function boot(
     };
     const runScene = async (scene: BenchScene): Promise<void> => {
       hour = scene.hour;
-      environmentDriver = driverFor(scene.weather);
+      weatherTransition.begin(scene.weather, 0); // instant — bench scenes must not sample mid-blend
       if (setup.clouds) {
         await loadCloudWeather(engine, `/${params.get('src') ?? 'pak-map'}`, setup.clouds, scene.weather);
       }
@@ -706,10 +746,21 @@ async function boot(
     void (async (): Promise<void> => {
       // Road cars (074 bench realism): typed cars from vehicles.ide on the path-node road graph around
       // every measured scene, registered LAZILY — the vehicle-lod system streams them exactly like the
-      // game's own parked cars, so each scene measures a realistic vehicle load.
-      const cars = registerBenchRoadCars(fs, vehicles, scenes);
+      // game's own parked cars, so each scene measures a realistic vehicle load. Shared with the prod
+      // three host (canvas-host) so the C1 baseline sweeps the SAME population.
+      const placements = benchRoadCarPlacements(
+        fs,
+        scenes,
+        new URLSearchParams(window.location.search).get('benchcar'),
+      );
+      if (vehicles && placements.length > 0) {
+        vehicles.register(placements);
+      } else if (scenes.some((scene) => scene.cars !== undefined)) {
+        // eslint-disable-next-line no-console -- a silent empty street would read as a false measurement
+        console.warn('[bench] road cars SKIPPED: no vehicle system, path graph or car models');
+      }
       // eslint-disable-next-line no-console -- bench CLI feedback (the record's context, same protocol)
-      console.log(`[bench] road cars registered: ${cars}`);
+      console.log(`[bench] road cars registered: ${vehicles ? placements.length : 0}`);
       for (const scene of scenes) {
         await runScene(scene);
       }
@@ -808,52 +859,6 @@ function loadWaterTexture(
  */
 function probeCenterOf(enabled: boolean, focus: readonly [number, number, number]): [number, number, number] | null {
   return enabled ? [focus[0], focus[1] + 1.0, focus[2]] : null;
-}
-
-/**
- * Bench road cars (074 bench realism): parse the game's own road graph (`data/Paths/NODES*.DAT`) and
- * vehicles.ide, scatter TYPE-`car` models along the roads around every measured scene (per-scene
- * radius/spacing — cities dense, countryside sparse), and register them for lazy distance streaming.
- * Deterministic — the same install measures the same street every sweep. Returns the placement count.
- */
-function registerBenchRoadCars(
-  fs: AssetFileSystem,
-  vehicles: EngineVehicles | null,
-  scenes: readonly BenchScene[],
-): number {
-  if (!vehicles) {
-    return 0;
-  }
-  const regions = scenes
-    .filter((scene) => scene.cars !== undefined)
-    .map((scene) => ({ position: scene.anchor, radius: scene.cars!.radius, spacing: scene.cars!.spacing }));
-  if (regions.length === 0) {
-    return 0;
-  }
-  const areas = new Map<number, ArrayBuffer>();
-  for (let area = 0; area < 64; area += 1) {
-    const bytes = fs.get(`data/paths/nodes${area}.dat`) ?? fs.get(`data/Paths/NODES${area}.DAT`);
-    if (bytes) {
-      areas.set(area, bytes);
-    }
-  }
-  const defs = parseVehicleDefs(fs.getText('data/vehicles.ide') ?? '');
-  // `?benchcar=<model>` pins every road car to ONE model — the per-model isolation knob (a flipped car is
-  // either a bad spot or a bad collider; one model across all spots answers which).
-  const pinned = new URLSearchParams(window.location.search).get('benchcar');
-  const models = pinned
-    ? [pinned.toLowerCase()]
-    : [...defs.values()].filter((def) => def.type === 'car').map((def) => def.model.toLowerCase());
-  if (areas.size === 0 || models.length === 0) {
-    // eslint-disable-next-line no-console -- a silent empty street would read as a false measurement
-    console.warn(`[bench] road cars SKIPPED: path areas ${areas.size}, car models ${models.length}`);
-
-    return 0;
-  }
-  const placements = roadCarPlacements(vehiclePathNodes(areas), { models, regions });
-  vehicles.register(placements);
-
-  return placements.length;
 }
 
 /** GTA Z-up point → engine Y-up: (x, y, z) → (x, z, −y). */

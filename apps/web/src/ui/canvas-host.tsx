@@ -5,6 +5,7 @@ import type { SpawnedVehicle, VehiclePlacement } from '@opensa/game/vehicle/vehi
 
 import { Game } from '@opensa/game';
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
+import { benchRoadCarPlacements } from '@opensa/game/adapters/road-cars';
 import { AnimationController } from '@opensa/game/character/animation-controller';
 import { CharacterAnimationSystem } from '@opensa/game/character/character-animation.system';
 import { orientCharacter } from '@opensa/game/character/orient-character';
@@ -35,6 +36,7 @@ import { VehicleHeadlightSystem } from '@opensa/game/vehicle/vehicle-headlight.s
 import { quatFromHeading } from '@opensa/game/vehicle/vehicle-lamps';
 import { VehicleLodSystem } from '@opensa/game/vehicle/vehicle-lod.system';
 import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.system';
+import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
 import { seaState } from '@opensa/game/water/wave-params';
 import { weatherForCity } from '@opensa/game/weather/weather-zones';
 import { cityAt, type CityBox, cityFromLevel, isDesertZone } from '@opensa/game/zones/city';
@@ -149,8 +151,6 @@ const WATER_LAYER = 3;
 const WORLD_READY_TIMEOUT_MS = 12000; // reveal the game even if streaming never settles (failed cell)
 const GROUNDING_TIMEOUT_MS = 3000; // after the world settled, reveal even if grounding is delayed
 const FLY_GROUND_MAX_DROP = 2000; // max downward ray (m) to find the ground when leaving fly mode
-const GROUND_SNAP_LIFT = 1.5; // start the map-car ground ray this far above the generator (clears a floor it sits in)
-const GROUND_SNAP_DROP = 5; // max downward distance (m) to find the ground beneath a map-car generator
 
 // The animation (idle/walk) stands the skeleton up in GTA Z-up, so the model needs
 // NO rotation; offset nudges the feet onto the box base. (Tune offset/scale here.)
@@ -1198,16 +1198,15 @@ function bootstrap(
             anchor.from[2] + 0.5,
           ]
         : placement.position;
-      // Map car generators (plan 059): seat the body on the ground beneath the IPL spot so it doesn't penetrate
-      // terrain/props and get launched. Raycast from just above the generator; keep the original z if none found.
+      // Map car generators (plan 059) + bench road cars (074): seat the body on the ground so it doesn't
+      // penetrate terrain/props and get launched (pitch with the street, slide off blocked spots, defer
+      // until the collision cell exists — the shared helper carries the bench field lessons; a deferred
+      // throw is retried every frame by the vehicle-lod stream).
+      let pitch = 0;
       if (!anchor && placement.groundSnap) {
-        const ground = character.physics.groundBelow(
-          [position[0], position[1], position[2] + GROUND_SNAP_LIFT],
-          GROUND_SNAP_DROP,
-        );
-        if (ground !== null) {
-          position = [position[0], position[1], ground + halfExtents[2] + 0.1];
-        }
+        const seated = seatVehicleOnGround(character.physics, position, heading, halfExtents);
+        position = seated.position;
+        pitch = seated.pitch;
       }
       object.position.set(position[0], position[1], position[2]);
       object.rotation.z = heading;
@@ -1225,6 +1224,7 @@ function bootstrap(
         handling.mass,
         wheels,
         halfExtents,
+        pitch,
       );
       // The physics system keeps these live from the body; seed with the placement.
       const live: [number, number, number] = [position[0], position[1], position[2]];
@@ -1356,6 +1356,7 @@ function bootstrap(
           `[bench] unknown scene '${benchKey}' — known: all, ${BENCH_SCENES.map((entry) => entry.key).join(', ')}`,
         );
       } else {
+        registerBenchRoadCars(fs, scenes, vehicleLod);
         void game
           .withStreamingFreeze(() => undefined, WORLD_READY_TIMEOUT_MS)
           .then(async () => {
@@ -1526,6 +1527,20 @@ function createSkyView(sky: SkyPlugin, skyLite: null | SkyLiteSystem): SkyView {
     sunShadow: () => sky.getSunShadow(),
     sunSin: () => sky.getSunSin(),
   };
+}
+
+/**
+ * Bench road cars (074 bench realism): the SAME deterministic population as the own-engine host — typed
+ * cars from vehicles.ide on the path-node road graph around every measured scene, registered lazily so
+ * the vehicle-lod stream spawns each only when the view nears it (C1 compares identical streets).
+ */
+function registerBenchRoadCars(fs: AssetFileSystem, scenes: readonly BenchScene[], vehicleLod: VehicleLodSystem): void {
+  const placements = benchRoadCarPlacements(fs, scenes, new URLSearchParams(window.location.search).get('benchcar'));
+  for (const placement of placements) {
+    vehicleLod.register(placement);
+  }
+  // eslint-disable-next-line no-console -- bench CLI feedback (the record's context, same protocol)
+  console.log(`[bench] road cars registered: ${placements.length}`);
 }
 
 /** After `game.init()` (the scene exists): add the rig's lights + tick it (and the fog) as systems. */

@@ -24,6 +24,7 @@ export type PipelineId =
   | 'bloom-down'
   | 'bloom-prefilter'
   | 'bloom-up'
+  | 'cloud-field'
   | 'clutter-cutout'
   | 'clutter-opaque'
   | 'corona'
@@ -55,6 +56,8 @@ export interface PipelineSet {
   bloomUpLayout: GPUBindGroupLayout;
   /** group(1): per-cell uniform (origin). */
   cellLayout: GPUBindGroupLayout;
+  /** group(0) of the cloud-field bake (sky v2 perf): the frame uniform alone. */
+  cloudFieldLayout: GPUBindGroupLayout;
   /** group(1) of the clutter pipeline (074/19): per-instance matrices (storage) + the model texture + sampler. */
   clutterLayout: GPUBindGroupLayout;
   /** group(1) of the debris pipeline: the break's uniform + its shard texture ARRAY + sampler (B7·a). */
@@ -106,6 +109,9 @@ export function compileAll(
       // Created ONCE at init and written in place — the frame bind group is recorded inside cell bundles and
       // is immutable (the row-15 lesson: never destroy or rebuild anything a bundle references).
       { binding: 6, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
+      // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm over the sky projection, rebuilt by the
+      // tiny 'cloud-field' pass each frame — full-deck weathers cost one tap instead of 10 vnoise/pixel.
+      { binding: 7, texture: {}, visibility: GPUShaderStage.FRAGMENT },
     ],
     label: 'frame',
   });
@@ -483,6 +489,23 @@ export function compileAll(
   );
   const { bloomLayout, bloomUpLayout } = compileBloomPipelines(device, colorFormat, pipelines);
   const probeMipLayout = compileProbePipelines(device, colorFormat, pipelines);
+  // Cumulus field bake (sky v2 perf): a 256² rg16float target, the frame uniform alone — its own tiny
+  // layout because the pass RENDERS INTO the texture the frame group binds (same-pass usage conflict).
+  const cloudFieldLayout = device.createBindGroupLayout({
+    entries: [{ binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT }],
+    label: 'cloud-field',
+  });
+  const cloudFieldModule = device.createShaderModule({ code: resolveShader('cloud-field'), label: 'cloud-field' });
+  pipelines.set(
+    'cloud-field',
+    device.createRenderPipeline({
+      fragment: { entryPoint: 'fsCloudField', module: cloudFieldModule, targets: [{ format: 'rg16float' }] },
+      label: 'cloud-field',
+      layout: device.createPipelineLayout({ bindGroupLayouts: [cloudFieldLayout], label: 'cloud-field' }),
+      primitive: { topology: 'triangle-list' },
+      vertex: { entryPoint: 'vsCloudField', module: cloudFieldModule },
+    }),
+  );
   // Probe DEBUG view (074/16): fullscreen cube-by-camera-ray, drawn at the END of the world pass over
   // everything (depth 'always') — the orientation check that beats convention-table archaeology.
   const probeViewLayout = device.createBindGroupLayout({
@@ -591,6 +614,7 @@ export function compileAll(
     bloomLayout,
     bloomUpLayout,
     cellLayout,
+    cloudFieldLayout,
     clutterLayout,
     debrisLayout,
     frameLayout,

@@ -4,8 +4,11 @@
  * for a seed, so a bench sweep measures a REAL vehicle load instead of an empty street. Renderer-agnostic:
  * the product is plain {@link VehiclePlacement}s for the vehicle-lod system's lazy `register`.
  */
-import type { VehiclePathNode } from '@opensa/renderware';
+import type { AssetFileSystem, VehiclePathNode } from '@opensa/renderware';
 
+import { parseVehicleDefs, vehiclePathNodes } from '@opensa/renderware';
+
+import type { BenchScene } from '../perf/bench';
 import type { VehiclePlacement } from '../vehicle/vehicle-lod.system';
 
 import { positionSeed } from './popcycle-cars';
@@ -28,6 +31,43 @@ export interface RoadCarRegion {
   radius: number;
   /** Minimum distance between two placed cars — the density knob (city ≈ 30, countryside ≈ 90). */
   spacing: number;
+}
+
+/**
+ * The bench road-car population straight from the game fs — shared by BOTH hosts (three prod and
+ * `?engine=opensa`) so a C1 baseline sweep measures the SAME streets: road graph = `data/Paths/NODES*.DAT`
+ * loose files, models = TYPE-`car` rows of `vehicles.ide` (never a plane), regions = the scenes' `cars`
+ * knobs. `pinnedModel` (`?benchcar=`) pins every spot to one model — the per-model isolation knob (a
+ * flipped car is either a bad spot or a bad collider; one model across all spots answers which).
+ * Returns `[]` when no scene asks for cars or the game ships no path graph / no car defs.
+ */
+export function benchRoadCarPlacements(
+  fs: AssetFileSystem,
+  scenes: readonly BenchScene[],
+  pinnedModel?: null | string,
+): VehiclePlacement[] {
+  const regions = scenes
+    .filter((scene) => scene.cars !== undefined)
+    .map((scene) => ({ position: scene.anchor, radius: scene.cars!.radius, spacing: scene.cars!.spacing }));
+  if (regions.length === 0) {
+    return [];
+  }
+  const areas = new Map<number, ArrayBuffer>();
+  for (let area = 0; area < 64; area += 1) {
+    const bytes = fs.get(`data/paths/nodes${area}.dat`) ?? fs.get(`data/Paths/NODES${area}.DAT`);
+    if (bytes) {
+      areas.set(area, bytes);
+    }
+  }
+  const defs = parseVehicleDefs(fs.getText('data/vehicles.ide') ?? '');
+  const models = pinnedModel
+    ? [pinnedModel.toLowerCase()]
+    : [...defs.values()].filter((def) => def.type === 'car').map((def) => def.model.toLowerCase());
+  if (areas.size === 0 || models.length === 0) {
+    return [];
+  }
+
+  return roadCarPlacements(vehiclePathNodes(areas), { models, regions });
 }
 
 /**

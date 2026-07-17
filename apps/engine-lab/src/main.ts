@@ -31,7 +31,7 @@ import { loadVehicleProbe } from './vehicle';
 
 const CELL_SIZE = 250;
 
-/** `?ao=` / `?sunvis=` / `?wind=` / `?stoch=` / `?scale=` A/B overrides (074/07, 06 row 10, 074/12, 074/09). */
+/** `?ao=` / `?sunvis=` / `?wind=` / `?stoch=` / `?scale=` / `?sky=` A/B overrides (074/07, 06 rows 4+10, 074/12, 074/09). */
 function applyEnvironmentOverrides(engine: Engine, params: URLSearchParams): void {
   const aoParam = Number(params.get('ao') ?? Number.NaN);
   if (Number.isFinite(aoParam)) {
@@ -52,6 +52,19 @@ function applyEnvironmentOverrides(engine: Engine, params: URLSearchParams): voi
   const stochParam = Number(params.get('stoch') ?? Number.NaN);
   if (Number.isFinite(stochParam)) {
     engine.environment.stochastic = stochParam;
+  }
+  // `?sky=preetham` — the 074/06 row-4 day-sky A/B (Hosek-Wilkie is the default).
+  if (params.get('sky') === 'preetham') {
+    engine.environment.skyModel = 'preetham';
+  }
+  // `?clouds=N` — cloud-layer opacity override (0 = the naked dome, kills cirrus+cumulus too).
+  const cloudsParam = Number(params.get('clouds') ?? Number.NaN);
+  if (Number.isFinite(cloudsParam)) {
+    engine.environment.cloudAlpha = cloudsParam;
+  }
+  // `?panorama=1` — re-composite the painted mod panorama (sky v2 retired it by default).
+  if (params.get('panorama') === '1') {
+    engine.environment.cloudPanorama = 1;
   }
 }
 

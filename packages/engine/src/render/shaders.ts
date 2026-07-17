@@ -108,6 +108,39 @@ fn fsBloomUp(in: BloomOut) -> @location(0) vec4f {
 }
 `,
   /**
+   * Cumulus field bake (074/06 row 4 sky v2 perf): rg = [n, mass] fbm over the SOFTENED sky projection
+   * p = dir.xz / (dir.y + 0.18), mapped uv = p/12 + 0.5 (|p| ≤ 5.6 at the horizon fits the domain; a
+   * hard floor froze the mapping below it and storm decks streaked vertically — field bug). Drift and
+   * the per-weather clump scale (cloudTop.w) bake IN, so consumers sample by projection alone — a 256²
+   * × 10 vnoise pass per frame replaces 10 vnoise per SKY PIXEL (field round: full decks stuttered at 2×).
+   */
+  'cloud-field': /* wgsl */ `
+#include <frame>
+
+struct CloudFieldOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+};
+
+@vertex
+fn vsCloudField(@builtin(vertex_index) index: u32) -> CloudFieldOut {
+  var corners = array<vec2f, 3>(vec2f(-1.0, -3.0), vec2f(3.0, 1.0), vec2f(-1.0, 1.0));
+  let corner = corners[index];
+  var out: CloudFieldOut;
+  out.clip = vec4f(corner, 0.0, 1.0);
+  out.uv = vec2f(corner.x * 0.5 + 0.5, 0.5 - corner.y * 0.5);
+  return out;
+}
+
+@fragment
+fn fsCloudField(in: CloudFieldOut) -> @location(0) vec4f {
+  let t = frame.params2.z;
+  let p = (in.uv - vec2f(0.5)) * 12.0;
+  let cuv = p * (0.45 * frame.cloudTop.w) + vec2f(t * 0.004, t * 0.002);
+  return vec4f(skyFbm(cuv), skyFbm(cuv * 0.4 + vec2f(19.0)), 0.0, 1.0);
+}
+`,
+  /**
    * Procedural clutter (074/19 B7·d): grass/bushes/rocks scattered per cell from procobj.dat, drawn INSTANCED —
    * thousands of copies of a handful of models, one draw per (cell × model). Per-instance world matrix in a
    * storage buffer (instance_index), world-material lighting (vertex-colour prelit + sun/moon + the 068 fog).
@@ -366,6 +399,9 @@ struct Frame {
 @group(0) @binding(5) var cloudDomeB: texture_2d<f32>;
 // SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
 @group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
+// Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
+// cloud-field pass each frame — full-deck weathers pay one tap here instead of 10 vnoise per pixel.
+@group(0) @binding(7) var cloudField: texture_2d<f32>;
 
 // Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
 // fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
@@ -426,13 +462,118 @@ fn skyCelestialFor(dir: vec3f) -> vec3f {
   return (sun + moon) * horizonClip;
 }
 
+// Shared value-noise stack (prod SKY_BASE port): hash21 seeds the starfield (sky module) AND the
+// procedural cloud layers; skyFbm drives cirrus (sky module) + the cumulus deck below. Lives in the
+// frame include because cloudLayerFor (car reflections, every rigid consumer) needs cumulus too.
+fn hash21(cell: vec2f) -> f32 {
+  return fract(sin(dot(cell, vec2f(127.1, 311.7))) * 43758.5453);
+}
+
+fn skyVnoise(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash21(i), hash21(i + vec2f(1.0, 0.0)), u.x),
+    mix(hash21(i + vec2f(0.0, 1.0)), hash21(i + vec2f(1.0, 1.0)), u.x),
+    u.y,
+  );
+}
+
+fn skyFbm(p: vec2f) -> f32 {
+  var v = 0.0;
+  var a = 0.5;
+  var q = p;
+  for (var i = 0u; i < 5u; i += 1u) {
+    v += a * skyVnoise(q);
+    q = q * 2.03 + vec2f(1.7);
+    a *= 0.5;
+  }
+  return v;
+}
+
+// Cloud palette (sky v2): timecyc lowClouds/bottomClouds carry the authored HUE (pink dawns, blue
+// nights) but their LUMINANCE was authored for SA's gamma-space multiply — used raw under linear+ACES
+// the noon deck reads as near-black smudges (field: the panorama looked navy for the same reason).
+// Same move as the sky-LUT mood tint: normalize the palette to a hue and drive brightness from a wide
+// day ease (sunlit white tops ~1.05, shaded bases ~0.58; night floors keep moonlit decks visible).
+struct CloudPalette {
+  top: vec3f,
+  bottom: vec3f,
+}
+
+fn cloudPalette() -> CloudPalette {
+  let day = smoothstep(-0.08, 0.25, frame.sunDir.y);
+  let top = frame.cloudTop.rgb;
+  let bottom = frame.cloudBottom.rgb;
+  let topHue = top / max(max(top.r, max(top.g, top.b)), 1e-3);
+  let botHue = bottom / max(max(bottom.r, max(bottom.g, bottom.b)), 1e-3);
+  return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
+}
+
+// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is retired):
+// coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
+// by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
+// huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
+// (the audit rule — a bare sunDir.y sign test snaps at 20:00/6:00). rgb = lit cloud colour, a = density.
+fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
+  if (dir.y <= 0.02) {
+    return vec4f(0.0);
+  }
+  let t = frame.params2.z;
+  // SOFTENED plane projection dir.xz/(dir.y + 0.18) — a hard floor (max(dir.y, k)) FREEZES the mapping
+  // below k: every elevation under it samples the same field point along a vertical line, and storm
+  // decks smeared DOWN to the horizon in vertical streaks (field bug, present in prod too at k=0.12).
+  // The soft denominator compresses features toward the horizon like real perspective instead.
+  let p = dir.xz / (dir.y + 0.18);
+  // n/mass come from the BAKED field (one tap — the field pass owns the 10-vnoise cost per 256² texel,
+  // so a full storm deck no longer scales with the swapchain resolution; field round: cloudy stuttered
+  // at 2× retina). The field bakes drift and the per-weather clump scale in, so p maps statically.
+  let field = textureSampleLevel(cloudField, skyLutSampler, p / 12.0 + vec2f(0.5), 0.0);
+  let n = field.r;
+  let cover = clamp(frame.sunCorona.w, 0.0, 1.0);
+  // Clear-sky edge 0.62 (prod ran 0.92): prod could afford an empty procedural deck because the painted
+  // panorama carried the fair-weather clouds — retired now, so a sunny LS day (cover ~0.14) must still
+  // scatter real puffs (~35-40 % of the dome at density ~0.25 — measured; 0.74 read as an empty sky in
+  // the field). Heavy weathers converge to the same full deck as prod.
+  let edge = mix(0.62, -0.25, cover);
+  let density = smoothstep(edge, edge + 0.20, n);
+  // Early out for clear pixels — skip the detail octave and the palette math.
+  if (density <= 0.002) {
+    return vec4f(0.0);
+  }
+  let mass = field.g;
+  // cloudTop.w = the per-weather clump-size multiplier (sky v2: SMOG big dirty clumps, storm banks) —
+  // recomputed here only for the in-shader DETAIL octave (it needs a higher frequency than the field).
+  let cuv = p * (0.45 * frame.cloudTop.w) + vec2f(t * 0.004, t * 0.002);
+  let palette = cloudPalette();
+  var cloud = mix(palette.bottom, palette.top, smoothstep(0.30, 0.80, n));
+  let bright = smoothstep(0.20, 0.72, n) * mix(0.35, 1.0, smoothstep(0.30, 0.72, mass));
+  cloud *= mix(1.0, mix(0.16, 1.0, bright), frame.params3.z);
+  // Detail octave STRENGTHENS with coverage: a full deck has density 1 everywhere, so all its readable
+  // structure must come from colour modulation (field: CLOUDY read as a flat grey wash without this).
+  let det = skyVnoise(cuv * 5.7 + vec2f(t * 0.006, 0.0));
+  cloud *= 1.0 + (det - 0.5) * mix(0.48, 0.9, cover);
+  let golden = (0.25 + 0.65 * (1.0 - clamp(frame.sunDir.y, 0.0, 1.0))) *
+    smoothstep(0.0, 0.045, frame.sunDir.y);
+  let clearness = 1.0 - cover * 0.85;
+  cloud += frame.sunCorona.rgb * (pow(sunDot, 5.0) * golden * clearness * (0.25 + 0.75 * bright));
+  let horizon = smoothstep(0.02, 0.30, dir.y);
+  return vec4f(cloud, density * horizon);
+}
+
 // The cloud dome in a direction (074/06 row 15), factored out of fsSky so a CAR can reflect the clouds too:
 // rgb = the lit cloud colour, a = its coverage. Azimuthal-equidistant mapping measured off the mod's sphere
 // (uv = 0.5 -/+ dir_horiz*k*theta, k ~ 0.297/rad), slow rotation on the wind clock, brightness following the
-// timecyc horizon mood with a night floor. Zero when no dome is bound or below the horizon.
+// timecyc horizon mood with a night floor. Falls back to the procedural cumulus when the panorama is off.
 fn cloudLayerFor(dir: vec3f) -> vec4f {
-  if (frame.params3.y <= 0.5 || dir.y <= 0.0) {
+  if (dir.y <= 0.0) {
     return vec4f(0.0);
+  }
+  if (frame.params3.y <= 0.5) {
+    // Panorama retired (sky v2): the analytic reflection fallback mirrors the procedural cumulus instead,
+    // so probe-off cars still catch clouds. The probe path renders the real fsSky and needs nothing here.
+    return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
   }
   let theta = acos(clamp(dir.y, -1.0, 1.0));
   let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
@@ -726,6 +867,7 @@ fn fsPed(in: PedVsOut) -> @location(0) vec4f {
   return vec4f(color, 1.0);
 }
 `,
+
   post: /* wgsl */ `
 // Godrays composite (074/09 stage 1): the scene renders into a LINEAR rgba16float target (the sun disc's
 // 3–6× overshoot survives), and this fullscreen pass radial-blurs the thresholded brightness toward the
@@ -1247,11 +1389,8 @@ fn vsSky(@builtin(vertex_index) index: u32) -> SkyOut {
 
 // Procedural night starfield (074/06 row 16, the prod sky.plugin port): gnomonic-projected cell hash —
 // ~one star per 10 % of cells, random brightness, gentle twinkle, horizon taper. SKY PASS ONLY: fog and
-// world fragments share skyFogFor and must NOT twinkle.
-fn hash21(cell: vec2f) -> f32 {
-  return fract(sin(dot(cell, vec2f(127.1, 311.7))) * 43758.5453);
-}
-
+// world fragments share skyFogFor and must NOT twinkle. (hash21/skyVnoise/skyFbm live in the frame
+// include — the cumulus deck and the reflection fallback need them outside the sky module.)
 fn starField(dir: vec3f) -> f32 {
   if (dir.y <= 0.02) {
     return 0.0;
@@ -1269,50 +1408,30 @@ fn starField(dir: vec3f) -> f32 {
   return point * bright * twinkle * taper;
 }
 
-// Value-noise fbm (074/09 sky round 3 — the prod SKY_BASE port): drives the CIRRUS layer below.
-fn skyVnoise(p: vec2f) -> f32 {
-  let i = floor(p);
-  let f = fract(p);
-  let u = f * f * (3.0 - 2.0 * f);
-  return mix(
-    mix(hash21(i), hash21(i + vec2f(1.0, 0.0)), u.x),
-    mix(hash21(i + vec2f(0.0, 1.0)), hash21(i + vec2f(1.0, 1.0)), u.x),
-    u.y,
-  );
-}
-
-fn skyFbm(p: vec2f) -> f32 {
-  var v = 0.0;
-  var a = 0.5;
-  var q = p;
-  for (var i = 0u; i < 5u; i += 1u) {
-    v += a * skyVnoise(q);
-    q = q * 2.03 + vec2f(1.7);
-    a *= 0.5;
-  }
-  return v;
-}
-
 // CIRRUS (prod applyClouds layer 1): thin, high, stretched wisps drifting slowly on their own heading —
-// what makes a clear day sky read ALIVE without touching the painted panorama deck (the user keeps the
-// skybox). They belong to clear skies, so coverage suppresses them; timecyc cloud colours tint them.
+// what makes a clear day sky read ALIVE. They belong to clear skies, so coverage suppresses them;
+// timecyc cloud colours tint them.
 fn cirrusFor(dir: vec3f, sunDot: f32) -> vec4f {
   if (dir.y <= 0.02) {
     return vec4f(0.0);
   }
   let t = frame.params2.z;
-  let cuv = dir.xz / max(dir.y, 0.12) * vec2f(0.9, 0.35) + vec2f(t * 0.0013, t * -0.0007) + vec2f(31.7);
+  // Same softened projection as the cumulus (a hard floor froze the band under it into vertical smears).
+  let cuv = dir.xz / (dir.y + 0.18) * vec2f(0.9, 0.35) + vec2f(t * 0.0013, t * -0.0007) + vec2f(31.7);
   let cover = clamp(frame.sunCorona.w, 0.0, 1.0);
   let amount = smoothstep(0.60, 0.92, skyFbm(cuv)) * (1.0 - cover) * 0.55;
   // The golden term peaks AT the horizon, so a hard y-above-0 select SNAPPED it (0 → 0.9) the frame the
   // sun crossed — the 19:59/5:59 sky jump. ~8 game-minutes of climb (y 0 → 0.045) ease it in/out instead.
   let golden = (0.25 + 0.65 * (1.0 - clamp(frame.sunDir.y, 0.0, 1.0))) *
     smoothstep(0.0, 0.045, frame.sunDir.y);
-  let tint = mix(frame.cloudBottom.rgb, frame.cloudTop.rgb, 0.85) * 1.5 +
+  // The normalized palette (sky v2) — the raw timecyc luminance read as dark smears under linear+ACES.
+  let palette = cloudPalette();
+  let tint = mix(palette.bottom, palette.top, 0.85) +
     frame.sunCorona.rgb * (golden * 0.2 + pow(sunDot, 5.0) * golden * 0.5);
   let horizon = smoothstep(0.02, 0.30, dir.y);
   return vec4f(tint, amount * horizon);
 }
+
 
 @fragment
 fn fsSky(in: SkyOut) -> @location(0) vec4f {
@@ -1326,10 +1445,15 @@ fn fsSky(in: SkyOut) -> @location(0) vec4f {
   // params3.y = cloud layer enable (0 = no texture bound).
   var occl = 0.0;
   let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
-  // CIRRUS wisps UNDER the painted deck (074/09 sky round 3): the clear-day sky motion the panorama
-  // cannot provide; rides the cloud-layer alpha knob so graphics.clouds.opacity still governs.
+  // CIRRUS wisps (074/09 sky round 3): thin high streaks; rides the cloud-layer alpha knob so
+  // graphics.clouds.opacity still governs.
   let cirrus = cirrusFor(dir, sunDot);
   col = mix(col, cirrus.rgb, cirrus.a * frame.params3.w);
+  // CUMULUS deck (sky v2): the procedural weather clouds that replace the painted panorama. Dense masses
+  // occlude the sun/moon discs and stars exactly like the old deck alpha did.
+  let cumulus = cumulusFor(dir, sunDot);
+  col = mix(col, cumulus.rgb, cumulus.a * frame.params3.w);
+  occl = cumulus.a * clamp(frame.params3.w * 1.6, 0.0, 1.0);
   if (frame.params3.y > 0.5 && dir.y > 0.0) {
     let theta = acos(clamp(dir.y, -1.0, 1.0));
     let horiz = normalize(vec2f(dir.x, -dir.z) + vec2f(1e-5, 0.0));
@@ -1362,7 +1486,8 @@ fn fsSky(in: SkyOut) -> @location(0) vec4f {
     col = mix(col, cloud.rgb * tint + goldenRim, alpha * frame.params3.w);
     // Celestial occlusion uses the TEXTURE alpha, only gated (not scaled) by the layer-alpha knob: an
     // opaque overcast deck must fully hide the discs (field: the moon glowed through CLOUDY at 0.85).
-    occl = alpha * clamp(frame.params3.w * 1.6, 0.0, 1.0);
+    // max() — the procedural cumulus underneath keeps its own occlusion when the panorama is thin.
+    occl = max(occl, alpha * clamp(frame.params3.w * 1.6, 0.0, 1.0));
     // Forward scatter through the deck (godrays proper land with plan 09's HDR chain): a silver lining
     // where half-opaque cloud edges sit near the sun + a milky diffuse blob through thick cover.
     let scatter = pow(sunDot, 12.0) * occl * (1.0 - occl) * 1.6 +

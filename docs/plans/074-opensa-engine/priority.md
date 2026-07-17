@@ -15,10 +15,13 @@ PARKED as leftover (0.6.0 plan).
 ① ~~map-optimizer normals batch~~ ✅ (2026-07-15) → ② ~~09 COMPLETION: ACES + bloom + tiers~~ ✅
 **FULLY SHIPPED + benched 2026-07-16** (ACES ≈ free; post chain 1.05–1.25 ms ≤ 3 ms budget; renderScale =
 the ONE tier knob — msaa/bloomq field-tested and removed; series rows 09·ACES/bloom/post-fix/tiers) →
-**③ HERE: the LOOK ROUND (gate lifted)** — sky rounds 1–3 shipped same day (dawn/dusk accepted; day sky
-verdict pending — skybox stays, options: panorama parallax / prod cumulus port / faster spin; night
-suspect: the hemisphere skylight fill the engine world lacks) → then the deferred verdicts (16 paint /
-17 lighting / hd-realtime concept) → the WebGL-prod `?bench=all` baseline → C1.
+**③ the LOOK ROUND** — sky rounds 1–3 shipped (dawn/dusk accepted) → **SKY v2 CLOSED, field-ACCEPTED
+2026-07-17** (Hosek-Wilkie LUT · painted panorama retired · procedural cirrus/cumulus with per-weather
+identities · cloud-field bake · softened horizon projection · prod WeatherTransition wired — see the
+readme handoff + 06 ledger row 4). **NEXT look item = FOG (the user's pre-C1 arc #2)** → then the
+deferred verdicts (16 paint / 17 lighting / hd-realtime concept) → ~~the WebGL-prod `?bench=all`
+baseline~~ ✅ **CAPTURED 2026-07-17** (road cars wired into canvas-host, same 841-car population; prod
+13.5–26.8 fps on land vs engine 120 Hz everywhere — series.md § C1 WebGL-prod baseline) → C1.
 B5 vehicles ✅ → **B5r VEHICLE REFLECTIONS — v1 SHIPPED but REJECTED in the field; the deep rework is now
 its own plan, [16](16-vehicle-paint.md)** (the gap is structural: no tonemapper, no environment probe — both
 of which the three path HAS, which is why prod looked better. Not a tuning problem) → B6 2dfx particles +

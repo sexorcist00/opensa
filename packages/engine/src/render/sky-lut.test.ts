@@ -63,10 +63,33 @@ describe('buildSkyLut', () => {
       expect(brightTexel[2]).toBeGreaterThan(dimTexel[2]);
     });
 
-    it('tracks pbrNight and exposure in the rebuild key', () => {
+    it('tracks pbrNight, exposure and the radiance model in the rebuild key', () => {
       const base = skyLutKey(baseInput());
       expect(skyLutKey({ ...baseInput(), pbrNight: 0.5 })).not.toBe(base);
       expect(skyLutKey({ ...baseInput(), exposure: 0.3 })).not.toBe(base);
+      expect(skyLutKey({ ...baseInput(), model: 'preetham' })).not.toBe(base);
+    });
+
+    it('Hosek-Wilkie day dome: horizon brighter than zenith, warm toward a low sun (the flat-fill fix)', () => {
+      // The exact Preetham failure the model replaces: zenith brighter than horizon and near-zero
+      // sun-side variation read as a lifeless single-colour fill by day.
+      const noon = buildSkyLut({ ...baseInput(), mood: 0 });
+      const zenith = texel(noon, SKY_LUT_HEIGHT - 1, Math.floor(SKY_LUT_WIDTH / 2));
+      const horizon = texel(noon, 3, Math.floor(SKY_LUT_WIDTH / 2));
+      expect(horizon[2]).toBeGreaterThan(zenith[2]);
+
+      const low = buildSkyLut({ ...baseInput(), mood: 0, sunElevation: 0.12 });
+      const sunward = texel(low, 3, 0);
+      const antiSun = texel(low, 3, SKY_LUT_WIDTH - 1);
+      // Warm side: red gains on blue toward the sun (f16 positive halves compare numerically).
+      expect(sunward[0]).toBeGreaterThan(antiSun[0]);
+    });
+
+    it('legacy Preetham path is untouched by the model switch (byte-identical A/B reference)', () => {
+      const preetham = buildSkyLut({ ...baseInput(), model: 'preetham' });
+      const hosek = buildSkyLut(baseInput());
+      expect(preetham).not.toEqual(hosek);
+      expect(buildSkyLut({ ...baseInput(), model: 'preetham' })).toEqual(preetham);
     });
   });
 });

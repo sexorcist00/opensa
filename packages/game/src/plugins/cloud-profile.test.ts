@@ -4,31 +4,41 @@ import { cloudProfile } from './cloud-profile';
 
 describe('cloudProfile', () => {
   describe('negative cases', () => {
-    it('falls back to the default profile for an unmatched weather (e.g. rain/storm)', () => {
-      expect(cloudProfile('RAIN')).toEqual({ coverage: 0.5, darkness: 0.3 });
+    it('falls back to the default profile for an unmatched weather (e.g. storm/sandstorm)', () => {
+      expect(cloudProfile('SANDSTORM')).toEqual({ coverage: 0.5, darkness: 0.3, scale: 1, tint: [1, 1, 1] });
     });
   });
 
   describe('positive cases', () => {
-    it('matches EXTRASUNNY before SUNNY (substring order)', () => {
-      expect(cloudProfile('EXTRASUNNY')).toEqual({ coverage: 0.14, darkness: 0 });
-      expect(cloudProfile('SUNNY')).toEqual({ coverage: 0.32, darkness: 0.06 });
+    it('gives EXTRASUNNY fewer clouds than SUNNY (substring order holds)', () => {
+      const extrasunny = cloudProfile('EXTRASUNNY');
+      const sunny = cloudProfile('SUNNY');
+      expect(extrasunny.coverage).toBeLessThan(sunny.coverage);
+      expect(extrasunny.scale).toBeGreaterThan(sunny.scale); // smaller scattered puffs
     });
 
-    it('maps the cloudy and foggy families', () => {
-      expect(cloudProfile('CLOUDY')).toEqual({ coverage: 1, darkness: 0.9 });
-      expect(cloudProfile('FOGGY')).toEqual({ coverage: 0.8, darkness: 0.2 });
+    it('maps the overcast families: CLOUDY dark broken deck, RAINY full storm slate', () => {
+      const cloudy = cloudProfile('CLOUDY');
+      const rainy = cloudProfile('RAINY');
+      expect(cloudy.coverage).toBeGreaterThan(0.8);
+      expect(rainy.coverage).toBe(1);
+      expect(rainy.darkness).toBeGreaterThan(cloudy.darkness);
+      // Storm hue: colder (blue-shifted) than the cloudy grey.
+      expect(rainy.tint[2] / rainy.tint[0]).toBeGreaterThan(cloudy.tint[2] / cloudy.tint[0]);
     });
 
-    it('adds a haze bump for SMOG variants on top of the base profile', () => {
-      // EXTRASUNNY_SMOG = EXTRASUNNY base (0.14/0) + SMOG bump (0.08/0.06).
-      expect(cloudProfile('EXTRASUNNY_SMOG')).toEqual({ coverage: 0.14 + 0.08, darkness: 0.06 });
+    it('turns SMOG variants into big dirty clumps (scale + warm tint) over their base coverage', () => {
+      const smog = cloudProfile('EXTRASUNNY_SMOG');
+      const base = cloudProfile('EXTRASUNNY');
+      expect(smog.coverage).toBeCloseTo(base.coverage + 0.12, 5);
+      expect(smog.scale).toBeLessThan(1); // bigger clumps
+      expect(smog.tint[0]).toBeGreaterThan(smog.tint[2]); // dirty warm haze
     });
 
     it('clamps the smog bump to 1', () => {
-      const profile = cloudProfile('CLOUDY_SMOG'); // 1 + 0.08 → clamp 1 ; 0.9 + 0.06 → 0.96
+      const profile = cloudProfile('CLOUDY_SMOG');
       expect(profile.coverage).toBe(1);
-      expect(profile.darkness).toBeCloseTo(0.96, 5);
+      expect(profile.darkness).toBeCloseTo(0.65, 5);
     });
   });
 });

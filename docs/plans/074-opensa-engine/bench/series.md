@@ -44,3 +44,45 @@ but the 073 measurements showed the WORLD dominated all three budgets, so the co
 | 2026-07-16 | (06·night-rounds)   | **in-game sweep after the night-brightness arc (moonlight = prod band term + fixed-5° world normalization · moon-park/sun-park continuity · godray + golden ~8-game-min horizon eases)** — same protocol, same pak                                                                    | all 6: avg 8.333–8.337 / p95 9.1–9.3 (fps 119.9–120)                                                                                | 0.23–0.43 avg      | pass: ls-noon 2.08 · sf-fog-dawn 2.14 · lv-night 3.13 · country-dusk 3.86 · ocean-horizon 1.94 · ls-rain-night 3.11 · **post: 1.10 · 1.10 · 1.26 · 1.18 · 1.05 · 1.20**                                                       | ls-noon 478 · sf-fog-dawn 509 · lv-night 410 · country-dusk 335 · ocean-horizon 11 · ls-rain-night 505     | —                                      | **ACCEPTED — frame budget untouched (all six vsync-locked 120 Hz, p95 ≤9.3, draws identical to the 09 rows), post stable 1.05–1.26.** Pass vs 09·post-fix reads +0.14…+0.47, but that row was the coolest sweep on record — vs the 09·ACES row the deltas are noise (ls-noon −0.12 · sf −0.21 · lv +0.16 · ocean −0.05 · rain −0.05) with ONE standout: **country-dusk 3.86 = new high (+0.43 vs both 09 rows)**. Plausibly REAL, not noise: the extended sink margin (0.75→1.15 h) keeps godrays + the golden deck tint alive through the dusk hour where the old hard gates had already cut them — the scene renders MORE at dusk by design. WATCH: if the next sweep repeats ≥3.8 on country-dusk, profile before accepting further dusk-hour effects; frame headroom is still ~4.5 ms. Field: night arc CLOSED — evening ramp, deep-night level and both boundary crossings accepted («выглядит отлично»).                       |
 | 2026-07-16 | (16·probe)          | **in-game sweep after plan-16 step 2 (scene env probe: 128²×6×8-mip cube, one face / 2 frames, own submit reusing cell bundles; rigid clearcoat re-wired probe↔analytic)** — HEADLESS ANGLE/Metal 1440×900@1× (NOT pass-comparable to the retina rows; probe on/off A/B is the point) | all 6: avg 8.33 / p95 10.1–10.3 (fps 120; `?probe=0` p95 identical 10.2 — the p95 level is the headless environment, not the probe) | 0.23–0.34 avg      | pass: ls-noon 1.22 · sf-fog-dawn 1.30 · lv-night 1.65 · country-dusk 1.58 · ocean-horizon 0.78 · ls-rain-night 2.06 · post 0.76–1.47 · **probe (UPPER BOUND, Metal begin-overlap with the previous frame's tail): 0.38–1.94** | ls-noon 468 · sf-fog-dawn 502 · lv-night 400 · country-dusk 327 · ocean-horizon 9 · ls-rain-night 493      | —                                      | **ACCEPTED by A/B — the probe adds NO measurable frame-level GPU: ls-rain-night (heaviest) probe on vs off = pass 2.16 vs 2.40, post 0.76 vs 1.19, p95 10.2 vs 10.2 — deltas inside run variance (±0.3), some even negative.** The gpuMs.probe column is contaminated the same way the first gpuMs.post was (Metal fires the face pass's begin timestamp at vertex start, overlapping the previous frame's fragments — the span follows the scene's world-pass time; PROBE_RANGE 350→250 moved nothing, reverted to 350). Judge probe cost by on/off A/B, never by the column. Zero validation warnings; `?probe=0` differs on the car crop only (RMSE ~3 %). Real-display sweep + field look verdict owed.                                                                                                                                                                                                                          |
 | 2026-07-16 | (11·bench-cars)     | **first sweep WITH road cars (841 registered across scenes — vehicles.ide type-car on the NODES.DAT road graph, city 30 u / country 90 u spacing, lazy vehicle-lod streaming)** — USER'S REAL DISPLAY                                                                                 | all 6: avg 8.32–8.33 / p95 9.1–9.2 (fps 120–120.1)                                                                                  | 0.37–0.50 avg      | pass: ls-noon 2.18 · sf-fog-dawn 2.47 · lv-night 2.97 · country-dusk 3.48 · ocean-horizon 1.86 · ls-rain-night 2.77 · post 1.02–1.19 · probe 0.21–0.62                                                                        | ls-noon 1122 · sf-fog-dawn 1243 · lv-night 1026 · country-dusk 480 · ocean-horizon 11 · ls-rain-night 1150 | —                                      | **ACCEPTED — the realistic vehicle load costs ~+0.3–0.5 ms world pass and ~2.4× draws, and every scene stays vsync-locked 120 Hz with p95 within 0.1 ms of the car-less rows.** Slow-frame spikes in the log (physics catch-up 20 ms, collision 29.9 ms one-off) are scene-TELEPORT transitions and car spawn bursts during settle — outside the measured windows (avgMs 8.33 clean). Physics steady state carries ~1000 bodies / ~5400 colliders at 120 Hz. This population is now the bench default; the C1 WebGL-prod baseline MUST register the same cars (wire road-cars into canvas-host first) or the comparison is apples-to-oranges.                                                                                                                                                                                                                                                                                        |
+
+## C1 WebGL-prod baseline (2026-07-17) — the SAME 841-car population on both renderers
+
+Road cars are now wired into canvas-host: shared `benchRoadCarPlacements` + `seatVehicleOnGround` in
+`packages/game` — both hosts assemble the identical deterministic population (NODES\*.DAT road graph +
+vehicles.ide type-`car`), and prod's map car generators inherited the pitch/slide/defer seating lessons.
+Both renderers log `[bench] road cars registered: 841`.
+
+### User's display (M3 Pro @2× retina): prod WebGL `?bench=all` (user-run 2026-07-17) vs the engine field row (11·bench-cars, 2026-07-16)
+
+| Scene         | prod frame avg / p95 ms (fps) | prod draws | prod gpu.frame EMA | engine frame avg / p95 ms (fps) | engine draws | engine GPU pass |
+| ------------- | ----------------------------- | ---------- | ------------------ | ------------------------------- | ------------ | --------------- |
+| ls-noon       | 58.9 / 67.6 (17.0)            | 5 894      | 31.1               | 8.32 / 9.1 (120)                | 1 122        | 2.18            |
+| sf-fog-dawn   | 58.3 / 67.5 (17.1)            | 7 953      | 29.8               | 8.33 / 9.2 (120)                | 1 243        | 2.47            |
+| lv-night      | 51.3 / 75.1 (19.5)            | 5 040      | 38.6               | 8.32 / 9.2 (120)                | 1 026        | 2.97            |
+| country-dusk  | 37.3 / 42.5 (26.8)            | 3 835      | 31.8               | 8.33 / 9.2 (120)                | 480          | 3.48            |
+| ocean-horizon | 18.4 / 25.0 (54.3)            | 55         | 29.9               | 8.32 / 9.1 (120)                | 11           | 1.86            |
+| ls-rain-night | 74.0 / 83.4 (13.5)            | 8 956      | 18.8               | 8.33 / 9.2 (120)                | 1 150        | 2.77            |
+
+**Verdict: the C1 performance side-by-side is CAPTURED — on the same display with the same car population
+the own engine runs every scene vsync-locked 120 Hz (p95 ≤ 9.2 ms, ~4.7 ms frame headroom) where prod
+WebGL delivers 13.5–26.8 fps on land (54 fps on the empty ocean). Frame-time ratio 4.5–8.9× on land
+scenes — and the engine is vsync-capped, so the true ratio is larger.**
+
+### Same-environment control (headless Chromium, ANGLE Metal, 1× DPR — NOT pass-comparable to display rows)
+
+Both sweeps ran in one harness session (fake directory picker over HTTP, 2026-07-17). Prod: ls-noon
+54.8 ms (18.2 fps, 8 249 draws) · sf-fog-dawn 64.4 (15.5) · lv-night 47.3 (21.1) · country-dusk 25.4
+(39.4) · ocean-horizon 8.3 (120) · ls-rain-night 70.0 (14.3, 8 309 draws). Engine: **all six scenes
+8.33 ms avg / p95 9.1–9.3 (120 fps)**, submit 0.26–0.41, pass 0.99–2.59, post 0.56–0.82, probe 0.32–1.16,
+draws 9–1 236. The engine's headless rows match its display rows (same avg/draws), confirming the engine
+numbers are not display-specific; prod's draw counts differ between display and headless runs (5 894 vs
+8 249 ls-noon — settings/DPR-dependent prod paths), the registered population itself is identical.
+
+## Sky v2 (2026-07-17) — HW dome + procedural clouds + baked field (headless 1×, NOT display-comparable)
+
+The whole arc field-ACCEPTED by the user the same day. Cost points at Ganton street view, hour 12
+(engine HUD world pass, headless ANGLE 1×): Preetham+panorama baseline 1.39 · HW+panorama 1.41 · naked
+HW dome 0.91–1.18 · cumulus PER-PIXEL at real coverage 3.10 (the 2× field stutter) → **cloud-field BAKE
+1.33 cloudy / 1.15 sunny / 1.00 extrasunny / 0.91 rainy — resolution-independent** (the 256² rg16float
+bake pass owns the fbm at a fixed ~0.05 ms). All shots 120 Hz vsync. A real-display sweep rides the next
+`?bench=all` run — the sky change is constants + one tiny fixed pass, no per-scene surface grew.

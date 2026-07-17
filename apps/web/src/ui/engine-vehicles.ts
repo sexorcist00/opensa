@@ -25,12 +25,9 @@ import { VehicleLampSystem } from '@opensa/game/vehicle/vehicle-lamp.system';
 import { VehicleLodSystem } from '@opensa/game/vehicle/vehicle-lod.system';
 import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.system';
 import { VehicleRig } from '@opensa/game/vehicle/vehicle-rig';
+import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
 
 import { parseParkedVehicles } from '../parked-vehicles';
-
-/** Raise the ground-snap ray start / how far it probes (mirrors canvas-host's car-generator snapping). */
-const GROUND_SNAP_LIFT = 2;
-const GROUND_SNAP_DROP = 6;
 
 export interface EngineVehicles {
   /** The car the player is seated in, or null — the host follows it with the camera. */
@@ -181,57 +178,11 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     let position: Vec3 = placement.position;
     let pitch = 0;
     // Map car generators (plan 059) + bench road cars (074): seat the body on the ground so it doesn't
-    // penetrate terrain/props and get launched. Two slope lessons from the bench field run: the body must
-    // PITCH with the street (a horizontal spawn at a slope break drops nose-first and the parking brake
-    // freezes it on its snout), and the spot may be BLOCKED sideways (a lamp post, another car — vertical
-    // probes can't see those), so candidates slide along the heading until the upper half is clear.
+    // penetrate terrain/props and get launched (pitch with the street, slide off blocked spots, defer
+    // until the collision cell exists — the shared helper carries the bench field lessons).
     if (placement.groundSnap) {
-      const forward: [number, number] = [-Math.sin(placement.heading), Math.cos(placement.heading)];
-      const reach = data.halfExtents[1];
-      const seatAt = (along: number): null | { pitch: number; spot: Vec3 } => {
-        const x = position[0] + forward[0] * along;
-        const y = position[1] + forward[1] * along;
-        const groundAt = (shift: number): null | number =>
-          physics.groundBelow(
-            [x + forward[0] * shift, y + forward[1] * shift, position[2] + GROUND_SNAP_LIFT],
-            GROUND_SNAP_DROP,
-          );
-        const centre = groundAt(0);
-        const nose = groundAt(reach) ?? centre;
-        const tail = groundAt(-reach) ?? centre;
-        if (centre === null || nose === null || tail === null) {
-          return null;
-        }
-
-        return {
-          pitch: Math.atan2(nose - tail, 2 * reach),
-          spot: [x, y, Math.max(centre, (nose + tail) / 2) + data.halfExtents[2] + 0.1],
-        };
-      };
-      const clearAt = (spot: Vec3): boolean =>
-        // The UPPER HALF of the body only: slopes pass under it, poles and other cars intersect it.
-        !physics.overlapsBox([spot[0], spot[1], spot[2] + data.halfExtents[2] * 0.6], placement.heading, [
-          data.halfExtents[0] * 0.9,
-          data.halfExtents[1] * 0.9,
-          data.halfExtents[2] * 0.4,
-        ]);
-      let seated: null | { pitch: number; spot: Vec3 } = null;
-      for (const along of [0, 3, -3]) {
-        const candidate = seatAt(along);
-        if (candidate && clearAt(candidate.spot)) {
-          seated = candidate;
-          break;
-        }
-      }
-      seated ??= seatAt(0);
-      if (!seated) {
-        // No ground under the spot — its collision cell hasn't streamed/parsed yet (the boot race, or the
-        // spot sits in the vehicle-lod ring beyond collisionDrawDistance). Spawning anyway drops the car
-        // through the void and it lands ON ITS NOSE when the ground appears (bench field run). The LOD
-        // system retries every frame, so the car materialises the moment the collision does.
-        throw new Error(`vehicle spawn deferred: no ground at ${position[0]},${position[1]} yet`);
-      }
-      position = seated.spot;
+      const seated = seatVehicleOnGround(physics, position, placement.heading, data.halfExtents);
+      position = seated.position;
       pitch = seated.pitch;
     }
 

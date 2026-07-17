@@ -1,12 +1,16 @@
 /**
- * PBR sky LUT builder (plan 074/06 row 4, the remaining half): the Preetham dome evaluated on the CPU into
- * a small (azimuth-from-sun × elevation) texture that BOTH the sky pass and the world fog sample — the 068
+ * PBR sky LUT builder (plan 074/06 row 4): the physical dome evaluated on the CPU into a small
+ * (azimuth-from-sun × elevation) texture that BOTH the sky pass and the world fog sample — the 068
  * fog-into-sky invariant holds by construction, and the per-fragment cost is one texture tap.
  *
- * The scattering math is the engine-side twin of prod's `sky-params.ts` (plan 067: Preetham fit constants
- * from the three.js Sky addon; timecyc `skyTop` stays the colourist via the mood tint). Values are
- * Reinhard-compressed (< 1) and stored rgba16float.
+ * The DEFAULT radiance model is Hosek-Wilkie (the day-sky fix: Preetham's fit ran zenith-brighter-than-
+ * horizon with near-zero sun-side variation — the field "flat lifeless fill"). HW values are stored
+ * LINEAR HDR in the rgba16float texels and compressed by ACES like everything else — no Reinhard
+ * pre-squash. The legacy Preetham path (the engine-side twin of prod's `sky-params.ts`, Reinhard-
+ * compressed as prod does) stays selectable for A/B while the day-sky verdict is out. timecyc `skyTop`
+ * stays the colourist via the mood tint in both models.
  */
+import { cookHosekWilkie, hosekWilkieRadiance } from './hosek-wilkie';
 
 export interface SkyLutInput {
   /** Cloud cover 0 (clear) → 1 (overcast) — drives haze AND hands the sky back to the authored gradient
@@ -17,11 +21,13 @@ export interface SkyLutInput {
   /** Exposure on the Preetham dome (prod `sky.pbrExposure`, default 0.55). The old hardcoded 0.25 was a
    *  pre-ACES constant — it read as a dark, lifeless navy once the tonemap landed (074/09 field round). */
   exposure: number;
+  /** Radiance model — Hosek-Wilkie when omitted; 'preetham' = the legacy prod-twin dome (A/B). */
+  model?: 'hosek' | 'preetham';
   /** How strongly the timecyc palette tints the physical sky (0 = pure Preetham, 1 = full SA mood). */
   mood: number;
   /**
    * Sun-BELOW-HORIZON factor 0..1 (prod's `uPbrNight`): blends the physical dome back to the flat timecyc
-   * gradient only once the sun has sunk — Preetham has no night model. MUST NOT be the litFade darkness
+   * gradient only once the sun has sunk — neither model has a night sky. MUST NOT be the litFade darkness
    * (`dn`): that ramps DURING golden hour and suppressed the Preetham sunrise/sunset entirely (the exact
    * bug prod fixed — "using the night factor here killed the Preetham sunset"; 074/09 sky field round).
    */
@@ -45,9 +51,15 @@ const SUN_STEEPNESS = 1.5;
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
+/** Ground albedo fed to Hosek-Wilkie — a fixed mid-grey; SA's mixed city/country ground. */
+const HW_ALBEDO = 0.15;
+/** Master scale from HW's expected-radiance units into the engine's pre-ACES linear range, calibrated so
+ *  a clear-noon zenith with `exposure` 0.55 lands ≈0.4 and the bright horizon ≈1.0–1.2 (ACES rolls it). */
+const HW_RADIANCE_SCALE = 0.07;
+
 /** Build the LUT texels (rgba16float, row-major, SKY_LUT_WIDTH × SKY_LUT_HEIGHT). */
 export function buildSkyLut(input: SkyLutInput): Uint16Array {
-  const { betaM, betaR, sunE, tint } = params(input);
+  const { betaM, betaR, sunE, tint, turbidity } = params(input);
   const out = new Uint16Array(SKY_LUT_WIDTH * SKY_LUT_HEIGHT * 4);
   const sunElevation = clamp01(input.sunElevation);
   const sunY = Math.max(0.02, sunElevation);
@@ -56,6 +68,9 @@ export function buildSkyLut(input: SkyLutInput): Uint16Array {
   const g2 = g * g;
   const sunFresnel = clamp01((1 - sunY) ** 5);
   const base = [0, 0.0003, 0.00075];
+  // Hosek-Wilkie state (the default model): cooked once per rebuild; the model is undefined below the
+  // horizon, so the sun elevation clamps to 0 there and pbrNight hands the dome to the timecyc gradient.
+  const hosek = input.model === 'preetham' ? null : cookHosekWilkie(turbidity, HW_ALBEDO, Math.asin(sunElevation));
 
   let at = 0;
   for (let row = 0; row < SKY_LUT_HEIGHT; row += 1) {
@@ -71,23 +86,33 @@ export function buildSkyLut(input: SkyLutInput): Uint16Array {
       // Azimuthal angle between the view and the sun (the dome is symmetric around the sun's azimuth).
       const azimuth = (col / (SKY_LUT_WIDTH - 1)) * Math.PI;
       const cosTheta = xz * Math.cos(azimuth) * sunXz + y * sunY;
-      const rPhase = 0.0596831 * (1 + cosTheta * cosTheta);
-      const mPhase = (0.0795775 * (1 - g2)) / (1 - 2 * g * cosTheta + g2) ** 1.5;
+      const gamma = Math.acos(Math.min(1, Math.max(-1, cosTheta)));
       const gradientT = clamp01(Math.max(0, elevation)) ** 0.55;
       for (let channel = 0; channel < 3; channel += 1) {
-        const fex = Math.exp(-(betaR[channel] * sR + betaM[channel] * sM));
-        const scatter = (betaR[channel] * rPhase + betaM[channel] * mPhase) / (betaR[channel] + betaM[channel]);
-        let lin = Math.max(0, sunE * scatter * (1 - fex)) ** 1.5;
-        lin *= 1 + (Math.max(0, sunE * scatter * fex) ** 0.5 - 1) * sunFresnel;
-        const value = ((lin + 0.1 * fex) * 0.04 + base[channel]) * input.exposure * tint[channel];
-        const preetham = value / (1 + value); // Reinhard, matching the prod dome
+        let dome: number;
+        if (hosek) {
+          // LINEAR HDR — ACES is the compressor; a Reinhard pre-squash here is exactly what flattened
+          // the Preetham day into a fill (double compression).
+          dome =
+            hosekWilkieRadiance(hosek[channel], zenith, gamma) * HW_RADIANCE_SCALE * input.exposure * tint[channel];
+        } else {
+          const rPhase = 0.0596831 * (1 + cosTheta * cosTheta);
+          const mPhase = (0.0795775 * (1 - g2)) / (1 - 2 * g * cosTheta + g2) ** 1.5;
+          const fex = Math.exp(-(betaR[channel] * sR + betaM[channel] * sM));
+          const scatter = (betaR[channel] * rPhase + betaM[channel] * mPhase) / (betaR[channel] + betaM[channel]);
+          let lin = Math.max(0, sunE * scatter * (1 - fex)) ** 1.5;
+          lin *= 1 + (Math.max(0, sunE * scatter * fex) ** 0.5 - 1) * sunFresnel;
+          const value = ((lin + 0.1 * fex) * 0.04 + base[channel]) * input.exposure * tint[channel];
+          dome = value / (1 + value); // Reinhard, matching the prod dome
+        }
         // Timecyc gradient blend — PROD-EXACT (skyBase): the gradient takes over at NIGHT (pbrNight — sun
-        // below the horizon; Preetham has no night model) and under OVERCAST (the deck hides the atmosphere;
-        // pure Preetham fights it as a milky Mie wash). By a clear day the sky IS Preetham + the mood TINT —
-        // the old extra `mood × 0.6` gradient mix was a pre-ACES hack that flattened the dome into a fill.
+        // below the horizon; neither model has a night sky) and under OVERCAST (the deck hides the
+        // atmosphere; a pure physical dome fights it as a milky Mie wash). By a clear day the sky IS the
+        // physical dome + the mood TINT — the old extra `mood × 0.6` gradient mix was a pre-ACES hack
+        // that flattened the dome into a fill.
         const gradient = input.skyHorizon[channel] + (input.skyTop[channel] - input.skyHorizon[channel]) * gradientT;
         const gradientW = Math.max(clamp01(input.pbrNight), clamp01(input.cloudCover) * 0.85);
-        out[at + channel] = f32ToF16(preetham + (gradient - preetham) * gradientW);
+        out[at + channel] = f32ToF16(dome + (gradient - dome) * gradientW);
       }
       out[at + 3] = f32ToF16(1);
       at += 4;
@@ -102,6 +127,7 @@ export function skyLutKey(input: SkyLutInput): string {
   const q = (value: number, steps: number): number => Math.round(value * steps);
 
   return [
+    input.model ?? 'hosek',
     q(input.sunElevation, 200),
     q(input.pbrNight, 100),
     q(input.exposure, 100),
@@ -118,7 +144,7 @@ export function skyLutKey(input: SkyLutInput): string {
 }
 
 function f32ToF16(value: number): number {
-  // Round-to-nearest float32 → float16 (positive-range inputs; the LUT stores 0..1).
+  // Round-to-nearest float32 → float16 (positive-range inputs; HW texels are linear HDR, may exceed 1).
   const f32 = new Float32Array(1);
   const u32 = new Uint32Array(f32.buffer);
   f32[0] = value;
@@ -141,6 +167,7 @@ function params(input: SkyLutInput): {
   betaR: readonly [number, number, number];
   sunE: number;
   tint: readonly [number, number, number];
+  turbidity: number;
 } {
   const cover = clamp01(input.cloudCover);
   const dark = clamp01(input.cloudDark);
@@ -167,5 +194,5 @@ function params(input: SkyLutInput): {
     number,
   ];
 
-  return { betaM, betaR, sunE, tint };
+  return { betaM, betaR, sunE, tint, turbidity };
 }

@@ -13,7 +13,9 @@ import type { Environment } from '@opensa/engine';
 import { buildTimecyc, sampleTimecycBlend } from '@opensa/renderware/parsers/text/timecyc';
 import { convertTo24h, parseTimecyc, WEATHER_NAMES } from '@opensa/renderware/parsers/text/timecyc.parser';
 
-import { cloudProfile } from '../plugins/cloud-profile';
+import type { WeatherBlend } from '../weather/weather-transition';
+
+import { cloudProfile, lerpCloudProfiles } from '../plugins/cloud-profile';
 import { sunElevationAt } from '../plugins/sun-position';
 import { timeBandGrade } from '../sky/time-bands';
 
@@ -76,10 +78,20 @@ export interface EngineEnvironmentOptions {
   timecyc?: { is24h: boolean; text: string };
   /** SA weather id 0..19 (cloud profile + timecyc column). */
   weather?: number;
+  /** Live weather blend getter (prod parity — the host's WeatherTransition): when present, every apply
+   *  samples timecyc AND the cloud profile blended from→to by the eased `t`. Omit for a static weather. */
+  weatherBlend?: () => WeatherBlend;
 }
 
 const lin = (value: number): number => (value / 255) ** 2.2;
 const lin3 = (rgb: readonly number[]): [number, number, number] => [lin(rgb[0]), lin(rgb[1]), lin(rgb[2])];
+
+/** Component-wise multiply (the weather cloud TINT over the timecyc palette). */
+const mul3 = (a: readonly number[], b: readonly number[]): [number, number, number] => [
+  a[0] * b[0],
+  a[1] * b[1],
+  a[2] * b[2],
+];
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 const scale3 = (rgb: readonly [number, number, number], k: number): [number, number, number] => [
   rgb[0] * k,
@@ -100,11 +112,18 @@ export function createEngineEnvironmentDriver(
         options.timecyc.is24h ? parseTimecyc(options.timecyc.text) : convertTo24h(parseTimecyc(options.timecyc.text)),
       )
     : null;
-  const clouds = cloudProfile(WEATHER_NAMES[weather] ?? '');
   const { litFade } = config.graphics.night;
 
   return {
     apply(hour: number): void {
+      // Weather blend (prod parity): the host's WeatherTransition eases from→to over
+      // weatherTransitionSeconds; without a blend getter the driver sits on the static weather.
+      const blend = options.weatherBlend?.() ?? { from: weather, t: 1, to: weather };
+      const clouds = lerpCloudProfiles(
+        cloudProfile(WEATHER_NAMES[blend.from] ?? ''),
+        cloudProfile(WEATHER_NAMES[blend.to] ?? ''),
+        blend.t,
+      );
       const sun = sunArc(hour, litFade.dawnStart, litFade.duskEnd);
       const dn = darkness(hour, litFade);
       environment.hour = hour;
@@ -123,6 +142,7 @@ export function createEngineEnvironmentDriver(
       environment.emissiveBoost = config.graphics.night.emissiveBoost;
       environment.cloudCover = clouds.coverage;
       environment.cloudDark = clouds.darkness;
+      environment.cloudScale = clouds.scale;
       environment.cloudAlpha = config.graphics.clouds.opacity;
       environment.godrayStrength = config.graphics.sun.godrays ? 1 : 0;
       environment.tonemap = config.graphics.toneMapping && config.graphics.toneMappingMode !== 'none' ? 1 : 0;
@@ -139,7 +159,7 @@ export function createEngineEnvironmentDriver(
       const reflection = config.graphics.vehicleReflection;
       environment.reflectionStrength = reflection.preset === 'off' ? 0 : reflection.intensity * 4;
       if (timecyc) {
-        const sample = sampleTimecycBlend(timecyc, weather, weather, hour, 0);
+        const sample = sampleTimecycBlend(timecyc, blend.from, blend.to, hour, blend.t);
         environment.sunColor = scale3(lin3(sample.dir), dayGate);
         environment.sunCoreColor = scale3(lin3(sample.sunCore), dayGate);
         environment.sunCoronaColor = scale3(lin3(sample.sunCorona), dayGate);
@@ -152,9 +172,10 @@ export function createEngineEnvironmentDriver(
         environment.waterColor = lin3(sample.water);
         environment.waterAlpha = sample.water[3] / 255;
         // timecyc cloud palette (074/09 sky round 2): the authored per-hour colours turn the WHOLE deck
-        // pink at dawn/dusk — prod's applyClouds reads exactly these columns.
-        environment.cloudTopColor = lin3(sample.lowClouds);
-        environment.cloudBottomColor = lin3(sample.bottomClouds);
+        // pink at dawn/dusk — prod's applyClouds reads exactly these columns. The weather TINT (sky v2)
+        // shifts the hue only — the engine's cloudPalette() normalizes luminance away.
+        environment.cloudTopColor = mul3(lin3(sample.lowClouds), clouds.tint);
+        environment.cloudBottomColor = mul3(lin3(sample.bottomClouds), clouds.tint);
       } else {
         // Parametric fallback (old paks without timecyc): warm-shifting disc, fixed day/night gradients.
         const warm = clamp01(1 - sun.elevationRatio);
@@ -163,8 +184,8 @@ export function createEngineEnvironmentDriver(
         environment.sunCoronaColor = [dayGate, (0.8 - warm * 0.25) * dayGate, (0.4 - warm * 0.3) * dayGate];
         environment.skyTop = mix3([0.12, 0.32, 0.65], [0.002, 0.004, 0.012], dn);
         environment.skyHorizon = mix3([0.42, 0.55, 0.72], [0.01, 0.012, 0.03], dn);
-        environment.cloudTopColor = mix3([0.78, 0.8, 0.85], [0.06, 0.07, 0.1], dn);
-        environment.cloudBottomColor = mix3([0.45, 0.48, 0.55], [0.03, 0.035, 0.05], dn);
+        environment.cloudTopColor = mul3(mix3([0.78, 0.8, 0.85], [0.06, 0.07, 0.1], dn), clouds.tint);
+        environment.cloudBottomColor = mul3(mix3([0.45, 0.48, 0.55], [0.03, 0.035, 0.05], dn), clouds.tint);
       }
       applyMoon(environment, hour, band.moon, litFade, config.graphics);
     },
