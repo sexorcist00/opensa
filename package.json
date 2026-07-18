@@ -100,7 +100,6 @@
     "timecyc": "tsx ./tools/timecyc-builder/src/index.ts"
   },
   "dependencies": {
-    "@babylonjs/core": "9.16.1",
     "@dimforge/rapier3d-compat": "0.19.3",
     "bitecs": "0.4.0",
     "fflate": "0.8.3",

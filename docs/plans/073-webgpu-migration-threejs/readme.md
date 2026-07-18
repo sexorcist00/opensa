@@ -33,6 +33,14 @@ certainty about where every millisecond goes.
 (re-run `/webgpu-spike.html` + this chain's toggles first), or we build the thin custom static-world WebGPU
 renderer (see the Babylon verdict's hybrid note).
 
+> **SUPERSEDED 2026-07-18 — this chain is CLOSED and its harnesses are DELETED.** The third option won:
+> the thin custom WebGPU renderer was built ([chain 074](../074-opensa-engine/readme.md)) and
+> [shipped as the game's renderer](../074-opensa-engine/10-flip-decision.md). The spike harnesses
+> (`webgpu-spike`, `webgpu-bundle-repro`, `webgpu-stream-compile`, `webgpu-tsl-material`,
+> `babylon-spike`) were removed in 074/13 phase 3 — **their measurements and verdicts are preserved in
+> prose under [`concept/`](concept/)**, which is what the revive instructions above should be read
+> against. Re-creating a harness from those docs is cheap; three itself is gone from the tree.
+
 </details>
 
 <details><summary>Original ACTIVE status (2026-07-11 morning)</summary>

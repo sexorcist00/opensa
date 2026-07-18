@@ -22,3 +22,10 @@ means re-applying it. Landing the fixes upstream deletes that liability and help
 
 Issue filed and linked here; production patch minimal; upgrade path for future three versions documented (re-run
 `webgpu-spike` + `webgpu-stream-compile` harnesses after any bump).
+
+> **MOOT 2026-07-18 — three, our patch, and both harnesses are gone from the tree** (plan 074/13,
+> phases 3 and 7): the project ships its own WebGPU renderer, so there is no three version left to bump
+> and no patch left to upstream. The open tasks above are retained as a record of the intent, not as
+> work. If the upstream PR is ever revived, the harnesses must be rebuilt from the measurements in
+> [`concept/phase-0-spike-checklist.md`](concept/phase-0-spike-checklist.md) and
+> [`concept/phase-1-findings.md`](concept/phase-1-findings.md), which carry every number they produced.

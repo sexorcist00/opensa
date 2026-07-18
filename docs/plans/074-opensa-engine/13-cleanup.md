@@ -220,20 +220,38 @@ All self-labelled throwaways from the 073 era. Nothing imports them; each has a 
 
 ### Tasks
 
-- [ ] **3.1** Delete `apps/web/src/standalone/babylon-spike.ts` + `babylon-spike.html` — the **only**
-      `@babylonjs/core` importer (its job is done: it proved the browser was not the limit, and that
-      finding is preserved in [the series' engine-comparison table](bench/series.md)).
-- [ ] **3.2** Delete `webgpu-spike.{ts,html}`, `webgpu-bundle-repro.{ts,html}`,
-      `webgpu-stream-compile.{ts,html}`, `webgpu-tsl-material.{ts,html}` — the four three-WebGPU repros.
-      **Before deleting: confirm each one's finding is written down in the 073 chain** (these files ARE
-      the evidence for why 073 failed; the code may go, the conclusions may not).
-- [ ] **3.3** Remove their `viewerInputs` lines from `vite.config.ts`.
-- [ ] **3.4** Decide the fate of `opensa-engine.{ts,html}` — the standalone engine boot. It predates the
-      engine being the default host and is now arguably redundant with both the game and engine-lab.
-      **Recommendation: keep for one more cycle** (it is the cleanest minimal-repro boot for engine bugs),
-      revisit at phase 8.
-- [ ] **3.5** `controls-harness.{tsx,html}` — KEEP untouched (React + `@opensa/game/input`, zero renderer;
+- [x] **3.1 DONE 2026-07-18** — `babylon-spike.{ts,html}` deleted, and since it was the **only**
+      `@babylonjs/core` importer the dependency went with it immediately rather than waiting for phase 7:
+      **`node_modules` 604 → 512 MB (−92 MB)**. Its finding (Babylon's snapshot = 0.12 ms at 15k draws,
+      but engine-GLOBAL granularity, so migration was not justified) is preserved in
+      [`073/concept/07-babylon-spike.md`](../073-webgpu-migration-threejs/concept/07-babylon-spike.md).
+- [x] **3.2 DONE 2026-07-18** — the four three-WebGPU repros deleted after an explicit
+      **findings-preservation audit** (the gate this task set): every conclusion each harness produced was
+      traced to prose before its code was removed —
+      `webgpu-spike` → [`concept/phase-0-spike-checklist.md`](../073-webgpu-migration-threejs/concept/phase-0-spike-checklist.md)
+      lines 88–139 (the whole result table, the GO verdict, the cell-size sweep that had only ever existed
+      as HUD output);
+      `webgpu-bundle-repro`, `webgpu-stream-compile`, `webgpu-tsl-material` →
+      [`concept/phase-1-findings.md`](../073-webgpu-migration-threejs/concept/phase-1-findings.md)
+      lines 59–79, 154–175, 103–112.
+      Two audit notes worth keeping: (a) for `webgpu-stream-compile` the DOC is richer than the deleted
+      file — the winning `ctx=holder` configuration is recorded only in the prose, the file's own header
+      never mentioned it; (b) `webgpu-tsl-material` is superseded by shipped code
+      (`world-material-tsl.ts`), so only its throwaway `pipelineMix` blend construction is gone, which is
+      a code artifact and not a finding.
+- [x] **3.3 DONE** — the five `viewerInputs` entries removed from `vite.config.ts`; the build's HTML
+      entries are now `index` + `viewer` + `controls-harness` only. Production build verified green.
+- [x] **3.4 DECIDED — KEEP `opensa-engine.{ts,html}`** for now (it is the cleanest minimal-repro boot for
+      engine bugs, and it is dev-served only — it was never in `viewerInputs`, so it costs the production
+      build nothing). Revisit at phase 8.
+- [x] **3.5** `controls-harness.{tsx,html}` — KEPT untouched (React + `@opensa/game/input`, zero renderer;
       driven by `e2e/touch-controls.spec.ts`).
+- [x] **3.6 (found during the audit)** Two 073 docs referenced the harnesses as FORWARD-LOOKING assets,
+      not history — `readme.md`'s revive conditions ("re-run `/webgpu-spike.html` first") and
+      `01-upstream-contribution.md`'s open tasks ("re-run the harnesses after any three bump", "the
+      `webgpu-stream-compile` harness is a good seed" for an upstream example). Both now carry a
+      superseded/moot banner pointing at the preserved measurements, so the instructions are not left
+      unfollowable.
 
 ---
 
@@ -354,6 +372,9 @@ Order chosen so the tree compiles after every step.
       `TARGET_RE` (L76, L102-103, L160-161).
 - [ ] **7.5** **Size ledger**: `node_modules` size, prod bundle size, cold `npm install` time — before and
       after, into the measurement ledger below. This is the phase's headline number.
+      **Baseline captured 2026-07-18 (after the babylon drop, three still in):** `node_modules` 512 MB ·
+      prod build JS 5.4 MB across all chunks (`canvas-host` 308 kB + `OrbitControls` 20 kB + `build-clump`
+      20 kB + `build-texture` 610 kB are the three-side chunks to watch) · HTML entries 3.
 
 ---
 
@@ -377,4 +398,5 @@ Order chosen so the tree compiles after every step.
 | 2026-07-18 | Phase-0 inventory (3 parallel sweeps)                                                 | 122 three-importing source files (52 render-path / 20 math-only / 50 tests / **0 tools**); 43 files in `renderware/src/three`; ~60 URL params, 10 of them dead; patch = 207 lines, `three.webgpu.js` only; `createRenderContext` has exactly 1 caller          |
 | 2026-07-18 | Phase 1.1–1.3: `@opensa/math` built + three-parity suite                              | 9 source files, ~1 000 lines, zero deps; 12 parity tests vs captured three@0.185.1 fixtures @ 8 decimals, all green first run; suite 330/2159 → **331/2171**, tsc + eslint clean                                                                               |
 | 2026-07-18 | Phase 1.5 part 1: pure-math files migrated                                            | three importers **122 → 109** (13 files freed); `placementMatrix` extracted from the doomed `build-procobj` into the surviving `procobj-scatter`; 7 files deliberately reverted (scene-graph seams, ride phases 4/5); suite 331/2171 green, tsc + eslint clean |
+| 2026-07-18 | Phase 3: spikes deleted + babylon dropped                                             | 5 spike TS + 5 HTML entries gone (findings audited into 073 prose FIRST); `@babylonjs/core` removed — **node_modules 604 → 512 MB (−92 MB)**; build HTML entries 8 → 3; prod build green, suite 331/2171                                                       |
 |            | _(phase 7 size ledger lands here: node_modules, bundle, install time — before/after)_ |                                                                                                                                                                                                                                                                |

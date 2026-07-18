@@ -82,14 +82,11 @@ const hideDebugger = process.env.OPENSA_DEBUGGER_HIDE === 'true';
 // The prod deploy build (`npm run build:prod` sets both flags) — gates deploy-only output like `.htaccess`.
 const isProdDeploy = excludeViewers && hideDebugger;
 
+// The five 073 spike entries (babylon + the four three-WebGPU repros) were deleted in plan 074/13
+// phase 3 — their findings live in docs/plans/073-webgpu-migration-threejs/concept/.
 const viewerInputs = {
-  babylonSpike: resolve(__dirname, 'babylon-spike.html'), // Babylon snapshot-rendering spike (throwaway; 'leave three?' question)
   controlsHarness: resolve(__dirname, 'controls-harness.html'),
   viewer: resolve(__dirname, 'viewer.html'), // object/vehicle/character as ?tab= in one app
-  webgpuBundleRepro: resolve(__dirname, 'webgpu-bundle-repro.html'), // Phase-1 bundle+InstancedMesh bug repro (throwaway)
-  webgpuSpike: resolve(__dirname, 'webgpu-spike.html'), // Phase-0 WebGPU render-bundle spike (throwaway, dev only)
-  webgpuStreamCompile: resolve(__dirname, 'webgpu-stream-compile.html'), // Phase-1 streaming-compile stall repro (throwaway)
-  webgpuTslMaterial: resolve(__dirname, 'webgpu-tsl-material.html'), // Phase-1 TSL world-material slice 1 (throwaway)
 };
 
 export default defineConfig(({ command }) => ({
