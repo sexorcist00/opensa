@@ -26,8 +26,9 @@
 
 - `resolveMap`: catalog + timed catalog + txdp + all instances (text + streams + extras).
 - `buildWorldGrid`: 250 m cells, HD vs LOD lists (`isLodModel` by name), exterior filter.
-- `buildCell` per cell: **InstancedMesh per single-material part** (shared geometry attributes),
-  per-def IDE-flag treatment, timed-object gating (`TimedObjectSystem`), 2dfx corona collection
+- Cell building now happens OFFLINE in `tools/opensa-pack` (`weld.ts`): every cell is welded into
+  merged per-material batches recorded as render bundles, with per-def IDE-flag treatment, hour-gated
+  timed objects as objectTable kind-0 entries, 2dfx corona collection
   (HD only), animated `anim`-section objects (per-instance groups), road-sign text meshes,
   procobj clutter.
 - Map meshes ignore DFF frame transforms (SA re-frames atomic model infos — junk-frame proof).
@@ -45,7 +46,8 @@
   empty frame), and the new level appears at full opacity — `CellFader` fade-in runs only for
   genuinely new cells, never on a swap (fixed the LOD→HD "blink"). A hysteresis dead-band
   (`0.25 × cellSize`) holds a cell's level across the ring boundary so it doesn't flip-flop.
-- Picking/describe: `userData.region` (instanced map), `userData.procObj` (clutter).
+- Picking/describe: WebGL-era only — the engine has no ray query yet, so the debugger's Map screen is
+  capability-gated off (plan 074/22).
 
 ## Known gaps / candidates
 

@@ -22,10 +22,17 @@
   off/close — then respawn, coords), Vehicles (spawn any car from `vehicles.ide` — sorted, with a name filter),
   Time (presets + speed),
   Atmosphere (night/world-light calibration sliders), Camera (follow rig), Graphics (bloom,
-  SSAO, tonemapping, reflections, water, sun/god-rays, clouds, stars, fog), **ProcObj**
+  tonemapping, reflections, water, sun/god-rays, clouds, stars, fog), **ProcObj**
   (per-category clutter knobs), Weather selector, Position (live coords + teleports incl.
   Truth's Farm), Map (map-viewer mode with manual cell selection, collision overlay,
   click-to-describe picking, **Show Normals**).
+  **On the own-engine host the overlay is capability-gated** (`ENGINE_DEBUG_CAPABILITIES`, plan
+  074/22): rows the engine has no equivalent for are HIDDEN rather than left dead — SSAO (replaced by
+  the baked AO channel), the CSM/shadow and pipeline-switch rows, and the whole **Map screen**, which
+  needs an engine ray query and is parked. **Every Map-screen bullet below therefore describes the
+  WebGL-era overlay** — picking, hiding, Show Normals and the draw-distance sliders alike, and the
+  `game.*` calls they name went with that renderer. The engine's live equivalent of the draw-distance
+  slider is `?draw=` ([query-parameters.md](../development/query-parameters.md)).
 - **Show Normals** (Map screen): scene-wide `MeshNormalMaterial` override (`game.setShowNormals`),
   drawn straight to the screen bypassing post-FX so the normals read clean. Auto-resets when leaving
   the screen / closing the panel (`resetTo`) or entering the map viewer.
@@ -34,10 +41,11 @@
   so they apply next frame). Fog moved here from Atmosphere and **coupled** to the LOD ring — the
   Draw Distance slider sets `fog ≈ lod × 0.8` (FogExp2 saturates at ~1.25× its distance) so the LOD
   cull edge is always hidden; the Fog slider can only pull fog closer (thicker), never expose the edge.
-- Picking: instanced map objects (`userData.region`), procobj clutter (`userData.procObj`),
-  road-sign text meshes report their host model.
-- **Hide object** (Map screen, on a picked model): collapses that `InstancedMesh` instance to zero scale
-  (`game.hideSelectedObject`, `HiddenInstances` in `packages/game/src/debug/`) so you can peek behind it;
+- Picking (WebGL-era; parked on the engine pending a ray query): instanced map objects, procobj
+  clutter and road-sign text meshes each reported their host model.
+- **Hide object** (Map screen, on a picked model, WebGL-era — the implementation was deleted with that
+  renderer; the engine's equivalent primitive is `CellStore.breakPlacement`, which degenerates a
+  placement's triangles in the cell index buffer): collapsed the picked instance so you could peek behind it;
   a hidden counter + **Restore all** appear, and every hide is restored automatically on map-viewer exit /
   debugger close (`setMapViewer(false)` calls `restoreAll` — hides can't leak into gameplay). Transient by
   design: a rebuilt cell brings the instance back.
