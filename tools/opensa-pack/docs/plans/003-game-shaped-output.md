@@ -392,6 +392,8 @@ the pipeline path.
 - [ ] Phase 4 — manifest shrunk to the rule; `timecyc`/`timecyc24`/`setup.timecyc` deleted
 - [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
 - [ ] Phase 5 — peds, clutter, breakables, anim objects, map objects; probe CLIs + fixtures retired
+- [ ] Phase 5 — map-object textures must PRESERVE map-optimizer's mip chain: plan from the RAW TXD, never
+      regenerate (the per-model writer emits one level, which is right for vehicles/peds only)
 - [ ] Phase 5b — mod field check: plain, retexture-only, and `txdp`-parented mods on a converted build
 - [ ] Phase 6 — pmb `pack` stage + `--until` docs
 - [ ] Close-out — 6-scene ritual sweep, `npm run lint`, coverage floors held, docs repointed
@@ -415,6 +417,27 @@ the pipeline path.
 | `landstal` | 274 KB | 32 ms | 5 130 v / 3 613 t / 123 submeshes | 18 spheres, 10 tris, half [1.16, 2.56, 0.82] |
 | `infernus` | 236 KB | 12 ms | 4 467 v / 3 822 t / 76 submeshes  | 20 spheres, 14 tris, half [1.20, 2.89, 0.69] |
 | `bmyri`    | 55 KB  | 4 ms  | 963 v / 1 179 t / 1 submesh       | **fallback box** (no COL in the DFF)         |
+
+### Mips belong to map-optimizer (user, 2026-07-18)
+
+opensa-pack must **never generate** a mip chain: map-optimizer authors them upstream, and a second
+generator downstream would silently overwrite its work. Measured on both inputs:
+
+| Input                                       | map textures with a chain | deepest |
+| ------------------------------------------- | ------------------------- | ------- |
+| `game-src/non-modified` (raw game)          | 23 / 1 177 — **2 %**      | 9       |
+| `NO_COMMIT/optimized` (after map-optimizer) | 646 / 1 215 — **53 %**    | 11      |
+
+**opensa-pack's production input is the chain output, after map-optimizer** (confirmed by the user) — so
+the raw-game survey that suggested "SA has no mips" was measuring the wrong thing. In game the rule is:
+map objects MUST have mips, vehicles must not, peds almost certainly not.
+
+Consequence for the per-model writer: it emits ONE level, which is correct for vehicles and peds and is
+**not yet correct for map objects** (phase 5). Those must PRESERVE what map-optimizer put in the TXD, and
+this entry point structurally cannot — `VehicleTextures` decodes level 0 and drops the rest before the
+writer sees the array. The map-object path has to plan from the RAW TXD, the way the world planner does
+(`textures.ts:184-193`). Recorded as a phase-5 task rather than a flag, because a flag we cannot honour is
+worse than no flag.
 
 **Per-model `.ostex` (same day)** — and it surfaced a real cost:
 

@@ -8,7 +8,7 @@
  */
 import type { VehicleTextureArray } from '@opensa/renderware/vehicle/types';
 
-import { encodeOstex, fnv1a, type Ostex, OstexAlphaClass, OstexFormat, ostexMaxMips } from '@opensa/engine-formats';
+import { encodeOstex, fnv1a, type Ostex, OstexAlphaClass, OstexFormat } from '@opensa/engine-formats';
 
 import { type AlphaClass, classifyAlpha, processAlphaTexture } from './alpha';
 import { packOstexPayload } from './ostex-payload';
@@ -22,26 +22,22 @@ const ALPHA_TO_OSTEX: Record<AlphaClass, number> = {
   softBlend: OstexAlphaClass.SOFT_BLEND,
 };
 
-/**
- * Whether to bake a mip chain. **Required, with no default** — the right answer differs by asset class and
- * a silent default would be inherited by the wrong one:
- *
- * - `'none'` — vehicles and peds. The engine uploads their arrays with no `mipLevelCount`
- *   (`engine.ts:728-736`), so it is 1 and nothing would ever sample a generated level. Close-range assets.
- * - `'full'` — MAP objects (breakables, clutter, animated objects). They are seen at distance and at
- *   grazing angles, the world planner generates chains for exactly this reason, and coverage-preserving
- *   mips are load-bearing for A2C foliage.
- *
- * Note that neither case inherits mips from the source: SA ships almost none (2 % of textures in a
- * 360-TXD map sample, none at all across the 210 vehicle TXDs). Chains are ours to generate or skip.
- */
-export type ModelMipPolicy = 'full' | 'none';
-
 /** Encode a built model's texture array as a `.ostex` file. */
-export function packModelOstex(texture: VehicleTextureArray, mips: ModelMipPolicy): Uint8Array {
+export function packModelOstex(texture: VehicleTextureArray): Uint8Array {
   const { height, layers: layerCount, names, rgba, width } = texture;
   const texelBytes = width * height * 4;
-  const mipCount = mips === 'full' ? ostexMaxMips(OstexFormat.RGBA8, width, height) : 1;
+  // ONE level, and opensa-pack must never generate more: MIPS BELONG TO map-optimizer. It is the stage
+  // that authors them (53 % of map textures carry a chain in an optimized build vs 2 % in a raw game), and
+  // a second generator downstream would silently overwrite its work.
+  //
+  // For vehicles and peds one level is also what the game wants: the engine uploads their arrays with no
+  // `mipLevelCount` (`engine.ts:728-736`), and SA ships none for them either.
+  //
+  // MAP OBJECTS (phase 5: breakables, clutter, animated objects) are the case this writer does NOT yet
+  // serve. They must PRESERVE the chain map-optimizer put in the TXD — which this entry point cannot do,
+  // because `VehicleTextures` decoded level 0 and dropped the rest before we ever see the array. That path
+  // has to plan from the RAW TXD, the way the world planner does (`textures.ts:184-193`).
+  const mipCount = 1;
 
   const classes: AlphaClass[] = [];
   const layerMips: { data: Uint8Array }[][] = [];
