@@ -13,7 +13,7 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 `001`–`077` (+074 sub-plans). Newest first:
 
 - **[077 — Unit coverage back to 85–90 %](./077-unit-coverage.md)** — the 074/13 teardown deleted heavily
-  unit-tested WebGL code and sank coverage 88.9 → 72.3 %. Recovered to **88.16 %** with a **device-independent
+  unit-tested WebGL code and sank coverage 88.9 → 72.3 %. Recovered to **88.18 %** with a **device-independent
   seam**: a recording `GPUDevice` stand-in that boots the whole engine headlessly, no engine source touched.
   **DONE 2026-07-18.**
 - **[076 — Roadsign / billboard text](./076-roadsign-text.md)** — 2dfx type-7 text plates (roadsignfont glyph

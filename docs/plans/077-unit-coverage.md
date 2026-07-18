@@ -9,9 +9,10 @@ executed.**
 
 **Target: 85 % statements minimum, 90 % preferred, with the floors re-armed at the achieved number.**
 
-**STATUS: DONE 2026-07-18 — 72.29 % → 88.16 % statements · 78.52 % branches · 90.65 % functions ·
-88.10 % lines.** Floors re-armed at 86/86/88/77. Phase 4 (extraction) was NEVER NEEDED: the fake device
-reached everything, so `packages/engine` sources were not touched at all. Suite 300 files / 2 098 tests,
+**STATUS: DONE 2026-07-18 — 72.29 % → 88.18 % statements · 78.57 % branches · 90.72 % functions ·
+88.12 % lines** (the plan itself closed at 88.16 %; fixing the four defects it found added two regression
+tests, see the last ledger row). Floors re-armed at 86/86/88/77. Phase 4 (extraction) was NEVER NEEDED: the fake device
+reached everything, so `packages/engine` sources were not touched at all. Suite 300 files / 2 100 tests,
 verified identical across consecutive runs.
 
 ## The measured gap (2026-07-18, baseline)
@@ -134,24 +135,37 @@ update [test-coverage.md](../development/test-coverage.md), and record the final
 | 2026-07-18 | phase 3 — `ifp-sampler` + `world/cells` | **88.16 %**              | **78.52 %** | 90.65 %     | 88.10 %     | `ifp-sampler` 72.2 → 99.2 % stmts / 45.7 → 91.4 % br; `cells` 65.6 → **100 / 100 %**; fake device now records written BYTES |
 | 2026-07-18 | phase 5 — floors re-armed + close-out   | **88.16 %**              | **78.52 %** | **90.65 %** | **88.10 %** | thresholds 86/86/88/77; suite 300 files / 2 098 tests, identical across runs; `test-coverage.md` rewritten                  |
 
-## Findings — bugs the coverage work surfaced, reported not patched
+## Findings — bugs the coverage work surfaced ✅ ALL FIXED
 
-Writing tests against untested code found three defects and one piece of dead code. None were fixed here:
-a coverage plan that also changes behaviour cannot tell you which change broke something.
+Writing tests against untested code found three defects and one piece of dead code. **They were recorded
+here unpatched first** — a coverage plan that also changes behaviour cannot tell you which change broke
+something — **and then all four were fixed the same session in their own commit.** Full record, including
+why the fixes are shaped as they are:
+[open-issues/fixed/physics-collider-defects.md](../open-issues/fixed/physics-collider-defects.md).
+The findings below are left in their ORIGINAL wording (the diagnosis is the valuable part); the
+resolution of each is appended in bold.
 
 1. **`PhysicsWorld.createFalling`'s box fallback is unreachable** (`physics-world.ts:254-257`).
    `ColliderDesc.convexHull()` returns a non-null but INVALID descriptor for degenerate input — the
    neighbouring `addConvexChassis` knows this and guards with try/catch, but `createFalling` relies on
    `??`, so `createCollider` throws. A prop whose mesh cannot be hulled **crashes the topple instead of
    falling back to its box**. This is a real B7·a destruction path.
+   → **FIXED:** mirrors `addConvexChassis` (`length >= 12` pre-check + try/catch). Two regression tests
+   assert the fallback body LANDS, not merely that nothing threw.
 2. **`PhysicsWorld.setColliderEnabled` does not work, and is dead.** `setEnabled(false)` reports
    `isEnabled() === false` while the collider keeps blocking solidly. No callers — the working path is
    `setColliderSensor`. Delete it or fix it before someone reaches for it.
+   → **FIXED: deleted** (user decision). A method that reports success and does nothing is worse than a
+   missing one — it passes review and fails in the field.
 3. **`roadsignGlyphIndex` does an unguarded prototype lookup** — `'toString'` returns a Function, not
    `null | number`. Unreachable from `roadsignGlyphQuads` (it only passes single characters), but the
    signature is a lie. `Object.hasOwn` or a `Map` closes it.
+   → **FIXED: it is a `Map`** — which kills the class rather than guarding one instance. (`Object.hasOwn`
+   needs an ES2022 lib this repo does not target.) Regression covers `toString`/`constructor`/`__proto__`.
 4. **`mat4Multiply` cannot alias `out` with `a`** — it writes `out` column-by-column while still reading
    `a`, so `mat4Multiply(m, m, b)` silently corrupts. No current caller does this; worth a doc comment.
+   → **RESOLVED as a doc comment, deliberately not guarded.** Both callers are per-frame hot path (the
+   view-projection matrix) and neither aliases; a 16-element guard copy every frame was not worth it.
 
 Also removed as a direct consequence: **`GtaSaWorldAdapter.preparseCellModels` + the whole `DffParser` /
 `dff-parse.worker` chain** — plan-060 off-thread parsing for the THREE renderer's cell builds, orphaned by
@@ -176,3 +190,26 @@ Named so the next reader does not mistake it for an oversight:
 - **Two unreachable defensive branches in `ifp-sampler`** — a `!positions` guard the caller already
   gates, and `|| 1` zero-span fallbacks that ascending keyframe times can never trigger. Untestable
   rather than untested.
+
+---
+
+## Close-out addendum (2026-07-18, after the plan's own defects were fixed)
+
+The four defects above were fixed the same session, in their own commit —
+[open-issues/fixed/physics-collider-defects.md](../open-issues/fixed/physics-collider-defects.md) is the
+record. Two regression tests came with them (the `createFalling` box fallback, asserted by BEHAVIOUR: the
+prop lands, not merely "no throw"), which is why the final numbers sit two tests above the phase-5 row:
+
+| Date       | What                                | Statements  | Branches    | Functions   | Lines       | Note                                      |
+| ---------- | ----------------------------------- | ----------- | ----------- | ----------- | ----------- | ----------------------------------------- |
+| 2026-07-18 | the four defect fixes + regressions | **88.18 %** | **78.57 %** | **90.72 %** | **88.12 %** | suite 300 files / **2 100** tests, e2e 24 |
+
+**What this plan is worth remembering for**, beyond the number:
+
+1. **The seam beat the refactor.** The plan's own phase 4 (extract logic out of `engine.ts`) was written
+   as the fallback and turned out to be unnecessary — a recording device stand-in reached everything that
+   mattered, with zero product-source changes to a renderer that had shipped days earlier.
+2. **Recording defects unpatched, then fixing them separately, worked.** Four were found; had they been
+   patched inside the coverage commits, a failure afterwards would have been un-attributable.
+3. **Writing tests for untested code is a defect-finding technique, not just a coverage exercise.** The
+   `createFalling` crash had no field report against it — nobody was looking.

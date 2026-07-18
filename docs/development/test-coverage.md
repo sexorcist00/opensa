@@ -17,7 +17,7 @@ exercising it** — that is why the compare viewer tab gained one in 074/13 phas
 
 ## Current (2026-07-18, after the plan-077 recovery)
 
-**Statements 88.16 % · Branches 78.52 % · Functions 90.65 % · Lines 88.10 %** (300 test files, 2 098
+**Statements 88.18 % · Branches 78.57 % · Functions 90.72 % · Lines 88.12 %** (300 test files, 2 100
 passing, 0 skipped). Enforced floors in `vitest.config.ts`: statements 86 / lines 86 / functions 88 /
 branches 77 — a small buffer below the achieved numbers, the repo's standing convention.
 

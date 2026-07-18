@@ -101,12 +101,13 @@ that replaced it needs a GPU) and the floors went red. The answer was NOT to low
 **device-independent seam** — `packages/engine/src/test/fake-device.ts`, a recording `GPUDevice`
 stand-in. `Engine.init()` runs against it unmodified, so the engine boots and renders a frame headlessly
 and tests assert **what it decided to draw** (hour gate, cell culling, pass order,
-ledger-returns-on-unload). **Coverage 72.29 → 88.16 % stmt · 78.52 % br · 90.65 % fn; floors re-armed
-86/86/88/77; suite 300 files / 2 098 tests, e2e 24 passed.** No engine source was touched, so nothing is
+ledger-returns-on-unload). **Coverage 72.29 → 88.18 % stmt · 78.57 % br · 90.72 % fn; floors re-armed
+86/86/88/77; suite 300 files / 2 100 tests, e2e 24 passed.** No engine source was touched, so nothing is
 owed to the bench. 077 also found four defects (two real: `createFalling`'s box fallback is unreachable so
-an unhullable prop CRASHES; `setColliderEnabled` silently does nothing and is dead) — recorded in that
-plan, **not patched**, because a coverage pass that also changes behaviour cannot tell you which change
-broke something.
+an unhullable prop CRASHED; `setColliderEnabled` silently did nothing and was dead). They were recorded
+UNPATCHED first — a coverage pass that also changes behaviour cannot tell you which change broke what —
+then fixed in their own commit the same session:
+[open-issues/fixed/physics-collider-defects.md](../../open-issues/fixed/physics-collider-defects.md).
 
 **Also standing from the close-out:** `?scale`, `?draw` and friends now have a canonical home —
 [query-parameters.md](../../development/query-parameters.md). Phase 2.4 decided AGAINST a central

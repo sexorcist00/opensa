@@ -153,7 +153,6 @@ export function mat4LookAt(out: Mat4, eye: Vec3, target: Vec3, up: Vec3): Mat4 {
   return out;
 }
 
-/** out = a × b (column-major). */
 /**
  * `out = a × b` (column-major). **`out` must not alias `a`** — the loop writes `out` column by column
  * while still reading every column of `a`, so `mat4Multiply(m, m, b)` silently corrupts. Aliasing `b` is

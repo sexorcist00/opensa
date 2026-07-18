@@ -30,7 +30,7 @@ export default defineConfig({
       reporter: ['text', 'text-summary', 'html'],
       // Floors sit a small buffer below the achieved numbers so an unrelated change can't silently erode
       // coverage. Branches sit lower by nature (error/edge paths). Re-armed 2026-07-18 against the plan-077
-      // recovery (88.16% stmt / 78.52% branch / 90.65% func / 88.10% lines) after the renderer teardown
+      // recovery (88.18% stmt / 78.57% branch / 90.72% func / 88.12% lines) after the renderer teardown
       // temporarily sank them — the engine is unit-tested through a fake GPUDevice, see plan 077.
       thresholds: { branches: 77, functions: 88, lines: 86, statements: 86 },
     },
