@@ -383,7 +383,9 @@ the pipeline path.
 - [x] Phase 2 — `COLL` section codec (`osm-collision.ts`): engine-shape collision, faces already flattened
       into indices, half-extents from the COL bounds — the whole main-thread spawn sequence, baked
 - [x] Phase 2 — offline vehicle writer (`tools/opensa-pack/src/vehicle-osm.ts`) reusing `buildVehicleModel`
-- [ ] Phase 2 — per-model `.ostex` emission (reuse `processAlphaTexture` for the mip chain)
+- [x] Phase 2 — per-model `.ostex` emission (`model-ostex.ts`) + `packOstexPayload` extracted so world and
+      per-model layers share one row-packing
+- [ ] Phase 2 — decide the texture-compression question (RGBA8 vs BC re-encode vs DXT pass-through)
 - [ ] Phase 3 — IMG delete-and-insert; VFS 3-step resolution + once-per-name warning + config silence flag
 - [ ] Phase 3 — local-loader ingest of `.osm`/`.ostex` (`build-vfs.ts` selection)
 - [ ] Phase 4 — named cell/texture files under `<out>/opensa/`, per-ring texture laziness, one loader
@@ -413,6 +415,31 @@ the pipeline path.
 | `landstal` | 274 KB | 32 ms | 5 130 v / 3 613 t / 123 submeshes | 18 spheres, 10 tris, half [1.16, 2.56, 0.82] |
 | `infernus` | 236 KB | 12 ms | 4 467 v / 3 822 t / 76 submeshes  | 20 spheres, 14 tris, half [1.20, 2.89, 0.69] |
 | `bmyri`    | 55 KB  | 4 ms  | 963 v / 1 179 t / 1 submesh       | **fallback box** (no COL in the DFF)         |
+
+**Per-model `.ostex` (same day)** — and it surfaced a real cost:
+
+| Model      | `.osm` | `.ostex`     | build | texture array                         |
+| ---------- | ------ | ------------ | ----- | ------------------------------------- |
+| `landstal` | 274 KB | **4 925 KB** | 44 ms | 14 layers @256², 9 mips, 3 with alpha |
+| `infernus` | 236 KB | **5 980 KB** | 37 ms | 17 layers @256²                       |
+| `cheetah`  | 206 KB | **5 276 KB** | 42 ms | 15 layers @256²                       |
+
+**The textures are ~20× the model.** Cause: `buildVehicleModel` hands back RGBA8 — `VehicleTextures`
+decoded the source DXT to feed the runtime — so the `.ostex` stores uncompressed texels plus a full mip
+chain, where the source TXD was BC-compressed. At ~5 MB × ~210 vehicles that is ~1 GB against a 940 MB
+`gta3.img`: converting cars alone would roughly double the build.
+
+Note what it does NOT cost: VRAM. The runtime already uploads these as RGBA today, so this is a
+delivery/disk regression only. Three ways out, none picked yet:
+
+1. **Accept RGBA8** — simplest, and honest about what the runtime consumes; the build roughly doubles.
+2. **Re-encode to BC** — an encoder exists (`tools/rw-codec/src/dxt-encode.ts`, used by the LOD tools), but
+   decode→re-encode is generation loss on art we did not author.
+3. **Pass the original DXT through** — what the WORLD planner already does for opaque, well-formed DXT
+   (`textures.ts:184-193`): no loss, smaller on disk AND in VRAM. Costs planning from the raw TXD rather
+   than from the built array, because the builder has already decoded by the time we see it.
+
+Recommendation: (3), for the same reason the world planner does it.
 
 `bmyri` is a PED that the vehicle builder accepted without complaint — the writer does not check the asset
 class, which is fine while callers pass a `vehicles.ide` roster but must not be relied on in phase 5.

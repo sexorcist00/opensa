@@ -17,6 +17,8 @@ import { parseDffCollision } from '@opensa/renderware/parsers/binary/col';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
 
+import { packModelOstex } from './model-ostex';
+
 /** Half-extents when a DFF carries no collision — the runtime's own fallback (`gta-sa-world.adapter.ts`). */
 const DEFAULT_HALF_EXTENTS: [number, number, number] = [1.2, 2.5, 0.7];
 
@@ -26,6 +28,8 @@ export interface VehicleOsm {
   fixture: VehicleFixture;
   /** True when the source DFF carried collision (false = the fallback box was baked). */
   hasCollision: boolean;
+  /** The sibling `.ostex` — the model's texture dictionary as one `texture2d_array`. */
+  ostex: Uint8Array;
   texture: VehicleModelData['texture'];
 }
 
@@ -60,6 +64,7 @@ export function buildVehicleOsm(fs: AssetFileSystem, model: string, options: Veh
     ]),
     fixture,
     hasCollision: collision.present,
+    ostex: packModelOstex(built.texture),
     texture: built.texture,
   };
 }

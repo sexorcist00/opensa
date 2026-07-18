@@ -13,14 +13,13 @@ import {
   OstexAlphaClass,
   OstexFormat,
   type OstexFormatId,
-  ostexLayerBytes,
   ostexMaxMips,
-  ostexMipLayout,
 } from '@opensa/engine-formats';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';
 
 import { type AlphaClass, classifyAlpha, effectiveAlphaClass, processAlphaTexture, resampleToPow2 } from './alpha';
+import { packOstexPayload } from './ostex-payload';
 
 const MAX_LAYERS = 256;
 const CUTOUT_REF = 128;
@@ -276,23 +275,13 @@ export class TexturePlanner {
 /** Repack tight mip rows into the 256-aligned `.ostex` payload and encode the array file. */
 function encodeArray(bucket: Bucket, layers: PlannedLayer[]): Uint8Array {
   const { format, height, mipCount, width } = bucket;
-  const layerBytes = ostexLayerBytes(format, width, height, mipCount);
-  const payload = new Uint8Array(layerBytes * layers.length);
-  let offset = 0;
-  for (const layer of layers) {
-    for (let level = 0; level < mipCount; level += 1) {
-      const layout = ostexMipLayout(format, width, height, level);
-      const mip = layer.mips[level];
-      const compressed = format !== OstexFormat.RGBA8;
-      const tightRow = compressed
-        ? Math.ceil(layout.mipWidth / 4) * (format === OstexFormat.BC1 ? 8 : 16)
-        : layout.mipWidth * 4;
-      for (let row = 0; row < layout.rows; row += 1) {
-        payload.set(mip.data.subarray(row * tightRow, (row + 1) * tightRow), offset + row * layout.bytesPerRow);
-      }
-      offset += layout.totalBytes;
-    }
-  }
+  const payload = packOstexPayload(
+    format,
+    width,
+    height,
+    mipCount,
+    layers.map((layer) => layer.mips),
+  );
   const alphaToOstex: Record<AlphaClass, number> = {
     cutout: OstexAlphaClass.CUTOUT,
     opaque: OstexAlphaClass.OPAQUE,
