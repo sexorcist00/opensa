@@ -120,6 +120,9 @@ export interface DebrisUpload {
   vertices: Float32Array;
 }
 
+/** Opaque handle returned by `createDebugLines` (074/13 phase 4). */
+export type DebugLineSetId = number;
+
 /**
  * A host-fed corona (074/08 B5 step 5) — vehicle head/tail lamps ride the EXISTING instanced corona pass
  * rather than a second one. Hosts replace `Engine.dynamicCoronas` each frame; already faded/gated by the
@@ -343,6 +346,15 @@ interface DebrisEntry {
   vertexCount: number;
 }
 
+/** One registered debug wireframe: its vertices, its colour uniform and its bind group. */
+interface DebugLineSet {
+  bindGroup: GPUBindGroup;
+  uniform: GPUBuffer;
+  vertexCount: number;
+  vertices: GPUBuffer;
+  visible: boolean;
+}
+
 /** Instances a model starts with room for; the matrix buffer doubles when it runs out. */
 const VEHICLE_CAPACITY = 8;
 /** 4 carcols colours × vec4f per matrix row. */
@@ -449,10 +461,20 @@ const LIGHT_POINT = 2;
 
 export class Engine {
   cells!: CellStore;
+  /**
+   * Debug prelit scale (074/13 phase 4): 1 = as authored, 0 = prelit off (texture only), 2 = SA's
+   * MODULATE2X. An ASSET-INSPECTION knob for the viewers — "is this model dark because its baked vertex
+   * light is dark?" — not a look tunable. Never anything but 1 in normal play.
+   */
+  debugPrelitScale = 1;
+  /** Debug unlit (074/13 phase 4): drop the sun/moon/pool lighting term and show the flat albedo. */
+  debugUnlit = false;
   /** Host-owned coronas (vehicle lamps) — replace the contents each frame; drawn with the 2dfx ones. */
   readonly dynamicCoronas: DynamicCorona[] = [];
+
   /** Host-owned dynamic lights (vehicle head/taillights …) — replace the contents each frame. */
   readonly dynamicLights: DynamicLight[] = [];
+
   /** Live environment — host mutates freely; written into the frame UBO every frame. Noon defaults. */
   readonly environment: Environment = {
     // Modest by default: SA prelit already carries baked darkening — full-strength AO double-darkens.
@@ -562,6 +584,7 @@ export class Engine {
   private readonly coronaScratch = new Float32Array(CORONA_CAP * 8);
   private coronaTexture!: GPUTexture;
   private readonly debris: DebrisEntry[] = [];
+  private readonly debugLines = new Map<DebugLineSetId, DebugLineSet>();
   private depthView!: GPUTextureView;
   private engineDevice!: EngineDevice;
   private frameBindGroup!: GPUBindGroup;
@@ -571,6 +594,7 @@ export class Engine {
   private lightPoolBuffer!: GPUBuffer;
   private readonly lightPoolScratch = new Float32Array(LIGHT_POOL_CAP * LIGHT_STRIDE);
   private msaaView!: GPUTextureView;
+  private nextDebugLineId = 1;
   /** 2dfx particles (B6) — the whole map's emitters in two instance buffers, one per blend mode. */
   private particles: null | {
     bindGroup: GPUBindGroup;
@@ -731,6 +755,44 @@ export class Engine {
     return id;
   }
 
+  /**
+   * Upload a DEBUG WIREFRAME (074/13 phase 4): a world-space line list drawn unlit over the scene, for
+   * COL collision hulls and mesh edges. `positions` is xyz pairs — every two vertices are one segment,
+   * already in ENGINE space (the host owns the GTA Z-up → Y-up change, as with every rigid draw).
+   */
+  createDebugLines(positions: Float32Array, color: readonly [number, number, number, number]): DebugLineSetId {
+    const id = this.nextDebugLineId;
+    this.nextDebugLineId += 1;
+
+    const vertices = this.resources.createBuffer('cellVertex', {
+      label: `debug-line-${id}`,
+      size: Math.max(4, Math.ceil(positions.byteLength / 4) * 4),
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(vertices, 0, positions);
+
+    const uniform = this.resources.createBuffer('uniform', {
+      label: `debug-line-${id}`,
+      size: 16,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(uniform, 0, new Float32Array(color));
+
+    this.debugLines.set(id, {
+      bindGroup: this.device.createBindGroup({
+        entries: [{ binding: 0, resource: { buffer: uniform } }],
+        label: `debug-line-${id}`,
+        layout: this.pipelines.debugLineLayout,
+      }),
+      uniform,
+      vertexCount: Math.floor(positions.length / 3),
+      vertices,
+      visible: true,
+    });
+
+    return id;
+  }
+
   /** Spawn one instance of an uploaded model (074/08 B5). Every instance owns its own part transforms. */
   createVehicle(id: VehicleModelId): VehicleInstance {
     const model = this.vehicleModels.get(id);
@@ -847,6 +909,16 @@ export class Engine {
     return id;
   }
 
+  destroyDebugLines(id: DebugLineSetId): void {
+    const set = this.debugLines.get(id);
+    if (!set) {
+      return;
+    }
+    this.resources.destroyBuffer('cellVertex', set.vertices);
+    this.resources.destroyBuffer('uniform', set.uniform);
+    this.debugLines.delete(id);
+  }
+
   destroyVehicle(instance: VehicleInstance): void {
     const model = this.vehicleModels.get(instance.model);
     if (!model) {
@@ -905,8 +977,11 @@ export class Engine {
     const moonLen = Math.hypot(env.moonDir[0], env.moonDir[1], env.moonDir[2]) || 1;
     // moonDir.w doubles as the stochastic de-tiling toggle (074/12) — the vec4 slot was spare.
     frameData.set([env.moonDir[0] / moonLen, env.moonDir[1] / moonLen, env.moonDir[2] / moonLen, env.stochastic], 64);
-    // moonColor.w = spare (held the retired cloud-panorama rotation speed).
-    frameData.set([...env.moonColor, 0], 68);
+    // moonColor.w = the debug UNLIT flag (074/13) — the slot was spare (it held the retired
+    // cloud-panorama rotation speed). Debug knobs ride spare lanes on purpose: GROWING the frame
+    // uniform would mint a new buffer and bind group, and that bind group is recorded into every cell
+    // bundle — every bundle would go stale.
+    frameData.set([...env.moonColor, this.debugUnlit ? 1 : 0], 68);
     // params3 = [light count (row 7), cloud layer on, cloudDark, cloud layer alpha] — row 15.
     frameData[72] = this.fillLightPool();
     // params4.x = how many of those lights are DYNAMIC (they come first in the pool). The world shades the
@@ -916,8 +991,8 @@ export class Engine {
     frameData[88] = this.dynamicLights.length;
     frameData[89] = env.moonPhase;
     frameData[90] = env.reflectionStrength;
-    // params3.y = spare (held the retired cloud-panorama enable).
-    frameData[73] = 0;
+    // params3.y = the debug PRELIT scale (074/13) — the slot was spare (retired cloud-panorama enable).
+    frameData[73] = this.debugPrelitScale;
     frameData[74] = env.cloudDark;
     frameData[75] = Math.min(1, Math.max(0, env.cloudAlpha));
     // sunCore/sunCorona = the SUN VISUAL (timecyc columns — the disc is yellow/orange; the white-ish
@@ -1033,6 +1108,7 @@ export class Engine {
     draws += this.drawParticles(pass);
     draws += this.drawDebris(pass);
     draws += this.drawCoronas(pass, camera);
+    draws += this.drawDebugLines(pass);
     // Probe DEBUG view (074/16): overdraw the frame with the cube panorama — orientation checked by eye.
     if (this.probeView) {
       pass.setPipeline(this.pipelines.get('probe-view'));
@@ -1338,6 +1414,13 @@ export class Engine {
     }
     if (draws.length > 0) {
       this.clutterCells.set(key, draws);
+    }
+  }
+
+  setDebugLinesVisible(id: DebugLineSetId, visible: boolean): void {
+    const set = this.debugLines.get(id);
+    if (set) {
+      set.visible = visible;
     }
   }
 
@@ -1948,16 +2031,6 @@ export class Engine {
     return 1;
   }
 
-  /**
-   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
-   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
-   * the known cost knob if a street full of parked cars ever pushes the draw budget.
-   */
-  /**
-   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
-   * so this is genuinely all there is to it per frame.
-   */
-  /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
   private drawDebris(pass: GPURenderPassEncoder): number {
     const now = (performance.now() - this.startedMs) / 1000;
     while (this.debris.length > 0 && this.debris[0].expiresAt <= now) {
@@ -1975,6 +2048,37 @@ export class Engine {
     }
 
     return this.debris.length;
+  }
+
+  /**
+   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
+   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
+   * the known cost knob if a street full of parked cars ever pushes the draw budget.
+   */
+  /**
+   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
+   * so this is genuinely all there is to it per frame.
+   */
+  /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
+  /** Debug wireframes (074/13 phase 4) — one draw per registered set, skipped entirely when there are none. */
+  private drawDebugLines(pass: GPURenderPassEncoder): number {
+    if (this.debugLines.size === 0) {
+      return 0;
+    }
+    pass.setPipeline(this.pipelines.get('debug-line'));
+    pass.setBindGroup(0, this.frameBindGroup);
+    let draws = 0;
+    for (const set of this.debugLines.values()) {
+      if (!set.visible) {
+        continue;
+      }
+      pass.setBindGroup(1, set.bindGroup);
+      pass.setVertexBuffer(0, set.vertices);
+      pass.draw(set.vertexCount);
+      draws += 1;
+    }
+
+    return draws;
   }
 
   /** One out-of-bundle object's draws: kind-4 scrollers first refresh their live uvAnim uniform (offset 16),

@@ -343,6 +343,41 @@ fn fsDebris(in: DebrisOut) -> @location(0) vec4f {
   return vec4f(color * alpha, alpha);   // premultiplied, like every other blended pass here
 }
 `,
+  /**
+   * Probe DEBUG view (074/16): replaces the frame with the cube sampled along the camera ray — look around
+   * and the probe's content must match the world's orientation exactly. This is how the face table is
+   * verified by EYE instead of by convention-table archaeology. Lab/game: append the probeview URL flag.
+   */
+  /**
+   * Debug wireframes (074/13 phase 4): world-space line lists for COL collision hulls and mesh edges.
+   * Vertices arrive already in ENGINE space, so the host owns the GTA Z-up → Y-up basis change (the same
+   * split every other rigid draw uses). Unlit and unfogged on purpose — a debug overlay must read the
+   * same at 5 m and at 500 m.
+   */
+  'debug-line': /* wgsl */ `
+#include <frame>
+
+struct DebugLineUniform {
+  color: vec4f,
+};
+@group(1) @binding(0) var<uniform> debugLine: DebugLineUniform;
+
+struct DebugLineOut {
+  @builtin(position) clip: vec4f,
+};
+
+@vertex
+fn vsDebugLine(@location(0) position: vec3f) -> DebugLineOut {
+  var out: DebugLineOut;
+  out.clip = frame.viewProj * vec4f(position, 1.0);
+  return out;
+}
+
+@fragment
+fn fsDebugLine() -> @location(0) vec4f {
+  return debugLine.color;
+}
+`,
   frame: /* wgsl */ `
 struct Frame {
   viewProj: mat4x4f,
@@ -398,6 +433,26 @@ struct Frame {
 // Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
 // cloud-field pass each frame — full-deck weathers pay one tap here instead of 10 vnoise per pixel.
 @group(0) @binding(7) var cloudField: texture_2d<f32>;
+
+// ASSET-INSPECTION debug knobs (074/13 phase 4), riding two spare frame lanes so the uniform never grows
+// (it would invalidate every recorded cell bundle). Both are inert at their defaults — scale 1, unlit 0 —
+// so normal play multiplies by one and selects the untouched lit term. NOTE: no backticks in WGSL
+// comments — these modules are JS template literals and a stray backtick ends the string.
+
+/**
+ * Baked vertex light: 1 = as authored, 0 = OFF, 2 = SA's MODULATE2X.
+ * "Off" is a NEUTRAL multiplier (white), not a zero one — the point is to see the texture without the
+ * baked light, not to black the model out. ×2 saturates, as MODULATE2X does on real hardware.
+ */
+fn debugPrelit(color: vec3f) -> vec3f {
+  let scale = frame.params3.y;
+  return select(min(color * scale, vec3f(1.0)), vec3f(1.0), scale < 0.5);
+}
+
+/** Flat albedo (no sun/moon/pool response) when the unlit flag is set. */
+fn debugLit(lit: vec3f) -> vec3f {
+  return select(lit, vec3f(1.0), frame.moonColor.w > 0.5);
+}
 
 // Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
 // fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
@@ -817,6 +872,7 @@ fn fsParticle(in: ParticleOut) -> @location(0) vec4f {
   return vec4f(texel.rgb * in.color.rgb * a, a);
 }
 `,
+
   ped: /* wgsl */ `
 #include <frame>
 
@@ -894,7 +950,6 @@ fn fsPed(in: PedVsOut) -> @location(0) vec4f {
   return vec4f(color, 1.0);
 }
 `,
-
   post: /* wgsl */ `
 // Godrays composite (074/09 stage 1): the scene renders into a LINEAR rgba16float target (the sun disc's
 // 3–6× overshoot survives), and this fullscreen pass radial-blurs the thresholded brightness toward the
@@ -1022,11 +1077,7 @@ fn fsProbeBlit(in: ProbeMipOut) -> @location(0) vec4f {
   return textureSampleLevel(probeInput, probeInputSampler, vec2f(in.uv.x, 1.0 - in.uv.y), 0.0);
 }
 `,
-  /**
-   * Probe DEBUG view (074/16): replaces the frame with the cube sampled along the camera ray — look around
-   * and the probe's content must match the world's orientation exactly. This is how the face table is
-   * verified by EYE instead of by convention-table archaeology. Lab/game: append the probeview URL flag.
-   */
+
   'probe-view': /* wgsl */ `
 #include <frame>
 
@@ -1315,7 +1366,7 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   let normal = normalize(in.normal);
   let sunNdl = max(dot(normal, frame.sunDir.xyz), 0.0);
   let moonNdl = clamp((dot(normal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
-  let base = texel.rgb * in.color.rgb;
+  let base = texel.rgb * debugPrelit(in.color.rgb);
   // A LIT lamp is a SOURCE, not a surface: it emits, and its diffuse response is irrelevant. Shading it like
   // painted metal is what "cropped" the tail lights — the lens wraps around the car's corner, so its normal
   // swings ~90° across the lens, and a nearby street lamp painted that swing straight onto the glass as a
@@ -1329,7 +1380,7 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   // tail lamp sits a metre behind its own lens); prod has the same rule by construction.
   let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
     in.poolDiffuse;
-  return base * lit;
+  return base * debugLit(lit);
 }
 
 fn rigidFog(world: vec3f) -> f32 {
@@ -1829,12 +1880,12 @@ fn worldShade(in: VsOut, cutout: bool) -> vec4f {
   // Hybrid lighting (074/06 row 3, the shipped 064 model): prelit is the INDIRECT term, the sun adds a real
   // direct term on the raw albedo. indirect/direct ride frame params — day arcs are a CPU concern.
   // Baked AO modulates ONLY the indirect term (074/07) — sun shadowing is the separate sunVis bake.
-  let lit = in.prelit * (frame.params.y * in.ao) +
+  let lit = debugPrelit(in.prelit) * (frame.params.y * in.ao) +
     frame.sunColor.rgb * (in.sunNdl * frame.params.z) +
     frame.moonColor.rgb * in.moonNdl +
     in.localLight +
     localLightDynamic(in.world, normalize(in.normal));
-  var color = texel.rgb * (lit + in.glow);
+  var color = texel.rgb * (debugLit(lit) + in.glow);
   // Unified fog (074/06 row 5, the 068 shape): RADIAL distance (view-Z pops at screen edges), exp² over
   // [start, cut], height attenuation (haze hugs the ground), hard horizon cut — and the fog colour is the
   // SKY at this direction, so distant geometry dissolves into exactly what's behind it.

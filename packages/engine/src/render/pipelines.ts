@@ -29,6 +29,7 @@ export type PipelineId =
   | 'clutter-opaque'
   | 'corona'
   | 'debris'
+  | 'debug-line'
   | 'particle-add'
   | 'particle-blend'
   | 'ped'
@@ -62,6 +63,8 @@ export interface PipelineSet {
   clutterLayout: GPUBindGroupLayout;
   /** group(1) of the debris pipeline: the break's uniform + its shard texture ARRAY + sampler (B7·a). */
   debrisLayout: GPUBindGroupLayout;
+  /** group(1) of the debug-line pipeline: the per-set colour uniform (074/13 phase 4). */
+  debugLineLayout: GPUBindGroupLayout;
   /** group(0): per-frame uniform. */
   frameLayout: GPUBindGroupLayout;
   get(id: PipelineId): GPURenderPipeline;
@@ -417,6 +420,31 @@ export function compileAll(
     }),
   );
 
+  // Debug wireframes (074/13 phase 4): COL collision hulls and mesh edges, as world-space line lists.
+  // Depth-TESTED but never depth-WRITING — an overlay that hides behind geometry it is actually behind,
+  // without punching holes in anything drawn after it.
+  const debugLineLayout = device.createBindGroupLayout({
+    entries: [{ binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT }],
+    label: 'debug-line',
+  });
+  const debugLineModule = device.createShaderModule({ code: resolveShader('debug-line'), label: 'debug-line' });
+  pipelines.set(
+    'debug-line',
+    device.createRenderPipeline({
+      depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
+      fragment: { entryPoint: 'fsDebugLine', module: debugLineModule, targets: [{ format: colorFormat }] },
+      label: 'debug-line',
+      layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, debugLineLayout], label: 'debug-line' }),
+      multisample: { count: MSAA_SAMPLES },
+      primitive: { topology: 'line-list' },
+      vertex: {
+        buffers: [{ arrayStride: 12, attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }] }],
+        entryPoint: 'vsDebugLine',
+        module: debugLineModule,
+      },
+    }),
+  );
+
   const coronaModule = device.createShaderModule({ code: resolveShader('corona'), label: 'corona' });
   pipelines.set(
     'corona',
@@ -615,6 +643,7 @@ export function compileAll(
     cloudFieldLayout,
     clutterLayout,
     debrisLayout,
+    debugLineLayout,
     frameLayout,
     get(id: PipelineId): GPURenderPipeline {
       const pipeline = pipelines.get(id);

@@ -18,6 +18,7 @@ export {
   type ClutterModelId,
   type ClutterModelInit,
   type CoronaSprites,
+  type DebugLineSetId,
   type DynamicCorona,
   type DynamicLight,
   Engine,

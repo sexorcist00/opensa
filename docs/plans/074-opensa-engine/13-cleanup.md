@@ -321,7 +321,27 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
 - [ ] **4.3** Update / retire `e2e/object-viewer.spec.ts` + `e2e/viewer-tabs.spec.ts` accordingly — and
       keep the `?tab=` contract if the shell lives.
 - [ ] **4.4** Check `tools/map-optimizer/src/compare-serve.ts` — it references viewer HTML and must follow.
-- [ ] **4.6 DECISION OWED — the dropped viewer toggles.** Options, cheapest first:
+- [x] **4.6 RESOLVED 2026-07-18 — USER CHOSE (c): make them real ENGINE features. SHIPPED.**
+      All five toggles are back, and they are now better than what three had: every view is the shipping
+      renderer with exactly ONE term changed, instead of a second material stack that could disagree
+      with the game. - **`engine.debugPrelitScale`** (1 authored / 0 off / 2 MODULATE2X) and **`engine.debugUnlit`** —
+      applied in `rigidShade` AND `worldShade`, so they work for the viewers and for any future
+      in-game debug UI. Semantics note: "off" is a NEUTRAL (white) multiplier, not a zero one — the
+      point is to see the texture without the baked light, not to black the model out. ×2 saturates,
+      as MODULATE2X does on hardware. - **They ride SPARE frame-uniform lanes** (`params3.y`, `moonColor.w`) rather than growing the
+      struct. Growing it would mint a new buffer + bind group, and that bind group is recorded into
+      every cell render bundle — every bundle in the world would go stale. Recorded in the shader. - **`debug-line` pipeline** — a line-list, depth-tested but never depth-writing, drawn after the
+      coronas inside the existing world pass (so it costs no extra pass and lands in the same GPU
+      timer bucket). API: `createDebugLines(positions, color)` / `setDebugLinesVisible` /
+      `destroyDebugLines`, world-space vertices by contract. - **`packages/renderware/src/collision/col-lines.ts`** — the COL→segments geometry extracted from
+      the doomed three `build-col-wireframe.ts` as pure data, plus `meshEdgeLines` (deduplicated
+      triangle edges; WebGPU has no polygon-mode line, so wireframe IS a line list). 9 unit tests.
+      Field-verified in a real browser: collision hull draws green over the model, wireframe shows the
+      polygon structure, ×2 visibly brightens. e2e 23 passed, suite 332/2179.
+      Gotcha re-paid: **no backticks in WGSL comments** — the shader modules are JS template literals
+      and a stray backtick ends the string (the whole file then fails to parse).
+
+- [ ] ~~**4.6 DECISION OWED — the dropped viewer toggles.**~~ Options as offered, kept for the record:
       (a) accept the loss (the viewer becomes "see exactly what the game draws", nothing more);
       (b) rebuild them as DATA readouts rather than shading modes — e.g. a panel that reports a model's
       prelit min/avg/max and whether it carries night colours, which answers the "too dark?" question

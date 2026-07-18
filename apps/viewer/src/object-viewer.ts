@@ -3,23 +3,30 @@
  * It reuses the real asset path (fetch → parseDff/parseTxd → `buildVehicleModel` → the engine's rigid
  * upload), so what you see here is exactly what the SHIPPING renderer produces for one model.
  *
- * Ported off three.js in plan 074/13 phase 4. The port changed what this tool is FOR: it used to render
- * models through three materials the game did not use, so its lit/prelit/MODULATE2X toggles existed to
- * bisect "is this darkness from the DFF or from the map pipeline?" across TWO different render paths.
- * There is only one path now — what you see here is what the game draws. The toggles are therefore gone
- * (see the plan's phase-4 notes for the ones worth rebuilding as engine features).
+ * Ported off three.js in plan 074/13 phase 4. The toggles survived the port but changed nature: they used
+ * to switch three MATERIALS the game never used (so the tool answered "is this dark because of the DFF or
+ * because of the map pipeline?" by comparing two different render paths). They are now ENGINE features —
+ * `debugPrelitScale` / `debugUnlit` ride spare frame-uniform lanes and the wireframes are a line-list
+ * pipeline — so every view is the SHIPPING renderer with exactly one term changed.
  *
  * Models load on demand from the compare server (`--after` side) via the autocomplete box — run
  * `npx tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>` alongside `npm run dev`.
  * Open at /viewer.html?tab=object.
  */
+import type { ColModel } from '@opensa/renderware/parsers/binary/col-types';
+
+import { parseColLibrary } from '@opensa/renderware/parsers/binary/col';
+
 import type { ViewedModel } from './engine/model-view';
 
 import { loadModel } from './engine/model-view';
 import { createViewerEngine } from './engine/viewer-engine';
 
+/** Serialised COL (baked by scripts/build-viewer-assets.ts) — vertices as a plain array. */
+type ColJson = Omit<ColModel, 'vertices'> & { vertices: number[] };
+
 interface ModelEntry {
-  /** Optional shared COL *library* (e.g. LODvegetation.col); kept for manifest compatibility. */
+  /** Optional shared COL *library* (e.g. LODvegetation.col); collision is looked up inside it by dff name. */
   col?: string;
   dff: string;
   name: string;
@@ -42,6 +49,11 @@ const entriesByDff = new Map<string, ModelEntry>();
 const polyLabel = Object.assign(document.createElement('div'), { className: 'hint' });
 /** Raw TXD bytes per source; the engine builds its own texture array per model. */
 const txdCache = new Map<string, Promise<ArrayBuffer | null>>();
+/** Parsed COL library (e.g. LODvegetation.col) → ColModel by lowercased name; fetched once per file. */
+const colLibCache = new Map<string, Promise<Map<string, ColModel>>>();
+const prelit = { double: false, on: true };
+let collisionOn = false;
+let wireframeOn = false;
 
 async function addModel(model: ModelEntry): Promise<void> {
   if (loaded.has(model.dff)) {
@@ -57,11 +69,33 @@ async function addModel(model: ModelEntry): Promise<void> {
   if (loaded.has(model.dff)) {
     return; // a second tick raced us while the bytes were in flight
   }
-  loaded.set(model.dff, loadModel(viewer.engine, dff, txd ? [txd] : []));
+  const view = loadModel(viewer.engine, dff, txd ? [txd] : []);
+  loaded.set(model.dff, view);
+  view.showWireframe(wireframeOn);
+  const col = await loadCollision(model);
+  if (col) {
+    view.setCollision(col);
+    view.showCollision(collisionOn);
+  }
   updatePolyCount();
   if (loaded.size === 1) {
     frameAll();
   }
+}
+
+function addToggle(parent: HTMLElement, label: string, initial: boolean, onChange: (on: boolean) => void): void {
+  const wrapper = document.createElement('label');
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = initial;
+  checkbox.addEventListener('change', () => onChange(checkbox.checked));
+  wrapper.append(checkbox, document.createTextNode(` ${label}`));
+  parent.appendChild(wrapper);
+}
+
+/** Prelit is one engine scale: off = neutral white, on = as authored, ×2 = SA's MODULATE2X. */
+function applyPrelit(): void {
+  viewer.engine.debugPrelitScale = prelit.on ? (prelit.double ? 2 : 1) : 0;
 }
 
 function buildControls(): void {
@@ -108,6 +142,33 @@ function buildControls(): void {
     }
   });
   panel.append(frameButton, clearButton);
+
+  // The debug view knobs. Unlike the three era these are ENGINE features (074/13 phase 4): the prelit
+  // scale and unlit flag ride spare frame-uniform lanes, the wireframes are a line-list pipeline. So
+  // what they show is the shipping renderer with one term changed — not a second shading path.
+  addToggle(panel, 'Lit', !viewer.engine.debugUnlit, (on) => {
+    viewer.engine.debugUnlit = !on;
+  });
+  addToggle(panel, 'Prelit vertex colours', true, (on) => {
+    prelit.on = on;
+    applyPrelit();
+  });
+  addToggle(panel, 'Prelit ×2 (MODULATE2X)', false, (on) => {
+    prelit.double = on;
+    applyPrelit();
+  });
+  addToggle(panel, 'Collision', false, (on) => {
+    collisionOn = on;
+    for (const model of loaded.values()) {
+      model.showCollision(on);
+    }
+  });
+  addToggle(panel, 'Wireframe (polygon mesh)', false, (on) => {
+    wireframeOn = on;
+    for (const model of loaded.values()) {
+      model.showWireframe(on);
+    }
+  });
 
   panel.appendChild(polyLabel);
   updatePolyCount();
@@ -242,6 +303,36 @@ async function listCompanionLod(
   } catch {
     /* server unreachable — no companion listed */
   }
+}
+
+function loadColLibrary(file: string): Promise<Map<string, ColModel>> {
+  let promise = colLibCache.get(file);
+  if (!promise) {
+    promise = fetch(`${BASE}/viewer/objects/${file}`)
+      .then((response) => response.arrayBuffer())
+      .then((buffer) => new Map(parseColLibrary(buffer).map((col) => [col.name.toLowerCase(), col])));
+    colLibCache.set(file, promise);
+  }
+
+  return promise;
+}
+
+/** The model's COL: either a shared library (`model.col`, looked up by dff name) or `<model>.col.json`. */
+async function loadCollision(model: ModelEntry): Promise<ColModel | null> {
+  if (model.server) {
+    return null; // the compare server serves no collision
+  }
+  const base = model.dff.replace(/\.dff$/i, '');
+  if (model.col) {
+    return (await loadColLibrary(model.col)).get(base.toLowerCase()) ?? null;
+  }
+  const response = await fetch(`${BASE}/viewer/objects/${base}.col.json`);
+  if (!response.ok) {
+    return null;
+  }
+  const json = (await response.json()) as ColJson;
+
+  return { ...json, vertices: new Float32Array(json.vertices) };
 }
 
 /**
