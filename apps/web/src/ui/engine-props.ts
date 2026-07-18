@@ -13,6 +13,7 @@ import type { PhysicsWorld } from '@opensa/game/physics/physics-world';
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { gtaPositionToEngine, writeGtaRoot } from '@opensa/game/adapters/engine-vehicle-handle';
+import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
 import { getClump } from '@opensa/renderware/archive/asset-cache';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
@@ -68,28 +69,7 @@ export function setupEngineProps(engine: Engine, fs: AssetFileSystem, physics: P
       const clump = getClump(fs, request.modelName);
       const txd = request.txdName ? fs.get(`${request.txdName.toLowerCase()}.txd`) : null;
       const model = buildVehicleModel(clump, new VehicleTextures(txd ? [txd] : []));
-      // The rigid path is renderer-level, not vehicle-level: a prop is a model with no paint and no lamps.
-      const bytes = (values: Float32Array): Uint8Array =>
-        new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
-      id = engine.createVehicleModel({
-        colors: model.colors,
-        indexCount: model.indices.length,
-        indices: new Uint8Array(model.indices.buffer, model.indices.byteOffset, model.indices.byteLength),
-        meta: model.meta,
-        normals: bytes(model.normals),
-        parts: model.parts,
-        positions: bytes(model.positions),
-        reflect: model.reflect,
-        submeshes: model.submeshes,
-        texture: {
-          height: model.texture.height,
-          layers: model.texture.layers,
-          rgba: model.texture.rgba,
-          width: model.texture.width,
-        },
-        uvs: bytes(model.uvs),
-        vertexCount: model.positions.length / 3,
-      });
+      id = engine.createVehicleModel(toRigidModelInit(model));
     } catch {
       id = null; // not renderable as an entity — the prop just disappears, rather than crashing the frame
     }

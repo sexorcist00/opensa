@@ -18,6 +18,7 @@ import type { AssetFileSystem } from '@opensa/renderware';
 import type { FrameBone } from '@opensa/renderware/anim/frame-clip';
 
 import { IfpSampler } from '@opensa/engine';
+import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
 import { animatedFrames, clipForModel, frameBones, frameClip } from '@opensa/renderware/anim/frame-clip';
 import { getClump, getIfp } from '@opensa/renderware/archive/asset-cache';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
@@ -95,7 +96,7 @@ export function setupEngineAnimObjects(
         built = {
           bones: frameBones(clump),
           clip: frameClip(clump, animation),
-          id: engine.createVehicleModel(toInit(model)),
+          id: engine.createVehicleModel(toRigidModelInit(model)),
           moving,
           submeshParts: model.submeshes.map((submesh) => submesh.part),
         };
@@ -211,30 +212,4 @@ function quatMatrix(x: number, y: number, z: number, w: number): number[] {
     2 * (y * z - x * w),
     1 - 2 * (x * x + y * y),
   ];
-}
-
-/** The rigid-model upload the engine wants (the same shape vehicles and felled props hand it). */
-function toInit(model: ReturnType<typeof buildVehicleModel>): Parameters<Engine['createVehicleModel']>[0] {
-  const bytes = (values: Float32Array): Uint8Array =>
-    new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
-
-  return {
-    colors: model.colors,
-    indexCount: model.indices.length,
-    indices: new Uint8Array(model.indices.buffer, model.indices.byteOffset, model.indices.byteLength),
-    meta: model.meta,
-    normals: bytes(model.normals),
-    parts: model.parts,
-    positions: bytes(model.positions),
-    reflect: model.reflect,
-    submeshes: model.submeshes,
-    texture: {
-      height: model.texture.height,
-      layers: model.texture.layers,
-      rgba: model.texture.rgba,
-      width: model.texture.width,
-    },
-    uvs: bytes(model.uvs),
-    vertexCount: model.positions.length / 3,
-  };
 }

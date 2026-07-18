@@ -275,9 +275,42 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
 ### Tasks
 
 - [x] **4.1** USER DECISION — option (1), port all four (recorded above).
-- [ ] **4.1a** Engine-side single-asset path: load one DFF/TXD outside the pak/cell pipeline + orbit
-      camera (lift engine-lab's). This is the shared foundation for all four tabs.
-- [ ] **4.1b** `object-viewer` port (the e2e-asserted tab — do it first, it validates 4.1a).
+- [x] **4.1a DONE 2026-07-18 — the single-asset path exists**, three new modules under
+      `apps/viewer/src/engine/`: `viewer-engine.ts` (canvas + engine + neutral studio environment + frame
+      loop), `orbit.ts` (the orbit rig, lifted out of the lab's inline `let`s in `main.ts` so it is
+      finally reusable), `model-view.ts` (bytes → `parseDff` → `buildVehicleModel` → the engine's rigid
+      upload, plus bounds for auto-framing).
+      **No new engine code was needed** — the rigid path (`createVehicleModel`/`createVehicle`) is
+      renderer-level, not vehicle-level, exactly as `engine-props.ts` already assumed; a viewed map
+      object is a model with no paint. `engine.frame()` is happy with zero cells, so a viewer needs no
+      pak and no streaming.
+      Reuse-first side effect: the `buildVehicleModel → createVehicleModel` adapter was duplicated
+      verbatim in `engine-props.ts` and `engine-anim-objects.ts`; it is now
+      `packages/game/src/adapters/vehicle-model-init.ts` (`toRigidModelInit`) with both hosts and the
+      viewer on it.
+      **Two lessons paid for in debugging:** (1) `engine.updateVehicles()` must run every frame or the
+      models exist on the GPU and are never placed — the symptom is an empty scene with a CORRECT
+      triangle count, which reads like a camera bug; (2) the canvas must be created and appended
+      SYNCHRONOUSLY before `engine.init` is awaited, or `e2e/viewer-tabs.spec.ts` fails on all four tabs.
+- [x] **4.1b DONE 2026-07-18 — `object-viewer` ported and verified in a real browser.** Every
+      non-render capability survives verbatim (HD/LOD split lists, compare-server autocomplete + URL
+      field, companion-LOD listing, Add/Frame all/Clear all, multi-model overlay, triangle count, status
+      line, e2e fixture path). Field check: `wattspark1_LAe2` renders textured and correctly oriented
+      (1 399 triangles, zero console errors); the speckled tree canopies were verified against the OLD
+      three baseline and look identical there — that is the model's alpha, not a port artefact.
+      **e2e lane changed (necessary, not incidental):** headless Chromium had no WebGPU, so
+      `playwright.config.ts` now launches with the bench harness's flags
+      (`--enable-unsafe-webgpu --enable-features=WebGPU --use-angle=metal`). The consequence is recorded
+      in the config: SwiftShader has no WebGPU, so the old "software renderer ⇒ deterministic
+      screenshots" premise is gone and canvas baselines are now MACHINE-SPECIFIC. Acceptable only
+      because this lane does not run in CI (it needs a local GTA copy for fixtures). Baseline
+      regenerated; all 3 object-viewer + 4 viewer-tabs specs green.
+      **Capability DROPPED, needs a decision (see 4.6):** the Lit / Prelit / Prelit ×2 / Wireframe /
+      Collision toggles. The first four were three-material switches with no engine equivalent; COL
+      wireframe needs a line pipeline the engine does not have. Note their original PURPOSE is partly
+      obsolete: they existed to bisect a discrepancy between the viewer's three materials and the game's
+      — with one renderer there is no discrepancy to bisect. What is NOT obsolete is inspecting the
+      DATA (is this DFF's prelit too dark? does it have night colours?) and seeing collision.
 - [ ] **4.1c** `vehicle-viewer` port (engine-lab's `?vehicle=1&vmodel=` covers most of it) +
       `build-col-wireframe` equivalent.
 - [ ] **4.1d** `character-viewer` port — DFF + IFP + TXD on `ifp-sampler` (the animation rebind from 1.6
@@ -288,6 +321,16 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
 - [ ] **4.3** Update / retire `e2e/object-viewer.spec.ts` + `e2e/viewer-tabs.spec.ts` accordingly — and
       keep the `?tab=` contract if the shell lives.
 - [ ] **4.4** Check `tools/map-optimizer/src/compare-serve.ts` — it references viewer HTML and must follow.
+- [ ] **4.6 DECISION OWED — the dropped viewer toggles.** Options, cheapest first:
+      (a) accept the loss (the viewer becomes "see exactly what the game draws", nothing more);
+      (b) rebuild them as DATA readouts rather than shading modes — e.g. a panel that reports a model's
+      prelit min/avg/max and whether it carries night colours, which answers the "too dark?" question
+      without a second shading path;
+      (c) add real engine features: a debug uniform for prelit off/×2 + an unlit mode, and a line
+      pipeline for COL wireframes (also unblocks the vehicle viewer's collision toggle and any future
+      debug-line need in the game).
+      Note (c) is the only option that keeps the vehicle viewer's Collision toggle, so this decision is
+      coupled to 4.1c.
 
 ---
 
