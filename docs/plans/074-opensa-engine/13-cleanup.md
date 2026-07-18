@@ -311,8 +311,35 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
       obsolete: they existed to bisect a discrepancy between the viewer's three materials and the game's
       — with one renderer there is no discrepancy to bisect. What is NOT obsolete is inspecting the
       DATA (is this DFF's prelit too dark? does it have night colours?) and seeing collision.
-- [ ] **4.1c** `vehicle-viewer` port (engine-lab's `?vehicle=1&vmodel=` covers most of it) +
-      `build-col-wireframe` equivalent.
+- [x] **4.1c DONE 2026-07-18 — `vehicle-viewer` ported, every capability kept.** Part selector, door
+      open/close (button + `E`), damage/repair, `chassis_vlo` LOD, collision, wireframe, triangle count,
+      server autocomplete. The port made three of them ENGINE-native rather than viewer-side scene-graph
+      surgery: damage twins and the LOD are `setSubmeshVisible` over the model's own
+      `kind: body|dam|lod` + `damageGroup` metadata (one `applyVisibility` recomputed from scratch, so
+      the two toggles can never disagree about who owns a submesh), and the door is
+      `entity.setPartRotation(part, axisAngle(Z))` — byte-identical to what `engine-vehicle-handle`
+      does in the game.
+      Selection highlight = a debug-line box, so no new engine feature was needed.
+
+      **Three lessons paid for here:**
+      1. **`setPaint` is 0..1, not 0..255.** The three viewer's `[200, 40, 40]` saturates every paint
+         slot to white, which reads as "the carcols markers were not found" — a trap, because the car
+         still renders and looks plausible. Noted in the constant.
+      2. **Part vertices live in the PART's frame, not model space.** Bounds taken straight off
+         `positions` box the model ORIGIN. `partBounds` now runs them through the part's bind matrix
+         (a copy of `RigidEntity.flatten` minus the root), and optionally through the live animation
+         rotation so the box follows an opened door.
+      3. **Do not judge a depth-tested debug overlay from one camera angle.** Two "bugs" here — a door
+         that appeared to fly above the roof and a highlight box floating in the sky — were both the
+         far-side view of a CORRECT overlay, mostly occluded by the car with only its top edge showing.
+         The numbers said the bounds were right; orbiting to the other side confirmed it. Log the
+         geometry before believing a screenshot.
+
+      **Open observation (NOT a port artefact, needs a look in-game):** vehicle bodies carry a fine
+      pink/blue speckle along silhouette edges and top surfaces, on stock `infernus` as well as modded
+      `admiral`. It is the engine's own vehicle shading (probe off + noon sun in the viewer's neutral
+      studio), so it should be checked against the game before anyone blames the port.
+
 - [ ] **4.1d** `character-viewer` port — DFF + IFP + TXD on `ifp-sampler` (the animation rebind from 1.6
       lands here).
 - [ ] **4.1e** `compare-viewer` port — two clumps side by side.
