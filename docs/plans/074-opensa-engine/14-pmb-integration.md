@@ -84,6 +84,18 @@ own engine, benchmarked**.
         was the DFF already broken?" — for the map, where a converter actually exists.
       - Loose live-tunable data files (timecyc, above) are unaffected: still files next to the pak.
 
+      **FOLLOW-UP TASK, scheduled AFTER the opensa-pack rework (user, 2026-07-18): delete
+      `ped.json`/`ped.bin` entirely.** Peds — the PLAYER included — must load vanilla DFF + TXD + IFP at
+      runtime, exactly like cars already do. Today they do not: `apps/web/src/ui/engine-player.ts` and
+      `apps/engine-lab/src/ped.ts` both fetch `/ped/ped.json` + `.bin`, a build-time bake from
+      `ped-probe` carrying exactly THREE clips (`IDLE_CLIP/WALK_CLIP/RUN_CLIP` by index). So a modded
+      player model or any fourth animation is invisible to the game — the one place still violating the
+      vanilla-assets rule. `buildPedModel` + `pedClip` (landed in 074/13 phase 4.1d) already make this
+      possible from the browser. Scope: rewire both hosts onto the VFS, then delete `ped-probe.ts`,
+      `public/ped/`, `apps/engine-lab/public/ped/` and the `PedFixtureJson` type. Open question to settle
+      then: which model the player uses, since stock `player.dff` is a 6-vertex placeholder (CJ is
+      assembled from clothing components).
+
 - [ ] Full-profile conversions (non-modified, anderius, carcer, gostown) + the final bench matrix.
 
 ## Measurement ledger

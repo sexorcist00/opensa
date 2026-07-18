@@ -1,11 +1,19 @@
-import type { Game } from '@opensa/game';
+import type { Config, EventBus, GameEvents } from '@opensa/game';
 
 import { GameClock } from '@opensa/game/time/game-clock';
 import { type CSSProperties, type ReactElement, useEffect, useRef, useState } from 'react';
 
-/** The narrow Game surface the HUD reads (074/10 reuse-not-duplicate): the three-owned `Game` satisfies it
- *  structurally, and the own-engine host provides a tiny implementation over the same EventBus/Config. */
-export type HudGame = Pick<Game, 'events' | 'getConfig' | 'getTime' | 'getZone'>;
+/**
+ * The narrow game surface the HUD reads. It used to be `Pick<Game, …>` off the three-owned `Game` class;
+ * that class died with the old renderer (074/13 phase 5), so the four members are spelled out — which is
+ * what they always were in practice, since the engine host supplies its own tiny implementation.
+ */
+export interface HudGame {
+  events: EventBus<GameEvents>;
+  getConfig(): Config;
+  getTime(): number;
+  getZone(): string;
+}
 
 /** District label: full opacity for this long, then it fades over {@link ZONE_FADE_MS}. */
 const ZONE_HOLD_MS = 3000;

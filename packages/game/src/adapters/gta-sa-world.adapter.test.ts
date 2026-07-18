@@ -158,10 +158,6 @@ describe('toModelColliders', () => {
 
 describe('GtaSaWorldAdapter cell streaming', () => {
   describe('negative cases', () => {
-    it('throws when loadCell is called before prepare', async () => {
-      await expect(new GtaSaWorldAdapter(cfg()).loadCell({ cx: 0, cy: 0, lod: false })).rejects.toThrow();
-    });
-
     it('throws when loadCellColliders is called before prepare', async () => {
       await expect(new GtaSaWorldAdapter(cfg()).loadCellColliders(0, 0)).rejects.toThrow();
     });
@@ -170,16 +166,6 @@ describe('GtaSaWorldAdapter cell streaming', () => {
   describe('positive cases', () => {
     it('exposes the configured cell size', () => {
       expect(new GtaSaWorldAdapter(cfg()).cellSize).toBe(250);
-    });
-
-    it('caches a built cell (same array on repeat loads)', async () => {
-      const adapter = new GtaSaWorldAdapter(cfg());
-      await adapter.prepare();
-
-      const first = await adapter.loadCell({ cx: 0, cy: 0, lod: false });
-      const second = await adapter.loadCell({ cx: 0, cy: 0, lod: false });
-
-      expect(second).toBe(first);
     });
 
     it('caches a cell’s colliders (same array on repeat loads)', async () => {

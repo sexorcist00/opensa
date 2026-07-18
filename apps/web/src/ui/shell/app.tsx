@@ -17,14 +17,9 @@ import './shell.css';
 
 // The heavy game surface is code-split — fetched only past the menu.
 // WebGPU-first (plan 074/10, user decision 2026-07-17): the own engine IS the game; browsers without
-// WebGPU get the sorry screen, not a fallback renderer. `?engine=three` remains a manual comparison
-// override for the post-flip period only (dies at C2); the two hosts never share a canvas.
-const THREE_OVERRIDE = new URLSearchParams(window.location.search).get('engine') === 'three';
-const GameCanvas = lazy(() =>
-  THREE_OVERRIDE
-    ? import('../canvas-host').then((module) => ({ default: module.CanvasHost }))
-    : import('../engine-canvas-host').then((module) => ({ default: module.EngineCanvasHost })),
-);
+// WebGPU get the sorry screen, not a fallback renderer. The `?engine=three` comparison override and the
+// three host it loaded were deleted with the rest of the old stack (074/13 phase 5, C2).
+const GameCanvas = lazy(() => import('../engine-canvas-host').then((module) => ({ default: module.EngineCanvasHost })));
 
 const SUBTITLED = 'sa-logo--small sa-logo--titled sa-logo--described';
 
@@ -33,8 +28,8 @@ export function App(): ReactElement {
   const fullscreen = useFullscreen();
   const { phase } = boot.state;
   const { pause, resume } = boot;
-  // null = probe in flight (resolves in ms, well before the folder pick); the three override skips it.
-  const [webGpuOk, setWebGpuOk] = useState<boolean | null>(THREE_OVERRIDE ? true : null);
+  // null = probe in flight (resolves in ms, well before the folder pick).
+  const [webGpuOk, setWebGpuOk] = useState<boolean | null>(null);
 
   // Count the visit (no-op unless VITE_GA_ID is set).
   useEffect(() => {
@@ -42,9 +37,6 @@ export function App(): ReactElement {
   }, []);
 
   useEffect(() => {
-    if (THREE_OVERRIDE) {
-      return;
-    }
     let cancelled = false;
     void probeWebGpuSupport().then((ok) => {
       if (!cancelled) {

@@ -1,23 +1,16 @@
+import type { parsePedDefs } from '@opensa/renderware';
+
 // game/adapters/** (and game/mods/**) are the only places allowed to import renderware.
+import { Matrix4 } from '@opensa/math';
 import {
   type AssetFileSystem,
   breakableInstanceKey,
   breakableKeyHash,
   breakableModelsOf,
-  buildAnimationClip,
   buildCellColliders,
-  buildCellSteps,
-  buildClump,
-  buildColliders,
   buildCollisionIndex,
-  buildCollisionWireframe,
-  buildProcObjMeshes,
-  buildSkinnedClump,
-  buildTextureMap,
   buildTimecyc,
-  buildVehicle,
   buildVehicleModel,
-  buildWater,
   buildWorldGrid,
   type CarGroup,
   cellModelNames,
@@ -30,22 +23,17 @@ import {
   type IdeObjectDef,
   type MapDefinitions,
   type ObjectDatEntry,
-  oceanFrame,
   parseCarcols,
   parseCarGroups,
   parseDff,
   parseDffCollision,
   parseHandling,
-  parseIfp,
   parseObjectDat,
-  parsePedDefs,
   parsePopcycle,
   parseProcObj,
   parseSurfaceNames,
   parseTimecyc,
-  parseTxd,
   parseVehicleDefs,
-  parseWater,
   placementMatrix,
   type PopcycleZone,
   primeClump,
@@ -56,7 +44,6 @@ import {
   procObjLotteryCap,
   type ProcObjRule,
   type RegionColliders,
-  type RegionMeshData,
   type RenderPart,
   resolveMap,
   scatterProcObjects,
@@ -69,33 +56,20 @@ import {
   VehicleTextures,
   type WorldGrid,
 } from '@opensa/renderware';
-import { type AnimationClip, Group, type InstancedMesh, Matrix4, type Object3D, type Texture, Vector3 } from 'three';
 
 import type { ModelColliders } from '../interfaces/collider.interface';
-import type {
-  CellRequest,
-  CharacterModel,
-  RegionRequest,
-  VehicleHandling,
-  VehicleModel,
-  WorldAdapter,
-  WorldObjectInfo,
-} from '../interfaces/world-adapter.interface';
+import type { CellRequest, VehicleHandling, WorldAdapter } from '../interfaces/world-adapter.interface';
 import type { WorldMod } from '../mods/mod.interface';
 import type { CellCoord } from '../streaming/grid';
 import type { VehiclePlacement } from '../vehicle/vehicle-lod.system';
 import type { City } from '../zones/city';
 
-import { VehicleRig } from '../vehicle/vehicle-rig';
 import { carGeneratorPlacements } from './car-generators';
 import { createDffParser, type DffParser } from './dff-parser';
 import { randomCarPlacements } from './popcycle-cars';
-import { ThreeVehicleHandle } from './three-vehicle-handle';
 import { createVehicleModelBuilder, type VehicleModelBuilder } from './vehicle-model-builder';
 
 /** Sea level (Z) + a large background plane half-size so the ocean reaches the horizon. */
-const SEA_LEVEL = 0;
-const SEA_HALF = 16000;
 
 /** B1 (plan 059) — a representative `popcycle.dat` zone-type per map.zon city, for resolving random map cars.
  *  Countryside/desert map 1:1; the three cities use a generic residential mix (coarse but data-driven). */
@@ -196,7 +170,6 @@ interface VehiclePaint {
  * The −90°X (GTA Z-up → three Y-up) lives here, not in the engine.
  */
 /** Per-slice main-thread budget for the cooperative cell build (plan 060 Phase 3). */
-const CELL_SLICE_MS = 5;
 
 export class GtaSaWorldAdapter implements WorldAdapter {
   readonly cellSize: number;
@@ -206,7 +179,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   private readonly breakableModels = new Set<string>();
   /** `cargrp.dat` groups for random map-car resolution (plan 059); null when absent. */
   private carGroups: CarGroup[] | null = null;
-  private readonly cellCache = new Map<string, Object3D[]>();
   private readonly colliderCache = new Map<string, ModelColliders[]>();
   private readonly config: GtaSaWorldConfig;
   /** Composed mod build-hook (undefined when no mods) — see {@link GtaSaWorldConfig.mods}. */
@@ -217,7 +189,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   /** Off-thread parse client (plan 060 Phase 5); null = synchronous fallback. */
   private readonly dffParser: DffParser | null;
   private readonly fs: AssetFileSystem;
-  private genericVehicleTextures: Map<string, Texture> | null = null;
   private grid: null | WorldGrid = null;
   /** Parsed `handling.cfg`, kept for the later vehicle-physics phase. */
   private handling: Map<string, HandlingEntry> | null = null;
@@ -343,36 +314,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return out;
   }
 
-  /** Identify a picked object: placed map instances via `userData.region`, scattered clutter
-   *  via `userData.procObj` (position decomposed from the instance matrix). */
-  describe(object: Object3D, instanceId?: number): null | WorldObjectInfo {
-    const proc = object.userData.procObj as undefined | { category: string; model: string };
-    if (proc && instanceId !== undefined) {
-      const matrix = new Matrix4();
-      (object as InstancedMesh).getMatrixAt(instanceId, matrix);
-      const position = new Vector3().setFromMatrixPosition(matrix);
-
-      return {
-        modelName: `${proc.model} [procobj: ${proc.category}]`,
-        position: [position.x, position.y, position.z],
-        txdName: this.defByName?.get(proc.model)?.txdName ?? '?',
-      };
-    }
-    const data = object.userData.region as RegionMeshData | undefined;
-    // Plain-Mesh world parts (073/08 WebGPU) raycast without an instanceId — their group has exactly one.
-    const instance = instanceId === undefined ? singleInstanceOf(data) : data?.instances[instanceId];
-    if (!data || !instance) {
-      return null;
-    }
-
-    return {
-      material: describeMaterial(object),
-      modelName: data.def.modelName,
-      position: instance.position,
-      txdName: data.def.txdName,
-    };
-  }
-
   /** Drop the cached per-cell colliders (clutter knobs changed) — the collision streaming system
    *  then re-streams physics via {@link loadCellColliders}, rebuilding with the new density. */
   invalidateColliderCache(): void {
@@ -389,59 +330,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   }
 
   /**
-   * Load an IFP file (e.g. `anim/ped.ifp`) **directly** — like the original game, no packed archive —
-   * into `THREE.AnimationClip`s keyed by lowercased animation name.
-   */
-  async loadAnimations(ifpName: string): Promise<Map<string, AnimationClip>> {
-    await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
-    const clips = new Map<string, AnimationClip>();
-    // The build lowercases all packed asset keys (case-insensitive like GTA), so normalise the lookup.
-    for (const anim of parseIfp(requireBuffer(this.fs, ifpName.toLowerCase()))) {
-      clips.set(anim.name.toLowerCase(), buildAnimationClip(anim));
-    }
-
-    return clips;
-  }
-
-  /**
-   * Load a character DFF + TXD. Skinned models (peds) build a `SkinnedMesh` +
-   * `Skeleton` (bind pose) and expose the named bones; otherwise a static clump
-   * is returned with `skeleton: null`. The renderable is kept in **native** GTA
-   * model space (no Z-up→Y-up conversion) — the caller stands it up under the
-   * engine's `entityRoot`.
-   */
-  async loadCharacter(dffName: string, txdName: string): Promise<CharacterModel> {
-    await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
-    // The build lowercases all packed asset keys (case-insensitive like GTA), so normalise the lookup —
-    // e.g. a `BMYPOL1.dff` request resolves to the packed `bmypol1.dff`.
-    const dffBuffer = requireBuffer(this.fs, dffName.toLowerCase());
-    const textures = buildTextureMap(parseTxd(requireBuffer(this.fs, txdName.toLowerCase())));
-    const clump = parseDff(dffBuffer);
-
-    const skinned = buildSkinnedClump(clump, textures);
-    if (skinned) {
-      return { bonesByName: skinned.bonesByName, object: skinned.root, skeleton: skinned.skeleton };
-    }
-
-    return { bonesByName: new Map(), object: buildClump(clump, textures, { convertToYUp: false }), skeleton: null };
-  }
-
-  /**
-   * TEMP (main-character stub): load a character by its `peds.ide` model name (e.g. `BMYPOL1`), resolving to the
-   * archive's bare `model.dff` / `txd.txd`. The whole ped roster comes from peds.ide → the img archives; there is
-   * no loose `player/` folder. (`GAME_CONFIG.mainCharacter` still picks which ped stands in for the player.)
-   */
-  async loadCharacterByModel(modelName: string): Promise<CharacterModel> {
-    this.peds ??= parsePedDefs(requireText(this.fs, 'data/peds.ide'));
-    const def = this.peds.get(modelName.toLowerCase());
-    if (!def) {
-      throw new Error(`No ped definition for '${modelName}' in peds.ide`);
-    }
-
-    return this.loadCharacter(`${def.model}.dff`, `${def.txd}.txd`);
-  }
-
-  /**
    * Load the timecyc (per-weather, per-hour colour/lighting table), always as 24h.
    * Uses the optional `timecyc_24h.dat` as-is when present, else converts the
    * mandatory vanilla `timecyc.dat` (8 keyframes/weather) to 24h.
@@ -454,64 +342,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     }
 
     return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
-  }
-
-  // eslint-disable-next-line
-  async loadCell(request: CellRequest): Promise<Object3D[]> {
-    if (!this.defs || !this.grid) {
-      throw new Error('GtaSaWorldAdapter.loadCell called before prepare()');
-    }
-    const key = `${request.cx},${request.cy},${request.lod ? 'lod' : 'hd'}`;
-    let meshes = this.cellCache.get(key);
-    if (!meshes) {
-      // Phase 5: parse + geometry-prepare the cell's uncached models OFF the main thread first, so the
-      // sliced build below runs on cache hits (its worst single steps were 50–80 ms parse/prepare units).
-      await this.preparseCellModels(request);
-      const buildStart = performance.now(); // plan 060 Phase 0: the CPU hump of a first-visit cell build
-      // Native Z-up; the streaming root applies the −90°X (so no per-cell group). Built COOPERATIVELY
-      // (plan 060 Phase 3): the step generator yields per model group, and past the per-slice budget we
-      // yield the main thread — a heavy cell (100–250 ms) becomes many sub-frame slices instead of a freeze.
-      meshes = [];
-      let sliceStart = performance.now();
-      let deadline = sliceStart + CELL_SLICE_MS;
-      let maxSliceMs = 0; // plan 060 round 5: a single generator step (one model group) can dwarf the budget
-      for (const chunk of buildCellSteps(this.fs, this.defs, this.grid, request.cx, request.cy, request.lod, {
-        breakableModels: this.breakableModels,
-        decoratePart: this.decoratePart,
-      })) {
-        meshes.push(...chunk);
-        if (performance.now() > deadline) {
-          maxSliceMs = Math.max(maxSliceMs, performance.now() - sliceStart);
-          await nextTask();
-          sliceStart = performance.now();
-          deadline = sliceStart + CELL_SLICE_MS;
-        }
-      }
-      maxSliceMs = Math.max(maxSliceMs, performance.now() - sliceStart);
-      // Procedural clutter (plan 042): deterministic scatter over the cell's collision faces.
-      // HD cells only — the clutter draw distances are far below the LOD ring anyway.
-      const batches = request.lod ? null : this.cellProcObjBatches(request.cx, request.cy);
-      if (batches && this.defByName) {
-        const defByName = this.defByName;
-        meshes.push(
-          ...buildProcObjMeshes(this.fs, batches, (model) => defByName.get(model), {
-            decoratePart: this.decoratePart,
-            lotteryCap: procObjLotteryCap(batches, this.config.procObjLimit),
-          }),
-        );
-      }
-      this.cellCache.set(key, meshes);
-      const buildMs = performance.now() - buildStart;
-      if (buildMs > 8) {
-        // Wall time — with the sliced build this spans many sub-frame slices, not one frozen frame.
-        // eslint-disable-next-line no-console -- plan 060 Phase 0 measurement: cell-build CPU hump
-        console.log(
-          `[stream] built ${key} in ${buildMs.toFixed(0)}ms (${meshes.length} objects, max slice ${maxSliceMs.toFixed(0)}ms)`,
-        );
-      }
-    }
-
-    return meshes;
   }
 
   // eslint-disable-next-line
@@ -554,53 +384,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     }
 
     return colliders;
-  }
-
-  // eslint-disable-next-line
-  async loadCollisionDebug(request: RegionRequest): Promise<Object3D[]> {
-    if (!this.defs) {
-      throw new Error('GtaSaWorldAdapter.loadCollisionDebug called before prepare()');
-    }
-    const index = buildCollisionIndex(this.fs);
-    const colliders = buildColliders(index, this.defs, { center: request.center, radius: request.radius });
-    const root = new Group();
-    root.rotation.x = -Math.PI / 2; // GTA Z-up → three.js Y-up (matches the streaming root)
-    root.add(buildCollisionWireframe(colliders));
-
-    return [root];
-  }
-
-  /**
-   * Load a painted, wheeled vehicle by model name. Resolves its `vehicles.ide`
-   * definition (txd + wheel scale) and carcol colours, merges the generic
-   * `vehicle.txd` with the car's own TXD, builds the mesh, and extracts the
-   * collision embedded in the DFF (model space — the caller sets the placement).
-   * Native Z-up — the caller parents it under the −90°X streaming root.
-   */
-  async loadVehicle(modelName: string, colour?: string): Promise<VehicleModel> {
-    const { def, dffBuffer, paint, ...common } = await this.vehicleCommon(modelName, colour);
-    const genericTextures = await this.loadGenericVehicleTextures();
-    const carTxdBuffer = requireBuffer(this.fs, `${def.txd.toLowerCase()}.txd`);
-    const textures = new Map<string, Texture>([...genericTextures, ...buildTextureMap(parseTxd(carTxdBuffer))]);
-
-    const built = buildVehicle(parseDff(dffBuffer), textures, { ...paint, wheelScale: def.wheelScale });
-    const handle = new ThreeVehicleHandle(built);
-
-    return {
-      colliders: common.colliders,
-      halfExtents: common.halfExtents,
-      handle,
-      handling: common.handling,
-      object: built.root,
-      reflectiveMaterials: built.reflectiveMaterials,
-      rig: new VehicleRig(handle),
-      seats: built.seats,
-      wheels: built.wheels.map((wheel) => ({
-        connection: wheel.connection,
-        front: wheel.front,
-        radius: wheel.radius,
-      })),
-    };
   }
 
   /**
@@ -647,27 +430,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
         radius: wheel.radius,
       })),
     };
-  }
-
-  /**
-   * Build the flat water surface from `water.dat`, textured with `waterclear256`.
-   * `water.dat` only covers the map, so the ocean is a single large sea-level plane
-   * (reaching the horizon); the file's non-sea-level polygons (lakes) are kept on
-   * top. (Sea-level file polygons are dropped — the big plane covers them.)
-   */
-  async loadWater(waterName: string, txdName: string): Promise<Object3D> {
-    await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
-    const waterText = requireText(this.fs, waterName);
-    const texture = buildTextureMap(parseTxd(requireBuffer(this.fs, txdName))).get('waterclear256');
-    if (!texture) {
-      throw new Error(`Water texture 'waterclear256' not found in ${txdName}`);
-    }
-
-    // Real water.dat polygons (correct coverage — tunnels under land stay dry), plus an open-ocean
-    // frame filling out to the horizon around the data's bounds (a full plane would flood tunnels).
-    const quads = parseWater(waterText);
-
-    return buildWater([...quads, ...oceanFrame(quads, SEA_HALF, SEA_LEVEL)], texture);
   }
 
   /**
@@ -822,15 +584,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
    *  the SAME gate the static breakable props use. */
   private isClutterBreakable(name: string): boolean {
     return getBreakable(this.fs, name) !== undefined || this.breakableModels.has(name);
-  }
-
-  private async loadGenericVehicleTextures(): Promise<Map<string, Texture>> {
-    await Promise.resolve(); // VFS reads are synchronous; the WorldAdapter API is async
-    if (!this.genericVehicleTextures) {
-      this.genericVehicleTextures = buildTextureMap(parseTxd(requireBuffer(this.fs, 'models/generic/vehicle.txd')));
-    }
-
-    return this.genericVehicleTextures;
   }
 
   /**
@@ -988,23 +741,6 @@ export function toModelColliders({ col, name, transforms }: RegionColliders): Mo
   };
 }
 
-/** Runtime render diagnostics for the pick panel: shader-variant cache keys of the object's material(s)
- *  (`saWorld|night` = day/night vertex blend active) + whether the geometry actually carries the
- *  `nightColor` attribute — pins which lighting path an instance takes without guessing from files. */
-function describeMaterial(object: Object3D): string {
-  const mesh = object as Partial<InstancedMesh>;
-  const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
-  const keys = [...new Set(materials.map((m) => m.customProgramCacheKey() || m.type))];
-  const night = Boolean(mesh.geometry?.getAttribute('nightColor'));
-
-  return `${keys.join(',')} nightAttr=${night ? 'yes' : 'no'}`;
-}
-
-/** Yield the main thread (macrotask) so input/render frames interleave with a heavy cell build. */
-function nextTask(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 function requireBuffer(fs: AssetFileSystem, name: string): ArrayBuffer {
   const buffer = fs.get(name);
   if (!buffer) {
@@ -1028,11 +764,6 @@ function requireText(fs: AssetFileSystem, name: string): string {
 /** carcols bytes → the engine's 0..1 colour space. */
 function scale255(rgb: readonly [number, number, number]): Rgb {
   return [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255];
-}
-
-/** The group's sole placement, when it has exactly one (plain-Mesh world parts pick without a slot id). */
-function singleInstanceOf(data: RegionMeshData | undefined): RegionMeshData['instances'][number] | undefined {
-  return data?.instances.length === 1 ? data.instances[0] : undefined;
 }
 
 /** Tag a model's collider placements with breakable instance keys (plan 045); a pass-through for
