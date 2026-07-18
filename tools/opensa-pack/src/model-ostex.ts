@@ -8,7 +8,7 @@
  */
 import type { VehicleTextureArray } from '@opensa/renderware/vehicle/types';
 
-import { encodeOstex, fnv1a, type Ostex, OstexAlphaClass, OstexFormat } from '@opensa/engine-formats';
+import { encodeOstex, fnv1a, type Ostex, OstexAlphaClass, OstexFormat, ostexMaxMips } from '@opensa/engine-formats';
 
 import { type AlphaClass, classifyAlpha, processAlphaTexture } from './alpha';
 import { packOstexPayload } from './ostex-payload';
@@ -22,15 +22,26 @@ const ALPHA_TO_OSTEX: Record<AlphaClass, number> = {
   softBlend: OstexAlphaClass.SOFT_BLEND,
 };
 
+/**
+ * Whether to bake a mip chain. **Required, with no default** — the right answer differs by asset class and
+ * a silent default would be inherited by the wrong one:
+ *
+ * - `'none'` — vehicles and peds. The engine uploads their arrays with no `mipLevelCount`
+ *   (`engine.ts:728-736`), so it is 1 and nothing would ever sample a generated level. Close-range assets.
+ * - `'full'` — MAP objects (breakables, clutter, animated objects). They are seen at distance and at
+ *   grazing angles, the world planner generates chains for exactly this reason, and coverage-preserving
+ *   mips are load-bearing for A2C foliage.
+ *
+ * Note that neither case inherits mips from the source: SA ships almost none (2 % of textures in a
+ * 360-TXD map sample, none at all across the 210 vehicle TXDs). Chains are ours to generate or skip.
+ */
+export type ModelMipPolicy = 'full' | 'none';
+
 /** Encode a built model's texture array as a `.ostex` file. */
-export function packModelOstex(texture: VehicleTextureArray): Uint8Array {
+export function packModelOstex(texture: VehicleTextureArray, mips: ModelMipPolicy): Uint8Array {
   const { height, layers: layerCount, names, rgba, width } = texture;
   const texelBytes = width * height * 4;
-  // ONE level, deliberately. Vehicle/ped dictionaries carry no mips in the source (a survey of all 210
-  // vehicle TXDs found a mip-less texture in every one), and the engine uploads these arrays with no
-  // `mipLevelCount` (`engine.ts:728-736`), so nothing would ever sample a generated chain. Baking one
-  // would inflate the file ~33 % to feed a sampler that does not read it.
-  const mipCount = 1;
+  const mipCount = mips === 'full' ? ostexMaxMips(OstexFormat.RGBA8, width, height) : 1;
 
   const classes: AlphaClass[] = [];
   const layerMips: { data: Uint8Array }[][] = [];

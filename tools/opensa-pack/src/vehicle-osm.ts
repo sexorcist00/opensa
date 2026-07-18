@@ -64,7 +64,7 @@ export function buildVehicleOsm(fs: AssetFileSystem, model: string, options: Veh
     ]),
     fixture,
     hasCollision: collision.present,
-    ostex: packModelOstex(built.texture),
+    ostex: packModelOstex(built.texture, 'none'), // vehicles: see ModelMipPolicy
     texture: built.texture,
   };
 }
