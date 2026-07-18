@@ -8,7 +8,7 @@
  */
 import type { VehicleTextureArray } from '@opensa/renderware/vehicle/types';
 
-import { encodeOstex, fnv1a, type Ostex, OstexAlphaClass, OstexFormat, ostexMaxMips } from '@opensa/engine-formats';
+import { encodeOstex, fnv1a, type Ostex, OstexAlphaClass, OstexFormat } from '@opensa/engine-formats';
 
 import { type AlphaClass, classifyAlpha, processAlphaTexture } from './alpha';
 import { packOstexPayload } from './ostex-payload';
@@ -26,7 +26,11 @@ const ALPHA_TO_OSTEX: Record<AlphaClass, number> = {
 export function packModelOstex(texture: VehicleTextureArray): Uint8Array {
   const { height, layers: layerCount, names, rgba, width } = texture;
   const texelBytes = width * height * 4;
-  const mipCount = ostexMaxMips(OstexFormat.RGBA8, width, height);
+  // ONE level, deliberately. Vehicle/ped dictionaries carry no mips in the source (a survey of all 210
+  // vehicle TXDs found a mip-less texture in every one), and the engine uploads these arrays with no
+  // `mipLevelCount` (`engine.ts:728-736`), so nothing would ever sample a generated chain. Baking one
+  // would inflate the file ~33 % to feed a sampler that does not read it.
+  const mipCount = 1;
 
   const classes: AlphaClass[] = [];
   const layerMips: { data: Uint8Array }[][] = [];
