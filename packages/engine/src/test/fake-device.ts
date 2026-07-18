@@ -1,0 +1,318 @@
+/* eslint-disable @typescript-eslint/no-empty-function -- a recording fake IGNORES most calls by design:
+   an empty body is the behaviour, not an unfinished one. Only the calls a test asserts on record anything. */
+/**
+ * A recording stand-in for `GPUDevice` — the device-independent seam (plan 077).
+ *
+ * The engine is not testable headlessly because it needs a GPU, but almost nothing it DECIDES needs one:
+ * which cells pass the ring test, which objects the hour gate admits, what order the passes run in, how the
+ * texture LRU evicts. This fake implements the exact WebGPU surface the engine uses — enumerated from the
+ * source, not guessed — and records every call, so a test can assert **what the engine decided to draw**.
+ *
+ * It is deliberately NOT a validator: it does not check descriptor legality (the browser and the bench do
+ * that). A test that only proves `createBuffer` was called proves nothing; assert against `draws`,
+ * `passes` and `writes` instead.
+ *
+ * Install it with {@link installFakeWebGpu}, which also fakes `navigator.gpu` and the canvas, so
+ * `Engine.init()` runs unmodified — the engine's own `initDevice()` is device-independent code that only
+ * touches `navigator.gpu`.
+ */
+
+export interface FakeGpu {
+  /** Labels of every buffer/texture destroyed — leak assertions read this. */
+  readonly destroyed: string[];
+  /** The GPUDevice stand-in to hand to engine code. */
+  readonly device: GPUDevice;
+  /** Every draw issued, in order, across all passes and bundles. */
+  readonly draws: RecordedDraw[];
+  /** Labels of every texture created and not destroyed. */
+  liveTextures(): string[];
+  /** Render passes in submission order. */
+  readonly passes: RecordedPass[];
+  /** Drop everything recorded so far — call between frames to assert one frame in isolation. */
+  reset(): void;
+  /** `queue.writeBuffer` calls, in order. */
+  readonly writes: RecordedWrite[];
+}
+
+/** One recorded draw, with the pipeline and bind groups in force when it was issued. */
+export interface RecordedDraw {
+  bindGroups: (string | undefined)[];
+  /** Present for `drawIndexed`. */
+  indexCount?: number;
+  instanceCount: number;
+  kind: 'draw' | 'drawIndexed';
+  /** The label of the render pass (or bundle) this draw belongs to. */
+  pass: string;
+  /** The label of the pipeline set before this draw, if any. */
+  pipeline: string | undefined;
+  vertexCount?: number;
+}
+
+/** One recorded render pass, in submission order. */
+export interface RecordedPass {
+  /** Labels of bundles executed into this pass, in order. */
+  bundles: string[];
+  drawCount: number;
+  label: string;
+}
+
+/** One recorded `queue.writeBuffer`. */
+export interface RecordedWrite {
+  byteLength: number;
+  label: string | undefined;
+  offset: number;
+}
+
+interface Recorder {
+  destroyed: string[];
+  draws: RecordedDraw[];
+  passes: RecordedPass[];
+  textures: Map<string, boolean>;
+  writes: RecordedWrite[];
+}
+
+/** A `GPUDevice` stand-in recording everything the engine asks of it. */
+export function createFakeDevice(): FakeGpu {
+  const recorder: Recorder = { destroyed: [], draws: [], passes: [], textures: new Map(), writes: [] };
+
+  const view = (label: string): unknown => ({ label });
+
+  const texture = (descriptor: GPUTextureDescriptor): unknown => {
+    const label = descriptor.label ?? 'texture';
+    recorder.textures.set(label, true);
+
+    return {
+      createView: (options?: GPUTextureViewDescriptor) => view(options?.label ?? label),
+      destroy: (): void => {
+        recorder.textures.set(label, false);
+        recorder.destroyed.push(label);
+      },
+      label,
+    };
+  };
+
+  const buffer = (descriptor: GPUBufferDescriptor): unknown => ({
+    destroy: (): void => {
+      recorder.destroyed.push(descriptor.label ?? 'buffer');
+    },
+    getMappedRange: () => new ArrayBuffer(descriptor.size),
+    label: descriptor.label,
+    mapAsync: () => Promise.resolve(),
+    size: descriptor.size,
+    unmap: (): void => {},
+  });
+
+  const commandEncoder = (): unknown => {
+    let current: RecordedPass = { bundles: [], drawCount: 0, label: 'unlabelled' };
+
+    return {
+      beginRenderPass(descriptor: GPURenderPassDescriptor): unknown {
+        current = { bundles: [], drawCount: 0, label: descriptor.label ?? 'unlabelled' };
+        recorder.passes.push(current);
+
+        return encoderRecorder(recorder, current);
+      },
+      copyBufferToBuffer(): void {},
+      copyTextureToTexture(): void {},
+      finish: () => ({ label: 'command-buffer' }),
+      resolveQuerySet(): void {},
+    };
+  };
+
+  const device = {
+    createBindGroup: (descriptor: GPUBindGroupDescriptor) => ({ label: descriptor.label }),
+    createBindGroupLayout: (descriptor: GPUBindGroupLayoutDescriptor) => ({ label: descriptor.label }),
+    createBuffer: buffer,
+    createCommandEncoder: commandEncoder,
+    createPipelineLayout: (descriptor: GPUPipelineLayoutDescriptor) => ({ label: descriptor.label }),
+    createQuerySet: (descriptor: GPUQuerySetDescriptor) => ({ destroy: (): void => {}, label: descriptor.label }),
+    createRenderBundleEncoder(descriptor: GPURenderBundleEncoderDescriptor): unknown {
+      const pass: RecordedPass = { bundles: [], drawCount: 0, label: descriptor.label ?? 'bundle' };
+
+      return {
+        ...encoderRecorder(recorder, pass),
+        finish: (options?: { label?: string }) => ({ label: options?.label ?? pass.label }),
+      };
+    },
+    createRenderPipeline: (descriptor: GPURenderPipelineDescriptor) => ({ label: descriptor.label }),
+    createSampler: (descriptor?: GPUSamplerDescriptor) => ({ label: descriptor?.label }),
+    createShaderModule: (descriptor: GPUShaderModuleDescriptor) => ({ label: descriptor.label }),
+    createTexture: texture,
+    destroy: (): void => {},
+    features: new Set<string>(['texture-compression-bc']),
+    limits: { maxTextureArrayLayers: 256, maxTextureDimension2D: 8192 },
+    queue: {
+      onSubmittedWorkDone: () => Promise.resolve(),
+      submit: (): void => {},
+      writeBuffer: (target: { label?: string }, offset: number, data: ArrayBuffer | ArrayBufferView): void => {
+        recorder.writes.push({
+          byteLength: data.byteLength,
+          label: target.label,
+          offset,
+        });
+      },
+      writeTexture: (): void => {},
+    },
+  };
+
+  return {
+    destroyed: recorder.destroyed,
+    device: device as unknown as GPUDevice,
+    draws: recorder.draws,
+    liveTextures: () => [...recorder.textures].filter(([, live]) => live).map(([label]) => label),
+    passes: recorder.passes,
+    reset(): void {
+      recorder.draws.length = 0;
+      recorder.passes.length = 0;
+      recorder.writes.length = 0;
+      recorder.destroyed.length = 0;
+    },
+    writes: recorder.writes,
+  };
+}
+
+/**
+ * Installs the fake as `navigator.gpu` plus a canvas stub, so `Engine.init()` runs unmodified.
+ * Returns the recorder and a `restore()` to put the globals back.
+ */
+export function installFakeWebGpu(options: { timestamps?: boolean } = {}): {
+  canvas: HTMLCanvasElement;
+  gpu: FakeGpu;
+  restore(): void;
+} {
+  const gpu = createFakeDevice();
+  const features = new Set<string>(['texture-compression-bc']);
+  if (options.timestamps ?? true) {
+    features.add('timestamp-query');
+  }
+
+  // `navigator` is a getter-only global in the node test env, so plain assignment throws — define over it
+  // and restore the original descriptor afterwards.
+  const overridden = [
+    'navigator',
+    'window',
+    'GPUBufferUsage',
+    'GPUTextureUsage',
+    'GPUShaderStage',
+    'GPUMapMode',
+    'GPUColorWrite',
+  ] as const;
+  const previous = new Map<string, PropertyDescriptor | undefined>(
+    overridden.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]),
+  );
+  const override = (name: string, value: unknown): void => {
+    Object.defineProperty(globalThis, name, { configurable: true, value, writable: true });
+  };
+
+  // The usage/stage bit namespaces are globals the browser provides. Real spec values, so any bit
+  // arithmetic in engine code behaves exactly as it does in a browser.
+  override('GPUBufferUsage', {
+    COPY_DST: 0x0008,
+    COPY_SRC: 0x0004,
+    INDEX: 0x0010,
+    INDIRECT: 0x0100,
+    MAP_READ: 0x0001,
+    MAP_WRITE: 0x0002,
+    QUERY_RESOLVE: 0x0200,
+    STORAGE: 0x0080,
+    UNIFORM: 0x0040,
+    VERTEX: 0x0020,
+  });
+  override('GPUTextureUsage', {
+    COPY_DST: 0x02,
+    COPY_SRC: 0x01,
+    RENDER_ATTACHMENT: 0x10,
+    STORAGE_BINDING: 0x08,
+    TEXTURE_BINDING: 0x04,
+  });
+  override('GPUShaderStage', { COMPUTE: 0x4, FRAGMENT: 0x2, VERTEX: 0x1 });
+  override('GPUMapMode', { READ: 0x0001, WRITE: 0x0002 });
+  override('GPUColorWrite', { ALL: 0xf, ALPHA: 0x8, BLUE: 0x4, GREEN: 0x2, RED: 0x1 });
+
+  override('navigator', {
+    gpu: {
+      getPreferredCanvasFormat: () => 'bgra8unorm',
+      requestAdapter: () =>
+        Promise.resolve({
+          features,
+          info: { architecture: 'fake', vendor: 'opensa' },
+          requestDevice: () => Promise.resolve(gpu.device),
+        }),
+    },
+  });
+  override('window', { devicePixelRatio: 1 });
+
+  const canvas = {
+    clientHeight: 900,
+    clientWidth: 1440,
+    getContext: (kind: string) =>
+      kind === 'webgpu'
+        ? {
+            configure: (): void => {},
+            getCurrentTexture: () => ({ createView: () => ({ label: 'swapchain' }), label: 'swapchain' }),
+          }
+        : null,
+    height: 900,
+    width: 1440,
+  } as unknown as HTMLCanvasElement;
+
+  return {
+    canvas,
+    gpu,
+    restore(): void {
+      for (const [name, descriptor] of previous) {
+        if (descriptor) {
+          Object.defineProperty(globalThis, name, descriptor);
+        } else {
+          delete (globalThis as Record<string, unknown>)[name];
+        }
+      }
+    },
+  };
+}
+
+/** Shared by render passes and bundle encoders — both accept the same draw-issuing calls. */
+function encoderRecorder(recorder: Recorder, pass: RecordedPass): Record<string, unknown> {
+  let pipeline: string | undefined;
+  const bindGroups: (string | undefined)[] = [];
+
+  return {
+    draw(vertexCount: number, instanceCount = 1): void {
+      pass.drawCount += 1;
+      recorder.draws.push({
+        bindGroups: [...bindGroups],
+        instanceCount,
+        kind: 'draw',
+        pass: pass.label,
+        pipeline,
+        vertexCount,
+      });
+    },
+    drawIndexed(indexCount: number, instanceCount = 1): void {
+      pass.drawCount += 1;
+      recorder.draws.push({
+        bindGroups: [...bindGroups],
+        indexCount,
+        instanceCount,
+        kind: 'drawIndexed',
+        pass: pass.label,
+        pipeline,
+      });
+    },
+    end(): void {},
+    executeBundles(bundles: { label: string }[]): void {
+      for (const bundle of bundles) {
+        pass.bundles.push(bundle.label);
+      }
+    },
+    setBindGroup(index: number, group: null | { label?: string }): void {
+      bindGroups[index] = group?.label;
+    },
+    setIndexBuffer(): void {},
+    setPipeline(value: { label?: string }): void {
+      pipeline = value.label;
+    },
+    setVertexBuffer(): void {},
+    setViewport(): void {},
+  };
+}

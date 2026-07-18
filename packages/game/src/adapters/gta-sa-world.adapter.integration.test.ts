@@ -90,6 +90,20 @@ describe('GtaSaWorldAdapter integration', () => {
       expect(result.weathers[0].hours).toHaveLength(24);
     });
 
+    it('loads from an authored timecyc_24h.dat with NO vanilla timecyc.dat present', async () => {
+      // Dropping the mandatory file proves the 24h branch is taken (it throws otherwise), and the
+      // result matches the conversion of the vanilla file — the shipped 24h fixture IS that conversion.
+      const files = baseFiles();
+      files.set('data/timecyc_24h.dat', readFileSync('tests/original/data/timecyc_24h.dat', 'utf8'));
+      const converted = await new GtaSaWorldAdapter(cfg()).loadTimecyc();
+      files.delete('data/timecyc.dat');
+
+      const authored = await new GtaSaWorldAdapter({ cellSize: 250, fs: fsFrom(files) }).loadTimecyc();
+
+      expect(authored.weathers[0].hours).toHaveLength(24);
+      expect(authored.weathers[0].hours).toEqual(converted.weathers[0].hours);
+    });
+
     it('loads a vehicle end-to-end by its bare gta3.img name (admiral via vehicles.ide)', async () => {
       // fakeFs holds only bare keys (admiral.dff/.txd) — a pass proves the loader reads them directly,
       // with no loose `vehicles/` path. Resolved through vehicles.ide (model + txd both `admiral`).

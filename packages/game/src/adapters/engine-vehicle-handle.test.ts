@@ -150,3 +150,154 @@ describe('EngineVehicleHandle', () => {
     });
   });
 });
+
+describe('EngineVehicleHandle model surface', () => {
+  describe('negative cases', () => {
+    it('a model with no `_vlo` submesh reports no LOD (the LOD system must not band it)', () => {
+      const { probe } = instance();
+      const data = model();
+      data.submeshes = data.submeshes.filter((submesh) => submesh.kind !== 'lod');
+
+      expect(new EngineVehicleHandle(probe, data, () => undefined).hasLod).toBe(false);
+    });
+
+    it('a model with no damageable part exposes no parts', () => {
+      const { probe } = instance();
+      const data = model();
+      data.submeshes = data.submeshes.map((submesh) => ({ ...submesh, damageGroup: null }));
+
+      expect(new EngineVehicleHandle(probe, data, () => undefined).parts).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('lists each damage group ONCE, at the pivot of the part it was paired under', () => {
+      const { probe } = instance();
+
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+
+      // `bonnet` has both a body and a `_dam` submesh — it must still appear as a single part.
+      expect(handle.parts).toEqual([{ name: 'bonnet', position: [0, 1.5, 0.4] }]);
+      expect(handle.hasLod).toBe(true);
+    });
+
+    it('mirrors the wheel roster the vehicle physics needs (front flag + radius)', () => {
+      const { probe } = instance();
+
+      expect(new EngineVehicleHandle(probe, model(), () => undefined).wheels).toEqual([{ front: true, radius: 0.35 }]);
+    });
+  });
+});
+
+describe('EngineVehicleHandle detached parts', () => {
+  describe('negative cases', () => {
+    it('poses and removals for an unknown part are silently ignored (no stray matrix writes)', () => {
+      const { matrices, probe, visible } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+      visible.clear();
+
+      handle.setDetachedPose('spoiler', { position: [5, 5, 5], rotation: [0, 0, 0, 1] });
+      handle.removeDetached('spoiler');
+
+      expect([...matrices].every((value) => value === 0)).toBe(true);
+      expect(visible.size).toBe(0);
+    });
+
+    it('an out-of-range wheel index is ignored rather than throwing mid-frame', () => {
+      const { probe } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+
+      expect(() => handle.setWheel(7, 1, 0.2)).not.toThrow();
+    });
+
+    it('a door side the model does not have is ignored', () => {
+      const { probe } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+
+      expect(() => handle.setDoorAngle('rr', 1)).not.toThrow();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('a detached panel reads its position off its CURRENT part matrix, converted back to GTA space', () => {
+      const { matrices, probe } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+      // Part 1 (bonnet) sits where the engine last flattened it: engine (x, y, z) = (1, 2, -3).
+      matrices.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 2, -3, 1], 1 * 16);
+
+      const pose = handle.detachPart('bonnet');
+
+      expect(pose?.position).toEqual([1, 3, 2]); // engine → GTA: (x, −z, y)
+    });
+
+    it('setDetachedPose writes a WORLD matrix that bypasses the car root', () => {
+      const { matrices, probe } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+
+      handle.setDetachedPose('bonnet', { position: [10, 20, 3], rotation: [0, 0, 0, 1] });
+
+      // GTA (10, 20, 3) → engine (10, 3, −20), written into the bonnet part's own slot.
+      expect([...matrices.subarray(1 * 16 + 12, 1 * 16 + 15)]).toEqual([10, 3, -20]);
+    });
+
+    it('a detached pose survives a round trip through detachPart (the panel does not jump)', () => {
+      const { probe } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+
+      handle.setDetachedPose('bonnet', { position: [10, 20, 3], rotation: [0, 0, 0, 1] });
+
+      expect(handle.detachPart('bonnet')?.position).toEqual([10, 20, 3]);
+    });
+
+    it('removeDetached hides EVERY submesh of the part, not just the body one', () => {
+      const { probe, visible } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+
+      handle.removeDetached('bonnet');
+
+      expect(visible.get(BONNET_OK)).toBe(false);
+      expect(visible.get(BONNET_DAM)).toBe(false); // the `_dam` twin shares the part
+    });
+
+    it('clearing damage restores the undamaged panel', () => {
+      const { probe, visible } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+
+      handle.setPartDamaged('bonnet', true);
+      expect(visible.get(BONNET_DAM)).toBe(true);
+
+      handle.setPartDamaged('bonnet', false);
+
+      expect(visible.get(BONNET_OK)).toBe(true);
+      expect(visible.get(BONNET_DAM)).toBe(false);
+    });
+
+    it('dispose runs the owner callback exactly once per call (the instance is pooled)', () => {
+      const { probe } = instance();
+      let released = 0;
+      const handle = new EngineVehicleHandle(probe, model(), () => {
+        released += 1;
+      });
+
+      handle.dispose();
+
+      expect(released).toBe(1);
+    });
+
+    it('forwards the lamp state to the engine instance verbatim', () => {
+      const { probe } = instance();
+      const calls: [boolean, boolean, number][] = [];
+      const lamped = {
+        ...probe,
+        setLamps: (headlights: boolean, brakes: boolean, intensity: number): void => {
+          calls.push([headlights, brakes, intensity]);
+        },
+      };
+      const handle = new EngineVehicleHandle(lamped, model(), () => undefined);
+
+      handle.setLamps({ brakes: true, headlights: false, intensity: 0.75 });
+
+      expect(calls).toEqual([[false, true, 0.75]]);
+    });
+  });
+});

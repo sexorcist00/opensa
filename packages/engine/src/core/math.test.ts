@@ -1,14 +1,51 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Mat4, Vec3 } from './math';
+
 import {
   frustumFromViewProj,
   frustumIntersectsSphere,
   mat4Identity,
+  mat4Invert,
   mat4LookAt,
   mat4Multiply,
   mat4PerspectiveZO,
   sphereFullyBeyond,
 } from './math';
+
+/**
+ * Defends the camera/culling core: a wrong matrix here does not crash, it quietly puts the whole world in
+ * the wrong place (skewed projection, mirrored view, geometry culled while on screen). Every case pins a
+ * guarantee a renderer depends on — column-major layout, 0..1 clip depth, normalized frustum planes, and
+ * inverse/multiply round-trips.
+ */
+
+function expectMatrixClose(actual: Mat4, expected: Mat4, precision = 4): void {
+  for (let index = 0; index < 16; index += 1) {
+    expect(actual[index]).toBeCloseTo(expected[index], precision);
+  }
+}
+
+/** Apply a column-major mat4 to a point, returning the perspective-divided result plus clip w. */
+function transformPoint(m: Mat4, p: Vec3): { w: number; xyz: [number, number, number] } {
+  const out: number[] = [];
+  for (let row = 0; row < 4; row += 1) {
+    out.push(m[row] * p[0] + m[4 + row] * p[1] + m[8 + row] * p[2] + m[12 + row]);
+  }
+  const w = out[3];
+
+  return { w, xyz: [out[0] / w, out[1] / w, out[2] / w] };
+}
+
+/** Column-major mat4 from a translation — a convenient non-identity, invertible matrix. */
+function translation(tx: number, ty: number, tz: number): Mat4 {
+  const m = mat4Identity();
+  m[12] = tx;
+  m[13] = ty;
+  m[14] = tz;
+
+  return m;
+}
 
 function viewProj(eye: [number, number, number], target: [number, number, number]): Float32Array {
   const proj = mat4Identity();
@@ -42,6 +79,36 @@ describe('engine math', () => {
       // The eye is inside the sphere.
       expect(sphereFullyBeyond([0, 0, 0], 10, 0, 0, 50, 1100)).toBe(false);
     });
+
+    it('falls back to identity instead of NaNs when inverting a singular matrix', () => {
+      const singular = mat4Identity();
+      singular[0] = 0; // collapses the X axis → determinant 0
+      const out = new Float32Array(16) as Mat4;
+
+      expect(mat4Invert(out, singular)).toBe(out);
+      expectMatrixClose(out, mat4Identity());
+    });
+
+    it('produces a finite view matrix when the eye sits on its own target', () => {
+      const view = mat4Identity();
+      mat4LookAt(view, [5, 5, 5], [5, 5, 5], [0, 1, 0]);
+
+      expect(Array.from(view).every((value) => Number.isFinite(value))).toBe(true);
+    });
+
+    it('produces a finite view matrix when up is parallel to the view direction', () => {
+      const view = mat4Identity();
+      mat4LookAt(view, [0, 10, 0], [0, 0, 0], [0, 1, 0]);
+
+      expect(Array.from(view).every((value) => Number.isFinite(value))).toBe(true);
+    });
+
+    it('culls a sphere entirely behind the near plane', () => {
+      const planes = new Float32Array(24);
+      frustumFromViewProj(planes, viewProj([0, 0, 10], [0, 0, 0]));
+
+      expect(frustumIntersectsSphere(planes, 0, 0, 10.5, 0.1)).toBe(false);
+    });
   });
 
   describe('positive cases', () => {
@@ -71,6 +138,178 @@ describe('engine math', () => {
       expect(sphereFullyBeyond([0, 0, 0], 1200, 0, 0, 100, 1100)).toBe(true);
       // 3D distance counts: a high cell over the horizon is farther than its ground distance.
       expect(sphereFullyBeyond([0, 200, 0], 1150, 0, 0, 50, 1100)).toBe(true);
+    });
+
+    it('builds an identity that leaves points untouched', () => {
+      const identity = mat4Identity();
+
+      expect(identity).toHaveLength(16);
+      expect(transformPoint(identity, [3, -4, 5]).xyz).toEqual([3, -4, 5]);
+      expect(transformPoint(identity, [3, -4, 5]).w).toBe(1);
+    });
+
+    it('inverts a view matrix back to itself through a round trip', () => {
+      const view = mat4Identity();
+      mat4LookAt(view, [12, 34, -56], [1, 2, 3], [0, 1, 0]);
+      const inverse = mat4Identity();
+      const roundTrip = mat4Identity();
+      mat4Invert(inverse, view);
+      mat4Invert(roundTrip, inverse);
+
+      expectMatrixClose(roundTrip, view, 3);
+    });
+
+    it('multiplies a matrix by its inverse to identity', () => {
+      const m = mat4Identity();
+      mat4LookAt(m, [7, -3, 2], [0, 0, 0], [0, 0, 1]);
+      const inverse = mat4Identity();
+      const product = mat4Identity();
+      mat4Invert(inverse, m);
+      mat4Multiply(product, m, inverse);
+
+      expectMatrixClose(product, mat4Identity(), 4);
+    });
+
+    it('inverts a camera view so it maps the origin back onto the eye', () => {
+      const eye: Vec3 = [10, 20, 30];
+      const view = mat4Identity();
+      mat4LookAt(view, eye, [0, 0, 0], [0, 1, 0]);
+      const inverse = mat4Identity();
+      mat4Invert(inverse, view);
+
+      const back = transformPoint(inverse, [0, 0, 0]).xyz;
+      expect(back[0]).toBeCloseTo(eye[0], 3);
+      expect(back[1]).toBeCloseTo(eye[1], 3);
+      expect(back[2]).toBeCloseTo(eye[2], 3);
+    });
+
+    it('applies the right-hand operand first when multiplying', () => {
+      const scaleX2 = mat4Identity();
+      scaleX2[0] = 2;
+      const shift = translation(5, 0, 0);
+      const out = mat4Identity();
+      mat4Multiply(out, shift, scaleX2);
+
+      // shift × scale on (1,0,0) → scale first (2,0,0) then shift → (7,0,0); the other order gives 12.
+      expect(transformPoint(out, [1, 0, 0]).xyz[0]).toBeCloseTo(7, 5);
+    });
+
+    it('leaves a matrix unchanged when multiplied by identity from either side', () => {
+      const m = translation(1, 2, 3);
+      const left = mat4Identity();
+      const right = mat4Identity();
+      mat4Multiply(left, mat4Identity(), m);
+      mat4Multiply(right, m, mat4Identity());
+
+      expectMatrixClose(left, m, 6);
+      expectMatrixClose(right, m, 6);
+    });
+
+    it('maps the near plane to depth 0 and the far plane to depth 1', () => {
+      const near = 0.1;
+      const far = 1000;
+      const proj = mat4Identity();
+      mat4PerspectiveZO(proj, Math.PI / 3, 16 / 9, near, far);
+
+      expect(transformPoint(proj, [0, 0, -near]).xyz[2]).toBeCloseTo(0, 4);
+      expect(transformPoint(proj, [0, 0, -far]).xyz[2]).toBeCloseTo(1, 3);
+    });
+
+    it('narrows the horizontal field of view as the aspect ratio widens', () => {
+      const wide = mat4Identity();
+      const square = mat4Identity();
+      mat4PerspectiveZO(wide, Math.PI / 3, 16 / 9, 0.1, 1000);
+      mat4PerspectiveZO(square, Math.PI / 3, 1, 0.1, 1000);
+
+      // Same world point projects closer to the centre in X on the wider viewport; Y is unaffected.
+      expect(Math.abs(transformPoint(wide, [1, 1, -10]).xyz[0])).toBeLessThan(
+        Math.abs(transformPoint(square, [1, 1, -10]).xyz[0]),
+      );
+      expect(transformPoint(wide, [1, 1, -10]).xyz[1]).toBeCloseTo(transformPoint(square, [1, 1, -10]).xyz[1], 5);
+    });
+
+    it('projects a point at the vertical fov edge onto the top of the viewport', () => {
+      const fovY = Math.PI / 3;
+      const proj = mat4Identity();
+      mat4PerspectiveZO(proj, fovY, 1, 0.1, 1000);
+      const depth = 10;
+      const edgeY = Math.tan(fovY / 2) * depth;
+
+      expect(transformPoint(proj, [0, edgeY, -depth]).xyz[1]).toBeCloseTo(1, 4);
+    });
+
+    it('flips handedness so the projection carries a negative w for points behind the camera', () => {
+      const proj = mat4Identity();
+      mat4PerspectiveZO(proj, Math.PI / 3, 1, 0.1, 1000);
+
+      expect(transformPoint(proj, [0, 0, -10]).w).toBeCloseTo(10, 5);
+      expect(transformPoint(proj, [0, 0, 10]).w).toBeCloseTo(-10, 5);
+    });
+
+    it('builds a view that puts the eye at the origin looking down negative Z', () => {
+      const view = mat4Identity();
+      mat4LookAt(view, [0, 0, 10], [0, 0, 0], [0, 1, 0]);
+
+      const atEye = transformPoint(view, [0, 0, 10]).xyz;
+      expect(atEye[0]).toBeCloseTo(0, 5);
+      expect(atEye[1]).toBeCloseTo(0, 5);
+      expect(atEye[2]).toBeCloseTo(0, 5);
+      // The target sits straight ahead at the eye-target distance.
+      expect(transformPoint(view, [0, 0, 0]).xyz[2]).toBeCloseTo(-10, 5);
+      // World +X stays screen-right and world +Y stays screen-up for this camera.
+      expect(transformPoint(view, [1, 2, 0]).xyz[0]).toBeCloseTo(1, 5);
+      expect(transformPoint(view, [1, 2, 0]).xyz[1]).toBeCloseTo(2, 5);
+    });
+
+    it('keeps the view basis orthonormal for an arbitrary camera', () => {
+      const view = mat4Identity();
+      mat4LookAt(view, [13, -7, 21], [2, 3, -4], [0, 1, 0]);
+      const rows = [
+        [view[0], view[4], view[8]],
+        [view[1], view[5], view[9]],
+        [view[2], view[6], view[10]],
+      ];
+      const dot = (a: number[], b: number[]): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+      for (const row of rows) {
+        expect(Math.hypot(row[0], row[1], row[2])).toBeCloseTo(1, 5);
+      }
+      expect(dot(rows[0], rows[1])).toBeCloseTo(0, 5);
+      expect(dot(rows[0], rows[2])).toBeCloseTo(0, 5);
+      expect(dot(rows[1], rows[2])).toBeCloseTo(0, 5);
+    });
+
+    it('returns normalized frustum planes so plane distance is metric', () => {
+      const planes = new Float32Array(24);
+      const out = frustumFromViewProj(planes, viewProj([0, 0, 10], [0, 0, 0]));
+
+      expect(out).toBe(planes);
+      for (let plane = 0; plane < 6; plane += 1) {
+        expect(Math.hypot(planes[plane * 4], planes[plane * 4 + 1], planes[plane * 4 + 2])).toBeCloseTo(1, 5);
+      }
+    });
+
+    it('keeps a zero-radius point on the view axis inside the frustum', () => {
+      const planes = new Float32Array(24);
+      frustumFromViewProj(planes, viewProj([0, 0, 10], [0, 0, 0]));
+
+      expect(frustumIntersectsSphere(planes, 0, 0, 0, 0)).toBe(true);
+      expect(frustumIntersectsSphere(planes, 0, 0, -900, 0)).toBe(true);
+    });
+
+    it('culls beyond the far plane but keeps geometry just inside it', () => {
+      const planes = new Float32Array(24);
+      frustumFromViewProj(planes, viewProj([0, 0, 10], [0, 0, 0]));
+
+      expect(frustumIntersectsSphere(planes, 0, 0, -1100, 1)).toBe(false);
+      expect(frustumIntersectsSphere(planes, 0, 0, -980, 1)).toBe(true);
+    });
+
+    it('treats the fog cut as a 3D reach so a zero-radius point cuts exactly at the distance', () => {
+      expect(sphereFullyBeyond([0, 0, 0], 1100, 0, 0, 0, 1100)).toBe(true);
+      expect(sphereFullyBeyond([0, 0, 0], 1099.9, 0, 0, 0, 1100)).toBe(false);
+      // Eye position is honoured, not assumed to be the origin.
+      expect(sphereFullyBeyond([1000, 0, 0], 1100, 0, 0, 0, 1100)).toBe(false);
     });
   });
 });

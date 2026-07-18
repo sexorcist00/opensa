@@ -225,7 +225,7 @@ describe('CharacterControllerSystem', () => {
       const handle = RigidBody.handle[player.eid];
       const z = (): number => player.physics.readBody(handle).position[2];
       const grounded = z();
-      const system = flySystem(player, keys('Space')); // Space = jump = up
+      const system = systemFor(player, keys('Space')); // Space = jump = up
 
       system.setFlying(true);
       player.physics.step(STEP); // apply the lift teleport
@@ -244,7 +244,7 @@ describe('CharacterControllerSystem', () => {
       const player = await groundedPlayer();
       addComponent(player.world, player.eid, Transform);
       const handle = RigidBody.handle[player.eid];
-      const system = flySystem(player, keys()); // nothing held
+      const system = systemFor(player, keys()); // nothing held
 
       system.setFlying(true);
       player.physics.step(STEP);
@@ -260,7 +260,7 @@ describe('CharacterControllerSystem', () => {
       const player = await groundedPlayer();
       addComponent(player.world, player.eid, Transform);
       const handle = RigidBody.handle[player.eid];
-      const system = flySystem(player, keys('ControlLeft'));
+      const system = systemFor(player, keys('ControlLeft'));
 
       system.setFlying(true);
       player.physics.step(STEP);
@@ -274,8 +274,22 @@ describe('CharacterControllerSystem', () => {
   });
 });
 
-/** A controller bound to a fixed keyboard, for the persistent-instance fly-mode tests. */
-function flySystem(player: Player, keyboard: KeyboardInput): CharacterControllerSystem {
+/** A player whose ECS Transform tracks a chosen planar position (what the scripted run steers by). */
+async function placedPlayer(x: number, y: number): Promise<Player> {
+  const player = await groundedPlayer();
+  addComponent(player.world, player.eid, Transform);
+  Transform.x[player.eid] = x;
+  Transform.y[player.eid] = y;
+
+  return player;
+}
+
+/** A controller bound to a fixed keyboard, for the tests that keep ONE system instance across steps. */
+function systemFor(
+  player: Player,
+  keyboard: KeyboardInput,
+  camera: LookDirectionSource = CAMERA,
+): CharacterControllerSystem {
   const cfg = config('play');
 
   return new CharacterControllerSystem(
@@ -284,6 +298,157 @@ function flySystem(player: Player, keyboard: KeyboardInput): CharacterController
     new KeyboardSource(keyboard, cfg.controls),
     cfg,
     player.controller,
-    CAMERA,
+    camera,
   );
 }
+
+describe('CharacterControllerSystem.setEnabled', () => {
+  describe('negative cases', () => {
+    it('a disabled controller ignores the keyboard (the player is scripted into a car)', async () => {
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys('KeyW'));
+
+      system.setEnabled(false);
+      system.fixedUpdate(STEP);
+
+      expect(Velocity.y[player.eid]).toBe(0);
+      player.physics.dispose();
+    });
+
+    it('disabling zeroes stale velocity so it cannot drive facing when control returns', async () => {
+      const player = await placedPlayer(0, 0);
+      Velocity.x[player.eid] = 7;
+      Velocity.y[player.eid] = -4;
+      Velocity.z[player.eid] = 2;
+      const system = systemFor(player, keys());
+
+      system.setEnabled(false);
+
+      expect([Velocity.x[player.eid], Velocity.y[player.eid], Velocity.z[player.eid]]).toEqual([0, 0, 0]);
+      player.physics.dispose();
+    });
+
+    it('disabling abandons a scripted path (a cutscene must not resume the old walk)', async () => {
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys());
+      system.runPath([[0, 20, 1.4]]);
+
+      system.setEnabled(false);
+      system.setEnabled(true);
+      system.fixedUpdate(STEP);
+
+      expect(Velocity.y[player.eid]).toBe(0); // no keys, no path → standing still
+      player.physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('re-enabling restores manual control', async () => {
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys('KeyW'));
+
+      system.setEnabled(false);
+      system.setEnabled(true);
+      system.fixedUpdate(STEP);
+
+      expect(Velocity.y[player.eid]).toBeGreaterThan(0);
+      player.physics.dispose();
+    });
+  });
+});
+
+describe('CharacterControllerSystem.runPath', () => {
+  describe('negative cases', () => {
+    it('an empty path counts as already arrived (manual control restored)', async () => {
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys());
+
+      system.runPath([]);
+
+      expect(system.arrived).toBe(true);
+      player.physics.dispose();
+    });
+
+    it('a fresh path is NOT arrived until it is walked', async () => {
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys());
+
+      system.runPath([[0, 20, 1.4]]);
+
+      expect(system.arrived).toBe(false);
+      player.physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('the scripted run overrides the keyboard — walking BACK still heads to the waypoint', async () => {
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys('KeyS')); // holding backward the whole time
+      system.runPath([[0, 20, 1.4]]);
+
+      system.fixedUpdate(STEP);
+
+      expect(Velocity.y[player.eid]).toBeGreaterThan(0); // toward the waypoint, not away from it
+      player.physics.dispose();
+    });
+
+    it('reaching the last waypoint stops the player and flags arrival', async () => {
+      const player = await placedPlayer(0, 0.3); // already inside the 0.6 m arrive radius
+      const system = systemFor(player, keys());
+      system.runPath([[0, 0, 1.4]]);
+
+      system.fixedUpdate(STEP);
+
+      expect(system.arrived).toBe(true);
+      expect(Velocity.x[player.eid]).toBe(0);
+      expect(Velocity.y[player.eid]).toBe(0);
+      player.physics.dispose();
+    });
+
+    it('a waypoint already reached is skipped and the run continues to the next one', async () => {
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys());
+      // The first point is inside the arrive radius; the second is 20 m along −Y.
+      system.runPath([
+        [0, 0.3, 1.4],
+        [0, -20, 1.4],
+      ]);
+
+      system.fixedUpdate(STEP);
+
+      expect(system.arrived).toBe(false); // the path is not finished
+      expect(Velocity.y[player.eid]).toBeLessThan(0); // already heading to the SECOND waypoint
+      player.physics.dispose();
+    });
+  });
+});
+
+describe('CharacterControllerSystem camera-relative movement', () => {
+  describe('negative cases', () => {
+    it('a camera looking straight down picks a stable axis instead of freezing the player', async () => {
+      const straightDown: LookDirectionSource = { getWorldDirection: (target) => target.set(0, -1, 0) };
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys('KeyW'), straightDown);
+
+      system.fixedUpdate(STEP);
+
+      // The projected forward is degenerate, so the fallback +Y axis carries the move.
+      expect(Velocity.y[player.eid]).toBeGreaterThan(0);
+      expect(Number.isFinite(Velocity.x[player.eid])).toBe(true);
+      player.physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('strafing right is perpendicular to the camera forward', async () => {
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys('KeyD')); // camera forward = GTA +Y → right = +X
+
+      system.fixedUpdate(STEP);
+
+      expect(Velocity.x[player.eid]).toBeGreaterThan(0);
+      expect(Velocity.y[player.eid]).toBeCloseTo(0, 6);
+      player.physics.dispose();
+    });
+  });
+});

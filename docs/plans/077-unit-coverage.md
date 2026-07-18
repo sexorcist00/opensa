@@ -99,7 +99,8 @@ update [test-coverage.md](../development/test-coverage.md), and record the final
 
 ## Measurement ledger
 
-| Date       | Phase                    | Statements  | Branches | Functions | Lines   | Note                                             |
-| ---------- | ------------------------ | ----------- | -------- | --------- | ------- | ------------------------------------------------ |
-| 2026-07-18 | baseline (post-teardown) | 72.29 %     | 67.11 %  | 71.86 %   | 72.13 % | 6 396 / 8 847 statements                         |
-| 2026-07-18 | phase 1 — `@opensa/math` | **74.40 %** | 69.09 %  | 77.74 %   | 74.22 % | math 67.7 → ~98 %; suite 295 files / 1 900 tests |
+| Date       | Phase                                   | Statements               | Branches | Functions | Lines   | Note                                                                                                          |
+| ---------- | --------------------------------------- | ------------------------ | -------- | --------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| 2026-07-18 | baseline (post-teardown)                | 72.29 %                  | 67.11 %  | 71.86 %   | 72.13 % | 6 396 / 8 847 statements                                                                                      |
+| 2026-07-18 | phase 1 — `@opensa/math`                | **74.40 %**              | 69.09 %  | 77.74 %   | 74.22 % | math 67.7 → ~98 %; suite 295 files / 1 900 tests                                                              |
+| 2026-07-18 | phase 3 — the fake device (engine only) | engine **26.1 → 62.9 %** | —        | —         | —       | `engine.ts` 0 → 43.8 %, `pipelines` 4.9 → 98.8 %, `core/math` 59.7 → 100 %, `sky-lut` 98.8 % — the seam works |
