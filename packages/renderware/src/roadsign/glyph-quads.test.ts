@@ -47,6 +47,14 @@ describe('roadsignGlyphIndex', () => {
       expect(roadsignGlyphIndex(' ')).toBeNull();
     });
 
+    it('returns null for Object.prototype keys — the lookup must not reach the prototype', () => {
+      // Regression (plan 077): COMMAND_GLYPHS was an object literal, so `glyphIndex('toString')` returned
+      // a Function and broke this function's `null | number` contract. It is a Map now.
+      for (const key of ['toString', 'constructor', 'hasOwnProperty', '__proto__']) {
+        expect(roadsignGlyphIndex(key)).toBeNull();
+      }
+    });
+
     it('draws nothing for characters absent from the roadsignfont atlas', () => {
       expect(roadsignGlyphIndex('$')).toBeNull();
       expect(roadsignGlyphIndex('*')).toBeNull();

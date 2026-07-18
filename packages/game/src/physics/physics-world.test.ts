@@ -596,18 +596,40 @@ describe('PhysicsWorld.createFalling', () => {
   ]);
 
   describe('negative cases', () => {
-    it('does NOT reach its box fallback for an empty mesh — Rapier hands back an invalid hull desc', async () => {
+    it('falls back to the BOX for a mesh Rapier cannot hull, instead of throwing', async () => {
+      // Rapier's `convexHull` returns a non-null but INVALID desc for degenerate input, so a bare
+      // `?? cuboid(...)` never fires and `createCollider` throws — which took the whole frame down when a
+      // prop with an unhullable mesh toppled. Guarded like `addConvexChassis` since plan 077.
       const physics = await makeWorld();
+      physics.createStaticBox([0, 0, -0.5], [50, 50, 0.5]); // ground, top at z = 0
 
-      // Pinned as the ACTUAL behaviour: `convexHull` returns a non-null but invalid desc for degenerate
-      // input (`addConvexChassis` documents exactly this and guards with try/catch), so `createFalling`'s
-      // `?? cuboid(...)` never fires and `createCollider` throws instead of falling back.
-      expect(() =>
-        physics.createFalling([0, 0, 6], [0, 0, 0, 1], 50, new Float32Array(), {
-          centre: [0, 0, 0],
-          half: [0.2, 0.2, 0.5],
-        }),
-      ).toThrow();
+      const prop = physics.createFalling([0, 0, 6], [0, 0, 0, 1], 50, new Float32Array(), {
+        centre: [0, 0, 0],
+        half: [0.2, 0.2, 0.5],
+      });
+
+      for (let i = 0; i < 300; i += 1) {
+        physics.step(STEP);
+      }
+      // It exists AND behaves: the fallback box lands on the ground rather than falling forever.
+      expect(physics.readBody(prop).position[2]).toBeCloseTo(0.5, 1);
+      physics.dispose();
+    });
+
+    it('falls back to the box for a mesh with too FEW points to hull (under 4)', async () => {
+      const physics = await makeWorld();
+      physics.createStaticBox([0, 0, -0.5], [50, 50, 0.5]);
+
+      const twoPoints = new Float32Array([0, 0, 0, 1, 0, 0]);
+      const prop = physics.createFalling([0, 0, 6], [0, 0, 0, 1], 50, twoPoints, {
+        centre: [0, 0, 0],
+        half: [0.2, 0.2, 0.5],
+      });
+
+      for (let i = 0; i < 300; i += 1) {
+        physics.step(STEP);
+      }
+      expect(physics.readBody(prop).position[2]).toBeCloseTo(0.5, 1);
       physics.dispose();
     });
 

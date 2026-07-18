@@ -1,52 +1,63 @@
-# Two `PhysicsWorld` collider defects (found by coverage, not by the field)
+# Two `PhysicsWorld` collider defects — FIXED 2026-07-18
 
-**Status: FOUND but NOT FIXED (2026-07-18).** Both surfaced while writing unit tests for previously
-untested code during [plan 077](../plans/077-unit-coverage.md). They are recorded rather than patched on
-purpose: a coverage pass that also changes behaviour cannot tell you which change broke something. Neither
-has a field report against it — which is exactly why they are worth writing down, since nobody is looking.
+**Status: ALL FOUR FIXED the same day they were found.** They surfaced while writing unit tests for
+previously untested code during [plan 077](../plans/077-unit-coverage.md), were recorded here unpatched
+first (a coverage pass that also changes behaviour cannot tell you which change broke something), and
+were then fixed as a separate, self-contained commit. Kept as the record of what was wrong and why the
+fixes are shaped the way they are.
 
-## 1. `createFalling`'s box fallback is unreachable — an unhullable prop CRASHES
+## 1. `createFalling`'s box fallback was unreachable — an unhullable prop CRASHED ✅ FIXED
 
-`packages/game/src/physics/physics-world.ts:254-257`.
+`packages/game/src/physics/physics-world.ts`.
 
-The code reads as "convex-hull the mesh, or fall back to a box":
+The code read as "convex-hull the mesh, or fall back to a box":
 
 ```ts
 const desc = ColliderDesc.convexHull(vertices) ?? ColliderDesc.cuboid(...);
 ```
 
 **But `ColliderDesc.convexHull()` does not return null for degenerate input — it returns a non-null,
-INVALID descriptor.** `??` therefore never fires, and `world.createCollider(desc)` throws instead.
+INVALID descriptor.** `??` therefore never fired, and `world.createCollider(desc)` threw instead. A
+breakable prop whose mesh could not be hulled (degenerate/duplicate geometry, a flat 2-triangle sign)
+took the frame down when it toppled rather than falling back to its bounding box.
 
-The proof that this is a known Rapier behaviour and not a theory: the neighbouring `addConvexChassis` in
-the same file already guards the same call with try/catch, precisely because of this.
+The proof this is Rapier behaviour and not a theory: `addConvexChassis`, twelve lines below in the same
+file, already guarded the same call for exactly this reason.
 
-**Symptom to expect in the field:** a breakable prop whose mesh cannot be hulled (degenerate/duplicate
-geometry, a flat 2-triangle sign) throws when it topples instead of falling back to its bounding box —
-so B7·a destruction takes the whole frame down rather than looking slightly wrong.
+**Fix:** mirror `addConvexChassis` — a `length >= 12` pre-check (a hull needs 4 points) plus try/catch,
+falling through to the placed cuboid. **Regression tests:** an empty mesh and a two-point mesh both now
+land on the ground instead of throwing. Note what they assert — not merely that no exception escapes,
+but that the fallback body **behaves**: it falls and comes to rest at ground height.
 
-**Fix:** mirror `addConvexChassis` — try/catch around the hull, use the cuboid on failure. Add a test
-with a degenerate mesh; the pinned "documented-actual" test in `physics-world.test.ts` should be flipped
-to the desired behaviour at the same time.
+## 2. `setColliderEnabled` reported success and did nothing ✅ REMOVED
 
-## 2. `setColliderEnabled` silently does nothing, and is dead code
+`setEnabled(false)` left `isEnabled()` reporting `false` while the collider kept blocking solidly
+(verified by re-fetching the collider wrapper and by waking/teleporting the parent body, in case it was a
+sleeping-island artefact).
 
-`PhysicsWorld.setColliderEnabled` calls Rapier's `setEnabled(false)`, and `isEnabled()` afterwards
-reports `false` — yet **the collider keeps blocking solidly**. Verified two ways: re-fetching the
-collider wrapper, and waking/teleporting the parent body in case it was a sleeping-island artefact.
+**Resolution: deleted** (user decision). It had zero callers, and the path that actually works — the one
+`enter-vehicle.system.ts` uses — is `setColliderSensor`. A method that reports success and does nothing is
+worse than a missing one: it passes review and fails in the field. If collider disabling is ever wanted,
+it should be re-added with a test that proves a body passes THROUGH, not that a flag reads back.
 
-It has **no callers**. The path that actually works, and that `enter-vehicle.system.ts` uses, is
-`setColliderSensor`.
+## 3. `roadsignGlyphIndex` reached the prototype ✅ FIXED
 
-**Fix:** delete the method, or work out why the flag does not take (collider vs parent-body state,
-or a narrow-phase cache that needs invalidating) before anyone reaches for it and believes it.
+`COMMAND_GLYPHS` was an object literal, so `roadsignGlyphIndex('toString')` returned a `Function`,
+violating the declared `null | number`. Unreachable from `roadsignGlyphQuads` (it only ever passes single
+characters), but the signature was a lie.
 
-## Two smaller ones, same batch
+**Fix: it is a `Map` now** — which kills the class of bug rather than guarding one instance of it.
+(`Object.hasOwn` was the first attempt and needs an ES2022 lib the project does not target.) Regression
+test covers `toString` / `constructor` / `hasOwnProperty` / `__proto__`.
 
-- **`roadsignGlyphIndex` does an unguarded prototype lookup** — `COMMAND_GLYPHS` is an object literal, so
-  `roadsignGlyphIndex('toString')` returns a `Function`, violating its `null | number` signature.
-  Unreachable from `roadsignGlyphQuads` (it only ever passes single characters). `Object.hasOwn` or a
-  `Map` closes it.
-- **`mat4Multiply` cannot alias `out` with `a`** (`packages/engine/src/core/math.ts`) — it writes `out`
-  column-by-column while still reading `a`, so `mat4Multiply(m, m, b)` silently corrupts. No current
-  caller does this; it deserves a doc comment before one does.
+## 4. `mat4Multiply` cannot alias `out` with `a` ✅ DOCUMENTED (deliberately not guarded)
+
+`packages/engine/src/core/math.ts`. The loop writes `out` column by column while still reading every
+column of `a`, so `mat4Multiply(m, m, b)` — "multiply in place", which is exactly what three's
+`m.multiply(b)` does and therefore what this codebase's heritage invites — silently corrupts. Aliasing
+`b` is safe: its column is copied to locals before any write.
+
+**Deliberately NOT guarded.** The guard costs a 16-element copy on a per-frame hot path, for a case no
+caller has. The constraint is documented on the function instead, where someone about to write the
+aliasing call will read it. If it ever needs enforcing, a dev-build-only `out !== a` assertion is the
+cheap middle ground.

@@ -21,15 +21,17 @@ const ATLAS_ROWS = 32;
  * verified against vanilla (junction boards: plane on AIRPORT, down arrows on the lane row); `#`/`%` read as
  * the diagonal exit arrows.
  */
-const COMMAND_GLYPHS: Readonly<Record<string, number>> = {
-  '#': 87, // ↗
-  '%': 86, // ↖
-  '<': 82, // ←
-  '>': 83, // →
-  '^': 84, // ↑
-  '}': 94, // airplane (AIRPORT boards)
-  '~': 85, // ↓ (lane indicators on the boards' bottom row)
-};
+const COMMAND_GLYPHS = new Map<string, number>(
+  Object.entries({
+    '#': 87, // ↗
+    '%': 86, // ↖
+    '<': 82, // ←
+    '>': 83, // →
+    '^': 84, // ↑
+    '}': 94, // airplane (AIRPORT boards)
+    '~': 85, // ↓ (lane indicators on the boards' bottom row)
+  }),
+);
 
 /** Text colour palette (flags bits 4–5): white, black, grey, red — as [r, g, b] in 0..1. */
 export const ROADSIGN_PALETTE: readonly (readonly [number, number, number])[] = [
@@ -61,7 +63,10 @@ export function roadsignGlyphIndex(char: string): null | number {
   if (char === '_' || char === ' ') {
     return null;
   }
-  const command = COMMAND_GLYPHS[char];
+  // A Map, not an object literal: a bare `OBJ[char]` lookup reaches the prototype, so
+  // `roadsignGlyphIndex('toString')` returned a Function and violated this function's `null | number`
+  // contract (plan 077). A Map has no such inherited keys, which kills the class rather than guarding it.
+  const command = COMMAND_GLYPHS.get(char);
   if (command !== undefined) {
     return command;
   }

@@ -251,10 +251,23 @@ export class PhysicsWorld {
     );
     // A CONVEX HULL, because a bounding box lies: a lamppost's arm makes its box 2.8 m wide, so the box came
     // to rest on that phantom face and left the actual pole hanging in the air. The hull is the shape you see.
-    const desc =
-      this.rapier.ColliderDesc.convexHull(hull) ??
-      this.rapier.ColliderDesc.cuboid(...box.half).setTranslation(...box.centre);
-    this.world.createCollider(desc.setMass(mass).setCollisionGroups(PROP_GROUPS), body);
+    //
+    // The fallback needs BOTH guards, exactly like `addConvexChassis`: `convexHull` returns a non-null but
+    // INVALID descriptor for degenerate input, so `?? box` never fires and `createCollider` throws instead —
+    // a prop whose mesh cannot be hulled took the frame down rather than falling back (found by plan 077).
+    const finish = (desc: ReturnType<Rapier['ColliderDesc']['cuboid']>): ReturnType<Rapier['ColliderDesc']['cuboid']> =>
+      desc.setMass(mass).setCollisionGroups(PROP_GROUPS);
+    const desc = hull.length >= 12 ? this.rapier.ColliderDesc.convexHull(hull) : null;
+    if (desc) {
+      try {
+        this.world.createCollider(finish(desc), body);
+
+        return body.handle;
+      } catch {
+        // degenerate vertices: convexHull yielded an invalid desc — fall through to the box.
+      }
+    }
+    this.world.createCollider(finish(this.rapier.ColliderDesc.cuboid(...box.half).setTranslation(...box.centre)), body);
 
     return body.handle;
   }
@@ -485,11 +498,6 @@ export class PhysicsWorld {
     const body = this.world.getRigidBody(handle);
     const v = body.linvel();
     body.setLinvel({ x: Math.sin(heading) * speed, y: -Math.cos(heading) * speed, z: v.z }, true);
-  }
-
-  /** Enable/disable a collider (e.g. the player's while seated, so the car doesn't collide with it). */
-  setColliderEnabled(handle: number, enabled: boolean): void {
-    this.world.getCollider(handle).setEnabled(enabled);
   }
 
   /** Make a collider a sensor (detected but applies no contact force) or solid again. */

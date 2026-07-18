@@ -154,6 +154,12 @@ export function mat4LookAt(out: Mat4, eye: Vec3, target: Vec3, up: Vec3): Mat4 {
 }
 
 /** out = a × b (column-major). */
+/**
+ * `out = a × b` (column-major). **`out` must not alias `a`** — the loop writes `out` column by column
+ * while still reading every column of `a`, so `mat4Multiply(m, m, b)` silently corrupts. Aliasing `b` is
+ * fine (its column is read into locals first). Guarding this would cost a 16-element copy on a per-frame
+ * hot path for a case no caller has; the constraint is documented instead (plan 077).
+ */
 export function mat4Multiply(out: Mat4, a: Mat4, b: Mat4): Mat4 {
   for (let column = 0; column < 4; column += 1) {
     const b0 = b[column * 4];
