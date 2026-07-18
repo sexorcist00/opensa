@@ -115,15 +115,12 @@ const OUT = process.argv[5] ?? 'gate';
     console.log('folder chosen, waiting for canvas...');
     await page.waitForSelector('canvas', { timeout: 240000 });
     await page.waitForTimeout(15000); // let the world settle so the shot shows geometry
-    const ctx = await page.evaluate(() => {
+    // WebGPU is the only context the app can boot on since 074/13 phase 5 deleted the three path.
+    const webgpu = await page.evaluate(() => {
       const canvas = document.querySelector('.sa-game canvas') ?? document.querySelector('canvas');
-      let webgpu = false;
-      let webgl2 = false;
-      try { webgpu = !!canvas.getContext('webgpu'); } catch { webgpu = false; }
-      try { webgl2 = !!canvas.getContext('webgl2'); } catch { webgl2 = false; }
-      return { webgl2, webgpu };
+      try { return !!canvas.getContext('webgpu'); } catch { return false; }
     });
-    console.log(`canvas context: webgpu=${ctx.webgpu} webgl2=${ctx.webgl2}`);
+    console.log(`canvas context: webgpu=${webgpu}`);
   }
 
   await page.screenshot({ path: `${OUT}.png` });

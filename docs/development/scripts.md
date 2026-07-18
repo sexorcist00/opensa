@@ -36,13 +36,13 @@ All TypeScript scripts run via `npx tsx`, `.mjs` ones via `node`.
 ### arch-graph.ts
 
 Visualise the package architecture as a **Mermaid flowchart**, derived from the actual workspace packages and
-their `@opensa/*` (plus `three` / Rapier) imports — so the picture can't drift from the code. Nodes are coloured
+their `@opensa/*` (plus Rapier) imports — so the picture can't drift from the code. Nodes are coloured
 by layer (app · engine · tool · external); edges are the import dependencies.
 
 ```bash
 npm run arch                                  # print the Mermaid graph to stdout
 tsx scripts/arch-graph.ts --out docs/architecture.generated.md   # write a fenced .md
-tsx scripts/arch-graph.ts --no-externals      # internal packages only (drop three.js / Rapier)
+tsx scripts/arch-graph.ts --no-externals      # internal packages only (drop Rapier)
 tsx scripts/arch-graph.ts --include-tests     # also follow imports in *.test.ts
 ```
 

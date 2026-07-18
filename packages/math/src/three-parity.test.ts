@@ -10,8 +10,9 @@ import { Vector3 } from './vector3';
 
 /**
  * The safety net for plan 074/13: every value here was captured from three@0.185.1 itself
- * (`capture-three-fixtures.ts`) BEFORE the dependency was dropped. If one of these fails, our
- * replacement disagrees with the library the whole codebase was written against.
+ * (by the since-deleted `capture-three-fixtures.ts`) BEFORE the dependency was dropped in phase 7.
+ * If one of these fails, our replacement disagrees with the library the whole codebase was written
+ * against. The fixtures cannot be regenerated — three is gone; they are the record.
  */
 
 const PRECISION = 8;

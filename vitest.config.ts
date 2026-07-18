@@ -21,7 +21,6 @@ export default defineConfig({
         // file here, add/extend a spec in `e2e/` to exercise it. (See memory: gl-dom-coverage-exclusion.)
         'packages/game/src/input/keyboard/keyboard.ts', // DOM keyboard listeners
         'packages/game/src/adapters/dff-parse.worker.ts', // Worker entry glue (self.onmessage); its stages (parseDff/prepareClumpAtomics/collectTransferables) are unit-covered, the wiring rides the streaming e2e
-        'packages/math/src/capture-three-fixtures.ts', // one-shot CLI run against live three; its OUTPUT is the fixture the parity suite asserts against
         'apps/web/src/ui/**', // DOM/style helpers (locations, debug-styles, hud font loading)
         'apps/web/src/asset-loader/asset-loader.ts', // fetch streaming + Cache Storage orchestration (e2e: asset-loader.spec.ts)
         'apps/web/src/asset-loader/cache-store.ts', // Cache Storage API wrapper (e2e: asset-loader.spec.ts)

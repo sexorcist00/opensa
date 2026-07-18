@@ -542,18 +542,29 @@ forecast — three forecast entries turned out differently and are marked:
 
 ## Phase 7 — Dependency prune + the patch + the size ledger
 
-- [ ] **7.1** Remove `three`, `postprocessing`, `@babylonjs/core` from root `dependencies`;
-      `@types/three` from `devDependencies`.
-- [ ] **7.2** Delete `patches/three+0.185.1.patch`; drop the `patch-package` postinstall **if it patches
-      nothing else** (check first — it is a shared mechanism).
-- [ ] **7.3** Update root `package.json` keywords (`three.js`, `webgl` → the WebGPU reality).
-- [ ] **7.4** `scripts/arch-graph.ts` — remove the hardcoded `ext_three` node and the `three(/…)?`
-      `TARGET_RE` (L76, L102-103, L160-161).
-- [ ] **7.5** **Size ledger**: `node_modules` size, prod bundle size, cold `npm install` time — before and
-      after, into the measurement ledger below. This is the phase's headline number.
-      **Baseline captured 2026-07-18 (after the babylon drop, three still in):** `node_modules` 512 MB ·
-      prod build JS 5.4 MB across all chunks (`canvas-host` 308 kB + `OrbitControls` 20 kB + `build-clump`
-      20 kB + `build-texture` 610 kB are the three-side chunks to watch) · HTML entries 3.
+**DONE 2026-07-18. `three` no longer exists anywhere in the repo.**
+
+- [x] **7.1 DONE** — `three` + `postprocessing` dropped from `dependencies`, `@types/three` from
+      `devDependencies` (`@babylonjs/core` had already gone in phase 3). The last importer,
+      `packages/math/src/capture-three-fixtures.ts`, was DELETED with them: it is the one-shot generator
+      for the parity fixtures and cannot run without the library. `three-fixtures.json` + the parity
+      suite survive as the record — a note in `three-parity.test.ts` says the fixtures are now
+      un-regenerable, so nobody edits them casually.
+- [x] **7.2 DONE** — `patches/three+0.185.1.patch` deleted; it was the **only** patch, so the
+      `patch-package` postinstall hook and the devDependency went with it and `patches/` is gone.
+      (Checked first, as the task demanded — the mechanism was not shared.)
+- [x] **7.3 DONE** — keywords `three.js` + `webgl` → `webgpu`.
+- [x] **7.4 DONE** — `scripts/arch-graph.ts`: `ext_three` node, the `three(/…)?` alternation in
+      `TARGET_RE`, its `resolveTarget` branch and both doc-comment mentions removed. The graph now
+      shows exactly one external — Rapier.
+- [x] **7.5 DONE — size ledger below.** Honest attribution: **the bundle drop belongs to phases 4–6,
+      not to this one.** Nothing had imported three since phase 6, so it was already tree-shaken out of
+      the build; phase 7 removes it from `node_modules`, CI installs and the lockfile. Measuring both
+      is the point — a dependency you stopped importing still costs every developer and every CI run.
+- [x] **7.6 (found here)** — discharges **task 5a.2**: `gate-check.js` probed `webgl2` alongside
+      `webgpu` to tell the two renderers apart. There is only one now, so the probe is a single
+      boolean (and the dead `let webgl2` was the only lint error outside the pre-existing
+      bench-harness `.js` set).
 
 ---
 
@@ -572,11 +583,11 @@ forecast — three forecast entries turned out differently and are marked:
 
 ## Measurement ledger
 
-| Date       | What                                                                                  | Numbers                                                                                                                                                                                                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-07-18 | Phase-0 inventory (3 parallel sweeps)                                                 | 122 three-importing source files (52 render-path / 20 math-only / 50 tests / **0 tools**); 43 files in `renderware/src/three`; ~60 URL params, 10 of them dead; patch = 207 lines, `three.webgpu.js` only; `createRenderContext` has exactly 1 caller                   |
-| 2026-07-18 | Phase 1.1–1.3: `@opensa/math` built + three-parity suite                              | 9 source files, ~1 000 lines, zero deps; 12 parity tests vs captured three@0.185.1 fixtures @ 8 decimals, all green first run; suite 330/2159 → **331/2171**, tsc + eslint clean                                                                                        |
-| 2026-07-18 | Phase 1.5 part 1: pure-math files migrated                                            | three importers **122 → 109** (13 files freed); `placementMatrix` extracted from the doomed `build-procobj` into the surviving `procobj-scatter`; 7 files deliberately reverted (scene-graph seams, ride phases 4/5); suite 331/2171 green, tsc + eslint clean          |
-| 2026-07-18 | Phase 3: spikes deleted + babylon dropped                                             | 5 spike TS + 5 HTML entries gone (findings audited into 073 prose FIRST); `@babylonjs/core` removed — **node_modules 604 → 512 MB (−92 MB)**; build HTML entries 8 → 3; prod build green, suite 331/2171                                                                |
-| 2026-07-18 | Phase 6: test rework                                                                  | three importers **17 → 1** (`capture-three-fixtures.ts`, deferred to phase 7); 7 dead modules + 7 tests deleted; suite 299/1874 → **292/1840** green, tsc + eslint clean; coverage 72.02 → **71.89 %** statements (−0.13 pp, flat); 12 stale coverage exclusions pruned |
-|            | _(phase 7 size ledger lands here: node_modules, bundle, install time — before/after)_ |                                                                                                                                                                                                                                                                         |
+| Date       | What                                                     | Numbers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| 2026-07-18 | Phase-0 inventory (3 parallel sweeps)                    | 122 three-importing source files (52 render-path / 20 math-only / 50 tests / **0 tools**); 43 files in `renderware/src/three`; ~60 URL params, 10 of them dead; patch = 207 lines, `three.webgpu.js` only; `createRenderContext` has exactly 1 caller                                                                                                                                                                                                                                                                         |
+| 2026-07-18 | Phase 1.1–1.3: `@opensa/math` built + three-parity suite | 9 source files, ~1 000 lines, zero deps; 12 parity tests vs captured three@0.185.1 fixtures @ 8 decimals, all green first run; suite 330/2159 → **331/2171**, tsc + eslint clean                                                                                                                                                                                                                                                                                                                                              |
+| 2026-07-18 | Phase 1.5 part 1: pure-math files migrated               | three importers **122 → 109** (13 files freed); `placementMatrix` extracted from the doomed `build-procobj` into the surviving `procobj-scatter`; 7 files deliberately reverted (scene-graph seams, ride phases 4/5); suite 331/2171 green, tsc + eslint clean                                                                                                                                                                                                                                                                |
+| 2026-07-18 | Phase 3: spikes deleted + babylon dropped                | 5 spike TS + 5 HTML entries gone (findings audited into 073 prose FIRST); `@babylonjs/core` removed — **node_modules 604 → 512 MB (−92 MB)**; build HTML entries 8 → 3; prod build green, suite 331/2171                                                                                                                                                                                                                                                                                                                      |
+| 2026-07-18 | Phase 6: test rework                                     | three importers **17 → 1** (`capture-three-fixtures.ts`, deferred to phase 7); 7 dead modules + 7 tests deleted; suite 299/1874 → **292/1840** green, tsc + eslint clean; coverage 72.02 → **71.89 %** statements (−0.13 pp, flat); 12 stale coverage exclusions pruned                                                                                                                                                                                                                                                       |
+| 2026-07-18 | **Phase 7: the dependency is GONE — the size ledger**    | `node_modules` **512 → 455 MB (−57 MB)**; prod build JS **5.4 → 2.90 MB (−46 %)**, biggest chunk `engine-canvas-host` 2.40 MB (gzip 900 kB), HTML entries 3 (unchanged); `npm install` 4.5 s warm-cache from a wiped `node_modules` (no cold-cache baseline was taken before, so this number stands alone); repo-wide `from 'three'` importers **1 → 0**; suite 292/1840 green, tsc clean, build green. Bundle share attributed to phases 4–6 (already unimported); `node_modules` + lockfile + install share is this phase's |     |
