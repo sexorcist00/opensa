@@ -195,3 +195,34 @@ NON-renderer):
 - Two `collision` spikes on scene entry (21.9 ms lv-night, 8.2 ms country-dusk) — the collider streamer
   still has no per-frame budget, unlike the render-cell adaptive creates from plan 21.
 - One `submit 4.50 ms` outlier on a country-dusk settle frame; steady-state submit is 0.20–0.70.
+
+---
+
+## 13·post-teardown ritual (2026-07-18, headless DPR 2) — the phase-8 close-out row
+
+The ritual re-run demanded by [13 task 8.1](../13-cleanup.md): after phases 6+7 deleted the last
+three-era modules and dropped the dependency, **numbers must not move.** Same harness, same pak, same
+841-car population; the comparable reference is the 07-18 _Follow-up (regional-weather fix)_ table
+above, which is the only other headless-DPR-2 row.
+
+| Scene         | avg / fps     | p95 ms | world pass ms | ref pass (07-18) | draws (ref)   | late |
+| ------------- | ------------- | ------ | ------------- | ---------------- | ------------- | ---- |
+| ls-noon       | 8.335 / 120.0 | 10.1   | 2.19          | 1.92             | 1 020 (1 021) | 0    |
+| sf-fog-dawn   | 8.333 / 120.0 | 9.9    | 2.24          | 1.93             | 835 (831)     | 0    |
+| lv-night      | 8.338 / 119.9 | 10.0   | 2.40          | 1.94             | 1 049 (1 044) | 0    |
+| country-dusk  | 8.333 / 120.0 | 10.0   | 2.27          | 2.12             | 515 (514)     | 0    |
+| ocean-horizon | 8.334 / 120.0 | 10.1   | 1.94          | 1.58             | 9 (9)         | 0    |
+| ls-rain-night | 8.333 / 120.0 | 9.9    | 2.35          | 1.83             | 978 (975)     | 0    |
+
+**Verdict: PASS on the gate, with one honest caveat.** Every scene is vsync-locked at 119.9–120.0 fps,
+`lateCreates` 0 in all six, and **draw counts match the reference to within ±4** — which is the real
+proof that nothing live was deleted, since a lost subsystem shows up as missing draws, not as timing.
+
+The caveat: `gpuMs.pass` reads **uniformly +7…+28 % above the reference row**, on every scene including
+the 9-draw ocean. A uniform offset that does not track scene complexity is the signature of machine
+state, not of a code change — and this run was NOT taken on a quiescent machine (a second dev server was
+live on :5173 alongside the harness's own). The **first** attempt at this row, taken with a subagent
+also running, showed the same offset amplified into scene-specific nonsense (ocean 3.39, ls-rain-night
+4.19 — both fell back to 1.94 / 2.35 the moment the machine quieted down), which is what makes the
+diagnosis credible. Recorded rather than tidied away: **the pass column of this row should not be used
+as a baseline**; the next quiescent run or the user's display row is the arbiter.

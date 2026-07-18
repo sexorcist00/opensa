@@ -39,7 +39,7 @@ selection + VFS) over an **in-page fake** File System Access tree — no real in
 native folder dialog can't be driven by Playwright).
 `e2e/shell.spec.ts` exercises the UI shell boot flow (fetch mode); its happy path needs the built
 **`static/games/original-<version>/`** chunk archives (gitignored), so that spec only runs where those are
-present (not on GitHub-hosted CI). It stops before the full texture download + WebGL boot to stay fast.
+present (not on GitHub-hosted CI). It stops before the full texture download + engine boot to stay fast.
 
 ## What is covered (`e2e/object-viewer.spec.ts`)
 
@@ -47,8 +47,8 @@ present (not on GitHub-hosted CI). It stops before the full texture download + W
   errors** while the default model's `dff`/`txd`/`col` fetch and build (real fetch → parse → build → render
   pipeline in the browser).
 - **Interaction**: the model `<select>` is populated and switching models keeps rendering.
-- **Visual regression**: a baseline screenshot of the rendered canvas. Headless Chromium renders WebGL via
-  **SwiftShader** (software), so frames are deterministic across machines; `maxDiffPixelRatio` gives a small
+- **Visual regression**: a baseline screenshot of the rendered canvas. Headless Chromium renders through a
+  software backend, so frames are deterministic across machines; `maxDiffPixelRatio` gives a small
   tolerance for AA differences.
 
 ## Snapshots

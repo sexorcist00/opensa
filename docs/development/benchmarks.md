@@ -17,19 +17,20 @@ same way (see the DPR caveat below).
 
 ## In-game bench (`?bench=`)
 
-The game host (WebGPU engine is the default since the boot gate; `?engine=three` = the prod-WebGL
-comparison override) runs deterministic scene flights and prints one JSON report per scene:
+The game host runs deterministic scene flights and prints one JSON report per scene. (Until 074/13
+phase 5 a `?engine=three` override booted the old WebGL renderer for side-by-side baselines; that
+renderer is deleted, so pre-2026-07-18 prod columns in the series can no longer be reproduced.)
 
 ```
 http://localhost:5173/?bench=all          # the full 6-scene sweep
 http://localhost:5173/?bench=country-dusk # one scene
 ```
 
-Scenes live in `apps/web/src/bench-scenes.ts` (plan 063 protocol — SAME scenes + camera paths in both
-renderers): `ls-noon` · `sf-fog-dawn` · `lv-night` · `country-dusk` · `ocean-horizon` · `ls-rain-night`.
+Scenes live in `apps/web/src/bench-scenes.ts` (plan 063 protocol — the camera paths are unchanged from
+the WebGL era, which is what makes the historical rows comparable): `ls-noon` · `sf-fog-dawn` · `lv-night` · `country-dusk` · `ocean-horizon` · `ls-rain-night`.
 Each scene: teleport to the anchor → streaming ring settles → 1.5 s warmup → 15 s camera flight with
 per-frame sampling. **Road cars** (841 across the scenes, from vehicles.ide on the NODES.DAT road
-graph) register automatically — the realistic vehicle load both renderers must share; `?benchcar=`
+graph) register automatically — the realistic vehicle load every row must share; `?benchcar=`
 pins one model.
 
 Report line (the deliverable IS this console line):
@@ -49,7 +50,7 @@ Report line (the deliverable IS this console line):
   0 in a healthy run.
 - `residency` — GPU ledger by category, MB; `texture` is the plan-21 accumulation watch.
 
-Useful A/B knobs while measuring: `?scale=0.75` (the ONE perf tier knob), `?aces=0`, `?bloom=0|N`,
+Full knob reference: [query-parameters.md](query-parameters.md). Useful A/B knobs while measuring: `?scale=0.75` (the ONE perf tier knob), `?aces=0`, `?bloom=0|N`,
 `?probe=0`, `?sky=preetham`, `?clouds=N`, `?draw=800..1600` (LOD ring; fog cap follows), `?hour=N`,
 `?soak=` (below). The prod host honours the same `?bench=` protocol for side-by-side baselines.
 
@@ -103,7 +104,7 @@ DPR=2 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
 DPR=2 TAG='[soak]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?soak=30" http://localhost:8787 soak30 2700000 999
 
-# boot-gate checks (074/10): default→engine, ?engine=three→webgl2, no-WebGPU→sorry screen
+# boot-gate checks (074/10): canvas→WebGPU context present, no-WebGPU→sorry screen
 node tools-debug/bench-harness/gate-check.js canvas "http://localhost:5173/" http://localhost:8787 gate
 node tools-debug/bench-harness/gate-check.js sorry  "http://localhost:5173/" http://localhost:8787 sorry
 ```
@@ -116,7 +117,7 @@ the scripts). It also swallows the IndexedDB `DataCloneError` from persisting th
 **Gotchas** (learned the hard way, keep them):
 
 - **Headless 1× is NOT pass-comparable to the user's 2× retina display rows** — and a 1× A/B once
-  missed a 30–40 % display-only night cost (the plan-16 SSR lesson). `DPR=2` closes the render-target
+  missed a 30–40 % display-only night cost (the plan-16 SSR lesson — that feature was rolled back). `DPR=2` closes the render-target
   gap (verify: screenshot is 2880×1800, HUD `target` ~345 MB vs 92 at 1×), but **user-display rows
   remain the sign-off standard** for per-pixel features.
 - The engine honours `?hour=`; prod ignores it (F2 menu there). The in-game clock keeps running — read

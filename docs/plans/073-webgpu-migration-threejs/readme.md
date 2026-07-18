@@ -6,10 +6,13 @@ The campaign solved everything reachable from outside the framework (CPU 65 → 
 GPU/present remainder inside three's Metal backend. **The path forward is our own framework:
 [074 own-engine chain](../074-opensa-engine/readme.md).**
 
-**Code/flags disposition (temporary):** every runtime flag (`?webgpu/bundle/mat04/pool/fog/mesh1/cellcull/
-texfree/aa/dpr/appear/warm/bundledebug`) and the engine changes stay in-tree for debugging; their fate
-(keep / fold / delete) is decided when the own-framework work starts. Backend-independent wins (physics
-catch-up cap, bounded asset caches, texture-data freeing, frame-segment HUD) are prod material regardless.
+**Code/flags disposition — EXECUTED 2026-07-18, the answer was DELETE.** The flags
+(`?webgpu/bundle/mat04/pool/fog/mesh1/cellcull/texfree/aa/dpr/appear/warm/bundledebug`) and the three
+engine changes were kept in-tree for debugging until the own-framework work landed; they died with the
+three-WebGL renderer in [074/13 phase 5](../074-opensa-engine/13-cleanup.md), and the surviving knobs are
+now documented in [query-parameters.md](../../development/query-parameters.md). Backend-independent wins
+(physics catch-up cap, bounded asset caches, texture-data freeing, frame-segment HUD) carried over to the
+own engine as predicted.
 
 <details><summary>Park write-up (the original data-driven verdict)</summary>
 

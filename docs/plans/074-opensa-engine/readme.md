@@ -77,7 +77,41 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
 - **The alpha-edge groundwork**: dilation BFS + DXT software decode exist from the
   [open issue](../../open-issues/fixed/alpha-edge.md).
 
-## Handoff status (2026-07-16, end of day — resume from here)
+## Handoff status (2026-07-18, end of day — resume from here)
+
+**THE TEARDOWN IS COMPLETE — [13 cleanup](13-cleanup.md) ran phases 1–8 in a day and `three` no longer
+exists in this repository.** The flip was decided in the morning ([10-flip-decision](10-flip-decision.md),
+user sign-off «паритет ок»), C2 followed, and the old stack came out package by package: the four asset
+viewers ported onto `@opensa/engine` · the WebGL host + render path + `renderware/src/three/` (43 files)
+deleted · `@opensa/math` extracted with a parity suite captured from three@0.185.1 itself · seven
+three-era modules found to be **dead code the engine had already superseded** (the AnimationMixer triple,
+`TimedObjectSystem`, `hidden-instances`, `render-sync`, `orient-character`) and deleted with their tests ·
+the dependency, `postprocessing`, `@types/three` and our 207-line three patch dropped (`patch-package`
+went with it — it was the only patch). **Numbers: importers 122 → 0 · `node_modules` 512 → 455 MB ·
+prod JS 5.4 → 2.90 MB · suite 289 files / 1 815 green · `npm run lint` green.**
+
+Ritual re-run PASS — 119.9–120.0 fps on all six scenes, `lateCreates` 0, **draws within ±4 of the
+reference row** (the measurement that proves nothing live was deleted); the `gpuMs.pass` column read
+uniformly high on a busy machine and is flagged as not-a-baseline in
+[series § 13·post-teardown ritual](bench/series.md).
+
+**Two things the close-out deliberately left OPEN for a decision rather than silently resolving:**
+
+1. **Coverage floors are RED and should stay red until decided.** 88.8 % → **71.9 %** statements: the
+   deleted WebGL code was heavily unit-tested, and `packages/engine` — which replaced it — needs a GPU
+   device, so it is verified by the bench/soak/e2e lanes instead. Either the engine grows a
+   device-independent unit seam or it joins the exclusion list with those lanes named as the
+   compensating control. **Do not lower the floors silently** ([test-coverage.md](../../development/test-coverage.md)).
+2. **`?scale`, `?draw` and friends now have a canonical home** — [query-parameters.md](../../development/query-parameters.md).
+   Phase 2.4 decided AGAINST a central `flags.ts` (22 names, most read once, two hosts with different
+   defaults); the reasoning is in the doc so it can be re-decided.
+
+**Next per the agreed sequence:** ③ the **opensa-pack REWORK** ([074/14](14-pmb-integration.md)) — output
+becomes "almost a copy of the game in our format" with loose live-tunable files (timecyc first) as FILES
+next to the pak → ④ the lab consumes that output like a game dir, and `manifest.timecyc` + `setup.timecyc`
+die. Post-flip perf lever unchanged: per-ring texture laziness (~767 MB world-array boot baseline).
+
+## Handoff status (2026-07-16 — history)
 
 **Plan [09](09-postfx-aa.md) FULLY SHIPPED + benched (2026-07-16):** ACES (prod-exact curve, `?aces=0`) ≈
 free; bloom (prod dual-filter chain + plan-071 night threshold profile, `?bloom=`) — full post chain

@@ -1,8 +1,10 @@
 /**
- * OpenSA own-engine standalone boot (plan 074/10 phase 1) — the first time `@opensa/engine` runs inside the
- * WEB APP's build instead of the lab. No gameplay: streams a converted district (`?src=pak-ls` full Los
- * Santos by default; root `public/pak-ls` symlinks the lab's pak) with a free-fly camera. This is the
- * side-by-side path the flip criteria measure against — the three-WebGL game stays untouched.
+ * OpenSA own-engine standalone boot (plan 074/10 phase 1) — `@opensa/engine` inside the WEB APP's build
+ * without the game. Streams a converted district (`?src=pak-ls` full Los Santos by default; root
+ * `public/pak-ls` symlinks the lab's pak) with a free-fly camera. It measured the flip criteria against
+ * the three-WebGL host; that host is gone, and the file is KEPT (074/13 phase 8.4) as the minimal-repro
+ * boot for engine bugs — no React, no gameplay, no streaming driver beyond the cells. Dev-served only:
+ * it is not in `viewerInputs`, so it costs the production build nothing.
  *
  * Controls: WASD + QE (down/up), drag = look, Shift = ×4 speed. `?hour=N` sets the time of day.
  */

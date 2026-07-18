@@ -6,15 +6,30 @@
 > (hard readers) or skip (guarded readers). CI runs no tests for this reason. See
 > [scripts.md → test-fixtures.ts](./scripts.md#test-fixturests).
 
-Run: `npm run test:coverage` (Vitest + v8). Scope (from `vitest.config.ts`): `apps/web/**` + `packages/**` `.ts` logic; **excluded**
-`*.test.ts`, `index.ts`, `*.interface.ts`, `test-utils.ts`, `apps/viewer/src/**`, all `.tsx` UI, and the
-**GL / DOM / app-loop glue** (`game.ts`, `core/renderer`, `core/camera-controller`, `input/keyboard`, the
-sky/water/postfx/ambient/directional/vehicle-reflection GL plugins, `vehicle-headlight.system`,
-`setup-character`, `adapters/dff-parse.worker.ts` (Worker entry glue — its stages `parseDff`/
-`prepareClumpAtomics`/`collectTransferables` are unit-covered), `apps/web/src/ui/**`) — WebGL/browser code verified on the Playwright e2e lane (`e2e.md`), not by
+Run: `npm run test:coverage` (Vitest + v8). Scope (from `vitest.config.ts`): `apps/web/**` + `packages/**`
+`.ts` logic; **excluded** `*.test.ts`, `index.ts`, `*.interface.ts`, `test-utils.ts`, `apps/viewer/src/**`,
+all `.tsx` UI, and the **DOM / worker-entry glue** (`input/keyboard`, `adapters/dff-parse.worker.ts` — its
+stages `parseDff`/`prepareClumpAtomics`/`collectTransferables` are unit-covered, `apps/web/src/ui/**`,
+the two asset-loader files) — browser code is verified on the Playwright e2e lane (`e2e.md`), not by
 headless node units (same rationale as the `.tsx` exclusion). See plan 046 for the roadmap.
 
-## Current (2026-06-13, after It.1–7 + coverage hardening)
+## Current (2026-07-18, after the 074/13 renderer teardown)
+
+**Statements 71.9 % · Branches 66.9 % · Functions 71.8 % · Lines 71.7 %** (292 test files, 1 840 passing,
+0 skipped).
+
+**The numbers FELL from the 88.8 % below, and the reason is structural, not a regression.** Plan
+[074/13](../plans/074-opensa-engine/13-cleanup.md) deleted the three-WebGL renderer — a large, heavily
+unit-tested body of code — while `packages/engine`, the WebGPU renderer that replaced it, is verified by
+the bench/soak/e2e lanes rather than by headless units (it needs a GPU device). Same scope glob, very
+different denominator.
+
+The enforced floors in `vitest.config.ts` are therefore **red on purpose** until this is decided:
+either the engine grows a unit-testable seam (device-independent math/layout logic), or it joins the
+exclusion list with its e2e/bench lane named as the compensating control — the rule this doc already
+applies to GL/DOM glue. **Do not "fix" it by lowering the floors silently.**
+
+## Historical (2026-06-13, after It.1–7 + coverage hardening)
 
 **Statements 88.9% · Branches 78.64% · Functions 87.21% · Lines 88.81%** over the headless scope above
 (108 test files, 651 passing, 0 skipped). Enforced floors in `vitest.config.ts`
@@ -22,7 +37,7 @@ headless node units (same rationale as the `.tsx` exclusion). See plan 046 for t
 achieved numbers so an unrelated change can't silently erode coverage (`npm run test:coverage` fails below).
 Branches sit lower by nature (error/edge + fetch paths in `resolve-map`/`img-archive`/`build-region`).
 
-## Baseline (2026-06-13, Iteration 0)
+## Historical baseline (2026-06-13, Iteration 0)
 
 90 test files, 543 passing / 8 skipped. (Iteration 1 committed the missing real fixtures → **551 passing, 0
 skipped**; the 8 were real-asset `skipIf` tests gated on absent `testground.*` / a packed `gta3.img`.

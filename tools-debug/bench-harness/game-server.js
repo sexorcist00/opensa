@@ -1,7 +1,7 @@
+const fs = require('fs');
 // Static file server over the play profile (NO_COMMIT/optimized) with Range support + CORS,
 // so the headless browser's fake showDirectoryPicker can stream files over HTTP.
 const http = require('http');
-const fs = require('fs');
 const path = require('path');
 
 const ROOT = process.argv[2];
@@ -44,7 +44,7 @@ const server = http.createServer((req, res) => {
       res.statusCode = 206;
       res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
       res.setHeader('Content-Length', end - start + 1);
-      fs.createReadStream(file, { start, end }).pipe(res);
+      fs.createReadStream(file, { end, start }).pipe(res);
     } else {
       res.setHeader('Content-Length', size);
       fs.createReadStream(file).pipe(res);

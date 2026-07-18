@@ -133,8 +133,10 @@ const TAG = process.env.TAG ?? '[bench]';
 
   const started = Date.now();
   while (Date.now() - started < TIMEOUT_MS) {
-    if (benchLines.some((line) => line.includes('sweep complete') || line.includes('"verdict"')) ||
-        benchLines.filter((line) => line.includes('"key"') || line.includes('"scene"')).length >= EXPECT_REPORTS) {
+    if (
+      benchLines.some((line) => line.includes('sweep complete') || line.includes('"verdict"')) ||
+      benchLines.filter((line) => line.includes('"key"') || line.includes('"scene"')).length >= EXPECT_REPORTS
+    ) {
       break;
     }
     await page.waitForTimeout(1000);

@@ -1,7 +1,9 @@
 # Vehicles
 
-`packages/renderware/src/three/build-vehicle.ts`, `packages/game/src/vehicle/`, vehicle-reflection plugin,
-plans 015–021/025/030/033.
+`packages/renderware/src/vehicle/` (`build-vehicle-model.ts` + `textures.ts` — renderer-agnostic model
+build, run off the main thread by `packages/game/src/adapters/vehicle-model.worker.ts`),
+`packages/game/src/vehicle/` (systems), `packages/engine/src/render/probe.ts` (the reflection probe),
+host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033 + 074/16.
 
 ## Implemented
 
@@ -21,9 +23,12 @@ plans 015–021/025/030/033.
   (255,255,0 yellow). NB (255,175,0)/(255,60,0) are per-lamp ids on the `vehiclelights` atlas, **not**
   paint markers. Colour spec strings `"p,s[,t,q]"` with omitted 3rd/4th defaulting to palette 0 (SA
   behaviour); RW modulate (texture × material colour) for non-marker textured materials (dark interiors fix).
-- **Reflections** (plan 030): MatFX env coefficient + SA reflection/specular plugin data carried
-  per material; preset-driven plugin (`off`/SA sphere-map/`enhanced` clearcoat via
-  MeshPhysicalMaterial), live intensity/preset switching, sky probe refresh on weather change.
+- **Reflections** (plan 030 → 074/16): MatFX env coefficient + SA reflection/specular plugin data carried
+  per material. The engine runs a skygfx-style "neo" car pipe — the base colour LERPs toward a live scene
+  **cube probe** (`packages/engine/src/render/probe.ts`, 128²×6, refreshed a couple of faces per frame) —
+  with a per-material class (matte/paint/chrome/glass) chosen from the material data, never from names.
+  The three-era presets (`packages/game/src/plugins/vehicle-reflection/presets.ts`) survive only as
+  debugger tuning values.
 - **Glass** (plan 025): window materials detected and rendered transparent (double-sided,
   sorted).
 - **Extras** (`extraN` components): SA's mutually-exclusive optional parts modelled at the same spot (e.g. the
@@ -66,5 +71,6 @@ plans 015–021/025/030/033.
 
 ## Test coverage anchors
 
-`build-vehicle.test.ts` (markers, modulate, parts, extras — synthetic + real petro-6wheels.dff), vehicle systems
-tests (physics/lod/damage), adapter vehicle data tests.
+`vehicle/build-vehicle-model.test.ts` (markers, modulate, parts, extras — synthetic + real
+petro-6wheels.dff), `vehicle/textures.test.ts`, `adapters/vehicle-model-builder.test.ts`,
+vehicle systems tests (physics/lod/damage), adapter vehicle data tests.

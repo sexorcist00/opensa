@@ -1,8 +1,10 @@
 # Weather + environment (sky, water, fog)
 
-`packages/game/src/plugins/sky.plugin.ts`, `water.plugin.ts`, `fog.plugin.ts`, `cloud-profile.ts`,
-`packages/game/src/weather/`, `packages/renderware/src/parsers/text/timecyc*`, `build-water.ts`, plans
-014/024/028/029/031.
+`packages/engine/src/render/sky-lut.ts` + `hosek-wilkie.ts` (sky/fog inside the engine's frame),
+`packages/game/src/adapters/engine-environment-driver.ts` (timecyc → engine environment),
+`packages/game/src/plugins/cloud-profile.ts`, `packages/game/src/weather/`,
+`packages/renderware/src/parsers/text/timecyc*` + `water.parser.ts`,
+`packages/renderware/src/map/ocean-frame.ts`, plans 014/024/028/029/031 and 074/06+21.
 
 ## Implemented
 

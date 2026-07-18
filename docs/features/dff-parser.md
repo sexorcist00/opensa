@@ -1,7 +1,8 @@
 # DFF parser
 
 `packages/renderware/src/parsers/binary/dff.ts` (+ `binary-stream.ts`, `chunks.ts`, `constants.ts`,
-`types.ts`). Renderer-agnostic: outputs plain `RWClump` data, three.js never leaks in.
+`types.ts`). Renderer-agnostic: outputs plain `RWClump` data — no GPU or renderer types leak in, which is
+why the same parser serves the browser runtime and the offline `opensa-pack` converter.
 
 ## Implemented
 
@@ -35,8 +36,8 @@
   data-driven emitters (plan 044).
 - Type 7 **Roadsign**: plate size, rotation (world-space!), flags (lines/chars/colour),
   4×16-char text → sign text rendering.
-- Type 10 **Escalator**: geometry-local path (start/bottom/top/end) + direction → moving step
-  rows (plan 044).
+- Type 10 **Escalator**: geometry-local path (start/bottom/top/end) + direction. Parsed only — the
+  step renderer went with the three teardown (see world-effects.md).
 - Other types (3 ped attractor, 6 enex, 8 trigger, 9 cover point) are skipped by
   size — counted in the survey but intentionally unused.
 

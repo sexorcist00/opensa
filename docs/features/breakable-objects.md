@@ -10,29 +10,31 @@ shipped map carry real shatter data (1695 carry the chunk; the rest are `magic =
   triangles + per-triangle material, materials (texture/mask/ambient). Strict layout check
   (header + packed arrays must equal the chunk size); `magic` is a runtime pointer — any
   non-zero value means data; name fields are NUL-trimmed (exporter heap garbage follows).
-- **Debris renderer** — `three/build-debris.ts`: one Mesh per break, geometry baked in world
+- **Debris renderer** — `breakable/bake-debris.ts` (renderer-agnostic bake) driven by
+  `apps/web/src/ui/engine-debris.ts`: one draw per break, geometry baked in world
   Z-up at break time; per-triangle shards with baked flight attributes (velocity = impact
   share + scatter + upward pop, random spin, analytic landing time from one ground probe).
   All motion in the vertex shader (`t = min(age, landTime)` — shards freeze where they land),
   tail fade in the fragment shader. Draw groups merged by shard texture; missing textures →
-  white. `spawnDebris`/`updateDebris` registry: 5 s lifetime, 8 simultaneous breaks (oldest
-  evicted), expiry detaches + disposes. DoubleSide, GLOW_LAYER (out of the SSAO prepass).
-- **World registry** — `three/breakable.ts`: at HD cell build (`collectBreakables`), every placed
-  prop whose model carries Breakable data registers (model, world transform, part InstancedMeshes +
-  slot, instance key). `nearestBreakable` finds the closest un-broken, still-streamed prop;
-  `breakBreakable` collapses its slots (zero-scale), flies the debris and marks it broken.
-  Re-registration replaces the stale entry on a cached-cell rebuild.
+  white. `engine.spawnDebris` owns the registry: 5 s lifetime, budgeted simultaneous breaks (oldest
+  evicted). The engine path also probes the real ground height, so shards land instead of sinking.
+- **World registry** — the converter (`tools/opensa-pack`, `weld.ts`) tags every placed prop whose
+  model carries Breakable data with its instance key inside the cell bundle; at runtime
+  `apps/web/src/ui/engine-breakables.ts` resolves a hit (or the nearest prop to the player) to that
+  key and calls the engine's `CellStore.breakPlacement`, which **degenerates the prop's triangles in
+  the cell index buffer** — the prop stays in the merged batch, so a break costs no draw call.
+  The shatter mesh itself is read on demand by `breakable/mesh.ts` (`getBreakable`), keys are hashed
+  by `breakable/key.ts` (`breakableInstanceKey` / `breakableKeyHash`).
 - **Collider removal** — the smashed prop's static body is dropped so a car drives through:
   breakable placements are tagged with their instance key in `loadCellColliders`
   (`ModelColliders.instanceKeys`), `PhysicsWorld.createStaticColliders` reports each created
   breakable body's key→handle, and `CollisionStreamingSystem.removeBreakable(key)` removes that one
   body (and forgets it on cell unload). The cell rebuild respawns the prop, like vanilla.
-- **Triggers** (`ui/canvas-host.tsx`) — (A) debugger "Break nearest prop" (Player tab) smashes the
-  closest prop to the player (`nearestBreakable`, planar). (B) vehicle impact uses the **real
+- **Triggers** (`apps/web/src/ui/engine-breakables.ts`) — (A) debugger "Break nearest prop" (Player tab)
+  smashes the closest prop to the player (`breakNearest`, planar). (B) vehicle impact uses the **real
   collision**, like SA's `CObject::ObjectDamage(impulse)`: the chassis collider follows the COL
   contour and Rapier emits contact-force events for it, so each event whose static body is a
-  registered breakable prop (`CollisionStreamingSystem.breakableKeyOf` →
-  `getBreakableByKey`) breaks that prop when the force clears the threshold — at the real contact,
+  registered breakable prop (`CollisionStreamingSystem.breakableKeyOf`) breaks that prop when the force clears the threshold — at the real contact,
   seeded with the hitter's velocity. Contact-force events fire only for chassis colliders, so the
   on-foot player can't smash props (matching vanilla). The same events feed the vehicle-damage system
   via a separate impact buffer (`takeBreakableImpacts` vs `takeImpacts`), so neither starves the other.
@@ -41,20 +43,18 @@ shipped map carry real shatter data (1695 carry the chunk; the rest are `magic =
   object.dat also tunes the per-prop impact threshold (higher damage multiplier → breaks easier) and
   marks indestructible props by mass (cutoff 90 000 — true cutscene/fixed props are mass 99 999;
   breakable fences sit at 50 000, an uproot value, so they still break).
-- **Render-geometry fallback** (`breakableFromGeometry`) — smash props with no Breakable atomic
-  (cardboard boxes, bin bags, some fences) shatter their **visible mesh**: the adapter passes the
-  object.dat smash set into the cell build, and `collectBreakables` synthesizes a shatter mesh from
-  the render geometry (positions/UVs/prelit colours/triangles, texture names lowercased to match the
+- **Render-geometry fallback** (`breakableFromGeometry`, `breakable/mesh.ts`) — smash props with no
+  Breakable atomic (cardboard boxes, bin bags, some fences) shatter their **visible mesh**: the
+  object.dat smash set comes from `breakable/models.ts` (`breakableModelsOf`), and the fallback
+  synthesizes a shatter mesh from the render geometry (positions/UVs/prelit colours/triangles, texture names lowercased to match the
   TXD) when a model is in the set but has no atomic.
 
 ## Known gaps
 
-- **Shards sink underground (MVP), no real landing** — the placement Z is the prop base for some
-  props but its centre for others, which froze tall props' shards in mid-air. So the game break omits
-  `groundZ`: shards fall straight through and sink as they fade (`build-debris.ts` keeps the analytic
-  landing path for when a real ground probe exists). **TODO: redo with real per-shard physics +
-  ground contact.**
-- `BREAK_FORCE` threshold (canvas-host) is a first-pass value — recalibrate against vanilla feel via
+- **No real per-shard physics** — landing is analytic (one Rapier ground probe per break feeds
+  `groundZ`; shards freeze where they land), not simulated. \*\*TODO: redo with real per-shard physics
+  - ground contact.\*\*
+- `BREAK_FORCE` threshold (`engine-breakables.ts`) is a first-pass value — recalibrate against vanilla feel via
   `showLogs: 'debug'` (the `breakable` log prints each hit's force).
 - Damaged-model swap states (`_dam` meshes) not handled — shatter only.
 
@@ -75,13 +75,8 @@ Owner-confirmed: keep the current MVP; do not build these yet.
 - `parsers/binary/breakable.test.ts` — real binnt08_la (252/154/7, texture+mask names,
   model-space sanity) + trafficlight1 (pointer magic, garbage-trimmed names); zero-magic
   marker (vegasnroad19) and chunk-less (skullpillar01_lvs) negatives.
-- `three/build-debris.test.ts` — real bin shatter mesh: de-indexed counts, world placement,
-  upward velocities + positive landing times, texture-merged single draw group, GLOW_LAYER;
-  determinism per seed; impact-velocity seeding; lifetime despawn + budget eviction negatives.
-- `three/breakable.test.ts` — registry: nearest within radius (planar match + vertical limit), slot
-  collapse + one debris mesh on break, key resolution (`getBreakableByKey`), stale-entry replacement,
-  render-geometry fallback (`breakableFromGeometry` counts + lowercased texture); negatives (out of
-  radius, double-break, streamed-out, other floor).
+- `breakable/bake-debris.test.ts` — real bin shatter mesh: de-indexed counts, world placement,
+  upward velocities + positive landing times; determinism per seed; impact-velocity seeding.
 - `parsers/text/object-dat.parser.test.ts` — comment/short/non-numeric rows skipped; real
   object.dat (bins keep change_model effect; indestructible props carry huge mass).
 - `streaming/collision-streaming.system.test.ts` — `removeBreakable` drops only the prop's body +

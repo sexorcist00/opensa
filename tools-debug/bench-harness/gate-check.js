@@ -10,9 +10,10 @@ const GAME = process.argv[4] ?? 'http://localhost:8787';
 const OUT = process.argv[5] ?? 'gate';
 
 (async () => {
-  const args = MODE === 'sorry'
-    ? ['--disable-features=WebGPU']
-    : ['--enable-unsafe-webgpu', '--enable-features=WebGPU', '--use-angle=metal'];
+  const args =
+    MODE === 'sorry'
+      ? ['--disable-features=WebGPU']
+      : ['--enable-unsafe-webgpu', '--enable-features=WebGPU', '--use-angle=metal'];
   const browser = await chromium.launch({ args, headless: true });
   const page = await browser.newPage({ viewport: { height: 900, width: 1440 } });
   page.on('pageerror', (err) => console.log(`pageerror ${err.message}`));
@@ -118,7 +119,11 @@ const OUT = process.argv[5] ?? 'gate';
     // WebGPU is the only context the app can boot on since 074/13 phase 5 deleted the three path.
     const webgpu = await page.evaluate(() => {
       const canvas = document.querySelector('.sa-game canvas') ?? document.querySelector('canvas');
-      try { return !!canvas.getContext('webgpu'); } catch { return false; }
+      try {
+        return !!canvas.getContext('webgpu');
+      } catch {
+        return false;
+      }
     });
     console.log(`canvas context: webgpu=${webgpu}`);
   }

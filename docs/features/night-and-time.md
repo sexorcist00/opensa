@@ -1,21 +1,25 @@
 # Time of day, night content, light sources
 
-`packages/game/src/time/`, `packages/renderware/src/three/corona.ts`, `night-fill.ts`, canvas-host wiring,
-plans 026/032/034/038.
+`packages/game/src/time/`, `packages/game/src/adapters/engine-environment-driver.ts` (the one
+config→`Engine.environment` mapping), `packages/engine/src/world/cells.ts` + `engine.ts` (corona anchors
+and the instanced corona pass), `apps/web/src/ui/engine-canvas-host.tsx` wiring, plans 026/032/034/038.
 
 ## Implemented
 
 - **Game clock**: minutes since midnight, `secondsPerGameMinute`, pause freezes time; debug Time
   screen with presets; `clockNightFactor` fade windows (`night.litFade` dawn/dusk).
-- **Timed objects (`tobj`)**: hour-window visibility via `TimedObjectSystem`
-  (`userData.timed`, hidden until the current hour applies); night-window detection for the
-  glowing lit-window overlays.
-- **2dfx light coronas**: per-model lights collected per cell into one `Points` cloud
-  (camera-facing sprites, distance fade, `night.coronaDrawDistance`), on `GLOW_LAYER` so SSAO's
-  normal prepass never rasterizes them (flickering-squares fix). Traffic lights render their
-  coronas too (all bulbs at once — signal cycling is a future item).
-- **Night fill** for dynamic objects (plan 034): cheap shader fill + rim so the player/vehicles
-  aren't black at night; scaled by sun-height night factor.
+- **Timed objects (`tobj`)**: the converter (`tools/opensa-pack/src/weld.ts`) lifts a timed bucket out of
+  the merged cell bundle into a kind-0 `objectTable` draw carrying its on/off hour window; the engine skips
+  the draw outside the window. Night-window detection also drives the glowing lit-window emissives.
+- **2dfx light coronas**: per-model lights are baked per cell as world-space anchors
+  (`packages/engine/src/world/cells.ts`) and drawn by one instanced billboard pass
+  (`engine.ts`, `coronastar` from particle.txd) with camera-facing sprites and distance fade. Traffic
+  lights render their coronas too (all bulbs at once — signal cycling is a future item).
+- **Dynamic objects at night**: the player/vehicles are lit by the engine's sun/moon path (a prod-derived
+  moonlight band). The old plan-034 "night fill" shader went with the three renderer and has no replacement.
+- **Static lamp lighting**: the 2dfx lamps light nothing but themselves — they were removed from the
+  light pool (host dynamics only). Surface lighting from street lamps is **not implemented**; it restarts
+  in plan 074/17.
 - **Vehicle headlights** (plan 033, ⚠️ **MVP — redo later**): night-gated for SEATED vehicles (generalizes to
   NPC traffic). The lamp glass self-illuminates (emissive: head warm-white, tail red dim/brake) + small coronas
   at the lamp dummies; bloom makes the halo. Lamps are identified by POSITION near the `headlights`/`taillights`
@@ -31,6 +35,7 @@ plans 026/032/034/038.
 
 ## Test coverage anchors
 
-`hour-window` tests, `timed-object.system` tests, corona build tests. Headlights: `build-vehicle` (lamp
-dummies + `lightType` by dummy position), `enter-vehicle` (`isBraking`); the system's visuals are
-browser-verified (canvas/three, no `node` test env).
+`time/game-clock.test.ts`, `adapters/engine-environment-driver.test.ts` (sun/moon arcs, timecyc colours),
+`plugins/sun-position.test.ts`. Headlights: `vehicle/vehicle-lamps.test.ts` (lamp dummies + `lightType` by
+dummy position), `vehicle/vehicle-lamp.system.test.ts`, `enter-vehicle` (`isBraking`); the visuals are
+browser-verified (no `node` test env).

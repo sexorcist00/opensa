@@ -6,8 +6,8 @@
  * The DEFAULT radiance model is Hosek-Wilkie (the day-sky fix: Preetham's fit ran zenith-brighter-than-
  * horizon with near-zero sun-side variation — the field "flat lifeless fill"). HW values are stored
  * LINEAR HDR in the rgba16float texels and compressed by ACES like everything else — no Reinhard
- * pre-squash. The legacy Preetham path (the engine-side twin of prod's `sky-params.ts`, Reinhard-
- * compressed as prod does) stays selectable for A/B while the day-sky verdict is out. timecyc `skyTop`
+ * pre-squash. The legacy Preetham path (ported from the since-deleted prod `sky-params.ts`, Reinhard-
+ * compressed as prod did) stays selectable for A/B while the day-sky verdict is out. timecyc `skyTop`
  * stays the colourist via the mood tint in both models.
  */
 import { cookHosekWilkie, hosekWilkieRadiance } from './hosek-wilkie';

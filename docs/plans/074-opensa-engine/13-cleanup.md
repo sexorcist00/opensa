@@ -3,6 +3,12 @@
 [← chain](readme.md) · prev: [10 integration](10-integration-flip.md) · gate:
 [the flip decision](10-flip-decision.md) — **PASSED 2026-07-18**
 
+**STATUS: COMPLETE — all 8 phases shipped 2026-07-18. `three` no longer exists in this repository**
+(importers 122 → 0 · `node_modules` 512 → 455 MB · prod JS 5.4 → 2.90 MB · suite 289/1 815 green ·
+lint green · bench ritual PASS). Two items were left OPEN **on purpose** rather than silently
+resolved: the coverage floors (red for a structural reason — see 6.6/8.3) and the `flags.ts` question
+(decided against, 2.4).
+
 Once the own engine is the shipping renderer (plan 10's criteria signed off), the old stack becomes dead
 weight: two renderers to maintain, a debug-flag zoo, and heavyweight dependencies. This plan deletes them.
 **User decision (2026-07-12): after a successful integration the old graphics DROP — including the
@@ -208,17 +214,29 @@ soak, the lab does not).
 
 ### Tasks
 
-- [ ] **2.1** Delete bucket-A reads together with their code in phases 3/5 (they have no independent life).
-- [ ] **2.2** Purge the DEAD names from docs; where a doc describes a retired feature, say so rather than
-      silently dropping the line (the series/plan history stays honest).
-- [ ] **2.3** Write **`docs/development/query-parameters.md`** — the canonical reference that does not
-      exist today: name · subsystem · default · values · where read. This is the deliverable that stops
-      the zoo from regrowing.
-- [ ] **2.4** Decide whether the survivors get a small central `flags.ts` reader in the engine host, or
-      stay inline. Recommendation: **one thin typed reader** — inline `URLSearchParams` at 40 sites is
-      exactly how the last zoo grew, and a typed reader makes the canonical doc mechanically checkable.
-- [ ] **2.5** `?engine=three` removal is the point of no return for the A/B — do it as its own commit so
-      the revert is a single click during the phase.
+**DONE 2026-07-18 (with phase 8).** A fresh sweep of every param-reading idiom found that only
+**four browser files** read query params at all, and **every bucket-A name is already dead** — they went
+with their code in phases 3 and 5, exactly as 2.1 predicted.
+
+- [x] **2.1 DONE (in phases 3/5)** — verified by sweep: `webgpu`, `engine`, `aa`, `dpr`, `bundle`,
+      `bundledebug`, `texfree`, `mesh1`, `warm`, `appear`, `cellcull`, `fog`, `nocull`, `shadowdebug`,
+      `mat04`, `matcache`, `pool` are read NOWHERE. Same for every bucket-D spike param and every name
+      on the DEAD list (`msaa`, `bloomq`, `ssr`, `carshadow`, `panorama`, `cloudcover`, `lighting`,
+      `path`, `speed`).
+- [x] **2.2 DONE** — the docs sweep in phase 8 covered this; retired features are described as retired
+      (the "Retired parameters" section of the new doc) rather than silently dropped.
+- [x] **2.3 DONE** — [`docs/development/query-parameters.md`](../../development/query-parameters.md):
+      every live param with default, values, read site and subsystem; the harness-contract params
+      (`bench`/`soak`/`benchcar`/`tab`) called out as contracts; the retired list preserved so an old
+      bookmark can be recognised; and the two cross-host inconsistencies documented rather than
+      silently "fixed" (`src` defaults differ per host; `hour=0` means midnight only in the game host).
+- [x] **2.4 DECIDED — NO `flags.ts`, against the plan's own recommendation.** The count fell from ~60 to
+      **22 distinct names**, most read exactly once, and the two hosts read overlapping-but-differently-
+      defaulted sets — a shared reader would have to model that difference rather than remove it. The
+      zoo grew because nothing was written down, not because reads were inline. Revisit if the count
+      climbs again; the reasoning is recorded in the doc itself so the next person can re-decide.
+- [x] **2.5 DONE (in phase 5a)** — `?engine=three` died with the WebGL host; there is no A/B left to
+      revert to, which is what the flip decision ratified.
 
 ---
 
@@ -570,24 +588,52 @@ forecast — three forecast entries turned out differently and are marked:
 
 ## Phase 8 — Close-out
 
-- [ ] **8.1** Full suite + typecheck + lint green; **the bench ritual re-run — numbers must not move**.
-- [ ] **8.2** Docs sweep: mark the 073 chain's "flags stay in-tree for debug" note EXECUTED; re-verify
-      WebGL-specific open-issues against the engine and close or re-file each.
-- [ ] **8.3** `docs/development/` — `in-game-tools.md`, `scripts.md`, `benchmarks.md`, `engine-lab.md`
-      lose their dead-param references and gain a link to the new `query-parameters.md`.
-- [ ] **8.4** Revisit the phase-3.4 decision on `opensa-engine.{ts,html}`.
-- [ ] **8.5** Update the chain readme + this plan's status; record the final disposition in
-      [10-flip-decision.md](10-flip-decision.md) (criterion 5 discharged).
+- [x] **8.1 DONE 2026-07-18.** Suite **289 files / 1 815 tests green**, `tsc --noEmit` clean, and
+      `npm run lint` **green for the first time in a while**: the 32 errors it was carrying were the
+      committed `tools-debug/bench-harness/*.js` Node scripts, which no eslint block gave Node globals
+      (`require`/`process` undefined) — they now ride the existing `scriptsConfig` list. 17 warnings
+      remain (missing return types, mostly in the phase-4 viewer port); warnings do not fail the lane.
+      **Bench ritual re-run: PASS — 119.9–120.0 fps on all six, `lateCreates` 0, draws within ±4 of the
+      reference**, which is the measurement that actually proves no live subsystem was deleted. The
+      `gpuMs.pass` column read uniformly high on a non-quiescent machine; recorded honestly rather than
+      tidied away in [series § 13·post-teardown ritual](bench/series.md).
+- [x] **8.2 DONE 2026-07-18** — the 073 readme's "Code/flags disposition (temporary)" note is marked
+      **EXECUTED, the answer was DELETE**, pointing at the new query-parameter reference.
+      **Open-issues re-verified: NEITHER is renderer-dependent, so nothing to close or re-file** —
+      `locked-dff.md` is a pure DFF/TXD parser problem and `vehicle-enter-null-body.md` is a
+      streaming/physics handle-pool race. The four `fixed/` entries were already closed.
+      Also swept OUTSIDE the plan's list, because they described the project as three.js-based and were
+      simply false: `README.md`'s one-line "What's inside" (the repo's highest-visibility wrong line),
+      `docs/architecture.md` (package map + BOTH Mermaid diagrams — they also predated
+      `@opensa/engine`, `@opensa/math`, `@opensa/engine-formats` and `@opensa/modloader` existing at
+      all), and the `renderware` + `game` package.json descriptions (**this discharges task 5c.5**).
+- [x] **8.3 DONE 2026-07-18.** `benchmarks.md` (the `?engine=three` A/B framing, "both renderers",
+      the gate-check `→webgl2` branch) + `e2e.md` ("WebGL boot", "renders WebGL via SwiftShader") +
+      `scripts.md` + a link to the new reference from `benchmarks.md`. `in-game-tools.md` and
+      `engine-lab.md` needed nothing — they already document the own engine.
+      **`test-coverage.md` needed more than a reword**: its scope paragraph listed a dozen files phases
+      4/5 deleted, and its headline numbers were the pre-teardown 88.8 %. Rewritten with the current
+      71.9 % AND the structural reason — see the coverage-floor note in 6.6, which this makes public.
+- [x] **8.4 DONE — the 3.4 decision STANDS: KEEP.** `opensa-engine.{ts,html}` is the only boot of
+      `@opensa/engine` with no React, no gameplay and no host, which makes it the cheapest place to
+      reproduce an engine bug; it is dev-served only (never in `viewerInputs`), so it costs the
+      production build nothing. Its docstring described it as "the side-by-side path the flip criteria
+      measure against — the three-WebGL game stays untouched", which is no longer true; reworded to
+      state its actual surviving purpose.
+- [x] **8.5 DONE 2026-07-18** — chain readme carries a new handoff snapshot (teardown complete + the
+      two deliberately-open decisions), and [10-flip-decision.md](10-flip-decision.md) criterion 5 flips
+      from DEFERRED to **PASS**, with the note that there is no longer a WebGL path to roll back to.
 
 ---
 
 ## Measurement ledger
 
-| Date       | What                                                     | Numbers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ---------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| 2026-07-18 | Phase-0 inventory (3 parallel sweeps)                    | 122 three-importing source files (52 render-path / 20 math-only / 50 tests / **0 tools**); 43 files in `renderware/src/three`; ~60 URL params, 10 of them dead; patch = 207 lines, `three.webgpu.js` only; `createRenderContext` has exactly 1 caller                                                                                                                                                                                                                                                                         |
-| 2026-07-18 | Phase 1.1–1.3: `@opensa/math` built + three-parity suite | 9 source files, ~1 000 lines, zero deps; 12 parity tests vs captured three@0.185.1 fixtures @ 8 decimals, all green first run; suite 330/2159 → **331/2171**, tsc + eslint clean                                                                                                                                                                                                                                                                                                                                              |
-| 2026-07-18 | Phase 1.5 part 1: pure-math files migrated               | three importers **122 → 109** (13 files freed); `placementMatrix` extracted from the doomed `build-procobj` into the surviving `procobj-scatter`; 7 files deliberately reverted (scene-graph seams, ride phases 4/5); suite 331/2171 green, tsc + eslint clean                                                                                                                                                                                                                                                                |
-| 2026-07-18 | Phase 3: spikes deleted + babylon dropped                | 5 spike TS + 5 HTML entries gone (findings audited into 073 prose FIRST); `@babylonjs/core` removed — **node_modules 604 → 512 MB (−92 MB)**; build HTML entries 8 → 3; prod build green, suite 331/2171                                                                                                                                                                                                                                                                                                                      |
-| 2026-07-18 | Phase 6: test rework                                     | three importers **17 → 1** (`capture-three-fixtures.ts`, deferred to phase 7); 7 dead modules + 7 tests deleted; suite 299/1874 → **292/1840** green, tsc + eslint clean; coverage 72.02 → **71.89 %** statements (−0.13 pp, flat); 12 stale coverage exclusions pruned                                                                                                                                                                                                                                                       |
-| 2026-07-18 | **Phase 7: the dependency is GONE — the size ledger**    | `node_modules` **512 → 455 MB (−57 MB)**; prod build JS **5.4 → 2.90 MB (−46 %)**, biggest chunk `engine-canvas-host` 2.40 MB (gzip 900 kB), HTML entries 3 (unchanged); `npm install` 4.5 s warm-cache from a wiped `node_modules` (no cold-cache baseline was taken before, so this number stands alone); repo-wide `from 'three'` importers **1 → 0**; suite 292/1840 green, tsc clean, build green. Bundle share attributed to phases 4–6 (already unimported); `node_modules` + lockfile + install share is this phase's |     |
+| Date       | What                                                     | Numbers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-18 | Phase-0 inventory (3 parallel sweeps)                    | 122 three-importing source files (52 render-path / 20 math-only / 50 tests / **0 tools**); 43 files in `renderware/src/three`; ~60 URL params, 10 of them dead; patch = 207 lines, `three.webgpu.js` only; `createRenderContext` has exactly 1 caller                                                                                                                                                                                                                                                                                                |
+| 2026-07-18 | Phase 1.1–1.3: `@opensa/math` built + three-parity suite | 9 source files, ~1 000 lines, zero deps; 12 parity tests vs captured three@0.185.1 fixtures @ 8 decimals, all green first run; suite 330/2159 → **331/2171**, tsc + eslint clean                                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-07-18 | Phase 1.5 part 1: pure-math files migrated               | three importers **122 → 109** (13 files freed); `placementMatrix` extracted from the doomed `build-procobj` into the surviving `procobj-scatter`; 7 files deliberately reverted (scene-graph seams, ride phases 4/5); suite 331/2171 green, tsc + eslint clean                                                                                                                                                                                                                                                                                       |
+| 2026-07-18 | Phase 3: spikes deleted + babylon dropped                | 5 spike TS + 5 HTML entries gone (findings audited into 073 prose FIRST); `@babylonjs/core` removed — **node_modules 604 → 512 MB (−92 MB)**; build HTML entries 8 → 3; prod build green, suite 331/2171                                                                                                                                                                                                                                                                                                                                             |
+| 2026-07-18 | Phase 6: test rework                                     | three importers **17 → 1** (`capture-three-fixtures.ts`, deferred to phase 7); 7 dead modules + 7 tests deleted; suite 299/1874 → **292/1840** green, tsc + eslint clean; coverage 72.02 → **71.89 %** statements (−0.13 pp, flat); 12 stale coverage exclusions pruned                                                                                                                                                                                                                                                                              |
+| 2026-07-18 | **Phase 7: the dependency is GONE — the size ledger**    | `node_modules` **512 → 455 MB (−57 MB)**; prod build JS **5.4 → 2.90 MB (−46 %)**, biggest chunk `engine-canvas-host` 2.40 MB (gzip 900 kB), HTML entries 3 (unchanged); `npm install` 4.5 s warm-cache from a wiped `node_modules` (no cold-cache baseline was taken before, so this number stands alone); repo-wide `from 'three'` importers **1 → 0**; suite 292/1840 green, tsc clean, build green. Bundle share attributed to phases 4–6 (already unimported); `node_modules` + lockfile + install share is this phase's                        |
+| 2026-07-18 | Phase 8: close-out (+ phase 2, done alongside)           | Suite **289 files / 1 815 green**, tsc clean, **`npm run lint` green** (32 pre-existing bench-harness errors fixed by giving those Node scripts globals); bench ritual **PASS** — 119.9–120.0 fps ×6, late 0, draws ±4 of reference; 4 MORE orphaned three-era modules found and deleted (`webgpu-hud`, `csm-math`, `sky-params`, `wave-params` + 3 tests); docs swept (README, architecture ×2 diagrams + package map, benchmarks, e2e, test-coverage, 2 package.json descriptions); **`query-parameters.md` written** — ~60 params → 22 documented |

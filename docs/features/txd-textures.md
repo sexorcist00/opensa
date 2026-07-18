@@ -1,17 +1,19 @@
 # TXD parser + textures
 
-`packages/renderware/src/parsers/binary/txd.ts`, `packages/renderware/src/three/build-texture.ts`,
-`packages/renderware/src/archive/asset-cache.ts` (txdp resolution).
+`packages/renderware/src/parsers/binary/txd.ts`, `packages/renderware/src/textures/dxt.ts` (CPU decode),
+`packages/renderware/src/map/resolve-map.ts` (`resolveTxdChain` — txdp resolution).
 
 ## Implemented
 
 - TXD texture-native parsing: name/mask, dimensions, mip levels, alpha flag.
-- Pixel formats: **DXT1 / DXT3 / DXT5** (uploaded compressed via `CompressedTexture` +
-  S3TC formats), **RGBA8888/X8R8G8B8** (`DataTexture`), **16-bit R5G6B5 / A1R5G5B5 /
-  A4R4G4B4** (expanded to RGBA8888 at parse, plan 043), and **PAL8/PAL4** palettized
-  (expanded at parse).
-- `buildTextureMap`: name-keyed (lowercased) `Map<string, Texture>` per TXD; `hasAlpha` carried
-  in `userData` (drives material transparency/alpha-test).
+- Pixel formats: **DXT1 / DXT3 / DXT5** (kept compressed — BC1/BC2/BC3), **RGBA8888/X8R8G8B8**,
+  **16-bit R5G6B5 / A1R5G5B5 / A4R4G4B4** (expanded to RGBA8888 at parse, plan 043), and
+  **PAL8/PAL4** palettized (expanded at parse).
+- Consumers: the world path goes through the converter (`tools/opensa-pack/src/textures.ts`), which
+  keeps block-aligned power-of-two DXT untouched and buckets everything into `texture_2d_array`s by
+  exact (format, W, H, mips), decoding the rest via `textures/dxt.ts`. Vehicles/peds build their
+  arrays in the browser (`vehicle/textures.ts`, `ped/build-ped-model.ts`) off the same decoder.
+  Names are matched lowercased; `hasAlpha` drives the alpha-test / blend class.
 - **txdp inheritance** (`parseTxdParents` + `resolveTxdChain`): a child TXD inherits textures it
   lacks from its parent chain (child wins), cycle-guarded, memoized per name. Required by the
   optimized/modded maps that hoist shared textures into regional `*_gene` parents.
@@ -29,12 +31,10 @@ expand to rgba8888 at parse).
 - Luminance (LUM8) rasters unsupported (none confirmed in shipped data; the audit's residual
   drop count after the 16-bit fix tells the truth).
 - Mipmaps beyond the base are uploaded for compressed textures but not validated individually.
-- No software decode in the runtime (only `scripts/dump-texture.ts` decodes DXT in JS for
-  inspection).
 - Per-texture/material `0x1F` = RW **Right To Render** (pipeline hint, ×56k) — identified via
   the gtamods section list; harmless skip, nothing to implement.
 
 ## Test coverage anchors
 
-`loaders.test.ts` (legacy loader wrappers), texture resolution through archive tests; txdp chain
-tests in `asset-cache.test.ts`.
+`parsers/binary/txd.test.ts` (formats, mips, alpha), texture resolution through archive tests; txdp
+chain tests in `parsers/text/ide.parser.test.ts` (`parseTxdParents`) and `map/resolve-map.test.ts`.

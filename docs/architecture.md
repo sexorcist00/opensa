@@ -16,8 +16,12 @@ apps/
   web/      @opensa/web      React shell + game surface + game-config + controls-harness  (tag type:app)
   viewer/   @opensa/viewer   standalone object/vehicle/character/compare viewers — tabs in /viewer.html  (type:app)
 packages/                    (tag type:engine)
-  renderware/  @opensa/renderware   parsers (DFF/TXD/COL, IDE/IPL/DAT/GXT) + archive + map + three builders
-  game/        @opensa/game         engine, ECS, systems, plugins, adapters
+  engine/      @opensa/engine       the WebGPU renderer — device/pipelines, frame graph, world cells (074/01)
+  engine-formats/ @opensa/engine-formats  native .oscell/.ostex/.ospak layouts, shared with the converter
+  math/        @opensa/math         dependency-free 3D math (the three surface we used, three-compatible)
+  renderware/  @opensa/renderware   parsers (DFF/TXD/COL, IDE/IPL/DAT/GXT) + archive + map + mesh preparation
+  game/        @opensa/game         ECS, systems, adapters — renderer-agnostic
+  modloader/   @opensa/modloader    modloader/ overlay over AssetFileSystem
   loaders/     @opensa/loaders      asset-loader (fetch/local) — framework-agnostic
   vfs/         @opensa/vfs          unzip → AssetFileSystem
   game-build/  @opensa/game-build   partitioning shared by the loaders + build scripts
@@ -38,9 +42,10 @@ flowchart TB
   ui["UI&nbsp;&middot; React shell + game surface"]:::ui
   loader["asset-loader&nbsp;&middot; download + cache"]:::infra
   vfs["vfs&nbsp;&middot; unzip + serve files"]:::infra
-  game["game&nbsp;&middot; engine, ECS, systems"]:::engine
-  rw["renderware&nbsp;&middot; parsers, world, builders"]:::lib
-  ext["three.js &middot; Rapier &middot; fflate"]:::ext
+  game["game&nbsp;&middot; ECS, systems, adapters"]:::engine
+  eng["engine&nbsp;&middot; WebGPU renderer"]:::engine
+  rw["renderware&nbsp;&middot; parsers, world, mesh prep"]:::lib
+  ext["Rapier &middot; fflate"]:::ext
 
   ui --> loader
   ui --> game
@@ -48,6 +53,7 @@ flowchart TB
   loader -->|raw zip chunks| vfs
   game -->|reads via AssetFileSystem| vfs
   game --> rw
+  game --> eng
   game --> ext
   rw --> ext
 
@@ -65,7 +71,7 @@ flowchart TB
   doesn't care that the **vfs** provides them today.
 - Only **`game/adapters`** (and `game/mods`) may import **renderware** — it's the leaf layer.
 - **asset-loader** and **vfs** are standalone (no React, no game).
-- three.js / Rapier load **lazily** with the game surface, so the UI shell paints instantly.
+- The engine / Rapier load **lazily** with the game surface, so the UI shell paints instantly.
 
 ## Level 2 — inside the modules
 
@@ -86,26 +92,32 @@ flowchart LR
   end
 
   subgraph GAME["game"]
-    core["core&nbsp;&middot; Game loop, renderer, camera"]:::engine
     sys["systems&nbsp;&middot; streaming, physics, character,<br/>vehicle, time, weather, zones"]:::engine
-    plug["plugins&nbsp;&middot; sky, water, fog, post-FX, reflections"]:::engine
-    adp["adapters&nbsp;&middot; GtaSaWorldAdapter,<br/>DFF parse worker (plan 060)"]:::engine
+    adp["adapters&nbsp;&middot; GtaSaWorldAdapter, environment driver,<br/>DFF parse worker (plan 060)"]:::engine
+  end
+
+  subgraph ENG["engine — WebGPU"]
+    ecore["core&nbsp;&middot; device, pipelines, frame graph"]:::engine
+    ernd["render&nbsp;&middot; sky, fog, post, probe, shadows"]:::engine
+    estr["stream + world&nbsp;&middot; cells, bundles, residency"]:::engine
   end
 
   subgraph RW["renderware"]
     par["parsers&nbsp;&middot; DFF/TXD/COL + IDE/IPL/DAT/GXT"]:::lib
     arc["archive&nbsp;&middot; ImgArchive, AssetFileSystem (iface)"]:::lib
     mp["map&nbsp;&middot; resolve-map, world-grid, build-cell"]:::lib
-    th["three builders + collision"]:::lib
+    th["mesh preparation + collision"]:::lib
   end
 
   shell --> al
   shell --> canvas
   al -->|chunks| v
-  canvas --> core
+  canvas --> sys
   canvas --> adp
-  core --> sys
-  core --> plug
+  canvas --> ecore
+  ecore --> ernd
+  ecore --> estr
+  adp --> estr
   adp --> par
   adp --> mp
   adp --> th
@@ -168,4 +180,4 @@ flowchart LR
 ```
 
 > Runtime in one line: **static chunks → asset-loader (cache) → vfs (unzip) → AssetFileSystem → game ←
-> renderware → three.js + Rapier**, all behind an instant React shell.
+> renderware → engine (WebGPU) + Rapier**, all behind an instant React shell.
