@@ -230,9 +230,25 @@ field/headless-verified, ready for the user's runs:**
   `smoothstep(0.7, 1.0, fogFactor)` (partial fog = haze; the deck only enters at the dissolve band,
   the pale-silhouette fix stays intact). Plan 21 ledger carries all three rows.
 
-**THE AGREED SEQUENCE (user, 2026-07-18): ① the user re-runs measurements + parity screenshots
-(display `?bench=all`, both renderers — `ls-rain-night` and `country-dusk` rows were invalid/moved
-before the fixes) → ② THE FLIP (decision doc; C2 stays GATED) → ③ on a successful flip: the
+**① DONE (2026-07-18) — THE PRE-FLIP SWEEP IS CAPTURED.** The user's display `?bench=all` on both
+renderers after the fix batch, 841 cars: engine **119.6–120.3 fps, p95 ≤ 9.3 ms, `lateCreates` 0 in all
+six** vs prod's **16.2–37.8 fps** on land (59.6 ocean) — frame time 3.2–7.4× better, draws 4.8–12.0×
+fewer, worst-scene total GPU 5.5 ms. This row supersedes the 22·debug-tools sweep and the invalidated
+07-17 `ls-rain-night` / `country-dusk` rows (different fog DATA). Full table +
+the honest tail (physics `fixed` 11–19 ms is the ONLY hitch source left; collider streamer still
+unbudgeted) in [bench/series.md](bench/series.md) § THE PRE-FLIP SWEEP. Parity screenshots taken by the
+user — verdict pending. **The flip's performance case is CLOSED.**
+
+**② THE FLIP IS DECIDED — 2026-07-18. [10-flip-decision.md](10-flip-decision.md).** The OpenSA WebGPU
+engine is the shipping renderer; the user signed off parity («паритет ок») on the pre-flip sweep. All
+four live criteria PASS (perf by 2×, parity, 30-min Chrome soak, WebGPU boot gate); criterion 5 (073
+flag disposition) rides C2 by construction. **C2 STAYS GATED** — the three-WebGL path remains in the
+tree behind `?engine=three` as the comparison rollback until the user's explicit deletion command. The
+doc also records what the flip does NOT claim (map lighting 17 deferred · SSR rolled back · the residual
+hitches are PHYSICS, 11–19 ms `fixed`, not the renderer · residency bounded at ~1.7 GB, not minimal).
+
+**THE AGREED SEQUENCE (user, 2026-07-18): ~~① measurements + parity screenshots~~ DONE (above) →
+~~② THE FLIP~~ DONE (decision doc; C2 stays GATED) → ③ on a successful flip: the
 opensa-pack REWORK — output = "almost a copy of the game in our format", loose live-tunable files
 (timecyc first) as FILES next to the pak ([074/14 tasks](14-pmb-integration.md)) → ④ the LAB updated
 to consume that output like a game dir, then `manifest.timecyc` + `setup.timecyc` plumbing die.**

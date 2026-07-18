@@ -136,7 +136,13 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
       `?soak=30`, read the verdict off the HUD `soakStatus` line). Judge = pure `soak.ts` + 8 unit tests.
       Mechanism check (4-min headless): 15 legs, PASS, heap flat 2661 MB, texture plateau 1253 MB,
       late 0, longTasks 0, slow 3/27010. The FORMAL 30-min Chrome+Safari runs are the C1 item below.
-- [ ] Bench + soak + parity sweeps; the flip decision doc with all ledgers linked.
+- [x] **Bench + soak + parity sweeps; the flip decision doc — DONE 2026-07-18: the FLIP IS DECIDED.**
+      See [10-flip-decision.md](10-flip-decision.md). Criteria 1 (PASS by 2× — engine 119.6–120.3 fps
+      vsync-locked vs prod 16.2–37.8 on land), 2 (PASS — user's parity round, «паритет ок», on the build
+      carrying the 07-18 fog/night fix batch), 3 (PASS rescoped — 30-min Chrome soak all 8 checks green;
+      Safari declared not relevant), 4 (PASS — the WebGPU boot gate replaced the fallback criterion).
+      Criterion 5 rides C2 by construction. C2 ([13](13-cleanup.md)) STAYS GATED — `?engine=three`
+      remains the comparison rollback until the user's explicit deletion command.
 - [ ] Post-flip cleanup: 073 flags/patch disposition PR (discussed with the user first — standing agreement).
 
 ## Measurement ledger

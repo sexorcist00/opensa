@@ -152,3 +152,46 @@ host (`weatherForCity` on city crossing, prod's own rule). Re-measured sweep, he
 Cost of the fix: country-dusk draws 443 → 514 (the countryside mood now reaches 1100 m instead of 700),
 world pass unchanged inside noise, every scene still vsync-locked. The debugger's Perf screen gained
 `fog start → cut` and `weather` rows — that readout is what made the diagnosis checkable in the field.
+
+## THE PRE-FLIP SWEEP (2026-07-18, user's display) — the row the flip decision rests on
+
+The final `?bench=all` on the M3 Pro @2× retina, both renderers, same 841-car road population
+(`[bench] road cars registered: 841` on both), run by the user AFTER the 07-18 fix batch (black-night
+NaN root-fix · timecyc read from the LIVE game VFS · cloud/fog dissolve band · regional weather remap).
+This supersedes the earlier same-day 22·debug-tools rows and the invalidated `ls-rain-night` /
+`country-dusk` rows from 07-17 — those were measured on builds carrying different fog DATA.
+
+| Scene         | prod avg / p95 ms (fps) | prod draws | prod tris | prod gpu.frame | engine avg / p95 ms (fps) | engine draws | engine pass / post / probe / submit | frame ratio | draw ratio |
+| ------------- | ----------------------- | ---------- | --------- | -------------- | ------------------------- | ------------ | ----------------------------------- | ----------- | ---------- |
+| ls-noon       | 59.57 / 67.6 (16.8)     | 8 127      | 980 k     | 30.70          | 8.324 / 9.2 (120.1)       | 1 036        | 2.48 / 1.14 / 0.37 / 0.36           | 7.2×        | 7.8×       |
+| sf-fog-dawn   | 53.63 / 59.1 (18.6)     | 10 119     | 2.24 M    | 17.27          | 8.314 / 9.3 (120.3)       | 842          | 2.85 / 1.08 / 0.55 / 0.38           | 6.5×        | 12.0×      |
+| lv-night      | 42.02 / 65.9 (23.8)     | 5 073      | 516 k     | 17.70          | 8.331 / 9.2 (120.0)       | 1 065        | 3.14 / 1.24 / 0.35 / 0.45           | 5.0×        | 4.8×       |
+| country-dusk  | 26.46 / 33.4 (37.8)     | 4 275      | 678 k     | 17.94          | 8.359 / 9.3 (119.6)       | 526          | 4.09 / 1.09 / 0.38 / 0.33           | 3.2×        | 8.1×       |
+| ocean-horizon | 16.78 / 22.3 (59.6)     | 60         | 6.6 k     | 44.62          | 8.333 / 9.3 (120.0)       | 11           | 1.85 / 1.02 / 0.23 / 0.36           | 2.0×        | 5.5×       |
+| ls-rain-night | 61.59 / 67.1 (16.2)     | 8 771      | 1.11 M    | 19.02          | 8.320 / 9.3 (120.2)       | 1 046        | 2.59 / 1.20 / 0.38 / 0.49           | 7.4×        | 8.4×       |
+
+`lateCreates` **0 in all six**. Residency: `target 424 MB` + `texture 768 MB` (country/ocean) to
+1 220–1 251 MB (city scenes) — the plan-21 LRU plateau holds, same band as the 07-17 sweep. Prod's
+`gpuMs.frame` is one whole-frame timer and is not column-comparable with the engine's per-pass split
+(note ocean-horizon: prod's cheapest scene reports its _highest_ frame timer — the timer is unreliable
+when the frame is short, another reason the frame/p95/fps/draws columns are the comparable ones).
+
+**VERDICT — the flip's performance case is CLOSED. Every engine scene is vsync-locked at 119.6–120.3 fps
+(p95 ≤ 9.3 ms = ~4.6 ms of unspent headroom against the 13.9 ms vsync budget) where prod WebGL delivers
+16.2–37.8 fps on land and 59.6 on the empty ocean. Frame time 3.2–7.4× better on land, draw calls
+4.8–12.0× fewer, and the engine is vsync-capped so the true margin is larger. No scene regressed against
+the 07-17 C1 baseline or the 22·debug-tools sweep; total GPU (pass + post + probe) stays ≤ 5.5 ms in the
+worst scene.**
+
+Honest tail from the same run (unchanged in kind from the 22·debug-tools observations, all
+NON-renderer):
+
+- **Physics is the only remaining hitch source.** `[slow]` lines show gpu 1.2–4.7 ms while `fixed`
+  carries 5–23 ms (`physics` is essentially all of it: 19.0 / 11.6 / 11.4 ms steps) with ~1 000 bodies /
+  5 378 colliders standing still after the sweep. The 130–250 ms giants are the known teleport/settle
+  pattern outside the measured windows; the 20–37 ms ones are Rapier step time and deserve their own
+  round (sleep/island tuning or a smaller standing collider set). The renderer's 4.6 ms of headroom
+  cannot be spent on this.
+- Two `collision` spikes on scene entry (21.9 ms lv-night, 8.2 ms country-dusk) — the collider streamer
+  still has no per-frame budget, unlike the render-cell adaptive creates from plan 21.
+- One `submit 4.50 ms` outlier on a country-dusk settle frame; steady-state submit is 0.20–0.70.
