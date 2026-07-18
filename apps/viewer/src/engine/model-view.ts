@@ -1,5 +1,5 @@
 import type { DebugLineSetId, Engine, VehicleInstance, VehicleModelId } from '@opensa/engine';
-import type { VehicleModelData } from '@opensa/renderware';
+import type { RWClump, VehicleModelData } from '@opensa/renderware';
 import type { ColModel } from '@opensa/renderware/parsers/binary/col-types';
 
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
@@ -55,6 +55,9 @@ export interface ViewedModel {
   partBounds(part: number, rotation?: PartRotation): Bounds | null;
   /** Attach a collision hull; call once, then drive it with {@link showCollision}. */
   setCollision(col: ColModel): void;
+  /** World-space translation applied on top of the GTA→engine basis change. */
+  setOffset(offset: readonly [number, number, number]): void;
+  setVisible(visible: boolean): void;
   showCollision(visible: boolean): void;
   /** Mesh edges — built on first use, since most sessions never ask for them. */
   showWireframe(visible: boolean): void;
@@ -77,7 +80,17 @@ export function loadModel(
   txds: readonly ArrayBuffer[],
   options: LoadModelOptions = {},
 ): ViewedModel {
-  const data = buildVehicleModel(parseDff(dff), new VehicleTextures(txds), options);
+  return loadModelFromClump(engine, parseDff(dff), txds, options);
+}
+
+/** As {@link loadModel}, for callers that already hold (and want to reuse or tweak) the parsed clump. */
+export function loadModelFromClump(
+  engine: Engine,
+  clump: RWClump,
+  txds: readonly ArrayBuffer[],
+  options: LoadModelOptions = {},
+): ViewedModel {
+  const data = buildVehicleModel(clump, new VehicleTextures(txds), options);
   const modelId = engine.createVehicleModel(toRigidModelInit(data));
   const instance = engine.createVehicle(modelId);
   instance.entity.setRoot(ROOT);
@@ -85,6 +98,8 @@ export function loadModel(
   let collision: DebugLineSetId | null = null;
   let wireframe: DebugLineSetId | null = null;
   let highlight: DebugLineSetId | null = null;
+  const offset: [number, number, number] = [0, 0, 0];
+  const root = new Float32Array(ROOT);
 
   return {
     bounds: measure(data.positions),
@@ -129,6 +144,19 @@ export function loadModel(
       }
       collision = engine.createDebugLines(toEngineSpace(colLines(col)), COLLISION_COLOR);
       engine.setDebugLinesVisible(collision, false);
+    },
+    setOffset(next) {
+      offset[0] = next[0];
+      offset[1] = next[1];
+      offset[2] = next[2];
+      root.set(ROOT);
+      root[12] = offset[0];
+      root[13] = offset[1];
+      root[14] = offset[2];
+      instance.entity.setRoot(root);
+    },
+    setVisible(visible) {
+      data.submeshes.forEach((_, index) => instance.setSubmeshVisible(index, visible));
     },
     showCollision(visible) {
       if (collision !== null) {

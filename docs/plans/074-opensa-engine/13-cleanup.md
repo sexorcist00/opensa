@@ -59,6 +59,14 @@ The numbers this plan is scoped against. Everything below traces to these.
    three — they consume `@opensa/renderware` through deep subpath imports of the parser/archive layer.
    The teardown cannot break the tool chain, which removes the scariest class of risk up front.
 
+   **CORRECTION (found during phase 4, 2026-07-18):** that sweep looked for `from 'three'` and so missed
+   DEEP imports into `renderware/src/three/`. Two real ones exist and are phase-5 work:
+   `tools/opensa-pack/src/water.ts` imports `oceanFrame` from `three/build-water`, and
+   `renderware/src/archive/asset-cache.ts` imports `buildTextureMap` from `three/build-texture`.
+   Neither is actually three-COUPLED — `oceanFrame` is pure `WaterQuad` math that merely lives in a
+   three file — but both must be moved out before that directory can be deleted. The conclusion holds
+   (no tool depends on three itself); the file count does not.
+
 ---
 
 ## Order of operations (and why)
@@ -369,7 +377,31 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
          (`world = pedMatrices[0] * skinned`), so debug overlays derived from the palette must be pushed
          through slot 0 themselves or they render in GTA axes.
 
-- [ ] **4.1e** `compare-viewer` port — two clumps side by side.
+- [x] **4.1e DONE 2026-07-18 — `compare-viewer` ported. PHASE 4's viewer work is COMPLETE:
+      `apps/viewer` has ZERO three imports.**
+
+      **The layout deliberately changed, and this is the one place the port is not a like-for-like.**
+      three's split screen was `setScissorTest` + two `render()` calls into half-viewports. Our engine
+      has no equivalent: `frame()` owns the whole canvas AND the whole post chain, so a true split would
+      run MSAA resolve, bloom and tonemap twice per frame — a real engine feature for a dev tool. Both
+      sides now live in one scene instead:
+      - **Side by side** (default) — BEFORE left, AFTER right, one orbit camera, both visible at once.
+      - **Stack (blink)** — both at the SAME origin with one hidden; `B` or the button flips them. Exact
+        pixel overlap, which is strictly BETTER than a split screen for spotting small differences (the
+        blink comparator has beaten side-by-side at this since astronomers used it on photographic
+        plates).
+
+      Everything else survives: the both-sides model list, rebuild-from-cached-clump on every toggle (no
+      refetch), Lit / Prelit / Prelit ×2, and the tab's unique **night colours** view — a shallow clump
+      copy with each geometry's `nightColors` swapped in as `prelitColors`, exactly the data the
+      prelight passes correct. `model-view` gained `loadModelFromClump`, `setOffset` and `setVisible` to
+      support it.
+
+      Field-checked against two REAL trees (`non-modified` vs `anderius`): both sides build, the labels
+      dim to show which side the blink is on, and a missing TXD on one side degrades to an untextured
+      model — the same graceful failure the three version had, worth knowing before reading a white
+      model as a difference.
+
 - [ ] **4.2** Execute the chosen option; keep `apps/viewer/src/shell.ts` if any tab survives (pure DOM
       routing, renderer-independent, survives a renderer swap unchanged).
 - [ ] **4.3** Update / retire `e2e/object-viewer.spec.ts` + `e2e/viewer-tabs.spec.ts` accordingly — and

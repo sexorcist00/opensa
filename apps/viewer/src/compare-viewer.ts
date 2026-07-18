@@ -1,91 +1,61 @@
 /**
  * Before/after model compare viewer (map-optimizer plan 019 Phase 2). Talks to the compare server
  * (`tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>`), which serves one model's
- * DFF/TXD bytes from two game trees; this tab shows them side-by-side (BEFORE left, AFTER right) through the
- * real parse → build path, with one synced orbit camera. Toggles mirror the object viewer (lit / prelit /
- * MODULATE2X) plus a **night colours** view that rebuilds each side with the night vertex-colour set swapped
- * in as prelit — the exact data the prelight passes correct.
+ * DFF/TXD bytes from two game trees, and shows them through the real parse → build path with one camera.
+ *
+ * Ported onto the own engine in plan 074/13 phase 4. **The layout changed and the change is deliberate:**
+ * three's split screen was `setScissorTest` + two `render()` calls into half-viewports, which our engine
+ * has no equivalent for — `frame()` owns the whole canvas and the whole post chain, so a true split would
+ * mean running MSAA resolve, bloom and tonemap twice per frame for a dev tool. Instead both sides live in
+ * ONE scene:
+ *   - **Side by side** (default) — BEFORE left, AFTER right, one orbit camera, both visible at once.
+ *   - **Stack (blink)** — both at the SAME origin with only one shown; `B` or the button flips between
+ *     them. Exact pixel overlap, which is strictly better than a split for spotting small differences.
  *
  * Open at /viewer.html?tab=compare (run `npm run dev`; the compare server is its own process).
  */
 import type { RWClump } from '@opensa/renderware/parsers/binary/types';
-import type { TextureDictionary } from '@opensa/renderware/three/build-texture';
-import type { Group } from 'three';
 
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
-import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
-import { buildClump } from '@opensa/renderware/three/build-clump';
-import { buildTextureMap } from '@opensa/renderware/three/build-texture';
-import {
-  AmbientLight,
-  Box3,
-  Color,
-  DirectionalLight,
-  GridHelper,
-  type Material,
-  Mesh,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
-  type Object3D,
-  PerspectiveCamera,
-  Scene,
-  Vector3,
-  WebGLRenderer,
-} from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-type SceneMesh = Mesh<Mesh['geometry'], Material | Material[]>;
+import type { ViewedModel } from './engine/model-view';
+
+import { loadModelFromClump } from './engine/model-view';
+import { createViewerEngine } from './engine/viewer-engine';
+
+type Side = 'after' | 'before';
 
 interface SideState {
   clump: null | RWClump;
-  group: Group | null;
-  scene: Scene;
-  textures: null | TextureDictionary;
-}
-
-interface ViewOptions {
-  lit: boolean;
-  modulate2x: boolean;
-  night: boolean;
-  prelit: boolean;
+  model: null | ViewedModel;
+  txd: ArrayBuffer | null;
 }
 
 const DEFAULT_SERVER = 'http://localhost:3002';
-const options: ViewOptions = { lit: true, modulate2x: false, night: false, prelit: true };
+let serverUrl = DEFAULT_SERVER;
 
-const renderer = new WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setScissorTest(true);
-document.body.appendChild(renderer.domElement);
+const viewer = createViewerEngine();
 
-const camera = new PerspectiveCamera(60, window.innerWidth / 2 / window.innerHeight, 0.1, 100000);
-const controls = new OrbitControls(camera, renderer.domElement);
-
-function makeScene(): Scene {
-  const scene = new Scene();
-  scene.background = new Color(0x4a4a4a); // neutral grey so darkness is judged against a known mid-tone
-  // Lights mirror the main app (AmbientLightPlugin 1.5 + DirectionalLightPlugin 1.5).
-  const directional = new DirectionalLight(0xffffff, 1.5);
-  directional.position.set(50, 100, 50);
-  scene.add(new AmbientLight(0xffffff, 1.5), directional, new GridHelper(200, 20, 0x888888, 0x444444));
-
-  return scene;
-}
-
-const sides: Record<'after' | 'before', SideState> = {
-  after: { clump: null, group: null, scene: makeScene(), textures: null },
-  before: { clump: null, group: null, scene: makeScene(), textures: null },
+const sides: Record<Side, SideState> = {
+  after: { clump: null, model: null, txd: null },
+  before: { clump: null, model: null, txd: null },
 };
 
-let serverUrl = DEFAULT_SERVER;
-const status = document.createElement('div');
+const prelit = { double: false, on: true };
+let nightColours = false;
+let stacked = false;
+/** In stack mode, which side is currently shown. */
+let shown: Side = 'before';
+const polyLabel = Object.assign(document.createElement('div'), { className: 'hint' });
 
-function addSideLabel(text: string, side: 'left' | 'right'): void {
+/** Fixed corner labels, so it is always obvious which side you are looking at. */
+function addSideLabel(text: string, corner: 'left' | 'right'): HTMLDivElement {
   const label = document.createElement('div');
   label.textContent = text;
-  label.style.cssText = `position:fixed;bottom:12px;${side}:12px;color:#fff;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:4px;font:bold 13px monospace;z-index:10;`;
+  label.style.cssText = `position:fixed;bottom:12px;${corner}:16px;font:12px monospace;color:#fff;text-shadow:0 1px 2px #000;pointer-events:none`;
   document.body.appendChild(label);
+
+  return label;
 }
 
 function addToggle(parent: HTMLElement, label: string, initial: boolean, onChange: (on: boolean) => void): void {
@@ -98,29 +68,11 @@ function addToggle(parent: HTMLElement, label: string, initial: boolean, onChang
   parent.appendChild(wrapper);
 }
 
-function animate(): void {
-  requestAnimationFrame(animate);
-  controls.update();
-  const halfWidth = Math.floor(window.innerWidth / 2);
-  renderer.setViewport(0, 0, halfWidth, window.innerHeight);
-  renderer.setScissor(0, 0, halfWidth, window.innerHeight);
-  renderer.render(sides.before.scene, camera);
-  renderer.setViewport(halfWidth, 0, window.innerWidth - halfWidth, window.innerHeight);
-  renderer.setScissor(halfWidth, 0, window.innerWidth - halfWidth, window.innerHeight);
-  renderer.render(sides.after.scene, camera);
-}
+const beforeLabel = addSideLabel('BEFORE', 'left');
+const afterLabel = addSideLabel('AFTER', 'right');
 
-function applyToMesh(mesh: SceneMesh): void {
-  const colour = mesh.geometry.getAttribute('color');
-  if (colour && options.modulate2x) {
-    const array = colour.array as Float32Array;
-    for (let i = 0; i < array.length; i += 1) {
-      array[i] = Math.min(1, array[i] * 2);
-    }
-    colour.needsUpdate = true;
-  }
-  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  mesh.material = materials.map((material) => rebuildMaterial(material, Boolean(colour)));
+function applyPrelit(): void {
+  viewer.engine.debugPrelitScale = prelit.on ? (prelit.double ? 2 : 1) : 0;
 }
 
 function buildControls(): void {
@@ -130,198 +82,191 @@ function buildControls(): void {
   const server = document.createElement('input');
   server.value = DEFAULT_SERVER;
   server.title = 'compare server URL';
-  server.addEventListener('change', () => {
-    serverUrl = server.value.replace(/\/$/, '');
-    void loadModelList(input);
-  });
-
   const input = document.createElement('input');
   input.placeholder = 'model name…';
   input.setAttribute('list', 'compare-models');
   const datalist = document.createElement('datalist');
   datalist.id = 'compare-models';
+  const status = document.createElement('div');
+  status.className = 'hint';
 
-  const load = document.createElement('button');
-  load.textContent = 'Load';
   const submit = (): void => {
-    if (input.value.trim()) {
-      void loadModel(input.value.trim().toLowerCase());
+    const name = input.value.trim().toLowerCase();
+    if (name) {
+      void loadModel(name, status);
     }
   };
+  const load = document.createElement('button');
+  load.textContent = 'Load';
   load.addEventListener('click', submit);
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       submit();
     }
   });
-
-  status.className = 'hint';
-  panel.append(server, input, datalist, load, status, document.createElement('hr'));
-
-  addToggle(panel, 'Lit (MeshStandard)', options.lit, (on) => {
-    options.lit = on;
-    rebuildBoth();
-  });
-  addToggle(panel, 'Prelit vertex colours', options.prelit, (on) => {
-    options.prelit = on;
-    rebuildBoth();
-  });
-  addToggle(panel, 'Prelit ×2 (MODULATE2X)', options.modulate2x, (on) => {
-    options.modulate2x = on;
-    rebuildBoth();
-  });
-  addToggle(panel, 'Night colours', options.night, (on) => {
-    options.night = on;
-    rebuildBoth();
+  server.addEventListener('change', () => {
+    serverUrl = server.value.replace(/\/$/, '');
+    void loadModelList(datalist, status);
   });
 
+  panel.append(server, input, datalist, load, status);
+
+  const flip = document.createElement('button');
+  flip.textContent = 'Flip side (B)';
+  flip.addEventListener('click', flipSide);
+  panel.appendChild(flip);
+
+  addToggle(panel, 'Stack (blink A/B)', stacked, (on) => {
+    stacked = on;
+    layout();
+  });
+  addToggle(panel, 'Lit', !viewer.engine.debugUnlit, (on) => {
+    viewer.engine.debugUnlit = !on;
+  });
+  addToggle(panel, 'Prelit vertex colours', prelit.on, (on) => {
+    prelit.on = on;
+    applyPrelit();
+  });
+  addToggle(panel, 'Prelit ×2 (MODULATE2X)', prelit.double, (on) => {
+    prelit.double = on;
+    applyPrelit();
+  });
+  addToggle(panel, 'Night colours', nightColours, (on) => {
+    nightColours = on;
+    rebuildBoth();
+  });
+
+  panel.appendChild(polyLabel);
   document.body.appendChild(panel);
-  addSideLabel('BEFORE', 'left');
-  addSideLabel('AFTER', 'right');
-  void loadModelList(input);
+  void loadModelList(datalist, status);
 }
 
-function disposeObject(object: Object3D): void {
-  object.traverse((node) => {
-    if (node instanceof Mesh) {
-      const mesh = node as SceneMesh;
-      mesh.geometry.dispose();
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const material of materials) {
-        material.dispose();
-      }
-    }
-  });
-}
-
-async function fetchSide(name: 'after' | 'before', model: string): Promise<void> {
-  const side = sides[name];
+async function fetchSide(side: Side, model: string): Promise<{ dff: ArrayBuffer; txd: ArrayBuffer | null }> {
   const [dff, txd] = await Promise.all([
-    fetch(`${serverUrl}/dff?side=${name}&model=${encodeURIComponent(model)}`),
-    fetch(`${serverUrl}/txd?side=${name}&model=${encodeURIComponent(model)}`),
+    fetch(`${serverUrl}/dff?side=${side}&model=${encodeURIComponent(model)}`).then((response) =>
+      response.ok ? response.arrayBuffer() : null,
+    ),
+    fetch(`${serverUrl}/txd?side=${side}&model=${encodeURIComponent(model)}`).then((response) =>
+      response.ok ? response.arrayBuffer() : null,
+    ),
   ]);
-  if (!dff.ok) {
-    throw new Error(`${name}: dff not found`);
+  if (!dff) {
+    throw new Error(`${side}: dff not found`);
   }
-  side.clump = parseDff(await dff.arrayBuffer());
-  side.textures = txd.ok ? buildTextureMap(parseTxd(await txd.arrayBuffer())) : new Map();
-  rebuildSide(side);
+
+  return { dff, txd };
 }
 
-function frameModel(): void {
-  const group = sides.before.group ?? sides.after.group;
-  if (!group) {
+function flipSide(): void {
+  shown = shown === 'before' ? 'after' : 'before';
+  layout();
+}
+
+function frameBoth(width: number): void {
+  const model = sides.before.model ?? sides.after.model;
+  if (!model) {
     return;
   }
-  const box = new Box3().expandByObject(group);
-  const size = box.getSize(new Vector3());
-  const center = box.getCenter(new Vector3());
-  const radius = Math.max(size.x, size.y, size.z) || 10;
-  controls.target.copy(center);
-  camera.position.set(center.x + radius, center.y + radius * 0.7, center.z + radius);
-  camera.far = radius * 100;
-  camera.updateProjectionMatrix();
-  controls.update();
+  const [x, y, z] = model.bounds.center;
+  viewer.orbit.frame([stacked ? x : 0, y, z], (model.bounds.radius + (stacked ? 0 : width)) * 2);
 }
 
-async function loadModel(model: string): Promise<void> {
-  status.textContent = `loading ${model}…`;
+/**
+ * Place both sides and set their visibility. Side-by-side pushes each half a model-width outward;
+ * stack mode puts them both at the origin and hides one.
+ */
+function layout(): void {
+  const width = Math.max(sides.before.model?.bounds.radius ?? 0, sides.after.model?.bounds.radius ?? 0) * 1.15;
+
+  for (const side of ['before', 'after'] as const) {
+    const model = sides[side].model;
+    if (!model) {
+      continue;
+    }
+    const offset = stacked ? 0 : side === 'before' ? -width : width;
+    model.setOffset([offset, 0, 0]);
+    model.setVisible(!stacked || shown === side);
+  }
+
+  beforeLabel.style.opacity = !stacked || shown === 'before' ? '1' : '0.25';
+  afterLabel.style.opacity = !stacked || shown === 'after' ? '1' : '0.25';
+  frameBoth(width);
+}
+
+async function loadModel(name: string, status: HTMLElement): Promise<void> {
+  status.textContent = `loading ${name}…`;
   try {
-    await Promise.all([fetchSide('before', model), fetchSide('after', model)]);
-    frameModel();
-    status.textContent = model;
+    const [before, after] = await Promise.all([fetchSide('before', name), fetchSide('after', name)]);
+    await viewer.ready;
+    sides.before.clump = parseDff(before.dff);
+    sides.before.txd = before.txd;
+    sides.after.clump = parseDff(after.dff);
+    sides.after.txd = after.txd;
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : String(error);
+
+    return;
   }
+  rebuildBoth();
+  status.textContent = name;
 }
 
-async function loadModelList(input: HTMLInputElement): Promise<void> {
+/** Fetch the both-sides model list (no `side` param = the intersection of the two trees). */
+async function loadModelList(datalist: HTMLDataListElement, status: HTMLElement): Promise<void> {
   try {
     const response = await fetch(`${serverUrl}/models`);
     if (!response.ok) {
+      status.textContent = `compare server not reachable at ${serverUrl}`;
+
       return;
     }
-    const models = (await response.json()) as string[];
-    const datalist = document.getElementById('compare-models');
-    if (datalist) {
-      datalist.replaceChildren(
-        ...models.map((name) => Object.assign(document.createElement('option'), { value: name })),
-      );
-    }
-    status.textContent = `${models.length} models on both sides`;
-    input.placeholder = 'model name (autocomplete)…';
+    const names = (await response.json()) as string[];
+    datalist.replaceChildren(...names.map((name) => Object.assign(document.createElement('option'), { value: name })));
+    status.textContent = `${names.length} models on both sides`;
   } catch {
     status.textContent = `compare server not reachable at ${serverUrl}`;
   }
 }
 
-function meshesOf(group: Group): SceneMesh[] {
-  const meshes: SceneMesh[] = [];
-  group.traverse((object) => {
-    if (object instanceof Mesh) {
-      meshes.push(object as SceneMesh);
-    }
-  });
-
-  return meshes;
-}
-
-function onResize(): void {
-  camera.aspect = window.innerWidth / 2 / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
+/**
+ * Rebuild both sides from their CACHED clumps — no refetch. The night-colours view swaps each geometry's
+ * night vertex-colour set in as its prelit set (a shallow copy; the parsed clump is never mutated), which
+ * is exactly the data the prelight passes correct.
+ */
 function rebuildBoth(): void {
-  rebuildSide(sides.before);
-  rebuildSide(sides.after);
+  let triangles = 0;
+
+  for (const side of ['before', 'after'] as const) {
+    const state = sides[side];
+    state.model?.dispose();
+    state.model = null;
+    if (!state.clump) {
+      continue;
+    }
+    const clump = nightColours ? withNightColours(state.clump) : state.clump;
+    state.model = loadModelFromClump(viewer.engine, clump, state.txd ? [state.txd] : []);
+    triangles += state.model.triangles;
+  }
+
+  polyLabel.textContent = `Triangles: ${Math.round(triangles).toLocaleString()} (both sides)`;
+  applyPrelit();
+  layout();
 }
 
-function rebuildMaterial(source: Material, hasPrelit: boolean): MeshBasicMaterial | MeshStandardMaterial {
-  const previous = source as MeshStandardMaterial;
-  const map = previous.map;
-  const shared = {
-    alphaTest: previous.alphaTest,
-    color: map ? 0xffffff : previous.color.getHex(),
-    map,
-    side: previous.side,
-    transparent: previous.transparent,
-    vertexColors: options.prelit && hasPrelit,
+function withNightColours(clump: RWClump): RWClump {
+  return {
+    ...clump,
+    geometries: clump.geometries.map((geometry) => ({
+      ...geometry,
+      prelitColors: geometry.nightColors ?? geometry.prelitColors,
+    })),
   };
-  source.dispose();
-
-  return options.lit
-    ? new MeshStandardMaterial({ ...shared, metalness: 0, roughness: 1 })
-    : new MeshBasicMaterial(shared);
 }
 
-/** Rebuild one side's model group from its parsed clump, honouring the night toggle. */
-function rebuildSide(side: SideState): void {
-  if (side.group) {
-    side.scene.remove(side.group);
-    disposeObject(side.group);
-    side.group = null;
+window.addEventListener('keydown', (event) => {
+  if (event.key.toLowerCase() === 'b') {
+    flipSide();
   }
-  if (!side.clump || !side.textures) {
-    return;
-  }
-  // Night view: swap the night vertex-colour set in as prelit (shallow copies — the parsed clump stays intact).
-  const clump = options.night
-    ? {
-        ...side.clump,
-        geometries: side.clump.geometries.map((geometry) => ({
-          ...geometry,
-          prelitColors: geometry.nightColors ?? geometry.prelitColors,
-        })),
-      }
-    : side.clump;
-  side.group = buildClump(clump, side.textures);
-  for (const mesh of meshesOf(side.group)) {
-    applyToMesh(mesh);
-  }
-  side.scene.add(side.group);
-}
-
-window.addEventListener('resize', onResize);
+});
 buildControls();
-animate();
+viewer.start();
