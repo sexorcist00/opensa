@@ -1,3 +1,4 @@
+import { oceanFrame } from '@opensa/renderware/map/ocean-frame';
 /**
  * Water bake (074/06 row 12 v2, user directive: water WITHOUT the shadow bakes — no rays, no BVH):
  * tessellate the water.dat polygons (+ the ocean frame) into a ~16 u grid and bake a per-vertex
@@ -12,7 +13,6 @@
  * spill past a pool's edges). The signal is elevation: SA's ocean sits at z≈0, everything enclosed sits above.
  */
 import { parseWater, type WaterQuad } from '@opensa/renderware/parsers/text/water.parser';
-import { oceanFrame } from '@opensa/renderware/three/build-water';
 
 /** Manifest section for the loose water mesh. */
 export interface WaterManifest {

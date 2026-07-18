@@ -13,16 +13,12 @@ describe('renderware barrel', () => {
     expect(typeof renderware.isLodModel).toBe('function');
     expect(typeof renderware.resolveMap).toBe('function');
     expect(typeof renderware.buildWorldGrid).toBe('function');
-    expect(typeof renderware.buildCell).toBe('function');
     expect(typeof renderware.getClump).toBe('function');
-    expect(typeof renderware.getTextures).toBe('function');
     expect(typeof renderware.modelKey).toBe('function');
     expect(typeof renderware.openArchive).toBe('function');
-    expect(typeof renderware.buildClumpParts).toBe('function');
     expect(typeof renderware.buildCollisionIndex).toBe('function');
     expect(typeof renderware.getCollision).toBe('function');
     expect(typeof renderware.buildColliders).toBe('function');
     expect(typeof renderware.buildCellColliders).toBe('function');
-    expect(typeof renderware.buildCollisionWireframe).toBe('function');
   });
 });

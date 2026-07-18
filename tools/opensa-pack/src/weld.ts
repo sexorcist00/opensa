@@ -14,7 +14,7 @@ import { WIND_MODELS } from '@opensa/game/mods/wind-mode';
 import { animatedFrames, clipForModel } from '@opensa/renderware/anim/frame-clip';
 import { getClump, getIfp } from '@opensa/renderware/archive/asset-cache';
 import { breakableInstanceKey, breakableKeyHash } from '@opensa/renderware/breakable/key';
-import { cellGroups } from '@opensa/renderware/map/build-cell';
+import { cellGroups } from '@opensa/renderware/map/cell-groups';
 import { type GridCell } from '@opensa/renderware/map/world-grid';
 import { frameWorldTransform } from '@opensa/renderware/mesh/frame-transform';
 import { isVertexAlphaBeam, prepareClumpAtomics } from '@opensa/renderware/mesh/prepare-clump';

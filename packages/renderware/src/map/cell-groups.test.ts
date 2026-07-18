@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ImgArchive } from '../archive';
 import type { IdeObjectDef, IplInstance, MapDefinitions } from '../parsers/text';
 import type { GridCell, WorldGrid } from './world-grid';
 
-import { buildCell, cellGroups, cellModelNames } from './build-cell';
+import { cellGroups, cellModelNames } from './cell-groups';
 import { cellKey } from './world-grid';
 
 type Vec3 = [number, number, number];
@@ -45,22 +44,6 @@ describe('cellGroups', () => {
     it('skips instances with no catalog def', () => {
       const groups = cellGroups(mapDefs([]), cell([inst(99)], []), false);
       expect(groups.size).toBe(0);
-    });
-  });
-});
-
-describe('buildCell', () => {
-  describe('negative cases', () => {
-    it('returns no meshes for a cell that is not in the grid', () => {
-      const archive = {} as ImgArchive; // not touched: empty grid returns before use
-      const grid: WorldGrid = new Map();
-      expect(buildCell(archive, mapDefs([]), grid, 5, 5, false)).toEqual([]);
-    });
-
-    it('returns no meshes for an empty cell', () => {
-      const archive = {} as ImgArchive;
-      const grid: WorldGrid = new Map([[cellKey(0, 0), cell([], [])]]);
-      expect(buildCell(archive, mapDefs([]), grid, 0, 0, false)).toEqual([]);
     });
   });
 });

@@ -4,7 +4,6 @@ import type { parsePedDefs } from '@opensa/renderware';
 import { Matrix4 } from '@opensa/math';
 import {
   type AssetFileSystem,
-  breakableInstanceKey,
   breakableKeyHash,
   breakableModelsOf,
   buildCellColliders,
@@ -15,7 +14,6 @@ import {
   type CarGroup,
   cellModelNames,
   convertTo24h,
-  getBreakable,
   groupRulesBySurface,
   type HandlingEntry,
   hasClump,
@@ -44,10 +42,8 @@ import {
   procObjLotteryCap,
   type ProcObjRule,
   type RegionColliders,
-  type RenderPart,
   resolveMap,
   scatterProcObjects,
-  setTxdParents,
   type Timecyc,
   type VehicleColours,
   type VehicleDef,
@@ -56,6 +52,8 @@ import {
   VehicleTextures,
   type WorldGrid,
 } from '@opensa/renderware';
+import { breakableInstanceKey } from '@opensa/renderware/breakable/key';
+import { getBreakable } from '@opensa/renderware/breakable/mesh';
 
 import type { ModelColliders } from '../interfaces/collider.interface';
 import type { CellRequest, VehicleHandling, WorldAdapter } from '../interfaces/world-adapter.interface';
@@ -137,7 +135,6 @@ export interface GtaSaWorldConfig {
   extraIpl?: readonly string[];
   /** The asset source (plan 050) — all models/textures/data are read from here, not fetched. */
   fs: AssetFileSystem;
-  /** Installed game mods (plan 039) — their `decoratePart` hooks run during cell builds. */
   mods?: readonly WorldMod[];
   /** Effective clutter density per category (0 when disabled) — keeps clutter COLLISION in sync
    *  with the rendered set. On a knob change, call {@link GtaSaWorldAdapter.invalidateColliderCache}
@@ -182,7 +179,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   private readonly colliderCache = new Map<string, ModelColliders[]>();
   private readonly config: GtaSaWorldConfig;
   /** Composed mod build-hook (undefined when no mods) — see {@link GtaSaWorldConfig.mods}. */
-  private readonly decoratePart?: (def: IdeObjectDef, part: RenderPart) => void;
   /** Catalog defs by lowercased model name — resolves procobj clutter models to their TXDs. */
   private defByName: Map<string, IdeObjectDef> | null = null;
   private defs: MapDefinitions | null = null;
@@ -220,15 +216,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     this.dffParser = config.dffParser === undefined ? createDffParser() : config.dffParser;
     this.vehicleModelBuilder =
       config.vehicleModelBuilder === undefined ? createVehicleModelBuilder() : config.vehicleModelBuilder;
-    const mods = config.mods ?? [];
-    this.decoratePart =
-      mods.length === 0
-        ? undefined
-        : (def, part): void => {
-            for (const mod of mods) {
-              mod.decoratePart?.(def, part);
-            }
-          };
   }
 
   /**
@@ -472,7 +459,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       return;
     }
     this.defs = resolveMap(this.fs, { extraIpl: this.config.extraIpl });
-    setTxdParents(this.defs.txdParents ?? new Map<string, string>()); // wire txdp: area TXDs inherit *_gene parents
     this.grid = buildWorldGrid(this.defs, this.cellSize);
     this.defByName = new Map([...this.defs.catalog.values()].map((def) => [def.modelName.toLowerCase(), def]));
     // Procedural ground clutter (plan 042): both data files present → cells scatter; else skipped.
