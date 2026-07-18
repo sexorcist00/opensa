@@ -340,16 +340,35 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
       `admiral`. It is the engine's own vehicle shading (probe off + noon sun in the viewer's neutral
       studio), so it should be checked against the game before anyone blames the port.
 
-- [ ] **4.1d** `character-viewer` port — DFF + IFP + TXD on `ifp-sampler` (the animation rebind from 1.6
-      lands here). **The engine has no browser-side skinned builder at all** — `setPedProbe` is fed only
-      by the offline `ped-probe.ts` fixture — so this port must extract ~300 lines of that CLI (HAnim bone
-      order, inverse binds, joint/weight packing, `minZ`) into a renderer-agnostic module.
-      **Shape it like `VehicleModelData` — a plain struct the game, the viewer and the offline fixture
-      baker all share.** Not because a ped format is coming: `opensa-pack` converts the MAP ONLY (user
-      decision 2026-07-18, plan [14](14-pmb-integration.md) — cars and peds stay raw DFF/TXD so modloader
-      can add them without a build step). The reason is the same one that made `buildVehicleModel` the
-      right shape: one RUNTIME builder that everything calls, instead of one path for the game and
-      another for the tools.
+- [x] **4.1d DONE 2026-07-18 — `character-viewer` ported, and the browser gained a skinned builder.**
+      The engine had NO browser-side skinned path (`setPedProbe` was fed only by the offline `ped-probe`
+      fixture), so ~300 lines moved out of that CLI into
+      `packages/renderware/src/ped/build-ped-model.ts`: `buildPedModel` + `pedClip` (HAnim skin-bone
+      order, inverse binds with the root anchored to the skin bind, joint/weight quantization, posed
+      `minZ`, IFP tracks matched by bone id then trimmed name). Shaped like `VehicleModelData` for the
+      same reason that one is — ONE runtime builder shared by the game, the viewers and the lab's
+      fixture baker. 11 tests on the REAL `bmypol1`/`army` fixtures.
+      Viewer: clip picker over all 294 `ped.ifp` animations, loop toggle, click-to-replay, skeleton,
+      collision capsule, wireframe, triangle count, "not skinned" path. Animation runs through the
+      engine's own `IfpSampler` into the ped probe's palette.
+
+      **Engine additions, both forced by animation and both small:**
+      - `updateDebugLines(id, positions)` — rewrite a line set in place. The skeleton and the mesh
+        wireframe DEFORM every frame; re-creating buffers per frame would churn GPU allocations.
+      - a **through-depth** variant of the line pipeline (`debug-line-through`, `depthCompare: always`,
+        selected by `createDebugLines(..., { throughDepth: true })`). A skeleton drawn INSIDE a body is
+        invisible under a depth test — three's `SkeletonHelper` disables depth for exactly this reason.
+        Found by looking at the first screenshot and seeing nothing.
+
+      **Two findings worth keeping:**
+      1. **`player.dff` is a 6-vertex, 2-triangle PLACEHOLDER in stock SA** — CJ's body is assembled at
+         runtime from clothing components. A probe run against it looked like a builder bug (32 bones, a
+         correct 32-track clip, and 2 triangles); real peds (`wmyst`, `bfyst`) carry ~1 150 vertices.
+         Pick a real ped when smoke-testing the skinned path.
+      2. **The bone palette is MODEL space, not world space.** The ped shader applies slot 0 last
+         (`world = pedMatrices[0] * skinned`), so debug overlays derived from the palette must be pushed
+         through slot 0 themselves or they render in GTA axes.
+
 - [ ] **4.1e** `compare-viewer` port — two clumps side by side.
 - [ ] **4.2** Execute the chosen option; keep `apps/viewer/src/shell.ts` if any tab survives (pure DOM
       routing, renderer-independent, survives a renderer swap unchanged).

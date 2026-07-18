@@ -8,6 +8,8 @@ import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
 
+import { boxLines } from './viewer-engine';
+
 /**
  * One DFF + its TXDs → something on screen, with no pak, no cells and no streaming.
  *
@@ -105,7 +107,7 @@ export function loadModel(
       const box = part === null ? null : this.partBounds(part, options.rotation);
       const clamped = box && options.clamp ? intersect(box, options.clamp) : box;
       if (clamped) {
-        highlight = engine.createDebugLines(toEngineSpace(boxLines(clamped)), HIGHLIGHT_COLOR);
+        highlight = engine.createDebugLines(toEngineSpace(boxLines(clamped.min, clamped.max)), HIGHLIGHT_COLOR);
       }
     },
     instance,
@@ -172,35 +174,6 @@ function boundsOfIndices(
   }
 
   return seen ? { max, min } : null;
-}
-
-/** The twelve edges of a box, as line-segment endpoints. */
-function boxLines({ max, min }: Bounds): Float32Array {
-  const corner = (i: number): [number, number, number] => [
-    i & 1 ? max[0] : min[0],
-    i & 2 ? max[1] : min[1],
-    i & 4 ? max[2] : min[2],
-  ];
-  const edges: [number, number][] = [
-    [0, 1],
-    [1, 3],
-    [3, 2],
-    [2, 0],
-    [4, 5],
-    [5, 7],
-    [7, 6],
-    [6, 4],
-    [0, 4],
-    [1, 5],
-    [2, 6],
-    [3, 7],
-  ];
-  const out: number[] = [];
-  for (const [a, b] of edges) {
-    out.push(...corner(a), ...corner(b));
-  }
-
-  return new Float32Array(out);
 }
 
 /** Clamp `box` to `limit`; null when they do not overlap. */

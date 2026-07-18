@@ -349,6 +349,8 @@ interface DebrisEntry {
 /** One registered debug wireframe: its vertices, its colour uniform and its bind group. */
 interface DebugLineSet {
   bindGroup: GPUBindGroup;
+  /** Ignore depth — for overlays that must be visible INSIDE geometry (a skeleton). */
+  throughDepth: boolean;
   uniform: GPUBuffer;
   vertexCount: number;
   vertices: GPUBuffer;
@@ -760,7 +762,11 @@ export class Engine {
    * COL collision hulls and mesh edges. `positions` is xyz pairs — every two vertices are one segment,
    * already in ENGINE space (the host owns the GTA Z-up → Y-up change, as with every rigid draw).
    */
-  createDebugLines(positions: Float32Array, color: readonly [number, number, number, number]): DebugLineSetId {
+  createDebugLines(
+    positions: Float32Array,
+    color: readonly [number, number, number, number],
+    options: { throughDepth?: boolean } = {},
+  ): DebugLineSetId {
     const id = this.nextDebugLineId;
     this.nextDebugLineId += 1;
 
@@ -784,6 +790,7 @@ export class Engine {
         label: `debug-line-${id}`,
         layout: this.pipelines.debugLineLayout,
       }),
+      throughDepth: options.throughDepth ?? false,
       uniform,
       vertexCount: Math.floor(positions.length / 3),
       vertices,
@@ -1702,6 +1709,20 @@ export class Engine {
     });
   }
 
+  /**
+   * Rewrite a debug wireframe's vertices in place. For overlays that DEFORM — a skinned character's
+   * skeleton or mesh edges — where re-creating the buffer every frame would churn GPU allocations.
+   * The new data must not exceed the size the set was created with.
+   */
+  updateDebugLines(id: DebugLineSetId, positions: Float32Array): void {
+    const set = this.debugLines.get(id);
+    if (!set) {
+      return;
+    }
+    this.device.queue.writeBuffer(set.vertices, 0, positions);
+    set.vertexCount = Math.floor(positions.length / 3);
+  }
+
   /** Upload the probe's palette after the host wrote it (model matrix slot 0 + sampled bones). */
   updatePedPalette(): void {
     if (this.ped) {
@@ -2065,12 +2086,16 @@ export class Engine {
     if (this.debugLines.size === 0) {
       return 0;
     }
-    pass.setPipeline(this.pipelines.get('debug-line'));
     pass.setBindGroup(0, this.frameBindGroup);
     let draws = 0;
+    let pipeline: boolean | null = null;
     for (const set of this.debugLines.values()) {
       if (!set.visible) {
         continue;
+      }
+      if (pipeline !== set.throughDepth) {
+        pass.setPipeline(this.pipelines.get(set.throughDepth ? 'debug-line-through' : 'debug-line'));
+        pipeline = set.throughDepth;
       }
       pass.setBindGroup(1, set.bindGroup);
       pass.setVertexBuffer(0, set.vertices);

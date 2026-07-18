@@ -30,6 +30,7 @@ export type PipelineId =
   | 'corona'
   | 'debris'
   | 'debug-line'
+  | 'debug-line-through'
   | 'particle-add'
   | 'particle-blend'
   | 'ped'
@@ -427,23 +428,7 @@ export function compileAll(
     entries: [{ binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT }],
     label: 'debug-line',
   });
-  const debugLineModule = device.createShaderModule({ code: resolveShader('debug-line'), label: 'debug-line' });
-  pipelines.set(
-    'debug-line',
-    device.createRenderPipeline({
-      depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
-      fragment: { entryPoint: 'fsDebugLine', module: debugLineModule, targets: [{ format: colorFormat }] },
-      label: 'debug-line',
-      layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, debugLineLayout], label: 'debug-line' }),
-      multisample: { count: MSAA_SAMPLES },
-      primitive: { topology: 'line-list' },
-      vertex: {
-        buffers: [{ arrayStride: 12, attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }] }],
-        entryPoint: 'vsDebugLine',
-        module: debugLineModule,
-      },
-    }),
-  );
+  compileDebugLinePipelines(device, colorFormat, depthFormat, debugLineLayout, frameLayout, pipelines);
 
   const coronaModule = device.createShaderModule({ code: resolveShader('corona'), label: 'corona' });
   pipelines.set(
@@ -715,6 +700,44 @@ function compileBloomPipelines(
   }
 
   return { bloomLayout, bloomUpLayout };
+}
+
+/** Debug wireframes (074/13 phase 4). Two depth behaviours share one shader: the default hides behind
+ *  geometry it is actually behind (a collision hull reads as solid), while 'through' ignores depth —
+ *  a SKELETON inside a body is useless if the body occludes it, which is why three's SkeletonHelper
+ *  disables the depth test too. */
+function compileDebugLinePipelines(
+  device: GPUDevice,
+  colorFormat: GPUTextureFormat,
+  depthFormat: GPUTextureFormat,
+  debugLineLayout: GPUBindGroupLayout,
+  frameLayout: GPUBindGroupLayout,
+  pipelines: Map<PipelineId, GPURenderPipeline>,
+): void {
+  const module = device.createShaderModule({ code: resolveShader('debug-line'), label: 'debug-line' });
+  const layout = device.createPipelineLayout({ bindGroupLayouts: [frameLayout, debugLineLayout], label: 'debug-line' });
+
+  for (const [id, depthCompare] of [
+    ['debug-line', 'greater'],
+    ['debug-line-through', 'always'],
+  ] as const) {
+    pipelines.set(
+      id,
+      device.createRenderPipeline({
+        depthStencil: { depthCompare, depthWriteEnabled: false, format: depthFormat },
+        fragment: { entryPoint: 'fsDebugLine', module, targets: [{ format: colorFormat }] },
+        label: id,
+        layout,
+        multisample: { count: MSAA_SAMPLES },
+        primitive: { topology: 'line-list' },
+        vertex: {
+          buffers: [{ arrayStride: 12, attributes: [{ format: 'float32x3', offset: 0, shaderLocation: 0 }] }],
+          entryPoint: 'vsDebugLine',
+          module,
+        },
+      }),
+    );
+  }
 }
 
 /**

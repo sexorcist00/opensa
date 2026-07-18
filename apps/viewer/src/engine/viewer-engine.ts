@@ -30,6 +30,35 @@ export interface ViewerEngine {
   start(step?: (dtSeconds: number) => void): void;
 }
 
+/** The twelve edges of an axis-aligned box, as line-segment endpoints — a debug-line source. */
+export function boxLines(min: readonly [number, number, number], max: readonly [number, number, number]): Float32Array {
+  const corner = (i: number): [number, number, number] => [
+    i & 1 ? max[0] : min[0],
+    i & 2 ? max[1] : min[1],
+    i & 4 ? max[2] : min[2],
+  ];
+  const edges: [number, number][] = [
+    [0, 1],
+    [1, 3],
+    [3, 2],
+    [2, 0],
+    [4, 5],
+    [5, 7],
+    [7, 6],
+    [6, 4],
+    [0, 4],
+    [1, 5],
+    [2, 6],
+    [3, 7],
+  ];
+  const out: number[] = [];
+  for (const [a, b] of edges) {
+    out.push(...corner(a), ...corner(b));
+  }
+
+  return new Float32Array(out);
+}
+
 export function createViewerEngine(): ViewerEngine {
   const canvas = document.createElement('canvas');
   canvas.style.cssText = 'display:block;width:100vw;height:100vh';
