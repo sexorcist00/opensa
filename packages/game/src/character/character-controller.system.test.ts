@@ -1,5 +1,4 @@
 import { addComponent, addEntity } from 'bitecs';
-import { PerspectiveCamera } from 'three';
 import { describe, expect, it } from 'vitest';
 
 import type { KeyboardInput } from '../input';
@@ -11,12 +10,12 @@ import { createEcsWorld } from '../ecs/world';
 import { KeyboardSource } from '../input';
 import { PhysicsWorld } from '../physics/physics-world';
 import { initRapier } from '../physics/rapier';
-import { CharacterControllerSystem } from './character-controller.system';
+import { CharacterControllerSystem, type LookDirectionSource } from './character-controller.system';
 
 const STEP = 1 / 60;
 
 // A default camera looks down −Z, which maps to GTA +Y → "forward" is +Y (north).
-const CAMERA = new PerspectiveCamera();
+const CAMERA: LookDirectionSource = { getWorldDirection: (target) => target.set(0, 0, -1) };
 
 interface Player {
   controller: CharacterController;

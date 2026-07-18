@@ -168,8 +168,9 @@ Three harder cases that are NOT math and need their own answer:
       they need an Object3D. They migrate when their three objects go away, which is exactly what
       phases 4 and 5 do. Reverting was the cheaper honest move over scattering bridge code through
       files that are about to be rewritten anyway.
-- [ ] **1.6** Rebind the animation triple onto `ifp-sampler`; retire `build-anim-clip.ts` /
-      `animated-objects.ts` if nothing else needs them.
+- [x] **1.6 DISCHARGED IN PHASE 6 (2026-07-18)** — no rebinding was needed: the engine host already runs
+      on `IfpSampler` (`engine-player.ts`), so the animation triple was dead code and was DELETED rather
+      than ported. `build-anim-clip.ts` / `animated-objects.ts` went with phase 5.
 
 **Gate for this phase:** `packages/game` and `packages/renderware` have zero `from 'three'` imports
 outside `renderware/src/three/` and the files scheduled for deletion in phase 5.
@@ -498,15 +499,44 @@ Order chosen so the tree compiles after every step.
   `character-controller.system`, `orient-character`, `render-sync.system`): they test logic we KEEP
   against three types we DROP.
 
+### 6.1 — the RESIDUAL classification (done 2026-07-18)
+
+Phases 3–5 already deleted ~41 of the 50 alongside their subjects. What survived into this phase was
+**17 files** (7 sources + 9 tests + one CLI), classified against the live code rather than the plan's
+forecast — three forecast entries turned out differently and are marked:
+
+| File(s)                                              | Group           | Disposition                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `character/animation-controller.{ts,test.ts}`        | 1 — die         | Whole class was a `THREE.AnimationMixer` wrapper. Superseded by the engine's `IfpSampler` (`engine-player.ts` satisfies the same `VehicleAnimator` surface). **Discharges task 1.6.**                                                                                                    |
+| `character/character-animation.system.{ts,test.ts}`  | 1 — die         | Only consumer was the deleted mixer path; the host never imported it.                                                                                                                                                                                                                    |
+| `character/orient-character.{ts,test.ts}`            | 1 — die         | Orphan: imported by nothing but its own test (three `Group`/`Object3D`).                                                                                                                                                                                                                 |
+| `character/render-sync.system.{ts,test.ts}`          | 1 — die         | Orphan: synced ECS transforms onto three `Object3D`s. The engine writes its own entity handles.                                                                                                                                                                                          |
+| `debug/hidden-instances.{ts,test.ts}`                | 1 — die         | Orphan (`InstancedMesh.setMatrixAt`). **Plan forecast said group 2** — nothing in the ported F2 debugger (074/22) references it.                                                                                                                                                         |
+| `time/timed-object.system.{ts,test.ts}`              | 1 — die         | Walked a three scene root setting `.visible`. **Forecast said group 2**; superseded by `engine.ts` `timedActive()` on the objectTable (074/06 row 9).                                                                                                                                    |
+| `time/hour-window.{ts,test.ts}`                      | 1 — die         | Fell dead with the line above (its only importer); the engine carries its own gate.                                                                                                                                                                                                      |
+| `character/character-controller.system.{ts,test.ts}` | 3 — rewritten   | KEPT (the host's player controller). `three.Vector3` → `@opensa/math`; the `PerspectiveCamera` dependency was only `getWorldDirection`, now the structural `LookDirectionSource` — which also **deletes the host's `as unknown as` camera shim cast**. Test drives a 3-line fake camera. |
+| `adapters/gta-sa-world.adapter.test.ts`              | 2 — import swap | `Matrix4` → `@opensa/math`. **Forecast said "the adapter tests" die** — this adapter is the live engine host's world source.                                                                                                                                                             |
+| `vehicle/enter-vehicle.system.test.ts`               | 2 — import swap | Its animator stub was cast to the deleted `CharacterAnimationSystem`; now `satisfies VehicleAnimator` (the real seam, and no longer a cast).                                                                                                                                             |
+| `renderware/mesh/prepare-clump.test.ts`              | 3 — rewritten   | Used three as a live **oracle** for `computeVertexNormals` / `computeBoundingSphere`. Values captured from three@0.185.1 and frozen inline — same technique as `@opensa/math`'s parity fixtures.                                                                                         |
+| `math/capture-three-fixtures.ts`                     | deferred        | The last three importer in the repo by design: it regenerates the parity fixtures. Dies in **phase 7** with the dependency.                                                                                                                                                              |
+
 ### Tasks
 
-- [ ] **6.1** Classify every one of the 50 into the three groups above, in a table in this plan.
-- [ ] **6.2** Delete group 1 WITH its subject in the same commit (never leave a test for deleted code).
-- [ ] **6.3** Swap imports for group 2 during phase 1.5.
-- [ ] **6.4** Rewrite group 3 against `@opensa/math` + the engine's entity handles.
-- [ ] **6.5** Remove the `postfx.plugin.ts` coverage exclusion in `vitest.config.ts:29`.
-- [ ] **6.6** **Coverage must not drop** — record before/after. A cleanup that quietly deletes coverage is
-      how a "no behaviour change" refactor hides a regression.
+- [x] **6.1 DONE 2026-07-18** — table above (residual 17, not 50; three forecast corrections recorded).
+- [x] **6.2 DONE** — group 1 deleted with its subjects, 7 modules + 7 tests, one commit.
+- [x] **6.3 DONE** — group 2 swapped.
+- [x] **6.4 DONE** — group 3 rewritten (`LookDirectionSource`, frozen three oracle values).
+- [x] **6.5 DONE** — the coverage exclusion list was pruned: `postfx.plugin.ts` **and 11 more** entries
+      pointed at files phases 4/5 already deleted (`game.ts`, `core/renderer.ts`, `camera-controller.ts`,
+      the five other plugins, `vehicle-headlight.system.ts`, `setup-character.ts`). Survivors:
+      `keyboard.ts`, `dff-parse.worker.ts`, `capture-three-fixtures.ts`, the two asset-loader files,
+      `apps/web/src/ui/**`.
+- [x] **6.6 DONE — coverage flat**: 72.02 → 71.89 % statements (−0.13 pp), 66.98 → 66.89 branches,
+      71.95 → 71.75 functions, 71.86 → 71.72 lines. The dip is the deleted modules having been
+      _well_-covered (`hour-window` was 100 %) — no surviving code lost coverage.
+      **Flagged for phase 8: the global thresholds (85 / 77) have been RED since phase 5** — the tested
+      three code left, `packages/engine` arrived largely unit-untested. That is a threshold decision the
+      close-out must make explicitly, not a phase-6 regression.
 
 ---
 
@@ -542,10 +572,11 @@ Order chosen so the tree compiles after every step.
 
 ## Measurement ledger
 
-| Date       | What                                                                                  | Numbers                                                                                                                                                                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-07-18 | Phase-0 inventory (3 parallel sweeps)                                                 | 122 three-importing source files (52 render-path / 20 math-only / 50 tests / **0 tools**); 43 files in `renderware/src/three`; ~60 URL params, 10 of them dead; patch = 207 lines, `three.webgpu.js` only; `createRenderContext` has exactly 1 caller          |
-| 2026-07-18 | Phase 1.1–1.3: `@opensa/math` built + three-parity suite                              | 9 source files, ~1 000 lines, zero deps; 12 parity tests vs captured three@0.185.1 fixtures @ 8 decimals, all green first run; suite 330/2159 → **331/2171**, tsc + eslint clean                                                                               |
-| 2026-07-18 | Phase 1.5 part 1: pure-math files migrated                                            | three importers **122 → 109** (13 files freed); `placementMatrix` extracted from the doomed `build-procobj` into the surviving `procobj-scatter`; 7 files deliberately reverted (scene-graph seams, ride phases 4/5); suite 331/2171 green, tsc + eslint clean |
-| 2026-07-18 | Phase 3: spikes deleted + babylon dropped                                             | 5 spike TS + 5 HTML entries gone (findings audited into 073 prose FIRST); `@babylonjs/core` removed — **node_modules 604 → 512 MB (−92 MB)**; build HTML entries 8 → 3; prod build green, suite 331/2171                                                       |
-|            | _(phase 7 size ledger lands here: node_modules, bundle, install time — before/after)_ |                                                                                                                                                                                                                                                                |
+| Date       | What                                                                                  | Numbers                                                                                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-18 | Phase-0 inventory (3 parallel sweeps)                                                 | 122 three-importing source files (52 render-path / 20 math-only / 50 tests / **0 tools**); 43 files in `renderware/src/three`; ~60 URL params, 10 of them dead; patch = 207 lines, `three.webgpu.js` only; `createRenderContext` has exactly 1 caller                   |
+| 2026-07-18 | Phase 1.1–1.3: `@opensa/math` built + three-parity suite                              | 9 source files, ~1 000 lines, zero deps; 12 parity tests vs captured three@0.185.1 fixtures @ 8 decimals, all green first run; suite 330/2159 → **331/2171**, tsc + eslint clean                                                                                        |
+| 2026-07-18 | Phase 1.5 part 1: pure-math files migrated                                            | three importers **122 → 109** (13 files freed); `placementMatrix` extracted from the doomed `build-procobj` into the surviving `procobj-scatter`; 7 files deliberately reverted (scene-graph seams, ride phases 4/5); suite 331/2171 green, tsc + eslint clean          |
+| 2026-07-18 | Phase 3: spikes deleted + babylon dropped                                             | 5 spike TS + 5 HTML entries gone (findings audited into 073 prose FIRST); `@babylonjs/core` removed — **node_modules 604 → 512 MB (−92 MB)**; build HTML entries 8 → 3; prod build green, suite 331/2171                                                                |
+| 2026-07-18 | Phase 6: test rework                                                                  | three importers **17 → 1** (`capture-three-fixtures.ts`, deferred to phase 7); 7 dead modules + 7 tests deleted; suite 299/1874 → **292/1840** green, tsc + eslint clean; coverage 72.02 → **71.89 %** statements (−0.13 pp, flat); 12 stale coverage exclusions pruned |
+|            | _(phase 7 size ledger lands here: node_modules, bundle, install time — before/after)_ |                                                                                                                                                                                                                                                                         |

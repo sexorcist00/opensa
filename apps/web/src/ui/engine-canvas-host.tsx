@@ -7,6 +7,7 @@
  * state). Three and the own engine never share a canvas — this host IS the capability branch.
  */
 import type { City } from '@opensa/game';
+import type { LookDirectionSource } from '@opensa/game/character/character-controller.system';
 import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 import type { ReactElement } from 'react';
 
@@ -425,14 +426,13 @@ async function boot(
     Math.cos(pitch) * Math.cos(yaw),
   ];
   // The controller only calls camera.getWorldDirection(v) — hand it the follow camera's forward.
-  const cameraShim = {
-    getWorldDirection: (target: { set(x: number, y: number, z: number): unknown }) => {
+  const cameraShim: LookDirectionSource = {
+    getWorldDirection: (target) => {
       const [fx, fy, fz] = forwardOf();
-      target.set(fx, fy, fz);
 
-      return target;
+      return target.set(fx, fy, fz);
     },
-  } as unknown as ConstructorParameters<typeof CharacterControllerSystem>[5];
+  };
 
   const controllerSystem = new CharacterControllerSystem(world, physics, input, config, controller, cameraShim);
   const physicsSystem = new PhysicsSystem(world, physics, config);

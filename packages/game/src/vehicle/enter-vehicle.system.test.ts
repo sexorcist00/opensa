@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { CharacterAnimationSystem } from '../character/character-animation.system';
 import type { CharacterControllerSystem } from '../character/character-controller.system';
 import type { Config, ControlsConfig } from '../interfaces/config.interface';
 import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { PhysicsWorld, VehicleController } from '../physics/physics-world';
-import type { EnterableVehicle } from './enter-vehicle.system';
+import type { EnterableVehicle, VehicleAnimator } from './enter-vehicle.system';
 import type { VehicleRig } from './vehicle-rig';
 
 import { Logger } from '../diagnostics/logger';
@@ -97,7 +96,7 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
       anim.clip = clip;
       anim.loop = options.loop ?? true;
     },
-  } as unknown as CharacterAnimationSystem;
+  } satisfies VehicleAnimator;
 
   const aimCamera = (yaw: number): void => {
     anim.cameraAzimuth = yaw;

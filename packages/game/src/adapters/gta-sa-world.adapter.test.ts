@@ -1,6 +1,6 @@
 import type * as Renderware from '@opensa/renderware';
 
-import { Matrix4 } from 'three';
+import { Matrix4 } from '@opensa/math';
 import { describe, expect, it, vi } from 'vitest';
 
 import { GtaSaWorldAdapter, toModelColliders } from './gta-sa-world.adapter';
