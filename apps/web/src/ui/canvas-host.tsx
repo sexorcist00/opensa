@@ -39,7 +39,7 @@ import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.syste
 import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
 import { seaState } from '@opensa/game/water/wave-params';
 import { weatherForCity } from '@opensa/game/weather/weather-zones';
-import { cityAt, type CityBox, cityFromLevel, isDesertZone } from '@opensa/game/zones/city';
+import { cityAt, type CityBox, isDesertZone } from '@opensa/game/zones/city';
 import { CityZoneSystem } from '@opensa/game/zones/city-zone.system';
 import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.system';
 import {
@@ -61,7 +61,6 @@ import {
   nightFillUniform,
   parseFxp,
   parseTxd,
-  parseZones,
   particleTimeUniform,
   particleViewportUniform,
   sampleTimecycBlend,
@@ -143,7 +142,7 @@ import { createGameRuntimeConfig, GAME_CELL_SIZE } from './game-runtime-config';
 import { Hud } from './hud/hud';
 import { loadFonts } from './hud/load-fonts';
 import { Overlay } from './hud/overlay';
-import { loadGxt, loadInfoZones } from './zone-data';
+import { loadCityBoxes, loadGxt, loadInfoZones } from './zone-data';
 
 const CELL_SIZE = GAME_CELL_SIZE; // streaming grid cell edge — see game-runtime-config.ts (shared with the own-engine host)
 /** Render layer holding the water surface — excluded from the shore DepthPass (plan 069). */
@@ -170,20 +169,6 @@ interface Bootstrap {
   game: Game;
   /** On-screen touch input source (present only on touch devices); drives `<TouchControls>`. */
   touchInput: null | TouchInputSource;
-}
-
-/** Read map.zon and map its boxes to city AABBs ([] when absent → everything classifies as Countryside). */
-function loadCityBoxes(fs: AssetFileSystem, name: string): CityBox[] {
-  const text = fs.getText(name);
-  if (text === null) {
-    return [];
-  }
-
-  return parseZones(text).flatMap((zone) => {
-    const city = cityFromLevel(zone.level);
-
-    return city ? [{ city, max: zone.max, min: zone.min }] : [];
-  });
 }
 
 /** Parse a standalone .txd into a name→Texture map (null when absent). */
@@ -415,7 +400,7 @@ export function CanvasHost({ fs, gameId, onWorldReady, paused = false }: CanvasH
         </Overlay>
       )}
       {game && actions && (
-        <DebugOverlay actions={actions} game={game} teleports={GAME_CONFIG[gameId].teleports ?? []} />
+        <DebugOverlay actions={actions} game={game} mapGame={game} teleports={GAME_CONFIG[gameId].teleports ?? []} />
       )}
     </>
   );

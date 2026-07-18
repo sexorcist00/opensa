@@ -116,6 +116,25 @@ describe('createEngineEnvironmentDriver', () => {
   });
 
   describe('positive cases', () => {
+    it('does not freeze config read at build time when the debugger REPLACES a nested object', () => {
+      // The F2 debugger patches config with fresh objects (`setNight({ litFade: {...} })`); a driver that
+      // destructured `litFade` once kept the boot window forever (plan 074/22 phase 3.1 finding).
+      const config = structuredClone(DEFAULT_ENGINE_ENV_CONFIG);
+      const environment = makeEnvironment();
+      const driver = createEngineEnvironmentDriver(environment, { config });
+
+      driver.apply(21);
+      expect(environment.dn).toBe(1); // 21:00 is night in the default window (dusk 19→20)
+
+      config.graphics.night.litFade = { dawnEnd: 7, dawnStart: 6, duskEnd: 23.5, duskStart: 23 };
+      driver.apply(21);
+      expect(environment.dn).toBe(0); // the new window says 21:00 is still day
+
+      config.fog.timecycScale = 2;
+      driver.apply(21);
+      expect(environment.fogCutDistance).toBeGreaterThan(0);
+    });
+
     it('builds the sun arc dynamically from the litFade window', () => {
       const environment = makeEnvironment();
       const config = structuredClone(DEFAULT_ENGINE_ENV_CONFIG);

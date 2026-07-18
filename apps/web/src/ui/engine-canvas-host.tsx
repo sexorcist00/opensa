@@ -6,9 +6,11 @@
  * camera (follow orbit producing a CameraState), the player body (the B1 ped probe driven by gameplay
  * state). Three and the own engine never share a canvas — this host IS the capability branch.
  */
+import type { City } from '@opensa/game';
+import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 import type { ReactElement } from 'react';
 
-import { type CameraState, Engine, setupStreaming, type StreamStats } from '@opensa/engine';
+import { Engine, setupStreaming, type StreamStats } from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
   DEFAULT_DRAW_DISTANCE,
@@ -28,8 +30,11 @@ import { initRapier } from '@opensa/game/physics/rapier';
 import { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
 import { cellsWithin } from '@opensa/game/streaming/grid';
 import { WeatherTransition } from '@opensa/game/weather/weather-transition';
+import { weatherForCity } from '@opensa/game/weather/weather-zones';
+import { type CityBox, isDesertZone } from '@opensa/game/zones/city';
+import { CityZoneSystem } from '@opensa/game/zones/city-zone.system';
 import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.system';
-import { type AssetFileSystem, gxtKeyHash, oceanFrame, parseTxd } from '@opensa/renderware';
+import { type AssetFileSystem, gxtKeyHash, oceanFrame, parseTxd, WEATHER_NAMES } from '@opensa/renderware';
 import { parseWater } from '@opensa/renderware/parsers/text/water.parser';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';
 import { addComponent, addEntity } from 'bitecs';
@@ -37,10 +42,16 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { GameId } from '../game-config';
 
+import { IS_DEV } from '../dev-mode';
 import { GAME_CONFIG } from '../game-config';
+import { vehicleModelsFromIde } from '../vehicle-models';
+import { ENGINE_DEBUG_CAPABILITIES } from './debug/debug-capabilities';
+import { type DebugActions, type DebugGame, DebugOverlay } from './debug/debug-overlay';
 import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
+import { createChordWatcher, flyStep, resolveCamera } from './engine-camera';
 import { setupEngineClutter } from './engine-clutter';
+import { createEngineDebugActions, type EnginePerfSnapshot } from './engine-debug-actions';
 import { loadCoronaSprites, setupEngineParticles } from './engine-particles';
 import { ledgerBreakdown, type LegSample, setupPerfRuns } from './engine-perf-runs';
 import { loadEnginePlayer } from './engine-player';
@@ -49,7 +60,7 @@ import { type EngineVehicles, setupEngineVehicles } from './engine-vehicles';
 import { createGameRuntimeConfig, GAME_CELL_SIZE } from './game-runtime-config';
 import { Hud, type HudGame } from './hud/hud';
 import { loadFonts } from './hud/load-fonts';
-import { loadGxt, loadInfoZones } from './zone-data';
+import { loadCityBoxes, loadGxt, loadInfoZones } from './zone-data';
 
 interface EngineCanvasHostProps {
   fs: AssetFileSystem;
@@ -70,17 +81,34 @@ const CAPSULE_HALF_HEIGHT = 0.55;
 const EYE_HEIGHT = 0.9; // camera target above the player origin (engine units)
 /** Default spawn hour — night, so vehicle lamps and coronas are visible on boot (`?hour=` overrides). */
 const NIGHT_HOUR = 22;
+/** Photo-camera movement keys (prod's fly mode: ARROWS move, the WASD player keeps walking). */
+const FLY_KEYS = new Set(['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'PageDown', 'PageUp']);
+/** Photo-camera speed (units/s) — prod's `camera-controller.FLY_SPEED`, so both hosts fly the same. */
+const FLY_SPEED = 18;
 
 /** Shared mutable flags between React props and the boot closure. */
 const hostState = { paused: false };
 let booted: null | Promise<void> = null;
 /** The HudGame the boot closure builds (module scope — survives StrictMode's dev double-mount). */
 let hudGameRef: HudGame | null = null;
+/** The F2 debugger's surfaces (074/22), built by the same boot closure. */
+let debugRef: null | { actions: DebugActions; game: DebugGame } = null;
 
 export function EngineCanvasHost({ fs, gameId, onWorldReady, paused = false }: EngineCanvasHostProps): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hudGame, setHudGame] = useState<HudGame | null>(hudGameRef);
+  const [debug, setDebug] = useState(debugRef);
+  const [locked, setLocked] = useState(false);
   hostState.paused = paused;
+
+  // Mouse capture (pointer lock): the look uses movementX/Y while locked, so the player needs an
+  // affordance telling them to click — prod's `sa-capture` button, ported verbatim (074/22 phase 6).
+  useEffect(() => {
+    const onChange = (): void => setLocked(document.pointerLockElement === canvasRef.current);
+    document.addEventListener('pointerlockchange', onChange);
+
+    return (): void => document.removeEventListener('pointerlockchange', onChange);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -91,14 +119,35 @@ export function EngineCanvasHost({ fs, gameId, onWorldReady, paused = false }: E
       // eslint-disable-next-line no-console -- boot failures must surface somewhere visible in dev
       console.error('[engine-host] boot failed', error);
     });
-    void booted.then(() => setHudGame(hudGameRef));
+    void booted.then(() => {
+      setHudGame(hudGameRef);
+      setDebug(debugRef);
+    });
   }, [fs, gameId, onWorldReady]);
+
+  function capture(): void {
+    // Newer browsers return a Promise that can reject (denied / unsupported); swallow it either way.
+    void Promise.resolve(canvasRef.current?.requestPointerLock()).catch(() => undefined);
+  }
 
   // No wrapper: like CanvasHost, the canvas fills the shell's `.sa-game` container directly.
   return (
     <>
       <canvas ref={canvasRef} style={{ display: 'block', height: '100%', width: '100%' }} />
+      {hudGame && !locked && !paused ? (
+        <button className="sa-capture" onClick={capture} type="button">
+          Click to play
+        </button>
+      ) : null}
       {hudGame ? <Hud game={hudGame} /> : null}
+      {debug ? (
+        <DebugOverlay
+          actions={debug.actions}
+          capabilities={ENGINE_DEBUG_CAPABILITIES}
+          game={debug.game}
+          teleports={GAME_CONFIG[gameId].teleports ?? []}
+        />
+      ) : null}
       <pre
         id="engine-hud"
         style={{
@@ -211,15 +260,19 @@ async function boot(
     weatherBlend: () => weatherTransition.blend(),
   });
   // '[' / ']' cycle the weather LIVE (sky v2 field iteration — a URL change costs a whole VFS reboot).
-  let liveWeather = weather;
+  // The transition's `target` IS the live weather id — the bench, the debugger, the regional remap and
+  // these keys all go through it, so nothing can drift out of sync with what timecyc actually samples.
+  const liveWeather = (): number => weatherTransition.target;
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'BracketLeft' && event.code !== 'BracketRight') {
       return;
     }
-    liveWeather = (liveWeather + (event.code === 'BracketRight' ? 1 : 19)) % 20;
-    weatherTransition.begin(liveWeather, config.weatherTransitionSeconds);
+    weatherTransition.begin(
+      (liveWeather() + (event.code === 'BracketRight' ? 1 : 19)) % 20,
+      config.weatherTransitionSeconds,
+    );
     // eslint-disable-next-line no-console -- field-iteration feedback (which weather id is on screen)
-    console.log(`[engine-host] weather ${liveWeather}`);
+    console.log(`[engine-host] weather ${liveWeather()}`);
   });
   void installWater(engine, fs, setup.water, `/${params.get('src') ?? 'pak-map'}`);
 
@@ -236,6 +289,12 @@ async function boot(
     clutterColliders: true,
     extraIpl: ['truthsfarm'],
     fs,
+    // Clutter follows the live per-category debug knobs (0 when disabled) — see the debugger's setProcObj.
+    procObjDensityOf: (category): number => {
+      const setting = config.graphics.procobj[category];
+
+      return setting.enabled ? setting.density : 0;
+    },
     procObjLimit: 150,
   });
   await adapter.prepare();
@@ -283,6 +342,8 @@ async function boot(
   let yaw = Math.PI;
   let pitch = -0.25;
   let followDistance = config.camera.followDistance;
+  /** The config distance this zoom last followed — a debugger change (074/22) re-seeds the live zoom. */
+  let authoredDistance = config.camera.followDistance;
   let dragging = false;
   canvas.addEventListener('pointerdown', () => {
     if (!document.pointerLockElement) {
@@ -299,10 +360,52 @@ async function boot(
   });
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
+    if (!config.camera.followZoom) {
+      return; // wheel zoom is a config toggle (debug → Camera), like prod
+    }
     followDistance = Math.max(
       config.camera.followZoomMin,
       Math.min(config.camera.followZoomMax, followDistance * (event.deltaY > 0 ? 1.08 : 0.93)),
     );
+  });
+  /** Re-read the authored camera distance/zoom bounds (the debugger mutates them live). */
+  const syncCameraConfig = (): void => {
+    if (config.camera.followDistance !== authoredDistance) {
+      authoredDistance = config.camera.followDistance;
+      followDistance = authoredDistance;
+    }
+    followDistance = Math.max(config.camera.followZoomMin, Math.min(config.camera.followZoomMax, followDistance));
+  };
+  /**
+   * Photo camera (074/22 phase 2.7 + 5): a detached free-fly EYE. The player entity is untouched — it keeps
+   * standing (or walking under WASD) exactly as prod's fly mode does; only the camera leaves the rig.
+   * ARROW keys move it (prod semantics), the mouse look is the shared yaw/pitch.
+   */
+  let flyEye: [number, number, number] | null = null;
+  const flyKeys = new Set<string>();
+  /** Enter/leave the photo camera. Entering seeds the eye from the live camera (no jump); the player entity
+   *  is untouched either way. The HUD hides itself on the shared `'fly-camera'` event, exactly as in prod. */
+  const setFlyMode = (on: boolean): void => {
+    flyEye = on ? [cameraEye[0], cameraEye[1], cameraEye[2]] : null;
+    flyKeys.clear();
+    events.emit('fly-camera', { enabled: on });
+  };
+  const photoChord = createChordWatcher('KeyK', 'KeyM');
+  window.addEventListener('keydown', (event) => {
+    if (photoChord.down(event.code)) {
+      setFlyMode(flyEye === null);
+    }
+    if (event.key === 'F2' && flyEye) {
+      setFlyMode(false); // entering the debugger leaves the photo camera (prod behaviour)
+    }
+    if (flyEye && FLY_KEYS.has(event.code)) {
+      event.preventDefault();
+      flyKeys.add(event.code);
+    }
+  });
+  window.addEventListener('keyup', (event) => {
+    photoChord.up(event.code);
+    flyKeys.delete(event.code);
   });
   const forwardOf = (): [number, number, number] => [
     Math.cos(pitch) * Math.sin(yaw),
@@ -421,14 +524,35 @@ async function boot(
   const events = new EventBus<GameEvents>();
   let zoneName = '';
   const gxt = loadGxt(fs, 'text/american.gxt');
-  const namedZones: NamedZone[] = loadInfoZones(fs, 'data/info.zon').map((zone) => ({
-    max: zone.max,
-    min: zone.min,
-    name: zone.label,
-  }));
+  const infoZones = loadInfoZones(fs, 'data/info.zon');
+  const namedZones: NamedZone[] = infoZones.map((zone) => ({ max: zone.max, min: zone.min, name: zone.label }));
   const zoneSystem = new ZoneNameSystem(namedZones, viewOf, (key) => {
     zoneName = (gxt?.get(gxtKeyHash(key)) ?? '').trim();
     events.emit('zone', { name: zoneName });
+  });
+  // City tracking (plan 035 parity): the SAME CityZoneSystem over map.zon boxes, desert counties first so
+  // they win over the coarse Las Venturas box. Feeds the debugger's city label through the shared bus.
+  const desertBoxes: CityBox[] = infoZones.flatMap((zone) =>
+    isDesertZone(zone.label) ? [{ city: 'DESERT' as const, max: zone.max, min: zone.min }] : [],
+  );
+  let city: City = 'COUNTRYSIDE';
+  const citySystem = new CityZoneSystem([...desertBoxes, ...loadCityBoxes(fs, 'data/map.zon')], viewOf, (next) => {
+    city = next;
+    events.emit('city', { city: next });
+    // SA authors every weather TYPE per region (CLOUDY_LA / CLOUDY_COUNTRYSIDE / …) and each column carries
+    // its own fog mood — countryside CLOUDY reaches 1150 u where the LA column stops at 700. Prod adapts the
+    // weather when the player CROSSES into another region (canvas-host, plan 035); without it the engine
+    // rendered LA's fog mood in the countryside (the "engine draws closer than prod" report, 074/22).
+    //
+    // KNOWN CONSEQUENCE (2026-07-18): RAINY has no LA/VEGAS column, so LS rain falls back to
+    // RAINY_COUNTRYSIDE, whose authored night fog cut is ~330 u (and 1 u at 20:00 in the 24 h table) —
+    // bench `ls-rain-night` then renders almost black. That is the authored mood meeting our night fog
+    // colour; prod only avoids it because its remap happens to never fire in that bench. Tracked as an
+    // open issue rather than papered over here (see plan 21 ledger).
+    weatherTransition.begin(
+      weatherForCity(WEATHER_NAMES, weatherTransition.target, next),
+      config.weatherTransitionSeconds,
+    );
   });
   const minutesNow = (): number => Math.floor((((hour % 24) + 24) % 24) * 60);
   let lastMinutes = minutesNow();
@@ -437,6 +561,104 @@ async function boot(
     getConfig: (): typeof config => config,
     getTime: minutesNow,
     getZone: (): string => zoneName,
+  };
+
+  // F2 debugger (074/22 phase 2): the SAME overlay prod runs, over thin host accessors. Graphics rows need
+  // no wiring at all — they mutate the shared config the environment driver re-reads every frame.
+  const vehicleModels = vehicleModelsFromIde(fs);
+  /** Cycle each car's own carcols combos on repeated spawns (prod parity — a re-spawn gives a new colour). */
+  const colourCycle = new Map<string, number>();
+  debugRef = {
+    actions: createEngineDebugActions({
+      breakNearest: (position, radius) => breakables.breakNearest(position, radius),
+      cameraDistance: () => followDistance,
+      city: (): City => city,
+      config,
+      flipVehicle: () => flipActiveVehicle(physics, vehicles?.activeVehicle() ?? null),
+      getHour: () => hour,
+      gpuTimings: () =>
+        lastStats
+          ? [
+              ['world', lastStats.gpuPassMs],
+              ['post', lastStats.gpuPostMs],
+              ['probe', lastStats.gpuProbeMs],
+              ['submit', lastStats.submitMs],
+            ]
+          : [],
+      isFlying: () => flyEye !== null,
+      perfHud: () => perfHud,
+      perfLogs: () => perfLogs,
+      perfSnapshot: (): EnginePerfSnapshot | null => {
+        const stats = lastStats;
+        const measured = frameStats(frames, stats);
+
+        return stats && measured
+          ? {
+              avgMs: measured.avgMs,
+              drawDistance,
+              draws: stats.drawsRecorded,
+              fog: { cut: engine.environment.fogCutDistance, start: engine.environment.fogStartDistance },
+              gpu: {
+                pass: stats.gpuPassMs,
+                post: stats.gpuPostMs,
+                probe: stats.gpuProbeMs,
+                submit: stats.submitMs,
+              },
+              p95Ms: measured.p95Ms,
+              residency: ledgerBreakdown(engine),
+              residencyMb: stats.residencyBytes / 1048576,
+              stream: {
+                late: lastStream?.lateCreates ?? 0,
+                loaded: lastStream?.loadedCells ?? 0,
+                pending: lastStream?.pendingCells ?? 0,
+              },
+              weather: { id: liveWeather(), name: WEATHER_NAMES[liveWeather()] ?? '?' },
+            }
+          : null;
+      },
+      perfStats: () => frameStats(frames, lastStats),
+      placePlayer,
+      playerCoords: viewOf,
+      reloadClutter: (): void => {
+        adapter.invalidateColliderCache();
+        collision.reload();
+        for (const key of clutterLoaded) {
+          engineClutter.removeCell(key);
+        }
+        clutterLoaded.clear();
+      },
+      setFlyMode,
+      setHour: (value): void => {
+        hour = value;
+      },
+      setPerfHud: (enabled): void => {
+        perfHud = enabled;
+      },
+      setPerfLogs: (enabled): void => {
+        perfLogs = enabled;
+      },
+      setWeather: (index): void => weatherTransition.begin(index, config.weatherTransitionSeconds),
+      spawn,
+      spawnVehicle: async (model): Promise<void> => {
+        const combos = await adapter.vehicleColourCombos(model);
+        const index = colourCycle.get(model) ?? 0;
+        colourCycle.set(model, index + 1);
+        const [px, py, pz] = viewOf();
+        // In FRONT of the camera, facing the same way. The camera's native forward is (sin yaw, −cos yaw);
+        // a heading h points along (−sin h, cos h), so the matching heading is yaw + π.
+        const position: [number, number, number] = [px + Math.sin(yaw) * 5, py - Math.cos(yaw) * 5, pz + 1];
+        await vehicles?.spawn({
+          ...(combos.length > 0 ? { colour: combos[index % combos.length].join(',') } : {}),
+          groundSnap: true,
+          heading: yaw + Math.PI,
+          model,
+          position,
+        });
+      },
+      vehicleModels: () => vehicleModels,
+      weather: liveWeather,
+    }),
+    game: { events },
   };
 
   let previous = performance.now();
@@ -456,6 +678,12 @@ async function boot(
   let benchCamera: null | { eye: [number, number, number]; target: [number, number, number] } = null;
   let benchSamples: LegSample[] | null = null;
   let lastStream: null | StreamStats = null;
+  /** Last frame's engine stats — the debugger's Perf screen and the HUD read them. */
+  let lastStats: null | ReturnType<Engine['frame']> = null;
+  // Developer readouts (074/22 phase 3.3): ON while developing, OFF in a production build; both are
+  // toggled live from the debugger's Perf screen.
+  let perfHud = IS_DEV;
+  let perfLogs = IS_DEV;
   // Soak-mode HUD line (074/10 ③) — progress while running, the verdict when done (the Safari
   // read-off). Carries its own leading newline so the HUD appends it unconditionally.
   let soakStatus = '';
@@ -532,6 +760,15 @@ async function boot(
       debugError ??= error instanceof Error ? error.message : String(error);
     }
   };
+  /** Pausing frees the cursor for the pause menu and drops the photo camera (as F2 and the debugger do). */
+  const onPaused = (): void => {
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+    if (flyEye) {
+      setFlyMode(false);
+    }
+  };
   const bootStarted = performance.now();
   let heading = Math.PI;
   const frames: number[] = [];
@@ -570,12 +807,13 @@ async function boot(
       weatherTransition.tick(dt);
       environmentDriver.apply(hour);
       zoneSystem.update();
+      citySystem.update();
       if (minutesNow() !== lastMinutes) {
         lastMinutes = minutesNow();
         events.emit('time', { minutes: lastMinutes });
       }
-    } else if (document.pointerLockElement) {
-      document.exitPointerLock(); // free the cursor for the pause menu (prod behaviour)
+    } else {
+      onPaused();
     }
 
     const gta = viewOf();
@@ -600,27 +838,29 @@ async function boot(
     const focus = seatedCar ? toEngine(seatedCar.position) : playerEngine;
     const target: [number, number, number] = [focus[0], focus[1] + EYE_HEIGHT, focus[2]];
     const [fx, fy, fz] = forwardOf();
-    // A running bench owns the camera (the prod BenchPlugin contract — deterministic path, player parked).
-    const camera: CameraState = {
+    // Photo camera (074/22): a detached eye flying on the ARROW keys, looking where the mouse points.
+    if (flyEye) {
+      flyEye = flyStep(flyEye, flyKeys, [fx, fy, fz], yaw, FLY_SPEED * dt);
+    }
+    syncCameraConfig();
+    const camera = resolveCamera({
       aspect: canvas.width / Math.max(1, canvas.height),
-      eye: benchCamera
-        ? benchCamera.eye
-        : [target[0] - fx * followDistance, target[1] - fy * followDistance, target[2] - fz * followDistance],
-      far: 10000,
-      fovYRad: Math.PI / 3,
-      near: 0.5,
-      target: benchCamera ? benchCamera.target : target,
-      up: [0, 1, 0],
-    };
+      bench: benchCamera,
+      distance: followDistance,
+      flyEye,
+      forward: [fx, fy, fz],
+      target,
+    });
     [cameraEye[0], cameraEye[1], cameraEye[2]] = camera.eye;
     engine.probeCenter = probeCenterOf(probeEnabled, focus);
     engine.probeView = probeViewEnabled;
     // Live tier knob (074/09): the config value drives the target size; the engine rebuilds on change.
     engine.renderScale = config.graphics.renderScale;
     const stats = engine.frame(camera);
+    lastStats = stats;
     // B7·b field stall: the CPU breakdown of the frames that actually hitch — a stall must arrive as a NUMBER,
     // not a theory. Quiet on a healthy frame. (The timings are last frame's; the stall is what matters.)
-    if (dt * 1000 > SLOW_FRAME_MS) {
+    if (perfLogs && dt * 1000 > SLOW_FRAME_MS) {
       // eslint-disable-next-line no-console
       console.log(
         `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · post ${stats.gpuPostMs.toFixed(2)} · probe ${stats.gpuProbeMs.toFixed(2)} · submit ${stats.submitMs.toFixed(2)} · ` +
@@ -647,20 +887,32 @@ async function boot(
       onWorldReady?.();
     }
 
-    const frameAvg = frames.reduce((sum, value) => sum + value, 0) / Math.max(1, frames.length);
-    hud.textContent =
-      `OWN ENGINE (074/10 B3) — walk: WASD, run: Shift, jump: Space, click = capture mouse (Esc frees)\n` +
-      `frame   ${frameAvg.toFixed(2)} ms (${(1000 / Math.max(frameAvg, 0.001)).toFixed(0)} fps)\n` +
-      `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${stats.gpuPassMs > 0 ? stats.gpuPassMs.toFixed(2) : 'n/a'} ms · post ${stats.gpuPostMs > 0 ? stats.gpuPostMs.toFixed(2) : 'n/a'} ms · probe ${stats.gpuProbeMs > 0 ? stats.gpuProbeMs.toFixed(2) : 'off'} ms · draws ${stats.drawsRecorded}\n` +
-      `stream  ${streamStats.loadedCells} cells, ${streamStats.pendingCells} pending, late ${streamStats.lateCreates} · ` +
-      `residency ${(stats.residencyBytes / 1048576).toFixed(0)} MB (${ledgerBreakdown(engine)})\n` +
-      `GTA     ${gta[0].toFixed(1)}, ${gta[1].toFixed(1)}, ${gta[2].toFixed(1)} · ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')}\n` +
-      `debug   vel ${Velocity.x[playerEid].toFixed(2)},${Velocity.y[playerEid].toFixed(2)},${Velocity.z[playerEid].toFixed(2)} ` +
-      `grounded ${Velocity.grounded[playerEid]} ${seatedCar ? '· SEATED ' : ''}` +
-      `move ${JSON.stringify(input.move())} · ped sampler ${pedMs.toFixed(2)} ms · anim ${animMs.toFixed(2)} ms` +
-      soakStatus +
-      (debugError ? `\nFIXED-STEP ERROR: ${debugError}` : '') +
-      (hostState.paused ? '\nPAUSED' : '');
+    // A running soak keeps the HUD up whatever the toggle says — its verdict is READ OFF the HUD.
+    const showHud = perfHud || soakStatus !== '';
+    if (hud.style.display !== (showHud ? 'block' : 'none')) {
+      hud.style.display = showHud ? 'block' : 'none';
+    }
+    if (!showHud) {
+      requestAnimationFrame(loop);
+
+      return; // the HUD string is the only work left this frame — don't build it for a hidden element
+    }
+    hud.textContent = hudText({
+      animMs,
+      debugError,
+      frames,
+      grounded: Velocity.grounded[playerEid],
+      gta,
+      hour,
+      move: input.move(),
+      pedMs,
+      residency: ledgerBreakdown(engine),
+      seated: seatedCar !== null,
+      soakStatus,
+      stats,
+      stream: streamStats,
+      velocity: [Velocity.x[playerEid], Velocity.y[playerEid], Velocity.z[playerEid]],
+    });
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
@@ -705,6 +957,96 @@ async function boot(
     },
     toEngine,
   });
+}
+
+/**
+ * Roll the occupied car 180° about its OWN forward axis and lift it 1.5 m (the debugger's "flip vehicle" —
+ * prod's implementation, with the quaternion algebra written out so the host keeps its three-free math).
+ */
+function flipActiveVehicle(physics: PhysicsWorld, active: null | { body: number }): void {
+  if (!active) {
+    return;
+  }
+  const { position, quaternion } = physics.readBody(active.body);
+  const [qx, qy, qz, qw] = quaternion;
+  // Car forward = (0, 1, 0) rotated by q (native Z-up), via q·v·q⁻¹ expanded.
+  const fx = 2 * (qx * qy - qw * qz);
+  const fy = 1 - 2 * (qx * qx + qz * qz);
+  const fz = 2 * (qy * qz + qw * qx);
+  // A π turn about a unit axis is the pure quaternion (axis, 0); compose it with the current orientation.
+  const length = Math.hypot(fx, fy, fz) || 1;
+  const [ax, ay, az] = [fx / length, fy / length, fz / length];
+  physics.holdBody(
+    active.body,
+    [position[0], position[1], position[2] + 1.5],
+    [
+      ay * qz - az * qy + qw * ax,
+      az * qx - ax * qz + qw * ay,
+      ax * qy - ay * qx + qw * az,
+      -(ax * qx + ay * qy + az * qz),
+    ],
+  );
+}
+
+/** The debugger's Perf rows from the host's own numbers (three's renderer.info counters have no twin here —
+ *  plan 074/22 phase 3.3 replaces the panel content with the engine ledger). */
+function frameStats(frames: readonly number[], stats: null | ReturnType<Engine['frame']>): null | PerfStats {
+  if (frames.length === 0) {
+    return null;
+  }
+  const sorted = [...frames].sort((a, b) => a - b);
+  const avgMs = frames.reduce((sum, value) => sum + value, 0) / frames.length;
+
+  return {
+    avgMs,
+    drawCalls: stats?.drawsRecorded ?? 0,
+    fps: 1000 / Math.max(avgMs, 0.001),
+    geometries: 0,
+    p95Ms: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))],
+    programs: 0,
+    textures: 0,
+    triangles: 0,
+  };
+}
+
+/** The on-screen HUD text (own engine). Extracted from the frame loop so the loop stays readable — it is one
+ *  string build with a dozen conditional fields. Shown while the Perf-screen toggle is on (074/22). */
+function hudText(frame: {
+  animMs: number;
+  debugError: null | string;
+  frames: readonly number[];
+  grounded: number;
+  gta: readonly [number, number, number];
+  hour: number;
+  move: { x: number; y: number };
+  pedMs: number;
+  residency: string;
+  seated: boolean;
+  soakStatus: string;
+  stats: ReturnType<Engine['frame']>;
+  stream: StreamStats;
+  velocity: readonly [number, number, number];
+}): string {
+  const { gta, stats, stream, velocity } = frame;
+  const avg = frame.frames.reduce((sum, value) => sum + value, 0) / Math.max(1, frame.frames.length);
+  const ms = (value: number, absent = 'n/a'): string => (value > 0 ? value.toFixed(2) : absent);
+  const clock = `${String(Math.floor(frame.hour)).padStart(2, '0')}:${String(Math.floor((frame.hour % 1) * 60)).padStart(2, '0')}`;
+
+  return (
+    `OWN ENGINE (074/10 B3) — walk: WASD, run: Shift, jump: Space, click = capture mouse (Esc frees)\n` +
+    `        F2 = debugger · K+M = photo camera (ARROWS move, PgUp/PgDn lift, mouse looks)\n` +
+    `frame   ${avg.toFixed(2)} ms (${(1000 / Math.max(avg, 0.001)).toFixed(0)} fps)\n` +
+    `submit  ${stats.submitMs.toFixed(2)} ms · GPU ${ms(stats.gpuPassMs)} ms · post ${ms(stats.gpuPostMs)} ms · probe ${ms(stats.gpuProbeMs, 'off')} ms · draws ${stats.drawsRecorded}\n` +
+    `stream  ${stream.loadedCells} cells, ${stream.pendingCells} pending, late ${stream.lateCreates} · ` +
+    `residency ${(stats.residencyBytes / 1048576).toFixed(0)} MB (${frame.residency})\n` +
+    `GTA     ${gta[0].toFixed(1)}, ${gta[1].toFixed(1)}, ${gta[2].toFixed(1)} · ${clock}\n` +
+    `debug   vel ${velocity[0].toFixed(2)},${velocity[1].toFixed(2)},${velocity[2].toFixed(2)} ` +
+    `grounded ${frame.grounded} ${frame.seated ? '· SEATED ' : ''}` +
+    `move ${JSON.stringify(frame.move)} · ped sampler ${frame.pedMs.toFixed(2)} ms · anim ${frame.animMs.toFixed(2)} ms` +
+    frame.soakStatus +
+    (frame.debugError ? `\nFIXED-STEP ERROR: ${frame.debugError}` : '') +
+    (hostState.paused ? '\nPAUSED' : '')
+  );
 }
 
 /** Water (074/06 row 12): prefer the BAKED tessellated mesh (`water.bin` — per-vertex shore field →

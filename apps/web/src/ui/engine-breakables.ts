@@ -9,6 +9,7 @@
  * `CellStore.breakPlacement`) — the prop stays inside the merged batch, so the break costs no draw call.
  */
 import type { Engine } from '@opensa/engine';
+import type { Vec3 } from '@opensa/game';
 import type { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
 import type { Impact, PhysicsWorld } from '@opensa/game/physics/physics-world';
 import type { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
@@ -30,6 +31,9 @@ const INDESTRUCTIBLE_MASS = 90000;
 const GROUND_PROBE = 12;
 
 export interface EngineBreakables {
+  /** Smash the loaded prop nearest the player (the debugger trigger — on foot no contact can break one).
+   *  Ignores the force threshold, like prod's debug action; tuned-indestructible props still survive. */
+  breakNearest(position: Vec3, radius: number): boolean;
   /** Drain this frame's impacts and smash whatever they hit. Cheap: the queue is usually empty. */
   update(): void;
 }
@@ -64,39 +68,37 @@ export function setupEngineBreakables(
     return force < BREAK_FORCE / toughness;
   };
 
-  const smash = (impact: Impact): void => {
-    const prop = propOf(impact);
-    if (!prop) {
-      return;
-    }
-    const modelName = prop.key.slice(0, prop.key.indexOf('|'));
-    if (survives(modelName, impact.force)) {
+  /** Break one placement by key. `force` gates the toughness check (Infinity = the debugger's forced smash);
+   *  `hitter` is the body that hit it (its velocity flings the shards) and `point` the contact it topples from. */
+  const smashKey = (key: string, force: number, hitter: null | number, point?: Vec3): void => {
+    const modelName = key.slice(0, key.indexOf('|'));
+    if (survives(modelName, force)) {
       return;
     }
     // Welded prop (degenerate its index range) OR breakable clutter (074/20 — degenerate its instance matrix).
-    const hash = breakableKeyHash(prop.key);
+    const hash = breakableKeyHash(key);
     const welded = engine.cells.breakPlacement(hash);
     const clutter = welded ? false : engine.breakClutterInstance(hash);
     if (!welded && !clutter) {
       return; // the prop's cell has streamed out, or it is already broken
     }
     // The collider must go with the geometry, or the car keeps hitting a ghost.
-    collision.removeBreakable(prop.key);
+    collision.removeBreakable(key);
 
-    const transform = collision.breakableTransform(prop.key);
+    const transform = collision.breakableTransform(key);
     if (!transform) {
       return; // no transform recorded — the prop vanishes without shards rather than shattering wrongly
     }
     const info = adapter.breakableInfo(modelName);
     const txdName = adapter.txdOf(modelName);
-    const hit = prop.hitter !== null ? physics.getLinvel(prop.hitter) : undefined;
+    const hit = hitter !== null ? physics.getLinvel(hitter) : undefined;
     // SA's UPROOT LIMIT (object.dat column G) says this prop is knocked OVER, not burst: a lamppost carries
     // 240 there, a crate 0. A street lamp bursting into shards reads as wrong at a glance — so it becomes a
     // real dynamic body and Rapier decides where it falls and what it lands on.
     if ((info?.uprootLimit ?? 0) > 0) {
       props.topple({
         // The contact point is what the pole falls away from — the car's velocity is only a fallback.
-        ...(impact.point ? { contact: impact.point } : {}),
+        ...(point ? { contact: point } : {}),
         ...(hit ? { impact: hit } : {}),
         ...(info?.mass !== undefined ? { mass: info.mass } : {}),
         modelName,
@@ -119,10 +121,22 @@ export function setupEngineBreakables(
   };
 
   return {
+    breakNearest(position: Vec3, radius: number): boolean {
+      const key = collision.nearestBreakable(position, radius);
+      if (key === undefined) {
+        return false;
+      }
+      smashKey(key, Number.POSITIVE_INFINITY, null);
+
+      return true;
+    },
     update(): void {
       const impacts = physics.takeBreakableImpacts();
       for (const impact of impacts) {
-        smash(impact);
+        const prop = propOf(impact);
+        if (prop) {
+          smashKey(prop.key, impact.force, prop.hitter, impact.point ?? undefined);
+        }
       }
     },
   };

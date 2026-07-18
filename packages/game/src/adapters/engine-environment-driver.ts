@@ -115,16 +115,19 @@ export function createEngineEnvironmentDriver(
 ): EngineEnvironmentDriver {
   const config = options.config ?? DEFAULT_ENGINE_ENV_CONFIG;
   const weather = options.weather ?? 0;
-  const fogScale = (options.fogScale ?? 1) * config.fog.timecycScale;
   const timecyc = options.timecyc
     ? buildTimecyc(
         options.timecyc.is24h ? parseTimecyc(options.timecyc.text) : convertTo24h(parseTimecyc(options.timecyc.text)),
       )
     : null;
-  const { litFade } = config.graphics.night;
 
   return {
     apply(hour: number): void {
+      // Config values are read HERE, every frame — the F2 debugger mutates the live config (and REPLACES
+      // nested objects like `night.litFade` wholesale), so anything hoisted out of `apply` silently freezes
+      // at its boot value. That was exactly the litFade/fog-scale bug found by the plan-074/22 smoke pass.
+      const litFade = config.graphics.night.litFade;
+      const fogScale = (options.fogScale ?? 1) * config.fog.timecycScale;
       // Weather blend (prod parity): the host's WeatherTransition eases from→to over
       // weatherTransitionSeconds; without a blend getter the driver sits on the static weather.
       const blend = options.weatherBlend?.() ?? { from: weather, t: 1, to: weather };

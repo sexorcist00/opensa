@@ -7,6 +7,7 @@ import type { AssetLoaderKind } from '@opensa/loaders';
  */
 import type { ReactNode } from 'react';
 
+import { IS_DEV } from './dev-mode';
 import { selectGameIds } from './game-config.select';
 
 /** Everything needed to launch and run one game. */
@@ -147,10 +148,6 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
     teleports: [...SA_TELEPORTS],
   },
 };
-
-/** True in `npm run dev` (Vite serve); false in any production build. Vite statically replaces
- *  `process.env.NODE_ENV` (see `vite.config.ts`), so the dev-only games are dropped at build time. */
-const IS_DEV = process.env.NODE_ENV !== 'production';
 
 /** Launchable game ids, in menu order. `devOnly` games (fetch demos that would distribute mod content from
  *  the CDN) are dropped from production builds, so a deployed site offers only the bring-your-own-files

@@ -59,6 +59,32 @@ export class CollisionStreamingSystem implements System {
     return this.breakableTransforms.get(key);
   }
 
+  /**
+   * The LOADED smashable placement nearest to `position` within `radius` (native Z-up), or undefined.
+   * Only props whose static body is still standing are considered — a smashed one is already gone from the
+   * registry. Used by the debugger's "break nearest prop" action (a hit the player cannot deal on foot).
+   */
+  nearestBreakable(position: Vec3, radius: number): string | undefined {
+    let best: string | undefined;
+    let bestDistance = radius * radius;
+    for (const key of this.breakable.keys()) {
+      const transform = this.breakableTransforms.get(key);
+      if (!transform) {
+        continue;
+      }
+      const dx = transform[12] - position[0];
+      const dy = transform[13] - position[1];
+      const dz = transform[14] - position[2];
+      const distance = dx * dx + dy * dy + dz * dz;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = key;
+      }
+    }
+
+    return best;
+  }
+
   reload(): void {
     for (const handles of this.loaded.values()) {
       this.physics.removeBodies(handles);

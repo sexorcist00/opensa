@@ -94,3 +94,61 @@ HW dome 0.91–1.18 · cumulus PER-PIXEL at real coverage 3.10 (the 2× field st
 1.33 cloudy / 1.15 sunny / 1.00 extrasunny / 0.91 rainy — resolution-independent** (the 256² rg16float
 bake pass owns the fbm at a fixed ~0.05 ms). All shots 120 Hz vsync. A real-display sweep rides the next
 `?bench=all` run — the sky change is constants + one tiny fixed pass, no per-scene surface grew.
+
+## 22·debug-tools (2026-07-18) — the plan-074/22 close-out sweep, user's display, both renderers
+
+The ritual display sweep after the F2-debugger port (plan [22](../22-debug-tools.md), phases 1–6:
+capability-gated overlay · engine `DebugActions` · engine Perf ledger + HUD/slow-log toggles · photo
+camera · capture button). User-run `?bench=all` on the M3 Pro @2× retina, same 841-car road population
+on both hosts (`?engine=three` for prod).
+
+| Scene         | prod avg / p95 ms (fps) | prod draws | prod gpu ms | engine avg / p95 ms (fps) | engine draws | engine gpu pass / post / probe / submit | frame ratio |
+| ------------- | ----------------------- | ---------- | ----------- | ------------------------- | ------------ | --------------------------------------- | ----------- |
+| ls-noon       | 57.35 / 65.6 (17.4)     | 8 629      | 48.77       | 8.39 / 9.3 (119.2)        | 1 035        | 2.74 / 1.20 / 0.42 / 0.39               | 6.8×        |
+| sf-fog-dawn   | 53.63 / 58.4 (18.6)     | 10 078     | 17.53       | 8.33 / 9.3 (120.1)        | 848          | 3.29 / 0.99 / 0.55 / 0.34               | 6.4×        |
+| lv-night      | 43.08 / 65.8 (23.2)     | 5 077      | 17.53       | 8.33 / 9.2 (120.0)        | 1 069        | 3.49 / 1.21 / 0.38 / 0.45               | 5.2×        |
+| country-dusk  | 25.78 / 33.3 (38.8)     | 4 252      | 18.09       | 8.41 / 9.3 (118.9)        | 447          | 4.38 / 1.13 / 0.62 / 0.43               | 3.1×        |
+| ocean-horizon | 16.83 / 22.3 (59.4)     | 54         | 42.55       | 8.33 / 9.4 (120.1)        | 11           | 1.84 / 0.99 / 0.29 / 0.37               | 2.0×        |
+| ls-rain-night | 59.86 / 66.9 (16.7)     | 8 771      | 19.73       | 8.34 / 9.3 (119.9)        | 1 047        | 3.25 / 1.17 / 0.42 / 0.51               | 7.2×        |
+
+Prod also reports triangles (0.5–2.2 M/scene) and its `gpuMs.frame` is a single whole-frame timer, so it
+is not column-comparable with the engine's per-pass split; the frame/p95/fps/draws columns are.
+
+**Verdict: unchanged from C1 and re-confirmed WITH the debugger mounted — every engine scene is
+vsync-locked (p95 ≤ 9.4 ms, ~4.7 ms headroom) against prod's 16.7–38.8 fps on land; 3.1–7.2× frame time,
+4.9–11.9× fewer draws, `lateCreates` 0 in all six. The F2 overlay costs nothing while closed** (its
+numbers match the 07-17 C1 rows taken before the port: 8.32–8.33 avg then, 8.33–8.41 now — inside noise).
+
+### Observations from the same run (NOT regressions of this plan, but the honest tail)
+
+- **The residual hitches are PHYSICS, not the GPU.** Every `[slow]` line during and after the sweep shows
+  gpu ~1.2–4.8 ms while `fixed` carries 5–23 ms (`physics` is essentially all of it) with ~1 000 bodies /
+  5 378 colliders standing still after the 841-car sweep. The 190–250 ms giants are the known
+  teleport/settle pattern and sit outside the measured windows; the 20–54 ms ones do not, and they are
+  Rapier step time. Candidate for its own round (sleep/island tuning, or shrinking the standing collider
+  set) — the renderer has ~4.7 ms of headroom it cannot spend on this.
+- One `collision 22.8 ms` spike (cell collider load) in lv-night's settle — the same streaming-side cost
+  the plan-21 adaptive creates bounded for RENDER cells; the collision streamer has no such budget.
+- Residency at 2× with 841 cars: `texture 1161–1252 MB` + `target 424 MB` ≈ 1.6–1.7 GB. Consistent with
+  the plan-21 diagnosis (world texture arrays + vehicle-type accumulation, LRU floor 256 MB); the
+  per-ring texture laziness follow-up is still the lever.
+
+### Follow-up (2026-07-18): the regional-weather fix, re-measured
+
+The user's parity screenshots showed prod drawing visibly further. Root cause (full ledger in
+[21](../21-fog-draw-distance.md)): the engine host never applied SA's REGIONAL weather remap, so it ran
+CLOUDY**\*LA** (fog cut 700) in the countryside where prod runs CLOUDY**\*COUNTRYSIDE** (1150). Fixed in the
+host (`weatherForCity` on city crossing, prod's own rule). Re-measured sweep, headless DPR 2, same build:
+
+| Scene         | avg / fps     | world pass ms | draws | late |
+| ------------- | ------------- | ------------- | ----- | ---- |
+| ls-noon       | 8.338 / 119.9 | 1.92          | 1 021 | 0    |
+| sf-fog-dawn   | 8.333 / 120.0 | 1.93          | 831   | 0    |
+| lv-night      | 8.334 / 120.0 | 1.94          | 1 044 | 0    |
+| country-dusk  | 8.333 / 120.0 | 2.12          | 514   | 0    |
+| ocean-horizon | 8.333 / 120.0 | 1.58          | 9     | 0    |
+| ls-rain-night | 8.347 / 119.8 | 1.83          | 975   | 0    |
+
+Cost of the fix: country-dusk draws 443 → 514 (the countryside mood now reaches 1100 m instead of 700),
+world pass unchanged inside noise, every scene still vsync-locked. The debugger's Perf screen gained
+`fog start → cut` and `weather` rows — that readout is what made the diagnosis checkable in the field.

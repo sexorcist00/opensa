@@ -1,5 +1,7 @@
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 
+import { IS_DEV } from '../../dev-mode';
+
 const HINT = 'Press F2 to open the debug menu — spawn a car, teleport to another city, change the weather, and more.';
 const FIRST_DELAY_MS = 5000; // ~5 s after the game appears
 const REPEAT_DELAY_MS = 5 * 60 * 1000; // once more, 5 min later, then never again this session
@@ -10,12 +12,18 @@ const LIFETIME_MS = 9000; // matches the sa-notif fade-in/out keyframe
  * repeated once after 5 min, then not again. Not persisted — a fresh session shows it again. Dismissing it
  * (the × button) stops it for the rest of the session. Mount while the game is on screen (playing/paused);
  * the timers survive pausing.
+ *
+ * Development builds never show it (plan 074/22): it tells a PLAYER the debugger exists — while developing
+ * it is only a notification covering the corner of the screen.
  */
 export function GameHint(): null | ReactElement {
   const [visible, setVisible] = useState(false);
   const dismissedRef = useRef(false);
 
   useEffect(() => {
+    if (IS_DEV) {
+      return; // the tip is for players, not for the person who wrote the debugger
+    }
     let hideId: number | undefined;
     const show = (): void => {
       if (dismissedRef.current) {
