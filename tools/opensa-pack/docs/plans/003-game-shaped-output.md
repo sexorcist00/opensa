@@ -462,7 +462,27 @@ delivery/disk regression only. Three ways out, none picked yet:
    (`textures.ts:184-193`): no loss, smaller on disk AND in VRAM. Costs planning from the raw TXD rather
    than from the built array, because the builder has already decoded by the time we see it.
 
-Recommendation: (3), for the same reason the world planner does it.
+**Decided (user, 2026-07-18): BC — size wins.** Option (3) did not survive the data: 85 % of vehicle TXDs
+mix formats or sizes inside one dictionary, and `.ostex` carries one format for the whole array, so
+pass-through would mean SEVERAL arrays per model — a runtime contract change, because a model's vertices
+index one array through `meta.x`.
+
+So the per-model writer re-encodes: **BC1 when every layer is opaque, BC3 when any layer needs alpha**
+(in practice cars are always BC3 — glass and lamps). Measured after the change:
+
+| Model      | `.osm` | `.ostex` | format | build  |
+| ---------- | ------ | -------- | ------ | ------ |
+| `landstal` | 274 KB | 896 KB   | BC3    | 170 ms |
+| `infernus` | 236 KB | 1 088 KB | BC3    | 127 ms |
+| `cheetah`  | 208 KB | 960 KB   | BC3    | 115 ms |
+| `bullet`   | 267 KB | 832 KB   | BC3    | 85 ms  |
+
+**4.07 → 1.16 MB per car; ~0.83 → ~0.24 GB across ~210 vehicles.** Build cost rose ~44 → ~120 ms per car
+(the DXT encode), i.e. roughly 30 s added to a full-vehicle convert.
+
+The generation loss was measured, not assumed: re-encoding the builder's RGBA through DXT5 costs a **mean
+absolute error of ~1/255 (0.4 %)** per channel, worst single layer 2.8/255, max single-texel 90 (a lone
+hard alpha edge). That is the expected cost of one BC round trip on already-DXT source art.
 
 `bmyri` is a PED that the vehicle builder accepted without complaint — the writer does not check the asset
 class, which is fine while callers pass a `vehicles.ide` roster but must not be relied on in phase 5.

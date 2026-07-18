@@ -8,7 +8,15 @@
  */
 import type { VehicleTextureArray } from '@opensa/renderware/vehicle/types';
 
-import { encodeOstex, fnv1a, type Ostex, OstexAlphaClass, OstexFormat } from '@opensa/engine-formats';
+import {
+  encodeOstex,
+  fnv1a,
+  type Ostex,
+  OstexAlphaClass,
+  OstexFormat,
+  type OstexFormatId,
+} from '@opensa/engine-formats';
+import { encodeDxt } from '@opensa/rw-codec/dxt-encode';
 
 import { type AlphaClass, classifyAlpha, processAlphaTexture } from './alpha';
 import { packOstexPayload } from './ostex-payload';
@@ -40,19 +48,35 @@ export function packModelOstex(texture: VehicleTextureArray): Uint8Array {
   const mipCount = 1;
 
   const classes: AlphaClass[] = [];
-  const layerMips: { data: Uint8Array }[][] = [];
+  const processed: Uint8Array[] = [];
   for (let layer = 0; layer < layerCount; layer += 1) {
     const texels = rgba.subarray(layer * texelBytes, (layer + 1) * texelBytes);
     const alphaClass = classifyAlpha(texels, hasAlpha(texels));
     classes.push(alphaClass);
     // sharpen=false: a model's dictionary is authored art, not a foliage scan the welder had to upgrade.
-    layerMips.push(
-      processAlphaTexture(texels, width, height, alphaClass, CUTOUT_REF, mipCount, false).map((data) => ({ data })),
-    );
+    processed.push(processAlphaTexture(texels, width, height, alphaClass, CUTOUT_REF, mipCount, false)[0]);
   }
 
+  // BC, because size wins here (user, 2026-07-18): a car's RGBA8 dictionary is ~20x its model, and ~210 of
+  // them would roughly double the build. `.ostex` carries ONE format for the whole array, so the choice is
+  // per model: BC1 when every layer is opaque, BC3 when any layer needs alpha. Splitting into a BC1 array
+  // plus a BC3 array would be smaller still, but a model's vertices index ONE array (`meta.x`), and that
+  // is a runtime contract, not a converter detail.
+  //
+  // This re-encodes texels that were DXT in the source. Losing a generation is the accepted price: the
+  // decode already happened inside the builder, and passing the original blocks through is impossible while
+  // 85 % of vehicle TXDs mix formats or sizes within one dictionary.
+  const blockAligned = width % 4 === 0 && height % 4 === 0;
+  const needsAlpha = classes.some((alphaClass) => alphaClass !== 'opaque');
+  const compressed = blockAligned ? (needsAlpha ? 'dxt5' : 'dxt1') : null;
+  const format: OstexFormatId =
+    compressed === null ? OstexFormat.RGBA8 : compressed === 'dxt1' ? OstexFormat.BC1 : OstexFormat.BC3;
+  const layerMips = processed.map((data) => [
+    { data: compressed === null ? data : encodeDxt(compressed, data, width, height) },
+  ]);
+
   const tex: Ostex = {
-    format: OstexFormat.RGBA8,
+    format,
     height,
     layers: classes.map((alphaClass, index) => ({
       alphaClass: ALPHA_TO_OSTEX[alphaClass],
@@ -61,7 +85,7 @@ export function packModelOstex(texture: VehicleTextureArray): Uint8Array {
       wrap: 0,
     })),
     mipCount,
-    payload: packOstexPayload(OstexFormat.RGBA8, width, height, mipCount, layerMips),
+    payload: packOstexPayload(format, width, height, mipCount, layerMips),
     premultiplied: true,
     width,
   };
