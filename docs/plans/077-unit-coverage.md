@@ -9,6 +9,11 @@ executed.**
 
 **Target: 85 % statements minimum, 90 % preferred, with the floors re-armed at the achieved number.**
 
+**STATUS: DONE 2026-07-18 — 72.29 % → 88.16 % statements · 78.52 % branches · 90.65 % functions ·
+88.10 % lines.** Floors re-armed at 86/86/88/77. Phase 4 (extraction) was NEVER NEEDED: the fake device
+reached everything, so `packages/engine` sources were not touched at all. Suite 300 files / 2 098 tests,
+verified identical across consecutive runs.
+
 ## The measured gap (2026-07-18, baseline)
 
 Total **8 847 statements, 6 396 covered = 72.29 %**. To reach 85 % needs **+1 124 covered statements**;
@@ -86,11 +91,17 @@ itself), then cover in this order — highest behavioural value first, not highe
 `world/textures.ts` (34, the LRU) · `stream/setup.ts` (46) · `render/probe.ts` (73) ·
 `debug/gpu-timers.ts` (54).
 
-### Phase 4 — targeted extraction, ONLY where phase 3 proved the fake insufficient
+### Phase 4 — targeted extraction — **NOT NEEDED, and that is the plan's main result**
 
-Decided by evidence from phase 3, not up front. Any extraction here is a behaviour-preserving move of
-pure logic, and **the phase closes with a bench ritual run + a field ride** — the only instruments that
-see a hot-path regression.
+The evidence from phase 3 said the fake reaches everything that matters: `world/cells.ts` went to
+**100 % statements and 100 % branches** through it, and `engine.ts` to 43.8 % without a single source
+edit. Nothing justified refactoring a field-validated hot path days after the flip. **No engine source
+was modified by this plan** — the whole recovery is test-only code, so there is no bench ritual or field
+ride to owe.
+
+The `engine.ts` remainder (~56 %) is genuinely device-bound work — resource creation and pass encoding —
+whose behaviour the bench, soak and e2e lanes already cover. Chasing it with a mock would be the
+coverage theatre this plan's anti-goal names.
 
 ### Phase 5 — re-arm the floors + close out
 
@@ -99,8 +110,47 @@ update [test-coverage.md](../development/test-coverage.md), and record the final
 
 ## Measurement ledger
 
-| Date       | Phase                                   | Statements               | Branches | Functions | Lines   | Note                                                                                                          |
-| ---------- | --------------------------------------- | ------------------------ | -------- | --------- | ------- | ------------------------------------------------------------------------------------------------------------- |
-| 2026-07-18 | baseline (post-teardown)                | 72.29 %                  | 67.11 %  | 71.86 %   | 72.13 % | 6 396 / 8 847 statements                                                                                      |
-| 2026-07-18 | phase 1 — `@opensa/math`                | **74.40 %**              | 69.09 %  | 77.74 %   | 74.22 % | math 67.7 → ~98 %; suite 295 files / 1 900 tests                                                              |
-| 2026-07-18 | phase 3 — the fake device (engine only) | engine **26.1 → 62.9 %** | —        | —         | —       | `engine.ts` 0 → 43.8 %, `pipelines` 4.9 → 98.8 %, `core/math` 59.7 → 100 %, `sky-lut` 98.8 % — the seam works |
+| Date       | Phase                                   | Statements               | Branches    | Functions   | Lines       | Note                                                                                                                        |
+| ---------- | --------------------------------------- | ------------------------ | ----------- | ----------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-18 | baseline (post-teardown)                | 72.29 %                  | 67.11 %     | 71.86 %     | 72.13 %     | 6 396 / 8 847 statements                                                                                                    |
+| 2026-07-18 | phase 1 — `@opensa/math`                | **74.40 %**              | 69.09 %     | 77.74 %     | 74.22 %     | math 67.7 → ~98 %; suite 295 files / 1 900 tests                                                                            |
+| 2026-07-18 | phase 3 — the fake device (engine only) | engine **26.1 → 62.9 %** | —           | —           | —           | `engine.ts` 0 → 43.8 %, `pipelines` 4.9 → 98.8 %, `core/math` 59.7 → 100 %, `sky-lut` 98.8 % — the seam works               |
+| 2026-07-18 | phase 3 — `ifp-sampler` + `world/cells` | **88.16 %**              | **78.52 %** | 90.65 %     | 88.10 %     | `ifp-sampler` 72.2 → 99.2 % stmts / 45.7 → 91.4 % br; `cells` 65.6 → **100 / 100 %**; fake device now records written BYTES |
+| 2026-07-18 | phase 5 — floors re-armed + close-out   | **88.16 %**              | **78.52 %** | **90.65 %** | **88.10 %** | thresholds 86/86/88/77; suite 300 files / 2 098 tests, identical across runs; `test-coverage.md` rewritten                  |
+
+## Findings — bugs the coverage work surfaced, reported not patched
+
+Writing tests against untested code found three defects and one piece of dead code. None were fixed here:
+a coverage plan that also changes behaviour cannot tell you which change broke something.
+
+1. **`PhysicsWorld.createFalling`'s box fallback is unreachable** (`physics-world.ts:254-257`).
+   `ColliderDesc.convexHull()` returns a non-null but INVALID descriptor for degenerate input — the
+   neighbouring `addConvexChassis` knows this and guards with try/catch, but `createFalling` relies on
+   `??`, so `createCollider` throws. A prop whose mesh cannot be hulled **crashes the topple instead of
+   falling back to its box**. This is a real B7·a destruction path.
+2. **`PhysicsWorld.setColliderEnabled` does not work, and is dead.** `setEnabled(false)` reports
+   `isEnabled() === false` while the collider keeps blocking solidly. No callers — the working path is
+   `setColliderSensor`. Delete it or fix it before someone reaches for it.
+3. **`roadsignGlyphIndex` does an unguarded prototype lookup** — `'toString'` returns a Function, not
+   `null | number`. Unreachable from `roadsignGlyphQuads` (it only passes single characters), but the
+   signature is a lie. `Object.hasOwn` or a `Map` closes it.
+4. **`mat4Multiply` cannot alias `out` with `a`** — it writes `out` column-by-column while still reading
+   `a`, so `mat4Multiply(m, m, b)` silently corrupts. No current caller does this; worth a doc comment.
+
+Also removed as a direct consequence: **`GtaSaWorldAdapter.preparseCellModels` + the whole `DffParser` /
+`dff-parse.worker` chain** — plan-060 off-thread parsing for the THREE renderer's cell builds, orphaned by
+[074/13](074-opensa-engine/13-cleanup.md) phase 5 and missed there because the method is private and
+reachable only through a config option nobody sets. ~31 unreachable statements.
+
+## What is deliberately still uncovered
+
+Named so the next reader does not mistake it for an oversight:
+
+- **`engine.ts`'s remaining ~56 %** — resource creation and pass encoding, i.e. the genuinely
+  device-bound half. Covered by the bench, soak and e2e lanes; a mock would prove only that the engine
+  called the API it obviously calls.
+- **`stream/pak-worker.ts` and `stream/setup.ts`** — Worker entry glue (`self.onmessage`), same rationale
+  as the existing worker exclusions.
+- **Two unreachable defensive branches in `ifp-sampler`** — a `!positions` guard the caller already
+  gates, and `|| 1` zero-span fallbacks that ascending keyframe times can never trigger. Untestable
+  rather than untested.

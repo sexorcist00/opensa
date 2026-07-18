@@ -28,9 +28,11 @@ export default defineConfig({
       include: ['apps/web/**/*.ts', 'packages/**/*.ts'],
       provider: 'v8',
       reporter: ['text', 'text-summary', 'html'],
-      // Floors (a small buffer below the achieved 88.8% stmt / 78.4% branch / 87.2% func / 88.8% lines) so an
-      // unrelated change can't silently erode coverage. Branches sit lower by nature (error/edge paths).
-      thresholds: { branches: 77, functions: 85, lines: 85, statements: 85 },
+      // Floors sit a small buffer below the achieved numbers so an unrelated change can't silently erode
+      // coverage. Branches sit lower by nature (error/edge paths). Re-armed 2026-07-18 against the plan-077
+      // recovery (88.16% stmt / 78.52% branch / 90.65% func / 88.10% lines) after the renderer teardown
+      // temporarily sank them — the engine is unit-tested through a fake GPUDevice, see plan 077.
+      thresholds: { branches: 77, functions: 88, lines: 86, statements: 86 },
     },
     environment: 'node',
     globals: false,

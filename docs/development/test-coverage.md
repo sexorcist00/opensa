@@ -13,21 +13,26 @@ stages `parseDff`/`prepareClumpAtomics`/`collectTransferables` are unit-covered,
 the two asset-loader files) — browser code is verified on the Playwright e2e lane (`e2e.md`), not by
 headless node units (same rationale as the `.tsx` exclusion). See plan 046 for the roadmap.
 
-## Current (2026-07-18, after the 074/13 renderer teardown)
+## Current (2026-07-18, after the plan-077 recovery)
 
-**Statements 71.9 % · Branches 66.9 % · Functions 71.8 % · Lines 71.7 %** (292 test files, 1 840 passing,
-0 skipped).
+**Statements 88.16 % · Branches 78.52 % · Functions 90.65 % · Lines 88.10 %** (300 test files, 2 098
+passing, 0 skipped). Enforced floors in `vitest.config.ts`: statements 86 / lines 86 / functions 88 /
+branches 77 — a small buffer below the achieved numbers, the repo's standing convention.
 
-**The numbers FELL from the 88.8 % below, and the reason is structural, not a regression.** Plan
-[074/13](../plans/074-opensa-engine/13-cleanup.md) deleted the three-WebGL renderer — a large, heavily
-unit-tested body of code — while `packages/engine`, the WebGPU renderer that replaced it, is verified by
-the bench/soak/e2e lanes rather than by headless units (it needs a GPU device). Same scope glob, very
-different denominator.
+**How it got here, because the dip is instructive.** Plan [074/13](../plans/074-opensa-engine/13-cleanup.md)
+deleted the three-WebGL renderer — a large, heavily unit-tested body of code — and `packages/engine`, the
+WebGPU renderer that replaced it, was effectively untested because it needs a GPU device. Coverage fell
+88.9 % → 72.3 % and the floors went red. The fix was NOT to lower them:
+[plan 077](../plans/077-unit-coverage.md) built a **device-independent seam** instead.
 
-The enforced floors in `vitest.config.ts` are therefore **red on purpose** until this is decided:
-either the engine grows a unit-testable seam (device-independent math/layout logic), or it joins the
-exclusion list with its e2e/bench lane named as the compensating control — the rule this doc already
-applies to GL/DOM glue. **Do not "fix" it by lowering the floors silently.**
+`packages/engine/src/test/fake-device.ts` is a recording stand-in for `GPUDevice` implementing the exact
+WebGPU surface the engine uses. `Engine.init()` runs against it unmodified — the engine's own `initDevice()`
+only touches `navigator.gpu` — so the engine boots and renders a frame with no GPU, and tests assert **what
+the engine decided to draw**: the hour gate on `tobj` objects, cell culling, pass order, the residency
+ledger returning to its prior line on unload. Zero changes to engine sources.
+
+**The rule that keeps this honest:** a test that only proves `createBuffer` was called is coverage theatre.
+If a test cannot fail for a reason a user would care about, it does not belong in the suite.
 
 ## Historical (2026-06-13, after It.1–7 + coverage hardening)
 
