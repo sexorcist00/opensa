@@ -48,6 +48,7 @@
     "packages/game",
     "packages/engine-formats",
     "packages/engine",
+    "packages/math",
     "tools/map-optimizer",
     "tools/opensa-lod-generator",
     "tools/vehicle-optimizer",

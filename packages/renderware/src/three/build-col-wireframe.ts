@@ -1,6 +1,7 @@
 import type { Object3D } from 'three';
 
-import { BufferAttribute, BufferGeometry, LineBasicMaterial, LineSegments, Vector3 } from 'three';
+import { Vector3 } from '@opensa/math';
+import { BufferAttribute, BufferGeometry, LineBasicMaterial, LineSegments } from 'three';
 
 import type { RegionColliders } from '../collision';
 import type { ColModel } from '../parsers/binary/col-types';

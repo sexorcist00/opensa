@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Quaternion, Vector3 } from '@opensa/math';
 
 import type { ColliderBox, ColliderSphere, ModelColliders } from '../interfaces/collider.interface';
 import type { Vec3 } from '../interfaces/world-adapter.interface';

@@ -1,15 +1,17 @@
 import type { Object3D } from 'three';
 
-import { InstancedMesh, Matrix4, Quaternion, Vector3 } from 'three';
+import { Matrix4 as EngineMatrix4 } from '@opensa/math';
+import { InstancedMesh, Matrix4 } from 'three';
 
 import type { ImgArchive } from '../archive';
 import type { IdeObjectDef } from '../parsers/text';
 import type { BuildRegionOptions } from './build-region';
-import type { ProcObjBatch, ProcObjPlacement } from './procobj-scatter';
+import type { ProcObjBatch } from './procobj-scatter';
 
 import { getClump, getTextures } from '../archive';
 import { buildClumpParts } from '../three/build-clump';
 import { registerProcObjMesh } from './procobj-runtime';
+import { placementMatrix } from './procobj-scatter';
 
 /** Options for {@link buildProcObjMeshes}: the shared mod hook + the per-cell render budget. */
 export interface ProcObjBuildOptions extends BuildRegionOptions {
@@ -17,15 +19,6 @@ export interface ProcObjBuildOptions extends BuildRegionOptions {
    *  density cutoff so the cell never draws more clutter than budgeted. Default: unlimited. */
   lotteryCap?: number;
 }
-
-const UP = new Vector3(0, 0, 1);
-
-// placementMatrix scratch (single-threaded module state, like the three.js math conventions).
-const position = new Vector3();
-const quaternion = new Quaternion();
-const spin = new Quaternion();
-const normal = new Vector3();
-const scale = new Vector3();
 
 /**
  * Turn one cell's scatter batches into renderable `InstancedMesh`es (plan 042, iteration 3c).
@@ -43,6 +36,7 @@ export function buildProcObjMeshes(
 ): Object3D[] {
   const meshes: Object3D[] = [];
   const matrix = new Matrix4();
+  const engineMatrix = new EngineMatrix4();
 
   for (const batch of batches) {
     const def = defOf(batch.model);
@@ -57,7 +51,9 @@ export function buildProcObjMeshes(
       mesh.castShadow = false;
       mesh.receiveShadow = false; // unlit world material — manual shadow sampling (plan 038)
       batch.placements.forEach((placement, index) => {
-        mesh.setMatrixAt(index, placementMatrix(placement, matrix));
+        // TEMPORARY bridge: placementMatrix now returns an @opensa/math Matrix4 while
+        // InstancedMesh still wants three's. Dies with this file in plan 074/13 phase 5c.
+        mesh.setMatrixAt(index, matrix.fromArray(placementMatrix(placement, engineMatrix).elements));
       });
       mesh.instanceMatrix.needsUpdate = true;
       mesh.computeBoundingSphere();
@@ -69,20 +65,4 @@ export function buildProcObjMeshes(
   }
 
   return meshes;
-}
-
-/** Compose one placement transform: tilt to the face normal (align rules), spin around local up.
- *  Shared by the render meshes and the clutter colliders (procobj-colliders) — same world pose. */
-export function placementMatrix(placement: ProcObjPlacement, matrix: Matrix4): Matrix4 {
-  position.set(placement.position[0], placement.position[1], placement.position[2]);
-  spin.setFromAxisAngle(UP, placement.rotation);
-  if (placement.align) {
-    normal.set(placement.normal[0], placement.normal[1], placement.normal[2]);
-    quaternion.setFromUnitVectors(UP, normal).multiply(spin); // spin in model space, then tilt
-  } else {
-    quaternion.copy(spin);
-  }
-  scale.set(placement.scale, placement.scale, placement.scaleZ);
-
-  return matrix.compose(position, quaternion, scale);
 }

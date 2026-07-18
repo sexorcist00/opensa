@@ -33,6 +33,7 @@ export default defineConfig({
         'packages/game/src/vehicle/vehicle-headlight.system.ts', // canvas-texture lamps (logic unit-tested in build-vehicle)
         'packages/game/src/character/setup-character.ts', // async model load + scene wiring
         'packages/game/src/adapters/dff-parse.worker.ts', // Worker entry glue (self.onmessage); its stages (parseDff/prepareClumpAtomics/collectTransferables) are unit-covered, the wiring rides the streaming e2e
+        'packages/math/src/capture-three-fixtures.ts', // one-shot CLI run against live three; its OUTPUT is the fixture the parity suite asserts against
         'apps/web/src/ui/**', // DOM/style helpers (locations, debug-styles, hud font loading)
         'apps/web/src/asset-loader/asset-loader.ts', // fetch streaming + Cache Storage orchestration (e2e: asset-loader.spec.ts)
         'apps/web/src/asset-loader/cache-store.ts', // Cache Storage API wrapper (e2e: asset-loader.spec.ts)

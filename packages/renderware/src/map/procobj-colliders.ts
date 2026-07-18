@@ -1,11 +1,11 @@
-import { Matrix4 } from 'three';
+import { Matrix4 } from '@opensa/math';
 
 import type { CollisionIndex, RegionColliders } from '../collision';
 import type { ProcObjCategoryName } from './procobj-categories';
 import type { ProcObjBatch } from './procobj-scatter';
 
 import { getCollision } from '../collision';
-import { placementMatrix } from './build-procobj';
+import { placementMatrix } from './procobj-scatter';
 
 export interface ProcObjColliderOptions {
   /** Effective density per category (0 = disabled). Default: vanilla density 1. */

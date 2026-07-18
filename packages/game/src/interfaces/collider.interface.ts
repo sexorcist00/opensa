@@ -1,4 +1,4 @@
-import type { Matrix4 } from 'three';
+import type { Matrix4 } from '@opensa/math';
 
 import type { Vec3 } from './world-adapter.interface';
 

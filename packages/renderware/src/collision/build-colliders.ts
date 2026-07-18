@@ -1,4 +1,4 @@
-import { Matrix4, Quaternion, Vector3 } from 'three';
+import { Matrix4, Quaternion, Vector3 } from '@opensa/math';
 
 import type { ColModel } from '../parsers/binary/col-types';
 import type { IplInstance, MapDefinitions } from '../parsers/text';

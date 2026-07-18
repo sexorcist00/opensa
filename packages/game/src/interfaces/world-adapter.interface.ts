@@ -1,4 +1,5 @@
-import type { AnimationClip, Bone, Matrix4, MeshStandardMaterial, Object3D, Skeleton } from 'three';
+import type { Matrix4 } from '@opensa/math';
+import type { AnimationClip, Bone, MeshStandardMaterial, Object3D, Skeleton } from 'three';
 
 import type { CellCoord } from '../streaming/grid';
 import type { VehicleHandle } from '../vehicle/vehicle-handle';

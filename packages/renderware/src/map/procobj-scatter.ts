@@ -1,6 +1,6 @@
-import type { Matrix4 } from 'three';
+import type { Matrix4 } from '@opensa/math';
 
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from '@opensa/math';
 
 import type { RegionColliders } from '../collision';
 import type { ColFace } from '../parsers/binary/col-types';
@@ -244,4 +244,29 @@ function scatterTriangle(
   for (const rule of rules) {
     scatterFace(batches, random, rule, surface, a, b, c, normal, area);
   }
+}
+
+// placementMatrix scratch (single-threaded module state, like the three.js math conventions).
+const PLACEMENT_UP = new Vector3(0, 0, 1);
+const placementPosition = new Vector3();
+const placementQuaternion = new Quaternion();
+const placementSpin = new Quaternion();
+const placementNormal = new Vector3();
+const placementScale = new Vector3();
+
+/** Compose one placement transform: tilt to the face normal (align rules), spin around local up.
+ *  Shared by the render meshes and the clutter colliders (procobj-colliders) — same world pose. */
+export function placementMatrix(placement: ProcObjPlacement, matrix: Matrix4): Matrix4 {
+  placementPosition.set(placement.position[0], placement.position[1], placement.position[2]);
+  placementSpin.setFromAxisAngle(PLACEMENT_UP, placement.rotation);
+  if (placement.align) {
+    placementNormal.set(placement.normal[0], placement.normal[1], placement.normal[2]);
+    // spin in model space, then tilt
+    placementQuaternion.setFromUnitVectors(PLACEMENT_UP, placementNormal).multiply(placementSpin);
+  } else {
+    placementQuaternion.copy(placementSpin);
+  }
+  placementScale.set(placement.scale, placement.scale, placement.scaleZ);
+
+  return matrix.compose(placementPosition, placementQuaternion, placementScale);
 }

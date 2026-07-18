@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Quaternion, Vector3 } from '@opensa/math';
 
 import type { System } from '../core/system';
 import type { PhysicsWorld } from '../physics/physics-world';
