@@ -247,6 +247,39 @@ describe('createEngineEnvironmentDriver', () => {
       expect(environment.moonColor[2]).toBeCloseTo(0.72 * 0.9575 * 0.3, 3);
     });
 
+    it('floors authored-NEGATIVE timecyc colours at 0 instead of NaN (the black-night-sky bug)', () => {
+      // SA authors negative cloud colours (RAINY_COUNTRYSIDE 21:00 lowClouds = −15,−36,−45); a fractional
+      // power of a negative is NaN in JS, and one NaN in the frame UBO turned every short-fog night black
+      // (NaN survives a ×0 mix factor in WGSL). The driver must clamp, like prod's piecewise sRGB does.
+      const row = [
+        '35 35 35', // amb
+        '170 170 170', // ambObj
+        '255 255 255', // dir
+        '40 40 40', // skyTop
+        '60 60 60', // skyBot
+        '0 0 0', // sunCore
+        '0 0 0', // sunCorona
+        '1 1 0.6', // sunSize spriteSize spriteBright
+        '200 100 0', // shadow lightShadow poleShadow
+        '412 0 1', // farClip fogStart lightOnGround
+        '-15 -36 -45', // lowClouds — the authored negatives
+        '-50 -50 -50', // bottomClouds — the authored negatives
+        '240 255 38 64', // water RGBA
+        '98 255 0 64', // alpha1 rgb1
+        '20 90 55 0', // alpha2 rgb2
+        '0 0 0 1', // cloudAlpha intensityLimit waterFogAlpha dirMult
+      ].join(' ');
+      const text = Array.from({ length: 24 }, () => row).join('\n');
+      const environment = makeEnvironment();
+      createEngineEnvironmentDriver(environment, { timecyc: { is24h: true, text }, weather: 0 }).apply(21);
+
+      expect(environment.cloudTopColor).toEqual([0, 0, 0]);
+      expect(environment.cloudBottomColor).toEqual([0, 0, 0]);
+      for (const channel of [...environment.cloudTopColor, ...environment.cloudBottomColor]) {
+        expect(Number.isFinite(channel)).toBe(true);
+      }
+    });
+
     it('drives the water tint from the timecyc columns', () => {
       const environment = makeEnvironment();
       // Minimal 24h-style timecyc: not worth synthesizing here — assert the PARAMETRIC path leaves the

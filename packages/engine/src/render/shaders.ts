@@ -644,21 +644,27 @@ fn skyFogFor(dir: vec3f) -> vec3f {
   return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
 }
 
-// Fog v2 (074/21 P2): a fogged pixel must dissolve into the sky INCLUDING its procedural cloud decks —
-// with the base-only colour, distant towers read as flat pale silhouettes against any clouded sky, and
-// close-fog weathers (FOGGY farClip 250) seam hard against a coloured dawn deck. Same cirrus+cumulus
-// composite as fsSky; discs/stars stay excluded (the sun-through-buildings regression, field round 3).
+// Fog v2 (074/21 P2): a pixel dissolving at the cut must equal the sky INCLUDING its procedural cloud
+// decks — with the base-only colour, distant towers read as flat pale silhouettes against any clouded
+// sky, and close-fog weathers (FOGGY farClip 250) seam hard against a coloured dawn deck. Same
+// cirrus+cumulus composite as fsSky; discs/stars stay excluded (the sun-through-buildings regression,
+// field round 3). The clouds ride a NEAR-DISSOLVE weight, not the raw fog factor (074/21 field round,
+// "clouds walk onto buildings"): partial fog is in-scattered HAZE — the atmosphere gradient — while the
+// building still OCCLUDES the deck behind it, so a mid-fog tower must not pick up the deck's colour
+// (a red dawn deck painted tower facades pink). The weight reaches 1 inside the hard-cut band
+// (fog ≥ 0.85·cut), exactly where the pale-silhouette fix lives — the dissolve stays seamless.
 // The cloud math only runs on meaningfully fogged pixels — the branch is legal in non-uniform control
 // flow because every cloud tap uses explicit-LOD sampling — and cumulus/cirrus carry their own
 // early-outs, so the clear-range majority of the frame pays one comparison.
 fn fogColorFor(dir: vec3f, fogFactor: f32) -> vec3f {
   var col = skyFogFor(dir);
-  if (fogFactor > 0.02) {
+  let cloudW = smoothstep(0.7, 1.0, fogFactor) * frame.params3.w;
+  if (cloudW > 0.002) {
     let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
     let cirrus = cirrusFor(dir, sunDot);
-    col = mix(col, cirrus.rgb, cirrus.a * frame.params3.w);
+    col = mix(col, cirrus.rgb, cirrus.a * cloudW);
     let cumulus = cumulusFor(dir, sunDot);
-    col = mix(col, cumulus.rgb, cumulus.a * frame.params3.w);
+    col = mix(col, cumulus.rgb, cumulus.a * cloudW);
   }
 
   return col;

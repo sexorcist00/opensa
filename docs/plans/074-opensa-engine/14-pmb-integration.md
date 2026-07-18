@@ -52,6 +52,15 @@ own engine, benchmarked**.
       meshopt+deflate, and static hosting can still serve `Content-Encoding: br` transparently.
 - [ ] BC α-subset encode (after the size ledger says how much it still matters).
 - [ ] Wind/stochastic/subdivision data moved into pmb config; `--wind` CLI removed.
+- [ ] **Output shape = "almost a copy of the game, in our format"** (user, 2026-07-18): opensa-pack
+      behaves like every other tool in the chain — a game-ready set IN, a game-shaped set OUT. Converted
+      assets become the pak; loose LIVE-TUNABLE data files (timecyc first — `data/timecyc_24h.dat` /
+      `timecyc.dat`) ship as FILES next to it, not baked into the manifest. Motivation: the manifest-baked
+      timecyc froze weather/fog at convert time and silently diverged from prod the moment the user
+      iterated on the install's file (2026-07-18 field finding; the game host now reads the live VFS —
+      plan 21 ledger). Includes: **update the LAB to consume this output like a game dir** (it currently
+      has no game fs — that is the only reason `manifest.timecyc` exists), then DELETE the manifest
+      timecyc field + `setup.timecyc` plumbing entirely.
 - [ ] Full-profile conversions (non-modified, anderius, carcer, gostown) + the final bench matrix.
 
 ## Measurement ledger

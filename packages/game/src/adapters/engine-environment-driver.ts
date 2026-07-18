@@ -92,7 +92,11 @@ export interface EngineEnvironmentOptions {
   weatherBlend?: () => WeatherBlend;
 }
 
-const lin = (value: number): number => (value / 255) ** 2.2;
+// Floor at 0: SA authors NEGATIVE timecyc colours (RAINY_COUNTRYSIDE 21:00 lowClouds = −15,−36,−45) and a
+// fractional power of a negative is NaN in JS — one NaN texel in the frame UBO poisons every WGSL mix()
+// it touches (even at factor 0) and rendered short-fog nights pure black. Prod survives the same data only
+// because three's piecewise sRGB curve maps negatives through its linear segment.
+const lin = (value: number): number => (Math.max(0, value) / 255) ** 2.2;
 const lin3 = (rgb: readonly number[]): [number, number, number] => [lin(rgb[0]), lin(rgb[1]), lin(rgb[2])];
 
 /** Component-wise multiply (the weather cloud TINT over the timecyc palette). */

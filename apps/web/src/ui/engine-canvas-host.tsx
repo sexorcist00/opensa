@@ -246,16 +246,28 @@ async function boot(
   await engine.init(canvas, loadCoronaSprites(fs));
   const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak-map'}`, { lodRadius: drawDistance });
   // Environment drive (074/10 config-API parity): the SHARED config→Environment driver — real timecyc
-  // colours when the pak carries them, sun/moon arcs built dynamically from config night.litFade, prod
-  // graphics tunables (sky mood, cloud opacity, moon brightness, godrays, fog timecycScale) live on.
+  // colours, sun/moon arcs built dynamically from config night.litFade, prod graphics tunables (sky mood,
+  // cloud opacity, moon brightness, godrays, fog timecycScale) live on.
   const weather = Number(params.get('weather') ?? 0) || 0;
   // Weather transitions (prod parity): the SAME WeatherTransition class prod's Game runs — one driver,
   // its blend getter eases from→to over config.weatherTransitionSeconds (smoothstep, like prod).
   const weatherTransition = new WeatherTransition(weather);
+  // Timecyc source of truth = the LIVE game files, with prod's exact preference (timecyc_24h.dat as-is,
+  // else vanilla timecyc.dat converted) — the pak's baked copy silently froze weather/fog at convert time
+  // and diverged from what prod renders the moment the install's file changed (2026-07-18 field finding).
+  // The bake stays as the fallback for pak-only consumers (the lab has no game fs).
+  const liveTimecyc24 = fs.getText('data/timecyc_24h.dat');
+  const liveTimecyc = liveTimecyc24 ?? fs.getText('data/timecyc.dat');
+  const timecycSource =
+    liveTimecyc !== null
+      ? { is24h: liveTimecyc24 !== null, text: liveTimecyc }
+      : setup.timecyc !== undefined
+        ? { is24h: setup.timecyc24 ?? false, text: setup.timecyc }
+        : undefined;
   const environmentDriver = createEngineEnvironmentDriver(engine.environment, {
     config,
     fogCap: drawDistance - FOG_RING_MARGIN,
-    ...(setup.timecyc !== undefined ? { timecyc: { is24h: setup.timecyc24 ?? false, text: setup.timecyc } } : {}),
+    ...(timecycSource ? { timecyc: timecycSource } : {}),
     weather,
     weatherBlend: () => weatherTransition.blend(),
   });

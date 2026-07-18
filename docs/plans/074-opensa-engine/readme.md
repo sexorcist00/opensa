@@ -213,11 +213,35 @@ heap flat 2661 MB, late 0, longTasks 0, slow 0.01 %) → ④ the C1 criteria run
 user's formal display `?bench=all` row, (b) **plan [22 debug tools](22-debug-tools.md) — RAISED TO
 BLOCKER (user, late 2026-07-17): full F2 debugger PORT (the overlay is not mounted on the engine host
 at all) + photo mode K+M + the pointer-capture button; 7 phases, detailed tasks in the plan**, (c) the
-flip decision doc. THE AGREED SEQUENCE: plan 22 ships → remind the user to run display `?bench=all` +
-parity screenshots → FLIP. 30-min Chrome soak DONE 2026-07-17: PASS all 8 checks (heap SHRANK
-2661→2499 MB over 107 legs — series 10·soak30). Post-migration queue: opensa-pack plan 002 (fetch-game
-paks — gostown & co, user refines scope) + bucket D debugger knobs. Flip → (C2 stays GATED).
-Post-flip residency follow-up: per-ring texture laziness (~767 MB world-array boot baseline).
+flip decision doc. 30-min Chrome soak DONE 2026-07-17: PASS all 8 checks (heap SHRANK
+2661→2499 MB over 107 legs — series 10·soak30).
+
+**2026-07-18 — plan 22 SHIPPED (phases 1–7, ledger in the plan) + the pre-measurement fix batch, all
+field/headless-verified, ready for the user's runs:**
+
+- **Black night ROOT-FIXED** — SA authors NEGATIVE timecyc cloud colours; the driver's `lin()` made
+  them NaN and one NaN in the frame UBO poisoned every WGSL `mix()` even at factor 0 (sky AND fog).
+  Floor at 0 + regression test; [open-issues/fixed/engine-night-sky-black.md](../../open-issues/fixed/engine-night-sky-black.md).
+- **Timecyc source of truth → the LIVE game files** (user field finding: two different timecyc files
+  rendered identical engine fog) — the host fed the driver the PAK-BAKED copy; now it reads
+  `data/timecyc_24h.dat` / `timecyc.dat` from the VFS with prod's exact preference, manifest bake =
+  pak-only fallback (the lab). Most of the engine-vs-prod fog "difference" was different DATA.
+- **Clouds no longer walk onto buildings** — `fogColorFor`'s cloud composite now rides
+  `smoothstep(0.7, 1.0, fogFactor)` (partial fog = haze; the deck only enters at the dissolve band,
+  the pale-silhouette fix stays intact). Plan 21 ledger carries all three rows.
+
+**THE AGREED SEQUENCE (user, 2026-07-18): ① the user re-runs measurements + parity screenshots
+(display `?bench=all`, both renderers — `ls-rain-night` and `country-dusk` rows were invalid/moved
+before the fixes) → ② THE FLIP (decision doc; C2 stays GATED) → ③ on a successful flip: the
+opensa-pack REWORK — output = "almost a copy of the game in our format", loose live-tunable files
+(timecyc first) as FILES next to the pak ([074/14 tasks](14-pmb-integration.md)) → ④ the LAB updated
+to consume that output like a game dir, then `manifest.timecyc` + `setup.timecyc` plumbing die.**
+Known A/B caveat for the screenshot runs: the engine remaps weather REGIONALLY at spawn while the prod
+bench sits on its literal id until a city crossing — `ls-rain-night` compares column 16 vs prod's 8
+(recorded in the plan-21 ledger; call it before comparing those frames pixel-wise).
+Post-migration queue (unchanged): opensa-pack plan 002 (fetch-game paks — gostown & co, user refines
+scope) + bucket D debugger knobs. Post-flip residency follow-up: per-ring texture laziness (~767 MB
+world-array boot baseline).
 
 **Parity debts RESOLVED by user decision 2026-07-17: vehicle paint (16) CLOSED (user verdict — the
 paint is good now) · map lighting (17) DEFERRED to the next iteration, not a pre-flip blocker (the

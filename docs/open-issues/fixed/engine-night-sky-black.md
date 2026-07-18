@@ -1,8 +1,28 @@
 # Own engine: a short-fog NIGHT renders pure black (rain/fog weathers)
 
-**Status: investigated, NOT fixed (2026-07-18).** Root cause narrowed to "the authored night sky reaches
-the sky LUT correctly but arrives on screen as ~0" — the loss is downstream of `buildSkyLut`, in the sky
-pass or its uniform feed. Pre-existing; it is not caused by the regional-weather remap that exposed it.
+**Status: ✅ FIXED (2026-07-18).** Root cause: **SA authors NEGATIVE timecyc cloud colours**
+(RAINY_COUNTRYSIDE 21:00 `lowClouds = −15,−36,−45`, `bottomClouds = −50,−50,−50`), and the engine
+environment driver's `lin()` was a plain power curve — `(−15/255) ** 2.2` is **NaN in JS** (fractional
+power of a negative). The NaN rode `cloudTopColor`/`cloudBottomColor` into the frame UBO, where WGSL
+`mix(sky, cloud.rgb, factor)` poisons the result **even at factor 0** (NaN × 0 = NaN; only a LITERAL 0
+gets constant-folded away). That blackened both `fsSky` (sky pixels) and `fogColorFor` (every fogged
+world pixel — plan 074/21 composites clouds into the fog colour), so a short fog cut turned the whole
+frame black. Prod survives the same data because three's piecewise sRGB decode maps negatives through
+its LINEAR segment (a tiny negative, never NaN).
+
+**The fix** (`packages/game/src/adapters/engine-environment-driver.ts`): `lin()` floors its 0–255 input
+at 0, with a regression test feeding the authored negative row through a synthetic timecyc
+(`engine-environment-driver.test.ts`). Verified headless: the repro below went frame-luma 2.6 → 34.7
+(lit shopfronts / night windows / fogged distance all back), `?bench=ls-rain-night` renders at 120 fps.
+
+**Debug lessons for the next NaN hunt:** (1) a WGSL NaN check `x != x` and a black uniform visualization
+both LIE under fast-math — the give-away was `mix(col, rgb, 0.0-literal)` ≠ `mix(col, rgb, computed-0)`;
+(2) meter TRUE sky pixels — in a street canyon every "sky-looking" pixel is fogged geometry painted by
+`fogColorFor`, so an fsSky probe changes nothing; (3) the headless harness pitch: drag must start OFF
+the "Click to play" button or it becomes a pointer-lock click.
+
+The original investigation record (still accurate up to its "downstream of the LUT" arrow — the LUT
+probe was right, the loss was in the CONSUMER mixes):
 
 ## Symptom
 
