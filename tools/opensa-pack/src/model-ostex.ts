@@ -1,10 +1,11 @@
 /**
  * A MODEL's texture dictionary → `.ostex` (plan opensa-pack/003 phase 2).
  *
- * No new format was needed: `.ostex` is already "one `texture2d_array`, every layer the same size, full mip
- * chain baked offline" — exactly what a vehicle's or a ped's dictionary is once the builder has bucketed it.
- * The world planner's layers and these go through the same alpha pipeline and the same row packing, so an
- * optimized model's textures behave like every other texture we ship.
+ * No new format was needed: `.ostex` is already "one `texture2d_array`, every layer the same size" — exactly
+ * what a vehicle's or a ped's dictionary is once the builder has bucketed it. These layers go through the
+ * same alpha pipeline and the same row packing as the world planner's, so an optimized model's textures
+ * behave like every other texture we ship. Payload is BC1/BC3 and carries a SINGLE level; see below for why
+ * this writer never generates mips.
  */
 import type { VehicleTextureArray } from '@opensa/renderware/vehicle/types';
 

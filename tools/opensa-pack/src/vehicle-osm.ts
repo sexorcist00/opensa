@@ -6,7 +6,8 @@
  * The builder is the SAME code the runtime uses (`buildVehicleModel`, browser-and-node callable), so the
  * optimized asset cannot drift from what the unoptimized path would have produced.
  *
- * Textures are NOT packed here: a model's dictionary is a `.ostex` beside it in the archive.
+ * Textures do not go INTO the `.osm`: the dictionary is a sibling `.ostex` (built by `packModelOstex` and
+ * returned alongside), because that is exactly what `.ostex` already is.
  */
 import type { AssetFileSystem } from '@opensa/renderware/archive/asset-fs';
 import type { VehicleFixture, VehicleModelData } from '@opensa/renderware/vehicle/types';

@@ -1,7 +1,12 @@
 # 003 — game-shaped output: `--game` in, a game out
 
-**Status: PLANNED 2026-07-18 (user decision). Supersedes the output half of
-[074/14](../../../../docs/plans/074-opensa-engine/14-pmb-integration.md); the pmb-stage half stays there.**
+**Status: IN PROGRESS — phases 0, 1 and 2 SHIPPED 2026-07-18; phase 3 is next.** Supersedes the output half
+of [074/14](../../../../docs/plans/074-opensa-engine/14-pmb-integration.md); the pmb-stage half stays there.
+
+Shipped so far: `--out` is a game-dir copy with products under `<out>/opensa/` (phase 1, commit `189d81b`);
+the `.osm` container + baked `COLL` + the vehicle writer + BC1/BC3 per-model `.ostex` (phase 2, commits
+`dc10ceb` · `4f9b64f` · `0d88b59` · `bea5554` · `71de581` · `a896334`). Nothing in the RUNTIME reads a
+`.osm` yet — that is phase 3, and until then this is converter-side only.
 
 opensa-pack is the odd tool in the chain. Every other tool takes `--game <dir>` and emits `--out <dir>`
 that is a complete, bootable game dir (`tools/perfect-map-builder/src/pipeline.ts:138-152` — each stage
@@ -85,6 +90,10 @@ the per-model `.osm` serves the by-name lookups (breakables, clutter, animated o
     textures/<ref>.ostex
     water.osw
 ```
+
+**That block is the TARGET, not today.** As of phase 1 the products land in `<out>/opensa/` but keep their
+current shape — `world.ospak` + `manifest.json` + `water.bin` + `report.json`. The split into named cell
+and texture files is phase 4, and it is gated on the container-vs-files measurement.
 
 Inside the IMG, per user decision 2026-07-18: **full replacement, own extension, same basename.**
 `landstal.dff` → `landstal.osm`; `landstal.txd` → `landstal.ostex`. The original is DELETED. `EditableImg`
