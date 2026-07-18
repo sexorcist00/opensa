@@ -12,12 +12,9 @@ import {
   buildVehicleModel,
   buildWorldGrid,
   type CarGroup,
-  cellModelNames,
   convertTo24h,
   groupRulesBySurface,
   type HandlingEntry,
-  hasClump,
-  hasPreparedAtomics,
   type IdeObjectDef,
   type MapDefinitions,
   type ObjectDatEntry,
@@ -34,8 +31,6 @@ import {
   parseVehicleDefs,
   placementMatrix,
   type PopcycleZone,
-  primeClump,
-  primePreparedAtomics,
   type ProcObjBatch,
   type ProcObjCategoryName,
   procObjColliders,
@@ -56,14 +51,13 @@ import { breakableInstanceKey } from '@opensa/renderware/breakable/key';
 import { getBreakable } from '@opensa/renderware/breakable/mesh';
 
 import type { ModelColliders } from '../interfaces/collider.interface';
-import type { CellRequest, VehicleHandling, WorldAdapter } from '../interfaces/world-adapter.interface';
+import type { VehicleHandling, WorldAdapter } from '../interfaces/world-adapter.interface';
 import type { WorldMod } from '../mods/mod.interface';
 import type { CellCoord } from '../streaming/grid';
 import type { VehiclePlacement } from '../vehicle/vehicle-lod.system';
 import type { City } from '../zones/city';
 
 import { carGeneratorPlacements } from './car-generators';
-import { createDffParser, type DffParser } from './dff-parser';
 import { randomCarPlacements } from './popcycle-cars';
 import { createVehicleModelBuilder, type VehicleModelBuilder } from './vehicle-model-builder';
 
@@ -127,9 +121,6 @@ export interface GtaSaWorldConfig {
    * fixed-step loop into a catch-up spiral (12 fps, standing still, on an empty screen). Default: on.
    */
   clutterColliders?: boolean;
-  /** Off-thread DFF parse+prepare for cell builds (plan 060 Phase 5). Defaults to the real parse
-   *  worker where Workers exist; null falls back to synchronous in-generator parsing (node tests). */
-  dffParser?: DffParser | null;
   /** Standalone script-gated binary IPL groups to load (plan 042) — the world-state choice
    *  vanilla makes via mission-script LOAD_IPL/REMOVE_IPL (e.g. `truthsfarm`, `barriers1`). */
   extraIpl?: readonly string[];
@@ -182,16 +173,12 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   /** Catalog defs by lowercased model name — resolves procobj clutter models to their TXDs. */
   private defByName: Map<string, IdeObjectDef> | null = null;
   private defs: MapDefinitions | null = null;
-  /** Off-thread parse client (plan 060 Phase 5); null = synchronous fallback. */
-  private readonly dffParser: DffParser | null;
   private readonly fs: AssetFileSystem;
   private grid: null | WorldGrid = null;
   /** Parsed `handling.cfg`, kept for the later vehicle-physics phase. */
   private handling: Map<string, HandlingEntry> | null = null;
   /** Parsed `object.dat` collision-damage tuning by lowercased model (plan 045); null when absent. */
   private objectDat: Map<string, ObjectDatEntry> | null = null;
-  /** Models the parse worker is currently parsing — concurrent cells await instead of re-sending. */
-  private readonly parseInFlight = new Map<string, Promise<void>>();
   /** Parsed `peds.ide` defs by lowercased model name (TEMP: resolves the env-picked main character). */
   private peds: null | ReturnType<typeof parsePedDefs> = null;
   /** `popcycle.dat` zone-types for random map-car resolution (plan 059); null when absent. */
@@ -213,7 +200,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     this.config = config;
     this.fs = config.fs;
     this.cellSize = config.cellSize;
-    this.dffParser = config.dffParser === undefined ? createDffParser() : config.dffParser;
     this.vehicleModelBuilder =
       config.vehicleModelBuilder === undefined ? createVehicleModelBuilder() : config.vehicleModelBuilder;
   }
@@ -570,45 +556,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
    *  the SAME gate the static breakable props use. */
   private isClutterBreakable(name: string): boolean {
     return getBreakable(this.fs, name) !== undefined || this.breakableModels.has(name);
-  }
-
-  /**
-   * Parse + geometry-prepare a cell's uncached models in the parse worker, priming the renderware caches
-   * (plan 060 Phase 5). Models another cell already sent are awaited, not re-sent. No-op without a worker
-   * (node tests, unsupported environments) — the sliced build then parses synchronously as before.
-   */
-  private async preparseCellModels(request: CellRequest): Promise<void> {
-    if (!this.dffParser || !this.defs || !this.grid) {
-      return;
-    }
-    const names = cellModelNames(this.defs, this.grid, request.cx, request.cy, request.lod);
-    const inFlight = names
-      .map((name) => this.parseInFlight.get(name.toLowerCase()))
-      .filter((batch): batch is Promise<void> => batch !== undefined);
-    const fresh = names.filter((name) => {
-      const key = name.toLowerCase();
-
-      return !this.parseInFlight.has(key) && !(hasClump(name) && hasPreparedAtomics(name));
-    });
-    if (fresh.length > 0) {
-      const models = fresh
-        .map((name) => ({ buffer: this.fs.get(`${name.toLowerCase()}.dff`), name }))
-        .filter((model): model is { buffer: ArrayBuffer; name: string } => model.buffer !== null);
-      const batch = this.dffParser
-        .parse(models)
-        .then((parsed) => {
-          parsed.forEach(({ clump, name, prepared }) => {
-            primeClump(name, clump);
-            primePreparedAtomics(name, prepared);
-          });
-        })
-        .finally(() => {
-          fresh.forEach((name) => this.parseInFlight.delete(name.toLowerCase()));
-        });
-      fresh.forEach((name) => this.parseInFlight.set(name.toLowerCase(), batch));
-      inFlight.push(batch);
-    }
-    await Promise.all(inFlight);
   }
 
   /** First carcol combo for a model → primary/secondary RGB (falls back to white).

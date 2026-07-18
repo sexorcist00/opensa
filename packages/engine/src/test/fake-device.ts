@@ -59,6 +59,8 @@ export interface RecordedPass {
 /** One recorded `queue.writeBuffer`. */
 export interface RecordedWrite {
   byteLength: number;
+  /** A COPY of the written bytes — buffer packing (offsets, strides, flag bits) is asserted from here. */
+  data: Uint8Array;
   label: string | undefined;
   offset: number;
 }
@@ -145,8 +147,12 @@ export function createFakeDevice(): FakeGpu {
       onSubmittedWorkDone: () => Promise.resolve(),
       submit: (): void => {},
       writeBuffer: (target: { label?: string }, offset: number, data: ArrayBuffer | ArrayBufferView): void => {
+        const view = ArrayBuffer.isView(data)
+          ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+          : new Uint8Array(data);
         recorder.writes.push({
           byteLength: data.byteLength,
+          data: new Uint8Array(view),
           label: target.label,
           offset,
         });
