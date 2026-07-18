@@ -1,7 +1,7 @@
 # Alpha cutout black edge (foliage / fences)
 
 **Status: shelved on the WebGL prod path; ✅ FIXED BY CONSTRUCTION in the own-engine path (2026-07-11).**
-The [074 native texture pipeline](../../tools/opensa-pack/docs/plans/000-converter-tool.md) implements exactly the
+The [074 native texture pipeline](../../../tools/opensa-pack/docs/plans/000-converter-tool.md) implements exactly the
 "complete fix" this doc predicted: offline alpha-weighted (premultiplied) mips + full-BFS edge dilation +
 per-texture classification + alpha-to-coverage (the engine owns MSAA). Field-confirmed on the LS district:
 no halo on foliage/fences. The notes below remain for the WebGL path, which keeps the original behaviour.

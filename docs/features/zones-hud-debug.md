@@ -59,5 +59,6 @@
 ## Test coverage anchors
 
 zone tests (`city`, `zone-name`, `city-zone` systems), GXT hash tests, debug overlay is mostly
-manual (UI), picking covered via adapter `describe` tests, hide-object via `hidden-instances` tests
-(collapse/restore, idempotent re-hide, multiple meshes).
+manual (UI). Picking and hide-object had unit tests in the WebGL era; both features and their tests went
+with that renderer (074/13), and the engine host's debugger gates the whole Map screen off until there is
+a ray query. The overlay's capability gating itself is covered by `debug-capabilities.test.ts`.

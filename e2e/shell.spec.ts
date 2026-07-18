@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 /**
  * UI shell boot flow (plans 051 / 056): the menu lists the configured games; picking a fetch game shows its
  * disclaimer → OK → loading; picking the local game shows the folder prompt. Stops before the heavy download +
- * WebGL boot (covered elsewhere) so the lane stays fast — the manifest is mocked (hung / aborted) so the tests
+ * engine boot (covered elsewhere) so the lane stays fast — the manifest is mocked (hung / aborted) so the tests
  * don't need real game archives.
  */
 const GOSTOWN = 'Run Gostown Paradise [web]'; // a fetch game

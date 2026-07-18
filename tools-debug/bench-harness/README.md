@@ -13,7 +13,7 @@ scenes, report protocols, the recording ritual, DPR caveats. This README is just
 - `drive.js` — boots the app, clicks through the folder flow, waits for `[bench]` (or `TAG='[soak]'`)
   report lines, screenshots on exit. `DPR=2` gives retina-equivalent render targets.
 - `gate-check.js` — WebGPU boot-gate verification: `canvas` mode reports which context type the game
-  canvas holds (webgpu = own engine, webgl2 = three prod); `sorry` mode launches WITHOUT WebGPU and
+  canvas holds (WebGPU is the only one since 074/13 deleted the three path); `sorry` mode launches WITHOUT WebGPU and
   expects the sorry screen.
 
 Deliberately plain dependency-free Node scripts (playwright resolves from the repo root via

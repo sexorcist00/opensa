@@ -72,7 +72,7 @@ prod path for comparable area (~20×). Draws/entry ≈ 20 — above the ≤8 asp
 fragment the groups; consolidation is an M1 knob, not a gate). Look: geometry/textures/palms/roads correct;
 dark = prelit-only by design (sun/tints = plan 06). **Alpha verdict (user, zoomed):
 "alpha is fixed" (user) — no black halo on foliage/fences. The shelved
-[alpha-edge open issue](../../open-issues/alpha-edge.md) is FIXED on the native path by construction
+[alpha-edge open issue](../../open-issues/fixed/alpha-edge.md) is FIXED on the native path by construction
 (classification + dilation + premultiply + offline mips + A2C).** PENDING: Safari row (informational).
 
 ## P0 GATE: ✅ PASSED (2026-07-11)

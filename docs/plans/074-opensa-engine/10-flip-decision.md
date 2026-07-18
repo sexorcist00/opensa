@@ -1,7 +1,7 @@
 # 074·10 — THE FLIP DECISION
 
 [← chain](readme.md) · parent: [10 integration & flip](10-integration-flip.md) · gate for:
-[13 cleanup](13-cleanup.md) (**still GATED**)
+[13 cleanup](13-cleanup.md) — **C2 given the same day; 13 is COMPLETE**
 
 **Decision date: 2026-07-18. Decision: FLIP — the OpenSA WebGPU engine is the shipping renderer.**
 Signed off by the user on the pre-flip measurement sweep + the parity screenshot round («паритет ок»).
@@ -31,7 +31,7 @@ to roll back to.** The comparison artefact is now the git history and the measur
 | **2** | Visual parity sign-off per bench scene                                   | **PASS**            | User's parity screenshot round on the same sweep, 2026-07-18: «паритет ок». Preceded by the fix batch that made the comparison honest (below).                                                                                                                                                                                                                                    |
 | **3** | Stress matrix green in Chrome + Safari; 30-min soak clean                | **PASS (rescoped)** | 30-min Chrome soak: all 8 self-judged checks green, 107 legs / 192 668 frames, heap SHRANK 2661 → 2499 MB ([series 10·soak30](bench/series.md)). **Safari declared NOT relevant by the user 2026-07-17**; the earlier Safari smoke test passed anyway (plan 10 criterion 3 note).                                                                                                 |
 | **4** | ~~Non-WebGPU browsers keep the WebGL path~~ → **WebGPU-first boot gate** | **PASS**            | Criterion REPLACED by user decision 2026-07-17 (no dual-renderer support). `webgpu-gate.ts` probes adapter + `texture-compression-bc` mirroring `initDevice`; no WebGPU → sorry screen. All three branches harness-verified, 5 unit tests.                                                                                                                                        |
-| **5** | 073 flags & code disposition executed                                    | **PASS (C2 done)**  | C2 was commanded the same day and [13](13-cleanup.md) ran to completion: the three-WebGL path, the flag zoo and the dependency are gone (`from 'three'` importers repo-wide: **0**; `node_modules` 512 → 455 MB; prod JS 5.4 → 2.90 MB). The 073 note is marked EXECUTED, and the surviving knobs are documented in [query-parameters.md](../../development/query-parameters.md). |
+| **5** | 073 flags & code disposition executed                                    | **PASS (C2 done)**  | C2 was commanded the same day and [13](13-cleanup.md) ran to completion: the three-WebGL path, the flag zoo and the dependency are gone (`from 'three'` importers repo-wide: **0**; `node_modules` 512 → 455 MB; prod JS 5.4 → 2.88 MB). The 073 note is marked EXECUTED, and the surviving knobs are documented in [query-parameters.md](../../development/query-parameters.md). |
 
 ### The fix batch that made criteria 1–2 valid
 

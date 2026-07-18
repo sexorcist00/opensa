@@ -4,10 +4,12 @@
 [the flip decision](10-flip-decision.md) — **PASSED 2026-07-18**
 
 **STATUS: COMPLETE — all 8 phases shipped 2026-07-18. `three` no longer exists in this repository**
-(importers 122 → 0 · `node_modules` 512 → 455 MB · prod JS 5.4 → 2.90 MB · suite 289/1 815 green ·
-lint green · bench ritual PASS). Two items were left OPEN **on purpose** rather than silently
-resolved: the coverage floors (red for a structural reason — see 6.6/8.3) and the `flags.ts` question
-(decided against, 2.4).
+(importers 122 → 0 · `node_modules` 512 → 455 MB · prod JS 5.4 → 2.88 MB · suite 289/1 815 green ·
+lint green · bench ritual PASS). Two items were left OPEN **on purpose** rather than silently resolved:
+the coverage floors (red for a structural reason — see 6.6/8.3) and the `flags.ts` question (decided
+against, 2.4). **The coverage item was RESOLVED the same day by [plan 077](../077-unit-coverage.md)** —
+a device-independent seam (a recording `GPUDevice` stand-in), 72.29 → 88.16 %, floors re-armed, no engine
+source touched.
 
 Once the own engine is the shipping renderer (plan 10's criteria signed off), the old stack becomes dead
 weight: two renderers to maintain, a debug-flag zoo, and heavyweight dependencies. This plan deletes them.
@@ -146,7 +148,12 @@ Three harder cases that are NOT math and need their own answer:
       mirrored axis onto **X** in `decompose` (input scale `(2, 0.5, -1.5)` comes back `(-2, 0.5, 1.5)`),
       which is exactly the kind of silent disagreement a hand-rolled port produces.
       Suite after the phase: **331 files / 2171 tests green** (from 330/2159), tsc + eslint clean.
-- [ ] **1.4** Decide + record: does the engine adopt `@opensa/math` for its internal math, or keep its own?
+- [x] **1.4 DECIDED — the engine KEEPS its own math** (`packages/engine/src/core/math.ts`; it imports
+      `@opensa/math` nowhere, verified 2026-07-18). They are different shapes for different jobs: the
+      engine works on `Float32Array` column-major `Mat4` and readonly tuples it can hand straight to
+      `writeBuffer`, while `@opensa/math` is a three-compatible OBJECT api (`.x/.y/.z`, mutable, chainable)
+      whose whole purpose is that the teardown could be an import swap. Merging them would force one of
+      those two callers into the other's allocation model. Both are ~100 % covered (plan 077).
       (Engine currently has its own; do NOT churn it just for symmetry — record the reason either way.)
 - [x] **1.5 PART 1 DONE 2026-07-18 — the pure-math files are off three (122 → 109 importers).**
       Migrated: `physics-world`, `enter-vehicle.system`, `vehicle-damage.system`,
@@ -163,7 +170,7 @@ Three harder cases that are NOT math and need their own answer:
       `InstancedMesh`, commented as temporary and dying with the file. Net effect: phase 5c gets smaller,
       not bigger.
 
-- [ ] **1.5 PART 2 — BLOCKED BY DESIGN, rides phases 4/5.** Seven files were migrated, hit type errors
+- [x] **1.5 PART 2 — RESOLVED by phases 4–6, exactly as predicted.** Every one of the seven was a scene-graph problem, so every one was settled by its three object GOING AWAY rather than by a bridge: `camera-controller`, `setup-character`, `hidden-instances` and `procobj`'s render path were DELETED; `streaming.system` and `character-controller.system` survived on `@opensa/math` (the latter needed only a structural `LookDirectionSource`, phase 6). `@opensa/math` never grew `Box3.setFromObject` or `Sphere` interop. **Original analysis, kept because it was right:** Seven files were migrated, hit type errors
       at the seam with three OBJECTS, and were deliberately REVERTED rather than bridged:
       `camera-controller` (`OrbitControls`, `Box3.expandByObject`), `setup-character`
       (`Box3.setFromObject`), `hidden-instances` + test (`InstancedMesh.setMatrixAt`),
@@ -421,11 +428,17 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
       model — the same graceful failure the three version had, worth knowing before reading a white
       model as a difference.
 
-- [ ] **4.2** Execute the chosen option; keep `apps/viewer/src/shell.ts` if any tab survives (pure DOM
-      routing, renderer-independent, survives a renderer swap unchanged).
-- [ ] **4.3** Update / retire `e2e/object-viewer.spec.ts` + `e2e/viewer-tabs.spec.ts` accordingly — and
-      keep the `?tab=` contract if the shell lives.
-- [ ] **4.4** Check `tools/map-optimizer/src/compare-serve.ts` — it references viewer HTML and must follow.
+- [x] **4.2 DONE** — all four tabs survive, so `shell.ts` stays (pure DOM, no renderer).
+- [x] **4.3 DONE 2026-07-18 (verified by a real run).** `e2e/object-viewer.spec.ts` needed only honesty
+      fixes — its baseline test was still titled "WebGL via SwiftShader" when the page is WebGPU and the
+      snapshot is machine-specific. `e2e/viewer-tabs.spec.ts` had a REAL GAP: it looped over three tabs
+      and its own comment said "three viewers", but phase 4.1e ported a fourth. That gap mattered —
+      `apps/viewer/src/**` is EXCLUDED from unit coverage on the stated grounds that the e2e lane covers
+      it, so the compare tab was covered by nothing. Added; it asserts the tab boots the engine and mounts
+      a canvas WITHOUT the compare server (which is a separate process serving model bytes).
+      **Full lane re-run: 24 passed / 2 skipped.**
+- [x] **4.4 DONE — no change needed.** `tools/map-optimizer/src/compare-serve.ts` points at
+      `viewer.html?tab=compare`, which still exists and now has e2e coverage.
 - [x] **4.6 RESOLVED 2026-07-18 — USER CHOSE (c): make them real ENGINE features. SHIPPED.**
       All five toggles are back, and they are now better than what three had: every view is the shipping
       renderer with exactly ONE term changed, instead of a second material stack that could disagree
@@ -465,41 +478,41 @@ Order chosen so the tree compiles after every step.
 
 ### 5a — the host (`apps/web`)
 
-- [ ] **5a.1** Delete `apps/web/src/ui/canvas-host.tsx` (1 570 lines) and the `?engine=three` branch in
+- [x] **5a.1 DONE** (commit a312f0d) Delete `apps/web/src/ui/canvas-host.tsx` (1 570 lines) and the `?engine=three` branch in
       `apps/web/src/ui/shell/app.tsx`. The `engine-*.ts` siblings (camera/debris/perf-runs/particles/
       player/vehicles/breakables/clutter/props/anim-objects) all STAY — they are the engine host's wiring.
-- [ ] **5a.2** `tools-debug/bench-harness/gate-check.js` — its `webgl2 = three prod` branch becomes dead;
+- [x] **5a.2 DONE (in phase 7.6)** `tools-debug/bench-harness/gate-check.js` — its `webgl2 = three prod` branch becomes dead;
       simplify to assert `webgpu` only.
 
 ### 5b — the render path in `packages/game`
 
-- [ ] **5b.1** Delete `core/renderer.ts` (the old public entry — **one caller**, `game.ts:319`) and unwind
+- [x] **5b.1 DONE** (commit a312f0d) Delete `core/renderer.ts` (the old public entry — **one caller**, `game.ts:319`) and unwind
       that destructure.
-- [ ] **5b.2** Delete `plugins/` render members: `postfx.plugin.ts` (the only `postprocessing` importer),
+- [x] **5b.2 DONE** (commit a312f0d) Delete `plugins/` render members: `postfx.plugin.ts` (the only `postprocessing` importer),
       `sky.plugin.ts` (864), `water.plugin.ts`, `csm.plugin.ts`, `fog.plugin.ts`, `sky-lite.system.ts`,
       `render-pipeline.ts`, `plugin.ts`, `ambient-light.plugin.ts`, `directional-light.plugin.ts`,
       `vehicle-reflection/`.
-- [ ] **5b.3** Delete `mods/wind.mod.ts` (raw `onBeforeCompile` GLSL injection),
+- [x] **5b.3 DONE** (commit a312f0d) Delete `mods/wind.mod.ts` (raw `onBeforeCompile` GLSL injection),
       `lights/street-light.system.ts`, `vehicle/vehicle-headlight.system.ts`, `streaming/fade.ts`,
       `perf/perf-monitor.ts` (GL timer queries — the engine has its own timestamp HUD),
-      `adapters/gta-sa-world.adapter.ts` (1 049) + `adapters/three-vehicle-handle.ts`.
+      ~~`adapters/gta-sa-world.adapter.ts`~~ (**NOT deleted — it is the live engine host's world source**; only `three-vehicle-handle.ts` died) + `adapters/three-vehicle-handle.ts`.
       **Each of these has an engine-side equivalent already shipped — verify the equivalent exists before
       deleting, and note it in the commit** (that note is what makes this reviewable a year from now).
-- [ ] **5b.4** Rework `game.ts` (949 lines) — it is the seam between the two eras. Strip the three
+- [x] **5b.4 DONE** — `game.ts` deleted outright rather than reworked; the engine host is the seam. Rework `game.ts` (949 lines) — it is the seam between the two eras. Strip the three
       objects; what remains is the renderer-agnostic loop the plan-10 audit already verified.
-- [ ] **5b.5** `core/camera-controller.ts` — drop `OrbitControls`, keep the math on `@opensa/math`.
+- [x] **5b.5 DONE** — deleted with the render path; the engine host owns its camera. `core/camera-controller.ts` — drop `OrbitControls`, keep the math on `@opensa/math`.
 
 ### 5c — `packages/renderware`
 
-- [ ] **5c.1** Delete `src/three/` (43 files) — **gated on phase 4**.
-- [ ] **5c.2** Remove the barrel re-export block `src/index.ts:44–134`.
-- [ ] **5c.3** Delete/port the three-object producers in `src/map/`: `build-region.ts` (491),
+- [x] **5c.1 DONE** (commit 2c104e3) Delete `src/three/` (43 files) — **gated on phase 4**.
+- [x] **5c.2 DONE** — the block is gone; one line of PROVENANCE remains at `index.ts:44`, deliberately. Remove the barrel re-export block `src/index.ts:44–134`.
+- [x] **5c.3 DONE** (commit 2c104e3) Delete/port the three-object producers in `src/map/`: `build-region.ts` (491),
       `build-cell.ts`, `build-procobj.ts`, and check `procobj-runtime.ts` (type-only `InstancedMesh`).
       **Careful — `procobj-scatter.ts` and `procobj-colliders.ts` are bucket (b)**: they are live logic
       the engine host uses (the memoized scatter drives BOTH render and colliders), so they migrate to
       `@opensa/math`, they do NOT die.
-- [ ] **5c.4** `src/collision/build-colliders.ts` — bucket (b), migrates.
-- [ ] **5c.5** Update the package description ("RenderWare format parsers + three.js builders…").
+- [x] **5c.4 DONE** — `build-colliders.ts` survives on `@opensa/math` (`Matrix4`/`Quaternion`/`Vector3`). `src/collision/build-colliders.ts` — bucket (b), migrates.
+- [x] **5c.5 DONE in phase 8** — description now reads "renderer-agnostic mesh preparation". Update the package description ("RenderWare format parsers + three.js builders…").
 
 ---
 
@@ -554,7 +567,10 @@ forecast — three forecast entries turned out differently and are marked:
       _well_-covered (`hour-window` was 100 %) — no surviving code lost coverage.
       **Flagged for phase 8: the global thresholds (85 / 77) have been RED since phase 5** — the tested
       three code left, `packages/engine` arrived largely unit-untested. That is a threshold decision the
-      close-out must make explicitly, not a phase-6 regression.
+      close-out must make explicitly, not a phase-6 regression. **RESOLVED by
+      [plan 077](../077-unit-coverage.md)** (device-independent seam → 88.16 %, floors re-armed).
+      NOTE on the numbers: this row's 71.89 % and 077's 72.29 % baseline are DIFFERENT measurements, not
+      a discrepancy — phases 7 and 8 deleted more untested code between them, which moved the denominator.
 
 ---
 
@@ -628,12 +644,12 @@ forecast — three forecast entries turned out differently and are marked:
 
 ## Measurement ledger
 
-| Date       | What                                                     | Numbers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ---------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-07-18 | Phase-0 inventory (3 parallel sweeps)                    | 122 three-importing source files (52 render-path / 20 math-only / 50 tests / **0 tools**); 43 files in `renderware/src/three`; ~60 URL params, 10 of them dead; patch = 207 lines, `three.webgpu.js` only; `createRenderContext` has exactly 1 caller                                                                                                                                                                                                                                                                                                |
-| 2026-07-18 | Phase 1.1–1.3: `@opensa/math` built + three-parity suite | 9 source files, ~1 000 lines, zero deps; 12 parity tests vs captured three@0.185.1 fixtures @ 8 decimals, all green first run; suite 330/2159 → **331/2171**, tsc + eslint clean                                                                                                                                                                                                                                                                                                                                                                     |
-| 2026-07-18 | Phase 1.5 part 1: pure-math files migrated               | three importers **122 → 109** (13 files freed); `placementMatrix` extracted from the doomed `build-procobj` into the surviving `procobj-scatter`; 7 files deliberately reverted (scene-graph seams, ride phases 4/5); suite 331/2171 green, tsc + eslint clean                                                                                                                                                                                                                                                                                       |
-| 2026-07-18 | Phase 3: spikes deleted + babylon dropped                | 5 spike TS + 5 HTML entries gone (findings audited into 073 prose FIRST); `@babylonjs/core` removed — **node_modules 604 → 512 MB (−92 MB)**; build HTML entries 8 → 3; prod build green, suite 331/2171                                                                                                                                                                                                                                                                                                                                             |
-| 2026-07-18 | Phase 6: test rework                                     | three importers **17 → 1** (`capture-three-fixtures.ts`, deferred to phase 7); 7 dead modules + 7 tests deleted; suite 299/1874 → **292/1840** green, tsc + eslint clean; coverage 72.02 → **71.89 %** statements (−0.13 pp, flat); 12 stale coverage exclusions pruned                                                                                                                                                                                                                                                                              |
-| 2026-07-18 | **Phase 7: the dependency is GONE — the size ledger**    | `node_modules` **512 → 455 MB (−57 MB)**; prod build JS **5.4 → 2.90 MB (−46 %)**, biggest chunk `engine-canvas-host` 2.40 MB (gzip 900 kB), HTML entries 3 (unchanged); `npm install` 4.5 s warm-cache from a wiped `node_modules` (no cold-cache baseline was taken before, so this number stands alone); repo-wide `from 'three'` importers **1 → 0**; suite 292/1840 green, tsc clean, build green. Bundle share attributed to phases 4–6 (already unimported); `node_modules` + lockfile + install share is this phase's                        |
-| 2026-07-18 | Phase 8: close-out (+ phase 2, done alongside)           | Suite **289 files / 1 815 green**, tsc clean, **`npm run lint` green** (32 pre-existing bench-harness errors fixed by giving those Node scripts globals); bench ritual **PASS** — 119.9–120.0 fps ×6, late 0, draws ±4 of reference; 4 MORE orphaned three-era modules found and deleted (`webgpu-hud`, `csm-math`, `sky-params`, `wave-params` + 3 tests); docs swept (README, architecture ×2 diagrams + package map, benchmarks, e2e, test-coverage, 2 package.json descriptions); **`query-parameters.md` written** — ~60 params → 22 documented |
+| Date       | What                                                     | Numbers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-18 | Phase-0 inventory (3 parallel sweeps)                    | 122 three-importing source files (52 render-path / 20 math-only / 50 tests / **0 tools**); 43 files in `renderware/src/three`; ~60 URL params, 10 of them dead; patch = 207 lines, `three.webgpu.js` only; `createRenderContext` has exactly 1 caller                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-07-18 | Phase 1.1–1.3: `@opensa/math` built + three-parity suite | 9 source files, ~1 000 lines, zero deps; 12 parity tests vs captured three@0.185.1 fixtures @ 8 decimals, all green first run; suite 330/2159 → **331/2171**, tsc + eslint clean                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 2026-07-18 | Phase 1.5 part 1: pure-math files migrated               | three importers **122 → 109** (13 files freed); `placementMatrix` extracted from the doomed `build-procobj` into the surviving `procobj-scatter`; 7 files deliberately reverted (scene-graph seams, ride phases 4/5); suite 331/2171 green, tsc + eslint clean                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 2026-07-18 | Phase 3: spikes deleted + babylon dropped                | 5 spike TS + 5 HTML entries gone (findings audited into 073 prose FIRST); `@babylonjs/core` removed — **node_modules 604 → 512 MB (−92 MB)**; build HTML entries 8 → 3; prod build green, suite 331/2171                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 2026-07-18 | Phase 6: test rework                                     | three importers **17 → 1** (`capture-three-fixtures.ts`, deferred to phase 7); 7 dead modules + 7 tests deleted; suite 299/1874 → **292/1840** green, tsc + eslint clean; coverage 72.02 → **71.89 %** statements (−0.13 pp, flat); 12 stale coverage exclusions pruned                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 2026-07-18 | **Phase 7: the dependency is GONE — the size ledger**    | `node_modules` **512 → 455 MB (−57 MB)** (measured on a freshly installed tree — a re-measure after dev/build runs reads ~7 MB higher because `node_modules/.vite` caches into it); prod build JS **5.4 → 2.88 MB (−46 %)**, biggest chunk `engine-canvas-host` 2.40 MB (gzip 900 kB), HTML entries 3 (unchanged); `npm install` 4.5 s warm-cache from a wiped `node_modules` (no cold-cache baseline was taken before, so this number stands alone); repo-wide `from 'three'` importers **1 → 0**; suite 292/1840 green, tsc clean, build green. Bundle share attributed to phases 4–6 (already unimported); `node_modules` + lockfile + install share is this phase's |
+| 2026-07-18 | Phase 8: close-out (+ phase 2, done alongside)           | Suite **289 files / 1 815 green**, tsc clean, **`npm run lint` green** (32 pre-existing bench-harness errors fixed by giving those Node scripts globals); bench ritual **PASS** — 119.9–120.0 fps ×6, late 0, draws ±4 of reference; 4 MORE orphaned three-era modules found and deleted (`webgpu-hud`, `csm-math`, `sky-params`, `wave-params` + 3 tests); docs swept (README, architecture ×2 diagrams + package map, benchmarks, e2e, test-coverage, 2 package.json descriptions); **`query-parameters.md` written** — ~60 params → 22 documented                                                                                                                    |

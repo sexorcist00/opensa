@@ -62,6 +62,22 @@ draw**, not that it called an API. That is the seam: WebGPU's own interface.
 **Anti-goal, stated up front:** a test that only proves `createBuffer` was called is coverage theatre.
 If a test cannot fail for a reason a user would care about, it does not go in.
 
+> **Post-hoc correction (2026-07-18, from the close-out audit).** Three of the seven bullets above were
+> written before checking WHERE the behaviour lives, and two of them are not reachable from this plan's
+> scope at all:
+>
+> - **The vehicle-texture LRU is not in `packages/engine`** — it lives in
+>   `apps/web/src/ui/engine-vehicles.ts`, inside the `apps/web/src/ui/**` exclusion (DOM glue → the e2e
+>   lane). Testing it means moving it or widening the exclusion, which is a different plan.
+> - **The translucent submesh sort** is in `engine.ts`'s per-frame vehicle path, which needs a built
+>   vehicle model; the fake reaches it, but no test was written. **Unmet, named here so it is not
+>   mistaken for done.**
+> - **Uniform/buffer PACKING was delivered** — `world/cells.test.ts` asserts the cell uniform's origin,
+>   channel flag bits and identity uvAnim, and the aligned-erase byte window.
+>
+> The bullets are left as written above rather than quietly edited, because the gap between what a plan
+> promises and what it delivers is the thing worth being able to see later.
+
 ## Phases
 
 Each phase ends green with a measured coverage delta in the ledger. Phases 1–2 carry zero risk to
@@ -149,8 +165,14 @@ Named so the next reader does not mistake it for an oversight:
 - **`engine.ts`'s remaining ~56 %** — resource creation and pass encoding, i.e. the genuinely
   device-bound half. Covered by the bench, soak and e2e lanes; a mock would prove only that the engine
   called the API it obviously calls.
-- **`stream/pak-worker.ts` and `stream/setup.ts`** — Worker entry glue (`self.onmessage`), same rationale
-  as the existing worker exclusions.
+- **`stream/pak-worker.ts` and `stream/setup.ts` (both 0 %)** — Worker entry glue (`self.onmessage`) and
+  its wiring. NOTE: they are **counted, not excluded**, so they drag the totals down honestly rather than
+  being hidden. (An earlier draft of this line appealed to "the existing worker exclusions" — there are
+  none; the only one, `dff-parse.worker.ts`, was deleted by this plan.)
+- **`render/probe.ts` 57.5 %, `debug/gpu-timers.ts` 70.4 %, `world/textures.ts` 76.5 %** — named as phase-3
+  targets and only partly reached. Their remainders are device-bound (cube-face render, timestamp
+  resolve/readback, texture array upload); the probe in particular is judged by an on/off A/B in the
+  bench, never by a unit test.
 - **Two unreachable defensive branches in `ifp-sampler`** — a `!positions` guard the caller already
   gates, and `|| 1` zero-span fallbacks that ascending keyframe times can never trigger. Untestable
   rather than untested.

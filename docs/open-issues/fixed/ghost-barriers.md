@@ -4,14 +4,14 @@
 > script-gated `barriers2.ipl` roadblocks ("DANGER NO ACCESS ACROSS BRIDGE", STOP signs, cones at the
 > Hampton Barns bridge) that appeared permanently on any save past **32,767 permanent text-IPL instances
 > map-wide** — root cause an **int16 truncation of building-pool indexes inside `IplDef`** — are now
-> **removed by our own engine patch**: **[`asi/perfect-map`](../../asi/perfect-map)** (a from-scratch
+> **removed by our own engine patch**: **[`asi/perfect-map`](../../../asi/perfect-map)** (a from-scratch
 > Win32 `.asi`, MinGW-cross-compiled, no injector/plugin-sdk). It observes `CIplStore::IncludeEntity` into
 > an int32 sidecar and redirects `CIplStore::RemoveIpl`'s three building-bound reads (incl. the loop
 > back-edge re-read at 0x404BA8) to it. **Confirmed in-game on the 33k-row repro with BOTH FLA and OLA**
 > (it overlays FLA's incomplete int16 patch). The old placement work-around (binary streams + budgets +
 > `checkTextIplSlotBudget`) still ships for the stock target; the ASI is what LIFTS the limit for the
-> opensa-asi target. Full write-up: [`asi/perfect-map/docs/patch-catalogue.md`](../../asi/perfect-map/docs/patch-catalogue.md)
-> (#1) + the repro dial [`tools-debug/sa-int16-repro`](../../tools-debug/sa-int16-repro). **Remaining (004b):**
+> opensa-asi target. Full write-up: [`asi/perfect-map/docs/patch-catalogue.md`](../../../asi/perfect-map/docs/patch-catalogue.md)
+> (#1) + the repro dial [`tools-debug/sa-int16-repro`](../../../tools-debug/sa-int16-repro). **Remaining (004b):**
 > the other unbounded structures (`gpLoadedBuildings` 4096, `IplEntityIndexArrays` 40) still rely on
 > FLA/OLA; our ASI only widens the int16 ceiling so far. Kept as the reference for SA's four unbounded
 > placement structures + the epic of eliminated wrong theories.

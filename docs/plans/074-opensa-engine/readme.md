@@ -88,23 +88,30 @@ three-era modules found to be **dead code the engine had already superseded** (t
 `TimedObjectSystem`, `hidden-instances`, `render-sync`, `orient-character`) and deleted with their tests ·
 the dependency, `postprocessing`, `@types/three` and our 207-line three patch dropped (`patch-package`
 went with it — it was the only patch). **Numbers: importers 122 → 0 · `node_modules` 512 → 455 MB ·
-prod JS 5.4 → 2.90 MB · suite 289 files / 1 815 green · `npm run lint` green.**
+prod JS 5.4 → 2.88 MB · `npm run lint` green.** (Suite counts moved again immediately after — see the 077 paragraph.)
 
 Ritual re-run PASS — 119.9–120.0 fps on all six scenes, `lateCreates` 0, **draws within ±4 of the
 reference row** (the measurement that proves nothing live was deleted); the `gpuMs.pass` column read
 uniformly high on a busy machine and is flagged as not-a-baseline in
 [series § 13·post-teardown ritual](bench/series.md).
 
-**Two things the close-out deliberately left OPEN for a decision rather than silently resolving:**
+**The one open decision the close-out left — RESOLVED the same day by [plan 077](../077-unit-coverage.md).**
+The teardown had sunk coverage 88.9 % → 72.3 % (71.9 % mid-teardown; the denominator kept moving as more untested code was deleted) (the deleted WebGL code was heavily unit-tested; the engine
+that replaced it needs a GPU) and the floors went red. The answer was NOT to lower them: 077 built a
+**device-independent seam** — `packages/engine/src/test/fake-device.ts`, a recording `GPUDevice`
+stand-in. `Engine.init()` runs against it unmodified, so the engine boots and renders a frame headlessly
+and tests assert **what it decided to draw** (hour gate, cell culling, pass order,
+ledger-returns-on-unload). **Coverage 72.29 → 88.16 % stmt · 78.52 % br · 90.65 % fn; floors re-armed
+86/86/88/77; suite 300 files / 2 098 tests, e2e 24 passed.** No engine source was touched, so nothing is
+owed to the bench. 077 also found four defects (two real: `createFalling`'s box fallback is unreachable so
+an unhullable prop CRASHES; `setColliderEnabled` silently does nothing and is dead) — recorded in that
+plan, **not patched**, because a coverage pass that also changes behaviour cannot tell you which change
+broke something.
 
-1. **Coverage floors are RED and should stay red until decided.** 88.8 % → **71.9 %** statements: the
-   deleted WebGL code was heavily unit-tested, and `packages/engine` — which replaced it — needs a GPU
-   device, so it is verified by the bench/soak/e2e lanes instead. Either the engine grows a
-   device-independent unit seam or it joins the exclusion list with those lanes named as the
-   compensating control. **Do not lower the floors silently** ([test-coverage.md](../../development/test-coverage.md)).
-2. **`?scale`, `?draw` and friends now have a canonical home** — [query-parameters.md](../../development/query-parameters.md).
-   Phase 2.4 decided AGAINST a central `flags.ts` (22 names, most read once, two hosts with different
-   defaults); the reasoning is in the doc so it can be re-decided.
+**Also standing from the close-out:** `?scale`, `?draw` and friends now have a canonical home —
+[query-parameters.md](../../development/query-parameters.md). Phase 2.4 decided AGAINST a central
+`flags.ts` (22 names, most read once, two hosts with different defaults); the reasoning is in the doc so
+it can be re-decided.
 
 **Next per the agreed sequence:** ③ the **opensa-pack REWORK** ([074/14](14-pmb-integration.md)) — output
 becomes "almost a copy of the game in our format" with loose live-tunable files (timecyc first) as FILES

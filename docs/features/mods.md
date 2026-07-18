@@ -6,7 +6,9 @@ Two complementary mechanisms:
   swap a vehicle's model/texture and tweak its `vehicles.ide`/`handling.cfg`/`carcols.dat` lines **without
   rebuilding**. Pure data, no code.
 - **WorldMod** (`packages/game/src/mods/`, plans 039/040) — **code-level** engine features layered over the
-  vanilla pipeline (the wind mod is the reference impl).
+  vanilla pipeline. **Currently unwired:** its reference impl (the wind mod) and the `decoratePart` build
+  hook both died with the three renderer in 074/13, and sway now rides a converter channel + a vertex
+  shader term instead. The interface survives as the declared extension point.
 
 ## Drop-in asset overlay (`modloader/`)
 
@@ -49,7 +51,8 @@ Test anchors: `scan.test.ts` (root/nested/multi-txd discovery), `settings.test.t
 
 ## Game mods (WorldMod) + vegetation wind
 
-`packages/game/src/mods/` (`mod.interface.ts`, `wind.mod.ts`, `wind-mode.ts`), plans 039/040.
+`packages/game/src/mods/` (`mod.interface.ts`, `wind-mode.ts` — `wind.mod.ts` was the three material
+decorator, deleted in 074/13), plans 039/040.
 
 ## Implemented
 
@@ -76,5 +79,7 @@ Test anchors: `scan.test.ts` (root/nested/multi-txd discovery), `settings.test.t
 
 ## Test coverage anchors
 
-`wind.mod.test.ts` (trigger negatives incl. alpha-only, weight/height modes, update),
-`build-region.test.ts` decoratePart ordering, `gen-wind-list`/`wind-coverage` scripts.
+`wind-mode.test.ts` (trigger negatives incl. alpha-only, weight/height modes),
+`gen-wind-list`/`wind-coverage` scripts. The three-side `wind.mod.test.ts` and
+`build-region.test.ts` decoratePart ordering died with that renderer (074/13); sway is a converter
+channel + a vertex-shader term in the engine now, not a material decoration.

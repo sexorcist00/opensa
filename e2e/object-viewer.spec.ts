@@ -41,7 +41,7 @@ test.describe('object viewer', () => {
     await expect(page.locator('canvas')).toBeVisible();
   });
 
-  test('matches the rendered baseline (WebGL via SwiftShader)', async ({ page }) => {
+  test('matches the rendered baseline (WebGPU, so the snapshot is machine-specific)', async ({ page }) => {
     await page.goto('/viewer.html');
     await expect(page.locator('canvas')).toBeVisible();
     await page.waitForLoadState('networkidle');

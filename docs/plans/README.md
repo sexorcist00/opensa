@@ -10,8 +10,12 @@ The map of planning docs across the repo. **Engine plans** live here (`docs/plan
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`076` (+074 sub-plans). Newest first:
+`001`–`077` (+074 sub-plans). Newest first:
 
+- **[077 — Unit coverage back to 85–90 %](./077-unit-coverage.md)** — the 074/13 teardown deleted heavily
+  unit-tested WebGL code and sank coverage 88.9 → 72.3 %. Recovered to **88.16 %** with a **device-independent
+  seam**: a recording `GPUDevice` stand-in that boots the whole engine headlessly, no engine source touched.
+  **DONE 2026-07-18.**
 - **[076 — Roadsign / billboard text](./076-roadsign-text.md)** — 2dfx type-7 text plates (roadsignfont glyph
   atlas, world-space) that prod renders and the own engine skips → blank boards. Bake into the cutout pipeline.
 
@@ -88,7 +92,7 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   [`map-placement/docs/plans/`](../../tools/map-placement/docs/plans/) (`001` architecture & API).
 - **sa-lod** — shared simplified-copy LOD pipeline (decimate → normals → encode DFF/TXD/COL), extracted from
   opensa-lod-generator, used by it + lod-procobj-generator.
-  [`sa-lod/docs/plans/`](../../tools/sa-lod/docs/plans/) (`001` architecture & API).
+  [`sa-lod/docs/plans/`](../../tools/lod-common/docs/plans/) (`001` architecture & API).
 - **rw-codec** — shared pure RW chunk/DFF/DXT/geometry-struct codec, extracted from map-optimizer (plan 057,
   step 2). Top-level `rw-codec/` now; moves under `tools/` in the migration. No plans doc.
 - **timecyc-builder** — timecyc precompute. No plans doc yet.

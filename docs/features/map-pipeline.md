@@ -58,6 +58,9 @@
 
 ## Test coverage anchors
 
-Parser tests per format; `build-region.test.ts` (flags, frame-offset regression, decoratePart),
-`build-cell.test.ts`, `world-grid.test.ts`, `resolve-map.test.ts` (extraIpl),
-`streaming.system.test.ts`, `fade.test.ts`, `grid.test.ts`.
+Parser tests per format; `map/world-grid.test.ts`, `map/resolve-map.test.ts` (extraIpl),
+`map/cell-groups.test.ts`, `streaming/grid.test.ts`, `streaming/collision-streaming.system.test.ts`,
+`streaming/settle-watcher.test.ts`. Engine-side cell building is covered by
+`engine/src/world/cells.test.ts` (100 %, through the fake `GPUDevice` — plan 077).
+(`build-region.test.ts`, `build-cell.test.ts`, `fade.test.ts` and `streaming.system.test.ts` died with
+the three renderer in 074/13.)

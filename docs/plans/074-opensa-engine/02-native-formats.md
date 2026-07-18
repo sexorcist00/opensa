@@ -59,7 +59,7 @@ Decisions:
   quality loss, converter stays fast. Only the ALPHA subset + odd sizes go through decode → process → re-encode
   (BC3 in v0; BC7 as a v1 upgrade — encoder options in 03).
 - **Premultiplied everywhere alpha exists** + offline mips (alpha-weighted + dilation + per-mip coverage
-  preservation) — the [alpha-edge](../../open-issues/alpha-edge.md) fix lives HERE; see 03 for the pipeline.
+  preservation) — the [alpha-edge](../../open-issues/fixed/alpha-edge.md) fix lives HERE; see 03 for the pipeline.
 - Mip chain is COMPLETE in-file down to 1×1 (or 4×4 for BC) — the runtime never generates mips.
 
 ## `.ospak` — the archive (replaces holding a ~1 GB IMG ArrayBuffer in JS)

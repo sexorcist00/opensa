@@ -40,7 +40,7 @@ data model.
   UVs TILE (repeat wrapping) — atlasing breaks tiling. `texture2d_array` layers keep native per-layer tiling
   while letting one bind group cover a whole batch group. Same-size-class textures pack into shared arrays;
   odd sizes get padded or bucketed.
-- **The alpha pipeline — kills [alpha-edge](../../open-issues/alpha-edge.md) BY CONSTRUCTION:**
+- **The alpha pipeline — kills [alpha-edge](../../open-issues/fixed/alpha-edge.md) BY CONSTRUCTION:**
   1. **Offline classification** per texture: `opaque` / `cutout` / `soft-blend` (analysis of real alpha
      content — no runtime `hasAlpha` heuristics).
   2. **Premultiplied alpha everywhere.** The black fringe exists because we filter NON-premultiplied data with

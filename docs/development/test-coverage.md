@@ -7,11 +7,13 @@
 > [scripts.md → test-fixtures.ts](./scripts.md#test-fixturests).
 
 Run: `npm run test:coverage` (Vitest + v8). Scope (from `vitest.config.ts`): `apps/web/**` + `packages/**`
-`.ts` logic; **excluded** `*.test.ts`, `index.ts`, `*.interface.ts`, `test-utils.ts`, `apps/viewer/src/**`,
-all `.tsx` UI, and the **DOM / worker-entry glue** (`input/keyboard`, `adapters/dff-parse.worker.ts` — its
-stages `parseDff`/`prepareClumpAtomics`/`collectTransferables` are unit-covered, `apps/web/src/ui/**`,
-the two asset-loader files) — browser code is verified on the Playwright e2e lane (`e2e.md`), not by
-headless node units (same rationale as the `.tsx` exclusion). See plan 046 for the roadmap.
+`.ts` logic. **Excluded, and the list is short enough to state in full** (`vitest.config.ts`):
+`*.test.ts` · `index.ts` · `*.interface.ts` · `renderware/src/test-utils.ts` ·
+`packages/engine/src/test/**` (the fake `GPUDevice` — test infrastructure, not product code) ·
+`apps/web/src/standalone/**` (dev-only entry scripts) · and the **DOM glue** verified on the Playwright
+e2e lane instead: `game/src/input/keyboard/keyboard.ts`, `apps/web/src/ui/**`, and the two asset-loader
+files. **The rule that keeps the exclusion honest: anything excluded there MUST have an e2e spec
+exercising it** — that is why the compare viewer tab gained one in 074/13 phase 4.3.
 
 ## Current (2026-07-18, after the plan-077 recovery)
 
@@ -76,9 +78,13 @@ separate from `npm test`; see `e2e.md`.)
   `input/keyboard` 0, `three/corona` 18, `three/night-fill` 59, `three/build-col-wireframe` 67,
   `weather-transition` 0, `vehicle/{damage,headlight,physics}.system` 0, `character/{animation.system,setup}` 0.
 
-## Untested-module triage (the 43 without a sibling test)
+### Untested-module triage (HISTORICAL — plan-046 era, 2026-06)
 
-### Unit-testable now (pure / extractable logic) — target of Iterations 1–6
+> **Most of the files below no longer exist.** They were the three-WebGL renderer, deleted in
+> [074/13](../plans/074-opensa-engine/13-cleanup.md). Kept as the record of how that iteration was
+> planned; do NOT read it as a live TODO list.
+
+#### Unit-testable now (pure / extractable logic) — target of Iterations 1–6
 
 - Parsers/util: `parsers/text/surfinfo.parser.ts`, `parsers/text/text-lines.ts`, `parsers/binary/col-types.ts`,
   `parsers/binary/constants.ts`, `map/procobj-categories.ts`.
@@ -92,7 +98,7 @@ separate from `npm test`; see `e2e.md`.)
   `ecs/world.ts`, `ecs/components.ts`, `events/events.global.ts`, `input/keyboard.ts` (mockable),
   `mods/wind-mode.ts`, `ui/locations.ts`.
 
-### Viewer / e2e only (canvas / GL / DOM / full loop) — Iteration 8
+#### Viewer / e2e only (canvas / GL / DOM / full loop) — Iteration 8
 
 - `game.ts` (whole loop), `core/camera-controller.ts`, `core/renderer.ts`, `input/keyboard.ts` (DOM — low value
   to mock), `plugins/{sky,water,postfx,ambient-light,directional-light}.plugin.ts`,
@@ -105,5 +111,6 @@ separate from `npm test`; see `e2e.md`.)
 ## Notes
 
 - v8 counts `.ts` files loaded during the run plus the `include` glob, so zero-coverage files still appear.
-- Coverage thresholds are intentionally NOT gated yet — measure first (this doc), set per-area floors in a
-  later iteration (plan 046, It.7).
+- **Thresholds ARE enforced** (`vitest.config.ts` `coverage.thresholds`) — `npm run test:coverage` fails
+  below them. The plan-046-era note that said "intentionally NOT gated yet" was superseded when the floors
+  were first armed, and re-armed at 86/86/88/77 by [plan 077](../plans/077-unit-coverage.md).

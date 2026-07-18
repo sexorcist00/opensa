@@ -2,10 +2,10 @@
 
 **Status: ✅ crash ROOT-FIXED in-engine; particles now kept on LODs by default (2026-07-09, confirmed in-game).**
 The use-after-free is fixed by our own `perfect-map.asi` (perfect-map Phase 2 — RE in
-[plan 008](../../asi/perfect-map/docs/plans/008-2dfx-emitter-re.md), patch
-[plan 009](../../asi/perfect-map/docs/plans/009-2dfx-emitter-patch.md): a null-`m_SystemBP` guard on
+[plan 008](../../../asi/perfect-map/docs/plans/008-2dfx-emitter-re.md), patch
+[plan 009](../../../asi/perfect-map/docs/plans/009-2dfx-emitter-patch.md): a null-`m_SystemBP` guard on
 `FxSystem_c::Stop`/`Play`). With that asi present, `sa-lod-generator` now **keeps** type-1 particle 2dfx on LOD
-clones by default ([plan 010](../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md) step 1) — distant factory
+clones by default ([plan 010](../../../asi/perfect-map/docs/plans/010-pipeline-keep-2dfx.md) step 1) — distant factory
 smoke/fire is visible at LOD range. `--strip-particles` restores the old strip for a **stock target with no asi**
 (without the asi, kept particles crash exactly as below). Corona/light 2dfx (type 0) is kept as before.
 
@@ -21,7 +21,7 @@ target.
 Running the full perfect-map pipeline (mods + trees + procobj + sa-lod) in **real SA**:
 
 1. **Crash starting a NEW game** — `0x004AA3A1`, AV on `[null+0x1B]`. Since RE'd precisely (perfect-map
-   [plan 008](../../asi/perfect-map/docs/plans/008-2dfx-emitter-re.md)): the faulting fn is **`FxSystem_c::Stop`
+   [plan 008](../../../asi/perfect-map/docs/plans/008-2dfx-emitter-re.md)): the faulting fn is **`FxSystem_c::Stop`
    @0x4AA390** reading a **null fx blueprint** (`m_SystemBP`), a use-after-free of a fx system the manager reaped
    without unlinking the entity's `FxEntitySystem` node — NOT a null model-info in `LoadObjectInstance` (that was
    the initial mis-ID). Keeping type-1 2dfx on many LOD clones multiplies the dangling nodes + drains the 1000-slot
@@ -63,7 +63,7 @@ Verified: every smokestack LOD clone lost its emitter with coronas and tri count
 (`refchimny01` smoke30lit → none, 3 lights kept, 892 tris unchanged); HD keeps its smoke up close;
 the new-game crash is gone.
 
-Details + verification tables: [`tools/sa-lod-generator/docs/plans/005-strip-clone-particle-fx.md`](../../tools/sa-lod-generator/docs/plans/005-strip-clone-particle-fx.md).
+Details + verification tables: [`tools/sa-lod-generator/docs/plans/005-strip-clone-particle-fx.md`](../../../tools/sa-lod-generator/docs/plans/005-strip-clone-particle-fx.md).
 
 ## Proper Fixes (MixMods)
 

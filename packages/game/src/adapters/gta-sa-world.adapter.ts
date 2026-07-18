@@ -126,6 +126,9 @@ export interface GtaSaWorldConfig {
   extraIpl?: readonly string[];
   /** The asset source (plan 050) — all models/textures/data are read from here, not fetched. */
   fs: AssetFileSystem;
+  /** **Currently INERT.** The build hook mods rode (`decoratePart`) died with the three cell builder in
+   *  074/13; the engine welds cells offline, so nothing reads this yet. Kept as the declared extension
+   *  point — passing mods here has no effect until one is re-wired. */
   mods?: readonly WorldMod[];
   /** Effective clutter density per category (0 when disabled) — keeps clutter COLLISION in sync
    *  with the rendered set. On a knob change, call {@link GtaSaWorldAdapter.invalidateColliderCache}
@@ -169,7 +172,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   private carGroups: CarGroup[] | null = null;
   private readonly colliderCache = new Map<string, ModelColliders[]>();
   private readonly config: GtaSaWorldConfig;
-  /** Composed mod build-hook (undefined when no mods) — see {@link GtaSaWorldConfig.mods}. */
   /** Catalog defs by lowercased model name — resolves procobj clutter models to their TXDs. */
   private defByName: Map<string, IdeObjectDef> | null = null;
   private defs: MapDefinitions | null = null;

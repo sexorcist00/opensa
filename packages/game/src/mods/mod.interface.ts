@@ -7,8 +7,10 @@
  * so hiding renderware types behind duplicate game-level interfaces would add indirection for no
  * generality. The engine core (`game/**` elsewhere) stays renderware-free.
  *
- * Wiring: `game.installMod(mod)` registers the per-frame `update`; the world adapter receives the
- * mods via its config. The `decoratePart` cell-build hook died with the three cell builder (074/13 C2).
+ * Wiring: **currently none.** `game.installMod(mod)` registered the per-frame `update` and the world
+ * adapter took the mods via its config; both the installer (`game.ts`) and the `decoratePart` cell-build
+ * hook died with the three renderer (074/13 C2). The interface is kept as the declared extension point —
+ * re-wiring it on the engine host is a future plan, not an oversight.
  */
 export interface WorldMod {
   name: string;

@@ -35,7 +35,7 @@ moving glint but no travelling waves / silhouette / beach run-up (waves stand in
 also flickered around pier piles (fixed partly with an `fwidth` edge-reject) and cost a full-scene DepthPass (made
 opt-in via `water.shore`). v1 stays in tree as a working baseline / `low`-tier surface; the real rework —
 **camera-following Gerstner-displaced grid, foam from the wave Jacobian (no depth buffer), baked shoreline** — is
-specced in **[docs/ideas/0.5.0/plans/01-water](../ideas/0.5.0/plans/01-water/readme.md)**. Keep-verbatim parts:
+specced in **docs/ideas/0.5.0/plans/01-water (docs/ideas/0.5.0 — the water plan folder was renumbered away)**. Keep-verbatim parts:
 `seaState()`, the sky-LUT reflection, GGX glint, underwater tint, timecyc colour, fog-chunk integration.
 
 ### What v1 shipped (kept as the fallback)
