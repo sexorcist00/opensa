@@ -22,7 +22,7 @@ chain already forks at the LOD stage (`pipeline.ts:171-185`): the `sa` target is
 The chain has exactly two kinds of asset at runtime, and **it is a property of the ASSET, not of the
 build** — both kinds coexist in the same session:
 
-- **Optimized** — converted by opensa-pack into our format (`.osm`/`.ost`), carrying every offline
+- **Optimized** — converted by opensa-pack into our format (`.osm`/`.ostex`), carrying every offline
   optimization we have: prepared buffers, resolved `txdp` chains, baked collision in engine shape,
   precomputed bounds. Loaded by reading a section. No RW parser runs.
 - **Unoptimized** — a stock or modded `.dff`/`.txd` reached through the **current** runtime flow: parse,
@@ -87,7 +87,7 @@ the per-model `.osm` serves the by-name lookups (breakables, clutter, animated o
 ```
 
 Inside the IMG, per user decision 2026-07-18: **full replacement, own extension, same basename.**
-`landstal.dff` → `landstal.osm`; `landstal.txd` → `landstal.ost`. The original is DELETED. `EditableImg`
+`landstal.dff` → `landstal.osm`; `landstal.txd` → `landstal.ostex`. The original is DELETED. `EditableImg`
 (`tools/tool-kit/src/archive/img.ts:13-26`) already has exactly this API — `delete(name)` + `set(name, data)`
 — and `writeImgFile` (`img.ts:97`) streams the rebuild without doubling peak RSS, which is how
 map-optimizer survives a ~1 GB archive (`tools/map-optimizer/src/adapters/gta-sa/build.ts:36`).
@@ -126,7 +126,7 @@ is a flat name→bytes map by design, and the resolution belongs above it, next 
    through the current parse-at-runtime flow (user decision 2026-07-18). `packages/modloader/src/index.ts:71-73`
    already resolves by bare name before falling through; this makes it a stated rule. It is also the correct
    precedence: our optimized asset is the un-modded original, so a mod replacing it must beat it.
-2. `<name>.osm` / `<name>.ost` → **optimized**, section read, no RW parser touched.
+2. `<name>.osm` / `<name>.ostex` → **optimized**, section read, no RW parser touched.
 3. `<name>.dff` / `<name>.txd` still in the archives → unoptimized. After a full convert this should be
    empty for models; it stays as the safety net and for anything a future converter skips.
 4. neither → **console warning**, once per name, silenced by a game-config flag so it cannot spam.
@@ -222,13 +222,13 @@ Optimization is per FILE, so a mod can produce a half-and-half asset: `modloader
 `.txd` while the model is still our `.osm`.
 
 **Decision (user, 2026-07-18): take the optimized side only, and warn.** A half-modded asset resolves to
-our `.osm` + our `.ost`; the lone modded file is ignored with a console warning naming it.
+our `.osm` + our `.ostex`; the lone modded file is ignored with a console warning naming it.
 
 **The consequence, accepted 2026-07-18:** a retexture-only car mod — the most common kind of car mod there
 is — does nothing but print a warning. The user weighed this and it is fine for now.
 
 Recorded so a future reader does not have to rediscover it: supporting retexture mods later means **`.osm`
-binding textures by NAME rather than baking indices into an atlas only its own `.ost` can satisfy**, so a
+binding textures by NAME rather than baking indices into an atlas only its own `.ostex` can satisfy**, so a
 runtime-parsed `.txd` can be bound instead. Cheap to design in, near-impossible to retrofit — so if that
 day comes, expect a format revision, not a patch.
 
@@ -271,7 +271,7 @@ Everything in that table survives in `--out`. Everything else in the archives is
 
 2. **The modloader hardcodes the extension list.** `packages/modloader/src/scan.ts:63-66` knows
    `.dff`/`.txd`/`.col`/`.ifp`; `index.ts:71-73` resolves by BARE name first, so a mod's `particle.txd`
-   shadows `models/particle.txd`. `.osm`/`.ost` must join that list, or mods silently stop overriding
+   shadows `models/particle.txd`. `.osm`/`.ostex` must join that list, or mods silently stop overriding
    converted assets — and a mod DFF must be able to shadow our `.osm`, which is the resolution order doing
    its job.
 3. **The vehicle DFF is consumed twice** — transferred to the worker for the model
@@ -282,7 +282,7 @@ Everything in that table survives in `--out`. Everything else in the archives is
    parse, and `parseDffCollision` at spawn becomes a struct read. This also answers "should collision live
    in the model file": for vehicles it already does (an embedded COL chunk), and the sectioned layout keeps
    that property while making it cheap to address.
-4. **`txdp` parent chains are resolved OFFLINE, and that is the model for `.ost`.** `asset-cache.ts:36-38`
+4. **`txdp` parent chains are resolved OFFLINE, and that is the model for `.ostex`.** `asset-cache.ts:36-38`
    and `:74-85` are orphaned doc comments — `getTextures`, `setTxdParents`, `ownTextures` have no
    implementation left, and `MapDefinitions.txdParents` is still built (`resolve-map.ts:60,73,106`) and read
    by **nobody at runtime**. It is not a live bug, because the consumer that matters survived on the
@@ -290,7 +290,7 @@ Everything in that table survives in `--out`. Everything else in the archives is
    `convert.ts:117`), so welded map geometry gets its inherited textures baked in.
 
    **Decision (user, 2026-07-18): fix it, both sides.**
-   - `.ost` stays **FLAT** — the converter resolves the chain at build time, so nothing we produce needs a
+   - `.ostex` stays **FLAT** — the converter resolves the chain at build time, so nothing we produce needs a
      runtime walk.
    - The **runtime walk is restored** for the fallback path. Offline flattening only covers what we
      converted; a stock or modded `.txd` reached through resolution step 3 still needs its `txdp` parent,
@@ -324,7 +324,7 @@ no code.
 via `writeImgFile`, world products under `<out>/opensa/`. Manifest still written, still read by both hosts.
 Nothing visual changes; the ritual 6-scene sweep must stay flat. This phase is reversible on its own.
 
-**Phase 2 — the `.osm`/`.ost` per-model format.** Format spec in `packages/engine-formats/` next to
+**Phase 2 — the `.osm`/`.ostex` per-model format.** Format spec in `packages/engine-formats/` next to
 `oscell.ts`, with round-trip tests. Writer reuses `buildVehicleModel` offline (it is already
 browser-and-node callable, which is why the probe CLI is thin). Vehicles first — they have the builder, the
 fixtures, and the measured spawn cost.
@@ -365,8 +365,8 @@ the pipeline path.
 
 - [x] Phase 0 — manifest field audit (2 fields die: `timecyc`, `timecyc24`)
 - [x] Phase 0 — by-name asset inventory = the archive-deletion exclusion set + 4 design constraints
-- [x] Phase 0 — extensions fixed as `.osm` (model, SECTIONED) / `.ost` (texture dict, FLAT)
-- [x] Phase 0 — resolution order settled: modloader → `.osm`/`.ost` → `.dff`/`.txd` → warn
+- [x] Phase 0 — extensions fixed as `.osm` (model, SECTIONED) / `.ostex` (texture dict, FLAT)
+- [x] Phase 0 — resolution order settled: modloader → `.osm`/`.ostex` → `.dff`/`.txd` → warn
 - [ ] Phase 1 — measure the `.col` sweep (first-collider-call ms, unreferenced-library share) before
       deciding on offline cell colliders
 - [ ] Phase 3 — restore the runtime `txdp` walk for the fallback path (`getTextures`/`setTxdParents`,
@@ -377,10 +377,15 @@ the pipeline path.
       (**IMG rebuild deferred to phase 3** — with nothing yet replacing archive entries, rebuilding would be
       churn; `cpSync` carries the archives through untouched)
 - [ ] Phase 1 — measure the `.col` sweep (see ledger)
-- [ ] Phase 2 — `.osm`/`.ost` spec + codecs in `packages/engine-formats/` with round-trip tests
-- [ ] Phase 2 — offline vehicle writer reusing `buildVehicleModel`
+- [x] Phase 2 — `.osm` container in `packages/engine-formats/src/osm.ts` + round-trip tests (9)
+- [x] Phase 2 — **no new texture format**: a model's dictionary is an existing `.ostex` beside it
+      (`.ost` would have collided with `.ostex`'s own `'OST1'` magic — the reuse was there all along)
+- [x] Phase 2 — `COLL` section codec (`osm-collision.ts`): engine-shape collision, faces already flattened
+      into indices, half-extents from the COL bounds — the whole main-thread spawn sequence, baked
+- [x] Phase 2 — offline vehicle writer (`tools/opensa-pack/src/vehicle-osm.ts`) reusing `buildVehicleModel`
+- [ ] Phase 2 — per-model `.ostex` emission (reuse `processAlphaTexture` for the mip chain)
 - [ ] Phase 3 — IMG delete-and-insert; VFS 3-step resolution + once-per-name warning + config silence flag
-- [ ] Phase 3 — local-loader ingest of `.osm`/`.ost` (`build-vfs.ts` selection)
+- [ ] Phase 3 — local-loader ingest of `.osm`/`.ostex` (`build-vfs.ts` selection)
 - [ ] Phase 4 — named cell/texture files under `<out>/opensa/`, per-ring texture laziness, one loader
 - [ ] Phase 4 — manifest shrunk to the rule; `timecyc`/`timecyc24`/`setup.timecyc` deleted
 - [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
@@ -400,6 +405,17 @@ the pipeline path.
 | convert wall-clock           | 3.3 s total (1 cell, no bakes)                                                    |
 | products written             | `opensa/{world.ospak 6.1 MB, manifest.json 98 KB, water.bin 2.5 MB, report.json}` |
 | game files after             | `data/gta.dat`, `models/gta3.img` present and untouched                           |
+
+**Phase 2 (2026-07-18)** — `buildVehicleOsm` over `game-src/non-modified`, offline build cost per model:
+
+| Model      | `.osm` | build | geometry                          | baked collision                              |
+| ---------- | ------ | ----- | --------------------------------- | -------------------------------------------- |
+| `landstal` | 274 KB | 32 ms | 5 130 v / 3 613 t / 123 submeshes | 18 spheres, 10 tris, half [1.16, 2.56, 0.82] |
+| `infernus` | 236 KB | 12 ms | 4 467 v / 3 822 t / 76 submeshes  | 20 spheres, 14 tris, half [1.20, 2.89, 0.69] |
+| `bmyri`    | 55 KB  | 4 ms  | 963 v / 1 179 t / 1 submesh       | **fallback box** (no COL in the DFF)         |
+
+`bmyri` is a PED that the vehicle builder accepted without complaint — the writer does not check the asset
+class, which is fine while callers pass a `vehicles.ide` roster but must not be relied on in phase 5.
 
 Still owed for phase 1: the `.col` sweep measurement (first-collider-call ms + unreferenced-library share) —
 it needs runtime instrumentation, not a converter run.

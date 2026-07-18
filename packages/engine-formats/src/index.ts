@@ -17,6 +17,27 @@ export {
   type OscellParticle,
 } from './oscell';
 export {
+  decodeOsm,
+  encodeOsm,
+  type Osm,
+  OSM_MAGIC,
+  OSM_SECTION_ALIGN,
+  OSM_VERSION_MAJOR,
+  OSM_VERSION_MINOR,
+  type OsmSection,
+  osmSection,
+  OsmSectionTag,
+  osmTag,
+  osmTagName,
+} from './osm';
+export {
+  decodeOsmCollision,
+  encodeOsmCollision,
+  type OsmCollision,
+  type OsmCollisionBox,
+  type OsmCollisionSphere,
+} from './osm-collision';
+export {
   buildOspak,
   OSPAK_ALIGN,
   OSPAK_VERSION,

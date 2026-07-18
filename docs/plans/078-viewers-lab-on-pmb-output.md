@@ -50,14 +50,14 @@ game dir (pmb --out)
         │
         ├── served statically (dev server, range-capable)
         │
-        └── VFS  ──►  resolution order: <name>.osm/.ost → <name>.dff/.txd → warn once
+        └── VFS  ──►  resolution order: <name>.osm/.ostex → <name>.dff/.txd → warn once
                           │
                           ├── engine host (apps/web)
                           ├── engine lab
                           └── viewers (object / vehicle / character / compare)
 ```
 
-Because the resolution order is shared, every surface sees **optimized** assets (`.osm`/`.ost`, converted)
+Because the resolution order is shared, every surface sees **optimized** assets (`.osm`/`.ostex`, converted)
 and **unoptimized** ones (a `modloader/` `.dff`/`.txd` parsed at runtime) through the same call — the
 terminology and the contract are opensa-pack 003's. Two consequences for this plan: the viewers become the
 natural place to inspect which kind an asset actually resolved to (a mod author's first question), and the
@@ -104,7 +104,7 @@ What it loses is its private data path. **Per user decision 2026-07-18 the lab l
 `dff`/`txd` through the VFS, exactly as the game and the viewers do** — there is no lab-only fixture format.
 `pak-loader.ts`, the `ped/` and `vehicle*/` fixture dirs, and the two probe CLIs that fill them
 (`tools/opensa-pack/src/ped-probe.ts`, `vehicle-probe.ts`) all retire. A ped becomes "ask the VFS for
-`male01`" — and once opensa-pack 003 phase 5 converts peds and cars, the lab picks up `.osm`/`.ost` through
+`male01`" — and once opensa-pack 003 phase 5 converts peds and cars, the lab picks up `.osm`/`.ostex` through
 the same resolution order without a line of lab code changing. That is the whole point of the contract: the
 lab cannot silently diverge from the game, because it is running the game's loader.
 
