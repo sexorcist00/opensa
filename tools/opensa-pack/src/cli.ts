@@ -16,9 +16,15 @@
  * `--wind` — overlay dirs of wind-ADAPTED DFFs (prelit alpha = sway weights), e.g.
  * `--wind "mods-src/vegetation,mods-src/mods/21. Wind Project 1.0.2"`; they shadow the game's assets.
  *
- * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / cellSize)). Writes `world.ospak` +
- * `manifest.json` + `report.json` into `--out`.
+ * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / cellSize)).
+ *
+ * OUTPUT (plan 003 phase 1): `--out` is a COPY of `--game` — the chain convention, so every stage hands the
+ * next a complete game tree. Our own products go under `<out>/opensa/` (`world.ospak`, `manifest.json`,
+ * `water.bin`, `report.json`); the game's own files are passed through untouched. Point a host at the
+ * products with `?src=<out>/opensa`.
  */
+import { argValue, fromCwd } from '@opensa/tool-kit/cli';
+import { copyGameDir, guardOut } from '@opensa/tool-kit/game-dir';
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,9 +35,7 @@ import { WaterHeightGrid } from './height-grid';
 import { bakeWater } from './water';
 
 function arg(name: string): null | string {
-  const index = process.argv.indexOf(`--${name}`);
-
-  return index >= 0 ? (process.argv[index + 1] ?? null) : null;
+  return argValue(`--${name}`) ?? null;
 }
 
 function findFiles(dir: string, extension: string): string[] {
@@ -49,15 +53,21 @@ function findFiles(dir: string, extension: string): string[] {
 }
 
 async function main(): Promise<void> {
-  const game = arg('game');
-  const out = arg('out');
+  const gameRaw = arg('game');
+  const outRaw = arg('out');
   const rectRaw = arg('rect');
-  if (!game || !out || !rectRaw) {
-    console.error('usage: opensa-pack --game <dir> --out <dir> --rect x0,y0,x1,y1 [--cell-size 250]');
+  if (!gameRaw || !outRaw || !rectRaw) {
+    console.error(
+      'usage: opensa-pack --game <dir> --out <dir> --rect x0,y0,x1,y1 [--cell-size 250] [--no-ao] ' +
+        '[--bakes [--no-sunvis]] [--bake-workers N] [--chunk-cells 6] [--wind <dir>[,<dir>…]] ' +
+        '[--stochastic <file>[,<file>…]]',
+    );
     process.exitCode = 2;
 
     return;
   }
+  const game = requireDir('game', gameRaw);
+  const out = fromCwd(outRaw);
   const rect = rectRaw.split(',').map(Number);
   if (rect.length !== 4 || rect.some(Number.isNaN)) {
     throw new Error(`bad --rect '${rectRaw}' (want x0,y0,x1,y1 in cell coords)`);
@@ -73,7 +83,9 @@ async function main(): Promise<void> {
   const windDirs = (arg('wind') ?? '')
     .split(',')
     .map((dir) => dir.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((dir) => requireDir('wind', dir));
+  guardOut(out, game, ...windDirs);
 
   const started = Date.now();
   console.log(
@@ -96,7 +108,8 @@ async function main(): Promise<void> {
   const stochasticPaths = (arg('stochastic') ?? join(dataDir, 'stochastic.txt'))
     .split(',')
     .map((path) => path.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(fromCwd);
   const stochasticNames = new Set<string>();
   for (const path of stochasticPaths) {
     for (const name of parseStochasticList(readFileSync(path, 'utf8'))) {
@@ -117,22 +130,28 @@ async function main(): Promise<void> {
     waterHeights,
   });
 
-  mkdirSync(out, { recursive: true });
+  // `--out` is a game dir (003 phase 1): mirror `--game`, then drop our products into `<out>/opensa/`.
+  const copyStarted = Date.now();
+  copyGameDir(game, out);
+  const products = join(out, 'opensa');
+  mkdirSync(products, { recursive: true });
+  console.log(`[opensa-pack] copied the game dir → ${out} (${((Date.now() - copyStarted) / 1000).toFixed(1)} s)`);
+
   // Water bake (074/06 row 12 v2, user directive — water WITHOUT the shadow bakes): shore-field
   // tessellation from water.dat, pure 2D geometry (no rays, no BVH), always on — it costs seconds.
   const waterText = fs.getText('data/water.dat');
   if (waterText !== null) {
     const water = bakeWater(waterText, (x, y) => waterHeights.heightAt(x, y));
-    writeFileSync(join(out, 'water.bin'), water.bin);
+    writeFileSync(join(products, 'water.bin'), water.bin);
     manifest.water = { ...water.manifest, file: 'water.bin' };
     console.log(
       `[opensa-pack] water: ${water.manifest.vertexCount} verts / ${water.manifest.indexCount / 3} tris ` +
         `(shore field baked, ${(water.bin.byteLength / 1048576).toFixed(1)} MB)`,
     );
   }
-  writeFileSync(join(out, 'world.ospak'), pak);
-  writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest));
-  writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2));
+  writeFileSync(join(products, 'world.ospak'), pak);
+  writeFileSync(join(products, 'manifest.json'), JSON.stringify(manifest));
+  writeFileSync(join(products, 'report.json'), JSON.stringify(report, null, 2));
 
   printReport(report, started);
 }
@@ -199,6 +218,16 @@ function printReport(report: Awaited<ReturnType<typeof convertDistrict>>['report
         `(${report.sunVis.uniqueVertices} unique), ${report.sunVis.rays} rays`,
     );
   }
+}
+
+/** A `--flag` that must name an existing directory. */
+function requireDir(flag: string, value: string): string {
+  const path = fromCwd(value);
+  if (statSync(path, { throwIfNoEntry: false })?.isDirectory() !== true) {
+    throw new Error(`--${flag} must be a directory: ${path}`);
+  }
+
+  return path;
 }
 
 main().catch((error: unknown) => {

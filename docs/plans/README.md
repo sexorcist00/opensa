@@ -10,8 +10,13 @@ The map of planning docs across the repo. **Engine plans** live here (`docs/plan
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`077` (+074 sub-plans). Newest first:
+`001`–`078` (+074 sub-plans). Newest first:
 
+- **[078 — Viewers and the lab on a pmb output](./078-viewers-lab-on-pmb-output.md)** — four surfaces get game
+  data four different ways (picker+pak, pak-only, a `localhost:3002` protocol, static fixtures). Collapse them
+  onto ONE contract: a perfect-map-builder output in `./public`, read through the VFS exactly as the game
+  reads it. Depends on [opensa-pack 003](../../tools/opensa-pack/docs/plans/003-game-shaped-output.md).
+  **PLANNED 2026-07-18.**
 - **[077 — Unit coverage back to 85–90 %](./077-unit-coverage.md)** — the 074/13 teardown deleted heavily
   unit-tested WebGL code and sank coverage 88.9 → 72.3 %. Recovered to **88.18 %** with a **device-independent
   seam**: a recording `GPUDevice` stand-in that boots the whole engine headlessly, no engine source touched.

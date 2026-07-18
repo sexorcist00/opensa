@@ -9,7 +9,8 @@
     "./mesh/simplify": "./src/mesh/simplify.ts",
     "./mesh/bvh": "./src/mesh/bvh.ts",
     "./archive/img": "./src/archive/img.ts",
-    "./cli": "./src/cli.ts"
+    "./cli": "./src/cli.ts",
+    "./game-dir": "./src/game-dir.ts"
   },
   "nx": {
     "tags": [
