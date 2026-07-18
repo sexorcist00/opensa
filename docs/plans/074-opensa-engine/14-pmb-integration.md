@@ -61,6 +61,29 @@ own engine, benchmarked**.
       plan 21 ledger). Includes: **update the LAB to consume this output like a game dir** (it currently
       has no game fs — that is the only reason `manifest.timecyc` exists), then DELETE the manifest
       timecyc field + `setup.timecyc` plumbing entirely.
+- [ ] **SCOPE: `opensa-pack` CONVERTS THE MAP, AND ONLY THE MAP — user decision 2026-07-18.**
+      Vehicles and peds keep loading raw DFF/TXD at runtime. This SUPERSEDES the "one format for
+      everything" direction taken earlier the same day (kept below as the record of what was weighed).
+
+      **The reasoning, and it is a good one: MODDABILITY.** `opensa-pack` works in tandem with
+      perfect-map-builder, and that tool chain owns the MAP — it never touches cars or peds. Keeping the
+      same boundary in the pak means a new car can be added through **modloader** as the game itself does
+      it: drop in a DFF/TXD, no reconversion, no pack rerun, no format migration. Funnelling vehicles
+      through the converter would have made every added car a build step, which is precisely the
+      extensibility the project exists to preserve.
+
+      **What that settles:**
+      - The runtime keeps its RenderWare parser + DXT decoder. That is now a DELIBERATE capability
+        (mods are read at runtime), not debt to be paid off.
+      - The BC-vs-RGBA8 split is by design too: the map is converted and ships compressed; dynamic
+        content is decoded live. Two paths, two different jobs.
+      - `buildVehicleModel` and `buildPedModel` stay RUNTIME builders — the browser twins the game and
+        the viewers share. `vehicle-probe`/`ped-probe` remain what they always were: fixture bakers for
+        the lab, not the start of a format.
+      - The viewers keep reading raw source, so they can still answer "did the converter break this, or
+        was the DFF already broken?" — for the map, where a converter actually exists.
+      - Loose live-tunable data files (timecyc, above) are unaffected: still files next to the pak.
+
 - [ ] Full-profile conversions (non-modified, anderius, carcer, gostown) + the final bench matrix.
 
 ## Measurement ledger

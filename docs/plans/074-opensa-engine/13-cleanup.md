@@ -341,7 +341,15 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
       studio), so it should be checked against the game before anyone blames the port.
 
 - [ ] **4.1d** `character-viewer` port — DFF + IFP + TXD on `ifp-sampler` (the animation rebind from 1.6
-      lands here).
+      lands here). **The engine has no browser-side skinned builder at all** — `setPedProbe` is fed only
+      by the offline `ped-probe.ts` fixture — so this port must extract ~300 lines of that CLI (HAnim bone
+      order, inverse binds, joint/weight packing, `minZ`) into a renderer-agnostic module.
+      **Shape it like `VehicleModelData` — a plain struct the game, the viewer and the offline fixture
+      baker all share.** Not because a ped format is coming: `opensa-pack` converts the MAP ONLY (user
+      decision 2026-07-18, plan [14](14-pmb-integration.md) — cars and peds stay raw DFF/TXD so modloader
+      can add them without a build step). The reason is the same one that made `buildVehicleModel` the
+      right shape: one RUNTIME builder that everything calls, instead of one path for the game and
+      another for the tools.
 - [ ] **4.1e** `compare-viewer` port — two clumps side by side.
 - [ ] **4.2** Execute the chosen option; keep `apps/viewer/src/shell.ts` if any tab survives (pure DOM
       routing, renderer-independent, survives a renderer swap unchanged).
