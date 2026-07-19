@@ -118,9 +118,11 @@ export function syntheticCell(cx: number, cy: number, cellSize: number, boxesPer
     indexCount: indices.length,
     indexData,
     lights: [],
+    names: [],
     objects: [],
     origin: [originX, 0, originZ],
     particles: [],
+    placements: [],
     vertexCount,
     vertexData,
   });

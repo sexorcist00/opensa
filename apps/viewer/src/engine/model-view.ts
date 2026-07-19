@@ -182,7 +182,7 @@ export function loadModelFromClump(
 /** AABB over the vertices the given submeshes actually index (not the whole buffer). */
 function boundsOfIndices(
   positions: Float32Array,
-  indices: Uint16Array,
+  indices: Uint16Array | Uint32Array,
   submeshes: readonly VehicleModelData['submeshes'][number][],
 ): Bounds | null {
   const min: [number, number, number] = [Infinity, Infinity, Infinity];

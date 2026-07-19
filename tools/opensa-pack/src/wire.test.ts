@@ -56,9 +56,11 @@ function sampleCell(index16: boolean): Oscell {
       ? new Uint8Array(new Uint16Array(triangles).buffer)
       : new Uint8Array(new Uint32Array(triangles).buffer),
     lights: [],
+    names: [],
     objects: [],
     origin: [0, 0, 0],
     particles: [],
+    placements: [],
     vertexCount,
     vertexData,
   };

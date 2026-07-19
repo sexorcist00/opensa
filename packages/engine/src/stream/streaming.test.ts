@@ -328,3 +328,70 @@ describe('StreamingDriver texture residency', () => {
     });
   });
 });
+
+describe('StreamingDriver manual cells (the map inspector, 074/22)', () => {
+  describe('negative cases', () => {
+    it('does not load a cell outside the pinned set even when it sits under the focus', () => {
+      const h = harness(['3,3,lod', '4,3,lod'], { lodRadius: 2000 });
+      h.driver.setManualCells([[4, 3]], true);
+      h.driver.update([875, 0, -875]); // standing inside cell 3,3
+
+      expect(h.requested).toEqual(['4,3,lod']);
+    });
+
+    it('does not offer a level the pinned cell lacks', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 2000 });
+      h.driver.setManualCells([[3, 3]]); // asks for HD; the pak has LOD only
+      h.driver.update([0, 0, 0]);
+
+      expect(h.requested).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('loads exactly the pinned cell, ignoring the rings entirely', () => {
+      // Rect closest point is 1060.7 away — outside this ring, so only the pin can bring it in.
+      const h = harness(['3,3,lod'], { lodRadius: 1000 });
+      h.driver.setManualCells([[3, 3]], true);
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.driver.update([0, 0, 0]);
+
+      expect(h.loaded).toEqual(['3,3,lod']);
+    });
+
+    it('evicts a deselected cell even while it sits well inside the ring', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 2000 });
+      h.driver.setManualCells([[3, 3]], true);
+      h.driver.update([875, 0, -875]);
+      h.deliver('3,3,lod');
+      h.driver.update([875, 0, -875]);
+
+      h.driver.setManualCells([], true);
+      h.driver.update([875, 0, -875]);
+
+      expect(h.unloaded).toEqual(['3,3,lod']);
+    });
+
+    it('returns to focus-driven streaming when the pin is cleared', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 2000 });
+      h.driver.setManualCells([], true);
+      h.driver.update([875, 0, -875]);
+      expect(h.requested).toEqual([]);
+
+      h.driver.setManualCells(null);
+      h.driver.update([875, 0, -875]);
+
+      expect(h.requested).toEqual(['3,3,lod']);
+    });
+
+    it('lists every cell the pak offers, once per grid coord', () => {
+      const h = harness(['3,3,hd', '3,3,lod', '4,3,lod']);
+
+      expect(h.driver.listCells().sort()).toEqual([
+        [3, 3],
+        [4, 3],
+      ]);
+    });
+  });
+});

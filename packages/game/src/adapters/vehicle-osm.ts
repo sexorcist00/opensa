@@ -87,8 +87,10 @@ export function readModelOsm(name: string, osm: Uint8Array): OptimizedModel {
     fixture,
     model: {
       colors: at(layout.colors, vertexCount * STRIDE.colors),
+      // A fixture written before the width existed is uint16 — that was the only shape the builder emitted.
+      index16: fixture.index16 ?? true,
       indexCount: fixture.indexCount,
-      indices: at(layout.indices, fixture.indexCount * STRIDE.index),
+      indices: at(layout.indices, fixture.indexCount * ((fixture.index16 ?? true) ? STRIDE.index : 4)),
       meta: at(layout.meta, vertexCount * STRIDE.meta),
       // A fixture from before the night set simply has no darker twin: the day colours stand in, which
       // makes the vertex stage's day → night mix a no-op rather than a black model.

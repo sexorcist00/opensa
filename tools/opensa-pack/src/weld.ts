@@ -6,7 +6,14 @@
  * IDE-anim defs weld STATICALLY at bind pose (field fix: skipping them left building-sized holes —
  * burger01_LAw is a 22×35 m diner, not a sign; their IFP animation is a later dynamic-entity feature).
  */
-import type { Oscell, OscellBreakable, OscellGroup, OscellLight, OscellParticle } from '@opensa/engine-formats';
+import type {
+  Oscell,
+  OscellBreakable,
+  OscellGroup,
+  OscellLight,
+  OscellParticle,
+  OscellPlacement,
+} from '@opensa/engine-formats';
 import type { AssetFileSystem, IplInstance, MapDefinitions, RWUvAnimation } from '@opensa/renderware';
 
 import { encodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
@@ -72,7 +79,25 @@ export interface WeldedCell {
   origin: readonly [number, number, number];
   /** 2dfx PARTICLE emitters (row 13, B6): factory smoke, fires, fountains — HD cells only, like coronas. */
   particles: OscellParticle[];
+  /** EVERY placement's index range + identity (minor 6) — the debugger's mapper, both levels. */
+  placements: WeldPlacementRange[];
   stats: WeldStats;
+}
+
+/**
+ * One placed object's triangles inside ONE bucket, before the cell layout turns it into an absolute range
+ * (the minor-6 mapper). Same shape as {@link WeldBreakableRange} plus the identity the debugger needs: the
+ * model/TXD names and the local-space AABB of exactly the vertices this range covers.
+ */
+export interface WeldPlacementRange {
+  bucket: WeldBucket;
+  count: number;
+  id: number;
+  max: [number, number, number];
+  min: [number, number, number];
+  model: string;
+  start: number;
+  txd: string;
 }
 
 export interface WeldStats {
@@ -86,6 +111,8 @@ export interface WeldStats {
   indices: number;
   /** 2dfx PARTICLE emitter anchors welded into this cell (B6). */
   particles: number;
+  /** Placement-mapper rows written (minor 6) — the debugger's per-object identity. */
+  placements: number;
   /** 2dfx roadsign entries welded as beam-class text (plan 076). */
   roadsigns: number;
   skippedTimed: number;
@@ -176,6 +203,7 @@ export function weldCellParts(
     groups: 0,
     indices: 0,
     particles: 0,
+    placements: 0,
     roadsigns: 0,
     skippedTimed: 0,
     timedObjects: 0,
@@ -186,6 +214,7 @@ export function weldCellParts(
   const lights: OscellLight[] = [];
   const particles: OscellParticle[] = [];
   const breakables: WeldBreakableRange[] = [];
+  const placements: WeldPlacementRange[] = [];
 
   const groups = [...cellGroups(defs, cell, lod).values()].sort((a, b) => (a.def.modelName < b.def.modelName ? -1 : 1));
   for (const group of groups) {
@@ -217,6 +246,9 @@ export function weldCellParts(
       animated,
       // UV-scroll is HD-only: a LOD copy of the LV skull sign would scroll a second ghost behind it.
       lod ? undefined : uvAnimRegistry,
+      // The mapper rides BOTH levels: the inspector can pin a section as LOD ("Show LODs") and must still
+      // answer what was clicked there.
+      placements,
     );
     // 2dfx corona anchors (074/06 row 13) — HD level only (LOD duplicates would double every lamp).
     if (!lod) {
@@ -253,6 +285,7 @@ export function weldCellParts(
     lod,
     origin: originEngine,
     particles,
+    placements,
     stats,
   };
 }
@@ -377,6 +410,8 @@ function assemble(
     hasSway: boolean;
     lights: OscellLight[];
     particles: OscellParticle[];
+    /** Bucket-relative placement ranges (minor 6) — resolved and merged by the layout below. */
+    placements?: WeldPlacementRange[];
   },
   stats: WeldStats,
 ): Uint8Array {
@@ -444,6 +479,8 @@ function assemble(
       keyHash: range.keyHash,
     }));
   stats.breakables = breakables.length;
+  const mapper = buildPlacementTable(channels.placements ?? [], bucketIndexBase);
+  stats.placements = mapper.placements.length;
   const center: [number, number, number] = [
     (cellMin[0] + cellMax[0]) / 2,
     (cellMin[1] + cellMax[1]) / 2,
@@ -468,14 +505,35 @@ function assemble(
     indexCount,
     indexData: new Uint8Array(indexArray.buffer),
     lights: channels.lights,
+    names: mapper.names,
     objects,
     origin,
     particles: channels.particles,
+    placements: mapper.placements,
     vertexCount,
     vertexData,
   };
 
   return encodeOscell(cell);
+}
+
+/** Local-space AABB of the weld rows in `[startRow, endRow)` — the first three floats of each row. */
+function boundsOfRows(
+  vertices: readonly number[],
+  startRow: number,
+  endRow: number,
+): { max: [number, number, number]; min: [number, number, number] } {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  for (let row = startRow; row < endRow; row += 1) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      const value = vertices[row * WELD_ROW + axis];
+      min[axis] = Math.min(min[axis], value);
+      max[axis] = Math.max(max[axis], value);
+    }
+  }
+
+  return { max, min };
 }
 
 function bucketFor(
@@ -545,6 +603,65 @@ function buildObjectTable(ordered: WeldBucket[]): Oscell['objects'] {
   }
 
   return objects;
+}
+
+/**
+ * Resolve the mapper's bucket-relative ranges to absolute index offsets and intern the names (minor 6).
+ *
+ * A model is welded material-by-material with the INSTANCE loop innermost, so one placement contributes a
+ * row per (part × bucket) — a five-material building placed 40 times would be 200 rows. Rows of the same
+ * placement that ended up ADJACENT in the final index buffer are merged, which collapses the common case
+ * (one part, many triangles) without losing the ability to hide an object split across buckets.
+ */
+function buildPlacementTable(
+  ranges: readonly WeldPlacementRange[],
+  bucketIndexBase: Map<WeldBucket, number>,
+): { names: string[]; placements: OscellPlacement[] } {
+  const names: string[] = [];
+  const nameRefs = new Map<string, number>();
+  const intern = (name: string): number => {
+    const existing = nameRefs.get(name);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const ref = names.length;
+    names.push(name);
+    nameRefs.set(name, ref);
+
+    return ref;
+  };
+  const rows = ranges
+    .filter((range) => range.count > 0)
+    .map((range) => ({
+      bounds: [...range.min, ...range.max],
+      id: range.id,
+      indexCount: range.count,
+      indexOffset: (bucketIndexBase.get(range.bucket) ?? 0) + range.start,
+      nameRef: intern(range.model.toLowerCase()),
+      txdRef: intern(range.txd.toLowerCase()),
+    }))
+    .sort((a, b) => a.indexOffset - b.indexOffset);
+
+  const placements: OscellPlacement[] = [];
+  for (const row of rows) {
+    const previous = placements[placements.length - 1];
+    if (previous && previous.id === row.id && previous.indexOffset + previous.indexCount === row.indexOffset) {
+      previous.indexCount += row.indexCount;
+      previous.bounds = [
+        Math.min(previous.bounds[0], row.bounds[0]),
+        Math.min(previous.bounds[1], row.bounds[1]),
+        Math.min(previous.bounds[2], row.bounds[2]),
+        Math.max(previous.bounds[3], row.bounds[3]),
+        Math.max(previous.bounds[4], row.bounds[4]),
+        Math.max(previous.bounds[5], row.bounds[5]),
+      ];
+      continue;
+    }
+    placements.push(row);
+  }
+
+  // Names are only referenced by the table; an empty table must not carry a pool (the reader skips it).
+  return placements.length > 0 ? { names, placements } : { names: [], placements: [] };
 }
 
 /** Part → `.oscell` pipelineClass: beam (3) wins; else the texture's alpha class decides. */
@@ -683,6 +800,38 @@ function quatToMat3(x: number, y: number, z: number, w: number): number[] {
 }
 
 /**
+ * Record what the just-appended index range BELONGS to: the breakable table when the prop is smashable, and
+ * the minor-6 mapper always. Both are one row per (part × instance × bucket); the mapper's AABB covers
+ * exactly the vertices this append added, because a box around the whole model would swallow its neighbours
+ * on a pick.
+ */
+function recordRanges(
+  def: { modelName: string; txdName: string },
+  instance: IplInstance,
+  bucket: WeldBucket,
+  start: number,
+  vertexStart: number,
+  breakables: undefined | WeldBreakableRange[],
+  placements: undefined | WeldPlacementRange[],
+): void {
+  const count = bucket.indices.length - start;
+  if (count === 0) {
+    return;
+  }
+  const id = breakableKeyHash(breakableInstanceKey(def.modelName, instance.position));
+  breakables?.push({ bucket, count, keyHash: id, start });
+  placements?.push({
+    bucket,
+    count,
+    id,
+    model: def.modelName,
+    start,
+    txd: def.txdName,
+    ...boundsOfRows(bucket.vertices, vertexStart, bucket.vertices.length / WELD_ROW),
+  });
+}
+
+/**
  * UV-scroll slot for a material (B7·c): the first UVAnimDict name it references that the clump actually carries,
  * registered GLOBALLY by name (SA dict names are global identifiers, so every reference shares one slot). Null
  * when there is no plugin, no registry (occluder weld), or the named entry is missing / empty — render static
@@ -767,6 +916,9 @@ function weldGroup(
   animated?: null | ReadonlySet<number>,
   /** UV-scroll registry (B7·c): a material referencing a UVAnimDict entry leaves the merged bundle. */
   uvAnimRegistry?: UvAnimRegistry,
+  /** The minor-6 mapper: EVERY placement appends its range + identity here (last param on purpose — the
+   *  call site is positional, and inserting mid-list would silently rotate the optional arguments). */
+  placements?: WeldPlacementRange[],
 ): void {
   const clump = getClump(fs, def.modelName);
   const atomics = prepareClumpAtomics(clump);
@@ -812,15 +964,9 @@ function weldGroup(
       const layerValue = resolved.layer | (resolved.stochastic ? 0x8000 : 0);
       for (const instance of instances) {
         const start = bucket.indices.length;
+        const vertexStart = bucket.vertices.length / WELD_ROW;
         appendInstance(bucket, atomic, part.index, instance, layerValue, originEngine, swayKind, frame);
-        if (breakable) {
-          breakables.push({
-            bucket,
-            count: bucket.indices.length - start,
-            keyHash: breakableKeyHash(breakableInstanceKey(def.modelName, instance.position)),
-            start,
-          });
-        }
+        recordRanges(def, instance, bucket, start, vertexStart, breakable ? breakables : undefined, placements);
         flags.hasNight ||= atomic.nightColor !== null;
         flags.hasSway ||= swayKind !== null;
       }

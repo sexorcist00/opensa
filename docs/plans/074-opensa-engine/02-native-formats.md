@@ -37,6 +37,14 @@ Group bounds allow sub-cell culling later without a format change.
 **ObjectRecord**: `kind u8 (timed|breakable|animated|roadsign) | params (on/off hours, model ref, anim ref) |
 own group range | transform f32x12`. These render OUTSIDE the cell bundle.
 
+**PlacementRecord** (minor 6, the debugger's MAPPER — 40 B): `id u32 | nameRef u16 | txdRef u16 |
+indexOffset u32 | indexCount u32 | boundsAabb f32x6`, followed by the cell's name pool. Merging is the whole
+point of a group, and it erases which triangles came from which placed object; this writes that identity back
+down so the F2 Map screen can pick, name and hide one. `id` is the SAME FNV-1a placement hash the breakable
+table and the physics colliders carry. Rows of one object that ended up adjacent in the final index buffer are
+merged offline. **Runtime-optional by design:** the engine parses it (and retains index bytes) only under
+`CellStore.debugPicking`, because a full map's mapper is tens of MB against a 21 MB heap. See 22 phase 8.
+
 ## `.ostex` — texture ARRAY container
 
 One file = one `texture2d_array` (all layers same W×H×format — the bucketing unit):

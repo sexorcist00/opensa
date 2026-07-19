@@ -13,6 +13,7 @@ import { getIfp } from '@opensa/renderware/archive/asset-cache';
 import type { ModelBundles } from './model-bundle';
 
 import { buildPedOsm } from './ped-osm';
+import { createProgress } from './progress';
 
 /** The idle clip a standing ped holds — `minZ` is measured in this pose. */
 const REST_CLIP = 'idle_stance';
@@ -52,7 +53,10 @@ export function packPeds(fs: AssetFileSystem, bundles: ModelBundles, log: (messa
   let bytes = 0;
   let multiArray = 0;
 
-  for (const def of parsePedDefs(text).values()) {
+  const pedDefs = [...parsePedDefs(text).values()];
+  const progress = createProgress('peds', pedDefs.length, log);
+  for (const def of pedDefs) {
+    progress.tick();
     const model = def.model.toLowerCase();
     if (converted.has(model)) {
       continue;

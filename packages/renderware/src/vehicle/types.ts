@@ -68,6 +68,9 @@ export interface VehicleDummy {
 export interface VehicleFixture {
   doors: VehicleDoor[];
   dummies: VehicleDummy[];
+  /** False when the index payload is uint32 — a model past 65 536 vertices. Absent on fixtures written
+   *  before the width existed, when uint16 was the only shape the builder emitted. */
+  index16?: boolean;
   indexCount: number;
   layout: {
     colors: number;
@@ -96,7 +99,11 @@ export interface VehicleModelData {
   doors: readonly VehicleDoor[];
   /** Every non-geometry frame, verbatim (headlights/taillights/exhaust/seats/…). */
   dummies: readonly VehicleDummy[];
-  indices: Uint16Array;
+  /**
+   * Triangle indices, uint16 while the model fits and uint32 past 65 536 vertices (hi-poly mod cars do —
+   * the field pair was 86 511 and 82 991). Consumers must bind by `BYTES_PER_ELEMENT`, never assume u16.
+   */
+  indices: Uint16Array | Uint32Array;
   /** Per-vertex slots: x = texture layer, y = lamps-on twin layer (0 = none), z = {@link PaintSlot},
    *  w = {@link LampTag} (low nibble) | {@link MaterialClass} << 4 (high nibble). */
   meta: Uint8Array;

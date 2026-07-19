@@ -188,6 +188,9 @@ export function packVehicleFixture(
     fixture: {
       doors: [...built.doors],
       dummies: [...built.dummies],
+      // The builder narrows the index array to the model (uint32 past 65 536 verts), so the width has to
+      // travel with the fixture — the reader cannot infer it from a byte blob.
+      index16: built.indices.BYTES_PER_ELEMENT === 2,
       indexCount: built.indices.length,
       layout,
       name,

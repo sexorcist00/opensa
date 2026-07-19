@@ -306,19 +306,49 @@ function rewriteOptimizedArchives(
         rewrite.unplaced.slice(0, 8).join(', '),
     );
   }
+  reportFailures(packed, log);
+  log(`${bundles.size()} models bundled; archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+
+  return { ...packed, rewrite };
+}
+
+/** How many model names one failure class prints before it says "+N more" — `report.json` always has all. */
+const MAX_LISTED_FAILURES = 20;
+
+/**
+ * Name what did not convert, grouped by failure CLASS. The counts in each stage's summary say how MANY
+ * failed but never which, so nothing was debuggable from the console; the raw per-model dump this replaces
+ * bypassed the injected `log` and buried the signal (41 map objects failing for ONE reason read as 41
+ * unrelated problems). Every failure is still in `report.json` in full — this is the index into it.
+ */
+function reportFailures(packed: PackedModels, log: (message: string) => void): void {
+  const classes = new Map<string, { models: string[]; title: string }>();
   for (const [label, failures] of [
     ['vehicle', packed.vehicles.failed],
     ['clutter', packed.clutter.failed],
     ['ped', packed.peds.failed],
     ['anim object', packed.animObjects.failed],
     ['prop', packed.props.failed],
+    ['breakable', packed.breakables.failed],
     ['map object', packed.mapObjects.failed],
   ] as const) {
     for (const failure of failures) {
-      console.warn(`[opensa-pack] ⚠ ${label} '${failure.model}' not converted: ${failure.error}`);
+      // Drop the per-model detail (the name, the vertex count) so one cause collapses into one line.
+      const reason = failure.error.split(failure.model).join('<model>').replace(/\d+/g, 'N');
+      const key = `${label} ${reason}`;
+      const bucket = classes.get(key) ?? { models: [], title: `${label} — ${reason}` };
+      bucket.models.push(failure.model);
+      classes.set(key, bucket);
     }
   }
-  log(`${bundles.size()} models bundled; archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
-
-  return { ...packed, rewrite };
+  if (classes.size === 0) {
+    return;
+  }
+  const total = [...classes.values()].reduce((count, bucket) => count + bucket.models.length, 0);
+  log(`⚠ ${total} models did not convert, in ${classes.size} failure class(es) — full list in report.json:`);
+  for (const { models, title } of classes.values()) {
+    const shown = models.slice(0, MAX_LISTED_FAILURES);
+    const rest = models.length - shown.length;
+    log(`  ⚠ ${title} (${models.length}): ${shown.join(', ')}${rest > 0 ? `, +${rest} more` : ''}`);
+  }
 }

@@ -571,3 +571,67 @@ describe('frameWorldTransform', () => {
     });
   });
 });
+
+describe('weldCell placement mapper (minor 6)', () => {
+  describe('negative cases', () => {
+    it('writes no name pool when the cell welded nothing', () => {
+      const empty: GridCell = { cx: 9, cy: -7, hd: [], lod: [] };
+
+      const welded = weldCell(
+        fixtureFs(),
+        fixtureDefs(),
+        empty,
+        false,
+        new TexturePlanner(fixtureFs(), new Map()),
+        [0, 0, 0],
+      );
+
+      expect(welded).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names every placement and points its ranges at real triangles', () => {
+      const fs = fixtureFs();
+      const welded = weldCell(fs, fixtureDefs(), fixtureCell(3), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      const cell = decodeOscell(welded!.bytes);
+
+      expect(welded!.stats.placements).toBe(cell.placements.length);
+      expect(cell.placements.length).toBeGreaterThanOrEqual(3); // three instances, at least one row each
+      for (const placement of cell.placements) {
+        expect(cell.names[placement.nameRef]).toBe('trafficlight1');
+        expect(cell.names[placement.txdRef]).toBe('dyntraffic');
+        expect(placement.indexCount).toBeGreaterThan(0);
+        expect(placement.indexOffset + placement.indexCount).toBeLessThanOrEqual(cell.indexCount);
+      }
+    });
+
+    it('gives each instance its own id and its own box, at the position it was placed', () => {
+      const fs = fixtureFs();
+      const welded = weldCell(fs, fixtureDefs(), fixtureCell(3), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      const cell = decodeOscell(welded!.bytes);
+      const ids = new Set(cell.placements.map((placement) => placement.id));
+
+      expect(ids.size).toBe(3);
+      // The three lights stand 10 u apart on GTA +x, which is engine +x — so their boxes must too.
+      const minX = [...ids]
+        .map((id) => Math.min(...cell.placements.filter((p) => p.id === id).map((p) => p.bounds[0])))
+        .sort((a, b) => a - b);
+      expect(minX[1] - minX[0]).toBeCloseTo(10, 1);
+      expect(minX[2] - minX[1]).toBeCloseTo(10, 1);
+    });
+
+    it('covers every triangle in the cell exactly once across the mapper', () => {
+      const fs = fixtureFs();
+      const welded = weldCell(fs, fixtureDefs(), fixtureCell(2), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      const cell = decodeOscell(welded!.bytes);
+      const covered = cell.placements.reduce((total, placement) => total + placement.indexCount, 0);
+
+      // A gap would be an unpickable object; an overlap would mean two objects claim the same triangles.
+      expect(covered).toBe(cell.indexCount);
+    });
+  });
+});

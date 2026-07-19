@@ -126,10 +126,10 @@ export function buildVehicleModel(
     colors: new Uint8Array(scratch.colors),
     doors,
     dummies: collectDummies(clump),
-    // The index buffer is uint16 (the engine binds it as one), so a model past 65 536 vertices would WRAP
-    // and draw a scrambled mesh. Say so instead: the converter can skip such a model, and nothing in SA's
-    // map comes near the ceiling.
-    indices: new Uint16Array(assertIndexable(scratch.positions.length / 3, scratch.indices)),
+    // Index width follows the model: uint16 while it fits, uint32 past the ceiling. Stock SA never comes
+    // near it, but hi-poly mod cars do (the field pair was 86 511 and 82 991 verts), and this used to THROW
+    // — which took the whole vehicle system down with it, because the throw landed in the fixed step.
+    indices: indicesFor(scratch.positions.length / 3, scratch.indices),
     meta: new Uint8Array(scratch.meta),
     night: new Uint8Array(scratch.night),
     normals: new Float32Array(scratch.normals),
@@ -367,15 +367,6 @@ function appendGeometry(
   });
 }
 
-/** Guard the uint16 index ceiling — see the call site. Returns the indices so it reads as a pass-through. */
-function assertIndexable(vertexCount: number, indices: number[]): number[] {
-  if (vertexCount > 65536) {
-    throw new Error(`model has ${vertexCount} vertices, past the uint16 index ceiling`);
-  }
-
-  return indices;
-}
-
 /** SA scales the axles separately (vehicles.ide gives [front, rear]); the in-engine boost rides on top. */
 function axleScale(wheelScale: readonly [number, number], front: boolean): number {
   return (front ? wheelScale[0] : wheelScale[1]) * WHEEL_SCALE_BOOST;
@@ -468,6 +459,11 @@ function hiddenExtraFrames(clump: RWClump, rng: () => number): Set<number> {
   const chosen = extras[Math.min(extras.length - 1, Math.floor(rng() * extras.length))];
 
   return new Set(extras.filter((frameIndex) => frameIndex !== chosen));
+}
+
+/** Narrowest index array the vertex count allows — see the call site. */
+function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint32Array {
+  return vertexCount > 65536 ? new Uint32Array(indices) : new Uint16Array(indices);
 }
 
 /** The shared wheel atomic, instanced at every `wheel_*_dummy` (right side spun 180° — mirroring would

@@ -18,6 +18,7 @@ import { parseObjectDat } from '@opensa/renderware/parsers/text/object-dat.parse
 import type { ModelBundles } from './model-bundle';
 
 import { buildModelOsm } from './model-osm';
+import { createProgress } from './progress';
 
 /** The host's own floor on the fallback box: too thin and the solver jitters (`engine-props.ts`). */
 const MIN_HALF_EXTENT = 0.12;
@@ -54,7 +55,10 @@ export function packProps(
   let walked = 0;
   let kept = 0;
 
-  for (const [name, entry] of parseObjectDat(text)) {
+  const propEntries = [...parseObjectDat(text)];
+  const progress = createProgress('props', propEntries.length, log);
+  for (const [name, entry] of propEntries) {
+    progress.tick();
     const model = name.toLowerCase();
     if (entry.uprootLimit <= 0 || converted.has(model)) {
       continue;

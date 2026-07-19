@@ -30,6 +30,7 @@ function cell(buckets: WeldBucket[], lod = false): WeldedCell {
     lod,
     origin: [0, 0, 0],
     particles: [],
+    placements: [],
     stats: {
       animatedObjects: 0,
       animatedStatic: 0,
@@ -37,6 +38,7 @@ function cell(buckets: WeldBucket[], lod = false): WeldedCell {
       groups: 0,
       indices: 0,
       particles: 0,
+      placements: 0,
       roadsigns: 0,
       skippedTimed: 0,
       timedObjects: 0,

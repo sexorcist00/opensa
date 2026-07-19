@@ -12,7 +12,7 @@ import {
 describe('menuFor', () => {
   describe('negative cases', () => {
     it('drops the Map screen when the host cannot inspect the map', () => {
-      const screens = menuFor(ENGINE_DEBUG_CAPABILITIES, false).map((item) => item.screen);
+      const screens = menuFor({ ...ENGINE_DEBUG_CAPABILITIES, mapScreen: false }, false).map((item) => item.screen);
 
       expect(screens).not.toContain('map');
     });
@@ -47,7 +47,7 @@ describe('menuFor', () => {
       ]);
     });
 
-    it('keeps the renderer-agnostic screens for the engine host', () => {
+    it('keeps the renderer-agnostic screens for the engine host, Map included (restored 074/22 phase 7)', () => {
       const screens = menuFor(ENGINE_DEBUG_CAPABILITIES, false).map((item) => item.screen);
 
       expect(screens).toEqual([
@@ -61,6 +61,7 @@ describe('menuFor', () => {
         'procobj',
         'weather',
         'position',
+        'map',
       ]);
     });
   });

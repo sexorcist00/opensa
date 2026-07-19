@@ -66,6 +66,8 @@ export interface EngineDebugActionsDeps {
   spawn: Vec3;
   /** Spawn a car of this model in front of the player (awaits the worker model build). */
   spawnVehicle: (model: string) => Promise<void>;
+  /** Lift the map-viewer camera straight above the player and aim it down — the inspector's "reset view". */
+  topDownView: () => void;
   /** Spawnable model names from `vehicles.ide`. */
   vehicleModels: () => readonly string[];
   /** The weather id currently blending in. */
@@ -195,7 +197,7 @@ export function createEngineDebugActions(deps: EngineDebugActionsDeps): DebugAct
     teleportToGanton: (): void => deps.placePlayer([...deps.spawn], true),
     toneMapping: () => graphics.toneMapping,
     toneMappingMode: () => graphics.toneMappingMode,
-    topDownView: (): void => undefined, // map viewer is capability-gated off (needs the engine ray query)
+    topDownView: deps.topDownView,
     vehicleModels: deps.vehicleModels,
     vehicleReflection: () => graphics.vehicleReflection,
     water: () => graphics.water,

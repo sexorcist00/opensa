@@ -32,6 +32,7 @@ import { type ReactElement, useCallback, useEffect, useState } from 'react';
 
 import type { Teleport } from '../../game-config';
 import type { DebugCapabilities, Screen } from './debug-capabilities';
+import type { MapGame } from './map-inspector';
 
 import {
   ALL_DEBUG_CAPABILITIES,
@@ -41,6 +42,7 @@ import {
   worldLightControlsFor,
 } from './debug-capabilities';
 import { styles } from './debug-styles';
+import { MapInspector } from './map-inspector';
 import { DebugToggle, PerfPanel, PipelineToggle, SkyModelToggle, ToneMappingModeSelector } from './perf-panel';
 
 /** Quick time-of-day presets for the debugger (label → minutes since midnight). */
@@ -253,22 +255,27 @@ export function DebugOverlay({
   actions,
   capabilities = ALL_DEBUG_CAPABILITIES,
   game,
+  mapGame,
   teleports,
 }: {
   actions: DebugActions;
-  /** Which controls this host can honour; defaults to everything (the three-WebGL host). */
+  /** Which controls this host can honour; defaults to everything. */
   capabilities?: DebugCapabilities;
   game: DebugGame;
+  /** The Map screen's wider host surface — omitted by a host that cannot drive the map viewer. */
+  mapGame?: MapGame;
   teleports: Teleport[];
 }): null | ReactElement {
   const menu = menuFor(capabilities, __DEBUGGER_HIDE__);
   const [visible, setVisible] = useState(false);
   const [screen, setScreen] = useState<Screen>('root');
-  const [vehicleFilter, setVehicleFilter] = useState('');
   const [flying, setFlying] = useState(() => actions.isFlying());
   const [showCoords, setShowCoords] = useState(false);
   const [coords, setCoords] = useState<Vec3>([0, 0, 0]);
   const [city, setCity] = useState<City>(() => actions.city());
+  const [mapActive, setMapActive] = useState(false);
+  const [normals, setNormals] = useState(false);
+  const [faces, setFaces] = useState(false);
   const [time, setTime] = useState(() => actions.gameTime());
   const [godrays, setGodrays] = useState(() => actions.godrays());
   const [godraysSize, setGodraysSize] = useState(() => actions.godraysSize());
@@ -300,6 +307,9 @@ export function DebugOverlay({
     (next: Screen): void => {
       setScreen(next);
       setShowCoords(false);
+      setMapActive(false); // navigating away leaves the map viewer (the inspector's unmount cleans up)
+      setNormals(false);
+      setFaces(false);
       actions.setShowNormals(false); // leaving the screen / closing always drops the debug overrides
       actions.setShowFaces(false);
     },
@@ -416,33 +426,7 @@ export function DebugOverlay({
             </div>
           )}
 
-          {screen === 'vehicles' && (
-            <div style={styles.group}>
-              <input
-                onChange={(e) => setVehicleFilter(e.target.value)}
-                placeholder="Filter…"
-                style={styles.filterInput}
-                type="text"
-                value={vehicleFilter}
-              />
-              {actions
-                .vehicleModels()
-                .filter((model) => model.includes(vehicleFilter.trim().toLowerCase()))
-                .map((model) => (
-                  <button
-                    key={model}
-                    onClick={() => void actions.spawnVehicle(model)}
-                    style={styles.actionButton}
-                    type="button"
-                  >
-                    {model.charAt(0).toUpperCase() + model.slice(1)} Spawn
-                  </button>
-                ))}
-              <button onClick={() => actions.flipVehicle()} style={styles.actionButton} type="button">
-                Flip vehicle
-              </button>
-            </div>
-          )}
+          {screen === 'vehicles' && <VehicleScreen actions={actions} />}
 
           {screen === 'position' && (
             <div style={styles.group}>
@@ -1290,9 +1274,196 @@ export function DebugOverlay({
               ))}
             </div>
           )}
+
+          {screen === 'map' && capabilities.mapScreen && mapGame && (
+            <MapScreen
+              actions={actions}
+              faces={faces}
+              game={mapGame}
+              mapActive={mapActive}
+              meshOverrides={capabilities.meshOverrides}
+              normals={normals}
+              setFaces={setFaces}
+              setMapActive={setMapActive}
+              setNormals={setNormals}
+            />
+          )}
         </>
       )}
     </div>
+  );
+}
+
+/** The Map debug screen: normals override + the map viewer (extracted to keep the panel's render simple). */
+function MapScreen({
+  actions,
+  faces,
+  game,
+  mapActive,
+  meshOverrides,
+  normals,
+  setFaces,
+  setMapActive,
+  setNormals,
+}: {
+  actions: DebugActions;
+  faces: boolean;
+  game: MapGame;
+  mapActive: boolean;
+  meshOverrides: boolean;
+  normals: boolean;
+  setFaces: (value: boolean) => void;
+  setMapActive: (update: (previous: boolean) => boolean) => void;
+  setNormals: (value: boolean) => void;
+}): ReactElement {
+  return (
+    <div style={styles.group}>
+      <button onClick={() => setMapActive((previous) => !previous)} style={styles.actionButton} type="button">
+        {mapActive ? 'Deactivate Map Viewer' : 'Activate Map Viewer'}
+      </button>
+      {meshOverrides ? (
+        <>
+          <button
+            onClick={() => {
+              const next = !normals;
+              setNormals(next);
+              setFaces(false); // shares the override slot with Show Faces
+              actions.setShowNormals(next);
+            }}
+            style={styles.actionButton}
+            type="button"
+          >
+            {normals ? 'Hide Normals' : 'Show Normals'}
+          </button>
+          <button
+            onClick={() => {
+              const next = !faces;
+              setFaces(next);
+              setNormals(false); // shares the override slot with Show Normals
+              actions.setShowFaces(next);
+            }}
+            style={styles.actionButton}
+            type="button"
+          >
+            {faces ? 'Hide Faces' : 'Show Faces'}
+          </button>
+        </>
+      ) : null}
+      {!mapActive && <DrawDistanceControls actions={actions} />}
+      {mapActive && (
+        <button onClick={() => actions.topDownView()} style={styles.actionButton} type="button">
+          Top (reset view)
+        </button>
+      )}
+      {mapActive && <MapInspector game={game} />}
+    </div>
+  );
+}
+
+/** The Vehicles screen: filter + one spawn button per model, and the spawn ERROR the button used to eat. */
+function VehicleScreen({ actions }: { actions: DebugActions }): ReactElement {
+  const [filter, setFilter] = useState('');
+  const [error, setError] = useState<null | string>(null);
+
+  return (
+    <div style={styles.group}>
+      <input
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Filter…"
+        style={styles.filterInput}
+        type="text"
+        value={filter}
+      />
+      {actions
+        .vehicleModels()
+        .filter((model) => model.includes(filter.trim().toLowerCase()))
+        .map((model) => (
+          <button
+            key={model}
+            onClick={() => {
+              // Never `void` this promise: a spawn failure (a missing `.osm` section, no vehicles.ide row, a
+              // model the pack could not convert) used to vanish into an unhandled rejection, and the button
+              // simply did nothing. This panel is the only place the user can see why.
+              setError(null);
+              actions.spawnVehicle(model).catch((cause: unknown) => {
+                setError(`${model}: ${cause instanceof Error ? cause.message : String(cause)}`);
+              });
+            }}
+            style={styles.actionButton}
+            type="button"
+          >
+            {model.charAt(0).toUpperCase() + model.slice(1)} Spawn
+          </button>
+        ))}
+      {error === null ? null : <div style={styles.info}>⚠ {error}</div>}
+      <button onClick={() => actions.flipVehicle()} style={styles.actionButton} type="button">
+        Flip vehicle
+      </button>
+    </div>
+  );
+}
+
+/** Fog fully saturates at ~1.25× its distance, so pinning fog at lod × this hides the LOD cull edge
+ *  (no skyline poking through). Raising draw distance moves fog out with it; the fog slider can only
+ *  pull it closer (thicker), never past this — so the edge always stays hidden. */
+const FOG_TO_LOD = 0.8;
+
+/** Map draw-distance controls: one Draw Distance slider that drives the LOD ring + couples fog to
+ *  hide its cull edge, plus HD-ring and Fog fine-tuning. Reads live config on mount. */
+function DrawDistanceControls({ actions }: { actions: DebugActions }): ReactElement {
+  const initial = actions.streaming();
+  const [lod, setLod] = useState(initial.lodDrawDistance);
+  const [hd, setHd] = useState(initial.hdDrawDistance);
+  const [fog, setFog] = useState(() => actions.fogDistance());
+  const fogMax = Math.round(lod * FOG_TO_LOD);
+
+  return (
+    <>
+      <div style={styles.groupLabel}>DRAW DISTANCE: {lod} m</div>
+      <input
+        max={4000}
+        min={500}
+        onChange={(e) => {
+          const next = Number(e.target.value);
+          const nextHd = Math.min(hd, next);
+          const nextFog = Math.round(next * FOG_TO_LOD);
+          setLod(next);
+          setHd(nextHd);
+          setFog(nextFog);
+          actions.setStreaming({ hdDrawDistance: nextHd, lodDrawDistance: next });
+          actions.setFogDistance(nextFog); // keep fog saturating at the new cull edge
+        }}
+        step={100}
+        type="range"
+        value={lod}
+      />
+      <div style={styles.groupLabel}>HD DISTANCE: {hd} m</div>
+      <input
+        max={lod}
+        min={100}
+        onChange={(e) => {
+          const next = Number(e.target.value);
+          setHd(next);
+          actions.setStreaming({ hdDrawDistance: next });
+        }}
+        step={50}
+        type="range"
+        value={hd}
+      />
+      <div style={styles.groupLabel}>FOG: {fog} m</div>
+      <input
+        max={fogMax}
+        min={100}
+        onChange={(e) => {
+          const next = Number(e.target.value);
+          setFog(next);
+          actions.setFogDistance(next);
+        }}
+        step={50}
+        type="range"
+        value={fog}
+      />
+    </>
   );
 }
 

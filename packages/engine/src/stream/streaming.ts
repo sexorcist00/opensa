@@ -78,6 +78,9 @@ export class StreamingDriver {
   private lastFocus: [number, number] | null = null;
   private readonly lodRadius: number;
   private readonly manifest: OspakManifest;
+  /** Map-inspector pin (074/22): while set, the rings are IGNORED — exactly these cells are resident at
+   *  exactly this level, and every other slot evicts. `null` = normal focus-driven streaming. */
+  private manual: null | { keys: Set<string>; level: Level } = null;
   private readonly requested = new Set<string>();
   private readonly stats: StreamStats = {
     created: 0,
@@ -127,6 +130,22 @@ export class StreamingDriver {
     worker.addEventListener('message', (event: MessageEvent<PakWorkerResponse>) => {
       this.onBlob(event.data);
     });
+  }
+
+  /** Every cell the pak offers, as GTA cell coords — the map inspector's section grid. Independent of
+   *  what is currently resident (that is `engine.cells`), because the grid must show the whole map. */
+  listCells(): [number, number][] {
+    return [...this.cells.values()].map((slot): [number, number] => [slot.cx, slot.cy]);
+  }
+
+  /**
+   * Pin an explicit cell set (map-inspector) or return to focus-driven streaming with `null`. The rings
+   * are bypassed rather than the update loop suspended, so creates keep their frame budget and the
+   * atomic HD↔LOD swap still applies — a pinned set fills in over a few frames instead of hitching.
+   */
+  setManualCells(cells: null | readonly (readonly [number, number])[], lod = false): void {
+    this.manual =
+      cells === null ? null : { keys: new Set(cells.map(([cx, cy]) => `${cx},${cy}`)), level: lod ? 'lod' : 'hd' };
   }
 
   /** Tear down every loaded cell (the leak-assertion hook: the residency ledger must return to its
@@ -189,7 +208,9 @@ export class StreamingDriver {
     const desired = this.desiredLevel(slot, biasedCentre, biasedRect);
     if (desired === null) {
       slot.pending = null;
-      if (slot.current !== null && trueRect > this.lodRadius + EVICT_MARGIN) {
+      // The evict margin is a RING hysteresis; a pinned set has no ring, so an unselected cell must go
+      // regardless of how close it sits to the camera — otherwise deselecting one never clears it.
+      if (slot.current !== null && (this.manual !== null || trueRect > this.lodRadius + EVICT_MARGIN)) {
         this.unload(slot);
       }
 
@@ -300,6 +321,11 @@ export class StreamingDriver {
    *  HD tests the cell CENTRE (a quality ring — rect would nearly double HD residency for no guarantee);
    *  the LOD ring tests the cell RECT — the fog-mask guarantee is geometric (074/21). */
   private desiredLevel(slot: CellSlot, centreDistance: number, rectDistance: number): Level | null {
+    if (this.manual !== null) {
+      const { keys, level } = this.manual;
+
+      return keys.has(`${slot.cx},${slot.cy}`) && slot.keys[level] ? level : null;
+    }
     const hdEdge = slot.current === 'hd' ? this.hdRadius + HYSTERESIS : this.hdRadius;
     const lodEdge = slot.current !== null ? this.lodRadius + HYSTERESIS : this.lodRadius;
     if (centreDistance < hdEdge && slot.keys.hd) {

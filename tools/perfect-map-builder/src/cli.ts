@@ -7,6 +7,8 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  *   tsx tools/perfect-map-builder/src/cli.ts --game <path> --in <mods-src> --out <path>
  *     --until <stage>  stop after a stage (mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack) and KEEP
  *                      every intermediate build under `<out>/.work` — for step-by-step in-game debugging.
+ *                      The list is the pipeline ORDER and the stop point is INCLUSIVE, so every stage at or
+ *                      before it runs: `--until pack` still builds the `sa` target, since `sa` precedes it.
  *                      `--until lod` runs the WHOLE pipeline (both sa + opensa) while keeping every step.
  *                      `--until opensa` stops at the LOD build, leaving `opensa/` in GAME format; a full run
  *                      (or `--until pack`) converts it, and `opensa/` is then our own format — bootable by

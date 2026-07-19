@@ -16,6 +16,7 @@ import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.p
 
 import type { ModelBundles } from './model-bundle';
 
+import { createProgress } from './progress';
 import { buildVehicleOsm } from './vehicle-osm';
 
 /** Dictionaries the runtime still reaches for by name, whoever else references them. Never deleted. */
@@ -56,7 +57,9 @@ export function packVehicles(
   let osmBytes = 0;
   let ostexBytes = 0;
 
+  const progress = createProgress('vehicles', defs.length, log);
   for (const def of defs) {
+    progress.tick();
     const model = def.model.toLowerCase();
     const dff = `${model}.dff`;
     try {

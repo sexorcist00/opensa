@@ -6,6 +6,8 @@ import type { VehicleModelData } from '@opensa/renderware';
  */
 export interface RigidModelInit {
   colors: Uint8Array;
+  /** False when `indices` is uint32 — a model past 65 536 vertices. Absent = the historical uint16. */
+  index16?: boolean;
   indexCount: number;
   indices: Uint8Array;
   meta: Uint8Array;
@@ -39,6 +41,9 @@ const bytes = (values: Float32Array): Uint8Array => new Uint8Array(values.buffer
 export function toRigidModelInit(model: VehicleModelData): RigidModelInit {
   return {
     colors: model.colors,
+    // The builder narrows the index array to the model; carry the width instead of assuming it, or a
+    // hi-poly car binds uint32 data as uint16 and draws a scrambled mesh.
+    index16: model.indices.BYTES_PER_ELEMENT === 2,
     indexCount: model.indices.length,
     indices: new Uint8Array(model.indices.buffer, model.indices.byteOffset, model.indices.byteLength),
     meta: model.meta,

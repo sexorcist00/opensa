@@ -314,8 +314,11 @@ export type VehicleModelId = number;
 /** Rigid-entity upload (074/08 B2) — raw byte views over the vehicle fixture's bin sections. */
 export interface VehicleModelInit {
   colors: Uint8Array;
+  /** False when `indices` is a uint32 payload — a hi-poly mod car past 65 536 vertices. Defaults to true,
+   *  so a caller (or an `.osm` predating the width) keeps the historical uint16 binding. */
+  index16?: boolean;
   indexCount: number;
-  /** uint16 index payload. */
+  /** uint16 (default) or uint32 index payload — see {@link VehicleModelInit.index16}. */
   indices: Uint8Array;
   meta: Uint8Array;
   /** NIGHT vertex colours, same layout as `colors`; the vertex stage mixes day → night by the `dn` factor. */
@@ -455,6 +458,7 @@ interface VehicleModel {
   bindGroups: Map<number, GPUBindGroup>;
   buffers: GPUBuffer[];
   capacity: number;
+  index16: boolean;
   indexBuffer: GPUBuffer;
   /** Slot-indexed; `null` = free. A live instance owns matrix rows [slot × partCount, +partCount). */
   instances: (null | VehicleInstanceState)[];
@@ -901,6 +905,7 @@ export class Engine {
       bindGroups: new Map<number, GPUBindGroup>(),
       buffers,
       capacity: VEHICLE_CAPACITY,
+      index16: init.index16 ?? true,
       indexBuffer,
       instances: new Array<null | VehicleInstanceState>(VEHICLE_CAPACITY).fill(null),
       lampBuffer,
@@ -2001,6 +2006,8 @@ export class Engine {
         pass.setBindGroup(0, this.frameBindGroup);
         pass.setBindGroup(1, draw.bindGroup);
         model.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
+        // Clutter species are small by construction (one scattered plant), and the loader derives their
+        // count as byteLength / 2 — the uint16 assumption is the format here, not an oversight.
         pass.setIndexBuffer(model.indexBuffer, 'uint16');
         pass.drawIndexed(model.indexCount, draw.instanceCount);
         draws += 1;
@@ -2229,6 +2236,7 @@ export class Engine {
     // Which texture array is currently bound. A car keeps this at 0 for the whole model — the switch only
     // costs anything on a multi-array map object, and even there the opaque order groups submeshes by array.
     let boundArray = -1;
+    const indexFormat: GPUIndexFormat = model.index16 ? 'uint16' : 'uint32';
     for (const state of model.instances) {
       if (!state) {
         continue;
@@ -2239,7 +2247,7 @@ export class Engine {
           pass.setPipeline(this.pipelines.get(translucent ? 'rigid-blend' : 'rigid-opaque'));
           pass.setBindGroup(0, this.frameBindGroup);
           model.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
-          pass.setIndexBuffer(model.indexBuffer, 'uint16');
+          pass.setIndexBuffer(model.indexBuffer, indexFormat);
           bound = true;
         }
         const array = submesh.array ?? 0;

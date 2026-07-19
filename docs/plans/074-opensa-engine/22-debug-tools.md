@@ -279,3 +279,140 @@ launchers · wishlist: normals/wireframe debug pipeline, engine map inspector (n
 | 2026-07-18 | **Phase 3 SHIPPED** — bucket-B metered smoke (found + fixed the frozen `litFade`/`fogScale` driver reads), engine Perf ledger, HUD + slow-log toggles defaulting to dev, F2 tip hidden in dev           | 3.2 closed by user decision: text, not a slider. Suite 2150 green.                                                                      |
 | 2026-07-18 | **Phase 2 SHIPPED** — `engine-debug-actions.ts` + host wiring (city system, procobj density, photo camera, spawn/flip/break), `engine-camera.ts`, `nearestBreakable`                                    | Browser-verified click-through (see phase 2.10). 18 new unit tests; suite 515 green.                                                    |
 | 2026-07-18 | **Phase 1 SHIPPED** — `DebugGame` + optional `mapGame` + `debug-capabilities.ts` (19 flags, `menuFor`/`skyControlsFor` extracted as pure logic), bucket-C rows gated in the Atmosphere/Graphics screens | Prod unchanged (default = all capabilities; `mapGame={game}`). 7 new unit tests; tsc + eslint clean; apps/web suite 45/45.              |
+
+---
+
+## Phase 7 — the Map screen RESTORED on the engine host (2026-07-19)
+
+Plan 13 phase 5 recorded the Map screen as a deliberate loss ("three-host only; the engine host never had
+them"). The user's verdict on the rebuilt debugger: it was **the most important element**, so it comes back.
+
+**What was there** (recovered verbatim from `a312f0d^`): `map-inspector.tsx` (241 lines) — the region-coloured
+SECTION grid with per-cell checkboxes, "Whole map", "Show LODs", a COLLISION toggle and a SELECTED panel
+(name/txd/pos/mat + Hide object / Restore all) — plus `MapScreen` and `DrawDistanceControls` inside
+`debug-overlay.tsx`.
+
+**What survived the deletion**, and made this cheap: the `'map'` screen union member, the `Map` menu row, the
+`mapScreen` capability + its `menuFor` filter, and **every** grid style in `debug-styles.ts` (`CELL_PX`, `cell`,
+`cellCenter`, `cellEmpty`, `grid`, `sectionsBox`, `legend`, `swatch` …) — dead but intact. Only the components
+and the render branch had gone.
+
+### Shipped
+
+- **`StreamingDriver.listCells()` + `setManualCells(cells, lod)`** — the driver's public surface was
+  `unloadAll()` + `update()` and nothing else. The pin is injected at `desiredLevel()`, so the rings are
+  BYPASSED rather than the update loop suspended: creates keep their frame budget and the atomic HD↔LOD swap
+  still applies, and a pinned set fills in over a few frames instead of hitching. **Gotcha found by test:** the
+  evict branch is guarded by the RING margin, so an unselected cell sitting under the camera would never
+  unload — deselecting one would leave it on screen forever. Eviction now also fires whenever a pin is active.
+- **`StreamSetup.cellSize`** — the inspector's grid maths needs the PAK's pitch, and `setup.ts` was computing
+  it and throwing it away. It is the truth over the runtime config's copy, which a pak converted at another
+  size would contradict.
+- **`MapGame`** — the inspector's host contract, declared in `map-inspector.tsx` (the three `Game` class it
+  used to take no longer exists). Selection members are OPTIONAL: a host without picking omits them and the
+  SELECTED panel explains itself instead of showing dead buttons.
+- **Host wiring** — `debugRef.mapGame`: `listCells`/`setManualCells` straight to the driver, `viewCell` from
+  the player position, and `setMapViewer` reusing the existing photo camera (`setFlyMode`) plus the shared
+  `'map-viewer'` event the HUD already listens for. `topDownView` was a stub returning `undefined`; it now
+  lifts the detached eye 400 u over the player and pitches down (stopping 0.01 rad short of vertical — a
+  perfectly vertical forward vector is degenerate for the look-at basis).
+- **New capability `meshOverrides`** — Show Normals / Show Faces are three material overrides needing a debug
+  world-pipeline variant, so they are gated OFF separately rather than dragging the whole screen down with
+  them. `mapScreen` flips to `true` for the engine.
+- **`DrawDistanceControls` restored unchanged** — it needed no engine work at all: `streaming()`,
+  `setStreaming()`, `fogDistance()`, `setFogDistance()` were all already live on the engine actions.
+
+5 new driver tests (pin ignores rings · pinned level the pak lacks · deselect evicts under the camera · the
+pin clears back to focus streaming · listCells dedups levels); the two capability tests that asserted the Map
+screen DROPS for the engine were updated — the behaviour intentionally changed. Suite 2266/321 green.
+
+### Still open — picking (the selection half)
+
+`WorldObjectInfo` selection is NOT wired, because cells are welded, material-batched geometry recorded once
+into an immutable `GPURenderBundle`, with no per-vertex id channel and no model name anywhere in the cell
+data. The `objectTable` is not an identity table — it holds only unmergeable objects (timed/breakable/
+animated/roadsign/uvScroll) and its `params` is an animation slot, not an id.
+
+**The agreed route (user, 2026-07-19) is an auxiliary MAPPER in the format, and the user will rebuild for it.**
+The pattern already exists in miniature: `OscellBreakable {keyHash, indexOffset, indexCount}` gives per-
+placement identity for smashables, and `CellStore.breakPlacement()` already hides one placement by degenerating
+its indices with a single `writeBuffer`. Generalising that table to ALL placements (`nameRef` into a string
+table + `indexOffset/indexCount` + an AABB) buys the whole SELECTED panel: pick = CPU ray against the
+placements' AABBs in visible cells (no BVH, no ID-buffer readback), hide = the existing `breakPlacement`,
+restore = re-upload the cell's original indices. Note `breakPlacement` has no inverse today, and `indexData`
+is retained only for cells that carry breakables — restore has to solve that.
+
+---
+
+## Phase 8 — the placement MAPPER in the format (2026-07-19)
+
+Phase 7 left the SELECTED panel unwired because welded cells have no per-object identity. The user chose the
+mapper route and accepted the rebuild it costs.
+
+**The insight that made it cheap:** the identity is not lost during the weld, only unrecorded. `OscellBreakable
+{keyHash, indexOffset, indexCount}` already does this for smashables, and `CellStore.breakPlacement()` already
+hides one by degenerating its indices. The mapper is that table generalised to every placement.
+
+### `.oscell` minor 6
+
+`OscellPlacement {id, nameRef, txdRef, indexOffset, indexCount, bounds[6]}` — 40 B/row — plus a per-cell name
+pool (`Oscell.names`). One row per (part × instance × bucket), sharing an `id` (the SAME FNV-1a placement hash
+the breakable table and the physics colliders use, so rows cross-reference either). Each row carries its OWN
+AABB: a box around the whole model would swallow its neighbours on a pick.
+
+Header count appended under `minor >= 6`, table appended after the breakables, pool last and written only when
+rows reference it — the established rule, so a pre-mapper pak reads as "no placements" and the Map screen just
+does not pick.
+
+**The trap this rule exists for, and it bit immediately:** `oswire.ts` re-parses the header independently to
+find the payload sections (`r.seek(68 + (minor >= 2 ? 4 : 0) + …)`). The new count shifted every wire offset
+and two wire tests failed. The comment there warns about exactly this; the `minor >= 6` term is now in it.
+
+### The welder
+
+`WeldPlacementRange` mirrors `WeldBreakableRange` and is filled by a shared `recordRanges()`; bounds come from
+exactly the vertex rows that append produced. `buildPlacementTable()` resolves bucket-relative starts to
+absolute offsets (only the layout knows where a bucket landed), interns names, and MERGES rows of the same
+placement that ended up adjacent in the final index buffer — a five-material building placed 40 times would
+otherwise be 200 rows. The mapper rides BOTH levels, because "Show LODs" must still answer what was clicked.
+
+### The engine
+
+`CellStore.debugPicking` (default OFF) gates BOTH parsing the mapper and retaining `indexData`. This is the one
+real design decision: a full map's mapper is tens of MB and the heap is 21 MB today, so paying for it in play
+would undo the residency work. It takes effect on the next load, which entering the map viewer forces with
+`unloadAll()`.
+
+- `pick(origin, direction)` — ray/AABB slab test over the rows of every VISIBLE cell, nearest wins. No BVH, no
+  ID-buffer readback; neither is possible on batched geometry with no per-vertex id. A ray starting INSIDE a
+  box hits at 0 (clicking while stood inside a building selects it).
+- `hidePlacement(id)` — `breakPlacement`'s degenerate-index trick on a mapper row, with the same 4-byte
+  alignment rule (an unaligned `writeBuffer` is REJECTED with only a warning — a u16 range starting on an odd
+  index would silently refuse to hide).
+- Restore needs no inverse and no extra memory: the host calls `driver.unloadAll()` and the pinned set
+  re-streams, rebuilding index buffers straight from the pak. That is already `breakPlacement`'s documented
+  restore story, and SA's.
+
+### The host
+
+A click in the map viewer PICKS instead of grabbing the pointer, along the camera's forward vector — the
+crosshair, not a cursor: the viewer flies with the mouse steering the look, so unprojecting a cursor position
+would be wrong the moment the pointer locks. The hit is emitted as `'select'` with the position converted back
+to GTA coords (engine `(x, y, z)` → `(x, −z, y)`), which is what the map files use and therefore what the panel
+should show.
+
+### Tests — 15 new, suite 2281/321 green
+
+Format: mapper + name-pool round-trip FIELD BY FIELD (a rotation inside a reader is what cost a round on the
+breakable table), a bad AABB throws, a pre-mapper cell reads clean. Welder: every placement named, ranges
+inside the buffer, one id and one box per instance 10 u apart as placed, and **the mapper covers every triangle
+in the cell exactly once** — a gap is an unpickable object, an overlap means two objects claim the same
+triangles. Engine: picking off ⇒ no hits at all; ray beside/behind the boxes misses; frontmost wins; the
+**cell ORIGIN is applied** (cell-local bounds would pick the wrong district); inside-the-box hits at 0; a
+hidden placement stops picking while its neighbour survives.
+
+### Owed after the user's rebuild
+
+The pak-size delta. Estimate only, to be replaced with the measured number: 40 B/row after merging, so a cell
+with ~2 000 rows adds ~80 KB, and a full map lands in the tens of MB against a 1.4 GB pak. `weldStats.placements`
+reports the row count per cell and rides the existing convert report.

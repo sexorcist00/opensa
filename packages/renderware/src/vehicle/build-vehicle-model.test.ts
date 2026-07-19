@@ -78,11 +78,12 @@ describe('buildVehicleModel', () => {
       expect(extras).toHaveLength(1);
       expect(extras[0].name).toBe('extra1');
     });
+  });
 
-    it('refuses a model past the uint16 index ceiling instead of wrapping its indices', () => {
-      // The engine binds the index buffer as uint16, so vertex 65 536 would draw as vertex 0 — a scrambled
-      // mesh with no error anywhere. Nothing in SA's map comes near this (the biggest is 29 857), so the
-      // guard is a tripwire, not a limit.
+  describe('positive cases', () => {
+    it('indexes a model past 65 536 vertices as uint32 instead of wrapping it', () => {
+      // This used to THROW, and the throw landed in the fixed step — two hi-poly mod cars (86 511 and
+      // 82 991 verts) took the whole vehicle system down with them, so NOTHING spawned.
       const huge = geometry();
       const vertexCount = 65_540;
       huge.positions = new Float32Array(vertexCount * 3);
@@ -91,13 +92,26 @@ describe('buildVehicleModel', () => {
         huge.triangles.push({ a: at, b: at + 1, c: at + 2, materialIndex: 0 });
       }
 
-      expect(() =>
-        buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [huge]), textures()),
-      ).toThrow(/uint16 index ceiling/);
-    });
-  });
+      const model = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [huge]), textures());
 
-  describe('positive cases', () => {
+      expect(model.indices.BYTES_PER_ELEMENT).toBe(4);
+      // The whole point: the last vertex must still address itself, not wrap to a low index. A plain loop,
+      // because `Math.max(...indices)` blows the call stack on tens of thousands of them and `.reduce` is
+      // not callable on the `Uint16Array | Uint32Array` union (its overloads do not unify).
+      let highest = 0;
+      for (const index of model.indices) {
+        highest = Math.max(highest, index);
+      }
+
+      expect(highest).toBeGreaterThan(65_535);
+    });
+
+    it('keeps uint16 indices for an ordinary model', () => {
+      const model = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [geometry()]), textures());
+
+      expect(model.indices.BYTES_PER_ELEMENT).toBe(2);
+    });
+
     it('carcols markers become a per-vertex paint SLOT, not a baked colour (one model, many colours)', () => {
       const built = buildVehicleModel(
         clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [geometry([material({ color: PRIMARY_MARKER })])]),

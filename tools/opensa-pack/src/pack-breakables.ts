@@ -23,6 +23,8 @@ import { breakableFromGeometry, getBreakable } from '@opensa/renderware/breakabl
 
 import type { ModelBundles } from './model-bundle';
 
+import { createProgress } from './progress';
+
 /** The synthetic fallback reuses u16 triangle indices — the host's own cap, applied at bake time. */
 const MAX_SYNTHETIC_VERTICES = 65535;
 
@@ -53,7 +55,10 @@ export function packBreakables(
   let skipped = 0;
   let bytes = 0;
 
-  for (const raw of models) {
+  const names = [...models];
+  const progress = createProgress('breakables', names.length, log);
+  for (const raw of names) {
+    progress.tick();
     const model = raw.toLowerCase();
     try {
       const baked = shatterOf(fs, model);

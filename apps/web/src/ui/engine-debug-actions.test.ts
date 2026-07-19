@@ -33,6 +33,7 @@ function deps(overrides: Partial<EngineDebugActionsDeps> = {}): EngineDebugActio
     setWeather: vi.fn(),
     spawn: [1, 2, 3],
     spawnVehicle: vi.fn(() => Promise.resolve()),
+    topDownView: vi.fn(),
     vehicleModels: () => ['infernus'],
     weather: () => 0,
     ...overrides,

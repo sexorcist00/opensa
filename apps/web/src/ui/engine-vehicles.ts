@@ -294,8 +294,25 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
 
   const vehicleLod = new VehicleLodSystem(deps.viewOf, config, spawnVehicle);
   // Parked cars come from the game's `parked.json` in the VFS (shipped per game); absent → none.
+  //
+  // ONE placement must never cost the whole system. This loop used to let a build failure escape into
+  // `setupEngineVehicles`' caller, which catches and leaves `vehicles` NULL — so two unconvertible hi-poly
+  // mod cars killed spawning for all 201 models, from the debugger and the road-car registrar alike. A car
+  // that cannot be built is now skipped and NAMED; the rest of the street still parks.
+  const failedModels = new Set<string>();
   for (const placement of parseParkedVehicles(deps.fs.getText('parked.json'))) {
-    vehicleLod.add(placement, await spawnVehicle(placement));
+    try {
+      vehicleLod.add(placement, await spawnVehicle(placement));
+    } catch (error) {
+      if (!failedModels.has(placement.model)) {
+        failedModels.add(placement.model);
+        // eslint-disable-next-line no-console -- a silently missing car is exactly what hid this for a day
+        console.warn(
+          `[vehicles] '${placement.model}' could not be built, skipping it: ` +
+            (error instanceof Error ? error.message : String(error)),
+        );
+      }
+    }
   }
 
   return {

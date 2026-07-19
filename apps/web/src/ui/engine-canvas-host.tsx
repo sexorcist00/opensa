@@ -48,6 +48,7 @@ import { GAME_CONFIG } from '../game-config';
 import { vehicleModelsFromIde } from '../vehicle-models';
 import { ENGINE_DEBUG_CAPABILITIES } from './debug/debug-capabilities';
 import { type DebugActions, type DebugGame, DebugOverlay } from './debug/debug-overlay';
+import { type MapGame } from './debug/map-inspector';
 import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
 import { createChordWatcher, flyStep, resolveCamera } from './engine-camera';
@@ -86,6 +87,9 @@ const NIGHT_HOUR = 22;
 const FLY_KEYS = new Set(['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'PageDown', 'PageUp']);
 /** Photo-camera speed (units/s) — prod's `camera-controller.FLY_SPEED`, so both hosts fly the same. */
 const FLY_SPEED = 18;
+/** Map-viewer "Top (reset view)" altitude above the player, in engine units — high enough to frame a
+ *  250 u section with margin. */
+const TOP_DOWN_HEIGHT = 400;
 
 /** Shared mutable flags between React props and the boot closure. */
 const hostState = { paused: false };
@@ -93,7 +97,7 @@ let booted: null | Promise<void> = null;
 /** The HudGame the boot closure builds (module scope — survives StrictMode's dev double-mount). */
 let hudGameRef: HudGame | null = null;
 /** The F2 debugger's surfaces (074/22), built by the same boot closure. */
-let debugRef: null | { actions: DebugActions; game: DebugGame } = null;
+let debugRef: null | { actions: DebugActions; game: DebugGame; mapGame: MapGame } = null;
 
 export function EngineCanvasHost({ fs, gameId, onWorldReady, paused = false }: EngineCanvasHostProps): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -146,6 +150,7 @@ export function EngineCanvasHost({ fs, gameId, onWorldReady, paused = false }: E
           actions={debug.actions}
           capabilities={ENGINE_DEBUG_CAPABILITIES}
           game={debug.game}
+          mapGame={debug.mapGame}
           teleports={GAME_CONFIG[gameId].teleports ?? []}
         />
       ) : null}
@@ -357,7 +362,36 @@ async function boot(
   /** The config distance this zoom last followed — a debugger change (074/22) re-seeds the live zoom. */
   let authoredDistance = config.camera.followDistance;
   let dragging = false;
+  /** Map-viewer state (074/22): a click PICKS instead of grabbing the pointer, and the mapper is resident. */
+  let mapViewer = false;
+  let selectedPlacement: null | number = null;
+  let hiddenPlacements = 0;
+  /**
+   * Pick along the camera's own forward vector — the crosshair, not a cursor position. The map viewer flies
+   * with the mouse steering the look, so the centre of the screen IS where the user is aiming; unprojecting
+   * a cursor would be wrong the moment the pointer is locked.
+   */
+  const pickAtCrosshair = (): void => {
+    const hit = engine.cells.pick(cameraEye, forwardOf());
+    selectedPlacement = hit?.id ?? null;
+    events.emit(
+      'select',
+      hit
+        ? {
+            // Engine (x, y, z) back to GTA (x, −z, y): the panel reports the coordinates the map files use.
+            modelName: hit.model,
+            position: [hit.position[0], -hit.position[2], hit.position[1]],
+            txdName: hit.txd,
+          }
+        : null,
+    );
+  };
   canvas.addEventListener('pointerdown', () => {
+    if (mapViewer) {
+      pickAtCrosshair();
+
+      return; // in the map viewer a click SELECTS; it must not also grab the pointer
+    }
     if (!document.pointerLockElement) {
       void Promise.resolve(canvas.requestPointerLock()).catch(() => undefined);
     }
@@ -666,10 +700,65 @@ async function boot(
           position,
         });
       },
+      topDownView: (): void => {
+        // Lift the detached eye straight over the player and aim it down. The pitch stops just short of
+        // -PI/2: a perfectly vertical forward vector is degenerate for the look-at basis.
+        const [ex, ey, ez] = toEngine(viewOf());
+        flyEye = [ex, ey + TOP_DOWN_HEIGHT, ez];
+        pitch = -Math.PI / 2 + 0.01;
+      },
       vehicleModels: () => vehicleModels,
       weather: liveWeather,
     }),
     game: { events },
+    // The Map screen (074/22 phases 7-8). Picking rides the `.oscell` placement mapper (minor 6): a pak
+    // converted before it simply yields no hits, which the inspector reports rather than pretending.
+    mapGame: {
+      cellSize: () => setup.cellSize,
+      events,
+      hideSelectedObject: (): number => {
+        if (selectedPlacement !== null && engine.cells.hidePlacement(selectedPlacement) > 0) {
+          hiddenPlacements += 1;
+          selectedPlacement = null;
+          events.emit('select', null); // the object is gone from view — clear the selection panel
+        }
+
+        return hiddenPlacements;
+      },
+      listCells: () => setup.driver.listCells(),
+      restoreHiddenObjects: (): number => {
+        // Hiding degenerates indices in place and has no inverse; a cell RELOAD rebuilds its index buffer
+        // straight from the pak, so dropping every loaded cell restores the lot. The pinned set re-streams
+        // on the next update, which is the same path entering the viewer already takes.
+        setup.driver.unloadAll();
+        hiddenPlacements = 0;
+
+        return 0;
+      },
+      setManualCells: (cells, lod) => setup.driver.setManualCells(cells, lod),
+      setMapViewer: (enabled): void => {
+        // The viewer detaches the camera (the existing photo camera) and hands the cell set to the
+        // inspector; leaving restores focus-driven streaming. The HUD hides itself on the same event.
+        mapViewer = enabled;
+        // The mapper + retained index bytes are tens of MB on a full map, so they are viewer-only. This
+        // takes effect on the next LOAD — `unloadAll` below is what makes that immediate, in both directions.
+        engine.cells.debugPicking = enabled;
+        setup.driver.unloadAll();
+        setFlyMode(enabled);
+        if (!enabled) {
+          setup.driver.setManualCells(null);
+          selectedPlacement = null;
+          hiddenPlacements = 0;
+          events.emit('select', null);
+        }
+        events.emit('map-viewer', { enabled });
+      },
+      viewCell: (): [number, number] | null => {
+        const [gx, gy] = viewOf();
+
+        return [Math.floor(gx / setup.cellSize), Math.floor(gy / setup.cellSize)];
+      },
+    },
   };
 
   let previous = performance.now();

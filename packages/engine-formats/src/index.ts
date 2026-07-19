@@ -15,6 +15,7 @@ export {
   type OscellLight,
   type OscellObject,
   type OscellParticle,
+  type OscellPlacement,
 } from './oscell';
 export {
   decodeOsm,

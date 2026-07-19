@@ -60,9 +60,11 @@ function cellBytes(overrides: Partial<Oscell> = {}): Uint8Array {
     indexCount: 3,
     indexData: new Uint8Array(new Uint32Array([0, 1, 2]).buffer),
     lights: [],
+    names: [],
     objects: [],
     origin: [0, 0, 0],
     particles: [],
+    placements: [],
     vertexCount,
     vertexData: new Uint8Array(vertexCount * OSCELL_VERTEX_STRIDE),
     ...overrides,
@@ -393,6 +395,101 @@ describe('CellStore', () => {
       engine.cells.load('1,0', cellBytes({ origin: [250, 0, 0] }));
 
       expect([...engine.cells.all()].map((cell) => cell.key)).toEqual(['0,0', '1,0']);
+    });
+  });
+});
+
+/** A cell whose mapper holds two boxed placements 100 u apart along +x, both at the origin's height. */
+function mapperCellBytes(origin: [number, number, number] = [0, 0, 0]): Uint8Array {
+  return cellBytes({
+    names: ['near_shop', 'shoptxd', 'far_shop'],
+    origin,
+    placements: [
+      { bounds: [-5, -5, -5, 5, 5, 5], id: 111, indexCount: 3, indexOffset: 0, nameRef: 0, txdRef: 1 },
+      { bounds: [95, -5, -5, 105, 5, 5], id: 222, indexCount: 3, indexOffset: 0, nameRef: 2, txdRef: 1 },
+    ],
+  });
+}
+
+describe('CellStore placement mapper (074/22 picking)', () => {
+  describe('negative cases', () => {
+    it('picks nothing while debug picking is off — the mapper is not even parsed', async () => {
+      const engine = await bootedEngine();
+      engine.cells.load('0,0', mapperCellBytes());
+
+      expect(engine.cells.pick([-100, 0, 0], [1, 0, 0])).toBeNull();
+    });
+
+    it('misses when the ray passes beside every box', async () => {
+      const engine = await bootedEngine();
+      engine.cells.debugPicking = true;
+      engine.cells.load('0,0', mapperCellBytes());
+
+      expect(engine.cells.pick([-100, 50, 0], [1, 0, 0])).toBeNull();
+    });
+
+    it('misses when every box is BEHIND the ray origin', async () => {
+      const engine = await bootedEngine();
+      engine.cells.debugPicking = true;
+      engine.cells.load('0,0', mapperCellBytes());
+
+      expect(engine.cells.pick([200, 0, 0], [1, 0, 0])).toBeNull();
+    });
+
+    it('hides nothing for an id no loaded cell carries', async () => {
+      const engine = await bootedEngine();
+      engine.cells.debugPicking = true;
+      engine.cells.load('0,0', mapperCellBytes());
+
+      expect(engine.cells.hidePlacement(999)).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('returns the FRONTMOST placement, named, when the ray crosses both', async () => {
+      const engine = await bootedEngine();
+      engine.cells.debugPicking = true;
+      engine.cells.load('0,0', mapperCellBytes());
+
+      const hit = engine.cells.pick([-100, 0, 0], [1, 0, 0]);
+
+      expect(hit?.model).toBe('near_shop'); // the far box is also crossed — order is what is under test
+      expect(hit?.txd).toBe('shoptxd');
+      expect(hit?.id).toBe(111);
+      expect(hit?.distance).toBeCloseTo(95, 5);
+      expect(hit?.position).toEqual([0, 0, 0]);
+    });
+
+    it('resolves the mapper against the cell ORIGIN, not cell-local space', async () => {
+      const engine = await bootedEngine();
+      engine.cells.debugPicking = true;
+      engine.cells.load('0,0', mapperCellBytes([1000, 0, -500]));
+
+      // The same box now lives at world (1000, 0, -500): a ray down cell-local x must MISS it...
+      expect(engine.cells.pick([-100, 0, 0], [1, 0, 0])).toBeNull();
+      // ...and one aimed at the shifted position must find it.
+      expect(engine.cells.pick([900, 0, -500], [1, 0, 0])?.model).toBe('near_shop');
+    });
+
+    it('hits a box the ray STARTS inside, at distance zero', async () => {
+      const engine = await bootedEngine();
+      engine.cells.debugPicking = true;
+      engine.cells.load('0,0', mapperCellBytes());
+
+      const hit = engine.cells.pick([0, 0, 0], [1, 0, 0]);
+
+      expect(hit?.id).toBe(111);
+      expect(hit?.distance).toBe(0);
+    });
+
+    it('hides a placement and stops picking it, leaving its neighbour alone', async () => {
+      const engine = await bootedEngine();
+      engine.cells.debugPicking = true;
+      engine.cells.load('0,0', mapperCellBytes());
+
+      expect(engine.cells.hidePlacement(111)).toBe(1);
+
+      expect(engine.cells.pick([-100, 0, 0], [1, 0, 0])?.id).toBe(222);
     });
   });
 });

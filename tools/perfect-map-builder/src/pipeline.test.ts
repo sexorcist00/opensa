@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { checkImgIdBudgets, checkTextIplSlotBudget } from './pipeline';
+import { checkImgIdBudgets, checkTextIplSlotBudget, runsStage } from './pipeline';
 
 /** A game dir whose gta.dat registers `n` text IPLs with one inst row each. */
 function writeGame(dir: string, n: number): void {
@@ -18,6 +18,36 @@ function writeGame(dir: string, n: number): void {
   writeFileSync(join(dir, 'data', 'maps', 'empty.IPL'), 'inst\nend\n');
   writeFileSync(join(dir, 'data', 'gta.dat'), lines.join('\n') + '\n');
 }
+
+describe('runsStage', () => {
+  describe('negative cases', () => {
+    it('does not run opensa when the run stops at sa', () => {
+      expect(runsStage('opensa', 'sa')).toBe(false);
+    });
+
+    it('does not run either target when the run stops in the common chain', () => {
+      expect(runsStage('sa', 'procobj')).toBe(false);
+      expect(runsStage('opensa', 'procobj')).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('runs both targets on a full run', () => {
+      expect(runsStage('sa', undefined)).toBe(true);
+      expect(runsStage('opensa', undefined)).toBe(true);
+    });
+
+    it('runs sa when a later stage is the stop point (the silently-missing-sa bug)', () => {
+      expect(runsStage('sa', 'pack')).toBe(true);
+      expect(runsStage('sa', 'opensa')).toBe(true);
+    });
+
+    it('runs both targets on --until lod', () => {
+      expect(runsStage('sa', 'lod')).toBe(true);
+      expect(runsStage('opensa', 'lod')).toBe(true);
+    });
+  });
+});
 
 describe('checkTextIplSlotBudget', () => {
   let dir: string;

@@ -24,6 +24,7 @@ import type { ModelBundles } from './model-bundle';
 import type { TexturePlanner } from './textures';
 
 import { buildModelOsm } from './model-osm';
+import { createProgress } from './progress';
 
 export interface MapObjectDefs {
   catalog: ReadonlyMap<number, IdeObjectDef>;
@@ -67,13 +68,22 @@ export function packMapObjects(
   let models = 0;
   let skipped = 0;
 
-  for (const catalog of [defs.catalog, defs.timedCatalog ?? new Map<number, IdeObjectDef>()]) {
+  const catalogs = [defs.catalog, defs.timedCatalog ?? new Map<number, IdeObjectDef>()];
+  // Unique model names up front: the loop dedups IDE rows, so row count is not the denominator a wait is
+  // measured against. Cheap next to what follows (one pass over ~10k names).
+  const uniqueModels = new Set(
+    catalogs.flatMap((catalog) => [...catalog.values()].map((def) => def.modelName.toLowerCase())),
+  );
+  const progress = createProgress('map objects', uniqueModels.size, log);
+
+  for (const catalog of catalogs) {
     for (const def of catalog.values()) {
       const model = def.modelName.toLowerCase();
       if (seen.has(model)) {
         continue; // one model, many IDE rows
       }
       seen.add(model);
+      progress.tick();
       const txd = def.txdName.toLowerCase();
       txdUsers.set(txd, [...(txdUsers.get(txd) ?? []), model]);
       if (bundles.hasSection(model, OsmSectionTag.GEOM)) {

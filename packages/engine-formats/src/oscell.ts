@@ -14,7 +14,12 @@ import { ByteReader, ByteWriter } from './binary';
 
 export const OSCELL_MAGIC = 0x3143534f; // 'OSC1' little-endian
 export const OSCELL_VERSION_MAJOR = 0;
-/** Minor 5 (B7·c): objectTable gained kind 4 = UV-SCROLL — a material whose UVs crawl (LV skull sign, conveyor
+/** Minor 6 (074/22 phase 8): the PLACEMENT MAPPER — a row per merged placement range, naming the model it
+ *  came from and the index range it owns, plus a per-cell name table. Welding destroys per-object identity
+ *  (that is the point: 4.5x fewer draws), so the debugger could not answer "what did I just click". This is
+ *  the identity the weld already knows, written down. Same shape as the breakable table, generalised to
+ *  EVERY placement and carrying an AABB so a pick is a CPU ray test with no BVH and no ID-buffer readback.
+ *  Minor 5 (B7·c): objectTable gained kind 4 = UV-SCROLL — a material whose UVs crawl (LV skull sign, conveyor
  *  belts). Its `params` is an INDEX into the pak manifest's `uvAnimations`; the transform is identity (the scroll
  *  rides a runtime uniform, not the vertex). No record layout change — older readers just never draw the kind.
  *  Minor 4 (B7·a): a light knows which smashable placement OWNS it — a smashed traffic light must take its
@@ -24,7 +29,7 @@ export const OSCELL_VERSION_MAJOR = 0;
  *  bundle and without splitting the prop out of the merged batch (which measured 4.5x the draw calls).
  *  Minor 2 (B6): the cell gained a PARTICLE table (2dfx type-1 emitter anchors). Readers accept minor 1
  *  paks — they simply carry no particles. */
-export const OSCELL_VERSION_MINOR = 5;
+export const OSCELL_VERSION_MINOR = 6;
 export const OSCELL_VERTEX_STRIDE = 36;
 
 /** Header `flags` bits. */
@@ -53,10 +58,14 @@ export interface Oscell {
   /** uint16 or uint32 raw index payload (see `index16`). */
   indexData: Uint8Array;
   lights: OscellLight[];
+  /** Model/TXD names the placement table references by index (minor 6) — deduped per cell. */
+  names: string[];
   objects: OscellObject[];
   origin: readonly [number, number, number];
   /** 2dfx PARTICLE emitters (074/06 row 13, B6): factory smoke, fires, fountains, vents, insects. */
   particles: OscellParticle[];
+  /** The placement mapper (minor 6): which merged triangles belong to which placed object. */
+  placements: OscellPlacement[];
   vertexCount: number;
   /** Interleaved vertex payload, stride {@link OSCELL_VERTEX_STRIDE}. */
   vertexData: Uint8Array;
@@ -123,9 +132,33 @@ export interface OscellParticle {
   position: readonly [number, number, number];
 }
 
+/**
+ * One placed object's triangles inside the cell's merged index buffer (minor 6) — the debugger's mapper.
+ *
+ * A placement's geometry is split across buckets by material, exactly like a breakable's, so ONE object can
+ * own SEVERAL rows; they share an `id` and each carries its OWN range and AABB (a per-range box picks more
+ * precisely than one box around the whole object, and costs nothing extra).
+ *
+ * `id` is the placement's stable hash — the same FNV-1a of the placement key the breakable table and the
+ * physics colliders use, so a row can be cross-referenced with either.
+ */
+export interface OscellPlacement {
+  /** Cell-local AABB, `[minX, minY, minZ, maxX, maxY, maxZ]` — the pick test. */
+  bounds: readonly number[];
+  id: number;
+  indexCount: number;
+  indexOffset: number;
+  /** Index into {@link Oscell.names} — the model name. */
+  nameRef: number;
+  /** Index into {@link Oscell.names} — the TXD name. */
+  txdRef: number;
+}
+
 const GROUP_RECORD_BYTES = 32;
 const OBJECT_RECORD_BYTES = 64;
 const LIGHT_RECORD_BYTES = 28;
+/** Placement mapper row: id u32 + nameRef/txdRef u16 + range 2xu32 + AABB 6xf32. */
+const PLACEMENT_RECORD_BYTES = 40;
 
 export function decodeOscell(bytes: Uint8Array): Oscell {
   const r = new ByteReader(bytes);
@@ -153,6 +186,9 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
   const particleCount = minor >= 2 ? r.u32() : 0;
   // Minor 3 (B7) appends the breakable count on the same rule — an older pak has none, and must not lose a word.
   const breakableCount = minor >= 3 ? r.u32() : 0;
+  // Minor 6 appends the placement count on the same rule — a pre-mapper pak reads 0 and keeps every
+  // following offset where it is. The debugger's Map screen degrades to "no picking" on such a pak.
+  const placementCount = minor >= 6 ? r.u32() : 0;
   const vertexOffset = r.u32();
   const indexOffset = r.u32();
   const tableOffset = r.u32();
@@ -186,6 +222,8 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
   const lights = readLights(r, lightCount, minor);
   const particles = readParticles(r, particleCount);
   const breakables = readBreakables(r, breakableCount);
+  const placements = readPlacements(r, placementCount);
+  const names = placementCount > 0 ? readNames(r) : [];
 
   return {
     bounds,
@@ -196,9 +234,11 @@ export function decodeOscell(bytes: Uint8Array): Oscell {
     indexCount,
     indexData,
     lights,
+    names,
     objects,
     origin,
     particles,
+    placements,
     vertexCount,
     vertexData,
   };
@@ -234,6 +274,7 @@ export function encodeOscell(cell: Oscell): Uint8Array {
   w.u32(cell.lights.length);
   w.u32(cell.particles.length);
   w.u32(cell.breakables.length);
+  w.u32(cell.placements.length);
   const vertexOffsetSlot = w.reserveU32();
   const indexOffsetSlot = w.reserveU32();
   const tableOffsetSlot = w.reserveU32();
@@ -278,6 +319,7 @@ export function encodeOscell(cell: Oscell): Uint8Array {
     w.u32(breakable.indexOffset);
     w.u32(breakable.indexCount);
   }
+  writePlacements(w, cell.placements, cell.names);
 
   return w.bytes();
 }
@@ -287,6 +329,7 @@ export const OSCELL_RECORD_BYTES = {
   group: GROUP_RECORD_BYTES,
   light: LIGHT_RECORD_BYTES,
   object: OBJECT_RECORD_BYTES,
+  placement: PLACEMENT_RECORD_BYTES,
 } as const;
 
 function readBreakables(r: ByteReader, count: number): OscellBreakable[] {
@@ -318,6 +361,22 @@ function readLights(r: ByteReader, count: number, minor: number): OscellLight[] 
   }
 
   return lights;
+}
+
+/** The placement table's name pool: u16 count, then length-prefixed ASCII (model + TXD names are both ASCII). */
+function readNames(r: ByteReader): string[] {
+  const count = r.u16();
+  const names: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const length = r.u8();
+    let name = '';
+    for (let at = 0; at < length; at += 1) {
+      name += String.fromCharCode(r.u8());
+    }
+    names.push(name);
+  }
+
+  return names;
 }
 
 function readObjects(r: ByteReader, count: number): OscellObject[] {
@@ -355,6 +414,23 @@ function readParticles(r: ByteReader, count: number): OscellParticle[] {
   return particles;
 }
 
+function readPlacements(r: ByteReader, count: number): OscellPlacement[] {
+  const placements: OscellPlacement[] = [];
+  for (let index = 0; index < count; index += 1) {
+    // Locals first — the linter sorts object keys, and inlining side-effecting reads once rotated the
+    // breakable table's three fields (see readBreakables).
+    const id = r.u32();
+    const nameRef = r.u16();
+    const txdRef = r.u16();
+    const indexOffset = r.u32();
+    const indexCount = r.u32();
+    const bounds = [r.f32(), r.f32(), r.f32(), r.f32(), r.f32(), r.f32()];
+    placements.push({ bounds, id, indexCount, indexOffset, nameRef, txdRef });
+  }
+
+  return placements;
+}
+
 function writeLights(w: ByteWriter, lights: readonly OscellLight[]): void {
   for (const light of lights) {
     for (const value of light.position) {
@@ -369,6 +445,17 @@ function writeLights(w: ByteWriter, lights: readonly OscellLight[]): void {
   }
 }
 
+function writeNames(w: ByteWriter, names: readonly string[]): void {
+  w.u16(names.length);
+  for (const raw of names) {
+    const name = raw.slice(0, 255);
+    w.u8(name.length);
+    for (let at = 0; at < name.length; at += 1) {
+      w.u8(name.charCodeAt(at));
+    }
+  }
+}
+
 function writeParticles(w: ByteWriter, particles: readonly OscellParticle[]): void {
   for (const particle of particles) {
     for (const value of particle.position) {
@@ -379,5 +466,25 @@ function writeParticles(w: ByteWriter, particles: readonly OscellParticle[]): vo
     for (let at = 0; at < name.length; at += 1) {
       w.u8(name.charCodeAt(at));
     }
+  }
+}
+
+/** The mapper rows, followed by their name pool — the pool is written only when rows reference it. */
+function writePlacements(w: ByteWriter, placements: readonly OscellPlacement[], names: readonly string[]): void {
+  for (const placement of placements) {
+    if (placement.bounds.length !== 6) {
+      throw new Error(`placement bounds must be 6 floats (min+max), got ${placement.bounds.length}`);
+    }
+    w.u32(placement.id);
+    w.u16(placement.nameRef);
+    w.u16(placement.txdRef);
+    w.u32(placement.indexOffset);
+    w.u32(placement.indexCount);
+    for (const value of placement.bounds) {
+      w.f32(value);
+    }
+  }
+  if (placements.length > 0) {
+    writeNames(w, names);
   }
 }

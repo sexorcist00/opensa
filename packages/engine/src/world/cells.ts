@@ -5,6 +5,7 @@
  */
 import {
   decodeOscell,
+  type Oscell,
   type OscellBreakable,
   OscellChannel,
   type OscellGroup,
@@ -66,12 +67,42 @@ export interface CellHandle {
   /** 2dfx PARTICLE emitters (B6), WORLD-space. The HOST resolves the name against effects.fxp and builds
    *  the instance buffers; the cell only carries the anchors. */
   particles: { effectName: string; x: number; y: number; z: number }[];
+  /**
+   * The placement mapper (minor 6), WORLD-space bounds — populated ONLY while `debugPicking` is on.
+   *
+   * Kept as one flat row list rather than a per-id map because a pick WALKS it and a hide filters it; the
+   * whole point of the table is that it is cheap enough to scan. It stays empty in normal play: a full map's
+   * mapper is tens of MB, and the residency budget is the reason this engine exists.
+   */
+  placements: {
+    bounds: Float64Array;
+    id: number;
+    indexCount: number;
+    indexOffset: number;
+    model: string;
+    txd: string;
+  }[];
   uniform: GPUBuffer;
   vertexBuffer: GPUBuffer;
   visible: boolean;
 }
 
+/** What a map-inspector click resolved to. */
+export interface PickHit {
+  /** Distance along the pick ray (world units) — the frontmost hit wins. */
+  distance: number;
+  id: number;
+  model: string;
+  /** Centre of the hit placement's box: what the inspector reports as its position. */
+  position: [number, number, number];
+  txd: string;
+}
+
 export class CellStore {
+  /** Debugger only (074/22): parse the placement mapper and RETAIN index bytes on load, so the map inspector
+   *  can pick and hide. Off in play — both cost real memory on a full map. Takes effect on the NEXT load,
+   *  which the map viewer triggers anyway by pinning its cell set. */
+  debugPicking = false;
   get count(): number {
     return this.cells.size;
   }
@@ -148,6 +179,33 @@ export class CellStore {
     return this.cells.has(key);
   }
 
+  /**
+   * Hide the placement with this id everywhere it is loaded (map inspector): the same degenerate-index trick
+   * `breakPlacement` uses, applied to a mapper row instead of a breakable one. Returns how many cells were
+   * touched. There is no inverse — the caller restores by RELOADING the cells, which rebuilds their index
+   * buffers straight from the pak (the map viewer re-pins its set to do exactly that).
+   */
+  hidePlacement(id: number): number {
+    let hidden = 0;
+    for (const cell of this.cells.values()) {
+      const rows = cell.placements.filter((placement) => placement.id === id);
+      if (rows.length === 0) {
+        continue;
+      }
+      const stride = cell.index16 ? 2 : 4;
+      for (const row of rows) {
+        // Same alignment rule as breakPlacement: an unaligned writeBuffer is REJECTED with only a warning,
+        // so a u16 range starting on an odd index would silently refuse to hide.
+        const erase = alignedErase(cell.indexData, row.indexOffset, row.indexCount, stride);
+        this.device.queue.writeBuffer(cell.indexBuffer, erase.byteOffset, erase.bytes);
+      }
+      cell.placements = cell.placements.filter((placement) => placement.id !== id);
+      hidden += 1;
+    }
+
+    return hidden;
+  }
+
   /** Decode + upload + record. Idempotent per key. */
   load(key: string, bytes: Uint8Array): CellHandle {
     const existing = this.cells.get(key);
@@ -215,7 +273,7 @@ export class CellStore {
       draws: bundleGroups.length,
       index16: cell.index16,
       indexBuffer,
-      indexData: cell.breakables.length > 0 ? cell.indexData : new Uint8Array(0),
+      indexData: cell.breakables.length > 0 || this.debugPicking ? cell.indexData : new Uint8Array(0),
       key,
       lights: cell.lights.map((light) => ({
         color: light.color,
@@ -263,6 +321,7 @@ export class CellStore {
         y: particle.position[1] + cell.origin[1],
         z: particle.position[2] + cell.origin[2],
       })),
+      placements: this.debugPicking ? worldPlacements(cell) : [],
       uniform,
       vertexBuffer,
       visible: true,
@@ -270,6 +329,36 @@ export class CellStore {
     this.cells.set(key, handle);
 
     return handle;
+  }
+
+  /**
+   * Nearest placement whose world AABB the ray enters (map inspector's click-to-pick). A slab test over the
+   * mapper rows of every VISIBLE cell — no BVH and no ID-buffer readback, which the welded cell path could
+   * not support anyway (batched geometry, no per-vertex id). Returns null when picking is off or nothing hit.
+   */
+  pick(origin: readonly [number, number, number], direction: readonly [number, number, number]): null | PickHit {
+    let best: null | PickHit = null;
+    for (const cell of this.cells.values()) {
+      if (!cell.visible) {
+        continue;
+      }
+      for (const placement of cell.placements) {
+        const distance = raySlab(origin, direction, placement.bounds);
+        if (distance === null || (best !== null && distance >= best.distance)) {
+          continue;
+        }
+        const b = placement.bounds;
+        best = {
+          distance,
+          id: placement.id,
+          model: placement.model,
+          position: [(b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2],
+          txd: placement.txd,
+        };
+      }
+    }
+
+    return best;
   }
 
   unload(key: string): void {
@@ -324,7 +413,6 @@ function align4(bytes: number): number {
   return Math.ceil(bytes / 4) * 4;
 }
 
-/** One row per RANGE in the pak (a prop split across materials owns several) — group them by placement. */
 function groupBreakables(rows: readonly OscellBreakable[]): CellHandle['breakables'] {
   const breakables: CellHandle['breakables'] = new Map();
   for (const row of rows) {
@@ -345,4 +433,62 @@ function pad4(bytes: Uint8Array): Uint8Array {
   padded.set(bytes);
 
   return padded;
+}
+
+/** One row per RANGE in the pak (a prop split across materials owns several) — group them by placement. */
+/**
+ * Ray vs AABB (the slab method). Returns the entry distance along `direction`, or null when the ray misses
+ * or the box is entirely behind the origin. A ray STARTING inside the box hits at 0 — clicking while stood
+ * inside a building should still select it.
+ */
+function raySlab(
+  origin: readonly [number, number, number],
+  direction: readonly [number, number, number],
+  bounds: Float64Array,
+): null | number {
+  let near = -Infinity;
+  let far = Infinity;
+  for (let axis = 0; axis < 3; axis += 1) {
+    const d = direction[axis];
+    const min = bounds[axis];
+    const max = bounds[axis + 3];
+    if (Math.abs(d) < 1e-9) {
+      if (origin[axis] < min || origin[axis] > max) {
+        return null; // parallel to this slab and outside it
+      }
+      continue;
+    }
+    const t1 = (min - origin[axis]) / d;
+    const t2 = (max - origin[axis]) / d;
+    near = Math.max(near, Math.min(t1, t2));
+    far = Math.min(far, Math.max(t1, t2));
+    if (near > far) {
+      return null;
+    }
+  }
+  if (far < 0) {
+    return null;
+  }
+
+  return Math.max(near, 0);
+}
+
+/** Mapper rows with their AABBs shifted into world space (the cell stores them cell-local). */
+function worldPlacements(cell: Oscell): CellHandle['placements'] {
+  return cell.placements.map((placement) => {
+    const bounds = new Float64Array(6);
+    for (let axis = 0; axis < 3; axis += 1) {
+      bounds[axis] = placement.bounds[axis] + cell.origin[axis];
+      bounds[axis + 3] = placement.bounds[axis + 3] + cell.origin[axis];
+    }
+
+    return {
+      bounds,
+      id: placement.id,
+      indexCount: placement.indexCount,
+      indexOffset: placement.indexOffset,
+      model: cell.names[placement.nameRef] ?? '',
+      txd: cell.names[placement.txdRef] ?? '',
+    };
+  });
 }

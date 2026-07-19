@@ -177,14 +177,14 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     `excluding ${excludeItems.length} models from sa/opensa LODs ` +
       `(${userExcluded.length} user-curated via lod-exclude.json)`,
   );
-  if (until === undefined || until === 'sa' || until === 'lod') {
+  if (runsStage('sa', until)) {
     const sa = join(outPath, 'sa');
     log('sa → sa/');
     buildSaLods({ config: { excludeItems }, gameDir: game, outDir: sa });
     checkImgIdBudgets(sa);
     produced.push({ dir: sa, name: 'sa' });
   }
-  if (until === undefined || until === 'opensa' || until === 'pack' || until === 'lod') {
+  if (runsStage('opensa', until)) {
     produced.push(...(await buildOpensaTarget({ config, excludeItems, game, log, outPath, until, work })));
   }
 
@@ -249,6 +249,16 @@ export function collectGeneratedModels(gameDir: string): string[] {
   }
 
   return [...names];
+}
+
+/**
+ * Whether a post-split target (`sa`/`opensa`) runs under the given `--until`. `STAGE_NAMES` is the pipeline
+ * ORDER, so `--until <stage>` means "run everything up to and including it" — `--until pack` builds `sa`
+ * too, because `sa` precedes `pack`. (It used to be an explicit name list, which silently dropped the whole
+ * `sa` target from `--until pack`/`--until opensa` runs: no log line, no error, just a missing build.)
+ */
+export function runsStage(stage: 'opensa' | 'sa', until: StageName | undefined): boolean {
+  return until === undefined || until === 'lod' || STAGE_NAMES.indexOf(stage) <= STAGE_NAMES.indexOf(until);
 }
 
 /**

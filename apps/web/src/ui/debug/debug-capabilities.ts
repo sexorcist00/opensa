@@ -25,8 +25,12 @@ export interface DebugCapabilities {
   readonly headlightSliders: boolean;
   /** Night street-lamp (2dfx) light toggle — the static lamp pool restarts in plan 17. */
   readonly lampsToggle: boolean;
-  /** Map screen: viewer, inspector, normals/faces overrides. Needs an engine ray query (parked). */
+  /** Map screen: the map viewer + section inspector. Restored on the engine host (074/22 phase 7) —
+   *  the streaming driver pins cells, the host detaches the camera. Selection is gated separately. */
   readonly mapScreen: boolean;
+  /** Show Normals / Show Faces on the Map screen — three material overrides; the engine needs a debug
+   *  shader variant of the world pipeline (not built). */
+  readonly meshOverrides: boolean;
   /** Moon SIZE + ELEVATION — the engine builds its own moon arc and draws the disc from the sky model;
    *  `moon.brightness` is the one knob that reaches it. */
   readonly moonRig: boolean;
@@ -85,6 +89,7 @@ export const ALL_DEBUG_CAPABILITIES: DebugCapabilities = {
   headlightSliders: true,
   lampsToggle: true,
   mapScreen: true,
+  meshOverrides: true,
   moonRig: true,
   pipelineSwitch: true,
   reflectionPresets: true,
@@ -111,7 +116,8 @@ export const ENGINE_DEBUG_CAPABILITIES: DebugCapabilities = {
   godrayShader: false,
   headlightSliders: false,
   lampsToggle: false,
-  mapScreen: false,
+  mapScreen: true, // restored 074/22 phase 7 — pinned cells + detached camera
+  meshOverrides: false,
   moonRig: false,
   pipelineSwitch: false,
   reflectionPresets: false,
