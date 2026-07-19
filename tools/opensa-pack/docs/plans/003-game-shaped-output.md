@@ -415,8 +415,7 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
 - [x] Phase 0 — by-name asset inventory = the archive-deletion exclusion set + 4 design constraints
 - [x] Phase 0 — extensions fixed as `.osm` (model, SECTIONED) / `.ostex` (texture dict, FLAT)
 - [x] Phase 0 — resolution order settled: modloader → `.osm`/`.ostex` → `.dff`/`.txd` → warn
-- [ ] Phase 1 — measure the `.col` sweep (first-collider-call ms, unreferenced-library share) before
-      deciding on offline cell colliders
+- [x] Phase 1 — the `.col` sweep MEASURED (2026-07-19), and it says NOT to bake offline cell colliders
 - [x] Phase 3 step 4 — the runtime `txdp` walk restored as `getTxdChain`/`setTxdParents`, wired into the
       FIVE live by-name TXD sites (props, clutter, anim objects, debris, vehicles). The sixth — the ped —
       does not read the VFS at all yet, so it gets the walk for free when it moves there in phase 5.
@@ -427,7 +426,6 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
       churn; `cpSync` carries the archives through untouched)
 - [x] Phase 3 gate — the spawn measurement: 45× per car type (7.4 ms → 0.17 ms); the worker-hidden
       100–200 ms build per new car TYPE is gone, not hidden
-- [ ] Phase 1 — measure the `.col` sweep (see ledger)
 - [x] Phase 2 — `.osm` container in `packages/engine-formats/src/osm.ts` + round-trip tests (9)
 - [x] Phase 2 — **no new texture format**: a model's dictionary is an existing `.ostex` beside it
       (`.ost` would have collided with `.ostex`'s own `'OST1'` magic — the reuse was there all along)
@@ -436,7 +434,8 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
 - [x] Phase 2 — offline vehicle writer (`tools/opensa-pack/src/vehicle-osm.ts`) reusing `buildVehicleModel`
 - [x] Phase 2 — per-model `.ostex` emission (`model-ostex.ts`) + `packOstexPayload` extracted so world and
       per-model layers share one row-packing
-- [ ] Phase 2 — decide the texture-compression question (RGBA8 vs BC re-encode vs DXT pass-through)
+- [x] Phase 2 — texture compression DECIDED (user, 2026-07-18): BC1 when every layer is opaque, BC3 when
+      any needs alpha; 4.07 → 1.16 MB per car, generation loss measured at ~1/255 mean
 - [x] Phase 3 step 1 — IMG delete-and-insert (`archive-edit.ts` + `pack-vehicles.ts`, wired in `cli.ts`
       behind a default-on `--no-models` opt-out); vehicles only, phase 5 adds the rest of the classes
 - [x] Phase 3 step 2 — the RUNTIME reads `.osm`/`.ostex`: resolution order in `loadOptimizedVehicle`, the
@@ -450,12 +449,13 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
       driver loads an array with the first cell that draws it and releases it with the last). No file split
       was needed — see the ledger for why, and for the measurement that says the planner's global array
       packing, not the loading policy, is the residency lever.
-- [ ] Phase 4 — named cell/texture files under `<out>/opensa/`, one loader — **now unjustified**: the
-      laziness it was meant to enable shipped without it. Needs a fresh reason before it is built.
+- [–] Phase 4 — named cell/texture files under `<out>/opensa/`, one loader — DROPPED, not deferred: the
+  laziness it was meant to enable shipped without it, and nothing else wants it.
 - [x] Phase 4 step 2 — the MANIFEST RULE applied: `timecyc`/`timecyc24` deleted from `OspakManifest`,
       `buildOspak`, the converter, `StreamSetup` and the host's fallback branch. The lab reads the game's
       own `data/timecyc*.dat` via `?src=` naming an opensa-pack `--out` (`pak-source.ts`).
-- [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
+- [x] Phase 2 — mixing rule shipped with phase 3 step 2 (the de-duplicated `onAssetWarning` that names the
+      ignored file); still to be PROVEN in the field — that is phase 5b
 - [x] Phase 5a — `ClutterModelInit`/`DebrisUpload` widened to `ModelTextureInit` (ped left for its own step)
 - [x] Phase 5b — `SHAT` section + `packBreakables` + `getBreakable` reading it (252 props, 1.6 MB)
 - [x] Phase 5f step 2 — ped converter (`ped-osm.ts` + `packPeds`) + `readPedOsm` + the ped data-loss gate
@@ -466,11 +466,14 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
 - [x] Phase 5d — topple props: `HULL` section (dedup'd collider cloud + fallback box), read by `boundsOf`
 - [x] Phase 5c — clutter species converted + read on the cell-stream path (56/56); `TEXS` section replaces
       the sibling `.ostex`; `ModelBundles` merges every class's sections into ONE `.osm` per model
-- [ ] Phase 5 — peds, clutter, anim objects, map objects; probe CLIs + fixtures retired
-- [ ] Phase 5 — map-object textures must PRESERVE map-optimizer's mip chain: plan from the RAW TXD, never
-      regenerate (the per-model writer emits one level, which is right for vehicles/peds only)
+- [x] Phase 5 — peds, clutter, anim objects, map objects all converted
+- [→] Probe CLIs + fixtures retired — MOVED to plan 078: `ped-probe`/`vehicle-probe` only die once the LAB
+  loads peds and cars by name through the VFS, which is that plan's whole subject
+- [x] Phase 5g — map-object textures preserve the chain: they plan from the RAW TXD through the SHARED world
+      planner, which passes opaque DXT through byte for byte
 - [ ] Phase 5b — mod field check: plain, retexture-only, and `txdp`-parented mods on a converted build
-- [ ] Phase 6 — pmb `pack` stage + `--until` docs
+- [x] Phase 6 — pmb `pack` stage + `--until` docs (byte-identical pak across the library extraction)
+- [x] Phase 1 — `openGameDir` reads archives through a FILE HANDLE (the >2 GB defect + the RSS win)
 - [ ] Close-out — 6-scene ritual sweep, `npm run lint`, coverage floors held, docs repointed
 
 ## Measurement ledger
@@ -1159,8 +1162,22 @@ hard alpha edge). That is the expected cost of one BC round trip on already-DXT 
 `bmyri` is a PED that the vehicle builder accepted without complaint — the writer does not check the asset
 class, which is fine while callers pass a `vehicles.ide` roster but must not be relied on in phase 5.
 
-Still owed for phase 1: the `.col` sweep measurement (first-collider-call ms + unreferenced-library share) —
-it needs runtime instrumentation, not a converter run.
+**The `.col` sweep, measured 2026-07-19 — and the answer is to leave it alone.** Over the converted full
+map: **261 libraries, 21 MB, 10 195 collision models, 54 ms** to parse the lot (Node; a browser pays more
+for the reads, but this is a ONE-OFF at the first collider call, not per cell). **86 % of the parsed models
+are referenced by a placed instance** — only 1 464 are parsed for nothing.
+
+Both halves of the case for offline cell colliders fail on those numbers: the sweep is small, and it is
+mostly USEFUL work rather than waste. If the one-off hitch ever shows up in a profile, moving the sweep to a
+worker is a far smaller change than baking colliders per cell. Caveat kept honest: the ms is the Node parse
+cost, so it bounds the work, not the browser wall-clock.
+
+**`openGameDir` reads archives through a file handle now (2026-07-19).** It used to `readFileSync` the whole
+`.img` — which Node refuses past 2 GB, exactly the wall the per-model convert hit before the deletions
+brought the archive back under it. The directory is read up front and each entry sliced on demand, the way
+the browser VFS has always done it (`parseVer2Directory` was already shared for this). Measured: opening the
+full modded dir went from seconds and ~1.4 GB resident to **13 ms and 88 MB**, and the pak stayed
+byte-identical.
 
 Later phases record: IMG rebuild peak RSS, per-model `.osm` share of `--out`, the split spawn-path numbers
 below, and boot/steady-state for the phase-4 container-vs-files gate.
