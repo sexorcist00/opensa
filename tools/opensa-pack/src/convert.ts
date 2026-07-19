@@ -232,14 +232,11 @@ export async function convertDistrict(
   Object.assign(report.textures, planner.report, { arrays: report.textures.arrays });
   log(`assembling pak (${inputs.length} entries) …`);
 
-  const timecyc24 = fs.getText('data/timecyc_24h.dat');
-  const timecyc = timecyc24 ?? fs.getText('data/timecyc.dat') ?? undefined;
   const uvAnimations = uvAnimList(uvAnims);
   report.uvAnimations = uvAnimations.length;
   const { manifest, pak } = buildOspak(inputs, {
     cellSize,
     uvAnimations, // buildOspak drops the key when the list is empty
-    ...(timecyc !== undefined ? { timecyc, timecyc24: timecyc24 !== null } : {}),
   });
   report.pakBytes = pak.byteLength;
 

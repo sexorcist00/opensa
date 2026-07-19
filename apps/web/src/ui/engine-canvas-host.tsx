@@ -253,18 +253,13 @@ async function boot(
   // Weather transitions (prod parity): the SAME WeatherTransition class prod's Game runs — one driver,
   // its blend getter eases from→to over config.weatherTransitionSeconds (smoothstep, like prod).
   const weatherTransition = new WeatherTransition(weather);
-  // Timecyc source of truth = the LIVE game files, with prod's exact preference (timecyc_24h.dat as-is,
-  // else vanilla timecyc.dat converted) — the pak's baked copy silently froze weather/fog at convert time
-  // and diverged from what prod renders the moment the install's file changed (2026-07-18 field finding).
-  // The bake stays as the fallback for pak-only consumers (the lab has no game fs).
+  // Timecyc comes from the LIVE game files, with prod's exact preference (timecyc_24h.dat as authored,
+  // else vanilla timecyc.dat converted). There is no pak-baked copy to fall back to any more: the manifest
+  // rule (opensa-pack 003) forbids carrying data that already exists in the game dir, and that copy is
+  // precisely what froze weather/fog at convert time and diverged from prod (2026-07-18 field finding).
   const liveTimecyc24 = fs.getText('data/timecyc_24h.dat');
   const liveTimecyc = liveTimecyc24 ?? fs.getText('data/timecyc.dat');
-  const timecycSource =
-    liveTimecyc !== null
-      ? { is24h: liveTimecyc24 !== null, text: liveTimecyc }
-      : setup.timecyc !== undefined
-        ? { is24h: setup.timecyc24 ?? false, text: setup.timecyc }
-        : undefined;
+  const timecycSource = liveTimecyc !== null ? { is24h: liveTimecyc24 !== null, text: liveTimecyc } : undefined;
   const environmentDriver = createEngineEnvironmentDriver(engine.environment, {
     config,
     fogCap: drawDistance - FOG_RING_MARGIN,

@@ -61,10 +61,6 @@ export interface OspakManifest {
   cellSize: number;
   /** Texture-array entries: `"array-<id>"` → range; meta mirrors the .ostex headers for scheduling. */
   textures: Record<string, OspakEntry & { format: number; height: number; layers: number; width: number }>;
-  /** Raw `timecyc.dat` text (row 14) — the runtime samples it with the same renderware parser as prod. */
-  timecyc?: string;
-  /** True when `timecyc` is already the 24-hour variant (`timecyc_24h.dat`). */
-  timecyc24?: boolean;
   /** UV-scroll animations (B7·c / plan 074/18): the whole map's UVAnimDict entries, de-duped by name in
    *  encounter order. A cell's kind-4 objectTable entry stores an INDEX into this array; the runtime advances
    *  them globally in sync (SA's dict names are global identifiers) and feeds each visible scroller its
@@ -98,8 +94,6 @@ export function buildOspak(
   inputs: readonly OspakInput[],
   options: {
     cellSize?: number;
-    timecyc?: string;
-    timecyc24?: boolean;
     uvAnimations?: OspakUvAnimation[];
   } = {},
 ): { manifest: OspakManifest; pak: Uint8Array } {
@@ -134,7 +128,6 @@ export function buildOspak(
       cells,
       cellSize: options.cellSize ?? 250,
       textures,
-      ...(options.timecyc !== undefined ? { timecyc: options.timecyc, timecyc24: options.timecyc24 ?? false } : {}),
       ...(options.uvAnimations !== undefined && options.uvAnimations.length > 0
         ? { uvAnimations: options.uvAnimations }
         : {}),

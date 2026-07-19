@@ -15,9 +15,6 @@ export interface StreamSetup {
   center: [number, number, number];
   driver: StreamingDriver;
   radius: number;
-  /** Raw timecyc.dat from the manifest (row 14), when the converter embedded it. */
-  timecyc?: string;
-  timecyc24: boolean;
   /** Baked water mesh pointer (074/06 row 12 v2) — a loose binary next to the manifest. */
   water?: OspakManifest['water'];
 }
@@ -112,7 +109,5 @@ export async function setupStreaming(
     ...(manifest.water !== undefined ? { water: manifest.water } : {}),
     driver: new StreamingDriver(engine, manifest, worker, radii),
     radius: Math.max((maxX - minX) / 2, (maxZ - minZ) / 2, 400),
-    ...(manifest.timecyc !== undefined ? { timecyc: manifest.timecyc } : {}),
-    timecyc24: manifest.timecyc24 ?? false,
   };
 }

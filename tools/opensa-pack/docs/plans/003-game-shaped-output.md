@@ -412,7 +412,9 @@ the pipeline path.
       packing, not the loading policy, is the residency lever.
 - [ ] Phase 4 — named cell/texture files under `<out>/opensa/`, one loader — **now unjustified**: the
       laziness it was meant to enable shipped without it. Needs a fresh reason before it is built.
-- [ ] Phase 4 — manifest shrunk to the rule; `timecyc`/`timecyc24`/`setup.timecyc` deleted
+- [x] Phase 4 step 2 — the MANIFEST RULE applied: `timecyc`/`timecyc24` deleted from `OspakManifest`,
+      `buildOspak`, the converter, `StreamSetup` and the host's fallback branch. The lab reads the game's
+      own `data/timecyc*.dat` via `?src=` naming an opensa-pack `--out` (`pak-source.ts`).
 - [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
 - [ ] Phase 5 — peds, clutter, breakables, anim objects, map objects; probe CLIs + fixtures retired
 - [ ] Phase 5 — map-object textures must PRESERVE map-optimizer's mip chain: plan from the RAW TXD, never
@@ -557,6 +559,22 @@ it awaits only what the first ring needs, and the rest stream in behind the crea
 `game-src/non-modified`, NOT from the map-optimizer output production actually ships (which carries mip
 chains on 53 % of map textures). The absolute MB are therefore a floor. The RATIO is the meaningful part
 and is structural — higher-resolution textures scale both sides equally.
+
+**Phase 4 step 2 (2026-07-19) — the manifest rule applied.** `timecyc`/`timecyc24` are gone from the
+manifest, `buildOspak`, the converter, `StreamSetup` and the host's fallback branch. Measured: the
+one-cell manifest went **98 KB → 3 979 B**, because the whole `timecyc.dat` text was living inside it.
+
+The lab blocker turned out to be smaller than this plan recorded ("078 phases 1–2 and 003 phase 4 are the
+same cut"). Since phase 1, `--out` IS a game dir with products under `opensa/`, so the lab needs no VFS —
+only for `?src=` to name the game dir. `pak-source.ts` probes `<src>/opensa/manifest.json`: present ⇒ that
+is the products base and `<src>` is the game dir (timecyc read from `<src>/data/`); absent ⇒ the old
+products-directory layout still loads, with the parametric environment it would have had anyway. A `..`
+path hack was NOT possible — the browser normalizes `/pak/../data/x` to `/data/x`.
+
+**Field-checked, not just green:** headless boot of the production host (`gate-check.js canvas`) against
+`game-src/non-modified` — WebGPU up, 120 fps, and the 22:10 night renders with correct timecyc mood (warm
+lamps, lit windows, correct fog). That run also used an OLD `pak-map`, so it covered the backwards
+-compatible eager-texture path at the same time.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

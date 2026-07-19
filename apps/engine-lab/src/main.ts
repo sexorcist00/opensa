@@ -9,7 +9,6 @@ import {
   type EngineStats,
   setupStreaming,
   type StreamingDriver,
-  type StreamSetup,
   type StreamStats,
 } from '@opensa/engine';
 
@@ -24,6 +23,7 @@ import {
 import { type DebugPanelState, mountDebugPanel } from './debug-panel';
 import { type EnvironmentDriver, FOG_RING_MARGIN, parametricDriver, timecycDriver } from './environment';
 import { loadPak } from './pak-loader';
+import { type LabTimecyc, loadLabTimecyc, resolvePakSource } from './pak-source';
 import { loadPedProbe } from './ped';
 import { syntheticCell, syntheticTextureArray } from './synthetic';
 import { loadVehicleProbe } from './vehicle';
@@ -228,13 +228,16 @@ async function main(): Promise<void> {
   let title: string;
   let streaming: null | StreamingDriver = null;
   if (useStream) {
-    // `?src=pak-sf` streams an alternative converted district (default /pak) — e.g. the SF beams rect.
-    const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak'}`, streamRadiiParam(params));
+    // `?src=` names an opensa-pack `--out` (a game dir with products under `opensa/`) — or, for the older
+    // paks under `public/`, the products directory itself. Default /pak.
+    const source = await resolvePakSource(params.get('src') ?? 'pak');
+    const timecyc = await loadLabTimecyc(source);
+    const setup = await setupStreaming(engine, source.base, streamRadiiParam(params));
     streaming = setup.driver;
     focus = setup.center;
     orbitRadius = setup.radius * 1.4;
     title = 'STREAMING district (worker pak, rings live)';
-    const applyWeather = wireWeather(engine, setup, params, (driver) => {
+    const applyWeather = wireWeather(engine, timecyc, params, (driver) => {
       environmentDriver = driver;
       applyEnvironment();
     });
@@ -519,7 +522,7 @@ function streamRadiiParam(params: URLSearchParams): { lodRadius?: number } {
  *  (074/06 row 14); per-weather cover/dark come from the cloud profile inside the timecyc driver. */
 function wireWeather(
   engine: Engine,
-  setup: StreamSetup,
+  timecyc: LabTimecyc | null,
   params: URLSearchParams,
   onDriver: (driver: EnvironmentDriver) => void,
 ): (weather: number) => void {
@@ -532,8 +535,8 @@ function wireWeather(
   const fogCap = drawDistance !== null ? drawDistance - FOG_RING_MARGIN : undefined;
 
   return (weather: number): void => {
-    if (setup.timecyc !== undefined) {
-      onDriver(timecycDriver(engine, setup.timecyc, setup.timecyc24, weather, fogScale, aces, bloom, fogCap));
+    if (timecyc !== null) {
+      onDriver(timecycDriver(engine, timecyc.text, timecyc.is24h, weather, fogScale, aces, bloom, fogCap));
     }
   };
 }
