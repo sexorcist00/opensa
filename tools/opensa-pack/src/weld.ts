@@ -130,6 +130,12 @@ export function assembleCell(welded: WeldedCell): Uint8Array {
   return assemble(welded.buckets, welded.origin, welded, welded.stats);
 }
 
+/** Whether a def is VEGETATION for the cutout rule — the same test the welder sways by, so a converted tree
+ *  and the cell beside it classify their canopy alpha identically. */
+export function isVegetationDef(def: { flags: number; modelName: string }): boolean {
+  return swayKindFor(def) !== null;
+}
+
 /** Convert one cell in one shot (weld + encode, no bake) — the tests' and no-bake path. */
 export function weldCell(
   fs: AssetFileSystem,

@@ -69,8 +69,12 @@ export function readModelOsm(name: string, osm: Uint8Array): OptimizedModel {
   // A car is one array; a map object is routinely several (one array is one size AND format AND mip count),
   // and each submesh names the one it samples. All of them come through — dropping the tail here is how a
   // building would render every wall in whatever texture happened to land in array 0.
-  const dictionaries = decodeOsmTextures(section(OsmSectionTag.TEXS, 'TEXS')).arrays;
-  if (dictionaries.length === 0) {
+  // A map object points into the SHARED world plan instead of carrying a dictionary: its submeshes' `array`
+  // fields are refs into the arrays the cells already stream, so there is no `TEXS` to read and nothing to
+  // upload. Every other class ships its own.
+  const texs = fixture.textureSource === 'world' ? null : section(OsmSectionTag.TEXS, 'TEXS');
+  const dictionaries = texs ? decodeOsmTextures(texs).arrays : [];
+  if (texs && dictionaries.length === 0) {
     throw new Error(`${name}.osm carries no texture array`);
   }
   const collisionBytes = osmSection(sections, OsmSectionTag.COLL);

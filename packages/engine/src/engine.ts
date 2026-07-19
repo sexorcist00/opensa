@@ -450,8 +450,9 @@ interface VehicleInstanceState {
 }
 
 interface VehicleModel {
-  /** One per texture array; a submesh's `array` picks which to bind. Rebuilt whenever capacity grows. */
-  bindGroups: GPUBindGroup[];
+  /** Keyed by a submesh's `array`: an index into this model's own textures, or a WORLD array ref when the
+   *  model points into the shared plan. Built on demand and dropped whenever capacity grows. */
+  bindGroups: Map<number, GPUBindGroup>;
   buffers: GPUBuffer[];
   capacity: number;
   indexBuffer: GPUBuffer;
@@ -465,6 +466,9 @@ interface VehicleModel {
   /** Residency estimate per array, parallel to `textures` — each is destroyed with its own share. */
   textureBytes: number[];
   textures: GPUTexture[];
+  /** True when `submeshes[].array` are refs into the SHARED world plan — the model owns no textures, and
+   *  a submesh whose array has not streamed in yet is simply not drawn this frame. */
+  worldArrays: boolean;
 }
 
 /** Interleaved debris vertex (B7·a): position, uv, colour, centroid, velocity, spin, (landTime, layer). */
@@ -888,18 +892,13 @@ export class Engine {
     const matrixBuffer = this.createVehicleMatrixBuffer(init.parts.length, VEHICLE_CAPACITY);
     const paintBuffer = this.createVehiclePaintBuffer(init.parts.length, VEHICLE_CAPACITY);
     const lampBuffer = this.createVehicleLampBuffer(init.parts.length, VEHICLE_CAPACITY);
-    if (init.textures.length === 0) {
-      throw new Error('a rigid model needs at least one texture array');
-    }
     const uploads = init.textures.map((texture) => this.createModelTexture(texture, 'vehicle-texture'));
     const textures = uploads.map((upload) => upload.texture);
     const textureBytes = uploads.map((upload) => upload.byteEstimate);
     const id = this.vehicleModelSeq;
     this.vehicleModelSeq += 1;
     const model: VehicleModel = {
-      bindGroups: textures.map((texture) =>
-        this.createVehicleBindGroup({ lampBuffer, matrixBuffer, paintBuffer, texture }),
-      ),
+      bindGroups: new Map<number, GPUBindGroup>(),
       buffers,
       capacity: VEHICLE_CAPACITY,
       indexBuffer,
@@ -911,6 +910,7 @@ export class Engine {
       submeshes: init.submeshes,
       textureBytes,
       textures,
+      worldArrays: init.textures.length === 0,
     };
     this.vehicleModels.set(id, model);
     this.vehicleParts.set(id, init.parts);
@@ -2244,7 +2244,11 @@ export class Engine {
         }
         const array = submesh.array ?? 0;
         if (array !== boundArray) {
-          pass.setBindGroup(1, model.bindGroups[array] ?? model.bindGroups[0]);
+          const group = this.rigidBindGroup(model, array);
+          if (!group) {
+            continue; // a world array still streaming in — the submesh appears the frame it lands
+          }
+          pass.setBindGroup(1, group);
           boundArray = array;
         }
         pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset, 0, state.slot * model.partCount + submesh.part);
@@ -2446,7 +2450,8 @@ export class Engine {
     model.matrixBuffer = this.createVehicleMatrixBuffer(model.partCount, capacity);
     model.paintBuffer = this.createVehiclePaintBuffer(model.partCount, capacity);
     model.lampBuffer = this.createVehicleLampBuffer(model.partCount, capacity);
-    model.bindGroups = model.textures.map((texture) => this.createVehicleBindGroup({ ...model, texture }));
+    // The groups hold the OLD buffers; drop them and let the draw path rebuild against the new ones.
+    model.bindGroups.clear();
     model.instances.length = capacity;
     model.instances.fill(null, model.capacity, capacity);
     model.capacity = capacity;
@@ -2532,6 +2537,34 @@ export class Engine {
     this.device.queue.submit([encoder.finish()]);
 
     return mix;
+  }
+
+  /**
+   * The bind group for one of a model's texture arrays, built on first use and cached. A world-array model
+   * binds the SHARED cell texture — never its own upload — so a texture referenced by a hundred map objects
+   * is resident once. Null while that array is still streaming.
+   */
+  private rigidBindGroup(model: VehicleModel, array: number): GPUBindGroup | null {
+    const cached = model.bindGroups.get(array);
+    if (cached) {
+      return cached;
+    }
+    let texture: GPUTexture | undefined;
+    if (model.worldArrays) {
+      if (!this.textures.has(array)) {
+        return null;
+      }
+      texture = this.textures.get(array).texture;
+    } else {
+      texture = model.textures[array] ?? model.textures[0];
+    }
+    if (!texture) {
+      return null;
+    }
+    const group = this.createVehicleBindGroup({ ...model, texture });
+    model.bindGroups.set(array, group);
+
+    return group;
   }
 
   /** One fullscreen-triangle pass into `view` (the bloom chain's unit of work — no depth, no MSAA). */

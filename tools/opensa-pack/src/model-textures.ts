@@ -43,6 +43,36 @@ const WHITE_LAYER = 'white';
 const WHITE: readonly number[] = [255, 255, 255, 255];
 
 /**
+ * Where each builder layer lands in a planner that is ALREADY RUNNING — the shared world plan, one instance
+ * for the whole map (opensa-pack 003 phase 5g). Nothing is built here: the caller owns the arrays, and a map
+ * object's `.osm` therefore carries no dictionary of its own. That is the difference between 380 MB of
+ * geometry and 3 674 MB of per-model dictionaries, most of which would be the same texture copied again for
+ * every model that references it.
+ */
+export function planModelSlots(
+  planner: TexturePlanner,
+  names: readonly string[],
+  txdName: string,
+  preferCutout = false,
+  emptyDictionary = false,
+): ModelTextureSlot[] {
+  const txd = txdName.toLowerCase();
+
+  return names.map((raw) => {
+    const name = raw.toLowerCase();
+    // An EMPTY source dictionary is stock SA's own convention, not a data gap: the builder gave every one
+    // of these names a white stand-in and the material colour carries, so plan them as white rather than
+    // as the planner's loud missing-texture magenta.
+    const resolved =
+      name === WHITE_LAYER || emptyDictionary
+        ? planner.resolve(txd, null, WHITE)
+        : planner.resolve(txd, name, WHITE, preferCutout);
+
+    return { array: resolved.arrayRef, layer: resolved.layer };
+  });
+}
+
+/**
  * Plan every layer the builder claimed. `preferCutout` mirrors the welder's vegetation rule — SA alpha-tests
  * foliage, and a blend-classed canopy writes no depth (trees show through trees).
  *
@@ -60,19 +90,7 @@ export function planModelTextures(
   emptyDictionary = false,
 ): ModelDictionary {
   const planner = new TexturePlanner(fs, txdParents);
-  const txd = txdName.toLowerCase();
-  const slots = names.map((raw) => {
-    const name = raw.toLowerCase();
-    // An EMPTY source dictionary is stock SA's own convention, not a data gap: the builder gave every one
-    // of these names a white stand-in and the material colour carries, so plan them as white rather than
-    // as the planner's loud missing-texture magenta.
-    const resolved =
-      name === WHITE_LAYER || emptyDictionary
-        ? planner.resolve(txd, null, WHITE)
-        : planner.resolve(txd, name, WHITE, preferCutout);
-
-    return { array: resolved.arrayRef, layer: resolved.layer };
-  });
+  const slots = planModelSlots(planner, names, txdName, preferCutout, emptyDictionary);
 
   // `build()` emits in ref order, but say so rather than assume it — a mis-ordered array silently
   // retextures every submesh that indexes it.

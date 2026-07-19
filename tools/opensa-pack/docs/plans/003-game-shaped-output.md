@@ -1,19 +1,20 @@
 # 003 — game-shaped output: `--game` in, a game out
 
-**Status: IN PROGRESS.** Phases 0–4 SHIPPED; phase 5 shipped for every by-name class — vehicles, breakables,
-clutter, topple props, animated objects, peds — plus the engine and the production player. Both phase-3
-gates are closed (no DFF parse at spawn; 45× measured).
+**Status: IN PROGRESS.** Phases 0–5 SHIPPED — every class in the archives converts: vehicles, breakables,
+clutter, topple props, animated objects, peds, and the ~14 000 map objects, plus the engine and the
+production player. Both phase-3 gates are closed (no DFF parse at spawn; 45× measured).
 
-**RESUME HERE — phase 5g, map objects (~14 000).** Steps 1–5 are done: `planModelTextures` (the raw-TXD
+**RESUME HERE — phase 6.** Phase 5 is COMPLETE: every class in the archives converts, map objects included.
+Phase 5g steps 1–6 are done: `planModelTextures` (the raw-TXD
 dictionary that preserves mip chains) plans per BUILDER LAYER, `remapModelLayers` rewrites `meta` onto the
 planned slots, a per-submesh `array` index carries the multi-array case through the engine, and the rigid
 path now reads PRELIT and NIGHT vertex colours (clutter and the rigid emissive included).
 
-A sweep of all 14 296 map models now converts **100 %** of them. What remains: **the bulk convert itself** —
-wire map objects into the CLI (`rawDictionary` + the `preferCutout` vegetation rule), then the `.dff`/`.txd`
-deletion for them.
+The bulk convert ships: **13 841 map objects, 0 failed**, against the SHARED world dictionary (400 MB, not
+the 3 674 MB a private dictionary each would have cost), and `gta3.img` came out SMALLER than the input
+(1 224 vs 1 328 MB) with 14 349 entries deleted.
 
-Also open: phase 6 (the pmb `pack` stage), the `.col` sweep measurement, and the remaining audit gaps
+Also open: **phase 6** (the pmb `pack` stage), the `.col` sweep measurement, and the remaining audit gaps
 (material masks, 2dfx in the per-model container, second UV layer). **Phase 5b — the runtime `modloader/`
 field check — is DEFERRED by the user (2026-07-19) until opensa-pack is complete and integrated with
 perfect-map-builder**: the unoptimized path is only meaningfully exercised against a finished converter.
@@ -956,7 +957,49 @@ unchanged in character (no runaway glow). What the bench does NOT isolate is a b
 window or a night bush — the scenes are urban and the effect is subtle; the arithmetic is covered by tests
 instead.
 
-**Still open for map objects**: the ~14 000-model bulk convert and the `.dff`/`.txd` deletion.
+**Phase 5g step 6 (2026-07-19) — the bulk convert, and the SHARED dictionary it forced.**
+
+Measuring before wiring is what saved this step. A per-model dictionary for every map object comes to
+**3 674 MB — 89 % of it `TEXS`** — against 1 320 MB of source `.dff` + `.txd`, because a TXD referenced by a
+hundred models is stored a hundred times. The user chose the shared plan, and it is the right shape anyway:
+the welded cells ALREADY hold a global, deduplicated plan of every texture the map uses.
+
+So a map object plans into the WORLD planner — the same instance the cells use — and its `.osm` carries no
+dictionary at all: `DESC` + `GEOM`, with GLOBAL array refs in the submeshes and `textureSource: 'world'` in
+the fixture. **400 MB total (DESC 19 + GEOM 380), a 9.2× saving**, and it replaces 411 MB of `.dff`.
+
+Timing forced the shape of the pipeline. That plan is complete only after every cell is welded, and open
+only until `build()` seals it — one instant. `convertDistrict` grew an `onWorldPlanned` hook at exactly that
+point, and the CLI's model stages moved into it. Order inside is load-bearing: the by-name classes run
+FIRST so a model they own keeps its PRIVATE dictionary (a clutter species is one instanced draw and cannot
+switch texture arrays mid-mesh), and map objects take only what is left.
+
+Engine: a rigid model's bind groups are now built ON DEMAND and keyed by array, so a world-array model binds
+the shared cell texture and never uploads one. A submesh whose array has not streamed in is **skipped, not
+drawn** — it appears the frame its array lands. That path is unreachable from the bench scenes (nothing in
+them draws a map object by name), so it is asserted through the recording device instead:
+`engine.world-arrays.test.ts`.
+
+Measured on the full modded map:
+
+|                       | before   | after                                              |
+| --------------------- | -------- | -------------------------------------------------- |
+| models bundled        | 958      | **14 760**                                         |
+| map objects converted | —        | **13 841, 0 failed** (455 already bundled by name) |
+| dictionaries dropped  | —        | 2 243 (**240 kept**)                               |
+| `gta3.img`            | 1 328 MB | **1 224 MB** (+12 858 −14 349 entries)             |
+| convert wall-clock    | 141 s    | 314 s                                              |
+
+`.txd` deletion follows the vehicle stage's rule — a dictionary goes only when no unconverted model still
+needs it — plus one the map needs and cars do not: a dictionary that is a `txdp` PARENT of a kept one must
+stay, or the child's unconverted models lose the textures they inherit.
+
+**Field-checked**: six bench scenes at 120 fps, `lateCreates 0`, props and traffic intact with 14 349 archive
+entries deleted under them.
+
+A defect this surfaced and did NOT fix: at one point the archive passed 2 GB and `openGameDir` could not
+read its own output (Node's file-read ceiling — it buffers the whole `.img`). The deletions brought it back
+under, but the tool is one big mod away from the same wall; it should read entries through a file handle.
 
 ### Test-coverage audit (2026-07-19)
 

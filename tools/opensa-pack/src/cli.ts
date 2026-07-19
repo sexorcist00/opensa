@@ -36,6 +36,8 @@ import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'n
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { TexturePlanner } from './textures';
+
 import { rewriteModelArchives } from './archive-edit';
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
@@ -44,10 +46,23 @@ import { createModelBundles } from './model-bundle';
 import { packAnimObjects } from './pack-anim-objects';
 import { packBreakables } from './pack-breakables';
 import { packClutter } from './pack-clutter';
+import { packMapObjects } from './pack-map-objects';
 import { packPeds } from './pack-peds';
 import { packProps } from './pack-props';
 import { packVehicles } from './pack-vehicles';
 import { bakeWater } from './water';
+import { isVegetationDef } from './weld';
+
+interface PackedModels {
+  animObjects: ReturnType<typeof packAnimObjects>;
+  breakables: ReturnType<typeof packBreakables>;
+  clutter: ReturnType<typeof packClutter>;
+  deletes: string[];
+  mapObjects: ReturnType<typeof packMapObjects>;
+  peds: ReturnType<typeof packPeds>['report'];
+  props: ReturnType<typeof packProps>;
+  vehicles: ReturnType<typeof packVehicles>['report'];
+}
 
 function arg(name: string): null | string {
   return argValue(`--${name}`) ?? null;
@@ -135,13 +150,23 @@ async function main(): Promise<void> {
     }
   }
   const waterHeights = new WaterHeightGrid();
-  const { defs, manifest, pak, report } = await convertDistrict(fs, {
+  // ONE `.osm` per model, contributed to by every class the model belongs to (a cactus is clutter AND a
+  // breakable). Emitting a file per class instead loses whichever contribution the archive editor dedupes
+  // away — the accumulator is what makes that impossible.
+  const bundles = createModelBundles();
+  let packed: null | PackedModels = null;
+  const { manifest, pak, report } = await convertDistrict(fs, {
     ao,
     ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
     cellSize,
     ...(chunkCells !== undefined ? { chunkCells } : {}),
     fallbackTxds,
     log: (message) => console.log(`[opensa-pack] ${message}`),
+    // Every model class converts HERE: the by-name ones first (they own their private dictionaries), then
+    // the map objects, which resolve into the world plan this hook hands over while it is still open.
+    ...(optimizeModels
+      ? { onWorldPlanned: (planner, mapDefs) => (packed = packModels(fs, mapDefs, planner, bundles)) }
+      : {}),
     rect: rect as unknown as readonly [number, number, number, number],
     stochasticNames,
     sunVis,
@@ -172,23 +197,28 @@ async function main(): Promise<void> {
 
   // 003 phase 3: convert the by-name assets INTO the copied archives — `<model>.dff`/`<txd>.txd` out,
   // `<model>.osm`/`<model>.ostex` in. Vehicles only for now; phase 5 adds the rest of the classes.
-  const models = optimizeModels ? optimizeModelArchives(fs, defs, out) : null;
+  const models = packed ? rewriteOptimizedArchives(out, bundles, packed) : null;
   writeFileSync(join(products, 'report.json'), JSON.stringify({ ...report, ...(models ? { models } : {}) }, null, 2));
 
   printReport(report, started);
 }
 
 /**
- * Convert the by-name model assets into the copied archives (003 phase 3) and report what moved.
- * Rebuilding the archives is the expensive half — it streams, but it still rewrites ~1 GB of `gta3.img`.
+ * Convert every model class into `bundles` (003 phases 3–5). Runs from `convertDistrict`'s world-plan hook,
+ * because the last class — map objects — resolves into the SHARED texture plan and that plan is only
+ * complete and still open at that one moment.
+ *
+ * Order is load-bearing: the by-name classes go first so a model they own keeps its PRIVATE dictionary (a
+ * clutter species is one instanced draw and cannot switch texture arrays mid-mesh), and map objects then
+ * take only what is left.
  */
-function optimizeModelArchives(fs: ReturnType<typeof openGameDir>, defs: MapDefinitions, out: string): object {
+function packModels(
+  fs: ReturnType<typeof openGameDir>,
+  defs: MapDefinitions,
+  planner: TexturePlanner,
+  bundles: ReturnType<typeof createModelBundles>,
+): PackedModels {
   const log = (message: string): void => console.log(`[opensa-pack] ${message}`);
-  const started = Date.now();
-  // ONE `.osm` per model, contributed to by every class the model belongs to (a cactus is clutter AND a
-  // breakable). Emitting a file per class instead loses whichever contribution the archive editor dedupes
-  // away — the accumulator is what makes that impossible.
-  const bundles = createModelBundles();
   const vehicles = packVehicles(fs, bundles, log);
   // Smashable props (5b): only a `SHAT` section, so the model keeps its `.dff` — the shatter mesh is the
   // ONLY thing the runtime resolves by name for a prop, and it is what costs a main-thread DFF parse.
@@ -201,41 +231,19 @@ function optimizeModelArchives(fs: ReturnType<typeof openGameDir>, defs: MapDefi
   const animObjects = packAnimObjects(fs, defs, bundles, log);
   // Peds (5f): their own DESC/GEOM — no colours, no paint slots, but joints/weights and a real skeleton.
   const peds = packPeds(fs, bundles, log);
-  const rewrite = rewriteModelArchives(out, {
-    deletes: [...vehicles.deletes, ...peds.deletes],
-    inserts: bundles.inserts(),
-  });
-  for (const archive of rewrite.archives) {
-    log(
-      `archive ${archive.file}: +${archive.inserted} -${archive.deleted} entries, ` +
-        `${(archive.bytes / 1048576).toFixed(0)} MB`,
-    );
-  }
-  if (rewrite.unplaced.length > 0) {
-    // An insert whose origin no archive held would be a SILENT no-render at runtime — never let it pass quietly.
-    console.warn(
-      `[opensa-pack] ⚠ ${rewrite.unplaced.length} optimized entries had no home archive: ` +
-        rewrite.unplaced.slice(0, 8).join(', '),
-    );
-  }
-  for (const failure of vehicles.report.failed) {
-    console.warn(`[opensa-pack] ⚠ vehicle '${failure.model}' not converted: ${failure.error}`);
-  }
-  for (const failure of clutter.failed) {
-    console.warn(`[opensa-pack] ⚠ clutter '${failure.model}' not converted: ${failure.error}`);
-  }
-  for (const failure of peds.report.failed) {
-    console.warn(`[opensa-pack] ⚠ ped '${failure.model}' not converted: ${failure.error}`);
-  }
-  for (const failure of animObjects.failed) {
-    console.warn(`[opensa-pack] ⚠ anim object '${failure.model}' not converted: ${failure.error}`);
-  }
-  for (const failure of props.failed) {
-    console.warn(`[opensa-pack] ⚠ prop '${failure.model}' not converted: ${failure.error}`);
-  }
-  log(`${bundles.size()} models bundled; archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  // Map objects (5g): everything else the IDEs name, against the shared dictionary.
+  const mapObjects = packMapObjects(fs, defs, planner, bundles, isVegetationDef, log, defs.txdParents);
 
-  return { animObjects, breakables, clutter, peds: peds.report, props, rewrite, vehicles: vehicles.report };
+  return {
+    animObjects,
+    breakables,
+    clutter,
+    deletes: [...vehicles.deletes, ...peds.deletes, ...mapObjects.deletes],
+    mapObjects,
+    peds: peds.report,
+    props,
+    vehicles: vehicles.report,
+  };
 }
 
 /** Parse a de-tiling list: plain names (one per line, `#` comments) OR skygfx `texdb.txt` lines
@@ -310,6 +318,48 @@ function requireDir(flag: string, value: string): string {
   }
 
   return path;
+}
+
+/**
+ * Write the accumulated `.osm` files into the copied archives and report what moved. Rebuilding the
+ * archives is the expensive half — it streams, but it still rewrites ~1 GB of `gta3.img`.
+ */
+function rewriteOptimizedArchives(
+  out: string,
+  bundles: ReturnType<typeof createModelBundles>,
+  packed: PackedModels,
+): object {
+  const log = (message: string): void => console.log(`[opensa-pack] ${message}`);
+  const started = Date.now();
+  const rewrite = rewriteModelArchives(out, { deletes: packed.deletes, inserts: bundles.inserts() });
+  for (const archive of rewrite.archives) {
+    log(
+      `archive ${archive.file}: +${archive.inserted} -${archive.deleted} entries, ` +
+        `${(archive.bytes / 1048576).toFixed(0)} MB`,
+    );
+  }
+  if (rewrite.unplaced.length > 0) {
+    // An insert whose origin no archive held would be a SILENT no-render at runtime — never let it pass quietly.
+    console.warn(
+      `[opensa-pack] ⚠ ${rewrite.unplaced.length} optimized entries had no home archive: ` +
+        rewrite.unplaced.slice(0, 8).join(', '),
+    );
+  }
+  for (const [label, failures] of [
+    ['vehicle', packed.vehicles.failed],
+    ['clutter', packed.clutter.failed],
+    ['ped', packed.peds.failed],
+    ['anim object', packed.animObjects.failed],
+    ['prop', packed.props.failed],
+    ['map object', packed.mapObjects.failed],
+  ] as const) {
+    for (const failure of failures) {
+      console.warn(`[opensa-pack] ⚠ ${label} '${failure.model}' not converted: ${failure.error}`);
+    }
+  }
+  log(`${bundles.size()} models bundled; archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+
+  return { ...packed, rewrite };
 }
 
 main().catch((error: unknown) => {

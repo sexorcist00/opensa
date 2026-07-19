@@ -20,7 +20,8 @@ import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-mode
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
 
 import { packModelOstex } from './model-ostex';
-import { planModelTextures, remapModelLayers } from './model-textures';
+import { planModelSlots, planModelTextures, remapModelLayers } from './model-textures';
+import { type TexturePlanner } from './textures';
 
 export interface ModelOsm {
   built: VehicleModelData;
@@ -58,6 +59,13 @@ export interface ModelOsmOptions {
   txd?: string;
   /** `vehicles.ide` wheelScale as [front, rear]. */
   wheelScale?: readonly [number, number];
+  /**
+   * Plan into the SHARED WORLD dictionary instead of a private one — what a map object does. The submeshes
+   * then carry GLOBAL array refs and the `.osm` gets no `TEXS` at all: the arrays it points into are the
+   * ones the welded cells already ship, so a texture used by a hundred models is stored once, not a
+   * hundred times (measured: 3 674 MB of per-model dictionaries vs 380 MB of geometry).
+   */
+  worldDictionary?: { planner: TexturePlanner; preferCutout?: boolean };
 }
 
 /** Build one model's `.osm`. Throws when the DFF is absent — the caller decides whether that is fatal. */
@@ -93,25 +101,48 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
         dictionary.empty,
       )
     : null;
-  const arrays = planned ? submeshArrays(name, built, planned.slots) : null;
-  if (planned) {
-    remapModelLayers(built.meta, planned.slots);
+  const shared = options.worldDictionary
+    ? planModelSlots(
+        options.worldDictionary.planner,
+        built.texture.names,
+        options.txd ?? name,
+        options.worldDictionary.preferCutout,
+        dictionary.empty,
+      )
+    : null;
+  const slots = planned?.slots ?? shared;
+  const arrays = slots ? submeshArrays(name, built, slots) : null;
+  if (slots) {
+    remapModelLayers(built.meta, slots);
   }
   const { bin, fixture } = packVehicleFixture(name, built);
   if (arrays) {
     fixture.submeshes = fixture.submeshes.map((submesh, index) => ({ ...submesh, array: arrays[index] }));
   }
+  if (shared) {
+    // The arrays are the WORLD's, not this file's — the runtime must bind the streamed cell arrays rather
+    // than look for a dictionary that is deliberately absent.
+    fixture.textureSource = 'world';
+  }
   // Without a raw dictionary the builder bucketed everything into ONE array, so `TEXS` carries a single
   // entry; peds and map objects are the classes whose textures disagree on size and need more.
-  const ostex = planned ? planned.arrays[0] : packModelOstex(built.texture);
+  const ostex = shared ? new Uint8Array(0) : planned ? planned.arrays[0] : packModelOstex(built.texture);
   const sections: OsmSection[] = [
     { bytes: new TextEncoder().encode(JSON.stringify(fixture)), tag: OsmSectionTag.DESC },
     { bytes: bin, tag: OsmSectionTag.GEOM },
-    { bytes: encodeOsmTextures({ arrays: planned ? planned.arrays : [ostex] }), tag: OsmSectionTag.TEXS },
+    ...(shared
+      ? []
+      : [{ bytes: encodeOsmTextures({ arrays: planned ? planned.arrays : [ostex] }), tag: OsmSectionTag.TEXS }]),
     ...(options.extraSections?.(built, dff, clump) ?? []),
   ];
 
-  return { built, bytes: encodeOsm(sections), fixture, ostex, sections };
+  return {
+    built,
+    bytes: encodeOsm(sections),
+    fixture,
+    ostex,
+    sections,
+  };
 }
 
 /**

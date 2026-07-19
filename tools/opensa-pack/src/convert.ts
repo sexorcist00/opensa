@@ -41,6 +41,7 @@ import {
 export interface ConvertOptions {
   /** Bake per-vertex AO/skyVis (074/07); on by default, `--no-ao` skips it. */
   ao?: boolean;
+
   /** Bake pool size (074/14 A2); 1 = the serial in-process path. Default: a quarter of the cores. */
   bakeWorkers?: number;
   cellSize?: number;
@@ -50,6 +51,12 @@ export interface ConvertOptions {
   fallbackTxds?: readonly string[];
   /** Progress sink (chunk/bake/assembly lines with an ETA); silent when absent — tests stay quiet. */
   log?: (message: string) => void;
+  /**
+   * Called once the whole map has been welded into the texture plan and before that plan is sealed — the
+   * only point at which a per-model converter can resolve into the SHARED dictionary (003 phase 5g). A map
+   * object's `.osm` carries no textures of its own precisely because it points into these arrays.
+   */
+  onWorldPlanned?: (planner: TexturePlanner, defs: MapDefinitions) => void;
   /** Inclusive GTA cell-coordinate rect [x0, y0, x1, y1]. */
   rect: readonly [number, number, number, number];
   /** Curated stochastic de-tiling texture names, lowercased (074/12). */
@@ -223,6 +230,11 @@ export async function convertDistrict(
         `elapsed ${elapsed.toFixed(0)}s, eta ~${eta.toFixed(0)}s`,
     );
   }
+
+  // The ONE moment the world's texture plan is both COMPLETE (every cell welded) and still OPEN (not yet
+  // sealed by `build()`): the per-model conversion hooks in here, because a map object's dictionary IS
+  // this plan (003 phase 5g).
+  options.onWorldPlanned?.(planner, defs);
 
   log('encoding texture arrays …');
   for (const array of planner.build()) {

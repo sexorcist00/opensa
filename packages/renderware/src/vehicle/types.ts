@@ -84,6 +84,9 @@ export interface VehicleFixture {
   parts: VehicleModelPart[];
   submeshes: VehicleModelSubmesh[];
   textures: { height: number; names: string[]; offset: number; width: number };
+  /** `'world'` = the submeshes' `array` fields are refs into the SHARED world plan and the file carries no
+   *  `TEXS`; absent = a private dictionary rides along, which is what every by-name class ships. */
+  textureSource?: 'world';
   vertexCount: number;
   wheels: VehicleWheel[];
 }
