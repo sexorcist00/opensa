@@ -5,21 +5,21 @@ import { breakableModelsFromText } from '@opensa/renderware/breakable/models';
  * `opensa-pack` CLI (plan 074/03).
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1
- *     [--cell-size 250] [--no-ao] [--no-models] [--bakes [--no-sunvis]] [--bake-workers N]
- *     [--chunk-cells 6] [--wind <dir>[,<dir>…]]
+ *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--stochastic <file>[,<file>…]]
  *
- * (`--in <mods-src>` and its only consumer — the `clouds/` skybox dome stage — were REMOVED 2026-07-17
- * together with the engine's painted cloud panorama.)
+ * REMOVED FLAGS (2026-07-19, user): `--cell-size` (the pak and the runtime must agree on it and nothing
+ * checked that — it is the {@link CELL_SIZE} constant now), `--chunk-cells` (a welding tuning knob from the
+ * A2 speed work; the default stands), `--no-sunvis` (it said exactly what omitting `--bakes` says), and
+ * `--wind` — whose wind-ADAPTED vegetation DFFs move into pmb config with the rest of the input data
+ * (074/14). Until that lands, unadapted vegetation sways by height-above-base instead of authored per-vertex
+ * weights. (`--in <mods-src>` went earlier, 2026-07-17, with the painted cloud panorama.)
  *
  * AO/skyVis is ON BY DEFAULT (2026-07-17 user decision — it replaces prod's SSAO, so a default pak must
- * carry it; `--no-ao` skips it for fast iteration reconverts). `--bakes` now gates only the HEAVY shadow
- * bake (sun-vis, 074/07): production, bench-ritual and pre-flip converts MUST pass it — without it the
- * direct sun renders unshadowed (bridges/canyons) by design.
+ * carry it; `--no-ao` skips it for fast iteration reconverts). `--bakes` gates the HEAVY shadow bake
+ * (sun-vis, 074/07): production, bench-ritual and pre-flip converts MUST pass it — without it the direct
+ * sun renders unshadowed (bridges/canyons) by design.
  *
- * `--wind` — overlay dirs of wind-ADAPTED DFFs (prelit alpha = sway weights), e.g.
- * `--wind "mods-src/vegetation,mods-src/mods/21. Wind Project 1.0.2"`; they shadow the game's assets.
- *
- * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / cellSize)).
+ * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / CELL_SIZE)).
  *
  * OUTPUT (plan 003 phase 1): `--out` is a COPY of `--game` — the chain convention, so every stage hands the
  * next a complete game tree. Our own products go under `<out>/opensa/` (`world.ospak`, `manifest.json`,
@@ -32,8 +32,8 @@ import { breakableModelsFromText } from '@opensa/renderware/breakable/models';
  */
 import { argValue, fromCwd } from '@opensa/tool-kit/cli';
 import { copyGameDir, guardOut } from '@opensa/tool-kit/game-dir';
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { TexturePlanner } from './textures';
@@ -64,22 +64,11 @@ interface PackedModels {
   vehicles: ReturnType<typeof packVehicles>['report'];
 }
 
+/** The world cell size. NOT a flag: the pak and the runtime must agree on it, and nothing checked that. */
+const CELL_SIZE = 250;
+
 function arg(name: string): null | string {
   return argValue(`--${name}`) ?? null;
-}
-
-function findFiles(dir: string, extension: string): string[] {
-  const found: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      found.push(...findFiles(full, extension));
-    } else if (entry.toLowerCase().endsWith(extension)) {
-      found.push(full);
-    }
-  }
-
-  return found;
 }
 
 async function main(): Promise<void> {
@@ -88,9 +77,8 @@ async function main(): Promise<void> {
   const rectRaw = arg('rect');
   if (!gameRaw || !outRaw || !rectRaw) {
     console.error(
-      'usage: opensa-pack --game <dir> --out <dir> --rect x0,y0,x1,y1 [--cell-size 250] [--no-ao] ' +
-        '[--no-models] [--bakes [--no-sunvis]] [--bake-workers N] [--chunk-cells 6] ' +
-        '[--wind <dir>[,<dir>…]] [--stochastic <file>[,<file>…]]',
+      'usage: opensa-pack --game <dir> --out <dir> --rect x0,y0,x1,y1 ' +
+        '[--no-ao] [--no-models] [--bakes] [--bake-workers N] [--stochastic <file>[,<file>…]]',
     );
     process.exitCode = 2;
 
@@ -102,7 +90,6 @@ async function main(): Promise<void> {
   if (rect.length !== 4 || rect.some(Number.isNaN)) {
     throw new Error(`bad --rect '${rectRaw}' (want x0,y0,x1,y1 in cell coords)`);
   }
-  const cellSize = Number(arg('cell-size') ?? 250) || 250;
   // AO is ON by default (it stands in for prod's SSAO — a default pak must carry it; `--no-ao` for fast
   // iteration reconverts). The heavy SHADOW bake (sun-vis) stays opt-in behind `--bakes`.
   const bakes = process.argv.includes('--bakes');
@@ -110,29 +97,15 @@ async function main(): Promise<void> {
   // 003 phase 3: on by default — a converted build must be optimized. `--no-models` skips the per-model
   // conversion AND the ~1 GB archive rebuild, for world-only iteration reconverts.
   const optimizeModels = !process.argv.includes('--no-models');
-  const sunVis = bakes && !process.argv.includes('--no-sunvis');
   const bakeWorkers = Number(arg('bake-workers') ?? 0) || undefined; // default: a quarter of the cores
-  const chunkCells = Number(arg('chunk-cells') ?? 0) || undefined; // default: 6 (chunked welding, A2)
-  const windDirs = (arg('wind') ?? '')
-    .split(',')
-    .map((dir) => dir.trim())
-    .filter(Boolean)
-    .map((dir) => requireDir('wind', dir));
-  guardOut(out, game, ...windDirs);
+  guardOut(out, game);
 
   const started = Date.now();
+  console.log(`[opensa-pack] loading game dir ${game} …`);
+  const fs = openGameDir(game);
   console.log(
-    `[opensa-pack] loading game dir ${game}${windDirs.length > 0 ? ` + wind overlays ${windDirs.join(' | ')}` : ''} …`,
-  );
-  const fs = openGameDir(game, windDirs);
-  console.log(
-    `[opensa-pack] converting rect ${rectRaw} (cellSize ${cellSize}, ao ${ao ? 'on' : 'off'}, ` +
-      `sunvis ${sunVis ? 'on' : 'off'}) …`,
-  );
-  // Overlay mods ship shared TXDs (vegetation.txd) the installed game wires via txdp — offline they become
-  // planner fallbacks.
-  const fallbackTxds = windDirs.flatMap((dir) =>
-    findFiles(dir, '.txd').map((file) => basename(file, '.txd').toLowerCase()),
+    `[opensa-pack] converting rect ${rectRaw} (cellSize ${CELL_SIZE}, ao ${ao ? 'on' : 'off'}, ` +
+      `sunvis ${bakes ? 'on' : 'off'}) …`,
   );
   // Stochastic de-tiling list (074/12): the CURATED uniform-noise list is the ONLY default — the skygfx
   // texdb (data/skygfx-texdb.txt) scrambled structured textures in the field; opt back in via
@@ -158,9 +131,7 @@ async function main(): Promise<void> {
   const { manifest, pak, report } = await convertDistrict(fs, {
     ao,
     ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
-    cellSize,
-    ...(chunkCells !== undefined ? { chunkCells } : {}),
-    fallbackTxds,
+    cellSize: CELL_SIZE,
     log: (message) => console.log(`[opensa-pack] ${message}`),
     // Every model class converts HERE: the by-name ones first (they own their private dictionaries), then
     // the map objects, which resolve into the world plan this hook hands over while it is still open.
@@ -169,7 +140,7 @@ async function main(): Promise<void> {
       : {}),
     rect: rect as unknown as readonly [number, number, number, number],
     stochasticNames,
-    sunVis,
+    sunVis: bakes,
     waterHeights,
   });
 

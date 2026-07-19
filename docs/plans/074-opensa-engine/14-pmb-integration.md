@@ -51,7 +51,8 @@ own engine, benchmarked**.
       `DecompressionStream` has no brotli, a WASM brotli decoder would outweigh its gain over
       meshopt+deflate, and static hosting can still serve `Content-Encoding: br` transparently.
 - [ ] BC α-subset encode (after the size ledger says how much it still matters).
-- [ ] Wind/stochastic/subdivision data moved into pmb config; `--wind` CLI removed.
+- [~] `--wind` CLI REMOVED (2026-07-19, with `--cell-size`, `--chunk-cells`, `--no-sunvis`). The DATA has
+  not moved into pmb config yet — until it does, unadapted vegetation sways by height-above-base.
 - [ ] **Output shape = "almost a copy of the game, in our format"** (user, 2026-07-18): opensa-pack
       behaves like every other tool in the chain — a game-ready set IN, a game-shaped set OUT. Converted
       assets become the pak; loose LIVE-TUNABLE data files (timecyc first — `data/timecyc_24h.dat` /

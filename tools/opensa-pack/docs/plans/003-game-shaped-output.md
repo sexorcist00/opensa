@@ -197,17 +197,17 @@ writing a fourth private copy).
 
 Fields are `OspakManifest` (`packages/engine-formats/src/ospak.ts:33-55`), produced at `src/convert.ts:236-240`.
 
-| Field          | Origin                                        | Verdict                                                                                           |
-| -------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `version`      | format constant                               | **keep**                                                                                          |
-| `byteLength`   | pak size                                      | **keep** while a container exists; dies with it if phase 4 goes to loose files                    |
-| `cellSize`     | converter choice (`--cell-size`, default 250) | **keep** — not derivable from the game; the welder picked it                                      |
-| `cells`        | welded output                                 | **keep**                                                                                          |
-| `textures`     | our texture arrays                            | **keep**                                                                                          |
-| `uvAnimations` | extracted from DFF UVAnimDict plugins         | **keep** — the source DFFs are welded away, and cells index this array by slot, so it is ours now |
-| `water`        | our baked mesh pointer                        | **keep** — the MESH is ours; `data/water.dat` remains the runtime fallback it already is          |
-| `timecyc`      | verbatim `data/timecyc*.dat` text             | **DELETE** — rule violation, and the one that already bit us                                      |
-| `timecyc24`    | which of the two files was found              | **DELETE** — same                                                                                 |
+| Field          | Origin                                           | Verdict                                                                                           |
+| -------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `version`      | format constant                                  | **keep**                                                                                          |
+| `byteLength`   | pak size                                         | **keep** while a container exists; dies with it if phase 4 goes to loose files                    |
+| `cellSize`     | converter choice (the `CELL_SIZE` constant, 250) | **keep** — not derivable from the game; the welder picked it                                      |
+| `cells`        | welded output                                    | **keep**                                                                                          |
+| `textures`     | our texture arrays                               | **keep**                                                                                          |
+| `uvAnimations` | extracted from DFF UVAnimDict plugins            | **keep** — the source DFFs are welded away, and cells index this array by slot, so it is ours now |
+| `water`        | our baked mesh pointer                           | **keep** — the MESH is ours; `data/water.dat` remains the runtime fallback it already is          |
+| `timecyc`      | verbatim `data/timecyc*.dat` text                | **DELETE** — rule violation, and the one that already bit us                                      |
+| `timecyc24`    | which of the two files was found                 | **DELETE** — same                                                                                 |
 
 Two fields die. Their consumers, in the order they must be cut:
 

@@ -72,7 +72,7 @@ measurement ledger tables (bytes, groups, arrays) the plan docs consume.
 
 **Bake defaults (revised 2026-07-17, user decision): AO/skyVis is ON by default** — it stands in for
 prod's SSAO, so a default pak must carry it; `--no-ao` skips it for fast iteration reconverts. **The
-heavy SHADOW bake (sun-vis) stays opt-in behind `--bakes`** (`--no-sunvis` subtracts): bench-ritual,
+heavy SHADOW bake (sun-vis) stays opt-in behind `--bakes`**: bench-ritual,
 field shadow checks and production/flip paks MUST pass it — without it the direct sun renders
 unshadowed (bridges/canyons) by design. History: 2026-07-13 both bakes went opt-in for iteration speed
 (bakes were ~90 % of convert wall-time); AO returned to default-on when it became the engine's only AO
