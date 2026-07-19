@@ -402,7 +402,9 @@ the pipeline path.
       mixing-rule warning (de-duplicated, surfaced via `onAssetWarning`), `.osm`/`.ostex` in the modloader
       allow-list, `readVehicleOsm` (the missing inverse of `packVehicleFixture`), and a COMPRESSED model
       texture path in the engine (`core/ostex-upload`, `ModelTextureInit` union)
-- [ ] Phase 3 — local-loader ingest of `.osm`/`.ostex` (`build-vfs.ts` selection)
+- [x] Phase 3 step 3 — local-loader ingest: `partitionEntries` prefers `<base>.osm` and pulls the
+      MODEL-named `<base>.ostex` with it; `looseGroup` routes both. Everything downstream
+      (`filesForGroup`, `readEntry`) was already extension-agnostic.
 - [ ] Phase 4 — named cell/texture files under `<out>/opensa/`, per-ring texture laziness, one loader
 - [ ] Phase 4 — manifest shrunk to the rule; `timecyc`/`timecyc24`/`setup.timecyc` deleted
 - [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
@@ -488,6 +490,18 @@ spawn path is owed); what it settled instead:
   agree on positions, submeshes, half-extents, handling, seat, wheels and collision vertices. The wheel
   RADIUS initially disagreed — a lie in my fixture (hardcoded `wheelScale`), not a product bug; the test now
   reads the def exactly as `packVehicles` does.
+
+**Phase 3 step 3 (2026-07-19)** — the browser local loader. One decision worth keeping:
+
+> **A converted model's dictionary is named after the MODEL, not after the IDE's `txd` column.**
+
+Several models share one stock `.txd`, but a converted model indexes its OWN baked atlas by layer index, so
+`<base>.osm` is only meaningful beside `<base>.ostex`. The selection therefore pulls the `.ostex` from the
+MODEL loop, not from the txd loop — and the txd loop still runs, because a shared dictionary must survive
+for whatever stayed unoptimized (covered by a test where `house` is converted and `shed` is not).
+
+Nothing else needed changing: `filesForGroup`/`readEntry` never looked at extensions. Only `partitionEntries`
+and `looseGroup` did.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

@@ -20,11 +20,11 @@ import type { LazyImgArchive } from './img-reader';
 export interface InstallPlan {
   /** Loose file paths, ingested by their relative path (bucketed by `looseGroup`). */
   loose: string[];
-  /** Referenced `.dff` + every `.col` archive entries. */
+  /** Referenced geometry (`.osm` when converted, else `.dff`) + every `.col` archive entry. */
   models: Entry[];
   /** Placement/anim/data world files (ipl/ifp/dat) from `gta3.img`, ingested by bare name. */
   others: Entry[];
-  /** Referenced `.txd` archive entries. */
+  /** Referenced dictionaries: a converted model's `.ostex`, plus the `.txd` of whatever stayed stock. */
   textures: Entry[];
 }
 

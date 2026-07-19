@@ -63,16 +63,18 @@ export function ideRefs(ideText: string): Map<number, ModelRef> {
 
 /**
  * The group a loose file (keyed by its lowercased relative path) is packed into: everything under `data/`
- * goes to `data`; otherwise by extension — `.dff` → models, `.txd` → textures, the rest (ifp/gxt) → others.
+ * goes to `data`; otherwise by extension — geometry → models, dictionaries → textures, the rest
+ * (ifp/gxt) → others. `.osm`/`.ostex` are our optimized twins of `.dff`/`.txd` and belong in the same
+ * groups (opensa-pack 003).
  */
 export function looseGroup(name: string): GroupName {
   if (name.startsWith('data/')) {
     return 'data';
   }
-  if (name.endsWith('.dff')) {
+  if (name.endsWith('.dff') || name.endsWith('.osm')) {
     return 'models';
   }
-  if (name.endsWith('.txd')) {
+  if (name.endsWith('.txd') || name.endsWith('.ostex')) {
     return 'textures';
   }
 
@@ -81,14 +83,51 @@ export function looseGroup(name: string): GroupName {
 
 /**
  * Split img-sourced entries into three buckets:
- * - models: each referenced `.dff` (gta3 → gta_int) + every `.col` from gta3.img.
- * - others: every placement/anim/data file (ipl/ifp/dat) from gta3.img.
- * - textures: each referenced `.txd` (gta3 → gta_int).
- * Referenced dff/txd present in neither img are dropped. Loose files are grouped by {@link looseGroup}.
+ * - models: each referenced model as `.osm` if opensa-pack converted it, else `.dff` (gta3 → gta_int),
+ *   plus every `.col` from gta3.img;
+ * - others: every placement/anim/data file (ipl/ifp/dat) from gta3.img;
+ * - textures: a converted model's own `<model>.ostex`, plus the stock `.txd` of whatever stayed
+ *   unoptimized (gta3 → gta_int).
+ *
+ * Anything present in neither img is dropped. Missing OUR extensions here is the same class of bug as the
+ * procobj miss (plans 19/20): a converted asset the local loader never ingests is a silent no-render, not
+ * an error. Loose files are grouped by {@link looseGroup}.
  */
 export function partitionEntries(refs: PlacedRefs, gta3: ReadonlySet<string>, gtaInt: ReadonlySet<string>): Partition {
-  const models = resolveBucket(refs.models, '.dff', gta3, gtaInt);
+  const models: Entry[] = [];
   const others: Entry[] = [];
+  const textures: Entry[] = [];
+  const seen = new Set<string>();
+  /** Take one file into a bucket if either img holds it; false when it exists nowhere. */
+  const take = (name: string, bucket: Entry[]): boolean => {
+    if (seen.has(name)) {
+      return true;
+    }
+    const source = resolveSource(name, gta3, gtaInt);
+    if (!source) {
+      return false;
+    }
+    bucket.push({ name, source });
+    seen.add(name);
+
+    return true;
+  };
+
+  for (const base of refs.models) {
+    // Our optimized pair first (opensa-pack 003). The dictionary is named after the MODEL, not after the
+    // IDE's txd: several models can share one stock `.txd`, but a converted model indexes its OWN baked
+    // atlas by layer index, so `<base>.osm` is only meaningful beside `<base>.ostex`.
+    if (take(`${base}.osm`, models)) {
+      take(`${base}.ostex`, textures);
+    } else {
+      take(`${base}.dff`, models);
+    }
+  }
+  // The stock dictionaries for whatever stayed unoptimized. A converted model's `.txd` is gone from the
+  // archives, so this simply finds nothing for it.
+  for (const base of refs.txds) {
+    take(`${base}.txd`, textures);
+  }
   for (const name of gta3) {
     if (MODEL_WORLD_EXTENSIONS.some((ext) => name.endsWith(ext))) {
       models.push({ name, source: 'gta3' });
@@ -97,7 +136,7 @@ export function partitionEntries(refs: PlacedRefs, gta3: ReadonlySet<string>, gt
     }
   }
 
-  return { models, others, textures: resolveBucket(refs.txds, '.txd', gta3, gtaInt) };
+  return { models, others, textures };
 }
 
 /** Resolve placed instance ids to the unique set of referenced model + txd base names via the IDE id map. */
@@ -125,28 +164,4 @@ export function resolveSource(name: string, gta3: ReadonlySet<string>, gtaInt: R
   }
 
   return null;
-}
-
-/** Map base names → resolved {@link Entry}s for one extension, deduped, dropping any in neither img. */
-function resolveBucket(
-  bases: readonly string[],
-  ext: string,
-  gta3: ReadonlySet<string>,
-  gtaInt: ReadonlySet<string>,
-): Entry[] {
-  const out: Entry[] = [];
-  const seen = new Set<string>();
-  for (const base of bases) {
-    const name = `${base}${ext}`;
-    if (seen.has(name)) {
-      continue;
-    }
-    const source = resolveSource(name, gta3, gtaInt);
-    if (source) {
-      out.push({ name, source });
-      seen.add(name);
-    }
-  }
-
-  return out;
 }
