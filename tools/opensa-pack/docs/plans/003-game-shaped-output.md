@@ -13,13 +13,11 @@ The bulk convert ships: **13 841 map objects, 0 failed**, against the SHARED wor
 the 3 674 MB a private dictionary each would have cost), and `gta3.img` came out SMALLER than the input
 (1 224 vs 1 328 MB) with 14 349 entries deleted.
 
-**Still open**, and nothing else:
+**Still open**: the **full pmb run end to end** — the user runs it last. The `pack` stage is proven at the
+library boundary (byte-identical pak) and by the typechecker, not yet through the pipeline.
 
-- the three AUDIT GAPS — material masks (429 models), 2dfx in the per-model container (126), a second UV
-  layer (26). All three are carried by the welded CELL path already, so they only bite an asset drawn BY
-  NAME; see the audit table below for how much each is worth.
-- the **full pmb run end to end** — the user runs it last. The `pack` stage is proven at the library
-  boundary (byte-identical pak) and by the typechecker, not yet through the pipeline.
+The three audit gaps are CLOSED (2026-07-19) — measured, and none of them costs anything today; see
+"The three audit gaps, measured" below.
 
 Supersedes the output half
 of [074/14](../../../../docs/plans/074-opensa-engine/14-pmb-integration.md); the pmb-stage half stays there.
@@ -1095,18 +1093,18 @@ reverted. Runtime modloader is a different, later path.)
 
 Audited every asset they ship — **1 328 DFFs (all parsed) and 1 795 TXDs / 26 561 textures (all parsed)**:
 
-| DFF feature               | mod models | carried by the per-model `.osm`?              |
-| ------------------------- | ---------- | --------------------------------------------- |
-| prelit vertex colours     | 1 265      | **yes** — `colors`                            |
-| **night vertex colours**  | **1 243**  | **NO** — `buildVehicleModel` never reads them |
-| **material mask texture** | 429        | **NO** — `maskName` ignored                   |
-| authored normals          | 196        | **yes** — `normals`                           |
-| **2dfx lights / coronas** | 104        | **NO** — the per-model container has no 2dfx  |
-| multi-frame clump         | 83         | **yes** — `SKEL` + `parts`                    |
-| **2 UV layers**           | 26         | **NO** — the builder reads `uvLayers[0]` only |
-| RW breakable mesh         | 25         | **yes** — `SHAT`                              |
-| 2dfx particles            | 18         | **NO**                                        |
-| 2dfx roadsigns            | 4          | **NO**                                        |
+| DFF feature               | mod models | carried by the per-model `.osm`?               |
+| ------------------------- | ---------- | ---------------------------------------------- |
+| prelit vertex colours     | 1 265      | **yes** — `colors`                             |
+| **night vertex colours**  | **1 243**  | **NO** — `buildVehicleModel` never reads them  |
+| **material mask texture** | 429        | no — and neither does the CELL path; see below |
+| authored normals          | 196        | **yes** — `normals`                            |
+| **2dfx lights / coronas** | 104        | not in the container — the CELL carries them   |
+| multi-frame clump         | 83         | **yes** — `SKEL` + `parts`                     |
+| **2 UV layers**           | 26         | no — and neither does the CELL path; see below |
+| RW breakable mesh         | 25         | **yes** — `SHAT`                               |
+| 2dfx particles            | 18         | **NO**                                         |
+| 2dfx roadsigns            | 4          | **NO**                                         |
 
 Textures: dxt1 24 422 · dxt5 945 · dxt3 936 · rgba8888 258 (all decodable), sides up to 2 048, and
 **95 % carry a mip chain** (deepest 12). `packModelOstex` writes `mipCount = 1`, so the phase-5 mip catch is
@@ -1118,17 +1116,45 @@ reads `nightColors`, collects 2dfx (coronas, particles, roadsigns) by placement,
 path, which today serves clutter, topple props, animated objects, breakables, peds and vehicles — and which
 becomes the main path if the ~14 000 map objects are converted.
 
+### The three audit gaps, measured (2026-07-19) — and none of them is a divergence
+
+The table above compares the per-model container against the SOURCE DFF. The question that actually matters
+is different: does an asset drawn BY NAME come out worse than the same asset through the welded CELL path?
+Measured on the real modded game, the answer is no for all three, and each has a stated condition under
+which that would change.
+
+**Material masks — our renderer does not read them, anywhere.** `maskName` is parsed, and `mesh.ts` even
+carries it into the `SHAT` section, but nothing consumes it: the weld never touches it, the rigid path never
+touches it, and the debris baker reads only `texture` and `ambient`. So the 429 models are not a per-model
+gap; masks are simply an SA feature we do not implement at all (39 of 56 clutter species and 57 of 252
+breakables carry one, and they render the same on both paths — without it). **Condition**: if masks are ever
+implemented, BOTH paths need them together, and the `SHAT` field is already there waiting.
+
+**2dfx — carried by PLACEMENT, and the break path already knows it.** Coronas and particle emitters weld
+into HD cells per placement, so a by-name model standing in the world still gets its 2dfx from the cell it
+stands in. When that placement breaks or topples, `cells.ts:134-139` removes its lights with its geometry —
+the lesson a smashed traffic light taught by leaving its coronas hanging in the sky. A toppled lamp going
+dark is what the game does too. Of the by-name classes: **0 of 56 clutter species carry 2dfx at all**, and 23
+of 252 breakables do — of which only **3 are never placed** (`mtraffic4`, `imy_track_barrier`, `mine`), and
+an unplaced model is never drawn. **Condition**: a class that spawns models with 2dfx at positions no IPL
+placed would need them in the container.
+
+**Second UV layer — both paths read set 0.** The weld takes `atomic.uv`, which is `uvLayers[0]`; the rigid
+builder takes `uvLayers[0]`. SA's own renderer uses set 0. **0 of 56 clutter species and 0 of 252 breakables
+carry a second set**; the 26 that do are map objects, which already render from set 0 today and continue to
+after conversion. **Condition**: the same one as masks — a renderer feature, needed on both paths at once.
+
 **Ordered by how much they hurt** (user: record now, close later — the earlier queue comes first):
 
-1. **Night vertex colours (1 243 models)** — this IS what half these mods are (`Pre Light Fixes Pack`,
-   `Project reLIT`, `Neon Objects`). A prop or animated object drawn by name renders with day colours at
-   night.
-2. **Mips in the per-model `.ostex` (95 % of textures)** — must plan from the RAW TXD like the world
-   planner, not from `buildVehicleModel`'s decoded output.
-3. **Material mask textures (429)** — first establish whether our renderer uses SA's mask at all.
-4. **2dfx in the per-model container (126)** — probably covered in practice, because 2dfx are welded into
-   the cell by PLACEMENT; needs confirming rather than assuming.
-5. **Second UV layer (26)** — small, but silent.
+1. ~~**Night vertex colours (1 243 models)**~~ — CLOSED (phase 5g step 4): the rigid path reads prelit AND
+   night sets now, and measuring first found the bigger half — the DAY prelit was being dropped too.
+2. ~~**Mips in the per-model `.ostex` (95 % of textures)**~~ — CLOSED (phase 5g step 1): map objects plan
+   from the RAW TXD through the shared world planner, which passes opaque DXT through byte for byte.
+3. ~~**Material mask textures (429)**~~ — CLOSED: established, and the answer is that NOTHING in our
+   renderer reads a mask.
+4. ~~**2dfx in the per-model container (126)**~~ — CLOSED: confirmed rather than assumed, with the break
+   path's light removal and the 3-model unplaced tail measured.
+5. ~~**Second UV layer (26)**~~ — CLOSED: both paths read set 0, and no by-name model carries a second set.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 
