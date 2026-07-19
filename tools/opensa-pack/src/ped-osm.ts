@@ -12,12 +12,13 @@
  * (array, layer) — resolved here, once, instead of by name at spawn.
  */
 import type { AssetFileSystem } from '@opensa/renderware';
+import type { IfpAnimation } from '@opensa/renderware/parsers/binary/ifp';
 import type { PedFixture, PedFixtureSubmesh, PedModelData } from '@opensa/renderware/ped/build-ped-model';
 
 import { encodeOsm, encodeOsmTextures, type OsmSection, OsmSectionTag } from '@opensa/engine-formats';
 import { parseDff } from '@opensa/renderware';
 import { getTxdChain } from '@opensa/renderware/archive/asset-cache';
-import { buildPedModel } from '@opensa/renderware/ped/build-ped-model';
+import { buildPedModel, pedClip } from '@opensa/renderware/ped/build-ped-model';
 
 import { packModelOstex } from './model-ostex';
 
@@ -32,17 +33,28 @@ export interface PedOsm {
   textureArrays: Uint8Array[];
 }
 
-/** Build one ped's `.osm`. Throws when the model is absent or carries no skin. */
-export function buildPedOsm(fs: AssetFileSystem, model: string, txdName: string): PedOsm {
+/**
+ * Build one ped's `.osm`. Throws when the model is absent or carries no skin.
+ *
+ * `restClip` matters more than it looks: `minZ` is the lowest POSED vertex — the feet level the host aligns
+ * to the capsule bottom — so it depends on the pose. Measured on the BIND pose instead, the player sinks
+ * into the ground to the knees, which is exactly what the first field check showed.
+ */
+export function buildPedOsm(fs: AssetFileSystem, model: string, txdName: string, restClip?: IfpAnimation): PedOsm {
   const name = model.toLowerCase();
   const dff = fs.get(`${name}.dff`);
   if (!dff) {
     throw new Error(`${name}.dff not found`);
   }
-  const built = buildPedModel(parseDff(dff), getTxdChain(fs, txdName));
-  if (!built) {
+  const clump = parseDff(dff);
+  const txds = getTxdChain(fs, txdName);
+  const bind = buildPedModel(clump, txds);
+  if (!bind) {
     throw new Error(`${name} is not a skinned clump`);
   }
+  // The clip resolves against THIS model's bones, which only exist after the first build — so the pose
+  // measurement costs a second one. Offline, that is free.
+  const built = restClip ? (buildPedModel(clump, txds, { poseWith: pedClip(restClip, bind.bones) }) ?? bind) : bind;
 
   const { arrays, slotOf } = bucketTextures(built);
   const { bin, fixture } = packPedFixture(name, built, slotOf);

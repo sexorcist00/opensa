@@ -46,12 +46,16 @@ export async function loadPedProbe(engine: Engine, position: readonly [number, n
     joints: slice(fixture.layout.joints, fixture.vertexCount * 4),
     normals: slice(fixture.layout.normals, fixture.vertexCount * 12),
     positions: slice(fixture.layout.positions, fixture.vertexCount * 12),
-    submeshes: fixture.submeshes,
-    texture: {
-      height: texture.height,
-      rgba: slice(texture.offset, texture.width * texture.height * 4),
-      width: texture.width,
-    },
+    submeshes: fixture.submeshes.map((submesh) => ({ ...submesh, array: 0, layer: 0 })),
+    textures: [
+      {
+        height: texture.height,
+        kind: 'rgba',
+        layers: 1,
+        rgba: slice(texture.offset, texture.width * texture.height * 4),
+        width: texture.width,
+      },
+    ],
     uvs: slice(fixture.layout.uvs, fixture.vertexCount * 8),
     weights: slice(fixture.layout.weights, fixture.vertexCount * 4),
   });

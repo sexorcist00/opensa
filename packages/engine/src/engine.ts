@@ -279,8 +279,11 @@ export interface PedProbeInit {
   joints: Uint8Array;
   normals: Uint8Array;
   positions: Uint8Array;
-  submeshes: readonly { indexCount: number; indexOffset: number }[];
-  texture: { height: number; rgba: Uint8Array; width: number };
+  /** Each submesh binds its OWN texture, addressed as (array, layer) — a ped's textures can disagree on
+   *  size, so they cannot all live in one array (opensa-pack 003 phase 5f). */
+  submeshes: readonly { array: number; indexCount: number; indexOffset: number; layer: number }[];
+  /** One entry per texture SIZE the ped uses; `submeshes[].array` indexes this. */
+  textures: readonly ModelTextureInit[];
   uvs: Uint8Array;
   weights: Uint8Array;
 }
@@ -621,15 +624,15 @@ export class Engine {
   } = null;
   /** Skinning probe (074/08 B1) — a single skinned entity outside the static bundles. */
   private ped: null | {
-    bindGroup: GPUBindGroup;
     buffers: GPUBuffer[];
     indexBuffer: GPUBuffer;
     palette: Float32Array;
     paletteBuffer: GPUBuffer;
-    submeshes: readonly { indexCount: number; indexOffset: number }[];
+    /** One bind group per submesh: each holds a 2D view of the single array layer that submesh draws. */
+    submeshes: readonly { bindGroup: GPUBindGroup; indexCount: number; indexOffset: number }[];
   } = null;
-  private pedTexture: GPUTexture | null = null;
   private pedTextureBytes = 0;
+  private pedTextures: GPUTexture[] = [];
   private pipelines!: PipelineSet;
   /** Resolved scene (16f) + the godrays composite resources (074/09 stage 1); bind group is rebuilt on
    *  resize — it is NOT referenced by any bundle, so this is safe (unlike the frame bind group). */
@@ -1339,10 +1342,10 @@ export class Engine {
     }
     this.resources.destroyBuffer('cellVertex', this.ped.indexBuffer);
     this.resources.destroyBuffer('uniform', this.ped.paletteBuffer);
-    if (this.pedTexture) {
-      this.resources.destroyTexture('texture', this.pedTexture, this.pedTextureBytes);
-      this.pedTexture = null;
+    for (const texture of this.pedTextures) {
+      this.resources.destroyTexture('texture', texture, this.pedTextureBytes / Math.max(1, this.pedTextures.length));
     }
+    this.pedTextures = [];
     this.ped = null;
   }
 
@@ -1507,34 +1510,34 @@ export class Engine {
       size: palette.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    const texture = this.resources.createTexture(
-      'texture',
-      {
-        format: 'rgba8unorm-srgb',
-        label: 'ped-texture',
-        size: { height: init.texture.height, width: init.texture.width },
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      },
-      init.texture.rgba.byteLength,
-    );
-    this.device.queue.writeTexture(
-      { texture },
-      init.texture.rgba,
-      { bytesPerRow: init.texture.width * 4 },
-      { height: init.texture.height, width: init.texture.width },
-    );
-    const bindGroup = this.device.createBindGroup({
-      entries: [
-        { binding: 0, resource: { buffer: paletteBuffer } },
-        { binding: 1, resource: texture.createView() },
-        { binding: 2, resource: this.device.createSampler({ label: 'ped', magFilter: 'linear', minFilter: 'linear' }) },
-      ],
-      label: 'ped',
-      layout: this.pipelines.pedLayout,
-    });
-    this.ped = { bindGroup, buffers, indexBuffer, palette, paletteBuffer, submeshes: init.submeshes };
-    this.pedTexture = texture;
-    this.pedTextureBytes = init.texture.rgba.byteLength;
+    // One GPU texture per dictionary, then a bind group per SUBMESH holding a 2D view of the one layer it
+    // draws with. That is why the ped shader needs no change to support several arrays: a `2d` view over
+    // `baseArrayLayer` looks exactly like the single image it used to bind.
+    const uploads = init.textures.map((texture) => this.createModelTexture(texture, 'ped-texture'));
+    const sampler = this.device.createSampler({ label: 'ped', magFilter: 'linear', minFilter: 'linear' });
+    const submeshes = init.submeshes.map((submesh) => ({
+      bindGroup: this.device.createBindGroup({
+        entries: [
+          { binding: 0, resource: { buffer: paletteBuffer } },
+          {
+            binding: 1,
+            resource: (uploads[submesh.array] ?? uploads[0]).texture.createView({
+              arrayLayerCount: 1,
+              baseArrayLayer: submesh.layer,
+              dimension: '2d',
+            }),
+          },
+          { binding: 2, resource: sampler },
+        ],
+        label: 'ped',
+        layout: this.pipelines.pedLayout,
+      }),
+      indexCount: submesh.indexCount,
+      indexOffset: submesh.indexOffset,
+    }));
+    this.ped = { buffers, indexBuffer, palette, paletteBuffer, submeshes };
+    this.pedTextures = uploads.map((upload) => upload.texture);
+    this.pedTextureBytes = uploads.reduce((sum, upload) => sum + upload.byteEstimate, 0);
 
     return { palette };
   }
@@ -2181,10 +2184,10 @@ export class Engine {
     }
     pass.setPipeline(this.pipelines.get('ped'));
     pass.setBindGroup(0, this.frameBindGroup);
-    pass.setBindGroup(1, this.ped.bindGroup);
     this.ped.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
     pass.setIndexBuffer(this.ped.indexBuffer, 'uint16');
     for (const submesh of this.ped.submeshes) {
+      pass.setBindGroup(1, submesh.bindGroup);
       pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset);
     }
 

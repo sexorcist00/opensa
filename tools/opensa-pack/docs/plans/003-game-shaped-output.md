@@ -419,9 +419,8 @@ the pipeline path.
 - [x] Phase 5a — `ClutterModelInit`/`DebrisUpload` widened to `ModelTextureInit` (ped left for its own step)
 - [x] Phase 5b — `SHAT` section + `packBreakables` + `getBreakable` reading it (252 props, 1.6 MB)
 - [x] Phase 5f step 2 — ped converter (`ped-osm.ts` + `packPeds`) + `readPedOsm` + the ped data-loss gate
-- [ ] Phase 5f step 3 — engine: `PedProbeInit` takes a texture ARRAY, submeshes bind by (array, layer), and
-      `engine-player.ts` loads the player by NAME from the VFS instead of `/ped/ped.json` — a PRODUCTION
-      change, so it needs a field check, not just a green suite
+- [x] Phase 5f step 3 — engine binds a ped's textures per SUBMESH; `engine-player.ts` loads the player by
+      NAME from the VFS. FIELD-CHECKED (two real bugs the suite could not see — see the ledger)
 - [x] Phase 5e — animated objects: `SKEL` (the frame tree); the IFP stays a separate, moddable asset
 - [x] Phase 5 — REAL-FIXTURE conversion tests + the `no-data-loss` gate over one model per class
 - [x] Phase 5d — topple props: `HULL` section (dedup'd collider cloud + fallback box), read by `boundsOf`
@@ -742,6 +741,31 @@ The ped gate in `no-data-loss.test.ts` compares the converted `bmypol1` against 
 skinned buffer byte for byte (`positions`, `normals`, `uvs`, `indices`, `joints`, `weights`), the WHOLE
 skeleton deep-equal (skin order, parents, bone ids, inverse binds), `minZ` exact, and **every texture
 present** — layer count summed across arrays equals the builder's, with each submesh's slot in range.
+
+**Phase 5f step 3 (2026-07-19) — the engine and the production player. FIELD-CHECKED, and the field found
+two bugs a green suite could not.**
+
+The engine change turned out to need NO shader work: a ped now uploads one GPU texture per dictionary and
+builds a bind group **per submesh**, each holding a `2d` view over `baseArrayLayer` — which looks exactly
+like the single image the pipeline used to bind. The draw loop already iterated submeshes, so it just sets
+its own bind group per iteration. Multi-array peds therefore render whole, not first-texture-only.
+
+`engine-player.ts` no longer fetches `/ped/ped.json` + `/ped/ped.bin` — the LAB's probe fixture, baked by a
+CLI, in the PRODUCTION host. The player is `male01.osm` from the archives and its clips resolve from the
+game's own `ped.ifp` at load, so a modded IFP changes how the player walks.
+
+**Bug 1 — the player lay flat on the ground.** `getIfp(fs, 'ped')` asks for `ped.ifp`; the browser VFS keys
+loose files by relative path, so the archives' `anim/ped.ifp` never matched. With no clips the sampler holds
+the BIND pose, and SA's bind mesh lies along X — the skeleton is what stands a ped up. Both spellings are
+tried now, and a miss warns instead of shipping a corpse.
+
+**Bug 2 — the player sank into the ground to the knees.** `minZ` is the lowest POSED vertex, and
+`buildPedModel` takes the pose to measure it in (`options.poseWith`). The converter was not passing one, so
+it measured the BIND pose. `packPeds` now resolves `idle_stance` — the clip a standing ped holds — and poses
+with it; the log says which pose was used, and says so loudly when no IFP was found.
+
+Both were invisible to 2 207 green tests and obvious in one screenshot. That is the whole argument for the
+field check on a production path.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

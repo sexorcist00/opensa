@@ -49,9 +49,28 @@ export function loadPed(
     joints: data.joints,
     normals: bytesOf(data.normals),
     positions: bytesOf(data.positions),
-    submeshes: data.submeshes,
+    // Each texture becomes its own single-layer array, so a submesh's array index IS its texture's index.
+    submeshes: data.submeshes.map((submesh) => ({
+      ...submesh,
+      array: Math.max(
+        0,
+        data.textures.findIndex((texture) => texture.name.toLowerCase() === submesh.texture.toLowerCase()),
+      ),
+      layer: 0,
+    })),
     // Probe-grade, like the lab: peds are single-texture in practice; extras would need a texture array.
-    texture: data.textures[0] ?? { height: 1, rgba: new Uint8Array([255, 255, 255, 255]), width: 1 },
+    // The viewer shows one ped at a time from a loose file; every texture becomes its own single-layer
+    // array, so a ped whose textures disagree on size renders whole here too.
+    textures: (data.textures.length > 0
+      ? data.textures
+      : [{ height: 1, rgba: new Uint8Array([255, 255, 255, 255]), width: 1 }]
+    ).map((texture) => ({
+      height: texture.height,
+      kind: 'rgba' as const,
+      layers: 1,
+      rgba: texture.rgba,
+      width: texture.width,
+    })),
     uvs: bytesOf(data.uvs),
     weights: data.weights,
   });

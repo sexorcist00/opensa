@@ -4,9 +4,13 @@
  * `tools/opensa-pack/src/ped-probe.ts` (served at `/ped`, a root-public symlink like the paks).
  */
 import type { Engine, PedProbe, SamplerClip } from '@opensa/engine';
+import type { AssetFileSystem } from '@opensa/renderware';
 
 import { IfpSampler } from '@opensa/engine';
 import { writeGtaRoot } from '@opensa/game/adapters/engine-vehicle-handle';
+import { readPedOsm } from '@opensa/game/adapters/ped-osm';
+import { getIfp } from '@opensa/renderware/archive/asset-cache';
+import { pedClip } from '@opensa/renderware/ped/build-ped-model';
 
 export interface EnginePlayer {
   /** Face a yaw directly (enter/exit uses it on the way out of the car). */
@@ -26,58 +30,63 @@ export interface EnginePlayer {
   update(positionEngine: readonly [number, number, number], headingYaw: number, speed: number, dt: number): void;
 }
 
-interface PedFixtureJson {
-  bones: {
-    bindPosition: [number, number, number];
-    bindRotation: [number, number, number, number];
-    inverseBind: number[];
-    name: string;
-    parent: number;
-  }[];
-  clips: { duration: number; name: string; tracks: { quats: number[]; times: number[] }[] }[];
-  indexCount: number;
-  layout: { indices: number; joints: number; normals: number; positions: number; uvs: number; weights: number };
-  minZ?: number;
-  submeshes: { indexCount: number; indexOffset: number; texture: string }[];
-  textures: { height: number; name: string; offset: number; width: number }[];
-  vertexCount: number;
-}
-
-// Fixture clip order: [idle, walk, run] (ped-probe --clips idle_stance,walk_civi,run_civi).
+/** The player model and the clips it walks on, resolved from the game's own assets. */
+const PLAYER_MODEL = 'male01';
+/** Where the player's clips live. The archives hold it bare; a game dir keeps it under `anim/`, and the
+ *  browser VFS keys loose files by their relative path — so both spellings have to be tried. */
+const PLAYER_IFP_NAMES = ['ped', 'anim/ped'];
+/** Clip order the state machine below indexes: [idle, walk, run]. */
+const PLAYER_CLIPS = ['idle_stance', 'walk_civi', 'run_civi'];
 const IDLE_CLIP = 0;
 const WALK_CLIP = 1;
 const RUN_CLIP = 2;
 /** Planar speed (GTA m/s) above which the run cycle plays — between walkSpeed 2 and runSpeed 7. */
 const RUN_SPEED_THRESHOLD = 4;
 
-export async function loadEnginePlayer(engine: Engine): Promise<EnginePlayer> {
-  const [fixture, bin] = await Promise.all([
-    fetch('/ped/ped.json').then((response) => response.json() as Promise<PedFixtureJson>),
-    fetch('/ped/ped.bin').then((response) => response.arrayBuffer()),
-  ]);
-  const bytes = new Uint8Array(bin);
-  const slice = (offset: number, length: number): Uint8Array => bytes.subarray(offset, offset + length);
-  const texture = fixture.textures[0];
+/**
+ * The player, loaded BY NAME from the game's own assets (opensa-pack 003 phase 5f).
+ *
+ * It used to fetch `/ped/ped.json` + `/ped/ped.bin` over HTTP — the LAB's probe fixture, baked by a CLI —
+ * in the production host. So the shipped player was whatever a developer last converted, animations frozen
+ * at bake time, and the game dir the user picked had no say. Now the model comes from `<model>.osm` in the
+ * archives and the clips are resolved from `ped.ifp` at load, exactly like every other asset.
+ */
+export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem): EnginePlayer {
+  const osm = fs.get(`${PLAYER_MODEL}.osm`);
+  if (!osm) {
+    throw new Error(`player model ${PLAYER_MODEL}.osm not found — run opensa-pack over the game dir`);
+  }
+  const { fixture, geometry, textureArrays } = readPedOsm(PLAYER_MODEL, new Uint8Array(osm));
   const probe: PedProbe = engine.setPedProbe({
     boneCount: fixture.bones.length,
     indexCount: fixture.indexCount,
-    indices: slice(fixture.layout.indices, fixture.indexCount * 2),
-    joints: slice(fixture.layout.joints, fixture.vertexCount * 4),
-    normals: slice(fixture.layout.normals, fixture.vertexCount * 12),
-    positions: slice(fixture.layout.positions, fixture.vertexCount * 12),
+    indices: geometry.indices,
+    joints: geometry.joints,
+    normals: geometry.normals,
+    positions: geometry.positions,
     submeshes: fixture.submeshes,
-    texture: {
-      height: texture.height,
-      rgba: slice(texture.offset, texture.width * texture.height * 4),
-      width: texture.width,
-    },
-    uvs: slice(fixture.layout.uvs, fixture.vertexCount * 8),
-    weights: slice(fixture.layout.weights, fixture.vertexCount * 4),
+    textures: textureArrays.map((bytes) => ({ bytes, kind: 'ostex' as const })),
+    uvs: geometry.uvs,
+    weights: geometry.weights,
   });
   const sampler = new IfpSampler(fixture.bones);
-  const clips: SamplerClip[] = fixture.clips;
-  // The fixture names its clips (`CAR_getin_LHS`, …); the engine's SamplerClip is name-free, so index them here.
-  const clipByName = new Map(fixture.clips.map((clip, index) => [clip.name.toLowerCase(), index]));
+  // The clips are resolved against THIS model's bones, from the game's own IFP — a modded ped.ifp changes
+  // how the player walks, which a baked fixture could never express.
+  const animations = PLAYER_IFP_NAMES.map((name) => getIfp(fs, name)).find((entries) => entries.length > 0) ?? [];
+  if (animations.length === 0) {
+    // Without clips the sampler holds the BIND pose — and SA's bind mesh lies flat along X, so the player
+    // would lie on the ground instead of standing. Say so rather than shipping a corpse.
+    // eslint-disable-next-line no-console -- a silent bind-pose player is worse than a console line
+    console.warn(`[player] no ped.ifp found (tried ${PLAYER_IFP_NAMES.join(', ')}) — the player cannot animate`);
+  }
+  const resolved = PLAYER_CLIPS.map((name) => {
+    const animation = animations.find((entry) => entry.name.toLowerCase() === name);
+
+    return animation ? pedClip(animation, fixture.bones) : { duration: 0, name, tracks: [] };
+  });
+  const clips: SamplerClip[] = resolved;
+  // The engine's SamplerClip is name-free, so index the names here for `setScripted`.
+  const clipByName = new Map(resolved.map((clip, index) => [clip.name.toLowerCase(), index]));
   let clipTime = 0;
   let activeClip = IDLE_CLIP;
   let scripted: null | { index: number; loop: boolean } = null;
@@ -94,7 +103,7 @@ export async function loadEnginePlayer(engine: Engine): Promise<EnginePlayer> {
     faceTo(yaw: number): void {
       scriptedFacing = yaw;
     },
-    minZ: fixture.minZ ?? 0,
+    minZ: fixture.minZ,
     setScripted(clip, options = {}): void {
       if (clip === null) {
         scripted = null;
