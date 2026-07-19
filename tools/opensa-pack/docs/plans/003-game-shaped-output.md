@@ -387,6 +387,8 @@ the pipeline path.
 - [x] Phase 1 — full game-dir copy; world products under `<out>/opensa/`
       (**IMG rebuild deferred to phase 3** — with nothing yet replacing archive entries, rebuilding would be
       churn; `cpSync` carries the archives through untouched)
+- [x] Phase 3 gate — the spawn measurement: 45× per car type (7.4 ms → 0.17 ms); the worker-hidden
+      100–200 ms build per new car TYPE is gone, not hidden
 - [ ] Phase 1 — measure the `.col` sweep (see ledger)
 - [x] Phase 2 — `.osm` container in `packages/engine-formats/src/osm.ts` + round-trip tests (9)
 - [x] Phase 2 — **no new texture format**: a model's dictionary is an existing `.ostex` beside it
@@ -766,6 +768,30 @@ with it; the log says which pose was used, and says so loudly when no IFP was fo
 
 Both were invisible to 2 207 green tests and obvious in one screenshot. That is the whole argument for the
 field check on a production path.
+
+**Phase 3 gate, second half — the spawn measurement (owed since step 2, done 2026-07-19.)** 40 car types,
+`game-src/non-modified` vs its converted `--out`, in Node:
+
+| Path                                                                 | mean        | worst   |
+| -------------------------------------------------------------------- | ----------- | ------- |
+| UNOPTIMIZED — `parseDff` + `buildVehicleModel` + `parseDffCollision` | **7.4 ms**  | 18.3 ms |
+| OPTIMIZED — `readVehicleOsm` (section reads)                         | **0.17 ms** | 0.81 ms |
+
+**45× per car type; 297 ms → 7 ms over the 40.**
+
+Split by thread, because the gate is about a FREEZE and plan 21 had already moved the build off the main
+thread:
+
+- the old MAIN-THREAD half (`parseDffCollision` alone) was already cheap — **0.05 ms mean, 0.61 ms worst**;
+- the new read does EVERYTHING on the main thread in **0.22 ms mean / 2.27 ms worst**.
+
+That worst looks alarming and is not: broken down, `decodeOsm` is 0.007 ms, the `DESC` JSON parse 0.060 ms
+(worst 0.16 ms, largest DESC = `ambulan` at 35 KB) and the `COLL` decode 0.014 ms. Nothing sums to 2.27 ms —
+that outlier is the first call warming up, not steady state.
+
+**So the honest claim is not "the main thread got faster".** It is that the ~100–200 ms browser build per
+new car TYPE — which plan 21 moved into a worker to HIDE — is GONE rather than hidden, and what remains is
+a fifth of a millisecond. Caveats: Node, not the browser, and no GPU upload is included in either column.
 
 ### What the MODS carry, and what the per-model format still drops (audit, 2026-07-19)
 
