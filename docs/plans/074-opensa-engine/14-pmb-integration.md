@@ -43,7 +43,9 @@ own engine, benchmarked**.
 
 ## Tasks
 
-- [ ] pmb stage wrapper around `convertDistrict` (config in pmb, no CLI flags in the pipeline path).
+- [x] pmb stage wrapper — 2026-07-19. `packGameDir(options)` is the library entry (`opensa-pack/src/pack.ts`)
+      and `'pack'` is a pipeline stage; config in `BuilderConfig.pack`, no CLI flags on the pipeline path.
+      The extraction produced a byte-identical pak. A full pmb run is still owed.
 - [x] Chunked welding + bake worker pool — 2026-07-13, see ledger (A2). Full-map single-command convert
       unblocked: peak RSS 5.2 GB (vs 16 GB monolithic for ONE city), bakes 2.7× on a QUARTER of the cores
       (`--bake-workers` raises it when thermals allow).

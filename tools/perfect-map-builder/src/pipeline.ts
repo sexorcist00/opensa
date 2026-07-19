@@ -11,6 +11,7 @@ import { parseOnlyList, runOptimizer } from '@opensa/map-optimizer/run';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { install as installMods } from '@opensa/mod-installer/install';
 import { buildOpensaLods } from '@opensa/opensa-lod-generator/build';
+import { packGameDir } from '@opensa/opensa-pack/pack';
 import { install as installPeds } from '@opensa/ped-installer/install';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseIde } from '@opensa/renderware/parsers/text/ide.parser';
@@ -29,7 +30,18 @@ import { config as defaultConfig } from './config';
  * Valid `--until <name>` values. Common-chain + `sa`/`opensa` stop after the named one; the special `lod` value
  * runs the whole pipeline (**both** sa + opensa) while keeping every intermediate for debugging.
  */
-export const STAGE_NAMES = ['mods', 'vehicles', 'peds', 'optimize', 'trees', 'procobj', 'sa', 'opensa', 'lod'] as const;
+export const STAGE_NAMES = [
+  'mods',
+  'vehicles',
+  'peds',
+  'optimize',
+  'trees',
+  'procobj',
+  'sa',
+  'opensa',
+  'pack',
+  'lod',
+] as const;
 export interface BuildPerfectMapOptions {
   /** Downgrade the int16 text-ROW budget from a build-stopping error to a warning — the 03-asi ghost-barriers
    *  repro path (an intentionally over-2^15 full build). The 39-slot guard stays hard so the other structures
@@ -172,21 +184,13 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     checkImgIdBudgets(sa);
     produced.push({ dir: sa, name: 'sa' });
   }
-  if (until === undefined || until === 'opensa' || until === 'lod') {
-    const opensa = join(outPath, 'opensa');
-    log('opensa → opensa/ (baking cells — can take several minutes)');
-    await buildOpensaLods({
-      cellSize: config.cellSize,
-      config: { excludeItems },
-      gameDir: game,
-      outDir: opensa,
-      stripLods: true,
-    });
-    swapLinearTxds(game, opensa);
-    produced.push({ dir: opensa, name: 'opensa' });
+  if (until === undefined || until === 'opensa' || until === 'pack' || until === 'lod') {
+    produced.push(...(await buildOpensaTarget({ config, excludeItems, game, log, outPath, until, work })));
   }
-  // The sidecars are split-time inputs, not game content — keep the final targets clean.
-  for (const target of produced.filter(({ name }) => name === 'sa' || name === 'opensa')) {
+
+  // The sidecars are split-time inputs, not game content — keep the final targets clean. (The opensa side
+  // already dropped its own above, before the convert read the dir.)
+  for (const target of produced.filter(({ name }) => name === 'sa')) {
     rmSync(join(target.dir, 'linear-txd'), { force: true, recursive: true });
   }
 
@@ -271,6 +275,59 @@ export function swapLinearTxds(commonDir: string, opensaDir: string): void {
   }
   writeFileSync(imgPath, img.build());
   log(`opensa: swapped ${names.length} linear-convention TXD(s) (${names.join(', ')})`);
+}
+
+/**
+ * The `opensa` target: the cell-LOD build, then OUR conversion of it.
+ *
+ * `--until opensa` asks for the LOD build itself, so it lands in the final directory and stops there.
+ * Otherwise the pack stage is the last thing to touch this target, so the LOD build is an intermediate and
+ * the CONVERTED dir takes the `opensa/` name — every stage still hands the next a complete game tree.
+ */
+async function buildOpensaTarget(step: {
+  config: BuilderConfig;
+  excludeItems: string[];
+  game: string;
+  log: (message: string) => void;
+  outPath: string;
+  until: StageName | undefined;
+  work: string;
+}): Promise<{ dir: string; name: string }[]> {
+  const { config, excludeItems, game, log, outPath, until, work } = step;
+  const packing = until !== 'opensa';
+  const opensa = join(outPath, 'opensa');
+  const lodDir = packing ? join(work, 'opensa-lod') : opensa;
+  log(`opensa → ${packing ? '.work/opensa-lod' : 'opensa/'} (baking cells — can take several minutes)`);
+  await buildOpensaLods({
+    cellSize: config.cellSize,
+    config: { excludeItems },
+    gameDir: game,
+    outDir: lodDir,
+    stripLods: true,
+  });
+  // The LOD build is the last thing that mutates the game dir, and `swapLinearTxds` rewrites the very texels
+  // the pak carries — so it must run BEFORE the convert, not after it. The sidecar goes with it: it is a
+  // split-time input, not game content.
+  swapLinearTxds(game, lodDir);
+  rmSync(join(lodDir, 'linear-txd'), { force: true, recursive: true });
+  if (!packing) {
+    return [{ dir: opensa, name: 'opensa' }];
+  }
+  log('pack → opensa/ (converting the map into our format — several minutes)');
+  await packGameDir({
+    ao: config.pack.ao,
+    ...(config.pack.bakeWorkers !== undefined ? { bakeWorkers: config.pack.bakeWorkers } : {}),
+    bakes: config.pack.bakes,
+    gameDir: lodDir,
+    log: (message) => log(`pack: ${message}`),
+    outDir: opensa,
+    rect: config.pack.rect,
+  });
+
+  return [
+    { dir: lodDir, name: 'opensa-lod' },
+    { dir: opensa, name: 'pack' },
+  ];
 }
 
 /** SA's `IplEntityIndexArrays` usable capacity: one slot per gta.dat text IPL with inst rows, and the game

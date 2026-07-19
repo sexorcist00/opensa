@@ -383,11 +383,31 @@ against a fully converted build and confirm it renders through the runtime flow,
 **retexture-only** mod (the mixing rule) and a `txdp`-parented one (constraint 4). This is the phase that
 says whether "optimized/unoptimized" is a real contract or just a diagram.
 
-**Phase 6 — pmb stage.** `'pack'` joins `STAGE_NAMES` (`pipeline.ts:32`) and the `--until` docs
-(`perfect-map-builder/src/cli.ts:8`), running on the `opensa` target AFTER `swapLinearTxds`
-(`pipeline.ts:178-185`) and before the `linear-txd` cleanup — the LOD build is the last thing that mutates
-the game dir, and `swapLinearTxds` rewrites the texels the pak must carry. Config in pmb, no CLI flags on
-the pipeline path.
+**Phase 6 — pmb stage. SHIPPED 2026-07-19.** `'pack'` joins `STAGE_NAMES` and the `--until` docs, running
+on the `opensa` target after `swapLinearTxds` and the `linear-txd` cleanup — the LOD build is the last thing
+that mutates the game dir, and `swapLinearTxds` rewrites the very texels the pak carries.
+
+The convert became a LIBRARY first (`pack.ts` → `packGameDir(options)`), because a pipeline stage must not
+go through argv; `cli.ts` is now flag parsing and nothing else. **The extracted path produced a pak
+byte-identical to the pre-refactor build** — which is also the determinism pmb requires of every stage.
+
+Where the output lands depends on how far the run goes, and the rule keeps "every stage hands the next a
+complete game tree" true: `--until opensa` stops at the LOD build and leaves `opensa/` in GAME format, while
+a full run (or `--until pack`) builds the LODs into `.work/opensa-lod` and the CONVERTED dir takes the
+`opensa/` name. Config lives in `BuilderConfig.pack` — `{ ao, bakes, rect }`, and a pipeline build is a
+SHIPPING build, so both bakes default ON.
+
+Two things this surfaced, neither fixed here:
+
+- **`config.cellSize` is 256 while the pack's `CELL_SIZE` is 250.** pmb's field is documented as "must match
+  the engine streaming grid", but it feeds `buildOpensaLods` (the impostor bake), not the pack. Two grids,
+  one name; worth resolving before someone changes the wrong 250.
+- **`checkImgIdBudgets` does not run on the packed target**, and should not: it guards the REAL game's FLA
+  pools, and the packed `opensa/` is not bootable by the real game. The convert moves 14 349 entries out and
+  12 858 in, so the counts it would read are meaningless there.
+
+**Owed**: a full pmb run end to end. The stage is proven at the library boundary (byte-identical pak) and by
+the typechecker, but the pipeline wiring itself has not been executed — it needs the whole mods-src chain.
 
 ## Tasks
 
