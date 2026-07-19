@@ -46,6 +46,7 @@ export function setupEngineClutter(engine: Engine, fs: AssetFileSystem): EngineC
         positions: bytes(model.positions),
         texture: {
           height: model.texture.height,
+          kind: 'rgba',
           layers: model.texture.layers,
           rgba: model.texture.rgba,
           width: model.texture.width,

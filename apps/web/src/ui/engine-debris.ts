@@ -8,7 +8,7 @@
  * The ground probe is the fix this port carries: the three path never probed, so its shards fall through the
  * floor and sink while fading (its own TODO). Rapier already answers "what is under this point", so they land.
  */
-import type { Engine } from '@opensa/engine';
+import type { Engine, ModelTextureInit } from '@opensa/engine';
 import type { AssetFileSystem } from '@opensa/renderware';
 import type { BakedDebris } from '@opensa/renderware/breakable/bake-debris';
 
@@ -122,11 +122,7 @@ function resample(source: { height: number; rgba: Uint8Array; width: number }): 
 }
 
 /** One layer per draw group. A missing texture becomes plain white — the shard keeps its vertex colours. */
-function shardTextures(
-  fs: AssetFileSystem,
-  txdName: string | undefined,
-  baked: BakedDebris,
-): { height: number; layers: number; rgba: Uint8Array; width: number } {
+function shardTextures(fs: AssetFileSystem, txdName: string | undefined, baked: BakedDebris): ModelTextureInit {
   const layers = Math.max(1, baked.groups.length);
   const rgba = new Uint8Array(layers * SHARD_TEXTURE_SIZE * SHARD_TEXTURE_SIZE * 4).fill(255);
   // The TXD lives in the IMG under its BARE name, not under models/ — the wrong path silently yielded no
@@ -134,7 +130,7 @@ function shardTextures(
   // `txdp` parents, so an inherited texture is found too (opensa-pack 003).
   const chain = txdName ? getTxdChain(fs, txdName) : [];
   if (chain.length === 0) {
-    return { height: SHARD_TEXTURE_SIZE, layers, rgba, width: SHARD_TEXTURE_SIZE };
+    return { height: SHARD_TEXTURE_SIZE, kind: 'rgba', layers, rgba, width: SHARD_TEXTURE_SIZE };
   }
   const textures = new Map<string, { height: number; rgba: Uint8Array; width: number }>();
   // Child first: the first TXD to define a name wins, which is what `txdp` inheritance means.
@@ -157,7 +153,7 @@ function shardTextures(
     }
   });
 
-  return { height: SHARD_TEXTURE_SIZE, layers, rgba, width: SHARD_TEXTURE_SIZE };
+  return { height: SHARD_TEXTURE_SIZE, kind: 'rgba', layers, rgba, width: SHARD_TEXTURE_SIZE };
 }
 
 /** The DFF's own shatter mesh, or — for the smash props that ship none (boxes, bags) — its render mesh. */

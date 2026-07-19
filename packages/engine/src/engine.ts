@@ -103,8 +103,8 @@ export interface ClutterModelInit {
   meta: Uint8Array;
   normals: Uint8Array; // float32x3
   positions: Uint8Array; // float32x3
-  /** RGBA8 layers (all one size, packed sequentially) — the model's textures as a texture array. */
-  texture: { height: number; layers: number; rgba: Uint8Array; width: number };
+  /** The model's dictionary: our `.ostex`, or RGBA8 layers from a runtime TXD parse. */
+  texture: ModelTextureInit;
   uvs: Uint8Array; // float32x2
 }
 
@@ -116,7 +116,7 @@ export interface DebrisUpload {
   gravity: number;
   lifetime: number;
   /** The shard textures, one layer per draw group; the layer rides in each vertex. */
-  texture: { height: number; layers: number; rgba: Uint8Array; width: number };
+  texture: ModelTextureInit;
   /** Interleaved, 80 bytes per vertex — the layout the debris pipeline declares. */
   vertices: Float32Array;
 }
@@ -735,25 +735,7 @@ export class Engine {
       upload('meta', init.meta, GPUBufferUsage.VERTEX),
     ];
     const indexBuffer = upload('indices', init.indices, GPUBufferUsage.INDEX);
-    const layerBytes = init.texture.width * init.texture.height * 4;
-    const texture = this.resources.createTexture(
-      'texture',
-      {
-        format: 'rgba8unorm-srgb',
-        label: 'clutter-texture',
-        size: { depthOrArrayLayers: init.texture.layers, height: init.texture.height, width: init.texture.width },
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      },
-      init.texture.rgba.byteLength,
-    );
-    for (let layer = 0; layer < init.texture.layers; layer += 1) {
-      this.device.queue.writeTexture(
-        { origin: { x: 0, y: 0, z: layer }, texture },
-        init.texture.rgba.subarray(layer * layerBytes, (layer + 1) * layerBytes),
-        { bytesPerRow: init.texture.width * 4 },
-        { height: init.texture.height, width: init.texture.width },
-      );
-    }
+    const { byteEstimate: textureBytes, texture } = this.createModelTexture(init.texture, 'clutter-texture');
     const id = this.clutterModelSeq;
     this.clutterModelSeq += 1;
     this.clutterModels.set(id, {
@@ -762,7 +744,7 @@ export class Engine {
       indexBuffer,
       indexCount: init.indices.byteLength / 2,
       texture,
-      textureBytes: init.texture.rgba.byteLength,
+      textureBytes,
     });
 
     return id;
@@ -886,7 +868,7 @@ export class Engine {
     const matrixBuffer = this.createVehicleMatrixBuffer(init.parts.length, VEHICLE_CAPACITY);
     const paintBuffer = this.createVehiclePaintBuffer(init.parts.length, VEHICLE_CAPACITY);
     const lampBuffer = this.createVehicleLampBuffer(init.parts.length, VEHICLE_CAPACITY);
-    const { byteEstimate: textureBytes, texture } = this.createModelTexture(init.texture);
+    const { byteEstimate: textureBytes, texture } = this.createModelTexture(init.texture, 'vehicle-texture');
     const id = this.vehicleModelSeq;
     this.vehicleModelSeq += 1;
     const model: VehicleModel = {
@@ -1664,22 +1646,7 @@ export class Engine {
     });
     const spawn = (performance.now() - this.startedMs) / 1000;
     this.device.queue.writeBuffer(uniform, 0, new Float32Array([spawn, upload.lifetime, upload.fade, upload.gravity]));
-    const texture = this.resources.createTexture(
-      'texture',
-      {
-        format: 'rgba8unorm-srgb',
-        label: 'debris:shards',
-        size: { depthOrArrayLayers: upload.texture.layers, height: upload.texture.height, width: upload.texture.width },
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      },
-      upload.texture.rgba.byteLength,
-    );
-    this.device.queue.writeTexture(
-      { texture },
-      upload.texture.rgba,
-      { bytesPerRow: upload.texture.width * 4, rowsPerImage: upload.texture.height },
-      { depthOrArrayLayers: upload.texture.layers, height: upload.texture.height, width: upload.texture.width },
-    );
+    const { byteEstimate: textureBytes, texture } = this.createModelTexture(upload.texture, 'debris:shards');
     this.debris.push({
       bindGroup: this.device.createBindGroup({
         entries: [
@@ -1695,7 +1662,7 @@ export class Engine {
       }),
       expiresAt: spawn + upload.lifetime,
       texture,
-      textureBytes: upload.texture.rgba.byteLength,
+      textureBytes,
       uniform,
       vertexBuffer,
       vertexCount: upload.vertices.byteLength / DEBRIS_STRIDE,
@@ -1884,9 +1851,12 @@ export class Engine {
    * A model's texture array, from either side of the optimized/unoptimized split. The `ostex` branch is
    * the whole reason the per-model dictionary is compressed: the payload reaches video memory untouched.
    */
-  private createModelTexture(init: ModelTextureInit): { byteEstimate: number; texture: GPUTexture } {
+  private createModelTexture(
+    init: ModelTextureInit,
+    label = 'model-texture',
+  ): { byteEstimate: number; texture: GPUTexture } {
     if (init.kind === 'ostex') {
-      const upload = uploadOstexTexture(this.device, this.resources, init.bytes, 'model-texture');
+      const upload = uploadOstexTexture(this.device, this.resources, init.bytes, label);
 
       return { byteEstimate: upload.byteEstimate, texture: upload.texture };
     }
@@ -1895,7 +1865,7 @@ export class Engine {
       'texture',
       {
         format: 'rgba8unorm-srgb',
-        label: 'vehicle-texture',
+        label,
         size: { depthOrArrayLayers: init.layers, height: init.height, width: init.width },
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       },

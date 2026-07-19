@@ -24,6 +24,7 @@ export {
   Engine,
   type EngineStats,
   type Environment,
+  type ModelTextureInit,
   type ParticleUpload,
   type PedProbe,
   type PedProbeInit,
