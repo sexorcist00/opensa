@@ -1128,6 +1128,10 @@ struct RigidVsIn {
   // Reflection slots straight from the DFF material-effect plugins (B5r): env layer, env coefficient,
   // SA reflection intensity, SA specular level. x = 0 means the material is simply not reflective.
   @location(5) reflect: vec4<u32>,
+  // The NIGHT vertex colours (opensa-pack 003 phase 5g). SA bakes the map's lighting into the prelit set
+  // and ships a second, darker one for night; a map object drawn by name is the case this serves — a car
+  // carries no prelit at all, so its night set is the synthesized ambient and the blend is a no-op tint.
+  @location(6) night: vec4f,
 };
 
 struct RigidVsOut {
@@ -1182,7 +1186,10 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   out.uv = in.uv;
   out.normal = normalize((model * vec4f(in.normal, 0.0)).xyz);
   out.world = world.xyz;
-  var color = in.color;
+  // Day → night on the prelit set, BEFORE the paint override: a car's night set is its day set (no prelit,
+  // nothing to darken — its light comes from the world), and mixing after paint would wash the panel out
+  // toward the unpainted material colour at midnight.
+  var color = vec4f(mix(in.color.rgb, in.night.rgb, frame.params.x), in.color.a);
   if (in.slots.z > 0u) {
     color = vec4f(rigidPaint[in.instance * 4u + (in.slots.z - 1u)].rgb, in.color.a);
   }

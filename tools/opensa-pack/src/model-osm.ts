@@ -130,12 +130,13 @@ export function packVehicleFixture(
 
     return offset;
   };
-  const layout = { colors: 0, indices: 0, meta: 0, normals: 0, positions: 0, reflect: 0, uvs: 0 };
+  const layout = { colors: 0, indices: 0, meta: 0, night: 0, normals: 0, positions: 0, reflect: 0, uvs: 0 };
   layout.positions = reserve(built.positions.byteLength);
   layout.normals = reserve(built.normals.byteLength);
   layout.uvs = reserve(built.uvs.byteLength);
   layout.colors = reserve(built.colors.byteLength);
   layout.meta = reserve(built.meta.byteLength);
+  layout.night = reserve(built.night.byteLength);
   layout.reflect = reserve(built.reflect.byteLength);
   layout.indices = reserve(built.indices.byteLength);
 
@@ -145,6 +146,7 @@ export function packVehicleFixture(
   bin.set(bytesOf(built.uvs), layout.uvs);
   bin.set(built.colors, layout.colors);
   bin.set(built.meta, layout.meta);
+  bin.set(built.night, layout.night);
   bin.set(built.reflect, layout.reflect);
   bin.set(bytesOf(built.indices), layout.indices);
 

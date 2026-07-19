@@ -9,6 +9,13 @@ import type { RWClump, RWGeometry, RWMaterial, RWTriangle } from '../parsers/bin
  */
 
 /** All prepared render data of one atomic — vertex attributes shared by its {@link PreparedPart}s. */
+/**
+ * Synthesized night ambient for geometry with NO authored night set (slightly cool, ~SA night level).
+ * ONE formula for the whole world: the welded cell path and the per-model rigid path both use it, or a
+ * converted prop would disagree with the cell it stands in.
+ */
+export const NIGHT_AMBIENT: readonly [number, number, number] = [0.3, 0.32, 0.4];
+
 export interface PreparedAtomic {
   /** Prelit colours (vec4 when a floodlight beam lives in the prelit alpha, else vec3), or null. */
   color: null | { array: Float32Array; itemSize: 3 | 4 };

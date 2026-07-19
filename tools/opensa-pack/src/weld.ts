@@ -17,7 +17,7 @@ import { breakableInstanceKey, breakableKeyHash } from '@opensa/renderware/break
 import { cellGroups } from '@opensa/renderware/map/cell-groups';
 import { type GridCell } from '@opensa/renderware/map/world-grid';
 import { frameWorldTransform } from '@opensa/renderware/mesh/frame-transform';
-import { isVertexAlphaBeam, prepareClumpAtomics } from '@opensa/renderware/mesh/prepare-clump';
+import { isVertexAlphaBeam, NIGHT_AMBIENT, prepareClumpAtomics } from '@opensa/renderware/mesh/prepare-clump';
 import { IdeFlag } from '@opensa/renderware/parsers/text/index';
 import { ROADSIGN_PALETTE, type RoadsignGlyphQuads } from '@opensa/renderware/roadsign/glyph-quads';
 
@@ -112,10 +112,8 @@ export const WELD_AO = 17;
 export const WELD_SUNVIS = 18;
 export const WELD_SUNSOFT = 19;
 
-/** Synthesized night ambient for geometry without an authored night set (slightly cool, ~SA night level). */
-const NIGHT_AMBIENT_R = 0.3;
-const NIGHT_AMBIENT_G = 0.32;
-const NIGHT_AMBIENT_B = 0.4;
+/** Synthesized night ambient for geometry without an authored night set — shared with the rigid builder. */
+const [NIGHT_AMBIENT_R, NIGHT_AMBIENT_G, NIGHT_AMBIENT_B] = NIGHT_AMBIENT;
 
 /**
  * Wind-sway tuning per vegetation kind (074/06 row 10 — the plan-039 prod model baked offline). The vertex

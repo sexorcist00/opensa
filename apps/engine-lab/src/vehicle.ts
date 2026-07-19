@@ -54,6 +54,8 @@ export async function loadVehicleProbe(
     indexCount: fixture.indexCount,
     indices: slice(fixture.layout.indices, fixture.indexCount * 2),
     meta: slice(fixture.layout.meta, fixture.vertexCount * 4),
+    // The lab's pinned fixtures predate the night set; the day colours make the blend a no-op.
+    night: slice(fixture.layout.night ?? fixture.layout.colors, fixture.vertexCount * 4),
     normals: slice(fixture.layout.normals, fixture.vertexCount * 12),
     parts: fixture.parts,
     positions: slice(fixture.layout.positions, fixture.vertexCount * 12),

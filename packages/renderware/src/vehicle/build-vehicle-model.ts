@@ -22,7 +22,7 @@ import type {
 } from './types';
 
 import { frameWorldTransform, rotationToQuat } from '../mesh/frame-transform';
-import { groupTrianglesByMaterial } from '../mesh/prepare-clump';
+import { groupTrianglesByMaterial, NIGHT_AMBIENT } from '../mesh/prepare-clump';
 import { LampTag, MaterialClass, PaintSlot } from './types';
 
 /** SA per-lamp marker colours on the `vehiclelights*` atlas: they say WHICH lamp a material is — engine
@@ -57,6 +57,7 @@ interface Scratch {
   colors: number[];
   indices: number[];
   meta: number[];
+  night: number[];
   normals: number[];
   parts: VehicleModelPart[];
   positions: number[];
@@ -75,6 +76,7 @@ export function buildVehicleModel(
     colors: [],
     indices: [],
     meta: [],
+    night: [],
     normals: [],
     parts: [],
     positions: [],
@@ -129,6 +131,7 @@ export function buildVehicleModel(
     // map comes near the ceiling.
     indices: new Uint16Array(assertIndexable(scratch.positions.length / 3, scratch.indices)),
     meta: new Uint8Array(scratch.meta),
+    night: new Uint8Array(scratch.night),
     normals: new Float32Array(scratch.normals),
     parts: scratch.parts,
     positions: new Float32Array(scratch.positions),
@@ -292,7 +295,34 @@ function appendGeometry(
       }
       const uvs = rw.uvLayers[0];
       scratch.uvs.push(uvs ? uvs[corner * 2] : 0, uvs ? uvs[corner * 2 + 1] : 0);
-      scratch.colors.push(color[0], color[1], color[2], color[3]);
+      // PRELIT vertex colours modulate the material's (074/... — opensa-pack 003 phase 5g). SA bakes the
+      // map's lighting there and it is DARK: 2 972 of 3 000 map models carry a non-white set, mean luma
+      // 88/255, so ignoring it renders a building roughly three times too bright. Vehicles are unaffected
+      // by construction — not one of the game's 198 cars carries a prelit set at all.
+      const day = rw.prelitColors;
+      const night = rw.nightColors;
+      scratch.colors.push(
+        modulate(color[0], day, corner, 0),
+        modulate(color[1], day, corner, 1),
+        modulate(color[2], day, corner, 2),
+        color[3],
+      );
+      // The night set replaces the day colour as `dn` goes to 1. Without an authored one, synthesize it the
+      // way the welded cell path does — one night formula for the whole world, or a converted prop would
+      // disagree with the cell it stands in. But ONLY for prelit geometry: an asset with no prelit set is
+      // not part of the baked-lighting world (no car carries one), and darkening it here would dim every
+      // vehicle at midnight on top of the world light that already does that job.
+      const dayRgb = scratch.colors.slice(-4, -1);
+      scratch.night.push(
+        ...(night
+          ? [
+              modulate(color[0], night, corner, 0),
+              modulate(color[1], night, corner, 1),
+              modulate(color[2], night, corner, 2),
+            ]
+          : dayRgb.map((channel, index) => (day ? Math.round(channel * NIGHT_AMBIENT[index]) : channel))),
+        255,
+      );
       scratch.meta.push(layer, nightLayer, paint, (lamp === null ? LampTag.none : LampTag[lamp]) | (klass << 4));
       scratch.reflect.push(reflect[0], reflect[1], reflect[2], reflect[3]);
       emitted.set(corner, index);
@@ -575,6 +605,11 @@ function materialSurface(
     reflect,
     translucent,
   };
+}
+
+/** One channel of a material colour, modulated by a prelit set when the geometry carries one. */
+function modulate(channel: number, prelit: null | Uint8Array, vertex: number, offset: number): number {
+  return prelit ? Math.round((channel * prelit[vertex * 4 + offset]) / 255) : channel;
 }
 
 function paintSlot(material: RWMaterial): number {

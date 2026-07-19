@@ -9,6 +9,8 @@ export interface RigidModelInit {
   indexCount: number;
   indices: Uint8Array;
   meta: Uint8Array;
+  /** NIGHT vertex colours (same layout as `colors`) — SA's extra-vertex-colour set, or a synthesized one. */
+  night: Uint8Array;
   normals: Uint8Array;
   parts: VehicleModelData['parts'];
   positions: Uint8Array;
@@ -40,6 +42,7 @@ export function toRigidModelInit(model: VehicleModelData): RigidModelInit {
     indexCount: model.indices.length,
     indices: new Uint8Array(model.indices.buffer, model.indices.byteOffset, model.indices.byteLength),
     meta: model.meta,
+    night: model.night,
     normals: bytes(model.normals),
     parts: model.parts,
     positions: bytes(model.positions),

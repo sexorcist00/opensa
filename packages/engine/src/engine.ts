@@ -316,6 +316,8 @@ export interface VehicleModelInit {
   /** uint16 index payload. */
   indices: Uint8Array;
   meta: Uint8Array;
+  /** NIGHT vertex colours, same layout as `colors`; the vertex stage mixes day → night by the `dn` factor. */
+  night: Uint8Array;
   normals: Uint8Array;
   parts: readonly RigidPartInit[];
   positions: Uint8Array;
@@ -877,6 +879,7 @@ export class Engine {
       upload('colors', init.colors, GPUBufferUsage.VERTEX),
       upload('meta', init.meta, GPUBufferUsage.VERTEX),
       upload('reflect', init.reflect, GPUBufferUsage.VERTEX),
+      upload('night', init.night, GPUBufferUsage.VERTEX),
     ];
     const indexBuffer = upload('indices', init.indices, GPUBufferUsage.INDEX);
     const matrixBuffer = this.createVehicleMatrixBuffer(init.parts.length, VEHICLE_CAPACITY);

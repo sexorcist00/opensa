@@ -35,6 +35,7 @@ function model(): VehicleModelData {
     dummies: [],
     indices: new Uint16Array(0),
     meta: new Uint8Array(0),
+    night: new Uint8Array(0),
     normals: new Float32Array(0),
     parts: [],
     positions: new Float32Array(0),

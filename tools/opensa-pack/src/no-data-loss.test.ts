@@ -129,6 +129,7 @@ describe('the .osm conversion loses nothing', () => {
       expect(model.uvs).toEqual(stock.uvs);
       expect(model.colors).toEqual(stock.colors);
       expect(model.meta).toEqual(stock.meta);
+      expect(model.night).toEqual(stock.night);
       expect(model.reflect).toEqual(stock.reflect);
       expect(model.indices).toEqual(stock.indices);
     });

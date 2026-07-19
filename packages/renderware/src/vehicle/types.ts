@@ -73,6 +73,8 @@ export interface VehicleFixture {
     colors: number;
     indices: number;
     meta: number;
+    /** Absent on fixtures built before the night set existed — the reader falls back to the day colours. */
+    night?: number;
     normals: number;
     positions: number;
     reflect: number;
@@ -95,6 +97,12 @@ export interface VehicleModelData {
   /** Per-vertex slots: x = texture layer, y = lamps-on twin layer (0 = none), z = {@link PaintSlot},
    *  w = {@link LampTag} (low nibble) | {@link MaterialClass} << 4 (high nibble). */
   meta: Uint8Array;
+  /**
+   * The NIGHT vertex colours — the same RGBA layout as `colors`, replacing them as the day/night factor
+   * goes to 1. Authored where the geometry carries SA's extra-vertex-colour set, and otherwise synthesized
+   * as day × {@link NIGHT_AMBIENT}, which is exactly what the welded cell path does.
+   */
+  night: Uint8Array;
   normals: Float32Array;
   parts: readonly VehicleModelPart[];
   positions: Float32Array;

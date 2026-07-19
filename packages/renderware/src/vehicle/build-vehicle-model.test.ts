@@ -92,6 +92,33 @@ describe('buildVehicleModel', () => {
       expect([...built.colors.subarray(0, 3)]).not.toEqual([60, 255, 0]);
     });
 
+    it('leaves a model with no prelit set undarkened at night — a car is lit by the world, not by vertices', () => {
+      const built = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [geometry()]), textures());
+
+      // Not one of the game's 198 cars carries a prelit set, so synthesizing an ambient night here would
+      // dim every vehicle at midnight on top of the world light that already does it.
+      expect(built.night).toEqual(built.colors);
+    });
+
+    it('modulates the material colour by the PRELIT set, and carries the authored night set', () => {
+      const lit = geometry([material({ color: [200, 200, 200, 255] })]);
+      lit.prelitColors = new Uint8Array([128, 128, 128, 255, 128, 128, 128, 255, 128, 128, 128, 255]);
+      lit.nightColors = new Uint8Array([64, 64, 64, 255, 64, 64, 64, 255, 64, 64, 64, 255]);
+      const built = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [lit]), textures());
+
+      expect([...built.colors.subarray(0, 4)]).toEqual([100, 100, 100, 255]); // 200 × 128/255
+      expect([...built.night.subarray(0, 4)]).toEqual([50, 50, 50, 255]); // 200 × 64/255
+    });
+
+    it('synthesizes night = day × ambient for PRELIT geometry with no authored night set', () => {
+      const lit = geometry([material({ color: [255, 255, 255, 255] })]);
+      lit.prelitColors = new Uint8Array([200, 200, 200, 255, 200, 200, 200, 255, 200, 200, 200, 255]);
+      const built = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [lit]), textures());
+
+      // The welded cell path's formula, shared as NIGHT_AMBIENT — a prop must not disagree with its cell.
+      expect([...built.night.subarray(0, 3)]).toEqual([60, 64, 80]); // 200 × [0.3, 0.32, 0.4]
+    });
+
     it('gives each material its OWN copy of a vertex the two share (opensa-pack 003 phase 5g)', () => {
       // Two triangles over four vertices, sharing the 1—2 edge, one material each. With a single vertex
       // table the shared corners took whichever material came last — the wrong texture layer and the wrong

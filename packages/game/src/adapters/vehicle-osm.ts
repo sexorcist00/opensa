@@ -86,6 +86,12 @@ export function readModelOsm(name: string, osm: Uint8Array): OptimizedModel {
       indexCount: fixture.indexCount,
       indices: at(layout.indices, fixture.indexCount * STRIDE.index),
       meta: at(layout.meta, vertexCount * STRIDE.meta),
+      // A fixture from before the night set simply has no darker twin: the day colours stand in, which
+      // makes the vertex stage's day → night mix a no-op rather than a black model.
+      night:
+        layout.night === undefined
+          ? at(layout.colors, vertexCount * STRIDE.colors)
+          : at(layout.night, vertexCount * STRIDE.colors),
       normals: at(layout.normals, vertexCount * STRIDE.normals),
       parts: fixture.parts,
       positions: at(layout.positions, vertexCount * STRIDE.positions),

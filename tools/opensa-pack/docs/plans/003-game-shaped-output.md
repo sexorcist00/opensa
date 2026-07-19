@@ -4,13 +4,13 @@
 clutter, topple props, animated objects, peds — plus the engine and the production player. Both phase-3
 gates are closed (no DFF parse at spawn; 45× measured).
 
-**RESUME HERE — phase 5g, map objects (~14 000).** Steps 1–3 are done: `planModelTextures` (the raw-TXD
+**RESUME HERE — phase 5g, map objects (~14 000).** Steps 1–4 are done: `planModelTextures` (the raw-TXD
 dictionary that preserves mip chains) plans per BUILDER LAYER, `remapModelLayers` rewrites `meta` onto the
-planned slots, and a per-submesh `array` index carries the multi-array case through the engine. A sweep of
-all 14 296 map models converts **99.92 %** of them. What remains, in order:
+planned slots, a per-submesh `array` index carries the multi-array case through the engine, and the rigid
+path now reads PRELIT and NIGHT vertex colours. A sweep of all 14 296 map models converts **99.92 %** of them.
 
-1. **Night vertex colours** — 1 243 of the mod models carry them and the rigid builder never reads them.
-2. Only then the bulk convert, and the `.dff`/`.txd` deletion for map objects.
+What remains: **the bulk convert itself** — wire map objects into the CLI (`rawDictionary`, the `preferCutout`
+vegetation rule, skipping the 11 unparseable TXDs), then the `.dff`/`.txd` deletion for them.
 
 Also open: phase 6 (the pmb `pack` stage), the `.col` sweep measurement, and the remaining audit gaps
 (material masks, 2dfx in the per-model container, second UV layer). **Phase 5b — the runtime `modloader/`
@@ -890,8 +890,43 @@ bench scenes at **120 fps**, 841 road cars, `lateCreates 0`, and the screenshot 
 and the street correctly textured. That exercises the split on the vehicle/ped/prop path; the map objects
 themselves still reach the screen through the WELDED cell path until the bulk convert lands.
 
-**Still open for map objects** (the remaining `5g` work): night vertex colours, and only then the
-~14 000-model bulk convert.
+**Phase 5g step 4 (2026-07-19) — prelit and night vertex colours on the rigid path.** The audit listed
+"night vertex colours (1 243 models)" as the gap; measuring first turned up a bigger one. `buildVehicleModel`
+never read `prelitColors` EITHER — its `colors` buffer is the MATERIAL colour alone.
+
+Measured on the real modded game dir, and the numbers decided the design:
+
+| class       | models | carry prelit | carry a night set | prelit NOT white | mean prelit luma |
+| ----------- | ------ | ------------ | ----------------- | ---------------- | ---------------- |
+| vehicles    | 198    | **0**        | **0**             | 0                | —                |
+| map objects | 3 000  | 2 987        | 2 869             | 2 972            | **88 / 255**     |
+
+So SA bakes the map's lighting into the prelit set, it is DARK, and dropping it renders a converted building
+roughly **three times too bright** — while no car is affected at all, which is what made it safe to read
+prelit unconditionally instead of behind a per-class flag that would have to be set identically in two
+places.
+
+- `colors` is now material × prelit; a new `night` buffer is material × the authored night set.
+- **Synthesis is gated on prelit.** With no authored night set, night = day × `NIGHT_AMBIENT` — but only for
+  geometry that HAS a prelit set. An asset with none is not part of the baked-lighting world, and
+  synthesizing for it would dim every car at midnight on top of the world light that already does that.
+  `NIGHT_AMBIENT` moved to `prepare-clump.ts` and the welded cell path now imports it: ONE night formula, or
+  a converted prop disagrees with the cell it stands in.
+- The engine gained vertex slot 6 (`unorm8x4`, `@location(6)`), and `vsRigid` mixes day → night by the same
+  `frame.params.x` the world path uses — **before** the paint override, or a painted panel would wash out
+  toward the unpainted material colour at midnight.
+- `GEOM` gained a `night` section; a fixture written before it falls back to the day colours, which makes
+  the mix a no-op rather than a black model.
+
+**Field-checked** on a fresh full-map convert: six bench scenes at **120 fps**, `lateCreates 0`, and the noon
+shot shows the rigid props (lampposts) sitting at the same light level as the welded cell geometry around
+them instead of standing out bright.
+
+Known gaps left open here: the CLUTTER pipeline has no night buffer (it keeps its own `day × ambient` mix in
+the shader, so an authored night set on a clutter species is ignored), and the rigid path has no emissive
+GLOW — the cell path derives one from the night−day luma delta, so a converted lit window will not bloom.
+
+**Still open for map objects**: the ~14 000-model bulk convert and the `.dff`/`.txd` deletion.
 
 ### Test-coverage audit (2026-07-19)
 
