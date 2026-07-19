@@ -20,6 +20,7 @@ import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-mode
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
 
 import { packModelOstex } from './model-ostex';
+import { planModelTextures, remapModelLayers } from './model-textures';
 
 export interface ModelOsm {
   built: VehicleModelData;
@@ -41,6 +42,13 @@ export interface ModelOsmOptions {
    * wherever the builder bakes a frame transform.
    */
   extraSections?: (built: VehicleModelData, dff: ArrayBuffer, clump: RWClump) => OsmSection[];
+  /**
+   * Plan the dictionary from the RAW TXD rather than from the builder's decoded array — what a MAP OBJECT
+   * needs, because the builder dropped its mip chain (95 % of the modded map textures carry one). The result
+   * is one array per (size, format, mip count), so the submeshes come out carrying an `array` index and
+   * `meta` is remapped onto the planned layers.
+   */
+  rawDictionary?: { preferCutout?: boolean; txdParents: Map<string, string> };
   /**
    * Shared dictionaries appended AFTER the model's own, lowest priority — the vehicle path's generic set.
    * Ordinary map models have none.
@@ -72,14 +80,32 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
   const built = buildVehicleModel(clump, new VehicleTextures(txds), {
     ...(options.wheelScale ? { wheelScale: options.wheelScale } : {}),
   });
+  // The raw-TXD dictionary rewrites the per-vertex layers, so it must run BEFORE the fixture is packed —
+  // and the per-submesh array must be read BEFORE the remap, while `meta` still holds builder layers.
+  const planned = options.rawDictionary
+    ? planModelTextures(
+        fs,
+        options.rawDictionary.txdParents,
+        built.texture.names,
+        options.txd ?? name,
+        options.rawDictionary.preferCutout,
+      )
+    : null;
+  const arrays = planned ? submeshArrays(name, built, planned.slots) : null;
+  if (planned) {
+    remapModelLayers(built.meta, planned.slots);
+  }
   const { bin, fixture } = packVehicleFixture(name, built);
-  // A rigid model's builder buckets its whole dictionary into ONE array, so `TEXS` carries a single entry
-  // here; the multi-array shape exists for peds and map objects, whose textures disagree on size.
-  const ostex = packModelOstex(built.texture);
+  if (arrays) {
+    fixture.submeshes = fixture.submeshes.map((submesh, index) => ({ ...submesh, array: arrays[index] }));
+  }
+  // Without a raw dictionary the builder bucketed everything into ONE array, so `TEXS` carries a single
+  // entry; peds and map objects are the classes whose textures disagree on size and need more.
+  const ostex = planned ? planned.arrays[0] : packModelOstex(built.texture);
   const sections: OsmSection[] = [
     { bytes: new TextEncoder().encode(JSON.stringify(fixture)), tag: OsmSectionTag.DESC },
     { bytes: bin, tag: OsmSectionTag.GEOM },
-    { bytes: encodeOsmTextures({ arrays: [ostex] }), tag: OsmSectionTag.TEXS },
+    { bytes: encodeOsmTextures({ arrays: planned ? planned.arrays : [ostex] }), tag: OsmSectionTag.TEXS },
     ...(options.extraSections?.(built, dff, clump) ?? []),
   ];
 
@@ -146,4 +172,30 @@ export function packVehicleFixture(
 
 function bytesOf(array: Float32Array | Uint16Array | Uint32Array): Uint8Array {
   return new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
+}
+
+/**
+ * Which texture ARRAY each submesh samples, read from the builder's per-vertex layers BEFORE they are
+ * remapped. A submesh is one material, so every one of its vertices must land in the same array — and this
+ * checks all of them rather than trusting the first: SA geometries do sometimes share a vertex between two
+ * material groups, and the builder's last writer wins, which would leave a submesh straddling two arrays.
+ * That model cannot be drawn by one bind group, so it throws and the caller falls back to the DFF.
+ */
+function submeshArrays(name: string, built: VehicleModelData, slots: readonly { array: number }[]): number[] {
+  return built.submeshes.map((submesh) => {
+    let array = -1;
+    for (let at = submesh.indexOffset; at < submesh.indexOffset + submesh.indexCount; at += 1) {
+      const slot = slots[built.meta[built.indices[at] * 4]];
+      if (!slot) {
+        throw new Error(`${name}: vertex layer ${built.meta[built.indices[at] * 4]} has no planned slot`);
+      }
+      if (array === -1) {
+        array = slot.array;
+      } else if (array !== slot.array) {
+        throw new Error(`${name}: a submesh straddles texture arrays ${array} and ${slot.array}`);
+      }
+    }
+
+    return array === -1 ? 0 : array;
+  });
 }

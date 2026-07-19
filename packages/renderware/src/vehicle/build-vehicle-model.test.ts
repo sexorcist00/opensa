@@ -92,6 +92,29 @@ describe('buildVehicleModel', () => {
       expect([...built.colors.subarray(0, 3)]).not.toEqual([60, 255, 0]);
     });
 
+    it('gives each material its OWN copy of a vertex the two share (opensa-pack 003 phase 5g)', () => {
+      // Two triangles over four vertices, sharing the 1—2 edge, one material each. With a single vertex
+      // table the shared corners took whichever material came last — the wrong texture layer and the wrong
+      // colour on 6.9 % of the map's models, and an unbindable submesh once layers span several arrays.
+      const shared = geometry([material({ color: [10, 20, 30, 255] }), material({ color: [200, 100, 50, 255] })]);
+      shared.positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]);
+      shared.triangles = [
+        { a: 0, b: 1, c: 2, materialIndex: 0 },
+        { a: 1, b: 3, c: 2, materialIndex: 1 },
+      ];
+      const built = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [shared]), textures());
+
+      expect(built.positions.length / 3).toBe(6); // 3 + 3, not 4 — the shared edge is emitted twice
+      for (const submesh of built.submeshes) {
+        const expected = submesh.indexOffset === 0 ? [10, 20, 30] : [200, 100, 50];
+        for (let at = submesh.indexOffset; at < submesh.indexOffset + submesh.indexCount; at += 1) {
+          const vertex = built.indices[at];
+
+          expect([...built.colors.subarray(vertex * 4, vertex * 4 + 3)]).toEqual(expected);
+        }
+      }
+    });
+
     it('lamp materials render white and carry a head/tail tag instead of their marker colour', () => {
       const lamp = material({
         color: HEAD_LAMP_MARKER,

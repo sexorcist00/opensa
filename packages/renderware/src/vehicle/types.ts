@@ -125,6 +125,9 @@ export interface VehicleModelPart {
 }
 
 export interface VehicleModelSubmesh {
+  /** Which texture ARRAY this submesh samples (opensa-pack 003 phase 5g). Absent means 0 — the single-array
+   *  case every runtime build is; only the offline converter, planning from raw TXDs, ever sets it. */
+  array?: number;
   /** Model-space centroid of the submesh's triangles (074/16 round 6) — the engine sorts TRANSLUCENT
    *  submeshes back-to-front by this each frame, or the steering wheel draws over the windscreen. */
   center: [number, number, number];

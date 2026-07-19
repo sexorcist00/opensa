@@ -4,15 +4,13 @@
 clutter, topple props, animated objects, peds — plus the engine and the production player. Both phase-3
 gates are closed (no DFF parse at spawn; 45× measured).
 
-**RESUME HERE — phase 5g, map objects (~14 000).** Steps 1–2 are done: `planModelTextures` (the raw-TXD
-dictionary that preserves mip chains) now plans per BUILDER LAYER, and `remapModelLayers` rewrites `meta`
-onto the planned slots. What remains, in order:
+**RESUME HERE — phase 5g, map objects (~14 000).** Steps 1–3 are done: `planModelTextures` (the raw-TXD
+dictionary that preserves mip chains) plans per BUILDER LAYER, `remapModelLayers` rewrites `meta` onto the
+planned slots, and a per-submesh `array` index carries the multi-array case through the engine. A sweep of
+all 14 296 map models converts **99.92 %** of them. What remains, in order:
 
-1. **A per-submesh ARRAY index on the rigid path.** It rides ALONGSIDE `meta.x`, not instead of it —
-   vehicles use `meta.y` as the lamps-on twin layer, switched PER VERTEX at runtime, which per-submesh
-   binding alone cannot express.
-2. **Night vertex colours** — 1 243 of the mod models carry them and the rigid builder never reads them.
-3. Only then the bulk convert, and the `.dff`/`.txd` deletion for map objects.
+1. **Night vertex colours** — 1 243 of the mod models carry them and the rigid builder never reads them.
+2. Only then the bulk convert, and the `.dff`/`.txd` deletion for map objects.
 
 Also open: phase 6 (the pmb `pack` stage), the `.col` sweep measurement, and the remaining audit gaps
 (material masks, 2dfx in the per-model container, second UV layer). **Phase 5b — the runtime `modloader/`
@@ -855,9 +853,45 @@ is why a per-submesh array index is unavoidable — one model genuinely cannot b
 the remapped index against the `.ostex` layer's `nameHash`, i.e. against the builder's NAME, for every slot
 not claimed by content dedup.
 
-**Still open for map objects** (the remaining `5g` work): a per-submesh ARRAY index on the rigid path
-(vehicles keep `meta.x` for the lamp twin, so the array index rides alongside rather than replacing it),
-night vertex colours, and only then the ~14 000-model bulk convert.
+**Phase 5g step 3 (2026-07-19) — the per-submesh array, and the builder bug the map sweep exposed.**
+A submesh now carries an `array` index (absent = 0, which every runtime build and every car is) beside the
+per-vertex `meta.x` layer. The engine builds ONE bind group per array and switches it per submesh — the ped
+path's pattern, and free of bundle cost because rigid models are never in bundles. The OPAQUE draw order now
+sorts by array (depth decides opaque order anyway), so a multi-array model re-binds once per array rather
+than once per submesh; the translucent order keeps its back-to-front sort untouched.
+
+**Multi-array is the NORM for map objects, not an edge case.** Swept all 14 296 map models of the real
+modded game dir:
+
+| arrays per model | 1     | 2     | 3     | 4     | 5   | 6   | 7   | 8   | 9–14 |
+| ---------------- | ----- | ----- | ----- | ----- | --- | --- | --- | --- | ---- |
+| models           | 6 091 | 4 024 | 2 134 | 1 054 | 493 | 275 | 103 | 66  | 43   |
+
+Peak model: `vicstuff_sfe6004` at 29 857 vertices — half the uint16 index ceiling, which the builder now
+asserts rather than letting a bigger model WRAP its indices silently.
+
+**The sweep found a real builder bug, and the user chose to fix it at the source.** 536 models (3.7 %) came
+out with a submesh straddling two texture arrays. Cause: `appendGeometry` kept ONE vertex table per geometry
+and wrote per-vertex attributes per MATERIAL GROUP, so a vertex shared by two materials took whichever
+material wrote last — the wrong layer, colour, paint slot and reflection on that corner. It has always been
+wrong on the unoptimized path too; splitting the arrays is only what made it fatal. The builder now emits
+vertices PER MATERIAL GROUP (and drops vertices no triangle references).
+
+Measured: **+0.2 % vertices** over 2 000 real map models, 6.9 % of models carry such a shared vertex, and
+the straddle count went **536 → 0**: the sweep now converts **14 285 of 14 296 (99.92 %)**. The 11 that
+remain are unparseable TXDs (`mine`), a pre-existing anti-rip case, not a phase-5g gap.
+
+The alternative — skipping those 536 and leaving their `.dff` in place — was rejected because the optimized
+and unoptimized assets must not drift: the builder IS the runtime's, and that is what keeps them identical.
+
+**Field-checked**, because the builder is shared by every rigid model that already ships: a full-map convert
+of the modded game dir (`--rect -12,-12,12,12 --no-ao`, 140.8 s) driven through the headless sweep — all six
+bench scenes at **120 fps**, 841 road cars, `lateCreates 0`, and the screenshot shows the player, the traffic
+and the street correctly textured. That exercises the split on the vehicle/ped/prop path; the map objects
+themselves still reach the screen through the WELDED cell path until the bulk convert lands.
+
+**Still open for map objects** (the remaining `5g` work): night vertex colours, and only then the
+~14 000-model bulk convert.
 
 ### Test-coverage audit (2026-07-19)
 

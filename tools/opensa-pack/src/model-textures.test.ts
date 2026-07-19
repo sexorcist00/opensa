@@ -13,6 +13,7 @@
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { decodeOstex, fnv1a } from '@opensa/engine-formats';
+import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
 import { parseDff } from '@opensa/renderware';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
@@ -21,6 +22,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { buildModelOsm } from './model-osm';
 import { type ModelTextureSlot, planModelTextures, remapModelLayers } from './model-textures';
 
 const FIXTURES = join(process.cwd(), 'tests', 'original');
@@ -180,6 +182,36 @@ describe('remapModelLayers', () => {
       ]);
 
       expect([...meta]).toEqual([3, 0, 5, 9]); // paint slot and tags untouched
+    });
+
+    it('gives every submesh of the real model an array its layer actually exists in', () => {
+      // The end-to-end shape: convert with the raw dictionary, read it back the way the engine does, and
+      // check the pair a draw uses — the submesh's ARRAY plus its vertices' LAYER — resolves to the texture
+      // the builder named. This is the assertion that a wrongly-remapped index cannot survive.
+      const osm = buildModelOsm(fs, MODEL, { rawDictionary: { txdParents: new Map<string, string>() }, txd: TXD });
+      const { model } = readModelOsm(MODEL, osm.bytes);
+      const dictionaries = model.textures.map((texture) =>
+        decodeOstex(texture.kind === 'ostex' ? texture.bytes : new Uint8Array()),
+      );
+      const indices = new Uint16Array(model.indices.buffer, model.indices.byteOffset, model.indexCount);
+
+      expect(model.textures.length).toBeGreaterThan(1);
+      expect(model.submeshes.length).toBeGreaterThan(1);
+      model.submeshes.forEach((submesh, index) => {
+        const array = submesh.array ?? 0;
+
+        expect(dictionaries[array]).toBeDefined();
+        // The builder is deterministic, so the untouched build above still holds the PRE-remap layers for
+        // the same submesh — which is what makes "went where it was planned to" checkable at all.
+        const source = built.submeshes[index];
+        const planned = plan().slots[built.meta[built.indices[source.indexOffset] * 4]];
+
+        expect(array).toBe(planned.array);
+        for (let at = submesh.indexOffset; at < submesh.indexOffset + submesh.indexCount; at += 1) {
+          expect(model.meta[indices[at] * 4]).toBe(planned.layer);
+          expect(dictionaries[array].layers.length).toBeGreaterThan(planned.layer);
+        }
+      });
     });
 
     it('sends every vertex of the real model to the slot its NAME was planned into', () => {

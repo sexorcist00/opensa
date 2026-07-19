@@ -104,10 +104,14 @@ function optimized(fs: AssetFileSystem, modelName: string): ClutterModelInit | n
     return null;
   }
   const { model } = readModelOsm(modelName, new Uint8Array(osm));
-  if (model.texture.kind !== 'ostex') {
+  const texture = model.textures[0];
+  // The clutter pipeline draws a whole species in ONE instanced call — it has no submeshes, so it cannot
+  // switch texture arrays mid-mesh. A species that planned more than one array must take the unoptimized
+  // path, which renders it correctly, rather than silently drawing every leaf out of array 0.
+  if (model.textures.length !== 1 || texture.kind !== 'ostex') {
     return null;
   }
-  const dictionary = decodeOstex(model.texture.bytes);
+  const dictionary = decodeOstex(texture.bytes);
 
   return {
     colors: model.colors,
@@ -116,7 +120,7 @@ function optimized(fs: AssetFileSystem, modelName: string): ClutterModelInit | n
     meta: model.meta,
     normals: model.normals,
     positions: model.positions,
-    texture: model.texture,
+    texture,
     uvs: model.uvs,
   };
 }

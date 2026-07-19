@@ -14,7 +14,8 @@ export interface RigidModelInit {
   positions: Uint8Array;
   reflect: Uint8Array;
   submeshes: VehicleModelData['submeshes'];
-  texture: RigidTextureInit;
+  /** One per texture ARRAY; a submesh's `array` indexes it. Runtime-built models always carry exactly one. */
+  textures: readonly RigidTextureInit[];
   uvs: Uint8Array;
   vertexCount: number;
 }
@@ -44,13 +45,15 @@ export function toRigidModelInit(model: VehicleModelData): RigidModelInit {
     positions: bytes(model.positions),
     reflect: model.reflect,
     submeshes: model.submeshes,
-    texture: {
-      height: model.texture.height,
-      kind: 'rgba',
-      layers: model.texture.layers,
-      rgba: model.texture.rgba,
-      width: model.texture.width,
-    },
+    textures: [
+      {
+        height: model.texture.height,
+        kind: 'rgba',
+        layers: model.texture.layers,
+        rgba: model.texture.rgba,
+        width: model.texture.width,
+      },
+    ],
     uvs: bytes(model.uvs),
     vertexCount: model.positions.length / 3,
   };

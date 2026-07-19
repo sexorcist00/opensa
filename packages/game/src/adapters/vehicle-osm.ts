@@ -66,10 +66,11 @@ export function readModelOsm(name: string, osm: Uint8Array): OptimizedModel {
   };
   const fixture = JSON.parse(new TextDecoder().decode(section(OsmSectionTag.DESC, 'DESC'))) as VehicleFixture;
   const geom = section(OsmSectionTag.GEOM, 'GEOM');
-  // One array for a rigid model; the multi-array shape serves peds and map objects (`osm-textures.ts`).
+  // A car is one array; a map object is routinely several (one array is one size AND format AND mip count),
+  // and each submesh names the one it samples. All of them come through — dropping the tail here is how a
+  // building would render every wall in whatever texture happened to land in array 0.
   const dictionaries = decodeOsmTextures(section(OsmSectionTag.TEXS, 'TEXS')).arrays;
-  const ostex = dictionaries[0];
-  if (!ostex) {
+  if (dictionaries.length === 0) {
     throw new Error(`${name}.osm carries no texture array`);
   }
   const collisionBytes = osmSection(sections, OsmSectionTag.COLL);
@@ -90,7 +91,7 @@ export function readModelOsm(name: string, osm: Uint8Array): OptimizedModel {
       positions: at(layout.positions, vertexCount * STRIDE.positions),
       reflect: at(layout.reflect, vertexCount * STRIDE.reflect),
       submeshes: fixture.submeshes,
-      texture: { bytes: ostex, kind: 'ostex' },
+      textures: dictionaries.map((bytes) => ({ bytes, kind: 'ostex' }) as const),
       uvs: at(layout.uvs, vertexCount * STRIDE.uvs),
       vertexCount,
     },

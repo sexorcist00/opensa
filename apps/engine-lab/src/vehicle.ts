@@ -59,16 +59,18 @@ export async function loadVehicleProbe(
     positions: slice(fixture.layout.positions, fixture.vertexCount * 12),
     reflect: slice(fixture.layout.reflect, fixture.vertexCount * 4),
     submeshes: fixture.submeshes,
-    texture: {
-      height: fixture.textures.height,
-      kind: 'rgba',
-      layers: fixture.textures.names.length,
-      rgba: slice(
-        fixture.textures.offset,
-        fixture.textures.names.length * fixture.textures.width * fixture.textures.height * 4,
-      ),
-      width: fixture.textures.width,
-    },
+    textures: [
+      {
+        height: fixture.textures.height,
+        kind: 'rgba',
+        layers: fixture.textures.names.length,
+        rgba: slice(
+          fixture.textures.offset,
+          fixture.textures.names.length * fixture.textures.width * fixture.textures.height * 4,
+        ),
+        width: fixture.textures.width,
+      },
+    ],
     uvs: slice(fixture.layout.uvs, fixture.vertexCount * 8),
     vertexCount: fixture.vertexCount,
   });

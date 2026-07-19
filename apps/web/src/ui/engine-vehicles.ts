@@ -174,7 +174,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       id: engine.createVehicleModel(data.model),
       instances: 0,
       lastUsed: performance.now(),
-      textureBytes: textureBytesOf(data.model.texture),
+      textureBytes: textureBytesOf(data.model.textures),
     };
     models.set(name, entry);
 
@@ -350,7 +350,10 @@ function headingQuat(heading: number): [number, number, number, number] {
   return [0, 0, Math.sin(heading / 2), Math.cos(heading / 2)];
 }
 
-/** What a model's texture array costs the budget — the `.ostex` payload, or the raw RGBA8 layers. */
-function textureBytesOf(texture: EngineVehicleData['model']['texture']): number {
-  return texture.kind === 'ostex' ? texture.bytes.byteLength : texture.rgba.byteLength;
+/** What a model's texture arrays cost the budget — the `.ostex` payloads, or the raw RGBA8 layers. */
+function textureBytesOf(textures: EngineVehicleData['model']['textures']): number {
+  return textures.reduce(
+    (total, texture) => total + (texture.kind === 'ostex' ? texture.bytes.byteLength : texture.rgba.byteLength),
+    0,
+  );
 }

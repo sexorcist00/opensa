@@ -69,8 +69,8 @@ describe('readVehicleOsm', () => {
       const source = built();
       const read = readVehicleOsm('admiral', source.bytes);
 
-      expect(read.model.texture.kind).toBe('ostex');
-      expect(read.model.texture.kind === 'ostex' && read.model.texture.bytes).toEqual(source.ostex);
+      expect(read.model.textures[0].kind).toBe('ostex');
+      expect(read.model.textures[0].kind === 'ostex' && read.model.textures[0].bytes).toEqual(source.ostex);
     });
 
     it('bakes the collision the runtime would otherwise parse at spawn', () => {
@@ -123,8 +123,8 @@ describe('a converted vehicle through GtaSaWorldAdapter', () => {
       const converted = await new GtaSaWorldAdapter({ cellSize: 250, fs: adapterFs(true) }).loadVehicleData('admiral');
 
       expect(adapterFs(true).get('admiral.dff')).toBeNull(); // nothing a DFF parser could be handed
-      expect(converted.model.texture.kind).toBe('ostex');
-      expect(stock.model.texture.kind).toBe('rgba');
+      expect(converted.model.textures[0].kind).toBe('ostex');
+      expect(stock.model.textures[0].kind).toBe('rgba');
       // What the game actually consumes must be identical across the two paths.
       expect(converted.model.vertexCount).toBe(stock.model.vertexCount);
       expect(converted.model.indexCount).toBe(stock.model.indexCount);
@@ -144,7 +144,7 @@ describe('a converted vehicle through GtaSaWorldAdapter', () => {
       const fs = withModloader(fsFrom(files));
       const vehicle = await new GtaSaWorldAdapter({ cellSize: 250, fs }).loadVehicleData('admiral');
 
-      expect(vehicle.model.texture.kind).toBe('rgba'); // parsed at runtime, not our baked atlas
+      expect(vehicle.model.textures[0].kind).toBe('rgba'); // parsed at runtime, not our baked atlas
     });
 
     it('takes the optimized side of a half-modded car and names the file it ignored', async () => {
@@ -161,7 +161,7 @@ describe('a converted vehicle through GtaSaWorldAdapter', () => {
         onAssetWarning: (message) => warnings.push(message),
       }).loadVehicleData('admiral');
 
-      expect(vehicle.model.texture.kind).toBe('ostex');
+      expect(vehicle.model.textures[0].kind).toBe('ostex');
       expect(warnings).toEqual(["ignoring modded admiral.txd — 'admiral' is an optimized model"]);
     });
   });

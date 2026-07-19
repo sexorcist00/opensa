@@ -154,7 +154,7 @@ describe('the .osm conversion loses nothing', () => {
       const stock = pair.stock;
 
       const { model } = readModelOsm(entry.model, pair.osm.bytes);
-      const dictionary = decodeOstex(model.texture.kind === 'ostex' ? model.texture.bytes : new Uint8Array());
+      const dictionary = decodeOstex(model.textures[0].kind === 'ostex' ? model.textures[0].bytes : new Uint8Array());
 
       expect(dictionary.width).toBe(stock.texture.width);
       expect(dictionary.height).toBe(stock.texture.height);

@@ -322,7 +322,12 @@ export interface VehicleModelInit {
   /** Per-vertex DFF reflection slots (B5r): env layer, env coefficient, reflect intensity, specular level. */
   reflect: Uint8Array;
   submeshes: readonly VehicleSubmesh[];
-  texture: ModelTextureInit;
+  /**
+   * One entry per texture ARRAY the model uses; `submeshes[].array` indexes it. A car is one array (its
+   * dictionary shares a size); a map object is routinely several — a converted Chinatown building plans 19
+   * layers into 6 arrays, because one array is one size AND one format AND one mip count.
+   */
+  textures: readonly ModelTextureInit[];
   uvs: Uint8Array;
   vertexCount: number;
 }
@@ -336,6 +341,10 @@ export interface VehiclePaint {
 }
 
 export interface VehicleSubmesh {
+  /** Which texture ARRAY this submesh samples — an index into `VehicleModelInit.textures`. Absent means 0,
+   *  the single-array case every runtime-built model (and every car) is. The LAYER stays per-vertex in
+   *  `meta.x`, because the lamps-on twin is switched per vertex and per-submesh binding cannot say that. */
+  array?: number;
   /** Model-space centroid (074/16 round 6) — translucent submeshes sort back-to-front by it per frame.
    *  Optional: fixtures built before the field carry none and sort at the origin. */
   center?: readonly [number, number, number];
@@ -437,7 +446,8 @@ interface VehicleInstanceState {
 }
 
 interface VehicleModel {
-  bindGroup: GPUBindGroup;
+  /** One per texture array; a submesh's `array` picks which to bind. Rebuilt whenever capacity grows. */
+  bindGroups: GPUBindGroup[];
   buffers: GPUBuffer[];
   capacity: number;
   indexBuffer: GPUBuffer;
@@ -448,8 +458,9 @@ interface VehicleModel {
   paintBuffer: GPUBuffer;
   partCount: number;
   submeshes: readonly VehicleSubmesh[];
-  texture: GPUTexture;
-  textureBytes: number;
+  /** Residency estimate per array, parallel to `textures` — each is destroyed with its own share. */
+  textureBytes: number[];
+  textures: GPUTexture[];
 }
 
 /** Interleaved debris vertex (B7·a): position, uv, colour, centroid, velocity, spin, (landTime, layer). */
@@ -871,11 +882,18 @@ export class Engine {
     const matrixBuffer = this.createVehicleMatrixBuffer(init.parts.length, VEHICLE_CAPACITY);
     const paintBuffer = this.createVehiclePaintBuffer(init.parts.length, VEHICLE_CAPACITY);
     const lampBuffer = this.createVehicleLampBuffer(init.parts.length, VEHICLE_CAPACITY);
-    const { byteEstimate: textureBytes, texture } = this.createModelTexture(init.texture, 'vehicle-texture');
+    if (init.textures.length === 0) {
+      throw new Error('a rigid model needs at least one texture array');
+    }
+    const uploads = init.textures.map((texture) => this.createModelTexture(texture, 'vehicle-texture'));
+    const textures = uploads.map((upload) => upload.texture);
+    const textureBytes = uploads.map((upload) => upload.byteEstimate);
     const id = this.vehicleModelSeq;
     this.vehicleModelSeq += 1;
     const model: VehicleModel = {
-      bindGroup: this.createVehicleBindGroup({ lampBuffer, matrixBuffer, paintBuffer, texture }),
+      bindGroups: textures.map((texture) =>
+        this.createVehicleBindGroup({ lampBuffer, matrixBuffer, paintBuffer, texture }),
+      ),
       buffers,
       capacity: VEHICLE_CAPACITY,
       indexBuffer,
@@ -885,8 +903,8 @@ export class Engine {
       paintBuffer,
       partCount: init.parts.length,
       submeshes: init.submeshes,
-      texture,
       textureBytes,
+      textures,
     };
     this.vehicleModels.set(id, model);
     this.vehicleParts.set(id, init.parts);
@@ -927,7 +945,9 @@ export class Engine {
     this.resources.destroyBuffer('uniform', model.matrixBuffer);
     this.resources.destroyBuffer('uniform', model.paintBuffer);
     this.resources.destroyBuffer('uniform', model.lampBuffer);
-    this.resources.destroyTexture('texture', model.texture, model.textureBytes);
+    model.textures.forEach((texture, array) => {
+      this.resources.destroyTexture('texture', texture, model.textureBytes[array] ?? 0);
+    });
     this.vehicleModels.delete(id);
     this.vehicleParts.delete(id);
   }
@@ -2200,6 +2220,9 @@ export class Engine {
   private drawVehicleModel(pass: GPURenderPassEncoder, model: VehicleModel, translucent: boolean, eye: Vec3): number {
     let draws = 0;
     let bound = false;
+    // Which texture array is currently bound. A car keeps this at 0 for the whole model — the switch only
+    // costs anything on a multi-array map object, and even there the opaque order groups submeshes by array.
+    let boundArray = -1;
     for (const state of model.instances) {
       if (!state) {
         continue;
@@ -2209,10 +2232,14 @@ export class Engine {
         if (!bound) {
           pass.setPipeline(this.pipelines.get(translucent ? 'rigid-blend' : 'rigid-opaque'));
           pass.setBindGroup(0, this.frameBindGroup);
-          pass.setBindGroup(1, model.bindGroup);
           model.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
           pass.setIndexBuffer(model.indexBuffer, 'uint16');
           bound = true;
+        }
+        const array = submesh.array ?? 0;
+        if (array !== boundArray) {
+          pass.setBindGroup(1, model.bindGroups[array] ?? model.bindGroups[0]);
+          boundArray = array;
         }
         pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset, 0, state.slot * model.partCount + submesh.part);
         draws += 1;
@@ -2413,7 +2440,7 @@ export class Engine {
     model.matrixBuffer = this.createVehicleMatrixBuffer(model.partCount, capacity);
     model.paintBuffer = this.createVehiclePaintBuffer(model.partCount, capacity);
     model.lampBuffer = this.createVehicleLampBuffer(model.partCount, capacity);
-    model.bindGroup = this.createVehicleBindGroup(model);
+    model.bindGroups = model.textures.map((texture) => this.createVehicleBindGroup({ ...model, texture }));
     model.instances.length = capacity;
     model.instances.fill(null, model.capacity, capacity);
     model.capacity = capacity;
@@ -2559,6 +2586,10 @@ export class Engine {
     }
     if (translucent) {
       order.sort((a, b) => b.distSq - a.distSq);
+    } else {
+      // Opaque has no order requirement (depth decides), so group by texture ARRAY: a multi-array map object
+      // otherwise re-binds on every submesh. Translucency keeps its back-to-front order — correctness first.
+      order.sort((a, b) => (model.submeshes[a.index].array ?? 0) - (model.submeshes[b.index].array ?? 0));
     }
 
     return order.map((entry) => entry.index);
