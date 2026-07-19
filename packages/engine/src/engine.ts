@@ -101,6 +101,8 @@ export interface ClutterModelInit {
   indices: Uint8Array;
   /** The shared vehicle-model meta (uint8x4); only meta.x = texture-array layer is read. */
   meta: Uint8Array;
+  /** NIGHT vertex colours (unorm8x4) — every procobj species ships an authored set. */
+  night: Uint8Array;
   normals: Uint8Array; // float32x3
   positions: Uint8Array; // float32x3
   /** The model's dictionary: our `.ostex`, or RGBA8 layers from a runtime TXD parse. */
@@ -749,6 +751,7 @@ export class Engine {
       upload('uvs', init.uvs, GPUBufferUsage.VERTEX),
       upload('colors', init.colors, GPUBufferUsage.VERTEX),
       upload('meta', init.meta, GPUBufferUsage.VERTEX),
+      upload('night', init.night, GPUBufferUsage.VERTEX),
     ];
     const indexBuffer = upload('indices', init.indices, GPUBufferUsage.INDEX);
     const { byteEstimate: textureBytes, texture } = this.createModelTexture(init.texture, 'clutter-texture');

@@ -77,7 +77,8 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
   ];
 
   const clump = parseDff(dff);
-  const built = buildVehicleModel(clump, new VehicleTextures(txds), {
+  const dictionary = new VehicleTextures(txds);
+  const built = buildVehicleModel(clump, dictionary, {
     ...(options.wheelScale ? { wheelScale: options.wheelScale } : {}),
   });
   // The raw-TXD dictionary rewrites the per-vertex layers, so it must run BEFORE the fixture is packed —
@@ -89,6 +90,7 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
         built.texture.names,
         options.txd ?? name,
         options.rawDictionary.preferCutout,
+        dictionary.empty,
       )
     : null;
   const arrays = planned ? submeshArrays(name, built, planned.slots) : null;

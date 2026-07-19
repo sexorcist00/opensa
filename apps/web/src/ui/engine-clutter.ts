@@ -118,6 +118,7 @@ function optimized(fs: AssetFileSystem, modelName: string): ClutterModelInit | n
     cutout: dictionary.layers.some((layer) => layer.alphaClass !== OstexAlphaClass.OPAQUE),
     indices: model.indices,
     meta: model.meta,
+    night: model.night,
     normals: model.normals,
     positions: model.positions,
     texture,
@@ -137,6 +138,7 @@ function unoptimized(fs: AssetFileSystem, modelName: string, txdName: string): C
     cutout: hasAlpha(model.texture.rgba),
     indices: new Uint8Array(model.indices.buffer, model.indices.byteOffset, model.indices.byteLength),
     meta: model.meta,
+    night: model.night,
     normals: bytes(model.normals),
     positions: bytes(model.positions),
     texture: {

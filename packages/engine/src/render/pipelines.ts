@@ -577,6 +577,8 @@ export function compileAll(
     { arrayStride: 8, attributes: [{ format: 'float32x2', offset: 0, shaderLocation: 2 }] },
     { arrayStride: 4, attributes: [{ format: 'unorm8x4', offset: 0, shaderLocation: 3 }] },
     { arrayStride: 4, attributes: [{ format: 'uint8x4', offset: 0, shaderLocation: 4 }] },
+    // NIGHT vertex colours — clutter species ship authored ones, so they are read, not guessed.
+    { arrayStride: 4, attributes: [{ format: 'unorm8x4', offset: 0, shaderLocation: 5 }] },
   ];
   for (const cutout of [false, true]) {
     pipelines.set(

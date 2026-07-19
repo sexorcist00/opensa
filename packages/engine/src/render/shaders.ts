@@ -165,6 +165,9 @@ struct ClutterIn {
   @location(2) uv: vec2f,
   @location(3) color: vec4f,
   @location(4) slots: vec4<u32>,
+  // The NIGHT vertex colours — every one of the 56 species procobj scatters carries an AUTHORED set, so
+  // the old in-shader day x ambient guess was overwriting art that shipped with the model.
+  @location(5) night: vec4f,
 };
 
 struct ClutterOut {
@@ -186,9 +189,9 @@ fn vsClutter(in: ClutterIn) -> ClutterOut {
   out.world = world.xyz;
   out.uv = in.uv;
   out.layer = in.slots.x;
-  // Clutter carries no authored night set — dim the day vertex colour toward a cool ambient at night (the
-  // converter's world-synthesis constant), so a bush darkens with the world instead of glowing.
-  out.prelit = mix(in.color.rgb, in.color.rgb * vec3f(0.3, 0.32, 0.4), frame.params.x);
+  // Day → night on the authored sets, the same blend the world and rigid paths use. The builder synthesizes
+  // day × ambient where a species truly has no night set, so this is one formula everywhere.
+  out.prelit = mix(in.color.rgb, in.night.rgb, frame.params.x);
   let n = normalize((model * vec4f(in.normal, 0.0)).xyz);
   out.sunNdl = max(dot(n, frame.sunDir.xyz), 0.0);
   out.moonNdl = clamp((dot(n, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
@@ -1159,6 +1162,11 @@ struct RigidVsOut {
   @location(12) poolDiffuse: vec3f,
   // Pool specular (neo pass 2's point-light half), already scaled by the material's specular level.
   @location(13) poolSpec: vec3f,
+  // Night EMISSIVE (opensa-pack 003 phase 5g), the rigid twin of the cell path's: a vertex much brighter at
+  // night than by day IS a lit window / neon / sign, so it emits instead of merely being tinted. The cell
+  // path can also read a BAKED mask; a per-model asset has no cell to carry one, so the luma-delta
+  // heuristic is the whole rule here. A car cannot trip it — no prelit means night == day means delta 0.
+  @location(14) glow: vec3f,
 };
 
 @group(1) @binding(0) var<storage, read> rigidMatrices: array<mat4x4f>;
@@ -1194,6 +1202,9 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
     color = vec4f(rigidPaint[in.instance * 4u + (in.slots.z - 1u)].rgb, in.color.a);
   }
   out.color = color;
+  let lumaWeights = vec3f(0.2126, 0.7152, 0.0722);
+  let nightDelta = dot(in.night.rgb, lumaWeights) - dot(in.color.rgb, lumaWeights);
+  out.glow = in.night.rgb * (smoothstep(0.05, 0.32, nightDelta) * frame.params.w * frame.params.x);
   out.layer = in.slots.x;
   out.nightLayer = in.slots.y;
   out.lampTag = in.slots.w & 0xFu;
@@ -1387,7 +1398,7 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   // tail lamp sits a metre behind its own lens); prod has the same rule by construction.
   let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
     in.poolDiffuse;
-  return base * debugLit(lit);
+  return base * (debugLit(lit) + in.glow);
 }
 
 fn rigidFog(world: vec3f) -> f32 {

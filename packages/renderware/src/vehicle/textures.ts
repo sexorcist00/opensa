@@ -21,8 +21,17 @@ interface DecodedTexture {
 const ALPHA_CUT = 250;
 
 export class VehicleTextures {
+  /**
+   * True when NOT ONE source dictionary carried a texture — stock SA ships 11 empty TXDs, and the game
+   * renders their materials with the material colour over a white stand-in. Callers that plan their own
+   * dictionary need to know, or they would mark every one of those materials as a MISSING texture.
+   */
+  get empty(): boolean {
+    return this.sources.size === 0;
+  }
   private readonly layers: string[] = [];
   private readonly picked = new Map<string, DecodedTexture>();
+
   private readonly sources = new Map<string, DecodedTexture>();
 
   /** `txds` are raw TXD bytes, highest priority first (model TXD, then the generic `vehicle.txd`). */

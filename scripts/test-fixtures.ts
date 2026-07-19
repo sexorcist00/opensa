@@ -110,6 +110,10 @@ const MANIFEST: readonly Fixture[] = [
   extract('gta_cactus.txd', 'dff/clutter/gta_cactus.txd'),
   extract('binnt08_la.dff', 'dff/breakable/binnt08_la.dff'),
   extract('washer.dff', 'dff/building/washer.dff'),
+  // Stock SA ships 11 EMPTY TXDs — a valid dictionary chunk in one 2 048-byte sector with nothing inside.
+  // `mine` is the awkward one: its material NAMES a texture the empty dictionary cannot supply.
+  extract('mine.dff', 'dff/empty-txd/mine.dff'),
+  extract('mine.txd', 'dff/empty-txd/mine.txd'),
   // A stock vegetation LOD DFF — the template the lod-trees-generator rebuilds card geometry over. Carries the
   // tristrip flag + an extra-vertex-colour (0x253f2f9) extension, both of which the encoder must scrub (else SA
   // renders the impostor as nothing).

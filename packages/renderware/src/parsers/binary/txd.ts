@@ -35,6 +35,14 @@ export function parseTxd(buffer: ArrayBuffer): RWTextureDictionary {
     return { textures: recovered };
   }
 
+  // An EMPTY dictionary is not a broken one. Stock SA ships 11 of them — a valid 0x16 chunk in a single
+  // 2 048-byte IMG sector with nothing inside, for models that need no textures (`faketarget`,
+  // `fake_mule_col`, `fuckknows`, `mine`, …). The game renders those materials with their own colour, so
+  // reporting "not a TXD" here was both wrong and the reason 11 map models refused to convert.
+  if (dictHeader) {
+    return { textures: [] };
+  }
+
   throw new Error('Not a TXD: no TexDictionary (0x16) chunk and no recoverable TEXTURE_NATIVE chunks');
 }
 

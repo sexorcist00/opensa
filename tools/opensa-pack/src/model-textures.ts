@@ -48,7 +48,8 @@ const WHITE: readonly number[] = [255, 255, 255, 255];
  *
  * A texture the chain cannot resolve comes out MAGENTA, not white: that is what the welded cell path does
  * with the same missing texture, and a loud model is worth more than one that quietly matches the
- * unoptimized path's invisible white.
+ * unoptimized path's invisible white. `emptyDictionary` is the ONE exception, and it is not a data gap —
+ * see the call site.
  */
 export function planModelTextures(
   fs: AssetFileSystem,
@@ -56,13 +57,19 @@ export function planModelTextures(
   names: readonly string[],
   txdName: string,
   preferCutout = false,
+  emptyDictionary = false,
 ): ModelDictionary {
   const planner = new TexturePlanner(fs, txdParents);
   const txd = txdName.toLowerCase();
   const slots = names.map((raw) => {
     const name = raw.toLowerCase();
+    // An EMPTY source dictionary is stock SA's own convention, not a data gap: the builder gave every one
+    // of these names a white stand-in and the material colour carries, so plan them as white rather than
+    // as the planner's loud missing-texture magenta.
     const resolved =
-      name === WHITE_LAYER ? planner.resolve(txd, null, WHITE) : planner.resolve(txd, name, WHITE, preferCutout);
+      name === WHITE_LAYER || emptyDictionary
+        ? planner.resolve(txd, null, WHITE)
+        : planner.resolve(txd, name, WHITE, preferCutout);
 
     return { array: resolved.arrayRef, layer: resolved.layer };
   });

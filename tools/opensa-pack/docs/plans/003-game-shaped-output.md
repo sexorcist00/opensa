@@ -4,13 +4,14 @@
 clutter, topple props, animated objects, peds — plus the engine and the production player. Both phase-3
 gates are closed (no DFF parse at spawn; 45× measured).
 
-**RESUME HERE — phase 5g, map objects (~14 000).** Steps 1–4 are done: `planModelTextures` (the raw-TXD
+**RESUME HERE — phase 5g, map objects (~14 000).** Steps 1–5 are done: `planModelTextures` (the raw-TXD
 dictionary that preserves mip chains) plans per BUILDER LAYER, `remapModelLayers` rewrites `meta` onto the
 planned slots, a per-submesh `array` index carries the multi-array case through the engine, and the rigid
-path now reads PRELIT and NIGHT vertex colours. A sweep of all 14 296 map models converts **99.92 %** of them.
+path now reads PRELIT and NIGHT vertex colours (clutter and the rigid emissive included).
 
-What remains: **the bulk convert itself** — wire map objects into the CLI (`rawDictionary`, the `preferCutout`
-vegetation rule, skipping the 11 unparseable TXDs), then the `.dff`/`.txd` deletion for them.
+A sweep of all 14 296 map models now converts **100 %** of them. What remains: **the bulk convert itself** —
+wire map objects into the CLI (`rawDictionary` + the `preferCutout` vegetation rule), then the `.dff`/`.txd`
+deletion for them.
 
 Also open: phase 6 (the pmb `pack` stage), the `.col` sweep measurement, and the remaining audit gaps
 (material masks, 2dfx in the per-model container, second UV layer). **Phase 5b — the runtime `modloader/`
@@ -922,9 +923,38 @@ places.
 shot shows the rigid props (lampposts) sitting at the same light level as the welded cell geometry around
 them instead of standing out bright.
 
-Known gaps left open here: the CLUTTER pipeline has no night buffer (it keeps its own `day × ambient` mix in
-the shader, so an authored night set on a clutter species is ignored), and the rigid path has no emissive
-GLOW — the cell path derives one from the night−day luma delta, so a converted lit window will not bloom.
+**Phase 5g step 5 (2026-07-19) — the three things step 4 left, all closed after the user asked why not.**
+
+1. **Clutter reads its night set.** The clutter shader had been GUESSING (`day × ambient` inline) on the
+   stated grounds that "clutter carries no authored night set". Measured: **56 of 56 procobj species carry
+   one**, and prelit too. The guess was overwriting art that ships with the model. Clutter gained the same
+   `night` vertex buffer and the same blend; the builder still synthesizes where a species truly has none,
+   so it is one formula everywhere.
+2. **The rigid path emits.** `vsRigid` now runs the cell path's own heuristic — a vertex much brighter at
+   night than by day IS a lit window — and `rigidShade` adds it exactly where the world fragment does. The
+   cell path can also read a BAKED emissive mask; a per-model asset has no cell to carry one, so the
+   luma-delta heuristic is the whole rule here. A car cannot trip it: no prelit means night == day means
+   delta 0.
+3. **The 11 "unparseable" TXDs were never broken.** Each is a valid `0x16` dictionary chunk in ONE
+   2 048-byte IMG sector with nothing inside, and all 11 are **byte-identical in the stock and the modded
+   game** — Rockstar's own convention, not a lock and not something our chain lost. The models are collision
+   markers and debug leftovers: `faketarget`, `fake_mule_col`, `fuckknows`, `mine`, `od_copwindows`,
+   `motel_toilet`, `cj_oyster`, `d5002whi`, `standblack04`, `lod_lopolbrij1`, `lodcj_bandit_6`. **Nine of
+   them have no textured material at all** — their colour is the material's own, which is exactly what the
+   game draws. Two (`mine` → `mine_64`, `lodcj_bandit_6` → `slot6LOD`) NAME a texture the empty dictionary
+   cannot supply, and there the game paints a white stand-in so the material colour comes through.
+
+   So the fix is to behave like the game, not to skip: `parseTxd` returns an EMPTY dictionary instead of
+   claiming "not a TXD" (the message was also simply wrong — the chunk is there), and a model whose whole
+   dictionary is empty plans its names as flat WHITE rather than the planner's loud missing-texture magenta.
+   That exception is narrow on purpose: a texture missing from a NON-empty dictionary is still a real data
+   gap and still comes out magenta. `mine.dff` + `mine.txd` are now fixtures, and the sweep went
+   **14 285 → 14 296 of 14 296: 100 %**, with zero `not converted` warnings in a full convert (was 18).
+
+**Field-checked** on a fresh full-map convert: six bench scenes at **120 fps**, `lateCreates 0`, night scene
+unchanged in character (no runaway glow). What the bench does NOT isolate is a before/after of a single lit
+window or a night bush — the scenes are urban and the effect is subtle; the arithmetic is covered by tests
+instead.
 
 **Still open for map objects**: the ~14 000-model bulk convert and the `.dff`/`.txd` deletion.
 
