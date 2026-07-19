@@ -1,0 +1,105 @@
+# 081 — Vehicle driving physics (feel overhaul on the own engine)
+
+**Status: PLANNED 2026-07-19.** Supersedes the idea at `docs/ideas/0.4.0/plans/07-vehicle-physics/`
+(2026-07-12, "THE priority gameplay task") — rethought against what the engine actually is now.
+
+**Goal: driving feels GREAT — SA-arcade responsive but physically grounded.** The original complaints
+(user, 2026-07-12): steering responds instantly with no feel, braking pitches the nose UP instead of
+down, cars flip far too easily. Steering has since gained a rate-limit + speed-sensitive lock; the
+other two complaints are untouched and their root causes are now LOCATED, not hypothesised (below).
+
+## What changed since the 0.4.0 idea was written
+
+The idea doc planned a "phase 0.5 spike: adopt Rapier's `DynamicRayCastVehicleController` or build our
+own". **That decision was made by history: plan 018 shipped DRCVC and it has been production for the
+whole 074 arc** (bench road cars, enter/exit, damage, LOD streaming all ride it). The engine study for
+this plan (2026-07-19) mapped the exact current state:
+
+- **Vehicle = Rapier raycast vehicle** (`createDynamicVehicle`, `physics-world.ts:175-230`), chassis
+  collider from COL convex primitives with an **equal mass share per shape** — the centre of mass
+  "emerges" as the mean of primitive centres (`:700`), which includes cabin boxes → **COM sits high.
+  This is the flip-happiness root cause.** `handling.cfg` ships an authored `CentreOfMass` per vehicle;
+  nothing reads it. `setAdditionalMassProperties` is never called.
+- **`handling.cfg` is parsed but 5 of ~40 fields are consumed** (mass, maxVelocity, engineAccel,
+  brakeDecel, steeringLock — `gta-sa-world.adapter.ts:707-723`). Traction, suspension, brake bias,
+  drive type, gears, turn mass, drag, anti-dive: all parsed into raw strings and ignored.
+- **One shared constant set for every car** (`physics-world.ts:16-31`): suspension rest 0.15 /
+  stiffness 120 / compression 12 / relaxation 2.3 / travel 0.25 / `WHEEL_FRICTION_SLIP` 10.5;
+  chassis angular damping 2 ("resist roll-flip", i.e. the flip problem is band-aided globally).
+  A firetruck and an Infernus currently share identical suspension and tyres.
+- **Drive is always 4WD** (engine force split equally across wheels, `setVehicleControls`
+  `:516-531`); handbrake (Space) is a full 4-wheel brake — no rear-grip-cut slide.
+- **Driving logic lives in `enter-vehicle.system.ts:381-440`** with honest workarounds for DRCVC
+  quirks that must be preserved as a ledger: phantom ~0.95 rest speed (real speed read from body
+  velocity), reverse cannot start from rest (`seedReverse`), parking brake 80 at spawn.
+- **One-fixed-step control latency**: `drive()` runs AFTER this step's `updateVehicle`
+  (`physics.step` updates vehicles first, `engine-canvas-host.tsx:708-719`) so controls apply next
+  step.
+- **No physics telemetry exists anywhere**; no visual suspension travel (wheels only spin+steer —
+  `VehicleRig`); the F2 Vehicles screen is graphics-only.
+- Infrastructure that did NOT exist in 0.4.0 and this plan now leans on: the F2 debugger +
+  capabilities system (a Physics tab is cheap), the `[bench]` JSON console protocol + headless
+  harness (a `[phys]` twin is cheap), deterministic fixed-step loop, `InputState` as an interface
+  (scripted input source = trivial), and plan 080's camera chain which will CONSUME the slip/speed
+  signals this plan produces (080/05 drift framing).
+
+## The architecture decision (made here, not re-litigated per plan)
+
+**Stay on `DynamicRayCastVehicleController` through plans 02–04; the own-controller question is a
+GATE in plan 05, decided by telemetry, not preference.**
+
+Reasoning: everything that fixes the reported complaints is expressible OUTSIDE the controller —
+COM/inertia are body mass properties; anti-roll bars, anti-dive, downforce, air control are chassis
+forces; brake bias, handbrake rear-cut, drive-type torque split, per-car suspension, traction scaling
+are per-wheel DRCVC parameters (`frictionSlip`, `sideFrictionStiffness`, per-wheel brake/engine are
+all in the API). The ONE thing DRCVC owns that we cannot shape is the tyre force curve itself
+(Bullet-lineage: grip scalars, no slip-angle model, no combined-slip circle, no load sensitivity).
+Whether that ceiling actually blocks "SA-arcade but grounded" is an empirical question — plan 01's
+telemetry + plan 05's gate criteria answer it. **Every system in 02–04 must therefore be
+controller-agnostic** (chassis-level forces, or parameters an own controller would also have), so a
+positive gate verdict swaps the controller without invalidating the chain.
+
+## Sub-plans
+
+| #   | Plan                                                     | One-liner                                                                                                                            |
+| --- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 01  | [Telemetry + test track](01-telemetry.md)                | Physics HUD, scripted-input replays over real map locations, `[phys]` JSON capture, BEFORE baselines.                                |
+| 02  | [handling.cfg as truth](02-handling-truth.md)            | Full typed unit-mapping; COM + inertia applied (THE flip fix); per-car suspension; control-latency fix.                              |
+| 03  | [Stability forces](03-stability.md)                      | Anti-roll bars, anti-dive/anti-squat (THE nose fix), speed downforce, arcade roll stabiliser — replaces the global damping band-aid. |
+| 04  | [Drivetrain + brakes](04-drivetrain-brakes.md)           | Gears + drive type F/R/4, engine braking, brake bias, handbrake = rear grip cut (the SA slide), reverse rework.                      |
+| 05  | [Tyres + steering + THE GATE](05-tyres-steering-gate.md) | Traction mapping, steering feel v2, counter-steer assist; gate verdict: DRCVC tyre ceiling → own controller go/no-go.                |
+| 06  | [Air, kerbs, visual suspension](06-air-kerbs-visual.md)  | In-air attitude control, kerb contact smoothing, VISIBLE suspension travel through the rig.                                          |
+| 07  | [Presets + physics CI](07-presets-regression.md)         | Per-class field sweep (sports/truck/bus), replay regression pack with tolerance bands, close-out.                                    |
+
+Execution order + rationale: [priority.md](priority.md).
+
+## Ground rules
+
+1. **Telemetry first — nothing is tuned blind** (carried verbatim from the idea; now cheap to honor).
+   Every feel change in 02–06 lands with a before/after replay capture in that plan's ledger.
+2. **`handling.cfg` is the tuning source of truth.** Mapped, never invented; the unit-conversion
+   table is written ONCE (plan 02) with unit tests pinning real rows (LANDSTAL, ADMIRAL, INFERNUS).
+   Where a mapping is deliberately arcade-bent, the bend is a named, documented factor.
+3. **Controller-agnostic feel systems** (the architecture decision above) — chassis forces and
+   per-wheel parameters only; nothing may reach into DRCVC internals.
+4. **The DRCVC quirks ledger is load-bearing**: phantom rest speed, seedReverse, parking brake,
+   spawn defer/slide/pitch lessons. A plan that touches adjacent code re-verifies the quirk's test.
+5. **Determinism**: replays = scripted `InputState` + fixed spawn + fixed step; captures are
+   comparable run-to-run on the same build. Physics tests never depend on wall clock or randomness.
+6. **Renderer untouched.** The vehicle systems output body/wheel transforms through `VehicleHandle`;
+   the only render-side change in the whole chain is the plan-06 suspension-travel parameter.
+7. **Feel is field-judged** per plan (the 080 rule): a plan's defaults freeze only on user verdict;
+   `?veh=legacy`-style A/B is NOT provided — physics cannot honestly run two worlds — instead each
+   plan keeps its constants config-patchable live via the new F2 Physics tab for in-session A/B.
+8. **Measurements ledger per sub-plan** (standing rule), including the fixed-step cost budget:
+   vehicle physics for 8 live cars ≤ 0.5 ms per fixed step, measured at plan 07.
+
+## Cross-links
+
+- **080/05 vehicle camera** consumes `speed`, `velocityDir`, and (new here) a slip proxy — drift
+  framing gets honest data from plan 01's telemetry channel.
+- **0.5.0/04 all-vehicle-types** rides on this chain (its per-class presets are plan 07 here);
+  bikes' balance controller remains out of scope for 081.
+- **0.6.0/01 vehdeform** consumes the same Rapier contact events — orthogonal, no coupling.
+- Vanilla references for feel targets: the user's real-SA installs under `game-src/` (same
+  handling.cfg rows) — plan 01 records reference captures of expectations per test-track scene.

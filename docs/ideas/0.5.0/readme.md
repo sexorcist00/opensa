@@ -45,3 +45,15 @@ controllers, trains, peds with imposter LODs, the far-rendering tiers (vehicle_v
 ASI twin (suppresses the vanilla population, reads our format, adds kilometre-range car/ped draw).
 
 Full chain: [plans/06-city-life/readme.md](plans/06-city-life/readme.md).
+
+## LOD generators, extended (moved from 0.4.0, 2026-07-19)
+
+Two independent generator upgrades for the REAL-GAME pipeline, each unlocked by an ASI engine fix from
+the [`asi/perfect-map`](../../../asi/perfect-map/docs/plans/readme.md) chain — untouched by the own-engine
+flip (they run in pmb/lod-generator land). **Part A** (needs asi Phase 2, the 2dfx emitter-leak fix):
+LODs carry the full 2dfx richness — coronas everywhere, roadsigns & escalators into baked cells,
+rate-budgeted particle emitters at range. **Part B** (needs asi Phase 1, the int16 limit lift): procobj
+scatter gets configurable, biome-aware density (forest bushes, mountain rocks, desert cacti) with the
+int16-era caps raised for the asi target. Both keep the stock target byte-identical to today.
+
+Full chain: [plans/07-lod-generators-extended/readme.md](plans/07-lod-generators-extended/readme.md).

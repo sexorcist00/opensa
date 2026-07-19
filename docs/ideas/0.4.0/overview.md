@@ -15,13 +15,13 @@ The through-line: two chains are pure capability (rendering, plates), one chain 
 
 ## The five chains at a glance
 
-| Chain                                                                                              | Plans         | Pillar    | Gated on | Independent?                                               |
-| -------------------------------------------------------------------------------------------------- | ------------- | --------- | -------- | ---------------------------------------------------------- |
-| [01 — Vehicle license plates](plans/01-plates/)                                                    | 4             | Look      | —        | ✅ fully standalone                                        |
-| [02 — Rendering overhaul](../../plans/062-rendering-overhaul.md) _(moved to `docs/plans/062–072`)_ | 10            | Look      | —        | ✅ standalone (but its perf harness is shared — see below) |
-| [03 — opensa-asi (own limit/engine patches)](../../../asi/perfect-map/docs/plans/readme.md)        | 11 (2 phases) | Limits    | —        | ✅ standalone; **enables 05**                              |
-| [04 — Basic CLEO support](plans/04-cleo-basic/readme.md)                                           | 5             | Behaviour | —        | ✅ fully standalone                                        |
-| [05 — LOD generators, extended](plans/05-lod-generators-extended/readme.md)                        | 6 (A+B)       | Content   | **03**   | ❌ needs the ASI                                           |
+| Chain                                                                                                        | Plans         | Pillar    | Gated on | Independent?                                               |
+| ------------------------------------------------------------------------------------------------------------ | ------------- | --------- | -------- | ---------------------------------------------------------- |
+| [01 — Vehicle license plates](../../plans/082-vehicle-plates/readme.md) _(moved to `docs/plans/082`)_        | 4             | Look      | —        | ✅ fully standalone                                        |
+| [02 — Rendering overhaul](../../plans/062-rendering-overhaul.md) _(moved to `docs/plans/062–072`)_           | 10            | Look      | —        | ✅ standalone (but its perf harness is shared — see below) |
+| [03 — opensa-asi (own limit/engine patches)](../../../asi/perfect-map/docs/plans/readme.md)                  | 11 (2 phases) | Limits    | —        | ✅ standalone; **enables 05**                              |
+| [04 — Basic CLEO support](../../plans/083-cleo-basic/readme.md) _(moved to `docs/plans/083`)_                | 5             | Behaviour | —        | ✅ fully standalone                                        |
+| [05 — LOD generators, extended](../0.5.0/plans/07-lod-generators-extended/readme.md) _(moved to `0.5.0/07`)_ | 6 (A+B)       | Content   | **03**   | ❌ needs the ASI                                           |
 
 **~36 plans total.** Only one hard cross-chain dependency (05 → 03), plus one shared foundation (02's perf harness).
 
@@ -30,11 +30,11 @@ The through-line: two chains are pure capability (rendering, plates), one chain 
 ```
                           02-rendering/001  ── perf HUD + benchmark harness ──┐  (shared measurement foundation)
                                                                               │
-01-plates ─────────────────────────────────────────────────  (independent)   │
+01-plates (→ docs/plans/082) ──────────────────────────────  (independent)   │
                                                                               ▼
 02-rendering  001 → 002 → 003 → 004 → 005 → 006 → 007 → 008 → 009 → 010        │ used by
                                                                               │  05-A3, 05-B3
-04-cleo-basic  001 → 002 → 003 → 004 → 005  ─────────────────  (independent)   │  (far-view / streaming budgets)
+04-cleo-basic (→ docs/plans/083)  01 → 02 → 03 → 04 → 05 ───  (independent)   │  (far-view / streaming budgets)
                                                                               │
 03-asi  Phase 1: 000 → 001 → 002 → 003 → 004 → 005 → 006   (limit lift = Task 3) ┼──┐
                  └ 000 = reproduce the bug FIRST (the pass/fail oracle)        │  │
@@ -54,7 +54,7 @@ Two cross-cutting threads run through multiple chains and should be treated as s
 
 - **03-asi is the keystone.** Its Phase 1 (limit lift) unlocks 05-Part B; its Phase 2 (2dfx emitter fix) unlocks 05-Part A. Nothing else in 0.4.0 blocks on it, but ~⅓ of the content value (denser world, effects at range) is downstream of it. If content richness is the 0.4.0 headline, 03-asi is the long pole — start it early.
 - **02-rendering is the largest chain (10 plans)** and mostly self-contained, but its plan 001 is a dependency-magnet: build it first regardless, because 03-Phase-2 and 05 want its numbers.
-- **01-plates and 04-cleo are leaf chains** — fully parallelizable, no dependents, good for filling gaps or parallel tracks.
+- **01-plates and 04-cleo are leaf chains** (now working plans 082/083) — fully parallelizable, no dependents, good for filling gaps or parallel tracks.
 
 ## Suggested execution order
 
@@ -63,9 +63,9 @@ Three broad phases, each shippable:
 **Phase A — foundations & standalone wins (parallelizable)**
 
 - 02-rendering/001 (instrumentation) — do this first; everything measures against it.
-- 01-plates (whole chain) — small, standalone, visible win.
+- 01-plates (now docs/plans/082) — small, standalone, visible win.
 - 03-asi Phase 1 (001–006) — the limit lift; long pole, start early.
-- 04-cleo-basic can run as an independent parallel track any time.
+- 04-cleo-basic (now docs/plans/083) can run as an independent parallel track any time.
 
 **Phase B — build on the foundations**
 
@@ -92,10 +92,10 @@ Nothing forces this exact order — the only hard rule is **05 after its 03 phas
 
 | Chain         | Plans | Rough size        | Standalone value                                                                                         |
 | ------------- | ----- | ----------------- | -------------------------------------------------------------------------------------------------------- |
-| 01-plates     | 4     | small             | ships alone                                                                                              |
+| 01-plates     | 4     | small             | ships alone (→ docs/plans/082)                                                                           |
 | 02-rendering  | 10    | large             | ships incrementally per stage                                                                            |
 | 03-asi        | 11    | large / high-risk | Phase 1 ships alone (limit lift, starts with 000 repro); Phase 2 alone (2dfx fix, starts with 007 repro) |
-| 04-cleo-basic | 5     | medium            | ships alone (two mods run)                                                                               |
-| 05-lod-ext    | 6     | medium            | only after 03                                                                                            |
+| 04-cleo-basic | 5     | medium            | ships alone (two mods run) (→ docs/plans/083)                                                            |
+| 05-lod-ext    | 6     | medium            | only after 03 (→ 0.5.0/07)                                                                               |
 
 See the [index](readme.md) for every plan link, and each chain's readme for design rationale, code grounding, and external references.

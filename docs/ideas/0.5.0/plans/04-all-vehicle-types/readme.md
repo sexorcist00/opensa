@@ -4,9 +4,10 @@ Extend the current car support to the full SA land fleet. Scope (user, 2026-07-1
 add motorbikes, bicycles, quads, trucks with trailers, buses/long vehicles, and the utility oddballs
 (forklift, combine, mower, sweeper, tractor, golf cart, Caddy…). Aircraft and boats are explicitly OUT.
 
-**Migration note:** rides on the 0.4.0 physics overhaul ([0.4.0/07](../../../0.4.0/plans/07-vehicle-physics/readme.md)
-— per-class presets are its phase 5) and on the 074 dynamics layer (plan 08: dummy hierarchies, part
-flattening, damage states). Render side is engine-ready by then; this plan is mostly gameplay + data.
+**Migration note:** rides on the vehicle-physics chain
+([docs/plans/081-vehicle-physics/](../../../../plans/081-vehicle-physics/readme.md) — per-class presets
+are its plan 07; the class-factor table it ships is this plan's preset seed) and on the 074 dynamics
+layer (plan 08: dummy hierarchies, part flattening, damage states). Render side is engine-ready by then; this plan is mostly gameplay + data.
 
 ## Per-class work breakdown
 

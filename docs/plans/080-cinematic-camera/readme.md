@@ -1,0 +1,125 @@
+# 080 — Cinematic camera (GTA V-feel follow camera for the own engine)
+
+**Status: PLANNED 2026-07-19.** Planning-only so far — no code has been written.
+
+**Goal: the camera feels "cinematic" the way GTA V's does — weighty, smooth, always composed — while
+staying responsive enough that nobody blames it for a missed turn.** Today the engine host camera is a
+rigid stick: `eye = target − forward · distance`, raw mouse deltas, zero smoothing, hard-coded rig
+(`resolveCamera`, `apps/web/src/ui/engine-camera.ts:81-103`). Everything below replaces that follow rig;
+photo mode and bench cameras are explicitly untouched.
+
+## What "GTA V feel" decomposes into (the target behaviours)
+
+| #   | Behaviour                                                                   | Sub-plan |
+| --- | --------------------------------------------------------------------------- | -------- |
+| 1   | Camera not hard-locked to the character — rotational lag, catches up softly | 02       |
+| 2   | Eased acceleration/braking of all camera motion (inertia)                   | 01 + 02  |
+| 3   | Spring behaviour — camera "weight" on sharp direction changes               | 02       |
+| 4   | Look-ahead — frame shifts toward movement direction                         | 03       |
+| 5   | Speed-based distance + FOV widening (mostly vehicles)                       | 05       |
+| 6   | Auto-centering behind the player after input goes idle                      | 03       |
+| 7   | Camera bob while walking/running/jumping                                    | 06       |
+| 8   | Landing dip + impact kick/shake                                             | 06       |
+| 9   | Collision camera — never clips through walls, smooth pull-in/release        | 04       |
+| 10  | Vehicle turn lag + drift framing (camera looks along velocity in a slide)   | 05       |
+| 11  | Cinematic dampening of raw mouse input                                      | 02       |
+
+Additions beyond the request (they fall out of the same architecture and GTA V has them all):
+
+- **Vertical follow softness** — the camera's height channel damps slower than the planar channels, so
+  stairs, curbs and jump arcs do not jolt the frame (02).
+- **Soft dead zone** — sub-threshold player drift does not move the camera at all (02).
+- **Pitch-coupled framing** — looking down raises/tightens the rig slightly, looking up drops it toward
+  the shoulder, keeping the character composed instead of filling the frame (07, polish).
+- **Look-behind key** in vehicles — smooth 180° flip while held (05, polish).
+- **Sprint FOV kick on foot** — subtle, a few degrees (06).
+- **Motion-reduction accessibility toggle** — one config flag that zeroes bob/shake/FOV kicks (06).
+
+Out of scope, recorded so nobody re-litigates: **gamepad** (no gamepad input path exists in
+`packages/game/src/input/` at all — a separate plan when it comes), **first-person mode**, **idle
+cinematic auto-camera** and the **R-key cinematic vehicle camera** (both are 0.6.0 idea material —
+stubs to be added when this chain closes).
+
+## What the engine study established (constraints — every sub-plan obeys these)
+
+1. **Two coordinate spaces.** Gameplay/physics are GTA Z-up; rendering is engine Y-up;
+   `toEngine(gta) = (x, z, −y)` (`engine-canvas-host.tsx:1155`). Camera OUTPUT (`CameraState.eye/target`)
+   is Y-up; camera COLLISION casts must run in Z-up against the Rapier world. The rig does its math in
+   ONE space (engine Y-up, where yaw/pitch already live) and converts only at the physics boundary.
+2. **FOV is free.** The projection matrix is rebuilt every frame from `camera.fovYRad`
+   (`packages/engine/src/engine.ts:967-968`); no uniform or shader work for speed/FOV effects. It is
+   currently hard-coded to π/3 in `resolveCamera` (`engine-camera.ts:90`) and must become an input.
+3. **The camera updates in the VARIABLE-rate section** of the host loop, after fixed-step physics
+   catch-up (`engine-canvas-host.tsx:787-929`, `FIXED_STEP = 1/60`, no interpolation between steps).
+   Therefore every smoothing term must be frame-rate independent — exponential decay / critically
+   damped springs parameterised by dt, never per-frame lerp constants.
+4. **No smoothing utilities exist.** `@opensa/math` has `lerp/clamp/degToRad/radToDeg/euclideanModulo`
+   only (`packages/math/src/math-utils.ts`). Damp/spring/angle-damp helpers are new code (plan 01).
+5. **No camera raycast API exists.** `PhysicsWorld` exposes only downward casts (`groundBelow`,
+   `physics-world.ts:361-367`); the Rapier primitive `world.castRay` is already used internally, so a
+   general `raycast`/`sphereCast` is a thin addition (plan 04).
+6. **Config exists but is ignored.** `CameraConfig` (`packages/game/src/interfaces/config.interface.ts:12-31`)
+   carries the 036-era rig fields; the engine host reads only the zoom clamps and hard-codes the rest
+   (EYE_HEIGHT 0.9, pitch clamp [−1.2, 0.9], sensitivity 0.004). The debug Camera tab is disabled for
+   the engine host (`debug-capabilities.ts` — `cameraRig: false`).
+7. **Vehicle state is all reachable, nothing consumes it yet**: signed forward speed
+   (`physics.vehicleSpeed`), full velocity (`getLinvel`), pose (`readBody`), heading from quaternion
+   (`enter-vehicle.system.ts:470`). Drift = angle between velocity and car forward, derivable per frame.
+8. **Character signals**: `Velocity.grounded` 0/1 flag, vertical velocity, landing = the
+   `grounded && vz < 0` edge (`character-controller.system.ts:100-110`); walk 2 / run 7 u/s. There is
+   no landing EVENT — the camera derives edges itself (plan 06).
+9. **Camera priority is bench > photo > follow** (`resolveCamera`, pinned by `engine-camera.test.ts`).
+   This ordering is an invariant: bench and photo bypass EVERYTHING in this chain, so ritual/soak
+   numbers cannot be moved by camera work, by construction.
+
+## Architecture (decided here, detailed in plan 01)
+
+A **`CameraDirector`** — pure, deterministic, unit-testable — grows out of `engine-camera.ts` into
+`apps/web/src/ui/camera/` (the existing pattern: pure math modules + tests, host stays browser glue).
+The host calls `director.update(input, dt)` once per rendered frame with a plain snapshot (focus pose,
+velocities, grounded flag, look deltas, mode) and receives a `CameraState`. Physics is injected as a
+narrow probe interface so collision is stubbable in tests. Layers, applied in fixed order:
+
+```
+follow rig (yaw/pitch/distance springs)        ← plans 02, 03
+  → mode layer (on-foot | vehicle)             ← plan 05
+    → collision resolve (pull-in/release)      ← plan 04
+      → additive motion (bob, dips, shakes)    ← plan 06
+        → CameraState (eye, target, fovYRad)
+```
+
+Collision runs BEFORE additive motion so a bob can never push the eye through a wall; additive
+offsets are amplitude-capped below the collision margin.
+
+## Sub-plans
+
+| #   | Plan                                                     | One-liner                                                                                                           |
+| --- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| 01  | [Foundations](01-foundations.md)                         | Damp/spring math in `@opensa/math`, CameraDirector skeleton, config plumbing, debug tab, A/B switch.                |
+| 02  | [Follow rig](02-follow-rig.md)                           | The spherical rig with per-channel springs: rotational lag, inertia, input dampening, dead zone, vertical softness. |
+| 03  | [Auto-center + look-ahead](03-auto-center-look-ahead.md) | Idle recentering behind heading, speed-scaled; lateral look-ahead offset.                                           |
+| 04  | [Collision camera](04-collision.md)                      | PhysicsWorld ray/sphere-cast API + whisker rig, fast pull-in / slow release.                                        |
+| 05  | [Vehicle camera](05-vehicle-camera.md)                   | Speed distance/FOV curves, turn lag, drift framing, enter/exit blends, look-behind.                                 |
+| 06  | [Motion feel](06-motion-feel.md)                         | Bob, landing dip, impact shake, sprint FOV kick, motion-reduction toggle.                                           |
+| 07  | [Transitions + polish](07-transitions-polish.md)         | Mode blending, pitch-coupled framing, field-tuning rounds, bench guard, close-out.                                  |
+
+Execution order and the reasoning behind it: [priority.md](priority.md).
+
+## Ground rules
+
+1. **Pure core.** Every behaviour lives in a pure `step(state, input, dt) → state` function under
+   `apps/web/src/ui/camera/`, unit-tested with fixed dt sequences. The host contributes only snapshot
+   assembly and the physics probe. No `performance.now()` inside the core — time comes in as dt.
+2. **Frame-rate independence is tested, not assumed.** For each spring/damp: one test asserts that
+   N steps at dt and one step at N·dt land within tolerance (exponential-decay property).
+3. **Bench/photo bypass is an invariant** — `resolveCamera` priority stays; a bench run must produce
+   draws/fps identical to pre-080 rows (ritual sweep is the proof).
+4. **A/B escape hatch**: `?cam=legacy` keeps the pre-080 stick camera for the whole chain (the
+   `?stoch=0` pattern) — field rounds compare feel one keypress apart, and a bad round never blocks play.
+5. **Config-driven tuning.** Every constant a field round might touch lives in `CameraConfig` (new
+   fields, plan 01) and is surfaced in the debug Camera tab. No magic numbers buried in the rig.
+6. **Measurements ledger per sub-plan** (standing rule): tuning values that survive a field round get
+   recorded with the user's verdict; CPU cost of `director.update` and cast counts get measured, not
+   estimated (budget: ≤ 0.1 ms p95, ≤ 5 rays/frame).
+7. **Feel is field-judged.** The headless harness can pin determinism and regressions but cannot judge
+   feel; each sub-plan ends with a user field round, and tuning defaults are frozen only on acceptance.

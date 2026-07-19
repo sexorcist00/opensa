@@ -77,7 +77,7 @@ Three concrete costs of the current shape:
 3. **Two hosts, two loaders, one symlink farm.** `packages/engine/src/stream/setup.ts:30-35` and
    `apps/engine-lab/src/pak-loader.ts:20-26` duplicate the manifest fetch/validate; the paks live in
    `apps/engine-lab/public/` with root-level symlinks (`public/pak-ls`, `public/pak-map`, `public/ped`) as
-   the sharing mechanism. Plan [078](../../../../docs/plans/078-viewers-lab-on-pmb-output.md) collapses
+   the sharing mechanism. Plan [079](../../../../docs/plans/079-viewers-lab-on-pmb-output.md) collapses
    that, and it needs this plan's output shape to collapse ONTO.
 
 ## The gap this plan has to close first
@@ -218,7 +218,7 @@ Two fields die. Their consumers, in the order they must be cut:
   becomes the only path
 - `apps/engine-lab/src/main.ts:535-536` — **ordering dependency**: the lab has no VFS today and reads
   timecyc exclusively from the manifest, so this field cannot be deleted until the lab reads a game dir
-  ([078](../../../../docs/plans/078-viewers-lab-on-pmb-output.md) phases 1–2). 078 phase 2 and 003 phase 4
+  ([079](../../../../docs/plans/079-viewers-lab-on-pmb-output.md) phases 1–2). 079 phase 2 and 003 phase 4
   are the same cut.
 
 ### Convert-everything dissolves the exclusion set — and creates a size question
@@ -332,12 +332,12 @@ Everything in that table survives in `--out`. Everything else in the archives is
    why it went unnoticed — but it is a latent hole that opens the moment a mod parents a vehicle or prop
    TXD, and it is cheap to close.
 
-### Two findings that belong to plan 078
+### Two findings that belong to plan 079
 
 - **The player ped never touches the VFS.** `apps/web/src/ui/engine-player.ts:54-56` fetches
   `/ped/ped.json` + `/ped/ped.bin` — the probe fixture — over HTTP, in the PRODUCTION host, not just the
   lab. `buildPedModel` exists and is reachable only from `apps/viewer`. So retiring the ped fixture is a
-  production change, not a lab change, and it lands with 078.
+  production change, not a lab change, and it lands with 079.
 - **`particle.txd` is fetched and fully re-parsed three times** at boot (coronas, ripple, foam) with no
   cache. Free win, noted so it is not lost.
 
@@ -371,11 +371,11 @@ numbers say container, the container stays and only the manifest rule and the `o
 **Phase 5 — the rest of the archives**: peds, clutter, breakables, animated objects, map objects. At the
 end of this phase a stock build is 100 % optimized and the `.dff`/`.txd` entries are gone from the IMGs.
 
-**The PLAYER ped lands here** (user decision 2026-07-18, not in 078): `apps/web/src/ui/engine-player.ts:54-56`
+**The PLAYER ped lands here** (user decision 2026-07-18, not in 079): `apps/web/src/ui/engine-player.ts:54-56`
 fetches `/ped/ped.json` + `/ped/ped.bin` — the probe fixture — in the **production** host, so moving it to a
 by-name VFS load is a production change and needs its own field check, not just a green suite.
 The lab stops having a private ped/vehicle fixture format here — it loads peds and cars by name through the
-VFS like the game and the viewers (plan [078](../../../../docs/plans/078-viewers-lab-on-pmb-output.md)), so
+VFS like the game and the viewers (plan [079](../../../../docs/plans/079-viewers-lab-on-pmb-output.md)), so
 `ped-probe.ts` / `vehicle-probe.ts` and `ped.bin` / `vehicle.bin` retire.
 
 **Phase 5b — the unoptimized path proves itself. DONE 2026-07-19, and the field earned its keep.**
@@ -481,7 +481,7 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
 - [x] Phase 5c — clutter species converted + read on the cell-stream path (56/56); `TEXS` section replaces
       the sibling `.ostex`; `ModelBundles` merges every class's sections into ONE `.osm` per model
 - [x] Phase 5 — peds, clutter, anim objects, map objects all converted
-- [→] Probe CLIs + fixtures retired — MOVED to plan 078: `ped-probe`/`vehicle-probe` only die once the LAB
+- [→] Probe CLIs + fixtures retired — MOVED to plan 079: `ped-probe`/`vehicle-probe` only die once the LAB
   loads peds and cars by name through the VFS, which is that plan's whole subject
 - [x] Phase 5g — map-object textures preserve the chain: they plan from the RAW TXD through the SHARED world
       planner, which passes opaque DXT through byte for byte
@@ -634,7 +634,7 @@ and is structural — higher-resolution textures scale both sides equally.
 manifest, `buildOspak`, the converter, `StreamSetup` and the host's fallback branch. Measured: the
 one-cell manifest went **98 KB → 3 979 B**, because the whole `timecyc.dat` text was living inside it.
 
-The lab blocker turned out to be smaller than this plan recorded ("078 phases 1–2 and 003 phase 4 are the
+The lab blocker turned out to be smaller than this plan recorded ("079 phases 1–2 and 003 phase 4 are the
 same cut"). Since phase 1, `--out` IS a game dir with products under `opensa/`, so the lab needs no VFS —
 only for `?src=` to name the game dir. `pak-source.ts` probes `<src>/opensa/manifest.json`: present ⇒ that
 is the products base and `<src>` is the game dir (timecyc read from `<src>/data/`); absent ⇒ the old

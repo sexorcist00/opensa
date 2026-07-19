@@ -119,7 +119,7 @@ it can be re-decided.
 (phases 0–6, closed). `--out` is a game-dir copy, every class in the archives converts (including the
 ~14 000 map objects, against the SHARED world dictionary), and opensa-pack is a perfect-map-builder `pack`
 STAGE. The one thing left there is a full pmb run, which the USER does. → ④ the lab consumes that output
-like a game dir ([plan 078](../078-viewers-lab-on-pmb-output.md)); `manifest.timecyc` + `setup.timecyc` are
+like a game dir ([plan 079](../079-viewers-lab-on-pmb-output.md)); `manifest.timecyc` + `setup.timecyc` are
 already gone. Post-flip perf lever unchanged: per-ring texture laziness (~767 MB world-array boot baseline).
 
 **Engine changes that arrived WITH the converter rework** (they alter how anything drawn BY NAME looks, so

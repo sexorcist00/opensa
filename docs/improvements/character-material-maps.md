@@ -3,6 +3,27 @@
 **Status: parked — not doing yet.** The diffuse texture renders correctly; the extra PBR maps a model
 ships are simply ignored. Captured while fixing the **T800** ped (see below). No code written for this.
 
+## Relevance check (2026-07-19, after the own-engine flip + opensa-pack 003)
+
+**Still relevant — the premise holds, but the render half of this doc is three-era.** Verified:
+
+- The named builders SURVIVED the teardown and are the live path: `build-ped-model.ts` and
+  `vehicle/textures.ts` still resolve exactly ONE texture per material (`material.texture?.name`,
+  `textures.ts:61`) for both the runtime DFF fallback and the opensa-pack `.osm` conversion (they
+  share these builders). The T800 example and **option 1 (sibling-by-suffix lookup)** stand as
+  written — and the lookup must live in the shared builder so offline and runtime paths agree.
+- Everything downstream changed. There is no three material to hang extra maps on; implementing
+  this now means: extra layers/channels in `VehicleModelInit`/the `.osm` `TEXS` section (format
+  work, opensa-pack + engine reader), WGSL sampling in the rigid/skinned paths, and for normal
+  maps a **tangent attribute = vertex-format growth** — something the engine has deliberately
+  avoided so far (UV-scroll shipped format-neutral); screen-space-derivative tangents are the
+  cheaper first option.
+- Overlaps to respect when picking this up: emissive should REPLACE the rigid path's night-glow
+  luma-delta heuristic where authored (and compose with the `dn` night mix + the lamp-texture
+  swap); per-material metadata rides the plan-16 precedent (`MaterialClass` nibble in `meta.w`).
+  NOT superseded by `ideas/0.6.0/03-vehicle-normals` — that is geometry normal smoothing, not
+  normal MAPS.
+
 ## Idea
 
 The ped/vehicle model builders (`packages/renderware/src/ped/build-ped-model.ts`,

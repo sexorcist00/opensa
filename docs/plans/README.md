@@ -10,13 +10,28 @@ The map of planning docs across the repo. **Engine plans** live here (`docs/plan
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`078` (+074 sub-plans). Newest first:
+`001`–`083` (+ sub-plan folders 074, 078–083). Newest first:
 
-- **[078 — Viewers and the lab on a pmb output](./078-viewers-lab-on-pmb-output.md)** — four surfaces get game
+- **[083 — Basic CLEO support](./083-cleo-basic/readme.md)** — run compiled `.cs` scripts: Sanny-DB SCM
+  decoder (lifts the 0x014B car-gen reader), engine-agnostic thread VM, CleoHost on the rigid `.osm`
+  path, `packages/cleo` module, tracer + coverage. Promoted from ideas/0.4.0/04.
+- **[082 — Vehicle license plates](./082-vehicle-plates/readme.md)** — per-instance city-correct plates on
+  the array-based engine: plate atlas array + per-instance slot, converter-flagged plate submeshes,
+  mask DSL + placement-seeded determinism, damage-riding. Promoted from ideas/0.4.0/01.
+- **[081 — Vehicle driving physics](./081-vehicle-physics/readme.md)** — feel overhaul on the own engine:
+  telemetry-first, handling.cfg as truth (COM fixes flips), anti-roll/anti-dive (nose-down braking),
+  drivetrain identity, SA handbrake, a measured DRCVC-vs-own-controller gate. Promoted from ideas/0.4.0/07.
+- **[080 — Cinematic camera](./080-cinematic-camera/readme.md)** — GTA V-feel follow camera: per-channel
+  springs/lag, auto-center + look-ahead, collision whiskers, vehicle speed/FOV/drift framing, bob/shake,
+  7 sub-plans + priority chain.
+- **[079 — Viewers and the lab on a pmb output](./079-viewers-lab-on-pmb-output.md)** — four surfaces get game
   data four different ways (picker+pak, pak-only, a `localhost:3002` protocol, static fixtures). Collapse them
   onto ONE contract: a perfect-map-builder output in `./public`, read through the VFS exactly as the game
   reads it. Depends on [opensa-pack 003](../../tools/opensa-pack/docs/plans/003-game-shaped-output.md).
   **PLANNED 2026-07-18.**
+- **[078 — Global bug fixing](./078-global-bug-fixing/readme.md)** — the umbrella ledger for the bugs the
+  first FULL pmb map convert surfaced (2026-07-19, >1 h run): engine and tool fixes tracked in one place.
+  **OPEN — awaiting the detailed bug report; runs before 079.**
 - **[077 — Unit coverage back to 85–90 %](./077-unit-coverage.md)** — the 074/13 teardown deleted heavily
   unit-tested WebGL code and sank coverage 88.9 → 72.3 %. Recovered to **88.18 %** with a **device-independent
   seam**: a recording `GPUDevice` stand-in that boots the whole engine headlessly, no engine source touched.
