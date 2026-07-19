@@ -30,9 +30,11 @@ export interface BuilderConfig {
 export const config: BuilderConfig = {
   lodCellSize: 256,
   optimizerPasses: { addNormals: true }, // all passes on; normals created for OpenSA's SSAO (plan 015)
-  // A pipeline build is a SHIPPING build: both bakes on. AO stands in for prod's SSAO and sun-vis is the
-  // static shadow term — without it the direct sun renders unshadowed under bridges and in canyons.
-  pack: { ao: true, bakes: true, rect: [-12, -12, 12, 12] },
+  // AO stands in for prod's SSAO, so it stays on. The heavy SUN-VIS bake is OFF for now (user,
+  // 2026-07-19) — the gating logic itself is due for a rework, and until then a pipeline run should not
+  // pay for it. A shipping build wants it back: without sun-vis the direct sun renders unshadowed under
+  // bridges and in canyons.
+  pack: { ao: true, bakes: false, rect: [-12, -12, 12, 12] },
   procobjTex: 128,
   subfolders: { mods: 'mods', peds: 'peds', procobj: 'procobj', vegetation: 'vegetation', vehicles: 'vehicles' },
   treeTex: 512,

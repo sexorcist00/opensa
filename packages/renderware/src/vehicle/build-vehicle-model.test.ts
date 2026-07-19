@@ -78,6 +78,23 @@ describe('buildVehicleModel', () => {
       expect(extras).toHaveLength(1);
       expect(extras[0].name).toBe('extra1');
     });
+
+    it('refuses a model past the uint16 index ceiling instead of wrapping its indices', () => {
+      // The engine binds the index buffer as uint16, so vertex 65 536 would draw as vertex 0 — a scrambled
+      // mesh with no error anywhere. Nothing in SA's map comes near this (the biggest is 29 857), so the
+      // guard is a tripwire, not a limit.
+      const huge = geometry();
+      const vertexCount = 65_540;
+      huge.positions = new Float32Array(vertexCount * 3);
+      huge.triangles = [];
+      for (let at = 0; at + 2 < vertexCount; at += 3) {
+        huge.triangles.push({ a: at, b: at + 1, c: at + 2, materialIndex: 0 });
+      }
+
+      expect(() =>
+        buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [huge]), textures()),
+      ).toThrow(/uint16 index ceiling/);
+    });
   });
 
   describe('positive cases', () => {
