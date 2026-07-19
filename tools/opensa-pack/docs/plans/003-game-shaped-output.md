@@ -833,6 +833,31 @@ onto the planned slots, a per-submesh ARRAY index on the rigid path (vehicles ke
 twin, so the array index rides alongside rather than replacing it), night vertex colours, and only then the
 ~14 000-model bulk convert.
 
+### Test-coverage audit (2026-07-19)
+
+Floors hold: **88.5 % statements / 78.9 % branches / 90.5 % functions / 88.5 % lines** against 86/77/88/86.
+
+Two things a green run does not tell you, both recorded rather than papered over:
+
+1. **`tools/**`is not in the coverage lane at all.**`vitest.config.ts`measures`['apps/web/**/*.ts', 'packages/**/*.ts']`; the converter's tests RUN (they are in the test `include`)
+but count toward no floor. The converter is exactly the half where a silent data loss lives, so its
+tests are the ones to keep honest by hand — `no-data-loss.test.ts` is the anchor.
+2. **`apps/web/src/ui/**` is excluded by the DOM rule**, whose stated condition is e2e coverage. Everything
+this plan changed there (`engine-clutter`, `engine-props`, `engine-anim-objects`, `engine-player`,
+`engine-debris`, `engine-vehicles`, `engine-canvas-host`) was verified by HEADLESS FIELD CHECKS with
+   screenshots instead — which is what caught the flat-lying and knee-deep player. Worth knowing that those
+   files rest on field checks, not on specs.
+
+Gaps closed in the audit: `model-bundle.ts` (the accumulator that makes silent section loss impossible) and
+`pack-vehicles.ts` (the TXD-deletion guard — the code that decides what gets ERASED from the archives) had
+no tests at all and now do. Also fixed a FLAKE I had introduced: `vehicle-osm.test.ts` and
+`no-data-loss.test.ts` rebuilt a real model per assertion, which under coverage instrumentation pushed a
+test past vitest's 5 s timeout (it failed in one full-coverage run and passed in the next). Both memoize the
+build now; worst single test 1.65 s.
+
+Still untested, judged lower risk: `pack-clutter` / `pack-peds` roster enumeration (both exercised
+end-to-end by real converts) and the lab's `pak-source.ts`.
+
 ### What the MODS carry, and what the per-model format still drops (audit, 2026-07-19)
 
 The production input is not the stock game: `mods-src/mods` holds **57 mods (1.1 GB)** that mod-installer

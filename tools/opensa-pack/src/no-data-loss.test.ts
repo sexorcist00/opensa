@@ -74,6 +74,32 @@ function fileOf(relative: string): ArrayBuffer {
   return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
 }
 
+/** Both sides built ONCE per model — under coverage each build costs seconds, and rebuilding them per
+ *  assertion is what pushes a file past vitest's per-test timeout. */
+const conversions = new Map<
+  string,
+  { osm: ReturnType<typeof buildModelOsm>; stock: ReturnType<typeof buildVehicleModel> }
+>();
+function conversionOf(entry: (typeof MODELS)[number]): {
+  osm: ReturnType<typeof buildModelOsm>;
+  stock: ReturnType<typeof buildVehicleModel>;
+} {
+  let pair = conversions.get(entry.model);
+  if (!pair) {
+    const fs = fsFor(entry);
+    pair = {
+      osm: buildModelOsm(fs, entry.model, { txd: entry.txdName }),
+      stock: buildVehicleModel(
+        parseDff(fs.get(`${entry.model}.dff`)!),
+        new VehicleTextures([fs.get(`${entry.txdName}.txd`)!]),
+      ),
+    };
+    conversions.set(entry.model, pair);
+  }
+
+  return pair;
+}
+
 function fsFor(entry: (typeof MODELS)[number]): AssetFileSystem {
   const files = new Map<string, ArrayBuffer>([
     [`${entry.model}.dff`, fileOf(entry.dff)],
@@ -91,15 +117,10 @@ function fsFor(entry: (typeof MODELS)[number]): AssetFileSystem {
 describe('the .osm conversion loses nothing', () => {
   describe('positive cases', () => {
     it.each(MODELS)('$kind: $model keeps every geometry buffer, byte for byte', (entry) => {
-      const fs = fsFor(entry);
-      const stock = toRigidModelInit(
-        buildVehicleModel(
-          parseDff(fs.get(`${entry.model}.dff`)!),
-          new VehicleTextures([fs.get(`${entry.txdName}.txd`)!]),
-        ),
-      );
+      const pair = conversionOf(entry);
+      const stock = toRigidModelInit(pair.stock);
 
-      const { model } = readModelOsm(entry.model, buildModelOsm(fs, entry.model, { txd: entry.txdName }).bytes);
+      const { model } = readModelOsm(entry.model, pair.osm.bytes);
 
       expect(model.vertexCount).toBe(stock.vertexCount);
       expect(model.indexCount).toBe(stock.indexCount);
@@ -115,13 +136,10 @@ describe('the .osm conversion loses nothing', () => {
     it.each(MODELS)(
       '$kind: $model keeps every structural field (parts, submeshes, doors, dummies, wheels)',
       (entry) => {
-        const fs = fsFor(entry);
-        const stock = buildVehicleModel(
-          parseDff(fs.get(`${entry.model}.dff`)!),
-          new VehicleTextures([fs.get(`${entry.txdName}.txd`)!]),
-        );
+        const pair = conversionOf(entry);
+        const stock = pair.stock;
 
-        const { fixture } = readModelOsm(entry.model, buildModelOsm(fs, entry.model, { txd: entry.txdName }).bytes);
+        const { fixture } = readModelOsm(entry.model, pair.osm.bytes);
 
         expect(fixture.parts).toEqual(stock.parts);
         expect(fixture.submeshes).toEqual(stock.submeshes);
@@ -132,13 +150,10 @@ describe('the .osm conversion loses nothing', () => {
     );
 
     it.each(MODELS)('$kind: $model keeps the dictionary shape (pixels are BC, by design)', (entry) => {
-      const fs = fsFor(entry);
-      const stock = buildVehicleModel(
-        parseDff(fs.get(`${entry.model}.dff`)!),
-        new VehicleTextures([fs.get(`${entry.txdName}.txd`)!]),
-      );
+      const pair = conversionOf(entry);
+      const stock = pair.stock;
 
-      const { model } = readModelOsm(entry.model, buildModelOsm(fs, entry.model, { txd: entry.txdName }).bytes);
+      const { model } = readModelOsm(entry.model, pair.osm.bytes);
       const dictionary = decodeOstex(model.texture.kind === 'ostex' ? model.texture.bytes : new Uint8Array());
 
       expect(dictionary.width).toBe(stock.texture.width);

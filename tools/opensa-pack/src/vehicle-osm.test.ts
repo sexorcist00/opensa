@@ -34,7 +34,11 @@ const fs = fsFrom(
   ]),
 );
 
-const built = (): ReturnType<typeof buildVehicleOsm> => buildVehicleOsm(fs, 'admiral', { wheelScale: [0.7, 0.7] });
+/** Built ONCE: the real admiral takes seconds under coverage instrumentation, and rebuilding it per
+ *  assertion pushed the file past vitest's per-test timeout (a flaky test is worse than no test). */
+let cached: null | ReturnType<typeof buildVehicleOsm> = null;
+const built = (): ReturnType<typeof buildVehicleOsm> =>
+  (cached ??= buildVehicleOsm(fs, 'admiral', { wheelScale: [0.7, 0.7] }));
 
 describe('readVehicleOsm', () => {
   describe('negative cases', () => {

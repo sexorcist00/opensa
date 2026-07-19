@@ -41,8 +41,29 @@ plans 008/011/012/013/036.
 - Animation set is locomotion + vehicle enter/exit; no combat/swim/climb.
 - IFP translation tracks unused for the player (physics-driven) — used for map objects instead.
 
+## Where the OWN-ENGINE player comes from (opensa-pack 003 phase 5f, 2026-07-19)
+
+`apps/web/src/ui/engine-player.ts` used to `fetch('/ped/ped.json' + '/ped/ped.bin')` — the LAB's probe
+fixture, baked by `ped-probe`, served over HTTP **in the production host**. So the shipped player was
+whatever a developer last converted, with its animations frozen at bake time, and the game directory the
+user picked had no say in it.
+
+It now loads `male01.osm` from the archives through the VFS, and resolves `idle_stance` / `walk_civi` /
+`run_civi` from the game's own `ped.ifp` at load — so a modded IFP changes how the player walks. Two traps
+this path carries, both found in the field and not by tests:
+
+- the IFP is keyed `anim/ped.ifp` in the browser VFS and bare `ped.ifp` in the archives, and **with no clips
+  the sampler holds the BIND pose — SA's bind mesh lies along X, so the player lies flat on the ground**;
+- `minZ` is the lowest POSED vertex (the feet level the host aligns to the capsule), so the converter has to
+  pass `options.poseWith`; measured on the bind pose instead, the player sinks in to the knees.
+
+`ped-probe` and the lab's `ped.json`/`ped.bin` fixture still exist — the LAB uses them (see
+`docs/development/engine-lab.md`); only production moved.
+
 ## Test coverage anchors
 
 `ped/build-ped-model.test.ts` (real fixtures: `bmypol1`, and `army` for the HAnim ≠ frame-order case),
 `engine/src/anim/ifp-sampler.test.ts`,
 `ifp` parser tests, `character-controller.system.test.ts`, `ui/engine-camera.test.ts`.
+The converted-ped path: `tools/opensa-pack/src/no-data-loss.test.ts` (every skinned buffer byte for byte,
+the whole skeleton, `minZ`, and every texture present across arrays).

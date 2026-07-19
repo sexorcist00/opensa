@@ -14,8 +14,10 @@ import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware
  *   - copy:    copied verbatim from `game-src/<game>/<from>`
  *   - extract: extracted by name from a `models/*.img` archive
  *   - archive: a one-file stock VER2 `.img` built around an extracted entry
+ *   - mod:     copied from `mods-src/mods/<from>` — opensa-pack's production input is a MODDED game, and
+ *              the mods carry things the stock game barely has (95 % of their textures ship a mip chain)
  *
- * Extend MANIFEST when a test needs a new real-asset fixture.
+ * Extend MANIFEST when a test needs a new real-asset fixture, or MOD_MANIFEST when it needs a modded one.
  *
  * `data/timecyc_24h.dat` is generated here (the stock 24h expansion of timecyc.dat, no mod overlay).
  * Curated / version-pinned test models that can't be reproduced from a stock copy live committed under
