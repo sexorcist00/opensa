@@ -1,11 +1,10 @@
 # 003 — game-shaped output: `--game` in, a game out
 
-**Status: IN PROGRESS.** Phases 0–5 SHIPPED — every class in the archives converts: vehicles, breakables,
-clutter, topple props, animated objects, peds, and the ~14 000 map objects, plus the engine and the
-production player. Both phase-3 gates are closed (no DFF parse at spawn; 45× measured).
+**Status: every phase SHIPPED (0–6).** Each class in the archives converts — vehicles, breakables, clutter,
+topple props, animated objects, peds and the ~14 000 map objects — plus the engine, the production player
+and the pmb stage. Both phase-3 gates are closed (no DFF parse at spawn; 45× measured).
 
-**RESUME HERE — phase 6.** Phase 5 is COMPLETE: every class in the archives converts, map objects included.
-Phase 5g steps 1–6 are done: `planModelTextures` (the raw-TXD
+Phase 5g steps 1–6: `planModelTextures` (the raw-TXD
 dictionary that preserves mip chains) plans per BUILDER LAYER, `remapModelLayers` rewrites `meta` onto the
 planned slots, a per-submesh `array` index carries the multi-array case through the engine, and the rigid
 path now reads PRELIT and NIGHT vertex colours (clutter and the rigid emissive included).
@@ -14,10 +13,13 @@ The bulk convert ships: **13 841 map objects, 0 failed**, against the SHARED wor
 the 3 674 MB a private dictionary each would have cost), and `gta3.img` came out SMALLER than the input
 (1 224 vs 1 328 MB) with 14 349 entries deleted.
 
-Also open: **phase 6** (the pmb `pack` stage), the `.col` sweep measurement, and the remaining audit gaps
-(material masks, 2dfx in the per-model container, second UV layer). **Phase 5b — the runtime `modloader/`
-field check — is DEFERRED by the user (2026-07-19) until opensa-pack is complete and integrated with
-perfect-map-builder**: the unoptimized path is only meaningfully exercised against a finished converter.
+**Still open**, and nothing else:
+
+- the three AUDIT GAPS — material masks (429 models), 2dfx in the per-model container (126), a second UV
+  layer (26). All three are carried by the welded CELL path already, so they only bite an asset drawn BY
+  NAME; see the audit table below for how much each is worth.
+- the **full pmb run end to end** — the user runs it last. The `pack` stage is proven at the library
+  boundary (byte-identical pak) and by the typechecker, not yet through the pipeline.
 
 Supersedes the output half
 of [074/14](../../../../docs/plans/074-opensa-engine/14-pmb-integration.md); the pmb-stage half stays there.
@@ -490,7 +492,8 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
       found a real defect — see the ledger
 - [x] Phase 6 — pmb `pack` stage + `--until` docs (byte-identical pak across the library extraction)
 - [x] Phase 1 — `openGameDir` reads archives through a FILE HANDLE (the >2 GB defect + the RSS win)
-- [ ] Close-out — 6-scene ritual sweep, `npm run lint`, coverage floors held, docs repointed
+- [x] Close-out (2026-07-19) — 6-scene ritual sweep on the converted full map, `npm run lint` clean
+      (0 errors), coverage floors held, plan + 074/14 repointed. See the close-out row below.
 
 ## Measurement ledger
 
@@ -1039,6 +1042,24 @@ entries deleted under them.
 A defect this surfaced and did NOT fix: at one point the archive passed 2 GB and `openGameDir` could not
 read its own output (Node's file-read ceiling — it buffers the whole `.img`). The deletions brought it back
 under, but the tool is one big mod away from the same wall; it should read entries through a file handle.
+
+### Close-out row (2026-07-19)
+
+The ritual sweep on the CONVERTED full map — every model class in our format, 14 349 archive entries deleted
+under it — all six scenes at the frame cap with no late creates:
+
+| scene         | fps   | p95 ms | draws | gpu pass / post / probe ms |
+| ------------- | ----- | ------ | ----- | -------------------------- |
+| ls-noon       | 120.0 | 9.3    | 1 090 | 1.74 / 1.14 / 0.44         |
+| sf-fog-dawn   | 120.0 | 9.2    | 976   | 1.75 / 1.10 / 0.62         |
+| lv-night      | 120.1 | 9.3    | 1 142 | 2.08 / 1.22 / 0.37         |
+| country-dusk  | 119.9 | 9.3    | 515   | 2.23 / 1.04 / 0.30         |
+| ocean-horizon | 120.3 | 9.3    | 9     | 2.02 / 1.14 / 0.25         |
+| ls-rain-night | 120.3 | 9.2    | 1 017 | 1.81 / 1.10 / 0.44         |
+
+`npm run lint`: 0 errors (30 style warnings, all pre-existing `explicit-function-return-type`).
+Coverage: **89.35 % statements / 79.26 % branches / 91.15 % functions / 89.33 % lines**, against the
+86/77/88/86 floors.
 
 ### Test-coverage audit (2026-07-19)
 
