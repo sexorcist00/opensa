@@ -13,7 +13,7 @@ import type { AssetFileSystem } from '@opensa/renderware/archive/asset-fs';
 import type { RWClump } from '@opensa/renderware/parsers/binary/types';
 import type { VehicleFixture, VehicleModelData } from '@opensa/renderware/vehicle/types';
 
-import { encodeOsm, type OsmSection, OsmSectionTag } from '@opensa/engine-formats';
+import { encodeOsm, encodeOsmTextures, type OsmSection, OsmSectionTag } from '@opensa/engine-formats';
 import { parseDff } from '@opensa/renderware';
 import { getTxdChain } from '@opensa/renderware/archive/asset-cache';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
@@ -73,11 +73,13 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
     ...(options.wheelScale ? { wheelScale: options.wheelScale } : {}),
   });
   const { bin, fixture } = packVehicleFixture(name, built);
+  // A rigid model's builder buckets its whole dictionary into ONE array, so `TEXS` carries a single entry
+  // here; the multi-array shape exists for peds and map objects, whose textures disagree on size.
   const ostex = packModelOstex(built.texture);
   const sections: OsmSection[] = [
     { bytes: new TextEncoder().encode(JSON.stringify(fixture)), tag: OsmSectionTag.DESC },
     { bytes: bin, tag: OsmSectionTag.GEOM },
-    { bytes: ostex, tag: OsmSectionTag.TEXS },
+    { bytes: encodeOsmTextures({ arrays: [ostex] }), tag: OsmSectionTag.TEXS },
     ...(options.extraSections?.(built, dff, clump) ?? []),
   ];
 

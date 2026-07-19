@@ -12,7 +12,14 @@
  */
 import type { VehicleFixture } from '@opensa/renderware/vehicle/types';
 
-import { decodeOsm, decodeOsmCollision, type OsmCollision, osmSection, OsmSectionTag } from '@opensa/engine-formats';
+import {
+  decodeOsm,
+  decodeOsmCollision,
+  decodeOsmTextures,
+  type OsmCollision,
+  osmSection,
+  OsmSectionTag,
+} from '@opensa/engine-formats';
 
 import type { ModelColliders } from '../interfaces/collider.interface';
 import type { VehicleRigData } from './engine-vehicle-handle';
@@ -59,7 +66,12 @@ export function readModelOsm(name: string, osm: Uint8Array): OptimizedModel {
   };
   const fixture = JSON.parse(new TextDecoder().decode(section(OsmSectionTag.DESC, 'DESC'))) as VehicleFixture;
   const geom = section(OsmSectionTag.GEOM, 'GEOM');
-  const ostex = section(OsmSectionTag.TEXS, 'TEXS');
+  // One array for a rigid model; the multi-array shape serves peds and map objects (`osm-textures.ts`).
+  const dictionaries = decodeOsmTextures(section(OsmSectionTag.TEXS, 'TEXS')).arrays;
+  const ostex = dictionaries[0];
+  if (!ostex) {
+    throw new Error(`${name}.osm carries no texture array`);
+  }
   const collisionBytes = osmSection(sections, OsmSectionTag.COLL);
 
   const at = (offset: number, length: number): Uint8Array => geom.subarray(offset, offset + length);

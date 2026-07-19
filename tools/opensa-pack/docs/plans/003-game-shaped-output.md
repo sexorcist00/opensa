@@ -706,6 +706,23 @@ hand-written one did not even parse), and the `HULL` codec test states its expec
 `Math.fround` — 0.12, the production floor on a thin prop's box, is not representable in f32, and the
 contract is exactness TO f32.
 
+**Phase 5f (2026-07-19) — peds, step 1: the one-array contract gives way.**
+
+Measured before designing anything (`game-src/non-modified`, all of `peds.ide`): **265 peds build, 11 fail;
+242 carry exactly ONE texture, 22 carry two, 1 carries three — and 23 peds MIX texture sizes.** A
+`texture2d_array` is one size and one format, so those 23 cannot fit the single-array shape `TEXS` shipped
+with earlier today.
+
+Resampling them onto a common size is the option this plan forbids: it regenerates the mip chain
+map-optimizer authored. So — exactly as the 2026-07-19 mip decision anticipated — **the one-array-per-model
+contract gives way**: `TEXS` is now `OsmTextures`, a container of one or more `.ostex` arrays, and a
+consumer addresses a texture as (array, layer). A rigid model is simply the `arrays.length === 1` case, so
+vehicles and clutter are unchanged in substance.
+
+Worth recording for the map-object step: the engine's ped path binds `textures[0]` ONLY today, so those 23
+peds already lose their extra textures AT THE HOST. Conversion must still carry them — losing data in the
+converter is not excused by a renderer that currently ignores it.
+
 ### Mips belong to map-optimizer (user, 2026-07-18)
 
 opensa-pack must **never generate** a mip chain: map-optimizer authors them upstream, and a second

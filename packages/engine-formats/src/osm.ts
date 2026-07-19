@@ -45,6 +45,9 @@ export const OsmSectionTag = {
    * at 23 bytes, and `.ostex` is two characters longer than `.txd`, so **457 of ~14 900 stock models could
    * not have carried one** (`veg_procgrasspatch.ostex` = 24). `.osm` fits every name. The texture FORMAT is
    * unchanged — this is packaging, not a new dictionary format.
+   *
+   * The payload is `OsmTextures`: one or more `.ostex` arrays, because a model whose textures disagree on
+   * size cannot live in a single `texture2d_array` (23 of 265 stock peds do). See `osm-textures.ts`.
    */
   TEXS: osmTag('TEXS'),
 } as const;
