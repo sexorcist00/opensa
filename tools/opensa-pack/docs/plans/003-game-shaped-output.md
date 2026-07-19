@@ -767,6 +767,50 @@ with it; the log says which pose was used, and says so loudly when no IFP was fo
 Both were invisible to 2 207 green tests and obvious in one screenshot. That is the whole argument for the
 field check on a production path.
 
+### What the MODS carry, and what the per-model format still drops (audit, 2026-07-19)
+
+The production input is not the stock game: `mods-src/mods` holds **57 mods (1.1 GB)** that mod-installer
+bakes into the archives BEFORE opensa-pack runs, so `--game` already contains them. (I first mistook these
+for `modloader/` runtime overrides and started making the resolver ask "is this modded" — wrong premise,
+reverted. Runtime modloader is a different, later path.)
+
+Audited every asset they ship — **1 328 DFFs (all parsed) and 1 795 TXDs / 26 561 textures (all parsed)**:
+
+| DFF feature               | mod models | carried by the per-model `.osm`?              |
+| ------------------------- | ---------- | --------------------------------------------- |
+| prelit vertex colours     | 1 265      | **yes** — `colors`                            |
+| **night vertex colours**  | **1 243**  | **NO** — `buildVehicleModel` never reads them |
+| **material mask texture** | 429        | **NO** — `maskName` ignored                   |
+| authored normals          | 196        | **yes** — `normals`                           |
+| **2dfx lights / coronas** | 104        | **NO** — the per-model container has no 2dfx  |
+| multi-frame clump         | 83         | **yes** — `SKEL` + `parts`                    |
+| **2 UV layers**           | 26         | **NO** — the builder reads `uvLayers[0]` only |
+| RW breakable mesh         | 25         | **yes** — `SHAT`                              |
+| 2dfx particles            | 18         | **NO**                                        |
+| 2dfx roadsigns            | 4          | **NO**                                        |
+
+Textures: dxt1 24 422 · dxt5 945 · dxt3 936 · rgba8888 258 (all decodable), sides up to 2 048, and
+**95 % carry a mip chain** (deepest 12). `packModelOstex` writes `mipCount = 1`, so the phase-5 mip catch is
+not an edge case — it is the norm.
+
+**Scope of the damage, stated honestly:** the WELDED CELL path already handles all of this — the welder
+reads `nightColors`, collects 2dfx (coronas, particles, roadsigns) by placement, and the world
+`TexturePlanner` passes mip chains through. The static modded map is fine. The gaps are in the PER-MODEL
+path, which today serves clutter, topple props, animated objects, breakables, peds and vehicles — and which
+becomes the main path if the ~14 000 map objects are converted.
+
+**Ordered by how much they hurt** (user: record now, close later — the earlier queue comes first):
+
+1. **Night vertex colours (1 243 models)** — this IS what half these mods are (`Pre Light Fixes Pack`,
+   `Project reLIT`, `Neon Objects`). A prop or animated object drawn by name renders with day colours at
+   night.
+2. **Mips in the per-model `.ostex` (95 % of textures)** — must plan from the RAW TXD like the world
+   planner, not from `buildVehicleModel`'s decoded output.
+3. **Material mask textures (429)** — first establish whether our renderer uses SA's mask at all.
+4. **2dfx in the per-model container (126)** — probably covered in practice, because 2dfx are welded into
+   the cell by PLACEMENT; needs confirming rather than assuming.
+5. **Second UV layer (26)** — small, but silent.
+
 ### Mips belong to map-optimizer (user, 2026-07-18)
 
 opensa-pack must **never generate** a mip chain: map-optimizer authors them upstream, and a second
