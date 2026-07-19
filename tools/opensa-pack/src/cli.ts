@@ -1,3 +1,4 @@
+import { breakableModelsFromText } from '@opensa/renderware/breakable/models';
 /**
  * `opensa-pack` CLI (plan 074/03).
  *
@@ -37,6 +38,7 @@ import { rewriteModelArchives } from './archive-edit';
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
 import { WaterHeightGrid } from './height-grid';
+import { packBreakables } from './pack-breakables';
 import { packVehicles } from './pack-vehicles';
 import { bakeWater } from './water';
 
@@ -180,7 +182,13 @@ function optimizeVehicles(fs: ReturnType<typeof openGameDir>, out: string): obje
   const log = (message: string): void => console.log(`[opensa-pack] ${message}`);
   const started = Date.now();
   const { edit, report } = packVehicles(fs, log);
-  const rewrite = rewriteModelArchives(out, edit);
+  // Smashable props (phase 5b): only a `SHAT` section, so the model keeps its `.dff` — the shatter mesh is
+  // the ONLY thing the runtime resolves by name for a prop, and it is what costs a main-thread DFF parse.
+  const breakables = packBreakables(fs, breakableModelsFromText(fs.getText('data/object.dat')), log);
+  const rewrite = rewriteModelArchives(out, {
+    deletes: edit.deletes,
+    inserts: [...edit.inserts, ...breakables.inserts],
+  });
   for (const archive of rewrite.archives) {
     log(
       `archive ${archive.file}: +${archive.inserted} -${archive.deleted} entries, ` +
@@ -199,7 +207,7 @@ function optimizeVehicles(fs: ReturnType<typeof openGameDir>, out: string): obje
   }
   log(`archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 
-  return { ...report, rewrite };
+  return { ...report, breakables: breakables.report, rewrite };
 }
 
 /** Parse a de-tiling list: plain names (one per line, `#` comments) OR skygfx `texdb.txt` lines

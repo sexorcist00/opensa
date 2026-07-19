@@ -416,7 +416,9 @@ the pipeline path.
       `buildOspak`, the converter, `StreamSetup` and the host's fallback branch. The lab reads the game's
       own `data/timecyc*.dat` via `?src=` naming an opensa-pack `--out` (`pak-source.ts`).
 - [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
-- [ ] Phase 5 — peds, clutter, breakables, anim objects, map objects; probe CLIs + fixtures retired
+- [x] Phase 5a — `ClutterModelInit`/`DebrisUpload` widened to `ModelTextureInit` (ped left for its own step)
+- [x] Phase 5b — `SHAT` section + `packBreakables` + `getBreakable` reading it (252 props, 1.6 MB)
+- [ ] Phase 5 — peds, clutter, anim objects, map objects; probe CLIs + fixtures retired
 - [ ] Phase 5 — map-object textures must PRESERVE map-optimizer's mip chain: plan from the RAW TXD, never
       regenerate (the per-model writer emits one level, which is right for vehicles/peds only)
 - [ ] Phase 5b — mod field check: plain, retexture-only, and `txdp`-parented mods on a converted build
@@ -575,6 +577,46 @@ path hack was NOT possible — the browser normalizes `/pak/../data/x` to `/data
 `game-src/non-modified` — WebGPU up, 120 fps, and the 22:10 night renders with correct timecyc mood (warm
 lamps, lit windows, correct fog). That run also used an OLD `pak-map`, so it covered the backwards
 -compatible eager-texture path at the same time.
+
+**Phase 5 scope + the mip decision (user, 2026-07-19).** "Convert everything in the IMG archives" stands —
+the ~1 000-model by-name subset was offered and declined, because script spawns are not enumerable.
+
+The class map that made phase 5 a five-step job rather than one, each needing a DIFFERENT section:
+
+| class            | what it needs beyond today's `.osm`                                           | count   |
+| ---------------- | ----------------------------------------------------------------------------- | ------- |
+| clutter          | nothing (narrower init + a `cutout` flag, derivable from the `.ostex` layer)  | 57      |
+| animated objects | `SKEL`: frame tree + resolved IFP clip + the moving-part map                  | 54      |
+| breakables       | `SHAT`: the six RW Breakable arrays + material table; never calls the builder | 269     |
+| topple props     | a convex hull of ALL vertices — NOT the COL, so `COLL` does not serve it      | 382     |
+| peds             | `SKEL` in skin order, `joints`/`weights`, `minZ`, clips, texture name→index   | 281     |
+| map objects      | the rest                                                                      | ~14 000 |
+
+> **Mips are required (user, 2026-07-19).** A per-model `.ostex` carries ONE format and ONE size per array
+> because `meta.x` indexes a single array — but a map object's dictionary mixes sizes, so that contract and
+> map-optimizer's chain cannot both survive. The chain wins: **the one-array-per-model contract gives way**
+> (multiple arrays per model, or a per-submesh array index), not the mips. Resampling every layer to a
+> common size is ruled out — it regenerates the chain, which is exactly what this plan forbids.
+
+**Phase 5a + 5b (2026-07-19).**
+
+- **5a** — `ClutterModelInit` and `DebrisUpload` now take `ModelTextureInit` and go through
+  `createModelTexture`; two more hand-rolled copies of the same upload loop died with it. `PedProbeInit` is
+  deliberately NOT widened — its texture is a single image and its submeshes address textures by NAME, so
+  it moves with the ped conversion, where name becomes layer index.
+- **5b** — `SHAT`: a prop's shatter mesh, baked. `getBreakable` reads it before touching a DFF, so the first
+  hit on a smashable prop stops costing a main-thread `parseDff` + geometry scan. The
+  **authored-vs-synthesized choice is resolved offline** (including the 65 535-vertex cap on the synthesized
+  fallback), so the reader has no branch left.
+
+Measured on `game-src/non-modified` (whole `object.dat` set): **204 authored + 48 synthesized = 252 props in
+1.6 MB**, 17 with nothing to shatter, 0 failed. 11 of them landed in `gta_int.img` — the `near` placement
+picking the right archive per model. A prop KEEPS its `.dff`: only the shatter mesh is baked, because that
+is the only thing the debris path resolves by name.
+
+Texture names stay NAMES in `SHAT`, not layer indices: debris resolves them against the prop's TXD and
+resamples onto its own 64² shard atlas, which is a different contract from the `meta.x` layer index model
+geometry uses.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 
