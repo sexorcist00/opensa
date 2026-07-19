@@ -30,6 +30,14 @@ export class ByteReader {
     return value;
   }
 
+  /** Signed 32-bit — parent/bone indices use -1 for "none". */
+  i32(): number {
+    const value = this.view.getInt32(this.position, true);
+    this.position += 4;
+
+    return value;
+  }
+
   raw(length: number): Uint8Array {
     if (this.position + length > this.view.byteLength) {
       throw new RangeError(`raw(${length}) overruns buffer (at ${this.position}/${this.view.byteLength})`);
@@ -106,6 +114,13 @@ export class ByteWriter {
     this.ensure(1);
     this.view.setInt8(this.length, value);
     this.length += 1;
+  }
+
+  /** Signed 32-bit — parent/bone indices use -1 for "none". */
+  i32(value: number): void {
+    this.ensure(4);
+    this.view.setInt32(this.length, value, true);
+    this.length += 4;
   }
 
   patchU32(at: number, value: number): void {

@@ -418,6 +418,8 @@ the pipeline path.
 - [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
 - [x] Phase 5a — `ClutterModelInit`/`DebrisUpload` widened to `ModelTextureInit` (ped left for its own step)
 - [x] Phase 5b — `SHAT` section + `packBreakables` + `getBreakable` reading it (252 props, 1.6 MB)
+- [x] Phase 5e — animated objects: `SKEL` (the frame tree); the IFP stays a separate, moddable asset
+- [x] Phase 5 — REAL-FIXTURE conversion tests + the `no-data-loss` gate over one model per class
 - [x] Phase 5d — topple props: `HULL` section (dedup'd collider cloud + fallback box), read by `boundsOf`
 - [x] Phase 5c — clutter species converted + read on the cell-stream path (56/56); `TEXS` section replaces
       the sibling `.ostex`; `ModelBundles` merges every class's sections into ONE `.osm` per model
@@ -662,6 +664,47 @@ renderable, one to collect every vertex for the collider. `HULL` bakes the secon
 351 of 382 converted; the 31 failures are all `object.dat` naming a model no archive holds. **208 models
 carry `GEOM` + `HULL` + `SHAT` together** — a file-per-class design would have silently dropped sections on
 every one of them.
+
+**Phase 5e (2026-07-19) — animated objects, and the data-loss gate (user ask).**
+
+`SKEL` bakes the clump's FRAME TREE — name, parent, position, the full 3×3 rotation, and `boneId`. That is
+everything an animated object needs, because the runtime derives all of it (which frames the clip moves,
+the sampler bones, the resolved tracks, the part→frame map) from those frames and nothing else. Verified on
+the converted archives: baked frames are **byte-identical to the clump** across every field.
+
+**The IFP is deliberately NOT baked in.** A clip is a separate, moddable asset resolved by name; burning it
+into the model would freeze that binding — the mistake the manifest made with `timecyc`. `frameBones`,
+`frameClip` and `animatedFrames` now take FRAMES rather than a clump, so one implementation serves both
+paths.
+
+Measured: **53 of 54 converted, 264 frames in 18 KB**; 690 models bundled overall.
+
+### The data-loss gate (user directive, 2026-07-19)
+
+> A converted build is very hard to debug in the game, so conversion must be proven lossless in tests.
+
+`tools/opensa-pack/src/no-data-loss.test.ts` takes ONE REAL MODEL PER CLASS — `admiral` (vehicle),
+`nt_noddonkbase` (animated), `lamppost1` (topple), `binnt08_la` (breakable), `sjmcacti2` (clutter) — and
+compares what the runtime gets from the converted `.osm` against what it would have got from the stock
+DFF/TXD:
+
+- every geometry buffer (`positions`, `normals`, `uvs`, `colors`, `meta`, `reflect`, `indices`) **byte for
+  byte**;
+- every structural field (`parts`, `submeshes`, `doors`, `dummies`, `wheels`) deep-equal;
+- the dictionary's size, layer count and layer ORDER (`meta.x` indexes it — a reordered dictionary silently
+  retextures the model).
+
+**The one deliberate exception is texture pixels** (BC re-encode, measured ~1/255 mean in phase 2).
+Everything describing them is still exact. Audited by hand alongside it: all 13 `VehicleModelData` fields
+are carried, and `wrap: 0` in the layer header is a pre-existing convention shared with the world planner
+(the engine samples `repeat`), not a loss this plan introduced.
+
+Fixtures added to `scripts/test-fixtures.ts` (real assets, one per class + their IDE-named TXDs):
+`des_xoilfield.txd`, `lamppost1.dff`, `dynsigns.txd`, `labins01_la.txd`, `sjmcacti2.dff`, `gta_cactus.txd`.
+Existing tests revisited: `packProps` now runs on the REAL `object.dat` instead of a hand-written row (the
+hand-written one did not even parse), and the `HULL` codec test states its expectations through
+`Math.fround` — 0.12, the production floor on a thin prop's box, is not representable in f32, and the
+contract is exactness TO f32.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

@@ -22,7 +22,7 @@ describe.skipIf(!existsSync(IFP) || !existsSync(DFF))('frame-clip (real nt_noddo
     });
 
     it('leaves an unmentioned frame with an EMPTY track, so it holds its bind pose', () => {
-      const clip = frameClip(clump, clipForModel(animations, MODEL)!);
+      const clip = frameClip(clump.frames, clipForModel(animations, MODEL)!);
 
       // Some frames of the pump are static scenery; they must not be forced to the origin.
       expect(clip.tracks.some((track) => track.times.length === 0)).toBe(true);
@@ -35,7 +35,7 @@ describe.skipIf(!existsSync(IFP) || !existsSync(DFF))('frame-clip (real nt_noddo
     });
 
     it('bones mirror the clump’s FRAME hierarchy — parents and all', () => {
-      const bones = frameBones(clump);
+      const bones = frameBones(clump.frames);
 
       expect(bones).toHaveLength(clump.frames.length);
       bones.forEach((bone, index) => {
@@ -48,7 +48,7 @@ describe.skipIf(!existsSync(IFP) || !existsSync(DFF))('frame-clip (real nt_noddo
     });
 
     it('tracks are index-aligned with the frames, and the clip actually lasts a while', () => {
-      const clip = frameClip(clump, clipForModel(animations, MODEL)!);
+      const clip = frameClip(clump.frames, clipForModel(animations, MODEL)!);
 
       expect(clip.tracks).toHaveLength(clump.frames.length);
       expect(clip.duration).toBeGreaterThan(0);
@@ -60,7 +60,7 @@ describe.skipIf(!existsSync(IFP) || !existsSync(DFF))('frame-clip (real nt_noddo
     });
 
     it('knows which frames MOVE — and that their children move with them', () => {
-      const moved = animatedFrames(clump, clipForModel(animations, MODEL)!);
+      const moved = animatedFrames(clump.frames, clipForModel(animations, MODEL)!);
 
       expect(moved.size).toBeGreaterThan(0);
       expect(moved.size).toBeLessThan(clump.frames.length); // the pump's base does not move

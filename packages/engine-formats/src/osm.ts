@@ -36,6 +36,8 @@ export const OsmSectionTag = {
   HULL: osmTag('HULL'),
   /** A smashable prop's baked shatter mesh — no DFF parse on the first hit (phase 5). */
   SHAT: osmTag('SHAT'),
+  /** An animated object's FRAME TREE — the IFP's bones are these frames, matched by name (phase 5). */
+  SKEL: osmTag('SKEL'),
   /**
    * The model's texture dictionary: a complete `.ostex` payload, carried INSIDE the container.
    *

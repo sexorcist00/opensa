@@ -13,7 +13,14 @@
  * - object clips KEEP their translation (a garage door slides). Ped clips drop it — locomotion is in-place.
  */
 import type { IfpAnimation } from '../parsers/binary/ifp';
-import type { RWClump, RWFrame } from '../parsers/binary/types';
+import type { RWFrame } from '../parsers/binary/types';
+
+/**
+ * The frame data these functions actually need — name, local transform, parent. `RWClump['frames']`
+ * satisfies it, and so does a `SKEL` section decoded from a converted `.osm` (opensa-pack 003 phase 5),
+ * which is how the optimized path drives an animated object with no clump at all.
+ */
+export type AnimFrame = Pick<RWFrame, 'name' | 'parentIndex' | 'position' | 'rotation'>;
 
 /**
  * Structurally the own engine's `SamplerBone` / `SamplerClip` — declared here rather than imported, because
@@ -35,10 +42,10 @@ export interface FrameClip {
 const TIME_SCALE = 1 / 60;
 
 /** The frames an IFP clip actually moves — and every frame hanging off them, which moves with them. */
-export function animatedFrames(clump: RWClump, animation: IfpAnimation): Set<number> {
+export function animatedFrames(frames: readonly AnimFrame[], animation: IfpAnimation): Set<number> {
   const moved = new Set<number>();
   const byName = new Map<string, number>();
-  clump.frames.forEach((frame, index) => byName.set(frame.name.trim().toLowerCase(), index));
+  frames.forEach((frame, index) => byName.set(frame.name.trim().toLowerCase(), index));
   for (const bone of animation.bones) {
     const index = byName.get(bone.name.trim().toLowerCase());
     if (index !== undefined && bone.frames.length > 0) {
@@ -49,7 +56,7 @@ export function animatedFrames(clump: RWClump, animation: IfpAnimation): Set<num
   let grew = true;
   while (grew) {
     grew = false;
-    clump.frames.forEach((frame, index) => {
+    frames.forEach((frame, index) => {
       if (!moved.has(index) && frame.parentIndex >= 0 && moved.has(frame.parentIndex)) {
         moved.add(index);
         grew = true;
@@ -69,8 +76,8 @@ export function clipForModel(animations: readonly IfpAnimation[], modelName: str
  * The clump's frames as sampler bones. `inverseBind` is IDENTITY on purpose: a rigid frame carries its atomic
  * whole, so what we want out of the sampler is the frame's world matrix, not a skinning matrix.
  */
-export function frameBones(clump: RWClump): FrameBone[] {
-  return clump.frames.map((frame) => ({
+export function frameBones(frames: readonly AnimFrame[]): FrameBone[] {
+  return frames.map((frame) => ({
     bindPosition: [frame.position[0], frame.position[1], frame.position[2]] as const,
     bindRotation: quatOfFrame(frame),
     inverseBind: IDENTITY,
@@ -82,13 +89,13 @@ export function frameBones(clump: RWClump): FrameBone[] {
  * The clip, with one track per CLUMP FRAME (index-aligned with {@link frameBones}) — the IFP names its bones
  * after the frames. A frame the clip does not mention gets an empty track and holds its bind pose.
  */
-export function frameClip(clump: RWClump, animation: IfpAnimation): FrameClip {
+export function frameClip(frames: readonly AnimFrame[], animation: IfpAnimation): FrameClip {
   const byName = new Map<string, IfpAnimation['bones'][number]>();
   for (const bone of animation.bones) {
     byName.set(bone.name.trim().toLowerCase(), bone);
   }
   let duration = 0;
-  const tracks = clump.frames.map((frame) => {
+  const tracks = frames.map((frame) => {
     const bone = byName.get(frame.name.trim().toLowerCase());
     if (!bone || bone.frames.length === 0) {
       return { quats: [], times: [] };
@@ -116,7 +123,7 @@ export function frameClip(clump: RWClump, animation: IfpAnimation): FrameClip {
 const IDENTITY: readonly number[] = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
 /** A frame's 3×3 (column-major, RW order) as a quaternion (x, y, z, w). */
-function quatOfFrame(frame: RWFrame): [number, number, number, number] {
+function quatOfFrame(frame: AnimFrame): [number, number, number, number] {
   const m = frame.rotation;
   const trace = m[0] + m[4] + m[8];
   if (trace > 0) {

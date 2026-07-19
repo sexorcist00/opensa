@@ -80,6 +80,15 @@ const MANIFEST: readonly Fixture[] = [
   extract('countrye_stream1.ipl', 'ipl_binary/countrye_stream1.ipl'),
   extract('counxref.ifp', 'dff/anim-clump/counxref.ifp'),
   extract('nt_noddonkbase.dff', 'dff/anim-clump/nt_noddonkbase.dff'),
+  // The opensa-pack `.osm` conversion tests (plan 003 phase 5) run on REAL models, one per asset class, each
+  // with the TXD its IDE row names — a converted model must lose nothing against the DFF/TXD build, and a
+  // hand-built clump cannot prove that.
+  extract('des_xoilfield.txd', 'dff/anim-clump/des_xoilfield.txd'), // nt_noddonkbase's dictionary
+  extract('lamppost1.dff', 'dff/topple/lamppost1.dff'), // object.dat uprootLimit 240 — the topple prop
+  extract('dynsigns.txd', 'dff/topple/dynsigns.txd'),
+  extract('labins01_la.txd', 'dff/breakable/labins01_la.txd'), // binnt08_la's dictionary
+  extract('sjmcacti2.dff', 'dff/clutter/sjmcacti2.dff'), // a procobj.dat species (and a topple prop)
+  extract('gta_cactus.txd', 'dff/clutter/gta_cactus.txd'),
   extract('binnt08_la.dff', 'dff/breakable/binnt08_la.dff'),
   extract('washer.dff', 'dff/building/washer.dff'),
   // A stock vegetation LOD DFF — the template the lod-trees-generator rebuilds card geometry over. Carries the

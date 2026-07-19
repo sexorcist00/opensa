@@ -41,6 +41,7 @@ import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
 import { WaterHeightGrid } from './height-grid';
 import { createModelBundles } from './model-bundle';
+import { packAnimObjects } from './pack-anim-objects';
 import { packBreakables } from './pack-breakables';
 import { packClutter } from './pack-clutter';
 import { packProps } from './pack-props';
@@ -195,6 +196,8 @@ function optimizeModelArchives(fs: ReturnType<typeof openGameDir>, defs: MapDefi
   const clutter = packClutter(fs, defs, bundles, log);
   // Topple props (5d): the collider hull the host otherwise collects with a SECOND clump walk per prop.
   const props = packProps(fs, defs, bundles, log);
+  // Animated map objects (5e): the frame tree the IFP matches by name — the clip stays a separate asset.
+  const animObjects = packAnimObjects(fs, defs, bundles, log);
   const rewrite = rewriteModelArchives(out, { deletes: vehicles.deletes, inserts: bundles.inserts() });
   for (const archive of rewrite.archives) {
     log(
@@ -215,12 +218,15 @@ function optimizeModelArchives(fs: ReturnType<typeof openGameDir>, defs: MapDefi
   for (const failure of clutter.failed) {
     console.warn(`[opensa-pack] ⚠ clutter '${failure.model}' not converted: ${failure.error}`);
   }
+  for (const failure of animObjects.failed) {
+    console.warn(`[opensa-pack] ⚠ anim object '${failure.model}' not converted: ${failure.error}`);
+  }
   for (const failure of props.failed) {
     console.warn(`[opensa-pack] ⚠ prop '${failure.model}' not converted: ${failure.error}`);
   }
   log(`${bundles.size()} models bundled; archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 
-  return { breakables, clutter, props, rewrite, vehicles: vehicles.report };
+  return { animObjects, breakables, clutter, props, rewrite, vehicles: vehicles.report };
 }
 
 /** Parse a de-tiling list: plain names (one per line, `#` comments) OR skygfx `texdb.txt` lines

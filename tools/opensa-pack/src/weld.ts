@@ -661,7 +661,7 @@ function movingFrames(
   const clump = getClump(fs, def.modelName);
   const animation = clipForModel(getIfp(fs, def.anim ?? ''), def.modelName);
 
-  return animation ? animatedFrames(clump, animation) : new Set<number>();
+  return animation ? animatedFrames(clump.frames, animation) : new Set<number>();
 }
 
 function quatToMat3(x: number, y: number, z: number, w: number): number[] {

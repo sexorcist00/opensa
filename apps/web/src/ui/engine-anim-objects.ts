@@ -14,11 +14,14 @@
  */
 import type { Engine, SamplerClip, VehicleInstance, VehicleModelId } from '@opensa/engine';
 import type { AnimatedPlacement, GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
+import type { RigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
 import type { AssetFileSystem } from '@opensa/renderware';
-import type { FrameBone } from '@opensa/renderware/anim/frame-clip';
+import type { AnimFrame, FrameBone } from '@opensa/renderware/anim/frame-clip';
 
 import { IfpSampler } from '@opensa/engine';
+import { decodeOsm, decodeOsmSkeleton, osmSection, OsmSectionTag } from '@opensa/engine-formats';
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
+import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
 import { animatedFrames, clipForModel, frameBones, frameClip } from '@opensa/renderware/anim/frame-clip';
 import { getClump, getIfp, getTxdChain } from '@opensa/renderware/archive/asset-cache';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
@@ -51,6 +54,17 @@ interface AnimModel {
   submeshParts: number[];
 }
 
+/**
+ * What driving an animated object needs, from either side of the optimized/unoptimized split: the frame
+ * tree the IFP matches by name, the parts/submeshes the builder produced, and the engine-ready upload.
+ */
+interface AnimSource {
+  frames: readonly AnimFrame[];
+  init: RigidModelInit;
+  parts: readonly { name: string }[];
+  submeshes: readonly { part: number }[];
+}
+
 interface Live {
   instance: VehicleInstance;
   model: AnimModel;
@@ -76,29 +90,30 @@ export function setupEngineAnimObjects(
     }
     let built: AnimModel | null = null;
     try {
-      const clump = getClump(fs, placement.modelName);
+      // OPTIMIZED first (opensa-pack 003 phase 5): the `SKEL` section IS the frame tree, so the clip, the
+      // moving-part map and the sampler bones all resolve with no clump. The IFP stays a separate asset —
+      // baking the clip into the model would freeze a binding a mod is allowed to change.
+      const source = optimizedSource(fs, placement.modelName) ?? unoptimizedSource(fs, placement);
       const animation = clipForModel(getIfp(fs, placement.anim), placement.modelName);
-      const moved = animation ? animatedFrames(clump, animation) : new Set<number>();
+      const moved = animation ? animatedFrames(source.frames, animation) : new Set<number>();
       if (animation && moved.size > 0) {
-        const txds = getTxdChain(fs, placement.txdName);
-        const model = buildVehicleModel(clump, new VehicleTextures(txds));
         // The builder names each part after its frame — that is the ONLY link back to the clip, whose bones
         // are frame names too. Parts whose frame does not move belong to the bundle, not to us.
         const frameOf = new Map<string, number>();
-        clump.frames.forEach((frame, index) => frameOf.set(frame.name.trim().toLowerCase(), index));
+        source.frames.forEach((frame, index) => frameOf.set(frame.name.trim().toLowerCase(), index));
         const moving = new Map<number, number>();
-        model.parts.forEach((part, index) => {
+        source.parts.forEach((part, index) => {
           const frame = frameOf.get(part.name.trim().toLowerCase());
           if (frame !== undefined && moved.has(frame)) {
             moving.set(index, frame);
           }
         });
         built = {
-          bones: frameBones(clump),
-          clip: frameClip(clump, animation),
-          id: engine.createVehicleModel(toRigidModelInit(model)),
+          bones: frameBones(source.frames),
+          clip: frameClip(source.frames, animation),
+          id: engine.createVehicleModel(source.init),
           moving,
-          submeshParts: model.submeshes.map((submesh) => submesh.part),
+          submeshParts: source.submeshes.map((submesh) => submesh.part),
         };
       }
     } catch {
@@ -199,6 +214,27 @@ function composeWorld(out: Float32Array, placement: AnimatedPlacement, frame: Fl
   out[15] = 1;
 }
 
+/** The converted model: `SKEL` + the rigid sections. Null when this object is not converted. */
+function optimizedSource(fs: AssetFileSystem, modelName: string): AnimSource | null {
+  const osm = fs.get(`${modelName.toLowerCase()}.osm`);
+  if (!osm) {
+    return null;
+  }
+  const bytes = new Uint8Array(osm);
+  const section = osmSection(decodeOsm(bytes), OsmSectionTag.SKEL);
+  if (!section) {
+    return null; // converted, but not as an animated object — fall back to the clump
+  }
+  const { fixture, model } = readModelOsm(modelName, bytes);
+
+  return {
+    frames: decodeOsmSkeleton(section).frames,
+    init: model,
+    parts: fixture.parts,
+    submeshes: fixture.submeshes,
+  };
+}
+
 /** Column-major 3×3 of a quaternion. */
 function quatMatrix(x: number, y: number, z: number, w: number): number[] {
   return [
@@ -212,4 +248,12 @@ function quatMatrix(x: number, y: number, z: number, w: number): number[] {
     2 * (y * z - x * w),
     1 - 2 * (x * x + y * y),
   ];
+}
+
+/** The stock or modded DFF/TXD, parsed and built on first spawn in range. */
+function unoptimizedSource(fs: AssetFileSystem, placement: AnimatedPlacement): AnimSource {
+  const clump = getClump(fs, placement.modelName);
+  const model = buildVehicleModel(clump, new VehicleTextures(getTxdChain(fs, placement.txdName)));
+
+  return { frames: clump.frames, init: toRigidModelInit(model), parts: model.parts, submeshes: model.submeshes };
 }
