@@ -74,6 +74,40 @@ export interface PedTexture {
 /** Seconds per raw ANP3 time unit. */
 const IFP_TIME_SCALE = 1 / 60;
 
+/**
+ * A converted ped's `DESC` payload (opensa-pack 003 phase 5) — the twin of `VehicleFixture`.
+ *
+ * A ped is NOT a rigid model: it has no vertex colours, no `meta` paint/lamp slots and no reflection slots,
+ * but it does carry four bone indices and four weights per vertex, a skeleton in SKIN ORDER with real
+ * inverse binds, and a posed `minZ` the host stands it on. Sharing `VehicleFixture` would mean carrying
+ * seven fields that are always empty and dropping the four that matter.
+ *
+ * `submeshes` address their texture as (array, layer) rather than by name: `TEXS` may hold several arrays
+ * because a ped's textures can disagree on size, and resolving a name at spawn is work the converter has
+ * already done. The NAME is kept alongside so a human (and a mod diff) can still read it.
+ */
+export interface PedFixture {
+  bones: PedBone[];
+  indexCount: number;
+  layout: { indices: number; joints: number; normals: number; positions: number; uvs: number; weights: number };
+  /** Lowest POSED vertex — the feet level the host aligns to the capsule bottom. */
+  minZ: number;
+  name: string;
+  submeshes: PedFixtureSubmesh[];
+  vertexCount: number;
+}
+
+export interface PedFixtureSubmesh {
+  /** Index into the `TEXS` arrays. */
+  array: number;
+  indexCount: number;
+  indexOffset: number;
+  /** Layer within that array. */
+  layer: number;
+  /** The RW texture name, kept for readability — binding uses `array`/`layer`. */
+  texture: string;
+}
+
 interface SkinBone {
   frame: RWFrame;
   frameIndex: number;

@@ -418,6 +418,10 @@ the pipeline path.
 - [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
 - [x] Phase 5a — `ClutterModelInit`/`DebrisUpload` widened to `ModelTextureInit` (ped left for its own step)
 - [x] Phase 5b — `SHAT` section + `packBreakables` + `getBreakable` reading it (252 props, 1.6 MB)
+- [x] Phase 5f step 2 — ped converter (`ped-osm.ts` + `packPeds`) + `readPedOsm` + the ped data-loss gate
+- [ ] Phase 5f step 3 — engine: `PedProbeInit` takes a texture ARRAY, submeshes bind by (array, layer), and
+      `engine-player.ts` loads the player by NAME from the VFS instead of `/ped/ped.json` — a PRODUCTION
+      change, so it needs a field check, not just a green suite
 - [x] Phase 5e — animated objects: `SKEL` (the frame tree); the IFP stays a separate, moddable asset
 - [x] Phase 5 — REAL-FIXTURE conversion tests + the `no-data-loss` gate over one model per class
 - [x] Phase 5d — topple props: `HULL` section (dedup'd collider cloud + fallback box), read by `boundsOf`
@@ -722,6 +726,22 @@ vehicles and clutter are unchanged in substance.
 Worth recording for the map-object step: the engine's ped path binds `textures[0]` ONLY today, so those 23
 peds already lose their extra textures AT THE HOST. Conversion must still carry them — losing data in the
 converter is not excused by a renderer that currently ignores it.
+
+**Phase 5f step 2 (2026-07-19) — the ped converter.** A ped is the one class that cannot reuse the rigid
+writer: no vertex colours, no paint/lamp `meta`, no reflection slots, but four bone indices and four weights
+per vertex, a skeleton in SKIN ORDER carrying real inverse binds, and a posed `minZ`. So it gets its own
+`DESC`/`GEOM` (`PedFixture`), and no `COLL` — a ped is collided as a capsule.
+
+Textures bucket BY SIZE, one `.ostex` per bucket, and a submesh stores the resolved `(array, layer)` with
+the texture NAME kept beside it for readability. Nothing is dropped for disagreeing with its neighbours.
+
+Measured: **265 converted, 11 failed, 23 needed several arrays, 20.0 MB**; 955 models bundled overall,
+archives now +928/−667 in `gta3.img`.
+
+The ped gate in `no-data-loss.test.ts` compares the converted `bmypol1` against `buildPedModel`: every
+skinned buffer byte for byte (`positions`, `normals`, `uvs`, `indices`, `joints`, `weights`), the WHOLE
+skeleton deep-equal (skin order, parents, bone ids, inverse binds), `minZ` exact, and **every texture
+present** — layer count summed across arrays equals the builder's, with each submesh's slot in range.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

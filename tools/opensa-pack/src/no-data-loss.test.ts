@@ -13,10 +13,12 @@
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { decodeOsm, decodeOsmSkeleton, decodeOstex, osmSection, OsmSectionTag } from '@opensa/engine-formats';
+import { readPedOsm } from '@opensa/game/adapters/ped-osm';
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
 import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
 import { parseDff } from '@opensa/renderware';
 import { getClump } from '@opensa/renderware/archive/asset-cache';
+import { buildPedModel } from '@opensa/renderware/ped/build-ped-model';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
 import { readFileSync } from 'node:fs';
@@ -26,6 +28,7 @@ import { describe, expect, it } from 'vitest';
 import { createModelBundles } from './model-bundle';
 import { buildModelOsm } from './model-osm';
 import { packAnimObjects } from './pack-anim-objects';
+import { buildPedOsm } from './ped-osm';
 
 /** The packers log a summary line; these tests do not care about it. */
 const quiet = (): void => undefined;
@@ -192,6 +195,77 @@ describe('the .osm conversion loses nothing', () => {
       const sections = decodeOsm(insert.bytes);
       expect(osmSection(sections, OsmSectionTag.SKEL)).not.toBeNull();
       expect(osmSection(sections, OsmSectionTag.GEOM)).not.toBeNull();
+    });
+  });
+});
+
+/**
+ * The ped gate. A ped's `.osm` has its own shape (no colours/meta/reflect; joints, weights, a skin-order
+ * skeleton with real inverse binds, a posed `minZ`), so it needs its own comparison against the builder.
+ */
+describe('the ped conversion loses nothing', () => {
+  const MODEL = 'bmypol1';
+  const TXD = 'bmypol1';
+
+  const pedFs = (): AssetFileSystem => {
+    const files = new Map<string, ArrayBuffer>([
+      [`${MODEL}.dff`, fileOf('character/bmypol1.dff')],
+      [`${TXD}.txd`, fileOf('character/bmypol1.txd')],
+    ]);
+
+    return {
+      get: (name: string): ArrayBuffer | null => files.get(name.toLowerCase()) ?? null,
+      getText: () => null,
+      has: (name: string): boolean => files.has(name.toLowerCase()),
+      names: [...files.keys()],
+    };
+  };
+
+  describe('positive cases', () => {
+    it('keeps every skinned buffer, byte for byte', () => {
+      const fs = pedFs();
+      const stock = buildPedModel(parseDff(fs.get(`${MODEL}.dff`)!), [fs.get(`${TXD}.txd`)!])!;
+
+      const read = readPedOsm(MODEL, buildPedOsm(fs, MODEL, TXD).bytes);
+
+      expect(read.fixture.vertexCount).toBe(stock.positions.length / 3);
+      expect(read.fixture.indexCount).toBe(stock.indices.length);
+      expect(new Float32Array(read.geometry.positions.slice().buffer)).toEqual(stock.positions);
+      expect(new Float32Array(read.geometry.normals.slice().buffer)).toEqual(stock.normals);
+      expect(new Float32Array(read.geometry.uvs.slice().buffer)).toEqual(stock.uvs);
+      expect(new Uint16Array(read.geometry.indices.slice().buffer)).toEqual(stock.indices);
+      expect(read.geometry.joints).toEqual(stock.joints);
+      expect(read.geometry.weights).toEqual(stock.weights);
+    });
+
+    it('keeps the whole skeleton — skin order, parents, bone ids and inverse binds', () => {
+      const fs = pedFs();
+      const stock = buildPedModel(parseDff(fs.get(`${MODEL}.dff`)!), [fs.get(`${TXD}.txd`)!])!;
+
+      const read = readPedOsm(MODEL, buildPedOsm(fs, MODEL, TXD).bytes);
+
+      expect(read.fixture.bones).toEqual(stock.bones);
+      expect(read.fixture.minZ).toBe(stock.minZ);
+    });
+
+    it('carries EVERY texture, resolving each submesh to an (array, layer) slot', () => {
+      const fs = pedFs();
+      const stock = buildPedModel(parseDff(fs.get(`${MODEL}.dff`)!), [fs.get(`${TXD}.txd`)!])!;
+
+      const built = buildPedOsm(fs, MODEL, TXD);
+      const read = readPedOsm(MODEL, built.bytes);
+      const layers = read.textureArrays.reduce((sum, array) => sum + decodeOstex(array).layers.length, 0);
+
+      // Not one texture lost, however much their sizes disagree.
+      expect(layers).toBe(stock.textures.length);
+      expect(read.fixture.submeshes).toHaveLength(stock.submeshes.length);
+      read.fixture.submeshes.forEach((submesh, index) => {
+        expect(submesh.indexCount).toBe(stock.submeshes[index].indexCount);
+        expect(submesh.indexOffset).toBe(stock.submeshes[index].indexOffset);
+        expect(submesh.texture).toBe(stock.submeshes[index].texture);
+        expect(read.textureArrays[submesh.array]).toBeDefined();
+        expect(decodeOstex(read.textureArrays[submesh.array]).layers.length).toBeGreaterThan(submesh.layer);
+      });
     });
   });
 });

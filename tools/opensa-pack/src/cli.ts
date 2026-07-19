@@ -44,6 +44,7 @@ import { createModelBundles } from './model-bundle';
 import { packAnimObjects } from './pack-anim-objects';
 import { packBreakables } from './pack-breakables';
 import { packClutter } from './pack-clutter';
+import { packPeds } from './pack-peds';
 import { packProps } from './pack-props';
 import { packVehicles } from './pack-vehicles';
 import { bakeWater } from './water';
@@ -198,7 +199,12 @@ function optimizeModelArchives(fs: ReturnType<typeof openGameDir>, defs: MapDefi
   const props = packProps(fs, defs, bundles, log);
   // Animated map objects (5e): the frame tree the IFP matches by name — the clip stays a separate asset.
   const animObjects = packAnimObjects(fs, defs, bundles, log);
-  const rewrite = rewriteModelArchives(out, { deletes: vehicles.deletes, inserts: bundles.inserts() });
+  // Peds (5f): their own DESC/GEOM — no colours, no paint slots, but joints/weights and a real skeleton.
+  const peds = packPeds(fs, bundles, log);
+  const rewrite = rewriteModelArchives(out, {
+    deletes: [...vehicles.deletes, ...peds.deletes],
+    inserts: bundles.inserts(),
+  });
   for (const archive of rewrite.archives) {
     log(
       `archive ${archive.file}: +${archive.inserted} -${archive.deleted} entries, ` +
@@ -218,6 +224,9 @@ function optimizeModelArchives(fs: ReturnType<typeof openGameDir>, defs: MapDefi
   for (const failure of clutter.failed) {
     console.warn(`[opensa-pack] ⚠ clutter '${failure.model}' not converted: ${failure.error}`);
   }
+  for (const failure of peds.report.failed) {
+    console.warn(`[opensa-pack] ⚠ ped '${failure.model}' not converted: ${failure.error}`);
+  }
   for (const failure of animObjects.failed) {
     console.warn(`[opensa-pack] ⚠ anim object '${failure.model}' not converted: ${failure.error}`);
   }
@@ -226,7 +235,7 @@ function optimizeModelArchives(fs: ReturnType<typeof openGameDir>, defs: MapDefi
   }
   log(`${bundles.size()} models bundled; archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 
-  return { animObjects, breakables, clutter, props, rewrite, vehicles: vehicles.report };
+  return { animObjects, breakables, clutter, peds: peds.report, props, rewrite, vehicles: vehicles.report };
 }
 
 /** Parse a de-tiling list: plain names (one per line, `#` comments) OR skygfx `texdb.txt` lines
