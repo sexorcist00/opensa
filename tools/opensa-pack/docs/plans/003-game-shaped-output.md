@@ -4,20 +4,20 @@
 clutter, topple props, animated objects, peds — plus the engine and the production player. Both phase-3
 gates are closed (no DFF parse at spawn; 45× measured).
 
-**RESUME HERE — phase 5g, map objects (~14 000).** Step 1 (`planModelTextures`, the raw-TXD dictionary that
-preserves mip chains) is done. What remains, in order:
+**RESUME HERE — phase 5g, map objects (~14 000).** Steps 1–2 are done: `planModelTextures` (the raw-TXD
+dictionary that preserves mip chains) now plans per BUILDER LAYER, and `remapModelLayers` rewrites `meta`
+onto the planned slots. What remains, in order:
 
-1. **Remap `meta.x`** from `buildVehicleModel`'s layer order onto the planned `(array, layer)` slots, by
-   texture NAME. This is index surgery: a mistake silently retextures every converted model, so it wants a
-   test that compares the remapped indices against the builder's names before anything is written.
-2. **A per-submesh ARRAY index on the rigid path.** It rides ALONGSIDE `meta.x`, not instead of it —
+1. **A per-submesh ARRAY index on the rigid path.** It rides ALONGSIDE `meta.x`, not instead of it —
    vehicles use `meta.y` as the lamps-on twin layer, switched PER VERTEX at runtime, which per-submesh
    binding alone cannot express.
-3. **Night vertex colours** — 1 243 of the mod models carry them and the rigid builder never reads them.
-4. Only then the bulk convert, and the `.dff`/`.txd` deletion for map objects.
+2. **Night vertex colours** — 1 243 of the mod models carry them and the rigid builder never reads them.
+3. Only then the bulk convert, and the `.dff`/`.txd` deletion for map objects.
 
-Also open: phase 5b (runtime `modloader/` field check), phase 6 (the pmb `pack` stage), the `.col` sweep
-measurement, and the remaining audit gaps (material masks, 2dfx in the per-model container, second UV layer).
+Also open: phase 6 (the pmb `pack` stage), the `.col` sweep measurement, and the remaining audit gaps
+(material masks, 2dfx in the per-model container, second UV layer). **Phase 5b — the runtime `modloader/`
+field check — is DEFERRED by the user (2026-07-19) until opensa-pack is complete and integrated with
+perfect-map-builder**: the unoptimized path is only meaningfully exercised against a finished converter.
 
 Supersedes the output half
 of [074/14](../../../../docs/plans/074-opensa-engine/14-pmb-integration.md); the pmb-stage half stays there.
@@ -828,10 +828,36 @@ a modded game — and the fixture is `chinatown_sfe1.dff` + `chinatownsfe.txd` f
 the model needs MORE than one array, that no slot points at a missing array, and that every material
 resolves.
 
-**Still open for map objects** (the remaining `5g` work): remapping `meta.x` from the builder's layer order
-onto the planned slots, a per-submesh ARRAY index on the rigid path (vehicles keep `meta.x` for the lamp
-twin, so the array index rides alongside rather than replacing it), night vertex colours, and only then the
-~14 000-model bulk convert.
+**Phase 5g step 2 (2026-07-19) — the `meta` remap, and the two traps in it.** The planner now plans per
+BUILDER LAYER (`built.texture.names`, in order) instead of per clump material, so its output IS the remap
+table: `slots[i]` is where builder layer `i` went. Planning the clump's materials instead would have left
+two orders to be matched up afterwards, and a mismatch there retextures the model without failing anything.
+`remapModelLayers` then rewrites `meta` in place.
+
+Two traps the remap had to answer, both invisible in a passing test:
+
+1. **`white` must stay WHITE.** The builder resolves an UNTEXTURED material to a stand-in `white` layer and
+   bakes the material colour into the VERTEX COLOURS; the shader multiplies `texel.rgb * in.color.rgb`
+   (`shaders.ts` `rigidShade`). The world planner instead mints a flat-colour texture per colour — so
+   remapping `white` onto one would apply the colour TWICE. `white` resolves as flat WHITE here, and the
+   vertex colours keep carrying the colour.
+2. **`meta.y` = 0 means "no lamps-on twin", not "layer 0".** The builder can rely on that because its layer
+   0 is always the first body material; the planner has no such rule. A twin landing on planned layer 0, or
+   in a DIFFERENT array than its base (a per-vertex swap cannot cross arrays — only `meta.x`'s array is
+   bound), now THROWS rather than mis-sampling.
+
+A deliberate divergence from the unoptimized path, recorded: a texture the chain cannot resolve comes out
+MAGENTA (the planner's rule, which the welded cell path already shows for the same texture), where the
+builder would give it a white texel. Loud beats an invisible white.
+
+Measured on the fixture: **19 builder layers → 6 arrays**, every slot distinct, no twins. The array spread
+is why a per-submesh array index is unavoidable — one model genuinely cannot be one array. The test asserts
+the remapped index against the `.ostex` layer's `nameHash`, i.e. against the builder's NAME, for every slot
+not claimed by content dedup.
+
+**Still open for map objects** (the remaining `5g` work): a per-submesh ARRAY index on the rigid path
+(vehicles keep `meta.x` for the lamp twin, so the array index rides alongside rather than replacing it),
+night vertex colours, and only then the ~14 000-model bulk convert.
 
 ### Test-coverage audit (2026-07-19)
 
