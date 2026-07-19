@@ -35,6 +35,8 @@ export interface VehicleOsm {
 }
 
 export interface VehicleOsmOptions {
+  /** `vehicles.ide` txd name — defaults to the model name, which is what stock SA uses for every car. */
+  txd?: string;
   /** `vehicles.ide` wheelScale as [front, rear]. */
   wheelScale?: readonly [number, number];
 }
@@ -47,7 +49,7 @@ export function buildVehicleOsm(fs: AssetFileSystem, model: string, options: Veh
     throw new Error(`${name}.dff not found`);
   }
   // The runtime's own chain: the model's own dict, then the shared generic set.
-  const txds = [`${name}.txd`, 'vehicle.txd', 'models/generic/vehicle.txd']
+  const txds = [`${(options.txd ?? name).toLowerCase()}.txd`, 'vehicle.txd', 'models/generic/vehicle.txd']
     .map((txd) => fs.get(txd))
     .filter((bytes): bytes is ArrayBuffer => bytes !== null && bytes !== undefined);
 

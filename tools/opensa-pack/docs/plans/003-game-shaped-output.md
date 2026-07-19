@@ -1,6 +1,7 @@
 # 003 — game-shaped output: `--game` in, a game out
 
-**Status: IN PROGRESS — phases 0, 1 and 2 SHIPPED 2026-07-18; phase 3 is next.** Supersedes the output half
+**Status: IN PROGRESS — phases 0-2 SHIPPED 2026-07-18; phase 3 step 1 (IMG delete-and-insert) SHIPPED
+2026-07-19. Next: the runtime side — resolution order, local-loader ingest, the `txdp` walk.** Supersedes the output half
 of [074/14](../../../../docs/plans/074-opensa-engine/14-pmb-integration.md); the pmb-stage half stays there.
 
 Shipped so far: `--out` is a game-dir copy with products under `<out>/opensa/` (phase 1, commit `189d81b`);
@@ -395,7 +396,10 @@ the pipeline path.
 - [x] Phase 2 — per-model `.ostex` emission (`model-ostex.ts`) + `packOstexPayload` extracted so world and
       per-model layers share one row-packing
 - [ ] Phase 2 — decide the texture-compression question (RGBA8 vs BC re-encode vs DXT pass-through)
-- [ ] Phase 3 — IMG delete-and-insert; VFS 3-step resolution + once-per-name warning + config silence flag
+- [x] Phase 3 step 1 — IMG delete-and-insert (`archive-edit.ts` + `pack-vehicles.ts`, wired in `cli.ts`
+      behind a default-on `--no-models` opt-out); vehicles only, phase 5 adds the rest of the classes
+- [ ] Phase 3 — VFS 3-step resolution + once-per-name warning + config silence flag; `.osm`/`.ostex` into
+      the modloader extension allow-list (`packages/modloader/src/scan.ts:62-67`)
 - [ ] Phase 3 — local-loader ingest of `.osm`/`.ostex` (`build-vfs.ts` selection)
 - [ ] Phase 4 — named cell/texture files under `<out>/opensa/`, per-ring texture laziness, one loader
 - [ ] Phase 4 — manifest shrunk to the rule; `timecyc`/`timecyc24`/`setup.timecyc` deleted
@@ -426,6 +430,35 @@ the pipeline path.
 | `landstal` | 274 KB | 32 ms | 5 130 v / 3 613 t / 123 submeshes | 18 spheres, 10 tris, half [1.16, 2.56, 0.82] |
 | `infernus` | 236 KB | 12 ms | 4 467 v / 3 822 t / 76 submeshes  | 20 spheres, 14 tris, half [1.20, 2.89, 0.69] |
 | `bmyri`    | 55 KB  | 4 ms  | 963 v / 1 179 t / 1 submesh       | **fallback box** (no COL in the DFF)         |
+
+**Phase 3 step 1 (2026-07-19)** — the whole vehicle roster converted INTO the copied archives, same
+one-cell smoke command (`--game game-src/non-modified --rect 9,-7,9,-7 --no-ao`):
+
+| Measure                     | Value                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| cars converted              | **198 / 201** (3 fail on a stock `vehicles.ide` typo — see below)            |
+| `.osm` total                | **41.3 MB** (~209 KB/car)                                                    |
+| `.ostex` total              | **151.2 MB** (~764 KB/car — BC1/BC3)                                         |
+| archive edit                | `gta3.img` +396 −395 entries; 0 unplaced, 0 missing deletes                  |
+| `gta3.img` after            | 897 MB → **1 047 MB** (the `.dff`/`.txd` out, `.osm`/`.ostex` in)            |
+| archive rewrite wall-clock  | **18.0 s** (build 198 models + stream a 1 GB rebuild)                        |
+| total convert wall-clock    | 3.3 s → **21.3 s** — hence `--no-models` for world-only iteration reconverts |
+| peak RSS                    | **2.04 GB** — the streamed rebuild holds one 1 GB source buffer, not two     |
+| `.col` entries after        | **216, untouched** (design constraint 1 holds)                               |
+| `.dff` remaining            | 12 766 — map objects and peds, i.e. phase 5's work                           |
+| `landstal.osm` round-trip   | DESC 5 130 v / 10 839 idx · COLL 14 v / 10 tris / half [1.16, 2.56, 0.82]    |
+| `landstal.ostex` round-trip | BC3, 256×256, 14 layers                                                      |
+
+TXD deletion held back **3** dictionaries (`car`, `bike`, `plane`) — the guard working as designed: they
+are the mis-parsed `type` column of the three failed rows, so nothing was deleted on their behalf.
+
+**Found by this step — a stock-data parser bug, PRE-EXISTING and live in the runtime.** `vehicles.ide`
+rows 585/586/593 are missing the comma between `model` and `txd`:
+`585,\temperor\t\temperor, \tcar, …`. `parseVehicleDefs` splits on commas only, so `def.model` becomes
+`"emperor\t\temperor"` — which means **`emperor`, `wayfarer` and `dodo` cannot spawn in the engine today**
+(`gta-sa-world.adapter.ts:608` throws "No vehicle definition"). SA's own parser is whitespace-tolerant.
+Not fixed here: the row splitter is shared by every IDE section, so widening it is its own change with its
+own blast radius.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

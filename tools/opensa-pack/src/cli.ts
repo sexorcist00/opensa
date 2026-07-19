@@ -2,7 +2,7 @@
  * `opensa-pack` CLI (plan 074/03).
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1
- *     [--cell-size 250] [--no-ao] [--bakes [--no-sunvis]] [--bake-workers N]
+ *     [--cell-size 250] [--no-ao] [--no-models] [--bakes [--no-sunvis]] [--bake-workers N]
  *     [--chunk-cells 6] [--wind <dir>[,<dir>…]]
  *
  * (`--in <mods-src>` and its only consumer — the `clouds/` skybox dome stage — were REMOVED 2026-07-17
@@ -22,6 +22,10 @@
  * next a complete game tree. Our own products go under `<out>/opensa/` (`world.ospak`, `manifest.json`,
  * `water.bin`, `report.json`); the game's own files are passed through untouched. Point a host at the
  * products with `?src=<out>/opensa`.
+ *
+ * Phase 3 adds the per-model half: every car in `vehicles.ide` is converted to `<model>.osm` +
+ * `<model>.ostex` INSIDE the copied archives, and its `.dff`/`.txd` are deleted. `--no-models` skips both
+ * the conversion and the archive rebuild.
  */
 import { argValue, fromCwd } from '@opensa/tool-kit/cli';
 import { copyGameDir, guardOut } from '@opensa/tool-kit/game-dir';
@@ -29,9 +33,11 @@ import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'n
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { rewriteModelArchives } from './archive-edit';
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
 import { WaterHeightGrid } from './height-grid';
+import { packVehicles } from './pack-vehicles';
 import { bakeWater } from './water';
 
 function arg(name: string): null | string {
@@ -59,8 +65,8 @@ async function main(): Promise<void> {
   if (!gameRaw || !outRaw || !rectRaw) {
     console.error(
       'usage: opensa-pack --game <dir> --out <dir> --rect x0,y0,x1,y1 [--cell-size 250] [--no-ao] ' +
-        '[--bakes [--no-sunvis]] [--bake-workers N] [--chunk-cells 6] [--wind <dir>[,<dir>…]] ' +
-        '[--stochastic <file>[,<file>…]]',
+        '[--no-models] [--bakes [--no-sunvis]] [--bake-workers N] [--chunk-cells 6] ' +
+        '[--wind <dir>[,<dir>…]] [--stochastic <file>[,<file>…]]',
     );
     process.exitCode = 2;
 
@@ -77,6 +83,9 @@ async function main(): Promise<void> {
   // iteration reconverts). The heavy SHADOW bake (sun-vis) stays opt-in behind `--bakes`.
   const bakes = process.argv.includes('--bakes');
   const ao = !process.argv.includes('--no-ao');
+  // 003 phase 3: on by default — a converted build must be optimized. `--no-models` skips the per-model
+  // conversion AND the ~1 GB archive rebuild, for world-only iteration reconverts.
+  const optimizeModels = !process.argv.includes('--no-models');
   const sunVis = bakes && !process.argv.includes('--no-sunvis');
   const bakeWorkers = Number(arg('bake-workers') ?? 0) || undefined; // default: a quarter of the cores
   const chunkCells = Number(arg('chunk-cells') ?? 0) || undefined; // default: 6 (chunked welding, A2)
@@ -151,9 +160,46 @@ async function main(): Promise<void> {
   }
   writeFileSync(join(products, 'world.ospak'), pak);
   writeFileSync(join(products, 'manifest.json'), JSON.stringify(manifest));
-  writeFileSync(join(products, 'report.json'), JSON.stringify(report, null, 2));
+
+  // 003 phase 3: convert the by-name assets INTO the copied archives — `<model>.dff`/`<txd>.txd` out,
+  // `<model>.osm`/`<model>.ostex` in. Vehicles only for now; phase 5 adds the rest of the classes.
+  const vehicles = optimizeModels ? optimizeVehicles(fs, out) : null;
+  writeFileSync(
+    join(products, 'report.json'),
+    JSON.stringify({ ...report, ...(vehicles ? { vehicles } : {}) }, null, 2),
+  );
 
   printReport(report, started);
+}
+
+/**
+ * Convert the by-name model assets into the copied archives (003 phase 3) and report what moved.
+ * Rebuilding the archives is the expensive half — it streams, but it still rewrites ~1 GB of `gta3.img`.
+ */
+function optimizeVehicles(fs: ReturnType<typeof openGameDir>, out: string): object {
+  const log = (message: string): void => console.log(`[opensa-pack] ${message}`);
+  const started = Date.now();
+  const { edit, report } = packVehicles(fs, log);
+  const rewrite = rewriteModelArchives(out, edit);
+  for (const archive of rewrite.archives) {
+    log(
+      `archive ${archive.file}: +${archive.inserted} -${archive.deleted} entries, ` +
+        `${(archive.bytes / 1048576).toFixed(0)} MB`,
+    );
+  }
+  if (rewrite.unplaced.length > 0) {
+    // An insert whose origin no archive held would be a SILENT no-render at runtime — never let it pass quietly.
+    console.warn(
+      `[opensa-pack] ⚠ ${rewrite.unplaced.length} optimized entries had no home archive: ` +
+        rewrite.unplaced.slice(0, 8).join(', '),
+    );
+  }
+  for (const failure of report.failed) {
+    console.warn(`[opensa-pack] ⚠ vehicle '${failure.model}' not converted: ${failure.error}`);
+  }
+  log(`archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+
+  return { ...report, rewrite };
 }
 
 /** Parse a de-tiling list: plain names (one per line, `#` comments) OR skygfx `texdb.txt` lines
