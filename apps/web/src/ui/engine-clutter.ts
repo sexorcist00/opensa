@@ -9,7 +9,7 @@ import type { CellClutter, ClutterModelId, Engine } from '@opensa/engine';
 import type { CellClutterRender } from '@opensa/game/adapters/gta-sa-world.adapter';
 import type { AssetFileSystem } from '@opensa/renderware';
 
-import { getClump } from '@opensa/renderware/archive/asset-cache';
+import { getClump, getTxdChain } from '@opensa/renderware/archive/asset-cache';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
 
@@ -32,8 +32,8 @@ export function setupEngineClutter(engine: Engine, fs: AssetFileSystem): EngineC
     let id: ClutterModelId | null = null;
     try {
       const clump = getClump(fs, modelName);
-      const txd = fs.get(`${txdName.toLowerCase()}.txd`);
-      const model = buildVehicleModel(clump, new VehicleTextures(txd ? [txd] : []));
+      const txds = getTxdChain(fs, txdName);
+      const model = buildVehicleModel(clump, new VehicleTextures(txds));
       const bytes = (values: Float32Array): Uint8Array =>
         new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
       id = engine.createClutterModel({

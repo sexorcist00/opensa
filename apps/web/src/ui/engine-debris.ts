@@ -12,7 +12,7 @@ import type { Engine } from '@opensa/engine';
 import type { AssetFileSystem } from '@opensa/renderware';
 import type { BakedDebris } from '@opensa/renderware/breakable/bake-debris';
 
-import { getClump } from '@opensa/renderware/archive/asset-cache';
+import { getClump, getTxdChain } from '@opensa/renderware/archive/asset-cache';
 import { bakeDebris, DEBRIS_FADE, DEBRIS_GRAVITY, DEBRIS_LIFETIME } from '@opensa/renderware/breakable/bake-debris';
 import { breakableFromGeometry, getBreakable } from '@opensa/renderware/breakable/mesh';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
@@ -129,20 +129,26 @@ function shardTextures(
 ): { height: number; layers: number; rgba: Uint8Array; width: number } {
   const layers = Math.max(1, baked.groups.length);
   const rgba = new Uint8Array(layers * SHARD_TEXTURE_SIZE * SHARD_TEXTURE_SIZE * 4).fill(255);
-  // The TXD lives in the IMG under its BARE name (`asset-cache#ownTextures`), not under models/ — the
-  // wrong path silently yielded no texture, and the shards came out grey with only their vertex colours.
-  const bytes = txdName ? fs.get(`${txdName.toLowerCase()}.txd`) : null;
-  if (!bytes) {
+  // The TXD lives in the IMG under its BARE name, not under models/ — the wrong path silently yielded no
+  // texture, and the shards came out grey with only their vertex colours. `getTxdChain` also walks the
+  // `txdp` parents, so an inherited texture is found too (opensa-pack 003).
+  const chain = txdName ? getTxdChain(fs, txdName) : [];
+  if (chain.length === 0) {
     return { height: SHARD_TEXTURE_SIZE, layers, rgba, width: SHARD_TEXTURE_SIZE };
   }
   const textures = new Map<string, { height: number; rgba: Uint8Array; width: number }>();
-  for (const texture of parseTxd(bytes).textures) {
+  // Child first: the first TXD to define a name wins, which is what `txdp` inheritance means.
+  for (const texture of chain.flatMap((bytes) => parseTxd(bytes).textures)) {
+    const name = texture.name.toLowerCase();
+    if (textures.has(name)) {
+      continue; // already defined by a nearer TXD in the chain — a parent must never overwrite its child
+    }
     const base = texture.mipmaps[0];
     const pixels =
       texture.format === 'rgba8888'
         ? new Uint8Array(base.data)
         : decodeDxt(texture.format, base.data, base.width, base.height);
-    textures.set(texture.name.toLowerCase(), { height: base.height, rgba: pixels, width: base.width });
+    textures.set(name, { height: base.height, rgba: pixels, width: base.width });
   }
   baked.groups.forEach((group, layer) => {
     const source = textures.get(group.texture.toLowerCase());

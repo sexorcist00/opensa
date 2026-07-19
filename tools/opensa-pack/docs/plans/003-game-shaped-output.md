@@ -379,8 +379,9 @@ the pipeline path.
 - [x] Phase 0 — resolution order settled: modloader → `.osm`/`.ostex` → `.dff`/`.txd` → warn
 - [ ] Phase 1 — measure the `.col` sweep (first-collider-call ms, unreferenced-library share) before
       deciding on offline cell colliders
-- [ ] Phase 3 — restore the runtime `txdp` walk for the fallback path (`getTextures`/`setTxdParents`,
-      six call sites, test from a real `txdp` case)
+- [x] Phase 3 step 4 — the runtime `txdp` walk restored as `getTxdChain`/`setTxdParents`, wired into the
+      FIVE live by-name TXD sites (props, clutter, anim objects, debris, vehicles). The sixth — the ped —
+      does not read the VFS at all yet, so it gets the walk for free when it moves there in phase 5.
 - [x] Phase 1 — `--game`/`--out` via `@opensa/tool-kit/cli` (+ `requireDir`); `guardOut` + `copyGameDir`
       promoted to `@opensa/tool-kit/game-dir` with tests
 - [x] Phase 1 — full game-dir copy; world products under `<out>/opensa/`
@@ -502,6 +503,22 @@ for whatever stayed unoptimized (covered by a test where `house` is converted an
 
 Nothing else needed changing: `filesForGroup`/`readEntry` never looked at extensions. Only `partitionEntries`
 and `looseGroup` did.
+
+**Phase 3 step 4 (2026-07-19)** — the `txdp` walk. Two things it settled:
+
+- **It returns a CHAIN, not a merged texture map.** The orphaned doc comments described a memoized
+  `getTextures` with an `ownTextures` cache behind it. But both consumers — `VehicleTextures` and the ped
+  path's `decodeTextures` — already merge an ORDERED list under a "first TXD wins" rule, and that rule IS
+  `txdp` inheritance. So `getTxdChain` just returns `[child, parent, grandparent…]`. A second resolved-
+  texture cache would have been a second copy of every decoded texel (the 073/08 memory lesson).
+- **Five live sites, not six.** Props, clutter, animated objects, debris and vehicles read a TXD by bare
+  name and are now wired. The ped does NOT: `character-viewer.ts:145` fetches dff/txd over HTTP from the
+  dev server, and the production player reads `/ped/ped.json`+`.bin`. **User confirmed 2026-07-19 that the
+  ped must load from the archive too** — that is the phase-5 move already on this plan, and it inherits the
+  walk for free the moment it goes through the VFS.
+
+`engine-debris.ts` needed a real fix beyond the swap: its texture map used `set` unconditionally, so with a
+chain the PARENT would have overwritten the child. Now it skips names a nearer TXD already defined.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

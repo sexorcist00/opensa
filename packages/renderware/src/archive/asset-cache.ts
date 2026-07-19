@@ -33,9 +33,8 @@ function lruSet<K, V>(cache: Map<K, V>, key: K, value: V, max: number): void {
 /** Parsed IFP animation packages (zone object clips like `counxref.ifp`), by lowercased name. */
 const ifpCache = new Map<string, IfpAnimation[]>();
 
-/** A TXD's own (raw) parsed textures, by lowercased name (no extension). */
-/** A TXD's *resolved* textures — its own overlaid on its `txdp` parent chain — by lowercased name. */
 /** `txdp` parent links (lowercased child → parent). Empty until {@link setTxdParents}; then chains resolve. */
+let txdParents: ReadonlyMap<string, string> = new Map();
 
 export function getClump(archive: ImgArchive, modelName: string): RWClump {
   const key = `${modelName.toLowerCase()}.dff`;
@@ -61,6 +60,32 @@ export function getIfp(archive: ImgArchive, ifpName: string): IfpAnimation[] {
   return animations;
 }
 
+/**
+ * A TXD's bytes followed by its `txdp` ancestors', **highest priority first** — the child, then its parent,
+ * then its parent's parent. Feed the result straight to `VehicleTextures` / `decodeTextures`, whose
+ * "first TXD wins" rule IS `txdp` inheritance: a child inherits every texture it does not itself define.
+ *
+ * Returning a CHAIN rather than a merged texture map is deliberate. The merge already exists in both
+ * consumers, and a second resolved-texture cache here would be a second copy of every decoded texel — the
+ * plan 073/08 memory lesson. Cycle-guarded; absent links or a missing parent TXD collapse to just the
+ * child, so this is a no-op on self-contained (stock) archives.
+ */
+export function getTxdChain(archive: ImgArchive, txdName: string): ArrayBuffer[] {
+  const chain: ArrayBuffer[] = [];
+  const seen = new Set<string>();
+  let name: string | undefined = txdName.toLowerCase();
+  while (name !== undefined && !seen.has(name)) {
+    seen.add(name);
+    const bytes = archive.get(`${name}.txd`);
+    if (bytes) {
+      chain.push(bytes);
+    }
+    name = txdParents.get(name);
+  }
+
+  return chain;
+}
+
 /** Whether a model's clump is already cached (the streaming parse worker skips re-parsing it). */
 export function hasClump(modelName: string): boolean {
   return clumpCache.has(`${modelName.toLowerCase()}.dff`);
@@ -72,17 +97,17 @@ export function primeClump(modelName: string, clump: RWClump): void {
 }
 
 /**
- * Walk a TXD's `txdp` parent chain, overlaying each child's own textures on its parent's so the **child
- * wins** (the inheritance the optimized map relies on). Pure — `ownOf` supplies each TXD's own map — and
- * cycle-guarded; the caller ({@link getTextures}) memoizes the final per-name result. An empty/absent parent
- * map (or missing parent TXD) collapses to just the child, so it's a no-op on self-contained archives.
+ * Install the `txdp` parent map (from `MapDefinitions`). A child TXD then inherits any texture it lacks
+ * from its parent, recursively. No-op effect when empty (stock archives are self-contained), so it is
+ * always safe to call.
+ *
+ * This is the UNOPTIMIZED path's texture resolution (opensa-pack 003): what opensa-pack converts has its
+ * chain flattened offline by `TexturePlanner`, but a stock or modded `.txd` reached at runtime still needs
+ * the walk — without it, a mod that parents a TXD silently loses every inherited texture.
  */
-
-/**
- * Install the `txdp` parent map (from {@link MapDefinitions}). A child TXD then inherits any texture it
- * lacks from its parent (recursively). Clears the resolved cache so existing maps pick up the new chains.
- * No-op effect when empty (stock archives are self-contained), so it's always safe to call.
- */
+export function setTxdParents(parents: ReadonlyMap<string, string> | undefined): void {
+  txdParents = parents ?? new Map();
+}
 
 function parseOrEmpty<T>(buffer: ArrayBuffer | null, parse: (buffer: ArrayBuffer) => T, empty: T): T {
   if (!buffer) {

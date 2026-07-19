@@ -20,7 +20,7 @@ import type { FrameBone } from '@opensa/renderware/anim/frame-clip';
 import { IfpSampler } from '@opensa/engine';
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
 import { animatedFrames, clipForModel, frameBones, frameClip } from '@opensa/renderware/anim/frame-clip';
-import { getClump, getIfp } from '@opensa/renderware/archive/asset-cache';
+import { getClump, getIfp, getTxdChain } from '@opensa/renderware/archive/asset-cache';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
 
@@ -80,8 +80,8 @@ export function setupEngineAnimObjects(
       const animation = clipForModel(getIfp(fs, placement.anim), placement.modelName);
       const moved = animation ? animatedFrames(clump, animation) : new Set<number>();
       if (animation && moved.size > 0) {
-        const txd = fs.get(`${placement.txdName.toLowerCase()}.txd`);
-        const model = buildVehicleModel(clump, new VehicleTextures(txd ? [txd] : []));
+        const txds = getTxdChain(fs, placement.txdName);
+        const model = buildVehicleModel(clump, new VehicleTextures(txds));
         // The builder names each part after its frame — that is the ONLY link back to the clip, whose bones
         // are frame names too. Parts whose frame does not move belong to the bundle, not to us.
         const frameOf = new Map<string, number>();

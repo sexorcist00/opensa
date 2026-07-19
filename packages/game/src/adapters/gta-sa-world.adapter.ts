@@ -46,6 +46,7 @@ import {
   VehicleTextures,
   type WorldGrid,
 } from '@opensa/renderware';
+import { getTxdChain, setTxdParents } from '@opensa/renderware/archive/asset-cache';
 import { breakableInstanceKey } from '@opensa/renderware/breakable/key';
 import { getBreakable } from '@opensa/renderware/breakable/mesh';
 
@@ -385,9 +386,10 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       return optimized;
     }
     const { def, dffBuffer, paint, ...common } = await this.vehicleCommon(modelName, colour);
-    const txds = [`${def.txd.toLowerCase()}.txd`, 'models/generic/vehicle.txd']
-      .map((txdName) => this.fs.get(txdName))
-      .filter((bytes): bytes is ArrayBuffer => bytes !== null && bytes !== undefined);
+    // The car's own dictionary AND its `txdp` ancestors, then the shared generic set — highest priority
+    // first, which is exactly how `VehicleTextures` merges.
+    const generic = this.fs.get('models/generic/vehicle.txd');
+    const txds = [...getTxdChain(this.fs, def.txd), ...(generic ? [generic] : [])];
     // Off-thread build when the worker exists (074/21 field fix — a new car type froze the frame ~170 ms):
     // buffers are COPIED before the transfer so the VFS keeps its originals.
     const model = this.vehicleModelBuilder
@@ -458,6 +460,10 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       return;
     }
     this.defs = resolveMap(this.fs, { extraIpl: this.config.extraIpl });
+    // The IDE `txdp` links, handed to the asset cache so runtime-parsed TXDs inherit from their parents
+    // (opensa-pack 003). Anything opensa-pack converted had its chain flattened offline; this serves the
+    // unoptimized path, where a modded TXD with a parent would otherwise lose the inherited textures.
+    setTxdParents(this.defs.txdParents);
     this.grid = buildWorldGrid(this.defs, this.cellSize);
     this.defByName = new Map([...this.defs.catalog.values()].map((def) => [def.modelName.toLowerCase(), def]));
     // Procedural ground clutter (plan 042): both data files present → cells scatter; else skipped.

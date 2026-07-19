@@ -14,7 +14,7 @@ import type { AssetFileSystem } from '@opensa/renderware';
 
 import { gtaPositionToEngine, writeGtaRoot } from '@opensa/game/adapters/engine-vehicle-handle';
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
-import { getClump } from '@opensa/renderware/archive/asset-cache';
+import { getClump, getTxdChain } from '@opensa/renderware/archive/asset-cache';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
 
@@ -67,8 +67,8 @@ export function setupEngineProps(engine: Engine, fs: AssetFileSystem, physics: P
     let id: null | VehicleModelId = null;
     try {
       const clump = getClump(fs, request.modelName);
-      const txd = request.txdName ? fs.get(`${request.txdName.toLowerCase()}.txd`) : null;
-      const model = buildVehicleModel(clump, new VehicleTextures(txd ? [txd] : []));
+      const txds = request.txdName ? getTxdChain(fs, request.txdName) : [];
+      const model = buildVehicleModel(clump, new VehicleTextures(txds));
       id = engine.createVehicleModel(toRigidModelInit(model));
     } catch {
       id = null; // not renderable as an entity — the prop just disappears, rather than crashing the frame
