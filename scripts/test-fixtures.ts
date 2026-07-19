@@ -139,6 +139,9 @@ const MANIFEST: readonly Fixture[] = [
   // infernus: the vehicle-optimizer scale test fixture — a hierarchical rig (dummies) + embedded COL3 collision.
   extract('infernus.dff', 'dff/vehicle/infernus.dff'),
   extract('admiral.dff', 'vehicles/admiral.dff'),
+  // A SECOND car, so a modloader test can prove the mod's GEOMETRY won rather than just its texture kind.
+  extract('cheetah.dff', 'vehicles/cheetah.dff'),
+  extract('cheetah.txd', 'vehicles/cheetah.txd'),
   // the world-adapter integration test's vehicle pair + the loose generic vehicle dictionary
   extract('admiral.txd', 'vehicles/admiral.txd'),
   copy('models/generic/vehicle.txd', 'models/generic/vehicle.txd'),

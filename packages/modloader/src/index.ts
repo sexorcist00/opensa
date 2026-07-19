@@ -9,6 +9,18 @@ const HANDLING_CFG = 'data/handling.cfg';
 const CARCOLS_DAT = 'data/carcols.dat';
 const GTA_DAT = 'data/gta.dat';
 
+/** An {@link AssetFileSystem} that knows which of its assets came from a `modloader/` overlay. */
+export interface ModdedAssetFileSystem extends AssetFileSystem {
+  readonly moddedAssets: ReadonlySet<string>;
+}
+
+/** Whether `name` (bare or pathed) is served by a `modloader/` overlay rather than by the game itself. */
+export function isModdedAsset(fs: AssetFileSystem, name: string): boolean {
+  const modded = (fs as Partial<ModdedAssetFileSystem>).moddedAssets;
+
+  return modded?.has(baseName(name)) ?? false;
+}
+
 /**
  * Wrap an {@link AssetFileSystem} so a `modloader/` overlay takes effect, **without changing the engine**. Two kinds
  * of mod are supported, both folder-layout- and loader-filename-agnostic (files match by bare name, at any depth):
@@ -24,7 +36,7 @@ const GTA_DAT = 'data/gta.dat';
  * Everything else passes through. The overlay is computed once (the VFS is already populated + synchronous), so
  * reads stay O(1). Returns the original fs unchanged when there's no overlay.
  */
-export function withModloader(fs: AssetFileSystem): AssetFileSystem {
+export function withModloader(fs: AssetFileSystem): AssetFileSystem | ModdedAssetFileSystem {
   const { assets, dataMerges, mapRefs, settings, texts } = scanModloader(fs);
 
   const ideLines: string[] = [];
@@ -71,10 +83,15 @@ export function withModloader(fs: AssetFileSystem): AssetFileSystem {
     get: (name): ArrayBuffer | null => assets.get(baseName(name)) ?? fs.get(name),
     getText: (name): null | string => merged.get(name) ?? texts.get(baseName(name)) ?? fs.getText(name),
     has: (name): boolean => merged.has(name) || assets.has(baseName(name)) || texts.has(baseName(name)) || fs.has(name),
+    // The bare names the OVERLAY supplies. A reader that must tell "a user modded this" from "the file is
+    // simply present" cannot get that from `get`/`has`, which merge the two — and the difference decides
+    // real behaviour: the mixing rule warns about a modded TXD beside a converted model, and a converted
+    // build legitimately KEEPS stock TXDs that unconverted models still need.
+    moddedAssets: new Set(assets.keys()),
     get names(): string[] {
       return [...new Set([...fs.names, ...assets.keys()])];
     },
-  };
+  } satisfies ModdedAssetFileSystem;
 }
 
 /** Bare lowercased file name of a VFS key / engine read path (e.g. `data/maps/lodtrees.ide` → `lodtrees.ide`). */

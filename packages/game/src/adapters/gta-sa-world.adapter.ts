@@ -2,6 +2,7 @@ import type { parsePedDefs } from '@opensa/renderware';
 
 // game/adapters/** (and game/mods/**) are the only places allowed to import renderware.
 import { Matrix4 } from '@opensa/math';
+import { isModdedAsset } from '@opensa/modloader';
 import {
   type AssetFileSystem,
   breakableKeyHash,
@@ -606,7 +607,11 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     // The mixing rule (user decision 2026-07-18): a mod that ships only the TXD of a converted car cannot
     // be honoured — our `.osm` carries its own baked atlas, indexed by layer rather than by texture name —
     // so the optimized model wins and the ignored file is named. Retexture-only car mods do nothing.
-    if (this.fs.get(`${def.txd.toLowerCase()}.txd`)) {
+    //
+    // It must ask the MODLOADER OVERLAY, not the merged VFS (field check, 2026-07-19): a converted build
+    // legitimately keeps the stock TXDs that unconverted models still need, and asking `fs.get` called
+    // every one of those a mod — the warning fired for cars nobody had touched.
+    if (isModdedAsset(this.fs, `${def.txd.toLowerCase()}.txd`)) {
       this.warnAsset(`ignoring modded ${def.txd.toLowerCase()}.txd — '${name}' is an optimized model`);
     }
 

@@ -378,10 +378,24 @@ The lab stops having a private ped/vehicle fixture format here — it loads peds
 VFS like the game and the viewers (plan [078](../../../../docs/plans/078-viewers-lab-on-pmb-output.md)), so
 `ped-probe.ts` / `vehicle-probe.ts` and `ped.bin` / `vehicle.bin` retire.
 
-**Phase 5b — the unoptimized path proves itself.** Drop a real car mod (`.dff` + `.txd`) into `modloader/`
-against a fully converted build and confirm it renders through the runtime flow, including a
-**retexture-only** mod (the mixing rule) and a `txdp`-parented one (constraint 4). This is the phase that
-says whether "optimized/unoptimized" is a real contract or just a diagram.
+**Phase 5b — the unoptimized path proves itself. DONE 2026-07-19, and the field earned its keep.**
+
+Booting the converted full map with a car mod in `modloader/` printed a warning nobody had asked for:
+`ignoring modded coach.txd — 'coach' is an optimized model`, for a car with no mod anywhere near it. The
+mixing rule was asking the MERGED VFS whether a `.txd` exists — and a convert deliberately KEEPS the stock
+dictionaries that unconverted models still need, so it called every one of those a mod. `withModloader` now
+exposes `moddedAssets` (the bare names the OVERLAY supplies) and the rule asks that instead; nothing else
+can tell "a user modded this" from "the file is simply there".
+
+The contract is now pinned as an integration test on REAL fixtures rather than on a screenshot, which could
+not even resolve the swapped car at bench distance (`modloader-paths.test.ts`, four cases):
+
+- a KEPT stock dictionary draws no warning — the regression the field found;
+- a retexture-only mod still loses to the `.osm`, and the ignored file is named;
+- a complete mod WINS and loads unoptimized, proven by VERTEX COUNT (the fixture set gained `cheetah.dff`
+  so the mod is a different car under the admiral's name — "the mod won" is a fact about the mesh, not
+  about which texture path happened to run);
+- a modded dictionary still walks into its `txdp` PARENT for what it does not ship (constraint 4).
 
 **Phase 6 — pmb stage. SHIPPED 2026-07-19.** `'pack'` joins `STAGE_NAMES` and the `--until` docs, running
 on the `opensa` target after `swapLinearTxds` and the `linear-txd` cleanup — the LOD build is the last thing
@@ -471,7 +485,9 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
   loads peds and cars by name through the VFS, which is that plan's whole subject
 - [x] Phase 5g — map-object textures preserve the chain: they plan from the RAW TXD through the SHARED world
       planner, which passes opaque DXT through byte for byte
-- [ ] Phase 5b — mod field check: plain, retexture-only, and `txdp`-parented mods on a converted build
+- [x] Phase 5b — the optimized/unoptimized contract EXERCISED: a headless field check on the converted full
+      map, then pinned as an integration test on real fixtures (`modloader-paths.test.ts`). The field check
+      found a real defect — see the ledger
 - [x] Phase 6 — pmb `pack` stage + `--until` docs (byte-identical pak across the library extraction)
 - [x] Phase 1 — `openGameDir` reads archives through a FILE HANDLE (the >2 GB defect + the RSS win)
 - [ ] Close-out — 6-scene ritual sweep, `npm run lint`, coverage floors held, docs repointed
