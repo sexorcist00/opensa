@@ -1,7 +1,25 @@
 # 003 — game-shaped output: `--game` in, a game out
 
-**Status: IN PROGRESS — phases 0-2 SHIPPED 2026-07-18; phase 3 step 1 (IMG delete-and-insert) SHIPPED
-2026-07-19. Next: the runtime side — resolution order, local-loader ingest, the `txdp` walk.** Supersedes the output half
+**Status: IN PROGRESS.** Phases 0–4 SHIPPED; phase 5 shipped for every by-name class — vehicles, breakables,
+clutter, topple props, animated objects, peds — plus the engine and the production player. Both phase-3
+gates are closed (no DFF parse at spawn; 45× measured).
+
+**RESUME HERE — phase 5g, map objects (~14 000).** Step 1 (`planModelTextures`, the raw-TXD dictionary that
+preserves mip chains) is done. What remains, in order:
+
+1. **Remap `meta.x`** from `buildVehicleModel`'s layer order onto the planned `(array, layer)` slots, by
+   texture NAME. This is index surgery: a mistake silently retextures every converted model, so it wants a
+   test that compares the remapped indices against the builder's names before anything is written.
+2. **A per-submesh ARRAY index on the rigid path.** It rides ALONGSIDE `meta.x`, not instead of it —
+   vehicles use `meta.y` as the lamps-on twin layer, switched PER VERTEX at runtime, which per-submesh
+   binding alone cannot express.
+3. **Night vertex colours** — 1 243 of the mod models carry them and the rigid builder never reads them.
+4. Only then the bulk convert, and the `.dff`/`.txd` deletion for map objects.
+
+Also open: phase 5b (runtime `modloader/` field check), phase 6 (the pmb `pack` stage), the `.col` sweep
+measurement, and the remaining audit gaps (material masks, 2dfx in the per-model container, second UV layer).
+
+Supersedes the output half
 of [074/14](../../../../docs/plans/074-opensa-engine/14-pmb-integration.md); the pmb-stage half stays there.
 
 Shipped so far: `--out` is a game-dir copy with products under `<out>/opensa/` (phase 1, commit `189d81b`);
