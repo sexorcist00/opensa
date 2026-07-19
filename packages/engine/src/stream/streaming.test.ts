@@ -10,16 +10,24 @@ function harness(
   cells: string[],
   radii: StreamingRadii = {},
   fogCutDistance = 2400,
+  /** Per-cell texture-array refs (003 phase 4). Omit to model a pre-`textures` pak (eager, legacy). */
+  cellTextures?: Record<string, number[]>,
 ): {
   deliver: (key: string) => void;
   driver: StreamingDriver;
+  liveArrays: () => number[];
   loaded: string[];
+  loadedArrays: string[];
   requested: string[];
   unloaded: string[];
+  unloadedArrays: number[];
 } {
   const loaded: string[] = [];
   const unloaded: string[] = [];
   const requested: string[] = [];
+  const loadedArrays: string[] = [];
+  const unloadedArrays: number[] = [];
+  const live = new Set<number>();
   const engine = {
     cells: {
       load: (key: string): void => {
@@ -30,6 +38,17 @@ function harness(
       },
     },
     environment: { fogCutDistance },
+    textures: {
+      has: (ref: number): boolean => live.has(ref),
+      load: (ref: number): void => {
+        live.add(ref);
+        loadedArrays.push(`array-${ref}`);
+      },
+      unload: (ref: number): void => {
+        live.delete(ref);
+        unloadedArrays.push(ref);
+      },
+    },
   } as unknown as Engine;
   let onMessage: ((event: { data: unknown }) => void) | null = null;
   const worker = {
@@ -40,27 +59,35 @@ function harness(
       requested.push(message.key);
     },
   } as unknown as Worker;
-  const driver = new StreamingDriver(engine, manifestWith(cells), worker, radii);
+  const driver = new StreamingDriver(engine, manifestWith(cells, cellTextures), worker, radii);
 
   return {
     deliver: (key: string): void => {
       onMessage?.({ data: { buffer: new ArrayBuffer(4), key, type: 'blob' } });
     },
     driver,
+    liveArrays: (): number[] => [...live].sort((a, b) => a - b),
     loaded,
+    loadedArrays,
     requested,
     unloaded,
+    unloadedArrays,
   };
 }
 
 /** Minimal manifest: one 250 u cell at grid (3,3) with both levels (engine rect x[750,1000] z[−1000,−750]). */
-function manifestWith(cells: string[]): OspakManifest {
+function manifestWith(cells: string[], cellTextures?: Record<string, number[]>): OspakManifest {
   const entries: OspakManifest['cells'] = {};
+  const arrays: OspakManifest['textures'] = {};
   for (const key of cells) {
-    entries[key] = { hash: 0, length: 4, offset: 0 };
+    const refs = cellTextures?.[key];
+    entries[key] = { hash: 0, length: 4, offset: 0, ...(refs ? { textures: refs } : {}) };
+    for (const ref of refs ?? []) {
+      arrays[`array-${ref}`] = { format: 0, hash: 0, height: 4, layers: 1, length: 4, offset: 0, width: 4 };
+    }
   }
 
-  return { byteLength: 4096, cells: entries, cellSize: 250, textures: {}, version: 1 };
+  return { byteLength: 4096, cells: entries, cellSize: 250, textures: arrays, version: 1 };
 }
 
 describe('StreamingDriver rings (074/21 P1)', () => {
@@ -183,6 +210,121 @@ describe('StreamingDriver rings (074/21 P1)', () => {
       const stats = h.driver.update([400, 0, 0]);
 
       expect(stats.lateCreates).toBe(1);
+    });
+  });
+});
+
+/**
+ * Per-ring texture residency (003 phase 4). The invariant that matters: a cell is never recorded against an
+ * array that is not uploaded — `CellStore` binds `textures.get(ref)` while building the bundle and throws
+ * on a miss — and an array outlives exactly as long as some loaded cell still draws with it.
+ */
+describe('StreamingDriver texture residency', () => {
+  describe('negative cases', () => {
+    it('does not create a cell whose arrays have not arrived yet', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, { '3,3,lod': [7] });
+      h.driver.update([0, 0, 0]); // requests the cell AND array-7
+      h.deliver('3,3,lod'); // the cell blob lands first
+
+      h.driver.update([0, 0, 0]);
+
+      expect(h.loaded).toEqual([]); // still waiting on array-7
+      expect(h.requested).toContain('array-7');
+    });
+
+    it('loads nothing up-front — an array arrives only with the cell that needs it', () => {
+      const h = harness(['3,3,lod', '9,9,lod'], { lodRadius: 1200 }, 2400, {
+        '3,3,lod': [1],
+        '9,9,lod': [2], // far away: its array must never be fetched
+      });
+
+      h.driver.update([0, 0, 0]);
+
+      expect(h.requested).toContain('array-1');
+      expect(h.requested).not.toContain('array-2');
+    });
+
+    it('keeps an array a second loaded cell still draws with', () => {
+      const h = harness(['3,3,lod', '4,3,lod'], { lodRadius: 1600 }, 2400, {
+        '3,3,lod': [5],
+        '4,3,lod': [5], // shared
+      });
+      for (const key of ['3,3,lod', '4,3,lod']) {
+        h.driver.update([0, 0, 0]);
+        h.deliver(key);
+        h.deliver('array-5');
+        h.driver.update([0, 0, 0]);
+      }
+      expect(h.loaded).toEqual(['3,3,lod', '4,3,lod']);
+
+      h.driver.update([10000, 0, 0]); // evicts BOTH — but only after both are gone may the array die
+
+      expect(h.unloadedArrays).toEqual([5]);
+      expect(h.liveArrays()).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('creates the cell once its arrays are uploaded', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, { '3,3,lod': [7] });
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.deliver('array-7');
+
+      h.driver.update([0, 0, 0]);
+
+      expect(h.loaded).toEqual(['3,3,lod']);
+      expect(h.liveArrays()).toEqual([7]);
+    });
+
+    it('releases the array when the last cell drawing with it is evicted', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, { '3,3,lod': [7] });
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.deliver('array-7');
+      h.driver.update([0, 0, 0]);
+
+      h.driver.update([10000, 0, 0]); // far outside the ring + evict margin
+
+      expect(h.unloaded).toEqual(['3,3,lod']);
+      expect(h.unloadedArrays).toEqual([7]);
+      expect(h.liveArrays()).toEqual([]);
+    });
+
+    it('keeps a shared array alive across an HD↔LOD swap instead of destroying and refetching it', () => {
+      // The claim-before-release rule: both levels of one cell draw with array-3, so the swap must not
+      // let its user count touch zero.
+      const h = harness(['3,3,hd', '3,3,lod'], { hdRadius: 1200, lodRadius: 1600 }, 2400, {
+        '3,3,hd': [3],
+        '3,3,lod': [3],
+      });
+      // Stand IN the cell (centre 875, −875) so HD is the desired level.
+      h.driver.update([875, 0, -875]);
+      h.deliver('3,3,hd');
+      h.deliver('array-3');
+      h.driver.update([875, 0, -875]);
+      expect(h.loaded).toEqual(['3,3,hd']);
+
+      // Move out past the HD edge + hysteresis (centre 1400 > 1260) while the rect (1275) holds the LOD ring.
+      const away: [number, number, number] = [2275, 0, -875];
+      h.driver.update(away);
+      h.deliver('3,3,lod');
+      h.driver.update(away);
+
+      expect(h.loaded).toEqual(['3,3,hd', '3,3,lod']);
+      expect(h.unloadedArrays).toEqual([]); // never released mid-swap
+      expect(h.loadedArrays).toEqual(['array-3']); // and therefore never re-fetched
+    });
+
+    it('still works on a pre-`textures` pak — nothing to wait for, nothing to release', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1200 });
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+
+      h.driver.update([0, 0, 0]);
+
+      expect(h.loaded).toEqual(['3,3,lod']);
+      expect(h.requested.filter((key) => key.startsWith('array-'))).toEqual([]);
     });
   });
 });

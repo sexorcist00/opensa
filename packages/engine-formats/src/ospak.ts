@@ -8,6 +8,26 @@ import { fnv1a } from './binary';
 export const OSPAK_VERSION = 1;
 export const OSPAK_ALIGN = 4096;
 
+/**
+ * A cell's range plus the texture arrays it needs.
+ *
+ * `textures` is what makes per-ring texture laziness possible: without it the runtime cannot know which
+ * arrays a cell will bind until it has decoded the cell, so the only safe policy was "upload every array in
+ * the district before the first cell". With it, the driver loads an array when the first cell that draws
+ * with it streams in, and releases it when the last one leaves.
+ *
+ * **Measured, and smaller than it sounds** (003 phase 4, whole-map convert): a focus keeps a median 84 % of
+ * the district's texture bytes resident, because the planner packs arrays GLOBALLY — 17 of 99 arrays are
+ * touched by more than a quarter of all cells. Laziness cannot evict a map-wide atlas. The lever for real
+ * residency is spatial locality in `TexturePlanner`, not the loading policy.
+ *
+ * Absent on paks built before this field existed — the runtime then falls back to the eager policy, so old
+ * paks keep working unchanged.
+ */
+export interface OspakCellEntry extends OspakEntry {
+  textures?: number[];
+}
+
 export interface OspakEntry {
   /** Wire encoding of the stored bytes (074/10 A1): absent = raw payload. */
   enc?: OspakWireEnc;
@@ -28,13 +48,15 @@ export interface OspakInput {
   meta?: { format: number; height: number; layers: number; width: number };
   /** Decoded size of `bytes` when `enc` is set. */
   rawLength?: number;
+  /** Texture-array refs this CELL draws with (kind 'cell') — see {@link OspakCellEntry.textures}. */
+  textures?: number[];
 }
 
 export interface OspakManifest {
   /** Byte size of the pak file (sanity for range readers). */
   byteLength: number;
-  /** Cell entries: `"x,y,hd"` / `"x,y,lod"` → range. */
-  cells: Record<string, OspakEntry>;
+  /** Cell entries: `"x,y,hd"` / `"x,y,lod"` → range + the texture arrays the cell draws with. */
+  cells: Record<string, OspakCellEntry>;
   /** World-grid cell size (engine units) — key "cx,cy,…" → engine-space centre mapping for streaming. */
   cellSize: number;
   /** Texture-array entries: `"array-<id>"` → range; meta mirrors the .ostex headers for scheduling. */
@@ -94,18 +116,9 @@ export function buildOspak(
       offset,
     };
     if (input.kind === 'cell') {
-      if (cells[input.key]) {
-        throw new Error(`duplicate cell key ${input.key}`);
-      }
-      cells[input.key] = entry;
+      addCell(cells, input, entry);
     } else {
-      if (!input.meta) {
-        throw new Error(`texture entry ${input.key} missing meta`);
-      }
-      if (textures[input.key]) {
-        throw new Error(`duplicate texture key ${input.key}`);
-      }
-      textures[input.key] = { ...entry, ...input.meta };
+      addTexture(textures, input, entry);
     }
     spans.push({ bytes: input.bytes, offset });
     offset += Math.ceil(input.bytes.byteLength / OSPAK_ALIGN) * OSPAK_ALIGN;
@@ -145,4 +158,26 @@ export function validateOspakManifest(manifest: OspakManifest): void {
       throw new Error(`entry ${key} range overruns pak (${entry.offset}+${entry.length}>${manifest.byteLength})`);
     }
   }
+}
+
+/** One cell entry: its range plus the de-duplicated, sorted refs of the arrays it draws with. */
+function addCell(cells: OspakManifest['cells'], input: OspakInput, entry: OspakEntry): void {
+  if (cells[input.key]) {
+    throw new Error(`duplicate cell key ${input.key}`);
+  }
+  cells[input.key] = {
+    ...entry,
+    ...(input.textures !== undefined ? { textures: [...new Set(input.textures)].sort((a, b) => a - b) } : {}),
+  };
+}
+
+/** One texture entry: its range plus the `.ostex` header meta the runtime schedules uploads with. */
+function addTexture(textures: OspakManifest['textures'], input: OspakInput, entry: OspakEntry): void {
+  if (!input.meta) {
+    throw new Error(`texture entry ${input.key} missing meta`);
+  }
+  if (textures[input.key]) {
+    throw new Error(`duplicate texture key ${input.key}`);
+  }
+  textures[input.key] = { ...entry, ...input.meta };
 }

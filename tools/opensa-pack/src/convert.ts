@@ -208,7 +208,10 @@ export async function convertDistrict(
     }
     for (const entry of welded) {
       const bytes = assembleCell(entry.cell);
-      inputs.push(wireCompress({ bytes, key: entry.key, kind: 'cell' }));
+      // The arrays this cell binds, recorded so the runtime can load textures PER RING instead of
+      // uploading the whole district up front (074/21 residency follow-up, 003 phase 4).
+      const textures = entry.cell.buckets.map((bucket) => bucket.textureArrayRef);
+      inputs.push(wireCompress({ bytes, key: entry.key, kind: 'cell', textures }));
       accumulate(report, entry.key, bytes.byteLength, entry.cell.stats);
     }
     doneCells += chunk.cells;

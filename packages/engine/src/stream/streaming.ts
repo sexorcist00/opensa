@@ -3,7 +3,12 @@ import type { OspakManifest } from '@opensa/engine-formats';
 /**
  * Thin streaming driver (plan 074/05): plan-060 semantics re-implemented three-free — rings + hysteresis,
  * keep-old-level-until-replacement, atomic HD↔LOD swap, bounded creates (≤1 cell/frame), eviction outside the
- * outer ring. Cells come from the pak worker as transferable blobs; textures load up-front (district-shared).
+ * outer ring. Cells come from the pak worker as transferable blobs.
+ *
+ * Textures stream WITH the cells (003 phase 4): each cell entry lists the arrays it draws with, so an array
+ * is fetched alongside the first cell that needs it and destroyed when the last such cell unloads. Before
+ * that the whole district's arrays had to be resident from boot (~1.7 GB on a full map), because nothing
+ * knew which cell wanted which. A pre-`textures` pak still loads eagerly in `setup`.
  *
  * The LOD ring is the fog-mask boundary (plan 074/21): hosts size it via `lodRadius` so that
  * `fogCut + margin ≤ lodRadius`, and the LOD/evict decisions test the CELL RECT (closest point), not the
@@ -62,6 +67,8 @@ interface CellSlot {
 type Level = 'hd' | 'lod';
 
 export class StreamingDriver {
+  /** Texture-array ref → the loaded cell keys drawing with it. Empty set ⇒ the array is released. */
+  private readonly arrayUsers = new Map<number, Set<string>>();
   private readonly blobs = new Map<string, Uint8Array>();
   private readonly cells = new Map<string, CellSlot>();
   private readonly engine: Engine;
@@ -84,6 +91,8 @@ export class StreamingDriver {
   private teleportGrace = true;
   /** Smoothed per-update focus delta (engine XZ) — the prefetch direction. */
   private readonly velocity: [number, number] = [0, 0];
+  /** Texture-array refs already reported missing — one line each, not one per frame. */
+  private readonly warnedArrays = new Set<number>();
   private readonly worker: Worker;
 
   constructor(engine: Engine, manifest: OspakManifest, worker: Worker, radii: StreamingRadii = {}) {
@@ -116,19 +125,7 @@ export class StreamingDriver {
       this.keyToSlot.set(key, slot);
     }
     worker.addEventListener('message', (event: MessageEvent<PakWorkerResponse>) => {
-      const message = event.data;
-      if (message.type !== 'blob') {
-        return;
-      }
-      if (message.buffer) {
-        this.blobs.set(message.key, new Uint8Array(message.buffer));
-      } else {
-        // Failed fetch/inflate: clear the in-flight mark so the slot RETRIES next time it wants the level
-        // (a permanently-poisoned key was the original stuck-at-LOD failure mode).
-        this.requested.delete(message.key);
-        // eslint-disable-next-line no-console -- deliberate field diagnostic: a silent retry loop hid the stuck-at-LOD bug once already
-        console.warn(`[stream] entry ${message.key} failed: ${message.error ?? 'unknown'} — will retry`);
-      }
+      this.onBlob(event.data);
     });
   }
 
@@ -207,6 +204,7 @@ export class StreamingDriver {
     slot.pending = desired;
     if (!this.requested.has(key)) {
       this.requestBlob(key);
+      this.texturesReady(key); // kick the arrays off IN PARALLEL with the cell — never serialize the two
 
       return null;
     }
@@ -216,6 +214,9 @@ export class StreamingDriver {
     const blob = this.blobs.get(key);
     if (!blob) {
       return null;
+    }
+    if (!this.texturesReady(key)) {
+      return null; // arrays still in flight — a cell must never record against an unloaded array
     }
 
     return this.create(slot, desired, key, blob, trueRect);
@@ -252,6 +253,15 @@ export class StreamingDriver {
     return [fx + leadX, fz + leadZ];
   }
 
+  /** Record this cell as a user of every array it draws with. */
+  private claimTextures(key: string): void {
+    for (const ref of this.manifest.cells[key].textures ?? []) {
+      const users = this.arrayUsers.get(ref) ?? new Set<string>();
+      users.add(key);
+      this.arrayUsers.set(ref, users);
+    }
+  }
+
   /** Load a delivered blob into the engine; returns the create's duration for the frame budget. */
   private create(slot: CellSlot, level: Level, key: string, blob: Uint8Array, trueRect: number): number {
     const start = performance.now();
@@ -263,10 +273,14 @@ export class StreamingDriver {
       this.stats.lateCreates += 1;
     }
     this.engine.cells.load(key, blob);
+    this.claimTextures(key);
     // Atomic swap: the replacement is live — drop the old level the same frame (no hole, no double-draw).
     const previousKey = slot.current ? slot.keys[slot.current] : undefined;
     if (previousKey !== undefined && previousKey !== key) {
       this.engine.cells.unload(previousKey);
+      // Claim BEFORE release: an array both levels draw with must never drop to zero users in between,
+      // or the HD↔LOD swap would destroy the texture and immediately re-fetch it.
+      this.releaseTextures(previousKey);
       this.requested.delete(previousKey);
     }
     slot.current = level;
@@ -298,6 +312,35 @@ export class StreamingDriver {
     return null;
   }
 
+  /** A delivered pak entry: a texture array uploads straight away, a cell blob waits for its create slot. */
+  private onBlob(message: PakWorkerResponse): void {
+    if (message.type !== 'blob') {
+      return;
+    }
+    // A texture array is uploaded the moment it lands and never enters `blobs`: it has no slot, so the
+    // stale-blob prune would throw it away, and holding the CPU copy is exactly the memory we came here to
+    // save.
+    if (message.key.startsWith('array-')) {
+      if (message.buffer) {
+        this.engine.textures.load(Number(message.key.slice('array-'.length)), new Uint8Array(message.buffer));
+      } else {
+        this.requested.delete(message.key); // failed: let the next cell that needs it re-request
+      }
+
+      return;
+    }
+    if (message.buffer) {
+      this.blobs.set(message.key, new Uint8Array(message.buffer));
+
+      return;
+    }
+    // Failed fetch/inflate: clear the in-flight mark so the slot RETRIES next time it wants the level
+    // (a permanently-poisoned key was the original stuck-at-LOD failure mode).
+    this.requested.delete(message.key);
+    // eslint-disable-next-line no-console -- deliberate field diagnostic: a silent retry loop hid the stuck-at-LOD bug once already
+    console.warn(`[stream] entry ${message.key} failed: ${message.error ?? 'unknown'} — will retry`);
+  }
+
   /** Backpressure (whip-bench finding: 736 MB heap): fetched blobs whose slot no longer wants that level
    *  are DROPPED (with their in-flight mark, so a future desire re-fetches). Camera whips order far more
    *  data than the 1-create/frame budget can consume — without pruning it piles up in the worker handoff. */
@@ -307,6 +350,22 @@ export class StreamingDriver {
       if (!slot || slot.keys[slot.pending ?? 'hd'] !== key || slot.pending === null) {
         this.blobs.delete(key);
         this.requested.delete(key);
+      }
+    }
+  }
+
+  /** Drop this cell's claims; an array nothing draws with any more is destroyed. */
+  private releaseTextures(key: string): void {
+    for (const ref of this.manifest.cells[key].textures ?? []) {
+      const users = this.arrayUsers.get(ref);
+      if (!users) {
+        continue;
+      }
+      users.delete(key);
+      if (users.size === 0) {
+        this.arrayUsers.delete(ref);
+        this.engine.textures.unload(ref);
+        this.requested.delete(`array-${ref}`);
       }
     }
   }
@@ -323,10 +382,55 @@ export class StreamingDriver {
     } satisfies PakWorkerRequest);
   }
 
+  /**
+   * Whether every array this cell draws with is uploaded, requesting the missing ones. A pak built before
+   * the `textures` field carries no refs — those districts loaded every array eagerly at boot, so there is
+   * nothing to wait for and this is trivially true.
+   */
+  private texturesReady(key: string): boolean {
+    const refs = this.manifest.cells[key]?.textures;
+    if (refs === undefined) {
+      return true;
+    }
+    let ready = true;
+    for (const ref of refs) {
+      if (this.engine.textures.has(ref)) {
+        continue;
+      }
+      ready = false;
+      const arrayKey = `array-${ref}`;
+      if (!this.requested.has(arrayKey)) {
+        const entry = this.manifest.textures[arrayKey];
+        if (!entry) {
+          // A cell naming an array the pak does not carry — a converter bug. The cell stays unbuilt rather
+          // than crashing the frame in `cells.load`, but it must SAY so: a silently absent cell is the
+          // failure mode this project keeps paying for.
+          if (!this.warnedArrays.has(ref)) {
+            this.warnedArrays.add(ref);
+            // eslint-disable-next-line no-console -- a malformed pak must not fail silently
+            console.warn(`[stream] cell ${key} needs ${arrayKey}, which the pak does not carry`);
+          }
+          continue;
+        }
+        this.requested.add(arrayKey);
+        this.worker.postMessage({
+          ...(entry.enc !== undefined ? { enc: entry.enc } : {}),
+          key: arrayKey,
+          length: entry.length,
+          offset: entry.offset,
+          type: 'fetch',
+        } satisfies PakWorkerRequest);
+      }
+    }
+
+    return ready;
+  }
+
   private unload(slot: CellSlot): void {
     const currentKey = slot.current ? slot.keys[slot.current] : undefined;
     if (currentKey !== undefined) {
       this.engine.cells.unload(currentKey);
+      this.releaseTextures(currentKey);
       this.requested.delete(currentKey);
     }
     slot.current = null;

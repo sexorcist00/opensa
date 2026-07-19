@@ -406,7 +406,12 @@ the pipeline path.
 - [x] Phase 3 step 3 — local-loader ingest: `partitionEntries` prefers `<base>.osm` and pulls the
       MODEL-named `<base>.ostex` with it; `looseGroup` routes both. Everything downstream
       (`filesForGroup`, `readEntry`) was already extension-agnostic.
-- [ ] Phase 4 — named cell/texture files under `<out>/opensa/`, per-ring texture laziness, one loader
+- [x] Phase 4 step 1 — per-ring texture laziness, ON THE CONTAINER (cell entries carry `textures`; the
+      driver loads an array with the first cell that draws it and releases it with the last). No file split
+      was needed — see the ledger for why, and for the measurement that says the planner's global array
+      packing, not the loading policy, is the residency lever.
+- [ ] Phase 4 — named cell/texture files under `<out>/opensa/`, one loader — **now unjustified**: the
+      laziness it was meant to enable shipped without it. Needs a fresh reason before it is built.
 - [ ] Phase 4 — manifest shrunk to the rule; `timecyc`/`timecyc24`/`setup.timecyc` deleted
 - [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
 - [ ] Phase 5 — peds, clutter, breakables, anim objects, map objects; probe CLIs + fixtures retired
@@ -519,6 +524,39 @@ and `looseGroup` did.
 
 `engine-debris.ts` needed a real fix beyond the swap: its texture map used `set` unconditionally, so with a
 chain the PARENT would have overwritten the child. Now it skips names a nearer TXD already defined.
+
+**Phase 4 step 1 (2026-07-19) — per-ring texture residency: SHIPPED, and the measurement says it is not
+the lever we thought.**
+
+Two premises this plan carried turned out to be wrong, and both were checked before writing code:
+
+1. **Loose files are NOT what enables laziness.** `manifest.textures` was already `"array-<id>" → {offset,
+length, format, w, h, layers}` — every array individually range-addressable inside the container. The
+   ~767 MB boot was `setup.ts:57` ("request all, await all, upload"), i.e. the POLICY, not the format. So
+   laziness shipped on the container, with no file split and no format change.
+2. **Laziness barely moves peak residency.** Whole-map convert (`--rect -12,-12,11,11`, stock game,
+   1 121 cell entries / 99 arrays / **165 MB** of GPU texture):
+
+| Measure                                 | Value                                       |
+| --------------------------------------- | ------------------------------------------- |
+| resident at a focus (HD 380 / LOD 1000) | median **139 MB (84 %)**, max 163 MB (99 %) |
+| saved vs the eager boot                 | median **26 MB**, worst case **2 MB**       |
+| arrays touched by >25 % of ALL cells    | **17 of 99 — 95 MB of the 165 MB**          |
+| cells per array                         | median **93**, max 691                      |
+
+**Diagnosis: `TexturePlanner` packs arrays GLOBALLY.** A map-wide atlas is drawn by cells everywhere, so no
+loading policy can evict it — wherever you stand, most of the district's bytes are legitimately in use. The
+real residency lever is spatial locality in the planner (pack an array from cells that neighbour each
+other), which is its own plan, not a phase of this one.
+
+**Kept anyway**, because it is correct, cheap and backwards compatible, and it removes a real BOOT STALL
+that peak-memory numbers do not show: boot no longer awaits all 99 arrays before the first cell can record —
+it awaits only what the first ring needs, and the rest stream in behind the create budget.
+
+**Measurement caveat, and it is the same trap this ledger already records twice:** these numbers come from
+`game-src/non-modified`, NOT from the map-optimizer output production actually ships (which carries mip
+chains on 53 % of map textures). The absolute MB are therefore a floor. The RATIO is the meaningful part
+and is structural — higher-resolution textures scale both sides equally.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

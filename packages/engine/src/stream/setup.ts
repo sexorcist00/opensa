@@ -3,8 +3,8 @@ import type { OspakManifest } from '@opensa/engine-formats';
 import { validateOspakManifest } from '@opensa/engine-formats';
 
 /**
- * Streaming-mode bootstrap (plan 074/05): manifest → worker (pak lives worker-side) → texture arrays up-front
- * (district-shared; cells can't record without them) → a ready StreamingDriver.
+ * Streaming-mode bootstrap (plan 074/05): manifest → worker (pak lives worker-side) → texture arrays
+ * (eagerly for a pre-`textures` pak; PER RING otherwise, driven by the streamer) → a ready StreamingDriver.
  */
 import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
@@ -54,8 +54,12 @@ export async function setupStreaming(
     worker.postMessage({ type: 'init', url: `${baseUrl}/world.ospak` } satisfies PakWorkerRequest);
   });
 
-  // Texture arrays up-front: request all, await all, upload (order-independent).
-  const textureEntries = Object.entries(manifest.textures);
+  // Texture arrays up-front — ONLY for a pak that does not say which cell needs which array (003 phase 4).
+  // When every cell entry carries `textures`, the streaming driver loads an array with the first cell that
+  // draws it and releases it with the last: the district's whole texture set (~1.7 GB on a full map) never
+  // has to be resident, and boot stops paying for the far side of the world.
+  const lazyTextures = Object.values(manifest.cells).every((entry) => entry.textures !== undefined);
+  const textureEntries = lazyTextures ? [] : Object.entries(manifest.textures);
   await new Promise<void>((resolve) => {
     let remaining = textureEntries.length;
     if (remaining === 0) {
