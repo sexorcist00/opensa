@@ -793,6 +793,28 @@ that outlier is the first call warming up, not steady state.
 new car TYPE — which plan 21 moved into a worker to HIDE — is GONE rather than hidden, and what remains is
 a fifth of a millisecond. Caveats: Node, not the browser, and no GPU upload is included in either column.
 
+**Phase 5g step 1 (2026-07-19) — the per-model dictionary, planned from the RAW TXD.** The prerequisite for
+map objects: converting 14 000 of them through `packModelOstex` would bake a single mip level into 95 % of
+the modded textures, i.e. ship assets WORSE than the DFFs they replace.
+
+`planModelTextures` reuses the WORLD planner, one instance per model. That inherits, with no second
+implementation: the opaque-DXT pass-through that preserves the source chain byte for byte, the `txdp` walk,
+the alpha pipeline for everything else, flat-colour materials, and content dedup. A fresh instance numbers
+its arrays from 0, so `arrayRef` IS the model's array index — which is exactly the `(array, layer)`
+addressing `TEXS` already carries.
+
+Its test runs on a REAL modded map object, because a stock fixture cannot prove the point (the stock game
+barely ships mips). `scripts/test-fixtures.ts` gained a `mod` fixture kind for it — the production input IS
+a modded game — and the fixture is `chinatown_sfe1.dff` + `chinatownsfe.txd` from `17. Chinatown Project`:
+19 material textures, several 512² DXT1 with **10 mip levels**. The test asserts the chain survives, that
+the model needs MORE than one array, that no slot points at a missing array, and that every material
+resolves.
+
+**Still open for map objects** (the remaining `5g` work): remapping `meta.x` from the builder's layer order
+onto the planned slots, a per-submesh ARRAY index on the rigid path (vehicles keep `meta.x` for the lamp
+twin, so the array index rides alongside rather than replacing it), night vertex colours, and only then the
+~14 000-model bulk convert.
+
 ### What the MODS carry, and what the per-model format still drops (audit, 2026-07-19)
 
 The production input is not the stock game: `mods-src/mods` holds **57 mods (1.1 GB)** that mod-installer

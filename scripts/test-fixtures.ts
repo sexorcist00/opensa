@@ -27,7 +27,9 @@ import { dirname, join } from 'node:path';
 type Fixture =
   | { readonly dest: string; readonly entry: string; readonly type: 'archive' }
   | { readonly dest: string; readonly entry: string; readonly type: 'extract' }
-  | { readonly dest: string; readonly from: string; readonly type: 'copy' };
+  | { readonly dest: string; readonly from: string; readonly type: 'copy' }
+  /** Copied from `mods-src/`, not from the game dir — see {@link MOD_MANIFEST}. */
+  | { readonly dest: string; readonly from: string; readonly type: 'mod' };
 
 const gameIndex = process.argv.indexOf('--game');
 const GAME = gameIndex >= 0 ? process.argv[gameIndex + 1] : 'non-modified';
@@ -36,7 +38,22 @@ const ARCHIVES = ['models/gta3.img', 'models/gta_int.img'];
 const OUT = 'tests/original';
 
 const copy = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'copy' });
+const modFile = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'mod' });
 const extract = (entry: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, entry, type: 'extract' });
+
+/**
+ * Assets copied from `mods-src/mods` rather than the game dir.
+ *
+ * opensa-pack's PRODUCTION input is not a stock game: mod-installer bakes these mods into the archives
+ * before it runs. They also carry things the stock game barely has — 95 % of their textures ship a mip
+ * chain (up to 12 levels, 2048 px) — so "the converted dictionary preserves the chain" can only be tested
+ * against one of them.
+ */
+const MOD_MANIFEST: readonly Fixture[] = [
+  // A Chinatown building + its dictionary: 19 material textures, several 512² DXT1 with 10 mip levels.
+  modFile('17. Chinatown Project v2 + Chinese Lamps/gta3_img/chinatown_sfe1.dff', 'mods/chinatown_sfe1.dff'),
+  modFile('17. Chinatown Project v2 + Chinese Lamps/gta3_img/chinatownsfe.txd', 'mods/chinatownsfe.txd'),
+];
 
 const MANIFEST: readonly Fixture[] = [
   // --- Loose data / config / text files (copied verbatim) ---
@@ -177,13 +194,16 @@ function produce(fixture: Fixture): null | Uint8Array {
     case 'extract': {
       return extractEntry(fixture.entry);
     }
+    case 'mod': {
+      return new Uint8Array(readFileSync(join('mods-src', 'mods', fixture.from)));
+    }
   }
 }
 
 let written = 0;
 const missing: string[] = [];
 
-for (const fixture of MANIFEST) {
+for (const fixture of [...MANIFEST, ...MOD_MANIFEST]) {
   let data: null | Uint8Array = null;
   try {
     data = produce(fixture);
@@ -211,7 +231,7 @@ try {
   missing.push(`${OUT}/data/timecyc_24h.dat`);
 }
 
-console.log(`test:fixtures (${GAME}): wrote ${written}/${MANIFEST.length + 1} into ${OUT}/`);
+console.log(`test:fixtures (${GAME}): wrote ${written}/${MANIFEST.length + MOD_MANIFEST.length + 1} into ${OUT}/`);
 if (missing.length > 0) {
   console.error(`\n  MISSING ${missing.length} — source not found in ${ROOT}:`);
   for (const dest of missing) {
