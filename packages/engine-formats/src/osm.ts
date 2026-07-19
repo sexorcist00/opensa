@@ -32,6 +32,8 @@ export const OsmSectionTag = {
   DESC: osmTag('DESC'),
   /** Geometry payload: the concatenated vertex/index buffers `DESC` lays out. */
   GEOM: osmTag('GEOM'),
+  /** A topple prop's collider point cloud + fallback box — no second clump walk when it is knocked over. */
+  HULL: osmTag('HULL'),
   /** A smashable prop's baked shatter mesh — no DFF parse on the first hit (phase 5). */
   SHAT: osmTag('SHAT'),
   /**

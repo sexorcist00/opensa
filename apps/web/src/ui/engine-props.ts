@@ -12,8 +12,10 @@ import type { Engine, VehicleInstance, VehicleModelId } from '@opensa/engine';
 import type { PhysicsWorld } from '@opensa/game/physics/physics-world';
 import type { AssetFileSystem } from '@opensa/renderware';
 
+import { decodeOsm, decodeOsmHull, osmSection, OsmSectionTag } from '@opensa/engine-formats';
 import { gtaPositionToEngine, writeGtaRoot } from '@opensa/game/adapters/engine-vehicle-handle';
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
+import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
 import { getClump, getTxdChain } from '@opensa/renderware/archive/asset-cache';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
@@ -66,10 +68,16 @@ export function setupEngineProps(engine: Engine, fs: AssetFileSystem, physics: P
     }
     let id: null | VehicleModelId = null;
     try {
-      const clump = getClump(fs, request.modelName);
-      const txds = request.txdName ? getTxdChain(fs, request.txdName) : [];
-      const model = buildVehicleModel(clump, new VehicleTextures(txds));
-      id = engine.createVehicleModel(toRigidModelInit(model));
+      // OPTIMIZED first (opensa-pack 003): the prop's `.osm`, read as sections. Falls back to the DFF/TXD
+      // parse for anything unconverted or overridden by a mod.
+      const osm = fs.get(`${request.modelName.toLowerCase()}.osm`);
+      if (osm) {
+        id = engine.createVehicleModel(readModelOsm(request.modelName, new Uint8Array(osm)).model);
+      } else {
+        const clump = getClump(fs, request.modelName);
+        const txds = request.txdName ? getTxdChain(fs, request.txdName) : [];
+        id = engine.createVehicleModel(toRigidModelInit(buildVehicleModel(clump, new VehicleTextures(txds))));
+      }
     } catch {
       id = null; // not renderable as an entity — the prop just disappears, rather than crashing the frame
     }
@@ -175,11 +183,35 @@ function awayFrom(
   return [1, 0, 0];
 }
 
-/** The prop in MODEL space: its vertices (the collider's hull) plus a bounding box as the fallback. */
+/** The `HULL` section of `<prop>.osm`, when the converter wrote one. */
+function bakedHull(fs: AssetFileSystem, modelName: string): null | ReturnType<typeof decodeOsmHull> {
+  const osm = fs.get(`${modelName.toLowerCase()}.osm`);
+  if (!osm) {
+    return null;
+  }
+  try {
+    const section = osmSection(decodeOsm(new Uint8Array(osm)), OsmSectionTag.HULL);
+
+    return section ? decodeOsmHull(section) : null;
+  } catch {
+    return null; // a malformed `.osm` falls back to the clump walk rather than killing the topple
+  }
+}
+
+/**
+ * The prop in MODEL space: its vertices (the collider's hull) plus a bounding box as the fallback.
+ *
+ * A converted prop carries this as a baked `HULL` section, so toppling it no longer walks the clump a
+ * second time (opensa-pack 003 phase 5). The walk below stays for the unoptimized path.
+ */
 function boundsOf(
   fs: AssetFileSystem,
   modelName: string,
 ): null | { centre: [number, number, number]; half: [number, number, number]; hull: Float32Array } {
+  const baked = bakedHull(fs, modelName);
+  if (baked) {
+    return { centre: [...baked.centre], half: [...baked.half], hull: baked.points };
+  }
   const min: [number, number, number] = [Infinity, Infinity, Infinity];
   const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
   const points: number[] = [];

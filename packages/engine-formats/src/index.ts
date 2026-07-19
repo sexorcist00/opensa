@@ -37,6 +37,7 @@ export {
   type OsmCollisionBox,
   type OsmCollisionSphere,
 } from './osm-collision';
+export { decodeOsmHull, encodeOsmHull, type OsmHull } from './osm-hull';
 export { decodeOsmShatter, encodeOsmShatter, type OsmShatter, type OsmShatterMaterial } from './osm-shatter';
 export {
   buildOspak,

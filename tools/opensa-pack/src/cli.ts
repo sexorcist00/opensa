@@ -43,6 +43,7 @@ import { WaterHeightGrid } from './height-grid';
 import { createModelBundles } from './model-bundle';
 import { packBreakables } from './pack-breakables';
 import { packClutter } from './pack-clutter';
+import { packProps } from './pack-props';
 import { packVehicles } from './pack-vehicles';
 import { bakeWater } from './water';
 
@@ -192,6 +193,8 @@ function optimizeModelArchives(fs: ReturnType<typeof openGameDir>, defs: MapDefi
   const breakables = packBreakables(fs, breakableModelsFromText(fs.getText('data/object.dat')), bundles, log);
   // Clutter species (5c): the HOT by-name class — a species builds on cell stream-in, not on a rare event.
   const clutter = packClutter(fs, defs, bundles, log);
+  // Topple props (5d): the collider hull the host otherwise collects with a SECOND clump walk per prop.
+  const props = packProps(fs, defs, bundles, log);
   const rewrite = rewriteModelArchives(out, { deletes: vehicles.deletes, inserts: bundles.inserts() });
   for (const archive of rewrite.archives) {
     log(
@@ -212,9 +215,12 @@ function optimizeModelArchives(fs: ReturnType<typeof openGameDir>, defs: MapDefi
   for (const failure of clutter.failed) {
     console.warn(`[opensa-pack] ⚠ clutter '${failure.model}' not converted: ${failure.error}`);
   }
+  for (const failure of props.failed) {
+    console.warn(`[opensa-pack] ⚠ prop '${failure.model}' not converted: ${failure.error}`);
+  }
   log(`${bundles.size()} models bundled; archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 
-  return { breakables, clutter, rewrite, vehicles: vehicles.report };
+  return { breakables, clutter, props, rewrite, vehicles: vehicles.report };
 }
 
 /** Parse a de-tiling list: plain names (one per line, `#` comments) OR skygfx `texdb.txt` lines

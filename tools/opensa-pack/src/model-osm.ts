@@ -10,6 +10,7 @@
  * unoptimized path would have produced.
  */
 import type { AssetFileSystem } from '@opensa/renderware/archive/asset-fs';
+import type { RWClump } from '@opensa/renderware/parsers/binary/types';
 import type { VehicleFixture, VehicleModelData } from '@opensa/renderware/vehicle/types';
 
 import { encodeOsm, type OsmSection, OsmSectionTag } from '@opensa/engine-formats';
@@ -32,8 +33,14 @@ export interface ModelOsm {
 }
 
 export interface ModelOsmOptions {
-  /** Sections beyond `DESC`/`GEOM` — collision for a vehicle, a skeleton for an animated object. */
-  extraSections?: (built: VehicleModelData, dff: ArrayBuffer) => OsmSection[];
+  /**
+   * Sections beyond `DESC`/`GEOM`/`TEXS` — collision for a vehicle, a hull for a topple prop.
+   *
+   * The raw CLUMP is passed as well as the built model on purpose: a runtime consumer that walks the clump
+   * (the topple hull does) must be baked from the clump, not from the built positions, or the two disagree
+   * wherever the builder bakes a frame transform.
+   */
+  extraSections?: (built: VehicleModelData, dff: ArrayBuffer, clump: RWClump) => OsmSection[];
   /**
    * Shared dictionaries appended AFTER the model's own, lowest priority — the vehicle path's generic set.
    * Ordinary map models have none.
@@ -61,7 +68,8 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
       .filter((bytes): bytes is ArrayBuffer => bytes !== null && bytes !== undefined),
   ];
 
-  const built = buildVehicleModel(parseDff(dff), new VehicleTextures(txds), {
+  const clump = parseDff(dff);
+  const built = buildVehicleModel(clump, new VehicleTextures(txds), {
     ...(options.wheelScale ? { wheelScale: options.wheelScale } : {}),
   });
   const { bin, fixture } = packVehicleFixture(name, built);
@@ -70,7 +78,7 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
     { bytes: new TextEncoder().encode(JSON.stringify(fixture)), tag: OsmSectionTag.DESC },
     { bytes: bin, tag: OsmSectionTag.GEOM },
     { bytes: ostex, tag: OsmSectionTag.TEXS },
-    ...(options.extraSections?.(built, dff) ?? []),
+    ...(options.extraSections?.(built, dff, clump) ?? []),
   ];
 
   return { built, bytes: encodeOsm(sections), fixture, ostex, sections };

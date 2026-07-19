@@ -418,6 +418,7 @@ the pipeline path.
 - [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
 - [x] Phase 5a — `ClutterModelInit`/`DebrisUpload` widened to `ModelTextureInit` (ped left for its own step)
 - [x] Phase 5b — `SHAT` section + `packBreakables` + `getBreakable` reading it (252 props, 1.6 MB)
+- [x] Phase 5d — topple props: `HULL` section (dedup'd collider cloud + fallback box), read by `boundsOf`
 - [x] Phase 5c — clutter species converted + read on the cell-stream path (56/56); `TEXS` section replaces
       the sibling `.ostex`; `ModelBundles` merges every class's sections into ONE `.osm` per model
 - [ ] Phase 5 — peds, clutter, anim objects, map objects; probe CLIs + fixtures retired
@@ -642,6 +643,25 @@ rendering, residency 649 MB vs 713 MB on the stock build (BC dictionaries).
 
 `cutout` for clutter now comes from the `.ostex` layer classes instead of scanning every alpha byte — the
 converter already classified them, and a compressed payload has no bytes to scan.
+
+**Phase 5d (2026-07-19) — topple props.** Toppling a lamppost cost TWO clump walks: one to build the
+renderable, one to collect every vertex for the collider. `HULL` bakes the second.
+
+- The cloud is **deduplicated**, which cannot move the collider: the host hands Rapier a point CLOUD and
+  Rapier hulls it, and a convex hull is determined by the point SET. Measured: **32 554 of 73 194 points
+  kept (44 %)**, whole set 0.4 MB. `lamppost1` alone: 81 → 29 points, `centre`/`half` identical to the
+  stock walk.
+- The hull is baked from the **raw CLUMP**, not from the built model's positions. `buildVehicleModel` can
+  bake a frame transform into its output, and the host walks the clump — using the built positions would
+  have silently moved the collider on any multi-part prop. (`extraSections` now receives the clump for
+  exactly this.)
+- **The bundle guard fired for real**, and taught the packers a rule: 11 topple props are ALSO clutter
+  species (cacti, joshua trees, firs), so the rigid sections were already contributed. A class now checks
+  `hasSection` and adds only what it adds — the guard stays a hard error for genuine disagreement.
+
+351 of 382 converted; the 31 failures are all `object.dat` naming a model no archive holds. **208 models
+carry `GEOM` + `HULL` + `SHAT` together** — a file-per-class design would have silently dropped sections on
+every one of them.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

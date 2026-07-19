@@ -18,6 +18,8 @@ import type { ArchiveInsert } from './archive-edit';
 export interface ModelBundles {
   /** Add a class's contribution to `model`. Repeated tags are rejected — two classes may not both claim one. */
   add(model: string, contribution: ModelContribution): void;
+  /** Whether `model` already carries `tag` — a later class then contributes only what it adds. */
+  hasSection(model: string, tag: number): boolean;
   /** Every accumulated model as archive inserts — ONE `.osm` each; the dictionary rides in `TEXS`. */
   inserts(): ArchiveInsert[];
   /** Number of distinct models accumulated. */
@@ -44,6 +46,9 @@ export function createModelBundles(): ModelBundles {
         bundle.sections.push(section);
       }
       bundles.set(name, bundle);
+    },
+    hasSection(model: string, tag: number): boolean {
+      return bundles.get(model.toLowerCase())?.sections.some((section) => section.tag === tag) ?? false;
     },
     inserts(): ArchiveInsert[] {
       const out: ArchiveInsert[] = [];
