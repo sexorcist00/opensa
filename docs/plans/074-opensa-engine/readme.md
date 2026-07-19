@@ -114,10 +114,20 @@ then fixed in their own commit the same session:
 `flags.ts` (22 names, most read once, two hosts with different defaults); the reasoning is in the doc so
 it can be re-decided.
 
-**Next per the agreed sequence:** ③ the **opensa-pack REWORK** ([074/14](14-pmb-integration.md)) — output
-becomes "almost a copy of the game in our format" with loose live-tunable files (timecyc first) as FILES
-next to the pak → ④ the lab consumes that output like a game dir, and `manifest.timecyc` + `setup.timecyc`
-die. Post-flip perf lever unchanged: per-ring texture laziness (~767 MB world-array boot baseline).
+**Next per the agreed sequence:** ③ the **opensa-pack REWORK** — **DONE 2026-07-19**, in its own plan
+[`tools/opensa-pack/docs/plans/003-game-shaped-output.md`](../../../tools/opensa-pack/docs/plans/003-game-shaped-output.md)
+(phases 0–6, closed). `--out` is a game-dir copy, every class in the archives converts (including the
+~14 000 map objects, against the SHARED world dictionary), and opensa-pack is a perfect-map-builder `pack`
+STAGE. The one thing left there is a full pmb run, which the USER does. → ④ the lab consumes that output
+like a game dir ([plan 078](../078-viewers-lab-on-pmb-output.md)); `manifest.timecyc` + `setup.timecyc` are
+already gone. Post-flip perf lever unchanged: per-ring texture laziness (~767 MB world-array boot baseline).
+
+**Engine changes that arrived WITH the converter rework** (they alter how anything drawn BY NAME looks, so
+a look-round must know): the rigid path reads PRELIT and NIGHT vertex colours (map objects were rendering
+~3× too bright; cars are untouched — none carries a prelit set), `vsRigid` emits on the cell path's
+night−day luma heuristic, clutter reads its authored night set instead of guessing, a rigid submesh names
+a texture ARRAY (with world-array models binding the shared cell textures), and `buildVehicleModel` emits
+vertices per MATERIAL GROUP — fixing wrong per-vertex attributes on 6.9 % of map models on BOTH paths.
 
 ## Handoff status (2026-07-16 — history)
 

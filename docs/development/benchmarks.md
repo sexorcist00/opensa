@@ -89,9 +89,13 @@ the tab with `?soak=30`, come back in half an hour, read the line (heap/longtask
 
 Runs all of the above in headless Chromium — no human, no screenshots from the user. Two pieces:
 
+The served dir must be an **opensa-pack `--out`**, not a raw game: since opensa-pack plan 003 the engine
+host loads the player by name and refuses to boot without it (`player model male01.osm not found — run
+opensa-pack over the game dir`).
+
 ```bash
-# 1. serve a game install (the play profile) with Range + CORS
-node tools-debug/bench-harness/game-server.js /path/to/NO_COMMIT/optimized 8787
+# 1. serve a CONVERTED game install (an opensa-pack --out) with Range + CORS
+node tools-debug/bench-harness/game-server.js /path/to/converted-game 8787
 
 # 2. vite dev server at the repo root
 npm run dev
