@@ -1,4 +1,4 @@
-import type { AssetFileSystem } from '@opensa/renderware';
+import type { AssetFileSystem, MapDefinitions } from '@opensa/renderware';
 
 import {
   buildOspak,
@@ -104,7 +104,7 @@ interface WeldRectContext {
 export async function convertDistrict(
   fs: AssetFileSystem,
   options: ConvertOptions,
-): Promise<{ manifest: OspakManifest; pak: Uint8Array; report: ConvertReport }> {
+): Promise<{ defs: MapDefinitions; manifest: OspakManifest; pak: Uint8Array; report: ConvertReport }> {
   await MeshoptEncoder.ready;
   const cellSize = options.cellSize ?? 250;
   const defs = resolveMap(fs, { extraIpl: OPEN_SCRIPT_IPL });
@@ -240,7 +240,7 @@ export async function convertDistrict(
   });
   report.pakBytes = pak.byteLength;
 
-  return { manifest, pak, report };
+  return { defs, manifest, pak, report };
 }
 
 function accumulate(report: ConvertReport, key: string, bytes: number, stats: WeldStats): void {

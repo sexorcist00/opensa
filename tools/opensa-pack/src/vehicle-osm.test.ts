@@ -41,14 +41,14 @@ describe('readVehicleOsm', () => {
     it('throws when a section is missing rather than returning a half-model', () => {
       const truncated = built().bytes.subarray(0, 16);
 
-      expect(() => readVehicleOsm('admiral', truncated, built().ostex)).toThrow();
+      expect(() => readVehicleOsm('admiral', truncated)).toThrow();
     });
   });
 
   describe('positive cases', () => {
     it('recovers the geometry the writer packed, buffer for buffer', () => {
       const source = built();
-      const read = readVehicleOsm('admiral', source.bytes, source.ostex);
+      const read = readVehicleOsm('admiral', source.bytes);
       const model = read.model;
 
       expect(model.vertexCount).toBe(source.fixture.vertexCount);
@@ -61,16 +61,17 @@ describe('readVehicleOsm', () => {
       expect(model.indices.byteLength).toBe(model.indexCount * 2);
     });
 
-    it('carries the texture dictionary as `.ostex` bytes, uncompressed by nobody', () => {
+    it('carries the texture dictionary in the container, uncompressed by nobody', () => {
       const source = built();
-      const read = readVehicleOsm('admiral', source.bytes, source.ostex);
+      const read = readVehicleOsm('admiral', source.bytes);
 
-      expect(read.model.texture).toEqual({ bytes: source.ostex, kind: 'ostex' });
+      expect(read.model.texture.kind).toBe('ostex');
+      expect(read.model.texture.kind === 'ostex' && read.model.texture.bytes).toEqual(source.ostex);
     });
 
     it('bakes the collision the runtime would otherwise parse at spawn', () => {
       const source = built();
-      const read = readVehicleOsm('admiral', source.bytes, source.ostex);
+      const read = readVehicleOsm('admiral', source.bytes);
       const col = parseDffCollision(fs.get('admiral.dff')!)!;
 
       expect(source.hasCollision).toBe(true);
@@ -82,7 +83,7 @@ describe('readVehicleOsm', () => {
 
     it('keeps the articulation the handle animates (doors, wheels, submeshes)', () => {
       const source = built();
-      const read = readVehicleOsm('admiral', source.bytes, source.ostex);
+      const read = readVehicleOsm('admiral', source.bytes);
 
       expect(read.rig.submeshes).toEqual(source.fixture.submeshes);
       expect(read.rig.doors).toEqual(source.fixture.doors);
@@ -92,7 +93,7 @@ describe('readVehicleOsm', () => {
 
     it('agrees with the unoptimized build it replaces — same vertices, same submeshes', () => {
       const source = built();
-      const read = readVehicleOsm('admiral', source.bytes, source.ostex);
+      const read = readVehicleOsm('admiral', source.bytes);
       const clump = parseDff(fs.get('admiral.dff')!);
 
       // The writer used the runtime's own builder, so a drift here means the FORMAT lost something.
@@ -191,8 +192,7 @@ function convertedFiles(): Map<string, ArrayBuffer> {
   const osm = buildVehicleOsm(fsFrom(files), 'admiral', { txd: def.txd.toLowerCase(), wheelScale: def.wheelScale });
   files.delete('admiral.dff');
   files.delete('admiral.txd');
-  files.set('admiral.osm', bufferOf(osm.bytes));
-  files.set('admiral.ostex', bufferOf(osm.ostex));
+  files.set('admiral.osm', bufferOf(osm.bytes)); // the dictionary rides inside, in `TEXS`
 
   return files;
 }

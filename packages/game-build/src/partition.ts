@@ -86,8 +86,8 @@ export function looseGroup(name: string): GroupName {
  * - models: each referenced model as `.osm` if opensa-pack converted it, else `.dff` (gta3 → gta_int),
  *   plus every `.col` from gta3.img;
  * - others: every placement/anim/data file (ipl/ifp/dat) from gta3.img;
- * - textures: a converted model's own `<model>.ostex`, plus the stock `.txd` of whatever stayed
- *   unoptimized (gta3 → gta_int).
+ * - textures: the stock `.txd` of whatever stayed unoptimized (a converted model carries its dictionary
+ *   inside its own `.osm`).
  *
  * Anything present in neither img is dropped. Missing OUR extensions here is the same class of bug as the
  * procobj miss (plans 19/20): a converted asset the local loader never ingests is a silent no-render, not
@@ -114,12 +114,10 @@ export function partitionEntries(refs: PlacedRefs, gta3: ReadonlySet<string>, gt
   };
 
   for (const base of refs.models) {
-    // Our optimized pair first (opensa-pack 003). The dictionary is named after the MODEL, not after the
-    // IDE's txd: several models can share one stock `.txd`, but a converted model indexes its OWN baked
-    // atlas by layer index, so `<base>.osm` is only meaningful beside `<base>.ostex`.
-    if (take(`${base}.osm`, models)) {
-      take(`${base}.ostex`, textures);
-    } else {
+    // Our optimized model first (opensa-pack 003). It carries its own dictionary in a `TEXS` section, so
+    // unlike the stock pair it is a SINGLE entry — a VER2 name caps at 23 bytes and `<model>.ostex` did not
+    // fit 457 of the ~14 900 stock models.
+    if (!take(`${base}.osm`, models)) {
       take(`${base}.dff`, models);
     }
   }

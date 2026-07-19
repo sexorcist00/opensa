@@ -84,26 +84,23 @@ describe('partitionEntries', () => {
    * would be a silent no-render, not an error — the procobj class of bug.
    */
   describe('a partly converted archive', () => {
-    const converted = new Set(['house.osm', 'house.ostex', 'htex.txd', 'roads.col', 'shed.dff']);
+    const converted = new Set(['house.osm', 'htex.txd', 'roads.col', 'shed.dff']);
     const partition = partitionEntries(placedModels([1, 2], ide), converted, new Set());
 
-    it('takes the .osm over the .dff and brings the model-named .ostex with it', () => {
+    it('takes the .osm over the .dff — one entry, dictionary included', () => {
       expect(names(partition.models)).toEqual(['house.osm', 'roads.col', 'shed.dff']);
-      expect(names(partition.textures)).toContain('house.ostex');
     });
 
     it('still takes the stock txd for the model that stayed unoptimized', () => {
       // `shed` shares `htex` with `house`; the shared dictionary must survive for shed's sake.
-      expect(names(partition.textures)).toEqual(['house.ostex', 'htex.txd']);
+      expect(names(partition.textures)).toEqual(['htex.txd']);
     });
 
-    it('ingests the pair even when only the optimized names exist', () => {
-      const only = new Set(['house.osm', 'house.ostex']);
-
-      const fully = partitionEntries(placedModels([1], ide), only, new Set());
+    it('needs no texture entry at all once every model is converted', () => {
+      const fully = partitionEntries(placedModels([1], ide), new Set(['house.osm']), new Set());
 
       expect(names(fully.models)).toEqual(['house.osm']);
-      expect(names(fully.textures)).toEqual(['house.ostex']);
+      expect(names(fully.textures)).toEqual([]);
     });
   });
 });
@@ -115,9 +112,9 @@ describe('looseGroup', () => {
       expect(looseGroup('data/maps/la.ipl')).toBe('data');
     });
 
-    it('routes our optimized twins to the same groups as the stock pair', () => {
+    it('routes our optimized model to the models group, and a loose world .ostex to textures', () => {
       expect(looseGroup('vehicles/admiral.osm')).toBe('models');
-      expect(looseGroup('vehicles/admiral.ostex')).toBe('textures');
+      expect(looseGroup('opensa/textures/7.ostex')).toBe('textures');
     });
 
     it('routes dff to models, txd to textures, and the rest (ifp/gxt) to others', () => {

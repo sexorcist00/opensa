@@ -34,6 +34,15 @@ export const OsmSectionTag = {
   GEOM: osmTag('GEOM'),
   /** A smashable prop's baked shatter mesh — no DFF parse on the first hit (phase 5). */
   SHAT: osmTag('SHAT'),
+  /**
+   * The model's texture dictionary: a complete `.ostex` payload, carried INSIDE the container.
+   *
+   * It was a sibling `<model>.ostex` file until phase 5 measured the archive: a VER2 entry name is capped
+   * at 23 bytes, and `.ostex` is two characters longer than `.txd`, so **457 of ~14 900 stock models could
+   * not have carried one** (`veg_procgrasspatch.ostex` = 24). `.osm` fits every name. The texture FORMAT is
+   * unchanged — this is packaging, not a new dictionary format.
+   */
+  TEXS: osmTag('TEXS'),
 } as const;
 
 export interface Osm {

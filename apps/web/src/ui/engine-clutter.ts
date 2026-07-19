@@ -5,10 +5,12 @@
  * divergence — the field lesson that cost 17 ms/step). Geometry is built through the shared vehicle-model
  * builder (a clutter model is a model with no paint), so no new extractor is needed.
  */
-import type { CellClutter, ClutterModelId, Engine } from '@opensa/engine';
+import type { CellClutter, ClutterModelId, ClutterModelInit, Engine } from '@opensa/engine';
 import type { CellClutterRender } from '@opensa/game/adapters/gta-sa-world.adapter';
 import type { AssetFileSystem } from '@opensa/renderware';
 
+import { decodeOstex, OstexAlphaClass } from '@opensa/engine-formats';
+import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
 import { getClump, getTxdChain } from '@opensa/renderware/archive/asset-cache';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
@@ -31,28 +33,7 @@ export function setupEngineClutter(engine: Engine, fs: AssetFileSystem): EngineC
     }
     let id: ClutterModelId | null = null;
     try {
-      const clump = getClump(fs, modelName);
-      const txds = getTxdChain(fs, txdName);
-      const model = buildVehicleModel(clump, new VehicleTextures(txds));
-      const bytes = (values: Float32Array): Uint8Array =>
-        new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
-      id = engine.createClutterModel({
-        colors: model.colors,
-        // Grass/bushes carry alpha (cutout/A2C); rocks/cacti are opaque — read it off the built texture.
-        cutout: hasAlpha(model.texture.rgba),
-        indices: new Uint8Array(model.indices.buffer, model.indices.byteOffset, model.indices.byteLength),
-        meta: model.meta,
-        normals: bytes(model.normals),
-        positions: bytes(model.positions),
-        texture: {
-          height: model.texture.height,
-          kind: 'rgba',
-          layers: model.texture.layers,
-          rgba: model.texture.rgba,
-          width: model.texture.width,
-        },
-        uvs: bytes(model.uvs),
-      });
+      id = engine.createClutterModel(optimized(fs, modelName) ?? unoptimized(fs, modelName, txdName));
     } catch {
       id = null;
     }
@@ -108,4 +89,59 @@ function hasAlpha(rgba: Uint8Array): boolean {
   }
 
   return false;
+}
+
+/**
+ * The OPTIMIZED build (opensa-pack 003 phase 5): the species' `.osm` — geometry and its BC dictionary read
+ * as sections, no `parseDff`, no TXD decode, on the CELL STREAM path. Null when the species is unconverted.
+ *
+ * `cutout` comes from the `.ostex` layer classes rather than from scanning every alpha byte: the converter
+ * already classified each layer, and the compressed payload has no bytes to scan.
+ */
+function optimized(fs: AssetFileSystem, modelName: string): ClutterModelInit | null {
+  const osm = fs.get(`${modelName.toLowerCase()}.osm`);
+  if (!osm) {
+    return null;
+  }
+  const { model } = readModelOsm(modelName, new Uint8Array(osm));
+  if (model.texture.kind !== 'ostex') {
+    return null;
+  }
+  const dictionary = decodeOstex(model.texture.bytes);
+
+  return {
+    colors: model.colors,
+    cutout: dictionary.layers.some((layer) => layer.alphaClass !== OstexAlphaClass.OPAQUE),
+    indices: model.indices,
+    meta: model.meta,
+    normals: model.normals,
+    positions: model.positions,
+    texture: model.texture,
+    uvs: model.uvs,
+  };
+}
+
+/** The UNOPTIMIZED build: a stock or modded DFF/TXD, parsed and built the moment the cell streams in. */
+function unoptimized(fs: AssetFileSystem, modelName: string, txdName: string): ClutterModelInit {
+  const model = buildVehicleModel(getClump(fs, modelName), new VehicleTextures(getTxdChain(fs, txdName)));
+  const bytes = (values: Float32Array): Uint8Array =>
+    new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
+
+  return {
+    colors: model.colors,
+    // Grass/bushes carry alpha (cutout/A2C); rocks/cacti are opaque — read it off the built texture.
+    cutout: hasAlpha(model.texture.rgba),
+    indices: new Uint8Array(model.indices.buffer, model.indices.byteOffset, model.indices.byteLength),
+    meta: model.meta,
+    normals: bytes(model.normals),
+    positions: bytes(model.positions),
+    texture: {
+      height: model.texture.height,
+      kind: 'rgba',
+      layers: model.texture.layers,
+      rgba: model.texture.rgba,
+      width: model.texture.width,
+    },
+    uvs: bytes(model.uvs),
+  };
 }

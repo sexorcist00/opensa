@@ -603,18 +603,14 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     if (!osm) {
       return null; // nothing at all — the unoptimized path raises the "asset not found" error
     }
-    const ostex = this.fs.get(`${name}.ostex`);
-    if (!ostex) {
-      throw new Error(`${name}.osm has no sibling ${name}.ostex — the converted pair is incomplete`);
-    }
     // The mixing rule (user decision 2026-07-18): a mod that ships only the TXD of a converted car cannot
-    // be honoured — our `.osm` indexes its atlas by baked layer index, not by texture name — so the
-    // optimized pair wins and the ignored file is named. Retexture-only car mods therefore do nothing.
+    // be honoured — our `.osm` carries its own baked atlas, indexed by layer rather than by texture name —
+    // so the optimized model wins and the ignored file is named. Retexture-only car mods do nothing.
     if (this.fs.get(`${def.txd.toLowerCase()}.txd`)) {
       this.warnAsset(`ignoring modded ${def.txd.toLowerCase()}.txd — '${name}' is an optimized model`);
     }
 
-    const vehicle = readVehicleOsm(name, new Uint8Array(osm), new Uint8Array(ostex));
+    const vehicle = readVehicleOsm(name, new Uint8Array(osm));
 
     return {
       colliders: vehicle.colliders,

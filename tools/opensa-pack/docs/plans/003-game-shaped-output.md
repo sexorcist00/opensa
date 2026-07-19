@@ -418,6 +418,8 @@ the pipeline path.
 - [ ] Phase 2 — mixing rule: half-modded asset resolves optimized-only, warning names the ignored file
 - [x] Phase 5a — `ClutterModelInit`/`DebrisUpload` widened to `ModelTextureInit` (ped left for its own step)
 - [x] Phase 5b — `SHAT` section + `packBreakables` + `getBreakable` reading it (252 props, 1.6 MB)
+- [x] Phase 5c — clutter species converted + read on the cell-stream path (56/56); `TEXS` section replaces
+      the sibling `.ostex`; `ModelBundles` merges every class's sections into ONE `.osm` per model
 - [ ] Phase 5 — peds, clutter, anim objects, map objects; probe CLIs + fixtures retired
 - [ ] Phase 5 — map-object textures must PRESERVE map-optimizer's mip chain: plan from the RAW TXD, never
       regenerate (the per-model writer emits one level, which is right for vehicles/peds only)
@@ -617,6 +619,29 @@ is the only thing the debris path resolves by name.
 Texture names stay NAMES in `SHAT`, not layer indices: debris resolves them against the prop's TXD and
 resamples onto its own 64² shard atlas, which is a different contract from the `meta.x` layer index model
 geometry uses.
+
+**Phase 5c (2026-07-19) — clutter, and two structural fixes it forced.**
+
+1. **The sibling `.ostex` had to move INSIDE the `.osm`.** A VER2 entry name caps at 23 bytes, and `.ostex`
+   is two characters longer than `.txd`: measured on the stock archives, **457 of ~14 900 models could not
+   have carried one** (`veg_procgrasspatch.ostex` = 24 bytes), while `.osm` fits every single name (0 too
+   long). The dictionary is now the `TEXS` section. The texture FORMAT is unchanged — the same `.ostex`
+   payload, carried in the container instead of beside it — so the phase-2 "no new texture format" decision
+   stands; only the packaging moved. It is also simpler: one file per model, one resolution step, and the
+   "the converted pair is incomplete" error case is gone.
+2. **One `.osm` per MODEL, not per class** (`model-bundle.ts`). A model belongs to as many classes as the
+   data says, and the archive editor dedupes inserts by name — so emitting a file per class silently drops
+   the second contribution. Found before it shipped, and confirmed on real data: `rockbrkq.osm` carries
+   `GEOM` + `SHAT` in one container because that rock is clutter AND a breakable. The accumulator rejects
+   two classes writing the same tag rather than picking a winner.
+
+Measured (`game-src/non-modified`, one cell): **56/56 species**, 2.7 MB of `.osm` of which 2.3 MB is
+dictionaries; **508 models bundled** — one fewer than the class totals sum to, which IS the merge.
+Field-checked headless against the CONVERTED game dir: 120 fps, 555 draws, vegetation and converted cars
+rendering, residency 649 MB vs 713 MB on the stock build (BC dictionaries).
+
+`cutout` for clutter now comes from the `.ostex` layer classes instead of scanning every alpha byte — the
+converter already classified them, and a compressed payload has no bytes to scan.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

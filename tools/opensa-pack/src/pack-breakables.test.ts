@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { createModelBundles } from './model-bundle';
 import { packBreakables } from './pack-breakables';
 
 const FIXTURES = join(process.cwd(), 'tests', 'original');
@@ -21,10 +22,11 @@ const MODEL = 'binnt08_la';
 const quiet = (): void => undefined;
 
 /** The archives after phase 5b: the `.dff` stays (only the shatter mesh is baked), plus a `SHAT`-only `.osm`. */
-function convertedFiles(): { files: Map<string, ArrayBuffer>; report: ReturnType<typeof packBreakables>['report'] } {
+function convertedFiles(): { files: Map<string, ArrayBuffer>; report: ReturnType<typeof packBreakables> } {
   const files = stockFiles();
-  const packed = packBreakables(fsFrom(files), [MODEL], quiet);
-  for (const insert of packed.inserts) {
+  const bundles = createModelBundles();
+  const report = packBreakables(fsFrom(files), [MODEL], bundles, quiet);
+  for (const insert of bundles.inserts()) {
     files.set(
       insert.name,
       insert.bytes.buffer.slice(
@@ -34,7 +36,7 @@ function convertedFiles(): { files: Map<string, ArrayBuffer>; report: ReturnType
     );
   }
 
-  return { files, report: packed.report };
+  return { files, report };
 }
 
 function fileOf(relative: string): ArrayBuffer {
@@ -59,11 +61,12 @@ function stockFiles(): Map<string, ArrayBuffer> {
 describe('packBreakables', () => {
   describe('negative cases', () => {
     it('reports a model that is not in the archive instead of throwing', () => {
-      const packed = packBreakables(fsFrom(new Map()), ['nosuchprop'], quiet);
+      const bundles = createModelBundles();
+      const report = packBreakables(fsFrom(new Map()), ['nosuchprop'], bundles, quiet);
 
-      expect(packed.inserts).toEqual([]);
-      expect(packed.report.skipped).toBe(1);
-      expect(packed.report.failed).toEqual([]);
+      expect(bundles.inserts()).toEqual([]);
+      expect(report.skipped).toBe(1);
+      expect(report.failed).toEqual([]);
     });
 
     it('writes ONLY a SHAT section — the prop keeps its .dff for everything else', () => {

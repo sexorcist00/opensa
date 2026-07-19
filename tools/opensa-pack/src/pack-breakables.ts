@@ -17,11 +17,11 @@
 import type { AssetFileSystem } from '@opensa/renderware';
 import type { RWBreakable } from '@opensa/renderware/parsers/binary/types';
 
-import { encodeOsm, encodeOsmShatter, OsmSectionTag, type OsmShatter } from '@opensa/engine-formats';
+import { encodeOsmShatter, OsmSectionTag, type OsmShatter } from '@opensa/engine-formats';
 import { getClump } from '@opensa/renderware/archive/asset-cache';
 import { breakableFromGeometry, getBreakable } from '@opensa/renderware/breakable/mesh';
 
-import type { ArchiveInsert } from './archive-edit';
+import type { ModelBundles } from './model-bundle';
 
 /** The synthetic fallback reuses u16 triangle indices — the host's own cap, applied at bake time. */
 const MAX_SYNTHETIC_VERTICES = 65535;
@@ -37,11 +37,6 @@ export interface BreakablePackReport {
   synthesized: number;
 }
 
-export interface BreakablePackResult {
-  readonly inserts: readonly ArchiveInsert[];
-  readonly report: BreakablePackReport;
-}
-
 /**
  * Bake `SHAT` for every model in `models` (the `object.dat` smashable set). Missing or unparsable models are
  * reported, never fatal — a prop that fails simply keeps the runtime path it has today.
@@ -49,9 +44,9 @@ export interface BreakablePackResult {
 export function packBreakables(
   fs: AssetFileSystem,
   models: Iterable<string>,
+  bundles: ModelBundles,
   log: (message: string) => void,
-): BreakablePackResult {
-  const inserts: ArchiveInsert[] = [];
+): BreakablePackReport {
   const failed: { error: string; model: string }[] = [];
   let authored = 0;
   let synthesized = 0;
@@ -71,9 +66,9 @@ export function packBreakables(
       } else {
         synthesized += 1;
       }
-      const osm = encodeOsm([{ bytes: encodeOsmShatter(baked.shatter), tag: OsmSectionTag.SHAT }]);
-      inserts.push({ bytes: osm, name: `${model}.osm`, near: `${model}.dff` });
-      bytes += osm.byteLength;
+      const section = { bytes: encodeOsmShatter(baked.shatter), tag: OsmSectionTag.SHAT };
+      bundles.add(model, { sections: [section] });
+      bytes += section.bytes.byteLength;
     } catch (error) {
       failed.push({ error: error instanceof Error ? error.message : String(error), model });
     }
@@ -83,7 +78,7 @@ export function packBreakables(
       `${failed.length} failed, ${(bytes / 1048576).toFixed(1)} MB`,
   );
 
-  return { inserts, report: { authored, bytes, failed, skipped, synthesized } };
+  return { authored, bytes, failed, skipped, synthesized };
 }
 
 /** The mesh the runtime would have chosen: the authored plugin, else a synthesized one, else nothing. */

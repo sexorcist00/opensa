@@ -1,3 +1,5 @@
+import type { MapDefinitions } from '@opensa/renderware';
+
 import { breakableModelsFromText } from '@opensa/renderware/breakable/models';
 /**
  * `opensa-pack` CLI (plan 074/03).
@@ -38,7 +40,9 @@ import { rewriteModelArchives } from './archive-edit';
 import { convertDistrict } from './convert';
 import { openGameDir } from './game-fs';
 import { WaterHeightGrid } from './height-grid';
+import { createModelBundles } from './model-bundle';
 import { packBreakables } from './pack-breakables';
+import { packClutter } from './pack-clutter';
 import { packVehicles } from './pack-vehicles';
 import { bakeWater } from './water';
 
@@ -128,7 +132,7 @@ async function main(): Promise<void> {
     }
   }
   const waterHeights = new WaterHeightGrid();
-  const { manifest, pak, report } = await convertDistrict(fs, {
+  const { defs, manifest, pak, report } = await convertDistrict(fs, {
     ao,
     ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
     cellSize,
@@ -165,11 +169,8 @@ async function main(): Promise<void> {
 
   // 003 phase 3: convert the by-name assets INTO the copied archives — `<model>.dff`/`<txd>.txd` out,
   // `<model>.osm`/`<model>.ostex` in. Vehicles only for now; phase 5 adds the rest of the classes.
-  const vehicles = optimizeModels ? optimizeVehicles(fs, out) : null;
-  writeFileSync(
-    join(products, 'report.json'),
-    JSON.stringify({ ...report, ...(vehicles ? { vehicles } : {}) }, null, 2),
-  );
+  const models = optimizeModels ? optimizeModelArchives(fs, defs, out) : null;
+  writeFileSync(join(products, 'report.json'), JSON.stringify({ ...report, ...(models ? { models } : {}) }, null, 2));
 
   printReport(report, started);
 }
@@ -178,17 +179,20 @@ async function main(): Promise<void> {
  * Convert the by-name model assets into the copied archives (003 phase 3) and report what moved.
  * Rebuilding the archives is the expensive half — it streams, but it still rewrites ~1 GB of `gta3.img`.
  */
-function optimizeVehicles(fs: ReturnType<typeof openGameDir>, out: string): object {
+function optimizeModelArchives(fs: ReturnType<typeof openGameDir>, defs: MapDefinitions, out: string): object {
   const log = (message: string): void => console.log(`[opensa-pack] ${message}`);
   const started = Date.now();
-  const { edit, report } = packVehicles(fs, log);
-  // Smashable props (phase 5b): only a `SHAT` section, so the model keeps its `.dff` — the shatter mesh is
-  // the ONLY thing the runtime resolves by name for a prop, and it is what costs a main-thread DFF parse.
-  const breakables = packBreakables(fs, breakableModelsFromText(fs.getText('data/object.dat')), log);
-  const rewrite = rewriteModelArchives(out, {
-    deletes: edit.deletes,
-    inserts: [...edit.inserts, ...breakables.inserts],
-  });
+  // ONE `.osm` per model, contributed to by every class the model belongs to (a cactus is clutter AND a
+  // breakable). Emitting a file per class instead loses whichever contribution the archive editor dedupes
+  // away — the accumulator is what makes that impossible.
+  const bundles = createModelBundles();
+  const vehicles = packVehicles(fs, bundles, log);
+  // Smashable props (5b): only a `SHAT` section, so the model keeps its `.dff` — the shatter mesh is the
+  // ONLY thing the runtime resolves by name for a prop, and it is what costs a main-thread DFF parse.
+  const breakables = packBreakables(fs, breakableModelsFromText(fs.getText('data/object.dat')), bundles, log);
+  // Clutter species (5c): the HOT by-name class — a species builds on cell stream-in, not on a rare event.
+  const clutter = packClutter(fs, defs, bundles, log);
+  const rewrite = rewriteModelArchives(out, { deletes: vehicles.deletes, inserts: bundles.inserts() });
   for (const archive of rewrite.archives) {
     log(
       `archive ${archive.file}: +${archive.inserted} -${archive.deleted} entries, ` +
@@ -202,12 +206,15 @@ function optimizeVehicles(fs: ReturnType<typeof openGameDir>, out: string): obje
         rewrite.unplaced.slice(0, 8).join(', '),
     );
   }
-  for (const failure of report.failed) {
+  for (const failure of vehicles.report.failed) {
     console.warn(`[opensa-pack] ⚠ vehicle '${failure.model}' not converted: ${failure.error}`);
   }
-  log(`archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  for (const failure of clutter.failed) {
+    console.warn(`[opensa-pack] ⚠ clutter '${failure.model}' not converted: ${failure.error}`);
+  }
+  log(`${bundles.size()} models bundled; archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 
-  return { ...report, breakables: breakables.report, rewrite };
+  return { breakables, clutter, rewrite, vehicles: vehicles.report };
 }
 
 /** Parse a de-tiling list: plain names (one per line, `#` comments) OR skygfx `texdb.txt` lines

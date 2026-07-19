@@ -1,5 +1,5 @@
 /**
- * `.osm` + `.ostex` → everything a vehicle spawn needs (opensa-pack 003 phase 3) — the OPTIMIZED path.
+ * `.osm` → everything a vehicle spawn needs (opensa-pack 003 phase 3) — the OPTIMIZED path.
  *
  * This is the inverse of opensa-pack's `packVehicleFixture`, and the point of the whole format: the work
  * the unoptimized path does at spawn (parse the DFF in a worker, walk the chunk tree for the embedded COL
@@ -21,6 +21,14 @@ import type { RigidModelInit } from './vehicle-model-init';
 /** Byte strides of the `GEOM` sections, matching what `packVehicleFixture` reserved. */
 const STRIDE = { colors: 4, index: 2, meta: 4, normals: 12, positions: 12, reflect: 4, uvs: 8 };
 
+/** What every converted rigid model carries: the engine-ready upload, its fixture, and collision if any. */
+export interface OptimizedModel {
+  /** Present only when the class bakes one (vehicles do; a clutter species does not). */
+  collision?: OsmCollision;
+  fixture: VehicleFixture;
+  model: RigidModelInit;
+}
+
 export interface OptimizedVehicle {
   /** Null when the source DFF carried no collision — the same signal the unoptimized path gives. */
   colliders: ModelColliders | null;
@@ -33,8 +41,13 @@ export interface OptimizedVehicle {
   wheels: { connection: [number, number, number]; front: boolean; index: number; radius: number }[];
 }
 
-/** Read one converted vehicle. Throws when a required section is missing — a truncated `.osm` is a bug. */
-export function readVehicleOsm(name: string, osm: Uint8Array, ostex: Uint8Array): OptimizedVehicle {
+/**
+ * Read any converted rigid model — geometry, dictionary and description in one container, engine-ready.
+ *
+ * `COLL` is NOT required — vehicles carry it, a clutter species does not. Every class the converter emits
+ * shares `DESC`/`GEOM`/`TEXS`; the class-specific sections are read by their own callers.
+ */
+export function readModelOsm(name: string, osm: Uint8Array): OptimizedModel {
   const sections = decodeOsm(osm);
   const section = (tag: number, label: string): Uint8Array => {
     const bytes = osmSection(sections, tag);
@@ -46,14 +59,15 @@ export function readVehicleOsm(name: string, osm: Uint8Array, ostex: Uint8Array)
   };
   const fixture = JSON.parse(new TextDecoder().decode(section(OsmSectionTag.DESC, 'DESC'))) as VehicleFixture;
   const geom = section(OsmSectionTag.GEOM, 'GEOM');
-  const collision = decodeOsmCollision(section(OsmSectionTag.COLL, 'COLL'));
+  const ostex = section(OsmSectionTag.TEXS, 'TEXS');
+  const collisionBytes = osmSection(sections, OsmSectionTag.COLL);
 
   const at = (offset: number, length: number): Uint8Array => geom.subarray(offset, offset + length);
   const { layout, vertexCount } = fixture;
 
   return {
-    colliders: toColliders(name, collision),
-    halfExtents: [...collision.halfExtents],
+    ...(collisionBytes ? { collision: decodeOsmCollision(collisionBytes) } : {}),
+    fixture,
     model: {
       colors: at(layout.colors, vertexCount * STRIDE.colors),
       indexCount: fixture.indexCount,
@@ -68,6 +82,21 @@ export function readVehicleOsm(name: string, osm: Uint8Array, ostex: Uint8Array)
       uvs: at(layout.uvs, vertexCount * STRIDE.uvs),
       vertexCount,
     },
+  };
+}
+
+/** Read one converted vehicle. Throws when a required section is missing — a truncated `.osm` is a bug. */
+export function readVehicleOsm(name: string, osm: Uint8Array): OptimizedVehicle {
+  const read = readModelOsm(name, osm);
+  const { collision, fixture } = read;
+  if (!collision) {
+    throw new Error(`${name}.osm is missing its COLL section`);
+  }
+
+  return {
+    colliders: toColliders(name, collision),
+    halfExtents: [...collision.halfExtents],
+    model: read.model,
     rig: fixture,
     seat: seatOf(fixture),
     wheels: fixture.wheels.map((wheel, index) => ({

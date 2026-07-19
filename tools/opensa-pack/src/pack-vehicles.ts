@@ -14,7 +14,7 @@ import type { AssetFileSystem } from '@opensa/renderware';
 
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 
-import type { ArchiveEdit, ArchiveInsert } from './archive-edit';
+import type { ModelBundles } from './model-bundle';
 
 import { buildVehicleOsm } from './vehicle-osm';
 
@@ -24,26 +24,32 @@ const SHARED_TXDS = new Set(['generic', 'particle', 'vehicle']);
 export interface VehiclePackReport {
   readonly failed: readonly { readonly error: string; readonly model: string }[];
   readonly models: number;
+  /** Total `.osm` bytes — the dictionary is a section INSIDE it, so this already includes `ostexBytes`. */
   readonly osmBytes: number;
+  /** The `TEXS` share of `osmBytes`. */
   readonly ostexBytes: number;
   /** TXDs left in the archives although their car converted — shared, or another def still needs them. */
   readonly txdsKept: readonly string[];
 }
 
 export interface VehiclePackResult {
-  readonly edit: ArchiveEdit;
+  /** Archive entries this class makes obsolete — the `.osm`/`.ostex` inserts come from the bundles. */
+  readonly deletes: readonly string[];
   readonly report: VehiclePackReport;
 }
 
 /** Build the optimized form of every car. A missing or unparsable model is reported, never fatal. */
-export function packVehicles(fs: AssetFileSystem, log: (message: string) => void): VehiclePackResult {
+export function packVehicles(
+  fs: AssetFileSystem,
+  bundles: ModelBundles,
+  log: (message: string) => void,
+): VehiclePackResult {
   const text = fs.getText('data/vehicles.ide');
   if (text === null) {
     throw new Error('data/vehicles.ide not found — cannot enumerate vehicles');
   }
   const defs = [...parseVehicleDefs(text).values()];
 
-  const inserts: ArchiveInsert[] = [];
   const deletes: string[] = [];
   const failed: { error: string; model: string }[] = [];
   const converted = new Set<string>();
@@ -55,10 +61,9 @@ export function packVehicles(fs: AssetFileSystem, log: (message: string) => void
     const dff = `${model}.dff`;
     try {
       const built = buildVehicleOsm(fs, model, { txd: def.txd.toLowerCase(), wheelScale: def.wheelScale });
-      // Both land beside the DFF: the `.ostex` is the MODEL's baked dictionary (its own TXD plus the shared
-      // vehicle sets, merged by the builder), so it belongs to the model, not to the TXD it came from.
-      inserts.push({ bytes: built.bytes, name: `${model}.osm`, near: dff });
-      inserts.push({ bytes: built.ostex, name: `${model}.ostex`, near: dff });
+      // The `.ostex` is the MODEL's baked dictionary (its own TXD plus the shared vehicle sets, merged by
+      // the builder), so it belongs to the model, not to the TXD it came from.
+      bundles.add(model, { sections: built.sections });
       deletes.push(dff);
       osmBytes += built.bytes.byteLength;
       ostexBytes += built.ostex.byteLength;
@@ -71,13 +76,10 @@ export function packVehicles(fs: AssetFileSystem, log: (message: string) => void
   const txdsKept = planTxdDeletions(defs, converted, deletes);
   log(
     `vehicles: ${converted.size}/${defs.length} converted, ${failed.length} failed, ` +
-      `osm ${mb(osmBytes)} + ostex ${mb(ostexBytes)}, ${txdsKept.length} txds kept`,
+      `osm ${mb(osmBytes)} (dictionaries ${mb(ostexBytes)} of it), ${txdsKept.length} txds kept`,
   );
 
-  return {
-    edit: { deletes, inserts },
-    report: { failed, models: converted.size, osmBytes, ostexBytes, txdsKept },
-  };
+  return { deletes, report: { failed, models: converted.size, osmBytes, ostexBytes, txdsKept } };
 }
 
 function mb(bytes: number): string {
