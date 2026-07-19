@@ -1,19 +1,12 @@
 /**
  * Texture-array store (plan 074/01 world module): one `.ostex` blob → one `texture_2d_array` + its material
- * bind group. Upload is verbatim `writeTexture` per (layer, mip) — the format IS the GPU layout (074/02).
+ * bind group. The upload itself lives in `core/ostex-upload` (per-model dictionaries share it); this class
+ * owns the world's ref keying, material bind group and residency.
  * The CPU payload is released after upload (JS holds handles — the 073 memory lesson).
  */
-import { decodeOstex, OstexFormat, type OstexFormatId, ostexMipLayout } from '@opensa/engine-formats';
-
 import type { Resources } from '../core/resources';
 
-const GPU_FORMAT: Record<OstexFormatId, GPUTextureFormat> = {
-  [OstexFormat.BC1]: 'bc1-rgba-unorm-srgb',
-  [OstexFormat.BC2]: 'bc2-rgba-unorm-srgb',
-  [OstexFormat.BC3]: 'bc3-rgba-unorm-srgb',
-  [OstexFormat.BC7]: 'bc7-rgba-unorm-srgb',
-  [OstexFormat.RGBA8]: 'rgba8unorm-srgb',
-};
+import { uploadOstexTexture } from '../core/ostex-upload';
 
 export interface TextureArrayHandle {
   bindGroup: GPUBindGroup;
@@ -61,33 +54,7 @@ export class TextureArrays {
     if (existing) {
       return existing;
     }
-    const tex = decodeOstex(bytes);
-    const byteEstimate = tex.payload.byteLength;
-    const texture = this.resources.createTexture(
-      'texture',
-      {
-        dimension: '2d',
-        format: GPU_FORMAT[tex.format],
-        label: `array-${ref}`,
-        mipLevelCount: tex.mipCount,
-        size: { depthOrArrayLayers: tex.layers.length, height: tex.height, width: tex.width },
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      },
-      byteEstimate,
-    );
-    let offset = 0;
-    for (let layer = 0; layer < tex.layers.length; layer += 1) {
-      for (let level = 0; level < tex.mipCount; level += 1) {
-        const layout = ostexMipLayout(tex.format, tex.width, tex.height, level);
-        this.device.queue.writeTexture(
-          { mipLevel: level, origin: { x: 0, y: 0, z: layer }, texture },
-          tex.payload.subarray(offset, offset + layout.totalBytes),
-          { bytesPerRow: layout.bytesPerRow, rowsPerImage: layout.rows },
-          { depthOrArrayLayers: 1, height: layout.mipHeight, width: layout.mipWidth },
-        );
-        offset += layout.totalBytes;
-      }
-    }
+    const { byteEstimate, layers, texture } = uploadOstexTexture(this.device, this.resources, bytes, `array-${ref}`);
     const bindGroup = this.device.createBindGroup({
       entries: [
         { binding: 0, resource: texture.createView({ dimension: '2d-array' }) },
@@ -96,7 +63,7 @@ export class TextureArrays {
       label: `material-${ref}`,
       layout: this.materialLayout,
     });
-    const handle: TextureArrayHandle = { bindGroup, byteEstimate, layers: tex.layers.length, texture };
+    const handle: TextureArrayHandle = { bindGroup, byteEstimate, layers, texture };
     this.arrays.set(ref, handle);
 
     return handle;

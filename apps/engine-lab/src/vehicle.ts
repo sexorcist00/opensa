@@ -61,6 +61,7 @@ export async function loadVehicleProbe(
     submeshes: fixture.submeshes,
     texture: {
       height: fixture.textures.height,
+      kind: 'rgba',
       layers: fixture.textures.names.length,
       rgba: slice(
         fixture.textures.offset,

@@ -43,7 +43,6 @@ import {
   type VehicleColours,
   type VehicleDef,
   type VehicleDummy,
-  type VehicleModelData,
   VehicleTextures,
   type WorldGrid,
 } from '@opensa/renderware';
@@ -56,10 +55,13 @@ import type { WorldMod } from '../mods/mod.interface';
 import type { CellCoord } from '../streaming/grid';
 import type { VehiclePlacement } from '../vehicle/vehicle-lod.system';
 import type { City } from '../zones/city';
+import type { VehicleRigData } from './engine-vehicle-handle';
 
 import { carGeneratorPlacements } from './car-generators';
 import { randomCarPlacements } from './popcycle-cars';
 import { createVehicleModelBuilder, type VehicleModelBuilder } from './vehicle-model-builder';
+import { type RigidModelInit, toRigidModelInit } from './vehicle-model-init';
+import { readVehicleOsm } from './vehicle-osm';
 
 /** Sea level (Z) + a large background plane half-size so the ocean reaches the horizon. */
 
@@ -102,9 +104,12 @@ export interface EngineVehicleData {
   colliders: ModelColliders | null;
   halfExtents: [number, number, number];
   handling: VehicleHandling;
-  model: VehicleModelData;
+  /** Engine-ready upload shape — BOTH paths converge here, so the host cannot tell them apart. */
+  model: RigidModelInit;
   /** Carcols colours as 0..1 (the engine's `setPaint` space). */
   paint: { primary: Rgb; quaternary: Rgb; secondary: Rgb; tertiary: Rgb };
+  /** The articulation the handle animates (doors, wheels, damage submeshes). */
+  rig: VehicleRigData;
   /** `ped_frontseat` dummy in vehicle space, or null. */
   seat: [number, number, number] | null;
   wheels: { connection: [number, number, number]; front: boolean; index: number; radius: number }[];
@@ -130,6 +135,10 @@ export interface GtaSaWorldConfig {
    *  074/13; the engine welds cells offline, so nothing reads this yet. Kept as the declared extension
    *  point — passing mods here has no effect until one is re-wired. */
   mods?: readonly WorldMod[];
+  /** Asset-resolution warnings (opensa-pack 003): a mod that cannot be honoured, a name nothing answers.
+   *  Already de-duplicated per message here, because these fire on a SPAWN path. Omit to stay silent —
+   *  this package routes diagnostics out rather than printing (nothing in it touches `console`). */
+  onAssetWarning?: (message: string) => void;
   /** Effective clutter density per category (0 when disabled) — keeps clutter COLLISION in sync
    *  with the rendered set. On a knob change, call {@link GtaSaWorldAdapter.invalidateColliderCache}
    *  and re-stream physics. Default: vanilla density 1 for every category. */
@@ -197,6 +206,8 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   private vehicleColours: null | VehicleColours = null;
   private vehicleDefs: Map<string, VehicleDef> | null = null;
   private readonly vehicleModelBuilder: null | VehicleModelBuilder;
+  /** Asset warnings already emitted — see {@link GtaSaWorldAdapter.warnAsset}. */
+  private readonly warnedAssets = new Set<string>();
 
   constructor(config: GtaSaWorldConfig) {
     this.config = config;
@@ -362,11 +373,17 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   }
 
   /**
-   * The renderer-agnostic vehicle load (074/08 B5 step 4): the same definition/collision/handling/paint work
-   * as {@link loadVehicle}, but the renderable is a {@link VehicleModelData} the OWN ENGINE uploads as a
-   * model (one per car type — instances share it). The three path keeps its `Object3D` tree.
+   * The renderer-agnostic vehicle load (074/08 B5 step 4): geometry the OWN ENGINE uploads as a model (one
+   * per car type — instances share it), plus collision, handling and paint.
+   *
+   * Two paths converge here (opensa-pack 003): the OPTIMIZED `.osm`/`.ostex` read, and the UNOPTIMIZED
+   * DFF/TXD parse below it. The caller cannot tell which ran, and must not need to.
    */
   async loadVehicleData(modelName: string, colour?: string): Promise<EngineVehicleData> {
+    const optimized = await this.loadOptimizedVehicle(modelName, colour);
+    if (optimized) {
+      return optimized;
+    }
     const { def, dffBuffer, paint, ...common } = await this.vehicleCommon(modelName, colour);
     const txds = [`${def.txd.toLowerCase()}.txd`, 'models/generic/vehicle.txd']
       .map((txdName) => this.fs.get(txdName))
@@ -388,15 +405,9 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       colliders: common.colliders,
       halfExtents: common.halfExtents,
       handling: common.handling,
-      model,
-      // The engine takes 0..1 colours; carcols is bytes. Same values the builder writes into the non-marker
-      // vertex colours, so a painted panel and a plain one sit in the same colour space.
-      paint: {
-        primary: scale255(paint.primary),
-        quaternary: scale255(paint.quaternary ?? paint.secondary),
-        secondary: scale255(paint.secondary),
-        tertiary: scale255(paint.tertiary ?? paint.primary),
-      },
+      model: toRigidModelInit(model),
+      paint: enginePaint(paint),
+      rig: model,
       seat: seat ? seat.position : null,
       wheels: model.wheels.map((wheel, index) => ({
         connection: [...model.parts[wheel.part].localTranslation] as [number, number, number],
@@ -560,6 +571,57 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return getBreakable(this.fs, name) !== undefined || this.breakableModels.has(name);
   }
 
+  /** Everything both vehicle load paths need: the IDE def, the DFF bytes, its collision and its paint. */
+  /**
+   * The OPTIMIZED spawn (opensa-pack 003 phase 3): `<model>.osm` + `<model>.ostex`, no RW parser entered.
+   * Returns null when this car is not converted, and the caller falls through to the unoptimized path.
+   *
+   * **Resolution order** — the plan's rule, implemented by asking for the `.dff` FIRST. That looks
+   * backwards until you see what conversion does: opensa-pack DELETES `<model>.dff` from the archives, so
+   * after a convert the only thing that can still answer with one is a `modloader/` override. Hence a
+   * present `.dff` means either "a mod is overriding this car" or "this build was never converted", and
+   * both must take the unoptimized path. There is no way to ask the VFS *where* a name came from, so this
+   * ordering IS the modloader-wins rule rather than an approximation of it.
+   */
+  private async loadOptimizedVehicle(modelName: string, colour?: string): Promise<EngineVehicleData | null> {
+    await this.ensureVehicleData();
+    const name = modelName.toLowerCase();
+    const def = this.vehicleDefs?.get(name);
+    if (!def) {
+      throw new Error(`No vehicle definition for '${modelName}' in vehicles.ide`);
+    }
+    if (this.fs.get(`${name}.dff`)) {
+      return null; // a modloader override, or an unconverted build
+    }
+    const osm = this.fs.get(`${name}.osm`);
+    if (!osm) {
+      return null; // nothing at all — the unoptimized path raises the "asset not found" error
+    }
+    const ostex = this.fs.get(`${name}.ostex`);
+    if (!ostex) {
+      throw new Error(`${name}.osm has no sibling ${name}.ostex — the converted pair is incomplete`);
+    }
+    // The mixing rule (user decision 2026-07-18): a mod that ships only the TXD of a converted car cannot
+    // be honoured — our `.osm` indexes its atlas by baked layer index, not by texture name — so the
+    // optimized pair wins and the ignored file is named. Retexture-only car mods therefore do nothing.
+    if (this.fs.get(`${def.txd.toLowerCase()}.txd`)) {
+      this.warnAsset(`ignoring modded ${def.txd.toLowerCase()}.txd — '${name}' is an optimized model`);
+    }
+
+    const vehicle = readVehicleOsm(name, new Uint8Array(osm), new Uint8Array(ostex));
+
+    return {
+      colliders: vehicle.colliders,
+      halfExtents: vehicle.halfExtents,
+      handling: this.vehicleHandling(def.handlingId),
+      model: vehicle.model,
+      paint: enginePaint(this.resolveVehicleColours(name, colourIndices(colour))),
+      rig: vehicle.rig,
+      seat: vehicle.seat,
+      wheels: vehicle.wheels,
+    };
+  }
+
   /** First carcol combo for a model → primary/secondary RGB (falls back to white).
    *  Missing 3rd/4th colours default to palette index 0 (black), like SA does for 2-colour cars. */
   private resolveVehicleColours(name: string, indices?: number[]): VehiclePaint {
@@ -589,7 +651,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return { primary: white, secondary: white };
   }
 
-  /** Everything both vehicle load paths need: the IDE def, the DFF bytes, its collision and its paint. */
   private async vehicleCommon(
     modelName: string,
     colour?: string,
@@ -653,9 +714,17 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       steeringLock: num(19, 30),
     };
   }
+
+  /** One line per distinct message — an asset warning fires on a spawn path, so it must never spam. */
+  private warnAsset(message: string): void {
+    if (this.warnedAssets.has(message)) {
+      return;
+    }
+    this.warnedAssets.add(message);
+    this.config.onAssetWarning?.(message);
+  }
 }
 
-/** Convert renderware collision (COL model + placements) to the engine's generic shape. */
 export function toModelColliders({ col, name, transforms }: RegionColliders): ModelColliders {
   const indices = new Uint32Array(col.faces.length * 3);
   col.faces.forEach((face, i) => {
@@ -673,6 +742,30 @@ export function toModelColliders({ col, name, transforms }: RegionColliders): Mo
       vertices: col.vertices,
     },
     transforms,
+  };
+}
+
+/** Convert renderware collision (COL model + placements) to the engine's generic shape. */
+/** A `colour` override string (`"1,2"`) as carcols palette indices, or undefined for the model's default. */
+function colourIndices(colour?: string): number[] | undefined {
+  return colour
+    ? colour
+        .split(',')
+        .map((cell) => Number(cell.trim()))
+        .filter((value) => Number.isFinite(value))
+    : undefined;
+}
+
+/**
+ * Carcols bytes → the engine's 0..1 `setPaint` space. The same values the builder writes into the
+ * non-marker vertex colours, so a painted panel and a plain one sit in the same colour space.
+ */
+function enginePaint(paint: VehiclePaint): EngineVehicleData['paint'] {
+  return {
+    primary: scale255(paint.primary),
+    quaternary: scale255(paint.quaternary ?? paint.secondary),
+    secondary: scale255(paint.secondary),
+    tertiary: scale255(paint.tertiary ?? paint.primary),
   };
 }
 

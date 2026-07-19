@@ -75,6 +75,17 @@ describe('scanModloader', () => {
       expect([...new Uint8Array(scan.assets.get('cn2_ringking.ifp')!)]).toEqual([5]);
     });
 
+    it('buckets our optimized .osm / .ostex pair into assets too (a mod built against a converted game)', () => {
+      const scan = scanModloader(
+        fakeFs({
+          'modloader/MyCar/landstal.osm': Uint8Array.of(1),
+          'modloader/MyCar/landstal.ostex': Uint8Array.of(2),
+        }),
+      );
+
+      expect([...scan.assets.keys()].sort()).toEqual(['landstal.osm', 'landstal.ostex']);
+    });
+
     it('buckets .ide / text .ipl / whole-file .dat (surfinfo) into texts by bare name', () => {
       const scan = scanModloader(
         fakeFs({

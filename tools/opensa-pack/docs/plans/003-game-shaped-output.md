@@ -398,8 +398,10 @@ the pipeline path.
 - [ ] Phase 2 — decide the texture-compression question (RGBA8 vs BC re-encode vs DXT pass-through)
 - [x] Phase 3 step 1 — IMG delete-and-insert (`archive-edit.ts` + `pack-vehicles.ts`, wired in `cli.ts`
       behind a default-on `--no-models` opt-out); vehicles only, phase 5 adds the rest of the classes
-- [ ] Phase 3 — VFS 3-step resolution + once-per-name warning + config silence flag; `.osm`/`.ostex` into
-      the modloader extension allow-list (`packages/modloader/src/scan.ts:62-67`)
+- [x] Phase 3 step 2 — the RUNTIME reads `.osm`/`.ostex`: resolution order in `loadOptimizedVehicle`, the
+      mixing-rule warning (de-duplicated, surfaced via `onAssetWarning`), `.osm`/`.ostex` in the modloader
+      allow-list, `readVehicleOsm` (the missing inverse of `packVehicleFixture`), and a COMPRESSED model
+      texture path in the engine (`core/ostex-upload`, `ModelTextureInit` union)
 - [ ] Phase 3 — local-loader ingest of `.osm`/`.ostex` (`build-vfs.ts` selection)
 - [ ] Phase 4 — named cell/texture files under `<out>/opensa/`, per-ring texture laziness, one loader
 - [ ] Phase 4 — manifest shrunk to the rule; `timecyc`/`timecyc24`/`setup.timecyc` deleted
@@ -436,29 +438,56 @@ one-cell smoke command (`--game game-src/non-modified --rect 9,-7,9,-7 --no-ao`)
 
 | Measure                     | Value                                                                        |
 | --------------------------- | ---------------------------------------------------------------------------- |
-| cars converted              | **198 / 201** (3 fail on a stock `vehicles.ide` typo — see below)            |
-| `.osm` total                | **41.3 MB** (~209 KB/car)                                                    |
-| `.ostex` total              | **151.2 MB** (~764 KB/car — BC1/BC3)                                         |
-| archive edit                | `gta3.img` +396 −395 entries; 0 unplaced, 0 missing deletes                  |
-| `gta3.img` after            | 897 MB → **1 047 MB** (the `.dff`/`.txd` out, `.osm`/`.ostex` in)            |
-| archive rewrite wall-clock  | **18.0 s** (build 198 models + stream a 1 GB rebuild)                        |
-| total convert wall-clock    | 3.3 s → **21.3 s** — hence `--no-models` for world-only iteration reconverts |
+| cars converted              | **201 / 201**, 0 failed, 0 TXDs held back                                    |
+| `.osm` total                | **41.8 MB** (~213 KB/car)                                                    |
+| `.ostex` total              | **153.0 MB** (~779 KB/car — BC1/BC3)                                         |
+| archive edit                | `gta3.img` +402 −402 entries; 0 unplaced, 0 missing deletes                  |
+| `gta3.img` after            | 897 MB → **1 048 MB** (the `.dff`/`.txd` out, `.osm`/`.ostex` in)            |
+| archive rewrite wall-clock  | **18.2 s** (build 201 models + stream a 1 GB rebuild)                        |
+| total convert wall-clock    | 3.3 s → **21.2 s** — hence `--no-models` for world-only iteration reconverts |
 | peak RSS                    | **2.04 GB** — the streamed rebuild holds one 1 GB source buffer, not two     |
 | `.col` entries after        | **216, untouched** (design constraint 1 holds)                               |
 | `.dff` remaining            | 12 766 — map objects and peds, i.e. phase 5's work                           |
 | `landstal.osm` round-trip   | DESC 5 130 v / 10 839 idx · COLL 14 v / 10 tris / half [1.16, 2.56, 0.82]    |
 | `landstal.ostex` round-trip | BC3, 256×256, 14 layers                                                      |
 
-TXD deletion held back **3** dictionaries (`car`, `bike`, `plane`) — the guard working as designed: they
-are the mis-parsed `type` column of the three failed rows, so nothing was deleted on their behalf.
+**Found by this step — a latent parser bug, still live for any un-patched install.** The FIRST run
+converted only 198/201: stock `vehicles.ide` rows 585/586/593 (`emperor`, `wayfarer`, `dodo`) are missing
+the comma between `model` and `txd` — `585,\temperor\t\temperor, \tcar, …`. `parseVehicleDefs` splits on
+commas only, so `def.model` became `"emperor\t\temperor"`, which also means those three **cannot spawn in
+the engine** on stock data (`gta-sa-world.adapter.ts:608` throws "No vehicle definition"). SA's own parser
+is whitespace-tolerant; ours is not.
 
-**Found by this step — a stock-data parser bug, PRE-EXISTING and live in the runtime.** `vehicles.ide`
-rows 585/586/593 are missing the comma between `model` and `txd`:
-`585,\temperor\t\temperor, \tcar, …`. `parseVehicleDefs` splits on commas only, so `def.model` becomes
-`"emperor\t\temperor"` — which means **`emperor`, `wayfarer` and `dodo` cannot spawn in the engine today**
-(`gta-sa-world.adapter.ts:608` throws "No vehicle definition"). SA's own parser is whitespace-tolerant.
-Not fixed here: the row splitter is shared by every IDE section, so widening it is its own change with its
-own blast radius.
+The user patched the commas into `game-src/non-modified`, and the numbers above are the re-run. **The
+parser is still comma-only** — a fresh game dir reproduces this. Widening the row splitter is its own
+change (it is shared by every IDE section), so it stays recorded, not fixed.
+
+The failed run also proved the TXD guard: it held back exactly `car`, `bike`, `plane` — the mis-parsed
+`type` column of the three broken rows — so nothing was deleted on a bad def's behalf.
+
+**Phase 3 step 2 (2026-07-19)** — the runtime side. No numbers to report yet (the field measurement of the
+spawn path is owed); what it settled instead:
+
+- **The engine could not accept a compressed model texture at all.** `createVehicleModel` hardcoded
+  `rgba8unorm-srgb` + `bytesPerRow: width * 4`. The world had the right path all along
+  (`TextureArrays.load`), so it was extracted to `core/ostex-upload` and both now share it. BC1/BC3 reaches
+  video memory untouched — pinned by a test at 128×128: **16 384 B/layer vs 65 536 B for RGBA8**. (First
+  version of that test used 4×4 and proved nothing: `bytesPerRow` pads to 256, which swamps the payload.)
+- **Resolution order is implemented `.dff`-FIRST**, which reads backwards until you see why: conversion
+  DELETES `<model>.dff`, so afterwards only a `modloader/` override can still answer with one. There is no
+  API to ask the VFS where a name came from, so this ordering IS the modloader-wins rule.
+- `EngineVehicleData.model` is now the engine-ready `RigidModelInit` — both paths converge inside the
+  adapter, and `engine-vehicles.ts` lost its inline copy of `toRigidModelInit`. The articulation the handle
+  animates moved to a narrow `VehicleRigData` (`Pick` of the 5 fields), which the DFF build and the `.osm`
+  fixture both satisfy structurally.
+- **`packages/game` prints nothing** (the package has no `console` by design), so the warning leaves via
+  `onAssetWarning` and the host prints it. De-duplication stays in the adapter — these fire on a spawn path.
+- The phase gate lives in `tools/opensa-pack/src/vehicle-osm.test.ts`, not in the adapter's own integration
+  test: it needs the WRITER, and the nx boundary forbids `type:engine` → `type:tool`. Correctly so.
+- Gate result: a converted `admiral` spawns with **no `.dff` present at all**, and optimized vs unoptimized
+  agree on positions, submeshes, half-extents, handling, seat, wheels and collision vertices. The wheel
+  RADIUS initially disagreed — a lie in my fixture (hardcoded `wheelScale`), not a product bug; the test now
+  reads the def exactly as `packVehicles` does.
 
 ### Mips belong to map-optimizer (user, 2026-07-18)
 

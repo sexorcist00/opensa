@@ -18,6 +18,7 @@ import {
   sphereFullyBeyond,
   type Vec3,
 } from './core/math';
+import { uploadOstexTexture } from './core/ostex-upload';
 import { Resources } from './core/resources';
 import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
@@ -253,6 +254,17 @@ export interface Environment {
   windStrength: number;
 }
 
+/**
+ * A model's texture array, from either side of the optimized/unoptimized split (opensa-pack 003):
+ *
+ * - `ostex` — our offline `.ostex`, uploaded verbatim. BC1/BC3 stays COMPRESSED all the way into video
+ *   memory; nothing expands it. This is the optimized path.
+ * - `rgba` — RGBA8 layers a runtime TXD parse produced (a `modloader/` mod, or anything not yet converted).
+ */
+export type ModelTextureInit =
+  | { bytes: Uint8Array; kind: 'ostex' }
+  | { height: number; kind: 'rgba'; layers: number; rgba: Uint8Array; width: number };
+
 /** Live probe handle: write the palette ([model, bone 0, …], column-major), then `updatePedPalette()`. */
 export interface PedProbe {
   palette: Float32Array;
@@ -307,8 +319,7 @@ export interface VehicleModelInit {
   /** Per-vertex DFF reflection slots (B5r): env layer, env coefficient, reflect intensity, specular level. */
   reflect: Uint8Array;
   submeshes: readonly VehicleSubmesh[];
-  /** RGBA8 layers, all the same size, packed sequentially. */
-  texture: { height: number; layers: number; rgba: Uint8Array; width: number };
+  texture: ModelTextureInit;
   uvs: Uint8Array;
   vertexCount: number;
 }
@@ -875,25 +886,7 @@ export class Engine {
     const matrixBuffer = this.createVehicleMatrixBuffer(init.parts.length, VEHICLE_CAPACITY);
     const paintBuffer = this.createVehiclePaintBuffer(init.parts.length, VEHICLE_CAPACITY);
     const lampBuffer = this.createVehicleLampBuffer(init.parts.length, VEHICLE_CAPACITY);
-    const layerBytes = init.texture.width * init.texture.height * 4;
-    const texture = this.resources.createTexture(
-      'texture',
-      {
-        format: 'rgba8unorm-srgb',
-        label: 'vehicle-texture',
-        size: { depthOrArrayLayers: init.texture.layers, height: init.texture.height, width: init.texture.width },
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      },
-      init.texture.rgba.byteLength,
-    );
-    for (let layer = 0; layer < init.texture.layers; layer += 1) {
-      this.device.queue.writeTexture(
-        { origin: { x: 0, y: 0, z: layer }, texture },
-        init.texture.rgba.subarray(layer * layerBytes, (layer + 1) * layerBytes),
-        { bytesPerRow: init.texture.width * 4 },
-        { height: init.texture.height, width: init.texture.width },
-      );
-    }
+    const { byteEstimate: textureBytes, texture } = this.createModelTexture(init.texture);
     const id = this.vehicleModelSeq;
     this.vehicleModelSeq += 1;
     const model: VehicleModel = {
@@ -908,7 +901,7 @@ export class Engine {
       partCount: init.parts.length,
       submeshes: init.submeshes,
       texture,
-      textureBytes: init.texture.rgba.byteLength,
+      textureBytes,
     };
     this.vehicleModels.set(id, model);
     this.vehicleParts.set(id, init.parts);
@@ -1885,6 +1878,39 @@ export class Engine {
       upBindGroups,
       upViews,
     };
+  }
+
+  /**
+   * A model's texture array, from either side of the optimized/unoptimized split. The `ostex` branch is
+   * the whole reason the per-model dictionary is compressed: the payload reaches video memory untouched.
+   */
+  private createModelTexture(init: ModelTextureInit): { byteEstimate: number; texture: GPUTexture } {
+    if (init.kind === 'ostex') {
+      const upload = uploadOstexTexture(this.device, this.resources, init.bytes, 'model-texture');
+
+      return { byteEstimate: upload.byteEstimate, texture: upload.texture };
+    }
+    const layerBytes = init.width * init.height * 4;
+    const texture = this.resources.createTexture(
+      'texture',
+      {
+        format: 'rgba8unorm-srgb',
+        label: 'vehicle-texture',
+        size: { depthOrArrayLayers: init.layers, height: init.height, width: init.width },
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      },
+      init.rgba.byteLength,
+    );
+    for (let layer = 0; layer < init.layers; layer += 1) {
+      this.device.queue.writeTexture(
+        { origin: { x: 0, y: 0, z: layer }, texture },
+        init.rgba.subarray(layer * layerBytes, (layer + 1) * layerBytes),
+        { bytesPerRow: init.width * 4 },
+        { height: init.height, width: init.width },
+      );
+    }
+
+    return { byteEstimate: init.rgba.byteLength, texture };
   }
 
   private createVehicleBindGroup(model: {

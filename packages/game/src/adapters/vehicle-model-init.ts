@@ -14,10 +14,15 @@ export interface RigidModelInit {
   positions: Uint8Array;
   reflect: Uint8Array;
   submeshes: VehicleModelData['submeshes'];
-  texture: { height: number; layers: number; rgba: Uint8Array; width: number };
+  texture: RigidTextureInit;
   uvs: Uint8Array;
   vertexCount: number;
 }
+
+/** Mirrors the engine's `ModelTextureInit` — our optimized `.ostex`, or RGBA8 layers from a runtime parse. */
+export type RigidTextureInit =
+  | { bytes: Uint8Array; kind: 'ostex' }
+  | { height: number; kind: 'rgba'; layers: number; rgba: Uint8Array; width: number };
 
 const bytes = (values: Float32Array): Uint8Array => new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
 
@@ -41,6 +46,7 @@ export function toRigidModelInit(model: VehicleModelData): RigidModelInit {
     submeshes: model.submeshes,
     texture: {
       height: model.texture.height,
+      kind: 'rgba',
       layers: model.texture.layers,
       rgba: model.texture.rgba,
       width: model.texture.width,

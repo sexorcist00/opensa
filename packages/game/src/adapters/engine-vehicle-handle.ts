@@ -22,6 +22,13 @@ import type {
 } from '../vehicle/vehicle-handle';
 import type { VehicleLampState } from '../vehicle/vehicle-lamps';
 
+/**
+ * Just the ARTICULATION a handle animates — doors, dummies, wheels, parts, submeshes — and nothing about
+ * how the model reached the GPU. Both spawn paths satisfy it structurally: the unoptimized path's
+ * `VehicleModelData` and the optimized path's `.osm` `DESC` fixture (opensa-pack 003).
+ */
+export type VehicleRigData = Pick<VehicleModelData, 'doors' | 'dummies' | 'parts' | 'submeshes' | 'wheels'>;
+
 /** Column-major mat4 scratch for the detached-part world matrix. */
 const WORLD = new Float32Array(16);
 
@@ -31,7 +38,7 @@ export class EngineVehicleHandle implements VehicleHandle {
   readonly wheels: VehicleWheelInfo[];
   private band: VehicleBand = 'hd';
   private readonly damaged = new Set<string>();
-  private readonly data: VehicleModelData;
+  private readonly data: VehicleRigData;
 
   private readonly instance: VehicleInstance;
 
@@ -40,7 +47,7 @@ export class EngineVehicleHandle implements VehicleHandle {
   /** The body's last rotation — a detaching panel inherits it (see `detachPart`). */
   private rotation: VehicleQuat = [0, 0, 0, 1];
 
-  constructor(instance: VehicleInstance, data: VehicleModelData, onDispose: () => void) {
+  constructor(instance: VehicleInstance, data: VehicleRigData, onDispose: () => void) {
     this.instance = instance;
     this.data = data;
     this.onDispose = onDispose;

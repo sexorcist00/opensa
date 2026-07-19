@@ -169,32 +169,12 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     const data = await adapter.loadVehicleData(name);
     const entry: VehicleModelEntry = {
       data,
-      id: engine.createVehicleModel({
-        colors: data.model.colors,
-        indexCount: data.model.indices.length,
-        indices: new Uint8Array(
-          data.model.indices.buffer,
-          data.model.indices.byteOffset,
-          data.model.indices.byteLength,
-        ),
-        meta: data.model.meta,
-        normals: bytesOf(data.model.normals),
-        parts: data.model.parts,
-        positions: bytesOf(data.model.positions),
-        reflect: data.model.reflect,
-        submeshes: data.model.submeshes,
-        texture: {
-          height: data.model.texture.height,
-          layers: data.model.texture.layers,
-          rgba: data.model.texture.rgba,
-          width: data.model.texture.width,
-        },
-        uvs: bytesOf(data.model.uvs),
-        vertexCount: data.model.positions.length / 3,
-      }),
+      // The adapter hands over an already engine-ready model — both the optimized (`.osm`/`.ostex`) and the
+      // unoptimized (DFF/TXD) path converge on it, so nothing here needs to know which one ran.
+      id: engine.createVehicleModel(data.model),
       instances: 0,
       lastUsed: performance.now(),
-      textureBytes: data.model.texture.rgba.byteLength,
+      textureBytes: textureBytesOf(data.model.texture),
     };
     models.set(name, entry);
 
@@ -253,7 +233,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
 
       const instance = engine.createVehicle(id);
       instance.setPaint(paint);
-      const handle = new EngineVehicleHandle(instance, data.model, () => engine.destroyVehicle(instance));
+      const handle = new EngineVehicleHandle(instance, data.rig, () => engine.destroyVehicle(instance));
       const rig = new VehicleRig(handle);
       const wheels = data.wheels.map((wheel) => ({
         connection: wheel.connection,
@@ -365,11 +345,12 @@ interface VehicleModelEntry {
   textureBytes: number;
 }
 
-function bytesOf(array: Float32Array): Uint8Array {
-  return new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
-}
-
 /** Body quaternion for a heading about GTA +Z. */
 function headingQuat(heading: number): [number, number, number, number] {
   return [0, 0, Math.sin(heading / 2), Math.cos(heading / 2)];
+}
+
+/** What a model's texture array costs the budget — the `.ostex` payload, or the raw RGBA8 layers. */
+function textureBytesOf(texture: EngineVehicleData['model']['texture']): number {
+  return texture.kind === 'ostex' ? texture.bytes.byteLength : texture.rgba.byteLength;
 }
