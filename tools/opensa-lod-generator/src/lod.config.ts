@@ -1,9 +1,12 @@
 import type { LodConfig } from './core/types';
 
 /**
- * Default run config. `cellSize` **must match the engine's streaming grid** (`world-grid.ts` / the world
- * adapter's `cellSize`) so each baked LOD maps to exactly one engine cell — see plan 002 "Engine fit". Tune the
- * cell size + (later) decimation/atlas budgets from the Phase-0 report.
+ * Default run config. `cellSize` is the GAME-side grid (`GAME_CELL_SIZE`, 256) — the one the world adapter
+ * streams collision and scatters procobj on, so one baked impostor stands for one game cell of instances.
+ *
+ * It is NOT the engine's RENDER grid: opensa-pack welds its `.oscell` blobs on `CELL_SIZE` (250) and ships
+ * that in the manifest. This comment used to claim the two must match; they never have, and nothing breaks
+ * because an impostor is a placement like any other and welds into whichever render cell it falls in.
  */
 export const config: LodConfig = {
   cellSize: 256,

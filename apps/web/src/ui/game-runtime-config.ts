@@ -9,6 +9,12 @@ const BASE = import.meta.env.VITE_STATIC_URL;
 
 /** Streaming grid cell edge — shared by Config.streaming + the adapter; MUST match opensa-lod-generator's
  *  cellSize (its baked lod_<cx>_<cy> cells map 1:1 onto engine cells). */
+/**
+ * The GAME-side cell grid: collision streaming, procobj scatter, LOD-impostor placement.
+ *
+ * Distinct from the RENDER grid — opensa-pack welds `.oscell` blobs on its own `CELL_SIZE` (250) and the
+ * manifest carries that to the engine. The two have never matched and nothing requires them to.
+ */
 export const GAME_CELL_SIZE = 256;
 
 export function createGameRuntimeConfig(): Config {

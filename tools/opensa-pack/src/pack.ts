@@ -34,7 +34,14 @@ import { packVehicles } from './pack-vehicles';
 import { bakeWater } from './water';
 import { isVegetationDef } from './weld';
 
-/** The world cell size. NOT an option: the pak and the runtime must agree on it, and nothing checked that. */
+/**
+ * The RENDER cell size: the grid the district is welded into and the manifest ships to the engine, which
+ * streams and draws `.oscell` blobs on it. NOT an option — the pak and the runtime must agree, and nothing
+ * checked that when it was a flag.
+ *
+ * Distinct from the GAME-side grid (`GAME_CELL_SIZE`, 256) that collision streaming, procobj scatter and the
+ * LOD-impostor bake use. The two have never been equal and need not be.
+ */
 export const CELL_SIZE = 250;
 
 export interface PackOptions {

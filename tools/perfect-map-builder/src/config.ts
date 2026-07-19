@@ -2,8 +2,16 @@ import type { OptimizerPasses } from '@opensa/map-optimizer/run';
 
 /** perfect-map-builder run config (plan 001). */
 export interface BuilderConfig {
-  /** Grid cell size for the OpenSA cell-LOD bake (must match the engine streaming grid). */
-  cellSize: number;
+  /**
+   * Cell size for the OpenSA cell-LOD bake — the GAME-side grid (`GAME_CELL_SIZE`, 256): the one the world
+   * adapter streams collision and scatters procobj on, and the one a baked impostor is PLACED in.
+   *
+   * NOT the render grid. opensa-pack welds `.oscell` blobs on its own `CELL_SIZE` (250) and the manifest
+   * carries that to the engine; the two have never matched, and nothing requires them to — an impostor is a
+   * placement like any other and welds into whichever render cell its position falls in. (Both this comment
+   * and `lod.config.ts`'s claimed that they must match. They did not, and the field never noticed.)
+   */
+  lodCellSize: number;
   /** map-optimizer pass toggles; `{}` = all on (the default full-feature build). */
   optimizerPasses: Partial<OptimizerPasses>;
   /**
@@ -20,7 +28,7 @@ export interface BuilderConfig {
 }
 
 export const config: BuilderConfig = {
-  cellSize: 256,
+  lodCellSize: 256,
   optimizerPasses: { addNormals: true }, // all passes on; normals created for OpenSA's SSAO (plan 015)
   // A pipeline build is a SHIPPING build: both bakes on. AO stands in for prod's SSAO and sun-vis is the
   // static shadow term — without it the direct sun renders unshadowed under bridges and in canyons.

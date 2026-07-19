@@ -299,7 +299,7 @@ async function buildOpensaTarget(step: {
   const lodDir = packing ? join(work, 'opensa-lod') : opensa;
   log(`opensa → ${packing ? '.work/opensa-lod' : 'opensa/'} (baking cells — can take several minutes)`);
   await buildOpensaLods({
-    cellSize: config.cellSize,
+    cellSize: config.lodCellSize,
     config: { excludeItems },
     gameDir: game,
     outDir: lodDir,

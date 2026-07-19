@@ -15,7 +15,7 @@ import { createStageProfiler, type ProfileSnapshot, type StageProfiler } from '.
 import { config as defaultConfig } from './lod.config';
 
 export interface BuildOpensaLodsOptions {
-  /** Grid cell size (shortcut for `config.cellSize`); must match the engine streaming grid. */
+  /** Grid cell size (shortcut for `config.cellSize`) — the GAME-side grid, not the render grid. */
   cellSize?: number;
   /** Overrides on top of the default {@link LodConfig}. */
   config?: Partial<LodConfig>;
