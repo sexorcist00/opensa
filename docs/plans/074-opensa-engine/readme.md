@@ -77,7 +77,31 @@ An M0 failure is a cheap, honest answer — that is the point of gating first.
 - **The alpha-edge groundwork**: dilation BFS + DXT software decode exist from the
   [open issue](../../open-issues/fixed/alpha-edge.md).
 
-## Handoff status (2026-07-18, end of day — resume from here)
+## Handoff status (2026-07-19, end of day — resume from here)
+
+**The user is running the full pmb rebuild.** Ask how it went before anything else — three fixes only take
+effect on the other side of it, and three measurements are owed (see
+[078 ledger](../078-global-bug-fixing/readme.md) and the `.oscell` minor-6 note in
+[02 native formats](02-native-formats.md)).
+
+Shipped this day, all in `95bd544` (suite 2282/321, `npm run lint` 0 errors):
+
+- **[078 global bug fixing](../078-global-bug-fixing/readme.md) rounds 1–3** — the first full pmb run's
+  fallout. 7 rows: 5 fixed, 1 not-a-bug, **1 still open (row 7: 42 `<model>.dff not found` — triage only,
+  no rebuild needed; the cheapest next task).** The load-bearing find: map objects, props, clutter and cars
+  all share ONE builder, so its uint16 throw was a map-wide outage — two hi-poly custom cars killed vehicle
+  spawning for all 201 models and took 41 cell LODs with them. Fixed by carrying uint32 index width through
+  the whole rigid path, plus per-placement isolation.
+- **[22 debug tools](22-debug-tools.md) phase 7** — the F2 **Map screen restored** on the engine host
+  (plan 13 had recorded it as a deliberate loss; the user called it the most important element). The
+  streaming driver gained `listCells()` / `setManualCells()`.
+- **[22 debug tools](22-debug-tools.md) phase 8 + `.oscell` minor 6** — the **placement mapper**, so the
+  debugger can pick / name / hide one welded object. Runtime-optional behind `CellStore.debugPicking`.
+
+Unchanged from the 07-18 handoff below: `three` does not exist in this repo, C2 is done, and the agreed
+order after 078 closes is **079 viewers/lab → full migration audit → merge `webgpu-migration` into `main`**.
+
+## Handoff status (2026-07-18 — history)
 
 **THE TEARDOWN IS COMPLETE — [13 cleanup](13-cleanup.md) ran phases 1–8 in a day and `three` no longer
 exists in this repository.** The flip was decided in the morning ([10-flip-decision](10-flip-decision.md),

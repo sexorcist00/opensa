@@ -87,12 +87,21 @@ describe('packProps on a real topple prop', () => {
 
       const report = packProps(gameFs(), defs, bundles, quiet);
 
-      // Only `lamppost1`'s DFF is present, so it is the only conversion; every other topple prop fails as
-      // "not found". A smash-only row must appear in NEITHER list — the gate skipped it before the fs.
+      // Only `lamppost1`'s DFF is present, so it is the only conversion. A smash-only row must appear in
+      // NEITHER list — the gate skipped it before the fs.
       expect(bundles.inserts().map((entry) => entry.name)).toEqual([`${MODEL}.osm`]);
       expect(report.models).toBe(1);
       expect(report.failed.map((failure) => failure.model)).not.toContain(SMASH_ONLY);
-      expect(report.failed.every((failure) => failure.error.includes('not found'))).toBe(true);
+    });
+
+    it('counts a topple row with no model as ABSENT, not as a conversion failure', () => {
+      // `object.dat` is a physics-tuning table, not a model roster: it carries rows (cutscene body parts,
+      // effect names) whose DFF is in no archive, in stock SA too. Reporting those as failures buried the
+      // real ones — 30 of the run's 85 "failures" were this.
+      const report = packProps(gameFs(), defs, createModelBundles(), quiet);
+
+      expect(report.failed).toEqual([]);
+      expect(report.absent).toBeGreaterThan(0);
     });
 
     it('drops duplicate points without shrinking the extent', () => {

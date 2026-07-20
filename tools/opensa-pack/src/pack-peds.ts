@@ -19,6 +19,8 @@ import { createProgress } from './progress';
 const REST_CLIP = 'idle_stance';
 
 export interface PedPackReport {
+  /** Roster slots with no model — the player row and the mission `special0*` placeholders. */
+  readonly absent: number;
   readonly bytes: number;
   readonly failed: readonly { readonly error: string; readonly model: string }[];
   readonly models: number;
@@ -38,7 +40,7 @@ export function packPeds(fs: AssetFileSystem, bundles: ModelBundles, log: (messa
   if (text === null) {
     log('peds: no data/peds.ide — skipped');
 
-    return { deletes: [], report: { bytes: 0, failed: [], models: 0, multiArray: 0 } };
+    return { deletes: [], report: { absent: 0, bytes: 0, failed: [], models: 0, multiArray: 0 } };
   }
 
   // The REST clip the posed `minZ` is measured against — the same one the host plays standing still. A ped
@@ -50,6 +52,7 @@ export function packPeds(fs: AssetFileSystem, bundles: ModelBundles, log: (messa
   const deletes: string[] = [];
   const failed: { error: string; model: string }[] = [];
   const converted = new Set<string>();
+  let absent = 0;
   let bytes = 0;
   let multiArray = 0;
 
@@ -59,6 +62,12 @@ export function packPeds(fs: AssetFileSystem, bundles: ModelBundles, log: (messa
     progress.tick();
     const model = def.model.toLowerCase();
     if (converted.has(model)) {
+      continue;
+    }
+    // Not every roster row names a model: `null` is the player slot (CJ is assembled at runtime from
+    // `player.img` components) and `special01…10` are the mission slots `LOAD_SPECIAL_CHARACTER` fills.
+    if (!fs.has(`${model}.dff`)) {
+      absent += 1;
       continue;
     }
     try {
@@ -76,9 +85,9 @@ export function packPeds(fs: AssetFileSystem, bundles: ModelBundles, log: (messa
   }
   log(
     `peds: ${restClip ? `posed on ${REST_CLIP}` : 'BIND POSE (no ped.ifp — feet level will be wrong)'}, ` +
-      `${converted.size} converted, ${failed.length} failed, ${multiArray} needed several texture arrays, ` +
-      `${(bytes / 1048576).toFixed(1)} MB`,
+      `${converted.size} converted, ${absent} slots with no model, ${failed.length} failed, ` +
+      `${multiArray} needed several texture arrays, ${(bytes / 1048576).toFixed(1)} MB`,
   );
 
-  return { deletes, report: { bytes, failed, models: converted.size, multiArray } };
+  return { deletes, report: { absent, bytes, failed, models: converted.size, multiArray } };
 }

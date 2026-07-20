@@ -335,7 +335,9 @@ function reportFailures(packed: PackedModels, log: (message: string) => void): v
     for (const failure of failures) {
       // Drop the per-model detail (the name, the vertex count) so one cause collapses into one line.
       const reason = failure.error.split(failure.model).join('<model>').replace(/\d+/g, 'N');
-      const key = `${label} ${reason}`;
+      // NUL as the composite-key separator (written as an ESCAPE — a literal one makes the file binary
+      // to grep): no label or error message can contain it, so two classes can never collide.
+      const key = `${label}\u0000${reason}`;
       const bucket = classes.get(key) ?? { models: [], title: `${label} — ${reason}` };
       bucket.models.push(failure.model);
       classes.set(key, bucket);

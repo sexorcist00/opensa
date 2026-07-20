@@ -58,6 +58,14 @@ describe('getTxdChain', () => {
       expect(decode(getTxdChain(archiveOf(['mytreetxd.txd']), 'mytreetxd'))).toEqual(['mytreetxd.txd']);
     });
 
+    it('does not serve one archive a TXD that only another archive carries', () => {
+      // The bytes cache behind the chain is keyed PER ARCHIVE. Keyed by name alone it hands the second
+      // archive whatever the first cached — the wrong dictionary, or one this archive does not have.
+      expect(decode(getTxdChain(archiveOf(['mytreetxd.txd']), 'mytreetxd'))).toEqual(['mytreetxd.txd']);
+
+      expect(getTxdChain(archiveOf([]), 'mytreetxd')).toEqual([]);
+    });
+
     it('still yields the parent when the CHILD TXD is the missing one', () => {
       // A mod may declare a txdp for a dictionary it never ships; the parent must still be reachable.
       setTxdParents(new Map([['mytreetxd', 'vegetation']]));

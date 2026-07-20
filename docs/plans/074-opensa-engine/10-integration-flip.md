@@ -66,7 +66,12 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
       exception is `VehicleHeadlightSystem` (sprites/materials/uniform arrays: three-only by nature; the
       DECISION half of it was extracted to the shared `vehicle-lamps.ts` in step 5). The CHARACTER half of this
       task was already served by the B3 host (ECS Transform + the ped probe — no mesh ref in the loop).
-- [ ] Engine-side ray query (picking + the map-inspector tools).
+- [x] **Engine-side picking — DONE 2026-07-19, but NOT as a general ray query.** Batched cell geometry has
+      no per-vertex id, so neither an ID-buffer readback nor a triangle walk was possible. Instead the
+      `.oscell` gained a per-placement MAPPER (minor 6) and `CellStore.pick()` is a ray/AABB test over it,
+      gated by `debugPicking`. That serves the map inspector (name / position / hide); a TRIANGLE-accurate
+      ray query still does not exist, and would need the mapper's ranges plus retained index data. See
+      [22 debug tools](22-debug-tools.md) phase 8.
 - [x] **Config-API parity audit — DONE 2026-07-13 (same day):** ONE shared driver
       `@opensa/game/adapters/engine-environment-driver` (renderware allowed there by the layer rule) maps
       config→`Engine.environment` for BOTH hosts: sun/moon arcs build DYNAMICALLY from `night.litFade`

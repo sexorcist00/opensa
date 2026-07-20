@@ -1,6 +1,6 @@
 # 078 — Global bug fixing (post-full-pmb-run: engine + tools)
 
-**Status: OPEN — round 1 fixed (2026-07-19).** It runs BEFORE [079 — viewers/lab on pmb output](../079-viewers-lab-on-pmb-output.md);
+**Status: OPEN — rounds 1–4 shipped; every ledger row fixed, awaiting ONE reconvert to confirm (2026-07-20).** It runs BEFORE [079 — viewers/lab on pmb output](../079-viewers-lab-on-pmb-output.md);
 the agreed order after it closes: 079 → full migration audit → merge `webgpu-migration` into `main`.
 
 ## Context
@@ -25,9 +25,11 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 | 2   | `linear-txd/` in the output looks like debug junk                                                                          | —                                  | —                                                                                                                                             | NOT a bug: the gamma/linear TXD sidecar (lod-trees plan 012) that `swapLinearTxds` vets into the opensa `gta3.img` before the pack. Already self-deleting; visible only under `.work/` because `--until` keeps intermediates                                                                                                                                                                                                    | **NOT A BUG**                                           |
 | 3   | `[engine-host] boot failed SyntaxError: Unexpected token '<', "<!doctype "...` when booting from a local folder            | engine                             | boot the engine host with no pak served at `/pak-map`                                                                                         | `setup.ts` trusted `response.ok`, but a dev server answers an unknown path with its SPA `index.html` at **HTTP 200** — so the friendly "no pak" guard was skipped and `.json()` choked on markup. The pak is fetched over HTTP independently of the local-folder VFS, and root `public/` had no `pak-map`                                                                                                                       | **FIXED** (message); the two-sources split is 079's job |
 | 4   | No progress inside the long pack stages; failure COUNTS with no names                                                      | opensa-pack                        | any full run                                                                                                                                  | Each stage logged once after its loop; the per-model failure dump used `console.warn`, was uncapped, and omitted `breakables`                                                                                                                                                                                                                                                                                                   | **FIXED**                                               |
-| 5   | 41 cell LODs (`lod_8_-7`, `lod_7_-7`, … the LS/SF core) fail: "past the uint16 index ceiling"                              | opensa-lod-generator / opensa-pack | full run, see `report.json`                                                                                                                   | Baked cell LODs exceed 65 535 verts; the converter cannot index them → those far LODs are MISSING in the engine                                                                                                                                                                                                                                                                                                                 | **OPEN** — surfaced by fix 4                            |
-| 6   | `admiral`, `comet` fail the uint16 ceiling — **AND no vehicle spawns at all, from the debugger or the road-car registrar** | opensa-pack + renderware + engine  | boot the packed dir; HUD shows `FIXED-STEP ERROR: model has 90609 vertices, past the uint16 index ceiling`, `[bench] road cars registered: 0` | ONE cause, two symptoms. The user's two custom cars (`mods-src/vehicles/`) are hi-poly (86 511 / 82 991 raw verts, ~90 609 after the builder's per-material split). `buildVehicleModel` hardcodes `Uint16Array` and THROWS; the pack therefore leaves their `.dff` in the archive; the runtime then builds that same `.dff`, hits the same throw — **inside the fixed step**, which takes the whole vehicle system down with it | **OPEN** — root-caused 2026-07-19                       |
-| 7   | 30 props + 11 peds + 1 anim object: "`<model>.dff` not found"                                                              | opensa-pack                        | full run                                                                                                                                      | Unverified: ped `special01…10` are stock placeholder slots (benign), but `dyn_*`/`kmb_*` props look like real map content                                                                                                                                                                                                                                                                                                       | **OPEN** — needs triage                                 |
+| 5   | 41 cell LODs (`lod_8_-7`, `lod_7_-7`, … the LS/SF core) fail: "past the uint16 index ceiling"                              | opensa-lod-generator / opensa-pack | full run, see `report.json`                                                                                                                   | The SAME builder as row 6 — `packMapObjects` → `buildModelOsm` → `buildVehicleModel`. Baked cell LODs exceed 65 535 verts, so the uint16 throw dropped them and those far LODs were MISSING in the engine                                                                                                                                                                                                                       | **FIXED by round 3** — verify on the rebuild            |
+| 6   | `admiral`, `comet` fail the uint16 ceiling — **AND no vehicle spawns at all, from the debugger or the road-car registrar** | opensa-pack + renderware + engine  | boot the packed dir; HUD shows `FIXED-STEP ERROR: model has 90609 vertices, past the uint16 index ceiling`, `[bench] road cars registered: 0` | ONE cause, two symptoms. The user's two custom cars (`mods-src/vehicles/`) are hi-poly (86 511 / 82 991 raw verts, ~90 609 after the builder's per-material split). `buildVehicleModel` hardcodes `Uint16Array` and THROWS; the pack therefore leaves their `.dff` in the archive; the runtime then builds that same `.dff`, hits the same throw — **inside the fixed step**, which takes the whole vehicle system down with it | **FIXED** — round 3, field-confirmed                    |
+| 7   | 30 props + 11 peds + 1 anim object: "`<model>.dff` not found"                                                              | opensa-pack                        | full run                                                                                                                                      | All 42 are benign roster rows with no model, reported as failures because three classes lacked the guard `packMapObjects` already had. Props come from `object.dat` (a physics-tuning table, not a roster); peds `null`/`special01…10` are runtime-filled slots; `oilplodbitbase` is a stock far LOD the LOD stage deliberately stripped                                                                                        | **FIXED** — round 4                                     |
+| 8   | The `map objects` stage slows to ~1 model/s as it runs (100/s at the start, 754 s total)                                   | renderware / opensa-pack           | any full run, watch the progress line                                                                                                         | `VehicleTextures` DECODED every texture of a model's whole TXD chain in its constructor. The shared world dictionaries are enormous (`lods.txd` 17 901 textures / 255 MB decoded, `lodtrees.txd` 78 MB) and the models that name them sit at the tail of the IDE order — 238 GB of redundant decode across the stage, almost all of it thrown away                                                                              | **FIXED** — round 4                                     |
+| 9   | `report.json` is not in the `--out` directory                                                                              | perfect-map-builder                | any run with `--out ./build/perfect`                                                                                                          | It IS written, but three levels down (`<out>/opensa/opensa/report.json`) beside the pak it documents. Nothing mirrored it at the run root                                                                                                                                                                                                                                                                                       | **FIXED** — round 4                                     |
 
 ## Working rules
 
@@ -100,8 +102,8 @@ discarded: `loadOptimizedVehicle` resolves `.dff` first, `.osm` second, exactly 
 
 1. The two custom cars in `mods-src/vehicles/` are hi-poly — `admiral` 86 511 and `comet` 82 991 raw verts,
    ~90 609 after the builder's per-material vertex split.
-2. `build-vehicle-model.ts:373` hardcodes `Uint16Array` and throws past 65 536 — deliberately, so indices
-   never wrap silently.
+2. `buildVehicleModel` built the index array as `Uint16Array` and guarded it with an `assertIndexable`
+   throw past 65 536 — deliberately, so indices never wrap silently.
 3. The pack therefore fails those two and, correctly, leaves their `.dff` in the archive for the legacy path.
 4. The runtime then builds that same `.dff` and hits the same throw — **inside the fixed step**. The HUD
    shows `FIXED-STEP ERROR: Error: model has 90609 vertices, past the uint16 index ceiling`, and
@@ -113,9 +115,10 @@ half of this bug.
 **The fix has two independent parts** (both owed; the first rides the pending rebuild):
 
 - **uint32 indices on the rigid path.** `buildVehicleModel` emits `Uint32Array` past the ceiling, the `.osm`
-  fixture records the index width, and `engine.ts:2004` / `:2242` stop hardcoding `'uint16'` in
-  `setIndexBuffer` — the CELL path already does exactly this (`cell.index16 ? 'uint16' : 'uint32'`), so the
-  pattern is established. This fixes the pack failure and the runtime throw at once.
+  fixture records the index width, and the RIGID draw stops hardcoding `'uint16'` in `setIndexBuffer` — the
+  CELL path already does exactly this (`cell.index16 ? 'uint16' : 'uint32'`), so the pattern is established.
+  (The neighbouring CLUTTER draw is deliberately left on uint16 — see round 3.) This fixes the pack failure
+  and the runtime throw at once.
 - **Blast radius.** One bad model must not kill the vehicle system: the fixed-step vehicle work needs
   per-model isolation, so a model that cannot build is skipped and NAMED, not fatal. Worth doing even after
   uint32 — the next unbuildable model should cost one car, not all of them.
@@ -149,6 +152,13 @@ than wrapping:
 | `admiral` | 90 887   | 4 B         | 90 886    |
 | `comet`   | 83 008   | 4 B         | 83 007    |
 
+**Why `admiral` carries three different vertex counts in this ledger** — 91 208 in `report.json`, 90 609 on
+the HUD, 90 887 in the table above — and none of them is wrong: the builder emits vertices PER MATERIAL
+GROUP, so the split depends on how the materials resolved to texture layers. The pack resolved against the
+world dictionary, the runtime against the model's real TXD chain, and the Node probe above against an EMPTY
+`VehicleTextures`. `comet` reads 83 008 in all three because its materials collapse the same way either way.
+All three are far past 65 536, which is the only thing the fix turns on.
+
 **Part B — blast radius.** The parked-car loop in `engine-vehicles.ts` let a build failure escape into
 `setupEngineVehicles`' caller, which catches it and leaves `vehicles` **null** — so two bad cars killed
 spawning for all 201 models, from the debugger AND the road-car registrar. Each placement is now isolated:
@@ -179,3 +189,103 @@ model-specific. The two hi-poly cars are the only difference, and they are the o
 `.dff` at runtime: the other 199 load pre-baked `.osm`, which is the whole point of the pack. Expected to
 go away when the rebuild converts them (now that part A lets it) — **verify it after the rebuild rather
 than assuming it**, and do not read the 51.5 fps row as a renderer regression.
+
+### Row 5 falls to the same fix (2026-07-19)
+
+The 41 cell LODs go through `packMapObjects` → `buildModelOsm` → **`buildVehicleModel`** — the very builder
+round 3 taught uint32. Verified against the run's own input archive
+(`build/perfect/.work/opensa-lod/models/lods.img`), where the failures still sit as `.dff`:
+
+| model      | vertices | index width | max index |
+| ---------- | -------- | ----------- | --------- |
+| `lod_8_-7` | 126 463  | 4 B         | 126 462   |
+| `lod_9_-5` | 96 134   | 4 B         | 96 133    |
+| `lod_7_-7` | 69 525   | 4 B         | 69 524    |
+
+The vertex counts match `report.json` exactly, so these are the same models that failed. They build and
+address correctly now, and the far LODs across the LS/SF core should return with the rebuild. **Confirm on
+the rebuild — do not tick this row from a Node probe alone.**
+
+### The rebuild landed (2026-07-20) — rows 5 and 6 confirmed
+
+The user's full run finished. Its `report.json` clears both rows against the previous run's 85 failures:
+
+| class       | before | after |
+| ----------- | ------ | ----- |
+| vehicles    | 2      | **0** |
+| map objects | 41     | **0** |
+| total       | 85     | 42    |
+
+The 42 that remain are row 7 exactly. Run counters: pak 1 453 903 872 B, 1137 cells, 10 360 map models
+(417 already bundled by name), 201 vehicles. **Still owed:** the in-game LOD check across LS/SF, the fps
+re-measure with `admiral`/`comet` now converted, and the mapper's pak-size delta.
+
+### Round 4 (2026-07-20) — rows 7, 8, 9; batched into ONE reconvert
+
+**Row 7 — the 42 "not found" are roster rows with no model.** Each class was triaged separately and none is
+a real miss:
+
+- **30 props.** The roster is `data/object.dat`, SA's physics-tuning table rather than a model list. The 30
+  are exactly the set whose name appears in NO `.ide` anywhere and whose `.dff` is absent from stock
+  gta3/gta*int/player/cutscene too — they were never streamable in stock SA. `man1_llega`/`man1_rlega` and
+  `glassfx*\*`/`des_burn_win` are leftover cutscene and effect names, not props.
+- **11 peds.** `peds.ide` line 42 is the player slot (`null` — CJ is assembled at runtime from `player.img`
+  components), and 290–299 are the `special01…10` mission slots `LOAD_SPECIAL_CHARACTER` fills. No
+  `special0*.dff` exists in any archive or in `mods-src`.
+- **1 anim object.** `oilplodbitbase` IS in vanilla `gta3.img` but not in the LOD build's — `stripOldLods`
+  removed it, correctly: the `countn2_stream*` binary IPLs point their `lod` index at the 10
+  `oilplodbitbase` rows in `countn2.ipl`, so it is a genuine stock far LOD whose instances were stripped
+  (10 → 0) and whose DFF then went with them. IDE defs are left as-is by design, so the `anim` row outlives
+  its model. Nothing places it.
+
+The fix is the guard `packMapObjects` has had all along (`if (!fs.has(...)) continue` — "an IDE row with no
+model is the map's own business, not a conversion failure"), mirrored into `pack-props.ts`, `pack-peds.ts`
+and `pack-anim-objects.ts`. They count it as `absent` and say so in the stage line rather than skipping
+silently, so a REAL missing model is still visible: `props: 352 converted, 30 rows with no model, 0 failed`.
+Expect the next run to report **0 failures**.
+
+**Row 8 — the map-objects slowdown was a per-model decode of a shared mega-dictionary.** Not O(n²), not GC
+(heap held at 125–300 MB through the collapse): `VehicleTextures`' constructor DXT-decoded every texture in
+the model's whole TXD chain, with no cache. Map objects walk the IDE in load order and the LOD-built models
+sit at the tail, pointing at the giant shared dictionaries:
+
+| txd          | textures | txd MB | decoded RGBA | models | wasted decode |
+| ------------ | -------- | ------ | ------------ | ------ | ------------- |
+| `lods`       | 17 901   | 48.8   | 255 MB       | 564    | 140 GB        |
+| `lodtrees`   | 184      | 78.7   | 236 MB       | 184    | 42 GB         |
+| `vegetation` | 93       | 35.0   | 140 MB       | 136    | 19 GB         |
+
+238 GB of redundant decode — and on the map-object path the packed RGBA is discarded outright
+(`model-osm.ts` sets `ostex` empty; the arrays come from the world dictionary). Two changes, both pure
+memoisation with no output change:
+
+- **Lazy texels.** `SourceTexture` decodes on first use and caches; `pack()` picks the array size from
+  `width`/`height`, which are known without decoding, so only the layers a material actually references are
+  ever decoded.
+- **Two caches.** Raw TXD bytes per archive in `getTxdChain` (byte-budgeted at 256 MB — TXD sizes span KB to
+  80 MB), and the parsed header by buffer identity in a `WeakMap`. Consecutive models share a dictionary, so
+  this collapses a per-model 78 MB read + parse to one.
+
+Measured on the user's own `build/perfect/.work/opensa-lod`, same models, per `buildModelOsm` call:
+
+| model               | before   | lazy only | + caches |
+| ------------------- | -------- | --------- | -------- |
+| `lod_8_-7`          | 1027 ms  | 348 ms    | 309 ms   |
+| `lod_7_-7`          | 890 ms   | 223 ms    | 152 ms   |
+| `lod_7_-5`          | 876 ms   | 204 ms    | 106 ms   |
+| `lodaw_streettree1` | ~1059 ms | 80 ms     | 39 ms    |
+| `lodbg_fir_dead`    | ~1059 ms | 125 ms    | 77 ms    |
+
+**8–27× on the models that dominated the stage.** The 754 s stage should land in the low tens of seconds —
+measure it on the reconvert.
+
+The TXD-bytes cache had to be keyed **per archive**: keyed by name alone it served a second archive whatever
+the first had cached, which the existing `txd-chain` suite caught immediately (a fixture archive that does
+not contain `mytreetxd.txd` was handed one). Pinned as its own test.
+
+**Row 9 — `report.json` at the run root.** The pack writes it beside the pak it documents
+(`<out>/opensa/opensa/`), which is not where a run's summary is looked for. `pipeline.ts` now mirrors it to
+`<out>/report.json` and logs the path; the nested copy stays the pak's own.
+
+Suite 2284/321 green, `tsc` + `eslint` clean. Rows 7 and 8 change converter OUTPUT and the stage timing, so
+they batch into the user's next reconvert (working rule 2).

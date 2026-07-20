@@ -33,6 +33,52 @@ function lruSet<K, V>(cache: Map<K, V>, key: K, value: V, max: number): void {
 /** Parsed IFP animation packages (zone object clips like `counxref.ifp`), by lowercased name. */
 const ifpCache = new Map<string, IfpAnimation[]>();
 
+/**
+ * RAW TXD bytes by lowercased name — the fetch, not the texels.
+ *
+ * Consecutive models share a dictionary (an IDE lists its district together), and the shared ones are huge:
+ * re-reading `lodtrees.txd` from the archive for each of its 184 models cost ~80 ms apiece. This caches the
+ * BYTES only; the decoded-texel cache the comment on {@link getTxdChain} warns against is still forbidden.
+ * Budgeted in bytes rather than entries because TXD sizes span kilobytes to ~80 MB.
+ */
+const txdBytesCache = new WeakMap<ImgArchive, { entries: Map<string, ArrayBuffer>; held: number }>();
+const TXD_BYTES_MAX = 256 * 1024 * 1024;
+
+/**
+ * The archive read for one TXD, memoised under the byte budget (oldest evicted first).
+ *
+ * Keyed PER ARCHIVE, not by name alone: the same dictionary name resolves to different bytes in different
+ * archives (a mod overlay, a second game dir, one test's fixture after another's), and a name-only cache
+ * hands the wrong TXD — or one the archive does not contain at all — to whoever asks next.
+ */
+function cachedTxdBytes(archive: ImgArchive, name: string): ArrayBuffer | null {
+  let cache = txdBytesCache.get(archive);
+  if (!cache) {
+    cache = { entries: new Map(), held: 0 };
+    txdBytesCache.set(archive, cache);
+  }
+  const hit = cache.entries.get(name);
+  if (hit) {
+    cache.entries.delete(name);
+    cache.entries.set(name, hit);
+
+    return hit;
+  }
+  const bytes = archive.get(`${name}.txd`);
+  if (!bytes) {
+    return null;
+  }
+  cache.entries.set(name, bytes);
+  cache.held += bytes.byteLength;
+  while (cache.held > TXD_BYTES_MAX && cache.entries.size > 1) {
+    const oldest = cache.entries.keys().next().value as string;
+    cache.held -= cache.entries.get(oldest)?.byteLength ?? 0;
+    cache.entries.delete(oldest);
+  }
+
+  return bytes;
+}
+
 /** `txdp` parent links (lowercased child → parent). Empty until {@link setTxdParents}; then chains resolve. */
 let txdParents: ReadonlyMap<string, string> = new Map();
 
@@ -76,7 +122,7 @@ export function getTxdChain(archive: ImgArchive, txdName: string): ArrayBuffer[]
   let name: string | undefined = txdName.toLowerCase();
   while (name !== undefined && !seen.has(name)) {
     seen.add(name);
-    const bytes = archive.get(`${name}.txd`);
+    const bytes = cachedTxdBytes(archive, name);
     if (bytes) {
       chain.push(bytes);
     }

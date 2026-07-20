@@ -22,6 +22,8 @@ import type { ModelBundles } from './model-bundle';
 import { buildModelOsm } from './model-osm';
 
 export interface AnimPackReport {
+  /** IDE `anim` rows whose model no longer exists — e.g. a far LOD the LOD stage stripped. */
+  readonly absent: number;
   readonly failed: readonly { readonly error: string; readonly model: string }[];
   readonly frames: number;
   readonly models: number;
@@ -37,12 +39,19 @@ export function packAnimObjects(
 ): AnimPackReport {
   const failed: { error: string; model: string }[] = [];
   const converted = new Set<string>();
+  let absent = 0;
   let skeletonBytes = 0;
   let frames = 0;
 
   for (const def of defs.catalog.values()) {
     const model = def.modelName.toLowerCase();
     if (def.anim === undefined || def.anim === '' || converted.has(model)) {
+      continue;
+    }
+    // The LOD stage strips a stock far LOD's instances and then its DFF, but leaves IDE defs as they are —
+    // so an `anim` row can outlive its model. Nothing places it, so this is not a conversion failure.
+    if (!bundles.hasSection(model, OsmSectionTag.GEOM) && !fs.has(`${model}.dff`)) {
+      absent += 1;
       continue;
     }
     try {
@@ -70,11 +79,11 @@ export function packAnimObjects(
     }
   }
   log(
-    `anim objects: ${converted.size} converted, ${failed.length} failed, ` +
+    `anim objects: ${converted.size} converted, ${absent} rows with no model, ${failed.length} failed, ` +
       `${frames} frames in ${(skeletonBytes / 1024).toFixed(0)} KB`,
   );
 
-  return { failed, frames, models: converted.size, skeletonBytes };
+  return { absent, failed, frames, models: converted.size, skeletonBytes };
 }
 
 /** Every `RWFrame` field a rigid consumer can use, verbatim. `boneId` is -1 when the frame has no HAnim. */

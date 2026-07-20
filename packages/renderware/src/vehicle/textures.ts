@@ -3,22 +3,38 @@
  * into ONE RGBA8 array whose layers all share a size. Ported from the B2 probe's `TextureSet` — same lore,
  * now browser-callable (no node:fs, no tool-side resampler).
  */
-import type { RWMaterial } from '../parsers/binary/types';
+import type { RWMaterial, RWTexture } from '../parsers/binary/types';
 import type { VehicleTextureArray } from './types';
 
 import { parseTxd } from '../parsers/binary/txd';
 import { decodeDxt } from '../textures/dxt';
 
-interface DecodedTexture {
+/**
+ * One source texture, decoded ON DEMAND.
+ *
+ * A dictionary can be enormous and mostly unread: the shared world `lods.txd` carries 17 901 textures while
+ * the model that names it references a handful, and the map-object path throws the packed RGBA away
+ * entirely. Decoding in the constructor cost ~1 s per model on those dictionaries and made the pack's map
+ * stage degrade as it walked into the LOD-built models. Size is known without decoding, which is all
+ * `pack()` needs to choose the array size — only the texels are deferred.
+ */
+interface SourceTexture {
   /** True when the decoded texels actually carry transparency (not merely an alpha-capable format). */
-  alpha: boolean;
-  height: number;
-  rgba: Uint8Array;
-  width: number;
+  alpha: () => boolean;
+  readonly height: number;
+  rgba: () => Uint8Array;
+  readonly width: number;
 }
 
 /** Below this a texel counts as see-through — the same 250 cut the material-alpha check uses. */
 const ALPHA_CUT = 250;
+
+/**
+ * Parsed TXD headers by buffer identity. `getTxdChain` hands the same buffer to every model that names a
+ * dictionary, so the header walk over a shared 80 MB TXD happens once instead of per model. Weak, and it
+ * holds only the entry table — the texels stay lazy.
+ */
+const parsedTxds = new WeakMap<ArrayBuffer, ReturnType<typeof parseTxd>>();
 
 export class VehicleTextures {
   /**
@@ -30,24 +46,19 @@ export class VehicleTextures {
     return this.sources.size === 0;
   }
   private readonly layers: string[] = [];
-  private readonly picked = new Map<string, DecodedTexture>();
+  private readonly picked = new Map<string, SourceTexture>();
 
-  private readonly sources = new Map<string, DecodedTexture>();
+  private readonly sources = new Map<string, SourceTexture>();
 
   /** `txds` are raw TXD bytes, highest priority first (model TXD, then the generic `vehicle.txd`). */
   constructor(txds: readonly ArrayBuffer[]) {
     for (const bytes of txds) {
-      for (const texture of parseTxd(bytes).textures) {
+      for (const texture of parseTxdOnce(bytes).textures) {
         const key = texture.name.toLowerCase();
         if (this.sources.has(key)) {
           continue; // first TXD wins — the model's own overrides the generic set
         }
-        const base = texture.mipmaps[0];
-        const rgba =
-          texture.format === 'rgba8888'
-            ? new Uint8Array(base.data)
-            : decodeDxt(texture.format, base.data, base.width, base.height);
-        this.sources.set(key, { alpha: hasTransparency(rgba), height: base.height, rgba, width: base.width });
+        this.sources.set(key, lazyTexture(texture));
       }
     }
   }
@@ -60,7 +71,7 @@ export class VehicleTextures {
   hasAlpha(material: RWMaterial): boolean {
     const name = material.texture?.name.toLowerCase() ?? '';
 
-    return this.sources.get(name)?.alpha ?? false;
+    return this.sources.get(name)?.alpha() ?? false;
   }
 
   pack(): VehicleTextureArray {
@@ -75,7 +86,7 @@ export class VehicleTextures {
     }
     if (this.layers.length === 0) {
       this.layers.push('white');
-      this.picked.set('white', { alpha: false, height: 4, rgba: whiteTexel(4, 4), width: 4 });
+      this.picked.set('white', WHITE);
     }
     const rgba = new Uint8Array(this.layers.length * width * height * 4);
     this.layers.forEach((name, layer) => {
@@ -118,12 +129,31 @@ export class VehicleTextures {
       return existing;
     }
     const source = name === 'white' ? null : (this.sources.get(name) ?? null);
-    this.picked.set(name, source ?? { alpha: false, height: 4, rgba: whiteTexel(4, 4), width: 4 });
+    this.picked.set(name, source ?? WHITE);
     this.layers.push(name);
 
     return this.layers.length - 1;
   }
 }
+
+function parseTxdOnce(bytes: ArrayBuffer): ReturnType<typeof parseTxd> {
+  const hit = parsedTxds.get(bytes);
+  if (hit) {
+    return hit;
+  }
+  const parsed = parseTxd(bytes);
+  parsedTxds.set(bytes, parsed);
+
+  return parsed;
+}
+
+/** The stand-in for an untextured material and for a name no dictionary carried. */
+const WHITE: SourceTexture = {
+  alpha: () => false,
+  height: 4,
+  rgba: () => whiteTexel(4, 4),
+  width: 4,
+};
 
 /** Scan the decoded texels: an alpha-CAPABLE format (DXT3/5, RGBA) is common on fully opaque textures too. */
 function hasTransparency(rgba: Uint8Array): boolean {
@@ -136,10 +166,37 @@ function hasTransparency(rgba: Uint8Array): boolean {
   return false;
 }
 
+/** Wrap a parsed TXD entry so its texels are decoded at most once, and only if something asks for them. */
+function lazyTexture(texture: RWTexture): SourceTexture {
+  const base = texture.mipmaps[0];
+  let rgba: null | Uint8Array = null;
+  let alpha: boolean | null = null;
+  const decode = (): Uint8Array => {
+    rgba ??=
+      texture.format === 'rgba8888'
+        ? new Uint8Array(base.data)
+        : decodeDxt(texture.format, base.data, base.width, base.height);
+
+    return rgba;
+  };
+
+  return {
+    alpha: (): boolean => {
+      alpha ??= hasTransparency(decode());
+
+      return alpha;
+    },
+    height: base.height,
+    rgba: decode,
+    width: base.width,
+  };
+}
+
 /** Nearest-sample resize onto the array's common size (vehicle textures are small and already pow2). */
-function resample(source: DecodedTexture, width: number, height: number): Uint8Array {
+function resample(source: SourceTexture, width: number, height: number): Uint8Array {
+  const rgba = source.rgba();
   if (source.width === width && source.height === height) {
-    return source.rgba;
+    return rgba;
   }
   const out = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y += 1) {
@@ -147,7 +204,7 @@ function resample(source: DecodedTexture, width: number, height: number): Uint8A
     for (let x = 0; x < width; x += 1) {
       const sx = Math.min(source.width - 1, Math.floor((x / width) * source.width));
       for (let channel = 0; channel < 4; channel += 1) {
-        out[(y * width + x) * 4 + channel] = source.rgba[(sy * source.width + sx) * 4 + channel];
+        out[(y * width + x) * 4 + channel] = rgba[(sy * source.width + sx) * 4 + channel];
       }
     }
   }

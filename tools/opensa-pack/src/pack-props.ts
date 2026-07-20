@@ -24,6 +24,8 @@ import { createProgress } from './progress';
 const MIN_HALF_EXTENT = 0.12;
 
 export interface PropPackReport {
+  /** `object.dat` rows with no model behind them — stale tuning entries, not conversion failures. */
+  readonly absent: number;
   readonly failed: readonly { readonly error: string; readonly model: string }[];
   readonly hullBytes: number;
   readonly models: number;
@@ -42,7 +44,7 @@ export function packProps(
   if (text === null) {
     log('props: no data/object.dat — skipped');
 
-    return { failed: [], hullBytes: 0, models: 0, points: { kept: 0, walked: 0 } };
+    return { absent: 0, failed: [], hullBytes: 0, models: 0, points: { kept: 0, walked: 0 } };
   }
   const txdByModel = new Map<string, string>();
   for (const def of defs.catalog.values()) {
@@ -51,6 +53,7 @@ export function packProps(
 
   const failed: { error: string; model: string }[] = [];
   const converted = new Set<string>();
+  let absent = 0;
   let hullBytes = 0;
   let walked = 0;
   let kept = 0;
@@ -61,6 +64,12 @@ export function packProps(
     progress.tick();
     const model = name.toLowerCase();
     if (entry.uprootLimit <= 0 || converted.has(model)) {
+      continue;
+    }
+    // `object.dat` is SA's physics-tuning table, not a model roster: it carries stale rows (cutscene body
+    // parts, effect names) with no `.dff` in any archive, in stock SA too. Same rule as `packMapObjects`.
+    if (!fs.has(`${model}.dff`)) {
+      absent += 1;
       continue;
     }
     try {
@@ -94,11 +103,11 @@ export function packProps(
   }
   const ratio = walked > 0 ? ((kept / walked) * 100).toFixed(0) : '0';
   log(
-    `props: ${converted.size} topple props converted, ${failed.length} failed, ` +
+    `props: ${converted.size} topple props converted, ${absent} rows with no model, ${failed.length} failed, ` +
       `hulls ${(hullBytes / 1048576).toFixed(1)} MB (${kept} of ${walked} points kept, ${ratio} %)`,
   );
 
-  return { failed, hullBytes, models: converted.size, points: { kept, walked } };
+  return { absent, failed, hullBytes, models: converted.size, points: { kept, walked } };
 }
 
 /** The collider cloud + the fallback box, from every geometry of the raw clump. */

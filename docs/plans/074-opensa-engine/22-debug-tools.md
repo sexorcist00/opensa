@@ -185,7 +185,7 @@ mouse looks)`.
       so the locked/unlocked branch was driven by stubbing `document.pointerLockElement` and dispatching
       `pointerlockchange` — that exercises OUR rule; the request path is prod's code unchanged.
 
-### Phase 7 — close-out
+### Close-out of phases 1–6
 
 - [x] 7.1 The ritual display sweep — **user-run `?bench=all` on both renderers, 2026-07-18**, recorded in
       [bench/series.md § 22·debug-tools](bench/series.md). Engine: all six scenes vsync-locked, avg
@@ -196,7 +196,8 @@ mouse looks)`.
 - [x] 7.2 Series row written (with the honest tail: the residual 20–54 ms hitches are Rapier step time at
       ~1 000 bodies / 5 378 colliders, not the renderer; one 22.8 ms collision-cell spike; residency
       ≈1.6–1.7 GB at 2× with 841 cars). Bucket D stays a POST-FLIP batch for the user to pick from.
-- [ ] 7.3 **Remind the user: parity screenshots → THE FLIP.**
+- [x] 7.3 **Remind the user: parity screenshots → THE FLIP.** Done — the user signed parity off («паритет
+      ок») and [10-flip-decision](10-flip-decision.md) was written 2026-07-18; C2 followed the same day.
 
 ---
 
@@ -247,8 +248,8 @@ only once at boot.
 | Water sliders (6)                                                                                      | engine water = own shader (sea/inland, baked shore); no 1:1 mapping           | 0.6.0/02 water               |
 | Sun size / rays size                                                                                   | `sunSize` comes from timecyc through the driver                               | retire                       |
 | Show Normals / Show Faces                                                                              | three material overrides; engine needs a debug shader variant                 | needs feature                |
-| Map inspector (manual cells, pick, hide/restore)                                                       | needs the plan-10 engine ray query                                            | needs feature                |
-| Draw distance / HD / fog sliders (Map screen)                                                          | boot-time ring on the engine; the Perf screen states `?draw=N` instead        | needs feature (live re-ring) |
+| Map inspector (manual cells, pick, hide/restore)                                                       | SHIPPED phases 7-8 — pinned cells + the `.oscell` placement mapper            | **done**                     |
+| Draw distance / HD / fog sliders (Map screen)                                                          | SHIPPED phase 7 — restored unchanged; its four accessors were already live    | **done**                     |
 | Night stars toggle                                                                                     | the starfield is part of the sky model, no flag                               | retire                       |
 | Night lights (lamps) toggle                                                                            | static lamp pool REMOVED 2026-07-17                                           | plan 17                      |
 | Effects distance (2dfx particles)                                                                      | knob not wired                                                                | plan 17                      |
@@ -264,7 +265,8 @@ only once at boot.
 `aoStrength` · `sunVisStrength` · `windStrength` · `stochastic` (unstable v1) · `skyModel` A/B ·
 `godrayStrength` · `fogHeightK`/`fogHeightMin` · probe on/off + `probeView` · `reflectionStrength`
 raw · `moonPhase` · `bloomThreshold` night profile · dynamic light/corona intensities · bench/soak
-launchers · wishlist: normals/wireframe debug pipeline, engine map inspector (needs ray query).
+launchers · wishlist: normals/wireframe debug pipeline. (The engine map inspector left this list — shipped in
+phases 7–8 below.)
 
 ## Ledger
 
@@ -322,8 +324,9 @@ and the render branch had gone.
 - **`DrawDistanceControls` restored unchanged** — it needed no engine work at all: `streaming()`,
   `setStreaming()`, `fogDistance()`, `setFogDistance()` were all already live on the engine actions.
 
-5 new driver tests (pin ignores rings · pinned level the pak lacks · deselect evicts under the camera · the
-pin clears back to focus streaming · listCells dedups levels); the two capability tests that asserted the Map
+6 new driver tests (pin ignores the rings · the pin LOADS its cell even outside the ring · a pinned level the
+pak lacks · deselect evicts under the camera · the pin clears back to focus streaming · listCells dedups
+levels); the two capability tests that asserted the Map
 screen DROPS for the engine were updated — the behaviour intentionally changed. Suite 2266/321 green.
 
 ### Still open — picking (the selection half)

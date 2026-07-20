@@ -324,7 +324,7 @@ async function buildOpensaTarget(step: {
     return [{ dir: opensa, name: 'opensa' }];
   }
   log('pack → opensa/ (converting the map into our format — several minutes)');
-  await packGameDir({
+  const packed = await packGameDir({
     ao: config.pack.ao,
     ...(config.pack.bakeWorkers !== undefined ? { bakeWorkers: config.pack.bakeWorkers } : {}),
     bakes: config.pack.bakes,
@@ -333,6 +333,15 @@ async function buildOpensaTarget(step: {
     outDir: opensa,
     rect: config.pack.rect,
   });
+  // The pack writes its report beside the pak it belongs to (`opensa/opensa/`), which is three levels down
+  // from the `--out` the run was asked for. Mirror it at the root: that is where a run's summary is looked
+  // for, and the nested copy stays the pak's own.
+  const reportPath = join(outPath, 'report.json');
+  writeFileSync(
+    reportPath,
+    JSON.stringify({ ...packed.report, ...(packed.models ? { models: packed.models } : {}) }, null, 2),
+  );
+  log(`pack: report → ${reportPath}`);
 
   return [
     { dir: lodDir, name: 'opensa-lod' },

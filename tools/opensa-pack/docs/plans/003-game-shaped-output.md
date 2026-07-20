@@ -909,8 +909,10 @@ modded game dir:
 | ---------------- | ----- | ----- | ----- | ----- | --- | --- | --- | --- | ---- |
 | models           | 6 091 | 4 024 | 2 134 | 1 054 | 493 | 275 | 103 | 66  | 43   |
 
-Peak model: `vicstuff_sfe6004` at 29 857 vertices — half the uint16 index ceiling, which the builder now
-asserts rather than letting a bigger model WRAP its indices silently.
+Peak model: `vicstuff_sfe6004` at 29 857 vertices — half the uint16 index ceiling, which the builder
+asserted rather than letting a bigger model WRAP its indices silently. (**Superseded 2026-07-19:** that
+assert turned out to be a map-wide outage — the builder now widens to uint32 instead of throwing. See
+[078 round 3](../../../../docs/plans/078-global-bug-fixing/readme.md).)
 
 **The sweep found a real builder bug, and the user chose to fix it at the source.** 536 models (3.7 %) came
 out with a submesh straddling two texture arrays. Cause: `appendGeometry` kept ONE vertex table per geometry
