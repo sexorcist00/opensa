@@ -80,9 +80,17 @@ Three things worth naming:
 2. **The draws are twice as expensive as anywhere else.** lv-night runs 1680 draws at 8.77 ms pass
    (0.0052 ms/draw); Ganton runs 1374 at 14.08 (0.0102 ms/draw). Fewer calls, far more GPU per call —
    the signature of heavy near-field geometry or overdraw, not of draw-call count.
-3. **The physics world is anomalous.** 1808 bodies / 7475 colliders on **287** road cars, where ls-noon
-   holds 1024 / 5895 on **841**. 1737 of those bodies already exist on the first frame, before a single
-   car spawns. Unexplained; worth its own investigation before any optimisation is chosen.
+3. **The body count is EXPLAINED and is not the cause** (investigated 2026-07-20). `createStaticColliders`
+   (`physics-world.ts:315`) makes one FIXED rigid body per collidable map-object instance, with a trimesh
+   plus boxes and spheres on each — hence ~3.3 colliders per body. Ganton holds more bodies than downtown
+   (1808 vs 1024) because a residential block is many small collidable props where downtown is a few large
+   buildings; the road-car count is unrelated. And it does not cost: `fixed` settles at 1.7–3.3 ms of a
+   ~19 ms frame, while GPU (pass + post + probe + submit) totals ~18.3 ms. **Ganton is ~95 % GPU-bound.**
+
+The live hypothesis for the doubled per-draw cost is therefore the dullest one: at 20–30 m every object
+covers far more screen than it does from 120 m, so the same geometry costs many times the fragments. If so
+this is pixel cost, not geometry or draw count, and `?scale=0.75` should drop the pass roughly with area
+(~14 ms → ~8). That test has not been run.
 
 ## What the chronology shows
 
