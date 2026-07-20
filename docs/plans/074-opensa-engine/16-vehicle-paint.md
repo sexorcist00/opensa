@@ -398,7 +398,7 @@ sun shadow):
 - **Headless verdict**: noon — a soft dark ring hugs the sills and bumpers, car reads seated; night
   21:00 — blends into the dark road, no double-darkening, 120 Hz, GPU pass 2.91 ms night.
 
-Bench: see [bench/series.md](bench/series.md) § 16·ssr-grounding (headless in-game `?bench=all`, on/off).
+Bench: see [bench/series.md](../../benchmarks/opensa-engine/2026-07-18-series.md) § 16·ssr-grounding (headless in-game `?bench=all`, on/off).
 
 ## Steps 3+6 field round 1 (2026-07-17) — night fps + wheel sort + the sunken shadow (ROLLED BACK except item 2)
 

@@ -4,13 +4,13 @@ How the own-engine game is performance-tested: the in-game **bench sweep** (spee
 (stability over time), and the **headless harness** that runs both without a human at the screen.
 Chain context: [074/11 performance testing](../plans/074-opensa-engine/11-performance-testing.md) ·
 [074/10 flip criteria](../plans/074-opensa-engine/10-integration-flip.md) · results ledger:
-[bench/series.md](../plans/074-opensa-engine/bench/series.md).
+[the series](../benchmarks/opensa-engine/2026-07-18-series.md).
 
 ## The standing ritual
 
 **The 6-scene sweep runs after EVERY engine change; deltas drive accept/reject** (user rule,
 2026-07-15). Every run becomes a row in
-[`docs/plans/074-opensa-engine/bench/series.md`](../plans/074-opensa-engine/bench/series.md) — date,
+[`docs/benchmarks/opensa-engine/2026-07-18-series.md`](../benchmarks/opensa-engine/2026-07-18-series.md) — date,
 label, protocol, numbers, verdict. Regression gate: **>10 % on a comparable column fails silently
 nothing — it gets investigated or explicitly accepted in the row's note.** Only compare rows taken the
 same way (see the DPR caveat below).

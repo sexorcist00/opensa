@@ -35,7 +35,8 @@ become the first entries of a permanent series.
 
 ## The record (committed, append-only)
 
-- `docs/plans/074-opensa-engine/bench/` — one JSON per accepted run + `series.md` (a hand-curated table: date,
+- `docs/benchmarks/` — one JSON per accepted run, split `opensa-engine/` vs `three-engine/`, plus the
+  annotated series `opensa-engine/2026-07-18-series.md` (a hand-curated table: date,
   commit, scene, the headline numbers, note). The M0 rows seed it:
 
 | Date       | Commit | Scene                 | frame           | submit  | GPU     | draws | residency | Note                           |
@@ -71,7 +72,7 @@ become the first entries of a permanent series.
 
 ## Measurement ledger
 
-(the series lives in `bench/series.md`; this doc keeps only decisions about the harness itself)
+(the series lives in `docs/benchmarks/opensa-engine/2026-07-18-series.md`; this doc keeps only decisions about the harness itself)
 
 ## Bench road cars (2026-07-16 — user-directed bench realism)
 

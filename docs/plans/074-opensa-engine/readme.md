@@ -117,7 +117,7 @@ prod JS 5.4 → 2.88 MB · `npm run lint` green.** (Suite counts moved again imm
 Ritual re-run PASS — 119.9–120.0 fps on all six scenes, `lateCreates` 0, **draws within ±4 of the
 reference row** (the measurement that proves nothing live was deleted); the `gpuMs.pass` column read
 uniformly high on a busy machine and is flagged as not-a-baseline in
-[series § 13·post-teardown ritual](bench/series.md).
+[series § 13·post-teardown ritual](../../benchmarks/opensa-engine/2026-07-18-series.md).
 
 **The one open decision the close-out left — RESOLVED the same day by [plan 077](../077-unit-coverage.md).**
 The teardown had sunk coverage 88.9 % → 72.3 % (71.9 % mid-teardown; the denominator kept moving as more untested code was deleted) (the deleted WebGL code was heavily unit-tested; the engine
@@ -183,7 +183,7 @@ BAKE (256² rg16float per frame — full decks stopped scaling with the swapchai
 freezing the horizon band — softened to `dir.xz/(dir.y + 0.18)` → (6) prod's `WeatherTransition` wired
 through the driver (`weatherBlend` getter + `lerpCloudProfiles`) — smooth 6 s weather changes are back.
 Full history in the [06 ledger row 4](06-world-effects-parity.md); cost points in
-[bench/series.md](bench/series.md) § Sky v2. FOG (the user's pre-C1 arc #2) = **plan
+[bench/series.md](../../benchmarks/opensa-engine/2026-07-18-series.md) § Sky v2. FOG (the user's pre-C1 arc #2) = **plan
 [21](21-fog-draw-distance.md): P1 (fog ⊂ LOD-ring invariant + `?draw=` knob + distance cull) and P2
 (clouds composite into the fog colour) both FIELD-ACCEPTED 2026-07-17 across two rounds («подгрузки
 почти незаметны» → «все супер»), including the round-2 fixes: cutout fog no longer scales by texel.a
@@ -233,7 +233,7 @@ identical 841-car population; prod's map car generators inherited pitch/slide/de
 real-display prod sweep: 13.5–26.8 fps on land (54 fps empty ocean) vs the engine's vsync-locked 120 Hz
 everywhere — frame-time ratio 4.5–8.9× on land, engine vsync-capped so the true ratio is larger. A
 same-environment headless control (both renderers, one harness) confirms the gap is not display-specific.
-Full tables in [bench/series.md](bench/series.md) § C1 WebGL-prod baseline.
+Full tables in [bench/series.md](../../benchmarks/opensa-engine/2026-07-18-series.md) § C1 WebGL-prod baseline.
 
 **Plan 16 steps 3+6 BUILT AND ROLLED BACK (2026-07-17, user decision):** vehicle SSR (history-reproject
 march) + contact blob shadows went through a full build + three field rounds in one day (night fps
@@ -312,7 +312,7 @@ six** vs prod's **16.2–37.8 fps** on land (59.6 ocean) — frame time 3.2–7.
 fewer, worst-scene total GPU 5.5 ms. This row supersedes the 22·debug-tools sweep and the invalidated
 07-17 `ls-rain-night` / `country-dusk` rows (different fog DATA). Full table +
 the honest tail (physics `fixed` 11–19 ms is the ONLY hitch source left; collider streamer still
-unbudgeted) in [bench/series.md](bench/series.md) § THE PRE-FLIP SWEEP. Parity screenshots taken by the
+unbudgeted) in [bench/series.md](../../benchmarks/opensa-engine/2026-07-18-series.md) § THE PRE-FLIP SWEEP. Parity screenshots taken by the
 user — verdict pending. **The flip's performance case is CLOSED.**
 
 **② THE FLIP IS DECIDED — 2026-07-18. [10-flip-decision.md](10-flip-decision.md).** The OpenSA WebGPU
@@ -446,7 +446,7 @@ WGSL snapshots current; tsc + eslint clean; benches committed through the `city`
   instant load, **and the alpha-edge halo is DEAD (user-confirmed)** — the years-old open issue fixed by
   construction on first run. M0 ✅ → next milestone M1 (streaming proof, plan 05).
 - 2026-07-12 (M1 build-out, session 1) — bench harness landed (074/11: `?bench=orbit|close|drive`, warmup 120 +
-  measure 600, p50/p95/max, JSON download + `bench-compare.ts` with the >10 % gate; `bench/series.md` seeded)
+  measure 600, p50/p95/max, JSON download + `bench-compare.ts` with the >10 % gate; `docs/benchmarks/opensa-engine/2026-07-18-series.md` seeded)
   and the M1 streaming core: pak WORKER (bytes worker-side, transferable slices), thin driver (rings 380/1000 +
   hysteresis + atomic swap + ≤1 create/frame + eviction), manifest grew `cellSize`. Modes: `?pak=1&stream=1`,
   stress `&bench=drive`. Field drive bench:

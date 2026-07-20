@@ -21,15 +21,15 @@ engine is the only target.
 the three-WebGL path was to stay in the tree behind `?engine=three` until a separate explicit command
 (**C2**). That command came the same day, and 13 ran to completion: **there is no longer a WebGL path
 to roll back to.** The comparison artefact is now the git history and the measured rows in
-[bench/series.md](bench/series.md).
+[bench/series.md](../../benchmarks/opensa-engine/2026-07-18-series.md).
 
 ## Criteria — agreed in advance, judged now
 
 | #     | Criterion (as written before the work)                                   | Verdict             | Evidence                                                                                                                                                                                                                                                                                                                                                                          |
 | ----- | ------------------------------------------------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1** | 60 fps ls-noon @2× retina on M3 Pro, and ≥ prod fps on EVERY bench scene | **PASS, by 2×**     | [series § THE PRE-FLIP SWEEP](bench/series.md): 119.6–120.3 fps on all six scenes (vsync-locked, p95 ≤ 9.3 ms = ~4.6 ms unspent) vs prod 16.2–37.8 fps on land, 59.6 on the empty ocean. Frame time 3.2–7.4×, draws 4.8–12.0×.                                                                                                                                                    |
+| **1** | 60 fps ls-noon @2× retina on M3 Pro, and ≥ prod fps on EVERY bench scene | **PASS, by 2×**     | [series § THE PRE-FLIP SWEEP](../../benchmarks/opensa-engine/2026-07-18-series.md): 119.6–120.3 fps on all six scenes (vsync-locked, p95 ≤ 9.3 ms = ~4.6 ms unspent) vs prod 16.2–37.8 fps on land, 59.6 on the empty ocean. Frame time 3.2–7.4×, draws 4.8–12.0×.                                                                                                                |
 | **2** | Visual parity sign-off per bench scene                                   | **PASS**            | User's parity screenshot round on the same sweep, 2026-07-18: «паритет ок». Preceded by the fix batch that made the comparison honest (below).                                                                                                                                                                                                                                    |
-| **3** | Stress matrix green in Chrome + Safari; 30-min soak clean                | **PASS (rescoped)** | 30-min Chrome soak: all 8 self-judged checks green, 107 legs / 192 668 frames, heap SHRANK 2661 → 2499 MB ([series 10·soak30](bench/series.md)). **Safari declared NOT relevant by the user 2026-07-17**; the earlier Safari smoke test passed anyway (plan 10 criterion 3 note).                                                                                                 |
+| **3** | Stress matrix green in Chrome + Safari; 30-min soak clean                | **PASS (rescoped)** | 30-min Chrome soak: all 8 self-judged checks green, 107 legs / 192 668 frames, heap SHRANK 2661 → 2499 MB ([series 10·soak30](../../benchmarks/opensa-engine/2026-07-18-series.md)). **Safari declared NOT relevant by the user 2026-07-17**; the earlier Safari smoke test passed anyway (plan 10 criterion 3 note).                                                             |
 | **4** | ~~Non-WebGPU browsers keep the WebGL path~~ → **WebGPU-first boot gate** | **PASS**            | Criterion REPLACED by user decision 2026-07-17 (no dual-renderer support). `webgpu-gate.ts` probes adapter + `texture-compression-bc` mirroring `initDevice`; no WebGPU → sorry screen. All three branches harness-verified, 5 unit tests.                                                                                                                                        |
 | **5** | 073 flags & code disposition executed                                    | **PASS (C2 done)**  | C2 was commanded the same day and [13](13-cleanup.md) ran to completion: the three-WebGL path, the flag zoo and the dependency are gone (`from 'three'` importers repo-wide: **0**; `node_modules` 512 → 455 MB; prod JS 5.4 → 2.88 MB). The 073 note is marked EXECUTED, and the surviving knobs are documented in [query-parameters.md](../../development/query-parameters.md). |
 
@@ -89,7 +89,7 @@ scenes did not, that is the A/B, and C2 simply does not get called. The gate is 
 
 ## Ledger index (everything this decision rests on)
 
-- [bench/series.md](bench/series.md) — § THE PRE-FLIP SWEEP (the decisive row), § C1 WebGL-prod baseline,
+- [bench/series.md](../../benchmarks/opensa-engine/2026-07-18-series.md) — § THE PRE-FLIP SWEEP (the decisive row), § C1 WebGL-prod baseline,
   § 22·debug-tools, 10·soak30, and every per-plan cost point.
 - [10 integration & flip](10-integration-flip.md) — boundary inventory, criteria as originally written,
   boot gate + soak task records.
