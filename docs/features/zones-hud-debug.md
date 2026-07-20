@@ -25,13 +25,13 @@
   tonemapping, reflections, water, sun/god-rays, clouds, stars, fog), **ProcObj**
   (per-category clutter knobs), Weather selector, Position (live coords + teleports incl.
   Truth's Farm), Map (map-viewer mode with manual cell selection, collision overlay,
-  click-to-describe picking, **Show Normals**, **Show Faces**; right-drag orbits, left-drag pans,
+  click-to-describe picking, **Show Normals**; right-drag orbits, left-drag pans,
   the wheel dollies).
   **On the own-engine host the overlay is capability-gated** (`ENGINE_DEBUG_CAPABILITIES`, plan
   074/22): rows the engine has no equivalent for are HIDDEN rather than left dead — SSAO (replaced by
   the baked AO channel) and the CSM/shadow and pipeline-switch rows. The **Map screen is RESTORED on the
   engine host** (074/22 phases 7-9): pinned cells, a detached camera that lifts overhead on activation,
-  cursor picking against the `.oscell` placement mapper, hide/restore, Show Normals, Show Faces and Show
+  cursor picking against the `.oscell` placement mapper, hide/restore, Show Normals and Show
   Collision — and fog is forced off while it is open, so a district reads cleanly from above. The `game.*`
   calls named in the Map bullets below are the WebGL-era ones; the engine host reaches the same features
   through `mapGame` + engine flags. The engine's live equivalent of the draw-distance slider is `?draw=`
@@ -40,9 +40,10 @@
   (0 normal · 1 unlit · 2 normals), returned BEFORE fog so the normals read clean; the WebGL host used a
   scene-wide `MeshNormalMaterial` override (`game.setShowNormals`). Auto-resets when leaving the screen /
   closing the panel (`resetTo`) or entering the map viewer.
-- **Show Faces** (Map screen): scene-wide wireframe. On the engine this is the `cell-wire` pass — a
-  NON-indexed draw that reads the cell's vertex/index buffers as storage, so `vertex_index % 3` is the
-  barycentric corner and no edge geometry is needed. The WebGL host used a wireframe material override.
+- **Show Faces** — REMOVED from the engine host 2026-07-20. Its `cell-wire` pass needed `STORAGE` usage on
+  every cell's vertex AND index buffer, paid on the whole world at all times for a view that is off in
+  normal play, and the field reported a day-and-night fps drop with it. The viewers already provide a
+  wireframe.
 - **Draw-distance controls** (Map screen): live sliders for the streaming **Draw Distance** (LOD
   ring) + **HD Distance** + **Fog** (`game.setStreaming` / `setFogDistance`; systems read config live
   so they apply next frame). Fog moved here from Atmosphere and **coupled** to the LOD ring — the

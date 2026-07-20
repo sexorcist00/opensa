@@ -245,27 +245,6 @@ describe('Engine frame decisions', () => {
       expect(away).toBe(0);
     });
 
-    it('draws the cell wireframe ONLY while Show Faces is on, one draw per visible cell', async () => {
-      // The wireframe is non-indexed with one vertex per index — that is what makes `vertex_index % 3` the
-      // barycentric corner. If it ever became an indexed draw the shader's whole premise would be gone.
-      const engine = await bootedEngine();
-      const cell = engine.cells.load('0,0', cellBytes());
-
-      gpu.reset();
-      engine.frame(camera());
-      expect(gpu.draws.filter((draw) => draw.pipeline === 'cell-wire')).toEqual([]);
-
-      engine.debugFaces = true;
-      gpu.reset();
-      engine.frame(camera());
-      const wire = gpu.draws.filter((draw) => draw.pipeline === 'cell-wire');
-
-      expect(wire).toHaveLength(1);
-      expect(wire[0].kind).toBe('draw');
-      expect(wire[0].vertexCount).toBe(cell.wireVertexCount);
-      expect(wire[0].bindGroups[2]).toBe('0,0:wire');
-    });
-
     it('survives a cell being loaded and unloaded between frames', async () => {
       const engine = await bootedEngine();
 

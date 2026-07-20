@@ -825,9 +825,6 @@ async function boot(
         }
         clutterLoaded.clear();
       },
-      setDebugFaces: (enabled): void => {
-        engine.debugFaces = enabled;
-      },
       setDebugNormals: (enabled): void => {
         engine.debugNormals = enabled;
       },

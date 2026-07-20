@@ -505,12 +505,6 @@ export class Engine {
    * build's scene-wide `MeshNormalMaterial` override, which WebGPU has no equivalent of. Shares one frame
    * lane with {@link debugUnlit} and WINS over it: one lane, one view, as the old override slot behaved.
    */
-  /**
-   * Debug FACES (074/22): a scene-wide wireframe over the finished frame — three's `overrideMaterial` with
-   * `wireframe: true`. Independent of {@link debugNormals}: this is an overlay pass, not a shading mode, so
-   * the two compose instead of sharing a slot.
-   */
-  debugFaces = false;
   debugNormals = false;
   /**
    * Debug prelit scale (074/13 phase 4): 1 = as authored, 0 = prelit off (texture only), 2 = SA's
@@ -1150,7 +1144,6 @@ export class Engine {
     draws += this.drawParticles(pass);
     draws += this.drawDebris(pass);
     draws += this.drawCoronas(pass, camera);
-    draws += this.drawCellWireframe(pass);
     draws += this.drawDebugLines(pass);
     // Probe DEBUG view (074/16): overdraw the frame with the cube panorama — orientation checked by eye.
     if (this.probeView) {
@@ -2023,31 +2016,6 @@ export class Engine {
    */
   /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
   /** Debug wireframes (074/13 phase 4) — one draw per registered set, skipped entirely when there are none. */
-  /**
-   * "Show Faces" (074/22): the wireframe of every VISIBLE cell, drawn over the finished frame.
-   *
-   * Non-indexed on purpose — see the `cell-wire` shader. One draw per cell, and only while the debug view is
-   * on, so nothing here costs anything in normal play.
-   */
-  private drawCellWireframe(pass: GPURenderPassEncoder): number {
-    if (!this.debugFaces) {
-      return 0;
-    }
-    pass.setPipeline(this.pipelines.get('cell-wire'));
-    pass.setBindGroup(0, this.frameBindGroup);
-    let draws = 0;
-    for (const cell of this.cells.all()) {
-      if (!cell.visible || cell.wireVertexCount === 0) {
-        continue;
-      }
-      pass.setBindGroup(1, cell.cellBindGroup);
-      pass.setBindGroup(2, cell.wireBindGroup);
-      pass.draw(cell.wireVertexCount);
-      draws += 1;
-    }
-
-    return draws;
-  }
 
   private drawClutter(pass: GPURenderPassEncoder): number {
     let draws = 0;

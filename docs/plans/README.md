@@ -10,7 +10,12 @@ The map of planning docs across the repo. **Engine plans** live here (`docs/plan
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`083` (+ sub-plan folders 074, 078–083). Newest first:
+`001`–`084` (+ sub-plan folders 074, 078–083). Newest first:
+
+- **[084 — Vehicle appearance and dynamic-model lighting](./084-vehicle-appearance.md)** — the 2026-07-20
+  field round: wheel-side/scale conventions and the flat dynamic indirect term SHIPPED (with measurements);
+  open = night level vs the map, reflections (floor vs prod-style presets — DECISION NEEDED), AO for
+  dynamics, and a 37 fps night capture. Peds share the row-B root.
 
 - **[083 — Basic CLEO support](./083-cleo-basic/readme.md)** — run compiled `.cs` scripts: Sanny-DB SCM
   decoder (lifts the 0x014B car-gen reader), engine-agnostic thread VM, CleoHost on the rigid `.osm`

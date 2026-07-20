@@ -274,9 +274,10 @@ describe('CellStore', () => {
       expect(new Float32Array(write.data.buffer, write.data.byteOffset, 8)[3]).toBe(0);
     });
 
-    it('sets flag bit 2 for a 16-bit-index cell, composing with the baked-channel bits', async () => {
-      // The wireframe pass reads the index buffer as raw words, so it is the one consumer that has to
-      // unpack the width itself — bit 2 is how the width reaches it.
+    it('keeps the cell flag word to the BAKED-CHANNEL bits only', async () => {
+      // Bit 2 used to carry the index width for the "Show Faces" wireframe, which read the index buffer as
+      // raw words. That pass is gone (the viewers cover it), so the width reaches every remaining consumer
+      // through `setIndexBuffer` and must not leak into the flags.
       const engine = await bootedEngine();
       gpu.reset();
       engine.cells.load(
@@ -289,25 +290,25 @@ describe('CellStore', () => {
       );
 
       const write = writesTo(':cell')[0];
-      expect(new Float32Array(write.data.buffer, write.data.byteOffset, 8)[3]).toBe(5); // sunVis | index16
+      expect(new Float32Array(write.data.buffer, write.data.byteOffset, 8)[3]).toBe(1); // sunVis alone
     });
 
-    it('creates the cell buffers with STORAGE usage, which the wireframe pass binds', async () => {
-      // Dropping this flag is invisible to every other assertion and fails only on a REAL device, at
-      // bind-group creation — which is exactly the kind of defect a recording harness should catch.
+    it('creates the cell buffers WITHOUT storage usage — it costs GPU time for nothing', async () => {
+      // The "Show Faces" pass needed STORAGE on every cell's vertex AND index buffer to look a vertex up by
+      // hand. It was paid on every cell in the world, always, for a debug view that is off in normal play,
+      // and declaring a buffer storage-capable denies the driver fast paths for vertex/index fetch. The
+      // field reported a broad day-and-night fps drop and this was the change that landed with it.
       const engine = await bootedEngine();
       engine.cells.load('0,0', cellBytes());
 
-      expect(gpu.bufferUsage.get('0,0:vb')! & GPUBufferUsage.STORAGE).toBeTruthy();
-      expect(gpu.bufferUsage.get('0,0:ib')! & GPUBufferUsage.STORAGE).toBeTruthy();
-      // …without losing the usages the ordinary draw path needs.
+      expect(gpu.bufferUsage.get('0,0:vb')! & GPUBufferUsage.STORAGE).toBe(0);
+      expect(gpu.bufferUsage.get('0,0:ib')! & GPUBufferUsage.STORAGE).toBe(0);
+      // …while keeping the usages the ordinary draw path needs.
       expect(gpu.bufferUsage.get('0,0:vb')! & GPUBufferUsage.VERTEX).toBeTruthy();
       expect(gpu.bufferUsage.get('0,0:ib')! & GPUBufferUsage.INDEX).toBeTruthy();
     });
 
-    it('counts wireVertexCount from the index WIDTH, not the byte length', async () => {
-      // The wireframe draws non-indexed with one vertex per index; a stride mix-up would silently halve
-      // or double it, which reads as a partial mesh rather than an error.
+    it('records the index WIDTH each cell was decoded with', async () => {
       const engine = await bootedEngine();
       const wide = engine.cells.load('0,0', cellBytes({ index16: false }));
       const narrow = engine.cells.load(
@@ -315,8 +316,8 @@ describe('CellStore', () => {
         cellBytes({ index16: true, indexCount: 3, indexData: new Uint8Array(new Uint16Array([0, 1, 2]).buffer) }),
       );
 
-      expect(wide.wireVertexCount).toBe(3);
-      expect(narrow.wireVertexCount).toBe(3);
+      expect(wide.index16).toBe(false);
+      expect(narrow.index16).toBe(true);
     });
 
     it('pads an odd u16 index payload up to a 4-byte write', async () => {

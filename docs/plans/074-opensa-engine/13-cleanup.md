@@ -614,7 +614,7 @@ forecast — three forecast entries turned out differently and are marked:
       **Bench ritual re-run: PASS — 119.9–120.0 fps on all six, `lateCreates` 0, draws within ±4 of the
       reference**, which is the measurement that actually proves no live subsystem was deleted. The
       `gpuMs.pass` column read uniformly high on a non-quiescent machine; recorded honestly rather than
-      tidied away in [series § 13·post-teardown ritual](bench/series.md).
+      tidied away in [series § 13·post-teardown ritual](../../benchmarks/opensa-engine/2026-07-18-series.md).
 - [x] **8.2 DONE 2026-07-18** — the 073 readme's "Code/flags disposition (temporary)" note is marked
       **EXECUTED, the answer was DELETE**, pointing at the new query-parameter reference.
       **Open-issues re-verified: NEITHER is renderer-dependent, so nothing to close or re-file** —

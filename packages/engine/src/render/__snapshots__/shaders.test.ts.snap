@@ -94,494 +94,6 @@ fn fsBloomUp(in: BloomOut) -> @location(0) vec4f {
 "
 `;
 
-exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > cell-wire 1`] = `
-"
-
-struct Frame {
-  viewProj: mat4x4f,
-  invViewProj: mat4x4f,
-  // camera.w = cloud dome slot A→B crossfade blend (row 15 weather fade; spare vec4 slot).
-  camera: vec4f,
-  // Environment (plan 074/06): sun direction (unit, towards the sun; .w = CURRENT ARC ELEVATION 0..1,
-  // the sun-vis v2 threshold input — 074/07), sun colour,
-  // params  = [dn (0 day → 1 night), indirectScale, directScale, emissiveBoost],
-  // skyTop / skyHorizon = LINEAR sky gradient colours (row 4 v1 — the PBR LUT replaces them later),
-  // fog     = [cutDistance, startDistance, heightK, heightMin] (row 5 — the 068 shape),
-  // params2 = [aoStrength (074/07 baked skyVis → indirect), sunVisStrength (074/07 baked sun shadows),
-  //            time seconds (the wind clock), windStrength (074/06 row 10)],
-  // moonDir/moonColor = the night light (074/06 row 6; colour is BLACK by day — the CPU arc gates it);
-  // moonDir.w = stochastic de-tiling toggle (074/12); moonColor.w = spare (held the retired
-  // cloud-panorama rotation speed).
-  sunDir: vec4f,
-  sunColor: vec4f,
-  params: vec4f,
-  skyTop: vec4f,
-  skyHorizon: vec4f,
-  fog: vec4f,
-  params2: vec4f,
-  moonDir: vec4f,
-  moonColor: vec4f,
-  // params3 = [localLightCount (row 7), spare (held the retired panorama enable), cloudDark, cloudLayerAlpha].
-  params3: vec4f,
-  // The SUN VISUAL (timecyc columns): sunCore = disc colour (.w = angular core radius, rad, from
-  // timecyc sunSize); sunCorona = halo/godray colour (.w = weather cloud COVER 0..1 — prod's uCloudClear
-  // source: stars fade GLOBALLY under overcast). env.sunColor above stays the LIGHT.
-  sunCore: vec4f,
-  sunCorona: vec4f,
-  // Water v1 (074/06 row 12): timecyc WaterRGBA — deep tint (linear rgb) + base opacity in .w.
-  waterColor: vec4f,
-  // params4 = [dynamicLightCount, moonPhase (B6), reflectionStrength (B5r), probeMix (074/16 step 2 —
-  // 0 = analytic sky fallback, 1 = all six faces of the scene probe rendered)]. The pool is ordered
-  // DYNAMIC first, then static 2dfx: the world shades the static half per vertex and the dynamic half per
-  // pixel; vehicles and peds take the STATIC half only, so a car is never lit by its own lamps.
-  params4: vec4f,
-  // timecyc cloud colours (074/09 sky round 2): lowClouds (lit tops) / bottomClouds (shadowed undersides)
-  // tint the cloud deck — the authored dawn/dusk palette turns the WHOLE sky's clouds pink, not just
-  // the sun side (prod applyClouds colours its deck from exactly these columns).
-  cloudTop: vec4f,
-  cloudBottom: vec4f,
-};
-@group(0) @binding(0) var<uniform> frame: Frame;
-@group(0) @binding(1) var skyLut: texture_2d<f32>;
-@group(0) @binding(2) var skyLutSampler: sampler;
-// Bindings 4/5 held the painted cloud-panorama dome — REMOVED 2026-07-17 (procedural cirrus+cumulus
-// carry the clouds); the numbers stay vacant so the rest never renumbers.
-// SA corona billboards from particle.txd: layer 0 = coronastar (lamps, headlights), layer 1 = coronamoon.
-@group(0) @binding(6) var coronaSprites: texture_2d_array<f32>;
-// Baked cumulus field (sky v2 perf): rg = [n, mass] fbm baked over the sky projection by the tiny
-// cloud-field pass each frame — full-deck weathers pay one tap here instead of 10 vnoise per pixel.
-@group(0) @binding(7) var cloudField: texture_2d<f32>;
-
-// ASSET-INSPECTION debug knobs (074/13 phase 4), riding two spare frame lanes so the uniform never grows
-// (it would invalidate every recorded cell bundle). Both are inert at their defaults — scale 1, unlit 0 —
-// so normal play multiplies by one and selects the untouched lit term. NOTE: no backticks in WGSL
-// comments — these modules are JS template literals and a stray backtick ends the string.
-
-/**
- * Baked vertex light: 1 = as authored, 0 = OFF, 2 = SA's MODULATE2X.
- * "Off" is a NEUTRAL multiplier (white), not a zero one — the point is to see the texture without the
- * baked light, not to black the model out. ×2 saturates, as MODULATE2X does on real hardware.
- */
-fn debugPrelit(color: vec3f) -> vec3f {
-  let scale = frame.params3.y;
-  return select(min(color * scale, vec3f(1.0)), vec3f(1.0), scale < 0.5);
-}
-
-/**
- * Debug VIEW mode on the same spare lane: 0 = normal shading, 1 = unlit (flat albedo), 2 = normals.
- *
- * One lane, one view at a time — the three build shared a single scene-wide override slot for exactly this
- * reason, so enabling one debug view disabled the other. Widening the existing flag keeps the uniform the
- * same size, which is load-bearing: growing it invalidates every recorded cell bundle.
- */
-fn debugView() -> f32 {
-  return frame.moonColor.w;
-}
-
-/** Flat albedo (no sun/moon/pool response) when the unlit view is selected. */
-fn debugLit(lit: vec3f) -> vec3f {
-  return select(lit, vec3f(1.0), abs(debugView() - 1.0) < 0.5);
-}
-
-/**
- * Normal visualisation, the same mapping the three MeshNormalMaterial used: n * 0.5 + 0.5. Returned INSTEAD
- * of the shaded colour and before fog — a fogged normal is a fogged debug view, which is no debug view.
- */
-fn debugNormalColor(normal: vec3f) -> vec3f {
-  return normalize(normal) * 0.5 + vec3f(0.5);
-}
-
-/** Whether the normals view is selected. */
-fn debugShowNormals() -> bool {
-  return debugView() > 1.5;
-}
-
-// Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
-// fogged geometry dissolves into exactly the sky behind it, the 068 invariant). The dome is a CPU-built
-// Preetham LUT (074/06 row 4): u = azimuthal angle from the sun (the dome is sun-symmetric), v = elevation.
-// The moon's angular radius as a multiple of the sun's (they are famously close in the real sky; SA draws a
-// bigger, friendlier moon). MOON_BODY_GAIN keeps the lit disc HDR so it feeds the bloom/godray pass.
-const MOON_DISC_SCALE = 3.2;
-const MOON_BODY_GAIN = 10.0;
-
-fn skyBaseFor(dir: vec3f) -> vec3f {
-  let dirXz = normalize(vec2f(dir.x, dir.z) + vec2f(1e-5, 0.0));
-  let sunXz = normalize(vec2f(frame.sunDir.x, frame.sunDir.z) + vec2f(1e-5, 0.0));
-  let azimuth = acos(clamp(dot(dirXz, sunXz), -1.0, 1.0)) / 3.14159265;
-  let v = clamp((dir.y + 0.05) / 1.05, 0.0, 1.0);
-  var col = textureSampleLevel(skyLut, skyLutSampler, vec2f(azimuth, v), 0.0).rgb;
-  // Night sky glow (074/09 sky round — the prod skyBase port): the authored SA night gradient is
-  // near-black, so prod adds the moon's cool Rayleigh scatter (halo + a soft lift of its hemisphere) and
-  // the warm URBAN skyglow band at the horizon (San Andreas is a metropolis — city nights are never
-  // black; the deck reflects the city light, so overcast makes it BRIGHTER). Living in the shared base,
-  // it feeds the world fog too — night fog matches the glowing horizon, the 068 invariant.
-  // FADE (sky round 3 — "включается резко"): the sink window is widened to the whole post-sunset margin
-  // AND the glow rides dn (the hour-long dusk ramp) — the city light breathes in with the darkness
-  // instead of snapping on in the ~40 s the sun needs to cross a narrow horizon band.
-  let pbrNight = (1.0 - smoothstep(-0.22, -0.01, frame.sunDir.y)) * frame.params.x;
-  if (pbrNight > 0.01) {
-    // env.moonColor ≈ (0.34, 0.44, 0.72) × its CPU gate (peak 0.5 × skylight 0.6 → b = 0.216) — recover
-    // the gate so the glow follows the night band/cloud fade without a new UBO slot.
-    let moonGate = clamp(frame.moonColor.b / 0.216, 0.0, 1.0);
-    let moonGlow = vec3f(0.45, 0.62, 1.0) * (0.055 * moonGate);
-    let cityGlow = vec3f(1.0, 0.58, 0.3) * (0.03 * (1.0 + frame.sunCorona.w * 1.2));
-    let moonHalo = pow(max(dot(dir, frame.moonDir.xyz), 0.0), 8.0);
-    let moonHemi = 0.5 + 0.5 * dot(dir, frame.moonDir.xyz);
-    let band = pow(1.0 - clamp(dir.y, 0.0, 1.0), 6.0);
-    col += (moonGlow * (moonHalo * 0.6 + moonHemi * moonHemi * 0.12) + cityGlow * band) * pbrNight;
-  }
-  return col;
-}
-
-// Sun + moon discs, split from the gradient so the cloud layer can OCCLUDE them (row 15): the disc
-// overshoot survives a partial alpha mix, so clouds must attenuate this term, not blend over it.
-fn skyCelestialFor(dir: vec3f) -> vec3f {
-  // The prod-look sun (field round 3): a FILLED disc in the timecyc sunCore colour (yellow/orange —
-  // prod colours its sun mesh with exactly this column) + an exponential warm corona in sunCorona.
-  // Angular sizing comes from timecyc sunSize via sunCore.w. The 3–6× overshoot feeds the godrays
-  // post pass (bright-pass threshold) and clips to a hot centre in the swapchain.
-  let sunDot = clamp(dot(dir, frame.sunDir.xyz), -1.0, 1.0);
-  let ang = acos(sunDot);
-  let coreR = max(frame.sunCore.w, 1e-4);
-  let disc = (1.0 - smoothstep(coreR * 0.75, coreR, ang)) * 6.0;
-  let corona = exp(-ang / (coreR * 2.2)) * 2.6;
-  let glow = exp(-ang / (coreR * 8.0)) * 0.5;
-  let sun = frame.sunCore.rgb * disc + frame.sunCorona.rgb * (corona + glow);
-  let moon = moonFor(dir);
-  // The sea-horizon line CLIPS the discs (field: the sun used to just fade out at ground level): drivers
-  // now let the arcs sink below y=0, and pixels under the horizon drop the disc — the sun/moon visibly
-  // set INTO the ocean, upper sliver last. Soft edge = a few arcminutes of waterline shimmer.
-  let horizonClip = smoothstep(-0.003, 0.005, dir.y);
-  return (sun + moon) * horizonClip;
-}
-
-// Shared value-noise stack (prod SKY_BASE port): hash21 seeds the starfield (sky module) AND the
-// procedural cloud layers; skyFbm drives cirrus (sky module) + the cumulus deck below. Lives in the
-// frame include because cloudLayerFor (car reflections, every rigid consumer) needs cumulus too.
-fn hash21(cell: vec2f) -> f32 {
-  return fract(sin(dot(cell, vec2f(127.1, 311.7))) * 43758.5453);
-}
-
-fn skyVnoise(p: vec2f) -> f32 {
-  let i = floor(p);
-  let f = fract(p);
-  let u = f * f * (3.0 - 2.0 * f);
-  return mix(
-    mix(hash21(i), hash21(i + vec2f(1.0, 0.0)), u.x),
-    mix(hash21(i + vec2f(0.0, 1.0)), hash21(i + vec2f(1.0, 1.0)), u.x),
-    u.y,
-  );
-}
-
-fn skyFbm(p: vec2f) -> f32 {
-  var v = 0.0;
-  var a = 0.5;
-  var q = p;
-  for (var i = 0u; i < 5u; i += 1u) {
-    v += a * skyVnoise(q);
-    q = q * 2.03 + vec2f(1.7);
-    a *= 0.5;
-  }
-  return v;
-}
-
-// Cloud palette (sky v2): timecyc lowClouds/bottomClouds carry the authored HUE (pink dawns, blue
-// nights) but their LUMINANCE was authored for SA's gamma-space multiply — used raw under linear+ACES
-// the noon deck reads as near-black smudges (field: the panorama looked navy for the same reason).
-// Same move as the sky-LUT mood tint: normalize the palette to a hue and drive brightness from a wide
-// day ease (sunlit white tops ~1.05, shaded bases ~0.58; night floors keep moonlit decks visible).
-struct CloudPalette {
-  top: vec3f,
-  bottom: vec3f,
-}
-
-fn cloudPalette() -> CloudPalette {
-  let day = smoothstep(-0.08, 0.25, frame.sunDir.y);
-  let top = frame.cloudTop.rgb;
-  let bottom = frame.cloudBottom.rgb;
-  let topHue = top / max(max(top.r, max(top.g, top.b)), 1e-3);
-  let botHue = bottom / max(max(bottom.r, max(bottom.g, bottom.b)), 1e-3);
-  return CloudPalette(topHue * mix(0.10, 1.05, day), botHue * mix(0.05, 0.58, day));
-}
-
-// CUMULUS (074/06 row 4 sky v2 — the prod applyClouds layer-2 port; the painted panorama is REMOVED):
-// coverage-thresholded fbm masses driven by the weather's cloud cover, lit tops / dark undersides shaped
-// by a second mass octave, one high-frequency detail octave (full coverage otherwise degenerates into
-// huge soft smears), the normalized cloud palette above, golden-hour sun rims with the horizon EASE
-// (the audit rule — a bare sunDir.y sign test snaps at 20:00/6:00). rgb = lit cloud colour, a = density.
-fn cumulusFor(dir: vec3f, sunDot: f32) -> vec4f {
-  if (dir.y <= 0.02) {
-    return vec4f(0.0);
-  }
-  let t = frame.params2.z;
-  // SOFTENED plane projection dir.xz/(dir.y + 0.18) — a hard floor (max(dir.y, k)) FREEZES the mapping
-  // below k: every elevation under it samples the same field point along a vertical line, and storm
-  // decks smeared DOWN to the horizon in vertical streaks (field bug, present in prod too at k=0.12).
-  // The soft denominator compresses features toward the horizon like real perspective instead.
-  let p = dir.xz / (dir.y + 0.18);
-  // n/mass come from the BAKED field (one tap — the field pass owns the 10-vnoise cost per 256² texel,
-  // so a full storm deck no longer scales with the swapchain resolution; field round: cloudy stuttered
-  // at 2× retina). The field bakes drift and the per-weather clump scale in, so p maps statically.
-  let field = textureSampleLevel(cloudField, skyLutSampler, p / 12.0 + vec2f(0.5), 0.0);
-  let n = field.r;
-  let cover = clamp(frame.sunCorona.w, 0.0, 1.0);
-  // Clear-sky edge 0.62 (prod ran 0.92): prod could afford an empty procedural deck because the painted
-  // panorama carried the fair-weather clouds — retired now, so a sunny LS day (cover ~0.14) must still
-  // scatter real puffs (~35-40 % of the dome at density ~0.25 — measured; 0.74 read as an empty sky in
-  // the field). Heavy weathers converge to the same full deck as prod.
-  let edge = mix(0.62, -0.25, cover);
-  let density = smoothstep(edge, edge + 0.20, n);
-  // Early out for clear pixels — skip the detail octave and the palette math.
-  if (density <= 0.002) {
-    return vec4f(0.0);
-  }
-  let mass = field.g;
-  // cloudTop.w = the per-weather clump-size multiplier (sky v2: SMOG big dirty clumps, storm banks) —
-  // recomputed here only for the in-shader DETAIL octave (it needs a higher frequency than the field).
-  let cuv = p * (0.45 * frame.cloudTop.w) + vec2f(t * 0.004, t * 0.002);
-  let palette = cloudPalette();
-  var cloud = mix(palette.bottom, palette.top, smoothstep(0.30, 0.80, n));
-  let bright = smoothstep(0.20, 0.72, n) * mix(0.35, 1.0, smoothstep(0.30, 0.72, mass));
-  cloud *= mix(1.0, mix(0.16, 1.0, bright), frame.params3.z);
-  // Detail octave STRENGTHENS with coverage: a full deck has density 1 everywhere, so all its readable
-  // structure must come from colour modulation (field: CLOUDY read as a flat grey wash without this).
-  let det = skyVnoise(cuv * 5.7 + vec2f(t * 0.006, 0.0));
-  cloud *= 1.0 + (det - 0.5) * mix(0.48, 0.9, cover);
-  let golden = (0.25 + 0.65 * (1.0 - clamp(frame.sunDir.y, 0.0, 1.0))) *
-    smoothstep(0.0, 0.045, frame.sunDir.y);
-  let clearness = 1.0 - cover * 0.85;
-  cloud += frame.sunCorona.rgb * (pow(sunDot, 5.0) * golden * clearness * (0.25 + 0.75 * bright));
-  let horizon = smoothstep(0.02, 0.30, dir.y);
-  return vec4f(cloud, density * horizon);
-}
-
-// CIRRUS (prod applyClouds layer 1): thin, high, stretched wisps drifting slowly on their own heading —
-// what makes a clear day sky read ALIVE. They belong to clear skies, so coverage suppresses them;
-// timecyc cloud colours tint them. Lives in the FRAME include (074/21 P2): the fog colour composites it
-// too, and a sky-module-only helper would be an unresolved call target for world/rigid/water consumers
-// (the black-canvas gotcha, twice already).
-fn cirrusFor(dir: vec3f, sunDot: f32) -> vec4f {
-  if (dir.y <= 0.02) {
-    return vec4f(0.0);
-  }
-  let t = frame.params2.z;
-  // Same softened projection as the cumulus (a hard floor froze the band under it into vertical smears).
-  let cuv = dir.xz / (dir.y + 0.18) * vec2f(0.9, 0.35) + vec2f(t * 0.0013, t * -0.0007) + vec2f(31.7);
-  let cover = clamp(frame.sunCorona.w, 0.0, 1.0);
-  let amount = smoothstep(0.60, 0.92, skyFbm(cuv)) * (1.0 - cover) * 0.55;
-  // The golden term peaks AT the horizon, so a hard y-above-0 select SNAPPED it (0 → 0.9) the frame the
-  // sun crossed — the 19:59/5:59 sky jump. ~8 game-minutes of climb (y 0 → 0.045) ease it in/out instead.
-  let golden = (0.25 + 0.65 * (1.0 - clamp(frame.sunDir.y, 0.0, 1.0))) *
-    smoothstep(0.0, 0.045, frame.sunDir.y);
-  // The normalized palette (sky v2) — the raw timecyc luminance read as dark smears under linear+ACES.
-  let palette = cloudPalette();
-  let tint = mix(palette.bottom, palette.top, 0.85) +
-    frame.sunCorona.rgb * (golden * 0.2 + pow(sunDot, 5.0) * golden * 0.5);
-  let horizon = smoothstep(0.02, 0.30, dir.y);
-  return vec4f(tint, amount * horizon);
-}
-
-// The cloud layer in a direction, factored out of fsSky so a CAR can reflect the clouds too: rgb = the lit
-// cloud colour, a = its coverage. The analytic reflection fallback mirrors the procedural cumulus, so
-// probe-off cars still catch clouds; the probe path renders the real fsSky and needs nothing here.
-// (The painted-panorama branch that lived here was REMOVED 2026-07-17 with the dome textures.)
-fn cloudLayerFor(dir: vec3f) -> vec4f {
-  if (dir.y <= 0.0) {
-    return vec4f(0.0);
-  }
-  return cumulusFor(dir, max(dot(dir, frame.sunDir.xyz), 0.0));
-}
-
-/**
- * The MOON (074/06 row 6, B6): the real SA coronamoon sprite plus a PHASE.
- *
- * Vanilla SA fakes its phases by cropping the sprite, which gives a sliced disc rather than a crescent. We
- * light a sphere instead: the moon's surface normal is reconstructed from the disc coordinates, and the lit
- * fraction follows a phase angle (params4.y, advanced by the host with the in-game days). That yields a real
- * terminator — waxing crescent through full and back — for the cost of a dot product.
- *
- * moonColor is BLACK by day, so this whole term dies with it.
- */
-fn moonFor(dir: vec3f) -> vec3f {
-  let moonDot = dot(dir, frame.moonDir.xyz);
-  // Local disc frame: where in the moon's face this view direction lands, in [-1, 1].
-  let right = normalize(cross(vec3f(0.0, 1.0, 0.0), frame.moonDir.xyz));
-  let up = cross(frame.moonDir.xyz, right);
-  let radius = max(frame.sunCore.w * MOON_DISC_SCALE, 1e-4);
-  let disc = vec2f(dot(dir, right), dot(dir, up)) / radius;
-  let r = length(disc);
-
-  // The sprite across the disc: rgb carries the CRATERS, alpha the round shape (normalised by the host).
-  let uv = disc * 0.5 + vec2f(0.5);
-  let texel = textureSample(coronaSprites, skyLutSampler, uv, 1u);
-  let face = texel.a;
-
-  // Phase: rebuild the surface normal of the sphere at this point and light it from the phase direction.
-  let z = sqrt(max(0.0, 1.0 - min(r * r, 1.0)));
-  let normal = normalize(right * disc.x + up * disc.y + frame.moonDir.xyz * z);
-  let angle = frame.params4.y * 6.2831853;
-  let sunward = normalize(right * sin(angle) + frame.moonDir.xyz * (-cos(angle)));
-  // A soft terminator: earthshine keeps the dark limb faintly visible, as it is in life.
-  let lit = smoothstep(-0.08, 0.12, dot(normal, sunward)) * 0.92 + 0.08;
-
-  let body = texel.rgb * (face * lit * step(r, 1.0) * MOON_BODY_GAIN);
-  // A wide soft halo marks the moon's place in the horizon band even when the disc is a thin crescent.
-  let halo = pow(max(moonDot, 0.0), 96.0) * 2.2;
-  // moonColor now carries the prod-strength LIGHT (peak b 0.216, was 0.105) — rescale so the shipped
-  // disc/halo brightness stays exactly as field-accepted.
-  return frame.moonColor.rgb * 0.486 * (body + vec3f(halo));
-}
-
-// The sky the WORLD FOG dissolves into (068 invariant): the gradient + only the WIDE sun haze. The hot
-// disc/corona must NOT be here — fogged silhouettes picked it up and the sun "shone through buildings"
-// (field round 3). Prod's disc is a separate mesh for the same reason.
-fn skyFogFor(dir: vec3f) -> vec3f {
-  let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
-
-  return skyBaseFor(dir) + frame.sunCorona.rgb * pow(sunDot, 8.0) * 0.06;
-}
-
-// Fog v2 (074/21 P2): a pixel dissolving at the cut must equal the sky INCLUDING its procedural cloud
-// decks — with the base-only colour, distant towers read as flat pale silhouettes against any clouded
-// sky, and close-fog weathers (FOGGY farClip 250) seam hard against a coloured dawn deck. Same
-// cirrus+cumulus composite as fsSky; discs/stars stay excluded (the sun-through-buildings regression,
-// field round 3). The clouds ride a NEAR-DISSOLVE weight, not the raw fog factor (074/21 field round,
-// "clouds walk onto buildings"): partial fog is in-scattered HAZE — the atmosphere gradient — while the
-// building still OCCLUDES the deck behind it, so a mid-fog tower must not pick up the deck's colour
-// (a red dawn deck painted tower facades pink). The weight reaches 1 inside the hard-cut band
-// (fog ≥ 0.85·cut), exactly where the pale-silhouette fix lives — the dissolve stays seamless.
-// The cloud math only runs on meaningfully fogged pixels — the branch is legal in non-uniform control
-// flow because every cloud tap uses explicit-LOD sampling — and cumulus/cirrus carry their own
-// early-outs, so the clear-range majority of the frame pays one comparison.
-fn fogColorFor(dir: vec3f, fogFactor: f32) -> vec3f {
-  var col = skyFogFor(dir);
-  let cloudW = smoothstep(0.7, 1.0, fogFactor) * frame.params3.w;
-  if (cloudW > 0.002) {
-    let sunDot = max(dot(dir, frame.sunDir.xyz), 0.0);
-    let cirrus = cirrusFor(dir, sunDot);
-    col = mix(col, cirrus.rgb, cirrus.a * cloudW);
-    let cumulus = cumulusFor(dir, sunDot);
-    col = mix(col, cumulus.rgb, cumulus.a * cloudW);
-  }
-
-  return col;
-}
-
-// Local light pool (074/06 row 7): up to 64 point lights (2dfx street lamps + host dynamics — vehicle
-// headlights), CPU-filled each frame. The world consumes it in the VERTEX shader (SA is vertex-lit and
-// world verts ≪ pixels); small dynamic entities sample it per pixel. Bounded loop (count ≤ 64 — guardrail).
-struct LocalLight {
-  position: vec4f, // xyz world + radius
-  color: vec4f,    // linear RGB × intensity; w spare
-  // xyz = the direction a SPOT points, w = the cosine of its half-angle. w >= 1.5 means POINT (no cone) —
-  // the same sentinel the three pool uses. Headlights NEED this: as a point light a headlight floods the
-  // whole street, the road behind the car included.
-  dir: vec4f,
-};
-@group(0) @binding(3) var<storage, read> localLights: array<LocalLight>;
-
-// A RANGE of the pool, so the world can split it: static lamps per vertex (they never move, and world verts
-// ≪ pixels), moving lights per pixel. A headlight shaded per vertex is a disaster — SA's road polygons are
-// tens of metres wide, so the beam lands between vertices: it blotches along the mesh normals and disappears
-// outright when the car sits mid-polygon.
-// NB: "from" is a WGSL RESERVED KEYWORD (so is "meta", which bit the B2 vertex layout) — hence first/last.
-// The naga guardrails do not catch reserved words; assertGuardrails now does, so the browser stops being
-// the first thing to notice.
-fn localLightRange(world: vec3f, normal: vec3f, first: u32, last: u32) -> vec3f {
-  var sum = vec3f(0.0);
-  let count = min(last, 64u);
-  for (var index = first; index < count; index += 1u) {
-    let light = localLights[index];
-    var toLight = light.position.xyz - world;
-    let dist = length(toLight);
-    let radius = light.position.w;
-    if (dist < radius) {
-      toLight = toLight / max(dist, 0.001);
-      let spot = light.dir.w < 1.5;
-      // Cone falloff SQUARED toward the rim — a flat plateau reads as a hard-edged searchlight blob.
-      var cone = 1.0;
-      if (spot) {
-        cone = smoothstep(light.dir.w, min(light.dir.w + 0.30, 1.0), dot(-toLight, light.dir.xyz));
-        cone = cone * cone;
-      }
-      // WRAP: a headlight grazes the road almost tangentially, so a hard N·L collapses the beam to nothing.
-      // Wrapping keeps the road pool readable while walls still take more light when they face the lamp.
-      let wrap = select(0.4, 0.25, spot);
-      let ndl = clamp((dot(normal, toLight) + wrap) / (1.0 + wrap), 0.0, 1.0);
-      let falloff = 1.0 - dist / radius;
-      sum += light.color.rgb * (ndl * cone * falloff * falloff);
-    }
-  }
-  return sum;
-}
-
-/** Dynamic half only — the world's PER-PIXEL term. */
-fn localLightDynamic(world: vec3f, normal: vec3f) -> vec3f {
-  return localLightRange(world, normal, 0u, u32(frame.params4.x));
-}
-
-/** Static 2dfx half only — the world's PER-VERTEX term. */
-fn localLightStatic(world: vec3f, normal: vec3f) -> vec3f {
-  return localLightRange(world, normal, u32(frame.params4.x), u32(frame.params3.x));
-}
-
-
-struct CellUniform {
-  // origin.w = per-cell flag bits; bit 2 = 16-bit indices (bits 0/1 are the baked-channel gates).
-  origin: vec4f,
-  uvAnim: vec4f,
-};
-@group(1) @binding(0) var<uniform> cell: CellUniform;
-@group(2) @binding(0) var<storage, read> vertexWords: array<u32>;
-@group(2) @binding(1) var<storage, read> indexWords: array<u32>;
-
-struct WireOut {
-  @builtin(position) clip: vec4f,
-  @location(0) bary: vec3f,
-};
-
-/** One index, from either width. u16 pairs share a word, low half first (little-endian upload). */
-fn readIndex(at: u32, index16: bool) -> u32 {
-  if (index16) {
-    let word = indexWords[at >> 1u];
-    return select(word >> 16u, word & 0xffffu, (at & 1u) == 0u);
-  }
-  return indexWords[at];
-}
-
-@vertex
-fn vsCellWire(@builtin(vertex_index) vi: u32) -> WireOut {
-  let flags = u32(cell.origin.w + 0.5);
-  let index = readIndex(vi, (flags & 4u) != 0u);
-  // Position is the first 3 floats of the oscell vertex.
-  let base = index * 9u;
-  let local = vec3f(
-    bitcast<f32>(vertexWords[base]),
-    bitcast<f32>(vertexWords[base + 1u]),
-    bitcast<f32>(vertexWords[base + 2u]),
-  );
-  var out: WireOut;
-  out.clip = frame.viewProj * vec4f(local + cell.origin.xyz, 1.0);
-  // The corner this vertex plays in its triangle — the whole point of drawing non-indexed.
-  let corner = vi % 3u;
-  out.bary = vec3f(f32(corner == 0u), f32(corner == 1u), f32(corner == 2u));
-  return out;
-}
-
-@fragment
-fn fsCellWire(in: WireOut) -> @location(0) vec4f {
-  // Screen-space derivative keeps the line one pixel wide whatever the distance — a wireframe scaled by
-  // depth turns distant geometry into a solid block, which is the opposite of what it is for.
-  let d = fwidth(in.bary);
-  let edge = min(min(in.bary.x / max(d.x, 0.0001), in.bary.y / max(d.y, 0.0001)), in.bary.z / max(d.z, 0.0001));
-  if (edge > 1.0) {
-    discard; // interior of the triangle
-  }
-  return vec4f(0.0, 1.0, 0.53, 1.0);
-}
-"
-`;
-
 exports[`shader store > positive cases > golden snapshot per module (shader diffs become reviewable) > cloud-field 1`] = `
 "
 
@@ -5528,6 +5040,36 @@ struct RigidVsOut {
 @group(1) @binding(5) var probeTexture: texture_cube<f32>;
 @group(1) @binding(6) var probeSampler: sampler;
 
+// The ground half of the hemisphere: the road under the car, dark, so the sky/ground split reads as shape
+// rather than as a tint. Deliberately the same 0.10 the reflection path uses for asphalt.
+const AMBIENT_GROUND = 0.10;
+
+/**
+ * Hemispheric indirect weight for a DYNAMIC model: how much SKY this surface sees, 1.0 on a horizontal
+ * panel down to AMBIENT_GROUND on one facing straight down.
+ *
+ * What it fixes: the indirect term was a flat vec3f(frame.params.y) — one constant on every pixel of the
+ * car, with no normal, no position and no occlusion in it. By day the sun's N.L gradient hides that; at
+ * night there IS no sun, the indirect term dominates, and the body collapsed into a single flat colour with
+ * no readable edges. The map never had the problem because its indirect term is prelit x params.y x ao,
+ * i.e. baked lighting AND baked AO — neither of which a car has (no vehicle in the game ships a prelit set).
+ *
+ * A WEIGHT, not a colour, and normalised against the sky rather than the hemisphere mean: the term can only
+ * ever DARKEN relative to the old flat fill. Normalising against the mean would conserve energy but brighten
+ * roofs and bonnets by ~1.8x — on a car already reported as too bright at night, that would have made the
+ * loudest surfaces worse. It does drop the car's average indirect by roughly half, which narrows but does
+ * NOT close the measured night gap to the map (car 0.70 vs map ~0.13 at full night); that gap is its own
+ * knob and its own field round.
+ *
+ * Deliberately scalar and per-PIXEL. A sky-coloured version would need the sky LUT, and reading it per
+ * vertex both blew the 16-varying fragment-input limit and forced VERTEX visibility onto a fragment-only
+ * binding; per pixel it is a mix and a multiply over a normal the shader already has, and params.y was
+ * neutral before this anyway, so no colour is lost.
+ */
+fn skyVisibility(normal: vec3f) -> f32 {
+  return mix(AMBIENT_GROUND, 1.0, normal.y * 0.5 + 0.5);
+}
+
 @vertex
 fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   let model = rigidMatrices[in.instance];
@@ -5736,13 +5278,14 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   // swings ~90° across the lens, and a nearby street lamp painted that swing straight onto the glass as a
   // hard gradient broken at the triangle edge. Prod never showed it because its lamp glass is emissive-
   // dominant (emissiveMap × 1..4), which drowns the diffuse term. Ambient keeps the unlit texel detail alive.
+  let ambient = frame.params.y * skyVisibility(normal);
   let glow = rigidLampGlow(in);
   if (glow > 0.0) {
-    return base * (frame.params.y + glow);
+    return base * (ambient + glow);
   }
   // STATIC lamps only, computed per VERTEX (round 5). A car must not be lit by its OWN headlights (the
   // tail lamp sits a metre behind its own lens); prod has the same rule by construction.
-  let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
+  let lit = vec3f(ambient) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
     in.poolDiffuse;
   return base * (debugLit(lit) + in.glow);
 }

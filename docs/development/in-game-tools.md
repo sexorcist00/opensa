@@ -17,7 +17,7 @@ multi-level menu:
 - **Map** — Activate **Map Viewer**: the camera lifts overhead and detaches — **right-drag orbits,
   left-drag pans, the wheel dollies**, and a left **click** (under a small travel threshold, so panning
   never selects) picks the object under the **cursor**. Render chosen map sections (HD/LOD); toggle
-  **Show Collision / Show Normals / Show Faces**. Fog is forced OFF while the viewer is open, so a
+  **Show Collision / Show Normals**. Fog is forced OFF while the viewer is open, so a
   district reads cleanly from 400 u up. A picked object can be **hidden** (Hide object) to peek behind it — hides
   are debug-only and everything is restored on Restore all / leaving the map viewer / closing the debugger.
   Leaving the screen, closing (×), or pressing F2 exits it cleanly.

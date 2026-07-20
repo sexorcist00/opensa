@@ -85,10 +85,6 @@ export interface CellHandle {
   uniform: GPUBuffer;
   vertexBuffer: GPUBuffer;
   visible: boolean;
-  /** group(2) of the "Show Faces" pass: this cell's vertex + index buffers as read-only storage. */
-  wireBindGroup: GPUBindGroup;
-  /** Total indices — the wireframe pass draws non-indexed with one vertex per index. */
-  wireVertexCount: number;
 }
 
 /** What a map-inspector click resolved to. */
@@ -220,15 +216,13 @@ export class CellStore {
     const vertexBuffer = this.resources.createBuffer('cellVertex', {
       label: `${key}:vb`,
       size: align4(cell.vertexData.byteLength),
-      // STORAGE so the "Show Faces" wireframe pass can fetch a vertex BY INDEX in the shader — the only way
-      // to keep `vertex_index % 3` meaningful (see the `cell-wire` module). Read-only, no extra allocation.
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
     this.device.queue.writeBuffer(vertexBuffer, 0, pad4(cell.vertexData));
     const indexBuffer = this.resources.createBuffer('cellIndex', {
       label: `${key}:ib`,
       size: align4(cell.indexData.byteLength),
-      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
+      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
     });
     this.device.queue.writeBuffer(indexBuffer, 0, pad4(cell.indexData));
     const uniform = this.resources.createBuffer('uniform', {
@@ -241,10 +235,7 @@ export class CellStore {
     // reserved bytes (no in-data sentinels needed).
     const cellFlags =
       ((cell.channelMask & OscellChannel.SUN_VIS) !== 0 ? 1 : 0) |
-      ((cell.channelMask & OscellChannel.EMISSIVE) !== 0 ? 2 : 0) |
-      // Bit 2 = 16-bit indices. The wireframe pass reads the index buffer as raw words, so it is the one
-      // consumer that has to unpack the width itself; every other path gets it from `setIndexBuffer`.
-      (cell.index16 ? 4 : 0);
+      ((cell.channelMask & OscellChannel.EMISSIVE) !== 0 ? 2 : 0);
     // Bundle geometry gets IDENTITY uvAnim (0,0,1,1) — a uniform-gated no-op in vsWorld.
     this.device.queue.writeBuffer(uniform, 0, new Float32Array([...cell.origin, cellFlags, 0, 0, 1, 1]));
     const cellBindGroup = this.device.createBindGroup({
@@ -252,15 +243,6 @@ export class CellStore {
       label: `${key}:cell`,
       layout: this.pipelines.cellLayout,
     });
-    const wireBindGroup = this.device.createBindGroup({
-      entries: [
-        { binding: 0, resource: { buffer: vertexBuffer } },
-        { binding: 1, resource: { buffer: indexBuffer } },
-      ],
-      label: `${key}:wire`,
-      layout: this.pipelines.cellWireLayout,
-    });
-
     // ObjectTable groups render OUTSIDE the bundle (hour-gated); the bundle records the rest.
     const objectOwned = new Set<number>();
     for (const object of cell.objects) {
@@ -342,9 +324,6 @@ export class CellStore {
       uniform,
       vertexBuffer,
       visible: true,
-      wireBindGroup,
-      // The wireframe draws NON-indexed with one vertex per index, so this is the whole triangle list.
-      wireVertexCount: Math.floor(cell.indexData.byteLength / (cell.index16 ? 2 : 4)),
     };
     this.cells.set(key, handle);
 

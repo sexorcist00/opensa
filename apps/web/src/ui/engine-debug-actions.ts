@@ -57,7 +57,6 @@ export interface EngineDebugActionsDeps {
   /** Re-scatter clutter after a procobj knob change (render + colliders share one scatter). */
   reloadClutter: () => void;
   /** Show FACES: the engine's scene-wide wireframe overlay pass (074/22). */
-  setDebugFaces: (enabled: boolean) => void;
   /** Show NORMALS: the engine's debug VIEW lane (074/22), replacing three's scene-wide material override. */
   setDebugNormals: (enabled: boolean) => void;
   setFlyMode: (on: boolean) => void;
@@ -167,7 +166,6 @@ export function createEngineDebugActions(deps: EngineDebugActionsDeps): DebugAct
       }
     },
     setShadows: (patch): void => void Object.assign(graphics.shadows, patch),
-    setShowFaces: (enabled): void => deps.setDebugFaces(enabled),
     setShowNormals: (enabled): void => deps.setDebugNormals(enabled),
     setSky: (patch): void => void Object.assign(graphics.sky, patch),
     setSkyModel: (model): void => {

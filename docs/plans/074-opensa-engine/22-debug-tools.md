@@ -188,7 +188,7 @@ mouse looks)`.
 ### Close-out of phases 1–6
 
 - [x] 7.1 The ritual display sweep — **user-run `?bench=all` on both renderers, 2026-07-18**, recorded in
-      [bench/series.md § 22·debug-tools](bench/series.md). Engine: all six scenes vsync-locked, avg
+      [bench/series.md § 22·debug-tools](../../benchmarks/opensa-engine/2026-07-18-series.md). Engine: all six scenes vsync-locked, avg
       8.33–8.41 ms / p95 ≤ 9.4 (118.9–120.1 fps), draws 11–1 069, `lateCreates` 0. Prod (`?engine=three`,
       same 841-car population): 16.7–38.8 fps on land, 4 252–10 078 draws. Frame ratio 3.1–7.2×.
       **The overlay costs nothing while closed** — the engine rows match the pre-port C1 rows (8.32–8.33
@@ -588,3 +588,32 @@ the Playwright lane. The `e2e/` specs mention neither the map screen nor any of 
 screenshots taken this session. Two pure functions worth extracting into `engine-camera.ts` next to their
 tested siblings: `ndcOf` (a missing y-flip breaks picking while `cursorRay`'s own tests stay green) and the
 wheel-dolly step.
+
+## Show Faces — REMOVED (2026-07-20)
+
+The `cell-wire` pass described above is gone, one day after it landed. It was correct and it worked; it was
+not worth its price.
+
+**Why.** The technique needed `GPUBufferUsage.STORAGE` on the vertex AND index buffer of every cell, because
+the shader looks a vertex up by hand to keep `vertex_index % 3` as the barycentric corner. That flag is not
+free and it is not conditional: declaring a buffer storage-capable denies the driver fast paths for
+vertex/index fetch, and it was paid on every cell in the world, in every frame, for a debug view that is off
+in normal play. Buffer usage cannot be changed after creation, so there was no way to pay it only while the
+view is on short of recreating every cell on toggle.
+
+The field reported an fps drop that was present **day and night and unrelated to vehicles** — the profile of
+something touching all world geometry rather than one model class. This landed in the same commit
+(`03f05b1`). The removal was the user's call: the viewers already render a wireframe, so the capability was
+duplicated, and the engine host paid for it in every frame of normal play.
+
+**What went with it:** the `cell-wire` shader module and pipeline, `cellWireLayout`, `CellHandle.wireBindGroup`
+and `wireVertexCount`, `Engine.debugFaces` and `drawCellWireframe`, the `meshFaces` capability and the Show
+Faces button, and cell-flag **bit 2** (the index width, which only that pass had to unpack by hand — every
+other consumer gets it from `setIndexBuffer`).
+
+`cells.test.ts` now pins the inverse invariant: the cell buffers must NOT carry `STORAGE`, and the flag word
+must carry the baked-channel bits only. Show Normals and Show Collision are untouched — neither needs
+storage access.
+
+**Not yet measured.** The fps hypothesis above is reasoned from the usage flag, not benchmarked; the
+before/after belongs in [084](../084-vehicle-appearance.md) row 4 with a number next to it.

@@ -7,12 +7,6 @@
  * arrays, no unbounded loops.
  */
 
-import { OSCELL_VERTEX_STRIDE } from '@opensa/engine-formats/oscell';
-
-/** The oscell vertex stride in 32-bit WORDS — how far the wireframe pass steps to reach the next vertex.
- *  Derived, never typed: a stride change in the format must not need a second edit in WGSL. */
-const STRIDE_WORDS = OSCELL_VERTEX_STRIDE / 4;
-
 const MODULES: Record<string, string> = {
   /**
    * Bloom (074/09 — prod parity with postprocessing's BloomEffect, mipmapBlur path). Three entry points
@@ -124,80 +118,6 @@ fn fsBloomUp(in: BloomOut) -> @location(0) vec4f {
    * split every other rigid draw uses). Unlit and unfogged on purpose — a debug overlay must read the
    * same at 5 m and at 500 m.
    */
-  /**
-   * Scene-wide WIREFRAME for "Show Faces" (074/22) — the replacement for three's `overrideMaterial` with
-   * `wireframe: true`, which WebGPU has no equivalent of.
-   *
-   * The hard part is that a solid wireframe needs to know WHERE IN ITS TRIANGLE each pixel is, and indexed
-   * geometry cannot say: under `drawIndexed`, `vertex_index` is the value READ FROM the index buffer, so
-   * `vertex_index % 3` is meaningless and neighbouring triangles share vertices anyway.
-   *
-   * So this pass does not use the fixed-function index path at all. It draws NON-indexed with
-   * `vertexCount = indexCount` and reads both buffers as storage: `vertex_index` is then the position within
-   * the triangle list, its remainder mod 3 IS the barycentric corner, and the real vertex is looked up
-   * through the index array by hand. No geometry is duplicated and no edge buffer is built — the cost is
-   * the STORAGE usage flag on the cell buffers.
-   *
-   * The fragment then draws the edge with a `fwidth`-scaled band, so lines stay one pixel wide at any
-   * distance, and discards the interior.
-   */
-  'cell-wire': /* wgsl */ `
-#include <frame>
-
-struct CellUniform {
-  // origin.w = per-cell flag bits; bit 2 = 16-bit indices (bits 0/1 are the baked-channel gates).
-  origin: vec4f,
-  uvAnim: vec4f,
-};
-@group(1) @binding(0) var<uniform> cell: CellUniform;
-@group(2) @binding(0) var<storage, read> vertexWords: array<u32>;
-@group(2) @binding(1) var<storage, read> indexWords: array<u32>;
-
-struct WireOut {
-  @builtin(position) clip: vec4f,
-  @location(0) bary: vec3f,
-};
-
-/** One index, from either width. u16 pairs share a word, low half first (little-endian upload). */
-fn readIndex(at: u32, index16: bool) -> u32 {
-  if (index16) {
-    let word = indexWords[at >> 1u];
-    return select(word >> 16u, word & 0xffffu, (at & 1u) == 0u);
-  }
-  return indexWords[at];
-}
-
-@vertex
-fn vsCellWire(@builtin(vertex_index) vi: u32) -> WireOut {
-  let flags = u32(cell.origin.w + 0.5);
-  let index = readIndex(vi, (flags & 4u) != 0u);
-  // Position is the first 3 floats of the oscell vertex.
-  let base = index * ${STRIDE_WORDS}u;
-  let local = vec3f(
-    bitcast<f32>(vertexWords[base]),
-    bitcast<f32>(vertexWords[base + 1u]),
-    bitcast<f32>(vertexWords[base + 2u]),
-  );
-  var out: WireOut;
-  out.clip = frame.viewProj * vec4f(local + cell.origin.xyz, 1.0);
-  // The corner this vertex plays in its triangle — the whole point of drawing non-indexed.
-  let corner = vi % 3u;
-  out.bary = vec3f(f32(corner == 0u), f32(corner == 1u), f32(corner == 2u));
-  return out;
-}
-
-@fragment
-fn fsCellWire(in: WireOut) -> @location(0) vec4f {
-  // Screen-space derivative keeps the line one pixel wide whatever the distance — a wireframe scaled by
-  // depth turns distant geometry into a solid block, which is the opposite of what it is for.
-  let d = fwidth(in.bary);
-  let edge = min(min(in.bary.x / max(d.x, 0.0001), in.bary.y / max(d.y, 0.0001)), in.bary.z / max(d.z, 0.0001));
-  if (edge > 1.0) {
-    discard; // interior of the triangle
-  }
-  return vec4f(0.0, 1.0, 0.53, 1.0);
-}
-`,
   /**
    * Cumulus field bake (074/06 row 4 sky v2 perf): rg = [n, mass] fbm over the SOFTENED sky projection
    * p = dir.xz / (dir.y + 0.18), mapped uv = p/12 + 0.5 (|p| ≤ 5.6 at the horizon fits the domain; a
@@ -1289,6 +1209,36 @@ struct RigidVsOut {
 @group(1) @binding(5) var probeTexture: texture_cube<f32>;
 @group(1) @binding(6) var probeSampler: sampler;
 
+// The ground half of the hemisphere: the road under the car, dark, so the sky/ground split reads as shape
+// rather than as a tint. Deliberately the same 0.10 the reflection path uses for asphalt.
+const AMBIENT_GROUND = 0.10;
+
+/**
+ * Hemispheric indirect weight for a DYNAMIC model: how much SKY this surface sees, 1.0 on a horizontal
+ * panel down to AMBIENT_GROUND on one facing straight down.
+ *
+ * What it fixes: the indirect term was a flat vec3f(frame.params.y) — one constant on every pixel of the
+ * car, with no normal, no position and no occlusion in it. By day the sun's N.L gradient hides that; at
+ * night there IS no sun, the indirect term dominates, and the body collapsed into a single flat colour with
+ * no readable edges. The map never had the problem because its indirect term is prelit x params.y x ao,
+ * i.e. baked lighting AND baked AO — neither of which a car has (no vehicle in the game ships a prelit set).
+ *
+ * A WEIGHT, not a colour, and normalised against the sky rather than the hemisphere mean: the term can only
+ * ever DARKEN relative to the old flat fill. Normalising against the mean would conserve energy but brighten
+ * roofs and bonnets by ~1.8x — on a car already reported as too bright at night, that would have made the
+ * loudest surfaces worse. It does drop the car's average indirect by roughly half, which narrows but does
+ * NOT close the measured night gap to the map (car 0.70 vs map ~0.13 at full night); that gap is its own
+ * knob and its own field round.
+ *
+ * Deliberately scalar and per-PIXEL. A sky-coloured version would need the sky LUT, and reading it per
+ * vertex both blew the 16-varying fragment-input limit and forced VERTEX visibility onto a fragment-only
+ * binding; per pixel it is a mix and a multiply over a normal the shader already has, and params.y was
+ * neutral before this anyway, so no colour is lost.
+ */
+fn skyVisibility(normal: vec3f) -> f32 {
+  return mix(AMBIENT_GROUND, 1.0, normal.y * 0.5 + 0.5);
+}
+
 @vertex
 fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   let model = rigidMatrices[in.instance];
@@ -1497,13 +1447,14 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   // swings ~90° across the lens, and a nearby street lamp painted that swing straight onto the glass as a
   // hard gradient broken at the triangle edge. Prod never showed it because its lamp glass is emissive-
   // dominant (emissiveMap × 1..4), which drowns the diffuse term. Ambient keeps the unlit texel detail alive.
+  let ambient = frame.params.y * skyVisibility(normal);
   let glow = rigidLampGlow(in);
   if (glow > 0.0) {
-    return base * (frame.params.y + glow);
+    return base * (ambient + glow);
   }
   // STATIC lamps only, computed per VERTEX (round 5). A car must not be lit by its OWN headlights (the
   // tail lamp sits a metre behind its own lens); prod has the same rule by construction.
-  let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
+  let lit = vec3f(ambient) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
     in.poolDiffuse;
   return base * (debugLit(lit) + in.glow);
 }

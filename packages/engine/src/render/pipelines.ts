@@ -24,7 +24,6 @@ export type PipelineId =
   | 'bloom-down'
   | 'bloom-prefilter'
   | 'bloom-up'
-  | 'cell-wire'
   | 'cloud-field'
   | 'clutter-cutout'
   | 'clutter-opaque'
@@ -59,8 +58,6 @@ export interface PipelineSet {
   bloomUpLayout: GPUBindGroupLayout;
   /** group(1): per-cell uniform (origin). */
   cellLayout: GPUBindGroupLayout;
-  /** group(2) of the "Show Faces" wireframe pass: the cell's vertex + index buffers, as read-only storage. */
-  cellWireLayout: GPUBindGroupLayout;
   /** group(0) of the cloud-field bake (sky v2 perf): the frame uniform alone. */
   cloudFieldLayout: GPUBindGroupLayout;
   /** group(1) of the clutter pipeline (074/19): per-instance matrices (storage) + the model texture + sampler. */
@@ -123,15 +120,6 @@ export function compileAll(
   const cellLayout = device.createBindGroupLayout({
     entries: [{ binding: 0, buffer: { type: 'uniform' }, visibility: GPUShaderStage.VERTEX }],
     label: 'cell',
-  });
-  // "Show Faces" (074/22): the cell's own vertex + index buffers, read as STORAGE so the wireframe pass can
-  // look a vertex up by hand and keep `vertex_index % 3` as the barycentric corner. See the `cell-wire` shader.
-  const cellWireLayout = device.createBindGroupLayout({
-    entries: [
-      { binding: 0, buffer: { type: 'read-only-storage' }, visibility: GPUShaderStage.VERTEX },
-      { binding: 1, buffer: { type: 'read-only-storage' }, visibility: GPUShaderStage.VERTEX },
-    ],
-    label: 'cell-wire',
   });
   const materialLayout = device.createBindGroupLayout({
     entries: [
@@ -443,32 +431,6 @@ export function compileAll(
     label: 'debug-line',
   });
   compileDebugLinePipelines(device, colorFormat, depthFormat, debugLineLayout, frameLayout, pipelines);
-  pipelines.set(
-    'cell-wire',
-    device.createRenderPipeline({
-      // Depth-TESTED like the geometry it replaces, but it must not write: the wireframe is drawn over the
-      // shaded frame, and a writing overlay would occlude the cells drawn after it.
-      depthStencil: { depthCompare: 'greater-equal', depthWriteEnabled: false, format: depthFormat },
-      fragment: {
-        entryPoint: 'fsCellWire',
-        module: device.createShaderModule({ code: resolveShader('cell-wire'), label: 'cell-wire' }),
-        targets: [{ format: colorFormat }],
-      },
-      label: 'cell-wire',
-      layout: device.createPipelineLayout({
-        bindGroupLayouts: [frameLayout, cellLayout, cellWireLayout],
-        label: 'cell-wire',
-      }),
-      multisample: { count: MSAA_SAMPLES },
-      // No culling: a wireframe of only the front faces reads as a solid shell from above.
-      primitive: { cullMode: 'none', topology: 'triangle-list' },
-      vertex: {
-        entryPoint: 'vsCellWire',
-        module: device.createShaderModule({ code: resolveShader('cell-wire'), label: 'cell-wire' }),
-      },
-    }),
-  );
-
   const coronaModule = device.createShaderModule({ code: resolveShader('corona'), label: 'corona' });
   pipelines.set(
     'corona',
@@ -666,7 +628,6 @@ export function compileAll(
     bloomLayout,
     bloomUpLayout,
     cellLayout,
-    cellWireLayout,
     cloudFieldLayout,
     clutterLayout,
     debrisLayout,

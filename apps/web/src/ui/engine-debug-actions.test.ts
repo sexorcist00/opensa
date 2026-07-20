@@ -24,7 +24,6 @@ function deps(overrides: Partial<EngineDebugActionsDeps> = {}): EngineDebugActio
     placePlayer: vi.fn(),
     playerCoords: (): Vec3 => [10, 20, 30],
     reloadClutter: vi.fn(),
-    setDebugFaces: vi.fn(),
     setDebugNormals: vi.fn(),
     setFlyMode: vi.fn(),
     setHour: (value: number): void => {
@@ -62,7 +61,6 @@ describe('createEngineDebugActions', () => {
 
       expect(() => {
         actions.setShowNormals(true);
-        actions.setShowFaces(true);
         actions.topDownView();
         actions.setPerfEnabled(true);
       }).not.toThrow();
@@ -183,18 +181,15 @@ describe('engineStatRows', () => {
 
 describe('the debug VIEW actions', () => {
   describe('positive cases', () => {
-    it('forwards Show Normals and Show Faces to the engine, in both directions', () => {
-      // Both were literal no-ops before 074/22; a regression back to one would be invisible without this.
-      const setDebugFaces = vi.fn();
+    it('forwards Show Normals to the engine, in both directions', () => {
+      // It was a literal no-op before 074/22; a regression back to one would be invisible without this.
       const setDebugNormals = vi.fn();
-      const actions = createEngineDebugActions(deps({ setDebugFaces, setDebugNormals }));
+      const actions = createEngineDebugActions(deps({ setDebugNormals }));
 
       actions.setShowNormals(true);
       actions.setShowNormals(false);
-      actions.setShowFaces(true);
 
       expect(setDebugNormals.mock.calls).toEqual([[true], [false]]);
-      expect(setDebugFaces.mock.calls).toEqual([[true]]);
     });
   });
 });

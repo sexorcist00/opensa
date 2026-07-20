@@ -147,7 +147,6 @@ export interface DebugActions {
   /** Toggle sun shadows. */
   setShadows(patch: Partial<ShadowsConfig>): void;
   /** Toggle the debug wireframe view (scene-wide wireframe override, bypasses post-FX). */
-  setShowFaces(enabled: boolean): void;
   /** Toggle the debug normals view (scene-wide normal-colour override, bypasses post-FX). */
   setShowNormals(enabled: boolean): void;
   /** Tune the god-rays shader (density/exposure/weight). */
@@ -275,7 +274,6 @@ export function DebugOverlay({
   const [city, setCity] = useState<City>(() => actions.city());
   const [mapActive, setMapActive] = useState(false);
   const [normals, setNormals] = useState(false);
-  const [faces, setFaces] = useState(false);
   const [time, setTime] = useState(() => actions.gameTime());
   const [godrays, setGodrays] = useState(() => actions.godrays());
   const [godraysSize, setGodraysSize] = useState(() => actions.godraysSize());
@@ -309,9 +307,7 @@ export function DebugOverlay({
       setShowCoords(false);
       setMapActive(false); // navigating away leaves the map viewer (the inspector's unmount cleans up)
       setNormals(false);
-      setFaces(false);
       actions.setShowNormals(false); // leaving the screen / closing always drops the debug overrides
-      actions.setShowFaces(false);
     },
     [actions],
   );
@@ -1278,13 +1274,10 @@ export function DebugOverlay({
           {screen === 'map' && capabilities.mapScreen && mapGame && (
             <MapScreen
               actions={actions}
-              faces={faces}
               game={mapGame}
               mapActive={mapActive}
-              meshFaces={capabilities.meshFaces}
               meshOverrides={capabilities.meshOverrides}
               normals={normals}
-              setFaces={setFaces}
               setMapActive={setMapActive}
               setNormals={setNormals}
             />
@@ -1298,24 +1291,18 @@ export function DebugOverlay({
 /** The Map debug screen: normals override + the map viewer (extracted to keep the panel's render simple). */
 function MapScreen({
   actions,
-  faces,
   game,
   mapActive,
-  meshFaces,
   meshOverrides,
   normals,
-  setFaces,
   setMapActive,
   setNormals,
 }: {
   actions: DebugActions;
-  faces: boolean;
   game: MapGame;
   mapActive: boolean;
-  meshFaces: boolean;
   meshOverrides: boolean;
   normals: boolean;
-  setFaces: (value: boolean) => void;
   setMapActive: (update: (previous: boolean) => boolean) => void;
   setNormals: (value: boolean) => void;
 }): ReactElement {
@@ -1325,38 +1312,17 @@ function MapScreen({
         {mapActive ? 'Deactivate Map Viewer' : 'Activate Map Viewer'}
       </button>
       {meshOverrides ? (
-        <>
-          <button
-            onClick={() => {
-              const next = !normals;
-              setNormals(next);
-              setFaces(false); // shares the override slot with Show Faces
-              actions.setShowNormals(next);
-            }}
-            style={styles.actionButton}
-            type="button"
-          >
-            {normals ? 'Hide Normals' : 'Show Normals'}
-          </button>
-          <button
-            disabled={!meshFaces}
-            onClick={() => {
-              const next = !faces;
-              setFaces(next);
-              // The UI keeps the two views mutually exclusive, matching prod's single override slot; the
-              // engine itself would compose them (normals is a shading mode, faces an overlay pass).
-              setNormals(false);
-              actions.setShowFaces(next);
-            }}
-            // A host that cannot honour this must LOOK unavailable — an enabled-looking button that does
-            // nothing reads as a bug (it was reported as one).
-            style={meshFaces ? styles.actionButton : { ...styles.actionButton, cursor: 'not-allowed', opacity: 0.4 }}
-            title={meshFaces ? undefined : 'not available on this renderer'}
-            type="button"
-          >
-            {faces ? 'Hide Faces' : 'Show Faces'}
-          </button>
-        </>
+        <button
+          onClick={() => {
+            const next = !normals;
+            setNormals(next);
+            actions.setShowNormals(next);
+          }}
+          style={styles.actionButton}
+          type="button"
+        >
+          {normals ? 'Hide Normals' : 'Show Normals'}
+        </button>
       ) : null}
       {!mapActive && <DrawDistanceControls actions={actions} />}
       {mapActive && (

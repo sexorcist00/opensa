@@ -28,10 +28,6 @@ export interface DebugCapabilities {
   /** Map screen: the map viewer + section inspector. Restored on the engine host (074/22 phase 7) —
    *  the streaming driver pins cells, the host detaches the camera. Selection is gated separately. */
   readonly mapScreen: boolean;
-  /** Show FACES (scene-wide wireframe) on the Map screen. On the engine this is the `cell-wire` pass — a
-   *  NON-indexed draw reading the cell's vertex/index buffers as storage, so no edge geometry is needed.
-   *  Independent of {@link meshOverrides}: one is an overlay pass, the other a shading mode. */
-  readonly meshFaces: boolean;
   /** Show NORMALS on the Map screen. Restored on the engine host (074/22) as a debug VIEW mode riding a
    *  spare frame-uniform lane, rather than three's scene-wide material override. */
   readonly meshOverrides: boolean;
@@ -93,7 +89,6 @@ export const ALL_DEBUG_CAPABILITIES: DebugCapabilities = {
   headlightSliders: true,
   lampsToggle: true,
   mapScreen: true,
-  meshFaces: true,
   meshOverrides: true,
   moonRig: true,
   pipelineSwitch: true,
@@ -121,8 +116,7 @@ export const ENGINE_DEBUG_CAPABILITIES: DebugCapabilities = {
   godrayShader: false,
   headlightSliders: false,
   lampsToggle: false,
-  mapScreen: true, // restored 074/22 phase 7 — pinned cells + detached camera
-  meshFaces: true, // restored 074/22 — a storage-buffer wireframe pass (no edge geometry needed)
+  mapScreen: true, // restored 074/22 phase 7 — pinned cells + detached camera // restored 074/22 — a storage-buffer wireframe pass (no edge geometry needed)
   meshOverrides: true, // restored 074/22 — a debug VIEW mode on a spare frame lane, not a material override
   moonRig: false,
   pipelineSwitch: false,
