@@ -63,52 +63,16 @@ Kept because every own-engine claim is expressed against it. Same six bench scen
 | 16  | 07-18 | [headless-regional-weather](opensa-engine/2026-07-18-headless-regional-weather.json)       | after the regional-weather fix (074/21); headless DPR 2                  | 119.8–120 fps · world pass 1.58–2.12 · draws 9–1 044 · late 0            |
 | 17  | 07-18 | [headless-postteardown-ritual](opensa-engine/2026-07-18-headless-postteardown-ritual.json) | the 074/13 phase-8 ritual after `three` was deleted; same harness as #16 | 119.9–120 fps · pass 1.94–2.40 · draws within ±5 of #16 — **PASS**       |
 
-## Ganton, street level (2026-07-20) — the scene the sweep was missing
+## Ganton, street level — WITHDRAWN (2026-07-20)
 
-| scene        | fps      | avg    | p95  | draws | pass      | probe | bodies / colliders | road cars |
-| ------------ | -------- | ------ | ---- | ----- | --------- | ----- | ------------------ | --------- |
-| ganton-noon  | **52.0** | 19.213 | 24.3 | 1367  | **14.07** | 2.544 | 1808 / 7475        | 287       |
-| ganton-night | **51.8** | 19.320 | 24.7 | 1374  | **14.08** | 2.559 | 1808 / 7475        | 287       |
+The `ganton-noon` / `ganton-night` datasets and the `?scale=0.75` decomposition that stood here were
+**deleted as invalid**. Every one of them was taken through the folder picker, and the folder picker does
+not select the world: `engine-canvas-host.tsx:264` always fetches the pak from `public/pak-map`. So the
+runs measured whatever sat in `public/`, not the pak they were labelled with, and the pak-to-pak
+comparisons they supported measured nothing at all.
 
-**The worst scenes in the sweep** — worse than country-dusk (60.6) — which is what the field kept reporting
-and no existing path could reproduce. Both are GPU-bound: pass is ~73 % of the frame.
-
-Three things worth naming:
-
-1. **Night costs nothing here.** 51.8 vs 52.0 on the same path. Whatever makes Ganton heavy is not a
-   night effect, so the earlier "night is worse" impression does not survive a controlled pair.
-2. **The draws are twice as expensive as anywhere else.** lv-night runs 1680 draws at 8.77 ms pass
-   (0.0052 ms/draw); Ganton runs 1374 at 14.08 (0.0102 ms/draw). Fewer calls, far more GPU per call —
-   the signature of heavy near-field geometry or overdraw, not of draw-call count.
-3. **The body count is EXPLAINED and is not the cause** (investigated 2026-07-20). `createStaticColliders`
-   (`physics-world.ts:315`) makes one FIXED rigid body per collidable map-object instance, with a trimesh
-   plus boxes and spheres on each — hence ~3.3 colliders per body. Ganton holds more bodies than downtown
-   (1808 vs 1024) because a residential block is many small collidable props where downtown is a few large
-   buildings; the road-car count is unrelated. And it does not cost: `fixed` settles at 1.7–3.3 ms of a
-   ~19 ms frame, while GPU (pass + post + probe + submit) totals ~18.3 ms. **Ganton is ~95 % GPU-bound.**
-
-### The scale pair decomposes the frame (2026-07-20)
-
-Running the identical path at `?scale=0.75` and solving `pass = F + V·area` across the two resolutions
-splits the world pass into its two halves:
-
-| term                          | ms       | share | scales with resolution? |
-| ----------------------------- | -------- | ----- | ----------------------- |
-| fragments (V)                 | **9.97** | 71 %  | yes                     |
-| geometry / vertex / draws (F) | **4.10** | 29 %  | no                      |
-| probe                         | **2.54** | —     | **no, not at all**      |
-| post                          | 1.06     | —     | yes                     |
-
-So the dull hypothesis was RIGHT but only for 71 % of the pass — Ganton is predominantly fragment-bound at
-street level, which is why the per-draw cost looked doubled. The remaining 4.1 ms is real geometry/draw work
-that no resolution knob will touch.
-
-**The probe did not move by 0.001 ms** (2.544 → 2.545): it renders into a fixed-size cubemap, so the render
-scale never reaches it. That makes it a flat ~2.5 ms tax — 13 % of the frame at scale 1, and a rising share
-as everything else shrinks.
-
-Net effect of the knob: 52.0 → **68.7 fps** (+32 %), avg 19.21 → 14.55, p95 24.3 → 18.4. Useful, and far
-short of 120 — so scale alone is not the answer here.
+The scenes themselves (`bench-scenes.ts`) are kept — the street-level path was the right idea. Re-measure
+once the pak source follows the loading mode.
 
 ## What the chronology shows
 
