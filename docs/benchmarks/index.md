@@ -87,10 +87,28 @@ Three things worth naming:
    buildings; the road-car count is unrelated. And it does not cost: `fixed` settles at 1.7–3.3 ms of a
    ~19 ms frame, while GPU (pass + post + probe + submit) totals ~18.3 ms. **Ganton is ~95 % GPU-bound.**
 
-The live hypothesis for the doubled per-draw cost is therefore the dullest one: at 20–30 m every object
-covers far more screen than it does from 120 m, so the same geometry costs many times the fragments. If so
-this is pixel cost, not geometry or draw count, and `?scale=0.75` should drop the pass roughly with area
-(~14 ms → ~8). That test has not been run.
+### The scale pair decomposes the frame (2026-07-20)
+
+Running the identical path at `?scale=0.75` and solving `pass = F + V·area` across the two resolutions
+splits the world pass into its two halves:
+
+| term                          | ms       | share | scales with resolution? |
+| ----------------------------- | -------- | ----- | ----------------------- |
+| fragments (V)                 | **9.97** | 71 %  | yes                     |
+| geometry / vertex / draws (F) | **4.10** | 29 %  | no                      |
+| probe                         | **2.54** | —     | **no, not at all**      |
+| post                          | 1.06     | —     | yes                     |
+
+So the dull hypothesis was RIGHT but only for 71 % of the pass — Ganton is predominantly fragment-bound at
+street level, which is why the per-draw cost looked doubled. The remaining 4.1 ms is real geometry/draw work
+that no resolution knob will touch.
+
+**The probe did not move by 0.001 ms** (2.544 → 2.545): it renders into a fixed-size cubemap, so the render
+scale never reaches it. That makes it a flat ~2.5 ms tax — 13 % of the frame at scale 1, and a rising share
+as everything else shrinks.
+
+Net effect of the knob: 52.0 → **68.7 fps** (+32 %), avg 19.21 → 14.55, p95 24.3 → 18.4. Useful, and far
+short of 120 — so scale alone is not the answer here.
 
 ## What the chronology shows
 
