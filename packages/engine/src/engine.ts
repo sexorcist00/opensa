@@ -501,6 +501,18 @@ const LIGHT_POINT = 2;
 export class Engine {
   cells!: CellStore;
   /**
+   * Debug normals (074/22): shade every surface by its world normal instead of its material — the three
+   * build's scene-wide `MeshNormalMaterial` override, which WebGPU has no equivalent of. Shares one frame
+   * lane with {@link debugUnlit} and WINS over it: one lane, one view, as the old override slot behaved.
+   */
+  /**
+   * Debug FACES (074/22): a scene-wide wireframe over the finished frame — three's `overrideMaterial` with
+   * `wireframe: true`. Independent of {@link debugNormals}: this is an overlay pass, not a shading mode, so
+   * the two compose instead of sharing a slot.
+   */
+  debugFaces = false;
+  debugNormals = false;
+  /**
    * Debug prelit scale (074/13 phase 4): 1 = as authored, 0 = prelit off (texture only), 2 = SA's
    * MODULATE2X. An ASSET-INSPECTION knob for the viewers — "is this model dark because its baked vertex
    * light is dark?" — not a look tunable. Never anything but 1 in normal play.
@@ -923,6 +935,20 @@ export class Engine {
     return id;
   }
 
+  /**
+   * The debug VIEW the frame lane carries: 0 normal · 1 unlit · 2 normals.
+   *
+   * Normals WIN over unlit — one lane means one view at a time, exactly as the three build's single
+   * scene-wide override slot behaved.
+   */
+  debugViewMode(): number {
+    if (this.debugNormals) {
+      return 2;
+    }
+
+    return this.debugUnlit ? 1 : 0;
+  }
+
   destroyDebugLines(id: DebugLineSetId): void {
     const set = this.debugLines.get(id);
     if (!set) {
@@ -993,11 +1019,11 @@ export class Engine {
     const moonLen = Math.hypot(env.moonDir[0], env.moonDir[1], env.moonDir[2]) || 1;
     // moonDir.w doubles as the stochastic de-tiling toggle (074/12) — the vec4 slot was spare.
     frameData.set([env.moonDir[0] / moonLen, env.moonDir[1] / moonLen, env.moonDir[2] / moonLen, env.stochastic], 64);
-    // moonColor.w = the debug UNLIT flag (074/13) — the slot was spare (it held the retired
-    // cloud-panorama rotation speed). Debug knobs ride spare lanes on purpose: GROWING the frame
-    // uniform would mint a new buffer and bind group, and that bind group is recorded into every cell
-    // bundle — every bundle would go stale.
-    frameData.set([...env.moonColor, this.debugUnlit ? 1 : 0], 68);
+    // moonColor.w = the debug VIEW mode (074/13, widened 074/22): 0 normal · 1 unlit · 2 normals. The slot
+    // was spare (it held the retired cloud-panorama rotation speed). Debug knobs ride spare lanes on
+    // purpose: GROWING the frame uniform would mint a new buffer and bind group, and that bind group is
+    // recorded into every cell bundle — every bundle would go stale.
+    frameData.set([...env.moonColor, this.debugViewMode()], 68);
     // params3 = [light count (row 7), cloud layer on, cloudDark, cloud layer alpha] — row 15.
     frameData[72] = this.fillLightPool();
     // params4.x = how many of those lights are DYNAMIC (they come first in the pool). The world shades the
@@ -1124,6 +1150,7 @@ export class Engine {
     draws += this.drawParticles(pass);
     draws += this.drawDebris(pass);
     draws += this.drawCoronas(pass, camera);
+    draws += this.drawCellWireframe(pass);
     draws += this.drawDebugLines(pass);
     // Probe DEBUG view (074/16): overdraw the frame with the cube panorama — orientation checked by eye.
     if (this.probeView) {
@@ -1985,6 +2012,43 @@ export class Engine {
     this.resources.destroyTexture('texture', entry.texture, entry.textureBytes);
   }
 
+  /**
+   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
+   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
+   * the known cost knob if a street full of parked cars ever pushes the draw budget.
+   */
+  /**
+   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
+   * so this is genuinely all there is to it per frame.
+   */
+  /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
+  /** Debug wireframes (074/13 phase 4) — one draw per registered set, skipped entirely when there are none. */
+  /**
+   * "Show Faces" (074/22): the wireframe of every VISIBLE cell, drawn over the finished frame.
+   *
+   * Non-indexed on purpose — see the `cell-wire` shader. One draw per cell, and only while the debug view is
+   * on, so nothing here costs anything in normal play.
+   */
+  private drawCellWireframe(pass: GPURenderPassEncoder): number {
+    if (!this.debugFaces) {
+      return 0;
+    }
+    pass.setPipeline(this.pipelines.get('cell-wire'));
+    pass.setBindGroup(0, this.frameBindGroup);
+    let draws = 0;
+    for (const cell of this.cells.all()) {
+      if (!cell.visible || cell.wireVertexCount === 0) {
+        continue;
+      }
+      pass.setBindGroup(1, cell.cellBindGroup);
+      pass.setBindGroup(2, cell.wireBindGroup);
+      pass.draw(cell.wireVertexCount);
+      draws += 1;
+    }
+
+    return draws;
+  }
+
   private drawClutter(pass: GPURenderPassEncoder): number {
     let draws = 0;
     for (const cellDraws of this.clutterCells.values()) {
@@ -2103,17 +2167,6 @@ export class Engine {
     return this.debris.length;
   }
 
-  /**
-   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
-   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
-   * the known cost knob if a street full of parked cars ever pushes the draw budget.
-   */
-  /**
-   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
-   * so this is genuinely all there is to it per frame.
-   */
-  /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
-  /** Debug wireframes (074/13 phase 4) — one draw per registered set, skipped entirely when there are none. */
   private drawDebugLines(pass: GPURenderPassEncoder): number {
     if (this.debugLines.size === 0) {
       return 0;

@@ -1281,6 +1281,7 @@ export function DebugOverlay({
               faces={faces}
               game={mapGame}
               mapActive={mapActive}
+              meshFaces={capabilities.meshFaces}
               meshOverrides={capabilities.meshOverrides}
               normals={normals}
               setFaces={setFaces}
@@ -1300,6 +1301,7 @@ function MapScreen({
   faces,
   game,
   mapActive,
+  meshFaces,
   meshOverrides,
   normals,
   setFaces,
@@ -1310,6 +1312,7 @@ function MapScreen({
   faces: boolean;
   game: MapGame;
   mapActive: boolean;
+  meshFaces: boolean;
   meshOverrides: boolean;
   normals: boolean;
   setFaces: (value: boolean) => void;
@@ -1336,13 +1339,19 @@ function MapScreen({
             {normals ? 'Hide Normals' : 'Show Normals'}
           </button>
           <button
+            disabled={!meshFaces}
             onClick={() => {
               const next = !faces;
               setFaces(next);
-              setNormals(false); // shares the override slot with Show Normals
+              // The UI keeps the two views mutually exclusive, matching prod's single override slot; the
+              // engine itself would compose them (normals is a shading mode, faces an overlay pass).
+              setNormals(false);
               actions.setShowFaces(next);
             }}
-            style={styles.actionButton}
+            // A host that cannot honour this must LOOK unavailable — an enabled-looking button that does
+            // nothing reads as a bug (it was reported as one).
+            style={meshFaces ? styles.actionButton : { ...styles.actionButton, cursor: 'not-allowed', opacity: 0.4 }}
+            title={meshFaces ? undefined : 'not available on this renderer'}
             type="button"
           >
             {faces ? 'Hide Faces' : 'Show Faces'}

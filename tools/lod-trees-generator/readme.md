@@ -13,7 +13,10 @@ tsx tools/lod-trees-generator/src/cli.ts --out <path> --game <path> [--in <dir>]
   already-`lod*`) are skipped (logged); a single-file `--in` is taken as-is. **Omit `--in` to bake the built-in SA
   tree roster (`@opensa/map-placement/vegetation`) straight from the game's own `gta3.img`** — no model/texture
   swap, just impostor LODs for the stock trees. (SA has no "is-a-tree" data flag, so the roster + the "type" cut
-  are curated — review/extend `map-placement/src/vegetation.ts` for a given game.)
+  are curated — review/extend `map-placement/src/vegetation.ts` for a given game.) A path that does not exist, or
+  a directory with no `.dff`, falls back to that same built-in roster with a logged line — for callers that pass
+  the folder unconditionally (perfect-map-builder passes `<mods-src>/vegetation` either way). An `--in` typed
+  EXPLICITLY on the CLI is still validated, so a typo is loud.
 - `--out` — drop-in output: **`gta3.img`** (repacked) holding the LOD DFFs + atlas TXD + COL + swapped HD + edited
   streams, and **`data/`** with the patched `gta.dat`/IPLs/IDEs. The per-impostor DFFs + `lodtrees.txd`/`.col` are
   packed into the IMG and their redundant root copies removed, so the root is left clean (only `gta3.img` +

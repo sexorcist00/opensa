@@ -21,7 +21,7 @@
    export interface BuildOptions {
      gamePath: string;
      outPath: string;
-     inPath?: string; // HD procobj folder (mods-src/procobj)
+     inPath?: string; // HD procobj folder (mods-src/procobj); absent path or no .dff ⇒ treated as omitted
      modloader?: boolean; // default false → full mirror
      prelight: boolean; // the pipeline runs bare prelight (no info file)
      prelightInfo?: PrelightInfo;

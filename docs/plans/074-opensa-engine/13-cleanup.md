@@ -446,7 +446,9 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
       applied in `rigidShade` AND `worldShade`, so they work for the viewers and for any future
       in-game debug UI. Semantics note: "off" is a NEUTRAL (white) multiplier, not a zero one — the
       point is to see the texture without the baked light, not to black the model out. ×2 saturates,
-      as MODULATE2X does on hardware. - **They ride SPARE frame-uniform lanes** (`params3.y`, `moonColor.w`) rather than growing the
+      as MODULATE2X does on hardware. - **They ride SPARE frame-uniform lanes** (`params3.y`, `moonColor.w`) rather than growing the struct.
+      `moonColor.w` was later WIDENED by 074/22 from a boolean unlit flag into a debug VIEW mode (0 normal ·
+      1 unlit · 2 normals), so only one of the two views is active at a time rather than growing the
       struct. Growing it would mint a new buffer + bind group, and that bind group is recorded into
       every cell render bundle — every bundle in the world would go stale. Recorded in the shader. - **`debug-line` pipeline** — a line-list, depth-tested but never depth-writing, drawn after the
       coronas inside the existing world pass (so it costs no extra pass and lands in the same GPU

@@ -24,6 +24,8 @@ function deps(overrides: Partial<EngineDebugActionsDeps> = {}): EngineDebugActio
     placePlayer: vi.fn(),
     playerCoords: (): Vec3 => [10, 20, 30],
     reloadClutter: vi.fn(),
+    setDebugFaces: vi.fn(),
+    setDebugNormals: vi.fn(),
     setFlyMode: vi.fn(),
     setHour: (value: number): void => {
       hour = value;
@@ -175,6 +177,24 @@ describe('engineStatRows', () => {
       expect(rows.get('draw distance')).toBe('1000 m — boot-only, set with ?draw=N');
       expect(rows.get('fog start → cut')).toBe('0 → 700 m (timecyc)');
       expect(rows.get('weather')).toBe('15 CLOUDY_CS');
+    });
+  });
+});
+
+describe('the debug VIEW actions', () => {
+  describe('positive cases', () => {
+    it('forwards Show Normals and Show Faces to the engine, in both directions', () => {
+      // Both were literal no-ops before 074/22; a regression back to one would be invisible without this.
+      const setDebugFaces = vi.fn();
+      const setDebugNormals = vi.fn();
+      const actions = createEngineDebugActions(deps({ setDebugFaces, setDebugNormals }));
+
+      actions.setShowNormals(true);
+      actions.setShowNormals(false);
+      actions.setShowFaces(true);
+
+      expect(setDebugNormals.mock.calls).toEqual([[true], [false]]);
+      expect(setDebugFaces.mock.calls).toEqual([[true]]);
     });
   });
 });

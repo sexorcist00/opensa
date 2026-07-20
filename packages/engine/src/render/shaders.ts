@@ -7,6 +7,12 @@
  * arrays, no unbounded loops.
  */
 
+import { OSCELL_VERTEX_STRIDE } from '@opensa/engine-formats/oscell';
+
+/** The oscell vertex stride in 32-bit WORDS — how far the wireframe pass steps to reach the next vertex.
+ *  Derived, never typed: a stride change in the format must not need a second edit in WGSL. */
+const STRIDE_WORDS = OSCELL_VERTEX_STRIDE / 4;
+
 const MODULES: Record<string, string> = {
   /**
    * Bloom (074/09 — prod parity with postprocessing's BloomEffect, mipmapBlur path). Three entry points
@@ -105,6 +111,91 @@ fn fsBloomUp(in: BloomOut) -> @location(0) vec4f {
   c += textureSampleLevel(inputTex, inputSampler, in.uv + t * vec2f(1.0, -1.0), 0.0) * 0.0625;
   let support = textureSampleLevel(supportTex, inputSampler, in.uv, 0.0);
   return mix(support, c, bloom.params.z);
+}
+`,
+  /**
+   * Probe DEBUG view (074/16): replaces the frame with the cube sampled along the camera ray — look around
+   * and the probe's content must match the world's orientation exactly. This is how the face table is
+   * verified by EYE instead of by convention-table archaeology. Lab/game: append the probeview URL flag.
+   */
+  /**
+   * Debug wireframes (074/13 phase 4): world-space line lists for COL collision hulls and mesh edges.
+   * Vertices arrive already in ENGINE space, so the host owns the GTA Z-up → Y-up basis change (the same
+   * split every other rigid draw uses). Unlit and unfogged on purpose — a debug overlay must read the
+   * same at 5 m and at 500 m.
+   */
+  /**
+   * Scene-wide WIREFRAME for "Show Faces" (074/22) — the replacement for three's `overrideMaterial` with
+   * `wireframe: true`, which WebGPU has no equivalent of.
+   *
+   * The hard part is that a solid wireframe needs to know WHERE IN ITS TRIANGLE each pixel is, and indexed
+   * geometry cannot say: under `drawIndexed`, `vertex_index` is the value READ FROM the index buffer, so
+   * `vertex_index % 3` is meaningless and neighbouring triangles share vertices anyway.
+   *
+   * So this pass does not use the fixed-function index path at all. It draws NON-indexed with
+   * `vertexCount = indexCount` and reads both buffers as storage: `vertex_index` is then the position within
+   * the triangle list, its remainder mod 3 IS the barycentric corner, and the real vertex is looked up
+   * through the index array by hand. No geometry is duplicated and no edge buffer is built — the cost is
+   * the STORAGE usage flag on the cell buffers.
+   *
+   * The fragment then draws the edge with a `fwidth`-scaled band, so lines stay one pixel wide at any
+   * distance, and discards the interior.
+   */
+  'cell-wire': /* wgsl */ `
+#include <frame>
+
+struct CellUniform {
+  // origin.w = per-cell flag bits; bit 2 = 16-bit indices (bits 0/1 are the baked-channel gates).
+  origin: vec4f,
+  uvAnim: vec4f,
+};
+@group(1) @binding(0) var<uniform> cell: CellUniform;
+@group(2) @binding(0) var<storage, read> vertexWords: array<u32>;
+@group(2) @binding(1) var<storage, read> indexWords: array<u32>;
+
+struct WireOut {
+  @builtin(position) clip: vec4f,
+  @location(0) bary: vec3f,
+};
+
+/** One index, from either width. u16 pairs share a word, low half first (little-endian upload). */
+fn readIndex(at: u32, index16: bool) -> u32 {
+  if (index16) {
+    let word = indexWords[at >> 1u];
+    return select(word >> 16u, word & 0xffffu, (at & 1u) == 0u);
+  }
+  return indexWords[at];
+}
+
+@vertex
+fn vsCellWire(@builtin(vertex_index) vi: u32) -> WireOut {
+  let flags = u32(cell.origin.w + 0.5);
+  let index = readIndex(vi, (flags & 4u) != 0u);
+  // Position is the first 3 floats of the oscell vertex.
+  let base = index * ${STRIDE_WORDS}u;
+  let local = vec3f(
+    bitcast<f32>(vertexWords[base]),
+    bitcast<f32>(vertexWords[base + 1u]),
+    bitcast<f32>(vertexWords[base + 2u]),
+  );
+  var out: WireOut;
+  out.clip = frame.viewProj * vec4f(local + cell.origin.xyz, 1.0);
+  // The corner this vertex plays in its triangle — the whole point of drawing non-indexed.
+  let corner = vi % 3u;
+  out.bary = vec3f(f32(corner == 0u), f32(corner == 1u), f32(corner == 2u));
+  return out;
+}
+
+@fragment
+fn fsCellWire(in: WireOut) -> @location(0) vec4f {
+  // Screen-space derivative keeps the line one pixel wide whatever the distance — a wireframe scaled by
+  // depth turns distant geometry into a solid block, which is the opposite of what it is for.
+  let d = fwidth(in.bary);
+  let edge = min(min(in.bary.x / max(d.x, 0.0001), in.bary.y / max(d.y, 0.0001)), in.bary.z / max(d.z, 0.0001));
+  if (edge > 1.0) {
+    discard; // interior of the triangle
+  }
+  return vec4f(0.0, 1.0, 0.53, 1.0);
 }
 `,
   /**
@@ -346,17 +437,6 @@ fn fsDebris(in: DebrisOut) -> @location(0) vec4f {
   return vec4f(color * alpha, alpha);   // premultiplied, like every other blended pass here
 }
 `,
-  /**
-   * Probe DEBUG view (074/16): replaces the frame with the cube sampled along the camera ray — look around
-   * and the probe's content must match the world's orientation exactly. This is how the face table is
-   * verified by EYE instead of by convention-table archaeology. Lab/game: append the probeview URL flag.
-   */
-  /**
-   * Debug wireframes (074/13 phase 4): world-space line lists for COL collision hulls and mesh edges.
-   * Vertices arrive already in ENGINE space, so the host owns the GTA Z-up → Y-up basis change (the same
-   * split every other rigid draw uses). Unlit and unfogged on purpose — a debug overlay must read the
-   * same at 5 m and at 500 m.
-   */
   'debug-line': /* wgsl */ `
 #include <frame>
 
@@ -452,9 +532,33 @@ fn debugPrelit(color: vec3f) -> vec3f {
   return select(min(color * scale, vec3f(1.0)), vec3f(1.0), scale < 0.5);
 }
 
-/** Flat albedo (no sun/moon/pool response) when the unlit flag is set. */
+/**
+ * Debug VIEW mode on the same spare lane: 0 = normal shading, 1 = unlit (flat albedo), 2 = normals.
+ *
+ * One lane, one view at a time — the three build shared a single scene-wide override slot for exactly this
+ * reason, so enabling one debug view disabled the other. Widening the existing flag keeps the uniform the
+ * same size, which is load-bearing: growing it invalidates every recorded cell bundle.
+ */
+fn debugView() -> f32 {
+  return frame.moonColor.w;
+}
+
+/** Flat albedo (no sun/moon/pool response) when the unlit view is selected. */
 fn debugLit(lit: vec3f) -> vec3f {
-  return select(lit, vec3f(1.0), frame.moonColor.w > 0.5);
+  return select(lit, vec3f(1.0), abs(debugView() - 1.0) < 0.5);
+}
+
+/**
+ * Normal visualisation, the same mapping the three MeshNormalMaterial used: n * 0.5 + 0.5. Returned INSTEAD
+ * of the shaded colour and before fog — a fogged normal is a fogged debug view, which is no debug view.
+ */
+fn debugNormalColor(normal: vec3f) -> vec3f {
+  return normalize(normal) * 0.5 + vec3f(0.5);
+}
+
+/** Whether the normals view is selected. */
+fn debugShowNormals() -> bool {
+  return debugView() > 1.5;
 }
 
 // Shared sky colour by view direction (the sky pass AND the world fog sample the same PBR dome — fully
@@ -1382,6 +1486,9 @@ fn rigidSpecular(in: RigidVsOut, normal: vec3f, level: f32) -> vec3f {
 
 fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   let normal = normalize(in.normal);
+  if (debugShowNormals()) {
+    return debugNormalColor(normal);
+  }
   let sunNdl = max(dot(normal, frame.sunDir.xyz), 0.0);
   let moonNdl = clamp((dot(normal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
   let base = texel.rgb * debugPrelit(in.color.rgb);
@@ -1903,6 +2010,9 @@ fn worldShade(in: VsOut, cutout: bool) -> vec4f {
     frame.moonColor.rgb * in.moonNdl +
     in.localLight +
     localLightDynamic(in.world, normalize(in.normal));
+  if (debugShowNormals()) {
+    return vec4f(debugNormalColor(in.normal), texel.a); // before fog — a fogged normal shows nothing
+  }
   var color = texel.rgb * (debugLit(lit) + in.glow);
   // Unified fog (074/06 row 5, the 068 shape): RADIAL distance (view-Z pops at screen edges), exp² over
   // [start, cut], height attenuation (haze hugs the ground), hard horizon cut — and the fog colour is the

@@ -13,7 +13,10 @@ tsx tools/lod-procobj-generator/src/cli.ts --out <path> --game <path> [--in <dir
   pick the species. **Omit it to convert every `procobj.dat` species straight from the game's own `gta3.img`** (no
   model/texture swap). With `--in`, the LOD mesh decimates the **pack's DFF** (the model the HD is swapped to —
   decimating the stock model instead showed a different plant at LOD range) and LOD textures downscale from its
-  TXDs, falling back to the stock game TXD.
+  TXDs, falling back to the stock game TXD. A path that does not exist, or a directory holding no `.dff`, means
+  the same as omitting the flag: the library logs a line and converts every species. That tolerance is for
+  callers that pass the folder unconditionally (perfect-map-builder passes `<mods-src>/procobj` either way) —
+  an `--in` typed EXPLICITLY on the CLI is still validated, so a typo is loud.
 - `--out` — output drop-in directory
 - `--game` — game data (`gta.dat` + `data/` + `models/gta3.img`)
 - `--tris` — QEM target triangles per LOD model (default `200`)

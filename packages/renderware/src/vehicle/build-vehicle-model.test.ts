@@ -288,7 +288,7 @@ describe('buildVehicleModel', () => {
       expect(built.meta[built.indices[lodVertex] * 4 + 3] >> 4).toBe(MaterialClass.matte);
     });
 
-    it('the shared `wheel` atomic instances at every dummy, right side turned 180°, scaled by wheelScale', () => {
+    it('the shared `wheel` atomic instances at every dummy, LEFT side turned 180°, scaled by wheelScale', () => {
       const built = buildVehicleModel(
         clump(
           [
@@ -311,10 +311,17 @@ describe('buildVehicleModel', () => {
 
       expect(built.wheels).toHaveLength(4);
       expect(built.wheels.filter((wheel) => wheel.front)).toHaveLength(2);
+      // The mesh is authored on the RIGHT (the fallback — this clump parents `wheel` to no dummy), so the
+      // right copies mount as-modelled and the LEFT ones take the 180° spin.
       const right = built.parts[built.wheels[1].part];
       expect(right.name).toBe('wheel_rf_dummy');
-      expect(right.localRotation).toEqual([0, 0, 1, 0]); // 180° about Z — mirroring would flip the winding
-      expect(right.scale).toBeCloseTo(0.8 * 1.25, 5); // vehicles.ide FRONT-axle scale × the in-engine boost
+      expect(right.localRotation).toEqual([0, 0, 0, 1]);
+      // The synthetic wheel geometry has radius 1 (diameter 2), so fitting it to the requested 0.8 m FRONT
+      // diameter is 0.8 / 2 — the field is a diameter in metres, not a multiplier.
+      expect(right.scale).toBeCloseTo(0.4, 5);
+      const left = built.parts[built.wheels[0].part];
+      expect(left.name).toBe('wheel_lf_dummy');
+      expect(left.localRotation).toEqual([0, 0, 1, 0]); // 180° about Z — a mirror would flip the winding
     });
 
     it('`_dam` twins ride the same buffers as hidden submeshes, paired to their `_ok` by damage group', () => {
@@ -502,6 +509,81 @@ describe.skipIf(!existsSync(ADMIRAL) || !existsSync(GENERIC_TXD))('buildVehicleM
         expect(index).toBeLessThan(vertices);
       }
       expect([...built.positions].every(Number.isFinite)).toBe(true);
+    });
+  });
+});
+
+/**
+ * The wheel-side conventions, on real models — the four shapes SA and its mods actually ship. Each was
+ * rendering its far-side wheels facing INWARD: the shared-atomic path spun the wrong side, and the per-corner
+ * path never spun at all (the field pair was admiral with both axles wrong and comet with the driver side).
+ * The invariant every one of them pins: the copies on the side the mesh was NOT authored on carry the flip,
+ * and the copies on the authored side mount exactly as modelled.
+ */
+const CONVENTIONS: { atomics: string; file: string; name: string; wheels: number }[] = [
+  { atomics: 'a shared `wheel` atomic', file: ADMIRAL, name: 'admiral (stock)', wheels: 4 },
+  {
+    atomics: 'a LONE `wheel_rf` corner atomic',
+    file: 'tests/custom/dff/vehicle/comet.dff',
+    name: 'comet',
+    wheels: 4,
+  },
+  {
+    atomics: '4 per-corner atomics',
+    file: 'tests/custom/dff/vehicle/petro-4wheels.dff',
+    name: 'petro 4',
+    wheels: 4,
+  },
+  {
+    atomics: '6 per-corner atomics + a shared `wheel`',
+    file: 'tests/custom/dff/vehicle/petro-6wheels.dff',
+    name: 'petro 6',
+    wheels: 6,
+  },
+];
+
+describe('buildVehicleModel (wheel side, real models)', () => {
+  describe('positive cases', () => {
+    for (const convention of CONVENTIONS) {
+      it.skipIf(!existsSync(convention.file))(`${convention.name} — ${convention.atomics}`, () => {
+        const built = buildVehicleModel(
+          parseDff(toArrayBuffer(readFileSync(convention.file))),
+          new VehicleTextures([]),
+          { wheelScale: [0.7, 0.7] },
+        );
+
+        expect(built.wheels).toHaveLength(convention.wheels);
+        // `vehicles.ide`'s wheel field (or the modloader `.settings.txt` line, same field) is the ONLY
+        // truth for wheel size, and it is a DIAMETER IN METRES: every stock mesh is already authored at its
+        // target, so fitting lands near 1. Multiplying by it instead shrank every wheel by a third.
+        for (const wheel of built.wheels) {
+          expect(wheel.radius * 2).toBeCloseTo(0.7, 3); // fitted to the requested diameter, whatever the mesh
+          expect(built.parts[wheel.part].scale ?? 1).toBeGreaterThan(0.5);
+          expect(built.parts[wheel.part].scale ?? 1).toBeLessThan(1.5);
+        }
+        // Every model measured authors its wheel on the RIGHT, so the left copies — and only they — flip.
+        for (const wheel of built.wheels) {
+          const part = built.parts[wheel.part];
+          const left = part.name.startsWith('wheel_l');
+
+          expect({ name: part.name, rotation: part.localRotation }).toEqual({
+            name: part.name,
+            rotation: left ? [0, 0, 1, 0] : [0, 0, 0, 1],
+          });
+        }
+      });
+    }
+
+    it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))('covers the middle axle too', () => {
+      const built = buildVehicleModel(
+        parseDff(toArrayBuffer(readFileSync('tests/custom/dff/vehicle/petro-6wheels.dff'))),
+        new VehicleTextures([]),
+        { wheelScale: [1, 1] },
+      );
+      const names = built.wheels.map((wheel) => built.parts[wheel.part].name).sort();
+
+      expect(names.filter((name) => /_[lr]m/.test(name))).toHaveLength(2);
+      expect(built.wheels.filter((wheel) => wheel.front)).toHaveLength(2); // `m` and `b` are not front axles
     });
   });
 });

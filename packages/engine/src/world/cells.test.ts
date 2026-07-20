@@ -274,6 +274,51 @@ describe('CellStore', () => {
       expect(new Float32Array(write.data.buffer, write.data.byteOffset, 8)[3]).toBe(0);
     });
 
+    it('sets flag bit 2 for a 16-bit-index cell, composing with the baked-channel bits', async () => {
+      // The wireframe pass reads the index buffer as raw words, so it is the one consumer that has to
+      // unpack the width itself — bit 2 is how the width reaches it.
+      const engine = await bootedEngine();
+      gpu.reset();
+      engine.cells.load(
+        '0,0',
+        cellBytes({
+          channelMask: OscellChannel.SUN_VIS,
+          index16: true,
+          indexData: new Uint8Array(new Uint16Array([0, 1, 2]).buffer),
+        }),
+      );
+
+      const write = writesTo(':cell')[0];
+      expect(new Float32Array(write.data.buffer, write.data.byteOffset, 8)[3]).toBe(5); // sunVis | index16
+    });
+
+    it('creates the cell buffers with STORAGE usage, which the wireframe pass binds', async () => {
+      // Dropping this flag is invisible to every other assertion and fails only on a REAL device, at
+      // bind-group creation — which is exactly the kind of defect a recording harness should catch.
+      const engine = await bootedEngine();
+      engine.cells.load('0,0', cellBytes());
+
+      expect(gpu.bufferUsage.get('0,0:vb')! & GPUBufferUsage.STORAGE).toBeTruthy();
+      expect(gpu.bufferUsage.get('0,0:ib')! & GPUBufferUsage.STORAGE).toBeTruthy();
+      // …without losing the usages the ordinary draw path needs.
+      expect(gpu.bufferUsage.get('0,0:vb')! & GPUBufferUsage.VERTEX).toBeTruthy();
+      expect(gpu.bufferUsage.get('0,0:ib')! & GPUBufferUsage.INDEX).toBeTruthy();
+    });
+
+    it('counts wireVertexCount from the index WIDTH, not the byte length', async () => {
+      // The wireframe draws non-indexed with one vertex per index; a stride mix-up would silently halve
+      // or double it, which reads as a partial mesh rather than an error.
+      const engine = await bootedEngine();
+      const wide = engine.cells.load('0,0', cellBytes({ index16: false }));
+      const narrow = engine.cells.load(
+        '1,0',
+        cellBytes({ index16: true, indexCount: 3, indexData: new Uint8Array(new Uint16Array([0, 1, 2]).buffer) }),
+      );
+
+      expect(wide.wireVertexCount).toBe(3);
+      expect(narrow.wireVertexCount).toBe(3);
+    });
+
     it('pads an odd u16 index payload up to a 4-byte write', async () => {
       const engine = await bootedEngine();
       gpu.reset();

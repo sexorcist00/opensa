@@ -18,6 +18,9 @@
  */
 
 export interface FakeGpu {
+  /** Usage flags every created buffer was asked for, by label. A missing usage flag is invisible to every
+   *  other assertion here and fails only on a real device, at bind-group creation. */
+  readonly bufferUsage: Map<string, number>;
   /** Labels of every buffer/texture destroyed — leak assertions read this. */
   readonly destroyed: string[];
   /** The GPUDevice stand-in to hand to engine code. */
@@ -66,6 +69,7 @@ export interface RecordedWrite {
 }
 
 interface Recorder {
+  bufferUsage: Map<string, number>;
   destroyed: string[];
   draws: RecordedDraw[];
   passes: RecordedPass[];
@@ -75,7 +79,14 @@ interface Recorder {
 
 /** A `GPUDevice` stand-in recording everything the engine asks of it. */
 export function createFakeDevice(): FakeGpu {
-  const recorder: Recorder = { destroyed: [], draws: [], passes: [], textures: new Map(), writes: [] };
+  const recorder: Recorder = {
+    bufferUsage: new Map(),
+    destroyed: [],
+    draws: [],
+    passes: [],
+    textures: new Map(),
+    writes: [],
+  };
 
   const view = (label: string): unknown => ({ label });
 
@@ -93,16 +104,20 @@ export function createFakeDevice(): FakeGpu {
     };
   };
 
-  const buffer = (descriptor: GPUBufferDescriptor): unknown => ({
-    destroy: (): void => {
-      recorder.destroyed.push(descriptor.label ?? 'buffer');
-    },
-    getMappedRange: () => new ArrayBuffer(descriptor.size),
-    label: descriptor.label,
-    mapAsync: () => Promise.resolve(),
-    size: descriptor.size,
-    unmap: (): void => {},
-  });
+  const buffer = (descriptor: GPUBufferDescriptor): unknown => {
+    recorder.bufferUsage.set(descriptor.label ?? 'buffer', descriptor.usage);
+
+    return {
+      destroy: (): void => {
+        recorder.destroyed.push(descriptor.label ?? 'buffer');
+      },
+      getMappedRange: () => new ArrayBuffer(descriptor.size),
+      label: descriptor.label,
+      mapAsync: () => Promise.resolve(),
+      size: descriptor.size,
+      unmap: (): void => {},
+    };
+  };
 
   const commandEncoder = (): unknown => {
     let current: RecordedPass = { bundles: [], drawCount: 0, label: 'unlabelled' };
@@ -162,6 +177,7 @@ export function createFakeDevice(): FakeGpu {
   };
 
   return {
+    bufferUsage: recorder.bufferUsage,
     destroyed: recorder.destroyed,
     device: device as unknown as GPUDevice,
     draws: recorder.draws,

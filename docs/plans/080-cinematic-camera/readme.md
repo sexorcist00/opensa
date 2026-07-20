@@ -6,7 +6,8 @@
 staying responsive enough that nobody blames it for a missed turn.** Today the engine host camera is a
 rigid stick: `eye = target − forward · distance`, raw mouse deltas, zero smoothing, hard-coded rig
 (`resolveCamera`, `apps/web/src/ui/engine-camera.ts:81-103`). Everything below replaces that follow rig;
-photo mode and bench cameras are explicitly untouched.
+the bench camera is explicitly untouched. The **free-fly camera is in scope as a first-class mode** —
+see [Free-fly / map viewer](#free-fly--map-viewer-mode-in-scope) below.
 
 ## What "GTA V feel" decomposes into (the target behaviours)
 
@@ -68,9 +69,42 @@ stubs to be added when this chain closes).
 8. **Character signals**: `Velocity.grounded` 0/1 flag, vertical velocity, landing = the
    `grounded && vz < 0` edge (`character-controller.system.ts:100-110`); walk 2 / run 7 u/s. There is
    no landing EVENT — the camera derives edges itself (plan 06).
-9. **Camera priority is bench > photo > follow** (`resolveCamera`, pinned by `engine-camera.test.ts`).
-   This ordering is an invariant: bench and photo bypass EVERYTHING in this chain, so ritual/soak
-   numbers cannot be moved by camera work, by construction.
+9. **Camera priority is bench > free-fly > follow** (`resolveCamera`, pinned by `engine-camera.test.ts`).
+   The BENCH branch is the invariant: it bypasses EVERYTHING in this chain, so ritual/soak numbers
+   cannot be moved by camera work, by construction. The free-fly branch (`flyEye`) is not bypassed —
+   it becomes a director mode (see below).
+
+## Free-fly / map viewer mode (in scope)
+
+**Added 2026-07-20, after the 074/22 phase 9 map-viewer repair.** The map viewer and the photo camera
+are the SAME free-fly camera (`flyEye`), and repairing the viewer grew it a real control set that now
+lives in `engine-camera.ts` next to the follow math: `flyStep` (arrow walk + PageUp/PageDown lift),
+`panStep` (left-drag pan in the screen plane, scaled by height above ground), right-drag orbit, wheel
+dolly, `TOP_DOWN_PITCH` snap, and `cursorRay` picking. It is not a stub any more — it is a second real
+camera, and it must go through the same director rather than staying a parallel inline path in the host.
+
+Requirements this adds to the chain:
+
+- **`mode: 'fly'`** joins `'foot' | 'vehicle'` in `CameraSnapshot`. The director owns the free-fly eye,
+  yaw/pitch and distance-to-pivot; the host stops mutating them inline.
+- **The fly rig reuses the same primitives** — the free-fly camera gets the damped input and eased
+  start/stop of plan 01's `damp`/`smoothDamp` (today arrow-walk and drag are raw and step-quantised).
+  A viewer that glides instead of snapping is the whole point of putting it here.
+- **Layers it opts OUT of**, explicitly: collision (04 — a map viewer must fly through geometry),
+  auto-center and look-ahead (03 — no focus to follow), additive motion (06 — no bob in a viewer).
+  The director must make opting out per-mode a first-class thing, not a pile of `if (mode !== 'fly')`.
+- **Picking stays cursor-based** and must keep working through the director: `cursorRay` unprojects
+  through the camera's `fovYRad`, which plan 01 turns from the `CAMERA_FOV_Y` constant into an input.
+  If the fly mode ever animates FOV, picking follows it or clicks land off-target.
+- **Map-viewer specifics survive**: the fog override (`NO_FOG_DISTANCE`, re-applied after
+  `environmentDriver.apply` — fog CULLS cells, it is what made the viewer look dead), the top-down
+  snap on activation, and exactly ONE `requestPointerLock` in the whole host. All three are regressions
+  waiting to happen the moment camera code moves; the fly-mode tests pin them.
+- **`?cam=legacy` covers the fly path too**, so a bad round never costs the debug tooling.
+
+Where it lands: `camera/fly-rig.ts` in plan 01's module layout, wired in plan 01 (parity first — the
+moved fly path reproduces today's viewer bit-for-bit), smoothed in plan 02 alongside the follow rig's
+input dampening, and re-checked in plan 07's transition audit (viewer ⇄ gameplay is a mode blend).
 
 ## Architecture (decided here, detailed in plan 01)
 

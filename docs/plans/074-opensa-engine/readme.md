@@ -508,7 +508,7 @@ WGSL snapshots current; tsc + eslint clean; benches committed through the `city`
   black all day, so the day path is untouched. No reconvert needed.
 - 2026-07-12 (07 emissive mask + moon disc + 0.5.0 stub) — three closers: (1) the emissive-mask bake landed —
   the night-window luma-delta detection moved OFFLINE into the welder (layerChannels high byte + EMISSIVE
-  bit), WGSL glow consumes the mask when the cell carries it (cell.origin.w became FLAG BITS: 1 sunVis,
+  bit), WGSL glow consumes the mask when the cell carries it (cell.origin.w became FLAG BITS: 4 = 16-bit indices added by 074/22 for `cell-wire`; 1 sunVis,
   2 emissive; heuristic = old-pak fallback); LS rect 77.6 k masked verts, both paks reconverted. (2) The
   moon DISC joined the shared skyColorFor (smoothstep disc + faint halo on moonDir; moonColor black by day
   keeps day frames untouched, and fogged geometry dissolves into the moon behind it — the 068 invariant).

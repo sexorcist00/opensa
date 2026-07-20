@@ -11,7 +11,7 @@ import type { LookDirectionSource } from '@opensa/game/character/character-contr
 import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 import type { ReactElement } from 'react';
 
-import { Engine, setupStreaming, type StreamStats } from '@opensa/engine';
+import { type DebugLineSetId, Engine, setupStreaming, type StreamStats } from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
   DEFAULT_DRAW_DISTANCE,
@@ -46,12 +46,21 @@ import type { GameId } from '../game-config';
 import { IS_DEV } from '../dev-mode';
 import { GAME_CONFIG } from '../game-config';
 import { vehicleModelsFromIde } from '../vehicle-models';
+import { buildCollisionLines } from './collision-wireframe';
 import { ENGINE_DEBUG_CAPABILITIES } from './debug/debug-capabilities';
 import { type DebugActions, type DebugGame, DebugOverlay } from './debug/debug-overlay';
 import { type MapGame } from './debug/map-inspector';
 import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
-import { createChordWatcher, flyStep, resolveCamera } from './engine-camera';
+import {
+  CAMERA_FOV_Y,
+  createChordWatcher,
+  cursorRay,
+  flyStep,
+  panStep,
+  resolveCamera,
+  TOP_DOWN_PITCH,
+} from './engine-camera';
 import { setupEngineClutter } from './engine-clutter';
 import { createEngineDebugActions, type EnginePerfSnapshot } from './engine-debug-actions';
 import { loadCoronaSprites, setupEngineParticles } from './engine-particles';
@@ -90,6 +99,8 @@ const FLY_SPEED = 18;
 /** Map-viewer "Top (reset view)" altitude above the player, in engine units — high enough to frame a
  *  250 u section with margin. */
 const TOP_DOWN_HEIGHT = 400;
+/** Fog distances the map viewer forces — past the camera far plane (10 000), so nothing is ever fogged. */
+const NO_FOG_DISTANCE = 100000;
 
 /** Shared mutable flags between React props and the boot closure. */
 const hostState = { paused: false };
@@ -367,12 +378,12 @@ async function boot(
   let selectedPlacement: null | number = null;
   let hiddenPlacements = 0;
   /**
-   * Pick along the camera's own forward vector — the crosshair, not a cursor position. The map viewer flies
-   * with the mouse steering the look, so the centre of the screen IS where the user is aiming; unprojecting
-   * a cursor would be wrong the moment the pointer is locked.
+   * Pick along a caller-supplied ray. Gameplay passes the camera forward — under pointer lock the crosshair
+   * IS the aim. The map viewer has no lock, so it passes {@link cursorRay}: there the cursor is the aim, and
+   * a forward-vector pick would select whatever happened to sit at screen centre.
    */
-  const pickAtCrosshair = (): void => {
-    const hit = engine.cells.pick(cameraEye, forwardOf());
+  const pickAlong = (direction: [number, number, number]): void => {
+    const hit = engine.cells.pick(cameraEye, direction);
     selectedPlacement = hit?.id ?? null;
     events.emit(
       'select',
@@ -386,19 +397,72 @@ async function boot(
         : null,
     );
   };
-  canvas.addEventListener('pointerdown', () => {
-    if (mapViewer) {
-      pickAtCrosshair();
+  /** Cursor position in NDC (y up), from a pointer event over the canvas. */
+  const ndcOf = (event: PointerEvent | WheelEvent): [number, number] => {
+    const rect = canvas.getBoundingClientRect();
 
-      return; // in the map viewer a click SELECTS; it must not also grab the pointer
+    return [
+      ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
+      1 - ((event.clientY - rect.top) / Math.max(1, rect.height)) * 2,
+    ];
+  };
+  /**
+   * Map-viewer mouse (the three OrbitControls mapping prod used: LEFT pans, RIGHT rotates).
+   *
+   * A left press is ambiguous until it ends — it is a PICK if the pointer barely moved, a pan otherwise —
+   * so the pick fires on pointer UP under the travel threshold, never on down. Panning a district would
+   * otherwise select whatever the drag started on.
+   */
+  let mapDrag: null | { button: number; moved: number; ndc: [number, number] } = null;
+  const PICK_TRAVEL = 0.01;
+  canvas.addEventListener('contextmenu', (event) => {
+    if (mapViewer) {
+      event.preventDefault(); // right-drag orbits; the menu would eat the gesture
     }
-    if (!document.pointerLockElement) {
-      void Promise.resolve(canvas.requestPointerLock()).catch(() => undefined);
+  });
+  canvas.addEventListener('pointerdown', (event) => {
+    if (mapViewer) {
+      mapDrag = { button: event.button, moved: 0, ndc: ndcOf(event) };
+      canvas.setPointerCapture(event.pointerId);
+
+      return; // in the map viewer a click SELECTS or drags; it must not also grab the pointer
     }
+    // The pointer is grabbed ONLY by the "Click to play" button (prod's rule — `canvas-host` has exactly one
+    // `requestPointerLock`, in that handler). Locking on any canvas press made the FIRST click anywhere a
+    // capture: the map viewer's click-to-select could never fire, because the click that would have selected
+    // was spent taking the pointer. Drag-look below covers looking around while unlocked.
     dragging = true;
   });
-  window.addEventListener('pointerup', () => (dragging = false));
+  window.addEventListener('pointerup', (event) => {
+    dragging = false;
+    if (mapViewer && mapDrag) {
+      if (mapDrag.button === 0 && mapDrag.moved < PICK_TRAVEL) {
+        pickAlong(cursorRay(forwardOf(), ndcOf(event), canvas.width / Math.max(1, canvas.height), CAMERA_FOV_Y));
+      }
+      mapDrag = null;
+    }
+  });
   window.addEventListener('pointermove', (event) => {
+    if (mapViewer) {
+      if (!mapDrag) {
+        return;
+      }
+      const ndc = ndcOf(event);
+      const delta: [number, number] = [ndc[0] - mapDrag.ndc[0], ndc[1] - mapDrag.ndc[1]];
+      mapDrag.moved += Math.hypot(delta[0], delta[1]);
+      mapDrag.ndc = ndc;
+      if (mapDrag.button === 2) {
+        // The viewer may look straight DOWN (that is its resting view), so it gets the full pitch range the
+        // basis allows — not the gameplay camera's −1.2 floor.
+        yaw -= event.movementX * 0.004;
+        pitch = Math.max(TOP_DOWN_PITCH, Math.min(0.9, pitch - event.movementY * 0.004));
+      } else if (mapDrag.button === 0 && flyEye) {
+        // Pan by the eye's HEIGHT so the gesture covers the same apparent distance at any altitude.
+        flyEye = panStep(flyEye, forwardOf(), delta, Math.max(1, flyEye[1]));
+      }
+
+      return;
+    }
     if (document.pointerLockElement === canvas || dragging) {
       yaw -= event.movementX * 0.004;
       pitch = Math.max(-1.2, Math.min(0.9, pitch - event.movementY * 0.004));
@@ -406,6 +470,14 @@ async function boot(
   });
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
+    if (mapViewer && flyEye) {
+      // Dolly the detached eye along the view — the follow rig's zoom config does not apply to a free eye.
+      const [fx, fy, fz] = forwardOf();
+      const step = Math.max(1, flyEye[1]) * (event.deltaY > 0 ? -0.12 : 0.12);
+      flyEye = [flyEye[0] + fx * step, Math.max(2, flyEye[1] + fy * step), flyEye[2] + fz * step];
+
+      return;
+    }
     if (!config.camera.followZoom) {
       return; // wheel zoom is a config toggle (debug → Camera), like prod
     }
@@ -435,6 +507,38 @@ async function boot(
     flyEye = on ? [cameraEye[0], cameraEye[1], cameraEye[2]] : null;
     flyKeys.clear();
     events.emit('fly-camera', { enabled: on });
+  };
+  /**
+   * The map viewer renders WITHOUT fog (field check, 2026-07-20).
+   *
+   * The viewer sits {@link TOP_DOWN_HEIGHT} above the district, and the authored fog cut is often far less
+   * than that — LA-clear is 800, FOGGY_SF 250. The ground was therefore past the cut and the whole district
+   * dissolved into fog colour: at night that reads as an empty brown screen, which is what "the map viewer
+   * does not work" looked like. The geometry was there the whole time (a whole-map pin loaded 840 cells and
+   * drew 1297 batches into an invisible frame).
+   *
+   * Fog is a look, and the viewer is an inspection tool — so it is simply switched off here rather than
+   * stretched. Re-applied every frame because `environmentDriver.apply` rewrites both distances from timecyc.
+   */
+  const clearMapViewerFog = (): void => {
+    if (!mapViewer) {
+      return;
+    }
+    engine.environment.fogCutDistance = NO_FOG_DISTANCE;
+    engine.environment.fogStartDistance = NO_FOG_DISTANCE;
+  };
+  /**
+   * Lift the detached eye straight over the player and aim it down. The pitch stops just short of -PI/2: a
+   * perfectly vertical forward vector is degenerate for the look-at basis.
+   *
+   * This is what ENTERING the map viewer does, not only the "Top" button. `setFlyMode` alone detaches the eye
+   * where it already stands, looking where it already looked — indistinguishable from the activation doing
+   * nothing at all. The three-based camera controller snapped overhead inside `enterDebug()` for that reason.
+   */
+  const snapTopDown = (): void => {
+    const [ex, ey, ez] = toEngine(viewOf());
+    flyEye = [ex, ey + TOP_DOWN_HEIGHT, ez];
+    pitch = TOP_DOWN_PITCH;
   };
   const photoChord = createChordWatcher('KeyK', 'KeyM');
   window.addEventListener('keydown', (event) => {
@@ -508,6 +612,55 @@ async function boot(
         break;
       }
     }
+  };
+  /**
+   * "Show collision" (074/22): the collider set around the CAMERA, drawn through the engine's line-list debug
+   * pipeline. The three build used a scene-wide `LineSegments`; the engine's `createDebugLines` wants one flat
+   * endpoint array, which is what `buildCollisionLines` produces.
+   *
+   * It follows the camera, not the player — in the map viewer you fly away from the player, and collision you
+   * cannot see is not a debug overlay. Rebuilt only when the camera changes CELL, so this is not frame work.
+   */
+  let collisionLines: DebugLineSetId | null = null;
+  let collisionSignature = '';
+  let showCollision = false;
+  const COLLISION_COLOUR: [number, number, number, number] = [0, 1, 0.4, 1];
+  const refreshCollision = async (force = false): Promise<void> => {
+    if (!showCollision) {
+      return;
+    }
+    const [gx, gy] = [cameraEye[0], -cameraEye[2]];
+    const cells = cellsWithin([gx, gy, 0], config.streaming.collisionDrawDistance, adapter.cellSize);
+    const signature = cells.map(([cx, cy]) => `${cx},${cy}`).join(';');
+    if (!force && signature === collisionSignature) {
+      return;
+    }
+    collisionSignature = signature;
+    const loaded = await Promise.all(cells.map(([cx, cy]) => adapter.loadCellColliders(cx, cy)));
+    if (!showCollision) {
+      return; // toggled off while awaiting
+    }
+    const positions = buildCollisionLines(loaded.flat());
+    if (collisionLines === null) {
+      collisionLines = engine.createDebugLines(positions, COLLISION_COLOUR);
+    } else {
+      // The buffer is sized at creation, so a bigger set needs a new one rather than a partial upload.
+      engine.destroyDebugLines(collisionLines);
+      collisionLines = engine.createDebugLines(positions, COLLISION_COLOUR);
+    }
+  };
+  const setShowCollision = (enabled: boolean): void => {
+    showCollision = enabled;
+    if (!enabled) {
+      if (collisionLines !== null) {
+        engine.destroyDebugLines(collisionLines);
+        collisionLines = null;
+      }
+      collisionSignature = '';
+
+      return;
+    }
+    void refreshCollision(true);
   };
   let debugError: null | string = null;
   /** Last frame's camera eye (engine space) — the lamp coronas need it, one frame stale is invisible. */
@@ -672,6 +825,12 @@ async function boot(
         }
         clutterLoaded.clear();
       },
+      setDebugFaces: (enabled): void => {
+        engine.debugFaces = enabled;
+      },
+      setDebugNormals: (enabled): void => {
+        engine.debugNormals = enabled;
+      },
       setFlyMode,
       setHour: (value): void => {
         hour = value;
@@ -700,13 +859,7 @@ async function boot(
           position,
         });
       },
-      topDownView: (): void => {
-        // Lift the detached eye straight over the player and aim it down. The pitch stops just short of
-        // -PI/2: a perfectly vertical forward vector is degenerate for the look-at basis.
-        const [ex, ey, ez] = toEngine(viewOf());
-        flyEye = [ex, ey + TOP_DOWN_HEIGHT, ez];
-        pitch = -Math.PI / 2 + 0.01;
-      },
+      topDownView: (): void => snapTopDown(),
       vehicleModels: () => vehicleModels,
       weather: liveWeather,
     }),
@@ -745,7 +898,11 @@ async function boot(
         engine.cells.debugPicking = enabled;
         setup.driver.unloadAll();
         setFlyMode(enabled);
+        if (enabled) {
+          snapTopDown(); // the viewer opens LOOKING at the district, as the three camera controller did
+        }
         if (!enabled) {
+          setShowCollision(false); // the overlay belongs to the viewer; leaving must not strand it on screen
           setup.driver.setManualCells(null);
           selectedPlacement = null;
           hiddenPlacements = 0;
@@ -753,6 +910,7 @@ async function boot(
         }
         events.emit('map-viewer', { enabled });
       },
+      setShowCollision,
       viewCell: (): [number, number] | null => {
         const [gx, gy] = viewOf();
 
@@ -906,6 +1064,7 @@ async function boot(
       }
       weatherTransition.tick(dt);
       environmentDriver.apply(hour);
+      clearMapViewerFog();
       zoneSystem.update();
       citySystem.update();
       if (minutesNow() !== lastMinutes) {
@@ -931,6 +1090,7 @@ async function boot(
     const streamStats: StreamStats = setup.driver.update(playerEngine);
     // Emitters follow the streamed cell set; the call self-gates on a signature, so this is not per-frame work.
     particles?.rebuild();
+    void refreshCollision(); // self-gates on the camera's cell set — a no-op unless the overlay is on and moved
     lastStream = streamStats;
 
     // While seated the camera trails the CAR (the rider is teleported into the seat every frame — following

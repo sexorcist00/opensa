@@ -42,9 +42,6 @@ const PAINT_MARKERS = new Map<string, number>([
   ['255,255,0', PaintSlot.quaternary],
 ]);
 
-/** Wheels read a touch small from the vehicles.ide scale alone; nudge them up (prod's WHEEL_SCALE_BOOST). */
-const WHEEL_SCALE_BOOST = 1.25;
-
 const DOOR_RE = /^door_(lf|rf|lr|rr)_ok$/;
 const EXTRA_RE = /^extra\d+$/;
 const WHEEL_CONTAINER_RE = /^f_wheel/;
@@ -90,7 +87,7 @@ export function buildVehicleModel(
   const hiddenExtras = hiddenExtraFrames(clump, options.rng ?? Math.random);
   const wheelScale = options.wheelScale ?? [1, 1];
 
-  let sharedWheel: null | number = null;
+  let sharedWheel: null | { frameIndex: number; geometryIndex: number } = null;
   const cornerWheels: { frameIndex: number; front: boolean; geometryIndex: number; right: boolean }[] = [];
   const containerWheels: number[] = [];
 
@@ -101,7 +98,7 @@ export function buildVehicleModel(
       continue;
     }
     if (name === WHEEL_FRAME) {
-      sharedWheel = atomic.geometryIndex;
+      sharedWheel = { frameIndex: atomic.frameIndex, geometryIndex: atomic.geometryIndex };
       continue;
     }
     const corner = WHEEL_CORNER_RE.exec(name)?.[1];
@@ -221,25 +218,35 @@ function addWheels(
   source: {
     containerWheels: readonly number[];
     cornerWheels: readonly { frameIndex: number; front: boolean; geometryIndex: number; right: boolean }[];
-    sharedWheel: null | number;
+    sharedWheel: null | { frameIndex: number; geometryIndex: number };
   },
 ): VehicleWheel[] {
   const { containerWheels, cornerWheels, sharedWheel } = source;
   const dummies = hasWheelDummies(clump);
   if (sharedWheel === null && cornerWheels.length === 1 && dummies) {
-    return instanceWheels(scratch, clump, cornerWheels[0].geometryIndex, textures, wheelScale);
+    const lone = cornerWheels[0];
+
+    return instanceWheels(scratch, clump, lone.geometryIndex, textures, wheelScale, lone.frameIndex);
   }
   if (cornerWheels.length > 0) {
+    // Per-corner sets reuse ONE authored mesh across the corners (petro's left and right geometries are
+    // byte-identical), so the far side needs the same flip the instanced conventions get.
+    const authoredRight = authoredWheelRight(clump);
+
     return cornerWheels.map((wheel) => {
-      const scale = axleScale(wheelScale, wheel.front);
+      const authoredRadius = wheelRadius(clump.geometries[wheel.geometryIndex]);
+      const scale = axleScale(wheelScale, wheel.front, authoredRadius);
       const part = addPart(scratch, clump, wheel.frameIndex, frameName(clump, wheel.frameIndex), scale);
+      if (wheel.right !== authoredRight) {
+        scratch.parts[part].localRotation = flipWheelSide(scratch.parts[part].localRotation);
+      }
       appendGeometry(scratch, clump.geometries[wheel.geometryIndex], part, textures, 'body', null);
 
-      return { front: wheel.front, part, radius: wheelRadius(clump.geometries[wheel.geometryIndex]) * scale };
+      return { front: wheel.front, part, radius: authoredRadius * scale };
     });
   }
   if (sharedWheel !== null) {
-    return instanceWheels(scratch, clump, sharedWheel, textures, wheelScale);
+    return instanceWheels(scratch, clump, sharedWheel.geometryIndex, textures, wheelScale, sharedWheel.frameIndex);
   }
   if (containerWheels.length > 0 && dummies) {
     return instanceWheels(scratch, clump, containerWheels[0], textures, wheelScale);
@@ -367,9 +374,45 @@ function appendGeometry(
   });
 }
 
+/**
+ * Which side a wheel mesh was authored on — READ FROM THE MODEL, not assumed. Walking up from the frame the
+ * mesh hangs on, the first corner name found gives the side: either the mesh's own `wheel_rf` (a lone corner
+ * atomic instanced at every dummy) or the `wheel_rf_dummy` its shared `wheel` frame is parented to. Every
+ * model measured — stock and modded, 4- and 6-wheeled — authors on the RIGHT, which is the fallback when a
+ * model offers no frame to read; reading it means a left-authored model works with no code change.
+ *
+ * The dummies themselves carry no signal: every wheel dummy measured is identity-rotated, so their rotation
+ * (which IS honoured, below) never encodes the side.
+ */
+function authoredWheelRight(clump: RWClump, fromFrame?: number): boolean {
+  const start = fromFrame ?? clump.frames.findIndex((frame) => frame.name.trim().toLowerCase() === WHEEL_FRAME);
+  for (let at = start; at >= 0; at = clump.frames[at].parentIndex) {
+    const name = frameName(clump, at);
+    const side = WHEEL_DUMMY_RE.exec(name)?.[1] ?? WHEEL_CORNER_RE.exec(name)?.[1][0];
+    if (side) {
+      return side === 'r';
+    }
+  }
+
+  return true;
+}
+
 /** SA scales the axles separately (vehicles.ide gives [front, rear]); the in-engine boost rides on top. */
-function axleScale(wheelScale: readonly [number, number], front: boolean): number {
-  return (front ? wheelScale[0] : wheelScale[1]) * WHEEL_SCALE_BOOST;
+/**
+ * Fit an authored wheel mesh to the size the data asks for. `vehicles.ide`'s wheel field (the modloader
+ * `.settings.txt` line carries the same one) is the wheel DIAMETER IN METRES, not a multiplier — measured
+ * against the stock meshes it names: admiral 0.68 vs a 0.700 m mesh, cheetah 0.68 vs 0.688, infernus 0.70 vs
+ * 0.700, petro 1.106 vs 1.182. Ratios of 0.94–1.00, i.e. every stock mesh is already modelled at its target.
+ *
+ * Multiplying by it instead shrank every wheel by a third, which is what prod's 1.25 "wheels read a touch
+ * small" boost was patching over (0.70 × 1.25 = 0.875 — still 12 % short, hence the wording). Fitting to the
+ * diameter needs no fudge and is a no-op for a mesh authored at size, so ONE rule covers all four wheel
+ * conventions instead of exempting the per-corner and container ones.
+ */
+function axleScale(wheelScale: readonly [number, number], front: boolean, authoredRadius: number): number {
+  const diameter = authoredRadius * 2;
+
+  return diameter > 0 ? (front ? wheelScale[0] : wheelScale[1]) / diameter : 1;
 }
 
 /** `f_wheel_<mask>` container frames (and their descendants): the wheel sub-model, not body geometry. */
@@ -430,6 +473,21 @@ function collectDummies(clump: RWClump): VehicleDummy[] {
   return dummies;
 }
 
+/**
+ * Turn a wheel to the side it is MOUNTED on, given a mesh authored for the other one: `q ⊗ [0, 0, 1, 0]`, a
+ * 180° spin about the hub's up axis composed after the frame's own rotation.
+ *
+ * Not a mirror — a negative scale would invert the triangle winding — and the spin is what resolves BOTH
+ * authoring conventions found in the wild: a mesh reused verbatim on both sides (petro's left and right
+ * geometries are byte-identical), and one the author already pre-mirrored about Y (comet, where the spin's
+ * own Y flip cancels the author's and the surviving X flip is the true side change).
+ *
+ * `|| 0` normalises the negated zeros: a quaternion of `-0`s does not compare equal to its positive twin.
+ */
+function flipWheelSide(q: readonly [number, number, number, number]): [number, number, number, number] {
+  return [q[1], -q[0] || 0, q[3], -q[2] || 0];
+}
+
 /** RW frame rotation (column-major basis) + position → a column-major mat4. */
 function frameMatrix(rotation: readonly number[], position: readonly number[]): number[] {
   const [r0, r1, r2, r3, r4, r5, r6, r7, r8] = rotation;
@@ -466,29 +524,34 @@ function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint3
   return vertexCount > 65536 ? new Uint32Array(indices) : new Uint16Array(indices);
 }
 
-/** The shared wheel atomic, instanced at every `wheel_*_dummy` (right side spun 180° — mirroring would
- *  flip the winding). */
+/**
+ * The shared wheel atomic, instanced at every `wheel_*_dummy`, each dummy's own orientation honoured and the
+ * copies on the far side from {@link authoredWheelRight} turned by {@link flipWheelSide}.
+ */
 function instanceWheels(
   scratch: Scratch,
   clump: RWClump,
   geometryIndex: number,
   textures: VehicleTextures,
   wheelScale: readonly [number, number],
+  sourceFrame?: number,
 ): VehicleWheel[] {
   const wheels: VehicleWheel[] = [];
   const baseRadius = wheelRadius(clump.geometries[geometryIndex]);
+  const authoredRight = authoredWheelRight(clump, sourceFrame);
   for (const [frameIndex, frame] of clump.frames.entries()) {
     const match = WHEEL_DUMMY_RE.exec(frame.name.trim().toLowerCase());
     if (!match) {
       continue;
     }
     const front = match[2] === 'f';
-    const scale = axleScale(wheelScale, front);
+    const scale = axleScale(wheelScale, front, baseRadius);
     const world = frameWorldTransform(clump.frames, frameIndex);
     const right = match[1] === 'r';
+    const mounted: [number, number, number, number] = world ? rotationToQuat(world.rot) : [0, 0, 0, 1];
     const part = scratch.parts.length;
     scratch.parts.push({
-      localRotation: right ? [0, 0, 1, 0] : [0, 0, 0, 1],
+      localRotation: right === authoredRight ? mounted : flipWheelSide(mounted),
       localTranslation: world ? world.pos : [0, 0, 0],
       name: frame.name.trim().toLowerCase(),
       scale,

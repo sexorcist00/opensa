@@ -46,6 +46,7 @@ apps/web/src/ui/camera/
   camera-director.ts      // the state machine + layer order; owns CameraRigState
   camera-input.ts         // look-delta smoothing, idle timer, zoom intent   (plan 02)
   follow-rig.ts           // on-foot spherical rig springs                   (plans 02, 03)
+  fly-rig.ts              // free-fly / map viewer: walk, pan, orbit, dolly  (this plan, smoothed in 02)
   vehicle-rig.ts          // vehicle chase behaviour                         (plan 05)
   camera-collision.ts     // whisker casts + pull-in/release                 (plan 04)
   camera-motion.ts        // additive bob/dip/shake/FOV-kick layer           (plan 06)
@@ -57,7 +58,7 @@ apps/web/src/ui/camera/
 type CameraSnapshot = {
   // assembled by the host, all plain data, engine Y-up
   dt: number;
-  mode: 'foot' | 'vehicle'; // photo/bench never reach the director (resolveCamera priority)
+  mode: 'foot' | 'vehicle' | 'fly'; // bench never reaches the director (resolveCamera priority)
   focus: Vec3; // player or seated car position (already the host's `focus`)
   focusHeading: number; // ped render heading or car heading, as engine yaw
   velocity: Vec3; // planar+vertical, engine space
@@ -100,6 +101,13 @@ type CameraRigState = {
 - [ ] `resolveCamera` takes `fovYRad`; test updates.
 - [ ] Host: snapshot assembly, director call, `?cam=legacy` branch.
 - [ ] Legacy-parity unit test (director output === old math for a scripted input sequence).
+- [ ] **Fly mode**: move `flyStep`/`panStep` + the host's inline orbit/dolly/top-down-snap block into
+      `fly-rig.ts` behind `mode: 'fly'`; per-mode layer opt-outs (fly skips collision/auto-center/motion)
+      expressed once in the director spine, not as scattered conditionals.
+- [ ] **Fly-parity + map-viewer regression tests**: the moved viewer path reproduces today's controls
+      bit-for-bit; `cursorRay` picks through the director's `fovYRad`; the `NO_FOG_DISTANCE` override
+      survives `environmentDriver.apply`; exactly one `requestPointerLock` in the host (all four are the
+      074/22 phase 9 findings — see `22-debug-tools.md`).
 
 ## 3. Config plumbing
 
@@ -134,6 +142,8 @@ how field rounds tune without rebuilds (the 036 pattern, which worked).
 - Suite green; `engine-camera.test.ts` (moved) green; new math + parity tests green.
 - With default config and no `?cam` flag: gameplay camera is **visually identical** to pre-080
   (parity test + a manual sanity walk).
+- **F2 → Map viewer still works end to end** after the fly path moves: pan/orbit/dolly/top-down snap,
+  cursor picking, no fog cut. Field-check it in the headless harness, not only by tests.
 - Ritual bench row: fps/draws within noise of the reference (bench bypass proof).
 
 ## Ledger

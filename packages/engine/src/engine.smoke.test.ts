@@ -82,3 +82,45 @@ describe('Engine on a fake device', () => {
     });
   });
 });
+
+describe('debugViewMode', () => {
+  describe('negative cases', () => {
+    it('is 0 with no debug view selected — normal play must not take a debug branch', () => {
+      expect(new Engine().debugViewMode()).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reports 1 for unlit and 2 for normals', () => {
+      const unlit = new Engine();
+      unlit.debugUnlit = true;
+      const normals = new Engine();
+      normals.debugNormals = true;
+
+      expect(unlit.debugViewMode()).toBe(1);
+      expect(normals.debugViewMode()).toBe(2);
+    });
+
+    it('carries the mode INTO the frame uniform, not just the getter', async () => {
+      // `debugViewMode()` being right is worth nothing if the lane it rides is never written.
+      const engine = new Engine();
+      await engine.init(harness.canvas);
+      engine.debugNormals = true;
+      gpu.reset();
+      engine.frame(cameraAt([0, 0, 50]));
+
+      const write = gpu.writes.find((entry) => entry.label?.includes('frame'));
+      expect(write).toBeDefined();
+      const floats = new Float32Array(write!.data.buffer, write!.data.byteOffset);
+      expect(floats[71]).toBe(2); // moonColor.w — the debug VIEW lane
+    });
+
+    it('lets NORMALS win when both are set — one lane carries one view', () => {
+      const engine = new Engine();
+      engine.debugUnlit = true;
+      engine.debugNormals = true;
+
+      expect(engine.debugViewMode()).toBe(2);
+    });
+  });
+});

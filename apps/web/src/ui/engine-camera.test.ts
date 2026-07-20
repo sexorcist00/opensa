@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createChordWatcher, flyStep, resolveCamera } from './engine-camera';
+import { createChordWatcher, cursorRay, flyStep, panStep, resolveCamera, TOP_DOWN_PITCH } from './engine-camera';
 
 const FORWARD = [0, 0, -1] as const; // looking down −Z
 const TARGET = [10, 2, 30] as const;
@@ -110,6 +110,81 @@ describe('createChordWatcher', () => {
 
       chord.up('KeyM'); // K still held
       expect(chord.down('KeyM')).toBe(true);
+    });
+  });
+});
+
+describe('cursorRay', () => {
+  const close = (a: readonly number[], b: readonly number[]): void => {
+    a.forEach((value, at) => expect(value).toBeCloseTo(b[at], 6));
+  };
+
+  describe('negative cases', () => {
+    it('returns the forward vector unchanged at screen centre', () => {
+      close(cursorRay([0, 0, 1], [0, 0], 16 / 9, Math.PI / 3), [0, 0, 1]);
+    });
+
+    it('stays unit length off-centre, so the pick ray has no implicit scale', () => {
+      const dir = cursorRay([0, 0, 1], [0.8, -0.6], 16 / 9, Math.PI / 3);
+
+      expect(Math.hypot(...dir)).toBeCloseTo(1, 6);
+    });
+
+    it('survives the near-vertical top-down forward the viewer rests at', () => {
+      // A perfectly vertical forward has no screen basis; the viewer's pitch stops just short of it.
+      const forward: [number, number, number] = [Math.cos(TOP_DOWN_PITCH), Math.sin(TOP_DOWN_PITCH), 0];
+      const dir = cursorRay(forward, [0.5, 0.5], 1, Math.PI / 3);
+
+      expect(Number.isFinite(dir[0]) && Number.isFinite(dir[1]) && Number.isFinite(dir[2])).toBe(true);
+      expect(Math.hypot(...dir)).toBeCloseTo(1, 6);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('aims along the camera RIGHT for a cursor on the right edge', () => {
+      // Looking down +Z, `mat4LookAt`'s screen right is −X; a right-edge cursor must lean that way.
+      const dir = cursorRay([0, 0, 1], [1, 0], 1, Math.PI / 3);
+
+      expect(dir[0]).toBeLessThan(0);
+      expect(dir[1]).toBeCloseTo(0, 6);
+      expect(dir[2]).toBeGreaterThan(0);
+    });
+
+    it('aims UP for a cursor above centre', () => {
+      const dir = cursorRay([0, 0, 1], [0, 1], 1, Math.PI / 3);
+
+      expect(dir[1]).toBeGreaterThan(0);
+    });
+
+    it('widens with the aspect ratio — the same NDC x reaches further on a wide canvas', () => {
+      const narrow = cursorRay([0, 0, 1], [1, 0], 1, Math.PI / 3);
+      const wide = cursorRay([0, 0, 1], [1, 0], 2, Math.PI / 3);
+
+      expect(Math.abs(wide[0])).toBeGreaterThan(Math.abs(narrow[0]));
+    });
+  });
+});
+
+describe('panStep', () => {
+  describe('negative cases', () => {
+    it('does not move the eye without a drag', () => {
+      expect(panStep([5, 100, 5], [0, 0, 1], [0, 0], 100)).toEqual([5, 100, 5]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('moves the eye OPPOSITE the drag, so the map follows the cursor', () => {
+      // Looking down +Z, screen right is −X. Dragging right (+ndc x) must push the eye toward +X.
+      const moved = panStep([0, 100, 0], [0, 0, 1], [0.1, 0], 100);
+
+      expect(moved[0]).toBeGreaterThan(0);
+    });
+
+    it('scales with the height passed in — the same drag covers more ground from higher up', () => {
+      const low = panStep([0, 0, 0], [0, 0, 1], [0.1, 0], 50);
+      const high = panStep([0, 0, 0], [0, 0, 1], [0.1, 0], 500);
+
+      expect(Math.abs(high[0])).toBeGreaterThan(Math.abs(low[0]));
     });
   });
 });

@@ -419,3 +419,172 @@ hidden placement stops picking while its neighbour survives.
 The pak-size delta. Estimate only, to be replaced with the measured number: 40 B/row after merging, so a cell
 with ~2 000 rows adds ~80 KB, and a full map lands in the tens of MB against a 1.4 GB pak. `weldStats.placements`
 reports the row count per cell and rides the existing convert report.
+
+## Phase 9 — the map viewer, field-repaired (2026-07-20)
+
+The user reported the Map screen as "completely non-functional": activation did nothing, orbit/pan were dead,
+and Show Normals / Show Collision were absent. It turned out to be FIVE independent gaps, not one break, and
+the headline symptom had the smallest cause.
+
+**The pointer-lock regression is the one that mattered — and the user diagnosed it.** `canvas-host` (prod) has
+exactly ONE `requestPointerLock`, in the "Click to play" button's handler; the canvas's own click only PICKS.
+The engine host had added a second one to `pointerdown`, so the first press anywhere captured the pointer.
+Click-to-select could therefore never fire: the click that would have selected was spent taking the pointer.
+Removed — drag-look already covers looking around while unlocked, and capture is the button's job again.
+
+**Activation looked dead because nothing moved the camera.** The chain was intact — `setMapViewer` pinned
+cells, enabled `debugPicking`, detached the eye — but `setFlyMode` only detaches the eye WHERE IT STANDS.
+You entered the viewer at the player's shoulder looking where you already looked, which is indistinguishable
+from a dead button. Prod snapped overhead inside `enterDebug()`; the port had moved that to a separate "Top"
+button and lost it from activation. `snapTopDown()` is now shared by both.
+
+**Orbit/pan had no implementation at all.** Prod used three's `OrbitControls` (LEFT = pan, RIGHT = rotate);
+three is gone and nothing replaced it, and the `mapViewer` branch of `pointerdown` returned early so even
+drag-look was off. New pointer handling in the host, with the pure math in `engine-camera.ts`: `cursorRay`
+(the NDC→world ray, matching `mat4LookAt`'s basis exactly) and `panStep` (eye slides opposite the drag,
+scaled by eye HEIGHT so a gesture covers the same apparent distance at any altitude). A left press is
+ambiguous until it ends — under 0.01 NDC of travel it is a pick, above it a pan — so panning a district no
+longer selects whatever it started on.
+
+**Picking now uses the CURSOR.** Phase 8 picked along the camera forward and justified it by pointer lock;
+in the viewer there IS no pointer lock, so the crosshair was simply the wrong aim. `cursorRay` replaces it.
+
+**Show Collision** was not ported because `build-col-wireframe` was three-shaped. The engine had a complete,
+UNUSED debug-line stack (`createDebugLines` + the `debug-line` line-list pipelines, zero consumers outside
+the engine). New `collision-wireframe.ts` builds endpoint pairs from `ModelColliders` — the engine-agnostic
+seam physics already consumes, so the overlay draws exactly what physics was given — and converts GTA Z-up to
+engine Y-up. It follows the CAMERA, not the player (in the viewer you fly away from the player), and rebuilds
+only when the camera changes cell.
+
+**Show Normals** had no WebGPU equivalent: prod used a scene-wide `MeshNormalMaterial` via `overrideMaterial`.
+Implemented instead as a debug VIEW MODE widening the existing `moonColor.w` lane — 0 normal · 1 unlit ·
+2 normals — so the frame uniform does NOT grow. That constraint is load-bearing: growing it mints a new bind
+group, and that bind group is recorded into every cell bundle. Normals win over unlit, which is exactly how
+prod's single override slot behaved. Returned before fog (a fogged normal shows nothing).
+
+`meshOverrides` used to gate Show Normals AND Show Faces together. Split into `meshOverrides` (normals) and
+`meshFaces` (the wireframe), so a host can honour one without the other. `meshFaces` was false at this point
+and its button visibly disabled rather than silently inert; it was implemented properly later the same day —
+see "Show Faces, restored properly" below. The disabled styling stays as the general rule for a
+capability-gated button.
+
+### Tests — 20 new, suite 2309/322 green
+
+`cursorRay`: centre returns forward untouched, stays unit length off-centre, leans the right way per axis,
+widens with aspect, and survives the near-vertical top-down forward the viewer rests at (the reason the pitch
+stops at −π/2 + 0.01 — a vertical forward has no defined screen basis). `panStep`: opposite the drag, scaled
+by height. `buildCollisionLines`: triangles → three edge PAIRS, the GTA→engine swap, placement translation
+applied, one set per placement, box edges and sphere rings counted. `debugViewMode`: 0 by default (normal
+play must not take a debug branch), 1/2 per flag, normals win when both are set.
+
+The 13 shader golden snapshots moved because the debug helper block is shared by every module; the two real
+call-site changes appear once each, which is what the review gate is for. (A 14th, `cell-wire`, was added by
+the Show Faces work below.)
+
+### Not verified in-game yet (at the time of writing)
+
+All of this was compile- and unit-verified only; the fog fix and Show Faces were headless-field-verified
+afterwards (see the two sections below). What is still unconfirmed in-game is picking and the collision
+overlay. Picking additionally needs a pak carrying the `.oscell`
+placement mapper (minor 6) — on an older pak `pick()` returns null forever and the panel says so, which is a
+DATA state, not a code bug. Confirm both on the user's next run.
+
+### The black map viewer was FOG, not coordinates (2026-07-20, headless field check)
+
+The user reported that after the phase-9 fixes the camera moved but showed an empty brown screen, that the
+active district was invisible, and that "Whole map" changed nothing — suspecting broken coordinates.
+
+Reproduced headlessly (`bench-harness` over the user's own `build/perfect/opensa`, F2 → Map → Activate →
+Whole map). The coordinates were fine and the streaming was fine: the whole-map pin loaded **840 cells /
+2 518 cell-vertex buffers / 4 622 MB residency and drew 1 297 batches**. Every one of them into an invisible
+frame.
+
+`TOP_DOWN_HEIGHT` is 400, and the authored fog cut is routinely far less — clear LA is 800, FOGGY_SF is 250,
+and 074/21 deliberately removed the old `max(…, 1200)` floor so weathers run their raw `farClip`. So from
+overhead the ground sat at or past the cut. Worse, `fogCutDistance` is not only a look: `engine.ts`
+culls with `sphereFullyBeyond(camera.eye, …, env.fogCutDistance)`, so distant cells were **discarded**, not
+merely tinted. At night the fog colour is the night sky, which is why it read as a dead brown screen.
+
+Fix: the map viewer renders with fog OFF (`NO_FOG_DISTANCE = 100 000`, past the 10 000 far plane), re-applied
+after `environmentDriver.apply` each frame because that rewrites both distances from timecyc. Fog is a look
+and the viewer is an inspection tool. Verified in the same harness — the district reads cleanly from above,
+and "Whole map" shows the freeway, the stadium and the LS blocks at 1 646 draws.
+
+**Known caveat:** `streaming.ts` counts a `lateCreate` for any cell appearing inside the fog cut, so while the
+viewer is open that honesty metric is meaningless (every pinned cell counts). The bench never opens the map
+viewer, so the perf-ritual numbers are unaffected — but do not read `lateCreates` from a map-viewer session.
+
+**Show Faces was still unavailable at this point** and was made to LOOK it (dimmed, `not-allowed`, a title
+explaining why) instead of presenting an enabled button that does nothing — which is exactly how it got
+reported as broken. It was implemented properly later the same day via the storage-buffer index lookup named
+here; see the next section.
+
+### Show Faces, restored properly (2026-07-20)
+
+The user chose the correct implementation over the cheap one, and it is in.
+
+**Why it could not be a port.** A solid wireframe needs to know where in its triangle each pixel is, and
+indexed geometry cannot say: under `drawIndexed`, `vertex_index` is the value READ FROM the index buffer, so
+`vertex_index % 3` is meaningless, and neighbouring triangles share vertices anyway. three answered this with
+a scene-wide `overrideMaterial` + `wireframe: true`; WebGPU has no such concept.
+
+**What it does instead.** The `cell-wire` pass does not use the fixed-function index path at all. It draws
+**non-indexed** with `vertexCount = indexCount` and reads the cell's vertex AND index buffers as read-only
+STORAGE: `vertex_index` is then the position in the triangle list, its remainder mod 3 IS the barycentric
+corner, and the real vertex is looked up through the index array by hand. No geometry is duplicated and no
+edge buffer is built. The fragment draws the edge with an `fwidth`-scaled band — one pixel wide at any
+distance — and discards the interior.
+
+Costs and details worth keeping:
+
+- Cell vertex/index buffers gained `GPUBufferUsage.STORAGE`. Read-only, no extra allocation.
+- The index WIDTH has to travel to the shader, because this is the one consumer that unpacks the buffer
+  itself rather than getting the format from `setIndexBuffer`. It rides **bit 2 of the per-cell flag word**
+  (`origin.w`), next to the existing baked-channel bits — the same spare-lane discipline the debug view mode
+  uses. u16 pairs share a word, low half first.
+- `STRIDE_WORDS` is DERIVED from `OSCELL_VERTEX_STRIDE`, not typed into the WGSL: a format change must not
+  need a second edit in a shader.
+- The pass is depth-TESTED but does not write, draws with `cullMode: 'none'` (a front-faces-only wireframe
+  reads as a solid shell from above), and runs once per visible cell only while the toggle is on.
+- Unlike Show Normals it is an OVERLAY pass, not a shading mode, so the two are independent in the engine —
+  the UI still makes them mutually exclusive, matching how prod's single override slot behaved.
+
+`meshFaces` is now true on the engine host, and the capability split introduced earlier stays: it is a real
+per-feature gate, not a placeholder.
+
+**Field-verified in the headless harness** on the user's own pak: the whole district renders as a correct
+per-triangle wireframe — road triangulation, building faces and tree cards all read individually — and the
+button toggles back off.
+
+### Coverage audit, and what it caught (2026-07-20)
+
+An audit of the phase-9 work against the test suite found the pass itself untested end to end. Eleven tests
+were added (suite **2320/323**); the ones worth naming:
+
+- **`drawCellWireframe` gating** — a frame with `debugFaces` off issues NO `cell-wire` draw; on, exactly one
+  per visible cell, `kind: 'draw'` (not `drawIndexed` — an indexed draw would destroy the shader's whole
+  premise), `vertexCount === cell.wireVertexCount`, bind group 2 = `<key>:wire`. One test covers the
+  pipeline, the bind group, the count and the gate.
+- **`wireVertexCount` for BOTH index widths** — the stride divide was executed on both paths every run and
+  asserted on neither; a mix-up would silently halve or double the wireframe.
+- **The STORAGE usage flag.** This one needed a harness extension: `fake-device.ts` was dropping
+  `descriptor.usage` on the floor, so losing the flag was invisible to every unit test and would have failed
+  only on a REAL device, at bind-group creation. `FakeGpu.bufferUsage` now records it, and the test asserts
+  the cell buffers keep VERTEX/INDEX as well as gaining STORAGE.
+- **Flag-word bit 2** composing with the baked-channel bits (`SUN_VIS | index16 === 5`) — a mask regression
+  is otherwise silent.
+- **The debug view reaching the frame uniform** (`floats[71] === 2`): `debugViewMode()` being correct is
+  worth nothing if the lane it rides is never written.
+- **`setShowNormals` / `setShowFaces` forwarding** — both were literal no-ops before this plan, so a
+  regression back to one would have been invisible.
+- **`hdFolder`** in lod-trees, mirroring `swapFolder`'s five cases. It was exported for this; the two helpers
+  are duplicated logic with slightly different `.dff` checks, and are a merge candidate.
+
+**Standing gap, honestly recorded:** `apps/web/src/ui/**` is EXCLUDED from the coverage floors
+(`vitest.config.ts`), and that exclusion carries a written rule — anything excluded must have e2e coverage on
+the Playwright lane. The `e2e/` specs mention neither the map screen nor any of these toggles. So
+`collision-wireframe.ts` is unit-tested by choice rather than by policy, and the map-viewer INPUT path
+(orbit/pan/dolly, the click-vs-drag threshold, `ndcOf`) has no automated coverage at all — only the headless
+screenshots taken this session. Two pure functions worth extracting into `engine-camera.ts` next to their
+tested siblings: `ndcOf` (a missing y-flip breaks picking while `cursorRay`'s own tests stay green) and the
+wheel-dolly step.
