@@ -82,6 +82,9 @@ export interface CellHandle {
     model: string;
     txd: string;
   }[];
+  /** Triangles baked into the two bundles — summed per visible cell into `EngineStats.trianglesRecorded`.
+   *  Counted once at load because a bundle is recorded once and never rebuilt. */
+  triangles: number;
   uniform: GPUBuffer;
   vertexBuffer: GPUBuffer;
   visible: boolean;
@@ -321,6 +324,7 @@ export class CellStore {
         z: particle.position[2] + cell.origin[2],
       })),
       placements: this.debugPicking ? worldPlacements(cell) : [],
+      triangles: bundleGroups.reduce((sum, group) => sum + group.indexCount / 3, 0),
       uniform,
       vertexBuffer,
       visible: true,

@@ -24,6 +24,7 @@ export interface LegSample {
   postMs: number;
   probeMs: number;
   submitMs: number;
+  triangles: number;
 }
 
 /** What the runs need from the engine host — thin accessors over its loop state. */
@@ -125,7 +126,7 @@ export function setupPerfRuns(host: PerfRunsHost): void {
     const report = {
       avgDrawCalls: Math.round(avg(samples.map((sample) => sample.draws))),
       avgMs: Number(avgMs.toFixed(3)),
-      avgTriangles: 0,
+      avgTriangles: Math.round(avg(samples.map((sample) => sample.triangles))),
       fps: Number((1000 / Math.max(0.001, avgMs)).toFixed(1)),
       frames: samples.length,
       gpuMs: {

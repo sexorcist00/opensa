@@ -1134,6 +1134,7 @@ async function boot(
       postMs: stats.gpuPostMs,
       probeMs: stats.gpuProbeMs,
       submitMs: stats.submitMs,
+      triangles: stats.trianglesRecorded,
     });
 
     if (
@@ -1262,7 +1263,7 @@ function frameStats(frames: readonly number[], stats: null | ReturnType<Engine['
     p95Ms: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))],
     programs: 0,
     textures: 0,
-    triangles: 0,
+    triangles: stats?.trianglesRecorded ?? 0,
   };
 }
 

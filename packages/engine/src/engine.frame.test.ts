@@ -229,6 +229,21 @@ describe('Engine frame decisions', () => {
       expect(stats.cellsVisible).toBe(1); // the distant one is culled, not merely skipped at draw time
     });
 
+    it('counts the triangles of VISIBLE cells only', async () => {
+      const engine = await bootedEngine();
+      // Two groups of one triangle each — the sum, not the group count, is what the bench reports.
+      const twoTriangles = cellBytes({
+        groups: [
+          { bounds: [0, 0, 0, 50], indexCount: 3, indexOffset: 0, pipelineClass: 0, side: 0, textureArrayRef: 0 },
+          { bounds: [0, 0, 0, 50], indexCount: 3, indexOffset: 0, pipelineClass: 0, side: 0, textureArrayRef: 0 },
+        ],
+      });
+      engine.cells.load('near', twoTriangles);
+      engine.cells.load('far', cellBytes({ bounds: [0, 0, 0, 10], origin: [100000, 0, 0] }));
+
+      expect(engine.frame(camera()).trianglesRecorded).toBe(2);
+    });
+
     it('keeps drawing a cell as the camera moves within range, and stops beyond it', async () => {
       const engine = await bootedEngine();
       engine.cells.load('0,0', cellBytes());

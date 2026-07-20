@@ -165,6 +165,13 @@ export interface EngineStats {
   gpuProbeMs: number;
   residencyBytes: number;
   submitMs: number;
+  /**
+   * Triangles submitted this frame — baked cell bundles (counted at load) plus every out-of-bundle
+   * `drawIndexed`, instance counts included. The number the bench reports as `avgTriangles`: it is what
+   * separates a geometry problem from a fragment one, so it counts what was SUBMITTED, not what survived
+   * the depth test.
+   */
+  trianglesRecorded: number;
 }
 
 export interface Environment {
@@ -633,6 +640,9 @@ export class Engine {
   private depthView!: GPUTextureView;
   private engineDevice!: EngineDevice;
   private frameBindGroup!: GPUBindGroup;
+  /** Triangles recorded by the out-of-bundle draw passes this frame; reset at the top of `frame`. A field
+   *  rather than a return value because every `draw*` already returns its draw count. */
+  private frameTriangles = 0;
   private frameUniform!: GPUBuffer;
   private readonly frustumPlanes = new Float32Array(24);
   private readonly invViewProj: Mat4 = mat4Identity();
@@ -696,6 +706,7 @@ export class Engine {
     gpuProbeMs: 0,
     residencyBytes: 0,
     submitMs: 0,
+    trianglesRecorded: 0,
   };
   private targetKey = '';
   private timers!: GpuTimers;
@@ -1052,6 +1063,8 @@ export class Engine {
     const blendCells: { bundle: GPURenderBundle; distanceSq: number }[] = [];
     let draws = 0;
     let total = 0;
+    let triangles = 0;
+    this.frameTriangles = 0;
     for (const cell of this.cells.all()) {
       total += 1;
       // Fog distance cull (plan 074/21 P1): a cell entirely at/past the fog cut is 100 % fog = pixel-equal
@@ -1079,6 +1092,7 @@ export class Engine {
           });
         }
         draws += cell.draws;
+        triangles += cell.triangles;
       }
     }
     // Blend phase back-to-front by CELL distance — cross-cell transparency ordering (per-group order inside
@@ -1205,6 +1219,7 @@ export class Engine {
     this.statsValue.cellsTotal = total;
     this.statsValue.cellsVisible = bundles.length;
     this.statsValue.drawsRecorded = draws;
+    this.statsValue.trianglesRecorded = triangles + this.frameTriangles;
     this.statsValue.residencyBytes = this.resources.totalBytes();
 
     return this.statsValue;
@@ -2042,6 +2057,7 @@ export class Engine {
         // count as byteLength / 2 — the uint16 assumption is the format here, not an oversight.
         pass.setIndexBuffer(model.indexBuffer, 'uint16');
         pass.drawIndexed(model.indexCount, draw.instanceCount);
+        this.frameTriangles += (model.indexCount / 3) * draw.instanceCount;
         draws += 1;
       }
     }
@@ -2112,6 +2128,7 @@ export class Engine {
     pass.setVertexBuffer(0, this.coronaQuad);
     pass.setVertexBuffer(1, this.coronaInstances);
     pass.draw(6, count);
+    this.frameTriangles += 2 * count; // billboard quads
 
     return 1;
   }
@@ -2175,6 +2192,7 @@ export class Engine {
       pass.setPipeline(this.pipelines.get(pipelineIdFor(group.pipelineClass, group.side)));
       pass.setBindGroup(2, this.textures.get(group.textureArrayRef).bindGroup);
       pass.drawIndexed(group.indexCount, 1, group.indexOffset, 0, 0);
+      this.frameTriangles += group.indexCount / 3;
       draws += 1;
     }
 
@@ -2226,6 +2244,7 @@ export class Engine {
       pass.setVertexBuffer(0, this.coronaQuad); // the same unit quad the coronas billboard with
       pass.setVertexBuffer(1, instances);
       pass.draw(6, count);
+      this.frameTriangles += 2 * count; // billboard quads
       draws += 1;
     }
 
@@ -2243,6 +2262,7 @@ export class Engine {
     for (const submesh of this.ped.submeshes) {
       pass.setBindGroup(1, submesh.bindGroup);
       pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset);
+      this.frameTriangles += submesh.indexCount / 3;
     }
 
     return this.ped.submeshes.length;
@@ -2281,6 +2301,7 @@ export class Engine {
           boundArray = array;
         }
         pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset, 0, state.slot * model.partCount + submesh.part);
+        this.frameTriangles += submesh.indexCount / 3;
         draws += 1;
       }
     }
@@ -2307,6 +2328,7 @@ export class Engine {
     pass.setVertexBuffer(0, this.water.vertices);
     pass.setIndexBuffer(this.water.indices, 'uint32');
     pass.drawIndexed(this.water.indexCount);
+    this.frameTriangles += this.water.indexCount / 3;
 
     return 1;
   }
