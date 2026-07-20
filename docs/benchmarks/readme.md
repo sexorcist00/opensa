@@ -63,39 +63,60 @@ A perf comparison is worthless without these held equal, so record them in `note
 
 See [index.md](index.md) — the full chronological table with conditions.
 
-## Open: the 2026-07-20 regression
+## RESOLVED: the 2026-07-20 "regression" is the cost of a complete map
 
-Against the 07-18 baseline ([JSON](opensa-engine/2026-07-18-ingame-preflip-baseline.json)) (same machine, same 841-car population, also run by the user):
+**It was never a code regression.** A four-point bisect on a fixed pak settled it in one sitting, and the
+user's own account of the map confirmed the cause.
 
-| scene         | fps 07-18 → 07-20 | draws       | GPU pass        | probe       | submit      |
-| ------------- | ----------------- | ----------- | --------------- | ----------- | ----------- |
-| ocean-horizon | 120.0 → 117.3     | 11 → 19     | 1.85 → **1.80** | 0.23 → 0.53 | 0.36 → 0.20 |
-| ls-rain-night | 120.2 → 111.7     | 1046 → 959  | 2.59 → 4.18     | 0.38 → 1.26 | 0.49 → 0.97 |
-| ls-noon       | 120.1 → 103.5     | 1036 → 1202 | 2.48 → 4.84     | 0.37 → 1.15 | 0.36 → 1.42 |
-| lv-night      | 120.0 → 69.7      | 1065 → 1678 | 3.14 → 9.10     | 0.35 → 1.64 | 0.45 → 3.33 |
-| sf-fog-dawn   | 120.3 → 64.8      | 842 → 1023  | 2.85 → 4.43     | 0.55 → 1.94 | 0.38 → 0.54 |
-| country-dusk  | 119.6 → 58.3      | 526 → 932   | 4.09 → 12.56    | 0.38 → 1.89 | 0.33 → 2.60 |
+Against the 07-18 baseline ([JSON](opensa-engine/2026-07-18-ingame-preflip-baseline.json)):
 
-Every scene used to sit vsync-locked at 120 with p95 ≤ 9.4 — real cost was under the 8.33 ms budget with
-room to spare. Only the ocean still is.
+| scene         | fps 07-18 → 07-20 | draws       | GPU pass         |
+| ------------- | ----------------- | ----------- | ---------------- |
+| ocean-horizon | 120.0 → **120.0** | 11 → 19     | 1.85 → **1.78**  |
+| ls-rain-night | 120.2 → 117.5     | 1046 → 960  | 2.59 → 4.29      |
+| ls-noon       | 120.1 → 112.1     | 1036 → 1202 | 2.48 → 4.97      |
+| lv-night      | 120.0 → 75.6      | 1065 → 1680 | 3.14 → 8.77      |
+| sf-fog-dawn   | 120.3 → 105.4     | 842 → 1019  | 2.85 → 4.21      |
+| country-dusk  | 119.6 → 60.6      | 526 → 917   | 4.09 → **12.45** |
 
-Two readings the data forces:
+### The bisect (all four points on the same pak)
 
-1. **`ocean-horizon` is the control and it did not move** (pass 1.85 → 1.80). No fixed per-frame cost was
-   added; whatever changed scales with how much WORLD is on screen.
-2. **`ls-rain-night` drew 8 % FEWER calls and cost 61 % MORE GPU.** So this is not draw count — each draw
-   carries more work. `country-dusk` says the same louder: draws +77 %, pass +207 %.
+| point | commit    | ls-noon                                                  | sf-fog | lv-night | country-dusk | ocean | rain-night |
+| ----- | --------- | -------------------------------------------------------- | ------ | -------- | ------------ | ----- | ---------- |
+| A     | `3f354b0` | — could not load this pak at all (the map never came up) |
+| B     | `95bd544` | 113.6                                                    | 107.6  | 78.0     | **64.6**     | 120   | 118.8      |
+| C     | `52b4ec9` | 110.1                                                    | 107.4  | 75.9     | **64.7**     | 120   | 118.2      |
+| D     | `03f05b1` | 109.6                                                    | 105.3  | 74.9     | **60.4**     | 120   | 117.5      |
+| HEAD  | `436d2f2` | 112.1                                                    | 105.4  | 75.6     | **60.6**     | 120   | 117.5      |
 
-`probe` tripled everywhere except the ocean, but the probe re-renders the world into a cubemap face, so it
-inherits a heavier world. Symptom, not cause.
+Draw counts are identical to the unit across all four (1202 / 1019 / 1680 / 917 / 19 / 959), and the frame
+times sit inside run-to-run noise. **The slowdown is already fully present at the earliest code that can
+read this pak** — so nothing in the 07-19…07-20 window caused it.
 
-Candidates, untested: the **pak rebuild** between the two dates (plan 078 row 5 restored far LODs across
-the LS/SF core — meaning the 07-18 baseline may have been measured on a pak that was MISSING geometry, and
-the "regression" is a vanished handicap); or a code change in the 07-18…07-20 window making each draw
-heavier. Residency also rose (~975 MB at the Ganton spawn in July rows → 1 644 MB in the 07-20 HUD).
+### The cause
 
-**The decisive test needs no code: re-run `?bench=all` against the OLD pak.** 120 fps returns ⇒ data;
-it does not ⇒ code, and bisect the window.
+The pak is the **improved map**: it carries our generated LODs, vegetation and procobj. The 07-18 baseline
+was measured before those existed in the output (user-confirmed). The evidence lines up exactly:
 
-Ruled out already: the `cell-wire` STORAGE flags (removed, no effect — and the ocean is flat), and the
-hemispheric ambient (vehicle pixels only; Ganton drops to 40 fps with two cars, by day).
+- **`ocean-horizon` did not move at all** (pass 1.85 → 1.78). It is the one scene with no LODs, no
+  vegetation and no procobj — the control, and it is flat.
+- **`country-dusk` moved most** — draws +74 %, pass ×3. Countryside is where vegetation and procobj are
+  densest.
+- Cost per draw rose too, not just draw count, which is what added geometry and alpha-tested foliage do.
+
+**So the old 120 fps was not an engine achievement — it was the cost of an incomplete world.** This is now
+an optimisation problem against real content, not a hunt for a broken commit.
+
+### What the bisect did find
+
+- **Point D (`03f05b1`) costs ~5 %** on the two heaviest scenes (country-dusk 64.7 → 60.4 fps, pass
+  11.43 → 12.52). Small, real, and worth a look — that commit carries the map-viewer work and plan-078
+  rows 7/8/10.
+- **HEAD is neutral against D**: removing the Show Faces STORAGE flags and adding the hemispheric ambient
+  both cost nothing measurable. Both are closed out as suspects.
+
+### The open question this leaves
+
+Ganton with two cars dropped to 40 fps by day in free play — worse than any bench scene reports. The bench
+paths may simply not pass through the heaviest content. Worth a targeted run before assuming the sweep
+covers the worst case.

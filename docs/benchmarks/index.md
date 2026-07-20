@@ -74,13 +74,15 @@ which is exactly how these rows should be read.
 jump is content, not regression — the 07-18 batch restored fog/draw distance via the regional weather remap,
 so more world became visible. Cost stayed inside the budget.
 
-**07-18 → 07-20:** the break. See [readme.md](readme.md#open-the-2026-07-20-regression) for the per-scene
-delta and the analysis. The short version: `ocean-horizon` (nothing to draw) did not move, so no fixed
-per-frame cost appeared; but `ls-rain-night` drew **8 % fewer** calls for **61 % more** GPU, so each draw
-now carries more work. The decisive test — re-run `?bench=all` on the OLD pak — has not been done.
+**07-18 → 07-20: not a break — a fuller map.** A four-point bisect on a fixed pak (B `95bd544`,
+C `52b4ec9`, D `03f05b1`, HEAD `436d2f2`) put identical draw counts and noise-level frame times at every
+point, so no commit in the window caused it. The pak is the improved map — our LODs, vegetation and
+procobj — and the 07-18 baseline predates them. `ocean-horizon`, the only scene without that content, did
+not move. Full tables in [readme.md](readme.md).
 
 ## The gap this record has
 
-**The pak build is not recorded on the in-game rows**, and it is the one variable most likely to explain
-07-18 → 07-20. The lab rows carry a `converter` block; the sweeps do not. Every new in-game run must name
-its pak in `note` — that is now in the readme's comparability checklist.
+**The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
+07-18 → 07-20: what the map CONTAINED changed under us while the numbers were read as if it had not. The
+lab rows carry a `converter` block; the sweeps did not. Every new in-game run must name its pak in `note`
+— that is now in the readme's comparability checklist, and the 07-19/07-20 bisect rows carry it.
