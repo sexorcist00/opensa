@@ -150,16 +150,49 @@ nothing for panel gaps).
 Judgement: hold until rows 1 and 2 are field-judged. There is a real chance AO turns out to be polish rather
 than necessity once the level and the reflections are right.
 
-### 4. Night performance — 37 fps
+### 4. Performance — DIAGNOSED, and it is not a vehicle row
 
-Observed in the row-B verdict screenshot: `frame 26.98 ms (37 fps) · GPU 21.50 ms · draws 705 · probe
-1.51 ms`, night, Grove Street, one custom car. An earlier daytime capture in the same session read 120 fps
-at 262 draws. The user's account: night drops were present before and are NOT caused by custom cars, but
-"чтобы до 37 такого не было".
+Opened as "37 fps at night". It turned out to be neither a night problem nor a vehicle one, and the whole
+investigation is recorded with its numbers in [`docs/benchmarks/`](../benchmarks/) (readme + index). Summary:
 
-Not caused by row B (a mix and a multiply). Not vehicle-specific either — this row may well split into its
-own plan once it has a shape. Nothing has been measured yet; the first knob by standing practice is
-`?scale=0.75`, and the first question is what those 705 draws are.
+**It is not a code regression.** A four-point bisect on a fixed pak (`95bd544` → `52b4ec9` → `03f05b1` →
+HEAD) put identical draw counts and noise-level frame times at every point. The pak is the **improved map**
+— our LODs, vegetation and procobj — and the 07-18 baseline that showed 120 fps everywhere predates all
+three. The old number was the cost of an incomplete world, not an engine achievement.
+
+**It is not night.** `ganton-night` 51.8 fps vs `ganton-noon` 52.0 on the identical path.
+
+**The bench was measuring the wrong thing.** Every existing scene flies at 90–120 m; the field plays at
+street level. Two new scenes (`ganton-noon`, `ganton-night`, `bench-scenes.ts`) at 20–30 m are now the worst
+in the sweep at 52 fps, below `country-dusk`'s 60.6 — which is what the field kept reporting and no path
+could reproduce.
+
+**Where the frame goes** (the `?scale=0.75` pair solves `pass = F + V·area`):
+
+| term                           | ms       | share | scales with resolution |
+| ------------------------------ | -------- | ----- | ---------------------- |
+| fragments                      | **9.97** | 71 %  | yes                    |
+| geometry / vertex / draw setup | **4.10** | 29 %  | no                     |
+| probe                          | **2.54** | —     | **no, not at all**     |
+| post                           | 1.06     | —     | yes                    |
+
+Ruled out along the way, each with evidence: the `cell-wire` STORAGE flags, the hemispheric ambient, the
+841-car population, the 1808 physics bodies (one fixed body per collidable instance — 1.7–3.3 ms of a 19 ms
+frame while GPU takes 18.3), and vegetation (the user checked the map viewer: almost none).
+
+**Targets, by return:** the fragment cost (~10 ms, the largest single item — shader cost or overdraw, not
+yet distinguished); the **probe** (~2.5 ms, flat, untouched by render scale, and the cheapest win — it
+re-renders one cubemap face per frame at a resolution nothing has questioned); the geometry floor (~4.1 ms,
+hardest — needs cheaper near LODs or fewer objects).
+
+`?scale=0.75` buys 52 → 68.7 fps (+32 %) and is a mitigation, not an answer.
+
+**Related, decision deferred by the user:** our `procobj` models are **4.13×** the stock triangle count
+(`sand_combush02`/`03` are 48 → 4096, an 85× blowup), which works out to **10.4×** the triangles per m² of
+procobj surface once `procobj.dat` spacing is applied — up to 68× on desert surfaces. That is a content
+decision, and it explains `country-dusk` rather than Ganton (city grass surfaces are only 1.4–2×).
+
+**This row should leave 084.** It is not vehicle appearance; it wants its own plan.
 
 ### 5. Peds inherit row B's root
 

@@ -115,8 +115,9 @@ an optimisation problem against real content, not a hunt for a broken commit.
 - **HEAD is neutral against D**: removing the Show Faces STORAGE flags and adding the hemispheric ambient
   both cost nothing measurable. Both are closed out as suspects.
 
-### The open question this leaves
+### That open question is now closed
 
-Ganton with two cars dropped to 40 fps by day in free play — worse than any bench scene reports. The bench
-paths may simply not pass through the heaviest content. Worth a targeted run before assuming the sweep
-covers the worst case.
+Ganton in free play read ~40 fps by day, worse than any bench scene reported — because every scene flew at
+90–120 m while the field plays at street level. The two `ganton-*` scenes added the same day reproduce it
+(52 fps, the worst in the sweep) and the `?scale=0.75` pair decomposes it. See
+[index.md](index.md#ganton-street-level-2026-07-20--the-scene-the-sweep-was-missing).
