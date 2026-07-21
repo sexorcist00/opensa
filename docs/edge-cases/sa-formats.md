@@ -1,0 +1,34 @@
+# SA asset-format edge cases
+
+Strict RenderWare/SA requirements every generated or byte-edited asset must satisfy. Violations are usually
+**silent** in-game (invisible model, corrupted collision) — they render fine in viewers. Detailed war
+stories: `tools/lod-trees-generator/docs/plans/005-sa-asset-format.md`,
+`tools/lod-procobj-generator/docs/plans/003-sa-asset-format.md`.
+
+- **Model id ≤ 18630 (stock ceiling).** Ids above it silently fail to load on stock SA — "HD swapped but no
+  LOD shows". Allocators (`allocateLodIds`, `findFreeBlock` in `tools/map-placement`) stay inside the stock
+  id gap; going higher needs fastman92 Limit Adjuster.
+- **uint16 vertex/index ceiling (65,535).** Indexed geometry must split across atomics past 65,535 verts.
+  The engine paths are widened to uint32, but the index-width flag is load-bearing everywhere (cell path,
+  rigid path, LOD encoders) — two ~90k-vert custom cars once took the whole vehicle system down.
+- **Tristrip flag must match the data.** `rpGEOMETRYTRISTRIP` set on a triangle-_list_ geometry makes SA
+  read it as a strip → draws nothing (`clearTristripFlag`).
+- **Extra-vertex-colour (`0x253F2F9`) must be stripped when the vertex count changes.** A template's
+  extension carried onto a rebuilt mesh applies stale RGBA → black or fully transparent
+  (`stripExtraVertColour`).
+- **TXD must be DXT-compressed.** A large uncompressed A8R8G8B8 TXD silently fails to load (untextured /
+  invisible). Atlases go DXT5 (alpha) / DXT1; mod-installer's PNG→TXD merge _patches_ an existing `.txd`,
+  never creates one, and needs 8-bit RGB/RGBA PNGs.
+- **Empty COL3 model is exactly 112 bytes.** Any other size misaligns the rest of the COL library and
+  corrupts collision _globally_, faulting an unrelated model (the "3999" crash). Collision binds by **name**;
+  `.col` must be packed into the IMG to be auto-discovered.
+- **IMG VER2 entry names ≤ 23 bytes including extension** (base ≤ 19 chars) — longer impostor names get
+  short aliases (`lodt<i>`, `plobj`, `plotr`).
+- **Anti-rip "locked" DFF/TXD.** Four lock variants (inflated sizes, hidden wrappers) are recovered by the
+  **engine parser only**; the offline byte-editing tools (`vehicle-optimizer`, map-optimizer's size-trusting
+  `readRw`) still trust declared sizes — a locked DFF there reads 0 geometries until an explicit `unlockDff`
+  exists. More lock variants remain in the wild. See `docs/open-issues/locked-dff.md`.
+- **UV-layer-count byte can be 0** with the truth in the `TEXTURED`/`TEXTURED2` flags — trusting the bare
+  byte reads triangles out of UV float data (garbage that masquerades as a lock). Handled in the parsers;
+  keep honouring the flags in new code.
+- **COL v1 unsupported** (none shipped in SA); don't emit it.

@@ -1,0 +1,37 @@
+# Engine rendering edge cases
+
+Limits and deliberate approximations of the own WebGPU engine.
+
+- **WebGPU `sampleCount` is 1 or 4 only**; alpha-to-coverage needs 4. No arbitrary MSAA ladder (the old
+  `msaa`/`bloomq` params were removed for this).
+- **World shadowing is baked, the sun doesn't track.** Per-pixel shading of the ~1,038 static 2dfx lamps
+  cost 120 → 25 fps; instead the world carries a baked arc-averaged sun-visibility scalar. Street lamps
+  light nothing but themselves — surface lighting from lamps is unimplemented (plan 074/17, deferred).
+- **No runtime SSAO; dynamic models get no AO.** Baked AO covers the map only. Vehicles/peds use a flat
+  indirect term + `skyVisibility(normal)` — panel gaps / wheel arches / ground contact can't darken; night
+  level, reflection strength and dynamic AO are the open rows of plan 084.
+- **Shader-stage limits are invisible to tests.** The fake GPUDevice doesn't validate the 16-varying
+  fragment-input cap or binding visibility — two shader defects shipped through 2,325 green tests. Check
+  WGSL by eye (a static check is a noted follow-up in plan 084).
+- **Two-sided world rendering.** SA's static world renders without backface culling (mirrored coplanar
+  pairs, `0x200000 DISABLE_BACKFACE_CULLING` honoured); glass is double-sided gated by
+  `@builtin(front_facing)`. Roadsign glyphs render twice at ±0.05 m; sign text does not dim at night.
+- **Particles are approximate.** No heat-haze refraction (prims skipped), tracks baked at 3 sample points
+  (no rotation / texture-frame animation), emission approximated by a fixed `rate × life` budget, point
+  emission only. Particle 2dfx on generated LODs is kept alive by a null-`m_SystemBP` guard.
+- **No corona occlusion** — coronas draw through geometry at some angles (SA traces line-of-sight; the
+  engine doesn't). Traffic-light bulb cycling isn't modelled. Vehicle headlights are an MVP — no projected
+  road beam.
+- **Escalators don't move** — the step renderer died with the three renderer; no replacement, no step
+  colliders.
+- **Stochastic de-tiling (`?stoch=`) is UNSTABLE v1, default off** (plan 074/12).
+- **Frustum culling only** — SA's `occlu` occlusion volumes are unused; interiors are filtered out
+  entirely.
+- **Streaming shows seams at speed** (deferred to the plan-21 tuning round): ≤1 cell-create/frame can spike
+  ~22 ms on fast traversal; free-fly can show late cells and magenta-before-texture; the HD↔LOD swap
+  visibly steps at speed.
+- **No moving colliders.** IFP-animated map objects don't collide with their moving parts; breakable shards
+  land analytically (one ground probe, freeze); on-foot players can't smash props (contact events fire for
+  chassis colliders only — matches vanilla); `_dam` damage-model swaps are unhandled (shatter only).
+- **The one perf knob is `?scale=`** (render scale, try 0.75 first on perf problems); there is no quality
+  tier ladder on the engine.
