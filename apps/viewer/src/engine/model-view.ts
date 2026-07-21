@@ -3,6 +3,7 @@ import type { RWClump, VehicleModelData } from '@opensa/renderware';
 import type { ColModel } from '@opensa/renderware/parsers/binary/col-types';
 
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
+import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
 import { colLines, meshEdgeLines } from '@opensa/renderware/collision/col-lines';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
@@ -42,10 +43,21 @@ export interface LoadModelOptions {
 /** xyzw, the same shape `RigidEntity.setPartRotation` takes. */
 export type PartRotation = readonly [number, number, number, number];
 
-export interface ViewedModel {
+/** The geometry the ViewedModel builder needs — shared by the DFF (`VehicleModelData`) and the converted
+ *  `.osm` (`RigidModelInit`) paths, so both render, frame, wireframe and part-highlight identically. */
+export interface RigidGeometry {
+  indices: Uint16Array | Uint32Array;
+  parts: VehicleModelData['parts'];
+  positions: Float32Array;
+  submeshes: VehicleModelData['submeshes'];
+}
+
+export interface ViewedModel<D extends RigidGeometry = RigidGeometry> {
   /** Axis-aligned bounds in ENGINE space, for framing the camera. */
   bounds: { center: [number, number, number]; radius: number };
-  data: VehicleModelData;
+  /** The geometry (+ whatever richer type the caller built it from — the DFF path keeps the full
+   *  `VehicleModelData`, e.g. its `doors`; the `.osm` path carries only {@link RigidGeometry}). */
+  data: D;
   dispose(): void;
   /** Box the given part in yellow (null clears it). */
   highlightPart(part: null | number, options?: HighlightOptions): void;
@@ -79,7 +91,7 @@ export function loadModel(
   dff: ArrayBuffer,
   txds: readonly ArrayBuffer[],
   options: LoadModelOptions = {},
-): ViewedModel {
+): ViewedModel<VehicleModelData> {
   return loadModelFromClump(engine, parseDff(dff), txds, options);
 }
 
@@ -89,94 +101,29 @@ export function loadModelFromClump(
   clump: RWClump,
   txds: readonly ArrayBuffer[],
   options: LoadModelOptions = {},
-): ViewedModel {
+): ViewedModel<VehicleModelData> {
   const data = buildVehicleModel(clump, new VehicleTextures(txds), options);
   const modelId = engine.createVehicleModel(toRigidModelInit(data));
-  const instance = engine.createVehicle(modelId);
-  instance.entity.setRoot(ROOT);
 
-  let collision: DebugLineSetId | null = null;
-  let wireframe: DebugLineSetId | null = null;
-  let highlight: DebugLineSetId | null = null;
-  const offset: [number, number, number] = [0, 0, 0];
-  const root = new Float32Array(ROOT);
+  return viewModel(engine, data, modelId);
+}
 
-  return {
-    bounds: measure(data.positions),
-    data,
-    dispose() {
-      for (const id of [collision, wireframe, highlight]) {
-        if (id !== null) {
-          engine.destroyDebugLines(id);
-        }
-      }
-      engine.destroyVehicle(instance);
-      engine.destroyVehicleModel(modelId);
-    },
-    highlightPart(part, options = {}) {
-      // Rebuilt rather than hidden: the box moves whenever the part does (an opened door).
-      if (highlight !== null) {
-        engine.destroyDebugLines(highlight);
-        highlight = null;
-      }
-      const box = part === null ? null : this.partBounds(part, options.rotation);
-      const clamped = box && options.clamp ? intersect(box, options.clamp) : box;
-      if (clamped) {
-        highlight = engine.createDebugLines(toEngineSpace(boxLines(clamped.min, clamped.max)), HIGHLIGHT_COLOR);
-      }
-    },
-    instance,
-    modelId,
-    partBounds(part, rotation) {
-      const local = boundsOfIndices(
-        data.positions,
-        data.indices,
-        data.submeshes.filter((submesh) => submesh.part === part),
-      );
+/**
+ * A CONVERTED model (`<name>.osm`, own-engine format) → on screen, the AFTER side of the before/after viewer
+ * (plan 079 phase 4). `readModelOsm` gives the engine-ready `RigidModelInit` directly — same decode the game
+ * runs — so no `parseDff`/`buildVehicleModel`; the textures ride inside as `.ostex`. The buffers arrive as
+ * `Uint8Array` views, so reinterpret positions/indices for the framing/wireframe maths.
+ */
+export function loadModelFromOsm(engine: Engine, name: string, osm: ArrayBuffer): ViewedModel {
+  const { model } = readModelOsm(name, new Uint8Array(osm));
+  const modelId = engine.createVehicleModel(model);
+  const positions = new Float32Array(model.positions.slice().buffer);
+  const indices =
+    (model.index16 ?? true)
+      ? new Uint16Array(model.indices.slice().buffer)
+      : new Uint32Array(model.indices.slice().buffer);
 
-      // Vertices live in the PART's frame (that is the whole point of the rigid path — the engine
-      // composes root × part per draw). Raw bounds would box the model ORIGIN instead of the part.
-      return local && data.parts[part] ? transformBounds(local, partMatrix(data.parts[part], rotation)) : local;
-    },
-    setCollision(col) {
-      if (collision !== null) {
-        return;
-      }
-      collision = engine.createDebugLines(toEngineSpace(colLines(col)), COLLISION_COLOR);
-      engine.setDebugLinesVisible(collision, false);
-    },
-    setOffset(next) {
-      offset[0] = next[0];
-      offset[1] = next[1];
-      offset[2] = next[2];
-      root.set(ROOT);
-      root[12] = offset[0];
-      root[13] = offset[1];
-      root[14] = offset[2];
-      instance.entity.setRoot(root);
-    },
-    setVisible(visible) {
-      data.submeshes.forEach((_, index) => instance.setSubmeshVisible(index, visible));
-    },
-    showCollision(visible) {
-      if (collision !== null) {
-        engine.setDebugLinesVisible(collision, visible);
-      }
-    },
-    showWireframe(visible) {
-      if (wireframe === null) {
-        if (!visible) {
-          return;
-        }
-        wireframe = engine.createDebugLines(
-          toEngineSpace(meshEdgeLines(data.positions, data.indices)),
-          WIREFRAME_COLOR,
-        );
-      }
-      engine.setDebugLinesVisible(wireframe, visible);
-    },
-    triangles: data.indices.length / 3,
-  };
+  return viewModel(engine, { indices, parts: model.parts, positions, submeshes: model.submeshes }, modelId);
 }
 
 /** AABB over the vertices the given submeshes actually index (not the whole buffer). */
@@ -335,4 +282,93 @@ function transformBounds(bounds: Bounds, matrix: Float32Array): Bounds {
   }
 
   return { max, min };
+}
+
+/** The shared ViewedModel over uploaded geometry — the DFF and `.osm` paths differ only in how `data` is built. */
+function viewModel<D extends RigidGeometry>(engine: Engine, data: D, modelId: VehicleModelId): ViewedModel<D> {
+  const instance = engine.createVehicle(modelId);
+  instance.entity.setRoot(ROOT);
+
+  let collision: DebugLineSetId | null = null;
+  let wireframe: DebugLineSetId | null = null;
+  let highlight: DebugLineSetId | null = null;
+  const offset: [number, number, number] = [0, 0, 0];
+  const root = new Float32Array(ROOT);
+
+  return {
+    bounds: measure(data.positions),
+    data,
+    dispose(): void {
+      for (const id of [collision, wireframe, highlight]) {
+        if (id !== null) {
+          engine.destroyDebugLines(id);
+        }
+      }
+      engine.destroyVehicle(instance);
+      engine.destroyVehicleModel(modelId);
+    },
+    highlightPart(part, options = {}): void {
+      // Rebuilt rather than hidden: the box moves whenever the part does (an opened door).
+      if (highlight !== null) {
+        engine.destroyDebugLines(highlight);
+        highlight = null;
+      }
+      const box = part === null ? null : this.partBounds(part, options.rotation);
+      const clamped = box && options.clamp ? intersect(box, options.clamp) : box;
+      if (clamped) {
+        highlight = engine.createDebugLines(toEngineSpace(boxLines(clamped.min, clamped.max)), HIGHLIGHT_COLOR);
+      }
+    },
+    instance,
+    modelId,
+    partBounds(part, rotation): Bounds | null {
+      const local = boundsOfIndices(
+        data.positions,
+        data.indices,
+        data.submeshes.filter((submesh) => submesh.part === part),
+      );
+
+      // Vertices live in the PART's frame (that is the whole point of the rigid path — the engine
+      // composes root × part per draw). Raw bounds would box the model ORIGIN instead of the part.
+      return local && data.parts[part] ? transformBounds(local, partMatrix(data.parts[part], rotation)) : local;
+    },
+    setCollision(col): void {
+      if (collision !== null) {
+        return;
+      }
+      collision = engine.createDebugLines(toEngineSpace(colLines(col)), COLLISION_COLOR);
+      engine.setDebugLinesVisible(collision, false);
+    },
+    setOffset(next): void {
+      offset[0] = next[0];
+      offset[1] = next[1];
+      offset[2] = next[2];
+      root.set(ROOT);
+      root[12] = offset[0];
+      root[13] = offset[1];
+      root[14] = offset[2];
+      instance.entity.setRoot(root);
+    },
+    setVisible(visible): void {
+      data.submeshes.forEach((_, index) => instance.setSubmeshVisible(index, visible));
+    },
+    showCollision(visible): void {
+      if (collision !== null) {
+        engine.setDebugLinesVisible(collision, visible);
+      }
+    },
+    showWireframe(visible): void {
+      if (wireframe === null) {
+        if (!visible) {
+          return;
+        }
+        wireframe = engine.createDebugLines(
+          toEngineSpace(meshEdgeLines(data.positions, data.indices)),
+          WIREFRAME_COLOR,
+        );
+      }
+      engine.setDebugLinesVisible(wireframe, visible);
+    },
+    triangles: data.indices.length / 3,
+  };
 }

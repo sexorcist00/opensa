@@ -12,7 +12,7 @@
  * `vehicles.ide`. Run `npx tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>` alongside
  * `npm run dev`. Open at /viewer.html?tab=vehicle.
  */
-import type { VehicleDoor } from '@opensa/renderware';
+import type { VehicleDoor, VehicleModelData } from '@opensa/renderware';
 import type { ColModel } from '@opensa/renderware/parsers/binary/col-types';
 
 import { parseDffCollision } from '@opensa/renderware/parsers/binary/col';
@@ -45,7 +45,7 @@ const wireframeToggle = document.createElement('input');
 /** Live triangle count of the current car. */
 const polyLabel = Object.assign(document.createElement('div'), { className: 'hint' });
 
-let current: null | ViewedModel = null;
+let current: null | ViewedModel<VehicleModelData> = null;
 let selectedPart = 0;
 /** COL bounds of the current car — clamps the selection box (modded DFFs blow up the mesh bbox). */
 let colBounds: Bounds | null = null;

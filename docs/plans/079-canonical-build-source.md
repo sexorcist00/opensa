@@ -194,7 +194,20 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
   (`webgpu=true`) and the screenshot shows Grove Street at night — CJ, a parked car, houses, lamps, HUD 120 fps
   / 66 cells / GTA 2495,-1675 — i.e. the real world through the real load path. This retires the surrogate that
   shadowed the pak-source bug. (README + benchmarks.md repointed.)
-- **Phase 4 — object-viewer before/after.** compare-serve reads `.osm`/`.ostex` on AFTER; viewer renders
+- **Phase 4 — object/compare viewer before/after. DONE (code + data-path verified) 2026-07-21; viewer render
+  is browser-only, awaiting the user.** `compare-serve` gained a `/osm` endpoint + lists bare model names
+  across `.dff ∪ .osm`, so AFTER can be a converted build (the `.osm` is self-contained — textures inside, no
+  separate `.ostex`; 0 standalone `.ostex` entries confirmed). The viewer tries `/osm` and falls back to
+  `/dff`, so a side can be either format. `model-view.ts` gained `loadModelFromOsm` (decodes with the game's
+  `readModelOsm` → `engine.createVehicleModel`, reinterpreting the `Uint8Array` position/index views for the
+  framing/wireframe maths — headless-checked: landstal bbox 6.59 m, indices in range) and a generic
+  `ViewedModel<D>` so the DFF path keeps its full `VehicleModelData` (`doors`) while the `.osm` path carries
+  only geometry. Wired into the object tab (AFTER-only overlay) and the compare tab (before/after). **Coverage
+  boundary:** by-name models (vehicles/peds/props/clutter) diff cleanly; map objects welded into the pak have
+  no standalone `.osm` and don't appear on AFTER. The vehicle/character tabs still fetch `/dff` from AFTER, so
+  they break against a converted build until phase 5 moves them to `.osm`. Original design:
+
+- **Phase 4 (design) — object-viewer before/after.** compare-serve reads `.osm`/`.ostex` on AFTER; viewer renders
   AFTER via the `.osm` rigid path; BEFORE = `.dff`/`.txd` from `non-modified`. Report resolved-as (osm vs
   dff) and the map-object coverage boundary.
 - **Phase 5 — vehicle/character viewers + retire old paths.** Those two onto the VFS; drop the `:3002` raw
@@ -215,7 +228,9 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
       apps/web bench-sweep gate stays browser-only (not run this pass)
 - [x] Phase 3 — bench harness on `?loader=http-dir` against `./build/perfect`; fake picker + `game-server.js`
       removed; headless gate-check booted to canvas (webgpu=true, Grove St. night screenshot) — real load path
-- [ ] Phase 4 — object-viewer BEFORE `non-modified` ↔ AFTER `build/perfect/opensa` (`.osm`/`.ostex`)
+- [x] Phase 4 — object/compare viewer AFTER reads `.osm` (compare-serve `/osm` + `loadModelFromOsm`); BEFORE
+      `non-modified` `.dff`; data-path headless-verified, viewer render browser-only (owed); vehicle/character
+      tabs move to `.osm` in phase 5
 - [ ] Phase 5 — vehicle/character viewers on the VFS; retire `:3002`, symlinks, `clouds-*.rgba`; e2e fixture
 - [ ] Close-out — lint, coverage floors, dev docs repointed
 

@@ -19,7 +19,7 @@ import { parseColLibrary } from '@opensa/renderware/parsers/binary/col';
 
 import type { ViewedModel } from './engine/model-view';
 
-import { loadModel } from './engine/model-view';
+import { loadModel, loadModelFromOsm } from './engine/model-view';
 import { createViewerEngine } from './engine/viewer-engine';
 
 /** Serialised COL (baked by scripts/build-viewer-assets.ts) — vertices as a plain array. */
@@ -60,16 +60,26 @@ async function addModel(model: ModelEntry): Promise<void> {
     return;
   }
   const base = model.dff.replace(/\.dff$/i, '');
-  const [dff, txd] = await Promise.all([
-    fetchDff(model, base),
-    model.server ? loadServerTxd(model.server, base) : loadTxd(model.txd),
-    viewer.ready,
-  ]);
-
+  await viewer.ready;
+  // A server side may be CONVERTED (own-engine `.osm`): try that first — it decodes with the game's own
+  // `readModelOsm`, textures inside — and fall back to the stock DFF+TXD path (404 ⇒ this side is stock).
+  const osm = model.server ? await fetchOsm(model.server, base) : null;
   if (loaded.has(model.dff)) {
     return; // a second tick raced us while the bytes were in flight
   }
-  const view = loadModel(viewer.engine, dff, txd ? [txd] : []);
+  let view;
+  if (osm) {
+    view = loadModelFromOsm(viewer.engine, base, osm);
+  } else {
+    const [dff, txd] = await Promise.all([
+      fetchDff(model, base),
+      model.server ? loadServerTxd(model.server, base) : loadTxd(model.txd),
+    ]);
+    if (loaded.has(model.dff)) {
+      return;
+    }
+    view = loadModel(viewer.engine, dff, txd ? [txd] : []);
+  }
   loaded.set(model.dff, view);
   view.showWireframe(wireframeOn);
   const col = await loadCollision(model);
@@ -247,6 +257,13 @@ async function fetchDff(model: ModelEntry, base: string): Promise<ArrayBuffer> {
   }
 
   return response.arrayBuffer();
+}
+
+/** The CONVERTED `.osm` bytes from a compare-server side, or null when that side is stock (404 → use DFF). */
+async function fetchOsm(server: string, base: string): Promise<ArrayBuffer | null> {
+  const response = await fetch(`${server}/osm?side=after&model=${encodeURIComponent(base)}`);
+
+  return response.ok ? response.arrayBuffer() : null;
 }
 
 /** Aim the orbit rig at the union of every loaded model. */

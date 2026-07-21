@@ -20,14 +20,22 @@ import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 
 import type { ViewedModel } from './engine/model-view';
 
-import { loadModelFromClump } from './engine/model-view';
+import { loadModelFromClump, loadModelFromOsm } from './engine/model-view';
 import { createViewerEngine } from './engine/viewer-engine';
+
+/** A fetched side: either the converted `.osm`, or the stock DFF (+ its TXD). */
+type Fetched = { dff: ArrayBuffer; txd: ArrayBuffer | null } | { osm: ArrayBuffer };
 
 type Side = 'after' | 'before';
 
+/** What one side rendered from: a parsed stock clump (+txd), or a converted own-engine `.osm` (self-contained). */
 interface SideState {
   clump: null | RWClump;
   model: null | ViewedModel;
+  /** The model name — `loadModelFromOsm` needs it (error messages, section labels). */
+  name: null | string;
+  /** Converted `.osm` bytes when this side is own-engine; null when it is a stock clump. */
+  osm: ArrayBuffer | null;
   txd: ArrayBuffer | null;
 }
 
@@ -37,8 +45,8 @@ let serverUrl = DEFAULT_SERVER;
 const viewer = createViewerEngine();
 
 const sides: Record<Side, SideState> = {
-  after: { clump: null, model: null, txd: null },
-  before: { clump: null, model: null, txd: null },
+  after: { clump: null, model: null, name: null, osm: null, txd: null },
+  before: { clump: null, model: null, name: null, osm: null, txd: null },
 };
 
 const prelit = { double: false, on: true };
@@ -70,6 +78,20 @@ function addToggle(parent: HTMLElement, label: string, initial: boolean, onChang
 
 const beforeLabel = addSideLabel('BEFORE', 'left');
 const afterLabel = addSideLabel('AFTER', 'right');
+
+/** Store a fetched side — the converted `.osm` bytes, or the parsed stock clump + its TXD. */
+function applyFetched(state: SideState, fetched: Fetched, name: string): void {
+  state.name = name;
+  if ('osm' in fetched) {
+    state.osm = fetched.osm;
+    state.clump = null;
+    state.txd = null;
+  } else {
+    state.clump = parseDff(fetched.dff);
+    state.txd = fetched.txd;
+    state.osm = null;
+  }
+}
 
 function applyPrelit(): void {
   viewer.engine.debugPrelitScale = prelit.on ? (prelit.double ? 2 : 1) : 0;
@@ -141,7 +163,12 @@ function buildControls(): void {
   void loadModelList(datalist, status);
 }
 
-async function fetchSide(side: Side, model: string): Promise<{ dff: ArrayBuffer; txd: ArrayBuffer | null }> {
+async function fetchSide(side: Side, model: string): Promise<Fetched> {
+  // A converted side answers `/osm`; a stock side 404s it and we fall back to DFF+TXD.
+  const osm = await fetch(`${serverUrl}/osm?side=${side}&model=${encodeURIComponent(model)}`);
+  if (osm.ok) {
+    return { osm: await osm.arrayBuffer() };
+  }
   const [dff, txd] = await Promise.all([
     fetch(`${serverUrl}/dff?side=${side}&model=${encodeURIComponent(model)}`).then((response) =>
       response.ok ? response.arrayBuffer() : null,
@@ -198,10 +225,8 @@ async function loadModel(name: string, status: HTMLElement): Promise<void> {
   try {
     const [before, after] = await Promise.all([fetchSide('before', name), fetchSide('after', name)]);
     await viewer.ready;
-    sides.before.clump = parseDff(before.dff);
-    sides.before.txd = before.txd;
-    sides.after.clump = parseDff(after.dff);
-    sides.after.txd = after.txd;
+    applyFetched(sides.before, before, name);
+    applyFetched(sides.after, after, name);
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : String(error);
 
@@ -240,11 +265,15 @@ function rebuildBoth(): void {
     const state = sides[side];
     state.model?.dispose();
     state.model = null;
-    if (!state.clump) {
+    if (state.osm && state.name) {
+      // A converted side is already baked (incl. night colours) — the night-colours swap is a clump-only view.
+      state.model = loadModelFromOsm(viewer.engine, state.name, state.osm);
+    } else if (state.clump) {
+      const clump = nightColours ? withNightColours(state.clump) : state.clump;
+      state.model = loadModelFromClump(viewer.engine, clump, state.txd ? [state.txd] : []);
+    } else {
       continue;
     }
-    const clump = nightColours ? withNightColours(state.clump) : state.clump;
-    state.model = loadModelFromClump(viewer.engine, clump, state.txd ? [state.txd] : []);
     triangles += state.model.triangles;
   }
 
