@@ -79,6 +79,16 @@ interface PackedModels {
   props: ReturnType<typeof packProps>;
   vehicles: ReturnType<typeof packVehicles>['report'];
 }
+/** `HH:mm DD-MM-YYYY` in local time — the opensa manifest `buildTime`, e.g. `07:52 21-07-2026`. */
+export function formatBuildTime(now: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, '0');
+
+  return (
+    `${pad(now.getHours())}:${pad(now.getMinutes())} ` +
+    `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`
+  );
+}
+
 /** Convert one game dir into a packed one — everything the CLI used to do, minus the argv. */
 export async function packGameDir(options: PackOptions): Promise<PackResult> {
   const { gameDir, outDir, rect } = options;
@@ -157,16 +167,6 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   printReport(report, started, log);
 
   return { models: written, report };
-}
-
-/** `HH:mm DD-MM-YYYY` in local time — the opensa manifest `buildTime`, e.g. `07:52 21-07-2026`. */
-function formatBuildTime(now: Date): string {
-  const pad = (value: number): string => String(value).padStart(2, '0');
-
-  return (
-    `${pad(now.getHours())}:${pad(now.getMinutes())} ` +
-    `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`
-  );
 }
 
 /**

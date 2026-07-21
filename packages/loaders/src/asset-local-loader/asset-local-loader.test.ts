@@ -136,5 +136,24 @@ describe('AssetLocalLoader', () => {
 
       expect(acquireDir).toHaveBeenCalledOnce();
     });
+
+    it('openWorld reads opensa/<name> lowercased from the source, null when absent', async () => {
+      let requested = '';
+      const world = new Blob([new Uint8Array([1])]);
+      const source: InstallSource = {
+        ...fakeSource(),
+        openLoose: (path) => {
+          requested = path;
+
+          return Promise.resolve(path === 'opensa/world.ospak' ? world : null);
+        },
+      };
+      const local = make({}, { openSource: () => Promise.resolve(source) });
+      await local.prepare();
+
+      expect(await local.openWorld('World.OSPAK')).toBe(world);
+      expect(requested).toBe('opensa/world.ospak');
+      expect(await local.openWorld('absent.bin')).toBeNull();
+    });
   });
 });

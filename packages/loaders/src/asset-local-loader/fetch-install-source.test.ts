@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DirIndexEntry } from './fetch-install-source';
 
-import { fetchInstallSource } from './fetch-install-source';
+import { fetchDirIndex, fetchInstallSource } from './fetch-install-source';
 
 const BASE = 'http://host/build/perfect/opensa';
 
@@ -112,6 +112,34 @@ describe('fetchInstallSource', () => {
       const source = await fetchInstallSource(BASE, index);
 
       expect(await source.readLooseText('data/gta.dat')).toBe('IDE data/x.ide');
+    });
+  });
+});
+
+describe('fetchDirIndex', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  describe('negative cases', () => {
+    it('rejects with a serve:static hint when __index 404s', async () => {
+      vi.stubGlobal('fetch', () => Promise.resolve({ ok: false, status: 404 } as Response));
+
+      await expect(fetchDirIndex('http://host/x')).rejects.toThrow(/no __index at http:\/\/host\/x\/__index \(404\)/);
+      await expect(fetchDirIndex('http://host/x')).rejects.toThrow(/serve:static/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('fetches ${base}/__index and returns the parsed listing', async () => {
+      const listing: DirIndexEntry[] = [{ path: 'models/gta3.img', size: 4 }];
+      let requested = '';
+      vi.stubGlobal('fetch', (input: string) => {
+        requested = input;
+
+        return Promise.resolve({ json: () => Promise.resolve(listing), ok: true } as Response);
+      });
+
+      expect(await fetchDirIndex('http://host/build/x')).toEqual(listing);
+      expect(requested).toBe('http://host/build/x/__index');
     });
   });
 });
