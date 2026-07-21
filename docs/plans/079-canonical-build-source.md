@@ -152,9 +152,29 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
   buffer is fine. The lab keeps URL streaming (phase 2), so nothing streaming-critical regresses; URL-stream
   for http-dir is a noted follow-up. **Not yet verified end-to-end in a browser** (needs a real WebGPU boot,
   like the pak-source fix); the `setup.ts`/`pak-loader.ts` dedup rides with phase 2 (the lab).
-- **Phase 2 — lab onto the mount.** `?src=<game dir>`; `pak-loader.ts` deleted; peds/vehicles from the VFS
-  (fixtures + probe CLIs retired). Gate: the 6-scene bench sweep reproduces its reference row (fps AND draws
-  within ±4) and the vehicle look bench still renders its cars.
+- **Phase 2 — lab onto the mount.** DESIGN (2026-07-21, from the data-flow map):
+  - **The lab builds no VFS today.** It reads three data sources ad-hoc: `pak-loader.ts` (`loadPak`, a whole-pak
+    fetch — a duplicate of `setupStreaming`, `?pak=1`), and throwaway probe fixtures `ped.ts` → `/ped/ped.json`
+    `+.bin` and `vehicle.ts` → `/<vmodel>/vehicle.json` `+.bin` (produced by `tools/opensa-pack/src/ped-probe.ts`
+    / `vehicle-probe.ts`). `public/` is entirely git-ignored — retiring fixtures deletes CLIs + fetch code, not
+    tracked files.
+  - **Target:** `main.ts` builds `createAssetLoader({ assetLoader: 'http-dir', base: <?src> })` → a real
+    `AssetFileSystem`, and the ped/vehicle probes read models BY NAME through it. `vehicle-probe` is already a
+    thin wrapper over the shared `buildVehicleModel`, so the lab calls that on VFS bytes directly — the fixture
+    just disappears. Ped is harder (the probe packs skinning; the runtime `.osm`-ped path must be confirmed to
+    exist before the lab can drop `ped-probe`). Delete `pak-loader.ts`; `?pak=1` routes through `setupStreaming`.
+  - **Tension:** the loader's `load()` materialises the WHOLE game VFS (~1–2 min, all groups) — heavy for a lab
+    that inspects one car. Resolve by loading only the groups the probe needs, or reading select entries off the
+    `InstallSource` without a full `load()`. Decide in the first sub-step.
+  - **Gate is browser-only, and it is the `apps/web` sweep, not the lab's own bench.** The check that pixels did
+    not move is `apps/web` `?bench=all` (6 prod scenes: ls-noon · sf-fog-dawn · lv-night · country-dusk ·
+    ocean-horizon · ls-rain-night, the `[bench]` console contract) reproducing its reference row in
+    `docs/benchmarks/opensa-engine/` within ±4 fps AND draws, run against the served build. The lab's own
+    `?bench=<scene>` legs (city/close/drive/map/orbit/teleport/whip → downloaded JSON) are a secondary check.
+    **Neither can be run headlessly** (real WebGPU boot), so every sub-step needs the user to verify in-browser.
+  - **Sub-steps (each browser-verified):** (a) lab builds the http-dir VFS + `?src` points at the served build;
+    (b) vehicle probe off `buildVehicleModel` over the VFS, delete `vehicle-probe`; (c) delete `pak-loader.ts`,
+    `?pak=1` → streaming; (d) ped probe over the VFS (after confirming the runtime ped path), delete `ped-probe`.
 - **Phase 3 — bench harness on the real path.** Point it at `./build/perfect`; remove the fake picker in
   favour of `?loader=http-dir`. Gate: a headless boot + screenshot matches the pre-change frame.
 - **Phase 4 — object-viewer before/after.** compare-serve reads `.osm`/`.ostex` on AFTER; viewer renders
