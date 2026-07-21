@@ -2,8 +2,9 @@
 
 Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD generators.
 
-- **Node heap ceilings.** A full pmb build needs `NODE_OPTIONS=--max-old-space-size=12288` (the cell bake
-  holds the mod-grown ~1.3 GB `gta3.img` + merged cells); sa-lod-generator needs ~8 GB. The full map cannot
+- **Node heap ceilings.** A full pmb build **or a standalone `opensa-pack` run with AO on** needs
+  `NODE_OPTIONS=--max-old-space-size=12288` (the cell bake holds the mod-grown ~1.3 GB `gta3.img` + merged
+  cells); the default 4 GB dies around 37 % of the AO bake. sa-lod-generator needs ~8 GB. The full map cannot
   weld in one heap — welding is chunked.
 - **Map objects have no standalone `.osm` texture set.** Only by-name classes (peds, vehicles, props,
   breakables, clutter) carry private `TEXS` dictionaries. Map objects are `textureSource: 'world'`
@@ -37,3 +38,16 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
 - **Texture sizes are asset-driven.** Never hardcode a size that belongs to a source asset — texture arrays
   derive one size from `max(assets)`, fixed slots resample instead of throwing. Only shadow maps / probes /
   LUTs stay constants.
+- **Mod vegetation is ~48× stock density, and almost none of it buys coverage.** `mods-src/vegetation`
+  models run 1451–5813 triangles against SA's 48–132; in draw range of the Ganton path that is 13 524 →
+  645 433 triangles (×47.7) for a leaf-area growth of only ×1.66 — **~96 % of the added triangles add no
+  screen coverage**. `veg_palm04` is the extreme: 105× the triangles for LESS painted area than stock
+  (524 vs 621 m²), average triangle 0.104 m² (~32 cm), i.e. under the rasteriser's 2×2 quad at play
+  distance. There is no duplication to blame — each DFF is 1 atomic / 1 geometry. The chain also has no mid
+  LOD: 5000 triangles HD → 16-triangle impostor, carried to a stock `vegepart.ide` draw distance of 150 that
+  was sized for 48-triangle models.
+- **A placement-only mod costs nothing until the `trees` stage swaps the models under it.** The mod
+  "39. Green Piece 1.47" shipped no models at all — one IPL, 233 `inst` lines, installed into
+  `data/maps/interior/stadint.ipl`. It was invisible in the mods-layer benchmark (stock trees then) and
+  became **73 % of the whole trees-layer regression at Ganton** (6.09 of 8.36 ms) once the swap landed. When
+  a stage multiplies per-instance cost, re-audit every earlier stage that added instances.

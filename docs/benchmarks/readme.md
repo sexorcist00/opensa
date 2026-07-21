@@ -7,9 +7,11 @@ gone the moment the session ends, and a regression cannot be diagnosed without t
 **Everything lives here** — the whole measurement history was consolidated into this folder on 2026-07-20,
 split by renderer:
 
-- [`opensa-engine/`](opensa-engine/) — the own WebGPU engine. 19 runs plus
-  [`2026-07-18-series.md`](opensa-engine/2026-07-18-series.md), the annotated engine-vs-prod narrative
-  (the tables in it are also extracted as JSON alongside).
+- [`opensa-engine/`](opensa-engine/) — the own WebGPU engine: the run JSONs plus four written analyses —
+  [`2026-07-18-series.md`](opensa-engine/2026-07-18-series.md) (the annotated engine-vs-prod narrative,
+  tables also extracted as JSON alongside), [`2026-07-21-http-dir-sweep.md`](opensa-engine/2026-07-21-http-dir-sweep.md),
+  [`2026-07-21-scale-ladder.md`](opensa-engine/2026-07-21-scale-ladder.md) and
+  [`2026-07-21-layer-decomposition.md`](opensa-engine/2026-07-21-layer-decomposition.md).
 - [`three-engine/`](three-engine/) — the three.js/WebGL prod line, kept for the before/after record.
 
 Chronology, with the conditions each run was taken under: [index.md](index.md). **Read that before
@@ -96,16 +98,22 @@ read this pak** — so nothing in the 07-19…07-20 window caused it.
 ### The cause
 
 The pak is the **improved map**: it carries our generated LODs, vegetation and procobj. The 07-18 baseline
-was measured before those existed in the output (user-confirmed). The evidence lines up exactly:
+was measured before those existed in the output (user-confirmed). **2026-07-21 then localised it to ONE of
+the three — the `trees` stage; procobj (≤ +0.38 ms) and lods (+0.22 ms) are retired as suspects**
+([layer-decomposition](opensa-engine/2026-07-21-layer-decomposition.md), rows #21/#22). The evidence lines
+up exactly:
 
 - **`ocean-horizon` did not move at all** (pass 1.85 → 1.78). It is the one scene with no LODs, no
   vegetation and no procobj — the control, and it is flat.
 - **`country-dusk` moved most** — draws +74 %, pass ×3. Countryside is where vegetation and procobj are
   densest.
 - Cost per draw rose too, not just draw count, which is what added geometry and alpha-tested foliage do.
+  (Superseded 2026-07-21: the controlled A/B put the cost **per-pixel**, not per-draw — draw calls did not
+  move at all, 1255 → 1258, while the pass fell 44 %. See row #22.)
 
-**So the old 120 fps was not an engine achievement — it was the cost of an incomplete world.** This is now
-an optimisation problem against real content, not a hunt for a broken commit.
+**So the old 120 fps was not an engine achievement — it was the cost of an incomplete world.** This is an
+optimisation problem against real content, not a hunt for a broken commit — and 2026-07-21 named the
+content: mod vegetation swapped in by the `trees` stage.
 
 ### What the bisect did find
 
@@ -115,10 +123,15 @@ an optimisation problem against real content, not a hunt for a broken commit.
 - **HEAD is neutral against D**: removing the Show Faces STORAGE flags and adding the hemispheric ambient
   both cost nothing measurable. Both are closed out as suspects.
 
-### That open question is NOT closed — the answer was withdrawn
+### CLOSED 2026-07-21 — it is the trees stage
 
-Ganton in free play read ~40 fps by day, worse than any bench scene reported. Street-level `ganton-*`
-scenes were added to chase it and appeared to reproduce it, but **those runs were invalid and have been
-deleted**: the folder picker does not select the world (`engine-canvas-host.tsx:264` always fetches the pak
-from `public/pak-map`), so no run measured the pak it named. The scenes stay; the numbers are gone.
-Re-measure after the pak source follows the loading mode.
+Ganton in free play read ~40 fps by day, worse than any bench scene reported. The first attempt to chase it
+was invalid and the runs were deleted (the folder picker did not select the world —
+`engine-canvas-host.tsx:264` always fetched the pak from `public/pak-map`, so no run measured the pak it
+named). After that was fixed, a six-layer rebuild of the map answered it:
+
+**`trees` is ~90 % of the regression** (ganton-noon pass 5.36 → 13.72 ms), and **one placement-only mod,
+"39. Green Piece 1.47", was 73 % of that** — removing it took the pass to 7.63 ms and 53 → 82 fps, with six
+control scenes flat. The cost is per-pixel foliage fill, not triangles and not draws. The mod was deleted
+on 2026-07-21 and all other foliage work is parked. Full analysis and asset audit:
+[2026-07-21-layer-decomposition.md](opensa-engine/2026-07-21-layer-decomposition.md) (rows #21/#22).

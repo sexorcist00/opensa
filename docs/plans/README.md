@@ -15,8 +15,9 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 
 - **[084 — Vehicle appearance and dynamic-model lighting](./084-vehicle-appearance/readme.md)** — the 2026-07-20
   field round: wheel-side/scale conventions and the flat dynamic indirect term SHIPPED (with measurements);
-  open = night level vs the map, reflections (floor vs prod-style presets — DECISION NEEDED), AO for
-  dynamics, and a 37 fps night capture. Peds share the row-B root.
+  open = night level vs the map, reflections (floor vs prod-style presets — DECISION NEEDED) and AO for
+  dynamics. The perf row is CLOSED (2026-07-21: it was mod vegetation, not vehicles). Peds share the
+  row-B root.
 
 - **[083 — Basic CLEO support](./083-cleo-basic/readme.md)** — run compiled `.cs` scripts: Sanny-DB SCM
   decoder (lifts the 0x014B car-gen reader), engine-agnostic thread VM, CleoHost on the rigid `.osm`

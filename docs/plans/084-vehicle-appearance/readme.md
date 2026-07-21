@@ -150,9 +150,15 @@ nothing for panel gaps).
 Judgement: hold until rows 1 and 2 are field-judged. There is a real chance AO turns out to be polish rather
 than necessity once the level and the reflections are right.
 
-### 4. Performance — DIAGNOSED, and it is not a vehicle row
+### 4. Performance — CLOSED 2026-07-21, and it was never a vehicle row
 
-Opened as "37 fps at night". **The whole investigation is WITHDRAWN (2026-07-20).**
+Opened as "37 fps at night". The answer: **mod vegetation swapped in by the pmb `trees` stage**, 73 % of it
+placed by a single mod ("39. Green Piece 1.47", since deleted). Removing it took ganton-noon from 13.72 to
+7.63 ms of GPU pass, 53 → 82 fps. Nothing here belongs to vehicle appearance. Full analysis, asset audit
+and the parked remedies: [`docs/benchmarks/opensa-engine/2026-07-21-layer-decomposition.md`](../../benchmarks/opensa-engine/2026-07-21-layer-decomposition.md)
+(benchmark rows #21/#22). The history below is kept only to explain why the first attempt produced nothing.
+
+**The first investigation was WITHDRAWN (2026-07-20).**
 
 Every measurement it rested on was taken through the folder picker, and the folder picker does not select
 the world: `engine-canvas-host.tsx:264` always fetches the pak from `public/pak-map`. No run measured the
@@ -160,12 +166,9 @@ pak it was labelled with, so the bisect, the "it is the improved map" conclusion
 and the `?scale=0.75` decomposition all measured an unknown world. The datasets are deleted from
 `docs/benchmarks/`.
 
-What survives: the `ganton-noon` / `ganton-night` scenes in `bench-scenes.ts` (street level was the right
-instinct), and the standing observation that free play at Ganton is heavier than any pre-existing bench
-path reported. Nothing else.
-
-The perf row leaves 084 either way — it is not vehicle appearance. Fix the pak source first, then measure
-a clean map. See the memory note `pak-source-public-shadow-bug`.
+What survived: the `ganton-noon` / `ganton-night` scenes in `bench-scenes.ts` — street level was the right
+instinct, and they are the scenes that later carried the answer. The pak source was fixed in plan 079, and
+the clean re-measurement is the layer decomposition linked above.
 
 ### 5. Peds inherit row B's root
 

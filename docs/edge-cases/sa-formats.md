@@ -24,6 +24,10 @@ stories: `tools/lod-trees-generator/docs/plans/005-sa-asset-format.md`,
   `.col` must be packed into the IMG to be auto-discovered.
 - **IMG VER2 entry names ≤ 23 bytes including extension** (base ≤ 19 chars) — longer impostor names get
   short aliases (`lodt<i>`, `plobj`, `plotr`).
+- **A text IPL's `lod` field is an INDEX into that file's own `inst` list**, not a name. Deleting instance
+  lines shifts every index above the cut and silently re-links LODs to unrelated objects. To remove
+  instances, drop them together with their linked LOD partners and remap the survivors through an old→new
+  index map.
 - **Anti-rip "locked" DFF/TXD.** Four lock variants (inflated sizes, hidden wrappers) are recovered by the
   **engine parser only**; the offline byte-editing tools (`vehicle-optimizer`, map-optimizer's size-trusting
   `readRw`) still trust declared sizes — a locked DFF there reads 0 geometries until an explicit `unlockDff`

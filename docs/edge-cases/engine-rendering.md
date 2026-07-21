@@ -35,3 +35,9 @@ Limits and deliberate approximations of the own WebGPU engine.
   chassis colliders only — matches vanilla); `_dam` damage-model swaps are unhandled (shatter only).
 - **The one perf knob is `?scale=`** (render scale, try 0.75 first on perf problems); there is no quality
   tier ladder on the engine.
+- **Street-level foliage is fill-bound, and the cost is per-PIXEL, not per-triangle or per-draw.** Measured
+  2026-07-21 (benchmarks #21/#22): the same ~1.46 M triangles cost 4.15 ms on a 90–120 m flyover and
+  13.72 ms at 20–30 m over Ganton; removing 18 % of the triangles cut the pass 44 %, while draw calls did
+  not move at all (1255 → 1258). Foliage also lands in the probe pass (2.45 → 1.57 ms on the same change).
+  When a scene is slow, measure `gpuMs.pass` against leaf/canopy screen coverage — draws and triangle counts
+  will mislead you.

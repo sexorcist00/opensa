@@ -30,10 +30,11 @@ loader drives the full sweep intact.
 
 **The higher draw counts vs the 07-18 reference are the BUILD, not the loader.** lv-night +57 % and
 country-dusk +71 % are large, and a loader cannot add geometry — this is the newer/fuller 07-21 build
-(LOD/procobj/vegetation and the 078/084 rounds since 07-18). It is direct evidence for the still-open
-"the map got heavier" question (see `perf-ganton-diagnosis`): the night/dusk countryside-heavy scenes grew
-most in draws. That is a PERF topic to chase on its own, not a phase-3 regression. `gpuMs.pass` is not
+(LOD/procobj/vegetation and the 078/084 rounds since 07-18). It was direct evidence for the "the map got
+heavier" question: the night/dusk countryside-heavy scenes grew most in draws. **ANSWERED 2026-07-21 →
+[layer-decomposition](2026-07-21-layer-decomposition.md)** — the `trees` stage, and mostly one mod. Not a
+phase-3 regression. `gpuMs.pass` is not
 compared (machine not quiescent; the reference's own pass column is flagged unusable).
 
-**Verdict: phase-2/3 load-path gate PASS.** The full 6-scene sweep runs headlessly through the shipping
+**Verdict: phase-2/3 load-path gate PASS.** The full sweep runs headlessly through the shipping
 loader, all vsync-locked, nothing dropped. The draw growth vs the old build is a separate perf lead.

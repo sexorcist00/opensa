@@ -26,7 +26,7 @@ npm run serve:static        # static origin :3001 — mounts /build (Range + /__
 | Surface                  | URL                                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | Game on the served build | `http://localhost:5173/?loader=http-dir&src=http://localhost:3001/build/perfect/opensa`                            |
-| Bench sweep (6 scenes)   | `http://localhost:5173/?bench=all` (one scene: `?bench=country-dusk`)                                              |
+| Bench sweep (8 scenes)   | `http://localhost:5173/?bench=all` (one scene: `?bench=country-dusk`)                                              |
 | Soak (minutes)           | `http://localhost:5173/?soak=30`                                                                                   |
 | Lab                      | `npx vite --config apps/engine-lab/vite.config.ts` → `http://localhost:4300/`                                      |
 | Lab: streaming LS        | `http://localhost:4300/?pak=1&src=http://localhost:3001/build/perfect/opensa&at=2495,-1687,13&orbit=300&draw=1500` |
@@ -58,7 +58,8 @@ npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 25
 NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts --game <dir> --out <dir>
 
 # Game dir → native pak (the pack stage standalone)
-npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1 --in ./mods-src
+NODE_OPTIONS=--max-old-space-size=12288 \
+  npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1 --in ./mods-src
 #   [--no-ao] [--bakes --clouds mods-src/clouds] [--no-models] [--bake-workers N] [--stochastic <file…>]
 ```
 

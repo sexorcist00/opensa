@@ -22,7 +22,7 @@ phase 5 a `?engine=three` override booted the old WebGL renderer for side-by-sid
 renderer is deleted, so pre-2026-07-18 prod columns in the series can no longer be reproduced.)
 
 ```
-http://localhost:5173/?bench=all          # the full 6-scene sweep
+http://localhost:5173/?bench=all          # the full 8-scene sweep
 http://localhost:5173/?bench=country-dusk # one scene
 ```
 
@@ -104,7 +104,7 @@ npm run dev
 #    the REAL load path (no fake picker); the app loads straight from ?src, no folder step.
 SRC="http://localhost:3001/build/perfect/opensa"
 DPR=2 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
-  "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" sweep 600000 6
+  "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" sweep 600000 8
 
 # a soak run: TAG switches the captured protocol, expect count is bypassed by the verdict line
 DPR=2 TAG='[soak]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
