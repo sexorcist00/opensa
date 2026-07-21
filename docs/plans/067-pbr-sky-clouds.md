@@ -1,5 +1,7 @@
 # 067 — PBR sky, horizon LUT, clouds
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](./074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
 Part of the [rendering overhaul chain](062-rendering-overhaul.md). Independent of 002–004 (can run in parallel after [063](063-render-foundations-instrumentation.md)). Feeds [068 — fog](068-unified-fog.md) via the horizon LUT.
 
 ## Context

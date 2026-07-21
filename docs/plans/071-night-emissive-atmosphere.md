@@ -1,5 +1,7 @@
 # 071 — Night & emissive atmosphere (dawn, dusk, night)
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](./074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
 Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [067](067-pbr-sky-clouds.md) (sky/moon) and [070](070-local-lights.md) (local lights). The "make night actually beautiful" plan: keep prelit + night vertex colours AND make them glow.
 
 ## Context

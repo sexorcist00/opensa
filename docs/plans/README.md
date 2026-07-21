@@ -63,7 +63,9 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   `?webgpu/bundle/...` flags and engine changes stay in-tree for debugging until the own-framework work decides
   their fate.
 
-- **[062 — Rendering overhaul](./062-rendering-overhaul.md)** — the "modern lighting" fork (chain umbrella,
+- **[062 — Rendering overhaul](./062-rendering-overhaul.md)** — **CLOSED 2026-07-21 (user triage): the whole
+  062–072 chain is superseded by the own engine (074) — every effect was re-implemented there; no tail in
+  these plans is actionable any more.** The "modern lighting" fork (chain umbrella,
   promoted from `ideas/0.4.0/02-rendering`): real sun on the prelit world without double-counting, CSM building
   shadows with LOD proxies, PBR sky + 512×1 horizon LUT, unified fog (horizon cut), Gerstner water, world-shader
   light pool (projected headlights), glowing night emissives, quality tiers + default flip. Stages:

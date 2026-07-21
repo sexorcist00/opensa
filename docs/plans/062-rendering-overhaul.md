@@ -1,5 +1,7 @@
 # 062 — Rendering overhaul (the "modern lighting" fork)
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](./074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
 Full rework of OpenSA's rendering toward modern-game visuals while **preserving the San Andreas prelit vibe**. This is the "modern-lighting fork (T3)" that plan [038 — SA prelit world lighting](./038-sa-prelit-lighting.md) explicitly left out of scope. 038's sa-prelit look stays as the shipping baseline and the A/B reference throughout — every stage lands behind a toggle and is judged against it.
 
 ## Where we start (038 aftermath — already shipped)

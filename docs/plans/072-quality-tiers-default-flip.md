@@ -1,5 +1,7 @@
 # 072 — Quality tiers, default flip, cleanup
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](./074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
 **Status: 🅿️ PARKED (2026-07-10, user's call).** An INTERIM default flip is live instead: `graphics.pipeline`
 defaults to `'modern'` and `sky.model` to `'pbr'` — the whole 064–071 chain on by default, EXCEPT volumetric
 clouds (`clouds.volumetric` stays false — heavy). Every stage keeps its individual debug slider. The FORMAL

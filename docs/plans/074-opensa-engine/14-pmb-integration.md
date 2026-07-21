@@ -161,6 +161,8 @@ those same normals — bad normals poison everything downstream), (2) THEN the b
 mystery (2026-07-13): a fully-baked pak-map VERIFIED to carry real sunVis data (Grove Street cell: 26 k
 full-shadow verts, channel flags set, shader gate present, env strengths at defaults) shows NO visible
 shadow difference in the field — root cause not found, investigation parked with bakes staying opt-in.
+**CLOSED 2026-07-21 (user triage): the root-cause hunt is dropped — bakes stay opt-in; reopen only if
+baked shadows return as a feature (ideas 0.6.0/04).**
 
 **2026-07-13 — FULL-MAP `--bakes` CONVERT (A3 tail closed): 202.6 s wall** (the ~28 min projection was
 ~8× pessimistic — ocean chunks are near-free and the pool scales), rect −12,−12..11,11 + `--clouds`:

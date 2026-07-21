@@ -1,5 +1,7 @@
 # 069 — Water
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](./074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
 Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [068](068-unified-fog.md) (shared fog chunk + horizon LUT). Replaces the current water shader with a modern one.
 
 ## Context

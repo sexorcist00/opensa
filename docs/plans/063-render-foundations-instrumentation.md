@@ -1,5 +1,7 @@
 # 063 — Foundations: instrumentation & colour pipeline
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](./074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
 **Status: ✅ shipped 2026-07-10** (perf HUD + GPU timer + bench harness + baselines on the M3 Pro reference
 machine + `graphics.pipeline` switch + colour decision frozen: post-pass ACES). Open follow-up: possible
 cell-disposal leak (geometries/textures climb across bench scenes) — tracked here, investigate separately.

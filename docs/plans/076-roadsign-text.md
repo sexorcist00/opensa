@@ -77,11 +77,13 @@ the text is static geometry with a normal texture; welding it as cutout costs ze
 
 ## Open questions
 
-- **World-space placement vs cells:** confirm each roadsign lands in exactly one cell and reads at the right
-  spot after the axis change (build-roadsign's world-space note is the load-bearing gotcha).
-- **Which panels in the field report are roadsigns?** Verify the specific LV billboards carry type-7 entries
-  (vs a plain ad texture that is simply dark at night) before calling the field bug fixed — the mechanism is
-  right regardless, but the exact boards should be confirmed.
+**CLOSED 2026-07-21 (user triage)** — the two verification items below are dropped as done-enough (the
+mechanism shipped and field-passed; no sign complaints since):
+
+- ~~**World-space placement vs cells:** confirm each roadsign lands in exactly one cell and reads at the
+  right spot after the axis change.~~
+- ~~**Which panels in the field report are roadsigns?** Verify the specific LV billboards carry type-7
+  entries.~~
 - **Font atlas layout** already reverse-engineered in `build-roadsign.ts` (4 cols × 32 rows, `ATLAS_ORDER`) —
   reuse verbatim.
 

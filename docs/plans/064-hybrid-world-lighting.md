@@ -1,5 +1,7 @@
 # 064 — Hybrid world lighting (real sun on the prelit world)
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](./074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
 Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [063](063-render-foundations-instrumentation.md) (frozen colour pipeline + benchmarks). THE foundation plan: solves "how to add real light to the current world while keeping the SA prelit vibe".
 
 ## Context

@@ -1,5 +1,7 @@
 # 066 — Modern asset tool (perfect-map-builder → opensa native cells)
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
 Part of the [rendering overhaul chain](../062-rendering-overhaul.md). This grew from a single "baked-channels asset
 step" into a small tool chain because the bench data ([072 measurements](../072-quality-tiers-default-flip.md)) showed
 the real win is not more shader work — it is **moving cost offline**. We are draw-call-bound, and the modern pipeline

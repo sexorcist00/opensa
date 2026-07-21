@@ -1,5 +1,7 @@
 # 073 — WebGPU migration on three.js (chain umbrella)
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — the parked chain is retired for good: the own engine ([074](../074-opensa-engine/readme.md)) replaced the three.js WebGPU path entirely; the leftover `?webgpu`/`bundle` flag zoo died with the three renderer in 074/13.**
+
 **Status: ❌ FAILED (2026-07-11) — the blocker is on three.js's side.** Renamed `073-webgpu-migration` →
 `073-webgpu-migration-threejs` to record WHICH WebGPU attempt failed: the one built on three's WebGPURenderer.
 The campaign solved everything reachable from outside the framework (CPU 65 → ~4 ms) and hit an irreducible

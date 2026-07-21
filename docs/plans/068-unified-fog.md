@@ -1,5 +1,7 @@
 # 068 — Unified fog & aerial perspective (cut the horizon)
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](./074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
 Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [067](067-pbr-sky-clouds.md) (the horizon LUT). Fixes the reported bug-class: **the ocean/far world is visible through the haze at the horizon** — fog must actually terminate the world.
 
 ## Context

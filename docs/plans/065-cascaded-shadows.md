@@ -1,5 +1,7 @@
 # 065 — Cascaded shadows (buildings, vehicles, peds)
 
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](./074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
 Part of the [rendering overhaul chain](062-rendering-overhaul.md). Depends on [064](064-hybrid-world-lighting.md) (the world shader that consumes the shadow term). Delivers the headline feature: **buildings cast real, moving sun shadows** — fast.
 
 ## Context

@@ -217,9 +217,10 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
   `loadModelFromOsm` (renders + paints + submesh LOD/damage; doors + mesh COL degrade — DFF-only). All four
   viewer tabs now work against a converted build. **NOTE the viewers still talk to the compare-server
   (`:3002`), NOT a VFS — the plan's original "onto the VFS" was superseded: a before/after tool is inherently
-  two game dirs, which the compare-server already is.** Still open (gitignored/tooling cleanup, low value):
-  the `public/` symlink farm + orphaned `clouds-*.rgba` (nothing references them since phase 2), repointing e2e
-  at a committed game-shaped fixture, and the compare-coverage audit finding. Viewer render is browser-only.
+  two game dirs, which the compare-server already is.** Leftovers triaged 2026-07-21: the `public/` symlink
+  farm + orphaned `clouds-*.rgba` are **NOT RELEVANT (user verdict — obsolete, drop when convenient)**;
+  still open (low value): repointing e2e at a committed game-shaped fixture and the compare-coverage audit
+  finding. Viewer render is browser-only.
 - **Phase 6 — documentation. Stale-doc sweep DONE 2026-07-21; the full documentation audit (6b) DONE 2026-07-21.**
   The sweep landed: `query-parameters.md` (`loader`/`src`/`pak` rows), `asset-loader.md` (http-dir section),
   `scripts.md` (`/build` mount), `in-game-tools.md` (buildTime grey line), `architecture.md` (http-dir override),
@@ -252,7 +253,8 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
       `non-modified` `.dff`; data-path headless-verified, viewer render browser-only (owed); vehicle/character
       tabs move to `.osm` in phase 5
 - [x] Phase 5 (viewers + probe CLIs) — vehicle/character tabs read `.osm`; ped-probe/vehicle-probe deleted.
-      Left (gitignored/low-value): `public/` symlinks, `clouds-*.rgba`, e2e-fixture repoint, compare-coverage audit
+      Left (low-value): e2e-fixture repoint, compare-coverage audit (`public/` symlinks + `clouds-*.rgba`
+      ruled NOT RELEVANT by the user 2026-07-21)
 - [x] Phase 6a — stale-doc sweep (9 files) + AssetHttpDirLoader boot test
 - [x] Phase 6b — the documentation audit: architecture/ + features refresh + edge-cases/ + links.md +
       commands.md + Cyrillic sweep + open-tails triage list (awaiting the user's do-vs-close verdicts)
