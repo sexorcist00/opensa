@@ -78,6 +78,26 @@ in-browser to the same VFS — so the downstream flow is identical. **Chromium-o
 - **Boot gate**: the shell shows the game menu; picking a local game opens the **folder prompt**
   (`FolderPrompt`, `boot-machine` `folder` phase, with the game's disclaimer) → load. See [ui-shell](ui-shell.md).
 
+## HTTP-dir loader (`asset-local-loader/`, plan 079)
+
+The dev-only sibling of the local loader: instead of a user-picked folder, it reads a **served** game dir
+over HTTP so every dev surface (lab, bench harness, viewers) can boot the one canonical build
+(`./build/perfect`) without the folder gesture. Selected with `?loader=http-dir&src=<url>` (read in
+`use-asset-boot.ts`); never a per-game default.
+
+- **Shared core** (`install-source-core.ts`, `assembleInstallSource`): the local and http-dir loaders both
+  build an `InstallSource` (openLoose/gta3/gtaInt/readLoose) and run the **same** `build-vfs.ts` selection —
+  the only difference is where the bytes come from.
+- **`fetchInstallSource`** (`fetch-install-source.ts`): assembles an `InstallSource` from a served dir —
+  `fetchDirIndex` walks the server's `/__index` listing; loose files are ranged/fetched by URL, and the IMG
+  archives use the lazy `urlRangeSource` (`img-reader.ts`, a `ByteRangeSource` over HTTP `Range`) so the
+  ~1 GB `gta3.img` is never buffered — identical laziness to the disk path.
+- **`InstallSourceLoader`** (base) / **`AssetHttpDirLoader`**: the http-dir loader extends the shared
+  `InstallSourceLoader`; `init()` fetches+selects, `load()` reads selected bytes into the VFS. No `prepare`/
+  `restore`/`ready` — there is no folder gesture to guard.
+- Served by `scripts/serve-static.ts`'s `/build` mount (a `dirIndex()` walk answers `/__index`); see
+  [scripts.md](../development/scripts.md).
+
 ## Progress + events
 
 Typed emitter (`emitter.ts`): `progress` (global `{ loadedBytes, loadedChunks, totalBytes, totalChunks }`),

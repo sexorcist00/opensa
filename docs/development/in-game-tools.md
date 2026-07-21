@@ -4,7 +4,9 @@ Developer tooling that ships with the build but stays out of the normal play pat
 
 ## In-game debugger
 
-Press **F2** in the game for the debug menu. Opening it alone changes nothing in the world — it's a
+Press **F2** in the game for the debug menu. A small grey line at the top shows the loaded build's
+**`buildTime`** (`HH:MM DD-MM-YYYY`, stamped by opensa-pack into the opensa manifest, plan 079) so it is
+always clear which build is running. Opening the menu alone changes nothing in the world — it's a
 multi-level menu:
 
 - **Player** — **Fly Mode** (first, separated): toggle on and the player floats and flies at **2× speed** —

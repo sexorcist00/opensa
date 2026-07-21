@@ -29,11 +29,11 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 - **[080 — Cinematic camera](./080-cinematic-camera/readme.md)** — GTA V-feel follow camera: per-channel
   springs/lag, auto-center + look-ahead, collision whiskers, vehicle speed/FOV/drift framing, bob/shake,
   7 sub-plans + priority chain.
-- **[079 — Viewers and the lab on a pmb output](./079-viewers-lab-on-pmb-output.md)** — four surfaces get game
-  data four different ways (picker+pak, pak-only, a `localhost:3002` protocol, static fixtures). Collapse them
-  onto ONE contract: a perfect-map-builder output in `./public`, read through the VFS exactly as the game
-  reads it. Depends on [opensa-pack 003](../../tools/opensa-pack/docs/plans/003-game-shaped-output.md).
-  **PLANNED 2026-07-18.**
+- **[079 — One canonical build source, the dev-surface unification, and its docs](./079-canonical-build-source.md)**
+  — every dev surface (lab, bench harness, viewers) reads ONE canonical build (`./build/perfect`), served in
+  place (NOT copied into `public/`), via a new `http-dir` loader + the loading-MODE-selects-the-world fix +
+  `buildTime`. Depends on [opensa-pack 003](../../tools/opensa-pack/docs/plans/003-game-shaped-output.md).
+  **Phases 0–5 DONE 2026-07-21; phase 6 (docs) open.**
 - **[078 — Global bug fixing](./078-global-bug-fixing/readme.md)** — the umbrella ledger for the bugs the
   first FULL pmb map convert surfaced (2026-07-19, >1 h run): engine and tool fixes tracked in one place.
   **OPEN — awaiting the detailed bug report; runs before 079.**

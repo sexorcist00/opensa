@@ -22,7 +22,7 @@ packages/                    (tag type:engine)
   renderware/  @opensa/renderware   parsers (DFF/TXD/COL, IDE/IPL/DAT/GXT) + archive + map + mesh preparation
   game/        @opensa/game         ECS, systems, adapters — renderer-agnostic
   modloader/   @opensa/modloader    modloader/ overlay over AssetFileSystem
-  loaders/     @opensa/loaders      asset-loader (fetch/local) — framework-agnostic
+  loaders/     @opensa/loaders      asset-loader (fetch/local/http-dir) — framework-agnostic
   vfs/         @opensa/vfs          unzip → AssetFileSystem
   game-build/  @opensa/game-build   partitioning shared by the loaders + build scripts
 tools/                       (tag type:tool — offline; read the engine, never the app)
@@ -134,7 +134,9 @@ flowchart LR
 
 The menu is the first screen — **nothing downloads until a game is picked** (no eager pre-menu load). Each
 game in `GAME_CONFIG` carries its own loader: a **fetch** game (e.g. Gostown) downloads chunk archives; a
-**local** game (San Andreas) reads a user-picked install. The disclaimer is remembered per game.
+**local** game (San Andreas) reads a user-picked install. A dev-only **http-dir** override
+(`?loader=http-dir&src=<url>`, plan 079) reads a _served_ game dir instead — the dev surfaces boot the one
+canonical build this way. The disclaimer is remembered per game.
 
 ```mermaid
 flowchart TB

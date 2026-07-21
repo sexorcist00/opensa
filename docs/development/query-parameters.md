@@ -5,29 +5,32 @@ Every query parameter the browser apps read, where it is read, and what it does.
 the 073 debug-flag zoo grew to ~60 undocumented inline `URLSearchParams` reads, and **this file exists so
 it cannot regrow unnoticed**. Add a parameter, add a row — a knob that is not here is not supported.
 
-Verified against the code 2026-07-18. Only four browser files read parameters at all.
+Verified against the code 2026-07-18; `loader`/`src` updated 2026-07-21 (plan 079). The browser apps read
+parameters in `engine-canvas-host.tsx`, the engine-lab `main.ts`, the viewers, and `use-asset-boot.ts`/the
+boot machine (`loader`).
 
 ## Game host — `apps/web` (`/`, the shipping app)
 
 Read in `src/ui/engine-canvas-host.tsx` unless noted.
 
-| Param       | Default                | Values                        | What it does                                           |
-| ----------- | ---------------------- | ----------------------------- | ------------------------------------------------------ |
-| `src`       | `pak-map`              | pak directory name            | Which converted pak the streaming driver loads         |
-| `spawn`     | the game's spawn point | `x,y,z` (GTA coords)          | Player spawn override                                  |
-| `hour`      | `22` (night)           | `0`–`24`; **`0` is honoured** | Time of day                                            |
-| `weather`   | `0`                    | timecyc weather row           | Starting weather (remapped regionally at spawn)        |
-| `draw`      | `1200`                 | number, floored at `400`      | LOD ring radius; the fog cap follows it (074/21)       |
-| `scale`     | config `renderScale`   | e.g. `0.75`                   | Render scale — **the one perf tier knob**              |
-| `aces`      | on                     | `0` = off                     | ACES tonemapping A/B                                   |
-| `bloom`     | config                 | `0` = off, `>0` = intensity   | Bloom A/B                                              |
-| `probe`     | on                     | `0` = off                     | Env-probe reflections off → analytic fallback          |
-| `probeview` | off                    | `1` = on                      | Draw the probe cube as a panorama instead of the frame |
-| `sky`       | analytic               | `preetham`                    | Sky model switch                                       |
-| `clouds`    | config                 | number                        | Cloud opacity                                          |
-| `bench`     | off                    | `all` or one scene key        | Bench sweep; emits the `[bench]` JSON protocol         |
-| `soak`      | off                    | minutes                       | Soak stability run; emits `[soak]`                     |
-| `benchcar`  | mixed models           | vehicle model name            | Pin every bench road car to one model                  |
+| Param       | Default                | Values                         | What it does                                                                                                                                                    |
+| ----------- | ---------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loader`    | per-game               | `http-dir`                     | Dev override (079): run the full game against a served build (with `src`); read in `use-asset-boot.ts`                                                          |
+| `src`       | `pak-map`              | pak base URL / served game dir | The world pak base — the loading MODE selects it (079): folder mode reads `opensa/` from the picked folder; `?loader=http-dir&src=<url>` reads the served build |
+| `spawn`     | the game's spawn point | `x,y,z` (GTA coords)           | Player spawn override                                                                                                                                           |
+| `hour`      | `22` (night)           | `0`–`24`; **`0` is honoured**  | Time of day                                                                                                                                                     |
+| `weather`   | `0`                    | timecyc weather row            | Starting weather (remapped regionally at spawn)                                                                                                                 |
+| `draw`      | `1200`                 | number, floored at `400`       | LOD ring radius; the fog cap follows it (074/21)                                                                                                                |
+| `scale`     | config `renderScale`   | e.g. `0.75`                    | Render scale — **the one perf tier knob**                                                                                                                       |
+| `aces`      | on                     | `0` = off                      | ACES tonemapping A/B                                                                                                                                            |
+| `bloom`     | config                 | `0` = off, `>0` = intensity    | Bloom A/B                                                                                                                                                       |
+| `probe`     | on                     | `0` = off                      | Env-probe reflections off → analytic fallback                                                                                                                   |
+| `probeview` | off                    | `1` = on                       | Draw the probe cube as a panorama instead of the frame                                                                                                          |
+| `sky`       | analytic               | `preetham`                     | Sky model switch                                                                                                                                                |
+| `clouds`    | config                 | number                         | Cloud opacity                                                                                                                                                   |
+| `bench`     | off                    | `all` or one scene key         | Bench sweep; emits the `[bench]` JSON protocol                                                                                                                  |
+| `soak`      | off                    | minutes                        | Soak stability run; emits `[soak]`                                                                                                                              |
+| `benchcar`  | mixed models           | vehicle model name             | Pin every bench road car to one model                                                                                                                           |
 
 `bench` / `soak` / `benchcar` are read in `src/ui/engine-perf-runs.ts`. Scene keys live in
 `src/bench-scenes.ts`: `ls-noon` · `sf-fog-dawn` · `lv-night` · `country-dusk` · `ocean-horizon` ·
@@ -43,29 +46,28 @@ The proving ground ([engine-lab.md](engine-lab.md)); read in `src/main.ts`. Rend
 game host (`scale`, `aces`, `bloom`, `probe`, `probeview`, `sky`, `clouds`, `hour`, `weather`, `draw`,
 `src`) with the scene-setup additions below.
 
-| Param       | Default          | Values                            | What it does                                          |
-| ----------- | ---------------- | --------------------------------- | ----------------------------------------------------- |
-| `pak`       | off              | `1`                               | Load geometry from a pak instead of synthetic         |
-| `stream`    | off              | `1` (needs `pak=1`)               | Streaming mode                                        |
-| `cells`     | `8`              | number                            | Synthetic grid side                                   |
-| `boxes`     | `12`             | number                            | Boxes per synthetic grid side                         |
-| `at`        | pak centre       | `x,y,z`                           | Orbit focus override                                  |
-| `orbit`     | fitted           | number                            | Starting camera distance                              |
-| `az` / `el` | `0` / `0.9`      | number                            | Starting orbit azimuth (deg) / height factor          |
-| `ped`       | off              | `1`                               | Spawn a ped                                           |
-| `pedy`      | focus Y          | number                            | Ped/vehicle Y placement                               |
-| `vehicle`   | `0`              | count                             | How many vehicles to spawn                            |
-| `vmodel`    | `vehicle`        | model base name                   | Which vehicle model                                   |
-| `drive`     | off              | `1`                               | Drivable vehicle mode                                 |
-| `freeze`    | off              | `1`                               | Freeze animation                                      |
-| `daycycle`  | off              | `1`                               | Animate the day cycle                                 |
-| `fogscale`  | `2.5`            | number                            | Fog timecyc scale                                     |
-| `ao`        | config           | number                            | Baked AO strength                                     |
-| `sunvis`    | config           | number                            | Baked sun-visibility strength                         |
-| `wind`      | config           | number                            | Wind strength                                         |
-| `stoch`     | config (**off**) | number                            | Stochastic de-tiling — default-OFF, unstable (074/12) |
-| `bench`     | off              | `city`\|`close`\|`orbit`\|`drive` | Lab camera bench script (`src/bench.ts`)              |
-| `test`      | off              | `leak`                            | Leak test mode (requires streaming)                   |
+| Param       | Default          | Values                            | What it does                                                                                         |
+| ----------- | ---------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `pak`       | off              | `1`                               | Stream the converted district (worker pak + LOD rings) instead of synthetic — the one pak path (079) |
+| `cells`     | `8`              | number                            | Synthetic grid side                                                                                  |
+| `boxes`     | `12`             | number                            | Boxes per synthetic grid side                                                                        |
+| `at`        | pak centre       | `x,y,z`                           | Orbit focus override                                                                                 |
+| `orbit`     | fitted           | number                            | Starting camera distance                                                                             |
+| `az` / `el` | `0` / `0.9`      | number                            | Starting orbit azimuth (deg) / height factor                                                         |
+| `ped`       | off              | `1`                               | Spawn a ped                                                                                          |
+| `pedy`      | focus Y          | number                            | Ped/vehicle Y placement                                                                              |
+| `vehicle`   | `0`              | count                             | How many vehicles to spawn                                                                           |
+| `vmodel`    | `vehicle`        | model base name                   | Which vehicle model                                                                                  |
+| `drive`     | off              | `1`                               | Drivable vehicle mode                                                                                |
+| `freeze`    | off              | `1`                               | Freeze animation                                                                                     |
+| `daycycle`  | off              | `1`                               | Animate the day cycle                                                                                |
+| `fogscale`  | `2.5`            | number                            | Fog timecyc scale                                                                                    |
+| `ao`        | config           | number                            | Baked AO strength                                                                                    |
+| `sunvis`    | config           | number                            | Baked sun-visibility strength                                                                        |
+| `wind`      | config           | number                            | Wind strength                                                                                        |
+| `stoch`     | config (**off**) | number                            | Stochastic de-tiling — default-OFF, unstable (074/12)                                                |
+| `bench`     | off              | `city`\|`close`\|`orbit`\|`drive` | Lab camera bench script (`src/bench.ts`)                                                             |
+| `test`      | off              | `leak`                            | Leak test mode (requires streaming)                                                                  |
 
 ## Standalone engine page — `apps/web/src/standalone/opensa-engine.ts`
 
@@ -84,7 +86,9 @@ The minimal boot kept as a repro harness (074/13 phase 3.4): `src` (default `pak
 
 Documented rather than silently fixed; both are load-bearing for existing bookmarks and bench URLs:
 
-- **`src` defaults differ per host** — `pak-map` (game), `pak-ls` (standalone), `pak` (lab).
+- **`src` defaults differ per host** — `pak-map` (game), `pak-ls` (standalone), `pak` (lab); since 079 the lab
+  points `src` at a served game dir (e.g. `http://localhost:3001/build/perfect/opensa`), and `?loader=http-dir`
+  makes the game do the same.
 - **`hour=0` means midnight only in the game host.** The standalone page and the lab read it as
   `Number(...) || 12`, so `0` falls back to noon.
 

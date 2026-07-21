@@ -99,6 +99,11 @@ The local + e2e static origin (`npm run serve:static`, port 3001 = `VITE_STATIC_
 `static/games/<game>-<version>/` archives, and maps `/viewer/*` → the object-viewer's `tests/viewer/` e2e
 fixtures (`npm run test:fixtures`) — all gitignored. CORS is on; dev mode reads files fresh.
 
+Also mounts **`/build`** (Range-capable) so the dev surfaces can boot the canonical build in place: a
+`dirIndex()` walk answers `/build/.../__index` for the `http-dir` loader (`?loader=http-dir&src=<url>`), and
+the bench harness + viewers read `./build/perfect/opensa` this way (plan 079). Nothing is copied into
+`public/`.
+
 ```sh
 npm run serve:static                # tsx scripts/serve-static.ts
 ```

@@ -7,9 +7,10 @@ workspace (`tsx`-run CLI + unit tests), registered in the root `package.json`, `
 
 ## Tools
 
-- **[`bench-harness`](./bench-harness)** — headless field-check harness for the own-engine game: fake
-  `showDirectoryPicker` over a local HTTP file server + Playwright WebGPU boot — runs the in-game bench
-  sweeps, soak runs and boot-gate checks without a human at the screen. Guide:
+- **[`bench-harness`](./bench-harness)** — headless field-check harness for the own-engine game: boots via
+  `?loader=http-dir&src=<served build>` (the real load path, no fake picker — plan 079 phase 3) over
+  `serve-static`'s `/build` mount + Playwright WebGPU boot — runs the in-game bench sweeps, soak runs and
+  boot-gate checks without a human at the screen. Guide:
   [docs/development/benchmarks.md](../docs/development/benchmarks.md). (Plain node scripts, not a
   workspace — they drive a browser, they don't ship.)
 - **[`sa-int16-repro`](./sa-int16-repro)** — the row-count dial that reproduces SA's int16 building-pool

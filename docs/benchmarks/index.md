@@ -66,13 +66,14 @@ Kept because every own-engine claim is expressed against it. Same six bench scen
 ## Ganton, street level — WITHDRAWN (2026-07-20)
 
 The `ganton-noon` / `ganton-night` datasets and the `?scale=0.75` decomposition that stood here were
-**deleted as invalid**. Every one of them was taken through the folder picker, and the folder picker does
-not select the world: `engine-canvas-host.tsx:264` always fetches the pak from `public/pak-map`. So the
-runs measured whatever sat in `public/`, not the pak they were labelled with, and the pak-to-pak
+**deleted as invalid**. Every one of them was taken through the folder picker, and at the time the folder
+picker did not select the world: `engine-canvas-host.tsx` always fetched the pak from `public/pak-map`. So
+the runs measured whatever sat in `public/`, not the pak they were labelled with, and the pak-to-pak
 comparisons they supported measured nothing at all.
 
-The scenes themselves (`bench-scenes.ts`) are kept — the street-level path was the right idea. Re-measure
-once the pak source follows the loading mode.
+The scenes themselves (`bench-scenes.ts`) are kept — the street-level path was the right idea. The pak
+source now follows the loading mode (plan 079: folder mode reads `opensa/` from the picked folder, and the
+harness boots `?loader=http-dir&src=<served build>`), so re-measured runs are trustworthy again.
 
 ## What the chronology shows
 
