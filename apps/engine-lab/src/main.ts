@@ -27,6 +27,7 @@ import { type LabTimecyc, loadLabTimecyc, resolvePakSource } from './pak-source'
 import { loadPedProbe } from './ped';
 import { syntheticCell, syntheticTextureArray } from './synthetic';
 import { loadVehicleProbe } from './vehicle';
+import { labInstallSource, readModelBytes } from './vfs';
 
 const CELL_SIZE = 250;
 
@@ -172,9 +173,10 @@ function leakStep(
 }
 
 /**
- * `?vehicle=N` setup (074/16 round 2): `?vmodel=<dir>` picks an alternative fixture (vehicle-probe CLI
- * `--out`); the bench default is PARKED at the focus with a close camera — `?drive=1` restores the convoy
- * circle and its wider framing.
+ * `?vehicle=N` setup (074/16 round 2, plan 079 phase 2): `?vmodel=<name>` names a CONVERTED vehicle model in
+ * the served build (default `landstal`), read as `<name>.osm` through the same decode the game uses. The bench
+ * default is PARKED at the focus with a close camera — `?drive=1` restores the convoy circle and its wider
+ * framing. Needs `?src` pointing at a served game dir (an opensa-pack `--out`).
  */
 async function loadVehicleBench(
   engine: Engine,
@@ -183,9 +185,14 @@ async function loadVehicleBench(
   vehicleCount: number,
 ): Promise<{ host: Awaited<ReturnType<typeof loadVehicleProbe>>; startDistance: number }> {
   const vehicleY = Number(params.get('pedy') ?? focus[1]) || focus[1];
-  const vehicleBase = params.get('vmodel') ?? 'vehicle';
+  const name = params.get('vmodel') ?? 'landstal';
   const drive = params.get('drive') === '1';
-  const host = await loadVehicleProbe(engine, [focus[0], vehicleY, focus[2]], vehicleCount, vehicleBase, drive);
+  const source = await labInstallSource(await requireGameDir(params));
+  const osm = await readModelBytes(source, `${name}.osm`);
+  if (!osm) {
+    throw new Error(`vehicle model ${name}.osm not found in the served build — check ?vmodel and ?src`);
+  }
+  const host = loadVehicleProbe(engine, [focus[0], vehicleY, focus[2]], vehicleCount, name, osm, drive);
 
   return { host, startDistance: drive ? 55 : 14 };
 }
@@ -509,6 +516,19 @@ function pick(
   ledger: Record<string, { bytes: number; count: number }>,
 ): Record<string, { bytes: number; count: number }> {
   return { cellIndex: ledger.cellIndex, cellVertex: ledger.cellVertex, uniform: ledger.uniform };
+}
+
+/** Resolve `?src` to a served GAME dir (an opensa-pack `--out`), which the probes read converted models from. */
+async function requireGameDir(params: URLSearchParams): Promise<string> {
+  const source = await resolvePakSource(params.get('src') ?? 'pak');
+  if (!source.gameDir) {
+    throw new Error(
+      '?vehicle needs ?src pointing at a served game dir (an opensa-pack --out with opensa/ inside), ' +
+        'e.g. ?src=http://localhost:3001/build/perfect/opensa',
+    );
+  }
+
+  return source.gameDir;
 }
 
 /** The `?draw=` knob as StreamingRadii — empty when absent (defaults). */

@@ -1,12 +1,14 @@
 /**
- * Rigid-entity probe host (074/08 B2c, `?vehicle=N`): fetch the vehicle fixture
- * (tools/opensa-pack/src/vehicle-probe.ts), feed it to the engine, and drive a circle around the focus with
- * game-style transform updates — root matrix per frame, wheels spin by arc distance and hold the turn's
- * steer angle. `?vehicle=N` spawns N instances of the ONE model (B5 multi-instance check — they share the
- * geometry and the texture array, only their part matrices differ). Pairs with `?ped=1`.
+ * Rigid-entity probe host (074/08 B2c, `?vehicle=N`): read a CONVERTED vehicle `.osm` from the served build
+ * (plan 079 phase 2 — the same bytes and `readModelOsm` decode the game uses, replacing the old vehicle-probe
+ * fixture), feed it to the engine, and drive a circle around the focus with game-style transform updates —
+ * root matrix per frame, wheels spin by arc distance and hold the turn's steer angle. `?vehicle=N` spawns N
+ * instances of the ONE model (B5 multi-instance check — they share the geometry and the texture array, only
+ * their part matrices differ). Pairs with `?ped=1`.
  */
 import type { Engine, VehicleInstance, VehiclePaint } from '@opensa/engine';
-import type { VehicleFixture } from '@opensa/renderware/vehicle/types';
+
+import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
 
 export interface VehicleProbeHost {
   /** Advance the drive loop to `nowSec`, flatten + upload; returns the CPU cost in ms. */
@@ -36,49 +38,22 @@ const CONVOY_PAINTS: VehiclePaint[] = [
   },
 ];
 
-export async function loadVehicleProbe(
+export function loadVehicleProbe(
   engine: Engine,
   center: readonly [number, number, number],
   count = 1,
-  base = 'vehicle',
+  name = 'landstal',
+  osm: Uint8Array,
   drive = false,
-): Promise<VehicleProbeHost> {
-  const [fixture, bin] = await Promise.all([
-    fetch(`/${base}/vehicle.json`).then((response) => response.json() as Promise<VehicleFixture>),
-    fetch(`/${base}/vehicle.bin`).then((response) => response.arrayBuffer()),
-  ]);
-  const bytes = new Uint8Array(bin);
-  const slice = (offset: number, length: number): Uint8Array => bytes.subarray(offset, offset + length);
-  const model = engine.createVehicleModel({
-    colors: slice(fixture.layout.colors, fixture.vertexCount * 4),
-    indexCount: fixture.indexCount,
-    indices: slice(fixture.layout.indices, fixture.indexCount * 2),
-    meta: slice(fixture.layout.meta, fixture.vertexCount * 4),
-    // The lab's pinned fixtures predate the night set; the day colours make the blend a no-op.
-    night: slice(fixture.layout.night ?? fixture.layout.colors, fixture.vertexCount * 4),
-    normals: slice(fixture.layout.normals, fixture.vertexCount * 12),
-    parts: fixture.parts,
-    positions: slice(fixture.layout.positions, fixture.vertexCount * 12),
-    reflect: slice(fixture.layout.reflect, fixture.vertexCount * 4),
-    submeshes: fixture.submeshes,
-    textures: [
-      {
-        height: fixture.textures.height,
-        kind: 'rgba',
-        layers: fixture.textures.names.length,
-        rgba: slice(
-          fixture.textures.offset,
-          fixture.textures.names.length * fixture.textures.width * fixture.textures.height * 4,
-        ),
-        width: fixture.textures.width,
-      },
-    ],
-    uvs: slice(fixture.layout.uvs, fixture.vertexCount * 8),
-    vertexCount: fixture.vertexCount,
-  });
+): VehicleProbeHost {
+  // The converted `.osm` is self-contained (geometry + `.ostex` texture arrays + the pre-built parts in DESC),
+  // so `readModelOsm` yields both the engine-ready upload and the same `VehicleFixture` the drive loop below
+  // reads — the fetch/hand-slice fixture path is gone, the decode is the game's.
+  const { fixture, model } = readModelOsm(name, osm);
+  const modelId = engine.createVehicleModel(model);
   const cars: VehicleInstance[] = [];
   for (let index = 0; index < Math.max(1, count); index += 1) {
-    const car = engine.createVehicle(model);
+    const car = engine.createVehicle(modelId);
     car.setPaint(CONVOY_PAINTS[index % CONVOY_PAINTS.length]);
     // The `_dam` twins and the `_vlo` LOD ride in the same buffers — hide them until damage/LOD drive them
     // (B5 steps 3-4). This is the visibility primitive doing exactly what prod's `.visible` flags did.

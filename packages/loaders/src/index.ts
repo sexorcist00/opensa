@@ -9,7 +9,15 @@ import { AssetFetchLoader } from './asset-fetch-loader';
 import { AssetHttpDirLoader, AssetLocalLoader } from './asset-local-loader';
 
 export { AssetFetchLoader, type AssetFetchLoaderConfig } from './asset-fetch-loader';
-export { AssetHttpDirLoader, AssetLocalLoader, type AssetLocalLoaderConfig } from './asset-local-loader';
+export {
+  AssetHttpDirLoader,
+  AssetLocalLoader,
+  type AssetLocalLoaderConfig,
+  type DirIndexEntry,
+  fetchDirIndex,
+  fetchInstallSource,
+  type InstallSource,
+} from './asset-local-loader';
 export { Emitter, type Listener } from './emitter';
 export { allChunks, chunkUrl, chunkUrls, CORE_GROUPS, GROUP_NAMES, manifestDir, parseManifest } from './manifest';
 export type {
