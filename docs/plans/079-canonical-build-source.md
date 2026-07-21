@@ -210,9 +210,15 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
 - **Phase 4 (design) — object-viewer before/after.** compare-serve reads `.osm`/`.ostex` on AFTER; viewer renders
   AFTER via the `.osm` rigid path; BEFORE = `.dff`/`.txd` from `non-modified`. Report resolved-as (osm vs
   dff) and the map-object coverage boundary.
-- **Phase 5 — vehicle/character viewers + retire old paths.** Those two onto the VFS; drop the `:3002` raw
-  protocol where redundant, the `public/` symlink farm, orphaned `clouds-*.rgba`; repoint e2e at a small
-  committed game-shaped fixture; close the compare-coverage audit finding.
+- **Phase 5 — vehicle/character viewers + retire old paths.** Viewer `.osm` support + probe-CLI deletion DONE
+  2026-07-21 (commits `6687fef`, `22ed056`): the `ped-probe`/`vehicle-probe` CLIs are deleted (dead since
+  phase 2); the character tab reads `.osm` via `readPedOsm` (full-featured) and the vehicle tab via
+  `loadModelFromOsm` (renders + paints + submesh LOD/damage; doors + mesh COL degrade — DFF-only). All four
+  viewer tabs now work against a converted build. **NOTE the viewers still talk to the compare-server
+  (`:3002`), NOT a VFS — the plan's original "onto the VFS" was superseded: a before/after tool is inherently
+  two game dirs, which the compare-server already is.** Still open (gitignored/tooling cleanup, low value):
+  the `public/` symlink farm + orphaned `clouds-*.rgba` (nothing references them since phase 2), repointing e2e
+  at a committed game-shaped fixture, and the compare-coverage audit finding. Viewer render is browser-only.
 - **Close-out — `npm run lint`, coverage floors held, `docs/development/` repointed at the new workflow.**
 
 ## Tasks
@@ -231,7 +237,8 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
 - [x] Phase 4 — object/compare viewer AFTER reads `.osm` (compare-serve `/osm` + `loadModelFromOsm`); BEFORE
       `non-modified` `.dff`; data-path headless-verified, viewer render browser-only (owed); vehicle/character
       tabs move to `.osm` in phase 5
-- [ ] Phase 5 — vehicle/character viewers on the VFS; retire `:3002`, symlinks, `clouds-*.rgba`; e2e fixture
+- [x] Phase 5 (viewers + probe CLIs) — vehicle/character tabs read `.osm`; ped-probe/vehicle-probe deleted.
+      Left (gitignored/low-value): `public/` symlinks, `clouds-*.rgba`, e2e-fixture repoint, compare-coverage audit
 - [ ] Close-out — lint, coverage floors, dev docs repointed
 
 ## Measurement ledger
