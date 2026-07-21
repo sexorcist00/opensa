@@ -22,7 +22,6 @@ import {
 } from './bench';
 import { type DebugPanelState, mountDebugPanel } from './debug-panel';
 import { type EnvironmentDriver, FOG_RING_MARGIN, parametricDriver, timecycDriver } from './environment';
-import { loadPak } from './pak-loader';
 import { type LabTimecyc, loadLabTimecyc, resolvePakSource } from './pak-source';
 import { loadPedProbe } from './ped';
 import { syntheticCell, syntheticTextureArray } from './synthetic';
@@ -224,8 +223,9 @@ async function main(): Promise<void> {
   let environmentDriver: EnvironmentDriver = parametricDriver(engine, aces, bloom);
   const applyEnvironment = (): void => environmentDriver.apply(hour);
   applyEnvironment();
+  // `?pak=1` streams the converted district through the worker pak + LOD rings (plan 079 phase 2 — the old
+  // whole-pak `loadPak` shortcut is gone; streaming is the one pak path, and it is what the game runs).
   const usePak = params.get('pak') === '1';
-  const useStream = usePak && params.get('stream') === '1';
   hud.textContent = `device: ${engine.adapterInfo}\n${usePak ? 'loading pak…' : 'building synthetic district…'}`;
 
   const buildStart = performance.now();
@@ -234,7 +234,7 @@ async function main(): Promise<void> {
   let orbitRadius: number;
   let title: string;
   let streaming: null | StreamingDriver = null;
-  if (useStream) {
+  if (usePak) {
     // `?src=` names an opensa-pack `--out` (a game dir with products under `opensa/`) — or, for the older
     // paks under `public/`, the products directory itself. Default /pak.
     const source = await resolvePakSource(params.get('src') ?? 'pak');
@@ -255,12 +255,6 @@ async function main(): Promise<void> {
       title = `STREAMING district (worker pak, rings live) — weather ${weather}`;
       applyWeather(weather);
     });
-  } else if (usePak) {
-    const district = await loadPak(engine);
-    recordedDraws = district.drawsRecorded;
-    focus = district.center;
-    orbitRadius = Math.max(district.radius * 1.6, 400);
-    title = `converted district (${district.cellCount} cells, ${recordedDraws} recorded draws)`;
   } else {
     recordedDraws = buildSyntheticDistrict(engine, gridSide, boxesPerSide);
     const half = (gridSide * CELL_SIZE) / 2;

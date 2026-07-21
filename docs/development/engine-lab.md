@@ -15,20 +15,21 @@ npm run dev -w @opensa/engine-lab    # vite, fixed port 4300
 
 No build target on purpose — it is a dev-server lab, not a shipped app. (Sources:
 `apps/engine-lab/src/` — `main.ts` entry + params, `bench.ts`, `debug-panel.ts`, `environment.ts`,
-`pak-loader.ts`, `ped.ts`, `vehicle.ts`, `synthetic.ts`.)
+`ped.ts`, `vehicle.ts`, `vfs.ts`, `synthetic.ts`.)
 
 ## Data modes
 
-Everything is served from `apps/engine-lab/public/`:
+Since plan 079 phase 2 the lab reads the ONE canonical build the game reads — a served perfect-map-builder
+output — through `?src`. Serve it with `npm run serve:static` (mounts `/build` with Range) and point `?src`
+at the game dir: `?src=http://localhost:3001/build/perfect/opensa`. There is no lab-only fixture format; the
+ped/vehicle probes decode the SAME `.osm`/`.ostex` bytes the game does (`readPedOsm` / `readModelOsm`).
 
-| Mode                | URL                          | What it does                                                                                                                                                                                  |
-| ------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Synthetic (default) | no params                    | In-memory box-field district through the real `.oscell`/`.ostex` encoders — no files needed; the cutout layer is the A2C sanity check. `?cells=N` grid side, `?boxes=N` boxes per cell.       |
-| Whole-pak           | `?pak=1`                     | Fetches `/pak/manifest.json` + `world.ospak` once (the M0 shortcut). Hardcoded to `public/pak/`.                                                                                              |
-| Streaming           | `?pak=1&stream=1&src=pak-ls` | The REAL pak worker + LOD rings (380/1000, hysteresis, atomic swap, eviction). `?src=` picks the district dir (`pak`, `pak-ls`, `pak-map`, `pak-sf`). WASD pans the focus — the rings follow. |
+| Mode                | URL                                                     | What it does                                                                                                                                    |
+| ------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Synthetic (default) | no params                                               | In-memory box-field district through the real `.oscell`/`.ostex` encoders — no files needed; the cutout layer is the A2C sanity check.          |
+| Streaming           | `?pak=1&src=http://localhost:3001/build/perfect/opensa` | The REAL pak worker + LOD rings (hysteresis, atomic swap, eviction). WASD pans the focus — the rings follow. `?src=` names the served game dir. |
 
-Pak dirs are `opensa-pack --out` output; vehicle fixtures (`public/vehicle*`) come from
-`tools/opensa-pack/src/vehicle-probe.ts`, the ped fixture from `ped-probe.ts`.
+The ped/vehicle probes (`?ped`/`?vehicle`, below) read their converted models from the same `?src` build.
 
 ## Query parameters
 
@@ -36,9 +37,8 @@ Pak dirs are `opensa-pack --out` output; vehicle fixtures (`public/vehicle*`) co
 
 | Param                 | Default   | Effect                                                                                                     |
 | --------------------- | --------- | ---------------------------------------------------------------------------------------------------------- |
-| `pak=1`               | synthetic | converted pak instead of the synthetic district                                                            |
-| `stream=1`            | off       | with `pak=1`: streaming worker + live rings                                                                |
-| `src=<dir>`           | `pak`     | streaming district dir; also the `report.json` source for bench records                                    |
+| `pak=1`               | synthetic | stream the converted district (worker pak + LOD rings) instead of the synthetic one                        |
+| `src=<url>`           | `pak`     | the served game dir (an opensa-pack `--out`); the world, the probes and the `report.json` all read from it |
 | `cells=N` / `boxes=N` | 8 / 12    | synthetic grid size                                                                                        |
 | `test=leak`           | off       | streaming leak assertion: sweep → unloadAll → ledger vs baseline, PASS/FAIL HUD (exclusive with `?bench=`) |
 
@@ -79,12 +79,13 @@ Pak dirs are `opensa-pack --out` output; vehicle fixtures (`public/vehicle*`) co
 
 ### Probes / look bench
 
-| Param               | Effect                                                                                 |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| `ped=1` (+`pedy=N`) | animated skinning-probe ped at the focus (idle/walk alternate)                         |
-| `vehicle=N`         | N vehicle instances (N>1 = multi-instance pool, convoy paints)                         |
-| `vmodel=<dir>`      | vehicle fixture dir (`vehicle`, `vehicle-alpha`, `vehicle-buccanee`, `vehicle-comet`)  |
-| `drive=1`           | convoy circle drive + wheel spin + night head/taillights (default = parked look bench) |
+| Param               | Effect                                                                                             |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| `ped=1` (+`pedy=N`) | animated skinning-probe ped at the focus (idle/walk alternate); reads `<pedmodel>.osm` from `?src` |
+| `pedmodel=<name>`   | ped model name (default `male01`) — any converted ped in the served build                          |
+| `vehicle=N`         | N vehicle instances (N>1 = multi-instance pool, convoy paints); reads `<vmodel>.osm` from `?src`   |
+| `vmodel=<name>`     | vehicle model name (default `landstal`) — any converted vehicle in the served build                |
+| `drive=1`           | convoy circle drive + wheel spin + night head/taillights (default = parked look bench)             |
 
 ### Bench
 

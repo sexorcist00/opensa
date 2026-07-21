@@ -152,7 +152,18 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
   buffer is fine. The lab keeps URL streaming (phase 2), so nothing streaming-critical regresses; URL-stream
   for http-dir is a noted follow-up. **Not yet verified end-to-end in a browser** (needs a real WebGPU boot,
   like the pak-source fix); the `setup.ts`/`pak-loader.ts` dedup rides with phase 2 (the lab).
-- **Phase 2 — lab onto the mount.** DESIGN (2026-07-21, from the data-flow map):
+- **Phase 2 — lab onto the mount. DONE 2026-07-21 (vehicle + ped browser-verified by the user; pak-loader
+  deleted).** The lab reads the served build through `?src`: `?vehicle=<vmodel>` decodes `<name>.osm` with
+  the game's `readModelOsm`, `?ped=<pedmodel>` decodes `<name>.osm` + loose `anim/ped.ifp` with `readPedOsm` +
+  `parseIfp` (the `loadEnginePlayer` recipe) — the ped-probe/vehicle-probe FIXTURES are gone, no lab-only
+  format. `pak-loader.ts` deleted; `?pak=1` now streams (the one pak path). A new `apps/engine-lab/src/vfs.ts`
+  opens the build's archives lazily (`fetchInstallSource`, exported from `@opensa/loaders`) and reads one
+  `.osm` by name — NO full VFS build, so the perf tension is moot (the lab inspects one model). Bug found +
+  fixed: `resolvePakSource` mangled absolute `?src` URLs. Decode headless-verified for both classes; the
+  `apps/web` 6-scene bench gate stays open (browser-only; not run this pass). The probe CLIs
+  (`ped-probe.ts`/`vehicle-probe.ts`) still exist — retiring them is phase 5 cleanup. Original design below:
+
+- **Phase 2 (design) — lab onto the mount.** (2026-07-21, from the data-flow map):
   - **The lab builds no VFS today.** It reads three data sources ad-hoc: `pak-loader.ts` (`loadPak`, a whole-pak
     fetch — a duplicate of `setupStreaming`, `?pak=1`), and throwaway probe fixtures `ped.ts` → `/ped/ped.json`
     `+.bin` and `vehicle.ts` → `/<vmodel>/vehicle.json` `+.bin` (produced by `tools/opensa-pack/src/ped-probe.ts`
@@ -193,7 +204,9 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
 - [x] Phase 0 (server) — `serve-static` mounts `./build` (Range) + `__index` listing; dev-docs still to write
 - [x] Phase 1 — `fetchInstallSource` + `InstallSourceLoader` base + `AssetHttpDirLoader` + `?loader=http-dir` wired
       (setup.ts/pak-loader.ts dedup deferred to phase 2; end-to-end browser boot not yet verified)
-- [ ] Phase 2 — lab on the mount; `pak-loader.ts` + fixtures deleted; bench sweep reproduces reference
+- [x] Phase 2 — lab reads `?src` build: vehicle (`readModelOsm`) + ped (`readPedOsm`+`parseIfp`) probes,
+      `pak-loader.ts` deleted, `?pak=1` streams, `vfs.ts` lazy reads; probe CLIs retired in phase 5; the
+      apps/web bench-sweep gate stays browser-only (not run this pass)
 - [ ] Phase 3 — bench harness on `?loader=http-dir` against `./build/perfect`; fake picker removed
 - [ ] Phase 4 — object-viewer BEFORE `non-modified` ↔ AFTER `build/perfect/opensa` (`.osm`/`.ostex`)
 - [ ] Phase 5 — vehicle/character viewers on the VFS; retire `:3002`, symlinks, `clouds-*.rgba`; e2e fixture
