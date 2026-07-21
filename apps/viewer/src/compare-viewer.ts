@@ -293,7 +293,8 @@ function withNightColours(clump: RWClump): RWClump {
 }
 
 window.addEventListener('keydown', (event) => {
-  if (event.key.toLowerCase() === 'b') {
+  // `key` is absent on some synthetic keydowns (datalist autocomplete pick, IME/autofill) — guard it.
+  if (event.key?.toLowerCase() === 'b') {
     flipSide();
   }
 });

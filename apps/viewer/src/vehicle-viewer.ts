@@ -295,7 +295,8 @@ function toggleDoor(): void {
 }
 
 window.addEventListener('keydown', (event) => {
-  if (event.key.toLowerCase() === 'e') {
+  // `key` is absent on some synthetic keydowns (datalist autocomplete pick, IME/autofill) — guard it.
+  if (event.key?.toLowerCase() === 'e') {
     toggleDoor();
   }
 });
