@@ -12,14 +12,14 @@
  * `vehicles.ide`. Run `npx tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>` alongside
  * `npm run dev`. Open at /viewer.html?tab=vehicle.
  */
-import type { VehicleDoor, VehicleModelData } from '@opensa/renderware';
+import type { VehicleDoor } from '@opensa/renderware';
 import type { ColModel } from '@opensa/renderware/parsers/binary/col-types';
 
 import { parseDffCollision } from '@opensa/renderware/parsers/binary/col';
 
 import type { Bounds, ViewedModel } from './engine/model-view';
 
-import { loadModel } from './engine/model-view';
+import { loadModel, loadModelFromOsm } from './engine/model-view';
 import { createViewerEngine } from './engine/viewer-engine';
 
 /**
@@ -45,7 +45,10 @@ const wireframeToggle = document.createElement('input');
 /** Live triangle count of the current car. */
 const polyLabel = Object.assign(document.createElement('div'), { className: 'hint' });
 
-let current: null | ViewedModel<VehicleModelData> = null;
+let current: null | ViewedModel = null;
+/** The door list — only the DFF (`VehicleModelData`) path carries it; a converted `.osm` has none (its parts
+ *  are there, but not the door-hinge metadata the animation UI needs), so the door feature is DFF-only. */
+let doors: readonly VehicleDoor[] = [];
 let selectedPart = 0;
 /** COL bounds of the current car — clamps the selection box (modded DFFs blow up the mesh bbox). */
 let colBounds: Bounds | null = null;
@@ -144,7 +147,14 @@ function buildControls(): void {
 function doorOf(part: number): undefined | VehicleDoor {
   const name = current?.data.parts[part]?.name;
 
-  return current?.data.doors.find((entry) => entry.name === name || `door_${entry.side}` === name);
+  return doors.find((entry) => entry.name === name || `door_${entry.side}` === name);
+}
+
+/** The CONVERTED `.osm` bytes from the `--after` side, or null when it's stock (404 → use DFF+TXD). */
+async function fetchOsm(model: string): Promise<ArrayBuffer | null> {
+  const response = await fetch(`${serverUrl}/osm?side=after&model=${encodeURIComponent(model)}`);
+
+  return response.ok ? response.arrayBuffer() : null;
 }
 
 async function fetchServer(endpoint: 'dff' | 'txd', model: string): Promise<ArrayBuffer> {
@@ -178,11 +188,29 @@ async function loadVehicle(name: string, status?: HTMLElement): Promise<void> {
   if (status) {
     status.textContent = `loading ${name}…`;
   }
-  let dffBuffer: ArrayBuffer;
-  let txdBuffer: ArrayBuffer;
+  let osm: ArrayBuffer | null = null;
+  let dffBuffer: ArrayBuffer | null = null;
   try {
-    [dffBuffer, txdBuffer] = await Promise.all([fetchServer('dff', name), fetchServer('txd', name)]);
+    // AFTER may be a converted build (`.osm`): try that first, fall back to the stock DFF+TXD.
+    osm = await fetchOsm(name);
+    let txdBuffer: ArrayBuffer | null = null;
+    if (!osm) {
+      [dffBuffer, txdBuffer] = await Promise.all([fetchServer('dff', name), fetchServer('txd', name)]);
+    }
     await viewer.ready;
+    current?.dispose();
+    doorOpen.clear();
+    damaged.clear();
+    if (osm) {
+      // The converted car renders + paints + toggles submesh LOD/damage; doors (hinge metadata) and the
+      // mesh COL overlay are DFF-only, so they degrade quietly here.
+      current = loadModelFromOsm(viewer.engine, name, osm);
+      doors = [];
+    } else {
+      const view = loadModel(viewer.engine, dffBuffer!, [txdBuffer!], { wheelScale: WHEEL_SCALE });
+      current = view;
+      doors = view.data.doors;
+    }
   } catch (error) {
     if (status) {
       status.textContent = error instanceof Error ? error.message : String(error);
@@ -191,10 +219,6 @@ async function loadVehicle(name: string, status?: HTMLElement): Promise<void> {
     return;
   }
 
-  current?.dispose();
-  doorOpen.clear();
-  damaged.clear();
-  current = loadModel(viewer.engine, dffBuffer, [txdBuffer], { wheelScale: WHEEL_SCALE });
   current.instance.setPaint({
     primary: PRIMARY,
     quaternary: SECONDARY,
@@ -202,7 +226,7 @@ async function loadVehicle(name: string, status?: HTMLElement): Promise<void> {
     tertiary: PRIMARY,
   });
 
-  const col: ColModel | null = parseDffCollision(dffBuffer);
+  const col: ColModel | null = dffBuffer ? parseDffCollision(dffBuffer) : null;
   if (col) {
     current.setCollision(col);
     current.showCollision(collisionToggle.checked);

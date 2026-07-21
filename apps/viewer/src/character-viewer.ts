@@ -18,7 +18,7 @@ import { parseIfp } from '@opensa/renderware/parsers/binary/ifp';
 
 import type { ViewedPed } from './engine/ped-view';
 
-import { loadPed } from './engine/ped-view';
+import { loadPed, loadPedFromOsm } from './engine/ped-view';
 import { boxLines, createViewerEngine } from './engine/viewer-engine';
 
 /** Mirrors the game's PLAYER_HALF_EXTENTS: feet at z = 0, so the box stands on the ground. */
@@ -118,6 +118,13 @@ function buildControls(): void {
   void loadPedList(datalist, status);
 }
 
+/** The CONVERTED `.osm` bytes from the `--after` side, or null when it's stock (404 → use DFF+TXD). */
+async function fetchOsm(model: string): Promise<ArrayBuffer | null> {
+  const response = await fetch(`${serverUrl}/osm?side=after&model=${encodeURIComponent(model)}`);
+
+  return response.ok ? response.arrayBuffer() : null;
+}
+
 async function fetchServer(endpoint: 'dff' | 'txd', model: string): Promise<ArrayBuffer> {
   const response = await fetch(`${serverUrl}/${endpoint}?side=after&model=${encodeURIComponent(model)}`);
   if (!response.ok) {
@@ -138,20 +145,23 @@ function loadAnimations(): Promise<IfpAnimation[]> {
 
 async function loadCharacter(name: string, status: HTMLElement): Promise<void> {
   status.textContent = `loading ${name}…`;
-  let dff: ArrayBuffer;
-  let txd: ArrayBuffer;
-  let clips: IfpAnimation[];
   try {
-    [dff, txd, clips] = await Promise.all([fetchServer('dff', name), fetchServer('txd', name), loadAnimations()]);
+    // AFTER may be a converted build (`.osm`): try that first, fall back to the stock DFF+TXD.
+    const [osm, clips] = await Promise.all([fetchOsm(name), loadAnimations()]);
     await viewer.ready;
+    current?.dispose();
+    if (osm) {
+      current = loadPedFromOsm(viewer.engine, name, osm, clips);
+    } else {
+      const [dff, txd] = await Promise.all([fetchServer('dff', name), fetchServer('txd', name)]);
+      current = loadPed(viewer.engine, dff, [txd], clips);
+    }
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : String(error);
 
     return;
   }
 
-  current?.dispose();
-  current = loadPed(viewer.engine, dff, [txd], clips);
   if (!current) {
     status.textContent = `${name}: not skinned (no skeleton)`;
     polyLabel.textContent = '';
