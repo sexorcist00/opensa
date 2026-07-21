@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan 027 (`.claude/plans/027-hud-layer.md`), DONE. The HUD is **DOM/React over the `<canvas>`** (not in
+Plan 027 (`.claude/plans/027-hud-layer/readme.md`), DONE. The HUD is **DOM/React over the `<canvas>`** (not in
 the WebGL scene), so it's inherently immune to post-processing and trivial to hide.
 
 - `src/ui/hud/overlay.tsx` `Overlay` — full-screen fixed layer, `pointer-events:none`, **z 10**. The HUD

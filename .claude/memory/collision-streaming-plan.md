@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan: `.claude/plans/010-collision-streaming.md`. Make static map collision **stream per grid cell** (the render grid from [[world-streaming-plan]]) around the player, replacing the fixed Ganton zone built once at spawn (plan 008 / [[character-physics-plan]]). Cells gain Rapier static bodies when near, drop them when far → collision works everywhere the player drives.
+Plan: `.claude/plans/010-collision-streaming/readme.md`. Make static map collision **stream per grid cell** (the render grid from [[world-streaming-plan]]) around the player, replacing the fixed Ganton zone built once at spawn (plan 008 / [[character-physics-plan]]). Cells gain Rapier static bodies when near, drop them when far → collision works everywhere the player drives.
 
 **Reuses:** `buildCollisionIndex` (name→ColModel), `buildColliders` (bind by name, conjugated-quat, Z-up), `toModelColliders` (adapter DTO), `WorldGrid` (already built in the adapter for render), `cellsWithin` grid math. Physics stays GTA Z-up.
 

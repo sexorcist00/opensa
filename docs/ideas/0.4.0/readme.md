@@ -25,7 +25,7 @@ by opensa-pack). The idea's original sub-plan docs were absorbed there and delet
 
 Full rework of vanilla rendering toward modern-game visuals while preserving the SA prelit/night-vertex vibe — the T3 fork plan 038 left out of scope. Real building shadows (CSM + LOD shadow proxies), PBR sky with a 512×1 horizon LUT feeding fog/water, fog that actually cuts the horizon, realistic water, real headlight/street-lamp lights (coronas demoted to distant impostors), glowing tobj/night-vertex emissives, and an opensa-native asset step in perfect-map-builder (meshopt/KTX2 + baked sun-visibility/AO channels — no longer bound to DFF/TXD). Every stage lands behind a toggle with measured frame budgets; the default flips only at the end.
 
-**→ Promoted to working plans (2026-07-10): [docs/plans/062 — Rendering overhaul](../../plans/062-rendering-overhaul.md)** — the chain overview + the ten stage plans now live as `docs/plans/062–072` (foundations 063, hybrid lighting 064, shadows 065, pmb asset step 066, sky 067, fog 068, water 069, local lights 070, night 071, tiers/default-flip 072). Statuses tracked there.
+**→ Promoted to working plans (2026-07-10): [docs/plans/062 — Rendering overhaul](../../plans/062-rendering-overhaul/readme.md)** — the chain overview + the ten stage plans now live as `docs/plans/062–072` (foundations 063, hybrid lighting 064, shadows 065, pmb asset step 066, sky 067, fog 068, water 069, local lights 070, night 071, tiers/default-flip 072). Statuses tracked there.
 
 ## opensa-asi — our own limit-adjuster ASI
 

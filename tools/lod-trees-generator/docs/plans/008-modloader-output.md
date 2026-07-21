@@ -76,7 +76,7 @@ resolves `txdp` too (`asset-cache`), so the same mod works in both. The `txdp` m
 
 `--modloader` targets the **real game's `modloader.asi`** (the LOD Vegetation format). OpenSA's own `packages/modloader`
 currently only overrides `.dff`/`.txd` — not `loader.txt`/IPL/IDE — so these mods' defs/placements wouldn't load in
-OpenSA yet. **Next stage** — planned in [`docs/plans/058-modloader.md` "Extension"](../../../../docs/plans/058-modloader.md):
+OpenSA yet. **Next stage** — planned in [`docs/plans/058-modloader/readme.md` "Extension"](../../../../docs/plans/058-modloader/readme.md):
 extend the modloader decorator to detect the loader file (any name/depth), merge its `IDE`/`IPL` lines into
 `gta.dat`, and serve the files by basename; `resolveMap` + `setTxdParents` + `buildCollisionIndex` already do the
 rest, so the same `--modloader` output (`lod/`+`hd/`) loads in OpenSA.

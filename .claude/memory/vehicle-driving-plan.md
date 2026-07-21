@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan: `.claude/plans/017-vehicle-driving.md`. Drive the seated car with WSAD (arcade kinematic, not full Rapier vehicle). Builds on [[enter-vehicle-plan]] (seated state in `EnterVehicleSystem`) + [[vehicle-loading-plan]] (`VehicleRig` wheels) + parsed `handling.cfg` dict.
+Plan: `.claude/plans/017-vehicle-driving/readme.md`. Drive the seated car with WSAD (arcade kinematic, not full Rapier vehicle). Builds on [[enter-vehicle-plan]] (seated state in `EnterVehicleSystem`) + [[vehicle-loading-plan]] (`VehicleRig` wheels) + parsed `handling.cfg` dict.
 
 **Approach:** integrate scalar `speed` + `heading` from input each frame, mutate the car `object` transform (native Z-up, pos + rotation.z); teleport the seated player to the moving seat; `rig.setSpeed/setSteer`; hold `CAR_sit` facing the live heading (`setScripted` each frame — `AnimationController.play` no-ops on same clip). Folded into `EnterVehicleSystem` (owns seated state + keyboard/physics/body/animation/camera); needs `config.controls` + the car `object`/`rig` added to `EnterableVehicle`. **`driveState {pos, heading, speed}`** from `startSeated`; seat + EXIT read it (static `position`/`heading` = parked placement, used only for approach/open).
 

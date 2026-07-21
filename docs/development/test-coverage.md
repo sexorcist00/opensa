@@ -25,7 +25,7 @@ branches 77 — a small buffer below the achieved numbers, the repo's standing c
 deleted the three-WebGL renderer — a large, heavily unit-tested body of code — and `packages/engine`, the
 WebGPU renderer that replaced it, was effectively untested because it needs a GPU device. Coverage fell
 88.9 % → 72.3 % and the floors went red. The fix was NOT to lower them:
-[plan 077](../plans/077-unit-coverage.md) built a **device-independent seam** instead.
+[plan 077](../plans/077-unit-coverage/readme.md) built a **device-independent seam** instead.
 
 `packages/engine/src/test/fake-device.ts` is a recording stand-in for `GPUDevice` implementing the exact
 WebGPU surface the engine uses. `Engine.init()` runs against it unmodified — the engine's own `initDevice()`
@@ -113,4 +113,4 @@ separate from `npm test`; see `e2e.md`.)
 - v8 counts `.ts` files loaded during the run plus the `include` glob, so zero-coverage files still appear.
 - **Thresholds ARE enforced** (`vitest.config.ts` `coverage.thresholds`) — `npm run test:coverage` fails
   below them. The plan-046-era note that said "intentionally NOT gated yet" was superseded when the floors
-  were first armed, and re-armed at 86/86/88/77 by [plan 077](../plans/077-unit-coverage.md).
+  were first armed, and re-armed at 86/86/88/77 by [plan 077](../plans/077-unit-coverage/readme.md).

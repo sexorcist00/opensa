@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan 025 (`.claude/plans/025-vehicle-glass.md`), DONE. Fixes the RenderWare bug where car windows
+Plan 025 (`.claude/plans/025-vehicle-glass/readme.md`), DONE. Fixes the RenderWare bug where car windows
 (notably admiral) disappear at certain angles — the SilentPatch / SkyGFX two-sided two-pass alpha fix,
 ported to three.js.
 

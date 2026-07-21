@@ -1,5 +1,5 @@
 {
-  "note": "THE THREE-ERA BASELINE — the classic (pre-overhaul) WebGL pipeline, six bench scenes. Transcribed from the table in docs/plans/063-render-foundations-instrumentation.md (Measurements), which is where the narrative and caveats live. This is the row every later three-era comparison is expressed against.",
+  "note": "THE THREE-ERA BASELINE — the classic (pre-overhaul) WebGL pipeline, six bench scenes. Transcribed from the table in docs/plans/063-render-foundations-instrumentation/readme.md (Measurements), which is where the narrative and caveats live. This is the row every later three-era comparison is expressed against.",
   "engine": "three.js / WebGL2 (prod, classic pipeline)",
   "host": "M3 Pro, ANGLE -> Metal",
   "caveat": "GPU ms on this machine comes from EXT_disjoint_timer_query_webgl2 and is known to be coarse/unreliable on Apple Silicon — ocean-horizon reports GPU 18.39 against a 12.79 ms frame, which is physically impossible sustained. Treat the GPU column as indicative, not measured.",

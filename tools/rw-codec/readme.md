@@ -5,7 +5,7 @@ from map-optimizer so map-optimizer, opensa-lod-generator and vehicle-optimizer 
 importing each other). A leaf: depends on nothing (its tests read engine fixtures, but the source is standalone).
 
 On the Nx monorepo move it becomes `@opensa/rw-codec` (`tools/rw-codec`) — see
-[docs/plans/057](../docs/plans/057-nx-monorepo-migration.md).
+[docs/plans/057](../docs/plans/057-nx-monorepo-migration/readme.md).
 
 ## Modules (`rw-codec/src/`)
 

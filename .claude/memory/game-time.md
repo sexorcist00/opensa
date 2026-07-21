@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan 026 (`.claude/plans/026-game-time.md`), DONE — the foundation for timecyc (sky/sun later).
+Plan 026 (`.claude/plans/026-game-time/readme.md`), DONE — the foundation for timecyc (sky/sun later).
 
 - Time = minutes since midnight, float, wraps at 1440. `6:00 = 360`.
 - `Config.time.secondsPerGameMinute` (canvas-host = **1.5**): real seconds per game-minute (day = 36 real min); tunable.

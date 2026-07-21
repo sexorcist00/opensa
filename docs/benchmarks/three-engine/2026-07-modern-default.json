@@ -1,5 +1,5 @@
 {
-  "note": "The three-era MODERN default — the full 064-071 chain on, volumetric clouds off. Transcribed from docs/plans/072-quality-tiers-default-flip.md, which carries the cost attribution and the tier ladder this data drives. BEFORE columns are the classic baseline (see 2026-06-classic-baseline.json); the point of the table is that the modern pipeline cost 62-162% MORE frame time for 24-51% more draws — that is what the quality tiers were built to claw back.",
+  "note": "The three-era MODERN default — the full 064-071 chain on, volumetric clouds off. Transcribed from docs/plans/072-quality-tiers-default-flip/readme.md, which carries the cost attribution and the tier ladder this data drives. BEFORE columns are the classic baseline (see 2026-06-classic-baseline.json); the point of the table is that the modern pipeline cost 62-162% MORE frame time for 24-51% more draws — that is what the quality tiers were built to claw back.",
   "engine": "three.js / WebGL2 (prod, modern pipeline, clouds off)",
   "host": "M3 Pro, same machine and same 6 scenes as the classic baseline",
   "runs": [

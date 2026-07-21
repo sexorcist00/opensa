@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan: `.claude/plans/014-simple-water.md`. Render water from `static/data/water.dat` as a **flat textured surface** across the map, using `waterclear256` from `static/models/particle.txd`. **No water shader** (that's a much later task) — just a textured `MeshBasicMaterial` plane.
+Plan: `.claude/plans/014-simple-water/readme.md`. Render water from `static/data/water.dat` as a **flat textured surface** across the map, using `waterclear256` from `static/models/particle.txd`. **No water shader** (that's a much later task) — just a textured `MeshBasicMaterial` plane.
 
 **Verified everything is present:** `water.dat` = `processed` header + **307 quads**; each line = **4 (or 3) vertices × 7 floats** (`x y z` + 4 extra normal/flow) + a type flag → `vertexCount = (tokens−1)/7`; we use only the corner positions, `z` = water height (mostly 0 = sea, some lakes higher). `particle.txd` parses (34 textures, **all rgba8888**, supported); has **`waterclear256` 128×128** (the surface) + `waterwake`. Reuse `parseTxd`→`buildTextureMap` + the persistent **−90°X `streamingRoot`** to parent the mesh.
 

@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan 029 (`.claude/plans/029-graphics.md`) — "best picture, least cost"; timecyc-driven, **EXTRASUNNY_LA
+Plan 029 (`.claude/plans/029-graphics/readme.md`) — "best picture, least cost"; timecyc-driven, **EXTRASUNNY_LA
 only** this iteration. Decisions: post-FX lib = pmndrs **`postprocessing`** (added with godrays); **godrays
 = next iteration**; sky = timecyc gradient (not physical scattering).
 

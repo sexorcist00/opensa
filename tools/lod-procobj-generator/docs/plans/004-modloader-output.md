@@ -11,7 +11,7 @@ Vegetation for `txdp`).
 > **additively** (a mod can't remove a species by omission), so `--modloader` ships only **disable rows** — each
 > converted `(surface, model)` rule re-stated with `spacing = 1e999` (→ `Infinity` ⇒ zero scatter). The additive
 > merge replaces the stock rule by key, so the species stops scattering while stock species are kept. `--out` keeps
-> the whole-file strip (`convertProcObj({ disableScatter })` selects). See `docs/plans/058-modloader.md`.
+> the whole-file strip (`convertProcObj({ disableScatter })` selects). See `docs/plans/058-modloader/readme.md`.
 
 > **The generation is unchanged.** What models/textures/collision/placements get produced is identical — only the
 > **emit/packaging layer** changes (which files, which folders, `loader.txt` vs `gta.dat` patch). This is an
@@ -100,7 +100,7 @@ A for `--out`, B for `--modloader` — though for this tool A and B share the sa
 `--modloader` targets the **real game's `modloader.asi`** (the Project Props 4 format). OpenSA's own `packages/modloader`
 currently only overrides `.dff`/`.txd` — it does **not** read `loader.txt`/IPL/IDE/COLFILE, so these mods' _defs and
 placements_ wouldn't load in OpenSA yet. **Next stage** — planned in
-[`docs/plans/058-modloader.md` "Extension"](../../../../docs/plans/058-modloader.md): the modloader decorator
+[`docs/plans/058-modloader/readme.md` "Extension"](../../../../docs/plans/058-modloader/readme.md): the modloader decorator
 detects the loader file (any name/depth), merges its `IDE`/`IPL` lines into `gta.dat`, and serves files by basename
 (`.col` is auto-discovered, so no `COLFILE` needed); `resolveMap` loads the new defs + static IPL, so the same
 `lod/`+`hd/` output works in OpenSA.

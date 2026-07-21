@@ -616,4 +616,4 @@ must carry the baked-channel bits only. Show Normals and Show Collision are unto
 storage access.
 
 **Not yet measured.** The fps hypothesis above is reasoned from the usage flag, not benchmarked; the
-before/after belongs in [084](../084-vehicle-appearance.md) row 4 with a number next to it.
+before/after belongs in [084](../084-vehicle-appearance/readme.md) row 4 with a number next to it.

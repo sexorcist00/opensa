@@ -1,18 +1,19 @@
 # Plans index
 
-The map of planning docs across the repo. **Engine plans** live here (`docs/plans/NNN-*.md`, numbered); the
+The map of planning docs across the repo. **Engine plans** live here — one numbered folder per plan
+(`docs/plans/NNN-*/readme.md`, multi-part plans add sibling files inside their folder); the
 **offline tools** keep their own `docs/plans/` next to their code. Open questions and parked ideas live in
 [`../open-issues/`](../open-issues/) and [`../ideas/`](../ideas/).
 
-> The [Nx monorepo migration (plan 057)](./057-nx-monorepo-migration.md) will move each tool's `docs/` under
+> The [Nx monorepo migration (plan 057)](./057-nx-monorepo-migration/readme.md) will move each tool's `docs/` under
 > `tools/<name>/docs/` — update the links below when it lands.
 
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`084` (+ sub-plan folders 074, 078–083). Newest first:
+`001`–`084`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
 
-- **[084 — Vehicle appearance and dynamic-model lighting](./084-vehicle-appearance.md)** — the 2026-07-20
+- **[084 — Vehicle appearance and dynamic-model lighting](./084-vehicle-appearance/readme.md)** — the 2026-07-20
   field round: wheel-side/scale conventions and the flat dynamic indirect term SHIPPED (with measurements);
   open = night level vs the map, reflections (floor vs prod-style presets — DECISION NEEDED), AO for
   dynamics, and a 37 fps night capture. Peds share the row-B root.
@@ -29,7 +30,7 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 - **[080 — Cinematic camera](./080-cinematic-camera/readme.md)** — GTA V-feel follow camera: per-channel
   springs/lag, auto-center + look-ahead, collision whiskers, vehicle speed/FOV/drift framing, bob/shake,
   7 sub-plans + priority chain.
-- **[079 — One canonical build source, the dev-surface unification, and its docs](./079-canonical-build-source.md)**
+- **[079 — One canonical build source, the dev-surface unification, and its docs](./079-canonical-build-source/readme.md)**
   — every dev surface (lab, bench harness, viewers) reads ONE canonical build (`./build/perfect`), served in
   place (NOT copied into `public/`), via a new `http-dir` loader + the loading-MODE-selects-the-world fix +
   `buildTime`. Depends on [opensa-pack 003](../../tools/opensa-pack/docs/plans/003-game-shaped-output.md).
@@ -37,14 +38,14 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 - **[078 — Global bug fixing](./078-global-bug-fixing/readme.md)** — the umbrella ledger for the bugs the
   first FULL pmb map convert surfaced (2026-07-19, >1 h run): engine and tool fixes tracked in one place.
   **OPEN — awaiting the detailed bug report; runs before 079.**
-- **[077 — Unit coverage back to 85–90 %](./077-unit-coverage.md)** — the 074/13 teardown deleted heavily
+- **[077 — Unit coverage back to 85–90 %](./077-unit-coverage/readme.md)** — the 074/13 teardown deleted heavily
   unit-tested WebGL code and sank coverage 88.9 → 72.3 %. Recovered to **88.18 %** with a **device-independent
   seam**: a recording `GPUDevice` stand-in that boots the whole engine headlessly, no engine source touched.
   **DONE 2026-07-18.**
-- **[076 — Roadsign / billboard text](./076-roadsign-text.md)** — 2dfx type-7 text plates (roadsignfont glyph
+- **[076 — Roadsign / billboard text](./076-roadsign-text/readme.md)** — 2dfx type-7 text plates (roadsignfont glyph
   atlas, world-space) that prod renders and the own engine skips → blank boards. Bake into the cutout pipeline.
 
-- **[075 — Water body classes: SEA vs INLAND](./075-water-body-classes.md)** — split water.dat by height so
+- **[075 — Water body classes: SEA vs INLAND](./075-water-body-classes/readme.md)** — split water.dat by height so
   inland pools/reservoirs render calm (no swell/foam/spillover) while the ocean keeps its full dynamics.
 
 - **[074 — OpenSA engine](./074-opensa-engine/readme.md)** — own WebGPU-only framework + native formats
@@ -63,28 +64,28 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   `?webgpu/bundle/...` flags and engine changes stay in-tree for debugging until the own-framework work decides
   their fate.
 
-- **[062 — Rendering overhaul](./062-rendering-overhaul.md)** — **CLOSED 2026-07-21 (user triage): the whole
+- **[062 — Rendering overhaul](./062-rendering-overhaul/readme.md)** — **CLOSED 2026-07-21 (user triage): the whole
   062–072 chain is superseded by the own engine (074) — every effect was re-implemented there; no tail in
   these plans is actionable any more.** The "modern lighting" fork (chain umbrella,
   promoted from `ideas/0.4.0/02-rendering`): real sun on the prelit world without double-counting, CSM building
   shadows with LOD proxies, PBR sky + 512×1 horizon LUT, unified fog (horizon cut), Gerstner water, world-shader
   light pool (projected headlights), glowing night emissives, quality tiers + default flip. Stages:
-  [063 foundations/instrumentation](./063-render-foundations-instrumentation.md) ·
-  [064 hybrid lighting](./064-hybrid-world-lighting.md) · [065 shadows](./065-cascaded-shadows.md) ·
-  [066 pmb modern-asset tool](./066-pmb-modern-tool/readme.md) · [067 sky](./067-pbr-sky-clouds.md) ·
-  [068 fog](./068-unified-fog.md) · [069 water](./069-water.md) · [070 local lights](./070-local-lights.md) ·
-  [071 night](./071-night-emissive-atmosphere.md) · [072 tiers/flip](./072-quality-tiers-default-flip.md).
-- [061 — World-ready state](./061-world-ready-state.md) — boot reveal + teleport freeze driven by streaming
+  [063 foundations/instrumentation](./063-render-foundations-instrumentation/readme.md) ·
+  [064 hybrid lighting](./064-hybrid-world-lighting/readme.md) · [065 shadows](./065-cascaded-shadows/readme.md) ·
+  [066 pmb modern-asset tool](./066-pmb-modern-tool/readme.md) · [067 sky](./067-pbr-sky-clouds/readme.md) ·
+  [068 fog](./068-unified-fog/readme.md) · [069 water](./069-water/readme.md) · [070 local lights](./070-local-lights/readme.md) ·
+  [071 night](./071-night-emissive-atmosphere/readme.md) · [072 tiers/flip](./072-quality-tiers-default-flip/readme.md).
+- [061 — World-ready state](./061-world-ready-state/readme.md) — boot reveal + teleport freeze driven by streaming
   `settled()`.
-- [060 — Streaming smoothness](./060-streaming-smoothness.md) — warm-invisibly + atomic-appear cell pipeline.
-- [059 — Map car generators](./059-map-car-generators.md) — spawn the binary-IPL `CARS` section (SA's map-baked
+- [060 — Streaming smoothness](./060-streaming-smoothness/readme.md) — warm-invisibly + atomic-appear cell pipeline.
+- [059 — Map car generators](./059-map-car-generators/readme.md) — spawn the binary-IPL `CARS` section (SA's map-baked
   parked cars in gta3.img): parser + specific-model + random (popcycle/cargrp, B1 city approximation) all done
   (lazy LOD register, ground-snap on spawn), in-game verified; B2 per-zone fidelity + random colour pending.
-- [058 — Modloader](./058-modloader.md) — `modloader/` overlay (`AssetFileSystem` decorator): override vehicle
+- [058 — Modloader](./058-modloader/readme.md) — `modloader/` overlay (`AssetFileSystem` decorator): override vehicle
   dff/txd + merge their settings into vehicles.ide/handling.cfg/carcols.dat, no engine changes.
-- [057 — Nx monorepo migration](./057-nx-monorepo-migration.md)
-- [056 — Multi-game config](./056-multi-game-config.md)
-- [055 — Input sources / mobile controls](./055-input-sources-mobile-controls.md) · [054 — Asset cache revoke](./054-asset-cache-revoke.md) · [053 — Asset local loader](./053-asset-local-loader.md)
+- [057 — Nx monorepo migration](./057-nx-monorepo-migration/readme.md)
+- [056 — Multi-game config](./056-multi-game-config/readme.md)
+- [055 — Input sources / mobile controls](./055-input-sources-mobile-controls/readme.md) · [054 — Asset cache revoke](./054-asset-cache-revoke/readme.md) · [053 — Asset local loader](./053-asset-local-loader/readme.md)
 - …`001`–`052` in this folder.
 
 ## Tools (each ships its own plans)

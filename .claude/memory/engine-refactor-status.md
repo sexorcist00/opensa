@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Framework-agnostic engine refactor. Plan: `.claude/plans/006-engine-refactor.md`. Two layers: generic **`game`** (never imports renderware) + GTA-SA **`renderware`**, bridged only by `game/adapters` (eslint `no-restricted-imports` on `src/game/**` except `src/game/adapters/**`).
+Framework-agnostic engine refactor. Plan: `.claude/plans/006-engine-refactor/readme.md`. Two layers: generic **`game`** (never imports renderware) + GTA-SA **`renderware`**, bridged only by `game/adapters` (eslint `no-restricted-imports` on `src/game/**` except `src/game/adapters/**`).
 
 **Phases 0–5 — DONE (2026-06-05). R3F fully removed; the engine drives the render imperatively.** Only phase 6 (dynamics: COL → streaming/LOD → bitECS → Rapier) remains, each as its own follow-up plan.
 

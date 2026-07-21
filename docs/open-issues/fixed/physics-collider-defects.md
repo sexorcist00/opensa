@@ -1,7 +1,7 @@
 # Two `PhysicsWorld` collider defects (+2 smaller)
 
 **Status: ✅ ALL FOUR FIXED (2026-07-18), the same day they were found.** They surfaced while writing unit tests for
-previously untested code during [plan 077](../../plans/077-unit-coverage.md), were recorded here unpatched
+previously untested code during [plan 077](../../plans/077-unit-coverage/readme.md), were recorded here unpatched
 first (a coverage pass that also changes behaviour cannot tell you which change broke something), and
 were then fixed as a separate, self-contained commit. Kept as the record of what was wrong and why the
 fixes are shaped the way they are.

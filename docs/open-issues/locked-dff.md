@@ -166,5 +166,5 @@ Covered by `tests/custom/locked-models/yosemite.dff` (31 atomics / 31 geometries
   `16777228` while its real payload is 12 bytes; without `forEachClumpChild` `parseDff` returns an empty
   model and `parseDffCollision` returns `null` even though a `COL3` chunk is present near EOF.
 
-Related: [plan 015 — vehicle loading](../plans/015-vehicle-loading.md),
-[plan 043 — DFF/TXD completeness](../plans/043-dff-txd-completeness.md).
+Related: [plan 015 — vehicle loading](../plans/015-vehicle-loading/readme.md),
+[plan 043 — DFF/TXD completeness](../plans/043-dff-txd-completeness/readme.md).

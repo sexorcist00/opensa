@@ -1,5 +1,5 @@
 {
-  "note": "Field sweep 2026-07-20 pasted by the user into chat (NOT captured from a file). Same machine and same 841-car road population as the 07-18 baseline in series.md. Recorded here because it documents a large, unexplained regression - see docs/plans/084-vehicle-appearance.md row 4.",
+  "note": "Field sweep 2026-07-20 pasted by the user into chat (NOT captured from a file). Same machine and same 841-car road population as the 07-18 baseline in series.md. Recorded here because it documents a large, unexplained regression - see docs/plans/084-vehicle-appearance/readme.md row 4.",
   "runs": [
     {
       "key": "ls-noon",

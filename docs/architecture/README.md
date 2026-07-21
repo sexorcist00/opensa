@@ -16,7 +16,7 @@ re-render, commit both.
 
 ## Repository layout
 
-OpenSA is an **Nx + npm-workspaces monorepo** (see [plan 057](../plans/057-nx-monorepo-migration.md)). Every
+OpenSA is an **Nx + npm-workspaces monorepo** (see [plan 057](../plans/057-nx-monorepo-migration/readme.md)). Every
 package keeps only `package.json` (+ `readme`/`docs`) at its root and **all code lives in `<pkg>/src/`**.
 Cross-package imports go through the `@opensa/*` package name (subpath `exports` → `.ts`, no build step),
 never deep relative paths.

@@ -7,7 +7,7 @@
 (importers 122 → 0 · `node_modules` 512 → 455 MB · prod JS 5.4 → 2.88 MB · suite 289/1 815 green ·
 lint green · bench ritual PASS). Two items were left OPEN **on purpose** rather than silently resolved:
 the coverage floors (red for a structural reason — see 6.6/8.3) and the `flags.ts` question (decided
-against, 2.4). **The coverage item was RESOLVED the same day by [plan 077](../077-unit-coverage.md)** —
+against, 2.4). **The coverage item was RESOLVED the same day by [plan 077](../077-unit-coverage/readme.md)** —
 a device-independent seam (a recording `GPUDevice` stand-in), 72.29 → 88.18 %, floors re-armed, no engine
 source touched.
 
@@ -570,7 +570,7 @@ forecast — three forecast entries turned out differently and are marked:
       **Flagged for phase 8: the global thresholds (85 / 77) have been RED since phase 5** — the tested
       three code left, `packages/engine` arrived largely unit-untested. That is a threshold decision the
       close-out must make explicitly, not a phase-6 regression. **RESOLVED by
-      [plan 077](../077-unit-coverage.md)** (device-independent seam → 88.18 %, floors re-armed).
+      [plan 077](../077-unit-coverage/readme.md)** (device-independent seam → 88.18 %, floors re-armed).
       NOTE on the numbers: this row's 71.89 % and 077's 72.29 % baseline are DIFFERENT measurements, not
       a discrepancy — phases 7 and 8 deleted more untested code between them, which moved the denominator.
 

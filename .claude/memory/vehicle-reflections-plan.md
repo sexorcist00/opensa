@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan 030 (`.claude/plans/030-vehicle-reflections.md`) — give cars GTA-SA env-map reflections + specular.
+Plan 030 (`.claude/plans/030-vehicle-reflections/readme.md`) — give cars GTA-SA env-map reflections + specular.
 **ALL 4 PHASES DONE** (functionally complete). ⚠️ **Visual quality "so-so" (user 2026-06-08) — final
 calibration DEFERRED on purpose:** the user wants to lift the **overall scene** (lighting/shadows/grade)
 FIRST, then re-tune the cars against it. Don't keep micro-tuning reflection numbers in isolation; revisit

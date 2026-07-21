@@ -2,7 +2,7 @@
 
 `packages/loaders/src/` — standalone, framework-agnostic (no React, no `game`). Resolves the game's assets into the
 VFS behind one contract; the loader kind is chosen **per game** by its `assetLoader` in `GAME_CONFIG`
-(plan 056). Plans [049](../plans/049-asset-loader.md) (fetch) + [053](../plans/053-asset-local-loader.md)
+(plan 056). Plans [049](../plans/049-asset-loader/readme.md) (fetch) + [053](../plans/053-asset-local-loader/readme.md)
 (local + restructure).
 
 ## Layout

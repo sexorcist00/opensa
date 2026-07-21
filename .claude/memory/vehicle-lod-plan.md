@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan 021 (`.claude/plans/021-vehicle-lod.md`), DONE — finishes the vehicles with GTA-style distance LOD.
+Plan 021 (`.claude/plans/021-vehicle-lod/readme.md`), DONE — finishes the vehicles with GTA-style distance LOD.
 
 - `build-vehicle.ts`: `*_vlo` atomics (were skipped) now go into a hidden `lod` Group under `root`;
   `BuiltVehicle.lod` / `VehicleModel.lod` expose it (null if the model has no vlo).

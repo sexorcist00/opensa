@@ -42,7 +42,7 @@ and close the bookkeeping.
   English-only rule).
 - The superseded idea (`docs/ideas/0.4.0/plans/07-vehicle-physics/`) already points here; verify
   the 0.5.0/04 cross-reference and hand it the class-factor table location.
-- Doc sweep: `docs/plans/018-vehicle-physics.md` gains a banner pointing at this chain as the feel
+- Doc sweep: `docs/plans/018-vehicle-physics/readme.md` gains a banner pointing at this chain as the feel
   layer on top of its foundation; quirks ledger's final state recorded in the readme.
 - Memory/handoff update (outside the repo): shipped tuning philosophy, the gate verdict, what
   0.5.0/04 inherits.

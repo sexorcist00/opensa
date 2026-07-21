@@ -83,7 +83,7 @@ A completely separate animation mechanism from the animated map objects of B7·b
   DolSign's stepped flipbook works), applied as a shader variant:
   `vMapUv = vMapUv * uUvAnim.zw + uUvAnim.xy`. The `rotation`/`skew` params are parsed but unused — SA's
   assets do not need them.
-- Plan [041](../041-animated-map-objects.md) documented both mechanisms; the three path shipped both.
+- Plan [041](../041-animated-map-objects/readme.md) documented both mechanisms; the three path shipped both.
 
 ## What is missing
 

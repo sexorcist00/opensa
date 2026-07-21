@@ -119,7 +119,7 @@ reference row** (the measurement that proves nothing live was deleted); the `gpu
 uniformly high on a busy machine and is flagged as not-a-baseline in
 [series § 13·post-teardown ritual](../../benchmarks/opensa-engine/2026-07-18-series.md).
 
-**The one open decision the close-out left — RESOLVED the same day by [plan 077](../077-unit-coverage.md).**
+**The one open decision the close-out left — RESOLVED the same day by [plan 077](../077-unit-coverage/readme.md).**
 The teardown had sunk coverage 88.9 % → 72.3 % (71.9 % mid-teardown; the denominator kept moving as more untested code was deleted) (the deleted WebGL code was heavily unit-tested; the engine
 that replaced it needs a GPU) and the floors went red. The answer was NOT to lower them: 077 built a
 **device-independent seam** — `packages/engine/src/test/fake-device.ts`, a recording `GPUDevice`
@@ -389,8 +389,8 @@ signs — no new engine machinery: an IFP's bones ARE the clump's frames).
 
 **Standing debts before a parity sign-off:** vehicle paint (16) and map lighting (17) both look worse than
 prod today. Two field-found prod-parity gaps pulled OUT of this chain into their own plans (2026-07-15), BOTH
-SHIPPED + FIELD-CONFIRMED + CLOSED: [075 water SEA/INLAND classes](../075-water-body-classes.md) (inland pools
-calm + livelier ripple — no ocean waves/spillover) and [076 roadsign/billboard text](../076-roadsign-text.md)
+SHIPPED + FIELD-CONFIRMED + CLOSED: [075 water SEA/INLAND classes](../075-water-body-classes/readme.md) (inland pools
+calm + livelier ripple — no ocean waves/spillover) and [076 roadsign/billboard text](../076-roadsign-text/readme.md)
 (2dfx type-7 text plates welded as unlit beam text). B7·d procobj + breakable clutter (19, 20) now SHIPPED +
 FIELD-CONFIRMED. Back to the ladder: B6.5 map lighting (17) next.
 

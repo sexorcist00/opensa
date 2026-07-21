@@ -2,7 +2,7 @@
 
 [← chain](readme.md) · prev: [01 format](01-native-cell-format.md) · next: [03 shadows](03-baked-sun-occlusion-shadows.md)
 
-The biggest single frame-time lever in the chain. We are draw-call-bound — [072 measurements](../072-quality-tiers-default-flip.md)
+The biggest single frame-time lever in the chain. We are draw-call-bound — [072 measurements](../072-quality-tiers-default-flip/readme.md)
 show `ls-noon` at **14 454 draws** and the night scenes (`lv-night`, `ls-rain-night`) CPU-bound (frame ms ≫ GPU ms). The
 static world emits roughly one small draw per object/cell, exactly as DFF did. Merging that geometry at **build time** —
 which only a format we own can do cheaply — collapses thousands of tiny draws into dozens per cell.

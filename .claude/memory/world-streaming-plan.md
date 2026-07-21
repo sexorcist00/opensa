@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan: `.claude/plans/009-world-streaming-lod.md`. Render the map like GTA SA: full-detail (HD) models around the view, **LODs** ringing them, world split into **grid cells (squares)** that stream in/out as the view moves; **configurable draw distance** for HD models and for LODs. This is the **StreamingSystem** scaffolded in plan 006 (rides the `System` registry + player/camera view).
+Plan: `.claude/plans/009-world-streaming-lod/readme.md`. Render the map like GTA SA: full-detail (HD) models around the view, **LODs** ringing them, world split into **grid cells (squares)** that stream in/out as the view moves; **configurable draw distance** for HD models and for LODs. This is the **StreamingSystem** scaffolded in plan 006 (rides the `System` registry + player/camera view).
 
 **SA reference:** per-instance `drawDist` (IDE, we parse `IdeObjectDef.drawDistance`) + **LOD links** (`IplInstance.lod` = index of the LOD stand-in instance; LOD models are `lod`-prefixed = `isLodModel`, with large drawDist). HD culled when far → its LOD draws → far = nothing. `CWorld` buckets the world into a sector grid. (Memory streaming N/A — our WIMG archive is fully in RAM.)
 

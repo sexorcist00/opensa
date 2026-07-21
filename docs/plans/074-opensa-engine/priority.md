@@ -138,7 +138,7 @@ quad, size-is-a-diameter) — all five are written up in the 06 row 13 ledger.
 Tests: `renderware/fx/{bake-fx,sprites}.test.ts`, `apps/web/.../engine-particles.test.ts` (the axis swap),
 and the converter on the real SF fountain (`weld.test.ts`, new `dff/particles/fountain_sfw.*` fixture).
 OLD SCOPE (kept for the record):
-A REAL flip-parity gap, not a nice-to-have: prod renders these (plan [044](../044-world-effects.md),
+A REAL flip-parity gap, not a nice-to-have: prod renders these (plan [044](../044-world-effects/readme.md),
 `renderware/src/three/build-particles.ts`, `graphics.effects` config with a master toggle) and the map
 carries **113 type-1 entries** — 20 `WS_factorysmoke` columns, 8 fires, 6 fountains, vents, insects,
 waterfall mist. Our side is empty from the CONVERTER up: `weld.ts#collectLights` extracts type-0 (corona)
