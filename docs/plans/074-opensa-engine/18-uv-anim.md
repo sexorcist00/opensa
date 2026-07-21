@@ -1,6 +1,6 @@
 # 18 — UV-scroll animation (B7·c)
 
-**Status: SHIPPED + FIELD-CONFIRMED (2026-07-15) — CLOSED.** User verdict after reconvert: "все супер". Built
+**Status: SHIPPED + FIELD-CONFIRMED (2026-07-15) — CLOSED.** User verdict after reconvert: "everything is great". Built
 end-to-end via **option 1's cheaper cousin** —
 NOT a per-vertex slot (the vertex is a packed 36 B; growing it +11 % for a handful of signs was the wrong
 trade), and NOT a whole extra pass. Instead the scroller leaves the merged bundle exactly like a timed object:

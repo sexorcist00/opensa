@@ -1,7 +1,7 @@
 # 04 — Graphic improvements (shadows + street-lamp lighting)
 
 **STATUS: DRAFT bundle** — both members are parked ideas the user wants to think through properly later
-("мы позже хорошо над этим подумаем"); nothing here is scheduled or committed to a design.
+("we'll think it through properly later"); nothing here is scheduled or committed to a design.
 
 The common thread: both features were BUILT in some form during the 074 chain, field-tested, and removed
 by user decision — the current shipping engine is the deliberately simple, stable, fast version. This

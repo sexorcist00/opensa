@@ -3,7 +3,7 @@
 [← plans index](README.md) · prod source: `packages/renderware/src/three/build-roadsign.ts` (plan 042 item 5) ·
 engine home: [074/06](074-opensa-engine/06-world-effects-parity.md) · pattern precedent: [074/18 UV-scroll](074-opensa-engine/18-uv-anim.md)
 
-**Status: SHIPPED + FIELD-CONFIRMED (2026-07-15) — CLOSED.** User: "все супер". The glyph builder is now a
+**Status: SHIPPED + FIELD-CONFIRMED (2026-07-15) — CLOSED.** User: "everything is great". The glyph builder is now a
 shared three-free module; a global converter pre-pass buckets each roadsign by the cell of its WORLD position
 (deduped by model) and welds the glyph quads as **BEAM-class** geometry — unlit + full-bright (readable day AND
 night, the field bug), palette colour in the prelit, `roadsignfont` (particle.txd) as one texture-array layer.

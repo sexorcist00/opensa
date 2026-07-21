@@ -2,7 +2,7 @@
 
 [← plans index](README.md) · related: [069 water](069-water.md) · engine home: [074/06 row 12](074-opensa-engine/06-world-effects-parity.md)
 
-**Status: SHIPPED + FIELD-CONFIRMED (2026-07-15) — CLOSED.** User: inland water calm + livelier ("вода живее").
+**Status: SHIPPED + FIELD-CONFIRMED (2026-07-15) — CLOSED.** User: inland water calm + livelier ("water is livelier").
 Bake classifies each water.dat quad by height (z > 1 m ⇒ INLAND), carries a per-vertex class in `water.bin`
 (stride 16 → 20), and the `water` WGSL zeroes swell/surf/swash/foam for inland (+ a `calmRipple` normal so a
 still pool shimmers) while the sea path is untouched. pak-map reconverted: **2,895 INLAND verts / 61,946 SEA**

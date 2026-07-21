@@ -17,7 +17,7 @@ weight: two renderers to maintain, a debug-flag zoo, and heavyweight dependencie
 three-WebGL fallback**; the shipped app's minimum requirement becomes WebGPU (this supersedes flip
 criterion 4's "keep three-WebGL for non-WebGPU browsers" — revisit ONLY if usage data demands it).
 
-**GATE STATUS: OPENED by the user 2026-07-18** ("теперь мы должны полностью выпилить весь старый движок").
+**GATE STATUS: OPENED by the user 2026-07-18** ("now we must fully cut out the whole old engine").
 The comparison period declared on 2026-07-13 is over; `?engine=three` and everything behind it may now be
 deleted. This is the **C2** command the chain has been referring to.
 

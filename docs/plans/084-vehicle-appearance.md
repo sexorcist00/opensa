@@ -1,7 +1,7 @@
 # 084 — vehicle appearance and dynamic-model lighting
 
-**Status: OPENED 2026-07-20**, mid-field-round, by the user's verdict "у нас очень плохие дела с внешним
-видом авто". Two rows were diagnosed and shipped inside that same round and are recorded here as measured
+**Status: OPENED 2026-07-20**, mid-field-round, by the user's verdict "our vehicle appearance is in very bad
+shape". Two rows were diagnosed and shipped inside that same round and are recorded here as measured
 history; the rest are open and one of them needs a decision before any code.
 
 Scope: how a VEHICLE looks — geometry conventions, paint, reflections, and the lighting a dynamic model
@@ -90,7 +90,7 @@ made the loudest surfaces worse. Scalar and per-pixel — a sky-COLOURED version
 the 16-varying limit when passed per vertex and forced VERTEX visibility onto a fragment-only binding.
 `params.y` was neutral before this, so no colour is lost.
 
-User verdict: "стало значительно лучше, грани читаются, модель не такая светлая". Side effect: the car's
+User verdict: "got significantly better, edges read clearly, the model isn't as washed-out". Side effect: the car's
 average indirect drops roughly half, which narrows row 1 below without closing it.
 
 ---

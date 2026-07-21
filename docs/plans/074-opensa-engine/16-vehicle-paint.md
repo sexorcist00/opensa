@@ -334,11 +334,11 @@ read it before the next attempt.
 Field history compressed: v1 cost 110 → 60–70 fps at night on the real display (march at any distance +
 MSAA depth store every frame); tuning (near-field 45 u gate, 12 steps, capture every 2nd frame offset
 from the probe) brought it to 80–90 and a clean `?bench=all` display sweep (5/6 scenes vsync 120) — but
-free-roam night still dipped and a step-geometry bug ("бегущие полосы": step gap outgrowing the
+free-roam night still dipped and a step-geometry bug ("marching stripes": step gap outgrowing the
 thickness window at growth 1.5) burned trust. The shadow's own field round: bind-pose placement sank the
 decal under the road (physics settling) → needed a per-car physics raycast; the falloff knee had to sit
 at the sill line or the blob read as absent. Each fix worked, but the stack of caveats is exactly what
-"надо другой подход" means.
+"needs a different approach" means.
 
 **Constraints for the next attempt (so it starts ahead):** prod has NO SSR and no contact blob (its cars
 ground via CSM; its reflections are a sky-only cube probe) — both features are beyond-parity, so they

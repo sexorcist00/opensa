@@ -9,7 +9,7 @@ that track the moving sun — was built, produced unacceptable noon artifacts, a
 **The prerequisite that must be solved first is written in bold below; everything else already exists.**
 
 Related 2026-07-17 context: the plan-16 SSR + contact-shadow build was also rolled back the same cycle
-("другой подход на след итерацию") — vehicle/dynamic-entity shadows are an OPEN question this bundle
+("different approach for the next iteration") — vehicle/dynamic-entity shadows are an OPEN question this bundle
 should answer together with the static ones (prod grounds its cars via CSM; we deleted CSM by design).
 
 ## What was tried (the full 2026-07-12 record)

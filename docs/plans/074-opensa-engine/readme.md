@@ -105,7 +105,7 @@ order after 078 closes is **079 viewers/lab → full migration audit → merge `
 
 **THE TEARDOWN IS COMPLETE — [13 cleanup](13-cleanup.md) ran phases 1–8 in a day and `three` no longer
 exists in this repository.** The flip was decided in the morning ([10-flip-decision](10-flip-decision.md),
-user sign-off «паритет ок»), C2 followed, and the old stack came out package by package: the four asset
+user sign-off "parity ok"), C2 followed, and the old stack came out package by package: the four asset
 viewers ported onto `@opensa/engine` · the WebGL host + render path + `renderware/src/three/` (43 files)
 deleted · `@opensa/math` extracted with a parity suite captured from three@0.185.1 itself · seven
 three-era modules found to be **dead code the engine had already superseded** (the AnimationMixer triple,
@@ -168,7 +168,7 @@ All six bench scenes stayed vsync-locked 120 Hz through every step (series rows 
 the dn-blend bug prod had already fixed; exposure 0.25→prod 0.55; timecyc lowClouds/bottomClouds tint the
 whole deck both sides; night city glow + moon scatter + golden rims; night-glow FADE over the dusk hour;
 prod cirrus wisps UNDER the panorama — the skybox stays per the user). Night world un-blackened
-(`sunIndirect` night 0.4 → prod worldLight 0.7). **SKY v2 CLOSED — field-ACCEPTED 2026-07-17 («все супер»), six rounds in one day: (1) Hosek-Wilkie
+(`sunIndirect` night 0.4 → prod worldLight 0.7). **SKY v2 CLOSED — field-ACCEPTED 2026-07-17 ("everything is great"), six rounds in one day: (1) Hosek-Wilkie
 replaces Preetham inside the sky LUT (the fit ran an INVERTED noon gradient, double-compressed by
 Reinhard-then-ACES; verbatim BSD-3 reference port, linear HDR, `?sky=preetham` A/B) → (2) the painted
 panorama RETIRED (byte analysis: a ~0.45-alpha grey veil over the whole dome buried any radiance model;
@@ -185,8 +185,8 @@ through the driver (`weatherBlend` getter + `lerpCloudProfiles`) — smooth 6 s 
 Full history in the [06 ledger row 4](06-world-effects-parity.md); cost points in
 [bench/series.md](../../benchmarks/opensa-engine/2026-07-18-series.md) § Sky v2. FOG (the user's pre-C1 arc #2) = **plan
 [21](21-fog-draw-distance.md): P1 (fog ⊂ LOD-ring invariant + `?draw=` knob + distance cull) and P2
-(clouds composite into the fog colour) both FIELD-ACCEPTED 2026-07-17 across two rounds («подгрузки
-почти незаметны» → «все супер»), including the round-2 fixes: cutout fog no longer scales by texel.a
+(clouds composite into the fog colour) both FIELD-ACCEPTED 2026-07-17 across two rounds ("streaming pop-in
+is almost unnoticeable" → "everything is great"), including the round-2 fixes: cutout fog no longer scales by texel.a
 (ghost tree outlines) and the VEHICLE-MODEL BUILD WORKER (the ~170 ms new-car-type freeze — the
 plan-060 dff-parse.worker pattern). P3 (adaptive 2-create + velocity prefetch + `lateCreates` metric +
 the residency diagnosis: texture arrays, not cells) SHIPPED and FIELD-ACCEPTED the same day — user rode
@@ -202,7 +202,7 @@ The driver now ships prod's term verbatim (`(0.34,0.44,0.72) × band.moon × moo
 night.skylight × 0.5` — this is also where prod's `night.skylight` reaches the world); the disc keeps its
 arc, `moonFor` rescaled so the shipped disc look is untouched. Details in the [06 ledger row 6].
 
-**Night arc CLOSED — field-ACCEPTED 2026-07-16 ("выглядит отлично") + benched (series 06·night-rounds).**
+**Night arc CLOSED — field-ACCEPTED 2026-07-16 ("looks great") + benched (series 06·night-rounds).**
 Four rounds total: prod moonlight band term (+ `night.skylight` reaches the world through it) → deep-night
 normalization to prod's fixed-5° moon geometry → moon-park/sun-park continuity (the 19:59 azimuth teleport,
 the 20:45 pbrNight step) → ~8-game-minute horizon eases on the three hard `sunDir.y > 0` gates (godrays +
@@ -237,7 +237,7 @@ Full tables in [bench/series.md](../../benchmarks/opensa-engine/2026-07-18-serie
 
 **Plan 16 steps 3+6 BUILT AND ROLLED BACK (2026-07-17, user decision):** vehicle SSR (history-reproject
 march) + contact blob shadows went through a full build + three field rounds in one day (night fps
-110→60–70 → tuned to a clean 5/6-scene display sweep; "бегущие полосы" step-geometry bug; the decal
+110→60–70 → tuned to a clean 5/6-scene display sweep; "marching stripes" step-geometry bug; the decal
 sinking under the road until a physics raycast placed it) — and the user called it: the stack worsened
 the experience; a DIFFERENT approach next iteration; today stays the simple stable fast version. The
 code is fully reverted; what survived the day: the translucent SORT fix (centroid − bounding radius —
@@ -316,7 +316,7 @@ unbudgeted) in [bench/series.md](../../benchmarks/opensa-engine/2026-07-18-serie
 user — verdict pending. **The flip's performance case is CLOSED.**
 
 **② THE FLIP IS DECIDED — 2026-07-18. [10-flip-decision.md](10-flip-decision.md).** The OpenSA WebGPU
-engine is the shipping renderer; the user signed off parity («паритет ок») on the pre-flip sweep. All
+engine is the shipping renderer; the user signed off parity ("parity ok") on the pre-flip sweep. All
 four live criteria PASS (perf by 2×, parity, 30-min Chrome soak, WebGPU boot gate); criterion 5 (073
 flag disposition) rides C2 by construction. **C2 STAYS GATED** — the three-WebGL path remains in the
 tree behind `?engine=three` as the comparison rollback until the user's explicit deletion command. The

@@ -196,8 +196,8 @@ mouse looks)`.
 - [x] 7.2 Series row written (with the honest tail: the residual 20–54 ms hitches are Rapier step time at
       ~1 000 bodies / 5 378 colliders, not the renderer; one 22.8 ms collision-cell spike; residency
       ≈1.6–1.7 GB at 2× with 841 cars). Bucket D stays a POST-FLIP batch for the user to pick from.
-- [x] 7.3 **Remind the user: parity screenshots → THE FLIP.** Done — the user signed parity off («паритет
-      ок») and [10-flip-decision](10-flip-decision.md) was written 2026-07-18; C2 followed the same day.
+- [x] 7.3 **Remind the user: parity screenshots → THE FLIP.** Done — the user signed parity off ("parity
+      ok") and [10-flip-decision](10-flip-decision.md) was written 2026-07-18; C2 followed the same day.
 
 ---
 

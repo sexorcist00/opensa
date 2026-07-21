@@ -32,7 +32,7 @@ it is not.
 4. ~~Prod fallback: non-WebGPU browsers keep the three-WebGL path untouched; the loader picks per
    capability.~~ **REPLACED 2026-07-17 (user decision, final): the game is WebGPU-FIRST — no dual-renderer
    support.** Non-WebGPU browsers get a clear "sorry, your hardware/browser doesn't support WebGPU"
-   screen instead of a fallback renderer ("иначе придётся две версии поддерживать — не стоит оно того").
+   screen instead of a fallback renderer ("otherwise we'd have to maintain two versions — not worth it").
    This reaffirms plan 13's 2026-07-12 supersession of the old criterion; the "loader" therefore shrinks
    to a boot GATE: `navigator.gpu` + adapter → the engine host, else the message. The three-WebGL path's
    only remaining role is the post-flip comparison period until the C2 deletion command.
@@ -143,7 +143,7 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
       late 0, longTasks 0, slow 3/27010. The FORMAL 30-min Chrome+Safari runs are the C1 item below.
 - [x] **Bench + soak + parity sweeps; the flip decision doc — DONE 2026-07-18: the FLIP IS DECIDED.**
       See [10-flip-decision.md](10-flip-decision.md). Criteria 1 (PASS by 2× — engine 119.6–120.3 fps
-      vsync-locked vs prod 16.2–37.8 on land), 2 (PASS — user's parity round, «паритет ок», on the build
+      vsync-locked vs prod 16.2–37.8 on land), 2 (PASS — user's parity round, "parity ok", on the build
       carrying the 07-18 fog/night fix batch), 3 (PASS rescoped — 30-min Chrome soak all 8 checks green;
       Safari declared not relevant), 4 (PASS — the WebGPU boot gate replaced the fallback criterion).
       Criterion 5 rides C2 by construction. C2 ([13](13-cleanup.md)) STAYS GATED — `?engine=three`
