@@ -53,6 +53,10 @@ export interface OspakInput {
 }
 
 export interface OspakManifest {
+  /** Wall-clock build time stamped by opensa-pack (`HH:mm DD-MM-YYYY`, local) — shown in the debugger so the
+   *  running pak version is visible at a glance. Absent for a pak built before the field existed. It makes
+   *  `manifest.json` non-reproducible by design (the pak `world.ospak` stays byte-identical). */
+  buildTime?: string;
   /** Byte size of the pak file (sanity for range readers). */
   byteLength: number;
   /** Cell entries: `"x,y,hd"` / `"x,y,lod"` → range + the texture arrays the cell draws with. */

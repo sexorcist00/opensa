@@ -92,6 +92,7 @@ export function App(): ReactElement {
               fs={boot.fs}
               gameId={boot.state.game}
               onWorldReady={boot.worldReady}
+              pakSource={boot.pakSource}
               paused={phase === 'paused'}
             />
           </div>

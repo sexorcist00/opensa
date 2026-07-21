@@ -100,6 +100,17 @@ export class AssetLocalLoader implements AssetLoader {
   }
 
   /**
+   * Open a world-pak file from the picked install's `opensa/` folder — the folder-mode pak source. This is
+   * what makes the loading MODE select the world: a folder pick renders the pak inside that folder, never the
+   * app's `public/`. Absent file ⇒ null, so the streaming setup fails loudly instead of falling back.
+   */
+  async openWorld(name: string): Promise<Blob | null> {
+    const { source } = await this.ensure();
+
+    return source.openLoose(`opensa/${name.toLowerCase()}`);
+  }
+
+  /**
    * The gesture-bound folder step — called from the Play click. Uses the boot-restored handle (so the picker /
    * permission request is the first await and keeps the user activation). A denied/cancelled prompt rejects;
    * the stored handle is forgotten so the next click prompts afresh.

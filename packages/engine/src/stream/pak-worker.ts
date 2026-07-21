@@ -12,6 +12,9 @@ import { decodeOswire, type OspakWireEnc, rebuildOscell } from '@opensa/engine-f
 import { MeshoptDecoder } from 'meshoptimizer/decoder';
 
 export interface PakWorkerRequest {
+  /** Folder mode (074/10 pak-source fix): the picked install's `world.ospak` as a disk-backed Blob. `slice()`
+   *  reads ranges off disk in the worker, so the multi-GB pak never loads whole and never touches main. */
+  blob?: Blob;
   /** Wire encoding of the entry (074/10 A1) — the worker decodes before transfer. */
   enc?: OspakWireEnc;
   key?: string;
@@ -26,11 +29,12 @@ export interface PakWorkerResponse {
   error?: string;
   key: string;
   /** Which IO mode init picked (surfaced to the HUD/logs). */
-  mode?: 'range' | 'whole';
+  mode?: 'local' | 'range' | 'whole';
   type: 'blob' | 'ready';
 }
 
 let pak: null | Uint8Array = null;
+let pakBlob: Blob | null = null;
 let pakUrl = '';
 let rangeMode = false;
 
@@ -53,9 +57,18 @@ async function init(url: string): Promise<void> {
   self.postMessage({ key: '', mode: 'whole', type: 'ready' } satisfies PakWorkerResponse);
 }
 
+/** Folder mode: the pak is a local Blob (a File handle). No probe — `slice()` ranges it straight off disk. */
+function initLocal(blob: Blob): void {
+  pakBlob = blob;
+  self.postMessage({ key: '', mode: 'local', type: 'ready' } satisfies PakWorkerResponse);
+}
+
 async function serve(key: string, offset: number, length: number, enc?: OspakWireEnc): Promise<void> {
   let buffer: ArrayBuffer;
-  if (rangeMode) {
+  if (pakBlob) {
+    // Folder mode: slice the disk-backed Blob — the range read happens in the worker, off disk.
+    buffer = await pakBlob.slice(offset, offset + length).arrayBuffer();
+  } else if (rangeMode) {
     const response = await fetch(pakUrl, { headers: { Range: `bytes=${offset}-${offset + length - 1}` } });
     if (response.status !== 206) {
       throw new Error(`range fetch ${response.status} (server stopped honouring Range?)`);
@@ -84,14 +97,21 @@ async function serve(key: string, offset: number, length: number, enc?: OspakWir
 
 self.onmessage = (event: MessageEvent<PakWorkerRequest>): void => {
   const message = event.data;
-  if (message.type === 'init' && message.url) {
-    init(message.url).catch((error: unknown) => {
-      self.postMessage({
-        error: error instanceof Error ? error.message : String(error),
-        key: '',
-        type: 'ready',
-      } satisfies PakWorkerResponse);
-    });
+  if (message.type === 'init') {
+    if (message.blob) {
+      initLocal(message.blob);
+
+      return;
+    }
+    if (message.url) {
+      init(message.url).catch((error: unknown) => {
+        self.postMessage({
+          error: error instanceof Error ? error.message : String(error),
+          key: '',
+          type: 'ready',
+        } satisfies PakWorkerResponse);
+      });
+    }
 
     return;
   }

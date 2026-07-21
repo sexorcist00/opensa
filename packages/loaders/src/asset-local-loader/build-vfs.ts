@@ -36,6 +36,9 @@ export interface InstallSource {
   readonly gtaInt: LazyImgArchive | null;
   /** Loose file paths, lowercased + `/`-joined relative, EXCLUDING the model/anim archives. */
   looseFiles(): Promise<string[]>;
+  /** Open a file as a Blob (a File handle — `slice()` reads ranges off disk, no whole read), or null when
+   *  absent. The world pak reads its bytes this way in folder mode, so the multi-GB pak never loads whole. */
+  openLoose(path: string): Promise<Blob | null>;
   /** Raw bytes of a loose file. */
   readLoose(path: string): Promise<Uint8Array>;
   /** UTF-8 text of a loose file (IDE/IPL). */

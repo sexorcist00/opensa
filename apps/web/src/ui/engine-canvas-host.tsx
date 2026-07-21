@@ -11,7 +11,14 @@ import type { LookDirectionSource } from '@opensa/game/character/character-contr
 import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 import type { ReactElement } from 'react';
 
-import { type DebugLineSetId, Engine, setupStreaming, type StreamStats } from '@opensa/engine';
+import {
+  type DebugLineSetId,
+  Engine,
+  type LocalPakSource,
+  type PakSource,
+  setupStreaming,
+  type StreamStats,
+} from '@opensa/engine';
 import {
   createEngineEnvironmentDriver,
   DEFAULT_DRAW_DISTANCE,
@@ -77,6 +84,9 @@ interface EngineCanvasHostProps {
   fs: AssetFileSystem;
   gameId: GameId;
   onWorldReady?: () => void;
+  /** Folder mode: the picked install's world-pak source (opensa/ inside it). null/absent ⇒ HTTP mode, world
+   *  from `?src=` or `public/pak-map`. The loading MODE selects the world — folder mode never reads public. */
+  pakSource?: LocalPakSource | null;
   paused?: boolean;
 }
 
@@ -108,9 +118,15 @@ let booted: null | Promise<void> = null;
 /** The HudGame the boot closure builds (module scope — survives StrictMode's dev double-mount). */
 let hudGameRef: HudGame | null = null;
 /** The F2 debugger's surfaces (074/22), built by the same boot closure. */
-let debugRef: null | { actions: DebugActions; game: DebugGame; mapGame: MapGame } = null;
+let debugRef: null | { actions: DebugActions; buildTime?: string; game: DebugGame; mapGame: MapGame } = null;
 
-export function EngineCanvasHost({ fs, gameId, onWorldReady, paused = false }: EngineCanvasHostProps): ReactElement {
+export function EngineCanvasHost({
+  fs,
+  gameId,
+  onWorldReady,
+  pakSource = null,
+  paused = false,
+}: EngineCanvasHostProps): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hudGame, setHudGame] = useState<HudGame | null>(hudGameRef);
   const [debug, setDebug] = useState(debugRef);
@@ -131,7 +147,7 @@ export function EngineCanvasHost({ fs, gameId, onWorldReady, paused = false }: E
     if (!canvas) {
       return;
     }
-    booted ??= boot(canvas, fs, gameId, onWorldReady).catch((error: unknown) => {
+    booted ??= boot(canvas, fs, gameId, pakSource, onWorldReady).catch((error: unknown) => {
       // eslint-disable-next-line no-console -- boot failures must surface somewhere visible in dev
       console.error('[engine-host] boot failed', error);
     });
@@ -139,7 +155,7 @@ export function EngineCanvasHost({ fs, gameId, onWorldReady, paused = false }: E
       setHudGame(hudGameRef);
       setDebug(debugRef);
     });
-  }, [fs, gameId, onWorldReady]);
+  }, [fs, gameId, pakSource, onWorldReady]);
 
   function capture(): void {
     // Newer browsers return a Promise that can reject (denied / unsupported); swallow it either way.
@@ -159,6 +175,7 @@ export function EngineCanvasHost({ fs, gameId, onWorldReady, paused = false }: E
       {debug ? (
         <DebugOverlay
           actions={debug.actions}
+          buildTime={debug.buildTime}
           capabilities={ENGINE_DEBUG_CAPABILITIES}
           game={debug.game}
           mapGame={debug.mapGame}
@@ -206,6 +223,7 @@ async function boot(
   canvas: HTMLCanvasElement,
   fs: AssetFileSystem,
   gameId: GameId,
+  pakSourceProp: LocalPakSource | null,
   onWorldReady?: () => void,
 ): Promise<void> {
   const params = new URLSearchParams(window.location.search);
@@ -261,7 +279,12 @@ async function boot(
   // SA corona billboards (B6): coronastar for lamps/headlights, coronamoon for the moon. They must exist
   // BEFORE the first cell loads — the frame bind group is baked into every cell bundle.
   await engine.init(canvas, loadCoronaSprites(fs));
-  const setup = await setupStreaming(engine, `/${params.get('src') ?? 'pak-map'}`, { lodRadius: drawDistance });
+  // The loading MODE selects the world (pak-source fix): folder mode reads the pak from the picked install's
+  // opensa/ folder; HTTP mode keeps the URL (?src= or public/pak-map). A folder with no opensa/manifest.json
+  // fails loudly in setupStreaming — it must NEVER fall back to public (that silent fallback made every
+  // folder-based measurement read whatever sat in public/, regardless of the pick).
+  const pakSource: PakSource = pakSourceProp ?? `/${params.get('src') ?? 'pak-map'}`;
+  const setup = await setupStreaming(engine, pakSource, { lodRadius: drawDistance });
   // Environment drive (074/10 config-API parity): the SHARED config→Environment driver — real timecyc
   // colours, sun/moon arcs built dynamically from config night.litFade, prod graphics tunables (sky mood,
   // cloud opacity, moon brightness, godrays, fog timecycScale) live on.
@@ -298,7 +321,7 @@ async function boot(
     // eslint-disable-next-line no-console -- field-iteration feedback (which weather id is on screen)
     console.log(`[engine-host] weather ${liveWeather()}`);
   });
-  void installWater(engine, fs, setup.water, `/${params.get('src') ?? 'pak-map'}`);
+  void installWater(engine, fs, setup.water, pakSource);
 
   // Physics + collision streaming (REUSED, pure): the adapter prepares the map defs once, then streams
   // COL cells around the player on the game's own 256-unit grid (independent of the pak's render grid).
@@ -860,6 +883,7 @@ async function boot(
       vehicleModels: () => vehicleModels,
       weather: liveWeather,
     }),
+    ...(setup.buildTime !== undefined ? { buildTime: setup.buildTime } : {}),
     game: { events },
     // The Map screen (074/22 phases 7-8). Picking rides the `.oscell` placement mapper (minor 6): a pak
     // converted before it simply yields no hits, which the inspector reports rather than pretending.
@@ -1314,14 +1338,19 @@ async function installWater(
   engine: Engine,
   fs: AssetFileSystem,
   water: undefined | { file: string; indexCount: number; vertexCount: number },
-  baseUrl: string,
+  source: PakSource,
 ): Promise<void> {
   const ripple = loadWaterTexture(fs, 'waterclear256');
   const foam = loadWaterTexture(fs, 'waterwake');
   if (water) {
-    const response = await fetch(`${baseUrl}/${water.file}`);
-    if (response.ok) {
-      const bin = new Uint8Array(await response.arrayBuffer());
+    // The baked water.bin rides the SAME source as the pak — the picked folder in folder mode, the URL base
+    // otherwise — so the map viewer and the game agree on which world they render.
+    const bytes =
+      typeof source === 'string'
+        ? await fetch(`${source}/${water.file}`).then((response) => (response.ok ? response.arrayBuffer() : null))
+        : await source.open(water.file).then((blob) => (blob ? blob.arrayBuffer() : null));
+    if (bytes) {
+      const bin = new Uint8Array(bytes);
       const view = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
       const vertexCount = view.getUint32(0, true);
       const indexCount = view.getUint32(4, true);

@@ -252,12 +252,16 @@ const PROCOBJ_CATEGORIES: readonly ProcObjCategory[] = [
  */
 export function DebugOverlay({
   actions,
+  buildTime,
   capabilities = ALL_DEBUG_CAPABILITIES,
   game,
   mapGame,
   teleports,
 }: {
   actions: DebugActions;
+  /** The pak's build time (opensa manifest `buildTime`) — a grey stamp under the title so the running pak
+   *  version is visible. Absent for a pak built before the field existed. */
+  buildTime?: string;
   /** Which controls this host can honour; defaults to everything. */
   capabilities?: DebugCapabilities;
   game: DebugGame;
@@ -389,6 +393,7 @@ export function DebugOverlay({
         ×
       </button>
       <div style={styles.title}>DEBUG</div>
+      <BuildStamp buildTime={buildTime} />
 
       {screen === 'root' ? (
         <div style={styles.group}>
@@ -1286,6 +1291,11 @@ export function DebugOverlay({
       )}
     </div>
   );
+}
+
+/** The pak build-time stamp under the title — a small grey line, or nothing when the pak predates the field. */
+function BuildStamp({ buildTime }: { buildTime?: string }): null | ReactElement {
+  return buildTime ? <div style={styles.buildTime}>build {buildTime}</div> : null;
 }
 
 /** The Map debug screen: normals override + the map viewer (extracted to keep the panel's render simple). */

@@ -31,6 +31,7 @@ function source(overrides: Partial<InstallSource> = {}): InstallSource {
     gta3,
     gtaInt: null,
     looseFiles: () => Promise.resolve(Object.keys(loose)),
+    openLoose: () => Promise.resolve(null),
     readLoose: (path) => Promise.resolve(new TextEncoder().encode(loose[path])),
     readLooseText: (path) => Promise.resolve(loose[path] ?? ''),
     ...overrides,

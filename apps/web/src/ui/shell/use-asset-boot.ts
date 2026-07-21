@@ -1,3 +1,4 @@
+import type { LocalPakSource } from '@opensa/engine';
 import type { AssetLoader, ProgressSnapshot } from '@opensa/loaders';
 import type { AssetFileSystem } from '@opensa/renderware';
 
@@ -30,6 +31,9 @@ export interface AssetBoot {
   disclaimerAccepted: boolean;
   /** The asset file system the game reads from (filled as the load completes). */
   fs: AssetFileSystem;
+  /** Folder mode: the picked install's world-pak source (opensa/ inside it). null in HTTP/fetch mode, so the
+   *  host loads the world over HTTP. This is what makes the loading MODE select the world. */
+  pakSource: LocalPakSource | null;
   pause: () => void;
   /** Active-load progress, 0–100. */
   percent: number;
@@ -84,6 +88,19 @@ export function useAssetBoot(): AssetBoot {
 
     return loaded ? withModloader(vfs) : vfs;
   }, [session, fallbackVfs, loaded]);
+
+  // Folder mode selects the world: a loader that can open its install's `opensa/` pak (the local loader)
+  // becomes the world source. The fetch loader has no `openWorld`, so this stays null and the host loads over
+  // HTTP. Only once loaded — `openWorld` needs the folder acquired + scanned.
+  const pakSource = useMemo<LocalPakSource | null>(() => {
+    const loader = session?.loader;
+    if (!loaded || !loader?.openWorld) {
+      return null;
+    }
+    const open = loader.openWorld.bind(loader);
+
+    return { open };
+  }, [session, loaded]);
 
   // Stream active-load progress into state.
   useEffect(() => session?.loader.events.on('progress', setSnapshot), [session]);
@@ -179,6 +196,7 @@ export function useAssetBoot(): AssetBoot {
     disclaimer: state.game ? GAME_CONFIG[state.game].disclaimer : null,
     disclaimerAccepted: state.game ? isDisclaimerAccepted(state.game) : false,
     fs,
+    pakSource,
     pause: useCallback((): void => dispatch({ type: 'PAUSE' }), []),
     percent: toPercent(snapshot),
     play: useCallback((game: GameId): void => {

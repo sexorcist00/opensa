@@ -55,6 +55,13 @@ export async function browserInstallSource(dir: FileSystemDirectoryHandle): Prom
     gta3,
     gtaInt,
     looseFiles: () => Promise.resolve(loose),
+    // The File is a disk-backed Blob — `slice()` reads ranges lazily (the pak worker's range mode over a
+    // local file). Paths are indexed lowercased, so callers pass lowercased keys (e.g. `opensa/world.ospak`).
+    openLoose: async (path): Promise<Blob | null> => {
+      const handle = handles.get(path);
+
+      return handle ? await handle.getFile() : null;
+    },
     readLoose,
     readLooseText: async (path) => new TextDecoder().decode(await readLoose(path)),
   };

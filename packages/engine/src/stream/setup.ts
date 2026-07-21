@@ -11,7 +11,22 @@ import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
 
 import { StreamingDriver, type StreamingRadii } from './streaming';
 
+/**
+ * A picked-folder pak source (folder mode): opens `manifest.json` / `world.ospak` / `water.bin` as disk-backed
+ * Blobs from the install's `opensa/` folder. `null` ⇒ the file is absent, and the caller fails loudly rather
+ * than silently reading the app's `public/` (the pak-source bug: the loading MODE must select the world).
+ */
+export interface LocalPakSource {
+  open(name: string): Promise<Blob | null>;
+}
+
+/** Where the world pak lives: a URL base (HTTP/fetch mode) or a picked-folder source (folder mode). */
+export type PakSource = LocalPakSource | string;
+
 export interface StreamSetup {
+  /** When the pak was built (opensa-pack manifest `buildTime`, `HH:mm DD-MM-YYYY`) — the debugger shows it so
+   *  the running pak version is visible. Absent for a pak converted before the field existed. */
+  buildTime?: string;
   /** The pak's cell grid pitch (world units) — the map inspector's grid maths, and the truth over the
    *  runtime config's copy, which a pak converted at another size would contradict. */
   cellSize: number;
@@ -24,25 +39,19 @@ export interface StreamSetup {
 
 export async function setupStreaming(
   engine: Engine,
-  baseUrl = '/pak',
+  source: PakSource = '/pak',
   radii: StreamingRadii = {},
 ): Promise<StreamSetup> {
-  const manifestResponse = await fetch(`${baseUrl}/manifest.json`);
-  // `ok` alone does not mean a pak lives here: a dev server answers an unknown non-asset path with its SPA
-  // `index.html` at HTTP 200, so the guard passed and `.json()` failed on the markup instead — the useless
-  // `SyntaxError: Unexpected token '<', "<!doctype "...`. Sniff the body so the actionable message survives.
-  const body = manifestResponse.ok ? await manifestResponse.text() : '';
-  if (!manifestResponse.ok || body.trimStart().startsWith('<')) {
-    throw new Error(
-      `no pak at ${baseUrl}/manifest.json — point the dev server's public dir at an opensa-pack output ` +
-        `(the pmb 'opensa' target), or pass ?src=<dir> for one served elsewhere`,
-    );
-  }
-  const manifest = JSON.parse(body) as OspakManifest;
+  const manifest = await loadManifest(source);
   validateOspakManifest(manifest);
   // UV-scroll animations (B7·c / plan 074/18): global by dict name, advanced engine-side; kind-4 draws slot in.
   engine.setUvAnimations(manifest.uvAnimations ?? []);
 
+  // Folder mode hands the worker the pak Blob (read off disk); HTTP mode hands it the `world.ospak` URL.
+  const pakInit: PakWorkerRequest =
+    typeof source === 'string'
+      ? { type: 'init', url: `${source}/world.ospak` }
+      : { blob: await openLocal(source, 'world.ospak'), type: 'init' };
   const worker = new Worker(new URL('./pak-worker.ts', import.meta.url), { type: 'module' });
   await new Promise<void>((resolve, reject) => {
     worker.addEventListener(
@@ -58,7 +67,7 @@ export async function setupStreaming(
       },
       { once: true },
     );
-    worker.postMessage({ type: 'init', url: `${baseUrl}/world.ospak` } satisfies PakWorkerRequest);
+    worker.postMessage(pakInit);
   });
 
   // Texture arrays up-front — ONLY for a pak that does not say which cell needs which array (003 phase 4).
@@ -115,10 +124,44 @@ export async function setupStreaming(
   }
 
   return {
+    ...(manifest.buildTime !== undefined ? { buildTime: manifest.buildTime } : {}),
     cellSize,
     center: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
     ...(manifest.water !== undefined ? { water: manifest.water } : {}),
     driver: new StreamingDriver(engine, manifest, worker, radii),
     radius: Math.max((maxX - minX) / 2, (maxZ - minZ) / 2, 400),
   };
+}
+
+/** Load + validate the manifest from either source (fetch URL or picked folder). */
+async function loadManifest(source: PakSource): Promise<OspakManifest> {
+  if (typeof source !== 'string') {
+    return JSON.parse(await (await openLocal(source, 'manifest.json')).text()) as OspakManifest;
+  }
+  const response = await fetch(`${source}/manifest.json`);
+  // `ok` alone does not mean a pak lives here: a dev server answers an unknown non-asset path with its SPA
+  // `index.html` at HTTP 200, so the guard passed and `.json()` failed on the markup instead — the useless
+  // `SyntaxError: Unexpected token '<', "<!doctype "...`. Sniff the body so the actionable message survives.
+  const body = response.ok ? await response.text() : '';
+  if (!response.ok || body.trimStart().startsWith('<')) {
+    throw new Error(
+      `no pak at ${source}/manifest.json — point the dev server's public dir at an opensa-pack output ` +
+        `(the pmb 'opensa' target), or pass ?src=<dir> for one served elsewhere`,
+    );
+  }
+
+  return JSON.parse(body) as OspakManifest;
+}
+
+/** Open a required pak file from a folder source, throwing a loud, actionable error when it is absent. */
+async function openLocal(source: LocalPakSource, name: string): Promise<Blob> {
+  const blob = await source.open(name);
+  if (!blob) {
+    throw new Error(
+      `no opensa/${name} in the picked folder — pick an opensa-pack output (a game dir with an opensa/ ` +
+        `folder), or reconvert the install first`,
+    );
+  }
+
+  return blob;
 }

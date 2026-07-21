@@ -37,7 +37,7 @@ export {
 export { quatMultiply, RigidEntity, type RigidPartInit } from './entities/rigid';
 export { compileAll, MSAA_SAMPLES, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';
 export { assertGuardrails, resolveShader, shaderModuleNames } from './render/shaders';
-export { setupStreaming, type StreamSetup } from './stream/setup';
+export { type LocalPakSource, type PakSource, setupStreaming, type StreamSetup } from './stream/setup';
 export { StreamingDriver, type StreamingRadii, type StreamStats } from './stream/streaming';
 export { type CellHandle, CellStore } from './world/cells';
 export { type TextureArrayHandle, TextureArrays } from './world/textures';

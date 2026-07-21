@@ -142,6 +142,10 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     );
   }
   writeFileSync(join(products, 'world.ospak'), pak);
+  // Stamp the build time so the debugger can show which pak the runtime is on. This is the one intentionally
+  // non-reproducible field in the output (the pak bytes stay byte-identical); it is set here in the CLI, not
+  // in `buildOspak`, so the deterministic core is untouched.
+  manifest.buildTime = formatBuildTime(new Date());
   writeFileSync(join(products, 'manifest.json'), JSON.stringify(manifest));
 
   // Convert the by-name assets INTO the copied archives — `<model>.dff`/`<txd>.txd` out, `<model>.osm` in.
@@ -153,6 +157,16 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   printReport(report, started, log);
 
   return { models: written, report };
+}
+
+/** `HH:mm DD-MM-YYYY` in local time — the opensa manifest `buildTime`, e.g. `07:52 21-07-2026`. */
+function formatBuildTime(now: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, '0');
+
+  return (
+    `${pad(now.getHours())}:${pad(now.getMinutes())} ` +
+    `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`
+  );
 }
 
 /**
