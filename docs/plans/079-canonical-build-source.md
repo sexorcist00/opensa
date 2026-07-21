@@ -186,8 +186,14 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
   - **Sub-steps (each browser-verified):** (a) lab builds the http-dir VFS + `?src` points at the served build;
     (b) vehicle probe off `buildVehicleModel` over the VFS, delete `vehicle-probe`; (c) delete `pak-loader.ts`,
     `?pak=1` → streaming; (d) ped probe over the VFS (after confirming the runtime ped path), delete `ped-probe`.
-- **Phase 3 — bench harness on the real path.** Point it at `./build/perfect`; remove the fake picker in
-  favour of `?loader=http-dir`. Gate: a headless boot + screenshot matches the pre-change frame.
+- **Phase 3 — bench harness on the real path. DONE + headless-verified 2026-07-21.** `drive.js` /
+  `gate-check.js` boot via `?loader=http-dir&src=<serve-static build>` — the shipping loader, no fake
+  `showDirectoryPicker`, no "Choose game folder" step. `game-server.js` (the fake picker's `/f/` server) is
+  deleted; the harness now serves the build through `serve-static`'s `/build` mount (which speaks http-dir's
+  `/__index` + Range contract). **Gate met:** a headless gate-check booted the game to canvas
+  (`webgpu=true`) and the screenshot shows Grove Street at night — CJ, a parked car, houses, lamps, HUD 120 fps
+  / 66 cells / GTA 2495,-1675 — i.e. the real world through the real load path. This retires the surrogate that
+  shadowed the pak-source bug. (README + benchmarks.md repointed.)
 - **Phase 4 — object-viewer before/after.** compare-serve reads `.osm`/`.ostex` on AFTER; viewer renders
   AFTER via the `.osm` rigid path; BEFORE = `.dff`/`.txd` from `non-modified`. Report resolved-as (osm vs
   dff) and the map-object coverage boundary.
@@ -207,7 +213,8 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
 - [x] Phase 2 — lab reads `?src` build: vehicle (`readModelOsm`) + ped (`readPedOsm`+`parseIfp`) probes,
       `pak-loader.ts` deleted, `?pak=1` streams, `vfs.ts` lazy reads; probe CLIs retired in phase 5; the
       apps/web bench-sweep gate stays browser-only (not run this pass)
-- [ ] Phase 3 — bench harness on `?loader=http-dir` against `./build/perfect`; fake picker removed
+- [x] Phase 3 — bench harness on `?loader=http-dir` against `./build/perfect`; fake picker + `game-server.js`
+      removed; headless gate-check booted to canvas (webgpu=true, Grove St. night screenshot) — real load path
 - [ ] Phase 4 — object-viewer BEFORE `non-modified` ↔ AFTER `build/perfect/opensa` (`.osm`/`.ostex`)
 - [ ] Phase 5 — vehicle/character viewers on the VFS; retire `:3002`, symlinks, `clouds-*.rgba`; e2e fixture
 - [ ] Close-out — lint, coverage floors, dev docs repointed

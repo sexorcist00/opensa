@@ -94,29 +94,32 @@ host loads the player by name and refuses to boot without it (`player model male
 opensa-pack over the game dir`).
 
 ```bash
-# 1. serve a CONVERTED game install (an opensa-pack --out) with Range + CORS
-node tools-debug/bench-harness/game-server.js /path/to/converted-game 8787
+# 1. serve the canonical build (an opensa-pack --out under ./build) with Range + CORS + a /__index listing
+npm run serve:static      # port 3001, mounts /build → build/
 
 # 2. vite dev server at the repo root
 npm run dev
 
-# 3. drive a sweep (DPR=2 = retina-equivalent render targets)
+# 3. drive a sweep (DPR=2 = retina-equivalent render targets). ?loader=http-dir reads the served build —
+#    the REAL load path (no fake picker); the app loads straight from ?src, no folder step.
+SRC="http://localhost:3001/build/perfect/opensa"
 DPR=2 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
-  "http://localhost:5173/?bench=all" http://localhost:8787 sweep 600000 6
+  "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" sweep 600000 6
 
 # a soak run: TAG switches the captured protocol, expect count is bypassed by the verdict line
 DPR=2 TAG='[soak]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
-  "http://localhost:5173/?soak=30" http://localhost:8787 soak30 2700000 999
+  "http://localhost:5173/?loader=http-dir&src=$SRC&soak=30" soak30 2700000 999
 
 # boot-gate checks (074/10): canvas→WebGPU context present, no-WebGPU→sorry screen
-node tools-debug/bench-harness/gate-check.js canvas "http://localhost:5173/" http://localhost:8787 gate
-node tools-debug/bench-harness/gate-check.js sorry  "http://localhost:5173/" http://localhost:8787 sorry
+node tools-debug/bench-harness/gate-check.js canvas "http://localhost:5173/?loader=http-dir&src=$SRC" gate
+node tools-debug/bench-harness/gate-check.js sorry  "http://localhost:5173/" sorry
 ```
 
-How it works: `drive.js` replaces `window.showDirectoryPicker` with a fake directory-handle tree built
-from the server's `/__index`; file `slice()` maps to HTTP Range reads (the 1.3 GB gta3.img is never
-buffered). WebGPU needs `--enable-unsafe-webgpu --enable-features=WebGPU --use-angle=metal` (already in
-the scripts). It also swallows the IndexedDB `DataCloneError` from persisting the fake handle.
+How it works (plan 079 phase 3): `?loader=http-dir&src=<served build>` runs the game through the REAL
+load path — `fetchInstallSource` reads the served dir's `/__index` + files over HTTP Range, exactly as
+`serve-static` exposes them, so the harness exercises the shipping loader instead of a fake
+`showDirectoryPicker` (the surrogate that once shadowed a whole class of load bug). WebGPU needs
+`--enable-unsafe-webgpu --enable-features=WebGPU --use-angle=metal` (already in the scripts).
 
 **Gotchas** (learned the hard way, keep them):
 
