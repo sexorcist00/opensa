@@ -183,7 +183,7 @@ async function loadVehicleBench(
   params: URLSearchParams,
   focus: readonly [number, number, number],
   vehicleCount: number,
-): Promise<{ host: Awaited<ReturnType<typeof loadVehicleProbe>>; startDistance: number }> {
+): Promise<{ host: ReturnType<typeof loadVehicleProbe>; startDistance: number }> {
   const vehicleY = Number(params.get('pedy') ?? focus[1]) || focus[1];
   const name = params.get('vmodel') ?? 'landstal';
   const drive = params.get('drive') === '1';
@@ -277,18 +277,19 @@ async function main(): Promise<void> {
   let angle = orbitAngleOverride(params, 'az', 0);
   // `?orbit=N` starts the camera N engine units from the focus (the bench close-up; wheel still zooms).
   let zoom = (orbitOverride(params) ?? orbitRadius) / orbitRadius;
-  // Skinning probe (074/08 B1): `?ped=1` drops the animated fixture ped at the focus point and STARTS the
-  // camera zoomed onto it (a 1.8-unit ped is subpixel at a full-city orbit radius); wheel out to leave.
+  // Skinning probe (074/08 B1, plan 079 phase 2): `?ped=1` reads the CONVERTED ped at the focus and zooms in
+  // (a 1.8-unit ped is subpixel at a full-city orbit radius); wheel out to leave.
   let pedHost: Awaited<ReturnType<typeof loadPedProbe>> | null = null;
   let pedMs = 0;
   let pedPosition: [number, number, number] | null = null;
   if (params.get('ped') === '1') {
     const pedY = Number(params.get('pedy') ?? focus[1]) || focus[1];
     pedPosition = [focus[0], pedY, focus[2]];
-    pedHost = await loadPedProbe(engine, pedPosition);
+    const source = await labInstallSource(await requireGameDir(params));
+    pedHost = await loadPedProbe(engine, pedPosition, source, params.get('pedmodel') ?? 'male01');
     zoom = Math.min(1, 14 / orbitRadius);
   }
-  // Rigid-entity probe (074/08 B2c → B5): `?vehicle=N` drives N instances of the fixture model in a convoy
+  // Rigid-entity probe (074/08 B2c → B5): `?vehicle=N` drives N instances of the converted model in a convoy
   // around the focus (N > 1 exercises the multi-instance pool: shared geometry, per-instance matrices).
   let vehicleHost: Awaited<ReturnType<typeof loadVehicleProbe>> | null = null;
   let vehicleMs = 0;
