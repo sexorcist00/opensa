@@ -23,8 +23,8 @@ screen.
 - Collision = rendered set ∩ models that ship a COL (rocks/cacti/trees collide; grass/flowers
   walk-through); knob changes re-stream physics (debounced invalidate + reload).
 - Wind mod's `decoratePart` runs on clutter parts (procedural bushes sway when listed).
-- Clutter was pickable on the WebGL host; on the engine the Map screen is capability-gated off until
-  there is a ray query (plan 074/22). Offline sanity tool: `scripts/procobj-stats.ts`.
+- Clutter is pickable through the engine Map screen (`CellStore.pick` over the placement mapper, plan
+  074/22). Offline sanity tool: `scripts/debug/procobj-stats.ts`.
 
 ## Known gaps / candidates
 

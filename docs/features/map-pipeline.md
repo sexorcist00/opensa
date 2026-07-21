@@ -46,8 +46,9 @@
   empty frame), and the new level appears at full opacity — `CellFader` fade-in runs only for
   genuinely new cells, never on a swap (fixed the LOD→HD "blink"). A hysteresis dead-band
   (`0.25 × cellSize`) holds a cell's level across the ring boundary so it doesn't flip-flop.
-- Picking/describe: WebGL-era only — the engine has no ray query yet, so the debugger's Map screen is
-  capability-gated off (plan 074/22).
+- Picking/describe: the engine has a ray query — `CellStore.pick` (slab test over the `.oscell` placement
+  mapper), and the debugger's Map screen is restored on the engine host (`map-inspector.tsx`, plan 074/22
+  phases 7–9). See [zones-hud-debug.md](zones-hud-debug.md) for the current story.
 
 ## Known gaps / candidates
 

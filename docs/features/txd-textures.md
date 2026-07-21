@@ -20,7 +20,7 @@
 - sRGB handling: world textures flow through the colour-managed pipeline; timecyc-driven
   uniforms decode 0–255 sRGB explicitly where needed (see world-lighting).
 
-## Coverage (audit 2026-06-12, `scripts/audit-rw-coverage.ts`)
+## Coverage (audit 2026-06-12, `scripts/debug/audit-rw-coverage.ts`)
 
 22705 textures across the shipped TXDs parse successfully; **36 dropped (0.16%)** — the 16-bit
 rasters below. Shipped format distribution: dxt1 20790, dxt5 1867, dxt3 44, rgba8888 4 (palettes

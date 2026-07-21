@@ -56,7 +56,7 @@ why the same parser serves the browser runtime and the offline `opensa-pack` con
 - Frame transforms are deliberately ignored for map models (SA re-frames atomic model infos);
   kept for vehicles/characters/`anim`-section clump objects.
 
-## Coverage (audit 2026-06-12, `scripts/audit-rw-coverage.ts`)
+## Coverage (audit 2026-06-12, `scripts/debug/audit-rw-coverage.ts`)
 
 **13126 DFFs, 0 parse failures.** Full 2dfx census: lights 1664 (done), particles 113,
 ped attractors 820, sun glare 2, enex 75, roadsigns 516 (done), trigger 30, cover points 13900,

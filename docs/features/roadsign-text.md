@@ -12,7 +12,7 @@ type-7 entries, `tools/opensa-pack/src/convert.ts` (world-space pre-pass, signs 
   geometry-local). The converter therefore collects signs in a global pre-pass and welds each one's
   quads into the HD cell its world position falls in, at identity — never through the instanced path.
 - Plate transform (solver-verified across every observed rotation family,
-  `scripts/solve-roadsign.ts`): flat base (width +X, lines −Y, normal −Z), entry Euler applied
+  `scripts/debug/solve-roadsign.ts`): flat base (width +X, lines −Y, normal −Z), entry Euler applied
   **Z→X→Y**, angles as stored. 90°-multiple rotations satisfy several wrong conventions — never
   hand-calibrate on one junction.
 - Glyphs: `roadsignfont` atlas from particle.txd (32×512; 4 cols × 32 rows of 8×16 px cells);
@@ -33,7 +33,7 @@ type-7 entries, `tools/opensa-pack/src/convert.ts` (world-space pre-pass, signs 
 - Some PF-mod gantries sit slightly rotated/offset vs the vanilla entries (text can sink into
   the custom board) — data quirk, reproduces in real SA+PF.
 - **Many boards are empty in vanilla too (user-verified)** — a blank board is not a bug; check
-  `scripts/find-2dfx.ts` for an entry first.
+  `scripts/debug/find-2dfx.ts` for an entry first.
 - Sign text doesn't dim at night (plain unlit material, no world tint).
 
 ## Test coverage anchors

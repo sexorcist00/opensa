@@ -71,8 +71,9 @@ in-browser to the same VFS — so the downstream flow is identical. **Chromium-o
   `renderware/archive`.
 - **Selection** (`build-vfs.ts`): the in-browser port of `scripts/build-game.ts`'s partition (shared
   `packages/game-build/src/partition.ts` — `partitionEntries` + `looseGroup`) — exterior-placed models/textures,
-  `.col`, the loose `data/`/anim/text files, and the `gta3.img` ipl/ifp/dat, **plus** the game's dynamic
-  models (`GAME_CONFIG[game].mainCharacter` via `peds.ide`, `.vehicles` via `vehicles.ide`).
+  `.col`, the loose `data/`/anim/text files, and the `gta3.img` ipl/ifp/dat, **plus** the dynamic models
+  (`dynamicModelRefs`): **every** ped from `peds.ide`, **every** vehicle from `vehicles.ide`, and procobj
+  clutter from `procobj.dat`.
 - **`AssetLocalLoader`**: `restore()` (boot) → `prepare()` (folder gesture) → `init()` (scan+select →
   one synthetic chunk per group) → `load()` (read selected bytes into the VFS, count-based progress).
 - **Boot gate**: the shell shows the game menu; picking a local game opens the **folder prompt**
@@ -118,8 +119,6 @@ The `AssetSink` consumer. `Vfs implements AssetSink, AssetFileSystem`:
 ## Known gaps / candidates
 
 - Local loader is **Chromium-only** (File System Access); `fetch` stays the default everywhere else.
-- The per-game `mainCharacter` / `vehicles` selection (`GAME_CONFIG`) is a **temporary** bring-your-own-files
-  stop-gap until a proper ped/vehicle registry exists.
 - Lazy per-file inflate for the fetch path (decompress on `get`) if the eager-unzip footprint bites.
 
 ## Test coverage anchors

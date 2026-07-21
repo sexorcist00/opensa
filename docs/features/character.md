@@ -7,10 +7,11 @@ plans 008/011/012/013/036.
 ## Implemented
 
 - **Skinned model**: Skin plugin → a plain `PedModelData` struct (vertices + `PedBone[]`, no GPU
-  types — the offline `ped-probe` CLI and the character viewer build the same thing); bones from the frame hierarchy
+  types — the character viewer builds the same thing); bones from the frame hierarchy
   (skin bone i ↔ frame i+1, frame 0 = dummy root); bind pose = raw mesh regardless of mapping;
-  named-bone map for animation retargeting. Current model: the selected game's `mainCharacter` (a `peds.ide`
-  ped, e.g. `BMYPOL1`; `apps/web/src/game-config.tsx`), loaded via `adapter.loadCharacterByModel`.
+  named-bone map for animation retargeting. The shipped player is `male01` (`PLAYER_MODEL` in
+  `apps/web/src/ui/engine-player.ts`), loaded from `male01.osm` — see "Where the OWN-ENGINE player comes
+  from" below.
 - **Root anchoring** (`anchorRootBone`): the root bone's rest position is snapped to the skin's authoritative
   bind translation (`inverse(boneInverse)`). The IFP root **translation** track is dropped (locomotion stays
   in-place — physics owns position), so the root bone would otherwise keep its DFF **frame** position. Standard
