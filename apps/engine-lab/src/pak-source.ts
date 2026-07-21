@@ -37,9 +37,11 @@ export async function loadLabTimecyc(source: PakSource): Promise<LabTimecyc | nu
   return vanilla !== null ? { is24h: false, text: vanilla } : null;
 }
 
-/** Resolve `?src=` to a products base, preferring the game-dir layout (`<src>/opensa/manifest.json`). */
+/** Resolve `?src=` to a products base, preferring the game-dir layout (`<src>/opensa/manifest.json`). An
+ *  absolute URL (a build served cross-origin, e.g. `http://localhost:3001/build/...`) passes through as-is;
+ *  a bare name is made root-relative to the lab's own origin. */
 export async function resolvePakSource(src: string): Promise<PakSource> {
-  const root = `/${src.replace(/^\/+|\/+$/g, '')}`;
+  const root = /^(?:https?:)?\/\//.test(src) ? src.replace(/\/+$/, '') : `/${src.replace(/^\/+|\/+$/g, '')}`;
   if (await exists(`${root}/opensa/manifest.json`)) {
     return { base: `${root}/opensa`, gameDir: root };
   }
