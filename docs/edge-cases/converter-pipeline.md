@@ -25,8 +25,11 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   `NIGHT_AMBIENT` formula must be shared across weld/rigid/clutter paths.
 - **QEM must be UV-drift guarded.** GTA roads tile V as per-segment patchwork; unguarded collapses smear it
   into lengthwise stripes (`maxUvDrift`). Never flip windings — a wrong flip is a hole.
-- **Gamma vs linear TXD split.** LOD atlases are encoded per target: gamma into the real-SA build, a linear
-  sidecar for the OpenSA pak — texel maths must match the target renderer or impostors mis-light.
+- **Gamma vs linear TXD split.** Real SA (D3D9-era RW) multiplies/filters texels in GAMMA, the own engine in
+  LINEAR, and the conversion isn't per-pixel invertible — atlases are encoded per target (gamma into the
+  real-SA build, a linear sidecar swapped into the OpenSA img). **And never bake a lighting LEVEL into a
+  texture the engine lights again** — bake a normalized atlas and carry prelit/night on vertices, so unknown
+  pipeline multipliers (skygfx etc.) cancel; a level baked into texels breaks under any of them.
 - **LOD bakes must exclude exactly what the engine excludes** — timed (tobj), interior, `lod`-target, and
   script-gated binary-only IPL groups (except `truthsfarm`) — or closed props get painted into far LODs
   (the bridge-roadblocks-in-LOD bug). Trees/procobj are excluded from cell LODs (they get impostors from

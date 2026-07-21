@@ -29,3 +29,11 @@ runtime, but the converter guards stand for any build not running that ASI.
   require rebasing every surviving lod-index across text + binary in lockstep.
 - **opensa-lod-generator output is for OpenSA only** — uncapped per-cell LODs (hundreds of materials,
   MB-scale models) crash the real-SA streamer.
+- **`gta.dat` is loaded top-down — an IDE line must precede the first IPL line that uses its ids.**
+  mod-installer appends mod IDE/IPL blocks at the end (self-contained, fine), but a tool injecting new ids
+  into STOCK IPLs must insert its IDE before the first `IPL`/`ZON` line (`patchGtaDat` does), or the first
+  stock IPL crashes with undefined-id.
+- **In-game bisection of pool-exhaustion heap corruption gives FALSE NEGATIVES.** Removing ANY img entry
+  reshuffles the heap so the crash lands somewhere silent — a boot that "flips" on ±1 entry with no content
+  diff implicates nothing. Suspect a `FILE_TYPE_*` pool first and check/raise the FLA ini before bisecting
+  generators (this cost two debugging days once).

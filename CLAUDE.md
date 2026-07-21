@@ -123,6 +123,17 @@ Never edit generated code manually.
 
 ---
 
+## Standing Workflow Rules
+
+- English only, repo-wide: no Cyrillic in any doc, comment, or committed file — paraphrase field verdicts
+  in English (chat language stays whatever the user speaks)
+- Record measured numbers into the plan doc after EVERY phase/step (before/after, representative log lines);
+  a phase without its numbers is unfinished
+- Every reported performance figure goes into `docs/benchmarks/` (per its readme's schema/index) BEFORE it
+  is analysed — including numbers pasted in chat; always record which pak build a run read
+
+---
+
 ## Documentation Maintenance
 
 Keep these in sync with the code — update them in the same change, not later:
