@@ -57,8 +57,9 @@ this path carries, both found in the field and not by tests:
 - `minZ` is the lowest POSED vertex (the feet level the host aligns to the capsule), so the converter has to
   pass `options.poseWith`; measured on the bind pose instead, the player sinks in to the knees.
 
-`ped-probe` and the lab's `ped.json`/`ped.bin` fixture still exist — the LAB uses them (see
-`docs/development/engine-lab.md`); only production moved.
+The lab reads the same way now (plan 079 phase 2): `?ped` decodes `<model>.osm` + `anim/ped.ifp` from the
+served build through `readPedOsm` + `parseIfp`. So the `ped-probe` CLI and its `ped.json`/`ped.bin` fixture
+were retired (plan 079 phase 5) — nothing bakes a ped fixture any more; the `.osm` IS the format.
 
 ## Test coverage anchors
 

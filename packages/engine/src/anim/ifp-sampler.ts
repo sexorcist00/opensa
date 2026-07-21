@@ -3,7 +3,7 @@
  * palette (world × inverseBind per bone, column-major mat4). The prod path rode three's AnimationMixer —
  * NOT portable; this is the thin replacement the dynamics milestone builds on. Pure math, no dependencies.
  *
- * Conventions (fixed by the probe fixture, `tools/opensa-pack/src/ped-probe.ts`):
+ * Conventions (fixed by the ped model format — `readPedOsm` / `build-ped-model.ts`):
  * - bones are in SKIN order, parents point at skin indices (−1 = root), locals = frame bind pose;
  * - a bone with an empty track holds its bind rotation (prod behaviour);
  * - root translation is NOT animated (locomotion stays in-place — gameplay owns the position);

@@ -1,7 +1,8 @@
 /**
  * The own-engine player body (plan 074/10 B3): the B1 ped probe driven by GAMEPLAY state — position from
- * the physics Transform, heading from planar velocity, idle↔walk clip by speed. The fixture comes from
- * `tools/opensa-pack/src/ped-probe.ts` (served at `/ped`, a root-public symlink like the paks).
+ * the physics Transform, heading from planar velocity, idle↔walk clip by speed. The model is `male01.osm`
+ * read BY NAME from the VFS (opensa-pack 003 phase 5f — see {@link loadEnginePlayer}); the old ped-probe
+ * fixture is gone.
  */
 import type { Engine, PedProbe, SamplerClip } from '@opensa/engine';
 import type { AssetFileSystem } from '@opensa/renderware';

@@ -8,10 +8,9 @@ import { decodeDxt } from '../textures/dxt';
  * A skinned character, built from a DFF + its TXDs into a plain, serializable struct — the ped twin of
  * `buildVehicleModel`/`VehicleModelData`.
  *
- * Renderer-agnostic and browser-callable BY DESIGN (plan 074/13 phase 4 + 074/14): the offline
- * `ped-probe` CLI and the character viewer must build the exact same thing, and this struct is what the
- * ped FORMAT will serialize once `opensa-pack` becomes the single entry point. Nothing here knows about
- * GPU buffers, byte offsets or the engine.
+ * Renderer-agnostic and browser-callable BY DESIGN (plan 074/13 phase 4 + 074/14): the character viewer and
+ * opensa-pack's ped conversion build the exact same thing, and this struct is what the ped `.osm` serializes.
+ * Nothing here knows about GPU buffers, byte offsets or the engine.
  *
  * Coordinates stay native GTA (Z-up); the SA bind mesh lies along X and the skeleton stands it up, which
  * is why {@link PedModelData.minZ} is measured on the POSED mesh rather than the bind one.
