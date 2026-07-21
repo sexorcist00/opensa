@@ -1,6 +1,10 @@
 # 063 — Foundations: instrumentation & colour pipeline
 
 **Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+**The one engine-agnostic tail — the "streamed-out cells may not release GPU resources" leak concept — was
+verified a NON-ISSUE on the own engine the same day: the ledger unit test (`engine.frame.test.ts`) plus a
+30-min headless soak, residency/texture/heap all flat →
+[benchmarks #20](../../benchmarks/opensa-engine/2026-07-21-soak30-headless.json).**
 
 **Status: ✅ shipped 2026-07-10** (perf HUD + GPU timer + bench harness + baselines on the M3 Pro reference
 machine + `graphics.pipeline` switch + colour decision frozen: post-pass ACES). Open follow-up: possible
