@@ -44,12 +44,12 @@ The ped/vehicle probes (`?ped`/`?vehicle`, below) read their converted models fr
 
 ### Camera (all live-adjustable afterward)
 
-| Param             | Default      | Effect                                                  |
-| ----------------- | ------------ | ------------------------------------------------------- |
-| `at=x,y,z`        | scene centre | orbit focus at a GTA coordinate                         |
-| `orbit=N`         | scene radius | starting camera distance                                |
-| `az=deg` / `el=N` | 0 / 0.9      | pinned starting azimuth / height factor                 |
-| `freeze=1`        | off          | stop the auto-spin (auto-off when a vehicle is present) |
+| Param             | Default      | Effect                                                                                     |
+| ----------------- | ------------ | ------------------------------------------------------------------------------------------ |
+| `at=x,y,z`        | Los Santos   | orbit focus at a GTA coordinate (`?pak=1` defaults to Grove St., not the empty map centre) |
+| `orbit=N`         | scene radius | starting camera distance                                                                   |
+| `az=deg` / `el=N` | 0 / 0.9      | pinned starting azimuth / height factor                                                    |
+| `freeze=1`        | off          | stop the auto-spin (auto-off when a vehicle is present)                                    |
 
 ### Time / weather
 

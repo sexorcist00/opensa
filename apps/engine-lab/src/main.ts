@@ -29,6 +29,10 @@ import { loadVehicleProbe } from './vehicle';
 import { labInstallSource, readModelBytes } from './vfs';
 
 const CELL_SIZE = 250;
+/** Where `?pak=1` opens when no `?at` is given — Grove Street, Los Santos (engine coords: GTA 2495,-1687,13 →
+ *  x, z, -y), with a street-level orbit, so the whole-map build's empty centre (GTA 0,0) is never the default. */
+const LS_STREAM_FOCUS: [number, number, number] = [2495, 13, 1687];
+const LS_STREAM_ORBIT = 450;
 
 /** `?ao=` / `?sunvis=` / `?wind=` / `?stoch=` / `?scale=` / `?sky=` A/B overrides (074/07, 06 rows 4+10, 074/12, 074/09). */
 function applyEnvironmentOverrides(engine: Engine, params: URLSearchParams): void {
@@ -243,6 +247,13 @@ async function main(): Promise<void> {
     streaming = setup.driver;
     focus = setup.center;
     orbitRadius = setup.radius * 1.4;
+    // The canonical whole-map build centres on empty water (GTA 0,0), so `?pak=1` without `?at` would stare
+    // into nothing. Default the view to Los Santos (like the game spawns the player in a city, not the map's
+    // geometric centre); `?at` / `?orbit` still override below.
+    if (focusOverride(params) === null) {
+      focus = [...LS_STREAM_FOCUS];
+      orbitRadius = LS_STREAM_ORBIT;
+    }
     title = 'STREAMING district (worker pak, rings live)';
     const applyWeather = wireWeather(engine, timecyc, params, (driver) => {
       environmentDriver = driver;
