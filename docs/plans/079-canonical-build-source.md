@@ -220,9 +220,13 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
   two game dirs, which the compare-server already is.** Still open (gitignored/tooling cleanup, low value):
   the `public/` symlink farm + orphaned `clouds-*.rgba` (nothing references them since phase 2), repointing e2e
   at a committed game-shaped fixture, and the compare-coverage audit finding. Viewer render is browser-only.
-- **Phase 6 — documentation. OPEN, scope TBD (temporary anchor 2026-07-21).** Beyond the stale-doc sweep that
-  rides with phases 0–5, the user wants NEW documentation added under this plan — the exact set to be named
-  next session. _Placeholder; expand here once the doc list is given._
+- **Phase 6 — documentation. Stale-doc sweep DONE 2026-07-21; NEW docs OPEN, scope TBD (temporary anchor).**
+  The sweep landed: `query-parameters.md` (`loader`/`src`/`pak` rows), `asset-loader.md` (http-dir section),
+  `scripts.md` (`/build` mount), `in-game-tools.md` (buildTime grey line), `architecture.md` (http-dir override),
+  `benchmarks/index.md` (pak-source bug now fixed), `plans/README.md` (079 retitle/repoint), `tools-debug/README.md`
+  (http-dir boot), `map-optimizer/README.md` (`/osm` compare side). Coverage: added the AssetHttpDirLoader
+  end-to-end boot test. **Still OPEN:** the NEW documentation the user wants added under this plan — the exact
+  set to be named next. _Expand here once the doc list is given._
 - **Close-out — `npm run lint`, coverage floors held, `docs/development/` repointed at the new workflow.**
 
 ## Tasks
@@ -243,7 +247,8 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
       tabs move to `.osm` in phase 5
 - [x] Phase 5 (viewers + probe CLIs) — vehicle/character tabs read `.osm`; ped-probe/vehicle-probe deleted.
       Left (gitignored/low-value): `public/` symlinks, `clouds-*.rgba`, e2e-fixture repoint, compare-coverage audit
-- [ ] Phase 6 — documentation (scope TBD, temporary anchor): the stale-doc sweep + NEW docs the user will name
+- [x] Phase 6a — stale-doc sweep (9 files) + AssetHttpDirLoader boot test
+- [ ] Phase 6b — NEW docs the user will name (scope TBD, temporary anchor)
 - [ ] Close-out — lint, coverage floors, dev docs repointed
 
 ## Measurement ledger
