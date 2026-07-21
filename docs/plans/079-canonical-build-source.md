@@ -220,13 +220,19 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
   two game dirs, which the compare-server already is.** Still open (gitignored/tooling cleanup, low value):
   the `public/` symlink farm + orphaned `clouds-*.rgba` (nothing references them since phase 2), repointing e2e
   at a committed game-shaped fixture, and the compare-coverage audit finding. Viewer render is browser-only.
-- **Phase 6 — documentation. Stale-doc sweep DONE 2026-07-21; NEW docs OPEN, scope TBD (temporary anchor).**
+- **Phase 6 — documentation. Stale-doc sweep DONE 2026-07-21; the full documentation audit (6b) DONE 2026-07-21.**
   The sweep landed: `query-parameters.md` (`loader`/`src`/`pak` rows), `asset-loader.md` (http-dir section),
   `scripts.md` (`/build` mount), `in-game-tools.md` (buildTime grey line), `architecture.md` (http-dir override),
   `benchmarks/index.md` (pak-source bug now fixed), `plans/README.md` (079 retitle/repoint), `tools-debug/README.md`
   (http-dir boot), `map-optimizer/README.md` (`/osm` compare side). Coverage: added the AssetHttpDirLoader
-  end-to-end boot test. **Still OPEN:** the NEW documentation the user wants added under this plan — the exact
-  set to be named next. _Expand here once the doc list is given._
+  end-to-end boot test. **6b — the project-wide documentation audit** (user-named scope, 7 sub-tasks): (1)
+  `docs/architecture/` folder replacing `architecture.md` — README/boot-and-loading/world-streaming/
+  perfect-map-builder/tools + generated diagrams (`npm run arch:render`, `arch-graph.ts` `--svg`/`--render`/
+  `--layers`); (2) `docs/features/` actualized against the code (stale mainCharacter/picking/male01/script
+  paths); (3) `docs/edge-cases/` — six grouped current-limitations files; (4) open-tails sweep across all
+  plans handed to the user for do-vs-close triage; (5) Cyrillic sweep — docs are now fully English; (6)
+  `docs/links.md`; (7) `docs/commands.md`. Maintenance rules for all of these live in `CLAUDE.md`
+  ("Documentation Maintenance").
 - **Close-out — `npm run lint`, coverage floors held, `docs/development/` repointed at the new workflow.**
 
 ## Tasks
@@ -248,7 +254,8 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
 - [x] Phase 5 (viewers + probe CLIs) — vehicle/character tabs read `.osm`; ped-probe/vehicle-probe deleted.
       Left (gitignored/low-value): `public/` symlinks, `clouds-*.rgba`, e2e-fixture repoint, compare-coverage audit
 - [x] Phase 6a — stale-doc sweep (9 files) + AssetHttpDirLoader boot test
-- [ ] Phase 6b — NEW docs the user will name (scope TBD, temporary anchor)
+- [x] Phase 6b — the documentation audit: architecture/ + features refresh + edge-cases/ + links.md +
+      commands.md + Cyrillic sweep + open-tails triage list (awaiting the user's do-vs-close verdicts)
 - [ ] Close-out — lint, coverage floors, dev docs repointed
 
 ## Measurement ledger
