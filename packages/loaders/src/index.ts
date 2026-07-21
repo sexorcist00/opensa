@@ -6,10 +6,10 @@
 import type { AssetLoader, AssetLoaderKind, AssetSink } from './types';
 
 import { AssetFetchLoader } from './asset-fetch-loader';
-import { AssetLocalLoader } from './asset-local-loader';
+import { AssetHttpDirLoader, AssetLocalLoader } from './asset-local-loader';
 
 export { AssetFetchLoader, type AssetFetchLoaderConfig } from './asset-fetch-loader';
-export { AssetLocalLoader, type AssetLocalLoaderConfig } from './asset-local-loader';
+export { AssetHttpDirLoader, AssetLocalLoader, type AssetLocalLoaderConfig } from './asset-local-loader';
 export { Emitter, type Listener } from './emitter';
 export { allChunks, chunkUrl, chunkUrls, CORE_GROUPS, GROUP_NAMES, manifestDir, parseManifest } from './manifest';
 export type {
@@ -25,10 +25,12 @@ export type {
   ProgressSnapshot,
 } from './types';
 
-/** Everything {@link createAssetLoader} needs for either loader; unused fields are ignored by the other. */
+/** Everything {@link createAssetLoader} needs for any loader; unused fields are ignored by the others. */
 export interface CreateAssetLoaderConfig {
   /** Which loader to build for this game. */
   assetLoader: AssetLoaderKind;
+  /** The served game-dir base URL — required for `http-dir` (`?src=`), ignored otherwise. */
+  base?: string;
   /** Build variant (e.g. `gostown`) — labels the local loader's synthesised manifest. */
   game: string;
   /** Full URL to `manifest.json` — used by the fetch loader. */
@@ -39,14 +41,18 @@ export interface CreateAssetLoaderConfig {
   version: string;
 }
 
-/** Build the loader for a game's configured `assetLoader`. */
+/** Build the loader for a game's configured (or session-overridden) `assetLoader`. */
 export function createAssetLoader(config: CreateAssetLoaderConfig): AssetLoader {
+  const install = { game: config.game, sink: config.sink, version: config.version };
+  if (config.assetLoader === 'http-dir') {
+    if (!config.base) {
+      throw new Error('http-dir loader needs a served game-dir base URL (?src=)');
+    }
+
+    return new AssetHttpDirLoader(install, config.base);
+  }
   if (config.assetLoader === 'local') {
-    return new AssetLocalLoader({
-      game: config.game,
-      sink: config.sink,
-      version: config.version,
-    });
+    return new AssetLocalLoader(install);
   }
 
   return new AssetFetchLoader({ manifestUrl: config.manifestUrl, sink: config.sink });

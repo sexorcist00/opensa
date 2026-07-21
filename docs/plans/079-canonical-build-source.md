@@ -137,13 +137,21 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
 
 ## Phases
 
-- **Phase 0 — server + convention.** Extend `serve-static.ts` to mount `./build` with range support; write
-  the "working with a build" section + the canonical folders into
-  [query-parameters.md](../development/query-parameters.md) and the dev docs; state what `build:prod`
-  excludes. _(The `--out` default + buildTime + pak-source fix are already in.)_
-- **Phase 1 — `http-dir` loader + shared mount.** `fetchInstallSource(baseUrl)` in `packages/loaders`
-  (`urlRangeSource` twin of `fileHandleSource`); `AssetLoaderKind = 'http-dir'`; `?loader=http-dir&src=`. The
-  `setup.ts`/`pak-loader.ts` fetch/validate duplication collapses here.
+- **Phase 0 — server + convention.** `serve-static.ts` mounts `./build` with Range **and a `/build/.../__index`
+  listing** (the http-dir loader's file index) — DONE. Still to write: the "working with a build" section +
+  the canonical folders into [query-parameters.md](../development/query-parameters.md) and the dev docs; state
+  what `build:prod` excludes. _(The `--out` default + buildTime + pak-source fix are already in.)_
+- **Phase 1 — `http-dir` loader + shared mount. DONE 2026-07-21 (code-complete + unit-tested).**
+  `urlRangeSource` (HTTP-Range twin of `fileHandleSource`) + `fetchInstallSource(base, index)` (served-dir
+  `InstallSource`) over a shared `assembleInstallSource`; an `InstallSourceLoader` base holds `init`/`load`/
+  `openWorld`, with `AssetLocalLoader` (picker) and the new `AssetHttpDirLoader` (served dir) as the only
+  divergence; `AssetLoaderKind = 'http-dir'`; `createAssetLoader` + `?loader=http-dir&src=` wired through
+  `use-asset-boot` + the boot machine (http-dir loads straight, no folder/disclaimer gate). **World source
+  decision:** http-dir reuses `openWorld` → a Blob (buffers the ~332 MB world at boot) rather than URL
+  streaming — the committed `pakSource` plumbing is reused untouched, and this is a dev-mode surface where the
+  buffer is fine. The lab keeps URL streaming (phase 2), so nothing streaming-critical regresses; URL-stream
+  for http-dir is a noted follow-up. **Not yet verified end-to-end in a browser** (needs a real WebGPU boot,
+  like the pak-source fix); the `setup.ts`/`pak-loader.ts` dedup rides with phase 2 (the lab).
 - **Phase 2 — lab onto the mount.** `?src=<game dir>`; `pak-loader.ts` deleted; peds/vehicles from the VFS
   (fixtures + probe CLIs retired). Gate: the 6-scene bench sweep reproduces its reference row (fps AND draws
   within ±4) and the vehicle look bench still renders its cars.
@@ -162,8 +170,9 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
 - [x] `--out` optional → default `./build/perfect` (cli.ts)
 - [x] Loading MODE selects the world (pak-source fix) — foundation for phase 1
 - [x] `buildTime` in the manifest + grey debugger stamp — the cross-surface version guard
-- [ ] Phase 0 — `serve-static` mounts `./build` (range); canonical folders + workflow in the dev docs
-- [ ] Phase 1 — `fetchInstallSource` + `http-dir` loader; `setup.ts`/`pak-loader.ts` duplication removed
+- [x] Phase 0 (server) — `serve-static` mounts `./build` (Range) + `__index` listing; dev-docs still to write
+- [x] Phase 1 — `fetchInstallSource` + `InstallSourceLoader` base + `AssetHttpDirLoader` + `?loader=http-dir` wired
+      (setup.ts/pak-loader.ts dedup deferred to phase 2; end-to-end browser boot not yet verified)
 - [ ] Phase 2 — lab on the mount; `pak-loader.ts` + fixtures deleted; bench sweep reproduces reference
 - [ ] Phase 3 — bench harness on `?loader=http-dir` against `./build/perfect`; fake picker removed
 - [ ] Phase 4 — object-viewer BEFORE `non-modified` ↔ AFTER `build/perfect/opensa` (`.osm`/`.ostex`)

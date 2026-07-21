@@ -15,6 +15,19 @@ export interface DirIndexEntry {
   size: number;
 }
 
+/** Fetch a served dir's flat file index from `${base}/__index` (served by serve-static's `/build` mount). */
+export async function fetchDirIndex(base: string): Promise<DirIndexEntry[]> {
+  const response = await fetch(`${base}/__index`);
+  if (!response.ok) {
+    throw new Error(
+      `no __index at ${base}/__index (${response.status}) — serve the build with \`npm run serve:static\` ` +
+        `(the /build mount), and point ?src= at a game dir under it`,
+    );
+  }
+
+  return (await response.json()) as DirIndexEntry[];
+}
+
 /** Build an {@link InstallSource} over a game dir served at `base` (files reachable at `${base}/<path>`). */
 export function fetchInstallSource(base: string, index: readonly DirIndexEntry[]): Promise<InstallSource> {
   const sizes = new Map<string, number>();

@@ -46,8 +46,9 @@ export interface AssetLoaderEvents {
   progress: ProgressSnapshot;
 }
 
-/** Which loader the build selects (`VITE_ASSET_LOADER`, default `fetch`). */
-export type AssetLoaderKind = 'fetch' | 'local';
+/** Which loader the build selects (`VITE_ASSET_LOADER`, default `fetch`). `http-dir` is a dev/session override
+ *  (`?loader=http-dir`) that reads a served perfect-map-builder output — see plan 079. */
+export type AssetLoaderKind = 'fetch' | 'http-dir' | 'local';
 
 /**
  * Where the loader pushes each ready chunk's RAW zip bytes. Implemented by the Virtual File System

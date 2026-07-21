@@ -1,5 +1,5 @@
 import type { LocalPakSource } from '@opensa/engine';
-import type { AssetLoader, ProgressSnapshot } from '@opensa/loaders';
+import type { AssetLoader, AssetLoaderKind, ProgressSnapshot } from '@opensa/loaders';
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { createAssetLoader } from '@opensa/loaders';
@@ -60,6 +60,19 @@ export function useAssetBoot(): AssetBoot {
   const [detail, setDetail] = useState('');
   const attemptRef = useRef(''); // `${game}:${retries}` — runs the load once per attempt (retry/StrictMode-safe)
 
+  // `?loader=http-dir&src=<url>` (plan 079): a dev/session override that reads a served perfect-map-builder
+  // output instead of the per-game loader. Non-null ⇒ every game runs from that served dir (no folder pick).
+  const httpDirBase = useMemo<null | string>(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    return params.get('loader') === 'http-dir' ? (params.get('src') ?? '') : null;
+  }, []);
+  /** The effective loader kind for a game — the http-dir override wins when present. */
+  const loaderKind = useCallback(
+    (game: GameId): AssetLoaderKind => (httpDirBase !== null ? 'http-dir' : GAME_CONFIG[game].assetLoader),
+    [httpDirBase],
+  );
+
   // A fresh loader + VFS per selected game (null on the menu). The empty fallback VFS is only read before a
   // game is chosen (the game canvas mounts at warmup, when the session exists).
   const fallbackVfs = useMemo(() => new Vfs(), []);
@@ -67,10 +80,10 @@ export function useAssetBoot(): AssetBoot {
     if (!state.game) {
       return null;
     }
-    const config = GAME_CONFIG[state.game];
     const vfs = new Vfs();
     const loader = createAssetLoader({
-      assetLoader: config.assetLoader,
+      assetLoader: loaderKind(state.game),
+      ...(httpDirBase !== null ? { base: httpDirBase } : {}),
       game: state.game,
       manifestUrl: `${BASE}/games/${state.game}-${__APP_VERSION__}/manifest.json`,
       sink: vfs,
@@ -78,7 +91,7 @@ export function useAssetBoot(): AssetBoot {
     });
 
     return { loader, vfs };
-  }, [state.game]);
+  }, [state.game, httpDirBase, loaderKind]);
 
   // Wrap the VFS with the modloader overlay once it's fully loaded (phase `warmup`+) — the game canvas only
   // mounts then, and the scan needs the complete `modloader/` tree. Computed once per loaded session (stable ref).
@@ -199,14 +212,17 @@ export function useAssetBoot(): AssetBoot {
     pakSource,
     pause: useCallback((): void => dispatch({ type: 'PAUSE' }), []),
     percent: toPercent(snapshot),
-    play: useCallback((game: GameId): void => {
-      dispatch({
-        accepted: isDisclaimerAccepted(game),
-        assetLoader: GAME_CONFIG[game].assetLoader,
-        game,
-        type: 'SELECT',
-      });
-    }, []),
+    play: useCallback(
+      (game: GameId): void => {
+        dispatch({
+          accepted: isDisclaimerAccepted(game),
+          assetLoader: loaderKind(game),
+          game,
+          type: 'SELECT',
+        });
+      },
+      [loaderKind],
+    ),
     resume: useCallback((): void => dispatch({ type: 'RESUME' }), []),
     retry: useCallback((): void => {
       setDetail('');

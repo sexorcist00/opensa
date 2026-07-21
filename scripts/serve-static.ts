@@ -6,13 +6,30 @@
  * points `?src=/build/perfect/opensa` here instead of copying the ~1.4 GB build into a Vite `public/`. sirv
  * honours Range, so the pak streams. CORS on; dev mode reads files fresh and tolerates a missing root.
  */
+import { readdirSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { join } from 'node:path';
 import sirv from 'sirv';
 
 const PORT = Number(process.env.PORT) || 3001;
 const serveStatic = sirv('static', { dev: true });
 const serveTests = sirv('tests', { dev: true }); // `/viewer/objects/x` → `tests/viewer/objects/x`
 const serveBuild = sirv('build', { dev: true }); // `/build/perfect/opensa/x` → `build/perfect/opensa/x`
+
+/** A flat `{ path, size }[]` walk of a served dir — the http-dir loader's file index (its `__index` endpoint). */
+function dirIndex(dir: string, base = ''): { path: string; size: number }[] {
+  const out: { path: string; size: number }[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = base ? `${base}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      out.push(...dirIndex(join(dir, entry.name), rel));
+    } else if (entry.isFile()) {
+      out.push({ path: rel, size: statSync(join(dir, entry.name)).size });
+    }
+  }
+
+  return out;
+}
 
 createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*'); // the app (Vite :5173) fetches this origin cross-port
@@ -21,7 +38,20 @@ createServer((req, res) => {
     res.end('Not found');
   };
   if (req.url?.startsWith('/build/')) {
-    req.url = req.url.slice('/build'.length); // sirv('build') serves that dir at root — drop the mount prefix
+    const path = req.url.slice('/build'.length).split('?')[0]; // drop the mount prefix + query
+    // `${base}/__index` → the flat file listing the http-dir loader (fetchInstallSource) needs.
+    if (path.endsWith('/__index')) {
+      try {
+        const body = JSON.stringify(dirIndex(join('build', path.slice(1, -'/__index'.length))));
+        res.setHeader('Content-Type', 'application/json');
+        res.end(body);
+      } catch {
+        notFound();
+      }
+
+      return;
+    }
+    req.url = path;
     serveBuild(req, res, notFound);
 
     return;
