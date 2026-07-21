@@ -116,6 +116,11 @@ export function loadModelFromClump(
  */
 export function loadModelFromOsm(engine: Engine, name: string, osm: ArrayBuffer): ViewedModel {
   const { model } = readModelOsm(name, new Uint8Array(osm));
+  // A world-textured model (most map objects + world clutter) carries NO textures in its `.osm` — they live
+  // in the pak's SHARED texture dictionary, which the viewer does not load. It cannot be shown standalone.
+  if (model.textures.length === 0) {
+    throw new Error(`${name}: map object — textures live in the shared pak, not viewable standalone`);
+  }
   const modelId = engine.createVehicleModel(model);
   const positions = new Float32Array(model.positions.slice().buffer);
   const indices =

@@ -164,24 +164,29 @@ function buildControls(): void {
 }
 
 async function fetchSide(side: Side, model: string): Promise<Fetched> {
-  // A converted side answers `/osm`; a stock side 404s it and we fall back to DFF+TXD.
-  const osm = await fetch(`${serverUrl}/osm?side=${side}&model=${encodeURIComponent(model)}`);
-  if (osm.ok) {
-    return { osm: await osm.arrayBuffer() };
-  }
-  const [dff, txd] = await Promise.all([
-    fetch(`${serverUrl}/dff?side=${side}&model=${encodeURIComponent(model)}`).then((response) =>
-      response.ok ? response.arrayBuffer() : null,
-    ),
-    fetch(`${serverUrl}/txd?side=${side}&model=${encodeURIComponent(model)}`).then((response) =>
-      response.ok ? response.arrayBuffer() : null,
-    ),
-  ]);
-  if (!dff) {
-    throw new Error(`${side}: dff not found`);
+  const q = `side=${side}&model=${encodeURIComponent(model)}`;
+  const tryOsm = async (): Promise<Fetched | null> => {
+    const response = await fetch(`${serverUrl}/osm?${q}`);
+
+    return response.ok ? { osm: await response.arrayBuffer() } : null;
+  };
+  const tryDff = async (): Promise<Fetched | null> => {
+    const [dff, txd] = await Promise.all([
+      fetch(`${serverUrl}/dff?${q}`).then((response) => (response.ok ? response.arrayBuffer() : null)),
+      fetch(`${serverUrl}/txd?${q}`).then((response) => (response.ok ? response.arrayBuffer() : null)),
+    ]);
+
+    return dff ? { dff, txd } : null;
+  };
+  // BEFORE is conventionally stock (DFF), AFTER converted (OSM) — try the likely format first so the common
+  // workflow makes no 404s; fall back to the other for the rare mismatch.
+  const [first, second] = side === 'after' ? [tryOsm, tryDff] : [tryDff, tryOsm];
+  const result = (await first()) ?? (await second());
+  if (!result) {
+    throw new Error(`${side}: ${model} not found`);
   }
 
-  return { dff, txd };
+  return result;
 }
 
 function flipSide(): void {
@@ -260,24 +265,34 @@ async function loadModelList(datalist: HTMLDataListElement, status: HTMLElement)
  */
 function rebuildBoth(): void {
   let triangles = 0;
+  const skipped: string[] = [];
 
   for (const side of ['before', 'after'] as const) {
     const state = sides[side];
     state.model?.dispose();
     state.model = null;
-    if (state.osm && state.name) {
-      // A converted side is already baked (incl. night colours) — the night-colours swap is a clump-only view.
-      state.model = loadModelFromOsm(viewer.engine, state.name, state.osm);
-    } else if (state.clump) {
-      const clump = nightColours ? withNightColours(state.clump) : state.clump;
-      state.model = loadModelFromClump(viewer.engine, clump, state.txd ? [state.txd] : []);
-    } else {
-      continue;
+    try {
+      if (state.osm && state.name) {
+        // A converted side is already baked (incl. night colours) — the night-colours swap is a clump-only view.
+        state.model = loadModelFromOsm(viewer.engine, state.name, state.osm);
+      } else if (state.clump) {
+        const clump = nightColours ? withNightColours(state.clump) : state.clump;
+        state.model = loadModelFromClump(viewer.engine, clump, state.txd ? [state.txd] : []);
+      } else {
+        continue;
+      }
+      triangles += state.model.triangles;
+    } catch (error) {
+      // A world-textured map object can't be shown standalone — skip THIS side, keep the other rendering.
+      skipped.push(side);
+      // eslint-disable-next-line no-console -- the reason (textures in the shared pak) belongs in the console
+      console.warn(`[compare] ${side}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    triangles += state.model.triangles;
   }
 
-  polyLabel.textContent = `Triangles: ${Math.round(triangles).toLocaleString()} (both sides)`;
+  polyLabel.textContent =
+    `Triangles: ${Math.round(triangles).toLocaleString()} (both sides)` +
+    (skipped.length > 0 ? ` — ${skipped.join(' + ')} not viewable standalone (map object)` : '');
   applyPrelit();
   layout();
 }

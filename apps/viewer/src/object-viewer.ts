@@ -69,7 +69,15 @@ async function addModel(model: ModelEntry): Promise<void> {
   }
   let view;
   if (osm) {
-    view = loadModelFromOsm(viewer.engine, base, osm);
+    try {
+      view = loadModelFromOsm(viewer.engine, base, osm);
+    } catch (error) {
+      // A world-textured map object can't be shown standalone (textures in the shared pak) — skip it.
+      // eslint-disable-next-line no-console -- the reason belongs in the console
+      console.warn(`[object] ${base}: ${error instanceof Error ? error.message : String(error)}`);
+
+      return;
+    }
   } else {
     const [dff, txd] = await Promise.all([
       fetchDff(model, base),
