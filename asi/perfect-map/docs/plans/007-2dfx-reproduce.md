@@ -4,7 +4,7 @@ Part of the [perfect-map ASI chain](readme.md), Phase 2 — **the very first tas
 
 ## Context
 
-The open issue ([lod-2dfx-particles.md](../../../../docs/open-issues/lod-2dfx-particles.md)) reproduced this once, via the full perfect-map pipeline with particle 2dfx left on cloned LODs: keeping type-1 emitters on the clones → **new-game crash at `0x004AA3A1`** (AV `[null+0x1B]`). Scale: 38 models carry particles, sa-lod cloned 11 of them (refinery smoke, Vegas plants, fountains, fire). We currently STRIP particles at build time so it never fires — the repro must deliberately UN-strip. _(The pre-RE `LoadObjectInstance`/null-model-info framing here was a mis-ID — [008](008-2dfx-emitter-re.md) proved the fault is `FxSystem_c::Stop` reading a freed blueprint; see the corrected characterization below.)_
+The open issue ([lod-2dfx-particles.md](../../../../docs/open-issues/fixed/lod-2dfx-particles.md)) reproduced this once, via the full perfect-map pipeline with particle 2dfx left on cloned LODs: keeping type-1 emitters on the clones → **new-game crash at `0x004AA3A1`** (AV `[null+0x1B]`). Scale: 38 models carry particles, sa-lod cloned 11 of them (refinery smoke, Vegas plants, fountains, fire). We currently STRIP particles at build time so it never fires — the repro must deliberately UN-strip. _(The pre-RE `LoadObjectInstance`/null-model-info framing here was a mis-ID — [008](008-2dfx-emitter-re.md) proved the fault is `FxSystem_c::Stop` reading a freed blueprint; see the corrected characterization below.)_
 
 Two forces to separate in the repro (the RE in 008 will need them apart):
 

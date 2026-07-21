@@ -4,7 +4,7 @@ Part of the [perfect-map ASI chain](readme.md), Phase 2. Depends on [009](009-2d
 
 ## Context
 
-Today ([lod-2dfx-particles.md](../../../../docs/open-issues/lod-2dfx-particles.md)) both LOD targets drop particle 2dfx:
+Today ([lod-2dfx-particles.md](../../../../docs/open-issues/fixed/lod-2dfx-particles.md)) both LOD targets drop particle 2dfx:
 
 - **sa** — `stripParticleEffects(bytes)` wrapped around every clone in `finalize.ts` + `fill-holes.ts` (keeps type-0 coronas/lights, removes type-1 particles).
 - **opensa** — structurally immune (cell bake rebuilds from geometry; `build2dfxSection` re-adds only type-0 lights via `LIGHT_2DFX = new Set([0])`).

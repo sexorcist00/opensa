@@ -4,7 +4,7 @@ Part of the [perfect-map ASI chain](readme.md). Depends on [003](003-patch-frame
 
 ## Context
 
-The four unbounded structures, from [ghost-barriers.md](../../../../docs/open-issues/ghost-barriers.md), in impact order:
+The four unbounded structures, from [ghost-barriers.md](../../../../docs/open-issues/fixed/ghost-barriers.md), in impact order:
 
 1. **`IplDef` int16 pool indexes** — THE root cause. `CIplStore::IncludeEntity` (0x404C90) truncates building-pool indexes to int16; `RemoveIpl` deletes entities by that `[firstBuilding..lastBuilding]` range. Past 32,767 permanent text rows the ranges wrap negative → stream-out corrupts CIplStore → ghost barriers + crashes. Ceiling: **2^15**, bisected exactly.
 2. **`gpLoadedBuildings`** (0xBCC0E0, `CFileLoader::LoadScene`) — 4096 rows/scene into a static array; a 30k monolith writes ~26k pointers past it → trashed statics.

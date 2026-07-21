@@ -1,6 +1,6 @@
 # 078 — Global bug fixing (post-full-pmb-run: engine + tools)
 
-**Status: OPEN — rounds 1–4 shipped; every ledger row fixed, awaiting ONE reconvert to confirm (2026-07-20).** It runs BEFORE [079 — viewers/lab on pmb output](../079-viewers-lab-on-pmb-output.md);
+**Status: OPEN — rounds 1–4 shipped; every ledger row fixed, awaiting ONE reconvert to confirm (2026-07-20).** It runs BEFORE [079 — viewers/lab on pmb output](../079-canonical-build-source/readme.md);
 the agreed order after it closes: 079 → full migration audit → merge `webgpu-migration` into `main`.
 
 ## Context

@@ -51,9 +51,9 @@ Both were real failure modes during bring-up.
 1. Resolve the tree object ids from the IDEs in `gta.dat` (plus the `lod<name>` model names).
 2. **Text first.** For each text IPL, drop tree rows (+ transitively their within-file LOD targets), re-index
    the surviving within-file `lod` links, and **return the old→new instance-index map**
-   ([`stripTextIpl`](../../src/adapters/gta-sa/strip/ipl-text.ts)).
+   ([`stripTextIpl`](../../src/adapters/gta-sa/strip/strip-map.ts)).
 3. **Binary second.** For each stream, drop tree HDs by id and remap each survivor's `lod` through its area's
-   text map — no within-stream re-index ([`stripBinaryIpl`](../../src/adapters/gta-sa/strip/ipl-binary.ts)).
+   text map — no within-stream re-index ([`stripBinaryIpl`](../../src/adapters/gta-sa/strip/strip-map.ts)).
    Streams pair to text by area key: `countrye_stream3.ipl` & `countrye.ipl` → `countrye`. A stream with no
    companion text leaves its `lod` untouched.
 4. **procobj** — drop the tree scatter rows (`stripProcObj` from `@opensa/map-placement/procobj-strip`).

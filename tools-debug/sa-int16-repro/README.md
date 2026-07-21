@@ -1,7 +1,7 @@
 # @opensa/sa-int16-repro
 
 The fast, deterministic **repro dial** for SA's int16 building-pool truncation — the "ghost barriers" bug
-([post-mortem](../../docs/open-issues/ghost-barriers.md)). It is the pass/fail **oracle** for the
+([post-mortem](../../docs/open-issues/fixed/ghost-barriers.md)). It is the pass/fail **oracle** for the
 [perfect-map ASI project](../../asi/perfect-map/docs/plans/readme.md): you cannot confirm a fix you cannot
 reliably trigger. Full reproducing plan: [docs/reproducing-the-int16-bug.md](./docs/reproducing-the-int16-bug.md).
 

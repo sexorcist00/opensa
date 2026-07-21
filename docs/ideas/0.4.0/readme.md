@@ -1,6 +1,6 @@
 # Ideas — 0.4.0
 
-Future-work plans for the 0.4.0 cycle. Each feature is a sequential chain of small plans under [plans/](plans/); a plan is implementable on its own and ends with a verification + measurements section (standing rule: record numbers into the plan doc after every phase).
+Future-work plans for the 0.4.0 cycle. Each feature is a sequential chain of small plans under `plans/` (all promoted to `docs/plans/` by now — the folder is gone); a plan is implementable on its own and ends with a verification + measurements section (standing rule: record numbers into the plan doc after every phase).
 
 **→ [overview.md](overview.md)** — the cross-chain roadmap: pillars, dependency graph, critical path, suggested execution order, and shared contracts (the `opensa-asi` target flag, the perf harness). Read that first for the big picture; the sections below are the per-chain index.
 

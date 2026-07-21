@@ -34,7 +34,7 @@ tsx tools/lod-procobj-generator/src/cli.ts --out <path> --game <path> [--in <dir
   Applied **trunk-only** (opaque surfaces; foliage — alpha-cutout — keeps its own prelit). Optionally pass a JSON
   of per-model overrides — `--prelight ./info.json` with `{ "cedar1_po": { "skip": true }, … }` opts those models
   **out** (LOD keeps its source prelit; HD packed verbatim). Bare `--prelight` applies to every model. Shared with
-  `lod-trees-generator` via [`@opensa/sa-lod/prelight`](../sa-lod/src/prelight.ts).
+  `lod-trees-generator` via [`@opensa/sa-lod/prelight`](../lod-common/src/prelight.ts).
 - `--modloader` — emit **two** independent **Modloader mods** (real game) under `<out>`, so **no stock IDE is
   rewritten**:
   - **`<out>/lod/`** — the LODs: LOD DFFs + `lod_procobj.txd`/`.col` in `gta3img/` (injected into `gta3.img` by
@@ -87,7 +87,7 @@ converted.
 A thin orchestrator over two shared packages. Plans: [`001` architecture](./docs/plans/001-architecture.md) ·
 [`002` build pipeline](./docs/plans/002-build-pipeline.md) · [`003` SA asset format](./docs/plans/003-sa-asset-format.md).
 
-- **[`@opensa/sa-lod`](../sa-lod/)** — the simplified-copy LOD pipeline (decimate → normals → encode DFF/TXD/COL),
+- **[`@opensa/sa-lod`](../lod-common/)** — the simplified-copy LOD pipeline (decimate → normals → encode DFF/TXD/COL),
   shared with [`opensa-lod-generator`](../opensa-lod-generator/).
 - **[`@opensa/map-placement`](../map-placement/)** — SA map-edit workflows (procobj scatter → static IPL, id
   allocation, IDE/gta.dat edits, swapped-HD retexture), shared with `lod-trees-generator`.

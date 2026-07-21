@@ -1,7 +1,7 @@
 # perfect-map ASI
 
 Our own `.asi` engine-patch for real **GTA:SA 1.0 US** that lifts the hard limits behind the
-[ghost-barriers bug](../../docs/open-issues/ghost-barriers.md) — the int16 `IplDef` pool-index truncation plus
+[ghost-barriers bug](../../docs/open-issues/fixed/ghost-barriers.md) — the int16 `IplDef` pool-index truncation plus
 the three other unbounded placement structures — so perfect-map builds can add **unlimited** objects instead of
 staying under the ≤30k-text-row / ≤39-slot work-around. `ProperFixes.asi` proves the fix is code-patchable but is
 obfuscated + license-locked; we reverse-engineer it behaviourally and write our own patches from the decompiled

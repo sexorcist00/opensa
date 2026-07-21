@@ -1,7 +1,7 @@
 # perfect-map ASI — architecture
 
 The design for our own `.asi` engine-patch for real GTA:SA 1.0 US that lifts the hard limits behind the
-[ghost-barriers bug](../../../docs/open-issues/ghost-barriers.md) (int16 `IplDef` pool-index truncation + three
+[ghost-barriers bug](../../../docs/open-issues/fixed/ghost-barriers.md) (int16 `IplDef` pool-index truncation + three
 more unbounded placement structures), so perfect-map builds can add unlimited objects instead of staying under
 the ≤30k-text-row / ≤39-slot work-around. This document is the standing architecture; the numbered
 [plans](./plans/readme.md) are the execution steps that fill it in. The reproduction oracle every step is

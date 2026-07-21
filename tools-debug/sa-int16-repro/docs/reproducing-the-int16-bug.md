@@ -9,7 +9,7 @@ in-game flip confirmation is the only piece left, and it needs the user's Wine i
 
 ## Context
 
-The ghost-barriers post-mortem ([ghost-barriers.md](../../../docs/open-issues/ghost-barriers.md)) reproduced this
+The ghost-barriers post-mortem ([ghost-barriers.md](../../../docs/open-issues/fixed/ghost-barriers.md)) reproduced this
 the hard way: the full perfect-map build (~22k rows) flips the bug at **exactly 2^15 = 32,768** total permanent
 text-IPL instances map-wide (bisected: **31,300 rows → clean; 33,210 → bug**). Symptom: script-gated
 `barriers2.ipl` roadblocks appear permanently at the Hampton Barns bridge on any save, and teleport-then-save

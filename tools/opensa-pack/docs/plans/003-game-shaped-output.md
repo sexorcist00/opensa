@@ -77,7 +77,7 @@ Three concrete costs of the current shape:
 3. **Two hosts, two loaders, one symlink farm.** `packages/engine/src/stream/setup.ts:30-35` and
    `apps/engine-lab/src/pak-loader.ts:20-26` duplicate the manifest fetch/validate; the paks live in
    `apps/engine-lab/public/` with root-level symlinks (`public/pak-ls`, `public/pak-map`, `public/ped`) as
-   the sharing mechanism. Plan [079](../../../../docs/plans/079-viewers-lab-on-pmb-output.md) collapses
+   the sharing mechanism. Plan [079](../../../../docs/plans/079-canonical-build-source/readme.md) collapses
    that, and it needs this plan's output shape to collapse ONTO.
 
 ## The gap this plan has to close first
@@ -218,7 +218,7 @@ Two fields die. Their consumers, in the order they must be cut:
   becomes the only path
 - `apps/engine-lab/src/main.ts:535-536` — **ordering dependency**: the lab has no VFS today and reads
   timecyc exclusively from the manifest, so this field cannot be deleted until the lab reads a game dir
-  ([079](../../../../docs/plans/079-viewers-lab-on-pmb-output.md) phases 1–2). 079 phase 2 and 003 phase 4
+  ([079](../../../../docs/plans/079-canonical-build-source/readme.md) phases 1–2). 079 phase 2 and 003 phase 4
   are the same cut.
 
 ### Convert-everything dissolves the exclusion set — and creates a size question
@@ -375,7 +375,7 @@ end of this phase a stock build is 100 % optimized and the `.dff`/`.txd` entries
 fetches `/ped/ped.json` + `/ped/ped.bin` — the probe fixture — in the **production** host, so moving it to a
 by-name VFS load is a production change and needs its own field check, not just a green suite.
 The lab stops having a private ped/vehicle fixture format here — it loads peds and cars by name through the
-VFS like the game and the viewers (plan [079](../../../../docs/plans/079-viewers-lab-on-pmb-output.md)), so
+VFS like the game and the viewers (plan [079](../../../../docs/plans/079-canonical-build-source/readme.md)), so
 `ped-probe.ts` / `vehicle-probe.ts` and `ped.bin` / `vehicle.bin` retire.
 
 **Phase 5b — the unoptimized path proves itself. DONE 2026-07-19, and the field earned its keep.**

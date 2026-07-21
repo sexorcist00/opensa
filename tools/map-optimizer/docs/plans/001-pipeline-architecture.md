@@ -18,7 +18,7 @@ plan (002+).
 
 Reuses the main project's renderware parsers + build partition (the engine in `../src`); separate project,
 one-directional dependency. Related: the runtime in-memory alternative in
-[../../../docs/ideas/map-optimizer.md](../../../docs/ideas/map-optimizer.md) (this plan instead chooses the
+the retired idea note `docs/ideas/map-optimizer.md` (this plan instead chooses the
 **offline, writes-optimized-assets** path, mirroring `scripts/build-game.ts`).
 
 ## Context / problem
