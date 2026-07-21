@@ -67,6 +67,7 @@
   ],
   "scripts": {
     "arch": "tsx scripts/arch-graph.ts",
+    "arch:render": "tsx scripts/arch-graph.ts --svg docs/architecture/assets/packages.svg && tsx scripts/arch-graph.ts --layers app,engine --svg docs/architecture/assets/runtime-packages.svg && tsx scripts/arch-graph.ts --render docs/architecture",
     "build": "tsc -b && vite build",
     "build:game:anderius": "tsx scripts/build-game.ts --game anderius",
     "build:game:carcer": "tsx scripts/build-game.ts --game carcer",
@@ -149,6 +150,7 @@
     "jsdom": "29.1.1",
     "knip": "6.13.1",
     "lint-staged": "17.0.4",
+    "mermaid": "11.16.0",
     "nx": "23.0.1",
     "playwright": "1.60.0",
     "prettier": "3.8.3",

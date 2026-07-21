@@ -120,3 +120,19 @@ Never edit generated code manually.
 - If only one component changed, avoid unrelated validations
 - Read only files relevant to the current task
 - Avoid scanning the entire repository unless necessary
+
+---
+
+## Documentation Maintenance
+
+Keep these in sync with the code — update them in the same change, not later:
+
+- `docs/architecture/` — when a change alters architecture (modules, boot/loading flow, formats, streaming,
+  pmb stages, tools), update the matching doc AND its diagram. Diagrams are mermaid blocks named `%%| <name>`
+  rendered to `docs/architecture/assets/` by `npm run arch:render` — edit the block, re-render, commit both
+- `docs/features/` — when developing a feature, update its file's state; a new feature gets its own new file
+  (+ a row in `docs/features/README.md`)
+- `docs/edge-cases/` — when a new limitation/constraint is discovered, add it to the matching file; when one
+  is lifted, remove it. Only CURRENT limitations live there, no legacy
+- `docs/links.md` — when an external resource (repo, article, tool) proves useful, add it here
+- `docs/commands.md` — when a command/CLI/param is added or changed, update this cheat sheet

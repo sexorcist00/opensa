@@ -126,4 +126,4 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 
 - [`../open-issues/`](../open-issues/) — investigated problems kept for reference (e.g. locked-dff).
 - [`../ideas/`](../ideas/) — parked design directions ("later, maybe").
-- [`../architecture.md`](../architecture.md) — high-level engine architecture.
+- [`../architecture/`](../architecture/README.md) — the architecture docs (modules, boot/loading, streaming, pmb, tools).
