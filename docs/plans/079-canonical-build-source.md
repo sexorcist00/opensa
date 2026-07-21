@@ -1,6 +1,7 @@
-# 079 — one canonical build source: every dev surface reads the same build, one version
+# 079 — one canonical build source, the dev-surface unification, and its documentation
 
-**Status: IN PROGRESS. Renamed + widened 2026-07-21 (was `079-viewers-lab-on-pmb-output`). Depends on
+**Status: phases 0–5 DONE 2026-07-21 (functionally closed — see below); phase 6 (documentation) OPEN, scope
+TBD. Renamed + widened twice (was `079-viewers-lab-on-pmb-output`, then `…canonical-build-source`). Depends on
 [opensa-pack 003](../../tools/opensa-pack/docs/plans/003-game-shaped-output.md) — this plan consumes the
 game-shaped output that one produces.**
 
@@ -219,6 +220,9 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
   two game dirs, which the compare-server already is.** Still open (gitignored/tooling cleanup, low value):
   the `public/` symlink farm + orphaned `clouds-*.rgba` (nothing references them since phase 2), repointing e2e
   at a committed game-shaped fixture, and the compare-coverage audit finding. Viewer render is browser-only.
+- **Phase 6 — documentation. OPEN, scope TBD (temporary anchor 2026-07-21).** Beyond the stale-doc sweep that
+  rides with phases 0–5, the user wants NEW documentation added under this plan — the exact set to be named
+  next session. _Placeholder; expand here once the doc list is given._
 - **Close-out — `npm run lint`, coverage floors held, `docs/development/` repointed at the new workflow.**
 
 ## Tasks
@@ -239,6 +243,7 @@ game does. `?src=` becomes a build selector pointing at a game dir (default `./b
       tabs move to `.osm` in phase 5
 - [x] Phase 5 (viewers + probe CLIs) — vehicle/character tabs read `.osm`; ped-probe/vehicle-probe deleted.
       Left (gitignored/low-value): `public/` symlinks, `clouds-*.rgba`, e2e-fixture repoint, compare-coverage audit
+- [ ] Phase 6 — documentation (scope TBD, temporary anchor): the stale-doc sweep + NEW docs the user will name
 - [ ] Close-out — lint, coverage floors, dev docs repointed
 
 ## Measurement ledger
