@@ -17,6 +17,13 @@ The engine never parses RenderWare at runtime — everything is converted offlin
 Sections are read independently — the main thread takes `COLL` without touching geometry; consumers reject
 unknown **major** versions loudly, minors only add optional sections.
 
+**A vehicle's vertex streams carry two things the names do not say** (plan 084): the NIGHT colour set's
+**alpha** is the model's own sky occlusion — a car has no prelit set, so that byte was a constant 255 and now
+holds the AO the builder computes — and `reflect.x` is SPARE, because the reflection pipe reflects the live
+probe rather than the DFF's env texture. `DESC` submeshes also gained an optional `extra` (which `extraN`
+alternative a submesh belongs to; the spawn picks one) and `tyre` (rubber, found by geometry, never
+reflective). All are additive: a pak built before them still reads.
+
 **Private vs world textures.** By-name classes (vehicles, peds, clutter, props, breakables) carry their own
 dictionary in the `.osm` `TEXS` section — self-contained, viewable standalone. **Map objects** are planned
 against the pak's shared world dictionary instead: their `.osm` is `DESC + GEOM` with global array

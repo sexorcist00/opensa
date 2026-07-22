@@ -63,9 +63,44 @@ function model(): VehicleModelData {
   } as unknown as VehicleModelData;
 }
 
+/** The same model plus two mutually-exclusive optional parts, which only a SPAWN may choose between. */
+function modelWithExtras(): VehicleModelData {
+  const base = model();
+
+  return {
+    ...base,
+    parts: [...base.parts, { localRotation: [0, 0, 0, 1], localTranslation: [0, -2, 0.5], name: 'extra1' }],
+    submeshes: [
+      ...base.submeshes,
+      {
+        damageGroup: null,
+        extra: 'extra1',
+        indexCount: 3,
+        indexOffset: 12,
+        kind: 'body',
+        lamp: null,
+        part: 3,
+        translucent: false,
+      },
+      {
+        damageGroup: null,
+        extra: 'extra2',
+        indexCount: 3,
+        indexOffset: 15,
+        kind: 'body',
+        lamp: null,
+        part: 3,
+        translucent: false,
+      },
+    ],
+  } as unknown as VehicleModelData;
+}
+
 const BONNET_OK = 1;
 const BONNET_DAM = 2;
 const LOD = 3;
+const EXTRA_1 = 4;
+const EXTRA_2 = 5;
 
 describe('EngineVehicleHandle', () => {
   describe('negative cases', () => {
@@ -77,6 +112,18 @@ describe('EngineVehicleHandle', () => {
       expect(visible.get(BONNET_OK)).toBe(true);
       expect(visible.get(BONNET_DAM)).toBe(false);
       expect(visible.get(LOD)).toBe(false);
+    });
+
+    it('never draws two `extraN` alternatives at once — they occupy the same spot', () => {
+      // Twenty spawns, because the pick is random: any of them showing both (or neither) is the jumble the
+      // rule exists to prevent.
+      for (let spawn = 0; spawn < 20; spawn += 1) {
+        const { probe, visible } = instance();
+
+        new EngineVehicleHandle(probe, modelWithExtras(), () => undefined);
+
+        expect([visible.get(EXTRA_1), visible.get(EXTRA_2)].filter(Boolean)).toHaveLength(1);
+      }
     });
 
     it('an unknown part cannot be detached', () => {
@@ -102,6 +149,20 @@ describe('EngineVehicleHandle', () => {
       expect(visible.get(BONNET_OK)).toBe(false);
       expect(visible.get(BONNET_DAM)).toBe(true);
       expect(visible.get(LOD)).toBe(false);
+    });
+
+    it('keeps the SAME extra across an LOD swap and a damage change (one decision owns visibility)', () => {
+      const { probe, visible } = instance();
+      const handle = new EngineVehicleHandle(probe, modelWithExtras(), () => undefined);
+      const chosen = visible.get(EXTRA_1) === true ? EXTRA_1 : EXTRA_2;
+      const other = chosen === EXTRA_1 ? EXTRA_2 : EXTRA_1;
+
+      handle.setPartDamaged('bonnet', true);
+      handle.setLodBand('vlo');
+      handle.setLodBand('hd');
+
+      expect(visible.get(chosen)).toBe(true);
+      expect(visible.get(other)).toBe(false);
     });
 
     it('a culled car draws nothing at all', () => {

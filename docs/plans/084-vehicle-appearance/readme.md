@@ -185,23 +185,30 @@ The refused alternative is kept as a lever with its price in
 
 `vehicle/sky-occlusion.ts` — horizon mapping over a height field, not ray casting:
 
+- the car is first put in its REST POSE. The buffers do not hold it: a wheel's vertices are wheel-local (a
+  0.35 m blob about the origin) and a door's are hinge-local, because the part matrix places them at draw
+  time. Skipping this step — which the first cut did — stacks four wheels inside the cabin, and they
+  occluded it: the stock cars' seat surfaces read 55-110 of 255 with the wheels in there and 136-250 once
+  they were placed. Mirrors `RigidEntity.flatten`: `T(t) x R(q) x S x offset`;
 - the shown shell (`kind === 'body'` submeshes only) splats into a 32x32 "highest surface over this cell"
   grid; 8 azimuths x 8 cells of marching per vertex give the horizon angle, `1 - sin(horizon)` the sky left;
 - **the normal weights each azimuth**, or the roof would darken the door skin under it. Measured on the mod
-  admiral: body paint submesh went 146 -> 209 mean (of 255) once weighting was in;
+  admiral: the body paint submesh went 146 -> 199 mean (of 255) once weighting was in;
 - the LOD and the `_dam` twins are excluded from CASTING (they still receive). This is the convertible case:
   a `_vlo` blob would roof an open car;
 - the result rides in the NIGHT set's **alpha**, which the builder had been filling with a constant 255 — no
   new vertex buffer, no `.osm` version bump, no second upload. The shader carries it to the pixel in
   `local.w` (the struct was at 15 of the 16 inter-stage locations, so a 16th was not available).
 
-Measured, mod admiral (90 887 verts): exhaust group mean **122**/255, engine-bay bits 71, seats 45-55, body
-paint 209, roof 255. Cost `skyOcclusion` 78 ms on that car, 8-20 ms on stock cars (3.8-4.8 k verts) — the
+Measured, mod admiral (91 746 verts): exhaust group mean **121**/255, pedals 43, seats 60-70, body paint
+199, roof 255. Cost `skyOcclusion` 64-76 ms on that car, 3-4 ms on stock cars (3.8-4.7 k verts) — the
 converted path pays it offline, a modloader car once at spawn.
 
-Convertibles, up-facing seat surfaces (255 = open sky): feltzer **99**, comet 88, windsor 110 (its soft top
-is modelled UP), against closed cars admiral 81, infernus 83, sultan 65, stallion 55. Field-checked in the
-lab: the feltzer's open cabin reads lit, its footwell dark.
+Convertibles work by construction: no roof geometry means nothing to cast, which the unit test pins with a
+roof excluded from the shell. Field-checked in the lab on the **feltzer** — its open cabin reads lit, its
+footwell dark. A coarse spot-check of upward-facing seat-height surfaces across body styles lands between 73
+(bfinject, a buggy seat deep in its frame) and 250 (stallion, roofless), with the closed admiral at 136; the
+probe is too crude to rank the middle of that range, which is why the rendered check is the one that counts.
 
 Still open in this row: contact shadow with the ground (nothing here darkens the ground under a car), and
 peds (row 5).

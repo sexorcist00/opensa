@@ -20,10 +20,10 @@ map AO. The builder would then only consume what the converter wrote.
 
 The whole pass, on the spawn path only. Measured 2026-07-22 (Apple M-series, `skyOcclusion` alone):
 
-| model                    | verts  | pass    |
-| ------------------------ | ------ | ------- |
-| stock cars (admiral, infernus, cheetah…) | 3.8–4.8 k | 8–20 ms |
-| mod admiral              | 90 887 | 78 ms   |
+| model                                    | verts     | pass     |
+| ---------------------------------------- | --------- | -------- |
+| stock cars (admiral, infernus, rhino…)   | 3.8–4.7 k | 3–4 ms   |
+| mod admiral                              | 91 746    | 64–76 ms |
 
 Once per MODEL, not per instance, and only for models that are not already converted. So the realistic win
 is a single hitch of tens of milliseconds the first time an unconverted car spawns.

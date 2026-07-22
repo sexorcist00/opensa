@@ -134,7 +134,8 @@ export function buildVehicleModel(
   // the shader already reads that stream per vertex, so a car carries its own AO with no new buffer, no
   // `.osm` version bump and no second upload. See `sky-occlusion.ts` for why it is computed here.
   const night = new Uint8Array(scratch.night);
-  const occlusion = skyOcclusion(scratch.positions, scratch.normals, scratch.positions.length / 3, shownShell(scratch));
+  const placed = restPose(scratch);
+  const occlusion = skyOcclusion(placed.positions, placed.normals, scratch.positions.length / 3, shownShell(scratch));
   for (let vertex = 0; vertex < occlusion.length; vertex += 1) {
     night[vertex * 4 + 3] = occlusion[vertex];
   }
@@ -405,6 +406,15 @@ function appendGeometry(
   });
 }
 
+/** A column-major mat4 applied to a point (the door offset — rotation and translation only). */
+function applyMat4(m: ArrayLike<number>, x: number, y: number, z: number): [number, number, number] {
+  return [
+    m[0] * x + m[4] * y + m[8] * z + m[12],
+    m[1] * x + m[5] * y + m[9] * z + m[13],
+    m[2] * x + m[6] * y + m[10] * z + m[14],
+  ];
+}
+
 /**
  * Which side a wheel mesh was authored on — READ FROM THE MODEL, not assumed. Walking up from the frame the
  * mesh hangs on, the first corner name found gives the side: either the mesh's own `wheel_rf` (a lone corner
@@ -530,14 +540,14 @@ function frameName(clump: RWClump, frameIndex: number): string {
   return clump.frames[frameIndex]?.name.trim().toLowerCase() ?? '';
 }
 
-function hasWheelDummies(clump: RWClump): boolean {
-  return clump.frames.some((frame) => WHEEL_DUMMY_RE.test(frame.name.trim().toLowerCase()));
-}
-
 /**
  * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
  * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
  */
+
+function hasWheelDummies(clump: RWClump): boolean {
+  return clump.frames.some((frame) => WHEEL_DUMMY_RE.test(frame.name.trim().toLowerCase()));
+}
 
 /** Narrowest index array the vertex count allows — see the call site. */
 function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint32Array {
@@ -734,6 +744,59 @@ function reflectionOf(material: RWMaterial): [number, number, number, number] {
   // pipe reflects the LIVE probe, so SA's baked env photo is not the colour source and claiming a layer for
   // it only made every car ship a 512x512 texture it never read.
   return [0, byte(coefficient), byte(intensity), byte(specular)];
+}
+
+/**
+ * Every vertex where it actually SITS on the parked car — the model-space rest pose.
+ *
+ * The buffers do not hold that: a wheel's vertices are wheel-local (a 0.35 m blob about the origin) and a
+ * door's are hinge-local, because the part matrix places them at draw time. Anything that reasons about the
+ * car's SHAPE — the sky occlusion below — has to place them first, or it sees four wheels stacked inside the
+ * cabin. Mirrors `RigidEntity.flatten`: T(t) x R(q) x S x offset.
+ */
+function restPose(scratch: Scratch): { normals: number[]; positions: number[] } {
+  const positions = [...scratch.positions];
+  const normals = [...scratch.normals];
+  const partOf = new Int32Array(positions.length / 3).fill(-1);
+  for (const submesh of scratch.submeshes) {
+    for (let at = 0; at < submesh.indexCount; at += 1) {
+      partOf[scratch.indices[submesh.indexOffset + at]] = submesh.part;
+    }
+  }
+  for (let vertex = 0; vertex < partOf.length; vertex += 1) {
+    const part = scratch.parts[partOf[vertex]];
+    if (!part) {
+      continue;
+    }
+    const at = vertex * 3;
+    const scale = part.scale ?? 1;
+    const inside = part.offset
+      ? applyMat4(part.offset, positions[at], positions[at + 1], positions[at + 2])
+      : ([positions[at], positions[at + 1], positions[at + 2]] as [number, number, number]);
+    const turned = rotateByQuat(part.localRotation, inside[0] * scale, inside[1] * scale, inside[2] * scale);
+    positions[at] = turned[0] + part.localTranslation[0];
+    positions[at + 1] = turned[1] + part.localTranslation[1];
+    positions[at + 2] = turned[2] + part.localTranslation[2];
+    const spun = rotateByQuat(part.localRotation, normals[at], normals[at + 1], normals[at + 2]);
+    normals[at] = spun[0];
+    normals[at + 1] = spun[1];
+    normals[at + 2] = spun[2];
+  }
+
+  return { normals, positions };
+}
+
+/** v turned by the quaternion q — the shortest form, t = 2 (q_xyz x v). */
+function rotateByQuat(q: readonly number[], x: number, y: number, z: number): [number, number, number] {
+  const tx = 2 * (q[1] * z - q[2] * y);
+  const ty = 2 * (q[2] * x - q[0] * z);
+  const tz = 2 * (q[0] * y - q[1] * x);
+
+  return [
+    x + q[3] * tx + (q[1] * tz - q[2] * ty),
+    y + q[3] * ty + (q[2] * tx - q[0] * tz),
+    z + q[3] * tz + (q[0] * ty - q[1] * tx),
+  ];
 }
 
 /**

@@ -68,10 +68,31 @@ positive gate verdict swaps the controller without invalidating the chain.
 | 03  | [Stability forces](03-stability.md)                      | Anti-roll bars, anti-dive/anti-squat (THE nose fix), speed downforce, arcade roll stabiliser — replaces the global damping band-aid. |
 | 04  | [Drivetrain + brakes](04-drivetrain-brakes.md)           | Gears + drive type F/R/4, engine braking, brake bias, handbrake = rear grip cut (the SA slide), reverse rework.                      |
 | 05  | [Tyres + steering + THE GATE](05-tyres-steering-gate.md) | Traction mapping, steering feel v2, counter-steer assist; gate verdict: DRCVC tyre ceiling → own controller go/no-go.                |
+| 05b | Damageable tyres (see below)                              | Burst a tyre: grip drops on that corner, the car pulls, the wheel sits on its rim. The detection half already shipped.               |
 | 06  | [Air, kerbs, visual suspension](06-air-kerbs-visual.md)  | In-air attitude control, kerb contact smoothing, VISIBLE suspension travel through the rig.                                          |
 | 07  | [Presets + physics CI](07-presets-regression.md)         | Per-class field sweep (sports/truck/bus), replay regression pack with tolerance bands, close-out.                                    |
 
 Execution order + rationale: [priority.md](priority.md).
+
+### 05b — damageable tyres (queued 2026-07-22, no code yet)
+
+The half nobody could do before is done: **the tyre is identifiable**. `renderware/src/vehicle/wheel-tyre.ts`
+finds a wheel's rubber by geometry — it is the outer band of the disc, see
+[plan 084 row 3b](../084-vehicle-appearance/readme.md) — and every tyre submesh is tagged `tyre: true` in the
+built model, on the converted and the modloader path alike. 180 of 215 stock vehicles have one; the rest
+(boats, aircraft, a few one-material wheels) have none, and the feature has to survive that.
+
+What it still needs, when the row is picked up:
+
+- **State per CORNER, not per car.** The wheel index is already the handle's unit (`VehicleWheelInfo`); tyre
+  damage belongs beside it, not in the damage-GROUP set the body panels use.
+- **Physics**: friction slip and suspension dropped on that wheel alone. Plan 02 makes per-car suspension
+  real, and this is the same seam driven to a per-WHEEL value.
+- **Visual**: hide the tyre submesh (the same per-instance visibility that already hides `_dam` and the
+  unchosen `extraN`) and drop the wheel radius to the rim so the corner sits down. The rim is exactly the
+  wheel submeshes NOT tagged `tyre`.
+- **Cause**: gunfire, and kerb/impact thresholds — which wants plan 06's kerb work first, or every pothole
+  bursts a tyre.
 
 ## Ground rules
 

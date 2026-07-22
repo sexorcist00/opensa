@@ -501,6 +501,37 @@ describe.skipIf(!existsSync(ADMIRAL) || !existsSync(GENERIC_TXD))('buildVehicleM
       expect(lamps).toEqual(new Set(['head', 'tail']));
     });
 
+    it('occludes the bottom of the car and leaves the roof open to the sky', () => {
+      // The night set's alpha is the self-occlusion (`sky-occlusion.ts`), and the claim is about SHAPE, so
+      // the probe is the shape: the highest tenth of the car sees the sky, the lowest tenth is underneath it.
+      const heights: { alpha: number; z: number }[] = [];
+      for (let vertex = 0; vertex < built.positions.length / 3; vertex += 1) {
+        heights.push({ alpha: built.night[vertex * 4 + 3], z: built.positions[vertex * 3 + 2] });
+      }
+      heights.sort((left, right) => left.z - right.z);
+      const tenth = Math.floor(heights.length / 10);
+      const mean = (values: { alpha: number }[]): number =>
+        values.reduce((sum, value) => sum + value.alpha, 0) / values.length;
+      const bottom = mean(heights.slice(0, tenth));
+      const top = mean(heights.slice(-tenth));
+
+      expect(bottom).toBeLessThan(top * 0.75);
+      expect(top).toBeGreaterThan(200); // a roof is open sky by definition
+    });
+
+    it('finds the tyre on every real wheel and silences only that', () => {
+      const wheelParts = new Set(built.wheels.map((wheel) => wheel.part));
+      const wheelSubmeshes = built.submeshes.filter((submesh) => wheelParts.has(submesh.part));
+      const tyres = wheelSubmeshes.filter((submesh) => submesh.tyre);
+      const coefficient = (submesh: (typeof tyres)[number]): number =>
+        built.reflect[built.indices[submesh.indexOffset] * 4 + 1];
+
+      // Every wheel finds its rubber (the stock admiral authors TWO tyre materials on each), and the whole
+      // of it is silenced. The rim is not asserted here: this model authors no reflection on it at all.
+      expect(new Set(tyres.map((submesh) => submesh.part))).toEqual(wheelParts);
+      expect(new Set(tyres.map(coefficient))).toEqual(new Set([0]));
+    });
+
     it('carries a real paint slot: the carcols markers are per-vertex, not baked colours', () => {
       const slots = new Set<number>();
       for (let at = 2; at < built.meta.length; at += 4) {
@@ -606,6 +637,22 @@ describe('buildVehicleModel (wheel side, real models)', () => {
         }
       });
     }
+
+    it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))(
+      "ships all SIX of a real model's extras, each tagged with its own frame",
+      () => {
+        const built = buildVehicleModel(
+          parseDff(toArrayBuffer(readFileSync('tests/custom/dff/vehicle/petro-6wheels.dff'))),
+          new VehicleTextures([]),
+        );
+        const tagged = new Set(built.submeshes.map((submesh) => submesh.extra).filter(Boolean));
+
+        // The choice is the spawn's, so the MODEL must carry every alternative — a build-time pick would
+        // freeze one of these six into the pak for every petro in the world.
+        expect([...tagged].sort()).toEqual(['extra1', 'extra2', 'extra3', 'extra4', 'extra5', 'extra6']);
+        expect(built.parts.filter((part) => part.name.startsWith('extra'))).toHaveLength(6);
+      },
+    );
 
     it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))(
       'silences the tyre and leaves the rim reflective — the model that was caught glinting',
