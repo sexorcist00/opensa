@@ -7,9 +7,15 @@ Limits and deliberate approximations of the own WebGPU engine.
 - **World shadowing is baked, the sun doesn't track.** Per-pixel shading of the ~1,038 static 2dfx lamps
   cost 120 → 25 fps; instead the world carries a baked arc-averaged sun-visibility scalar. Street lamps
   light nothing but themselves — surface lighting from lamps is unimplemented (plan 074/17, deferred).
-- **No runtime SSAO; dynamic models get no AO.** Baked AO covers the map only. Vehicles/peds use a flat
-  indirect term + `skyVisibility(normal)` — panel gaps / wheel arches / ground contact can't darken; night
-  level, reflection strength and dynamic AO are the open rows of plan 084.
+- **No runtime SSAO.** A vehicle carries its own AO instead: `vehicle/sky-occlusion.ts` computes per-vertex
+  sky visibility from a height field over the car's shown shell (LOD/`_dam` excluded, so a convertible is
+  not roofed by its own LOD blob) and it rides in the night set's alpha. It darkens what is UNDER something
+  — cabin, underbody, exhaust — and nothing else: a panel gap and the contact with the ground still can't
+  darken, and PEDS get no AO at all. Reflection strength stays an open row of plan 084.
+- **A material with SA's `reflection`/`specular` plugin but no env map renders matte.** `reflectionOf()`
+  gates reflectivity on `envMap.coefficient > 0`, so exhausts and bare-metal trim authored with the other
+  two plugins get no reflection and no specular (prod's `enhanced` preset supplied clearcoat as a constant
+  and they read as dull chrome). Plan 084 row 2.
 - **Shader-stage limits are invisible to tests.** The fake GPUDevice doesn't validate the 16-varying
   fragment-input cap or binding visibility — two shader defects shipped through 2,325 green tests. Check
   WGSL by eye (a static check is a noted follow-up in plan 084).

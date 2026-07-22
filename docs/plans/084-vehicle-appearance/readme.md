@@ -97,11 +97,19 @@ average indirect drops roughly half, which narrows row 1 below without closing i
 
 ## Open rows
 
-### 1. Night level of dynamic models vs the map
+### 1. Night level of dynamic models vs the map — SHIPPED 2026-07-22
 
-After row B the gap is roughly 2.5× instead of 5×. There is no truth in the data here — "a car must not look
-like a light source" is the whole specification, so this is one constant and a field round, not an analysis.
-Cheapest open row; do it first.
+The map's indirect is `prelit x params.y x ao`; a car's was `params.y` alone. The two missing factors are
+now supplied: `DYNAMIC_INDIRECT = 0.35` stands in for the mean prelit (SA map models average 88/255 luma),
+and row 3's occlusion supplies the AO. Both land in one line of `rigidShade`:
+
+```wgsl
+let ambient = frame.params.y * DYNAMIC_INDIRECT * skyVisibility(normal) * in.local.w;
+```
+
+Found by a field probe, not by reading: the shader was temporarily patched to output its own terms as
+colour channels and shot headless under the parked admiral. Measured at noon, BEFORE: `ambient` saturated
+at ~1.0 on the underbody — a car's exhaust was lit as if it faced open sky.
 
 ### 2. Reflections — DECISION NEEDED before any code
 
@@ -136,19 +144,34 @@ the wheel diameter in row A, where the data WAS the truth and the fudge was corr
 mods ship 0.5 because it is the exporter's default, not a decision. This is also the shape the user asked
 for at the top of the session: a thin format, one extensible interpretation layer.
 
-### 3. Ambient occlusion for dynamic models
+### 3. Ambient occlusion for dynamic models — SHIPPED 2026-07-22
 
-Row B restored shape from orientation; it cannot darken a panel gap, a wheel arch, or the contact with the
-ground, because nothing in the dynamic path knows about occlusion. Prod covered this with SSAO, which is
-gone. Baked AO exists (opensa-pack, on by default) but bakes into the MAP — a dynamic model gets none.
+**Where it is computed is a user decision (2026-07-22): the shared BUILDER, never the converter.** Baking it
+in opensa-pack would make a modloader car differ from a converted one; `buildVehicleModel` runs on both
+paths, so the numbers agree by construction and the pack merely persists what the builder already produced.
 
-Options, not yet chosen: screen-space pass (closest to what was lost, covers peds too, costs GPU — see
-row 4 before adding load); baked per-vertex AO in the model (free at runtime, but a modloader car must be
-computed at spawn and comet is 83 k verts); contact shadows only (cheap, fixes the ground contact, does
-nothing for panel gaps).
+`vehicle/sky-occlusion.ts` — horizon mapping over a height field, not ray casting:
 
-Judgement: hold until rows 1 and 2 are field-judged. There is a real chance AO turns out to be polish rather
-than necessity once the level and the reflections are right.
+- the shown shell (`kind === 'body'` submeshes only) splats into a 32x32 "highest surface over this cell"
+  grid; 8 azimuths x 8 cells of marching per vertex give the horizon angle, `1 - sin(horizon)` the sky left;
+- **the normal weights each azimuth**, or the roof would darken the door skin under it. Measured on the mod
+  admiral: body paint submesh went 146 -> 209 mean (of 255) once weighting was in;
+- the LOD and the `_dam` twins are excluded from CASTING (they still receive). This is the convertible case:
+  a `_vlo` blob would roof an open car;
+- the result rides in the NIGHT set's **alpha**, which the builder had been filling with a constant 255 — no
+  new vertex buffer, no `.osm` version bump, no second upload. The shader carries it to the pixel in
+  `local.w` (the struct was at 15 of the 16 inter-stage locations, so a 16th was not available).
+
+Measured, mod admiral (90 887 verts): exhaust group mean **122**/255, engine-bay bits 71, seats 45-55, body
+paint 209, roof 255. Cost `skyOcclusion` 78 ms on that car, 8-20 ms on stock cars (3.8-4.8 k verts) — the
+converted path pays it offline, a modloader car once at spawn.
+
+Convertibles, up-facing seat surfaces (255 = open sky): feltzer **99**, comet 88, windsor 110 (its soft top
+is modelled UP), against closed cars admiral 81, infernus 83, sultan 65, stallion 55. Field-checked in the
+lab: the feltzer's open cabin reads lit, its footwell dark.
+
+Still open in this row: contact shadow with the ground (nothing here darkens the ground under a car), and
+peds (row 5).
 
 ### 4. Performance — CLOSED 2026-07-21, and it was never a vehicle row
 

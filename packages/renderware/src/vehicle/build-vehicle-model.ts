@@ -23,6 +23,7 @@ import type {
 
 import { frameWorldTransform, rotationToQuat } from '../mesh/frame-transform';
 import { groupTrianglesByMaterial, NIGHT_AMBIENT } from '../mesh/prepare-clump';
+import { skyOcclusion } from './sky-occlusion';
 import { LampTag, MaterialClass, PaintSlot } from './types';
 
 /** SA per-lamp marker colours on the `vehiclelights*` atlas: they say WHICH lamp a material is — engine
@@ -118,6 +119,14 @@ export function buildVehicleModel(
   }
 
   const wheels = addWheels(scratch, clump, textures, wheelScale, { containerWheels, cornerWheels, sharedWheel });
+  // Self-occlusion rides in the NIGHT set's alpha, which the builder had been filling with a constant 255:
+  // the shader already reads that stream per vertex, so a car carries its own AO with no new buffer, no
+  // `.osm` version bump and no second upload. See `sky-occlusion.ts` for why it is computed here.
+  const night = new Uint8Array(scratch.night);
+  const occlusion = skyOcclusion(scratch.positions, scratch.normals, scratch.positions.length / 3, shownShell(scratch));
+  for (let vertex = 0; vertex < occlusion.length; vertex += 1) {
+    night[vertex * 4 + 3] = occlusion[vertex];
+  }
 
   return {
     colors: new Uint8Array(scratch.colors),
@@ -128,7 +137,7 @@ export function buildVehicleModel(
     // — which took the whole vehicle system down with it, because the throw landed in the fixed step.
     indices: indicesFor(scratch.positions.length / 3, scratch.indices),
     meta: new Uint8Array(scratch.meta),
-    night: new Uint8Array(scratch.night),
+    night,
     normals: new Float32Array(scratch.normals),
     parts: scratch.parts,
     positions: new Float32Array(scratch.positions),
@@ -693,6 +702,25 @@ function reflectionOf(material: RWMaterial, textures: VehicleTextures): [number,
     byte(effects?.reflection?.intensity ?? 0),
     byte(effects?.specular?.level ?? 0),
   ];
+}
+
+/**
+ * Which vertices belong to the shell the car SHOWS, so only that shell casts sky occlusion: the hidden
+ * `_dam` twins and the `_vlo` LOD ride in the same buffers, and the LOD is a closed blob — over a
+ * convertible it would roof an open cabin that has no roof.
+ */
+function shownShell(scratch: Scratch): Uint8Array {
+  const shown = new Uint8Array(scratch.positions.length / 3);
+  for (const submesh of scratch.submeshes) {
+    if (submesh.kind !== 'body') {
+      continue;
+    }
+    for (let at = 0; at < submesh.indexCount; at += 1) {
+      shown[scratch.indices[submesh.indexOffset + at]] = 1;
+    }
+  }
+
+  return shown;
 }
 
 function wheelRadius(geometry: RWGeometry | undefined): number {

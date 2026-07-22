@@ -29,6 +29,14 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   with a per-material class (matte/paint/chrome/glass) chosen from the material data, never from names.
   The three-era presets (`packages/game/src/plugins/vehicle-reflection/presets.ts`) survive only as
   debugger tuning values.
+- **Self-occlusion** (plan 084, 2026-07-22): `sky-occlusion.ts` gives every vertex a sky-visibility value
+  from a height field over the car's own shown shell — horizon mapping, 8 azimuths, weighted by the vertex
+  normal so a roof darkens the cabin under it and not the door skin beside it. It is computed in the shared
+  BUILDER, so a converted car and a modloader car agree by construction, and rides in the night set's alpha
+  (no extra buffer). The `_vlo` LOD and `_dam` twins receive it but never cast, which is what keeps a
+  convertible's cabin open. The engine's dynamic indirect term is `params.y × DYNAMIC_INDIRECT ×
+  skyVisibility(normal) × occlusion` — the map's `prelit × params.y × ao`, with a constant standing in for
+  the prelit a car has no data for.
 - **Glass** (plan 025): window materials detected and rendered transparent (double-sided,
   sorted).
 - **Extras** (`extraN` components): SA's mutually-exclusive optional parts modelled at the same spot (e.g. the

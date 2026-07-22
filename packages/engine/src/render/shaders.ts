@@ -1175,9 +1175,11 @@ struct RigidVsOut {
   @location(8) @interpolate(flat) envLayer: u32,
   // [env coefficient, SA reflection intensity, SA specular level] — all 0..1, all authored per material.
   @location(9) @interpolate(flat) reflect: vec3f,
-  // MODEL-space position: the flake hash is anchored to the CAR, so the sparkle rides with it. A world-space
-  // hash would make the flakes crawl across the paint as the car drives.
-  @location(10) local: vec3f,
+  // MODEL-space position (xyz): the flake hash is anchored to the CAR, so the sparkle rides with it. A
+  // world-space hash would make the flakes crawl across the paint as the car drives.
+  // w = the model's own SKY OCCLUSION (plan 084), which rides here rather than in a location of its own:
+  // the struct is at 15 of the 16 inter-stage locations, and a 16th would push the ped/vehicle pair over.
+  @location(10) local: vec4f,
   // slots.w HIGH nibble (074/16 round 2): the material CLASS — 0 matte, 1 paint, 2 chrome, 3 glass.
   @location(11) @interpolate(flat) matClass: u32,
   // Light-pool response, computed per VERTEX (074/16 round 5 — the night-fps fix): the original neo car
@@ -1239,6 +1241,16 @@ fn skyVisibility(normal: vec3f) -> f32 {
   return mix(AMBIENT_GROUND, 1.0, normal.y * 0.5 + 0.5);
 }
 
+/**
+ * What a DYNAMIC model's indirect term is worth against the WORLD's (plan 084).
+ *
+ * The map's indirect is prelit x params.y x ao and a car's was params.y alone — the same lamp, but the
+ * map dims it twice and the car not at all. Measured at full night that read car 0.70 against map ~0.13.
+ * The missing half is the two factors a car has no data for: this constant stands in for the mean PRELIT
+ * (SA's map models average 88/255 luma), and local.w supplies the AO the builder now computes.
+ */
+const DYNAMIC_INDIRECT = 0.35;
+
 @vertex
 fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   let model = rigidMatrices[in.instance];
@@ -1266,7 +1278,9 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   out.lamps = rigidLamp[in.instance].xyz;
   out.envLayer = in.reflect.x;
   out.reflect = vec3f(in.reflect.yzw) / 255.0;
-  out.local = in.position;
+  // The night set's ALPHA is the self-occlusion the builder wrote (vehicle/sky-occlusion.ts). A fixture
+  // from before it simply carries the material alpha there, which is 1 on everything opaque - no change.
+  out.local = vec4f(in.position, in.night.a);
   // Light pool per VERTEX (round 5): diffuse from the STATIC half (a car is never lit by its own
   // headlights) + neo pass 2's point-light specular over the WHOLE pool (it SHOULD catch its own
   // headlights' bounce off a wall), scaled by the material's specular level here so the fragment adds it raw.
@@ -1447,7 +1461,7 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   // swings ~90° across the lens, and a nearby street lamp painted that swing straight onto the glass as a
   // hard gradient broken at the triangle edge. Prod never showed it because its lamp glass is emissive-
   // dominant (emissiveMap × 1..4), which drowns the diffuse term. Ambient keeps the unlit texel detail alive.
-  let ambient = frame.params.y * skyVisibility(normal);
+  let ambient = frame.params.y * DYNAMIC_INDIRECT * skyVisibility(normal) * in.local.w;
   let glow = rigidLampGlow(in);
   if (glow > 0.0) {
     return base * (ambient + glow);
@@ -1480,7 +1494,7 @@ fn fsRigid(in: RigidVsOut) -> @location(0) vec4f {
   // it, so it can never glow; specular rides on top; fog dissolves the finished surface.
   let isPaint = f32(in.matClass == 1u);
   let isChrome = f32(in.matClass == 2u);
-  let shadingNormal = normalize(mix(normal, flakeNormal(normal, in.local), isPaint));
+  let shadingNormal = normalize(mix(normal, flakeNormal(normal, in.local.xyz), isPaint));
   let toEye = normalize(frame.camera.xyz - in.world);
   let coefficient = mix(in.reflect.x, max(in.reflect.x, CHROME_COEFFICIENT_FLOOR), isChrome);
   let amount = neoReflAmount(dot(shadingNormal, toEye), coefficient) * (isPaint + isChrome);
