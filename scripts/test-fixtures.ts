@@ -133,6 +133,11 @@ const MANIFEST: readonly Fixture[] = [
   // A stock HD tree with day + night vertex colours — the night-tint fixtures (lod-trees `computeNightTint` and the
   // lod-procobj mesh night-colour carry).
   extract('cedar1_hi.dff', 'dff/night-colours/cedar1_hi.dff'),
+  // The LV strip's neon-rope palm (vegaxref 3509): the rope's night set is saturated red (255/49/49) over a
+  // flat grey day (81/81/81) — Rec709 luma reads it DARKER than day, the case that broke the luma-delta
+  // emissive rule (the rope never glowed; map-object round 2026-07-22).
+  extract('vgsn_nitree_r01.dff', 'dff/night-colours/vgsn_nitree_r01.dff'),
+  extract('vgsn_nitree.txd', 'dff/night-colours/vgsn_nitree.txd'),
   extract('dyntraffic.txd', 'dff/trafficlight-backface-culling/dyntraffic.txd'),
   extract('admiral.dff', 'dff/vehicle/admiral.dff'),
   extract('squalo.dff', 'dff/vehicle/squalo.dff'),

@@ -20,7 +20,9 @@
   does not track the moving sun. `ao.ts` bakes AO/skyVis into the low channels byte and modulates
   ONLY the indirect term. Both are gated per cell so old paks render unchanged.
 - **Night emissives**: a vertex much brighter at night than by day IS a lit window; the converter bakes
-  that mask (the shader keeps a heuristic fallback) and adds it as a glow term.
+  that mask (the shader keeps a heuristic fallback) and adds it as a glow term. The delta is per-CHANNEL
+  max, not luma — saturated neon (the LV strip's red rope lights, night 255/49/49 over a grey day) reads
+  darker than day in luma and never glowed under the old luma rule (fixed in the map-object round).
 - Moonlight is a WRAPPED N·L normalized to prod's fixed 5° moon elevation, gated by the same sun-vis bake.
 - PostFX (074/09): ACES tone mapping (always on by design since plan 038), bloom (prod dual-filter with
   the 071 night threshold), god rays. There is **no runtime SSAO** — the baked AO replaces it.

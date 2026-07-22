@@ -304,6 +304,11 @@ function appendInstance(
   // GTA IPL quaternions are the conjugate of the usual convention (parity with build-region).
   const [qx, qy, qz, qw] = [-instance.rotation[0], -instance.rotation[1], -instance.rotation[2], instance.rotation[3]];
   const m = quatToMat3(qx, qy, qz, qw);
+  // A NIGHT-ONLY timed model (SA's `*_nt` dressing, 085 row D) with no authored night set keeps its DAY
+  // prelit at night — that prelit IS its night look (vanilla renders it fullbright after the 22:00 swap);
+  // the dark day×ambient synthesis crushed the Fremont casino facades to a fraction of their brightness.
+  const nightIsDay = isNightOnlyWindow(bucket.timed);
+  const [ambientR, ambientG, ambientB] = nightIsDay ? [1, 1, 1] : [NIGHT_AMBIENT_R, NIGHT_AMBIENT_G, NIGHT_AMBIENT_B];
   const base = bucket.vertices.length / WELD_ROW;
   const used = new Map<number, number>(); // source vertex → welded row (per instance/part)
   const remap = (source: number): number => {
@@ -360,10 +365,11 @@ function appendInstance(
       dayB,
       dayA,
       // No authored night set → synthesize night = day × ambient (074/06 row 1: one blend formula for the
-      // whole world; the weather-reactive ambient of the old dual-tint path is a later refinement).
-      atomic.nightColor ? atomic.nightColor[source * 3] : dayR * NIGHT_AMBIENT_R,
-      atomic.nightColor ? atomic.nightColor[source * 3 + 1] : dayG * NIGHT_AMBIENT_G,
-      atomic.nightColor ? atomic.nightColor[source * 3 + 2] : dayB * NIGHT_AMBIENT_B,
+      // whole world; the weather-reactive ambient of the old dual-tint path is a later refinement). A
+      // night-only timed model keeps day as-is instead — see `nightIsDay` above.
+      atomic.nightColor ? atomic.nightColor[source * 3] : dayR * ambientR,
+      atomic.nightColor ? atomic.nightColor[source * 3 + 1] : dayG * ambientG,
+      atomic.nightColor ? atomic.nightColor[source * 3 + 2] : dayB * ambientB,
       // Sway amplitude in metres (074/06 row 10): adapted DFFs carry per-vertex weights (prelit alpha),
       // unadapted vegetation falls back to height-above-base (pz = model-space GTA Z, up).
       swayKind === null
@@ -579,8 +585,8 @@ function buildObjectTable(ordered: WeldBucket[]): Oscell['objects'] {
   const objects: Oscell['objects'] = [];
   for (let index = 0; index < ordered.length; index += 1) {
     const timed = ordered[index].timed;
-    if (!timed) {
-      continue;
+    if (!timed || ordered[index].uvAnim) {
+      continue; // a timed SCROLLER is one kind-5 row below, not a kind-0 — two rows drew it twice (minor 7)
     }
     const last = objects[objects.length - 1];
     if (last && last.groupStart + last.groupCount === index && samePreviousWindow(ordered, index)) {
@@ -597,9 +603,18 @@ function buildObjectTable(ordered: WeldBucket[]): Oscell['objects'] {
   }
   for (let index = 0; index < ordered.length; index += 1) {
     const uvAnim = ordered[index].uvAnim;
-    if (uvAnim) {
-      objects.push({ groupCount: 1, groupStart: index, kind: 4, params: uvAnim.slot, transform: IDENTITY });
+    if (!uvAnim) {
+      continue;
     }
+    // kind 5 (minor 7): a scroller with a tobj window — the Fremont facade's stripes run only 22→5.
+    const timed = ordered[index].timed;
+    objects.push({
+      groupCount: 1,
+      groupStart: index,
+      kind: timed ? 5 : 4,
+      params: timed ? uvAnim.slot | (timed.on << 16) | (timed.off << 24) : uvAnim.slot,
+      transform: IDENTITY,
+    });
   }
 
   return objects;
@@ -664,8 +679,14 @@ function buildPlacementTable(
   return placements.length > 0 ? { names, placements } : { names: [], placements: [] };
 }
 
-/** Part → `.oscell` pipelineClass: beam (3) wins; else the texture's alpha class decides. */
-function classOf(beam: boolean, alphaClass: 'cutout' | 'opaque' | 'softBlend'): number {
+/** Part → `.oscell` pipelineClass: additive (4) wins, then beam (3); else the texture's alpha class
+ *  decides. Additive = the def carries `IdeFlag.ADDITIVE` (085 row C — vgncircus2neon: SA's timed neon
+ *  overlays are fullbright in BOTH prelit sets and glow by ADDING onto the base building; welded as
+ *  ordinary lit geometry they were crushed by the night indirect scale and read dull). */
+function classOf(beam: boolean, additive: boolean, alphaClass: 'cutout' | 'opaque' | 'softBlend'): number {
+  if (additive) {
+    return 4;
+  }
   if (beam) {
     return 3;
   }
@@ -766,8 +787,11 @@ function isBreakable(
   );
 }
 
-function lumaOf(r: number, g: number, b: number): number {
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+/** A timed window that shows the model ONLY after dark — SA's `*_nt` night-dressing convention
+ *  (casinoblock41_nt is 22→5; the map's night windows run 20→6 / 22→6). Such a model's DAY prelit is its
+ *  night look, and its emissive compares against void (085 row D). */
+function isNightOnlyWindow(timed: null | { off: number; on: number }): boolean {
+  return timed !== null && timed.on >= 18 && timed.off <= 8;
 }
 
 /**
@@ -927,6 +951,7 @@ function weldGroup(
   // visible mesh instead). Absent object.dat → the shatter-mesh gate alone still works.
   const breakable = breakables !== undefined && isBreakable(fs, def, breakableModels);
   const doubleSided = (def.flags & IdeFlag.DISABLE_BACKFACE_CULLING) !== 0 ? 1 : 0;
+  const additive = (def.flags & IdeFlag.ADDITIVE) !== 0;
   const swayKind = swayKindFor(def);
   const timed = def.time !== undefined ? { off: def.time.off, on: def.time.on } : null;
   for (const atomic of atomics) {
@@ -951,11 +976,17 @@ function weldGroup(
       const uvAnim = resolveUvAnim(clump, material, uvAnimRegistry);
       // Vegetation prefers CUTOUT (field fix: soft-classed canopies wrote no depth → trees showed through
       // trees). Vanilla SA alpha-TESTS foliage; our A2C+MSAA equivalent needs the cutout texture pipeline.
-      const resolved = planner.resolve(def.txdName, material.texture?.name ?? null, material.color, swayKind !== null);
+      const resolved = planner.resolve(
+        def.txdName,
+        material.texture?.name ?? null,
+        material.color,
+        swayKind !== null,
+        def.modelName,
+      );
       const bucket = bucketFor(
         buckets,
         resolved.arrayRef,
-        classOf(beam, resolved.alphaClass),
+        classOf(beam, additive, resolved.alphaClass),
         doubleSided,
         timed,
         uvAnim,
@@ -1037,6 +1068,8 @@ function weldRoadsigns(
 function writeBucketVertices(bucket: WeldBucket, vertexBase: number, view: DataView): boolean {
   let hasEmissive = false;
   const bucketVertices = bucket.vertices.length / WELD_ROW;
+  // Per-bucket: a NIGHT-ONLY timed bucket's emissive compares against VOID (see the delta below).
+  const dayIsVoid = isNightOnlyWindow(bucket.timed);
   for (let vertex = 0; vertex < bucketVertices; vertex += 1) {
     const row = vertex * WELD_ROW;
     const at = (vertexBase + vertex) * OSCELL_VERTEX_STRIDE;
@@ -1063,11 +1096,18 @@ function writeBucketVertices(bucket: WeldBucket, vertexBase: number, view: DataV
     const softness7 = Math.max(0, Math.min(127, Math.round((bucket.vertices[row + WELD_SUNSOFT] / 0.5) * 127)));
     view.setUint16(at + 32, bucket.vertices[row + 16] | (softness7 << 8), true);
     // channels u16 = aoSkyVis | emissive << 8 (074/02). Emissive mask (07): baked night-window detection —
-    // the same luma-delta the runtime heuristic used, computed OFFLINE per vertex (refinable later without
-    // engine changes). Synthesized night sets (day × ambient) always yield a negative delta → mask 0.
-    const delta =
-      lumaOf(bucket.vertices[row + 12], bucket.vertices[row + 13], bucket.vertices[row + 14]) -
-      lumaOf(bucket.vertices[row + 8], bucket.vertices[row + 9], bucket.vertices[row + 10]);
+    // the same max-CHANNEL delta the runtime heuristic uses, computed OFFLINE per vertex (refinable later
+    // without engine changes). Per channel, not luma: neon night sets are SATURATED — the LV strip's red
+    // rope light is 188/37/62 against a flat grey day, and its Rec709 luma sits BELOW the day's, so the
+    // luma rule read "not lit". Synthesized night sets (day × ambient) stay below day on every channel →
+    // still mask 0. A NIGHT-ONLY timed model (085 row D) compares against VOID, not its day set — by day
+    // the model does not exist, so "much brighter at night than by day" is the night set's own brightness
+    // (the Fremont `*_nt` facades are lit dressing top to bottom).
+    const delta = Math.max(
+      bucket.vertices[row + 12] - (dayIsVoid ? 0 : bucket.vertices[row + 8]),
+      bucket.vertices[row + 13] - (dayIsVoid ? 0 : bucket.vertices[row + 9]),
+      bucket.vertices[row + 14] - (dayIsVoid ? 0 : bucket.vertices[row + 10]),
+    );
     const emissive = smoothstep(0.05, 0.32, delta);
     hasEmissive ||= emissive > 0;
     view.setUint16(at + 34, unorm(bucket.vertices[row + WELD_AO]) | (unorm(emissive) << 8), true);

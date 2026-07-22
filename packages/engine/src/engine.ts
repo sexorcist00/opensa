@@ -498,7 +498,9 @@ const PROBE_FRAME_INTERVAL = 2;
 
 /** Light-pool capacity (074/06 row 7) — mirrored by the WGSL loop bound. Holds HOST DYNAMICS only since
  *  2026-07-17 (static 2dfx lamps removed — their binary pool admission read as "lamps igniting ahead of
- *  the car"; the redesign is plan 17's, the corona glow still marks every lamp). */
+ *  the car"; the redesign is plan 17's, the corona glow still marks every lamp). A smooth-admission
+ *  restore was tried and REVERTED 2026-07-22 (085 row E: "не то что нам нужно" — the user owes the
+ *  precise description of the wanted ground-glow behaviour before this is touched again). */
 const LIGHT_POOL_CAP = 64;
 /** Floats per pooled light: position+radius, colour, direction+cone cosine (2 = point, no cone). */
 const LIGHT_STRIDE = 12;
@@ -2176,11 +2178,12 @@ export class Engine {
     return draws;
   }
 
-  /** One out-of-bundle object's draws: kind-4 scrollers first refresh their live uvAnim uniform (offset 16),
-   *  then every object binds its own group 1 (the cell bind group for timed, the per-object one for scroll). */
+  /** One out-of-bundle object's draws: kind-4/5 scrollers first refresh their live uvAnim uniform (offset
+   *  16), then every object binds its own group 1 (the cell bind group for timed, the per-object one for
+   *  scroll). Kind 5 packs its animation slot in the LOW 16 bits (the window rides the high ones). */
   private drawObjectGroups(pass: GPURenderPassEncoder, object: CellHandle['objects'][number]): number {
-    if (object.kind === 4 && object.uvAnimUniform) {
-      const at = object.params * 4;
+    if ((object.kind === 4 || object.kind === 5) && object.uvAnimUniform) {
+      const at = (object.kind === 5 ? object.params & 0xffff : object.params) * 4;
       if (at + 4 <= this.uvAnimTransforms.length) {
         this.uvAnimScratch.set(this.uvAnimTransforms.subarray(at, at + 4));
         this.device.queue.writeBuffer(object.uvAnimUniform, 16, this.uvAnimScratch);
@@ -2208,8 +2211,14 @@ export class Engine {
       }
       let bound = false;
       for (const object of cell.objects) {
-        // kind 0 = timed (hour-gated), kind 4 = UV-scroll (always on). Both draw OUTSIDE the recorded bundle.
-        if (object.kind !== 4 && (object.kind !== 0 || !timedActive(object.params, hour))) {
+        // kind 0 = timed (hour-gated), kind 4 = UV-scroll (always on), kind 5 = timed UV-scroll (both:
+        // minor 7 — the Fremont facade's stripes run only inside their tobj window). All draw OUTSIDE the
+        // recorded bundle.
+        const active =
+          object.kind === 4 ||
+          (object.kind === 0 && timedActive(object.params, hour)) ||
+          (object.kind === 5 && timedActive((object.params >> 16) & 0xffff, hour));
+        if (!active) {
           continue;
         }
         if (!bound) {
@@ -2411,9 +2420,9 @@ export class Engine {
    *
    * Static 2dfx street lamps were REMOVED from the pool (2026-07-17, user decision): the nearest-24 /
    * 100 u admission made lamp pools visibly IGNITE ahead of a driving car — binary pool entry has no
-   * fade, and in dense streets the nearest-set rotation popped mid-distance lamps on and off. Lamp
-   * surface lighting returns with plan 17's redesign (smooth admission weight or baked pools — plan 15);
-   * the corona pass still draws every lamp's glow, so the night look keeps its lights.
+   * fade, and in dense streets the nearest-set rotation popped mid-distance lamps on and off. A
+   * smooth-admission restore was tried and REVERTED (085 row E, 2026-07-22) — the user wants a different
+   * behaviour and owes its precise description; the corona pass still draws every lamp's glow.
    */
   private fillLightPool(): number {
     const scratch = this.lightPoolScratch;

@@ -5100,8 +5100,9 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
     color = vec4f(rigidPaint[in.instance * 4u + (in.slots.z - 1u)].rgb, in.color.a);
   }
   out.color = color;
-  let lumaWeights = vec3f(0.2126, 0.7152, 0.0722);
-  let nightDelta = dot(in.night.rgb, lumaWeights) - dot(in.color.rgb, lumaWeights);
+  // Max-CHANNEL delta, same rule as the world paths: saturated neon reads darker than day in luma.
+  let nightDeltaRgb = in.night.rgb - in.color.rgb;
+  let nightDelta = max(max(nightDeltaRgb.r, nightDeltaRgb.g), nightDeltaRgb.b);
   out.glow = in.night.rgb * (smoothstep(0.05, 0.32, nightDelta) * frame.params.w * frame.params.x);
   out.layer = in.slots.x;
   out.nightLayer = in.slots.y;
@@ -7007,11 +7008,11 @@ fn vsWorld(in: VsIn) -> VsOut {
   out.prelit = mix(in.dayPrelit.rgb, in.nightPrelit.rgb, frame.params.x);
   // Night emissives (074/06 rows 8-9, the 071 model): a vertex much brighter at night than by day IS a lit
   // window / neon / sign — it GLOWS instead of being merely tinted. The BAKED mask (07, high channels byte)
-  // replaces the runtime luma-delta heuristic when the cell carries it; dn fades either in.
+  // replaces the runtime heuristic when the cell carries it; dn fades either in. Max-CHANNEL delta, not
+  // luma: neon night sets are saturated (the LV strip's red rope light reads DARKER than day in luma).
   let cellFlags = u32(cell.origin.w + 0.5);
-  let luma = vec3f(0.2126, 0.7152, 0.0722);
-  let delta = dot(in.nightPrelit.rgb, luma) - dot(in.dayPrelit.rgb, luma);
-  let heuristic = smoothstep(0.05, 0.32, delta);
+  let deltaRgb = in.nightPrelit.rgb - in.dayPrelit.rgb;
+  let heuristic = smoothstep(0.05, 0.32, max(max(deltaRgb.r, deltaRgb.g), deltaRgb.b));
   let baked = f32(in.layerChannels.y >> 8u) / 255.0;
   let emissive = mix(heuristic, baked, f32((cellFlags >> 1u) & 1u));
   out.glow = in.nightPrelit.rgb * (emissive * frame.params.w * frame.params.x);

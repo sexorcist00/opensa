@@ -1,7 +1,7 @@
 import type { AssetFileSystem, IdeObjectDef, MapDefinitions } from '@opensa/renderware';
 import type { GridCell } from '@opensa/renderware/map/world-grid';
 
-import { decodeOscell } from '@opensa/engine-formats';
+import { decodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
 import { buildArchiveBuffer, openArchive } from '@opensa/renderware';
 import { frameWorldTransform } from '@opensa/renderware/mesh/frame-transform';
 import { readFileSync } from 'node:fs';
@@ -307,6 +307,48 @@ describe('weldCell breakables', () => {
   });
 });
 
+// `mine`: a stock model with NO prelit and NO night set + an EMPTY txd — the plainest timed-model fixture.
+const MINE_DFF = 'tests/original/dff/empty-txd/mine.dff';
+const MINE_TXD = 'tests/original/dff/empty-txd/mine.txd';
+
+function mineCell(): GridCell {
+  return {
+    cx: 0,
+    cy: 0,
+    hd: [{ id: 4001, interior: 0, lod: -1, modelName: 'mine', position: [0, 0, 0], rotation: [0, 0, 0, 1] }],
+    lod: [],
+  };
+}
+
+function mineDefs(def: Partial<IdeObjectDef> = {}): MapDefinitions {
+  const catalog = new Map<number, IdeObjectDef>();
+  catalog.set(4001, { drawDistance: 100, flags: 0, id: 4001, modelName: 'mine', txdName: 'mine', ...def });
+
+  return {
+    carGenerators: [],
+    catalog,
+    imgDirs: [],
+    instances: [],
+    timedCatalog: new Map<number, IdeObjectDef>(),
+    txdParents: new Map<string, string>(),
+  };
+}
+
+function mineFs(): AssetFileSystem {
+  const archive = openArchive(
+    buildArchiveBuffer([
+      { data: readFileSync(MINE_DFF), name: 'mine.dff' },
+      { data: readFileSync(MINE_TXD), name: 'mine.txd' },
+    ]),
+  );
+
+  return {
+    get: (name: string) => archive.get(name.split('/').pop() ?? name),
+    getText: () => null,
+    has: (name: string) => archive.get(name.split('/').pop() ?? name) !== null,
+  } as unknown as AssetFileSystem;
+}
+
 describe('weldCell', () => {
   describe('negative cases', () => {
     it('returns null for an empty cell', () => {
@@ -318,6 +360,26 @@ describe('weldCell', () => {
   });
 
   describe('positive cases', () => {
+    it('routes an IdeFlag.ADDITIVE def to pipelineClass 4 — SA neon overlays ADD onto the building (085 row C)', () => {
+      const fs = fixtureFs();
+      // vgncircus2neon's real flags: DRAW_LAST (0x4) + ADDITIVE (0x8) + 0x80; welded as lit geometry the
+      // fullbright overlay was crushed by the night indirect scale and the casino read dull.
+      const welded = weldCell(
+        fs,
+        fixtureDefs({ flags: 140 }),
+        fixtureCell(1),
+        false,
+        new TexturePlanner(fs, new Map()),
+        [0, 0, 0],
+      );
+
+      const classes = new Set(decodeOscell(welded!.bytes).groups.map((group) => group.pipelineClass));
+      expect(classes).toEqual(new Set([4]));
+      // The same model without the flag never lands there.
+      const plain = weldCell(fs, fixtureDefs(), fixtureCell(1), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+      expect(decodeOscell(plain!.bytes).groups.some((group) => group.pipelineClass === 4)).toBe(false);
+    });
+
     it('welds animated defs statically and counts them (field fix: anim skip left building-sized holes)', () => {
       const fs = fixtureFs();
       const planner = new TexturePlanner(fs, new Map());
@@ -347,6 +409,54 @@ describe('weldCell', () => {
       expect(owned).toBe(cell.groups.length);
       expect(welded!.stats.timedObjects).toBe(cell.objects.length);
     });
+    it('keeps a NIGHT-ONLY timed model fullbright: night = day prelit, emissive vs void (085 row D)', () => {
+      // `mine` carries NO night set (and no prelit — day defaults to white): the class of model the dark
+      // day×ambient synthesis crushed. casinoblock41_nt's window: shown 22→5 only; its day prelit IS the
+      // night look. A model WITH an authored night set keeps it — the trafficlight tests above cover that.
+      const fs = mineFs();
+
+      const welded = weldCell(
+        fs,
+        mineDefs({ time: { off: 5, on: 22 } }),
+        mineCell(),
+        false,
+        new TexturePlanner(fs, new Map()),
+        [0, 0, 0],
+      );
+
+      const cell = decodeOscell(welded!.bytes);
+      const view = new DataView(cell.vertexData.buffer, cell.vertexData.byteOffset, cell.vertexData.byteLength);
+      for (let vertex = 0; vertex < cell.vertexCount; vertex += 1) {
+        const at = vertex * OSCELL_VERTEX_STRIDE;
+        for (let channel = 0; channel < 3; channel += 1) {
+          expect(view.getUint8(at + 28 + channel)).toBe(view.getUint8(at + 24 + channel));
+        }
+        expect(view.getUint16(at + 34, true) >> 8).toBe(255); // fullbright vs void ⇒ full mask
+      }
+      expect(cell.channelMask & OscellChannel.EMISSIVE).not.toBe(0);
+    });
+
+    it('still synthesizes the dark ambient night for a DAY-window timed model', () => {
+      const fs = mineFs();
+
+      const welded = weldCell(
+        fs,
+        mineDefs({ time: { off: 22, on: 5 } }),
+        mineCell(),
+        false,
+        new TexturePlanner(fs, new Map()),
+        [0, 0, 0],
+      );
+
+      const cell = decodeOscell(welded!.bytes);
+      const view = new DataView(cell.vertexData.buffer, cell.vertexData.byteOffset, cell.vertexData.byteLength);
+      for (let vertex = 0; vertex < cell.vertexCount; vertex += 1) {
+        const at = vertex * OSCELL_VERTEX_STRIDE;
+        expect(view.getUint8(at + 28)).toBeLessThan(view.getUint8(at + 24)); // night = day × ambient
+        expect(view.getUint16(at + 34, true) >> 8).toBe(0); // synthesized night never glows
+      }
+    });
+
     it('bakes multiple instances into merged groups (few draws, correct totals)', () => {
       const fs = fixtureFs();
       const planner = new TexturePlanner(fs, new Map());
@@ -389,6 +499,105 @@ describe('weldCell', () => {
   });
 });
 
+// The LV strip's neon-rope palm (vegaxref 3509): the rope's night set is saturated red (255/49/49) over a
+// flat grey day (81/81/81) — its Rec709 luma is BARELY above the day's, the case that broke the luma-delta
+// emissive rule (the rope never glowed while the bark next to it did).
+const NITREE_DFF = 'tests/original/dff/night-colours/vgsn_nitree_r01.dff';
+const NITREE_TXD = 'tests/original/dff/night-colours/vgsn_nitree.txd';
+
+/** Per-vertex emissive bytes (channels u16 high byte) of a welded cell. */
+function emissiveBytes(bytes: Uint8Array): number[] {
+  const cell = decodeOscell(bytes);
+  const view = new DataView(cell.vertexData.buffer, cell.vertexData.byteOffset, cell.vertexData.byteLength);
+  const out: number[] = [];
+  for (let vertex = 0; vertex < cell.vertexCount; vertex += 1) {
+    out.push(view.getUint16(vertex * OSCELL_VERTEX_STRIDE + 34, true) >> 8);
+  }
+
+  return out;
+}
+
+function nitreeCell(): GridCell {
+  return {
+    cx: 0,
+    cy: 0,
+    hd: [
+      {
+        id: 3509,
+        interior: 0,
+        lod: -1,
+        modelName: 'VgsN_nitree_r01',
+        position: [0, 0, 0],
+        rotation: [0, 0, 0, 1],
+      },
+    ],
+    lod: [],
+  };
+}
+
+function nitreeDefs(): MapDefinitions {
+  const catalog = new Map<number, IdeObjectDef>();
+  catalog.set(3509, {
+    drawDistance: 120,
+    flags: 2097156,
+    id: 3509,
+    modelName: 'VgsN_nitree_r01',
+    txdName: 'vgsn_nitree',
+  });
+
+  return {
+    carGenerators: [],
+    catalog,
+    imgDirs: [],
+    instances: [],
+    timedCatalog: new Map<number, IdeObjectDef>(),
+    txdParents: new Map<string, string>(),
+  };
+}
+
+function nitreeFs(): AssetFileSystem {
+  const archive = openArchive(
+    buildArchiveBuffer([
+      { data: readFileSync(NITREE_DFF), name: 'vgsn_nitree_r01.dff' },
+      { data: readFileSync(NITREE_TXD), name: 'vgsn_nitree.txd' },
+    ]),
+  );
+
+  return {
+    get: (name: string) => archive.get(name.split('/').pop() ?? name),
+    getText: () => null,
+    has: (name: string) => archive.get(name.split('/').pop() ?? name) !== null,
+  } as unknown as AssetFileSystem;
+}
+
+describe('weldCell night emissive mask', () => {
+  describe('negative cases', () => {
+    it('keeps the mask at 0 where the night set is darker than day on every channel (foliage)', () => {
+      const fs = nitreeFs();
+
+      const welded = weldCell(fs, nitreeDefs(), nitreeCell(), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      // The palm's leaves/planta night sets sit far below their day prelit — they must not glow.
+      const zeros = emissiveBytes(welded!.bytes).filter((value) => value === 0).length;
+      expect(zeros).toBeGreaterThan(50);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('fires on a saturated neon night set whose LUMA barely beats the day (the LV rope light)', () => {
+      const fs = nitreeFs();
+
+      const welded = weldCell(fs, nitreeDefs(), nitreeCell(), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      // The rope is 128 source vertices at night 255/49/49 over day 81 — max-channel delta 0.68 ⇒ full mask.
+      // The luma rule read the same vertices as delta 0.046 (below the 0.05 floor) and left the rope dark.
+      const full = emissiveBytes(welded!.bytes).filter((value) => value === 255).length;
+      expect(full).toBeGreaterThanOrEqual(100);
+      expect(decodeOscell(welded!.bytes).channelMask & OscellChannel.EMISSIVE).not.toBe(0);
+    });
+  });
+});
+
 // visagesign04: a stock UV-animated sign whose DFF opens with a UVAnimDict — three materials each scroll a
 // dict entry (Money, DolSign, Material #2065564020). The exact case the parser's uvAnim support was built on.
 const UVANIM_DFF = 'tests/custom/dff/uv-anim/visagesign04.dff';
@@ -402,9 +611,16 @@ function uvAnimCell(): GridCell {
   };
 }
 
-function uvAnimDefs(): MapDefinitions {
+function uvAnimDefs(def: Partial<IdeObjectDef> = {}): MapDefinitions {
   const catalog = new Map<number, IdeObjectDef>();
-  catalog.set(5000, { drawDistance: 100, flags: 0, id: 5000, modelName: 'visagesign04', txdName: 'visagesign04' });
+  catalog.set(5000, {
+    drawDistance: 100,
+    flags: 0,
+    id: 5000,
+    modelName: 'visagesign04',
+    txdName: 'visagesign04',
+    ...def,
+  });
 
   return {
     carGenerators: [],
@@ -460,6 +676,40 @@ describe('weldCell UV-scroll (B7·c)', () => {
   });
 
   describe('positive cases', () => {
+    it('routes a TIMED scroller to ONE kind-5 row — window beside the slot, no kind-0 twin (minor 7)', () => {
+      // casinoblock41_nt: a scroller that exists only 22→5. Minor 6 wrote it as TWO rows (kind 0 + kind 4):
+      // the stripes ran around the clock and the geometry doubled inside the window.
+      const fs = uvAnimFs();
+      const registry = createUvAnimRegistry();
+
+      const welded = weldCell(
+        fs,
+        uvAnimDefs({ time: { off: 5, on: 22 } }),
+        uvAnimCell(),
+        false,
+        new TexturePlanner(fs, new Map()),
+        [0, 0, 0],
+        undefined,
+        registry,
+      );
+
+      const cell = decodeOscell(welded!.bytes);
+      // The model's NON-scrolling remainder stays a plain kind-0 timed draw; the three scroll materials
+      // become kind-5 rows — and none of them gets a kind-0 twin (the double-draw this kind fixes).
+      const timedRows = cell.objects.filter((object) => object.kind === 0);
+      expect(timedRows).toHaveLength(1);
+      expect(cell.objects.filter((object) => object.kind === 4)).toHaveLength(0);
+      const scrollers = cell.objects.filter((object) => object.kind === 5);
+      expect(scrollers).toHaveLength(3);
+      const scrollerGroups = new Set(scrollers.map((object) => object.groupStart));
+      expect(scrollerGroups.has(timedRows[0].groupStart)).toBe(false);
+      for (const object of scrollers) {
+        expect((object.params >> 16) & 0xff).toBe(22); // on hour
+        expect((object.params >> 24) & 0xff).toBe(5); // off hour
+        expect(object.params & 0xffff).toBeLessThan(uvAnimList(registry).length); // the animation slot
+      }
+    });
+
     it('routes each UVAnimDict material to a kind-4 objectTable draw and registers the animation globally', () => {
       const fs = uvAnimFs();
       const registry = createUvAnimRegistry();

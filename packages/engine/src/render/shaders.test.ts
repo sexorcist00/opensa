@@ -42,6 +42,8 @@ describe('shader store', () => {
       expect(pipelineIdFor(1, 0)).toBe('world-cutout-front');
       expect(pipelineIdFor(2, 1)).toBe('world-blend-double');
       expect(pipelineIdFor(3, 0)).toBe('world-beam-front');
+      expect(pipelineIdFor(4, 0)).toBe('world-additive-front');
+      expect(pipelineIdFor(4, 1)).toBe('world-additive-double');
     });
   });
 });

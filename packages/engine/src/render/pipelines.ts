@@ -3,9 +3,10 @@
  * `compileAll()` behind the load veil. A steady-state miss throws — cold-start compile storms are impossible
  * by design, not unlikely (the 073 lesson as an assertion).
  *
- * World set: opaque/cutout/blend/beam × front/double = 8 pipelines + sky. The cutout pair enables
- * alpha-to-coverage (MSAA 4×) — the third leg of the alpha-edge fix. Blend/beam pipelines blend
- * PREMULTIPLIED output (one, one-minus-src-alpha) with depth READ-ONLY (074/06 rows 9/11).
+ * World set: opaque/cutout/blend/beam/additive × front/double = 10 pipelines + sky. The cutout pair
+ * enables alpha-to-coverage (MSAA 4×) — the third leg of the alpha-edge fix. Blend/beam pipelines blend
+ * PREMULTIPLIED output (one, one-minus-src-alpha) with depth READ-ONLY (074/06 rows 9/11); the additive
+ * pair (085 row C) ADDS premultiplied light (one, one) — SA's IdeFlag.ADDITIVE neon overlays.
  */
 import { OSCELL_VERTEX_STRIDE } from '@opensa/engine-formats';
 
@@ -42,6 +43,8 @@ export type PipelineId =
   | 'rigid-opaque'
   | 'sky'
   | 'water'
+  | 'world-additive-double'
+  | 'world-additive-front'
   | 'world-beam-double'
   | 'world-beam-front'
   | 'world-blend-double'
@@ -148,7 +151,14 @@ export function compileAll(
   ];
 
   const pipelines = new Map<PipelineId, GPURenderPipeline>();
-  const variants: { blend: boolean; cull: GPUCullMode; cutout: boolean; entry: string; id: PipelineId }[] = [
+  const variants: {
+    additive?: boolean;
+    blend: boolean;
+    cull: GPUCullMode;
+    cutout: boolean;
+    entry: string;
+    id: PipelineId;
+  }[] = [
     { blend: false, cull: 'back', cutout: false, entry: 'fsWorld', id: 'world-opaque-front' },
     { blend: false, cull: 'none', cutout: false, entry: 'fsWorld', id: 'world-opaque-double' },
     { blend: false, cull: 'back', cutout: true, entry: 'fsWorldCutout', id: 'world-cutout-front' },
@@ -157,11 +167,20 @@ export function compileAll(
     { blend: true, cull: 'none', cutout: false, entry: 'fsWorld', id: 'world-blend-double' },
     { blend: true, cull: 'back', cutout: false, entry: 'fsBeam', id: 'world-beam-front' },
     { blend: true, cull: 'none', cutout: false, entry: 'fsBeam', id: 'world-beam-double' },
+    // Additive neon overlays (085 row C — IdeFlag.ADDITIVE, pipelineClass 4): the beam's self-lit shading,
+    // but the light ADDS onto the base building instead of compositing over it, the vanilla RW blend.
+    { additive: true, blend: true, cull: 'back', cutout: false, entry: 'fsBeam', id: 'world-additive-front' },
+    { additive: true, blend: true, cull: 'none', cutout: false, entry: 'fsBeam', id: 'world-additive-double' },
   ];
   // Premultiplied-alpha compositing (textures ship premultiplied; fsBeam premultiplies the cone).
   const premultBlend: GPUBlendState = {
     alpha: { dstFactor: 'one-minus-src-alpha', operation: 'add', srcFactor: 'one' },
     color: { dstFactor: 'one-minus-src-alpha', operation: 'add', srcFactor: 'one' },
+  };
+  // Additive light (085 row C): dst + src on colour, dst alpha untouched — premultiplied texels add clean.
+  const additiveBlend: GPUBlendState = {
+    alpha: { dstFactor: 'one', operation: 'add', srcFactor: 'zero' },
+    color: { dstFactor: 'one', operation: 'add', srcFactor: 'one' },
   };
   const skyModule = device.createShaderModule({ code: resolveShader('sky'), label: 'sky' });
   const skyLayout = device.createPipelineLayout({ bindGroupLayouts: [frameLayout], label: 'sky' });
@@ -600,6 +619,7 @@ export function compileAll(
   }
 
   for (const variant of variants) {
+    const blendState = worldBlendState(variant, premultBlend, additiveBlend);
     pipelines.set(
       variant.id,
       device.createRenderPipeline({
@@ -613,7 +633,7 @@ export function compileAll(
         fragment: {
           entryPoint: variant.entry,
           module,
-          targets: [{ format: colorFormat, ...(variant.blend ? { blend: premultBlend } : {}) }],
+          targets: [{ format: colorFormat, ...(blendState === undefined ? {} : { blend: blendState }) }],
         },
         label: variant.id,
         layout,
@@ -652,9 +672,10 @@ export function compileAll(
   };
 }
 
-/** `.oscell` group → pipeline id (pipelineClass 0 opaque | 1 cutout | 2 blend | 3 beam; side 0 front | 1 double). */
+/** `.oscell` group → pipeline id (pipelineClass 0 opaque | 1 cutout | 2 blend | 3 beam | 4 additive;
+ *  side 0 front | 1 double). */
 export function pipelineIdFor(pipelineClass: number, side: number): PipelineId {
-  const kind = (['opaque', 'cutout', 'blend', 'beam'] as const)[pipelineClass] ?? 'cutout';
+  const kind = (['opaque', 'cutout', 'blend', 'beam', 'additive'] as const)[pipelineClass] ?? 'cutout';
 
   return `world-${kind}-${side === 1 ? 'double' : 'front'}`;
 }
@@ -780,4 +801,17 @@ function compileProbePipelines(
   }
 
   return probeMipLayout;
+}
+
+/** Blend state for a world variant: none (a depth-writing class), premultiplied over, or additive light. */
+function worldBlendState(
+  variant: { additive?: boolean; blend: boolean },
+  premult: GPUBlendState,
+  additive: GPUBlendState,
+): GPUBlendState | undefined {
+  if (!variant.blend) {
+    return undefined;
+  }
+
+  return variant.additive === true ? additive : premult;
 }

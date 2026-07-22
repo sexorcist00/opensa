@@ -287,9 +287,9 @@ export class CellStore {
         z: light.position[2] + cell.origin[2],
       })),
       objects: cell.objects.map((object: OscellObject) => {
-        // kind-4 UV-scroll (B7·c): its own cell uniform (origin shared, uvAnim rewritten per frame) + bind group.
-        // Every other kind rides the immutable cell bind group and stores no per-object GPU state.
-        if (object.kind !== 4) {
+        // kind-4/5 UV-scroll (B7·c; 5 = hour-gated scroller, minor 7): its own cell uniform (origin shared,
+        // uvAnim rewritten per frame) + bind group. Every other kind rides the immutable cell bind group.
+        if (object.kind !== 4 && object.kind !== 5) {
           return {
             bindGroup: cellBindGroup,
             groups: cell.groups.slice(object.groupStart, object.groupStart + object.groupCount),

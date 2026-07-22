@@ -10,7 +10,12 @@ and the instanced corona pass), `apps/web/src/ui/engine-canvas-host.tsx` wiring,
   screen with presets; `clockNightFactor` fade windows (`night.litFade` dawn/dusk).
 - **Timed objects (`tobj`)**: the converter (`tools/opensa-pack/src/weld.ts`) lifts a timed bucket out of
   the merged cell bundle into a kind-0 `objectTable` draw carrying its on/off hour window; the engine skips
-  the draw outside the window. Night-window detection also drives the glowing lit-window emissives.
+  the draw outside the window. Night-window detection also drives the glowing lit-window emissives (085:
+  the delta is per-CHANNEL, not luma — saturated neon reads darker than day in luma). A NIGHT-ONLY window
+  keeps the model's day prelit as its night set (vanilla shows `*_nt` dressing fullbright) and its emissive
+  compares against void; a timed bucket that also UV-scrolls becomes ONE kind-5 draw (hour-gated scroll —
+  the Fremont facade's stripes). `IdeFlag.ADDITIVE` overlays render on the additive pipeline pair (their
+  light ADDS onto the base building — the LV strip's neon dressings).
 - **2dfx light coronas**: per-model lights are baked per cell as world-space anchors
   (`packages/engine/src/world/cells.ts`) and drawn by one instanced billboard pass
   (`engine.ts`, `coronastar` from particle.txd) with camera-facing sprites and distance fade. Traffic

@@ -19,6 +19,10 @@ export const OSCELL_VERSION_MAJOR = 0;
  *  (that is the point: 4.5x fewer draws), so the debugger could not answer "what did I just click". This is
  *  the identity the weld already knows, written down. Same shape as the breakable table, generalised to
  *  EVERY placement and carrying an AABB so a pick is a CPU ray test with no BVH and no ID-buffer readback.
+ *  Minor 7 (085 row D): objectTable kind 5 = TIMED UV-SCROLL — a scroller that also carries a tobj window
+ *  (casinoblock41_nt: the Fremont facade's stripes exist only 22→5). Minor 6 wrote such a bucket as TWO
+ *  rows (kind 0 + kind 4): the scroll drew around the clock and doubled the geometry inside the window.
+ *  Same skip rule as every new kind — older readers just never draw it.
  *  Minor 5 (B7·c): objectTable gained kind 4 = UV-SCROLL — a material whose UVs crawl (LV skull sign, conveyor
  *  belts). Its `params` is an INDEX into the pak manifest's `uvAnimations`; the transform is identity (the scroll
  *  rides a runtime uniform, not the vertex). No record layout change — older readers just never draw the kind.
@@ -29,7 +33,7 @@ export const OSCELL_VERSION_MAJOR = 0;
  *  bundle and without splitting the prop out of the merged batch (which measured 4.5x the draw calls).
  *  Minor 2 (B6): the cell gained a PARTICLE table (2dfx type-1 emitter anchors). Readers accept minor 1
  *  paks — they simply carry no particles. */
-export const OSCELL_VERSION_MINOR = 6;
+export const OSCELL_VERSION_MINOR = 7;
 export const OSCELL_VERTEX_STRIDE = 36;
 
 /** Header `flags` bits. */
@@ -112,9 +116,10 @@ export interface OscellLight {
 export interface OscellObject {
   groupCount: number;
   groupStart: number;
-  /** 0 timed | 1 breakable | 2 animated | 3 roadsign | 4 uvScroll. */
+  /** 0 timed | 1 breakable | 2 animated | 3 roadsign | 4 uvScroll | 5 timed uvScroll (minor 7). */
   kind: number;
-  /** kind-specific packed params (timed: onHour | offHour << 8; uvScroll: manifest uvAnimations index). */
+  /** kind-specific packed params (timed: onHour | offHour << 8; uvScroll: manifest uvAnimations index;
+   *  timed uvScroll: index | onHour << 16 | offHour << 24). */
   params: number;
   /** Row-major 3×4 affine transform (cell-local). */
   transform: readonly number[];

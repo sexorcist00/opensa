@@ -272,3 +272,50 @@ describe('Engine frame decisions', () => {
     });
   });
 });
+
+/** A cell whose single object is a TIMED UV-scroller (kind 5, minor 7): slot 0, visible in [on, off). */
+function timedScrollCellBytes(on: number, off: number): Uint8Array {
+  return cellBytes({
+    objects: [
+      {
+        groupCount: 1,
+        groupStart: 0,
+        kind: 5,
+        params: 0 | (on << 16) | (off << 24),
+        transform: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
+      },
+    ],
+  });
+}
+
+describe('kind-5 timed UV-scroll (085 row D / minor 7)', () => {
+  describe('negative cases', () => {
+    it('draws NOTHING outside the window — the minor-6 double-row wrote the scroll around the clock', async () => {
+      const engine = await bootedEngine();
+      engine.cells.load('0,0', timedScrollCellBytes(22, 5));
+      engine.environment.hour = 14;
+
+      gpu.reset();
+      engine.frame(camera());
+
+      expect(worldDraws()).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('draws inside the window, with the scroll uniform refreshed from the animation slot', async () => {
+      const engine = await bootedEngine();
+      engine.setUvAnimations([{ duration: 2, keyframes: [{ time: 0, uv: [0, 1, 1, 0, 0.5, 0] }], name: 'stripes' }]);
+      engine.cells.load('0,0', timedScrollCellBytes(22, 5));
+      engine.environment.hour = 23;
+
+      gpu.reset();
+      engine.frame(camera());
+
+      expect(worldDraws()).toBeGreaterThan(0);
+      // The per-object cell uniform got the live uvAnim vec4 at offset 16 (the kind-4 contract, shared).
+      const scrollWrites = gpu.writes.filter((write) => write.label?.includes('uvscroll') && write.offset === 16);
+      expect(scrollWrites.length).toBeGreaterThan(0);
+    });
+  });
+});
