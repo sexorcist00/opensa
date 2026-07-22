@@ -52,13 +52,19 @@ export function loadVehicleProbe(
   const { fixture, model } = readModelOsm(name, osm);
   const modelId = engine.createVehicleModel(model);
   const cars: VehicleInstance[] = [];
+  // SA's optional parts are mutually exclusive, so the convoy walks them instead of choosing at random —
+  // N instances of one model then show N different extras side by side, which is the point of the bench.
+  const extras = [
+    ...new Set(fixture.submeshes.map((submesh) => submesh.extra).filter((name): name is string => !!name)),
+  ];
   for (let index = 0; index < Math.max(1, count); index += 1) {
     const car = engine.createVehicle(modelId);
     car.setPaint(CONVOY_PAINTS[index % CONVOY_PAINTS.length]);
+    const extra = extras.length > 0 ? extras[index % extras.length] : null;
     // The `_dam` twins and the `_vlo` LOD ride in the same buffers — hide them until damage/LOD drive them
     // (B5 steps 3-4). This is the visibility primitive doing exactly what prod's `.visible` flags did.
     fixture.submeshes.forEach((submesh, index) => {
-      if (submesh.kind !== 'body') {
+      if (submesh.kind !== 'body' || (submesh.extra && submesh.extra !== extra)) {
         car.setSubmeshVisible(index, false);
       }
     });

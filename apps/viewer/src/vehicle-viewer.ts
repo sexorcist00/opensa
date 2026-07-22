@@ -80,6 +80,7 @@ function applyVisibility(): void {
     return;
   }
   const showLod = lodToggle.checked && current.data.submeshes.some((submesh) => submesh.kind === 'lod');
+  const shownExtra = firstExtra(current.data.submeshes);
 
   current.data.submeshes.forEach((submesh, index) => {
     let visible: boolean;
@@ -90,6 +91,11 @@ function applyVisibility(): void {
     } else {
       const isDamaged = submesh.damageGroup !== null && damaged.has(submesh.damageGroup);
       visible = submesh.kind === 'dam' ? isDamaged : !isDamaged;
+    }
+    // A model ships every `extraN` alternative and the game picks one per spawn; the viewer inspects a
+    // MODEL, so it shows the first and hides the rest rather than stacking them on top of each other.
+    if (submesh.extra && submesh.extra !== shownExtra) {
+      visible = false;
     }
     current?.instance.setSubmeshVisible(index, visible);
   });
@@ -164,6 +170,11 @@ async function fetchServer(endpoint: 'dff' | 'txd', model: string): Promise<Arra
   }
 
   return response.arrayBuffer();
+}
+
+/** The alternative a model viewer shows out of a set that only a spawn can choose between. */
+function firstExtra(submeshes: readonly { extra?: null | string }[]): null | string {
+  return submeshes.find((submesh) => !!submesh.extra)?.extra ?? null;
 }
 
 /** Frame the car by its COL bounds when it has them, else by the mesh. */

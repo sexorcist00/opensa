@@ -41,8 +41,6 @@ export const PaintSlot = {
 } as const;
 
 export interface VehicleBuildOptions {
-  /** Deterministic chooser among mutually-exclusive `extraN` frames (default `Math.random`). */
-  rng?: () => number;
   /** `vehicles.ide` wheelScale as [front, rear] — SA scales the axles separately. Absent = [1, 1]. */
   wheelScale?: readonly [number, number];
 }
@@ -151,6 +149,13 @@ export interface VehicleModelSubmesh {
   center: [number, number, number];
   /** Pairing key for the `_ok`/`_dam` twins (`door_lf`, `bonnet`, …); null when the part cannot deform. */
   damageGroup: null | string;
+  /**
+   * The `extraN` frame this submesh belongs to, or null/absent for the ordinary body. SA's optional parts
+   * are mutually exclusive and a car shows AT MOST ONE — the choice belongs to the spawn, not to the build,
+   * so every alternative ships and the runtime hides the rest per instance (`EngineVehicleHandle`).
+   * Absent on fixtures built before that moved, where the builder had already resolved the choice.
+   */
+  extra?: null | string;
   indexCount: number;
   indexOffset: number;
   /**

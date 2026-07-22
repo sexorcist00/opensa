@@ -38,7 +38,15 @@ export class EngineVehicleHandle implements VehicleHandle {
   readonly wheels: VehicleWheelInfo[];
   private band: VehicleBand = 'hd';
   private readonly damaged = new Set<string>();
+
   private readonly data: VehicleRigData;
+  /**
+   * Which `extraN` this CAR shows. SA's optional parts are mutually exclusive and the choice is a spawn
+   * decision, not a build one — the model ships every alternative and each instance hides the rest, so a
+   * street of the same car does not wear the same optional part. Null when the model has no extras (and on
+   * a pak built before the builder started shipping them, where the choice was already baked in).
+   */
+  private readonly extra: null | string;
 
   private readonly instance: VehicleInstance;
 
@@ -64,7 +72,11 @@ export class EngineVehicleHandle implements VehicleHandle {
       name,
       position: [...data.parts[part].localTranslation] as [number, number, number],
     }));
-    this.setLodBand('hd'); // `_dam` and `_vlo` submeshes start hidden
+    const extras = [
+      ...new Set(data.submeshes.map((submesh) => submesh.extra).filter((name): name is string => !!name)),
+    ];
+    this.extra = extras.length > 0 ? extras[Math.floor(Math.random() * extras.length)] : null;
+    this.setLodBand('hd'); // `_dam`, `_vlo` and the extras this car did not draw start hidden
   }
 
   detachPart(name: string): null | VehiclePose {
@@ -140,7 +152,10 @@ export class EngineVehicleHandle implements VehicleHandle {
       } else {
         visible = !showLod && !damaged;
       }
-      this.instance.setSubmeshVisible(index, visible && !culled);
+      // An optional part only exists on the car that drew it — the alternatives sit in the same spot and
+      // would render as one overlapping jumble.
+      const wrongExtra = !!submesh.extra && submesh.extra !== this.extra;
+      this.instance.setSubmeshVisible(index, visible && !culled && !wrongExtra);
     });
     this.band = band;
   }

@@ -58,7 +58,7 @@ describe('buildVehicleModel', () => {
       expect(built.parts).toHaveLength(1);
     });
 
-    it('unchosen `extraN` alternatives never render — SA shows at most one', () => {
+    it("every `extraN` alternative ships TAGGED — the pick is the spawn's, not the build's", () => {
       const built = buildVehicleModel(
         clump(
           [frame('chassis'), frame('extra1'), frame('extra2'), frame('extra3')],
@@ -71,12 +71,12 @@ describe('buildVehicleModel', () => {
           [geometry()],
         ),
         textures(),
-        { rng: () => 0 }, // pick extra1
       );
 
-      const extras = built.parts.filter((part) => part.name.startsWith('extra'));
-      expect(extras).toHaveLength(1);
-      expect(extras[0].name).toBe('extra1');
+      expect(built.parts.map((part) => part.name)).toEqual(['chassis', 'extra1', 'extra2', 'extra3']);
+      // The chassis carries no tag; each extra's submeshes name their own frame, which is what lets the
+      // runtime show exactly one per car instead of all three on top of each other.
+      expect(built.submeshes.map((submesh) => submesh.extra ?? null)).toEqual([null, 'extra1', 'extra2', 'extra3']);
     });
   });
 

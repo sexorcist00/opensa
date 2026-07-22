@@ -45,9 +45,13 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
 - **Glass** (plan 025): window materials detected and rendered transparent (double-sided,
   sorted).
 - **Extras** (`extraN` components): SA's mutually-exclusive optional parts modelled at the same spot (e.g. the
-  Benson's swappable advertising boards). The builder shows **at most one** per spawn — a random `extraN` (via
-  `VehicleOptions.rng`, default `Math.random`), hiding the rest. Without this, all `extraN` atomics render on top
-  of each other (overlapping jumble).
+  Benson's swappable advertising boards, the mod admiral's exhaust-and-mudflap set). All alternatives ship in
+  the model, each submesh tagged with its `extraN` frame; **the pick is per SPAWN**, made by
+  `EngineVehicleHandle` and applied through the same per-instance submesh visibility that hides `_dam` and
+  `_vlo`. So two cars of one model wear different optional parts, which is what SA does. It used to be a
+  build-time `Math.random()` in the builder, which froze one alternative into the pak for every car in the
+  world and re-rolled it on each convert (2026-07-22). Without a pick, all `extraN` atomics render on top of
+  each other (overlapping jumble) — the viewer therefore shows the first and the lab's convoy walks them.
 - **Physics** (plans 017/018): Rapier dynamic chassis from the COL convex hull, raycast wheels
   (suspension), handling.cfg parsed (kept for tuning), enter/exit flow with seat alignment
   (plan 016) — the run-to-door is interruptible (movement input or a blocked path hands control back,

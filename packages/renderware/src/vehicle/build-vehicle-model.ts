@@ -85,7 +85,6 @@ export function buildVehicleModel(
   const doors: VehicleDoor[] = [];
   const damGeometry = collectDamGeometry(clump);
   const containerFrames = collectContainerFrames(clump);
-  const hiddenExtras = hiddenExtraFrames(clump, options.rng ?? Math.random);
   const wheelScale = options.wheelScale ?? [1, 1];
 
   let sharedWheel: null | { frameIndex: number; geometryIndex: number } = null;
@@ -112,10 +111,18 @@ export function buildVehicleModel(
       });
       continue;
     }
-    if (name.endsWith('_dam') || hiddenExtras.has(atomic.frameIndex)) {
-      continue; // `_dam` rides with its `_ok` twin; unchosen `extraN` alternatives never render
+    if (name.endsWith('_dam')) {
+      continue; // `_dam` rides with its `_ok` twin
     }
+    const before = scratch.submeshes.length;
     addBodyAtomic(scratch, clump, atomic.geometryIndex, name, atomic.frameIndex, textures, damGeometry, doors);
+    // Every `extraN` alternative ships, tagged with its frame. SA shows at most one and the pick is per
+    // SPAWN — a build-time choice would freeze one optional part into the pak for every car in the world.
+    if (EXTRA_RE.test(name)) {
+      for (let at = before; at < scratch.submeshes.length; at += 1) {
+        scratch.submeshes[at].extra = name;
+      }
+    }
   }
 
   const wheels = addWheels(scratch, clump, textures, wheelScale, { containerWheels, cornerWheels, sharedWheel });
@@ -516,17 +523,6 @@ function hasWheelDummies(clump: RWClump): boolean {
  * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
  * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
  */
-function hiddenExtraFrames(clump: RWClump, rng: () => number): Set<number> {
-  const extras = clump.atomics
-    .map((atomic) => atomic.frameIndex)
-    .filter((frameIndex) => EXTRA_RE.test(frameName(clump, frameIndex)));
-  if (extras.length === 0) {
-    return new Set();
-  }
-  const chosen = extras[Math.min(extras.length - 1, Math.floor(rng() * extras.length))];
-
-  return new Set(extras.filter((frameIndex) => frameIndex !== chosen));
-}
 
 /** Narrowest index array the vertex count allows — see the call site. */
 function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint32Array {
