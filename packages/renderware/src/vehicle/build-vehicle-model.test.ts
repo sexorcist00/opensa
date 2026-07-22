@@ -607,6 +607,27 @@ describe('buildVehicleModel (wheel side, real models)', () => {
       });
     }
 
+    it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))(
+      'silences the tyre and leaves the rim reflective — the model that was caught glinting',
+      () => {
+        // This fixture is why the rule exists: all six of its wheels author the tyre with a FULL env map
+        // (`xvehicleenv128`, coefficient 1) plus specular, so rubber rendered as reflective as chrome.
+        const built = buildVehicleModel(
+          parseDff(toArrayBuffer(readFileSync('tests/custom/dff/vehicle/petro-6wheels.dff'))),
+          new VehicleTextures([]),
+        );
+        const wheelSubmeshes = built.submeshes.filter((submesh) => built.parts[submesh.part].name.startsWith('wheel_'));
+        const coefficient = (submesh: (typeof wheelSubmeshes)[number]): number =>
+          built.reflect[built.indices[submesh.indexOffset] * 4 + 1];
+        const tyres = wheelSubmeshes.filter((submesh) => submesh.tyre);
+        const rims = wheelSubmeshes.filter((submesh) => !submesh.tyre);
+
+        expect(tyres.length).toBe(12); // two tyre materials on each of the six wheels
+        expect(new Set(tyres.map(coefficient))).toEqual(new Set([0]));
+        expect(Math.max(...rims.map(coefficient))).toBe(255); // the rim keeps every bit of what it authored
+      },
+    );
+
     it.skipIf(!existsSync('tests/custom/dff/vehicle/petro-6wheels.dff'))('covers the middle axle too', () => {
       const built = buildVehicleModel(
         parseDff(toArrayBuffer(readFileSync('tests/custom/dff/vehicle/petro-6wheels.dff'))),

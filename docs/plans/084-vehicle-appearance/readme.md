@@ -230,6 +230,14 @@ a few cars with one material over the whole wheel — "no tyre" is a supported a
 
 The submesh carries a `tyre` flag so the damageable-tyre work can find it without re-deriving any of this.
 
+**The model the user actually saw glinting** is a fixture we already ship: `tests/custom/dff/vehicle/
+petro-6wheels.dff`. All six of its wheels author the TYRE with a full env map (`xvehicleenv128`,
+coefficient 1.0) plus specular 0.05, so its rubber was as reflective as chrome — measured through the
+builder, tyre submeshes went from `paint / coefficient 255 / specular 13` to `matte / 0 / 0`, while the rim
+beside them stayed `paint / 255 / 13`. It is now a regression test on that file. (The two mod cars in the
+field pak were NOT this case: their tyres were already matte, and what looked like a glint there was the
+over-bright indirect term rows 1/3 fixed.)
+
 ### 4. Performance — CLOSED 2026-07-21, and it was never a vehicle row
 
 Opened as "37 fps at night". The answer: **mod vegetation swapped in by the pmb `trees` stage**, 73 % of it
