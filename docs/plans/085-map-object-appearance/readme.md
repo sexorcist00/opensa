@@ -195,13 +195,20 @@ another archive TXD, ledgered as crossTxd, missing stays empty.
 
 ## Open rows
 
-### Row G — mod 46 "Animated Radars": models invisible (OPEN — needs a repro session)
+### Row G — mod 46 "Animated Radars": models invisible (OPEN — data chain verified clean, awaiting a live repro)
 
-The mod's `.ide.merge` moves `ap_radar1_01` from `objs` to `anim` (clip file `radar.ifp`, dist 600) and
-mod-installer supports exactly this (its own tests use this mod). The IFP's single clip is named `'0'`,
-NOT the model name — `clipForModel` finds nothing, and by the missing-clip rule the def should weld WHOLE
-at bind pose (visible, static). The field reports it INVISIBLE — so something else drops it. Also worth
-fixing while there: single-clip IFPs should fall back to their first clip (mods name clips arbitrarily);
-that would make the radar actually TURN instead of standing still.
+**Verified 2026-07-22 (correcting an earlier note: the "clip named '0'" reading was a debug-script bug —
+the clip IS named `ap_radar1_01`):** the entire offline chain is consistent. The installer applies the
+mod's `.ide.merge` (anim row present in the BUILD's multiobj.ide); the pak carries the model's static base
+(42 idx welded, cell −7,−3) with the 1860-vert dish left out for the host (B7·b); `ap_radar1_01.osm` has a
+valid SKEL (frames `bigsprunkpole`/`coe_bigsprunkcan_` — the mod author re-rigged the Sprunk-can skeleton,
+that's authored, not a converter mixup); `radar.ifp` is in the build archive; `clipForModel` finds the clip
+and `animatedFrames` marks exactly one moving frame. The runtime half (`engine-anim-objects.ts`) is wired
+after `adapter.prepare()` and its roster comes from the same defs.
+
+**Remaining suspect:** the runtime module's model build swallowed failures (`catch { built = null }`) —
+a failed build means the moving part is simply MISSING in the world, which is the field report exactly.
+That catch now logs `[anim-objects] <model> failed to build …` — the next live session reads the console
+at the LS airport and gets the answer for free. (Also check spawn: RANGE 300 m, 1 birth/frame.)
 
 ### Row E follow-up — ground glow (deferred to 078 ledger #11; user owes the wanted behaviour)

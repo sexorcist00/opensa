@@ -116,8 +116,13 @@ export function setupEngineAnimObjects(
           submeshParts: source.submeshes.map((submesh) => submesh.part),
         };
       }
-    } catch {
-      built = null; // a model we cannot build simply stays as the converter welded it
+    } catch (error) {
+      built = null; // a model we cannot build simply stays as the converter welded it…
+      // …but never SILENTLY (085 row G): the converter left this model's moving frames OUT of the cell
+      // bundle, so a swallowed build failure here means the object is simply MISSING in the world — the
+      // exact "mod 46 radars are invisible" field report, undiagnosable without the name and the error.
+      // eslint-disable-next-line no-console -- a hole in the world must not fail silently
+      console.warn(`[anim-objects] ${placement.modelName} failed to build — its moving parts stay missing:`, error);
     }
     models.set(placement.modelName, built);
 
