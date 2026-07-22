@@ -42,9 +42,10 @@ Sanity: 1123 cells / ~1 GB / AO ~375 s. Also owed on this rebuild (078): map-obj
 ## Open / parked (no action until the user speaks)
 
 - Row E ground glow — user owes the precise description (078 ledger #11).
-- Row G — mod 46 "Animated Radars" models invisible (`ap_radar1_01`): the installer DOES apply its
-  `.ide.merge` (objs → anim, radar.ifp), but the IFP's single clip is named `'0'`, not the model name,
-  so `clipForModel` finds nothing — by the missing-clip rule it should weld static-visible, yet the
-  field says invisible. Needs a repro session.
+- Row G — mod 46 "Animated Radars" (`ap_radar1_01`): the WHOLE offline chain verified clean (merge
+  applied, static base in the pak, .osm SKEL + radar.ifp + clip all consistent — the clip IS named after
+  the model; the earlier `'0'` note was a debug-script bug). Next live session: stand at the LS airport
+  radar and read the console — a `[anim-objects] ap_radar1_01 failed to build` warn (now loud) names the
+  root; if no warn, check spawn range (300 m).
 - Mod 42 data decision — patch `_257`→`_256` in visagesign04.dff or restore the mod's TXD (user said:
   leave the mod alone for now).
