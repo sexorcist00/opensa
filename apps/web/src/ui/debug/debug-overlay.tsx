@@ -92,6 +92,8 @@ export interface DebugActions {
   isFlying(): boolean;
   /** Current night-lights (street-lamp coronas) config. */
   lights(): LightsConfig;
+  /** Whether the missing-texture highlight (magenta stand-ins) is on (engine host only; default = dev). */
+  missingTextureHighlight?(): boolean;
   /** Current night-moon config (size/glow/elevation). */
   moon(): MoonConfig;
   /** Current night ambient/atmosphere config (brightness/tint). */
@@ -132,6 +134,8 @@ export interface DebugActions {
   setHeadlights(patch: Partial<HeadlightConfig>): void;
   /** Toggle night street-lamp lights (coronas). */
   setLights(patch: Partial<LightsConfig>): void;
+  /** Repaint missing-texture stand-in layers magenta/off (engine host only; plan 085 row B). */
+  setMissingTextureHighlight?(enabled: boolean): void;
   /** Tune the night moon (size/glow/elevation). */
   setMoon(patch: Partial<MoonConfig>): void;
   /** Tune night ambient/atmosphere (brightness/tint). */
@@ -1316,6 +1320,10 @@ function MapScreen({
   setMapActive: (update: (previous: boolean) => boolean) => void;
   setNormals: (value: boolean) => void;
 }): ReactElement {
+  // Missing-texture highlight (plan 085 row B): repaints the pak's stand-in layers magenta. Engine host
+  // only — seeded from the host so the button reflects the dev-build default.
+  const [missingTex, setMissingTex] = useState(() => actions.missingTextureHighlight?.() ?? false);
+
   return (
     <div style={styles.group}>
       <button onClick={() => setMapActive((previous) => !previous)} style={styles.actionButton} type="button">
@@ -1332,6 +1340,19 @@ function MapScreen({
           type="button"
         >
           {normals ? 'Hide Normals' : 'Show Normals'}
+        </button>
+      ) : null}
+      {actions.setMissingTextureHighlight ? (
+        <button
+          onClick={() => {
+            const next = !missingTex;
+            setMissingTex(next);
+            actions.setMissingTextureHighlight?.(next);
+          }}
+          style={styles.actionButton}
+          type="button"
+        >
+          {missingTex ? 'Missing Textures: magenta ON' : 'Missing Textures: magenta OFF'}
         </button>
       ) : null}
       {!mapActive && <DrawDistanceControls actions={actions} />}

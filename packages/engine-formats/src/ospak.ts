@@ -63,6 +63,11 @@ export interface OspakManifest {
   cells: Record<string, OspakCellEntry>;
   /** World-grid cell size (engine units) — key "cx,cy,…" → engine-space centre mapping for streaming. */
   cellSize: number;
+  /** Colour stand-in layers the planner minted for MISSING textures (plan 085 row B): 4×4 RGBA8 layers the
+   *  runtime can repaint magenta when the missing-texture highlight is on. `color` is the PACKED texel, so
+   *  toggling off restores the quiet material colour without re-fetching the array. Absent when the whole
+   *  map resolved. */
+  missingLayers?: { array: number; color: [number, number, number, number]; layer: number }[];
   /** Texture-array entries: `"array-<id>"` → range; meta mirrors the .ostex headers for scheduling. */
   textures: Record<string, OspakEntry & { format: number; height: number; layers: number; width: number }>;
   /** UV-scroll animations (B7·c / plan 074/18): the whole map's UVAnimDict entries, de-duped by name in
@@ -98,6 +103,7 @@ export function buildOspak(
   inputs: readonly OspakInput[],
   options: {
     cellSize?: number;
+    missingLayers?: OspakManifest['missingLayers'];
     uvAnimations?: OspakUvAnimation[];
   } = {},
 ): { manifest: OspakManifest; pak: Uint8Array } {
@@ -132,6 +138,9 @@ export function buildOspak(
       cells,
       cellSize: options.cellSize ?? 250,
       textures,
+      ...(options.missingLayers !== undefined && options.missingLayers.length > 0
+        ? { missingLayers: options.missingLayers }
+        : {}),
       ...(options.uvAnimations !== undefined && options.uvAnimations.length > 0
         ? { uvAnimations: options.uvAnimations }
         : {}),

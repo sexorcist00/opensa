@@ -807,6 +807,7 @@ async function boot(
             ]
           : [],
       isFlying: () => flyEye !== null,
+      missingTextureHighlight: () => missingTexHighlight,
       perfHud: () => perfHud,
       perfLogs: () => perfLogs,
       perfSnapshot: (): EnginePerfSnapshot | null => {
@@ -854,6 +855,10 @@ async function boot(
       setFlyMode,
       setHour: (value): void => {
         hour = value;
+      },
+      setMissingTextureHighlight: (enabled): void => {
+        missingTexHighlight = enabled;
+        engine.textures.setMissingHighlight(enabled);
       },
       setPerfHud: (enabled): void => {
         perfHud = enabled;
@@ -963,6 +968,11 @@ async function boot(
   // toggled live from the debugger's Perf screen.
   let perfHud = IS_DEV;
   let perfLogs = IS_DEV;
+  // Missing-texture highlight (plan 085 row B): magenta stand-ins ON while developing, the quiet material
+  // colour in a production build; toggled live from the debugger's Map screen. Applying the flag here is
+  // early enough — arrays stream in later and paint on load.
+  let missingTexHighlight = IS_DEV;
+  engine.textures.setMissingHighlight(missingTexHighlight);
   // Soak-mode HUD line (074/10 ③) — progress while running, the verdict when done (the Safari
   // read-off). Carries its own leading newline so the HUD appends it unconditionally.
   let soakStatus = '';

@@ -17,6 +17,7 @@ function deps(overrides: Partial<EngineDebugActionsDeps> = {}): EngineDebugActio
     getHour: () => hour,
     gpuTimings: () => [],
     isFlying: () => false,
+    missingTextureHighlight: () => false,
     perfHud: () => true,
     perfLogs: () => true,
     perfSnapshot: () => null,
@@ -29,6 +30,7 @@ function deps(overrides: Partial<EngineDebugActionsDeps> = {}): EngineDebugActio
     setHour: (value: number): void => {
       hour = value;
     },
+    setMissingTextureHighlight: vi.fn(),
     setPerfHud: vi.fn(),
     setPerfLogs: vi.fn(),
     setWeather: vi.fn(),

@@ -46,6 +46,8 @@ export async function setupStreaming(
   validateOspakManifest(manifest);
   // UV-scroll animations (B7·c / plan 074/18): global by dict name, advanced engine-side; kind-4 draws slot in.
   engine.setUvAnimations(manifest.uvAnimations ?? []);
+  // Missing-texture stand-ins (plan 085 row B): the highlight repaints these layers magenta on demand.
+  engine.textures.setMissingLayers(manifest.missingLayers ?? []);
 
   // Folder mode hands the worker the pak Blob (read off disk); HTTP mode hands it the `world.ospak` URL.
   const pakInit: PakWorkerRequest =

@@ -169,6 +169,40 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   return { models: written, report };
 }
 
+/** The two texture-resolution ledgers (085 rows B/F): cross-TXD rescues (info) and true misses (warn). */
+function logTextureLedgers(
+  textures: Awaited<ReturnType<typeof convertDistrict>>['report']['textures'],
+  log: (message: string) => void,
+): void {
+  const crossTxd = Object.values(textures.crossTxd);
+  if (crossTxd.length > 0) {
+    // Names the def's own chain lacked but another TXD supplied (085 row F) — the mod-triage view:
+    // a mod TXD that dropped names its stock predecessor had shows up here, one line per name.
+    log(`ℹ ${crossTxd.length} texture name(s) resolved through the global index:`);
+    for (const entry of crossTxd.slice(0, 24)) {
+      const models = entry.models.slice(0, 6).join(', ') + (entry.models.length > 6 ? ', …' : '');
+      log(`  ${entry.txd} lacks '${entry.texture}' ← taken from ${entry.donor} — model(s): ${models || '?'}`);
+    }
+    if (crossTxd.length > 24) {
+      log(`  … ${crossTxd.length - 24} more — full list in report.json textures.crossTxd`);
+    }
+  }
+  const missing = Object.entries(textures.missing);
+  if (missing.length > 0) {
+    // Missing textures render as the material colour (vanilla parity) — quiet in the frame, loud here:
+    // one line per failed name WITH the models that asked for it, so a broken mod is identifiable
+    // straight from the console (user decides what to do with the mod afterwards).
+    log(`⚠ ${missing.length} texture name(s) resolved nowhere (material-colour stand-ins):`);
+    for (const [key, entry] of missing.slice(0, 24)) {
+      const models = entry.models.slice(0, 6).join(', ') + (entry.models.length > 6 ? ', …' : '');
+      log(`  ${key} ×${entry.count} — model(s): ${models === '' ? '?' : models}`);
+    }
+    if (missing.length > 24) {
+      log(`  … ${missing.length - 24} more — full list in report.json textures.missing`);
+    }
+  }
+}
+
 /**
  * Convert every model class into `bundles` (003 phases 3–5). Runs from `convertDistrict`'s world-plan hook,
  * because the last class — map objects — resolves into the SHARED texture plan and that plan is only
@@ -257,6 +291,7 @@ function printReport(
       `breakables=${report.breakables}, uv-scroll=${report.uvAnimObjects}/${report.uvAnimations}, ` +
       `roadsigns=${report.roadsigns}, normals authored=${report.normals.authored} computed=${report.normals.computed}`,
   );
+  logTextureLedgers(report.textures, log);
   const normalsTotal = report.normals.authored + report.normals.computed;
   if (normalsTotal > 0 && report.normals.computed / normalsTotal > 0.1) {
     // opensa-pack plan 001: computed normals = the runtime invents them (naive average, no crease model) —

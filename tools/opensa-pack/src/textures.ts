@@ -55,14 +55,38 @@ const DXT_TO_FORMAT: Record<string, OstexFormatId> = {
 };
 
 export class TexturePlanner {
-  /** Ledger: how many textures took each path. */
-  readonly report = { colors: 0, dedup: 0, opaquePass: 0, processed: 0 };
+  /** Stand-in layers minted for MISSING textures (plan 085 row B) — written into the pak manifest so the
+   *  runtime can repaint them magenta on demand. `color` is the PACKED texel of the layer. Deliberately a
+   *  pool SEPARATE from ordinary colour materials: repainting a shared layer would tint those too. */
+  readonly missingLayers: { array: number; color: [number, number, number, number]; layer: number }[] = [];
+  /** Ledger: how many textures took each path + every name the chain could not supply (`txd/texture` →
+   *  count + the MODELS that asked for it, so a broken mod is identifiable from the report alone). */
+  readonly report = {
+    colors: 0,
+    /** Names the def's own chain missed but the GLOBAL index supplied, keyed `txd/texture`: which txd
+     *  LACKED the name, which donor txd supplied it, and every MODEL that asked — the mod-triage view. */
+    crossTxd: {} as Record<string, { donor: string; models: string[]; texture: string; txd: string }>,
+    dedup: 0,
+    missing: {} as Record<string, { count: number; models: string[] }>,
+    opaquePass: 0,
+    processed: 0,
+  };
   private readonly buckets = new Map<string, Bucket>();
   private readonly byContent = new Map<number, ResolvedTexture>();
   /** Global fallback TXDs (074/06 row 10): overlay mods ship one shared TXD (e.g. `vegetation.txd`) that the
    *  installed game wires via txdp; offline we search it when the def's own chain misses. */
   private readonly fallbackTxds: readonly string[];
   private readonly fs: AssetFileSystem;
+  /** name → the first `.txd` (sorted archive order — deterministic) carrying it. Built LAZILY on the first
+   *  chain miss (085 row F): the LAST-RESORT lookup behind the scoped def→txdp→fallback chain. Two real
+   *  classes need it: a mod TXD that DROPPED names its stock predecessor carried (mod 32's triadcasino.txd
+   *  lost the roof's `greyground256128`), and stock models referencing a texture another TXD carries
+   *  (lacnchasgn_lvs → `carparksignplate_64` — vanilla RW finds it through the loaded-txd pool). Scoped
+   *  resolution stays first (the lod-common plan-004 lesson: the def TXD's pixels win over a same-named
+   *  texture elsewhere); this index only decides between the real texels and a stand-in. Names only — the
+   *  scan retains no pixel data (the lazy-TXD memory lesson), the winner re-parses through rawCache. */
+  private globalIndex: Map<string, string> | null = null;
+
   private nextArrayRef = 0;
 
   private readonly rawCache = new Map<string, Map<string, RWTexture>>();
@@ -117,6 +141,7 @@ export class TexturePlanner {
     textureName: null | string,
     color: readonly number[],
     preferCutout = false,
+    model?: string,
   ): ResolvedTexture {
     if (!textureName) {
       return this.resolveColor(color);
@@ -129,7 +154,38 @@ export class TexturePlanner {
       rw = this.rawTexture(fallback, textureName.toLowerCase());
     }
     if (!rw) {
-      return this.resolveColor([255, 0, 255, 255]); // loud missing-texture magenta
+      // Last resort (085 row F): the global by-name index — see its declaration for the two real classes.
+      const global = this.globalTxd(textureName.toLowerCase());
+      if (global !== undefined) {
+        rw = this.rawTexture(global, textureName.toLowerCase());
+        if (rw) {
+          const key = `${txdName.toLowerCase()}/${textureName.toLowerCase()}`;
+          const entry = (this.report.crossTxd[key] ??= {
+            donor: global,
+            models: [],
+            texture: textureName.toLowerCase(),
+            txd: txdName.toLowerCase(),
+          });
+          if (model !== undefined && !entry.models.includes(model)) {
+            entry.models.push(model);
+          }
+        }
+      }
+    }
+    if (!rw) {
+      // Vanilla parity: SA draws a missing texture UNTEXTURED — material colour × prelit (map-object round,
+      // visagesign04: a mod DFF naming `_257` textures no dictionary anywhere ships turned its arch magenta;
+      // the game and prod both showed the quiet grey). The loudness lives elsewhere: every failed name is
+      // in `report.missing` (the pack log summarizes it), and the stand-in layer is registered in the
+      // manifest so the runtime's missing-texture highlight can repaint it magenta on demand.
+      const key = `${txdName.toLowerCase()}/${textureName.toLowerCase()}`;
+      const entry = (this.report.missing[key] ??= { count: 0, models: [] });
+      entry.count += 1;
+      if (model !== undefined && !entry.models.includes(model)) {
+        entry.models.push(model);
+      }
+
+      return this.resolveColor(color, true);
     }
     const contentKey = fnv1a(rw.mipmaps[0]?.data ?? new Uint8Array()) ^ (rw.width << 8) ^ rw.height;
     const existing = this.byContent.get(contentKey);
@@ -174,6 +230,34 @@ export class TexturePlanner {
       layer: layerIndex % MAX_LAYERS,
       stochastic: false,
     };
+  }
+
+  /** The global index's txd for a texture name (building the index on first use), or undefined. */
+  private globalTxd(name: string): string | undefined {
+    if (!this.globalIndex) {
+      this.globalIndex = new Map();
+      // `?? []`: hand-rolled test fixtures often omit `names` — no listing simply means no global index.
+      const files = (this.fs.names ?? []).filter((file) => file.toLowerCase().endsWith('.txd')).sort();
+      for (const file of files) {
+        const bytes = this.fs.get(file);
+        if (!bytes) {
+          continue;
+        }
+        const txd = file.toLowerCase().replace(/\.txd$/, '');
+        try {
+          for (const texture of parseTxd(bytes).textures) {
+            const key = texture.name.toLowerCase();
+            if (!this.globalIndex.has(key)) {
+              this.globalIndex.set(key, txd);
+            }
+          }
+        } catch {
+          // locked/unparseable dictionaries stay out of the index (parity with rawTexture)
+        }
+      }
+    }
+
+    return this.globalIndex.get(name);
   }
 
   private plan(rw: RWTexture, name: string, preferCutout = false): ResolvedTexture {
@@ -247,26 +331,37 @@ export class TexturePlanner {
     return parent && parent !== txdName ? this.rawTexture(parent, textureName, seen) : null;
   }
 
-  private resolveColor(color: readonly number[]): ResolvedTexture {
+  /** `missing = true` mints the layer in the missing-texture pool: same texel, but never shared with an
+   *  ordinary colour material (the runtime repaints these) and registered in {@link missingLayers}. */
+  private resolveColor(color: readonly number[], missing = false): ResolvedTexture {
     this.report.colors += 1;
     const [r, g, b, a] = color;
-    const key = fnv1a(`color:${r},${g},${b},${a}`);
+    const tag = missing ? 'missing' : 'color';
+    const key = fnv1a(`${tag}:${r},${g},${b},${a}`);
     const existing = this.byContent.get(key);
     if (existing) {
       return existing;
     }
     const alphaClass: AlphaClass = a < 250 ? 'softBlend' : 'opaque';
-    const texel = a < 250 ? [(r * a) / 255, (g * a) / 255, (b * a) / 255, a] : [r, g, b, 255];
+    const texel = (a < 250 ? [(r * a) / 255, (g * a) / 255, (b * a) / 255, a] : [r, g, b, 255]).map(Math.round) as [
+      number,
+      number,
+      number,
+      number,
+    ];
     const rgba = new Uint8Array(4 * 4 * 4);
     for (let index = 0; index < 16; index += 1) {
-      rgba.set(texel.map(Math.round), index * 4);
+      rgba.set(texel, index * 4);
     }
     const planned = this.appendLayer(OstexFormat.RGBA8, 4, 4, 1, {
       alphaClass,
       mips: [{ data: rgba, height: 4, width: 4 }],
-      name: `color:${r},${g},${b},${a}`,
+      name: `${tag}:${r},${g},${b},${a}`,
     });
     this.byContent.set(key, planned);
+    if (missing) {
+      this.missingLayers.push({ array: planned.arrayRef, color: texel, layer: planned.layer });
+    }
 
     return planned;
   }

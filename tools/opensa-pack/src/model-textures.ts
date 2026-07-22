@@ -55,18 +55,19 @@ export function planModelSlots(
   txdName: string,
   preferCutout = false,
   emptyDictionary = false,
+  model?: string,
 ): ModelTextureSlot[] {
   const txd = txdName.toLowerCase();
 
   return names.map((raw) => {
     const name = raw.toLowerCase();
     // An EMPTY source dictionary is stock SA's own convention, not a data gap: the builder gave every one
-    // of these names a white stand-in and the material colour carries, so plan them as white rather than
-    // as the planner's loud missing-texture magenta.
+    // of these names a white stand-in and the material colour carries, so plan them as white without
+    // touching the planner's missing-texture ledger.
     const resolved =
       name === WHITE_LAYER || emptyDictionary
         ? planner.resolve(txd, null, WHITE)
-        : planner.resolve(txd, name, WHITE, preferCutout);
+        : planner.resolve(txd, name, WHITE, preferCutout, model);
 
     return { array: resolved.arrayRef, layer: resolved.layer };
   });
@@ -76,10 +77,10 @@ export function planModelSlots(
  * Plan every layer the builder claimed. `preferCutout` mirrors the welder's vegetation rule — SA alpha-tests
  * foliage, and a blend-classed canopy writes no depth (trees show through trees).
  *
- * A texture the chain cannot resolve comes out MAGENTA, not white: that is what the welded cell path does
- * with the same missing texture, and a loud model is worth more than one that quietly matches the
- * unoptimized path's invisible white. `emptyDictionary` is the ONE exception, and it is not a data gap —
- * see the call site.
+ * A texture the chain cannot resolve comes out as the material-colour stand-in (vanilla draws it
+ * untextured) and lands in the planner's `report.missing` ledger — the same rule as the welded cell path,
+ * so the two never disagree on the same model. `emptyDictionary` skips the ledger, and it is not a data
+ * gap — see the call site.
  */
 export function planModelTextures(
   fs: AssetFileSystem,
@@ -88,9 +89,10 @@ export function planModelTextures(
   txdName: string,
   preferCutout = false,
   emptyDictionary = false,
+  model?: string,
 ): ModelDictionary {
   const planner = new TexturePlanner(fs, txdParents);
-  const slots = planModelSlots(planner, names, txdName, preferCutout, emptyDictionary);
+  const slots = planModelSlots(planner, names, txdName, preferCutout, emptyDictionary, model);
 
   // `build()` emits in ref order, but say so rather than assume it — a mis-ordered array silently
   // retextures every submesh that indexes it.

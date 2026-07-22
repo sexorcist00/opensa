@@ -33,6 +33,8 @@ export interface FakeGpu {
   readonly passes: RecordedPass[];
   /** Drop everything recorded so far — call between frames to assert one frame in isolation. */
   reset(): void;
+  /** `queue.writeTexture` calls, in order (085: the missing-texture repaint is asserted from here). */
+  readonly textureWrites: RecordedTextureWrite[];
   /** `queue.writeBuffer` calls, in order. */
   readonly writes: RecordedWrite[];
 }
@@ -59,6 +61,14 @@ export interface RecordedPass {
   label: string;
 }
 
+/** One recorded `queue.writeTexture` — the destination layer and a COPY of the texel bytes. */
+export interface RecordedTextureWrite {
+  data: Uint8Array;
+  label: string | undefined;
+  /** `origin.z` — the array layer written. */
+  z: number;
+}
+
 /** One recorded `queue.writeBuffer`. */
 export interface RecordedWrite {
   byteLength: number;
@@ -74,6 +84,7 @@ interface Recorder {
   draws: RecordedDraw[];
   passes: RecordedPass[];
   textures: Map<string, boolean>;
+  textureWrites: RecordedTextureWrite[];
   writes: RecordedWrite[];
 }
 
@@ -85,6 +96,7 @@ export function createFakeDevice(): FakeGpu {
     draws: [],
     passes: [],
     textures: new Map(),
+    textureWrites: [],
     writes: [],
   };
 
@@ -172,7 +184,19 @@ export function createFakeDevice(): FakeGpu {
           offset,
         });
       },
-      writeTexture: (): void => {},
+      writeTexture: (
+        destination: { origin?: { z?: number }; texture: { label?: string } },
+        data: ArrayBuffer | ArrayBufferView,
+      ): void => {
+        const view = ArrayBuffer.isView(data)
+          ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+          : new Uint8Array(data);
+        recorder.textureWrites.push({
+          data: new Uint8Array(view),
+          label: destination.texture.label,
+          z: destination.origin?.z ?? 0,
+        });
+      },
     },
   };
 
@@ -187,8 +211,10 @@ export function createFakeDevice(): FakeGpu {
       recorder.draws.length = 0;
       recorder.passes.length = 0;
       recorder.writes.length = 0;
+      recorder.textureWrites.length = 0;
       recorder.destroyed.length = 0;
     },
+    textureWrites: recorder.textureWrites,
     writes: recorder.writes,
   };
 }

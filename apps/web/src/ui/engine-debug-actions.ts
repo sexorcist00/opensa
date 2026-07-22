@@ -43,6 +43,9 @@ export interface EngineDebugActionsDeps {
   /** Per-pass GPU timings of the last frame (label → ms). */
   gpuTimings: () => readonly (readonly [string, number])[];
   isFlying: () => boolean;
+  /** Move the player (native Z-up); `moveBody` also teleports the physics capsule. */
+  /** Whether the missing-texture highlight (magenta stand-ins, plan 085 row B) is on; default = dev build. */
+  missingTextureHighlight: () => boolean;
   /** Whether the on-screen HUD is drawn (host state; defaults to the development build). */
   perfHud: () => boolean;
   /** Whether slow frames print their CPU breakdown (host state; defaults to the development build). */
@@ -51,7 +54,6 @@ export interface EngineDebugActionsDeps {
   perfSnapshot: () => EnginePerfSnapshot | null;
   /** Rolling frame stats; null until a frame was measured. */
   perfStats: () => null | PerfStats;
-  /** Move the player (native Z-up); `moveBody` also teleports the physics capsule. */
   placePlayer: (position: Vec3, moveBody?: boolean) => void;
   playerCoords: () => Vec3;
   /** Re-scatter clutter after a procobj knob change (render + colliders share one scatter). */
@@ -61,6 +63,8 @@ export interface EngineDebugActionsDeps {
   setDebugNormals: (enabled: boolean) => void;
   setFlyMode: (on: boolean) => void;
   setHour: (hour: number) => void;
+  /** Repaint missing-texture stand-in layers: magenta on, packed material colour off. */
+  setMissingTextureHighlight: (enabled: boolean) => void;
   setPerfHud: (enabled: boolean) => void;
   setPerfLogs: (enabled: boolean) => void;
   /** Start a weather transition (the shared WeatherTransition, 6 s blend). */
@@ -123,6 +127,7 @@ export function createEngineDebugActions(deps: EngineDebugActionsDeps): DebugAct
     headlights: () => graphics.headlights,
     isFlying: deps.isFlying,
     lights: () => graphics.lights,
+    missingTextureHighlight: deps.missingTextureHighlight,
     moon: () => graphics.moon,
     night: () => graphics.night,
     perfHud: deps.perfHud,
@@ -154,6 +159,7 @@ export function createEngineDebugActions(deps: EngineDebugActionsDeps): DebugAct
     },
     setHeadlights: (patch): void => void Object.assign(graphics.headlights, patch),
     setLights: (patch): void => void Object.assign(graphics.lights, patch),
+    setMissingTextureHighlight: deps.setMissingTextureHighlight,
     setMoon: (patch): void => void Object.assign(graphics.moon, patch),
     setNight: (patch): void => void Object.assign(graphics.night, patch),
     setPerfEnabled: (): void => undefined, // the engine samples every frame anyway — nothing to gate

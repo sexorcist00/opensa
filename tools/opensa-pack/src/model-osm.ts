@@ -99,6 +99,7 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
         options.txd ?? name,
         options.rawDictionary.preferCutout,
         dictionary.empty,
+        name,
       )
     : null;
   const shared = options.worldDictionary
@@ -108,6 +109,7 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
         options.txd ?? name,
         options.worldDictionary.preferCutout,
         dictionary.empty,
+        name,
       )
     : null;
   const slots = planned?.slots ?? shared;

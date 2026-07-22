@@ -75,5 +75,13 @@ describe('ospak', () => {
       expect(buildOspak(inputs(), { uvAnimations: [] }).manifest).not.toHaveProperty('uvAnimations');
       expect(buildOspak(inputs()).manifest).not.toHaveProperty('uvAnimations');
     });
+
+    it('carries missing-texture stand-in layers into the manifest, and omits the key when the map resolved (085)', () => {
+      const missing = [{ array: 3, color: [92, 92, 87, 255] as [number, number, number, number], layer: 1 }];
+
+      expect(buildOspak(inputs(), { missingLayers: missing }).manifest.missingLayers).toEqual(missing);
+      expect(buildOspak(inputs(), { missingLayers: [] }).manifest).not.toHaveProperty('missingLayers');
+      expect(buildOspak(inputs()).manifest).not.toHaveProperty('missingLayers');
+    });
   });
 });

@@ -139,7 +139,7 @@ export async function convertDistrict(
     roadsigns: 0,
     skippedTimed: 0,
     sunVis: null,
-    textures: { arrays: 0, colors: 0, dedup: 0, opaquePass: 0, processed: 0 },
+    textures: { arrays: 0, colors: 0, crossTxd: {}, dedup: 0, missing: {}, opaquePass: 0, processed: 0 },
     timedObjects: 0,
     uvAnimations: 0,
     uvAnimObjects: 0,
@@ -248,6 +248,7 @@ export async function convertDistrict(
   report.uvAnimations = uvAnimations.length;
   const { manifest, pak } = buildOspak(inputs, {
     cellSize,
+    missingLayers: planner.missingLayers, // buildOspak drops the key when the list is empty
     uvAnimations, // buildOspak drops the key when the list is empty
   });
   report.pakBytes = pak.byteLength;
