@@ -12,10 +12,10 @@ Limits and deliberate approximations of the own WebGPU engine.
   not roofed by its own LOD blob) and it rides in the night set's alpha. It darkens what is UNDER something
   — cabin, underbody, exhaust — and nothing else: a panel gap and the contact with the ground still can't
   darken, and PEDS get no AO at all. Reflection strength stays an open row of plan 084.
-- **A material with SA's `reflection`/`specular` plugin but no env map renders matte.** `reflectionOf()`
-  gates reflectivity on `envMap.coefficient > 0`, so exhausts and bare-metal trim authored with the other
-  two plugins get no reflection and no specular (prod's `enhanced` preset supplied clearcoat as a constant
-  and they read as dull chrome). Plan 084 row 2.
+- **A TEXTURED material with SA's `reflection` plugin but no env map still renders matte.** Reflectivity
+  without an env map is granted to UNTEXTURED materials only (bare metal and plastic — exhausts, trim,
+  bumper irons). The mods' exporter stamps `reflection` on every material it writes, so honouring it
+  everywhere turned 100 % of both field mods reflective, carpet and tyres included. Plan 084 row 2.
 - **Shader-stage limits are invisible to tests.** The fake GPUDevice doesn't validate the 16-varying
   fragment-input cap or binding visibility — two shader defects shipped through 2,325 green tests. Check
   WGSL by eye (a static check is a noted follow-up in plan 084).

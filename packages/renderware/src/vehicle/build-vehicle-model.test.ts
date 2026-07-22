@@ -414,6 +414,39 @@ describe('buildVehicleModel', () => {
       expect([...built.reflect.subarray(0, 4)]).toEqual([0, 0, 0, 0]);
     });
 
+    it('an env map zeroed to 0 wins over a strong reflection plugin — it IS the tyre marker', () => {
+      const tyre = material({
+        effects: {
+          envMap: { coefficient: 0, texture: 'vehicleenvmap128', useFrameBufferAlpha: false },
+          reflection: { intensity: 0.5, offset: [1, 1], scale: [1, 1] },
+        },
+      });
+      const built = buildVehicleModel(
+        clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [geometry([tyre])]),
+        textures(),
+      );
+
+      expect([...built.reflect.subarray(0, 4)]).toEqual([0, 0, 0, 0]);
+    });
+
+    it('SA reflection + specular with NO env map is reflective — the exhaust / bare-trim shape', () => {
+      const exhaust = material({
+        color: [51, 51, 51, 255],
+        effects: {
+          reflection: { intensity: 0.5, offset: [1, 1], scale: [1, 1] },
+          specular: { level: 0.17, texture: 'vehiclespecdot64' },
+        },
+      });
+      const built = buildVehicleModel(
+        clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [geometry([exhaust])]),
+        textures(),
+      );
+
+      expect(built.reflect[0]).toBe(0); // no env map named, and the shader reflects the live probe anyway
+      expect(built.reflect[1]).toBe(Math.round(0.5 * 255)); // the plugin's intensity becomes the coefficient
+      expect(built.reflect[3]).toBe(Math.round(0.17 * 255));
+    });
+
     it('a lone corner wheel with real dummies is a MIS-NAMED shared wheel (the comet case)', () => {
       const built = buildVehicleModel(
         clump(

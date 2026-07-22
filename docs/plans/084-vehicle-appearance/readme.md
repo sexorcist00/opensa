@@ -111,7 +111,31 @@ Found by a field probe, not by reading: the shader was temporarily patched to ou
 colour channels and shot headless under the parked admiral. Measured at noon, BEFORE: `ambient` saturated
 at ~1.0 on the underbody — a car's exhaust was lit as if it faced open sky.
 
-### 2. Reflections — DECISION NEEDED before any code
+### 2. Reflections — VARIANT 1 SHIPPED 2026-07-22 (the env-map gate is gone)
+
+User's call after the exhaust round: drop the gate rather than build presets. `reflectionOf()` now reads the
+material's data as a whole instead of demanding an env map:
+
+- an env map with a coefficient of 0 stays MATTE and wins over everything — it is SA's own marker on tyres
+  and rubber, and that was never in question;
+- with no env map at all, an **untextured** material carrying the `reflection` plugin becomes reflective and
+  the plugin's intensity IS the coefficient. That is the exhaust / trim / bumper-iron shape, and it is why
+  the mod admiral's exhaust rendered as flat 0.2 diffuse where prod showed dull chrome.
+
+The narrowing to untextured is measured, not taste: the mods' exporter stamps `reflection` on every material
+they ship, so honouring the plugin alone turned **100 %** of both field cars reflective (carpet, leather and
+tyres included). Reflective share, before -> after: mod admiral 21 -> **26 %**, mod comet 35 -> **41 %**,
+stock cheetah 42 -> 42 %, stock admiral 60 -> 60 % — it adds exactly the bare-metal parts and moves no stock
+car at all.
+
+Also learned while measuring: `envLayer` (`reflect.x`) is handed to the fragment stage and **never read** —
+`rigidEnv` reflects the live probe, so the DFF env texture only ever acted as a flag. Left in place for now;
+removing it would free one of the 16 inter-stage locations.
+
+The preset option below stays as written: if reflection strength ever needs to be authored per CLASS rather
+than per material, that is the shape to port.
+
+#### The original decision note, kept
 
 The user's report: no paint/reflection effect on hi-poly custom models, though it is there on low-poly stock.
 The data is NOT missing — measured on the two mods in the field:

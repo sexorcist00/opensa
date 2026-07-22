@@ -23,8 +23,11 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   (255,255,0 yellow). NB (255,175,0)/(255,60,0) are per-lamp ids on the `vehiclelights` atlas, **not**
   paint markers. Colour spec strings `"p,s[,t,q]"` with omitted 3rd/4th defaulting to palette 0 (SA
   behaviour); RW modulate (texture × material colour) for non-marker textured materials (dark interiors fix).
-- **Reflections** (plan 030 → 074/16): MatFX env coefficient + SA reflection/specular plugin data carried
-  per material. The engine runs a skygfx-style "neo" car pipe — the base colour LERPs toward a live scene
+- **Reflections** (plan 030 → 074/16 → 084): MatFX env coefficient + SA reflection/specular plugin data
+  carried per material. A material is reflective when its env map has a coefficient (a coefficient of 0 is
+  SA's own "not reflective" marker on tyres and rubber, and it wins over everything else), or — with no env
+  map at all — when it is UNTEXTURED and carries the `reflection` plugin, which is how SA authors bare metal
+  such as exhausts and trim. The env TEXTURE is not the colour source: the shader reflects the live probe. The engine runs a skygfx-style "neo" car pipe — the base colour LERPs toward a live scene
   **cube probe** (`packages/engine/src/render/probe.ts`, 128²×6, refreshed a couple of faces per frame) —
   with a per-material class (matte/paint/chrome/glass) chosen from the material data, never from names.
   The three-era presets (`packages/game/src/plugins/vehicle-reflection/presets.ts`) survive only as

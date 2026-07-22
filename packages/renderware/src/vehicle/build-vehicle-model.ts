@@ -685,23 +685,38 @@ function paintSlot(material: RWMaterial): number {
 }
 
 /**
- * The material's DFF reflection settings → the per-vertex reflect slots. `envMap.coefficient` gates the whole
- * thing: SA leaves the plugin on wheels and tyres with a coefficient of 0, which means "not reflective".
+ * The material's DFF reflection settings → the per-vertex reflect slots.
+ *
+ * SA authors reflectivity with THREE plugins and a material may carry any subset. The env map used to gate
+ * the whole thing, which rendered a common authoring shape fully MATTE: an exhaust or a bare-metal trim with
+ * `reflection` + `specular` and no env map at all (the mod admiral's exhaust: intensity 0.50, specular 0.17).
+ * Prod never showed it because its `enhanced` preset supplied clearcoat as a CONSTANT, so those materials
+ * read as dull chrome. The env map is not what makes a surface reflective — it is only one of the inputs,
+ * and it does not even supply the COLOUR here: `rigidEnv` reflects the live probe, never the DFF texture.
+ *
+ * A coefficient of 0 on an env map still means "not reflective" — SA's own marker on tyres and rubber — so
+ * a material that carries an env map and zeroes it stays matte no matter what else it has.
  */
 function reflectionOf(material: RWMaterial, textures: VehicleTextures): [number, number, number, number] {
   const effects = material.effects;
   const env = effects?.envMap;
-  if (!env || env.coefficient <= 0 || !env.texture) {
+  const intensity = effects?.reflection?.intensity ?? 0;
+  const specular = effects?.specular?.level ?? 0;
+  if (env && (env.coefficient <= 0 || !env.texture)) {
+    return [0, 0, 0, 0];
+  }
+  // Without an env map the fallback is narrowed to UNTEXTURED materials, and that is not a taste call:
+  // measured on the two field mods, their exporter stamps `reflection` on every material they ship, so
+  // taking the plugin alone turned 100 % of both cars reflective — carpet, leather and tyres included
+  // (stock cars, authored by hand, sit at 42-60 %). A material with no base texture is the one SA uses for
+  // bare metal and plastic — the exhaust, the trim, the bumper irons — and its own colour IS the surface.
+  const coefficient = env ? env.coefficient : material.texture === null ? intensity : 0;
+  if (coefficient <= 0) {
     return [0, 0, 0, 0];
   }
   const byte = (value: number): number => Math.max(0, Math.min(255, Math.round(value * 255)));
 
-  return [
-    textures.resolveNamed(env.texture),
-    byte(env.coefficient),
-    byte(effects?.reflection?.intensity ?? 0),
-    byte(effects?.specular?.level ?? 0),
-  ];
+  return [env?.texture ? textures.resolveNamed(env.texture) : 0, byte(coefficient), byte(intensity), byte(specular)];
 }
 
 /**
