@@ -25,6 +25,7 @@ import { frameWorldTransform, rotationToQuat } from '../mesh/frame-transform';
 import { groupTrianglesByMaterial, NIGHT_AMBIENT } from '../mesh/prepare-clump';
 import { skyOcclusion } from './sky-occlusion';
 import { LampTag, MaterialClass, PaintSlot } from './types';
+import { tyreMaterials } from './wheel-tyre';
 
 /** SA per-lamp marker colours on the `vehiclelights*` atlas: they say WHICH lamp a material is — engine
  *  metadata, NEVER rendered (else garish green/yellow lamp patches). */
@@ -50,6 +51,9 @@ const WHEEL_CONTAINER_RE = /^f_wheel/;
 const WHEEL_CORNER_RE = /^wheel_(lf|rf|lm|rm|lb|rb)$/;
 const WHEEL_DUMMY_RE = /^wheel_(l|r)([fmb])_dummy$/;
 const WHEEL_FRAME = 'wheel';
+
+/** Body geometry has no tyre in it — only the wheel paths pass a real set. */
+const NO_TYRES: ReadonlySet<number> = new Set();
 
 interface Scratch {
   colors: number[];
@@ -256,7 +260,15 @@ function addWheels(
       if (wheel.right !== authoredRight) {
         scratch.parts[part].localRotation = flipWheelSide(scratch.parts[part].localRotation);
       }
-      appendGeometry(scratch, clump.geometries[wheel.geometryIndex], part, textures, 'body', null);
+      appendGeometry(
+        scratch,
+        clump.geometries[wheel.geometryIndex],
+        part,
+        textures,
+        'body',
+        null,
+        tyreMaterials(clump.geometries[wheel.geometryIndex]),
+      );
 
       return { front: wheel.front, part, radius: authoredRadius * scale };
     });
@@ -289,6 +301,7 @@ function appendGeometry(
   textures: VehicleTextures,
   kind: VehicleModelSubmesh['kind'],
   damageGroup: null | string,
+  tyres: ReadonlySet<number> = NO_TYRES,
 ): void {
   if (!rw) {
     return;
@@ -298,7 +311,8 @@ function appendGeometry(
       return;
     }
     const material = rw.materials[materialIndex];
-    const surface = materialSurface(material, textures, kind);
+    const tyre = tyres.has(materialIndex);
+    const surface = materialSurface(material, textures, kind, tyre);
     const { color, klass, lamp, layer, nightLayer, paint, reflect } = surface;
     const indexOffset = scratch.indices.length;
     const center: [number, number, number] = [0, 0, 0];
@@ -379,6 +393,7 @@ function appendGeometry(
     scratch.submeshes.push({
       center: centroid,
       damageGroup,
+      ...(tyre ? { tyre: true } : {}),
       indexCount: tris.length * 3,
       indexOffset,
       kind,
@@ -543,6 +558,7 @@ function instanceWheels(
 ): VehicleWheel[] {
   const wheels: VehicleWheel[] = [];
   const baseRadius = wheelRadius(clump.geometries[geometryIndex]);
+  const tyres = tyreMaterials(clump.geometries[geometryIndex]);
   const authoredRight = authoredWheelRight(clump, sourceFrame);
   for (const [frameIndex, frame] of clump.frames.entries()) {
     const match = WHEEL_DUMMY_RE.exec(frame.name.trim().toLowerCase());
@@ -561,7 +577,7 @@ function instanceWheels(
       name: frame.name.trim().toLowerCase(),
       scale,
     });
-    appendGeometry(scratch, clump.geometries[geometryIndex], part, textures, 'body', null);
+    appendGeometry(scratch, clump.geometries[geometryIndex], part, textures, 'body', null, tyres);
     wheels.push({ front, part, radius: baseRadius * scale });
   }
 
@@ -636,6 +652,7 @@ function materialSurface(
   material: RWMaterial,
   textures: VehicleTextures,
   kind: VehicleModelSubmesh['kind'],
+  tyre = false,
 ): {
   color: [number, number, number, number];
   klass: number;
@@ -654,7 +671,10 @@ function materialSurface(
     : [material.color[0], material.color[1], material.color[2], material.color[3]];
   const layer = textures.resolve(material);
   const nightLayer = textures.resolveNightTwin(material);
-  const reflect = reflectionOf(material);
+  // RUBBER DOES NOT REFLECT. SA marks its own tyres with a zeroed env map; mods do not, so the geometry
+  // says it instead (`wheel-tyre.ts`) and the tyre loses reflection AND specular here. The rim beside it is
+  // untouched — that one is supposed to shine.
+  const reflect = tyre ? ([0, 0, 0, 0] as [number, number, number, number]) : reflectionOf(material);
   const translucent = color[3] < 250 || textures.hasAlpha(material);
 
   return {

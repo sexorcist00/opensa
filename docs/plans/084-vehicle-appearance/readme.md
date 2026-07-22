@@ -206,6 +206,30 @@ lab: the feltzer's open cabin reads lit, its footwell dark.
 Still open in this row: contact shadow with the ground (nothing here darkens the ground under a car), and
 peds (row 5).
 
+### 3b. Tyres must never reflect — SHIPPED 2026-07-22
+
+Rubber does not shine, and SA says so where it can: its own tyre materials carry an env map with a
+coefficient of 0, the "not reflective" marker. Mods do not — their exporter stamps the reflection plugin on
+everything — and row 2 above made untextured materials with that plugin reflective, which would have put a
+gloss on three stock cars' rubber (`vincent`, `willard`, `rctiger`: an untextured black material at the tyre
+radius carrying `reflection` 0.2–0.5).
+
+`vehicle/wheel-tyre.ts` finds the tyre by GEOMETRY, per the standing no-name-matching rule. A wheel is a disc
+about its axle (X in wheel space), and the tyre is its outer band. Measured across stock and mod cars:
+
+| part | mean radius (share of the wheel's max) |
+| ---- | -------------------------------------- |
+| tyre | 0.87 · 0.89 · 0.90 · 0.90 · 0.96 · 0.98 |
+| rim  | 0.18 · 0.32 · 0.48 · 0.53 · 0.54 · 0.70 |
+
+Nothing lands between, so the cut is `mean ≥ 0.8` plus `outer ≥ 0.9` (a hub cap with a long spoke reaches
+the rim but its mass does not). A tyre is forced matte — reflect zeroed, so no env and no specular — and the
+rim keeps what the DFF authored (mod admiral's rim stays chrome at coefficient 128, the comet's paint at
+128). Coverage: **180 of 215** stock vehicles have a separable tyre; the other 35 are boats, aircraft, RC and
+a few cars with one material over the whole wheel — "no tyre" is a supported answer, not a failure.
+
+The submesh carries a `tyre` flag so the damageable-tyre work can find it without re-deriving any of this.
+
 ### 4. Performance — CLOSED 2026-07-21, and it was never a vehicle row
 
 Opened as "37 fps at night". The answer: **mod vegetation swapped in by the pmb `trees` stage**, 73 % of it

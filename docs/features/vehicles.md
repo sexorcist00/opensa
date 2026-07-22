@@ -42,6 +42,15 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   convertible's cabin open. The engine's dynamic indirect term is `params.y × DYNAMIC_INDIRECT ×
   skyVisibility(normal) × occlusion` — the map's `prelit × params.y × ao`, with a constant standing in for
   the prelit a car has no data for.
+- **Tyre detection** (plan 084, 2026-07-22): `wheel-tyre.ts` finds the RUBBER of a wheel by geometry, never
+  by texture name (the field set says `tire`, `tyre`, `tread`, `wheel`, `vehicletyres128`, `generic_tire_01`
+  — it disagrees with itself). A wheel is a disc about its axle and the tyre is its outer band: measured
+  across the game, tyre materials sit at a mean radius of 0.87–0.98 of the wheel's own maximum and every rim
+  material at 0.18–0.70. A detected tyre is forced MATTE — no reflection, no specular, because rubber does
+  not shine — while the rim beside it keeps whatever the DFF authored. 180 of 215 stock vehicles have a
+  separable tyre; the other 35 (boats, aircraft, RC, and a few cars with one material over the whole wheel)
+  simply have none, which is a supported answer. The submesh keeps a `tyre` flag for the damageable-tyre
+  work that will want it.
 - **Glass** (plan 025): window materials detected and rendered transparent (double-sided,
   sorted).
 - **Extras** (`extraN` components): SA's mutually-exclusive optional parts modelled at the same spot (e.g. the

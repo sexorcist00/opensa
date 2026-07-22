@@ -172,6 +172,9 @@ export interface VehicleModelSubmesh {
    *  Optional: old fixtures sort by the centre alone. */
   radius?: number;
   translucent: boolean;
+  /** True when this submesh is the WHEEL's rubber (`wheel-tyre.ts` — a geometric test, not a name). Rubber
+   *  never reflects, and a damageable tyre will want to find itself later. Absent = not a tyre. */
+  tyre?: boolean;
 }
 
 export interface VehicleTextureArray {
