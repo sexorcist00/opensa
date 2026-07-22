@@ -8,6 +8,8 @@ Distinct from the neighbouring rubrics:
 
 - `docs/features/*` — things that are implemented and work.
 - `docs/open-issues/*` — known problems/bugs investigated but unsolved (no shipped fix).
+- `docs/performance/*` — optimizations we deliberately left on the table, with their price: the plan-B list
+  for when frame time gets bad.
 - `docs/improvements/*` — nice-to-have enhancements we've chosen to defer (no problem, just not now).
 
 When one gets picked up, promote it to a `docs/plans/*` plan.
