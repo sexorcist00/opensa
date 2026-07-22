@@ -148,6 +148,7 @@ Keep these in sync with the code — update them in the same change, not later:
 - `docs/performance/` — when a change picks the RUNTIME path over a precomputed/baked one, or takes any
   deliberate cost for correctness, simplicity or moddability, record the alternative here in the same change:
   what it would save, what it would cost, what would have to be true to pull it. This is the plan-B list read
-  when the frame budget is blown — a lever with a price attached, not a plan (+ a row in its README)
+  when the frame budget is blown — a lever with a price attached, not a plan (one file per lever in
+  `docs/performance/deferred-optimizations/` + a row in the README)
 - `docs/links.md` — when an external resource (repo, article, tool) proves useful, add it here
 - `docs/commands.md` — when a command/CLI/param is added or changed, update this cheat sheet

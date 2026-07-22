@@ -181,7 +181,7 @@ for at the top of the session: a thin format, one extensible interpretation laye
 in opensa-pack would make a modloader car differ from a converted one; `buildVehicleModel` runs on both
 paths, so the numbers agree by construction and the pack merely persists what the builder already produced.
 The refused alternative is kept as a lever with its price in
-[docs/performance/vehicle-ao-baking.md](../../performance/vehicle-ao-baking.md).
+[docs/performance/deferred-optimizations/vehicle-ao-baking.md](../../performance/deferred-optimizations/vehicle-ao-baking.md).
 
 `vehicle/sky-occlusion.ts` — horizon mapping over a height field, not ray casting:
 

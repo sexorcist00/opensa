@@ -1,7 +1,7 @@
 # Bake vehicle sky-occlusion in opensa-pack
 
 **Status:** in reserve — not needed. Opened 2026-07-22 alongside the change it describes
-([plan 084](../plans/084-vehicle-appearance/readme.md), commit `e5004e0`).
+([plan 084](../../plans/084-vehicle-appearance/readme.md), commit `e5004e0`).
 
 ## What we do today
 

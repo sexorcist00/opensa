@@ -23,9 +23,16 @@ Distinct from the neighbouring rubrics:
 - `docs/edge-cases/*` — limits we live with today, not levers we could pull.
 - `docs/ideas/*` — design directions not scheduled yet.
 
-| Lever                                            | Doc                                          | Est. win                                     | Status                  |
-| ------------------------------------------------ | -------------------------------------------- | -------------------------------------------- | ----------------------- |
-| Bake vehicle sky-occlusion in opensa-pack        | [vehicle-ao-baking.md](vehicle-ao-baking.md) | 8–78 ms per model at spawn (once per model)  | in reserve — not needed |
+Entries live in [deferred-optimizations/](deferred-optimizations/), one file per lever.
+
+| Lever | Axis | Est. win | Status |
+| --- | --- | --- | --- |
+| [Bake vehicle sky-occlusion in opensa-pack](deferred-optimizations/vehicle-ao-baking.md) | spawn hitch | 8–78 ms per model, once per model, spawn path only | in reserve — not needed |
+| [Automatic render-scale / quality-tier ladder](deferred-optimizations/render-scale-tier.md) | GPU pass | 0.4–1.4 ms (measured ceiling), targets 345 → 88 MB | measured and refused |
+| [Per-ring texture laziness](deferred-optimizations/per-ring-texture-laziness.md) | memory | under the ~767 MB world-array floor | in reserve |
+| [One draw per visible vehicle submesh](deferred-optimizations/vehicle-submesh-draw-batching.md) | draw count | unmeasured; the axis the pass floor lives on | in reserve |
+| [Env-probe cadence and resolution](deferred-optimizations/env-probe-cadence.md) | GPU pass | 0.2–1.9 ms observed, ~5.8 ms worst seen | in reserve |
+| [Foliage fill](deferred-optimizations/foliage-fill.md) | GPU pass (fill) | the 07-21 case was 13.72 → 7.63 ms | parked by decision |
 
 ## How to use it when the frame budget is blown
 
