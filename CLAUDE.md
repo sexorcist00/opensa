@@ -152,3 +152,6 @@ Keep these in sync with the code — update them in the same change, not later:
   `docs/performance/deferred-optimizations/` + a row in the README)
 - `docs/links.md` — when an external resource (repo, article, tool) proves useful, add it here
 - `docs/commands.md` — when a command/CLI/param is added or changed, update this cheat sheet
+- `docs/debug/` — when a debug script proves useful, KEEP it in `scripts/debug/` and add a row in
+  `docs/debug/README.md` (what it answers + how to run) in the same change; throwaway experiments are
+  `scripts/debug/.tmp-*.ts` and are deleted before commit

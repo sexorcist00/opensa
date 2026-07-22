@@ -90,10 +90,7 @@ Guide: [development/benchmarks.md](./development/benchmarks.md).
 # Ghost-barriers int16 repro dial (33k rows = buggy, 32k = clean)
 npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/non-modified --out <dir> --rows 33000
 
-# One-off inspectors (scripts/debug/): audit-rw-coverage · dump-chunks · dump-texture · find-2dfx ·
-# find-instances · ide-flag-histogram · inspect-area · model-bbox · procobj-stats · solve-roadsign ·
-# check-cell-signs · dump-fx-system · wind-coverage · dump-osm (a pak .osm's sections/DESC/texture refs) ·
-# dump-osm-meta (per-submesh texture-layer histograms + TEXS layers) · dump-texel-avg (TEXS layer avg colour)
+# One-off inspectors (scripts/debug/) — catalog + the triage playbook: docs/debug/README.md
 npx tsx scripts/debug/<name>.ts --help
 ```
 
