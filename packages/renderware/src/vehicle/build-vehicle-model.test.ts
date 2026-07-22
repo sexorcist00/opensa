@@ -503,9 +503,15 @@ describe.skipIf(!existsSync(ADMIRAL) || !existsSync(GENERIC_TXD))('buildVehicleM
 
     it('occludes the bottom of the car and leaves the roof open to the sky', () => {
       // The night set's alpha is the self-occlusion (`sky-occlusion.ts`), and the claim is about SHAPE, so
-      // the probe is the shape: the highest tenth of the car sees the sky, the lowest tenth is underneath it.
+      // the probe is the shape: of the UP-FACING vertices, the highest tenth (roof) sees the sky and the
+      // lowest tenth (floor pans under that roof) is enclosed. Down- and side-facing vertices are excluded:
+      // their darkening is the shader's `skyVisibility(normal)` term, not the bake's — a vertex barely
+      // facing the azimuth fan reads open here by design (085, the comet door smudges).
       const heights: { alpha: number; z: number }[] = [];
       for (let vertex = 0; vertex < built.positions.length / 3; vertex += 1) {
+        if (built.normals[vertex * 3 + 2] < 0.5) {
+          continue;
+        }
         heights.push({ alpha: built.night[vertex * 4 + 3], z: built.positions[vertex * 3 + 2] });
       }
       heights.sort((left, right) => left.z - right.z);

@@ -67,6 +67,22 @@ describe('skyOcclusion', () => {
       expect(Math.min(...occlusion.subarray(0, floor.length / 3))).toBe(255);
     });
 
+    it('keeps a skin tilted slightly below horizontal bright next to a thin lip (085 comet smudges)', () => {
+      // A vertical door skin whose normal points 15° DOWN, one cell inboard of a thin skirt lip that tops
+      // out above it. Every azimuth weight is then a numerical scrap, and dividing occluded by their sum
+      // used to swing the vertex to fully occluded — the black smudges on the comet's doors.
+      const skin = [0, 0, 0];
+      const lip = [-0.12, 0, 0.35];
+      const spread = [...plate(1.5, -0.5, 4)]; // enough footprint for a real grid
+      const positions = [...skin, ...lip, ...spread];
+      const count = positions.length / 3;
+      const normals = [-0.99, 0, -0.15, ...up(count - 1)];
+      const occlusion = skyOcclusion(positions, normals, count);
+
+      // Bright, not smudge-black: the scrap-ratio verdict put this vertex at ~42 of 255.
+      expect(occlusion[0]).toBeGreaterThan(200);
+    });
+
     it('never drops below the indirect floor', () => {
       const positions = [...plate(1, 0), ...plate(1, 4)];
       const occlusion = skyOcclusion(positions, up(positions.length / 3), positions.length / 3);

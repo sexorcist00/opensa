@@ -31,6 +31,14 @@ const CLEARANCE = 0.02;
  *  world's own AO floor is the same idea. */
 const FLOOR = 0.15;
 
+/** A vertex must face at least ONE azimuth's worth of the fan before its verdict fully applies. The fan
+ *  samples horizontal-and-up directions only, so a skin tilted a few degrees BELOW horizontal gives every
+ *  azimuth a weight near zero — and `occluded / weightSum` then divides one numerical scrap by another,
+ *  swinging the vertex to fully occluded (the comet's door smudges, 085). Below this floor the fan's
+ *  verdict fades toward open sky instead; the shader's own `skyVisibility(normal)` already darkens
+ *  down-facing surfaces, so "open" is the correct neutral here. */
+const FACING_FLOOR = 1;
+
 /** The car's own shell as "highest surface over this cell", plus the frame it is addressed in. */
 interface HeightField {
   readonly cellX: number;
@@ -172,5 +180,5 @@ function vertexSky(
     weightSum += weight;
   }
 
-  return weightSum > 0 ? 1 - occluded / weightSum : 1;
+  return 1 - occluded / Math.max(weightSum, FACING_FLOOR);
 }

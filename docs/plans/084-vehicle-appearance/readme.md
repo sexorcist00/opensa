@@ -97,6 +97,28 @@ average indirect drops roughly half, which narrows row 1 below without closing i
 
 ## Open rows
 
+### 0. Field follow-up: black smudges on the comet's doors — FIXED 2026-07-22 late (sky-occlusion scrap ratio)
+
+**Symptom (user, first field run after the rebuild):** dark blotchy smudges on the gold comet's door
+panel (the 1995 GT2 mod — the Targa with the spike bug was replaced by the user earlier).
+
+**Trace (offline, no rebuild):** the pak's `comet.osm` night-alpha (= the row-3 AO) put doors at avg 140
+with 24–28 % of vertices BELOW 52, while the bonnet bakes 204 with 0 % — outer door skin was smudge-black.
+Rebuilding the model through the shared builder and instrumenting `vertexSky` pinned it: the worst
+vertices (AO 41) have normals tilted ~15° BELOW horizontal, so ALL 8 azimuth weights collapse to ~0
+(`riseZ·nz` cancels the horizontal dot), and `occluded / weightSum` divides one numerical scrap by
+another — the verdict swings to fully occluded on noise. High-poly wide-body mods expose it because the
+door plane sits INSIDE the footprint (arch flares set the field bounds), so every march finds a column.
+
+**Fix:** `FACING_FLOOR = 1` — the fan's verdict fades toward open sky unless the vertex faces at least
+one azimuth's worth of the fan (`1 - occluded / max(weightSum, 1)`). Down-facing surfaces stay dark via
+the shader's own `skyVisibility(normal)` factor (row 1's line) — the bake owes only positional enclosure.
+Measured on the comet door outer skin (x < −0.8, nx < −0.5): min 41 → 57, verts below 100: 26 → 14 of
+434; the scrap-class exemplar went 41 → 255; remaining dark vertices are the door CARD (interior,
+x ≈ −0.63 — legitimately enclosed). The admiral builder test's shape probe now compares UP-FACING tenths
+only (floor pans vs roof), matching the bake/shader contract. Field check: needs the next rebuild (the
+AO rides `.osm`), or a method-5 spot rebake.
+
 ### 1. Night level of dynamic models vs the map — SHIPPED 2026-07-22
 
 The map's indirect is `prelit x params.y x ao`; a car's was `params.y` alone. The two missing factors are
