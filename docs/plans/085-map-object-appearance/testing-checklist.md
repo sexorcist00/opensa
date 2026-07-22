@@ -39,13 +39,23 @@ Sanity: 1123 cells / ~1 GB / AO ~375 s. Also owed on this rebuild (078): map-obj
       reflectivity gate, extras at spawn, matte tyres on admiral/comet/petro (the wheel fix rides
       `.osm` DESC — old paks keep the bug).
 
+## Field results 2026-07-22 late (first run on the rebuilt pak)
+
+- [x] Row A neon palms — confirmed. Row C LV additive neon — confirmed. Row D Fremont fullbright +
+      scroll — confirmed. Converter 0 failures, map-objects stage time good, pack ledger lines present.
+- [x] Row G radar — spawns AND rotates now; the "no texture" black dish is the MOD'S OWN near-black
+      `ap_radar` texture (byte-faithful in the pak — see the plan's row G). Data decision owed.
+- [ ] Row B (grey stand-ins + F2 magenta + report triage) and row F (six magenta-roster spots) — still
+      to check this run.
+- [ ] Wheels: tyres must show NO specular glint (rubber matte, rims may shine) on admiral/comet/petro.
+- New batch: row H (LV facade "holes", vgsn_blucasign/vgnlowmall3) — see the plan; user probe owed:
+  do the holes survive by day? Plus 084 row 0: comet door AO smudges FIXED offline, needs a rebuild
+  (or spot rebake) to verify.
+
 ## Open / parked (no action until the user speaks)
 
 - Row E ground glow — user owes the precise description (078 ledger #11).
-- Row G — mod 46 "Animated Radars" (`ap_radar1_01`): the WHOLE offline chain verified clean (merge
-  applied, static base in the pak, .osm SKEL + radar.ifp + clip all consistent — the clip IS named after
-  the model; the earlier `'0'` note was a debug-script bug). Next live session: stand at the LS airport
-  radar and read the console — a `[anim-objects] ap_radar1_01 failed to build` warn (now loud) names the
-  root; if no warn, check spawn range (300 m).
+- Row G data decision — keep mod 46's dark radar texture, or delete the mod's `ap_misc1bit.txd` to
+  restore the stock red look (rebuild required).
 - Mod 42 data decision — patch `_257`→`_256` in visagesign04.dff or restore the mod's TXD (user said:
   leave the mod alone for now).

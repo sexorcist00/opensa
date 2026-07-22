@@ -92,7 +92,8 @@ npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/non-modified --o
 
 # One-off inspectors (scripts/debug/): audit-rw-coverage · dump-chunks · dump-texture · find-2dfx ·
 # find-instances · ide-flag-histogram · inspect-area · model-bbox · procobj-stats · solve-roadsign ·
-# check-cell-signs · dump-fx-system · wind-coverage
+# check-cell-signs · dump-fx-system · wind-coverage · dump-osm (a pak .osm's sections/DESC/texture refs) ·
+# dump-osm-meta (per-submesh texture-layer histograms + TEXS layers) · dump-texel-avg (TEXS layer avg colour)
 npx tsx scripts/debug/<name>.ts --help
 ```
 

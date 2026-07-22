@@ -195,7 +195,45 @@ another archive TXD, ledgered as crossTxd, missing stays empty.
 
 ## Open rows
 
-### Row G — mod 46 "Animated Radars": models invisible (OPEN — data chain verified clean, awaiting a live repro)
+### Row H — LV facade "holes" that shift with movement (OPEN — batch 2, 2026-07-22 late)
+
+**Symptom (user, field, night 23:50):** black hole-like patches on a facade near `vgsn_blucasign`
+(vgnfremnt1, @2156.0 2073.3 34.4) / `vgnlowmall3` (vgnlowbild, @2098.0 2076.1 31.7); they SHIFT with
+camera movement "like an occlusion bug".
+
+**Checked so far (all clean):** both IDE flags are 128 = 0x80 DONT_RECEIVE_SHADOWS (innocuous, no
+z-write/additive bits); both models' textures resolve (no `textures.missing`/`crossTxd` entries);
+`vgsn_blucasign.osm` is a plain 3-submesh world-source model. `vgsn_blucasign` has a far-LOD twin
+(`lod`-link 349 in `vegasn`).
+
+**Parallax reading of the screenshot:** the black trapezoids sit metres IN FRONT of the lit wall (the
+sign's own planes), so camera motion slides them across the facade — "holes" would then be the sign's
+quads rendering opaque-black at night instead of lit/additive. Next probe (10 s, user, in game): do the
+holes survive by DAY? Day-yes → welded geometry/z problem; day-no (night only) → the night
+emissive/additive classing of this sign's materials (row C/D territory) is painting them black-opaque.
+
+### Row G — mod 46 "Animated Radars" (CLOSED 2026-07-22 late — engine correct, the DARK look is the mod's own texture)
+
+**Field result after the rebuild:** the radar spawns and the dish ROTATES — the loud-warn fix (`a12fa71`)
+plus the rebuild resolved the invisibility. The user then read the dish as "no texture" (renders black).
+
+**Traced to data — the render is byte-faithful:** `ap_radar1_01.osm` carries its OWN 512×512 BC3 TEXS
+(one layer, meta all layer 0, vertex colours white — `scripts/debug/dump-osm.ts` /
+`dump-osm-meta.ts`); no `textures.missing`/`crossTxd` entries. The pak layer's opaque texels average
+rgb 28/1/0 vs the source's 29/2/1 with identical opaque counts (187 802) and the same 28.4 %
+transparent share (`dump-texel-avg.ts` + a block-level DXT1 decode). The source is mod 46's own
+`ap_misc1bit.txd`: its `ap_radar` (512² DXT1a) is a NEAR-BLACK dark-red lattice whose slat gaps are the
+transparent texels. Stock `ap_radar` (128² DXT3) is a BRIGHT RED frame with white slats. Vanilla +
+modloader would render the same dark dish — this is the mod author's texture, not a pipeline loss.
+
+**User decision owed (same shape as mod 42):** keep the mod's dark look, or drop
+`mods-src/mods/46. Animated Radars/gta3_img/ap_misc1bit.txd` (keep the DFF + ifp + ide.merge) so the
+stock red texture returns — needs a rebuild to show either way.
+
+**Noted, separate:** this own-TEXS `.osm` (built by `pack-anim-objects`' `buildModelOsm` fallback, no
+world dictionary) ships mipCount 1 — distant aliasing; the world-dictionary path bakes full chains.
+
+### Row G history — the offline verification trail (kept for the method)
 
 **Verified 2026-07-22 (correcting an earlier note: the "clip named '0'" reading was a debug-script bug —
 the clip IS named `ap_radar1_01`):** the entire offline chain is consistent. The installer applies the

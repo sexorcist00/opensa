@@ -71,6 +71,9 @@ const SA_TELEPORTS: readonly Teleport[] = [
   // unlike the ~1 m rocks a car drives over) in Bone County desert (cell 0,9, ~150 of them at z 15.3). Spawn is
   // just west of the field; the Admiral (6 m east) faces a wall of cacti — drive in to smash them.
   { coords: [5.0, 2415.0, 17.0], label: 'Desert - Breakable cacti' },
+  // Animated radars (085 row G): the two LS airport ap_radar1_01 towers @ (1663.6|1709.4, -2362.7) — the
+  // spinning dish is an anim object; a `[anim-objects] ap_radar1_01 failed to build` console warn names the root.
+  { coords: [1686.0, -2380.0, 14.0], label: 'LS - Airport radars (anim 085 G)' },
   // Normals batch (map-optimizer plans 020-022) field-check spots: a road junction for the angle weighting,
   // the doubled curved shells for the twin-quad smoothing.
   { coords: [2493.0, -1667.0, 16.0], label: 'LS - Ganton junction (normals 021)' },
