@@ -656,11 +656,9 @@ function materialSurface(
   const color: [number, number, number, number] = marker
     ? [255, 255, 255, material.color[3]]
     : [material.color[0], material.color[1], material.color[2], material.color[3]];
-  // Layer allocation ORDER is load-bearing: the base texture must resolve BEFORE the env map, or the env
-  // texture can land on layer 0 — and `reflect.x == 0` is the "not reflective" sentinel.
   const layer = textures.resolve(material);
   const nightLayer = textures.resolveNightTwin(material);
-  const reflect = reflectionOf(material, textures);
+  const reflect = reflectionOf(material);
   const translucent = color[3] < 250 || textures.hasAlpha(material);
 
   return {
@@ -697,7 +695,7 @@ function paintSlot(material: RWMaterial): number {
  * A coefficient of 0 on an env map still means "not reflective" — SA's own marker on tyres and rubber — so
  * a material that carries an env map and zeroes it stays matte no matter what else it has.
  */
-function reflectionOf(material: RWMaterial, textures: VehicleTextures): [number, number, number, number] {
+function reflectionOf(material: RWMaterial): [number, number, number, number] {
   const effects = material.effects;
   const env = effects?.envMap;
   const intensity = effects?.reflection?.intensity ?? 0;
@@ -716,7 +714,10 @@ function reflectionOf(material: RWMaterial, textures: VehicleTextures): [number,
   }
   const byte = (value: number): number => Math.max(0, Math.min(255, Math.round(value * 255)));
 
-  return [env?.texture ? textures.resolveNamed(env.texture) : 0, byte(coefficient), byte(intensity), byte(specular)];
+  // Slot 0 is SPARE. It used to carry the env texture's array layer, and nothing ever sampled it: the neo
+  // pipe reflects the LIVE probe, so SA's baked env photo is not the colour source and claiming a layer for
+  // it only made every car ship a 512x512 texture it never read.
+  return [0, byte(coefficient), byte(intensity), byte(specular)];
 }
 
 /**

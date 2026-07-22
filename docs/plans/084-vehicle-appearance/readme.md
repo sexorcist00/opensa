@@ -128,9 +128,16 @@ tyres included). Reflective share, before -> after: mod admiral 21 -> **26 %**, 
 stock cheetah 42 -> 42 %, stock admiral 60 -> 60 % — it adds exactly the bare-metal parts and moves no stock
 car at all.
 
-Also learned while measuring: `envLayer` (`reflect.x`) is handed to the fragment stage and **never read** —
-`rigidEnv` reflects the live probe, so the DFF env texture only ever acted as a flag. Left in place for now;
-removing it would free one of the 16 inter-stage locations.
+**The dead env layer is gone too (same day).** `envLayer` (`reflect.x`) was handed to the fragment stage and
+never read: `rigidEnv` reflects the live probe, so SA's baked env photo is not the colour source and the
+texture name only ever acted as a flag. Removed the varying (location 8 is free again), and with it the
+`resolveNamed` call that claimed an ARRAY LAYER for that texture on every car — including cars whose TXD
+does not even carry it, which got a white stand-in layer for their trouble.
+
+Texture array per model, before → after: stock cheetah 15 → **13** layers (3.8 → 3.3 MB RGBA), infernus
+17 → 15, mod admiral 39 → **38** (39.0 → 38.0 MB), mod comet 24 → **21** @1024² (96.0 → **84.0 MB**). Two
+layers per car is the usual saving (`xvehicleenv128` + `vehicleenvmap128`). `reflect.x` stays in the vertex
+stream as a documented SPARE — the coefficient in `.y` is the reflective flag.
 
 The preset option below stays as written: if reflection strength ever needs to be authored per CLASS rather
 than per material, that is the shape to port.

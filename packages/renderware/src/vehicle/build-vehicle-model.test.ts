@@ -380,7 +380,7 @@ describe('buildVehicleModel', () => {
       expect(door.offset?.slice(12, 15)).toEqual([0.5, 0, 0]); // the door, relative to the hinge
     });
 
-    it('carries the DFF reflection settings per vertex (env layer, coefficient, intensity, specular)', () => {
+    it('carries the DFF reflection settings per vertex (coefficient, intensity, specular)', () => {
       const reflective = material({
         effects: {
           envMap: { coefficient: 1, texture: 'xvehicleenv128', useFrameBufferAlpha: false },
@@ -393,7 +393,7 @@ describe('buildVehicleModel', () => {
         textures(),
       );
 
-      expect(built.reflect[0]).toBeGreaterThan(0); // the env map resolved to a real layer
+      expect(built.reflect[0]).toBe(0); // slot 0 is spare — nothing samples the DFF's env texture
       expect(built.reflect[1]).toBe(255); // coefficient 1
       expect(built.reflect[2]).toBe(Math.round(0.09 * 255));
       expect(built.reflect[3]).toBe(Math.round(0.18 * 255));
@@ -514,9 +514,9 @@ describe.skipIf(!existsSync(ADMIRAL) || !existsSync(GENERIC_TXD))('buildVehicleM
 
     it('the DFF ships env-map settings on the paint — the reflect channel is populated from the file', () => {
       let reflective = 0;
-      for (let at = 0; at < built.reflect.length; at += 4) {
+      for (let at = 1; at < built.reflect.length; at += 4) {
         if (built.reflect[at] > 0) {
-          reflective += 1;
+          reflective += 1; // the COEFFICIENT is the reflective flag; slot 0 is spare
         }
       }
 

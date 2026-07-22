@@ -5003,8 +5003,9 @@ struct RigidVsOut {
   // slots.w LOW nibble: 0 = body, 1 = head lamp, 2 = tail lamp; lamps = [headlights, brakes, intensity].
   @location(6) @interpolate(flat) lampTag: u32,
   @location(7) @interpolate(flat) lamps: vec3f,
-  @location(8) @interpolate(flat) envLayer: u32,
   // [env coefficient, SA reflection intensity, SA specular level] — all 0..1, all authored per material.
+  // There is no env LAYER beside them: the DFF names an env texture, but this pipe reflects the live probe
+  // (rigidEnv), so the name only ever acted as a flag. Location 8 is free again.
   @location(9) @interpolate(flat) reflect: vec3f,
   // MODEL-space position (xyz): the flake hash is anchored to the CAR, so the sparkle rides with it. A
   // world-space hash would make the flakes crawl across the paint as the car drives.
@@ -5107,7 +5108,6 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   out.lampTag = in.slots.w & 0xFu;
   out.matClass = in.slots.w >> 4u;
   out.lamps = rigidLamp[in.instance].xyz;
-  out.envLayer = in.reflect.x;
   out.reflect = vec3f(in.reflect.yzw) / 255.0;
   // The night set's ALPHA is the self-occlusion the builder wrote (vehicle/sky-occlusion.ts). A fixture
   // from before it simply carries the material alpha there, which is 1 on everything opaque - no change.
