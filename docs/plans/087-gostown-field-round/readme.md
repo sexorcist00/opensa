@@ -7,7 +7,7 @@ Same method as 085: symptom → source asset → pipeline stage → pak bytes �
 
 ## Rows
 
-### A+B — lod cells missing from RING streaming (ROOT CAUSE FIELD-CONFIRMED 2026-07-23 late; all three fixes in — SECOND rebuild owed)
+### A+B — lod cells missing from RING streaming (CLOSED 2026-07-23 night — field-verified on the 250-bake pak)
 
 **Field discriminator (user): pinning the whole map with "Show LODs" renders EVERYTHING — the bridge,
 the islands, no holes, no console errors.** Diagnosed OFFLINE from the pak bytes + `lods.ipl` (no
@@ -80,11 +80,14 @@ game id → named rects — `full` (what the pipeline passes: original `[-12,-12
 the 074/11 bench scenes). A game without a `full` entry auto-fits to content (`occupiedRect`);
 `config.pack.rect` stays as a per-run override, CLI `--rect` for standalone subsets.
 
-Owed: **SECOND rebuild of gostown (+ original when its turn comes) with the 250 bake**, then
-field-verify — spawn: the span must render via its verbatim LOD with slot 5,−7 at LOD level, and
-survive the walk-up promotion; the (1514,−1498) shore hole gone; wandering-hole drive clean. On the
-new pak `stream-ring-bounds.ts` should show the hd-only/lod-only slot pairing GONE and lod overhang
-collapsed to object-level only (bake cells = pak slots).
+**CLOSED — second rebuild (250 bake, pak `20:40 23-07-2026`, 764 cells) field-verified by the user:
+the spawn bridge renders and the shore holes are gone.** `stream-ring-bounds.ts` confirms structurally:
+hd-only/lod-only slot pairing 31/20 → **4/0** (the 4 are legit empty-bake cells), lod overhang now
+mirrors hd (mean 130.4 vs 129.0, p90 identical) — the systematic 256-grid spill is dead, only
+object-level overhang remains and the manifest-`aabb` ring covers exactly that (the script's one
+remaining "grid-rect would skip" cell from spawn is the case the aabb test now catches). `5,-7,lod`
+aabb == `5,-7,hd` aabb — span a shares its slot across levels. Original inherits all three fixes at
+its owed rebuild (its 078 in-game LOD anomalies were almost certainly this same class).
 
 ### A (history) — the paradise bridge bake side (superseded by the model story above)
 
@@ -103,7 +106,7 @@ verts: 50 627 / 84 239 / 15 621; the engine handles uint32 indices, weld has no 
 checked). If the pinned cells draw the bridge, the streaming path is fine and the miss is elsewhere
 (group class? distance?); if not, decode the welded positions.
 
-### B — part of an island not streamed at range; a lone tree floats where its ground should be (COVERED BY A+B)
+### B — part of an island not streamed at range; a lone tree floats where its ground should be (CLOSED with A+B)
 
 Screenshot 2026-07-23: a chunk of a far island absent while a palm renders mid-air over the water.
 Explained by the A+B root causes: the islands beyond cell ±12 were clipped out of the pak entirely
