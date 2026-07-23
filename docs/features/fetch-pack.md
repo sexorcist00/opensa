@@ -1,8 +1,9 @@
 # fetch-pack — one build for local play AND hosted fetch
 
-**State (2026-07-23): tool SHIPPED (plan 086 phase 2); the fetch CLIENT still boots the legacy
-raw-game path — phase 3 switches it to the pak (until then the chunks are produced but not consumed
-end-to-end).**
+**State (2026-07-23): tool SHIPPED (phase 2) and the fetch CLIENT boots the pak (phase 3): the VFS
+reassembles `<name>#index` slices, `AssetFetchLoader.openWorld` serves `opensa/*` from the delivered
+chunks — the dead `public/pak-map` fallback is unreachable in fetch mode. E2E smoke owed with the
+first small TC build (phase 4).**
 
 `tools/fetch-pack` packs a pmb build's `opensa/` game dir into content-hashed zip chunks +
 `manifest.json` under `static/games/<game>-<version>/` — the same layout the `asset-fetch-loader`

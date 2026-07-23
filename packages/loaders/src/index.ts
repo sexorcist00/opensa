@@ -39,6 +39,9 @@ export interface CreateAssetLoaderConfig {
   assetLoader: AssetLoaderKind;
   /** The served game-dir base URL — required for `http-dir` (`?src=`), ignored otherwise. */
   base?: string;
+  /** Read-back view of the sink (the VFS) — lets the fetch loader's `openWorld` serve the pak files its
+   *  chunks delivered (plan 086 phase 3). */
+  files?: { get(name: string): ArrayBuffer | null };
   /** Build variant (e.g. `gostown`) — labels the local loader's synthesised manifest. */
   game: string;
   /** Full URL to `manifest.json` — used by the fetch loader. */
@@ -63,5 +66,9 @@ export function createAssetLoader(config: CreateAssetLoaderConfig): AssetLoader 
     return new AssetLocalLoader(install);
   }
 
-  return new AssetFetchLoader({ manifestUrl: config.manifestUrl, sink: config.sink });
+  return new AssetFetchLoader({
+    ...(config.files ? { files: config.files } : {}),
+    manifestUrl: config.manifestUrl,
+    sink: config.sink,
+  });
 }

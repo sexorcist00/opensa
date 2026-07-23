@@ -336,3 +336,31 @@ describe('AssetFetchLoader', () => {
     });
   });
 });
+
+describe('openWorld (plan 086 phase 3)', () => {
+  describe('negative cases', () => {
+    it('returns null without a files view or for an absent pak file', async () => {
+      const bare = new AssetFetchLoader({ manifestUrl: 'http://x/manifest.json' });
+      expect(await bare.openWorld('world.ospak')).toBeNull();
+
+      const empty = new AssetFetchLoader({
+        files: { get: () => null },
+        manifestUrl: 'http://x/manifest.json',
+      });
+      expect(await empty.openWorld('world.ospak')).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('serves opensa/<name> from the delivered files, lowercased', async () => {
+      const loader = new AssetFetchLoader({
+        files: { get: (name) => (name === 'opensa/world.ospak' ? new Uint8Array([7, 7]).buffer : null) },
+        manifestUrl: 'http://x/manifest.json',
+      });
+
+      const blob = await loader.openWorld('WORLD.OSPAK');
+      expect(blob).not.toBeNull();
+      expect(new Uint8Array(await blob!.arrayBuffer())).toEqual(new Uint8Array([7, 7]));
+    });
+  });
+});

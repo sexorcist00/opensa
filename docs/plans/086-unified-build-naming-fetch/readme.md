@@ -74,13 +74,26 @@ Group mapping: data = data/text/loose · models = models/ + opensa/ · others = 
 `<path>#<index>` parts (phase 3 reassembles). First real run: 3.6 GB → 407 files, 74 chunks, ~2.5 min;
 pre-086 pak identity falls back loudly.
 
-## Phase 3 — the fetch client boots the pak
+## Phase 3 — the fetch client boots the pak (DONE 2026-07-23 — code; e2e smoke owed with phase 4)
 
-`use-asset-boot.ts` + `asset-fetch-loader`: after chunks unpack into the VFS, boot through the pak
-path (the folder-mode reader of 079) instead of the dead raw-game path. Version/invalidation: keep
-the `<game>-<version>` URL scheme for now (matches `__APP_VERSION__`), entry-hash-level reuse is a
-later refinement. First task of the phase: establish whether fetch boot works AT ALL today post-flip
-(suspected broken since the three removal) — that decides how much is rewrite vs repair.
+Established: post-flip fetch mode filled the VFS with raw-game chunks and streamed the WORLD from the
+dead `public/pak-map` fallback (`engine-canvas-host` picks `pakSource ?? '/pak-map'`; only loaders
+with `openWorld` become the world source). The fix rides the existing seam:
+
+- `Vfs` reassembles fetch-pack SLICES on first touch (`<name>#0..#N` — parts land in DIFFERENT chunks
+  by design of the name-hash buckets; the concat replaces the parts, joined once). `has()` sees a
+  chain by its `#0`.
+- `AssetFetchLoader` gained `openWorld(name)` — serves `opensa/<name>` from the delivered files via a
+  read-back `files` view of its sink (wired through `createAssetLoader`; use-asset-boot passes the
+  VFS). Same contract as the folder loaders: absent ⇒ null ⇒ streaming fails LOUDLY — the silent
+  `public/pak-map` fallback is unreachable in fetch mode now (a legacy raw-game chunk set no longer
+  half-boots).
+- `use-asset-boot`'s `pakSource` needed no change — any loader with `openWorld` is the world source.
+
+URL scheme kept (`games/<game>-<version>/`, matches `__APP_VERSION__`); entry-hash reuse = later
+refinement. Unit-verified (VFS slice chains incl. the no-`#0` negative; openWorld null/lowercase
+paths). **E2E smoke owed**: run with the small gostown build once phase 4's trial runs produce it —
+a 3.6 GB original download in headless is not a smoke test.
 
 ## Phase 4 — npm aliases + TC trial runs
 

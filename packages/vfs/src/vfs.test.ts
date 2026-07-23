@@ -147,3 +147,30 @@ describe('Vfs', () => {
     });
   });
 });
+
+describe('fetch-pack slice reassembly (plan 086 phase 3)', () => {
+  describe('negative cases', () => {
+    it('does not invent a file from a missing part chain', () => {
+      const vfs = new Vfs();
+      vfs.addFiles('c', [['models/gta3.img#1', Uint8Array.from([2])]]); // no #0 — not a chain start
+      expect(vfs.has('models/gta3.img')).toBe(false);
+      expect(vfs.get('models/gta3.img')).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reassembles #index parts delivered across chunks, in any order', () => {
+      const vfs = new Vfs();
+      vfs.addFiles('c1', [['opensa/world.ospak#1', Uint8Array.from([3, 4])]]);
+      vfs.addFiles('c2', [
+        ['opensa/world.ospak#0', Uint8Array.from([1, 2])],
+        ['opensa/world.ospak#2', Uint8Array.from([5])],
+      ]);
+
+      expect(vfs.has('opensa/world.ospak')).toBe(true);
+      expect([...new Uint8Array(vfs.get('opensa/world.ospak')!)]).toEqual([1, 2, 3, 4, 5]);
+      // The parts were replaced by the whole — a second read serves the cached concat.
+      expect([...new Uint8Array(vfs.get('opensa/world.ospak')!)]).toEqual([1, 2, 3, 4, 5]);
+    });
+  });
+});

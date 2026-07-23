@@ -84,6 +84,7 @@ export function useAssetBoot(): AssetBoot {
     const loader = createAssetLoader({
       assetLoader: loaderKind(state.game),
       ...(httpDirBase !== null ? { base: httpDirBase } : {}),
+      files: vfs,
       game: state.game,
       manifestUrl: `${BASE}/games/${state.game}-${__APP_VERSION__}/manifest.json`,
       sink: vfs,
@@ -102,9 +103,9 @@ export function useAssetBoot(): AssetBoot {
     return loaded ? withModloader(vfs) : vfs;
   }, [session, fallbackVfs, loaded]);
 
-  // Folder mode selects the world: a loader that can open its install's `opensa/` pak (the local loader)
-  // becomes the world source. The fetch loader has no `openWorld`, so this stays null and the host loads over
-  // HTTP. Only once loaded — `openWorld` needs the folder acquired + scanned.
+  // The loading MODE selects the world: any loader that can open its install's `opensa/` pak becomes the
+  // world source — folder/http-dir from the install, and since 086 phase 3 the FETCH loader too (its
+  // chunks deliver the pak into the VFS). Only once loaded — `openWorld` needs the content in place.
   const pakSource = useMemo<LocalPakSource | null>(() => {
     const loader = session?.loader;
     if (!loaded || !loader?.openWorld) {
