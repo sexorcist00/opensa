@@ -114,14 +114,26 @@ Explained by the A+B root causes: the islands beyond cell ±12 were clipped out 
 loaded while the terrain's lod coverage lived in a different/absent slot — root cause 2). Re-check in
 the field after the rebuild; only if a hole survives does this become its own row.
 
-### C — black stripes on the water (OPEN)
+### C — black stripes on the water (FIXED IN CODE 2026-07-23 night; rides the next rebuild)
 
-Long parallel dark bands across every lake (screenshots 2026-07-23, from the pre-click orbit view).
-They look like shadows of the suspension bridge/cliffs stretched across the water — but gostown was
-packed WITHOUT `--bakes` (no sun-vis), so where does the water darkening come from? Suspects: the
-world AO bake (on by default — did the bake see the water shore-field?), the water shader's
-night/indirect term, or welded-cell vertex colours under the water plane. Compare `?hour=12` vs
-night; check whether the stripes move with the sun.
+Long parallel dark bands across every lake. Field discriminator (user): **static, hour-independent**
+— killed the sun/time suspects. Pak bytes told the rest (`scripts/debug/water-depth-map.ts`): the
+BAKED DEPTH FIELD ITSELF is striped — periodic shallow columns run across the whole bridge/dam lake
+region. Root cause: gostown's elevated lakes (z≈539) sit far above the height grid's `Z_CAP = 4`, so
+their depth is the PSEUDO path — distance to the nearest "shoreline" × 0.15 — and `boundaryEdges`
+mis-detected every interior water.dat seam as a shoreline: a TC's water grid is not endpoint-aligned
+(one long quad edge meets TWO shorter neighbours — T-junctions), so the endpoint-key pairing never
+matches and each seam counts as a boundary. Depth dips toward ~0 along each seam → the shader's
+`shallow` term (brighter + alpha down to 0.4) paints a static band over the dark lakebed → the
+"stripes". FIX (water.ts): every unpaired candidate edge is re-checked by a TWO-SIDED COVERAGE probe
+(3 samples along the edge, ±1 u across it): water on both sides at the same level (±3 m) ⇒ interior
+seam, dropped; a reservoir lip above lower water keeps its shoreline (the level gate). Verified
+offline: re-baking the real gostown `water.dat` turns the striped field into a smooth basin (shallow
+at true shores, deep mid-lake). Tests: T-junction seam ≠ shoreline, dam lip stays one. Needs the next
+`build:game:gostown` run to reach the field (water.bin only).
+
+Related but NOT ours: the dark pipe/structure shadows on the dam wall itself are painted into the
+authored gostown textures (user-confirmed baked content).
 
 ## Closed the same day (2026-07-23)
 

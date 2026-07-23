@@ -33,6 +33,15 @@ const DEPTH_CLAMP = 30;
 const PSEUDO_DEPTH_SLOPE = 0.15;
 /** The SA map half-extent; boundary edges on the outer border are NOT shorelines. */
 const MAP_EDGE = 2990;
+/** Vertical tolerance when matching a candidate seam to a covering quad: same-lake quads share a level
+ *  (float noise apart), while a reservoir lip above a lower river (a dam) is a REAL waterline. */
+const LEVEL_TOLERANCE = 3;
+/** Sideways probe distance of the two-sided coverage test (087 row C) — clears endpoint rounding noise
+ *  while staying well inside any water.dat quad. */
+const SEAM_PROBE = 1;
+/** Probe positions along a candidate edge — off-centre thirds, dodging lattice junction points where a
+ *  probe would land exactly on a neighbouring quad's border. */
+const SEAM_SAMPLES = [0.27, 0.53, 0.79] as const;
 /** Ocean-frame half extent (matches the runtime oceanFrame the flat v1 used). */
 const OCEAN_HALF = 6000;
 /** SEA/INLAND cut (plan 075): a water polygon above this height (metres) is INLAND (pool/reservoir/lake) and
@@ -44,6 +53,17 @@ const WATER_INLAND = 1;
 const VERTEX_FLOATS = 5;
 
 type Edge = readonly [number, number, number, number];
+
+/** One water polygon prepared for the coverage probe: XZ ring + bbox + its water-level span. */
+interface QuadCover {
+  maxX: number;
+  maxY: number;
+  minX: number;
+  minY: number;
+  ring: readonly (readonly [number, number])[];
+  zMax: number;
+  zMin: number;
+}
 
 export function bakeWater(
   datText: string,
@@ -88,9 +108,14 @@ export function bakeWater(
 }
 
 /** Water-coverage boundary edges (shorelines): quad edges NOT shared with another quad, excluding the
- *  map border. Shared-edge detection keys on rounded endpoint pairs (order-independent). */
+ *  map border. Shared-edge detection keys on rounded endpoint pairs (order-independent) — and, because a
+ *  TC's water grid is not endpoint-aligned (one long edge meets TWO shorter neighbours — a T-junction),
+ *  every unpaired candidate is re-checked by COVERAGE: probe both sides of the edge; water on both sides
+ *  at the same level ⇒ an interior seam, not a shore. Without this, gostown's lakes read every interior
+ *  seam as a shoreline and the pseudo-depth field striped the whole lake with static shallow bands
+ *  (plan 087 row C — the "black stripes on the water"). */
 function boundaryEdges(quads: readonly WaterQuad[]): Edge[] {
-  const counts = new Map<string, { count: number; edge: Edge }>();
+  const counts = new Map<string, { count: number; edge: Edge; z: number }>();
   const key = (x: number, y: number): string => `${Math.round(x * 4)},${Math.round(y * 4)}`;
   for (const quad of quads) {
     // Grid-ordered quad corners (v0, +X, +Y, +X+Y): the perimeter is 0→1→3→2; triangles are 0→1→2.
@@ -104,19 +129,22 @@ function boundaryEdges(quads: readonly WaterQuad[]): Edge[] {
       if (entry) {
         entry.count += 1;
       } else {
-        counts.set(edgeKey, { count: 1, edge: [a[0], a[1], b[0], b[1]] });
+        counts.set(edgeKey, { count: 1, edge: [a[0], a[1], b[0], b[1]], z: (a[2] + b[2]) / 2 });
       }
     }
   }
 
+  const cover = coverIndex(quads);
+
   return [...counts.values()]
     .filter((entry) => entry.count === 1)
-    .map((entry) => entry.edge)
     .filter(
-      (edge) =>
+      ({ edge }) =>
         !(Math.abs(edge[0]) >= MAP_EDGE && Math.abs(edge[2]) >= MAP_EDGE) &&
         !(Math.abs(edge[1]) >= MAP_EDGE && Math.abs(edge[3]) >= MAP_EDGE),
-    );
+    )
+    .filter(({ edge, z }) => isShoreline(edge, z, cover))
+    .map(({ edge }) => edge);
 }
 
 /** Spatial hash of shore edges (SHORE_CLAMP-sized cells) — the distance query only visits nearby edges. */
@@ -143,6 +171,63 @@ function bucketEdges(edges: readonly Edge[]): Map<string, Edge[]> {
   return buckets;
 }
 
+/** Whether some water polygon at a compatible level covers (x, y) — the seam-vs-shore probe. */
+function coveredAt(cover: readonly QuadCover[], x: number, y: number, z: number): boolean {
+  for (const quad of cover) {
+    if (x < quad.minX || x > quad.maxX || y < quad.minY || y > quad.maxY) {
+      continue;
+    }
+    if (z < quad.zMin - LEVEL_TOLERANCE || z > quad.zMax + LEVEL_TOLERANCE) {
+      continue;
+    }
+    if (pointInRing(quad.ring, x, y)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function coverIndex(quads: readonly WaterQuad[]): QuadCover[] {
+  return quads.map((quad) => {
+    const order = quad.vertices.length >= 4 ? [0, 1, 3, 2] : [0, 1, 2];
+    const ring = order.map((i): [number, number] => [quad.vertices[i][0], quad.vertices[i][1]]);
+    const zs = quad.vertices.map((v) => v[2]);
+
+    return {
+      maxX: Math.max(...ring.map((p) => p[0])),
+      maxY: Math.max(...ring.map((p) => p[1])),
+      minX: Math.min(...ring.map((p) => p[0])),
+      minY: Math.min(...ring.map((p) => p[1])),
+      ring,
+      zMax: Math.max(...zs),
+      zMin: Math.min(...zs),
+    };
+  });
+}
+
+/** A candidate edge is a real shoreline iff SOME probe point has open (non-water) space on some side.
+ *  All probes water-covered on both sides ⇒ a T-junction interior seam — drop it. Mixed edges stay
+ *  shorelines (conservative: a kept edge only ever shallows water that genuinely borders land). */
+function isShoreline(edge: Edge, z: number, cover: readonly QuadCover[]): boolean {
+  const [ax, ay, bx, by] = edge;
+  const length = Math.hypot(bx - ax, by - ay);
+  if (length < 1e-6) {
+    return false;
+  }
+  const nx = (-(by - ay) / length) * SEAM_PROBE;
+  const ny = ((bx - ax) / length) * SEAM_PROBE;
+  for (const t of SEAM_SAMPLES) {
+    const x = ax + (bx - ax) * t;
+    const y = ay + (by - ay) * t;
+    if (!coveredAt(cover, x + nx, y + ny, z) || !coveredAt(cover, x - nx, y - ny, z)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /** World-lattice split points across [a, b]: the endpoints + every multiple of `step` strictly inside.
  *  Both neighbours of a shared edge produce the same interior points — seams weld by construction. */
 function lattice(a: number, b: number, step: number): number[] {
@@ -157,6 +242,20 @@ function lattice(a: number, b: number, step: number): number[] {
   points.push(hi);
 
   return a <= b ? points : points.reverse();
+}
+
+/** Even-odd raycast point-in-polygon on the XZ ring. */
+function pointInRing(ring: readonly (readonly [number, number])[], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
 }
 
 function pointToSegment(x: number, y: number, [ax, ay, bx, by]: Edge): number {

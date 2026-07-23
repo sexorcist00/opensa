@@ -58,6 +58,7 @@ Run any of them as `npx tsx scripts/debug/<name>.ts …`; `--game <id>` picks th
 | `dump-cell.ts <x> <y> [pakDir]` | a WELDED cell's tables at a world point: objectTable rows (kind, timed window, per-group class/array/sphere) + placement boxes near the point — the pak-bytes step for bugs in the welded look (built for 085 row H) |
 | `stream-ring-bounds.ts [pakDir]` | per-cell TRUE geometry XZ AABB vs the slot's 250-grid rect: overhang stats/worst offenders, hd-only↔lod-only slot pairing, ring-skip check from spawn — the plan-087 streaming-holes verifier (default pak `build/gostown/opensa/pak`) |
 | `grid-extent.ts [gameDir]` | the true occupied 250-grid extent of a game dir (default `build/gostown/sa`) — measures a game's `PACK_RECTS.full` rect BEFORE any pak exists (gostown `[-8,-16,37,5]`, original `[-12,-12,11,11]` measured 2026-07-23) |
+| `water-depth-map.ts [pakDir] [x0 y0 x1 y1]` | ASCII heatmap of the baked water DEPTH field (water.bin) over a GTA region — the pak-bytes step for water-look bugs (found 087 row C: T-junction false shorelines striped every gostown lake; default region = the bridge/dam lakes) |
 
 Default pak: `build/original/opensa/pak` (086 phase 8 — the game dir is self-contained; older builds are
 probed at `opensa-pack/` and the nested `opensa/opensa`). The world-welded side of a model lives in

@@ -15,6 +15,14 @@ const SQUARE = [
     .join('   ') + ' 1',
 ].join('\n');
 
+/** water.dat text from grid-order quads ([v0, +X, +Y, +X+Y], each vertex [x, y, z]). */
+function dat(quads: readonly (readonly (readonly number[])[])[]): string {
+  return [
+    'processed',
+    ...quads.map((corners) => corners.map(([x, y, z]) => `${x} ${y} ${z} 0 0 0 0`).join('   ') + ' 1'),
+  ].join('\n');
+}
+
 function decode(bin: Uint8Array): { indices: Uint32Array; vertices: Float32Array } {
   const view = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
   const vertexCount = view.getUint32(0, true);
@@ -25,6 +33,21 @@ function decode(bin: Uint8Array): { indices: Uint32Array; vertices: Float32Array
     // Vertex = [x, y, z, depth, class] (plan 075) — stride 20.
     vertices: new Float32Array(bin.buffer, bin.byteOffset + 8, vertexCount * 5),
   };
+}
+
+/** Min baked depth among lake vertices within `radius` of (px, py) at level `z` (skips the ocean frame). */
+function depthNear(vertices: Float32Array, px: number, py: number, z: number, radius = 9): number {
+  let depth = Number.POSITIVE_INFINITY;
+  for (let v = 0; v < vertices.length; v += 5) {
+    if (Math.abs(vertices[v + 2] - z) > 0.5) {
+      continue;
+    }
+    if (Math.abs(vertices[v] - px) <= radius && Math.abs(vertices[v + 1] - py) <= radius) {
+      depth = Math.min(depth, vertices[v + 3]);
+    }
+  }
+
+  return depth;
 }
 
 /** A flat water square at height `z`, water.dat 7-float layout. */
@@ -48,6 +71,37 @@ describe('bakeWater', () => {
       const { bin, manifest } = bakeWater('processed\n');
       expect(manifest.vertexCount).toBeGreaterThan(0); // the solid ocean plane
       expect(decode(bin).indices.length).toBe(manifest.indexCount);
+    });
+
+    it('does not treat a T-junction seam between same-level quads as a shoreline (087 row C stripes)', () => {
+      // One 200-wide quad meets TWO 100-wide neighbours along y=100: endpoint keys never pair, so all
+      // three seam edges are boundary CANDIDATES — but water covers both sides, so none is a shore.
+      const lake = dat([
+        [
+          [0, 0, 5],
+          [200, 0, 5],
+          [0, 100, 5],
+          [200, 100, 5],
+        ],
+        [
+          [0, 100, 5],
+          [100, 100, 5],
+          [0, 200, 5],
+          [100, 200, 5],
+        ],
+        [
+          [100, 100, 5],
+          [200, 100, 5],
+          [100, 200, 5],
+          [200, 200, 5],
+        ],
+      ]);
+      const { vertices } = decode(bakeWater(lake).bin);
+
+      // Mid-lake ON the seam: the nearest TRUE shore is ~96 u away → deep, not a 0-depth stripe.
+      expect(depthNear(vertices, 96, 100, 5)).toBeGreaterThan(5);
+      // The real outer shoreline still reads as depth ≈ 0.
+      expect(depthNear(vertices, 96, 0, 5)).toBeLessThan(0.5);
     });
   });
 
@@ -102,6 +156,34 @@ describe('bakeWater', () => {
       expect(atStart).toBeGreaterThan(13);
       expect(atStart).toBeLessThan(16);
       expect(atEnd).toBeLessThan(0.5); // the visual waterline
+    });
+
+    it('keeps a reservoir lip above lower water as a REAL shoreline (the level gate)', () => {
+      // The upper lake's south edge T-joins two lower-river quads 40 m BELOW: water covers both sides
+      // in XY, but not at the same level — the lip must stay a waterline (depth → 0 there).
+      const damLip = dat([
+        [
+          [0, 100, 50],
+          [200, 100, 50],
+          [0, 300, 50],
+          [200, 300, 50],
+        ],
+        [
+          [0, 0, 10],
+          [100, 0, 10],
+          [0, 100, 10],
+          [100, 100, 10],
+        ],
+        [
+          [100, 0, 10],
+          [200, 0, 10],
+          [100, 100, 10],
+          [200, 100, 10],
+        ],
+      ]);
+      const { vertices } = decode(bakeWater(damLip).bin);
+
+      expect(depthNear(vertices, 96, 100, 50)).toBeLessThan(0.5);
     });
 
     it('classifies water above sea level as INLAND (class 1) and sea-level water as SEA (class 0)', () => {
