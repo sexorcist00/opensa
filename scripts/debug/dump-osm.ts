@@ -5,7 +5,7 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
  * texture-array refs), and — for world-sourced models — whether the manifest still has those arrays.
  * Run: `npx tsx scripts/debug/dump-osm.ts <modelName> [--pak build/original/opensa]`.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 interface Fixture {
   parts: { name: string }[];
@@ -59,7 +59,11 @@ function main(): void {
     console.log(`\nown TEXS: ${decodeOsmTextures(texs).arrays.length} arrays`);
   }
   if (fixture.textureSource === 'world') {
-    const manifest = JSON.parse(readFileSync(`${pak}/opensa/manifest.json`, 'utf8')) as {
+    // Plan 086 phase 7: the pak manifest lives in the `<gameDir>-pack` sibling; legacy builds nest it.
+    const manifestPath = existsSync(`${pak}-pack/manifest.json`)
+      ? `${pak}-pack/manifest.json`
+      : `${pak}/opensa/manifest.json`;
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
       textures: { format?: string; layers?: number; size?: number }[];
     };
     console.log(`\nmanifest has ${manifest.textures.length} world arrays; the model's refs:`);

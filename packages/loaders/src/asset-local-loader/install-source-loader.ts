@@ -71,14 +71,17 @@ export abstract class InstallSourceLoader implements AssetLoader {
   }
 
   /**
-   * Open a world-pak file from the install's `opensa/` folder — the folder / served-dir pak source. This is
-   * what makes the loading MODE select the world: the pak comes from the picked/served install, never the
-   * app's `public/`. Absent file ⇒ null, so the streaming setup fails loudly instead of falling back.
+   * Open a world-pak file from the build's `opensa-pack/` sibling (plan 086 phase 7), falling back to the
+   * legacy in-game-dir `opensa/` folder. This is what makes the loading MODE select the world: the pak
+   * comes from the picked/served install, never the app's `public/`. Absent file ⇒ null, so the streaming
+   * setup fails loudly instead of falling back.
    */
   async openWorld(name: string): Promise<Blob | null> {
     const { source } = await this.ensureSource();
 
-    return source.openLoose(`opensa/${name.toLowerCase()}`);
+    return (
+      (await source.openLoose(`opensa-pack/${name.toLowerCase()}`)) ?? source.openLoose(`opensa/${name.toLowerCase()}`)
+    );
   }
 
   /** Resolve the backing install (picker + FSA, or a served dir). Called once; the base memoises the result. */

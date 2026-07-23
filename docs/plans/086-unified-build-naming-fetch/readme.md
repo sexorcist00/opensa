@@ -121,6 +121,20 @@ carries the 28 curated names; the TC folders none.
 the name says so now). `test:fixtures` chain + every reference updated; paths point at
 `game-src/original` since phase 0.
 
+## Phase 7 — the pak leaves the game dir (DONE 2026-07-23)
+
+User decision after the first phase-4 field run: the `opensa/opensa` nesting confused every reader
+(twice mis-documented on 2026-07-23 alone), so the pak products (`world.ospak`, `manifest.json`,
+`water.bin`, `report.json`) now land in the `<out>/opensa-pack` SIBLING of the converted game dir —
+`build/<id>/{sa, opensa, opensa-pack}`. `packGameDir` gained `pakDir` (default `<outDir>-pack`,
+CLI `--pak-out`); pmb passes it explicitly. Every consumer probes the new layout FIRST and falls back
+to the legacy nested pak (and raw game dirs stay untouched): the install-source core rebases a served/
+picked BUILD ROOT (`opensa/` prefix stripped for game files, `opensa-pack/*` kept, `sa/**` dropped),
+`openWorld` tries `opensa-pack/<name>` then `opensa/<name>` (folder/http-dir AND fetch loaders),
+engine-lab's `resolvePakSource` probes root → legacy → bare, fetch-pack walks both roots and ships pak
+files as `opensa-pack/<name>` VFS entries, and the debug scripts/crosstxd defaults probe both. Surfaces
+now point at the BUILD ROOT: `?src=…/build/original`.
+
 ## Order & risk
 
 0 → 1 → 2 → 3 → 4 → 5/6 (5 and 6 are independent). Phase 0 is wide but mechanical and unblocks

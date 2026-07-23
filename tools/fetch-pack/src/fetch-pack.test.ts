@@ -45,15 +45,17 @@ describe('fetchPack', () => {
       expect(groupOf('stream.ini')).toBe('data');
       expect(groupOf('models/gta3.img')).toBe('models');
       expect(groupOf('opensa/world.ospak')).toBe('models');
+      expect(groupOf('opensa-pack/world.ospak')).toBe('models');
       expect(groupOf('anim/anim.img')).toBe('others');
     });
 
-    it('packs a build into chunks + a manifest keyed by the pak identity', () => {
+    it('packs a build into chunks + a manifest keyed by the pak-sibling identity (086 phase 7)', () => {
       const game = join(dir, 'build', 'opensa');
-      mkdirSync(join(game, 'opensa'), { recursive: true });
+      const pak = join(dir, 'build', 'opensa-pack');
       mkdirSync(join(game, 'data'), { recursive: true });
-      writeFileSync(join(game, 'opensa', 'world.ospak'), new Uint8Array(64).fill(7));
-      writeFileSync(join(game, 'opensa', 'manifest.json'), JSON.stringify({ appVersion: '9.9.9', game: 'testgame' }));
+      mkdirSync(pak, { recursive: true });
+      writeFileSync(join(pak, 'world.ospak'), new Uint8Array(64).fill(7));
+      writeFileSync(join(pak, 'manifest.json'), JSON.stringify({ appVersion: '9.9.9', game: 'testgame' }));
       writeFileSync(join(game, 'data', 'vehicles.ide'), 'cars\nend\n');
       writeFileSync(join(game, 'stream.ini'), 'memory 512\n');
 
@@ -63,25 +65,39 @@ describe('fetchPack', () => {
       expect(result.version).toBe('9.9.9');
       expect(result.outDir.endsWith('testgame-9.9.9')).toBe(true);
       const manifest = JSON.parse(readFileSync(join(result.outDir, 'manifest.json'), 'utf8')) as {
-        chunks: Record<string, { bytes: number; file: string }[]>;
+        chunks: Record<string, { bytes: number; entries: number; file: string }[]>;
         game: string;
       };
       expect(manifest.game).toBe('testgame');
       expect(Object.keys(manifest.chunks).sort()).toEqual(['data', 'models', 'others', 'textures']);
       expect(manifest.chunks.textures).toEqual([]); // pak textures live inside world.ospak
-      expect(manifest.chunks.models.length).toBeGreaterThan(0);
+      // The pak sibling ships in the models group (as `opensa-pack/<name>` VFS entries).
+      expect(manifest.chunks.models.reduce((sum, c) => sum + c.entries, 0)).toBe(2);
       for (const info of manifest.chunks.models) {
         expect(readFileSync(join(result.outDir, info.file)).length).toBe(info.bytes);
       }
     });
 
-    it('keeps untouched chunks byte-identical when one file changes (the cache promise)', () => {
+    it('still packs a legacy build with the pak nested inside the game dir', () => {
       const game = join(dir, 'build', 'opensa');
       mkdirSync(join(game, 'opensa'), { recursive: true });
+      writeFileSync(join(game, 'opensa', 'world.ospak'), new Uint8Array(8).fill(7));
+      writeFileSync(join(game, 'opensa', 'manifest.json'), JSON.stringify({ appVersion: '1.2.3', game: 'legacy' }));
+
+      const result = fetchPack({ buildDir: join(dir, 'build'), log: noop, outRoot: join(dir, 'out') });
+
+      expect(result.game).toBe('legacy');
+      expect(result.version).toBe('1.2.3');
+    });
+
+    it('keeps untouched chunks byte-identical when one file changes (the cache promise)', () => {
+      const game = join(dir, 'build', 'opensa');
+      const pak = join(dir, 'build', 'opensa-pack');
       mkdirSync(join(game, 'data'), { recursive: true });
-      writeFileSync(join(game, 'opensa', 'manifest.json'), JSON.stringify({ appVersion: '1.0.0', game: 'stab' }));
+      mkdirSync(pak, { recursive: true });
+      writeFileSync(join(pak, 'manifest.json'), JSON.stringify({ appVersion: '1.0.0', game: 'stab' }));
       writeFileSync(join(game, 'data', 'vehicles.ide'), 'cars\nend\n');
-      writeFileSync(join(game, 'opensa', 'world.ospak'), new Uint8Array(64).fill(7));
+      writeFileSync(join(pak, 'world.ospak'), new Uint8Array(64).fill(7));
 
       const readChunks = (outDir: string): Record<string, { file: string; hash: string }[]> =>
         (
@@ -91,7 +107,7 @@ describe('fetchPack', () => {
         ).chunks;
 
       const first = fetchPack({ buildDir: join(dir, 'build'), log: noop, outRoot: join(dir, 'out1') });
-      writeFileSync(join(game, 'opensa', 'world.ospak'), new Uint8Array(64).fill(8)); // same size, new bytes
+      writeFileSync(join(pak, 'world.ospak'), new Uint8Array(64).fill(8)); // same size, new bytes
       const second = fetchPack({ buildDir: join(dir, 'build'), log: noop, outRoot: join(dir, 'out2') });
 
       const before = readChunks(first.outDir);

@@ -1,9 +1,9 @@
 # fetch-pack
 
-The plan-086 finishing tool: pack a pmb build's `opensa/` game dir into the fetch loader's
-content-hashed zip chunks + `manifest.json` under `static/games/<game>-<version>/`. One build serves
-both surfaces — local play reads `build/<id>/opensa` directly (http-dir / folder mode), hosted fetch
-downloads these chunks of the SAME bytes.
+The plan-086 finishing tool: pack a pmb build (`opensa/` game dir + `opensa-pack/` pak sibling — phase 7)
+into the fetch loader's content-hashed zip chunks + `manifest.json` under `static/games/<game>-<version>/`.
+One build serves both surfaces — local play reads `build/<id>` directly (http-dir / folder mode), hosted
+fetch downloads these chunks of the SAME bytes.
 
 ```bash
 npm run fetch:pack                # defaults: --build ./build/original --out ./static/games

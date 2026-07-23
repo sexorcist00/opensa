@@ -33,7 +33,7 @@ function make(): AssetHttpDirLoader {
 }
 
 /** Stub `fetch` for a served build: `__index` returns the listing, every file GET/Range returns its bytes. */
-function serveBuild(files: Record<string, Uint8Array>): void {
+function serveBuild(files: Record<string, Uint8Array>, base = BASE): void {
   const index: DirIndexEntry[] = Object.entries(files).map(([path, bytes]) => ({ path, size: bytes.length }));
   const respond = (body: null | Uint8Array, status: number): Response =>
     ({
@@ -46,10 +46,10 @@ function serveBuild(files: Record<string, Uint8Array>): void {
     }) as Response;
 
   vi.stubGlobal('fetch', (input: string, init?: RequestInit) => {
-    if (input === `${BASE}/__index`) {
+    if (input === `${base}/__index`) {
       return Promise.resolve(respond(new Uint8Array(), 200));
     }
-    const bytes = files[input.slice(BASE.length + 1).toLowerCase()];
+    const bytes = files[input.slice(base.length + 1).toLowerCase()];
     if (!bytes) {
       return Promise.resolve(respond(null, 404));
     }
@@ -102,12 +102,33 @@ describe('AssetHttpDirLoader', () => {
       expect(chunks.sort()).toEqual(['local-data', 'local-models', 'local-others', 'local-textures']);
     });
 
-    it('openWorld reads opensa/<name> lowercased from the served dir', async () => {
+    it('openWorld reads opensa/<name> lowercased from the served dir (legacy nested pak)', async () => {
       serveBuild(FILES);
 
       const world = await make().openWorld('World.OSPAK');
       expect(world).not.toBeNull();
       expect(Array.from(new Uint8Array(await world!.arrayBuffer()))).toEqual([9, 9, 9]);
+    });
+
+    it('boots from a pmb BUILD ROOT and reads the pak from the opensa-pack sibling (086 phase 7)', async () => {
+      const root = 'http://host/build/original';
+      const files: Record<string, Uint8Array> = {
+        'opensa-pack/manifest.json': new TextEncoder().encode('{"version":1}'),
+        'opensa-pack/world.ospak': new Uint8Array([7, 7]),
+        'sa/models/gta3.img': new Uint8Array([1]), // the real-SA target — must be ignored, not booted
+        ...Object.fromEntries(
+          Object.entries(FILES)
+            .filter(([path]) => !path.startsWith('opensa/'))
+            .map(([path, bytes]) => [`opensa/${path}`, bytes]),
+        ),
+      };
+      serveBuild(files, root);
+      const loader = new AssetHttpDirLoader({ game: 'gta-sa', version: '1.0.0' }, root);
+
+      expect((await loader.init()).game).toBe('gta-sa');
+      const world = await loader.openWorld('world.ospak');
+      expect(world).not.toBeNull();
+      expect(Array.from(new Uint8Array(await world!.arrayBuffer()))).toEqual([7, 7]);
     });
   });
 });

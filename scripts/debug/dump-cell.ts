@@ -1,6 +1,6 @@
 import { decodeOscell } from '@opensa/engine-formats/oscell';
 import { decodeOswire, OSWIRE_MAGIC, rebuildOscell } from '@opensa/engine-formats/oswire';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 
@@ -19,7 +19,9 @@ if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
   console.error('usage: npx tsx scripts/debug/dump-cell.ts <x> <y> [pakDir]');
   process.exit(1);
 }
-const pakDir = pakArg ?? 'build/original/opensa/opensa';
+// Plan 086 phase 7 layout first (pak sibling), then the legacy nested pak.
+const pakDir =
+  pakArg ?? (existsSync('build/original/opensa-pack') ? 'build/original/opensa-pack' : 'build/original/opensa/opensa');
 
 interface PakEntry {
   enc?: string;

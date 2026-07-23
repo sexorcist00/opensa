@@ -353,11 +353,12 @@ async function buildOpensaTarget(step: {
     gameId: basename(resolve(step.gamePath)),
     log: (message) => log(`pack: ${message}`),
     outDir: opensa,
+    // Plan 086 phase 7: the pak is not game content — it lands beside the game dir.
+    pakDir: join(outPath, 'opensa-pack'),
     rect: config.pack.rect,
   });
-  // The pack writes its report beside the pak it belongs to (`opensa/opensa/`), which is three levels down
-  // from the `--out` the run was asked for. Mirror it at the root: that is where a run's summary is looked
-  // for, and the nested copy stays the pak's own.
+  // The pack writes its report beside the pak it belongs to (`<out>/opensa-pack/`). Mirror it at the root:
+  // that is where a run's summary is looked for, and the pak-side copy stays the pak's own.
   const reportPath = join(outPath, 'report.json');
   writeFileSync(
     reportPath,

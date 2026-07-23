@@ -47,7 +47,7 @@ the matching alias (see below) or call the pmb CLI with `--game/--in/--out` dire
 
 ```sh
 npm run build:game:original              # pmb build → ./build/original (sa/ + opensa/ targets)
-npm run fetch:pack                       # ./build/original/opensa → static/games/original-<version>/
+npm run fetch:pack                       # ./build/original → static/games/original-<version>/
 # other games: npm run build:game:gostown|carcer|anderius, then fetch:pack --build ./build/<id>
 ```
 

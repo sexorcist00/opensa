@@ -60,8 +60,12 @@ export interface PackOptions {
   log?: (message: string) => void;
   /** Convert the per-model half (and rewrite the ~1 GB archives). ON by default. */
   models?: boolean;
-  /** The output game dir — a COPY of `gameDir`, with our products under `<out>/opensa/`. */
+  /** The output game dir — a COPY of `gameDir`; the pak products go to `pakDir`. */
   outDir: string;
+  /** Where the pak products land (`world.ospak`, `manifest.json`, `water.bin`, `report.json`).
+   *  Defaults to the `<outDir>-pack` SIBLING (plan 086 phase 7: the pak is not game content, it lives
+   *  beside the game dir — pmb's `<out>/opensa` gets `<out>/opensa-pack`). */
+  pakDir?: string;
   /** Inclusive GTA CELL-coordinate rect [x0, y0, x1, y1]. */
   rect: readonly [number, number, number, number];
   /** Stochastic de-tiling name lists; defaults to the curated `data/stochastic.txt`. */
@@ -136,10 +140,11 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     waterHeights,
   });
 
-  // The output is a game dir (003 phase 1): mirror the input, then drop our products into `<out>/opensa/`.
+  // The output is a game dir (003 phase 1): mirror the input; the pak products go to the SIBLING pak
+  // dir (plan 086 phase 7) so the game dir stays pure game content.
   const copyStarted = Date.now();
   copyGameDir(gameDir, outDir);
-  const products = join(outDir, 'opensa');
+  const products = options.pakDir ?? `${outDir}-pack`;
   mkdirSync(products, { recursive: true });
   log(`copied the game dir → ${outDir} (${((Date.now() - copyStarted) / 1000).toFixed(1)} s)`);
 

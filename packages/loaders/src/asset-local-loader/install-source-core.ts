@@ -26,9 +26,13 @@ export interface InstallIo {
 }
 
 /** Assemble an {@link InstallSource}: open gta3.img, merge every other `models/*.img` as an override, list loose. */
-export async function assembleInstallSource(io: InstallIo): Promise<InstallSource> {
+export async function assembleInstallSource(rawIo: InstallIo): Promise<InstallSource> {
+  const io = rebaseBuildRoot(rawIo);
   if (!io.paths.includes(GTA3)) {
-    throw new Error('models/gta3.img not found — pick the GTA San Andreas install folder (or a served game dir)');
+    throw new Error(
+      'models/gta3.img not found — pick the GTA San Andreas install folder, a served game dir, ' +
+        'or a pmb build root (the folder holding opensa/ + opensa-pack/)',
+    );
   }
   const gta3 = await openLazyVer2(await io.archiveSource(GTA3));
 
@@ -72,5 +76,35 @@ function mergeLazy(archives: readonly LazyImgArchive[]): LazyImgArchive {
     has: (name) => owner.has(name.toLowerCase()),
     names: [...owner.keys()],
     read: (name) => owner.get(name.toLowerCase())?.read(name) ?? Promise.resolve(null),
+  };
+}
+
+/**
+ * A pmb BUILD ROOT (plan 086 phase 7) holds the game dir under `opensa/` and the pak under `opensa-pack/`
+ * as siblings (plus the real-SA `sa/` target, which the engine never reads). When the picked/served root is
+ * such a build root, rebase it: game paths lose the `opensa/` prefix, `opensa-pack/*` stays addressable
+ * as-is (`openWorld` reads it), everything else (`sa/**`, the root `report.json`) is dropped. A raw install
+ * or a plain game dir passes through untouched — including a legacy build root, whose nested pak
+ * (`opensa/opensa/*`) rebases to `opensa/*`, exactly where the legacy `openWorld` fallback looks.
+ */
+function rebaseBuildRoot(io: InstallIo): InstallIo {
+  if (io.paths.includes(GTA3) || !io.paths.includes(`opensa/${GTA3}`)) {
+    return io;
+  }
+  const toActual = new Map<string, string>();
+  for (const path of io.paths) {
+    if (path.startsWith('opensa/')) {
+      toActual.set(path.slice('opensa/'.length), path);
+    } else if (path.startsWith('opensa-pack/')) {
+      toActual.set(path, path);
+    }
+  }
+  const actual = (path: string): string => toActual.get(path) ?? path;
+
+  return {
+    archiveSource: (path) => io.archiveSource(actual(path)),
+    openLoose: (path) => io.openLoose(actual(path)),
+    paths: [...toActual.keys()],
+    readLoose: (path) => io.readLoose(actual(path)),
   };
 }
