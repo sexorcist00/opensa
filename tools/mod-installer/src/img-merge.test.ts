@@ -1,3 +1,5 @@
+import { readRw, RW_STRUCT, RW_TEXTURE_DICTIONARY, RW_TEXTURE_NATIVE } from '@opensa/rw-codec/chunk';
+import { readTextureName } from '@opensa/rw-codec/texture-native';
 import { createImg, openImg } from '@opensa/tool-kit/archive/img';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -5,6 +7,11 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { mergeImgDir } from './img-merge';
+import { pngToTextureNative } from './png-texture';
+import { buildTxd, encodePng, solidRgba } from './test-utils';
+
+/** The RW version the png-texture tests use — any SA-era version works for the codec. */
+const VERSION = 0x1803ffff;
 
 let dir: string;
 
@@ -83,5 +90,83 @@ describe('mergeImgDir', () => {
       expect(img.has('ferriswheel_wheel.dff')).toBe(true); // added
       expect(img.has('keep.dff')).toBe(true); // untouched
     });
+
+    it('collects files from organisational subfolders by bare name (plan 009 — gta3_img/LV/… layouts)', () => {
+      const imgPath = join(dir, 'gta3.img');
+      const path = imgDir({ 'root.dff': Uint8Array.from([1]) });
+      mkdirSync(join(path, 'LV', 'deep'), { recursive: true });
+      writeFileSync(join(path, 'LV', 'nested.dff'), Uint8Array.from([2, 2]));
+      writeFileSync(join(path, 'LV', 'deep', 'deeper.dff'), Uint8Array.from([3, 3, 3]));
+
+      const applied = mergeImgDir(path, imgPath);
+
+      const img = openImg(new Uint8Array(readFileSync(imgPath)));
+      expect(applied).toBe(3);
+      expect(img.has('root.dff')).toBe(true);
+      expect(img.has('nested.dff')).toBe(true);
+      expect(img.has('deeper.dff')).toBe(true);
+    });
+
+    it('merges a PNG subfolder into the same-named .txd ENTRY, warning when the entry is missing (plan 009)', () => {
+      const imgPath = join(dir, 'gta3.img');
+      const base = createImg();
+      base.set(
+        'philss.txd',
+        buildTxd(
+          [pngToTextureNative('existing', encodePng(solidRgba(8, 8, [10, 20, 30, 255]), 8, 8), VERSION)],
+          VERSION,
+        ),
+      );
+      writeFileSync(imgPath, base.build());
+
+      const path = imgDir({});
+      mkdirSync(join(path, 'philss'));
+      writeFileSync(join(path, 'philss', 'cap_up.png'), encodePng(solidRgba(8, 8, [70, 80, 90, 255]), 8, 8));
+      mkdirSync(join(path, 'ghosttxd'));
+      writeFileSync(join(path, 'ghosttxd', 'orphan.png'), encodePng(solidRgba(8, 8, [1, 2, 3, 255]), 8, 8)); // warns
+
+      const applied = mergeImgDir(path, imgPath);
+
+      expect(applied).toBe(1); // one texture merged; the orphan folder only warned
+      expect(txdNames(imgPath, 'philss.txd')).toEqual(['existing', 'cap_up']);
+    });
+
+    it('merges the PNG subfolder into the .txd the SAME mod ships, not the stock entry', () => {
+      // A mod may carry BOTH `<txd>.txd` and a `<txd>/` PNG folder: the mod's file lands first, then the
+      // PNGs patch THAT dictionary — the stock entry (and its textures) must be fully superseded.
+      const imgPath = join(dir, 'gta3.img');
+      const base = createImg();
+      base.set(
+        'philss.txd',
+        buildTxd([pngToTextureNative('stock', encodePng(solidRgba(8, 8, [9, 9, 9, 255]), 8, 8), VERSION)], VERSION),
+      );
+      writeFileSync(imgPath, base.build());
+
+      const path = imgDir({
+        'philss.txd': buildTxd(
+          [pngToTextureNative('modded', encodePng(solidRgba(8, 8, [50, 60, 70, 255]), 8, 8), VERSION)],
+          VERSION,
+        ),
+      });
+      mkdirSync(join(path, 'philss'));
+      writeFileSync(join(path, 'philss', 'cap_up.png'), encodePng(solidRgba(8, 8, [70, 80, 90, 255]), 8, 8));
+
+      const applied = mergeImgDir(path, imgPath);
+
+      expect(applied).toBe(2); // the mod's txd entry + one merged texture
+      // 'stock' is gone (the mod's txd replaced the entry), 'cap_up' merged into the MOD's dictionary.
+      expect(txdNames(imgPath, 'philss.txd')).toEqual(['modded', 'cap_up']);
+    });
   });
 });
+
+/** The texture names of a `.txd` entry inside the img at `imgPath`, in dictionary order. */
+function txdNames(imgPath: string, entryName: string): string[] {
+  const img = openImg(new Uint8Array(readFileSync(imgPath)));
+  const file = readRw(new Uint8Array(img.get(entryName)!));
+  const dict = file.chunks.find((chunk) => chunk.type === RW_TEXTURE_DICTIONARY)!;
+
+  return dict
+    .children!.filter((c) => c.type === RW_TEXTURE_NATIVE)
+    .map((c) => readTextureName(c.children!.find((s) => s.type === RW_STRUCT)!.data!));
+}

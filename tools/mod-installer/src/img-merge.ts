@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from 'node:path';
 
 import { applyStreamMerge, isStreamMerge } from './stream-merge';
+import { mergeTxdBytes } from './txd-folder';
 
 /**
  * Apply a mod's `<name>.ipl.merge` stream edits from an IMG folder onto the archive's entries (add/remove/
@@ -80,23 +81,78 @@ export function isRemoveOriginalDir(name: string): boolean {
  * generic "loose IMG entries" convention — a binary `.img` can't be patched file-by-file, so a mod ships a
  * folder.) `<name>.ipl.merge` files are NOT entries — they EDIT the named stream entry (plan 008) and are
  * applied by {@link applyStreamMergeDir} in a later pass (after the mod's data merges, whose inst removals
- * rebase the streams first). A `Remove original/` SUBFOLDER's file names are DELETED from the archive (the
- * files' contents are irrelevant — mods ship the retired originals for reference). Returns the number of
- * operations applied.
+ * rebase the streams first).
+ *
+ * Subfolders (plan 009):
+ * - A `Remove original/` subfolder's file names are DELETED from the archive (the files' contents are
+ *   irrelevant — mods ship the retired originals for reference).
+ * - A subfolder containing PNGs is a **texture folder for an IMG-internal `.txd`**: its PNGs merge into the
+ *   entry `<folder>.txd` (add/replace by texture name — the loose-txd convention of plan 003, reaching inside
+ *   the archive). Applied AFTER this mod's file entries, so a `.txd` the mod also ships is patched, not lost.
+ *   A texture folder whose entry is missing is a LOUD warning, not a silent skip.
+ * - Any other subfolder is organisational: recurse, collecting files by bare name (real packs ship
+ *   `gta3_img/LV/…` layouts — these were silently ignored before plan 009).
+ *
+ * Returns the number of operations applied.
  */
 export function mergeImgDir(imgDir: string, imgPath: string): number {
-  const listing = readdirSync(imgDir, { withFileTypes: true });
-  const files = listing.filter((entry) => entry.isFile() && !isStreamMerge(entry.name));
-  const entries = new Map(files.map((file) => [file.name, readBytes(join(imgDir, file.name))]));
-  const removals = listing
-    .filter((entry) => entry.isDirectory() && isRemoveOriginalDir(entry.name))
-    .flatMap((dir) =>
-      readdirSync(join(imgDir, dir.name), { withFileTypes: true })
-        .filter((entry) => entry.isFile())
-        .map((entry) => entry.name),
-    );
+  const entries = new Map<string, Uint8Array>();
+  const removals: string[] = [];
+  const textureFolders: { name: string; path: string }[] = [];
+  const collect = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = join(dir, entry.name);
+      if (entry.isFile()) {
+        if (!isStreamMerge(entry.name)) {
+          entries.set(entry.name, readBytes(entryPath));
+        }
+        continue;
+      }
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      if (isRemoveOriginalDir(entry.name)) {
+        for (const file of readdirSync(entryPath, { withFileTypes: true }).filter((e) => e.isFile())) {
+          removals.push(file.name);
+        }
+      } else if (readdirSync(entryPath, { withFileTypes: true }).some((e) => e.isFile() && /\.png$/i.test(e.name))) {
+        textureFolders.push({ name: entry.name, path: entryPath });
+      } else {
+        collect(entryPath);
+      }
+    }
+  };
+  collect(imgDir);
+  if (entries.size === 0 && removals.length === 0 && textureFolders.length === 0) {
+    return 0;
+  }
 
-  return injectImgEntries(entries, imgPath, removals);
+  const img = existsSync(imgPath) ? openImg(readBytes(imgPath)) : createImg();
+  for (const name of removals) {
+    if (!img.delete(name)) {
+      console.warn(`mod-installer: Remove original — entry not in ${imgPath}: ${name}`);
+    }
+  }
+  for (const [name, bytes] of entries) {
+    img.set(name, bytes);
+  }
+  let merged = 0;
+  for (const folder of textureFolders) {
+    const entryName = `${folder.name}.txd`;
+    const existing = img.get(entryName);
+    if (!existing) {
+      console.warn(`mod-installer: texture folder ${folder.path} — no entry ${entryName} in ${imgPath}`);
+      continue;
+    }
+    const result = mergeTxdBytes(folder.path, new Uint8Array(existing), entryName);
+    if (result.merged > 0) {
+      img.set(entryName, result.bytes);
+      merged += result.merged;
+    }
+  }
+  writeBytes(imgPath, img.build());
+
+  return entries.size + removals.length + merged;
 }
 
 function readBytes(path: string): Uint8Array {
