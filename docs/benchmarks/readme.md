@@ -58,7 +58,8 @@ A perf comparison is worthless without these held equal, so record them in `note
 - **the road-car population** (`[bench] road cars registered: N` — the series ran 841)
 - **the pak** the run read. Converter output changes what the world contains; a pak that is missing far
   LODs benchmarks faster than one that has them, and the numbers look like a code regression when nothing
-  in the code moved. **Name the pak build.**
+  in the code moved. **Name the pak build.** Naming note: `build/original` was called `build/perfect`
+  until 2026-07-23 (plan 086) — rows recorded before that date read the same folder under its old name.
 - renderer flags (`?scale=`, `?draw=`, `?engine=`)
 
 ## Runs
