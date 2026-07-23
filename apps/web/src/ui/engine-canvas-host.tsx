@@ -283,9 +283,9 @@ async function boot(
   // BEFORE the first cell loads — the frame bind group is baked into every cell bundle.
   await engine.init(canvas, loadCoronaSprites(fs));
   // The loading MODE selects the world (pak-source fix): folder mode reads the pak from the picked install's
-  // opensa/ folder; HTTP mode keeps the URL (?src= or public/pak-map). A folder with no opensa/manifest.json
-  // fails loudly in setupStreaming — it must NEVER fall back to public (that silent fallback made every
-  // folder-based measurement read whatever sat in public/, regardless of the pick).
+  // opensa-pack/ sibling (086 phase 7; legacy: the nested opensa/ folder); HTTP mode keeps the URL (?src= or
+  // public/pak-map). A folder with no pak fails loudly in setupStreaming — it must NEVER fall back to public
+  // (that silent fallback made every folder-based measurement read whatever sat in public/, regardless of the pick).
   const pakSource: PakSource = pakSourceProp ?? `/${params.get('src') ?? 'pak-map'}`;
   const setup = await setupStreaming(engine, pakSource, { lodRadius: drawDistance });
   // Environment drive (074/10 config-API parity): the SHARED config→Environment driver — real timecyc
