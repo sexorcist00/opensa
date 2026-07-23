@@ -11,8 +11,12 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`085`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+`001`–`086`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
 
+- **[086 — One build, consistent names, pak-based fetch](./086-unified-build-naming-fetch/readme.md)** —
+  `game-src/<id>` · `mods-src/<id>` · `build/<id>` naming unification (`original`→`original`,
+  `build/original`→`build/original`), pak manifest identity, the fetch-pack finishing tool replacing
+  `build-game.ts`, the fetch client booting the pak, TC trial runs (gostown/carcer/anderius).
 - **[085 — Map-object appearance](./085-map-object-appearance/readme.md)** — the 2026-07-22 field round
   (after vehicles, before peds): row A SHIPPED — the night emissive mask went per-channel (the luma delta
   systematically killed saturated neon: the LV strip's red rope lights never glowed); further rows as the
@@ -37,7 +41,7 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   springs/lag, auto-center + look-ahead, collision whiskers, vehicle speed/FOV/drift framing, bob/shake,
   7 sub-plans + priority chain.
 - **[079 — One canonical build source, the dev-surface unification, and its docs](./079-canonical-build-source/readme.md)**
-  — every dev surface (lab, bench harness, viewers) reads ONE canonical build (`./build/perfect`), served in
+  — every dev surface (lab, bench harness, viewers) reads ONE canonical build (`./build/original`), served in
   place (NOT copied into `public/`), via a new `http-dir` loader + the loading-MODE-selects-the-world fix +
   `buildTime`. Depends on [opensa-pack 003](../../tools/opensa-pack/docs/plans/003-game-shaped-output.md).
   **Phases 0–5 DONE 2026-07-21; phase 6 (docs) open.**

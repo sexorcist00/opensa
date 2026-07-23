@@ -9,7 +9,7 @@ import { decodeToRgba, encodePng } from './lib/texture';
  * Turn the pak build's `textures.crossTxd` ledger into reviewable PNG texture-folder fixes
  * (mod-installer plan 009): every texture the pack rescued from a DONOR txd is exported as an RGBA PNG
  * under `NO_COMMIT/crossTxdFix/<mod>/gta3_img/<txd>/<texture>.png`, where `<mod>` is the mod that should
- * carry the fix. After review, move each mod folder's content into `mods-src/mods/<mod>/gta3_img/` and
+ * carry the fix. After review, move each mod folder's content into `mods-src/original/mods/<mod>/gta3_img/` and
  * rebuild — the installer merges the PNGs into the txd, and the ledger entry disappears.
  *
  * Attribution rule: the LAST mod (install order) shipping any of the entry's model DFFs — but never
@@ -20,12 +20,12 @@ import { decodeToRgba, encodePng } from './lib/texture';
  * vehicle-generic parent at runtime; they are not missing data.
  *
  * Run: `npx tsx scripts/crosstxd-fix.ts [reportPath] [buildGameDir] [modsDir] [outDir]`
- * Defaults: build/perfect/opensa/opensa/report.json · build/perfect/sa · mods-src/mods · NO_COMMIT/crossTxdFix
+ * Defaults: build/original/opensa/opensa/report.json · build/original/sa · mods-src/original/mods · NO_COMMIT/crossTxdFix
  */
 const [
-  reportPath = 'build/perfect/opensa/opensa/report.json',
-  buildGameDir = 'build/perfect/sa',
-  modsDir = 'mods-src/mods',
+  reportPath = 'build/original/opensa/opensa/report.json',
+  buildGameDir = 'build/original/sa',
+  modsDir = 'mods-src/original/mods',
   outDir = 'NO_COMMIT/crossTxdFix',
 ] = process.argv.slice(2);
 
@@ -170,4 +170,6 @@ if (failures.length > 0) {
     console.log(`  ${line}`);
   }
 }
-console.log(`\noutput: ${outDir} — review, then move each mod's gta3_img/ into mods-src/mods/<mod>/ and rebuild`);
+console.log(
+  `\noutput: ${outDir} — review, then move each mod's gta3_img/ into mods-src/original/mods/<mod>/ and rebuild`,
+);

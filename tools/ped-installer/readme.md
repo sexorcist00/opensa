@@ -5,7 +5,7 @@ ped's `dff`/`txd` replace the stock ones inside `gta3.img`; a **new** ped's line
 Sibling of [`vehicle-installer`](../vehicle-installer/readme.md), but simpler (peds touch one data file).
 
 ```sh
-tsx tools/ped-installer/src/cli.ts --game ./game-src/non-modified --in ./peds --out ./build [--strip]
+tsx tools/ped-installer/src/cli.ts --game ./game-src/original --in ./peds --out ./build [--strip]
 ```
 
 - `--game` — base game tree (`gta.dat` + `data/` + `models/gta3.img` …).

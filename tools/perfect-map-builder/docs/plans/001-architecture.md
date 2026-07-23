@@ -6,9 +6,9 @@ then splits the result into the two runtime targets. Replaces the manual multi-c
 pipeline** — each step's output is the next step's input, so mods + optimizations + LODs **compound**.
 
 ```sh
-tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/non-modified --in ./mods-src --out ./build/perfect
-# → ./build/perfect/sa      (real game, fastman92)
-# → ./build/perfect/opensa  (OpenSA)
+tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-src --out ./build/original
+# → ./build/original/sa      (real game, fastman92)
+# → ./build/original/opensa  (OpenSA)
 ```
 
 ## Inputs

@@ -21,13 +21,13 @@ No build target on purpose — it is a dev-server lab, not a shipped app. (Sourc
 
 Since plan 079 phase 2 the lab reads the ONE canonical build the game reads — a served perfect-map-builder
 output — through `?src`. Serve it with `npm run serve:static` (mounts `/build` with Range) and point `?src`
-at the game dir: `?src=http://localhost:3001/build/perfect/opensa`. There is no lab-only fixture format; the
+at the game dir: `?src=http://localhost:3001/build/original/opensa`. There is no lab-only fixture format; the
 ped/vehicle probes decode the SAME `.osm`/`.ostex` bytes the game does (`readPedOsm` / `readModelOsm`).
 
 | Mode                | URL                                                     | What it does                                                                                                                                    |
 | ------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | Synthetic (default) | no params                                               | In-memory box-field district through the real `.oscell`/`.ostex` encoders — no files needed; the cutout layer is the A2C sanity check.          |
-| Streaming           | `?pak=1&src=http://localhost:3001/build/perfect/opensa` | The REAL pak worker + LOD rings (hysteresis, atomic swap, eviction). WASD pans the focus — the rings follow. `?src=` names the served game dir. |
+| Streaming           | `?pak=1&src=http://localhost:3001/build/original/opensa` | The REAL pak worker + LOD rings (hysteresis, atomic swap, eviction). WASD pans the focus — the rings follow. `?src=` names the served game dir. |
 
 The ped/vehicle probes (`?ped`/`?vehicle`, below) read their converted models from the same `?src` build.
 

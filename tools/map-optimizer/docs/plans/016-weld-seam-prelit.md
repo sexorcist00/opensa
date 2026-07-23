@@ -166,7 +166,7 @@ lives under `tools/map-optimizer/`.
 - T-junction: a mid-edge landing produces **no** weld.
 
 **Real-asset integration test** via the existing fixture mechanism (`npm run test:fixtures`, see
-`docs/development/getting-started.md`): fixtures are **regenerated locally** from a clean `game-src/non-modified`
+`docs/development/getting-started.md`): fixtures are **regenerated locally** from a clean `game-src/original`
 into the gitignored `tests/original/` by the **MANIFEST in `scripts/test-fixtures.ts`** (types `copy` / `extract`
 / `archive`) — Rockstar assets are never committed. This is **build tooling, not the engine**; extending the
 MANIFEST is allowed.

@@ -3,7 +3,7 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
 /**
  * 085 row G: what layer do a converted model's vertices sample, and what is actually in its TEXS array?
  * Prints per-submesh meta slot histograms plus each TEXS layer's format/name-hash — the mismatch finder.
- * Run: `npx tsx scripts/debug/dump-osm-meta.ts <modelName> [--pak build/perfect/opensa]`.
+ * Run: `npx tsx scripts/debug/dump-osm-meta.ts <modelName> [--pak build/original/opensa]`.
  */
 import { readFileSync } from 'node:fs';
 
@@ -17,7 +17,7 @@ interface Fixture {
 function main(): void {
   const args = process.argv.slice(2);
   const pakFlag = args.indexOf('--pak');
-  const pak = pakFlag === -1 ? 'build/perfect/opensa' : args[pakFlag + 1];
+  const pak = pakFlag === -1 ? 'build/original/opensa' : args[pakFlag + 1];
   const model = args
     .find((arg, index) => !arg.startsWith('--') && (pakFlag === -1 || index !== pakFlag + 1))
     ?.toLowerCase();

@@ -7,7 +7,7 @@ added) its `peds`-section line is merged into **`data/peds.ide`**. Sibling of `v
 simpler: peds touch **one** data file (`peds.ide`) — no handling/carcols/carmods/palette.
 
 ```sh
-tsx tools/ped-installer/src/cli.ts --game ./game-src/non-modified --in ./peds --out ./build
+tsx tools/ped-installer/src/cli.ts --game ./game-src/original --in ./peds --out ./build
 ```
 
 - `--game` — base game tree (`gta.dat` + `data/` + `models/gta3.img` …).
@@ -66,13 +66,13 @@ tools/ped-installer/src/
 A vehicle install edits four data files; a **ped** install edits at most **one** (`peds.ide`). The other
 ped-adjacent data is **out of scope** (plan 002 lists them): animations (`anim/ped.ifp`), `pedstats.dat`, voice/
 audio, collision (peds use the shared generic ped COL), and population groups (`pedgrp.dat` — **not present** in
-`game-src/non-modified/data`, so nothing to trim). This keeps the tool to: **models → gta3.img** (+ an optional
+`game-src/original/data`, so nothing to trim). This keeps the tool to: **models → gta3.img** (+ an optional
 **peds.ide** line for new peds).
 
 ## Fixtures (tests)
 
 Follow the `tests/original/` convention (`scripts/test-fixtures.ts`, `npm run test:fixtures` — gitignored,
-regenerated from `game-src/non-modified`): a fixture that **copies** `data/peds.ide` and **extracts** a stock ped
+regenerated from `game-src/original`): a fixture that **copies** `data/peds.ide` and **extracts** a stock ped
 `dff`/`txd` (e.g. `bfori`) from `gta3.img`. Unit tests that touch real data use `describe.skipIf(!existsSync(...))`,
 plus synthetic in-memory cases for `mergePeds` / `settings` / `strip` (deterministic, no fixtures needed). Assert
 results through the engine `parsePedDefs` parser.

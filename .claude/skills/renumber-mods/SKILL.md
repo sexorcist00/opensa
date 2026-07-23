@@ -1,11 +1,11 @@
 ---
 name: renumber-mods
-description: Close numbering gaps in mods-src/mods after a mod is deleted — rename "N. Name" folders to a contiguous 0..K sequence preserving install order. Use when the user deleted a mod folder and wants the numbering compacted.
+description: Close numbering gaps in mods-src/original/mods after a mod is deleted — rename "N. Name" folders to a contiguous 0..K sequence preserving install order. Use when the user deleted a mod folder and wants the numbering compacted.
 ---
 
 # Renumber mod folders
 
-Mod folders under `mods-src/mods/` are named `<number>. <name>` and the number IS the install order
+Mod folders under `mods-src/original/mods/` are named `<number>. <name>` and the number IS the install order
 (the mod-installer applies them ascending). Deleting a mod leaves a gap; this skill compacts the
 sequence to `0..K` while preserving the relative order. Renumbering never changes the install result —
 only the labels.
@@ -15,14 +15,14 @@ only the labels.
 1. List the current state and show the gaps:
 
    ```bash
-   ls "mods-src/mods/" | sort -n
+   ls "mods-src/original/mods/" | sort -n
    ```
 
 2. Compact in ASCENDING order (targets are always below the source number, so no collision is
    possible). Only rename folders whose number differs from their index:
 
    ```bash
-   cd mods-src/mods
+   cd mods-src/original/mods
    i=0
    ls | sort -n | while IFS= read -r dir; do
      name="${dir#*. }"

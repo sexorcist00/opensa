@@ -83,7 +83,7 @@ npx tsx scripts/gen-wind-list.ts
 ### build-viewer-assets.ts
 
 Builds the object-viewer's **e2e fixtures** into **`tests/viewer/objects/`** by extracting from a clean,
-unmodified GTA copy under `game-src/non-modified`: the object-viewer's models + their txds, a pre-baked
+unmodified GTA copy under `game-src/original`: the object-viewer's models + their txds, a pre-baked
 `<model>.col.json` (map-object collision lives in the IMG, not the DFF), and a `manifest.json`. Chained after
 `test-fixtures.ts` by **`npm run test:fixtures`** (not a separate command). `tests/viewer/` is gitignored (like
 `tests/original/`); regenerate locally after a fresh clone. At runtime the viewers load from the compare
@@ -101,7 +101,7 @@ fixtures (`npm run test:fixtures`) — all gitignored. CORS is on; dev mode read
 
 Also mounts **`/build`** (Range-capable) so the dev surfaces can boot the canonical build in place: a
 `dirIndex()` walk answers `/build/.../__index` for the `http-dir` loader (`?loader=http-dir&src=<url>`), and
-the bench harness + viewers read `./build/perfect/opensa` this way (plan 079). Nothing is copied into
+the bench harness + viewers read `./build/original/opensa` this way (plan 079). Nothing is copied into
 `public/`.
 
 ```sh
@@ -121,7 +121,7 @@ npm run timecyc
 ### test-fixtures.ts
 
 Regenerates the real-asset test fixtures (`tests/original/`) — Rockstar assets, **gitignored, not
-redistributed**. Reads from a **clean, UNMODIFIED GTA San Andreas** copy at **`game-src/non-modified/`**:
+redistributed**. Reads from a **clean, UNMODIFIED GTA San Andreas** copy at **`game-src/original/`**:
 copies loose data/text files, extracts entries from `models/*.img`, builds `img/admiral.img`, and generates
 `models/effects` particle data + a stock `data/timecyc_24h.dat` (plain `convertTo24h`, no mod overlay).
 Committed fixtures (mods + curated/version-pinned test models) live in `tests/custom/` and are untouched.
@@ -129,7 +129,7 @@ Committed fixtures (mods + curated/version-pinned test models) live in `tests/cu
 **Running the test suite requires this first** (CI has no game-src, so unit tests + e2e are disabled there):
 
 ```sh
-npm run test:fixtures   # populate tests/original/ from game-src/non-modified
+npm run test:fixtures   # populate tests/original/ from game-src/original
 npm test                # then run the unit tests
 ```
 

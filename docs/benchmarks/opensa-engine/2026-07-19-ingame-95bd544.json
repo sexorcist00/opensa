@@ -1,7 +1,7 @@
 {
-  "note": "BISECT POINT B — commit 95bd544 (2026-07-19, 'fix a lot of bugs'), run on the CURRENT pak (build/perfect, rebuild #1 of 2026-07-20 08:49). Point A (3f354b0) could not load this pak at all — the map did not come up — so B is the earliest code in the window that reads it. User-run, M3 Pro @2x retina, 841 road cars. Chat paste. Purpose: hold the pak fixed and vary the code, to separate a code regression from a data one. USER CONFIRMED 2026-07-20: this pak is the IMPROVED map — it carries our generated LODs, vegetation and procobj. The 07-18 baseline was measured WITHOUT them. So this is not a regression: it is the true cost of a complete world, and the old 120 fps was the cost of an incomplete one.",
+  "note": "BISECT POINT B — commit 95bd544 (2026-07-19, 'fix a lot of bugs'), run on the CURRENT pak (build/original, rebuild #1 of 2026-07-20 08:49). Point A (3f354b0) could not load this pak at all — the map did not come up — so B is the earliest code in the window that reads it. User-run, M3 Pro @2x retina, 841 road cars. Chat paste. Purpose: hold the pak fixed and vary the code, to separate a code regression from a data one. USER CONFIRMED 2026-07-20: this pak is the IMPROVED map — it carries our generated LODs, vegetation and procobj. The 07-18 baseline was measured WITHOUT them. So this is not a regression: it is the true cost of a complete world, and the old 120 fps was the cost of an incomplete one.",
   "commit": "95bd544",
-  "pak": "build/perfect (rebuild #1, 2026-07-20 08:49)",
+  "pak": "build/original (rebuild #1, 2026-07-20 08:49)",
   "host": "Chrome / M3 Pro @2x retina",
   "roadCars": 841,
   "runs": [

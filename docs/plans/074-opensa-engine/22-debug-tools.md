@@ -494,7 +494,7 @@ DATA state, not a code bug. Confirm both on the user's next run.
 The user reported that after the phase-9 fixes the camera moved but showed an empty brown screen, that the
 active district was invisible, and that "Whole map" changed nothing — suspecting broken coordinates.
 
-Reproduced headlessly (`bench-harness` over the user's own `build/perfect/opensa`, F2 → Map → Activate →
+Reproduced headlessly (`bench-harness` over the user's own `build/original/opensa`, F2 → Map → Activate →
 Whole map). The coordinates were fine and the streaming was fine: the whole-map pin loaded **840 cells /
 2 518 cell-vertex buffers / 4 622 MB residency and drew 1 297 batches**. Every one of them into an invisible
 frame.

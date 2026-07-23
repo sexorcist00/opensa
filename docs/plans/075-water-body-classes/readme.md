@@ -29,7 +29,7 @@ it should be a calm sheet. The ocean itself is correct. One water surface, one s
 ## The classifier — by HEIGHT (decided 2026-07-15)
 
 The distinguishing signal is elevation above sea level. SA's ocean sits at **z ≈ 0**; every enclosed/inland
-body sits ABOVE it. Measured on `game-src/non-modified/data/water.dat` (307 polys):
+body sits ABOVE it. Measured on `game-src/original/data/water.dat` (307 polys):
 
 | z band         | polys | reading                                        |
 | -------------- | ----- | ---------------------------------------------- |

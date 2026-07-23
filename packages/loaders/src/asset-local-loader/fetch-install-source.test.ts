@@ -10,7 +10,7 @@ import type { DirIndexEntry } from './fetch-install-source';
 
 import { fetchDirIndex, fetchInstallSource } from './fetch-install-source';
 
-const BASE = 'http://host/build/perfect/opensa';
+const BASE = 'http://host/build/original/opensa';
 
 const GTA3 = buildVer2Buffer([
   { data: new Uint8Array([1, 2, 3, 4]), name: 'cj.dff' },

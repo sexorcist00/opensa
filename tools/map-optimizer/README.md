@@ -73,15 +73,15 @@ byte-identical (`only` wins when both are given).
 
 ```bash
 # 1. HTML review report — day/night before→after thumbnails per verdict (in-memory apply; no run needed)
-npx tsx tools/map-optimizer/src/review-cli.ts --game ./game-src/non-modified --report review.html --limit 200
+npx tsx tools/map-optimizer/src/review-cli.ts --game ./game-src/original --report review.html --limit 200
 
 # 2. Tick "exclude" on over-corrected models in the page, save the JSON it produces to exclude.json, iterate:
-npx tsx tools/map-optimizer/src/review-cli.ts --game ./game-src/non-modified --report review.html --exclude exclude.json
+npx tsx tools/map-optimizer/src/review-cli.ts --game ./game-src/original --report review.html --exclude exclude.json
 #    (the run consumes it via the Node API: runOptimizer({ ..., prelitOptions: { exclude } }))
 
 # 3. Interactive side-by-side compare of one model from two game trees
 #    (BEFORE = stock .dff/.txd, AFTER = the pmb build's .osm — the canonical build):
-npx tsx tools/map-optimizer/src/compare-serve.ts --before ./game-src/non-modified --after ./build/perfect/opensa
+npx tsx tools/map-optimizer/src/compare-serve.ts --before ./game-src/original --after ./build/original/opensa
 #    then `npm run dev` and open viewer.html?tab=compare (day + night-colours view, synced orbit)
 ```
 

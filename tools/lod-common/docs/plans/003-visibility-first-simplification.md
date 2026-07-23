@@ -148,7 +148,7 @@ Structural reduction for architectural geometry — where QEM broke, this is pro
 
 ## Measurements
 
-Record the before/after numbers here after **every** phase, measured on `game-src/non-modified` (the canonical
+Record the before/after numbers here after **every** phase, measured on `game-src/original` (the canonical
 unmodified SA copy). Method: resolve the full exterior grid, merge every cell twice (raw vs post-cull) and run
 each modifier in sequence, counting triangles/vertices — no build emitted.
 

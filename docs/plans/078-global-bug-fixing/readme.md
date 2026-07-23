@@ -14,7 +14,7 @@ Command that produced the run (for reproduction):
 
 ```
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
-  --game ./game-src/non-modified --in ./mods-src --out ./build/perfect
+  --game ./game-src/original --in ./mods-src --out ./build/original
 ```
 
 ## Bug ledger
@@ -31,7 +31,7 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 | 8   | The `map objects` stage slows to ~1 model/s as it runs (100/s at the start, 754 s total)                                   | renderware / opensa-pack                    | any full run, watch the progress line                                                                                                         | `VehicleTextures` DECODED every texture of a model's whole TXD chain in its constructor. The shared world dictionaries are enormous (`lods.txd` 17 901 textures / 255 MB decoded, `lodtrees.txd` 78 MB) and the models that name them sit at the tail of the IDE order — 238 GB of redundant decode across the stage, almost all of it thrown away                                                                              | **FIXED** — round 4                                     |
 | 10  | pmb dies in the `trees` / `procobj` stage when `mods-src` has no `vegetation/` or `procobj/`                               | lod-trees-generator / lod-procobj-generator | run pmb against a `--in` root without those subfolders                                                                                        | Both subfolders are an OPTIONAL HD-swap source and both generators already had a full no-`--in` path, but `pipeline.ts` passes the path unconditionally (unlike `vehicles`/`peds`, which `populated()` guards) and the adapters called bare `statSync` on it → ENOENT. The documented default was written but unreachable                                                                                                       | **FIXED** — round 4                                     |
 | 11  | Ten Green Bottles (2345.5, −1704.8): no glow pool on the ground at night (prod spread the junction's green light across the pavement; the original also blinks it) | engine | stand at the junction at night | Static 2dfx lights left the light pool 2026-07-17 ("lamps igniting ahead of the car"); a smooth-admission restore was tried 2026-07-22 and REVERTED by the user ("не то что нам нужно"). Facts so far in 085 row E: only green 2dfx source within 60 u is `trafficlight1`; the parser drops `coronaShowMode`/`range`/`shadowSize` | **DEFERRED** — user owes the precise wanted behaviour before this is touched again |
-| 9   | `report.json` is not in the `--out` directory                                                                              | perfect-map-builder                         | any run with `--out ./build/perfect`                                                                                                          | It IS written, but three levels down (`<out>/opensa/opensa/report.json`) beside the pak it documents. Nothing mirrored it at the run root                                                                                                                                                                                                                                                                                       | **FIXED** — round 4                                     |
+| 9   | `report.json` is not in the `--out` directory                                                                              | perfect-map-builder                         | any run with `--out ./build/original`                                                                                                          | It IS written, but three levels down (`<out>/opensa/opensa/report.json`) beside the pak it documents. Nothing mirrored it at the run root                                                                                                                                                                                                                                                                                       | **FIXED** — round 4                                     |
 
 ## Working rules
 
@@ -59,7 +59,7 @@ implied linear semantics, now states it.
 of trusting `ok`, so the actionable "no pak at …" message survives the dev server's 200-OK SPA fallback.
 `apps/engine-lab/src/pak-loader.ts:19-24` is a copy of this fetch with the same gap — 079 folds it into the
 shared path rather than duplicating the fix. Unblocked locally with a `public/pak-map` symlink into
-`build/perfect/opensa/opensa` (the pak dir: `manifest.json` + `world.ospak` + `water.bin` + `report.json`).
+`build/original/opensa/opensa` (the pak dir: `manifest.json` + `world.ospak` + `water.bin` + `report.json`).
 
 **Bug 4 — logging.** New `progress.ts` (`createProgress(label, total, log)`, same ETA shape as the
 cell-convert line in `convert.ts`, one line per 5 s) wired into the loops a full run actually waits on:
@@ -93,7 +93,7 @@ Suite green: 180 tests / 24 files across opensa-pack + perfect-map-builder + eng
 The user reported two things: cars do not spawn from the debugger although the pack says they converted,
 and the pack lost two cars they suspect are their custom merges. Both are the same defect.
 
-**Verified the pack is NOT at fault** (Node, against the user's own `build/perfect/opensa/models/gta3.img`):
+**Verified the pack is NOT at fault** (Node, against the user's own `build/original/opensa/models/gta3.img`):
 `alpha.dff` is gone and `alpha.osm` is present (4.4 MB); `readVehicleOsm('alpha')` decodes fully — 77
 submeshes, 14 936 verts, 4 wheels, colliders, seat, half-extents; the baked 4.2 MB atlas is there and every
 submesh references array 0. A first hypothesis that the runtime only asks for `.dff` was **wrong** and was
@@ -175,7 +175,7 @@ Suite 2282/321 green, `tsc` + `eslint` clean. **Part A changes converter OUTPUT*
 convert to `.osm` after the user's pending rebuild; part B and the runtime uint32 read work immediately on
 the existing pak, which still carries their `.dff`.
 
-**FIELD-CONFIRMED same day** (headless, the user's own `build/perfect/opensa`, `?bench=ls-noon`): road cars
+**FIELD-CONFIRMED same day** (headless, the user's own `build/original/opensa`, `?bench=ls-noon`): road cars
 went **0 → 296**, the `FIXED-STEP ERROR` line is gone from the HUD, and cars render in the street. The fix
 works on the EXISTING pak — no rebuild needed for the runtime half.
 
@@ -196,7 +196,7 @@ than assuming it**, and do not read the 51.5 fps row as a renderer regression.
 
 The 41 cell LODs go through `packMapObjects` → `buildModelOsm` → **`buildVehicleModel`** — the very builder
 round 3 taught uint32. Verified against the run's own input archive
-(`build/perfect/.work/opensa-lod/models/lods.img`), where the failures still sit as `.dff`:
+(`build/original/.work/opensa-lod/models/lods.img`), where the failures still sit as `.dff`:
 
 | model      | vertices | index width | max index |
 | ---------- | -------- | ----------- | --------- |
@@ -271,7 +271,7 @@ memoisation with no output change:
   80 MB), and the parsed header by buffer identity in a `WeakMap`. Consecutive models share a dictionary, so
   this collapses a per-model 78 MB read + parse to one.
 
-Measured on the user's own `build/perfect/.work/opensa-lod`, same models, per `buildModelOsm` call:
+Measured on the user's own `build/original/.work/opensa-lod`, same models, per `buildModelOsm` call:
 
 | model               | before   | lazy only | + caches |
 | ------------------- | -------- | --------- | -------- |

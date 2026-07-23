@@ -1,12 +1,12 @@
 # perfect-map-builder
 
 The offline orchestrator (`tools/perfect-map-builder`) that turns a stock GTA SA install + a mods folder into
-the **one canonical build** every dev surface reads. `--out` defaults to `./build/perfect` (git-ignored,
+the **one canonical build** every dev surface reads. `--out` defaults to `./build/original` (git-ignored,
 regenerated each reconvert):
 
 ```
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
-  --game ./game-src/non-modified --in ./mods-src
+  --game ./game-src/original --in ./mods-src
 ```
 
 Each stage is another tool's Node API; every stage hands the next a **complete game dir**, so the chain can
@@ -20,7 +20,7 @@ stop anywhere (`--until <stage>`, inclusive, keeps intermediates). Intermediates
 ```mermaid
 %%| pmb-pipeline
 flowchart TB
-  src[("game-src/non-modified<br/>+ mods-src/")]:::data
+  src[("game-src/original<br/>+ mods-src/")]:::data
   mods["mods · mod-installer"]:::stage
   veh["vehicles · vehicle-installer"]:::stage
   peds["peds · ped-installer"]:::stage
@@ -82,5 +82,5 @@ dictionary), `manifest.json` (with `buildTime`), `water.bin`, `report.json`.
 - Bakes: AO/skyVis **on by default** (`--no-ao` to skip — it replaces prod's SSAO); the heavy sun-vis shadow
   bake is opt-in (`--bakes`), and **off** in the pmb pack stage.
 
-Point any host at the result: `?loader=http-dir&src=http://localhost:3001/build/perfect/opensa` (game),
-`?src=…` (lab), `--after ./build/perfect/opensa` (viewers).
+Point any host at the result: `?loader=http-dir&src=http://localhost:3001/build/original/opensa` (game),
+`?src=…` (lab), `--after ./build/original/opensa` (viewers).

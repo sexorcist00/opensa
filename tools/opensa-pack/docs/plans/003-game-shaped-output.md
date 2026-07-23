@@ -495,7 +495,7 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
 
 ## Measurement ledger
 
-**Phase 1 (2026-07-18)** — one-cell smoke convert, `--game game-src/non-modified --rect 9,-7,9,-7 --no-ao`:
+**Phase 1 (2026-07-18)** — one-cell smoke convert, `--game game-src/original --rect 9,-7,9,-7 --no-ao`:
 
 | Measure                      | Value                                                                             |
 | ---------------------------- | --------------------------------------------------------------------------------- |
@@ -505,7 +505,7 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
 | products written             | `opensa/{world.ospak 6.1 MB, manifest.json 98 KB, water.bin 2.5 MB, report.json}` |
 | game files after             | `data/gta.dat`, `models/gta3.img` present and untouched                           |
 
-**Phase 2 (2026-07-18)** — `buildVehicleOsm` over `game-src/non-modified`, offline build cost per model:
+**Phase 2 (2026-07-18)** — `buildVehicleOsm` over `game-src/original`, offline build cost per model:
 
 | Model      | `.osm` | build | geometry                          | baked collision                              |
 | ---------- | ------ | ----- | --------------------------------- | -------------------------------------------- |
@@ -514,7 +514,7 @@ the typechecker, but the pipeline wiring itself has not been executed — it nee
 | `bmyri`    | 55 KB  | 4 ms  | 963 v / 1 179 t / 1 submesh       | **fallback box** (no COL in the DFF)         |
 
 **Phase 3 step 1 (2026-07-19)** — the whole vehicle roster converted INTO the copied archives, same
-one-cell smoke command (`--game game-src/non-modified --rect 9,-7,9,-7 --no-ao`):
+one-cell smoke command (`--game game-src/original --rect 9,-7,9,-7 --no-ao`):
 
 | Measure                     | Value                                                                        |
 | --------------------------- | ---------------------------------------------------------------------------- |
@@ -538,7 +538,7 @@ commas only, so `def.model` became `"emperor\t\temperor"`, which also means thos
 the engine** on stock data (`gta-sa-world.adapter.ts:608` throws "No vehicle definition"). SA's own parser
 is whitespace-tolerant; ours is not.
 
-The user patched the commas into `game-src/non-modified`, and the numbers above are the re-run. **The
+The user patched the commas into `game-src/original`, and the numbers above are the re-run. **The
 parser is still comma-only** — a fresh game dir reproduces this. Widening the row splitter is its own
 change (it is shared by every IDE section), so it stays recorded, not fixed.
 
@@ -626,7 +626,7 @@ that peak-memory numbers do not show: boot no longer awaits all 99 arrays before
 it awaits only what the first ring needs, and the rest stream in behind the create budget.
 
 **Measurement caveat, and it is the same trap this ledger already records twice:** these numbers come from
-`game-src/non-modified`, NOT from the map-optimizer output production actually ships (which carries mip
+`game-src/original`, NOT from the map-optimizer output production actually ships (which carries mip
 chains on 53 % of map textures). The absolute MB are therefore a floor. The RATIO is the meaningful part
 and is structural — higher-resolution textures scale both sides equally.
 
@@ -642,7 +642,7 @@ products-directory layout still loads, with the parametric environment it would 
 path hack was NOT possible — the browser normalizes `/pak/../data/x` to `/data/x`.
 
 **Field-checked, not just green:** headless boot of the production host (`gate-check.js canvas`) against
-`game-src/non-modified` — WebGPU up, 120 fps, and the 22:10 night renders with correct timecyc mood (warm
+`game-src/original` — WebGPU up, 120 fps, and the 22:10 night renders with correct timecyc mood (warm
 lamps, lit windows, correct fog). That run also used an OLD `pak-map`, so it covered the backwards
 -compatible eager-texture path at the same time.
 
@@ -677,7 +677,7 @@ The class map that made phase 5 a five-step job rather than one, each needing a 
   **authored-vs-synthesized choice is resolved offline** (including the 65 535-vertex cap on the synthesized
   fallback), so the reader has no branch left.
 
-Measured on `game-src/non-modified` (whole `object.dat` set): **204 authored + 48 synthesized = 252 props in
+Measured on `game-src/original` (whole `object.dat` set): **204 authored + 48 synthesized = 252 props in
 1.6 MB**, 17 with nothing to shatter, 0 failed. 11 of them landed in `gta_int.img` — the `near` placement
 picking the right archive per model. A prop KEEPS its `.dff`: only the shatter mesh is baked, because that
 is the only thing the debris path resolves by name.
@@ -701,7 +701,7 @@ geometry uses.
    `GEOM` + `SHAT` in one container because that rock is clutter AND a breakable. The accumulator rejects
    two classes writing the same tag rather than picking a winner.
 
-Measured (`game-src/non-modified`, one cell): **56/56 species**, 2.7 MB of `.osm` of which 2.3 MB is
+Measured (`game-src/original`, one cell): **56/56 species**, 2.7 MB of `.osm` of which 2.3 MB is
 dictionaries; **508 models bundled** — one fewer than the class totals sum to, which IS the merge.
 Field-checked headless against the CONVERTED game dir: 120 fps, 555 draws, vegetation and converted cars
 rendering, residency 649 MB vs 713 MB on the stock build (BC dictionaries).
@@ -771,7 +771,7 @@ contract is exactness TO f32.
 
 **Phase 5f (2026-07-19) — peds, step 1: the one-array contract gives way.**
 
-Measured before designing anything (`game-src/non-modified`, all of `peds.ide`): **265 peds build, 11 fail;
+Measured before designing anything (`game-src/original`, all of `peds.ide`): **265 peds build, 11 fail;
 242 carry exactly ONE texture, 22 carry two, 1 carries three — and 23 peds MIX texture sizes.** A
 `texture2d_array` is one size and one format, so those 23 cannot fit the single-array shape `TEXS` shipped
 with earlier today.
@@ -828,7 +828,7 @@ Both were invisible to 2 207 green tests and obvious in one screenshot. That is 
 field check on a production path.
 
 **Phase 3 gate, second half — the spawn measurement (owed since step 2, done 2026-07-19.)** 40 car types,
-`game-src/non-modified` vs its converted `--out`, in Node:
+`game-src/original` vs its converted `--out`, in Node:
 
 | Path                                                                 | mean        | worst   |
 | -------------------------------------------------------------------- | ----------- | ------- |
@@ -1088,7 +1088,7 @@ end-to-end by real converts) and the lab's `pak-source.ts`.
 
 ### What the MODS carry, and what the per-model format still drops (audit, 2026-07-19)
 
-The production input is not the stock game: `mods-src/mods` holds **57 mods (1.1 GB)** that mod-installer
+The production input is not the stock game: `mods-src/original/mods` holds **57 mods (1.1 GB)** that mod-installer
 bakes into the archives BEFORE opensa-pack runs, so `--game` already contains them. (I first mistook these
 for `modloader/` runtime overrides and started making the resolver ask "is this modded" — wrong premise,
 reverted. Runtime modloader is a different, later path.)
@@ -1165,7 +1165,7 @@ generator downstream would silently overwrite its work. Measured on both inputs:
 
 | Input                                       | map textures with a chain | deepest |
 | ------------------------------------------- | ------------------------- | ------- |
-| `game-src/non-modified` (raw game)          | 23 / 1 177 — **2 %**      | 9       |
+| `game-src/original` (raw game)          | 23 / 1 177 — **2 %**      | 9       |
 | `NO_COMMIT/optimized` (after map-optimizer) | 646 / 1 215 — **53 %**    | 11      |
 
 **opensa-pack's production input is the chain output, after map-optimizer** (confirmed by the user) — so

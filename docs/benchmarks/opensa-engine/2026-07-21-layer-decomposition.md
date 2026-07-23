@@ -10,7 +10,7 @@ User's machine and display, in-game `?bench=all` sweep, **1126 road cars** (the 
 not compare absolute draw counts to any pre-07-21 row). Six builds, each taken from a pmb `.work`
 intermediate and re-converted through `opensa-pack`:
 
-`non-modified → modifications → optimizations → trees → procobj → all (+lods)`
+`original → modifications → optimizations → trees → procobj → all (+lods)`
 
 Numbers came as a chat paste of the console `[bench]` lines. Anything reporting fps 120 is vsync-locked —
 read `gpuMs.pass`, `avgTriangles`, `avgDrawCalls` there, never `avgMs`.
@@ -21,7 +21,7 @@ read `gpuMs.pass`, `avgTriangles`, `avgDrawCalls` there, never `avgMs`.
 
 | Layer         | pass ms |    Δ pass | triangles | draws |      fps |
 | ------------- | ------: | --------: | --------: | ----: | -------: |
-| non-modified  |   4.779 |         — |   371 031 |  1129 |    114.5 |
+| original  |   4.779 |         — |   371 031 |  1129 |    114.5 |
 | modifications |   5.323 | **+0.54** |   459 941 |  1229 |    105.5 |
 | optimizations |   5.360 |     +0.04 |   459 009 |  1216 |    104.1 |
 | trees         |  13.718 | **+8.36** | 1 455 734 |  1255 | **53.0** |
@@ -120,10 +120,10 @@ triangles do not add coverage.**
 ## What "39. Green Piece 1.47" cost — predicted, then measured
 
 > **Outcome: the user deleted the mod on 2026-07-21 and parked every other foliage lever.** The paths in
-> this section describe the build as it was when measured; `mods-src/mods/39. Green Piece 1.47` no longer
+> this section describe the build as it was when measured; `mods-src/original/mods/39. Green Piece 1.47` no longer
 > exists, so any pak built after that date is not comparable to the "with Green Piece" column below.
 
-`mods-src/mods/39. Green Piece 1.47` shipped **no models at all**: it was one `Green Piece.IPL` with 233 `inst`
+`mods-src/original/mods/39. Green Piece 1.47` shipped **no models at all**: it was one `Green Piece.IPL` with 233 `inst`
 lines that PLACE extra vegetation, installed at the `mods` stage (appended into `stadint.ipl`; all 233 were
 located in the built map). It is therefore invisible in the mods-layer measurement — at that point the trees
 it places are still the stock 48–132-triangle models, which is why the whole mods layer cost only +0.54 ms.

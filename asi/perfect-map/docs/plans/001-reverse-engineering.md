@@ -29,7 +29,7 @@ Note the `IplDef` field is not just the truncating `min/max` at `IncludeEntity` 
 
 ## Tasks
 
-- [x] Set up static RE on macOS: **capstone (venv) over the real 1.0 US `gta_sa.exe`** (`game-src/non-modified`) — sufficient for disasm + byte extraction; radare2/Ghidra not needed for the four sites. gta-reversed addresses used to name functions.
+- [x] Set up static RE on macOS: **capstone (venv) over the real 1.0 US `gta_sa.exe`** (`game-src/original`) — sufficient for disasm + byte extraction; radare2/Ghidra not needed for the four sites. gta-reversed addresses used to name functions.
 - [~] Disassemble `ProperFixes.asi`: enumerate its injector hook targets / patched addresses → the "which sites are load-bearing" oracle. **Partial** — strings + byte-scan done (injector+plugin-sdk confirmed; PF references the `0x8E3EE8`–`0x8E3F08` cluster = it relocates `IplEntityIndexArrays`; graphics hook `0x5BF85B` out of scope). Full disasm (following injector call sites for `0x404C90`/`0xBCC0E0`) pending radare2.
 - [x] For each of the four fixes: locate every read/write of the structure, decompiled context, minimal correct change, **AND the original bytes from the exe** (RE session 3) → [patch-catalogue.md](../patch-catalogue.md). Both source halves now cited.
 - [x] `IplDef` struct layout + widen strategy that doesn't shift neighbouring fields. **DONE** — struct is 0x34 with int16 fields at 0x22/0x24/0x26/0x28/0x2A; in-place widen would grow the pooled stride (high blast radius), so the catalogue recommends a **sidecar int32 range table via IncludeEntity/RemoveIpl hooks** (#1/#2) + array relocation for #3/#4. staticIdx (40-slot index) stays int16, bounded by #4's relocation.
@@ -84,7 +84,7 @@ gta-reversed-modern `source/game_sa/` (1.0 US HOODLUM only build → map directl
 ### RE session 3 (2026-07-09) — byte extraction from the real exe (two-source rule closed for #1–#4)
 
 Exe attempt 1 (14,405,632 B, SHA1 `0df50d56…`) was REJECTED (wrong/extra variant). Exe attempt 2 —
-`game-src/non-modified/gta_sa.exe`, **14,383,616 B, SHA1 `8c23ceffafa9fd88ea567be7926a33413b8e3c00`** — is the
+`game-src/original/gta_sa.exe`, **14,383,616 B, SHA1 `8c23ceffafa9fd88ea567be7926a33413b8e3c00`** — is the
 canonical 1.0 US; accepted. Disasm via capstone (venv), PE image base 0x400000.
 
 - **HOODLUM relocation found:** `IncludeEntity`'s callable entry 0x404C90 is a trampoline (`e9 9b ea 15 01` =

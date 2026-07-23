@@ -10,7 +10,7 @@ import { inflateRawSync } from 'node:zlib';
  * every placement-mapper row whose box intersects a ±60 u column around the point. This is the pak-bytes
  * step of the triage playbook for bugs in the WELDED look — `dump-osm*` only covers per-model archives.
  * Tables travel verbatim in the oswire container, so the meshopt vertex/index payloads stay undecoded.
- * Run: `npx tsx scripts/debug/dump-cell.ts <x> <y> [pakDir]` (default pak `build/perfect/opensa/opensa`).
+ * Run: `npx tsx scripts/debug/dump-cell.ts <x> <y> [pakDir]` (default pak `build/original/opensa/opensa`).
  */
 const [xArg, yArg, pakArg] = process.argv.slice(2);
 const targetX = Number(xArg);
@@ -19,7 +19,7 @@ if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
   console.error('usage: npx tsx scripts/debug/dump-cell.ts <x> <y> [pakDir]');
   process.exit(1);
 }
-const pakDir = pakArg ?? 'build/perfect/opensa/opensa';
+const pakDir = pakArg ?? 'build/original/opensa/opensa';
 
 interface PakEntry {
   enc?: string;

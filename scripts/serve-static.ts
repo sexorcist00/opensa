@@ -3,7 +3,7 @@
  * archives from `static/` (`static/games/<game>-<version>/*`, gitignored), maps `/viewer/*` →
  * `tests/viewer/*` — the object-viewer's e2e fixtures (`npm run test:fixtures`, gitignored, only loaded in
  * `--mode e2e`) — AND maps `/build/*` → `build/*`, the canonical dev source (plan 079): every dev surface
- * points `?src=/build/perfect/opensa` here instead of copying the ~1.4 GB build into a Vite `public/`. sirv
+ * points `?src=/build/original/opensa` here instead of copying the ~1.4 GB build into a Vite `public/`. sirv
  * honours Range, so the pak streams. CORS on; dev mode reads files fresh and tolerates a missing root.
  */
 import { readdirSync, statSync } from 'node:fs';
@@ -14,7 +14,7 @@ import sirv from 'sirv';
 const PORT = Number(process.env.PORT) || 3001;
 const serveStatic = sirv('static', { dev: true });
 const serveTests = sirv('tests', { dev: true }); // `/viewer/objects/x` → `tests/viewer/objects/x`
-const serveBuild = sirv('build', { dev: true }); // `/build/perfect/opensa/x` → `build/perfect/opensa/x`
+const serveBuild = sirv('build', { dev: true }); // `/build/original/opensa/x` → `build/original/opensa/x`
 
 /** A flat `{ path, size }[]` walk of a served dir — the http-dir loader's file index (its `__index` endpoint). */
 function dirIndex(dir: string, base = ''): { path: string; size: number }[] {

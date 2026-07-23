@@ -2,7 +2,7 @@ import { type ImgArchive, openArchive } from '@opensa/renderware/archive/img-arc
 import { buildCollisionIndex, getCollision } from '@opensa/renderware/collision/collision-index';
 /**
  * Build the object-viewer's **e2e fixtures** into `tests/viewer/` by extracting from a clean, UNMODIFIED GTA
- * San Andreas copy under `game-src/non-modified` (the same source `test-fixtures.ts` uses). Chained after
+ * San Andreas copy under `game-src/original` (the same source `test-fixtures.ts` uses). Chained after
  * `test-fixtures.ts` by `npm run test:fixtures`; the output is Rockstar assets, so `tests/viewer/` is
  * gitignored (like `tests/original/`) and every contributor regenerates it locally.
  *
@@ -17,7 +17,7 @@ import { buildCollisionIndex, getCollision } from '@opensa/renderware/collision/
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-const ROOT = join('game-src', 'non-modified');
+const ROOT = join('game-src', 'original');
 const ARCHIVES = ['models/gta3.img', 'models/gta_int.img'];
 const OUT = 'tests/viewer';
 
@@ -110,6 +110,6 @@ if (missing.length > 0) {
   for (const dest of missing) {
     console.error(`    - ${dest}`);
   }
-  console.error(`\n  Ensure game-src/non-modified is a complete, unmodified GTA San Andreas install.`);
+  console.error(`\n  Ensure game-src/original is a complete, unmodified GTA San Andreas install.`);
   process.exitCode = 1;
 }

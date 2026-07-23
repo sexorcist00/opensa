@@ -3,7 +3,7 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
 /**
  * Dump one converted model's `.osm` from a built pak: sections, DESC fixture (parts, submeshes with their
  * texture-array refs), and — for world-sourced models — whether the manifest still has those arrays.
- * Run: `npx tsx scripts/debug/dump-osm.ts <modelName> [--pak build/perfect/opensa]`.
+ * Run: `npx tsx scripts/debug/dump-osm.ts <modelName> [--pak build/original/opensa]`.
  */
 import { readFileSync } from 'node:fs';
 
@@ -17,12 +17,12 @@ interface Fixture {
 function main(): void {
   const args = process.argv.slice(2);
   const pakFlag = args.indexOf('--pak');
-  const pak = pakFlag === -1 ? 'build/perfect/opensa' : args[pakFlag + 1];
+  const pak = pakFlag === -1 ? 'build/original/opensa' : args[pakFlag + 1];
   const model = args
     .find((arg, index) => !arg.startsWith('--') && (pakFlag === -1 || index !== pakFlag + 1))
     ?.toLowerCase();
   if (!model) {
-    console.error('usage: npx tsx scripts/debug/dump-osm.ts <modelName> [--pak build/perfect/opensa]');
+    console.error('usage: npx tsx scripts/debug/dump-osm.ts <modelName> [--pak build/original/opensa]');
     process.exit(1);
   }
 

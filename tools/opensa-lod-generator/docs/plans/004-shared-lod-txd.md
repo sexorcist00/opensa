@@ -6,7 +6,7 @@ same-named different-pixel variants to a random winner.** Replace the 563 per-ce
 texture once. Kills a measured **5.5× texture duplication** in `lods.img` and, more importantly, 5.5× duplicate
 decoded/GPU textures at LOD range.
 
-## Measured motivation (2026-07-02, game-src/non-modified)
+## Measured motivation (2026-07-02, game-src/original)
 
 - 563 cells reference **31,981 texture entries** across their per-cell TXDs, but only **5,805 unique names**
   map-wide → duplication **5.5×** (median 35 textures/cell, max 258).
@@ -42,7 +42,7 @@ all source TXDs **by name, first wins**, so two cells naming the same texture al
 
 ## Measurements
 
-**After Phase 1 (2026-07-02, game-src/non-modified):** the shared `lods.txd` is **16.0 MB** (5,805 unique
+**After Phase 1 (2026-07-02, game-src/original):** the shared `lods.txd` is **16.0 MB** (5,805 unique
 textures @ 64 px DXT + mips) vs a measured-estimate **~88 MB** of per-cell TXD payload (31,981 entries) —
 **−82 %** on disk, and one decoded/GPU texture per name instead of ~5.5 copies at LOD range. `finalize` emits
 exactly one TXD; every cell IDE def's `txd` column is the shared `lods` (unit-tested). Pixels unchanged by

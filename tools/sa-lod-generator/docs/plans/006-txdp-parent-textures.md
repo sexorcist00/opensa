@@ -9,7 +9,7 @@
    MixMods "SA Optimized Map" mod (1,368 mappings → 32 parents, see `./1`), and already fully supported by the
    OpenSA engine (`resolveTxdChain`).
 
-## Measured motivation (2026-07-02, game-src/non-modified)
+## Measured motivation (2026-07-02, game-src/original)
 
 - Screen maths: a LOD appears at ≥ ~300 u, where 1 px ≈ 0.32 world units (FOV 60 / 1080p) → ~3 px/m on screen.
   A 256 px facade texture over ~10 m at 0.25 (64 px) still delivers ~6.5 px/m — 2× the screen density at the
@@ -59,7 +59,7 @@ different variants stay in each child, which resolves first in the txdp chain.)_
 
 ## Measurements
 
-**After Phases 1–2 (2026-07-02, game-src/non-modified, 991 clone atlases):**
+**After Phases 1–2 (2026-07-02, game-src/original, 991 clone atlases):**
 
 | scheme                    | payload                                                               |
 | ------------------------- | --------------------------------------------------------------------- |

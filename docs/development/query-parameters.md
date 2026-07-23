@@ -87,7 +87,7 @@ The minimal boot kept as a repro harness (074/13 phase 3.4): `src` (default `pak
 Documented rather than silently fixed; both are load-bearing for existing bookmarks and bench URLs:
 
 - **`src` defaults differ per host** — `pak-map` (game), `pak-ls` (standalone), `pak` (lab); since 079 the lab
-  points `src` at a served game dir (e.g. `http://localhost:3001/build/perfect/opensa`), and `?loader=http-dir`
+  points `src` at a served game dir (e.g. `http://localhost:3001/build/original/opensa`), and `?loader=http-dir`
   makes the game do the same.
 - **`hour=0` means midnight only in the game host.** The standalone page and the lab read it as
   `Number(...) || 12`, so `0` falls back to noon.

@@ -99,10 +99,10 @@ unzip + verify) → the lazily-loaded game runs entirely from the VFS.
 ## 5. Test fixtures (to run the test suite)
 
 The real-asset test fixtures under `tests/original/` are Rockstar assets, so they are **not committed**
-(gitignored) — regenerate them locally from an **unmodified** GTA SA copy placed at `game-src/non-modified/`:
+(gitignored) — regenerate them locally from an **unmodified** GTA SA copy placed at `game-src/original/`:
 
 ```bash
-npm run test:fixtures   # extracts/copies the needed files from game-src/non-modified into tests/original/
+npm run test:fixtures   # extracts/copies the needed files from game-src/original into tests/original/
 npm test                # now the unit tests have their fixtures
 ```
 
@@ -120,7 +120,7 @@ npx tsx tools/map-optimizer/src/compare-serve.ts --before <gameDir> --after <gam
 ```
 
 The object-viewer e2e instead renders static fixtures from `tests/viewer/` (gitignored like `tests/original/`),
-extracted from `game-src/non-modified/` by `npm run test:fixtures`.
+extracted from `game-src/original/` by `npm run test:fixtures`.
 
 ## Where to go next
 

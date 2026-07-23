@@ -67,7 +67,7 @@ envelope, like vanilla's own areas (vegasE 718 text + streams).
 
 - 15,283 pairs → 8 areas (≤1900 pairs each), ~30 binary stream tiles ≤512 inst; gta.dat gains 8 IPL lines
   (text IPLs with inst: stock 30 + 8 = 38 ≤ the 40-slot `IplEntityIndexArrays`).
-- **lod-trees is over the same envelope** (measured on `build/perfect2/.work/5-trees`): its impostor
+- **lod-trees is over the same envelope** (measured on `build/original2/.work/5-trees`): its impostor
   text-appends push `countrye` to **4649** (1257 text + 3392 binary) and `vegasw` to **4487** — both > 4096
   BEFORE procobj even runs. That's why the full pmb build broke at a lower procobj threshold and why the
   chunking experiment "didn't help" on it. lod-trees now has a per-area append budget with overflow migration — lod-trees plan 011.

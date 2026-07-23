@@ -5,7 +5,7 @@ model**, with its textures halved. A drop-in `--out` that replaces the stock LOD
 names and IPL links), so the map's linkage is untouched. See [001-architecture.md](./001-architecture.md) for the
 why + measured feasibility.
 
-## Result (`game-src/non-modified`, `--tex-scale 0.5`)
+## Result (`game-src/original`, `--tex-scale 0.5`)
 
 `baked 4275 LOD clones + 996 TXDs @ 0.5× (shared 15, missing HD 0, missing TXD 0)` + `retargeted 5992 LOD
 instances to their HD transform` in ~27 s. `models/gta3.img` 897 MB → 1.1 GB (**+~200 MB** — matches the plan-001
@@ -16,7 +16,7 @@ and on the three reported skewed objects: each cloned LOD instance's rotation no
 
 ## Goal
 
-For each HD model that has a LOD (measured: ~4 300 models / ~6 066 links, `game-src/non-modified`):
+For each HD model that has a LOD (measured: ~4 300 models / ~6 066 links, `game-src/original`):
 
 1. **Clone** the HD geometry as-is (no decimation) under the **stock LOD name** → no pop, **no holes**.
 2. **Empty collision** (LODs don't collide).
@@ -103,7 +103,7 @@ lod-common plan 004: clone TXDs now resolve through their own source atlas (`res
 ## CLI + config
 
 ```sh
-tsx tools/sa-lod-generator/src/cli.ts --game ./game-src/non-modified --out ./build [--tex-scale 0.5]
+tsx tools/sa-lod-generator/src/cli.ts --game ./game-src/original --out ./build [--tex-scale 0.5]
 ```
 
 `lod.config.ts`: `texScale` (0.5). Without `--out`, print the resolve/sizing report only (Phase-0 style).

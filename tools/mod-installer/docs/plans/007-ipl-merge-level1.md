@@ -11,7 +11,7 @@ workaround described below no longer exist in mods 0/1. Extend the `.merge` data
 
 ## Motivation
 
-Mods 0 and 1 are the only two in `mods-src/mods` that replace stock `data/maps` files whole (31 and 14 files;
+Mods 0 and 1 are the only two in `mods-src/original/mods` that replace stock `data/maps` files whole (31 and 14 files;
 diffs are line-scale: flags, sunk objects, appended instances). Whole-file replacement is last-wins: today mod 1
 silently erases mod 0's fixes in 9 shared files (verified line-by-line — mod 1's copies do NOT contain mod 0's
 edits). Every other mod is already conflict-free: modloader-style additive (`loader.txt` + own IDE/IPL, baked by

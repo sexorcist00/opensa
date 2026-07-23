@@ -6,7 +6,7 @@
 
 | input                                       | authored | computed       | guard           |
 | ------------------------------------------- | -------- | -------------- | --------------- |
-| `game-src/non-modified` (vanilla)           | 21       | **170 (89 %)** | ⚠ warning fires |
+| `game-src/original` (vanilla)           | 21       | **170 (89 %)** | ⚠ warning fires |
 | `NO_COMMIT/optimized` (map-optimizer build) | 176      | 15 (7.9 %)     | silent          |
 
 The conditioned map's residual 15 = models outside the optimizer's selection (its `resolve()` set is

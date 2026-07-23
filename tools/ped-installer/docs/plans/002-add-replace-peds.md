@@ -75,7 +75,7 @@ Tagged so we pick them up later:
 - **pedstats / voice / audio** — `pedstats.dat`, voice-archive / audio bank lines: not touched.
 - **Collision** — peds use the shared generic ped COL; no per-ped COL handling.
 - **Population groups** — `pedgrp.dat` (which ambient groups a ped spawns in) is **not present** in
-  `game-src/non-modified/data`; an install does **not** add a ped to population yet (parallel to
+  `game-src/original/data`; an install does **not** add a ped to population yet (parallel to
   `vehicle-installer`'s deferred `cargrp` install-side). Needs its own plan if picked up.
 - **Auto-id assignment** — picking a free ped id for a new model with no settings id.
 

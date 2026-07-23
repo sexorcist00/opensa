@@ -5,9 +5,9 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  * perfect-map-builder CLI. Chains every map tool into one build and splits it into the `sa` (real game) and
  * `opensa` LOD targets. Usage:
  *   tsx tools/perfect-map-builder/src/cli.ts --game <path> --in <mods-src> [--out <path>]
- *     --out            output build dir. Defaults to `./build/perfect` — the ONE canonical build every dev
+ *     --out            output build dir. Defaults to `./build/original` — the ONE canonical build every dev
  *                      surface reads (the lab, the harness and the object-viewer's AFTER side all mount
- *                      `./build/perfect/opensa`). Pass it only to build somewhere else.
+ *                      `./build/original/opensa`). Pass it only to build somewhere else.
  *     --until <stage>  stop after a stage (mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack) and KEEP
  *                      every intermediate build under `<out>/.work` — for step-by-step in-game debugging.
  *                      The list is the pipeline ORDER and the stop point is INCLUSIVE, so every stage at or
@@ -35,7 +35,7 @@ import { statSync } from 'node:fs';
 import { buildPerfectMap, STAGE_NAMES, type StageName } from './pipeline';
 
 /** The canonical build dir when `--out` is omitted — the single source every dev surface reads (plan 079). */
-const DEFAULT_OUT = './build/perfect';
+const DEFAULT_OUT = './build/original';
 
 async function main(): Promise<void> {
   const gameArg = argValue('--game');

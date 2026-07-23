@@ -14,7 +14,7 @@ into the repo-root **`tests/`** folder (committed) and read from there.
 **How to apply** (2026-06-19, licensing cleanup): fixtures split by provenance.
 
 - **`tests/original/`** — real Rockstar assets, **gitignored**, regenerated locally by `npm run test:fixtures`
-  (`scripts/test-fixtures.ts`): copies loose data + extracts IMG entries from `game-src/non-modified` (a clean
+  (`scripts/test-fixtures.ts`): copies loose data + extracts IMG entries from `game-src/original` (a clean
   STOCK SA copy), builds `img/admiral.img`, and generates `data/timecyc_24h.dat` = stock `convertTo24h` (no
   RealVision; the game's `npm run timecyc` keeps its own enhanced merge). Add new real fixtures to the MANIFEST.
 - **`tests/custom/`** — committed (NOT Rockstar IP, or can't be reproduced from stock): mods

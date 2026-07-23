@@ -2,7 +2,7 @@ import { buildVer2Buffer, type ImgArchive, openArchive } from '@opensa/renderwar
 import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware/parsers/text/timecyc.parser';
 /**
  * Reconstruct the real-asset test fixtures (`tests/original/`) from a clean, UNMODIFIED GTA San Andreas
- * install under `game-src/non-modified` (default). These are Rockstar assets, so they are NOT committed
+ * install under `game-src/original` (default). These are Rockstar assets, so they are NOT committed
  * (`tests/original/` is gitignored) — every contributor regenerates them locally on setup, or after
  * changing the manifest:
  *
@@ -14,7 +14,7 @@ import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware
  *   - copy:    copied verbatim from `game-src/<game>/<from>`
  *   - extract: extracted by name from a `models/*.img` archive
  *   - archive: a one-file stock VER2 `.img` built around an extracted entry
- *   - mod:     copied from `mods-src/mods/<from>` — opensa-pack's production input is a MODDED game, and
+ *   - mod:     copied from `mods-src/original/mods/<from>` — opensa-pack's production input is a MODDED game, and
  *              the mods carry things the stock game barely has (95 % of their textures ship a mip chain)
  *
  * Extend MANIFEST when a test needs a new real-asset fixture, or MOD_MANIFEST when it needs a modded one.
@@ -34,7 +34,7 @@ type Fixture =
   | { readonly dest: string; readonly from: string; readonly type: 'mod' };
 
 const gameIndex = process.argv.indexOf('--game');
-const GAME = gameIndex >= 0 ? process.argv[gameIndex + 1] : 'non-modified';
+const GAME = gameIndex >= 0 ? process.argv[gameIndex + 1] : 'original';
 const ROOT = join('game-src', GAME);
 const ARCHIVES = ['models/gta3.img', 'models/gta_int.img'];
 const OUT = 'tests/original';
@@ -44,7 +44,7 @@ const modFile = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest
 const extract = (entry: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, entry, type: 'extract' });
 
 /**
- * Assets copied from `mods-src/mods` rather than the game dir.
+ * Assets copied from `mods-src/original/mods` rather than the game dir.
  *
  * opensa-pack's PRODUCTION input is not a stock game: mod-installer bakes these mods into the archives
  * before it runs. They also carry things the stock game barely has — 95 % of their textures ship a mip

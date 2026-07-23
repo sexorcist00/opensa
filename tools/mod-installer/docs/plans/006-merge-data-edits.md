@@ -8,7 +8,7 @@ replacements, and never clobber other mods' lines.
 
 ## Why
 
-The motivating mod (now `mods-src/mods/42. Animated Radars`) turns the airport radar into an animated object.
+The motivating mod (now `mods-src/original/mods/42. Animated Radars`) turns the airport radar into an animated object.
 That is a **section move** inside `data/maps/generic/multiobj.ide`:
 
 ```
@@ -79,4 +79,4 @@ rotate in both real SA and the browser build.
   converter. Non-sectioned keyed files (handling.cfg, carcols.dat) remain OUT of scope until a mod needs
   them — the directive grammar leaves room (`remove from "handling":` could map to a file region).
 - `bake-mod` (Modloader-style loader.txt mods) does not process `.merge` files — third-party Modloader mods
-  don't ship them; the convention is ours, for `mods-src/mods` overlay mods.
+  don't ship them; the convention is ours, for `mods-src/original/mods` overlay mods.

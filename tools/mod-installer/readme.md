@@ -4,7 +4,7 @@ Layer GTA-SA **mod folders** onto a base game into a single drop-in `--out`. Cop
 top in numeric-aware alphabetical order — plain files overwrite, `gta3_img/`/`gta_int_img/`/`cutscene_img/` loose entries merge into `gta3.img`/`gta_int.img`/`cutscene.img`.
 
 ```sh
-tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --out ./build
+tsx tools/mod-installer/src/cli.ts --game ./game-src/original --in ./mods --out ./build
 ```
 
 - `--game` — base game tree (`gta.dat` + `data/` + `models/gta3.img` …)

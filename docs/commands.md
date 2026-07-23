@@ -1,19 +1,19 @@
 # Commands cheat sheet
 
 The everyday commands with all their params, in one place. Canonical folders:
-**source game** `./game-src/non-modified` · **mods** `./mods-src` · **canonical build** `./build/perfect`
+**source game** `./game-src/original` · **mods** `./mods-src` · **canonical build** `./build/original`
 (see [architecture/perfect-map-builder.md](./architecture/perfect-map-builder.md)).
 Rule (also in `CLAUDE.md`): when a command or param is added/changed, update this file.
 
 ## The one build
 
 ```bash
-# Full perfect-map build → ./build/perfect (sa/ + opensa/ targets)
+# Full perfect-map build → ./build/original (sa/ + opensa/ targets)
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
-  --game ./game-src/non-modified --in ./mods-src
+  --game ./game-src/original --in ./mods-src
 ```
 
-Params: `--out <dir>` (default `./build/perfect`) · `--until <mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack|lod>`
+Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack|lod>`
 (inclusive, keeps `.work/`) · `--keep-work` · `--no-weld-seams` · `--no-textures` · `--allow-text-row-overflow`.
 
 ## Serving & running
@@ -25,11 +25,11 @@ npm run serve:static        # static origin :3001 — mounts /build (Range + /__
 
 | Surface                  | URL                                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Game on the served build | `http://localhost:5173/?loader=http-dir&src=http://localhost:3001/build/perfect/opensa`                            |
+| Game on the served build | `http://localhost:5173/?loader=http-dir&src=http://localhost:3001/build/original/opensa`                            |
 | Bench sweep (8 scenes)   | `http://localhost:5173/?bench=all` (one scene: `?bench=country-dusk`)                                              |
 | Soak (minutes)           | `http://localhost:5173/?soak=30`                                                                                   |
 | Lab                      | `npx vite --config apps/engine-lab/vite.config.ts` → `http://localhost:4300/`                                      |
-| Lab: streaming LS        | `http://localhost:4300/?pak=1&src=http://localhost:3001/build/perfect/opensa&at=2495,-1687,13&orbit=300&draw=1500` |
+| Lab: streaming LS        | `http://localhost:4300/?pak=1&src=http://localhost:3001/build/original/opensa&at=2495,-1687,13&orbit=300&draw=1500` |
 | Lab: vehicle probe       | `http://localhost:4300/?pak=1&stream=1&src=…&vehicle=1&vmodel=vehicle-comet&at=2495,-1675,13.3&orbit=26&hour=12`   |
 | Viewers                  | `npm run dev` → `http://localhost:5173/viewer.html?tab=<object,vehicle,character,compare>`                         |
 
@@ -39,7 +39,7 @@ Full query-param reference: [development/query-parameters.md](./development/quer
 
 ```bash
 # Mods → game dir
-npx tsx tools/mod-installer/src/cli.ts --in ./mods-src/mods --game ./game-src/non-modified --out <dir>
+npx tsx tools/mod-installer/src/cli.ts --in ./mods-src/original/mods --game ./game-src/original --out <dir>
 
 # Lossless map conditioning (normals/prelit/dedupe)
 npx tsx tools/map-optimizer/src/cli.ts --game <dir> --out <dir>
@@ -67,13 +67,13 @@ NODE_OPTIONS=--max-old-space-size=12288 \
 
 ```bash
 # BEFORE = any game dir (.dff), AFTER = a converted build (.osm); port 3002 (--port)
-npx tsx tools/map-optimizer/src/compare-serve.ts --before ./game-src/non-modified --after ./build/perfect/opensa
+npx tsx tools/map-optimizer/src/compare-serve.ts --before ./game-src/original --after ./build/original/opensa
 ```
 
 ## Headless field checks (tools-debug/bench-harness)
 
 ```bash
-SRC=http://localhost:3001/build/perfect/opensa
+SRC=http://localhost:3001/build/original/opensa
 # Boot + bench/soak, screenshots on exit. Env: DPR=2 · TAG='[soak]' · DRAG=<dy>
 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" <outPrefix> <timeoutMs> <expectReports>
@@ -88,7 +88,7 @@ Guide: [development/benchmarks.md](./development/benchmarks.md).
 
 ```bash
 # Ghost-barriers int16 repro dial (33k rows = buggy, 32k = clean)
-npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/non-modified --out <dir> --rows 33000
+npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/original --out <dir> --rows 33000
 
 # One-off inspectors (scripts/debug/) — catalog + the triage playbook: docs/debug/README.md
 npx tsx scripts/debug/<name>.ts --help

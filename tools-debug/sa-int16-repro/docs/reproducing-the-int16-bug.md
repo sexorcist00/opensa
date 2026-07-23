@@ -47,14 +47,14 @@ warning (the 39-slot guard stays hard), for an intentionally over-2^15 full buil
 
 ## Worked example (no perfect-map-builder needed)
 
-Stock `game-src/non-modified` = **9,268 rows / 30 slots** (measured); topping to 33k adds 6 filler areas → 37/39
+Stock `game-src/original` = **9,268 rows / 30 slots** (measured); topping to 33k adds 6 filler areas → 37/39
 slots, inside the isolation bound.
 
 ```sh
 # buggy build (crosses 2^15) — expect the ghosts / crash
-npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/non-modified --out ./NO_COMMIT/repro-33k --rows 33000
+npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/original --out ./NO_COMMIT/repro-33k --rows 33000
 # clean control (stays below 2^15) — expect no ghosts
-npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/non-modified --out ./NO_COMMIT/repro-32k --rows 32000
+npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/original --out ./NO_COMMIT/repro-32k --rows 32000
 ```
 
 ## In-game procedure (Wine) & detection oracle

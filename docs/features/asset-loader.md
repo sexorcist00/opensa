@@ -83,7 +83,7 @@ in-browser to the same VFS — so the downstream flow is identical. **Chromium-o
 
 The dev-only sibling of the local loader: instead of a user-picked folder, it reads a **served** game dir
 over HTTP so every dev surface (lab, bench harness, viewers) can boot the one canonical build
-(`./build/perfect`) without the folder gesture. Selected with `?loader=http-dir&src=<url>` (read in
+(`./build/original`) without the folder gesture. Selected with `?loader=http-dir&src=<url>` (read in
 `use-asset-boot.ts`); never a per-game default.
 
 - **Shared core** (`install-source-core.ts`, `assembleInstallSource`): the local and http-dir loaders both

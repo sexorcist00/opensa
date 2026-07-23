@@ -26,7 +26,7 @@ The field verdict decides. Every measured number lands in the owning plan doc in
 
 ## Inspectors — source-asset side (`scripts/debug/`)
 
-Run any of them as `npx tsx scripts/debug/<name>.ts …`; `--game original|non-modified` picks the
+Run any of them as `npx tsx scripts/debug/<name>.ts …`; `--game original|original` picks the
 variant under `game-src/`.
 
 | Script | Answers |
@@ -56,7 +56,7 @@ variant under `game-src/`.
 | `dump-texel-avg.ts <model> [pakDir]` | average colour of each own-TEXS layer (BC endpoint scan) — tells a black/greyed bake from a faithful one in seconds |
 | `dump-cell.ts <x> <y> [pakDir]` | a WELDED cell's tables at a world point: objectTable rows (kind, timed window, per-group class/array/sphere) + placement boxes near the point — the pak-bytes step for bugs in the welded look (built for 085 row H) |
 
-Default pak: `build/perfect/opensa` (the canonical build). The world-welded side of a model lives in
+Default pak: `build/original/opensa` (the canonical build). The world-welded side of a model lives in
 cell bundles, not its `.osm` — `dump-cell.ts` covers that path.
 
 ## Approaches beyond scripts
@@ -71,7 +71,7 @@ cell bundles, not its `.osm` — `dump-cell.ts` covers that path.
   [`docs/commands.md`](../commands.md). The served dir must be an opensa-pack `--out`.
 - **Shader-term probe** — temporarily output a shader term as the fragment colour, shoot headless,
   compare against expectation. Reading the code had pointed at the wrong cause twice in 084.
-- **Spot rebake (no full pmb run)** — APFS-clone the build (`cp -Rc build/perfect build/.x`), rebake
+- **Spot rebake (no full pmb run)** — APFS-clone the build (`cp -Rc build/original build/.x`), rebake
   one model, drop it in with `rewriteModelArchives` (inserts ONLY — a delete of the same name removes
   what you just inserted), serve, shoot, delete the clone.
 - **Offline algorithm replica** — when a baked value looks wrong, rebuild the model through the SHARED

@@ -14,7 +14,7 @@ folder**. Instead, read the **PNG** files inside it and merge them into that `<n
 - a PNG with a new name → **add** it,
 - every other texture in the `.txd` is left untouched.
 
-Applies anywhere in the tree, at any depth. Examples (base = `non-modified`):
+Applies anywhere in the tree, at any depth. Examples (base = `original`):
 
 ```
 mod/models/particle/          → merges into  out/models/particle.txd          (particle.txd exists in base)

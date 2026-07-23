@@ -1,8 +1,8 @@
 # 2026-07-21 — `?bench=all` sweep through the http-dir loader (plan 079 phase 3, headless DPR 2)
 
-The first bench sweep run **through the real load path** (`?loader=http-dir&src=http://localhost:3001/build/perfect/opensa`,
+The first bench sweep run **through the real load path** (`?loader=http-dir&src=http://localhost:3001/build/original/opensa`,
 `serve-static` + `fetchInstallSource`, no fake picker — plan 079 phase 3). Against the fresh 2026-07-21
-`build/perfect/opensa` reconvert (`buildTime 10:45 21-07-2026`). Harness: `drive.js` headless Chromium,
+`build/original/opensa` reconvert (`buildTime 10:45 21-07-2026`). Harness: `drive.js` headless Chromium,
 `--use-angle=metal`, DPR 2. Machine NOT quiescent (a vite dev server was live alongside the harness).
 
 The comparison reference is the only other headless-DPR-2 six-scene row: the **07-18 post-teardown ritual**

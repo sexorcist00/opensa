@@ -3,7 +3,7 @@
 **Status: BUILT 2026-07-15 (gate + point-repair + counters + tests; field A/B owed).** Implements option 1 of
 the 0.4.0 normals-smoothing idea (graduated here, idea doc deleted) (plans 020–023 are the normals batch).
 
-## Measured (vanilla `game-src/non-modified`, 2026-07-15 probe — the phase-0 numbers)
+## Measured (vanilla `game-src/original`, 2026-07-15 probe — the phase-0 numbers)
 
 Of 11 462 world models the optimizer processes, **103 carry authored normals** on at least one triangle mesh
 (plan 17's "960 of 12 964" counted a wider model set). Gate verdicts at `repairFraction` 0.05:

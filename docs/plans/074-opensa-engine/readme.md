@@ -480,7 +480,7 @@ WGSL snapshots current; tsc + eslint clean; benches committed through the `city`
   canyon direct sun now dies at noon; the moving-sun directional bake is the v2 follow-up.
 - 2026-07-12 (06 row 10 wind) — sway landed OFFLINE-first: converter bakes the final amplitude in METRES into
   nightPrelit.a (trigger = IDE IS_TREE/IS_PALM + plan-039 WIND_MODELS; per-vertex weights from wind-ADAPTED
-  overlay DFFs via `--wind "mods-src/vegetation,mods-src/mods/21. Wind Project 1.0.2"`, height-above-base
+  overlay DFFs via `--wind "mods-src/vegetation,mods-src/original/mods/21. Wind Project 1.0.2"`, height-above-base
   fallback for unadapted vegetation; the mods' shared `vegetation.txd` became a planner FALLBACK TXD — the
   offline twin of the installed txdp wiring). WGSL: two world-space sines phased by position, wind clock +
   strength in params2.zw, `?wind=N`. The overlay also swaps in the HD vegetation geometry: district verts

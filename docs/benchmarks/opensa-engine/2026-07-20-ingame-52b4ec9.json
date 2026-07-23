@@ -1,7 +1,7 @@
 {
   "note": "BISECT POINT C — commit 52b4ec9 (2026-07-20, 'fix: opensa-pack'), same pak, same machine, same 841 cars. Chat paste. Within noise of point B (95bd544): the code between them costs nothing. USER CONFIRMED 2026-07-20: this pak is the IMPROVED map — it carries our generated LODs, vegetation and procobj. The 07-18 baseline was measured WITHOUT them. So this is not a regression: it is the true cost of a complete world, and the old 120 fps was the cost of an incomplete one.",
   "commit": "52b4ec9",
-  "pak": "build/perfect (rebuild #1, 2026-07-20 08:49)",
+  "pak": "build/original (rebuild #1, 2026-07-20 08:49)",
   "host": "Chrome / M3 Pro @2x retina",
   "roadCars": 841,
   "runs": [

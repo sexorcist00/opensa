@@ -6,7 +6,7 @@ mechanic our engine ignored — `parseBinaryIpl` reads only INST. This plan wire
 existing parked-vehicle spawn path, including resolving the **random** (`id = -1`) ones via `cargrp.dat` + zones.
 See [[binary-ipl-cars-section]].
 
-## Findings (measured on `game-src/non-modified`)
+## Findings (measured on `game-src/original`)
 
 - Binary IPL header: `numCars @0x14`, `carsOffset @0x3C`. Record = **48 bytes**: `pos f32×3 (Z-up)`, `angle f32`,
   `modelId i32`, `primCol i32`, `secCol i32`, `forceSpawn i32`, `alarm i32`, `doorLock i32`, + 8 unused.

@@ -102,7 +102,7 @@ npm run dev
 
 # 3. drive a sweep (DPR=2 = retina-equivalent render targets). ?loader=http-dir reads the served build —
 #    the REAL load path (no fake picker); the app loads straight from ?src, no folder step.
-SRC="http://localhost:3001/build/perfect/opensa"
+SRC="http://localhost:3001/build/original/opensa"
 DPR=2 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" sweep 600000 8
 

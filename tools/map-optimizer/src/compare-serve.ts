@@ -2,8 +2,8 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
 /**
  * Compare server for the before/after model viewer (plan 019 Phase 2; own-engine AFTER in 079 phase 4). Serves
  * model bytes out of two game trees' IMG archives so the viewer's compare/object tabs can show one model
- * side-by-side — BEFORE a stock DFF/TXD (`non-modified`, a mod-installer output, …), AFTER either a stock DFF
- * or a CONVERTED own-engine `.osm` (an opensa-pack `--out` like `build/perfect/opensa`, where by-name models
+ * side-by-side — BEFORE a stock DFF/TXD (`original`, a mod-installer output, …), AFTER either a stock DFF
+ * or a CONVERTED own-engine `.osm` (an opensa-pack `--out` like `build/original/opensa`, where by-name models
  * are self-contained `.osm`). The viewer tries `/osm` and falls back to `/dff`, so a side can be either format.
  * Usage: `tsx map-optimizer/src/compare-serve.ts --before <gameDir> --after <gameDir> [--port 3002]`.
  *

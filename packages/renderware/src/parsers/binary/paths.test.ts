@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { toArrayBuffer } from '../../test-utils';
 import { vehiclePathNodes } from './paths';
 
-const NODES0 = 'game-src/non-modified/data/Paths/NODES0.DAT';
+const NODES0 = 'game-src/original/data/Paths/NODES0.DAT';
 
 /** One synthetic area file: `vehicleNodes` vehicle nodes (28 B), no ped/navi nodes, then the link table. */
 function areaFile(

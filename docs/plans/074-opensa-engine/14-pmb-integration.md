@@ -99,7 +99,7 @@ own engine, benchmarked**.
       then: which model the player uses, since stock `player.dff` is a 6-vertex placeholder (CJ is
       assembled from clothing components).
 
-- [ ] Full-profile conversions (non-modified, anderius, carcer, gostown) + the final bench matrix.
+- [ ] Full-profile conversions (original, anderius, carcer, gostown) + the final bench matrix.
 
 ## Measurement ledger
 

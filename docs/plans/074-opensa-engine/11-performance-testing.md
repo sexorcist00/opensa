@@ -9,10 +9,10 @@ become the first entries of a permanent series.
 ## The canonical input: `./game-src`
 
 - `game-src/<profile>/` (gitignored — Rockstar assets; the existing fixtures convention) holds the PINNED game
-  builds measurements run against. Baseline profile: **`non-modified`** (stock, no mods — the most stable
+  builds measurements run against. Baseline profile: **`original`** (stock, no mods — the most stable
   input); the modded profiles (`anderius`, `carcer`, `gostown`) join later as stress inputs.
 - One command produces the bench pak, always the same way:
-  `npx tsx tools/opensa-pack/src/cli.ts --game game-src/non-modified --out apps/engine-lab/public/pak --rect <scene>`
+  `npx tsx tools/opensa-pack/src/cli.ts --game game-src/original --out apps/engine-lab/public/pak --rect <scene>`
 - The converter's `report.json` IS part of the measurement (pak size, groups histogram, convert wall-time) —
   tool regressions get caught the same run.
 

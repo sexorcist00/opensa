@@ -11,7 +11,7 @@ import type { DirIndexEntry } from './fetch-install-source';
 
 import { AssetHttpDirLoader } from './asset-http-dir-loader';
 
-const BASE = 'http://host/build/perfect/opensa';
+const BASE = 'http://host/build/original/opensa';
 
 const GTA3 = buildVer2Buffer([
   { data: new Uint8Array([1]), name: 'cj.dff' },

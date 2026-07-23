@@ -13,7 +13,7 @@ Two groups: what works on the CURRENT pak right now, and what needs the NEXT pak
 
 ## Needs the NEXT pak rebuild (pmb full run) first
 
-Rebuild reminders: `mods-src/mods/39. Green Piece 1.47` was deleted — re-baseline benchmarks, do not
+Rebuild reminders: `mods-src/original/mods/39. Green Piece 1.47` was deleted — re-baseline benchmarks, do not
 compare against older paks. Expect 0 converter failures. `NODE_OPTIONS=--max-old-space-size=12288`.
 Sanity: 1123 cells / ~1 GB / AO ~375 s. Also owed on this rebuild (078): map-objects stage time
 (lazy-TXD), wheels on admiral/comet/petro (084).

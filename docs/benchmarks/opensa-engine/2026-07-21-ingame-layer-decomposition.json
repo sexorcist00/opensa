@@ -1,8 +1,8 @@
 {
-  "note": "THE 6-LAYER DECOMPOSITION of the pmb map build, run by the user on 2026-07-21 (his machine, his display, in-game ?bench=all sweep). Answers 'where did the map get heavier'. Six separate builds taken from the pmb `.work` intermediates and each re-converted through opensa-pack, then benched back to back: non-modified -> modifications -> optimizations -> trees -> procobj -> all (= + lods). Road cars registered: 1126 (the older series ran 841 — do NOT compare absolute draws to pre-07-21 rows). Numbers are pasted from the chat console log, so only the fields the [bench] line carries are here; per-layer pak hashes were not captured beyond the layer name. Everything <= 120 fps is vsync-locked, so read pass/triangles/draws, not avgMs, wherever fps is 120.",
+  "note": "THE 6-LAYER DECOMPOSITION of the pmb map build, run by the user on 2026-07-21 (his machine, his display, in-game ?bench=all sweep). Answers 'where did the map get heavier'. Six separate builds taken from the pmb `.work` intermediates and each re-converted through opensa-pack, then benched back to back: original -> modifications -> optimizations -> trees -> procobj -> all (= + lods). Road cars registered: 1126 (the older series ran 841 — do NOT compare absolute draws to pre-07-21 rows). Numbers are pasted from the chat console log, so only the fields the [bench] line carries are here; per-layer pak hashes were not captured beyond the layer name. Everything <= 120 fps is vsync-locked, so read pass/triangles/draws, not avgMs, wherever fps is 120.",
   "layers": [
     {
-      "layer": "non-modified",
+      "layer": "original",
       "runs": [
         {
           "key": "ls-noon",

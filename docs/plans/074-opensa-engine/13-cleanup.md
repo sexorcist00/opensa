@@ -423,7 +423,7 @@ it" path (object + compare), and the character viewer needs an IFP player on `if
       prelight passes correct. `model-view` gained `loadModelFromClump`, `setOffset` and `setVisible` to
       support it.
 
-      Field-checked against two REAL trees (`non-modified` vs `anderius`): both sides build, the labels
+      Field-checked against two REAL trees (`original` vs `anderius`): both sides build, the labels
       dim to show which side the blink is on, and a missing TXD on one side degrades to an untextured
       model — the same graceful failure the three version had, worth knowing before reading a white
       model as a difference.

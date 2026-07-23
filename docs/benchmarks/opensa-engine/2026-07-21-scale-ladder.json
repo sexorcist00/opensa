@@ -2,7 +2,7 @@
   "date": "2026-07-21",
   "purpose": "072 tier-ladder decision data: does the single ?scale knob cover what a quality-tier ladder would?",
   "harness": "tools-debug/bench-harness drive.js, headless Chromium --use-angle=metal, DPR 2, viewport 1440x900, M3 Pro",
-  "build": "build/perfect/opensa (buildTime 10:45 21-07-2026), ?loader=http-dir via serve-static :3001",
+  "build": "build/original/opensa (buildTime 10:45 21-07-2026), ?loader=http-dir via serve-static :3001",
   "caveats": [
     "machine not quiescent (vite dev + serve-static alongside)",
     "gpuMs from the engine's own GPU timers; cross-run deltas same-session comparable",

@@ -57,7 +57,7 @@ peak RSS 16 → 5.2 GB; serial ≡ pooled SHA-identical; chunk ring = 2 cells �
 OPT-IN since the same day — `--bakes`, quarter-of-cores default) · size M
 Bakes are 91 % of convert time (parallel per cell); welding the whole map cannot hold in one 16 GB heap
 (one city already held it). Chunk = region-sized weld scratch with an overlap margin for the bake BVH.
-**Done:** the FULL non-modified map converts on the M3 in one command, wall-time recorded (~target ≤ 15 min).
+**Done:** the FULL original map converts on the M3 in one command, wall-time recorded (~target ≤ 15 min).
 
 **A3. Full-map pak in the standalone page** — ✅ CORE DONE 2026-07-13 (first FULL-MAP pak: 71.4 s
 bakeless, 1121 entries, 769.7 MB wire, `?src=pak-map` in the lab/standalone/game; whole-map `?bench=map`

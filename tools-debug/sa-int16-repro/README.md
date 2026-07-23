@@ -34,10 +34,10 @@ crosses 2^15, so no seeded stream cluster is needed (confirmed in-game).
 
 ```sh
 # buggy build (crosses 2^15) — expect the ghosts / crash
-tsx tools-debug/sa-int16-repro/src/cli.ts --game ./build/perfect/sa --out ./NO_COMMIT/repro-33k --rows 33000
+tsx tools-debug/sa-int16-repro/src/cli.ts --game ./build/original/sa --out ./NO_COMMIT/repro-33k --rows 33000
 
 # clean control (stays below 2^15) — expect no ghosts
-tsx tools-debug/sa-int16-repro/src/cli.ts --game ./build/perfect/sa --out ./NO_COMMIT/repro-32k --rows 32000
+tsx tools-debug/sa-int16-repro/src/cli.ts --game ./build/original/sa --out ./NO_COMMIT/repro-32k --rows 32000
 ```
 
 Flags: `--rows N` (target total), `--model-id`/`--model-name` (override the dummy), `--allow-slot-overflow`.
@@ -54,7 +54,7 @@ row guard downgraded to a warning (the 39-slot guard stays hard):
 
 ```sh
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
-  --game ./game-src/non-modified --in <over-budget-mods-src> --out ./build/perfect --allow-text-row-overflow
+  --game ./game-src/original --in <over-budget-mods-src> --out ./build/original --allow-text-row-overflow
 ```
 
 ## In-game procedure (Wine) & detection oracle

@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 
 function main(): void {
   const model = process.argv[2]?.toLowerCase();
-  const pak = process.argv[3] ?? 'build/perfect/opensa';
+  const pak = process.argv[3] ?? 'build/original/opensa';
   if (!model) {
     console.error('usage: npx tsx scripts/debug/dump-texel-avg.ts <modelName> [pakDir]');
     process.exit(1);

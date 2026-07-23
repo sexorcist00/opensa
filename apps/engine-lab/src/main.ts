@@ -530,7 +530,7 @@ async function requireGameDir(params: URLSearchParams): Promise<string> {
   if (!source.gameDir) {
     throw new Error(
       '?vehicle needs ?src pointing at a served game dir (an opensa-pack --out with opensa/ inside), ' +
-        'e.g. ?src=http://localhost:3001/build/perfect/opensa',
+        'e.g. ?src=http://localhost:3001/build/original/opensa',
     );
   }
 

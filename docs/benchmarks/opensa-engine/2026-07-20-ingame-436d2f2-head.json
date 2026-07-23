@@ -1,7 +1,7 @@
 {
   "note": "BISECT POINT HEAD — commit 436d2f2 (Show Faces removed + hemispheric ambient), same pak, same machine, same 841 cars. Chat paste. Within noise of D: BOTH of this session's engine changes are performance-neutral, which also closes them out as suspects for the regression. USER CONFIRMED 2026-07-20: this pak is the IMPROVED map — it carries our generated LODs, vegetation and procobj. The 07-18 baseline was measured WITHOUT them. So this is not a regression: it is the true cost of a complete world, and the old 120 fps was the cost of an incomplete one.",
   "commit": "436d2f2",
-  "pak": "build/perfect (rebuild #1, 2026-07-20 08:49)",
+  "pak": "build/original (rebuild #1, 2026-07-20 08:49)",
   "host": "Chrome / M3 Pro @2x retina",
   "roadCars": 841,
   "runs": [

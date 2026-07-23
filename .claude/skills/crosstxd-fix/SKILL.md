@@ -19,7 +19,7 @@ merges into the IMG entry `<folder>.txd`).
    # [reportPath] [buildGameDir] [modsDir] [outDir] override the defaults when needed
    ```
 
-   It reads `build/perfect/opensa/opensa/report.json`, exports every rescued texture as an RGBA PNG from
+   It reads `build/original/opensa/opensa/report.json`, exports every rescued texture as an RGBA PNG from
    the build's archives (gta3 + gta_int + cutscene overlay), and lays them out under
    `NO_COMMIT/crossTxdFix/<mod>/gta3_img/<txd>/<texture>.png`.
 
@@ -31,7 +31,7 @@ merges into the IMG entry `<folder>.txd`).
      parent, they are not missing data.
 
 3. Review the PNGs (open a few — a wrong donor is visible instantly), then move each mod's `gta3_img/`
-   content into `mods-src/mods/<mod>/gta3_img/` (create the `Fixes` mod folder on first use). The PNG
+   content into `mods-src/original/mods/<mod>/gta3_img/` (create the `Fixes` mod folder on first use). The PNG
    folders coexist with the mod's other files; modloader-based original-GTA installs ignore them.
 
 4. After the next pmb rebuild, verify `textures.crossTxd` in the new `report.json` shrank to only the

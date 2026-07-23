@@ -69,7 +69,7 @@ A/B under-reports per-vertex world costs — the same lesson the rolled-back SSR
 
 ## 2. What we measured (real numbers — do not re-derive)
 
-Over a clean `game-src/non-modified/models/gta3.img`:
+Over a clean `game-src/original/models/gta3.img`:
 
 | Fact                                                                        | Number                                                    |
 | --------------------------------------------------------------------------- | --------------------------------------------------------- |

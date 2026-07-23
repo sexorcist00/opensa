@@ -9,7 +9,7 @@ under `--in` on top, in alphabetical order — plain files overwrite, `gta3img/`
 ## Idea
 
 ```
-tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --out ./build
+tsx tools/mod-installer/src/cli.ts --game ./game-src/original --in ./mods --out ./build
 ```
 
 - `--game` — the base game tree (`gta.dat` + `data/` + `models/gta3.img` …).
@@ -68,7 +68,7 @@ copy/overwrite, `readdirSync`/`statSync` for the mod scan).
    fresh archive if absent); wired into `apply-mod`.
 4. **CLI + tests** ✅ — `cli.ts`; `sortMods` unit test (plain vs numeric) + a tmpdir IMG-merge integration test
    (seed + replace-by-name). `tsc`/`eslint`/tests green.
-5. **Verify** — _pending the user_: run on `./game-src/non-modified` + a couple of mod folders (each mirroring the
+5. **Verify** — _pending the user_: run on `./game-src/original` + a couple of mod folders (each mirroring the
    game tree, with an optional `gta3img/`); confirm the merged `--out` loads in-game.
 
 ## Decisions (resolved)

@@ -7,7 +7,7 @@ import { inflate } from './inflate';
  * SA int16 "ghost barriers" repro dial. Copies a built SA game dir and inflates its total permanent text-IPL row
  * count across (or below) 2^15 to reproduce the int16 building-pool truncation on demand — the pass/fail oracle
  * for the perfect-map ASI project (tools-debug/sa-int16-repro/docs/reproducing-the-int16-bug.md). Usage:
- *   tsx tools-debug/sa-int16-repro/src/cli.ts --game ./build/perfect/sa --out ./NO_COMMIT/repro-33k --rows 33000
+ *   tsx tools-debug/sa-int16-repro/src/cli.ts --game ./build/original/sa --out ./NO_COMMIT/repro-33k --rows 33000
  *     --rows <N>            target TOTAL text rows map-wide (33000 → expect bug; 32000 → expect clean)
  *     --model-id/-name      override the harvested dummy model (default: first valid stock id in the build)
  *     --allow-slot-overflow force past 39 text-IPL slots (entangles IplEntityIndexArrays — breaks isolation)

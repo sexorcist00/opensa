@@ -23,7 +23,7 @@ the trunk glows but the rope itself stays dark pink/unlit. Model source: `mods-s
 - The pipeline was suspected of losing the night set (prelight bake in the trees stage) — it does not:
   `applyStockPrelight` replaces only the DAY prelit, and map-optimizer's conform-night runs BEFORE the
   vegetation swap so it never sees these models.
-- The built pak (`build/perfect`) proved the night set SURVIVES: rope vertices carry night avg 188 — but
+- The built pak (`build/original`) proved the night set SURVIVES: rope vertices carry night avg 188 — but
   their baked emissive byte is **0** while the bark next to them bakes 245. The bark glows, the rope
   doesn't — exactly the screenshot.
 - Root cause: the emissive rule (offline in `weld.ts`, heuristic twins in the world + rigid shaders) used
@@ -39,7 +39,7 @@ channel → still mask 0, nothing new glows. Fixture: stock `vgsn_nitree_r01.dff
 rule fails it; foliage stays 0).
 
 **Field check: PENDING the next pak rebuild** — the mask is baked at pack time, the current
-`build/perfect` pak still carries the luma-rule bytes.
+`build/original` pak still carries the luma-rule bytes.
 
 ---
 
@@ -47,7 +47,7 @@ rule fails it; foliage stays 0).
 
 **Symptom (user, 2026-07-22):** `visagesign04` (the LV Visage skull sign arch) — the frame renders solid
 purple; the animated LED screen inside it is fine. "Prod is fine." The model is modded
-(`mods-src/mods/42. Animated texture (24 hours Las Venturas)/gta3_img/visagesign04.dff`).
+(`mods-src/original/mods/42. Animated texture (24 hours Las Venturas)/gta3_img/visagesign04.dff`).
 
 **Trace:**
 
@@ -264,7 +264,7 @@ transparent texels. Stock `ap_radar` (128² DXT3) is a BRIGHT RED frame with whi
 modloader would render the same dark dish — this is the mod author's texture, not a pipeline loss.
 
 **User decision owed (same shape as mod 42):** keep the mod's dark look, or drop
-`mods-src/mods/46. Animated Radars/gta3_img/ap_misc1bit.txd` (keep the DFF + ifp + ide.merge) so the
+`mods-src/original/mods/46. Animated Radars/gta3_img/ap_misc1bit.txd` (keep the DFF + ifp + ide.merge) so the
 stock red texture returns — needs a rebuild to show either way.
 
 **Noted, separate:** this own-TEXS `.osm` (built by `pack-anim-objects`' `buildModelOsm` fallback, no

@@ -4,7 +4,7 @@ Install GTA-SA **vehicle mod folders** onto a base game into a single drop-in `-
 go into `gta3.img` (replace by name), and its `*.settings.txt` lines are merged into the four data files.
 
 ```sh
-tsx tools/vehicle-installer/src/cli.ts --game ./game-src/non-modified --in ./1 --out ./build
+tsx tools/vehicle-installer/src/cli.ts --game ./game-src/original --in ./1 --out ./build
 ```
 
 - `--game` — base game tree (`gta.dat` + `data/` + `models/gta3.img` …)

@@ -111,7 +111,7 @@ Audited against code; the integration STARTS now, the flip waits for its criteri
       default), the player body = the B1 ped probe driven by gameplay state (position from Transform,
       heading from planar velocity, idle↔walk by speed; `/ped` root symlink). Parametric day arc v1;
       timecyc driver + zones/HUD adapter + pointer-lock look are follow-ups. KNOWN LIMIT: the pak is the
-      non-modified conversion while the VFS may be a modded profile — collision and render can disagree
+      original conversion while the VFS may be a modded profile — collision and render can disagree
       where mods move geometry; parity testing wants the matching profile. Field-round fixes that closed
       it: canvas sizing (no wrapper — the shell's .sa-game sizes it, + ResizeObserver for the hidden
       warmup mount), FULL bitECS field init (plain-array stores: an unwritten Velocity field NaN-poisons

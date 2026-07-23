@@ -89,7 +89,7 @@ rest, so the same `--modloader` output (`lod/`+`hd/`) loads in OpenSA.
   `lodtrees.txd`/`.col` → `gta3img/`, `lodtrees.ide` registered via a one-line `loader.txt`. No HD swap, no stock
   IDE/`gta.dat`. The mode-B `placeModloader`/`collectPlacements`/standalone-IPL code was removed. `editAreas` now
   skips emitting no-op (untouched) text IPLs, so the mod ships only the areas it changed.
-- **P3 — `lod/` mod verify (offline). ✅** On `non-modified` with the vegetation pack: 9814 instances attached
+- **P3 — `lod/` mod verify (offline). ✅** On `original` with the vegetation pack: 9814 instances attached
   (9463 appended, 351 repointed), 184 impostors; `lod/` = 25 modified text IPLs (LA/SF/country/vegas/levelmap), 155
   modified binary streams + 184 DFFs + `lodtrees.txd`/`.col` in `gta3img/`, `loader.txt` = `IDE
 data/maps/lodtrees.ide`. Matches the LOD Vegetation reference layout.
