@@ -35,6 +35,10 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   script-gated binary-only IPL groups (except `truthsfarm`) — or closed props get painted into far LODs
   (the bridge-roadblocks-in-LOD bug). Trees/procobj are excluded from cell LODs (they get impostors from
   the sibling tools).
+- **A lod-target is not always a replaceable stand-in** — TCs place a stub HD (gostown `fakebit01`,
+  24 verts) whose lod link points at the REAL geometry (`LODEnsemble*` forests): stripping such targets
+  deletes the content, and the cell bake cannot replace it (it bakes the stub). List them in
+  `lod-always.json` — kept by the strip, welded into both levels (plan 087 row D).
 - **Elevated lakes have no TRUE depth** — the water bake's height grid only rasterizes ground at GTA
   z ≤ 4 (`Z_CAP`, sized for SA's sea), so a TC reservoir far above it takes the shore-distance
   pseudo-depth path (plan 087 row C). Fine for the look; anything needing the real lakebed (underwater

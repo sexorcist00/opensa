@@ -26,7 +26,9 @@
 
 - `resolveMap`: catalog + timed catalog + txdp + all instances (text + streams + extras).
 - `buildWorldGrid`: 250 m cells, HD vs LOD lists (authoritative `IplInstance.isLod` from the IPL
-  lod-index targets — the `lod`-name prefix is only a heuristic), exterior filter.
+  lod-index targets — the `lod`-name prefix is only a heuristic), exterior filter. Timed (tobj) and
+  `lod-always.json` models go into BOTH lists (087 row D: a lod target behind a stub HD — gostown's
+  `LODEnsemble*` forests — IS the content and must survive the HD ring).
 - Cell building now happens OFFLINE in `tools/opensa-pack` (`weld.ts`): every cell is welded into
   merged per-material batches recorded as render bundles, with per-def IDE-flag treatment, hour-gated
   timed objects as objectTable kind-0 entries, 2dfx corona collection

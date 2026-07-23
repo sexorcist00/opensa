@@ -67,6 +67,18 @@ flowchart TB
 Between stages 6 and 7 the pipeline collects generated models + `lod-exclude.json` into `excludeItems` for
 both final LOD generators.
 
+## Per-game data files (`mods-src/<game>/`, also honoured at the mods-src root)
+
+Curated JSON, one concern each — a TC without a file simply gets none:
+
+| File                   | Consumed by                       | Meaning                                                                                                            |
+| ---------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `lod-exclude.json`     | sa/opensa LOD generators          | models excluded from LOD generation (joined with the sibling generators' own models)                               |
+| `lod-holes.json`       | cell bake (`holeFillModels`)      | models that ship NO authored LOD and hole the far view — exempt from the bake's reduction, carried VERBATIM (plan 086 ph 5; gostown bridges) |
+| `lod-always.json`      | strip (`keepLods`) + pak weld     | lod-TARGET models that ARE the content behind a stub HD — the strip keeps them, the weld puts them in BOTH levels (plan 087 row D; gostown `LODEnsemble*` forests) |
+| `broken-prelight.json` | map-optimizer prelight force list | models whose authored prelight is forced past the skip-guards and recomputed (plan 019)                            |
+| `prelight.json`        | lod-trees bake                    | per-model prelight-skip overrides for the tree impostor bake                                                       |
+
 ## opensa-pack (the `pack` stage, also standalone)
 
 `packGameDir` (`tools/opensa-pack/src/pack.ts`) converts a game-ready dir into the native build. `--out` is a
