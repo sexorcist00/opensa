@@ -598,7 +598,7 @@ async function boot(
   const physicsSystem = new PhysicsSystem(world, physics, config);
   const collision = new CollisionStreamingSystem(adapter, physics, viewOf, config);
 
-  const player = loadEnginePlayer(engine, fs);
+  const player = loadEnginePlayer(engine, fs, GAME_CONFIG[gameId].mainCharacter);
   // 2dfx particles (B6): the pak carries the emitter anchors, this reads effects.fxp + effectsPC.txd and
   // bakes them. Absent-tolerant — a profile without the FX files simply renders no particles.
   const particles = setupEngineParticles(engine, fs);

@@ -128,7 +128,8 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
     ),
     label: 'Run Gostown Paradise [web]',
     loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
-    mainCharacter: 'BMYPOL1',
+    // The ped installed from mods-src/gostown/peds (peds.ide 144) — the TC ships no BMYPOL1/male01 model.
+    mainCharacter: 'BMYCG',
     playerSpawn: [1531.15, -1271.89, 581.74],
     teleports: [{ coords: [1531.15, -1271.89, 581.74], label: 'Downtown' }],
   },

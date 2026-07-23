@@ -1,8 +1,9 @@
 /**
  * The own-engine player body (plan 074/10 B3): the B1 ped probe driven by GAMEPLAY state — position from
- * the physics Transform, heading from planar velocity, idle↔walk clip by speed. The model is `male01.osm`
- * read BY NAME from the VFS (opensa-pack 003 phase 5f — see {@link loadEnginePlayer}); the old ped-probe
- * fixture is gone.
+ * the physics Transform, heading from planar velocity, idle↔walk clip by speed. The model is the game's
+ * `GAME_CONFIG.mainCharacter` `.osm` read BY NAME from the VFS (opensa-pack 003 phase 5f — see
+ * {@link loadEnginePlayer}; hardcoded `male01` until 2026-07-23, a 074 bring-up leftover); the old
+ * ped-probe fixture is gone.
  */
 import type { Engine, PedProbe, SamplerClip } from '@opensa/engine';
 import type { AssetFileSystem } from '@opensa/renderware';
@@ -31,8 +32,6 @@ export interface EnginePlayer {
   update(positionEngine: readonly [number, number, number], headingYaw: number, speed: number, dt: number): void;
 }
 
-/** The player model and the clips it walks on, resolved from the game's own assets. */
-const PLAYER_MODEL = 'male01';
 /** Where the player's clips live. The archives hold it bare; a game dir keeps it under `anim/`, and the
  *  browser VFS keys loose files by their relative path — so both spellings have to be tried. */
 const PLAYER_IFP_NAMES = ['ped', 'anim/ped'];
@@ -52,12 +51,16 @@ const RUN_SPEED_THRESHOLD = 4;
  * at bake time, and the game dir the user picked had no say. Now the model comes from `<model>.osm` in the
  * archives and the clips are resolved from `ped.ifp` at load, exactly like every other asset.
  */
-export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem): EnginePlayer {
-  const osm = fs.get(`${PLAYER_MODEL}.osm`);
+export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: string): EnginePlayer {
+  const name = model.toLowerCase();
+  const osm = fs.get(`${name}.osm`);
   if (!osm) {
-    throw new Error(`player model ${PLAYER_MODEL}.osm not found — run opensa-pack over the game dir`);
+    throw new Error(
+      `player model ${name}.osm not found (GAME_CONFIG.mainCharacter) — check the model exists in the ` +
+        'game/peds install and opensa-pack ran over the game dir',
+    );
   }
-  const { fixture, geometry, textureArrays } = readPedOsm(PLAYER_MODEL, new Uint8Array(osm));
+  const { fixture, geometry, textureArrays } = readPedOsm(name, new Uint8Array(osm));
   const probe: PedProbe = engine.setPedProbe({
     boneCount: fixture.bones.length,
     indexCount: fixture.indexCount,
