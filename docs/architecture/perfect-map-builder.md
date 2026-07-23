@@ -33,10 +33,13 @@ flowchart TB
   pack["pack · opensa-pack packGameDir<br/>weld cells · .osm per model · pak"]:::stage
   outsa[("&lt;out&gt;/sa<br/>real-SA build")]:::data
   outos[("&lt;out&gt;/opensa<br/>game dir + opensa/ pak")]:::data
+  fetch["fetch-pack (npm run fetch:pack)<br/>content-hashed zip chunks + manifest"]:::stage
+  hosted[("static/games/&lt;game&gt;-&lt;version&gt;/<br/>hosted fetch delivery")]:::data
 
   src --> mods --> veh --> peds --> opt --> trees --> proc --> guard
   guard --> sa --> outsa
   guard --> oslod --> pack --> outos
+  outos --> fetch --> hosted
 
   classDef stage fill:#d8f5e0,stroke:#1f9d55,color:#111
   classDef guard fill:#ffe6cc,stroke:#f55c07,color:#111
@@ -84,3 +87,12 @@ dictionary), `manifest.json` (with `buildTime`), `water.bin`, `report.json`.
 
 Point any host at the result: `?loader=http-dir&src=http://localhost:3001/build/original/opensa` (game),
 `?src=…` (lab), `--after ./build/original/opensa` (viewers).
+
+## fetch-pack (downstream of the `pack` output, plan 086)
+
+`tools/fetch-pack` (`npm run fetch:pack`) consumes `<out>/opensa` and repacks it into the hosted fetch
+delivery: ~50 MB content-hashed zip chunks + `manifest.json` under `static/games/<game>-<version>/`
+(identity from the pak manifest's `game`/`appVersion`). One build serves both surfaces — local play reads
+`build/<id>/opensa` directly, hosted fetch downloads chunks of the SAME bytes. Not a pmb stage: it runs
+separately after a build. See [fetch-pack.md](../features/fetch-pack.md) and the tool's
+`docs/plans/001-architecture.md`.

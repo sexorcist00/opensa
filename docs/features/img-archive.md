@@ -15,8 +15,9 @@
   - `getIfp` — IFP animation packages (zone object clips), absent → empty list.
 - URL helpers (`datChildUrl`, `iplBasename`, `streamIplUrl`, `standaloneIplUrl`,
   `normalizeDatPath`).
-- Build tooling: `scripts/build-game.ts` (`npm run build:game:original`) packs a variant into the staged
-  data/models/textures/others archives — reads the stock `gta3.img`/`gta_int.img` directly via `openArchive`.
+- Build tooling: the pmb pipeline (`npm run build:game:original`) reads the stock `gta3.img`/`gta_int.img`
+  via `openArchive`; `tools/fetch-pack` (`npm run fetch:pack`) then packs the built game dir into the staged
+  data/models/others chunk archives (plan 086).
 
 ## Known gaps / candidates
 

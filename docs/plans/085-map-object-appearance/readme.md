@@ -263,9 +263,9 @@ transparent share (`dump-texel-avg.ts` + a block-level DXT1 decode). The source 
 transparent texels. Stock `ap_radar` (128² DXT3) is a BRIGHT RED frame with white slats. Vanilla +
 modloader would render the same dark dish — this is the mod author's texture, not a pipeline loss.
 
-**User decision owed (same shape as mod 42):** keep the mod's dark look, or drop
-`mods-src/original/mods/46. Animated Radars/gta3_img/ap_misc1bit.txd` (keep the DFF + ifp + ide.merge) so the
-stock red texture returns — needs a rebuild to show either way.
+**Data decision RESOLVED 2026-07-23:** the user deleted mod "46. Animated Radars" ENTIRELY (folders
+renumbered to a contiguous 0..54 via the `renumber-mods` skill) — the next rebuild restores the stock
+static red radars at all 4 airport placements (id 1682).
 
 **Noted, separate:** this own-TEXS `.osm` (built by `pack-anim-objects`' `buildModelOsm` fallback, no
 world dictionary) ships mipCount 1 — distant aliasing; the world-dictionary path bakes full chains.

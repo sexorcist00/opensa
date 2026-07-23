@@ -74,5 +74,35 @@ describe('fetchPack', () => {
         expect(readFileSync(join(result.outDir, info.file)).length).toBe(info.bytes);
       }
     });
+
+    it('keeps untouched chunks byte-identical when one file changes (the cache promise)', () => {
+      const game = join(dir, 'build', 'opensa');
+      mkdirSync(join(game, 'opensa'), { recursive: true });
+      mkdirSync(join(game, 'data'), { recursive: true });
+      writeFileSync(join(game, 'opensa', 'manifest.json'), JSON.stringify({ appVersion: '1.0.0', game: 'stab' }));
+      writeFileSync(join(game, 'data', 'vehicles.ide'), 'cars\nend\n');
+      writeFileSync(join(game, 'opensa', 'world.ospak'), new Uint8Array(64).fill(7));
+
+      const readChunks = (outDir: string): Record<string, { file: string; hash: string }[]> =>
+        (
+          JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8')) as {
+            chunks: Record<string, { file: string; hash: string }[]>;
+          }
+        ).chunks;
+
+      const first = fetchPack({ buildDir: join(dir, 'build'), log: noop, outRoot: join(dir, 'out1') });
+      writeFileSync(join(game, 'opensa', 'world.ospak'), new Uint8Array(64).fill(8)); // same size, new bytes
+      const second = fetchPack({ buildDir: join(dir, 'build'), log: noop, outRoot: join(dir, 'out2') });
+
+      const before = readChunks(first.outDir);
+      const after = readChunks(second.outDir);
+      // The untouched data group: same hash → same filename → the browser cache survives.
+      expect(after.data).toEqual(before.data);
+      expect(readFileSync(join(second.outDir, after.data[0].file))).toEqual(
+        readFileSync(join(first.outDir, before.data[0].file)),
+      );
+      // The changed file's own chunk re-hashes.
+      expect(after.models[0].hash).not.toBe(before.models[0].hash);
+    });
   });
 });

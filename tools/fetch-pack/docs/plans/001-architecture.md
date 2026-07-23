@@ -33,7 +33,9 @@ zips.
 
 Same cache math as the legacy chunker: stable hash-bucket assignment (`fnv1a(name) % N`), sorted
 entries, fixed zip mtime — one changed file leaves every other chunk byte-identical, so its hash,
-filename and the browser cache survive.
+filename and the browser cache survive. Caveat: `N = ceil(groupBytes / 50 MB)` is derived from the
+group's TOTAL size — a change that pushes the group across a 50 MB multiple changes `N` and reshuffles
+every bucket in that group (all its chunk hashes bust at once).
 
 ## Measured (first real run, 2026-07-23, pre-086 pak)
 

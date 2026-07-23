@@ -1,5 +1,5 @@
 /**
- * In-browser port of `scripts/build-game.ts`'s selection (plan 053, phase 4). Given a raw GTA install, it
+ * In-browser run of the shared fetch-build selection (`@opensa/game-build` partition) (plan 053, phase 4). Given a raw GTA install, it
  * picks the same asset set the shipped build packs — the exterior-placed models/textures (from IPL/IDE) plus
  * the loose + world files — using the **shared** partition logic (`src/game-build/partition.ts`). No zipping:
  * the bytes go straight into the VFS (phase 5). The install is reached through {@link InstallSource} so this is

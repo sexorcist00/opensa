@@ -63,6 +63,26 @@ describe('chunkByHash', () => {
       expect(chunkByHash(entries, 100)).toEqual(chunkByHash(entries, 100));
     });
 
+    it('keeps every other entry in its chunk when one entry is removed (N unchanged)', () => {
+      const entries = sized(['alpha', 'beta', 'gamma', 'delta', 'epsilon'], 40); // 200 / 100 → 2, without gamma 160 / 100 → 2
+      const before = chunkByHash(entries, 100)
+        .map((chunk) => chunk.map((e) => e.name).filter((name) => name !== 'gamma'))
+        .filter((chunk) => chunk.length > 0);
+      const after = chunkByHash(
+        entries.filter((e) => e.name !== 'gamma'),
+        100,
+      ).map((chunk) => chunk.map((e) => e.name));
+      expect(after).toEqual(before);
+    });
+
+    it('keeps assignments when an entry resizes within the same chunk count', () => {
+      const entries = sized(['alpha', 'beta', 'gamma', 'delta', 'epsilon'], 40);
+      const resized = entries.map((e) => (e.name === 'gamma' ? { ...e, size: 39 } : e)); // 199 / 100 → still 2
+      expect(chunkByHash(resized, 100).map((c) => c.map((e) => e.name))).toEqual(
+        chunkByHash(entries, 100).map((c) => c.map((e) => e.name)),
+      );
+    });
+
     it('assigns by stable hash bucket (every member of a chunk shares fnv1a % N)', () => {
       const entries = sized(['alpha', 'beta', 'gamma', 'delta', 'epsilon'], 40);
       const n = chunkCount(200, 100); // 2

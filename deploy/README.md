@@ -40,8 +40,9 @@ These are **not** in git and are large (textures alone is hundreds of MB). Build
 `VITE_GAME_TYPE`:
 
 ```bash
-npm run build:game:original          # → static/games/original-<version>/  (manifest.json + chunk zips)
-# or: npm run build:game:original-extend, etc.
+npm run build:game:original          # pmb build → ./build/original
+npm run fetch:pack                   # ./build/original/opensa → static/games/original-<version>/ (manifest.json + chunk zips)
+# other games: npm run build:game:gostown|carcer|anderius, then fetch:pack --build ./build/<id>
 ```
 
 > The folder name is `<GAME_TYPE>-<version>` where `<version>` is `package.json`'s version. The runtime

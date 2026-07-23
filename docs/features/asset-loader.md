@@ -69,8 +69,8 @@ in-browser to the same VFS — so the downstream flow is identical. **Chromium-o
 - **Lazy IMG reader** (`img-reader.ts`): reads only the VER2 directory up front, then slices each needed
   entry's byte range from disk — never buffers the ~1 GB `gta3.img`. VER2 parsing shared from
   `renderware/archive`.
-- **Selection** (`build-vfs.ts`): the in-browser port of `scripts/build-game.ts`'s partition (shared
-  `packages/game-build/src/partition.ts` — `partitionEntries` + `looseGroup`) — exterior-placed models/textures,
+- **Selection** (`build-vfs.ts`): the shared partition (`packages/game-build/src/partition.ts` —
+  `partitionEntries` + `looseGroup`) run in-browser — exterior-placed models/textures,
   `.col`, the loose `data/`/anim/text files, and the `gta3.img` ipl/ifp/dat, **plus** the dynamic models
   (`dynamicModelRefs`): **every** ped from `peds.ide`, **every** vehicle from `vehicles.ide`, and procobj
   clutter from `procobj.dat`.

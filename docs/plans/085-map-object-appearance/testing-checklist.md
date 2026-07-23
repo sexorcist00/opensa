@@ -8,8 +8,9 @@ Two groups: what works on the CURRENT pak right now, and what needs the NEXT pak
 - [ ] **Missing-texture highlight toggle (row B, engine half)** — F2 → Map → "Missing Textures:
       magenta ON/OFF". On the CURRENT (old) pak the button exists but has nothing to repaint (no
       `missingLayers` in the old manifest) — just confirm it doesn't crash. Real check after rebuild.
-- [ ] **Ten Green Bottles ground glow (row E / 078 #11): NOT fixed, intentionally** — the restore was
-      reverted on the user's call. Nothing to test; the precise wanted behaviour is owed.
+- [ ] **Ten Green Bottles ground glow (row E / 078 #11): CLOSED for this iteration 2026-07-23** — the
+      restore stays reverted; the wanted behaviour is now specced as blink-synced 2dfx point lights,
+      deferred to `docs/ideas/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md`. Nothing to test.
 
 ## Needs the NEXT pak rebuild (pmb full run) first
 

@@ -90,7 +90,7 @@ export function modelTxdMap(dataDir: string): Map<string, string> {
 
 /**
  * The unique DFF **models** and TXD **textures** the game's EXTERIOR map references (deduped, lowercased).
- * Reuses the build partition + IPL/IDE parsers read-only — the same logic `scripts/build-game.ts` uses to
+ * Reuses the build partition + IPL/IDE parsers read-only — the same logic the fetch build uses to
  * know what the map needs. Interiors are skipped (the optimizer targets the visible world).
  */
 export function resolveMap(dataDir: string, gta3: ImgArchive): { models: string[]; txds: string[] } {

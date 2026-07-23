@@ -40,32 +40,34 @@ game-src/original/
 - Optional `data/timecyc_24h.dat` is used as-is when present; otherwise the vanilla `data/timecyc.dat`
   is converted to 24h at runtime.
 
-To build a non-default variant (e.g. a mod set), drop it in `game-src/<name>/` with the same layout
-and pass `--game <name>` to the build (see below).
+To build a non-default variant (e.g. a TC), drop it in `game-src/<name>/` with the same layout and use
+the matching alias (see below) or call the pmb CLI with `--game/--in/--out` directly.
 
 ## 3. Build the archives
 
 ```sh
-npm run build:game:original              # → static/original-<version>/
-# or, for any variant:
-tsx scripts/build-game.ts --game <name>
+npm run build:game:original              # pmb build → ./build/original (sa/ + opensa/ targets)
+npm run fetch:pack                       # ./build/original/opensa → static/games/original-<version>/
+# other games: npm run build:game:gostown|carcer|anderius, then fetch:pack --build ./build/<id>
 ```
 
-`build:game:original` first regenerates `timecyc_24h.dat` (`npm run timecyc`), then packs
-`game-src/original/` into `static/original-<version>/` (version comes from `package.json`). Each group
-is split into **~50MB content-hashed chunks** (`<group>-<hash>.zip`) so a dropped download re-fetches
-one chunk, not the whole group; `manifest.json` lists them:
+`build:game:<id>` runs the perfect-map-builder pipeline (`tools/perfect-map-builder`) into
+`./build/<id>`; `fetch:pack` (`tools/fetch-pack`, plan 086) then packs the `opensa/` game dir into
+`static/games/<game>-<version>/` (identity from the pak manifest). Each group is split into **~50MB
+content-hashed chunks** (`<group>-<hash>.zip`) so a dropped download re-fetches one chunk, not the
+whole group; `manifest.json` lists them:
 
-- `data` — the contents of the loose `data/` folder (ide/ipl/dat/cfg/zon); no dff/txd/col.
-- `models` — the `.dff` geometry the exterior map references (interiors excluded) + every `.col`.
-- `textures` — the `.txd` textures the exterior map references (the bulk → ~10 chunks).
-- `others` — everything else: `.ipl`/`.ifp`/`.dat` from `gta3.img` + loose anim/text (ifp/gxt/fxp).
+- `data` — loose root files + the `data/` and `text/` folders (ide/ipl/dat/cfg/zon/gxt).
+- `models` — the `models/` IMGs + the `opensa/` pak (world/vehicle/ped `.osm`s, cells, `world.ospak`).
+- `textures` — EMPTY for a pak build (pak textures live inside `world.ospak`); kept for the manifest shape.
+- `others` — everything else (anim/ifp and friends).
 
 Chunk assignment is a stable hash bucket, so changing one file leaves the other chunks byte-identical
-(same hash/filename → the browser cache survives a version bump). See [build-flags.md](./build-flags.md)
-and plan 048 for the full breakdown.
+(same hash/filename → the browser cache survives a version bump) — unless a group's total crosses a
+50 MB multiple, which changes the bucket count and reshuffles that group's chunks. See
+[fetch-pack.md](../features/fetch-pack.md) for the full breakdown.
 
-Each chunk also carries a `cached` flag from the build's `CACHED` map (`scripts/build-game.ts`). `models`,
+Each chunk also carries a `cached` flag from the build's `CACHED` map (`tools/fetch-pack`). `models`,
 `textures`, and `others` are cached in the browser (Cache Storage); `data` is `cached: false` — always
 re-downloaded and never stored. That makes `data` a **build-liveness probe**: delete its zip on the server
 (to revoke a build) and clients 404 on it, which wipes their whole asset cache. Deleting the whole build

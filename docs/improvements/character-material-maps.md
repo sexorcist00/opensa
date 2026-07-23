@@ -35,7 +35,7 @@ intended.
 
 Example — the **T800 endoskeleton** ped
 ([gtainside #144069](https://www.gtainside.com/en/sanandreas/skins/144069-endoskeleton-terminator-t800/)),
-dropped in at `game-src/original-extend/player/T800.{dff,txd}`. Its TXD carries the full set:
+dropped into the ped install source (`mods-src/original/peds/`, ped-installer). Its TXD carries the full set:
 
 | Texture          | Size  | Format | Role (suffix)                                                           |
 | ---------------- | ----- | ------ | ----------------------------------------------------------------------- |

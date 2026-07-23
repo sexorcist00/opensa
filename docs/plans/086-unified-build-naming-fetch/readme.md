@@ -126,3 +126,25 @@ the name says so now). `test:fixtures` chain + every reference updated; paths po
 0 → 1 → 2 → 3 → 4 → 5/6 (5 and 6 are independent). Phase 0 is wide but mechanical and unblocks
 everything; phase 3 carries the unknown (state of the current fetch boot); phase 4 carries the TC
 risk (unproven pipelines — but loud).
+
+## Post-plan audit (2026-07-23, head `c4bce83`)
+
+Full docs+tests sweep of the plan's fragment. Measured:
+
+- Coverage floors pass: statements 89.75 % · branches 79.94 % · functions 91.45 % · lines 89.71 %
+  (floors: statements 86 · branches 77 · functions 88 · lines 86); fetch-pack suite 16/16 after
+  adding the missing chunk-stability tests
+  (remove/resize with N unchanged, one-file byte-change → untouched chunks byte-identical).
+- Phase 4's first TC trial runs surfaced two build bugs, fixed: VER2 names are 24 bytes
+  (`9602cab`, Carcer City ships one) and pmb skips `mods`/`trees` on an empty source folder
+  (`c4bce83`, gostown has no `vegetation/`); carcer verified through the vehicles stage. Phase 4
+  itself stays open — fetch-pack chaining after `build:game:*`, the TC runs and the fetch-mode e2e
+  smoke are still owed.
+- Stability caveat documented (tool plan 001): a group total crossing a 50 MB multiple changes `N`
+  and reshuffles that whole group's chunks.
+- Stale-doc sweep fixed: `docs/development/{scripts,getting-started,build-flags}.md`,
+  `docs/features/{README,img-archive,asset-loader}.md` (README's fetch-pack table row was
+  malformed), `deploy/README.md`, `docs/improvements/character-material-maps.md`,
+  `docs/architecture/perfect-map-builder.md` (+ pmb-pipeline diagram) now carry the
+  pmb → fetch-pack chain; `cli.ts` runners stay untested repo-wide by convention (only
+  tool-kit has a cli test), and `tools/**` sits outside the coverage floors by config.

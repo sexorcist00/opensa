@@ -3,7 +3,7 @@
  * install once to index every file handle, then hands the handle index to the shared assembly
  * (`install-source-core.ts`) which opens `gta3.img` and merges **every other `models/*.img`** (gta_int.img +
  * any mod archives the install ships, e.g. our cell-LOD `lods.img`, gostown's `gostown6.img`) into one lazy
- * override archive, and serves loose files on demand. Mirrors `scripts/build-game.ts`'s `gta3` +
+ * override archive, and serves loose files on demand. Mirrors the fetch build's `gta3` +
  * `mergeArchives(overrides)` split — otherwise models a mod adds in a separate IMG (like `lod_<cx>_<cy>.dff`
  * in `lods.img`) resolve to nothing and are dropped. Chromium-only.
  */

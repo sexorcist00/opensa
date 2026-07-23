@@ -26,8 +26,8 @@ The field verdict decides. Every measured number lands in the owning plan doc in
 
 ## Inspectors — source-asset side (`scripts/debug/`)
 
-Run any of them as `npx tsx scripts/debug/<name>.ts …`; `--game original|original` picks the
-variant under `game-src/`.
+Run any of them as `npx tsx scripts/debug/<name>.ts …`; `--game <id>` picks the variant under
+`game-src/` (default `original`).
 
 | Script | Answers |
 | --- | --- |
@@ -56,7 +56,7 @@ variant under `game-src/`.
 | `dump-texel-avg.ts <model> [pakDir]` | average colour of each own-TEXS layer (BC endpoint scan) — tells a black/greyed bake from a faithful one in seconds |
 | `dump-cell.ts <x> <y> [pakDir]` | a WELDED cell's tables at a world point: objectTable rows (kind, timed window, per-group class/array/sphere) + placement boxes near the point — the pak-bytes step for bugs in the welded look (built for 085 row H) |
 
-Default pak: `build/original/opensa` (the canonical build). The world-welded side of a model lives in
+Default pak: `build/original/opensa/opensa` (the canonical build's pak dir). The world-welded side of a model lives in
 cell bundles, not its `.osm` — `dump-cell.ts` covers that path.
 
 ## Approaches beyond scripts

@@ -8,7 +8,6 @@ All TypeScript scripts run via `npx tsx`, `.mjs` ones via `node`.
 - [Project overview](#project-overview)
   - [arch-graph.ts](#arch-graphts)
 - [Build / asset pipeline](#build--asset-pipeline)
-  - [build-game.ts](#build-gamets)
   - [gen-wind-list.ts](#gen-wind-listts)
   - [test-viewer-fixtures.ts](#test-viewer-fixturests)
   - [serve-static.ts](#serve-staticts)
@@ -52,23 +51,10 @@ Paste the output into a ` ```mermaid ` block (GitHub renders it) or <https://mer
 
 ## Build / asset pipeline
 
-### build-game.ts
-
-Packs a variant (`game-src/<game>/`) into `static/<version>/` in four groups — data + models + textures
-
-- others (`data/` folder · referenced `.dff` + every `.col` · referenced `.txd` · `.ipl`/`.ifp`/`.dat`
-  from `gta3.img` + loose anim/text), each split into ~50MB content-hashed chunks (`game-build/chunk.ts`)
-  listed in `manifest.json`. Every chunk gets a `cached` flag from the `CACHED` map (`data: false`, the rest
-  `true`) — the runtime caches only `cached` chunks and treats the always-fresh `data` group as a build-liveness
-  probe (a 404 there wipes the client cache; see [asset-loader.md](../features/asset-loader.md)). See plan 048
-  for the full breakdown. It also reads the game's **TEMP** `mainCharacter` (`peds.ide`) + `vehicles`
-  (`vehicles.ide`) from `GAME_CONFIG` (`apps/web/src/game-config.tsx`, by `--game`) and packs them — dynamically-spawned
-  models the map-placement partition would otherwise miss. Rebuild after changing them.
-
-```sh
-npm run build:game:original          # npm run timecyc && tsx scripts/build-game.ts --game original
-tsx scripts/build-game.ts --game <name>   # any other variant
-```
+Game builds moved out of `scripts/` (plan 086): `tools/perfect-map-builder` builds a game
+(`npm run build:game:original`, also `:gostown` `:carcer` `:anderius`), `tools/fetch-pack`
+(`npm run fetch:pack`) packs the built `opensa/` game dir into the hosted fetch chunks — see
+[docs/commands.md](../commands.md) and [fetch-pack.md](../features/fetch-pack.md).
 
 ### gen-wind-list.ts
 

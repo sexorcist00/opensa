@@ -4,7 +4,7 @@ import { looseGroup } from '@opensa/game-build/partition';
  * Base for the {@link InstallSource}-driven loaders (plan 079 phase 1). `init` / `load` / `openWorld` are
  * identical whether the install is a user-picked FSA folder ({@link AssetLocalLoader}) or a perfect-map-builder
  * output served over HTTP ({@link AssetHttpDirLoader}); the two differ ONLY in {@link resolveSource}. Reads the
- * selected asset set (same buckets as `scripts/build-game.ts`) into the VFS with count-based progress.
+ * selected asset set (same buckets as the fetch build (`@opensa/game-build` partition)) into the VFS with count-based progress.
  */
 import type { AssetLoader, AssetLoaderEvents, ChunkInfo, GroupName, Manifest } from '../types';
 import type { InstallPlan, InstallSource } from './build-vfs';
