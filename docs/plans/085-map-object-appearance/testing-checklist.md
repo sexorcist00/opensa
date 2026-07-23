@@ -55,11 +55,10 @@ Sanity: 1123 cells / ~1 GB / AO ~375 s. Also owed on this rebuild (078): map-obj
   (weld `classOf`). NEXT REBUILD: at the Old Venturas Strip entrance (~2110, 2076) at 23:30–04:00
   expect a solid black fascia band under the pink arches, fullbright bulb canopies, no see-through;
   the dark sloped marquee silhouette IS vanilla (authored roof10L256 night prelit 12/15/13).
-- 084 row 0: comet door AO smudges — first fix (`4d8c03a`) field-checked 2026-07-23: comet ± unchanged,
-  admiral grew NEW night speckles (bonnet/grille dots, window-frame line; visible only after ~20:00 =
-  the AO-in-indirect channel). SECOND fix in the shared builder: own-panel near-clearance + neighbour
-  despeckle — offline A/B in plan 084 ("2026-07-23 — the night-speckle iteration"), admiral bonnet
-  below-100 733→0. Needs the next rebuild (or a method-5 spot rebake) to field-verify AT NIGHT.
+- 084 row 0: vehicle AO night speckles — CLOSED 2026-07-23. Second fix (own-panel near-clearance +
+  neighbour despeckle, `3737c43`) field-VERIFIED at night via the modloader overlay: speckles gone,
+  interior/wheel wells keep their dark (full A/B in plan 084, "the night-speckle iteration"). The next
+  full pmb rebuild bakes it into every `.osm` — until then the baked cars carry the old channel.
 
 ## Open / parked (no action until the user speaks)
 

@@ -319,5 +319,9 @@ Measured (`scripts/debug/dump-vehicle-ao.ts`, mods-src admiral + comet, before �
 admiral bonnet below-100 **733 (13.6 %) → 0**, bump_front **307 (20.8 %) → 0**, bump_rear
 **159 (12.3 %) → 0**, doors worst 41 → 60, chassis below-100 24.4 % → 11.1 %; comet bonnet
 256 (8 %) → 24 (0.7 %), doors worst 42 → 65. Enclosures KEPT their dark: comet interior/seats stay
-28–31 % below-100, wheel wells 7–13 %. Field verdict owed after the next rebuild (or a method-5 spot
-rebake of the two cars).
+28–31 % below-100, wheel wells 7–13 %.
+
+**Field-VERIFIED 2026-07-23** via the modloader overlay (the shared-builder property made the rebuild
+unnecessary — the DFFs dropped into `modloader/` rebuilt at spawn with the new bake): user verdict —
+"пятна ушли, салон и арки норм" (speckles gone, interior and wheel wells fine). The next full pmb
+rebuild bakes it into every `.osm`.
