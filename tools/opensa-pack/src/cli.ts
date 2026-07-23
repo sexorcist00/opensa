@@ -42,7 +42,7 @@ async function main(): Promise<void> {
   if (!gameRaw || !outRaw || !rectRaw) {
     console.error(
       'usage: opensa-pack --game <dir> --out <dir> --rect x0,y0,x1,y1 ' +
-        '[--no-ao] [--no-models] [--bakes] [--bake-workers N] [--stochastic <file>[,<file>…]]',
+        '[--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--stochastic <file>[,<file>…]]',
     );
     process.exitCode = 2;
 
@@ -59,11 +59,13 @@ async function main(): Promise<void> {
     .filter(Boolean)
     .map(fromCwd);
 
+  const gameId = arg('game-id');
   await packGameDir({
     ao: !process.argv.includes('--no-ao'),
     ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
     bakes: process.argv.includes('--bakes'),
     gameDir: requireDir('game', gameRaw),
+    ...(gameId ? { gameId } : {}),
     models: !process.argv.includes('--no-models'),
     outDir: fromCwd(outRaw),
     rect: rect as unknown as readonly [number, number, number, number],

@@ -31,7 +31,7 @@ Game ids: `original` (stock SA; renamed from `non-modified`) · `gostown` (demo)
   rename fixes every dev script's default.
 - `timecyc` stays as-is (own command, out of scope by user decision).
 
-## Phase 0 — the rename + the full audit (game-src/non-modified → original, build/perfect → build/original)
+## Phase 0 — the rename + the full audit (DONE 2026-07-23, `cd14e4b`)
 
 Filesystem (both roots are gitignored user data): `mv game-src/non-modified game-src/original`,
 `mv build/perfect build/original`, `mv mods-src/non-modified mods-src/original`.
@@ -54,11 +54,14 @@ Repo sweep — every reference goes, none survive (user's explicit bar: "ПОЛ�
 Verify: repo-wide grep for `non-modified` and `build/perfect` returns nothing (outside git history);
 lint + unit tests green; one smoke boot via `?loader=http-dir&src=…/build/original/opensa`.
 
-## Phase 1 — opensa-pack manifest identity
+## Phase 1 — opensa-pack manifest identity (DONE 2026-07-23)
 
 `manifest.json` (the pak one) gains `game` (= the `--game` folder's basename — after phase 0 the
-folder name IS the id, no mapping table) and `appVersion` (root `package.json` version). Written by
-the pack stage; pmb passes them through. Old readers ignore unknown fields.
+folder name IS the id, no mapping table) and `appVersion` (root `package.json` version, read
+module-relative so cwd never matters; omitted outside the repo). Stamped in `packGameDir` beside
+`buildTime` (the deterministic `buildOspak` core untouched). pmb passes `gameId =
+basename(--game)` explicitly — its own `gameDir` at the pack stage is a work intermediate;
+standalone runs take `--game-id` (default: basename of `--game`). Old readers ignore the fields.
 
 ## Phase 2 — the finishing tool (fetch-pack)
 

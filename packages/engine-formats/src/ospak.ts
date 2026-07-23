@@ -53,6 +53,9 @@ export interface OspakInput {
 }
 
 export interface OspakManifest {
+  /** Root `package.json` version of the app that built this pak (plan 086 phase 1) — the fetch client
+   *  pairs it with `game` for cache keying. Absent on older paks or builds outside the repo. */
+  appVersion?: string;
   /** Wall-clock build time stamped by opensa-pack (`HH:mm DD-MM-YYYY`, local) — shown in the debugger so the
    *  running pak version is visible at a glance. Absent for a pak built before the field existed. It makes
    *  `manifest.json` non-reproducible by design (the pak `world.ospak` stays byte-identical). */
@@ -63,6 +66,9 @@ export interface OspakManifest {
   cells: Record<string, OspakCellEntry>;
   /** World-grid cell size (engine units) — key "cx,cy,…" → engine-space centre mapping for streaming. */
   cellSize: number;
+  /** Fetch game id (plan 086 phase 1): the `game-src/<id>` folder name this pak was built from
+   *  (`original`, `gostown`, …). Absent on older paks. */
+  game?: string;
   /** Colour stand-in layers the planner minted for MISSING textures (plan 085 row B): 4×4 RGBA8 layers the
    *  runtime can repaint magenta when the missing-texture highlight is on. `color` is the PACKED texel, so
    *  toggling off restores the quiet material colour without re-fetching the array. Absent when the whole

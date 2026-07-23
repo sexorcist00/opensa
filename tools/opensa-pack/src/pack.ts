@@ -14,7 +14,7 @@ import type { MapDefinitions } from '@opensa/renderware';
 import { breakableModelsFromText } from '@opensa/renderware/breakable/models';
 import { copyGameDir, guardOut } from '@opensa/tool-kit/game-dir';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { TexturePlanner } from './textures';
@@ -53,6 +53,10 @@ export interface PackOptions {
   bakeWorkers?: number;
   /** The game dir to convert. */
   gameDir: string;
+  /** Fetch game id stamped into the manifest (plan 086: `game-src/<id>` — folder name IS the id).
+   *  Defaults to `basename(gameDir)`; pmb passes its `--game` basename because ITS gameDir here is a
+   *  work-stage intermediate. */
+  gameId?: string;
   log?: (message: string) => void;
   /** Convert the per-model half (and rewrite the ~1 GB archives). ON by default. */
   models?: boolean;
@@ -156,6 +160,13 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   // non-reproducible field in the output (the pak bytes stay byte-identical); it is set here in the CLI, not
   // in `buildOspak`, so the deterministic core is untouched.
   manifest.buildTime = formatBuildTime(new Date());
+  // Fetch identity (plan 086 phase 1): which game this pak IS and which app built it — the finishing
+  // fetch-pack tool and the fetch client key their manifests/caches on the pair.
+  manifest.game = options.gameId ?? basename(resolve(gameDir));
+  const appVersion = readAppVersion();
+  if (appVersion !== null) {
+    manifest.appVersion = appVersion;
+  }
   writeFileSync(join(products, 'manifest.json'), JSON.stringify(manifest));
 
   // Convert the by-name assets INTO the copied archives — `<model>.dff`/`<txd>.txd` out, `<model>.osm` in.
@@ -167,6 +178,18 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   printReport(report, started, log);
 
   return { models: written, report };
+}
+
+/** The repo root `package.json` version (module-relative — cwd-independent), or null outside the repo. */
+export function readAppVersion(): null | string {
+  try {
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+    const parsed = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version?: string };
+
+    return typeof parsed.version === 'string' ? parsed.version : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The two texture-resolution ledgers (085 rows B/F): cross-TXD rescues (info) and true misses (warn). */

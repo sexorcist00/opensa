@@ -60,7 +60,8 @@ NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts
 # Game dir → native pak (the pack stage standalone)
 NODE_OPTIONS=--max-old-space-size=12288 \
   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1 --in ./mods-src
-#   [--no-ao] [--bakes --clouds mods-src/clouds] [--no-models] [--bake-workers N] [--stochastic <file…>]
+#   [--game-id <id>] [--no-ao] [--bakes --clouds mods-src/clouds] [--no-models] [--bake-workers N] [--stochastic <file…>]
+#   --game-id: fetch game id stamped into the pak manifest (default: basename of --game; pmb passes its own)
 ```
 
 ## Viewers' compare server

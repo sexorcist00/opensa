@@ -20,7 +20,7 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 import type { BuilderConfig } from './config';
 
@@ -185,7 +185,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     produced.push({ dir: sa, name: 'sa' });
   }
   if (runsStage('opensa', until)) {
-    produced.push(...(await buildOpensaTarget({ config, excludeItems, game, log, outPath, until, work })));
+    produced.push(...(await buildOpensaTarget({ config, excludeItems, game, gamePath, log, outPath, until, work })));
   }
 
   // The sidecars are split-time inputs, not game content — keep the final targets clean. (The opensa side
@@ -298,6 +298,8 @@ async function buildOpensaTarget(step: {
   config: BuilderConfig;
   excludeItems: string[];
   game: string;
+  /** The run's ORIGINAL `--game` dir — the fetch game id source (plan 086); `game` above is a work stage. */
+  gamePath: string;
   log: (message: string) => void;
   outPath: string;
   until: StageName | undefined;
@@ -329,6 +331,8 @@ async function buildOpensaTarget(step: {
     ...(config.pack.bakeWorkers !== undefined ? { bakeWorkers: config.pack.bakeWorkers } : {}),
     bakes: config.pack.bakes,
     gameDir: lodDir,
+    // The fetch game id (plan 086): the USER-FACING --game folder, not this work-stage intermediate.
+    gameId: basename(resolve(step.gamePath)),
     log: (message) => log(`pack: ${message}`),
     outDir: opensa,
     rect: config.pack.rect,

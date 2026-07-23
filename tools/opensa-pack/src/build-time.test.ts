@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatBuildTime } from './pack';
+import { formatBuildTime, readAppVersion } from './pack';
 
 describe('formatBuildTime', () => {
   describe('positive cases', () => {
@@ -14,6 +14,15 @@ describe('formatBuildTime', () => {
 
     it('offsets the zero-based month by one (December is 12)', () => {
       expect(formatBuildTime(new Date(2025, 11, 31, 23, 59))).toBe('23:59 31-12-2025');
+    });
+  });
+});
+
+describe('readAppVersion', () => {
+  describe('positive cases', () => {
+    it('reads the repo root package.json version', () => {
+      const version = readAppVersion();
+      expect(version).toMatch(/^\d+\.\d+\.\d+/);
     });
   });
 });
