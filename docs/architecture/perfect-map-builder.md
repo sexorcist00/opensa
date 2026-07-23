@@ -49,12 +49,12 @@ flowchart TB
 
 | #   | Stage      | Runs                                          | Notes                                                            |
 | --- | ---------- | --------------------------------------------- | ---------------------------------------------------------------- |
-| 1   | `mods`     | `installMods` (mod-installer)                 | always; overlays + Modloader bake into `gta.dat`/`gta3.img`      |
-| 2   | `vehicles` | `installVehicles`                             | skipped when `--in`'s `vehicles/` is empty                       |
+| 1   | `mods`     | `installMods` (mod-installer)                 | skipped when `--in`'s `mods/` is empty; overlays + Modloader bake into `gta.dat`/`gta3.img` |
+| 2   | `vehicles` | `installVehicles`                             | skipped when `vehicles/` is empty                                |
 | 3   | `peds`     | `installPeds`                                 | skipped when `peds/` is empty                                    |
 | 4   | `optimize` | `runOptimizer` (map-optimizer)                | lossless conditioning; `broken-prelight.json` force-list         |
-| 5   | `trees`    | `buildTreeLods`                               | `--tex` 512 atlas, `prelight.json`                               |
-| 6   | `procobj`  | `buildProcobjLods`                            | `--tex` 128                                                      |
+| 5   | `trees`    | `buildTreeLods`                               | skipped when `vegetation/` is empty; `--tex` 512 atlas, `prelight.json` |
+| 6   | `procobj`  | `buildProcobjLods`                            | always (original ships no `procobj/` — bakes the built-in roster, no-op on a TC); `--tex` 128 |
 | —   | guards     | `checkTextIplSlotBudget`, `checkImgIdBudgets` | the SA runtime ceilings — see [edge-cases](../edge-cases/)       |
 | 7   | `sa`       | `buildSaLods` → `<out>/sa`                    | the real-game (RenderWare) target                                |
 | 8   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 256 bake, `stripLods`, linear-convention TXD swap           |

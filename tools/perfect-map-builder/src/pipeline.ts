@@ -84,12 +84,13 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const populated = (sub: string): boolean => existsSync(source(sub)) && readdirSync(source(sub)).length > 0;
 
   // The common chain (installers → optimizer → LODs). Conditional stages are skipped when their source is empty.
-  const chain: { name: StageName; run: (game: string, out: string) => Promise<unknown> | void }[] = [
-    {
+  const chain: { name: StageName; run: (game: string, out: string) => Promise<unknown> | void }[] = [];
+  if (populated(subfolders.mods)) {
+    chain.push({
       name: 'mods',
       run: (game, out) => installMods({ gamePath: game, inPath: source(subfolders.mods), outPath: out }),
-    },
-  ];
+    });
+  }
   if (populated(subfolders.vehicles)) {
     chain.push({
       name: 'vehicles',
@@ -116,18 +117,22 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         ...(prelitForce ? { prelitOptions: { force: prelitForce } } : {}),
       }),
   });
-  chain.push({
-    name: 'trees',
-    run: (game, out) =>
-      buildTreeLods({
-        config: { textureSize: config.treeTex },
-        gamePath: game,
-        inPath: source(subfolders.vegetation),
-        outPath: out,
-        prelight: true,
-        prelightInfo: loadPrelight(source(subfolders.vegetation)),
-      }),
-  });
+  if (populated(subfolders.vegetation)) {
+    chain.push({
+      name: 'trees',
+      run: (game, out) =>
+        buildTreeLods({
+          config: { textureSize: config.treeTex },
+          gamePath: game,
+          inPath: source(subfolders.vegetation),
+          outPath: out,
+          prelight: true,
+          prelightInfo: loadPrelight(source(subfolders.vegetation)),
+        }),
+    });
+  }
+  // procobj stays unconditional: original ships NO procobj/ folder — the no-`--in` mode bakes the built-in
+  // roster from the game's own gta3.img/procobj.dat and exits gracefully when no species matches (a TC).
   chain.push({
     name: 'procobj',
     run: (game, out) =>
@@ -141,15 +146,25 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   });
 
   const staged = new Set(chain.map((stage) => stage.name));
-  for (const name of ['vehicles', 'peds'] as const) {
+  const stageSource = {
+    mods: subfolders.mods,
+    peds: subfolders.peds,
+    trees: subfolders.vegetation,
+    vehicles: subfolders.vehicles,
+  } as const;
+  for (const name of ['mods', 'vehicles', 'peds', 'trees'] as const) {
     if (!staged.has(name)) {
-      log(`${name} — skipped (${subfolders[name]}/ empty)`);
+      log(`${name} — skipped (${stageSource[name]}/ empty)`);
     }
   }
 
   const produced: { dir: string; name: string }[] = [];
+  const untilIndex = until === undefined ? Infinity : STAGE_NAMES.indexOf(until);
   let game = gamePath;
   for (const [index, stage] of chain.entries()) {
+    if (STAGE_NAMES.indexOf(stage.name) > untilIndex) {
+      return { produced, stoppedEarly: true }; // `until` names a skipped stage — everything before it has run
+    }
     log(stage.name);
     const out = join(work, `${index + 1}-${stage.name}`);
     await stage.run(game, out);
