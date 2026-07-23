@@ -7,7 +7,29 @@ Same method as 085: symptom → source asset → pipeline stage → pak bytes �
 
 ## Rows
 
-### A — the paradise bridge at LOD range (OPEN, bake side DONE)
+### A+B — lod cells missing from RING streaming (OPEN — narrowed 2026-07-23 evening)
+
+**Field discriminator (user): pinning the whole map with "Show LODs" renders EVERYTHING — the bridge,
+the islands, no holes, no console errors.** So the pak data is complete and the renderer is honest;
+the defect lives in the ring SELECTION (`StreamingDriver.desiredLevel` / eviction / create scheduling)
+— pinning bypasses exactly that. Ruled out: engine frustum culling (uses the cell's TRUE geometry
+bounds from the oscell, not the grid rect), uint32 index handling (weld switches at 65 535, engine
+sets the index format per cell), create errors (console clean).
+
+Remaining suspects, in order:
+1. `desiredLevel` ring math for slots whose hd/lod keys disagree (gostown: 290 hd vs 279 lod slots),
+   or the hysteresis/`slot.current` state machine leaving slots at `null`.
+2. Eviction / residency-target pressure dropping lod cells that were just created (holes WANDER while
+   driving — an eviction smell).
+3. The 256→250 grid drift (the bake's `lod_<cx>_<cy>` naming is 256-grid; the weld assigns each model
+   to the SAME-NUMBERED 250 slot, so geometry sits up to ~150 u outside its slot's rect at high cell
+   indices) — biases ring DISTANCE decisions, could starve edge slots. Original has the identical
+   drift and its in-game LOD check is STILL OWED (plan 078) — this may not be gostown-specific.
+
+Next: instrument the ring decision (log/HUD `desiredLevel` + eviction for a named slot, e.g. 5,-6)
+and walk the spawn→bridge path; that is code for the next round.
+
+### A (history) — the paradise bridge bake side (DONE)
 
 `gp_paradisebridgea` (44 784 verts of trusses/cables, IPL lod = −1, its authored `LODParadiseBridge*`
 defined but never placed) vanished from the far view. The hole-fill exemption
