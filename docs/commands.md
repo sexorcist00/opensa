@@ -92,6 +92,9 @@ npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/non-modified --o
 
 # One-off inspectors (scripts/debug/) — catalog + the triage playbook: docs/debug/README.md
 npx tsx scripts/debug/<name>.ts --help
+
+# crossTxd ledger → reviewable PNG fixes per owning mod (the /crosstxd-fix skill; installer plan 009)
+npx tsx scripts/crosstxd-fix.ts   # → NO_COMMIT/crossTxdFix/<mod>/gta3_img/<txd>/<texture>.png
 ```
 
 ## Repo chores
