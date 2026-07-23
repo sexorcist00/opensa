@@ -35,6 +35,15 @@ export interface BuilderConfig {
  * extent with `scripts/debug/grid-extent.ts <game-dir>` first.
  */
 export const PACK_RECTS: Record<string, Record<string, readonly [number, number, number, number]>> = {
+  anderius: {
+    // Measured 2026-07-23 (grid-extent on game-src/anderius, pre-mods; 591 cells) — NB it pokes past the
+    // old hardcoded ±12 on the min side, so the fixed rect was clipping this TC too.
+    full: [-13, -13, 11, 11],
+  },
+  carcer: {
+    // Measured 2026-07-23 (grid-extent on game-src/carcer, pre-mods; 188 cells).
+    full: [-8, -8, 5, 8],
+  },
   gostown: {
     // Measured 2026-07-23 (plan 087, grid-extent on the merged build): the far islands reach cell x 37 /
     // y −16 — the old hardcoded ±12 silently dropped a quarter of the lod map.

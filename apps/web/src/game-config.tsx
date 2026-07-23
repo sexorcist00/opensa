@@ -132,7 +132,7 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
       </>
     ),
     // Islands: the far side of the 5.2×4.5 km archipelago must sit inside the LOD ring (field, 2026-07-23).
-    drawDistance: 3000,
+    drawDistance: 1500,
     label: 'Run Gostown Paradise [web]',
     loadGame: { radius: 400, startMinutes: 720, weather: 'EXTRASUNNY_SMOG_LA' },
     // The ped installed from mods-src/gostown/peds (peds.ide 144) — the TC ships no BMYPOL1/male01 model.

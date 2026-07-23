@@ -253,6 +253,28 @@ describe('StreamingDriver geometry-AABB rings (plan 087)', () => {
       expect(h.requested).toEqual(['3,3,lod']);
     });
 
+    it('the HD↔LOD swap trades the WHOLE slot — footprint equality is the BAKE side of the contract (087)', () => {
+      // hd and lod carry DIFFERENT aabbs here (the pre-087 split-bake shape): promoting to HD still
+      // unloads the slot's lod even though its geometry reached elsewhere. Per-slot atomicity is the
+      // driver's contract; the bake guarantees both levels share a footprint by running on the SAME grid
+      // (pmb config.test pins lodCellSize === CELL_SIZE — the gostown missing-bridge regression).
+      const h = harness(['3,3,hd', '3,3,lod'], { lodRadius: 2000 }, 2400, undefined, {
+        '3,3,hd': [750, 1000, -1000, -750],
+        '3,3,lod': [750, 1500, -1500, -750],
+      });
+      h.driver.update([2000, 0, -875]); // far: lod desired (its aabb reaches to 500 u from the focus)
+      h.deliver('3,3,lod');
+      h.driver.update([2000, 0, -875]);
+      expect(h.loaded).toEqual(['3,3,lod']);
+
+      h.driver.update([875, 0, -875]); // stand at the slot centre: HD desired
+      h.deliver('3,3,hd');
+      h.driver.update([875, 0, -875]);
+
+      expect(h.loaded).toEqual(['3,3,lod', '3,3,hd']);
+      expect(h.unloaded).toEqual(['3,3,lod']); // the whole slot swapped — no half-footprint residue
+    });
+
     it('evicts by the geometry rect: keeps the cell in the margin band, drops it past ring + margin', () => {
       const h = harness(['3,3,lod'], { lodRadius: 1000 }, 2400, undefined, {
         '3,3,lod': [600, 1000, -1000, -600],

@@ -19,9 +19,14 @@
   (`engine/src/render/sky-lut.ts` + `hosek-wilkie.ts`), sun disc + god-rays source, procedural cumulus
   baked to a 256² field, stars, moon; the night factor feeds every consumer. (Until 074/13 this was a
   three `sky.plugin.ts` gradient dome — the sky v2 arc replaced the model, not just the renderer.)
-- **Water**: `water.dat` quads + infinite ocean ring at sea level, classified SEA vs INLAND (plan 075);
-  reflection, sun glint and darkness knobs in the engine's water shading; shoreline handled by the quads'
-  alpha. Fog is applied in the same shader so the far ocean dissolves into the horizon like terrain.
+- **Water**: `water.dat` quads + the infinite ocean ring, classified SEA vs INLAND (plan 075), baked
+  offline (`opensa-pack/water.ts` → `water.bin`): ~16 u tessellation on a world lattice + a per-vertex
+  DEPTH field (true water−ground where the weld's sea-band height grid has data; shore-distance
+  pseudo-depth for elevated lakes). Shorelines are unpaired quad edges verified by a two-sided coverage
+  probe — a T-junction seam between same-level quads is NOT a shore (plan 087 row C: false seams striped
+  every gostown lake with static shallow bands). Runtime: Gerstner displacement damped by the field,
+  fresnel/sky reflection, sun glint, foam + swash on the depth bands; fog in the same shader so the far
+  ocean dissolves into the horizon like terrain.
 - **Fog**: distance fog blended into the sky horizon colour from the same LUT, driven by timecyc
   (`engine-environment-driver.ts`). Since plan 074/21 fog is a strict SUBSET of the LOD ring — the cap
   follows `?draw=` so the cull edge can never be exposed — and clouds composite into the fog colour at
@@ -35,4 +40,5 @@
 
 ## Test coverage anchors
 
-`timecyc` parser/convert/sample tests, `weather-zones` tests, `build-water` tests.
+`timecyc` parser/convert/sample tests, `weather-zones` tests, `opensa-pack/water.test.ts` (tessellation,
+depth field, T-junction seam vs dam-lip shoreline, SEA/INLAND classes).

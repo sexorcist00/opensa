@@ -35,6 +35,10 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   script-gated binary-only IPL groups (except `truthsfarm`) — or closed props get painted into far LODs
   (the bridge-roadblocks-in-LOD bug). Trees/procobj are excluded from cell LODs (they get impostors from
   the sibling tools).
+- **Elevated lakes have no TRUE depth** — the water bake's height grid only rasterizes ground at GTA
+  z ≤ 4 (`Z_CAP`, sized for SA's sea), so a TC reservoir far above it takes the shore-distance
+  pseudo-depth path (plan 087 row C). Fine for the look; anything needing the real lakebed (underwater
+  rendering, buoyancy) will need the cap rethought per water level.
 - **Texture sizes are asset-driven.** Never hardcode a size that belongs to a source asset — texture arrays
   derive one size from `max(assets)`, fixed slots resample instead of throwing. Only shadow maps / probes /
   LUTs stay constants.
