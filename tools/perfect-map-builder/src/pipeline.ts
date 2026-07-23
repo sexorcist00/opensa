@@ -203,7 +203,9 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     produced.push({ dir: sa, name: 'sa' });
   }
   if (runsStage('opensa', until)) {
-    produced.push(...(await buildOpensaTarget({ config, excludeItems, game, gamePath, log, outPath, until, work })));
+    produced.push(
+      ...(await buildOpensaTarget({ config, excludeItems, game, gamePath, holeFillModels, log, outPath, until, work })),
+    );
   }
 
   // The sidecars are split-time inputs, not game content — keep the final targets clean. (The opensa side
@@ -318,19 +320,21 @@ async function buildOpensaTarget(step: {
   game: string;
   /** The run's ORIGINAL `--game` dir — the fetch game id source (plan 086); `game` above is a work stage. */
   gamePath: string;
+  /** Per-game hole-fill list (`lod-holes.json`) — exempt from the cell bake's reduction tracks. */
+  holeFillModels: string[];
   log: (message: string) => void;
   outPath: string;
   until: StageName | undefined;
   work: string;
 }): Promise<{ dir: string; name: string }[]> {
-  const { config, excludeItems, game, log, outPath, until, work } = step;
+  const { config, excludeItems, game, holeFillModels, log, outPath, until, work } = step;
   const packing = until !== 'opensa';
   const opensa = join(outPath, 'opensa');
   const lodDir = packing ? join(work, 'opensa-lod') : opensa;
   log(`opensa → ${packing ? '.work/opensa-lod' : 'opensa/'} (baking cells — can take several minutes)`);
   await buildOpensaLods({
     cellSize: config.lodCellSize,
-    config: { excludeItems },
+    config: { excludeItems, holeFillModels },
     gameDir: game,
     outDir: lodDir,
     stripLods: true,

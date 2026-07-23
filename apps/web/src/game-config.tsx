@@ -23,6 +23,9 @@ export interface GameConfig {
   disabledNote?: string;
   /** Shown in a popup before launch (fetch: with an OK button; local: inside the folder prompt). */
   disclaimer: ReactNode;
+  /** Far draw distance (m) — the LOD streaming ring + fog cap, ONE knob (074/21). `?draw=` overrides.
+   *  SA's continuous city reads fine at 1200; an island TC needs the next island inside the ring. */
+  drawDistance: number;
   /** Menu button text. */
   label: string;
   /** Initial collision-zone radius / clock (minutes since midnight) / weather (a `WEATHER_NAMES` entry). */
@@ -128,8 +131,10 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
         </div>
       </>
     ),
+    // Islands: the far side of the 5.2×4.5 km archipelago must sit inside the LOD ring (field, 2026-07-23).
+    drawDistance: 3000,
     label: 'Run Gostown Paradise [web]',
-    loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
+    loadGame: { radius: 400, startMinutes: 720, weather: 'EXTRASUNNY_SMOG_LA' },
     // The ped installed from mods-src/gostown/peds (peds.ide 144) — the TC ships no BMYPOL1/male01 model.
     mainCharacter: 'BMYCG',
     playerSpawn: [1531.15, -1271.89, 591.74],
@@ -147,6 +152,7 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
         <p>Analytics only count visitors.</p>
       </>
     ),
+    drawDistance: 1200,
     label: 'Run San Andreas [local only]',
     loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
     mainCharacter: 'BMYPOL1',

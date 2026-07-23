@@ -70,6 +70,14 @@ export interface LodConfig {
    * unseen faces stay two-sided) but still wins the single-siding; `'off'` skips the pass (blanket two-sided).
    */
   hiddenFaces: 'cull' | 'off' | 'orient';
+  /**
+   * Hole-fill models (lowercased): instances EXEMPT from the reduction tracks — merged into the cell
+   * verbatim (the drop-transparent/visibility/coplanar chain applies to everything else). For models the
+   * tracks eat whole and the far view can't lose: gostown's suspension bridge is trusses and cables, and
+   * the culls left a hole over the water (plan 086 field find, 2026-07-23). pmb feeds this from the
+   * per-game `mods-src/<id>/lod-holes.json` — the same list the sa target's clone LODs use.
+   */
+  holeFillModels?: readonly string[];
   /** Draw distance (world units) for emitted cell-LOD IDE defs — the original game's visibility gate. */
   lodDrawDistance: number;
   /** Max texture dimension (px) in a per-cell LOD TXD; sources are downscaled to it (plan 002, Phase 2). */

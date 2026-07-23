@@ -115,6 +115,13 @@ inherit SA's list) to `mods-src/<id>/lod-holes.json`, loaded by pmb like `lod-ex
 (`loadLodHoles`, `--in` root or its `mods/`); standalone runs pass `--holes <json>`. `original`
 carries the 28 curated names; the TC folders none.
 
+**Addendum 2026-07-23 (phase-4 field find):** the list now ALSO feeds the **opensa cell bake** —
+listed instances are exempt from the reduction tracks (drop-transparent · budgeted-decimate ·
+visibility-cull · coplanar) and merge into the cell VERBATIM (`concatMeshes` after the modifier
+chain). Found on gostown's `gp_paradisebridgea`: a 44 784-vert suspension bridge of trusses/cables
+that the tracks reduced out of the far view (`lod_5_-7` kept 15 621 verts for its whole cell) — the
+first `mods-src/gostown/lod-holes.json` entry. opensa-lod CLI grew the same `--holes <json>`.
+
 ## Phase 6 — viewer fixtures rename (DONE 2026-07-23)
 
 `scripts/build-viewer-assets.ts` → `scripts/test-viewer-fixtures.ts` (it only builds e2e fixtures;

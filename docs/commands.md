@@ -51,7 +51,7 @@ npx tsx tools/lod-trees-generator/src/cli.ts --in ./mods-src/vegetation --game <
 # Procobj → static IPL + LODs
 npx tsx tools/lod-procobj-generator/src/cli.ts --in ./mods-src/procobj --game <dir> --out <dir> --prelight --tex 128
 
-# OpenSA cell LODs
+# OpenSA cell LODs ([--holes <json>]: hole-fill models merged verbatim past the reduction tracks)
 npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 256
 
 # Real-SA per-object LOD clones ([--holes <json>]: per-game hole-fill list, e.g. mods-src/original/lod-holes.json)

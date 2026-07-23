@@ -252,9 +252,12 @@ async function boot(
   }
   // Draw distance (074/21 P1): ONE knob → the LOD streaming ring, with the fog cut capped at
   // `drawDistance − FOG_RING_MARGIN` — the outer margin band is always loaded before it leaves the fog,
-  // so streaming pops are impossible by construction. `?draw=N` = live A/B (min 400 keeps rings sane).
+  // so streaming pops are impossible by construction. Per-game default from GAME_CONFIG (an island TC
+  // needs a wider ring than SA's continuous city); `?draw=N` = live A/B (min 400 keeps rings sane).
   const drawParam = Number(params.get('draw') ?? Number.NaN);
-  const drawDistance = Number.isFinite(drawParam) ? Math.max(400, drawParam) : DEFAULT_DRAW_DISTANCE;
+  const drawDistance = Number.isFinite(drawParam)
+    ? Math.max(400, drawParam)
+    : (GAME_CONFIG[gameId].drawDistance ?? DEFAULT_DRAW_DISTANCE);
   // `?spawn=x,y,z` (GTA coords) overrides the config spawn — field checks at arbitrary spots
   // (e.g. Santa Maria Beach for the water: `?spawn=342,-1803,4.8`).
   const spawnParam = (params.get('spawn') ?? '').split(',').map(Number);
