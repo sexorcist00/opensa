@@ -31,6 +31,7 @@ moved from ideas/0.5.0/03, the receiver-densification prerequisite stands; (02) 
 lighting v2 — light ALL lamps of the loaded HD cells at once (the 2026-07-17 field observation says the
 budget likely exists), killing the ignition-pop artifact class by construction; (03) contact darkening/
 shadows for dynamics — the "SSAO for cars/peds" question reformulated (near cascade / capsule AO / blob
-v2 candidates).
+v2 candidates); (04) real light from 2dfx coronas — 085 row E's Ten Green Bottles blink glow done
+properly (blink-synced diffuse wash, wet-road specular, clustered lighting for the full strip).
 
 Full bundle: [plans/04-graphic-improvements/readme.md](plans/04-graphic-improvements/readme.md).
