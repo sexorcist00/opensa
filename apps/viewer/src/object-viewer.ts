@@ -22,7 +22,7 @@ import type { ViewedModel } from './engine/model-view';
 import { loadModel, loadModelFromOsm } from './engine/model-view';
 import { createViewerEngine } from './engine/viewer-engine';
 
-/** Serialised COL (baked by scripts/build-viewer-assets.ts) — vertices as a plain array. */
+/** Serialised COL (baked by scripts/test-viewer-fixtures.ts) — vertices as a plain array. */
 type ColJson = Omit<ColModel, 'vertices'> & { vertices: number[] };
 
 interface ModelEntry {

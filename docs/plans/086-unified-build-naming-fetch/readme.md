@@ -99,10 +99,11 @@ Failures are triaged loudly per the 085 rule — a swallowed error is a hole in 
 `sa-lod-generator` `holeFillModels` moves from `lod.config.ts` to `mods-src/<id>/lod-holes.json`
 (same pattern as `lod-exclude.json`); `original` gets the current 30 names, others none.
 
-## Phase 6 — viewer fixtures rename
+## Phase 6 — viewer fixtures rename (DONE 2026-07-23)
 
 `scripts/build-viewer-assets.ts` → `scripts/test-viewer-fixtures.ts` (it only builds e2e fixtures;
-the name should say so). `test:fixtures` chain updated; paths point at `game-src/original`.
+the name says so now). `test:fixtures` chain + every reference updated; paths point at
+`game-src/original` since phase 0.
 
 ## Order & risk
 

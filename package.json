@@ -94,7 +94,7 @@
     "serve:static": "tsx scripts/serve-static.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:fixtures": "tsx scripts/test-fixtures.ts && tsx scripts/build-viewer-assets.ts",
+    "test:fixtures": "tsx scripts/test-fixtures.ts && tsx scripts/test-viewer-fixtures.ts",
     "test:watch": "vitest",
     "timecyc": "tsx ./tools/timecyc-builder/src/index.ts"
   },

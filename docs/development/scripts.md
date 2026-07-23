@@ -10,7 +10,7 @@ All TypeScript scripts run via `npx tsx`, `.mjs` ones via `node`.
 - [Build / asset pipeline](#build--asset-pipeline)
   - [build-game.ts](#build-gamets)
   - [gen-wind-list.ts](#gen-wind-listts)
-  - [build-viewer-assets.ts](#build-viewer-assetsts)
+  - [test-viewer-fixtures.ts](#test-viewer-fixturests)
   - [serve-static.ts](#serve-staticts)
   - [test-fixtures.ts](#test-fixturests)
 - [Debugging / auditing](#debugging--auditing)
@@ -80,7 +80,7 @@ models.
 npx tsx scripts/gen-wind-list.ts
 ```
 
-### build-viewer-assets.ts
+### test-viewer-fixtures.ts
 
 Builds the object-viewer's **e2e fixtures** into **`tests/viewer/objects/`** by extracting from a clean,
 unmodified GTA copy under `game-src/original`: the object-viewer's models + their txds, a pre-baked
@@ -90,7 +90,7 @@ unmodified GTA copy under `game-src/original`: the object-viewer's models + thei
 server — these fixtures exist only so the object-viewer e2e renders real geometry in CI without the full game.
 
 ```sh
-npm run test:fixtures               # tsx scripts/test-fixtures.ts && tsx scripts/build-viewer-assets.ts
+npm run test:fixtures               # tsx scripts/test-fixtures.ts && tsx scripts/test-viewer-fixtures.ts
 ```
 
 ### serve-static.ts

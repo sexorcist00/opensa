@@ -2,11 +2,11 @@
 
 > **Update (2026-06-22) — viewer fixtures regenerated, not committed.** All of `static/` is now gitignored,
 > so the viewer fixtures (`static/viewer/`) are no longer committed. `scripts/copy-viewer.ts` +
-> `scripts/extract-viewer-collision.ts` were replaced by a single `scripts/build-viewer-assets.ts`
+> `scripts/extract-viewer-collision.ts` were replaced by a single `scripts/test-viewer-fixtures.ts`
 > (`npm run viewer:assets`) that extracts everything from `game-src/original` — character (now
 > **bmypol1**, not the custom Tommy) + `ped.ifp`, vehicles (admiral/comet), and the object models + their
 > baked `*.col.json`. References to `extract-viewer-collision.ts` below are historical; the COL-baking logic
-> moved into `build-viewer-assets.ts` unchanged.
+> moved into `test-viewer-fixtures.ts` unchanged.
 
 ## Goal
 

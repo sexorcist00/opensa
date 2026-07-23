@@ -3,7 +3,7 @@ import { buildCollisionIndex, getCollision } from '@opensa/renderware/collision/
 /**
  * Build the object-viewer's **e2e fixtures** into `tests/viewer/` by extracting from a clean, UNMODIFIED GTA
  * San Andreas copy under `game-src/original` (the same source `test-fixtures.ts` uses). Chained after
- * `test-fixtures.ts` by `npm run test:fixtures`; the output is Rockstar assets, so `tests/viewer/` is
+ * `test-fixtures.ts` by `npm run test:fixtures` (renamed from `test-viewer-fixtures.ts` — plan 086 phase 6); the output is Rockstar assets, so `tests/viewer/` is
  * gitignored (like `tests/original/`) and every contributor regenerates it locally.
  *
  * At runtime the viewers load from the compare server (`--after`); these static fixtures exist ONLY so the
