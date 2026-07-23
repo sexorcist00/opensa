@@ -32,11 +32,14 @@ export function alignedErase(
   const start = indexOffset * stride;
   const end = start + indexCount * stride;
   const alignedStart = start & ~3;
-  const alignedEnd = Math.min(indexData.byteLength, (end + 3) & ~3);
+  // NOT clamped to indexData.byteLength: a u16 cell with an ODD index count ends on a 2-byte boundary, and
+  // clamping produced a non-multiple-of-4 write that writeBuffer REJECTS (the 087 map-inspector hide crash).
+  // The GPU buffer is created at align4(byteLength), so the ≤2 pad bytes past the data are safely writable.
+  const alignedEnd = (end + 3) & ~3;
   const bytes = new Uint8Array(alignedEnd - alignedStart);
   // Head and tail: the neighbouring indices this window overlaps survive untouched.
   bytes.set(indexData.subarray(alignedStart, start), 0);
-  bytes.set(indexData.subarray(end, alignedEnd), end - alignedStart);
+  bytes.set(indexData.subarray(end, Math.min(indexData.byteLength, alignedEnd)), end - alignedStart);
 
   return { byteOffset: alignedStart, bytes };
 }

@@ -195,6 +195,10 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // Hole-fill list (plan 086 phase 5): per-GAME data, not code — stock SA's list lives in
   // mods-src/original/lod-holes.json; a TC without the file gets none (the curated names are SA's).
   const holeFillModels = loadLodHoles(inPath, source(subfolders.mods));
+  // Always-on lods (plan 087, `lod-always.json`): lod-target models that ARE the content (a stub HD, the
+  // real geometry behind its lod link — gostown's LODEnsemble* forests). The strip keeps them and the
+  // pak welds them into BOTH levels; the cell bake still skips them (it bakes HD, i.e. the stub).
+  const alwaysOnLods = loadLodAlways(inPath, source(subfolders.mods));
   if (runsStage('sa', until)) {
     const sa = join(outPath, 'sa');
     log('sa → sa/');
@@ -204,7 +208,18 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   }
   if (runsStage('opensa', until)) {
     produced.push(
-      ...(await buildOpensaTarget({ config, excludeItems, game, gamePath, holeFillModels, log, outPath, until, work })),
+      ...(await buildOpensaTarget({
+        alwaysOnLods,
+        config,
+        excludeItems,
+        game,
+        gamePath,
+        holeFillModels,
+        log,
+        outPath,
+        until,
+        work,
+      })),
     );
   }
 
@@ -315,6 +330,8 @@ export function swapLinearTxds(commonDir: string, opensaDir: string): void {
  * the CONVERTED dir takes the `opensa/` name — every stage still hands the next a complete game tree.
  */
 async function buildOpensaTarget(step: {
+  /** Per-game always-on lod-target list (`lod-always.json`) — kept by the strip, welded into both levels. */
+  alwaysOnLods: string[];
   config: BuilderConfig;
   excludeItems: string[];
   game: string;
@@ -327,7 +344,7 @@ async function buildOpensaTarget(step: {
   until: StageName | undefined;
   work: string;
 }): Promise<{ dir: string; name: string }[]> {
-  const { config, excludeItems, game, holeFillModels, log, outPath, until, work } = step;
+  const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, until, work } = step;
   const packing = until !== 'opensa';
   const opensa = join(outPath, 'opensa');
   const lodDir = packing ? join(work, 'opensa-lod') : opensa;
@@ -336,6 +353,7 @@ async function buildOpensaTarget(step: {
     cellSize: config.lodCellSize,
     config: { excludeItems, holeFillModels },
     gameDir: game,
+    keepLods: alwaysOnLods,
     outDir: lodDir,
     stripLods: true,
   });
@@ -354,6 +372,7 @@ async function buildOpensaTarget(step: {
   // PACK_RECTS, else the convert auto-fits to content (a new TC without a pinned extent).
   const packRect = config.pack.rect ?? PACK_RECTS[gameId]?.full;
   const packed = await packGameDir({
+    ...(alwaysOnLods.length > 0 ? { alwaysOnLods } : {}),
     ao: config.pack.ao,
     ...(config.pack.bakeWorkers !== undefined ? { bakeWorkers: config.pack.bakeWorkers } : {}),
     bakes: config.pack.bakes,
@@ -476,6 +495,25 @@ export function checkTextIplSlotBudget(gameDir: string, allowTextRowOverflow = f
         `(unbounded — overflowing corrupts CIplStore). Merge or drop mod IPLs:\n  ${used.join('\n  ')}`,
     );
   }
+}
+
+/** The first `lod-always.json` found among `dirs` → lowercased lod-TARGET models that are the real content
+ *  behind a stub HD (plan 087, gostown `LODEnsemble*` forests): kept by the strip, welded into BOTH levels. */
+function loadLodAlways(...dirs: string[]): string[] {
+  for (const dir of dirs) {
+    const file = join(dir, 'lod-always.json');
+    if (existsSync(file)) {
+      const names = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+      if (!Array.isArray(names) || names.some((name) => typeof name !== 'string')) {
+        throw new Error(`${file} must be a JSON array of model names`);
+      }
+      log(`lod-always — ${names.length} always-on lod model(s) from ${file}`);
+
+      return (names as string[]).map((name) => name.toLowerCase());
+    }
+  }
+
+  return [];
 }
 
 /** The first `lod-exclude.json` found among `dirs` → lowercased model names kept out of the LOD bakes. */

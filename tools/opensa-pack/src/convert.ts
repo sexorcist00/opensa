@@ -39,6 +39,10 @@ import {
 } from './weld';
 
 export interface ConvertOptions {
+  /** lod-TARGET models (lowercased) welded into BOTH levels (plan 087, `lod-always.json`): a TC's
+   *  stub-HD/real-LOD pattern (gostown `LODEnsemble*` forests behind a `fakebit01` marker) would
+   *  otherwise vanish inside the HD ring — see {@link buildWorldGrid}. */
+  alwaysOnLods?: ReadonlySet<string>;
   /** Bake per-vertex AO/skyVis (074/07); on by default, `--no-ao` skips it. */
   ao?: boolean;
 
@@ -148,7 +152,7 @@ export async function convertDistrict(
   // Smashable props (B7·a): object.dat's smash effects are the second half of the gate (the first is the DFF's
   // own shatter mesh). Absent-tolerant, and the SAME helper the runtime adapter gates with.
   const breakableModels = breakableModelsFromText(fs.getText('data/object.dat'));
-  const grid = buildWorldGrid(defs, cellSize);
+  const grid = buildWorldGrid(defs, cellSize, options.alwaysOnLods);
   const rect = options.rect ?? occupiedRect(grid);
   const planner = new TexturePlanner(
     fs,

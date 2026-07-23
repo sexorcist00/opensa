@@ -30,6 +30,23 @@ describe('alignedErase', () => {
       // Range [2, 5) spans bytes 4..10; the window runs to byte 12, which holds index 5.
       expect(afterErase(2, 3)).toEqual([10, 11, 0, 0, 0, 15, 16, 17]);
     });
+
+    it('does not emit an unaligned write when an ODD u16 index count ends the buffer (the hide crash)', () => {
+      // 7 indices = 14 bytes: the old clamp to byteLength produced a 2-byte-short window that writeBuffer
+      // REJECTS with OperationError (087: map-inspector hide). The GPU buffer is align4-padded, so the
+      // window may legally run to byte 16.
+      const data = new Uint8Array(new Uint16Array([10, 11, 12, 13, 14, 15, 16]).buffer);
+
+      const erase = alignedErase(data, 4, 3, 2);
+
+      expect(erase.byteOffset % 4).toBe(0);
+      expect(erase.bytes.byteLength % 4).toBe(0);
+      expect(erase.byteOffset + erase.bytes.byteLength).toBe(16); // into the pad, never short of it
+      const padded = new Uint8Array(16);
+      padded.set(data, 0);
+      padded.set(erase.bytes, erase.byteOffset);
+      expect([...new Uint16Array(padded.buffer)]).toEqual([10, 11, 12, 13, 0, 0, 0, 0]);
+    });
   });
 
   describe('positive cases', () => {
@@ -44,7 +61,8 @@ describe('alignedErase', () => {
           const erase = alignedErase(data, offset, count, 2);
           expect(erase.byteOffset % 4).toBe(0);
           expect(erase.bytes.byteLength % 4).toBe(0);
-          expect(erase.byteOffset + erase.bytes.byteLength).toBeLessThanOrEqual(data.byteLength);
+          // May run into the align4 pad of the GPU buffer, never past it.
+          expect(erase.byteOffset + erase.bytes.byteLength).toBeLessThanOrEqual((data.byteLength + 3) & ~3);
         }
       }
     });

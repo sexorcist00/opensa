@@ -45,6 +45,9 @@ import { isVegetationDef } from './weld';
 export const CELL_SIZE = 250;
 
 export interface PackOptions {
+  /** lod-TARGET models welded into BOTH levels (plan 087 `lod-always.json` — the stub-HD/real-LOD TC
+   *  pattern); lowercased names, passed through to the convert. */
+  alwaysOnLods?: readonly string[];
   /** Bake per-vertex AO/skyVis. ON by default — it stands in for prod's SSAO, so a shipping pak needs it. */
   ao?: boolean;
   /** Bake per-vertex SUN VISIBILITY — the heavy shadow bake. OFF by default; production converts need it. */
@@ -122,6 +125,9 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   const bundles = createModelBundles();
   let packed: null | PackedModels = null;
   const { manifest, pak, report } = await convertDistrict(fs, {
+    ...(options.alwaysOnLods !== undefined && options.alwaysOnLods.length > 0
+      ? { alwaysOnLods: new Set(options.alwaysOnLods.map((name) => name.toLowerCase())) }
+      : {}),
     ao,
     ...(options.bakeWorkers !== undefined ? { bakeWorkers: options.bakeWorkers } : {}),
     cellSize: CELL_SIZE,

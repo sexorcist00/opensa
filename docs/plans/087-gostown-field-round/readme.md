@@ -135,6 +135,42 @@ at true shores, deep mid-lake). Tests: T-junction seam ≠ shoreline, dam lip st
 Related but NOT ours: the dark pipe/structure shadows on the dam wall itself are painted into the
 authored gostown textures (user-confirmed baked content).
 
+### D — forests vanish at LOD range; trees unpickable (FIXED IN CODE 2026-07-23 night; rides the next rebuild)
+
+User: gostown trees have no generated lods (example area `gp_land71`, the island at GTA 809,−1074).
+Pak bytes: the island's hd cell holds NO tree placements at all, and `lodensemble*` exists NOWHERE in
+the pak. Gostown's forests use the **stub-HD/real-LOD pattern**: `fakebit01` (24 verts, draw 65) is
+the placed HD whose lod link points at `LODEnsemble1–5` (~112 tris each, draw 2000) — the ensemble IS
+the forest. Our chain assumed lod-targets are replaceable stand-ins: `stripLods` deleted them and the
+cell bake "replaced" them with a bake of the HD side — the stub. Forests gone at every level; that is
+also why the picker had nothing to hit. `lod-holes.json` cannot fix this class (hole-fill exempts
+models the bake MERGES — these never reach the merge). → FIX: **`lod-always.json`** (per game, like
+lod-holes): lod-target models that are the real content — the strip keeps them (`keepLods` →
+`stripOldLods` exclude) and `buildWorldGrid` welds them into BOTH levels (like timed instances;
+per-slot level exclusivity keeps them single-rendered; the impostor bake still skips lod-targets, so
+nothing double-bakes). `mods-src/gostown/lod-always.json` = lodensemble1–5. Individual palms
+(`gp_petitpalm1` ×91 cells, ~800 tris) are real HD placements that DO reach the impostor bake — if the
+field still misses single palms at range after the rebuild, THEY go to `lod-holes.json` (reduction),
+not this list.
+
+### E — map-inspector hide crashed on writeBuffer alignment (FIXED 2026-07-23 night)
+
+`hidePlacement` → `OperationError: Number of bytes to write must be a multiple of 4`: `alignedErase`
+clamped its window to `indexData.byteLength`, and a u16 cell with an ODD index count ends on a 2-byte
+boundary — hiding a placement at the buffer tail produced a 2-byte-short write that WebGPU rejects.
+The GPU index buffer is `align4`-padded, so the window now legally runs into the pad (the clamp is
+gone; the tail READ is still clamped). Same helper serves `breakPlacement` — tail-end smashables were
+silently refusing to break too. Test pins the odd-count tail case.
+
+### F — terrain brightness seams (`gp_land112` dark vs `gp_land110` light) — AUTHORED, lever ready
+
+Measured (getClump, identical in `game-src/gostown` AND the optimized `build/gostown/sa` — the
+optimizer changed NOTHING): `gp_land112` day prelit averages **50/50/50**, `gp_land110` **88/87/87**;
+neither ships normals. Not a map-optimizer bug — the prelight pass's preserve-authored gate correctly
+kept both; the AUTHORS baked adjacent land pieces at different light levels. The existing lever if the
+seams should go: list the dark models in `mods-src/gostown/broken-prelight.json` (the optimizer's
+prelight FORCE list) and rebuild — user's call, since it overwrites authored shading.
+
 ## Closed the same day (2026-07-23)
 
 - Player model from `GAME_CONFIG.mainCharacter` (gostown → BMYCG) — boots.
