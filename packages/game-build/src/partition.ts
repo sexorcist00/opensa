@@ -36,10 +36,10 @@ export interface PlacedRefs {
 /** Which model archive a file's bytes come from: gta3.img (primary) or gta_int.img (override). */
 export type Source = 'gta3' | 'gta_int';
 
-/** Collision taken wholesale from gta3.img into the models bucket (it pairs with the geometry). */
+/** Collision taken wholesale from the model archives into the models bucket (it pairs with the geometry). */
 const MODEL_WORLD_EXTENSIONS = ['.col'] as const;
 
-/** Placement/anim/data taken wholesale from gta3.img into the others bucket. */
+/** Placement/anim/data taken wholesale from the model archives into the others bucket. */
 const OTHER_WORLD_EXTENSIONS = ['.ipl', '.ifp', '.dat'] as const;
 
 /**
@@ -84,8 +84,8 @@ export function looseGroup(name: string): GroupName {
 /**
  * Split img-sourced entries into three buckets:
  * - models: each referenced model as `.osm` if opensa-pack converted it, else `.dff` (gta3 → gta_int),
- *   plus every `.col` from gta3.img;
- * - others: every placement/anim/data file (ipl/ifp/dat) from gta3.img;
+ *   plus every `.col` from gta3.img AND the override archives (a TC keeps its collision in its own img);
+ * - others: every placement/anim/data file (ipl/ifp/dat) from the same archives;
  * - textures: the stock `.txd` of whatever stayed unoptimized (a converted model carries its dictionary
  *   inside its own `.osm`).
  *
@@ -131,6 +131,19 @@ export function partitionEntries(refs: PlacedRefs, gta3: ReadonlySet<string>, gt
       models.push({ name, source: 'gta3' });
     } else if (OTHER_WORLD_EXTENSIONS.some((ext) => name.endsWith(ext))) {
       others.push({ name, source: 'gta3' });
+    }
+  }
+  // The override archives carry the same world files for a TC — gostown keeps ALL its collision (53 .col
+  // libraries) and binary IPL streams in gostown6.img, not gta3.img; sweeping only gta3 shipped a world
+  // with no physics (plan 086 phase 4 field find). gta3 wins a name collision.
+  for (const name of gtaInt) {
+    if (gta3.has(name)) {
+      continue;
+    }
+    if (MODEL_WORLD_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+      models.push({ name, source: 'gta_int' });
+    } else if (OTHER_WORLD_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+      others.push({ name, source: 'gta_int' });
     }
   }
 

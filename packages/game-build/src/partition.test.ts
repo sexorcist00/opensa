@@ -77,6 +77,20 @@ describe('partitionEntries', () => {
       expect(names(textures)).toEqual(['htex.txd', 'ttex.txd']);
       expect(textures.find((e) => e.name === 'ttex.txd')?.source).toBe('gta_int');
     });
+
+    // A TC keeps its world files in its OWN archive (gostown6.img → the override set) — sweeping only
+    // gta3 shipped a world with no collision (plan 086 phase 4 field find).
+    it('sweeps col/ipl world files from the override archives too, gta3 winning a collision', () => {
+      const tc = partitionEntries(
+        placedModels([1], ide),
+        new Set(['house.dff', 'la.ipl']),
+        new Set(['gp_stream0.ipl', 'gp_veg.col', 'htex.txd', 'la.ipl']),
+      );
+      expect(names(tc.models)).toContain('gp_veg.col');
+      expect(tc.models.find((e) => e.name === 'gp_veg.col')?.source).toBe('gta_int');
+      expect(names(tc.others)).toEqual(['gp_stream0.ipl', 'la.ipl']);
+      expect(tc.others.find((e) => e.name === 'la.ipl')?.source).toBe('gta3'); // not duplicated from the override
+    });
   });
 
   /**
