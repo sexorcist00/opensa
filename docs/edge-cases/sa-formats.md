@@ -22,8 +22,9 @@ stories: `tools/lod-trees-generator/docs/plans/005-sa-asset-format.md`,
 - **Empty COL3 model is exactly 112 bytes.** Any other size misaligns the rest of the COL library and
   corrupts collision _globally_, faulting an unrelated model (the "3999" crash). Collision binds by **name**;
   `.col` must be packed into the IMG to be auto-discovered.
-- **IMG VER2 entry names ≤ 23 bytes including extension** (base ≤ 19 chars) — longer impostor names get
-  short aliases (`lodt<i>`, `plobj`, `plotr`).
+- **IMG VER2 entry names ≤ 24 bytes including extension** — the 24-byte name field is NUL-terminated only
+  when the name is shorter (TCs ship full 24-byte names, e.g. Carcer City's `cj_padlockgate_l_(d).dff`);
+  longer impostor names get short aliases (`lodt<i>`, `plobj`, `plotr`).
 - **A text IPL's `lod` field is an INDEX into that file's own `inst` list**, not a name. Deleting instance
   lines shifts every index above the cut and silently re-links LODs to unrelated objects. To remove
   instances, drop them together with their linked LOD partners and remap the survivors through an old→new

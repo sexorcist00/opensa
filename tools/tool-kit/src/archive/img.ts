@@ -107,8 +107,8 @@ export function writeImgFile(img: EditableImg, path: string): void {
     let cursor = dirSectors;
     names.forEach((name, i) => {
       const encoded = new TextEncoder().encode(name);
-      if (encoded.length > 23) {
-        throw new Error(`VER2 name too long (max 23 bytes): ${name}`);
+      if (encoded.length > 24) {
+        throw new Error(`VER2 name too long (max 24 bytes): ${name}`);
       }
       const data = img.get(name) ?? new Uint8Array(0);
       const sectors = Math.max(1, Math.ceil(data.length / SECTOR));
