@@ -59,10 +59,11 @@ function main(): void {
     console.log(`\nown TEXS: ${decodeOsmTextures(texs).arrays.length} arrays`);
   }
   if (fixture.textureSource === 'world') {
-    // Plan 086 phase 7: the pak manifest lives in the `<gameDir>-pack` sibling; legacy builds nest it.
-    const manifestPath = existsSync(`${pak}-pack/manifest.json`)
-      ? `${pak}-pack/manifest.json`
-      : `${pak}/opensa/manifest.json`;
+    // Plan 086 phase 8: the pak manifest lives in the game dir's pak/; older builds nested/sibling it.
+    const manifestPath =
+      [`${pak}/pak/manifest.json`, `${pak}-pack/manifest.json`, `${pak}/opensa/manifest.json`].find((path) =>
+        existsSync(path),
+      ) ?? `${pak}/pak/manifest.json`;
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
       textures: { format?: string; layers?: number; size?: number }[];
     };

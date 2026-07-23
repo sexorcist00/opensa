@@ -20,13 +20,15 @@ import { decodeToRgba, encodePng } from './lib/texture';
  * vehicle-generic parent at runtime; they are not missing data.
  *
  * Run: `npx tsx scripts/crosstxd-fix.ts [reportPath] [buildGameDir] [modsDir] [outDir]`
- * Defaults: build/original/opensa-pack/report.json (086 phase 7; or the legacy nested path) ·
+ * Defaults: build/original/opensa/pak/report.json (086 phase 8; older pak homes probed) ·
  * build/original/sa · mods-src/original/mods · NO_COMMIT/crossTxdFix
  */
 const [
-  reportPath = existsSync('build/original/opensa-pack/report.json')
-    ? 'build/original/opensa-pack/report.json'
-    : 'build/original/opensa/opensa/report.json',
+  reportPath = [
+    'build/original/opensa/pak/report.json',
+    'build/original/opensa-pack/report.json',
+    'build/original/opensa/opensa/report.json',
+  ].find((path) => existsSync(path)) ?? 'build/original/opensa/pak/report.json',
   buildGameDir = 'build/original/sa',
   modsDir = 'mods-src/original/mods',
   outDir = 'NO_COMMIT/crossTxdFix',

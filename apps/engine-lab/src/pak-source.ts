@@ -37,13 +37,19 @@ export async function loadLabTimecyc(source: PakSource): Promise<LabTimecyc | nu
   return vanilla !== null ? { is24h: false, text: vanilla } : null;
 }
 
-/** Resolve `?src=` to a products base. Probes, in order: a pmb BUILD ROOT (`<src>/opensa-pack/manifest.json`,
- *  plan 086 phase 7 — game dir at `<src>/opensa`), the legacy game-dir layout (`<src>/opensa/manifest.json`),
- *  else `<src>` IS the products dir. An absolute URL (a build served cross-origin, e.g.
- *  `http://localhost:3001/build/...`) passes through as-is; a bare name is made root-relative to the lab's
- *  own origin. */
+/** Resolve `?src=` to a products base. Probes, in order: a SELF-CONTAINED game dir (`<src>/pak/manifest.json`,
+ *  plan 086 phase 8), a pmb BUILD ROOT (`<src>/opensa/pak/manifest.json`), the short-lived phase-7 sibling
+ *  (`<src>/opensa-pack/manifest.json`), the legacy nested pak (`<src>/opensa/manifest.json`), else `<src>`
+ *  IS the products dir. An absolute URL (a build served cross-origin, e.g. `http://localhost:3001/build/...`)
+ *  passes through as-is; a bare name is made root-relative to the lab's own origin. */
 export async function resolvePakSource(src: string): Promise<PakSource> {
   const root = /^(?:https?:)?\/\//.test(src) ? src.replace(/\/+$/, '') : `/${src.replace(/^\/+|\/+$/g, '')}`;
+  if (await exists(`${root}/pak/manifest.json`)) {
+    return { base: `${root}/pak`, gameDir: root };
+  }
+  if (await exists(`${root}/opensa/pak/manifest.json`)) {
+    return { base: `${root}/opensa/pak`, gameDir: `${root}/opensa` };
+  }
   if (await exists(`${root}/opensa-pack/manifest.json`)) {
     return { base: `${root}/opensa-pack`, gameDir: `${root}/opensa` };
   }

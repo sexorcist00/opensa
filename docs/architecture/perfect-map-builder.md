@@ -32,17 +32,14 @@ flowchart TB
   oslod["opensa · opensa-lod-generator<br/>cell-LOD bake + linear TXDs"]:::stage
   pack["pack · opensa-pack packGameDir<br/>weld cells · .osm per model · pak"]:::stage
   outsa[("&lt;out&gt;/sa<br/>real-SA build")]:::data
-  outos[("&lt;out&gt;/opensa<br/>converted game dir")]:::data
-  outpak[("&lt;out&gt;/opensa-pack<br/>world.ospak · manifest · water.bin")]:::data
-  fetch["fetch-pack (npm run fetch:pack)<br/>content-hashed zip chunks + manifest"]:::stage
-  hosted[("static/games/&lt;game&gt;-&lt;version&gt;/<br/>hosted fetch delivery")]:::data
+  outos[("&lt;out&gt;/opensa<br/>SELF-CONTAINED game dir<br/>(pak/ inside: world.ospak · manifest · water.bin)")]:::data
+  fetch["fetch-pack (chained by build:game:*)<br/>content-hashed zip chunks + manifest"]:::stage
+  outpak[("&lt;out&gt;/opensa-pack/&lt;game&gt;-&lt;version&gt;<br/>the FETCH build — deploy as games/&lt;game&gt;-&lt;version&gt;")]:::data
 
   src --> mods --> veh --> peds --> opt --> trees --> proc --> guard
   guard --> sa --> outsa
   guard --> oslod --> pack --> outos
-  pack --> outpak
-  outos --> fetch --> hosted
-  outpak --> fetch
+  outos --> fetch --> outpak
 
   classDef stage fill:#d8f5e0,stroke:#1f9d55,color:#111
   classDef guard fill:#ffe6cc,stroke:#f55c07,color:#111
@@ -64,7 +61,7 @@ flowchart TB
 | —   | guards     | `checkTextIplSlotBudget`, `checkImgIdBudgets` | the SA runtime ceilings — see [edge-cases](../edge-cases/)       |
 | 7   | `sa`       | `buildSaLods` → `<out>/sa`                    | the real-game (RenderWare) target                                |
 | 8   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 256 bake, `stripLods`, linear-convention TXD swap           |
-| 9   | `pack`     | `packGameDir` (opensa-pack) → `<out>/opensa`  | the OpenSA target; pak → `<out>/opensa-pack` (086 phase 7); report mirrored to `<out>/report.json` |
+| 9   | `pack`     | `packGameDir` (opensa-pack) → `<out>/opensa`  | the OpenSA target, self-contained (pak → `<out>/opensa/pak`, 086 phase 8); report mirrored to `<out>/report.json` |
 | 10  | `lod`      | —                                             | special `--until` value: run everything, keep every intermediate |
 
 Between stages 6 and 7 the pipeline collects generated models + `lod-exclude.json` into `excludeItems` for
@@ -74,9 +71,9 @@ both final LOD generators.
 
 `packGameDir` (`tools/opensa-pack/src/pack.ts`) converts a game-ready dir into the native build. `--out` is a
 **copy of the game dir** in which every converted model's `dff`/`txd` inside the IMGs is replaced by one
-sectioned `.osm`; the pak products go to the `<out>-pack` **sibling** (`--pak-out` to override — plan 086
-phase 7): `world.ospak` (welded cells + the shared world texture dictionary), `manifest.json` (with
-`buildTime`), `water.bin`, `report.json`.
+sectioned `.osm`; the pak products go to `<out>/pak` (`--pak-out` to override — plan 086 phase 8, the game
+dir is SELF-CONTAINED): `world.ospak` (welded cells + the shared world texture dictionary), `manifest.json`
+(with `buildTime`), `water.bin`, `report.json`.
 
 - **Weld first, models second** (order-critical): `weld.ts` merges the district into 250-unit render cells
   and produces the shared texture plan; `convertDistrict` then converts model classes
@@ -89,15 +86,16 @@ phase 7): `world.ospak` (welded cells + the shared world texture dictionary), `m
 - Bakes: AO/skyVis **on by default** (`--no-ao` to skip — it replaces prod's SSAO); the heavy sun-vis shadow
   bake is opt-in (`--bakes`), and **off** in the pmb pack stage.
 
-Point any host at the BUILD ROOT — the loaders probe the layout (`opensa/` game dir + `opensa-pack/` pak;
-legacy nested-pak and raw game dirs still resolve): `?loader=http-dir&src=http://localhost:3001/build/original`
-(game), `?src=…/build/original` (lab), `--after ./build/original/opensa` (viewers — a game dir compare).
+Point any host at the GAME DIR — it is self-contained (`pak/` inside; loaders also resolve legacy layouts
+and a build-root pick): `?loader=http-dir&src=http://localhost:3001/build/original/opensa` (game),
+`?src=…/build/original/opensa` (lab), `--after ./build/original/opensa` (viewers).
 
-## fetch-pack (downstream of the `pack` output, plan 086)
+## fetch-pack (the SECOND build, plan 086 phase 8)
 
-`tools/fetch-pack` (`npm run fetch:pack`) consumes `<out>/opensa` + `<out>/opensa-pack` and repacks them
-into the hosted fetch delivery: ~50 MB content-hashed zip chunks + `manifest.json` under
-`static/games/<game>-<version>/` (identity from the pak manifest's `game`/`appVersion`). One build serves
-both surfaces — local play reads `build/<id>` directly, hosted fetch downloads chunks of the SAME bytes.
-Not a pmb stage: it runs separately after a build. See [fetch-pack.md](../features/fetch-pack.md) and the
-tool's `docs/plans/001-architecture.md`.
+`tools/fetch-pack` (`npm run fetch:pack`, chained after pmb by every `build:game:*` alias) consumes the
+self-contained `<out>/opensa` game dir and produces the independent FETCH build:
+`<out>/opensa-pack/<game>-<version>/` — ~50 MB content-hashed zip chunks + a download `manifest.json`
+(identity from the pak manifest's `game`/`appVersion`). Deploy = upload that folder to the static host as
+`games/<game>-<version>/`; `--out ./static/games` stages a local fetch-mode test. Two independent builds
+of the SAME bytes: `opensa/` for the folder/http-dir modes, `opensa-pack/` for hosted fetch. See
+[fetch-pack.md](../features/fetch-pack.md) and the tool's `docs/plans/001-architecture.md`.

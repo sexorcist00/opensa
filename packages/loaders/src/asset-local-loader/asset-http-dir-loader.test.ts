@@ -110,17 +110,30 @@ describe('AssetHttpDirLoader', () => {
       expect(Array.from(new Uint8Array(await world!.arrayBuffer()))).toEqual([9, 9, 9]);
     });
 
-    it('boots from a pmb BUILD ROOT and reads the pak from the opensa-pack sibling (086 phase 7)', async () => {
+    it('reads the pak from the game dir’s pak/ folder (086 phase 8 — the self-contained layout)', async () => {
+      const files: Record<string, Uint8Array> = {
+        ...Object.fromEntries(Object.entries(FILES).filter(([path]) => !path.startsWith('opensa/'))),
+        'pak/manifest.json': new TextEncoder().encode('{"version":1}'),
+        'pak/world.ospak': new Uint8Array([8, 8]),
+      };
+      serveBuild(files);
+
+      const world = await make().openWorld('world.ospak');
+      expect(world).not.toBeNull();
+      expect(Array.from(new Uint8Array(await world!.arrayBuffer()))).toEqual([8, 8]);
+    });
+
+    it('boots from a pmb BUILD ROOT too (phase-8 game dir under opensa/, sa/ ignored)', async () => {
       const root = 'http://host/build/original';
       const files: Record<string, Uint8Array> = {
-        'opensa-pack/manifest.json': new TextEncoder().encode('{"version":1}'),
-        'opensa-pack/world.ospak': new Uint8Array([7, 7]),
         'sa/models/gta3.img': new Uint8Array([1]), // the real-SA target — must be ignored, not booted
         ...Object.fromEntries(
           Object.entries(FILES)
             .filter(([path]) => !path.startsWith('opensa/'))
             .map(([path, bytes]) => [`opensa/${path}`, bytes]),
         ),
+        'opensa/pak/manifest.json': new TextEncoder().encode('{"version":1}'),
+        'opensa/pak/world.ospak': new Uint8Array([7, 7]),
       };
       serveBuild(files, root);
       const loader = new AssetHttpDirLoader({ game: 'gta-sa', version: '1.0.0' }, root);

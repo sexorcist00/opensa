@@ -7,14 +7,15 @@ zips.
 
 ## Contract
 
-- **Input**: a pmb `--out` dir; the `<build>/opensa` GAME DIR + the `<build>/opensa-pack` pak sibling
-  (phase 7; pre-phase-7 builds nest the pak inside the game dir) ship — the `sa/` twin is the real-SA
-  target and never travels. Pak files become `opensa-pack/<name>` VFS entries.
-- **Identity**: `game` + `appVersion` from `<build>/opensa-pack/manifest.json` (phase 1; legacy:
-  `<build>/opensa/opensa/manifest.json`). Fallback (pre-086 pak): build folder basename + root
-  package.json version, with a ⚠ log.
-- **Output**: `static/games/<game>-<version>/` — `manifest.json` (`{ chunks, game, version }`, the
-  exact legacy shape `packages/loaders/manifest.ts` parses) + `<group>-<sha1·12>.zip` chunks.
+- **Input**: a pmb `--out` dir; the SELF-CONTAINED `<build>/opensa` GAME DIR ships whole (phase 8 — the
+  engine pak rides inside at `pak/`, becoming `pak/<name>` VFS entries) — the `sa/` twin is the real-SA
+  target and never travels.
+- **Identity**: `game` + `appVersion` from `<game>/pak/manifest.json` (phase 1; older homes probed:
+  the phase-7 `<build>/opensa-pack/` sibling, the legacy nested `<game>/opensa/`). Fallback (pre-086
+  pak): build folder basename + root package.json version, with a ⚠ log.
+- **Output**: `<build>/opensa-pack/<game>-<version>/` (the second, independent FETCH build; `--out
+  ./static/games` stages a local test) — `manifest.json` (`{ chunks, game, version }`, the exact legacy
+  shape `packages/loaders/manifest.ts` parses) + `<group>-<sha1·12>.zip` chunks.
 
 ## Grouping (the loader's fixed vocabulary)
 

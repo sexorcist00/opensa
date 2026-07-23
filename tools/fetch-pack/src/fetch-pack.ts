@@ -9,15 +9,17 @@ import { chunkByHash, TARGET_CHUNK_BYTES } from './chunk';
 
 /**
  * The finishing tool of plan 086: pack a pmb build's `opensa/` GAME DIR into the fetch loader's
- * content-hashed zip chunks + `manifest.json` under `static/games/<game>-<version>/`. It knows NOTHING
+ * content-hashed zip chunks + `manifest.json` under `<build>/opensa-pack/<game>-<version>/` (phase 8:
+ * the SECOND independent build of a pmb run; deploy = upload that folder as `games/<game>-<version>/`,
+ * `--out ./static/games` stages a local fetch test). It knows NOTHING
  * about the game's content — no IDE/IPL parsing, no exterior/interior partitioning (all of that died
  * with `build-game.ts`); it walks files, slices the huge ones, buckets by name hash and zips.
  *
  * Group mapping (the loader's fixed vocabulary `data|models|others|textures`):
  *   data     — `data/` + `text/` + the loose root files (stream.ini, parked.json, …)
- *   models   — `models/` (the IMG archives with the converted `.osm` inside) + the pak sibling shipped
- *              as `opensa-pack/` (world.ospak, pak manifest, water.bin; nested `opensa/` in pre-phase-7
- *              builds) — the heavy geometry+texture payload
+ *   models   — `models/` (the IMG archives with the converted `.osm` inside) + the game dir's `pak/`
+ *              (world.ospak, pak manifest, water.bin; older builds: nested `opensa/` or the
+ *              `opensa-pack/` sibling) — the heavy geometry+texture payload
  *   others   — everything else (`anim/`, audio, dlls…)
  *   textures — EMPTY for a pak build (textures live inside world.ospak); kept so the manifest shape and
  *              the client's group iteration stay untouched
@@ -29,7 +31,9 @@ export interface FetchPackOptions {
   /** A pmb `--out` dir (e.g. `./build/original`) — its `opensa/` target is what ships. */
   buildDir: string;
   log?: (message: string) => void;
-  /** Output root; the game lands under `<outRoot>/<game>-<version>/`. Default `./static/games`. */
+  /** Output root; the game lands under `<outRoot>/<game>-<version>/`. Default `<buildDir>/opensa-pack`
+   *  (phase 8: the fetch build sits beside the `opensa/` game build — two independent artifacts of one
+   *  pmb run; pass `--out ./static/games` to stage a local fetch-mode test directly). */
   outRoot?: string;
 }
 
@@ -57,11 +61,14 @@ export function fetchPack(options: FetchPackOptions): FetchPackResult {
   if (!existsSync(gameDir)) {
     throw new Error(`no opensa/ target under ${options.buildDir} — run pmb first`);
   }
-  // The pak sibling (plan 086 phase 7); a pre-phase-7 build carries the pak nested inside the game dir.
-  const pakDir = existsSync(join(buildRoot, 'opensa-pack')) ? join(buildRoot, 'opensa-pack') : null;
-  // Identity comes from the pak manifest (plan 086 phase 1); a pre-phase-1 pak falls back loudly.
-  const pakManifestPath = pakDir ? join(pakDir, 'manifest.json') : join(gameDir, 'opensa', 'manifest.json');
-  const pakManifest = existsSync(pakManifestPath)
+  // Identity comes from the pak manifest (plan 086 phase 1): `<game>/pak/` since phase 8, with the two
+  // older homes as fallbacks; a pre-phase-1 pak falls back to the folder/package.json, loudly.
+  const pakManifestPath = [
+    join(gameDir, 'pak', 'manifest.json'),
+    join(buildRoot, 'opensa-pack', 'manifest.json'),
+    join(gameDir, 'opensa', 'manifest.json'),
+  ].find((path) => existsSync(path));
+  const pakManifest = pakManifestPath
     ? (JSON.parse(readFileSync(pakManifestPath, 'utf8')) as { appVersion?: string; game?: string })
     : {};
   const game = pakManifest.game ?? basename(resolve(options.buildDir));
@@ -70,7 +77,7 @@ export function fetchPack(options: FetchPackOptions): FetchPackResult {
     log(`⚠ pak manifest lacks game/appVersion (pre-086 build) — using ${game}-${version} from fallbacks`);
   }
 
-  const outDir = join(resolve(options.outRoot ?? join('static', 'games')), `${game}-${version}`);
+  const outDir = join(resolve(options.outRoot ?? join(buildRoot, 'opensa-pack')), `${game}-${version}`);
   mkdirSync(outDir, { recursive: true });
 
   const groups: Record<GroupName, { bytes: Uint8Array; name: string }[]> = {
@@ -80,22 +87,16 @@ export function fetchPack(options: FetchPackOptions): FetchPackResult {
     textures: [],
   };
   let entryCount = 0;
-  // The game dir's files ship by their game-relative path; the pak sibling's files ship as
-  // `opensa-pack/<name>` — the VFS key the fetch loader's `openWorld` reads (phase 7).
-  const roots: { dir: string; prefix: string }[] = [
-    { dir: gameDir, prefix: '' },
-    ...(pakDir ? [{ dir: pakDir, prefix: 'opensa-pack/' }] : []),
-  ];
-  for (const root of roots) {
-    for (const file of walk(root.dir)) {
-      const path = root.prefix + relative(root.dir, file).split(sep).join('/');
-      const raw = readFileSync(file);
-      const bytes = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
-      for (const entry of sliceEntries([{ bytes, name: path }])) {
-        groups[groupOf(path)].push(entry);
-      }
-      entryCount += 1;
+  // The game dir is self-contained (phase 8) — one walk covers everything; the pak ships by its
+  // game-relative `pak/<name>` path, the VFS key the fetch loader's `openWorld` reads.
+  for (const file of walk(gameDir)) {
+    const path = relative(gameDir, file).split(sep).join('/');
+    const raw = readFileSync(file);
+    const bytes = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+    for (const entry of sliceEntries([{ bytes, name: path }])) {
+      groups[groupOf(path)].push(entry);
     }
+    entryCount += 1;
   }
 
   const chunks = {} as Record<
@@ -130,7 +131,7 @@ export function groupOf(path: string): GroupName {
   if (!path.includes('/') || top === 'data' || top === 'text') {
     return 'data';
   }
-  if (top === 'models' || top === 'opensa' || top === 'opensa-pack') {
+  if (top === 'models' || top === 'pak' || top === 'opensa' || top === 'opensa-pack') {
     return 'models';
   }
 

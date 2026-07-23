@@ -142,6 +142,25 @@ engine-lab's `resolvePakSource` probes root → legacy → bare, fetch-pack walk
 files as `opensa-pack/<name>` VFS entries, and the debug scripts/crosstxd defaults probe both. Surfaces
 now point at the BUILD ROOT: `?src=…/build/original`.
 
+## Phase 8 — TWO independent builds (DONE 2026-07-23, supersedes phase 7's layout)
+
+Phase 7's field trial surfaced a terminology split: for the user, "the pack" is the DOWNLOADABLE fetch
+package, and the folder-mode game dir must stay one self-contained pick — a build root holding
+`opensa/ + opensa-pack/` siblings satisfied neither. Final scheme (user decision):
+
+- `build/<id>/opensa` — **build #1, the game dir**: self-contained, the engine pak inside at `pak/`
+  (the clean name kills the old `opensa/opensa` confusion). Folder mode picks it, http-dir serves it
+  (`?src=…/build/<id>/opensa`) — nothing outside it is needed.
+- `build/<id>/opensa-pack/<game>-<version>/` — **build #2, the fetch build**: fetch-pack's output
+  (download manifest + ~50 MB deflate chunks, `world.ospak` sliced into `#index` parts). Deploy =
+  upload the folder as `games/<game>-<version>/`; `--out ./static/games` stages a local fetch test.
+- Every `build:game:*` alias chains fetch-pack after pmb — one command, both builds (the phase-4
+  chaining finally lands).
+
+Probe chains keep every older layout loadable: `openWorld` tries `pak/` → `opensa/` (nested legacy) →
+`opensa-pack/` (the one-day phase-7 sibling); fetch-pack, engine-lab, and the debug/crosstxd scripts
+probe the same three homes.
+
 ## Order & risk
 
 0 → 1 → 2 → 3 → 4 → 5/6 (5 and 6 are independent). Phase 0 is wide but mechanical and unblocks

@@ -44,14 +44,15 @@ describe('fetchPack', () => {
       expect(groupOf('text/american.gxt')).toBe('data');
       expect(groupOf('stream.ini')).toBe('data');
       expect(groupOf('models/gta3.img')).toBe('models');
+      expect(groupOf('pak/world.ospak')).toBe('models');
       expect(groupOf('opensa/world.ospak')).toBe('models');
       expect(groupOf('opensa-pack/world.ospak')).toBe('models');
       expect(groupOf('anim/anim.img')).toBe('others');
     });
 
-    it('packs a build into chunks + a manifest keyed by the pak-sibling identity (086 phase 7)', () => {
+    it('packs a build into chunks + a manifest keyed by the in-game-dir pak identity (086 phase 8)', () => {
       const game = join(dir, 'build', 'opensa');
-      const pak = join(dir, 'build', 'opensa-pack');
+      const pak = join(game, 'pak');
       mkdirSync(join(game, 'data'), { recursive: true });
       mkdirSync(pak, { recursive: true });
       writeFileSync(join(pak, 'world.ospak'), new Uint8Array(64).fill(7));
@@ -71,7 +72,7 @@ describe('fetchPack', () => {
       expect(manifest.game).toBe('testgame');
       expect(Object.keys(manifest.chunks).sort()).toEqual(['data', 'models', 'others', 'textures']);
       expect(manifest.chunks.textures).toEqual([]); // pak textures live inside world.ospak
-      // The pak sibling ships in the models group (as `opensa-pack/<name>` VFS entries).
+      // The game dir's pak/ ships in the models group (as `pak/<name>` VFS entries).
       expect(manifest.chunks.models.reduce((sum, c) => sum + c.entries, 0)).toBe(2);
       for (const info of manifest.chunks.models) {
         expect(readFileSync(join(result.outDir, info.file)).length).toBe(info.bytes);
@@ -92,7 +93,7 @@ describe('fetchPack', () => {
 
     it('keeps untouched chunks byte-identical when one file changes (the cache promise)', () => {
       const game = join(dir, 'build', 'opensa');
-      const pak = join(dir, 'build', 'opensa-pack');
+      const pak = join(game, 'pak');
       mkdirSync(join(game, 'data'), { recursive: true });
       mkdirSync(pak, { recursive: true });
       writeFileSync(join(pak, 'manifest.json'), JSON.stringify({ appVersion: '1.0.0', game: 'stab' }));

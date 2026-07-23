@@ -1,13 +1,15 @@
 # fetch-pack
 
-The plan-086 finishing tool: pack a pmb build (`opensa/` game dir + `opensa-pack/` pak sibling — phase 7)
-into the fetch loader's content-hashed zip chunks + `manifest.json` under `static/games/<game>-<version>/`.
-One build serves both surfaces — local play reads `build/<id>` directly (http-dir / folder mode), hosted
-fetch downloads these chunks of the SAME bytes.
+The plan-086 finishing tool: pack a pmb build's SELF-CONTAINED `opensa/` game dir (engine pak inside at
+`pak/` — phase 8) into the second, independent FETCH build: content-hashed zip chunks + a download
+`manifest.json` under `<build>/opensa-pack/<game>-<version>/`. Two builds of the SAME bytes — local play
+opens `build/<id>/opensa` directly (folder / http-dir), hosted fetch downloads the chunks (deploy = upload
+the `<game>-<version>/` folder as `games/<game>-<version>/`). Every `build:game:*` alias chains this tool
+after pmb.
 
 ```bash
-npm run fetch:pack                # defaults: --build ./build/original --out ./static/games
-npx tsx tools/fetch-pack/src/cli.ts --build ./build/gostown
+npm run fetch:pack                # defaults: --build ./build/original --out <build>/opensa-pack
+npx tsx tools/fetch-pack/src/cli.ts --build ./build/gostown --out ./static/games   # stage a local fetch test
 ```
 
 Identity comes from the pak manifest (`game` + `appVersion`, plan 086 phase 1); a pre-086 pak falls

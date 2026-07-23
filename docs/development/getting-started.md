@@ -46,19 +46,19 @@ the matching alias (see below) or call the pmb CLI with `--game/--in/--out` dire
 ## 3. Build the archives
 
 ```sh
-npm run build:game:original              # pmb build → ./build/original (sa/ + opensa/ targets)
-npm run fetch:pack                       # ./build/original → static/games/original-<version>/
-# other games: npm run build:game:gostown|carcer|anderius, then fetch:pack --build ./build/<id>
+npm run build:game:original              # pmb + fetch-pack → ./build/original (sa/ + opensa/ + opensa-pack/)
+# other games: npm run build:game:gostown|carcer|anderius
 ```
 
-`build:game:<id>` runs the perfect-map-builder pipeline (`tools/perfect-map-builder`) into
-`./build/<id>`; `fetch:pack` (`tools/fetch-pack`, plan 086) then packs the `opensa/` game dir into
-`static/games/<game>-<version>/` (identity from the pak manifest). Each group is split into **~50MB
-content-hashed chunks** (`<group>-<hash>.zip`) so a dropped download re-fetches one chunk, not the
-whole group; `manifest.json` lists them:
+One command, TWO independent builds (plan 086 phase 8): `opensa/` — the SELF-CONTAINED game dir
+(engine pak inside at `pak/`; open it in folder mode or serve it for http-dir), and `opensa-pack/` —
+the FETCH build (`tools/fetch-pack` packs the game dir into `<game>-<version>/` chunks; deploy = upload
+that folder as `games/<game>-<version>/`). Each group is split into **~50MB content-hashed chunks**
+(`<group>-<hash>.zip`) so a dropped download re-fetches one chunk, not the whole group; the download
+`manifest.json` lists them:
 
 - `data` — loose root files + the `data/` and `text/` folders (ide/ipl/dat/cfg/zon/gxt).
-- `models` — the `models/` IMGs + the `opensa/` pak (world/vehicle/ped `.osm`s, cells, `world.ospak`).
+- `models` — the `models/` IMGs (converted `.osm` inside) + the game dir's `pak/` (`world.ospak`, sliced).
 - `textures` — EMPTY for a pak build (pak textures live inside `world.ospak`); kept for the manifest shape.
 - `others` — everything else (anim/ifp and friends).
 

@@ -25,11 +25,11 @@ npm run serve:static        # static origin :3001 — mounts /build (Range + /__
 
 | Surface                  | URL                                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Game on the served build | `http://localhost:5173/?loader=http-dir&src=http://localhost:3001/build/original`                            |
+| Game on the served build | `http://localhost:5173/?loader=http-dir&src=http://localhost:3001/build/original/opensa`                            |
 | Bench sweep (8 scenes)   | `http://localhost:5173/?bench=all` (one scene: `?bench=country-dusk`)                                              |
 | Soak (minutes)           | `http://localhost:5173/?soak=30`                                                                                   |
 | Lab                      | `npx vite --config apps/engine-lab/vite.config.ts` → `http://localhost:4300/`                                      |
-| Lab: streaming LS        | `http://localhost:4300/?pak=1&src=http://localhost:3001/build/original&at=2495,-1687,13&orbit=300&draw=1500` |
+| Lab: streaming LS        | `http://localhost:4300/?pak=1&src=http://localhost:3001/build/original/opensa&at=2495,-1687,13&orbit=300&draw=1500` |
 | Lab: vehicle probe       | `http://localhost:4300/?pak=1&stream=1&src=…&vehicle=1&vmodel=vehicle-comet&at=2495,-1675,13.3&orbit=26&hour=12`   |
 | Viewers                  | `npm run dev` → `http://localhost:5173/viewer.html?tab=<object,vehicle,character,compare>`                         |
 
@@ -61,7 +61,7 @@ NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts
 NODE_OPTIONS=--max-old-space-size=12288 \
   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1 --in ./mods-src
 #   [--pak-out <dir>] [--game-id <id>] [--no-ao] [--bakes --clouds mods-src/clouds] [--no-models] [--bake-workers N] [--stochastic <file…>]
-#   --pak-out: where the pak products land (default: the <out>-pack SIBLING — 086 phase 7)
+#   --pak-out: where the pak products land (default: <out>/pak — the game dir is self-contained, 086 phase 8)
 #   --game-id: fetch game id stamped into the pak manifest (default: basename of --game; pmb passes its own)
 ```
 
@@ -75,7 +75,7 @@ npx tsx tools/map-optimizer/src/compare-serve.ts --before ./game-src/original --
 ## Headless field checks (tools-debug/bench-harness)
 
 ```bash
-SRC=http://localhost:3001/build/original
+SRC=http://localhost:3001/build/original/opensa
 # Boot + bench/soak, screenshots on exit. Env: DPR=2 · TAG='[soak]' · DRAG=<dy>
 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" <outPrefix> <timeoutMs> <expectReports>
@@ -107,7 +107,7 @@ npm run test:fixtures                # real-GTA fixtures + viewer e2e assets
 npm run e2e / e2e:ui / e2e:update    # playwright
 npm run lint / format                # tsc --noEmit + eslint / prettier+eslint --fix
 npm run arch / arch:render           # package graph to stdout / regenerate docs/architecture/assets
-npm run build:game:original          # pmb build of a game id (also :gostown :carcer :anderius — plan 086)
-npm run fetch:pack                   # pmb build → fetch chunks under static/games/<game>-<version>/ (--build ./build/<id>, --out ./static/games)
+npm run build:game:original          # pmb build + fetch-pack chained → the TWO builds of a game id (also :gostown :carcer :anderius — plan 086)
+npm run fetch:pack                   # game build → fetch chunks under build/<id>/opensa-pack/<game>-<version>/ (--build ./build/<id>; --out ./static/games stages a local fetch test)
 npm run timecyc                      # precompute timecyc data
 ```

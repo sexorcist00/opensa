@@ -80,12 +80,12 @@ function mergeLazy(archives: readonly LazyImgArchive[]): LazyImgArchive {
 }
 
 /**
- * A pmb BUILD ROOT (plan 086 phase 7) holds the game dir under `opensa/` and the pak under `opensa-pack/`
- * as siblings (plus the real-SA `sa/` target, which the engine never reads). When the picked/served root is
- * such a build root, rebase it: game paths lose the `opensa/` prefix, `opensa-pack/*` stays addressable
- * as-is (`openWorld` reads it), everything else (`sa/**`, the root `report.json`) is dropped. A raw install
- * or a plain game dir passes through untouched — including a legacy build root, whose nested pak
- * (`opensa/opensa/*`) rebases to `opensa/*`, exactly where the legacy `openWorld` fallback looks.
+ * A pmb BUILD ROOT holds the game dir under `opensa/` (plus the real-SA `sa/` target, which the engine
+ * never reads). Picking the GAME DIR is the canonical move (phase 8 — it is self-contained, pak under
+ * `pak/`), but a root pick still resolves: game paths lose the `opensa/` prefix (a v2 build's pak then
+ * sits at `pak/*`, a legacy nested pak at `opensa/*` — both `openWorld` homes), the short-lived phase-7
+ * `opensa-pack/*` sibling stays addressable as-is, everything else (`sa/**`, the root `report.json`) is
+ * dropped. A raw install or a plain game dir passes through untouched.
  */
 function rebaseBuildRoot(io: InstallIo): InstallIo {
   if (io.paths.includes(GTA3) || !io.paths.includes(`opensa/${GTA3}`)) {

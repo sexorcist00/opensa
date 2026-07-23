@@ -19,8 +19,8 @@ merges into the IMG entry `<folder>.txd`).
    # [reportPath] [buildGameDir] [modsDir] [outDir] override the defaults when needed
    ```
 
-   It reads `build/original/opensa-pack/report.json` (or the pre-086-phase-7 nested
-   `build/original/opensa/opensa/report.json`), exports every rescued texture as an RGBA PNG from
+   It reads `build/original/opensa/pak/report.json` (086 phase 8; older pak homes are probed
+   automatically), exports every rescued texture as an RGBA PNG from
    the build's archives (gta3 + gta_int + cutscene overlay), and lays them out under
    `NO_COMMIT/crossTxdFix/<mod>/gta3_img/<txd>/<texture>.png`.
 

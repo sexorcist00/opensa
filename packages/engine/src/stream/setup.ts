@@ -160,8 +160,8 @@ async function openLocal(source: LocalPakSource, name: string): Promise<Blob> {
   const blob = await source.open(name);
   if (!blob) {
     throw new Error(
-      `no pak ${name} in the picked folder — pick the pmb BUILD ROOT (the folder holding opensa/ + ` +
-        `opensa-pack/, e.g. build/<game>), a legacy game dir with a nested opensa/ pak, or reconvert first`,
+      `no pak ${name} in the picked folder — pick the game dir (build/<game>/opensa: self-contained, ` +
+        `pak/ inside), or reconvert the install first`,
     );
   }
 

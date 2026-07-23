@@ -356,12 +356,11 @@ async function buildOpensaTarget(step: {
     // The fetch game id (plan 086): the USER-FACING --game folder, not this work-stage intermediate.
     gameId: basename(resolve(step.gamePath)),
     log: (message) => log(`pack: ${message}`),
+    // Plan 086 phase 8: the game dir is self-contained — the pak lands in `<out>/opensa/pak` (the default).
     outDir: opensa,
-    // Plan 086 phase 7: the pak is not game content — it lands beside the game dir.
-    pakDir: join(outPath, 'opensa-pack'),
     rect: config.pack.rect,
   });
-  // The pack writes its report beside the pak it belongs to (`<out>/opensa-pack/`). Mirror it at the root:
+  // The pack writes its report beside the pak it belongs to (`<out>/opensa/pak/`). Mirror it at the root:
   // that is where a run's summary is looked for, and the pak-side copy stays the pak's own.
   const reportPath = join(outPath, 'report.json');
   writeFileSync(

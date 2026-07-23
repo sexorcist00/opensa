@@ -19,9 +19,13 @@ if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
   console.error('usage: npx tsx scripts/debug/dump-cell.ts <x> <y> [pakDir]');
   process.exit(1);
 }
-// Plan 086 phase 7 layout first (pak sibling), then the legacy nested pak.
+// Plan 086 phase 8 layout first (build/original/opensa/pak), then the older pak homes.
 const pakDir =
-  pakArg ?? (existsSync('build/original/opensa-pack') ? 'build/original/opensa-pack' : 'build/original/opensa/opensa');
+  pakArg ??
+  ['build/original/opensa/pak', 'build/original/opensa-pack', 'build/original/opensa/opensa'].find((dir) =>
+    existsSync(dir),
+  ) ??
+  'build/original/opensa/pak';
 
 interface PakEntry {
   enc?: string;

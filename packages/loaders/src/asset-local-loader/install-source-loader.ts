@@ -71,16 +71,20 @@ export abstract class InstallSourceLoader implements AssetLoader {
   }
 
   /**
-   * Open a world-pak file from the build's `opensa-pack/` sibling (plan 086 phase 7), falling back to the
-   * legacy in-game-dir `opensa/` folder. This is what makes the loading MODE select the world: the pak
-   * comes from the picked/served install, never the app's `public/`. Absent file ⇒ null, so the streaming
-   * setup fails loudly instead of falling back.
+   * Open a world-pak file from the game dir's `pak/` folder (plan 086 phase 8 — the self-contained
+   * layout), falling back to the legacy homes: the nested `opensa/` (pre-phase-7 builds) and the
+   * `opensa-pack/` sibling of a root pick (the short-lived phase-7 layout). This is what makes the
+   * loading MODE select the world: the pak comes from the picked/served install, never the app's
+   * `public/`. Absent file ⇒ null, so the streaming setup fails loudly instead of falling back.
    */
   async openWorld(name: string): Promise<Blob | null> {
     const { source } = await this.ensureSource();
+    const lower = name.toLowerCase();
 
     return (
-      (await source.openLoose(`opensa-pack/${name.toLowerCase()}`)) ?? source.openLoose(`opensa/${name.toLowerCase()}`)
+      (await source.openLoose(`pak/${lower}`)) ??
+      (await source.openLoose(`opensa/${lower}`)) ??
+      source.openLoose(`opensa-pack/${lower}`)
     );
   }
 

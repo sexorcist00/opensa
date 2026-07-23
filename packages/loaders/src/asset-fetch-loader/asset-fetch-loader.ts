@@ -87,13 +87,15 @@ export class AssetFetchLoader implements AssetLoader {
 
   /**
    * Open a world-pak file delivered by the fetch chunks (plan 086 phase 3): the fetch-pack layout ships
-   * the pak products as VFS entries (`opensa-pack/world.ospak` since phase 7; `opensa/…` in pre-phase-7
-   * chunk sets — sliced parts reassembled by the VFS). Same contract as the folder loaders — absent
-   * file ⇒ null, so streaming fails loudly instead of silently reading the app's `public/pak-map`.
+   * the pak products as VFS entries (`pak/world.ospak` since phase 8; `opensa-pack/…` / `opensa/…` in
+   * older chunk sets — sliced parts reassembled by the VFS). Same contract as the folder loaders —
+   * absent file ⇒ null, so streaming fails loudly instead of silently reading the app's `public/pak-map`.
    */
   async openWorld(name: string): Promise<Blob | null> {
     const files = this.config.files;
-    const bytes = files?.get(`opensa-pack/${name.toLowerCase()}`) ?? files?.get(`opensa/${name.toLowerCase()}`) ?? null;
+    const lower = name.toLowerCase();
+    const bytes =
+      files?.get(`pak/${lower}`) ?? files?.get(`opensa-pack/${lower}`) ?? files?.get(`opensa/${lower}`) ?? null;
 
     return Promise.resolve(bytes ? new Blob([bytes]) : null);
   }

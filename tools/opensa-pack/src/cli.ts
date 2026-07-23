@@ -21,10 +21,10 @@
  *
  * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / CELL_SIZE)).
  *
- * OUTPUT (plan 003 phase 1 + 086 phase 7): `--out` is a COPY of `--game` — the chain convention, so every
- * stage hands the next a complete game tree. The pak products (`world.ospak`, `manifest.json`, `water.bin`,
- * `report.json`) go to the `<out>-pack` SIBLING (override with `--pak-out`); the game's own files are passed
- * through untouched. Point a host at the parent that holds both (`?src=<build root>`).
+ * OUTPUT (plan 003 phase 1 + 086 phase 8): `--out` is a COPY of `--game` — the chain convention, so every
+ * stage hands the next a complete game tree, and the game dir is SELF-CONTAINED: the pak products
+ * (`world.ospak`, `manifest.json`, `water.bin`, `report.json`) go to `<out>/pak` (override with
+ * `--pak-out`). Point a host at the game dir (`?src=<out>`).
  */
 import { argValue, fromCwd } from '@opensa/tool-kit/cli';
 import { statSync } from 'node:fs';
