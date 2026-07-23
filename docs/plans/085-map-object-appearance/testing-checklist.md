@@ -21,21 +21,19 @@ Sanity: 1123 cells / ~1 GB / AO ~375 s. Also owed on this rebuild (078): map-obj
 
 - [ ] **Row A — neon rope palms** (`vgsn_nitree_r01`, LV strip / user's palm spot): at night the
       red/pink rope spiral GLOWS (was: only the trunk lit). Blue (`b01`) ropes glow at full strength too.
-- [ ] **Row B — missing textures render grey, not magenta**: visagesign04's arch (LV Visage) turns
-      untextured grey like prod. F2 magenta toggle now paints exactly the broken spots. `report.json`
-      → `textures.missing` lists every failed name WITH the models — the user triages the mods from it
-      (known-broken data: mod 42 names `_257` textures that exist nowhere).
+- [x] **Row B — missing textures render grey, not magenta** — VERIFIED by the user 2026-07-23 on the
+      rebuilt pak: visagesign04's arch (LV Visage) turns untextured grey like prod, the F2 magenta
+      toggle paints exactly the broken spots (known-broken data: mod 42/now-40 names `_257` textures
+      that exist nowhere).
 - [ ] **Row C — additive neon** (`vgncircus2neon`, Circus casino + the whole LV strip's flags-0x8
       overlays): night dressing ADDS light onto the buildings (was: dull). Check 22:00–06:00.
 - [ ] **Row D — night-only timed models** (`casinoblock41_nt`, Fremont): the facade runs FULLBRIGHT
       after the 22:00 swap (was ~18 % brightness) **and the stripes SCROLL down** (kind 5 — the scroll
       also stops showing by day and no longer double-draws at night).
-- [ ] **Row F — the magenta roster resolves**: the 28-model list (top: `bonaventura_lan`, `sw_block02`
-      @1282,373, `triadcasno01_lvs` roofs @1955,1011, `subpen_crane_sfse` @−1744,−1784, `vgnlowbuild13`
-      @2551,2019, `lacnchasgn*_lvs` La Conca @2445,1500, `noodlecart_prop`, `ferris01_law2`…) now pulls
-      the real texels through the global by-name index. Spot-check those six positions; `report.json`
-      → `textures.crossTxd` names every donor, `textures.missing` should shrink to genuinely absent
-      names (mod 42's `_257` set).
+- [x] **Row F — the magenta roster resolves** — VERIFIED by the user 2026-07-23 on the rebuilt pak: the
+      magenta-roster spots resolve, AND `report.json` carries **no `textures.crossTxd` at all** — the
+      reviewed crossTxd PNG fixes (the `/crosstxd-fix` batch moved into `mods-src/original/mods`) made
+      the data self-contained, so nothing needs a donor TXD any more.
 - [ ] **084 vehicle round (2026-07-22, still unverified in field)**: AO under cars, indirect level,
       reflectivity gate, extras at spawn, matte tyres on admiral/comet/petro (the wheel fix rides
       `.osm` DESC — old paks keep the bug).
@@ -46,8 +44,8 @@ Sanity: 1123 cells / ~1 GB / AO ~375 s. Also owed on this rebuild (078): map-obj
       scroll — confirmed. Converter 0 failures, map-objects stage time good, pack ledger lines present.
 - [x] Row G radar — spawns AND rotates now; the "no texture" black dish is the MOD'S OWN near-black
       `ap_radar` texture (byte-faithful in the pak — see the plan's row G). Data decision owed.
-- [ ] Row B (grey stand-ins + F2 magenta + report triage) and row F (six magenta-roster spots) — still
-      to check this run.
+- [x] Row B (grey stand-ins + F2 magenta + report triage) and row F (magenta-roster spots) — VERIFIED
+      2026-07-23; crossTxd ledger empty (see the rows above).
 - [x] Wheels: tyre rubber matte, no specular glint — CONFIRMED by the user 2026-07-23.
 - Row H (LV facade "holes") — TRACED + FIXED 2026-07-23 (see the plan): day/night probe answered
   (day clean, night holes), vanilla check answered (solid facade in the original build). Cause: row C's
