@@ -146,20 +146,29 @@ inside it).
 
 ---
 
-### Row E — ground glow at Ten Green Bottles: pool restore tried and REVERTED (awaiting the user's spec)
+### Row E — ground glow at Ten Green Bottles (CLOSED for this iteration 2026-07-23 — spec captured, deferred to ideas/0.6.0)
 
 **Symptom (user, 2026-07-22):** at Ten Green Bottles (2345.5, −1704.8) prod spread a GREEN glow across the
 ground at night; the original also blinks it. The named model (`telwire_01_lae2`) is just wires — no 2dfx
-(the pick hit its street-spanning AABB). Data facts that stay true: the only green 2dfx light within 60 u
-is the junction's `trafficlight1` (0/255/0, range 18, showMode 7 = the traffic cycle we ignore — all
-three colours glow at once); `lamppost3` is steady amber (255/148/52, shadowSize 8). The parser still
-drops `coronaShowMode`, point-light `range` and `shadowSize`/`shadowColourMultiplier`; static lights left
-the light pool 2026-07-17 ("lamps igniting ahead of the car").
+(the pick hit its street-spanning AABB).
 
-**Tried 2026-07-22 and REVERTED the same day (user: "не то что нам нужно"):** restoring static 2dfx
-lights into the pool with smooth admission (colour premultiplied by gate × distanceFade × rankFade). The
-code is in this branch's history if the mechanism is ever wanted; do NOT re-apply it as-is — the user
-owes a precise description of the wanted ground-glow behaviour first.
+**Spec answered 2026-07-23 (user, original-build field check):** the glow is tied to the CORONAS on the
+bottle sign — they blink and the wash blinks with them; the junction's traffic light is unrelated (stays
+red while the wash is green). Data trace: the coronas are authored by mod "19. Project Immerse-Yourself"
+on its replacement `liquorstore02_lae2` (the bar building) — EIGHT 2dfx lights, rgba 15/230/0/200,
+point-light **range 18**, **showMode 3 = FLICKER_NIGHT**, shadowSize 8, farClip 100. In SA one 2dfx light
+drives corona + ground splat + a range-18 point light from ONE blink state. Vanilla `liquorstore02_lae2`
+carries no lights — the earlier "only green 2dfx in 60 u is the trafficlight" fact was true of the STOCK
+data only. The parser still drops `range`/`showMode`/`shadowSize`; static lights left the pool 2026-07-17.
+
+**Decision (user, 2026-07-23):** close row E for this iteration; do it properly later. The full staged
+plan (parser+oscell fields → shared blink function driving corona AND pool intensity → wet-road specular
+→ clustered lighting for strip-scale) lives in
+`docs/ideas/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md`. The blink function also fixes
+"all three traffic-light colours glow at once" (showMode 7/8).
+
+**History:** a bare pool restore (smooth admission, no blink) was tried 2026-07-22 and REVERTED the same
+day (user: "не то что нам нужно") — the missing half was the blink sync; do not re-apply as-is.
 
 ---
 
@@ -195,22 +204,50 @@ another archive TXD, ledgered as crossTxd, missing stays empty.
 
 ## Open rows
 
-### Row H — LV facade "holes" that shift with movement (OPEN — batch 2, 2026-07-22 late)
+### Row H — LV facade "holes": row C's ADDITIVE class erased a no-alpha night facade (FIXED 2026-07-23, pending rebuild)
 
-**Symptom (user, field, night 23:50):** black hole-like patches on a facade near `vgsn_blucasign`
-(vgnfremnt1, @2156.0 2073.3 34.4) / `vgnlowmall3` (vgnlowbild, @2098.0 2076.1 31.7); they SHIFT with
-camera movement "like an occlusion bug".
+**Symptom (user, field, night 23:50):** see-through "holes" + a translucent look on the Old Venturas
+Strip entrance facade; day is clean. The picked names (`vgsn_blucasign`, `vgnlowmall3`) were RED
+HERRINGS — the AABB picker attributed pixels of the real subject to neighbours (`vgnlowmall3`'s box
+spans the whole mall; the reported pos 2098/2076.1/31.7 is a box centre, not a hit point).
 
-**Checked so far (all clean):** both IDE flags are 128 = 0x80 DONT_RECEIVE_SHADOWS (innocuous, no
-z-write/additive bits); both models' textures resolve (no `textures.missing`/`crossTxd` entries);
-`vgsn_blucasign.osm` is a plain 3-submesh world-source model. `vgsn_blucasign` has a far-LOD twin
-(`lod`-link 349 in `vegasn`).
+**The real subject** is the timed pair on the entrance: `casinoblock3_dy` (tobj 4→23, the solid arched
+day wall) / `casinoblock3_nt` (tobj 23→4, flags 140 = DRAW_LAST + ADDITIVE, the fullbright night
+dressing: `casinolights*` bulb lattices) over the always-on `casinoblock3` base block. At 23:50 the day
+wall legitimately hides — vanilla shows the night model as a SOLID glowing facade (black fascia band
+occludes, field-verified in the original build 2026-07-23, 23:21/23:25 screenshots).
 
-**Parallax reading of the screenshot:** the black trapezoids sit metres IN FRONT of the lit wall (the
-sign's own planes), so camera motion slides them across the facade — "holes" would then be the sign's
-quads rendering opaque-black at night instead of lit/additive. Next probe (10 s, user, in game): do the
-holes survive by DAY? Day-yes → welded geometry/z problem; day-no (night only) → the night
-emissive/additive classing of this sign's materials (row C/D territory) is painting them black-opaque.
+**Root cause:** row C's fix classed EVERY submesh of a flag-8 def as pipeline class 4 (additive).
+Vanilla only puts a model through blended render states on its ALPHA pass — a DXT1 no-alpha texture
+draws OPAQUE regardless of the flag. Every `casinolights*` texture is DXT1 hasAlpha=false
+(`txd-alpha.ts`), so vanilla renders `casinoblock3_nt` opaque; our additive classing made its black
+texels invisible (holes into the block interior) and its mid texels a translucent wash. The circus neon
+that motivated row C keeps class 4 legitimately — its glow textures (`neon_centrala`,
+`circirctex4_neon`…) are DXT3 WITH alpha.
+
+**Trace method (the full chain, 2026-07-23):** headless day/night A/B at the spot reproduced the user's
+screenshots 1:1 (temp bench scenes + a screenshots-during-path driver); kill-tests (hiding objectTable
+kinds via a temp engine switch) isolated the draws; `dump-cell.ts` (NEW inspector) read the welded
+cell's objectTable — `_nt` = 3 groups all cls=4; decoded vertex meta proved the LAYERS were correct
+(3561/3513/3381 & 0xff = 233/185/53 = casinolights5/3/2 — high byte is other packed data), killing the
+layer-mismatch theory; pixel sampling killed the "bright beige" illusion (the wedge reads 43/37/34 in
+BOTH renders — it is the dark marquee silhouette); `dump-dff-materials.ts` showed the base block's
+AUTHORED night sets (pillars 170/181/175 lit, roof10L256 12/15/13 dark — both render faithfully). The
+discriminator was the user's vanilla night check: the black fascia is SOLID there, and the kill-test
+had already shown the base model has NO wall behind it — so the solidity must come from `_nt` itself
+rendered non-additively.
+
+**Fix (weld.ts `classOf`):** class 4 requires `alphaClass !== 'opaque'` — an additive-flagged def's
+no-alpha submeshes stay lit geometry (class 0). Their vanilla fullbright night look is already covered
+by row D (night-only window → nightIsDay prelit + emissive-vs-void mask 255 → glow ≈ full texture
+brightness), and black texels now write depth and occlude. Offline re-weld of cell 8,8 confirms: the
+23→4 row welds `[0,0,0,0,0]` (was `[4,4,4]` + kind-5 cls-4 scrollers); `casinoblock41_nt` (22→5) keeps
+its blend/cutout groups `[0,0,0,0,2,1]`. Tests: weld routes flags-140 + DXT3-alpha (bin fixture) to
+class 4, flags-140 + DXT1-opaque (trafficlight fixture) to class 0.
+
+**Field check: PENDING the next pak rebuild** (class is assigned at weld time) — expect: solid black
+fascia band under the arches, no see-through, bulb canopies fullbright, dark marquee silhouette
+matching the original build's screenshots.
 
 ### Row G — mod 46 "Animated Radars" (CLOSED 2026-07-22 late — engine correct, the DARK look is the mod's own texture)
 

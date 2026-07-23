@@ -47,15 +47,25 @@ Sanity: 1123 cells / ~1 GB / AO ~375 s. Also owed on this rebuild (078): map-obj
       `ap_radar` texture (byte-faithful in the pak — see the plan's row G). Data decision owed.
 - [ ] Row B (grey stand-ins + F2 magenta + report triage) and row F (six magenta-roster spots) — still
       to check this run.
-- [ ] Wheels: tyres must show NO specular glint (rubber matte, rims may shine) on admiral/comet/petro.
-- New batch: row H (LV facade "holes", vgsn_blucasign/vgnlowmall3) — see the plan; user probe owed:
-  do the holes survive by day? Plus 084 row 0: comet door AO smudges FIXED offline, needs a rebuild
-  (or spot rebake) to verify.
+- [x] Wheels: tyre rubber matte, no specular glint — CONFIRMED by the user 2026-07-23.
+- Row H (LV facade "holes") — TRACED + FIXED 2026-07-23 (see the plan): day/night probe answered
+  (day clean, night holes), vanilla check answered (solid facade in the original build). Cause: row C's
+  additive class on `casinoblock3_nt`'s DXT1 no-alpha textures; fix: class 4 only for alpha materials
+  (weld `classOf`). NEXT REBUILD: at the Old Venturas Strip entrance (~2110, 2076) at 23:30–04:00
+  expect a solid black fascia band under the pink arches, fullbright bulb canopies, no see-through;
+  the dark sloped marquee silhouette IS vanilla (authored roof10L256 night prelit 12/15/13).
+- 084 row 0: comet door AO smudges FIXED offline, needs a rebuild (or spot rebake) to verify.
 
 ## Open / parked (no action until the user speaks)
 
-- Row E ground glow — user owes the precise description (078 ledger #11).
-- Row G data decision — keep mod 46's dark radar texture, or delete the mod's `ap_misc1bit.txd` to
-  restore the stock red look (rebuild required).
+- Row E ground glow — CLOSED for this iteration 2026-07-23: spec captured (blink-synced 2dfx point
+  light, mod-19 authored), deferred to
+  `docs/ideas/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md` (see the plan's row E).
+- Row G data decision — RESOLVED 2026-07-23: the user deleted mod "46. Animated Radars" ENTIRELY
+  (model + texture + animation). Next rebuild restores the stock static red radars at all 4 airport
+  placements (id 1682: SF −1691.6/−619.7 · LV 1294.9/1502.6 · LS 1663.6 & 1709.4/−2362.7). Mod folders
+  renumbered to a contiguous 0..54 (new `renumber-mods` skill) — the baseline changed, re-baseline any
+  perf/size comparison on the next pmb run.
 - Mod 42 data decision — patch `_257`→`_256` in visagesign04.dff or restore the mod's TXD (user said:
-  leave the mod alone for now).
+  leave the mod alone for now). NOTE: after the 2026-07-23 renumbering this mod is now
+  "40. Animated texture (24 hours Las Venturas)".
