@@ -682,9 +682,13 @@ function buildPlacementTable(
 /** Part → `.oscell` pipelineClass: additive (4) wins, then beam (3); else the texture's alpha class
  *  decides. Additive = the def carries `IdeFlag.ADDITIVE` (085 row C — vgncircus2neon: SA's timed neon
  *  overlays are fullbright in BOTH prelit sets and glow by ADDING onto the base building; welded as
- *  ordinary lit geometry they were crushed by the night indirect scale and read dull). */
+ *  ordinary lit geometry they were crushed by the night indirect scale and read dull) — but ONLY for
+ *  materials with alpha to blend. Vanilla puts flag-8 models through the additive blend solely on the
+ *  alpha render pass; a submesh whose texture has NO alpha channel draws in the opaque pass regardless
+ *  (085 row H — casinoblock3_nt: every `casinolights*` is DXT1 no-alpha and renders as the SOLID black
+ *  fascia in vanilla; classing them additive made the black texels vanish — a see-through facade). */
 function classOf(beam: boolean, additive: boolean, alphaClass: 'cutout' | 'opaque' | 'softBlend'): number {
-  if (additive) {
+  if (additive && alphaClass !== 'opaque') {
     return 4;
   }
   if (beam) {

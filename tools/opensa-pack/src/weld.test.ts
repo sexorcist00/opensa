@@ -334,6 +334,65 @@ function mineDefs(def: Partial<IdeObjectDef> = {}): MapDefinitions {
   };
 }
 
+// The breakable bin (DXT3 alpha texture `bins2_LAe2`) — the ALPHA side of the additive-class test.
+const BIN_DFF = 'tests/original/dff/breakable/binnt08_la.dff';
+const BIN_TXD = 'tests/original/dff/breakable/labins01_la.txd';
+
+function binCell(): GridCell {
+  return {
+    cx: 0,
+    cy: 0,
+    hd: [
+      {
+        id: 1337,
+        interior: 0,
+        lod: -1,
+        modelName: 'binnt08_la',
+        position: [10, 10, 5],
+        rotation: [0, 0, 0, 1],
+      },
+    ],
+    lod: [],
+  };
+}
+
+function binDefs(def: Partial<IdeObjectDef> = {}): MapDefinitions {
+  const catalog = new Map<number, IdeObjectDef>();
+  catalog.set(1337, {
+    drawDistance: 80,
+    flags: 0,
+    id: 1337,
+    modelName: 'binnt08_la',
+    txdName: 'labins01_la',
+    ...def,
+  });
+
+  return {
+    carGenerators: [],
+    catalog,
+    imgDirs: [],
+    instances: [],
+    timedCatalog: new Map<number, IdeObjectDef>(),
+    txdParents: new Map<string, string>(),
+  };
+}
+
+function binFs(): AssetFileSystem {
+  const archive = openArchive(
+    buildArchiveBuffer([
+      { data: readFileSync(BIN_DFF), name: 'binnt08_la.dff' },
+      { data: readFileSync(BIN_TXD), name: 'labins01_la.txd' },
+    ]),
+  );
+
+  return {
+    ...archive,
+    get: (name) => archive.get(name),
+    getText: () => null,
+    has: (name) => archive.get(name) !== null,
+  };
+}
+
 function mineFs(): AssetFileSystem {
   const archive = openArchive(
     buildArchiveBuffer([
@@ -360,11 +419,31 @@ describe('weldCell', () => {
   });
 
   describe('positive cases', () => {
-    it('routes an IdeFlag.ADDITIVE def to pipelineClass 4 — SA neon overlays ADD onto the building (085 row C)', () => {
-      const fs = fixtureFs();
-      // vgncircus2neon's real flags: DRAW_LAST (0x4) + ADDITIVE (0x8) + 0x80; welded as lit geometry the
-      // fullbright overlay was crushed by the night indirect scale and the casino read dull.
+    it('routes an IdeFlag.ADDITIVE def to pipelineClass 4 only for ALPHA materials (085 rows C + H)', () => {
+      // vgncircus2neon's real flags: DRAW_LAST (0x4) + ADDITIVE (0x8) + 0x80; its glow textures are DXT3
+      // WITH alpha and vanilla ADDs them (row C). casinoblock3_nt carries the same flags over DXT1
+      // NO-alpha textures and vanilla draws those in the opaque pass — classing them additive erased
+      // every black texel and opened see-through holes in the Fremont facade (row H).
+      const alphaFs = binFs();
       const welded = weldCell(
+        alphaFs,
+        binDefs({ flags: 140 }),
+        binCell(),
+        false,
+        new TexturePlanner(alphaFs, new Map()),
+        [0, 0, 0],
+      );
+
+      const classes = new Set(decodeOscell(welded!.bytes).groups.map((group) => group.pipelineClass));
+      expect(classes).toEqual(new Set([4]));
+      // The same model without the flag never lands there.
+      const plain = weldCell(alphaFs, binDefs(), binCell(), false, new TexturePlanner(alphaFs, new Map()), [0, 0, 0]);
+      expect(decodeOscell(plain!.bytes).groups.some((group) => group.pipelineClass === 4)).toBe(false);
+
+      // Opaque-textured model with the SAME flags: stays lit geometry (row H — vanilla only additive-blends
+      // the alpha pass; DXT1 materials render opaque and their black texels must occlude).
+      const fs = fixtureFs();
+      const opaque = weldCell(
         fs,
         fixtureDefs({ flags: 140 }),
         fixtureCell(1),
@@ -372,12 +451,7 @@ describe('weldCell', () => {
         new TexturePlanner(fs, new Map()),
         [0, 0, 0],
       );
-
-      const classes = new Set(decodeOscell(welded!.bytes).groups.map((group) => group.pipelineClass));
-      expect(classes).toEqual(new Set([4]));
-      // The same model without the flag never lands there.
-      const plain = weldCell(fs, fixtureDefs(), fixtureCell(1), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
-      expect(decodeOscell(plain!.bytes).groups.some((group) => group.pipelineClass === 4)).toBe(false);
+      expect(decodeOscell(opaque!.bytes).groups.some((group) => group.pipelineClass === 4)).toBe(false);
     });
 
     it('welds animated defs statically and counts them (field fix: anim skip left building-sized holes)', () => {
