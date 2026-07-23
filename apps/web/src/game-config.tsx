@@ -154,7 +154,8 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
     ),
     drawDistance: 1200,
     label: 'Run San Andreas [local only]',
-    loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
+    // 22:00 — the night boot the engine host always used (vehicle lamps/coronas visible on boot).
+    loadGame: { radius: 400, startMinutes: 1320, weather: 'EXTRASUNNY_SMOG_LA' },
     mainCharacter: 'BMYPOL1',
     playerSpawn: [2495.0, -1675.0, 16.0], // LS - Ganton (default). Debug teleports below cover feature spots.
     teleports: [...SA_TELEPORTS],

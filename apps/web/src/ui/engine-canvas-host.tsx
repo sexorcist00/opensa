@@ -100,8 +100,6 @@ const SLOW_FRAME_MS = 20;
 const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HALF_HEIGHT = 0.55;
 const EYE_HEIGHT = 0.9; // camera target above the player origin (engine units)
-/** Default spawn hour — night, so vehicle lamps and coronas are visible on boot (`?hour=` overrides). */
-const NIGHT_HOUR = 22;
 /** Photo-camera movement keys (prod's fly mode: ARROWS move, the WASD player keeps walking). */
 const FLY_KEYS = new Set(['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'PageDown', 'PageUp']);
 /** Photo-camera speed (units/s) — prod's `camera-controller.FLY_SPEED`, so both hosts fly the same. */
@@ -739,7 +737,12 @@ async function boot(
   // vehicle work right now, and a noon spawn hides all three. `?hour=` still overrides — and it accepts 0:
   // the old `|| DEFAULT` fallback treated midnight as "unset" and silently bounced it back to daytime.
   const hourParam = Number(params.get('hour'));
-  let hour = Number.isFinite(hourParam) && params.get('hour') !== null ? hourParam : NIGHT_HOUR;
+  // Boot clock: `?hour=` wins, else the game's configured start time (GAME_CONFIG.loadGame.startMinutes —
+  // the field the engine host ignored until 2026-07-23; original keeps its 22:00 night default there).
+  let hour =
+    Number.isFinite(hourParam) && params.get('hour') !== null
+      ? hourParam
+      : GAME_CONFIG[gameId].loadGame.startMinutes / 60;
   environmentDriver.apply(hour);
 
   // Prod HUD + district names (074/10 reuse-not-duplicate): the SAME DOM <Hud> component fed through the

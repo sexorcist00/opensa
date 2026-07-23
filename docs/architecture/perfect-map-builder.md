@@ -92,7 +92,7 @@ and a build-root pick): `?loader=http-dir&src=http://localhost:3001/build/origin
 
 ## fetch-pack (the SECOND build, plan 086 phase 8)
 
-`tools/fetch-pack` (`npm run fetch:pack`, chained after pmb by every `build:game:*` alias) consumes the
+`tools/fetch-pack` (chained after pmb by every `build:game:*` alias) consumes the
 self-contained `<out>/opensa` game dir and produces the independent FETCH build:
 `<out>/opensa-pack/<game>-<version>/` — ~50 MB content-hashed zip chunks + a download `manifest.json`
 (identity from the pak manifest's `game`/`appVersion`). Deploy = upload that folder to the static host as

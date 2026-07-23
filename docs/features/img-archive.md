@@ -16,7 +16,7 @@
 - URL helpers (`datChildUrl`, `iplBasename`, `streamIplUrl`, `standaloneIplUrl`,
   `normalizeDatPath`).
 - Build tooling: the pmb pipeline (`npm run build:game:original`) reads the stock `gta3.img`/`gta_int.img`
-  via `openArchive`; `tools/fetch-pack` (`npm run fetch:pack`) then packs the built game dir into the staged
+  via `openArchive`; `tools/fetch-pack` (chained in `build:game:*`) then packs the built game dir into the staged
   data/models/others chunk archives (plan 086).
 
 ## Known gaps / candidates

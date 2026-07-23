@@ -108,6 +108,6 @@ npm run e2e / e2e:ui / e2e:update    # playwright
 npm run lint / format                # tsc --noEmit + eslint / prettier+eslint --fix
 npm run arch / arch:render           # package graph to stdout / regenerate docs/architecture/assets
 npm run build:game:original          # pmb build + fetch-pack chained → the TWO builds of a game id (also :gostown :carcer :anderius — plan 086)
-npm run fetch:pack                   # game build → fetch chunks under build/<id>/opensa-pack/<game>-<version>/ (--build ./build/<id>; --out ./static/games stages a local fetch test)
+npx tsx tools/fetch-pack/src/cli.ts     # fetch build standalone (chained in build:game:*; --build ./build/<id>; --out ./static/games stages a local fetch test)
 npm run timecyc                      # precompute timecyc data
 ```

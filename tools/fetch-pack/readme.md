@@ -8,7 +8,7 @@ the `<game>-<version>/` folder as `games/<game>-<version>/`). Every `build:game:
 after pmb.
 
 ```bash
-npm run fetch:pack                # defaults: --build ./build/original --out <build>/opensa-pack
+npx tsx tools/fetch-pack/src/cli.ts   # defaults: --build ./build/original --out <build>/opensa-pack (chained in build:game:*)
 npx tsx tools/fetch-pack/src/cli.ts --build ./build/gostown --out ./static/games   # stage a local fetch test
 ```
 

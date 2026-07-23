@@ -11,8 +11,11 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`086`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+`001`–`087`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
 
+- **[087 — The gostown field round](./087-gostown-field-round/readme.md)** — the first TC's field-bug
+  batch after its first full boot (bridge at LOD range, missing island chunk + floating tree, black
+  water stripes); same symptom→bytes method as 085.
 - **[086 — One build, consistent names, pak-based fetch](./086-unified-build-naming-fetch/readme.md)** —
   `game-src/<id>` · `mods-src/<id>` · `build/<id>` naming unification (`original`→`original`,
   `build/original`→`build/original`), pak manifest identity, the fetch-pack finishing tool replacing
