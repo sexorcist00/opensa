@@ -64,10 +64,9 @@ reference when touching tool dependencies.
 - Only **`game/adapters`** (and `game/mods`) may import **renderware** — it's the leaf layer.
 - **loaders** and **vfs** are standalone (no React, no game).
 - The engine / Rapier load **lazily** with the game surface, so the UI shell paints instantly.
-- **Two cell grids, intentionally distinct:** the render grid (`CELL_SIZE = 250`, opensa-pack weld →
-  engine streaming) and the game grid (`256`, collision streaming / procobj scatter / LOD bakes). The
-  mismatch has a measured cost — a slot's lod footprint ≠ its hd footprint (plan 087; re-alignment tried
-  and rolled back 2026-07-23, open question).
+- **Two cell grids:** the render grid (`CELL_SIZE = 250` — opensa-pack weld, engine streaming, AND the
+  cell-LOD bake, which must match it so an object's HD and LOD share a slot; field-proven in plan 087)
+  and the game grid (`256`, collision streaming / procobj scatter only).
 
 > Runtime in one line: **source (chunks | folder | served dir) → loader → vfs (AssetFileSystem) → game ←
 > renderware → engine (WebGPU) + Rapier**, with the world itself streamed from the build's `opensa/` pak —

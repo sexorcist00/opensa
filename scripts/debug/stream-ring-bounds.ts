@@ -5,9 +5,9 @@ import { join } from 'node:path';
  * Measure how far each pak cell's TRUE geometry (exact vertex XZ AABB) extends beyond its slot's
  * 250-grid rect — the overhang the streaming ring cannot see without the manifest `aabb` field
  * (plan 087 A+B: gostown measured mean 141 u / p90 215 u / max 799 u, hd-only↔lod-only slot pairing
- * from the 256-grid bake — the bake grid deliberately stays 256, so the pairing/spill persist by
- * design; what a rebuild must fix is the bridge rows + the island clipping). Also lists slot
- * asymmetry, the named bridge cells, and the pak's occupied extent (feeds pmb `PACK_RECTS`).
+ * from the pre-087 256-grid bake — on a 250-bake pak the pairing should be GONE and lod overhang
+ * object-level only). Also lists slot asymmetry, the named bridge cells, and the pak's occupied
+ * extent (feeds pmb `PACK_RECTS`).
  *
  * Run: npx tsx scripts/debug/stream-ring-bounds.ts [pak-dir]   (default build/gostown/opensa/pak)
  */

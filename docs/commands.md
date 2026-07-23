@@ -52,9 +52,9 @@ npx tsx tools/lod-trees-generator/src/cli.ts --in ./mods-src/vegetation --game <
 npx tsx tools/lod-procobj-generator/src/cli.ts --in ./mods-src/procobj --game <dir> --out <dir> --prelight --tex 128
 
 # OpenSA cell LODs ([--holes <json>]: hole-fill models merged verbatim past the reduction tracks)
-npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 256
-#   --cell = the game grid (256), deliberately ≠ the pak's 250 render grid — the measured consequences and
-#   the open re-alignment question live in plan 087 (rolled back 2026-07-23, decide on field evidence)
+npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 250
+#   --cell MUST equal the pak's 250 render grid: a mismatched bake puts an object's HD and LOD in different
+#   streaming slots — field-proven holes (plan 087). NOT the 256 game grid (collision/procobj keep that).
 
 # Real-SA per-object LOD clones ([--holes <json>]: per-game hole-fill list, e.g. mods-src/original/lod-holes.json)
 NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts --game <dir> --out <dir>

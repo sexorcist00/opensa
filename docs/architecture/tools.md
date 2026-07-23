@@ -22,7 +22,7 @@ never the app. The dependency picture is the tools cluster of
   LODs (own IDE ids, `plo*` aliases to dodge SA's big-building path).
 - **sa-lod-generator** — regenerates per-object LODs as HD clones (geometry clone + empty COL + halved
   textures) for the **real game** target.
-- **opensa-lod-generator** — the OpenSA cell-LOD bake: merge per 256-cell → budgeted QEM decimate →
+- **opensa-lod-generator** — the OpenSA cell-LOD bake: merge per 250-cell (= the render grid, plan 087) → budgeted QEM decimate →
   per-cell TXD; output is not tuned for the real-SA streamer (uncapped).
 - **opensa-pack** — game-ready dir → native build (`.osm` per model inside the IMGs + the `opensa/` pak);
   see [perfect-map-builder.md](./perfect-map-builder.md#opensa-pack-the-pack-stage-also-standalone).

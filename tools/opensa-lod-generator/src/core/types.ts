@@ -43,9 +43,10 @@ export interface CellInstance {
 /** Run configuration (the "what/where" knobs). */
 export interface LodConfig {
   /**
-   * Square cell size in world units. Plan 002 sized it to the streaming grid of the time (256, the game
-   * grid); the engine pak streams on 250 since plan 074 — the mismatch is measured (plan 087, lod spill
-   * mean 141 u) and deliberately kept for now (see `lod.config.ts`).
+   * Square cell size in world units. **Must equal the engine's streaming `cellSize`** (250 since the
+   * plan-074 pak) so one baked LOD maps to exactly one engine cell — a mismatch splits an object's HD
+   * and LOD across slots and the streaming swap can leave it with neither level loaded (plan 087,
+   * field-proven; see `lod.config.ts`).
    */
   cellSize: number;
   /**

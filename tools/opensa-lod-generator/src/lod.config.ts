@@ -1,16 +1,17 @@
 import type { LodConfig } from './core/types';
 
 /**
- * Default run config. `cellSize` is the GAME-side grid (`GAME_CELL_SIZE`, 256) — collision streaming and
- * procobj scatter run on it, and plan 002 sized the bake to the STREAMING grid of the three era, which was
- * this same 256. The engine pak now streams on 250 (opensa-pack `CELL_SIZE`), so the two grids partition
- * the plane differently; plan 087 measured the consequence (a slot's lod footprint ≠ its hd footprint —
- * swap gaps at the HD ring, gostown lod spill mean 141 u / p90 215 u). Re-aligning the bake to 250 was
- * tried and ROLLED BACK the same day (user 2026-07-23): 256 stays deliberate until the bridge-model row
- * of plan 087 is closed and the mismatch question is decided on field evidence.
+ * Default run config. `cellSize` MUST equal the engine's streaming grid (opensa-pack `CELL_SIZE`, 250) —
+ * plan 002's original invariant ("one baked LOD = one engine cell"; the 256 of the three era WAS that
+ * era's streaming grid). Both sides bucket by `floor(pivot / cellSize)`, so equal sizes put an object's
+ * HD and LOD in the SAME slot and the HD↔LOD swap is atomic by construction. A mismatched bake splits
+ * them across slots — field-proven on gostown (plan 087, 2026-07-23): the paradise-bridge main span had
+ * HD in slot 5,−7 and LOD in 5,−6, so at spawn NEITHER level loaded; a water-shore hole at (1514,−1498)
+ * showed the same split on plain terrain. NOT the game grid: collision streaming / procobj scatter keep
+ * their own `GAME_CELL_SIZE` (256).
  */
 export const config: LodConfig = {
-  cellSize: 256,
+  cellSize: 250,
   decimateBudget: 0.01,
   // Engine streaming HD ring (apps/web canvas-host Config.streaming.hdDrawDistance) — the closest a LOD is seen.
   hdDrawDistance: 300,

@@ -17,10 +17,10 @@ Versioning rules and the memory model of the `.ospak` streaming path (plans 074/
   its PIVOT and reaches past the grid rect (gostown mean 141 u, max 799 u). A pak built before `aabb`
   falls back to the grid rect — its big pivot-welded meshes (bridges) can pop inside the fog until it is
   reconverted.
-- **The HD↔LOD swap is atomic per SLOT, not per footprint**: the cell-LOD bake runs on the 256 game grid
-  while the pak welds on 250, so a slot's lod coverage spills into neighbours (plan 087 measured it) —
-  promoting a slot to HD can uncover a strip whose only far representation it carried. Deliberately kept
-  for now (re-alignment rolled back 2026-07-23); the plan-087 bridge row tracks the open question.
+- **The cell-LOD bake MUST run on the render grid (250)**: a mismatched bake (the pre-087 256) puts an
+  object's HD and LOD in different streaming slots, and the swap can leave it with NEITHER level loaded
+  (field-proven: the gostown bridge span at spawn, plan 087). A pak built from a 256 bake keeps this
+  hole class until rebaked.
 - **The placement mapper is parsed only under `debugPicking`** — a full map's mapper runs to tens of MB
   against a ~21 MB steady heap; F2 Map pick/name/hide costs that memory.
 - **The http-dir dev loader buffers the world as a Blob** (~332 MB at boot) — fine for dev; the lab keeps

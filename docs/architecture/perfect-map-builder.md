@@ -60,7 +60,7 @@ flowchart TB
 | 6   | `procobj`  | `buildProcobjLods`                            | always (original ships no `procobj/` — bakes the built-in roster, no-op on a TC); `--tex` 128 |
 | —   | guards     | `checkTextIplSlotBudget`, `checkImgIdBudgets` | the SA runtime ceilings — see [edge-cases](../edge-cases/)       |
 | 7   | `sa`       | `buildSaLods` → `<out>/sa`                    | the real-game (RenderWare) target                                |
-| 8   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 256 bake, `stripLods`, linear-convention TXD swap           |
+| 8   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 250 bake (= the render grid, plan 087), `stripLods`, linear-convention TXD swap |
 | 9   | `pack`     | `packGameDir` (opensa-pack) → `<out>/opensa`  | the OpenSA target, self-contained (pak → `<out>/opensa/pak`, 086 phase 8); report mirrored to `<out>/report.json` |
 | 10  | `lod`      | —                                             | special `--until` value: run everything, keep every intermediate |
 

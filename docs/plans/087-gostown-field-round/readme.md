@@ -7,7 +7,7 @@ Same method as 085: symptom → source asset → pipeline stage → pak bytes �
 
 ## Rows
 
-### A+B — lod cells missing from RING streaming (DIAGNOSED 2026-07-23; rect + `aabb` fixes landed, grid re-alignment rolled back, bridge hole-fill widened — rebuild owed)
+### A+B — lod cells missing from RING streaming (ROOT CAUSE FIELD-CONFIRMED 2026-07-23 late; all three fixes in — SECOND rebuild owed)
 
 **Field discriminator (user): pinning the whole map with "Show LODs" renders EVERYTHING — the bridge,
 the islands, no holes, no console errors.** Diagnosed OFFLINE from the pak bytes + `lods.ipl` (no
@@ -32,11 +32,21 @@ its hd only z 1233..1351; the neighbour 5,−7 sits 386 u away (> 380 HD ring) a
 z 1646 — **the bridge span z 1351..1646 is covered by NOTHING**; ±10 u of walking flips 5,−7 across
 the HD edge and the hole moves. The grid mismatch also produces the paired hd-only/lod-only slot
 columns (31 hd-only vs 20 lod-only slots: `-4,y`↔`-3,y`, `11,y`↔`10,y`, `y=-11`↔`y=-10`…).
-**User decision (2026-07-23 night): the 256→250 re-alignment is REVERTED** — 256 is deliberate (the
-game grid; plan 002 originally sized the bake to the three-era streaming grid, which WAS 256; the pak
-moved to 250 later). The mechanism stays measured and documented (edge-cases/streaming-formats.md);
-whether to re-align is decided on field evidence AFTER the bridge-model fix below lands — the
-bridge-shaped part of the symptom has a model-data explanation that must be separated out first.
+**Status history:** the 256→250 re-alignment was first reverted (user: 256 looked deliberate — it WAS,
+for the three-era streaming grid, which was 256; plan 002's real invariant is bake = STREAMING grid) —
+then **RE-APPLIED after the first rebuild field-confirmed the mechanism** (below). Collision streaming
+and procobj scatter keep `GAME_CELL_SIZE` 256; only the bake's `lodCellSize` moved to 250.
+
+**Field confirmation (first rebuild, pak `20:20 23-07-2026`, 757 cells).** Rect fix ✓ (islands in,
+extent `[-8,-16,37,5]`); hole-fill b/c ✓ in the bake (`5,-7,lod` 15 621 → 26 348 verts, `5,-6,lod`
+50 627 → 51 032) — **and the spawn bug persisted exactly as this root cause predicts**: span a's HD
+sits in slot 5,−7 (pak pivot on 250: floor(−1522/250) = −7) while its verbatim LOD sits in slot 5,−6
+(bake pivot on 256: floor(−1522/256) = −6). At spawn 5,−6 is at HD (its lod unloaded) and 5,−7 is at
+LOD (its hd not loaded) → the span exists in NEITHER loaded level; a few steps promote 5,−7 → HD and
+it appears (user screenshots 20:21). Second field case, non-bridge: a shore hole at GTA
+(1514.3, −1498.4), F2-picked as `lod_5_-6` — the point lies in slot 6,−6 territory, its far
+representation lives in `lod_5_-6` (unloaded, slot at HD), its HD owner slot 6,−7 was at LOD. Plain
+terrain, same split — the mechanism is map-wide, not a bridge quirk.
 
 **Root cause 3 — the ring tests the GRID rect, but geometry is welded by PIVOT.** Measured overhang of
 true vertex XZ AABBs beyond the slot rect (gostown pak, 2026-07-23): hd mean 127 u / p90 171 / p99 339 /
@@ -70,12 +80,11 @@ game id → named rects — `full` (what the pipeline passes: original `[-12,-12
 the 074/11 bench scenes). A game without a `full` entry auto-fits to content (`occupiedRect`);
 `config.pack.rect` stays as a per-run override, CLI `--rect` for standalone subsets.
 
-Owed: **rebuild gostown + original** (repack emits `aabb` + the per-game rect; gostown rebake picks up
-the b/c hole-fill), then field-verify — spawn→bridge walk (span visible at HD range and at LOD range),
-far islands present, wandering-hole check while driving; re-run `stream-ring-bounds.ts` on the new
-paks. NB the bake stays 256, so the hd-only/lod-only slot pairing and the lod spill WILL still show in
-the script's output — only the bridge rows and the island clipping are expected to die; if wandering
-holes survive the b/c fix, root cause 2 returns to the table.
+Owed: **SECOND rebuild of gostown (+ original when its turn comes) with the 250 bake**, then
+field-verify — spawn: the span must render via its verbatim LOD with slot 5,−7 at LOD level, and
+survive the walk-up promotion; the (1514,−1498) shore hole gone; wandering-hole drive clean. On the
+new pak `stream-ring-bounds.ts` should show the hd-only/lod-only slot pairing GONE and lod overhang
+collapsed to object-level only (bake cells = pak slots).
 
 ### A (history) — the paradise bridge bake side (superseded by the model story above)
 

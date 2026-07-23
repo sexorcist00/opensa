@@ -3,11 +3,11 @@ import type { OptimizerPasses } from '@opensa/map-optimizer/run';
 /** perfect-map-builder run config (plan 001). */
 export interface BuilderConfig {
   /**
-   * Cell size for the OpenSA cell-LOD bake — the GAME-side grid (`GAME_CELL_SIZE`, 256), which was also
-   * the three-era streaming grid the bake was originally sized to (plan 002). The pak streams on 250, so
-   * the partitions differ; plan 087 measured the consequence (lod footprint ≠ hd footprint per slot).
-   * A 250 re-alignment was tried and ROLLED BACK (user 2026-07-23) — decide on field evidence after the
-   * bridge-model row closes.
+   * Cell size for the OpenSA cell-LOD bake. MUST equal opensa-pack's render grid (`CELL_SIZE`, 250) so an
+   * object's HD and LOD land in the same streaming slot (plan 002's invariant; the old 256 matched the
+   * THREE-ERA streaming grid). Field-proven on gostown (plan 087, 2026-07-23): with a 256 bake the bridge
+   * main span had HD in slot 5,−7 and LOD in 5,−6 — at spawn neither loaded. Collision streaming and
+   * procobj scatter keep their own `GAME_CELL_SIZE` (256) — this knob does not touch them.
    */
   lodCellSize: number;
   /** map-optimizer pass toggles; `{}` = all on (the default full-feature build). */
@@ -50,7 +50,7 @@ export const PACK_RECTS: Record<string, Record<string, readonly [number, number,
 };
 
 export const config: BuilderConfig = {
-  lodCellSize: 256,
+  lodCellSize: 250,
   optimizerPasses: { addNormals: true }, // all passes on; normals created for OpenSA's SSAO (plan 015)
   // AO stands in for prod's SSAO, so it stays on. The heavy SUN-VIS bake is OFF for now (user,
   // 2026-07-19) — the gating logic itself is due for a rework, and until then a pipeline run should not
