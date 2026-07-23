@@ -54,6 +54,7 @@ Run any of them as `npx tsx scripts/debug/<name>.ts …`; `--game <id>` picks th
 | `dump-osm.ts <model> [--pak dir]` | a built pak `.osm`'s sections + DESC fixture: parts, submeshes, texture-array refs, own-TEXS vs world-sourced |
 | `dump-osm-meta.ts <model> [--pak dir]` | per-submesh texture-LAYER histograms (vertex meta) + each TEXS layer's size/format/mips/name-hash — the layer-mismatch finder |
 | `dump-texel-avg.ts <model> [pakDir]` | average colour of each own-TEXS layer (BC endpoint scan) — tells a black/greyed bake from a faithful one in seconds |
+| `dump-vehicle-ao.ts` | per-part night-alpha (vehicle AO channel) stats for the mods-src admiral/comet — bakes from the DFF, so it judges a sky-occlusion change offline (run · stash · run · diff) |
 | `dump-cell.ts <x> <y> [pakDir]` | a WELDED cell's tables at a world point: objectTable rows (kind, timed window, per-group class/array/sphere) + placement boxes near the point — the pak-bytes step for bugs in the welded look (built for 085 row H) |
 
 Default pak: `build/original/opensa-pack` (the canonical build's pak sibling — 086 phase 7; pre-phase-7

@@ -20,6 +20,21 @@ const AZIMUTHS = 8;
 /** How far a ray marches, in cells. Beyond ~8 cells the car is behind you and the horizon stops rising. */
 const MARCH_CELLS = 8;
 
+/** Samples closer than this many CELL DIAGONALS to the vertex are the vertex's OWN panel, not an
+ *  occluder: a window-frame or sill vertex sits a few cm inset below its panel's top edge, and the nearby
+ *  cells' "highest surface" is that same panel — the bake read the door's own column as a wall and smeared
+ *  a dark line along the frame (085 field find, admiral speckles / comet doors 2026-07-23). A cabin or a
+ *  wheel well is enclosed by geometry far wider than two cells and stays dark from the rings beyond. */
+const NEAR_CLEAR_CELLS = 2;
+
+/** Passes of the neighbour-median lift — one clears lone speckle vertices, the second the 2-3-vertex
+ *  clusters a thin ornament (a bonnet star, a wiper, an aerial) splats into the height field. */
+const DESPECKLE_PASSES = 2;
+
+/** A vertex may sit this much (unorm8) below its neighbours' median before it counts as bake noise.
+ *  Real cavities darken in patches — the neighbours are dark too and the median follows them. */
+const DESPECKLE_SLACK = 25;
+
 /** Height-field resolution across the model's footprint. ~32 cells over a 5 m car ≈ 15 cm — a roof, a floor
  *  pan and a sill land in different cells, which is all the term needs to separate inside from outside. */
 const GRID = 32;
@@ -51,6 +66,39 @@ interface HeightField {
 }
 
 /**
+ * Lift lone dark vertices to their triangle neighbourhood's median (dark-only — a bright vertex inside a
+ * well reads as a highlight, not a hole). A speckle is bake noise: the height field's "highest surface"
+ * in some cell is a thin ornament, and only the handful of vertices whose march crosses that cell at
+ * close range see it as a wall. Real shading darkens in patches, so the median moves with it and the
+ * slack leaves gradients alone.
+ */
+export function despeckle(values: Uint8Array, indices: ArrayLike<number>): void {
+  const neighbours: number[][] = Array.from({ length: values.length }, () => []);
+  for (let i = 0; i + 2 < indices.length; i += 3) {
+    const a = indices[i];
+    const b = indices[i + 1];
+    const c = indices[i + 2];
+    neighbours[a]?.push(b, c);
+    neighbours[b]?.push(a, c);
+    neighbours[c]?.push(a, b);
+  }
+  for (let pass = 0; pass < DESPECKLE_PASSES; pass += 1) {
+    const before = new Uint8Array(values); // each pass reads the previous one — order-independent
+    for (let v = 0; v < values.length; v += 1) {
+      const around = neighbours[v];
+      if (around.length === 0) {
+        continue;
+      }
+      const sorted = around.map((n) => before[n]).sort((x, y) => x - y);
+      const floor = sorted[Math.floor(sorted.length / 2)] - DESPECKLE_SLACK;
+      if (values[v] < floor) {
+        values[v] = floor;
+      }
+    }
+  }
+}
+
+/**
  * Sky visibility per vertex, unorm8 (255 = open sky). `positions` and `normals` are the builder's own
  * model-space buffers, z up — the rest pose, which is what the car spends its life in.
  *
@@ -68,6 +116,7 @@ export function skyOcclusion(
   normals: readonly number[],
   vertexCount: number,
   occluders?: Uint8Array,
+  indices?: ArrayLike<number>,
 ): Uint8Array {
   const out = new Uint8Array(vertexCount).fill(255);
   const field = heightField(positions, vertexCount, occluders);
@@ -79,6 +128,9 @@ export function skyOcclusion(
     const sky = vertexSky(positions, normals, v, field);
 
     out[v] = Math.round((FLOOR + (1 - FLOOR) * sky) * 255);
+  }
+  if (indices) {
+    despeckle(out, indices);
   }
 
   return out;
@@ -134,8 +186,12 @@ function heightField(
 /** The horizon slope this azimuth reaches from (x, y, z) — 0 when nothing along it rises above the vertex. */
 function horizonSlope(field: HeightField, x: number, y: number, z: number, stepX: number, stepY: number): number {
   const stepLength = Math.hypot(stepX, stepY);
+  const selfClearance = NEAR_CLEAR_CELLS * Math.hypot(field.cellX, field.cellY);
   let slope = 0;
   for (let step = 1; step <= MARCH_CELLS; step += 1) {
+    if (stepLength * step < selfClearance) {
+      continue; // still over the vertex's own panel — not an occluder (see NEAR_CLEAR_CELLS)
+    }
     const sampleX = x + stepX * step;
     const sampleY = y + stepY * step;
     if (sampleX < field.minX || sampleX > field.maxX || sampleY < field.minY || sampleY > field.maxY) {

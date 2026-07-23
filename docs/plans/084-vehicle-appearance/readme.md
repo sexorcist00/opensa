@@ -299,3 +299,25 @@ to the ped-bug pass that follows this one.
    diameter, which is already done. Rows 1–3 end with the user looking at the game.
 2. **One change per round.** Row B deliberately fixed shape and not level for this reason.
 3. **Measurements into this doc** as each row lands (the standing rule), with the user's verdict quoted.
+
+## 2026-07-23 — the night-speckle iteration (second AO fix)
+
+Field, after the full rebuild: comet door smudges ± unchanged, admiral grew NEW dark speckles (bonnet by
+the grille, a line along the door's window frame) — **visible only after ~20:00**, which convicts the AO
+channel rather than clearing it: AO multiplies only indirect, and at night indirect is the whole lighting.
+`4d8c03a` had killed the zero-weight class; two mechanisms remained in `sky-occlusion.ts`:
+
+1. **The own-panel false wall** — a window-frame/sill vertex sits a few cm inset below its own panel's
+   top, and the ADJACENT height-field cell holds that panel's top: the march read the door's own column
+   as a wall. Fix: samples closer than 2 cell diagonals are the vertex's own panel (`NEAR_CLEAR_CELLS`);
+   a cabin/wheel well is enclosed far wider and keeps its darkness from the rings beyond.
+2. **Thin-ornament splats** — a bonnet star / wiper / aerial puts one towering `max z` into a cell and
+   the handful of vertices whose march crosses it at close range go dark alone. Fix: a dark-only
+   neighbour-median `despeckle` pass over the triangle adjacency (2 passes, slack 25).
+
+Measured (`scripts/debug/dump-vehicle-ao.ts`, mods-src admiral + comet, before → after):
+admiral bonnet below-100 **733 (13.6 %) → 0**, bump_front **307 (20.8 %) → 0**, bump_rear
+**159 (12.3 %) → 0**, doors worst 41 → 60, chassis below-100 24.4 % → 11.1 %; comet bonnet
+256 (8 %) → 24 (0.7 %), doors worst 42 → 65. Enclosures KEPT their dark: comet interior/seats stay
+28–31 % below-100, wheel wells 7–13 %. Field verdict owed after the next rebuild (or a method-5 spot
+rebake of the two cars).

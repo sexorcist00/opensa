@@ -135,7 +135,13 @@ export function buildVehicleModel(
   // `.osm` version bump and no second upload. See `sky-occlusion.ts` for why it is computed here.
   const night = new Uint8Array(scratch.night);
   const placed = restPose(scratch);
-  const occlusion = skyOcclusion(placed.positions, placed.normals, scratch.positions.length / 3, shownShell(scratch));
+  const occlusion = skyOcclusion(
+    placed.positions,
+    placed.normals,
+    scratch.positions.length / 3,
+    shownShell(scratch),
+    scratch.indices,
+  );
   for (let vertex = 0; vertex < occlusion.length; vertex += 1) {
     night[vertex * 4 + 3] = occlusion[vertex];
   }
