@@ -63,15 +63,16 @@ module-relative so cwd never matters; omitted outside the repo). Stamped in `pac
 basename(--game)` explicitly — its own `gameDir` at the pack stage is a work intermediate;
 standalone runs take `--game-id` (default: basename of `--game`). Old readers ignore the fields.
 
-## Phase 2 — the finishing tool (fetch-pack)
+## Phase 2 — the finishing tool (DONE 2026-07-23)
 
-New `scripts/fetch-pack.ts` (or `tools/fetch-pack` if it grows): input = a pmb `--out`'s `opensa/`
-dir, output = `static/games/<game>-<version>/` with content-hashed chunks + the fetch manifest.
-Reuses `scripts/game-build/chunk.ts` (`chunkByHash`); ALL raw-game partitioning (IDE/IPL parsing,
-exterior/interior split, gta3.img reading) is deleted with `build-game.ts`. Open question resolved
-here: the chunk GROUPS for a pak build (e.g. `world` = world.ospak+cells manifest, `models` = .osm/.ostex
-archives, `rest` = data/anim/text) — pick what makes the boot progress bar honest and a dropped
-download cheap.
+`tools/fetch-pack` (own tool, `docs/plans/001-architecture.md` inside): input = a pmb `--out`'s
+`opensa/` game dir, output = `static/games/<game>-<version>/` chunks + the legacy-shaped manifest.
+`chunkByHash` moved into the tool; `build-game.ts` and all raw-game partitioning DELETED; npm
+`build:game:*` became pmb aliases (user's spec), `original-extend` deleted, `fetch:pack` added.
+Group mapping: data = data/text/loose · models = models/ + opensa/ · others = rest · textures = EMPTY
+(pak textures live in world.ospak; shape kept for the client). Oversized files slice into
+`<path>#<index>` parts (phase 3 reassembles). First real run: 3.6 GB → 407 files, 74 chunks, ~2.5 min;
+pre-086 pak identity falls back loudly.
 
 ## Phase 3 — the fetch client boots the pak
 

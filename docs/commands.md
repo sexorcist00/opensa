@@ -106,6 +106,7 @@ npm run test:fixtures                # real-GTA fixtures + viewer e2e assets
 npm run e2e / e2e:ui / e2e:update    # playwright
 npm run lint / format                # tsc --noEmit + eslint / prettier+eslint --fix
 npm run arch / arch:render           # package graph to stdout / regenerate docs/architecture/assets
-npm run build:game:original          # static chunk archives for the fetch loader (also :gostown …)
+npm run build:game:original          # pmb build of a game id (also :gostown :carcer :anderius — plan 086)
+npm run fetch:pack                   # pmb build → fetch chunks under static/games/<game>-<version>/ (--build ./build/<id>)
 npm run timecyc                      # precompute timecyc data
 ```

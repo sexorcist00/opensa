@@ -22,7 +22,8 @@ implemented ones, and assembling the release changelog.
 | Road-sign text (2dfx type 7)                  | [roadsign-text.md](roadsign-text.md)               |
 | World effects (2dfx particles)                | [world-effects.md](world-effects.md)               |
 | Breakable objects                             | [breakable-objects.md](breakable-objects.md)       |
-| Game mods (modloader overlay, WorldMod, wind) | [mods.md](mods.md)                                 |
+| Game mods (modloader overlay, WorldMod, wind) | [fetch-pack.md](fetch-pack.md) | fetch-pack — one pmb build serves local play and hosted fetch chunks | tool shipped; client switch = plan 086 phase 3 |
+| [mods.md](mods.md)                                 |
 | Zones, HUD, debug tooling                     | [zones-hud-debug.md](zones-hud-debug.md)           |
 | UI shell (boot/menu/loading/pause)            | [ui-shell.md](ui-shell.md)                         |
 

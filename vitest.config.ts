@@ -53,6 +53,7 @@ export default defineConfig({
       'tools/sa-lod-generator/**/*.test.ts',
       'tools/lod-procobj-generator/**/*.test.ts',
       'tools/mod-installer/**/*.test.ts',
+      'tools/fetch-pack/**/*.test.ts',
       'tools/vehicle-installer/**/*.test.ts',
       'tools/ped-installer/**/*.test.ts',
       'tools/perfect-map-builder/**/*.test.ts',
