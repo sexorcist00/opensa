@@ -177,10 +177,13 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     `excluding ${excludeItems.length} models from sa/opensa LODs ` +
       `(${userExcluded.length} user-curated via lod-exclude.json)`,
   );
+  // Hole-fill list (plan 086 phase 5): per-GAME data, not code — stock SA's list lives in
+  // mods-src/original/lod-holes.json; a TC without the file gets none (the curated names are SA's).
+  const holeFillModels = loadLodHoles(inPath, source(subfolders.mods));
   if (runsStage('sa', until)) {
     const sa = join(outPath, 'sa');
     log('sa → sa/');
-    buildSaLods({ config: { excludeItems }, gameDir: game, outDir: sa });
+    buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa });
     checkImgIdBudgets(sa);
     produced.push({ dir: sa, name: 'sa' });
   }
@@ -462,6 +465,25 @@ function loadLodExclude(...dirs: string[]): string[] {
         throw new Error(`${file} must be a JSON array of model names`);
       }
       log(`lod-exclude — ${names.length} model(s) from ${file}`);
+
+      return (names as string[]).map((name) => name.toLowerCase());
+    }
+  }
+
+  return [];
+}
+
+/** The first `lod-holes.json` found among `dirs` → lowercased models that ship NO LOD and hole the far
+ *  view (plan 086 phase 5 — moved out of `sa-lod-generator/lod.config.ts`, whose list was SA-specific). */
+function loadLodHoles(...dirs: string[]): string[] {
+  for (const dir of dirs) {
+    const file = join(dir, 'lod-holes.json');
+    if (existsSync(file)) {
+      const names = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+      if (!Array.isArray(names) || names.some((name) => typeof name !== 'string')) {
+        throw new Error(`${file} must be a JSON array of model names`);
+      }
+      log(`lod-holes — ${names.length} hole-fill model(s) from ${file}`);
 
       return (names as string[]).map((name) => name.toLowerCase());
     }

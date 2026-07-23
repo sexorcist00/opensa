@@ -94,10 +94,12 @@ build:game:anderius  = pmb --game ./game-src/anderius  --in ./mods-src/anderius 
 Trial runs for the three TCs go `--until pack` first (the `lod` stage waits until the base passes).
 Failures are triaged loudly per the 085 rule — a swallowed error is a hole in the world.
 
-## Phase 5 — per-game LOD hole list
+## Phase 5 — per-game LOD hole list (DONE 2026-07-23)
 
-`sa-lod-generator` `holeFillModels` moves from `lod.config.ts` to `mods-src/<id>/lod-holes.json`
-(same pattern as `lod-exclude.json`); `original` gets the current 30 names, others none.
+`sa-lod-generator` `holeFillModels` moved from `lod.config.ts` (default now empty — a TC must not
+inherit SA's list) to `mods-src/<id>/lod-holes.json`, loaded by pmb like `lod-exclude.json`
+(`loadLodHoles`, `--in` root or its `mods/`); standalone runs pass `--holes <json>`. `original`
+carries the 28 curated names; the TC folders none.
 
 ## Phase 6 — viewer fixtures rename (DONE 2026-07-23)
 

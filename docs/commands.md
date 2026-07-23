@@ -54,7 +54,7 @@ npx tsx tools/lod-procobj-generator/src/cli.ts --in ./mods-src/procobj --game <d
 # OpenSA cell LODs
 npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 256
 
-# Real-SA per-object LOD clones
+# Real-SA per-object LOD clones ([--holes <json>]: per-game hole-fill list, e.g. mods-src/original/lod-holes.json)
 NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts --game <dir> --out <dir>
 
 # Game dir → native pak (the pack stage standalone)
