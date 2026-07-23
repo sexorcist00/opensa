@@ -69,9 +69,9 @@ Upload (FTP/SFTP/SSH) so the served layout is:
     games/
       original-<version>/
         manifest.json
-        priority-<hash>.zip
+        data-<hash>.zip
         models-<hash>.zip
-        textures-<hash>.zip
+        others-<hash>.zip
 ```
 
 - Everything inside `dist/` → the web root.

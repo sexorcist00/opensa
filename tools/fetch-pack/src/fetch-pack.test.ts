@@ -91,6 +91,21 @@ describe('fetchPack', () => {
       expect(result.version).toBe('1.2.3');
     });
 
+    it('reads the phase-7 sibling identity and defaults the output to <build>/opensa-pack', () => {
+      const game = join(dir, 'build', 'opensa');
+      const sibling = join(dir, 'build', 'opensa-pack');
+      mkdirSync(game, { recursive: true });
+      mkdirSync(sibling, { recursive: true });
+      writeFileSync(join(game, 'stream.ini'), 'memory 512\n');
+      writeFileSync(join(sibling, 'manifest.json'), JSON.stringify({ appVersion: '2.0.0', game: 'sib' }));
+
+      const result = fetchPack({ buildDir: join(dir, 'build'), log: noop }); // no outRoot — the default
+
+      expect(result.game).toBe('sib');
+      expect(result.outDir).toBe(join(dir, 'build', 'opensa-pack', 'sib-2.0.0'));
+      expect(readFileSync(join(result.outDir, 'manifest.json'), 'utf8')).toContain('"game": "sib"');
+    });
+
     it('keeps untouched chunks byte-identical when one file changes (the cache promise)', () => {
       const game = join(dir, 'build', 'opensa');
       const pak = join(game, 'pak');

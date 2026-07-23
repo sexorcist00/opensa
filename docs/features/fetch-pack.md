@@ -5,9 +5,11 @@ reassembles `<name>#index` slices, `AssetFetchLoader.openWorld` serves `opensa/*
 chunks — the dead `public/pak-map` fallback is unreachable in fetch mode. E2E smoke owed with the
 first small TC build (phase 4).**
 
-`tools/fetch-pack` packs a pmb build's `opensa/` game dir into content-hashed zip chunks +
-`manifest.json` under `static/games/<game>-<version>/` — the same layout the `asset-fetch-loader`
-already downloads/caches. Identity (`game`, `appVersion`) rides the pak manifest (086 phase 1).
+`tools/fetch-pack` packs a pmb build's self-contained `opensa/` game dir into content-hashed zip
+chunks + a download `manifest.json` under `build/<id>/opensa-pack/<game>-<version>/` (086 phase 8 —
+the second, independent build; deploy = upload that folder to the host as `games/<game>-<version>/`,
+`--out ./static/games` stages a local fetch test). Same layout the `asset-fetch-loader` already
+downloads/caches. Identity (`game`, `appVersion`) rides the pak manifest (086 phase 1).
 chained into every `npm run build:game:<id>` alias (standalone: `npx tsx tools/fetch-pack/src/cli.ts`).
 
 Replaced: `scripts/build-game.ts` (raw-game partitioning) — deleted; `original-extend` npm target —

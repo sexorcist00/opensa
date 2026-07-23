@@ -66,7 +66,7 @@ Each tool exposes a programmatic entry so the builder imports and calls it in-pr
 Intermediate stages are ~1 GB each. The builder uses a scratch area (e.g. `<out>/.work/stepN`) and **deletes each
 intermediate once the next stage has consumed it**, keeping at most two live — except **step 6 is kept** until both
 `sa` and `opensa` have been generated from it, then removed. Only `<out>/sa`, `<out>/opensa` and
-`<out>/report.json` (the pack report, mirrored from `<out>/opensa/opensa/report.json`) remain.
+`<out>/report.json` (the pack report, mirrored from `<out>/opensa/pak/report.json` — 086 phase 8) remain.
 
 ## Config
 

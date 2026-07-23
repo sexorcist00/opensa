@@ -22,7 +22,7 @@ zips.
 | group    | content                                                       |
 | -------- | ------------------------------------------------------------- |
 | data     | `data/` + `text/` + loose root files (`stream.ini`, …)        |
-| models   | `models/` (IMGs with `.osm`) + `opensa/` (world.ospak, water) |
+| models   | `models/` (IMGs with `.osm`) + `pak/` (world.ospak, water)    |
 | others   | `anim/`, audio, dlls — the rest                               |
 | textures | EMPTY — pak textures live inside world.ospak; kept for shape  |
 

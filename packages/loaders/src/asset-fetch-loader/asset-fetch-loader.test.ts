@@ -352,7 +352,18 @@ describe('openWorld (plan 086 phase 3)', () => {
   });
 
   describe('positive cases', () => {
-    it('serves opensa/<name> from the delivered files, lowercased', async () => {
+    it('serves pak/<name> from the delivered files (phase 8), lowercased', async () => {
+      const loader = new AssetFetchLoader({
+        files: { get: (name) => (name === 'pak/world.ospak' ? new Uint8Array([8, 8]).buffer : null) },
+        manifestUrl: 'http://x/manifest.json',
+      });
+
+      const blob = await loader.openWorld('WORLD.OSPAK');
+      expect(blob).not.toBeNull();
+      expect(new Uint8Array(await blob!.arrayBuffer())).toEqual(new Uint8Array([8, 8]));
+    });
+
+    it('falls back to the legacy opensa/<name> key of older chunk sets', async () => {
       const loader = new AssetFetchLoader({
         files: { get: (name) => (name === 'opensa/world.ospak' ? new Uint8Array([7, 7]).buffer : null) },
         manifestUrl: 'http://x/manifest.json',
