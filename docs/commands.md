@@ -53,14 +53,18 @@ npx tsx tools/lod-procobj-generator/src/cli.ts --in ./mods-src/procobj --game <d
 
 # OpenSA cell LODs ([--holes <json>]: hole-fill models merged verbatim past the reduction tracks)
 npx tsx tools/opensa-lod-generator/src/cli.ts --game <dir> --out <dir> --cell 256
+#   --cell = the game grid (256), deliberately ≠ the pak's 250 render grid — the measured consequences and
+#   the open re-alignment question live in plan 087 (rolled back 2026-07-23, decide on field evidence)
 
 # Real-SA per-object LOD clones ([--holes <json>]: per-game hole-fill list, e.g. mods-src/original/lod-holes.json)
 NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts --game <dir> --out <dir>
 
 # Game dir → native pak (the pack stage standalone)
 NODE_OPTIONS=--max-old-space-size=12288 \
-  npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1 --in ./mods-src
-#   [--pak-out <dir>] [--game-id <id>] [--no-ao] [--bakes --clouds mods-src/clouds] [--no-models] [--bake-workers N] [--stochastic <file…>]
+  npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --in ./mods-src
+#   [--rect x0,y0,x1,y1] [--pak-out <dir>] [--game-id <id>] [--no-ao] [--bakes --clouds mods-src/clouds] [--no-models] [--bake-workers N] [--stochastic <file…>]
+#   --rect: optional SUBSET override (bench districts); default auto-fits every cell with content — the old
+#     hardcoded ±12 silently dropped gostown's far islands (plan 087)
 #   --pak-out: where the pak products land (default: <out>/pak — the game dir is self-contained, 086 phase 8)
 #   --game-id: fetch game id stamped into the pak manifest (default: basename of --game; pmb passes its own)
 ```

@@ -1,12 +1,13 @@
 import type { LodConfig } from './core/types';
 
 /**
- * Default run config. `cellSize` is the GAME-side grid (`GAME_CELL_SIZE`, 256) — the one the world adapter
- * streams collision and scatters procobj on, so one baked impostor stands for one game cell of instances.
- *
- * It is NOT the engine's RENDER grid: opensa-pack welds its `.oscell` blobs on `CELL_SIZE` (250) and ships
- * that in the manifest. This comment used to claim the two must match; they never have, and nothing breaks
- * because an impostor is a placement like any other and welds into whichever render cell it falls in.
+ * Default run config. `cellSize` is the GAME-side grid (`GAME_CELL_SIZE`, 256) — collision streaming and
+ * procobj scatter run on it, and plan 002 sized the bake to the STREAMING grid of the three era, which was
+ * this same 256. The engine pak now streams on 250 (opensa-pack `CELL_SIZE`), so the two grids partition
+ * the plane differently; plan 087 measured the consequence (a slot's lod footprint ≠ its hd footprint —
+ * swap gaps at the HD ring, gostown lod spill mean 141 u / p90 215 u). Re-aligning the bake to 250 was
+ * tried and ROLLED BACK the same day (user 2026-07-23): 256 stays deliberate until the bridge-model row
+ * of plan 087 is closed and the mismatch question is decided on field evidence.
  */
 export const config: LodConfig = {
   cellSize: 256,

@@ -66,8 +66,9 @@ export interface PackOptions {
    *  Defaults to `<outDir>/pak` (plan 086 phase 8: the game dir is SELF-CONTAINED — one folder pick
    *  serves the whole game; `pak/` replaced the confusing nested `opensa/` name). */
   pakDir?: string;
-  /** Inclusive GTA CELL-coordinate rect [x0, y0, x1, y1]. */
-  rect: readonly [number, number, number, number];
+  /** Inclusive GTA CELL-coordinate rect [x0, y0, x1, y1]. Absent = auto-fit to every cell with content
+   *  (plan 087: a fixed rect silently dropped gostown's far islands). */
+  rect?: readonly [number, number, number, number];
   /** Stochastic de-tiling name lists; defaults to the curated `data/stochastic.txt`. */
   stochasticFiles?: readonly string[];
 }
@@ -110,8 +111,8 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   log(`loading game dir ${gameDir} …`);
   const fs = openGameDir(gameDir);
   log(
-    `converting rect ${rect.join(',')} (cellSize ${CELL_SIZE}, ao ${ao ? 'on' : 'off'}, ` +
-      `sunvis ${bakes ? 'on' : 'off'}) …`,
+    `converting rect ${rect ? rect.join(',') : 'auto (fit to content)'} (cellSize ${CELL_SIZE}, ` +
+      `ao ${ao ? 'on' : 'off'}, sunvis ${bakes ? 'on' : 'off'}) …`,
   );
   const stochasticNames = readStochasticNames(options.stochasticFiles);
   const waterHeights = new WaterHeightGrid();
@@ -134,7 +135,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
           },
         }
       : {}),
-    rect,
+    ...(rect !== undefined ? { rect } : {}),
     stochasticNames,
     sunVis: bakes,
     waterHeights,

@@ -11,8 +11,11 @@ import type { OspakManifest } from '@opensa/engine-formats';
  * knew which cell wanted which. A pre-`textures` pak still loads eagerly in `setup`.
  *
  * The LOD ring is the fog-mask boundary (plan 074/21): hosts size it via `lodRadius` so that
- * `fogCut + margin ≤ lodRadius`, and the LOD/evict decisions test the CELL RECT (closest point), not the
- * centre — a 250 u cell's 177 u half-diagonal would otherwise put unloaded geometry deep inside clear air.
+ * `fogCut + margin ≤ lodRadius`, and the LOD/evict decisions test the closest point of the cell's TRUE
+ * geometry AABB (manifest `aabb`, plan 087) — an instance welds into the cell of its PIVOT, so meshes
+ * (bridges, piers) reach a mean 141 u / max 799 u past the grid rect on gostown, and a grid-rect ring
+ * skipped cells whose geometry already sat inside the fog. Pre-`aabb` paks fall back to the grid rect
+ * (whose closest-point test already beat the old centre test by the 177 u half-diagonal).
  */
 import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
@@ -58,10 +61,14 @@ interface CellSlot {
   current: Level | null;
   cx: number;
   cy: number;
+  /** Union of the level rects — eviction must keep a slot while ANY of its geometry is near the ring. */
+  evictRect: [number, number, number, number];
   keys: Partial<Record<Level, string>>;
   pending: Level | null;
-  /** Cell rect in engine XZ ([minX, maxX, minZ, maxZ]) — the LOD ring tests its closest point. */
+  /** GRID cell rect in engine XZ ([minX, maxX, minZ, maxZ]) — the fallback when a level has no `aabb`. */
   rect: [number, number, number, number];
+  /** Per-level TRUE geometry rects (manifest `aabb`, plan 087) — what the LOD ring actually tests. */
+  rects: Partial<Record<Level, [number, number, number, number]>>;
 }
 
 type Level = 'hd' | 'lod';
@@ -105,27 +112,52 @@ export class StreamingDriver {
     this.hdRadius = radii.hdRadius ?? HD_RADIUS;
     this.lodRadius = radii.lodRadius ?? LOD_RADIUS;
     const cellSize = manifest.cellSize ?? 250; // pre-cellSize manifests (older converts) default to the stock grid
-    for (const key of Object.keys(manifest.cells)) {
+    for (const [key, entry] of Object.entries(manifest.cells)) {
       const [cxRaw, cyRaw, level] = key.split(',');
       const cx = Number(cxRaw);
       const cy = Number(cyRaw);
       const slotKey = `${cx},${cy}`;
       let slot = this.cells.get(slotKey);
       if (!slot) {
+        // GTA cy maps to engine z = −y: the row [cy, cy+1) lands at z ∈ [−(cy+1), −cy) · cellSize.
+        const rect: [number, number, number, number] = [
+          cx * cellSize,
+          (cx + 1) * cellSize,
+          -(cy + 1) * cellSize,
+          -cy * cellSize,
+        ];
         slot = {
           centre: [(cx + 0.5) * cellSize, -(cy + 0.5) * cellSize],
           current: null,
           cx,
           cy,
+          evictRect: rect,
           keys: {},
           pending: null,
-          // GTA cy maps to engine z = −y: the row [cy, cy+1) lands at z ∈ [−(cy+1), −cy) · cellSize.
-          rect: [cx * cellSize, (cx + 1) * cellSize, -(cy + 1) * cellSize, -cy * cellSize],
+          rect,
+          rects: {},
         };
         this.cells.set(slotKey, slot);
       }
       slot.keys[level as Level] = key;
+      if (entry.aabb) {
+        slot.rects[level as Level] = entry.aabb;
+      }
       this.keyToSlot.set(key, slot);
+    }
+    // Eviction must be at least as conservative as every level's DECISION rect (aabb, grid fallback) —
+    // evicting by a smaller rect than the one that desires the level would load/unload-flap at the edge.
+    for (const slot of this.cells.values()) {
+      const levels = (Object.keys(slot.keys) as Level[]).map((level) => slot.rects[level] ?? slot.rect);
+      slot.evictRect = levels.reduce(
+        (union, r): [number, number, number, number] => [
+          Math.min(union[0], r[0]),
+          Math.max(union[1], r[1]),
+          Math.min(union[2], r[2]),
+          Math.max(union[3], r[3]),
+        ],
+        levels[0],
+      );
     }
     worker.addEventListener('message', (event: MessageEvent<PakWorkerResponse>) => {
       this.onBlob(event.data);
@@ -169,13 +201,10 @@ export class StreamingDriver {
     let createSpentMs = 0;
     let creates = 0;
     for (const slot of this.cells.values()) {
-      const biasedCentre = Math.hypot(slot.centre[0] - biasX, slot.centre[1] - biasZ);
-      const biasedRect = rectDistanceOf(slot.rect, biasX, biasZ);
-      const trueRect = rectDistanceOf(slot.rect, focus[0], focus[2]);
       // Adaptive budget: up to two creates while the total stays under CREATE_BUDGET_MS — a heavy first
       // create keeps the old 1/frame behaviour, two light ones drain ring-entry bursts twice as fast.
       const canCreate = creates === 0 || (creates < 2 && createSpentMs < CREATE_BUDGET_MS);
-      const spent = this.advanceSlot(slot, biasedCentre, biasedRect, trueRect, canCreate);
+      const spent = this.advanceSlot(slot, biasX, biasZ, focus[0], focus[2], canCreate);
       if (spent !== null) {
         creates += 1;
         createSpentMs += spent;
@@ -197,20 +226,25 @@ export class StreamingDriver {
     return this.stats;
   }
 
-  /** One slot's step: evict / request / create-swap. Returns the create's duration (ms), null otherwise. */
+  /** One slot's step: evict / request / create-swap. Requests test the BIASED focus (velocity prefetch),
+   *  eviction and the late-create metric the TRUE one. Returns the create's duration (ms), null otherwise. */
   private advanceSlot(
     slot: CellSlot,
-    biasedCentre: number,
-    biasedRect: number,
-    trueRect: number,
+    biasX: number,
+    biasZ: number,
+    trueX: number,
+    trueZ: number,
     canCreate: boolean,
   ): null | number {
-    const desired = this.desiredLevel(slot, biasedCentre, biasedRect);
+    const desired = this.desiredLevel(slot, biasX, biasZ);
     if (desired === null) {
       slot.pending = null;
       // The evict margin is a RING hysteresis; a pinned set has no ring, so an unselected cell must go
       // regardless of how close it sits to the camera — otherwise deselecting one never clears it.
-      if (slot.current !== null && (this.manual !== null || trueRect > this.lodRadius + EVICT_MARGIN)) {
+      if (
+        slot.current !== null &&
+        (this.manual !== null || rectDistanceOf(slot.evictRect, trueX, trueZ) > this.lodRadius + EVICT_MARGIN)
+      ) {
         this.unload(slot);
       }
 
@@ -240,7 +274,7 @@ export class StreamingDriver {
       return null; // arrays still in flight — a cell must never record against an unloaded array
     }
 
-    return this.create(slot, desired, key, blob, trueRect);
+    return this.create(slot, desired, key, blob, rectDistanceOf(this.levelRect(slot, desired), trueX, trueZ));
   }
 
   /** Smooth the per-update focus delta; returns the REQUEST focus (true focus + capped lead vector). */
@@ -318,9 +352,10 @@ export class StreamingDriver {
   }
 
   /** Ring pick with a hysteresis dead-band: keep the current level near the boundary (no flip-flop).
-   *  HD tests the cell CENTRE (a quality ring — rect would nearly double HD residency for no guarantee);
-   *  the LOD ring tests the cell RECT — the fog-mask guarantee is geometric (074/21). */
-  private desiredLevel(slot: CellSlot, centreDistance: number, rectDistance: number): Level | null {
+   *  HD tests the GRID cell CENTRE (a quality ring — a rect test would nearly double HD residency for no
+   *  guarantee); the LOD ring tests the level's TRUE geometry rect (manifest `aabb`, grid-rect fallback) —
+   *  the fog-mask guarantee is geometric, and the geometry is what must not pop (074/21, 087). */
+  private desiredLevel(slot: CellSlot, fx: number, fz: number): Level | null {
     if (this.manual !== null) {
       const { keys, level } = this.manual;
 
@@ -328,14 +363,19 @@ export class StreamingDriver {
     }
     const hdEdge = slot.current === 'hd' ? this.hdRadius + HYSTERESIS : this.hdRadius;
     const lodEdge = slot.current !== null ? this.lodRadius + HYSTERESIS : this.lodRadius;
-    if (centreDistance < hdEdge && slot.keys.hd) {
+    if (slot.keys.hd && Math.hypot(slot.centre[0] - fx, slot.centre[1] - fz) < hdEdge) {
       return 'hd';
     }
-    if (rectDistance < lodEdge && slot.keys.lod) {
+    if (slot.keys.lod && rectDistanceOf(this.levelRect(slot, 'lod'), fx, fz) < lodEdge) {
       return 'lod';
     }
 
     return null;
+  }
+
+  /** The rect a level's ring decisions test: its true geometry AABB, or the grid rect on a pre-`aabb` pak. */
+  private levelRect(slot: CellSlot, level: Level): readonly [number, number, number, number] {
+    return slot.rects[level] ?? slot.rect;
   }
 
   /** A delivered pak entry: a texture array uploads straight away, a cell blob waits for its create slot. */

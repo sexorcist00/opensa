@@ -12,6 +12,8 @@ function harness(
   fogCutDistance = 2400,
   /** Per-cell texture-array refs (003 phase 4). Omit to model a pre-`textures` pak (eager, legacy). */
   cellTextures?: Record<string, number[]>,
+  /** Per-cell TRUE geometry XZ AABBs (plan 087). Omit to model a pre-`aabb` pak (grid-rect fallback). */
+  cellAabbs?: Record<string, [number, number, number, number]>,
 ): {
   deliver: (key: string) => void;
   driver: StreamingDriver;
@@ -59,7 +61,7 @@ function harness(
       requested.push(message.key);
     },
   } as unknown as Worker;
-  const driver = new StreamingDriver(engine, manifestWith(cells, cellTextures), worker, radii);
+  const driver = new StreamingDriver(engine, manifestWith(cells, cellTextures, cellAabbs), worker, radii);
 
   return {
     deliver: (key: string): void => {
@@ -76,12 +78,17 @@ function harness(
 }
 
 /** Minimal manifest: one 250 u cell at grid (3,3) with both levels (engine rect x[750,1000] z[−1000,−750]). */
-function manifestWith(cells: string[], cellTextures?: Record<string, number[]>): OspakManifest {
+function manifestWith(
+  cells: string[],
+  cellTextures?: Record<string, number[]>,
+  cellAabbs?: Record<string, [number, number, number, number]>,
+): OspakManifest {
   const entries: OspakManifest['cells'] = {};
   const arrays: OspakManifest['textures'] = {};
   for (const key of cells) {
     const refs = cellTextures?.[key];
-    entries[key] = { hash: 0, length: 4, offset: 0, ...(refs ? { textures: refs } : {}) };
+    const aabb = cellAabbs?.[key];
+    entries[key] = { hash: 0, length: 4, offset: 0, ...(aabb ? { aabb } : {}), ...(refs ? { textures: refs } : {}) };
     for (const ref of refs ?? []) {
       arrays[`array-${ref}`] = { format: 0, hash: 0, height: 4, layers: 1, length: 4, offset: 0, width: 4 };
     }
@@ -210,6 +217,58 @@ describe('StreamingDriver rings (074/21 P1)', () => {
       const stats = h.driver.update([400, 0, 0]);
 
       expect(stats.lateCreates).toBe(1);
+    });
+  });
+});
+
+/**
+ * Geometry-AABB rings (plan 087): the manifest `aabb` is where the cell's TRUE geometry is — an instance
+ * welds into the cell of its PIVOT, so meshes reach past the grid rect (gostown mean 141 u, max 799 u).
+ * The ring must test the geometry, not the grid; pre-`aabb` paks keep the grid-rect behaviour (the whole
+ * suite above runs without aabbs).
+ */
+describe('StreamingDriver geometry-AABB rings (plan 087)', () => {
+  describe('negative cases', () => {
+    it('does not request a cell whose geometry sits outside the ring even though its grid rect is inside', () => {
+      // Grid rect closest point 1060.7 < 1200 (the old test would request); the actual geometry is a far
+      // corner sliver at 1400 — fetching it would waste the create budget on invisible content.
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, undefined, {
+        '3,3,lod': [990, 1000, -1000, -990],
+      });
+      h.driver.update([0, 0, 0]);
+
+      expect(h.requested).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('requests a cell whose grid rect is outside the ring but whose geometry reaches inside (the bridge case)', () => {
+      // Grid rect closest point 1060.7 > 1000 — the grid-rect ring skipped this; the welded mesh (a
+      // pivot-welded bridge) reaches to (600, −600) → 848.5, well inside the ring.
+      const h = harness(['3,3,lod'], { lodRadius: 1000 }, 2400, undefined, {
+        '3,3,lod': [600, 1000, -1000, -600],
+      });
+      h.driver.update([0, 0, 0]);
+
+      expect(h.requested).toEqual(['3,3,lod']);
+    });
+
+    it('evicts by the geometry rect: keeps the cell in the margin band, drops it past ring + margin', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1000 }, 2400, undefined, {
+        '3,3,lod': [600, 1000, -1000, -600],
+      });
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.driver.update([0, 0, 0]);
+      expect(h.loaded).toEqual(['3,3,lod']);
+
+      // Geometry at 1131: outside the desire edge (1060 with hysteresis) but inside ring + margin (1150).
+      h.driver.update([-200, 0, 200]);
+      expect(h.unloaded).toEqual([]);
+
+      // Geometry at 1273 > 1150 — now it goes.
+      h.driver.update([-300, 0, 300]);
+      expect(h.unloaded).toEqual(['3,3,lod']);
     });
   });
 });

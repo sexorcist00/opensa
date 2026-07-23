@@ -12,7 +12,7 @@ The engine never parses RenderWare at runtime — everything is converted offlin
 | `.ostex`  | `OST1` | one `texture_2d_array`                        | BC1/BC2/BC3/BC7/RGBA8, full offline mip chain, premultiplied alpha, alpha class (opaque/cutout/soft-blend)                                                                                    |
 | `.oscell` | `OSC1` | one streamed **cell** level (HD or LOD)       | 36-byte vertices (pos, normal + baked sunVis, uv, day/night prelit, layer + AO/emissive channels), object/breakable/particle/light tables (object kinds incl. 4 uv-scroll / 5 timed uv-scroll, minor 7), pipeline classes opaque/cutout/blend/beam/**additive**, placement mapper for the debugger |
 | `.oswire` | `OSW1` | meshopt-compressed transport of a cell        | the pak worker decodes it back into exact `.oscell` bytes                                                                                                                                     |
-| `.ospak`  | —      | the **archive**                               | manifest (`buildTime`, cells with offsets/hashes + per-cell texture refs, the **shared world texture dictionary**, uv animations, water, `missingLayers` — the stand-in layers the runtime's magenta highlight repaints) + 4096-aligned blobs; runtime reads byte ranges only |
+| `.ospak`  | —      | the **archive**                               | manifest (`buildTime`, cells with offsets/hashes + per-cell texture refs + per-cell geometry `aabb` (world XZ — what the streaming rings test, plan 087), the **shared world texture dictionary**, uv animations, water, `missingLayers` — the stand-in layers the runtime's magenta highlight repaints) + 4096-aligned blobs; runtime reads byte ranges only |
 
 Sections are read independently — the main thread takes `COLL` without touching geometry; consumers reject
 unknown **major** versions loudly, minors only add optional sections.
@@ -70,8 +70,11 @@ flowchart LR
   never live whole on the main thread.
 - **`stream/streaming.ts`** — `StreamingDriver`: ring model with hysteresis, the old level stays visible
   until its replacement is resident (atomic HD↔LOD swap), ≤1 cell create per frame, eviction outside the
-  outer ring. The LOD ring doubles as the fog-mask boundary. **Per-ring texture residency**: a shared array
-  is fetched with the first cell that draws it and released with the last.
+  outer ring. The LOD ring doubles as the fog-mask boundary, and it tests the cell's TRUE geometry rect
+  (manifest `aabb`; grid-rect fallback for pre-`aabb` paks) — an instance welds into the cell of its
+  PIVOT, so meshes reach past the grid rect (gostown mean 141 u, max 799 u — plan 087) and a grid-rect
+  ring skipped cells whose geometry already sat inside the fog. **Per-ring texture residency**: a shared
+  array is fetched with the first cell that draws it and released with the last.
 - **`world/cells.ts`** — `CellStore`: one `.oscell` becomes GPU buffers + a recorded `GPURenderBundle`
   replayed while frustum-visible; also the debugger's ray `pick()` over the placement mapper (parsed only
   under `debugPicking`).

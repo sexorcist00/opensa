@@ -57,8 +57,10 @@ export interface ConvertOptions {
    * object's `.osm` carries no textures of its own precisely because it points into these arrays.
    */
   onWorldPlanned?: (planner: TexturePlanner, defs: MapDefinitions) => void;
-  /** Inclusive GTA cell-coordinate rect [x0, y0, x1, y1]. */
-  rect: readonly [number, number, number, number];
+  /** Inclusive GTA cell-coordinate rect [x0, y0, x1, y1]. Absent = every cell with content: a fixed rect
+   *  silently drops whatever a TC places outside it (plan 087: gostown's far islands lived at x up to 37 —
+   *  a quarter of its LOD map fell outside the old hardcoded ±12). */
+  rect?: readonly [number, number, number, number];
   /** Curated stochastic de-tiling texture names, lowercased (074/12). */
   stochasticNames?: ReadonlySet<string>;
   /** Bake per-vertex sun visibility (074/07); on by default, `--no-sunvis` skips it. */
@@ -108,6 +110,34 @@ interface WeldRectContext {
   uvAnimRegistry: UvAnimRegistry;
 }
 
+/** World XZ AABB of a welded cell's geometry (engine coords, integer-rounded outward) — the manifest `aabb`
+ *  the streaming rings test instead of the grid rect (plan 087: pivot-welded meshes reach past it). */
+export function cellAabbXZ(cell: WeldedCell): [number, number, number, number] | undefined {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const bucket of cell.buckets) {
+    if (bucket.vertices.length === 0) {
+      continue;
+    }
+    minX = Math.min(minX, bucket.min[0]);
+    maxX = Math.max(maxX, bucket.max[0]);
+    minZ = Math.min(minZ, bucket.min[2]);
+    maxZ = Math.max(maxZ, bucket.max[2]);
+  }
+  if (minX > maxX) {
+    return undefined;
+  }
+
+  return [
+    Math.floor(minX + cell.origin[0]),
+    Math.ceil(maxX + cell.origin[0]),
+    Math.floor(minZ + cell.origin[2]),
+    Math.ceil(maxZ + cell.origin[2]),
+  ];
+}
+
 export async function convertDistrict(
   fs: AssetFileSystem,
   options: ConvertOptions,
@@ -119,6 +149,7 @@ export async function convertDistrict(
   // own shatter mesh). Absent-tolerant, and the SAME helper the runtime adapter gates with.
   const breakableModels = breakableModelsFromText(fs.getText('data/object.dat'));
   const grid = buildWorldGrid(defs, cellSize);
+  const rect = options.rect ?? occupiedRect(grid);
   const planner = new TexturePlanner(
     fs,
     defs.txdParents ?? new Map<string, string>(),
@@ -133,7 +164,7 @@ export async function convertDistrict(
     ao: null,
     breakables: 0,
     cells: [],
-    normals: countNormalsProvenance(fs, defs, options.rect, cellSize),
+    normals: countNormalsProvenance(fs, defs, rect, cellSize),
     pakBytes: 0,
     particles: 0,
     roadsigns: 0,
@@ -164,27 +195,14 @@ export async function convertDistrict(
   const ringCells = ao || sunVis ? Math.ceil(Math.max(AO_MAX_DISTANCE, SUNVIS_MAX_DISTANCE) / cellSize) : 0;
   const workers = options.bakeWorkers ?? defaultBakeWorkers();
   const log = options.log ?? ((): void => undefined);
-  const [x0, y0, x1, y1] = normalizedRect(options.rect);
+  const [x0, y0, x1, y1] = normalizedRect(rect);
 
-  // Progress accounting (user ask: long converts must say where they are and what's left): the grid knows
-  // which cells have content up front, so the ETA weights chunks by their cell counts, not chunk counts.
-  const chunks: { cells: number; rect: readonly [number, number, number, number] }[] = [];
-  for (let chunkY = y0; chunkY <= y1; chunkY += chunkSide) {
-    for (let chunkX = x0; chunkX <= x1; chunkX += chunkSide) {
-      const rect = [
-        chunkX,
-        chunkY,
-        Math.min(chunkX + chunkSide - 1, x1),
-        Math.min(chunkY + chunkSide - 1, y1),
-      ] as const;
-      const cells = countRectCells(grid, rect);
-      if (cells > 0) {
-        chunks.push({ cells, rect });
-      }
-    }
-  }
+  const chunks = planChunks(grid, [x0, y0, x1, y1], chunkSide);
   const totalCells = chunks.reduce((sum, entry) => sum + entry.cells, 0);
-  log(`plan: ${chunks.length} chunks / ${totalCells} grid cells (chunk ${chunkSide}², bake ring ${ringCells})`);
+  log(
+    `plan: rect ${x0},${y0},${x1},${y1}${options.rect ? '' : ' (auto-fit to content)'} — ` +
+      `${chunks.length} chunks / ${totalCells} grid cells (chunk ${chunkSide}², bake ring ${ringCells})`,
+  );
   const startedMs = Date.now();
   let doneCells = 0;
 
@@ -218,7 +236,10 @@ export async function convertDistrict(
       // The arrays this cell binds, recorded so the runtime can load textures PER RING instead of
       // uploading the whole district up front (074/21 residency follow-up, 003 phase 4).
       const textures = entry.cell.buckets.map((bucket) => bucket.textureArrayRef);
-      inputs.push(wireCompress({ bytes, key: entry.key, kind: 'cell', textures }));
+      const aabb = cellAabbXZ(entry.cell);
+      inputs.push(
+        wireCompress({ ...(aabb !== undefined ? { aabb } : {}), bytes, key: entry.key, kind: 'cell', textures }),
+      );
       accumulate(report, entry.key, bytes.byteLength, entry.cell.stats);
     }
     doneCells += chunk.cells;
@@ -254,6 +275,25 @@ export async function convertDistrict(
   report.pakBytes = pak.byteLength;
 
   return { defs, manifest, pak, report };
+}
+
+/** The tightest cell rect covering every grid cell with content — the no-`rect` default (a TC's true extent). */
+export function occupiedRect(grid: ReturnType<typeof buildWorldGrid>): [number, number, number, number] {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const cell of grid.values()) {
+    x0 = Math.min(x0, cell.cx);
+    y0 = Math.min(y0, cell.cy);
+    x1 = Math.max(x1, cell.cx);
+    y1 = Math.max(y1, cell.cy);
+  }
+  if (x0 > x1) {
+    throw new Error('cannot auto-fit the convert rect: the world grid has no exterior instances');
+  }
+
+  return [x0, y0, x1, y1];
 }
 
 function accumulate(report: ConvertReport, key: string, bytes: number, stats: WeldStats): void {
@@ -465,6 +505,33 @@ function normalizedRect(rect: readonly [number, number, number, number]): [numbe
     Math.max(rect[0], rect[2]),
     Math.max(rect[1], rect[3]),
   ];
+}
+
+/** Split a normalized rect into chunk rects, keeping only chunks with content. Progress accounting rides
+ *  the cell counts (user ask: long converts must say where they are and what's left) — the grid knows which
+ *  cells have content up front, so the ETA weights chunks by their cell counts, not chunk counts. */
+function planChunks(
+  grid: ReturnType<typeof buildWorldGrid>,
+  [x0, y0, x1, y1]: readonly [number, number, number, number],
+  chunkSide: number,
+): { cells: number; rect: readonly [number, number, number, number] }[] {
+  const chunks: { cells: number; rect: readonly [number, number, number, number] }[] = [];
+  for (let chunkY = y0; chunkY <= y1; chunkY += chunkSide) {
+    for (let chunkX = x0; chunkX <= x1; chunkX += chunkSide) {
+      const rect = [
+        chunkX,
+        chunkY,
+        Math.min(chunkX + chunkSide - 1, x1),
+        Math.min(chunkY + chunkSide - 1, y1),
+      ] as const;
+      const cells = countRectCells(grid, rect);
+      if (cells > 0) {
+        chunks.push({ cells, rect });
+      }
+    }
+  }
+
+  return chunks;
 }
 
 function tryGetClump(fs: AssetFileSystem, modelName: string): null | ReturnType<typeof getClump> {

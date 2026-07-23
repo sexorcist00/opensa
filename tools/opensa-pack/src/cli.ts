@@ -4,7 +4,7 @@
  * a library (plan 003 phase 6), because its real home is a stage inside perfect-map-builder and a pipeline
  * stage must not go through argv.
  *
- *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --rect x0,y0,x1,y1
+ *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> [--rect x0,y0,x1,y1]
  *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--stochastic <file>[,<file>…]]
  *
  * REMOVED FLAGS (2026-07-19, user): `--cell-size` (the pak and the runtime must agree on it and nothing
@@ -19,7 +19,9 @@
  * (sun-vis, 074/07): production, bench-ritual and pre-flip converts MUST pass it — without it the direct
  * sun renders unshadowed (bridges/canyons) by design.
  *
- * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / CELL_SIZE)).
+ * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / CELL_SIZE)). OPTIONAL since plan 087:
+ * the default auto-fits every cell with content — a fixed rect silently dropped whatever a TC placed
+ * outside it (gostown's far islands). Pass it only to convert a deliberate SUBSET (bench districts).
  *
  * OUTPUT (plan 003 phase 1 + 086 phase 8): `--out` is a COPY of `--game` — the chain convention, so every
  * stage hands the next a complete game tree, and the game dir is SELF-CONTAINED: the pak products
@@ -39,9 +41,9 @@ async function main(): Promise<void> {
   const gameRaw = arg('game');
   const outRaw = arg('out');
   const rectRaw = arg('rect');
-  if (!gameRaw || !outRaw || !rectRaw) {
+  if (!gameRaw || !outRaw) {
     console.error(
-      'usage: opensa-pack --game <dir> --out <dir> --rect x0,y0,x1,y1 ' +
+      'usage: opensa-pack --game <dir> --out <dir> [--rect x0,y0,x1,y1] ' +
         '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] ' +
         '[--stochastic <file>[,<file>…]]',
     );
@@ -49,8 +51,8 @@ async function main(): Promise<void> {
 
     return;
   }
-  const rect = rectRaw.split(',').map(Number);
-  if (rect.length !== 4 || rect.some(Number.isNaN)) {
+  const rect = rectRaw?.split(',').map(Number);
+  if (rect !== undefined && (rect.length !== 4 || rect.some(Number.isNaN))) {
     throw new Error(`bad --rect '${rectRaw}' (want x0,y0,x1,y1 in cell coords)`);
   }
   const bakeWorkers = Number(arg('bake-workers') ?? 0) || undefined;
@@ -71,7 +73,7 @@ async function main(): Promise<void> {
     models: !process.argv.includes('--no-models'),
     outDir: fromCwd(outRaw),
     ...(pakOut ? { pakDir: fromCwd(pakOut) } : {}),
-    rect: rect as unknown as readonly [number, number, number, number],
+    ...(rect !== undefined ? { rect: rect as unknown as readonly [number, number, number, number] } : {}),
     ...(stochastic.length > 0 ? { stochasticFiles: stochastic } : {}),
   });
 }

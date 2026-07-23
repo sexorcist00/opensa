@@ -25,6 +25,12 @@ export const OSPAK_ALIGN = 4096;
  * paks keep working unchanged.
  */
 export interface OspakCellEntry extends OspakEntry {
+  /** World XZ AABB of the cell's TRUE geometry, engine coords `[minX, maxX, minZ, maxZ]` (plan 087):
+   *  the streaming rings must test where the geometry actually is — an instance welds into the cell of
+   *  its PIVOT, so meshes (bridges, piers) reach past the grid rect (gostown: mean 141 u, max 799 u) and
+   *  a grid-rect ring skips cells whose geometry is already inside the fog. Absent on older paks — the
+   *  runtime falls back to the grid rect. */
+  aabb?: [number, number, number, number];
   textures?: number[];
 }
 
@@ -39,6 +45,8 @@ export interface OspakEntry {
 }
 
 export interface OspakInput {
+  /** World XZ geometry AABB (kind 'cell') — see {@link OspakCellEntry.aabb}. */
+  aabb?: [number, number, number, number];
   bytes: Uint8Array;
   /** Wire encoding the producer applied to `bytes` (the reader inflates before use). */
   enc?: OspakWireEnc;
@@ -179,6 +187,7 @@ function addCell(cells: OspakManifest['cells'], input: OspakInput, entry: OspakE
   }
   cells[input.key] = {
     ...entry,
+    ...(input.aabb !== undefined ? { aabb: input.aabb } : {}),
     ...(input.textures !== undefined ? { textures: [...new Set(input.textures)].sort((a, b) => a - b) } : {}),
   };
 }

@@ -62,6 +62,16 @@ describe('ospak', () => {
       expect(a.manifest).toEqual(b.manifest);
     });
 
+    it('carries a cell geometry aabb into the manifest, and omits the key when absent (plan 087)', () => {
+      const aabb: [number, number, number, number] = [1322, 1707, 1266, 1731];
+      const withAabb = [...inputs()];
+      withAabb[0] = { ...withAabb[0], aabb };
+      const { manifest } = buildOspak(withAabb);
+
+      expect(manifest.cells['54,-32,hd'].aabb).toEqual(aabb);
+      expect(manifest.cells['54,-32,lod']).not.toHaveProperty('aabb');
+    });
+
     it('carries texture meta into the manifest for the scheduler', () => {
       const { manifest } = buildOspak(inputs());
 

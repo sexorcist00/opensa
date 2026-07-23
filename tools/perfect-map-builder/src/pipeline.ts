@@ -24,7 +24,7 @@ import { basename, join, resolve } from 'node:path';
 
 import type { BuilderConfig } from './config';
 
-import { config as defaultConfig } from './config';
+import { config as defaultConfig, PACK_RECTS } from './config';
 
 /**
  * Valid `--until <name>` values. Common-chain + `sa`/`opensa` stop after the named one; the special `lod` value
@@ -348,17 +348,21 @@ async function buildOpensaTarget(step: {
     return [{ dir: opensa, name: 'opensa' }];
   }
   log('pack → opensa/ (converting the map into our format — several minutes)');
+  // The fetch game id (plan 086): the USER-FACING --game folder, not this work-stage intermediate.
+  const gameId = basename(resolve(step.gamePath));
+  // Per-game rect (plan 087): a run-config override wins, else the game's pinned `full` rect from
+  // PACK_RECTS, else the convert auto-fits to content (a new TC without a pinned extent).
+  const packRect = config.pack.rect ?? PACK_RECTS[gameId]?.full;
   const packed = await packGameDir({
     ao: config.pack.ao,
     ...(config.pack.bakeWorkers !== undefined ? { bakeWorkers: config.pack.bakeWorkers } : {}),
     bakes: config.pack.bakes,
     gameDir: lodDir,
-    // The fetch game id (plan 086): the USER-FACING --game folder, not this work-stage intermediate.
-    gameId: basename(resolve(step.gamePath)),
+    gameId,
     log: (message) => log(`pack: ${message}`),
     // Plan 086 phase 8: the game dir is self-contained — the pak lands in `<out>/opensa/pak` (the default).
     outDir: opensa,
-    rect: config.pack.rect,
+    ...(packRect !== undefined ? { rect: packRect } : {}),
   });
   // The pack writes its report beside the pak it belongs to (`<out>/opensa/pak/`). Mirror it at the root:
   // that is where a run's summary is looked for, and the pak-side copy stays the pak's own.
