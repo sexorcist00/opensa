@@ -36,6 +36,8 @@ variant under `game-src/`.
 | `dump-texture.ts <txd> <name> [out.png] [alpha]` | one TXD texture as PNG (software DXT decode). **Gotcha:** transparent texels take the viewer's background colour — always check the `alpha` dump too; for DXT1a ground truth decode blocks (3-colour mode ⇒ index 3 is transparent black) |
 | `dump-chunks.ts <file> [filterHex]` | a RenderWare file's chunk tree — WHERE a plugin chunk lives |
 | `model-bbox.ts <model>…` | render extents (DFF) vs collision extents (COL) — partial mesh vs transform/culling bug |
+| `dump-dff-materials.ts <model>…` | per-material DFF breakdown: texture, tris/verts, DAY vs NIGHT prelit RGBA averages + per-material bbox — "which submesh is this and how does the artist light it at night" (closed 085 rows G/H) |
+| `txd-alpha.ts <txd\|path>…` | per-texture format/hasAlpha — vanilla only puts a model through blended render states on its ALPHA pass, so a DXT1 no-alpha texture draws opaque even on an ADDITIVE-flagged def (085 row H) |
 | `find-2dfx.ts [--img <path>]` | 2d Effect entries across the map: type histogram + decoded roadsigns; diff archives to expose re-export damage |
 | `ide-flag-histogram.ts` | which IDE object-flag bits the map actually uses, with example models per bit (flag semantics: `packages/renderware/src/parsers/text/ide-flags.ts` — verify bits against a real asset before acting on them) |
 | `audit-rw-coverage.ts` | what the archive's DFF/TXD data contains vs what our parsers handle (chunk histograms, parse failures, dropped textures) |
@@ -52,9 +54,10 @@ variant under `game-src/`.
 | `dump-osm.ts <model> [--pak dir]` | a built pak `.osm`'s sections + DESC fixture: parts, submeshes, texture-array refs, own-TEXS vs world-sourced |
 | `dump-osm-meta.ts <model> [--pak dir]` | per-submesh texture-LAYER histograms (vertex meta) + each TEXS layer's size/format/mips/name-hash — the layer-mismatch finder |
 | `dump-texel-avg.ts <model> [pakDir]` | average colour of each own-TEXS layer (BC endpoint scan) — tells a black/greyed bake from a faithful one in seconds |
+| `dump-cell.ts <x> <y> [pakDir]` | a WELDED cell's tables at a world point: objectTable rows (kind, timed window, per-group class/array/sphere) + placement boxes near the point — the pak-bytes step for bugs in the welded look (built for 085 row H) |
 
 Default pak: `build/perfect/opensa` (the canonical build). The world-welded side of a model lives in
-cell bundles, not its `.osm` — a bug only in the welded look needs the cell path, not these.
+cell bundles, not its `.osm` — `dump-cell.ts` covers that path.
 
 ## Approaches beyond scripts
 
