@@ -520,6 +520,22 @@ export class EnterVehicleSystem implements System {
     return [this.toWorld(vehicle, entry)];
   }
 
+  /** The DOOR PART that physically sits on a WORLD flank (plan 088 fr6): the crawl/egress spots are
+   *  yaw-planar, but the door panels ride the body's FULL orientation — on a roof-down car model +x
+   *  renders at world −x, so swinging `rf` for a world-+x crawl moved the door on the OPPOSITE side. */
+  private doorOnWorldFlank(vehicle: EnterableVehicle, positiveX: boolean): DoorSide {
+    const [qx, qy, qz, qw] = this.physics.readBody(vehicle.body).quaternion;
+    // World direction of the model's +X axis, projected on the yaw-planar "right of heading".
+    const axisX = 1 - 2 * (qy * qy + qz * qz);
+    const axisY = 2 * (qx * qy + qz * qw);
+    const rightDot = axisX * Math.cos(vehicle.heading) + axisY * Math.sin(vehicle.heading);
+    // ε-biased: a car ON ITS SIDE has its x-axis vertical (dot ≈ ±1e−16 float noise) — bias the tie
+    // to the upright naming instead of letting noise flip the door.
+    const modelRightIsWorldRight = rightDot >= -1e-3;
+
+    return positiveX === modelRightIsWorldRight ? 'rf' : 'lf';
+  }
+
   /** Standing spot in the open doorway of the sequence's side, aligned with the seat row. */
   private doorwayWorld(vehicle: EnterableVehicle): Vec3 {
     const [hx] = vehicle.halfExtents;
@@ -691,7 +707,13 @@ export class EnterVehicleSystem implements System {
     const base = ground ?? position[2] - vehicle.halfExtents[2];
     for (const height of [0.35, 0.85]) {
       const z = base + height;
-      if (!this.physics.pathClear([position[0], position[1], z], [target[0], target[1], z], vehicle.body)) {
+      const clear = this.physics.pathClear(
+        [position[0], position[1], z],
+        [target[0], target[1], z],
+        vehicle.body,
+        this.playerCollider, // belt-and-braces: the seated rider sits ON the driver-side ray
+      );
+      if (!clear) {
         return false;
       }
     }
@@ -756,12 +778,17 @@ export class EnterVehicleSystem implements System {
       // door that swings is the one on the CHOSEN flank (a fixed rf swing read as "the wrong door
       // opened" in the field); nose/tail crawls swing nothing. All four blocked → appear on top.
       const spot = this.clearCrawlSpot(this.active);
-      this.logger.log('enter-vehicle', `egress wreck ${spot ? `crawl [${spot.local.join(',')}]` : 'boxed in'}`);
+      if (spot && spot.local[0] !== 0) {
+        // The door that swings is the one PHYSICALLY on the crawl-out flank — through the body's
+        // full orientation, not yaw (roof-down flips model x in world).
+        this.side = this.doorOnWorldFlank(this.active, spot.local[0] > 0);
+        this.doorTarget = this.openAngle();
+      }
+      this.logger.log(
+        'enter-vehicle',
+        `egress wreck ${spot ? `crawl [${spot.local.join(',')}] door ${this.side}` : 'boxed in'}`,
+      );
       if (spot) {
-        if (spot.local[0] !== 0) {
-          this.side = spot.local[0] > 0 ? 'rf' : 'lf';
-          this.doorTarget = this.openAngle();
-        }
         this.startCrawlout(spot.target);
 
         return;

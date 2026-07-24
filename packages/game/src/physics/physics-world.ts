@@ -458,7 +458,7 @@ export class PhysicsWorld {
    * next one. `excludeBody` skips the probing car itself (the ray starts inside its chassis);
    * sensors are ignored (the seated rider's capsule IS a sensor and sits exactly at the origin).
    */
-  pathClear(from: Vec3, to: Vec3, excludeBody?: number): boolean {
+  pathClear(from: Vec3, to: Vec3, excludeBody?: number, excludeCollider?: number): boolean {
     const direction = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
     const length = Math.hypot(direction[0], direction[1], direction[2]);
     if (length === 0) {
@@ -468,15 +468,16 @@ export class PhysicsWorld {
       { x: from[0], y: from[1], z: from[2] },
       { x: direction[0] / length, y: direction[1] / length, z: direction[2] / length },
     );
-    const exclude = excludeBody === undefined ? undefined : this.world.getRigidBody(excludeBody);
+    const excludeB = excludeBody === undefined ? undefined : this.world.getRigidBody(excludeBody);
+    const excludeC = excludeCollider === undefined ? undefined : this.world.getCollider(excludeCollider);
     const hit = this.world.castRay(
       ray,
       length,
       true,
       this.rapier.QueryFilterFlags.EXCLUDE_SENSORS,
       undefined,
-      undefined,
-      exclude,
+      excludeC,
+      excludeB,
     );
 
     return hit === null;

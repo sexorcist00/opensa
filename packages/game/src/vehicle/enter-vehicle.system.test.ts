@@ -639,8 +639,10 @@ describe('exit egress chain (plan 088/09d)', () => {
       h.system.fixedUpdate(0.016);
 
       expect(h.anim.clip).toBe('car_crawloutrhs');
-      h.system.update(1); // the rf door swings open on the crawl-out side while he crawls
-      expect((car.handle as FakeVehicleHandle).doorAngles.get('rf')).toBeCloseTo(Math.PI / 3);
+      // Roof-down flips model x in world (and the derived yaw is π): the crawl spot lands at world −x,
+      // where the PHYSICAL door is door_lf — that is the one that swings, not a yaw-frame 'rf'.
+      h.system.update(1);
+      expect((car.handle as FakeVehicleHandle).doorAngles.get('lf')).toBeCloseTo(-Math.PI / 3);
     });
 
     it('a car ON ITS SIDE with the right flank grounded crawls out the OTHER side', () => {

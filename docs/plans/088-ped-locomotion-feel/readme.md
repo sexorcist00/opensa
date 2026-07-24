@@ -370,6 +370,18 @@ All four packages **1283 green**; lint + tsc clean.
   (mirrored on rf). Tests: +4 egress cases (blocked-driver→rf, both→windscreen, all→roof,
   overturned→crawl) on a configurable blockage stub; all four packages **1280 green**.
 
+  **Field round 6 (2026-07-24):** the wrong-side reads survived fr5; the wreck report cracked it —
+  "the DRIVER door opens INTO THE WALL, he exits through the CLOSED PASSENGER door". The egress
+  spots are YAW-planar, but the door panels ride the body's FULL orientation: on a roof-down car
+  the derived yaw flips by π and model x mirrors in world, so swinging the yaw-frame `rf` moved the
+  panel on the OPPOSITE world flank from the crawl. New `doorOnWorldFlank` maps the crawl-out's
+  WORLD side to the physical door through the body quaternion (ε-biased tie-break: a side-lying
+  car's x-axis is vertical and the dot is ±1e−16 float noise). For the upright wrong-side case the
+  probes now ALSO explicitly exclude the player's collider (belt-and-braces against browser-Rapier
+  sensor-flag differences — the seated capsule sits exactly ON the driver-side ray), and the wreck
+  log carries the picked flank + door. Sim proof kept the warp itself clean (real `CAR_getout_LHS`
+  root travel replayed at two headings — endpoints pinned, path always doorward). **1293 green.**
+
   **Field round 5 (2026-07-24):** the wrong-side exit SURVIVED round 4 ("both free → driver door
   opens, exits passenger; passenger blocked → correct"). A clean-room Rapier test proved the sensor
   exclusion and the rays sound — the bug was the HEIGHT BASE: `position.z − hz` sits BELOW the road
