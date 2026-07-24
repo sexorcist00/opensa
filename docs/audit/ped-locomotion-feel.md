@@ -49,8 +49,9 @@ New load-bearing seams: the `Locomotion` ECS component (heading/state/stateTime/
 
 The user's original complaints — instant direction changes, a feel-less animation-less jump, no
 sense of acceleration, floating car entry, doors clipping through the body, exits into walls,
-standing calmly on 45° slopes — are all closed and field-verified (four field rounds on
-2026-07-24, each fix landed same day). Tests grew from 2,451 (pre-088 merge baseline, full repo)
+standing calmly on 45° slopes — are all closed and field-verified (SIX field rounds on
+2026-07-24, each fix landed same day — the last cracked the yaw-vs-body-orientation door mapping
+on overturned wrecks). Tests grew from 2,451 (pre-088 merge baseline, full repo)
 by **+~100 focused unit tests** across game/engine/web/renderware — including real-Rapier FSM
 timing, a real 48° trimesh ramp, real-IFP root-travel numbers, and degradation gates that keep
 every new clip TC-safe (absent clip → previous behaviour, never a bind pose).

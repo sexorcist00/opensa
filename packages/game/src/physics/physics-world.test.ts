@@ -746,6 +746,16 @@ describe('PhysicsWorld.pathClear (plan 088/09d)', () => {
       expect(physics.pathClear([0, 0, 1], [4, 0, 1], body)).toBe(true);
       physics.dispose();
     });
+
+    it('an explicitly excluded collider (the seated rider) does not block the ray', async () => {
+      const physics = await makeWorld();
+      physics.createStaticBox([0, 0, -1], [10, 10, 0.5]);
+      const { collider } = physics.createKinematicCapsule([2, 0, 1], 0.3, 0.6); // ON the ray path
+      physics.step(1 / 60);
+      expect(physics.pathClear([0, 0, 1], [4, 0, 1])).toBe(false); // it DOES block by default
+      expect(physics.pathClear([0, 0, 1], [4, 0, 1], undefined, collider)).toBe(true);
+      physics.dispose();
+    });
   });
 });
 

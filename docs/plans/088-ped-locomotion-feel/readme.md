@@ -1,9 +1,10 @@
 # 088 — Ped locomotion feel (turning, acceleration tiers, jump, animation states)
 
-**Status: SHIPPED + CLOSED 2026-07-24 (both rounds, all field-verified same day; 05 stays QUEUED).**
-Round 2 (07 landing tiers · 08 slope slide · 09a–d ingress/egress) closed after two field rounds +
-the overturned crawl-out fix; close-out re-run (character.md/vehicles.md/edge-cases updated, audit
-at `docs/audit/ped-locomotion-feel.md`).
+**Status: SHIPPED + CLOSED 2026-07-24 (both rounds, SIX same-day field rounds, all accepted;
+05 stays QUEUED).** Round 2 (07 landing tiers · 08 slope slide · 09a–d ingress/egress) survived
+field rounds 2–6 (slide push, crawl-out lift, ground-anchored probes, stranded doors, and finally
+the yaw-vs-body-orientation door mapping on wrecks); close-out re-run twice
+(character.md/vehicles.md/edge-cases updated, audit at `docs/audit/ped-locomotion-feel.md`).
 Round 1: four feature commits (`4fbe73b` heading+plant · `5ed9a0c` crossfade+hold · `6520641`
 tiers+rate-sync · `c45adaf` jump FSM) + the field fix `160d428` + close-out `824ca1b`; 792 green.
 

@@ -81,9 +81,14 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   `car_shuffle_rhs`; the step-in walks a three-leg route around the OPEN panel (back along the
   1.2 m standoff ring past the swept edge, inboard behind it, forward into the doorway). Exit runs
   an egress chain — driver door → passenger door → windscreen crawl (`car_crawloutrhs` to a
-  ground-anchored spot past the bonnet) → appear on the roof — each spot gated by two-height
-  `PhysicsWorld.pathClear` rays from the car's centre (target + knee, 0.6 m past the doorway; the
-  car excluded, sensors ignored). An overturned car (`!isUpright`) skips the doors and crawls out.
+  ground-anchored spot past the bonnet) → appear on the roof — each spot gated by two HORIZONTAL
+  `PhysicsWorld.pathClear` rays at 0.35/0.85 m above the REAL ground under the car (a centre-height
+  anchor grazed cambered roads and false-blocked the driver side), reaching 0.6 m past the doorway;
+  the car, all sensors AND the rider's own collider are excluded. A WRECK (`!isUpright` — roof-down
+  or on a flank) probes four planar exits (right → left → nose → tail) and crawls out the first
+  clear one; the door that swings is mapped to the crawl-out's WORLD flank through the body's full
+  orientation (`doorOnWorldFlank` — roof-down mirrors model x in world, so the yaw-frame name is
+  the wrong panel), with appear-on-top when boxed in.
   Door choreography: per-side angle tracking; the exit door stays open while the player stands in
   the doorway and shuts once he steps clear (the same footprint trigger that restores collision).
 - **LOD/streaming** (plan 021): HD/LOD/unload distances per vehicle, placements respawn.
