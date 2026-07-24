@@ -72,9 +72,12 @@ const PLAYER_CLIPS = [
   'jump_glide',
   'jump_land',
   'fall_glide',
-  'fall_collapse',
+  // The severe tier goes FACE DOWN in one motion + rises from face-down. NOT `fall_collapse`: that
+  // clip is a standing-knockout crumple whose buckle→straighten→drop prefix read as TWO clips on a
+  // landing (field 2026-07-24: "crouch, then he stood up, then ALSO a fall").
+  'fall_front',
   'fall_land',
-  'getup',
+  'getup_front',
 ];
 const IDLE_CLIP = 0;
 const WALK_CLIP = 1;

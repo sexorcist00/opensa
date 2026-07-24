@@ -278,6 +278,16 @@ without `getup` it holds the collapse's last frame). In fall-speed terms the tie
 ≈13 m/s, collapse from z=17 ≈17.5 m/s; 5 airClipFor chain/degradation cases minus renames); full
 suite **798 green**; lint (recovery pick extracted to `recoverySecondsOf`) + tsc clean.
 
+**Field fix (2026-07-24, same day):** the severe tier read as TWO clips ("crouch, then he stood up,
+then ALSO a fall"). A physics-sim replay proved the state/clip SEQUENCE was correct (fall_glide →
+collapse 1.0 s → getup → idle) — the problem was the CONTENT: `FALL_collapse` is a standing-knockout
+crumple (buckle → brief straighten → drop backwards), authored for fainting peds, and its
+straighten-up middle is the phantom "second clip". Swapped the tier to **`fall_front`** (0.73 s —
+one motion, straight down onto the face) + **`getup_front`** (the matching face-down riser), and
+`collapseRecoverySeconds` 1.8 → **2.2** so the 2.1 s chain plays out instead of cutting the riser at
+58 % and popping to idle. Clip durations recorded: land 0.23 · fall_land 0.47 · fall_front 0.73 ·
+glide 0.5 · fall_glide 0.8 · getup(_front) 1.37 (ANP3 raw / 60).
+
 ### 08 — Slope slide (a pose for the 45°+ surfaces Rapier already slides down)
 
 - Ground NORMAL from the ground probe (extend the physics ray); grounded on a slope steeper than

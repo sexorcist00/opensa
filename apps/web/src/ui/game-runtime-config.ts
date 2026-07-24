@@ -118,7 +118,9 @@ export function createGameRuntimeConfig(): Config {
     movement: {
       accel: 14,
       airControl: 0.3,
-      collapseRecoverySeconds: 1.8,
+      // 2.2 covers the full fall_front (0.73 s) + getup_front (1.37 s) chain — a shorter recovery
+      // CUT the riser mid-motion and popped to idle.
+      collapseRecoverySeconds: 2.2,
       collapseSpeed: 16,
       coyoteSeconds: 0.12,
       deceleration: 25,
