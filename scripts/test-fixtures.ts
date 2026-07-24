@@ -2,7 +2,7 @@ import { buildVer2Buffer, type ImgArchive, openArchive } from '@opensa/renderwar
 import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware/parsers/text/timecyc.parser';
 /**
  * Reconstruct the real-asset test fixtures (`tests/original/`) from a clean, UNMODIFIED GTA San Andreas
- * install under `game-src/non-modified` (default). These are Rockstar assets, so they are NOT committed
+ * install under `game-src/original` (default). These are Rockstar assets, so they are NOT committed
  * (`tests/original/` is gitignored) — every contributor regenerates them locally on setup, or after
  * changing the manifest:
  *
@@ -14,8 +14,10 @@ import { convertTo24h, parseTimecyc, stringifyTimecyc } from '@opensa/renderware
  *   - copy:    copied verbatim from `game-src/<game>/<from>`
  *   - extract: extracted by name from a `models/*.img` archive
  *   - archive: a one-file stock VER2 `.img` built around an extracted entry
+ *   - mod:     copied from `mods-src/original/mods/<from>` — opensa-pack's production input is a MODDED game, and
+ *              the mods carry things the stock game barely has (95 % of their textures ship a mip chain)
  *
- * Extend MANIFEST when a test needs a new real-asset fixture.
+ * Extend MANIFEST when a test needs a new real-asset fixture, or MOD_MANIFEST when it needs a modded one.
  *
  * `data/timecyc_24h.dat` is generated here (the stock 24h expansion of timecyc.dat, no mod overlay).
  * Curated / version-pinned test models that can't be reproduced from a stock copy live committed under
@@ -27,16 +29,33 @@ import { dirname, join } from 'node:path';
 type Fixture =
   | { readonly dest: string; readonly entry: string; readonly type: 'archive' }
   | { readonly dest: string; readonly entry: string; readonly type: 'extract' }
-  | { readonly dest: string; readonly from: string; readonly type: 'copy' };
+  | { readonly dest: string; readonly from: string; readonly type: 'copy' }
+  /** Copied from `mods-src/`, not from the game dir — see {@link MOD_MANIFEST}. */
+  | { readonly dest: string; readonly from: string; readonly type: 'mod' };
 
 const gameIndex = process.argv.indexOf('--game');
-const GAME = gameIndex >= 0 ? process.argv[gameIndex + 1] : 'non-modified';
+const GAME = gameIndex >= 0 ? process.argv[gameIndex + 1] : 'original';
 const ROOT = join('game-src', GAME);
 const ARCHIVES = ['models/gta3.img', 'models/gta_int.img'];
 const OUT = 'tests/original';
 
 const copy = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'copy' });
+const modFile = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'mod' });
 const extract = (entry: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, entry, type: 'extract' });
+
+/**
+ * Assets copied from `mods-src/original/mods` rather than the game dir.
+ *
+ * opensa-pack's PRODUCTION input is not a stock game: mod-installer bakes these mods into the archives
+ * before it runs. They also carry things the stock game barely has — 95 % of their textures ship a mip
+ * chain (up to 12 levels, 2048 px) — so "the converted dictionary preserves the chain" can only be tested
+ * against one of them.
+ */
+const MOD_MANIFEST: readonly Fixture[] = [
+  // A Chinatown building + its dictionary: 19 material textures, several 512² DXT1 with 10 mip levels.
+  modFile('17. Chinatown Project v2 + Chinese Lamps/gta3_img/chinatown_sfe1.dff', 'mods/chinatown_sfe1.dff'),
+  modFile('17. Chinatown Project v2 + Chinese Lamps/gta3_img/chinatownsfe.txd', 'mods/chinatownsfe.txd'),
+];
 
 const MANIFEST: readonly Fixture[] = [
   // --- Loose data / config / text files (copied verbatim) ---
@@ -80,14 +99,31 @@ const MANIFEST: readonly Fixture[] = [
   extract('countrye_stream1.ipl', 'ipl_binary/countrye_stream1.ipl'),
   extract('counxref.ifp', 'dff/anim-clump/counxref.ifp'),
   extract('nt_noddonkbase.dff', 'dff/anim-clump/nt_noddonkbase.dff'),
+  // The opensa-pack `.osm` conversion tests (plan 003 phase 5) run on REAL models, one per asset class, each
+  // with the TXD its IDE row names — a converted model must lose nothing against the DFF/TXD build, and a
+  // hand-built clump cannot prove that.
+  extract('des_xoilfield.txd', 'dff/anim-clump/des_xoilfield.txd'), // nt_noddonkbase's dictionary
+  extract('lamppost1.dff', 'dff/topple/lamppost1.dff'), // object.dat uprootLimit 240 — the topple prop
+  extract('dynsigns.txd', 'dff/topple/dynsigns.txd'),
+  extract('labins01_la.txd', 'dff/breakable/labins01_la.txd'), // binnt08_la's dictionary
+  extract('sjmcacti2.dff', 'dff/clutter/sjmcacti2.dff'), // a procobj.dat species (and a topple prop)
+  extract('gta_cactus.txd', 'dff/clutter/gta_cactus.txd'),
   extract('binnt08_la.dff', 'dff/breakable/binnt08_la.dff'),
   extract('washer.dff', 'dff/building/washer.dff'),
+  // Stock SA ships 11 EMPTY TXDs — a valid dictionary chunk in one 2 048-byte sector with nothing inside.
+  // `mine` is the awkward one: its material NAMES a texture the empty dictionary cannot supply.
+  extract('mine.dff', 'dff/empty-txd/mine.dff'),
+  extract('mine.txd', 'dff/empty-txd/mine.txd'),
   // A stock vegetation LOD DFF — the template the lod-trees-generator rebuilds card geometry over. Carries the
   // tristrip flag + an extra-vertex-colour (0x253f2f9) extension, both of which the encoder must scrub (else SA
   // renders the impostor as nothing).
   extract('lodroadscoast02.dff', 'dff/lod-template/lodroadscoast02.dff'),
   extract('esc_step.dff', 'dff/escalator/esc_step.dff'),
   extract('escl_la.dff', 'dff/escalator/escl_la.dff'),
+  // The SF fountain (IDE 9833, txd fountain_sfw): a stock model carrying THREE 2dfx type-1 particle anchors
+  // (`water_fountain`) — the converter's only real-asset case for welding emitters into a cell (074/06 row 13).
+  extract('fountain_sfw.dff', 'dff/particles/fountain_sfw.dff'),
+  extract('fountain_sfw.txd', 'dff/particles/fountain_sfw.txd'),
   extract('ws_floodbeams.dff', 'dff/floodbeams/ws_floodbeams.dff'),
   extract('ce_grndpalcst05.dff', 'dff/frame-offset-ignored/ce_grndpalcst05.dff'),
   extract('skullpillar01_lvs.dff', 'dff/particle/skullpillar01_lvs.dff'),
@@ -97,12 +133,20 @@ const MANIFEST: readonly Fixture[] = [
   // A stock HD tree with day + night vertex colours — the night-tint fixtures (lod-trees `computeNightTint` and the
   // lod-procobj mesh night-colour carry).
   extract('cedar1_hi.dff', 'dff/night-colours/cedar1_hi.dff'),
+  // The LV strip's neon-rope palm (vegaxref 3509): the rope's night set is saturated red (255/49/49) over a
+  // flat grey day (81/81/81) — Rec709 luma reads it DARKER than day, the case that broke the luma-delta
+  // emissive rule (the rope never glowed; map-object round 2026-07-22).
+  extract('vgsn_nitree_r01.dff', 'dff/night-colours/vgsn_nitree_r01.dff'),
+  extract('vgsn_nitree.txd', 'dff/night-colours/vgsn_nitree.txd'),
   extract('dyntraffic.txd', 'dff/trafficlight-backface-culling/dyntraffic.txd'),
   extract('admiral.dff', 'dff/vehicle/admiral.dff'),
   extract('squalo.dff', 'dff/vehicle/squalo.dff'),
   // infernus: the vehicle-optimizer scale test fixture — a hierarchical rig (dummies) + embedded COL3 collision.
   extract('infernus.dff', 'dff/vehicle/infernus.dff'),
   extract('admiral.dff', 'vehicles/admiral.dff'),
+  // A SECOND car, so a modloader test can prove the mod's GEOMETRY won rather than just its texture kind.
+  extract('cheetah.dff', 'vehicles/cheetah.dff'),
+  extract('cheetah.txd', 'vehicles/cheetah.txd'),
   // the world-adapter integration test's vehicle pair + the loose generic vehicle dictionary
   extract('admiral.txd', 'vehicles/admiral.txd'),
   copy('models/generic/vehicle.txd', 'models/generic/vehicle.txd'),
@@ -164,13 +208,16 @@ function produce(fixture: Fixture): null | Uint8Array {
     case 'extract': {
       return extractEntry(fixture.entry);
     }
+    case 'mod': {
+      return new Uint8Array(readFileSync(join('mods-src', 'mods', fixture.from)));
+    }
   }
 }
 
 let written = 0;
 const missing: string[] = [];
 
-for (const fixture of MANIFEST) {
+for (const fixture of [...MANIFEST, ...MOD_MANIFEST]) {
   let data: null | Uint8Array = null;
   try {
     data = produce(fixture);
@@ -198,7 +245,7 @@ try {
   missing.push(`${OUT}/data/timecyc_24h.dat`);
 }
 
-console.log(`test:fixtures (${GAME}): wrote ${written}/${MANIFEST.length + 1} into ${OUT}/`);
+console.log(`test:fixtures (${GAME}): wrote ${written}/${MANIFEST.length + MOD_MANIFEST.length + 1} into ${OUT}/`);
 if (missing.length > 0) {
   console.error(`\n  MISSING ${missing.length} — source not found in ${ROOT}:`);
   for (const dest of missing) {

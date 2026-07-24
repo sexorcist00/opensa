@@ -16,11 +16,11 @@ measured feasibility), [002](./docs/plans/002-clone-lods.md) (Phase 1 clone), [0
 
 ```sh
 # Report only (no build) — LOD counts + stock-vs-clone triangle budget:
-tsx tools/sa-lod-generator/src/cli.ts --game ./game-src/non-modified
+tsx tools/sa-lod-generator/src/cli.ts --game ./game-src/original
 
 # Drop-in build:
 NODE_OPTIONS=--max-old-space-size=8192 \
-tsx tools/sa-lod-generator/src/cli.ts --game ./game-src/non-modified --out ./build/salod [--tex-scale 0.25]
+tsx tools/sa-lod-generator/src/cli.ts --game ./game-src/original --out ./build/salod [--tex-scale 0.25]
 ```
 
 `--game` is a game-data dir (`data/` + `models/` with `gta3.img`). Without `--out` it prints the sizing report.

@@ -43,8 +43,10 @@ export interface CellInstance {
 /** Run configuration (the "what/where" knobs). */
 export interface LodConfig {
   /**
-   * Square cell size in world units. **Must equal the engine's streaming `cellSize`** so one baked LOD maps to
-   * exactly one engine cell (see plan 002 "Engine fit").
+   * Square cell size in world units. **Must equal the engine's streaming `cellSize`** (250 since the
+   * plan-074 pak) so one baked LOD maps to exactly one engine cell — a mismatch splits an object's HD
+   * and LOD across slots and the streaming swap can leave it with neither level loaded (plan 087,
+   * field-proven; see `lod.config.ts`).
    */
   cellSize: number;
   /**
@@ -70,6 +72,14 @@ export interface LodConfig {
    * unseen faces stay two-sided) but still wins the single-siding; `'off'` skips the pass (blanket two-sided).
    */
   hiddenFaces: 'cull' | 'off' | 'orient';
+  /**
+   * Hole-fill models (lowercased): instances EXEMPT from the reduction tracks — merged into the cell
+   * verbatim (the drop-transparent/visibility/coplanar chain applies to everything else). For models the
+   * tracks eat whole and the far view can't lose: gostown's suspension bridge is trusses and cables, and
+   * the culls left a hole over the water (plan 086 field find, 2026-07-23). pmb feeds this from the
+   * per-game `mods-src/<id>/lod-holes.json` — the same list the sa target's clone LODs use.
+   */
+  holeFillModels?: readonly string[];
   /** Draw distance (world units) for emitted cell-LOD IDE defs — the original game's visibility gate. */
   lodDrawDistance: number;
   /** Max texture dimension (px) in a per-cell LOD TXD; sources are downscaled to it (plan 002, Phase 2). */

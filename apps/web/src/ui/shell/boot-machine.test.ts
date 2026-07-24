@@ -5,7 +5,7 @@ import type { BootEvent, BootState } from './boot-machine';
 import { bootReducer, initialBootState, MAX_RETRIES } from './boot-machine';
 
 const run = (state: BootState, events: BootEvent[]): BootState => events.reduce(bootReducer, state);
-const select = (assetLoader: 'fetch' | 'local', accepted = false): BootEvent => ({
+const select = (assetLoader: 'fetch' | 'http-dir' | 'local', accepted = false): BootEvent => ({
   accepted,
   assetLoader,
   game: 'gostown',
@@ -45,6 +45,10 @@ describe('bootReducer', () => {
       const folder = run(initialBootState(), [select('local', true)]);
       expect(folder.phase).toBe('folder'); // folder pick is needed even when the disclaimer was accepted
       expect(run(folder, [{ type: 'FOLDER_READY' }]).phase).toBe('loading');
+    });
+
+    it('http-dir loads straight from its served dir (no folder or disclaimer gate)', () => {
+      expect(run(initialBootState(), [select('http-dir', false)]).phase).toBe('loading');
     });
 
     it('pauses and resumes from playing', () => {

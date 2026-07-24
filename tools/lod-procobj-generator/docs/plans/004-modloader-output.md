@@ -11,7 +11,7 @@ Vegetation for `txdp`).
 > **additively** (a mod can't remove a species by omission), so `--modloader` ships only **disable rows** — each
 > converted `(surface, model)` rule re-stated with `spacing = 1e999` (→ `Infinity` ⇒ zero scatter). The additive
 > merge replaces the stock rule by key, so the species stops scattering while stock species are kept. `--out` keeps
-> the whole-file strip (`convertProcObj({ disableScatter })` selects). See `docs/plans/058-modloader.md`.
+> the whole-file strip (`convertProcObj({ disableScatter })` selects). See `docs/plans/058-modloader/readme.md`.
 
 > **The generation is unchanged.** What models/textures/collision/placements get produced is identical — only the
 > **emit/packaging layer** changes (which files, which folders, `loader.txt` vs `gta.dat` patch). This is an
@@ -100,7 +100,7 @@ A for `--out`, B for `--modloader` — though for this tool A and B share the sa
 `--modloader` targets the **real game's `modloader.asi`** (the Project Props 4 format). OpenSA's own `packages/modloader`
 currently only overrides `.dff`/`.txd` — it does **not** read `loader.txt`/IPL/IDE/COLFILE, so these mods' _defs and
 placements_ wouldn't load in OpenSA yet. **Next stage** — planned in
-[`docs/plans/058-modloader.md` "Extension"](../../../../docs/plans/058-modloader.md): the modloader decorator
+[`docs/plans/058-modloader/readme.md` "Extension"](../../../../docs/plans/058-modloader/readme.md): the modloader decorator
 detects the loader file (any name/depth), merges its `IDE`/`IPL` lines into `gta.dat`, and serves files by basename
 (`.col` is auto-discovered, so no `COLFILE` needed); `resolveMap` loads the new defs + static IPL, so the same
 `lod/`+`hd/` output works in OpenSA.
@@ -112,13 +112,13 @@ detects the loader file (any name/depth), merges its `IDE`/`IPL` lines into `gta
   (HD .dff + LOD .dff + `lod_procobj.txd` + `.col`) into a single `gta3img/`.
 - **P2 — `loader.txt` + data. ✅** Extracted `emitRegistration` (`build.ts`): in modloader mode it writes
   `loader.txt` (`IDE data/maps/lod_procobj.ide` + `IPL data/maps/lod_procobj.ipl` when any species converted, no
-  `COLFILE`) and drops the gta.dat patch; otherwise patches `data/gta.dat` as before. Verified on `non-modified`:
+  `COLFILE`) and drops the gta.dat patch; otherwise patches `data/gta.dat` as before. Verified on `original`:
   48 species → `gta3img/` (48 LOD DFFs + `lod_procobj.txd`/`.col`), `loader.txt` (IDE+IPL), `data/maps/lod_procobj.{ide,ipl}`,
   stripped `data/procobj.dat`, **no** `data/gta.dat`. Lint clean, 5 tests pass.
 - **P2b — `lod/`+`hd/` split, HD via `txdp` (revised — HD no longer dropped). ✅** `run` (`build.ts`) writes the LOD
   mod under `<out>/lod/` (convertProcObj, IDE, IMG entries, loader.txt) and calls `emitHdMod` → `<out>/hd/`: the
   swapped (prelit) HD DFFs + custom TXD → `hd/gta3img/`, a `txdp` IDE (`lod_procobj_hd.ide`) via
-  `txdpSwappedModels`, a one-line `loader.txt`. Verified on `non-modified` + vegetation pack: `lod/` (48 LOD DFFs +
+  `txdpSwappedModels`, a one-line `loader.txt`. Verified on `original` + vegetation pack: `lod/` (48 LOD DFFs +
   txd/col + IPL/IDE + stripped `procobj.dat`) and `hd/` (48 HD DFFs + `vegetation.txd` + `txdp` IDE). **Two IDEs
   total, both ours, zero stock IDEs.** Mirrors lod-trees `008`.
 - **P3 — in-game verify** (real `modloader/` install, pending) + update `005`/`003` asset-format notes if the

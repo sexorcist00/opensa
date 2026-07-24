@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan 024 (`.claude/plans/024-fog.md`), DONE. GTA-style distance fog hiding the far map + streaming/LOD edge.
+Plan 024 (`.claude/plans/024-fog/readme.md`), DONE. GTA-style distance fog hiding the far map + streaming/LOD edge.
 
 - `Config.fog: FogConfig { distance: number }` — default **800** (canvas-host) + the 4 config test fixtures.
 - `FogPlugin` (`src/game/plugins/fog.plugin.ts`, registered in canvas-host like the light plugins):

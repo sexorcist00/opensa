@@ -8,20 +8,23 @@ import { join } from 'node:path';
 import { pngToTextureNative } from './png-texture';
 
 /**
- * Merge a folder of PNGs into an existing loose `.txd`: each `<name>.png` becomes a texture named `<name>` —
- * **replacing** the same-named texture in the dictionary or **adding** a new one, leaving every other texture
- * untouched. Returns the number of PNGs merged. Non-PNG files in the folder are ignored.
+ * The in-memory core of {@link mergeTxdFolder} — also used for `.txd` ENTRIES inside an IMG archive
+ * (plan 009), where there is no loose file to rewrite. `label` names the target in errors.
  */
-export function mergeTxdFolder(folderPath: string, txdPath: string): number {
+export function mergeTxdBytes(
+  folderPath: string,
+  txdBytes: Uint8Array,
+  label: string,
+): { bytes: Uint8Array; merged: number } {
   const pngs = readdirSync(folderPath, { withFileTypes: true }).filter((e) => e.isFile() && /\.png$/i.test(e.name));
   if (pngs.length === 0) {
-    return 0;
+    return { bytes: txdBytes, merged: 0 };
   }
 
-  const file = readRw(Uint8Array.from(readFileSync(txdPath)));
+  const file = readRw(txdBytes);
   const dict = file.chunks.find((chunk) => chunk.type === RW_TEXTURE_DICTIONARY);
   if (!dict?.children) {
-    throw new Error(`not a TXD (no texture-dictionary chunk): ${txdPath}`);
+    throw new Error(`not a TXD (no texture-dictionary chunk): ${label}`);
   }
   const byName = new Map<string, RwChunk>();
   for (const native of dict.children.filter((c) => c.type === RW_TEXTURE_NATIVE)) {
@@ -44,9 +47,22 @@ export function mergeTxdFolder(folderPath: string, txdPath: string): number {
   }
 
   updateTextureCount(dict);
-  writeFileSync(txdPath, writeRw(file));
 
-  return pngs.length;
+  return { bytes: writeRw(file), merged: pngs.length };
+}
+
+/**
+ * Merge a folder of PNGs into an existing loose `.txd`: each `<name>.png` becomes a texture named `<name>` —
+ * **replacing** the same-named texture in the dictionary or **adding** a new one, leaving every other texture
+ * untouched. Returns the number of PNGs merged. Non-PNG files in the folder are ignored.
+ */
+export function mergeTxdFolder(folderPath: string, txdPath: string): number {
+  const result = mergeTxdBytes(folderPath, Uint8Array.from(readFileSync(txdPath)), txdPath);
+  if (result.merged > 0) {
+    writeFileSync(txdPath, result.bytes);
+  }
+
+  return result.merged;
 }
 
 /** Insert a new TextureNative after the last existing one (before the dictionary's trailing extension). */

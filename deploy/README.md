@@ -40,8 +40,9 @@ These are **not** in git and are large (textures alone is hundreds of MB). Build
 `VITE_GAME_TYPE`:
 
 ```bash
-npm run build:game:original          # → static/games/original-<version>/  (manifest.json + chunk zips)
-# or: npm run build:game:original-extend, etc.
+npm run build:game:original          # pmb + fetch-pack → ./build/original (opensa/ game dir + opensa-pack/ fetch build)
+# deploy: upload build/original/opensa-pack/original-<version>/ to the static host as games/original-<version>/
+# other games: npm run build:game:gostown|carcer|anderius
 ```
 
 > The folder name is `<GAME_TYPE>-<version>` where `<version>` is `package.json`'s version. The runtime
@@ -68,9 +69,9 @@ Upload (FTP/SFTP/SSH) so the served layout is:
     games/
       original-<version>/
         manifest.json
-        priority-<hash>.zip
+        data-<hash>.zip
         models-<hash>.zip
-        textures-<hash>.zip
+        others-<hash>.zip
 ```
 
 - Everything inside `dist/` → the web root.

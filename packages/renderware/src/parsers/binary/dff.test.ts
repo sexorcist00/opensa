@@ -244,7 +244,9 @@ function buildBinMeshClump(faceMaterials: [number, number], binMesh: boolean): A
   const geometryStruct = chunk(
     RwSection.STRUCT,
     concat(
-      u16(GeometryFlag.POSITIONS | GeometryFlag.TEXTURED),
+      // NB no TEXTURED flag: with the layer-count byte at 0 the flag itself implies one UV set (RW
+      // semantics — see the uv-layer-count fixture below), and this synthetic carries no UV data.
+      u16(GeometryFlag.POSITIONS),
       u8(0), // numUVLayers
       u8(0), // native flag
       u32(2), // numTriangles
@@ -475,6 +477,45 @@ describe('parseDff (locked DFF — every container size bloated)', () => {
 
     it('recovers the embedded COL the lock hid in the clump Extension', () => {
       expect(parseDffCollision(buffer)).not.toBeNull();
+    });
+  });
+});
+
+// NOT a lock — a 2015-era export quirk (see docs/open-issues/locked-dff.md "false alarm" note):
+// casroyale01_lvs.dff writes the geometry's UV-LAYER-COUNT BYTE as 0 and carries the truth in the TEXTURED
+// flag, which RenderWare honours. Trusting the bare byte skipped the UV block and read the TRIANGLES out of
+// UV float data (garbage indices up to 64512 for 1418 vertices) — masquerading as an anti-rip "lock" and
+// costing three field rounds (vanished casino → shard fields, 2026-07-15). Committed real fixture.
+const UV_FLAG_COUNT_DFF = 'tests/custom/locked-models/casroyale01_lvs.dff';
+
+describe('parseDff (uv-layer count from TEXTURED flags when the byte is 0)', () => {
+  const clump = parseDff(toArrayBuffer(new Uint8Array(readFileSync(UV_FLAG_COUNT_DFF))));
+
+  describe('positive cases', () => {
+    it('reads one UV layer from the TEXTURED flag and the triangles from the right offset', () => {
+      const geometry = clump.geometries[0];
+      const vertexCount = geometry.positions.length / 3;
+      expect(vertexCount).toBe(1418);
+      expect(geometry.uvLayers).toHaveLength(1);
+      expect(geometry.triangles).toHaveLength(1011);
+      expect(geometry.triangles.every((t) => t.a < vertexCount && t.b < vertexCount && t.c < vertexCount)).toBe(true);
+    });
+
+    it('reads sane geometry (full surface, no degenerate collapse, all materials assigned)', () => {
+      const geometry = clump.geometries[0];
+      const p = geometry.positions;
+      let area = 0;
+      for (const t of geometry.triangles) {
+        const bx = p[t.b * 3] - p[t.a * 3];
+        const by = p[t.b * 3 + 1] - p[t.a * 3 + 1];
+        const bz = p[t.b * 3 + 2] - p[t.a * 3 + 2];
+        const cx = p[t.c * 3] - p[t.a * 3];
+        const cy = p[t.c * 3 + 1] - p[t.a * 3 + 1];
+        const cz = p[t.c * 3 + 2] - p[t.a * 3 + 2];
+        area += Math.hypot(by * cz - bz * cy, bz * cx - bx * cz, bx * cy - by * cx) / 2;
+      }
+      expect(area).toBeCloseTo(6389, -1); // the same building as the vanilla export
+      expect(new Set(geometry.triangles.map((t) => t.materialIndex)).size).toBe(12);
     });
   });
 });

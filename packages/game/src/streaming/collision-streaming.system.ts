@@ -29,6 +29,9 @@ export class CollisionStreamingSystem implements System {
   /** Reverse of {@link breakable}: body handle → instance key, so a contact-force impact on a static
    *  body can be resolved to the prop it hit. */
   private readonly breakableByHandle = new Map<number, string>();
+  /** The prop's world matrix (column-major), so a smash can bake its shards where the prop actually stands —
+   *  the key alone carries only the position, and a rotated bin would shatter into a sheared cloud. */
+  private readonly breakableTransforms = new Map<string, readonly number[]>();
   private readonly config: Readonly<Config>;
   private current = new Set<string>();
   private readonly loaded = new Map<string, number[]>();
@@ -49,6 +52,37 @@ export class CollisionStreamingSystem implements System {
   /** The breakable instance key of a static body handle (from a contact-force impact), if any. */
   breakableKeyOf(handle: null | number): string | undefined {
     return handle === null ? undefined : this.breakableByHandle.get(handle);
+  }
+
+  /** The world matrix of a smashable placement (column-major), for baking its debris where it stands. */
+  breakableTransform(key: string): readonly number[] | undefined {
+    return this.breakableTransforms.get(key);
+  }
+
+  /**
+   * The LOADED smashable placement nearest to `position` within `radius` (native Z-up), or undefined.
+   * Only props whose static body is still standing are considered — a smashed one is already gone from the
+   * registry. Used by the debugger's "break nearest prop" action (a hit the player cannot deal on foot).
+   */
+  nearestBreakable(position: Vec3, radius: number): string | undefined {
+    let best: string | undefined;
+    let bestDistance = radius * radius;
+    for (const key of this.breakable.keys()) {
+      const transform = this.breakableTransforms.get(key);
+      if (!transform) {
+        continue;
+      }
+      const dx = transform[12] - position[0];
+      const dy = transform[13] - position[1];
+      const dz = transform[14] - position[2];
+      const distance = dx * dx + dy * dy + dz * dz;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = key;
+      }
+    }
+
+    return best;
   }
 
   reload(): void {
@@ -140,6 +174,11 @@ export class CollisionStreamingSystem implements System {
               this.breakableByHandle.set(handle, instanceKey);
             }),
           );
+          for (const model of models) {
+            model.instanceKeys?.forEach((instanceKey, index) => {
+              this.breakableTransforms.set(instanceKey, [...model.transforms[index].elements]);
+            });
+          }
         }
       })
       .catch(() => this.loading.delete(key));

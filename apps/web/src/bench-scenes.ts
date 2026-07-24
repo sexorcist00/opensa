@@ -10,6 +10,7 @@ export const BENCH_SCENES: readonly BenchScene[] = [
   {
     // Downtown Los Santos at noon — the draw-call/triangle worst case (skyline + traffic area).
     anchor: [1456, -1400, 30],
+    cars: { radius: 500, spacing: 30 },
     durationS: 15,
     hour: 12,
     key: 'ls-noon',
@@ -23,6 +24,7 @@ export const BENCH_SCENES: readonly BenchScene[] = [
   {
     // San Fierro dawn in fog — the fog/atmosphere calibration scene.
     anchor: [-1980, 550, 40],
+    cars: { radius: 500, spacing: 30 },
     durationS: 15,
     hour: 7,
     key: 'sf-fog-dawn',
@@ -36,6 +38,7 @@ export const BENCH_SCENES: readonly BenchScene[] = [
   {
     // Las Venturas strip at midnight — corona/lamp/night-emissive worst case.
     anchor: [2035, 1340, 15],
+    cars: { radius: 500, spacing: 30 },
     durationS: 15,
     hour: 0,
     key: 'lv-night',
@@ -49,6 +52,7 @@ export const BENCH_SCENES: readonly BenchScene[] = [
   {
     // Countryside dusk near Blueberry — long shadows + vegetation.
     anchor: [230, -60, 5],
+    cars: { radius: 500, spacing: 90 },
     durationS: 15,
     hour: 19,
     key: 'country-dusk',
@@ -76,6 +80,7 @@ export const BENCH_SCENES: readonly BenchScene[] = [
   {
     // Downtown LS in rain at night — post-fx + wet-look worst case.
     anchor: [1456, -1400, 30],
+    cars: { radius: 500, spacing: 30 },
     durationS: 15,
     hour: 21,
     key: 'ls-rain-night',
@@ -85,5 +90,37 @@ export const BENCH_SCENES: readonly BenchScene[] = [
       { look: [1456, -1600, 40], pos: [1660, -1250, 90] },
     ],
     weather: 8, // RAINY_SF
+  },
+  {
+    // Ganton at street level, noon — the FREE-PLAY worst case. Added 2026-07-20 because the field kept
+    // reporting ~40 fps here on two cars while every existing bench scene reported 60-120: the other
+    // paths fly at 90-120 m, where distance culls the near-field detail a player actually drives through.
+    // This one stays at 20-30 m over Grove Street, the ground the user actually plays on.
+    anchor: [2374, -1660, 13],
+    cars: { radius: 500, spacing: 30 },
+    durationS: 15,
+    hour: 12,
+    key: 'ganton-noon',
+    path: [
+      { look: [2500, -1700, 15], pos: [2280, -1620, 25] },
+      { look: [2500, -1750, 15], pos: [2400, -1680, 22] },
+      { look: [2620, -1720, 15], pos: [2520, -1700, 28] },
+    ],
+    weather: 1, // SUNNY_LA
+  },
+  {
+    // The same Ganton path at night — isolates the day/night delta on identical geometry, which is what
+    // the field reported as the loudest difference. Same weather as the noon row on purpose.
+    anchor: [2374, -1660, 13],
+    cars: { radius: 500, spacing: 30 },
+    durationS: 15,
+    hour: 22,
+    key: 'ganton-night',
+    path: [
+      { look: [2500, -1700, 15], pos: [2280, -1620, 25] },
+      { look: [2500, -1750, 15], pos: [2400, -1680, 22] },
+      { look: [2620, -1720, 15], pos: [2520, -1700, 28] },
+    ],
+    weather: 1, // SUNNY_LA
   },
 ];

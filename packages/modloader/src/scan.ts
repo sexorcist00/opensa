@@ -19,6 +19,12 @@ export interface ModloaderScan {
 }
 
 const PREFIX = 'modloader/';
+/**
+ * Binary assets a mod may override, keyed by bare name. `.osm`/`.ostex` are OUR optimized formats
+ * (opensa-pack 003): a mod normally ships stock `.dff`/`.txd` and wins as UNOPTIMIZED, but a mod built
+ * against a converted game may ship the optimized pair directly, and it must not be silently dropped here.
+ */
+const ASSET_EXTENSIONS = ['.dff', '.txd', '.col', '.ifp', '.osm', '.ostex'];
 /** A binary IPL stream (`<area>_streamN.ipl`) — bytes the engine reads via `get`, unlike a text (placement) IPL. */
 const STREAM_IPL = /_stream\d+\.ipl$/;
 
@@ -59,13 +65,7 @@ function baseName(path: string): string {
 /** Route one `modloader/` file into the {@link ModloaderScan} by type (keyed by its bare name). */
 function bucket(fs: AssetFileSystem, name: string, lower: string, scan: ModloaderScan): void {
   const base = baseName(lower);
-  if (
-    lower.endsWith('.dff') ||
-    lower.endsWith('.txd') ||
-    lower.endsWith('.col') ||
-    lower.endsWith('.ifp') ||
-    STREAM_IPL.test(base)
-  ) {
+  if (ASSET_EXTENSIONS.some((extension) => lower.endsWith(extension)) || STREAM_IPL.test(base)) {
     const bytes = fs.get(name);
     if (bytes) {
       scan.assets.set(base, bytes);

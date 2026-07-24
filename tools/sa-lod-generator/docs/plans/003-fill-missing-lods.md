@@ -4,7 +4,7 @@
 distance a hole opens in the far view (seen in both vanilla SA and OpenSA, e.g. `lae2_landhub02`, `lanalley1_lan`).
 Phase 1 only upgrades LODs that already exist; this phase **creates** a far-LOD for HD objects that lack one.
 
-**Result** (`game-src/non-modified`, 19 curated models): `filled 19 missing-LOD holes (19 instances, 0 skipped)`.
+**Result** (`game-src/original`, 19 curated models): `filled 19 missing-LOD holes (19 instances, 0 skipped)`.
 Verified byte-level on a binary-placed case — `lae2_landhub02` (`lae2_stream2` rec 70) `lod -1 → 377`; its
 companion `LAe2.ipl` grew 377→378 with `salodh0003` appended at index 377 at the HD's exact position.
 

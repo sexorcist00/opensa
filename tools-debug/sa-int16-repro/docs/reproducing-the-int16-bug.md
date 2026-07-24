@@ -9,7 +9,7 @@ in-game flip confirmation is the only piece left, and it needs the user's Wine i
 
 ## Context
 
-The ghost-barriers post-mortem ([ghost-barriers.md](../../../docs/open-issues/ghost-barriers.md)) reproduced this
+The ghost-barriers post-mortem ([ghost-barriers.md](../../../docs/open-issues/fixed/ghost-barriers.md)) reproduced this
 the hard way: the full perfect-map build (~22k rows) flips the bug at **exactly 2^15 = 32,768** total permanent
 text-IPL instances map-wide (bisected: **31,300 rows → clean; 33,210 → bug**). Symptom: script-gated
 `barriers2.ipl` roadblocks appear permanently at the Hampton Barns bridge on any save, and teleport-then-save
@@ -47,14 +47,14 @@ warning (the 39-slot guard stays hard), for an intentionally over-2^15 full buil
 
 ## Worked example (no perfect-map-builder needed)
 
-Stock `game-src/non-modified` = **9,268 rows / 30 slots** (measured); topping to 33k adds 6 filler areas → 37/39
+Stock `game-src/original` = **9,268 rows / 30 slots** (measured); topping to 33k adds 6 filler areas → 37/39
 slots, inside the isolation bound.
 
 ```sh
 # buggy build (crosses 2^15) — expect the ghosts / crash
-npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/non-modified --out ./NO_COMMIT/repro-33k --rows 33000
+npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/original --out ./NO_COMMIT/repro-33k --rows 33000
 # clean control (stays below 2^15) — expect no ghosts
-npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/non-modified --out ./NO_COMMIT/repro-32k --rows 32000
+npx tsx tools-debug/sa-int16-repro/src/cli.ts --game ./game-src/original --out ./NO_COMMIT/repro-32k --rows 32000
 ```
 
 ## In-game procedure (Wine) & detection oracle

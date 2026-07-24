@@ -3,7 +3,7 @@ import { parseCarGroups } from '@opensa/renderware/parsers/text/cargrp.parser';
 import { parseCarmods } from '@opensa/renderware/parsers/text/carmods.parser';
 import { parseHandling } from '@opensa/renderware/parsers/text/handling.parser';
 import { createImg, openImg } from '@opensa/tool-kit/archive/img';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -110,6 +110,82 @@ describe('stripGta3Img', () => {
           .map((n) => n.toLowerCase())
           .sort(),
       ).toEqual(['admiral.dff', 'admiral.txd']);
+    });
+  });
+});
+
+// The SUT strips STOCK files, and every risk lives in stock-file weirdness the hand-written fakes above omit:
+// handling.cfg's `%` bike / `!` boat / `$` plane / `^` flying sub-tables, carcols.dat's `col`+`car` two-section
+// layout, cargrp.dat's fixed group order. All six are already in the fixture manifest.
+const STOCK = {
+  carcols: 'tests/original/data/carcols.dat',
+  cargrp: 'tests/original/data/cargrp.dat',
+  handling: 'tests/original/data/handling.cfg',
+  ide: 'tests/original/data/vehicles.ide',
+  parked: 'tests/original/parked.json',
+};
+const read = (path: string): string => readFileSync(path, 'utf8');
+
+describe.skipIf(!existsSync(STOCK.handling))('strip (real stock data files)', () => {
+  const installed = new Set(['admiral']);
+
+  describe('positive cases', () => {
+    it('stripHandling keeps the one installed car and EVERY non-car sub-table', () => {
+      const stock = read(STOCK.handling);
+
+      const out = stripHandling(stock, new Set(['ADMIRAL']));
+
+      expect(parseHandling(stock).size).toBeGreaterThan(200); // the stock car table
+      expect([...parseHandling(out).keys()]).toEqual(['ADMIRAL']);
+      // Bikes (%), boats (!), planes ($) and flying ($/^) live in their own tables keyed by a leading marker.
+      // They are NOT cars and must survive untouched, or the game loses every bike's handling.
+      for (const marker of ['%', '!', '$', '^']) {
+        const rows = (text: string): number => text.split('\n').filter((line) => line.startsWith(marker)).length;
+        expect(rows(out)).toBe(rows(stock));
+        expect(rows(out)).toBeGreaterThan(0);
+      }
+    });
+
+    it('stripCarcols keeps the WHOLE 127-colour palette and only the installed car', () => {
+      const stock = parseCarcols(read(STOCK.carcols));
+
+      const out = parseCarcols(stripCarcols(read(STOCK.carcols), installed));
+
+      // The palette is indexed BY NUMBER from the car rows — dropping a single entry would repaint the game.
+      expect(out.palette).toEqual(stock.palette);
+      expect([...out.cars.keys()]).toEqual(['admiral']);
+    });
+
+    it('stripCarGroups keeps every group LINE, so the group indexes still line up', () => {
+      const stock = read(STOCK.cargrp);
+
+      const out = stripCarGroups(stock, installed);
+
+      // popcycle.dat picks a car group BY INDEX, so an emptied group must stay as an empty line rather than
+      // disappear (our own parser skips the empties — that is why this asserts on lines, not on parsed groups).
+      expect(out.split('\n')).toHaveLength(stock.split('\n').length);
+      for (const group of parseCarGroups(out)) {
+        expect(group.models).toEqual(['admiral']);
+      }
+    });
+
+    it('stripIde keeps the cars section shape and only the installed model', () => {
+      const out = stripIde(read(STOCK.ide), installed);
+
+      const rows = out.split('\n').filter((line) => /^\d/.test(line.trim()));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toContain('admiral');
+      expect(out).toContain('cars');
+      expect(out).toContain('end');
+    });
+
+    it('stripParked drops every parked car whose model is not installed', () => {
+      const stock = JSON.parse(read(STOCK.parked)) as { model: string }[];
+
+      const out = JSON.parse(stripParked(read(STOCK.parked), installed)) as { model: string }[];
+
+      expect(stock.length).toBeGreaterThan(100);
+      expect(new Set(out.map((car) => car.model))).toEqual(new Set(['admiral']));
     });
   });
 });

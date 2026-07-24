@@ -8,9 +8,8 @@ All TypeScript scripts run via `npx tsx`, `.mjs` ones via `node`.
 - [Project overview](#project-overview)
   - [arch-graph.ts](#arch-graphts)
 - [Build / asset pipeline](#build--asset-pipeline)
-  - [build-game.ts](#build-gamets)
   - [gen-wind-list.ts](#gen-wind-listts)
-  - [build-viewer-assets.ts](#build-viewer-assetsts)
+  - [test-viewer-fixtures.ts](#test-viewer-fixturests)
   - [serve-static.ts](#serve-staticts)
   - [test-fixtures.ts](#test-fixturests)
 - [Debugging / auditing](#debugging--auditing)
@@ -36,13 +35,13 @@ All TypeScript scripts run via `npx tsx`, `.mjs` ones via `node`.
 ### arch-graph.ts
 
 Visualise the package architecture as a **Mermaid flowchart**, derived from the actual workspace packages and
-their `@opensa/*` (plus `three` / Rapier) imports — so the picture can't drift from the code. Nodes are coloured
+their `@opensa/*` (plus Rapier) imports — so the picture can't drift from the code. Nodes are coloured
 by layer (app · engine · tool · external); edges are the import dependencies.
 
 ```bash
 npm run arch                                  # print the Mermaid graph to stdout
 tsx scripts/arch-graph.ts --out docs/architecture.generated.md   # write a fenced .md
-tsx scripts/arch-graph.ts --no-externals      # internal packages only (drop three.js / Rapier)
+tsx scripts/arch-graph.ts --no-externals      # internal packages only (drop Rapier)
 tsx scripts/arch-graph.ts --include-tests     # also follow imports in *.test.ts
 ```
 
@@ -52,23 +51,10 @@ Paste the output into a ` ```mermaid ` block (GitHub renders it) or <https://mer
 
 ## Build / asset pipeline
 
-### build-game.ts
-
-Packs a variant (`game-src/<game>/`) into `static/<version>/` in four groups — data + models + textures
-
-- others (`data/` folder · referenced `.dff` + every `.col` · referenced `.txd` · `.ipl`/`.ifp`/`.dat`
-  from `gta3.img` + loose anim/text), each split into ~50MB content-hashed chunks (`game-build/chunk.ts`)
-  listed in `manifest.json`. Every chunk gets a `cached` flag from the `CACHED` map (`data: false`, the rest
-  `true`) — the runtime caches only `cached` chunks and treats the always-fresh `data` group as a build-liveness
-  probe (a 404 there wipes the client cache; see [asset-loader.md](../features/asset-loader.md)). See plan 048
-  for the full breakdown. It also reads the game's **TEMP** `mainCharacter` (`peds.ide`) + `vehicles`
-  (`vehicles.ide`) from `GAME_CONFIG` (`apps/web/src/game-config.tsx`, by `--game`) and packs them — dynamically-spawned
-  models the map-placement partition would otherwise miss. Rebuild after changing them.
-
-```sh
-npm run build:game:original          # npm run timecyc && tsx scripts/build-game.ts --game original
-tsx scripts/build-game.ts --game <name>   # any other variant
-```
+Game builds moved out of `scripts/` (plan 086): `tools/perfect-map-builder` builds a game
+(`npm run build:game:original`, also `:gostown` `:carcer` `:anderius`), `tools/fetch-pack`
+(chained in `build:game:*`) packs the built `opensa/` game dir into the hosted fetch chunks — see
+[docs/commands.md](../commands.md) and [fetch-pack.md](../features/fetch-pack.md).
 
 ### gen-wind-list.ts
 
@@ -80,17 +66,17 @@ models.
 npx tsx scripts/gen-wind-list.ts
 ```
 
-### build-viewer-assets.ts
+### test-viewer-fixtures.ts
 
 Builds the object-viewer's **e2e fixtures** into **`tests/viewer/objects/`** by extracting from a clean,
-unmodified GTA copy under `game-src/non-modified`: the object-viewer's models + their txds, a pre-baked
+unmodified GTA copy under `game-src/original`: the object-viewer's models + their txds, a pre-baked
 `<model>.col.json` (map-object collision lives in the IMG, not the DFF), and a `manifest.json`. Chained after
 `test-fixtures.ts` by **`npm run test:fixtures`** (not a separate command). `tests/viewer/` is gitignored (like
 `tests/original/`); regenerate locally after a fresh clone. At runtime the viewers load from the compare
 server — these fixtures exist only so the object-viewer e2e renders real geometry in CI without the full game.
 
 ```sh
-npm run test:fixtures               # tsx scripts/test-fixtures.ts && tsx scripts/build-viewer-assets.ts
+npm run test:fixtures               # tsx scripts/test-fixtures.ts && tsx scripts/test-viewer-fixtures.ts
 ```
 
 ### serve-static.ts
@@ -98,6 +84,11 @@ npm run test:fixtures               # tsx scripts/test-fixtures.ts && tsx script
 The local + e2e static origin (`npm run serve:static`, port 3001 = `VITE_STATIC_URL`). Serves the built
 `static/games/<game>-<version>/` archives, and maps `/viewer/*` → the object-viewer's `tests/viewer/` e2e
 fixtures (`npm run test:fixtures`) — all gitignored. CORS is on; dev mode reads files fresh.
+
+Also mounts **`/build`** (Range-capable) so the dev surfaces can boot the canonical build in place: a
+`dirIndex()` walk answers `/build/.../__index` for the `http-dir` loader (`?loader=http-dir&src=<url>`), and
+the bench harness + viewers read `./build/original/opensa` this way (plan 079). Nothing is copied into
+`public/`.
 
 ```sh
 npm run serve:static                # tsx scripts/serve-static.ts
@@ -116,7 +107,7 @@ npm run timecyc
 ### test-fixtures.ts
 
 Regenerates the real-asset test fixtures (`tests/original/`) — Rockstar assets, **gitignored, not
-redistributed**. Reads from a **clean, UNMODIFIED GTA San Andreas** copy at **`game-src/non-modified/`**:
+redistributed**. Reads from a **clean, UNMODIFIED GTA San Andreas** copy at **`game-src/original/`**:
 copies loose data/text files, extracts entries from `models/*.img`, builds `img/admiral.img`, and generates
 `models/effects` particle data + a stock `data/timecyc_24h.dat` (plain `convertTo24h`, no mod overlay).
 Committed fixtures (mods + curated/version-pinned test models) live in `tests/custom/` and are untouched.
@@ -124,7 +115,7 @@ Committed fixtures (mods + curated/version-pinned test models) live in `tests/cu
 **Running the test suite requires this first** (CI has no game-src, so unit tests + e2e are disabled there):
 
 ```sh
-npm run test:fixtures   # populate tests/original/ from game-src/non-modified
+npm run test:fixtures   # populate tests/original/ from game-src/original
 npm test                # then run the unit tests
 ```
 

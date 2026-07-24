@@ -78,13 +78,19 @@ function onRetry(state: BootState): BootState {
   return state.retries >= MAX_RETRIES ? initialBootState() : { ...state, phase: 'loading', retries: state.retries + 1 };
 }
 
-/** Pick a game from the menu: local always routes through the folder prompt; fetch skips the disclaimer
+/** Pick a game from the menu: local always routes through the folder prompt; http-dir (the dev/session
+ *  override) loads straight from its served dir, no folder or disclaimer gate; fetch skips the disclaimer
  *  once it has been accepted. */
 function onSelect(state: BootState, event: Extract<BootEvent, { type: 'SELECT' }>): BootState {
   if (state.phase !== 'menu') {
     return state;
   }
-  const phase: BootPhase = event.assetLoader === 'local' ? 'folder' : event.accepted ? 'loading' : 'disclaimer';
+  const phase: BootPhase =
+    event.assetLoader === 'local'
+      ? 'folder'
+      : event.assetLoader === 'http-dir' || event.accepted
+        ? 'loading'
+        : 'disclaimer';
 
   return { game: event.game, phase, retries: 0 };
 }

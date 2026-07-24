@@ -207,7 +207,8 @@ export function combinedModelSource(inPath: string, archive: ImgArchive): ModelS
  * HD DFFs for `--dff`, and emit the drop-in under `--out`.
  */
 export function run(options: BuildOptions): void {
-  const { config, gamePath, inPath, modloader, outPath, prelight, prelightInfo } = options;
+  const { config, gamePath, modloader, outPath, prelight, prelightInfo } = options;
+  const inPath = swapFolder(options.inPath);
   const archive = openArchive(readBytes(join(gamePath, 'models', 'gta3.img')));
   const dat = parseGtaDat(readFileSync(join(gamePath, 'data', 'gta.dat'), 'utf8'));
   const { idByModel, txdByModel, usedIds } = scanIdes(gamePath, dat.ide);
@@ -358,6 +359,34 @@ export function run(options: BuildOptions): void {
     `procobj→lod: ${lods.length} species · ${procObj?.objects ?? 0} static objects · ` +
       `${swap.size} HD swapped (${retxd.txds.size} custom TXD) → ${outPath}/models/gta3.img`,
   );
+}
+
+/**
+ * The HD-swap folder, or `undefined` for "no swap" — every `procobj.dat` species converts from the game's
+ * own `gta3.img`.
+ *
+ * A caller may hand over a path that is not there: pmb always passes `<mods-src>/procobj`, whether or not
+ * the user keeps that folder. An absent folder, and one holding no `.dff`, both mean the same thing as
+ * omitting the flag — no models to swap in — so they take the same default path rather than throwing.
+ * A path the CLI was given EXPLICITLY is checked there, so a typo is still loud.
+ */
+export function swapFolder(inPath: string | undefined): string | undefined {
+  if (inPath === undefined) {
+    return undefined;
+  }
+  const stat = statSync(inPath, { throwIfNoEntry: false });
+  if (stat === undefined) {
+    console.log(`lod-procobj-generator: no HD swap folder at ${inPath} — converting every procobj species`);
+
+    return undefined;
+  }
+  if (stat.isDirectory() && listDffModels(inPath).length === 0) {
+    console.log(`lod-procobj-generator: no .dff in ${inPath} — converting every procobj species`);
+
+    return undefined;
+  }
+
+  return inPath;
 }
 
 function base(path: string): string {

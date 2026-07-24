@@ -18,7 +18,7 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "resolvePackageJsonExports": true,
-    "types": ["node"]
+    "types": ["node", "@webgpu/types"]
   },
   "exclude": ["./game-src"]
 }

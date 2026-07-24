@@ -1,25 +1,19 @@
-import { Group, Mesh } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../interfaces/config.interface';
 import type { Vec3 } from '../interfaces/world-adapter.interface';
 
+import { FakeVehicleHandle } from './vehicle-handle.fake';
 import { type SpawnedVehicle, VehicleLodSystem, type VehiclePlacement } from './vehicle-lod.system';
 
 const CONFIG = { vehicle: { hdDistance: 80, lodDistance: 250, unloadDistance: 500 } } as unknown as Readonly<Config>;
 const PLACEMENT: VehiclePlacement = { heading: 0, model: 'admiral', position: [0, 0, 0] };
 
-/** A car spawned at `position`: an HD mesh + a hidden `lod` group under one object. */
-function makeCar(position: Vec3, despawn = vi.fn()): { hd: Mesh; lod: Group; spawned: SpawnedVehicle } {
-  const object = new Group();
-  const hd = new Mesh();
-  hd.name = 'chassis';
-  const lod = new Group();
-  lod.name = 'lod';
-  lod.visible = false;
-  object.add(hd, lod);
+/** A spawned car whose model carries a `_vlo`, so every LOD band is reachable. */
+function makeCar(position: Vec3, despawn = vi.fn()): { handle: FakeVehicleHandle; spawned: SpawnedVehicle } {
+  const handle = new FakeVehicleHandle([], [], true);
 
-  return { hd, lod, spawned: { despawn, lod, object, position } };
+  return { handle, spawned: { despawn, handle, position } };
 }
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -32,7 +26,7 @@ describe('VehicleLodSystem', () => {
       const system = new VehicleLodSystem(() => [0, 0, 0], CONFIG, spawn);
       system.add(PLACEMENT, car.spawned);
       system.update();
-      expect(car.spawned.object.visible).toBe(false);
+      expect(car.handle.band).toBe('culled');
       expect(car.spawned.despawn).not.toHaveBeenCalled();
       expect(spawn).not.toHaveBeenCalled();
     });
@@ -61,9 +55,7 @@ describe('VehicleLodSystem', () => {
       const system = new VehicleLodSystem(() => [0, 0, 0], CONFIG, vi.fn());
       system.add(PLACEMENT, car.spawned);
       system.update();
-      expect(car.spawned.object.visible).toBe(true);
-      expect(car.hd.visible).toBe(true);
-      expect(car.lod.visible).toBe(false);
+      expect(car.handle.band).toBe('hd');
     });
 
     it('swaps to the _vlo between hdDistance and lodDistance', () => {
@@ -71,8 +63,7 @@ describe('VehicleLodSystem', () => {
       const system = new VehicleLodSystem(() => [0, 0, 0], CONFIG, vi.fn());
       system.add(PLACEMENT, car.spawned);
       system.update();
-      expect(car.lod.visible).toBe(true);
-      expect(car.hd.visible).toBe(false);
+      expect(car.handle.band).toBe('vlo');
     });
 
     it('unloads the car beyond unloadDistance', () => {
@@ -101,7 +92,7 @@ describe('VehicleLodSystem', () => {
       expect(spawn).toHaveBeenCalledOnce();
       await flush();
       system.update();
-      expect(spawned.spawned.object.visible).toBe(true);
+      expect(spawned.handle.band).not.toBe('culled');
     });
 
     it('respawns an unloaded car once the view returns within lodDistance', async () => {
@@ -118,8 +109,7 @@ describe('VehicleLodSystem', () => {
 
       await flush();
       system.update(); // respawned car now shown HD
-      expect(respawned.spawned.object.visible).toBe(true);
-      expect(respawned.hd.visible).toBe(true);
+      expect(respawned.handle.band).toBe('hd');
     });
   });
 });

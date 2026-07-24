@@ -4,7 +4,9 @@ Developer tooling that ships with the build but stays out of the normal play pat
 
 ## In-game debugger
 
-Press **F2** in the game for the debug menu. Opening it alone changes nothing in the world — it's a
+Press **F2** in the game for the debug menu. A small grey line at the top shows the loaded build's
+**`buildTime`** (`HH:MM DD-MM-YYYY`, stamped by opensa-pack into the opensa manifest, plan 079) so it is
+always clear which build is running. Opening the menu alone changes nothing in the world — it's a
 multi-level menu:
 
 - **Player** — **Fly Mode** (first, separated): toggle on and the player floats and flies at **2× speed** —
@@ -14,8 +16,11 @@ multi-level menu:
   (unstick on the spot), To Ganton.
 - **Vehicles** — spawn Admiral/Camper in front of you; Flip the car you're in (wheels ↔ roof).
 - **Game** — Show / Copy current coords.
-- **Map** — Activate **Map Viewer**: free-fly camera, click to pick objects, and render chosen map
-  sections (HD/LOD) + collision. A picked object can be **hidden** (Hide object) to peek behind it — hides
+- **Map** — Activate **Map Viewer**: the camera lifts overhead and detaches — **right-drag orbits,
+  left-drag pans, the wheel dollies**, and a left **click** (under a small travel threshold, so panning
+  never selects) picks the object under the **cursor**. Render chosen map sections (HD/LOD); toggle
+  **Show Collision / Show Normals**. Fog is forced OFF while the viewer is open, so a
+  district reads cleanly from 400 u up. A picked object can be **hidden** (Hide object) to peek behind it — hides
   are debug-only and everything is restored on Restore all / leaving the map viewer / closing the debugger.
   Leaving the screen, closing (×), or pressing F2 exits it cleanly.
 - Plus live tuning of atmosphere/graphics/camera/weather/procobj/time (dev builds).
@@ -44,7 +49,7 @@ alongside the app: `npx tsx tools/map-optimizer/src/compare-serve.ts --before <d
   animation (looped), and toggle the skeleton, the collision capsule, and **wireframe**.
 
 The object-viewer's e2e (only) renders static fixtures from `tests/viewer/` (served at `/viewer` by
-`serve-static`, gitignored, extracted from `game-src/non-modified` by `npm run test:fixtures`).
+`serve-static`, gitignored, extracted from `game-src/original` by `npm run test:fixtures`).
 
-See [docs/plans/022-debug-viewers.md](../plans/022-debug-viewers.md) for the original design, and
+See [docs/plans/022-debug-viewers/readme.md](../plans/022-debug-viewers/readme.md) for the original design, and
 [scripts.md](./scripts.md) for the offline debug scripts under `scripts/debug/`.

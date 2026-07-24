@@ -1,12 +1,11 @@
 // Framework-agnostic GTA map resolution + streamed cell instancing.
-export { buildCell, buildCellSteps, cellModelNames } from './build-cell';
-export { buildProcObjMeshes } from './build-procobj';
-export { type RegionMeshData } from './build-region';
+export { addToGroup, cellGroups, cellModelNames, type RegionMeshData } from './cell-groups';
+export { oceanFrame } from './ocean-frame';
 export { procObjCategory, type ProcObjCategoryName } from './procobj-categories';
 export { type ProcObjColliderOptions, procObjColliders } from './procobj-colliders';
-export { type ProcObjSettings, resetProcObjMeshes, updateProcObjMeshes } from './procobj-runtime';
 export {
   groupRulesBySurface,
+  placementMatrix,
   PROC_OBJ_MAX_DENSITY,
   type ProcObjBatch,
   procObjLotteryCap,

@@ -10,7 +10,7 @@ import type { ResolveResult } from './types';
 export interface SaLodAdapter {
   /** Emit the drop-in clone-LOD build under `outDir` for a resolved set; returns the bake counts. */
   finalize(outDir: string, resolved: ResolveResult): BuildStats;
-  /** Identifier of the game this adapter serves (e.g. `non-modified`). */
+  /** Identifier of the game this adapter serves (e.g. `original`). */
   readonly game: string;
   /** Sizing report (LOD counts + stock-vs-clone triangle budgets) for a resolved set — read-only. */
   report(resolved: ResolveResult): SizingReport;

@@ -24,7 +24,7 @@ channels (03/04).
    later 1-byte channels), decoded via `MeshoptDecoder` **in the existing DFF worker** (transferables, same as today).
 3. **Textures**: cell atlas/dictionary as **KTX2 (Basis UASTC/ETC1S)**, loaded via `KTX2Loader`. KTX2 stays GPU-compressed
    (no RGBA re-upload), halves VRAM, and kills the current TXD decode cost. Linear-space audit: encode targets linear
-   (our [038 prelit](../038-sa-prelit-lighting.md) linear-space pipeline) — no double conversion.
+   (our [038 prelit](../038-sa-prelit-lighting/readme.md) linear-space pipeline) — no double conversion.
 4. **Additive + fallback**: emitted alongside DFF/TXD; the game adapter loads native cells when the VFS has them, else
    the DFF path unchanged. A build can ship both; a cell missing native data renders as today.
 

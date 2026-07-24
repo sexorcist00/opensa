@@ -6,9 +6,9 @@ then splits the result into the two runtime targets. Replaces the manual multi-c
 pipeline** — each step's output is the next step's input, so mods + optimizations + LODs **compound**.
 
 ```sh
-tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/non-modified --in ./mods-src --out ./build/perfect
-# → ./build/perfect/sa      (real game, fastman92)
-# → ./build/perfect/opensa  (OpenSA)
+tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-src --out ./build/original
+# → ./build/original/sa      (real game, fastman92)
+# → ./build/original/opensa  (OpenSA)
 ```
 
 ## Inputs
@@ -19,7 +19,10 @@ tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/non-modified --in ./m
   - `vegetation/` → lod-trees-generator (+ `vegetation/prelight.json` if present) · `procobj/` → lod-procobj-generator
 - `--out <path>` — output root; the builder creates `<out>/sa` and `<out>/opensa`.
 
-A stage whose source subfolder is missing/empty is **skipped** (its output = the previous stage's, untouched).
+`vehicles/` and `peds/` are **skipped** when their source subfolder is missing/empty (output = the previous
+stage's, untouched). `trees/` and `procobj/` always RUN: their subfolder is an optional HD-swap source, so a
+missing `vegetation/` / `procobj/` — or one holding no `.dff` — is normalised to "no swap" and the stage bakes
+the built-in SA tree roster / converts every `procobj.dat` species from the game's own `gta3.img`.
 
 ## Pipeline (each step's output = the next step's `--game`)
 
@@ -62,7 +65,8 @@ Each tool exposes a programmatic entry so the builder imports and calls it in-pr
 
 Intermediate stages are ~1 GB each. The builder uses a scratch area (e.g. `<out>/.work/stepN`) and **deletes each
 intermediate once the next stage has consumed it**, keeping at most two live — except **step 6 is kept** until both
-`sa` and `opensa` have been generated from it, then removed. Only `<out>/sa` + `<out>/opensa` remain.
+`sa` and `opensa` have been generated from it, then removed. Only `<out>/sa`, `<out>/opensa` and
+`<out>/report.json` (the pack report, mirrored from `<out>/opensa/pak/report.json` — 086 phase 8) remain.
 
 ## Config
 
@@ -81,7 +85,8 @@ cli.ts  --game --in --out
 
 ## Testing
 
-- **Unit:** stage-skip logic (empty subfolder → passthrough), working-dir lifecycle (intermediate cleanup, step-6
+- **Unit:** stage-skip logic for vehicles/peds (empty subfolder → passthrough) and the trees/procobj fallback
+  (absent or `.dff`-less subfolder → no swap, not a throw — `swapFolder`/`hdFolder`), working-dir lifecycle (intermediate cleanup, step-6
   retained for the split), config defaults.
 - **Integration:** a tiny synthetic `--game` + `--in` through the whole chain, asserting `<out>/sa` and
   `<out>/opensa` each contain a complete game tree (no dropped files) + the expected per-target LOD artifacts.

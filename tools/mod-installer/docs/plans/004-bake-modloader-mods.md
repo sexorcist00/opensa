@@ -126,7 +126,7 @@ The existing `gta3img/` folder convention (e.g. `Map Textures Fix/gta3.img/`) an
    (stock index of `out/data`) vs the loader-declared path; additive `object.dat`/`procobj.dat` via `mergeDataFile`.
 3. **Inject `gta3.img`. ✅** `injectImgEntries` (`img-merge.ts`, extracted) fed the scattered asset map.
 4. **e2e. ✅** Unit e2e in `bake-mod.test.ts` + an `install`-level mixed-routing case in `install.e2e.test.ts`
-   (a loader mod baked + a plain mod overlaid in one run). **Plus a real `--in ./mods-src/mods` run** (9 mods,
+   (a loader mod baked + a plain mod overlaid in one run). **Plus a real `--in ./mods-src/original/mods` run** (9 mods,
    3 baked): each routed by kind, gta.dat patched + canonicalised to `DATA\MAPS\…`, new IDEs/IPLs on disk, stock
    IDEs overwritten, assets injected into gta3.img, CLEO/prose skipped. (Verified earlier on the larger SA
    Brightened Project bundle too — 1383 assets, ~1.26 GB gta3.img, confirming the size risk.)

@@ -1,8 +1,5 @@
-import type { Object3D } from 'three';
+import { Quaternion, Vector3 } from '@opensa/math';
 
-import { Quaternion, Vector3 } from 'three';
-
-import type { CharacterAnimationSystem } from '../character/character-animation.system';
 import type { CharacterControllerSystem } from '../character/character-controller.system';
 import type { System } from '../core/system';
 import type { Logger } from '../diagnostics/logger';
@@ -10,10 +7,10 @@ import type { InputState } from '../input';
 import type { Config } from '../interfaces/config.interface';
 import type { Vec3, VehicleHandling, VehicleWheelPlacement } from '../interfaces/world-adapter.interface';
 import type { PhysicsWorld, VehicleController } from '../physics/physics-world';
-import type { VehicleDoor } from './vehicle-door';
+import type { VehicleHandle } from './vehicle-handle';
 import type { VehicleRig } from './vehicle-rig';
 
-import { setDoorAngle } from './vehicle-door';
+import { CAR_GETIN, CAR_GETOUT, CAR_SIT } from './vehicle-clips';
 
 /** A car the player can interact with + sit in (driver side). It is a dynamic
  * physics body; `position`/`heading` are kept live by the vehicle-physics system. */
@@ -22,15 +19,22 @@ export interface EnterableVehicle {
   body: number;
   /** Raycast vehicle controller (drive/brake/steer). */
   controller: VehicleController;
-  doors: VehicleDoor[];
   /** Half-extents in vehicle space `[hx, hy, hz]` (routing uses x/y). */
   halfExtents: [number, number, number];
+  /** The renderer-agnostic render handle (B5) — gameplay never touches a mesh. */
+  handle: VehicleHandle;
   /** Driving feel from handling.cfg. */
   handling: VehicleHandling;
   /** Heading about Z (native) — kept live from the body by the physics system. */
   heading: number;
-  /** The renderable car (under the streaming root); its transform follows the body. */
-  object: Object3D;
+  /**
+   * The chassis's FULL orientation (native GTA quaternion), kept live by the physics system.
+   *
+   * `heading` alone is a yaw, and a yaw cannot describe a car that is upside down. Anything bolted to the
+   * BODY — its lamps, and the coronas that sit on them — has to ride this, or it slides off the car the
+   * moment the car rolls.
+   */
+  orientation: [number, number, number, number];
   /** World position (native Z-up) — kept live from the body by the physics system. */
   position: Vec3;
   /** Wheel rig (spin/steer). */
@@ -39,6 +43,18 @@ export interface EnterableVehicle {
   seatLocal: [number, number, number];
   /** Raycast wheel placements (front flags for steering/drive). */
   wheels: VehicleWheelPlacement[];
+}
+
+/**
+ * The animation surface enter/exit needs (B5 step 4). `CharacterAnimationSystem` (three) satisfies it
+ * structurally, and so does the own engine's ped — the climb-in/sit/climb-out clips are the whole contract.
+ */
+export interface VehicleAnimator {
+  faceTo(yaw: number): void;
+  setScripted(
+    clip: null | string,
+    options?: { facing?: number; loop?: boolean; orientation?: readonly [number, number, number, number] },
+  ): void;
 }
 
 /** Planar distance (m) from the car within which Enter starts the sequence. */
@@ -58,10 +74,6 @@ const GETIN_DURATION = 1.2;
 const GETOUT_DURATION = 1.2;
 /** Capsule-centre height above the seat dummy (tuned in-browser). */
 const SEAT_RAISE = 0;
-
-const CAR_GETIN = 'car_getin_lhs';
-const CAR_GETOUT = 'car_getout_lhs';
-const CAR_SIT = 'car_sit';
 
 // handling.cfg → driving forces (tuned in-browser). Engine/brake are forces (N) scaled from the
 // car's mass + handling accel/decel; the controller (raycast wheels) integrates them.
@@ -102,7 +114,7 @@ export class EnterVehicleSystem implements System {
 
   private active: EnterableVehicle | null = null;
   private readonly aimCamera: (azimuth: number) => void;
-  private readonly animation: CharacterAnimationSystem;
+  private readonly animation: VehicleAnimator;
   private approachHeld = 0; // s of movement input held during 'approaching' → hand control back (GTA-like lag)
   private approachLast: Vec3 = [0, 0, 0]; // player position last 'approaching' frame (stall detection)
   private approachStalled = 0; // s without progress toward the door → auto-cancel a blocked approach
@@ -118,7 +130,7 @@ export class EnterVehicleSystem implements System {
   private exitFrom: Vec3 = [0, 0, 0];
   private exitTo: Vec3 = [0, 0, 0];
   /** Point the follow camera at the car while seated (null restores the player). */
-  private readonly followTarget: (object: null | Object3D) => void;
+  private readonly followTarget: (vehicle: EnterableVehicle | null) => void;
   private getinElapsed = 0;
   private getinFrom: Vec3 = [0, 0, 0];
   private holdPos: Vec3 = [0, 0, 0]; // parked car pose, held still while the player slides in/out
@@ -142,9 +154,9 @@ export class EnterVehicleSystem implements System {
     playerPosition: () => Vec3,
     controller: CharacterControllerSystem,
     placePlayer: (position: Vec3, moveBody?: boolean) => void,
-    animation: CharacterAnimationSystem,
+    animation: VehicleAnimator,
     aimCamera: (azimuth: number) => void,
-    followTarget: (object: null | Object3D) => void,
+    followTarget: (vehicle: EnterableVehicle | null) => void,
     config: Readonly<Config>,
     physics: PhysicsWorld,
     playerCollider: number,
@@ -204,6 +216,16 @@ export class EnterVehicleSystem implements System {
   /** Whether the seated driver is braking right now (for the brake lights). False unless actively driving. */
   isBraking(): boolean {
     return this.isSeated() && this.braking;
+  }
+
+  /**
+   * Whether this system OWNS the player's pose right now — it is teleporting the rider along the climb-in /
+   * seat / climb-out path, so a renderer must not apply its own walking rules (ground snap, locomotion
+   * heading) on top. True from the moment the climb-in slide starts until the climb-out slide ends; merely
+   * WALKING to the door is not riding.
+   */
+  isRiding(): boolean {
+    return this.phase === 'getin' || this.phase === 'exiting' || this.phase === 'exitopen' || this.isSeated();
   }
 
   /** Whether the player is seated in (driving) the active car — distinct from merely approaching/exiting. */
@@ -305,10 +327,7 @@ export class EnterVehicleSystem implements System {
     const remaining = this.doorTarget - angle;
     const next = angle + Math.sign(remaining) * Math.min(Math.abs(remaining), DOOR_SPEED * delta);
     this.doors.set(this.active, next);
-    const driver = this.active.doors.find((door) => door.side === 'lf');
-    if (driver) {
-      setDoorAngle(driver, next);
-    }
+    this.active.handle.setDoorAngle('lf', next);
   }
 
   /** Lock onto the nearest in-range car and send the player to its driver door. */
@@ -425,8 +444,8 @@ export class EnterVehicleSystem implements System {
    */
   private driverDoorPath(vehicle: EnterableVehicle): Vec3[] {
     const [hx, hy] = vehicle.halfExtents;
-    const hinge = vehicle.doors.find((door) => door.side === 'lf')?.pivot.position;
-    const entry: [number, number] = [(hinge?.x ?? -hx) - DOOR_STANDOFF, hinge?.y ?? 0]; // driver (−X) side
+    const hinge = vehicle.handle.doorHinge('lf');
+    const entry: [number, number] = [(hinge?.[0] ?? -hx) - DOOR_STANDOFF, hinge?.[1] ?? 0]; // driver (−X) side
     const player = this.playerLocal(vehicle);
 
     const path: [number, number][] = [];
@@ -585,7 +604,7 @@ export class EnterVehicleSystem implements System {
     this.steerAngle = 0; // start straight; drive() takes over the wheels from here
     this.placePlayer(this.seatWorld);
     this.animation.setScripted(CAR_SIT, { facing: this.active.heading, loop: true });
-    this.followTarget(this.active.object); // track the car (smooth) — not the per-frame-teleported rider
+    this.followTarget(this.active); // track the car (smooth) — not the per-frame-teleported rider
     this.aimCamera(this.active.heading); // centre behind the rear once; free to orbit while driving
     this.doorTarget = 0; // pull the door shut from inside
     this.logger.log('enter-vehicle', 'seated');

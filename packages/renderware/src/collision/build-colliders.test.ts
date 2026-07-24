@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Quaternion, Vector3 } from '@opensa/math';
 import { describe, expect, it } from 'vitest';
 
 import type { ColModel } from '../parsers/binary/col-types';

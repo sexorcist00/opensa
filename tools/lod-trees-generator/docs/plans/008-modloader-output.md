@@ -76,7 +76,7 @@ resolves `txdp` too (`asset-cache`), so the same mod works in both. The `txdp` m
 
 `--modloader` targets the **real game's `modloader.asi`** (the LOD Vegetation format). OpenSA's own `packages/modloader`
 currently only overrides `.dff`/`.txd` — not `loader.txt`/IPL/IDE — so these mods' defs/placements wouldn't load in
-OpenSA yet. **Next stage** — planned in [`docs/plans/058-modloader.md` "Extension"](../../../../docs/plans/058-modloader.md):
+OpenSA yet. **Next stage** — planned in [`docs/plans/058-modloader/readme.md` "Extension"](../../../../docs/plans/058-modloader/readme.md):
 extend the modloader decorator to detect the loader file (any name/depth), merge its `IDE`/`IPL` lines into
 `gta.dat`, and serve the files by basename; `resolveMap` + `setTxdParents` + `buildCollisionIndex` already do the
 rest, so the same `--modloader` output (`lod/`+`hd/`) loads in OpenSA.
@@ -89,7 +89,7 @@ rest, so the same `--modloader` output (`lod/`+`hd/`) loads in OpenSA.
   `lodtrees.txd`/`.col` → `gta3img/`, `lodtrees.ide` registered via a one-line `loader.txt`. No HD swap, no stock
   IDE/`gta.dat`. The mode-B `placeModloader`/`collectPlacements`/standalone-IPL code was removed. `editAreas` now
   skips emitting no-op (untouched) text IPLs, so the mod ships only the areas it changed.
-- **P3 — `lod/` mod verify (offline). ✅** On `non-modified` with the vegetation pack: 9814 instances attached
+- **P3 — `lod/` mod verify (offline). ✅** On `original` with the vegetation pack: 9814 instances attached
   (9463 appended, 351 repointed), 184 impostors; `lod/` = 25 modified text IPLs (LA/SF/country/vegas/levelmap), 155
   modified binary streams + 184 DFFs + `lodtrees.txd`/`.col` in `gta3img/`, `loader.txt` = `IDE
 data/maps/lodtrees.ide`. Matches the LOD Vegetation reference layout.

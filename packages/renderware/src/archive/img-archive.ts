@@ -9,8 +9,9 @@
  *   mods that ship as `.img`, e.g. Proper Fixes) load directly. Layout: `"VER2"` (4 bytes)
  *   | `numEntries` (u32 LE) | `numEntries` × 32-byte directory entries | data. Each entry:
  *   `offset` (u32, in 2048-byte sectors) | `streamingSize` (u16, sectors) | `sizeInArchive`
- *   (u16, sectors, usually 0) | `name` (24 bytes, NUL-terminated). Directory + data share
- *   the one file.
+ *   (u16, sectors, usually 0) | `name` (24 bytes, NUL-terminated only when shorter — TCs
+ *   ship full 24-byte names, e.g. Carcer City's `cj_padlockgate_l_(d).dff`). Directory +
+ *   data share the one file.
  *
  * Both expose the same {@link ImgArchive}: O(1) lookup by lowercased filename.
  */
@@ -53,15 +54,16 @@ export function buildArchiveBuffer(entries: { data: Uint8Array; name: string }[]
 /**
  * Build a stock GTA San Andreas VER2 `.img` in memory (for tests / small sets; {@link buildArchiveBuffer}'s
  * VER2 sibling — the packer script streams instead, in the same format). Files are laid out on whole 2048-byte
- * sector boundaries; the 24-byte name field needs a NUL terminator, so names must be ≤ 23 bytes (throws else).
+ * sector boundaries; the 24-byte name field is NUL-terminated only when the name is shorter, so names must be
+ * ≤ 24 bytes (throws else).
  */
 export function buildVer2Buffer(entries: { data: Uint8Array; name: string }[]): Uint8Array {
   const dirSectors = Math.ceil((8 + entries.length * 32) / SECTOR);
   let cursor = dirSectors;
   const placed = entries.map((entry) => {
     const name = new TextEncoder().encode(entry.name);
-    if (name.length > 23) {
-      throw new Error(`VER2 name too long (max 23 bytes): ${entry.name}`);
+    if (name.length > 24) {
+      throw new Error(`VER2 name too long (max 24 bytes): ${entry.name}`);
     }
     const sectors = Math.max(1, Math.ceil(entry.data.length / SECTOR));
     const offset = cursor;

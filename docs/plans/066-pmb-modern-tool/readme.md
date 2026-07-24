@@ -1,13 +1,15 @@
 # 066 — Modern asset tool (perfect-map-builder → opensa native cells)
 
-Part of the [rendering overhaul chain](../062-rendering-overhaul.md). This grew from a single "baked-channels asset
-step" into a small tool chain because the bench data ([072 measurements](../072-quality-tiers-default-flip.md)) showed
+**Status: 🔒 CLOSED 2026-07-21 (user triage) — superseded by the own WebGPU engine ([074](../074-opensa-engine/readme.md)): every effect re-implemented there; remaining tails in this plan are void.**
+
+Part of the [rendering overhaul chain](../062-rendering-overhaul/readme.md). This grew from a single "baked-channels asset
+step" into a small tool chain because the bench data ([072 measurements](../072-quality-tiers-default-flip/readme.md)) showed
 the real win is not more shader work — it is **moving cost offline**. We are draw-call-bound, and the modern pipeline
 made it worse: CSM alone adds **+35–50 % draw calls** (caster passes), the HDR post chain is a uniform GPU tax, and the
 static world still emits one small draw per cell as if it were DFF. A build-time format we fully own is the one place
 that can attack all three at the source.
 
-Starts after [065](../065-cascaded-shadows.md) proved the runtime (so we bake what's actually needed). We are no longer
+Starts after [065](../065-cascaded-shadows/readme.md) proved the runtime (so we bake what's actually needed). We are no longer
 bound to DFF/TXD for the `opensa` target — this chain uses that freedom.
 
 ## Why this is a tool, not a tweak (the perf thesis)

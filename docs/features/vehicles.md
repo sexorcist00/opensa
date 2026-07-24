@@ -1,7 +1,9 @@
 # Vehicles
 
-`packages/renderware/src/three/build-vehicle.ts`, `packages/game/src/vehicle/`, vehicle-reflection plugin,
-plans 015–021/025/030/033.
+`packages/renderware/src/vehicle/` (`build-vehicle-model.ts` + `textures.ts` — renderer-agnostic model
+build, run off the main thread by `packages/game/src/adapters/vehicle-model.worker.ts`),
+`packages/game/src/vehicle/` (systems), `packages/engine/src/render/probe.ts` (the reflection probe),
+host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033 + 074/16.
 
 ## Implemented
 
@@ -21,19 +23,55 @@ plans 015–021/025/030/033.
   (255,255,0 yellow). NB (255,175,0)/(255,60,0) are per-lamp ids on the `vehiclelights` atlas, **not**
   paint markers. Colour spec strings `"p,s[,t,q]"` with omitted 3rd/4th defaulting to palette 0 (SA
   behaviour); RW modulate (texture × material colour) for non-marker textured materials (dark interiors fix).
-- **Reflections** (plan 030): MatFX env coefficient + SA reflection/specular plugin data carried
-  per material; preset-driven plugin (`off`/SA sphere-map/`enhanced` clearcoat via
-  MeshPhysicalMaterial), live intensity/preset switching, sky probe refresh on weather change.
+- **Reflections** (plan 030 → 074/16 → 084): MatFX env coefficient + SA reflection/specular plugin data
+  carried per material. A material is reflective when its env map has a coefficient (a coefficient of 0 is
+  SA's own "not reflective" marker on tyres and rubber, and it wins over everything else), or — with no env
+  map at all — when it is UNTEXTURED and carries the `reflection` plugin, which is how SA authors bare metal
+  such as exhausts and trim. The env TEXTURE is not the colour source and is not uploaded at all: the shader reflects the live probe, so
+  neither a varying nor an array layer is spent on it (two layers per car; the mod comet's 1024² array went
+  96 → 84 MB RGBA). The engine runs a skygfx-style "neo" car pipe — the base colour LERPs toward a live scene
+  **cube probe** (`packages/engine/src/render/probe.ts`, 128²×6, refreshed a couple of faces per frame) —
+  with a per-material class (matte/paint/chrome/glass) chosen from the material data, never from names.
+  The three-era presets (`packages/game/src/plugins/vehicle-reflection/presets.ts`) survive only as
+  debugger tuning values.
+- **Self-occlusion** (plan 084, 2026-07-22): `sky-occlusion.ts` gives every vertex a sky-visibility value
+  from a height field over the car's own shown shell — horizon mapping, 8 azimuths, weighted by the vertex
+  normal so a roof darkens the cabin under it and not the door skin beside it. It is computed in the shared
+  BUILDER, so a converted car and a modloader car agree by construction, and rides in the night set's alpha
+  (no extra buffer). The `_vlo` LOD and `_dam` twins receive it but never cast, which is what keeps a
+  convertible's cabin open. The engine's dynamic indirect term is `params.y × DYNAMIC_INDIRECT ×
+  skyVisibility(normal) × occlusion` — the map's `prelit × params.y × ao`, with a constant standing in for
+  the prelit a car has no data for. `skyVisibility` / `DYNAMIC_INDIRECT` live in the shared `<frame>` shader
+  module (next to `localLightStatic`) so the ped path reuses the exact same weight, minus the per-instance
+  occlusion a ped has no bake for (plan 087 ped — see character.md).
+- **Tyre detection** (plan 084, 2026-07-22): `wheel-tyre.ts` finds the RUBBER of a wheel by geometry, never
+  by texture name (the field set says `tire`, `tyre`, `tread`, `wheel`, `vehicletyres128`, `generic_tire_01`
+  — it disagrees with itself). A wheel is a disc about its axle and the tyre is its outer band: measured
+  across the game, tyre materials sit at a mean radius of 0.87–0.98 of the wheel's own maximum and every rim
+  material at 0.18–0.70. A detected tyre is forced MATTE — no reflection, no specular, because rubber does
+  not shine — while the rim beside it keeps whatever the DFF authored. 180 of 215 stock vehicles have a
+  separable tyre; the other 35 (boats, aircraft, RC, and a few cars with one material over the whole wheel)
+  simply have none, which is a supported answer. The submesh keeps a `tyre` flag for the damageable-tyre
+  work that will want it.
 - **Glass** (plan 025): window materials detected and rendered transparent (double-sided,
   sorted).
 - **Extras** (`extraN` components): SA's mutually-exclusive optional parts modelled at the same spot (e.g. the
-  Benson's swappable advertising boards). The builder shows **at most one** per spawn — a random `extraN` (via
-  `VehicleOptions.rng`, default `Math.random`), hiding the rest. Without this, all `extraN` atomics render on top
-  of each other (overlapping jumble).
+  Benson's swappable advertising boards, the mod admiral's exhaust-and-mudflap set). All alternatives ship in
+  the model, each submesh tagged with its `extraN` frame; **the pick is per SPAWN**, made by
+  `EngineVehicleHandle` and applied through the same per-instance submesh visibility that hides `_dam` and
+  `_vlo`. So two cars of one model wear different optional parts, which is what SA does. It used to be a
+  build-time `Math.random()` in the builder, which froze one alternative into the pak for every car in the
+  world and re-rolled it on each convert (2026-07-22). Without a pick, all `extraN` atomics render on top of
+  each other (overlapping jumble) — the viewer therefore shows the first and the lab's convoy walks them.
 - **Physics** (plans 017/018): Rapier dynamic chassis from the COL convex hull, raycast wheels
   (suspension), handling.cfg parsed (kept for tuning), enter/exit flow with seat alignment
   (plan 016) — the run-to-door is interruptible (movement input or a blocked path hands control back,
-  GTA-style), damage system (plan 019) using the full COL.
+  GTA-style), damage system (plan 019) using the full COL. The scripted climb-in/sit/climb-out clips
+  (`car_getin_lhs` / `car_getout_lhs` / `car_sit`) are requested BY NAME (shared const
+  `VEHICLE_SCRIPTED_CLIPS` in `packages/game/src/vehicle/vehicle-clips.ts`) and resolved by the player from
+  `ped.ifp` — a scripted clip registers only when it resolves (`duration > 0`), else the driver falls back to
+  the standing locomotion pose (see character.md). While seated the ped rides the car's FULL orientation
+  (tilts/flips with it), positioned at the `ped_frontseat` dummy.
 - **LOD/streaming** (plan 021): HD/LOD/unload distances per vehicle, placements respawn.
 - **Headlights** (plan 033, ⚠️ MVP — redo later): glowing lamp glass + coronas at the lamp dummies; lamps
   found by position near the `headlights`/`taillights` dummies; no road beam yet. See night-and-time.md.
@@ -66,5 +104,6 @@ plans 015–021/025/030/033.
 
 ## Test coverage anchors
 
-`build-vehicle.test.ts` (markers, modulate, parts, extras — synthetic + real petro-6wheels.dff), vehicle systems
-tests (physics/lod/damage), adapter vehicle data tests.
+`vehicle/build-vehicle-model.test.ts` (markers, modulate, parts, extras — synthetic + real
+petro-6wheels.dff), `vehicle/textures.test.ts`, `adapters/vehicle-model-builder.test.ts`,
+vehicle systems tests (physics/lod/damage), adapter vehicle data tests.

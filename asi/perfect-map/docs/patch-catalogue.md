@@ -82,7 +82,7 @@ ProcessPool(*GetDummyPool(),    def->firstDummy,    def->lastDummy);
 
 Once the building pool exceeds **32,767** entries the `(int16)` cast wraps negative, the stored range is garbage,
 and RemoveIpl scans a wild/empty range → undeleted or wrongly-deleted entities (the ghost `barriers2`). Bisected
-flip at exactly 2^15 — see [ghost-barriers.md](../../../docs/open-issues/ghost-barriers.md).
+flip at exactly 2^15 — see [ghost-barriers.md](../../../docs/open-issues/fixed/ghost-barriers.md).
 
 **Verified on the exe (2026-07-09).** `IncludeEntity`'s body (relocated by HOODLUM to 0x1563730) does the
 truncation as `mov word ptr [ecx+0x22], dx` (`66 89 51 22`) — writing only the low 16 bits of the index — after

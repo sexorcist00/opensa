@@ -46,8 +46,9 @@ export interface GtaSaTreeLodOptions {
 }
 
 export function createGtaSaTreeLodAdapter(options: GtaSaTreeLodOptions): TreeLodAdapter {
-  const { debugPng, gamePath, inPath, modloader, outPath, prelight, prelightInfo, strip } = options;
+  const { debugPng, gamePath, modloader, outPath, prelight, prelightInfo, strip } = options;
   const archive = openTemplateArchive(gamePath);
+  const inPath = hdFolder(options.inPath);
   const isDir = inPath !== undefined && statSync(inPath).isDirectory();
   // Model list (dff file names) + their textures: from `--in` when given, else the built-in SA roster from gta3.img.
   // A `--in` directory is filtered the same way the no-`--in` roster is curated — drop `procobj.dat` scatter species
@@ -163,6 +164,32 @@ export function createGtaSaTreeLodAdapter(options: GtaSaTreeLodOptions): TreeLod
       return tree;
     },
   };
+}
+
+/**
+ * The HD tree folder, or `undefined` for "no folder" — the built-in SA roster bakes from `gta3.img`.
+ *
+ * pmb always passes `<mods-src>/vegetation`, whether or not the user keeps that folder, and a folder with no
+ * `.dff` in it says the same thing as no folder at all. Both take the built-in roster instead of throwing.
+ * An EXPLICIT `--in` is checked in the CLI, so a typo there is still loud.
+ */
+export function hdFolder(inPath: string | undefined): string | undefined {
+  if (inPath === undefined) {
+    return undefined;
+  }
+  const stat = statSync(inPath, { throwIfNoEntry: false });
+  if (stat === undefined) {
+    console.log(`lod-trees: no HD folder at ${inPath} — baking the built-in SA roster`);
+
+    return undefined;
+  }
+  if (stat.isDirectory() && !readdirSync(inPath).some((file) => file.toLowerCase().endsWith('.dff'))) {
+    console.log(`lod-trees: no .dff in ${inPath} — baking the built-in SA roster`);
+
+    return undefined;
+  }
+
+  return inPath;
 }
 
 /** Keep only the tree-like `.dff` names from a `--in` directory: drop procobj scatter species + non-foliage types

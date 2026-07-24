@@ -4,7 +4,7 @@
 
 **The headline of the chain.** The user's verdict on runtime CSM: the static-world shadows read **angular** (shadow-map
 stair-stepping on edges) and **jittery** (cascade swim under camera motion), and they cost us the +35–50 % draw calls the
-[072 bench](../072-quality-tiers-default-flip.md) measured. This plan bakes the **static→static** sun shadow into the cell
+[072 bench](../072-quality-tiers-default-flip/readme.md) measured. This plan bakes the **static→static** sun shadow into the cell
 data so it is evaluated analytically per vertex/fragment — no shadow-map resolution, no cascade transitions → smooth and
 stable at any camera distance — and CSM shrinks to a small dynamic-only near cascade.
 

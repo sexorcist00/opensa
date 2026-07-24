@@ -41,7 +41,7 @@ export interface RunSummary {
   verticesRemoved: number;
 }
 
-/** Print a human-readable run summary (mirrors `scripts/build-game.ts` console output). */
+/** Print a human-readable run summary (mirrors the old fetch-build console output). */
 export function printReport(report: RunReport): void {
   const totals = summarizeReport(report);
   const saved = totals.bytesBefore - totals.bytesAfter;

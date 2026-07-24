@@ -1,6 +1,6 @@
 import { parsePedDefs } from '@opensa/renderware/parsers/text/ped-defs.parser';
 import { createImg, openImg } from '@opensa/tool-kit/archive/img';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -82,6 +82,38 @@ describe('stripGta3Img', () => {
           .map((n) => n.toLowerCase())
           .sort(),
       ).toEqual(['bfori.dff', 'bfori.txd']);
+    });
+  });
+});
+
+// Real stock peds.ide: the rows have 11+ columns (stat, anim group, driving-mask, radio stations, voices…),
+// not the 4 the synthetic sample above uses — and the file the installer strips is always this one.
+const STOCK_PEDS = 'tests/original/data/peds.ide';
+
+describe.skipIf(!existsSync(STOCK_PEDS))('stripPeds (real stock peds.ide)', () => {
+  describe('positive cases', () => {
+    it('keeps one real ped row intact — full column count and all — and drops the other ~270', () => {
+      const stock = readFileSync(STOCK_PEDS, 'utf8');
+
+      const out = stripPeds(stock, new Set(['bfori']));
+
+      expect(parsePedDefs(stock).size).toBeGreaterThan(100);
+      expect([...parsePedDefs(out).keys()]).toEqual(['bfori']);
+      const row = out.split('\n').find((line) => line.toLowerCase().includes('bfori'));
+      expect(row!.split(',').length).toBeGreaterThan(4); // the row survives whole, not truncated
+    });
+
+    it('leaves every line OUTSIDE the peds section byte-for-byte', () => {
+      const stock = readFileSync(STOCK_PEDS, 'utf8');
+      const outside = (text: string): string[] => {
+        const lines = text.split('\n');
+        const start = lines.findIndex((line) => line.trim().toLowerCase() === 'peds');
+        const end = lines.findIndex((line, at) => at > start && line.trim().toLowerCase() === 'end');
+
+        return [...lines.slice(0, start), ...lines.slice(end)];
+      };
+
+      expect(outside(stripPeds(stock, new Set(['bfori'])))).toEqual(outside(stock));
     });
   });
 });

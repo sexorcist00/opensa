@@ -14,7 +14,9 @@ CLI (`cli.ts` → `run({ config, dffPath, gamePath, outPath, txdPath })`):
 
 - `--in` optional HD model folder (`<model>.dff` + `<model>.txd`) · `--out` drop-in dir · `--game` game-data dir.
   **`--dff`/`--txd` were unified into one `--in`** (a folder holding both). **Omitting `--in` converts every
-  `procobj.dat` species straight from the game's own `gta3.img`** (no model/texture swap). Below, "`--in`" stands in
+  `procobj.dat` species straight from the game's own `gta3.img`** (no model/texture swap) — as does passing a path
+  that does not exist or a directory with no `.dff`, so a caller that always passes the folder (pmb) needs no
+  guard of its own. Below, "`--in`" stands in
   for what the original `--dff`/`--txd` provided (`inPath` is passed as both the dff and txd path).
 - Knobs (`config.ts`, all overridable): `--tris` (200, QEM target), `--tex` (64 px, LOD texture max), `--draw`
   (300, LOD draw distance), `--max` (20000, static-object cap; `0` disables conversion), `--height` (0 = off, min

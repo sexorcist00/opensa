@@ -25,11 +25,16 @@
 **World assembly**
 
 - `resolveMap`: catalog + timed catalog + txdp + all instances (text + streams + extras).
-- `buildWorldGrid`: 250 m cells, HD vs LOD lists (`isLodModel` by name), exterior filter.
-- `buildCell` per cell: **InstancedMesh per single-material part** (shared geometry attributes),
-  per-def IDE-flag treatment, timed-object gating (`TimedObjectSystem`), 2dfx corona collection
+- `buildWorldGrid`: 250 m cells, HD vs LOD lists (authoritative `IplInstance.isLod` from the IPL
+  lod-index targets — the `lod`-name prefix is only a heuristic), exterior filter. Timed (tobj) and
+  `lod-always.json` models go into BOTH lists (087 row D: a lod target behind a stub HD — gostown's
+  `LODEnsemble*` forests — IS the content and must survive the HD ring).
+- Cell building now happens OFFLINE in `tools/opensa-pack` (`weld.ts`): every cell is welded into
+  merged per-material batches recorded as render bundles, with per-def IDE-flag treatment, hour-gated
+  timed objects as objectTable kind-0 entries, 2dfx corona collection
   (HD only), animated `anim`-section objects (per-instance groups), road-sign text meshes,
-  procobj clutter.
+  procobj clutter. The convert covers the game's `PACK_RECTS.full` rect (per-game since plan 087 — one
+  hardcoded ±12 dropped gostown's far islands), auto-fitting to content when a game has no pinned rect.
 - Map meshes ignore DFF frame transforms (SA re-frames atomic model infos — junk-frame proof).
 - **Floodlight beams** (`ws_floodbeams`, Vegas site lights): a `white` placeholder texture whose soft cone is
   baked into the per-vertex prelit ALPHA (the only transparency signal). `world-material.isVertexAlphaBeam`
@@ -39,13 +44,17 @@
   beam". A full-map scan verified it matches only the genuine beams (never terrain blends — real textures — or
   foliage — texture alpha); tighten in `isVertexAlphaBeam` if a future model trips it. Tested against the real
   `tests/dff/floodbeams/ws_floodbeams.dff`.
-- `StreamingSystem`: HD ring within `hdDrawDistance`, LOD ring to `lodDrawDistance`, async cell
-  loads cached by the adapter, manual cell selection for the map viewer. **Seamless LOD↔HD swap**: the
-  old detail level is kept until its same-cell replacement loads, then removed in the same step (no
-  empty frame), and the new level appears at full opacity — `CellFader` fade-in runs only for
-  genuinely new cells, never on a swap (fixed the LOD→HD "blink"). A hysteresis dead-band
-  (`0.25 × cellSize`) holds a cell's level across the ring boundary so it doesn't flip-flop.
-- Picking/describe: `userData.region` (instanced map), `userData.procObj` (clutter).
+- World streaming is the engine's `StreamingDriver` (see
+  [architecture/world-streaming.md](../architecture/world-streaming.md)): HD ring by slot centre, LOD
+  ring against the cell's TRUE geometry rect (manifest `aabb`, plan 087 — pivot-welded meshes reach
+  past the grid rect), hysteresis + atomic same-slot HD↔LOD swap (the old level stays until its
+  replacement is resident), velocity prefetch, manual pin for the map inspector. The swap is atomic by
+  FOOTPRINT only because the cell-LOD bake runs on the same 250 grid as the weld (the plan-087
+  invariant, pinned by `perfect-map-builder/config.test.ts`). Game-side `packages/game/src/streaming/`
+  keeps COLLISION streaming on the 256 game grid.
+- Picking/describe: the engine has a ray query — `CellStore.pick` (slab test over the `.oscell` placement
+  mapper), and the debugger's Map screen is restored on the engine host (`map-inspector.tsx`, plan 074/22
+  phases 7–9). See [zones-hud-debug.md](zones-hud-debug.md) for the current story.
 
 ## Known gaps / candidates
 
@@ -56,6 +65,11 @@
 
 ## Test coverage anchors
 
-Parser tests per format; `build-region.test.ts` (flags, frame-offset regression, decoratePart),
-`build-cell.test.ts`, `world-grid.test.ts`, `resolve-map.test.ts` (extraIpl),
-`streaming.system.test.ts`, `fade.test.ts`, `grid.test.ts`.
+Parser tests per format; `map/world-grid.test.ts`, `map/resolve-map.test.ts` (extraIpl),
+`map/cell-groups.test.ts`, `streaming/grid.test.ts`, `streaming/collision-streaming.system.test.ts`,
+`streaming/settle-watcher.test.ts`. Engine-side: `engine/src/stream/streaming.test.ts` (rings,
+geometry-aabb decisions, swap atomicity, texture residency, manual pin) and
+`engine/src/world/cells.test.ts` (100 %, through the fake `GPUDevice` — plan 077). The bake↔weld grid
+invariant: `perfect-map-builder/src/config.test.ts` + `opensa-lod-generator/src/core/grid.test.ts`.
+(`build-region.test.ts`, `build-cell.test.ts`, `fade.test.ts` and `streaming.system.test.ts` died with
+the three renderer in 074/13.)

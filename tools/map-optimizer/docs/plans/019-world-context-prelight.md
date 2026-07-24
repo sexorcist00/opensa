@@ -7,7 +7,7 @@ review.** Replace the two prelight passes that judge each model in isolation wit
 **neighbourhood**, and correct only what actually deviates — day level, night level, and broken/missing night
 sets — while provably protecting legitimate night lighting (lit windows, signs, floodlights).
 
-## Why (measured on game-src/non-modified, 2026-07-02)
+## Why (measured on game-src/original, 2026-07-02)
 
 The current passes use global constants and miss the real offenders while a naive fix would break the legit ones:
 
@@ -33,7 +33,7 @@ The current passes use global constants and miss the real offenders while a naiv
    curve); soften (k·MAD clamp) later if the review shows over-correction.
 2. **Vertex-AO rebake is in scope** (flat-prelit models get real baked shading via the tool-kit BVH).
 3. **Workflow: semi-automatic** — the run emits a review report (stats + rendered before/after thumbnails per
-   verdict) and a **compare viewer** (side-by-side model, BEFORE from `non-modified`/any given dir vs AFTER
+   verdict) and a **compare viewer** (side-by-side model, BEFORE from `original`/any given dir vs AFTER
    from the optimized output). Curated allow/deny lists feed back into the config.
 
 ## Design
@@ -67,7 +67,7 @@ pipeline** (their plans 012/013 are marked superseded); `recompute-normals` (pla
 
 **Review (Phase 2).** The run report gains the verdict list; a generator renders CPU-preview thumbnails
 (day + night, before + after — the lod-common rasterizer) into a self-contained HTML review page. Separately,
-`apps/viewer` gets a **compare tab**: two game dirs (BEFORE = `non-modified` or any path, e.g. a mod-installer
+`apps/viewer` gets a **compare tab**: two game dirs (BEFORE = `original` or any path, e.g. a mod-installer
 output; AFTER = the optimizer output), one model name, side-by-side interactive view.
 
 **Seam feathering (Phase 3).** Extend the seam-weld pre-pass: after welding the seam line, blend each ground
@@ -93,7 +93,7 @@ fill. Night set derives from the new day set.
 _(record after each phase — verdict counts, the six-model regression table, corrected-model totals, review
 screenshots)_
 
-### Phase 1 — world verdicts on `game-src/non-modified` (2026-07-03)
+### Phase 1 — world verdicts on `game-src/original` (2026-07-03)
 
 Pre-pass (`buildPrelitContext`, defaults: radius 100, minHood 5, dayTolerance 0.4, ratioTolerance 0.12,
 flatSpread 8) over every placed HD-tier model, whole map in **1.5 s**:
@@ -145,10 +145,10 @@ severity-ordered, "exclude" checkboxes → JSON for the new `PrelitContextOption
 side-by-side synced orbit, night-colours view), and `exclude` threading through
 `runOptimizer({ prelitOptions })` / `buildPrelitContext`.
 
-- Report on `non-modified`: 200 top-severity models rendered in **4.9 s**, 3.5 MB HTML, 0 render failures.
+- Report on `original`: 200 top-severity models rendered in **4.9 s**, 3.5 MB HTML, 0 render failures.
   Top of the severity list = `vegastwires*` / `railtunn*` (near-black overhead wires being lifted to the hood
   median) — exactly the models the exclude curation exists for.
-- Compare server on `non-modified` vs the smoke build: **15333 models** on both sides; spot-check
+- Compare server on `original` vs the smoke build: **15333 models** on both sides; spot-check
   `clubgate01_lax` day p50 27 → 58 (the verdict's +31).
 - **Bug found & fixed by the Phase-2 verification itself:** night repairs never reached the output — the
   encode's attribute-overlay path only writes the geometry Struct, and `addNightColorsIfMissing` deliberately
@@ -160,7 +160,7 @@ side-by-side synced orbit, night-colours view), and `exclude` threading through
 Next knobs for the softening pass (after visual review): `ratioTolerance` 0.12 (68 % repair rate is too eager)
 and a curated exclude list seeded from the report's top section (wires, rail tunnels).
 
-### Phase 3 — seam feather band on `game-src/non-modified` (2026-07-03)
+### Phase 3 — seam feather band on `game-src/original` (2026-07-03)
 
 Shipped: `featherBand` in the seam-weld pre-pass (default **10 u**, `0` disables) — after welding the seam
 line, every interior vertex within the band (and passing the same cos 45° normal guard, so walls stay off
@@ -185,7 +185,7 @@ leaves behind instead of undoing it.
 - End-to-end smoke (full default pipeline, `--no-textures`): **11462 models, 0 failures**; the seams log line
   confirms 488551 feathered vertices flow through the pipeline.
 
-### Phase 4 — vertex-AO rebake on `game-src/non-modified` (2026-07-03)
+### Phase 4 — vertex-AO rebake on `game-src/original` (2026-07-03)
 
 Shipped: `plugins/bake-vertex-ao.ts` — for the **205 `flat`-flagged models** (day spread ≈ 0 = no baked
 shading at all), per-vertex hemisphere occlusion against the model's own geometry (tool-kit BVH; 32
@@ -219,7 +219,7 @@ _glowing above_ the hood is the bug class the user reported. Changes:
 - New `maxSynthRatio` (default **0.35**): a synthesized night set never targets a streetlit hood's high ratio
   (`washgaspump` synth 0.70 → 0.35; vanilla night sets sit ~0.2–0.35).
 
-Verdicts on `non-modified`: night repairs **5014 → 1879**, ok 806 → 2065. The six-model table now matches the
+Verdicts on `original`: night repairs **5014 → 1879**, ok 806 → 2065. The six-model table now matches the
 user's truth exactly: `laepetrol1a` and `gwforum1_lae` get **no verdict at all**, `liquorstore03_lae2` keeps
 only its day lower, `clubgate01_lax` keeps its darkening ×0.52, `project2lae2` keeps flat+lower. On the user's
 `NO_COMMIT/mods`: night repairs 1350, and **all 15 Idlewood offenders are now night-UNTOUCHED**

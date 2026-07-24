@@ -1,30 +1,34 @@
 # Animated map objects (plan 041)
 
-`packages/renderware/src/three/uv-anim.ts`, `build-animated-clump.ts`, `animated-objects.ts`,
-`map/build-region.ts` (buildAnimatedObjects), canvas-host `map-animations` system.
+UV animations: `packages/renderware/src/parsers/binary/dff.ts` (UVAnimDict parsing),
+`tools/opensa-pack/src/weld.ts` (per-object kind-4 registry baked into the pak),
+`packages/engine/src/render/shaders.ts` (the per-cell `uvAnim` uniform).
+IFP-animated clumps: `packages/renderware/src/anim/frame-clip.ts` (frames-as-bones clip),
+`packages/engine/src/anim/` (`IfpSampler`), host wiring in `apps/web/src/ui/engine-anim-objects.ts`.
 
 ## Implemented
 
 **UV-animated textures** (signs, waterfalls — e.g. the LV skull sign `visagesign04`)
 
 - UVAnimDict parsed from the DFF; materials reference entries by name (UV Anim PLG).
-- Module registry: one shared `Vector4(offX, offY, sclX, sclY)` uniform per dict entry — the
-  TXD texture cache is shared, so `texture.offset` is never mutated; all instances animate in
-  sync (vanilla behaviour).
+- Registry: one shared `(offX, offY, sclX, sclY)` value per dict entry — the converter records the
+  animation list in the pak manifest and gives every affected object a kind-4 `objectTable` entry
+  carrying its slot, so all instances animate in sync (vanilla behaviour) with no vertex-format growth.
 - Generic keyframe-pair lerp looping over the duration; equal-time key pairs snap (stepped
   flipbooks like `DolSign`). Scroll direction verified against the original game (no flip).
-- World-material shader variant `|uvAnim` (`mapUv = mapUv * scale + offset` after `uv_vertex`).
+- The world shader applies it per object cell: `uv = uv * scale + offset`.
 
 **IFP-animated clump objects** (IDE `anim` section — oil pumps, windmills, fans)
 
-- `anim` defs are excluded from instancing; each instance builds a **frame hierarchy with
-  transforms KEPT** (the one exception to the map's frames-ignored rule), one world-material
-  mesh per atomic under its named frame node.
-- The clip comes from `<def.anim>.ifp` (cached `getIfp`), named after the model, bones bound by
-  frame name; `includeTranslation: true` (object clips animate part positions).
-- Mixer registry: `updateAnimatedObjects(delta)` skips detached roots — streamed-out objects
-  pause and resume on re-entry. IDE-flag treatment applies to the materials (e.g. the pump's
-  0x200000 double-sided).
+- `anim` defs are excluded from the merged cell batch; each instance keeps its **frame hierarchy with
+  transforms KEPT** (the one exception to the map's frames-ignored rule), one rigid part per atomic
+  under its named frame node. The converter leaves only the MOVING frames out of the cell bundle, so
+  the static host (e.g. the `burger01_LAw` diner) still batches.
+- The clip comes from `<def.anim>.ifp`, named after the model, bones bound by frame name;
+  translation is KEPT (object clips animate part positions — unlike ped clips).
+- A frame hierarchy is just a skeleton where every vertex has one bone, so the engine's existing
+  `IfpSampler` drives it with identity inverse-binds — no new pipeline, no new shader. Streamed-out
+  objects stop being updated and resume on re-entry.
 
 ## Known gaps / candidates
 
@@ -34,6 +38,6 @@
 
 ## Test coverage anchors
 
-`uv-anim.test.ts` (registry/interp/shader/real asset), `roadsign.test.ts` shares the 2dfx walk,
-`build-animated-clump.test.ts` (hierarchy/clip binding), `build-animated-objects.test.ts`
-(placement, mixer pause, treatment), `ide.parser` anim rows, `ifp` parser tests.
+`parsers/binary/uv-anim.test.ts` (parse/interp/real asset), `roadsign.test.ts` shares the 2dfx walk,
+`anim/frame-clip.test.ts` (frames-as-bones clip), `engine/src/anim/ifp-sampler.test.ts`,
+`ide.parser` anim rows, `ifp` parser tests.

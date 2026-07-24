@@ -185,7 +185,7 @@ const recommendedTypeScriptConfigs = [
 const jsonCustomConfig: Linter.Config = {
   ...json.configs.recommended,
   files: ['**/*.json'],
-  ignores: ['**/*-lock.json', 'package.json'],
+  ignores: ['**/*-lock.json', 'package.json', 'mods-src/**/*.json', 'tests/**/*.json', '**/dist/manifest.json'],
   language: 'json/json',
 };
 
@@ -223,6 +223,7 @@ const scriptsConfig = {
     'tools/rw-codec/**/*.{js,mjs,cjs,ts}',
     'tools/lod-trees-generator/**/*.{js,mjs,cjs,ts}',
     'tools/map-placement/**/*.{js,mjs,cjs,ts}',
+    'tools/opensa-pack/**/*.{js,mjs,cjs,ts}',
     'tools/lod-common/**/*.{js,mjs,cjs,ts}',
     'tools/sa-lod-generator/**/*.{js,mjs,cjs,ts}',
     'tools/perfect-map-builder/**/*.{js,mjs,cjs,ts}',
@@ -230,6 +231,7 @@ const scriptsConfig = {
     'tools/mod-installer/**/*.{js,mjs,cjs,ts}',
     'tools/vehicle-installer/**/*.{js,mjs,cjs,ts}',
     'tools/ped-installer/**/*.{js,mjs,cjs,ts}',
+    'tools-debug/bench-harness/**/*.{js,mjs,cjs,ts}',
     'tools-debug/sa-int16-repro/**/*.{js,mjs,cjs,ts}',
     'asi/perfect-map/**/*.{js,mjs,cjs,ts}',
   ],
@@ -301,6 +303,13 @@ const dtsOverrides: Linter.Config = {
   },
 };
 
+const jsonPrettierOverrides: Linter.Config = {
+  files: ['**/manifest.json', '**/report.json'],
+  rules: {
+    'prettier/prettier': 'off',
+  },
+};
+
 const disableDefaultExportBlockingForStorybook = {
   files: [
     '**/*.stories.@(js|jsx|ts|tsx|mdx)',
@@ -345,4 +354,5 @@ export default [
   ...storybook.configs['flat/recommended'],
   disableDefaultExportBlockingForStorybook,
   dtsOverrides,
+  jsonPrettierOverrides,
 ];

@@ -25,7 +25,7 @@
    export interface BuildTreeLodsOptions {
      gamePath: string;
      outPath: string;
-     inPath?: string; // HD tree folder (mods-src/vegetation)
+     inPath?: string; // HD tree folder (mods-src/vegetation); absent path or no .dff ⇒ built-in SA roster
      modloader?: boolean; // default false → full mirror
      prelight?: boolean;
      prelightInfo?: PrelightInfo; // parsed from vegetation/prelight.json

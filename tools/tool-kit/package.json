@@ -5,10 +5,12 @@
   "description": "Shared building blocks for the offline tools: smooth-group normals, QEM simplify, and an editable IMG archive.",
   "exports": {
     "./mesh/smooth-normals": "./src/mesh/smooth-normals.ts",
+    "./mesh/validate-normals": "./src/mesh/validate-normals.ts",
     "./mesh/simplify": "./src/mesh/simplify.ts",
     "./mesh/bvh": "./src/mesh/bvh.ts",
     "./archive/img": "./src/archive/img.ts",
-    "./cli": "./src/cli.ts"
+    "./cli": "./src/cli.ts",
+    "./game-dir": "./src/game-dir.ts"
   },
   "nx": {
     "tags": [

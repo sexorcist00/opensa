@@ -3,11 +3,26 @@
 // IMG archive + asset resolution
 export * from './archive';
 
+// 2dfx particles (074/06 row 13, B6): the shared FX baking both renderers run.
+export { breakableKeyHash } from './breakable/key';
+
+export { breakableModelsFromText, breakableModelsOf } from './breakable/models';
 // Collision (COL) index over the archive
 export * from './collision';
 
+export {
+  bakeFxInstances,
+  bakeFxSystem,
+  FX_INSTANCE_STRIDE,
+  FX_SYSTEM_STRIDE,
+  type FxBakedEmitter,
+  type FxPlacement,
+  writeFxSystemRecord,
+} from './fx/bake-fx';
+export { normalizeSpriteAlpha } from './fx/sprites';
 // Framework-agnostic map resolution + region instancing
 export * from './map';
+export { frameWorldTransform, mulMat3, rotationToQuat } from './mesh/frame-transform';
 export {
   hasPreparedAtomics,
   prepareClumpAtomics,
@@ -21,92 +36,13 @@ export * from './parsers/binary/col-types';
 export { parseDff } from './parsers/binary/dff';
 export { gxtKeyHash, parseGxt } from './parsers/binary/gxt';
 export { type IfpAnimation, type IfpBone, type IfpKeyframe, parseIfp } from './parsers/binary/ifp';
+export { type VehiclePathNode, vehiclePathNodes } from './parsers/binary/paths';
 export { parseTxd } from './parsers/binary/txd';
-
 export * from './parsers/binary/types';
-
 export * from './parsers/text';
-// three.js adapter layer
-export { updateAnimatedObjects } from './three/animated-objects';
-export {
-  breakableFromGeometry,
-  type BreakableInstance,
-  breakableInstanceKey,
-  breakBreakable,
-  type BreakOptions,
-  getBreakable,
-  getBreakableByKey,
-  nearestBreakable,
-  registerBreakable,
-  resetBreakables,
-} from './three/breakable';
-export { buildAnimationClip, type BuildAnimClipOptions } from './three/build-anim-clip';
-export {
-  buildClump,
-  buildClumpEscalators,
-  buildClumpLights,
-  buildClumpParticles,
-  buildClumpParts,
-  type ClumpEscalator,
-  type ClumpLight,
-  type ClumpParticle,
-  type RenderPart,
-  wrapClumpParts,
-} from './three/build-clump';
-export { buildCollisionWireframe } from './three/build-col-wireframe';
-export {
-  buildDebrisMesh,
-  DEBRIS_LIFETIME,
-  type DebrisImpact,
-  debrisTimeUniform,
-  resetDebris,
-  spawnDebris,
-  updateDebris,
-} from './three/build-debris';
-export {
-  buildEscalatorSteps,
-  type EscalatorPathEntry,
-  resetEscalators,
-  updateEscalators,
-} from './three/build-escalator';
-export {
-  buildParticleEmitters,
-  particleDrawDistanceUniform,
-  type ParticleEffectsSettings,
-  type ParticleEmitterEntry,
-  particleTimeUniform,
-  particleViewportUniform,
-  resetParticleEffects,
-  setFxLibrary,
-  updateParticleEffects,
-} from './three/build-particles';
-export { buildRoadsignParts, roadsignGlyphIndex, setRoadsignFont } from './three/build-roadsign';
-export { buildSkinnedClump, type SkinnedClump } from './three/build-skinned-clump';
-export { buildTextureMap, type TextureDictionary } from './three/build-texture';
-export {
-  buildVehicle,
-  type BuiltDoor,
-  type BuiltVehicle,
-  type BuiltWheel,
-  type VehicleOptions,
-} from './three/build-vehicle';
-export { buildWater, oceanFrame } from './three/build-water';
-export { type CoronaEntry, coronaMaterial, GLOW_LAYER } from './three/corona';
-export { nightFillRim, nightFillUniform } from './three/night-fill';
-export { type SunSplit, sunSplit, type SunSplitInput } from './three/sun-split';
-export { updateUvAnimations } from './three/uv-anim';
-export {
-  buildWorldMaterial,
-  dnBalanceUniform,
-  LOCAL_LIGHT_POOL,
-  windowGlowUniform,
-  worldCsmUniforms,
-  worldDayTintUniform,
-  worldEmissiveUniforms,
-  worldFogUniforms,
-  worldLocalLightUniforms,
-  worldMoonUniforms,
-  worldShadowUniforms,
-  worldSunUniforms,
-  worldTintUniform,
-} from './three/world-material';
+
+// The three.js adapter layer lived here until plan 074/13 phase 5c deleted it (C2).
+// Renderer-agnostic vehicle model (074/08 B5) — the own engine's spawn-time builder.
+export { buildVehicleModel } from './vehicle/build-vehicle-model';
+export { VehicleTextures } from './vehicle/textures';
+export * from './vehicle/types';

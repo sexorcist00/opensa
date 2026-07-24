@@ -1,0 +1,141 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  ALL_DEBUG_CAPABILITIES,
+  cameraControlsFor,
+  ENGINE_DEBUG_CAPABILITIES,
+  menuFor,
+  skyControlsFor,
+  worldLightControlsFor,
+} from './debug-capabilities';
+
+describe('menuFor', () => {
+  describe('negative cases', () => {
+    it('drops the Map screen when the host cannot inspect the map', () => {
+      const screens = menuFor({ ...ENGINE_DEBUG_CAPABILITIES, mapScreen: false }, false).map((item) => item.screen);
+
+      expect(screens).not.toContain('map');
+    });
+
+    it('drops the dev-only screens in the deploy build', () => {
+      const screens = menuFor(ALL_DEBUG_CAPABILITIES, true).map((item) => item.screen);
+
+      expect(screens).not.toContain('atmosphere');
+      expect(screens).not.toContain('camera');
+      expect(screens).not.toContain('graphics');
+      expect(screens).not.toContain('procobj');
+      expect(screens).not.toContain('map');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('keeps every screen for a fully capable host in a dev build', () => {
+      const screens = menuFor(ALL_DEBUG_CAPABILITIES, false).map((item) => item.screen);
+
+      expect(screens).toEqual([
+        'player',
+        'vehicles',
+        'time',
+        'atmosphere',
+        'camera',
+        'graphics',
+        'perf',
+        'procobj',
+        'weather',
+        'position',
+        'map',
+      ]);
+    });
+
+    it('keeps the renderer-agnostic screens for the engine host, Map included (restored 074/22 phase 7)', () => {
+      const screens = menuFor(ENGINE_DEBUG_CAPABILITIES, false).map((item) => item.screen);
+
+      expect(screens).toEqual([
+        'player',
+        'vehicles',
+        'time',
+        'atmosphere',
+        'camera',
+        'graphics',
+        'perf',
+        'procobj',
+        'weather',
+        'position',
+        'map',
+      ]);
+    });
+  });
+});
+
+describe('skyControlsFor', () => {
+  describe('negative cases', () => {
+    it('hides the god-rays shader sliders when the host has a single-strength pass', () => {
+      const keys = skyControlsFor(ENGINE_DEBUG_CAPABILITIES);
+
+      expect(keys).not.toContain('density');
+      expect(keys).not.toContain('exposure');
+      expect(keys).not.toContain('weight');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('keeps the shared sky sliders on every host', () => {
+      expect(skyControlsFor(ENGINE_DEBUG_CAPABILITIES)).toEqual(['mood', 'pbrExposure']);
+    });
+
+    it('lists the shader sliders first for a fully capable host', () => {
+      expect(skyControlsFor(ALL_DEBUG_CAPABILITIES)).toEqual(['density', 'exposure', 'weight', 'mood', 'pbrExposure']);
+    });
+  });
+});
+
+describe('cameraControlsFor', () => {
+  describe('negative cases', () => {
+    it('hides the follow-rig sliders on a host whose orbit is mouse yaw/pitch', () => {
+      const keys = cameraControlsFor(ENGINE_DEBUG_CAPABILITIES).map(([key]) => key);
+
+      expect(keys).not.toContain('followPolar');
+      expect(keys).not.toContain('followLerp');
+      expect(keys).not.toContain('followHeight');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('keeps distance and the zoom bounds everywhere', () => {
+      expect(cameraControlsFor(ENGINE_DEBUG_CAPABILITIES).map(([key]) => key)).toEqual([
+        'followDistance',
+        'followZoomMin',
+        'followZoomMax',
+      ]);
+    });
+
+    it('adds the rig sliders for a fully capable host', () => {
+      expect(cameraControlsFor(ALL_DEBUG_CAPABILITIES)).toHaveLength(8);
+    });
+  });
+});
+
+describe('worldLightControlsFor', () => {
+  describe('negative cases', () => {
+    it('hides the scalars the engine world light never reads', () => {
+      const keys = worldLightControlsFor(ENGINE_DEBUG_CAPABILITIES).map(([key]) => key);
+
+      expect(keys).not.toContain('duskBrightness');
+      expect(keys).not.toContain('shadowStrength');
+      expect(keys).not.toContain('sunDirect');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('keeps the two brightnesses the environment driver actually applies', () => {
+      expect(worldLightControlsFor(ENGINE_DEBUG_CAPABILITIES).map(([key]) => key)).toEqual([
+        'dayBrightness',
+        'nightPrelitBrightness',
+      ]);
+    });
+
+    it('shows all seven for a fully capable host', () => {
+      expect(worldLightControlsFor(ALL_DEBUG_CAPABILITIES)).toHaveLength(7);
+    });
+  });
+});

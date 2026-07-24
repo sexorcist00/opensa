@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan: `.claude/plans/013-player-physics.md`. The player is currently a **dynamic cuboid** with `lockRotations` whose velocity the controller sets directly (`setLinvel`) — it sticks on poles, has no inertia, and can't do steps/slopes. Replace it with a **Rapier `KinematicCharacterController` + vertical capsule**.
+Plan: `.claude/plans/013-player-physics/readme.md`. The player is currently a **dynamic cuboid** with `lockRotations` whose velocity the controller sets directly (`setLinvel`) — it sticks on poles, has no inertia, and can't do steps/slopes. Replace it with a **Rapier `KinematicCharacterController` + vertical capsule**.
 
 **Why this works (verified):** Rapier 0.19 (`@dimforge/rapier3d-compat`) has the full kinematic character controller — `world.createCharacterController(offset)`, `enableAutostep` (steps/kerbs), `enableSnapToGround` (stay glued on slopes/stairs), `setMaxSlopeClimbAngle`, `computeColliderMovement`→`computedMovement()` (slides along obstacles) + `computedGrounded()`; body = `kinematicPositionBased`, moved via `setNextKinematicTranslation` before `world.step()`. `ColliderDesc.capsule(halfHeight, radius)` is **Y-aligned** → rotate +90°X to stand vertical in our **Z-up** world.
 

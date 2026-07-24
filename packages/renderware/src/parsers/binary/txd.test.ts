@@ -58,7 +58,7 @@ describe('parseTxd (synthetic)', () => {
 
   const uncompressed = texNative({
     d3dFormat: 0,
-    flags: 0x00,
+    flags: 0x01, // A8R8G8B8 with a real alpha channel — the swizzle keeps its alpha
     height: 1,
     mip: u8(10, 20, 30, 40), // single BGRA pixel
     name: 'raw32',
@@ -134,13 +134,63 @@ describe('parseTxd (synthetic)', () => {
     width: 2,
   });
 
+  // DXT2/DXT4 (premultiplied-alpha variants of DXT3/DXT5) — a D3D9 exporter (carcer, a 2026 mod) writes
+  // these FourCCs; identical block layout, so they must decode as dxt3/dxt5 (were mis-classified as 16-bit
+  // rgba8888 → the whole texture rendered as rainbow noise).
+  const dxt2 = texNative({
+    d3dFormat: D3dCompression.DXT2,
+    flags: 0x01,
+    height: 4,
+    mip: new Uint8Array(16), // one DXT3 block
+    name: 'premul_dxt2',
+    rasterFormat: RasterFormat.C8888,
+    width: 4,
+  });
+  const dxt4 = texNative({
+    d3dFormat: D3dCompression.DXT4,
+    flags: 0x01,
+    height: 4,
+    mip: new Uint8Array(16), // one DXT5 block
+    name: 'premul_dxt4',
+    rasterFormat: RasterFormat.C8888,
+    width: 4,
+  });
+
+  // PAL4: 2 indices/byte against a 16-entry table. expandPalette assumes 8-bit/256-entry, so decoding would
+  // emit a half-size, mostly-black image — the decoder REJECTS it instead (docs/open-issues/pal4-textures.md).
+  const pal4 = texNative({
+    d3dFormat: 0,
+    depth: 4,
+    flags: 0x00,
+    height: 1,
+    mip: u8(0x00),
+    name: 'pal4',
+    palette: new Uint8Array(16 * 4),
+    rasterFormat: RasterFormat.C8888 | RasterFormat.PAL4,
+    width: 2,
+  });
+
   const dict = parseTxd(
-    buildSyntheticTxd([dxt5, uncompressed, x8r8g8b8, palettized, rgb565, argb1555, argb4444, unsupported]),
+    buildSyntheticTxd([
+      dxt5,
+      dxt2,
+      dxt4,
+      uncompressed,
+      x8r8g8b8,
+      palettized,
+      rgb565,
+      argb1555,
+      argb4444,
+      unsupported,
+      pal4,
+    ]),
   );
 
   it('skips textures with unsupported pixel formats but keeps the rest', () => {
     expect(dict.textures.map((t) => t.name)).toEqual([
       'compressed',
+      'premul_dxt2',
+      'premul_dxt4',
       'raw32',
       'raw32x',
       'paletted',
@@ -148,6 +198,10 @@ describe('parseTxd (synthetic)', () => {
       'argb1555',
       'argb4444',
     ]);
+  });
+
+  it('rejects PAL4 (4-bit palettized) rather than mis-decoding it half-size', () => {
+    expect(dict.textures.find((t) => t.name === 'pal4')).toBeUndefined();
   });
 
   it('expands 16-bit rasters to RGBA8888 (plan 043: previously dropped)', () => {
@@ -165,7 +219,8 @@ describe('parseTxd (synthetic)', () => {
   it('keeps 32-bit X8R8G8B8 / C888 textures (regression: palm trunks went white)', () => {
     const tex = dict.textures.find((t) => t.name === 'raw32x')!;
     expect(tex.format).toBe('rgba8888');
-    expect(Array.from(tex.mipmaps[0].data)).toEqual([33, 22, 11, 0]); // BGRX -> RGBA
+    // X8R8G8B8: the unused X byte (0) is padding, not alpha → forced OPAQUE (was 0 → whole models invisible).
+    expect(Array.from(tex.mipmaps[0].data)).toEqual([33, 22, 11, 255]); // BGRX -> RGBA, opaque
   });
 
   it('classifies DXT5 and preserves raw block data', () => {
@@ -174,6 +229,16 @@ describe('parseTxd (synthetic)', () => {
     expect(tex.hasAlpha).toBe(true);
     expect(tex.mipmaps).toHaveLength(1);
     expect(tex.mipmaps[0].data.length).toBe(16);
+  });
+
+  it('classifies DXT2/DXT4 as dxt3/dxt5 (premultiplied variants, same block layout)', () => {
+    const t2 = dict.textures.find((t) => t.name === 'premul_dxt2')!;
+    expect(t2.format).toBe('dxt3');
+    expect(t2.mipmaps[0].data.length).toBe(16); // raw block preserved, not expanded
+
+    const t4 = dict.textures.find((t) => t.name === 'premul_dxt4')!;
+    expect(t4.format).toBe('dxt5');
+    expect(t4.mipmaps[0].data.length).toBe(16);
   });
 
   it('skips trailing zero-size mip levels (WebGL rejects empty compressed data)', () => {
@@ -282,5 +347,40 @@ describe.skipIf(!lodvegExists)('parseTxd (real asset lodveg.txd — locked, no T
     expect(names).toContain('Gp_petitpalm1');
     // recovered textures carry real pixel data (mips), not empty placeholders
     expect(lodvegDict!.textures.every((t) => t.mipmaps.length > 0)).toBe(true);
+  });
+});
+
+// Real D3D9-platform mod TXDs (Carcer City, a 2026 mod). Its exporter ships two formats stock SA never does,
+// both of which our decoder mis-read until fixed: DXT4 (a premultiplied-alpha DXT5 FourCC) rendered as rainbow
+// noise (classified as 16-bit and expand16'd), and X8R8G8B8 rendered invisible (the unused X byte was copied
+// as alpha 0). Whole models (telewires, sewer, police station) were affected.
+const wiresPath = join(process.cwd(), 'tests', 'custom', 'txd', 'carcer-wires-dxt4.txd');
+const wiresExists = existsSync(wiresPath);
+const wiresDict = wiresExists ? parseTxd(toArrayBuffer(new Uint8Array(readFileSync(wiresPath)))) : null;
+
+describe.skipIf(!wiresExists)('parseTxd (real asset carcer wires.txd — DXT4)', () => {
+  it('classifies the DXT4 textures as dxt5 and preserves the raw compressed blocks', () => {
+    const tex = wiresDict!.textures.find((t) => t.name === 'telewireslong')!;
+    expect(tex.format).toBe('dxt5'); // DXT4 FourCC → dxt5 (premultiplied variant, same block layout)
+    expect(tex.mipmaps[0].data.length).toBe((tex.width * tex.height) / 1); // dxt5 = 1 byte/px raw block data
+    expect(wiresDict!.textures.every((t) => t.format === 'dxt5')).toBe(true);
+  });
+});
+
+const x888Path = join(process.cwd(), 'tests', 'custom', 'txd', 'carcer-x8r8g8b8.txd');
+const x888Exists = existsSync(x888Path);
+const x888Dict = x888Exists ? parseTxd(toArrayBuffer(new Uint8Array(readFileSync(x888Path)))) : null;
+
+describe.skipIf(!x888Exists)('parseTxd (real asset carcer X8R8G8B8 — opaque padding byte)', () => {
+  it('decodes the uncompressed 32-bit texture fully OPAQUE (X byte is padding, not alpha)', () => {
+    const tex = x888Dict!.textures.find((t) => t.name === 'chromepipe2_32hv')!;
+    expect(tex.format).toBe('rgba8888');
+    expect(tex.hasAlpha).toBe(false);
+    const rgba = tex.mipmaps[0].data;
+    let minAlpha = 255;
+    for (let i = 3; i < rgba.length; i += 4) {
+      minAlpha = Math.min(minAlpha, rgba[i]);
+    }
+    expect(minAlpha).toBe(255); // every texel opaque — the fix (was 0 → the whole model rendered invisible)
   });
 });

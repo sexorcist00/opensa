@@ -1,4 +1,3 @@
-import { BufferAttribute, BufferGeometry } from 'three';
 import { describe, expect, it } from 'vitest';
 
 import type { RWClump, RWGeometry, RWMaterial } from '../parsers/binary/types';
@@ -66,7 +65,7 @@ describe('prepareClumpAtomics', () => {
       expect(atomic.parts[0].index).toBeInstanceOf(Uint16Array); // 4 vertices — 16-bit is plenty
     });
 
-    it('computes area-weighted vertex normals exactly like three does', () => {
+    it('computes area-weighted vertex normals (values captured from three@0.185.1)', () => {
       const rw = geometry({
         positions: new Float32Array([0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 5]),
         triangles: [
@@ -76,26 +75,19 @@ describe('prepareClumpAtomics', () => {
       });
       const [atomic] = prepareClumpAtomics(clumpWith(rw));
 
-      const reference = new BufferGeometry();
-      reference.setAttribute('position', new BufferAttribute(rw.positions, 3));
-      reference.setIndex([0, 1, 2, 0, 3, 1]);
-      reference.computeVertexNormals();
-      const expected = reference.getAttribute('normal').array as Float32Array;
+      // `BufferGeometry.computeVertexNormals()` on the same positions + index [0,1,2, 0,3,1].
+      const expected = [0, 0.8574929237365723, 0.5144957304000854, 0, 0.8574929237365723, 0.5144957304000854, 0, 0, 1, 0, 1, 0]; // prettier-ignore
       atomic.normals.forEach((value, at) => expect(value).toBeCloseTo(expected[at], 5));
     });
 
     it('computes the bounding sphere like three (box centre, max-distance radius)', () => {
-      const rw = geometry();
-      const [atomic] = prepareClumpAtomics(clumpWith(rw));
+      const [atomic] = prepareClumpAtomics(clumpWith(geometry()));
 
-      const reference = new BufferGeometry();
-      reference.setAttribute('position', new BufferAttribute(rw.positions, 3));
-      reference.computeBoundingSphere();
-      const sphere = reference.boundingSphere!;
-      expect(atomic.sphere.center[0]).toBeCloseTo(sphere.center.x, 5);
-      expect(atomic.sphere.center[1]).toBeCloseTo(sphere.center.y, 5);
-      expect(atomic.sphere.center[2]).toBeCloseTo(sphere.center.z, 5);
-      expect(atomic.sphere.radius).toBeCloseTo(sphere.radius, 5);
+      // `BufferGeometry.computeBoundingSphere()` on the fixture's unit quad, three@0.185.1.
+      expect(atomic.sphere.center[0]).toBeCloseTo(0.5, 5);
+      expect(atomic.sphere.center[1]).toBeCloseTo(0.5, 5);
+      expect(atomic.sphere.center[2]).toBeCloseTo(0, 5);
+      expect(atomic.sphere.radius).toBeCloseTo(0.7071067811865476, 5);
     });
 
     it('converts prelit RGBA bytes to vec3 float colours and keeps sway weights from the alpha', () => {

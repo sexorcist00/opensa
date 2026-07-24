@@ -1,9 +1,42 @@
 import type * as Renderware from '@opensa/renderware';
 
-import { Matrix4 } from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { Matrix4 } from '@opensa/math';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GtaSaWorldAdapter, toModelColliders } from './gta-sa-world.adapter';
+
+/** The map `resolveMap` is stubbed to return — mutable so a test can place a different catalog. */
+const map = vi.hoisted(() => ({ current: null as null | Renderware.MapDefinitions }));
+
+function defaultMap(): Renderware.MapDefinitions {
+  return {
+    carGenerators: [
+      {
+        alarm: 0,
+        angle: 1,
+        doorLock: 0,
+        forceSpawn: 0,
+        id: 400,
+        position: [10, 20, 3],
+        primaryColor: -1,
+        secondaryColor: -1,
+      },
+      {
+        alarm: 0,
+        angle: 2,
+        doorLock: 0,
+        forceSpawn: 0,
+        id: -1,
+        position: [-50, -50, 5],
+        primaryColor: -1,
+        secondaryColor: -1,
+      },
+    ],
+    catalog: new Map([[1, { drawDistance: 300, flags: 0, id: 1, modelName: 'house', txdName: 'txd' }]]),
+    imgDirs: [],
+    instances: [{ id: 1, interior: 0, lod: -1, modelName: '', position: [10, 10, 0], rotation: [0, 0, 0, 1] }],
+  };
+}
 
 // Stub the map resolution; keep grid/cell builders real. The adapter reads everything from the VFS now.
 vi.mock('@opensa/renderware', async (importActual) => {
@@ -11,34 +44,12 @@ vi.mock('@opensa/renderware', async (importActual) => {
 
   return {
     ...actual,
-    resolveMap: (): Renderware.MapDefinitions => ({
-      carGenerators: [
-        {
-          alarm: 0,
-          angle: 1,
-          doorLock: 0,
-          forceSpawn: 0,
-          id: 400,
-          position: [10, 20, 3],
-          primaryColor: -1,
-          secondaryColor: -1,
-        },
-        {
-          alarm: 0,
-          angle: 2,
-          doorLock: 0,
-          forceSpawn: 0,
-          id: -1,
-          position: [-50, -50, 5],
-          primaryColor: -1,
-          secondaryColor: -1,
-        },
-      ],
-      catalog: new Map([[1, { drawDistance: 300, flags: 0, id: 1, modelName: 'house', txdName: 'txd' }]]),
-      imgDirs: [],
-      instances: [{ id: 1, interior: 0, lod: -1, modelName: '', position: [10, 10, 0], rotation: [0, 0, 0, 1] }],
-    }),
+    resolveMap: (): Renderware.MapDefinitions => map.current ?? defaultMap(),
   };
+});
+
+afterEach(() => {
+  map.current = null;
 });
 
 function cfg(): ConstructorParameters<typeof GtaSaWorldAdapter>[0] {
@@ -158,10 +169,6 @@ describe('toModelColliders', () => {
 
 describe('GtaSaWorldAdapter cell streaming', () => {
   describe('negative cases', () => {
-    it('throws when loadCell is called before prepare', async () => {
-      await expect(new GtaSaWorldAdapter(cfg()).loadCell({ cx: 0, cy: 0, lod: false })).rejects.toThrow();
-    });
-
     it('throws when loadCellColliders is called before prepare', async () => {
       await expect(new GtaSaWorldAdapter(cfg()).loadCellColliders(0, 0)).rejects.toThrow();
     });
@@ -170,16 +177,6 @@ describe('GtaSaWorldAdapter cell streaming', () => {
   describe('positive cases', () => {
     it('exposes the configured cell size', () => {
       expect(new GtaSaWorldAdapter(cfg()).cellSize).toBe(250);
-    });
-
-    it('caches a built cell (same array on repeat loads)', async () => {
-      const adapter = new GtaSaWorldAdapter(cfg());
-      await adapter.prepare();
-
-      const first = await adapter.loadCell({ cx: 0, cy: 0, lod: false });
-      const second = await adapter.loadCell({ cx: 0, cy: 0, lod: false });
-
-      expect(second).toBe(first);
     });
 
     it('caches a cell’s colliders (same array on repeat loads)', async () => {
@@ -273,6 +270,244 @@ describe('GtaSaWorldAdapter.mapCarGenerators', () => {
 
       // id 400 → landstal (specific); id -1 in COUNTRYSIDE → Workers group → rancher (random).
       expect(out.map((placement) => placement.model).sort()).toEqual(['landstal', 'rancher']);
+    });
+  });
+});
+
+/** A text-only file system serving exactly the given loose data files. */
+function textFs(files: Record<string, string>): Renderware.AssetFileSystem {
+  return {
+    get: () => null,
+    getText: (name) => files[name] ?? null,
+    has: (name) => name in files,
+    names: Object.keys(files),
+  };
+}
+
+describe('GtaSaWorldAdapter.animatedPlacements', () => {
+  describe('negative cases', () => {
+    it('reports nothing before prepare resolved the map', () => {
+      expect(new GtaSaWorldAdapter(cfg()).animatedPlacements()).toEqual([]);
+    });
+
+    it('skips placed objects whose catalog def carries no anim (the map is mostly static)', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+
+      expect(adapter.animatedPlacements()).toEqual([]); // the default map's `house` has no anim
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reports every anim-carrying placement with its IPL pose verbatim (no axis change here)', async () => {
+      map.current = {
+        catalog: new Map([
+          [1, { anim: 'windmill', drawDistance: 300, flags: 0, id: 1, modelName: 'mill', txdName: 'millt' }],
+          [2, { drawDistance: 300, flags: 0, id: 2, modelName: 'house', txdName: 'txd' }],
+        ]),
+        imgDirs: [],
+        instances: [
+          { id: 1, interior: 0, lod: -1, modelName: 'mill', position: [1, 2, 3], rotation: [0, 0, 0.5, 0.5] },
+          { id: 2, interior: 0, lod: -1, modelName: 'house', position: [9, 9, 9], rotation: [0, 0, 0, 1] },
+        ],
+      };
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+
+      expect(adapter.animatedPlacements()).toEqual([
+        { anim: 'windmill', modelName: 'mill', position: [1, 2, 3], rotation: [0, 0, 0.5, 0.5], txdName: 'millt' },
+      ]);
+    });
+  });
+});
+
+describe('GtaSaWorldAdapter.txdOf', () => {
+  describe('negative cases', () => {
+    it('is undefined before prepare (nothing is catalogued yet)', () => {
+      expect(new GtaSaWorldAdapter(cfg()).txdOf('house')).toBeUndefined();
+    });
+
+    it('is undefined for a model the catalog does not know', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+
+      expect(adapter.txdOf('nosuchmodel')).toBeUndefined();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('resolves a model TXD case-insensitively (shard texturing reads it by render name)', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+
+      expect(adapter.txdOf('HOUSE')).toBe('txd');
+    });
+  });
+});
+
+describe('GtaSaWorldAdapter.breakableInfo', () => {
+  const OBJECT_DAT = 'lamppost1, 200.0, 300.0, 0.99, 0.1, 20.0, 240.0, 0.5, 200, 0, 0';
+
+  describe('negative cases', () => {
+    it('is undefined when object.dat is absent (props still break at the default threshold)', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+
+      expect(adapter.breakableInfo('lamppost1')).toBeUndefined();
+    });
+
+    it('is undefined for a model object.dat does not tune', async () => {
+      const adapter = new GtaSaWorldAdapter({ cellSize: 250, fs: textFs({ 'data/object.dat': OBJECT_DAT }) });
+      await adapter.prepare();
+
+      expect(adapter.breakableInfo('bin1')).toBeUndefined();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reports the uproot limit and damage effect case-insensitively', async () => {
+      const adapter = new GtaSaWorldAdapter({ cellSize: 250, fs: textFs({ 'data/object.dat': OBJECT_DAT }) });
+      await adapter.prepare();
+
+      const entry = adapter.breakableInfo('LampPost1');
+      expect(entry?.uprootLimit).toBe(240);
+      expect(entry?.colDamageEffect).toBe(200);
+    });
+  });
+});
+
+describe('GtaSaWorldAdapter.loadTimecyc', () => {
+  describe('negative cases', () => {
+    it('throws when neither timecyc file ships (the table is mandatory)', async () => {
+      await expect(new GtaSaWorldAdapter(cfg()).loadTimecyc()).rejects.toThrow('asset not found: data/timecyc.dat');
+    });
+  });
+});
+
+describe('GtaSaWorldAdapter.invalidateColliderCache', () => {
+  describe('positive cases', () => {
+    it('forces the next load to REBUILD, so a clutter-density change reaches physics', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+      const first = await adapter.loadCellColliders(0, 0);
+
+      adapter.invalidateColliderCache();
+
+      expect(await adapter.loadCellColliders(0, 0)).not.toBe(first);
+    });
+  });
+});
+
+describe('GtaSaWorldAdapter.cellClutter', () => {
+  describe('negative cases', () => {
+    it('is empty before prepare', () => {
+      expect(new GtaSaWorldAdapter(cfg()).cellClutter(0, 0)).toEqual([]);
+    });
+
+    it('is empty when the procobj data files are absent (nothing scatters)', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+
+      expect(adapter.cellClutter(0, 0)).toEqual([]);
+    });
+  });
+});
+
+describe('GtaSaWorldAdapter.prepare', () => {
+  describe('positive cases', () => {
+    it('is idempotent and still reports completion on a repeat call (debug reload)', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+      const progress: number[] = [];
+
+      await adapter.prepare((fraction) => progress.push(fraction));
+      const cells = adapter.listCells();
+      await adapter.prepare((fraction) => progress.push(fraction));
+
+      expect(progress).toEqual([1, 1]);
+      expect(adapter.listCells()).toEqual(cells); // the grid was not rebuilt from scratch
+    });
+  });
+});
+
+describe('GtaSaWorldAdapter.vehiclePaint', () => {
+  const CARCOLS = [
+    'col',
+    '0,0,0',
+    '10,20,30',
+    '40,50,60',
+    'end',
+    'car',
+    'testcar, 1,2',
+    'end',
+    'car4',
+    'quadcar, 0,1,2,1',
+    'end',
+  ].join('\n');
+  const adapter = (): GtaSaWorldAdapter => new GtaSaWorldAdapter({ cellSize: 250, fs: vehicleFs(CARCOLS) });
+
+  describe('negative cases', () => {
+    it('paints a car with no carcols entry plain white in every slot', async () => {
+      expect(await adapter().vehiclePaint('nope')).toEqual({
+        primary: [1, 1, 1],
+        quaternary: [1, 1, 1],
+        secondary: [1, 1, 1],
+        tertiary: [1, 1, 1],
+      });
+    });
+
+    it('ignores a non-numeric colour string and falls back to the car own carcols combo', async () => {
+      const paint = await adapter().vehiclePaint('testcar', 'red,blue');
+
+      expect(paint.primary).toEqual([10 / 255, 20 / 255, 30 / 255]); // palette 1, the first combo
+    });
+  });
+
+  describe('positive cases', () => {
+    it('scales carcols bytes into the engine 0..1 space, defaulting 3rd/4th to palette 0', async () => {
+      expect(await adapter().vehiclePaint('TestCar')).toEqual({
+        primary: [10 / 255, 20 / 255, 30 / 255],
+        quaternary: [0, 0, 0],
+        secondary: [40 / 255, 50 / 255, 60 / 255],
+        tertiary: [0, 0, 0],
+      });
+    });
+
+    it('an explicit colour string overrides the car own combo', async () => {
+      const paint = await adapter().vehiclePaint('testcar', ' 2 , 1 ');
+
+      expect(paint.primary).toEqual([40 / 255, 50 / 255, 60 / 255]); // palette 2
+      expect(paint.secondary).toEqual([10 / 255, 20 / 255, 30 / 255]); // palette 1
+    });
+
+    it('falls back to the 4-colour table for a car listed only under car4', async () => {
+      expect(await adapter().vehiclePaint('quadcar')).toEqual({
+        primary: [0, 0, 0],
+        quaternary: [10 / 255, 20 / 255, 30 / 255],
+        secondary: [10 / 255, 20 / 255, 30 / 255],
+        tertiary: [40 / 255, 50 / 255, 60 / 255],
+      });
+    });
+  });
+});
+
+describe('GtaSaWorldAdapter.loadVehicleData', () => {
+  describe('negative cases', () => {
+    it('names the model when vehicles.ide has no such car', async () => {
+      const adapter = new GtaSaWorldAdapter({ cellSize: 250, fs: dataFs() });
+
+      await expect(adapter.loadVehicleData('delorean')).rejects.toThrow(/No vehicle definition/);
+    });
+
+    it('reports the missing DFF by name when the roster lists a car the archive lacks', async () => {
+      const adapter = new GtaSaWorldAdapter({ cellSize: 250, fs: dataFs() });
+
+      await expect(adapter.loadVehicleData('landstal')).rejects.toThrow('asset not found: landstal.dff');
+    });
+
+    it('throws a named error when a required data file is missing entirely', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+
+      await expect(adapter.vehicleColourCombos('landstal')).rejects.toThrow('asset not found: data/vehicles.ide');
     });
   });
 });

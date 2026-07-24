@@ -67,6 +67,21 @@ describe('buildWorldGrid', () => {
       expect(cell?.lod[0].id).toBe(2);
     });
 
+    it('puts ALWAYS-ON lod targets into BOTH layers, other lods stay lod-only (plan 087 gostown forests)', () => {
+      // The stub-HD/real-LOD TC pattern: fakebit01 (hd stub) links to LODEnsemble3 — the ensemble IS the
+      // forest, so hiding it inside the HD ring hides every tree. Listed models bucket like timed ones.
+      const ensemble = { ...inst(2, [20, 20, 0]), isLod: true };
+      const plainLod = { ...inst(3, [30, 30, 0]), isLod: true };
+      const defs = mapDefs(
+        [def(1, 'fakebit01'), def(2, 'LODEnsemble3'), def(3, 'lodhouse')],
+        [inst(1, [10, 10, 0]), ensemble, plainLod],
+      );
+      const cell = buildWorldGrid(defs, 250, new Set(['lodensemble3'])).get(cellKey(0, 0));
+
+      expect(cell?.hd.map((i) => i.id)).toEqual([1, 2]);
+      expect(cell?.lod.map((i) => i.id)).toEqual([2, 3]);
+    });
+
     it('puts timed (tobj) instances into BOTH layers (cell LODs bake no hour gate)', () => {
       const defs = mapDefs([def(1, 'house')], [inst(1, [10, 10, 0]), inst(7, [20, 20, 0])]);
       defs.timedCatalog = new Map([[7, { ...def(7, 'lampwin_nt'), time: { off: 6, on: 20 } }]]);

@@ -54,7 +54,7 @@ enforce most of it.
 - **Monorepo** (Nx + npm workspaces): `apps/` (web shell + viewer), `packages/` (engine: `renderware`,
   `game`, `loaders`, `vfs`, `game-build`), `tools/` (offline asset tools). Each package keeps its code in
   `<pkg>/src/`; cross-package imports use the `@opensa/*` name. See the
-  [architecture overview](./docs/architecture.md#repository-layout).
+  [architecture overview](./docs/architecture/README.md#repository-layout).
 - [docs/plans/](./docs/plans/) — numbered design plans (the "why" behind each feature).
 - [docs/features/](./docs/features/) — per-feature reference: what's implemented + known gaps.
 - [docs/development/](./docs/development/) — build, tests, scripts, and the

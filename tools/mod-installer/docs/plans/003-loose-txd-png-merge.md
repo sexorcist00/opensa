@@ -14,7 +14,7 @@ folder**. Instead, read the **PNG** files inside it and merge them into that `<n
 - a PNG with a new name → **add** it,
 - every other texture in the `.txd` is left untouched.
 
-Applies anywhere in the tree, at any depth. Examples (base = `non-modified`):
+Applies anywhere in the tree, at any depth. Examples (base = `original`):
 
 ```
 mod/models/particle/          → merges into  out/models/particle.txd          (particle.txd exists in base)
@@ -34,7 +34,7 @@ All building blocks already exist in `@opensa/rw-codec` (and are how the LOD too
    palette / 16-bit / interlaced (rare for mod textures; a follow-up). Round-trip-tested against lod-trees'
    `encodePng`.
 2. **Pick the format** — scan the alpha channel: any pixel `a < 255` ⇒ **DXT5** (full alpha), else **DXT1**
-   (opaque). Covers the user's "альфа канал" case (particle.txd needs DXT5, vehicle.txd is mostly DXT1).
+   (opaque). Covers the user's alpha-channel case (particle.txd needs DXT5, vehicle.txd is mostly DXT1).
 3. **Mip chain** — `buildMipChain(rgba, w, h)` (`@opensa/rw-codec/mip`) → RGBA levels down to 1×1 (2×2 box).
 4. **Compress** — `encodeDxt(format, level.data, level.width, level.height)` (`@opensa/rw-codec/dxt-encode`) per
    level → DXT blocks.

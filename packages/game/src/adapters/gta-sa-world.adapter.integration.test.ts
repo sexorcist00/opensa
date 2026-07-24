@@ -1,14 +1,9 @@
 import type * as Renderware from '@opensa/renderware';
 
 import { withModloader } from '@opensa/modloader';
-import { parseDff, prepareClumpAtomics } from '@opensa/renderware';
 import { readFileSync } from 'node:fs';
-import { type InstancedMesh, Matrix4, type Object3D, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ParseResponse, ParseWorkerLike } from './dff-parser';
-
-import { DffParser } from './dff-parser';
 import { GtaSaWorldAdapter } from './gta-sa-world.adapter';
 
 /** Read a committed fixture as a fresh ArrayBuffer. */
@@ -83,65 +78,10 @@ function fsFrom(files: Map<string, ArrayBuffer | string>): Renderware.AssetFileS
   };
 }
 
-/** Find every InstancedMesh in a built cell. */
-function instancedMeshes(meshes: Object3D[]): InstancedMesh[] {
-  const out: InstancedMesh[] = [];
-  for (const mesh of meshes) {
-    mesh.traverse((child) => {
-      if ((child as InstancedMesh).isInstancedMesh) {
-        out.push(child as InstancedMesh);
-      }
-    });
-  }
-
-  return out;
-}
-
 describe('GtaSaWorldAdapter integration', () => {
   describe('positive cases', () => {
     // First in the file on purpose: the renderware parse caches are module-level, and this test
     // needs the cell's model to be UNCACHED so the preparse path actually sends it to the parser.
-    it('preparses cell models through the injected parse worker and builds from the primed caches', async () => {
-      const requested: string[] = [];
-      const worker: ParseWorkerLike = {
-        onmessage: null,
-        postMessage(message, options): void {
-          requested.push(...message.models.map((model) => model.name));
-          expect(options.transfer).toHaveLength(message.models.length);
-          // Run the REAL worker stages in-process (parse + pure geometry prepare), reply async like a worker.
-          const models = message.models.map(({ buffer: raw, name }) => {
-            const clump = parseDff(raw);
-
-            return { clump, name, prepared: prepareClumpAtomics(clump) };
-          });
-          queueMicrotask(() => worker.onmessage?.({ data: { id: message.id, models } } as MessageEvent<ParseResponse>));
-        },
-      };
-      const adapter = new GtaSaWorldAdapter({ ...cfg(), dffParser: new DffParser(worker) });
-      await adapter.prepare();
-
-      const meshes = await adapter.loadCell({ cx: 0, cy: 0, lod: false });
-      expect(requested).toContain('washer'); // the cell's model went through the worker path
-      expect(instancedMeshes(meshes).length).toBeGreaterThan(0); // and the build used the primed caches
-    });
-
-    it('builds a real cell end-to-end (washer.dff → instanced mesh at the placed position)', async () => {
-      const adapter = new GtaSaWorldAdapter(cfg());
-      await adapter.prepare();
-
-      const meshes = await adapter.loadCell({ cx: 0, cy: 0, lod: false });
-      const instances = instancedMeshes(meshes);
-      expect(instances.length).toBeGreaterThan(0);
-
-      const mesh = instances[0];
-      expect(mesh.count).toBe(1);
-      const region = mesh.userData.region as Renderware.RegionMeshData;
-      expect(region.def.modelName).toBe('washer');
-      // The single placement sits at the instance's native Z-up position.
-      const position = new Vector3().setFromMatrixPosition(new Matrix4().fromArray(mesh.instanceMatrix.array, 0));
-      expect(position.x).toBeCloseTo(10, 3);
-      expect(position.y).toBeCloseTo(10, 3);
-    });
 
     it('loads the timecyc as 24h weather table from the real timecyc.dat', async () => {
       const result = await new GtaSaWorldAdapter(cfg()).loadTimecyc();
@@ -150,39 +90,33 @@ describe('GtaSaWorldAdapter integration', () => {
       expect(result.weathers[0].hours).toHaveLength(24);
     });
 
-    it('loads a skinned character end-to-end (bmypol1.dff → 32-bone skeleton)', async () => {
-      const character = await new GtaSaWorldAdapter(cfg()).loadCharacter('bmypol1.dff', 'bmypol1.txd');
-      expect(character.skeleton?.bones).toHaveLength(32);
-      expect(character.bonesByName.has('Root')).toBe(true);
-      expect(character.object).toBeDefined();
-    });
+    it('loads from an authored timecyc_24h.dat with NO vanilla timecyc.dat present', async () => {
+      // Dropping the mandatory file proves the 24h branch is taken (it throws otherwise), and the
+      // result matches the conversion of the vanilla file — the shipped 24h fixture IS that conversion.
+      const files = baseFiles();
+      files.set('data/timecyc_24h.dat', readFileSync('tests/original/data/timecyc_24h.dat', 'utf8'));
+      const converted = await new GtaSaWorldAdapter(cfg()).loadTimecyc();
+      files.delete('data/timecyc.dat');
 
-    it('resolves a character by peds.ide model name to its bare dff/txd (loadCharacterByModel)', async () => {
-      // BMYPOL1 → peds.ide → bare `bmypol1.dff`/`bmypol1.txd` (the roster lives in the img, no loose `player/`).
-      const character = await new GtaSaWorldAdapter(cfg()).loadCharacterByModel('BMYPOL1');
-      expect(character.skeleton?.bones).toHaveLength(32);
-      expect(character.object).toBeDefined();
-    });
+      const authored = await new GtaSaWorldAdapter({ cellSize: 250, fs: fsFrom(files) }).loadTimecyc();
 
-    it('loads animations directly from an .ifp file (no packed archive)', async () => {
-      const clips = await new GtaSaWorldAdapter(cfg()).loadAnimations('anim/ped.ifp');
-      expect(clips.size).toBe(4); // counxref.ifp's four animations
-      expect(clips.has('derrick01')).toBe(true);
+      expect(authored.weathers[0].hours).toHaveLength(24);
+      expect(authored.weathers[0].hours).toEqual(converted.weathers[0].hours);
     });
 
     it('loads a vehicle end-to-end by its bare gta3.img name (admiral via vehicles.ide)', async () => {
-      // fakeFs holds only bare keys (admiral.dff/.txd) — a pass proves loadVehicle reads them directly,
+      // fakeFs holds only bare keys (admiral.dff/.txd) — a pass proves the loader reads them directly,
       // with no loose `vehicles/` path. Resolved through vehicles.ide (model + txd both `admiral`).
-      const vehicle = await new GtaSaWorldAdapter(cfg()).loadVehicle('admiral');
-      expect(vehicle.object).toBeDefined();
+      const vehicle = await new GtaSaWorldAdapter(cfg()).loadVehicleData('admiral');
+      expect(vehicle.model.positions.length).toBeGreaterThan(0);
       expect(vehicle.colliders).not.toBeNull(); // embedded COL parsed from the same DFF
       expect(vehicle.handling).toBeDefined(); // from handling.cfg
     });
 
-    it('loadVehicle reads a modloader override end-to-end (overridden dff + merged handling)', async () => {
+    it('loadVehicleData reads a modloader override end-to-end (overridden dff + merged handling)', async () => {
       // Drop the stock admiral.dff entirely: the load can ONLY succeed if `withModloader` serves the
       // mod's `admiral.dff` under its bare name. The mod's settings.txt bumps ADMIRAL's mass (1109 → 9999),
-      // proving the merged handling.cfg reaches loadVehicle through the same decorator.
+      // proving the merged handling.cfg reaches the loader through the same decorator.
       const moddedHandling =
         'ADMIRAL 9999.0 2550.7 1.41 0.0 0.1 -0.15 77 0.65 0.74 0.52 4 198.0 17.2 12.9 R P 5 0.558 0 30.0 ' +
         '0.917 0.783 0.0 0.195 -0.045 0.50 0.10 0.45 0.43 35000 242000 1000002 1 1 0';
@@ -194,9 +128,10 @@ describe('GtaSaWorldAdapter integration', () => {
       files.set(`${dir}/admiral.settings.txt`, moddedHandling);
 
       const fs = withModloader(fsFrom(files));
-      const vehicle = await new GtaSaWorldAdapter({ cellSize: 250, fs }).loadVehicle('admiral');
+      const vehicle = await new GtaSaWorldAdapter({ cellSize: 250, fs }).loadVehicleData('admiral');
 
-      expect(vehicle.object).toBeDefined(); // built from the overridden dff (stock admiral.dff is absent)
+      // built from the overridden dff (stock admiral.dff is absent)
+      expect(vehicle.model.positions.length).toBeGreaterThan(0);
       expect(vehicle.colliders).not.toBeNull();
       expect(vehicle.handling.mass).toBe(9999); // merged ADMIRAL handling line, not the stock 1109
     });

@@ -83,4 +83,4 @@ workflows) → the LOD tools (CLI). Sits beside `sa-lod` (mesh encode) under `to
 ## Consumers
 
 `lod-trees-generator` (impostor placement), `lod-procobj-generator` (simplified-copy placement). Both also use
-`@opensa/sa-lod` (see its [001](../../../sa-lod/docs/plans/001-architecture.md)) and `@opensa/tool-kit`.
+`@opensa/sa-lod` (see its [001](../../../lod-common/docs/plans/001-architecture.md)) and `@opensa/tool-kit`.

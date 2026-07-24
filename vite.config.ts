@@ -82,6 +82,8 @@ const hideDebugger = process.env.OPENSA_DEBUGGER_HIDE === 'true';
 // The prod deploy build (`npm run build:prod` sets both flags) — gates deploy-only output like `.htaccess`.
 const isProdDeploy = excludeViewers && hideDebugger;
 
+// The five 073 spike entries (babylon + the four three-WebGPU repros) were deleted in plan 074/13
+// phase 3 — their findings live in docs/plans/073-webgpu-migration-threejs/concept/.
 const viewerInputs = {
   controlsHarness: resolve(__dirname, 'controls-harness.html'),
   viewer: resolve(__dirname, 'viewer.html'), // object/vehicle/character as ?tab= in one app

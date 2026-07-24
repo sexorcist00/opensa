@@ -195,7 +195,7 @@ a bottom edge); `skirtDepth` trades occlusion vs how far it hangs. Doesn't fix c
 - **Opt-in `--stitch-gaps`**, off by default; every variant **changes geometry**, so (unlike the lossless core) it
   needs in-viewer sign-off before shipping.
 
-## Coverage estimate (measured, stock `non-modified`)
+## Coverage estimate (measured, stock `original`)
 
 A full-map census (throwaway; `resolvePlacements` + boundary verts of **all 45 531 instances** → **11.9 M** world
 boundary vertices, spatial-hashed, **normal-guarded** so only near-**coplanar** near-misses count — the

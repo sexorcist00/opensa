@@ -1,5 +1,5 @@
+import { Vector3 } from '@opensa/math';
 import { query } from 'bitecs';
-import { type PerspectiveCamera, Vector3 } from 'three';
 
 import type { System } from '../core/system';
 import type { EcsWorld } from '../ecs/world';
@@ -9,6 +9,11 @@ import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { CharacterController, PhysicsWorld } from '../physics/physics-world';
 
 import { PlayerControlled, RigidBody, Transform, Velocity } from '../ecs/components';
+
+/** All the controller needs from a camera: the scene-space (Y-up) look direction. */
+export interface LookDirectionSource {
+  getWorldDirection(target: Vector3): Vector3;
+}
 
 /** Gravity integrated into the kinematic body's vertical velocity (Z-up). */
 const GRAVITY = -9.81;
@@ -41,7 +46,7 @@ export class CharacterControllerSystem implements System {
   private autoArrived = false;
   private autoIndex = 0;
   private autoPath: Vec3[] = [];
-  private readonly camera: PerspectiveCamera;
+  private readonly camera: LookDirectionSource;
   private readonly config: Readonly<Config>;
   private readonly controller: CharacterController;
   private enabled = true;
@@ -59,7 +64,7 @@ export class CharacterControllerSystem implements System {
     input: InputState,
     config: Readonly<Config>,
     controller: CharacterController,
-    camera: PerspectiveCamera,
+    camera: LookDirectionSource,
   ) {
     this.world = world;
     this.physics = physics;

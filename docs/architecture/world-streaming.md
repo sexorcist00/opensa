@@ -1,0 +1,86 @@
+# Native formats & world streaming
+
+The engine never parses RenderWare at runtime — everything is converted offline into the native formats in
+`packages/engine-formats` and streamed from a single pak. Format details live in
+[plan 074/02](../plans/074-opensa-engine/02-native-formats.md); this page is the map.
+
+## The formats
+
+| Format    | Magic  | One file is…                                  | Key contents                                                                                                                                                                                  |
+| --------- | ------ | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.osm`    | `OSM1` | one **model** (vehicle/ped/prop/…), sectioned | `DESC` (JSON: parts/submeshes/wheels/layout) · `GEOM` · `COLL` (baked collision) · `HULL` · `SHAT` (shatter mesh) · `SKEL` · `TEXS` (the model's private texture dictionary)                  |
+| `.ostex`  | `OST1` | one `texture_2d_array`                        | BC1/BC2/BC3/BC7/RGBA8, full offline mip chain, premultiplied alpha, alpha class (opaque/cutout/soft-blend)                                                                                    |
+| `.oscell` | `OSC1` | one streamed **cell** level (HD or LOD)       | 36-byte vertices (pos, normal + baked sunVis, uv, day/night prelit, layer + AO/emissive channels), object/breakable/particle/light tables (object kinds incl. 4 uv-scroll / 5 timed uv-scroll, minor 7), pipeline classes opaque/cutout/blend/beam/**additive**, placement mapper for the debugger |
+| `.oswire` | `OSW1` | meshopt-compressed transport of a cell        | the pak worker decodes it back into exact `.oscell` bytes                                                                                                                                     |
+| `.ospak`  | —      | the **archive**                               | manifest (`game` + `appVersion` for fetch cache-keying (plan 086), `buildTime`, cells with offsets/hashes + per-cell texture refs + per-cell geometry `aabb` (world XZ — what the streaming rings test, plan 087), the **shared world texture dictionary**, uv animations, water (a LOOSE `water.bin` next to the pak — stride-20 `x,y,z,depth,class`, plan 075), `missingLayers` — the stand-in layers the runtime's magenta highlight repaints) + 4096-aligned blobs; runtime reads byte ranges only |
+
+Sections are read independently — the main thread takes `COLL` without touching geometry; consumers reject
+unknown **major** versions loudly, minors only add optional sections.
+
+**A vehicle's vertex streams carry two things the names do not say** (plan 084): the NIGHT colour set's
+**alpha** is the model's own sky occlusion — a car has no prelit set, so that byte was a constant 255 and now
+holds the AO the builder computes — and `reflect.x` is SPARE, because the reflection pipe reflects the live
+probe rather than the DFF's env texture. `DESC` submeshes also gained an optional `extra` (which `extraN`
+alternative a submesh belongs to; the spawn picks one) and `tyre` (rubber, found by geometry, never
+reflective). All are additive: a pak built before them still reads.
+
+**Private vs world textures.** By-name classes (vehicles, peds, clutter, props, breakables) carry their own
+dictionary in the `.osm` `TEXS` section — self-contained, viewable standalone. **Map objects** are planned
+against the pak's shared world dictionary instead: their `.osm` is `DESC + GEOM` with global array
+references (`textureSource: 'world'`), which keeps the full map at ~400 MB instead of ~3.7 GB of per-model
+copies — but such a model only renders inside the streamed world.
+
+## Streaming at runtime
+
+![World streaming](./assets/world-streaming.svg)
+
+<details><summary>diagram source</summary>
+
+```mermaid
+%%| world-streaming
+flowchart LR
+  pak[(".ospak<br/>manifest + 4096-aligned blobs")]:::data
+  setup["setupStreaming<br/>validate manifest · buildTime ·<br/>water · uv-anims"]:::engine
+  worker["pak worker<br/>Range reads · .oswire → .oscell<br/>(pak bytes never on main thread)"]:::infra
+  driver["StreamingDriver<br/>rings + hysteresis · ≤1 create/frame ·<br/>atomic HD↔LOD swap · eviction"]:::engine
+  cells["CellStore<br/>.oscell → GPU buffers +<br/>recorded render bundle · pick()"]:::engine
+  tex["TextureArrays<br/>.ostex → texture_2d_array ·<br/>per-ring residency + ref-keying"]:::engine
+  frame[["frame graph<br/>replay bundles while frustum-visible"]]:::engine
+
+  pak --> setup --> driver
+  driver <--> worker
+  worker --> cells
+  driver --> tex
+  cells --> frame
+  tex --> frame
+
+  classDef infra fill:#e8e0ff,stroke:#6b4fbb,color:#111
+  classDef engine fill:#d8ecff,stroke:#2a7ae2,color:#111
+  classDef data fill:#f5efe1,stroke:#b08900,color:#111
+```
+
+</details>
+
+- **`stream/setup.ts`** — `setupStreaming(engine, source, radii)`: validates the manifest, spins up the pak
+  worker (folder mode hands it the pak Blob; HTTP mode the `world.ospak` URL), returns
+  `StreamSetup { buildTime?, cellSize, center, driver, radius, water? }`. A `LocalPakSource` returning `null`
+  throws loudly — no fallback (see [boot-and-loading.md](./boot-and-loading.md)).
+- **`stream/pak-worker.ts`** — all pak IO: HTTP Range mode when the server honours `Range:` (auto-detected;
+  falls back to whole-pak), meshopt/`.oswire` decode, transfers cell blobs. JS heap stays flat — pak bytes
+  never live whole on the main thread.
+- **`stream/streaming.ts`** — `StreamingDriver`: ring model with hysteresis, the old level stays visible
+  until its replacement is resident (atomic HD↔LOD swap), ≤1 cell create per frame, eviction outside the
+  outer ring. The LOD ring doubles as the fog-mask boundary, and it tests the cell's TRUE geometry rect
+  (manifest `aabb`; grid-rect fallback for pre-`aabb` paks) — an instance welds into the cell of its
+  PIVOT, so meshes reach past the grid rect (gostown mean 141 u, max 799 u — plan 087) and a grid-rect
+  ring skipped cells whose geometry already sat inside the fog. **Per-ring texture residency**: a shared
+  array is fetched with the first cell that draws it and released with the last.
+- **`world/cells.ts`** — `CellStore`: one `.oscell` becomes GPU buffers + a recorded `GPURenderBundle`
+  replayed while frustum-visible; also the debugger's ray `pick()` over the placement mapper (parsed only
+  under `debugPicking`).
+- **`world/textures.ts`** — `TextureArrays`: `.ostex` upload + material bind groups; CPU payload released
+  after upload.
+
+Dynamic models (`.osm`) load outside this path: vehicles/peds go through their own readers
+(`readModelOsm` / `readPedOsm`) and workers — see [features/vehicles.md](../features/vehicles.md) and
+[features/character.md](../features/character.md).

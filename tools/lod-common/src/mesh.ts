@@ -47,3 +47,36 @@ export interface MergedMesh {
 export type Quat = readonly [number, number, number, number];
 
 export type Vec3 = readonly [number, number, number];
+
+/**
+ * Concatenate two merged meshes — `b`'s vertices appended after `a`'s, group indices rebased. Built for the
+ * opensa cell bake's hole-fill exemption (plan 086): the protected instances merge verbatim and join the
+ * modifier-shaped remainder here. Night colours stay optional per side — a side without them contributes its
+ * DAY colours, the same fallback the engine applies when the night plugin is absent.
+ */
+export function concatMeshes(a: MergedMesh, b: MergedMesh): MergedMesh {
+  const aCount = a.positions.length / 3;
+  const concat = <T extends Float32Array | Uint8Array>(left: T, right: T, make: (length: number) => T): T => {
+    const out = make(left.length + right.length);
+    out.set(left, 0);
+    out.set(right, left.length);
+
+    return out;
+  };
+  const night =
+    a.nightColors || b.nightColors
+      ? concat(a.nightColors ?? a.colors, b.nightColors ?? b.colors, (n) => new Uint8Array(n))
+      : undefined;
+
+  return {
+    colors: concat(a.colors, b.colors, (n) => new Uint8Array(n)),
+    groups: [
+      ...a.groups,
+      ...b.groups.map((group) => ({ ...group, indices: Uint32Array.from(group.indices, (i) => i + aCount) })),
+    ],
+    ...(night ? { nightColors: night } : {}),
+    normals: concat(a.normals, b.normals, (n) => new Float32Array(n)),
+    positions: concat(a.positions, b.positions, (n) => new Float32Array(n)),
+    uvs: concat(a.uvs, b.uvs, (n) => new Float32Array(n)),
+  };
+}

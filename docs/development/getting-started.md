@@ -40,32 +40,34 @@ game-src/original/
 - Optional `data/timecyc_24h.dat` is used as-is when present; otherwise the vanilla `data/timecyc.dat`
   is converted to 24h at runtime.
 
-To build a non-default variant (e.g. a mod set), drop it in `game-src/<name>/` with the same layout
-and pass `--game <name>` to the build (see below).
+To build a non-default variant (e.g. a TC), drop it in `game-src/<name>/` with the same layout and use
+the matching alias (see below) or call the pmb CLI with `--game/--in/--out` directly.
 
 ## 3. Build the archives
 
 ```sh
-npm run build:game:original              # → static/original-<version>/
-# or, for any variant:
-tsx scripts/build-game.ts --game <name>
+npm run build:game:original              # pmb + fetch-pack → ./build/original (sa/ + opensa/ + opensa-pack/)
+# other games: npm run build:game:gostown|carcer|anderius
 ```
 
-`build:game:original` first regenerates `timecyc_24h.dat` (`npm run timecyc`), then packs
-`game-src/original/` into `static/original-<version>/` (version comes from `package.json`). Each group
-is split into **~50MB content-hashed chunks** (`<group>-<hash>.zip`) so a dropped download re-fetches
-one chunk, not the whole group; `manifest.json` lists them:
+One command, TWO independent builds (plan 086 phase 8): `opensa/` — the SELF-CONTAINED game dir
+(engine pak inside at `pak/`; open it in folder mode or serve it for http-dir), and `opensa-pack/` —
+the FETCH build (`tools/fetch-pack` packs the game dir into `<game>-<version>/` chunks; deploy = upload
+that folder as `games/<game>-<version>/`). Each group is split into **~50MB content-hashed chunks**
+(`<group>-<hash>.zip`) so a dropped download re-fetches one chunk, not the whole group; the download
+`manifest.json` lists them:
 
-- `data` — the contents of the loose `data/` folder (ide/ipl/dat/cfg/zon); no dff/txd/col.
-- `models` — the `.dff` geometry the exterior map references (interiors excluded) + every `.col`.
-- `textures` — the `.txd` textures the exterior map references (the bulk → ~10 chunks).
-- `others` — everything else: `.ipl`/`.ifp`/`.dat` from `gta3.img` + loose anim/text (ifp/gxt/fxp).
+- `data` — loose root files + the `data/` and `text/` folders (ide/ipl/dat/cfg/zon/gxt).
+- `models` — the `models/` IMGs (converted `.osm` inside) + the game dir's `pak/` (`world.ospak`, sliced).
+- `textures` — EMPTY for a pak build (pak textures live inside `world.ospak`); kept for the manifest shape.
+- `others` — everything else (anim/ifp and friends).
 
 Chunk assignment is a stable hash bucket, so changing one file leaves the other chunks byte-identical
-(same hash/filename → the browser cache survives a version bump). See [build-flags.md](./build-flags.md)
-and plan 048 for the full breakdown.
+(same hash/filename → the browser cache survives a version bump) — unless a group's total crosses a
+50 MB multiple, which changes the bucket count and reshuffles that group's chunks. See
+[fetch-pack.md](../features/fetch-pack.md) for the full breakdown.
 
-Each chunk also carries a `cached` flag from the build's `CACHED` map (`scripts/build-game.ts`). `models`,
+Each chunk also carries a `cached` flag from the build's `CACHED` map (`tools/fetch-pack`). `models`,
 `textures`, and `others` are cached in the browser (Cache Storage); `data` is `cached: false` — always
 re-downloaded and never stored. That makes `data` a **build-liveness probe**: delete its zip on the server
 (to revoke a build) and clients 404 on it, which wipes their whole asset cache. Deleting the whole build
@@ -99,10 +101,10 @@ unzip + verify) → the lazily-loaded game runs entirely from the VFS.
 ## 5. Test fixtures (to run the test suite)
 
 The real-asset test fixtures under `tests/original/` are Rockstar assets, so they are **not committed**
-(gitignored) — regenerate them locally from an **unmodified** GTA SA copy placed at `game-src/non-modified/`:
+(gitignored) — regenerate them locally from an **unmodified** GTA SA copy placed at `game-src/original/`:
 
 ```bash
-npm run test:fixtures   # extracts/copies the needed files from game-src/non-modified into tests/original/
+npm run test:fixtures   # extracts/copies the needed files from game-src/original into tests/original/
 npm test                # now the unit tests have their fixtures
 ```
 
@@ -120,7 +122,7 @@ npx tsx tools/map-optimizer/src/compare-serve.ts --before <gameDir> --after <gam
 ```
 
 The object-viewer e2e instead renders static fixtures from `tests/viewer/` (gitignored like `tests/original/`),
-extracted from `game-src/non-modified/` by `npm run test:fixtures`.
+extracted from `game-src/original/` by `npm run test:fixtures`.
 
 ## Where to go next
 

@@ -1,6 +1,9 @@
+import type { Raw2dfxEntry } from '@opensa/rw-codec/dff';
+
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { toArrayBuffer } from '@opensa/renderware/test-utils';
 import { build2dfxSection, extract2dfxEntries } from '@opensa/rw-codec/dff';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { MergedMesh } from './mesh';
@@ -151,6 +154,45 @@ describe('encodeLodDff', () => {
     it('omits the night plugin when the mesh has no night colours', () => {
       const clump = parseDff(toArrayBuffer(encodeLodDff(sampleMesh(), 'lod_3_-7')));
       expect(clump.geometries[0].nightColors).toBeNull();
+    });
+  });
+});
+
+// The hand-written `lightEntry()` above tests the transplant against a payload this file invented. A stock
+// chimney carries the real thing: 3 corona entries AND a particle emitter, so it also proves the extractor's
+// default — particles (type 1) are deliberately dropped from far LODs, where their emitters never unload.
+const CHIMNEY = 'tests/original/dff/particle/refchimny01.dff';
+
+describe.skipIf(!existsSync(CHIMNEY))('encodeLodDff (real 2dfx payload — refchimny01.dff)', () => {
+  const source = (): Raw2dfxEntry[] => extract2dfxEntries(new Uint8Array(readFileSync(CHIMNEY)));
+
+  describe('negative cases', () => {
+    it("leaves the chimney's PARTICLE emitter behind — only the coronas are transplanted", () => {
+      const raw = new Uint8Array(readFileSync(CHIMNEY));
+
+      expect(parseDff(toArrayBuffer(raw)).geometries.some((geometry) => (geometry.particles?.length ?? 0) > 0)).toBe(
+        true,
+      );
+      expect(source().map((entry) => entry.type)).toEqual([0, 0, 0]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('carries a stock DFF 2dfx section through byte-for-byte', () => {
+      const entries = source();
+
+      const encoded = encodeLodDff(sampleMesh(), 'lod_cell', {
+        effects: build2dfxSection(entries.map((entry) => ({ bytes: entry.bytes, position: entry.position })))!,
+      });
+
+      const lifted = extract2dfxEntries(encoded);
+      expect(lifted).toHaveLength(entries.length);
+      lifted.forEach((entry, index) => {
+        expect(entry.position).toEqual(entries[index].position);
+        expect([...entry.bytes]).toEqual([...entries[index].bytes]); // fields our parser cannot read survive
+      });
+      // And the engine parser still reads the coronas out of the result.
+      expect(parseDff(toArrayBuffer(encoded)).geometries[0].lights).toHaveLength(entries.length);
     });
   });
 });

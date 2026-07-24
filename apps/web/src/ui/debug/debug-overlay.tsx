@@ -4,7 +4,8 @@ import type {
   City,
   CloudsConfig,
   EffectsConfig,
-  Game,
+  EventBus,
+  GameEvents,
   HeadlightConfig,
   LightsConfig,
   MoonConfig,
@@ -30,7 +31,16 @@ import { GameClock } from '@opensa/game/time/game-clock';
 import { type ReactElement, useCallback, useEffect, useState } from 'react';
 
 import type { Teleport } from '../../game-config';
+import type { DebugCapabilities, Screen } from './debug-capabilities';
+import type { MapGame } from './map-inspector';
 
+import {
+  ALL_DEBUG_CAPABILITIES,
+  cameraControlsFor,
+  menuFor,
+  skyControlsFor,
+  worldLightControlsFor,
+} from './debug-capabilities';
 import { styles } from './debug-styles';
 import { MapInspector } from './map-inspector';
 import { DebugToggle, PerfPanel, PipelineToggle, SkyModelToggle, ToneMappingModeSelector } from './perf-panel';
@@ -60,6 +70,8 @@ export interface DebugActions {
   clouds(): CloudsConfig;
   /** Current world 2dfx particle-effects tuning (plan 044). */
   effects(): EffectsConfig;
+  /** Own-engine Perf rows (`[label, value]`, pre-formatted). Absent on the three host — see PerfPanelActions. */
+  engineStats?(): readonly (readonly [string, string])[];
   /** Flip the occupied car (on wheels → roof, on roof → wheels). No-op on foot. */
   flipVehicle(): void;
   /** Current fog distance (world units to full fog). */
@@ -80,10 +92,16 @@ export interface DebugActions {
   isFlying(): boolean;
   /** Current night-lights (street-lamp coronas) config. */
   lights(): LightsConfig;
+  /** Whether the missing-texture highlight (magenta stand-ins) is on (engine host only; default = dev). */
+  missingTextureHighlight?(): boolean;
   /** Current night-moon config (size/glow/elevation). */
   moon(): MoonConfig;
   /** Current night ambient/atmosphere config (brightness/tint). */
   night(): NightConfig;
+  /** Whether the own engine draws its on-screen HUD (engine host only; default = development build). */
+  perfHud?(): boolean;
+  /** Whether the own engine logs a CPU breakdown for slow frames (engine host only). */
+  perfLogs?(): boolean;
   /** Rolling perf stats; `null` until sampling produced a frame (see setPerfEnabled). */
   perfStats(): null | PerfStats;
   /** Live player position (native Z-up). */
@@ -116,18 +134,23 @@ export interface DebugActions {
   setHeadlights(patch: Partial<HeadlightConfig>): void;
   /** Toggle night street-lamp lights (coronas). */
   setLights(patch: Partial<LightsConfig>): void;
+  /** Repaint missing-texture stand-in layers magenta/off (engine host only; plan 085 row B). */
+  setMissingTextureHighlight?(enabled: boolean): void;
   /** Tune the night moon (size/glow/elevation). */
   setMoon(patch: Partial<MoonConfig>): void;
   /** Tune night ambient/atmosphere (brightness/tint). */
   setNight(patch: Partial<NightConfig>): void;
   /** Enable/disable perf sampling (the Perf panel turns it on only while open). */
   setPerfEnabled(enabled: boolean): void;
+  /** Show/hide the own engine's on-screen HUD (engine host only). */
+  setPerfHud?(enabled: boolean): void;
+  /** Enable/disable the own engine's slow-frame console breakdown (engine host only). */
+  setPerfLogs?(enabled: boolean): void;
   /** Tune one procedural-clutter category (enabled/drawDistance/density). */
   setProcObj(category: ProcObjCategory, patch: Partial<ProcObjTypeConfig>): void;
   /** Toggle sun shadows. */
   setShadows(patch: Partial<ShadowsConfig>): void;
   /** Toggle the debug wireframe view (scene-wide wireframe override, bypasses post-FX). */
-  setShowFaces(enabled: boolean): void;
   /** Toggle the debug normals view (scene-wide normal-colour override, bypasses post-FX). */
   setShowNormals(enabled: boolean): void;
   /** Tune the god-rays shader (density/exposure/weight). */
@@ -194,6 +217,15 @@ export interface DebugActions {
   worldLight(): WorldLightConfig;
 }
 
+/**
+ * The overlay's whole view of the game object: the typed event bus (city crossings). Everything else it needs
+ * goes through {@link DebugActions} — so a non-three host (the own engine, plan 074/22) can mount the same
+ * debugger. The three `Game` satisfies this structurally, so prod passes `game` unchanged.
+ */
+export interface DebugGame {
+  readonly events: Pick<EventBus<GameEvents>, 'on'>;
+}
+
 /** Reflection preset cycle order for the debug selector (Off + the registry keys). */
 const REFLECTION_PRESETS = ['off', ...Object.keys(PRESETS)];
 
@@ -205,43 +237,6 @@ const CITY_LABEL: Record<City, string> = {
   SF: 'San Fierro',
   VEGAS: 'Las Venturas',
 };
-
-type Screen =
-  | 'atmosphere'
-  | 'camera'
-  | 'graphics'
-  | 'map'
-  | 'perf'
-  | 'player'
-  | 'position'
-  | 'procobj'
-  | 'root'
-  | 'time'
-  | 'vehicles'
-  | 'weather';
-
-/** Authoring / live-tuning screens hidden only in the deploy build (`build:prod` sets `__DEBUGGER_HIDE__`). */
-const DEV_ONLY_SCREENS = new Set<Screen>(['atmosphere', 'camera', 'graphics', 'map', 'procobj']);
-
-const ALL_MENU: { label: string; screen: Screen }[] = [
-  { label: 'Player', screen: 'player' },
-  { label: 'Vehicles', screen: 'vehicles' },
-  { label: 'Time', screen: 'time' },
-  { label: 'Atmosphere', screen: 'atmosphere' },
-  { label: 'Camera', screen: 'camera' },
-  { label: 'Graphics', screen: 'graphics' },
-  { label: 'Perf', screen: 'perf' },
-  { label: 'ProcObj', screen: 'procobj' },
-  { label: 'Weather', screen: 'weather' },
-  { label: 'Position', screen: 'position' },
-  { label: 'Map', screen: 'map' },
-];
-
-/** Menu items visible for this game: hide dev-only screens in the deploy build. The Position screen always
- *  shows (coords readout + city); its teleport list is just empty when the game defines none. */
-function menuFor(): { label: string; screen: Screen }[] {
-  return ALL_MENU.filter((item) => !__DEBUGGER_HIDE__ || !DEV_ONLY_SCREENS.has(item.screen));
-}
 
 /** ProcObj screen rows — display order for the clutter categories (plan 042). */
 const PROCOBJ_CATEGORIES: readonly ProcObjCategory[] = [
@@ -261,24 +256,32 @@ const PROCOBJ_CATEGORIES: readonly ProcObjCategory[] = [
  */
 export function DebugOverlay({
   actions,
+  buildTime,
+  capabilities = ALL_DEBUG_CAPABILITIES,
   game,
+  mapGame,
   teleports,
 }: {
   actions: DebugActions;
-  game: Game;
+  /** The pak's build time (opensa manifest `buildTime`) — a grey stamp under the title so the running pak
+   *  version is visible. Absent for a pak built before the field existed. */
+  buildTime?: string;
+  /** Which controls this host can honour; defaults to everything. */
+  capabilities?: DebugCapabilities;
+  game: DebugGame;
+  /** The Map screen's wider host surface — omitted by a host that cannot drive the map viewer. */
+  mapGame?: MapGame;
   teleports: Teleport[];
 }): null | ReactElement {
-  const menu = menuFor();
+  const menu = menuFor(capabilities, __DEBUGGER_HIDE__);
   const [visible, setVisible] = useState(false);
   const [screen, setScreen] = useState<Screen>('root');
-  const [vehicleFilter, setVehicleFilter] = useState('');
   const [flying, setFlying] = useState(() => actions.isFlying());
   const [showCoords, setShowCoords] = useState(false);
   const [coords, setCoords] = useState<Vec3>([0, 0, 0]);
   const [city, setCity] = useState<City>(() => actions.city());
   const [mapActive, setMapActive] = useState(false);
   const [normals, setNormals] = useState(false);
-  const [faces, setFaces] = useState(false);
   const [time, setTime] = useState(() => actions.gameTime());
   const [godrays, setGodrays] = useState(() => actions.godrays());
   const [godraysSize, setGodraysSize] = useState(() => actions.godraysSize());
@@ -310,11 +313,9 @@ export function DebugOverlay({
     (next: Screen): void => {
       setScreen(next);
       setShowCoords(false);
-      setMapActive(false);
+      setMapActive(false); // navigating away leaves the map viewer (the inspector's unmount cleans up)
       setNormals(false);
-      setFaces(false);
       actions.setShowNormals(false); // leaving the screen / closing always drops the debug overrides
-      actions.setShowFaces(false);
     },
     [actions],
   );
@@ -396,6 +397,7 @@ export function DebugOverlay({
         ×
       </button>
       <div style={styles.title}>DEBUG</div>
+      <BuildStamp buildTime={buildTime} />
 
       {screen === 'root' ? (
         <div style={styles.group}>
@@ -429,33 +431,7 @@ export function DebugOverlay({
             </div>
           )}
 
-          {screen === 'vehicles' && (
-            <div style={styles.group}>
-              <input
-                onChange={(e) => setVehicleFilter(e.target.value)}
-                placeholder="Filter…"
-                style={styles.filterInput}
-                type="text"
-                value={vehicleFilter}
-              />
-              {actions
-                .vehicleModels()
-                .filter((model) => model.includes(vehicleFilter.trim().toLowerCase()))
-                .map((model) => (
-                  <button
-                    key={model}
-                    onClick={() => void actions.spawnVehicle(model)}
-                    style={styles.actionButton}
-                    type="button"
-                  >
-                    {model.charAt(0).toUpperCase() + model.slice(1)} Spawn
-                  </button>
-                ))}
-              <button onClick={() => actions.flipVehicle()} style={styles.actionButton} type="button">
-                Flip vehicle
-              </button>
-            </div>
-          )}
+          {screen === 'vehicles' && <VehicleScreen actions={actions} />}
 
           {screen === 'position' && (
             <div style={styles.group}>
@@ -563,44 +539,52 @@ export function DebugOverlay({
                   />
                 </div>
               ))}
-              <div style={styles.groupLabel}>DYNAMIC NIGHT FILL (player + cars)</div>
-              {(
-                [
-                  ['strength', 'NIGHT FILL', 2],
-                  ['rim', 'NIGHT FILL RIM', 2],
-                ] as const
-              ).map(([key, label, max]) => (
-                <div key={key}>
-                  <div style={styles.groupLabel}>
-                    {label}: {night.dynamicObjectsFill[key].toFixed(2)}
-                  </div>
+              {capabilities.dynamicObjectsFill && (
+                <>
+                  <div style={styles.groupLabel}>DYNAMIC NIGHT FILL (player + cars)</div>
+                  {(
+                    [
+                      ['strength', 'NIGHT FILL', 2],
+                      ['rim', 'NIGHT FILL RIM', 2],
+                    ] as const
+                  ).map(([key, label, max]) => (
+                    <div key={key}>
+                      <div style={styles.groupLabel}>
+                        {label}: {night.dynamicObjectsFill[key].toFixed(2)}
+                      </div>
+                      <input
+                        max={max}
+                        min={0}
+                        onChange={(e) => {
+                          const dynamicObjectsFill = { ...night.dynamicObjectsFill, [key]: Number(e.target.value) };
+                          setNight((prev) => ({ ...prev, dynamicObjectsFill }));
+                          actions.setNight({ dynamicObjectsFill });
+                        }}
+                        step={0.05}
+                        type="range"
+                        value={night.dynamicObjectsFill[key]}
+                      />
+                    </div>
+                  ))}
+                </>
+              )}
+              {capabilities.cloudCover && (
+                <>
+                  <div style={styles.groupLabel}>CLOUD COVER: {clouds.coverage.toFixed(2)}</div>
                   <input
-                    max={max}
+                    max={1}
                     min={0}
                     onChange={(e) => {
-                      const dynamicObjectsFill = { ...night.dynamicObjectsFill, [key]: Number(e.target.value) };
-                      setNight((prev) => ({ ...prev, dynamicObjectsFill }));
-                      actions.setNight({ dynamicObjectsFill });
+                      const coverage = Number(e.target.value);
+                      setClouds((prev) => ({ ...prev, coverage }));
+                      actions.setClouds({ coverage });
                     }}
-                    step={0.05}
+                    step={0.01}
                     type="range"
-                    value={night.dynamicObjectsFill[key]}
+                    value={clouds.coverage}
                   />
-                </div>
-              ))}
-              <div style={styles.groupLabel}>CLOUD COVER: {clouds.coverage.toFixed(2)}</div>
-              <input
-                max={1}
-                min={0}
-                onChange={(e) => {
-                  const coverage = Number(e.target.value);
-                  setClouds((prev) => ({ ...prev, coverage }));
-                  actions.setClouds({ coverage });
-                }}
-                step={0.01}
-                type="range"
-                value={clouds.coverage}
-              />
+                </>
+              )}
               <div style={styles.groupLabel}>CLOUD OPACITY: {clouds.opacity.toFixed(2)}</div>
               <input
                 max={1}
@@ -614,66 +598,76 @@ export function DebugOverlay({
                 type="range"
                 value={clouds.opacity}
               />
-              <DebugToggle
-                checked={clouds.volumetric}
-                label="Volumetric clouds (067 Stage B — heavy)"
-                onToggle={(volumetric) => {
-                  setClouds((prev) => ({ ...prev, volumetric }));
-                  actions.setClouds({ volumetric });
-                }}
-              />
-              <label style={styles.label}>
-                <input
-                  checked={stars.enabled}
-                  onChange={() => {
-                    const enabled = !stars.enabled;
-                    setStars({ enabled });
-                    actions.setStars({ enabled });
+              {capabilities.volumetricClouds && (
+                <DebugToggle
+                  checked={clouds.volumetric}
+                  label="Volumetric clouds (067 Stage B — heavy)"
+                  onToggle={(volumetric) => {
+                    setClouds((prev) => ({ ...prev, volumetric }));
+                    actions.setClouds({ volumetric });
                   }}
-                  style={styles.radio}
-                  type="checkbox"
                 />
-                <span style={stars.enabled ? styles.optionActive : styles.option}>Night stars</span>
-              </label>
-              <label style={styles.label}>
-                <input
-                  checked={lights.enabled}
-                  onChange={() => {
-                    const enabled = !lights.enabled;
-                    setLights((prev) => ({ ...prev, enabled }));
-                    actions.setLights({ enabled });
-                  }}
-                  style={styles.radio}
-                  type="checkbox"
-                />
-                <span style={lights.enabled ? styles.optionActive : styles.option}>Night lights (lamps)</span>
-              </label>
-              <div style={styles.groupLabel}>MOON SIZE: {moon.size.toFixed(0)}</div>
-              <input
-                max={400}
-                min={40}
-                onChange={(e) => {
-                  const size = Number(e.target.value);
-                  setMoon((prev) => ({ ...prev, size }));
-                  actions.setMoon({ size });
-                }}
-                step={5}
-                type="range"
-                value={moon.size}
-              />
-              <div style={styles.groupLabel}>MOON ELEVATION: {moon.elevationDeg.toFixed(0)}°</div>
-              <input
-                max={80}
-                min={2}
-                onChange={(e) => {
-                  const elevationDeg = Number(e.target.value);
-                  setMoon((prev) => ({ ...prev, elevationDeg }));
-                  actions.setMoon({ elevationDeg });
-                }}
-                step={1}
-                type="range"
-                value={moon.elevationDeg}
-              />
+              )}
+              {capabilities.starsToggle && (
+                <label style={styles.label}>
+                  <input
+                    checked={stars.enabled}
+                    onChange={() => {
+                      const enabled = !stars.enabled;
+                      setStars({ enabled });
+                      actions.setStars({ enabled });
+                    }}
+                    style={styles.radio}
+                    type="checkbox"
+                  />
+                  <span style={stars.enabled ? styles.optionActive : styles.option}>Night stars</span>
+                </label>
+              )}
+              {capabilities.lampsToggle && (
+                <label style={styles.label}>
+                  <input
+                    checked={lights.enabled}
+                    onChange={() => {
+                      const enabled = !lights.enabled;
+                      setLights((prev) => ({ ...prev, enabled }));
+                      actions.setLights({ enabled });
+                    }}
+                    style={styles.radio}
+                    type="checkbox"
+                  />
+                  <span style={lights.enabled ? styles.optionActive : styles.option}>Night lights (lamps)</span>
+                </label>
+              )}
+              {capabilities.moonRig && (
+                <>
+                  <div style={styles.groupLabel}>MOON SIZE: {moon.size.toFixed(0)}</div>
+                  <input
+                    max={400}
+                    min={40}
+                    onChange={(e) => {
+                      const size = Number(e.target.value);
+                      setMoon((prev) => ({ ...prev, size }));
+                      actions.setMoon({ size });
+                    }}
+                    step={5}
+                    type="range"
+                    value={moon.size}
+                  />
+                  <div style={styles.groupLabel}>MOON ELEVATION: {moon.elevationDeg.toFixed(0)}°</div>
+                  <input
+                    max={80}
+                    min={2}
+                    onChange={(e) => {
+                      const elevationDeg = Number(e.target.value);
+                      setMoon((prev) => ({ ...prev, elevationDeg }));
+                      actions.setMoon({ elevationDeg });
+                    }}
+                    step={1}
+                    type="range"
+                    value={moon.elevationDeg}
+                  />
+                </>
+              )}
               <div style={styles.groupLabel}>MOON BRIGHTNESS: {moon.brightness.toFixed(2)}</div>
               <input
                 max={3}
@@ -687,19 +681,23 @@ export function DebugOverlay({
                 type="range"
                 value={moon.brightness}
               />
-              <div style={styles.groupLabel}>CORONA DISTANCE: {night.coronaDrawDistance.toFixed(0)}</div>
-              <input
-                max={400}
-                min={20}
-                onChange={(e) => {
-                  const coronaDrawDistance = Number(e.target.value);
-                  setNight((prev) => ({ ...prev, coronaDrawDistance }));
-                  actions.setNight({ coronaDrawDistance });
-                }}
-                step={5}
-                type="range"
-                value={night.coronaDrawDistance}
-              />
+              {capabilities.coronaDistance && (
+                <>
+                  <div style={styles.groupLabel}>CORONA DISTANCE: {night.coronaDrawDistance.toFixed(0)}</div>
+                  <input
+                    max={400}
+                    min={20}
+                    onChange={(e) => {
+                      const coronaDrawDistance = Number(e.target.value);
+                      setNight((prev) => ({ ...prev, coronaDrawDistance }));
+                      actions.setNight({ coronaDrawDistance });
+                    }}
+                    step={5}
+                    type="range"
+                    value={night.coronaDrawDistance}
+                  />
+                </>
+              )}
               <div style={styles.groupLabel}>NIGHT EMISSIVE (071): {night.emissiveBoost.toFixed(2)}</div>
               <input
                 max={4}
@@ -713,19 +711,23 @@ export function DebugOverlay({
                 type="range"
                 value={night.emissiveBoost}
               />
-              <div style={styles.groupLabel}>NIGHT SKY GLOW (067): {night.skyGlow.toFixed(2)}</div>
-              <input
-                max={3}
-                min={0}
-                onChange={(e) => {
-                  const skyGlow = Number(e.target.value);
-                  setNight((prev) => ({ ...prev, skyGlow }));
-                  actions.setNight({ skyGlow });
-                }}
-                step={0.05}
-                type="range"
-                value={night.skyGlow}
-              />
+              {capabilities.skyGlow && (
+                <>
+                  <div style={styles.groupLabel}>NIGHT SKY GLOW (067): {night.skyGlow.toFixed(2)}</div>
+                  <input
+                    max={3}
+                    min={0}
+                    onChange={(e) => {
+                      const skyGlow = Number(e.target.value);
+                      setNight((prev) => ({ ...prev, skyGlow }));
+                      actions.setNight({ skyGlow });
+                    }}
+                    step={0.05}
+                    type="range"
+                    value={night.skyGlow}
+                  />
+                </>
+              )}
               <div style={styles.groupLabel}>NIGHT SKYLIGHT: {night.skylight.toFixed(2)}</div>
               <input
                 max={2}
@@ -739,31 +741,25 @@ export function DebugOverlay({
                 type="range"
                 value={night.skylight}
               />
-              <div style={styles.groupLabel}>NIGHT WINDOW GLOW: {night.windowGlow.toFixed(2)}</div>
-              <input
-                max={3}
-                min={0}
-                onChange={(e) => {
-                  const windowGlow = Number(e.target.value);
-                  setNight((prev) => ({ ...prev, windowGlow }));
-                  actions.setNight({ windowGlow });
-                }}
-                step={0.05}
-                type="range"
-                value={night.windowGlow}
-              />
+              {capabilities.windowGlow && (
+                <>
+                  <div style={styles.groupLabel}>NIGHT WINDOW GLOW: {night.windowGlow.toFixed(2)}</div>
+                  <input
+                    max={3}
+                    min={0}
+                    onChange={(e) => {
+                      const windowGlow = Number(e.target.value);
+                      setNight((prev) => ({ ...prev, windowGlow }));
+                      actions.setNight({ windowGlow });
+                    }}
+                    step={0.05}
+                    type="range"
+                    value={night.windowGlow}
+                  />
+                </>
+              )}
               <div style={styles.groupLabel}>WORLD LIGHT (SA prelit map — plan 038)</div>
-              {(
-                [
-                  ['dayBrightness', 'WORLD DAY', 0.3, 1.2, 0.05],
-                  ['duskBrightness', 'WORLD DUSK', 0.1, 1, 0.05],
-                  ['nightPrelitBrightness', 'WORLD NIGHT PRELIT', 0.2, 1.5, 0.05],
-                  ['lodNightAmbScale', 'LOD NIGHT AMB', 0.2, 4, 0.1],
-                  ['shadowStrength', 'WORLD SHADOW', 0, 1, 0.05],
-                  ['sunDirect', 'SUN DIRECT (064, modern)', 0, 2, 0.05],
-                  ['sunIndirect', 'SUN INDIRECT KEEP (064)', 0, 1, 0.05],
-                ] as const
-              ).map(([key, label, min, max, step]) => (
+              {worldLightControlsFor(capabilities).map(([key, label, min, max, step]) => (
                 <div key={key}>
                   <div style={styles.groupLabel}>
                     {label}: {worldLight[key].toFixed(2)}
@@ -835,18 +831,7 @@ export function DebugOverlay({
             <div style={styles.group}>
               <div style={styles.groupLabel}>FOLLOW CAMERA (mouse looks; auto-trails when you change direction)</div>
               <div style={styles.groupLabel}>CURRENT ZOOM: {cameraZoom.toFixed(1)}</div>
-              {(
-                [
-                  ['followDistance', 'DISTANCE', 4, 80, 1],
-                  ['followZoomMin', 'MIN ZOOM', 4, 40, 1],
-                  ['followZoomMax', 'MAX ZOOM', 6, 80, 1],
-                  ['followHeight', 'HEIGHT', 0, 4, 0.1],
-                  ['followPolar', 'ANGLE', 0.2, 1.5, 0.05],
-                  ['followLerp', 'RESPONSE', 0.5, 12, 0.5],
-                  ['followMinPolar', 'MIN ANGLE', 0.05, 1.5, 0.05],
-                  ['followMaxPolar', 'MAX ANGLE', 0.5, 1.55, 0.05],
-                ] as const
-              ).map(([key, label, min, max, step]) => (
+              {cameraControlsFor(capabilities).map(([key, label, min, max, step]) => (
                 <div key={key}>
                   <div style={styles.groupLabel}>
                     {label}: {camera[key].toFixed(2)}
@@ -897,33 +882,41 @@ export function DebugOverlay({
                 />
                 <span style={godrays ? styles.optionActive : styles.option}>God rays</span>
               </label>
-              <div style={styles.groupLabel}>RAYS SIZE: {godraysSize}</div>
-              <input
-                max={120}
-                min={5}
-                onChange={(e) => {
-                  const size = Number(e.target.value);
-                  setGodraysSize(size);
-                  actions.setGodraysSize(size);
-                }}
-                step={1}
-                type="range"
-                value={godraysSize}
-              />
-              <div style={styles.groupLabel}>SUN SIZE: {sunSize}</div>
-              <input
-                max={120}
-                min={5}
-                onChange={(e) => {
-                  const size = Number(e.target.value);
-                  setSunSize(size);
-                  actions.setSunSize(size);
-                }}
-                step={1}
-                type="range"
-                value={sunSize}
-              />
-              {(['density', 'exposure', 'weight', 'mood', 'pbrExposure'] as const).map((key) => (
+              {capabilities.godrayShader && (
+                <>
+                  <div style={styles.groupLabel}>RAYS SIZE: {godraysSize}</div>
+                  <input
+                    max={120}
+                    min={5}
+                    onChange={(e) => {
+                      const size = Number(e.target.value);
+                      setGodraysSize(size);
+                      actions.setGodraysSize(size);
+                    }}
+                    step={1}
+                    type="range"
+                    value={godraysSize}
+                  />
+                </>
+              )}
+              {capabilities.sunSize && (
+                <>
+                  <div style={styles.groupLabel}>SUN SIZE: {sunSize}</div>
+                  <input
+                    max={120}
+                    min={5}
+                    onChange={(e) => {
+                      const size = Number(e.target.value);
+                      setSunSize(size);
+                      actions.setSunSize(size);
+                    }}
+                    step={1}
+                    type="range"
+                    value={sunSize}
+                  />
+                </>
+              )}
+              {skyControlsFor(capabilities).map((key) => (
                 <div key={key}>
                   <div style={styles.groupLabel}>
                     {key.toUpperCase()}: {sky[key].toFixed(2)}
@@ -981,142 +974,156 @@ export function DebugOverlay({
                 type="range"
                 value={bloom.threshold}
               />
-              <label style={styles.label}>
-                <input
-                  checked={ssao.enabled}
-                  onChange={() => {
-                    const enabled = !ssao.enabled;
-                    setSsao((prev) => ({ ...prev, enabled }));
-                    actions.setSsao({ enabled });
-                  }}
-                  style={styles.radio}
-                  type="checkbox"
-                />
-                <span style={ssao.enabled ? styles.optionActive : styles.option}>SSAO</span>
-              </label>
-              <div style={styles.groupLabel}>AO INTENSITY: {ssao.intensity.toFixed(2)}</div>
-              <input
-                max={4}
-                min={0}
-                onChange={(e) => {
-                  const intensity = Number(e.target.value);
-                  setSsao((prev) => ({ ...prev, intensity }));
-                  actions.setSsao({ intensity });
-                }}
-                step={0.1}
-                type="range"
-                value={ssao.intensity}
-              />
-              <div style={styles.groupLabel}>AO RADIUS: {ssao.radius.toFixed(2)}</div>
-              <input
-                max={1}
-                min={0.01}
-                onChange={(e) => {
-                  const radius = Number(e.target.value);
-                  setSsao((prev) => ({ ...prev, radius }));
-                  actions.setSsao({ radius });
-                }}
-                step={0.01}
-                type="range"
-                value={ssao.radius}
-              />
-              <label style={styles.label}>
-                <input
-                  checked={shadows.enabled}
-                  onChange={() => {
-                    const enabled = !shadows.enabled;
-                    setShadows((prev) => ({ ...prev, enabled }));
-                    actions.setShadows({ enabled });
-                  }}
-                  style={styles.radio}
-                  type="checkbox"
-                />
-                <span style={shadows.enabled ? styles.optionActive : styles.option}>Sun shadows</span>
-              </label>
-              <div style={styles.groupLabel}>CSM DISTANCE (065, modern): {shadows.distance}</div>
-              <input
-                max={1500}
-                min={200}
-                onChange={(e) => {
-                  const distance = Number(e.target.value);
-                  setShadows((prev) => ({ ...prev, distance }));
-                  actions.setShadows({ distance });
-                }}
-                step={50}
-                type="range"
-                value={shadows.distance}
-              />
-              <WorldEffectsControls
-                effects={effects}
-                onPatch={(patch) => {
-                  setEffects((prev) => ({ ...prev, ...patch }));
-                  actions.setEffects(patch);
-                }}
-              />
-              {(
-                [
-                  ['beamIntensity', 'BEAM POWER (070)', 0, 6, 0.1],
-                  ['beamRange', 'BEAM RANGE (070)', 10, 60, 1],
-                  ['brakeIntensity', 'BRAKE POOL (070)', 0, 5, 0.1],
-                ] as const
-              ).map(([key, label, min, max, step]) => (
-                <div key={key}>
-                  <div style={styles.groupLabel}>
-                    {label}: {headlights[key].toFixed(2)}
-                  </div>
+              {capabilities.ssao && (
+                <>
+                  <label style={styles.label}>
+                    <input
+                      checked={ssao.enabled}
+                      onChange={() => {
+                        const enabled = !ssao.enabled;
+                        setSsao((prev) => ({ ...prev, enabled }));
+                        actions.setSsao({ enabled });
+                      }}
+                      style={styles.radio}
+                      type="checkbox"
+                    />
+                    <span style={ssao.enabled ? styles.optionActive : styles.option}>SSAO</span>
+                  </label>
+                  <div style={styles.groupLabel}>AO INTENSITY: {ssao.intensity.toFixed(2)}</div>
                   <input
-                    max={max}
-                    min={min}
+                    max={4}
+                    min={0}
                     onChange={(e) => {
-                      const value = Number(e.target.value);
-                      setHeadlights((prev) => ({ ...prev, [key]: value }));
-                      actions.setHeadlights({ [key]: value });
+                      const intensity = Number(e.target.value);
+                      setSsao((prev) => ({ ...prev, intensity }));
+                      actions.setSsao({ intensity });
                     }}
-                    step={step}
+                    step={0.1}
                     type="range"
-                    value={headlights[key]}
+                    value={ssao.intensity}
                   />
-                </div>
-              ))}
-              <div style={styles.groupLabel}>HEADLIGHT GLOW: {headlights.intensity.toFixed(2)}</div>
-              <input
-                max={4}
-                min={0}
-                onChange={(e) => {
-                  const intensity = Number(e.target.value);
-                  setHeadlights((prev) => ({ ...prev, intensity }));
-                  actions.setHeadlights({ intensity });
-                }}
-                step={0.1}
-                type="range"
-                value={headlights.intensity}
-              />
-              <div style={styles.groupLabel}>HEADLIGHT CORONA POWER: {headlights.coronaIntensity.toFixed(2)}</div>
-              <input
-                max={1}
-                min={0}
-                onChange={(e) => {
-                  const coronaIntensity = Number(e.target.value);
-                  setHeadlights((prev) => ({ ...prev, coronaIntensity }));
-                  actions.setHeadlights({ coronaIntensity });
-                }}
-                step={0.02}
-                type="range"
-                value={headlights.coronaIntensity}
-              />
-              <div style={styles.groupLabel}>HEADLIGHT CORONA SIZE: {headlights.coronaSize.toFixed(2)}</div>
-              <input
-                max={1}
-                min={0.05}
-                onChange={(e) => {
-                  const coronaSize = Number(e.target.value);
-                  setHeadlights((prev) => ({ ...prev, coronaSize }));
-                  actions.setHeadlights({ coronaSize });
-                }}
-                step={0.01}
-                type="range"
-                value={headlights.coronaSize}
-              />
+                  <div style={styles.groupLabel}>AO RADIUS: {ssao.radius.toFixed(2)}</div>
+                  <input
+                    max={1}
+                    min={0.01}
+                    onChange={(e) => {
+                      const radius = Number(e.target.value);
+                      setSsao((prev) => ({ ...prev, radius }));
+                      actions.setSsao({ radius });
+                    }}
+                    step={0.01}
+                    type="range"
+                    value={ssao.radius}
+                  />
+                </>
+              )}
+              {capabilities.shadows && (
+                <>
+                  <label style={styles.label}>
+                    <input
+                      checked={shadows.enabled}
+                      onChange={() => {
+                        const enabled = !shadows.enabled;
+                        setShadows((prev) => ({ ...prev, enabled }));
+                        actions.setShadows({ enabled });
+                      }}
+                      style={styles.radio}
+                      type="checkbox"
+                    />
+                    <span style={shadows.enabled ? styles.optionActive : styles.option}>Sun shadows</span>
+                  </label>
+                  <div style={styles.groupLabel}>CSM DISTANCE (065, modern): {shadows.distance}</div>
+                  <input
+                    max={1500}
+                    min={200}
+                    onChange={(e) => {
+                      const distance = Number(e.target.value);
+                      setShadows((prev) => ({ ...prev, distance }));
+                      actions.setShadows({ distance });
+                    }}
+                    step={50}
+                    type="range"
+                    value={shadows.distance}
+                  />
+                </>
+              )}
+              {capabilities.worldEffects && (
+                <WorldEffectsControls
+                  effects={effects}
+                  onPatch={(patch) => {
+                    setEffects((prev) => ({ ...prev, ...patch }));
+                    actions.setEffects(patch);
+                  }}
+                />
+              )}
+              {capabilities.headlightSliders && (
+                <>
+                  {(
+                    [
+                      ['beamIntensity', 'BEAM POWER (070)', 0, 6, 0.1],
+                      ['beamRange', 'BEAM RANGE (070)', 10, 60, 1],
+                      ['brakeIntensity', 'BRAKE POOL (070)', 0, 5, 0.1],
+                    ] as const
+                  ).map(([key, label, min, max, step]) => (
+                    <div key={key}>
+                      <div style={styles.groupLabel}>
+                        {label}: {headlights[key].toFixed(2)}
+                      </div>
+                      <input
+                        max={max}
+                        min={min}
+                        onChange={(e) => {
+                          const value = Number(e.target.value);
+                          setHeadlights((prev) => ({ ...prev, [key]: value }));
+                          actions.setHeadlights({ [key]: value });
+                        }}
+                        step={step}
+                        type="range"
+                        value={headlights[key]}
+                      />
+                    </div>
+                  ))}
+                  <div style={styles.groupLabel}>HEADLIGHT GLOW: {headlights.intensity.toFixed(2)}</div>
+                  <input
+                    max={4}
+                    min={0}
+                    onChange={(e) => {
+                      const intensity = Number(e.target.value);
+                      setHeadlights((prev) => ({ ...prev, intensity }));
+                      actions.setHeadlights({ intensity });
+                    }}
+                    step={0.1}
+                    type="range"
+                    value={headlights.intensity}
+                  />
+                  <div style={styles.groupLabel}>HEADLIGHT CORONA POWER: {headlights.coronaIntensity.toFixed(2)}</div>
+                  <input
+                    max={1}
+                    min={0}
+                    onChange={(e) => {
+                      const coronaIntensity = Number(e.target.value);
+                      setHeadlights((prev) => ({ ...prev, coronaIntensity }));
+                      actions.setHeadlights({ coronaIntensity });
+                    }}
+                    step={0.02}
+                    type="range"
+                    value={headlights.coronaIntensity}
+                  />
+                  <div style={styles.groupLabel}>HEADLIGHT CORONA SIZE: {headlights.coronaSize.toFixed(2)}</div>
+                  <input
+                    max={1}
+                    min={0.05}
+                    onChange={(e) => {
+                      const coronaSize = Number(e.target.value);
+                      setHeadlights((prev) => ({ ...prev, coronaSize }));
+                      actions.setHeadlights({ coronaSize });
+                    }}
+                    step={0.01}
+                    type="range"
+                    value={headlights.coronaSize}
+                  />
+                </>
+              )}
               <label style={styles.label}>
                 <input
                   checked={toneMapping}
@@ -1130,96 +1137,112 @@ export function DebugOverlay({
                 />
                 <span style={toneMapping ? styles.optionActive : styles.option}>Tone map (ACES)</span>
               </label>
-              <PipelineToggle
-                onChange={(next) => actions.setGraphicsPipeline(next)}
-                pipeline={pipeline}
-                setPipeline={setPipeline}
-              />
-              <ToneMappingModeSelector
-                mode={toneMode}
-                onChange={(next) => actions.setToneMappingMode(next)}
-                setMode={setToneMode}
-              />
-              <SkyModelToggle model={skyModel} onChange={(next) => actions.setSkyModel(next)} setModel={setSkyModel} />
-              {(
-                [
-                  ['waves', 'WATER WAVES (069)', 0, 3, 0.05],
-                  ['foam', 'WATER FOAM (069)', 0, 3, 0.05],
-                  ['shoreDepth', 'SHORE DEPTH (069)', 1, 20, 0.5],
-                  ['shoreClarity', 'SHORE CLARITY (069)', 0, 1, 0.05],
-                ] as const
-              ).map(([key, label, min, max, step]) => (
-                <div key={key}>
-                  <div style={styles.groupLabel}>
-                    {label}: {water[key].toFixed(2)}
-                  </div>
+              {capabilities.pipelineSwitch && (
+                <PipelineToggle
+                  onChange={(next) => actions.setGraphicsPipeline(next)}
+                  pipeline={pipeline}
+                  setPipeline={setPipeline}
+                />
+              )}
+              {capabilities.toneMappingModes && (
+                <ToneMappingModeSelector
+                  mode={toneMode}
+                  onChange={(next) => actions.setToneMappingMode(next)}
+                  setMode={setToneMode}
+                />
+              )}
+              {capabilities.skyModelToggle && (
+                <SkyModelToggle
+                  model={skyModel}
+                  onChange={(next) => actions.setSkyModel(next)}
+                  setModel={setSkyModel}
+                />
+              )}
+              {capabilities.water && (
+                <>
+                  {(
+                    [
+                      ['waves', 'WATER WAVES (069)', 0, 3, 0.05],
+                      ['foam', 'WATER FOAM (069)', 0, 3, 0.05],
+                      ['shoreDepth', 'SHORE DEPTH (069)', 1, 20, 0.5],
+                      ['shoreClarity', 'SHORE CLARITY (069)', 0, 1, 0.05],
+                    ] as const
+                  ).map(([key, label, min, max, step]) => (
+                    <div key={key}>
+                      <div style={styles.groupLabel}>
+                        {label}: {water[key].toFixed(2)}
+                      </div>
+                      <input
+                        max={max}
+                        min={min}
+                        onChange={(e) => {
+                          const value = Number(e.target.value);
+                          setWater((prev) => ({ ...prev, [key]: value }));
+                          actions.setWater({ [key]: value });
+                        }}
+                        step={step}
+                        type="range"
+                        value={water[key]}
+                      />
+                    </div>
+                  ))}
+                  <div style={styles.groupLabel}>WATER GLINT: {water.glint.toFixed(2)}</div>
                   <input
-                    max={max}
-                    min={min}
+                    max={5}
+                    min={0}
                     onChange={(e) => {
-                      const value = Number(e.target.value);
-                      setWater((prev) => ({ ...prev, [key]: value }));
-                      actions.setWater({ [key]: value });
+                      const glint = Number(e.target.value);
+                      setWater((prev) => ({ ...prev, glint }));
+                      actions.setWater({ glint });
                     }}
-                    step={step}
+                    step={0.1}
                     type="range"
-                    value={water[key]}
+                    value={water.glint}
                   />
-                </div>
-              ))}
-              <div style={styles.groupLabel}>WATER GLINT: {water.glint.toFixed(2)}</div>
-              <input
-                max={5}
-                min={0}
-                onChange={(e) => {
-                  const glint = Number(e.target.value);
-                  setWater((prev) => ({ ...prev, glint }));
-                  actions.setWater({ glint });
-                }}
-                step={0.1}
-                type="range"
-                value={water.glint}
-              />
-              <div style={styles.groupLabel}>WATER REFLECTION: {water.reflection.toFixed(2)}</div>
-              <input
-                max={1}
-                min={0}
-                onChange={(e) => {
-                  const reflection = Number(e.target.value);
-                  setWater((prev) => ({ ...prev, reflection }));
-                  actions.setWater({ reflection });
-                }}
-                step={0.01}
-                type="range"
-                value={water.reflection}
-              />
-              <div style={styles.groupLabel}>WATER DARKNESS: {water.darkness.toFixed(2)}</div>
-              <input
-                max={1}
-                min={0}
-                onChange={(e) => {
-                  const darkness = Number(e.target.value);
-                  setWater((prev) => ({ ...prev, darkness }));
-                  actions.setWater({ darkness });
-                }}
-                step={0.01}
-                type="range"
-                value={water.darkness}
-              />
-              <button
-                onClick={() => {
-                  const next =
-                    REFLECTION_PRESETS[
-                      (REFLECTION_PRESETS.indexOf(reflectionCfg.preset) + 1) % REFLECTION_PRESETS.length
-                    ];
-                  setReflectionCfg((prev) => ({ ...prev, preset: next }));
-                  actions.setVehicleReflection({ preset: next });
-                }}
-                style={styles.actionButton}
-                type="button"
-              >
-                Car reflect: {PRESETS[reflectionCfg.preset]?.label ?? 'Off'}
-              </button>
+                  <div style={styles.groupLabel}>WATER REFLECTION: {water.reflection.toFixed(2)}</div>
+                  <input
+                    max={1}
+                    min={0}
+                    onChange={(e) => {
+                      const reflection = Number(e.target.value);
+                      setWater((prev) => ({ ...prev, reflection }));
+                      actions.setWater({ reflection });
+                    }}
+                    step={0.01}
+                    type="range"
+                    value={water.reflection}
+                  />
+                  <div style={styles.groupLabel}>WATER DARKNESS: {water.darkness.toFixed(2)}</div>
+                  <input
+                    max={1}
+                    min={0}
+                    onChange={(e) => {
+                      const darkness = Number(e.target.value);
+                      setWater((prev) => ({ ...prev, darkness }));
+                      actions.setWater({ darkness });
+                    }}
+                    step={0.01}
+                    type="range"
+                    value={water.darkness}
+                  />
+                </>
+              )}
+              {capabilities.reflectionPresets && (
+                <button
+                  onClick={() => {
+                    const next =
+                      REFLECTION_PRESETS[
+                        (REFLECTION_PRESETS.indexOf(reflectionCfg.preset) + 1) % REFLECTION_PRESETS.length
+                      ];
+                    setReflectionCfg((prev) => ({ ...prev, preset: next }));
+                    actions.setVehicleReflection({ preset: next });
+                  }}
+                  style={styles.actionButton}
+                  type="button"
+                >
+                  Car reflect: {PRESETS[reflectionCfg.preset]?.label ?? 'Off'}
+                </button>
+              )}
               <div style={styles.groupLabel}>REFLECT INTENSITY: {reflectionCfg.intensity.toFixed(2)}</div>
               <input
                 max={3}
@@ -1257,14 +1280,13 @@ export function DebugOverlay({
             </div>
           )}
 
-          {screen === 'map' && (
+          {screen === 'map' && capabilities.mapScreen && mapGame && (
             <MapScreen
               actions={actions}
-              faces={faces}
-              game={game}
+              game={mapGame}
               mapActive={mapActive}
+              meshOverrides={capabilities.meshOverrides}
               normals={normals}
-              setFaces={setFaces}
               setMapActive={setMapActive}
               setNormals={setNormals}
             />
@@ -1275,56 +1297,64 @@ export function DebugOverlay({
   );
 }
 
-/** The Map debug screen: normals override + the top-down map viewer (extracted to keep the panel's
- *  render simple). */
+/** The pak build-time stamp under the title — a small grey line, or nothing when the pak predates the field. */
+function BuildStamp({ buildTime }: { buildTime?: string }): null | ReactElement {
+  return buildTime ? <div style={styles.buildTime}>build {buildTime}</div> : null;
+}
+
+/** The Map debug screen: normals override + the map viewer (extracted to keep the panel's render simple). */
 function MapScreen({
   actions,
-  faces,
   game,
   mapActive,
+  meshOverrides,
   normals,
-  setFaces,
   setMapActive,
   setNormals,
 }: {
   actions: DebugActions;
-  faces: boolean;
-  game: Game;
+  game: MapGame;
   mapActive: boolean;
+  meshOverrides: boolean;
   normals: boolean;
-  setFaces: (value: boolean) => void;
   setMapActive: (update: (previous: boolean) => boolean) => void;
   setNormals: (value: boolean) => void;
 }): ReactElement {
+  // Missing-texture highlight (plan 085 row B): repaints the pak's stand-in layers magenta. Engine host
+  // only — seeded from the host so the button reflects the dev-build default.
+  const [missingTex, setMissingTex] = useState(() => actions.missingTextureHighlight?.() ?? false);
+
   return (
     <div style={styles.group}>
       <button onClick={() => setMapActive((previous) => !previous)} style={styles.actionButton} type="button">
         {mapActive ? 'Deactivate Map Viewer' : 'Activate Map Viewer'}
       </button>
-      <button
-        onClick={() => {
-          const next = !normals;
-          setNormals(next);
-          setFaces(false); // shares the override slot with Show Faces
-          actions.setShowNormals(next);
-        }}
-        style={styles.actionButton}
-        type="button"
-      >
-        {normals ? 'Hide Normals' : 'Show Normals'}
-      </button>
-      <button
-        onClick={() => {
-          const next = !faces;
-          setFaces(next);
-          setNormals(false); // shares the override slot with Show Normals
-          actions.setShowFaces(next);
-        }}
-        style={styles.actionButton}
-        type="button"
-      >
-        {faces ? 'Hide Faces' : 'Show Faces'}
-      </button>
+      {meshOverrides ? (
+        <button
+          onClick={() => {
+            const next = !normals;
+            setNormals(next);
+            actions.setShowNormals(next);
+          }}
+          style={styles.actionButton}
+          type="button"
+        >
+          {normals ? 'Hide Normals' : 'Show Normals'}
+        </button>
+      ) : null}
+      {actions.setMissingTextureHighlight ? (
+        <button
+          onClick={() => {
+            const next = !missingTex;
+            setMissingTex(next);
+            actions.setMissingTextureHighlight?.(next);
+          }}
+          style={styles.actionButton}
+          type="button"
+        >
+          {missingTex ? 'Missing Textures: magenta ON' : 'Missing Textures: magenta OFF'}
+        </button>
+      ) : null}
       {!mapActive && <DrawDistanceControls actions={actions} />}
       {mapActive && (
         <button onClick={() => actions.topDownView()} style={styles.actionButton} type="button">
@@ -1336,35 +1366,46 @@ function MapScreen({
   );
 }
 
-/** Graphics-screen block for the world 2dfx particle effects (plan 044): master toggle + the
- *  draw distance that replaces the systems' authored CULLDIST. */
-function WorldEffectsControls(props: {
-  effects: EffectsConfig;
-  onPatch: (patch: Partial<EffectsConfig>) => void;
-}): ReactElement {
-  const { effects, onPatch } = props;
+/** The Vehicles screen: filter + one spawn button per model, and the spawn ERROR the button used to eat. */
+function VehicleScreen({ actions }: { actions: DebugActions }): ReactElement {
+  const [filter, setFilter] = useState('');
+  const [error, setError] = useState<null | string>(null);
 
   return (
-    <>
-      <label style={styles.label}>
-        <input
-          checked={effects.enabled}
-          onChange={() => onPatch({ enabled: !effects.enabled })}
-          style={styles.radio}
-          type="checkbox"
-        />
-        <span style={effects.enabled ? styles.optionActive : styles.option}>World effects</span>
-      </label>
-      <div style={styles.groupLabel}>EFFECTS DISTANCE: {effects.drawDistance.toFixed(0)}</div>
+    <div style={styles.group}>
       <input
-        max={300}
-        min={10}
-        onChange={(e) => onPatch({ drawDistance: Number(e.target.value) })}
-        step={10}
-        type="range"
-        value={effects.drawDistance}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Filter…"
+        style={styles.filterInput}
+        type="text"
+        value={filter}
       />
-    </>
+      {actions
+        .vehicleModels()
+        .filter((model) => model.includes(filter.trim().toLowerCase()))
+        .map((model) => (
+          <button
+            key={model}
+            onClick={() => {
+              // Never `void` this promise: a spawn failure (a missing `.osm` section, no vehicles.ide row, a
+              // model the pack could not convert) used to vanish into an unhandled rejection, and the button
+              // simply did nothing. This panel is the only place the user can see why.
+              setError(null);
+              actions.spawnVehicle(model).catch((cause: unknown) => {
+                setError(`${model}: ${cause instanceof Error ? cause.message : String(cause)}`);
+              });
+            }}
+            style={styles.actionButton}
+            type="button"
+          >
+            {model.charAt(0).toUpperCase() + model.slice(1)} Spawn
+          </button>
+        ))}
+      {error === null ? null : <div style={styles.info}>⚠ {error}</div>}
+      <button onClick={() => actions.flipVehicle()} style={styles.actionButton} type="button">
+        Flip vehicle
+      </button>
+    </div>
   );
 }
 
@@ -1405,7 +1446,7 @@ function DrawDistanceControls({ actions }: { actions: DebugActions }): ReactElem
       <div style={styles.groupLabel}>HD DISTANCE: {hd} m</div>
       <input
         max={lod}
-        min={150}
+        min={100}
         onChange={(e) => {
           const next = Number(e.target.value);
           setHd(next);
@@ -1415,10 +1456,10 @@ function DrawDistanceControls({ actions }: { actions: DebugActions }): ReactElem
         type="range"
         value={hd}
       />
-      <div style={styles.groupLabel}>FOG: {Math.min(fog, fogMax)} m</div>
+      <div style={styles.groupLabel}>FOG: {fog} m</div>
       <input
         max={fogMax}
-        min={50}
+        min={100}
         onChange={(e) => {
           const next = Number(e.target.value);
           setFog(next);
@@ -1426,8 +1467,44 @@ function DrawDistanceControls({ actions }: { actions: DebugActions }): ReactElem
         }}
         step={50}
         type="range"
-        value={Math.min(fog, fogMax)}
+        value={fog}
       />
     </>
   );
 }
+
+/** Graphics-screen block for the world 2dfx particle effects (plan 044): master toggle + the
+ *  draw distance that replaces the systems' authored CULLDIST. */
+function WorldEffectsControls(props: {
+  effects: EffectsConfig;
+  onPatch: (patch: Partial<EffectsConfig>) => void;
+}): ReactElement {
+  const { effects, onPatch } = props;
+
+  return (
+    <>
+      <label style={styles.label}>
+        <input
+          checked={effects.enabled}
+          onChange={() => onPatch({ enabled: !effects.enabled })}
+          style={styles.radio}
+          type="checkbox"
+        />
+        <span style={effects.enabled ? styles.optionActive : styles.option}>World effects</span>
+      </label>
+      <div style={styles.groupLabel}>EFFECTS DISTANCE: {effects.drawDistance.toFixed(0)}</div>
+      <input
+        max={300}
+        min={10}
+        onChange={(e) => onPatch({ drawDistance: Number(e.target.value) })}
+        step={10}
+        type="range"
+        value={effects.drawDistance}
+      />
+    </>
+  );
+}
+
+/** Fog fully saturates at ~1.25× its distance, so pinning fog at lod × this hides the LOD cull edge
+ *  (no skyline poking through). Raising draw distance moves fog out with it; the fog slider can only
+ *  pull it closer (thicker), never past this — so the edge always stays hidden. */

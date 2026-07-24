@@ -1,63 +1,66 @@
-import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 
-import type { VehicleWheel } from './vehicle-rig';
+import type { VehicleWheelInfo } from './vehicle-handle';
 
+import { FakeVehicleHandle } from './vehicle-handle.fake';
 import { VehicleRig } from './vehicle-rig';
 
-function quat(axis: Vector3, angle: number): Quaternion {
-  return new Quaternion().setFromAxisAngle(axis, angle);
-}
+/** The rig emits ANGLES through the handle now (B5 step 3) — the renderer turns them into rotations. */
+function rigWith(...wheels: VehicleWheelInfo[]): { handle: FakeVehicleHandle; rig: VehicleRig } {
+  const handle = new FakeVehicleHandle([], wheels);
 
-function wheel(front: boolean, radius: number): VehicleWheel {
-  return { front, radius, spinner: new Object3D() };
+  return { handle, rig: new VehicleRig(handle) };
 }
-
-const X = new Vector3(1, 0, 0);
-const Z = new Vector3(0, 0, 1);
 
 describe('VehicleRig', () => {
   describe('negative cases', () => {
     it('leaves wheels unrotated while idle (no speed, no steer)', () => {
-      const w = wheel(true, 1);
-      const rig = new VehicleRig([w]);
+      const { handle, rig } = rigWith({ front: true, radius: 1 });
+
       rig.update(1);
-      expect(w.spinner.quaternion.angleTo(new Quaternion())).toBeCloseTo(0);
+
+      expect(handle.wheelState[0].spin).toBeCloseTo(0);
+      expect(handle.wheelState[0].steer).toBeCloseTo(0);
     });
 
     it('does not steer the rear wheels', () => {
-      const w = wheel(false, 1);
-      const rig = new VehicleRig([w]);
+      const { handle, rig } = rigWith({ front: false, radius: 1 });
       rig.setSteer(0.5);
+
       rig.update(0); // no distance → no spin; rear ignores steer
-      expect(w.spinner.quaternion.angleTo(new Quaternion())).toBeCloseTo(0);
+
+      expect(handle.wheelState[0].steer).toBe(0);
     });
   });
 
   describe('positive cases', () => {
     it('rolls a wheel about its axle by distance / radius', () => {
-      const w = wheel(false, 2);
-      const rig = new VehicleRig([w]);
+      const { handle, rig } = rigWith({ front: false, radius: 2 });
       rig.setSpeed(4);
-      rig.update(0.5); // distance = 2, angle = -(2 / 2) = -1 rad about X
-      expect(w.spinner.quaternion.angleTo(quat(X, -1))).toBeCloseTo(0);
+
+      rig.update(0.5); // distance = 2 → spin = −(2 / 2) = −1 rad
+
+      expect(handle.wheelState[0].spin).toBeCloseTo(-1);
     });
 
-    it('steers the front wheels about the up axis', () => {
-      const w = wheel(true, 2);
-      const rig = new VehicleRig([w]);
+    it('steers the front wheels', () => {
+      const { handle, rig } = rigWith({ front: true, radius: 2 });
       rig.setSteer(0.3);
+
       rig.update(0); // no roll → pure steer
-      expect(w.spinner.quaternion.angleTo(quat(Z, 0.3))).toBeCloseTo(0);
+
+      expect(handle.wheelState[0].steer).toBeCloseTo(0.3);
+      expect(handle.wheelState[0].spin).toBeCloseTo(0);
     });
 
     it('accumulates roll across updates', () => {
-      const w = wheel(false, 1);
-      const rig = new VehicleRig([w]);
+      const { handle, rig } = rigWith({ front: false, radius: 1 });
       rig.setSpeed(1);
+
       rig.update(1);
-      rig.update(1); // total distance = 2 → angle -2 about X
-      expect(w.spinner.quaternion.angleTo(quat(X, -2))).toBeCloseTo(0);
+      rig.update(1); // total distance = 2 → spin −2
+
+      expect(handle.wheelState[0].spin).toBeCloseTo(-2);
     });
   });
 });

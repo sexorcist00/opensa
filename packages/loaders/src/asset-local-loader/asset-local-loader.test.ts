@@ -44,6 +44,7 @@ function fakeSource(): InstallSource {
     gta3,
     gtaInt: null,
     looseFiles: () => Promise.resolve(Object.keys(loose)),
+    openLoose: () => Promise.resolve(null),
     readLoose: (path) => Promise.resolve(new TextEncoder().encode(loose[path])),
     readLooseText: (path) => Promise.resolve(loose[path] ?? ''),
   };
@@ -134,6 +135,43 @@ describe('AssetLocalLoader', () => {
       await local.prepare();
 
       expect(acquireDir).toHaveBeenCalledOnce();
+    });
+
+    it('openWorld probes pak/<name> first (phase 8), then the legacy opensa/<name>', async () => {
+      const probed: string[] = [];
+      const world = new Blob([new Uint8Array([1])]);
+      const source: InstallSource = {
+        ...fakeSource(),
+        openLoose: (path) => {
+          probed.push(path);
+
+          return Promise.resolve(path === 'pak/world.ospak' ? world : null);
+        },
+      };
+      const local = make({}, { openSource: () => Promise.resolve(source) });
+      await local.prepare();
+
+      expect(await local.openWorld('World.OSPAK')).toBe(world);
+      expect(probed[0]).toBe('pak/world.ospak');
+    });
+
+    it('openWorld reads the legacy opensa/<name> lowercased, null when absent everywhere', async () => {
+      let requested = '';
+      const world = new Blob([new Uint8Array([1])]);
+      const source: InstallSource = {
+        ...fakeSource(),
+        openLoose: (path) => {
+          requested = path;
+
+          return Promise.resolve(path === 'opensa/world.ospak' ? world : null);
+        },
+      };
+      const local = make({}, { openSource: () => Promise.resolve(source) });
+      await local.prepare();
+
+      expect(await local.openWorld('World.OSPAK')).toBe(world);
+      expect(requested).toBe('opensa/world.ospak');
+      expect(await local.openWorld('absent.bin')).toBeNull();
     });
   });
 });

@@ -32,9 +32,9 @@ Dev notes and progress - in [`/blog`](./blog).
 
 ## What's inside
 
-A TypeScript / three.js engine for RenderWare assets (DFF/TXD models, COL collision, IMG archives, IPL/IDE
+A TypeScript / WebGPU engine for RenderWare assets (DFF/TXD models, COL collision, IMG archives, IPL/IDE
 world streaming) with a Rapier-physics player and vehicles — compatible with GTA San Andreas and its mods /
-total conversions. See the [architecture overview](./docs/architecture.md) and the per-feature reference in
+total conversions. See the [architecture overview](./docs/architecture/README.md) and the per-feature reference in
 [docs/features/](./docs/features/).
 
 ## Contributing

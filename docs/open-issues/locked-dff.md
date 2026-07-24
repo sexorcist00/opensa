@@ -6,39 +6,28 @@
 > its textures. **Remaining (2026-07-07): more locked-asset cases exist in the wild that the current
 > variants don't cover — to be finished later.** Also the byte-editing tools still need `unlockDff`
 > applied explicitly (the recovery lives in the engine parser, not in every tool path).
+> A would-be "Variant E" (2026-07-15) turned out to be a bug in OUR readers — see the false-alarm note
+> below before adding new variants.
 
-Both locks bloat chunk **sizes** to swallow siblings; the data is all present (the game reads by count,
-ignoring sizes). Recovered the same way (see [Fix](#fix-2026-06-19) below). The spawn crash was already
-fixed separately (a no-COL / locked vehicle falls back to a box chassis instead of throwing).
+## FALSE ALARM logged for the record: "Variant E" (2026-07-15) was OUR parser bug, not a lock
 
-Four distinct lock variants — all falsify chunk metadata so a boundary-respecting parser (ours) chokes
-while RenderWare's lenient (count- / scan-based) reader keeps going:
+The LV Casino Royale family (`casroyale01..04_lvs`, `flamingo04/05_lvs`, `vegaswaterfall02`, `gym_bike` —
+all from "0. Map Fixes Pack", healthy 2015 exports) writes the geometry struct's **UV-layer-count BYTE as 0**
+and carries the truth in the `TEXTURED`/`TEXTURED2` flags — a legal RenderWare convention (RW derives the
+count from the flags when the byte is 0). Both our readers trusted the bare byte, skipped the UV block and
+read the TRIANGLES out of UV float data — garbage indices (max 64512 for 1418 verts) that perfectly
+masqueraded as a poisoned-triangle-list lock. Cost: three field rounds (vanished casino → shard fields), a
+BinMesh "salvage" and a vanilla-substitution mechanism, ALL REVERTED once the real cause surfaced.
 
-| Variant                          | Example                    | Tamper                                                                                                                                                                              | Fix                                                                                                             |
-| -------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| B — inflated clump-struct size   | `cheetah.dff`              | the clump **Struct chunk size** is bloated to swallow all siblings                                                                                                                  | `forEachClumpChild` (canonical 12-byte struct)                                                                  |
-| A — inflated item sizes          | `yosemite.dff` (Ford F350) | every **atomic / geometry chunk size** is bloated (+ `0x0` padding) to swallow following items                                                                                      | count-based RW recovery (`findChunkFrom`)                                                                       |
-| C — hidden TexDictionary wrapper | `lodveg.txd` (gostown)     | the outer **TexDictionary (`0x16`) header is zeroed/obfuscated** (no readable `0x16` at all); inner `TEXTURE_NATIVE` chunks are intact                                              | byte-scan recovery (`recoverLockedTextures`)                                                                    |
-| D — every container size bloated | `walton.dff` (Willys jeep) | **every** container size is bloated (clump Struct = B, FrameList → 1.2 GB past EOF, GeometryList swallows the Atomics) + versions scrambled; struct counts + leaf sizes stay honest | `forEachClumpChild` recomputes each child's end from its honest children (`contentEnd` / `CLUMP_CHILD_CONTENT`) |
+Fixed in BOTH readers: `packages/renderware/src/parsers/binary/dff.ts#parseGeometry` and
+`tools/rw-codec/src/geometry-struct.ts#decodeGeometryStruct` (the latter was the
+"Offset is outside the bounds of the DataView" write failures). Layer count = byte, else TEXTURED2 → 2,
+TEXTURED → 1, else 0. Fixture: `tests/custom/locked-models/casroyale01_lvs.dff` (pins 1 UV layer, 1011
+in-range triangles, full 6389 u² surface, 12 materials).
 
-> **Correction:** Variant A was first (wrongly) read as "inflated counts → data absent". It is not —
-> the 31 atomics / 31 geometries are all present, each hidden behind the previous item's bloated size
-> plus `0x0` size-0 padding. A boundary walk finds only 8 / 16; RW (and now we) read by count.
-
-Both live in `game-src/original-extend/vehicles/`. The companion **`yosemite.txd` carries the same
-inflated-size lock**: it declares 20 textures but a boundary walk finds 10 (each TEXTURE_NATIVE's size
-swallows the next), so the body texture `F350_mix` was missing and the chassis rendered untextured.
-`parseTxd` now applies the same count-based recovery (`recoverLockedList`) → all 20 textures. (It also has
-the older leading-empty-chunk quirk, already handled by `readDictHeader`; see
-[plan 043](../plans/043-dff-txd-completeness.md).)
-
-## How RenderWare reads DFFs (why the locks target our parser)
-
-`RpClumpStreamRead` (mirror: **librw**, OpenRW) reads a fixed **count** of children via
-`RwStreamFindChunk`, scanning the flat stream forward and **ignoring parent chunk size boundaries**;
-and it reads a struct's fixed fields (e.g. `numAtomics/numLights/numCameras`) **directly**, never
-trusting the struct chunk's declared size to skip. Our parser instead walks children **strictly within**
-each parent's declared `[start, end)` (`forEachChild`) — which both locks exploit.
+Diagnostic lesson: before declaring a new LOCK variant, verify the file against a KNOWN-GOOD reader
+convention (RW derives many counts from flags) — "garbage indices" from a boundary-respecting parser can be
+our own offset drift.
 
 ## Variant A — inflated item sizes (`yosemite.dff`)
 
@@ -177,5 +166,5 @@ Covered by `tests/custom/locked-models/yosemite.dff` (31 atomics / 31 geometries
   `16777228` while its real payload is 12 bytes; without `forEachClumpChild` `parseDff` returns an empty
   model and `parseDffCollision` returns `null` even though a `COL3` chunk is present near EOF.
 
-Related: [plan 015 — vehicle loading](../plans/015-vehicle-loading.md),
-[plan 043 — DFF/TXD completeness](../plans/043-dff-txd-completeness.md).
+Related: [plan 015 — vehicle loading](../plans/015-vehicle-loading/readme.md),
+[plan 043 — DFF/TXD completeness](../plans/043-dff-txd-completeness/readme.md).

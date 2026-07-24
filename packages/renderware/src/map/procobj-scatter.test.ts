@@ -1,4 +1,4 @@
-import { Matrix4 } from 'three';
+import { Matrix4 } from '@opensa/math';
 import { describe, expect, it } from 'vitest';
 
 import type { RegionColliders } from '../collision';

@@ -1,4 +1,4 @@
-import { lazy, type ReactElement, Suspense, useEffect } from 'react';
+import { lazy, type ReactElement, Suspense, useEffect, useState } from 'react';
 
 import type { BootPhase } from './boot-machine';
 
@@ -12,10 +12,14 @@ import { Menu } from './menu';
 import { Preloader } from './preloader';
 import { useAssetBoot } from './use-asset-boot';
 import { useFullscreen } from './use-fullscreen';
+import { probeWebGpuSupport } from './webgpu-gate';
 import './shell.css';
 
-// The heavy game surface (three.js/Rapier) is code-split — fetched only past the menu.
-const GameCanvas = lazy(() => import('../canvas-host').then((module) => ({ default: module.CanvasHost })));
+// The heavy game surface is code-split — fetched only past the menu.
+// WebGPU-first (plan 074/10, user decision 2026-07-17): the own engine IS the game; browsers without
+// WebGPU get the sorry screen, not a fallback renderer. The `?engine=three` comparison override and the
+// three host it loaded were deleted with the rest of the old stack (074/13 phase 5, C2).
+const GameCanvas = lazy(() => import('../engine-canvas-host').then((module) => ({ default: module.EngineCanvasHost })));
 
 const SUBTITLED = 'sa-logo--small sa-logo--titled sa-logo--described';
 
@@ -24,10 +28,25 @@ export function App(): ReactElement {
   const fullscreen = useFullscreen();
   const { phase } = boot.state;
   const { pause, resume } = boot;
+  // null = probe in flight (resolves in ms, well before the folder pick).
+  const [webGpuOk, setWebGpuOk] = useState<boolean | null>(null);
 
   // Count the visit (no-op unless VITE_GA_ID is set).
   useEffect(() => {
     initAnalytics();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void probeWebGpuSupport().then((ok) => {
+      if (!cancelled) {
+        setWebGpuOk(ok);
+      }
+    });
+
+    return (): void => {
+      cancelled = true;
+    };
   }, []);
 
   // Esc toggles pause ↔ play.
@@ -50,6 +69,20 @@ export function App(): ReactElement {
   const showGame = phase === 'warmup' || phase === 'playing' || phase === 'paused';
   const showLoadingScreen = phase === 'loading' || phase === 'warmup';
 
+  if (webGpuOk === false) {
+    return (
+      <div className="sa-shell">
+        <div className="sa-stage sa-stage--col">
+          <Logo className={SUBTITLED} />
+          <p className="sa-tagline">
+            Sorry — OpenSA runs on WebGPU, and this browser or device does not support it. Please use a recent Chrome or
+            Edge, or Safari 26+ on macOS.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="sa-shell">
       {showGame && boot.state.game ? (
@@ -59,6 +92,7 @@ export function App(): ReactElement {
               fs={boot.fs}
               gameId={boot.state.game}
               onWorldReady={boot.worldReady}
+              pakSource={boot.pakSource}
               paused={phase === 'paused'}
             />
           </div>

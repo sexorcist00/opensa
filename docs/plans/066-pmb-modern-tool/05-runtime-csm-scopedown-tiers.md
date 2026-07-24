@@ -3,7 +3,7 @@
 [← chain](readme.md) · prev: [04 ambient/emissive](04-ambient-emissive-channels.md)
 
 The landing plan. It flips consumption of everything 01–04 produced, **re-scopes CSM** now that static shadows are baked,
-and exposes the whole tool as tier knobs feeding [072](../072-quality-tiers-default-flip.md). Nothing here changes a
+and exposes the whole tool as tier knobs feeding [072](../072-quality-tiers-default-flip/readme.md). Nothing here changes a
 DFF/TXD-only build — all of it is gated on native-cell data being present.
 
 ## Decisions

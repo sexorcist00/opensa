@@ -1,5 +1,5 @@
 /**
- * In-browser port of `scripts/build-game.ts`'s selection (plan 053, phase 4). Given a raw GTA install, it
+ * In-browser run of the shared fetch-build selection (`@opensa/game-build` partition) (plan 053, phase 4). Given a raw GTA install, it
  * picks the same asset set the shipped build packs — the exterior-placed models/textures (from IPL/IDE) plus
  * the loose + world files — using the **shared** partition logic (`src/game-build/partition.ts`). No zipping:
  * the bytes go straight into the VFS (phase 5). The install is reached through {@link InstallSource} so this is
@@ -11,6 +11,7 @@ import { ideRefs, partitionEntries, placedModels } from '@opensa/game-build/part
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { parsePedDefs } from '@opensa/renderware/parsers/text/ped-defs.parser';
+import { parseProcObj } from '@opensa/renderware/parsers/text/procobj.parser';
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 
 import type { LazyImgArchive } from './img-reader';
@@ -19,11 +20,11 @@ import type { LazyImgArchive } from './img-reader';
 export interface InstallPlan {
   /** Loose file paths, ingested by their relative path (bucketed by `looseGroup`). */
   loose: string[];
-  /** Referenced `.dff` + every `.col` archive entries. */
+  /** Referenced geometry (`.osm` when converted, else `.dff`) + every `.col` archive entry. */
   models: Entry[];
   /** Placement/anim/data world files (ipl/ifp/dat) from `gta3.img`, ingested by bare name. */
   others: Entry[];
-  /** Referenced `.txd` archive entries. */
+  /** Referenced dictionaries: a converted model's `.ostex`, plus the `.txd` of whatever stayed stock. */
   textures: Entry[];
 }
 
@@ -35,6 +36,9 @@ export interface InstallSource {
   readonly gtaInt: LazyImgArchive | null;
   /** Loose file paths, lowercased + `/`-joined relative, EXCLUDING the model/anim archives. */
   looseFiles(): Promise<string[]>;
+  /** Open a file as a Blob (a File handle — `slice()` reads ranges off disk, no whole read), or null when
+   *  absent. The world pak reads its bytes this way in folder mode, so the multi-GB pak never loads whole. */
+  openLoose(path: string): Promise<Blob | null>;
   /** Raw bytes of a loose file. */
   readLoose(path: string): Promise<Uint8Array>;
   /** UTF-8 text of a loose file (IDE/IPL). */
@@ -60,7 +64,11 @@ export async function readEntry(source: InstallSource, entry: Entry): Promise<Ui
 export async function selectInstallEntries(source: InstallSource): Promise<InstallPlan> {
   const placed = placedModels(await placedInstanceIds(source), await ideById(source));
   const extra = await dynamicModelRefs(source);
-  const refs = { models: [...placed.models, ...extra.models], txds: [...placed.txds, ...extra.txds] };
+  const clutter = await procObjModelRefs(source);
+  const refs = {
+    models: [...placed.models, ...extra.models, ...clutter.models],
+    txds: [...placed.txds, ...extra.txds, ...clutter.txds],
+  };
   const { models, others, textures } = partitionEntries(
     refs,
     new Set(source.gta3.names),
@@ -132,6 +140,34 @@ async function placedInstanceIds(source: InstallSource): Promise<number[]> {
   }
 
   return ids;
+}
+
+/** Model + txd base names for the procedurally-SCATTERED clutter (plan 042 / 074/19): `procobj.dat` names
+ *  the models the game scatters over collision surfaces (grass, rocks, cacti). Like peds/vehicles, they are
+ *  never IPL-placed, so the partition would miss their DFF+TXD and the clutter would silently not render. */
+async function procObjModelRefs(source: InstallSource): Promise<{ models: string[]; txds: string[] }> {
+  const loose = await source.looseFiles();
+  const procObjPath = loose.find((path) => path.endsWith('procobj.dat'));
+  if (!procObjPath) {
+    return { models: [], txds: [] };
+  }
+  // procobj.dat carries only model NAMES; the TXD lives in the model's IDE row — build a name → txd map.
+  const txdByModel = new Map<string, string>();
+  for (const ref of (await ideById(source)).values()) {
+    txdByModel.set(ref.model.toLowerCase(), ref.txd.toLowerCase());
+  }
+  const models: string[] = [];
+  const txds: string[] = [];
+  for (const rule of parseProcObj(await source.readLooseText(procObjPath))) {
+    const model = rule.model.toLowerCase();
+    models.push(model);
+    const txd = txdByModel.get(model);
+    if (txd) {
+      txds.push(txd);
+    }
+  }
+
+  return { models, txds };
 }
 
 /** A tight `ArrayBuffer` view of `bytes` (copying only when it is a sub-range of a larger buffer). */

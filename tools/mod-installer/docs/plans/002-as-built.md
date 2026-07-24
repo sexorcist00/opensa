@@ -11,7 +11,7 @@ be patched file-by-file, so a mod ships the entries as a folder; mod-installer *
 > [003 — merge PNG folders into loose `.txd`](./003-loose-txd-png-merge.md).
 
 ```sh
-tsx tools/mod-installer/src/cli.ts --game ./game-src/non-modified --in ./mods --out ./build
+tsx tools/mod-installer/src/cli.ts --game ./game-src/original --in ./mods --out ./build
 ```
 
 ## Inputs
@@ -131,5 +131,5 @@ Dependencies: `@opensa/tool-kit/archive/img` + `@opensa/rw-codec` + `@opensa/mod
 - `install.e2e.test.ts` — full tmpdir runs: base copy + alphabetical overlay + `gta3img/` merged into `gta3.img`
   (accounting for the 2048-byte sector padding); a nested PNG folder merged into a loose `.txd`; files-first ordering.
 
-29 tests, green. Also verified by a real `--in ./mods-src/mods` run (mix of plain + Modloader mods): each mod
+29 tests, green. Also verified by a real `--in ./mods-src/original/mods` run (mix of plain + Modloader mods): each mod
 routed by kind (loader → baked, else overlaid), gta.dat lines canonicalised to `DATA\MAPS\…`, assets into gta3.img.

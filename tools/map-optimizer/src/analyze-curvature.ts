@@ -11,7 +11,7 @@ import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
  * sharp). Read-only — measures whether road/terrain smoothing is worth building before any of it exists.
  *
  * Usage: `tsx map-optimizer/src/analyze-curvature.ts [--game <path>] [--center x,y,z] [--radius 150] [--area 4]`
- * (`--game` defaults to `./game-src/non-modified`).
+ * (`--game` defaults to `./game-src/original`).
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, isAbsolute, join, resolve } from 'node:path';
@@ -98,7 +98,7 @@ function main(): void {
   const radius = Number(argValue('--radius') ?? 150);
   const thresholds: CurvatureThresholds = { ...DEFAULT_THRESHOLDS, areaThreshold: Number(argValue('--area') ?? 4) };
 
-  const gameDir = fromCwd(argValue('--game') ?? './game-src/non-modified');
+  const gameDir = fromCwd(argValue('--game') ?? './game-src/original');
   const game = basename(gameDir);
   const modelsDir = join(gameDir, 'models');
   if (!statSync(gameDir, { throwIfNoEntry: false })?.isDirectory()) {

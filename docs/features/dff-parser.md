@@ -1,7 +1,8 @@
 # DFF parser
 
 `packages/renderware/src/parsers/binary/dff.ts` (+ `binary-stream.ts`, `chunks.ts`, `constants.ts`,
-`types.ts`). Renderer-agnostic: outputs plain `RWClump` data, three.js never leaks in.
+`types.ts`). Renderer-agnostic: outputs plain `RWClump` data — no GPU or renderer types leak in, which is
+why the same parser serves the browser runtime and the offline `opensa-pack` converter.
 
 ## Implemented
 
@@ -35,8 +36,8 @@
   data-driven emitters (plan 044).
 - Type 7 **Roadsign**: plate size, rotation (world-space!), flags (lines/chars/colour),
   4×16-char text → sign text rendering.
-- Type 10 **Escalator**: geometry-local path (start/bottom/top/end) + direction → moving step
-  rows (plan 044).
+- Type 10 **Escalator**: geometry-local path (start/bottom/top/end) + direction. Parsed only — the
+  step renderer went with the three teardown (see world-effects.md).
 - Other types (3 ped attractor, 6 enex, 8 trigger, 9 cover point) are skipped by
   size — counted in the survey but intentionally unused.
 
@@ -55,7 +56,7 @@
 - Frame transforms are deliberately ignored for map models (SA re-frames atomic model infos);
   kept for vehicles/characters/`anim`-section clump objects.
 
-## Coverage (audit 2026-06-12, `scripts/audit-rw-coverage.ts`)
+## Coverage (audit 2026-06-12, `scripts/debug/audit-rw-coverage.ts`)
 
 **13126 DFFs, 0 parse failures.** Full 2dfx census: lights 1664 (done), particles 113,
 ped attractors 820, sun glare 2, enex 75, roadsigns 516 (done), trigger 30, cover points 13900,

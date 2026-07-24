@@ -19,6 +19,9 @@ export interface AssetFetchLoaderConfig {
   cacheName?: string;
   /** Parallel chunk downloads (default 4). */
   concurrency?: number;
+  /** Read-back view of the sink (the same VFS): lets `openWorld` serve the pak files the fetch-pack
+   *  chunks delivered (plan 086 phase 3). Optional — without it `openWorld` reports no world. */
+  files?: { get(name: string): ArrayBuffer | null };
   /** Full URL to `manifest.json` (the caller knows game + version). */
   manifestUrl: string;
   /** Where ready chunk bytes go — the VFS. Optional so the loader runs/tests standalone. */
@@ -80,6 +83,21 @@ export class AssetFetchLoader implements AssetLoader {
     const [probe, cacheable] = partition(chunks, (chunk) => !chunk.cached);
     await runWithConcurrency(probe, this.concurrency, (chunk) => this.fetchChunk(chunk, tracker));
     await runWithConcurrency(cacheable, this.concurrency, (chunk) => this.fetchChunk(chunk, tracker));
+  }
+
+  /**
+   * Open a world-pak file delivered by the fetch chunks (plan 086 phase 3): the fetch-pack layout ships
+   * the pak products as VFS entries (`pak/world.ospak` since phase 8; `opensa-pack/…` / `opensa/…` in
+   * older chunk sets — sliced parts reassembled by the VFS). Same contract as the folder loaders —
+   * absent file ⇒ null, so streaming fails loudly instead of silently reading the app's `public/pak-map`.
+   */
+  async openWorld(name: string): Promise<Blob | null> {
+    const files = this.config.files;
+    const lower = name.toLowerCase();
+    const bytes =
+      files?.get(`pak/${lower}`) ?? files?.get(`opensa-pack/${lower}`) ?? files?.get(`opensa/${lower}`) ?? null;
+
+    return Promise.resolve(bytes ? new Blob([bytes]) : null);
   }
 
   private async deliver(chunk: GroupChunk, bytes: Uint8Array): Promise<void> {

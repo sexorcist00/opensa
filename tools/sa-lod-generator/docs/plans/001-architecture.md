@@ -34,7 +34,7 @@ shared `lod2*` atlas). We **replace each stock LOD DFF in place** (same model na
 - **empty collision** (LODs never collide);
 - **50 % textures** — the one deliberate degradation, the memory lever that keeps texture cost sane.
 
-## Measured feasibility (this repo, `game-src/non-modified`)
+## Measured feasibility (this repo, `game-src/original`)
 
 Only **~6 066 HD instances have a LOD** (most props/small buildings have none — they just vanish at distance), so
 the clone scope is bounded: **~4 300 LOD models**. Full-clone vs stock, map-wide:

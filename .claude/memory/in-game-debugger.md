@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan 023 (`.claude/plans/023-in-game-debugger.md`), iterations 1–4 DONE. The old Ctrl+X overlay was
+Plan 023 (`.claude/plans/023-in-game-debugger/readme.md`), iterations 1–4 DONE. The old Ctrl+X overlay was
 deleted and this one renamed in place — files are now `src/ui/debug/debug-overlay.tsx` (`DebugOverlay`,
 F2), `map-inspector.tsx`, `debug-styles.ts`. No `debug2`/Ctrl+X anymore.
 

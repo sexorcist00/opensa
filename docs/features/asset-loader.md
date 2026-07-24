@@ -2,7 +2,7 @@
 
 `packages/loaders/src/` — standalone, framework-agnostic (no React, no `game`). Resolves the game's assets into the
 VFS behind one contract; the loader kind is chosen **per game** by its `assetLoader` in `GAME_CONFIG`
-(plan 056). Plans [049](../plans/049-asset-loader.md) (fetch) + [053](../plans/053-asset-local-loader.md)
+(plan 056). Plans [049](../plans/049-asset-loader/readme.md) (fetch) + [053](../plans/053-asset-local-loader/readme.md)
 (local + restructure).
 
 ## Layout
@@ -69,14 +69,35 @@ in-browser to the same VFS — so the downstream flow is identical. **Chromium-o
 - **Lazy IMG reader** (`img-reader.ts`): reads only the VER2 directory up front, then slices each needed
   entry's byte range from disk — never buffers the ~1 GB `gta3.img`. VER2 parsing shared from
   `renderware/archive`.
-- **Selection** (`build-vfs.ts`): the in-browser port of `scripts/build-game.ts`'s partition (shared
-  `packages/game-build/src/partition.ts` — `partitionEntries` + `looseGroup`) — exterior-placed models/textures,
-  `.col`, the loose `data/`/anim/text files, and the `gta3.img` ipl/ifp/dat, **plus** the game's dynamic
-  models (`GAME_CONFIG[game].mainCharacter` via `peds.ide`, `.vehicles` via `vehicles.ide`).
+- **Selection** (`build-vfs.ts`): the shared partition (`packages/game-build/src/partition.ts` —
+  `partitionEntries` + `looseGroup`) run in-browser — exterior-placed models/textures,
+  `.col`, the loose `data/`/anim/text files, and the `gta3.img` ipl/ifp/dat, **plus** the dynamic models
+  (`dynamicModelRefs`): **every** ped from `peds.ide`, **every** vehicle from `vehicles.ide`, and procobj
+  clutter from `procobj.dat`.
 - **`AssetLocalLoader`**: `restore()` (boot) → `prepare()` (folder gesture) → `init()` (scan+select →
   one synthetic chunk per group) → `load()` (read selected bytes into the VFS, count-based progress).
 - **Boot gate**: the shell shows the game menu; picking a local game opens the **folder prompt**
   (`FolderPrompt`, `boot-machine` `folder` phase, with the game's disclaimer) → load. See [ui-shell](ui-shell.md).
+
+## HTTP-dir loader (`asset-local-loader/`, plan 079)
+
+The dev-only sibling of the local loader: instead of a user-picked folder, it reads a **served** game dir
+over HTTP so every dev surface (lab, bench harness, viewers) can boot the one canonical build
+(`./build/original`) without the folder gesture. Selected with `?loader=http-dir&src=<url>` (read in
+`use-asset-boot.ts`); never a per-game default.
+
+- **Shared core** (`install-source-core.ts`, `assembleInstallSource`): the local and http-dir loaders both
+  build an `InstallSource` (openLoose/gta3/gtaInt/readLoose) and run the **same** `build-vfs.ts` selection —
+  the only difference is where the bytes come from.
+- **`fetchInstallSource`** (`fetch-install-source.ts`): assembles an `InstallSource` from a served dir —
+  `fetchDirIndex` walks the server's `/__index` listing; loose files are ranged/fetched by URL, and the IMG
+  archives use the lazy `urlRangeSource` (`img-reader.ts`, a `ByteRangeSource` over HTTP `Range`) so the
+  ~1 GB `gta3.img` is never buffered — identical laziness to the disk path.
+- **`InstallSourceLoader`** (base) / **`AssetHttpDirLoader`**: the http-dir loader extends the shared
+  `InstallSourceLoader`; `init()` fetches+selects, `load()` reads selected bytes into the VFS. No `prepare`/
+  `restore`/`ready` — there is no folder gesture to guard.
+- Served by `scripts/serve-static.ts`'s `/build` mount (a `dirIndex()` walk answers `/__index`); see
+  [scripts.md](../development/scripts.md).
 
 ## Progress + events
 
@@ -98,8 +119,6 @@ The `AssetSink` consumer. `Vfs implements AssetSink, AssetFileSystem`:
 ## Known gaps / candidates
 
 - Local loader is **Chromium-only** (File System Access); `fetch` stays the default everywhere else.
-- The per-game `mainCharacter` / `vehicles` selection (`GAME_CONFIG`) is a **temporary** bring-your-own-files
-  stop-gap until a proper ped/vehicle registry exists.
 - Lazy per-file inflate for the fetch path (decompress on `get`) if the eager-unzip footprint bites.
 
 ## Test coverage anchors

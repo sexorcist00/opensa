@@ -35,6 +35,13 @@ export const styles: Record<string, CSSProperties> = {
     marginBottom: 4,
     padding: 0,
   },
+  buildTime: {
+    color: MUTED,
+    fontSize: 9,
+    letterSpacing: 1,
+    marginTop: -4,
+    textAlign: 'center',
+  },
   cell: {
     accentColor: ACCENT,
     cursor: 'pointer',

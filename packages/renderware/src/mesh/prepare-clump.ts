@@ -9,9 +9,18 @@ import type { RWClump, RWGeometry, RWMaterial, RWTriangle } from '../parsers/bin
  */
 
 /** All prepared render data of one atomic — vertex attributes shared by its {@link PreparedPart}s. */
+/**
+ * Synthesized night ambient for geometry with NO authored night set (slightly cool, ~SA night level).
+ * ONE formula for the whole world: the welded cell path and the per-model rigid path both use it, or a
+ * converted prop would disagree with the cell it stands in.
+ */
+export const NIGHT_AMBIENT: readonly [number, number, number] = [0.3, 0.32, 0.4];
+
 export interface PreparedAtomic {
   /** Prelit colours (vec4 when a floodlight beam lives in the prelit alpha, else vec3), or null. */
   color: null | { array: Float32Array; itemSize: 3 | 4 };
+  /** The clump frame this atomic hangs from — anim-hierarchy models place parts via frame transforms. */
+  frameIndex: number;
   geometryIndex: number;
   /** SA night (extra) vertex colours as vec3, or null. */
   nightColor: Float32Array | null;
@@ -45,6 +54,8 @@ const MAX_VERTEX_COORD = 1_000_000;
 
 /** Prepared atomics by lowercased model name — primed by the parse worker, filled on demand otherwise. */
 const preparedCache = new Map<string, PreparedAtomic[]>();
+/** Bounded like the clump cache (plan 073/08 memory) — prepared atomics duplicate the geometry arrays. */
+const PREPARED_CACHE_MAX = 512;
 
 /** Group a geometry's triangles into per-material index buffers, skipping empty slices. */
 export function groupTrianglesByMaterial(triangles: RWTriangle[], materialCount: number): RWTriangle[][] {
@@ -92,6 +103,7 @@ export function prepareClumpAtomics(clump: RWClump): PreparedAtomic[] {
     const beam = rw.materials.some((m) => isVertexAlphaBeam(m, rw));
     atomics.push({
       color: rw.prelitColors ? prelitColorArray(rw.prelitColors, beam) : null,
+      frameIndex: atomic.frameIndex,
       geometryIndex: atomic.geometryIndex,
       nightColor: rw.nightColors ? prelitColorArray(rw.nightColors, false).array : null,
       normals: vertexNormals(rw),
@@ -112,15 +124,15 @@ export function preparedAtomicsFor(modelName: string, clump: RWClump): PreparedA
   let prepared = preparedCache.get(key);
   if (!prepared) {
     prepared = prepareClumpAtomics(clump);
-    preparedCache.set(key, prepared);
   }
+  lruSetPrepared(key, prepared);
 
   return prepared;
 }
 
 /** Seed the cache with worker-prepared atomics (paired with the same worker's parsed clump). */
 export function primePreparedAtomics(modelName: string, prepared: PreparedAtomic[]): void {
-  preparedCache.set(modelName.toLowerCase(), prepared);
+  lruSetPrepared(modelName.toLowerCase(), prepared);
 }
 
 /**
@@ -308,6 +320,16 @@ function faceNormal(p: Float32Array, a: number, b: number, c: number): [number, 
   return [nx / len, ny / len, nz / len];
 }
 
+/** LRU touch (see asset-cache): re-insert on hit, evict the oldest past the cap. */
+function lruSetPrepared(key: string, value: PreparedAtomic[]): void {
+  preparedCache.delete(key);
+  preparedCache.set(key, value);
+  while (preparedCache.size > PREPARED_CACHE_MAX) {
+    const oldest = preparedCache.keys().next().value as string;
+    preparedCache.delete(oldest);
+  }
+}
+
 /** Prelit RGBA bytes → float colours; `withAlpha` keeps vec4 (floodlight beams), default drops to vec3. */
 function prelitColorArray(prelit: Uint8Array, withAlpha: boolean): { array: Float32Array; itemSize: 3 | 4 } {
   if (withAlpha) {
@@ -336,7 +358,9 @@ function prepareParts(rw: RWGeometry): PreparedPart[] {
     if (tris.length === 0) {
       return;
     }
-    const index = vertexCount > 65535 ? new Uint32Array(tris.length * 3) : new Uint16Array(tris.length * 3);
+    // uint16 holds indices 0..65535, so a mesh of up to 65536 vertices (max index 65535) still fits; only
+    // > 65536 vertices need uint32 (matches `indicesFor` in build-vehicle-model.ts). Hi-poly mod meshes.
+    const index = vertexCount > 65536 ? new Uint32Array(tris.length * 3) : new Uint16Array(tris.length * 3);
     tris.forEach((tri, at) => {
       index[at * 3] = tri.a;
       index[at * 3 + 1] = tri.b;

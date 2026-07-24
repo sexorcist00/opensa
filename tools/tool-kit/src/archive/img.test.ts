@@ -56,9 +56,9 @@ describe('EditableImg', () => {
 
 describe('writeImgFile', () => {
   describe('negative cases', () => {
-    it('throws on a VER2 name longer than 23 bytes', () => {
+    it('throws on a VER2 name longer than 24 bytes', () => {
       const img = createImg();
-      img.set('a-very-long-entry-name-way-past-23.dff', Uint8Array.of(1));
+      img.set('a-very-long-entry-name-way-past-24.dff', Uint8Array.of(1));
       expect(() => writeImgFile(img, join(tmpdir(), `img-${process.pid}-bad.img`))).toThrow(/name too long/);
     });
   });
@@ -76,6 +76,20 @@ describe('writeImgFile', () => {
       rmSync(path);
 
       expect(streamed).toEqual(img.build());
+    });
+
+    // The 24-byte name field is NUL-terminated only when shorter — TCs ship full 24-byte names (Carcer City).
+    it('round-trips a full 24-byte entry name', () => {
+      const img = createImg();
+      img.set('cj_padlockgate_l_(d).dff', Uint8Array.of(1, 2));
+
+      const path = join(tmpdir(), `img-${process.pid}-24byte.img`);
+      writeImgFile(img, path);
+      const reopened = openImg(new Uint8Array(readFileSync(path)));
+      rmSync(path);
+
+      expect(reopened.names()).toEqual(['cj_padlockgate_l_(d).dff']);
+      expect([...(reopened.get('cj_padlockgate_l_(d).dff') ?? []).slice(0, 2)]).toEqual([1, 2]);
     });
   });
 });

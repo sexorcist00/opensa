@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan: `.claude/plans/015-vehicle-loading.md`. Parse vehicle data + place two cars statically near Tommy's spawn — **admiral** (2-colour), **camper** (4-colour). No driving yet. Deferred phases (user): **dummy** (component system / wheel spin/steer / doors / lights / seats), **collision**, **physic** (driving from handling), **vehicle_vlo** (LOD), **damage** (ok/dam).
+Plan: `.claude/plans/015-vehicle-loading/readme.md`. Parse vehicle data + place two cars statically near Tommy's spawn — **admiral** (2-colour), **camper** (4-colour). No driving yet. Deferred phases (user): **dummy** (component system / wheel spin/steer / doors / lights / seats), **collision**, **physic** (driving from handling), **vehicle_vlo** (LOD), **damage** (ok/dam).
 
 **Files (all verified present + parse):** `static/vehicles/{admiral,camper}.dff`+`.txd` (DXT1), `static/models/generic/vehicle.txd` (19 tex rgba8888, shared); `static/data/vehicles.ide`, `carcols.dat`, `handling.cfg`.
 

@@ -11,6 +11,7 @@ import { parseOnlyList, runOptimizer } from '@opensa/map-optimizer/run';
 import { SA_TREE_MODELS } from '@opensa/map-placement/vegetation';
 import { install as installMods } from '@opensa/mod-installer/install';
 import { buildOpensaLods } from '@opensa/opensa-lod-generator/build';
+import { packGameDir } from '@opensa/opensa-pack/pack';
 import { install as installPeds } from '@opensa/ped-installer/install';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseIde } from '@opensa/renderware/parsers/text/ide.parser';
@@ -19,17 +20,28 @@ import { buildSaLods } from '@opensa/sa-lod-generator/build';
 import { editArchive } from '@opensa/tool-kit/archive/img';
 import { install as installVehicles } from '@opensa/vehicle-installer/install';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 import type { BuilderConfig } from './config';
 
-import { config as defaultConfig } from './config';
+import { config as defaultConfig, PACK_RECTS } from './config';
 
 /**
  * Valid `--until <name>` values. Common-chain + `sa`/`opensa` stop after the named one; the special `lod` value
  * runs the whole pipeline (**both** sa + opensa) while keeping every intermediate for debugging.
  */
-export const STAGE_NAMES = ['mods', 'vehicles', 'peds', 'optimize', 'trees', 'procobj', 'sa', 'opensa', 'lod'] as const;
+export const STAGE_NAMES = [
+  'mods',
+  'vehicles',
+  'peds',
+  'optimize',
+  'trees',
+  'procobj',
+  'sa',
+  'opensa',
+  'pack',
+  'lod',
+] as const;
 export interface BuildPerfectMapOptions {
   /** Downgrade the int16 text-ROW budget from a build-stopping error to a warning — the 03-asi ghost-barriers
    *  repro path (an intentionally over-2^15 full build). The 39-slot guard stays hard so the other structures
@@ -72,12 +84,13 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const populated = (sub: string): boolean => existsSync(source(sub)) && readdirSync(source(sub)).length > 0;
 
   // The common chain (installers → optimizer → LODs). Conditional stages are skipped when their source is empty.
-  const chain: { name: StageName; run: (game: string, out: string) => Promise<unknown> | void }[] = [
-    {
+  const chain: { name: StageName; run: (game: string, out: string) => Promise<unknown> | void }[] = [];
+  if (populated(subfolders.mods)) {
+    chain.push({
       name: 'mods',
       run: (game, out) => installMods({ gamePath: game, inPath: source(subfolders.mods), outPath: out }),
-    },
-  ];
+    });
+  }
   if (populated(subfolders.vehicles)) {
     chain.push({
       name: 'vehicles',
@@ -104,18 +117,22 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         ...(prelitForce ? { prelitOptions: { force: prelitForce } } : {}),
       }),
   });
-  chain.push({
-    name: 'trees',
-    run: (game, out) =>
-      buildTreeLods({
-        config: { textureSize: config.treeTex },
-        gamePath: game,
-        inPath: source(subfolders.vegetation),
-        outPath: out,
-        prelight: true,
-        prelightInfo: loadPrelight(source(subfolders.vegetation)),
-      }),
-  });
+  if (populated(subfolders.vegetation)) {
+    chain.push({
+      name: 'trees',
+      run: (game, out) =>
+        buildTreeLods({
+          config: { textureSize: config.treeTex },
+          gamePath: game,
+          inPath: source(subfolders.vegetation),
+          outPath: out,
+          prelight: true,
+          prelightInfo: loadPrelight(source(subfolders.vegetation)),
+        }),
+    });
+  }
+  // procobj stays unconditional: original ships NO procobj/ folder — the no-`--in` mode bakes the built-in
+  // roster from the game's own gta3.img/procobj.dat and exits gracefully when no species matches (a TC).
   chain.push({
     name: 'procobj',
     run: (game, out) =>
@@ -129,15 +146,25 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   });
 
   const staged = new Set(chain.map((stage) => stage.name));
-  for (const name of ['vehicles', 'peds'] as const) {
+  const stageSource = {
+    mods: subfolders.mods,
+    peds: subfolders.peds,
+    trees: subfolders.vegetation,
+    vehicles: subfolders.vehicles,
+  } as const;
+  for (const name of ['mods', 'vehicles', 'peds', 'trees'] as const) {
     if (!staged.has(name)) {
-      log(`${name} — skipped (${subfolders[name]}/ empty)`);
+      log(`${name} — skipped (${stageSource[name]}/ empty)`);
     }
   }
 
   const produced: { dir: string; name: string }[] = [];
+  const untilIndex = until === undefined ? Infinity : STAGE_NAMES.indexOf(until);
   let game = gamePath;
   for (const [index, stage] of chain.entries()) {
+    if (STAGE_NAMES.indexOf(stage.name) > untilIndex) {
+      return { produced, stoppedEarly: true }; // `until` names a skipped stage — everything before it has run
+    }
     log(stage.name);
     const out = join(work, `${index + 1}-${stage.name}`);
     await stage.run(game, out);
@@ -165,28 +192,40 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
     `excluding ${excludeItems.length} models from sa/opensa LODs ` +
       `(${userExcluded.length} user-curated via lod-exclude.json)`,
   );
-  if (until === undefined || until === 'sa' || until === 'lod') {
+  // Hole-fill list (plan 086 phase 5): per-GAME data, not code — stock SA's list lives in
+  // mods-src/original/lod-holes.json; a TC without the file gets none (the curated names are SA's).
+  const holeFillModels = loadLodHoles(inPath, source(subfolders.mods));
+  // Always-on lods (plan 087, `lod-always.json`): lod-target models that ARE the content (a stub HD, the
+  // real geometry behind its lod link — gostown's LODEnsemble* forests). The strip keeps them and the
+  // pak welds them into BOTH levels; the cell bake still skips them (it bakes HD, i.e. the stub).
+  const alwaysOnLods = loadLodAlways(inPath, source(subfolders.mods));
+  if (runsStage('sa', until)) {
     const sa = join(outPath, 'sa');
     log('sa → sa/');
-    buildSaLods({ config: { excludeItems }, gameDir: game, outDir: sa });
+    buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa });
     checkImgIdBudgets(sa);
     produced.push({ dir: sa, name: 'sa' });
   }
-  if (until === undefined || until === 'opensa' || until === 'lod') {
-    const opensa = join(outPath, 'opensa');
-    log('opensa → opensa/ (baking cells — can take several minutes)');
-    await buildOpensaLods({
-      cellSize: config.cellSize,
-      config: { excludeItems },
-      gameDir: game,
-      outDir: opensa,
-      stripLods: true,
-    });
-    swapLinearTxds(game, opensa);
-    produced.push({ dir: opensa, name: 'opensa' });
+  if (runsStage('opensa', until)) {
+    produced.push(
+      ...(await buildOpensaTarget({
+        alwaysOnLods,
+        config,
+        excludeItems,
+        game,
+        gamePath,
+        holeFillModels,
+        log,
+        outPath,
+        until,
+        work,
+      })),
+    );
   }
-  // The sidecars are split-time inputs, not game content — keep the final targets clean.
-  for (const target of produced.filter(({ name }) => name === 'sa' || name === 'opensa')) {
+
+  // The sidecars are split-time inputs, not game content — keep the final targets clean. (The opensa side
+  // already dropped its own above, before the convert read the dir.)
+  for (const target of produced.filter(({ name }) => name === 'sa')) {
     rmSync(join(target.dir, 'linear-txd'), { force: true, recursive: true });
   }
 
@@ -248,6 +287,16 @@ export function collectGeneratedModels(gameDir: string): string[] {
 }
 
 /**
+ * Whether a post-split target (`sa`/`opensa`) runs under the given `--until`. `STAGE_NAMES` is the pipeline
+ * ORDER, so `--until <stage>` means "run everything up to and including it" — `--until pack` builds `sa`
+ * too, because `sa` precedes `pack`. (It used to be an explicit name list, which silently dropped the whole
+ * `sa` target from `--until pack`/`--until opensa` runs: no log line, no error, just a missing build.)
+ */
+export function runsStage(stage: 'opensa' | 'sa', until: StageName | undefined): boolean {
+  return until === undefined || until === 'lod' || STAGE_NAMES.indexOf(stage) <= STAGE_NAMES.indexOf(until);
+}
+
+/**
  * Swap the linear-convention TXD sidecars (`<common build>/linear-txd/*.txd`) into the opensa target's
  * `gta3.img` (lod-trees plan 012): the common build's generated TXDs (impostor atlas, lod_procobj) are
  * encoded in the real-SA **gamma** convention — every bootable `.work` stage stays SA-correct — while
@@ -271,6 +320,82 @@ export function swapLinearTxds(commonDir: string, opensaDir: string): void {
   }
   writeFileSync(imgPath, img.build());
   log(`opensa: swapped ${names.length} linear-convention TXD(s) (${names.join(', ')})`);
+}
+
+/**
+ * The `opensa` target: the cell-LOD build, then OUR conversion of it.
+ *
+ * `--until opensa` asks for the LOD build itself, so it lands in the final directory and stops there.
+ * Otherwise the pack stage is the last thing to touch this target, so the LOD build is an intermediate and
+ * the CONVERTED dir takes the `opensa/` name — every stage still hands the next a complete game tree.
+ */
+async function buildOpensaTarget(step: {
+  /** Per-game always-on lod-target list (`lod-always.json`) — kept by the strip, welded into both levels. */
+  alwaysOnLods: string[];
+  config: BuilderConfig;
+  excludeItems: string[];
+  game: string;
+  /** The run's ORIGINAL `--game` dir — the fetch game id source (plan 086); `game` above is a work stage. */
+  gamePath: string;
+  /** Per-game hole-fill list (`lod-holes.json`) — exempt from the cell bake's reduction tracks. */
+  holeFillModels: string[];
+  log: (message: string) => void;
+  outPath: string;
+  until: StageName | undefined;
+  work: string;
+}): Promise<{ dir: string; name: string }[]> {
+  const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, until, work } = step;
+  const packing = until !== 'opensa';
+  const opensa = join(outPath, 'opensa');
+  const lodDir = packing ? join(work, 'opensa-lod') : opensa;
+  log(`opensa → ${packing ? '.work/opensa-lod' : 'opensa/'} (baking cells — can take several minutes)`);
+  await buildOpensaLods({
+    cellSize: config.lodCellSize,
+    config: { excludeItems, holeFillModels },
+    gameDir: game,
+    keepLods: alwaysOnLods,
+    outDir: lodDir,
+    stripLods: true,
+  });
+  // The LOD build is the last thing that mutates the game dir, and `swapLinearTxds` rewrites the very texels
+  // the pak carries — so it must run BEFORE the convert, not after it. The sidecar goes with it: it is a
+  // split-time input, not game content.
+  swapLinearTxds(game, lodDir);
+  rmSync(join(lodDir, 'linear-txd'), { force: true, recursive: true });
+  if (!packing) {
+    return [{ dir: opensa, name: 'opensa' }];
+  }
+  log('pack → opensa/ (converting the map into our format — several minutes)');
+  // The fetch game id (plan 086): the USER-FACING --game folder, not this work-stage intermediate.
+  const gameId = basename(resolve(step.gamePath));
+  // Per-game rect (plan 087): a run-config override wins, else the game's pinned `full` rect from
+  // PACK_RECTS, else the convert auto-fits to content (a new TC without a pinned extent).
+  const packRect = config.pack.rect ?? PACK_RECTS[gameId]?.full;
+  const packed = await packGameDir({
+    ...(alwaysOnLods.length > 0 ? { alwaysOnLods } : {}),
+    ao: config.pack.ao,
+    ...(config.pack.bakeWorkers !== undefined ? { bakeWorkers: config.pack.bakeWorkers } : {}),
+    bakes: config.pack.bakes,
+    gameDir: lodDir,
+    gameId,
+    log: (message) => log(`pack: ${message}`),
+    // Plan 086 phase 8: the game dir is self-contained — the pak lands in `<out>/opensa/pak` (the default).
+    outDir: opensa,
+    ...(packRect !== undefined ? { rect: packRect } : {}),
+  });
+  // The pack writes its report beside the pak it belongs to (`<out>/opensa/pak/`). Mirror it at the root:
+  // that is where a run's summary is looked for, and the pak-side copy stays the pak's own.
+  const reportPath = join(outPath, 'report.json');
+  writeFileSync(
+    reportPath,
+    JSON.stringify({ ...packed.report, ...(packed.models ? { models: packed.models } : {}) }, null, 2),
+  );
+  log(`pack: report → ${reportPath}`);
+
+  return [
+    { dir: lodDir, name: 'opensa-lod' },
+    { dir: opensa, name: 'pack' },
+  ];
 }
 
 /** SA's `IplEntityIndexArrays` usable capacity: one slot per gta.dat text IPL with inst rows, and the game
@@ -372,6 +497,25 @@ export function checkTextIplSlotBudget(gameDir: string, allowTextRowOverflow = f
   }
 }
 
+/** The first `lod-always.json` found among `dirs` → lowercased lod-TARGET models that are the real content
+ *  behind a stub HD (plan 087, gostown `LODEnsemble*` forests): kept by the strip, welded into BOTH levels. */
+function loadLodAlways(...dirs: string[]): string[] {
+  for (const dir of dirs) {
+    const file = join(dir, 'lod-always.json');
+    if (existsSync(file)) {
+      const names = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+      if (!Array.isArray(names) || names.some((name) => typeof name !== 'string')) {
+        throw new Error(`${file} must be a JSON array of model names`);
+      }
+      log(`lod-always — ${names.length} always-on lod model(s) from ${file}`);
+
+      return (names as string[]).map((name) => name.toLowerCase());
+    }
+  }
+
+  return [];
+}
+
 /** The first `lod-exclude.json` found among `dirs` → lowercased model names kept out of the LOD bakes. */
 function loadLodExclude(...dirs: string[]): string[] {
   for (const dir of dirs) {
@@ -382,6 +526,25 @@ function loadLodExclude(...dirs: string[]): string[] {
         throw new Error(`${file} must be a JSON array of model names`);
       }
       log(`lod-exclude — ${names.length} model(s) from ${file}`);
+
+      return (names as string[]).map((name) => name.toLowerCase());
+    }
+  }
+
+  return [];
+}
+
+/** The first `lod-holes.json` found among `dirs` → lowercased models that ship NO LOD and hole the far
+ *  view (plan 086 phase 5 — moved out of `sa-lod-generator/lod.config.ts`, whose list was SA-specific). */
+function loadLodHoles(...dirs: string[]): string[] {
+  for (const dir of dirs) {
+    const file = join(dir, 'lod-holes.json');
+    if (existsSync(file)) {
+      const names = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+      if (!Array.isArray(names) || names.some((name) => typeof name !== 'string')) {
+        throw new Error(`${file} must be a JSON array of model names`);
+      }
+      log(`lod-holes — ${names.length} hole-fill model(s) from ${file}`);
 
       return (names as string[]).map((name) => name.toLowerCase());
     }

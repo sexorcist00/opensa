@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan: `.claude/plans/016-enter-vehicle.md`. Press **Enter** near a car → CJ auto-runs to the driver door, opens it, climbs in, ends seated (hands on wheel). Driver side only (LHS/`door_lf`); exit deferred. Builds on [[vehicle-loading-plan]] (rig/dummy pattern).
+Plan: `.claude/plans/016-enter-vehicle/readme.md`. Press **Enter** near a car → CJ auto-runs to the driver door, opens it, climbs in, ends seated (hands on wheel). Driver side only (LHS/`door_lf`); exit deferred. Builds on [[vehicle-loading-plan]] (rig/dummy pattern).
 
 **Assets verified:** `ped.ifp` has `CAR_align_LHS`/`CAR_open_LHS`/`CAR_getin_LHS`/`CAR_closedoor_LHS`/`CAR_sit` (+ `CAR_getout_LHS`, `Drive_L/R` later) — already loaded into the AnimationController clip map by `loadAnimations`. **Door:** `door_lf_ok` atomic's frame parent = `door_lf_dummy` (hinge) at [0,0,0]; hinge at [-1.05,0.88] rel body (left-front=driver); door opens by rotating the hinge about **Z**. **Seat:** `ped_frontseat` dummy (at +X≈0.48 on admiral2 — verify side in browser). CAR_* clips carry root translation (default `buildAnimationClip` strips it) → plan moves CJ manually (align→door→seat lerps), in-place clips first.
 

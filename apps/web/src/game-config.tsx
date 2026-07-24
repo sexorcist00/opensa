@@ -7,6 +7,7 @@ import type { AssetLoaderKind } from '@opensa/loaders';
  */
 import type { ReactNode } from 'react';
 
+import { IS_DEV } from './dev-mode';
 import { selectGameIds } from './game-config.select';
 
 /** Everything needed to launch and run one game. */
@@ -22,6 +23,9 @@ export interface GameConfig {
   disabledNote?: string;
   /** Shown in a popup before launch (fetch: with an OK button; local: inside the folder prompt). */
   disclaimer: ReactNode;
+  /** Far draw distance (m) — the LOD streaming ring + fog cap, ONE knob (074/21). `?draw=` overrides.
+   *  SA's continuous city reads fine at 1200; an island TC needs the next island inside the ring. */
+  drawDistance: number;
   /** Menu button text. */
   label: string;
   /** Initial collision-zone radius / clock (minutes since midnight) / weather (a `WEATHER_NAMES` entry). */
@@ -57,15 +61,51 @@ const SA_TELEPORTS: readonly Teleport[] = [
   { coords: [-1045.0, -1620.0, 76.4], label: "Country - Truth's Farm" },
   { coords: [-1696.8, -748.0, 100.0], label: 'Country - Flint Hills' },
   { coords: [1139.0, -1490.0, 18.5], label: 'LS - Escalators' },
+  // Animated map objects (074/08 B7·b): the Burger Shot's sign SPINS — and the diner itself is the building
+  // that once vanished when anim defs were skipped wholesale ("the blue hole", plan 041).
+  { coords: [815.0, -1613.0, 20.0], label: 'LS - Burger Shot (spinning sign)' },
+  { coords: [-1494.0, 1941.0, 58.0], label: 'Country - Windmill' },
+  // UV-scroll animation (074/18 B7·c): the actual placed scrollers (found by scanning the map for models whose
+  // DFF carries a UVAnimDict — the plan's skull sign `visagesign04` turned out to have ZERO world placements).
+  { coords: [2370.1, 2164.7, 12.8], label: 'LV - Scrolling sign (UV-scroll)' },
+  { coords: [2088.0, 1901.5, 13.5], label: 'LV - Vegas waterfall (UV-scroll)' },
+  { coords: [2105.5, 1916.3, 14.9], label: 'LV - Mirage sign (UV-scroll)' },
+  // Procedural clutter (074/19-20): a DENSE field of breakable cacti (sjmcacti2, ~5.3 m tall — unmissable,
+  // unlike the ~1 m rocks a car drives over) in Bone County desert (cell 0,9, ~150 of them at z 15.3). Spawn is
+  // just west of the field; the Admiral (6 m east) faces a wall of cacti — drive in to smash them.
+  { coords: [5.0, 2415.0, 17.0], label: 'Desert - Breakable cacti' },
+  // Animated radars (085 row G): the two LS airport ap_radar1_01 towers @ (1663.6|1709.4, -2362.7) — the
+  // spinning dish is an anim object; a `[anim-objects] ap_radar1_01 failed to build` console warn names the root.
+  { coords: [1686.0, -2380.0, 14.0], label: 'LS - Airport radars (anim 085 G)' },
+  // Normals batch (map-optimizer plans 020-022) field-check spots: a road junction for the angle weighting,
+  // the doubled curved shells for the twin-quad smoothing.
+  { coords: [2493.0, -1667.0, 16.0], label: 'LS - Ganton junction (normals 021)' },
+  { coords: [-1348.0, -15.0, 12.0], label: 'SF - Airport car park ramp (normals 022)' },
+  { coords: [2165.0, 1275.0, 12.0], label: 'LV - Sphinx (normals 022)' },
 ];
 
 /** A launchable game id. */
-export type GameId = 'gostown' | 'original';
+export type GameId = 'carcer' | 'gostown' | 'original';
 
 export const GAME_CONFIG: Record<GameId, GameConfig> = {
+  carcer: {
+    assetLoader: 'local',
+    devOnly: true,
+    disclaimer: null,
+    // Islands: the far side of the 5.2×4.5 km archipelago must sit inside the LOD ring (field, 2026-07-23).
+    drawDistance: 1500,
+    label: 'Run Carcer City [local]',
+    loadGame: { radius: 400, startMinutes: 720, weather: 'EXTRASUNNY_SMOG_LA' },
+    // The ped installed from mods-src/gostown/peds (peds.ide 144) — the TC ships no BMYPOL1/male01 model.
+    mainCharacter: 'bmycg',
+    playerSpawn: [168.6, 728.0, 150.605202],
+    teleports: [{ coords: [1531.15, -1271.89, 581.74], label: 'Downtown' }],
+  },
   gostown: {
-    assetLoader: 'fetch',
-    disable: true,
+    /*assetLoader: 'fetch',
+    disable: true,*/
+    assetLoader: 'local',
+    devOnly: true,
     disabledNote: 'Demo is temporarily unavailable',
     disclaimer: (
       <>
@@ -104,10 +144,13 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
         </div>
       </>
     ),
+    // Islands: the far side of the 5.2×4.5 km archipelago must sit inside the LOD ring (field, 2026-07-23).
+    drawDistance: 1500,
     label: 'Run Gostown Paradise [web]',
-    loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
-    mainCharacter: 'BMYPOL1',
-    playerSpawn: [1531.15, -1271.89, 581.74],
+    loadGame: { radius: 400, startMinutes: 720, weather: 'EXTRASUNNY_SMOG_LA' },
+    // The ped installed from mods-src/gostown/peds (peds.ide 144) — the TC ships no BMYPOL1/male01 model.
+    mainCharacter: 'bmycg',
+    playerSpawn: [1531.15, -1271.89, 591.74],
     teleports: [{ coords: [1531.15, -1271.89, 581.74], label: 'Downtown' }],
   },
   original: {
@@ -122,17 +165,15 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
         <p>Analytics only count visitors.</p>
       </>
     ),
+    drawDistance: 1200,
     label: 'Run San Andreas [local only]',
-    loadGame: { radius: 400, startMinutes: 0, weather: 'EXTRASUNNY_SMOG_LA' },
-    mainCharacter: 'BMYPOL1',
-    playerSpawn: [2495, -1675, 16],
+    // 22:00 — the night boot the engine host always used (vehicle lamps/coronas visible on boot).
+    loadGame: { radius: 400, startMinutes: 1320, weather: 'EXTRASUNNY_SMOG_LA' },
+    mainCharacter: 'bmycg',
+    playerSpawn: [2495.0, -1675.0, 16.0], // LS - Ganton (default). Debug teleports below cover feature spots.
     teleports: [...SA_TELEPORTS],
   },
 };
-
-/** True in `npm run dev` (Vite serve); false in any production build. Vite statically replaces
- *  `process.env.NODE_ENV` (see `vite.config.ts`), so the dev-only games are dropped at build time. */
-const IS_DEV = process.env.NODE_ENV !== 'production';
 
 /** Launchable game ids, in menu order. `devOnly` games (fetch demos that would distribute mod content from
  *  the CDN) are dropped from production builds, so a deployed site offers only the bring-your-own-files

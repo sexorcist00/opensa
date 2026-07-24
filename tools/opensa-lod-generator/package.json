@@ -4,7 +4,8 @@
   "private": true,
   "description": "OpenSA chunked cell-LOD bake (merge → QEM decimate → per-cell TXD → drop-in build). CLI tool.",
   "exports": {
-    "./build": "./src/build.ts"
+    "./build": "./src/build.ts",
+    "./lod.config": "./src/lod.config.ts"
   },
   "nx": {
     "tags": [

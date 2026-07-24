@@ -1,17 +1,16 @@
-import { Object3D, Quaternion } from 'three';
 import { describe, expect, it } from 'vitest';
 
-import type { CharacterAnimationSystem } from '../character/character-animation.system';
 import type { CharacterControllerSystem } from '../character/character-controller.system';
 import type { Config, ControlsConfig } from '../interfaces/config.interface';
 import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { PhysicsWorld, VehicleController } from '../physics/physics-world';
-import type { EnterableVehicle } from './enter-vehicle.system';
+import type { EnterableVehicle, VehicleAnimator } from './enter-vehicle.system';
 import type { VehicleRig } from './vehicle-rig';
 
 import { Logger } from '../diagnostics/logger';
 import { KeyboardSource } from '../input';
 import { EnterVehicleSystem } from './enter-vehicle.system';
+import { FakeVehicleHandle } from './vehicle-handle.fake';
 
 const CONTROLS = { back: 'KeyS', forward: 'KeyW', left: 'KeyA', right: 'KeyD' };
 
@@ -29,7 +28,7 @@ interface Harness {
 
 /** How far the driver door has swung from closed. */
 function doorAngle(vehicle: EnterableVehicle): number {
-  return vehicle.doors[0].pivot.quaternion.angleTo(new Quaternion());
+  return Math.abs((vehicle.handle as FakeVehicleHandle).doorAngles.get('lf') ?? 0);
 }
 
 /** Run the full enter sequence so the system ends seated (Enter released, ready to drive). */
@@ -97,7 +96,7 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
       anim.clip = clip;
       anim.loop = options.loop ?? true;
     },
-  } as unknown as CharacterAnimationSystem;
+  } satisfies VehicleAnimator;
 
   const aimCamera = (yaw: number): void => {
     anim.cameraAzimuth = yaw;
@@ -130,15 +129,17 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
 /** Car with hinge at the body origin, half-extents [1, 2], driver seat at [-0.4, 0, -0.16]. */
 function vehicleAt(position: Vec3): EnterableVehicle {
   const rig = { setSpeed: (): undefined => undefined, setSteer: (): undefined => undefined } as unknown as VehicleRig;
+  const handle = new FakeVehicleHandle();
+  handle.hinges.set('lf', [0, 0, 0]); // hinge at the body origin
 
   return {
     body: 0,
     controller: {} as unknown as VehicleController,
-    doors: [{ closed: new Quaternion(), pivot: new Object3D(), side: 'lf' }],
     halfExtents: [1, 2, 0.7],
+    handle,
     handling: { brakeDecel: 9, engineAccel: 20, mass: 1500, maxVelocity: 160, steeringLock: 30 },
     heading: 0,
-    object: new Object3D(),
+    orientation: [0, 0, 0, 1] as [number, number, number, number],
     position,
     rig,
     seatLocal: [-0.4, 0, -0.16],

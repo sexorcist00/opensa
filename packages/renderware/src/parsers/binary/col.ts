@@ -47,7 +47,14 @@ export function parseColLibrary(buffer: ArrayBuffer): ColModel[] {
     }
     const body = stream.bytes(size);
     if (version >= 2) {
-      models.push(parseModel(body, version));
+      // A block whose declared size passes the guard can still be internally truncated (too small for the
+      // model header parseModel reads) — its RangeError would otherwise lose EVERY model already parsed in
+      // this library, not just the bad block. Keep the good ones and stop at the corrupt tail.
+      try {
+        models.push(parseModel(body, version));
+      } catch {
+        break;
+      }
     }
     // COL1 is skipped (absent from SA; its vertex layout is uncompressed float).
   }

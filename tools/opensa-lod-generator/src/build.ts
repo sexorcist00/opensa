@@ -15,11 +15,15 @@ import { createStageProfiler, type ProfileSnapshot, type StageProfiler } from '.
 import { config as defaultConfig } from './lod.config';
 
 export interface BuildOpensaLodsOptions {
-  /** Grid cell size (shortcut for `config.cellSize`); must match the engine streaming grid. */
+  /** Grid cell size (shortcut for `config.cellSize`) — the GAME-side grid, not the render grid. */
   cellSize?: number;
   /** Overrides on top of the default {@link LodConfig}. */
   config?: Partial<LodConfig>;
   gameDir: string;
+  /** lod-target models the strip must KEEP (plan 087 `lod-always.json`): a TC's stub-HD/real-LOD pattern
+   *  (gostown `LODEnsemble*` forests) — stripping them deletes the only real geometry; the cell bake
+   *  cannot replace it because it bakes the stub HD. Lowercased names. */
+  keepLods?: readonly string[];
   outDir: string;
   /** Strip the stock `lod*` building/terrain LODs (the cell-LODs replace them). Default false. */
   stripLods?: boolean;
@@ -47,7 +51,9 @@ export async function buildOpensaLods(options: BuildOpensaLodsOptions): Promise<
   adapter.finalize(options.outDir, baked);
   console.log(profiler.report());
   if (options.stripLods) {
-    const exclude = new Set((config.excludeItems ?? []).map((name) => name.toLowerCase()));
+    const exclude = new Set(
+      [...(config.excludeItems ?? []), ...(options.keepLods ?? [])].map((name) => name.toLowerCase()),
+    );
     const { entries, instances } = stripOldLods(options.outDir, exclude);
     console.log(`  stripped old lod*: ${instances} instances, ${entries} gta3.img entries`);
   }

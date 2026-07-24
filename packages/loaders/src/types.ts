@@ -17,6 +17,13 @@ export interface AssetLoader {
   /** Make the given groups' assets present in the VFS sink (download / read). Default: all groups. */
   load(groups?: readonly GroupName[]): Promise<void>;
   /**
+   * Optional: open a world-pak file (`manifest.json` / `world.ospak` / `water.bin`) from the loaded install.
+   * The LOCAL loader serves these from the `opensa/` folder inside the picked install, so folder mode renders
+   * the world from the picked folder — not the app's `public/`. The fetch loader has no folder and omits this,
+   * so the host loads the pak over HTTP. Returns null when the file is absent (the caller fails loudly).
+   */
+  openWorld?(name: string): Promise<Blob | null>;
+  /**
    * Optional: run anything that needs a **user gesture** before loading — the local loader prompts for the
    * install folder here. A loader that defines `prepare` must be `ready()` before {@link init}/{@link load}.
    */
@@ -39,8 +46,9 @@ export interface AssetLoaderEvents {
   progress: ProgressSnapshot;
 }
 
-/** Which loader the build selects (`VITE_ASSET_LOADER`, default `fetch`). */
-export type AssetLoaderKind = 'fetch' | 'local';
+/** Which loader the build selects (`VITE_ASSET_LOADER`, default `fetch`). `http-dir` is a dev/session override
+ *  (`?loader=http-dir`) that reads a served perfect-map-builder output — see plan 079. */
+export type AssetLoaderKind = 'fetch' | 'http-dir' | 'local';
 
 /**
  * Where the loader pushes each ready chunk's RAW zip bytes. Implemented by the Virtual File System

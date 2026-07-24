@@ -51,24 +51,56 @@ export class Vfs implements AssetFileSystem, AssetSink {
   }
 
   get(name: string): ArrayBuffer | null {
-    const bytes = this.files.get(name);
+    const bytes = this.assembled(name);
 
     return bytes ? new Uint8Array(bytes).buffer : null;
   }
 
   getText(name: string): null | string {
-    const bytes = this.files.get(name);
+    const bytes = this.assembled(name);
 
     return bytes ? decodeText(bytes) : null;
   }
 
   has(name: string): boolean {
-    return this.files.has(name);
+    return this.files.has(name) || this.files.has(`${name}#0`);
   }
 
   /** Problems vs the manifest (empty = every chunk delivered and every entry present). */
   verify(manifest: Manifest): string[] {
     return verifyTotals(manifestTotals(manifest), { chunks: this.chunkCount, entries: this.entryCount });
+  }
+
+  /**
+   * Serve `name`, reassembling fetch-pack SLICES on first touch (plan 086: files over the chunk target
+   * ship as `<name>#0..#N` parts, and parts of one file land in DIFFERENT chunks — the name-hash buckets
+   * split them). The concat replaces the parts in the map, so a 2 GB archive is joined once, not per read.
+   */
+  private assembled(name: string): Uint8Array | undefined {
+    const direct = this.files.get(name);
+    if (direct || !this.files.has(`${name}#0`)) {
+      return direct;
+    }
+    const parts: Uint8Array[] = [];
+    let total = 0;
+    for (let index = 0; ; index += 1) {
+      const part = this.files.get(`${name}#${index}`);
+      if (!part) {
+        break;
+      }
+      parts.push(part);
+      total += part.byteLength;
+    }
+    const whole = new Uint8Array(total);
+    let offset = 0;
+    for (const [index, part] of parts.entries()) {
+      whole.set(part, offset);
+      offset += part.byteLength;
+      this.files.delete(`${name}#${index}`);
+    }
+    this.files.set(name, whole);
+
+    return whole;
   }
 }
 

@@ -1,93 +1,47 @@
 /**
- * Standalone character viewer — a dev tool to inspect a skinned ped in isolation:
- * see its skeleton and collision capsule and play any `ped.ifp` animation (looped).
+ * Standalone character viewer — a dev tool to inspect a skinned ped in isolation: pick an animation clip
+ * from `ped.ifp`, loop it or play it once, and toggle the skeleton, the collision capsule and the mesh
+ * wireframe.
  *
- * It reuses the real path (`parseDff` -> `buildSkinnedClump`, `orientCharacter`,
- * `parseIfp` -> `buildAnimationClip` -> `AnimationController`), so the rig and
- * animations behave exactly as in the game.
+ * Ported onto the own engine in plan 074/13 phase 4. It reuses the real build path
+ * (`parseDff` → `buildPedModel` → `engine.setPedProbe`, animated by the engine's own `IfpSampler`), so a
+ * bad bind pose or a mismatched bone track here is the same one the game would show.
  *
- * Peds are loaded from the compare server (`--after` side); the autocomplete list comes from that side's
- * `peds.ide` and animations from its `anim/ped.ifp`. Run
+ * Peds are loaded from the compare server (`--after` side); the list comes from that side's `peds.ide` and
+ * the clips from its `anim/ped.ifp`. Run
  * `npx tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>` alongside `npm run dev`.
  * Open at /viewer.html?tab=character.
  */
-import type { AnimationClip, Object3D } from 'three';
+import type { IfpAnimation } from '@opensa/renderware';
 
-import { AnimationController } from '@opensa/game/character/animation-controller';
-import { orientCharacter } from '@opensa/game/character/orient-character';
-import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { parseIfp } from '@opensa/renderware/parsers/binary/ifp';
-import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
-import { buildAnimationClip } from '@opensa/renderware/three/build-anim-clip';
-import { buildSkinnedClump } from '@opensa/renderware/three/build-skinned-clump';
-import { buildTextureMap } from '@opensa/renderware/three/build-texture';
-import {
-  AmbientLight,
-  Box3,
-  Box3Helper,
-  Clock,
-  Color,
-  DirectionalLight,
-  GridHelper,
-  Group,
-  PerspectiveCamera,
-  Scene,
-  SkeletonHelper,
-  Vector3,
-  WebGLRenderer,
-} from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const DEFAULT_CLIP = 'idle_stance';
-/** Stand the SA bind pose up (matches canvas-host's PLAYER_PLACEMENT). */
-const PLACEMENT = {
-  offset: [0, 0, 0.04] as [number, number, number],
-  rotation: [0, 0, 0] as [number, number, number],
-  scale: 1,
-};
-/** Player collision half-extents (Z-up) from the game (canvas-host PLAYER_HALF_EXTENTS). */
-const HALF = new Vector3(0.3, 0.3, 0.9);
+import type { ViewedPed } from './engine/ped-view';
+
+import { loadPed, loadPedFromOsm } from './engine/ped-view';
+import { boxLines, createViewerEngine } from './engine/viewer-engine';
+
+/** Mirrors the game's PLAYER_HALF_EXTENTS: feet at z = 0, so the box stands on the ground. */
+const HALF: readonly [number, number, number] = [0.3, 0.3, 0.9];
+const DEFAULT_CLIP = 'IDLE_stance';
 
 /** Compare server (same as the other tabs); peds load from its `--after` side. */
 const DEFAULT_SERVER = 'http://localhost:3002';
 let serverUrl = DEFAULT_SERVER;
 
-const renderer = new WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-const scene = new Scene();
-scene.background = new Color(0x4a4a4a);
-
-const camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100000);
-const controls = new OrbitControls(camera, renderer.domElement);
-const clock = new Clock();
-
-const ambient = new AmbientLight(0xffffff, 1.5);
-const directional = new DirectionalLight(0xffffff, 1.5);
-directional.position.set(50, 100, 50);
-scene.add(ambient, directional, new GridHelper(8, 8, 0x888888, 0x444444));
-
-// Native GTA Z-up content shown Y-up (matches the game's entity root −90°X).
-const content = new Group();
-content.rotation.x = -Math.PI / 2;
-scene.add(content);
+const viewer = createViewerEngine();
 
 const clipSelect = document.createElement('select');
 const loopToggle = document.createElement('input');
 const skeletonToggle = document.createElement('input');
 const collisionToggle = document.createElement('input');
 const wireframeToggle = document.createElement('input');
-/** Live triangle count of the current ped. */
 const polyLabel = Object.assign(document.createElement('div'), { className: 'hint' });
 
-let controller: AnimationController | null = null;
-let skeletonHelper: null | SkeletonHelper = null;
-let collisionBox: Box3Helper | null = null;
-let currentPlayer: null | Object3D = null;
-/** IFP clips, fetched once per server (cleared when the server URL changes). */
-let clipCache: Map<string, AnimationClip> | null = null;
+let current: null | ViewedPed = null;
+/** Parsed once per server — the whole `ped.ifp`, shared by every ped from that side. */
+let animations: null | Promise<IfpAnimation[]> = null;
+let capsule: null | number = null;
 
 function addToggle(parent: HTMLElement, label: string, input: HTMLInputElement, onChange: () => void): void {
   const wrapper = document.createElement('label');
@@ -97,34 +51,17 @@ function addToggle(parent: HTMLElement, label: string, input: HTMLInputElement, 
   parent.appendChild(wrapper);
 }
 
-function animate(): void {
-  requestAnimationFrame(animate);
-  controller?.update(clock.getDelta());
-  controls.update();
-  renderer.render(scene, camera);
-}
-
-function applyCollision(): void {
-  if (collisionBox) {
-    collisionBox.visible = collisionToggle.checked;
+/** The player capsule as a static box — the game's collision shape, not the mesh's. */
+function applyCapsule(): void {
+  if (capsule === null && collisionToggle.checked) {
+    capsule = viewer.engine.createDebugLines(
+      boxLines([-HALF[0], 0, -HALF[1]], [HALF[0], HALF[2] * 2, HALF[1]]),
+      [0, 1, 0.53, 1],
+    );
   }
-}
-
-function applySkeleton(): void {
-  if (skeletonHelper) {
-    skeletonHelper.visible = skeletonToggle.checked;
+  if (capsule !== null) {
+    viewer.engine.setDebugLinesVisible(capsule, collisionToggle.checked);
   }
-}
-
-/** Toggle the polygon wireframe on the current ped's materials. */
-function applyWireframe(): void {
-  currentPlayer?.traverse((node) => {
-    const mesh = node as { material?: { wireframe?: boolean } | { wireframe?: boolean }[] };
-    const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
-    for (const material of materials) {
-      material.wireframe = wireframeToggle.checked;
-    }
-  });
 }
 
 function buildControls(): void {
@@ -141,6 +78,7 @@ function buildControls(): void {
   datalist.id = 'ped-models';
   const status = document.createElement('div');
   status.className = 'hint';
+
   const submit = (): void => {
     const name = input.value.trim().toLowerCase();
     if (name) {
@@ -157,135 +95,94 @@ function buildControls(): void {
   });
   server.addEventListener('change', () => {
     serverUrl = server.value.replace(/\/$/, '');
-    clipCache = null; // animations are per-side
+    animations = null; // clips are per-side
     void loadPedList(datalist, status);
   });
-  panel.append(server, input, datalist, load, status);
 
+  panel.append(server, input, datalist, load, status, clipSelect);
   clipSelect.addEventListener('change', playSelected);
-  panel.appendChild(clipSelect);
 
-  loopToggle.checked = true;
   addToggle(panel, 'Loop', loopToggle, playSelected);
-  skeletonToggle.checked = true;
-  addToggle(panel, 'Skeleton', skeletonToggle, applySkeleton);
-  addToggle(panel, 'Collision (capsule)', collisionToggle, applyCollision);
-  addToggle(panel, 'Wireframe (polygon mesh)', wireframeToggle, applyWireframe);
-  panel.appendChild(polyLabel);
+  addToggle(panel, 'Skeleton', skeletonToggle, () => current?.showSkeleton(skeletonToggle.checked));
+  addToggle(panel, 'Collision (capsule)', collisionToggle, applyCapsule);
+  addToggle(panel, 'Wireframe (polygon mesh)', wireframeToggle, () => current?.showWireframe(wireframeToggle.checked));
 
-  const hint = document.createElement('span');
-  hint.className = 'hint';
+  const hint = Object.assign(document.createElement('div'), { className: 'hint' });
   hint.textContent = 'click scene to replay';
-  panel.appendChild(hint);
+  panel.append(hint, polyLabel);
 
   document.body.appendChild(panel);
+  loopToggle.checked = true;
+  skeletonToggle.checked = true;
+  viewer.canvas.addEventListener('click', playSelected);
   void loadPedList(datalist, status);
 }
 
-/** Remove the current ped (mesh, skeleton, capsule, controller) before loading another. */
-function disposeCharacter(): void {
-  controller = null;
-  if (currentPlayer) {
-    content.remove(currentPlayer);
-    currentPlayer.traverse((node) => {
-      const mesh = node as { geometry?: { dispose(): void }; material?: { dispose(): void } | { dispose(): void }[] };
-      mesh.geometry?.dispose();
-      const material = mesh.material;
-      if (Array.isArray(material)) {
-        material.forEach((entry) => entry.dispose());
-      } else {
-        material?.dispose();
-      }
-    });
-    currentPlayer = null;
-  }
-  if (skeletonHelper) {
-    scene.remove(skeletonHelper);
-    skeletonHelper = null;
-  }
-  if (collisionBox) {
-    content.remove(collisionBox);
-    collisionBox = null;
-  }
-  clipSelect.replaceChildren();
+/** The CONVERTED `.osm` bytes from the `--after` side, or null when it's stock (404 → use DFF+TXD). */
+async function fetchOsm(model: string): Promise<ArrayBuffer | null> {
+  const response = await fetch(`${serverUrl}/osm?side=after&model=${encodeURIComponent(model)}`);
+
+  return response.ok ? response.arrayBuffer() : null;
 }
 
-async function fetchServer(endpoint: string): Promise<ArrayBuffer> {
-  const response = await fetch(`${serverUrl}/${endpoint}`);
+async function fetchServer(endpoint: 'dff' | 'txd', model: string): Promise<ArrayBuffer> {
+  const response = await fetch(`${serverUrl}/${endpoint}?side=after&model=${encodeURIComponent(model)}`);
   if (!response.ok) {
-    throw new Error(`${endpoint}: not found on --after`);
+    throw new Error(`${model}: ${endpoint} not found on --after`);
   }
 
   return response.arrayBuffer();
 }
 
-function frameObject(object: Object3D): void {
-  const box = new Box3().setFromObject(object);
-  const size = box.getSize(new Vector3());
-  const center = box.getCenter(new Vector3());
-  const radius = Math.max(size.x, size.y, size.z) || 2;
-  controls.target.copy(center);
-  camera.position.set(center.x + radius, center.y + radius * 0.5, center.z + radius);
-  controls.update();
-}
+/** `ped.ifp` from the `--after` game dir, parsed once and shared by every ped on that side. */
+function loadAnimations(): Promise<IfpAnimation[]> {
+  animations ??= fetch(`${serverUrl}/ifp?side=after`)
+    .then((response) => (response.ok ? response.arrayBuffer() : null))
+    .then((bytes) => (bytes ? parseIfp(bytes) : []));
 
-async function loadAnimations(): Promise<Map<string, AnimationClip>> {
-  if (clipCache) {
-    return clipCache;
-  }
-  const clips = new Map<string, AnimationClip>();
-  for (const anim of parseIfp(await fetchServer('ifp?side=after'))) {
-    clips.set(anim.name.toLowerCase(), buildAnimationClip(anim));
-  }
-  clipCache = clips;
-
-  return clips;
+  return animations;
 }
 
 async function loadCharacter(name: string, status: HTMLElement): Promise<void> {
   status.textContent = `loading ${name}…`;
-  let dffBuffer: ArrayBuffer;
-  let txdBuffer: ArrayBuffer;
   try {
-    [dffBuffer, txdBuffer] = await Promise.all([
-      fetchServer(`dff?side=after&model=${encodeURIComponent(name)}`),
-      fetchServer(`txd?side=after&model=${encodeURIComponent(name)}`),
-    ]);
+    // AFTER may be a converted build (`.osm`): try that first, fall back to the stock DFF+TXD.
+    const [osm, clips] = await Promise.all([fetchOsm(name), loadAnimations()]);
+    await viewer.ready;
+    current?.dispose();
+    if (osm) {
+      current = loadPedFromOsm(viewer.engine, name, osm, clips);
+    } else {
+      const [dff, txd] = await Promise.all([fetchServer('dff', name), fetchServer('txd', name)]);
+      current = loadPed(viewer.engine, dff, [txd], clips);
+    }
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : String(error);
 
     return;
   }
-  const skinned = buildSkinnedClump(parseDff(dffBuffer), buildTextureMap(parseTxd(txdBuffer)));
-  if (!skinned) {
+
+  if (!current) {
     status.textContent = `${name}: not skinned (no skeleton)`;
+    polyLabel.textContent = '';
 
     return;
   }
 
-  disposeCharacter();
-  const player = orientCharacter(skinned.root, PLACEMENT);
-  currentPlayer = player;
-  content.add(player);
-  updatePolyCount();
-
-  skeletonHelper = new SkeletonHelper(skinned.root);
-  skeletonHelper.visible = skeletonToggle.checked;
-  scene.add(skeletonHelper);
-  // Capsule footprint as a box: feet at z=0, ±half on x/y, full height on z (Z-up).
-  const bounds = new Box3(new Vector3(-HALF.x, -HALF.y, 0), new Vector3(HALF.x, HALF.y, HALF.z * 2));
-  collisionBox = new Box3Helper(bounds, 0x00ff88);
-  collisionBox.visible = collisionToggle.checked;
-  content.add(collisionBox);
-
-  const clips = await loadAnimations();
-  controller = new AnimationController(player, clips, skinned.bonesByName);
-  [...clips.keys()].sort().forEach((clip) => clipSelect.append(new Option(clip, clip)));
-  clipSelect.value = clips.has(DEFAULT_CLIP) ? DEFAULT_CLIP : (clipSelect.options[0]?.value ?? '');
+  clipSelect.replaceChildren(
+    ...current.clipNames.map((clip) =>
+      Object.assign(document.createElement('option'), { textContent: clip, value: clip }),
+    ),
+  );
+  clipSelect.value = current.clipNames.includes(DEFAULT_CLIP) ? DEFAULT_CLIP : (current.clipNames[0] ?? '');
   playSelected();
-  applyWireframe();
-  frameObject(player);
-  status.textContent = name;
+
+  current.showSkeleton(skeletonToggle.checked);
+  current.showWireframe(wireframeToggle.checked);
+  applyCapsule();
+  polyLabel.textContent = `Triangles: ${Math.round(current.data.indices.length / 3).toLocaleString()}`;
+  viewer.orbit.frame(current.bounds.center, current.bounds.radius * 2.4);
+  status.textContent = `${name} — ${current.clipNames.length} clip(s)`;
 }
 
 /** Fetch the `--after` ped list (from `peds.ide`) into the datalist. */
@@ -305,35 +202,11 @@ async function loadPedList(datalist: HTMLDataListElement, status: HTMLElement): 
   }
 }
 
-function onResize(): void {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
 function playSelected(): void {
-  if (controller && clipSelect.value) {
-    controller.play(clipSelect.value, 0.2, loopToggle.checked);
+  if (clipSelect.value) {
+    current?.play(clipSelect.value, loopToggle.checked);
   }
 }
 
-/** Sum the triangle count of the current ped's meshes and show it. */
-function updatePolyCount(): void {
-  let triangles = 0;
-  currentPlayer?.traverse((node) => {
-    const mesh = node as {
-      geometry?: { getAttribute(name: string): undefined | { count: number }; getIndex(): null | { count: number } };
-    };
-    const geometry = mesh.geometry;
-    if (geometry) {
-      const index = geometry.getIndex();
-      triangles += (index ? index.count : (geometry.getAttribute('position')?.count ?? 0)) / 3;
-    }
-  });
-  polyLabel.textContent = currentPlayer ? `Triangles: ${Math.round(triangles).toLocaleString()}` : '';
-}
-
-window.addEventListener('resize', onResize);
-renderer.domElement.addEventListener('click', playSelected);
 buildControls();
-animate();
+viewer.start((dt) => current?.update(dt));

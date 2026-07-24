@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * The tab shell (`viewer.html` + `apps/viewer/shell.ts`): `?tab=` lazy-loads one of the three viewers
+ * The tab shell (`viewer.html` + `apps/viewer/shell.ts`): `?tab=` lazy-loads one of the four viewers
  * into one app. Shell-level only — asserts the right viewer mounts its canvas and the nav reflects the
  * active tab, independent of each viewer's asset fetches (the canvas is appended before any fetch).
  */
@@ -17,6 +17,9 @@ test.describe('viewer tabs', () => {
     ['object', 'Object'],
     ['vehicle', 'Vehicle'],
     ['character', 'Character'],
+    // `compare` needs its own server process for MODEL bytes, but the tab must still boot the engine
+    // and mount a canvas without one — that is what this asserts (074/13 phase 4.3).
+    ['compare', 'Compare'],
   ] as const) {
     test(`?tab=${tab} loads the ${tab} viewer and marks its tab active`, async ({ page }) => {
       await page.goto(`/viewer.html?tab=${tab}`);

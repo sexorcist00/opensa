@@ -28,8 +28,14 @@ export type WorldGrid = Map<string, GridCell>;
  * hour gate), so the real hour-gated instance must render at LOD range too; HD and
  * LOD cells are mutually exclusive per cell, so nothing double-renders. Pure data —
  * the streaming layer turns cells into meshes.
+ *
+ * **`alwaysOnLods`** (plan 087, gostown trees): lod-TARGET models (lowercased) that ARE the content —
+ * a TC pattern places a stub HD (`fakebit01`, draw 65) whose lod link points at the real geometry
+ * (`LODEnsemble*` forests, draw 2000). Bucketing those targets lod-only would hide every forest inside
+ * the HD ring (and the cell bake never sees them — it bakes the stub). Listed models go into BOTH
+ * lists, exactly like timed instances (per-cell level exclusivity keeps it single-rendered).
  */
-export function buildWorldGrid(defs: MapDefinitions, cellSize: number): WorldGrid {
+export function buildWorldGrid(defs: MapDefinitions, cellSize: number, alwaysOnLods?: ReadonlySet<string>): WorldGrid {
   const grid: WorldGrid = new Map();
   for (const instance of defs.instances) {
     const timed = defs.timedCatalog?.has(instance.id) ?? false;
@@ -44,7 +50,7 @@ export function buildWorldGrid(defs: MapDefinitions, cellSize: number): WorldGri
       cell = { cx, cy, hd: [], lod: [] };
       grid.set(key, cell);
     }
-    if (timed) {
+    if (timed || (instance.isLod && alwaysOnLods?.has(def.modelName.toLowerCase()) === true)) {
       cell.hd.push(instance);
       cell.lod.push(instance);
     } else {

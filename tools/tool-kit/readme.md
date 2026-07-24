@@ -5,7 +5,7 @@ from any single tool so they don't reach into each other. Read-only over the eng
 (`../packages/renderware/src/...`); all mutation/convenience lives here.
 
 Today a plain folder of relative-imported modules; on the eventual monorepo move it becomes a real package
-(`@opensa/tool-kit`) — see [docs/ideas/monorepo-packages.md](../docs/ideas/monorepo-packages.md).
+(`@opensa/tool-kit`) — see [plan 057](../../docs/plans/057-nx-monorepo-migration/readme.md).
 
 ## Modules
 

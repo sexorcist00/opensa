@@ -13,9 +13,10 @@ const TEXTURE_CHILDREN: ReadonlySet<number> = new Set([RwSection.EXTENSION, RwSe
  *
  * Supports the GTA SA D3D8/D3D9 Texture Native layout. Pixel formats handled:
  * DXT1/3/5 (kept as raw blocks), uncompressed 32-bit (8888/888), 16-bit
- * (R5G6B5 / A1R5G5B5 / A4R4G4B4 — expanded to RGBA here, plan 043), and 8-/4-bit
- * palettized (expanded to RGBA here). Textures whose format is not understood
- * are skipped rather than aborting the whole dictionary.
+ * (R5G6B5 / A1R5G5B5 / A4R4G4B4 — expanded to RGBA here, plan 043), and 8-bit
+ * palettized (PAL8, expanded to RGBA here). 4-bit palettized (PAL4) is REJECTED, not
+ * decoded (see classifyFormat). Textures whose format is not understood are skipped
+ * rather than aborting the whole dictionary.
  */
 export function parseTxd(buffer: ArrayBuffer): RWTextureDictionary {
   const stream = new BinaryStream(buffer);
@@ -35,6 +36,14 @@ export function parseTxd(buffer: ArrayBuffer): RWTextureDictionary {
     return { textures: recovered };
   }
 
+  // An EMPTY dictionary is not a broken one. Stock SA ships 11 of them — a valid 0x16 chunk in a single
+  // 2 048-byte IMG sector with nothing inside, for models that need no textures (`faketarget`,
+  // `fake_mule_col`, `fuckknows`, `mine`, …). The game renders those materials with their own colour, so
+  // reporting "not a TXD" here was both wrong and the reason 11 map models refused to convert.
+  if (dictHeader) {
+    return { textures: [] };
+  }
+
   throw new Error('Not a TXD: no TexDictionary (0x16) chunk and no recoverable TEXTURE_NATIVE chunks');
 }
 
@@ -43,15 +52,24 @@ function classifyFormat(d3dFormat: number, rasterFormat: number, depth: number):
   switch (d3dFormat) {
     case D3dCompression.DXT1:
       return 'dxt1';
+    case D3dCompression.DXT2:
     case D3dCompression.DXT3:
       return 'dxt3';
+    case D3dCompression.DXT4:
     case D3dCompression.DXT5:
       return 'dxt5';
     default:
       break;
   }
-  if (rasterFormat & (RasterFormat.PAL8 | RasterFormat.PAL4)) {
-    return 'rgba8888'; // expanded from palette below
+  if (rasterFormat & RasterFormat.PAL8) {
+    return 'rgba8888'; // expanded from the 256-entry palette below
+  }
+  if (rasterFormat & RasterFormat.PAL4) {
+    // 4-bit palettes pack TWO indices per byte against a 16-entry table; expandPalette assumes one 8-bit
+    // index per byte, so decoding PAL4 would emit a half-size, mostly-black image. No shipped asset uses it
+    // (scanned original/carcer/gostown → 0 PAL4), so REJECT it here rather than mis-decode: the texture is
+    // skipped cleanly (a visible missing texture, not silent corruption). See docs/open-issues/pal4-textures.md.
+    return null;
   }
   // Uncompressed 32-bit: A8R8G8B8 (raster C8888) and X8R8G8B8 (raster C888) are
   // both 4 bytes/pixel — classify by depth so neither is dropped.
@@ -194,16 +212,15 @@ function parseTextureNative(stream: BinaryStream, header: ChunkHeader): null | R
     return null; // unsupported (e.g. 16-bit) — skip, chunk walker advances past it
   }
 
-  // Palettized rasters carry a colour table before the mip data.
+  // Palettized rasters carry a colour table before the mip data. Only PAL8 reaches here — classifyFormat
+  // rejects PAL4 above, so its 16-entry table is never read.
   let palette: null | Uint8Array = null;
   if (rasterFormat & RasterFormat.PAL8) {
     palette = stream.bytes(256 * 4);
-  } else if (rasterFormat & RasterFormat.PAL4) {
-    palette = stream.bytes(16 * 4);
   }
 
   const pixelFormat = rasterFormat & RasterFormat.PIXEL_FORMAT_MASK;
-  const mipmaps = readMipmaps(stream, width, height, numLevels, format, palette, depth, pixelFormat);
+  const mipmaps = readMipmaps(stream, width, height, numLevels, format, palette, depth, pixelFormat, hasAlpha);
   if (mipmaps.length === 0) {
     return null;
   }
@@ -228,6 +245,7 @@ function readMipmaps(
   palette: null | Uint8Array,
   depth: number,
   pixelFormat: number,
+  hasAlpha: boolean,
 ): RWMipLevel[] {
   const mipmaps: RWMipLevel[] = [];
   let w = width;
@@ -242,7 +260,7 @@ function readMipmaps(
       if (palette) {
         data = expandPalette(raw, palette);
       } else if (format === 'rgba8888') {
-        data = depth === 16 ? expand16(raw, pixelFormat) : swizzleBgraToRgba(raw);
+        data = depth === 16 ? expand16(raw, pixelFormat) : swizzleBgraToRgba(raw, hasAlpha);
       }
       mipmaps.push({ data, height: Math.max(1, h), width: Math.max(1, w) });
     }
@@ -320,13 +338,15 @@ function recoverTextures(
 }
 
 /** Convert in-place a BGRA byte buffer to RGBA (returns a new buffer). */
-function swizzleBgraToRgba(bgra: Uint8Array): Uint8Array {
+function swizzleBgraToRgba(bgra: Uint8Array, hasAlpha: boolean): Uint8Array {
   const out = new Uint8Array(bgra.length);
   for (let i = 0; i < bgra.length; i += 4) {
     out[i + 0] = bgra[i + 2];
     out[i + 1] = bgra[i + 1];
     out[i + 2] = bgra[i + 0];
-    out[i + 3] = bgra[i + 3];
+    // X8R8G8B8 (C888, hasAlpha=false) carries 0 in its unused X byte — that is padding, not alpha, so
+    // force opaque. Copying the X as alpha made whole opaque models (carcer sewer/police) render invisible.
+    out[i + 3] = hasAlpha ? bgra[i + 3] : 255;
   }
 
   return out;

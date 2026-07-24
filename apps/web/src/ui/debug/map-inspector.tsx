@@ -1,8 +1,35 @@
-import type { CellCoord, Game, WorldObjectInfo } from '@opensa/game';
+import type { CellCoord, GameEvents, WorldObjectInfo } from '@opensa/game';
+import type { EventBus } from '@opensa/game/events/event-bus';
 
 import { type ReactElement, useEffect, useMemo, useState } from 'react';
 
 import { CELL_PX, styles } from './debug-styles';
+
+/**
+ * The map inspector's view of the host (074/22). The three-owned `Game` class this used to take died with
+ * the old renderer (plan 13 phase 5), so the surface is declared here and implemented by whichever host
+ * can honour it — the engine host builds it in its boot closure. Selection members are OPTIONAL because
+ * picking needs the per-placement mapper in `.oscell`; a host without one simply omits them and the
+ * SELECTED block renders its own explanation instead of a dead panel.
+ */
+export interface MapGame {
+  /** The pak's cell grid pitch (world units). */
+  cellSize: () => number;
+  readonly events: Pick<EventBus<GameEvents>, 'on'>;
+  /** Hide the picked object; returns how many are hidden now. */
+  hideSelectedObject?: () => number;
+  /** Every cell the map offers, resident or not. */
+  listCells: () => CellCoord[];
+  /** Un-hide everything; returns the remaining hidden count (0). */
+  restoreHiddenObjects?: () => number;
+  /** Pin an explicit cell set at one level, or `null` to resume normal streaming. */
+  setManualCells: (cells: CellCoord[] | null, lod?: boolean) => void;
+  /** Enter/leave map-viewer mode (detached camera + pinned cells). */
+  setMapViewer: (enabled: boolean) => void;
+  setShowCollision?: (enabled: boolean) => void;
+  /** The cell the player currently stands in. */
+  viewCell: () => CellCoord | null;
+}
 
 /** Rough GTA SA region of a cell (by its world-centre coords), used to group the sections. */
 const REGIONS = ['Los Santos', 'San Fierro', 'Las Venturas', 'Countryside'] as const;
@@ -16,13 +43,13 @@ const REGION_COLOR: Record<Region, string> = {
 };
 
 /**
- * The map-viewer inspector. Mounting it turns the engine's **map-viewer** mode on
- * (free-fly camera + manual cell render + click-to-pick) and seeds the selection
- * with the current section; unmounting turns it back off and resumes streaming —
- * so leaving the Map screen / closing the panel exits cleanly. Pick the sections
- * to render (HD, or LOD with "Show LODs"); clicking a model reports its info.
+ * The map-viewer inspector. Mounting it turns the host's **map-viewer** mode on
+ * (detached camera + manual cell render + click-to-pick where supported) and seeds
+ * the selection with the current section; unmounting turns it back off and resumes
+ * streaming — so leaving the Map screen / closing the panel exits cleanly. Pick the
+ * sections to render (HD, or LOD with "Show LODs"); clicking a model reports its info.
  */
-export function MapInspector({ game }: { game: Game }): ReactElement {
+export function MapInspector({ game }: { game: MapGame }): ReactElement {
   const [showCollision, setShowCollision] = useState(false);
   const [selection, setSelection] = useState<null | WorldObjectInfo>(null);
   const [hiddenCount, setHiddenCount] = useState(0);
@@ -31,13 +58,13 @@ export function MapInspector({ game }: { game: Game }): ReactElement {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [showLods, setShowLods] = useState(false);
 
-  const cellSize = game.getConfig().streaming.cellSize;
+  const cellSize = game.cellSize();
 
   // Enter map-viewer on mount (seed the current section + all cells, suspend streaming);
   // leave on unmount (resume streaming, clear the manual selection).
   useEffect(() => {
     game.setMapViewer(true);
-    const view = game.getViewCell();
+    const view = game.viewCell();
     /* eslint-disable @eslint-react/set-state-in-effect */
     setCenter(view);
     setAllCells(game.listCells());
@@ -143,20 +170,23 @@ export function MapInspector({ game }: { game: Game }): ReactElement {
         <Checkbox checked={showLods} label="Show LODs" onToggle={() => setShowLods((previous) => !previous)} />
       </div>
 
-      <div style={styles.divider} />
-
-      <div style={styles.group}>
-        <div style={styles.groupLabel}>COLLISION</div>
-        <Checkbox
-          checked={showCollision}
-          label="Show collision"
-          onToggle={() => {
-            const next = !showCollision;
-            setShowCollision(next);
-            game.setShowCollision(next);
-          }}
-        />
-      </div>
+      {game.setShowCollision ? (
+        <>
+          <div style={styles.divider} />
+          <div style={styles.group}>
+            <div style={styles.groupLabel}>COLLISION</div>
+            <Checkbox
+              checked={showCollision}
+              label="Show collision"
+              onToggle={() => {
+                const next = !showCollision;
+                setShowCollision(next);
+                game.setShowCollision?.(next);
+              }}
+            />
+          </div>
+        </>
+      ) : null}
 
       <div style={styles.divider} />
 
@@ -168,18 +198,24 @@ export function MapInspector({ game }: { game: Game }): ReactElement {
             <div style={styles.info}>txd: {selection.txdName}</div>
             <div style={styles.info}>pos: {selection.position.map((n) => n.toFixed(1)).join(', ')}</div>
             {selection.material === undefined ? null : <div style={styles.info}>mat: {selection.material}</div>}
-            <button onClick={() => setHiddenCount(game.hideSelectedObject())} style={styles.actionButton} type="button">
-              Hide object
-            </button>
+            {game.hideSelectedObject ? (
+              <button
+                onClick={() => setHiddenCount(game.hideSelectedObject?.() ?? 0)}
+                style={styles.actionButton}
+                type="button"
+              >
+                Hide object
+              </button>
+            ) : null}
           </>
         ) : (
-          <div style={styles.hint}>click a model…</div>
+          <div style={styles.hint}>{game.hideSelectedObject ? 'click a model…' : 'picking needs a rebuilt pak'}</div>
         )}
         {hiddenCount > 0 ? (
           <>
             <div style={styles.hint}>hidden: {hiddenCount} (restored on exit)</div>
             <button
-              onClick={() => setHiddenCount(game.restoreHiddenObjects())}
+              onClick={() => setHiddenCount(game.restoreHiddenObjects?.() ?? 0)}
               style={styles.actionButton}
               type="button"
             >

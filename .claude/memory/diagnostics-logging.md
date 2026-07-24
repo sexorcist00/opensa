@@ -5,7 +5,7 @@ metadata:
   type: feedback
 ---
 
-The project has a structured diagnostics log channel (plan 020, `.claude/plans/020-diagnostics-logging.md`).
+The project has a structured diagnostics log channel (plan 020, `.claude/plans/020-diagnostics-logging/readme.md`).
 Use it instead of throwaway `console.log` (which `no-console: error` rejects anyway).
 
 - `Config.showLogs: false | LogLevel` (`'debug'|'log'|'warn'|'error'`) — **off by default**; flip it in

@@ -1,4 +1,4 @@
-- [Test fixtures](test-fixtures.md) — tests/original = real Rockstar (gitignored, regenerate via `npm run test:fixtures` from game-src/non-modified — MANDATORY before tests); tests/custom = committed mods/curated; never read static/
+- [Test fixtures](test-fixtures.md) — tests/original = real Rockstar (gitignored, regenerate via `npm run test:fixtures` from game-src/original — MANDATORY before tests); tests/custom = committed mods/curated; never read static/
 - [RenderWare DFF/TXD loader](renderware-loader.md) — how GTA SA model/texture loading is structured in src/renderware
 - [Map pipeline](map-pipeline.md) — DAT/IDE/IPL parsers + region builder, now under src/renderware/map
 - [Map render approach](binary-ipl-render-approach.md) — model catalog + InstancedMesh; tolerant asset loading

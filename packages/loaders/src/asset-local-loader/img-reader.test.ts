@@ -1,10 +1,10 @@
 import { buildVer2Buffer, openArchive } from '@opensa/renderware/archive';
 import { existsSync, readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ByteRangeSource } from './img-reader';
 
-import { openLazyVer2 } from './img-reader';
+import { openLazyVer2, urlRangeSource } from './img-reader';
 
 /** An in-memory {@link ByteRangeSource} that records every slice range, so we can assert laziness. */
 function memorySource(bytes: Uint8Array): { reads: [number, number][]; source: ByteRangeSource } {
@@ -88,6 +88,35 @@ describe.skipIf(!existsSync(REAL_IMG))('openLazyVer2 (real admiral.img)', () => 
       expect(lazy.names).toEqual(eager.names);
       const name = lazy.names[0];
       expect(Array.from((await lazy.read(name))!)).toEqual(Array.from(new Uint8Array(eager.get(name)!)));
+    });
+  });
+});
+
+describe('urlRangeSource', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  describe('negative cases', () => {
+    it('rejects when the range fetch is not ok', async () => {
+      vi.stubGlobal('fetch', () => Promise.resolve({ ok: false, status: 416 } as Response));
+
+      await expect(urlRangeSource('http://host/f', 100).slice(0, 4)).rejects.toThrow(
+        /range fetch 416: http:\/\/host\/f/,
+      );
+    });
+  });
+
+  describe('positive cases', () => {
+    it('sends a Range header over [start, end) and returns the sliced bytes', async () => {
+      let header = '';
+      vi.stubGlobal('fetch', (_input: string, init: { headers: { Range: string } }) => {
+        header = init.headers.Range;
+
+        return Promise.resolve({ arrayBuffer: () => Promise.resolve(new Uint8Array([9, 8, 7, 6]).buffer), ok: true });
+      });
+
+      const bytes = await urlRangeSource('http://host/f', 100).slice(8, 12);
+      expect(header).toBe('bytes=8-11');
+      expect(Array.from(bytes)).toEqual([9, 8, 7, 6]);
     });
   });
 });

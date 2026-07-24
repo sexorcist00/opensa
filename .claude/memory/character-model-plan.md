@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan: `.claude/plans/011-character-model-tommy.md`. Replace the temp 3ds cube ([[player-cube-placeholder]]) with a real GTA-SA character — **Tommy Vercetti** (`static/player/tommy.dff` + `tommy.txd`, SA-adapted, single mesh). Tommy spawns at `PLAYER_SPAWN` instead of the cube, textured + upright, interacts with the streamed collision exactly like the cube (dynamic box body, plan 008/010), and carries his **skeleton** as a real `THREE.Skeleton`/`SkinnedMesh` in **bind pose** — NO animation in this task (the *animation manager* is the explicit next task).
+Plan: `.claude/plans/011-character-model-tommy/readme.md`. Replace the temp 3ds cube ([[player-cube-placeholder]]) with a real GTA-SA character — **Tommy Vercetti** (`static/player/tommy.dff` + `tommy.txd`, SA-adapted, single mesh). Tommy spawns at `PLAYER_SPAWN` instead of the cube, textured + upright, interacts with the streamed collision exactly like the cube (dynamic box body, plan 008/010), and carries his **skeleton** as a real `THREE.Skeleton`/`SkinnedMesh` in **bind pose** — NO animation in this task (the *animation manager* is the explicit next task).
 
 **Model verified valid:** `parseDff` → 1 atomic, 33 named frames (Root/Pelvis/Spine/Neck/Head/arms/legs/fingers/toes), 1 geometry (1153 v, 1355 tri, flags 0x36, normals yes, 1 UV, material → texture `player`). bbox ≈ ±0.9 in two axes (T-pose; height + arm-span ≈ 1.8) and ±0.18 depth. `tommy.txd`: 1 texture `player` 256×256. It is **skinned** — the SkinPLG (`0x0116`) geometry extension is skipped by our parser today; fine for a static bind-pose render (verts already in bind pose), but must be parsed for the skeleton.
 

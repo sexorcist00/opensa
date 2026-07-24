@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan 028 (`.claude/plans/028-timecyc.md`), DONE — data layer only (consumers = next plan: sky/sun/light).
+Plan 028 (`.claude/plans/028-timecyc/readme.md`), DONE — data layer only (consumers = next plan: sky/sun/light).
 
 - `src/renderware/parsers/text/timecyc.parser.ts`: `FIELDS` (27-field schema, in file order; RGB=3/RGBA=4/
   int/float=1 → 52 numbers/row), `WEATHER_NAMES` (23; first **21** are time-of-day), `parseTimecyc(text)`

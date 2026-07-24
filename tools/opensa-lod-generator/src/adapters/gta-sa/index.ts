@@ -5,6 +5,7 @@ import { createCoplanarRemesh } from '@opensa/lod-common/coplanar-remesh';
 import { dropDegenerateFaces } from '@opensa/lod-common/drop-degenerate-faces';
 import { createDropTransparentGroups } from '@opensa/lod-common/drop-transparent-groups';
 import { applyModifiers, type LodContext, type LodModifier } from '@opensa/lod-common/hd-to-lod';
+import { concatMeshes } from '@opensa/lod-common/mesh';
 import { createModelSource } from '@opensa/lod-common/model-source';
 import { rebuildMeshNormals } from '@opensa/lod-common/normals';
 import { type ScopedRegistry, scopedSource } from '@opensa/lod-common/scoped-texture';
@@ -48,6 +49,7 @@ export function createGtaSaLodAdapter(
   const source = createModelSource(archives);
   const textureSource = createTextureSource(archives);
   const exclude = new Set((config.excludeItems ?? []).map((name) => name.toLowerCase()));
+  const holeFill = new Set((config.holeFillModels ?? []).map((name) => name.toLowerCase()));
 
   // Plan 003 Phases 1–3: the geometry is never deformed (QEM degraded the models); the chain removes what can't
   // be seen — degenerate faces, mostly-transparent texture groups, then every face no reachable camera sees
@@ -98,8 +100,21 @@ export function createGtaSaLodAdapter(
       // re-derived after (most map geometry ships without normals). The source models' corona lights ride along
       // as a transplanted 2dfx section — the cell glows at night like the HD it replaces.
       return profiler.cell(`cell ${cell.cx},${cell.cy}`, () => {
-        const merged = profiler.time('merge', () => mergeCell(cell, config.cellSize, source, scopedRegistry));
-        const shaped = applyModifiers(merged, modifiers, ctx); // each modifier records its own stage
+        // Hole-fill exemption (plan 086): protected instances skip the whole modifier chain — they merge
+        // verbatim and join the shaped remainder, so no cull/remesh track can eat them (the gostown bridge).
+        const protectedInstances = cell.instances.filter((instance) => holeFill.has(instance.model));
+        const reducible =
+          protectedInstances.length > 0
+            ? { ...cell, instances: cell.instances.filter((instance) => !holeFill.has(instance.model)) }
+            : cell;
+        const merged = profiler.time('merge', () => mergeCell(reducible, config.cellSize, source, scopedRegistry));
+        let shaped = applyModifiers(merged, modifiers, ctx); // each modifier records its own stage
+        if (protectedInstances.length > 0) {
+          const verbatim = profiler.time('merge', () =>
+            mergeCell({ ...cell, instances: protectedInstances }, config.cellSize, source, scopedRegistry),
+          );
+          shaped = concatMeshes(shaped, verbatim);
+        }
         const mesh = profiler.time('normals', () => rebuildMeshNormals(shaped));
         const effects = profiler.time('2dfx', () =>
           build2dfxSection(collectCellLightEffects(cell, config.cellSize, loadRaw, source, effectsCache)),

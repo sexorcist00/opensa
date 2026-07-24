@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Plan: `.claude/plans/012-animation-manager.md`. Drive Tommy's skeleton ([[character-model-plan]], `CharacterContext.skeleton`/`bonesByName`) with GTA SA animations from `static/anim/ped.ifp` — an animation manager that plays **idle/walk/run/jump** and crossfades by movement state.
+Plan: `.claude/plans/012-animation-manager/readme.md`. Drive Tommy's skeleton ([[character-model-plan]], `CharacterContext.skeleton`/`bonesByName`) with GTA SA animations from `static/anim/ped.ifp` — an animation manager that plays **idle/walk/run/jump** and crossfades by movement state.
 
 **Verified everything is present:** `ped.ifp` is **ANP3** (294 anims, parses end-to-end). Locomotion clips exist: `WALK_civi, run_civi, sprint_civi, IDLE_stance, JUMP_launch/glide/land`. **IFP bone names match the skeleton exactly** (32/32 for WALK_civi: `Root, Pelvis, … R Toe0` after trim) → map tracks→bones by name. Root bone = frame type 4 (rot+translation), others type 3 (rot only). `static/data/animgrp.dat` = ped gait groups (hardcode `man` for now). `static/anim/anim.img/` = 133 activity IFPs (NOT needed for walk/run/jump; a WIMG packer is a secondary deliverable).
 

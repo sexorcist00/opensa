@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { collectImgEntries, combinedModelSource } from './build';
+import { collectImgEntries, combinedModelSource, swapFolder } from './build';
 
 const bytes = (...values: number[]): Uint8Array => Uint8Array.from(values);
 
@@ -84,6 +84,49 @@ describe.skipIf(!existsSync(WASHER) || !existsSync(BUSH))('combinedModelSource',
       const stock = openArchive(buildArchiveBuffer([{ data: new Uint8Array(readFileSync(WASHER)), name: 'w.dff' }]));
       const washerVerts = combinedModelSource(dir, stock).load('w')!.geometries[0].positions.length;
       expect(fromPack.geometries[0].positions.length).toBe(washerVerts); // the pack's geometry, not the bush's
+    });
+  });
+});
+
+describe('swapFolder', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'procobj-swap-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  describe('negative cases', () => {
+    it('treats an absent folder as no swap — pmb passes `<mods-src>/procobj` whether or not it exists', () => {
+      expect(swapFolder(join(dir, 'nope'))).toBeUndefined();
+    });
+
+    it('treats a folder with no .dff as no swap', () => {
+      writeFileSync(join(dir, 'readme.txt'), 'not a model');
+
+      expect(swapFolder(dir)).toBeUndefined();
+    });
+
+    it('passes `undefined` straight through', () => {
+      expect(swapFolder(undefined)).toBeUndefined();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('keeps a folder that ships models', () => {
+      writeFileSync(join(dir, 'plant.dff'), readFileSync(WASHER));
+
+      expect(swapFolder(dir)).toBe(dir);
+    });
+
+    it('keeps a single-file pick', () => {
+      const file = join(dir, 'plant.dff');
+      writeFileSync(file, readFileSync(WASHER));
+
+      expect(swapFolder(file)).toBe(file);
     });
   });
 });

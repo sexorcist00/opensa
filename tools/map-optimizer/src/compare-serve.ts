@@ -1,17 +1,19 @@
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 /**
- * Compare server for the before/after model viewer (plan 019 Phase 2). Serves raw DFF/TXD bytes out of two
- * game trees' IMG archives so the viewer's compare tab (`viewer.html?tab=compare`) can show one model
- * side-by-side — BEFORE from any game dir (stock `non-modified`, a mod-installer output, …), AFTER from the
- * optimizer's output. Usage:
- * `tsx map-optimizer/src/compare-serve.ts --before <gameDir> --after <gameDir> [--port 3002]`.
+ * Compare server for the before/after model viewer (plan 019 Phase 2; own-engine AFTER in 079 phase 4). Serves
+ * model bytes out of two game trees' IMG archives so the viewer's compare/object tabs can show one model
+ * side-by-side — BEFORE a stock DFF/TXD (`original`, a mod-installer output, …), AFTER either a stock DFF
+ * or a CONVERTED own-engine `.osm` (an opensa-pack `--out` like `build/original/opensa`, where by-name models
+ * are self-contained `.osm`). The viewer tries `/osm` and falls back to `/dff`, so a side can be either format.
+ * Usage: `tsx map-optimizer/src/compare-serve.ts --before <gameDir> --after <gameDir> [--port 3002]`.
  *
  * Endpoints (all GET, CORS `*`):
- * - `/models`                          → JSON sorted model names present in BOTH sides' archives
- * - `/models?side=before|after`        → JSON sorted model names present on just that side (object tab uses `after`)
+ * - `/models`                          → JSON sorted BARE model names present on BOTH sides (.dff ∪ .osm)
+ * - `/models?side=before|after`        → JSON sorted bare model names on just that side (object tab uses `after`)
  * - `/models?side=after&kind=vehicle`  → JSON sorted vehicle model names from that side's `vehicles.ide`
  * - `/models?side=after&kind=ped`      → JSON sorted ped model names from that side's `peds.ide`
  * - `/lod?side=after&model=m`          → JSON: the model's LOD name (via the IPL lod-index) if present, else ""
+ * - `/osm?side=before|after&model=m`   → the model's converted `.osm` bytes (404 ⇒ stock side, use /dff)
  * - `/dff?side=before|after&model=m`   → the model's DFF bytes from that side
  * - `/txd?side=before|after&model=m`   → the model's TXD bytes (txd name resolved from that side's IDEs)
  * - `/ifp?side=before|after`           → that side's `anim/ped.ifp` bytes (character-tab animations)
@@ -66,7 +68,7 @@ function main(): void {
       const model = (url.searchParams.get('model') ?? '').toLowerCase();
       const lod = side.lodByModel.get(model);
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify(lod && side.get(`${lod}.dff`) ? lod : ''));
+      res.end(JSON.stringify(lod && (side.get(`${lod}.dff`) || side.get(`${lod}.osm`)) ? lod : ''));
 
       return;
     }
@@ -77,7 +79,7 @@ function main(): void {
       return;
     }
     const model = (url.searchParams.get('model') ?? '').toLowerCase();
-    if (!side || !model || (url.pathname !== '/dff' && url.pathname !== '/txd')) {
+    if (!side || !model || (url.pathname !== '/dff' && url.pathname !== '/osm' && url.pathname !== '/txd')) {
       res.statusCode = 404;
       res.end('not found');
 
@@ -85,6 +87,10 @@ function main(): void {
     }
     if (url.pathname === '/dff') {
       sendBytes(res, side.get(`${model}.dff`));
+    } else if (url.pathname === '/osm') {
+      // The converted (own-engine) side — a self-contained `.osm` (geometry + `.ostex` textures inside). The
+      // viewer decodes it with the game's `readModelOsm`; 404 signals "this side is stock, use /dff".
+      sendBytes(res, side.get(`${model}.osm`));
     } else {
       const txd = side.txdByModel.get(model);
       sendBytes(res, txd ? side.get(`${txd}.txd`) : null);
@@ -110,12 +116,15 @@ function modelListFor(side: null | Side, kind: null | string, both: string[]): s
   return modelNames(side.names);
 }
 
-/** Sorted `.dff` model names (no extension) in `names`, optionally intersected with `other`. */
+/** Sorted BARE model names in `names` — a stock side lists `.dff`, a converted (own-engine) side lists
+ *  `.osm`; both strip to the same bare name so the two sides intersect. Optionally intersected with `other`. */
 function modelNames(names: Set<string>, other?: Set<string>): string[] {
-  return [...names]
-    .filter((name) => name.endsWith('.dff') && (!other || other.has(name)))
-    .map((name) => name.slice(0, -4))
-    .sort();
+  const bare = (set: Set<string>): Set<string> =>
+    new Set([...set].filter((name) => name.endsWith('.dff') || name.endsWith('.osm')).map((name) => name.slice(0, -4)));
+  const mine = bare(names);
+  const both = other ? bare(other) : null;
+
+  return [...mine].filter((name) => !both || both.has(name)).sort();
 }
 
 /** Open every models/*.img of a game dir + its IDE model→txd map + the vehicle/ped catalogues. */
@@ -146,7 +155,7 @@ function openSide(gameDir: string): Side {
       if (!txdByModel.has(model)) {
         txdByModel.set(model, def.txd.toLowerCase());
       }
-      if (names.has(`${model}.dff`)) {
+      if (names.has(`${model}.dff`) || names.has(`${model}.osm`)) {
         list.push(model);
       }
     }

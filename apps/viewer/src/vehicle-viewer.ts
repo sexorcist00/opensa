@@ -1,73 +1,42 @@
-import type { BuiltDoor, BuiltPart, BuiltVehicle } from '@opensa/renderware/three/build-vehicle';
 /**
- * Standalone vehicle viewer — a dev tool to inspect a car in isolation: select a
- * body part, open/close its door (button or `E`), swap it to its damaged mesh,
- * and toggle the collision wireframe and the low-detail `chassis_vlo` LOD.
+ * Standalone vehicle viewer — a dev tool to inspect a car in isolation: select a body part, open/close its
+ * door (button or `E`), swap it to its damaged mesh, and toggle the collision wireframe and the low-detail
+ * `chassis_vlo` LOD.
  *
- * It reuses the real build path (`parseDff` -> `buildVehicle`, `parseDffCollision`
- * -> `buildCollisionWireframe`), so what you see is what the game builds.
+ * Ported onto the own engine in plan 074/13 phase 4. It reuses the real build path
+ * (`parseDff` → `buildVehicleModel` → the engine's rigid upload), so what you see is what the game builds:
+ * damage twins, the `_vlo` LOD and the door hinges are all the ENGINE's own per-submesh visibility and
+ * part rotation, not viewer-side scene-graph surgery.
  *
  * Vehicles are loaded from the compare server (`--after` side); the autocomplete list comes from that side's
  * `vehicles.ide`. Run `npx tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>` alongside
  * `npm run dev`. Open at /viewer.html?tab=vehicle.
  */
-import type { Texture } from 'three';
+import type { VehicleDoor } from '@opensa/renderware';
+import type { ColModel } from '@opensa/renderware/parsers/binary/col-types';
 
 import { parseDffCollision } from '@opensa/renderware/parsers/binary/col';
-import { parseDff } from '@opensa/renderware/parsers/binary/dff';
-import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
-import { buildCollisionWireframe } from '@opensa/renderware/three/build-col-wireframe';
-import { buildTextureMap } from '@opensa/renderware/three/build-texture';
-import { buildVehicle } from '@opensa/renderware/three/build-vehicle';
-import {
-  AmbientLight,
-  Box3,
-  Box3Helper,
-  Color,
-  DirectionalLight,
-  GridHelper,
-  Group,
-  Matrix4,
-  type Object3D,
-  PerspectiveCamera,
-  Quaternion,
-  Scene,
-  Vector3,
-  WebGLRenderer,
-} from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-/** Debug paint (the carcol markers become these) + a neutral wheel scale. */
-const PRIMARY: [number, number, number] = [200, 40, 40];
-const SECONDARY: [number, number, number] = [40, 50, 70];
+import type { Bounds, ViewedModel } from './engine/model-view';
+
+import { loadModel, loadModelFromOsm } from './engine/model-view';
+import { createViewerEngine } from './engine/viewer-engine';
+
+/**
+ * Debug paint (the carcol markers become these) + a neutral wheel scale.
+ * 0..1 — the engine's `setPaint` space, NOT the 0..255 the three viewer used (255-scale values saturate
+ * every paint slot to white, which reads as "the carcols markers were not found" and is a trap).
+ */
+const PRIMARY: readonly [number, number, number] = [0.78, 0.16, 0.16];
+const SECONDARY: readonly [number, number, number] = [0.16, 0.2, 0.27];
 const WHEEL_SCALE: [number, number] = [0.7, 0.7];
 const DOOR_OPEN_ANGLE = -Math.PI / 3;
-const HINGE = new Vector3(0, 0, 1);
 
 /** Compare server (same as the Compare/Object tabs); vehicles load from its `--after` side. */
 const DEFAULT_SERVER = 'http://localhost:3002';
 let serverUrl = DEFAULT_SERVER;
 
-const renderer = new WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-const scene = new Scene();
-scene.background = new Color(0x4a4a4a);
-
-const camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100000);
-const controls = new OrbitControls(camera, renderer.domElement);
-
-const ambient = new AmbientLight(0xffffff, 1.5);
-const directional = new DirectionalLight(0xffffff, 1.5);
-directional.position.set(50, 100, 50);
-scene.add(ambient, directional, new GridHelper(20, 20, 0x888888, 0x444444));
-
-// Native GTA Z-up content shown Y-up (matches the game's streaming root −90°X).
-const content = new Group();
-content.rotation.x = -Math.PI / 2;
-scene.add(content);
+const viewer = createViewerEngine();
 
 const partSelect = document.createElement('select');
 const collisionToggle = document.createElement('input');
@@ -76,13 +45,15 @@ const wireframeToggle = document.createElement('input');
 /** Live triangle count of the current car. */
 const polyLabel = Object.assign(document.createElement('div'), { className: 'hint' });
 
-let current: BuiltVehicle | null = null;
-let collision: null | Object3D = null;
-let selected: BuiltPart | null = null;
-let highlight: Box3Helper | null = null;
-/** World-space COL bounds of the current car — clamps the selection box (modded DFFs blow up the mesh bbox). */
-let colBox: Box3 | null = null;
-const doorOpen = new WeakSet<BuiltDoor>();
+let current: null | ViewedModel = null;
+/** The door list — only the DFF (`VehicleModelData`) path carries it; a converted `.osm` has none (its parts
+ *  are there, but not the door-hinge metadata the animation UI needs), so the door feature is DFF-only. */
+let doors: readonly VehicleDoor[] = [];
+let selectedPart = 0;
+/** COL bounds of the current car — clamps the selection box (modded DFFs blow up the mesh bbox). */
+let colBounds: Bounds | null = null;
+const doorOpen = new Set<number>();
+const damaged = new Set<string>();
 
 function addButton(parent: HTMLElement, label: string, onClick: () => void): void {
   const button = document.createElement('button');
@@ -99,41 +70,34 @@ function addToggle(parent: HTMLElement, label: string, input: HTMLInputElement, 
   parent.appendChild(wrapper);
 }
 
-function animate(): void {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-}
-
-function applyCollision(): void {
-  if (collision) {
-    collision.visible = collisionToggle.checked;
-  }
-}
-
-function applyLod(): void {
+/**
+ * Submesh visibility is the ONE place LOD and damage meet: `lod` submeshes replace everything else, and
+ * within the body set each damage group shows either its intact or its damaged twin. Computed from
+ * scratch every time so the two toggles can never disagree about who owns a submesh.
+ */
+function applyVisibility(): void {
   if (!current) {
     return;
   }
-  const showLod = lodToggle.checked && current.lod !== null;
-  if (current.lod) {
-    current.lod.visible = showLod;
-  }
-  for (const child of current.root.children) {
-    if (child !== current.lod) {
-      child.visible = !showLod;
-    }
-  }
-}
+  const showLod = lodToggle.checked && current.data.submeshes.some((submesh) => submesh.kind === 'lod');
+  const shownExtra = firstExtra(current.data.submeshes);
 
-/** Toggle the polygon wireframe on every material of the current car. */
-function applyWireframe(): void {
-  current?.root.traverse((node) => {
-    const mesh = node as { material?: { wireframe?: boolean } | { wireframe?: boolean }[] };
-    const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
-    for (const material of materials) {
-      material.wireframe = wireframeToggle.checked;
+  current.data.submeshes.forEach((submesh, index) => {
+    let visible: boolean;
+    if (showLod) {
+      visible = submesh.kind === 'lod';
+    } else if (submesh.kind === 'lod') {
+      visible = false;
+    } else {
+      const isDamaged = submesh.damageGroup !== null && damaged.has(submesh.damageGroup);
+      visible = submesh.kind === 'dam' ? isDamaged : !isDamaged;
     }
+    // A model ships every `extraN` alternative and the game picks one per spawn; the viewer inspects a
+    // MODEL, so it shows the first and hides the rest rather than stacking them on top of each other.
+    if (submesh.extra && submesh.extra !== shownExtra) {
+      visible = false;
+    }
+    current?.instance.setSubmeshVisible(index, visible);
   });
 }
 
@@ -176,43 +140,27 @@ function buildControls(): void {
   addButton(panel, 'Open / close door (E)', toggleDoor);
   addButton(panel, 'Damage / repair part', toggleDamage);
   panel.appendChild(rule.cloneNode());
-  addToggle(panel, 'Collision', collisionToggle, applyCollision);
-  addToggle(panel, 'LOD (chassis_vlo)', lodToggle, applyLod);
-  addToggle(panel, 'Wireframe (polygon mesh)', wireframeToggle, applyWireframe);
+  addToggle(panel, 'Collision', collisionToggle, () => current?.showCollision(collisionToggle.checked));
+  addToggle(panel, 'LOD (chassis_vlo)', lodToggle, applyVisibility);
+  addToggle(panel, 'Wireframe (polygon mesh)', wireframeToggle, () => current?.showWireframe(wireframeToggle.checked));
   panel.appendChild(polyLabel);
 
   document.body.appendChild(panel);
   void loadVehicleList(datalist, status);
 }
 
-function disposeCurrent(): void {
-  if (current) {
-    content.remove(current.root);
-    disposeTree(current.root);
-  }
-  if (collision) {
-    content.remove(collision);
-    disposeTree(collision);
-    collision = null;
-  }
-  if (highlight) {
-    scene.remove(highlight);
-    highlight = null;
-  }
-  selected = null;
+/** The door hinged on the selected part, if it is one. */
+function doorOf(part: number): undefined | VehicleDoor {
+  const name = current?.data.parts[part]?.name;
+
+  return doors.find((entry) => entry.name === name || `door_${entry.side}` === name);
 }
 
-function disposeTree(object: Object3D): void {
-  object.traverse((node) => {
-    const mesh = node as { geometry?: { dispose(): void }; material?: { dispose(): void } | { dispose(): void }[] };
-    mesh.geometry?.dispose();
-    const material = mesh.material;
-    if (Array.isArray(material)) {
-      material.forEach((entry) => entry.dispose());
-    } else {
-      material?.dispose();
-    }
-  });
+/** The CONVERTED `.osm` bytes from the `--after` side, or null when it's stock (404 → use DFF+TXD). */
+async function fetchOsm(model: string): Promise<ArrayBuffer | null> {
+  const response = await fetch(`${serverUrl}/osm?side=after&model=${encodeURIComponent(model)}`);
+
+  return response.ok ? response.arrayBuffer() : null;
 }
 
 async function fetchServer(endpoint: 'dff' | 'txd', model: string): Promise<ArrayBuffer> {
@@ -224,23 +172,56 @@ async function fetchServer(endpoint: 'dff' | 'txd', model: string): Promise<Arra
   return response.arrayBuffer();
 }
 
-function frameBox(box: Box3): void {
-  const size = box.getSize(new Vector3());
-  const center = box.getCenter(new Vector3());
-  const radius = Math.max(size.x, size.y, size.z) || 5;
-  controls.target.copy(center);
-  camera.position.set(center.x + radius, center.y + radius * 0.7, center.z + radius);
-  controls.update();
+/** The alternative a model viewer shows out of a set that only a spawn can choose between. */
+function firstExtra(submeshes: readonly { extra?: null | string }[]): null | string {
+  return submeshes.find((submesh) => !!submesh.extra)?.extra ?? null;
+}
+
+/** Frame the car by its COL bounds when it has them, else by the mesh. */
+function frameCar(): void {
+  if (!current) {
+    return;
+  }
+  if (!colBounds) {
+    viewer.orbit.frame(current.bounds.center, current.bounds.radius * 2.2);
+
+    return;
+  }
+  const { max, min } = colBounds;
+  // COL bounds are native Z-up; the orbit rig works in engine (Y-up) space.
+  viewer.orbit.frame(
+    [(min[0] + max[0]) / 2, (min[2] + max[2]) / 2, -(min[1] + max[1]) / 2],
+    Math.max(1, Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2) * 2.2,
+  );
 }
 
 async function loadVehicle(name: string, status?: HTMLElement): Promise<void> {
   if (status) {
     status.textContent = `loading ${name}…`;
   }
-  let dffBuffer: ArrayBuffer;
-  let txdBuffer: ArrayBuffer;
+  let osm: ArrayBuffer | null = null;
+  let dffBuffer: ArrayBuffer | null = null;
   try {
-    [dffBuffer, txdBuffer] = await Promise.all([fetchServer('dff', name), fetchServer('txd', name)]);
+    // AFTER may be a converted build (`.osm`): try that first, fall back to the stock DFF+TXD.
+    osm = await fetchOsm(name);
+    let txdBuffer: ArrayBuffer | null = null;
+    if (!osm) {
+      [dffBuffer, txdBuffer] = await Promise.all([fetchServer('dff', name), fetchServer('txd', name)]);
+    }
+    await viewer.ready;
+    current?.dispose();
+    doorOpen.clear();
+    damaged.clear();
+    if (osm) {
+      // The converted car renders + paints + toggles submesh LOD/damage; doors (hinge metadata) and the
+      // mesh COL overlay are DFF-only, so they degrade quietly here.
+      current = loadModelFromOsm(viewer.engine, name, osm);
+      doors = [];
+    } else {
+      const view = loadModel(viewer.engine, dffBuffer!, [txdBuffer!], { wheelScale: WHEEL_SCALE });
+      current = view;
+      doors = view.data.doors;
+    }
   } catch (error) {
     if (status) {
       status.textContent = error instanceof Error ? error.message : String(error);
@@ -248,34 +229,29 @@ async function loadVehicle(name: string, status?: HTMLElement): Promise<void> {
 
     return;
   }
-  const textures: Map<string, Texture> = buildTextureMap(parseTxd(txdBuffer));
-  const dff = parseDff(dffBuffer);
 
-  disposeCurrent();
-  current = buildVehicle(dff, textures, { primary: PRIMARY, secondary: SECONDARY, wheelScale: WHEEL_SCALE });
-  content.add(current.root);
+  current.instance.setPaint({
+    primary: PRIMARY,
+    quaternary: SECONDARY,
+    secondary: SECONDARY,
+    tertiary: PRIMARY,
+  });
 
-  const col = parseDffCollision(dffBuffer);
+  const col: ColModel | null = dffBuffer ? parseDffCollision(dffBuffer) : null;
   if (col) {
-    collision = buildCollisionWireframe([{ col, name: col.name, transforms: [new Matrix4()] }]);
-    collision.visible = collisionToggle.checked;
-    content.add(collision);
+    current.setCollision(col);
+    current.showCollision(collisionToggle.checked);
+    // The authored COL is clean; the mesh bbox is not (modded DFFs like admiral carry stray vertices).
+    colBounds = { max: [...col.bounds.max], min: [...col.bounds.min] };
+  } else {
+    colBounds = null;
   }
 
-  // World-space COL bounds (authored clean) — frames the camera and clamps the selection box.
-  // Modded DFFs (e.g. admiral) have stray vertices that blow up the mesh bbox.
-  content.updateMatrixWorld(true);
-  colBox = col
-    ? new Box3(new Vector3().fromArray(col.bounds.min), new Vector3().fromArray(col.bounds.max)).applyMatrix4(
-        content.matrixWorld,
-      )
-    : null;
-
   rebuildPartSelect();
-  applyLod();
-  applyWireframe();
-  updatePolyCount();
-  frameBox(colBox ?? new Box3().setFromObject(current.root));
+  applyVisibility();
+  current.showWireframe(wireframeToggle.checked);
+  polyLabel.textContent = `Triangles: ${Math.round(current.triangles).toLocaleString()}`;
+  frameCar();
   if (status) {
     status.textContent = name;
   }
@@ -298,95 +274,66 @@ async function loadVehicleList(datalist: HTMLDataListElement, status: HTMLElemen
   }
 }
 
-function onResize(): void {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
 function rebuildPartSelect(): void {
   partSelect.replaceChildren();
-  current?.parts.forEach((part, index) => partSelect.append(new Option(part.name, String(index))));
+  current?.data.parts.forEach((part, index) => partSelect.append(new Option(part.name, String(index))));
   selectPart(0);
 }
 
-function selectPart(index: number): void {
-  selected = current?.parts[index] ?? null;
-  if (selected) {
-    partSelect.value = String(index);
-  }
-  updateHighlight();
+/** The box tracks the part's LIVE pose, so it follows a door that is standing open. */
+function refreshHighlight(): void {
+  const door = doorOf(selectedPart);
+  const angle = door && doorOpen.has(door.part) ? DOOR_OPEN_ANGLE : 0;
+  current?.highlightPart(selectedPart, {
+    ...(colBounds ? { clamp: colBounds } : {}),
+    rotation: [0, 0, Math.sin(angle / 2), Math.cos(angle / 2)],
+  });
 }
 
+function selectPart(index: number): void {
+  selectedPart = index;
+  partSelect.value = String(index);
+  refreshHighlight();
+}
+
+/** Swap the selected part's damage group to its `_dam` twin (or back). */
 function toggleDamage(): void {
-  if (!selected) {
+  const group = current?.data.submeshes.find(
+    (submesh) => submesh.part === selectedPart && submesh.damageGroup !== null,
+  )?.damageGroup;
+  if (!group) {
     return;
   }
-  const damaged = selected.dam.visible;
-  selected.dam.visible = !damaged;
-  selected.ok.visible = damaged;
+  if (damaged.has(group)) {
+    damaged.delete(group);
+  } else {
+    damaged.add(group);
+  }
+  applyVisibility();
 }
 
 function toggleDoor(): void {
-  const door = current?.doors.find((d) => `door_${d.side}` === selected?.name);
-  if (!door) {
+  const door = doorOf(selectedPart);
+  if (!current || !door) {
     return;
   }
-  const open = !doorOpen.has(door);
+  const open = !doorOpen.has(door.part);
   if (open) {
-    doorOpen.add(door);
+    doorOpen.add(door.part);
   } else {
-    doorOpen.delete(door);
+    doorOpen.delete(door.part);
   }
-  door.pivot.quaternion
-    .copy(door.closed)
-    .multiply(new Quaternion().setFromAxisAngle(HINGE, open ? DOOR_OPEN_ANGLE : 0));
-  updateHighlight(); // door moved → re-fit the (clamped) highlight
+  // The hinge is the part's own Z axis; the engine composes this over the bind pose.
+  const half = (open ? DOOR_OPEN_ANGLE : 0) / 2;
+  current.instance.entity.setPartRotation(door.part, [0, 0, Math.sin(half), Math.cos(half)]);
+  refreshHighlight(); // the door moved — the box follows it
 }
 
-/** Highlight the selected part, clamped to the car's COL bounds so a stray vertex can't blow it up. */
-function updateHighlight(): void {
-  if (highlight) {
-    scene.remove(highlight);
-    highlight = null;
-  }
-  if (!selected) {
-    return;
-  }
-  content.updateMatrixWorld(true);
-  const box = new Box3().setFromObject(selected.pivot);
-  if (colBox && !box.isEmpty()) {
-    box.intersect(colBox);
-  }
-  if (box.isEmpty()) {
-    return;
-  }
-  highlight = new Box3Helper(box, 0xffff00);
-  scene.add(highlight);
-}
-
-/** Sum the triangle count of the current car's meshes and show it. */
-function updatePolyCount(): void {
-  let triangles = 0;
-  current?.root.traverse((node) => {
-    const mesh = node as {
-      geometry?: { getAttribute(name: string): undefined | { count: number }; getIndex(): null | { count: number } };
-    };
-    const geometry = mesh.geometry;
-    if (geometry) {
-      const index = geometry.getIndex();
-      triangles += (index ? index.count : (geometry.getAttribute('position')?.count ?? 0)) / 3;
-    }
-  });
-  polyLabel.textContent = current ? `Triangles: ${Math.round(triangles).toLocaleString()}` : '';
-}
-
-window.addEventListener('resize', onResize);
 window.addEventListener('keydown', (event) => {
-  if (event.key.toLowerCase() === 'e') {
+  // `key` is absent on some synthetic keydowns (datalist autocomplete pick, IME/autofill) — guard it.
+  if (event.key?.toLowerCase() === 'e') {
     toggleDoor();
   }
 });
 buildControls();
-collisionToggle.checked = false;
-animate();
+viewer.start();

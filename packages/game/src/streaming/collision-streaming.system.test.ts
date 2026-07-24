@@ -6,6 +6,13 @@ import type { Vec3 } from '../interfaces/world-adapter.interface';
 
 import { CollisionStreamingSystem } from './collision-streaming.system';
 
+/** A one-instance breakable model whose world matrix stands at `at` (column-major, translation at 12..14). */
+function breakableProp(key: string, at: readonly [number, number, number]): ModelColliders {
+  const elements = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, at[0], at[1], at[2], 1];
+
+  return { ...modelColliders(key), instanceKeys: [key], transforms: [{ elements }] as ModelColliders['transforms'] };
+}
+
 function config(collisionDrawDistance: number): Config {
   return {
     camera: {
@@ -56,6 +63,7 @@ function config(collisionDrawDistance: number): Config {
         trees: { density: 1, drawDistance: 150, enabled: true },
         underwater: { density: 1, drawDistance: 60, enabled: true },
       },
+      renderScale: 1,
       shadows: { distance: 800, enabled: true },
       sky: { density: 0.96, exposure: 0.5, model: 'classic', mood: 0.7, pbrExposure: 0.55, weight: 0.4 },
       ssao: { enabled: true, intensity: 1.5, radius: 0.2 },
@@ -169,9 +177,35 @@ describe('CollisionStreamingSystem', () => {
       expect(system.breakableKeyOf(null)).toBeUndefined();
       expect(system.breakableKeyOf(999)).toBeUndefined();
     });
+
+    it('nearestBreakable finds nothing when no prop is loaded, or none is inside the radius', async () => {
+      const adapter = stubAdapter();
+      adapter.loadCellColliders.mockImplementation(() => Promise.resolve([breakableProp('bin@0', [125, 125, 0])]));
+      const system = new CollisionStreamingSystem(adapter, stubPhysics(), () => [125, 125, 0] as Vec3, config(100));
+      expect(system.nearestBreakable([125, 125, 0], 8)).toBeUndefined(); // nothing streamed yet
+
+      system.update();
+      await flush();
+
+      expect(system.nearestBreakable([125, 125, 40], 8)).toBeUndefined(); // 40 m above it — out of range
+    });
   });
 
   describe('positive cases', () => {
+    it('nearestBreakable returns the closest loaded prop within the radius', async () => {
+      const adapter = stubAdapter();
+      adapter.loadCellColliders.mockImplementation(() =>
+        Promise.resolve([breakableProp('far@0', [130, 125, 0]), breakableProp('near@0', [126, 125, 0])]),
+      );
+      const system = new CollisionStreamingSystem(adapter, stubPhysics(), () => [125, 125, 0] as Vec3, config(100));
+
+      system.update();
+      await flush();
+
+      expect(system.nearestBreakable([125, 125, 0], 8)).toBe('near@0');
+      expect(system.nearestBreakable([131, 125, 0], 8)).toBe('far@0'); // nearest is relative to the caller
+    });
+
     it('drops a smashed breakable body without disturbing the rest of the cell', async () => {
       const adapter = stubAdapter();
       adapter.loadCellColliders.mockImplementation((cx, cy) =>

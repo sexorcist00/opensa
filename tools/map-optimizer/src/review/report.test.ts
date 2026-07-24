@@ -69,7 +69,7 @@ describe('review report', () => {
     it('renders rows with exclude checkboxes and the stats header', () => {
       const html = buildReviewHtml(
         [entry('clubgate01_lax', { flat: false, level: { protectFrom: 49, protectTo: 255, shift: 31 } })],
-        { game: 'non-modified', rendered: 1, stats: STATS, totalVerdicts: 6164 },
+        { game: 'original', rendered: 1, stats: STATS, totalVerdicts: 6164 },
       );
 
       expect(html).toContain('verdicts 6164');

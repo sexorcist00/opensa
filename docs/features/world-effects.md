@@ -14,32 +14,28 @@ columns, steam vents, fountains — 113 entries across the shipped map, each nam
   `"<info>.<channel>"` (emrate.rate, emlife.life/bias, emspeed.speed/bias, emdir.dir*,
   emangle.min/max, force.force*, size.sizex/y, colour.red/green/blue/alpha). `sampleFxTrack` =
   clamped linear interpolation.
-- **Runtime emitters** — `three/build-particles.ts`: `setFxLibrary(systems, textures)` set once
-  at bootstrap (`effects.fxp` + `effectsPC.txd`, absent-tolerant — no files, no particles).
-  `buildParticleEmitters` bakes tracks into per-particle attributes (velocity cone around
+- **Runtime emitters** — the bake is shared and renderer-agnostic (`renderware/src/fx/bake-fx.ts` +
+  `sprites.ts`), driven by `apps/web/src/ui/engine-particles.ts`, which loads the LIBRARY once at
+  bootstrap (`effects.fxp` + `effectsPC.txd`, absent-tolerant — no files, no particles) while the pak
+  carries the emitter ANCHORS (welded per cell by the converter).
+  `bakeFxSystem`/`bakeFxInstances` bake tracks into per-particle attributes (velocity cone around
   EMDIR within EMANGLE, life±bias, phase; deterministic mulberry32 so rebuilt cells are
   identical) + uniforms (colour/alpha/size sampled at age 0/0.5/1 — piecewise envelope, covers
   the 0→peak→0 fire shapes; COLOUR with COLOURBRIGHT fallback; force, CULLDIST fade). The
-  lifecycle loops entirely in the vertex shader off `particleTimeUniform` — zero per-frame CPU
-  work.
-- **Draw batching** — one `Points` per (system, emitter layer) per cell covering all placed
-  entries; 48 particles/emitter cap. DSTBLENDID=1 → additive (flames, sparks), else normal
-  alpha (smoke). All on `GLOW_LAYER` (SSAO normal-prepass safety), corona-convention
-  perspective point sizing via `particleViewportUniform`.
-- **Map plumbing** — `buildClumpParticles` (frame-transformed clump-local entries),
-  `collectParticleEmitters` (instance placement → world entries, same walk as the coronas),
-  built per HD cell only in `buildCell`.
+  lifecycle loops entirely in the vertex shader off a single time uniform — zero per-frame CPU work.
+- **Draw batching** — two instanced passes over one sprite atlas: DSTBLENDID=1 → additive (flames,
+  sparks), else premultiplied alpha (smoke). Particle counts are capped per emitter, and the buffers
+  are rebuilt only when the streamed cell set changes.
+- **Map plumbing** — 2dfx type-1 entries are frame-transformed to world space by the converter
+  (`tools/opensa-pack`) and stored as per-cell anchors; the host resolves each anchor's `effectName`
+  against the loaded library.
 - **Live config** — `graphics.effects { enabled, drawDistance }` (init config + debugger →
-  Graphics → "World effects"): `updateParticleEffects` gates registered layers per frame like
-  the procobj registry (detached layers skipped); `drawDistance` REPLACES each system's
-  authored CULLDIST (vanilla fire culls at 35 m — too close) via a shared shader uniform, so
-  the CPU cutoff lands where the GPU fade hits zero.
-- **Escalators (2dfx type 10)** — `RWEscalator` parsing (geometry-local path
-  start → bottom → top → end + direction); `buildEscalatorSteps`/`updateEscalators`
-  (`three/build-escalator.ts`): steps instanced from the vanilla `esc_step` model, looping the
-  3-segment polyline at 0.45 m/s, horizontal like SA (staircase on the incline, sunk into the
-  floor on landings); rig registry pauses detached (streamed-out) rigs. Hosts: escl_la ×4,
-  escl_singlela, shack02, vgseesc01/02.
+  Graphics → "World effects"): `drawDistance` REPLACES each system's authored CULLDIST (vanilla fire
+  culls at 35 m — too close), so the CPU cutoff lands where the GPU fade hits zero.
+- **Escalators (2dfx type 10)** — `RWEscalator` parsing only (geometry-local path
+  start → bottom → top → end + direction). The moving-step RENDERER was deleted with the three
+  renderer (074/13) and has **no replacement on the engine** — escalators currently do not move.
+  Hosts, for whenever it is redone: escl_la ×4, escl_singlela, shack02, vgseesc01/02.
 
 ## Known gaps
 
@@ -48,11 +44,11 @@ columns, steam vents, fountains — 113 entries across the shipped map, each nam
   particle rotation (EMROTATION/ROTSPEED ignored), no texture animation frames.
 - Emission rate is approximated by a fixed particle budget (`rate × life`, capped), not a
   spawn-rate simulation; EMSIZE/EMBOX emitter volumes ignored (point emission).
-- **Escalator physics/collision (REVISIT)** — steps are render-only: no step colliders, the
-  player can't ride them (vanilla carries standing entities with the step). Likely shape:
-  static ramp collider on the incline (check the host COL first) + a velocity impulse while
-  standing on it.
-- Step model is always `esc_step` — the LV travelators may want the wide `esc_step8` variant.
+- **Escalators (REVISIT)** — not rendered at all since the three teardown. When redone, also settle
+  the old open item: no step colliders, so the player can't ride them (vanilla carries standing
+  entities with the step). Likely shape: static ramp collider on the incline (check the host COL
+  first) + a velocity impulse while standing on it. Step model was always `esc_step` — the LV
+  travelators may want the wide `esc_step8` variant.
 
 ## Test coverage
 
@@ -60,10 +56,9 @@ columns, steam vents, fountains — 113 entries across the shipped map, each nam
   (1 entry, `fire`, pos (0, −0.3, 2.1)); trafficlight negative/lights regression.
 - `parsers/text/fxp.parser.test.ts` — real `effects.fxp`: 80+ systems, fire layer structure,
   prt_blood keyframe reference values, all 15 map-referenced effect names resolve.
-- `three/build-particles.test.ts` — real fxp + effectsPC.txd + skull DFF: library-unset /
-  unknown-name negatives; fire layers (no haze, additive flame, GLOW_LAYER, CULLDIST 35,
-  per-entry particle counts, determinism).
+- `fx/bake-fx.test.ts` — real fxp: dead/heat-haze prims dropped, additive-vs-alpha blend from the
+  authored dst id, `rate × life` particle counts, phase spread, determinism, the system record layout.
+  `fx/sprites.test.ts` — the RGB-on-black sprite alpha synthesis.
+- `ui/engine-particles.test.ts` — the GTA Z-up → engine Y-up direction/force conversion.
 - `parsers/binary/escalator.test.ts` — type-10 parsing on the real `escl_la.dff` (pair, opposed
-  directions, flat landings + rising incline).
-- `three/build-escalator.test.ts` — real escl_la + esc_step: empty/degenerate-path negatives,
-  detached rigs stay frozen; step rows span the incline heights and move along the loop.
+  directions, flat landings + rising incline). No render-side test exists — there is no renderer.

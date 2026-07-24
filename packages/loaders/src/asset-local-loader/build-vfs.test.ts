@@ -31,6 +31,7 @@ function source(overrides: Partial<InstallSource> = {}): InstallSource {
     gta3,
     gtaInt: null,
     looseFiles: () => Promise.resolve(Object.keys(loose)),
+    openLoose: () => Promise.resolve(null),
     readLoose: (path) => Promise.resolve(new TextEncoder().encode(loose[path])),
     readLooseText: (path) => Promise.resolve(loose[path] ?? ''),
     ...overrides,
@@ -90,6 +91,29 @@ describe('selectInstallEntries', () => {
       // Every ped (bmypol1 + cesar) + every vehicle (admiral + buffalo) — the whole roster, from the IDEs.
       expect(plan.models.map((e) => e.name).sort()).toEqual(['admiral.dff', 'bmypol1.dff', 'buffalo.dff', 'cesar.dff']);
       expect(plan.textures.map((e) => e.name).sort()).toEqual(['admtxd.txd', 'bmypol1.txd', 'buftxd.txd', 'cesar.txd']);
+    });
+
+    it('pulls in procobj clutter models (procobj.dat) + their txd, even when none are map-placed', async () => {
+      const loose: Record<string, string> = {
+        'data/maps/veg.ide': ['objs', '300, rockbrkq, gta_rockcuntry, 100, 0', 'end'].join('\n'),
+        // Space-separated: surface model spacing minDist minRot maxRot minScl maxScl minSclZ maxSclZ zOffMin zOffMax align useGrid
+        'data/procobj.dat': 'grnd rockbrkq 1 1 0 0 1 1 1 1 0 0 0 1',
+      };
+      const gta3 = fakeArchive({
+        'gta_rockcuntry.txd': new Uint8Array([1]),
+        'rockbrkq.dff': new Uint8Array([1]),
+      });
+      const plan = await selectInstallEntries(
+        source({
+          gta3,
+          looseFiles: () => Promise.resolve(Object.keys(loose)),
+          readLooseText: (p) => Promise.resolve(loose[p] ?? ''),
+        }),
+      );
+
+      // rockbrkq is scattered from procobj.dat, never IPL-placed — its DFF+TXD must still be selected.
+      expect(plan.models.map((e) => e.name)).toContain('rockbrkq.dff');
+      expect(plan.textures.map((e) => e.name)).toContain('gta_rockcuntry.txd');
     });
   });
 });

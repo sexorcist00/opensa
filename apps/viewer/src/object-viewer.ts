@@ -1,48 +1,28 @@
-import type { ColModel } from '@opensa/renderware/parsers/binary/col-types';
-import type { TextureDictionary } from '@opensa/renderware/three/build-texture';
 /**
- * Standalone object viewer (map models) — a dev tool, isolated from the map/streaming/
- * instancing layers. It reuses the real asset path (fetch -> parseTxd -> build-texture,
- * fetch -> parseDff -> build-clump), so what you see here is exactly what the parser +
- * three build layer produce for one model.
+ * Standalone object viewer (map models) — a dev tool, isolated from the map/streaming/instancing layers.
+ * It reuses the real asset path (fetch → parseDff/parseTxd → `buildVehicleModel` → the engine's rigid
+ * upload), so what you see here is exactly what the SHIPPING renderer produces for one model.
  *
- * Purpose: diagnose whether a model's look (e.g. "too dark") comes from the DFF
- * parser/build (this view) or from the map pipeline (instancing/lighting in the
- * main app). Toggles let you separate prelit vertex colours, MODULATE2X and the
- * lit/unlit shading model.
+ * Ported off three.js in plan 074/13 phase 4. The toggles survived the port but changed nature: they used
+ * to switch three MATERIALS the game never used (so the tool answered "is this dark because of the DFF or
+ * because of the map pipeline?" by comparing two different render paths). They are now ENGINE features —
+ * `debugPrelitScale` / `debugUnlit` ride spare frame-uniform lanes and the wireframes are a line-list
+ * pipeline — so every view is the SHIPPING renderer with exactly one term changed.
  *
- * Models are loaded on demand from the compare server (`--after` side) via the autocomplete box — run
+ * Models load on demand from the compare server (`--after` side) via the autocomplete box — run
  * `npx tsx tools/map-optimizer/src/compare-serve.ts --before <dir> --after <dir>` alongside `npm run dev`.
  * Open at /viewer.html?tab=object.
  */
-import type { BufferGeometry, Material } from 'three';
+import type { ColModel } from '@opensa/renderware/parsers/binary/col-types';
 
 import { parseColLibrary } from '@opensa/renderware/parsers/binary/col';
-import { parseDff } from '@opensa/renderware/parsers/binary/dff';
-import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
-import { buildClump } from '@opensa/renderware/three/build-clump';
-import { buildCollisionWireframe } from '@opensa/renderware/three/build-col-wireframe';
-import { buildTextureMap } from '@opensa/renderware/three/build-texture';
-import {
-  AmbientLight,
-  Box3,
-  Color,
-  DirectionalLight,
-  GridHelper,
-  Group,
-  Matrix4,
-  Mesh,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
-  type Object3D,
-  PerspectiveCamera,
-  Scene,
-  Vector3,
-  WebGLRenderer,
-} from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-/** Serialised COL (baked by scripts/build-viewer-assets.ts) — vertices as a plain array. */
+import type { ViewedModel } from './engine/model-view';
+
+import { loadModel, loadModelFromOsm } from './engine/model-view';
+import { createViewerEngine } from './engine/viewer-engine';
+
+/** Serialised COL (baked by scripts/test-viewer-fixtures.ts) — vertices as a plain array. */
 type ColJson = Omit<ColModel, 'vertices'> & { vertices: number[] };
 
 interface ModelEntry {
@@ -54,53 +34,72 @@ interface ModelEntry {
   server?: string;
   txd: string;
 }
-type SceneMesh = Mesh<BufferGeometry, Material | Material[]>;
-
-interface ViewOptions {
-  lit: boolean;
-  modulate2x: boolean;
-  prelit: boolean;
-  wireframe: boolean;
-}
 
 const BASE = import.meta.env.VITE_STATIC_URL;
 /** Compare server (same as the Compare tab); the object tab autocompletes + loads from its `--after` side. */
 const DEFAULT_SERVER = 'http://localhost:3002';
-const options: ViewOptions = { lit: true, modulate2x: false, prelit: true, wireframe: false };
 
-const renderer = new WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-const scene = new Scene();
-scene.background = new Color(0x4a4a4a); // neutral grey so darkness is judged against a known mid-tone
-
-const camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100000);
-const controls = new OrbitControls(camera, renderer.domElement);
-
-// Lights mirror the main app (AmbientLightPlugin 1.5 + DirectionalLightPlugin 1.5).
-const ambient = new AmbientLight(0xffffff, 1.5);
-const directional = new DirectionalLight(0xffffff, 1.5);
-directional.position.set(50, 100, 50);
-scene.add(ambient, directional, new GridHelper(200, 20, 0x888888, 0x444444));
-
-/** One overlaid model: its built clump + its (optional) collision wireframe. */
-interface LoadedModel {
-  collision: null | Object3D;
-  group: Group;
-}
+const viewer = createViewerEngine();
 
 // Several models overlaid at the origin (keyed by dff) so they can be compared side-by-side.
-const loaded = new Map<string, LoadedModel>();
+const loaded = new Map<string, ViewedModel>();
 // Every known model (anchors + manifest), keyed by dff — so "Clear all" can resolve loaded entries.
 const entriesByDff = new Map<string, ModelEntry>();
 /** Live triangle count of the loaded (overlaid) models. */
 const polyLabel = Object.assign(document.createElement('div'), { className: 'hint' });
+/** Raw TXD bytes per source; the engine builds its own texture array per model. */
+const txdCache = new Map<string, Promise<ArrayBuffer | null>>();
+/** Parsed COL library (e.g. LODvegetation.col) → ColModel by lowercased name; fetched once per file. */
+const colLibCache = new Map<string, Promise<Map<string, ColModel>>>();
+const prelit = { double: false, on: true };
 let collisionOn = false;
-const txdCache = new Map<string, Promise<TextureDictionary>>();
-/** Each geometry's original prelit colour array, so ×2/restore is lossless. */
-const originalColors = new WeakMap<BufferGeometry, Float32Array>();
+let wireframeOn = false;
+
+async function addModel(model: ModelEntry): Promise<void> {
+  if (loaded.has(model.dff)) {
+    return;
+  }
+  const base = model.dff.replace(/\.dff$/i, '');
+  await viewer.ready;
+  // A server side may be CONVERTED (own-engine `.osm`): try that first — it decodes with the game's own
+  // `readModelOsm`, textures inside — and fall back to the stock DFF+TXD path (404 ⇒ this side is stock).
+  const osm = model.server ? await fetchOsm(model.server, base) : null;
+  if (loaded.has(model.dff)) {
+    return; // a second tick raced us while the bytes were in flight
+  }
+  let view;
+  if (osm) {
+    try {
+      view = loadModelFromOsm(viewer.engine, base, osm);
+    } catch (error) {
+      // A world-textured map object can't be shown standalone (textures in the shared pak) — skip it.
+      // eslint-disable-next-line no-console -- the reason belongs in the console
+      console.warn(`[object] ${base}: ${error instanceof Error ? error.message : String(error)}`);
+
+      return;
+    }
+  } else {
+    const [dff, txd] = await Promise.all([
+      fetchDff(model, base),
+      model.server ? loadServerTxd(model.server, base) : loadTxd(model.txd),
+    ]);
+    if (loaded.has(model.dff)) {
+      return;
+    }
+    view = loadModel(viewer.engine, dff, txd ? [txd] : []);
+  }
+  loaded.set(model.dff, view);
+  view.showWireframe(wireframeOn);
+  const col = await loadCollision(model);
+  if (col) {
+    view.setCollision(col);
+    view.showCollision(collisionOn);
+  }
+  updatePolyCount();
+  if (loaded.size === 1) {
+    frameAll();
+  }
+}
 
 function addToggle(parent: HTMLElement, label: string, initial: boolean, onChange: (on: boolean) => void): void {
   const wrapper = document.createElement('label');
@@ -112,44 +111,9 @@ function addToggle(parent: HTMLElement, label: string, initial: boolean, onChang
   parent.appendChild(wrapper);
 }
 
-function animate(): void {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-}
-
-function applyCollision(): void {
-  for (const entry of loaded.values()) {
-    if (entry.collision) {
-      entry.collision.visible = collisionOn;
-    }
-  }
-}
-
-function applyOptions(): void {
-  for (const entry of loaded.values()) {
-    for (const mesh of meshesOf(entry.group)) {
-      applyToMesh(mesh);
-    }
-  }
-}
-
-function applyToMesh(mesh: SceneMesh): void {
-  const original = originalColors.get(mesh.geometry);
-  const colour = mesh.geometry.getAttribute('color');
-  const hasPrelit = Boolean(original) && Boolean(colour);
-
-  if (original && colour) {
-    const scale = options.modulate2x ? 2 : 1;
-    const array = colour.array as Float32Array;
-    for (let i = 0; i < original.length; i += 1) {
-      array[i] = Math.min(1, original[i] * scale);
-    }
-    colour.needsUpdate = true;
-  }
-
-  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  mesh.material = materials.map((material) => rebuildMaterial(material, hasPrelit));
+/** Prelit is one engine scale: off = neutral white, on = as authored, ×2 = SA's MODULATE2X. */
+function applyPrelit(): void {
+  viewer.engine.debugPrelitScale = prelit.on ? (prelit.double ? 2 : 1) : 0;
 }
 
 function buildControls(): void {
@@ -197,25 +161,31 @@ function buildControls(): void {
   });
   panel.append(frameButton, clearButton);
 
-  addToggle(panel, 'Lit (MeshStandard)', options.lit, (on) => {
-    options.lit = on;
-    applyOptions();
+  // The debug view knobs. Unlike the three era these are ENGINE features (074/13 phase 4): the prelit
+  // scale and unlit flag ride spare frame-uniform lanes, the wireframes are a line-list pipeline. So
+  // what they show is the shipping renderer with one term changed — not a second shading path.
+  addToggle(panel, 'Lit', !viewer.engine.debugUnlit, (on) => {
+    viewer.engine.debugUnlit = !on;
   });
-  addToggle(panel, 'Prelit vertex colours', options.prelit, (on) => {
-    options.prelit = on;
-    applyOptions();
+  addToggle(panel, 'Prelit vertex colours', true, (on) => {
+    prelit.on = on;
+    applyPrelit();
   });
-  addToggle(panel, 'Prelit ×2 (MODULATE2X)', options.modulate2x, (on) => {
-    options.modulate2x = on;
-    applyOptions();
+  addToggle(panel, 'Prelit ×2 (MODULATE2X)', false, (on) => {
+    prelit.double = on;
+    applyPrelit();
   });
-  addToggle(panel, 'Collision', collisionOn, (on) => {
+  addToggle(panel, 'Collision', false, (on) => {
     collisionOn = on;
-    applyCollision();
+    for (const model of loaded.values()) {
+      model.showCollision(on);
+    }
   });
-  addToggle(panel, 'Wireframe (polygon mesh)', options.wireframe, (on) => {
-    options.wireframe = on;
-    applyOptions();
+  addToggle(panel, 'Wireframe (polygon mesh)', false, (on) => {
+    wireframeOn = on;
+    for (const model of loaded.values()) {
+      model.showWireframe(on);
+    }
   });
 
   panel.appendChild(polyLabel);
@@ -285,23 +255,52 @@ function buildServerControls(panel: HTMLElement, addRow: (model: ModelEntry, che
   }
 }
 
+async function fetchDff(model: ModelEntry, base: string): Promise<ArrayBuffer> {
+  if (!model.server) {
+    return fetch(`${BASE}/viewer/objects/${model.dff}`).then((response) => response.arrayBuffer());
+  }
+  const response = await fetch(`${model.server}/dff?side=after&model=${encodeURIComponent(base)}`);
+  if (!response.ok) {
+    throw new Error(`${base}: not found on --after`);
+  }
+
+  return response.arrayBuffer();
+}
+
+/** The CONVERTED `.osm` bytes from a compare-server side, or null when that side is stock (404 → use DFF). */
+async function fetchOsm(server: string, base: string): Promise<ArrayBuffer | null> {
+  const response = await fetch(`${server}/osm?side=after&model=${encodeURIComponent(base)}`);
+
+  return response.ok ? response.arrayBuffer() : null;
+}
+
+/** Aim the orbit rig at the union of every loaded model. */
 function frameAll(): void {
   if (!loaded.size) {
     return;
   }
-  const box = new Box3();
-  for (const entry of loaded.values()) {
-    box.expandByObject(entry.group);
-  }
-  const size = box.getSize(new Vector3());
-  const center = box.getCenter(new Vector3());
-  const radius = Math.max(size.x, size.y, size.z) || 10;
+  let minX = Infinity,
+    minY = Infinity,
+    minZ = Infinity;
+  let maxX = -Infinity,
+    maxY = -Infinity,
+    maxZ = -Infinity;
 
-  controls.target.copy(center);
-  camera.position.set(center.x + radius, center.y + radius * 0.7, center.z + radius);
-  camera.far = radius * 100;
-  camera.updateProjectionMatrix();
-  controls.update();
+  for (const model of loaded.values()) {
+    const [x, y, z] = model.bounds.center;
+    const r = model.bounds.radius;
+    minX = Math.min(minX, x - r);
+    minY = Math.min(minY, y - r);
+    minZ = Math.min(minZ, z - r);
+    maxX = Math.max(maxX, x + r);
+    maxY = Math.max(maxY, y + r);
+    maxZ = Math.max(maxZ, z + r);
+  }
+
+  viewer.orbit.frame(
+    [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2],
+    Math.max(1, Math.hypot(maxX - minX, maxY - minY, maxZ - minZ) / 2) * 1.6,
+  );
 }
 
 /**
@@ -329,6 +328,36 @@ async function listCompanionLod(
   } catch {
     /* server unreachable — no companion listed */
   }
+}
+
+function loadColLibrary(file: string): Promise<Map<string, ColModel>> {
+  let promise = colLibCache.get(file);
+  if (!promise) {
+    promise = fetch(`${BASE}/viewer/objects/${file}`)
+      .then((response) => response.arrayBuffer())
+      .then((buffer) => new Map(parseColLibrary(buffer).map((col) => [col.name.toLowerCase(), col])));
+    colLibCache.set(file, promise);
+  }
+
+  return promise;
+}
+
+/** The model's COL: either a shared library (`model.col`, looked up by dff name) or `<model>.col.json`. */
+async function loadCollision(model: ModelEntry): Promise<ColModel | null> {
+  if (model.server) {
+    return null; // the compare server serves no collision
+  }
+  const base = model.dff.replace(/\.dff$/i, '');
+  if (model.col) {
+    return (await loadColLibrary(model.col)).get(base.toLowerCase()) ?? null;
+  }
+  const response = await fetch(`${BASE}/viewer/objects/${base}.col.json`);
+  if (!response.ok) {
+    return null;
+  }
+  const json = (await response.json()) as ColJson;
+
+  return { ...json, vertices: new Float32Array(json.vertices) };
 }
 
 /**
@@ -373,6 +402,30 @@ async function loadServerModels(
   }
 }
 
+/** Textures for a compare-server model: its TXD is resolved from the `--after` IDEs server-side (404 → none). */
+function loadServerTxd(server: string, base: string): Promise<ArrayBuffer | null> {
+  const key = `server:${server}:${base}`;
+  let promise = txdCache.get(key);
+  if (!promise) {
+    promise = fetch(`${server}/txd?side=after&model=${encodeURIComponent(base)}`).then((response) =>
+      response.ok ? response.arrayBuffer() : null,
+    );
+    txdCache.set(key, promise);
+  }
+
+  return promise;
+}
+
+function loadTxd(txd: string): Promise<ArrayBuffer | null> {
+  let promise = txdCache.get(txd);
+  if (!promise) {
+    promise = fetch(`${BASE}/viewer/objects/${txd}`).then((response) => (response.ok ? response.arrayBuffer() : null));
+    txdCache.set(txd, promise);
+  }
+
+  return promise;
+}
+
 /** A labelled, scrollable list section appended to the panel. */
 function makeSection(
   panel: HTMLElement,
@@ -388,190 +441,24 @@ function makeSection(
   return { heading, list, title };
 }
 
-/** Sum the triangle count of every loaded (overlaid) model and show it. */
-function updatePolyCount(): void {
-  let triangles = 0;
-  for (const entry of loaded.values()) {
-    for (const mesh of meshesOf(entry.group)) {
-      const index = mesh.geometry.getIndex();
-      triangles += (index ? index.count : mesh.geometry.getAttribute('position').count) / 3;
-    }
-  }
-  polyLabel.textContent = `Triangles: ${Math.round(triangles).toLocaleString()} (${loaded.size} obj)`;
-}
-
-/** Parsed COL library (e.g. LODvegetation.col) → ColModel by lowercased name; fetched once per file. */
-const colLibCache = new Map<string, Promise<Map<string, ColModel>>>();
-
-async function addModel(model: ModelEntry): Promise<void> {
-  if (loaded.has(model.dff)) {
-    return;
-  }
-  const base = model.dff.replace(/\.dff$/i, '');
-  const textures = model.server ? await loadServerTextures(model.server, base) : await loadTextures(model.txd);
-  let buffer: ArrayBuffer;
-  if (model.server) {
-    const response = await fetch(`${model.server}/dff?side=after&model=${encodeURIComponent(base)}`);
-    if (!response.ok) {
-      throw new Error(`${base}: not found on --after`);
-    }
-    buffer = await response.arrayBuffer();
-  } else {
-    buffer = await fetch(`${BASE}/viewer/objects/${model.dff}`).then((response) => response.arrayBuffer());
-  }
-  const group = buildClump(parseDff(buffer), textures);
-  for (const mesh of meshesOf(group)) {
-    const colour = mesh.geometry.getAttribute('color');
-    if (colour) {
-      originalColors.set(mesh.geometry, Float32Array.from(colour.array));
-    }
-  }
-  scene.add(group);
-
-  const entry: LoadedModel = { collision: null, group };
-  loaded.set(model.dff, entry);
-  for (const mesh of meshesOf(group)) {
-    applyToMesh(mesh);
-  }
-  entry.collision = model.server ? null : await buildCollision(model);
-  if (entry.collision) {
-    scene.add(entry.collision);
-  }
-  updatePolyCount();
-  if (loaded.size === 1) {
-    frameAll();
-  }
-}
-
-/** Show the model's COL, wrapped −90°X to match buildClump's Y-up convert. Source is either a shared COL
- *  library (`model.col`, looked up by dff name) or the pre-extracted per-model `<model>.col.json`. */
-async function buildCollision(model: ModelEntry): Promise<null | Object3D> {
-  const base = model.dff.replace(/\.dff$/, '');
-  let col: ColModel | null = null;
-
-  if (model.col) {
-    col = (await loadColLibrary(model.col)).get(base.toLowerCase()) ?? null;
-  } else {
-    const response = await fetch(`${BASE}/viewer/objects/${base}.col.json`);
-    if (response.ok) {
-      const json = (await response.json()) as ColJson;
-      col = { ...json, vertices: new Float32Array(json.vertices) };
-    }
-  }
-  if (!col) {
-    return null; // no collision for this model
-  }
-
-  const wrap = new Group();
-  wrap.rotation.x = -Math.PI / 2;
-  wrap.add(buildCollisionWireframe([{ col, name: col.name, transforms: [new Matrix4()] }]));
-  wrap.visible = collisionOn;
-
-  return wrap;
-}
-
-function disposeObject(object: Object3D): void {
-  object.traverse((node) => {
-    if (node instanceof Mesh) {
-      const mesh = node as SceneMesh;
-      mesh.geometry.dispose();
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const material of materials) {
-        material.dispose();
-      }
-    }
-  });
-}
-
-function loadColLibrary(file: string): Promise<Map<string, ColModel>> {
-  let promise = colLibCache.get(file);
-  if (!promise) {
-    promise = fetch(`${BASE}/viewer/objects/${file}`)
-      .then((response) => response.arrayBuffer())
-      .then((buffer) => new Map(parseColLibrary(buffer).map((col) => [col.name.toLowerCase(), col])));
-    colLibCache.set(file, promise);
-  }
-
-  return promise;
-}
-
-/** Textures for a compare-server model: its TXD is resolved from the `--after` IDEs server-side (404 → none). */
-function loadServerTextures(server: string, base: string): Promise<TextureDictionary> {
-  const key = `server:${server}:${base}`;
-  let promise = txdCache.get(key);
-  if (!promise) {
-    promise = fetch(`${server}/txd?side=after&model=${encodeURIComponent(base)}`)
-      .then((response) => (response.ok ? response.arrayBuffer() : null))
-      .then((buffer) => (buffer ? buildTextureMap(parseTxd(buffer)) : new Map())) as Promise<TextureDictionary>;
-    txdCache.set(key, promise);
-  }
-
-  return promise;
-}
-
-function loadTextures(txd: string): Promise<TextureDictionary> {
-  let promise = txdCache.get(txd);
-  if (!promise) {
-    promise = fetch(`${BASE}/viewer/objects/${txd}`)
-      .then((response) => response.arrayBuffer())
-      .then((buffer) => buildTextureMap(parseTxd(buffer)));
-    txdCache.set(txd, promise);
-  }
-
-  return promise;
-}
-
-function meshesOf(group: Group): SceneMesh[] {
-  const meshes: SceneMesh[] = [];
-  group.traverse((object) => {
-    if (object instanceof Mesh) {
-      meshes.push(object as SceneMesh);
-    }
-  });
-
-  return meshes;
-}
-
-function onResize(): void {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function rebuildMaterial(source: Material, hasPrelit: boolean): MeshBasicMaterial | MeshStandardMaterial {
-  const previous = source as MeshStandardMaterial;
-  const map = previous.map;
-  const shared = {
-    alphaTest: previous.alphaTest,
-    color: map ? 0xffffff : previous.color.getHex(),
-    map,
-    side: previous.side,
-    transparent: previous.transparent,
-    vertexColors: options.prelit && hasPrelit,
-    wireframe: options.wireframe,
-  };
-  source.dispose();
-
-  return options.lit
-    ? new MeshStandardMaterial({ ...shared, metalness: 0, roughness: 1 })
-    : new MeshBasicMaterial(shared);
-}
-
 function removeModel(model: ModelEntry): void {
   const entry = loaded.get(model.dff);
   if (!entry) {
     return;
   }
-  scene.remove(entry.group);
-  disposeObject(entry.group);
-  if (entry.collision) {
-    scene.remove(entry.collision);
-    disposeObject(entry.collision);
-  }
+  entry.dispose();
   loaded.delete(model.dff);
   updatePolyCount();
 }
 
-window.addEventListener('resize', onResize);
+/** Sum the triangle count of every loaded (overlaid) model and show it. */
+function updatePolyCount(): void {
+  let triangles = 0;
+  for (const model of loaded.values()) {
+    triangles += model.triangles;
+  }
+  polyLabel.textContent = `Triangles: ${Math.round(triangles).toLocaleString()} (${loaded.size} obj)`;
+}
+
 buildControls();
-animate();
+viewer.start();

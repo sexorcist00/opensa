@@ -85,8 +85,12 @@ export function findChild(stream: BinaryStream, start: number, end: number, type
  * and finds each item this way. Returns the header (cursor at its payload), or null.
  */
 export function findChunkFrom(stream: BinaryStream, start: number, end: number, type: number): ChunkHeader | null {
+  // Clamp to the real buffer: a doubly-tampered lock (container size inflated PAST EOF *and* child count
+  // inflated) would otherwise scan past the buffer and make readChunkHeader throw, aborting the whole parse
+  // these recovery paths exist to tolerate. Well-formed streams keep end <= length, so this is a no-op there.
+  const limit = Math.min(end, stream.length);
   let cursor = start;
-  while (cursor + 12 <= end) {
+  while (cursor + 12 <= limit) {
     stream.seek(cursor);
     const header = readChunkHeader(stream);
     if (header.type === type) {

@@ -7,7 +7,7 @@ metadata:
 
 Isolated dev tools in `src/standalone/*` (no game/streaming), each its own Vite entry in
 `vite.config.ts` `rollupOptions.input` + a root `*.html`. Run `npm run dev` + `npm run serve:static`.
-Detailed plan: `.claude/plans/022-debug-viewers.md`; brief usage in `README.md`.
+Detailed plan: `.claude/plans/022-debug-viewers/readme.md`; brief usage in `README.md`.
 
 - **`/viewer.html`** (`object-viewer.ts`) — map models; prelit/MODULATE2X/lit toggles + a
   **Collision** toggle. Assets in `static/viewer/`. (Was `model-viewer`/`viewer.html` — renamed.)

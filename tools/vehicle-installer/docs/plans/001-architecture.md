@@ -7,7 +7,7 @@ single drop-in `--out`. Each vehicle's `dff`/`txd` replace the stock ones **insi
 sections, a new `carmods` line).
 
 ```sh
-tsx tools/vehicle-installer/src/cli.ts --game ./game-src/non-modified --in ./1 --out ./build
+tsx tools/vehicle-installer/src/cli.ts --game ./game-src/original --in ./1 --out ./build
 ```
 
 - `--game` — base game tree (`gta.dat` + `data/` + `models/gta3.img` …).
@@ -63,7 +63,7 @@ model name. It is added **for the tool's use now** and to be wired into the engi
 ## Fixtures (tests)
 
 Follow the `tests/original/` convention (`scripts/test-fixtures.ts`, `npm run test:fixtures` — gitignored,
-regenerated from `game-src/non-modified`): add fixtures that **copy** `data/{handling.cfg,vehicles.ide,
+regenerated from `game-src/original`): add fixtures that **copy** `data/{handling.cfg,vehicles.ide,
 carcols.dat,carmods.dat}` and **extract** a stock vehicle `dff`/`txd` (e.g. `admiral`) from `gta3.img`. Unit tests
 that touch real data use `describe.skipIf(!existsSync(...))` (as `build-vehicle.test.ts` does), plus synthetic
 in-memory cases for the mergers (deterministic, no fixtures needed). The engine `parseCarmods` test uses the real

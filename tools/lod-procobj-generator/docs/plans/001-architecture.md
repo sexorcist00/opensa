@@ -24,7 +24,9 @@ machinery either way, so it moves to a shared package both can use.
 ### CLI
 
 > **Note (as-built):** the original `--dff`/`--txd` were **unified into one `--in`** (a folder with both the
-> `.dff` and `.txd`). Omitting `--in` converts every `procobj.dat` species straight from the game's `gta3.img`.
+> `.dff` and `.txd`). Omitting `--in` converts every `procobj.dat` species straight from the game's `gta3.img`;
+> a path that is absent, or a directory with no `.dff`, is treated the same way (the library normalises it —
+> only an EXPLICIT CLI `--in` is validated).
 > The pipeline prose below still says "`--dff`/`--txd`" — read it as the contents of `--in`.
 
 ```

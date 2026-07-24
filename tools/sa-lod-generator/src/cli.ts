@@ -8,7 +8,7 @@
  * `--strip-particles` restores the old strip behaviour for a STOCK target with no asi. Paths are relative to the
  * current working directory (absolute paths pass through).
  */
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { basename, isAbsolute, resolve } from 'node:path';
 
 import { createSaLodAdapter } from './adapters/gta-sa';
@@ -40,7 +40,12 @@ function main(): void {
   // Particles ride the LOD clones by default (plan 010) — needs perfect-map.asi's 2dfx fix (plan 009). Pass
   // --strip-particles for a stock target with no asi (the pre-009 behaviour: type-1 emitters removed, coronas kept).
   const keepParticles = !process.argv.includes('--strip-particles');
-  const adapter = createSaLodAdapter(label, gameDir, { ...config, keepParticles, texScale });
+  // Per-game hole-fill list (plan 086 phase 5) — pmb reads mods-src/<id>/lod-holes.json; standalone: --holes.
+  const holesArg = argValue('--holes');
+  const holeFillModels = holesArg
+    ? (JSON.parse(readFileSync(fromCwd(holesArg), 'utf8')) as string[]).map((name) => name.toLowerCase())
+    : config.holeFillModels;
+  const adapter = createSaLodAdapter(label, gameDir, { ...config, holeFillModels, keepParticles, texScale });
   const resolved = adapter.resolvePairs();
   printReport(label, adapter.report(resolved));
   console.log(

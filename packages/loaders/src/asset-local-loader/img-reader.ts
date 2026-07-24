@@ -55,3 +55,19 @@ export async function openLazyVer2(source: ByteRangeSource): Promise<LazyImgArch
     },
   };
 }
+
+/** A {@link ByteRangeSource} over an HTTP URL (Range requests) — the served-dir twin of {@link fileHandleSource}.
+ *  The size is taken from the dir index (no HEAD round-trip); ranges are `[start, end)`. */
+export function urlRangeSource(url: string, size: number): ByteRangeSource {
+  return {
+    size,
+    slice: async (start, end): Promise<Uint8Array> => {
+      const response = await fetch(url, { headers: { Range: `bytes=${start}-${end - 1}` } });
+      if (!response.ok) {
+        throw new Error(`range fetch ${response.status}: ${url}`);
+      }
+
+      return new Uint8Array(await response.arrayBuffer());
+    },
+  };
+}

@@ -53,11 +53,18 @@ async function main(): Promise<void> {
     const excludeItems = excludeArg
       ? (JSON.parse(readFileSync(fromCwd(excludeArg), 'utf8')) as string[]).map((name) => name.toLowerCase())
       : undefined;
+    // `--holes <file.json>`: hole-fill models exempt from the reduction tracks (merged verbatim) —
+    // the same per-game list pmb reads from mods-src/<id>/lod-holes.json.
+    const holesArg = argValue('--holes');
+    const holeFillModels = holesArg
+      ? (JSON.parse(readFileSync(fromCwd(holesArg), 'utf8')) as string[]).map((name) => name.toLowerCase())
+      : undefined;
     await buildOpensaLods({
       cellSize,
       config: {
         ...(workersArg !== undefined ? { workers: Number(workersArg) } : {}),
         ...(excludeItems ? { excludeItems } : {}),
+        ...(holeFillModels ? { holeFillModels } : {}),
       },
       gameDir,
       outDir: fromCwd(outArg),

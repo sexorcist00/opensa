@@ -1,6 +1,10 @@
 # compiled output
 /dist
-/node_modules
+apps/engine-lab/dist
+apps/engine-lab/public/pak*/*.ospak
+apps/engine-lab/public/pak*/manifest.json
+apps/engine-lab/public/pak*/report.json
+node_modules/
 /build
 
 # Logs
@@ -70,12 +74,13 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 /blog-src/
 /NO_COMMIT/
 # Real GTA SA test fixtures (Rockstar assets — not redistributed): regenerated locally from a stock
-# copy at game-src/non-modified via `npm run test:fixtures`. Committed fixtures (mods + curated /
+# copy at game-src/original via `npm run test:fixtures`. Committed fixtures (mods + curated /
 # version-pinned test models) live in tests/custom/, which stays tracked.
 /tests/original/
-# The standalone-viewer e2e fixtures (extracted from game-src/non-modified by `npm run test:fixtures`,
+# The standalone-viewer e2e fixtures (extracted from game-src/original by `npm run test:fixtures`,
 # served at `/viewer/*` by serve-static). Rockstar assets — regenerated locally, never committed.
 /tests/viewer/
 
 # Nx cache
 .nx/
+public/

@@ -1,19 +1,34 @@
 # Concepts
 
-Exploratory design docs for large, not-yet-committed directions — research + honest go/no-go before any code.
-A concept graduates to `docs/plans/` only once we decide to build it.
+**Concepts we still have to verify.** A concept is an exploratory design doc for a large, not-yet-committed
+direction: research + an honest go/no-go *before any code*. It is the second stage of the documentation
+lifecycle (see [docs/README.md](../README.md)) — an [idea](../ideas/README.md) becomes a concept when we
+start to seriously vet it.
 
-## Active
+Every concept has exactly two exits:
 
-- [webgpu-migration](webgpu-migration/) — move the renderer off WebGL2 onto WebGPU to break the CPU draw-call wall.
+```
+concept  →  docs/plans/       — it survived the go/no-go, we build it (the research record MOVES into the plan)
+         ↘  docs/postmortem/  — it died; we record WHY so we never re-run the same dead-end
+```
 
-## Background: why these exist
+So this folder holds only **live explorations**. A resolved concept never stays here: a validated one moves
+its research record into its `docs/plans/<n>-…/` folder, and a killed one moves to
+[docs/postmortem/](../postmortem/README.md).
 
-The 2026-07 **modern-cell tooling experiment** (native `.cell` format, baked shadows, static batching / atlas —
-`docs/plans/066-pmb-modern-tool` + `tools/opensa-lod-generator` plans 005–010) was **parked with no measurable
-perf or quality gain**. It is preserved on the `backup/tooling-experiment` git branch, not deleted.
+## Graduated to plans
 
-The experiment's real value was the **diagnosis** it produced (see [webgpu-migration/01-bottleneck.md](webgpu-migration/01-bottleneck.md)):
-the engine is **CPU-bound on draw-call submission**, and no amount of asset-side work (batching, atlasing, LOD
-merging) moves that wall — because the wall is the WebGL/three.js submission cost per draw, not the art. The only
-lever that attacks it at the root is a **rendering-API change**, which is what `webgpu-migration` researches.
+- **webgpu-migration** → [docs/plans/073-webgpu-migration-threejs/concept/](../plans/073-webgpu-migration-threejs/concept/README.md) —
+  the research record of the three-WebGPU attempt (spikes, Babylon comparison, upstream issue draft, the full
+  phase-1 chronology). The chain itself **FAILED on three.js's side**; see the
+  [073 readme](../plans/073-webgpu-migration-threejs/readme.md) for the verdict.
+- **opensa-engine** → [docs/plans/074-opensa-engine/00-concept.md](../plans/074-opensa-engine/00-concept.md) —
+  the own-framework concept (own WebGPU renderer + native formats, 60 fps target), now the
+  [074 chain](../plans/074-opensa-engine/readme.md).
+
+## Died (moved to postmortem)
+
+- **modern-cell tooling** → [docs/postmortem/modern-cell-tooling.md](../postmortem/modern-cell-tooling.md) —
+  the modern-cell tooling experiment produced no measurable perf/quality gain (code parked on
+  `backup/tooling-experiment`). It DID produce the diagnosis that the engine was CPU-bound on draw-call
+  submission — the thread that led, through the failed webgpu-migration (073), to the own engine (074).

@@ -77,6 +77,47 @@ describe('partitionEntries', () => {
       expect(names(textures)).toEqual(['htex.txd', 'ttex.txd']);
       expect(textures.find((e) => e.name === 'ttex.txd')?.source).toBe('gta_int');
     });
+
+    // A TC keeps its world files in its OWN archive (gostown6.img → the override set) — sweeping only
+    // gta3 shipped a world with no collision (plan 086 phase 4 field find).
+    it('sweeps col/ipl world files from the override archives too, gta3 winning a collision', () => {
+      const tc = partitionEntries(
+        placedModels([1], ide),
+        new Set(['house.dff', 'la.ipl', 'roads.col']),
+        new Set(['gp_stream0.ipl', 'gp_veg.col', 'htex.txd', 'la.ipl', 'roads.col']),
+      );
+      expect(names(tc.models)).toContain('gp_veg.col');
+      expect(tc.models.find((e) => e.name === 'gp_veg.col')?.source).toBe('gta_int');
+      expect(names(tc.others)).toEqual(['gp_stream0.ipl', 'la.ipl']);
+      expect(tc.others.find((e) => e.name === 'la.ipl')?.source).toBe('gta3'); // not duplicated from the override
+      // A col present in BOTH archives: gta3 wins, one entry.
+      expect(tc.models.filter((e) => e.name === 'roads.col')).toEqual([{ name: 'roads.col', source: 'gta3' }]);
+    });
+  });
+
+  /**
+   * A converted build (opensa-pack 003): `house` is optimized, `shed` is not. Missing our extensions here
+   * would be a silent no-render, not an error — the procobj class of bug.
+   */
+  describe('a partly converted archive', () => {
+    const converted = new Set(['house.osm', 'htex.txd', 'roads.col', 'shed.dff']);
+    const partition = partitionEntries(placedModels([1, 2], ide), converted, new Set());
+
+    it('takes the .osm over the .dff — one entry, dictionary included', () => {
+      expect(names(partition.models)).toEqual(['house.osm', 'roads.col', 'shed.dff']);
+    });
+
+    it('still takes the stock txd for the model that stayed unoptimized', () => {
+      // `shed` shares `htex` with `house`; the shared dictionary must survive for shed's sake.
+      expect(names(partition.textures)).toEqual(['htex.txd']);
+    });
+
+    it('needs no texture entry at all once every model is converted', () => {
+      const fully = partitionEntries(placedModels([1], ide), new Set(['house.osm']), new Set());
+
+      expect(names(fully.models)).toEqual(['house.osm']);
+      expect(names(fully.textures)).toEqual([]);
+    });
   });
 });
 
@@ -85,6 +126,11 @@ describe('looseGroup', () => {
     it('routes data-folder files to data regardless of extension', () => {
       expect(looseGroup('data/gta.dat')).toBe('data');
       expect(looseGroup('data/maps/la.ipl')).toBe('data');
+    });
+
+    it('routes our optimized model to the models group, and a loose world .ostex to textures', () => {
+      expect(looseGroup('vehicles/admiral.osm')).toBe('models');
+      expect(looseGroup('opensa/textures/7.ostex')).toBe('textures');
     });
 
     it('routes dff to models, txd to textures, and the rest (ifp/gxt) to others', () => {

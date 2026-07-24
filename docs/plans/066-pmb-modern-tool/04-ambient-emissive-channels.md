@@ -15,7 +15,7 @@ machinery exists. Both are 1 byte per vertex in the [01](01-native-cell-format.m
    - **Modulates indirect**: multiplies the 002 indirect/ambient term so occluded pockets keep GI but sit darker,
      fixing flat over-bright alcoves at noon.
 2. **emissiveMask (1 byte)** — derived offline from the **night-vertex delta** (night prelit ≫ day prelit = a lit window /
-   neon / sign). This replaces the runtime heuristic that [071](../071-night-emissive-atmosphere.md) glow uses to guess
+   neon / sign). This replaces the runtime heuristic that [071](../071-night-emissive-atmosphere/readme.md) glow uses to guess
    emitters, giving a clean authored mask → tighter bloom, fewer false positives on bright-but-unlit surfaces.
 3. **Scope guard**: scalar channels only — no emissive _textures_, no new materials. The mask gates the existing 071
    glow term; skyVis gates existing SSAO/indirect. Both uniform-gated and graceful when absent.
