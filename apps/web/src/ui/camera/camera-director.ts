@@ -18,7 +18,7 @@ import type { CameraConfig } from '@opensa/game';
 
 import { angleDelta, clamp, damp, smoothDampAngle, type SmoothDampRef } from '@opensa/math';
 
-import { type AutoCenterState, cancelAutoCenter, createAutoCenter, stepAutoCenter } from './auto-center';
+import { type AutoCenterState, cancelAutoCenter, createAutoCenter, stepAutoCenter, yawBehind } from './auto-center';
 import { createLookInput, type LookInputState, releaseLook } from './camera-input';
 import { CAMERA_FOV_Y, forwardFrom, resolveCamera } from './engine-camera';
 import { dollyStep, FLY_SPEED, flyStep, panStep, TOP_DOWN_PITCH, topDownEye } from './fly-rig';
@@ -119,11 +119,12 @@ export function snapTopDown(state: CameraRigState, focus: readonly [number, numb
 }
 
 /**
- * Aim the rig at a yaw the PLAYER did not ask for — vehicle entry lines the camera up behind the car today,
- * plan 03's auto-center will use the same channel. The swing is damped, and any look input cancels it.
+ * Aim the camera BEHIND a facing the player did not choose — vehicle entry lines it up behind the car, the
+ * exit swings it behind the dismounting player. `facing` is a GTA heading; the rig sits at `yawBehind` of it.
+ * The swing is damped, and any look input cancels it.
  */
-export function steerYaw(state: CameraRigState, yaw: number): void {
-  state.yawTarget = yaw;
+export function steerYaw(state: CameraRigState, facing: number): void {
+  state.yawTarget = yawBehind(facing);
 }
 
 /**
@@ -147,10 +148,11 @@ export function stepCamera(state: CameraRigState, snapshot: CameraSnapshot, conf
   }
   const [x, y, z] = snapshot.focus;
   const velocity = focusVelocity(state, snapshot, config);
-  // Auto-center and look-ahead are ON FOOT only for now: the vehicle versions of both (turn-follow while
-  // driving, drift framing) are plan 05's, tuned against a car's speeds rather than a ped's.
-  const composing = !state.legacy && snapshot.mode === 'foot';
-  if (composing) {
+  // Auto-center runs on foot AND in a car — the camera settles behind whatever the player is driving. Only
+  // the LOOK-AHEAD lean stays on foot: a car's version is drift framing (it leans toward the SLIDE, not the
+  // heading), which is plan 05's, tuned against a car's speeds.
+  const centering = !state.legacy && (snapshot.mode === 'foot' || snapshot.mode === 'vehicle');
+  if (centering) {
     const step = stepAutoCenter(
       state.autoCenter,
       state.yaw,
@@ -173,9 +175,10 @@ export function stepCamera(state: CameraRigState, snapshot: CameraSnapshot, conf
     snapshot.dt,
     !state.legacy && snapshot.mode !== 'fly',
   );
-  const ahead = composing
-    ? stepLookAhead(state.lookAhead, velocity.x, velocity.z, config, snapshot.dt)
-    : stepLookAhead(state.lookAhead, 0, 0, config, snapshot.dt);
+  const ahead =
+    centering && snapshot.mode === 'foot'
+      ? stepLookAhead(state.lookAhead, velocity.x, velocity.z, config, snapshot.dt)
+      : stepLookAhead(state.lookAhead, 0, 0, config, snapshot.dt);
 
   return resolveCamera({
     aspect: snapshot.aspect,

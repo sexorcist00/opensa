@@ -53,6 +53,7 @@ import type { GameId } from '../game-config';
 import { IS_DEV } from '../dev-mode';
 import { GAME_CONFIG } from '../game-config';
 import { vehicleModelsFromIde } from '../vehicle-models';
+import { yawBehind } from './camera/auto-center';
 import {
   type CameraSnapshot,
   createRigState,
@@ -98,6 +99,8 @@ const WORLD_READY_TIMEOUT_MS = 12000;
 /** A frame slower than this gets its CPU breakdown logged (vsync is 8.3 ms at 120 Hz). */
 const SLOW_FRAME_MS = 20;
 
+/** The GTA heading the player spawns facing — the camera seeds behind it, the pose falls back to it. */
+const SPAWN_FACING = Math.PI;
 /** Player capsule (metres, GTA Z-up): the setup-character defaults for a human. */
 const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HALF_HEIGHT = 0.55;
@@ -369,7 +372,7 @@ async function boot(
   Velocity.y[playerEid] = 0;
   Velocity.z[playerEid] = 0;
   Velocity.grounded[playerEid] = 0;
-  Locomotion.heading[playerEid] = Math.PI; // spawn facing, mirrors the pose fallback below
+  Locomotion.heading[playerEid] = SPAWN_FACING; // spawn facing, mirrors the pose fallback below
   Locomotion.state[playerEid] = 0; // LOCOMOTION_GROUNDED
   Locomotion.stateTime[playerEid] = 0;
   Locomotion.fallSpeed[playerEid] = 0;
@@ -392,7 +395,9 @@ async function boot(
   // camera shim (the only three-shaped seam in CharacterControllerSystem).
   // `?cam=legacy` runs the pre-080 rigid stick (the chain's A/B escape hatch — a field round compares feel
   // one reload apart, and a rejected round never blocks play). Deleted at chain close-out (plan 07).
-  const rig = createRigState(config.camera, Math.PI, -0.25, params.get('cam') === 'legacy');
+  // Seat the camera BEHIND the spawn facing (the ped spawns facing π; behind it is yawBehind(π) = 0). Seeding
+  // it at π put the camera nose-to-nose with a stationary player until they first moved.
+  const rig = createRigState(config.camera, yawBehind(SPAWN_FACING), -0.25, params.get('cam') === 'legacy');
   /** This frame's raw camera input, drained by the loop: pointer deltas in pixels, drag pan in NDC, wheel
    *  notches. Accumulating instead of mutating the rig is what lets ONE pure step own the smoothing. */
   const pendingInput = { look: { x: 0, y: 0 }, pan: null as null | { x: number; y: number }, zoom: 0 };

@@ -45,6 +45,8 @@ ON FOOT only for now (the vehicle versions are plan 05):
 - **Idle recenter**: after `recenterDelaySec` of untouched look, a MOVING player is eased behind at
   `recenterRate` scaled by speed (a walk barely drifts home, a sprint commits). Standing still never
   recenters — a parked camera is left alone.
+- **In a car too**: auto-center runs on foot AND while driving (the camera settles behind the car's rear).
+  Only the look-ahead lean stays on foot — a car's lean is drift framing (plan 05).
 - **Manual always wins**: any look input cancels both, restarts the idle clock, and holds turn-follow off
   for `manualGraceSec`. Pitch is never auto-touched.
 - **Look-ahead**: the frame leans toward travel by up to `lookAheadDistance`, damped over `lookAheadTime`
@@ -52,7 +54,9 @@ ON FOOT only for now (the vehicle versions are plan 05):
   geometry stays put.
 - The behind-yaw convention: a GTA heading `h` points along `(−sin h, cos h)` and the camera looks along
   `(sin yaw, −cos yaw)`, so the camera sits behind at `yaw = h + π`. In practice: running the way the
-  camera already looks needs no correction.
+  camera already looks needs no correction. The rig SEEDS at `yawBehind(spawn facing)` so a standing player
+  is framed from behind at boot, not nose-to-nose; `steerYaw` (vehicle entry/exit) takes a facing and
+  applies the same `yawBehind`.
 
 **Modes**
 
@@ -84,6 +88,9 @@ host since 080/01) — field rounds tune with sliders, not rebuilds.
 
 ## Known gaps / candidates
 
+- **Jitter while moving (KNOWN, unfixed):** physics steps at a fixed 1/60 but the camera and the framed
+  object draw in the variable-rate render loop, so a fast object stair-steps against the smoothed camera.
+  The fix is render interpolation across the ped/vehicle/camera draw paths — its own step.
 - The 080/02 and /03 defaults are FIRST GUESSES — they have not survived a field round yet, and the dead zone
   leaves the frame settling ~8 cm behind a focus that stopped (the price of a rock-still idle frame).
 - No camera collision — the eye clips through walls (plan 04 adds `PhysicsWorld` ray/sphere casts + whiskers).

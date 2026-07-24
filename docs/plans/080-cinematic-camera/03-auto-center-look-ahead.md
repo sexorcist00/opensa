@@ -121,3 +121,34 @@ Recorded in [`docs/benchmarks/opensa-engine/2026-07-25-headless-080-camera-direc
 one interaction to watch is the feedback loop every camera-relative game has — auto-center rotates the
 camera, which rotates "forward", which curves a held strafe. The headless run converges rather than
 spiralling, but only a human can say whether it FEELS right.
+
+### 2026-07-25 — field-round fixes (user report, same day)
+
+The first look surfaced three things the tests could not — the behind-yaw convention was a π off in
+practice, and the vehicle was left out. Fixed:
+
+1. **The camera framed the player's FACE at rest and behind them only once moving.** The rig SEEDED at
+   yaw π while the ped spawns facing π, and `yawBehind(π) = 0` — so the start was nose-to-nose, and the
+   first step's auto-center swung it round. Fix: seed the rig at `yawBehind(SPAWN_FACING)`. (The behind
+   formula itself was right — a straight run showed the back, pinned by the invariant test — only the seed
+   was wrong.)
+2. **Vehicle entry framed the car's FRONT, then swung to the rear.** `aimCamera` fed the car heading
+   straight into the yaw target; the same convention says behind is `heading + π`, so it aimed at the
+   front. Fix: `steerYaw` now takes a FACING and applies `yawBehind` itself — one place, and the exit swing
+   (which also passes a facing) gets it too. The old `aimCamera(heading)` comment claiming it "centres
+   behind the rear" was simply wrong and never visually checked.
+3. **The camera did not settle behind a moving car at all.** Auto-center was gated `mode === 'foot'`. The
+   user wants the camera to find the car's rear while driving, so auto-center now runs on foot AND in a
+   vehicle (heading = the car's). Only the look-ahead LEAN stays on foot — a car's lean is drift framing
+   (toward the slide, not the heading), still plan 05.
+
+Field-checked headless: at rest the camera sits behind the standing player; entering a car it lines up
+behind the rear. Suite 2625 green.
+
+**STILL OWED — the jitter.** The user also reports the camera dragging/juddering while the player moves,
+worst in a car. Diagnosed, NOT yet fixed: physics runs in `runFixedSteps` (1/60) but `focus`, `posePlayer`
+and the camera step in the VARIABLE-rate render loop (at 120 Hz every other frame does no physics step), so
+the framed object's position is a stair-step while the smoothed camera is continuous — the object judders
+against the camera on the fixed-step saw. The legacy stick hid it by moving in lockstep with the object.
+The real fix is render interpolation (draw ped + car + camera focus at `lerp(prev, cur, accumulator/step)`),
+which is a host-loop change spanning the ped and vehicle draw paths — its own step, tracked next.

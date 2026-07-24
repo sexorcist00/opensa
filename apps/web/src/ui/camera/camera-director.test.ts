@@ -264,14 +264,15 @@ describe('stepCamera — the smoothed rig (plan 080/02)', () => {
       expect(33 - camera.target[2]).toBeLessThanOrEqual(CONFIG.deadZone * 1.5); // dead-zone residual only
     });
 
-    it('swings a steered yaw home instead of snapping, then hands the camera back', () => {
+    it('swings BEHIND a steered facing instead of snapping, then hands the camera back', () => {
       const state = smoothState();
-      steerYaw(state, Math.PI / 2);
+      // steerYaw takes a FACING; the rig settles at yawBehind of it (facing −π/2 → behind is π/2).
+      steerYaw(state, -Math.PI / 2);
+      expect(state.yawTarget).toBeCloseTo(Math.PI / 2, 12);
 
       stepCamera(state, snapshot(), CONFIG);
       expect(state.yaw).toBeLessThan(Math.PI);
       expect(state.yaw).toBeGreaterThan(Math.PI / 2); // partway, not there
-      expect(state.yawTarget).not.toBeNull();
 
       idle(state, 180);
       expect(state.yaw).toBeCloseTo(Math.PI / 2, 3);
@@ -336,13 +337,11 @@ describe('stepCamera — composition (plan 080/03)', () => {
       expect(state.yaw).toBe(Math.PI);
     });
 
-    it('does not compose in a vehicle — that is plan 05 with a car’s speeds', () => {
+    it('does not LEAN in a vehicle — the look-ahead lean is drift framing, plan 05', () => {
       const state = smoothState();
-      const camera = walk(state, 12, 3, 0, 'vehicle');
+      walk(state, 12, 3, 0, 'vehicle');
 
-      expect(state.yaw).toBe(Math.PI);
-      expect(camera.target[2]).toBeGreaterThan(30 - 12 * 3); // still just the follow lag, no lean
-      expect(state.lookAhead.z).toBe(0);
+      expect(state.lookAhead.z).toBe(0); // no look-ahead offset while driving
     });
 
     it('does not compose on the legacy path', () => {
@@ -396,6 +395,15 @@ describe('stepCamera — composition (plan 080/03)', () => {
       // The lean shifted the whole rig, not the eye alone: the planar orbit radius still matches the
       // distance channel projected onto the plane.
       expect(orbit).toBeCloseTo(state.distance * Math.cos(state.pitch), 6);
+    });
+
+    it('settles behind a car the player drives on without touching the mouse', () => {
+      const state = smoothState();
+      // Drive off 1 rad from where the camera looks and keep going past the recenter delay.
+      walk(state, 12, CONFIG.recenterDelaySec + 6, 1, 'vehicle');
+
+      expect(state.yaw).toBeCloseTo(1 + Math.PI, 1);
+      expect(state.lookAhead.z).toBe(0); // still no lean — that is 05
     });
   });
 });
