@@ -656,6 +656,8 @@ describe('exit egress chain (plan 088/09d)', () => {
       h.system.fixedUpdate(0.016);
 
       expect(h.anim.clip).toBe('car_crawloutrhs'); // still a crawl, not a door swing
+      h.system.update(1); // the LEFT door swings — it is the chosen flank's door
+      expect((car.handle as FakeVehicleHandle).doorAngles.get('lf')).toBeCloseTo(-Math.PI / 3);
       h.system.fixedUpdate(3); // the crawl elapses
       const last = h.phys.teleports[h.phys.teleports.length - 1];
       expect(last[0]).toBeLessThan(0); // emerged on the CLEAR (−x) side, not into the grounded flank

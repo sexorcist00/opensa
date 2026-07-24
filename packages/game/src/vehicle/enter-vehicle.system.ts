@@ -460,7 +460,7 @@ export class EnterVehicleSystem implements System {
 
   /** The first clear crawl spot around a WRECK (roof-down OR on its side — the yaw-planar probe
    *  covers both): right side → left side → nose → tail; null when boxed in on all four. */
-  private clearCrawlSpot(vehicle: EnterableVehicle): null | Vec3 {
+  private clearCrawlSpot(vehicle: EnterableVehicle): null | { local: [number, number]; target: Vec3 } {
     const [hx, hy] = vehicle.halfExtents;
     const candidates: [number, number][] = [
       [hx + DOORWAY_CLEAR + 0.4, vehicle.seatLocal[1]],
@@ -471,7 +471,7 @@ export class EnterVehicleSystem implements System {
     for (const local of candidates) {
       const target = this.crawlTargetAt(vehicle, local);
       if (this.pathClearTo(vehicle, target)) {
-        return target;
+        return { local, target };
       }
     }
 
@@ -684,9 +684,13 @@ export class EnterVehicleSystem implements System {
    *  then silently went out the passenger side (field 2026-07-24). */
   private pathClearTo(vehicle: EnterableVehicle, target: Vec3): boolean {
     const { position } = this.physics.readBody(vehicle.body);
-    const bottom = position[2] - vehicle.halfExtents[2];
+    // Anchor the ray heights to the REAL ground under the car: `position.z − hz` sat BELOW the road
+    // for real models (the bbox is roof-heavy, the origin near the axles), so the knee ray grazed
+    // the asphalt and false-blocked whichever side faced the road crown (field 2026-07-24 ×2).
+    const ground = this.physics.groundBelow([position[0], position[1], position[2] + 0.5], 5, vehicle.body);
+    const base = ground ?? position[2] - vehicle.halfExtents[2];
     for (const height of [0.35, 0.85]) {
-      const z = bottom + height;
+      const z = base + height;
       if (!this.physics.pathClear([position[0], position[1], z], [target[0], target[1], z], vehicle.body)) {
         return false;
       }
@@ -748,14 +752,17 @@ export class EnterVehicleSystem implements System {
     this.active.rig.setSteer(0);
     if (!this.isUpright(this.active)) {
       // A WRECK (roof-down or on its side): probe the four planar exits and crawl out the first
-      // clear one — a side-lying car has one door against the ground, so nothing is assumed. The rf
-      // door swings for the read (harmless on a wreck); all four blocked → appear on top.
-      this.side = 'rf';
-      this.doorTarget = this.openAngle();
+      // clear one — a side-lying car has one door against the ground, so nothing is assumed. The
+      // door that swings is the one on the CHOSEN flank (a fixed rf swing read as "the wrong door
+      // opened" in the field); nose/tail crawls swing nothing. All four blocked → appear on top.
       const spot = this.clearCrawlSpot(this.active);
-      this.logger.log('enter-vehicle', `egress wreck ${spot ? 'crawl' : 'boxed in'}`);
+      this.logger.log('enter-vehicle', `egress wreck ${spot ? `crawl [${spot.local.join(',')}]` : 'boxed in'}`);
       if (spot) {
-        this.startCrawlout(spot);
+        if (spot.local[0] !== 0) {
+          this.side = spot.local[0] > 0 ? 'rf' : 'lf';
+          this.doorTarget = this.openAngle();
+        }
+        this.startCrawlout(spot.target);
 
         return;
       }

@@ -370,6 +370,16 @@ All four packages **1283 green**; lint + tsc clean.
   (mirrored on rf). Tests: +4 egress cases (blocked-driver→rf, both→windscreen, all→roof,
   overturned→crawl) on a configurable blockage stub; all four packages **1280 green**.
 
+  **Field round 5 (2026-07-24):** the wrong-side exit SURVIVED round 4 ("both free → driver door
+  opens, exits passenger; passenger blocked → correct"). A clean-room Rapier test proved the sensor
+  exclusion and the rays sound — the bug was the HEIGHT BASE: `position.z − hz` sits BELOW the road
+  on real models (the bbox is roof-heavy, the origin near the axles), so the knee ray ran at asphalt
+  level and false-blocked whichever side faced the road CROWN — which for a kerb-parked car is
+  always the driver side; toward the kerb the camber falls away, so the passenger ray stayed clear.
+  Probe heights now anchor to `groundBelow` under the car. Also per the field read: a WRECK swings
+  the door of the CHOSEN flank (rf-always read as "the wrong door opened"; nose/tail crawls swing
+  nothing), and the wreck egress log carries the picked local offset.
+
   **Field round 4 (2026-07-24):** "the driver door opens but he exits the passenger side, even
   into a wall". Root pair: (a) the exit probe's KNEE ray was anchored to the car-centre height and
   GRAZED cambered roads/kerbs ~2 m out — the driver side false-blocked and the exit silently went
