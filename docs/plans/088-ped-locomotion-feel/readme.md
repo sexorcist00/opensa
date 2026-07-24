@@ -1,7 +1,9 @@
 # 088 — Ped locomotion feel (turning, acceleration tiers, jump, animation states)
 
-**Status: REOPENED 2026-07-24 (round 2) — phases 01–04 + 06 CLOSED, 05 QUEUED; the user extended the
-scope same day with phases 07–09 (landing tiers, slope slide, vehicle ingress/egress realism).**
+**Status: SHIPPED + CLOSED 2026-07-24 (both rounds, all field-verified same day; 05 stays QUEUED).**
+Round 2 (07 landing tiers · 08 slope slide · 09a–d ingress/egress) closed after two field rounds +
+the overturned crawl-out fix; close-out re-run (character.md/vehicles.md/edge-cases updated, audit
+at `docs/audit/ped-locomotion-feel.md`).
 Round 1: four feature commits (`4fbe73b` heading+plant · `5ed9a0c` crossfade+hold · `6520641`
 tiers+rate-sync · `c45adaf` jump FSM) + the field fix `160d428` + close-out `824ca1b`; 792 green.
 
@@ -256,7 +258,7 @@ blockage checks; the "floats in the air" boarding is the LINEAR `getinFrom → s
 the clip's authored root motion (kept by `parseIfp` as frame-type-4 translation, dropped by
 `pedClip`'s root anchoring) never drives the body.
 
-### 07 — Landing tiers + the getup chain (CODE-COMPLETE 2026-07-24 — awaiting the field round)
+### 07 — Landing tiers + the getup chain (CLOSED 2026-07-24 — field round: collapse clip swapped, accepted)
 
 - Three impact tiers instead of two: `JUMP_land` (soft, ≥1 m/s) · **`FALL_land` — the impact
   CROUCH** the user asked for (> `hardLandSpeed` 12) · **`FALL_collapse` → `getup` chain** (a new
@@ -288,7 +290,7 @@ one motion, straight down onto the face) + **`getup_front`** (the matching face-
 58 % and popping to idle. Clip durations recorded: land 0.23 · fall_land 0.47 · fall_front 0.73 ·
 glide 0.5 · fall_glide 0.8 · getup(_front) 1.37 (ANP3 raw / 60).
 
-### 08 — Slope slide (CODE-COMPLETE 2026-07-24 — awaiting the field round)
+### 08 — Slope slide (CLOSED 2026-07-24 — field round 2: real downhill push added, accepted)
 
 - Ground NORMAL from the ground probe (extend the physics ray); grounded on a slope steeper than
   `slideSlopeDeg` (~42°, hysteresis a few degrees) → a SLIDE locomotion state: reduced control,
@@ -308,7 +310,7 @@ rotated-box API needed) and drops the capsule onto it; flat ground pinned as nev
 FSM transitions got extracted (`groundedTransition`/`slideTransition`) to hold the complexity cap.
 All four packages **1283 green**; lint + tsc clean.
 
-### 09 — Vehicle ingress/egress realism (each sub-step individually shippable)
+### 09 — Vehicle ingress/egress realism (CLOSED 2026-07-24 — field rounds 1–3 all fixed + accepted)
 
 - **09a — Root motion for the scripted clips (the "floats in the air" fix).** Extract the ROOT
   translation track from the raw IFP (`parseIfp` keeps it; `pedClip` drops it), and drive
@@ -367,6 +369,12 @@ All four packages **1283 green**; lint + tsc clean.
   (`exitopen` still seats: the door is only opening). `finishExit` faces out of the USED door
   (mirrored on rf). Tests: +4 egress cases (blocked-driver→rf, both→windscreen, all→roof,
   overturned→crawl) on a configurable blockage stub; all four packages **1280 green**.
+
+  **Field round 3 (2026-07-24, screenshot):** the overturned crawl-out buried the player — the
+  target z was the RAW ground while `placePlayer` places the CAPSULE CENTRE, so half the capsule
+  landed inside the collision (fell through / froze). Fixed: crawl targets lift by
+  `PLAYER_STAND_LIFT 1 m`; and per the user's ask, the rf door now swings open ON the crawl-out
+  side while crawling. Tests: ground-anchored-crawl-ends-standing + the rf-door swing pinned.
 
 Execution order: **07 → 09a → 09c → 09b → 09d → 08** (07 is self-contained; 09a is the foundation
 the rest of 09 samples through; 08 is independent and lowest-risk last).

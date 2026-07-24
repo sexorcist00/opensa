@@ -28,25 +28,42 @@
     hysteresis (no clip flicker at a boundary);
   - **`LocomotionMixer`** — 0.2 s crossfade on every clip switch (landings 0.12 s), walk↔run↔sprint carry
     normalized phase so the legs stay in step, cycle clocks scale by `speed / tierSpeed` clamped
-    [0.7, 1.4] (no foot sliding), one-shot clips (launch/glide/land/collapse) park on their last frame,
+    [0.7, 1.4] (no foot sliding), one-shot clips (launch, the glides, the land tiers, the riser)
+    park on their last frame,
     and an interrupted fade retargets from a frozen `holdPose` — pop-free;
   - **`IfpSampler.sampleBlended`** — the crossfade blends per-bone LOCAL quats/positions BEFORE compose
     (blending palette matrices would shear); measured 8.2 µs vs 6.0 µs single per 32-bone frame.
   The clip set (`PLAYER_CLIPS`): `idle_stance`/`walk_civi`/`run_civi`/`sprint_civi` gaits +
-  `JUMP_launch`/`JUMP_glide`/`JUMP_land`/`FALL_glide`/`FALL_collapse` air states. Every 088 addition
+  `JUMP_launch`/`JUMP_glide`/`JUMP_land`/`FALL_glide` air states + the 088/07 landing tiers
+  `fall_land` (impact crouch) and `fall_front`+`getup_front` (down flat, stand back up — NOT
+  `FALL_collapse`: its standing-knockout stagger read as two clips on a landing). Every 088 addition
   degrades on a TC whose IFP lacks it (`resolveGaitClip`, `airClipFor` chains) — never a bind pose.
 - **Movement feel** (plan 088/01+03): the controller owns a rate-limited heading
   (`Locomotion.heading`, 720°/s near idle → 240°/s at the top tier; an intent >120° behind PLANTS —
   decelerate, pivot, re-accelerate); RUN is the default gait (SA jogs), Shift sprints, `walk` is an
   optional binding or a partial touch-stick deflection. All tuning in `MovementConfig`
   (`game-runtime-config.ts`).
-- **Jump/fall FSM** (plan 088/04, `CharacterControllerSystem.advanceAirState`, states in
+- **Jump/fall FSM** (plan 088/04+07, `CharacterControllerSystem.advanceAirState`, states in
   `Locomotion.state`): LAUNCH (0.1 s anticipation crouch before the impulse; jumpSpeed 4.5 → apex
-  ≈ 1.03 m) → AIRBORNE → LAND (0.15 s reduced-control beat) or HARD_LAND (>12 m/s impact → collapse,
-  0.5 s); walking off an edge FALLs after the 0.12 s coyote window (a press inside it still jumps); a
-  press ≤0.15 s before touchdown fires on the landing frame (rising-edge armed — holding jump never
-  auto-hops); feather touches (<1 m/s) take no beat. Touchdown impact is recorded in
-  `Locomotion.fallSpeed` (the 080 camera shake's future input).
+  ≈ 1.03 m) → AIRBORNE → a landing TIER by touchdown speed: LAND (1–12 m/s, 0.15 s beat) ·
+  HARD_LAND (12–16, the `fall_land` impact crouch, 0.5 s) · COLLAPSE (>16, `fall_front` down flat +
+  `getup_front` back up over 2.2 s, `stateTime`-driven handoff); walking off an edge FALLs after the
+  0.12 s coyote window (a press inside it still jumps); a press ≤0.15 s before touchdown fires on the
+  landing frame (rising-edge armed — holding jump never auto-hops); feather touches (<1 m/s) take no
+  beat. Touchdown impact is recorded in `Locomotion.fallSpeed` (the 080 camera shake's future input).
+- **Slope slide** (plan 088/08): ground steeper than `slideSlopeDeg` (40°, from a per-step
+  `groundNormalBelow` probe) enters `LOCOMOTION_SLIDE` — the CONTROLLER pushes downhill (gravity's
+  along-slope component, capped 12 u/s; Rapier's kinematic controller never accelerates a slide
+  itself), control drops near-frictionless (0.05), the pose braces in `FALL_glide`, and there is NO
+  jump out of a slide — landing on steep ground slides immediately, so the jump-ladder up a hillside
+  is impossible. Exits below 36° (4° hysteresis) or off an edge into FALL.
+- **Vehicle ingress/egress** (plan 088/09): the enter/exit slides ride the clips' authored ROOT
+  MOTION (`rootMotion`/`warpAlongRootMotion` — endpoint-pinned to the real doorway and seat); entry
+  uses the NEAR front door (passenger side climbs in `car_getin_rhs` and shuffles across on
+  `car_shuffle_rhs`); the step-in walks a three-leg route around the open panel; the exit probes
+  each egress (driver door → passenger door → windscreen crawl `car_crawloutrhs` → appear on the
+  roof) with two-height `pathClear` rays, an overturned car goes straight to the crawl-out, and the
+  exit door shuts only once the player has stepped clear. Details in vehicles.md.
 - **Physics** (plans 008/013): bitECS entity + Rapier capsule/box controller, gravity, map
   collision, slope handling; respawn/teleport debug actions. The game's `playerSpawn`
   (`GAME_CONFIG`, `apps/web/src/game-config.tsx`) is the single source for where the player starts — it seeds both the

@@ -131,6 +131,18 @@ describe('LocomotionMixer', () => {
       }
     });
 
+    it('a one-shot clip parks on its last frame instead of wrapping (088/04)', () => {
+      const m = new LocomotionMixer(DURATIONS, CYCLIC, RUN, { oneShot: new Set([RUN]) });
+
+      const { pose } = m.update(RUN, 2); // way past the 0.5 s run duration
+
+      expect(pose.kind).toBe('single');
+      if (pose.kind === 'single') {
+        expect(pose.time).toBeLessThan(0.5); // held a hair BEFORE the duration — exactly at it, the
+        expect(pose.time).toBeGreaterThan(0.49); // sampler's wrap would rewind to frame 0
+      }
+    });
+
     it('restartFromHold fades the scripted pose into locomotion (the car-exit handback)', () => {
       const m = mixer();
       m.update(WALK, 1); // some prior locomotion state

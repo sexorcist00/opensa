@@ -719,3 +719,54 @@ describe('PhysicsWorld kinematic character on a car', () => {
     });
   });
 });
+
+describe('PhysicsWorld.pathClear (plan 088/09d)', () => {
+  describe('negative cases', () => {
+    it('a solid box across the ray blocks it', async () => {
+      const physics = await makeWorld();
+      physics.createStaticBox([2, 0, 1], [0.5, 2, 1]); // a wall between the points
+      physics.step(STEP); // build the query pipeline
+      expect(physics.pathClear([0, 0, 1], [4, 0, 1])).toBe(false);
+      physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('an empty span is clear, and a zero-length ray is trivially clear', async () => {
+      const physics = await makeWorld();
+      expect(physics.pathClear([0, 0, 1], [4, 0, 1])).toBe(true);
+      expect(physics.pathClear([1, 2, 3], [1, 2, 3])).toBe(true);
+      physics.dispose();
+    });
+
+    it('the excluded body (the probing car itself) does not block its own ray', async () => {
+      const physics = await makeWorld();
+      const body = physics.createBox([0, 0, 1], [1, 1, 0.5]); // the ray STARTS inside this box
+      physics.step(1 / 60);
+      expect(physics.pathClear([0, 0, 1], [4, 0, 1], body)).toBe(true);
+      physics.dispose();
+    });
+  });
+});
+
+describe('PhysicsWorld.groundNormalBelow (plan 088/08)', () => {
+  describe('negative cases', () => {
+    it('returns null with nothing below the probe', async () => {
+      const physics = await makeWorld();
+      expect(physics.groundNormalBelow([0, 0, 10], 4)).toBeNull();
+      physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('a flat floor reports the up normal', async () => {
+      const physics = await makeWorld();
+      physics.createStaticBox([0, 0, 0], [10, 10, 0.5]);
+      physics.step(STEP); // build the query pipeline
+      const normal = physics.groundNormalBelow([0, 0, 2], 4);
+      expect(normal).not.toBeNull();
+      expect(normal?.[2]).toBeCloseTo(1, 5);
+      physics.dispose();
+    });
+  });
+});

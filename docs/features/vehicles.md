@@ -66,12 +66,26 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
 - **Physics** (plans 017/018): Rapier dynamic chassis from the COL convex hull, raycast wheels
   (suspension), handling.cfg parsed (kept for tuning), enter/exit flow with seat alignment
   (plan 016) — the run-to-door is interruptible (movement input or a blocked path hands control back,
-  GTA-style), damage system (plan 019) using the full COL. The scripted climb-in/sit/climb-out clips
-  (`car_getin_lhs` / `car_getout_lhs` / `car_sit`) are requested BY NAME (shared const
+  GTA-style), damage system (plan 019) using the full COL. The scripted clips
+  (`car_getin_lhs`/`_rhs`, `car_getout_lhs`/`_rhs`, `car_sit`, `car_shuffle_rhs`, `car_crawloutrhs`)
+  are requested BY NAME (shared const
   `VEHICLE_SCRIPTED_CLIPS` in `packages/game/src/vehicle/vehicle-clips.ts`) and resolved by the player from
   `ped.ifp` — a scripted clip registers only when it resolves (`duration > 0`), else the driver falls back to
   the standing locomotion pose (see character.md). While seated the ped rides the car's FULL orientation
   (tilts/flips with it), positioned at the `ped_frontseat` dummy.
+- **Ingress/egress realism** (plan 088/09, 2026-07-24): the climb-in/out slides replay each clip's
+  authored ROOT MOTION (extracted from the IFP by `rootMotion`, warped between the real doorway and
+  seat by `warpAlongRootMotion` — a TC without the clip degrades to the old linear slide, and the
+  slide runs the CLIP's duration, not a constant). Entry picks the NEAR front door: the passenger
+  side opens `rf` (mirrored swing), climbs into the passenger seat and shuffles across on
+  `car_shuffle_rhs`; the step-in walks a three-leg route around the OPEN panel (back along the
+  1.2 m standoff ring past the swept edge, inboard behind it, forward into the doorway). Exit runs
+  an egress chain — driver door → passenger door → windscreen crawl (`car_crawloutrhs` to a
+  ground-anchored spot past the bonnet) → appear on the roof — each spot gated by two-height
+  `PhysicsWorld.pathClear` rays from the car's centre (target + knee, 0.6 m past the doorway; the
+  car excluded, sensors ignored). An overturned car (`!isUpright`) skips the doors and crawls out.
+  Door choreography: per-side angle tracking; the exit door stays open while the player stands in
+  the doorway and shuts once he steps clear (the same footprint trigger that restores collision).
 - **LOD/streaming** (plan 021): HD/LOD/unload distances per vehicle, placements respawn.
 - **Headlights** (plan 033, ⚠️ MVP — redo later): glowing lamp glass + coronas at the lamp dummies; lamps
   found by position near the `headlights`/`taillights` dummies; no road beam yet. See night-and-time.md.

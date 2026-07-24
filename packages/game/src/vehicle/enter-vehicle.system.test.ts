@@ -88,7 +88,7 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
   };
   const physics = {
     getLinvel: (): Vec3 => [0, phys.speed, 0], // heading 0 → forward speed = vy
-    groundBelow: (): null => null, // crawl-out targets fall back to the spot's own z
+    groundBelow: (): null | number => (phys as { ground?: number }).ground ?? null, // road top for crawl targets
     holdBody: (): undefined => undefined,
     ignoreVehicles: (): undefined => undefined,
     parkVehicle: (): void => {
@@ -639,7 +639,23 @@ describe('exit egress chain (plan 088/09d)', () => {
       h.system.fixedUpdate(0.016);
 
       expect(h.anim.clip).toBe('car_crawloutrhs');
-      expect((car.handle as FakeVehicleHandle).doorAngles.get('lf') ?? 0).toBeCloseTo(0); // no door swing
+      h.system.update(1); // the rf door swings open on the crawl-out side while he crawls
+      expect((car.handle as FakeVehicleHandle).doorAngles.get('rf')).toBeCloseTo(Math.PI / 3);
+    });
+
+    it('a crawl-out ends STANDING on the ground, not buried at ground level', () => {
+      const h = setup();
+      const car = vehicleAt([0, 0, 0]);
+      h.phys.blocked.add('lf').add('rf'); // → the windscreen crawl
+      (h.phys as unknown as { ground: number }).ground = 0.5; // groundBelow reports the road top
+      seatPlayer(h, car);
+      h.press(true);
+      h.system.update(0.016);
+      h.system.fixedUpdate(0.016);
+      h.system.fixedUpdate(3); // the crawl elapses → finishExit places the player
+
+      const last = h.phys.teleports[h.phys.teleports.length - 1];
+      expect(last[2]).toBeCloseTo(0.5 + 1, 6); // ground + capsule-centre lift, NOT the raw ground
     });
   });
 });

@@ -98,6 +98,10 @@ const DOOR_SPEED = Math.PI;
 /** Seconds the climb-in/out clip plays while the body slides between door and seat. */
 const GETIN_DURATION = 1.2;
 const GETOUT_DURATION = 1.2;
+/** Capsule-CENTRE height above the ground a standing player needs (radius 0.3 + half-height 0.6,
+ *  rounded up for the controller offset) — a ground-anchored exit spot must be lifted by it, or the
+ *  capsule lands half-buried and sticks in the collision (field 2026-07-24, overturned crawl-out). */
+const PLAYER_STAND_LIFT = 1;
 /** How far behind the hinge the open panel's swept arc reaches (m, with margin) — the step-in path
  *  crosses inboard BEHIND this line so it never clips the door. */
 const DOOR_SWEPT_CLEARANCE = 0.95;
@@ -465,17 +469,18 @@ export class EnterVehicleSystem implements System {
     return null;
   }
 
-  /** Ground-level spot a crawl-out ends at: beside the (rf) window, or ahead of the windscreen. */
+  /** Standing spot a crawl-out ends at: beside the (rf) window, or ahead of the windscreen. The z is
+   *  the real ground beside the car LIFTED to capsule centre — anchoring at the ground itself buried
+   *  half the capsule and stuck it in the collision (fell through / froze, field 2026-07-24). */
   private crawloutTarget(vehicle: EnterableVehicle, egress: 'side' | 'windscreen'): Vec3 {
     const [hx, hy] = vehicle.halfExtents;
     const spot =
       egress === 'windscreen'
         ? this.toWorld(vehicle, [0, hy + 1.2])
         : this.toWorld(vehicle, [hx + DOORWAY_CLEAR + 0.4, vehicle.seatLocal[1]]);
-    // An overturned car's roof is on the ground — aim the endpoint at the real ground beside it.
     const ground = this.physics.groundBelow([spot[0], spot[1], vehicle.position[2] + 1.5], 4, vehicle.body);
 
-    return [spot[0], spot[1], ground ?? spot[2]];
+    return [spot[0], spot[1], ground === null ? spot[2] : ground + PLAYER_STAND_LIFT];
   }
 
   private doorAngleOf(vehicle: EnterableVehicle | null): number {
@@ -716,7 +721,10 @@ export class EnterVehicleSystem implements System {
     this.steerAngle = 0;
     this.active.rig.setSteer(0);
     if (!this.isUpright(this.active)) {
-      // Overturned: no door can swing under the car — crawl out through the (rf) window opening.
+      // Overturned: crawl out through the rf window — and swing THAT door while crawling (it can't
+      // hit anything useful upside down, and a shut door read as clipping through it in the field).
+      this.side = 'rf';
+      this.doorTarget = this.openAngle();
       this.startCrawlout(this.crawloutTarget(this.active, 'side'));
 
       return;

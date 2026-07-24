@@ -39,10 +39,12 @@ Limits and deliberate approximations of the own WebGPU engine.
 - **No moving colliders.** IFP-animated map objects don't collide with their moving parts; breakable shards
   land analytically (one ground probe, freeze); on-foot players can't smash props (contact events fire for
   chassis colliders only — matches vanilla); `_dam` damage-model swaps are unhandled (shatter only).
-- **Player IFP root translation is ignored** — locomotion is in-place, physics owns position, so the
-  jump's height/arc is purely `movement.jumpSpeed` + gravity (plan 088/04): the authored root motion in
-  `JUMP_*` clips does not contribute. Air/land clips shorter than their state HOLD their last frame (the
-  ~0.4 s `JUMP_glide` vs a ~0.9 s flight — looping it jerked mid-air, field 2026-07-24).
+- **Player IFP root translation is ignored for LOCOMOTION** — it stays in-place, physics owns
+  position, so the jump's height/arc is purely `movement.jumpSpeed` + gravity (plan 088/04): the
+  authored root motion in `JUMP_*` clips does not contribute. The VEHICLE enter/exit clips are the
+  exception (088/09a): their root travel IS replayed, endpoint-warped between the real doorway and
+  seat. Air/land clips shorter than their state HOLD their last frame (the ~0.4 s `JUMP_glide` vs a
+  ~0.9 s flight — looping it jerked mid-air, field 2026-07-24).
 - **The one perf knob is `?scale=`** (render scale, try 0.75 first on perf problems); there is no quality
   tier ladder on the engine.
 - **Street-level foliage is fill-bound, and the cost is per-PIXEL, not per-triangle or per-draw.** Measured
