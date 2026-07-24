@@ -38,8 +38,13 @@ export class TouchInputSource implements InputState {
   }
 
   isActive(action: Action): boolean {
+    const deflection = Math.hypot(this.moveX, this.moveY);
     if (action === 'run') {
-      return Math.hypot(this.moveX, this.moveY) > RUN_THRESHOLD; // full move deflection = run
+      return deflection > RUN_THRESHOLD; // full move deflection = run
+    }
+    if (action === 'walk') {
+      // Partial deflection walks (088/03) — the analog gait a keyboard can only reach via its modifier.
+      return deflection > 0 && deflection <= RUN_THRESHOLD && !this.pressed.has('sprint');
     }
 
     return this.pressed.has(action);

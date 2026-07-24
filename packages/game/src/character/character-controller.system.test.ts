@@ -37,7 +37,15 @@ function config(gameState: Config['gameState']): Config {
       followZoomMax: 40,
       followZoomMin: 6,
     },
-    controls: { back: 'KeyS', forward: 'KeyW', jump: 'Space', left: 'KeyA', right: 'KeyD' },
+    controls: {
+      back: 'KeyS',
+      forward: 'KeyW',
+      jump: 'Space',
+      left: 'KeyA',
+      right: 'KeyD',
+      sprint: 'ShiftLeft',
+      walk: 'AltLeft',
+    },
     fog: { distance: 800, timecycScale: 1 },
     fonts: { hud: { clock: 'SixCaps-Regular', zone: 'SixCaps-Regular' } },
     gameState,
@@ -114,6 +122,7 @@ function config(gameState: Config['gameState']): Config {
       deceleration: 25,
       jumpSpeed: 6,
       runSpeed: 26,
+      sprintSpeed: 39,
       turnRateFullDeg: 240,
       turnRateIdleDeg: 720,
       walkSpeed: 10,
@@ -131,7 +140,9 @@ function config(gameState: Config['gameState']): Config {
 /** A kinematic capsule resting on a static ground, plus its ECS entity. */
 async function groundedPlayer(): Promise<Player> {
   const physics = new PhysicsWorld(await initRapier());
-  physics.createStaticBox([0, 0, 0], [10, 10, 0.5]); // top at z = 0.5
+  // Top at z = 0.5. Wide enough that the fast gaits (088/03: run 26 / sprint 39 u/s over ~3 s of
+  // ramp-up) never run off the edge mid-test — airborne accel is 0.3× and starves the target speed.
+  physics.createStaticBox([0, 0, 0], [500, 500, 0.5]);
   const controller = physics.createCharacterController();
   const { body, collider } = physics.createKinematicCapsule([0, 0, 1.4], 0.3, 0.6); // rests on the ground
 
@@ -185,24 +196,42 @@ describe('CharacterControllerSystem', () => {
   });
 
   describe('positive cases', () => {
-    it('accelerates forward (+Y) toward — but not instantly to — walk speed', async () => {
+    it('accelerates forward (+Y) toward — but not instantly to — the default run speed', async () => {
       const player = await groundedPlayer();
 
       run(player, config('play'), 'KeyW');
 
-      // one step: ramping up, not yet at walk speed (10), and no sideways drift
+      // one step: ramping up, not yet at run speed (26), and no sideways drift
       expect(Velocity.y[player.eid]).toBeGreaterThan(0);
-      expect(Velocity.y[player.eid]).toBeLessThan(10);
+      expect(Velocity.y[player.eid]).toBeLessThan(26);
       expect(Velocity.x[player.eid]).toBe(0);
       player.physics.dispose();
     });
 
-    it('reaches the target speed after sustained input', async () => {
+    it('reaches the default run speed after sustained input (RUN is the no-modifier gait, 088/03)', async () => {
       const player = await groundedPlayer();
       for (let i = 0; i < 120; i += 1) {
         run(player, config('play'), 'KeyW');
       }
-      expect(Velocity.y[player.eid]).toBeCloseTo(10, 1); // settled at walk speed
+      expect(Velocity.y[player.eid]).toBeCloseTo(26, 1);
+      player.physics.dispose();
+    });
+
+    it('the walk modifier caps the target at walk speed', async () => {
+      const player = await groundedPlayer();
+      for (let i = 0; i < 120; i += 1) {
+        run(player, config('play'), 'KeyW', 'AltLeft');
+      }
+      expect(Velocity.y[player.eid]).toBeCloseTo(10, 1);
+      player.physics.dispose();
+    });
+
+    it('the sprint modifier lifts the target to the sprint tier', async () => {
+      const player = await groundedPlayer();
+      for (let i = 0; i < 160; i += 1) {
+        run(player, config('play'), 'KeyW', 'ShiftLeft');
+      }
+      expect(Velocity.y[player.eid]).toBeCloseTo(39, 1);
       player.physics.dispose();
     });
 
@@ -516,7 +545,7 @@ describe('CharacterControllerSystem heading (plan 088/01)', () => {
         run(player, config('play'), 'KeyD');
       }
       expect(Locomotion.heading[player.eid]).toBeCloseTo(-Math.PI / 2, 2);
-      expect(Velocity.x[player.eid]).toBeCloseTo(10, 1); // strafe carries at walk speed
+      expect(Velocity.x[player.eid]).toBeCloseTo(26, 1); // strafe carries at the default run speed
       player.physics.dispose();
     });
 
@@ -531,7 +560,7 @@ describe('CharacterControllerSystem heading (plan 088/01)', () => {
       }
 
       expect(Math.abs(Locomotion.heading[player.eid])).toBeCloseTo(Math.PI, 2); // faced about
-      expect(Velocity.y[player.eid]).toBeCloseTo(-10, 1); // and walking the other way
+      expect(Velocity.y[player.eid]).toBeCloseTo(-26, 1); // and running the other way
       player.physics.dispose();
     });
 

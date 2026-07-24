@@ -6,6 +6,7 @@
  * ped-probe fixture is gone.
  */
 import type { Engine, PedProbe, SamplerClip } from '@opensa/engine';
+import type { MovementConfig } from '@opensa/game/interfaces/config.interface';
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { IfpSampler } from '@opensa/engine';
@@ -16,6 +17,7 @@ import { VEHICLE_SCRIPTED_CLIPS } from '@opensa/game/vehicle/vehicle-clips';
 import { getIfp } from '@opensa/renderware/archive/asset-cache';
 import { type PedClip, pedClip } from '@opensa/renderware/ped/build-ped-model';
 
+import { GaitSelector } from './gait-selector';
 import { LocomotionMixer } from './locomotion-mixer';
 
 export interface EnginePlayer {
@@ -36,14 +38,20 @@ export interface EnginePlayer {
   update(positionEngine: readonly [number, number, number], headingYaw: number, speed: number, dt: number): void;
 }
 
+/** The tier speeds the animation side needs: gait thresholds + cycle-speed references (088/03). */
+export type GaitTiers = Pick<MovementConfig, 'runSpeed' | 'sprintSpeed' | 'walkSpeed'>;
+
 /** Where the player's clips live. The archives hold it bare; a game dir keeps it under `anim/`, and the
  *  browser VFS keys loose files by their relative path — so both spellings have to be tried. */
 const PLAYER_IFP_NAMES = ['ped', 'anim/ped'];
-/** Clip order the state machine below indexes: [idle, walk, run]. */
-const PLAYER_CLIPS = ['idle_stance', 'walk_civi', 'run_civi'];
+/** Clip order the state machine below indexes: [idle, walk, run, sprint]. */
+const PLAYER_CLIPS = ['idle_stance', 'walk_civi', 'run_civi', 'sprint_civi'];
 const IDLE_CLIP = 0;
 const WALK_CLIP = 1;
 const RUN_CLIP = 2;
+const SPRINT_CLIP = 3;
+/** Gait tier (the {@link GaitSelector} output) → locomotion clip. */
+const GAIT_CLIPS = [IDLE_CLIP, WALK_CLIP, RUN_CLIP, SPRINT_CLIP];
 /**
  * Scripted clips `EnterVehicleSystem` asks for BY NAME (climb-in / climb-out / sit). Shared from the game
  * package ({@link VEHICLE_SCRIPTED_CLIPS}) so the requester and this resolver can't desync. They are resolved
@@ -51,10 +59,11 @@ const RUN_CLIP = 2;
  * driver rode STANDING with his legs out of the car.
  */
 const SCRIPTED_CLIPS = VEHICLE_SCRIPTED_CLIPS;
-/** Planar speed (GTA m/s) above which the run cycle plays — between walkSpeed 2 and runSpeed 7. */
-const RUN_SPEED_THRESHOLD = 4;
 /** The cyclic gaits that carry normalized phase through a crossfade (088/02) — legs stay in step. */
-const CYCLIC_CLIPS: ReadonlySet<number> = new Set([RUN_CLIP, WALK_CLIP]);
+const CYCLIC_CLIPS: ReadonlySet<number> = new Set([RUN_CLIP, SPRINT_CLIP, WALK_CLIP]);
+/** Cycle-speed sync clamp (088/03): how far the clip clock may stretch to match the ground speed. */
+const RATE_MIN = 0.7;
+const RATE_MAX = 1.4;
 
 /**
  * Name → index for `setScripted`. Locomotion (the first `locomotionCount`, always addressable by the state
@@ -85,7 +94,7 @@ export function buildClipIndex(
  * at bake time, and the game dir the user picked had no say. Now the model comes from `<model>.osm` in the
  * archives and the clips are resolved from `ped.ifp` at load, exactly like every other asset.
  */
-export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: string): EnginePlayer {
+export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: string, tiers: GaitTiers): EnginePlayer {
   const name = model.toLowerCase();
   const osm = fs.get(`${name}.osm`);
   if (!osm) {
@@ -128,11 +137,21 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
   const resolved = [...PLAYER_CLIPS, ...SCRIPTED_CLIPS].map(resolveClip);
   const clips: SamplerClip[] = resolved;
   const clipByName = buildClipIndex(resolved, PLAYER_CLIPS.length);
-  const mixer = new LocomotionMixer(
-    clips.map((clip) => clip.duration),
-    CYCLIC_CLIPS,
-    IDLE_CLIP,
-  );
+  const durations = clips.map((clip) => clip.duration);
+  // Gait thresholds sit halfway between the tier speeds; the selector's hysteresis stops the
+  // boundary flicker. Cycle-speed refs = the tier speeds — rate 1 exactly at each tier's target.
+  const selector = new GaitSelector([
+    IDLE_SPEED_THRESHOLD,
+    (tiers.walkSpeed + tiers.runSpeed) / 2,
+    (tiers.runSpeed + tiers.sprintSpeed) / 2,
+  ]);
+  const referenceSpeeds = [0, tiers.walkSpeed, tiers.runSpeed, tiers.sprintSpeed];
+  const rateOf = (clip: number, speed: number): number => {
+    const reference = referenceSpeeds[clip] ?? 0;
+
+    return reference > 0 ? Math.min(RATE_MAX, Math.max(RATE_MIN, speed / reference)) : 1;
+  };
+  const mixer = new LocomotionMixer(durations, CYCLIC_CLIPS, IDLE_CLIP, rateOf);
   let clipTime = 0; // the SCRIPTED clock — locomotion time lives in the mixer
   let scripted: null | { index: number; loop: boolean } = null;
   let scriptedFacing = 0;
@@ -188,8 +207,8 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
         const time = scripted.loop ? clipTime : Math.min(clipTime, clip.duration);
         sampler.sample(clip, time, probe.palette, 1);
       } else {
-        const wanted = speed > RUN_SPEED_THRESHOLD ? RUN_CLIP : speed > IDLE_SPEED_THRESHOLD ? WALK_CLIP : IDLE_CLIP;
-        const { captureHold, pose } = mixer.update(wanted, dt);
+        const wanted = resolveGaitClip(durations, GAIT_CLIPS[selector.update(speed)]);
+        const { captureHold, pose } = mixer.update(wanted, dt, speed);
         if (captureHold) {
           sampler.holdPose(); // freeze the on-screen pose BEFORE sampling — the hold-fade's source
         }
@@ -227,4 +246,13 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
       engine.updatePedPalette();
     },
   };
+}
+
+/**
+ * The clip a gait tier actually plays. Only the 088/03 addition degrades: a TC whose `ped.ifp` lacks
+ * `sprint_civi` keeps the RUN cycle at sprint speed (the pre-sprint v1 behaviour) — sampling the empty
+ * clip would drop the ped to the flat bind pose. Pure + exported so the gate is unit-testable.
+ */
+export function resolveGaitClip(durations: readonly number[], wanted: number): number {
+  return wanted === SPRINT_CLIP && (durations[SPRINT_CLIP] ?? 0) <= 0 ? RUN_CLIP : wanted;
 }

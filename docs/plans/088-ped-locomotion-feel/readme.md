@@ -147,7 +147,7 @@ bit-exact equality gates, 9 mixer incl. interruption + handback); engine+web+gam
 lint + tsc clean. Alpha curve is linear v1 — smoothstep is a one-line tuning lever if the field
 round wants softer ends.
 
-### 03 — Speed tiers + cycle-speed sync (kills foot sliding, adds sprint)
+### 03 — Speed tiers + cycle-speed sync (CODE-COMPLETE 2026-07-24 — awaiting the field round)
 
 - New `sprint` action (held; keyboard binding beside `run`) → `sprintSpeed` config; tier targets
   walk 2 / run 7 / sprint ~10 (field-tuned). `sprint_civi` joins `PLAYER_CLIPS`.
@@ -159,6 +159,26 @@ round wants softer ends.
 - Tests: hysteresis (no oscillation for a speed sequence straddling the boundary), rate clamp.
 - Verify in field at walk/run/sprint and mid-fade. Record: reference speeds per clip, hysteresis gap,
   clamp bounds, tier speeds after tuning.
+
+**Ledger (2026-07-24, code-complete):** tiers walk 2 / run 7 / **sprint 10** (`sprintSpeed` in
+`MovementConfig`), `sprint_civi` joined `PLAYER_CLIPS` (phase-carried with walk/run). **One design
+decision beyond the phase text: RUN is now the DEFAULT gait** — SA jogs when nothing is held; Shift
+= sprint, `walk` is an optional modifier binding (unbound in prod) and the analog partial
+touch-stick deflection (`TouchInputSource` reports `walk` under the 0.85 run threshold). The old
+walk-2-default + Shift-run scheme would have kept the game feeling slow with the tiers in place; the
+legacy `run` action stays for the touch harness/e2e. Gait pick: new pure `GaitSelector`
+(`apps/web/src/ui/gait-selector.ts`) with up-thresholds at the tier midpoints (idle 0.3 / 4.5 / 8.5
+prod) and **hysteresis 0.5** down (idle boundary capped at half its threshold → 0.15). Cycle-speed
+sync: `LocomotionMixer` scales each clip clock by `rateOf(clip, speed)`; refs = the tier speeds
+(rate = 1 exactly at each tier's target), clamp **[0.7, 1.4]**; the alpha clock stays wall-time.
+Degradation gate: `resolveGaitClip` — a TC without `sprint_civi` keeps the RUN cycle at sprint speed
+(tested, the rule-3 invariant). `loadEnginePlayer` now takes the tier speeds (`GaitTiers`); the top
+turn-rate tier moved runSpeed → sprintSpeed. Tests: +17 new (6 gait selector, 1 mixer rate, 4
+resolveGaitClip, 3 touch walk/sprint, 2 keyboard, walk/sprint tier controller pair) and the fast-gait
+suite exposed a test-world flaw (the 10 × 10 ground box let 26–39 u/s runs fall off the edge
+mid-ramp → widened to 500 × 500). Full engine+web+game: **784 green**; lint + tsc clean. Reference
+speeds are the tier speeds v1 — the field round may re-time them per clip (the stride-timing knob is
+`referenceSpeeds` in `engine-player.ts`).
 
 ### 04 — Jump + fall state machine (the feature the user actually asked for)
 

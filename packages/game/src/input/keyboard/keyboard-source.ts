@@ -38,6 +38,10 @@ export class KeyboardSource implements InputState {
         return this.keyboard.isDown(this.controls.jump);
       case 'run':
         return this.controls.run !== undefined && this.keyboard.isDown(this.controls.run);
+      case 'sprint':
+        return this.controls.sprint !== undefined && this.keyboard.isDown(this.controls.sprint);
+      case 'walk':
+        return this.controls.walk !== undefined && this.keyboard.isDown(this.controls.walk);
     }
   }
 

@@ -173,11 +173,7 @@ export class CharacterControllerSystem implements System {
       return { jump: false, target: this.moveToward(players[0], movement.runSpeed) };
     }
     const move = this.input.move();
-    const target = this.cameraRelativeMove(
-      move.y,
-      move.x,
-      this.input.isActive('run') ? movement.runSpeed : movement.walkSpeed,
-    );
+    const target = this.cameraRelativeMove(move.y, move.x, this.tierSpeed());
 
     return { jump: this.input.isActive('jump'), target };
   }
@@ -222,7 +218,12 @@ export class CharacterControllerSystem implements System {
     // speed. A plant holds the old facing until the speed has bled off, then turns.
     const speed = Math.hypot(Velocity.x[eid], Velocity.y[eid]);
     if (moving && (!reversing || speed <= IDLE_SPEED_THRESHOLD)) {
-      const turnRate = scheduledTurnRate(speed, movement.runSpeed, movement.turnRateIdleDeg, movement.turnRateFullDeg);
+      const turnRate = scheduledTurnRate(
+        speed,
+        movement.sprintSpeed, // the top gait tier (was runSpeed before 088/03 added sprint)
+        movement.turnRateIdleDeg,
+        movement.turnRateFullDeg,
+      );
       Locomotion.heading[eid] = approachAngle(heading, intentYaw, turnRate * step);
     }
     // Vertical: reset on the ground (jump impulse if requested), then integrate gravity.
@@ -273,6 +274,19 @@ export class CharacterControllerSystem implements System {
     if (Math.hypot(vx, vy) > IDLE_SPEED_THRESHOLD) {
       Locomotion.heading[eid] = yawFromPlanar(vx, vy); // debug fly turns instantly — no plant, no rate
     }
+  }
+
+  /** Gait tier (088/03): sprint > walk modifiers, RUN is the default — SA jogs when nothing is held. */
+  private tierSpeed(): number {
+    const { movement } = this.config;
+    if (this.input.isActive('sprint')) {
+      return movement.sprintSpeed;
+    }
+    if (this.input.isActive('walk')) {
+      return movement.walkSpeed;
+    }
+
+    return movement.runSpeed;
   }
 
   private zeroVelocity(): void {

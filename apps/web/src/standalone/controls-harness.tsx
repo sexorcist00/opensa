@@ -28,7 +28,9 @@ function Harness(): ReactElement {
     let raf = 0;
     const tick = (): void => {
       const move = source.move();
-      const actions = (['run', 'jump', 'enterExit'] as const).filter((action) => source.isActive(action));
+      const actions = (['walk', 'run', 'sprint', 'jump', 'enterExit'] as const).filter((action) =>
+        source.isActive(action),
+      );
       setText(`move: ${move.x.toFixed(2)}, ${move.y.toFixed(2)}\nactions: ${actions.join(', ') || '—'}`);
       raf = requestAnimationFrame(tick);
     };

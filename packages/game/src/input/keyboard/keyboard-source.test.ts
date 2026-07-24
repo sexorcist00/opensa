@@ -11,7 +11,9 @@ const CONTROLS: ControlsConfig = {
   jump: 'Space',
   left: 'KeyA',
   right: 'KeyD',
-  run: 'ShiftLeft',
+  run: 'ShiftRight',
+  sprint: 'ShiftLeft',
+  walk: 'AltLeft',
 };
 
 /** A KeyboardInput stub holding the given `KeyboardEvent.code`s. */
@@ -38,8 +40,18 @@ describe('KeyboardSource', () => {
     });
 
     it('treats run as inactive when no run key is bound', () => {
-      const source = new KeyboardSource(keys('ShiftLeft'), { ...CONTROLS, run: undefined });
+      const source = new KeyboardSource(keys('ShiftRight'), { ...CONTROLS, run: undefined });
       expect(source.isActive('run')).toBe(false);
+    });
+
+    it('treats the unbound gait modifiers (sprint/walk) as inactive', () => {
+      const source = new KeyboardSource(keys('ShiftLeft', 'AltLeft'), {
+        ...CONTROLS,
+        sprint: undefined,
+        walk: undefined,
+      });
+      expect(source.isActive('sprint')).toBe(false);
+      expect(source.isActive('walk')).toBe(false);
     });
   });
 
@@ -51,9 +63,11 @@ describe('KeyboardSource', () => {
       expect(new KeyboardSource(keys('KeyA'), CONTROLS).move()).toEqual({ x: -1, y: 0 });
     });
 
-    it('maps the bound keys to their actions (jump/run/enterExit)', () => {
+    it('maps the bound keys to their actions (jump/run/sprint/walk/enterExit)', () => {
       expect(new KeyboardSource(keys('Space'), CONTROLS).isActive('jump')).toBe(true);
-      expect(new KeyboardSource(keys('ShiftLeft'), CONTROLS).isActive('run')).toBe(true);
+      expect(new KeyboardSource(keys('ShiftRight'), CONTROLS).isActive('run')).toBe(true);
+      expect(new KeyboardSource(keys('ShiftLeft'), CONTROLS).isActive('sprint')).toBe(true);
+      expect(new KeyboardSource(keys('AltLeft'), CONTROLS).isActive('walk')).toBe(true);
       expect(new KeyboardSource(keys('Enter'), CONTROLS).isActive('enterExit')).toBe(true);
     });
 

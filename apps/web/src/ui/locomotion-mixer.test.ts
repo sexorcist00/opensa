@@ -115,6 +115,22 @@ describe('LocomotionMixer', () => {
       expect(after.pose.kind).toBe('hold');
     });
 
+    it('scales each clip clock by its own playback rate (088/03 cycle-speed sync)', () => {
+      // walk plays at 2×, everything else at 1× — the from/to clocks must diverge under a fade.
+      const rateOf = (clip: number): number => (clip === WALK ? 2 : 1);
+      const m = new LocomotionMixer(DURATIONS, CYCLIC, WALK, rateOf);
+      m.update(WALK, 0.1); // walk clock: 0.2
+
+      const { pose } = m.update(IDLE, 0.1); // fade walk→idle begins
+
+      expect(pose.kind).toBe('blend');
+      if (pose.kind === 'blend') {
+        expect(pose.fromTime).toBeCloseTo(0.2 + 0.2, 6); // outgoing walk still at 2×
+        expect(pose.toTime).toBeCloseTo(0.1, 6); // idle at 1×
+        expect(pose.alpha).toBeCloseTo(0.1 / DEFAULT_FADE_SECONDS, 6); // the alpha clock is WALL time
+      }
+    });
+
     it('restartFromHold fades the scripted pose into locomotion (the car-exit handback)', () => {
       const m = mixer();
       m.update(WALK, 1); // some prior locomotion state

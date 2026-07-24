@@ -30,7 +30,9 @@ export function createGameRuntimeConfig(): Config {
       followZoomMax: 10,
       followZoomMin: 4,
     },
-    controls: { back: 'KeyS', forward: 'KeyW', jump: 'Space', left: 'KeyA', right: 'KeyD', run: 'ShiftLeft' },
+    // 088/03: RUN is the default gait (SA jogs); Shift sprints. `walk` is left unbound — the slow tier
+    // is reachable by a partial touch-stick deflection, or bind a key here.
+    controls: { back: 'KeyS', forward: 'KeyW', jump: 'Space', left: 'KeyA', right: 'KeyD', sprint: 'ShiftLeft' },
     fog: { distance: 800, timecycScale: 1 },
     fonts: { hud: { clock: 'SixCaps-Regular', zone: 'SixCaps-Regular' } },
     gameState: 'play',
@@ -109,13 +111,14 @@ export function createGameRuntimeConfig(): Config {
       zone: { borderColor: '#000', borderWidth: 1, color: '#fff', fontSize: 40 },
     },
     mapViewer: false,
-    // Turn rates (plan 088/01): near-idle spins snappily, full run arcs at a third of that.
+    // Turn rates (plan 088/01): near-idle spins snappily, the top tier arcs at a third of that.
     movement: {
       accel: 20,
       airControl: 0.3,
       deceleration: 25,
       jumpSpeed: 3.5,
       runSpeed: 7,
+      sprintSpeed: 10,
       turnRateFullDeg: 240,
       turnRateIdleDeg: 720,
       walkSpeed: 2,

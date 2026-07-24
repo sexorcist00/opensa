@@ -72,8 +72,12 @@ export interface ControlsConfig {
   jump: string;
   left: string;
   right: string;
-  /** Hold to run (faster); walk otherwise. Optional. */
+  /** Legacy full-speed modifier (the default gait IS run since 088/03) — kept for touch parity. Optional. */
   run?: string;
+  /** Hold to sprint (the top gait tier). Optional. */
+  sprint?: string;
+  /** Hold to walk slowly (the bottom gait tier). Optional. */
+  walk?: string;
 }
 
 /** Night-fill tuning for dynamic objects (player/vehicles) — plan 034. */
@@ -243,13 +247,15 @@ export interface MovementConfig {
   deceleration: number;
   /** Upward launch velocity when jumping. */
   jumpSpeed: number;
-  /** Planar speed while holding the run key. */
+  /** Planar speed of the DEFAULT gait (no modifier held) — SA jogs by default (088/03). */
   runSpeed: number;
-  /** Turn rate (deg/s) at the top tier speed — low = wide readable arcs while running. */
+  /** Planar speed while the sprint modifier is held (the top gait tier). */
+  sprintSpeed: number;
+  /** Turn rate (deg/s) at the top tier speed — low = wide readable arcs while sprinting. */
   turnRateFullDeg: number;
   /** Turn rate (deg/s) while near-standing — high = snappy repositioning on the spot. */
   turnRateIdleDeg: number;
-  /** Planar speed when walking (default). */
+  /** Planar speed while the walk modifier is held (or a partial touch-stick deflection). */
   walkSpeed: number;
 }
 

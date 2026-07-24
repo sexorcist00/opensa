@@ -34,6 +34,8 @@ export class LocomotionMixer {
     /** Cyclic gait clips (walk/run/…) that carry normalized phase across a switch — legs stay in step. */
     private readonly cyclic: ReadonlySet<number>,
     initial: number,
+    /** Playback rate of a clip at the current speed (088/03 cycle-speed sync). Default: real time. */
+    private readonly rateOf: (clip: number, speed: number) => number = () => 1,
   ) {
     this.active = initial;
   }
@@ -46,20 +48,20 @@ export class LocomotionMixer {
     this.pendingHold = true;
   }
 
-  /** Advance one frame toward `wanted` and describe what to sample. */
-  update(wanted: number, dt: number): MixerFrame {
+  /** Advance one frame toward `wanted` and describe what to sample; `speed` drives the cycle-speed sync. */
+  update(wanted: number, dt: number, speed = 0): MixerFrame {
     if (wanted !== this.active) {
       this.beginFade(wanted);
     }
-    this.time += dt;
+    this.time += dt * this.rateOf(this.active, speed);
     const captureHold = this.pendingHold;
     this.pendingHold = false;
     const { fade } = this;
     if (!fade) {
       return { captureHold, pose: { clip: this.active, kind: 'single', time: this.time } };
     }
-    fade.elapsed += dt;
-    fade.fromTime += dt; // the outgoing cycle keeps advancing under the fade — a frozen leg reads as a hitch
+    fade.elapsed += dt; // the ALPHA clock is wall time — only the cycle clocks are rate-scaled
+    fade.fromTime += dt * this.rateOf(fade.from, speed); // the outgoing cycle keeps advancing under the fade
     const alpha = fade.elapsed / fade.duration;
     if (alpha >= 1) {
       this.fade = null;

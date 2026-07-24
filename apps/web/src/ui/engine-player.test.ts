@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildClipIndex, loadEnginePlayer } from './engine-player';
+import { buildClipIndex, loadEnginePlayer, resolveGaitClip } from './engine-player';
+
+const TIERS = { runSpeed: 7, sprintSpeed: 10, walkSpeed: 2 };
 
 /**
  * The missing-model path only: the happy path needs a real ped `.osm` (a full readPedOsm fixture) and
@@ -23,10 +25,38 @@ describe('loadEnginePlayer', () => {
         names: [] as string[],
       };
 
-      expect(() => loadEnginePlayer({} as never, fs as never, 'BMYCG')).toThrow(
+      expect(() => loadEnginePlayer({} as never, fs as never, 'BMYCG', TIERS)).toThrow(
         /bmycg\.osm.*GAME_CONFIG\.mainCharacter/,
       );
       expect(requested).toContain('bmycg.osm');
+    });
+  });
+});
+
+/**
+ * The 088/03 degradation gate: a TC whose `ped.ifp` lacks `sprint_civi` must keep the RUN cycle at
+ * sprint speed (the pre-sprint v1 behaviour) — sampling the empty clip would drop the ped to the flat
+ * bind pose. Durations are [idle, walk, run, sprint].
+ */
+describe('resolveGaitClip', () => {
+  describe('negative cases', () => {
+    it('an unresolved sprint clip (duration 0) falls back to the run cycle', () => {
+      expect(resolveGaitClip([1, 1, 1, 0], 3)).toBe(2);
+    });
+
+    it('a missing sprint entry falls back to the run cycle', () => {
+      expect(resolveGaitClip([1, 1, 1], 3)).toBe(2);
+    });
+
+    it('other gaits are never redirected, resolved or not (the v1 contract)', () => {
+      expect(resolveGaitClip([0, 0, 0, 0], 1)).toBe(1);
+      expect(resolveGaitClip([1, 1, 1, 1], 0)).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('a resolved sprint clip plays as itself', () => {
+      expect(resolveGaitClip([1, 1, 1, 0.8], 3)).toBe(3);
     });
   });
 });

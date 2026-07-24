@@ -6,8 +6,9 @@
  */
 
 /** Semantic player actions, mapped from a device by a source (e.g. {@link KeyboardSource}). `descend` (Ctrl) is
- *  the inverse of `jump`/up — used by the debug fly mode for vertical control. */
-export type Action = 'descend' | 'enterExit' | 'jump' | 'run';
+ *  the inverse of `jump`/up — used by the debug fly mode for vertical control. Gait (plan 088/03): the
+ *  DEFAULT gait is run; `walk` and `sprint` are held modifiers, `run` reports the full-deflection touch gait. */
+export type Action = 'descend' | 'enterExit' | 'jump' | 'run' | 'sprint' | 'walk';
 
 /** What the game reads: planar movement, held actions, and per-frame look/zoom deltas. */
 export interface InputState {

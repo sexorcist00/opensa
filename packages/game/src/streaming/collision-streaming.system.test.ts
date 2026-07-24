@@ -103,6 +103,7 @@ function config(collisionDrawDistance: number): Config {
       deceleration: 25,
       jumpSpeed: 6,
       runSpeed: 26,
+      sprintSpeed: 39,
       turnRateFullDeg: 240,
       turnRateIdleDeg: 720,
       walkSpeed: 10,

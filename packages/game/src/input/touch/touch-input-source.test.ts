@@ -18,6 +18,21 @@ describe('TouchInputSource', () => {
       source.setMove(0.5, 0.5); // magnitude ≈ 0.71 < 0.85
       expect(source.isActive('run')).toBe(false);
     });
+
+    it('does not walk with the stick at rest, nor at full deflection', () => {
+      const source = new TouchInputSource();
+      expect(source.isActive('walk')).toBe(false);
+      source.setMove(0, 1);
+      expect(source.isActive('walk')).toBe(false); // full deflection is the run gait
+    });
+
+    it('a held sprint button overrides the partial-deflection walk', () => {
+      const source = new TouchInputSource();
+      source.setMove(0.5, 0.5);
+      source.setAction('sprint', true);
+      expect(source.isActive('walk')).toBe(false);
+      expect(source.isActive('sprint')).toBe(true);
+    });
   });
 
   describe('positive cases', () => {
@@ -26,6 +41,12 @@ describe('TouchInputSource', () => {
       source.setMove(0, 1);
       expect(source.move()).toEqual({ x: 0, y: 1 });
       expect(source.isActive('run')).toBe(true); // magnitude 1 > 0.85
+    });
+
+    it('a partial deflection walks (the analog slow gait, 088/03)', () => {
+      const source = new TouchInputSource();
+      source.setMove(0.5, 0.5); // magnitude ≈ 0.71 ≤ 0.85
+      expect(source.isActive('walk')).toBe(true);
     });
 
     it('holds and releases button actions', () => {
