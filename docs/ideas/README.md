@@ -10,6 +10,12 @@ dead-ends already ruled out, and the open questions — so when we pick it up we
   limit-adjuster ASI, basic CLEO support, and extended LOD generators. Start with
   [0.4.0/overview.md](./0.4.0/overview.md) for the roadmap (pillars, dependency graph, suggested order).
 
+## Editors
+
+- [editors/](./editors/) — interactive asset editors over the machinery we already own (DFF ⇄ IR round-trip,
+  map-optimizer transforms, viewer). First doc: a **model editor** — open a model, select polygons,
+  recompute normals / reconfigure prelight, and export the updated model to a chosen folder.
+
 ## Parking lot
 
 _(empty — the previous parking-lot ideas have graduated: **map-optimizer** shipped as the
