@@ -10,6 +10,17 @@ export const CAR_SIT = 'car_sit';
 /** Passenger-side climb-in + the slide across to the driver seat (plan 088/09b). */
 export const CAR_GETIN_RHS = 'car_getin_rhs';
 export const CAR_SHUFFLE = 'car_shuffle_rhs';
+/** Passenger-side climb-out + the overturned/windscreen crawl-out (plan 088/09d). */
+export const CAR_GETOUT_RHS = 'car_getout_rhs';
+export const CAR_CRAWLOUT = 'car_crawloutrhs';
 
 /** Every scripted clip, in the order the player registers them. */
-export const VEHICLE_SCRIPTED_CLIPS = [CAR_GETIN, CAR_GETOUT, CAR_SIT, CAR_GETIN_RHS, CAR_SHUFFLE] as const;
+export const VEHICLE_SCRIPTED_CLIPS = [
+  CAR_GETIN,
+  CAR_GETOUT,
+  CAR_SIT,
+  CAR_GETIN_RHS,
+  CAR_SHUFFLE,
+  CAR_GETOUT_RHS,
+  CAR_CRAWLOUT,
+] as const;

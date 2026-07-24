@@ -442,6 +442,36 @@ export class PhysicsWorld {
     }
   }
 
+  /**
+   * True when the straight line `from → to` hits nothing solid (plan 088/09d): the exit sequence
+   * probes each egress spot with it — a wall/car inside the ray means that door is blocked, try the
+   * next one. `excludeBody` skips the probing car itself (the ray starts inside its chassis);
+   * sensors are ignored (the seated rider's capsule IS a sensor and sits exactly at the origin).
+   */
+  pathClear(from: Vec3, to: Vec3, excludeBody?: number): boolean {
+    const direction = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+    const length = Math.hypot(direction[0], direction[1], direction[2]);
+    if (length === 0) {
+      return true;
+    }
+    const ray = new this.rapier.Ray(
+      { x: from[0], y: from[1], z: from[2] },
+      { x: direction[0] / length, y: direction[1] / length, z: direction[2] / length },
+    );
+    const exclude = excludeBody === undefined ? undefined : this.world.getRigidBody(excludeBody);
+    const hit = this.world.castRay(
+      ray,
+      length,
+      true,
+      this.rapier.QueryFilterFlags.EXCLUDE_SENSORS,
+      undefined,
+      undefined,
+      exclude,
+    );
+
+    return hit === null;
+  }
+
   /** Set a body's linear velocity (Z-up). */
   /** Spin a dynamic body — a toppling prop is knocked over about a hinge rather than shoved sideways. */
   /**

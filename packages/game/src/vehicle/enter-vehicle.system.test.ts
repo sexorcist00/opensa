@@ -21,7 +21,16 @@ interface Harness {
   anim: { cameraAzimuth: number; clip: null | string; facing: number; loop: boolean };
   ctrl: { arrived: boolean; enabled: boolean; path: null | Vec3[] };
   hold: (code: string, down: boolean) => void;
-  phys: { brake: number; engine: number; parked: number; speed: number; steer: number; teleports: Vec3[] };
+  phys: {
+    blocked: Set<string>;
+    brake: number;
+    engine: number;
+    parked: number;
+    quaternion: [number, number, number, number];
+    speed: number;
+    steer: number;
+    teleports: Vec3[];
+  };
   press: (down: boolean) => void;
   system: EnterVehicleSystem;
 }
@@ -62,20 +71,36 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
     },
   } as unknown as CharacterControllerSystem;
 
-  const phys = { brake: 0, engine: 0, parked: 0, speed: 0, steer: 0, teleports: [] as Vec3[] };
+  const phys = {
+    blocked: new Set<string>(), // 'lf' | 'rf' | 'windscreen' — egress rays the world blocks (088/09d)
+    brake: 0,
+    engine: 0,
+    parked: 0,
+    quaternion: [0, 0, 0, 1] as [number, number, number, number],
+    speed: 0,
+    steer: 0,
+    teleports: [] as Vec3[],
+  };
   const placePlayer = (position: Vec3): void => {
     phys.teleports.push(position);
   };
   const physics = {
     getLinvel: (): Vec3 => [0, phys.speed, 0], // heading 0 → forward speed = vy
+    groundBelow: (): null => null, // crawl-out targets fall back to the spot's own z
     holdBody: (): undefined => undefined,
     ignoreVehicles: (): undefined => undefined,
     parkVehicle: (): void => {
       phys.parked += 1;
     },
+    // Egress probe (088/09d): heading 0 → the driver spot is at −x, passenger at +x, windscreen +y.
+    pathClear: (_from: Vec3, to: Vec3): boolean => {
+      const egress = to[1] > 2 ? 'windscreen' : to[0] < 0 ? 'lf' : 'rf';
+
+      return !phys.blocked.has(egress);
+    },
     readBody: (): { position: Vec3; quaternion: [number, number, number, number] } => ({
       position: [0, 0, 0],
-      quaternion: [0, 0, 0, 1],
+      quaternion: phys.quaternion,
     }),
     seedReverse: (): undefined => undefined,
     setColliderSensor: (): undefined => undefined,
@@ -522,6 +547,73 @@ describe('step-in walk-around (plan 088/09c)', () => {
       expect(around[1]).toBeCloseTo(-0.7, 6);
       expect(doorway[0]).toBeCloseTo(2 - 1.35, 6);
       expect(doorway[1]).toBeCloseTo(-0.7, 6);
+    });
+  });
+});
+
+describe('exit egress chain (plan 088/09d)', () => {
+  /** Seat the player in a car at the origin (heading 0), then press Enter to begin the exit. */
+  function seatAndExit(h: Harness, car: EnterableVehicle): void {
+    seatPlayer(h, car);
+    h.press(true);
+    h.system.update(0.016); // stopping (speed 0) …
+    h.system.fixedUpdate(0.016); // … → startExit picks the egress
+  }
+
+  describe('negative cases', () => {
+    it('with EVERY egress blocked the player just appears on top of the car', () => {
+      const h = setup();
+      const car = vehicleAt([0, 0, 0]);
+      h.phys.blocked.add('lf').add('rf').add('windscreen');
+
+      seatAndExit(h, car);
+
+      expect(h.ctrl.enabled).toBe(true); // control returned immediately — no climb clip
+      const last = h.phys.teleports[h.phys.teleports.length - 1];
+      expect(last[2]).toBeCloseTo(0.7 + 1, 6); // on the roof: hz + 1
+    });
+  });
+
+  describe('positive cases', () => {
+    it('a blocked driver door exits through the PASSENGER door', () => {
+      const h = setup();
+      const car = vehicleAt([0, 0, 0]);
+      h.phys.blocked.add('lf');
+
+      seatAndExit(h, car);
+      h.system.update(1); // the rf door swings open → climb-out starts
+
+      expect((car.handle as FakeVehicleHandle).doorAngles.get('rf')).toBeCloseTo(Math.PI / 3);
+      expect(h.anim.clip).toBe('car_getout_rhs');
+    });
+
+    it('both doors blocked → crawls out over the WINDSCREEN', () => {
+      const h = setup();
+      const car = vehicleAt([0, 0, 0]);
+      h.phys.blocked.add('lf').add('rf');
+
+      seatAndExit(h, car);
+
+      expect(h.anim.clip).toBe('car_crawloutrhs');
+      h.system.fixedUpdate(3); // the crawl elapses (fallback duration)
+      expect(h.ctrl.enabled).toBe(true);
+      const last = h.phys.teleports[h.phys.teleports.length - 1];
+      expect(last[1]).toBeCloseTo(2 + 1.2, 6); // ahead of the bonnet (hy + 1.2)
+    });
+
+    it('an OVERTURNED car skips the doors entirely and crawls out', () => {
+      const h = setup();
+      const car = vehicleAt([0, 0, 0]);
+      seatPlayer(h, car);
+      h.system.update(1); // let the entry door finish pulling shut
+      h.phys.quaternion = [1, 0, 0, 0]; // 180° about X — upside down
+
+      h.press(true);
+      h.system.update(0.016);
+      h.system.fixedUpdate(0.016);
+
+      expect(h.anim.clip).toBe('car_crawloutrhs');
+      expect((car.handle as FakeVehicleHandle).doorAngles.get('lf') ?? 0).toBeCloseTo(0); // no door swing
     });
   });
 });

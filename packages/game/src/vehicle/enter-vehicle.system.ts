@@ -10,7 +10,15 @@ import type { PhysicsWorld, VehicleController } from '../physics/physics-world';
 import type { VehicleHandle } from './vehicle-handle';
 import type { VehicleRig } from './vehicle-rig';
 
-import { CAR_GETIN, CAR_GETIN_RHS, CAR_GETOUT, CAR_SHUFFLE, CAR_SIT } from './vehicle-clips';
+import {
+  CAR_CRAWLOUT,
+  CAR_GETIN,
+  CAR_GETIN_RHS,
+  CAR_GETOUT,
+  CAR_GETOUT_RHS,
+  CAR_SHUFFLE,
+  CAR_SIT,
+} from './vehicle-clips';
 
 /** A car the player can interact with + sit in (driver side). It is a dynamic
  * physics body; `position`/`heading` are kept live by the vehicle-physics system. */
@@ -426,6 +434,31 @@ export class EnterVehicleSystem implements System {
     this.logger.debug('enter-vehicle', 'approach cancelled');
   }
 
+  /** The first FRONT door whose egress ray is clear, driver side first — or null when both are blocked. */
+  private clearDoorSide(vehicle: EnterableVehicle): DoorSide | null {
+    for (const side of ['lf', 'rf'] as const) {
+      this.side = side; // doorwayWorld reads the sequence side
+      if (this.pathClearTo(vehicle, this.doorwayWorld(vehicle))) {
+        return side;
+      }
+    }
+
+    return null;
+  }
+
+  /** Ground-level spot a crawl-out ends at: beside the (rf) window, or ahead of the windscreen. */
+  private crawloutTarget(vehicle: EnterableVehicle, egress: 'side' | 'windscreen'): Vec3 {
+    const [hx, hy] = vehicle.halfExtents;
+    const spot =
+      egress === 'windscreen'
+        ? this.toWorld(vehicle, [0, hy + 1.2])
+        : this.toWorld(vehicle, [hx + DOORWAY_CLEAR + 0.4, vehicle.seatLocal[1]]);
+    // An overturned car's roof is on the ground — aim the endpoint at the real ground beside it.
+    const ground = this.physics.groundBelow([spot[0], spot[1], vehicle.position[2] + 1.5], 4, vehicle.body);
+
+    return [spot[0], spot[1], ground ?? spot[2]];
+  }
+
   private doorAngleOf(vehicle: EnterableVehicle | null): number {
     return vehicle ? (this.doors.get(vehicle) ?? 0) : 0;
   }
@@ -524,6 +557,11 @@ export class EnterVehicleSystem implements System {
     car.position[2] = position[2];
     car.heading = headingFromQuat(quaternion);
     this.drive(car, step);
+    if (this.phase === 'exiting' || this.phase === 'idle') {
+      // The exit consumed this step (a crawl-out began / the roof fallback placed the player) —
+      // re-seating now would clobber the crawl clip. `exitopen` still seats: the door is only opening.
+      return;
+    }
 
     // Seat the rider via the car's FULL transform so he tilts/flips with it (not just yaw).
     this.seatQuat.set(quaternion[0], quaternion[1], quaternion[2], quaternion[3]);
@@ -541,8 +579,11 @@ export class EnterVehicleSystem implements System {
   /** Out of the car: restore manual control + locomotion, face away from the car, shut the door. */
   private finishExit(): void {
     const heading = this.active?.heading ?? 0;
-    // Yaw facing out of the doorway (vehicle −X side), away from the car body.
-    const outward = Math.atan2(Math.cos(heading), -Math.sin(heading));
+    // Yaw facing out of the used doorway (mirrored on a passenger-side exit), away from the car body.
+    const outward =
+      this.side === 'lf'
+        ? Math.atan2(Math.cos(heading), -Math.sin(heading))
+        : Math.atan2(-Math.cos(heading), Math.sin(heading));
     this.placePlayer(this.exitTo);
     this.followTarget(null); // back to following the player on foot
     this.animation.setScripted(null);
@@ -590,6 +631,13 @@ export class EnterVehicleSystem implements System {
     return this.side === 'lf' ? DOOR_OPEN_ANGLE : -DOOR_OPEN_ANGLE;
   }
 
+  /** Whether the straight ray from the car's centre to `target` is unobstructed (the car excluded). */
+  private pathClearTo(vehicle: EnterableVehicle, target: Vec3): boolean {
+    const { position } = this.physics.readBody(vehicle.body);
+
+    return this.physics.pathClear([position[0], position[1], position[2]], target, vehicle.body);
+  }
+
   /** True once the player is outside the car's footprint (+ clearance) — safe to re-collide. */
   private playerClearOf(vehicle: EnterableVehicle): boolean {
     const [hx, hy] = vehicle.halfExtents;
@@ -618,6 +666,21 @@ export class EnterVehicleSystem implements System {
     return [wx, wy, vehicle.position[2] + vehicle.seatLocal[2] + SEAT_RAISE];
   }
 
+  /** Crawl out (overturned / windscreen egress, 088/09d): no door swing, the crawl clip's root motion
+   *  carries the low scramble; reuses the exiting phase's warp. */
+  private startCrawlout(target: Vec3): void {
+    if (!this.active) {
+      return;
+    }
+    this.phase = 'exiting';
+    this.exitElapsed = 0;
+    this.exitFrom = this.playerPosition();
+    this.exitTo = target;
+    this.getoutMotion = this.animation.scriptedMotion(CAR_CRAWLOUT);
+    this.storeHold(this.active);
+    this.animation.setScripted(CAR_CRAWLOUT, { facing: this.active.heading, loop: false });
+  }
+
   /** Settled in the seat + Enter → park (brake to a stop) and open the door to climb back out. */
   private startExit(): void {
     if (!this.active) {
@@ -626,9 +689,32 @@ export class EnterVehicleSystem implements System {
     this.physics.parkVehicle(this.active.controller); // hold the car still while CJ climbs out
     this.steerAngle = 0;
     this.active.rig.setSteer(0);
-    this.side = 'lf'; // exit through the driver door (the 09d blockage chain picks alternatives)
-    this.phase = 'exitopen';
-    this.doorTarget = this.openAngle();
+    if (!this.isUpright(this.active)) {
+      // Overturned: no door can swing under the car — crawl out through the (rf) window opening.
+      this.startCrawlout(this.crawloutTarget(this.active, 'side'));
+
+      return;
+    }
+    // The 09d egress chain: driver door → passenger door → windscreen → appear on the car. A ray
+    // from the car's centre to each spot decides "blocked" (a wall/car inside it).
+    const side = this.clearDoorSide(this.active);
+    if (side) {
+      this.side = side;
+      this.phase = 'exitopen';
+      this.doorTarget = this.openAngle();
+
+      return;
+    }
+    const windscreen = this.crawloutTarget(this.active, 'windscreen');
+    if (this.pathClearTo(this.active, windscreen)) {
+      this.startCrawlout(windscreen);
+
+      return;
+    }
+    // Everything around is blocked — appear on top of the car (the honest last resort, no clip).
+    const [, , hz] = this.active.halfExtents;
+    this.exitTo = [this.active.position[0], this.active.position[1], this.active.position[2] + hz + 1];
+    this.finishExit();
   }
 
   /** At the doorway → gate the player, start the climb-in clip and slide to the seat. */
@@ -661,9 +747,12 @@ export class EnterVehicleSystem implements System {
     this.exitElapsed = 0;
     this.exitFrom = this.playerPosition();
     this.exitTo = this.doorwayWorld(this.active);
-    this.getoutMotion = this.animation.scriptedMotion(CAR_GETOUT);
+    this.getoutMotion = this.animation.scriptedMotion(this.side === 'rf' ? CAR_GETOUT_RHS : CAR_GETOUT);
     this.storeHold(this.active); // pin the (stopped) car here while the player climbs out
-    this.animation.setScripted(CAR_GETOUT, { facing: this.active.heading, loop: false });
+    this.animation.setScripted(this.side === 'rf' ? CAR_GETOUT_RHS : CAR_GETOUT, {
+      facing: this.active.heading,
+      loop: false,
+    });
   }
 
   /** Settle into the seat: hold the driving pose and shut the door. */

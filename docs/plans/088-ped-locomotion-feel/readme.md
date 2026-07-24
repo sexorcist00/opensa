@@ -344,6 +344,18 @@ glide 0.5 · fall_glide 0.8 · getup(_front) 1.37 (ANP3 raw / 60).
   out over the bonnet; the last resort places the player on the car's world-top with no clip.
   Entering stays upright-only (unchanged).
 
+  **CODE-COMPLETE 2026-07-24 — ledger:** `PhysicsWorld.pathClear(from, to, excludeBody)` (a solid
+  ray excluding sensors — the seated rider's capsule IS a sensor at the ray origin) probes each
+  egress from the car's centre. Upright exit: driver doorway → passenger doorway (`CAR_getout_rhs`
+  through the mirrored door) → windscreen crawl (`CAR_crawloutRHS` root motion to a ground spot
+  1.2 m past the bonnet, `groundBelow`-anchored) → appear on the roof (hz + 1, no clip, control
+  returns instantly). Overturned (`!isUpright`): doors never swing — straight to the crawl-out.
+  One real find: `driveSeated` re-seated the rider AFTER `drive()` in the same step, clobbering a
+  crawl-out's clip and the roof placement — it now early-returns when the exit consumed the step
+  (`exitopen` still seats: the door is only opening). `finishExit` faces out of the USED door
+  (mirrored on rf). Tests: +4 egress cases (blocked-driver→rf, both→windscreen, all→roof,
+  overturned→crawl) on a configurable blockage stub; all four packages **1280 green**.
+
 Execution order: **07 → 09a → 09c → 09b → 09d → 08** (07 is self-contained; 09a is the foundation
 the rest of 09 samples through; 08 is independent and lowest-risk last).
 
