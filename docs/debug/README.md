@@ -64,6 +64,16 @@ Default pak: `build/original/opensa/pak` (086 phase 8 — the game dir is self-c
 probed at `opensa-pack/` and the nested `opensa/opensa`). The world-welded side of a model lives in
 cell bundles, not its `.osm` — `dump-cell.ts` covers that path.
 
+## Mutators — write to the source IMG (`scripts/debug/`)
+
+Unlike the inspectors, these EDIT `game-src/<id>` in place. `game-src/*` is git-ignored, so the edit is
+local and reversible by re-extraction; each is report-by-default, `--write` to apply, and drops a one-time
+`.bak` of the target IMG first.
+
+| Script | Does |
+| --- | --- |
+| `strip-polygons-from-dff.ts --img <path> --tex <name[,name…]> [--models a,b,…] [--write]` | drops every submesh whose material references a given texture (its triangles) from DFF models inside an IMG — for cards that render as flat missing-texture quads because the texture is absent from the mod. Vertices + the material list are left untouched (the material just goes unused — no re-indexing), so the other cards on the same model survive; each edited DFF is re-parsed and verified before write. Default scans all DFFs; `--models` restricts. Fixed gostown's `LODEnsemble*` `Gp_feuillu1` magenta (`lodveg.txd` ships 6 of the 7 LOD-veg card textures; `Gp_feuillu1` is absent from the mod — not a recovery miss) |
+
 ## Approaches beyond scripts
 
 - **`report.json` ledgers first** — `textures.missing` (name → models that asked) and
