@@ -245,6 +245,10 @@ export interface MovementConfig {
   jumpSpeed: number;
   /** Planar speed while holding the run key. */
   runSpeed: number;
+  /** Turn rate (deg/s) at the top tier speed — low = wide readable arcs while running. */
+  turnRateFullDeg: number;
+  /** Turn rate (deg/s) while near-standing — high = snappy repositioning on the spot. */
+  turnRateIdleDeg: number;
   /** Planar speed when walking (default). */
   walkSpeed: number;
 }

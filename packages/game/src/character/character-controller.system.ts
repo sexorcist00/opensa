@@ -8,7 +8,15 @@ import type { Config } from '../interfaces/config.interface';
 import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { CharacterController, PhysicsWorld } from '../physics/physics-world';
 
-import { PlayerControlled, RigidBody, Transform, Velocity } from '../ecs/components';
+import { Locomotion, PlayerControlled, RigidBody, Transform, Velocity } from '../ecs/components';
+import {
+  angleDelta,
+  approachAngle,
+  IDLE_SPEED_THRESHOLD,
+  REVERSAL_ANGLE,
+  scheduledTurnRate,
+  yawFromPlanar,
+} from './locomotion';
 
 /** All the controller needs from a camera: the scene-space (Y-up) look direction. */
 export interface LookDirectionSource {
@@ -86,28 +94,13 @@ export class CharacterControllerSystem implements System {
     if (!this.enabled) {
       return; // gated (e.g. while the player is scripted into a car)
     }
-    const { movement } = this.config;
     const players = query(this.world, [PlayerControlled, RigidBody, Velocity]);
     const { jump, target } = this.desiredMove(players);
     const moving = target.x !== 0 || target.y !== 0;
+    const intentYaw = moving ? yawFromPlanar(target.x, target.y) : 0;
 
     for (const eid of players) {
-      const grounded = Velocity.grounded[eid] === 1;
-      // Horizontal: accelerate toward the target (decelerate toward rest with no input),
-      // at a reduced rate in the air → ramp-up, turn momentum, momentum into jumps.
-      const rate = (moving ? movement.accel : movement.deceleration) * (grounded ? 1 : movement.airControl) * step;
-      approach(eid, target.x, target.y, rate);
-      // Vertical: reset on the ground (jump impulse if requested), then integrate gravity.
-      let vz = grounded ? (jump ? movement.jumpSpeed : 0) : Velocity.z[eid];
-      vz += GRAVITY * step;
-
-      const move = this.physics.moveCharacter(this.controller, RigidBody.handle[eid], RigidBody.collider[eid], [
-        Velocity.x[eid] * step,
-        Velocity.y[eid] * step,
-        vz * step,
-      ]);
-      Velocity.grounded[eid] = move.grounded ? 1 : 0;
-      Velocity.z[eid] = move.grounded && vz < 0 ? 0 : vz; // landed → stop accumulating fall speed
+      this.moveOnFoot(eid, step, jump, moving, intentYaw, target);
     }
   }
 
@@ -205,6 +198,46 @@ export class CharacterControllerSystem implements System {
     }
   }
 
+  /** One player's fixed step on foot: planar accel/plant, rate-limited heading, gravity + jump. */
+  private moveOnFoot(
+    eid: number,
+    step: number,
+    jump: boolean,
+    moving: boolean,
+    intentYaw: number,
+    target: { x: number; y: number },
+  ): void {
+    const { movement } = this.config;
+    const grounded = Velocity.grounded[eid] === 1;
+    const heading = Locomotion.heading[eid] ?? 0;
+    // A reversal (intent far behind the facing) PLANTS: decelerate on the old heading to a stop,
+    // then about-face near-idle — turning a full run through 180° in place reads as skating.
+    const reversing = moving && Math.abs(angleDelta(heading, intentYaw)) > REVERSAL_ANGLE;
+    const accelerating = moving && !reversing;
+    // Horizontal: accelerate toward the target (decelerate toward rest with no input or mid-plant),
+    // at a reduced rate in the air → ramp-up, turn momentum, momentum into jumps.
+    const rate = (accelerating ? movement.accel : movement.deceleration) * (grounded ? 1 : movement.airControl) * step;
+    approach(eid, accelerating ? target.x : 0, accelerating ? target.y : 0, rate);
+    // Heading: rate-limited turn toward the intent (plan 088/01) — snappy near idle, wide arcs at
+    // speed. A plant holds the old facing until the speed has bled off, then turns.
+    const speed = Math.hypot(Velocity.x[eid], Velocity.y[eid]);
+    if (moving && (!reversing || speed <= IDLE_SPEED_THRESHOLD)) {
+      const turnRate = scheduledTurnRate(speed, movement.runSpeed, movement.turnRateIdleDeg, movement.turnRateFullDeg);
+      Locomotion.heading[eid] = approachAngle(heading, intentYaw, turnRate * step);
+    }
+    // Vertical: reset on the ground (jump impulse if requested), then integrate gravity.
+    let vz = grounded ? (jump ? movement.jumpSpeed : 0) : Velocity.z[eid];
+    vz += GRAVITY * step;
+
+    const move = this.physics.moveCharacter(this.controller, RigidBody.handle[eid], RigidBody.collider[eid], [
+      Velocity.x[eid] * step,
+      Velocity.y[eid] * step,
+      vz * step,
+    ]);
+    Velocity.grounded[eid] = move.grounded ? 1 : 0;
+    Velocity.z[eid] = move.grounded && vz < 0 ? 0 : vz; // landed → stop accumulating fall speed
+  }
+
   /** Planar velocity toward the current path waypoint; advances/flags arrival as points are reached. */
   private moveToward(eid: number, speed: number): { x: number; y: number } {
     const target = this.autoPath[this.autoIndex];
@@ -237,6 +270,9 @@ export class CharacterControllerSystem implements System {
     Velocity.y[eid] = vy;
     Velocity.z[eid] = vz;
     Velocity.grounded[eid] = 1;
+    if (Math.hypot(vx, vy) > IDLE_SPEED_THRESHOLD) {
+      Locomotion.heading[eid] = yawFromPlanar(vx, vy); // debug fly turns instantly — no plant, no rate
+    }
   }
 
   private zeroVelocity(): void {

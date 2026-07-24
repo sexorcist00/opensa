@@ -5,7 +5,7 @@ import type { KeyboardInput } from '../input';
 import type { Config } from '../interfaces/config.interface';
 import type { CharacterController } from '../physics/physics-world';
 
-import { PlayerControlled, RigidBody, Transform, Velocity } from '../ecs/components';
+import { Locomotion, PlayerControlled, RigidBody, Transform, Velocity } from '../ecs/components';
 import { createEcsWorld } from '../ecs/world';
 import { KeyboardSource } from '../input';
 import { PhysicsWorld } from '../physics/physics-world';
@@ -108,7 +108,16 @@ function config(gameState: Config['gameState']): Config {
       zone: { borderColor: '#000', borderWidth: 1, color: '#fff', fontSize: 40 },
     },
     mapViewer: false,
-    movement: { accel: 20, airControl: 0.3, deceleration: 25, jumpSpeed: 6, runSpeed: 26, walkSpeed: 10 },
+    movement: {
+      accel: 20,
+      airControl: 0.3,
+      deceleration: 25,
+      jumpSpeed: 6,
+      runSpeed: 26,
+      turnRateFullDeg: 240,
+      turnRateIdleDeg: 720,
+      walkSpeed: 10,
+    },
     showCollision: false,
     showLogs: false,
     staticUrl: '',
@@ -131,12 +140,14 @@ async function groundedPlayer(): Promise<Player> {
   addComponent(world, eid, PlayerControlled);
   addComponent(world, eid, RigidBody);
   addComponent(world, eid, Velocity);
+  addComponent(world, eid, Locomotion);
   RigidBody.handle[eid] = body;
   RigidBody.collider[eid] = collider;
   Velocity.x[eid] = 0;
   Velocity.y[eid] = 0;
   Velocity.z[eid] = 0;
   Velocity.grounded[eid] = 0;
+  Locomotion.heading[eid] = 0; // facing +Y (north), where the test camera walks W toward
   physics.step(STEP); // build the query pipeline so the controller sees the ground
 
   return { controller, eid, physics, world };
@@ -408,16 +419,19 @@ describe('CharacterControllerSystem.runPath', () => {
     it('a waypoint already reached is skipped and the run continues to the next one', async () => {
       const player = await placedPlayer(0, 0);
       const system = systemFor(player, keys());
-      // The first point is inside the arrive radius; the second is 20 m along −Y.
+      // The first point is inside the arrive radius; the second is 20 m along −Y — a 180° reversal,
+      // so the heading plant (088/01) pivots in place for a few steps before the walk starts.
       system.runPath([
         [0, 0.3, 1.4],
         [0, -20, 1.4],
       ]);
 
-      system.fixedUpdate(STEP);
+      for (let i = 0; i < 15; i += 1) {
+        system.fixedUpdate(STEP);
+      }
 
       expect(system.arrived).toBe(false); // the path is not finished
-      expect(Velocity.y[player.eid]).toBeLessThan(0); // already heading to the SECOND waypoint
+      expect(Velocity.y[player.eid]).toBeLessThan(0); // pivoted and heading to the SECOND waypoint
       player.physics.dispose();
     });
   });
@@ -448,6 +462,90 @@ describe('CharacterControllerSystem camera-relative movement', () => {
 
       expect(Velocity.x[player.eid]).toBeGreaterThan(0);
       expect(Velocity.y[player.eid]).toBeCloseTo(0, 6);
+      player.physics.dispose();
+    });
+  });
+});
+
+describe('CharacterControllerSystem heading (plan 088/01)', () => {
+  describe('negative cases', () => {
+    it('standing still holds the heading (no input never turns the model)', async () => {
+      const player = await groundedPlayer();
+      Locomotion.heading[player.eid] = 1;
+
+      run(player, config('play')); // no keys
+
+      expect(Locomotion.heading[player.eid]).toBe(1);
+      player.physics.dispose();
+    });
+
+    it('a reversal holds the old heading while the speed is still high (plant, not pirouette)', async () => {
+      const player = await groundedPlayer();
+      run(player, config('play')); // settle → grounded
+      Locomotion.heading[player.eid] = 0; // facing +Y
+      Velocity.y[player.eid] = 10; // at walk speed
+
+      run(player, config('play'), 'KeyS'); // intent = −Y, 180° behind
+
+      expect(Locomotion.heading[player.eid]).toBe(0); // facing held
+      // and the plant DECELERATES on the old heading instead of accelerating backward
+      expect(Velocity.y[player.eid]).toBeLessThan(10);
+      expect(Velocity.y[player.eid]).toBeGreaterThan(0);
+      player.physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('turns toward the intent at the rate — not instantly', async () => {
+      const player = await groundedPlayer();
+      run(player, config('play')); // settle → grounded
+      Locomotion.heading[player.eid] = 0;
+
+      run(player, config('play'), 'KeyD'); // strafe right → intent yaw −π/2, only 90° away
+
+      // One step at the near-idle rate (720°/s) turns 12°, nowhere near the full quarter.
+      expect(Locomotion.heading[player.eid]).toBeCloseTo(-(720 / 60) * (Math.PI / 180), 2);
+      expect(Locomotion.heading[player.eid]).toBeGreaterThan(-Math.PI / 2);
+      player.physics.dispose();
+    });
+
+    it('settles on the intent after sustained input', async () => {
+      const player = await groundedPlayer();
+      Locomotion.heading[player.eid] = 0;
+      for (let i = 0; i < 90; i += 1) {
+        run(player, config('play'), 'KeyD');
+      }
+      expect(Locomotion.heading[player.eid]).toBeCloseTo(-Math.PI / 2, 2);
+      expect(Velocity.x[player.eid]).toBeCloseTo(10, 1); // strafe carries at walk speed
+      player.physics.dispose();
+    });
+
+    it('a reversal about-faces once the plant has bled the speed off', async () => {
+      const player = await groundedPlayer();
+      run(player, config('play')); // settle → grounded
+      Locomotion.heading[player.eid] = 0;
+      Velocity.y[player.eid] = 10;
+
+      for (let i = 0; i < 200; i += 1) {
+        run(player, config('play'), 'KeyS');
+      }
+
+      expect(Math.abs(Locomotion.heading[player.eid])).toBeCloseTo(Math.PI, 2); // faced about
+      expect(Velocity.y[player.eid]).toBeCloseTo(-10, 1); // and walking the other way
+      player.physics.dispose();
+    });
+
+    it('fly mode turns instantly from its velocity (debug mode skips the rate)', async () => {
+      const player = await groundedPlayer();
+      addComponent(player.world, player.eid, Transform);
+      Locomotion.heading[player.eid] = 2;
+      const system = systemFor(player, keys('KeyW')); // fly forward = +Y → yaw 0
+
+      system.setFlying(true);
+      player.physics.step(STEP);
+      system.fixedUpdate(STEP);
+
+      expect(Locomotion.heading[player.eid]).toBeCloseTo(0, 6);
       player.physics.dispose();
     });
   });

@@ -11,8 +11,12 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`087`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+`001`–`088`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
 
+- **[088 — Ped locomotion feel](./088-ped-locomotion-feel/readme.md)** — AAA on-foot feel: turn-rate
+  heading (no more instant direction snap), walk/run/sprint tiers with hysteresis, clip crossfade +
+  cycle-speed sync (the promised 074/08 sampler follow-up), and a jump/fall FSM (launch anticipation,
+  glide, landing recovery, coyote time + jump buffer) on the clips already in `ped.ifp`.
 - **[087 — The gostown field round](./087-gostown-field-round/readme.md)** — the first TC's field-bug
   batch after its first full boot (bridge at LOD range, missing island chunk + floating tree, black
   water stripes); same symptom→bytes method as 085.

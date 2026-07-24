@@ -27,7 +27,7 @@ import {
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { CharacterControllerSystem } from '@opensa/game/character/character-controller.system';
 import { Logger } from '@opensa/game/diagnostics/logger';
-import { PlayerControlled, RigidBody, Transform, Velocity } from '@opensa/game/ecs/components';
+import { Locomotion, PlayerControlled, RigidBody, Transform, Velocity } from '@opensa/game/ecs/components';
 import { createEcsWorld } from '@opensa/game/ecs/world';
 import { EventBus } from '@opensa/game/events/event-bus';
 import { type GameEvents } from '@opensa/game/events/events.global';
@@ -361,6 +361,7 @@ async function boot(
   addComponent(world, playerEid, PlayerControlled);
   addComponent(world, playerEid, RigidBody);
   addComponent(world, playerEid, Velocity);
+  addComponent(world, playerEid, Locomotion);
   Transform.x[playerEid] = spawn[0];
   Transform.y[playerEid] = spawn[1];
   Transform.z[playerEid] = spawn[2];
@@ -374,6 +375,7 @@ async function boot(
   Velocity.y[playerEid] = 0;
   Velocity.z[playerEid] = 0;
   Velocity.grounded[playerEid] = 0;
+  Locomotion.heading[playerEid] = Math.PI; // spawn facing, mirrors the pose fallback below
   RigidBody.handle[playerEid] = capsule.body;
   RigidBody.collider[playerEid] = capsule.collider;
   const viewOf = (): [number, number, number] => [
@@ -1013,12 +1015,13 @@ async function boot(
   };
   /**
    * Pose the ped for this frame. On foot: data-driven feet placement (a ground ray from the body CENTRE, own
-   * capsule excluded — starting under the capsule slips through thin road shells into basements) plus a
-   * heading from planar velocity. RIDING: both rules must be switched OFF. Enter/exit teleports the rider
-   * onto the seat every fixed step, so the ground snap would lift the seated pose to `ground − minZ` (about a
-   * metre — the driver ends up sitting on the ROOF), and a velocity-derived heading leaves him facing his old
-   * walk direction while the car turns under him. The seat IS the pose: no lift, the car's own heading, and
-   * zero speed so the scripted CAR_sit clip is not dragged back into locomotion.
+   * capsule excluded — starting under the capsule slips through thin road shells into basements) plus the
+   * controller-owned rate-limited heading (plan 088/01, `Locomotion.heading`). RIDING: both rules must be
+   * switched OFF. Enter/exit teleports the rider onto the seat every fixed step, so the ground snap would
+   * lift the seated pose to `ground − minZ` (about a metre — the driver ends up sitting on the ROOF), and a
+   * walk-derived heading leaves him facing his old direction while the car turns under him. The seat IS the
+   * pose: no lift, the car's own heading (written BACK into Locomotion so dismounting turns from the car's
+   * yaw, not a stale walk yaw), and zero speed so the scripted CAR_sit clip is not dragged into locomotion.
    */
   const posePlayer = (
     gta: [number, number, number],
@@ -1032,6 +1035,7 @@ async function boot(
     if (ridingCar) {
       groundDelta = 0;
       heading = ridingCar.heading;
+      Locomotion.heading[playerEid] = heading;
     } else {
       if (Velocity.grounded[playerEid] === 1) {
         const ground = physics.groundBelow([gta[0], gta[1], gta[2]], 4, RigidBody.handle[playerEid]);
@@ -1039,9 +1043,7 @@ async function boot(
           groundDelta = ground - player.minZ - gta[2];
         }
       }
-      if (speed > 0.3) {
-        heading = Math.atan2(-vx, vy); // hold the last heading while standing
-      }
+      heading = Locomotion.heading[playerEid] ?? heading;
     }
     const render: [number, number, number] = [playerEngine[0], playerEngine[1] + groundDelta, playerEngine[2]];
     player.update(render, heading, ridingCar ? 0 : speed, dt);

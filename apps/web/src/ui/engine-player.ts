@@ -11,6 +11,7 @@ import type { AssetFileSystem } from '@opensa/renderware';
 import { IfpSampler } from '@opensa/engine';
 import { writeGtaRoot } from '@opensa/game/adapters/engine-vehicle-handle';
 import { readPedOsm } from '@opensa/game/adapters/ped-osm';
+import { IDLE_SPEED_THRESHOLD } from '@opensa/game/character/locomotion';
 import { VEHICLE_SCRIPTED_CLIPS } from '@opensa/game/vehicle/vehicle-clips';
 import { getIfp } from '@opensa/renderware/archive/asset-cache';
 import { type PedClip, pedClip } from '@opensa/renderware/ped/build-ped-model';
@@ -174,7 +175,7 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
         const time = scripted.loop ? clipTime : Math.min(clipTime, clip.duration);
         sampler.sample(clip, time, probe.palette, 1);
       } else {
-        const wanted = speed > RUN_SPEED_THRESHOLD ? RUN_CLIP : speed > 0.3 ? WALK_CLIP : IDLE_CLIP;
+        const wanted = speed > RUN_SPEED_THRESHOLD ? RUN_CLIP : speed > IDLE_SPEED_THRESHOLD ? WALK_CLIP : IDLE_CLIP;
         if (wanted !== activeClip) {
           activeClip = wanted;
           clipTime = 0; // v1: hard switch — the crossfade is the plan-08 sampler follow-up

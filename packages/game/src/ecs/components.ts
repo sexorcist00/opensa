@@ -15,6 +15,11 @@ export const RigidBody = {
   handle: [] as number[],
 };
 
+/** Locomotion state the controller owns and the renderer reads (plan 088): rate-limited heading (yaw, rad). */
+export const Locomotion = {
+  heading: [] as number[],
+};
+
 /** Player velocity (Z-up, units/s) + grounded flag — owned by the character controller. */
 export const Velocity = {
   grounded: [] as number[],

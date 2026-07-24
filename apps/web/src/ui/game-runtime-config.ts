@@ -109,7 +109,17 @@ export function createGameRuntimeConfig(): Config {
       zone: { borderColor: '#000', borderWidth: 1, color: '#fff', fontSize: 40 },
     },
     mapViewer: false,
-    movement: { accel: 20, airControl: 0.3, deceleration: 25, jumpSpeed: 3.5, runSpeed: 7, walkSpeed: 2 },
+    // Turn rates (plan 088/01): near-idle spins snappily, full run arcs at a third of that.
+    movement: {
+      accel: 20,
+      airControl: 0.3,
+      deceleration: 25,
+      jumpSpeed: 3.5,
+      runSpeed: 7,
+      turnRateFullDeg: 240,
+      turnRateIdleDeg: 720,
+      walkSpeed: 2,
+    },
     showCollision: false,
     // Diagnostics off by default. Flip to 'debug' | 'log' | 'warn' | 'error' here to stream
     // gated `log` events to the console; filter by `type` in the subscriber below.
