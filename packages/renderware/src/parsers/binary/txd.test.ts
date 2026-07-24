@@ -156,8 +156,34 @@ describe('parseTxd (synthetic)', () => {
     width: 4,
   });
 
+  // PAL4: 2 indices/byte against a 16-entry table. expandPalette assumes 8-bit/256-entry, so decoding would
+  // emit a half-size, mostly-black image — the decoder REJECTS it instead (docs/open-issues/pal4-textures.md).
+  const pal4 = texNative({
+    d3dFormat: 0,
+    depth: 4,
+    flags: 0x00,
+    height: 1,
+    mip: u8(0x00),
+    name: 'pal4',
+    palette: new Uint8Array(16 * 4),
+    rasterFormat: RasterFormat.C8888 | RasterFormat.PAL4,
+    width: 2,
+  });
+
   const dict = parseTxd(
-    buildSyntheticTxd([dxt5, dxt2, dxt4, uncompressed, x8r8g8b8, palettized, rgb565, argb1555, argb4444, unsupported]),
+    buildSyntheticTxd([
+      dxt5,
+      dxt2,
+      dxt4,
+      uncompressed,
+      x8r8g8b8,
+      palettized,
+      rgb565,
+      argb1555,
+      argb4444,
+      unsupported,
+      pal4,
+    ]),
   );
 
   it('skips textures with unsupported pixel formats but keeps the rest', () => {
@@ -172,6 +198,10 @@ describe('parseTxd (synthetic)', () => {
       'argb1555',
       'argb4444',
     ]);
+  });
+
+  it('rejects PAL4 (4-bit palettized) rather than mis-decoding it half-size', () => {
+    expect(dict.textures.find((t) => t.name === 'pal4')).toBeUndefined();
   });
 
   it('expands 16-bit rasters to RGBA8888 (plan 043: previously dropped)', () => {

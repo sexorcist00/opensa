@@ -94,7 +94,7 @@ export interface OscellGroup {
   bounds: readonly [number, number, number, number];
   indexCount: number;
   indexOffset: number;
-  /** 0 opaque | 1 cutout (A2C) | 2 blend | 3 beam. */
+  /** 0 opaque | 1 cutout (A2C) | 2 blend | 3 beam | 4 additive (plan 085). */
   pipelineClass: number;
   /** 0 front-side | 1 double-sided. */
   side: number;

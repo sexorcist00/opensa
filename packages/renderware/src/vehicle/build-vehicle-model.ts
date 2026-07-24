@@ -555,7 +555,8 @@ function hasWheelDummies(clump: RWClump): boolean {
   return clump.frames.some((frame) => WHEEL_DUMMY_RE.test(frame.name.trim().toLowerCase()));
 }
 
-/** Narrowest index array the vertex count allows — see the call site. */
+/** Narrowest index array the vertex count allows: uint16 holds indices 0..65535, so up to 65536 vertices
+ *  (max index 65535) still fit; only > 65536 needs uint32 (same boundary as prepare-clump.ts). */
 function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint32Array {
   return vertexCount > 65536 ? new Uint32Array(indices) : new Uint16Array(indices);
 }

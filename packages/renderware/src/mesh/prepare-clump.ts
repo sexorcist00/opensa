@@ -358,7 +358,9 @@ function prepareParts(rw: RWGeometry): PreparedPart[] {
     if (tris.length === 0) {
       return;
     }
-    const index = vertexCount > 65535 ? new Uint32Array(tris.length * 3) : new Uint16Array(tris.length * 3);
+    // uint16 holds indices 0..65535, so a mesh of up to 65536 vertices (max index 65535) still fits; only
+    // > 65536 vertices need uint32 (matches `indicesFor` in build-vehicle-model.ts). Hi-poly mod meshes.
+    const index = vertexCount > 65536 ? new Uint32Array(tris.length * 3) : new Uint16Array(tris.length * 3);
     tris.forEach((tri, at) => {
       index[at * 3] = tri.a;
       index[at * 3 + 1] = tri.b;

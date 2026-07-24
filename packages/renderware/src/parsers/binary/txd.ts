@@ -13,9 +13,10 @@ const TEXTURE_CHILDREN: ReadonlySet<number> = new Set([RwSection.EXTENSION, RwSe
  *
  * Supports the GTA SA D3D8/D3D9 Texture Native layout. Pixel formats handled:
  * DXT1/3/5 (kept as raw blocks), uncompressed 32-bit (8888/888), 16-bit
- * (R5G6B5 / A1R5G5B5 / A4R4G4B4 — expanded to RGBA here, plan 043), and 8-/4-bit
- * palettized (expanded to RGBA here). Textures whose format is not understood
- * are skipped rather than aborting the whole dictionary.
+ * (R5G6B5 / A1R5G5B5 / A4R4G4B4 — expanded to RGBA here, plan 043), and 8-bit
+ * palettized (PAL8, expanded to RGBA here). 4-bit palettized (PAL4) is REJECTED, not
+ * decoded (see classifyFormat). Textures whose format is not understood are skipped
+ * rather than aborting the whole dictionary.
  */
 export function parseTxd(buffer: ArrayBuffer): RWTextureDictionary {
   const stream = new BinaryStream(buffer);
@@ -60,8 +61,15 @@ function classifyFormat(d3dFormat: number, rasterFormat: number, depth: number):
     default:
       break;
   }
-  if (rasterFormat & (RasterFormat.PAL8 | RasterFormat.PAL4)) {
-    return 'rgba8888'; // expanded from palette below
+  if (rasterFormat & RasterFormat.PAL8) {
+    return 'rgba8888'; // expanded from the 256-entry palette below
+  }
+  if (rasterFormat & RasterFormat.PAL4) {
+    // 4-bit palettes pack TWO indices per byte against a 16-entry table; expandPalette assumes one 8-bit
+    // index per byte, so decoding PAL4 would emit a half-size, mostly-black image. No shipped asset uses it
+    // (scanned original/carcer/gostown → 0 PAL4), so REJECT it here rather than mis-decode: the texture is
+    // skipped cleanly (a visible missing texture, not silent corruption). See docs/open-issues/pal4-textures.md.
+    return null;
   }
   // Uncompressed 32-bit: A8R8G8B8 (raster C8888) and X8R8G8B8 (raster C888) are
   // both 4 bytes/pixel — classify by depth so neither is dropped.
@@ -204,12 +212,11 @@ function parseTextureNative(stream: BinaryStream, header: ChunkHeader): null | R
     return null; // unsupported (e.g. 16-bit) — skip, chunk walker advances past it
   }
 
-  // Palettized rasters carry a colour table before the mip data.
+  // Palettized rasters carry a colour table before the mip data. Only PAL8 reaches here — classifyFormat
+  // rejects PAL4 above, so its 16-entry table is never read.
   let palette: null | Uint8Array = null;
   if (rasterFormat & RasterFormat.PAL8) {
     palette = stream.bytes(256 * 4);
-  } else if (rasterFormat & RasterFormat.PAL4) {
-    palette = stream.bytes(16 * 4);
   }
 
   const pixelFormat = rasterFormat & RasterFormat.PIXEL_FORMAT_MASK;

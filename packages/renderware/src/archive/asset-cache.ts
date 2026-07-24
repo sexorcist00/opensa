@@ -30,8 +30,11 @@ function lruSet<K, V>(cache: Map<K, V>, key: K, value: V, max: number): void {
   }
 }
 
-/** Parsed IFP animation packages (zone object clips like `counxref.ifp`), by lowercased name. */
+/** Parsed IFP animation packages (zone object clips like `counxref.ifp`), by lowercased name. BOUNDED like
+ *  the clump cache (plan 073/08) — the distinct-IFP set is small and static, but an unbounded Map still
+ *  contradicts the "parse caches are bounded" rule, so cap it; an evicted package just re-parses on revisit. */
 const ifpCache = new Map<string, IfpAnimation[]>();
+const IFP_CACHE_MAX = 64;
 
 /**
  * RAW TXD bytes by lowercased name — the fetch, not the texels.
@@ -100,8 +103,8 @@ export function getIfp(archive: ImgArchive, ifpName: string): IfpAnimation[] {
   let animations = ifpCache.get(key);
   if (!animations) {
     animations = parseOrEmpty(archive.get(`${key}.ifp`), parseIfp, []);
-    ifpCache.set(key, animations);
   }
+  lruSet(ifpCache, key, animations, IFP_CACHE_MAX);
 
   return animations;
 }

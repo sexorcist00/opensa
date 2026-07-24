@@ -90,8 +90,10 @@ export interface OspakManifest {
    *  current transform. Absent when no converted model carries the plugin. */
   uvAnimations?: OspakUvAnimation[];
   version: number;
-  /** Water mesh (074/06 row 12 v2): a LOOSE binary next to the manifest — tessellated water.dat polygons
-   *  with the baked per-vertex shore-distance field ([u32 V][u32 I][f32×4 × V: x,y,z,shore][u32 × I]). */
+  /** Water mesh (074/06 row 12, through plan 075): a LOOSE binary next to the manifest — tessellated
+   *  water.dat polygons with the baked per-vertex depth field. Stride-20 (5 floats/vertex):
+   *  [u32 V][u32 I][f32×5 × V: x, y, z, depth, class][u32 × I], where `class` (plan 075) splits SEA (0)
+   *  from inland water. See tools/opensa-pack/src/water.ts for the authoritative writer. */
   water?: { file: string; indexCount: number; vertexCount: number };
 }
 

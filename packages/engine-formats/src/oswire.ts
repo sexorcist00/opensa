@@ -111,6 +111,16 @@ export function oscellSections(raw: Uint8Array): OscellSections {
   // Minor 2 (B6) inserted `particleCount` between the light count and the offsets.
   r.seek(6); // major is at 4, minor at 6
   const minor = r.u16();
+  // A newer minor may add a header count the offset formula below does not know about — which would slice
+  // the payload at the wrong place and produce a corrupt-but-valid-looking `.oscell` on rebuild. Fail LOUD
+  // instead. Bump this literal WITH the formula whenever encodeOscell gains a pre-offset header field.
+  const KNOWN_MINOR = 7;
+  if (minor > KNOWN_MINOR) {
+    throw new Error(
+      `.oswire: .oscell minor ${minor} is newer than the header formula (knows <= ${KNOWN_MINOR}) — ` +
+        'update oscellSections to account for its new header field before wire-encoding it',
+    );
+  }
   r.seek(8);
   const flags = r.u32();
   r.seek(48);
