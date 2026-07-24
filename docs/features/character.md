@@ -1,8 +1,9 @@
 # Character
 
 `packages/renderware/src/ped/build-ped-model.ts` (renderer-agnostic skinned model + bones),
-`packages/engine/src/anim/` (`IfpSampler` — the clip player), `packages/game/src/character/`,
-plans 008/011/012/013/036.
+`packages/engine/src/anim/` (`IfpSampler` — the clip player + crossfader), `packages/game/src/character/`
+(controller, heading, jump FSM), `apps/web/src/ui/` (`engine-player.ts` + `locomotion-mixer.ts` +
+`gait-selector.ts` — the animation state machine), plans 008/011/012/013/036/**088**.
 
 ## Implemented
 
@@ -19,14 +20,35 @@ plans 008/011/012/013/036.
   peds author that at the origin (matching the skin bind), but some mods offset the root frame (e.g. gostown's
   `BMYPOL1` puts `Root` at +2.16) — which would shove the whole body off the entity pivot (off-centre, with
   rotation orbiting the offset). The snap is a no-op when the frame and skin bind already agree.
-- **Animation** (plan 012): ANP3 IFP parsing (quaternions i16/4096, times i16, root translation
-  i16/1024) → `PedClip` (quaternion tracks per skin-order bone; translation opt-in), played by the
-  engine's `IfpSampler`;
-  `ped.ifp` is loaded **directly** (`loadAnimations(ifpUrl)` → `anim/ped.ifp`, no packed archive);
-  `CharacterAnimationSystem` (idle/walk/run
-  states, speed-matched locomotion — root motion stripped, physics owns position).
+- **Animation** (plan 012, reworked by 088): ANP3 IFP parsing (quaternions i16/4096, times i16, root
+  translation i16/1024) → `PedClip` (quaternion tracks per skin-order bone; translation opt-in), played
+  by the engine's `IfpSampler`. The locomotion state machine lives in `apps/web/src/ui/engine-player.ts`
+  on three pure, GPU-free collaborators (plan 088):
+  - **`GaitSelector`** — speed → idle/walk/run/sprint tier at the tier-midpoint thresholds with 0.5 m/s
+    hysteresis (no clip flicker at a boundary);
+  - **`LocomotionMixer`** — 0.2 s crossfade on every clip switch (landings 0.12 s), walk↔run↔sprint carry
+    normalized phase so the legs stay in step, cycle clocks scale by `speed / tierSpeed` clamped
+    [0.7, 1.4] (no foot sliding), one-shot clips (launch/glide/land/collapse) park on their last frame,
+    and an interrupted fade retargets from a frozen `holdPose` — pop-free;
+  - **`IfpSampler.sampleBlended`** — the crossfade blends per-bone LOCAL quats/positions BEFORE compose
+    (blending palette matrices would shear); measured 8.2 µs vs 6.0 µs single per 32-bone frame.
+  The clip set (`PLAYER_CLIPS`): `idle_stance`/`walk_civi`/`run_civi`/`sprint_civi` gaits +
+  `JUMP_launch`/`JUMP_glide`/`JUMP_land`/`FALL_glide`/`FALL_collapse` air states. Every 088 addition
+  degrades on a TC whose IFP lacks it (`resolveGaitClip`, `airClipFor` chains) — never a bind pose.
+- **Movement feel** (plan 088/01+03): the controller owns a rate-limited heading
+  (`Locomotion.heading`, 720°/s near idle → 240°/s at the top tier; an intent >120° behind PLANTS —
+  decelerate, pivot, re-accelerate); RUN is the default gait (SA jogs), Shift sprints, `walk` is an
+  optional binding or a partial touch-stick deflection. All tuning in `MovementConfig`
+  (`game-runtime-config.ts`).
+- **Jump/fall FSM** (plan 088/04, `CharacterControllerSystem.advanceAirState`, states in
+  `Locomotion.state`): LAUNCH (0.1 s anticipation crouch before the impulse; jumpSpeed 4.5 → apex
+  ≈ 1.03 m) → AIRBORNE → LAND (0.15 s reduced-control beat) or HARD_LAND (>12 m/s impact → collapse,
+  0.5 s); walking off an edge FALLs after the 0.12 s coyote window (a press inside it still jumps); a
+  press ≤0.15 s before touchdown fires on the landing frame (rising-edge armed — holding jump never
+  auto-hops); feather touches (<1 m/s) take no beat. Touchdown impact is recorded in
+  `Locomotion.fallSpeed` (the 080 camera shake's future input).
 - **Physics** (plans 008/013): bitECS entity + Rapier capsule/box controller, gravity, map
-  collision, jump, slope handling; respawn/teleport debug actions. The game's `playerSpawn`
+  collision, slope handling; respawn/teleport debug actions. The game's `playerSpawn`
   (`GAME_CONFIG`, `apps/web/src/game-config.tsx`) is the single source for where the player starts — it seeds both the
   player capsule and the initial collision zone (`loadGame` centres on it), so there is ground under the drop
   (Ganton on `original`).
@@ -44,8 +66,11 @@ plans 008/011/012/013/036.
 ## Known gaps / candidates
 
 - Single character model; no CJ/ped variety, no ped NPCs.
-- Animation set is locomotion + vehicle enter/exit; no combat/swim/climb.
-- IFP translation tracks unused for the player (physics-driven) — used for map objects instead.
+- Animation set is locomotion + jump/fall + vehicle enter/exit; no combat/swim/climb.
+- IFP translation tracks unused for the player (physics-driven; jump height = `jumpSpeed`, not the
+  authored root motion) — used for map objects instead.
+- Transition polish clips queued as plan 088/05 (`WALK_start`, `Run_stop(R)`, `turn_180`, `Turn_L/R`) —
+  only if a field round shows the crossfades leave gaps.
 
 ## Where the OWN-ENGINE player comes from (opensa-pack 003 phase 5f, 2026-07-19)
 
@@ -55,8 +80,8 @@ whatever a developer last converted, with its animations frozen at bake time, an
 user picked had no say in it.
 
 It now loads `<mainCharacter>.osm` (from `GAME_CONFIG`) from the archives through the VFS, and resolves
-`idle_stance` / `walk_civi` /
-`run_civi` — plus the scripted vehicle clips `car_getin_lhs` / `car_getout_lhs` / `car_sit` that
+the whole `PLAYER_CLIPS` set (gaits + the 088 jump/fall clips) — plus the scripted vehicle clips
+`car_getin_lhs` / `car_getout_lhs` / `car_sit` that
 `EnterVehicleSystem` drives by name — from the game's own `ped.ifp` at load, so a modded IFP changes how the
 player walks AND sits. A scripted clip is only registered under its name when it actually resolves
 (`duration > 0`); an absent one falls through to the standing locomotion stand-in rather than an empty clip
@@ -76,7 +101,9 @@ were retired (plan 079 phase 5) — nothing bakes a ped fixture any more; the `.
 ## Test coverage anchors
 
 `ped/build-ped-model.test.ts` (real fixtures: `bmypol1`, and `army` for the HAnim ≠ frame-order case),
-`engine/src/anim/ifp-sampler.test.ts`,
-`ifp` parser tests, `character-controller.system.test.ts`, `ui/engine-camera.test.ts`.
+`engine/src/anim/ifp-sampler.test.ts` (incl. the 088/02 blend/hold gates),
+`ifp` parser tests, `character-controller.system.test.ts` (heading/plant + the 088/04 FSM with real
+Rapier), `character/locomotion.test.ts`, `ui/locomotion-mixer.test.ts`, `ui/gait-selector.test.ts`,
+`ui/engine-player.test.ts` (`buildClipIndex`/`resolveGaitClip` degradation gates), `ui/engine-camera.test.ts`.
 The converted-ped path: `tools/opensa-pack/src/no-data-loss.test.ts` (every skinned buffer byte for byte,
 the whole skeleton, `minZ`, and every texture present across arrays).

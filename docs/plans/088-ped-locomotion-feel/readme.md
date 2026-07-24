@@ -1,6 +1,8 @@
 # 088 — Ped locomotion feel (turning, acceleration tiers, jump, animation states)
 
-**Status: PLANNED 2026-07-24.** No code yet.
+**Status: SHIPPED 2026-07-24 (phases 01–04 + close-out 06 all CLOSED same day; 05 stays QUEUED).**
+Four feature commits (`4fbe73b` heading+plant · `5ed9a0c` crossfade+hold · `6520641` tiers+rate-sync ·
+`c45adaf` jump FSM) + the field-round-1 fix `160d428`; full suite 792 green throughout.
 
 **Goal: on-foot movement feels like a modern AAA third-person game** — the character turns through an
 arc instead of snapping to a new direction, speed ramps through distinct walk/run/sprint tiers, the
@@ -115,7 +117,7 @@ heading incl. plant/pivot/fly), full game+web suite 528 green; lint (cognitive-c
 `moveOnFoot` extraction) + tsc clean. The duplicated `0.3` idle threshold in `engine-player.ts` and
 the host heading gate now both come from `IDLE_SPEED_THRESHOLD`.
 
-### 02 — Crossfade + phase-synced blending (CODE-COMPLETE 2026-07-24 — awaiting the field round)
+### 02 — Crossfade + phase-synced blending (CLOSED 2026-07-24 — field round 1 accepted)
 
 - `IfpSampler.sampleBlended(from, fromTime, to, toTime, alpha, out, outSlot)`: per-bone slerp of the
   two clips' LOCAL quats (and lerp of positions where tracks exist) before compose — one extra
@@ -147,7 +149,7 @@ bit-exact equality gates, 9 mixer incl. interruption + handback); engine+web+gam
 lint + tsc clean. Alpha curve is linear v1 — smoothstep is a one-line tuning lever if the field
 round wants softer ends.
 
-### 03 — Speed tiers + cycle-speed sync (CODE-COMPLETE 2026-07-24 — awaiting the field round)
+### 03 — Speed tiers + cycle-speed sync (CLOSED 2026-07-24 — field round 1 accepted, accel 20→14)
 
 - New `sprint` action (held; keyboard binding beside `run`) → `sprintSpeed` config; tier targets
   walk 2 / run 7 / sprint ~10 (field-tuned). `sprint_civi` joins `PLAYER_CLIPS`.
@@ -180,7 +182,7 @@ mid-ramp → widened to 500 × 500). Full engine+web+game: **784 green**; lint +
 speeds are the tier speeds v1 — the field round may re-time them per clip (the stride-timing knob is
 `referenceSpeeds` in `engine-player.ts`).
 
-### 04 — Jump + fall state machine (CODE-COMPLETE 2026-07-24 — awaiting the field round)
+### 04 — Jump + fall state machine (CLOSED 2026-07-24 — field round 1: glide loop fixed, then accepted)
 
 Controller FSM (fixed-step, in `CharacterControllerSystem`), states published via `Locomotion`:
 
@@ -241,7 +243,7 @@ it — the glides joined the one-shot set (hold the last frame; launch/land/coll
 turns). Each is one FSM edge + one clip through the same gate; none blocks the chain. Decide from the
 phase-04 field round.
 
-### 06 — Close-out: defaults freeze + docs
+### 06 — Close-out: defaults freeze + docs (DONE 2026-07-24)
 
 Field-judged defaults frozen on user verdict; `docs/features/character.md` rewritten for the FSM (also
 fixing the stale `CharacterAnimationSystem` wording — the machine is inline in `engine-player.ts`

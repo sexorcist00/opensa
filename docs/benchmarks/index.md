@@ -118,6 +118,12 @@ same 1137 cells: the 250 bake + aabb rings dropped bytes with no coverage loss. 
 re-baseline (fps re-measured with `admiral`/`comet` converted — road cars ≠ 0 — plus the mapper pak-size
 delta). Run: [`2026-07-24-ingame-617556f-087ring.json`](opensa-engine/2026-07-24-ingame-617556f-087ring.json).
 
+**07-24: IfpSampler crossfade microbench (plan 088/02, CPU-only).** The two-clip blended sample costs
+**8.24 µs vs 6.01 µs single** (1.37×) on a synthetic 32-bone/20-key clip, 20k iterations — one extra
+per-bone evaluate + slerp. Invisible next to the ~2 ms pass floor; crossfades shipped with no perf gate.
+Not a scene run (no pak, no GPU). Run:
+[`2026-07-24-microbench-ifp-sampler-blend.json`](opensa-engine/2026-07-24-microbench-ifp-sampler-blend.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
