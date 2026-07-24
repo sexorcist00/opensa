@@ -1,7 +1,7 @@
 # 01 — Baked directional sun shadows, second attempt (deferred from 074/07)
 
 **STATUS: DRAFT** — part of the [04-graphic-improvements](readme.md) idea bundle (0.6.0). Moved here from
-ideas/0.5.0/plans/03 on 2026-07-17; to be thought through properly later — nothing scheduled.
+roadmap/0.5.0/plans/03 on 2026-07-17; to be thought through properly later — nothing scheduled.
 
 Deferred on 2026-07-12 (user decision after a same-day build → field-test → revert cycle). The own engine
 ships the SCALAR baked sun-visibility (074/07 v1, field-accepted); the DIRECTIONAL version — static shadows

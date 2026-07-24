@@ -131,10 +131,30 @@ Never edit generated code manually.
   a phase without its numbers is unfinished
 - Every reported performance figure goes into `docs/benchmarks/` (per its readme's schema/index) BEFORE it
   is analysed — including numbers pasted in chat; always record which pak build a run read
+- After a BIG rework (a migration, a subsystem rewrite, a major feature chain), run an audit AND a benchmark
+  before calling it done: write the audit to `docs/audit/` (what changed, what it cost, what it bought) and
+  the before/after numbers to `docs/benchmarks/`. A large change without both is unfinished
 
 ---
 
 ## Documentation Maintenance
+
+The documentation lifecycle (idea → concept → plan / postmortem; roadmap for later versions) is described in
+`docs/README.md` — read it when deciding WHERE a doc belongs. The folders that carry that lifecycle:
+
+- `docs/ideas/` — a rough, unproven, unscheduled direction. High-level only; needs research before it can be
+  built. A new idea is its own folder + a row in `docs/ideas/README.md`
+- `docs/concepts/` — an idea under an honest go/no-go review (research first, code never). A concept has two
+  exits: it graduates to `docs/plans/` (validated — its research record MOVES into the plan), or it dies into
+  `docs/postmortem/`. Only LIVE explorations stay in `docs/concepts/`
+- `docs/postmortem/` — a died concept/plan: what was tried, what was measured, why it failed, when to revisit.
+  Add the file + a row in `docs/postmortem/README.md` (never just delete a dead direction)
+- `docs/plans/` — committed work you already know how to do: a numbered chain of small, individually-shippable
+  steps, each ending with verification + measured numbers. Add a row in `docs/plans/README.md`
+- `docs/roadmap/` — decided work deferred to a later version (`0.5.0/`, `0.6.0/`); same plan-chain shape as
+  `docs/plans/`, just not this version
+- `docs/audit/` — a post-big-rework audit (see the Standing Workflow rule above): what changed, its cost, its
+  gain
 
 Keep these in sync with the code — update them in the same change, not later:
 

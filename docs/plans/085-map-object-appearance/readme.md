@@ -146,7 +146,7 @@ inside it).
 
 ---
 
-### Row E — ground glow at Ten Green Bottles (CLOSED for this iteration 2026-07-23 — spec captured, deferred to ideas/0.6.0)
+### Row E — ground glow at Ten Green Bottles (CLOSED for this iteration 2026-07-23 — spec captured, deferred to roadmap/0.6.0)
 
 **Symptom (user, 2026-07-22):** at Ten Green Bottles (2345.5, −1704.8) prod spread a GREEN glow across the
 ground at night; the original also blinks it. The named model (`telwire_01_lae2`) is just wires — no 2dfx
@@ -164,7 +164,7 @@ data only. The parser still drops `range`/`showMode`/`shadowSize`; static lights
 **Decision (user, 2026-07-23):** close row E for this iteration; do it properly later. The full staged
 plan (parser+oscell fields → shared blink function driving corona AND pool intensity → wet-road specular
 → clustered lighting for strip-scale) lives in
-`docs/ideas/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md`. The blink function also fixes
+`docs/roadmap/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md`. The blink function also fixes
 "all three traffic-light colours glow at once" (showMode 7/8).
 
 **History:** a bare pool restore (smooth admission, no blink) was tried 2026-07-22 and REVERTED the same

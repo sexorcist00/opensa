@@ -46,7 +46,7 @@ fixes it; see map-optimizer plans 020–023.)
   phases, sign shimmer, moving sun shadows. Today we either lose those or fake them.
 - **Sun-vis v2's fundamental problem dies.** The directional bake was REVERTED because per-vertex thresholds
   on SA's metre-sparse receivers punch holes (bridge falls between road verts). Real-time shadows are
-  per-PIXEL — the sparse-receiver problem does not exist. The parked plan `ideas/0.5.0/03` (prerequisite:
+  per-PIXEL — the sparse-receiver problem does not exist. The parked plan `roadmap/0.5.0/03` (prerequisite:
   receiver densification 2–4 m) is superseded.
 - **Convert time collapses.** Bakes were 91 % of the full-LS convert (760 s of 833 s). LOD-only baking is a
   small fraction of the verts.

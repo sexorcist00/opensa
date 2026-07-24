@@ -10,7 +10,7 @@ Two groups: what works on the CURRENT pak right now, and what needs the NEXT pak
       `missingLayers` in the old manifest) — just confirm it doesn't crash. Real check after rebuild.
 - [ ] **Ten Green Bottles ground glow (row E / 078 #11): CLOSED for this iteration 2026-07-23** — the
       restore stays reverted; the wanted behaviour is now specced as blink-synced 2dfx point lights,
-      deferred to `docs/ideas/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md`. Nothing to test.
+      deferred to `docs/roadmap/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md`. Nothing to test.
 
 ## Needs the NEXT pak rebuild (pmb full run) first
 
@@ -62,7 +62,7 @@ Sanity: 1123 cells / ~1 GB / AO ~375 s. Also owed on this rebuild (078): map-obj
 
 - Row E ground glow — CLOSED for this iteration 2026-07-23: spec captured (blink-synced 2dfx point
   light, mod-19 authored), deferred to
-  `docs/ideas/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md` (see the plan's row E).
+  `docs/roadmap/0.6.0/plans/04-graphic-improvements/04-2dfx-real-lights.md` (see the plan's row E).
 - Row G data decision — RESOLVED 2026-07-23: the user deleted mod "46. Animated Radars" ENTIRELY
   (model + texture + animation). Next rebuild restores the stock static red radars at all 4 airport
   placements (id 1682: SF −1691.6/−619.7 · LV 1294.9/1502.6 · LS 1663.6 & 1709.4/−2362.7). Mod folders

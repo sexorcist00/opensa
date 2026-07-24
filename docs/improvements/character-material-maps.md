@@ -21,7 +21,7 @@ ships are simply ignored. Captured while fixing the **T800** ped (see below). No
 - Overlaps to respect when picking this up: emissive should REPLACE the rigid path's night-glow
   luma-delta heuristic where authored (and compose with the `dn` night mix + the lamp-texture
   swap); per-material metadata rides the plan-16 precedent (`MaterialClass` nibble in `meta.w`).
-  NOT superseded by `ideas/0.6.0/03-vehicle-normals` — that is geometry normal smoothing, not
+  NOT superseded by `roadmap/0.6.0/03-vehicle-normals` — that is geometry normal smoothing, not
   normal MAPS.
 
 ## Idea

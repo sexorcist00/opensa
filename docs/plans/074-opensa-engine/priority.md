@@ -110,7 +110,7 @@ the WebGL path for movement/camera/streaming; benches from inside the GAME, not 
 **B4. Water v1 + remaining world effects** — [06](06-world-effects-parity.md) rows 12/13 tails · size M
 ✅/PARKED 2026-07-13: water went v1→v2→v3 in one day (runtime flat → shore-field bake → TRUE-depth bake
 with surf/foam/swash; 12 field rounds logged in plan 06) and is PARKED as a leftover at v3 — the look
-ceiling is the 2005 sprite textures; resume = docs/ideas/0.6.0/plans/02-water-realism (authored textures
+ceiling is the 2005 sprite textures; resume = docs/roadmap/0.6.0/plans/02-water-realism (authored textures
 first). Coronas textured + 2dfx particles (row 13 tails) LEFT B4 UNFINISHED — they are now **B6** below
 (the tails were nearly lost when B4 closed; that is why they get their own step).
 The game needs a sea surface; v1 = flat animated surface with the sky-shared fog (the "real waves" rework
@@ -215,5 +215,5 @@ full modded profiles (anderius/carcer/gostown) convert and run the final bench m
 - ALL project docs and code stay English-only — repo-wide, not just plans (user rule, broadened
   2026-07-13); field verdicts get paraphrased in English; every verdict and measurement goes into the
   owning plan's ledger.
-- Parked items have written prerequisites — check ideas/0.5.0 before re-attempting directional shadows,
+- Parked items have written prerequisites — check roadmap/0.5.0 before re-attempting directional shadows,
   weather wind, or stochastic default-on.

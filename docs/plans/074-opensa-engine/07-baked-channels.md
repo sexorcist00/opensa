@@ -32,7 +32,7 @@ reserved since v0 (02 — no format bump). 066 stays the spec source; this doc o
 - [x] Sun-vis bake v1 (scalar, 066/03 v1) + channel writer + WGSL consumer in 06·3. No runtime CSM exists in
       this engine to A/B against — the acceptance test becomes "under-bridge/canyon direct sun dies, smooth
       under camera motion". Field ✅.
-- [ ] **v2 DIRECTIONAL — BUILT AND FIELD-REVERTED (2026-07-12), DEFERRED → [ideas/0.6.0/04-graphic-improvements/01](../../ideas/0.6.0/plans/04-graphic-improvements/01-baked-directional-shadows.md)** (user decision; the ideas doc carries the full attempt/problem/solution record and the receiver-densification prerequisite): with the fixed-azimuth arc, per-vertex visibility is a THRESHOLD
+- [ ] **v2 DIRECTIONAL — BUILT AND FIELD-REVERTED (2026-07-12), DEFERRED → [roadmap/0.6.0/04-graphic-improvements/01](../../roadmap/0.6.0/plans/04-graphic-improvements/01-baked-directional-shadows.md)** (user decision; the ideas doc carries the full attempt/problem/solution record and the receiver-densification prerequisite): with the fixed-azimuth arc, per-vertex visibility is a THRESHOLD
       function of elevation — the bake scans 8 ascending elevations (×2 disc jitter) for the first-lit
       crossing and a penumbra spread. Storage (no bump): threshold → `normal.w` (/1.1; 1.1 = never lit),
       softness → layer-u16 bits 8–14 (bit 15 = stochastic); current arc elevation rides the spare

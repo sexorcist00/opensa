@@ -2,7 +2,7 @@
 
 **Status: DEFERRED to the next iteration (user decision 2026-07-17) — NOT a pre-flip blocker.** The
 whole lamp-lighting question moves to the post-flip graphics round (the
-[0.6.0/04-graphic-improvements](../../ideas/0.6.0/plans/04-graphic-improvements/readme.md) DRAFT bundle:
+[0.6.0/04-graphic-improvements](../../roadmap/0.6.0/plans/04-graphic-improvements/readme.md) DRAFT bundle:
 directional shadows + HD-cell lamps + contact darkening, one thinking round). The current shipped state
 (coronas + emissives, NO static lamp pool — removed 2026-07-17) is the accepted flip baseline.
 

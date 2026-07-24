@@ -9,7 +9,7 @@ FUTURE beyond-parity iteration only.
 **Status history: steps 1–2 CLOSED, field-ACCEPTED 2026-07-16** — step 1 (ACES+bloom) shipped with plan 09;
 step 2 (the scene environment probe + the skygfx-neo reflection model, six field rounds — see the round
 records below) accepted by the user as the direction to build on. Step 4 vehicle normals SKIPPED by the
-user (2026-07-16) — design parked at docs/ideas/0.6.0/plans/03-vehicle-normals. **Steps 3 (SSR) + 6
+user (2026-07-16) — design parked at docs/roadmap/0.6.0/plans/03-vehicle-normals. **Steps 3 (SSR) + 6
 (grounding) were BUILT, field-tested and ROLLED BACK the same day (2026-07-17, user decision)** — the
 record below is preserved for the next attempt; do NOT retry the same shapes. The escape hatch stands:
 `graphics.vehicleReflection.preset: 'off'` sets `env.reflectionStrength = 0` and the whole term (probe

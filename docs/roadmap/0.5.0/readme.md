@@ -1,7 +1,8 @@
 # Ideas — 0.5.0
 
-Future-work plans for the 0.5.0 cycle. Same convention as [0.4.0](../0.4.0/readme.md): each feature is a chain of
-small, individually-implementable plans under [plans/](plans/), ending with verification + measurements.
+Future-work plans for the 0.5.0 cycle. Same convention as the sibling [0.6.0](../0.6.0/readme.md) cycle: each
+feature is a chain of small, individually-implementable plans under [plans/](plans/), ending with
+verification + measurements.
 
 ## Weather-driven wind (own engine)
 

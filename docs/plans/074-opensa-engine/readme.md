@@ -262,7 +262,7 @@ tripped the country-dusk WATCH (pass 4.50 twice) — profile country-dusk before
   now gates only sun-vis) + the tool OWNS ITS PLANS (`tools/opensa-pack/docs/plans/`, the founding
   074/03 doc moved there as 000).
 - **The baked-shadows open mystery DROPPED** (user: the whole shadow mechanic gets redesigned later —
-  see the [0.6.0/04-graphic-improvements DRAFT bundle](../../ideas/0.6.0/plans/04-graphic-improvements/readme.md):
+  see the [0.6.0/04-graphic-improvements DRAFT bundle](../../roadmap/0.6.0/plans/04-graphic-improvements/readme.md):
   directional shadows + HD-cell lamps + dynamic contact darkening, one thinking round).
 - **Vehicle-model texture LRU SHIPPED** (pre-flip item 1; series 21·vehicle-lru): 256 MB texture trim
   floor over the per-TYPE cache, live types pinned, worker rebuild on re-encounter; sweep texture bucket
@@ -513,7 +513,7 @@ WGSL snapshots current; tsc + eslint clean; benches committed through the `city`
   moon DISC joined the shared skyColorFor (smoothstep disc + faint halo on moonDir; moonColor black by day
   keeps day frames untouched, and fogged geometry dissolves into the moon behind it — the 068 invariant).
   (3) Weather-driven wind DEFERRED to 0.5.0 by user decision — idea stub at
-  docs/ideas/0.5.0/plans/02-weather-wind/.
+  docs/roadmap/0.5.0/plans/02-weather-wind/.
 - 2026-07-12 (plan 12 added) — stochastic texturing researched against the JuniorDjjr skygfx fork (shader =
   Deliot–Heitz 3-tap tiling-and-blending with ddx/ddy, selection = CURATED texdb name list — editorial, not
   inferred). Both blockers that parked improvements/stochastic-texturing die in this architecture: selection

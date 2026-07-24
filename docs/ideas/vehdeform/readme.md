@@ -1,4 +1,4 @@
-# 01 — VehDeform: dynamic impact deformation for vehicles
+# VehDeform: dynamic impact deformation for vehicles
 
 Bring GTA4-style continuous body deformation to OpenSA vehicles: dents proportional to impact force and
 direction, accumulating over a damage session, coexisting with SA's classic ok/dam part swaps (which stay
