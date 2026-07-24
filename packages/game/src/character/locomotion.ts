@@ -26,6 +26,8 @@ export const LOCOMOTION_LAND = 4;
 export const LOCOMOTION_HARD_LAND = 5;
 /** Touched down past the collapse threshold — goes DOWN (FALL_collapse) and stands back up (getup). */
 export const LOCOMOTION_COLLAPSE = 6;
+/** Grounded on a slope too steep to stand (088/08) — Rapier slides the capsule, the pose braces. */
+export const LOCOMOTION_SLIDE = 7;
 
 /** Intent further than this from the current heading while moving = a reversal: plant, don't pirouette. */
 export const REVERSAL_ANGLE = (2 * Math.PI) / 3; // 120°

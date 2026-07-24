@@ -265,6 +265,8 @@ export interface MovementConfig {
   launchDelaySeconds: number;
   /** Planar speed of the DEFAULT gait (no modifier held) — SA jogs by default (088/03). */
   runSpeed: number;
+  /** Slope steepness (deg) above which the ped SLIDES (088/08) — match the physics MIN_SLOPE_SLIDE. */
+  slideSlopeDeg: number;
   /** Planar speed while the sprint modifier is held (the top gait tier). */
   sprintSpeed: number;
   /** Turn rate (deg/s) at the top tier speed — low = wide readable arcs while sprinting. */

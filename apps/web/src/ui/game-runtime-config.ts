@@ -131,6 +131,7 @@ export function createGameRuntimeConfig(): Config {
       landRecoverySeconds: 0.15,
       launchDelaySeconds: 0.1,
       runSpeed: 7,
+      slideSlopeDeg: 45,
       sprintSpeed: 10,
       turnRateFullDeg: 240,
       turnRateIdleDeg: 720,

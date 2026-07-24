@@ -288,13 +288,25 @@ one motion, straight down onto the face) + **`getup_front`** (the matching face-
 58 % and popping to idle. Clip durations recorded: land 0.23 · fall_land 0.47 · fall_front 0.73 ·
 glide 0.5 · fall_glide 0.8 · getup(_front) 1.37 (ANP3 raw / 60).
 
-### 08 — Slope slide (a pose for the 45°+ surfaces Rapier already slides down)
+### 08 — Slope slide (CODE-COMPLETE 2026-07-24 — awaiting the field round)
 
 - Ground NORMAL from the ground probe (extend the physics ray); grounded on a slope steeper than
   `slideSlopeDeg` (~42°, hysteresis a few degrees) → a SLIDE locomotion state: reduced control,
   `FALL_glide` balance pose (no authored slide clip exists in SA — field-judged stand-in).
 - Tests: pure slope math; the state needs a ramp fixture — if the test physics world can't build
   an inclined collider cheaply, the state logic tests run on a faked normal and the ramp is field.
+
+**CODE-COMPLETE 2026-07-24 — ledger:** `PhysicsWorld.groundNormalBelow` (castRayAndGetNormal, one
+extra ray per fixed step while grounded — negligible) feeds a per-step slope angle into the FSM: a
+new `LOCOMOTION_SLIDE` state enters past `slideSlopeDeg` **45°** (= the physics `MIN_SLOPE_SLIDE`,
+so the pose appears exactly when Rapier starts sliding the capsule) and exits below **41°**
+(4° hysteresis); control is `airControl`-reduced while braced, a jump can still kick off the slope,
+and sliding off an edge falls through the normal coyote path. The pose is the `FALL_glide` balance
+stand-in (no authored SA slide clip — field-judged; degrades to `JUMP_glide`). The ramp test builds
+a REAL 48° trimesh incline through `createStaticColliders` (the ColliderShape trimesh path — no
+rotated-box API needed) and drops the capsule onto it; flat ground pinned as never sliding. The
+FSM transitions got extracted (`groundedTransition`/`slideTransition`) to hold the complexity cap.
+All four packages **1283 green**; lint + tsc clean.
 
 ### 09 — Vehicle ingress/egress realism (each sub-step individually shippable)
 

@@ -21,6 +21,7 @@ import {
   LOCOMOTION_HARD_LAND,
   LOCOMOTION_LAND,
   LOCOMOTION_LAUNCH,
+  LOCOMOTION_SLIDE,
 } from '@opensa/game/character/locomotion';
 import { VEHICLE_SCRIPTED_CLIPS } from '@opensa/game/vehicle/vehicle-clips';
 import { getIfp } from '@opensa/renderware/archive/asset-cache';
@@ -357,6 +358,8 @@ const AIR_CLIP_CHAINS: Readonly<Record<number, readonly number[]>> = {
   [LOCOMOTION_HARD_LAND]: [FALL_LAND_CLIP, LAND_CLIP],
   [LOCOMOTION_LAND]: [LAND_CLIP],
   [LOCOMOTION_LAUNCH]: [LAUNCH_CLIP],
+  // No authored slide clip exists in SA — the fall-glide balance pose is the stand-in (field-judged).
+  [LOCOMOTION_SLIDE]: [FALL_GLIDE_CLIP, GLIDE_CLIP],
 };
 
 /**

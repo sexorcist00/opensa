@@ -21,6 +21,7 @@ import {
   LOCOMOTION_HARD_LAND,
   LOCOMOTION_LAND,
   LOCOMOTION_LAUNCH,
+  LOCOMOTION_SLIDE,
   REVERSAL_ANGLE,
   scheduledTurnRate,
   yawFromPlanar,
@@ -48,6 +49,10 @@ const FLY_INITIAL_LIFT = 4;
 
 /** Planar distance (m) at which a scripted {@link CharacterControllerSystem.runTo} target is reached. */
 const ARRIVE_DISTANCE = 0.6;
+
+/** How far below the body the slope probe looks (m), and the hysteresis (deg) before a slide ends. */
+const SLOPE_PROBE_DROP = 2;
+const SLIDE_EXIT_HYSTERESIS_DEG = 4;
 
 /**
  * Drives the player's **kinematic capsule** from the keyboard while playing.
@@ -167,7 +172,13 @@ export class CharacterControllerSystem implements System {
    * Returns this step's physics modifiers: `launch` fires the vertical impulse (once, at the end of
    * the anticipation delay), `controlFactor` scales the grounded horizontal rate (the landing beat).
    */
-  private advanceAirState(eid: number, step: number, jumpEdge: boolean, grounded: boolean): AirStep {
+  private advanceAirState(
+    eid: number,
+    step: number,
+    jumpEdge: boolean,
+    grounded: boolean,
+    slopeDeg: null | number,
+  ): AirStep {
     const { movement } = this.config;
     const timers = this.airTimers.get(eid) ?? { buffer: 0, coyote: 0 };
     this.airTimers.set(eid, timers);
@@ -179,11 +190,10 @@ export class CharacterControllerSystem implements System {
     let launch = false;
     let controlFactor = 1;
     if (state === LOCOMOTION_GROUNDED) {
-      if (timers.buffer > 0 && (grounded || timers.coyote > 0)) {
-        [state, time, timers.buffer] = [LOCOMOTION_LAUNCH, 0, 0];
-      } else if (!grounded && timers.coyote <= 0) {
-        [state, time] = [LOCOMOTION_FALL, 0]; // walked off an edge; micro-airborne (stairs) never gets here
-      }
+      [state, time] = this.groundedTransition(timers, grounded, slopeDeg, state, time);
+    } else if (state === LOCOMOTION_SLIDE) {
+      controlFactor = movement.airControl; // braced, not steering
+      [state, time] = this.slideTransition(timers, grounded, slopeDeg, state, time);
     } else if (state === LOCOMOTION_LAUNCH) {
       if (time >= movement.launchDelaySeconds) {
         launch = true; // the crouch is over — fire the impulse and leave the ground
@@ -260,6 +270,46 @@ export class CharacterControllerSystem implements System {
     }
   }
 
+  /** Where the GROUNDED state goes this step: a (buffered/coyote) jump launches, walking off an edge
+   *  falls once the coyote window dies (micro-airborne stair steps never get here), and ground too
+   *  steep to stand starts the slide (088/08). */
+  private groundedTransition(
+    timers: { buffer: number; coyote: number },
+    grounded: boolean,
+    slopeDeg: null | number,
+    state: number,
+    time: number,
+  ): [number, number] {
+    if (timers.buffer > 0 && (grounded || timers.coyote > 0)) {
+      timers.buffer = 0;
+
+      return [LOCOMOTION_LAUNCH, 0];
+    }
+    if (!grounded && timers.coyote <= 0) {
+      return [LOCOMOTION_FALL, 0];
+    }
+    if (grounded && slopeDeg !== null && slopeDeg > this.config.movement.slideSlopeDeg) {
+      return [LOCOMOTION_SLIDE, 0]; // Rapier is already sliding the capsule
+    }
+
+    return [state, time];
+  }
+
+  /** Slope (deg) of the ground under the body, or null when nothing is within the probe (088/08). */
+  private groundSlopeDeg(eid: number): null | number {
+    const { position } = this.physics.readBody(RigidBody.handle[eid]);
+    const normal = this.physics.groundNormalBelow(
+      [position[0], position[1], position[2]],
+      SLOPE_PROBE_DROP,
+      RigidBody.handle[eid],
+    );
+    if (!normal) {
+      return null;
+    }
+
+    return (Math.acos(Math.min(1, Math.max(-1, normal[2]))) * 180) / Math.PI;
+  }
+
   /** One player's fixed step on foot: planar accel/plant, rate-limited heading, the air FSM + gravity. */
   private moveOnFoot(
     eid: number,
@@ -271,7 +321,7 @@ export class CharacterControllerSystem implements System {
   ): void {
     const { movement } = this.config;
     const grounded = Velocity.grounded[eid] === 1;
-    const air = this.advanceAirState(eid, step, jumpEdge, grounded);
+    const air = this.advanceAirState(eid, step, jumpEdge, grounded, grounded ? this.groundSlopeDeg(eid) : null);
     const heading = Locomotion.heading[eid] ?? 0;
     // A reversal (intent far behind the facing) PLANTS: decelerate on the old heading to a stop,
     // then about-face near-idle — turning a full run through 180° in place reads as skating.
@@ -366,6 +416,30 @@ export class CharacterControllerSystem implements System {
     }
 
     return state === LOCOMOTION_HARD_LAND ? movement.hardLandRecoverySeconds : movement.landRecoverySeconds;
+  }
+
+  /** Where a SLIDE goes this step (088/08): a jump kicks off the slope, sliding off an edge falls,
+   *  a flattened slope (with hysteresis, so the boundary never flickers) returns to the ground state. */
+  private slideTransition(
+    timers: { buffer: number; coyote: number },
+    grounded: boolean,
+    slopeDeg: null | number,
+    state: number,
+    time: number,
+  ): [number, number] {
+    if (timers.buffer > 0 && grounded) {
+      timers.buffer = 0;
+
+      return [LOCOMOTION_LAUNCH, 0];
+    }
+    if (!grounded && timers.coyote <= 0) {
+      return [LOCOMOTION_FALL, 0]; // slid off the edge
+    }
+    if (grounded && (slopeDeg === null || slopeDeg < this.config.movement.slideSlopeDeg - SLIDE_EXIT_HYSTERESIS_DEG)) {
+      return [LOCOMOTION_GROUNDED, 0];
+    }
+
+    return [state, time];
   }
 
   /** Gait tier (088/03): sprint > walk modifiers, RUN is the default — SA jogs when nothing is held. */

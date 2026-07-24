@@ -1,3 +1,4 @@
+import { Matrix4 } from '@opensa/math';
 import { addComponent, addEntity } from 'bitecs';
 import { describe, expect, it } from 'vitest';
 
@@ -19,6 +20,7 @@ import {
   LOCOMOTION_HARD_LAND,
   LOCOMOTION_LAND,
   LOCOMOTION_LAUNCH,
+  LOCOMOTION_SLIDE,
 } from './locomotion';
 
 const STEP = 1 / 60;
@@ -139,6 +141,7 @@ function config(gameState: Config['gameState']): Config {
       landRecoverySeconds: 0.15,
       launchDelaySeconds: 0.1,
       runSpeed: 26,
+      slideSlopeDeg: 45,
       sprintSpeed: 39,
       turnRateFullDeg: 240,
       turnRateIdleDeg: 720,
@@ -849,6 +852,49 @@ describe('CharacterControllerSystem jump & fall FSM (plan 088/04)', () => {
         step();
       }
       expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_GROUNDED); // 1.8 s served
+      player.physics.dispose();
+    });
+  });
+});
+
+describe('CharacterControllerSystem slope slide (plan 088/08)', () => {
+  /** A 48° ramp (steeper than slideSlopeDeg 45, shallower than the 50° climb limit), as a trimesh. */
+  async function rampPlayer(): Promise<Player> {
+    const player = await groundedPlayer(2); // a small flat pad far from the ramp
+    const rise = Math.tan((48 * Math.PI) / 180);
+    // A wide inclined quad through x∈[-20,20], y∈[6,26], z = (y − 6)·tan(48°) + 0.5.
+    const vertices = new Float32Array([-20, 6, 0.5, 20, 6, 0.5, 20, 26, 20 * rise + 0.5, -20, 26, 20 * rise + 0.5]);
+    const indices = new Uint32Array([0, 1, 2, 0, 2, 3]);
+    player.physics.createStaticColliders([
+      { name: 'ramp', shape: { boxes: [], indices, spheres: [], vertices }, transforms: [new Matrix4()] },
+    ]);
+    player.physics.step(STEP); // rebuild the query pipeline with the ramp in it
+
+    return player;
+  }
+
+  describe('negative cases', () => {
+    it('flat ground never slides', async () => {
+      const player = await groundedPlayer();
+      for (let i = 0; i < 30; i += 1) {
+        run(player, config('play'), 'KeyW');
+      }
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_GROUNDED);
+      player.physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('standing on a 48° slope enters SLIDE (Rapier is already sliding the capsule)', async () => {
+      const player = await rampPlayer();
+      const { step } = liveSystem(player);
+      // Drop onto the ramp surface: y = 12 → surface z ≈ 6.66 + 0.5; capsule centre ~1 above.
+      player.physics.teleport(RigidBody.handle[player.eid], [0, 12, (12 - 6) * Math.tan((48 * Math.PI) / 180) + 2]);
+      player.physics.step(STEP);
+      for (let i = 0; i < 60 && Locomotion.state[player.eid] !== LOCOMOTION_SLIDE; i += 1) {
+        step();
+      }
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_SLIDE);
       player.physics.dispose();
     });
   });

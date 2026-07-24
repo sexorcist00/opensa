@@ -1,4 +1,4 @@
-import { LOCOMOTION_COLLAPSE, LOCOMOTION_HARD_LAND } from '@opensa/game/character/locomotion';
+import { LOCOMOTION_COLLAPSE, LOCOMOTION_HARD_LAND, LOCOMOTION_SLIDE } from '@opensa/game/character/locomotion';
 import { describe, expect, it } from 'vitest';
 
 import { airClipFor, buildClipIndex, loadEnginePlayer, resolveGaitClip } from './engine-player';
@@ -150,6 +150,11 @@ describe('airClipFor landing tiers (plan 088/07)', () => {
   describe('positive cases', () => {
     it('HARD_LAND plays the fall_land impact crouch', () => {
       expect(airClipFor(LOCOMOTION_HARD_LAND, AIR())).toBe(9);
+    });
+
+    it('SLIDE braces in the fall-glide balance pose (glide when the TC lacks it)', () => {
+      expect(airClipFor(LOCOMOTION_SLIDE, AIR())).toBe(7);
+      expect(airClipFor(LOCOMOTION_SLIDE, AIR({ 7: 0 }))).toBe(5);
     });
 
     it('COLLAPSE plays fall_collapse first, then getup once the clip has run out', () => {

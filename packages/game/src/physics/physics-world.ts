@@ -366,6 +366,16 @@ export class PhysicsWorld {
     return hit ? position[2] - hit.timeOfImpact : null;
   }
 
+  /** Surface normal of the nearest collision directly below `position` (within `maxDrop`), or null —
+   *  the slope-slide state reads the ground steepness from it (plan 088/08). */
+  groundNormalBelow(position: Vec3, maxDrop: number, excludeBody?: number): null | Vec3 {
+    const ray = new this.rapier.Ray({ x: position[0], y: position[1], z: position[2] }, { x: 0, y: 0, z: -1 });
+    const exclude = excludeBody === undefined ? undefined : this.world.getRigidBody(excludeBody);
+    const hit = this.world.castRayAndGetNormal(ray, maxDrop, true, undefined, undefined, undefined, exclude);
+
+    return hit ? [hit.normal.x, hit.normal.y, hit.normal.z] : null;
+  }
+
   /**
    * Pin a (dynamic) body at a fixed transform with zero velocity — used to hold a parked
    * car perfectly still while the player slides in/out, so the kinematic rider can't shove it.

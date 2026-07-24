@@ -107,6 +107,7 @@ function config(gameState: Config['gameState']): Config {
       landRecoverySeconds: 0.15,
       launchDelaySeconds: 0.1,
       runSpeed: 26,
+      slideSlopeDeg: 45,
       sprintSpeed: 39,
       turnRateFullDeg: 240,
       turnRateIdleDeg: 720,
