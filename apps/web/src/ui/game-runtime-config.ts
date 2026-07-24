@@ -131,7 +131,9 @@ export function createGameRuntimeConfig(): Config {
       landRecoverySeconds: 0.15,
       launchDelaySeconds: 0.1,
       runSpeed: 7,
-      slideSlopeDeg: 45,
+      // 40° (field 2026-07-24, was 45): the LS river banks (~42°) must slide — 45 left the ped
+      // standing on them, and jump-laddering up any hillside worked.
+      slideSlopeDeg: 40,
       sprintSpeed: 10,
       turnRateFullDeg: 240,
       turnRateIdleDeg: 720,

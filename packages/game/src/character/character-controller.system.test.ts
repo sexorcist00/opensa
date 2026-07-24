@@ -885,7 +885,7 @@ describe('CharacterControllerSystem slope slide (plan 088/08)', () => {
   });
 
   describe('positive cases', () => {
-    it('standing on a 48° slope enters SLIDE (Rapier is already sliding the capsule)', async () => {
+    it("a 48° slope enters SLIDE and actually accelerates DOWNHILL (the push is ours, not Rapier's)", async () => {
       const player = await rampPlayer();
       const { step } = liveSystem(player);
       // Drop onto the ramp surface: y = 12 → surface z ≈ 6.66 + 0.5; capsule centre ~1 above.
@@ -895,6 +895,31 @@ describe('CharacterControllerSystem slope slide (plan 088/08)', () => {
         step();
       }
       expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_SLIDE);
+
+      for (let i = 0; i < 60; i += 1) {
+        step();
+      }
+      expect(Velocity.y[player.eid]).toBeLessThan(-2); // gathering speed toward −y (downhill)
+      player.physics.dispose();
+    });
+
+    it('refuses the jump while sliding (no jump-laddering up a steep hillside)', async () => {
+      const player = await rampPlayer();
+      const { down, step } = liveSystem(player);
+      player.physics.teleport(RigidBody.handle[player.eid], [0, 12, (12 - 6) * Math.tan((48 * Math.PI) / 180) + 2]);
+      player.physics.step(STEP);
+      for (let i = 0; i < 60 && Locomotion.state[player.eid] !== LOCOMOTION_SLIDE; i += 1) {
+        step();
+      }
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_SLIDE);
+
+      down.add('Space');
+      let vzMax = -Infinity;
+      for (let i = 0; i < 20; i += 1) {
+        step();
+        vzMax = Math.max(vzMax, Velocity.z[player.eid]);
+      }
+      expect(vzMax).toBeLessThanOrEqual(0); // the press never launched
       player.physics.dispose();
     });
   });

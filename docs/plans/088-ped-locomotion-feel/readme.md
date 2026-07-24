@@ -371,6 +371,24 @@ All four packages **1283 green**; lint + tsc clean.
 Execution order: **07 → 09a → 09c → 09b → 09d → 08** (07 is self-contained; 09a is the foundation
 the rest of 09 samples through; 08 is independent and lowest-risk last).
 
+**Field round 2 (2026-07-24, screenshots of the LS river bank):** four verdicts, all fixed same day.
+(1) **"No sliding on the slope"** — two roots: the bank is ~42° (under the 45° threshold →
+`slideSlopeDeg` 45 → **40**), and Rapier's kinematic controller NEVER accelerates a slide (it only
+redirects the per-step desired motion ≈ millimetres) — the push is OURS now: `applySlidePush` adds
+gravity's along-slope component per step (capped at 12 u/s), and the near-cancelling decel-to-rest
+went to a `SLIDE_CONTROL_FACTOR 0.05` (airControl 0.3 was eating the push to a 0.1 u/s crawl).
+(2) **Jump-laddering up steep slopes** — killed threefold: no jump OUT of a slide (SA rule, presses
+never bank), landing ON steep ground goes straight to SLIDE (no LAND beat, no buffered re-launch),
+and the slide pushes down faster than air control climbs. (3) **Exit into a blocked driver side** —
+the probe now reaches 0.6 m PAST the doorway spot (a wall just beyond it still blocks the standing
+body) and fires at two heights (target + knee — guardrails passed under the single ray).
+(4) **Door clipping at enter AND exit** — the step-in became a three-leg route (back along the
+standoff ring past the panel's swept rear edge `DOOR_SWEPT_CLEARANCE 0.95`, inboard BEHIND the
+panel, forward into the doorway), and after an exit the door now STAYS OPEN (SA behaviour) — closing
+it swept the panel through the player standing in the doorway. Doors got per-side angle tracking on
+the way. Tests: slide-accelerates-downhill + jump-refused-while-sliding on the 48° ramp, the 3-leg
+path pinned, exit-leaves-door-open updated; all four packages **1284 green**.
+
 ### 06 — Close-out: defaults freeze + docs (DONE 2026-07-24 — round 1; round 2 re-runs it)
 
 Field-judged defaults frozen on user verdict; `docs/features/character.md` rewritten for the FSM (also

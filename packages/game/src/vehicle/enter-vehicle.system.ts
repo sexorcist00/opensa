@@ -98,6 +98,9 @@ const DOOR_SPEED = Math.PI;
 /** Seconds the climb-in/out clip plays while the body slides between door and seat. */
 const GETIN_DURATION = 1.2;
 const GETOUT_DURATION = 1.2;
+/** How far behind the hinge the open panel's swept arc reaches (m, with margin) — the step-in path
+ *  crosses inboard BEHIND this line so it never clips the door. */
+const DOOR_SWEPT_CLEARANCE = 0.95;
 /** Fallback seat-shuffle length (s) when the clip is absent — the real CAR_shuffle_RHS runs 0.4 s. */
 const SHUFFLE_DURATION = 0.4;
 /** Capsule-centre height above the seat dummy (tuned in-browser). */
@@ -160,7 +163,7 @@ export class EnterVehicleSystem implements System {
   private braking = false;
   private readonly config: Readonly<Config>;
   private readonly controller: CharacterControllerSystem;
-  private readonly doors = new Map<EnterableVehicle, number>(); // current door angle
+  private readonly doors = new Map<EnterableVehicle, { lf: number; rf: number }>(); // per-side door angles
   private doorTarget = 0;
   private engine = 0; // current engine force (N), ramped toward the throttle target
   private enterHeld = false;
@@ -224,7 +227,7 @@ export class EnterVehicleSystem implements System {
 
   add(vehicle: EnterableVehicle): void {
     this.vehicles.push(vehicle);
-    this.doors.set(vehicle, 0);
+    this.doors.set(vehicle, { lf: 0, rf: 0 });
   }
 
   /** Whether pressing enter/exit now would do something: seated → can exit, idle with a car in range → can
@@ -397,7 +400,9 @@ export class EnterVehicleSystem implements System {
     }
     const remaining = this.doorTarget - angle;
     const next = angle + Math.sign(remaining) * Math.min(Math.abs(remaining), DOOR_SPEED * delta);
-    this.doors.set(this.active, next);
+    const angles = this.doors.get(this.active) ?? { lf: 0, rf: 0 };
+    angles[this.side] = next;
+    this.doors.set(this.active, angles);
     this.active.handle.setDoorAngle(this.side, next);
   }
 
@@ -436,9 +441,12 @@ export class EnterVehicleSystem implements System {
 
   /** The first FRONT door whose egress ray is clear, driver side first — or null when both are blocked. */
   private clearDoorSide(vehicle: EnterableVehicle): DoorSide | null {
+    const [hx] = vehicle.halfExtents;
     for (const side of ['lf', 'rf'] as const) {
-      this.side = side; // doorwayWorld reads the sequence side
-      if (this.pathClearTo(vehicle, this.doorwayWorld(vehicle))) {
+      this.side = side;
+      // Probe PAST the doorway spot: a wall just beyond it still blocks the standing body there.
+      const target = this.toWorld(vehicle, [sideSign(side) * (hx + DOORWAY_CLEAR + 0.6), vehicle.seatLocal[1]]);
+      if (this.pathClearTo(vehicle, target)) {
         return side;
       }
     }
@@ -460,7 +468,7 @@ export class EnterVehicleSystem implements System {
   }
 
   private doorAngleOf(vehicle: EnterableVehicle | null): number {
-    return vehicle ? (this.doors.get(vehicle) ?? 0) : 0;
+    return vehicle ? (this.doors.get(vehicle)?.[this.side] ?? 0) : 0;
   }
 
   /**
@@ -592,7 +600,9 @@ export class EnterVehicleSystem implements System {
     this.physics.setColliderSensor(this.playerCollider, false); // solid again — walking
     this.restoreWhenClear = true; // re-enable car collision once the player has stepped clear (update)
     this.controller.setEnabled(true);
-    this.doorTarget = 0;
+    // The door STAYS open (SA behaviour) — closing it now would sweep the panel straight through
+    // the player standing in the doorway (field 2026-07-24). The next entry finds it already open.
+    this.doorTarget = this.doorAngleOf(this.active);
     this.phase = 'idle';
     this.logger.log('enter-vehicle', 'exited');
   }
@@ -631,11 +641,15 @@ export class EnterVehicleSystem implements System {
     return this.side === 'lf' ? DOOR_OPEN_ANGLE : -DOOR_OPEN_ANGLE;
   }
 
-  /** Whether the straight ray from the car's centre to `target` is unobstructed (the car excluded). */
+  /** Whether the rays from the car's centre to `target` are unobstructed (the car excluded): probed
+   *  at the target's own height AND knee height — a guardrail under the first ray blocked nothing
+   *  and the exit walked into it (field 2026-07-24). */
   private pathClearTo(vehicle: EnterableVehicle, target: Vec3): boolean {
     const { position } = this.physics.readBody(vehicle.body);
+    const from: Vec3 = [position[0], position[1], position[2]];
+    const knee: Vec3 = [target[0], target[1], target[2] - 0.35];
 
-    return this.physics.pathClear([position[0], position[1], position[2]], target, vehicle.body);
+    return this.physics.pathClear(from, target, vehicle.body) && this.physics.pathClear(from, knee, vehicle.body);
   }
 
   /** True once the player is outside the car's footprint (+ clearance) — safe to re-collide. */
@@ -798,8 +812,13 @@ export class EnterVehicleSystem implements System {
     const sign = sideSign(this.side);
     const hinge = this.active.handle.doorHinge(this.side);
     const standoffX = (hinge?.[0] ?? sign * hx) + sign * DOOR_STANDOFF;
+    // Three legs, all outside the open panel (field 2026-07-24 — the two-leg path still clipped it):
+    // back along the standoff ring past the panel's swept rear edge, inboard BEHIND the panel, then
+    // forward along the body into the doorway.
+    const behindY = Math.min(this.active.seatLocal[1], (hinge?.[1] ?? 0) - DOOR_SWEPT_CLEARANCE);
     this.controller.runPath([
-      this.toWorld(this.active, [standoffX, this.active.seatLocal[1]]),
+      this.toWorld(this.active, [standoffX, behindY]),
+      this.toWorld(this.active, [sign * (hx + DOORWAY_CLEAR), behindY]),
       this.doorwayWorld(this.active),
     ]);
   }

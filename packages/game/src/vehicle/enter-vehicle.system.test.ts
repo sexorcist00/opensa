@@ -378,7 +378,7 @@ describe('EnterVehicleSystem', () => {
       expect(doorAngle(car)).toBeCloseTo(0);
     });
 
-    it('exits the car on Enter: reopens, climbs out, restores control, shuts the door', () => {
+    it('exits the car on Enter: reopens, climbs out, restores control — the door STAYS open (SA)', () => {
       const h = setup();
       const car = vehicleAt([2, 0, 0]);
       h.system.add(car);
@@ -407,8 +407,8 @@ describe('EnterVehicleSystem', () => {
       expect(h.anim.facing).toBeCloseTo(Math.PI / 2); // heading 0 → faces −X, away from the car body
       expect(h.anim.cameraAzimuth).toBeCloseTo(Math.PI / 2); // camera swings behind, looking away from the car
 
-      h.system.update(1); // door shut behind
-      expect(doorAngle(car)).toBeCloseTo(0);
+      h.system.update(1); // the door is LEFT open — closing it would sweep through the player
+      expect(doorAngle(car)).toBeCloseTo(Math.PI / 3);
     });
 
     it('drives forward on throttle', () => {
@@ -538,13 +538,15 @@ describe('step-in walk-around (plan 088/09c)', () => {
       h.ctrl.arrived = true;
       h.system.update(1); // door swings fully open -> the step-in path is issued
 
-      expect(h.ctrl.path).toHaveLength(2);
-      const [around, doorway] = h.ctrl.path ?? [];
-      // Leg 1 stays on the 1.2 m standoff ring (outside the ~0.9 m swept panel) while walking back
-      // to the seat's y; leg 2 goes straight inboard into the doorway. The old single-waypoint path
-      // cut the diagonal THROUGH the panel.
-      expect(around[0]).toBeCloseTo(2 - 1.2, 6);
-      expect(around[1]).toBeCloseTo(-0.7, 6);
+      expect(h.ctrl.path).toHaveLength(3);
+      const [back, across, doorway] = h.ctrl.path ?? [];
+      // Leg 1 stays on the 1.2 m standoff ring while walking PAST the panel's swept rear edge
+      // (hinge y − 0.95); leg 2 cuts inboard BEHIND the panel; leg 3 comes forward along the body
+      // into the doorway. The old paths cut through the open panel.
+      expect(back[0]).toBeCloseTo(2 - 1.2, 6);
+      expect(back[1]).toBeCloseTo(-0.95, 6);
+      expect(across[0]).toBeCloseTo(2 - 1.35, 6);
+      expect(across[1]).toBeCloseTo(-0.95, 6);
       expect(doorway[0]).toBeCloseTo(2 - 1.35, 6);
       expect(doorway[1]).toBeCloseTo(-0.7, 6);
     });

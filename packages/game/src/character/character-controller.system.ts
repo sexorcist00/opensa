@@ -53,6 +53,13 @@ const ARRIVE_DISTANCE = 0.6;
 /** How far below the body the slope probe looks (m), and the hysteresis (deg) before a slide ends. */
 const SLOPE_PROBE_DROP = 2;
 const SLIDE_EXIT_HYSTERESIS_DEG = 4;
+/** Downhill slide speed cap (units/s). The PUSH is ours: Rapier's kinematic controller only redirects
+ *  the per-step desired motion (gravity·step² ≈ millimetres) — it never accelerates a slide itself,
+ *  which left the 088/08 v1 "sliding" ped standing still on the slope (field 2026-07-24). */
+const SLIDE_MAX_SPEED = 12;
+/** Control/friction scale while sliding: near-frictionless (the decel-to-rest at airControl 0.3 was
+ *  exactly cancelling the downhill push — the ped "slid" at 0.1 m/s), with a whisper of steering. */
+const SLIDE_CONTROL_FACTOR = 0.05;
 
 /**
  * Drives the player's **kinematic capsule** from the keyboard while playing.
@@ -177,7 +184,7 @@ export class CharacterControllerSystem implements System {
     step: number,
     jumpEdge: boolean,
     grounded: boolean,
-    slopeDeg: null | number,
+    slope: null | { downhill: [number, number]; slopeDeg: number },
   ): AirStep {
     const { movement } = this.config;
     const timers = this.airTimers.get(eid) ?? { buffer: 0, coyote: 0 };
@@ -190,10 +197,10 @@ export class CharacterControllerSystem implements System {
     let launch = false;
     let controlFactor = 1;
     if (state === LOCOMOTION_GROUNDED) {
-      [state, time] = this.groundedTransition(timers, grounded, slopeDeg, state, time);
+      [state, time] = this.groundedTransition(timers, grounded, slope?.slopeDeg ?? null, state, time);
     } else if (state === LOCOMOTION_SLIDE) {
-      controlFactor = movement.airControl; // braced, not steering
-      [state, time] = this.slideTransition(timers, grounded, slopeDeg, state, time);
+      controlFactor = SLIDE_CONTROL_FACTOR; // near-frictionless — braced, barely steering
+      [state, time] = this.slideTransition(timers, grounded, slope?.slopeDeg ?? null, state, time);
     } else if (state === LOCOMOTION_LAUNCH) {
       if (time >= movement.launchDelaySeconds) {
         launch = true; // the crouch is over — fire the impulse and leave the ground
@@ -203,7 +210,7 @@ export class CharacterControllerSystem implements System {
       // A landing needs DESCENT: right after the impulse the controller can still report grounded for
       // a frame (ground snap) while the body rises — that frame must not read as a touchdown.
       if (grounded && (Velocity.z[eid] ?? 0) <= 0) {
-        [state, time] = [this.touchdownState(eid, timers), 0];
+        [state, time] = [this.touchdownState(eid, timers, slope?.slopeDeg ?? null), 0];
       }
     } else {
       // LAND / HARD_LAND / COLLAPSE: a recovery at reduced control, then back to the ground state.
@@ -216,6 +223,20 @@ export class CharacterControllerSystem implements System {
     Locomotion.stateTime[eid] = time;
 
     return { controlFactor, launch };
+  }
+
+  /** The slide is OUR physics (Rapier's kinematic controller never accelerates one): gravity's
+   *  along-slope component pushes downhill, capped at a terminal speed; the near-frictionless
+   *  reduced-control input can lean the slide but never out-accelerate it. */
+  private applySlidePush(eid: number, slope: { downhill: [number, number]; slopeDeg: number }, step: number): void {
+    const push = 9.81 * Math.sin((slope.slopeDeg * Math.PI) / 180) * step;
+    Velocity.x[eid] += slope.downhill[0] * push;
+    Velocity.y[eid] += slope.downhill[1] * push;
+    const slideSpeed = Math.hypot(Velocity.x[eid], Velocity.y[eid]);
+    if (slideSpeed > SLIDE_MAX_SPEED) {
+      Velocity.x[eid] *= SLIDE_MAX_SPEED / slideSpeed;
+      Velocity.y[eid] *= SLIDE_MAX_SPEED / slideSpeed;
+    }
   }
 
   /** Planar velocity (Z-up) for a forward/right input at `speed`, relative to the camera. */
@@ -295,8 +316,9 @@ export class CharacterControllerSystem implements System {
     return [state, time];
   }
 
-  /** Slope (deg) of the ground under the body, or null when nothing is within the probe (088/08). */
-  private groundSlopeDeg(eid: number): null | number {
+  /** Slope of the ground under the body (deg + the horizontal downhill direction — the surface
+   *  normal's XY projection points away from the hill), or null when nothing is within the probe. */
+  private groundSlope(eid: number): null | { downhill: [number, number]; slopeDeg: number } {
     const { position } = this.physics.readBody(RigidBody.handle[eid]);
     const normal = this.physics.groundNormalBelow(
       [position[0], position[1], position[2]],
@@ -306,8 +328,10 @@ export class CharacterControllerSystem implements System {
     if (!normal) {
       return null;
     }
+    const planar = Math.hypot(normal[0], normal[1]);
+    const downhill: [number, number] = planar > 1e-6 ? [normal[0] / planar, normal[1] / planar] : [0, 0];
 
-    return (Math.acos(Math.min(1, Math.max(-1, normal[2]))) * 180) / Math.PI;
+    return { downhill, slopeDeg: (Math.acos(Math.min(1, Math.max(-1, normal[2]))) * 180) / Math.PI };
   }
 
   /** One player's fixed step on foot: planar accel/plant, rate-limited heading, the air FSM + gravity. */
@@ -321,7 +345,8 @@ export class CharacterControllerSystem implements System {
   ): void {
     const { movement } = this.config;
     const grounded = Velocity.grounded[eid] === 1;
-    const air = this.advanceAirState(eid, step, jumpEdge, grounded, grounded ? this.groundSlopeDeg(eid) : null);
+    const slope = grounded ? this.groundSlope(eid) : null;
+    const air = this.advanceAirState(eid, step, jumpEdge, grounded, slope);
     const heading = Locomotion.heading[eid] ?? 0;
     // A reversal (intent far behind the facing) PLANTS: decelerate on the old heading to a stop,
     // then about-face near-idle — turning a full run through 180° in place reads as skating.
@@ -335,18 +360,10 @@ export class CharacterControllerSystem implements System {
       (grounded ? air.controlFactor : movement.airControl) *
       step;
     approach(eid, accelerating ? target.x : 0, accelerating ? target.y : 0, rate);
-    // Heading: rate-limited turn toward the intent (plan 088/01) — snappy near idle, wide arcs at
-    // speed. A plant holds the old facing until the speed has bled off, then turns.
-    const speed = Math.hypot(Velocity.x[eid], Velocity.y[eid]);
-    if (moving && (!reversing || speed <= IDLE_SPEED_THRESHOLD)) {
-      const turnRate = scheduledTurnRate(
-        speed,
-        movement.sprintSpeed, // the top gait tier (was runSpeed before 088/03 added sprint)
-        movement.turnRateIdleDeg,
-        movement.turnRateFullDeg,
-      );
-      Locomotion.heading[eid] = approachAngle(heading, intentYaw, turnRate * step);
+    if (Locomotion.state[eid] === LOCOMOTION_SLIDE && slope) {
+      this.applySlidePush(eid, slope, step);
     }
+    this.steerHeading(eid, moving, reversing, intentYaw, step);
     // Vertical: the FSM's launch impulse (fired once, after the anticipation crouch), else rest on
     // the ground, else keep integrating the flight — then gravity. A RISING body keeps its velocity
     // even if the controller still reports grounded (the post-launch snap frame must not eat the jump).
@@ -418,8 +435,9 @@ export class CharacterControllerSystem implements System {
     return state === LOCOMOTION_HARD_LAND ? movement.hardLandRecoverySeconds : movement.landRecoverySeconds;
   }
 
-  /** Where a SLIDE goes this step (088/08): a jump kicks off the slope, sliding off an edge falls,
-   *  a flattened slope (with hysteresis, so the boundary never flickers) returns to the ground state. */
+  /** Where a SLIDE goes this step (088/08): sliding off an edge falls, a flattened slope (with
+   *  hysteresis, so the boundary never flickers) returns to the ground state. There is NO jump out
+   *  of a slide (SA rule — and the jump-ladder exploit up steep hillsides dies with it). */
   private slideTransition(
     timers: { buffer: number; coyote: number },
     grounded: boolean,
@@ -427,11 +445,7 @@ export class CharacterControllerSystem implements System {
     state: number,
     time: number,
   ): [number, number] {
-    if (timers.buffer > 0 && grounded) {
-      timers.buffer = 0;
-
-      return [LOCOMOTION_LAUNCH, 0];
-    }
+    timers.buffer = 0; // presses while sliding never bank a jump
     if (!grounded && timers.coyote <= 0) {
       return [LOCOMOTION_FALL, 0]; // slid off the edge
     }
@@ -440,6 +454,23 @@ export class CharacterControllerSystem implements System {
     }
 
     return [state, time];
+  }
+
+  /** Heading: rate-limited turn toward the intent (plan 088/01) — snappy near idle, wide arcs at
+   *  speed. A plant holds the old facing until the speed has bled off, then turns. */
+  private steerHeading(eid: number, moving: boolean, reversing: boolean, intentYaw: number, step: number): void {
+    const { movement } = this.config;
+    const speed = Math.hypot(Velocity.x[eid], Velocity.y[eid]);
+    if (!moving || (reversing && speed > IDLE_SPEED_THRESHOLD)) {
+      return;
+    }
+    const turnRate = scheduledTurnRate(
+      speed,
+      movement.sprintSpeed, // the top gait tier (was runSpeed before 088/03 added sprint)
+      movement.turnRateIdleDeg,
+      movement.turnRateFullDeg,
+    );
+    Locomotion.heading[eid] = approachAngle(Locomotion.heading[eid] ?? 0, intentYaw, turnRate * step);
   }
 
   /** Gait tier (088/03): sprint > walk modifiers, RUN is the default — SA jogs when nothing is held. */
@@ -459,7 +490,7 @@ export class CharacterControllerSystem implements System {
    *  back up; past `hardLandSpeed` it takes the impact crouch (neither is buffer-bypassed); else a
    *  buffered press re-launches on the landing frame, a real impact takes the quick recovery beat,
    *  a feather touch takes none. */
-  private touchdownState(eid: number, timers: { buffer: number }): number {
+  private touchdownState(eid: number, timers: { buffer: number }, slopeDeg: null | number): number {
     const { movement } = this.config;
     const impact = Locomotion.fallSpeed[eid] ?? 0;
     if (impact > movement.collapseSpeed) {
@@ -467,6 +498,11 @@ export class CharacterControllerSystem implements System {
     }
     if (impact > movement.hardLandSpeed) {
       return LOCOMOTION_HARD_LAND;
+    }
+    if (slopeDeg !== null && slopeDeg > movement.slideSlopeDeg) {
+      timers.buffer = 0; // landing on a steep slope SLIDES — no beat, no buffered re-launch ladder
+
+      return LOCOMOTION_SLIDE;
     }
     if (timers.buffer > 0) {
       timers.buffer = 0;
