@@ -149,12 +149,15 @@ export function createFakeDevice(): FakeGpu {
   };
 
   const device = {
-    createBindGroup: (descriptor: GPUBindGroupDescriptor) => ({ label: descriptor.label }),
-    createBindGroupLayout: (descriptor: GPUBindGroupLayoutDescriptor) => ({ label: descriptor.label }),
+    createBindGroup: (descriptor: GPUBindGroupDescriptor): unknown => ({ label: descriptor.label }),
+    createBindGroupLayout: (descriptor: GPUBindGroupLayoutDescriptor): unknown => ({ label: descriptor.label }),
     createBuffer: buffer,
     createCommandEncoder: commandEncoder,
-    createPipelineLayout: (descriptor: GPUPipelineLayoutDescriptor) => ({ label: descriptor.label }),
-    createQuerySet: (descriptor: GPUQuerySetDescriptor) => ({ destroy: (): void => {}, label: descriptor.label }),
+    createPipelineLayout: (descriptor: GPUPipelineLayoutDescriptor): unknown => ({ label: descriptor.label }),
+    createQuerySet: (descriptor: GPUQuerySetDescriptor): unknown => ({
+      destroy: (): void => {},
+      label: descriptor.label,
+    }),
     createRenderBundleEncoder(descriptor: GPURenderBundleEncoderDescriptor): unknown {
       const pass: RecordedPass = { bundles: [], drawCount: 0, label: descriptor.label ?? 'bundle' };
 
@@ -163,15 +166,15 @@ export function createFakeDevice(): FakeGpu {
         finish: (options?: { label?: string }) => ({ label: options?.label ?? pass.label }),
       };
     },
-    createRenderPipeline: (descriptor: GPURenderPipelineDescriptor) => ({ label: descriptor.label }),
-    createSampler: (descriptor?: GPUSamplerDescriptor) => ({ label: descriptor?.label }),
-    createShaderModule: (descriptor: GPUShaderModuleDescriptor) => ({ label: descriptor.label }),
+    createRenderPipeline: (descriptor: GPURenderPipelineDescriptor): unknown => ({ label: descriptor.label }),
+    createSampler: (descriptor?: GPUSamplerDescriptor): unknown => ({ label: descriptor?.label }),
+    createShaderModule: (descriptor: GPUShaderModuleDescriptor): unknown => ({ label: descriptor.label }),
     createTexture: texture,
     destroy: (): void => {},
     features: new Set<string>(['texture-compression-bc']),
     limits: { maxTextureArrayLayers: 256, maxTextureDimension2D: 8192 },
     queue: {
-      onSubmittedWorkDone: () => Promise.resolve(),
+      onSubmittedWorkDone: (): Promise<void> => Promise.resolve(),
       submit: (): void => {},
       writeBuffer: (target: { label?: string }, offset: number, data: ArrayBuffer | ArrayBufferView): void => {
         const view = ArrayBuffer.isView(data)
@@ -297,7 +300,10 @@ export function installFakeWebGpu(options: { timestamps?: boolean } = {}): {
       kind === 'webgpu'
         ? {
             configure: (): void => {},
-            getCurrentTexture: () => ({ createView: () => ({ label: 'swapchain' }), label: 'swapchain' }),
+            getCurrentTexture: (): unknown => ({
+              createView: (): unknown => ({ label: 'swapchain' }),
+              label: 'swapchain',
+            }),
           }
         : null,
     height: 900,

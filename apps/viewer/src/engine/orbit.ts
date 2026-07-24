@@ -47,12 +47,12 @@ export function createOrbitRig(canvas: HTMLCanvasElement): OrbitRig {
   });
 
   return {
-    frame(nextFocus, radius) {
+    frame(nextFocus, radius): void {
       focus = [nextFocus[0], nextFocus[1], nextFocus[2]];
       baseRadius = Math.max(0.5, radius);
       zoom = 1;
     },
-    state(aspect) {
+    state(aspect): CameraState {
       const radius = baseRadius * zoom;
 
       return {

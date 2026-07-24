@@ -158,7 +158,9 @@ describe('a converted vehicle through GtaSaWorldAdapter', () => {
       const vehicle = await new GtaSaWorldAdapter({
         cellSize: 250,
         fs,
-        onAssetWarning: (message) => warnings.push(message),
+        onAssetWarning: (message): void => {
+          warnings.push(message);
+        },
       }).loadVehicleData('admiral');
 
       expect(vehicle.model.textures[0].kind).toBe('ostex');

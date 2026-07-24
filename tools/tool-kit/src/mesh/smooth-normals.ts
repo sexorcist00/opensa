@@ -455,7 +455,7 @@ function unionNearMisses(
 }
 
 /** Half the 26-neighbourhood: lexicographically positive offsets, so each cell pair is checked once. */
-const NEIGHBOUR_OFFSETS: readonly (readonly [number, number, number])[] = (() => {
+const NEIGHBOUR_OFFSETS: readonly (readonly [number, number, number])[] = ((): [number, number, number][] => {
   const offsets: [number, number, number][] = [];
   for (let dx = -1; dx <= 1; dx += 1) {
     for (let dy = -1; dy <= 1; dy += 1) {

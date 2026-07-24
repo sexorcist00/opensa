@@ -1,6 +1,15 @@
 {
-  "entry": ["apps/web/src/main.tsx", "test/*.ts", "database-manager/**/*.ts"],
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "tags": ["-lintignore"],
-  "ignore": ["./apps/web/**/*.enum.ts", "apps/web/error-handler/errors/common.errors.ts"]
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/debug/**/*.ts"]
+    },
+    "apps/web": {
+      "entry": ["src/main.tsx", "src/standalone/*.{ts,tsx}"]
+    },
+    "apps/viewer": {
+      "entry": ["src/shell.ts"]
+    }
+  }
 }

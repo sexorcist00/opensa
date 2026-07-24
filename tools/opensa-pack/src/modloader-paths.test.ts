@@ -43,7 +43,7 @@ function fsFrom(files: Map<string, ArrayBuffer>): AssetFileSystem {
 
   return {
     get: find,
-    getText: (name) => {
+    getText: (name): null | string => {
       const bytes = find(name);
 
       return bytes ? new TextDecoder().decode(bytes) : null;
@@ -101,7 +101,9 @@ async function loadAdmiral(files: Map<string, ArrayBuffer>): Promise<{
   const vehicle = await new GtaSaWorldAdapter({
     cellSize: 250,
     fs: withModloader(fsFrom(files)),
-    onAssetWarning: (message) => warnings.push(message),
+    onAssetWarning: (message): void => {
+      warnings.push(message);
+    },
   }).loadVehicleData('admiral');
 
   return { vehicle, warnings };

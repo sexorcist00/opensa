@@ -84,7 +84,7 @@ export function createViewerEngine(): ViewerEngine {
     engine,
     orbit,
     ready,
-    start(step) {
+    start(step): void {
       void ready.then(() => {
         let previous = performance.now();
         const loop = (now: number): void => {

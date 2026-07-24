@@ -899,7 +899,7 @@ async function boot(
     // The Map screen (074/22 phases 7-8). Picking rides the `.oscell` placement mapper (minor 6): a pak
     // converted before it simply yields no hits, which the inspector reports rather than pretending.
     mapGame: {
-      cellSize: () => setup.cellSize,
+      cellSize: (): number => setup.cellSize,
       events,
       hideSelectedObject: (): number => {
         if (selectedPlacement !== null && engine.cells.hidePlacement(selectedPlacement) > 0) {
@@ -910,7 +910,7 @@ async function boot(
 
         return hiddenPlacements;
       },
-      listCells: () => setup.driver.listCells(),
+      listCells: (): ReturnType<MapGame['listCells']> => setup.driver.listCells(),
       restoreHiddenObjects: (): number => {
         // Hiding degenerates indices in place and has no inverse; a cell RELOAD rebuilds its index buffer
         // straight from the pak, so dropping every loaded cell restores the lot. The pinned set re-streams
@@ -920,7 +920,7 @@ async function boot(
 
         return 0;
       },
-      setManualCells: (cells, lod) => setup.driver.setManualCells(cells, lod),
+      setManualCells: (cells, lod): void => setup.driver.setManualCells(cells, lod),
       setMapViewer: (enabled): void => {
         // The viewer detaches the camera (the existing photo camera) and hands the cell set to the
         // inspector; leaving restores focus-driven streaming. The HUD hides itself on the same event.

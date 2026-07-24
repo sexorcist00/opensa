@@ -21,10 +21,10 @@ const DEGENERATE = {
   uvs: new Float32Array(6),
 };
 
-function adapterWith(holeFillModels: readonly string[]) {
+function adapterWith(holeFillModels: readonly string[]): ReturnType<typeof createGtaSaLodAdapter> {
   const dff = encodeLodDff(DEGENERATE, 'bridge');
   const archive = {
-    get: (name: string) => (name === 'bridge.dff' ? dff.buffer.slice(0) : null),
+    get: (name: string): ArrayBufferLike | null => (name === 'bridge.dff' ? dff.buffer.slice(0) : null),
     names: ['bridge.dff'],
   };
 

@@ -344,7 +344,7 @@ describe('openWorld (plan 086 phase 3)', () => {
       expect(await bare.openWorld('world.ospak')).toBeNull();
 
       const empty = new AssetFetchLoader({
-        files: { get: () => null },
+        files: { get: (): ArrayBuffer | null => null },
         manifestUrl: 'http://x/manifest.json',
       });
       expect(await empty.openWorld('world.ospak')).toBeNull();
@@ -354,7 +354,9 @@ describe('openWorld (plan 086 phase 3)', () => {
   describe('positive cases', () => {
     it('serves pak/<name> from the delivered files (phase 8), lowercased', async () => {
       const loader = new AssetFetchLoader({
-        files: { get: (name) => (name === 'pak/world.ospak' ? new Uint8Array([8, 8]).buffer : null) },
+        files: {
+          get: (name): ArrayBuffer | null => (name === 'pak/world.ospak' ? new Uint8Array([8, 8]).buffer : null),
+        },
         manifestUrl: 'http://x/manifest.json',
       });
 
@@ -365,7 +367,9 @@ describe('openWorld (plan 086 phase 3)', () => {
 
     it('falls back to the legacy opensa/<name> key of older chunk sets', async () => {
       const loader = new AssetFetchLoader({
-        files: { get: (name) => (name === 'opensa/world.ospak' ? new Uint8Array([7, 7]).buffer : null) },
+        files: {
+          get: (name): ArrayBuffer | null => (name === 'opensa/world.ospak' ? new Uint8Array([7, 7]).buffer : null),
+        },
         manifestUrl: 'http://x/manifest.json',
       });
 
