@@ -45,12 +45,24 @@ export interface EnterableVehicle {
   wheels: VehicleWheelPlacement[];
 }
 
+/** A scripted clip's authored root travel (088/09a): ped-local metres, x = right of facing, y = forward,
+ *  z = up — measured on `ped.ifp`: `CAR_getin_LHS` runs (0,0,0)→(0.95, 0.49, −0.35), i.e. ~1 m into the
+ *  car, half a metre forward, dropping into the seat. */
+export interface ScriptedMotion {
+  /** Clip length (s) — the slide runs THIS long, not a hardcoded constant. */
+  duration: number;
+  /** Root position at `time` (clamped to the clip's ends). */
+  sample(time: number): readonly [number, number, number];
+}
+
 /**
  * The animation surface enter/exit needs (B5 step 4). `CharacterAnimationSystem` (three) satisfies it
  * structurally, and so does the own engine's ped — the climb-in/sit/climb-out clips are the whole contract.
  */
 export interface VehicleAnimator {
   faceTo(yaw: number): void;
+  /** The authored root travel of a named scripted clip, or null (a TC without it → the linear slide). */
+  scriptedMotion(clip: string): null | ScriptedMotion;
   setScripted(
     clip: null | string,
     options?: { facing?: number; loop?: boolean; orientation?: readonly [number, number, number, number] },
@@ -133,6 +145,9 @@ export class EnterVehicleSystem implements System {
   private readonly followTarget: (vehicle: EnterableVehicle | null) => void;
   private getinElapsed = 0;
   private getinFrom: Vec3 = [0, 0, 0];
+  /** The climb-in/out clips' authored root travel (null on a TC without them → linear slide). */
+  private getinMotion: null | ScriptedMotion = null;
+  private getoutMotion: null | ScriptedMotion = null;
   private holdPos: Vec3 = [0, 0, 0]; // parked car pose, held still while the player slides in/out
   private holdQuat: [number, number, number, number] = [0, 0, 0, 1];
   private readonly input: InputState;
@@ -281,35 +296,31 @@ export class EnterVehicleSystem implements System {
     }
   }
 
-  /** Slide the player from the door to the seat over the climb-in clip; then sit. */
+  /** Move the player from the door to the seat along the climb-in clip's root path; then sit. */
   private advanceGetin(delta: number): void {
     if (this.active) {
       this.physics.holdBody(this.active.body, this.holdPos, this.holdQuat); // pin the parked car
     }
     this.getinElapsed += delta;
-    const t = Math.min(this.getinElapsed / GETIN_DURATION, 1);
-    this.placePlayer([
-      this.getinFrom[0] + (this.seatWorld[0] - this.getinFrom[0]) * t,
-      this.getinFrom[1] + (this.seatWorld[1] - this.getinFrom[1]) * t,
-      this.getinFrom[2] + (this.seatWorld[2] - this.getinFrom[2]) * t,
-    ]);
+    const duration = this.getinMotion?.duration ?? GETIN_DURATION;
+    const t = Math.min(this.getinElapsed / duration, 1);
+    this.placePlayer(
+      warpAlongRootMotion(this.getinFrom, this.seatWorld, this.getinMotion, t, this.active?.heading ?? 0),
+    );
     if (t >= 1) {
       this.startSeated();
     }
   }
 
-  /** Slide the player from the seat back to the doorway over the climb-out clip; then finish. */
+  /** Move the player from the seat back to the doorway along the climb-out clip's root path. */
   private advanceGetout(delta: number): void {
     if (this.active) {
       this.physics.holdBody(this.active.body, this.holdPos, this.holdQuat); // pin the parked car
     }
     this.exitElapsed += delta;
-    const t = Math.min(this.exitElapsed / GETOUT_DURATION, 1);
-    this.placePlayer([
-      this.exitFrom[0] + (this.exitTo[0] - this.exitFrom[0]) * t,
-      this.exitFrom[1] + (this.exitTo[1] - this.exitFrom[1]) * t,
-      this.exitFrom[2] + (this.exitTo[2] - this.exitFrom[2]) * t,
-    ]);
+    const duration = this.getoutMotion?.duration ?? GETOUT_DURATION;
+    const t = Math.min(this.exitElapsed / duration, 1);
+    this.placePlayer(warpAlongRootMotion(this.exitFrom, this.exitTo, this.getoutMotion, t, this.active?.heading ?? 0));
     if (t >= 1) {
       this.finishExit();
     }
@@ -574,6 +585,7 @@ export class EnterVehicleSystem implements System {
     this.phase = 'getin';
     this.getinElapsed = 0;
     this.getinFrom = this.playerPosition();
+    this.getinMotion = this.animation.scriptedMotion(CAR_GETIN);
     this.seatWorld = this.seatWorldOf(this.active);
     this.storeHold(this.active); // pin the parked car here while the player climbs in
     this.controller.setEnabled(false);
@@ -590,6 +602,7 @@ export class EnterVehicleSystem implements System {
     this.exitElapsed = 0;
     this.exitFrom = this.playerPosition();
     this.exitTo = this.doorwayWorld(this.active);
+    this.getoutMotion = this.animation.scriptedMotion(CAR_GETOUT);
     this.storeHold(this.active); // pin the (stopped) car here while the player climbs out
     this.animation.setScripted(CAR_GETOUT, { facing: this.active.heading, loop: false });
   }
@@ -657,6 +670,44 @@ export class EnterVehicleSystem implements System {
       this.cancelApproach();
     }
   }
+}
+
+/**
+ * A point along a scripted move (plan 088/09a): the clip's authored root path carries the SHAPE
+ * (the doorway dip, the drop into the seat) while a linear correction distributes the clip-vs-world
+ * endpoint mismatch — the move still starts exactly at `from` and ends exactly at `to`. The clip's
+ * ped-local frame maps through the facing `heading` (x = right, y = forward, z = up). Without a
+ * motion (a TC whose IFP lacks the clip) it degrades to the straight slide. Pure + exported so the
+ * warp guarantees are unit-testable.
+ */
+export function warpAlongRootMotion(
+  from: Vec3,
+  to: Vec3,
+  motion: null | ScriptedMotion,
+  t: number,
+  heading: number,
+): Vec3 {
+  if (!motion) {
+    return [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t, from[2] + (to[2] - from[2]) * t];
+  }
+  const start = motion.sample(0);
+  const now = motion.sample(t * motion.duration);
+  const end = motion.sample(motion.duration);
+  const forward: [number, number] = [-Math.sin(heading), Math.cos(heading)];
+  const right: [number, number] = [Math.cos(heading), Math.sin(heading)];
+  const world = (p: readonly [number, number, number]): Vec3 => [
+    right[0] * (p[0] - start[0]) + forward[0] * (p[1] - start[1]),
+    right[1] * (p[0] - start[0]) + forward[1] * (p[1] - start[1]),
+    p[2] - start[2],
+  ];
+  const path = world([now[0], now[1], now[2]]);
+  const total = world([end[0], end[1], end[2]]);
+
+  return [
+    from[0] + path[0] + (to[0] - from[0] - total[0]) * t,
+    from[1] + path[1] + (to[1] - from[1] - total[1]) * t,
+    from[2] + path[2] + (to[2] - from[2] - total[2]) * t,
+  ];
 }
 
 function clamp(value: number, min: number, max: number): number {

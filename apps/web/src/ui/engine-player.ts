@@ -24,7 +24,7 @@ import {
 } from '@opensa/game/character/locomotion';
 import { VEHICLE_SCRIPTED_CLIPS } from '@opensa/game/vehicle/vehicle-clips';
 import { getIfp } from '@opensa/renderware/archive/asset-cache';
-import { type PedClip, pedClip } from '@opensa/renderware/ped/build-ped-model';
+import { type PedClip, pedClip, rootMotion, sampleRootMotion } from '@opensa/renderware/ped/build-ped-model';
 
 import { GaitSelector } from './gait-selector';
 import { DEFAULT_FADE_SECONDS, LocomotionMixer } from './locomotion-mixer';
@@ -34,6 +34,8 @@ export interface EnginePlayer {
   faceTo(yaw: number): void;
   /** Lowest posed vertex of the model (GTA Z-up) — the host aligns it to the physics ground. */
   minZ: number;
+  /** A scripted clip's authored root travel (088/09a — `EnterVehicleSystem` replays it), or null. */
+  scriptedMotion(clip: string): null | { duration: number; sample(time: number): readonly [number, number, number] };
   /**
    * Play a named clip (climb-in / sit / climb-out) instead of the speed-driven locomotion, or `null` to hand
    * control back. This is the {@link VehicleAnimator} surface `EnterVehicleSystem` drives — the same contract
@@ -228,11 +230,32 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
   let scriptedOrientation: null | readonly [number, number, number, number] = null;
   const root = new Float32Array(16);
 
+  // Root-travel tracks by (lowercased) clip name, extracted from the same IFP on first use.
+  const motionByName = new Map<string, null | ReturnType<EnginePlayer['scriptedMotion']>>();
+
   return {
     faceTo(yaw: number): void {
       scriptedFacing = yaw;
     },
     minZ: fixture.minZ,
+    scriptedMotion(clip: string): null | { duration: number; sample(time: number): readonly [number, number, number] } {
+      const key = clip.toLowerCase();
+      if (!motionByName.has(key)) {
+        const animation = animations.find((entry) => entry.name.toLowerCase() === key);
+        const track = animation ? rootMotion(animation) : null;
+        motionByName.set(
+          key,
+          track && track.duration > 0
+            ? {
+                duration: track.duration,
+                sample: (time): readonly [number, number, number] => sampleRootMotion(track, time),
+              }
+            : null,
+        );
+      }
+
+      return motionByName.get(key) ?? null;
+    },
     setScripted(clip, options = {}): void {
       if (clip === null) {
         if (scripted !== null) {

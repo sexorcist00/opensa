@@ -9,7 +9,7 @@ import type { VehicleRig } from './vehicle-rig';
 
 import { Logger } from '../diagnostics/logger';
 import { KeyboardSource } from '../input';
-import { EnterVehicleSystem } from './enter-vehicle.system';
+import { EnterVehicleSystem, warpAlongRootMotion } from './enter-vehicle.system';
 import { FakeVehicleHandle } from './vehicle-handle.fake';
 
 const CONTROLS = { back: 'KeyS', forward: 'KeyW', left: 'KeyA', right: 'KeyD' };
@@ -92,6 +92,7 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
     faceTo(yaw: number): void {
       anim.facing = yaw;
     },
+    scriptedMotion: (): null => null, // no root travel in the stub → the legacy linear slide
     setScripted(clip: null | string, options: { loop?: boolean } = {}): void {
       anim.clip = clip;
       anim.loop = options.loop ?? true;
@@ -436,6 +437,50 @@ describe('EnterVehicleSystem', () => {
       h.hold(CONTROLS.back, true); // S while moving forward → full brake
       h.system.fixedUpdate(0.1);
       expect(h.system.isBraking()).toBe(true);
+    });
+  });
+});
+
+describe('warpAlongRootMotion (plan 088/09a)', () => {
+  /** A synthetic clip whose root arcs 1 m right (+x) with a mid-way 0.5 m dip, over 2 s. */
+  const MOTION = {
+    duration: 2,
+    sample: (time: number): readonly [number, number, number] => {
+      const t = Math.min(Math.max(time / 2, 0), 1);
+
+      return [t, 0, -0.5 * Math.sin(t * Math.PI)];
+    },
+  };
+
+  describe('negative cases', () => {
+    it('without a motion it degrades to the straight linear slide', () => {
+      expect(warpAlongRootMotion([0, 0, 0], [2, 4, 0], null, 0.5, 1.23)).toEqual([1, 2, 0]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('starts exactly at `from` and ends exactly at `to` regardless of the clip travel', () => {
+      const from: [number, number, number] = [10, 20, 3];
+      const to: [number, number, number] = [11, 21, 3.5];
+      expect(warpAlongRootMotion(from, to, MOTION, 0, 0.7)).toEqual(from);
+      const end = warpAlongRootMotion(from, to, MOTION, 1, 0.7);
+      expect(end[0]).toBeCloseTo(to[0], 6);
+      expect(end[1]).toBeCloseTo(to[1], 6);
+      expect(end[2]).toBeCloseTo(to[2], 6);
+    });
+
+    it('carries the authored VERTICAL dip that a straight slide flattens out', () => {
+      // from → to is level; the clip dips 0.5 m at the midpoint — the warped path must dip too.
+      const mid = warpAlongRootMotion([0, 0, 0], [1, 0, 0], MOTION, 0.5, Math.PI / 2);
+      expect(mid[2]).toBeCloseTo(-0.5, 6);
+    });
+
+    it('maps the clip x (right of facing) through the heading', () => {
+      // heading 0: forward = (0, 1), right = (1, 0) → the clip +x travel stays on world +x, and the
+      // to−from residual (zero here, since `to` matches the mapped travel) adds nothing.
+      const mid = warpAlongRootMotion([0, 0, 0], [1, 0, 0], MOTION, 0.5, 0);
+      expect(mid[0]).toBeCloseTo(0.5, 6);
+      expect(mid[1]).toBeCloseTo(0, 6);
     });
   });
 });

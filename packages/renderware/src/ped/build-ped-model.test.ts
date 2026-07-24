@@ -5,7 +5,7 @@ import type { RWClump } from '../parsers/binary/types';
 
 import { parseDff } from '../parsers/binary/dff';
 import { toArrayBuffer } from '../test-utils';
-import { buildPedModel, pedClip } from './build-ped-model';
+import { buildPedModel, pedClip, rootMotion, sampleRootMotion } from './build-ped-model';
 
 /** Real stock peds, extracted by `npm run test:fixtures` — the same pair the skinning tests use. */
 const BMYPOL1_DFF = 'tests/original/character/bmypol1.dff';
@@ -145,6 +145,80 @@ describe('pedClip', () => {
       );
 
       expect(clip.tracks[1].times).toEqual([0.5]);
+    });
+  });
+});
+
+/** Synthetic ANP3 animation shells for the root-motion extractor (times raw i16, /60 to seconds). */
+describe('rootMotion (plan 088/09a)', () => {
+  describe('negative cases', () => {
+    it('returns null when no bone track carries translation (a plain locomotion clip)', () => {
+      const animation = {
+        bones: [
+          {
+            boneId: 0,
+            frames: [{ rotation: [0, 0, 0, 1] as [number, number, number, number], time: 0 }],
+            name: 'Root',
+          },
+        ],
+        name: 'walk_civi',
+      };
+      expect(rootMotion(animation)).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('extracts the translated track with times scaled to seconds', () => {
+      const animation = {
+        bones: [
+          {
+            boneId: 1,
+            frames: [{ rotation: [0, 0, 0, 1] as [number, number, number, number], time: 0 }],
+            name: 'Pelvis',
+          },
+          {
+            boneId: 0,
+            frames: [
+              {
+                rotation: [0, 0, 0, 1] as [number, number, number, number],
+                time: 0,
+                translation: [0, 0, 0] as [number, number, number],
+              },
+              {
+                rotation: [0, 0, 0, 1] as [number, number, number, number],
+                time: 60,
+                translation: [1, 0.5, -0.4] as [number, number, number],
+              },
+            ],
+            name: 'Root',
+          },
+        ],
+        name: 'car_getin_lhs',
+      };
+      const track = rootMotion(animation);
+      expect(track).not.toBeNull();
+      expect(track?.duration).toBeCloseTo(1, 6);
+      expect(track?.positions).toEqual([0, 0, 0, 1, 0.5, -0.4]);
+    });
+  });
+});
+
+describe('sampleRootMotion', () => {
+  const TRACK = { duration: 1, positions: [0, 0, 0, 1, 0.5, -0.4], times: [0, 1] };
+
+  describe('negative cases', () => {
+    it('clamps before the first and past the last keyframe', () => {
+      expect(sampleRootMotion(TRACK, -1)).toEqual([0, 0, 0]);
+      expect(sampleRootMotion(TRACK, 9)).toEqual([1, 0.5, -0.4]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('interpolates linearly between the bracketing keyframes', () => {
+      const mid = sampleRootMotion(TRACK, 0.5);
+      expect(mid[0]).toBeCloseTo(0.5, 6);
+      expect(mid[1]).toBeCloseTo(0.25, 6);
+      expect(mid[2]).toBeCloseTo(-0.2, 6);
     });
   });
 });

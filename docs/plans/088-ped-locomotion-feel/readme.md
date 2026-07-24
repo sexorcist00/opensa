@@ -303,6 +303,20 @@ glide 0.5 · fall_glide 0.8 · getup(_front) 1.37 (ANP3 raw / 60).
   `placePlayer` along `anchor + yaw · (root(t) − root(0))` for getin/getout instead of the linear
   lerp — the authored trajectory carries the doorway dip and the drop into the seat. Foundation
   for every other clip here (shuffle, crawlout).
+
+  **CODE-COMPLETE 2026-07-24 — ledger:** probed the real tracks first — `CAR_getin_LHS` roots
+  (0,0,0)→(0.95, 0.49, −0.35) over 1.0 s (a metre INTO the car, half forward, dropping into the
+  seat), getout is its reverse over 1.13 s, RHS mirrors x, `CAR_shuffle_RHS` continues −x a further
+  0.9 m (0.4 s), `CAR_crawloutRHS` is 2.17 s anchored at its END — the axes are exactly
+  right/forward/up of the facing. Shipped: `rootMotion`/`sampleRootMotion` extractors
+  (renderware, beside `pedClip`), `VehicleAnimator.scriptedMotion(name)` (EnginePlayer extracts +
+  caches from the same IFP), and `warpAlongRootMotion` (pure, exported): the clip's root path
+  carries the SHAPE while a linear correction distributes the clip-vs-world endpoint mismatch —
+  starts exactly at the doorway, ends exactly at the seat, and the slide now runs the CLIP's
+  duration (1.0/1.13 s) instead of the hardcoded 1.2 s that held the last pose while still
+  sliding. A TC without the clip degrades to the legacy linear slide (stubbed in the system
+  tests). Tests: +7 (4 extractor/sampler, 3 warp incl. the endpoint guarantee and the vertical
+  dip a straight slide flattens); all four packages **1275 green**; lint + tsc clean.
 - **09b — Passenger-side entry + the seat shuffle.** Nearest-door pick (`lf` vs `rf` by the
   player's side), the `rf` door swings (mirrored angle — `setDoorAngle`/`doorHinge` already take a
   side), `CAR_getin_RHS` into the passenger seat, then `CAR_shuffle_RHS` across to the driver

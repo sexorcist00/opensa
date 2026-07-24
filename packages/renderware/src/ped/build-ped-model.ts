@@ -107,6 +107,16 @@ export interface PedFixtureSubmesh {
   texture: string;
 }
 
+/** The authored root travel of an IFP clip, in ped-local metres (x right, y forward, z up). */
+export interface RootMotionTrack {
+  /** Track length in seconds (the last translated keyframe's time). */
+  duration: number;
+  /** x,y,z per keyframe, parallel to `times`. */
+  positions: number[];
+  /** Keyframe times in seconds, ascending. */
+  times: number[];
+}
+
 interface SkinBone {
   frame: RWFrame;
   frameIndex: number;
@@ -189,6 +199,52 @@ export function pedClip(animation: IfpAnimation, bones: readonly PedBone[]): Ped
   });
 
   return { duration, name: animation.name, tracks };
+}
+
+/**
+ * Extract a clip's ROOT translation track (plan 088/09a), or null when the clip carries none. The ped
+ * pipeline deliberately drops root translation (locomotion is in-place — gameplay owns position), but
+ * the vehicle enter/exit clips author the WHOLE body path in it (doorway dip, drop into the seat);
+ * the enter system replays it so the climb stops looking like a constant-speed float. The first
+ * translated bone track is the root by ANP3 convention (frame-type-4 tracks; `ped.ifp` has one).
+ */
+export function rootMotion(animation: IfpAnimation): null | RootMotionTrack {
+  const track = animation.bones.find((bone) => bone.frames.some((frame) => frame.translation));
+  if (!track) {
+    return null;
+  }
+  const frames = track.frames.filter((frame) => frame.translation);
+  const times = frames.map((frame) => frame.time * IFP_TIME_SCALE);
+  const positions = frames.flatMap((frame) => frame.translation ?? [0, 0, 0]);
+
+  return { duration: times[times.length - 1] ?? 0, positions, times };
+}
+
+/** Linearly sample a root-motion track at `time` (seconds), clamped to its ends. */
+export function sampleRootMotion(track: RootMotionTrack, time: number): [number, number, number] {
+  const { positions, times } = track;
+  const last = times.length - 1;
+  if (last < 0) {
+    return [0, 0, 0];
+  }
+  if (time <= times[0]) {
+    return [positions[0], positions[1], positions[2]];
+  }
+  if (time >= times[last]) {
+    return [positions[last * 3], positions[last * 3 + 1], positions[last * 3 + 2]];
+  }
+  let high = 1;
+  while (times[high] < time) {
+    high += 1;
+  }
+  const low = high - 1;
+  const t = (time - times[low]) / (times[high] - times[low] || 1);
+
+  return [0, 1, 2].map((axis) => {
+    const a = positions[low * 3 + axis];
+
+    return a + (positions[high * 3 + axis] - a) * t;
+  }) as [number, number, number];
 }
 
 /** Skinning palette for the bind pose (slot 0 = model matrix, bones from slot 1) — identity model. */
