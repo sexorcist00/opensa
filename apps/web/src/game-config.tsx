@@ -85,9 +85,22 @@ const SA_TELEPORTS: readonly Teleport[] = [
 ];
 
 /** A launchable game id. */
-export type GameId = 'gostown' | 'original';
+export type GameId = 'carcer' | 'gostown' | 'original';
 
 export const GAME_CONFIG: Record<GameId, GameConfig> = {
+  carcer: {
+    assetLoader: 'local',
+    devOnly: true,
+    disclaimer: null,
+    // Islands: the far side of the 5.2×4.5 km archipelago must sit inside the LOD ring (field, 2026-07-23).
+    drawDistance: 1500,
+    label: 'Run Carcer City [local]',
+    loadGame: { radius: 400, startMinutes: 720, weather: 'EXTRASUNNY_SMOG_LA' },
+    // The ped installed from mods-src/gostown/peds (peds.ide 144) — the TC ships no BMYPOL1/male01 model.
+    mainCharacter: 'bmycg',
+    playerSpawn: [168.6, 728.0, 150.605202],
+    teleports: [{ coords: [1531.15, -1271.89, 581.74], label: 'Downtown' }],
+  },
   gostown: {
     /*assetLoader: 'fetch',
     disable: true,*/
@@ -136,7 +149,7 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
     label: 'Run Gostown Paradise [web]',
     loadGame: { radius: 400, startMinutes: 720, weather: 'EXTRASUNNY_SMOG_LA' },
     // The ped installed from mods-src/gostown/peds (peds.ide 144) — the TC ships no BMYPOL1/male01 model.
-    mainCharacter: 'BMYCG',
+    mainCharacter: 'bmycg',
     playerSpawn: [1531.15, -1271.89, 591.74],
     teleports: [{ coords: [1531.15, -1271.89, 581.74], label: 'Downtown' }],
   },
@@ -156,7 +169,7 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
     label: 'Run San Andreas [local only]',
     // 22:00 — the night boot the engine host always used (vehicle lamps/coronas visible on boot).
     loadGame: { radius: 400, startMinutes: 1320, weather: 'EXTRASUNNY_SMOG_LA' },
-    mainCharacter: 'BMYPOL1',
+    mainCharacter: 'bmycg',
     playerSpawn: [2495.0, -1675.0, 16.0], // LS - Ganton (default). Debug teleports below cover feature spots.
     teleports: [...SA_TELEPORTS],
   },
