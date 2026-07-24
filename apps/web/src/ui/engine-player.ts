@@ -11,6 +11,7 @@ import type { AssetFileSystem } from '@opensa/renderware';
 import { IfpSampler } from '@opensa/engine';
 import { writeGtaRoot } from '@opensa/game/adapters/engine-vehicle-handle';
 import { readPedOsm } from '@opensa/game/adapters/ped-osm';
+import { VEHICLE_SCRIPTED_CLIPS } from '@opensa/game/vehicle/vehicle-clips';
 import { getIfp } from '@opensa/renderware/archive/asset-cache';
 import { type PedClip, pedClip } from '@opensa/renderware/ped/build-ped-model';
 
@@ -41,13 +42,35 @@ const IDLE_CLIP = 0;
 const WALK_CLIP = 1;
 const RUN_CLIP = 2;
 /**
- * Scripted clips `EnterVehicleSystem` asks for BY NAME (climb-in / sit / climb-out — see `enter-vehicle.
- * system.ts` CAR_GETIN/CAR_SIT/CAR_GETOUT). They are resolved from the SAME `ped.ifp` as locomotion; without
- * them `setScripted` fell through to `idle_stance`, so the driver rode STANDING with his legs out of the car.
+ * Scripted clips `EnterVehicleSystem` asks for BY NAME (climb-in / climb-out / sit). Shared from the game
+ * package ({@link VEHICLE_SCRIPTED_CLIPS}) so the requester and this resolver can't desync. They are resolved
+ * from the SAME `ped.ifp` as locomotion; without them `setScripted` fell through to `idle_stance`, so the
+ * driver rode STANDING with his legs out of the car.
  */
-const SCRIPTED_CLIPS = ['car_getin_lhs', 'car_getout_lhs', 'car_sit'];
+const SCRIPTED_CLIPS = VEHICLE_SCRIPTED_CLIPS;
 /** Planar speed (GTA m/s) above which the run cycle plays — between walkSpeed 2 and runSpeed 7. */
 const RUN_SPEED_THRESHOLD = 4;
+
+/**
+ * Name → index for `setScripted`. Locomotion (the first `locomotionCount`, always addressable by the state
+ * machine) is registered unconditionally; a SCRIPTED clip earns a name entry ONLY when it actually resolved
+ * from the IFP (`duration > 0`). An unresolved scripted clip MUST fall through to the standing locomotion
+ * stand-in — sampling its empty clip would drop the ped to the flat bind pose (SA's bind mesh lies along X).
+ * Pure + exported so the gate that decides "driver sits" vs "driver rides standing" is unit-testable.
+ */
+export function buildClipIndex(
+  resolved: readonly Pick<PedClip, 'duration' | 'name'>[],
+  locomotionCount: number,
+): Map<string, number> {
+  const clipByName = new Map<string, number>();
+  resolved.forEach((clip, index) => {
+    if (index < locomotionCount || clip.duration > 0) {
+      clipByName.set(clip.name.toLowerCase(), index);
+    }
+  });
+
+  return clipByName;
+}
 
 /**
  * The player, loaded BY NAME from the game's own assets (opensa-pack 003 phase 5f).
@@ -99,16 +122,7 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
   // Locomotion first (its indices are the [idle, walk, run] the state machine hard-codes), scripted after.
   const resolved = [...PLAYER_CLIPS, ...SCRIPTED_CLIPS].map(resolveClip);
   const clips: SamplerClip[] = resolved;
-  // The engine's SamplerClip is name-free, so index the names here for `setScripted`. Locomotion is always
-  // registered; a SCRIPTED clip earns a name entry ONLY when it actually resolved from the IFP (duration > 0)
-  // — sampling an unresolved (empty) scripted clip would drop the ped to the flat bind pose (SA's bind mesh
-  // lies along X), so an absent car_sit must fall through to the standing locomotion stand-in instead.
-  const clipByName = new Map<string, number>();
-  resolved.forEach((clip, index) => {
-    if (index < PLAYER_CLIPS.length || clip.duration > 0) {
-      clipByName.set(clip.name.toLowerCase(), index);
-    }
-  });
+  const clipByName = buildClipIndex(resolved, PLAYER_CLIPS.length);
   let clipTime = 0;
   let activeClip = IDLE_CLIP;
   let scripted: null | { index: number; loop: boolean } = null;

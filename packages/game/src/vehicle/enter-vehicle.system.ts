@@ -10,6 +10,8 @@ import type { PhysicsWorld, VehicleController } from '../physics/physics-world';
 import type { VehicleHandle } from './vehicle-handle';
 import type { VehicleRig } from './vehicle-rig';
 
+import { CAR_GETIN, CAR_GETOUT, CAR_SIT } from './vehicle-clips';
+
 /** A car the player can interact with + sit in (driver side). It is a dynamic
  * physics body; `position`/`heading` are kept live by the vehicle-physics system. */
 export interface EnterableVehicle {
@@ -72,10 +74,6 @@ const GETIN_DURATION = 1.2;
 const GETOUT_DURATION = 1.2;
 /** Capsule-centre height above the seat dummy (tuned in-browser). */
 const SEAT_RAISE = 0;
-
-const CAR_GETIN = 'car_getin_lhs';
-const CAR_GETOUT = 'car_getout_lhs';
-const CAR_SIT = 'car_sit';
 
 // handling.cfg → driving forces (tuned in-browser). Engine/brake are forces (N) scaled from the
 // car's mass + handling accel/decel; the controller (raycast wheels) integrates them.

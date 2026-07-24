@@ -63,7 +63,7 @@ import { carGeneratorPlacements } from './car-generators';
 import { randomCarPlacements } from './popcycle-cars';
 import { createVehicleModelBuilder, type VehicleModelBuilder } from './vehicle-model-builder';
 import { type RigidModelInit, toRigidModelInit } from './vehicle-model-init';
-import { readVehicleOsm } from './vehicle-osm';
+import { readVehicleOsm, SEAT_DUMMY_NAME } from './vehicle-osm';
 
 /** Sea level (Z) + a large background plane half-size so the ocean reaches the horizon. */
 
@@ -402,7 +402,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       : buildVehicleModel(parseDff(dffBuffer), new VehicleTextures(txds), {
           wheelScale: def.wheelScale,
         });
-    const seat = model.dummies.find((dummy: VehicleDummy) => dummy.name === 'ped_frontseat') ?? null;
+    const seat = model.dummies.find((dummy: VehicleDummy) => dummy.name === SEAT_DUMMY_NAME) ?? null;
 
     return {
       colliders: common.colliders,

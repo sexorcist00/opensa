@@ -133,8 +133,11 @@ export function readVehicleOsm(name: string, osm: Uint8Array): OptimizedVehicle 
   };
 }
 
+/** SA's driver-seat dummy name. One source: both the osm reader and the DFF adapter look it up by this. */
+export const SEAT_DUMMY_NAME = 'ped_frontseat';
+
 function seatOf(fixture: VehicleFixture): [number, number, number] | null {
-  const seat = fixture.dummies.find((dummy) => dummy.name === 'ped_frontseat');
+  const seat = fixture.dummies.find((dummy) => dummy.name === SEAT_DUMMY_NAME);
 
   return seat ? [...seat.position] : null;
 }
