@@ -228,6 +228,12 @@ collapse, coyote expiry, anticipation timing, coyote catch, buffered-fires-once-
 soft/hard tiers; the teleport tests must `physics.step` once to COMMIT a kinematic teleport before
 moving). Full engine+web+game: **792 green**; lint + tsc clean.
 
+**Field round 1 (2026-07-24):** two verdicts, both fixed same day. (1) "The jump animation plays
+twice — legs jerk mid-flight": `JUMP_glide` is ~0.4 s against a ~0.9 s flight and the sampler WRAPPED
+it — the glides joined the one-shot set (hold the last frame; launch/land/collapse already did).
+(2) "The run rips from a standstill": `accel` 20 → **14** (0→run ~0.5 s, 0→sprint ~0.7 s);
+`deceleration` stays 25 so stopping keeps its snap.
+
 ### 05 — Transition polish (QUEUED — only if 01–04 leave visible gaps)
 
 `WALK_start` (idle→walk kick), `Run_stop`/`Run_stopR` (run→idle plant, foot-phase-picked),

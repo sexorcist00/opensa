@@ -82,8 +82,16 @@ const FALL_GLIDE_CLIP = 7;
 const COLLAPSE_CLIP = 8;
 /** Gait tier (the {@link GaitSelector} output) → locomotion clip. */
 const GAIT_CLIPS = [IDLE_CLIP, WALK_CLIP, RUN_CLIP, SPRINT_CLIP];
-/** Air/land clips that HOLD their last frame — a looping launch re-crouches mid-flight. */
-const ONE_SHOT_CLIPS: ReadonlySet<number> = new Set([COLLAPSE_CLIP, LAND_CLIP, LAUNCH_CLIP]);
+/** Air/land clips that HOLD their last frame. Launch/land/collapse are obvious one-shots; the GLIDES
+ *  are too — `JUMP_glide` is ~0.4 s but a jump hangs ~0.9 s, and letting the sampler wrap it snapped
+ *  the pose back to frame 0 mid-flight (field 2026-07-24: "the jump animation plays twice, legs jerk"). */
+const ONE_SHOT_CLIPS: ReadonlySet<number> = new Set([
+  COLLAPSE_CLIP,
+  FALL_GLIDE_CLIP,
+  GLIDE_CLIP,
+  LAND_CLIP,
+  LAUNCH_CLIP,
+]);
 /** Landings snap in faster than gait fades; the launch pours into the glide almost seamlessly. */
 const LAND_FADE_SECONDS = 0.12;
 const LAUNCH_TO_GLIDE_FADE_SECONDS = 0.1;

@@ -113,8 +113,10 @@ export function createGameRuntimeConfig(): Config {
     mapViewer: false,
     // Turn rates (plan 088/01): near-idle spins snappily, the top tier arcs at a third of that.
     // Jump (plan 088/04): jumpSpeed 4.5 → apex ≈ 1.03 m, air ≈ 0.92 s (3.5 gave a weak 0.62 m hop).
+    // accel 14 (field 2026-07-24, was 20): 0→run in ~0.5 s — the start stopped ripping; decel stays
+    // higher so stopping keeps its snap.
     movement: {
-      accel: 20,
+      accel: 14,
       airControl: 0.3,
       coyoteSeconds: 0.12,
       deceleration: 25,
