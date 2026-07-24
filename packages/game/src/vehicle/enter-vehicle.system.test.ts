@@ -23,6 +23,7 @@ interface Harness {
   hold: (code: string, down: boolean) => void;
   phys: {
     blocked: Set<string>;
+    bodyPosition: Vec3;
     brake: number;
     engine: number;
     parked: number;
@@ -73,6 +74,7 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
 
   const phys = {
     blocked: new Set<string>(), // 'lf' | 'rf' | 'windscreen' — egress rays the world blocks (088/09d)
+    bodyPosition: [0, 0, 0] as Vec3, // what readBody reports — driveSeated drags car.position to it
     brake: 0,
     engine: 0,
     parked: 0,
@@ -99,7 +101,7 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
       return !phys.blocked.has(egress);
     },
     readBody: (): { position: Vec3; quaternion: [number, number, number, number] } => ({
-      position: [0, 0, 0],
+      position: phys.bodyPosition,
       quaternion: phys.quaternion,
     }),
     seedReverse: (): undefined => undefined,
@@ -378,9 +380,10 @@ describe('EnterVehicleSystem', () => {
       expect(doorAngle(car)).toBeCloseTo(0);
     });
 
-    it('exits the car on Enter: reopens, climbs out, restores control — the door STAYS open (SA)', () => {
+    it('exits the car on Enter: reopens, climbs out, restores control, shuts the door once clear', () => {
       const h = setup();
       const car = vehicleAt([2, 0, 0]);
+      h.phys.bodyPosition = [2, 0, 0]; // driveSeated re-reads the body — keep the car where it spawned
       h.system.add(car);
       // Enter and sit.
       h.press(true);
@@ -407,8 +410,29 @@ describe('EnterVehicleSystem', () => {
       expect(h.anim.facing).toBeCloseTo(Math.PI / 2); // heading 0 → faces −X, away from the car body
       expect(h.anim.cameraAzimuth).toBeCloseTo(Math.PI / 2); // camera swings behind, looking away from the car
 
-      h.system.update(1); // the door is LEFT open — closing it would sweep through the player
-      expect(doorAngle(car)).toBeCloseTo(Math.PI / 3);
+      // The test player stands 2 m from the body — already CLEAR — so the door swings shut behind him.
+      h.system.update(1);
+      expect(doorAngle(car)).toBeCloseTo(0);
+    });
+
+    it('holds the exit door open while the player still stands in the doorway', () => {
+      const player: Vec3 = [0, 0, 0];
+      const h = setup(player);
+      const car = vehicleAt([1.2, 0, 0]); // player local x = −1.2 → INSIDE the footprint+clearance
+      h.phys.bodyPosition = [1.2, 0, 0];
+      seatPlayer(h, car);
+      h.press(true);
+      h.system.update(0.016); // stopping…
+      h.system.fixedUpdate(0.016); // …→ exitopen (door swings)
+      h.system.update(1); // door open → climb-out starts
+      h.system.fixedUpdate(2); // climb-out done, player still beside the body
+
+      h.system.update(1);
+      expect(doorAngle(car)).toBeCloseTo(Math.PI / 3); // waiting for him to step clear
+
+      player[0] = -2; // steps away (clear of footprint + clearance)
+      h.system.update(1);
+      expect(doorAngle(car)).toBeCloseTo(0); // NOW it shuts
     });
 
     it('drives forward on throttle', () => {

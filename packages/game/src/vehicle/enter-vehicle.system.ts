@@ -161,6 +161,9 @@ export class EnterVehicleSystem implements System {
   private approachStalled = 0; // s without progress toward the door → auto-cancel a blocked approach
   /** Whether the driver is actively braking (handbrake or braking forward motion) — for the brake lights. */
   private braking = false;
+  /** After an exit: pull the used door shut once the player has stepped clear of the footprint —
+   *  closing it while he still stands in the doorway sweeps the panel through him. */
+  private closeDoorWhenClear = false;
   private readonly config: Readonly<Config>;
   private readonly controller: CharacterControllerSystem;
   private readonly doors = new Map<EnterableVehicle, { lf: number; rf: number }>(); // per-side door angles
@@ -320,6 +323,13 @@ export class EnterVehicleSystem implements System {
       this.phase = 'opening';
       this.doorTarget = this.openAngle();
     }
+    // Shut the exit door behind the player once he has stepped clear (field 2026-07-24: it must
+    // close — just never through him standing in the doorway). Before animateDoor so the swing
+    // starts this same frame.
+    if (this.closeDoorWhenClear && this.phase === 'idle' && this.active && this.playerClearOf(this.active)) {
+      this.doorTarget = 0;
+      this.closeDoorWhenClear = false;
+    }
     // The getin/exiting slides + seated ride run on the fixed step (see fixedUpdate).
     this.animateDoor(delta);
     if (this.phase === 'opening' && this.doorAngleOf(this.active) === this.openAngle()) {
@@ -414,6 +424,7 @@ export class EnterVehicleSystem implements System {
     }
 
     this.active = nearest;
+    this.closeDoorWhenClear = false; // entering again — the entry flow owns the door now
     // The NEAR front door (088/09b): a passenger-side approach uses the rf door + the seat shuffle,
     // instead of hiking around the car to the driver door.
     this.side = this.playerLocal(nearest)[0] > 0 ? 'rf' : 'lf';
@@ -600,9 +611,10 @@ export class EnterVehicleSystem implements System {
     this.physics.setColliderSensor(this.playerCollider, false); // solid again — walking
     this.restoreWhenClear = true; // re-enable car collision once the player has stepped clear (update)
     this.controller.setEnabled(true);
-    // The door STAYS open (SA behaviour) — closing it now would sweep the panel straight through
-    // the player standing in the doorway (field 2026-07-24). The next entry finds it already open.
+    // The door closes only once the player has STEPPED CLEAR (see update) — closing it now would
+    // sweep the panel straight through him standing in the doorway (field 2026-07-24).
     this.doorTarget = this.doorAngleOf(this.active);
+    this.closeDoorWhenClear = true;
     this.phase = 'idle';
     this.logger.log('enter-vehicle', 'exited');
   }

@@ -389,6 +389,12 @@ it swept the panel through the player standing in the doorway. Doors got per-sid
 the way. Tests: slide-accelerates-downhill + jump-refused-while-sliding on the 48° ramp, the 3-leg
 path pinned, exit-leaves-door-open updated; all four packages **1284 green**.
 
+**Round-2 follow-up (same day):** "the exit door must CLOSE" — it now shuts on the step-clear
+trigger (the same footprint+0.6 m check that restores car collision): open while the player stands
+in the doorway, swings shut the moment he walks away, never through him. The test stub's `readBody`
+grew a configurable body position on the way (it pinned every car to the origin, which put the
+"stepped clear" player inside the footprint). **1285 green**.
+
 ### 06 — Close-out: defaults freeze + docs (DONE 2026-07-24 — round 1; round 2 re-runs it)
 
 Field-judged defaults frozen on user verdict; `docs/features/character.md` rewritten for the FSM (also
