@@ -30,8 +30,12 @@ plans 008/011/012/013/036.
   player capsule and the initial collision zone (`loadGame` centres on it), so there is ground under the drop
   (Ganton on `original`).
 - **Night lighting**: the ped is dynamically lit (sun/moon + indirect) by the engine's `ped` pipeline —
-  no prelit. The old plan-034 "night fill" shader was removed with the three renderer and has **no
-  replacement yet**; the moonlight band carries the night read (see night-and-time.md).
+  no prelit. The indirect term is the SAME hemispheric weight the vehicles use (`skyVisibility` ×
+  `DYNAMIC_INDIRECT`, shared through the `<frame>` shader module, plan 084 → 087 ped): a flat
+  `vec3f(params.y)` gave the body no readable edges at night, when the sun term is gone and indirect
+  dominates (peds carry no baked AO, so `DYNAMIC_INDIRECT × skyVisibility(normal)` is the whole weight). The
+  old plan-034 "night fill" shader was removed with the three renderer and has **no replacement yet**; the
+  moonlight band carries the night read (see night-and-time.md).
 - **Follow camera** (plan 036): spherical rig in `Config.camera`; auto-trail only on direction
   CHANGE (not continuous), free mouse look wins, pitch manual-only; zoom wheel with min/max;
   debug Camera screen sliders.
@@ -50,7 +54,12 @@ whatever a developer last converted, with its animations frozen at bake time, an
 user picked had no say in it.
 
 It now loads `male01.osm` from the archives through the VFS, and resolves `idle_stance` / `walk_civi` /
-`run_civi` from the game's own `ped.ifp` at load — so a modded IFP changes how the player walks. Two traps
+`run_civi` — plus the scripted vehicle clips `car_getin_lhs` / `car_getout_lhs` / `car_sit` that
+`EnterVehicleSystem` drives by name — from the game's own `ped.ifp` at load, so a modded IFP changes how the
+player walks AND sits. A scripted clip is only registered under its name when it actually resolves
+(`duration > 0`); an absent one falls through to the standing locomotion stand-in rather than an empty clip
+(which would drop the ped to the flat bind pose). Before this the scripted names resolved to nothing, so the
+driver rode STANDING with his legs out of the car. Two traps
 this path carries, both found in the field and not by tests:
 
 - the IFP is keyed `anim/ped.ifp` in the browser VFS and bare `ped.ifp` in the archives, and **with no clips

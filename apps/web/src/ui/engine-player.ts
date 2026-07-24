@@ -12,7 +12,7 @@ import { IfpSampler } from '@opensa/engine';
 import { writeGtaRoot } from '@opensa/game/adapters/engine-vehicle-handle';
 import { readPedOsm } from '@opensa/game/adapters/ped-osm';
 import { getIfp } from '@opensa/renderware/archive/asset-cache';
-import { pedClip } from '@opensa/renderware/ped/build-ped-model';
+import { type PedClip, pedClip } from '@opensa/renderware/ped/build-ped-model';
 
 export interface EnginePlayer {
   /** Face a yaw directly (enter/exit uses it on the way out of the car). */
@@ -40,6 +40,12 @@ const PLAYER_CLIPS = ['idle_stance', 'walk_civi', 'run_civi'];
 const IDLE_CLIP = 0;
 const WALK_CLIP = 1;
 const RUN_CLIP = 2;
+/**
+ * Scripted clips `EnterVehicleSystem` asks for BY NAME (climb-in / sit / climb-out — see `enter-vehicle.
+ * system.ts` CAR_GETIN/CAR_SIT/CAR_GETOUT). They are resolved from the SAME `ped.ifp` as locomotion; without
+ * them `setScripted` fell through to `idle_stance`, so the driver rode STANDING with his legs out of the car.
+ */
+const SCRIPTED_CLIPS = ['car_getin_lhs', 'car_getout_lhs', 'car_sit'];
 /** Planar speed (GTA m/s) above which the run cycle plays — between walkSpeed 2 and runSpeed 7. */
 const RUN_SPEED_THRESHOLD = 4;
 
@@ -83,14 +89,26 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
     // eslint-disable-next-line no-console -- a silent bind-pose player is worse than a console line
     console.warn(`[player] no ped.ifp found (tried ${PLAYER_IFP_NAMES.join(', ')}) — the player cannot animate`);
   }
-  const resolved = PLAYER_CLIPS.map((name) => {
+  // Returns pedClip's richer (NAMED) shape, not the engine's name-free SamplerClip: we need the resolved
+  // clip's name below to key `clipByName`.
+  const resolveClip = (name: string): PedClip => {
     const animation = animations.find((entry) => entry.name.toLowerCase() === name);
 
     return animation ? pedClip(animation, fixture.bones) : { duration: 0, name, tracks: [] };
-  });
+  };
+  // Locomotion first (its indices are the [idle, walk, run] the state machine hard-codes), scripted after.
+  const resolved = [...PLAYER_CLIPS, ...SCRIPTED_CLIPS].map(resolveClip);
   const clips: SamplerClip[] = resolved;
-  // The engine's SamplerClip is name-free, so index the names here for `setScripted`.
-  const clipByName = new Map(resolved.map((clip, index) => [clip.name.toLowerCase(), index]));
+  // The engine's SamplerClip is name-free, so index the names here for `setScripted`. Locomotion is always
+  // registered; a SCRIPTED clip earns a name entry ONLY when it actually resolved from the IFP (duration > 0)
+  // — sampling an unresolved (empty) scripted clip would drop the ped to the flat bind pose (SA's bind mesh
+  // lies along X), so an absent car_sit must fall through to the standing locomotion stand-in instead.
+  const clipByName = new Map<string, number>();
+  resolved.forEach((clip, index) => {
+    if (index < PLAYER_CLIPS.length || clip.duration > 0) {
+      clipByName.set(clip.name.toLowerCase(), index);
+    }
+  });
   let clipTime = 0;
   let activeClip = IDLE_CLIP;
   let scripted: null | { index: number; loop: boolean } = null;

@@ -41,7 +41,9 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   (no extra buffer). The `_vlo` LOD and `_dam` twins receive it but never cast, which is what keeps a
   convertible's cabin open. The engine's dynamic indirect term is `params.y × DYNAMIC_INDIRECT ×
   skyVisibility(normal) × occlusion` — the map's `prelit × params.y × ao`, with a constant standing in for
-  the prelit a car has no data for.
+  the prelit a car has no data for. `skyVisibility` / `DYNAMIC_INDIRECT` live in the shared `<frame>` shader
+  module (next to `localLightStatic`) so the ped path reuses the exact same weight, minus the per-instance
+  occlusion a ped has no bake for (plan 087 ped — see character.md).
 - **Tyre detection** (plan 084, 2026-07-22): `wheel-tyre.ts` finds the RUBBER of a wheel by geometry, never
   by texture name (the field set says `tire`, `tyre`, `tread`, `wheel`, `vehicletyres128`, `generic_tire_01`
   — it disagrees with itself). A wheel is a disc about its axle and the tyre is its outer band: measured

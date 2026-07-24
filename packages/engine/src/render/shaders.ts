@@ -809,6 +809,42 @@ fn localLightDynamic(world: vec3f, normal: vec3f) -> vec3f {
 fn localLightStatic(world: vec3f, normal: vec3f) -> vec3f {
   return localLightRange(world, normal, u32(frame.params4.x), u32(frame.params3.x));
 }
+
+// The ground half of the hemisphere: the road under a dynamic model, dark, so the sky/ground split reads as
+// shape rather than as a tint. Deliberately the same 0.10 the reflection path uses for asphalt.
+const AMBIENT_GROUND = 0.10;
+
+/**
+ * Hemispheric indirect weight for a DYNAMIC model (car OR ped): how much SKY this surface sees, 1.0 on a
+ * horizontal panel down to AMBIENT_GROUND on one facing straight down.
+ *
+ * What it fixes: the indirect term was a flat vec3f(frame.params.y) — one constant on every pixel, with no
+ * normal, no position and no occlusion in it. By day the sun's N.L gradient hides that; at night there IS no
+ * sun, the indirect term dominates, and the body collapsed into a single flat colour with no readable edges.
+ * The map never had the problem because its indirect term is prelit x params.y x ao, i.e. baked lighting AND
+ * baked AO — neither of which a car or ped has (no vehicle or ped in the game ships a prelit set).
+ *
+ * A WEIGHT, not a colour, and normalised against the sky rather than the hemisphere mean: the term can only
+ * ever DARKEN relative to the old flat fill. Normalising against the mean would conserve energy but brighten
+ * upward-facing surfaces by ~1.8x — on bodies already reported as too bright at night, that would have made
+ * the loudest surfaces worse.
+ *
+ * Deliberately scalar and per-PIXEL over a normal the shader already has; params.y was neutral before this,
+ * so no colour is lost. Shared by the rigid (vehicle) and ped paths through <frame>.
+ */
+fn skyVisibility(normal: vec3f) -> f32 {
+  return mix(AMBIENT_GROUND, 1.0, normal.y * 0.5 + 0.5);
+}
+
+/**
+ * What a DYNAMIC model's indirect term is worth against the WORLD's (plan 084).
+ *
+ * The map's indirect is prelit x params.y x ao and a car's was params.y alone — the same lamp, but the
+ * map dims it twice and the car not at all. Measured at full night that read car 0.70 against map ~0.13.
+ * The missing half is the two factors a car has no data for: this constant stands in for the mean PRELIT
+ * (SA's map models average 88/255 luma), and (for vehicles) the per-instance AO the builder computes.
+ */
+const DYNAMIC_INDIRECT = 0.35;
 `,
   particle: /* wgsl */ `
 #include <frame>
@@ -958,9 +994,13 @@ fn fsPed(in: PedVsOut) -> @location(0) vec4f {
   let normal = normalize(in.normal);
   let sunNdl = max(dot(normal, frame.sunDir.xyz), 0.0);
   let moonNdl = clamp((dot(normal, frame.moonDir.xyz) + 0.6) / 1.6, 0.0, 1.0);
+  // Hemispheric indirect, the SAME term the vehicles use (plan 084 → 087 ped): a flat vec3f(frame.params.y)
+  // gave the body no readable edges at night, when the sun term is gone and indirect dominates. No per-model
+  // AO for a ped (no baked set), so DYNAMIC_INDIRECT x skyVisibility is the whole weight.
+  let ambient = frame.params.y * DYNAMIC_INDIRECT * skyVisibility(normal);
   // STATIC lamps only, like the vehicles: the driver sits a metre in FRONT of his own tail lights, and the
   // dynamic pool would wash him red from behind every time he brakes.
-  let lit = vec3f(frame.params.y) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
+  let lit = vec3f(ambient) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
     localLightStatic(in.world, normal);
   var color = texel.rgb * lit;
   // Same unified fog shape as fsWorld (068 invariant: distant peds dissolve into the sky behind them).
@@ -1212,45 +1252,8 @@ struct RigidVsOut {
 @group(1) @binding(5) var probeTexture: texture_cube<f32>;
 @group(1) @binding(6) var probeSampler: sampler;
 
-// The ground half of the hemisphere: the road under the car, dark, so the sky/ground split reads as shape
-// rather than as a tint. Deliberately the same 0.10 the reflection path uses for asphalt.
-const AMBIENT_GROUND = 0.10;
-
-/**
- * Hemispheric indirect weight for a DYNAMIC model: how much SKY this surface sees, 1.0 on a horizontal
- * panel down to AMBIENT_GROUND on one facing straight down.
- *
- * What it fixes: the indirect term was a flat vec3f(frame.params.y) — one constant on every pixel of the
- * car, with no normal, no position and no occlusion in it. By day the sun's N.L gradient hides that; at
- * night there IS no sun, the indirect term dominates, and the body collapsed into a single flat colour with
- * no readable edges. The map never had the problem because its indirect term is prelit x params.y x ao,
- * i.e. baked lighting AND baked AO — neither of which a car has (no vehicle in the game ships a prelit set).
- *
- * A WEIGHT, not a colour, and normalised against the sky rather than the hemisphere mean: the term can only
- * ever DARKEN relative to the old flat fill. Normalising against the mean would conserve energy but brighten
- * roofs and bonnets by ~1.8x — on a car already reported as too bright at night, that would have made the
- * loudest surfaces worse. It does drop the car's average indirect by roughly half, which narrows but does
- * NOT close the measured night gap to the map (car 0.70 vs map ~0.13 at full night); that gap is its own
- * knob and its own field round.
- *
- * Deliberately scalar and per-PIXEL. A sky-coloured version would need the sky LUT, and reading it per
- * vertex both blew the 16-varying fragment-input limit and forced VERTEX visibility onto a fragment-only
- * binding; per pixel it is a mix and a multiply over a normal the shader already has, and params.y was
- * neutral before this anyway, so no colour is lost.
- */
-fn skyVisibility(normal: vec3f) -> f32 {
-  return mix(AMBIENT_GROUND, 1.0, normal.y * 0.5 + 0.5);
-}
-
-/**
- * What a DYNAMIC model's indirect term is worth against the WORLD's (plan 084).
- *
- * The map's indirect is prelit x params.y x ao and a car's was params.y alone — the same lamp, but the
- * map dims it twice and the car not at all. Measured at full night that read car 0.70 against map ~0.13.
- * The missing half is the two factors a car has no data for: this constant stands in for the mean PRELIT
- * (SA's map models average 88/255 luma), and local.w supplies the AO the builder now computes.
- */
-const DYNAMIC_INDIRECT = 0.35;
+// skyVisibility / AMBIENT_GROUND / DYNAMIC_INDIRECT are shared dynamic-model lighting helpers — they live in
+// <frame> now (next to localLightStatic) so the ped path reuses the exact same indirect term (plan 087 ped).
 
 @vertex
 fn vsRigid(in: RigidVsIn) -> RigidVsOut {
