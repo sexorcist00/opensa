@@ -12,10 +12,11 @@ one ships, and each ends with a field round so tuning debt never stacks more tha
 | 5     | **05 Vehicle camera**           | The biggest payoff, deliberately after the rig+collision base: it is a retune + new writers, not new machinery. Drive-heavy field round.                                                                                                                                     |
 | 6     | **06 Motion feel**              | Additive layer on top of the collision-resolved pose (its caps are defined relative to 04's margin), and its vehicle-impact shake needs 05's mode plumbing. Comfort-sensitive → latest possible, easiest to cut/scale.                                                       |
 | 7     | **07 Transitions + polish**     | Needs all layers to audit transitions between them; freezes tuning, runs the perf/bench exit exam, deletes the legacy path. The chain's close-out.                                                                                                                           |
+| 8     | **08 View presets**             | Added 2026-07-25. Needs 05 (the vehicle ring is half the feature) and 04 (first person opts OUT of collision), and its preset blends belong to 07's transition audit — so it runs after 05, alongside or just before 07. Its ARCHITECTURE, however, constrains 02-06 from now on: every tuned value stays in `CameraConfig`, so a preset is a different config object, never a second code path. |
 
 ## Checkpoint rhythm
 
-- **After 02, 03, 04, 05, 06**: user field round; verdicts + frozen values go into that plan's
+- **After 02, 03, 04, 05, 06, 08**: user field round; verdicts + frozen values go into that plan's
   ledger before the next plan starts. A rejected round loops within its plan (the `?cam=legacy`
   A/B keeps the game playable throughout).
 - **After 01 and 07**: ritual bench sweep (the two points where host wiring changes shape) —

@@ -3,6 +3,10 @@
 **The heart of the chain — after this plan the camera already "feels GTA".** Everything here is
 on-foot; the vehicle mode (05) reuses the same channels with different tuning.
 
+**Standing constraint from [08](08-view-presets.md):** every value tuned here lives in `CameraConfig` and
+reaches the rig through the one config argument — no magic numbers in the rig code. That is what lets a view
+preset be a different config object rather than a second code path.
+
 ## Design: per-channel springs on a spherical rig
 
 The rig is spherical around a raised look point (the 036 design, proven in prod): `yaw`, `pitch`,

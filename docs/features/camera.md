@@ -54,7 +54,10 @@ capability, on for the engine host since 080/01) — field rounds tune with slid
 - No vehicle framing (speed distance/FOV curves, turn lag, drift framing) — plan 05.
 - No bob / landing dip / impact shake / sprint FOV kick, and no motion-reduction toggle — plan 06.
 - No mode-transition blending (foot ⇄ vehicle ⇄ viewer) — plan 07.
-- No gamepad look (there is no gamepad input path at all) and no first-person mode.
+- No switchable view presets yet (a C-key ring per mode, first person included) — plan 08. The seam is
+  already in place: every tuned value reaches the rig as one `CameraConfig`-shaped object, so a preset is a
+  different object handed to the same `stepCamera`, never a second code path.
+- No gamepad look — there is no gamepad input path at all.
 - `followLerp` / `followPolar` / `followMinPolar` / `followMaxPolar` are 036-era fields the own-engine rig
   does not read; they stay in `CameraConfig` until the chain closes and replaces them.
 

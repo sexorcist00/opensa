@@ -38,10 +38,17 @@ Additions beyond the request (they fall out of the same architecture and GTA V h
 - **Sprint FOV kick on foot** — subtle, a few degrees (06).
 - **Motion-reduction accessibility toggle** — one config flag that zeroes bob/shake/FOV kicks (06).
 
+**Switchable views are IN scope** (added 2026-07-25, user's request): a key (default C) cycles named view
+presets per mode — far / normal / close / **first-person** on foot, and a bumper view in cars. It gets its
+own sub-plan ([08](08-view-presets.md)) because first person has real dependencies (head-bone anchor, hiding
+the player mesh, motion re-tuning), but its ARCHITECTURE constrains this whole chain from now on: every
+tuned value stays in `CameraConfig` and reaches the rig as one config-shaped object, so a preset is a
+different object handed to the same `stepCamera` — never a second code path. No sub-plan may hard-code a
+number a preset would need to override.
+
 Out of scope, recorded so nobody re-litigates: **gamepad** (no gamepad input path exists in
-`packages/game/src/input/` at all — a separate plan when it comes), **first-person mode**, **idle
-cinematic auto-camera** and the **R-key cinematic vehicle camera** (both are 0.6.0 idea material —
-stubs to be added when this chain closes).
+`packages/game/src/input/` at all — a separate plan when it comes), **idle cinematic auto-camera** and the
+**R-key cinematic vehicle camera** (both are 0.6.0 idea material — stubs to be added when this chain closes).
 
 ## What the engine study established (constraints — every sub-plan obeys these)
 
@@ -138,6 +145,7 @@ offsets are amplitude-capped below the collision margin.
 | 05  | [Vehicle camera](05-vehicle-camera.md)                   | Speed distance/FOV curves, turn lag, drift framing, enter/exit blends, look-behind.                                 |
 | 06  | [Motion feel](06-motion-feel.md)                         | Bob, landing dip, impact shake, sprint FOV kick, motion-reduction toggle.                                           |
 | 07  | [Transitions + polish](07-transitions-polish.md)         | Mode blending, pitch-coupled framing, field-tuning rounds, bench guard, close-out.                                  |
+| 08  | [View presets](08-view-presets.md)                       | The C key cycles named view presets per mode (far/normal/close/**first-person**, bumper in cars).                   |
 
 Execution order and the reasoning behind it: [priority.md](priority.md).
 
