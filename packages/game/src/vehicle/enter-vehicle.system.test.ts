@@ -252,12 +252,28 @@ describe('EnterVehicleSystem', () => {
       expect(h.ctrl.path?.[0][0]).toBeCloseTo(0.8); // entry = 2 + (0 - 1.2)
     });
 
-    it('routes around the nearer bumper from the passenger side', () => {
+    it('enters through the PASSENGER door from the passenger side, then shuffles across (088/09b)', () => {
       const h = setup();
-      h.system.add(vehicleAt([-3, 0, 0])); // player on the +X (passenger) side in vehicle space
+      const car = vehicleAt([-3, 0, 0]); // player local x = +3 → passenger side
+      h.system.add(car);
       h.press(true);
-      h.system.update(1);
-      expect(h.ctrl.path).toHaveLength(3);
+      h.system.update(0.016);
+      // Straight to the rf-door standoff — no more hiking around the bumpers to the driver door.
+      expect(h.ctrl.path).toHaveLength(1);
+      expect(h.ctrl.path?.[0][0]).toBeCloseTo(-0.8); // -3 + (1 + 1.2)
+
+      h.ctrl.arrived = true;
+      h.system.update(1); // arrived → the PASSENGER door swings open (mirrored angle)
+      expect((car.handle as FakeVehicleHandle).doorAngles.get('rf')).toBeCloseTo(Math.PI / 3);
+
+      h.system.update(0.016); // doorway → climb in through the rf door
+      expect(h.anim.clip).toBe('car_getin_rhs');
+
+      h.system.fixedUpdate(2); // climb-in done → the kerb-side shuffle to the driver seat
+      expect(h.anim.clip).toBe('car_shuffle_rhs');
+
+      h.system.fixedUpdate(1); // shuffle done → seated as the driver
+      expect(h.anim.clip).toBe('car_sit');
     });
 
     it('hands control back when the player feeds movement during the run-up (after a short hold)', () => {
@@ -481,6 +497,31 @@ describe('warpAlongRootMotion (plan 088/09a)', () => {
       const mid = warpAlongRootMotion([0, 0, 0], [1, 0, 0], MOTION, 0.5, 0);
       expect(mid[0]).toBeCloseTo(0.5, 6);
       expect(mid[1]).toBeCloseTo(0, 6);
+    });
+  });
+});
+
+describe('step-in walk-around (plan 088/09c)', () => {
+  describe('positive cases', () => {
+    it('routes back along the OUTSIDE of the open door, then in from abeam the seat', () => {
+      const h = setup([1, 0, 0]);
+      const car = vehicleAt([2, 0, 0]);
+      car.seatLocal = [-0.4, -0.7, -0.16]; // seat behind the hinge → the walk-around leg is visible
+      h.system.add(car);
+      h.press(true);
+      h.system.update(0.016); // approaching
+      h.ctrl.arrived = true;
+      h.system.update(1); // door swings fully open -> the step-in path is issued
+
+      expect(h.ctrl.path).toHaveLength(2);
+      const [around, doorway] = h.ctrl.path ?? [];
+      // Leg 1 stays on the 1.2 m standoff ring (outside the ~0.9 m swept panel) while walking back
+      // to the seat's y; leg 2 goes straight inboard into the doorway. The old single-waypoint path
+      // cut the diagonal THROUGH the panel.
+      expect(around[0]).toBeCloseTo(2 - 1.2, 6);
+      expect(around[1]).toBeCloseTo(-0.7, 6);
+      expect(doorway[0]).toBeCloseTo(2 - 1.35, 6);
+      expect(doorway[1]).toBeCloseTo(-0.7, 6);
     });
   });
 });

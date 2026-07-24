@@ -10,7 +10,7 @@ import type { PhysicsWorld, VehicleController } from '../physics/physics-world';
 import type { VehicleHandle } from './vehicle-handle';
 import type { VehicleRig } from './vehicle-rig';
 
-import { CAR_GETIN, CAR_GETOUT, CAR_SIT } from './vehicle-clips';
+import { CAR_GETIN, CAR_GETIN_RHS, CAR_GETOUT, CAR_SHUFFLE, CAR_SIT } from './vehicle-clips';
 
 /** A car the player can interact with + sit in (driver side). It is a dynamic
  * physics body; `position`/`heading` are kept live by the vehicle-physics system. */
@@ -69,12 +69,18 @@ export interface VehicleAnimator {
   ): void;
 }
 
+/** Front doors the enter sequence can use (088/09b): `lf` = driver (−X), `rf` = passenger (+X). */
+type DoorSide = 'lf' | 'rf';
+
+/** −1 on the driver (−X) side, +1 on the passenger side — mirrors every door-relative x. */
+function sideSign(side: DoorSide): number {
+  return side === 'lf' ? -1 : 1;
+}
+
 /** Planar distance (m) from the car within which Enter starts the sequence. */
 const ENTER_RANGE = 4;
 /** How far out from the hinge (m, driver −X side) the player stands to open the door. */
 const DOOR_STANDOFF = 1.2;
-/** Extra clearance (m) past a bumper when routing around the car. */
-const END_MARGIN = 1.2;
 /** Clearance (m) outside the body where the player stands in the open doorway before climbing in. */
 const DOORWAY_CLEAR = 0.35;
 /** Driver-door open angle about the hinge (sign tuned in-browser). */
@@ -84,6 +90,8 @@ const DOOR_SPEED = Math.PI;
 /** Seconds the climb-in/out clip plays while the body slides between door and seat. */
 const GETIN_DURATION = 1.2;
 const GETOUT_DURATION = 1.2;
+/** Fallback seat-shuffle length (s) when the clip is absent — the real CAR_shuffle_RHS runs 0.4 s. */
+const SHUFFLE_DURATION = 0.4;
 /** Capsule-centre height above the seat dummy (tuned in-browser). */
 const SEAT_RAISE = 0;
 
@@ -112,7 +120,17 @@ const APPROACH_CANCEL_HOLD = 0.18; // s of movement input during the run-to-door
 const APPROACH_STALL_TIMEOUT = 1.5; // s of no progress toward the door (blocked path) before auto-cancelling
 const APPROACH_STALL_EPSILON = 0.02; // planar distance (m) under which the player counts as not progressing per frame
 
-type Phase = 'approaching' | 'exiting' | 'exitopen' | 'getin' | 'idle' | 'opening' | 'seated' | 'stepin' | 'stopping';
+type Phase =
+  | 'approaching'
+  | 'exiting'
+  | 'exitopen'
+  | 'getin'
+  | 'idle'
+  | 'opening'
+  | 'seated'
+  | 'shuffle'
+  | 'stepin'
+  | 'stopping';
 
 /**
  * Drives the full "enter the car" sequence (driver side): from within
@@ -161,6 +179,12 @@ export class EnterVehicleSystem implements System {
   private readonly seatOffset = new Vector3(); // scratch: seat-local → world offset (rotated by the car)
   private readonly seatQuat = new Quaternion(); // scratch: car body orientation
   private seatWorld: Vec3 = [0, 0, 0];
+  /** The kerb-side shuffle to the driver seat after a passenger-door entry (088/09b). */
+  private shuffleElapsed = 0;
+  private shuffleFrom: Vec3 = [0, 0, 0];
+  private shuffleMotion: null | ScriptedMotion = null;
+  /** Which front door this sequence uses — picked by the player's side at approach (088/09b). */
+  private side: DoorSide = 'lf';
   private steerAngle = 0; // current front-wheel steering (rad), slewed toward the input
   private readonly vehicles: EnterableVehicle[] = [];
 
@@ -216,6 +240,8 @@ export class EnterVehicleSystem implements System {
     // false) — a body inside the car shoves it (the entry/exit "pop").
     if (this.phase === 'getin') {
       this.advanceGetin(step);
+    } else if (this.phase === 'shuffle') {
+      this.advanceShuffle(step);
     } else if (this.phase === 'exiting') {
       this.advanceGetout(step);
     } else if ((this.phase === 'seated' || this.phase === 'stopping') && this.active) {
@@ -240,7 +266,13 @@ export class EnterVehicleSystem implements System {
    * WALKING to the door is not riding.
    */
   isRiding(): boolean {
-    return this.phase === 'getin' || this.phase === 'exiting' || this.phase === 'exitopen' || this.isSeated();
+    return (
+      this.phase === 'getin' ||
+      this.phase === 'shuffle' ||
+      this.phase === 'exiting' ||
+      this.phase === 'exitopen' ||
+      this.isSeated()
+    );
   }
 
   /** Whether the player is seated in (driving) the active car — distinct from merely approaching/exiting. */
@@ -275,17 +307,17 @@ export class EnterVehicleSystem implements System {
     }
     if (this.phase === 'approaching' && this.controller.arrived) {
       this.phase = 'opening';
-      this.doorTarget = DOOR_OPEN_ANGLE;
+      this.doorTarget = this.openAngle();
     }
     // The getin/exiting slides + seated ride run on the fixed step (see fixedUpdate).
     this.animateDoor(delta);
-    if (this.phase === 'opening' && this.doorAngleOf(this.active) === DOOR_OPEN_ANGLE) {
+    if (this.phase === 'opening' && this.doorAngleOf(this.active) === this.openAngle()) {
       this.startStepin();
     }
     if (this.phase === 'stepin' && this.controller.arrived) {
       this.startGetin();
     }
-    if (this.phase === 'exitopen' && this.doorAngleOf(this.active) === DOOR_OPEN_ANGLE) {
+    if (this.phase === 'exitopen' && this.doorAngleOf(this.active) === this.openAngle()) {
       this.startGetout();
     }
     // After exiting, only let the player collide with cars again once he's stepped clear —
@@ -308,7 +340,11 @@ export class EnterVehicleSystem implements System {
       warpAlongRootMotion(this.getinFrom, this.seatWorld, this.getinMotion, t, this.active?.heading ?? 0),
     );
     if (t >= 1) {
-      this.startSeated();
+      if (this.side === 'rf') {
+        this.startShuffle();
+      } else {
+        this.startSeated();
+      }
     }
   }
 
@@ -326,7 +362,23 @@ export class EnterVehicleSystem implements System {
     }
   }
 
-  /** Move the active car's driver door toward {@link doorTarget}. */
+  /** Advance the kerb-side shuffle to the driver seat (088/09b) — same warp as the climb-in. */
+  private advanceShuffle(delta: number): void {
+    if (this.active) {
+      this.physics.holdBody(this.active.body, this.holdPos, this.holdQuat); // pin the parked car
+    }
+    this.shuffleElapsed += delta;
+    const duration = this.shuffleMotion?.duration ?? SHUFFLE_DURATION;
+    const t = Math.min(this.shuffleElapsed / duration, 1);
+    this.placePlayer(
+      warpAlongRootMotion(this.shuffleFrom, this.seatWorld, this.shuffleMotion, t, this.active?.heading ?? 0),
+    );
+    if (t >= 1) {
+      this.startSeated();
+    }
+  }
+
+  /** Move the active car's SEQUENCE door (088/09b: lf or rf) toward {@link doorTarget}. */
   private animateDoor(delta: number): void {
     if (!this.active) {
       return;
@@ -338,7 +390,7 @@ export class EnterVehicleSystem implements System {
     const remaining = this.doorTarget - angle;
     const next = angle + Math.sign(remaining) * Math.min(Math.abs(remaining), DOOR_SPEED * delta);
     this.doors.set(this.active, next);
-    this.active.handle.setDoorAngle('lf', next);
+    this.active.handle.setDoorAngle(this.side, next);
   }
 
   /** Lock onto the nearest in-range car and send the player to its driver door. */
@@ -349,6 +401,9 @@ export class EnterVehicleSystem implements System {
     }
 
     this.active = nearest;
+    // The NEAR front door (088/09b): a passenger-side approach uses the rf door + the seat shuffle,
+    // instead of hiking around the car to the driver door.
+    this.side = this.playerLocal(nearest)[0] > 0 ? 'rf' : 'lf';
     this.phase = 'approaching';
     this.approachHeld = 0;
     this.approachStalled = 0;
@@ -356,7 +411,7 @@ export class EnterVehicleSystem implements System {
     // Stop the player shoving the dynamic car while walking to the door / climbing in.
     this.physics.ignoreVehicles(this.playerCollider, true);
     this.restoreWhenClear = false; // entering again — keep ignoring cars
-    this.controller.runPath(this.driverDoorPath(nearest));
+    this.controller.runPath(this.doorApproachPath(nearest, this.side));
     this.logger.debug('enter-vehicle', 'approach');
   }
 
@@ -375,11 +430,24 @@ export class EnterVehicleSystem implements System {
     return vehicle ? (this.doors.get(vehicle) ?? 0) : 0;
   }
 
-  /** Standing spot in the open doorway, aligned with the seat (just outside the body). */
+  /**
+   * A world-space path (Z-up) to the standing spot outside `side`'s front door (088/09b). The door is
+   * always on the PLAYER'S side of the car now, so the approach is straight — no bumper routing.
+   */
+  private doorApproachPath(vehicle: EnterableVehicle, side: DoorSide): Vec3[] {
+    const [hx] = vehicle.halfExtents;
+    const sign = sideSign(side);
+    const hinge = vehicle.handle.doorHinge(side);
+    const entry: [number, number] = [(hinge?.[0] ?? sign * hx) + sign * DOOR_STANDOFF, hinge?.[1] ?? 0];
+
+    return [this.toWorld(vehicle, entry)];
+  }
+
+  /** Standing spot in the open doorway of the sequence's side, aligned with the seat row. */
   private doorwayWorld(vehicle: EnterableVehicle): Vec3 {
     const [hx] = vehicle.halfExtents;
 
-    return this.toWorld(vehicle, [-(hx + DOORWAY_CLEAR), vehicle.seatLocal[1]]);
+    return this.toWorld(vehicle, [sideSign(this.side) * (hx + DOORWAY_CLEAR), vehicle.seatLocal[1]]);
   }
 
   /**
@@ -446,28 +514,6 @@ export class EnterVehicleSystem implements System {
 
     this.physics.setVehicleControls(car.controller, car.wheels, this.engine, brake, this.steerAngle);
     car.rig.setSteer(this.steerAngle); // front wheels turn with the physics steer
-  }
-
-  /**
-   * A world-space path (Z-up) to the driver-door standing spot. From the
-   * passenger (+X) side it routes around the nearer bumper so the player doesn't
-   * walk into the car; otherwise a straight approach.
-   */
-  private driverDoorPath(vehicle: EnterableVehicle): Vec3[] {
-    const [hx, hy] = vehicle.halfExtents;
-    const hinge = vehicle.handle.doorHinge('lf');
-    const entry: [number, number] = [(hinge?.[0] ?? -hx) - DOOR_STANDOFF, hinge?.[1] ?? 0]; // driver (−X) side
-    const player = this.playerLocal(vehicle);
-
-    const path: [number, number][] = [];
-    if (player[0] > 0) {
-      // Passenger side: go along the player's side to the nearer end, then cross over.
-      const endY = (player[1] >= 0 ? 1 : -1) * (hy + END_MARGIN);
-      path.push([player[0], endY], [entry[0], endY]);
-    }
-    path.push(entry);
-
-    return path.map((local) => this.toWorld(vehicle, local));
   }
 
   /** Drive the seated car and snap the rider onto its (full-transform) seat. */
@@ -539,6 +585,11 @@ export class EnterVehicleSystem implements System {
     return nearest;
   }
 
+  /** The sequence door's fully-open angle — the driver-side sign, mirrored for the passenger door. */
+  private openAngle(): number {
+    return this.side === 'lf' ? DOOR_OPEN_ANGLE : -DOOR_OPEN_ANGLE;
+  }
+
   /** True once the player is outside the car's footprint (+ clearance) — safe to re-collide. */
   private playerClearOf(vehicle: EnterableVehicle): boolean {
     const [hx, hy] = vehicle.halfExtents;
@@ -558,9 +609,11 @@ export class EnterVehicleSystem implements System {
     return [dx * cos + dy * sin, -dx * sin + dy * cos];
   }
 
-  /** World seat position (Z-up): seat dummy in vehicle space → world, raised onto the capsule centre. */
-  private seatWorldOf(vehicle: EnterableVehicle): Vec3 {
-    const [wx, wy] = this.toWorld(vehicle, [vehicle.seatLocal[0], vehicle.seatLocal[1]]);
+  /** World seat position (Z-up): seat dummy in vehicle space → world, raised onto the capsule centre.
+   *  The passenger seat is the driver seat mirrored to +X (088/09b). */
+  private seatWorldOf(vehicle: EnterableVehicle, seat: 'driver' | 'passenger' = 'driver'): Vec3 {
+    const seatX = seat === 'passenger' ? -vehicle.seatLocal[0] : vehicle.seatLocal[0];
+    const [wx, wy] = this.toWorld(vehicle, [seatX, vehicle.seatLocal[1]]);
 
     return [wx, wy, vehicle.position[2] + vehicle.seatLocal[2] + SEAT_RAISE];
   }
@@ -573,8 +626,9 @@ export class EnterVehicleSystem implements System {
     this.physics.parkVehicle(this.active.controller); // hold the car still while CJ climbs out
     this.steerAngle = 0;
     this.active.rig.setSteer(0);
+    this.side = 'lf'; // exit through the driver door (the 09d blockage chain picks alternatives)
     this.phase = 'exitopen';
-    this.doorTarget = DOOR_OPEN_ANGLE;
+    this.doorTarget = this.openAngle();
   }
 
   /** At the doorway → gate the player, start the climb-in clip and slide to the seat. */
@@ -585,12 +639,17 @@ export class EnterVehicleSystem implements System {
     this.phase = 'getin';
     this.getinElapsed = 0;
     this.getinFrom = this.playerPosition();
-    this.getinMotion = this.animation.scriptedMotion(CAR_GETIN);
-    this.seatWorld = this.seatWorldOf(this.active);
+    const clip = this.side === 'rf' ? CAR_GETIN_RHS : CAR_GETIN;
+    this.getinMotion = this.animation.scriptedMotion(clip);
+    // A passenger-door entry climbs into the PASSENGER seat first; the shuffle crosses after.
+    this.seatWorld = this.seatWorldOf(this.active, this.side === 'rf' ? 'passenger' : 'driver');
     this.storeHold(this.active); // pin the parked car here while the player climbs in
     this.controller.setEnabled(false);
     this.physics.setColliderSensor(this.playerCollider, true); // rider = sensor → can't shove the car
-    this.animation.setScripted(CAR_GETIN, { facing: this.active.heading, loop: false });
+    this.animation.setScripted(this.side === 'rf' ? CAR_GETIN_RHS : CAR_GETIN, {
+      facing: this.active.heading,
+      loop: false,
+    });
   }
 
   /** Door is open → play the climb-out clip and slide from the seat to the doorway. */
@@ -623,13 +682,37 @@ export class EnterVehicleSystem implements System {
     this.logger.log('enter-vehicle', 'seated');
   }
 
-  /** Door is open → walk the player tight into the open doorway (aligned with the seat). */
+  /** Passenger-door entry reached the passenger seat → slide across to the driver seat (088/09b). */
+  private startShuffle(): void {
+    if (!this.active) {
+      return;
+    }
+    this.phase = 'shuffle';
+    this.shuffleElapsed = 0;
+    this.shuffleFrom = this.playerPosition();
+    this.shuffleMotion = this.animation.scriptedMotion(CAR_SHUFFLE);
+    this.seatWorld = this.seatWorldOf(this.active, 'driver');
+    this.doorTarget = 0; // pull the passenger door shut while sliding across
+    this.animation.setScripted(CAR_SHUFFLE, { facing: this.active.heading, loop: false });
+  }
+
+  /** Door is open → walk AROUND the open panel into the doorway (088/09c): back along the outside
+   *  of the door's swept arc at the standoff distance (the panel at 60° reaches ~0.9 m out — inside
+   *  the 1.2 m standoff ring), then straight in from abeam the seat. The old single-waypoint path cut
+   *  a diagonal THROUGH the open panel. */
   private startStepin(): void {
     if (!this.active) {
       return;
     }
     this.phase = 'stepin';
-    this.controller.runPath([this.doorwayWorld(this.active)]);
+    const [hx] = this.active.halfExtents;
+    const sign = sideSign(this.side);
+    const hinge = this.active.handle.doorHinge(this.side);
+    const standoffX = (hinge?.[0] ?? sign * hx) + sign * DOOR_STANDOFF;
+    this.controller.runPath([
+      this.toWorld(this.active, [standoffX, this.active.seatLocal[1]]),
+      this.doorwayWorld(this.active),
+    ]);
   }
 
   /** Snapshot the car's current transform so {@link advanceGetin}/{@link advanceGetout} can pin it. */

@@ -321,8 +321,22 @@ glide 0.5 · fall_glide 0.8 · getup(_front) 1.37 (ANP3 raw / 60).
   player's side), the `rf` door swings (mirrored angle — `setDoorAngle`/`doorHinge` already take a
   side), `CAR_getin_RHS` into the passenger seat, then `CAR_shuffle_RHS` across to the driver
   seat, then the normal seated pose. Passenger seat local = the driver seat mirrored to +X.
+
+  **CODE-COMPLETE 2026-07-24 — ledger:** a `DoorSide` runs through the whole sequence (approach →
+  door swing → step-in → doorway → getin clip/motion → seat). A passenger-side approach now walks
+  STRAIGHT to the rf door (the old path hiked around a bumper to the driver door — routing + its
+  `END_MARGIN` deleted), climbs in with `CAR_getin_RHS` root motion into the mirrored (+X) seat,
+  then a new `shuffle` phase warps across on `CAR_shuffle_RHS` (0.4 s; the passenger door pulls
+  shut during the slide) into the driver seat. Exit stays the driver door until 09d. Degradation:
+  absent RHS clips → the stand-in pose + linear slides, sequence still completes. Tests: the
+  bumper-routing test replaced by the full rf-entry flow (approach x, rf swing, both clips, sit).
 - **09c — Door-aware step-in.** The step-in waypoint routes around the OPEN door's swept arc
   (hinge + panel radius) so the player walks around the panel into the doorway, never through it.
+
+  **CODE-COMPLETE 2026-07-24 — ledger:** two-leg step-in replaces the diagonal that cut through
+  the open panel: leg 1 walks back along the 1.2 m standoff ring (the panel at 60° reaches only
+  ~0.9 m out) to abeam the seat, leg 2 goes straight inboard into the doorway. Mirrored for the rf
+  door. Test pins both waypoints on a seat-behind-hinge fixture.
 - **09d — Exit-door chain + overturned egress.** Exit picks driver door → passenger door →
   windscreen → appear-on-the-car, each gated by a physics probe outward from that egress spot
   (wall/ground/vehicle within the standoff = blocked). Overturned (`!isUpright`) exits play
