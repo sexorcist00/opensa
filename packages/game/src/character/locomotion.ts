@@ -22,8 +22,10 @@ export const LOCOMOTION_AIRBORNE = 2;
 export const LOCOMOTION_FALL = 3;
 /** Touched down — the recovery beat with reduced control. */
 export const LOCOMOTION_LAND = 4;
-/** Touched down past the hard-impact threshold — the collapse tier with the longer recovery. */
+/** Touched down past the hard-impact threshold — the impact-crouch tier (FALL_land). */
 export const LOCOMOTION_HARD_LAND = 5;
+/** Touched down past the collapse threshold — goes DOWN (FALL_collapse) and stands back up (getup). */
+export const LOCOMOTION_COLLAPSE = 6;
 
 /** Intent further than this from the current heading while moving = a reversal: plant, don't pirouette. */
 export const REVERSAL_ANGLE = (2 * Math.PI) / 3; // 120°

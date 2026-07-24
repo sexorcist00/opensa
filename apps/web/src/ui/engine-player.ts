@@ -15,6 +15,7 @@ import { readPedOsm } from '@opensa/game/adapters/ped-osm';
 import {
   IDLE_SPEED_THRESHOLD,
   LOCOMOTION_AIRBORNE,
+  LOCOMOTION_COLLAPSE,
   LOCOMOTION_FALL,
   LOCOMOTION_GROUNDED,
   LOCOMOTION_HARD_LAND,
@@ -43,13 +44,15 @@ export interface EnginePlayer {
     options?: { facing?: number; loop?: boolean; orientation?: readonly [number, number, number, number] },
   ): void;
   /** Advance the clip clock and upload the palette for this frame (`speed` = planar GTA m/s;
-   *  `state` = the controller's `Locomotion.state` — picks the 088/04 air/land clip over the gait). */
+   *  `state`/`stateTime` = the controller's `Locomotion.state`+`stateTime` — pick the 088/04 air/land
+   *  clip over the gait, and drive the 088/07 collapse→getup handoff). */
   update(
     positionEngine: readonly [number, number, number],
     headingYaw: number,
     speed: number,
     dt: number,
     state?: number,
+    stateTime?: number,
   ): void;
 }
 
@@ -70,6 +73,8 @@ const PLAYER_CLIPS = [
   'jump_land',
   'fall_glide',
   'fall_collapse',
+  'fall_land',
+  'getup',
 ];
 const IDLE_CLIP = 0;
 const WALK_CLIP = 1;
@@ -80,6 +85,8 @@ const GLIDE_CLIP = 5;
 const LAND_CLIP = 6;
 const FALL_GLIDE_CLIP = 7;
 const COLLAPSE_CLIP = 8;
+const FALL_LAND_CLIP = 9;
+const GETUP_CLIP = 10;
 /** Gait tier (the {@link GaitSelector} output) → locomotion clip. */
 const GAIT_CLIPS = [IDLE_CLIP, WALK_CLIP, RUN_CLIP, SPRINT_CLIP];
 /** Air/land clips that HOLD their last frame. Launch/land/collapse are obvious one-shots; the GLIDES
@@ -88,6 +95,8 @@ const GAIT_CLIPS = [IDLE_CLIP, WALK_CLIP, RUN_CLIP, SPRINT_CLIP];
 const ONE_SHOT_CLIPS: ReadonlySet<number> = new Set([
   COLLAPSE_CLIP,
   FALL_GLIDE_CLIP,
+  FALL_LAND_CLIP,
+  GETUP_CLIP,
   GLIDE_CLIP,
   LAND_CLIP,
   LAUNCH_CLIP,
@@ -195,7 +204,7 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
     return reference > 0 ? Math.min(RATE_MAX, Math.max(RATE_MIN, speed / reference)) : 1;
   };
   const fadeFor = (from: number, to: number): number => {
-    if (to === LAND_CLIP || to === COLLAPSE_CLIP) {
+    if (to === LAND_CLIP || to === COLLAPSE_CLIP || to === FALL_LAND_CLIP) {
       return LAND_FADE_SECONDS;
     }
     if (from === LAUNCH_CLIP && to === GLIDE_CLIP) {
@@ -252,7 +261,7 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
         scriptedFacing = options.facing;
       }
     },
-    update(positionEngine, headingYaw, speed, dt, state = LOCOMOTION_GROUNDED): void {
+    update(positionEngine, headingYaw, speed, dt, state = LOCOMOTION_GROUNDED, stateTime = 0): void {
       if (scripted) {
         const clip = clips[scripted.index];
         clipTime += dt;
@@ -262,7 +271,8 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
       } else {
         // The air/land state overrides the gait; with no (resolved) air clip the gait carries on — the
         // jump PHYSICS still runs, the visual just degrades to v1 (rule 3).
-        const wanted = airClipFor(state, durations) ?? resolveGaitClip(durations, GAIT_CLIPS[selector.update(speed)]);
+        const wanted =
+          airClipFor(state, durations, stateTime) ?? resolveGaitClip(durations, GAIT_CLIPS[selector.update(speed)]);
         const { captureHold, pose } = mixer.update(wanted, dt, speed);
         if (captureHold) {
           sampler.holdPose(); // freeze the on-screen pose BEFORE sampling — the hold-fade's source
@@ -316,8 +326,9 @@ export function resolveGaitClip(durations: readonly number[], wanted: number): n
  *  have resolved (duration > 0) or the next is tried — an absent air set degrades to the speed gait. */
 const AIR_CLIP_CHAINS: Readonly<Record<number, readonly number[]>> = {
   [LOCOMOTION_AIRBORNE]: [GLIDE_CLIP],
+  [LOCOMOTION_COLLAPSE]: [COLLAPSE_CLIP, FALL_LAND_CLIP, LAND_CLIP],
   [LOCOMOTION_FALL]: [FALL_GLIDE_CLIP, GLIDE_CLIP],
-  [LOCOMOTION_HARD_LAND]: [COLLAPSE_CLIP, LAND_CLIP],
+  [LOCOMOTION_HARD_LAND]: [FALL_LAND_CLIP, LAND_CLIP],
   [LOCOMOTION_LAND]: [LAND_CLIP],
   [LOCOMOTION_LAUNCH]: [LAUNCH_CLIP],
 };
@@ -325,9 +336,20 @@ const AIR_CLIP_CHAINS: Readonly<Record<number, readonly number[]>> = {
 /**
  * The clip an 088/04 FSM state plays, or `null` for "not airborne / nothing resolved — use the speed
  * gait" (the rule-3 v1 fallback: jump PHYSICS works on every TC even when its IFP has no jump clips).
+ * `stateTime` drives the 088/07 COLLAPSE chain: `fall_collapse` until its clip has played out, then
+ * `getup` (when resolved — else the collapse holds its last frame for the whole recovery).
  * Pure + exported so the degradation chains are unit-testable.
  */
-export function airClipFor(state: number, durations: readonly number[]): null | number {
+export function airClipFor(state: number, durations: readonly number[], stateTime = 0): null | number {
+  const collapseDuration = durations[COLLAPSE_CLIP] ?? 0;
+  if (
+    state === LOCOMOTION_COLLAPSE &&
+    collapseDuration > 0 && // no collapse clip → the ped never went down, so getup would read wrong
+    stateTime >= collapseDuration &&
+    (durations[GETUP_CLIP] ?? 0) > 0
+  ) {
+    return GETUP_CLIP;
+  }
   for (const clip of AIR_CLIP_CHAINS[state] ?? []) {
     if ((durations[clip] ?? 0) > 0) {
       return clip;

@@ -1,8 +1,9 @@
 # 088 — Ped locomotion feel (turning, acceleration tiers, jump, animation states)
 
-**Status: SHIPPED 2026-07-24 (phases 01–04 + close-out 06 all CLOSED same day; 05 stays QUEUED).**
-Four feature commits (`4fbe73b` heading+plant · `5ed9a0c` crossfade+hold · `6520641` tiers+rate-sync ·
-`c45adaf` jump FSM) + the field-round-1 fix `160d428`; full suite 792 green throughout.
+**Status: REOPENED 2026-07-24 (round 2) — phases 01–04 + 06 CLOSED, 05 QUEUED; the user extended the
+scope same day with phases 07–09 (landing tiers, slope slide, vehicle ingress/egress realism).**
+Round 1: four feature commits (`4fbe73b` heading+plant · `5ed9a0c` crossfade+hold · `6520641`
+tiers+rate-sync · `c45adaf` jump FSM) + the field fix `160d428` + close-out `824ca1b`; 792 green.
 
 **Goal: on-foot movement feels like a modern AAA third-person game** — the character turns through an
 arc instead of snapping to a new direction, speed ramps through distinct walk/run/sprint tiers, the
@@ -243,7 +244,72 @@ it — the glides joined the one-shot set (hold the last frame; launch/land/coll
 turns). Each is one FSM edge + one clip through the same gate; none blocks the chain. Decide from the
 phase-04 field round.
 
-### 06 — Close-out: defaults freeze + docs (DONE 2026-07-24)
+## Round 2 (user-requested 2026-07-24, planned same day)
+
+The user's extension list, mapped to what `ped.ifp` actually ships (all clips verified present):
+impact-tiered landings (`FALL_land` crouch, `FALL_collapse` + `getup`), overturned-car egress
+(`CAR_crawloutRHS`, `CAR_rollout_*`), passenger-side entry + seat shuffle (`CAR_getin_RHS`,
+`CAR_shuffle_RHS`), door realism (`CAR_open_*`, `CAR_align_*`, `CAR_doorlocked_*`), and a slope
+slide (no authored SA clip — `FALL_glide` is the balance-pose stand-in, field-judged). The enter
+system study (2026-07-24): doors DO animate but only `lf`; exit is always the driver door with no
+blockage checks; the "floats in the air" boarding is the LINEAR `getinFrom → seatWorld` slide —
+the clip's authored root motion (kept by `parseIfp` as frame-type-4 translation, dropped by
+`pedClip`'s root anchoring) never drives the body.
+
+### 07 — Landing tiers + the getup chain (CODE-COMPLETE 2026-07-24 — awaiting the field round)
+
+- Three impact tiers instead of two: `JUMP_land` (soft, ≥1 m/s) · **`FALL_land` — the impact
+  CROUCH** the user asked for (> `hardLandSpeed` 12) · **`FALL_collapse` → `getup` chain** (a new
+  `LOCOMOTION_COLLAPSE` state, > new `collapseSpeed` ~16 — fell far enough to go down and STAND
+  BACK UP; recovery `collapseRecoverySeconds` ~1.8 covers both clips).
+- The anim side needs `stateTime` (collapse plays until its clip ends, then getup) —
+  `EnginePlayer.update` gains the argument; degradation: no `getup` → hold the collapse's last
+  frame; no `FALL_land` → `JUMP_land` (the round-1 behaviour).
+- Tests: tier pick per impact band; the collapse→getup handoff by stateTime; degradation chains.
+
+**Ledger (2026-07-24, code-complete):** three tiers shipped — `JUMP_land` (1–12 m/s, 0.15 s) ·
+`FALL_land` impact crouch (12–16 m/s = `hardLandSpeed`..`collapseSpeed`, 0.5 s) · `FALL_collapse` +
+`getup` (>16 m/s, new `LOCOMOTION_COLLAPSE` state, `collapseRecoverySeconds` **1.8 s** covering both
+clips; neither upper tier is buffer-bypassed). The anim handoff is `stateTime`-driven
+(`EnginePlayer.update` gained the argument; `airClipFor` hands `fall_collapse` → `getup` only when
+the collapse RESOLVED and has fully played — a TC without the collapse clip plays the crouch chain,
+without `getup` it holds the collapse's last frame). In fall-speed terms the tiers are ≈ heights of
+**>0.05 m / >7.3 m / >13 m**. Tests: +7 (3 tier/impact-band with real Rapier — mid-tier from z=10
+≈13 m/s, collapse from z=17 ≈17.5 m/s; 5 airClipFor chain/degradation cases minus renames); full
+suite **798 green**; lint (recovery pick extracted to `recoverySecondsOf`) + tsc clean.
+
+### 08 — Slope slide (a pose for the 45°+ surfaces Rapier already slides down)
+
+- Ground NORMAL from the ground probe (extend the physics ray); grounded on a slope steeper than
+  `slideSlopeDeg` (~42°, hysteresis a few degrees) → a SLIDE locomotion state: reduced control,
+  `FALL_glide` balance pose (no authored slide clip exists in SA — field-judged stand-in).
+- Tests: pure slope math; the state needs a ramp fixture — if the test physics world can't build
+  an inclined collider cheaply, the state logic tests run on a faked normal and the ramp is field.
+
+### 09 — Vehicle ingress/egress realism (each sub-step individually shippable)
+
+- **09a — Root motion for the scripted clips (the "floats in the air" fix).** Extract the ROOT
+  translation track from the raw IFP (`parseIfp` keeps it; `pedClip` drops it), and drive
+  `placePlayer` along `anchor + yaw · (root(t) − root(0))` for getin/getout instead of the linear
+  lerp — the authored trajectory carries the doorway dip and the drop into the seat. Foundation
+  for every other clip here (shuffle, crawlout).
+- **09b — Passenger-side entry + the seat shuffle.** Nearest-door pick (`lf` vs `rf` by the
+  player's side), the `rf` door swings (mirrored angle — `setDoorAngle`/`doorHinge` already take a
+  side), `CAR_getin_RHS` into the passenger seat, then `CAR_shuffle_RHS` across to the driver
+  seat, then the normal seated pose. Passenger seat local = the driver seat mirrored to +X.
+- **09c — Door-aware step-in.** The step-in waypoint routes around the OPEN door's swept arc
+  (hinge + panel radius) so the player walks around the panel into the doorway, never through it.
+- **09d — Exit-door chain + overturned egress.** Exit picks driver door → passenger door →
+  windscreen → appear-on-the-car, each gated by a physics probe outward from that egress spot
+  (wall/ground/vehicle within the standoff = blocked). Overturned (`!isUpright`) exits play
+  `CAR_crawloutRHS` with 09a root motion instead of the door slide; the windscreen egress crawls
+  out over the bonnet; the last resort places the player on the car's world-top with no clip.
+  Entering stays upright-only (unchanged).
+
+Execution order: **07 → 09a → 09c → 09b → 09d → 08** (07 is self-contained; 09a is the foundation
+the rest of 09 samples through; 08 is independent and lowest-risk last).
+
+### 06 — Close-out: defaults freeze + docs (DONE 2026-07-24 — round 1; round 2 re-runs it)
 
 Field-judged defaults frozen on user verdict; `docs/features/character.md` rewritten for the FSM (also
 fixing the stale `CharacterAnimationSystem` wording — the machine is inline in `engine-player.ts`

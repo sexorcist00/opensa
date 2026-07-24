@@ -1050,7 +1050,14 @@ async function boot(
     }
     const render: [number, number, number] = [playerEngine[0], playerEngine[1] + groundDelta, playerEngine[2]];
     // Riding forces the grounded state (0) — the seat pose must never pick a jump/fall clip.
-    player.update(render, heading, ridingCar ? 0 : speed, dt, ridingCar ? 0 : (Locomotion.state[playerEid] ?? 0));
+    player.update(
+      render,
+      heading,
+      ridingCar ? 0 : speed,
+      dt,
+      ridingCar ? 0 : (Locomotion.state[playerEid] ?? 0),
+      ridingCar ? 0 : (Locomotion.stateTime[playerEid] ?? 0),
+    );
   };
 
   /** A car system throwing must not kill the frame loop — surface it in the HUD and keep walking. */

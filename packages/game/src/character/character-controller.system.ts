@@ -15,6 +15,7 @@ import {
   IDLE_SPEED_THRESHOLD,
   LAND_MIN_FALL_SPEED,
   LOCOMOTION_AIRBORNE,
+  LOCOMOTION_COLLAPSE,
   LOCOMOTION_FALL,
   LOCOMOTION_GROUNDED,
   LOCOMOTION_HARD_LAND,
@@ -195,10 +196,9 @@ export class CharacterControllerSystem implements System {
         [state, time] = [this.touchdownState(eid, timers), 0];
       }
     } else {
-      // LAND / HARD_LAND: a recovery beat at reduced control, then back to the ground state.
+      // LAND / HARD_LAND / COLLAPSE: a recovery at reduced control, then back to the ground state.
       controlFactor = movement.airControl;
-      const recovery = state === LOCOMOTION_HARD_LAND ? movement.hardLandRecoverySeconds : movement.landRecoverySeconds;
-      if (time >= recovery) {
+      if (time >= this.recoverySecondsOf(state)) {
         [state, time] = [LOCOMOTION_GROUNDED, 0];
       }
     }
@@ -358,6 +358,16 @@ export class CharacterControllerSystem implements System {
     }
   }
 
+  /** How long a landing state locks control (088/07): the collapse's stand-back-up is the longest. */
+  private recoverySecondsOf(state: number): number {
+    const { movement } = this.config;
+    if (state === LOCOMOTION_COLLAPSE) {
+      return movement.collapseRecoverySeconds;
+    }
+
+    return state === LOCOMOTION_HARD_LAND ? movement.hardLandRecoverySeconds : movement.landRecoverySeconds;
+  }
+
   /** Gait tier (088/03): sprint > walk modifiers, RUN is the default — SA jogs when nothing is held. */
   private tierSpeed(): number {
     const { movement } = this.config;
@@ -371,11 +381,17 @@ export class CharacterControllerSystem implements System {
     return movement.runSpeed;
   }
 
-  /** The state a touchdown lands in: hard hits collapse (never bypassed), a buffered press re-launches
-   *  on the landing frame, a real impact takes the recovery beat, a feather touch takes none. */
+  /** The state a touchdown lands in (088/07 tiers): past `collapseSpeed` the ped goes DOWN and stands
+   *  back up; past `hardLandSpeed` it takes the impact crouch (neither is buffer-bypassed); else a
+   *  buffered press re-launches on the landing frame, a real impact takes the quick recovery beat,
+   *  a feather touch takes none. */
   private touchdownState(eid: number, timers: { buffer: number }): number {
+    const { movement } = this.config;
     const impact = Locomotion.fallSpeed[eid] ?? 0;
-    if (impact > this.config.movement.hardLandSpeed) {
+    if (impact > movement.collapseSpeed) {
+      return LOCOMOTION_COLLAPSE;
+    }
+    if (impact > movement.hardLandSpeed) {
       return LOCOMOTION_HARD_LAND;
     }
     if (timers.buffer > 0) {

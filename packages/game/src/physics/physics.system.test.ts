@@ -96,6 +96,8 @@ function config(gameState: Config['gameState']): Config {
     movement: {
       accel: 20,
       airControl: 0.3,
+      collapseRecoverySeconds: 1.8,
+      collapseSpeed: 16,
       coyoteSeconds: 0.12,
       deceleration: 25,
       hardLandRecoverySeconds: 0.5,

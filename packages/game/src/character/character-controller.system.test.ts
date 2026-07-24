@@ -13,6 +13,7 @@ import { initRapier } from '../physics/rapier';
 import { CharacterControllerSystem, type LookDirectionSource } from './character-controller.system';
 import {
   LOCOMOTION_AIRBORNE,
+  LOCOMOTION_COLLAPSE,
   LOCOMOTION_FALL,
   LOCOMOTION_GROUNDED,
   LOCOMOTION_HARD_LAND,
@@ -127,6 +128,8 @@ function config(gameState: Config['gameState']): Config {
     movement: {
       accel: 20,
       airControl: 0.3,
+      collapseRecoverySeconds: 1.8,
+      collapseSpeed: 16,
       coyoteSeconds: 0.12,
       deceleration: 25,
       hardLandRecoverySeconds: 0.5,
@@ -654,18 +657,18 @@ describe('CharacterControllerSystem jump & fall FSM (plan 088/04)', () => {
       player.physics.dispose();
     });
 
-    it('a press early in a HARD-land recovery expires unfired (no bounce out of a collapse)', async () => {
+    it('a press early in a COLLAPSE recovery expires unfired (no bounce out of a knockdown)', async () => {
       const player = await groundedPlayer();
       const { down, step } = liveSystem(player);
-      player.physics.teleport(RigidBody.handle[player.eid], [0, 0, 15]); // impact ≈ 16.6 > hardLandSpeed 12
+      player.physics.teleport(RigidBody.handle[player.eid], [0, 0, 17]); // impact ≈ 17.5 > collapseSpeed 16
       player.physics.step(STEP); // commit the kinematic teleport BEFORE the first controller move
       stepUntilGrounded(player, step);
-      step(); // the FSM sees the touchdown → HARD_LAND
-      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_HARD_LAND);
+      step(); // the FSM sees the touchdown → COLLAPSE
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_COLLAPSE);
 
-      down.add('Space'); // pressed at recovery start; the 0.15 s buffer dies inside the 0.5 s recovery
+      down.add('Space'); // pressed at recovery start; the 0.15 s buffer dies inside the 1.8 s recovery
       let vzMax = -Infinity;
-      for (let i = 0; i < 40; i += 1) {
+      for (let i = 0; i < 130; i += 1) {
         step();
         vzMax = Math.max(vzMax, Velocity.z[player.eid]);
       }
@@ -802,26 +805,50 @@ describe('CharacterControllerSystem jump & fall FSM (plan 088/04)', () => {
       player.physics.dispose();
     });
 
-    it('a hard impact collapses (fallSpeed recorded) and takes the LONG recovery', async () => {
+    it('a mid-tier impact takes the HARD_LAND crouch and its 0.5 s recovery (088/07)', async () => {
       const player = await groundedPlayer();
       const { step } = liveSystem(player);
-      player.physics.teleport(RigidBody.handle[player.eid], [0, 0, 15]);
+      player.physics.teleport(RigidBody.handle[player.eid], [0, 0, 10]); // impact ≈ 13 ∈ (12, 16)
       player.physics.step(STEP); // commit the kinematic teleport BEFORE the first controller move
       stepUntilGrounded(player, step);
       step();
 
       expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_HARD_LAND);
       expect(Locomotion.fallSpeed[player.eid]).toBeGreaterThan(12);
+      expect(Locomotion.fallSpeed[player.eid]).toBeLessThan(16);
 
       for (let i = 0; i < 12; i += 1) {
         step();
       }
-      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_HARD_LAND); // still collapsed past the soft window
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_HARD_LAND); // still crouched past the soft window
 
       for (let i = 0; i < 25; i += 1) {
         step();
       }
       expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_GROUNDED); // 0.5 s served
+      player.physics.dispose();
+    });
+
+    it('a severe impact COLLAPSES (fallSpeed recorded) and takes the long stand-back-up recovery', async () => {
+      const player = await groundedPlayer();
+      const { step } = liveSystem(player);
+      player.physics.teleport(RigidBody.handle[player.eid], [0, 0, 17]); // impact ≈ 17.5 > 16
+      player.physics.step(STEP);
+      stepUntilGrounded(player, step);
+      step();
+
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_COLLAPSE);
+      expect(Locomotion.fallSpeed[player.eid]).toBeGreaterThan(16);
+
+      for (let i = 0; i < 40; i += 1) {
+        step(); // 0.67 s — a HARD_LAND would have recovered by now
+      }
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_COLLAPSE);
+
+      for (let i = 0; i < 80; i += 1) {
+        step();
+      }
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_GROUNDED); // 1.8 s served
       player.physics.dispose();
     });
   });

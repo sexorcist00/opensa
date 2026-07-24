@@ -243,13 +243,17 @@ export interface MovementConfig {
   accel: number;
   /** Fraction (0..1) of accel/deceleration applied while airborne (air control). */
   airControl: number;
+  /** Recovery seconds after a COLLAPSE landing — covers the fall-down AND the stand-back-up clips. */
+  collapseRecoverySeconds: number;
+  /** Vertical impact speed (units/s) above which a landing collapses outright (088/07 top tier). */
+  collapseSpeed: number;
   /** Seconds after leaving the ground during which a jump is still accepted (coyote time, 088/04). */
   coyoteSeconds: number;
   /** Horizontal deceleration toward rest when there is no input. */
   deceleration: number;
-  /** Recovery seconds after a HARD landing (the collapse tier — control stays reduced throughout). */
+  /** Recovery seconds after a HARD landing (the impact-crouch tier — control reduced throughout). */
   hardLandRecoverySeconds: number;
-  /** Vertical impact speed (units/s) above which a landing collapses instead of the quick recovery. */
+  /** Vertical impact speed (units/s) above which a landing takes the impact crouch (088/07 mid tier). */
   hardLandSpeed: number;
   /** Seconds a jump press is remembered — landing within the window fires it on the landing frame. */
   jumpBufferSeconds: number;

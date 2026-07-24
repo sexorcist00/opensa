@@ -1,6 +1,7 @@
+import { LOCOMOTION_COLLAPSE, LOCOMOTION_HARD_LAND } from '@opensa/game/character/locomotion';
 import { describe, expect, it } from 'vitest';
 
-import { buildClipIndex, loadEnginePlayer, resolveGaitClip } from './engine-player';
+import { airClipFor, buildClipIndex, loadEnginePlayer, resolveGaitClip } from './engine-player';
 
 const TIERS = { runSpeed: 7, sprintSpeed: 10, walkSpeed: 2 };
 
@@ -113,6 +114,47 @@ describe('buildClipIndex', () => {
 
       expect(index.get('car_getin_lhs')).toBe(3);
       expect(index.get('car_sit')).toBe(4);
+    });
+  });
+});
+
+/**
+ * The 088/07 landing tiers: durations are [idle, walk, run, sprint, launch, glide, land, fall_glide,
+ * fall_collapse, fall_land, getup]. HARD_LAND plays the impact crouch (fall_land → jump_land);
+ * COLLAPSE plays fall_collapse until the clip has run out, then getup.
+ */
+const AIR = (overrides: Readonly<Record<number, number>> = {}): number[] => {
+  const durations = [1, 1, 1, 1, 0.2, 0.5, 0.23, 0.8, 1, 0.47, 1.37];
+  for (const [index, value] of Object.entries(overrides)) {
+    durations[Number(index)] = value;
+  }
+
+  return durations;
+};
+
+describe('airClipFor landing tiers (plan 088/07)', () => {
+  describe('negative cases', () => {
+    it('an unresolved impact crouch degrades HARD_LAND to the jump land', () => {
+      expect(airClipFor(LOCOMOTION_HARD_LAND, AIR({ 9: 0 }))).toBe(6);
+    });
+
+    it('an unresolved collapse clip never hands off to getup — the crouch chain plays instead', () => {
+      expect(airClipFor(LOCOMOTION_COLLAPSE, AIR({ 8: 0 }), 99)).toBe(9);
+    });
+
+    it('an unresolved getup holds the collapse past its duration instead of sampling emptiness', () => {
+      expect(airClipFor(LOCOMOTION_COLLAPSE, AIR({ 10: 0 }), 5)).toBe(8);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('HARD_LAND plays the fall_land impact crouch', () => {
+      expect(airClipFor(LOCOMOTION_HARD_LAND, AIR())).toBe(9);
+    });
+
+    it('COLLAPSE plays fall_collapse first, then getup once the clip has run out', () => {
+      expect(airClipFor(LOCOMOTION_COLLAPSE, AIR(), 0.5)).toBe(8); // mid-collapse
+      expect(airClipFor(LOCOMOTION_COLLAPSE, AIR(), 1.1)).toBe(10); // past the 1 s collapse → stand up
     });
   });
 });
