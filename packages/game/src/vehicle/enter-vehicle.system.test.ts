@@ -643,6 +643,24 @@ describe('exit egress chain (plan 088/09d)', () => {
       expect((car.handle as FakeVehicleHandle).doorAngles.get('rf')).toBeCloseTo(Math.PI / 3);
     });
 
+    it('a car ON ITS SIDE with the right flank grounded crawls out the OTHER side', () => {
+      const h = setup();
+      const car = vehicleAt([0, 0, 0]);
+      seatPlayer(h, car);
+      h.system.update(1); // let the entry door finish pulling shut
+      h.phys.quaternion = [0, Math.SQRT1_2, 0, Math.SQRT1_2]; // 90° roll about Y — lying on a flank
+      h.phys.blocked.add('rf'); // that flank is against a wall/the ground clutter
+
+      h.press(true);
+      h.system.update(0.016);
+      h.system.fixedUpdate(0.016);
+
+      expect(h.anim.clip).toBe('car_crawloutrhs'); // still a crawl, not a door swing
+      h.system.fixedUpdate(3); // the crawl elapses
+      const last = h.phys.teleports[h.phys.teleports.length - 1];
+      expect(last[0]).toBeLessThan(0); // emerged on the CLEAR (−x) side, not into the grounded flank
+    });
+
     it('a crawl-out ends STANDING on the ground, not buried at ground level', () => {
       const h = setup();
       const car = vehicleAt([0, 0, 0]);

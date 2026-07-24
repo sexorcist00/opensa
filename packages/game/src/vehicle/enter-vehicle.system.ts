@@ -403,21 +403,25 @@ export class EnterVehicleSystem implements System {
     }
   }
 
-  /** Move the active car's SEQUENCE door (088/09b: lf or rf) toward {@link doorTarget}. */
+  /** Move the active car's SEQUENCE door toward {@link doorTarget} — and always ease the OTHER
+   *  door shut: an exit that picks the opposite side used to strand the entry door mid-swing
+   *  (it read as "the driver door opened" while the body left through the passenger side). */
   private animateDoor(delta: number): void {
     if (!this.active) {
       return;
     }
-    const angle = this.doorAngleOf(this.active);
-    if (angle === this.doorTarget) {
-      return;
-    }
-    const remaining = this.doorTarget - angle;
-    const next = angle + Math.sign(remaining) * Math.min(Math.abs(remaining), DOOR_SPEED * delta);
     const angles = this.doors.get(this.active) ?? { lf: 0, rf: 0 };
-    angles[this.side] = next;
+    for (const side of ['lf', 'rf'] as const) {
+      const target = side === this.side ? this.doorTarget : 0;
+      const angle = angles[side];
+      if (angle === target) {
+        continue;
+      }
+      const remaining = target - angle;
+      angles[side] = angle + Math.sign(remaining) * Math.min(Math.abs(remaining), DOOR_SPEED * delta);
+      this.active.handle.setDoorAngle(side, angles[side]);
+    }
     this.doors.set(this.active, angles);
-    this.active.handle.setDoorAngle(this.side, next);
   }
 
   /** Lock onto the nearest in-range car and send the player to its driver door. */
@@ -454,6 +458,26 @@ export class EnterVehicleSystem implements System {
     this.logger.debug('enter-vehicle', 'approach cancelled');
   }
 
+  /** The first clear crawl spot around a WRECK (roof-down OR on its side — the yaw-planar probe
+   *  covers both): right side → left side → nose → tail; null when boxed in on all four. */
+  private clearCrawlSpot(vehicle: EnterableVehicle): null | Vec3 {
+    const [hx, hy] = vehicle.halfExtents;
+    const candidates: [number, number][] = [
+      [hx + DOORWAY_CLEAR + 0.4, vehicle.seatLocal[1]],
+      [-(hx + DOORWAY_CLEAR + 0.4), vehicle.seatLocal[1]],
+      [0, hy + 1.2],
+      [0, -(hy + 1.2)],
+    ];
+    for (const local of candidates) {
+      const target = this.crawlTargetAt(vehicle, local);
+      if (this.pathClearTo(vehicle, target)) {
+        return target;
+      }
+    }
+
+    return null;
+  }
+
   /** The first FRONT door whose egress ray is clear, driver side first — or null when both are blocked. */
   private clearDoorSide(vehicle: EnterableVehicle): DoorSide | null {
     const [hx] = vehicle.halfExtents;
@@ -469,15 +493,11 @@ export class EnterVehicleSystem implements System {
     return null;
   }
 
-  /** Standing spot a crawl-out ends at: beside the (rf) window, or ahead of the windscreen. The z is
-   *  the real ground beside the car LIFTED to capsule centre — anchoring at the ground itself buried
-   *  half the capsule and stuck it in the collision (fell through / froze, field 2026-07-24). */
-  private crawloutTarget(vehicle: EnterableVehicle, egress: 'side' | 'windscreen'): Vec3 {
-    const [hx, hy] = vehicle.halfExtents;
-    const spot =
-      egress === 'windscreen'
-        ? this.toWorld(vehicle, [0, hy + 1.2])
-        : this.toWorld(vehicle, [hx + DOORWAY_CLEAR + 0.4, vehicle.seatLocal[1]]);
+  /** Standing spot a crawl-out ends at, from a vehicle-local planar offset. The z is the real
+   *  ground there LIFTED to capsule centre — anchoring at the ground itself buried half the capsule
+   *  and stuck it in the collision (fell through / froze, field 2026-07-24). */
+  private crawlTargetAt(vehicle: EnterableVehicle, local: [number, number]): Vec3 {
+    const spot = this.toWorld(vehicle, local);
     const ground = this.physics.groundBelow([spot[0], spot[1], vehicle.position[2] + 1.5], 4, vehicle.body);
 
     return [spot[0], spot[1], ground === null ? spot[2] : ground + PLAYER_STAND_LIFT];
@@ -658,15 +678,21 @@ export class EnterVehicleSystem implements System {
     return this.side === 'lf' ? DOOR_OPEN_ANGLE : -DOOR_OPEN_ANGLE;
   }
 
-  /** Whether the rays from the car's centre to `target` are unobstructed (the car excluded): probed
-   *  at the target's own height AND knee height — a guardrail under the first ray blocked nothing
-   *  and the exit walked into it (field 2026-07-24). */
+  /** Whether the egress toward `target` is unobstructed (the car excluded): two HORIZONTAL rays at
+   *  fixed heights above the car's ground contact (knee 0.35 m + chest 0.85 m). Heights anchored to
+   *  the car CENTRE grazed the road on cambered streets and false-blocked the driver door — the exit
+   *  then silently went out the passenger side (field 2026-07-24). */
   private pathClearTo(vehicle: EnterableVehicle, target: Vec3): boolean {
     const { position } = this.physics.readBody(vehicle.body);
-    const from: Vec3 = [position[0], position[1], position[2]];
-    const knee: Vec3 = [target[0], target[1], target[2] - 0.35];
+    const bottom = position[2] - vehicle.halfExtents[2];
+    for (const height of [0.35, 0.85]) {
+      const z = bottom + height;
+      if (!this.physics.pathClear([position[0], position[1], z], [target[0], target[1], z], vehicle.body)) {
+        return false;
+      }
+    }
 
-    return this.physics.pathClear(from, target, vehicle.body) && this.physics.pathClear(from, knee, vehicle.body);
+    return true;
   }
 
   /** True once the player is outside the car's footprint (+ clearance) — safe to re-collide. */
@@ -721,17 +747,28 @@ export class EnterVehicleSystem implements System {
     this.steerAngle = 0;
     this.active.rig.setSteer(0);
     if (!this.isUpright(this.active)) {
-      // Overturned: crawl out through the rf window — and swing THAT door while crawling (it can't
-      // hit anything useful upside down, and a shut door read as clipping through it in the field).
+      // A WRECK (roof-down or on its side): probe the four planar exits and crawl out the first
+      // clear one — a side-lying car has one door against the ground, so nothing is assumed. The rf
+      // door swings for the read (harmless on a wreck); all four blocked → appear on top.
       this.side = 'rf';
       this.doorTarget = this.openAngle();
-      this.startCrawlout(this.crawloutTarget(this.active, 'side'));
+      const spot = this.clearCrawlSpot(this.active);
+      this.logger.log('enter-vehicle', `egress wreck ${spot ? 'crawl' : 'boxed in'}`);
+      if (spot) {
+        this.startCrawlout(spot);
+
+        return;
+      }
+      const top = Math.max(...this.active.halfExtents);
+      this.exitTo = [this.active.position[0], this.active.position[1], this.active.position[2] + top + 1];
+      this.finishExit();
 
       return;
     }
     // The 09d egress chain: driver door → passenger door → windscreen → appear on the car. A ray
     // from the car's centre to each spot decides "blocked" (a wall/car inside it).
     const side = this.clearDoorSide(this.active);
+    this.logger.log('enter-vehicle', `egress ${side ?? 'doors blocked'}`);
     if (side) {
       this.side = side;
       this.phase = 'exitopen';
@@ -739,7 +776,7 @@ export class EnterVehicleSystem implements System {
 
       return;
     }
-    const windscreen = this.crawloutTarget(this.active, 'windscreen');
+    const windscreen = this.crawlTargetAt(this.active, [0, this.active.halfExtents[1] + 1.2]);
     if (this.pathClearTo(this.active, windscreen)) {
       this.startCrawlout(windscreen);
 

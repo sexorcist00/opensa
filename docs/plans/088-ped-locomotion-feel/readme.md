@@ -370,6 +370,18 @@ All four packages **1283 green**; lint + tsc clean.
   (mirrored on rf). Tests: +4 egress cases (blocked-driver→rf, both→windscreen, all→roof,
   overturned→crawl) on a configurable blockage stub; all four packages **1280 green**.
 
+  **Field round 4 (2026-07-24):** "the driver door opens but he exits the passenger side, even
+  into a wall". Root pair: (a) the exit probe's KNEE ray was anchored to the car-centre height and
+  GRAZED cambered roads/kerbs ~2 m out — the driver side false-blocked and the exit silently went
+  right; probes are now two HORIZONTAL rays at fixed heights above the car's ground contact
+  (0.35 / 0.85 m). (b) The "open driver door" was the ENTRY door stranded mid-swing: only the
+  active side ever animated — `animateDoor` now always eases the INACTIVE door shut too. The
+  egress pick is logged (`enter-vehicle: egress …`) for future field reads. Plus the user's
+  side-lying case: a non-upright WRECK (roof-down OR on a flank) now PROBES four planar exits
+  (right → left → nose → tail) instead of assuming rf — one flank is against the ground on a
+  side-lying car — with appear-on-top when boxed in. Tests: side-lying crawl picks the clear
+  flank; **1293 green**.
+
   **Field round 3 (2026-07-24, screenshot):** the overturned crawl-out buried the player — the
   target z was the RAW ground while `placePlayer` places the CAPSULE CENTRE, so half the capsule
   landed inside the collision (fell through / froze). Fixed: crawl targets lift by
