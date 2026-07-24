@@ -33,41 +33,143 @@ export interface SamplerClip {
 
 /** Scratch reused across frames (bone count fixed per fixture) — the steady-state frame allocates zero. */
 export class IfpSampler {
+  /** Frozen local pose `holdPose` captured — the retarget source for interrupted crossfades. */
+  private readonly holdPositions: Float32Array;
+  private readonly holdQuats: Float32Array;
+  /** Local pose of the LAST sample call (what is on screen) — `holdPose` freezes it. */
+  private readonly lastPositions: Float32Array;
+  private readonly lastQuats: Float32Array;
   private readonly local = new Float32Array(16);
   private readonly position = new Float32Array(3);
+  private readonly positionB = new Float32Array(3);
   private readonly quat = new Float32Array(4);
+  private readonly quatB = new Float32Array(4);
   private readonly worlds: Float32Array;
 
   constructor(private readonly bones: readonly SamplerBone[]) {
     this.worlds = new Float32Array(bones.length * 16);
+    this.lastQuats = new Float32Array(bones.length * 4);
+    this.lastPositions = new Float32Array(bones.length * 3);
+    this.holdQuats = new Float32Array(bones.length * 4);
+    this.holdPositions = new Float32Array(bones.length * 3);
+    // Before any sample the last/held pose IS the bind pose — sampling from an empty hold stays defined.
+    bones.forEach((bone, index) => {
+      this.lastQuats.set(bone.bindRotation, index * 4);
+      this.lastPositions.set(bone.bindPosition, index * 3);
+    });
+    this.holdQuats.set(this.lastQuats);
+    this.holdPositions.set(this.lastPositions);
+  }
+
+  /** Freeze the last sampled local pose as the `sampleFromHold` source (plan 088/02 crossfade retarget). */
+  holdPose(): void {
+    this.holdQuats.set(this.lastQuats);
+    this.holdPositions.set(this.lastPositions);
   }
 
   /** Sample `clip` at `time` (wraps by duration) and write bone palettes into `out` from `outSlot`. */
   sample(clip: SamplerClip, time: number, out: Float32Array, outSlot = 1): void {
-    const looped = clip.duration > 0 ? time % clip.duration : 0;
+    const looped = wrap(time, clip.duration);
     for (let bone = 0; bone < this.bones.length; bone += 1) {
-      const definition = this.bones[bone];
-      const track = clip.tracks[bone];
-      if (track && track.times.length > 0) {
-        sampleQuat(track, looped, this.quat);
-      } else {
-        this.quat.set(definition.bindRotation);
-      }
-      // A translated bone only exists on map-object clips; a ped's bones keep their bind position.
-      if (track?.positions && track.times.length > 0) {
-        samplePosition(track, looped, this.position);
-      } else {
-        this.position.set(definition.bindPosition);
-      }
-      composeLocal(this.local, this.quat, this.position);
-      const world = this.worlds.subarray(bone * 16, bone * 16 + 16);
-      if (definition.parent >= 0) {
-        multiply(world, this.worlds.subarray(definition.parent * 16, definition.parent * 16 + 16), this.local);
-      } else {
-        world.set(this.local);
-      }
-      multiply(out.subarray((outSlot + bone) * 16, (outSlot + bone) * 16 + 16), world, definition.inverseBind);
+      this.evaluateBone(clip, looped, bone, this.quat, this.position);
+      this.writeBone(bone, out, outSlot);
     }
+  }
+
+  /**
+   * Crossfade (plan 088/02): sample BOTH clips and blend the per-bone LOCAL quats/positions before
+   * composing — blending the final palette matrices would shear. `alpha` 0 = pure `from`, 1 = pure `to`.
+   */
+  sampleBlended(
+    from: SamplerClip,
+    fromTime: number,
+    to: SamplerClip,
+    toTime: number,
+    alpha: number,
+    out: Float32Array,
+    outSlot = 1,
+  ): void {
+    if (alpha <= 0) {
+      this.sample(from, fromTime, out, outSlot);
+
+      return;
+    }
+    if (alpha >= 1) {
+      this.sample(to, toTime, out, outSlot);
+
+      return;
+    }
+    const fromLooped = wrap(fromTime, from.duration);
+    const toLooped = wrap(toTime, to.duration);
+    for (let bone = 0; bone < this.bones.length; bone += 1) {
+      this.evaluateBone(from, fromLooped, bone, this.quat, this.position);
+      this.evaluateBone(to, toLooped, bone, this.quatB, this.positionB);
+      this.blendScratch(alpha);
+      this.writeBone(bone, out, outSlot);
+    }
+  }
+
+  /** Blend the frozen `holdPose` pose into `to` — the pop-free source when a fade is interrupted. */
+  sampleFromHold(to: SamplerClip, toTime: number, alpha: number, out: Float32Array, outSlot = 1): void {
+    if (alpha >= 1) {
+      this.sample(to, toTime, out, outSlot);
+
+      return;
+    }
+    const toLooped = wrap(toTime, to.duration);
+    for (let bone = 0; bone < this.bones.length; bone += 1) {
+      this.quat.set(this.holdQuats.subarray(bone * 4, bone * 4 + 4));
+      this.position.set(this.holdPositions.subarray(bone * 3, bone * 3 + 3));
+      this.evaluateBone(to, toLooped, bone, this.quatB, this.positionB);
+      this.blendScratch(alpha);
+      this.writeBone(bone, out, outSlot);
+    }
+  }
+
+  /** scratch quat/position ← blend(scratch, scratchB, alpha): quat slerp + position lerp. */
+  private blendScratch(alpha: number): void {
+    slerpBetween(this.quat, this.quatB, alpha);
+    for (let axis = 0; axis < 3; axis += 1) {
+      this.position[axis] += (this.positionB[axis] - this.position[axis]) * alpha;
+    }
+  }
+
+  /** One bone's local rotation + translation from `clip` at the pre-wrapped `looped` time. */
+  private evaluateBone(
+    clip: SamplerClip,
+    looped: number,
+    bone: number,
+    quat: Float32Array,
+    position: Float32Array,
+  ): void {
+    const definition = this.bones[bone];
+    const track = clip.tracks[bone];
+    if (track && track.times.length > 0) {
+      sampleQuat(track, looped, quat);
+    } else {
+      quat.set(definition.bindRotation);
+    }
+    // A translated bone only exists on map-object clips; a ped's bones keep their bind position.
+    if (track?.positions && track.times.length > 0) {
+      samplePosition(track, looped, position);
+    } else {
+      position.set(definition.bindPosition);
+    }
+  }
+
+  /** Record the scratch local (for `holdPose`), compose, walk the parent chain, write the palette slot. */
+  private writeBone(bone: number, out: Float32Array, outSlot: number): void {
+    const definition = this.bones[bone];
+    this.lastQuats.set(this.quat, bone * 4);
+    this.lastPositions.set(this.position, bone * 3);
+    composeLocal(this.local, this.quat, this.position);
+    const world = this.worlds.subarray(bone * 16, bone * 16 + 16);
+    if (definition.parent >= 0) {
+      multiply(world, this.worlds.subarray(definition.parent * 16, definition.parent * 16 + 16), this.local);
+    } else {
+      world.set(this.local);
+    }
+    multiply(out.subarray((outSlot + bone) * 16, (outSlot + bone) * 16 + 16), world, definition.inverseBind);
   }
 }
 
@@ -242,4 +344,40 @@ function slerp(out: Float32Array, quats: readonly number[], a: number, b: number
   out[1] = scale0 * ay + scale1 * by;
   out[2] = scale0 * az + scale1 * bz;
   out[3] = scale0 * aw + scale1 * bw;
+}
+
+/** a ← slerp(a, b, t), shortest path — the two-clip blend twin of the keyframe `slerp` below. */
+function slerpBetween(a: Float32Array, b: Float32Array, t: number): void {
+  let bx = b[0];
+  let by = b[1];
+  let bz = b[2];
+  let bw = b[3];
+  let cosom = a[0] * bx + a[1] * by + a[2] * bz + a[3] * bw;
+  if (cosom < 0) {
+    cosom = -cosom;
+    bx = -bx;
+    by = -by;
+    bz = -bz;
+    bw = -bw;
+  }
+  let scale0: number;
+  let scale1: number;
+  if (1 - cosom > 1e-6) {
+    const omega = Math.acos(Math.min(1, cosom));
+    const sinom = Math.sin(omega);
+    scale0 = Math.sin((1 - t) * omega) / sinom;
+    scale1 = Math.sin(t * omega) / sinom;
+  } else {
+    scale0 = 1 - t;
+    scale1 = t;
+  }
+  a[0] = scale0 * a[0] + scale1 * bx;
+  a[1] = scale0 * a[1] + scale1 * by;
+  a[2] = scale0 * a[2] + scale1 * bz;
+  a[3] = scale0 * a[3] + scale1 * bw;
+}
+
+/** Clip-local time: wraps by duration, holds 0 for the zero-duration (unresolved) clip. */
+function wrap(time: number, duration: number): number {
+  return duration > 0 ? time % duration : 0;
 }

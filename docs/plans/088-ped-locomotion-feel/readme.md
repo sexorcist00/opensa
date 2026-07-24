@@ -115,7 +115,7 @@ heading incl. plant/pivot/fly), full game+web suite 528 green; lint (cognitive-c
 `moveOnFoot` extraction) + tsc clean. The duplicated `0.3` idle threshold in `engine-player.ts` and
 the host heading gate now both come from `IDLE_SPEED_THRESHOLD`.
 
-### 02 — Crossfade + phase-synced blending (the promised plan-074/08 sampler follow-up)
+### 02 — Crossfade + phase-synced blending (CODE-COMPLETE 2026-07-24 — awaiting the field round)
 
 - `IfpSampler.sampleBlended(from, fromTime, to, toTime, alpha, out, outSlot)`: per-bone slerp of the
   two clips' LOCAL quats (and lerp of positions where tracks exist) before compose — one extra
@@ -128,6 +128,24 @@ the host heading gate now both come from `IDLE_SPEED_THRESHOLD`.
   without popping (fade-from becomes the current blended source clip at its current time).
 - Verify: idle↔walk↔run pops gone in field. Record: fade times table, sampler cost per frame
   (µs, single vs blended — budget: invisible next to the 2 ms pass floor).
+
+**Ledger (2026-07-24, code-complete):** the promised 074/08 follow-up paid. Sampler
+(`ifp-sampler.ts`): shared per-bone `evaluateBone`/`writeBone`, `sampleBlended` (LOCAL quat slerp +
+position lerp BEFORE compose; α≤0/α≥1 early-out to the bit-exact single path), plus a hold-pose pair
+— every sample records its locals, `holdPose()` freezes them, `sampleFromHold` fades out of the
+frozen pose. The hold is how an INTERRUPTED fade retargets pop-free (idle→walk→run inside one 0.2 s
+window is the common case: at accel 20 the walk→run threshold arrives ~0.19 s after idle→walk); the
+frozen-source fade is the standard cheap inertialization fallback. New pure `LocomotionMixer`
+(`apps/web/src/ui/locomotion-mixer.ts`): fade bookkeeping, walk↔run normalized-phase carry
+(`toTime = phase × toDuration`, zero-duration gaits never carry), `captureHold` fires exactly once
+per interruption, and `restartFromHold` — a scripted-clip handback (car exit) now FADES into
+locomotion instead of popping (a small scope add beyond the phase text; the climb-out pose blends
+into stance over the same 0.2 s). Numbers: fade default **0.2 s linear** (landing override still
+phase 04); sampler cost measured 32-bone/20-key clip × 20k iters: **single 6.0 µs, blended 8.2 µs
+(1.37×)** — invisible next to the ~2 ms pass floor. Tests: +16 new (7 sampler blend/hold incl. two
+bit-exact equality gates, 9 mixer incl. interruption + handback); engine+web+game suites 767 green;
+lint + tsc clean. Alpha curve is linear v1 — smoothstep is a one-line tuning lever if the field
+round wants softer ends.
 
 ### 03 — Speed tiers + cycle-speed sync (kills foot sliding, adds sprint)
 

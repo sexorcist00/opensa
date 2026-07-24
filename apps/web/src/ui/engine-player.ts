@@ -16,6 +16,8 @@ import { VEHICLE_SCRIPTED_CLIPS } from '@opensa/game/vehicle/vehicle-clips';
 import { getIfp } from '@opensa/renderware/archive/asset-cache';
 import { type PedClip, pedClip } from '@opensa/renderware/ped/build-ped-model';
 
+import { LocomotionMixer } from './locomotion-mixer';
+
 export interface EnginePlayer {
   /** Face a yaw directly (enter/exit uses it on the way out of the car). */
   faceTo(yaw: number): void;
@@ -51,6 +53,8 @@ const RUN_CLIP = 2;
 const SCRIPTED_CLIPS = VEHICLE_SCRIPTED_CLIPS;
 /** Planar speed (GTA m/s) above which the run cycle plays — between walkSpeed 2 and runSpeed 7. */
 const RUN_SPEED_THRESHOLD = 4;
+/** The cyclic gaits that carry normalized phase through a crossfade (088/02) — legs stay in step. */
+const CYCLIC_CLIPS: ReadonlySet<number> = new Set([RUN_CLIP, WALK_CLIP]);
 
 /**
  * Name → index for `setScripted`. Locomotion (the first `locomotionCount`, always addressable by the state
@@ -124,8 +128,12 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
   const resolved = [...PLAYER_CLIPS, ...SCRIPTED_CLIPS].map(resolveClip);
   const clips: SamplerClip[] = resolved;
   const clipByName = buildClipIndex(resolved, PLAYER_CLIPS.length);
-  let clipTime = 0;
-  let activeClip = IDLE_CLIP;
+  const mixer = new LocomotionMixer(
+    clips.map((clip) => clip.duration),
+    CYCLIC_CLIPS,
+    IDLE_CLIP,
+  );
+  let clipTime = 0; // the SCRIPTED clock — locomotion time lives in the mixer
   let scripted: null | { index: number; loop: boolean } = null;
   let scriptedFacing = 0;
   /**
@@ -143,6 +151,11 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
     minZ: fixture.minZ,
     setScripted(clip, options = {}): void {
       if (clip === null) {
+        if (scripted !== null) {
+          // Handing control back: fade the held scripted pose into locomotion (climb-out → stance)
+          // instead of popping — update() re-picks the speed-appropriate gait on the next frame.
+          mixer.restartFromHold(IDLE_CLIP);
+        }
         scripted = null;
         scriptedOrientation = null;
         clipTime = 0;
@@ -176,12 +189,25 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
         sampler.sample(clip, time, probe.palette, 1);
       } else {
         const wanted = speed > RUN_SPEED_THRESHOLD ? RUN_CLIP : speed > IDLE_SPEED_THRESHOLD ? WALK_CLIP : IDLE_CLIP;
-        if (wanted !== activeClip) {
-          activeClip = wanted;
-          clipTime = 0; // v1: hard switch — the crossfade is the plan-08 sampler follow-up
+        const { captureHold, pose } = mixer.update(wanted, dt);
+        if (captureHold) {
+          sampler.holdPose(); // freeze the on-screen pose BEFORE sampling — the hold-fade's source
         }
-        clipTime += dt;
-        sampler.sample(clips[activeClip] ?? clips[0], clipTime, probe.palette, 1);
+        if (pose.kind === 'single') {
+          sampler.sample(clips[pose.clip] ?? clips[0], pose.time, probe.palette, 1);
+        } else if (pose.kind === 'blend') {
+          sampler.sampleBlended(
+            clips[pose.from],
+            pose.fromTime,
+            clips[pose.to],
+            pose.toTime,
+            pose.alpha,
+            probe.palette,
+            1,
+          );
+        } else {
+          sampler.sampleFromHold(clips[pose.to], pose.toTime, pose.alpha, probe.palette, 1);
+        }
         scriptedFacing = headingYaw;
       }
       if (scriptedOrientation) {

@@ -217,3 +217,82 @@ describe('IfpSampler', () => {
     });
   });
 });
+
+/** A one-key clip holding a steady Z rotation of `degrees` on a lone root bone. */
+function steadyZClip(degrees: number): SamplerClip {
+  const half = (degrees * Math.PI) / 360;
+
+  return { duration: 1, tracks: [{ quats: [0, 0, Math.sin(half), Math.cos(half)], times: [0] }] };
+}
+
+describe('IfpSampler blending (plan 088/02)', () => {
+  describe('negative cases', () => {
+    it('alpha 0 equals sampling the FROM clip bit-for-bit', () => {
+      const sampler = new IfpSampler([rootBone()]);
+      const blended = new Float32Array(2 * 16);
+      const single = new Float32Array(2 * 16);
+
+      sampler.sampleBlended(steadyZClip(30), 0.25, steadyZClip(90), 0.5, 0, blended, 1);
+      sampler.sample(steadyZClip(30), 0.25, single, 1);
+
+      expect(Array.from(blended)).toEqual(Array.from(single));
+    });
+
+    it('alpha 1 equals sampling the TO clip bit-for-bit', () => {
+      const sampler = new IfpSampler([rootBone()]);
+      const blended = new Float32Array(2 * 16);
+      const single = new Float32Array(2 * 16);
+
+      sampler.sampleBlended(steadyZClip(30), 0.25, steadyZClip(90), 0.5, 1, blended, 1);
+      sampler.sample(steadyZClip(90), 0.5, single, 1);
+
+      expect(Array.from(blended)).toEqual(Array.from(single));
+    });
+
+    it('sampling from a hold that was never captured blends from the BIND pose, not garbage', () => {
+      const sampler = new IfpSampler([rootBone()]);
+      const palette = new Float32Array(2 * 16);
+
+      sampler.sampleFromHold(steadyZClip(90), 0, 0, palette, 1); // pure hold = bind = identity
+
+      expect(zAngleDegrees(palette, 1)).toBeCloseTo(0, 5);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('alpha 0.5 lands halfway between the two clips (slerp of the LOCAL quats)', () => {
+      const sampler = new IfpSampler([rootBone()]);
+      const palette = new Float32Array(2 * 16);
+
+      sampler.sampleBlended(steadyZClip(0), 0, steadyZClip(90), 0, 0.5, palette, 1);
+
+      expect(zAngleDegrees(palette, 1)).toBeCloseTo(45, 3);
+    });
+
+    it('blends a translated bone linearly (the map-object position track)', () => {
+      const sampler = new IfpSampler([rootBone()]);
+      const still = stillQuats(1);
+      const atOrigin: SamplerClip = { duration: 1, tracks: [{ positions: [0, 0, 0], quats: still, times: [0] }] };
+      const atFour: SamplerClip = { duration: 1, tracks: [{ positions: [4, 0, 0], quats: still, times: [0] }] };
+      const palette = new Float32Array(2 * 16);
+
+      sampler.sampleBlended(atOrigin, 0, atFour, 0, 0.25, palette, 1);
+
+      expect(palette[28]).toBeCloseTo(1, 5);
+    });
+
+    it('holdPose freezes the on-screen pose and sampleFromHold fades out of it', () => {
+      const sampler = new IfpSampler([rootBone()]);
+      const palette = new Float32Array(2 * 16);
+      sampler.sample(steadyZClip(90), 0.5, palette, 1); // on screen: 90°
+
+      sampler.holdPose();
+      sampler.sample(steadyZClip(0), 0, palette, 1); // later samples must NOT disturb the held pose
+      sampler.sampleFromHold(steadyZClip(0), 0, 0, palette, 1);
+      expect(zAngleDegrees(palette, 1)).toBeCloseTo(90, 3); // pure hold
+
+      sampler.sampleFromHold(steadyZClip(0), 0, 0.5, palette, 1);
+      expect(zAngleDegrees(palette, 1)).toBeCloseTo(45, 3); // halfway out of the hold
+    });
+  });
+});
