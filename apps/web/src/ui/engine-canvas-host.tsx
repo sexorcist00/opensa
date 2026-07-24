@@ -1138,6 +1138,7 @@ async function boot(
       look: pendingInput.look,
       mode: cameraModeOf(rig.flyEye !== null, seatedCar !== null),
       pan: pendingInput.pan,
+      settling: vehicles?.isSettling() ?? false,
       walkKeys: flyKeys,
       zoomSteps: pendingInput.zoom,
     };

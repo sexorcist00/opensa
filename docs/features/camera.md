@@ -47,6 +47,10 @@ ON FOOT only for now (the vehicle versions are plan 05):
   recenters — a parked camera is left alone.
 - **In a car too**: auto-center runs on foot AND while driving (the camera settles behind the car's rear).
   Only the look-ahead lean stays on foot — a car's lean is drift framing (plan 05).
+- **Enter/exit glide**: while a scripted enter/exit plays (`EnterVehicleSystem.isSettling()` → the snapshot's
+  `settling`), auto-center is suspended so the ped's approach/climb twitches do not drag the camera; instead
+  one steered swing — aimed behind the car when the door opens, behind the dismount when the climb-out
+  begins — glides across the whole animation. A mouse move cancels it.
 - **Manual always wins**: any look input cancels both, restarts the idle clock, and holds turn-follow off
   for `manualGraceSec`. Pitch is never auto-touched.
 - **Look-ahead**: the frame leans toward travel by up to `lookAheadDistance`, damped over `lookAheadTime`

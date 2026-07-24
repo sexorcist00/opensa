@@ -298,6 +298,13 @@ export class EnterVehicleSystem implements System {
     return this.phase === 'seated' || this.phase === 'stopping';
   }
 
+  /** True while a scripted enter/exit is playing — the camera should glide to its target, not auto-center on
+   *  the ped's mid-sequence twitches (approach run, climb-in/out slides). `idle` and `seated` are the two
+   *  settled states where auto-center belongs. */
+  isSettling(): boolean {
+    return this.phase !== 'idle' && this.phase !== 'seated';
+  }
+
   /** Drop a (parked, unoccupied) car when it is unloaded. No-op if it is the active car. */
   remove(vehicle: EnterableVehicle): void {
     if (this.active === vehicle) {
@@ -326,6 +333,11 @@ export class EnterVehicleSystem implements System {
     if (this.phase === 'approaching' && this.controller.arrived) {
       this.phase = 'opening';
       this.doorTarget = this.openAngle();
+      // Start the camera gliding behind the car NOW (the door is opening, the climb-in is next), so the
+      // swing plays across the whole sequence instead of snapping when he lands in the seat.
+      if (this.active) {
+        this.aimCamera(this.active.heading);
+      }
     }
     // Shut the exit door behind the player once he has stepped clear (field 2026-07-24: it must
     // close — just never through him standing in the doorway). Before animateDoor so the swing
@@ -636,19 +648,22 @@ export class EnterVehicleSystem implements System {
     this.animation.setScripted(CAR_SIT, { loop: true, orientation: quaternion });
   }
 
+  /** The heading the player faces once out of the doorway (mirrored on a passenger-side exit). */
+  private exitFacing(): number {
+    const heading = this.active?.heading ?? 0;
+
+    return this.side === 'lf'
+      ? Math.atan2(Math.cos(heading), -Math.sin(heading))
+      : Math.atan2(-Math.cos(heading), Math.sin(heading));
+  }
+
   /** Out of the car: restore manual control + locomotion, face away from the car, shut the door. */
   private finishExit(): void {
-    const heading = this.active?.heading ?? 0;
-    // Yaw facing out of the used doorway (mirrored on a passenger-side exit), away from the car body.
-    const outward =
-      this.side === 'lf'
-        ? Math.atan2(Math.cos(heading), -Math.sin(heading))
-        : Math.atan2(-Math.cos(heading), Math.sin(heading));
+    const outward = this.exitFacing();
     this.placePlayer(this.exitTo);
     this.followTarget(null); // back to following the player on foot
     this.animation.setScripted(null);
     this.animation.faceTo(outward);
-    this.aimCamera(outward); // swing the camera behind the player so forward goes away from the car
     this.physics.setColliderSensor(this.playerCollider, false); // solid again — walking
     this.restoreWhenClear = true; // re-enable car collision once the player has stepped clear (update)
     this.controller.setEnabled(true);
@@ -852,6 +867,8 @@ export class EnterVehicleSystem implements System {
     this.exitElapsed = 0;
     this.exitFrom = this.playerPosition();
     this.exitTo = this.doorwayWorld(this.active);
+    // Glide the camera behind where the player will stand as the climb-out plays (not a snap on finish).
+    this.aimCamera(this.exitFacing());
     this.getoutMotion = this.animation.scriptedMotion(this.side === 'rf' ? CAR_GETOUT_RHS : CAR_GETOUT);
     this.storeHold(this.active); // pin the (stopped) car here while the player climbs out
     this.animation.setScripted(this.side === 'rf' ? CAR_GETOUT_RHS : CAR_GETOUT, {

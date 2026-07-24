@@ -76,6 +76,9 @@ export interface CameraSnapshot {
   mode: CameraMode;
   /** Fly only: left-drag pan delta in NDC since the last frame; null when nothing is being dragged. */
   pan: null | { x: number; y: number };
+  /** A scripted enter/exit is mid-sequence: hold auto-center off (the steered swing to the target still
+   *  plays) so the camera does not chase the ped's approach-run and climb twitches. */
+  settling: boolean;
   /** Fly only: the movement keys held this frame ({@link FLY_KEYS}). */
   walkKeys: ReadonlySet<string>;
   /** Wheel notches this frame: + away from the user (zoom out / dolly back), − toward it. */
@@ -159,8 +162,10 @@ export function stepCamera(state: CameraRigState, snapshot: CameraSnapshot, conf
   const velocity = focusVelocity(state, snapshot, config);
   // Auto-center runs on foot AND in a car — the camera settles behind whatever the player is driving. Only
   // the LOOK-AHEAD lean stays on foot: a car's version is drift framing (it leans toward the SLIDE, not the
-  // heading), which is plan 05's, tuned against a car's speeds.
-  const centering = !state.legacy && (snapshot.mode === 'foot' || snapshot.mode === 'vehicle');
+  // heading), which is plan 05's, tuned against a car's speeds. A scripted enter/exit suspends it: the
+  // steered swing (set at the start of the sequence) glides to the target while the ped's twitches are
+  // ignored.
+  const centering = !state.legacy && !snapshot.settling && (snapshot.mode === 'foot' || snapshot.mode === 'vehicle');
   if (centering) {
     const step = stepAutoCenter(
       state.autoCenter,

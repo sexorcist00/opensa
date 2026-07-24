@@ -26,6 +26,7 @@ const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
   look: { x: 0, y: 0 },
   mode: 'foot',
   pan: null,
+  settling: false,
   walkKeys: new Set(),
   zoomSteps: 0,
   ...over,
@@ -350,6 +351,24 @@ describe('stepCamera — composition (plan 080/03)', () => {
 
       expect(state.yaw).toBe(Math.PI);
       expect(state.lookAhead.z).toBe(0);
+    });
+
+    it('suspends auto-center while a scripted enter/exit settles, but keeps the steered swing', () => {
+      const state = smoothState();
+      steerYaw(state, -Math.PI / 2); // the sequence aimed the camera behind the car
+      const settling = (over = {}): CameraSnapshot => snapshot({ settling: true, ...over });
+
+      // A ped twitching through the climb-in (heading swinging around) must not drag the camera...
+      for (let frame = 0; frame < 30; frame += 1) {
+        stepCamera(state, settling({ focus: [10, 2, 30 + frame], focusHeading: frame }), CONFIG);
+      }
+      expect(state.autoCenter.following).toBe(false);
+
+      // ...but the swing set at the start still glides to its target.
+      for (let frame = 0; frame < 300; frame += 1) {
+        stepCamera(state, settling(), CONFIG);
+      }
+      expect(state.yaw).toBeCloseTo(Math.PI / 2, 2); // yawBehind(−π/2)
     });
 
     it('restarts the idle clock the moment the player looks', () => {

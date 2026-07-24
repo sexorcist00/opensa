@@ -171,3 +171,19 @@ host gains **render interpolation** (draw ped + car + camera focus at `lerp(prev
 which makes the focus continuous so a position spring no longer beats against the saw. That is a host-loop
 change across the ped and vehicle draw paths — its own step, and the right home for the position weight.
 See `docs/performance/deferred-optimizations/` for the lever with its price.
+
+### 2026-07-25 — smooth enter/exit transition (user request, same day)
+
+With auto-center now running in a vehicle, the climb-IN sequence exposed a new problem: the ped twitches
+through the approach run, the door open and the climb-in slide, and auto-center chased every one of those
+mid-sequence headings — the camera swung back and forth before settling. The user wants one smooth glide
+behind the car on entry, one behind the player on exit, ignoring the twitches between.
+
+Fix: `EnterVehicleSystem.isSettling()` is true for every phase except `idle` and `seated` (the two settled
+states). The host passes it as `CameraSnapshot.settling`; while set, the director suspends auto-center but
+keeps stepping the steered-yaw channel. The swing target is now set at the START of each sequence, not the
+end: entering aims behind the car the moment the door opens (`opening`), exiting aims behind the dismount
+facing the moment the climb-out begins (`exiting`) — so the glide plays across the whole animation instead
+of snapping when the ped lands. `exitFacing()` extracts the doorway-out yaw the finish already computed.
+Any mouse movement still cancels the swing (the player takes over). Unit-pinned: the director ignores a
+heading swinging around while `settling` yet still glides to the target. Suite 2626 green.

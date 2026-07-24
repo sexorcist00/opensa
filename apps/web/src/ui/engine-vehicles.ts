@@ -39,6 +39,9 @@ export interface EngineVehicles {
    * open and the car never drives — the phase machine simply never advances.
    */
   fixedUpdate(step: number): void;
+  /** True while a scripted enter/exit is mid-sequence — the camera glides to its target instead of
+   *  auto-centering on the ped's approach/climb twitches. */
+  isSettling(): boolean;
   /** Register placements to spawn LAZILY by distance (the LOD system streams them) — the bench road cars. */
   register(placements: readonly VehiclePlacement[]): void;
   /**
@@ -320,6 +323,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     fixedUpdate(step: number): void {
       enterVehicle.fixedUpdate(step);
     },
+    isSettling: (): boolean => enterVehicle.isSettling(),
     register(placements: readonly VehiclePlacement[]): void {
       for (const placement of placements) {
         vehicleLod.register(placement);
