@@ -160,18 +160,36 @@ function rayHitsAabb(
   const at = node * 6;
   let t0 = 0;
   let t1 = maxDistance;
-  const tx0 = (bounds[at] - ox) * invX;
-  const tx1 = (bounds[at + 3] - ox) * invX;
-  t0 = Math.max(t0, Math.min(tx0, tx1));
-  t1 = Math.min(t1, Math.max(tx0, tx1));
-  const ty0 = (bounds[at + 1] - oy) * invY;
-  const ty1 = (bounds[at + 4] - oy) * invY;
-  t0 = Math.max(t0, Math.min(ty0, ty1));
-  t1 = Math.min(t1, Math.max(ty0, ty1));
-  const tz0 = (bounds[at + 2] - oz) * invZ;
-  const tz1 = (bounds[at + 5] - oz) * invZ;
-  t0 = Math.max(t0, Math.min(tz0, tz1));
-  t1 = Math.min(t1, Math.max(tz0, tz1));
+  // A ray component of exactly 0 makes inv = ±Infinity, and `(bound - o) * inv` is then `0 * Infinity = NaN`
+  // for a slab plane that coincides with the origin. JS Math.min/max PROPAGATE NaN (unlike the C fmin/fmax
+  // idiom this shape relies on), so the whole test would collapse to `NaN <= NaN → false` and the subtree be
+  // silently skipped — the occluder reads as unshadowed. The noon sun sample hits this exactly (sunvis dir.x
+  // = 0 at elevation 1). So each parallel axis is its own slab: the ray only intersects if the origin lies
+  // within the box on that axis; otherwise it misses entirely.
+  if (Number.isFinite(invX)) {
+    const tx0 = (bounds[at] - ox) * invX;
+    const tx1 = (bounds[at + 3] - ox) * invX;
+    t0 = Math.max(t0, Math.min(tx0, tx1));
+    t1 = Math.min(t1, Math.max(tx0, tx1));
+  } else if (ox < bounds[at] || ox > bounds[at + 3]) {
+    return false;
+  }
+  if (Number.isFinite(invY)) {
+    const ty0 = (bounds[at + 1] - oy) * invY;
+    const ty1 = (bounds[at + 4] - oy) * invY;
+    t0 = Math.max(t0, Math.min(ty0, ty1));
+    t1 = Math.min(t1, Math.max(ty0, ty1));
+  } else if (oy < bounds[at + 1] || oy > bounds[at + 4]) {
+    return false;
+  }
+  if (Number.isFinite(invZ)) {
+    const tz0 = (bounds[at + 2] - oz) * invZ;
+    const tz1 = (bounds[at + 5] - oz) * invZ;
+    t0 = Math.max(t0, Math.min(tz0, tz1));
+    t1 = Math.min(t1, Math.max(tz0, tz1));
+  } else if (oz < bounds[at + 2] || oz > bounds[at + 5]) {
+    return false;
+  }
 
   return t0 <= t1;
 }

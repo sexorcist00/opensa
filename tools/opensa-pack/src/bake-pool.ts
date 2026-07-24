@@ -94,12 +94,22 @@ function bakeOn(
       cleanup();
       reject(error);
     };
+    // A native crash or OS OOM-kill of the worker thread emits NO 'error' event, only 'exit'. Without this
+    // the in-flight promise never settles and `Promise.all` hangs the whole pack forever (the district BVH is
+    // ~700 MB on full LS — an OOM-kill is a real outcome). This handler is armed only while a task is in
+    // flight, so the clean `terminate()` in the finally never reaches it.
+    const onExit = (code: number): void => {
+      cleanup();
+      reject(new Error(`bake worker exited (code ${code}) before returning a result — likely OOM-killed`));
+    };
     const cleanup = (): void => {
       worker.off('message', onMessage);
       worker.off('error', onError);
+      worker.off('exit', onExit);
     };
     worker.on('message', onMessage);
     worker.on('error', onError);
+    worker.on('exit', onExit);
     worker.postMessage({ id: 0, ...task }, [task.data.buffer as ArrayBuffer]);
   });
 }
