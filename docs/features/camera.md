@@ -88,9 +88,11 @@ host since 080/01) — field rounds tune with sliders, not rebuilds.
 
 ## Known gaps / candidates
 
-- **Jitter while moving (KNOWN, unfixed):** physics steps at a fixed 1/60 but the camera and the framed
-  object draw in the variable-rate render loop, so a fast object stair-steps against the smoothed camera.
-  The fix is render interpolation across the ped/vehicle/camera draw paths — its own step.
+- **Position weight is OFF at the shipped defaults.** `positionLagTime`/`verticalLagTime`/`deadZone` default
+  to 0 (rigid position), because physics is fixed-step 1/60 while the camera draws in the variable loop, so
+  any position lag makes the object judder against the smoothed camera. Rotation, zoom and look-ahead stay
+  smoothed. The position spring (behaviour #3) returns once the host gains render interpolation — see the
+  deferred-optimizations note.
 - The 080/02 and /03 defaults are FIRST GUESSES — they have not survived a field round yet, and the dead zone
   leaves the frame settling ~8 cm behind a focus that stopped (the price of a rock-still idle frame).
 - No camera collision — the eye clips through walls (plan 04 adds `PhysicsWorld` ray/sphere casts + whiskers).

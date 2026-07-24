@@ -22,8 +22,13 @@ export function createGameRuntimeConfig(): Config {
     // 080/01: the rig values the host used to hard-code (eye height 0.9, sensitivity 0.004, pitch clamps)
     // are config now — same numbers, so the camera feels exactly as it did, but a field round can tune them
     // from the debug Camera tab without a rebuild.
+    // The POSITION channels (positionLagTime / verticalLagTime / deadZone) ship at 0 = a rigid position
+    // attach. Physics runs at a fixed 1/60 but the camera draws in the variable render loop, so ANY
+    // positional lag makes the framed object stair-step against the smoothed camera (jitter on foot, a
+    // back-and-forth in a fast car). Rotation, zoom and look-ahead stay smoothed — none of them fight the
+    // fixed-step saw. The position weight (082/03 behaviour #3) comes back once render interpolation lands.
     camera: {
-      deadZone: 0.08,
+      deadZone: 0,
       followDistance: 7,
       followHeight: 0.9,
       followLerp: 3,
@@ -42,14 +47,14 @@ export function createGameRuntimeConfig(): Config {
       moveThreshold: 0.6,
       pitchMax: 0.9,
       pitchMin: -1.2,
-      positionLagTime: 0.12,
+      positionLagTime: 0,
       recenterDelaySec: 2,
       recenterRate: 1.6,
       sensitivity: 0.004,
       settleEpsilon: 0.03,
       teleportSnapDistance: 20,
       turnThreshold: 0.9,
-      verticalLagTime: 0.28,
+      verticalLagTime: 0,
       yawLagTime: 0.25,
       zoomLambda: 8,
     },

@@ -49,6 +49,9 @@ export interface CameraRigState {
   /** The composition offset toward travel (plan 03). */
   lookAhead: LookAheadState;
   pitch: number;
+  /** The smoothed planar focus velocity (units/s) look-ahead and auto-center read — see {@link focusVelocity}. */
+  velX: number;
+  velZ: number;
   yaw: number;
   /** A yaw something OTHER than the player asked for (vehicle entry today, auto-center in plan 03) — the rig
    *  swings toward it over `yawLagTime`. Null when the player owns the yaw, which any look input restores. */
@@ -83,6 +86,10 @@ export interface CameraSnapshot {
  *  Reachable from outside as `CameraSnapshot['mode']`. */
 type CameraMode = 'fly' | 'foot' | 'vehicle';
 
+/** How fast the measured focus velocity tracks its instantaneous value (per second). ~0.05 s half-life —
+ *  enough to average out the fixed-step saw, short enough that look-ahead still feels responsive. */
+const VELOCITY_LAMBDA = 14;
+
 export function createRigState(config: CameraConfig, yaw: number, pitch: number, legacy = false): CameraRigState {
   return {
     autoCenter: createAutoCenter(),
@@ -95,6 +102,8 @@ export function createRigState(config: CameraConfig, yaw: number, pitch: number,
     look: createLookInput(),
     lookAhead: createLookAhead(),
     pitch,
+    velX: 0,
+    velZ: 0,
     yaw,
     yawTarget: null,
     yawVelocity: { velocity: 0 },
@@ -236,7 +245,14 @@ function applyZoom(
   }
 }
 
-/** The framed object's planar velocity, measured from its own movement between frames (units/s). */
+/**
+ * The framed object's planar velocity, in units/s — SMOOTHED, not the raw per-frame delta.
+ *
+ * The raw delta is a saw: physics moves the focus on a 1/60 step, but this runs every render frame, so at
+ * 120 Hz every other frame sees zero movement. Feeding that saw to look-ahead makes the offset stutter
+ * toward 0 and back. A short exponential smoothing recovers the true speed (the saw's average) without adding
+ * meaningful lag — this is a MEASUREMENT filter, not a feel channel.
+ */
 function focusVelocity(
   state: CameraRigState,
   snapshot: CameraSnapshot,
@@ -246,15 +262,18 @@ function focusVelocity(
   const previous = state.lastFocus;
   state.lastFocus = [x, snapshot.focus[1], z];
   if (previous === null || snapshot.dt <= 0) {
-    return { x: 0, z: 0 };
+    return { x: state.velX, z: state.velZ };
   }
   // A teleport (respawn, debugger warp, vehicle entry) is not a velocity — the same jump the follow point
   // snaps on must not read as a sprint to the auto-center and look-ahead channels.
-  if (Math.hypot(x - previous[0], z - previous[2]) > config.teleportSnapDistance) {
-    return { x: 0, z: 0 };
+  if (Math.hypot(x - previous[0], z - previous[2]) <= config.teleportSnapDistance) {
+    const instantX = (x - previous[0]) / snapshot.dt;
+    const instantZ = (z - previous[2]) / snapshot.dt;
+    state.velX = damp(state.velX, instantX, VELOCITY_LAMBDA, snapshot.dt);
+    state.velZ = damp(state.velZ, instantZ, VELOCITY_LAMBDA, snapshot.dt);
   }
 
-  return { x: (x - previous[0]) / snapshot.dt, z: (z - previous[2]) / snapshot.dt };
+  return { x: state.velX, z: state.velZ };
 }
 
 /** The steered-yaw channel: swing toward a yaw the player did not ask for, then hand the camera back. */

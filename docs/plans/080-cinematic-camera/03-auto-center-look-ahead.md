@@ -145,10 +145,29 @@ practice, and the vehicle was left out. Fixed:
 Field-checked headless: at rest the camera sits behind the standing player; entering a car it lines up
 behind the rear. Suite 2625 green.
 
-**STILL OWED — the jitter.** The user also reports the camera dragging/juddering while the player moves,
-worst in a car. Diagnosed, NOT yet fixed: physics runs in `runFixedSteps` (1/60) but `focus`, `posePlayer`
-and the camera step in the VARIABLE-rate render loop (at 120 Hz every other frame does no physics step), so
-the framed object's position is a stair-step while the smoothed camera is continuous — the object judders
-against the camera on the fixed-step saw. The legacy stick hid it by moving in lockstep with the object.
-The real fix is render interpolation (draw ped + car + camera focus at `lerp(prev, cur, accumulator/step)`),
-which is a host-loop change spanning the ped and vehicle draw paths — its own step, tracked next.
+### 2026-07-25 — the jitter fix (rigid position, smoothed rotation)
+
+The user reported the camera juddering while moving — the ped appearing to "double" at a run, the camera
+sliding back-and-forth in a car. Root cause: physics runs at a fixed 1/60 in `runFixedSteps`, but `focus`,
+`posePlayer` and the camera all step in the VARIABLE-rate render loop, so at 120 Hz every other frame does
+no physics step. The framed object's position is a stair-step; a POSITION spring smoothing that stair-step
+lags and catches up every render frame, so the object oscillates against the camera on the fixed-step saw.
+The legacy stick never showed it because it moved in lockstep with the object.
+
+**The fix, without waiting for render interpolation:** ship the position channels at 0 —
+`positionLagTime`, `verticalLagTime`, `deadZone` all default to 0, so the camera position rigidly tracks
+the focus (in lockstep with the drawn object → nothing to beat against). Everything that does NOT fight the
+saw stays smoothed: input dampening, the yaw catch-up, auto-center, zoom, and look-ahead. Two details:
+
+- The look-ahead offset reads the focus VELOCITY, and the raw per-frame delta is the same saw (zero on the
+  no-physics frames). So `focusVelocity` now smooths the measurement — a `damp` at λ=14 (~0.05 s) recovers
+  the saw's average without meaningful lag. This is a measurement filter, not a feel channel.
+- The follow-rig code and its tests stay — the position spring is a real, tested mechanism gated by the
+  config values; it returns the moment those values go non-zero.
+
+**What this costs (recorded, standing rule):** behaviour #3 (position "weight" — the camera trailing a
+sharp direction change) and the vertical follow softness are OFF at these defaults. They come back when the
+host gains **render interpolation** (draw ped + car + camera focus at `lerp(prev, cur, accumulator/step)`),
+which makes the focus continuous so a position spring no longer beats against the saw. That is a host-loop
+change across the ped and vehicle draw paths — its own step, and the right home for the position weight.
+See `docs/performance/deferred-optimizations/` for the lever with its price.
