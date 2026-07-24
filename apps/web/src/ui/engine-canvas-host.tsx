@@ -53,21 +53,22 @@ import type { GameId } from '../game-config';
 import { IS_DEV } from '../dev-mode';
 import { GAME_CONFIG } from '../game-config';
 import { vehicleModelsFromIde } from '../vehicle-models';
+import {
+  type CameraSnapshot,
+  createRigState,
+  reseedDistance,
+  setFlyEye,
+  snapTopDown,
+  stepCamera,
+} from './camera/camera-director';
+import { CAMERA_FOV_Y, createChordWatcher, cursorRay, forwardFrom } from './camera/engine-camera';
+import { FLY_KEYS } from './camera/fly-rig';
 import { buildCollisionLines } from './collision-wireframe';
 import { ENGINE_DEBUG_CAPABILITIES } from './debug/debug-capabilities';
 import { type DebugActions, type DebugGame, DebugOverlay } from './debug/debug-overlay';
 import { type MapGame } from './debug/map-inspector';
 import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
-import {
-  CAMERA_FOV_Y,
-  createChordWatcher,
-  cursorRay,
-  flyStep,
-  panStep,
-  resolveCamera,
-  TOP_DOWN_PITCH,
-} from './engine-camera';
 import { setupEngineClutter } from './engine-clutter';
 import { createEngineDebugActions, type EnginePerfSnapshot } from './engine-debug-actions';
 import { loadCoronaSprites, setupEngineParticles } from './engine-particles';
@@ -99,14 +100,6 @@ const SLOW_FRAME_MS = 20;
 /** Player capsule (metres, GTA Z-up): the setup-character defaults for a human. */
 const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HALF_HEIGHT = 0.55;
-const EYE_HEIGHT = 0.9; // camera target above the player origin (engine units)
-/** Photo-camera movement keys (prod's fly mode: ARROWS move, the WASD player keeps walking). */
-const FLY_KEYS = new Set(['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'PageDown', 'PageUp']);
-/** Photo-camera speed (units/s) — prod's `camera-controller.FLY_SPEED`, so both hosts fly the same. */
-const FLY_SPEED = 18;
-/** Map-viewer "Top (reset view)" altitude above the player, in engine units — high enough to frame a
- *  250 u section with margin. */
-const TOP_DOWN_HEIGHT = 400;
 /** Fog distances the map viewer forces — past the camera far plane (10 000), so nothing is ever fogged. */
 const NO_FOG_DISTANCE = 100000;
 
@@ -392,13 +385,16 @@ async function boot(
   keyboard.start();
   const input = new CombinedInput([new KeyboardSource(keyboard, config.controls)]);
 
-  // Follow camera (host-owned, engine space): click = mouse capture (prod behaviour — the look uses
-  // movementX/Y continuously while pointer-locked, Esc releases), drag-orbit stays as the unlocked
-  // fallback; wheel = zoom. The controller sees its forward through a camera shim (the only three-shaped
-  // seam in CharacterControllerSystem).
-  let yaw = Math.PI;
-  let pitch = -0.25;
-  let followDistance = config.camera.followDistance;
+  // Camera (plan 080/01): the rig state lives in the director, the host only reports input. Click = mouse
+  // capture (prod behaviour — the look uses movementX/Y continuously while pointer-locked, Esc releases),
+  // drag-orbit stays as the unlocked fallback; wheel = zoom. The controller sees its forward through a
+  // camera shim (the only three-shaped seam in CharacterControllerSystem).
+  const rig = createRigState(config.camera, Math.PI, -0.25);
+  /** This frame's raw camera input, drained by the loop: pointer deltas in pixels, drag pan in NDC, wheel
+   *  notches. Accumulating instead of mutating the rig is what lets ONE pure step own the smoothing. */
+  const pendingInput = { look: { x: 0, y: 0 }, pan: null as null | { x: number; y: number }, zoom: 0 };
+  /** The FOV the last frame was rendered with — cursor picking must unproject through the SAME value. */
+  let cameraFovY = CAMERA_FOV_Y;
   /** The config distance this zoom last followed — a debugger change (074/22) re-seeds the live zoom. */
   let authoredDistance = config.camera.followDistance;
   let dragging = false;
@@ -466,7 +462,7 @@ async function boot(
     dragging = false;
     if (mapViewer && mapDrag) {
       if (mapDrag.button === 0 && mapDrag.moved < PICK_TRAVEL) {
-        pickAlong(cursorRay(forwardOf(), ndcOf(event), canvas.width / Math.max(1, canvas.height), CAMERA_FOV_Y));
+        pickAlong(cursorRay(forwardOf(), ndcOf(event), canvas.width / Math.max(1, canvas.height), cameraFovY));
       }
       mapDrag = null;
     }
@@ -481,66 +477,52 @@ async function boot(
       mapDrag.moved += Math.hypot(delta[0], delta[1]);
       mapDrag.ndc = ndc;
       if (mapDrag.button === 2) {
-        // The viewer may look straight DOWN (that is its resting view), so it gets the full pitch range the
-        // basis allows — not the gameplay camera's −1.2 floor.
-        yaw -= event.movementX * 0.004;
-        pitch = Math.max(TOP_DOWN_PITCH, Math.min(0.9, pitch - event.movementY * 0.004));
-      } else if (mapDrag.button === 0 && flyEye) {
-        // Pan by the eye's HEIGHT so the gesture covers the same apparent distance at any altitude.
-        flyEye = panStep(flyEye, forwardOf(), delta, Math.max(1, flyEye[1]));
+        // The viewer looks with the same deltas gameplay does — the director clamps its pitch by MODE (the
+        // viewer's resting view is straight down, which gameplay may not reach).
+        pendingInput.look.x += event.movementX;
+        pendingInput.look.y += event.movementY;
+      } else if (mapDrag.button === 0) {
+        pendingInput.pan = { x: (pendingInput.pan?.x ?? 0) + delta[0], y: (pendingInput.pan?.y ?? 0) + delta[1] };
       }
 
       return;
     }
     if (document.pointerLockElement === canvas || dragging) {
-      yaw -= event.movementX * 0.004;
-      pitch = Math.max(-1.2, Math.min(0.9, pitch - event.movementY * 0.004));
+      pendingInput.look.x += event.movementX;
+      pendingInput.look.y += event.movementY;
     }
   });
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
-    if (mapViewer && flyEye) {
-      // Dolly the detached eye along the view — the follow rig's zoom config does not apply to a free eye.
-      const [fx, fy, fz] = forwardOf();
-      const step = Math.max(1, flyEye[1]) * (event.deltaY > 0 ? -0.12 : 0.12);
-      flyEye = [flyEye[0] + fx * step, Math.max(2, flyEye[1] + fy * step), flyEye[2] + fz * step];
-
-      return;
-    }
-    if (!config.camera.followZoom) {
-      return; // wheel zoom is a config toggle (debug → Camera), like prod
-    }
-    followDistance = Math.max(
-      config.camera.followZoomMin,
-      Math.min(config.camera.followZoomMax, followDistance * (event.deltaY > 0 ? 1.08 : 0.93)),
-    );
+    // One notch, signed as the wheel reports it: the director dollies a detached eye and zooms an attached
+    // one (a wheel zoom on the follow rig is a config toggle — `followZoom`).
+    pendingInput.zoom += event.deltaY > 0 ? 1 : -1;
   });
-  /** Re-read the authored camera distance/zoom bounds (the debugger mutates them live). */
+  /** Re-read the authored camera distance (the debugger mutates it live); the bounds clamp inside the rig. */
   const syncCameraConfig = (): void => {
     if (config.camera.followDistance !== authoredDistance) {
       authoredDistance = config.camera.followDistance;
-      followDistance = authoredDistance;
+      reseedDistance(rig, config.camera, authoredDistance);
     }
-    followDistance = Math.max(config.camera.followZoomMin, Math.min(config.camera.followZoomMax, followDistance));
   };
   /**
    * Photo camera (074/22 phase 2.7 + 5): a detached free-fly EYE. The player entity is untouched — it keeps
    * standing (or walking under WASD) exactly as prod's fly mode does; only the camera leaves the rig.
    * ARROW keys move it (prod semantics), the mouse look is the shared yaw/pitch.
    */
-  let flyEye: [number, number, number] | null = null;
   const flyKeys = new Set<string>();
   /** Enter/leave the photo camera. Entering seeds the eye from the live camera (no jump); the player entity
    *  is untouched either way. The HUD hides itself on the shared `'fly-camera'` event, exactly as in prod. */
   const setFlyMode = (on: boolean): void => {
-    flyEye = on ? [cameraEye[0], cameraEye[1], cameraEye[2]] : null;
+    setFlyEye(rig, on ? [cameraEye[0], cameraEye[1], cameraEye[2]] : null);
     flyKeys.clear();
     events.emit('fly-camera', { enabled: on });
   };
   /**
    * The map viewer renders WITHOUT fog (field check, 2026-07-20).
    *
-   * The viewer sits {@link TOP_DOWN_HEIGHT} above the district, and the authored fog cut is often far less
+   * The viewer sits hundreds of units above the district (`TOP_DOWN_HEIGHT`), and the authored fog cut is
+   * often far less
    * than that — LA-clear is 800, FOGGY_SF 250. The ground was therefore past the cut and the whole district
    * dissolved into fog colour: at night that reads as an empty brown screen, which is what "the map viewer
    * does not work" looked like. The geometry was there the whole time (a whole-map pin loaded 840 cells and
@@ -557,27 +539,20 @@ async function boot(
     engine.environment.fogStartDistance = NO_FOG_DISTANCE;
   };
   /**
-   * Lift the detached eye straight over the player and aim it down. The pitch stops just short of -PI/2: a
-   * perfectly vertical forward vector is degenerate for the look-at basis.
-   *
-   * This is what ENTERING the map viewer does, not only the "Top" button. `setFlyMode` alone detaches the eye
-   * where it already stands, looking where it already looked — indistinguishable from the activation doing
-   * nothing at all. The three-based camera controller snapped overhead inside `enterDebug()` for that reason.
+   * Lift the detached eye straight over the player and aim it down — what ENTERING the map viewer does, not
+   * only the "Top" button. `setFlyMode` alone detaches the eye where it already stands, looking where it
+   * already looked, which is indistinguishable from the activation doing nothing at all (074/22 phase 9).
    */
-  const snapTopDown = (): void => {
-    const [ex, ey, ez] = toEngine(viewOf());
-    flyEye = [ex, ey + TOP_DOWN_HEIGHT, ez];
-    pitch = TOP_DOWN_PITCH;
-  };
+  const viewFromAbove = (): void => snapTopDown(rig, toEngine(viewOf()));
   const photoChord = createChordWatcher('KeyK', 'KeyM');
   window.addEventListener('keydown', (event) => {
     if (photoChord.down(event.code)) {
-      setFlyMode(flyEye === null);
+      setFlyMode(rig.flyEye === null);
     }
-    if (event.key === 'F2' && flyEye) {
+    if (event.key === 'F2' && rig.flyEye) {
       setFlyMode(false); // entering the debugger leaves the photo camera (prod behaviour)
     }
-    if (flyEye && FLY_KEYS.has(event.code)) {
+    if (rig.flyEye && FLY_KEYS.has(event.code)) {
       event.preventDefault();
       flyKeys.add(event.code);
     }
@@ -586,11 +561,7 @@ async function boot(
     photoChord.up(event.code);
     flyKeys.delete(event.code);
   });
-  const forwardOf = (): [number, number, number] => [
-    Math.cos(pitch) * Math.sin(yaw),
-    Math.sin(pitch),
-    Math.cos(pitch) * Math.cos(yaw),
-  ];
+  const forwardOf = (): [number, number, number] => forwardFrom(rig.yaw, rig.pitch);
   // The controller only calls camera.getWorldDirection(v) — hand it the follow camera's forward.
   const cameraShim: LookDirectionSource = {
     getWorldDirection: (target) => {
@@ -711,7 +682,7 @@ async function boot(
     vehicles = await setupEngineVehicles({
       adapter,
       aimCamera: (azimuth: number): void => {
-        yaw = azimuth;
+        rig.yaw = azimuth;
       },
       animator: player,
       config,
@@ -803,7 +774,7 @@ async function boot(
   debugRef = {
     actions: createEngineDebugActions({
       breakNearest: (position, radius) => breakables.breakNearest(position, radius),
-      cameraDistance: () => followDistance,
+      cameraDistance: () => rig.distance,
       city: (): City => city,
       config,
       flipVehicle: () => flipActiveVehicle(physics, vehicles?.activeVehicle() ?? null),
@@ -817,7 +788,7 @@ async function boot(
               ['submit', lastStats.submitMs],
             ]
           : [],
-      isFlying: () => flyEye !== null,
+      isFlying: () => rig.flyEye !== null,
       missingTextureHighlight: () => missingTexHighlight,
       perfHud: () => perfHud,
       perfLogs: () => perfLogs,
@@ -886,16 +857,16 @@ async function boot(
         const [px, py, pz] = viewOf();
         // In FRONT of the camera, facing the same way. The camera's native forward is (sin yaw, −cos yaw);
         // a heading h points along (−sin h, cos h), so the matching heading is yaw + π.
-        const position: [number, number, number] = [px + Math.sin(yaw) * 5, py - Math.cos(yaw) * 5, pz + 1];
+        const position: [number, number, number] = [px + Math.sin(rig.yaw) * 5, py - Math.cos(rig.yaw) * 5, pz + 1];
         await vehicles?.spawn({
           ...(combos.length > 0 ? { colour: combos[index % combos.length].join(',') } : {}),
           groundSnap: true,
-          heading: yaw + Math.PI,
+          heading: rig.yaw + Math.PI,
           model,
           position,
         });
       },
-      topDownView: (): void => snapTopDown(),
+      topDownView: viewFromAbove,
       vehicleModels: () => vehicleModels,
       weather: liveWeather,
     }),
@@ -936,7 +907,7 @@ async function boot(
         setup.driver.unloadAll();
         setFlyMode(enabled);
         if (enabled) {
-          snapTopDown(); // the viewer opens LOOKING at the district, as the three camera controller did
+          viewFromAbove(); // the viewer opens LOOKING at the district, as the three camera controller did
         }
         if (!enabled) {
           setShowCollision(false); // the overlay belongs to the viewer; leaving must not strand it on screen
@@ -1073,7 +1044,7 @@ async function boot(
     if (document.pointerLockElement) {
       document.exitPointerLock();
     }
-    if (flyEye) {
+    if (rig.flyEye) {
       setFlyMode(false);
     }
   };
@@ -1146,21 +1117,26 @@ async function boot(
     // While seated the camera trails the CAR (the rider is teleported into the seat every frame — following
     // the ped would judder); on foot it trails the player.
     const focus = seatedCar ? toEngine(seatedCar.position) : playerEngine;
-    const target: [number, number, number] = [focus[0], focus[1] + EYE_HEIGHT, focus[2]];
-    const [fx, fy, fz] = forwardOf();
-    // Photo camera (074/22): a detached eye flying on the ARROW keys, looking where the mouse points.
-    if (flyEye) {
-      flyEye = flyStep(flyEye, flyKeys, [fx, fy, fz], yaw, FLY_SPEED * dt);
-    }
     syncCameraConfig();
-    const camera = resolveCamera({
+    // The rig is one pure step over a snapshot of this frame (plan 080/01): the handlers above only
+    // ACCUMULATED input, so the smoothing that lands in plan 02 sees whole frames, dt included.
+    const snapshot: CameraSnapshot = {
       aspect: canvas.width / Math.max(1, canvas.height),
       bench: benchCamera,
-      distance: followDistance,
-      flyEye,
-      forward: [fx, fy, fz],
-      target,
-    });
+      dt,
+      focus,
+      look: pendingInput.look,
+      mode: cameraModeOf(rig.flyEye !== null, seatedCar !== null),
+      pan: pendingInput.pan,
+      walkKeys: flyKeys,
+      zoomSteps: pendingInput.zoom,
+    };
+    const camera = stepCamera(rig, snapshot, config.camera);
+    pendingInput.look.x = 0;
+    pendingInput.look.y = 0;
+    pendingInput.pan = null;
+    pendingInput.zoom = 0;
+    cameraFovY = camera.fovYRad;
     [cameraEye[0], cameraEye[1], cameraEye[2]] = camera.eye;
     engine.probeCenter = probeCenterOf(probeEnabled, focus);
     engine.probeView = probeViewEnabled;
@@ -1274,6 +1250,15 @@ async function boot(
  * Roll the occupied car 180° about its OWN forward axis and lift it 1.5 m (the debugger's "flip vehicle" —
  * prod's implementation, with the quaternion algebra written out so the host keeps its three-free math).
  */
+/** Which rig frames this frame: a detached eye wins over a seat, a seat over the on-foot follow. */
+function cameraModeOf(flying: boolean, seated: boolean): CameraSnapshot['mode'] {
+  if (flying) {
+    return 'fly';
+  }
+
+  return seated ? 'vehicle' : 'foot';
+}
+
 function flipActiveVehicle(physics: PhysicsWorld, active: null | { body: number }): void {
   if (!active) {
     return;

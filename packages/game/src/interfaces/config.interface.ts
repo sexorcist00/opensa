@@ -28,6 +28,13 @@ export interface CameraConfig {
   followZoomMax: number;
   /** Nearest the wheel can zoom in (world units). */
   followZoomMin: number;
+  /** Highest the look may pitch (radians, positive = up). */
+  pitchMax: number;
+  /** Lowest the gameplay look may pitch (radians, negative = down). The map viewer needs the full range down
+   *  to straight-down, so it clamps at its own top-down margin instead of this floor. */
+  pitchMin: number;
+  /** How far the mouse look turns the rig: radians per pixel of pointer movement. */
+  sensitivity: number;
 }
 
 /** Procedural sky-dome cloud tuning. */

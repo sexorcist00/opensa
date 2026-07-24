@@ -109,7 +109,7 @@ export const ALL_DEBUG_CAPABILITIES: DebugCapabilities = {
 
 /** The own-engine host: bucket-C rows off (see plan 074/22 for the per-row disposition). */
 export const ENGINE_DEBUG_CAPABILITIES: DebugCapabilities = {
-  cameraRig: false,
+  cameraRig: true, // 080/01 — the rig rows are the director's own config now, not the three follow orbit
   cloudCover: false,
   coronaDistance: false,
   dynamicObjectsFill: false,
@@ -164,19 +164,20 @@ export function menuFor(capabilities: DebugCapabilities, hideDevOnly: boolean): 
 }
 
 /** Camera-screen sliders: `[config key, label, min, max, step]`. The first three (distance + zoom bounds)
- *  drive the engine host's orbit too; the rest are the three follow RIG, gated by `cameraRig`. */
+ *  drive every host's zoom; the rest are the RIG group (plan 080/01), gated by `cameraRig`. */
 const CAMERA_ZOOM_ROWS = [
   ['followDistance', 'DISTANCE', 4, 80, 1],
   ['followZoomMin', 'MIN ZOOM', 4, 40, 1],
   ['followZoomMax', 'MAX ZOOM', 6, 80, 1],
 ] as const;
 
+/** The live-tuning rows a field round turns: framing height, look speed and the pitch clamps. Sliders are how
+ *  the 036 rounds tuned without a rebuild, and 080's rounds work the same way. */
 const CAMERA_RIG_ROWS = [
   ['followHeight', 'HEIGHT', 0, 4, 0.1],
-  ['followPolar', 'ANGLE', 0.2, 1.5, 0.05],
-  ['followLerp', 'RESPONSE', 0.5, 12, 0.5],
-  ['followMinPolar', 'MIN ANGLE', 0.05, 1.5, 0.05],
-  ['followMaxPolar', 'MAX ANGLE', 0.5, 1.55, 0.05],
+  ['sensitivity', 'LOOK SPEED', 0.001, 0.012, 0.0005],
+  ['pitchMin', 'PITCH MIN', -1.55, -0.2, 0.05],
+  ['pitchMax', 'PITCH MAX', 0.2, 1.55, 0.05],
 ] as const;
 
 export type CameraControlRow = (typeof CAMERA_RIG_ROWS)[number] | (typeof CAMERA_ZOOM_ROWS)[number];

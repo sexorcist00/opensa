@@ -834,7 +834,8 @@ export function DebugOverlay({
               {cameraControlsFor(capabilities).map(([key, label, min, max, step]) => (
                 <div key={key}>
                   <div style={styles.groupLabel}>
-                    {label}: {camera[key].toFixed(2)}
+                    {/* A fine-step row (look speed is radians per PIXEL) reads 0.00 at two decimals. */}
+                    {label}: {camera[key].toFixed(step < 0.01 ? 4 : 2)}
                   </div>
                   <input
                     max={max}

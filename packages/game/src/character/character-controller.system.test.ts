@@ -47,6 +47,9 @@ function config(gameState: Config['gameState']): Config {
       followZoom: true,
       followZoomMax: 40,
       followZoomMin: 6,
+      pitchMax: 0.9,
+      pitchMin: -1.2,
+      sensitivity: 0.004,
     },
     controls: {
       back: 'KeyS',

@@ -19,9 +19,12 @@ export const GAME_CELL_SIZE = 256;
 
 export function createGameRuntimeConfig(): Config {
   return {
+    // 080/01: the rig values the host used to hard-code (eye height 0.9, sensitivity 0.004, pitch clamps)
+    // are config now — same numbers, so the camera feels exactly as it did, but a field round can tune them
+    // from the debug Camera tab without a rebuild.
     camera: {
       followDistance: 7,
-      followHeight: 1.2,
+      followHeight: 0.9,
       followLerp: 3,
       followMaxPolar: Math.PI / 2 - 0.05,
       followMinPolar: 0.25,
@@ -29,6 +32,9 @@ export function createGameRuntimeConfig(): Config {
       followZoom: true,
       followZoomMax: 10,
       followZoomMin: 4,
+      pitchMax: 0.9,
+      pitchMin: -1.2,
+      sensitivity: 0.004,
     },
     // 088/03: RUN is the default gait (SA jogs); Shift sprints. `walk` is left unbound — the slow tier
     // is reachable by a partial touch-stick deflection, or bind a key here.

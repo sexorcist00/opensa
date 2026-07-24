@@ -91,26 +91,30 @@ describe('skyControlsFor', () => {
 
 describe('cameraControlsFor', () => {
   describe('negative cases', () => {
-    it('hides the follow-rig sliders on a host whose orbit is mouse yaw/pitch', () => {
-      const keys = cameraControlsFor(ENGINE_DEBUG_CAPABILITIES).map(([key]) => key);
+    it('hides the rig sliders on a host without a rig to tune', () => {
+      const keys = cameraControlsFor({ ...ENGINE_DEBUG_CAPABILITIES, cameraRig: false }).map(([key]) => key);
 
-      expect(keys).not.toContain('followPolar');
-      expect(keys).not.toContain('followLerp');
-      expect(keys).not.toContain('followHeight');
+      expect(keys).toEqual(['followDistance', 'followZoomMin', 'followZoomMax']);
     });
   });
 
   describe('positive cases', () => {
-    it('keeps distance and the zoom bounds everywhere', () => {
-      expect(cameraControlsFor(ENGINE_DEBUG_CAPABILITIES).map(([key]) => key)).toEqual([
-        'followDistance',
-        'followZoomMin',
-        'followZoomMax',
-      ]);
+    it('keeps distance and the zoom bounds first, everywhere', () => {
+      expect(
+        cameraControlsFor(ALL_DEBUG_CAPABILITIES)
+          .slice(0, 3)
+          .map(([key]) => key),
+      ).toEqual(['followDistance', 'followZoomMin', 'followZoomMax']);
     });
 
-    it('adds the rig sliders for a fully capable host', () => {
-      expect(cameraControlsFor(ALL_DEBUG_CAPABILITIES)).toHaveLength(8);
+    it('gives the engine host the 080 rig rows (height, look speed, pitch clamps)', () => {
+      const keys = cameraControlsFor(ENGINE_DEBUG_CAPABILITIES).map(([key]) => key);
+
+      expect(keys).toContain('followHeight');
+      expect(keys).toContain('sensitivity');
+      expect(keys).toContain('pitchMin');
+      expect(keys).toContain('pitchMax');
+      expect(keys).toHaveLength(7);
     });
   });
 });

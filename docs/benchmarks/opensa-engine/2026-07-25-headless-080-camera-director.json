@@ -1,0 +1,28 @@
+{
+  "note": "Plan 080/01 (camera director) verification run, taken by Claude on the dev machine, NOT by the user. Headless bench-harness (?loader=http-dir, DPR=2, Chromium/ANGLE-Metal) on the working tree with the director wired in; pak = build/original/opensa (087-ring rebuild, the same pak as 2026-07-24-ingame-617556f-087ring.json). ONE scene only (ls-noon). NOT pass-comparable to the user's in-game rows: different harness, and road cars registered 296 vs the in-game 1126 — headless boots with far fewer cars alive at bench start. The leg is vsync-capped (120 fps / 8.33 ms), so it cannot resolve a small CPU regression; it is recorded as evidence that the bench path still runs, draws the same class of frame (1181 draws vs 1238 in-game) and never touches the director (resolveCamera's bench branch wins, pinned by camera-director.test.ts). No BEFORE run was taken: producing one meant stashing the change under the user's live dev server, which was not worth the disturbance for a vsync-capped leg.",
+  "commit": "f46d3e3+working-tree",
+  "pak": "build/original/opensa (087-ring rebuild, 1137 cells)",
+  "host": "headless Chromium / ANGLE-Metal @DPR=2, 1440x900 viewport",
+  "roadCars": 296,
+  "runs": [
+    {
+      "key": "ls-noon",
+      "avgMs": 8.334,
+      "p95Ms": 9.2,
+      "fps": 120,
+      "frames": 1802,
+      "avgDrawCalls": 1181,
+      "avgTriangles": 2287719,
+      "gpuMs": { "pass": 3.13, "post": 1.175, "probe": 2.264, "submit": 0.376 },
+      "residency": "cellIndex 41 · cellVertex 184 · target 345 · texture 1155 · uniform 1",
+      "lateCreates": 0
+    }
+  ],
+  "microbench": {
+    "what": "one stepCamera call (the whole director: look + zoom + mode rig + resolve), foot mode",
+    "where": "node/tsx on the dev machine, 200k calls in 20 rounds after a 20k warm-up",
+    "meanUs": 0.078,
+    "p95Us": 0.089,
+    "budget": "plan 080 ground rule 6 allows 0.1 ms p95 — the step costs ~0.0001 ms, three orders under it"
+  }
+}

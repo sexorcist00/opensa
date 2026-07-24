@@ -1,16 +1,15 @@
 /**
- * Camera resolution for the own-engine host (074/22): who owns the eye this frame, and how the photo camera
- * moves. Pure math, kept out of `engine-canvas-host` so the frame loop stays readable and both rules are
- * unit-testable (the host itself is browser-only glue).
+ * Camera resolution for the own-engine host (074/22): who owns the eye this frame, plus the screen basis the
+ * viewer picks and pans through. Pure math, kept out of `engine-canvas-host` so the frame loop stays readable
+ * and every rule is unit-testable (the host itself is browser-only glue).
+ *
+ * The rig that PRODUCES eye/target lives in `camera-director.ts` (plan 080/01); this file stays the last step
+ * — the priority rule — so the bench bypass is one branch in one place.
  */
 import type { CameraState } from '@opensa/engine';
 
-/** Vertical field of view of every camera this host resolves — cursor picking must unproject through it. */
+/** Default vertical field of view of the rig. The director carries it as a value (plan 080/05 animates it). */
 export const CAMERA_FOV_Y = Math.PI / 3;
-
-/** The steepest the map viewer may look down. A perfectly vertical forward has no defined screen basis, so
- *  this stops just short of it — the same margin {@link screenBasis} depends on. */
-export const TOP_DOWN_PITCH = -Math.PI / 2 + 0.01;
 
 /**
  * Prod's K+M chord (`canvas-host`, verbatim semantics): the toggle fires ONCE while both keys are held —
@@ -52,6 +51,9 @@ export function createChordWatcher(
  * The gameplay camera picks along its own forward because the pointer is locked and the crosshair IS the aim.
  * The map viewer has no pointer lock, so the cursor is the aim and a forward-vector pick would select whatever
  * happens to sit at screen centre instead of what the user clicked.
+ *
+ * `fovYRad` is the FOV the frame was RENDERED with (the director's output) — a ray built on any other value
+ * lands off-target the moment the rig starts animating it (plan 080/05).
  */
 export function cursorRay(
   forward: readonly [number, number, number],
@@ -73,63 +75,9 @@ export function cursorRay(
   return [dir[0] / length, dir[1] / length, dir[2] / length];
 }
 
-/**
- * One photo-camera movement step (074/22): ARROWS walk the eye along the view forward / camera right
- * (prod's `flyUpdate`, same axes — right = forward × up), PageUp/PageDown lift it (an engine addition;
- * prod's fly camera has no vertical key). Pure — the eye in, the moved eye out.
- */
-export function flyStep(
-  eye: readonly [number, number, number],
-  keys: ReadonlySet<string>,
-  forward: readonly [number, number, number],
-  yaw: number,
-  step: number,
-): [number, number, number] {
-  const [fx, fy, fz] = forward;
-  // right = normalize(forward × up) — for a yaw-based forward that is (−cos yaw, 0, sin yaw).
-  const right: [number, number, number] = [-Math.cos(yaw), 0, Math.sin(yaw)];
-  const axes: [string, [number, number, number]][] = [
-    ['ArrowUp', [fx, fy, fz]],
-    ['ArrowDown', [-fx, -fy, -fz]],
-    ['ArrowRight', right],
-    ['ArrowLeft', [-right[0], 0, -right[2]]],
-    ['PageUp', [0, 1, 0]],
-    ['PageDown', [0, -1, 0]],
-  ];
-  const moved: [number, number, number] = [eye[0], eye[1], eye[2]];
-  for (const [code, [dx, dy, dz]] of axes) {
-    if (keys.has(code)) {
-      moved[0] += dx * step;
-      moved[1] += dy * step;
-      moved[2] += dz * step;
-    }
-  }
-
-  return moved;
-}
-
-/**
- * Drag-to-pan for the map viewer (the LEFT button, as prod's OrbitControls mapped it): the eye slides in the
- * camera's own screen plane, OPPOSITE the drag, so the map follows the cursor like a grabbed sheet.
- *
- * `scale` is world units per NDC unit — pass the eye's height above the ground so panning covers the same
- * apparent distance whether you are 50 m or 500 m up, which is what made the three controls feel right.
- */
-export function panStep(
-  eye: readonly [number, number, number],
-  forward: readonly [number, number, number],
-  ndcDelta: readonly [number, number],
-  scale: number,
-): [number, number, number] {
-  const { right, up } = screenBasis(forward);
-  const dx = -ndcDelta[0] * scale;
-  const dy = -ndcDelta[1] * scale;
-
-  return [
-    eye[0] + right[0] * dx + up[0] * dy,
-    eye[1] + right[1] * dx + up[1] * dy,
-    eye[2] + right[2] * dx + up[2] * dy,
-  ];
+/** The view forward for a yaw/pitch pair (engine Y-up) — the one place the rig's angle convention lives. */
+export function forwardFrom(yaw: number, pitch: number): [number, number, number] {
+  return [Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), Math.cos(pitch) * Math.cos(yaw)];
 }
 
 /**
@@ -142,10 +90,11 @@ export function resolveCamera(state: {
   distance: number;
   flyEye: [number, number, number] | null;
   forward: readonly [number, number, number];
+  fovYRad: number;
   target: readonly [number, number, number];
 }): CameraState {
-  const { aspect, bench, distance, flyEye, forward, target } = state;
-  const rig = { aspect, far: 10000, fovYRad: CAMERA_FOV_Y, near: 0.5, up: [0, 1, 0] as [number, number, number] };
+  const { aspect, bench, distance, flyEye, forward, fovYRad, target } = state;
+  const rig = { aspect, far: 10000, fovYRad, near: 0.5, up: [0, 1, 0] as [number, number, number] };
   if (bench) {
     return { ...rig, eye: bench.eye, target: bench.target };
   }
@@ -161,7 +110,7 @@ export function resolveCamera(state: {
 }
 
 /** The camera's screen basis for a forward vector, matching `mat4LookAt`'s (right, up) rows exactly. */
-function screenBasis(forward: readonly [number, number, number]): {
+export function screenBasis(forward: readonly [number, number, number]): {
   right: [number, number, number];
   up: [number, number, number];
 } {

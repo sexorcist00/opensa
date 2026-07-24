@@ -1,48 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { createChordWatcher, cursorRay, flyStep, panStep, resolveCamera, TOP_DOWN_PITCH } from './engine-camera';
+import { CAMERA_FOV_Y, createChordWatcher, cursorRay, forwardFrom, resolveCamera } from './engine-camera';
+import { TOP_DOWN_PITCH } from './fly-rig';
 
 const FORWARD = [0, 0, -1] as const; // looking down −Z
 const TARGET = [10, 2, 30] as const;
 
-describe('flyStep', () => {
-  describe('negative cases', () => {
-    it('does not move the eye when no movement key is held', () => {
-      expect(flyStep([1, 2, 3], new Set(), FORWARD, 0, 24)).toEqual([1, 2, 3]);
-    });
-
-    it('ignores keys that are not photo-camera controls', () => {
-      expect(flyStep([1, 2, 3], new Set(['KeyW', 'Space']), FORWARD, 0, 24)).toEqual([1, 2, 3]);
-    });
-
-    it('cancels opposite keys held together', () => {
-      const keys = new Set(['ArrowDown', 'ArrowUp']);
-      expect(flyStep([0, 0, 0], keys, FORWARD, 0, 10)).toEqual([0, 0, 0]);
-    });
-  });
-
-  describe('positive cases', () => {
-    it('walks the eye along the view forward', () => {
-      expect(flyStep([0, 0, 0], new Set(['ArrowUp']), FORWARD, 0, 10)).toEqual([0, 0, -10]);
-    });
-
-    it('strafes along the camera right (prod axes: right = forward × up) and lifts on PageUp', () => {
-      const strafed = flyStep([0, 0, 0], new Set(['ArrowRight']), FORWARD, 0, 5);
-      expect(strafed[0]).toBe(-5); // yaw 0 looks down −Z, so camera-right is −X
-      expect(strafed[2]).toBeCloseTo(0);
-      expect(flyStep([0, 0, 0], new Set(['PageUp']), FORWARD, 0, 5)).toEqual([0, 5, 0]);
-    });
-
-    it('scales the step by the frame time (speed × dt comes in as one number)', () => {
-      const slow = flyStep([0, 0, 0], new Set(['ArrowUp']), FORWARD, 0, 1);
-      const fast = flyStep([0, 0, 0], new Set(['ArrowUp']), FORWARD, 0, 4);
-      expect(fast[2]).toBeCloseTo(slow[2] * 4);
-    });
-  });
-});
-
 describe('resolveCamera', () => {
-  const base = { aspect: 1.5, bench: null, distance: 7, flyEye: null, forward: FORWARD, target: TARGET };
+  const base = {
+    aspect: 1.5,
+    bench: null,
+    distance: 7,
+    flyEye: null,
+    forward: FORWARD,
+    fovYRad: CAMERA_FOV_Y,
+    target: TARGET,
+  };
 
   describe('negative cases', () => {
     it('ignores the photo camera while a bench owns the frame', () => {
@@ -68,6 +41,29 @@ describe('resolveCamera', () => {
 
       expect(camera.eye).toEqual([4, 5, 6]);
       expect(camera.target).toEqual([4, 5, 5]);
+    });
+
+    it('carries the field of view it was handed (picking unprojects through the SAME value)', () => {
+      expect(resolveCamera({ ...base, fovYRad: 1.1 }).fovYRad).toBe(1.1);
+    });
+  });
+});
+
+describe('forwardFrom', () => {
+  describe('positive cases', () => {
+    it('looks down +Z at yaw 0 and down −X at yaw −pi/2', () => {
+      const [ax, ay, az] = forwardFrom(0, 0);
+      expect([ax, ay, az].map((value) => Number(value.toFixed(6)))).toEqual([0, 0, 1]);
+
+      const [bx, , bz] = forwardFrom(-Math.PI / 2, 0);
+      expect(bx).toBeCloseTo(-1, 6);
+      expect(bz).toBeCloseTo(0, 6);
+    });
+
+    it('stays unit length across the pitch range', () => {
+      for (const pitch of [-1.2, -0.25, 0, 0.9]) {
+        expect(Math.hypot(...forwardFrom(2.3, pitch))).toBeCloseTo(1, 12);
+      }
     });
   });
 });
@@ -161,30 +157,6 @@ describe('cursorRay', () => {
       const wide = cursorRay([0, 0, 1], [1, 0], 2, Math.PI / 3);
 
       expect(Math.abs(wide[0])).toBeGreaterThan(Math.abs(narrow[0]));
-    });
-  });
-});
-
-describe('panStep', () => {
-  describe('negative cases', () => {
-    it('does not move the eye without a drag', () => {
-      expect(panStep([5, 100, 5], [0, 0, 1], [0, 0], 100)).toEqual([5, 100, 5]);
-    });
-  });
-
-  describe('positive cases', () => {
-    it('moves the eye OPPOSITE the drag, so the map follows the cursor', () => {
-      // Looking down +Z, screen right is −X. Dragging right (+ndc x) must push the eye toward +X.
-      const moved = panStep([0, 100, 0], [0, 0, 1], [0.1, 0], 100);
-
-      expect(moved[0]).toBeGreaterThan(0);
-    });
-
-    it('scales with the height passed in — the same drag covers more ground from higher up', () => {
-      const low = panStep([0, 0, 0], [0, 0, 1], [0.1, 0], 50);
-      const high = panStep([0, 0, 0], [0, 0, 1], [0.1, 0], 500);
-
-      expect(Math.abs(high[0])).toBeGreaterThan(Math.abs(low[0]));
     });
   });
 });

@@ -124,6 +124,13 @@ per-bone evaluate + slerp. Invisible next to the ~2 ms pass floor; crossfades sh
 Not a scene run (no pak, no GPU). Run:
 [`2026-07-24-microbench-ifp-sampler-blend.json`](opensa-engine/2026-07-24-microbench-ifp-sampler-blend.json).
 
+**07-25: camera director wired in (plan 080/01), headless check.** `ls-noon` on the 087-ring pak ran
+**120 fps / 8.334 ms avg, p95 9.2, draws 1181** — vsync-capped, so it proves the bench path still runs and
+draws the same class of frame, NOT the absence of a small CPU cost. Taken by Claude headless (DPR=2, road
+cars 296), so it is not pass-comparable to the user's in-game rows. The director itself was microbenched
+instead: **0.078 µs mean / 0.089 µs p95 per `stepCamera` call**, against plan 080's 0.1 ms p95 budget. Run:
+[`2026-07-25-headless-080-camera-director.json`](opensa-engine/2026-07-25-headless-080-camera-director.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

@@ -76,9 +76,9 @@
   dominates (peds carry no baked AO, so `DYNAMIC_INDIRECT × skyVisibility(normal)` is the whole weight). The
   old plan-034 "night fill" shader was removed with the three renderer and has **no replacement yet**; the
   moonlight band carries the night read (see night-and-time.md).
-- **Follow camera** (plan 036): spherical rig in `Config.camera`; auto-trail only on direction
-  CHANGE (not continuous), free mouse look wins, pitch manual-only; zoom wheel with min/max;
-  debug Camera screen sliders.
+- **Follow camera**: the own-engine rig lives in the camera director (`Config.camera`, plan 080 — see
+  [camera.md](camera.md)); free mouse look, pitch clamped by config, wheel zoom with min/max, debug Camera
+  screen sliders. The 036 three-era spherical rig (auto-trail on direction CHANGE) is what 080 replaces.
 
 ## Known gaps / candidates
 
@@ -121,6 +121,6 @@ were retired (plan 079 phase 5) — nothing bakes a ped fixture any more; the `.
 `engine/src/anim/ifp-sampler.test.ts` (incl. the 088/02 blend/hold gates),
 `ifp` parser tests, `character-controller.system.test.ts` (heading/plant + the 088/04 FSM with real
 Rapier), `character/locomotion.test.ts`, `ui/locomotion-mixer.test.ts`, `ui/gait-selector.test.ts`,
-`ui/engine-player.test.ts` (`buildClipIndex`/`resolveGaitClip` degradation gates), `ui/engine-camera.test.ts`.
+`ui/engine-player.test.ts` (`buildClipIndex`/`resolveGaitClip` degradation gates), `ui/camera/*.test.ts`.
 The converted-ped path: `tools/opensa-pack/src/no-data-loss.test.ts` (every skinned buffer byte for byte,
 the whole skeleton, `minZ`, and every texture present across arrays).

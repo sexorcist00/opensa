@@ -1,4 +1,5 @@
 export { Box3 } from './box3';
+export { angleDelta, damp, dampAngle, smoothDamp, smoothDampAngle, type SmoothDampRef } from './damping';
 export { clamp, degToRad, euclideanModulo, lerp, MathUtils, radToDeg } from './math-utils';
 export { Matrix4 } from './matrix4';
 export { Quaternion } from './quaternion';
