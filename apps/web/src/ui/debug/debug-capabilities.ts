@@ -184,6 +184,12 @@ const CAMERA_RIG_ROWS = [
   ['verticalLagTime', 'LAG VERTICAL', 0, 1, 0.02],
   ['deadZone', 'DEAD ZONE', 0, 0.5, 0.01],
   ['yawLagTime', 'YAW SWING', 0, 1, 0.05],
+  // 080/03 composition: when the camera finds its own way home, and how far the frame leans ahead.
+  ['recenterDelaySec', 'RECENTER AFTER', 0, 6, 0.25],
+  ['recenterRate', 'RECENTER RATE', 0, 5, 0.1],
+  ['lookAheadDistance', 'LOOK AHEAD', 0, 3, 0.1],
+  ['lookAheadTime', 'LOOK AHEAD TIME', 0.05, 1.5, 0.05],
+  ['turnThreshold', 'TURN THRESHOLD', 0.2, 3, 0.1],
 ] as const;
 
 export type CameraControlRow = (typeof CAMERA_RIG_ROWS)[number] | (typeof CAMERA_ZOOM_ROWS)[number];

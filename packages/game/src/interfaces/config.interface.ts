@@ -37,6 +37,20 @@ export interface CameraConfig {
   /** The responsiveness floor: however fast the player moves, the look point never trails the focus by more
    *  than this (world units). The player can never leave the frame. */
   lagMaxDistance: number;
+  /** How far the frame leans toward where the player is heading (world units, at full speed). 0 = off. */
+  lookAheadDistance: number;
+  /** The speed (units/s) at which look-ahead and the idle recenter reach their full strength — the run gait,
+   *  so a walk gets a hint and a sprint the whole shift. */
+  lookAheadFullSpeed: number;
+  /** How long the look-ahead offset takes to follow a change of direction (seconds, spring). Slow on purpose:
+   *  it should read as composition, not as tracking. */
+  lookAheadTime: number;
+  /** After a look input, auto-centering is held off for this long (seconds) — the 036 manual grace, so a
+   *  small correction is not immediately undone by the camera. */
+  manualGraceSec: number;
+  /** Below this speed (units/s) the framed object counts as standing still: no heading tracking, no
+   *  recentering, no look-ahead. */
+  moveThreshold: number;
   /** Highest the look may pitch (radians, positive = up). */
   pitchMax: number;
   /** Lowest the gameplay look may pitch (radians, negative = down). The map viewer needs the full range down
@@ -45,11 +59,20 @@ export interface CameraConfig {
   /** How long the look point takes to catch up to the focus in the horizontal plane (seconds, spring). This
    *  is the weight: a hard direction change leaves the character leading the frame for a beat. */
   positionLagTime: number;
+  /** How long the look must stay idle before the camera starts easing behind a MOVING player (seconds). */
+  recenterDelaySec: number;
+  /** How fast the idle recenter closes on "behind the player" (per second, scaled by speed). */
+  recenterRate: number;
   /** How far the mouse look turns the rig: radians per pixel of pointer movement. */
   sensitivity: number;
+  /** Turn-follow stops once the yaw is within this of behind the player (radians). */
+  settleEpsilon: number;
   /** A focus jump beyond this (world units) is a TELEPORT, not movement: the rig snaps instead of flying
    *  across the map (respawn, debugger warp, vehicle entry from far away). */
   teleportSnapDistance: number;
+  /** A heading change faster than this (radians/second) swings the camera behind the new direction. Walking
+   *  straight never reaches it, so a framing the player chose survives a straight run. */
+  turnThreshold: number;
   /** How long the look point takes to follow the focus VERTICALLY (seconds). Slower than the planar channel
    *  on purpose — stairs, curbs and jump arcs must not jolt the horizon. */
   verticalLagTime: number;

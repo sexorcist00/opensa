@@ -36,6 +36,24 @@ instead of one global smoothing knob:
 - **`?cam=legacy`** turns every one of those channels off and runs the pre-080 rigid stick — the A/B a
   field round compares one reload apart, pinned by the parity test.
 
+**Composition** (plan 080/03) — the camera doing its own work while the player's hands are busy, all of it
+ON FOOT only for now (the vehicle versions are plan 05):
+
+- **Turn-follow**: a heading change faster than `turnThreshold` swings the camera behind the new direction
+  through the steered-yaw channel and stops once it is within `settleEpsilon`. A straight run never engages
+  it — a framing the player chose survives the whole run.
+- **Idle recenter**: after `recenterDelaySec` of untouched look, a MOVING player is eased behind at
+  `recenterRate` scaled by speed (a walk barely drifts home, a sprint commits). Standing still never
+  recenters — a parked camera is left alone.
+- **Manual always wins**: any look input cancels both, restarts the idle clock, and holds turn-follow off
+  for `manualGraceSec`. Pitch is never auto-touched.
+- **Look-ahead**: the frame leans toward travel by up to `lookAheadDistance`, damped over `lookAheadTime`
+  and scaled by speed. It moves eye and target together, so only the composition changes — the orbit
+  geometry stays put.
+- The behind-yaw convention: a GTA heading `h` points along `(−sin h, cos h)` and the camera looks along
+  `(sin yaw, −cos yaw)`, so the camera sits behind at `yaw = h + π`. In practice: running the way the
+  camera already looks needs no correction.
+
 **Modes**
 
 - `foot` / `vehicle` — the follow rig: mouse look (yaw free, pitch clamped to `pitchMin`/`pitchMax`), wheel
@@ -66,9 +84,8 @@ host since 080/01) — field rounds tune with sliders, not rebuilds.
 
 ## Known gaps / candidates
 
-- The 080/02 defaults are FIRST GUESSES — they have not survived a field round yet, and the dead zone
+- The 080/02 and /03 defaults are FIRST GUESSES — they have not survived a field round yet, and the dead zone
   leaves the frame settling ~8 cm behind a focus that stopped (the price of a rock-still idle frame).
-- No auto-center or look-ahead — the camera never returns behind the player on its own (plan 03).
 - No camera collision — the eye clips through walls (plan 04 adds `PhysicsWorld` ray/sphere casts + whiskers).
 - No vehicle framing (speed distance/FOV curves, turn lag, drift framing) — plan 05.
 - No bob / landing dip / impact shake / sprint FOV kick, and no motion-reduction toggle — plan 06.
@@ -83,6 +100,9 @@ host since 080/01) — field rounds tune with sliders, not rebuilds.
 ## Test coverage anchors
 
 `ui/camera/camera-input.test.ts` (gesture conservation, settle time, rate independence),
+`ui/camera/auto-center.test.ts` (the behind-yaw convention, straight runs never engaging, the grace window,
+stand-still exclusion, walk-vs-sprint recenter rates), `ui/camera/look-ahead.test.ts` (speed scaling, the
+cap, the fade home, rate independence),
 `ui/camera/follow-rig.test.ts` (no overshoot, dead zone holds still, vertical slower than planar, the lag
 floor at a 12 m/s sprint, teleport snap, 1/120-vs-1/20 agreement),
 `ui/camera/camera-director.test.ts` (the legacy-parity gate: the director reproduces the pre-080 stick

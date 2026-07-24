@@ -1,5 +1,3 @@
-import type { CameraConfig } from '@opensa/game';
-
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -11,30 +9,10 @@ import {
   steerYaw,
   stepCamera,
 } from './camera-director';
+import { TEST_CAMERA_CONFIG } from './camera-test-config';
 import { FLY_SPEED, TOP_DOWN_HEIGHT, TOP_DOWN_PITCH } from './fly-rig';
 
-const CONFIG: CameraConfig = {
-  deadZone: 0.08,
-  followDistance: 7,
-  followHeight: 0.9,
-  followLerp: 3,
-  followMaxPolar: Math.PI / 2 - 0.05,
-  followMinPolar: 0.25,
-  followPolar: 1.15,
-  followZoom: true,
-  followZoomMax: 10,
-  followZoomMin: 4,
-  inputSmoothTime: 0.03,
-  lagMaxDistance: 1.2,
-  pitchMax: 0.9,
-  pitchMin: -1.2,
-  positionLagTime: 0.12,
-  sensitivity: 0.004,
-  teleportSnapDistance: 20,
-  verticalLagTime: 0.28,
-  yawLagTime: 0.25,
-  zoomLambda: 8,
-};
+const CONFIG = TEST_CAMERA_CONFIG;
 
 /** The rig as `?cam=legacy` runs it: every 080 channel off, so the pre-080 math is what steps. */
 const legacyState = (): ReturnType<typeof createRigState> => createRigState(CONFIG, Math.PI, -0.25, true);
@@ -44,6 +22,7 @@ const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
   bench: null,
   dt: 1 / 60,
   focus: [10, 2, 30],
+  focusHeading: 0,
   look: { x: 0, y: 0 },
   mode: 'foot',
   pan: null,
@@ -316,6 +295,107 @@ describe('stepCamera — the smoothed rig (plan 080/02)', () => {
       const camera = stepCamera(state, snapshot({ focus: [10, 2, 500] }), CONFIG);
 
       expect(camera.target[2]).toBe(500);
+    });
+  });
+});
+
+describe('stepCamera — composition (plan 080/03)', () => {
+  const smoothState = (): ReturnType<typeof createRigState> => createRigState(CONFIG, Math.PI, -0.25);
+  /**
+   * Walk the focus in the direction `heading` FACES, at `speed`, for `seconds`.
+   *
+   * A GTA heading h points along (−sin h, cos h) in GTA XY, which is (−sin h, −cos h) in the engine's
+   * planar axes — so heading 0 walks toward −Z, the way a camera at yaw π looks.
+   */
+  const walk = (
+    state: ReturnType<typeof createRigState>,
+    speed: number,
+    seconds: number,
+    heading = 0,
+    mode: CameraSnapshot['mode'] = 'foot',
+  ): ReturnType<typeof stepCamera> => {
+    const dirX = -Math.sin(heading);
+    const dirZ = -Math.cos(heading);
+    let x = 10;
+    let z = 30;
+    let camera = stepCamera(state, snapshot({ focusHeading: heading, mode }), CONFIG);
+    for (let elapsed = 0; elapsed < seconds; elapsed += 1 / 60) {
+      x += (dirX * speed) / 60;
+      z += (dirZ * speed) / 60;
+      camera = stepCamera(state, snapshot({ focus: [x, 2, z], focusHeading: heading, mode }), CONFIG);
+    }
+
+    return camera;
+  };
+
+  describe('negative cases', () => {
+    it('leaves the yaw alone while the player stands still, however long', () => {
+      const state = smoothState();
+      walk(state, 0, 6);
+
+      expect(state.yaw).toBe(Math.PI);
+    });
+
+    it('does not compose in a vehicle — that is plan 05 with a car’s speeds', () => {
+      const state = smoothState();
+      const camera = walk(state, 12, 3, 0, 'vehicle');
+
+      expect(state.yaw).toBe(Math.PI);
+      expect(camera.target[2]).toBeGreaterThan(30 - 12 * 3); // still just the follow lag, no lean
+      expect(state.lookAhead.z).toBe(0);
+    });
+
+    it('does not compose on the legacy path', () => {
+      const state = legacyState();
+      walk(state, 7, 6);
+
+      expect(state.yaw).toBe(Math.PI);
+      expect(state.lookAhead.z).toBe(0);
+    });
+
+    it('restarts the idle clock the moment the player looks', () => {
+      const state = smoothState();
+      walk(state, 7, 1.5);
+      const before = state.autoCenter.idleFor;
+
+      stepCamera(state, snapshot({ look: { x: 3, y: 0 } }), CONFIG);
+
+      expect(state.autoCenter.idleFor).toBeLessThan(before);
+      expect(state.autoCenter.idleFor).toBeCloseTo(1 / 60, 6);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('eases behind a player who runs off at an angle without touching the mouse', () => {
+      const state = smoothState();
+      // Running the way the camera already looks needs no correction — that IS the invariant: heading 0 is
+      // exactly what a camera at yaw π (the rig's start) sits behind.
+      walk(state, 7, 1);
+      expect(state.yaw).toBeCloseTo(Math.PI, 6);
+
+      // Now run 1 rad off to the side and keep going: the camera finds its way behind, unasked.
+      walk(state, 7, CONFIG.recenterDelaySec + 6, 1);
+
+      expect(state.autoCenter.idleFor).toBeGreaterThan(CONFIG.recenterDelaySec);
+      expect(state.yaw).toBeCloseTo(1 + Math.PI, 1);
+    });
+
+    it('leans the frame toward travel while running', () => {
+      const state = smoothState();
+      walk(state, 7, 3);
+
+      expect(state.lookAhead.z).toBeLessThan(-0.5); // heading 0 runs toward −Z, so the frame leans that way
+      expect(Math.hypot(state.lookAhead.x, state.lookAhead.z)).toBeLessThanOrEqual(CONFIG.lookAheadDistance + 1e-9);
+    });
+
+    it('moves eye and target together, so the orbit geometry is unchanged', () => {
+      const state = smoothState();
+      const camera = walk(state, 7, 3);
+      const orbit = Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]);
+
+      // The lean shifted the whole rig, not the eye alone: the planar orbit radius still matches the
+      // distance channel projected onto the plane.
+      expect(orbit).toBeCloseTo(state.distance * Math.cos(state.pitch), 6);
     });
   });
 });

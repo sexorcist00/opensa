@@ -1128,6 +1128,8 @@ async function boot(
       bench: benchCamera,
       dt,
       focus,
+      // What the camera FRAMES faces this way: the ped's rate-limited heading, or the car's while seated.
+      focusHeading: seatedCar ? seatedCar.heading : (Locomotion.heading[playerEid] ?? heading),
       look: pendingInput.look,
       mode: cameraModeOf(rig.flyEye !== null, seatedCar !== null),
       pan: pendingInput.pan,

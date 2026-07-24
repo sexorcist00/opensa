@@ -18,14 +18,18 @@ import type { CameraConfig } from '@opensa/game';
 
 import { angleDelta, clamp, damp, smoothDampAngle, type SmoothDampRef } from '@opensa/math';
 
+import { type AutoCenterState, cancelAutoCenter, createAutoCenter, stepAutoCenter } from './auto-center';
 import { createLookInput, type LookInputState, releaseLook } from './camera-input';
 import { CAMERA_FOV_Y, forwardFrom, resolveCamera } from './engine-camera';
 import { dollyStep, FLY_SPEED, flyStep, panStep, TOP_DOWN_PITCH, topDownEye } from './fly-rig';
 import { createFollowPoint, type FollowPointState, resetFollowPoint, stepFollowPoint } from './follow-rig';
+import { createLookAhead, type LookAheadState, stepLookAhead } from './look-ahead';
 
 /** The rig's live state. A plain mutable record owned by the host and stepped in place — the same shape the
  *  character controller uses, so the frame loop allocates nothing per frame. */
 export interface CameraRigState {
+  /** Auto-centering: the idle clock and the turn-follow latch (plan 03). */
+  autoCenter: AutoCenterState;
   /** Follow distance, in world units — damps toward {@link distanceTarget}. */
   distance: number;
   /** Where the zoom is heading (the wheel and, later, the mode/collision layers all write this one target). */
@@ -34,11 +38,16 @@ export interface CameraRigState {
   flyEye: [number, number, number] | null;
   /** The smoothed point the rig frames (plan 02) — not the focus itself. */
   follow: FollowPointState;
+  /** The focus this rig framed last frame — the planar velocity every 03 channel reads is derived from it,
+   *  so the director needs no velocity plumbing from the host and measures the FRAMED object (ped or car). */
+  lastFocus: [number, number, number] | null;
   /** `?cam=legacy`: run the pre-080 rigid stick instead of the smoothed rig. The A/B a field round compares
    *  one keypress apart, and the escape hatch if a round is rejected. */
   legacy: boolean;
   /** Unapplied pointer travel (plan 02's input damper). */
   look: LookInputState;
+  /** The composition offset toward travel (plan 03). */
+  lookAhead: LookAheadState;
   pitch: number;
   yaw: number;
   /** A yaw something OTHER than the player asked for (vehicle entry today, auto-center in plan 03) — the rig
@@ -56,6 +65,9 @@ export interface CameraSnapshot {
   dt: number;
   /** The point the rig frames: the player, or the car they are seated in (engine space). */
   focus: readonly [number, number, number];
+  /** Which way the framed object FACES (GTA heading radians) — `Locomotion.heading`, which is rate-limited
+   *  and plant-aware, not an atan2 of the velocity (that jitters at low speed and flips on a strafe). */
+  focusHeading: number;
   /** Raw pointer deltas this frame, in pixels (sensitivity is the director's business, not the host's). */
   look: { x: number; y: number };
   mode: CameraMode;
@@ -73,12 +85,15 @@ type CameraMode = 'fly' | 'foot' | 'vehicle';
 
 export function createRigState(config: CameraConfig, yaw: number, pitch: number, legacy = false): CameraRigState {
   return {
+    autoCenter: createAutoCenter(),
     distance: config.followDistance,
     distanceTarget: config.followDistance,
     flyEye: null,
     follow: createFollowPoint(),
+    lastFocus: null,
     legacy,
     look: createLookInput(),
+    lookAhead: createLookAhead(),
     pitch,
     yaw,
     yawTarget: null,
@@ -131,6 +146,26 @@ export function stepCamera(state: CameraRigState, snapshot: CameraSnapshot, conf
     resetFollowPoint(state.follow);
   }
   const [x, y, z] = snapshot.focus;
+  const velocity = focusVelocity(state, snapshot, config);
+  // Auto-center and look-ahead are ON FOOT only for now: the vehicle versions of both (turn-follow while
+  // driving, drift framing) are plan 05's, tuned against a car's speeds rather than a ped's.
+  const composing = !state.legacy && snapshot.mode === 'foot';
+  if (composing) {
+    const step = stepAutoCenter(
+      state.autoCenter,
+      state.yaw,
+      snapshot.focusHeading,
+      Math.hypot(velocity.x, velocity.z),
+      config,
+      snapshot.dt,
+    );
+    state.yaw = step.yaw;
+    if (step.steerTo !== null) {
+      state.yawTarget = step.steerTo;
+    }
+  } else {
+    cancelAutoCenter(state.autoCenter);
+  }
   const target = stepFollowPoint(
     state.follow,
     [x, y + config.followHeight, z],
@@ -138,6 +173,9 @@ export function stepCamera(state: CameraRigState, snapshot: CameraSnapshot, conf
     snapshot.dt,
     !state.legacy && snapshot.mode !== 'fly',
   );
+  const ahead = composing
+    ? stepLookAhead(state.lookAhead, velocity.x, velocity.z, config, snapshot.dt)
+    : stepLookAhead(state.lookAhead, 0, 0, config, snapshot.dt);
 
   return resolveCamera({
     aspect: snapshot.aspect,
@@ -146,7 +184,9 @@ export function stepCamera(state: CameraRigState, snapshot: CameraSnapshot, conf
     flyEye: state.flyEye,
     forward,
     fovYRad: CAMERA_FOV_Y,
-    target,
+    // The offset moves eye AND target together (resolveCamera derives the eye from the target), so the
+    // composition leans toward travel while the orbit geometry plan 04 defends is untouched.
+    target: [target[0] + ahead.x, target[1], target[2] + ahead.z],
   });
 }
 
@@ -155,7 +195,9 @@ function applyLook(state: CameraRigState, snapshot: CameraSnapshot, config: Came
   const smoothTime = state.legacy ? 0 : config.inputSmoothTime;
   const look = releaseLook(state.look, snapshot.look.x, snapshot.look.y, smoothTime, snapshot.dt);
   if (snapshot.look.x !== 0 || snapshot.look.y !== 0) {
-    state.yawTarget = null; // the player took the camera back
+    // The player took the camera back: the steered swing stops and the idle clock restarts.
+    state.yawTarget = null;
+    cancelAutoCenter(state.autoCenter);
   }
   state.yaw -= look.x * config.sensitivity;
   // The viewer may look straight DOWN (that is its resting view), so it gets the full range the screen basis
@@ -189,6 +231,27 @@ function applyZoom(
       );
     }
   }
+}
+
+/** The framed object's planar velocity, measured from its own movement between frames (units/s). */
+function focusVelocity(
+  state: CameraRigState,
+  snapshot: CameraSnapshot,
+  config: CameraConfig,
+): { x: number; z: number } {
+  const [x, , z] = snapshot.focus;
+  const previous = state.lastFocus;
+  state.lastFocus = [x, snapshot.focus[1], z];
+  if (previous === null || snapshot.dt <= 0) {
+    return { x: 0, z: 0 };
+  }
+  // A teleport (respawn, debugger warp, vehicle entry) is not a velocity — the same jump the follow point
+  // snaps on must not read as a sprint to the auto-center and look-ahead channels.
+  if (Math.hypot(x - previous[0], z - previous[2]) > config.teleportSnapDistance) {
+    return { x: 0, z: 0 };
+  }
+
+  return { x: (x - previous[0]) / snapshot.dt, z: (z - previous[2]) / snapshot.dt };
 }
 
 /** The steered-yaw channel: swing toward a yaw the player did not ask for, then hand the camera back. */

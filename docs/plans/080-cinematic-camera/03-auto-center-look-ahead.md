@@ -37,13 +37,13 @@ GTA V refinement (idle recenter, which 036 did not have):
 
 ## Subtasks
 
-- [ ] Heading tracker with `MOVE_THRESHOLD` freeze (036: a stationary player cannot drift heading).
-- [ ] Turn-follow engage/settle state + tests (engage only above threshold; straight run never
+- [x] Heading tracker with `MOVE_THRESHOLD` freeze (036: a stationary player cannot drift heading).
+- [x] Turn-follow engage/settle state + tests (engage only above threshold; straight run never
       engages; manual look cancels; reverse walks the camera to face the motion).
-- [ ] Idle recenter: timer from 02, speed-scaled rate, stand-still exclusion; tests for each gate.
-- [ ] Look-ahead offset channel + cap + tests (offset tracks velocity direction change through the
+- [x] Idle recenter: timer from 02, speed-scaled rate, stand-still exclusion; tests for each gate.
+- [x] Look-ahead offset channel + cap + tests (offset tracks velocity direction change through the
       damp; zero at rest; capped at sprint).
-- [ ] Config + Camera-tab rows: `recenterDelaySec`, `recenterRate`, `lookAheadDistance`,
+- [x] Config + Camera-tab rows: `recenterDelaySec`, `recenterRate`, `lookAheadDistance`,
       `lookAheadTime`, thresholds.
 - [ ] **Field round**: run a lap with no mouse input (does it settle behind you naturally?), zigzag
       between buildings (turn-follow), strafe-circle an enemy stand-in (look-ahead must not fight
@@ -56,4 +56,68 @@ GTA V refinement (idle recenter, which 036 did not have):
 
 ## Ledger
 
-_(append here)_
+### 2026-07-25 — code complete, AWAITING THE FIELD ROUND (with 02)
+
+**What landed**
+
+- `auto-center.ts` — the idle clock, the heading tracker and both writers. Turn-follow arms on a heading
+  rate past `turnThreshold` and steers through 02's `smoothDampAngle` channel until it is within
+  `settleEpsilon`; idle recenter runs after `recenterDelaySec` of untouched look, only while the player is
+  actually moving, at `recenterRate × speed/lookAheadFullSpeed`. Any look input cancels both and restarts
+  the clock; the `manualGraceSec` window then keeps turn-follow from re-arming immediately.
+- `look-ahead.ts` — the composition offset: a spring toward `normalize(velocity) × lookAheadDistance ×
+  speedFactor` over `lookAheadTime`, hard-capped at `lookAheadDistance`, fading to zero through the same
+  channel when the player stops. It is added to the look point AFTER the follow spring, so eye and target
+  move together — the orbit geometry plan 04 has to defend is untouched.
+- Director: both run **on foot only** and never on the legacy path; the framed object's planar velocity is
+  derived from the focus delta inside the director (no new host plumbing, and it measures whatever is being
+  framed), with the same teleport guard the follow point uses.
+- The snapshot gained `focusHeading` — `Locomotion.heading` (rate-limited, plant-aware), NOT an atan2 of
+  velocity. The 036 plan called for the velocity atan2; 088 shipped a better signal, so this uses it.
+- Camera tab: `RECENTER AFTER`, `RECENTER RATE`, `LOOK AHEAD`, `LOOK AHEAD TIME`, `TURN THRESHOLD`.
+
+**The convention, pinned** (it is the one thing here that could be wrong by π): a GTA heading `h` points
+along `(−sin h, cos h)`, the camera looks along `(sin yaw, −cos yaw)`, so **behind = `h + π`**. The
+invariant the director test asserts is the readable form of it: running the way the camera already looks
+needs no correction at all, and running 1 rad off recenters to `1 + π`.
+
+**First-guess defaults (field round tunes them)**
+
+| field              | value   | why this number                                                                     |
+| ------------------ | ------- | ------------------------------------------------------------------------------------ |
+| `turnThreshold`    | 0.9 /s  | 036's value. A straight run never reaches it; a corner does.                         |
+| `settleEpsilon`    | 0.03    | 036's value — under 2°, invisible as a stop.                                          |
+| `manualGraceSec`   | 0.25 s  | 036's manual grace: a small correction is not immediately undone.                     |
+| `recenterDelaySec` | 2 s     | Long enough that looking around is not "fighting" the camera, short enough to help.  |
+| `recenterRate`     | 1.6 /s  | At a full run that is a ~0.43 s half-life — a drift home, not a yank.                 |
+| `moveThreshold`    | 0.6 u/s | Under the walk gait (2 u/s): standing still and micro-drift never rotate anything.    |
+| `lookAheadDistance`| 0.8 m   | A visible lean at the run gait; the plan's own suggested cap.                         |
+| `lookAheadTime`    | 0.45 s  | Slow enough to read as framing rather than tracking.                                  |
+| `lookAheadFullSpeed`| 7 u/s  | The run gait — walk gets a hint, sprint the whole shift.                              |
+
+**Measured**
+
+| what                                | number                                                                  |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| full suite                          | 348 files / **2624 tests green** (+24 over 080/02)                        |
+| `stepCamera` with 01+02+03 channels | **0.203 µs mean · 0.214 µs p95** (02 was 0.185/0.208) — +10%              |
+| headless run-then-strafe            | 120 fps, draws 657→714; the camera follows the turn home with no input     |
+
+Recorded in [`docs/benchmarks/opensa-engine/2026-07-25-headless-080-camera-director.json`](../../benchmarks/opensa-engine/2026-07-25-headless-080-camera-director.json).
+
+**Decisions / deviations**
+
+1. **Idle recenter is a RATE (`dampAngle`), not the `smoothDampAngle` spring.** The plan asked for both
+   writers on the one spring, but the behaviour it also asks for — "walk barely recenters, sprint
+   recenters confidently" — is a speed-scaled RATE, which a fixed-time spring cannot express without a
+   per-write lag override. Turn-follow (which has no speed scaling) keeps the spring.
+2. **On foot only.** Turn-follow and look-ahead in a car are plan 05's, tuned against a car's speeds; a
+   vehicle keeps today's behaviour (the entry swing) until then. One `mode === 'foot'` gate, not scattered.
+3. **Velocity is derived, not plumbed.** The director measures the focus delta per frame instead of taking
+   a velocity from the host — it then measures whatever it is framing (ped or car), and there is one less
+   thing for the host to keep correct.
+
+**Owed:** the field round (shared with 02): a no-input lap, a zigzag between buildings, a strafe-circle. The
+one interaction to watch is the feedback loop every camera-relative game has — auto-center rotates the
+camera, which rotates "forward", which curves a held strafe. The headless run converges rather than
+spiralling, but only a human can say whether it FEELS right.

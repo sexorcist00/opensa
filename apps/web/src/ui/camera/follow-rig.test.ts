@@ -1,31 +1,9 @@
-import type { CameraConfig } from '@opensa/game';
-
 import { describe, expect, it } from 'vitest';
 
+import { TEST_CAMERA_CONFIG } from './camera-test-config';
 import { createFollowPoint, stepFollowPoint } from './follow-rig';
 
-const CONFIG: CameraConfig = {
-  deadZone: 0.08,
-  followDistance: 7,
-  followHeight: 0.9,
-  followLerp: 3,
-  followMaxPolar: Math.PI / 2 - 0.05,
-  followMinPolar: 0.25,
-  followPolar: 1.15,
-  followZoom: true,
-  followZoomMax: 10,
-  followZoomMin: 4,
-  inputSmoothTime: 0.03,
-  lagMaxDistance: 1.2,
-  pitchMax: 0.9,
-  pitchMin: -1.2,
-  positionLagTime: 0.12,
-  sensitivity: 0.004,
-  teleportSnapDistance: 20,
-  verticalLagTime: 0.28,
-  yawLagTime: 0.25,
-  zoomLambda: 8,
-};
+const CONFIG = TEST_CAMERA_CONFIG;
 
 const DT = 1 / 60;
 
@@ -34,7 +12,7 @@ const follow = (
   state: ReturnType<typeof createFollowPoint>,
   target: [number, number, number],
   seconds: number,
-  config: CameraConfig = CONFIG,
+  config = CONFIG,
 ): [number, number, number] => {
   let point: [number, number, number] = state.point ?? [0, 0, 0];
   for (let elapsed = 0; elapsed < seconds; elapsed += DT) {

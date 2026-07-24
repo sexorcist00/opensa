@@ -13,7 +13,12 @@
       "frames": 1802,
       "avgDrawCalls": 1181,
       "avgTriangles": 2287719,
-      "gpuMs": { "pass": 3.13, "post": 1.175, "probe": 2.264, "submit": 0.376 },
+      "gpuMs": {
+        "pass": 3.13,
+        "post": 1.175,
+        "probe": 2.264,
+        "submit": 0.376
+      },
       "residency": "cellIndex 41 · cellVertex 184 · target 345 · texture 1155 · uniform 1",
       "lateCreates": 0
     }
@@ -33,6 +38,14 @@
       "meanUs": 0.185,
       "p95Us": 0.208,
       "note": "2.4x the 01 seams — and still 0.0002 ms, i.e. 240x under plan 02's own 0.05 ms p95 budget. The follow rig is not a perf question."
+    },
+    {
+      "plan": "080/03",
+      "what": "the same call with the 03 composition channels added: heading tracking + turn-follow/idle recenter and the look-ahead offset",
+      "where": "node/tsx on the dev machine, 200k calls in 20 rounds after a 20k warm-up",
+      "meanUs": 0.203,
+      "p95Us": 0.214,
+      "note": "+10% over 02 (0.185/0.208). The whole director is still ~0.0002 ms per frame."
     }
   ],
   "budget": "plan 080 ground rule 6 allows 0.1 ms p95 for the whole director (0.05 ms at the 02 stage)"

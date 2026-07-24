@@ -1,10 +1,12 @@
 # 080 — Cinematic camera (GTA V-feel follow camera for the own engine)
 
-**Status: IN PROGRESS.** Planned 2026-07-19. **01 (foundations) and 02 (follow rig) shipped 2026-07-25** —
-the damp/spring math and the `CameraDirector` in `apps/web/src/ui/camera/`, then the smoothed rig itself
-(input dampening, a trailing look point with a dead zone, the steered-yaw channel, gliding zoom) behind a
-`?cam=legacy` A/B. **02's field round is owed** — its defaults are first guesses until the user judges the
-feel. Next: 03 auto-center + look-ahead.
+**Status: IN PROGRESS.** Planned 2026-07-19. **01 (foundations), 02 (follow rig) and 03 (auto-center +
+look-ahead) shipped 2026-07-25** — the damp/spring math and the `CameraDirector` in
+`apps/web/src/ui/camera/`, the smoothed rig (input dampening, a trailing look point with a dead zone, the
+steered-yaw channel, gliding zoom), and the composition layer (turn-follow, idle recenter, look-ahead), all
+behind a `?cam=legacy` A/B. That is the **complete on-foot baseline** — the fast path the user asked for.
+**The 02+03 field round is owed**: the defaults are first guesses until the user judges the feel. Next:
+04 collision.
 
 **Goal: the camera feels "cinematic" the way GTA V's does — weighty, smooth, always composed — while
 staying responsive enough that nobody blames it for a missed turn.** Today the engine host camera is a

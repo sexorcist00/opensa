@@ -116,7 +116,10 @@ describe('cameraControlsFor', () => {
       for (const key of ['inputSmoothTime', 'positionLagTime', 'verticalLagTime', 'deadZone', 'yawLagTime'] as const) {
         expect(keys).toContain(key); // a field round tunes the feel live, without a rebuild
       }
-      expect(keys).toHaveLength(12);
+      for (const key of ['recenterDelaySec', 'recenterRate', 'lookAheadDistance', 'lookAheadTime'] as const) {
+        expect(keys).toContain(key); // the 03 composition channels
+      }
+      expect(keys).toHaveLength(17);
     });
   });
 });

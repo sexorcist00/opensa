@@ -129,8 +129,8 @@ Not a scene run (no pak, no GPU). Run:
 draws the same class of frame, NOT the absence of a small CPU cost. Taken by Claude headless (DPR=2, road
 cars 296), so it is not pass-comparable to the user's in-game rows. The director itself was microbenched
 instead: **0.078 µs mean / 0.089 µs p95 per `stepCamera` call**, against plan 080's 0.1 ms p95 budget —
-and **0.185 µs / 0.208 µs once 080/02's smoothing channels went live** (2.4×, still 240× under the stage
-budget). Run:
+**0.185 µs / 0.208 µs once 080/02's smoothing channels went live** (2.4×, still 240× under the stage
+budget) and **0.203 µs / 0.214 µs with 080/03's auto-center + look-ahead on top**. Run:
 [`2026-07-25-headless-080-camera-director.json`](opensa-engine/2026-07-25-headless-080-camera-director.json).
 
 ## The gap this record has
