@@ -18,11 +18,22 @@
       "lateCreates": 0
     }
   ],
-  "microbench": {
-    "what": "one stepCamera call (the whole director: look + zoom + mode rig + resolve), foot mode",
-    "where": "node/tsx on the dev machine, 200k calls in 20 rounds after a 20k warm-up",
-    "meanUs": 0.078,
-    "p95Us": 0.089,
-    "budget": "plan 080 ground rule 6 allows 0.1 ms p95 — the step costs ~0.0001 ms, three orders under it"
-  }
+  "microbench": [
+    {
+      "plan": "080/01",
+      "what": "one stepCamera call (look + zoom + mode rig + resolve), foot mode, no smoothing channels yet",
+      "where": "node/tsx on the dev machine, 200k calls in 20 rounds after a 20k warm-up",
+      "meanUs": 0.078,
+      "p95Us": 0.089
+    },
+    {
+      "plan": "080/02",
+      "what": "the same call with the 02 channels live: input damper, planar spring + vertical damp + dead zone, steered-yaw channel, zoom damp",
+      "where": "node/tsx on the dev machine, 200k calls in 20 rounds after a 20k warm-up",
+      "meanUs": 0.185,
+      "p95Us": 0.208,
+      "note": "2.4x the 01 seams — and still 0.0002 ms, i.e. 240x under plan 02's own 0.05 ms p95 budget. The follow rig is not a perf question."
+    }
+  ],
+  "budget": "plan 080 ground rule 6 allows 0.1 ms p95 for the whole director (0.05 ms at the 02 stage)"
 }

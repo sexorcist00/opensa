@@ -178,6 +178,12 @@ const CAMERA_RIG_ROWS = [
   ['sensitivity', 'LOOK SPEED', 0.001, 0.012, 0.0005],
   ['pitchMin', 'PITCH MIN', -1.55, -0.2, 0.05],
   ['pitchMax', 'PITCH MAX', 0.2, 1.55, 0.05],
+  // The 080/02 feel channels — a field round tunes these live, which is the whole point of the tab.
+  ['inputSmoothTime', 'INPUT SMOOTH', 0, 0.12, 0.005],
+  ['positionLagTime', 'LAG PLANAR', 0, 0.5, 0.01],
+  ['verticalLagTime', 'LAG VERTICAL', 0, 1, 0.02],
+  ['deadZone', 'DEAD ZONE', 0, 0.5, 0.01],
+  ['yawLagTime', 'YAW SWING', 0, 1, 0.05],
 ] as const;
 
 export type CameraControlRow = (typeof CAMERA_RIG_ROWS)[number] | (typeof CAMERA_ZOOM_ROWS)[number];

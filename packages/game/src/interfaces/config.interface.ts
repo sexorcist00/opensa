@@ -10,6 +10,9 @@ export interface BloomConfig {
 
 /** Follow/play camera tuning (the debug overview camera is fixed top-down). */
 export interface CameraConfig {
+  /** Focus movement under this (world units) does not pull the camera at all — idle jitter leaves the frame
+   *  still. Blended back in over the next two dead-zone widths, so there is no kink at the edge. */
+  deadZone: number;
   /** Initial distance from the player in follow mode (GTA/world units); wheel zoom moves it within the range. */
   followDistance: number;
   /** Height above the player the camera orbits + looks at (world units) — raises the framing off the feet. */
@@ -28,13 +31,33 @@ export interface CameraConfig {
   followZoomMax: number;
   /** Nearest the wheel can zoom in (world units). */
   followZoomMin: number;
+  /** How long a pointer flick is spread over (seconds). Total rotation is conserved — the movement is only
+   *  redistributed across a few frames, which is what separates "dampened" from "laggy". 0 = raw. */
+  inputSmoothTime: number;
+  /** The responsiveness floor: however fast the player moves, the look point never trails the focus by more
+   *  than this (world units). The player can never leave the frame. */
+  lagMaxDistance: number;
   /** Highest the look may pitch (radians, positive = up). */
   pitchMax: number;
   /** Lowest the gameplay look may pitch (radians, negative = down). The map viewer needs the full range down
    *  to straight-down, so it clamps at its own top-down margin instead of this floor. */
   pitchMin: number;
+  /** How long the look point takes to catch up to the focus in the horizontal plane (seconds, spring). This
+   *  is the weight: a hard direction change leaves the character leading the frame for a beat. */
+  positionLagTime: number;
   /** How far the mouse look turns the rig: radians per pixel of pointer movement. */
   sensitivity: number;
+  /** A focus jump beyond this (world units) is a TELEPORT, not movement: the rig snaps instead of flying
+   *  across the map (respawn, debugger warp, vehicle entry from far away). */
+  teleportSnapDistance: number;
+  /** How long the look point takes to follow the focus VERTICALLY (seconds). Slower than the planar channel
+   *  on purpose — stairs, curbs and jump arcs must not jolt the horizon. */
+  verticalLagTime: number;
+  /** How long a steered yaw takes to swing home (seconds) — the massy catch-up when something other than the
+   *  player aims the camera (vehicle entry today, auto-center in plan 03). Manual look always cancels it. */
+  yawLagTime: number;
+  /** How fast the live zoom distance closes on its target (per second; the damp half-life is ln2/lambda). */
+  zoomLambda: number;
 }
 
 /** Procedural sky-dome cloud tuning. */

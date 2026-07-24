@@ -19,6 +19,23 @@ and 080 (the own-engine cinematic chain).
 - **The bench bypass is an invariant**: `resolveCamera`'s priority is bench > fly eye > follow rig, so a
   running bench owns the frame whatever the rig did. Camera work cannot move ritual/soak numbers.
 
+**The smoothed rig** (plan 080/02) — the "cinematic" part, split into channels that damp at different rates
+instead of one global smoothing knob:
+
+- **Input dampening**: pointer deltas go into a pending pool and are released exponentially over
+  `inputSmoothTime`. Nothing is dropped — a gesture's total rotation equals raw mouse travel, it is only
+  spread over ~5 frames, which is the difference between "dampened" and "laggy".
+- **Look point, not focus**: the rig orbits a smoothed point that trails the player — a planar spring on
+  `positionLagTime`, a slower exponential on `verticalLagTime` for height (stairs and jump arcs must not
+  jolt the horizon), and a smoothstep **dead zone** (`deadZone`) so idle jitter moves nothing. Two floors
+  keep it honest: the point never trails by more than `lagMaxDistance`, and a focus jump past
+  `teleportSnapDistance` snaps (respawn, debugger warp).
+- **Steered yaw**: when something other than the player aims the camera — vehicle entry today, auto-center
+  in plan 03 — the yaw swings over `yawLagTime` instead of snapping, and any mouse movement takes it back.
+- **Zoom** damps toward a target the wheel (and later the mode/collision layers) writes, so it glides.
+- **`?cam=legacy`** turns every one of those channels off and runs the pre-080 rigid stick — the A/B a
+  field round compares one reload apart, pinned by the parity test.
+
 **Modes**
 
 - `foot` / `vehicle` — the follow rig: mouse look (yaw free, pitch clamped to `pitchMin`/`pitchMax`), wheel
@@ -41,15 +58,17 @@ rendered with, so an animated FOV (plan 05) can never send clicks off-target.
 caller-owned velocity, eases IN as well as out, `maxSpeed` cap). Both take dt — the camera runs in the
 VARIABLE-rate section of the host loop, so frame-rate independence is tested, not assumed.
 
-**Config + tuning** (`Config.camera`): `followDistance`, `followHeight`, `followZoom` + zoom bounds,
-`sensitivity`, `pitchMin`, `pitchMax`. All of it is live on the debug **Camera** screen (`cameraRig`
-capability, on for the engine host since 080/01) — field rounds tune with sliders, not rebuilds.
+**Config + tuning** (`Config.camera`): framing (`followDistance`, `followHeight`, `followZoom` + zoom
+bounds), look (`sensitivity`, `pitchMin`, `pitchMax`) and the 02 feel channels (`inputSmoothTime`,
+`positionLagTime`, `verticalLagTime`, `deadZone`, `lagMaxDistance`, `teleportSnapDistance`, `yawLagTime`,
+`zoomLambda`). All of it is live on the debug **Camera** screen (`cameraRig` capability, on for the engine
+host since 080/01) — field rounds tune with sliders, not rebuilds.
 
 ## Known gaps / candidates
 
-- No smoothing yet: the rig is still the pre-080 rigid stick (plan 080/01 ships the seams and reproduces it
-  bit for bit). Rotational lag, inertia, dead zone and vertical softness are plan 02; auto-center and
-  look-ahead plan 03.
+- The 080/02 defaults are FIRST GUESSES — they have not survived a field round yet, and the dead zone
+  leaves the frame settling ~8 cm behind a focus that stopped (the price of a rock-still idle frame).
+- No auto-center or look-ahead — the camera never returns behind the player on its own (plan 03).
 - No camera collision — the eye clips through walls (plan 04 adds `PhysicsWorld` ray/sphere casts + whiskers).
 - No vehicle framing (speed distance/FOV curves, turn lag, drift framing) — plan 05.
 - No bob / landing dip / impact shake / sprint FOV kick, and no motion-reduction toggle — plan 06.
@@ -63,6 +82,9 @@ capability, on for the engine host since 080/01) — field rounds tune with slid
 
 ## Test coverage anchors
 
+`ui/camera/camera-input.test.ts` (gesture conservation, settle time, rate independence),
+`ui/camera/follow-rig.test.ts` (no overshoot, dead zone holds still, vertical slower than planar, the lag
+floor at a 12 m/s sprint, teleport snap, 1/120-vs-1/20 agreement),
 `ui/camera/camera-director.test.ts` (the legacy-parity gate: the director reproduces the pre-080 stick
 camera over a scripted look+zoom sequence; mode clamps, zoom notches, fly walk/pan/dolly, top-down snap),
 `ui/camera/engine-camera.test.ts` (bench priority, cursor ray, forward convention), `ui/camera/fly-rig.test.ts`,

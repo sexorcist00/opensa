@@ -16,6 +16,7 @@ function breakableProp(key: string, at: readonly [number, number, number]): Mode
 function config(collisionDrawDistance: number): Config {
   return {
     camera: {
+      deadZone: 0.08,
       followDistance: 12,
       followHeight: 1.5,
       followLerp: 3,
@@ -25,9 +26,16 @@ function config(collisionDrawDistance: number): Config {
       followZoom: true,
       followZoomMax: 40,
       followZoomMin: 6,
+      inputSmoothTime: 0.03,
+      lagMaxDistance: 1.2,
       pitchMax: 0.9,
       pitchMin: -1.2,
+      positionLagTime: 0.12,
       sensitivity: 0.004,
+      teleportSnapDistance: 20,
+      verticalLagTime: 0.28,
+      yawLagTime: 0.25,
+      zoomLambda: 8,
     },
     controls: { back: 'KeyS', forward: 'KeyW', jump: 'Space', left: 'KeyA', right: 'KeyD' },
     fog: { distance: 800, timecycScale: 1 },

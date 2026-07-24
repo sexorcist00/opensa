@@ -59,6 +59,7 @@ import {
   reseedDistance,
   setFlyEye,
   snapTopDown,
+  steerYaw,
   stepCamera,
 } from './camera/camera-director';
 import { CAMERA_FOV_Y, createChordWatcher, cursorRay, forwardFrom } from './camera/engine-camera';
@@ -389,7 +390,9 @@ async function boot(
   // capture (prod behaviour — the look uses movementX/Y continuously while pointer-locked, Esc releases),
   // drag-orbit stays as the unlocked fallback; wheel = zoom. The controller sees its forward through a
   // camera shim (the only three-shaped seam in CharacterControllerSystem).
-  const rig = createRigState(config.camera, Math.PI, -0.25);
+  // `?cam=legacy` runs the pre-080 rigid stick (the chain's A/B escape hatch — a field round compares feel
+  // one reload apart, and a rejected round never blocks play). Deleted at chain close-out (plan 07).
+  const rig = createRigState(config.camera, Math.PI, -0.25, params.get('cam') === 'legacy');
   /** This frame's raw camera input, drained by the loop: pointer deltas in pixels, drag pan in NDC, wheel
    *  notches. Accumulating instead of mutating the rig is what lets ONE pure step own the smoothing. */
   const pendingInput = { look: { x: 0, y: 0 }, pan: null as null | { x: number; y: number }, zoom: 0 };
@@ -681,9 +684,9 @@ async function boot(
   try {
     vehicles = await setupEngineVehicles({
       adapter,
-      aimCamera: (azimuth: number): void => {
-        rig.yaw = azimuth;
-      },
+      // The camera SWINGS behind the car instead of snapping (plan 080/02's steered-yaw channel); any
+      // mouse movement takes it straight back.
+      aimCamera: (azimuth: number): void => steerYaw(rig, azimuth),
       animator: player,
       config,
       engine,

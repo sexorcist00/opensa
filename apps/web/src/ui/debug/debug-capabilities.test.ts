@@ -107,14 +107,16 @@ describe('cameraControlsFor', () => {
       ).toEqual(['followDistance', 'followZoomMin', 'followZoomMax']);
     });
 
-    it('gives the engine host the 080 rig rows (height, look speed, pitch clamps)', () => {
+    it('gives the engine host the 080 rig rows (framing, look, and the 02 feel channels)', () => {
       const keys = cameraControlsFor(ENGINE_DEBUG_CAPABILITIES).map(([key]) => key);
 
-      expect(keys).toContain('followHeight');
-      expect(keys).toContain('sensitivity');
-      expect(keys).toContain('pitchMin');
-      expect(keys).toContain('pitchMax');
-      expect(keys).toHaveLength(7);
+      for (const key of ['followHeight', 'sensitivity', 'pitchMin', 'pitchMax'] as const) {
+        expect(keys).toContain(key);
+      }
+      for (const key of ['inputSmoothTime', 'positionLagTime', 'verticalLagTime', 'deadZone', 'yawLagTime'] as const) {
+        expect(keys).toContain(key); // a field round tunes the feel live, without a rebuild
+      }
+      expect(keys).toHaveLength(12);
     });
   });
 });

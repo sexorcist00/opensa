@@ -23,6 +23,7 @@ export function createGameRuntimeConfig(): Config {
     // are config now — same numbers, so the camera feels exactly as it did, but a field round can tune them
     // from the debug Camera tab without a rebuild.
     camera: {
+      deadZone: 0.08,
       followDistance: 7,
       followHeight: 0.9,
       followLerp: 3,
@@ -32,9 +33,16 @@ export function createGameRuntimeConfig(): Config {
       followZoom: true,
       followZoomMax: 10,
       followZoomMin: 4,
+      inputSmoothTime: 0.03,
+      lagMaxDistance: 1.2,
       pitchMax: 0.9,
       pitchMin: -1.2,
+      positionLagTime: 0.12,
       sensitivity: 0.004,
+      teleportSnapDistance: 20,
+      verticalLagTime: 0.28,
+      yawLagTime: 0.25,
+      zoomLambda: 8,
     },
     // 088/03: RUN is the default gait (SA jogs); Shift sprints. `walk` is left unbound — the slow tier
     // is reachable by a partial touch-stick deflection, or bind a key here.
