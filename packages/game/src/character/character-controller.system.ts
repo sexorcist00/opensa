@@ -13,6 +13,13 @@ import {
   angleDelta,
   approachAngle,
   IDLE_SPEED_THRESHOLD,
+  LAND_MIN_FALL_SPEED,
+  LOCOMOTION_AIRBORNE,
+  LOCOMOTION_FALL,
+  LOCOMOTION_GROUNDED,
+  LOCOMOTION_HARD_LAND,
+  LOCOMOTION_LAND,
+  LOCOMOTION_LAUNCH,
   REVERSAL_ANGLE,
   scheduledTurnRate,
   yawFromPlanar,
@@ -21,6 +28,12 @@ import {
 /** All the controller needs from a camera: the scene-space (Y-up) look direction. */
 export interface LookDirectionSource {
   getWorldDirection(target: Vector3): Vector3;
+}
+
+/** What the air FSM hands the move step: the one-shot launch impulse + the grounded control scale. */
+interface AirStep {
+  controlFactor: number;
+  launch: boolean;
 }
 
 /** Gravity integrated into the kinematic body's vertical velocity (Z-up). */
@@ -51,6 +64,8 @@ export class CharacterControllerSystem implements System {
   get arrived(): boolean {
     return this.autoArrived;
   }
+  /** Per-player jump-buffer/coyote clocks (seconds remaining) for the 088/04 FSM. */
+  private readonly airTimers = new Map<number, { buffer: number; coyote: number }>();
   private autoArrived = false;
   private autoIndex = 0;
   private autoPath: Vec3[] = [];
@@ -62,6 +77,8 @@ export class CharacterControllerSystem implements System {
   private readonly forward = new Vector3();
   private readonly input: InputState;
   private readonly physics: PhysicsWorld;
+  /** Last step's jump-held signal — the buffer arms on the RISING edge only (no held-key auto-hop). */
+  private prevJumpHeld = false;
   private readonly right = new Vector3();
 
   private readonly world: EcsWorld;
@@ -96,11 +113,13 @@ export class CharacterControllerSystem implements System {
     }
     const players = query(this.world, [PlayerControlled, RigidBody, Velocity]);
     const { jump, target } = this.desiredMove(players);
+    const jumpEdge = jump && !this.prevJumpHeld;
+    this.prevJumpHeld = jump;
     const moving = target.x !== 0 || target.y !== 0;
     const intentYaw = moving ? yawFromPlanar(target.x, target.y) : 0;
 
     for (const eid of players) {
-      this.moveOnFoot(eid, step, jump, moving, intentYaw, target);
+      this.moveOnFoot(eid, step, jumpEdge, moving, intentYaw, target);
     }
   }
 
@@ -140,6 +159,53 @@ export class CharacterControllerSystem implements System {
         this.placeFlying(eid, [px, py, pz + FLY_INITIAL_LIFT], 0, 0, 0);
       }
     }
+  }
+
+  /**
+   * The per-player jump/fall FSM (plan 088/04), advanced once per fixed step BEFORE the move.
+   * Returns this step's physics modifiers: `launch` fires the vertical impulse (once, at the end of
+   * the anticipation delay), `controlFactor` scales the grounded horizontal rate (the landing beat).
+   */
+  private advanceAirState(eid: number, step: number, jumpEdge: boolean, grounded: boolean): AirStep {
+    const { movement } = this.config;
+    const timers = this.airTimers.get(eid) ?? { buffer: 0, coyote: 0 };
+    this.airTimers.set(eid, timers);
+    timers.buffer = jumpEdge ? movement.jumpBufferSeconds : Math.max(0, timers.buffer - step);
+    timers.coyote = grounded ? movement.coyoteSeconds : Math.max(0, timers.coyote - step);
+
+    let state = Locomotion.state[eid] ?? LOCOMOTION_GROUNDED;
+    let time = (Locomotion.stateTime[eid] ?? 0) + step;
+    let launch = false;
+    let controlFactor = 1;
+    if (state === LOCOMOTION_GROUNDED) {
+      if (timers.buffer > 0 && (grounded || timers.coyote > 0)) {
+        [state, time, timers.buffer] = [LOCOMOTION_LAUNCH, 0, 0];
+      } else if (!grounded && timers.coyote <= 0) {
+        [state, time] = [LOCOMOTION_FALL, 0]; // walked off an edge; micro-airborne (stairs) never gets here
+      }
+    } else if (state === LOCOMOTION_LAUNCH) {
+      if (time >= movement.launchDelaySeconds) {
+        launch = true; // the crouch is over — fire the impulse and leave the ground
+        [state, time] = [LOCOMOTION_AIRBORNE, 0];
+      }
+    } else if (state === LOCOMOTION_AIRBORNE || state === LOCOMOTION_FALL) {
+      // A landing needs DESCENT: right after the impulse the controller can still report grounded for
+      // a frame (ground snap) while the body rises — that frame must not read as a touchdown.
+      if (grounded && (Velocity.z[eid] ?? 0) <= 0) {
+        [state, time] = [this.touchdownState(eid, timers), 0];
+      }
+    } else {
+      // LAND / HARD_LAND: a recovery beat at reduced control, then back to the ground state.
+      controlFactor = movement.airControl;
+      const recovery = state === LOCOMOTION_HARD_LAND ? movement.hardLandRecoverySeconds : movement.landRecoverySeconds;
+      if (time >= recovery) {
+        [state, time] = [LOCOMOTION_GROUNDED, 0];
+      }
+    }
+    Locomotion.state[eid] = state;
+    Locomotion.stateTime[eid] = time;
+
+    return { controlFactor, launch };
   }
 
   /** Planar velocity (Z-up) for a forward/right input at `speed`, relative to the camera. */
@@ -194,25 +260,30 @@ export class CharacterControllerSystem implements System {
     }
   }
 
-  /** One player's fixed step on foot: planar accel/plant, rate-limited heading, gravity + jump. */
+  /** One player's fixed step on foot: planar accel/plant, rate-limited heading, the air FSM + gravity. */
   private moveOnFoot(
     eid: number,
     step: number,
-    jump: boolean,
+    jumpEdge: boolean,
     moving: boolean,
     intentYaw: number,
     target: { x: number; y: number },
   ): void {
     const { movement } = this.config;
     const grounded = Velocity.grounded[eid] === 1;
+    const air = this.advanceAirState(eid, step, jumpEdge, grounded);
     const heading = Locomotion.heading[eid] ?? 0;
     // A reversal (intent far behind the facing) PLANTS: decelerate on the old heading to a stop,
     // then about-face near-idle — turning a full run through 180° in place reads as skating.
     const reversing = moving && Math.abs(angleDelta(heading, intentYaw)) > REVERSAL_ANGLE;
     const accelerating = moving && !reversing;
     // Horizontal: accelerate toward the target (decelerate toward rest with no input or mid-plant),
-    // at a reduced rate in the air → ramp-up, turn momentum, momentum into jumps.
-    const rate = (accelerating ? movement.accel : movement.deceleration) * (grounded ? 1 : movement.airControl) * step;
+    // at a reduced rate in the air (or during a landing recovery) → ramp-up, turn momentum, momentum
+    // into jumps, and a beat where a landing dampens steering instead of stopping it.
+    const rate =
+      (accelerating ? movement.accel : movement.deceleration) *
+      (grounded ? air.controlFactor : movement.airControl) *
+      step;
     approach(eid, accelerating ? target.x : 0, accelerating ? target.y : 0, rate);
     // Heading: rate-limited turn toward the intent (plan 088/01) — snappy near idle, wide arcs at
     // speed. A plant holds the old facing until the speed has bled off, then turns.
@@ -226,8 +297,10 @@ export class CharacterControllerSystem implements System {
       );
       Locomotion.heading[eid] = approachAngle(heading, intentYaw, turnRate * step);
     }
-    // Vertical: reset on the ground (jump impulse if requested), then integrate gravity.
-    let vz = grounded ? (jump ? movement.jumpSpeed : 0) : Velocity.z[eid];
+    // Vertical: the FSM's launch impulse (fired once, after the anticipation crouch), else rest on
+    // the ground, else keep integrating the flight — then gravity. A RISING body keeps its velocity
+    // even if the controller still reports grounded (the post-launch snap frame must not eat the jump).
+    let vz = air.launch ? movement.jumpSpeed : grounded && Velocity.z[eid] <= 0 ? 0 : Velocity.z[eid];
     vz += GRAVITY * step;
 
     const move = this.physics.moveCharacter(this.controller, RigidBody.handle[eid], RigidBody.collider[eid], [
@@ -236,7 +309,16 @@ export class CharacterControllerSystem implements System {
       vz * step,
     ]);
     Velocity.grounded[eid] = move.grounded ? 1 : 0;
-    Velocity.z[eid] = move.grounded && vz < 0 ? 0 : vz; // landed → stop accumulating fall speed
+    if (move.grounded && vz < 0) {
+      if (!grounded) {
+        // A TOUCHDOWN (air → ground this step): record the impact for the FSM's land-tier pick.
+        // Standing gravity ticks also come through here and must not clobber it.
+        Locomotion.fallSpeed[eid] = -vz;
+      }
+      Velocity.z[eid] = 0;
+    } else {
+      Velocity.z[eid] = vz;
+    }
   }
 
   /** Planar velocity toward the current path waypoint; advances/flags arrival as points are reached. */
@@ -289,12 +371,32 @@ export class CharacterControllerSystem implements System {
     return movement.runSpeed;
   }
 
+  /** The state a touchdown lands in: hard hits collapse (never bypassed), a buffered press re-launches
+   *  on the landing frame, a real impact takes the recovery beat, a feather touch takes none. */
+  private touchdownState(eid: number, timers: { buffer: number }): number {
+    const impact = Locomotion.fallSpeed[eid] ?? 0;
+    if (impact > this.config.movement.hardLandSpeed) {
+      return LOCOMOTION_HARD_LAND;
+    }
+    if (timers.buffer > 0) {
+      timers.buffer = 0;
+
+      return LOCOMOTION_LAUNCH;
+    }
+
+    return impact >= LAND_MIN_FALL_SPEED ? LOCOMOTION_LAND : LOCOMOTION_GROUNDED;
+  }
+
   private zeroVelocity(): void {
     for (const eid of query(this.world, [PlayerControlled, Velocity])) {
       Velocity.x[eid] = 0;
       Velocity.y[eid] = 0;
       Velocity.z[eid] = 0;
+      // Both callers (seating into a car, toggling fly mode) also abandon any in-flight jump state.
+      Locomotion.state[eid] = LOCOMOTION_GROUNDED;
+      Locomotion.stateTime[eid] = 0;
     }
+    this.airTimers.clear();
   }
 }
 

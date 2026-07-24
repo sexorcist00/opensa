@@ -376,6 +376,9 @@ async function boot(
   Velocity.z[playerEid] = 0;
   Velocity.grounded[playerEid] = 0;
   Locomotion.heading[playerEid] = Math.PI; // spawn facing, mirrors the pose fallback below
+  Locomotion.state[playerEid] = 0; // LOCOMOTION_GROUNDED
+  Locomotion.stateTime[playerEid] = 0;
+  Locomotion.fallSpeed[playerEid] = 0;
   RigidBody.handle[playerEid] = capsule.body;
   RigidBody.collider[playerEid] = capsule.collider;
   const viewOf = (): [number, number, number] => [
@@ -1046,7 +1049,8 @@ async function boot(
       heading = Locomotion.heading[playerEid] ?? heading;
     }
     const render: [number, number, number] = [playerEngine[0], playerEngine[1] + groundDelta, playerEngine[2]];
-    player.update(render, heading, ridingCar ? 0 : speed, dt);
+    // Riding forces the grounded state (0) — the seat pose must never pick a jump/fall clip.
+    player.update(render, heading, ridingCar ? 0 : speed, dt, ridingCar ? 0 : (Locomotion.state[playerEid] ?? 0));
   };
 
   /** A car system throwing must not kill the frame loop — surface it in the HUD and keep walking. */

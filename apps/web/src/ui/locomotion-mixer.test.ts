@@ -118,7 +118,7 @@ describe('LocomotionMixer', () => {
     it('scales each clip clock by its own playback rate (088/03 cycle-speed sync)', () => {
       // walk plays at 2×, everything else at 1× — the from/to clocks must diverge under a fade.
       const rateOf = (clip: number): number => (clip === WALK ? 2 : 1);
-      const m = new LocomotionMixer(DURATIONS, CYCLIC, WALK, rateOf);
+      const m = new LocomotionMixer(DURATIONS, CYCLIC, WALK, { rateOf });
       m.update(WALK, 0.1); // walk clock: 0.2
 
       const { pose } = m.update(IDLE, 0.1); // fade walk→idle begins

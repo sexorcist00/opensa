@@ -15,9 +15,14 @@ export const RigidBody = {
   handle: [] as number[],
 };
 
-/** Locomotion state the controller owns and the renderer reads (plan 088): rate-limited heading (yaw, rad). */
+/** Locomotion state the controller owns and the renderer reads (plan 088): rate-limited heading (yaw, rad),
+ *  the jump/fall FSM state (`LOCOMOTION_*` in character/locomotion.ts) + seconds in it, and the vertical
+ *  impact speed of the last touchdown (units/s — picks the land tier; 080's camera shake will want it too). */
 export const Locomotion = {
+  fallSpeed: [] as number[],
   heading: [] as number[],
+  state: [] as number[],
+  stateTime: [] as number[],
 };
 
 /** Player velocity (Z-up, units/s) + grounded flag — owned by the character controller. */

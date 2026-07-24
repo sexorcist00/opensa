@@ -112,11 +112,18 @@ export function createGameRuntimeConfig(): Config {
     },
     mapViewer: false,
     // Turn rates (plan 088/01): near-idle spins snappily, the top tier arcs at a third of that.
+    // Jump (plan 088/04): jumpSpeed 4.5 → apex ≈ 1.03 m, air ≈ 0.92 s (3.5 gave a weak 0.62 m hop).
     movement: {
       accel: 20,
       airControl: 0.3,
+      coyoteSeconds: 0.12,
       deceleration: 25,
-      jumpSpeed: 3.5,
+      hardLandRecoverySeconds: 0.5,
+      hardLandSpeed: 12,
+      jumpBufferSeconds: 0.15,
+      jumpSpeed: 4.5,
+      landRecoverySeconds: 0.15,
+      launchDelaySeconds: 0.1,
       runSpeed: 7,
       sprintSpeed: 10,
       turnRateFullDeg: 240,

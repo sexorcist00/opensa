@@ -180,7 +180,7 @@ mid-ramp → widened to 500 × 500). Full engine+web+game: **784 green**; lint +
 speeds are the tier speeds v1 — the field round may re-time them per clip (the stride-timing knob is
 `referenceSpeeds` in `engine-player.ts`).
 
-### 04 — Jump + fall state machine (the feature the user actually asked for)
+### 04 — Jump + fall state machine (CODE-COMPLETE 2026-07-24 — awaiting the field round)
 
 Controller FSM (fixed-step, in `CharacterControllerSystem`), states published via `Locomotion`:
 
@@ -204,6 +204,29 @@ Controller FSM (fixed-step, in `CharacterControllerSystem`), states published vi
 - Verify in field: jump reads as crouch→launch→glide→land; ledge walks trigger the fall pose; landing
   from a rooftop staggers. Record: every timing constant after tuning, apex height/air time
   before vs after.
+
+**Ledger (2026-07-24, code-complete):** the FSM lives in `CharacterControllerSystem.advanceAirState`
+(GROUNDED → LAUNCH → AIRBORNE / FALL → LAND / HARD_LAND, states as `LOCOMOTION_*` consts +
+`Locomotion.state/stateTime/fallSpeed` writers). Constants shipped (all in `MovementConfig`,
+field-tunable): coyote **0.12 s**, jump buffer **0.15 s** (rising-edge armed — holding Space no
+longer auto-hops; a hard landing is never bypassed by a buffer), launch delay **0.1 s** (the
+`JUMP_launch` crouch is real anticipation — the impulse fires 6 fixed steps after the press), land
+recovery **0.15 s** / hard-land recovery **0.5 s** at `airControl`-reduced steering, hard-land
+threshold **12 m/s** impact, feather-touch floor `LAND_MIN_FALL_SPEED 1 m/s` (spawn settles and
+slope jitter never flash a landing). `jumpSpeed` raised 3.5 → **4.5**: apex 0.62 m / 0.71 s air →
+**1.03 m / 0.92 s** (the "weak hop" half of the complaint). Anim side: 5 new clips
+(`JUMP_launch/glide/land`, `FALL_glide/collapse`) resolved like the gaits; `airClipFor` degradation
+chains (FALL→glide, collapse→land, anything unresolved → the speed gait — jump PHYSICS works on
+every TC); launch/land are one-shots (mixer parks their clock a hair before `duration` — at exactly
+`duration` the sampler's wrap rewinds to frame 0); land fades in 0.12 s, launch→glide 0.1 s.
+**Two real physics finds:** (1) the frame after the impulse Rapier can still report grounded (snap)
+— the old `grounded → vz=0` line ATE single-fire jumps (the v1 held-key auto-rejump had masked it);
+fixed by "a rising body keeps its velocity" + "a landing requires descent". (2) `fallSpeed` must be
+written only on the air→ground transition — standing gravity ticks also pass the `vz<0` gate and
+clobbered the impact. Tests: +8 FSM cases with real Rapier (double-jump refusal, buffer-expires-in-
+collapse, coyote expiry, anticipation timing, coyote catch, buffered-fires-once-on-landing-frame,
+soft/hard tiers; the teleport tests must `physics.step` once to COMMIT a kinematic teleport before
+moving). Full engine+web+game: **792 green**; lint + tsc clean.
 
 ### 05 — Transition polish (QUEUED — only if 01–04 leave visible gaps)
 

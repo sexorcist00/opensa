@@ -11,6 +11,14 @@ import { KeyboardSource } from '../input';
 import { PhysicsWorld } from '../physics/physics-world';
 import { initRapier } from '../physics/rapier';
 import { CharacterControllerSystem, type LookDirectionSource } from './character-controller.system';
+import {
+  LOCOMOTION_AIRBORNE,
+  LOCOMOTION_FALL,
+  LOCOMOTION_GROUNDED,
+  LOCOMOTION_HARD_LAND,
+  LOCOMOTION_LAND,
+  LOCOMOTION_LAUNCH,
+} from './locomotion';
 
 const STEP = 1 / 60;
 
@@ -119,8 +127,14 @@ function config(gameState: Config['gameState']): Config {
     movement: {
       accel: 20,
       airControl: 0.3,
+      coyoteSeconds: 0.12,
       deceleration: 25,
+      hardLandRecoverySeconds: 0.5,
+      hardLandSpeed: 12,
+      jumpBufferSeconds: 0.15,
       jumpSpeed: 6,
+      landRecoverySeconds: 0.15,
+      launchDelaySeconds: 0.1,
       runSpeed: 26,
       sprintSpeed: 39,
       turnRateFullDeg: 240,
@@ -138,11 +152,12 @@ function config(gameState: Config['gameState']): Config {
 }
 
 /** A kinematic capsule resting on a static ground, plus its ECS entity. */
-async function groundedPlayer(): Promise<Player> {
+async function groundedPlayer(groundHalfExtent = 500): Promise<Player> {
   const physics = new PhysicsWorld(await initRapier());
-  // Top at z = 0.5. Wide enough that the fast gaits (088/03: run 26 / sprint 39 u/s over ~3 s of
-  // ramp-up) never run off the edge mid-test — airborne accel is 0.3× and starves the target speed.
-  physics.createStaticBox([0, 0, 0], [500, 500, 0.5]);
+  // Top at z = 0.5. The default is wide enough that the fast gaits (088/03: run 26 / sprint 39 u/s
+  // over ~3 s of ramp-up) never run off the edge mid-test — airborne accel is 0.3× and starves the
+  // target speed. The FSM ledge tests pass a TINY extent instead, to walk off it on purpose.
+  physics.createStaticBox([0, 0, 0], [groundHalfExtent, groundHalfExtent, 0.5]);
   const controller = physics.createCharacterController();
   const { body, collider } = physics.createKinematicCapsule([0, 0, 1.4], 0.3, 0.6); // rests on the ground
 
@@ -159,6 +174,11 @@ async function groundedPlayer(): Promise<Player> {
   Velocity.z[eid] = 0;
   Velocity.grounded[eid] = 0;
   Locomotion.heading[eid] = 0; // facing +Y (north), where the test camera walks W toward
+  // bitECS stores are module-level and eids restart per world — zero the FSM fields or the previous
+  // test's state leaks into this one.
+  Locomotion.state[eid] = 0;
+  Locomotion.stateTime[eid] = 0;
+  Locomotion.fallSpeed[eid] = 0;
   physics.step(STEP); // build the query pipeline so the controller sees the ground
 
   return { controller, eid, physics, world };
@@ -248,12 +268,14 @@ describe('CharacterControllerSystem', () => {
       player.physics.dispose();
     });
 
-    it('jumps (+Z velocity) on the jump key when grounded', async () => {
+    it('jumps (+Z velocity) once the launch anticipation has played out', async () => {
       const player = await groundedPlayer();
       run(player, config('play')); // settle → grounded
       expect(Velocity.grounded[player.eid]).toBe(1);
 
-      run(player, config('play'), 'Space');
+      for (let i = 0; i < 8; i += 1) {
+        run(player, config('play'), 'Space'); // launchDelay 0.1 s = 6 fixed steps of crouch first
+      }
 
       expect(Velocity.z[player.eid]).toBeGreaterThan(0);
       player.physics.dispose();
@@ -575,6 +597,231 @@ describe('CharacterControllerSystem heading (plan 088/01)', () => {
       system.fixedUpdate(STEP);
 
       expect(Locomotion.heading[player.eid]).toBeCloseTo(0, 6);
+      player.physics.dispose();
+    });
+  });
+});
+
+/** A persistent system whose held keys can CHANGE mid-test — jump-edge detection needs one instance. */
+function liveSystem(player: Player): { down: Set<string>; step: () => void } {
+  const down = new Set<string>();
+  const cfg = config('play');
+  const system = new CharacterControllerSystem(
+    player.world,
+    player.physics,
+    new KeyboardSource({ isDown: (code): boolean => down.has(code) }, cfg.controls),
+    cfg,
+    player.controller,
+    CAMERA,
+  );
+  const step = (): void => {
+    system.fixedUpdate(STEP);
+    player.physics.step(STEP);
+  };
+
+  return { down, step };
+}
+
+/** Step until the player is grounded (a fall test's touchdown), with a hard safety cap. */
+function stepUntilGrounded(player: Player, step: () => void, cap = 400): void {
+  for (let i = 0; i < cap && Velocity.grounded[player.eid] !== 1; i += 1) {
+    step();
+  }
+  expect(Velocity.grounded[player.eid]).toBe(1);
+}
+
+describe('CharacterControllerSystem jump & fall FSM (plan 088/04)', () => {
+  describe('negative cases', () => {
+    it('never double-jumps mid-air — a second press while airborne does not relaunch', async () => {
+      const player = await groundedPlayer();
+      const { down, step } = liveSystem(player);
+      step();
+      down.add('Space');
+      for (let i = 0; i < 10 && Velocity.z[player.eid] <= 0; i += 1) {
+        step();
+      }
+      expect(Velocity.z[player.eid]).toBeGreaterThan(0); // airborne, rising
+
+      down.delete('Space');
+      step();
+      down.add('Space'); // a fresh press mid-air
+      const rising = Velocity.z[player.eid];
+      step();
+      step();
+
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_AIRBORNE); // not re-launched
+      expect(Velocity.z[player.eid]).toBeLessThan(rising); // still on the same ballistic arc
+      player.physics.dispose();
+    });
+
+    it('a press early in a HARD-land recovery expires unfired (no bounce out of a collapse)', async () => {
+      const player = await groundedPlayer();
+      const { down, step } = liveSystem(player);
+      player.physics.teleport(RigidBody.handle[player.eid], [0, 0, 15]); // impact ≈ 16.6 > hardLandSpeed 12
+      player.physics.step(STEP); // commit the kinematic teleport BEFORE the first controller move
+      stepUntilGrounded(player, step);
+      step(); // the FSM sees the touchdown → HARD_LAND
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_HARD_LAND);
+
+      down.add('Space'); // pressed at recovery start; the 0.15 s buffer dies inside the 0.5 s recovery
+      let vzMax = -Infinity;
+      for (let i = 0; i < 40; i += 1) {
+        step();
+        vzMax = Math.max(vzMax, Velocity.z[player.eid]);
+      }
+
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_GROUNDED); // recovery over…
+      expect(vzMax).toBeLessThanOrEqual(0); // …and the stale press never fired
+      player.physics.dispose();
+    });
+
+    it('an expired coyote window refuses the mid-air jump (state FALL keeps falling)', async () => {
+      const player = await groundedPlayer(1); // a 1 m ledge to walk off
+      const { down, step } = liveSystem(player);
+      step();
+      step(); // settle → grounded
+      down.add('KeyW');
+      for (let i = 0; i < 100 && Velocity.grounded[player.eid] === 1; i += 1) {
+        step();
+      }
+      expect(Velocity.grounded[player.eid]).toBe(0); // off the edge
+      for (let i = 0; i < 10; i += 1) {
+        step(); // 0.16 s airborne > coyote 0.12 s
+      }
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_FALL);
+
+      down.add('Space');
+      for (let i = 0; i < 8; i += 1) {
+        step();
+      }
+
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_FALL); // no launch
+      expect(Velocity.z[player.eid]).toBeLessThan(0); // still falling
+      player.physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('the launch anticipation delays the impulse: crouch first, leave the ground after launchDelay', async () => {
+      const player = await groundedPlayer();
+      const { down, step } = liveSystem(player);
+      step(); // settle → grounded
+
+      down.add('Space');
+      step();
+      step();
+      step();
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_LAUNCH); // crouching, no lift yet
+      expect(Velocity.z[player.eid]).toBeLessThanOrEqual(0);
+
+      for (let i = 0; i < 6; i += 1) {
+        step();
+      }
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_AIRBORNE);
+      expect(Velocity.z[player.eid]).toBeGreaterThan(0);
+      player.physics.dispose();
+    });
+
+    it('the coyote window honours a press just after walking off a ledge', async () => {
+      const player = await groundedPlayer(1);
+      const { down, step } = liveSystem(player);
+      step();
+      step(); // settle → grounded
+      down.add('KeyW');
+      for (let i = 0; i < 100 && Velocity.grounded[player.eid] === 1; i += 1) {
+        step();
+      }
+      expect(Velocity.grounded[player.eid]).toBe(0);
+
+      step(); // 2 steps airborne ≈ 0.03 s — well inside the 0.12 s window
+      down.add('Space');
+      let vzMax = -Infinity;
+      for (let i = 0; i < 12; i += 1) {
+        step();
+        vzMax = Math.max(vzMax, Velocity.z[player.eid]);
+      }
+
+      expect(vzMax).toBeGreaterThan(0); // the jump fired mid-air
+      player.physics.dispose();
+    });
+
+    it('a buffered press fires exactly once, on the landing frame', async () => {
+      const player = await groundedPlayer();
+      const { down, step } = liveSystem(player);
+      step();
+      down.add('Space');
+      for (let i = 0; i < 10 && Velocity.z[player.eid] <= 0; i += 1) {
+        step();
+      }
+      down.delete('Space');
+      // Descend; press again just before touchdown (impact will be ≈ jumpSpeed 6 → inside the buffer).
+      for (let i = 0; i < 200 && Velocity.z[player.eid] > -5; i += 1) {
+        step();
+      }
+      down.add('Space');
+      stepUntilGrounded(player, step);
+      step(); // touchdown frame: buffered press bypasses LAND straight into LAUNCH
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_LAUNCH);
+
+      let vzMax = -Infinity;
+      for (let i = 0; i < 10; i += 1) {
+        step();
+        vzMax = Math.max(vzMax, Velocity.z[player.eid]);
+      }
+      expect(vzMax).toBeGreaterThan(0); // the second flight happened…
+
+      for (let i = 0; i < 200 && Velocity.z[player.eid] > -5; i += 1) {
+        step(); // …and with the key still held (no new edge) the NEXT landing recovers normally
+      }
+      stepUntilGrounded(player, step);
+      step();
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_LAND);
+      player.physics.dispose();
+    });
+
+    it('a soft landing takes the quick recovery, then control returns', async () => {
+      const player = await groundedPlayer();
+      const { down, step } = liveSystem(player);
+      step();
+      down.add('Space');
+      for (let i = 0; i < 10 && Velocity.z[player.eid] <= 0; i += 1) {
+        step();
+      }
+      down.delete('Space');
+      for (let i = 0; i < 200 && Velocity.z[player.eid] > -1; i += 1) {
+        step(); // ride past the apex first — the post-launch snap frame can flash grounded while rising
+      }
+      stepUntilGrounded(player, step);
+      step(); // FSM sees the touchdown
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_LAND); // jumpSpeed-6 impact is under the hard tier
+
+      for (let i = 0; i < 12; i += 1) {
+        step(); // landRecoverySeconds 0.15 = 9 steps
+      }
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_GROUNDED);
+      player.physics.dispose();
+    });
+
+    it('a hard impact collapses (fallSpeed recorded) and takes the LONG recovery', async () => {
+      const player = await groundedPlayer();
+      const { step } = liveSystem(player);
+      player.physics.teleport(RigidBody.handle[player.eid], [0, 0, 15]);
+      player.physics.step(STEP); // commit the kinematic teleport BEFORE the first controller move
+      stepUntilGrounded(player, step);
+      step();
+
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_HARD_LAND);
+      expect(Locomotion.fallSpeed[player.eid]).toBeGreaterThan(12);
+
+      for (let i = 0; i < 12; i += 1) {
+        step();
+      }
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_HARD_LAND); // still collapsed past the soft window
+
+      for (let i = 0; i < 25; i += 1) {
+        step();
+      }
+      expect(Locomotion.state[player.eid]).toBe(LOCOMOTION_GROUNDED); // 0.5 s served
       player.physics.dispose();
     });
   });

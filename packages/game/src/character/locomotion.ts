@@ -9,8 +9,28 @@
 /** Planar speed (units/s) below which the ped counts as standing — clip choice and heading share it. */
 export const IDLE_SPEED_THRESHOLD = 0.3;
 
+/**
+ * Jump/fall FSM states the controller writes into `Locomotion.state` (plan 088/04). The renderer maps
+ * them to clips; the physics meaning lives entirely in `CharacterControllerSystem.advanceAirState`.
+ */
+export const LOCOMOTION_GROUNDED = 0;
+/** Jump accepted — the anticipation crouch plays; the vertical impulse fires when the delay elapses. */
+export const LOCOMOTION_LAUNCH = 1;
+/** Airborne FROM A JUMP (rising or falling). */
+export const LOCOMOTION_AIRBORNE = 2;
+/** Airborne WITHOUT a jump — walked or was knocked off an edge (entered once the coyote window dies). */
+export const LOCOMOTION_FALL = 3;
+/** Touched down — the recovery beat with reduced control. */
+export const LOCOMOTION_LAND = 4;
+/** Touched down past the hard-impact threshold — the collapse tier with the longer recovery. */
+export const LOCOMOTION_HARD_LAND = 5;
+
 /** Intent further than this from the current heading while moving = a reversal: plant, don't pirouette. */
 export const REVERSAL_ANGLE = (2 * Math.PI) / 3; // 120°
+
+/** Touchdowns softer than this (units/s) skip the LAND beat entirely — the spawn settle and slope/step
+ *  micro-falls must not flash a landing recovery. A real hop off half a metre hits ~3. */
+export const LAND_MIN_FALL_SPEED = 1;
 
 const TWO_PI = 2 * Math.PI;
 const DEG_TO_RAD = Math.PI / 180;

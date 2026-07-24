@@ -12,13 +12,21 @@ import type { AssetFileSystem } from '@opensa/renderware';
 import { IfpSampler } from '@opensa/engine';
 import { writeGtaRoot } from '@opensa/game/adapters/engine-vehicle-handle';
 import { readPedOsm } from '@opensa/game/adapters/ped-osm';
-import { IDLE_SPEED_THRESHOLD } from '@opensa/game/character/locomotion';
+import {
+  IDLE_SPEED_THRESHOLD,
+  LOCOMOTION_AIRBORNE,
+  LOCOMOTION_FALL,
+  LOCOMOTION_GROUNDED,
+  LOCOMOTION_HARD_LAND,
+  LOCOMOTION_LAND,
+  LOCOMOTION_LAUNCH,
+} from '@opensa/game/character/locomotion';
 import { VEHICLE_SCRIPTED_CLIPS } from '@opensa/game/vehicle/vehicle-clips';
 import { getIfp } from '@opensa/renderware/archive/asset-cache';
 import { type PedClip, pedClip } from '@opensa/renderware/ped/build-ped-model';
 
 import { GaitSelector } from './gait-selector';
-import { LocomotionMixer } from './locomotion-mixer';
+import { DEFAULT_FADE_SECONDS, LocomotionMixer } from './locomotion-mixer';
 
 export interface EnginePlayer {
   /** Face a yaw directly (enter/exit uses it on the way out of the car). */
@@ -34,8 +42,15 @@ export interface EnginePlayer {
     clip: null | string,
     options?: { facing?: number; loop?: boolean; orientation?: readonly [number, number, number, number] },
   ): void;
-  /** Advance the clip clock and upload the palette for this frame (`speed` = planar GTA m/s). */
-  update(positionEngine: readonly [number, number, number], headingYaw: number, speed: number, dt: number): void;
+  /** Advance the clip clock and upload the palette for this frame (`speed` = planar GTA m/s;
+   *  `state` = the controller's `Locomotion.state` — picks the 088/04 air/land clip over the gait). */
+  update(
+    positionEngine: readonly [number, number, number],
+    headingYaw: number,
+    speed: number,
+    dt: number,
+    state?: number,
+  ): void;
 }
 
 /** The tier speeds the animation side needs: gait thresholds + cycle-speed references (088/03). */
@@ -44,14 +59,34 @@ export type GaitTiers = Pick<MovementConfig, 'runSpeed' | 'sprintSpeed' | 'walkS
 /** Where the player's clips live. The archives hold it bare; a game dir keeps it under `anim/`, and the
  *  browser VFS keys loose files by their relative path — so both spellings have to be tried. */
 const PLAYER_IFP_NAMES = ['ped', 'anim/ped'];
-/** Clip order the state machine below indexes: [idle, walk, run, sprint]. */
-const PLAYER_CLIPS = ['idle_stance', 'walk_civi', 'run_civi', 'sprint_civi'];
+/** Clip order the state machine below indexes: the gaits, then the 088/04 air/land states. */
+const PLAYER_CLIPS = [
+  'idle_stance',
+  'walk_civi',
+  'run_civi',
+  'sprint_civi',
+  'jump_launch',
+  'jump_glide',
+  'jump_land',
+  'fall_glide',
+  'fall_collapse',
+];
 const IDLE_CLIP = 0;
 const WALK_CLIP = 1;
 const RUN_CLIP = 2;
 const SPRINT_CLIP = 3;
+const LAUNCH_CLIP = 4;
+const GLIDE_CLIP = 5;
+const LAND_CLIP = 6;
+const FALL_GLIDE_CLIP = 7;
+const COLLAPSE_CLIP = 8;
 /** Gait tier (the {@link GaitSelector} output) → locomotion clip. */
 const GAIT_CLIPS = [IDLE_CLIP, WALK_CLIP, RUN_CLIP, SPRINT_CLIP];
+/** Air/land clips that HOLD their last frame — a looping launch re-crouches mid-flight. */
+const ONE_SHOT_CLIPS: ReadonlySet<number> = new Set([COLLAPSE_CLIP, LAND_CLIP, LAUNCH_CLIP]);
+/** Landings snap in faster than gait fades; the launch pours into the glide almost seamlessly. */
+const LAND_FADE_SECONDS = 0.12;
+const LAUNCH_TO_GLIDE_FADE_SECONDS = 0.1;
 /**
  * Scripted clips `EnterVehicleSystem` asks for BY NAME (climb-in / climb-out / sit). Shared from the game
  * package ({@link VEHICLE_SCRIPTED_CLIPS}) so the requester and this resolver can't desync. They are resolved
@@ -151,7 +186,17 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
 
     return reference > 0 ? Math.min(RATE_MAX, Math.max(RATE_MIN, speed / reference)) : 1;
   };
-  const mixer = new LocomotionMixer(durations, CYCLIC_CLIPS, IDLE_CLIP, rateOf);
+  const fadeFor = (from: number, to: number): number => {
+    if (to === LAND_CLIP || to === COLLAPSE_CLIP) {
+      return LAND_FADE_SECONDS;
+    }
+    if (from === LAUNCH_CLIP && to === GLIDE_CLIP) {
+      return LAUNCH_TO_GLIDE_FADE_SECONDS;
+    }
+
+    return DEFAULT_FADE_SECONDS;
+  };
+  const mixer = new LocomotionMixer(durations, CYCLIC_CLIPS, IDLE_CLIP, { fadeFor, oneShot: ONE_SHOT_CLIPS, rateOf });
   let clipTime = 0; // the SCRIPTED clock — locomotion time lives in the mixer
   let scripted: null | { index: number; loop: boolean } = null;
   let scriptedFacing = 0;
@@ -199,7 +244,7 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
         scriptedFacing = options.facing;
       }
     },
-    update(positionEngine, headingYaw, speed, dt): void {
+    update(positionEngine, headingYaw, speed, dt, state = LOCOMOTION_GROUNDED): void {
       if (scripted) {
         const clip = clips[scripted.index];
         clipTime += dt;
@@ -207,7 +252,9 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
         const time = scripted.loop ? clipTime : Math.min(clipTime, clip.duration);
         sampler.sample(clip, time, probe.palette, 1);
       } else {
-        const wanted = resolveGaitClip(durations, GAIT_CLIPS[selector.update(speed)]);
+        // The air/land state overrides the gait; with no (resolved) air clip the gait carries on — the
+        // jump PHYSICS still runs, the visual just degrades to v1 (rule 3).
+        const wanted = airClipFor(state, durations) ?? resolveGaitClip(durations, GAIT_CLIPS[selector.update(speed)]);
         const { captureHold, pose } = mixer.update(wanted, dt, speed);
         if (captureHold) {
           sampler.holdPose(); // freeze the on-screen pose BEFORE sampling — the hold-fade's source
@@ -255,4 +302,29 @@ export function loadEnginePlayer(engine: Engine, fs: AssetFileSystem, model: str
  */
 export function resolveGaitClip(durations: readonly number[], wanted: number): number {
   return wanted === SPRINT_CLIP && (durations[SPRINT_CLIP] ?? 0) <= 0 ? RUN_CLIP : wanted;
+}
+
+/** Per-state clip choice with degradation: try the authored clip, then its stand-in; every entry must
+ *  have resolved (duration > 0) or the next is tried — an absent air set degrades to the speed gait. */
+const AIR_CLIP_CHAINS: Readonly<Record<number, readonly number[]>> = {
+  [LOCOMOTION_AIRBORNE]: [GLIDE_CLIP],
+  [LOCOMOTION_FALL]: [FALL_GLIDE_CLIP, GLIDE_CLIP],
+  [LOCOMOTION_HARD_LAND]: [COLLAPSE_CLIP, LAND_CLIP],
+  [LOCOMOTION_LAND]: [LAND_CLIP],
+  [LOCOMOTION_LAUNCH]: [LAUNCH_CLIP],
+};
+
+/**
+ * The clip an 088/04 FSM state plays, or `null` for "not airborne / nothing resolved — use the speed
+ * gait" (the rule-3 v1 fallback: jump PHYSICS works on every TC even when its IFP has no jump clips).
+ * Pure + exported so the degradation chains are unit-testable.
+ */
+export function airClipFor(state: number, durations: readonly number[]): null | number {
+  for (const clip of AIR_CLIP_CHAINS[state] ?? []) {
+    if ((durations[clip] ?? 0) > 0) {
+      return clip;
+    }
+  }
+
+  return null;
 }

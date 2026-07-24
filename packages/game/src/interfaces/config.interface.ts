@@ -243,10 +243,22 @@ export interface MovementConfig {
   accel: number;
   /** Fraction (0..1) of accel/deceleration applied while airborne (air control). */
   airControl: number;
+  /** Seconds after leaving the ground during which a jump is still accepted (coyote time, 088/04). */
+  coyoteSeconds: number;
   /** Horizontal deceleration toward rest when there is no input. */
   deceleration: number;
+  /** Recovery seconds after a HARD landing (the collapse tier — control stays reduced throughout). */
+  hardLandRecoverySeconds: number;
+  /** Vertical impact speed (units/s) above which a landing collapses instead of the quick recovery. */
+  hardLandSpeed: number;
+  /** Seconds a jump press is remembered — landing within the window fires it on the landing frame. */
+  jumpBufferSeconds: number;
   /** Upward launch velocity when jumping. */
   jumpSpeed: number;
+  /** Recovery seconds after a normal landing (a beat of reduced control, not a stun). */
+  landRecoverySeconds: number;
+  /** Seconds between the jump being accepted and the impulse — the anticipation crouch is REAL time. */
+  launchDelaySeconds: number;
   /** Planar speed of the DEFAULT gait (no modifier held) — SA jogs by default (088/03). */
   runSpeed: number;
   /** Planar speed while the sprint modifier is held (the top gait tier). */
