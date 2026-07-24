@@ -87,10 +87,13 @@ export const RasterFormat = {
   PIXEL_FORMAT_MASK: 0x0f00,
 } as const;
 
-/** D3D compression identifiers stored in Texture Native (SA platform). */
+/** D3D compression identifiers stored in Texture Native (SA/D3D9 platform). DXT2/DXT4 are the
+ *  premultiplied-alpha variants of DXT3/DXT5 — identical block layout, so they decode the same. */
 export const D3dCompression = {
   DXT1: 0x31545844, // 'DXT1'
+  DXT2: 0x32545844, // 'DXT2' (premultiplied-alpha DXT3)
   DXT3: 0x33545844, // 'DXT3'
+  DXT4: 0x34545844, // 'DXT4' (premultiplied-alpha DXT5)
   DXT5: 0x35545844, // 'DXT5'
   NONE: 0,
 } as const;

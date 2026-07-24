@@ -51,8 +51,10 @@ function classifyFormat(d3dFormat: number, rasterFormat: number, depth: number):
   switch (d3dFormat) {
     case D3dCompression.DXT1:
       return 'dxt1';
+    case D3dCompression.DXT2:
     case D3dCompression.DXT3:
       return 'dxt3';
+    case D3dCompression.DXT4:
     case D3dCompression.DXT5:
       return 'dxt5';
     default:
@@ -211,7 +213,7 @@ function parseTextureNative(stream: BinaryStream, header: ChunkHeader): null | R
   }
 
   const pixelFormat = rasterFormat & RasterFormat.PIXEL_FORMAT_MASK;
-  const mipmaps = readMipmaps(stream, width, height, numLevels, format, palette, depth, pixelFormat);
+  const mipmaps = readMipmaps(stream, width, height, numLevels, format, palette, depth, pixelFormat, hasAlpha);
   if (mipmaps.length === 0) {
     return null;
   }
@@ -236,6 +238,7 @@ function readMipmaps(
   palette: null | Uint8Array,
   depth: number,
   pixelFormat: number,
+  hasAlpha: boolean,
 ): RWMipLevel[] {
   const mipmaps: RWMipLevel[] = [];
   let w = width;
@@ -250,7 +253,7 @@ function readMipmaps(
       if (palette) {
         data = expandPalette(raw, palette);
       } else if (format === 'rgba8888') {
-        data = depth === 16 ? expand16(raw, pixelFormat) : swizzleBgraToRgba(raw);
+        data = depth === 16 ? expand16(raw, pixelFormat) : swizzleBgraToRgba(raw, hasAlpha);
       }
       mipmaps.push({ data, height: Math.max(1, h), width: Math.max(1, w) });
     }
@@ -328,13 +331,15 @@ function recoverTextures(
 }
 
 /** Convert in-place a BGRA byte buffer to RGBA (returns a new buffer). */
-function swizzleBgraToRgba(bgra: Uint8Array): Uint8Array {
+function swizzleBgraToRgba(bgra: Uint8Array, hasAlpha: boolean): Uint8Array {
   const out = new Uint8Array(bgra.length);
   for (let i = 0; i < bgra.length; i += 4) {
     out[i + 0] = bgra[i + 2];
     out[i + 1] = bgra[i + 1];
     out[i + 2] = bgra[i + 0];
-    out[i + 3] = bgra[i + 3];
+    // X8R8G8B8 (C888, hasAlpha=false) carries 0 in its unused X byte — that is padding, not alpha, so
+    // force opaque. Copying the X as alpha made whole opaque models (carcer sewer/police) render invisible.
+    out[i + 3] = hasAlpha ? bgra[i + 3] : 255;
   }
 
   return out;

@@ -16,9 +16,11 @@ stories: `tools/lod-trees-generator/docs/plans/005-sa-asset-format.md`,
 - **Extra-vertex-colour (`0x253F2F9`) must be stripped when the vertex count changes.** A template's
   extension carried onto a rebuilt mesh applies stale RGBA → black or fully transparent
   (`stripExtraVertColour`).
-- **TXD must be DXT-compressed.** A large uncompressed A8R8G8B8 TXD silently fails to load (untextured /
-  invisible). Atlases go DXT5 (alpha) / DXT1; mod-installer's PNG→TXD merge _patches_ an existing `.txd`,
-  never creates one, and needs 8-bit RGB/RGBA PNGs.
+- **mod-installer's PNG→TXD merge** _patches_ an existing `.txd`, never creates one, and needs 8-bit
+  RGB/RGBA PNGs; atlases the tools bake go DXT5 (alpha) / DXT1. (TXD _reading_ is broad: DXT1/2/3/4/5 —
+  DXT2/4 are the premultiplied-alpha variants of DXT3/5 — plus uncompressed 32-bit A8R8G8B8 and X8R8G8B8
+  and 16-bit rasters all decode. Modern D3D9-platform exporters, e.g. Carcer City, ship DXT4 and X8R8G8B8;
+  the `X` byte is padding and must decode OPAQUE, not alpha-0, or the whole model renders invisible/black.)
 - **Empty COL3 model is exactly 112 bytes.** Any other size misaligns the rest of the COL library and
   corrupts collision _globally_, faulting an unrelated model (the "3999" crash). Collision binds by **name**;
   `.col` must be packed into the IMG to be auto-discovered.
