@@ -108,6 +108,16 @@ cost is **per-pixel foliage fill** — draws and triangle counts mislead on thes
 all other foliage work is parked. Analysis:
 [layer-decomposition](opensa-engine/2026-07-21-layer-decomposition.md).
 
+**07-24: 087 LOD-ring rebuild — perf-neutral, pak 12 % smaller.** The fresh `original` rebuild after the
+087 arc (per-game `PACK_RECTS`, per-cell `aabb` rings, bake grid 256→250, water row-C fix) benchmarks
+**within noise of the 07-20 `436d2f2` head** on every shared scene (ls-noon 112.2, lv-night 76.2,
+country-dusk 60.5, ls-rain-night 117.7, ocean-horizon 120), with `sf-fog-dawn` a touch faster (105.4→113.7,
+draws 1019→995) — and it did so with a **34 % fuller car population** (1126 road cars vs 841), so the ring +
+250-bake work is free. The pak shrank from **1 453 903 872 B → 1 272 901 632 B (−181 MB, −12.4 %)** at the
+same 1137 cells: the 250 bake + aabb rings dropped bytes with no coverage loss. This is the 078 merge-gate
+re-baseline (fps re-measured with `admiral`/`comet` converted — road cars ≠ 0 — plus the mapper pak-size
+delta). Run: [`2026-07-24-ingame-617556f-087ring.json`](opensa-engine/2026-07-24-ingame-617556f-087ring.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
