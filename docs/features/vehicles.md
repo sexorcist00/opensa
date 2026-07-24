@@ -66,7 +66,12 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
 - **Physics** (plans 017/018): Rapier dynamic chassis from the COL convex hull, raycast wheels
   (suspension), handling.cfg parsed (kept for tuning), enter/exit flow with seat alignment
   (plan 016) — the run-to-door is interruptible (movement input or a blocked path hands control back,
-  GTA-style), damage system (plan 019) using the full COL.
+  GTA-style), damage system (plan 019) using the full COL. The scripted climb-in/sit/climb-out clips
+  (`car_getin_lhs` / `car_getout_lhs` / `car_sit`) are requested BY NAME (shared const
+  `VEHICLE_SCRIPTED_CLIPS` in `packages/game/src/vehicle/vehicle-clips.ts`) and resolved by the player from
+  `ped.ifp` — a scripted clip registers only when it resolves (`duration > 0`), else the driver falls back to
+  the standing locomotion pose (see character.md). While seated the ped rides the car's FULL orientation
+  (tilts/flips with it), positioned at the `ped_frontseat` dummy.
 - **LOD/streaming** (plan 021): HD/LOD/unload distances per vehicle, placements respawn.
 - **Headlights** (plan 033, ⚠️ MVP — redo later): glowing lamp glass + coronas at the lamp dummies; lamps
   found by position near the `headlights`/`taillights` dummies; no road beam yet. See night-and-time.md.

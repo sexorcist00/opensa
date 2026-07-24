@@ -9,8 +9,9 @@ plans 008/011/012/013/036.
 - **Skinned model**: Skin plugin → a plain `PedModelData` struct (vertices + `PedBone[]`, no GPU
   types — the character viewer builds the same thing); bones from the frame hierarchy
   (skin bone i ↔ frame i+1, frame 0 = dummy root); bind pose = raw mesh regardless of mapping;
-  named-bone map for animation retargeting. The shipped player is `male01` (`PLAYER_MODEL` in
-  `apps/web/src/ui/engine-player.ts`), loaded from `male01.osm` — see "Where the OWN-ENGINE player comes
+  named-bone map for animation retargeting. The shipped player model is `GAME_CONFIG.mainCharacter`
+  (`apps/web/src/game-config.tsx` — `bmycg` for gostown/carcer/anderius), loaded from `<mainCharacter>.osm`
+  by name (the old hardcoded `PLAYER_MODEL`/`male01` const is gone) — see "Where the OWN-ENGINE player comes
   from" below.
 - **Root anchoring** (`anchorRootBone`): the root bone's rest position is snapped to the skin's authoritative
   bind translation (`inverse(boneInverse)`). The IFP root **translation** track is dropped (locomotion stays
@@ -53,7 +54,8 @@ fixture, baked by `ped-probe`, served over HTTP **in the production host**. So t
 whatever a developer last converted, with its animations frozen at bake time, and the game directory the
 user picked had no say in it.
 
-It now loads `male01.osm` from the archives through the VFS, and resolves `idle_stance` / `walk_civi` /
+It now loads `<mainCharacter>.osm` (from `GAME_CONFIG`) from the archives through the VFS, and resolves
+`idle_stance` / `walk_civi` /
 `run_civi` — plus the scripted vehicle clips `car_getin_lhs` / `car_getout_lhs` / `car_sit` that
 `EnterVehicleSystem` drives by name — from the game's own `ped.ifp` at load, so a modded IFP changes how the
 player walks AND sits. A scripted clip is only registered under its name when it actually resolves

@@ -6,9 +6,12 @@
 ## Implemented
 
 - TXD texture-native parsing: name/mask, dimensions, mip levels, alpha flag.
-- Pixel formats: **DXT1 / DXT3 / DXT5** (kept compressed — BC1/BC2/BC3), **RGBA8888/X8R8G8B8**,
-  **16-bit R5G6B5 / A1R5G5B5 / A4R4G4B4** (expanded to RGBA8888 at parse, plan 043), and
-  **PAL8/PAL4** palettized (expanded at parse).
+- Pixel formats: **DXT1 / DXT3 / DXT5** (kept compressed — BC1/BC2/BC3), plus the premultiplied D3D9
+  variants **DXT2 → dxt3 / DXT4 → dxt5** (same block layout — Carcer City, commit 6c5658b);
+  **RGBA8888 / X8R8G8B8** (the X byte is padding, forced OPAQUE — else X8R8G8B8 models render invisible);
+  **16-bit R5G6B5 / A1R5G5B5 / A4R4G4B4** (expanded to RGBA8888 at parse, plan 043); and **PAL8** palettized
+  (expanded at parse). **PAL4** (4-bit) is **REJECTED** rather than decoded — `expandPalette` assumes
+  8-bit/256-entry, and no shipped asset uses PAL4 (see docs/open-issues/pal4-textures.md).
 - Consumers: the world path goes through the converter (`tools/opensa-pack/src/textures.ts`), which
   keeps block-aligned power-of-two DXT untouched and buckets everything into `texture_2d_array`s by
   exact (format, W, H, mips), decoding the rest via `textures/dxt.ts`. Vehicles/peds build their

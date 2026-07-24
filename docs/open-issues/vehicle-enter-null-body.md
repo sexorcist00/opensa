@@ -1,7 +1,12 @@
 # Crash on entering a freshly-spawned car (`readBody` null body)
 
-**Status: shelved.** Investigated; root cause narrowed to a streaming/physics handle-pool race but not
-pinned to an exact line (needs a one-shot runtime trace). No fix applied yet.
+**Status: shelved, NOT currently reproducing (2026-07-24).** Investigated; root cause narrowed to a
+streaming/physics handle-pool race but not pinned to an exact line (needs a one-shot runtime trace). No fix
+applied yet, kept OPEN — but it has not been seen recently, so it is not a current-priority merge blocker.
+The stack trace below is the ORIGINAL capture (its line numbers are as-of-crash, not current source — don't
+"refresh" them; a pasted trace is a record). Note: commit `a16930e` ("resolve vehicle enter/sit clips") is an
+ANIMATION fix (the driver rode standing) — it did NOT touch this physics null-body crash; `readBody` is still
+unguarded. Do not close this issue on the strength of that commit.
 
 ## Symptom
 

@@ -5,7 +5,7 @@ The map of OpenSA, split by concern. Start here, then drill into the flow you ca
 | Doc                                                | What it covers                                                                                        |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | [boot-and-loading.md](./boot-and-loading.md)       | How a game gets into the browser: menu → loader (fetch / local folder / http-dir) → VFS → world-ready |
-| [world-streaming.md](./world-streaming.md)         | The native formats (`.osm` / `.ostex` / `.oscell` / `.ospak`) and how the engine streams the world    |
+| [world-streaming.md](./world-streaming.md)         | The native formats (`.osm` / `.ostex` / `.oscell` / `.oswire` / `.ospak`) and how the engine streams the world |
 | [perfect-map-builder.md](./perfect-map-builder.md) | The offline build pipeline that produces the canonical build (`./build/original`)                      |
 | [tools.md](./tools.md)                             | One-paragraph architecture of every tool in `tools/` and `tools-debug/`                               |
 
@@ -37,7 +37,7 @@ packages/                          (tag type:engine)
   vfs/            @opensa/vfs             unzip → AssetFileSystem
   game-build/     @opensa/game-build      partitioning shared by the loaders + build scripts
 tools/                             (tag type:tool — offline; may read engine packages, never the app)
-  perfect-map-builder/ · opensa-pack/ · mod-installer/ · vehicle-installer/ · ped-installer/
+  perfect-map-builder/ · opensa-pack/ · fetch-pack/ · mod-installer/ · vehicle-installer/ · ped-installer/
   map-optimizer/ · opensa-lod-generator/ · sa-lod-generator/ · lod-trees-generator/ · lod-procobj-generator/
   vehicle-optimizer/ · timecyc-builder/ · lod-common/ · map-placement/ · rw-codec/ · tool-kit/
 tools-debug/  bench-harness/ (headless field checks) · sa-int16-repro/ (ghost-barriers repro dial)

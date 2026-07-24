@@ -26,6 +26,10 @@ never the app. The dependency picture is the tools cluster of
   per-cell TXD; output is not tuned for the real-SA streamer (uncapped).
 - **opensa-pack** — game-ready dir → native build (`.osm` per model inside the IMGs + the `opensa/` pak);
   see [perfect-map-builder.md](./perfect-map-builder.md#opensa-pack-the-pack-stage-also-standalone).
+- **fetch-pack** — the build finisher (plan 086): re-homes a build into the fetch-serveable
+  `build/<id>/opensa-pack/<game>-<version>/` layout the fetch-mode loader streams by range. Chained after the
+  pack in every `build:game:*` (`npm run build:game:<id>`); see
+  [perfect-map-builder.md](./perfect-map-builder.md).
 
 ## Standalone tools
 

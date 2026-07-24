@@ -27,5 +27,6 @@ implemented ones, and assembling the release changelog.
 | Zones, HUD, debug tooling                     | [zones-hud-debug.md](zones-hud-debug.md)           |
 | UI shell (boot/menu/loading/pause)            | [ui-shell.md](ui-shell.md)                         |
 
-Cross-cutting architecture (native `.osm`/`.ostex`/`.oscell`/`.ospak` formats, engine world streaming, the
-boot/loader chain, the offline build pipeline) lives in [docs/architecture/](../architecture/README.md).
+Cross-cutting architecture (native `.osm`/`.ostex`/`.oscell`/`.oswire`/`.ospak` formats, engine world
+streaming, the boot/loader chain, the offline build pipeline) lives in
+[docs/architecture/](../architecture/README.md).
