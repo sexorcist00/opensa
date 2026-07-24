@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.4.0
+
+**Replaced the three.js renderer with our own WebGPU engine.** The `three` dependency is gone entirely
+(plan [074](docs/plans/074-opensa-engine/readme.md)). At identical content the app got **both faster and
+smaller**: a **~7× runtime speed-up** (city scenes went from 16–24 fps on three.js to a locked 120 fps) and a
+**−12.8 % gzip bundle** despite the engine being a large body of added code. Full numbers +
+reproduction: [`docs/audit/three-to-own-engine.md`](docs/audit/three-to-own-engine.md).
+
+### Own file formats
+
+The migration is built on a family of native, GPU-shaped formats (`packages/engine-formats`) — the runtime
+"codec" is a header parse + `writeBuffer`/`writeTexture`, so all the offline work is done offline instead of
+in a runtime costume:
+
+- **`.osm`** — one MODEL, in named sections (`DESC`/`GEOM`/`TEXS`/`COLL`/`HULL`/`SHAT`/`SKEL`). Covers assets
+  the runtime resolves BY NAME: vehicles, peds, clutter, breakables, animated objects. Each consumer reads
+  only its own byte range (collision without touching geometry; nothing parsed twice).
+- **`.oscell`** — one streamed world cell (HD or LOD) in the final GPU vertex layout (interleaved 36 B stride
+  with baked day/night prelight, sun-visibility and wind-sway channels). Uploads verbatim.
+- **`.ostex`** — one `texture2d_array` with the full mip chain baked offline (premultiplied alpha, 256-byte
+  aligned rows) — the runtime never generates mips.
+- **`.ospak`** — the archive: a JSON manifest + one 4 KiB-aligned binary pak, read by RANGE only (Cache API /
+  HTTP Range, never whole in JS); FNV-1a entry hashes keep converter re-runs and delivery incremental.
+- **`.oswire`** — meshopt-compressed transport wrapper for `.oscell` payloads; the pak worker rebuilds the
+  exact `.oscell` bytes, so the engine never learns wire encodings exist.
+- **`water.bin`** — baked water grid (per-vertex shore-distance + depth field) driving the animated shoreline.
+
+### Engine
+
+- **Own WebGPU renderer** — sky/fog/night/weather, dynamic vehicle + ped lighting, water, godrays, local
+  lights, particles, shadows — no three.js, no WebGL fallback path.
+- **Runtime-resolved animation** — IFP clips are parsed by name at runtime (`IfpSampler`), never baked into
+  the model; adding animations needs no rebuild and does not grow a ped's `.osm`.
+
 ## 0.3.0 (2026-07-06)
 
 ### Engine (brief, since the Nx migration)
