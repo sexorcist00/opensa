@@ -1,6 +1,6 @@
 # 080 — Cinematic camera (GTA V-feel follow camera for the own engine)
 
-**Status: IN PROGRESS.** Planned 2026-07-19. **01–07 shipped 2026-07-25**: the damp/spring math and the
+**Status: 01–07 DONE and ACCEPTED (2026-07-25); 08 deferred by the user.** Planned 2026-07-19.: the damp/spring math and the
 `CameraDirector` in `apps/web/src/ui/camera/` (01), the smoothed rig — input dampening, a trailing look
 point with a dead zone, the steered-yaw channel, gliding zoom (02), the composition layer — turn-follow,
 idle recenter, look-ahead (03), collision — a `PhysicsWorld` sphere/ray-cast API, snap-in/ease-out, a
@@ -14,8 +14,10 @@ on-foot default is frozen as shipped, and the `?cam=legacy` A/B was deleted with
 close-out task, taken early). **05's DRIVE field round is owed** — its defaults are first guesses, live on
 the Camera tab — and the look-behind key ships after it. **Four field rounds ran on 05+06** and every
 report was fixed (bob frequency, the corner-swing latch, the backing-up spin, the shake burst, the exit
-snap, entry sinking); the landing dip ships OFF because it never read at a third-person orbit. **What 07
-still owes is its ACCEPTANCE**: a full mixed session the user signs off on. Then 08 view presets.
+snap, entry sinking); the landing dip ships OFF because it never read at a third-person orbit. **07 was
+ACCEPTED in the field on the same day** — the chain is closed for 0.5.0. **08 (view presets / first person)
+is DEFERRED at the user's request**; its feasibility research lives in
+[`docs/ideas/first-person-camera/`](../../ideas/first-person-camera/readme.md).
 
 **Goal: the camera feels "cinematic" the way GTA V's does — weighty, smooth, always composed — while
 staying responsive enough that nobody blames it for a missed turn.** Today the engine host camera is a

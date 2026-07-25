@@ -55,9 +55,10 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   plus the additive motion layer — bob, landing dip, impact shake, sprint FOV kick, bounded and behind a
   `reducedMotion` switch (06). The 02–04 **field round is accepted** — defaults frozen as shipped, and the
   `?cam=legacy` A/B is DELETED with it. FOUR field rounds ran on the vehicle camera and the motion layer and
-  every report was fixed; the close-out (07) turned the transition matrix into a test, froze the tuning and
-  pruned the tab. **Owed: 07's acceptance — a full mixed session** — then **08 (C-key view presets incl.
-  first person)**.
+  every report was fixed; the close-out (07) turned the transition matrix into a test, froze the tuning,
+  pruned the tab and ran the exit exam. **ACCEPTED in the field 2026-07-25 — the chain is closed for 0.5.0.**
+  **08 (C-key view presets incl. first person) is DEFERRED**; its feasibility research is
+  [`docs/ideas/first-person-camera/`](../ideas/first-person-camera/readme.md).
 - **[079 — One canonical build source, the dev-surface unification, and its docs](./079-canonical-build-source/readme.md)**
   — every dev surface (lab, bench harness, viewers) reads ONE canonical build (`./build/original`), served in
   place (NOT copied into `public/`), via a new `http-dir` loader + the loading-MODE-selects-the-world fix +

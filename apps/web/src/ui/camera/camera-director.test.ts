@@ -507,6 +507,59 @@ describe('stepCamera — composition (plan 080/03)', () => {
   });
 });
 
+describe('stepCamera — the additive motion layer reaches the drawn camera (plan 080/06)', () => {
+  describe('negative cases', () => {
+    it('adds nothing while the layer is off', () => {
+      const off = { ...CONFIG, bobAmplitude: 0, landingDipScale: 0, shakeScale: 0 };
+      const state = rigState();
+      const level = stepCamera(state, snapshot(), off);
+      const landed = stepCamera(state, snapshot({ landingSpeed: 5 }), off);
+
+      expect(landed.eye[1]).toBeCloseTo(level.eye[1], 12);
+    });
+
+    it('leaves a detached fly eye alone — a viewer must land where it is dragged', () => {
+      const state = rigState();
+      setFlyEye(state, [4, 50, 6]);
+
+      expect(stepCamera(state, snapshot({ landingSpeed: 5, mode: 'fly' }), CONFIG).eye).toEqual([4, 50, 6]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('drops the drawn eye on a landing, and the look point HALF as far', () => {
+      const state = rigState();
+      const level = stepCamera(state, snapshot(), CONFIG);
+      const landed = stepCamera(state, snapshot({ landingSpeed: CONFIG.landingDipFullSpeed }), CONFIG);
+
+      const eyeDrop = level.eye[1] - landed.eye[1];
+      const targetDrop = level.target[1] - landed.target[1];
+      expect(eyeDrop).toBeGreaterThan(0);
+      expect(targetDrop).toBeCloseTo(eyeDrop / 2, 6); // the half-dip is what pitches the frame
+    });
+
+    it('moves eye and look point TOGETHER while bobbing — the aim must not wander', () => {
+      const state = rigState();
+      let camera = stepCamera(state, snapshot({ focus: [10, 2, 30] }), CONFIG);
+      for (let frame = 1; frame < 40; frame += 1) {
+        camera = stepCamera(state, snapshot({ focus: [10, 2, 30 - frame * 0.12], focusHeading: 0 }), CONFIG);
+      }
+      const level = { ...CONFIG, bobAmplitude: 0 };
+      const still = rigState();
+      let plain = stepCamera(still, snapshot({ focus: [10, 2, 30] }), level);
+      for (let frame = 1; frame < 40; frame += 1) {
+        plain = stepCamera(still, snapshot({ focus: [10, 2, 30 - frame * 0.12], focusHeading: 0 }), level);
+      }
+
+      // The bob shifted the whole rig, not the eye alone: eye and target moved by the SAME amount.
+      const eyeShift = camera.eye[1] - plain.eye[1];
+      const targetShift = camera.target[1] - plain.target[1];
+      expect(Math.abs(eyeShift)).toBeGreaterThan(0);
+      expect(targetShift).toBeCloseTo(eyeShift, 9);
+    });
+  });
+});
+
 describe('stepCamera — the vehicle camera (plan 080/05)', () => {
   const FAST = CONFIG.vehicleFovMaxSpeed;
   const SLIDE = CONFIG.driftSlipDeadZone * 3;

@@ -25,10 +25,11 @@ go/no-go). Something already understood and scheduled does NOT live here — it 
 
 ## Camera
 
-- [cinematic-camera-0.6.0/](./cinematic-camera-0.6.0/readme.md) — the three directions the 080 chain
-  deliberately deferred: an **idle cinematic auto-camera**, SA's **R-key cinematic vehicle cameras**, and a
-  **gamepad look path** (camera-ready, blocked on there being no gamepad input at all). All three are new
-  writers or new config objects on the shipped director, not new code paths.
+- [first-person-camera/](./first-person-camera/readme.md) — **first person**: the head IS findable (HAnim
+  bone id 5 / `Head`, dumped from a stock ped) and its live world matrix is already computed every rendered
+  frame by `IfpSampler`; hiding it is a zero-scale palette slot, which takes hats and hair with it. Written
+  at the 080 close-out with what that chain learned — the open question is not "can we", it is whether SA's
+  head animation and the ped's own torso across the near plane survive a field look.
 
 ## Editors
 

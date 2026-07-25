@@ -204,6 +204,40 @@ describe('PhysicsWorld.createDynamicVehicle', () => {
   });
 });
 
+describe('PhysicsWorld.sphereCast — the second exclusion', () => {
+  describe('negative cases', () => {
+    it('still reports a body that is NOT excluded', async () => {
+      const physics = await makeWorld();
+      const wall = physics.createStaticBox([0, 10, 0], [5, 0.5, 5]); // near face at y = 9.5
+      physics.step(STEP); // build the query pipeline so the cast sees it
+
+      expect(physics.sphereCast([0, 0, 0], [0, 1, 0], 0.3, 30)?.dist).toBeCloseTo(9.2, 1);
+      physics.dispose();
+      expect(wall).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('ignores BOTH bodies — the framed subject and the car the player just left', async () => {
+      const physics = await makeWorld();
+      // Two walls in line: the near one is the "car" (excluded second), the far one is real geometry.
+      const car = physics.createStaticBox([0, 4, 0], [5, 0.5, 5]);
+      physics.createStaticBox([0, 12, 0], [5, 0.5, 5]);
+      // The subject sits at the cast origin and must always be excluded — that is why one exclusion was
+      // never enough (plan 080/06 field round 2).
+      const subject = physics.createBox([0, 0, 0], [0.4, 0.4, 0.4]);
+      physics.step(STEP);
+
+      const near = physics.sphereCast([0, 0, 0], [0, 1, 0], 0.3, 30, subject);
+      const far = physics.sphereCast([0, 0, 0], [0, 1, 0], 0.3, 30, subject, car);
+
+      expect(near?.dist).toBeCloseTo(3.2, 1); // stopped by the "car"
+      expect(far?.dist).toBeCloseTo(11.2, 1); // straight past it to the real wall
+      physics.dispose();
+    });
+  });
+});
+
 describe('PhysicsWorld.readVehicleWheels', () => {
   const HALF: [number, number, number] = [1.2, 2.5, 0.7];
   const WHEELS = [

@@ -56,13 +56,15 @@ resets). This plan proves it:
 - [x] Tuning freeze + tab prune.
 - [x] Perf measurements + ritual sweep (ledger). The SOAK leg was not run — see the ledger for what was
       done instead and what that leaves owed.
-- [x] Legacy-path deletion (early, 2026-07-25) — docs sweep + idea stubs still owed.
+- [x] Legacy-path deletion (early, 2026-07-25), docs sweep, idea stub.
+- [x] ACCEPTED in the field 2026-07-25 (mixed session + the K+M chrome change).
 
-## Acceptance
+## Acceptance — MET 2026-07-25
 
-- User plays a full mixed session (foot + car + interiors + photo mode) and accepts the camera as
-  the default experience — the chain's real gate.
-- Ritual row within noise; budgets in the ledger; suite green; `?cam=legacy` gone.
+- ~~User plays a full mixed session and accepts the camera as the default experience~~ **ACCEPTED**: the
+  user walked the transition list and reported it good, and accepted the K+M chrome change on top.
+- Ritual row within noise (identical, in fact — see the ledger); budgets in the ledger; suite green;
+  `?cam=legacy` gone.
 
 ## Ledger
 
@@ -129,6 +131,29 @@ they stay config-only. 42 → 39 rows, and every survivor was moved by an actual
 | | `shakeScale` / `shakeImpactForce` | 0.08 / 250 000 | accepted after the burst bug was fixed |
 | | `sprintFovKick` | **0.07** | round: invisible at 0.04 with a band that completed at top speed |
 | | `reducedMotion` | false | the comfort switch, off by default |
+
+### 2026-07-25 — ACCEPTED, and the close-out sweep
+
+The user ran the transition list and accepted it; with that, **the 080 chain is closed for 0.5.0** except
+plan 08, which the user has explicitly deferred.
+
+Two things landed after the acceptance:
+
+- **The photo camera takes the chrome off the screen** (K+M): the perf readout, the debugger panel, the
+  "Click to play" button and the Fullscreen button hide, and leaving restores exactly what was there. The
+  debugger is SUPPRESSED rather than closed, so it returns on the same screen with the same state. Only the
+  K+M gesture counts — the `fly-camera` event gained a `photo` flag because the debugger's own fly toggle
+  and the map inspector drive the SAME camera, and hiding the panel there would take away the tool that is
+  flying. A running `?soak` keeps its status line.
+- **Docs swept + the test gaps closed**: the additive layer's offsets are now pinned as reaching the DRAWN
+  camera (the dip halves on the look point, the bob moves eye and target together), `sphereCast`'s second
+  exclusion has a real-Rapier test, and `planarMotion` is pinned as the shared channel — the same numbers a
+  capture records and the camera reads, so the two cannot diverge. `docs/features/camera.md` had two stale
+  facts from the field rounds (the 0.15 m layer cap, and "the cap is suspended during enter/exit"); both
+  corrected.
+- The 0.6.0 idea stubs were written and then **deleted at the user's request** — nothing in them was worth
+  keeping. What replaced them is one researched idea: [first-person
+  camera](../../ideas/first-person-camera/readme.md), written while the chain's knowledge is fresh.
 
 ### 2026-07-25 — the exit exam: numbers
 

@@ -1,5 +1,11 @@
 # 080/08 — Switchable view presets (the C key), first-person included
 
+**DEFERRED (2026-07-25, user's call): not next.** The rest of the chain (01–07) is closed and accepted; this
+plan waits. Its hardest half — first person — now has a researched idea doc with the feasibility questions
+already answered from the code: [`docs/ideas/first-person-camera/`](../../ideas/first-person-camera/readme.md)
+(the head IS a named bone with a live world matrix every rendered frame; hiding it is a zero-scale palette
+slot). Read that before starting this plan.
+
 **Added 2026-07-25 at the user's request.** SA cycles camera views with a key; we want the same, plus a
 first-person view — and, more importantly, we want the ARCHITECTURE for it in place while the chain is
 still being built, so no later plan hard-codes assumptions that make a second view impossible.

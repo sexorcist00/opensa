@@ -111,8 +111,8 @@ the floor guard:
   panel-damaging ones.
 - **Sprint FOV kick**: a couple of degrees as a run tips into a sprint, contributed to the FOV TARGET so it
   eases through the same damp the vehicle kick uses.
-- **Bounded, and no roll.** Each effect is capped and the SUM is capped at 0.15 m — inside the floor guard's
-  0.3 m margin and well inside collision's sphere, so the layer needs no casts of its own. Eye and look
+- **Bounded, and no roll.** Each effect is capped and the SUM is capped at 0.25 m — inside the floor guard's
+  0.3 m margin and well inside collision's 0.35 m sphere, so the layer needs no casts of its own. Eye and look
   point move TOGETHER (bar the dip): moving the eye alone swings the aim, which is the nauseating version.
   **`reducedMotion`** zeroes the whole layer — one Camera-tab toggle, and every effect also has its own
   scale.
@@ -125,9 +125,15 @@ distance, snap IN / ease OUT over `collisionReleaseTime`; the chosen zoom / car 
 occlusion. The floor is `collisionMinDistance` — the near-plane radius (0.5): a wall closer than that pulls
 the eye right up to the surface, so it may clip INTO the ped for a frame, but it never slides BEHIND the wall
 (which reads far worse) and it never stalls. A floor guard lifts the eye to `groundBelow(eye) + 0.3`,
-running whenever the rig is attached (incl. a car enter/exit, so a low seat can't bury it); only the distance
-CAP is suspended during enter/exit. Casts run against the one Rapier world, excluding the subject; ~1
-cast/frame + the ground guard, free.
+running whenever the rig is attached (incl. a car enter/exit, so a low seat can't bury it). During a
+scripted enter/exit the cap STAYS ON but eases in both directions: suspending it outright (the first cut)
+stopped the camera sliding along surfaces and let it sink through the ground mid-climb — and once the eye is
+under the floor the guard cannot rescue it, because its probe casts DOWNWARD. Easing keeps the geometry
+clearance without the snap the 04 field round rejected, and the same eased response is held for 0.8 s AFTER
+a sequence so stepping out of a car settles instead of jumping. Casts run against the one Rapier world,
+excluding the subject — and, for a few metres after an exit, the car just left as well (`sphereCast`'s
+second exclusion, since the framed subject's own collider must stay excluded too). **2 casts/frame** (one
+sphere cast + the ground ray), against plan 07's budget of 5.
 
 Known accepted trade-off (field verdict, stop point): a wall very close directly behind the player lets the
 camera clip into the ped a little — the alternatives (a size-based floor, or freezing the eye in the world)

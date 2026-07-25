@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { VehicleWheelReading } from '../physics/physics-world';
 
-import { computeFrame, TelemetryRing, type VehicleSample, VehicleTelemetry } from './vehicle-telemetry';
+import { computeFrame, planarMotion, TelemetryRing, type VehicleSample, VehicleTelemetry } from './vehicle-telemetry';
 
 const DT = 1 / 60;
 const RADIUS = 0.3;
@@ -170,6 +170,38 @@ describe('computeFrame', () => {
       expect(frame.wheels[0].slipRatio).toBeCloseTo(0.5, 6); // (30 − 20) / 20
       expect(frame.wheels[1].slipRatio).toBeCloseTo(-1, 9); // locked: surface speed 0
       expect(frame.slipRatio).toBeCloseTo(-0.25, 6); // mean over the wheels in contact
+    });
+  });
+});
+
+describe('planarMotion', () => {
+  // The shared channel: a capture reads it through `computeFrame`, and the CAMERA reads it every rendered
+  // frame for drift framing (`EngineVehicles.drivenMotion`). One implementation is what stops the two from
+  // disagreeing about which way a slide points.
+  describe('negative cases', () => {
+    it('reports no slip below the speed floor — an atan2 near the origin is noise, not a slide', () => {
+      expect(planarMotion([0, 0, 0, 1], [0.2, 0.1, 0]).slipAngle).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('splits a velocity into the car own axes and signs the slip toward its right', () => {
+      const motion = planarMotion([0, 0, 0, 1], [4, 20, 0]); // level, facing +Y, drifting to its right
+
+      expect(motion.heading).toBeCloseTo(0, 12);
+      expect(motion.speed).toBeCloseTo(20, 12);
+      expect(motion.speedLateral).toBeCloseTo(4, 12);
+      expect(motion.slipAngle).toBeCloseTo(Math.atan2(4, 20), 12);
+    });
+
+    it('agrees with the frame a capture records — the camera and a capture cannot diverge', () => {
+      const sampleAt = sample({ linvel: [4, 20, 0] });
+      const frame = computeFrame(sampleAt, null, DT, 0);
+      const motion = planarMotion(sampleAt.orientation, sampleAt.linvel);
+
+      expect(motion.slipAngle).toBe(frame.slipAngle);
+      expect(motion.speed).toBe(frame.speed);
+      expect(motion.heading).toBe(frame.heading);
     });
   });
 });
