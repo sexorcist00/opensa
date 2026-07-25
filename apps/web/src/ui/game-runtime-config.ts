@@ -28,7 +28,11 @@ export function createGameRuntimeConfig(): Config {
     // interpolation, plan 080/03) — a continuous focus, so the spring smooths real motion, not the
     // fixed-step saw. Turn all three to 0 to go back to a rigid attach.
     camera: {
-      collisionMinDistance: 1.6,
+      // Collision is VEHICLE-ONLY (field verdict): on foot the camera slides up the wall as it did before
+      // collision shipped — capping the on-foot distance pulled it through the wall or below the near plane
+      // in tight spots (porches, doorways), which read worse than the slide. In a car it caps the (size-based)
+      // distance so a car parked against a wall doesn't let the camera reverse through it.
+      collisionMinDistance: 0,
       collisionRadius: 0.35,
       collisionReleaseTime: 0.4,
       collisionWhiskerAngle: 0.26,
@@ -58,6 +62,7 @@ export function createGameRuntimeConfig(): Config {
       settleEpsilon: 0.03,
       teleportSnapDistance: 20,
       turnThreshold: 0.9,
+      vehicleDistanceScale: 2,
       verticalLagTime: 0.28,
       yawLagTime: 0.25,
       zoomLambda: 8,

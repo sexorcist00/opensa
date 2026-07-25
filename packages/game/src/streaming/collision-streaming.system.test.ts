@@ -16,7 +16,7 @@ function breakableProp(key: string, at: readonly [number, number, number]): Mode
 function config(collisionDrawDistance: number): Config {
   return {
     camera: {
-      collisionMinDistance: 1.6,
+      collisionMinDistance: 0,
       collisionRadius: 0.35,
       collisionReleaseTime: 0.4,
       collisionWhiskerAngle: 0.26,
@@ -46,6 +46,7 @@ function config(collisionDrawDistance: number): Config {
       settleEpsilon: 0.03,
       teleportSnapDistance: 20,
       turnThreshold: 0.9,
+      vehicleDistanceScale: 2,
       verticalLagTime: 0.28,
       yawLagTime: 0.25,
       zoomLambda: 8,

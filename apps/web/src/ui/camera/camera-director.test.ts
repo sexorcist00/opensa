@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { type CameraProbe } from './camera-collision';
 import {
   type CameraSnapshot,
   createRigState,
@@ -27,6 +28,7 @@ const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
   mode: 'foot',
   pan: null,
   settling: false,
+  vehicleDistance: null,
   walkKeys: new Set(),
   zoomSteps: 0,
   ...over,
@@ -423,6 +425,41 @@ describe('stepCamera — composition (plan 080/03)', () => {
 
       expect(state.yaw).toBeCloseTo(1 + Math.PI, 1);
       expect(state.lookAhead.z).toBe(0); // still no lean — that is 05
+    });
+
+    it('eases the distance to the car size while seated, and back on foot', () => {
+      const state = smoothState();
+      // A car wanting distance 12 (bigger than the on-foot 7): the live distance glides up to it.
+      for (let frame = 0; frame < 240; frame += 1) {
+        stepCamera(state, snapshot({ mode: 'vehicle', vehicleDistance: 12 }), CONFIG);
+      }
+      expect(state.distance).toBeCloseTo(12, 1);
+
+      // Out of the car, it eases back to the on-foot zoom target (7).
+      for (let frame = 0; frame < 240; frame += 1) {
+        stepCamera(state, snapshot(), CONFIG);
+      }
+      expect(state.distance).toBeCloseTo(7, 1);
+    });
+
+    it('caps the car distance at a wall (collision), and never on foot', () => {
+      const wall: CameraProbe = () => 3; // a wall 3 m behind the look point
+
+      // On foot the wall is ignored — the distance holds at the zoom target.
+      const foot = smoothState();
+      for (let frame = 0; frame < 120; frame += 1) {
+        stepCamera(foot, snapshot(), CONFIG, wall);
+      }
+      expect(foot.distance).toBeCloseTo(7, 1);
+
+      // In the car the same wall caps the (size 12) distance at 3.
+      const car = smoothState();
+      let camera = stepCamera(car, snapshot({ mode: 'vehicle', vehicleDistance: 12 }), CONFIG, wall);
+      for (let frame = 0; frame < 120; frame += 1) {
+        camera = stepCamera(car, snapshot({ mode: 'vehicle', vehicleDistance: 12 }), CONFIG, wall);
+      }
+      const orbit = Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]);
+      expect(orbit / Math.cos(car.pitch)).toBeCloseTo(3, 1);
     });
   });
 });

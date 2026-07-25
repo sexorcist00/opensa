@@ -120,14 +120,15 @@ describe('cameraControlsFor', () => {
         expect(keys).toContain(key); // the 03 composition channels
       }
       for (const key of [
+        'vehicleDistanceScale',
         'collisionRadius',
         'collisionMinDistance',
         'collisionReleaseTime',
         'collisionWhiskerAngle',
       ] as const) {
-        expect(keys).toContain(key); // the 04 collision channels
+        expect(keys).toContain(key); // the 04 collision channels + the car-distance scale
       }
-      expect(keys).toHaveLength(21);
+      expect(keys).toHaveLength(22);
     });
   });
 });

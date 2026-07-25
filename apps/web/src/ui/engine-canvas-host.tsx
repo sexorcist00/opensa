@@ -1180,6 +1180,7 @@ async function boot(
       mode: cameraModeOf(rig.flyEye !== null, seatedCar !== null),
       pan: pendingInput.pan,
       settling: vehicles?.isSettling() ?? false,
+      vehicleDistance: vehicleFollowDistance(seatedCar, config.camera.vehicleDistanceScale),
       walkKeys: flyKeys,
       zoomSteps: pendingInput.zoom,
     };
@@ -1306,10 +1307,6 @@ async function boot(
   });
 }
 
-/**
- * Roll the occupied car 180° about its OWN forward axis and lift it 1.5 m (the debugger's "flip vehicle" —
- * prod's implementation, with the quaternion algebra written out so the host keeps its three-free math).
- */
 /** Which rig frames this frame: a detached eye wins over a seat, a seat over the on-foot follow. */
 function cameraModeOf(flying: boolean, seated: boolean): CameraSnapshot['mode'] {
   if (flying) {
@@ -1504,4 +1501,13 @@ function probeCenterOf(enabled: boolean, focus: readonly [number, number, number
 /** GTA Z-up point → engine Y-up: (x, y, z) → (x, z, −y). */
 function toEngine(gta: readonly [number, number, number]): [number, number, number] {
   return [gta[0], gta[2], -gta[1]];
+}
+
+/**
+ * Roll the occupied car 180° about its OWN forward axis and lift it 1.5 m (the debugger's "flip vehicle" —
+ * prod's implementation, with the quaternion algebra written out so the host keeps its three-free math).
+ */
+/** The follow distance a seated car wants: its LENGTH (2·halfExtent.y) × the config scale, or null on foot. */
+function vehicleFollowDistance(car: null | { halfExtents: readonly number[] }, scale: number): null | number {
+  return car ? 2 * car.halfExtents[1] * scale : null;
 }

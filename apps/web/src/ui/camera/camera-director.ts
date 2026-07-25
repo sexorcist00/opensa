@@ -89,6 +89,9 @@ export interface CameraSnapshot {
   /** A scripted enter/exit is mid-sequence: hold auto-center off (the steered swing to the target still
    *  plays) so the camera does not chase the ped's approach-run and climb twitches. */
   settling: boolean;
+  /** The follow distance a seated car wants (its length × `vehicleDistanceScale`), or null on foot. The live
+   *  distance eases to it, and collision caps it. */
+  vehicleDistance: null | number;
   /** Fly only: the movement keys held this frame ({@link FLY_KEYS}). */
   walkKeys: ReadonlySet<string>;
   /** Wheel notches this frame: + away from the user (zoom out / dolly back), − toward it. */
@@ -167,9 +170,10 @@ export function stepCamera(
   steerYawChannel(state, config, snapshot.dt);
   const forward = forwardFrom(state.yaw, state.pitch);
   applyZoom(state, snapshot, config, forward);
-  state.distance = state.legacy
-    ? state.distanceTarget
-    : damp(state.distance, state.distanceTarget, config.zoomLambda, snapshot.dt);
+  // In a car the distance follows the car's size (bigger car, further out); on foot it follows the wheel
+  // zoom. Either way the live distance eases toward it (a spun wheel or a fresh car both glide).
+  const distanceTarget = snapshot.vehicleDistance ?? state.distanceTarget;
+  state.distance = state.legacy ? distanceTarget : damp(state.distance, distanceTarget, config.zoomLambda, snapshot.dt);
   if (snapshot.mode === 'fly') {
     stepFlyRig(state, snapshot, forward);
     // A detached eye owns its own position; the follow point must not fly across the map when it re-attaches.
@@ -211,21 +215,22 @@ export function stepCamera(
       ? stepLookAhead(state.lookAhead, velocity.x, velocity.z, config, snapshot.dt)
       : stepLookAhead(state.lookAhead, 0, 0, config, snapshot.dt);
   const lookPoint: [number, number, number] = [target[0] + ahead.x, target[1], target[2] + ahead.z];
-  // Collision (plan 04): cap the distance so the eye clears geometry between the look point and the eye. The
-  // eye sits at `lookPoint − forward · distance`, so the cast runs from the look point along `−forward`. Only
-  // the follow rig collides — a detached fly eye flies through geometry by design, and the bench is bypassed.
-  const collideDistance =
-    state.legacy || state.flyEye || snapshot.bench
-      ? state.distance
-      : resolveCollision(
-          state.collision,
-          lookPoint,
-          [-forward[0], -forward[1], -forward[2]],
-          state.distance,
-          config,
-          probe,
-          snapshot.dt,
-        );
+  // Collision (plan 04) is VEHICLE-ONLY (field verdict): on foot the camera slides up the wall as it always
+  // did — capping the distance in tight spots (porches, doorways) pulled it through the wall or below the
+  // near plane, which read worse. In a car it caps the size-based distance so a car against a wall can't
+  // reverse the camera through it. A scripted enter/exit skips it (the pull-in read as a jump — just centre).
+  const collides = snapshot.mode === 'vehicle' && !state.legacy && !snapshot.bench && !snapshot.settling;
+  const collideDistance = collides
+    ? resolveCollision(
+        state.collision,
+        lookPoint,
+        [-forward[0], -forward[1], -forward[2]],
+        state.distance,
+        config,
+        probe,
+        snapshot.dt,
+      )
+    : state.distance;
 
   const camera = resolveCamera({
     aspect: snapshot.aspect,
@@ -238,12 +243,9 @@ export function stepCamera(
     // composition leans toward travel while the orbit geometry the collision layer defends is untouched.
     target: lookPoint,
   });
-  // Floor guard: a steep down-pitch on a slope or a raised porch otherwise buries the eye and shows skybox.
-  if (state.legacy || state.flyEye || snapshot.bench) {
-    return camera;
-  }
 
-  return { ...camera, eye: guardFloor(camera.eye, groundProbe) };
+  // Floor guard rides with vehicle collision (a car under a bridge / on a ramp): lift the eye off the ground.
+  return collides ? { ...camera, eye: guardFloor(camera.eye, groundProbe) } : camera;
 }
 
 /** Mouse look: raw pixel deltas → damped yaw/pitch, clamped per mode. Manual look always wins (036's rule). */

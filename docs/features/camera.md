@@ -63,14 +63,19 @@ ON FOOT only for now (the vehicle versions are plan 05):
   is framed from behind at boot, not nose-to-nose; `steerYaw` (vehicle entry/exit) takes a facing and
   applies the same `yawBehind`.
 
-**Collision** (plan 080/04, behaviour #9): the eye never sits behind a wall. A sphere cast (radius
-`collisionRadius`, covering the near plane) sweeps from the look point toward the eye, plus two whiskers at
-±`collisionWhiskerAngle` so the pull-in starts before a wall edge crosses screen centre. Response is
-asymmetric — snap IN, ease OUT over `collisionReleaseTime`. It CAPS the distance (the chosen zoom is restored
-after the occlusion) and never pulls closer than `collisionMinDistance` (a wall shoves the camera in, not
-INTO the ped). A floor guard lifts the eye to `groundBelow(eye) + 0.3` so a steep down-pitch on a slope or
-porch can't bury it in skybox. Casts run against the one Rapier world (static geometry + cars + props all
-occlude), excluding the camera's own subject; ~4 casts/frame, free at this collider density.
+**Vehicle distance** (plan 080/05-lite): a seated car frames further out the bigger it is — its length
+(2·halfExtent.y) × `vehicleDistanceScale` (default 2). The live distance eases to it (a fresh car glides
+out, not snaps), and eases back to the on-foot zoom on exit. Collision caps it.
+
+**Collision** (plan 080/04, behaviour #9) is **VEHICLE-ONLY** (field verdict). On foot the camera slides up
+the wall as it did before collision shipped — capping the distance in tight spots (porches, doorways) pulled
+it through the wall or below the near plane, which read worse than the slide. In a car a sphere cast (radius
+`collisionRadius`, covering the near plane) from the look point along −forward + two whiskers at
+±`collisionWhiskerAngle` caps the size-based distance, so a car parked against a wall can't reverse the
+camera through it. Response is asymmetric — snap IN, ease OUT over `collisionReleaseTime`; a floor guard
+lifts the eye to `groundBelow(eye) + 0.3` (a car under a bridge / on a ramp). Casts run against the one
+Rapier world, excluding the car body; ~4 casts/frame, free. `collisionMinDistance` is 0 by default (a
+positive value pushes the camera behind a wall closer than it, so the slide wins there too).
 
 **Modes**
 

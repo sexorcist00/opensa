@@ -85,6 +85,9 @@ export interface CameraConfig {
   /** A heading change faster than this (radians/second) swings the camera behind the new direction. Walking
    *  straight never reaches it, so a framing the player chose survives a straight run. */
   turnThreshold: number;
+  /** In a car the follow distance is the car's LENGTH × this (a bus frames further out than a hatchback).
+   *  Collision then caps it, so a car against a wall doesn't push the camera through. */
+  vehicleDistanceScale: number;
   /** How long the look point takes to follow the focus VERTICALLY (seconds). Slower than the planar channel
    *  on purpose — stairs, curbs and jump arcs must not jolt the horizon. */
   verticalLagTime: number;

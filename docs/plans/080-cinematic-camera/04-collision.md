@@ -102,6 +102,23 @@ probe boundary only.
 `ls-noon` with collision on: **120 fps / 8.334 ms / p95 10 / draws 1184** — vsync-capped, GPU pass 2.877 ms,
 i.e. the per-frame casts are free (Rapier ray at this collider density is trivial). Suite 2650 green.
 
-**Field-checked headless**: walking into the house wall pulls the camera tight to the ped (no through-wall),
-the porch no longer shows skybox (floor guard). Owed to the user's own field round: interiors/underpasses,
-back-to-wall orbit, the recenter-vs-collision interaction, and the car-entry min-distance read.
+### 2026-07-25 — field round: collision made VEHICLE-ONLY
+
+The user's field round rejected on-foot collision outright: capping the on-foot distance pulled the camera
+THROUGH a wall (a `collisionMinDistance` bigger than the wall gap puts the eye behind it) or below the near
+plane in tight spots (porches, doorways) — both read worse than the pre-collision slide, where the camera
+just rides the fixed distance up the wall. Verdict: **on foot the camera slides, no collision.**
+
+- Collision now runs ONLY in `mode === 'vehicle'` (and not during a scripted enter/exit — the pull-in read
+  as a jump; the entry just centres behind). `collisionMinDistance` defaults to 0, `collisionRadius` stays
+  0.35 for the car. The floor guard rides with vehicle collision (a car under a bridge / on a ramp).
+- Where collision earns its keep is the car: paired with the new **size-based vehicle distance** (the car's
+  length × `vehicleDistanceScale`, default 2 — a bus frames further than a hatchback; the live distance
+  EASES to it, and back to the on-foot zoom on exit), the cast caps that distance so a car parked against a
+  wall can't reverse the camera through it. That is exactly the user's ask: "габариты × 2, but the wall
+  limits it".
+- Enter/exit: collision suspended during `settling` (only the centre-behind swing plays, no pull-in jump).
+
+Field-checked headless: on-foot at the porch the camera sits at a normal distance and slides on the wall (no
+skybox, no through-wall); the size-based car distance eases in. Suite 2652 green. Owed to the user's field
+round: the car-against-wall cap, and the car-size framing feel.
