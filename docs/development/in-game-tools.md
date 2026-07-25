@@ -29,6 +29,14 @@ multi-level menu:
 flies with the **arrow keys** + **mouse** look. It only moves the camera (rendering and the rest of the
 game are untouched). Opening the debugger (F2) leaves fly mode.
 
+**The chrome steps out of the shot.** Entering by K+M hides the perf readout, the debugger panel (if it was
+open), the "Click to play" button and the Fullscreen button; leaving restores exactly what was there — the
+debugger is SUPPRESSED, not closed, so it comes back on the same screen with the same state. Two deliberate
+exceptions: a running `?soak` keeps its status line (a soak must never be silently unobserved), and the
+debugger's OWN fly toggle and the map inspector keep the panel visible, because a tool you fly with is
+useless once its panel is gone. Only the K+M gesture is treated as "photo" (the `fly-camera` event carries
+the flag).
+
 Diagnostics logging is off by default; set `showLogs` in the `canvas-host.tsx` config to
 `'debug' | 'log' | 'warn' | 'error'` to stream gated, typed `log` events to the console.
 

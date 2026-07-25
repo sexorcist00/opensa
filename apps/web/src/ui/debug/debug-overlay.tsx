@@ -260,6 +260,7 @@ export function DebugOverlay({
   capabilities = ALL_DEBUG_CAPABILITIES,
   game,
   mapGame,
+  suppressed = false,
   teleports,
 }: {
   actions: DebugActions;
@@ -271,6 +272,9 @@ export function DebugOverlay({
   game: DebugGame;
   /** The Map screen's wider host surface — omitted by a host that cannot drive the map viewer. */
   mapGame?: MapGame;
+  /** Hide the panel WITHOUT closing it — the photo camera takes the screen, and leaving it must give the
+   *  debugger back exactly as it was. Suppressing rather than closing is what keeps that promise. */
+  suppressed?: boolean;
   teleports: Teleport[];
 }): null | ReactElement {
   const menu = menuFor(capabilities, __DEBUGGER_HIDE__);
@@ -337,22 +341,24 @@ export function DebugOverlay({
     setFlying(next);
   }, [actions]);
 
-  // F2 toggles the panel.
+  // F2 toggles the panel. While SUPPRESSED it does nothing here: the host reads the same key to leave the
+  // photo camera, and the panel reappearing in the state the player left it is the point of suppressing.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent): void {
-      if (e.key === 'F2') {
-        e.preventDefault();
-        if (visible) {
-          close();
-        } else {
-          setVisible(true);
-        }
+      if (e.key !== 'F2' || suppressed) {
+        return;
+      }
+      e.preventDefault();
+      if (visible) {
+        close();
+      } else {
+        setVisible(true);
       }
     }
     window.addEventListener('keydown', handleKeyDown);
 
     return (): void => window.removeEventListener('keydown', handleKeyDown);
-  }, [visible, close]);
+  }, [visible, close, suppressed]);
 
   // Keep the shown coords live while the Position screen displays them.
   useEffect(() => {
@@ -387,7 +393,7 @@ export function DebugOverlay({
     return (): void => clearInterval(id);
   }, [actions, visible, screen]);
 
-  if (!visible) {
+  if (!visible || suppressed) {
     return null;
   }
 

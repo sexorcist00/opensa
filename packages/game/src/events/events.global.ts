@@ -7,7 +7,10 @@ import type { City } from '../zones/city';
 export interface GameEvents {
   /** Player moved into a different city (Los Santos / San Fierro / Las Venturas / Countryside). */
   city: { city: City };
-  'fly-camera': { enabled: boolean };
+  /** The detached fly camera changed state. `photo` marks the immersive PHOTO gesture (the K+M chord) as
+   *  opposed to the debugger driving the same camera — only the photo gesture takes the chrome off the
+   *  screen, because the map inspector needs its panel while it flies. */
+  'fly-camera': { enabled: boolean; photo?: boolean };
   'game-state': { state: GameState };
   loaded: void;
   loading: { fraction: number };

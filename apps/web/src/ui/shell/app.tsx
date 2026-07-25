@@ -30,6 +30,8 @@ export function App(): ReactElement {
   const { pause, resume } = boot;
   // null = probe in flight (resolves in ms, well before the folder pick).
   const [webGpuOk, setWebGpuOk] = useState<boolean | null>(null);
+  /** The photo (fly) camera takes the screen — the shell's own chrome steps out of the shot. */
+  const [photoMode, setPhotoMode] = useState(false);
 
   // Count the visit (no-op unless VITE_GA_ID is set).
   useEffect(() => {
@@ -91,6 +93,7 @@ export function App(): ReactElement {
             <GameCanvas
               fs={boot.fs}
               gameId={boot.state.game}
+              onPhotoMode={setPhotoMode}
               onWorldReady={boot.worldReady}
               pakSource={boot.pakSource}
               paused={phase === 'paused'}
@@ -142,7 +145,7 @@ export function App(): ReactElement {
 
       {phase === 'playing' || phase === 'paused' ? <GameHint /> : null}
 
-      {fullscreen.isFullscreen ? null : (
+      {fullscreen.isFullscreen || photoMode ? null : (
         <button className="sa-fullscreen-btn" onClick={fullscreen.toggle} type="button">
           ⛶ Fullscreen
         </button>

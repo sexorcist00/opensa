@@ -144,7 +144,10 @@ either fell BEHIND the wall or stalled, both worse. Revisit if a real pull-in po
   orbit, wheel dolly (also altitude-scaled, floored at 2 u above ground), top-down snap on activation. Fly
   pitch reaches `TOP_DOWN_PITCH` (just short of straight down — a vertical forward has no screen basis),
   lower than gameplay may look. Fly opts OUT of collision, auto-center/look-ahead and additive motion by
-  construction.
+  construction. Entering it with **K+M** also takes the UI chrome off the screen (perf readout, debugger,
+  Click-to-play, Fullscreen) and restores it on exit — see
+  [in-game-tools.md](../development/in-game-tools.md); the debugger driving the same camera does NOT hide
+  anything, which is why the `fly-camera` event carries a `photo` flag rather than just `enabled`.
 
 **Field of view** is a director OUTPUT (`CameraState.fovYRad`, default π/3) — the projection is rebuilt from
 it every frame, and cursor picking in the map viewer unprojects through the SAME value the frame was

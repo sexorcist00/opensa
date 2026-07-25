@@ -94,6 +94,8 @@ import { loadCityBoxes, loadGxt, loadInfoZones } from './zone-data';
 interface EngineCanvasHostProps {
   fs: AssetFileSystem;
   gameId: GameId;
+  /** The photo (fly) camera opened or closed — the shell hides its own chrome for it. */
+  onPhotoMode?: (enabled: boolean) => void;
   onWorldReady?: () => void;
   /** Folder mode: the picked install's world-pak source (opensa/ inside it). null/absent ⇒ HTTP mode, world
    *  from `?src=` or `public/pak-map`. The loading MODE selects the world — folder mode never reads public. */
@@ -130,6 +132,7 @@ let debugRef: null | { actions: DebugActions; buildTime?: string; game: DebugGam
 export function EngineCanvasHost({
   fs,
   gameId,
+  onPhotoMode,
   onWorldReady,
   pakSource = null,
   paused = false,
@@ -138,6 +141,8 @@ export function EngineCanvasHost({
   const [hudGame, setHudGame] = useState<HudGame | null>(hudGameRef);
   const [debug, setDebug] = useState(debugRef);
   const [locked, setLocked] = useState(false);
+  /** The photo (fly) camera owns the screen: every piece of chrome hides for it and comes back on exit. */
+  const [photoMode, setPhotoMode] = useState(false);
   hostState.paused = paused;
 
   // Mouse capture (pointer lock): the look uses movementX/Y while locked, so the player needs an
@@ -148,6 +153,21 @@ export function EngineCanvasHost({
 
     return (): void => document.removeEventListener('pointerlockchange', onChange);
   }, []);
+
+  // The photo camera announces itself on the game's event bus (the HUD already listens on the same one),
+  // so the chrome follows it without the host loop knowing anything about React.
+  useEffect(() => {
+    if (!hudGame) {
+      return;
+    }
+
+    return hudGame.events.on('fly-camera', (e) => {
+      // Leaving ALWAYS restores the chrome, whichever way it was left (K+M again, F2, or a pause).
+      const hide = e.enabled && e.photo === true;
+      setPhotoMode(hide);
+      onPhotoMode?.(hide);
+    });
+  }, [hudGame, onPhotoMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -173,7 +193,7 @@ export function EngineCanvasHost({
   return (
     <>
       <canvas ref={canvasRef} style={{ display: 'block', height: '100%', width: '100%' }} />
-      {hudGame && !locked && !paused ? (
+      {hudGame && !locked && !paused && !photoMode ? (
         <button className="sa-capture" onClick={capture} type="button">
           Click to play
         </button>
@@ -186,6 +206,7 @@ export function EngineCanvasHost({
           capabilities={ENGINE_DEBUG_CAPABILITIES}
           game={debug.game}
           mapGame={debug.mapGame}
+          suppressed={photoMode}
           teleports={GAME_CONFIG[gameId].teleports ?? []}
         />
       ) : null}
@@ -418,6 +439,8 @@ async function boot(
   let dragging = false;
   /** Map-viewer state (074/22): a click PICKS instead of grabbing the pointer, and the mapper is resident. */
   let mapViewer = false;
+  /** The photo gesture (K+M) is on — the loop hides the perf readout with the rest of the chrome. */
+  let photoCamera = false;
   let selectedPlacement: null | number = null;
   let hiddenPlacements = 0;
   /**
@@ -531,10 +554,11 @@ async function boot(
   const flyKeys = new Set<string>();
   /** Enter/leave the photo camera. Entering seeds the eye from the live camera (no jump); the player entity
    *  is untouched either way. The HUD hides itself on the shared `'fly-camera'` event, exactly as in prod. */
-  const setFlyMode = (on: boolean): void => {
+  const setFlyMode = (on: boolean, photo = false): void => {
+    photoCamera = on && photo;
     setFlyEye(rig, on ? [cameraEye[0], cameraEye[1], cameraEye[2]] : null);
     flyKeys.clear();
-    events.emit('fly-camera', { enabled: on });
+    events.emit('fly-camera', { enabled: on, photo });
   };
   /**
    * The map viewer renders WITHOUT fog (field check, 2026-07-20).
@@ -565,7 +589,7 @@ async function boot(
   const photoChord = createChordWatcher('KeyK', 'KeyM');
   window.addEventListener('keydown', (event) => {
     if (photoChord.down(event.code)) {
-      setFlyMode(rig.flyEye === null);
+      setFlyMode(rig.flyEye === null, true); // the photo gesture: the chrome steps out of the shot
     }
     if (event.key === 'F2' && rig.flyEye) {
       setFlyMode(false); // entering the debugger leaves the photo camera (prod behaviour)
@@ -1312,7 +1336,9 @@ async function boot(
     }
 
     // A running soak keeps the HUD up whatever the toggle says — its verdict is READ OFF the HUD.
-    const showHud = perfHud || soakStatus !== '';
+    // The photo camera is for looking at the world — the perf readout hides with the rest of the chrome and
+    // comes straight back on exit (a running soak still overrides, it must never be silently unobserved).
+    const showHud = (perfHud && !photoCamera) || soakStatus !== '';
     if (hud.style.display !== (showHud ? 'block' : 'none')) {
       hud.style.display = showHud ? 'block' : 'none';
     }
