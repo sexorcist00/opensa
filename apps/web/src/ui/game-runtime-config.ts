@@ -33,6 +33,8 @@ export function createGameRuntimeConfig(): Config {
       // the NEAR-PLANE radius — a wall closer than that pulls the eye up to the surface (it may sit inside the
       // ped for a frame) rather than sliding BEHIND the wall, which reads far worse. Field-accepted stopping
       // point: the slide can clip the ped a little, but it never falls through the wall or stalls.
+      bobAmplitude: 0.05,
+      bobCyclesPerMetre: 0.7,
       collisionMinDistance: 0.5,
       collisionRadius: 0.35,
       collisionReleaseTime: 0.4,
@@ -52,6 +54,8 @@ export function createGameRuntimeConfig(): Config {
       followZoomMin: 4,
       inputSmoothTime: 0.03,
       lagMaxDistance: 1.2,
+      landingDipFullSpeed: 8,
+      landingDipScale: 0.06,
       lookAheadDistance: 0.8,
       lookAheadFullSpeed: 7,
       lookAheadTime: 0.45,
@@ -62,8 +66,12 @@ export function createGameRuntimeConfig(): Config {
       positionLagTime: 0.12,
       recenterDelaySec: 2,
       recenterRate: 1.6,
+      reducedMotion: false,
       sensitivity: 0.004,
       settleEpsilon: 0.03,
+      shakeImpactForce: 250000,
+      shakeScale: 0.08,
+      sprintFovKick: 0.04,
       teleportSnapDistance: 20,
       turnThreshold: 0.9,
       vehicleCollisionReleaseTime: 0.6,

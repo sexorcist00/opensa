@@ -56,6 +56,8 @@ export class VehicleDamageSystem implements System {
   private readonly dir = new Vector3();
   private readonly falling: FallingPart[] = [];
   private readonly logger: Logger;
+  /** Hardest contact force per body this frame — see {@link peakImpact}. */
+  private readonly peakForce = new Map<number, number>();
   private readonly physics: PhysicsWorld;
   private readonly quat = new Quaternion();
   private readonly vehicles: DamageVehicle[] = [];
@@ -74,6 +76,18 @@ export class VehicleDamageSystem implements System {
     });
   }
 
+  /**
+   * The hardest contact force this body took in the last {@link update} (0 = none) — the camera's impact
+   * shake reads it (plan 080/06).
+   *
+   * It lives here because `physics.takeImpacts()` DRAINS: a second listener would race this one for the same
+   * events and one of them would see nothing. Note this is every contact, not only the `STRONG_HIT` ones
+   * that damage a panel — the camera reacts to kerbs and scrapes the bodywork shrugs off.
+   */
+  peakImpact(body: number): number {
+    return this.peakForce.get(body) ?? 0;
+  }
+
   remove(body: number): void {
     const index = this.vehicles.findIndex((v) => v.body === body);
     if (index >= 0) {
@@ -85,7 +99,9 @@ export class VehicleDamageSystem implements System {
     // One state change per part per frame: a multi-contact crash shouldn't deform AND
     // detach the same panel in the same instant.
     const touched = new Set<VehiclePartInfo>();
+    this.peakForce.clear();
     for (const impact of this.physics.takeImpacts()) {
+      this.recordPeak(impact);
       this.handleImpact(impact, touched);
     }
     this.advanceFalling(delta);
@@ -184,6 +200,15 @@ export class VehicleDamageSystem implements System {
     }
 
     return best;
+  }
+
+  /** Keep the hardest force per body for this frame. */
+  private recordPeak(impact: Impact): void {
+    for (const body of [impact.bodyA, impact.bodyB]) {
+      if (body !== null && impact.force > (this.peakForce.get(body) ?? 0)) {
+        this.peakForce.set(body, impact.force);
+      }
+    }
   }
 }
 

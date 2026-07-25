@@ -91,6 +91,30 @@ transition a blend rather than a switch — and it is the rule plan 08's view pr
   tables blend, and every channel keeps its state across the transition — the continuity test scripts
   seat → drive → exit and asserts no cut.
 
+**Motion feel** (plan 080/06, behaviours #7 and #8) — the additive layer, applied LAST, after collision and
+the floor guard:
+
+- **Bob** phased by DISTANCE travelled, not wall time: the frequency tracks stride for free and freezes when
+  the player stops, with no threshold anywhere. Vertical at stride frequency, lateral at half (the
+  figure-eight); the amplitude damps in and out with the gait, so walk↔run eases and the phase never
+  restarts. On foot only — a car's suspension already provides the life.
+- **Landing dip**: an instant drop on the touchdown frame, recovered over 0.25 s. The look point dips half
+  as far, which pitches the frame a whisker and reads as knees bending. The edge comes from 088's real
+  `LOCOMOTION_LAND`/`HARD_LAND`/`COLLAPSE` states plus `Locomotion.fallSpeed`, not from a guessed velocity
+  sign.
+- **Impact shake**: decaying two-octave value noise at 15 Hz from a deterministic per-hit seed (no
+  `Math.random`, so a crash replays identically in a test). The trigger is
+  `VehicleDamageSystem.peakImpact(body)` — the damage system already watches collisions and
+  `physics.takeImpacts()` drains, so a second listener would race it. Every contact counts, not only the
+  panel-damaging ones.
+- **Sprint FOV kick**: a couple of degrees as a run tips into a sprint, contributed to the FOV TARGET so it
+  eases through the same damp the vehicle kick uses.
+- **Bounded, and no roll.** Each effect is capped and the SUM is capped at 0.15 m — inside the floor guard's
+  0.3 m margin and well inside collision's sphere, so the layer needs no casts of its own. Eye and look
+  point move TOGETHER (bar the dip): moving the eye alone swings the aim, which is the nauseating version.
+  **`reducedMotion`** zeroes the whole layer — one Camera-tab toggle, and every effect also has its own
+  scale.
+
 **Collision** (plan 080/04, behaviour #9): the eye never sits behind a wall directly behind the player/car,
 on foot AND in a car — the camera slides up the wall instead of passing through it. A single sphere cast
 (radius `collisionRadius`, near-plane cover) sweeps from the look point along −forward (whiskers OFF by
@@ -174,6 +198,10 @@ reproduces the pre-080 stick camera over a scripted look+zoom sequence; mode cla
 walk/pan/dolly, top-down snap; and the vehicle group — the lens widening only in a car and easing back on
 foot, the distance opening with speed and gliding back, settling behind where the car TRAVELS in a slide,
 and seat → drive → exit crossing with no cut),
+`ui/camera/camera-motion.test.ts` (the bob freezing at rest and never in a car or the air, walk→run
+continuity, the dip's depth/half-pitch/one-shot recovery, a shake replaying identically for its seed and a
+stronger hit taking over, every cap holding when all of it fires at once, rate independence, and
+`reducedMotion` zeroing the lot),
 `ui/camera/vehicle-camera.test.ts` (the drift dead-band and its fade-in, the sign of a slide, the FOV and
 distance curves incl. reverse, and that the vehicle table changes ONLY its four channels),
 `ui/camera/engine-camera.test.ts` (bench priority, cursor ray, forward convention), `ui/camera/fly-rig.test.ts`,

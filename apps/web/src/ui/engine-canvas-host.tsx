@@ -26,6 +26,12 @@ import {
 } from '@opensa/game/adapters/engine-environment-driver';
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { CharacterControllerSystem } from '@opensa/game/character/character-controller.system';
+import {
+  LOCOMOTION_COLLAPSE,
+  LOCOMOTION_GROUNDED,
+  LOCOMOTION_HARD_LAND,
+  LOCOMOTION_LAND,
+} from '@opensa/game/character/locomotion';
 import { Logger } from '@opensa/game/diagnostics/logger';
 import { Locomotion, PlayerControlled, RigidBody, Transform, Velocity } from '@opensa/game/ecs/components';
 import { createEcsWorld } from '@opensa/game/ecs/world';
@@ -975,6 +981,30 @@ async function boot(
   let lastStream: null | StreamStats = null;
   /** Last frame's engine stats — the debugger's Perf screen and the HUD read them. */
   let lastStats: null | ReturnType<Engine['frame']> = null;
+  /** The locomotion state the previous frame drew, so a landing is read as an EDGE (plan 080/06). */
+  let lastLocomotion = LOCOMOTION_GROUNDED;
+  /**
+   * The vertical impact speed of a landing that STARTED this frame, else 0.
+   *
+   * 088 gave the controller real landing states and `fallSpeed`; the camera reads the transition INTO one
+   * rather than re-deriving the touchdown from a velocity sign, which is what plan 06 assumed it would have
+   * to do. Reading the edge (not the state) is what keeps the dip a one-shot: the state lasts a while.
+   */
+  const motionSignals = (
+    seated: null | ReturnType<NonNullable<typeof vehicles>['activeVehicle']>,
+  ): { airborne: boolean; impact: number; landing: number } => ({
+    airborne: seated === null && Velocity.grounded[playerEid] !== 1,
+    impact: vehicles?.impactForce() ?? 0,
+    landing: landingEdge(),
+  });
+  const landingEdge = (): number => {
+    const state = Locomotion.state[playerEid] ?? LOCOMOTION_GROUNDED;
+    const landed = state === LOCOMOTION_LAND || state === LOCOMOTION_HARD_LAND || state === LOCOMOTION_COLLAPSE;
+    const started = landed && state !== lastLocomotion;
+    lastLocomotion = state;
+
+    return started ? Math.abs(Locomotion.fallSpeed[playerEid] ?? 0) : 0;
+  };
   // Developer readouts (074/22 phase 3.3): ON while developing, OFF in a production build; both are
   // toggled live from the debugger's Perf screen.
   let perfHud = IS_DEV;
@@ -1164,16 +1194,23 @@ async function boot(
     // the ped would judder); on foot it trails the player. Both are the INTERPOLATED render pose, so the
     // smoothed camera follows a continuous focus instead of the fixed-step saw (plan 080/03).
     const focus = seatedCar ? toEngine(seatedCar.renderPosition) : playerEngine;
+    const motion = motionSignals(seatedCar);
     syncCameraConfig();
     // The rig is one pure step over a snapshot of this frame (plan 080/01): the handlers above only
     // ACCUMULATED input, so the smoothing that lands in plan 02 sees whole frames, dt included.
     const snapshot: CameraSnapshot = {
+      // The camera's motion layer (plan 06) reads real gameplay edges, never guesses: 088 gives the
+      // controller a LANDING STATE and the touchdown's vertical speed, and the damage system already
+      // observes the crash this frame.
+      airborne: motion.airborne,
       aspect: canvas.width / Math.max(1, canvas.height),
       bench: benchCamera,
       dt,
       focus,
       // What the camera FRAMES faces this way: the ped's rate-limited heading, or the car's while seated.
       focusHeading: seatedCar ? seatedCar.heading : (Locomotion.heading[playerEid] ?? heading),
+      impactForce: motion.impact,
+      landingSpeed: motion.landing,
       look: pendingInput.look,
       mode: cameraModeOf(rig.flyEye !== null, seatedCar !== null),
       pan: pendingInput.pan,

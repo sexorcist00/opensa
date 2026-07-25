@@ -53,15 +53,15 @@ to cause discomfort, so it ships with a master off-switch and conservative defau
 
 ## Subtasks
 
-- [ ] `camera-motion.ts`: bob oscillator (distance-phased, damped amplitude), landing one-shot,
+- [x] `camera-motion.ts`: bob oscillator (distance-phased, damped amplitude), landing one-shot,
       shake generator (seeded PRNG), FOV kick; the additive combiner with the 0.15 m cap.
-- [ ] Unit tests: phase freezes at rest; amplitude continuity across walk↔run; landing edge
+- [x] Unit tests: phase freezes at rest; amplitude continuity across walk↔run; landing edge
       detection from scripted snapshots; shake decays deterministically for a fixed seed; caps
       hold under sum; `reducedMotion` zeroes everything.
-- [ ] Vehicle impact signal plumbed from the damage system's collision observation into the
-      snapshot (one number: impulse magnitude this frame).
-- [ ] Config + Camera tab: `bobAmplitude`, `bobFrequency`(k), `landingDipScale`, `shakeScale`,
-      `sprintFovKick`, `reducedMotion`.
+- [x] Vehicle impact signal plumbed from the damage system's collision observation into the
+      snapshot (one number: peak contact force this frame).
+- [x] Config + Camera tab: `bobAmplitude`, `bobCyclesPerMetre`, `landingDipScale`, `shakeScale`,
+      `sprintFovKick`, `reducedMotion` (+ the two "full at" references).
 - [ ] **Field round**: long walk (does bob read as life or as wobble?), stair runs, rooftop jumps,
       curb-hopping in a car, a deliberate wall crash. Explicitly ask for a comfort verdict, not
       only a looks verdict; tune down by default.
@@ -74,4 +74,57 @@ to cause discomfort, so it ships with a master off-switch and conservative defau
 
 ## Ledger
 
-_(append here)_
+### 2026-07-25 — code complete, AWAITING THE COMFORT FIELD ROUND
+
+**What landed** — `apps/web/src/ui/camera/camera-motion.ts`, pure, stepped by the director and applied as
+the LAST transform (after collision AND the floor guard, which is why the cap matters):
+
+- **Bob** phased by DISTANCE travelled, so the frequency tracks stride for free and freezes at a standstill
+  without any threshold logic. Vertical at stride frequency, lateral at half (the figure-eight), amplitude
+  damped in/out by gait — crossing walk↔run eases, never steps, and the phase never restarts.
+- **Landing dip**: an instant drop on the touchdown frame, recovered by `smoothDamp` over 0.25 s. The look
+  point dips HALF as far, which is what pitches the frame a whisker and reads as knees bending.
+- **Impact shake**: two-octave value noise at 15 Hz, decaying exponentially, from a deterministic per-shake
+  seed (an LCG stepped per hit — no `Math.random`, so a crash replays identically in a test). A stronger hit
+  takes over a weaker one with a fresh seed; a weaker one only adds amplitude.
+- **Sprint FOV kick**: a couple of degrees as a run tips into a sprint. It contributes to the FOV TARGET, so
+  it eases through 05's existing damp instead of getting its own channel.
+- **Caps**: each effect is bounded and the SUM is capped at `MOTION_CAP` 0.15 m — inside the floor guard's
+  0.3 m margin and well inside collision's sphere, so the layer needs no casts of its own. Proven by a test
+  that fires a crash landing at a sprint with every scale cranked to 1.
+- **No roll anywhere**, and eye + look point move TOGETHER for bob and shake: moving the eye alone swings
+  the aim, which is the nauseating version of the same effect.
+
+**Correction to this plan's §2.** It said "the controller has no landing event; the director derives the
+edge from the snapshot". That was true when 080 was written — 088 has since given the controller real
+`LOCOMOTION_LAND` / `HARD_LAND` / `COLLAPSE` states and `Locomotion.fallSpeed`. The host now reports the
+EDGE into one of those states with its impact speed, so the dip is a genuine one-shot rather than something
+inferred from a velocity sign (the same upgrade 03 made when it took `Locomotion.heading` over an atan2).
+
+**The impact signal** comes from `VehicleDamageSystem.peakImpact(body)` — the damage system already observes
+collisions, and `physics.takeImpacts()` DRAINS, so a second listener would race it and one of the two would
+see nothing. It reports every contact, not only the `STRONG_HIT` ones that damage a panel: the camera should
+react to a kerb the bodywork shrugs off.
+
+**First-guess defaults (the comfort round tunes these DOWN by default)**
+
+| field                 | value     | why this number                                                        |
+| --------------------- | --------- | ----------------------------------------------------------------------- |
+| `bobAmplitude`        | 0.05 m    | The plan's run figure. This is the knob that reads as life at 0.05 and as seasickness at 0.15. |
+| `bobCyclesPerMetre`   | 0.7       | ~1.4 m per bob cycle — a stride. (The plan called this `bobFrequency`; phasing by distance made a cycles-per-metre name the honest one.) |
+| `landingDipScale`     | 0.06 m    | The plan's guess for a normal jump; hard-capped at 0.12 internally.     |
+| `landingDipFullSpeed` | 8 u/s     | The fall speed that earns the full dip; 2x it is the clamp.             |
+| `shakeScale`          | 0.08 m    | Under the plan's 0.1 cap — a crash should jolt, not blind.              |
+| `shakeImpactForce`    | 250 000 N | Between the damage system's own measurements (light ~207k, crash ~377k). |
+| `sprintFovKick`       | 0.04 rad  | ~2.3°, the plan's "2-3°".                                               |
+| `reducedMotion`       | false     | Effects on by default; the master switch is a Camera-tab toggle.        |
+
+**Measured** (`docs/benchmarks/opensa-engine/2026-07-25-headless-080-camera-director.json`, microbench row
+080/06): `stepCamera` **0.568 µs mean / 0.620 p95 on foot with the layer live**, against **0.399 µs with
+`reducedMotion` on** — the layer costs **+0.17 µs (+42%)**, or +0.15 µs in a car. Absolute 0.0006 ms/frame.
+Camera suite 153 green (+17), apps/web + packages/game 755 green; `tsc` + eslint clean.
+
+**Owed**: the COMFORT field round — a long walk (does the bob read as life or as wobble?), stair runs,
+rooftop jumps, curb-hopping in a car and a deliberate wall crash. The plan asks for a comfort verdict
+explicitly, not only a looks verdict, and to tune DOWN when in doubt. Every scale is live on the Camera tab
+with `reducedMotion` as the A/B.

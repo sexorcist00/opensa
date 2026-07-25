@@ -75,6 +75,17 @@
    "footControlP95Us": 0.41,
    "vehicleTuningAloneUs": 0.061,
    "note": "NOT comparable to the 01/02/03 rows above: this trace differs (it holds turn-follow armed every step) and the snapshots are pre-built, so its FOOT control reads 0.385 where 03 recorded 0.203. The comparable figure is foot vs vehicle in the SAME run: +0.16 µs (+42%), of which the per-step tuning-table spread is 0.061 µs. Absolute cost is 0.0005 ms/frame — ~100x under plan 05's 0.05 ms budget, so the vehicle camera is not a perf question either. Stable across 3 consecutive runs (foot 0.381-0.389, vehicle 0.537-0.555)."
+  },
+  {
+   "plan": "080/06",
+   "what": "the same call with the additive motion layer live: bob, the landing dip, impact shake and the sprint FOV kick. The trace lands every 90th frame and crashes every 300th, so the one-shots are inside the measured path.",
+   "where": "node/tsx on the dev machine, 200k calls in 20 rounds after a 20k warm-up, snapshots pre-built; `reducedMotion: true` is the control (the layer is still CALLED, it just does no work)",
+   "meanUs": 0.568,
+   "p95Us": 0.62,
+   "footReducedMotionMeanUs": 0.399,
+   "vehicleMotionLiveMeanUs": 0.634,
+   "vehicleReducedMotionMeanUs": 0.486,
+   "note": "The layer costs +0.17 us on foot (+42% over the same rig with reducedMotion on) and +0.15 us in a car. Absolute 0.0006 ms/frame — the whole director is still ~1/80 of a 60 Hz frame's 1% budget. Stable across 3 consecutive runs. Same harness caveat as the 080/05 row: not comparable to the 01-03 rows, which is why the control was measured alongside."
   }
  ],
  "budget": "plan 080 ground rule 6 allows 0.1 ms p95 for the whole director (0.05 ms at the 02 stage)"

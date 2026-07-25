@@ -851,19 +851,22 @@ export function DebugOverlay({
                   />
                 </div>
               ))}
-              <label style={styles.label}>
-                <input
-                  checked={camera.followZoom}
-                  onChange={() => {
-                    const followZoom = !camera.followZoom;
-                    setCamera((prev) => ({ ...prev, followZoom }));
-                    actions.setCamera({ followZoom });
-                  }}
-                  style={styles.radio}
-                  type="checkbox"
-                />
-                <span style={camera.followZoom ? styles.optionActive : styles.option}>Wheel zoom</span>
-              </label>
+              <CameraToggle
+                checked={camera.followZoom}
+                label="Wheel zoom"
+                onToggle={(followZoom) => {
+                  setCamera((prev) => ({ ...prev, followZoom }));
+                  actions.setCamera({ followZoom });
+                }}
+              />
+              <CameraToggle
+                checked={camera.reducedMotion}
+                label="Reduced motion (no bob / dip / shake / FOV kicks)"
+                onToggle={(reducedMotion) => {
+                  setCamera((prev) => ({ ...prev, reducedMotion }));
+                  actions.setCamera({ reducedMotion });
+                }}
+              />
             </div>
           )}
 
@@ -1298,9 +1301,27 @@ export function DebugOverlay({
   );
 }
 
-/** The pak build-time stamp under the title — a small grey line, or nothing when the pak predates the field. */
 function BuildStamp({ buildTime }: { buildTime?: string }): null | ReactElement {
   return buildTime ? <div style={styles.buildTime}>build {buildTime}</div> : null;
+}
+
+/** The pak build-time stamp under the title — a small grey line, or nothing when the pak predates the field. */
+/** One boolean row on the Camera screen: a checkbox whose label lights up when it is on. */
+function CameraToggle({
+  checked,
+  label,
+  onToggle,
+}: {
+  checked: boolean;
+  label: string;
+  onToggle: (next: boolean) => void;
+}): ReactElement {
+  return (
+    <label style={styles.label}>
+      <input checked={checked} onChange={() => onToggle(!checked)} style={styles.radio} type="checkbox" />
+      <span style={checked ? styles.optionActive : styles.option}>{label}</span>
+    </label>
+  );
 }
 
 /** The Map debug screen: normals override + the map viewer (extracted to keep the panel's render simple). */

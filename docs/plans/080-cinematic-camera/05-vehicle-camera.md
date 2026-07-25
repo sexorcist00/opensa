@@ -71,6 +71,7 @@ for gameplay. Ships last, behind the field round.
       the damped `steerYaw`, so entry has swung rather than snapped since then).
 - [x] Vehicle tuning table in `CameraConfig` + Camera-tab rows (13 new sliders).
 - [ ] Look-behind key (§6 — this plan's own order: it ships after the field round).
+- [x] Field round 1: the seated distance halved, the speed ramp raised to carry it back — ACCEPTED.
 - [ ] **Field round** (drive-heavy): city corners at speed, handbrake drifts, highway top speed,
       tunnel (collision + FOV together), enter/exit repeatedly. The bench-road-cars scenes give a
       dense traffic backdrop. Freeze the two tuning tables in the ledger.
@@ -161,6 +162,10 @@ just one of them instead of two.
 Test note: the seat→drive→exit continuity case asserted an absolute per-step distance change (< 0.5 m), which
 was really a statement about the old gap. It now asserts the honest property — one step may close at most a
 QUARTER of the way to the on-foot target — so a future retune cannot break it for the wrong reason.
+
+**Field round 1 ACCEPTED (same day).** User re-drove it: the closer entry framing with the speed ramp
+earning the distance back reads right. `vehicleDistanceScale` 1 and `vehicleDistanceGain` 5 are FROZEN as
+shipped, along with everything the round did not object to.
 
 **Owed**: the rest of the DRIVE field round (city corners at speed, handbrake drifts, highway top speed, a tunnel for
 collision+FOV together, repeated enter/exit) — every default above is a first guess until the user drives

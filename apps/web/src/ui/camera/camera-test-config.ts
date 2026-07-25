@@ -8,6 +8,8 @@
 import type { CameraConfig } from '@opensa/game';
 
 export const TEST_CAMERA_CONFIG: CameraConfig = {
+  bobAmplitude: 0.05,
+  bobCyclesPerMetre: 0.7,
   collisionMinDistance: 0.5,
   collisionRadius: 0.35,
   collisionReleaseTime: 0.4,
@@ -27,6 +29,8 @@ export const TEST_CAMERA_CONFIG: CameraConfig = {
   followZoomMin: 4,
   inputSmoothTime: 0.03,
   lagMaxDistance: 1.2,
+  landingDipFullSpeed: 8,
+  landingDipScale: 0.06,
   lookAheadDistance: 0.8,
   lookAheadFullSpeed: 7,
   lookAheadTime: 0.45,
@@ -37,8 +41,12 @@ export const TEST_CAMERA_CONFIG: CameraConfig = {
   positionLagTime: 0.12,
   recenterDelaySec: 2,
   recenterRate: 1.6,
+  reducedMotion: false,
   sensitivity: 0.004,
   settleEpsilon: 0.03,
+  shakeImpactForce: 250000,
+  shakeScale: 0.08,
+  sprintFovKick: 0.04,
   teleportSnapDistance: 20,
   turnThreshold: 0.9,
   vehicleCollisionReleaseTime: 0.6,

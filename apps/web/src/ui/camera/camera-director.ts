@@ -28,7 +28,8 @@ import {
   resolveCollision,
 } from './camera-collision';
 import { createLookInput, type LookInputState, releaseLook } from './camera-input';
-import { CAMERA_FOV_Y, forwardFrom, resolveCamera } from './engine-camera';
+import { createMotion, type MotionOffset, type MotionState, stepMotion } from './camera-motion';
+import { CAMERA_FOV_Y, forwardFrom, resolveCamera, screenBasis } from './engine-camera';
 import { dollyStep, FLY_SPEED, flyStep, panStep, TOP_DOWN_PITCH, topDownEye } from './fly-rig';
 import { createFollowPoint, type FollowPointState, resetFollowPoint, stepFollowPoint } from './follow-rig';
 import { createLookAhead, type LookAheadState, stepLookAhead } from './look-ahead';
@@ -59,6 +60,8 @@ export interface CameraRigState {
   look: LookInputState;
   /** The composition offset toward travel (plan 03). */
   lookAhead: LookAheadState;
+  /** Bob / landing dip / shake / sprint-kick state (plan 06). */
+  motion: MotionState;
   pitch: number;
   /** The smoothed planar focus velocity (units/s) look-ahead and auto-center read — see {@link focusVelocity}. */
   velX: number;
@@ -72,6 +75,8 @@ export interface CameraRigState {
 
 /** Everything the director needs from the host this frame. Plain data, engine Y-up, assembled per frame. */
 export interface CameraSnapshot {
+  /** The player is off the ground — the bob damps out (a jump arc is already motion). Never true seated. */
+  airborne: boolean;
   aspect: number;
   /** A running bench owns the frame outright (the BenchPlugin contract) — the rig still steps, its output is
    *  discarded. That is the invariant keeping camera work out of ritual/soak numbers. */
@@ -82,6 +87,12 @@ export interface CameraSnapshot {
   /** Which way the framed object FACES (GTA heading radians) — `Locomotion.heading`, which is rate-limited
    *  and plant-aware, not an atan2 of the velocity (that jitters at low speed and flips on a strafe). */
   focusHeading: number;
+  /** Peak vehicle contact force this frame (N), 0 when nothing was hit — the impact shake's trigger. Read
+   *  off the damage system's own collision observation rather than a second listener. */
+  impactForce: number;
+  /** The vertical impact speed (units/s) of a landing that STARTED this frame, else 0 — plan 088's
+   *  `Locomotion.fallSpeed` at the landing edge. */
+  landingSpeed: number;
   /** Raw pointer deltas this frame, in pixels (sensitivity is the director's business, not the host's). */
   look: { x: number; y: number };
   mode: CameraMode;
@@ -123,6 +134,7 @@ export function createRigState(config: CameraConfig, yaw: number, pitch: number)
     lastFocus: null,
     look: createLookInput(),
     lookAhead: createLookAhead(),
+    motion: createMotion(),
     pitch,
     velX: 0,
     velZ: 0,
@@ -188,10 +200,6 @@ export function stepCamera(
       ? state.distanceTarget
       : vehicleDistanceForSpeed(snapshot.vehicleDistance, speed, config);
   state.distance = damp(state.distance, distanceTarget, config.zoomLambda, snapshot.dt);
-  // FOV is the other half of the speed sense (#5). On foot the target is the base lens, so leaving a car
-  // eases the widening out through the same channel instead of cutting it.
-  const fovTarget = snapshot.mode === 'vehicle' ? vehicleFovTarget(speed, config) : CAMERA_FOV_Y;
-  state.fov = damp(state.fov, fovTarget, config.vehicleFovLambda, snapshot.dt);
   if (snapshot.mode === 'fly') {
     stepFlyRig(state, snapshot, forward);
     // A detached eye owns its own position; the follow point must not fly across the map when it re-attaches.
@@ -199,6 +207,26 @@ export function stepCamera(
   }
   const [x, y, z] = snapshot.focus;
   const velocity = focusVelocity(state, snapshot, config);
+  // Additive motion (plan 06): bob, the landing dip, impact shake and the sprint FOV kick. Stepped here so
+  // it reads THIS frame's measured speed; its FOV contribution joins the target below and eases through the
+  // same damp, while its OFFSETS are applied last of all — after collision, so a bob can never push the eye
+  // through a wall.
+  const motion = stepMotion(
+    state.motion,
+    {
+      airborne: snapshot.airborne,
+      dt: snapshot.dt,
+      impact: snapshot.impactForce,
+      landing: snapshot.landingSpeed,
+      mode: snapshot.mode,
+      speed: Math.hypot(velocity.x, velocity.z),
+    },
+    config,
+  );
+  // FOV is the other half of the speed sense (#5), plus 06's sprint kick. On foot the base target is the
+  // base lens, so leaving a car eases the widening out through the same channel instead of cutting it.
+  const fovTarget = (snapshot.mode === 'vehicle' ? vehicleFovTarget(speed, config) : CAMERA_FOV_Y) + motion.fov;
+  state.fov = damp(state.fov, fovTarget, config.vehicleFovLambda, snapshot.dt);
   // Auto-center runs on foot AND in a car — the camera settles behind whatever the player is driving. Only
   // the LOOK-AHEAD lean stays on foot: a car's version is drift framing (it leans toward the SLIDE, not the
   // heading), which is plan 05's, tuned against a car's speeds. A scripted enter/exit suspends it: the
@@ -273,7 +301,12 @@ export function stepCamera(
 
   // Floor guard runs whenever the rig is attached (incl. during a car enter/exit) so a steep down-pitch on a
   // slope/porch, or a low seat, can't bury the eye and show only skybox.
-  return attached ? { ...camera, eye: guardFloor(camera.eye, groundProbe) } : camera;
+  const guarded = attached ? { ...camera, eye: guardFloor(camera.eye, groundProbe) } : camera;
+
+  // The additive layer goes on LAST — after collision AND the floor guard, which is why it must stay bounded
+  // (MOTION_CAP 0.15, inside the guard's 0.3 margin and well inside the collision sphere). A detached fly
+  // eye and a running bench are never touched: one is dragged by hand, the other owns the frame outright.
+  return attached ? applyMotion(guarded, motion, forward) : guarded;
 }
 
 /** Mouse look: raw pixel deltas → damped yaw/pitch, clamped per mode. Manual look always wins (036's rule). */
@@ -289,6 +322,32 @@ function applyLook(state: CameraRigState, snapshot: CameraSnapshot, config: Came
   // allows — not the gameplay camera's floor.
   const floor = snapshot.mode === 'fly' ? TOP_DOWN_PITCH : config.pitchMin;
   state.pitch = clamp(state.pitch - look.y * config.sensitivity, floor, config.pitchMax);
+}
+
+/**
+ * Shift the resolved camera by the motion layer's offset (plan 06).
+ *
+ * Lateral rides the camera's own right vector (a bob has to sway across the view, not along a world axis);
+ * vertical rides world up. Eye and look point take the SAME lateral and (bar the dip) the same vertical, so
+ * the frame translates instead of the aim wandering.
+ */
+function applyMotion(
+  camera: CameraState,
+  motion: MotionOffset,
+  forward: readonly [number, number, number],
+): CameraState {
+  if (motion.lateral === 0 && motion.vertical === 0 && motion.verticalTarget === 0) {
+    return camera;
+  }
+  const { right } = screenBasis(forward);
+  const dx = right[0] * motion.lateral;
+  const dz = right[2] * motion.lateral;
+
+  return {
+    ...camera,
+    eye: [camera.eye[0] + dx, camera.eye[1] + motion.vertical, camera.eye[2] + dz],
+    target: [camera.target[0] + dx, camera.target[1] + motion.verticalTarget, camera.target[2] + dz],
+  };
 }
 
 /** Wheel: dolly the free eye along the view, or move the follow zoom inside its config bounds. */

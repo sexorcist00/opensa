@@ -141,7 +141,10 @@ describe('cameraControlsFor', () => {
       ] as const) {
         expect(keys).toContain(key); // the 05 vehicle tuning table — the drive round turns these live
       }
-      expect(keys).toHaveLength(35);
+      for (const key of ['bobAmplitude', 'landingDipScale', 'shakeScale', 'sprintFovKick'] as const) {
+        expect(keys).toContain(key); // 06 motion feel (its `reducedMotion` master switch is a toggle, not a slider)
+      }
+      expect(keys).toHaveLength(42);
     });
   });
 });

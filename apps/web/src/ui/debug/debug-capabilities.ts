@@ -206,6 +206,16 @@ const CAMERA_RIG_ROWS = [
   ['driftLookBlend', 'DRIFT LEAN', 0, 1, 0.05],
   ['driftSlipDeadZone', 'DRIFT DEAD ZONE', 0, 0.5, 0.02],
   ['driftMinSpeed', 'DRIFT FROM SPEED', 0, 30, 1],
+  // 080/06 motion feel. Small numbers by design — this is the group that reads as life at one setting and
+  // as seasickness at the next, so the field round tunes DOWN by default. `reducedMotion` is the master
+  // off-switch and lives with the wheel-zoom toggle below the sliders.
+  ['bobAmplitude', 'BOB', 0, 0.15, 0.005],
+  ['bobCyclesPerMetre', 'BOB PER METRE', 0.2, 2, 0.05],
+  ['landingDipScale', 'LANDING DIP', 0, 0.2, 0.01],
+  ['landingDipFullSpeed', 'LANDING FULL AT', 2, 20, 1],
+  ['shakeScale', 'SHAKE', 0, 0.2, 0.01],
+  ['shakeImpactForce', 'SHAKE FULL AT', 50000, 600000, 25000],
+  ['sprintFovKick', 'SPRINT FOV', 0, 0.2, 0.01],
   // 080/04 collision (VEHICLE only): eye off walls, closest pull-in, release ease, whisker spread.
   ['collisionRadius', 'COLLIDE RADIUS', 0, 0.8, 0.05],
   ['collisionMinDistance', 'COLLIDE MIN', 0.5, 4, 0.1],

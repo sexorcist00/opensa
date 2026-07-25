@@ -10,6 +10,13 @@ export interface BloomConfig {
 
 /** Follow/play camera tuning (the debug overview camera is fixed top-down). */
 export interface CameraConfig {
+  /** How far the camera bobs at the run gait (world units, 0 = off). Scaled by speed and damped in/out, so
+   *  walking is a hint and stopping fades. SUBTLE is the whole art here — this is the effect that reads as
+   *  life at 0.05 and as seasickness at 0.15. */
+  bobAmplitude: number;
+  /** Bob cycles per METRE travelled. Phasing by distance (not by wall time) makes the frequency track the
+   *  stride for free, and freezes the bob when the player stands still. */
+  bobCyclesPerMetre: number;
   /** The closest collision may ever pull the eye to the look point (world units). A wall can shove the camera
    *  in, but never INTO the player — below this it stops, accepting a little wall clip over a face full of ped. */
   collisionMinDistance: number;
@@ -58,6 +65,11 @@ export interface CameraConfig {
   /** The responsiveness floor: however fast the player moves, the look point never trails the focus by more
    *  than this (world units). The player can never leave the frame. */
   lagMaxDistance: number;
+  /** The fall speed (units/s) at which the landing dip is full; faster landings are clamped at 2x it. */
+  landingDipFullSpeed: number;
+  /** How deep a full-speed landing dips the eye (world units) — the knee-bend beat. Capped internally, and
+   *  the look point dips half as far so the frame pitches down a whisker. */
+  landingDipScale: number;
   /** How far the frame leans toward where the player is heading (world units, at full speed). 0 = off. */
   lookAheadDistance: number;
   /** The speed (units/s) at which look-ahead and the idle recenter reach their full strength — the run gait,
@@ -84,10 +96,20 @@ export interface CameraConfig {
   recenterDelaySec: number;
   /** How fast the idle recenter closes on "behind the player" (per second, scaled by speed). */
   recenterRate: number;
+  /** Master off-switch for the whole additive motion layer (bob, landing dip, shake, FOV kicks) — the
+   *  comfort setting. Every effect also has its own scale for a lighter touch. */
+  reducedMotion: boolean;
   /** How far the mouse look turns the rig: radians per pixel of pointer movement. */
   sensitivity: number;
   /** Turn-follow stops once the yaw is within this of behind the player (radians). */
   settleEpsilon: number;
+  /** The contact force (N) that produces a FULL impact shake. Calibrated against the damage system's own
+   *  measurements: a light hit is ~207k, a real crash ~377k. */
+  shakeImpactForce: number;
+  /** The most an impact may shake the camera (world units, 0 = off). */
+  shakeScale: number;
+  /** How much the lens widens at a sprint (radians) — a couple of degrees whose only job is feeling faster. */
+  sprintFovKick: number;
   /** A focus jump beyond this (world units) is a TELEPORT, not movement: the rig snaps instead of flying
    *  across the map (respawn, debugger warp, vehicle entry from far away). */
   teleportSnapDistance: number;

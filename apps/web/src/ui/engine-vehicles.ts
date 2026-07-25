@@ -47,6 +47,13 @@ export interface EngineVehicles {
    * open and the car never drives — the phase machine simply never advances.
    */
   fixedUpdate(step: number): void;
+  /**
+   * The hardest contact force the DRIVEN car took this frame (N), 0 on foot or when nothing hit it — the
+   * camera's impact shake (plan 080/06). It comes from the damage system's own collision observation
+   * because `physics.takeImpacts()` drains: a second listener would race it and one of them would see
+   * nothing.
+   */
+  impactForce(): number;
   /** True while a scripted enter/exit is mid-sequence — the camera glides to its target instead of
    *  auto-centering on the ped's approach/climb twitches. */
   isSettling(): boolean;
@@ -382,6 +389,11 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       enterVehicle.fixedUpdate(step);
       // Telemetry LAST: it records the step as it ended, including the controls `drive()` just applied.
       stepTelemetry(step);
+    },
+    impactForce(): number {
+      const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
+
+      return car === null ? 0 : vehicleDamage.peakImpact(car.body);
     },
     isSettling: (): boolean => enterVehicle.isSettling(),
     register(placements: readonly VehiclePlacement[]): void {

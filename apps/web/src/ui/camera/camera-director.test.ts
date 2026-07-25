@@ -24,11 +24,14 @@ const RIGID = { ...CONFIG, inputSmoothTime: 0, zoomLambda: Number.POSITIVE_INFIN
 const rigState = (): ReturnType<typeof createRigState> => createRigState(CONFIG, Math.PI, -0.25);
 
 const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
+  airborne: false,
   aspect: 16 / 9,
   bench: null,
   dt: 1 / 60,
   focus: [10, 2, 30],
   focusHeading: 0,
+  impactForce: 0,
+  landingSpeed: 0,
   look: { x: 0, y: 0 },
   mode: 'foot',
   pan: null,
@@ -521,13 +524,14 @@ describe('stepCamera — the vehicle camera (plan 080/05)', () => {
   };
 
   describe('negative cases', () => {
-    it('never widens the lens on foot, however fast the player runs', () => {
+    it('never applies the CAR speed widening on foot — only 06 sprint kick, an order smaller', () => {
       const state = rigState();
       for (let frame = 0; frame < 240; frame += 1) {
         stepCamera(state, snapshot({ focus: [10, 2, 30 - frame], focusHeading: 0 }), CONFIG);
       }
 
-      expect(state.fov).toBe(CAMERA_FOV_Y);
+      expect(state.fov).toBeLessThanOrEqual(CAMERA_FOV_Y + CONFIG.sprintFovKick + 1e-6);
+      expect(state.fov).toBeLessThan(CAMERA_FOV_Y + CONFIG.vehicleFovKick);
     });
 
     it('does not lean the frame while driving straight — the slip channel reads zero', () => {
