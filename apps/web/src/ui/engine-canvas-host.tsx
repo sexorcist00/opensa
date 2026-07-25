@@ -42,6 +42,7 @@ import { weatherForCity } from '@opensa/game/weather/weather-zones';
 import { type CityBox, isDesertZone } from '@opensa/game/zones/city';
 import { CityZoneSystem } from '@opensa/game/zones/city-zone.system';
 import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.system';
+import { lerp } from '@opensa/math';
 import { type AssetFileSystem, gxtKeyHash, oceanFrame, parseTxd, WEATHER_NAMES } from '@opensa/renderware';
 import { parseWater } from '@opensa/renderware/parsers/text/water.parser';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';
@@ -677,6 +678,18 @@ async function boot(
 
   // Vehicles (074/08 B5 step 4): the SAME gameplay systems the three host runs — they speak VehicleHandle
   // now, so the only host-specific piece is the wiring.
+  // Render interpolation (the camera position weight, plan 080/03): physics steps at a fixed 1/60, but the
+  // frame draws in the variable loop, so the raw physics pose is a stair-step. We keep the pose from BEFORE
+  // and AFTER the last fixed step and draw `lerp(prev, cur, alpha)` where alpha is the fixed-step remainder —
+  // the drawn ped is then continuous, and the smoothed camera has a smooth focus to follow instead of a saw.
+  const prevPlayerGta: [number, number, number] = [spawn[0], spawn[1], spawn[2]];
+  const curPlayerGta: [number, number, number] = [spawn[0], spawn[1], spawn[2]];
+  /** Snap the interpolation to the live pose (teleport/respawn) so the lerp never sweeps across the jump. */
+  const resetPlayerInterpolation = (): void => {
+    prevPlayerGta[0] = curPlayerGta[0] = Transform.x[playerEid];
+    prevPlayerGta[1] = curPlayerGta[1] = Transform.y[playerEid];
+    prevPlayerGta[2] = curPlayerGta[2] = Transform.z[playerEid];
+  };
   const placePlayer = (position: [number, number, number], moveBody = true): void => {
     if (moveBody) {
       physics.teleport(RigidBody.handle[playerEid], position);
@@ -684,6 +697,7 @@ async function boot(
     Transform.x[playerEid] = position[0];
     Transform.y[playerEid] = position[1];
     Transform.z[playerEid] = position[2];
+    resetPlayerInterpolation();
   };
   let vehicles: EngineVehicles | null = null;
   try {
@@ -939,6 +953,7 @@ async function boot(
   let accumulator = 0;
   let readySent = false;
   let groundDelta = 0;
+  let renderAlpha = 1;
   let pedMs = 0;
   /** Per-frame block timers (B7·b field stall): a stall must have a NUMBER, not a theory. */
   let animMs = 0;
@@ -973,6 +988,11 @@ async function boot(
     physicsMs = 0;
     while (pending >= FIXED_STEP && steps < MAX_CATCHUP_STEPS) {
       try {
+        // Snapshot the pose from BEFORE this step so the interpolation has both ends of the last interval
+        // (the ped body is kinematic — the controller writes Transform inside fixedUpdate).
+        prevPlayerGta[0] = curPlayerGta[0];
+        prevPlayerGta[1] = curPlayerGta[1];
+        prevPlayerGta[2] = curPlayerGta[2];
         const controllerStarted = performance.now();
         controllerSystem.fixedUpdate(FIXED_STEP);
         const physicsStarted = performance.now();
@@ -982,6 +1002,8 @@ async function boot(
         // Enter/exit places the rider and DRIVES here — after the physics step, exactly where prod's Game
         // runs it. Without this the climb-in freezes mid-phase (the whole sequence lives in fixedUpdate).
         vehicles?.fixedUpdate(FIXED_STEP);
+        // Snapshot AFTER: the cars sampled their bodies in fixedUpdate, and the ped Transform is now current.
+        [curPlayerGta[0], curPlayerGta[1], curPlayerGta[2]] = viewOf();
         // Contact-force impacts are produced BY the physics step, so drain them here — one step late and a
         // hard hit's forces are already gone.
         breakables.update();
@@ -1040,9 +1062,9 @@ async function boot(
   };
 
   /** A car system throwing must not kill the frame loop — surface it in the HUD and keep walking. */
-  const tickVehicles = (delta: number): void => {
+  const tickVehicles = (delta: number, alpha: number): void => {
     try {
-      vehicles?.update(delta);
+      vehicles?.update(delta, alpha);
     } catch (error) {
       debugError ??= error instanceof Error ? error.message : String(error);
     }
@@ -1072,6 +1094,8 @@ async function boot(
     if (!hostState.paused) {
       const fixedStarted = performance.now();
       accumulator = runFixedSteps(accumulator + dt);
+      // The fraction into the NEXT fixed step: the drawn pose interpolates the last physics interval by it.
+      renderAlpha = accumulator / FIXED_STEP;
       fixedMs = performance.now() - fixedStarted;
       const collisionStarted = performance.now();
       collision.update();
@@ -1083,7 +1107,7 @@ async function boot(
       animObjects.update(animStarted / 1000, [Transform.x[playerEid], Transform.y[playerEid], Transform.z[playerEid]]);
       animMs = performance.now() - animStarted;
       const vehiclesStarted = performance.now();
-      tickVehicles(dt);
+      tickVehicles(dt, renderAlpha);
       vehiclesMs = performance.now() - vehiclesStarted;
       const previousHour = hour;
       hour = (hour + dt / (config.time.secondsPerGameMinute * 60)) % 24;
@@ -1108,7 +1132,15 @@ async function boot(
     const seatedCar = vehicles?.activeVehicle() ?? null;
     // Pose follows the RIDING car (climb-in included); the camera follows only the SEATED one.
     const ridingCar = vehicles?.ridingVehicle() ?? null;
-    const playerEngine = toEngine(gta);
+    // The DRAWN ped rides the interpolated pose (smooth at any refresh); gameplay (ground ray, heading,
+    // streaming) still uses the live `gta`. While riding, the rider is teleported onto the seat every fixed
+    // step, so the SAME snapshot interpolates the seat pose — the ped stays welded to the interpolated car.
+    const renderGta: [number, number, number] = [
+      lerp(prevPlayerGta[0], curPlayerGta[0], renderAlpha),
+      lerp(prevPlayerGta[1], curPlayerGta[1], renderAlpha),
+      lerp(prevPlayerGta[2], curPlayerGta[2], renderAlpha),
+    ];
+    const playerEngine = toEngine(renderGta);
     if (!hostState.paused) {
       const pedStarted = performance.now();
       posePlayer(gta, playerEngine, ridingCar, dt);
@@ -1123,8 +1155,9 @@ async function boot(
     lastStream = streamStats;
 
     // While seated the camera trails the CAR (the rider is teleported into the seat every frame — following
-    // the ped would judder); on foot it trails the player.
-    const focus = seatedCar ? toEngine(seatedCar.position) : playerEngine;
+    // the ped would judder); on foot it trails the player. Both are the INTERPOLATED render pose, so the
+    // smoothed camera follows a continuous focus instead of the fixed-step saw (plan 080/03).
+    const focus = seatedCar ? toEngine(seatedCar.renderPosition) : playerEngine;
     syncCameraConfig();
     // The rig is one pure step over a snapshot of this frame (plan 080/01): the handlers above only
     // ACCUMULATED input, so the smoothing that lands in plan 02 sees whole frames, dt included.

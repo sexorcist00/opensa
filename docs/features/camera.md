@@ -25,9 +25,10 @@ instead of one global smoothing knob:
 - **Input dampening**: pointer deltas go into a pending pool and are released exponentially over
   `inputSmoothTime`. Nothing is dropped — a gesture's total rotation equals raw mouse travel, it is only
   spread over ~5 frames, which is the difference between "dampened" and "laggy".
-- **Look point, not focus**: the rig orbits a smoothed point that trails the player — a planar spring on
-  `positionLagTime`, a slower exponential on `verticalLagTime` for height (stairs and jump arcs must not
-  jolt the horizon), and a smoothstep **dead zone** (`deadZone`) so idle jitter moves nothing. Two floors
+- **Look point, not focus**: the rig orbits a smoothed point that trails the player (behaviour #3, the
+  position "weight") — a planar spring on `positionLagTime`, a slower exponential on `verticalLagTime` for
+  height (stairs and jump arcs must not jolt the horizon), and a smoothstep **dead zone** (`deadZone`) so
+  idle jitter moves nothing. This is smooth because the drawn world is render-interpolated (below). Two floors
   keep it honest: the point never trails by more than `lagMaxDistance`, and a focus jump past
   `teleportSnapDistance` snaps (respawn, debugger warp).
 - **Steered yaw**: when something other than the player aims the camera — vehicle entry today, auto-center
@@ -79,6 +80,15 @@ ON FOOT only for now (the vehicle versions are plan 05):
 it every frame, and cursor picking in the map viewer unprojects through the SAME value the frame was
 rendered with, so an animated FOV (plan 05) can never send clicks off-target.
 
+**Render interpolation** (plan 080/03): physics steps at a fixed 1/60 but the frame draws in the
+variable-rate loop, so the raw physics pose is a stair-step. The host draws the ped, every car and the
+camera focus at `lerp(prev, cur, alpha)` (slerp for orientation) between the last two fixed states —
+`alpha = accumulator / FIXED_STEP`. This makes the drawn world continuous at any refresh, which is what lets
+the camera's POSITION weight be smooth instead of beating against the fixed-step saw. Gameplay (ground ray,
+heading, streaming, physics) still runs on the live pose. `VehiclePhysicsSystem` splits into `snapshot()`
+(fixed) and `render(alpha)` (variable); the car's `renderPosition`/`renderOrientation` carry the drawn pose
+that the camera and the lamps follow.
+
 **Smoothing primitives** (`@opensa/math`, used from plan 02 on): `damp`/`dampAngle` (exponential approach,
 `λ` reads as a half-life `t½ = ln2/λ`) and `smoothDamp`/`smoothDampAngle` (critically damped spring with a
 caller-owned velocity, eases IN as well as out, `maxSpeed` cap). Both take dt — the camera runs in the
@@ -92,11 +102,6 @@ host since 080/01) — field rounds tune with sliders, not rebuilds.
 
 ## Known gaps / candidates
 
-- **Position weight is OFF at the shipped defaults.** `positionLagTime`/`verticalLagTime`/`deadZone` default
-  to 0 (rigid position), because physics is fixed-step 1/60 while the camera draws in the variable loop, so
-  any position lag makes the object judder against the smoothed camera. Rotation, zoom and look-ahead stay
-  smoothed. The position spring (behaviour #3) returns once the host gains render interpolation — see the
-  deferred-optimizations note.
 - The 080/02 and /03 defaults are FIRST GUESSES — they have not survived a field round yet, and the dead zone
   leaves the frame settling ~8 cm behind a focus that stopped (the price of a rock-still idle frame).
 - No camera collision — the eye clips through walls (plan 04 adds `PhysicsWorld` ray/sphere casts + whiskers).

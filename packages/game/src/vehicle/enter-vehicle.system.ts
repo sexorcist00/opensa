@@ -43,8 +43,15 @@ export interface EnterableVehicle {
    * moment the car rolls.
    */
   orientation: [number, number, number, number];
-  /** World position (native Z-up) — kept live from the body by the physics system. */
+  /** World position (native Z-up) — kept live from the body by the physics system. This is the GAMEPLAY
+   *  pose (current physics state); the camera follows {@link renderPosition} instead. */
   position: Vec3;
+  /** The interpolated DRAWN orientation (native GTA quaternion) — `slerp(prev, cur, alpha)` between the last
+   *  two fixed steps. Lamps/coronas ride this so they don't twitch against the drawn body through a turn. */
+  renderOrientation: [number, number, number, number];
+  /** The interpolated DRAWN position (native Z-up) — `lerp(prev, cur, alpha)` between the last two fixed
+   *  steps, so the drawn car and the camera that follows it are continuous at any refresh (plan 080/03). */
+  renderPosition: Vec3;
   /** Wheel rig (spin/steer). */
   rig: VehicleRig;
   /** Driver seat position in vehicle space `[x, y, z]` (mirrored to the −X driver side). */

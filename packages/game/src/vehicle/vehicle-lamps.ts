@@ -53,8 +53,11 @@ export function lampAnchorsOf(vehicle: EnterableVehicle): { front: Vec3; rear: V
 export function lampsOf(vehicle: EnterableVehicle): VehicleLamp[] {
   const { front: head, rear: tail } = lampAnchorsOf(vehicle);
   // The car's FULL orientation, not its heading: a yaw cannot express a car on its roof, and the lamps (and
-  // the coronas on them) then float off the body the moment it rolls.
-  const quat = vehicle.orientation;
+  // the coronas on them) then float off the body the moment it rolls. Use the DRAWN pose (interpolated, plan
+  // 080/03), not the physics one: on the raw fixed-step orientation the coronas twitch against the slerp-drawn
+  // body through a turn. Both fall back to the physics pose for a car not yet through a render step.
+  const quat = vehicle.renderOrientation ?? vehicle.orientation;
+  const origin = vehicle.renderPosition ?? vehicle.position;
   const lamps: VehicleLamp[] = [];
   for (const [anchor, kind] of [
     [head, 'head'],
@@ -64,7 +67,7 @@ export function lampsOf(vehicle: EnterableVehicle): VehicleLamp[] {
       lamps.push({
         facing: rotate([0, kind === 'head' ? 1 : -1, 0], quat),
         kind,
-        position: add(vehicle.position, rotate([anchor[0] * mirror, anchor[1], anchor[2]], quat)),
+        position: add(origin, rotate([anchor[0] * mirror, anchor[1], anchor[2]], quat)),
       });
     }
   }

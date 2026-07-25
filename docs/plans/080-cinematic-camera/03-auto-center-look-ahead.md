@@ -187,3 +187,24 @@ facing the moment the climb-out begins (`exiting`) — so the glide plays across
 of snapping when the ped lands. `exitFacing()` extracts the doorway-out yaw the finish already computed.
 Any mouse movement still cancels the swing (the player takes over). Unit-pinned: the director ignores a
 heading swinging around while `settling` yet still glides to the target. Suite 2626 green.
+
+### 2026-07-25 — render interpolation → the position weight is BACK ON (user request)
+
+The rigid-position stopgap did its job (no judder) but the user wanted the smooth position weight, so the
+deferred render-interpolation lever was pulled. Physics still steps at a fixed 1/60; the host now draws the
+world at `lerp(prev, cur, alpha)` between the last two fixed states (`alpha = accumulator / FIXED_STEP`):
+
+- **Ped**: `runFixedSteps` snapshots the Transform before/after the last step into `prevPlayerGta`/
+  `curPlayerGta`; the loop draws the lerp. Gameplay (ground ray, heading, streaming) stays on the live pose.
+  `placePlayer` resets the pair so a teleport never sweeps. Riding shares the pair (the rider is teleported
+  onto the seat each step, so the snapshot interpolates the seat pose — no ped-vs-car desync).
+- **Vehicles**: `VehiclePhysicsSystem` split into `snapshot(step)` (fixed: read body, keep prev/cur pos+quat,
+  write the gameplay pose, roll wheels) and `render(alpha)` (variable: draw `lerp`/`slerp` into
+  `renderPosition`/`renderOrientation`). The seated focus follows `renderPosition`.
+- **Lamps/coronas** ride `renderOrientation` — a field catch: on the raw fixed-step orientation they twitched
+  against the slerp-drawn body through a turn (straight was fine, left/right jittered).
+
+With a continuous focus the position spring smooths real motion, not the saw, so `positionLagTime` 0.12,
+`verticalLagTime` 0.28 and `deadZone` 0.08 are back on. Cost: none measurable — `ls-noon` vsync-capped at
+120 fps, draws/tris identical to the rigid row. Suite 2629 green. Lever record:
+`docs/performance/deferred-optimizations/camera-position-render-interpolation.md` (now PULLED).

@@ -52,8 +52,9 @@ export interface EngineVehicles {
   ridingVehicle(): EnterableVehicle | null;
   /** Spawn a car and register it with the LOD system (persists like a parked car) — used for test spawns. */
   spawn(placement: VehiclePlacement): Promise<void>;
-  /** Per-frame (variable dt): input/approach/doors, damage, LOD streaming. */
-  update(delta: number): void;
+  /** Per-frame (variable dt): draw cars at the interpolated pose (`alpha` = fraction into the next fixed
+   *  step), then input/approach/doors, damage, LOD streaming. */
+  update(delta: number, alpha: number): void;
 }
 
 export interface EngineVehiclesDeps {
@@ -267,6 +268,8 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         // Seeded from the placement; the physics system keeps it live from the body.
         orientation: headingQuat(heading),
         position: live,
+        renderOrientation: headingQuat(heading),
+        renderPosition: [position[0], position[1], position[2]],
         rig,
         seatLocal,
         wheels,
@@ -321,6 +324,9 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
   return {
     activeVehicle: (): EnterableVehicle | null => seated,
     fixedUpdate(step: number): void {
+      // Sample the bodies (which the physics step just moved) into the gameplay pose + the interp snapshots,
+      // BEFORE enter/exit reads car.position/heading for this step.
+      vehiclePhysics.snapshot(step);
       enterVehicle.fixedUpdate(step);
     },
     isSettling: (): boolean => enterVehicle.isSettling(),
@@ -333,10 +339,10 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     async spawn(placement: VehiclePlacement): Promise<void> {
       vehicleLod.add(placement, await spawnVehicle(placement));
     },
-    update(delta: number): void {
-      // Same order the three host registers them in: physics writes the chassis pose and rolls the wheels,
+    update(delta: number, alpha: number): void {
+      // Draw each car at the interpolated pose (smooth at any refresh), then the variable-rate systems:
       // damage reacts to this step's impacts, enter/exit handles input and doors, LOD streams last.
-      vehiclePhysics.update(delta);
+      vehiclePhysics.render(alpha);
       vehicleDamage.update(delta);
       enterVehicle.update(delta);
       lamps.update();

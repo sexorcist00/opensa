@@ -21,6 +21,24 @@
       },
       "residency": "cellIndex 41 · cellVertex 184 · target 345 · texture 1155 · uniform 1",
       "lateCreates": 0
+    },
+    {
+      "key": "ls-noon (with render interpolation)",
+      "avgMs": 8.329,
+      "p95Ms": 9.1,
+      "fps": 120.1,
+      "frames": 1803,
+      "avgDrawCalls": 1181,
+      "avgTriangles": 2287705,
+      "gpuMs": {
+        "pass": 2.634,
+        "post": 0.846,
+        "probe": 0.951,
+        "submit": 0.341
+      },
+      "residency": "cellIndex 41 · cellVertex 184 · target 345 · texture 1167 · uniform 1",
+      "lateCreates": 0,
+      "note": "After adding render interpolation (ped + car + focus drawn at lerp/slerp of the last two fixed steps) and turning the camera position weight back ON. Vsync-capped 120 fps, draws/tris identical to the pre-interpolation row — the lerp per drawn body is free at this scale."
     }
   ],
   "microbench": [

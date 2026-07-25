@@ -1,8 +1,9 @@
 # Render interpolation for the camera position weight
 
-**Status:** in reserve — the correctness path, not a speed one. The camera's POSITION smoothing (plan
-080/02 behaviour #3, plus vertical follow softness) ships OFF (`positionLagTime`/`verticalLagTime`/`deadZone`
-= 0) because there is no render interpolation, and a position spring without it judders.
+**Status: PULLED 2026-07-25.** Render interpolation SHIPPED, and the position weight
+(`positionLagTime`/`verticalLagTime`/`deadZone`) is back on. This entry is kept as the record of the lever
+and its price; what follows describes what it looked like BEFORE, and the note at the end is what was
+actually built.
 
 ## What we do today
 
@@ -45,9 +46,21 @@ at a run is the same saw seen directly.
   OR the ped "doubling" at a run is judged bad enough on its own (it is the same root cause, so this fixes
   both at once).
 
-## Cheaper things to try first
+## What was actually built (2026-07-25)
 
-- Live-tune the rotational feel (auto-center, look-ahead, input smoothing) on the Camera tab — most of the
-  "cinematic" read is rotation + FOV, and all of that is already smoothed and jitter-free.
-- If only the ped doubling matters, interpolating JUST the ped pose (host-only, no vehicle path) is a much
-  smaller change than the full sweep.
+The full sweep, because the ped doubling and the car back-and-forth are the same root:
+
+- **Ped** (host-only): `runFixedSteps` keeps `prevPlayerGta`/`curPlayerGta` (the Transform before and after
+  the last fixed step); the loop draws `lerp(prev, cur, renderAlpha)` where `renderAlpha = accumulator /
+  FIXED_STEP`. Gameplay (ground ray, heading, streaming) still uses the live pose. Teleports reset the pair
+  via `resetPlayerInterpolation` in `placePlayer`. Riding uses the same pair (the rider is teleported onto
+  the seat every step, so the snapshot interpolates the seat).
+- **Vehicles**: `VehiclePhysicsSystem` split into `snapshot(step)` (fixed loop — reads the body, keeps
+  prev/cur pos+quat, writes the gameplay pose, rolls wheels) and `render(alpha)` (variable loop — draws
+  `lerp`/`slerp` into `renderPosition`/`renderOrientation`). The camera's seated focus follows
+  `renderPosition`; the lamps/coronas ride `renderOrientation` (on the raw fixed-step orientation they
+  twitched against the slerp-drawn body through a turn — the field caught it).
+- Position weight turned back on: `positionLagTime` 0.12, `verticalLagTime` 0.28, `deadZone` 0.08.
+
+Cost: none measurable — `ls-noon` vsync-capped at 120 fps, draws/tris identical to the rigid-position row
+(a lerp/slerp per drawn body is free at this scale).

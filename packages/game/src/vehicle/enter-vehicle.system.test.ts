@@ -169,6 +169,8 @@ function vehicleAt(position: Vec3): EnterableVehicle {
     heading: 0,
     orientation: [0, 0, 0, 1] as [number, number, number, number],
     position,
+    renderOrientation: [0, 0, 0, 1] as [number, number, number, number],
+    renderPosition: [...position],
     rig,
     seatLocal: [-0.4, 0, -0.16],
     wheels: [

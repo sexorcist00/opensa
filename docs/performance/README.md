@@ -33,7 +33,7 @@ Entries live in [deferred-optimizations/](deferred-optimizations/), one file per
 | [One draw per visible vehicle submesh](deferred-optimizations/vehicle-submesh-draw-batching.md) | draw count | unmeasured; the axis the pass floor lives on | in reserve |
 | [Env-probe cadence and resolution](deferred-optimizations/env-probe-cadence.md) | GPU pass | 0.2–1.9 ms observed, ~5.8 ms worst seen | in reserve |
 | [Foliage fill](deferred-optimizations/foliage-fill.md) | GPU pass (fill) | the 07-21 case was 13.72 → 7.63 ms | parked by decision |
-| [Camera position render interpolation](deferred-optimizations/camera-position-render-interpolation.md) | correctness (camera feel) | unlocks the 080/02 position weight + kills the run "doubling" | in reserve — correctness lever, not speed |
+| [Camera position render interpolation](deferred-optimizations/camera-position-render-interpolation.md) | correctness (camera feel) | unlocked the 080/02 position weight + killed the run "doubling" | **PULLED 2026-07-25** |
 
 ## How to use it when the frame budget is blown
 
