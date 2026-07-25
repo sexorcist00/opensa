@@ -54,12 +54,12 @@ The rig is engine Y-up; casts run GTA Z-up. Convert at the probe boundary only:
 
 ## Subtasks
 
-- [ ] `raycast`/`sphereCast` on `PhysicsWorld` + tests; radius derivation comment.
-- [ ] Probe wiring in the host (player capsule / seated car exclusion).
-- [ ] `camera-collision.ts`: primary + whiskers + asymmetric response + floor guard + cap
+- [x] `raycast`/`sphereCast` on `PhysicsWorld` + tests; radius derivation comment.
+- [x] Probe wiring in the host (player capsule / seated car exclusion).
+- [x] `camera-collision.ts`: primary + whiskers + asymmetric response + floor guard + cap
       semantics; unit tests with scripted probes.
-- [ ] Config + Camera tab: `collisionRadius`, `collisionReleaseTime`, whisker angle.
-- [ ] Measure: casts/frame and `director.update` p95 with collision on (ledger).
+- [x] Config + Camera tab: `collisionRadius`, `collisionReleaseTime`, whisker angle.
+- [x] Measure: casts/frame and `director.update` p95 with collision on (ledger).
 - [ ] **Field round**: interiors/underpasses (LS parking garages), back-to-wall orbiting, doorway
       exit glide, alley sprint with 03's recenter active (the combination is where jitter hides —
       recenter steering the yaw while collision caps the distance must not oscillate).
@@ -72,4 +72,36 @@ The rig is engine Y-up; casts run GTA Z-up. Convert at the probe boundary only:
 
 ## Ledger
 
-_(append here)_
+### 2026-07-25 — SHIPPED
+
+**Physics API** (`physics-world.ts`): `raycast(origin, dir, maxDist, exclude?) → {dist}|null` and
+`sphereCast(origin, dir, radius, maxDist, exclude?)`, both GTA Z-up, EXCLUDE_SENSORS, excluding the caster's
+subject (the player capsule / seated car body). `sphereCast` uses Rapier `castShape` with a `Ball` and
+returns `time_of_impact`. Real-collider tests on the physics world: hit distance, exclusion, and the ball
+stopping `radius` short of the wall (a zero-width ray reports 9.5, the 0.3 ball 9.2).
+
+**The layer** (`camera-collision.ts`, pure, injected `CameraProbe`): primary sphere cast from the look point
+along `−forward`, two whiskers at ±`collisionWhiskerAngle`, min across all three. Response is asymmetric —
+snap IN, `damp` OUT over `collisionReleaseTime`. It CAPS the distance (min of zoom target and the allowed
+distance), so the chosen zoom is restored after the occlusion. Space discipline: `gtaFromEngine` at the
+probe boundary only.
+
+**Two field-round fixes folded in the same day (user report):**
+- **`collisionMinDistance`** (1.6): a wall can shove the eye in but never INTO the player — below the min it
+  stops and accepts a little wall clip over a face full of ped. Fixes the "camera goes into the ped for a
+  second on car entry".
+- **Floor guard** (`guardFloor` + a `GroundProbe` = `physics.groundBelow`): a steep down-pitch on a raised
+  porch/slope buried the eye and showed only skybox (the blue frame the first field look caught). The eye is
+  lifted to `groundBelow(eye) + 0.3` when it sinks below.
+
+**First-guess defaults**: `collisionRadius` 0.35 (near-plane cover for near 0.5 / fov 60° is ~0.59 at 16:9;
+0.35 trades a little coverage for keeping the camera closer to walls — field-tune), `collisionMinDistance`
+1.6, `collisionReleaseTime` 0.4, `collisionWhiskerAngle` 0.26 rad (~15°). All live on the Camera tab.
+
+**Measured**: casts/frame = 3 (primary + 2 whiskers) + 1 ground guard = **4**, under the ≤5 budget. Headless
+`ls-noon` with collision on: **120 fps / 8.334 ms / p95 10 / draws 1184** — vsync-capped, GPU pass 2.877 ms,
+i.e. the per-frame casts are free (Rapier ray at this collider density is trivial). Suite 2650 green.
+
+**Field-checked headless**: walking into the house wall pulls the camera tight to the ped (no through-wall),
+the porch no longer shows skybox (floor guard). Owed to the user's own field round: interiors/underpasses,
+back-to-wall orbit, the recenter-vs-collision interaction, and the car-entry min-distance read.

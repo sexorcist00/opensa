@@ -4,9 +4,10 @@
 look-ahead) shipped 2026-07-25** — the damp/spring math and the `CameraDirector` in
 `apps/web/src/ui/camera/`, the smoothed rig (input dampening, a trailing look point with a dead zone, the
 steered-yaw channel, gliding zoom), and the composition layer (turn-follow, idle recenter, look-ahead), all
-behind a `?cam=legacy` A/B. That is the **complete on-foot baseline** — the fast path the user asked for.
-**The 02+03 field round is owed**: the defaults are first guesses until the user judges the feel. Next:
-04 collision.
+behind a `?cam=legacy` A/B, and **04 (collision)** — a `PhysicsWorld` sphere/ray-cast API, whisker rig,
+asymmetric snap-in/ease-out, a min-distance floor and a ground floor guard. That is the **complete on-foot
+baseline plus collision**. **The 02+03+04 field round is owed**: the defaults are first guesses until the
+user judges the feel. Next: 05 vehicle camera.
 
 **Goal: the camera feels "cinematic" the way GTA V's does — weighty, smooth, always composed — while
 staying responsive enough that nobody blames it for a missed turn.** Today the engine host camera is a

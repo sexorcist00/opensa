@@ -55,6 +55,7 @@ import { IS_DEV } from '../dev-mode';
 import { GAME_CONFIG } from '../game-config';
 import { vehicleModelsFromIde } from '../vehicle-models';
 import { yawBehind } from './camera/auto-center';
+import { type CameraProbe, type GroundProbe } from './camera/camera-collision';
 import {
   type CameraSnapshot,
   createRigState,
@@ -1182,7 +1183,15 @@ async function boot(
       walkKeys: flyKeys,
       zoomSteps: pendingInput.zoom,
     };
-    const camera = stepCamera(rig, snapshot, config.camera);
+    // Camera collision probe (plan 04): sphere cast against the one Rapier world, excluding the camera's own
+    // subject (the seated car body, or the player capsule on foot) so it never collides with what it frames.
+    const collisionExclude = seatedCar ? seatedCar.body : RigidBody.handle[playerEid];
+    const cameraProbe: CameraProbe = (from, dir, radius, maxDist) =>
+      physics.sphereCast([from[0], from[1], from[2]], [dir[0], dir[1], dir[2]], radius, maxDist, collisionExclude)
+        ?.dist ?? null;
+    // Floor guard: the ground below the eye, so a steep down-pitch can't bury the camera under a slope/porch.
+    const groundProbe: GroundProbe = (at) => physics.groundBelow([at[0], at[1], at[2]], 30, collisionExclude);
+    const camera = stepCamera(rig, snapshot, config.camera, cameraProbe, groundProbe);
     pendingInput.look.x = 0;
     pendingInput.look.y = 0;
     pendingInput.pan = null;

@@ -119,7 +119,15 @@ describe('cameraControlsFor', () => {
       for (const key of ['recenterDelaySec', 'recenterRate', 'lookAheadDistance', 'lookAheadTime'] as const) {
         expect(keys).toContain(key); // the 03 composition channels
       }
-      expect(keys).toHaveLength(17);
+      for (const key of [
+        'collisionRadius',
+        'collisionMinDistance',
+        'collisionReleaseTime',
+        'collisionWhiskerAngle',
+      ] as const) {
+        expect(keys).toContain(key); // the 04 collision channels
+      }
+      expect(keys).toHaveLength(21);
     });
   });
 });

@@ -1,0 +1,137 @@
+/**
+ * Camera collision (plan 080/04, behaviour #9): the eye must never sit behind a wall from the look point.
+ *
+ * The layer runs on the FINAL rig pose (after the follow/mode layers, before additive motion) and only CAPS
+ * the distance — the zoom state is preserved, so the chosen distance is restored the moment the occlusion
+ * clears, exactly as GTA restores your distance after a tunnel.
+ *
+ * Response is deliberately ASYMMETRIC, the industry standard: pulling IN is instant (a wall between the
+ * camera and the player is never shown, not even for one frame); easing OUT is damped, so leaving a doorway
+ * glides instead of popping. Whisker casts (±`collisionWhiskerAngle` around the eye direction) start the
+ * pull-in BEFORE the wall edge crosses screen centre, which reads as "the camera avoids the wall".
+ *
+ * A `CameraProbe` is injected (the 080/01 contract) so this is pure and unit-testable; the host passes the
+ * real `PhysicsWorld` sphere cast, the tests script hit distances.
+ */
+import type { CameraConfig } from '@opensa/game';
+
+import { damp } from '@opensa/math';
+
+/** One sphere cast from `fromGta` toward `dirGta` (both GTA Z-up), returning the free distance or null. */
+export type CameraProbe = (
+  fromGta: readonly [number, number, number],
+  dirGta: readonly [number, number, number],
+  radius: number,
+  maxDist: number,
+) => null | number;
+
+/** The ground Z below a GTA point (or null) — the floor guard lifts the eye off it on a steep down-pitch. */
+export type GroundProbe = (atGta: readonly [number, number, number]) => null | number;
+
+/** How far the eye is kept above the ground when the floor guard lifts it (world units). */
+const FLOOR_MARGIN = 0.3;
+
+/** The collision layer's live state — the damped, currently-shown distance. */
+export interface CollisionState {
+  /** The distance actually rendered last frame (eases out; snaps in). */
+  shown: number;
+}
+
+export function createCollisionState(distance: number): CollisionState {
+  return { shown: distance };
+}
+
+/** GTA Z-up from engine Y-up: `(x, y, z) → (x, −z, y)` — the inverse the host uses at the render boundary. */
+export function gtaFromEngine(v: readonly [number, number, number]): [number, number, number] {
+  return [v[0], -v[2], v[1]];
+}
+
+/**
+ * The eye (engine Y-up) lifted so it never sinks below the ground beneath it — a steep down-pitch on a slope
+ * or a raised porch otherwise buries the camera and the near plane shows only skybox. Returns the same eye
+ * when no lift is needed (or there is no probe).
+ */
+export function guardFloor(
+  eye: readonly [number, number, number],
+  groundProbe: GroundProbe | null,
+): [number, number, number] {
+  if (groundProbe === null) {
+    return [eye[0], eye[1], eye[2]];
+  }
+  const groundZ = groundProbe(gtaFromEngine(eye));
+  const minY = groundZ === null ? -Infinity : groundZ + FLOOR_MARGIN; // engine Y is GTA Z (up)
+
+  return [eye[0], Math.max(eye[1], minY), eye[2]];
+}
+
+/**
+ * Cap `desiredDistance` so the eye clears geometry between the look point and the eye.
+ *
+ * `lookPointEngine` is the orbit centre (head height — by definition outside geometry); `dirEngine` is the
+ * unit vector from the look point toward the eye (engine space). Returns the distance to render this frame.
+ */
+export function resolveCollision(
+  state: CollisionState,
+  lookPointEngine: readonly [number, number, number],
+  dirEngine: readonly [number, number, number],
+  desiredDistance: number,
+  config: CameraConfig,
+  probe: CameraProbe | null,
+  dt: number,
+): number {
+  if (probe === null || config.collisionRadius <= 0) {
+    state.shown = desiredDistance;
+
+    return desiredDistance;
+  }
+  const fromGta = gtaFromEngine(lookPointEngine);
+  const primary = castDistance(probe, fromGta, dirEngine, 0, config, desiredDistance);
+  let allowed = primary;
+  if (config.collisionWhiskerAngle > 0) {
+    // Whiskers ease the pull-in in early: take the min of the primary and the two flanking casts.
+    allowed = Math.min(
+      allowed,
+      castDistance(probe, fromGta, dirEngine, config.collisionWhiskerAngle, config, desiredDistance),
+      castDistance(probe, fromGta, dirEngine, -config.collisionWhiskerAngle, config, desiredDistance),
+    );
+  }
+  // Never pull closer than the min distance: a wall shoves the camera in, but not INTO the player. Below this
+  // the camera stops and accepts a little wall clip rather than a face full of ped.
+  allowed = Math.max(allowed, Math.min(desiredDistance, config.collisionMinDistance));
+  // Snap IN (a wall is never shown a single frame); ease OUT so leaving a doorway glides.
+  if (allowed < state.shown) {
+    state.shown = allowed;
+  } else {
+    const lambda = config.collisionReleaseTime > 0 ? 1 / config.collisionReleaseTime : Number.POSITIVE_INFINITY;
+    state.shown = damp(state.shown, allowed, lambda, dt);
+  }
+
+  return state.shown;
+}
+
+/** One cast at `yawOffset` around the eye direction (yaw about the engine up axis), capped at `desired`. */
+function castDistance(
+  probe: CameraProbe,
+  fromGta: readonly [number, number, number],
+  dirEngine: readonly [number, number, number],
+  yawOffset: number,
+  config: CameraConfig,
+  desired: number,
+): number {
+  const dirGta = gtaFromEngine(rotateYaw(dirEngine, yawOffset));
+  // Cast a touch past the desired eye so a wall exactly at the eye still registers.
+  const hit = probe(fromGta, dirGta, config.collisionRadius, desired + config.collisionRadius);
+
+  return hit === null ? desired : Math.min(desired, hit);
+}
+
+/** Rotate an engine-space vector about the up (Y) axis by `angle` — the whisker spread lives in the yaw plane. */
+function rotateYaw(v: readonly [number, number, number], angle: number): [number, number, number] {
+  if (angle === 0) {
+    return [v[0], v[1], v[2]];
+  }
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+
+  return [v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c];
+}

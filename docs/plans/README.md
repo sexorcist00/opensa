@@ -47,11 +47,11 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   drivetrain identity, SA handbrake, a measured DRCVC-vs-own-controller gate. Promoted from ideas/0.4.0/07.
 - **[080 — Cinematic camera](./080-cinematic-camera/readme.md)** — GTA V-feel follow camera: per-channel
   springs/lag, auto-center + look-ahead, collision whiskers, vehicle speed/FOV/drift framing, bob/shake,
-  7 sub-plans + priority chain. **01–03 DONE 2026-07-25** — the complete on-foot
-  baseline: damp/spring math + `CameraDirector` (`ui/camera/`), the smoothed rig (input dampening, trailing
-  look point, dead zone, steered yaw), and composition (turn-follow, idle recenter, look-ahead), behind a
-  `?cam=legacy` A/B. The 02+03 field round is owed; 04 collision next. **08 (C-key view presets incl. first
-  person) added 2026-07-25.**
+  7 sub-plans + priority chain. **01–04 DONE 2026-07-25** — the complete on-foot
+  baseline + collision: damp/spring math + `CameraDirector` (`ui/camera/`), the smoothed rig with render
+  interpolation (position weight), composition (turn-follow, idle recenter, look-ahead), and collision
+  (sphere/ray casts, whiskers, snap-in/ease-out, min distance, floor guard), behind a `?cam=legacy` A/B. The
+  02–04 field round is owed; 05 vehicle camera next. **08 (C-key view presets incl. first person) added.**
 - **[079 — One canonical build source, the dev-surface unification, and its docs](./079-canonical-build-source/readme.md)**
   — every dev surface (lab, bench harness, viewers) reads ONE canonical build (`./build/original`), served in
   place (NOT copied into `public/`), via a new `http-dir` loader + the loading-MODE-selects-the-world fix +

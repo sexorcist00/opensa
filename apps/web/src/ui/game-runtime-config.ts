@@ -28,6 +28,10 @@ export function createGameRuntimeConfig(): Config {
     // interpolation, plan 080/03) — a continuous focus, so the spring smooths real motion, not the
     // fixed-step saw. Turn all three to 0 to go back to a rigid attach.
     camera: {
+      collisionMinDistance: 1.6,
+      collisionRadius: 0.35,
+      collisionReleaseTime: 0.4,
+      collisionWhiskerAngle: 0.26,
       deadZone: 0.08,
       followDistance: 7,
       followHeight: 0.9,

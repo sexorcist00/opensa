@@ -502,6 +502,35 @@ export class PhysicsWorld {
       );
   }
 
+  /**
+   * Distance to the first solid hit along `dir` from `origin`, within `maxDist`, or null (Z-up). The camera
+   * collision layer (plan 080/04) casts against the ONE Rapier world, so streamed static geometry AND dynamic
+   * bodies (cars, props) occlude for free. `exclude` skips a body — the camera must not collide with its own
+   * subject (the player capsule / the seated car). Sensors are ignored (the seated rider's capsule is one).
+   */
+  raycast(origin: Vec3, dir: Vec3, maxDist: number, exclude?: number): null | { dist: number } {
+    const length = Math.hypot(dir[0], dir[1], dir[2]);
+    if (length === 0) {
+      return null;
+    }
+    const ray = new this.rapier.Ray(
+      { x: origin[0], y: origin[1], z: origin[2] },
+      { x: dir[0] / length, y: dir[1] / length, z: dir[2] / length },
+    );
+    const excludeBody = exclude === undefined ? undefined : this.world.getRigidBody(exclude);
+    const hit = this.world.castRay(
+      ray,
+      maxDist,
+      true,
+      this.rapier.QueryFilterFlags.EXCLUDE_SENSORS,
+      undefined,
+      undefined,
+      excludeBody,
+    );
+
+    return hit === null ? null : { dist: hit.timeOfImpact };
+  }
+
   readBody(handle: number): BodyTransform {
     const body = this.world.getRigidBody(handle);
     const t = body.translation();
@@ -569,6 +598,38 @@ export class PhysicsWorld {
       controller.setWheelBrake(i, perBrake);
       controller.setWheelSteering(i, wheel.front ? steer : 0);
     });
+  }
+
+  /**
+   * Like {@link raycast} but sweeps a BALL of `radius` — the camera uses this, not a zero-width ray: a ray
+   * lets the eye rest ON a wall and the near plane still clips through it, so the sphere must cover the near
+   * plane (`radius ≥ near·tan(fov/2)·√(1+aspect²)` — ~0.59 for near 0.5 / fov 60° / 16:9; the shipped default
+   * trades a little coverage for keeping the camera closer to walls, tuned in the field). Returns the distance
+   * the eye may travel before the near plane would touch geometry.
+   */
+  sphereCast(origin: Vec3, dir: Vec3, radius: number, maxDist: number, exclude?: number): null | { dist: number } {
+    const length = Math.hypot(dir[0], dir[1], dir[2]);
+    if (length === 0) {
+      return null;
+    }
+    const vel = { x: dir[0] / length, y: dir[1] / length, z: dir[2] / length };
+    const shape = new this.rapier.Ball(radius);
+    const excludeBody = exclude === undefined ? undefined : this.world.getRigidBody(exclude);
+    const hit = this.world.castShape(
+      { x: origin[0], y: origin[1], z: origin[2] },
+      { w: 1, x: 0, y: 0, z: 0 },
+      vel,
+      shape,
+      0,
+      maxDist,
+      true,
+      this.rapier.QueryFilterFlags.EXCLUDE_SENSORS,
+      undefined,
+      undefined,
+      excludeBody,
+    );
+
+    return hit === null ? null : { dist: hit.time_of_impact };
   }
 
   step(dt: number): void {

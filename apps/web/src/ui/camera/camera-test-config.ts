@@ -8,6 +8,10 @@
 import type { CameraConfig } from '@opensa/game';
 
 export const TEST_CAMERA_CONFIG: CameraConfig = {
+  collisionMinDistance: 1.6,
+  collisionRadius: 0.35,
+  collisionReleaseTime: 0.4,
+  collisionWhiskerAngle: 0.26,
   deadZone: 0.08,
   followDistance: 7,
   followHeight: 0.9,

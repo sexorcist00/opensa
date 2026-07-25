@@ -89,6 +89,83 @@ describe('PhysicsWorld.groundBelow', () => {
   });
 });
 
+describe('PhysicsWorld.raycast', () => {
+  describe('negative cases', () => {
+    it('returns null when nothing is hit within maxDist', async () => {
+      const physics = await makeWorld();
+      physics.createStaticBox([10, 0, 0], [0.5, 10, 10]); // a wall at x = 10
+      physics.step(STEP);
+
+      expect(physics.raycast([0, 0, 0], [1, 0, 0], 5)).toBeNull(); // wall face is 9.5 away, beyond 5
+      physics.dispose();
+    });
+
+    it('returns null for a zero direction', async () => {
+      const physics = await makeWorld();
+      expect(physics.raycast([0, 0, 0], [0, 0, 0], 5)).toBeNull();
+      physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reports the distance to the first solid hit', async () => {
+      const physics = await makeWorld();
+      physics.createStaticBox([10, 0, 0], [0.5, 10, 10]); // near face at x = 9.5
+      physics.step(STEP);
+
+      expect(physics.raycast([0, 0, 0], [1, 0, 0], 20)?.dist).toBeCloseTo(9.5, 3);
+      physics.dispose();
+    });
+
+    it('excludes a body so the camera never collides with its own subject', async () => {
+      const physics = await makeWorld();
+      const capsule = physics.createKinematicCapsule([2, 0, 0], 0.35, 0.55);
+      physics.createStaticBox([10, 0, 0], [0.5, 10, 10]); // wall behind the capsule
+      physics.step(STEP);
+
+      // The capsule sits 2 m ahead; excluded, the ray reaches the wall at 9.5.
+      expect(physics.raycast([0, 0, 0], [1, 0, 0], 20)?.dist).toBeLessThan(3);
+      expect(physics.raycast([0, 0, 0], [1, 0, 0], 20, capsule.body)?.dist).toBeCloseTo(9.5, 3);
+      physics.dispose();
+    });
+  });
+});
+
+describe('PhysicsWorld.sphereCast', () => {
+  describe('negative cases', () => {
+    it('returns null when the swept ball hits nothing within maxDist', async () => {
+      const physics = await makeWorld();
+      physics.createStaticBox([10, 0, 0], [0.5, 10, 10]);
+      physics.step(STEP);
+
+      expect(physics.sphereCast([0, 0, 0], [1, 0, 0], 0.3, 5)).toBeNull();
+      physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('stops the eye radius-short of the wall (the near plane never clips through)', async () => {
+      const physics = await makeWorld();
+      physics.createStaticBox([10, 0, 0], [0.5, 10, 10]); // near face at x = 9.5
+      physics.step(STEP);
+
+      // A zero-width ray would report 9.5; the 0.3 ball stops 0.3 short of it.
+      expect(physics.sphereCast([0, 0, 0], [1, 0, 0], 0.3, 20)?.dist).toBeCloseTo(9.2, 2);
+      physics.dispose();
+    });
+
+    it('excludes the subject body', async () => {
+      const physics = await makeWorld();
+      const capsule = physics.createKinematicCapsule([2, 0, 0], 0.35, 0.55);
+      physics.createStaticBox([10, 0, 0], [0.5, 10, 10]);
+      physics.step(STEP);
+
+      expect(physics.sphereCast([0, 0, 0], [1, 0, 0], 0.3, 20, capsule.body)?.dist).toBeCloseTo(9.2, 2);
+      physics.dispose();
+    });
+  });
+});
+
 describe('PhysicsWorld.createDynamicVehicle', () => {
   const HALF: [number, number, number] = [1.2, 2.5, 0.7];
 

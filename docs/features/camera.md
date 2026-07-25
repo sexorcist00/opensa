@@ -63,6 +63,15 @@ ON FOOT only for now (the vehicle versions are plan 05):
   is framed from behind at boot, not nose-to-nose; `steerYaw` (vehicle entry/exit) takes a facing and
   applies the same `yawBehind`.
 
+**Collision** (plan 080/04, behaviour #9): the eye never sits behind a wall. A sphere cast (radius
+`collisionRadius`, covering the near plane) sweeps from the look point toward the eye, plus two whiskers at
+±`collisionWhiskerAngle` so the pull-in starts before a wall edge crosses screen centre. Response is
+asymmetric — snap IN, ease OUT over `collisionReleaseTime`. It CAPS the distance (the chosen zoom is restored
+after the occlusion) and never pulls closer than `collisionMinDistance` (a wall shoves the camera in, not
+INTO the ped). A floor guard lifts the eye to `groundBelow(eye) + 0.3` so a steep down-pitch on a slope or
+porch can't bury it in skybox. Casts run against the one Rapier world (static geometry + cars + props all
+occlude), excluding the camera's own subject; ~4 casts/frame, free at this collider density.
+
 **Modes**
 
 - `foot` / `vehicle` — the follow rig: mouse look (yaw free, pitch clamped to `pitchMin`/`pitchMax`), wheel
@@ -104,7 +113,6 @@ host since 080/01) — field rounds tune with sliders, not rebuilds.
 
 - The 080/02 and /03 defaults are FIRST GUESSES — they have not survived a field round yet, and the dead zone
   leaves the frame settling ~8 cm behind a focus that stopped (the price of a rock-still idle frame).
-- No camera collision — the eye clips through walls (plan 04 adds `PhysicsWorld` ray/sphere casts + whiskers).
 - No vehicle framing (speed distance/FOV curves, turn lag, drift framing) — plan 05.
 - No bob / landing dip / impact shake / sprint FOV kick, and no motion-reduction toggle — plan 06.
 - No mode-transition blending (foot ⇄ vehicle ⇄ viewer) — plan 07.
@@ -123,6 +131,9 @@ stand-still exclusion, walk-vs-sprint recenter rates), `ui/camera/look-ahead.tes
 cap, the fade home, rate independence),
 `ui/camera/follow-rig.test.ts` (no overshoot, dead zone holds still, vertical slower than planar, the lag
 floor at a 12 m/s sprint, teleport snap, 1/120-vs-1/20 agreement),
+`ui/camera/camera-collision.test.ts` (snap-in/ease-out asymmetry, min distance, whisker min, floor guard,
+GTA-space cast) and `physics/physics-world.test.ts` (raycast/sphereCast hit distance, exclusion, ball
+stop-short),
 `ui/camera/camera-director.test.ts` (the legacy-parity gate: the director reproduces the pre-080 stick
 camera over a scripted look+zoom sequence; mode clamps, zoom notches, fly walk/pan/dolly, top-down snap),
 `ui/camera/engine-camera.test.ts` (bench priority, cursor ray, forward convention), `ui/camera/fly-rig.test.ts`,

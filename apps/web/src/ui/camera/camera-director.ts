@@ -19,6 +19,14 @@ import type { CameraConfig } from '@opensa/game';
 import { angleDelta, clamp, damp, smoothDampAngle, type SmoothDampRef } from '@opensa/math';
 
 import { type AutoCenterState, cancelAutoCenter, createAutoCenter, stepAutoCenter, yawBehind } from './auto-center';
+import {
+  type CameraProbe,
+  type CollisionState,
+  createCollisionState,
+  type GroundProbe,
+  guardFloor,
+  resolveCollision,
+} from './camera-collision';
 import { createLookInput, type LookInputState, releaseLook } from './camera-input';
 import { CAMERA_FOV_Y, forwardFrom, resolveCamera } from './engine-camera';
 import { dollyStep, FLY_SPEED, flyStep, panStep, TOP_DOWN_PITCH, topDownEye } from './fly-rig';
@@ -30,6 +38,8 @@ import { createLookAhead, type LookAheadState, stepLookAhead } from './look-ahea
 export interface CameraRigState {
   /** Auto-centering: the idle clock and the turn-follow latch (plan 03). */
   autoCenter: AutoCenterState;
+  /** Collision layer's damped shown-distance (plan 04). */
+  collision: CollisionState;
   /** Follow distance, in world units — damps toward {@link distanceTarget}. */
   distance: number;
   /** Where the zoom is heading (the wheel and, later, the mode/collision layers all write this one target). */
@@ -96,6 +106,7 @@ const VELOCITY_LAMBDA = 14;
 export function createRigState(config: CameraConfig, yaw: number, pitch: number, legacy = false): CameraRigState {
   return {
     autoCenter: createAutoCenter(),
+    collision: createCollisionState(config.followDistance),
     distance: config.followDistance,
     distanceTarget: config.followDistance,
     flyEye: null,
@@ -143,7 +154,13 @@ export function steerYaw(state: CameraRigState, facing: number): void {
  * Step the rig one rendered frame and resolve the camera. `state` is mutated in place; the returned
  * `CameraState` is what the engine draws.
  */
-export function stepCamera(state: CameraRigState, snapshot: CameraSnapshot, config: CameraConfig): CameraState {
+export function stepCamera(
+  state: CameraRigState,
+  snapshot: CameraSnapshot,
+  config: CameraConfig,
+  probe: CameraProbe | null = null,
+  groundProbe: GroundProbe | null = null,
+): CameraState {
   // The debugger moves the zoom BOUNDS live (074/22), so the live target is re-clamped every frame.
   state.distanceTarget = clamp(state.distanceTarget, config.followZoomMin, config.followZoomMax);
   applyLook(state, snapshot, config);
@@ -193,18 +210,40 @@ export function stepCamera(state: CameraRigState, snapshot: CameraSnapshot, conf
     centering && snapshot.mode === 'foot'
       ? stepLookAhead(state.lookAhead, velocity.x, velocity.z, config, snapshot.dt)
       : stepLookAhead(state.lookAhead, 0, 0, config, snapshot.dt);
+  const lookPoint: [number, number, number] = [target[0] + ahead.x, target[1], target[2] + ahead.z];
+  // Collision (plan 04): cap the distance so the eye clears geometry between the look point and the eye. The
+  // eye sits at `lookPoint − forward · distance`, so the cast runs from the look point along `−forward`. Only
+  // the follow rig collides — a detached fly eye flies through geometry by design, and the bench is bypassed.
+  const collideDistance =
+    state.legacy || state.flyEye || snapshot.bench
+      ? state.distance
+      : resolveCollision(
+          state.collision,
+          lookPoint,
+          [-forward[0], -forward[1], -forward[2]],
+          state.distance,
+          config,
+          probe,
+          snapshot.dt,
+        );
 
-  return resolveCamera({
+  const camera = resolveCamera({
     aspect: snapshot.aspect,
     bench: snapshot.bench,
-    distance: state.distance,
+    distance: collideDistance,
     flyEye: state.flyEye,
     forward,
     fovYRad: CAMERA_FOV_Y,
     // The offset moves eye AND target together (resolveCamera derives the eye from the target), so the
-    // composition leans toward travel while the orbit geometry plan 04 defends is untouched.
-    target: [target[0] + ahead.x, target[1], target[2] + ahead.z],
+    // composition leans toward travel while the orbit geometry the collision layer defends is untouched.
+    target: lookPoint,
   });
+  // Floor guard: a steep down-pitch on a slope or a raised porch otherwise buries the eye and shows skybox.
+  if (state.legacy || state.flyEye || snapshot.bench) {
+    return camera;
+  }
+
+  return { ...camera, eye: guardFloor(camera.eye, groundProbe) };
 }
 
 /** Mouse look: raw pixel deltas → damped yaw/pitch, clamped per mode. Manual look always wins (036's rule). */

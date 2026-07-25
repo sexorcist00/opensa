@@ -10,6 +10,18 @@ export interface BloomConfig {
 
 /** Follow/play camera tuning (the debug overview camera is fixed top-down). */
 export interface CameraConfig {
+  /** The closest collision may ever pull the eye to the look point (world units). A wall can shove the camera
+   *  in, but never INTO the player — below this it stops, accepting a little wall clip over a face full of ped. */
+  collisionMinDistance: number;
+  /** Radius of the sphere the collision layer sweeps toward the eye (world units) — covers the near plane so
+   *  a wall never clips through. Bigger keeps the camera further off walls. 0 disables collision. */
+  collisionRadius: number;
+  /** How fast the camera eases back OUT after an occlusion clears (seconds). Pulling IN is instant (a wall is
+   *  never shown); releasing glides so leaving a doorway doesn't pop. */
+  collisionReleaseTime: number;
+  /** Whisker cast spread (radians): two extra casts at ±this around the eye direction let the camera start
+   *  easing in BEFORE a wall edge crosses screen centre. 0 = primary cast only. */
+  collisionWhiskerAngle: number;
   /** Focus movement under this (world units) does not pull the camera at all — idle jitter leaves the frame
    *  still. Blended back in over the next two dead-zone widths, so there is no kink at the edge. */
   deadZone: number;
