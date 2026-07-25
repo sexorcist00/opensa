@@ -60,7 +60,7 @@ function config(gameState: Config['gameState']): Config {
       inputSmoothTime: 0.03,
       lagMaxDistance: 1.2,
       landingDipFullSpeed: 5,
-      landingDipScale: 0.12,
+      landingDipScale: 0.22,
       lookAheadDistance: 0.8,
       lookAheadFullSpeed: 7,
       lookAheadTime: 0.45,

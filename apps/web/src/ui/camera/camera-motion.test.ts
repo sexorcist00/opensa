@@ -130,11 +130,12 @@ describe('stepMotion', () => {
       expect(hardDip).toBeLessThan(softDip);
       expect(Math.abs(hardDip)).toBeCloseTo(CONFIG.landingDipScale, 6);
 
-      // ...and it is a ONE-SHOT: a second of standing still and the frame is level again.
+      // ...and it is a ONE-SHOT: a second of standing still and the frame is all but level again. Stated as
+      // a FRACTION of the dip, so a deeper one cannot fail this for the wrong reason.
       for (let frame = 0; frame < 60; frame += 1) {
         stepMotion(hard, input(), CONFIG);
       }
-      expect(Math.abs(stepMotion(hard, input(), CONFIG).vertical)).toBeLessThan(0.002);
+      expect(Math.abs(stepMotion(hard, input(), CONFIG).vertical)).toBeLessThan(Math.abs(hardDip) * 0.05);
     });
 
     it('pitches the frame on a dip — the look point dips half as far', () => {

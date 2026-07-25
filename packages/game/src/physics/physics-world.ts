@@ -654,8 +654,20 @@ export class PhysicsWorld {
    * plane (`radius ≥ near·tan(fov/2)·√(1+aspect²)` — ~0.59 for near 0.5 / fov 60° / 16:9; the shipped default
    * trades a little coverage for keeping the camera closer to walls, tuned in the field). Returns the distance
    * the eye may travel before the near plane would touch geometry.
+   *
+   * `alsoExclude` is a SECOND body to ignore. Rapier takes only one exclusion directly, so it goes through a
+   * filter predicate. The camera needs two: what it frames, and the car the player just climbed out of —
+   * otherwise stepping out puts the eye behind the car it is now framing the ped beside, and the cast pulls
+   * the camera onto the ped's back (plan 080/06 field round 2).
    */
-  sphereCast(origin: Vec3, dir: Vec3, radius: number, maxDist: number, exclude?: number): null | { dist: number } {
+  sphereCast(
+    origin: Vec3,
+    dir: Vec3,
+    radius: number,
+    maxDist: number,
+    exclude?: number,
+    alsoExclude?: number,
+  ): null | { dist: number } {
     const length = Math.hypot(dir[0], dir[1], dir[2]);
     if (length === 0) {
       return null;
@@ -675,6 +687,7 @@ export class PhysicsWorld {
       undefined,
       undefined,
       excludeBody,
+      alsoExclude === undefined ? undefined : (collider): boolean => collider.parent()?.handle !== alsoExclude,
     );
 
     return hit === null ? null : { dist: hit.time_of_impact };

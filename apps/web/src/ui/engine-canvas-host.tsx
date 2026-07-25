@@ -111,6 +111,8 @@ const SLOW_FRAME_MS = 20;
 const SPAWN_FACING = Math.PI;
 /** How long the camera keeps EASING its collision response after a scripted enter/exit ends (seconds). */
 const EXIT_EASE_SECONDS = 0.8;
+/** How close (world units) the player must stay to the car they left for the camera to keep ignoring it. */
+const RIDDEN_IGNORE_RANGE = 6;
 /** Player capsule (metres, GTA Z-up): the setup-character defaults for a human. */
 const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HALF_HEIGHT = 0.55;
@@ -995,6 +997,14 @@ async function boot(
    * its new framing.
    */
   let settleEase = 0;
+  /** The car the player last rode — the camera ignores it for a few metres after they step out. */
+  let lastRidden: null | ReturnType<NonNullable<typeof vehicles>['activeVehicle']> = null;
+  /** The just-left car's body while the player is still beside it, else undefined. */
+  const riddenNearby = (at: readonly number[], seated: unknown): number | undefined => {
+    const car = seated === null ? lastRidden : null;
+
+    return car !== null && planarDistance(at, car.position) < RIDDEN_IGNORE_RANGE ? car.body : undefined;
+  };
   /** Refresh the eased-collision window: full while a sequence plays, then counting down. */
   const easeWindow = (left: number, dt: number): number =>
     vehicles?.isSettling() === true ? EXIT_EASE_SECONDS : Math.max(0, left - dt);
@@ -1211,6 +1221,7 @@ async function boot(
     const focus = seatedCar ? toEngine(seatedCar.renderPosition) : playerEngine;
     const motion = motionSignals(seatedCar);
     settleEase = easeWindow(settleEase, dt);
+    lastRidden = vehicles?.ridingVehicle() ?? lastRidden;
     syncCameraConfig();
     // The rig is one pure step over a snapshot of this frame (plan 080/01): the handlers above only
     // ACCUMULATED input, so the smoothing that lands in plan 02 sees whole frames, dt included.
@@ -1240,10 +1251,21 @@ async function boot(
     };
     // Camera collision probe (plan 04): sphere cast against the one Rapier world, excluding the camera's own
     // subject (the seated car body, or the player capsule on foot) so it never collides with what it frames.
-    const collisionExclude = seatedCar ? seatedCar.body : RigidBody.handle[playerEid];
+    const collisionExclude = seatedCar?.body ?? RigidBody.handle[playerEid];
+    // The car the player just climbed out of is ignored too, while they are still beside it: the exit hands
+    // the rig a focus BESIDE the car with the eye still behind it, so the cast finds the car between them
+    // and pulls the camera onto the ped's back. Rapier takes one exclusion directly and the second through
+    // a predicate (`alsoExclude`), because the framed subject's own collider must stay excluded as well.
+    const nearRidden = riddenNearby(gta, seatedCar);
     const cameraProbe: CameraProbe = (from, dir, radius, maxDist) =>
-      physics.sphereCast([from[0], from[1], from[2]], [dir[0], dir[1], dir[2]], radius, maxDist, collisionExclude)
-        ?.dist ?? null;
+      physics.sphereCast(
+        [from[0], from[1], from[2]],
+        [dir[0], dir[1], dir[2]],
+        radius,
+        maxDist,
+        collisionExclude,
+        nearRidden,
+      )?.dist ?? null;
     // Floor guard: the ground below the eye, so a steep down-pitch can't bury the camera under a slope/porch.
     const groundProbe: GroundProbe = (at) => physics.groundBelow([at[0], at[1], at[2]], 30, collisionExclude);
     const camera = stepCamera(rig, snapshot, config.camera, cameraProbe, groundProbe);
@@ -1544,6 +1566,16 @@ function loadWaterTexture(
 }
 
 /**
+ * Roll the occupied car 180° about its OWN forward axis and lift it 1.5 m (the debugger's "flip vehicle" —
+ * prod's implementation, with the quaternion algebra written out so the host keeps its three-free math).
+ */
+/** The follow distance a seated car wants: its LENGTH (2·halfExtent.y) × the config scale, or null on foot. */
+/** Planar (x, y) distance between two GTA points. */
+function planarDistance(a: readonly number[], b: readonly number[]): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1]);
+}
+
+/**
  * Env-probe centre (074/16 step 2): the FOLLOWED thing — the seated car while driving, the player on foot
  * (nearby parked cars share the same probe, like prod's camera-centred cube). Lifted ~1 unit so the ground
  * plane doesn't split the cube in half at the centre. `?probe=0` keeps the analytic-sky fallback.
@@ -1557,11 +1589,6 @@ function toEngine(gta: readonly [number, number, number]): [number, number, numb
   return [gta[0], gta[2], -gta[1]];
 }
 
-/**
- * Roll the occupied car 180° about its OWN forward axis and lift it 1.5 m (the debugger's "flip vehicle" —
- * prod's implementation, with the quaternion algebra written out so the host keeps its three-free math).
- */
-/** The follow distance a seated car wants: its LENGTH (2·halfExtent.y) × the config scale, or null on foot. */
 function vehicleFollowDistance(car: null | { halfExtents: readonly number[] }, scale: number): null | number {
   return car ? 2 * car.halfExtents[1] * scale : null;
 }

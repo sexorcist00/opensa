@@ -194,6 +194,25 @@ both directions (`resolveCollision(..., eased)`): the camera keeps clearing geom
 while the animation plays. The field verdict that rejected the snap is preserved; only the suspension is
 gone.
 
+### 2026-07-25 — FIELD ROUND 3: the shake and the sinking ACCEPTED, two left
+
+Shake and the entry sinking read right now. The two that survived:
+
+**1. The exit still closed in, just less.** Easing the response only SLOWED the pull-in; the cause was still
+there — the car the player just left sits between the new focus (the ped, beside it) and the eye (still
+behind it). Fixed properly: `PhysicsWorld.sphereCast` gained an `alsoExclude` (Rapier takes one exclusion
+directly, a second through a filter predicate), and the host now ignores the car the player last rode while
+they are within `RIDDEN_IGNORE_RANGE` (6 m) of it. The framed subject's own collider must stay excluded too,
+which is exactly why one exclusion was not enough. The 0.8 s eased window stays — it smooths the framing
+change itself.
+
+**2. The landing dip was still invisible on foot.** Verified the path rather than guessing again: a scripted
+landing at 4.5 u/s DID move the drawn eye, by 10.8 cm. So the wiring was never the problem — 10.8 cm at a
+7 m orbit is simply not a thing a person notices, and **`MOTION_CAP` 0.15 was clipping it further**. Raised:
+`MOTION_CAP` **0.15 → 0.25** (still under the floor guard's 0.3 m margin and collision's 0.35 m sphere, so
+the layer still cannot breach a surface), `DIP_CAP` → 0.25, `landingDipScale` **0.12 → 0.22** and `DIP_TIME`
+0.25 → 0.32 s. A normal jump now drops the eye ~0.2 m and takes a third of a second to come back.
+
 **Owed**: a re-run of the COMFORT field round — a long walk (does the bob read as life or as wobble?), stair runs,
 rooftop jumps, curb-hopping in a car and a deliberate wall crash. The plan asks for a comfort verdict
 explicitly, not only a looks verdict, and to tune DOWN when in doubt. Every scale is live on the Camera tab

@@ -211,7 +211,7 @@ const CAMERA_RIG_ROWS = [
   // off-switch and lives with the wheel-zoom toggle below the sliders.
   ['bobAmplitude', 'BOB', 0, 0.15, 0.005],
   ['bobCyclesPerMetre', 'BOB PER METRE', 0.2, 2, 0.05],
-  ['landingDipScale', 'LANDING DIP', 0, 0.2, 0.01],
+  ['landingDipScale', 'LANDING DIP', 0, 0.4, 0.02],
   ['landingDipFullSpeed', 'LANDING FULL AT', 2, 20, 1],
   ['shakeScale', 'SHAKE', 0, 0.2, 0.01],
   ['shakeImpactForce', 'SHAKE FULL AT', 50000, 600000, 25000],

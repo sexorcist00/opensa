@@ -21,8 +21,10 @@ import type { CameraConfig } from '@opensa/game';
 
 import { clamp, damp, smoothDamp, type SmoothDampRef } from '@opensa/math';
 
-/** The hard cap on the summed offset (m). Below collision's sphere radius, so bob can never breach a wall. */
-export const MOTION_CAP = 0.15;
+/** The hard cap on the summed offset (m). Below the floor guard's 0.3 m margin and collision's 0.35 m sphere,
+ *  so the layer can never breach a surface — but high enough that a landing can actually be SEEN at a 7 m
+ *  orbit, which 0.15 was not (field round 2: "jumping on foot, nothing happens"). */
+export const MOTION_CAP = 0.25;
 
 /** How fast the bob amplitude follows the gait (per second) — fast enough to feel immediate, slow enough
  *  that stopping fades rather than cuts. */
@@ -30,9 +32,9 @@ const BOB_LAMBDA = 6;
 /** The lateral (figure-eight) swing as a fraction of the vertical bob. */
 const BOB_LATERAL_SHARE = 0.6;
 /** How long the landing dip takes to recover (seconds). */
-const DIP_TIME = 0.25;
+const DIP_TIME = 0.32;
 /** The deepest a landing may dip the eye (m), whatever the fall. */
-const DIP_CAP = 0.14;
+const DIP_CAP = 0.25;
 /** Shake amplitude half-life-ish decay (seconds). */
 const SHAKE_DECAY = 0.3;
 /** How fast the shake noise is sampled (Hz) — jitter, not a wobble. */
