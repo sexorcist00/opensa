@@ -28,11 +28,12 @@ export function createGameRuntimeConfig(): Config {
     // interpolation, plan 080/03) — a continuous focus, so the spring smooths real motion, not the
     // fixed-step saw. Turn all three to 0 to go back to a rigid attach.
     camera: {
-      // Collision is VEHICLE-ONLY (field verdict): on foot the camera slides up the wall as it did before
-      // collision shipped — capping the on-foot distance pulled it through the wall or below the near plane
-      // in tight spots (porches, doorways), which read worse than the slide. In a car it caps the (size-based)
-      // distance so a car parked against a wall doesn't let the camera reverse through it.
-      collisionMinDistance: 0,
+      // Collision keeps the eye out of walls and off the ground, on foot AND in a car — the camera slides
+      // along a surface instead of sinking through it. The min distance is the NEAR-PLANE radius: below it
+      // the near plane renders from inside geometry (skybox artefacts), above it a wall closer than the min
+      // would push the camera behind the wall — 0.5 is the near plane, so both failure modes need the head
+      // itself against the wall, which never happens. A car parks against a wall and the same cap holds.
+      collisionMinDistance: 0.5,
       collisionRadius: 0.35,
       collisionReleaseTime: 0.4,
       collisionWhiskerAngle: 0.26,

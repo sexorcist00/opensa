@@ -12,7 +12,7 @@ import { initRapier } from './rapier';
 function config(gameState: Config['gameState']): Config {
   return {
     camera: {
-      collisionMinDistance: 0,
+      collisionMinDistance: 0.5,
       collisionRadius: 0.35,
       collisionReleaseTime: 0.4,
       collisionWhiskerAngle: 0.26,

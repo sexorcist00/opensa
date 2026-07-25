@@ -442,24 +442,34 @@ describe('stepCamera — composition (plan 080/03)', () => {
       expect(state.distance).toBeCloseTo(7, 1);
     });
 
-    it('caps the car distance at a wall (collision), and never on foot', () => {
+    it('caps the distance at a wall (collision) on foot AND in a car', () => {
       const wall: CameraProbe = () => 3; // a wall 3 m behind the look point
+      const orbitOf = (state: ReturnType<typeof createRigState>, over = {}): number => {
+        let camera = stepCamera(state, snapshot(over), CONFIG, wall);
+        for (let frame = 0; frame < 120; frame += 1) {
+          camera = stepCamera(state, snapshot(over), CONFIG, wall);
+        }
 
-      // On foot the wall is ignored — the distance holds at the zoom target.
-      const foot = smoothState();
-      for (let frame = 0; frame < 120; frame += 1) {
-        stepCamera(foot, snapshot(), CONFIG, wall);
-      }
-      expect(foot.distance).toBeCloseTo(7, 1);
+        return Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]) / Math.cos(state.pitch);
+      };
 
-      // In the car the same wall caps the (size 12) distance at 3.
-      const car = smoothState();
-      let camera = stepCamera(car, snapshot({ mode: 'vehicle', vehicleDistance: 12 }), CONFIG, wall);
-      for (let frame = 0; frame < 120; frame += 1) {
-        camera = stepCamera(car, snapshot({ mode: 'vehicle', vehicleDistance: 12 }), CONFIG, wall);
+      // On foot the desired 7 is capped to the wall at 3.
+      expect(orbitOf(smoothState())).toBeCloseTo(3, 1);
+      // In a car the size-based 12 is capped to the same wall at 3.
+      expect(orbitOf(smoothState(), { mode: 'vehicle', vehicleDistance: 12 })).toBeCloseTo(3, 1);
+    });
+
+    it('does not cap during a scripted enter/exit (settling), only the floor guard runs', () => {
+      const wall: CameraProbe = () => 3;
+      const state = smoothState();
+      let camera = stepCamera(state, snapshot({ settling: true }), CONFIG, wall);
+      for (let frame = 0; frame < 60; frame += 1) {
+        camera = stepCamera(state, snapshot({ settling: true }), CONFIG, wall);
       }
-      const orbit = Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]);
-      expect(orbit / Math.cos(car.pitch)).toBeCloseTo(3, 1);
+      const orbit =
+        Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]) / Math.cos(state.pitch);
+
+      expect(orbit).toBeCloseTo(7, 1); // the wall cap is suspended; the swing centres without a pull-in jump
     });
   });
 });

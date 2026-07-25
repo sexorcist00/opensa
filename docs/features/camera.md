@@ -67,15 +67,18 @@ ON FOOT only for now (the vehicle versions are plan 05):
 (2·halfExtent.y) × `vehicleDistanceScale` (default 2). The live distance eases to it (a fresh car glides
 out, not snaps), and eases back to the on-foot zoom on exit. Collision caps it.
 
-**Collision** (plan 080/04, behaviour #9) is **VEHICLE-ONLY** (field verdict). On foot the camera slides up
-the wall as it did before collision shipped — capping the distance in tight spots (porches, doorways) pulled
-it through the wall or below the near plane, which read worse than the slide. In a car a sphere cast (radius
-`collisionRadius`, covering the near plane) from the look point along −forward + two whiskers at
-±`collisionWhiskerAngle` caps the size-based distance, so a car parked against a wall can't reverse the
-camera through it. Response is asymmetric — snap IN, ease OUT over `collisionReleaseTime`; a floor guard
-lifts the eye to `groundBelow(eye) + 0.3` (a car under a bridge / on a ramp). Casts run against the one
-Rapier world, excluding the car body; ~4 casts/frame, free. `collisionMinDistance` is 0 by default (a
-positive value pushes the camera behind a wall closer than it, so the slide wins there too).
+**Collision** (plan 080/04, behaviour #9): the eye never sits behind a wall or under the ground — on foot
+AND in a car, the camera slides along a surface instead of sinking through it. A sphere cast (radius
+`collisionRadius`, covering the near plane) sweeps from the look point along −forward + two whiskers at
+±`collisionWhiskerAngle`, min across all three, capping the distance (the chosen zoom / car distance is
+restored after the occlusion). Response is asymmetric — snap IN, ease OUT over `collisionReleaseTime`. It
+never pulls closer than `collisionMinDistance` (the NEAR-PLANE radius, 0.5: below it the near plane renders
+from inside geometry, above it a wall closer than the min pushes the camera behind it — both need the head
+itself against the wall, which never happens). A floor guard lifts the eye to `groundBelow(eye) + 0.3` — it
+runs whenever the rig is attached, INCLUDING during a car enter/exit, so a low seat can't bury the camera.
+The distance CAP is suspended during enter/exit (the pull-in read as a jump — the entry just centres
+behind). Casts run against the one Rapier world (static geometry + cars + props occlude), excluding the
+camera's subject; ~4 casts/frame, free.
 
 **Modes**
 

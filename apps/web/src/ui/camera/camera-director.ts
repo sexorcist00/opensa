@@ -215,22 +215,25 @@ export function stepCamera(
       ? stepLookAhead(state.lookAhead, velocity.x, velocity.z, config, snapshot.dt)
       : stepLookAhead(state.lookAhead, 0, 0, config, snapshot.dt);
   const lookPoint: [number, number, number] = [target[0] + ahead.x, target[1], target[2] + ahead.z];
-  // Collision (plan 04) is VEHICLE-ONLY (field verdict): on foot the camera slides up the wall as it always
-  // did — capping the distance in tight spots (porches, doorways) pulled it through the wall or below the
-  // near plane, which read worse. In a car it caps the size-based distance so a car against a wall can't
-  // reverse the camera through it. A scripted enter/exit skips it (the pull-in read as a jump — just centre).
-  const collides = snapshot.mode === 'vehicle' && !state.legacy && !snapshot.bench && !snapshot.settling;
-  const collideDistance = collides
-    ? resolveCollision(
-        state.collision,
-        lookPoint,
-        [-forward[0], -forward[1], -forward[2]],
-        state.distance,
-        config,
-        probe,
-        snapshot.dt,
-      )
-    : state.distance;
+  // Collision (plan 04): cap the distance so the eye clears geometry between the look point and the eye —
+  // on foot AND in a car (the camera slides along walls, never through them). The eye sits at
+  // `lookPoint − forward · distance`, so the cast runs from the look point along `−forward`. A detached fly
+  // eye flies through geometry by design, the bench is bypassed, and a scripted enter/exit skips the CAP (the
+  // pull-in read as a jump — just centre behind); the floor guard below still runs then, so the camera never
+  // sinks into the ground while getting in or out.
+  const attached = !state.legacy && !state.flyEye && !snapshot.bench;
+  const collideDistance =
+    attached && !snapshot.settling
+      ? resolveCollision(
+          state.collision,
+          lookPoint,
+          [-forward[0], -forward[1], -forward[2]],
+          state.distance,
+          config,
+          probe,
+          snapshot.dt,
+        )
+      : state.distance;
 
   const camera = resolveCamera({
     aspect: snapshot.aspect,
@@ -244,8 +247,9 @@ export function stepCamera(
     target: lookPoint,
   });
 
-  // Floor guard rides with vehicle collision (a car under a bridge / on a ramp): lift the eye off the ground.
-  return collides ? { ...camera, eye: guardFloor(camera.eye, groundProbe) } : camera;
+  // Floor guard runs whenever the rig is attached (incl. during a car enter/exit) so a steep down-pitch on a
+  // slope/porch, or a low seat, can't bury the eye and show only skybox.
+  return attached ? { ...camera, eye: guardFloor(camera.eye, groundProbe) } : camera;
 }
 
 /** Mouse look: raw pixel deltas → damped yaw/pitch, clamped per mode. Manual look always wins (036's rule). */

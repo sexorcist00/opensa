@@ -102,23 +102,29 @@ probe boundary only.
 `ls-noon` with collision on: **120 fps / 8.334 ms / p95 10 / draws 1184** — vsync-capped, GPU pass 2.877 ms,
 i.e. the per-frame casts are free (Rapier ray at this collider density is trivial). Suite 2650 green.
 
-### 2026-07-25 — field round: collision made VEHICLE-ONLY
+### 2026-07-25 — field round: the min-distance and the foot toggle, corrected TWICE
 
-The user's field round rejected on-foot collision outright: capping the on-foot distance pulled the camera
-THROUGH a wall (a `collisionMinDistance` bigger than the wall gap puts the eye behind it) or below the near
-plane in tight spots (porches, doorways) — both read worse than the pre-collision slide, where the camera
-just rides the fixed distance up the wall. Verdict: **on foot the camera slides, no collision.**
+Two wrong turns before it landed, both on the same knob:
 
-- Collision now runs ONLY in `mode === 'vehicle'` (and not during a scripted enter/exit — the pull-in read
-  as a jump; the entry just centres behind). `collisionMinDistance` defaults to 0, `collisionRadius` stays
-  0.35 for the car. The floor guard rides with vehicle collision (a car under a bridge / on a ramp).
-- Where collision earns its keep is the car: paired with the new **size-based vehicle distance** (the car's
-  length × `vehicleDistanceScale`, default 2 — a bus frames further than a hatchback; the live distance
-  EASES to it, and back to the on-foot zoom on exit), the cast caps that distance so a car parked against a
-  wall can't reverse the camera through it. That is exactly the user's ask: "габариты × 2, but the wall
-  limits it".
-- Enter/exit: collision suspended during `settling` (only the centre-behind swing plays, no pull-in jump).
+1. First cut shipped `collisionMinDistance` 1.6 → a wall closer than 1.6 m put the eye BEHIND it (the min
+   floors the distance, so a near wall can't pull it in past the min). Read as "falling through the wall".
+2. Reading "bring back the slide" as "turn collision off on foot", I made it vehicle-only. That was wrong —
+   without it the on-foot camera sank through the ground and into buildings (the user: "раньше скользило по
+   земле/зданию, теперь проваливаемся"). Collision is what MAKES the slide.
 
-Field-checked headless: on-foot at the porch the camera sits at a normal distance and slides on the wall (no
-skybox, no through-wall); the size-based car distance eases in. Suite 2652 green. Owed to the user's field
-round: the car-against-wall cap, and the car-size framing feel.
+The real fix is the min distance = the **near-plane radius (0.5)**. Below it the near plane renders from
+inside geometry (the skybox frame `min = 0` produced); above it a wall closer than the min pushes the eye
+behind the wall (the `min = 1.6` fall-through). 0.5 is the near plane, so both failure modes need the head
+itself against the wall — which never happens. Collision is back on foot AND in a car; the camera slides
+along walls and the ground. The floor guard runs whenever the rig is attached, INCLUDING during an
+enter/exit (a low seat can't bury the camera); only the distance CAP is suspended during `settling` (the
+pull-in read as a jump — the entry just centres behind).
+
+Also landed: **size-based vehicle distance** — a seated car frames out by its length ×
+`vehicleDistanceScale` (default 2; a bus frames further than a hatchback), the live distance EASES to it and
+back to the on-foot zoom on exit, and collision caps it so a car parked against a wall can't reverse the
+camera through it (the user's "габариты × 2, but the wall limits it").
+
+Field-checked headless: on foot at the porch the camera sits at a normal distance and slides on the wall (no
+skybox, no through-wall, no sinking). Suite green. Owed to the user's field round: the on-foot slide feel,
+the car-against-wall cap, and the car-size framing.
