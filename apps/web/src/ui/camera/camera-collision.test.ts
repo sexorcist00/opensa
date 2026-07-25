@@ -28,62 +28,63 @@ describe('gtaFromEngine', () => {
   });
 });
 
+const SUBJECT = 1.5; // the ped framing radius the tests use as the collision floor
+
 describe('resolveCollision', () => {
   describe('negative cases', () => {
     it('passes the distance through untouched when there is no probe', () => {
       const state = createCollisionState(7);
 
-      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, null, DT)).toBe(7);
+      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, null, DT, SUBJECT)).toBe(7);
     });
 
     it('passes through when the radius disables collision', () => {
       const state = createCollisionState(7);
 
-      expect(resolveCollision(state, LOOK, BEHIND, 7, { ...CONFIG, collisionRadius: 0 }, fixed(2), DT)).toBe(7);
+      expect(resolveCollision(state, LOOK, BEHIND, 7, { ...CONFIG, collisionRadius: 0 }, fixed(2), DT, SUBJECT)).toBe(
+        7,
+      );
     });
 
     it('never extends the distance past the desired zoom (a far wall is not a pull-out)', () => {
       const state = createCollisionState(7);
 
-      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(20), DT)).toBe(7);
+      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(20), DT, SUBJECT)).toBe(7);
     });
   });
 
   describe('positive cases', () => {
     it('snaps IN immediately when a wall is closer than the desired distance', () => {
       const state = createCollisionState(7);
-      // No whiskers so the single cast is the whole answer.
-      const noWhisker = { ...CONFIG, collisionWhiskerAngle: 0 };
 
-      expect(resolveCollision(state, LOOK, BEHIND, 7, noWhisker, fixed(3), DT)).toBeCloseTo(3, 6);
+      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(3), DT, SUBJECT)).toBeCloseTo(3, 6);
     });
 
-    it('never pulls closer than the min distance (a wall shoves in, but not INTO the player)', () => {
+    it('BLOCKS at the subject boundary when a wall is closer than the subject fits', () => {
       const state = createCollisionState(7);
-      const noWhisker = { ...CONFIG, collisionMinDistance: 1.6, collisionWhiskerAngle: 0 };
 
-      // A wall 0.5 m behind the head would put the eye in the ped; the min distance holds at 1.6.
-      expect(resolveCollision(state, LOOK, BEHIND, 7, noWhisker, fixed(0.5), DT)).toBeCloseTo(1.6, 6);
+      // A wall 0.5 m behind the head would put the eye inside the ped; it holds at the 1.5 subject radius.
+      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(0.5), DT, SUBJECT)).toBeCloseTo(1.5, 6);
     });
 
-    it('eases OUT over collisionReleaseTime when the wall clears', () => {
-      const state = createCollisionState(3); // was pulled in to 3
-      const noWhisker = { ...CONFIG, collisionWhiskerAngle: 0 };
-
-      const first = resolveCollision(state, LOOK, BEHIND, 7, noWhisker, fixed(null), DT);
-      expect(first).toBeGreaterThan(3);
-      expect(first).toBeLessThan(7); // still gliding out, not popped
-
+    it('the block holds steady frame to frame (no jitter), then eases out when the wall clears', () => {
+      const state = createCollisionState(7);
+      // Pinned: repeated frames all report the subject radius, unchanged.
+      for (let frame = 0; frame < 10; frame += 1) {
+        expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(0.5), DT, SUBJECT)).toBeCloseTo(1.5, 6);
+      }
+      // Player reaches open space: it eases back out toward the desired distance.
+      const first = resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(null), DT, SUBJECT);
+      expect(first).toBeGreaterThan(1.5);
       let value = first;
       for (let frame = 0; frame < 300; frame += 1) {
-        value = resolveCollision(state, LOOK, BEHIND, 7, noWhisker, fixed(null), DT);
+        value = resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(null), DT, SUBJECT);
       }
       expect(value).toBeCloseTo(7, 2);
     });
 
-    it('takes the MIN across the primary and the two whiskers', () => {
+    it('takes the MIN across the primary and the two whiskers when whiskers are on', () => {
       const state = createCollisionState(7);
-      // The centre cast is clear, but a flanking whisker sees a near wall — the camera eases in early.
       let call = 0;
       const probe: CameraProbe = () => {
         call += 1;
@@ -91,7 +92,9 @@ describe('resolveCollision', () => {
         return call === 1 ? null : 2.5; // primary clear, whiskers hit at 2.5
       };
 
-      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, probe, DT)).toBeCloseTo(2.5, 6);
+      expect(
+        resolveCollision(state, LOOK, BEHIND, 7, { ...CONFIG, collisionWhiskerAngle: 0.26 }, probe, DT, SUBJECT),
+      ).toBeCloseTo(2.5, 6);
     });
 
     it('casts from the look point in GTA space, along −forward', () => {
@@ -101,7 +104,7 @@ describe('resolveCollision', () => {
 
         return null;
       };
-      resolveCollision(createCollisionState(7), LOOK, BEHIND, 7, { ...CONFIG, collisionWhiskerAngle: 0 }, probe, DT);
+      resolveCollision(createCollisionState(7), LOOK, BEHIND, 7, CONFIG, probe, DT, SUBJECT);
 
       expect(seen[0].from).toEqual(gtaFromEngine(LOOK)); // [0, 0, 2]
       expect(seen[0].dir).toEqual(gtaFromEngine(BEHIND)); // [0, 1, 0]

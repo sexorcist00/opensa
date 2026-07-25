@@ -125,6 +125,23 @@ Also landed: **size-based vehicle distance** — a seated car frames out by its 
 back to the on-foot zoom on exit, and collision caps it so a car parked against a wall can't reverse the
 camera through it (the user's "габариты × 2, but the wall limits it").
 
-Field-checked headless: on foot at the porch the camera sits at a normal distance and slides on the wall (no
-skybox, no through-wall, no sinking). Suite green. Owed to the user's field round: the on-foot slide feel,
-the car-against-wall cap, and the car-size framing.
+### 2026-07-25 — per-subject floor + block-when-pinned (user field round, the model that stuck)
+
+The min-distance knob went round in circles (0 → 1.6 → 0.5 → 1.5) because it was one number trying to do two
+jobs. The user's framing separated them cleanly:
+
+- **The floor is the SUBJECT's real size**, not a global constant. `CameraSnapshot.subjectRadius` is the car's
+  planar half-extent + clearance, or the on-foot ped framing radius (~1.5, far enough to read the whole body,
+  not a face). The eye can never come closer than that, so it never enters its own subject — which is what a
+  fixed 0.5 let happen in a car (the camera cranked into the bodywork on orbit).
+- **When a wall is closer than the subject fits** — the eye pinned between subject and wall, no room — the
+  distance is BLOCKED at the subject boundary. It holds steady (a touch of wall clip behind the camera)
+  instead of diving into the ped/car, and eases back out once the player reaches open space. This is the
+  user's "заблокировать пока не отойдёт в более широкое пространство".
+- **Whiskers OFF by default**: the ±15° flanking casts fired on a pole or wall BESIDE the player/car (a thin
+  pole behind-and-to-the-side yanked the car camera in), so only the straight-back cast counts now.
+- `collisionMinDistance` demoted to the near-plane SAFETY floor (0.5) UNDER the subject floor.
+
+Field-checked headless: on foot at the porch the camera holds at a readable distance (whole body, no face,
+no skybox, no through-wall). Suite 2653 green. Owed to the user's field round: the on-foot framing distance,
+the car orbit against a wall, and the pinned-block feel.

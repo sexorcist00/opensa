@@ -68,7 +68,12 @@ export function guardFloor(
  * Cap `desiredDistance` so the eye clears geometry between the look point and the eye.
  *
  * `lookPointEngine` is the orbit centre (head height — by definition outside geometry); `dirEngine` is the
- * unit vector from the look point toward the eye (engine space). Returns the distance to render this frame.
+ * unit vector from the look point toward the eye (engine space). `subjectRadius` is the framed object's own
+ * size (the ped, or the car) — the eye never comes closer than this, so it never enters its own subject.
+ *
+ * When a wall is closer than `subjectRadius` (the camera is pinned between the subject and the wall, no room
+ * to fit) the distance is BLOCKED at the subject boundary — it holds steady (a little wall clip behind the
+ * camera) instead of diving into the subject, and eases back out once the player reaches open space.
  */
 export function resolveCollision(
   state: CollisionState,
@@ -78,15 +83,17 @@ export function resolveCollision(
   config: CameraConfig,
   probe: CameraProbe | null,
   dt: number,
+  subjectRadius: number,
 ): number {
   if (probe === null || config.collisionRadius <= 0) {
     state.shown = desiredDistance;
 
     return desiredDistance;
   }
+  // The floor is the subject's own size (never inside the ped/car), but at least the near-plane radius.
+  const floor = Math.min(desiredDistance, Math.max(config.collisionMinDistance, subjectRadius));
   const fromGta = gtaFromEngine(lookPointEngine);
-  const primary = castDistance(probe, fromGta, dirEngine, 0, config, desiredDistance);
-  let allowed = primary;
+  let allowed = castDistance(probe, fromGta, dirEngine, 0, config, desiredDistance);
   if (config.collisionWhiskerAngle > 0) {
     // Whiskers ease the pull-in in early: take the min of the primary and the two flanking casts.
     allowed = Math.min(
@@ -95,9 +102,13 @@ export function resolveCollision(
       castDistance(probe, fromGta, dirEngine, -config.collisionWhiskerAngle, config, desiredDistance),
     );
   }
-  // Never pull closer than the min distance: a wall shoves the camera in, but not INTO the player. Below this
-  // the camera stops and accepts a little wall clip rather than a face full of ped.
-  allowed = Math.max(allowed, Math.min(desiredDistance, config.collisionMinDistance));
+  if (allowed < floor) {
+    // Pinned: the wall is closer than the subject fits. Block at the floor (the subject boundary) — the
+    // camera holds there, wall clipping a touch behind it, until the player moves out into open space.
+    state.shown = floor;
+
+    return state.shown;
+  }
   // Snap IN (a wall is never shown a single frame); ease OUT so leaving a doorway glides.
   if (allowed < state.shown) {
     state.shown = allowed;

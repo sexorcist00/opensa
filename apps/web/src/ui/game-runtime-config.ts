@@ -28,15 +28,16 @@ export function createGameRuntimeConfig(): Config {
     // interpolation, plan 080/03) — a continuous focus, so the spring smooths real motion, not the
     // fixed-step saw. Turn all three to 0 to go back to a rigid attach.
     camera: {
-      // Collision keeps the eye out of walls and off the ground, on foot AND in a car — the camera slides
-      // along a surface instead of sinking through it. The min distance is the NEAR-PLANE radius: below it
-      // the near plane renders from inside geometry (skybox artefacts), above it a wall closer than the min
-      // would push the camera behind the wall — 0.5 is the near plane, so both failure modes need the head
-      // itself against the wall, which never happens. A car parks against a wall and the same cap holds.
+      // Collision keeps the eye out of a wall DIRECTLY behind the player/car, on foot and in a car. Field
+      // lessons baked in: whisker angle 0 (the ±15° flanking casts fired on a pole/wall BESIDE you, yanking
+      // the camera in for nothing — only the straight-back cast counts now). The "don't enter the subject"
+      // floor is per-subject (the ped framing radius / the car's bulk, computed in the host), not this knob —
+      // `collisionMinDistance` is just the near-plane safety floor under it. When a wall is closer than the
+      // subject fits, the distance BLOCKS at the subject boundary and waits for open space.
       collisionMinDistance: 0.5,
       collisionRadius: 0.35,
       collisionReleaseTime: 0.4,
-      collisionWhiskerAngle: 0.26,
+      collisionWhiskerAngle: 0,
       deadZone: 0.08,
       followDistance: 7,
       followHeight: 0.9,
