@@ -101,8 +101,9 @@ export interface CameraConfig {
    *  size-based distance). The speed sense of #5: the frame opens up as the car gets quick, and visibly
    *  glides back in under braking. */
   vehicleDistanceGain: number;
-  /** In a car the follow distance is the car's LENGTH × this (a bus frames further out than a hatchback).
-   *  Collision then caps it, so a car against a wall doesn't push the camera through. */
+  /** In a car the follow distance at REST is the car's LENGTH × this (a bus frames further out than a
+   *  hatchback); {@link vehicleDistanceGain} then opens it up with speed. Collision caps the result, so a
+   *  car against a wall doesn't push the camera through. */
   vehicleDistanceScale: number;
   /** The speed (units/s) at which {@link vehicleDistanceGain} is fully applied (smoothstep from 0). */
   vehicleDistanceSpeed: number;

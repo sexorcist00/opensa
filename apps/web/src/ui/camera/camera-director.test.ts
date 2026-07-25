@@ -611,7 +611,10 @@ describe('stepCamera — the vehicle camera (plan 080/05)', () => {
 
       expect(state.yaw).toBe(before.yaw); // nothing re-seeds the yaw
       expect(Math.abs(state.fov - before.fov)).toBeLessThan(0.02); // the lens eases, it does not cut
-      expect(Math.abs(state.distance - before.distance)).toBeLessThan(0.5);
+      // Continuity is a FRACTION of the gap, not an absolute distance: whatever the two tables are tuned
+      // to, one step may only close part of the way to the on-foot target.
+      const gap = Math.abs(before.distance - CONFIG.followDistance);
+      expect(Math.abs(state.distance - before.distance)).toBeLessThan(gap * 0.25);
       expect(camera.fovYRad).toBe(state.fov); // the frame is drawn with the channel's live value
     });
   });

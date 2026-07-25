@@ -140,6 +140,28 @@ control measured in the same run** — +0.16 µs (+42%), of which the per-step t
 snapshots, which is exactly why the foot control was measured alongside instead of comparing across rows.
 Camera suite 136 green (+27), full apps/web + packages/game 738 green; `tsc` + eslint clean.
 
-**Owed**: the DRIVE field round (city corners at speed, handbrake drifts, highway top speed, a tunnel for
+### 2026-07-25 — DRIVE FIELD ROUND 1: the seated distance halved, the speed ramp carries it back
+
+User's verdict after driving: the camera reads right overall, but **it sits too far from the car the moment
+you get in — about half that, and let speed open it back out to roughly what it does now.**
+
+That is exactly the split the two knobs were built for, so the fix is tuning, not code: the REST distance is
+`vehicleDistanceScale` and the speed ramp is `vehicleDistanceGain`.
+
+| field                  | was | now | effect on a ~4.4 m car                                    |
+| ---------------------- | --- | --- | ---------------------------------------------------------- |
+| `vehicleDistanceScale` | 2   | 1   | at rest 8.8 → **4.4 m** (one car length behind, half of it) |
+| `vehicleDistanceGain`  | 2   | 5   | at 40 u/s 10.8 → **9.4 m** — about where the old rest framing sat |
+
+So the framing now STARTS close and the speed ramp is what earns the old distance back, instead of starting
+far and barely moving. The reference speed stays 40 u/s and the glide is the same zoom damp, so braking pulls
+it back in over ~90 ms. A bus still frames further out than a hatchback — the base is a car LENGTH either way,
+just one of them instead of two.
+
+Test note: the seat→drive→exit continuity case asserted an absolute per-step distance change (< 0.5 m), which
+was really a statement about the old gap. It now asserts the honest property — one step may close at most a
+QUARTER of the way to the on-foot target — so a future retune cannot break it for the wrong reason.
+
+**Owed**: the rest of the DRIVE field round (city corners at speed, handbrake drifts, highway top speed, a tunnel for
 collision+FOV together, repeated enter/exit) — every default above is a first guess until the user drives
 it. The look-behind key (§6) ships after that round, per this plan's own order.
