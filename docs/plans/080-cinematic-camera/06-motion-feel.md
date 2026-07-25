@@ -213,7 +213,23 @@ landing at 4.5 u/s DID move the drawn eye, by 10.8 cm. So the wiring was never t
 the layer still cannot breach a surface), `DIP_CAP` → 0.25, `landingDipScale` **0.12 → 0.22** and `DIP_TIME`
 0.25 → 0.32 s. A normal jump now drops the eye ~0.2 m and takes a third of a second to come back.
 
-**Owed**: a re-run of the COMFORT field round — a long walk (does the bob read as life or as wobble?), stair runs,
+### 2026-07-25 — FIELD ROUND 4: exit ACCEPTED; the landing dip SHIPS OFF
+
+The exit no longer closes in — accepted. The landing dip was tried three times (3.4 cm → 10.8 cm → ~20 cm
+with the layer cap raised out of its way) and the user never saw it: **"forget it, ship without it"**.
+
+Shipped default `landingDipScale: 0`. The code, the tests and the `LANDING DIP` slider stay — the effect is
+correct, it is the VIEWPOINT that defeats it: at a 7 m third-person orbit the whole frame dropping 20 cm is
+a couple of percent of screen height on a body that already animates its own landing, so the camera's
+contribution is swamped by the ped's. It is a first-person/close-camera effect, and **plan 08's first-person
+preset is the natural place for it to come back** — the eye is the head there, and the same one-shot will
+read immediately. (`TEST_CAMERA_CONFIG` deliberately keeps a non-zero value so the behaviour stays pinned by
+tests even while it is off in the shipped config.)
+
+**Round 4 net**: bob, corner swing, sprint kick, shake, entry sliding/sinking, the backing-up fix and the
+exit framing are all field-accepted. The layer's remaining owed item is a long-session COMFORT verdict.
+
+**Owed**: a long-session COMFORT verdict — a long walk (does the bob read as life or as wobble?), stair runs,
 rooftop jumps, curb-hopping in a car and a deliberate wall crash. The plan asks for a comfort verdict
 explicitly, not only a looks verdict, and to tune DOWN when in doubt. Every scale is live on the Camera tab
 with `reducedMotion` as the A/B.

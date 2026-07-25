@@ -55,7 +55,10 @@ export function createGameRuntimeConfig(): Config {
       inputSmoothTime: 0.03,
       lagMaxDistance: 1.2,
       landingDipFullSpeed: 5,
-      landingDipScale: 0.22,
+      // Landing dip: SHIPPED OFF (080/06 field round 3). It works and is tested — it simply never read at a
+      // 7 m third-person orbit, at any depth tried. Raise `LANDING DIP` on the Camera tab to bring it back;
+      // it is likely to earn its place with 08's first-person preset, where the eye is the head.
+      landingDipScale: 0,
       lookAheadDistance: 0.8,
       lookAheadFullSpeed: 7,
       lookAheadTime: 0.45,

@@ -98,10 +98,12 @@ the floor guard:
   the player stops, with no threshold anywhere. Vertical at stride frequency, lateral at half (the
   figure-eight); the amplitude damps in and out with the gait, so walk↔run eases and the phase never
   restarts. On foot only — a car's suspension already provides the life.
-- **Landing dip**: an instant drop on the touchdown frame, recovered over 0.25 s. The look point dips half
-  as far, which pitches the frame a whisker and reads as knees bending. The edge comes from 088's real
-  `LOCOMOTION_LAND`/`HARD_LAND`/`COLLAPSE` states plus `Locomotion.fallSpeed`, not from a guessed velocity
-  sign.
+- **Landing dip** — implemented and tested, but **shipped OFF** (`landingDipScale: 0`): an instant drop on
+  the touchdown frame recovered over 0.32 s, the look point dipping half as far. The edge comes from 088's
+  real `LOCOMOTION_LAND`/`HARD_LAND`/`COLLAPSE` states plus `Locomotion.fallSpeed`, not a guessed velocity
+  sign. Three field attempts at increasing depth were never visible at a 7 m third-person orbit — the ped's
+  own landing animation swamps a 20 cm frame drop. Expected to earn its place in plan 08's first-person
+  preset, where the eye is the head.
 - **Impact shake**: decaying two-octave value noise at 15 Hz from a deterministic per-hit seed (no
   `Math.random`, so a crash replays identically in a test). The trigger is
   `VehicleDamageSystem.peakImpact(body)` — the damage system already watches collisions and
