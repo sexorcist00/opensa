@@ -67,20 +67,21 @@ ON FOOT only for now (the vehicle versions are plan 05):
 (2·halfExtent.y) × `vehicleDistanceScale` (default 2). The live distance eases to it (a fresh car glides
 out, not snaps), and eases back to the on-foot zoom on exit. Collision caps it.
 
-**Collision** (plan 080/04, behaviour #9): the eye never sits behind a wall or under the ground — on foot
-AND in a car, the camera slides along a surface instead of sinking through it. A single sphere cast (radius
-`collisionRadius`, near-plane cover) sweeps from the look point along −forward (whiskers OFF by default: the
-±15° flanking casts fired on a pole/wall BESIDE you, not between you and the eye). It caps the distance, snap
-IN / ease OUT over `collisionReleaseTime`; the chosen zoom / car distance restores after the occlusion.
+**Collision** (plan 080/04, behaviour #9): the eye never sits behind a wall directly behind the player/car,
+on foot AND in a car — the camera slides up the wall instead of passing through it. A single sphere cast
+(radius `collisionRadius`, near-plane cover) sweeps from the look point along −forward (whiskers OFF by
+default: the ±15° flanking casts fired on a pole/wall BESIDE you, not between you and the eye). It caps the
+distance, snap IN / ease OUT over `collisionReleaseTime`; the chosen zoom / car distance restores after the
+occlusion. The floor is `collisionMinDistance` — the near-plane radius (0.5): a wall closer than that pulls
+the eye right up to the surface, so it may clip INTO the ped for a frame, but it never slides BEHIND the wall
+(which reads far worse) and it never stalls. A floor guard lifts the eye to `groundBelow(eye) + 0.3`,
+running whenever the rig is attached (incl. a car enter/exit, so a low seat can't bury it); only the distance
+CAP is suspended during enter/exit. Casts run against the one Rapier world, excluding the subject; ~1
+cast/frame + the ground guard, free.
 
-The floor is **per-subject** (`CameraSnapshot.subjectRadius`, computed by the host: the car's planar bulk +
-clearance, or the on-foot ped framing radius ~1.5 — far enough to read the whole body, not a face), at least
-`collisionMinDistance` (the near-plane safety, 0.5). The camera never enters its own subject. When a wall is
-closer than the subject fits (the eye is PINNED between the subject and the wall), the distance is BLOCKED at
-the subject boundary — it holds steady, a little wall clip behind the camera, and eases back out once the
-player reaches open space. A floor guard lifts the eye to `groundBelow(eye) + 0.3`, running whenever the rig
-is attached (incl. a car enter/exit, so a low seat can't bury it); only the distance CAP is suspended during
-enter/exit. Casts run against the one Rapier world, excluding the subject; ~2 casts/frame, free.
+Known accepted trade-off (field verdict, stop point): a wall very close directly behind the player lets the
+camera clip into the ped a little — the alternatives (a size-based floor, or freezing the eye in the world)
+either fell BEHIND the wall or stalled, both worse. Revisit if a real pull-in policy is wanted.
 
 **Modes**
 

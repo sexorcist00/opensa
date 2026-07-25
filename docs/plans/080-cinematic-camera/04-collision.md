@@ -142,6 +142,14 @@ jobs. The user's framing separated them cleanly:
   pole behind-and-to-the-side yanked the car camera in), so only the straight-back cast counts now.
 - `collisionMinDistance` demoted to the near-plane SAFETY floor (0.5) UNDER the subject floor.
 
-Field-checked headless: on foot at the porch the camera holds at a readable distance (whole body, no face,
-no skybox, no through-wall). Suite 2653 green. Owed to the user's field round: the on-foot framing distance,
-the car orbit against a wall, and the pinned-block feel.
+### 2026-07-25 — reverted to the simple near-plane cap (field stop point)
+
+Two richer models were tried and rejected by the field round: a per-subject floor (blocked the eye at the
+subject boundary → still fell BEHIND a close wall), and freezing the eye in the world when pinned (the
+camera stalled and didn't recover). The user's call: keep the SIMPLE cap — `collisionMinDistance` is the
+near-plane radius (0.5), a wall closer than that pulls the eye up to the surface (it may clip into the ped
+for a frame) but never slides behind the wall and never stalls. Whiskers stay OFF (side false-positives).
+`subjectRadius`, the pinned/freeze path, and `CollisionResult` were removed. Size-based vehicle distance
+stayed. Suite 2654 green. Accepted trade-off recorded in `docs/features/camera.md`: a very close wall behind
+the player can clip the camera into the ped a touch — that's the stop point until a real pull-in policy is
+wanted.

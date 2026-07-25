@@ -28,7 +28,6 @@ const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
   mode: 'foot',
   pan: null,
   settling: false,
-  subjectRadius: 1.5,
   vehicleDistance: null,
   walkKeys: new Set(),
   zoomSteps: 0,
@@ -471,6 +470,19 @@ describe('stepCamera — composition (plan 080/03)', () => {
         Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]) / Math.cos(state.pitch);
 
       expect(orbit).toBeCloseTo(7, 1); // the wall cap is suspended; the swing centres without a pull-in jump
+    });
+
+    it('holds the eye at the near-plane floor against a very close wall (clips the ped, not skybox)', () => {
+      const near: CameraProbe = () => 0.2; // a wall 0.2 m behind — inside the near plane
+      const state = smoothState();
+      let camera = stepCamera(state, snapshot(), CONFIG, near);
+      for (let frame = 0; frame < 60; frame += 1) {
+        camera = stepCamera(state, snapshot(), CONFIG, near);
+      }
+      const orbit =
+        Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]) / Math.cos(state.pitch);
+
+      expect(orbit).toBeCloseTo(CONFIG.collisionMinDistance, 1); // held at 0.5, never behind the wall
     });
   });
 });

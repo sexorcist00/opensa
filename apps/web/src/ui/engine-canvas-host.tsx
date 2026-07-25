@@ -103,11 +103,6 @@ const SLOW_FRAME_MS = 20;
 
 /** The GTA heading the player spawns facing — the camera seeds behind it, the pose falls back to it. */
 const SPAWN_FACING = Math.PI;
-/** Collision never pulls the on-foot eye closer than this (world units) — far enough to read the whole ped,
- *  not drive into the face. Bigger than the capsule so a wall behind stops the camera at a readable spot. */
-const PED_SUBJECT_RADIUS = 1.5;
-/** Clearance added to a car's planar half-extent so the collision floor sits just OUTSIDE the bodywork. */
-const VEHICLE_SUBJECT_MARGIN = 0.6;
 /** Player capsule (metres, GTA Z-up): the setup-character defaults for a human. */
 const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HALF_HEIGHT = 0.55;
@@ -1185,7 +1180,6 @@ async function boot(
       mode: cameraModeOf(rig.flyEye !== null, seatedCar !== null),
       pan: pendingInput.pan,
       settling: vehicles?.isSettling() ?? false,
-      subjectRadius: cameraSubjectRadius(seatedCar),
       vehicleDistance: vehicleFollowDistance(seatedCar, config.camera.vehicleDistanceScale),
       walkKeys: flyKeys,
       zoomSteps: pendingInput.zoom,
@@ -1320,12 +1314,6 @@ function cameraModeOf(flying: boolean, seated: boolean): CameraSnapshot['mode'] 
   }
 
   return seated ? 'vehicle' : 'foot';
-}
-
-/** How close collision may pull the eye: a car's planar bulk + clearance, or the on-foot ped framing radius
- *  (far enough back to read the whole body, not a face). */
-function cameraSubjectRadius(car: null | { halfExtents: readonly number[] }): number {
-  return car ? Math.max(car.halfExtents[0], car.halfExtents[1]) + VEHICLE_SUBJECT_MARGIN : PED_SUBJECT_RADIUS;
 }
 
 function flipActiveVehicle(physics: PhysicsWorld, active: null | { body: number }): void {

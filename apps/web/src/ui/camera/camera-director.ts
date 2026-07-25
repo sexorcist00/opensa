@@ -89,9 +89,6 @@ export interface CameraSnapshot {
   /** A scripted enter/exit is mid-sequence: hold auto-center off (the steered swing to the target still
    *  plays) so the camera does not chase the ped's approach-run and climb twitches. */
   settling: boolean;
-  /** The framed object's own size (world units): the ped, or the seated car. Collision never pulls the eye
-   *  closer than this — it never enters its own subject. */
-  subjectRadius: number;
   /** The follow distance a seated car wants (its length × `vehicleDistanceScale`), or null on foot. The live
    *  distance eases to it, and collision caps it. */
   vehicleDistance: null | number;
@@ -235,7 +232,6 @@ export function stepCamera(
           config,
           probe,
           snapshot.dt,
-          snapshot.subjectRadius,
         )
       : state.distance;
 

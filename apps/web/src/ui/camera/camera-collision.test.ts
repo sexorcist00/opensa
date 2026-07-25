@@ -28,28 +28,24 @@ describe('gtaFromEngine', () => {
   });
 });
 
-const SUBJECT = 1.5; // the ped framing radius the tests use as the collision floor
-
 describe('resolveCollision', () => {
   describe('negative cases', () => {
     it('passes the distance through untouched when there is no probe', () => {
       const state = createCollisionState(7);
 
-      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, null, DT, SUBJECT)).toBe(7);
+      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, null, DT)).toBe(7);
     });
 
     it('passes through when the radius disables collision', () => {
       const state = createCollisionState(7);
 
-      expect(resolveCollision(state, LOOK, BEHIND, 7, { ...CONFIG, collisionRadius: 0 }, fixed(2), DT, SUBJECT)).toBe(
-        7,
-      );
+      expect(resolveCollision(state, LOOK, BEHIND, 7, { ...CONFIG, collisionRadius: 0 }, fixed(2), DT)).toBe(7);
     });
 
     it('never extends the distance past the desired zoom (a far wall is not a pull-out)', () => {
       const state = createCollisionState(7);
 
-      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(20), DT, SUBJECT)).toBe(7);
+      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(20), DT)).toBe(7);
     });
   });
 
@@ -57,28 +53,25 @@ describe('resolveCollision', () => {
     it('snaps IN immediately when a wall is closer than the desired distance', () => {
       const state = createCollisionState(7);
 
-      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(3), DT, SUBJECT)).toBeCloseTo(3, 6);
+      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(3), DT)).toBeCloseTo(3, 6);
     });
 
-    it('BLOCKS at the subject boundary when a wall is closer than the subject fits', () => {
+    it('never comes closer than the near-plane floor (a very close wall clips the ped, not skybox)', () => {
       const state = createCollisionState(7);
 
-      // A wall 0.5 m behind the head would put the eye inside the ped; it holds at the 1.5 subject radius.
-      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(0.5), DT, SUBJECT)).toBeCloseTo(1.5, 6);
+      // A wall 0.2 m behind would put the near plane inside geometry; it holds at the 0.5 near-plane floor.
+      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(0.2), DT)).toBeCloseTo(0.5, 6);
     });
 
-    it('the block holds steady frame to frame (no jitter), then eases out when the wall clears', () => {
-      const state = createCollisionState(7);
-      // Pinned: repeated frames all report the subject radius, unchanged.
-      for (let frame = 0; frame < 10; frame += 1) {
-        expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(0.5), DT, SUBJECT)).toBeCloseTo(1.5, 6);
-      }
-      // Player reaches open space: it eases back out toward the desired distance.
-      const first = resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(null), DT, SUBJECT);
-      expect(first).toBeGreaterThan(1.5);
+    it('eases back out when the wall clears', () => {
+      const state = createCollisionState(3); // pulled in to 3
+      const first = resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(null), DT);
+      expect(first).toBeGreaterThan(3);
+      expect(first).toBeLessThan(7); // still gliding out
+
       let value = first;
       for (let frame = 0; frame < 300; frame += 1) {
-        value = resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(null), DT, SUBJECT);
+        value = resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(null), DT);
       }
       expect(value).toBeCloseTo(7, 2);
     });
@@ -93,7 +86,7 @@ describe('resolveCollision', () => {
       };
 
       expect(
-        resolveCollision(state, LOOK, BEHIND, 7, { ...CONFIG, collisionWhiskerAngle: 0.26 }, probe, DT, SUBJECT),
+        resolveCollision(state, LOOK, BEHIND, 7, { ...CONFIG, collisionWhiskerAngle: 0.26 }, probe, DT),
       ).toBeCloseTo(2.5, 6);
     });
 
@@ -104,7 +97,7 @@ describe('resolveCollision', () => {
 
         return null;
       };
-      resolveCollision(createCollisionState(7), LOOK, BEHIND, 7, CONFIG, probe, DT, SUBJECT);
+      resolveCollision(createCollisionState(7), LOOK, BEHIND, 7, CONFIG, probe, DT);
 
       expect(seen[0].from).toEqual(gtaFromEngine(LOOK)); // [0, 0, 2]
       expect(seen[0].dir).toEqual(gtaFromEngine(BEHIND)); // [0, 1, 0]
