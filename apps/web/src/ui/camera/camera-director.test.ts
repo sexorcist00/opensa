@@ -28,6 +28,7 @@ const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
   mode: 'foot',
   pan: null,
   settling: false,
+  subjectRadius: 0.45,
   vehicleDistance: null,
   walkKeys: new Set(),
   zoomSteps: 0,

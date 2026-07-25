@@ -5,13 +5,16 @@
  * the distance — the zoom state is preserved, so the chosen distance is restored the moment the occlusion
  * clears, exactly as GTA restores your distance after a tunnel.
  *
- * Response is deliberately ASYMMETRIC, the industry standard: pulling IN is instant (a wall between the
- * camera and the player is never shown, not even for one frame); easing OUT is damped, so leaving a doorway
- * glides instead of popping. Whisker casts (±`collisionWhiskerAngle` around the eye direction) start the
- * pull-in BEFORE the wall edge crosses screen centre, which reads as "the camera avoids the wall".
+ * MULTI-RAY (field verdict, 2026-07-25): a single cast reacted to every thin pole/sign between the subject
+ * and the camera, so driving through the city the camera constantly jumped. Instead it casts a small fan —
+ * the CENTRE plus 4 CORNERS offset by the subject's silhouette radius — and only reacts when ALL of them hit
+ * (the obstacle spans the whole silhouette → a real wall). A pole thinner than the subject leaves the corner
+ * rays clear → ignored, the camera drives past it (the pole covers a slice of the frame for a moment, which
+ * reads far better than a pull-in). Rays are stateless, so unlike a physical collider they never stick.
  *
- * A `CameraProbe` is injected (the 080/01 contract) so this is pure and unit-testable; the host passes the
- * real `PhysicsWorld` sphere cast, the tests script hit distances.
+ * Response is ASYMMETRIC: pulling IN is instant (a wall is never shown a single frame); easing OUT is damped
+ * so leaving a doorway glides. A `CameraProbe` is injected (the 080/01 contract) so this is pure and
+ * unit-testable; the host passes the real `PhysicsWorld` sphere cast, the tests script hit distances.
  */
 import type { CameraConfig } from '@opensa/game';
 
@@ -65,14 +68,32 @@ export function guardFloor(
 }
 
 /**
- * Cap `desiredDistance` so the eye clears geometry between the look point and the eye.
+ * The 5-ray fan, as `[right, up]` multiples of the subject radius: CENTRE first, then the 4 corners. Centre is
+ * cast first so the fan early-exits on the most common miss, and a zero-radius subject degrades to the single
+ * eye-line ray (the tests' fallback).
+ */
+const RAY_OFFSETS: readonly (readonly [number, number])[] = [
+  [0, 0],
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+];
+
+/**
+ * Cap `desiredDistance` so the eye clears geometry that occludes the WHOLE subject silhouette between the look
+ * point and the eye.
  *
- * `lookPointEngine` is the orbit centre (head height — by definition outside geometry); `dirEngine` is the
- * unit vector from the look point toward the eye (engine space). Returns the distance to render this frame.
+ * `lookPointEngine` is the orbit centre (head height — by definition outside geometry); `dirEngine` is the unit
+ * vector from the look point toward the eye (engine space). `rightEngine`/`upEngine` are the camera screen basis
+ * and `subjectRadius` the subject's silhouette half-width — the fan's 4 corners sit at `±right·r ±up·r`. Returns
+ * the distance to render this frame.
  *
- * The floor is `collisionMinDistance` (the near-plane radius): a wall closer than that pulls the eye right up
- * to the surface — it may sit inside the ped for a frame, but it never slides BEHIND the wall (which reads far
- * worse) and it never stalls.
+ * Multi-ray rule: the camera pulls in ONLY when every ray in the fan hits something closer than the desired
+ * distance (a wall spanning the whole subject). If any ray is clear — a pole or sign thinner than the subject,
+ * or open space — nothing pulls in; the camera drives past, the thin object sweeping a slice of the frame. The
+ * floor is `collisionMinDistance` (the near-plane radius): a real wall closer than that pulls the eye right up
+ * to the surface — it may sit inside the ped for a frame, but never slides BEHIND the wall.
  */
 export function resolveCollision(
   state: CollisionState,
@@ -82,24 +103,40 @@ export function resolveCollision(
   config: CameraConfig,
   probe: CameraProbe | null,
   dt: number,
+  rightEngine: readonly [number, number, number] = [0, 0, 0],
+  upEngine: readonly [number, number, number] = [0, 0, 0],
+  subjectRadius = 0,
 ): number {
   if (probe === null || config.collisionRadius <= 0) {
     state.shown = desiredDistance;
 
     return desiredDistance;
   }
-  const fromGta = gtaFromEngine(lookPointEngine);
-  let allowed = castDistance(probe, fromGta, dirEngine, 0, config, desiredDistance);
-  if (config.collisionWhiskerAngle > 0) {
-    // Whiskers ease the pull-in in early: take the min of the primary and the two flanking casts.
-    allowed = Math.min(
-      allowed,
-      castDistance(probe, fromGta, dirEngine, config.collisionWhiskerAngle, config, desiredDistance),
-      castDistance(probe, fromGta, dirEngine, -config.collisionWhiskerAngle, config, desiredDistance),
-    );
+  const dirGta = gtaFromEngine(dirEngine);
+  const maxDist = desiredDistance + config.collisionRadius; // cast a touch past the eye so a wall AT it registers
+  const offsets = subjectRadius > 0 ? RAY_OFFSETS : RAY_OFFSETS.slice(0, 1);
+  let nearest = desiredDistance;
+  let occluded = true;
+  for (const [rx, uy] of offsets) {
+    const ox = rx * subjectRadius;
+    const oy = uy * subjectRadius;
+    const fromGta = gtaFromEngine([
+      lookPointEngine[0] + rightEngine[0] * ox + upEngine[0] * oy,
+      lookPointEngine[1] + rightEngine[1] * ox + upEngine[1] * oy,
+      lookPointEngine[2] + rightEngine[2] * ox + upEngine[2] * oy,
+    ]);
+    const hit = probe(fromGta, dirGta, config.collisionRadius, maxDist);
+    // A clear ray (nothing, or a hit past where the eye already sits) means the silhouette is NOT fully covered.
+    if (hit === null || hit >= desiredDistance) {
+      occluded = false;
+      break;
+    }
+    nearest = Math.min(nearest, hit);
   }
   // Never closer than the near-plane radius (below it the near plane renders from inside geometry).
-  allowed = Math.max(allowed, Math.min(desiredDistance, config.collisionMinDistance));
+  const allowed = occluded
+    ? Math.max(nearest, Math.min(desiredDistance, config.collisionMinDistance))
+    : desiredDistance;
   // Snap IN (a wall is never shown a single frame); ease OUT so leaving a doorway glides.
   if (allowed < state.shown) {
     state.shown = allowed;
@@ -109,31 +146,4 @@ export function resolveCollision(
   }
 
   return state.shown;
-}
-
-/** One cast at `yawOffset` around the eye direction (yaw about the engine up axis), capped at `desired`. */
-function castDistance(
-  probe: CameraProbe,
-  fromGta: readonly [number, number, number],
-  dirEngine: readonly [number, number, number],
-  yawOffset: number,
-  config: CameraConfig,
-  desired: number,
-): number {
-  const dirGta = gtaFromEngine(rotateYaw(dirEngine, yawOffset));
-  // Cast a touch past the desired eye so a wall exactly at the eye still registers.
-  const hit = probe(fromGta, dirGta, config.collisionRadius, desired + config.collisionRadius);
-
-  return hit === null ? desired : Math.min(desired, hit);
-}
-
-/** Rotate an engine-space vector about the up (Y) axis by `angle` — the whisker spread lives in the yaw plane. */
-function rotateYaw(v: readonly [number, number, number], angle: number): [number, number, number] {
-  if (angle === 0) {
-    return [v[0], v[1], v[2]];
-  }
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-
-  return [v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c];
 }

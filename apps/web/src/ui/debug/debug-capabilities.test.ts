@@ -124,11 +124,10 @@ describe('cameraControlsFor', () => {
         'collisionRadius',
         'collisionMinDistance',
         'collisionReleaseTime',
-        'collisionWhiskerAngle',
       ] as const) {
         expect(keys).toContain(key); // the 04 collision channels + the car-distance scale
       }
-      expect(keys).toHaveLength(22);
+      expect(keys).toHaveLength(21);
     });
   });
 });

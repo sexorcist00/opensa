@@ -1,50 +1,27 @@
-# Multi-ray camera collision (ignore small objects, react only to full occlusion)
+# Camera collision — multi-ray (PULLED) + the "On Top" fallback (in reserve)
 
-**Status:** in reserve — a camera-feel improvement with a tiny, measured cost. Not pulled yet; the current
-collision is a single sphere cast (plan 080/04), which reacts to every thin object.
+**Status:** the multi-ray fan was **PULLED 2026-07-25** (plan 080/04 — shipped, see below). The "On Top"
+overhead fallback for a genuine full pin stays **in reserve** — this file now tracks that remaining lever.
 
-## What we do today
+## Multi-ray fan — SHIPPED 2026-07-25
 
-One sphere cast (radius `collisionRadius` ~0.35) from the look point straight back along −forward. It is
-binary — hit / no hit — so a thin pole, sign, tree or fence on the sight line is treated exactly like a
-solid wall, and the camera pulls in on the full distance. Driving through a city (poles/signs everywhere)
-makes the camera constantly re-adjust. Whiskers are already OFF for the same reason (they fired on objects
-BESIDE the subject).
+The single sphere cast reacted to every thin pole/sign/tree on the sight line, so city driving jittered
+constantly. Replaced with a 5-ray fan in `resolveCollision` (`apps/web/src/ui/camera/camera-collision.ts`):
 
-## The lever
+- **Centre + 4 corners** (5 sphere casts, radius `collisionRadius`), the corners offset by the subject's
+  silhouette half-width (`CameraSnapshot.subjectRadius`) along the camera's `screenBasis` right/up.
+- The subject radius is the ped framing radius on foot (`PED_SUBJECT_RADIUS` 0.45) or the car's larger planar
+  half-extent + `VEHICLE_SUBJECT_MARGIN` while seated (host `cameraSubjectRadius`).
+- **Pull in ONLY when every ray hits** something closer than the desired distance (a wall spanning the whole
+  silhouette); the distance caps at `min(hits)`, floored at `collisionMinDistance`. Any clear ray (a pole
+  thinner than the subject) → no pull-in, the camera drives past and the pole sweeps a slice of the frame.
+- Centre is cast first, so the fan early-exits on the most common miss (~1 cast in the open).
 
-Distinguish "an object covers the WHOLE subject silhouette" (a real wall → pull in) from "an object covers
-only a slice" (a pole → ignore). Cast a small fan of rays instead of one:
-
-- **4 corners + centre** (5 rays) from the look point, the corners offset by the subject's silhouette radius
-  (car half-extent / ped capsule) projected onto the camera's right/up basis (`screenBasis` already yields
-  that basis).
-- **React only when ALL of them hit** an obstacle closer than the desired distance — that means the object
-  spans the whole back/side of the subject (a wall). Cap the distance at `min(hits)`.
-- If only some hit (a pole thinner than the subject), IGNORE — the camera visually slides past it; the pole
-  covers a slice of the frame for a moment, which reads far better than the constant pull-in.
-
-Optional hybrid for near-plane cover: use thin RAYS for the wall/not-wall decision, then a single sphere
-cast for the exact distance once it's decided a wall is there (a thin ray has no width, so the near plane
-could still clip between rays at a surface).
-
-## What it would win
-
-The city-driving jitter goes away: the camera stops reacting to poles, signs, thin trees, fences — only a
-genuine wall square behind the subject pulls it in. This is the single biggest remaining collision-feel
-complaint.
-
-## What it would cost
-
-- 5 rays/frame instead of 1 sphere cast. The camera steps ONCE per rendered frame (not the fixed loop), and
-  a Rapier `castRay` is trivial at our collider density — the current single-cast collision already
-  benchmarked as free (bench unchanged). 5 thin rays are still **< 0.05 ms/frame**, below noise. No perf
-  concern.
-- ~40–60 lines in `camera-collision.ts` + a couple of tests. No new physics API (`raycast`/`sphereCast`
-  already exist). The host already has the subject half-extents (car `halfExtents`, ped capsule).
-- **Accepted trade-off**: a wall covering only HALF the subject (2–3 of 5 rays) is ignored by the "all hit"
-  rule, so the camera can enter that partial wall a little. That is the deliberate meaning of "react only to
-  full occlusion" — fine for city play, worth knowing.
+Cost as predicted: ≤5 sphere casts on the ONE render-frame camera step, **< 0.05 ms**, below bench noise
+(soak/ritual numbers unchanged — the bench owns the frame and the rig output is discarded). Whiskers and
+`collisionWhiskerAngle` were removed (the fan subsumes them). **Accepted trade-off**, unchanged: a wall
+covering only part of the silhouette (some rays clear) is ignored, so the camera can enter a partial wall a
+little — the deliberate meaning of "react only to full occlusion".
 
 ## The "On Top" fallback (a companion idea, not a replacement)
 
@@ -67,14 +44,8 @@ Caveats to settle before building it:
   a stable-axis fallback, so it won't break, but movement feel changes overhead.
 - **Recovery**: ease the pitch back down the moment open space returns.
 
-## Suggested order if pulled
+## What would have to be true to pull On Top
 
-1. **Multi-ray (4+centre) first** — it removes the actual complaint (city jitter) and makes a genuine full
-   pin rare, so the current into-the-ped clip happens far less often and may become tolerable on its own.
-2. **On Top second** — only if, after multi-ray, real full pins are still frequent enough that the clip
-   annoys. Then overhead is the graceful answer to a true full occlusion.
-
-## What would have to be true to pull it
-
-- A field round confirms city-driving jitter is the priority (it is, per the 2026-07-25 rounds), and the
-  simple single-cast stop-point (into-the-ped clip on a very close wall) is not good enough to ship.
+- Multi-ray shipped (done) made genuine full pins rare, as expected. Pull On Top only if a later field round
+  finds real full pins (a wall hard behind the subject, no room) still frequent enough that the current
+  into-the-ped clip annoys. Then overhead is the graceful answer to a true full occlusion.

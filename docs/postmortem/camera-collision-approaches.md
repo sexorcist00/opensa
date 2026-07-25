@@ -37,11 +37,12 @@ A CAST has none of these: it is stateless, never wedges, and already computes th
 
 ## What we kept instead
 
-The `slide` behaviour dies with the collider (only a physical body gives it). We stay on cast + logic:
+The `slide` behaviour dies with the collider (only a physical body gives it). We stayed on cast + logic:
 **multi-ray (4 corners + centre)** — react only when the whole subject silhouette is occluded (a wall), ignore
-partial (a pole). It is stateless (no sticking), cheap (~5 rays/frame), and gives a PULL-IN, not a slide.
-Recorded as the live reserve lever in
-[`docs/performance/deferred-optimizations/camera-multiray-collision.md`](../performance/deferred-optimizations/camera-multiray-collision.md).
+partial (a pole). It is stateless (no sticking), cheap (≤5 casts/frame), and gives a PULL-IN, not a slide.
+**SHIPPED 2026-07-25** (plan 080/04); the lever file
+[`docs/performance/deferred-optimizations/camera-multiray-collision.md`](../performance/deferred-optimizations/camera-multiray-collision.md)
+is marked PULLED and now tracks only the reserved On Top fallback.
 
 ## When to revisit
 

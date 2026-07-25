@@ -192,11 +192,10 @@ const CAMERA_RIG_ROWS = [
   ['turnThreshold', 'TURN THRESHOLD', 0.2, 3, 0.1],
   // 080/05-lite: a seated car frames out by its size × this.
   ['vehicleDistanceScale', 'CAR DIST x', 1, 4, 0.25],
-  // 080/04 collision (VEHICLE only): eye off walls, closest pull-in, release ease, whisker spread.
+  // 080/04 collision: per-ray sphere radius, closest pull-in floor, release ease (multi-ray fan, no slider).
   ['collisionRadius', 'COLLIDE RADIUS', 0, 0.8, 0.05],
   ['collisionMinDistance', 'COLLIDE MIN', 0.5, 4, 0.1],
   ['collisionReleaseTime', 'COLLIDE RELEASE', 0, 1, 0.05],
-  ['collisionWhiskerAngle', 'COLLIDE WHISKER', 0, 0.6, 0.02],
 ] as const;
 
 export type CameraControlRow = (typeof CAMERA_RIG_ROWS)[number] | (typeof CAMERA_ZOOM_ROWS)[number];
