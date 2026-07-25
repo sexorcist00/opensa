@@ -208,3 +208,10 @@ With a continuous focus the position spring smooths real motion, not the saw, so
 `verticalLagTime` 0.28 and `deadZone` 0.08 are back on. Cost: none measurable — `ls-noon` vsync-capped at
 120 fps, draws/tris identical to the rigid row. Suite 2629 green. Lever record:
 `docs/performance/deferred-optimizations/camera-position-render-interpolation.md` (now PULLED).
+
+**Field fix (same day): the seated rider juddered fore/aft.** `driveSeated` calls the host's `placePlayer`
+EVERY fixed step to snap the rider onto the seat, and `placePlayer` was resetting the interpolation each
+time — so the ped drew on the raw stair-step while the car drew interpolated, juddering him against the
+seat. The reset belongs only to a genuine warp: `placePlayer` no longer resets, and a new `teleportPlayer`
+(place + reset) is what the debugger's teleport uses. The per-step seating now interpolates the seat pose
+in lockstep with the car (the snapshot already captures Transform after the vehicle fixed step).

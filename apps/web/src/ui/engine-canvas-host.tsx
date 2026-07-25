@@ -690,6 +690,9 @@ async function boot(
     prevPlayerGta[1] = curPlayerGta[1] = Transform.y[playerEid];
     prevPlayerGta[2] = curPlayerGta[2] = Transform.z[playerEid];
   };
+  // The vehicle system calls this EVERY fixed step to seat the rider (and to slide him through the climb),
+  // so it must NOT snap the interpolation — that would draw the rider on the raw stair-step while the car is
+  // interpolated, juddering him against the seat. A genuine warp (debugger teleport) resets separately.
   const placePlayer = (position: [number, number, number], moveBody = true): void => {
     if (moveBody) {
       physics.teleport(RigidBody.handle[playerEid], position);
@@ -697,6 +700,10 @@ async function boot(
     Transform.x[playerEid] = position[0];
     Transform.y[playerEid] = position[1];
     Transform.z[playerEid] = position[2];
+  };
+  /** A debugger warp: place AND snap the interpolation so the ped does not streak across the map for a frame. */
+  const teleportPlayer = (position: [number, number, number], moveBody = true): void => {
+    placePlayer(position, moveBody);
     resetPlayerInterpolation();
   };
   let vehicles: EngineVehicles | null = null;
@@ -843,7 +850,7 @@ async function boot(
           : null;
       },
       perfStats: () => frameStats(frames, lastStats),
-      placePlayer,
+      placePlayer: teleportPlayer,
       playerCoords: viewOf,
       reloadClutter: (): void => {
         adapter.invalidateColliderCache();
