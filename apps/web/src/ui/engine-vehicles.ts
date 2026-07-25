@@ -26,13 +26,20 @@ import { VehicleLodSystem } from '@opensa/game/vehicle/vehicle-lod.system';
 import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.system';
 import { VehicleRig } from '@opensa/game/vehicle/vehicle-rig';
 import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
-import { VehicleTelemetry } from '@opensa/game/vehicle/vehicle-telemetry';
+import { planarMotion, type PlanarMotion, VehicleTelemetry } from '@opensa/game/vehicle/vehicle-telemetry';
 
 import { parseParkedVehicles } from '../parked-vehicles';
 
 export interface EngineVehicles {
   /** The car the player is seated in, or null — the host follows it with the camera. */
   activeVehicle(): EnterableVehicle | null;
+  /**
+   * The driven car's speed and slip RIGHT NOW, or null on foot (plan 080/05's drift framing reads it every
+   * rendered frame). Deliberately not behind {@link EngineVehicles.telemetry}'s capture gate: this is four
+   * dot products off the body, while a capture is the ring plus the per-wheel channels. Same
+   * `planarMotion` either way, so the camera and a capture can never disagree about a slide's direction.
+   */
+  drivenMotion(): null | PlanarMotion;
   /**
    * FIXED step — must be called from the host's fixed loop, AFTER the physics step. Enter/exit does all its
    * rider placement and its driving here (prod's `Game` runs every system's `fixedUpdate` before `update`).
@@ -363,6 +370,11 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
 
   return {
     activeVehicle: (): EnterableVehicle | null => seated,
+    drivenMotion(): null | PlanarMotion {
+      const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
+
+      return car === null ? null : planarMotion(car.orientation, physics.getLinvel(car.body));
+    },
     fixedUpdate(step: number): void {
       // Sample the bodies (which the physics step just moved) into the gameplay pose + the interp snapshots,
       // BEFORE enter/exit reads car.position/heading for this step.

@@ -128,7 +128,20 @@ describe('cameraControlsFor', () => {
       ] as const) {
         expect(keys).toContain(key); // the 04 collision channels + the car-distance scale
       }
-      expect(keys).toHaveLength(22);
+      for (const key of [
+        'vehicleDistanceGain',
+        'vehicleFovKick',
+        'vehicleYawLagTime',
+        'vehicleRecenterDelaySec',
+        'vehicleVerticalLagTime',
+        'vehicleCollisionReleaseTime',
+        'driftLookBlend',
+        'driftSlipDeadZone',
+        'driftMinSpeed',
+      ] as const) {
+        expect(keys).toContain(key); // the 05 vehicle tuning table — the drive round turns these live
+      }
+      expect(keys).toHaveLength(35);
     });
   });
 });

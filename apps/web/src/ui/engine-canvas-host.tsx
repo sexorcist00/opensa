@@ -1178,6 +1178,9 @@ async function boot(
       mode: cameraModeOf(rig.flyEye !== null, seatedCar !== null),
       pan: pendingInput.pan,
       settling: vehicles?.isSettling() ?? false,
+      // The car's speed and slip come from the PHYSICS body (081/01's shared `planarMotion`), not from the
+      // focus delta: the delta measures the render loop, and a slide leaves no trace in it at all.
+      vehicle: vehicles?.drivenMotion() ?? null,
       vehicleDistance: vehicleFollowDistance(seatedCar, config.camera.vehicleDistanceScale),
       walkKeys: flyKeys,
       zoomSteps: pendingInput.zoom,

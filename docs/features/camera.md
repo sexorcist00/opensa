@@ -65,9 +65,31 @@ ON FOOT only for now (the vehicle versions are plan 05):
   is framed from behind at boot, not nose-to-nose; `steerYaw` (vehicle entry/exit) takes a facing and
   applies the same `yawBehind`.
 
-**Vehicle distance** (plan 080/05-lite): a seated car frames further out the bigger it is — its length
-(2·halfExtent.y) × `vehicleDistanceScale` (default 2). The live distance eases to it (a fresh car glides
-out, not snaps), and eases back to the on-foot zoom on exit. Collision caps it.
+**The vehicle camera** (plan 080/05) — **one rig, two tuning tables**. Driving does not fork the rig: it
+substitutes its own numbers (`vehicleTuning` → yaw swing, recenter delay, vertical lag, collision release)
+and adds two writers of its own. Nothing else in the director branches on the mode, which is what makes a
+transition a blend rather than a switch — and it is the rule plan 08's view presets stand on.
+
+- **Distance**: a seated car frames further out the bigger it is — its length (2·halfExtent.y) ×
+  `vehicleDistanceScale` — and further still the FASTER it goes, by `vehicleDistanceGain` smoothstepped to
+  `vehicleDistanceSpeed`. Through the same damp, so a fresh car glides out and hard braking visibly glides
+  the camera back in. Collision caps it; leaving the car eases back to the on-foot zoom.
+- **FOV**: the lens widens by up to `vehicleFovKick` between `vehicleFovMinSpeed` and `vehicleFovMaxSpeed`,
+  damped by its own slower `vehicleFovLambda`. The dead-band is the point: a lens that reacts to throttle
+  blips pumps. On foot the target is the base lens, so stepping out eases the widening away instead of
+  cutting it. Cursor picking unprojects through the same live value.
+- **Drift framing**: in a slide the camera looks partway ALONG the travel direction, so the player reads the
+  trajectory. It is expressed as a HEADING (`driftHeading` leans the auto-center heading by
+  `driftLookBlend × slip`), not as a second yaw writer — so the swing, the settle epsilon and the manual
+  override all apply to it unchanged. Straight driving is untouched: slip under `driftSlipDeadZone` or speed
+  under `driftMinSpeed` contributes nothing, and the band FADES in (a hard edge would flicker the framing —
+  the lesson 04's rejected all-hit collision gate paid for).
+- **The slip/speed channel is physics, not render**: it comes from `EngineVehicles.drivenMotion()`
+  (081/01's shared `planarMotion` off the body). A focus delta would measure the render loop, and a slide
+  leaves no trace in it at all.
+- Enter/exit needs no special case: `aimCamera` already routes through the damped `steerYaw` (plan 02), the
+  tables blend, and every channel keeps its state across the transition — the continuity test scripts
+  seat → drive → exit and asserts no cut.
 
 **Collision** (plan 080/04, behaviour #9): the eye never sits behind a wall directly behind the player/car,
 on foot AND in a car — the camera slides up the wall instead of passing through it. A single sphere cast
@@ -149,7 +171,11 @@ GTA-space cast) and `physics/physics-world.test.ts` (raycast/sphereCast hit dist
 stop-short),
 `ui/camera/camera-director.test.ts` (the parity gate: with every smoothing channel zeroed the director
 reproduces the pre-080 stick camera over a scripted look+zoom sequence; mode clamps, zoom notches, fly
-walk/pan/dolly, top-down snap),
+walk/pan/dolly, top-down snap; and the vehicle group — the lens widening only in a car and easing back on
+foot, the distance opening with speed and gliding back, settling behind where the car TRAVELS in a slide,
+and seat → drive → exit crossing with no cut),
+`ui/camera/vehicle-camera.test.ts` (the drift dead-band and its fade-in, the sign of a slide, the FOV and
+distance curves incl. reverse, and that the vehicle table changes ONLY its four channels),
 `ui/camera/engine-camera.test.ts` (bench priority, cursor ray, forward convention), `ui/camera/fly-rig.test.ts`,
 `math/damping.test.ts` (convergence, no overshoot, ±π seam both directions, maxSpeed clamp, rate
 independence at 1/60 vs 1/10 vs 1 s).

@@ -11,6 +11,7 @@ import {
   stepCamera,
 } from './camera-director';
 import { TEST_CAMERA_CONFIG } from './camera-test-config';
+import { CAMERA_FOV_Y } from './engine-camera';
 import { FLY_SPEED, TOP_DOWN_HEIGHT, TOP_DOWN_PITCH } from './fly-rig';
 
 const CONFIG = TEST_CAMERA_CONFIG;
@@ -32,6 +33,7 @@ const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
   mode: 'foot',
   pan: null,
   settling: false,
+  vehicle: null,
   vehicleDistance: null,
   walkKeys: new Set(),
   zoomSteps: 0,
@@ -477,6 +479,140 @@ describe('stepCamera — composition (plan 080/03)', () => {
         Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]) / Math.cos(state.pitch);
 
       expect(orbit).toBeCloseTo(CONFIG.collisionMinDistance, 1); // held at 0.5, never behind the wall
+    });
+  });
+});
+
+describe('stepCamera — the vehicle camera (plan 080/05)', () => {
+  const FAST = CONFIG.vehicleFovMaxSpeed;
+  const SLIDE = CONFIG.driftSlipDeadZone * 3;
+
+  /**
+   * Drive the focus along `heading` at `speed` for `seconds`, reporting the car's slip the way the physics
+   * channel does (081/01's `planarMotion`), not as something derived from the focus delta.
+   */
+  const drive = (
+    state: ReturnType<typeof createRigState>,
+    speed: number,
+    seconds: number,
+    over: { heading?: number; slipAngle?: number } = {},
+  ): ReturnType<typeof stepCamera> => {
+    const heading = over.heading ?? 0;
+    const dirX = -Math.sin(heading);
+    const dirZ = -Math.cos(heading);
+    const frame = (focus: [number, number, number]): CameraSnapshot =>
+      snapshot({
+        focus,
+        focusHeading: heading,
+        mode: 'vehicle',
+        vehicle: { slipAngle: over.slipAngle ?? 0, speed },
+        vehicleDistance: 9,
+      });
+    let x = 10;
+    let z = 30;
+    let camera = stepCamera(state, frame([x, 2, z]), CONFIG);
+    for (let elapsed = 0; elapsed < seconds; elapsed += 1 / 60) {
+      x += (dirX * speed) / 60;
+      z += (dirZ * speed) / 60;
+      camera = stepCamera(state, frame([x, 2, z]), CONFIG);
+    }
+
+    return camera;
+  };
+
+  describe('negative cases', () => {
+    it('never widens the lens on foot, however fast the player runs', () => {
+      const state = rigState();
+      for (let frame = 0; frame < 240; frame += 1) {
+        stepCamera(state, snapshot({ focus: [10, 2, 30 - frame], focusHeading: 0 }), CONFIG);
+      }
+
+      expect(state.fov).toBe(CAMERA_FOV_Y);
+    });
+
+    it('does not lean the frame while driving straight — the slip channel reads zero', () => {
+      const state = rigState();
+      drive(state, FAST, CONFIG.vehicleRecenterDelaySec + 6);
+
+      expect(state.yaw).toBeCloseTo(Math.PI, 1); // squarely behind the car, no drift offset
+    });
+
+    it('holds the base lens at city speeds — throttle noise must not pump the FOV', () => {
+      const state = rigState();
+      drive(state, CONFIG.vehicleFovMinSpeed - 1, 4);
+
+      expect(state.fov).toBe(CAMERA_FOV_Y);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('widens the lens with speed, and eases it back once out of the car', () => {
+      const state = rigState();
+      drive(state, FAST, 4);
+      expect(state.fov).toBeGreaterThan(CAMERA_FOV_Y);
+      const wide = state.fov;
+
+      // Back on foot the same channel closes it — no cut.
+      for (let frame = 0; frame < 240; frame += 1) {
+        stepCamera(state, snapshot(), CONFIG);
+      }
+
+      expect(state.fov).toBeLessThan(wide);
+      expect(state.fov).toBeCloseTo(CAMERA_FOV_Y, 3);
+    });
+
+    it('opens the follow distance with speed and glides it back in when the car slows', () => {
+      const state = rigState();
+      drive(state, CONFIG.vehicleDistanceSpeed, 6);
+      const atSpeed = state.distance;
+      expect(atSpeed).toBeGreaterThan(9);
+      expect(atSpeed).toBeCloseTo(9 + CONFIG.vehicleDistanceGain, 1);
+
+      drive(state, 0, 6);
+
+      expect(state.distance).toBeLessThan(atSpeed);
+      expect(state.distance).toBeCloseTo(9, 1); // back to the size-based distance
+    });
+
+    it('settles behind where the car TRAVELS in a slide, not behind its nose', () => {
+      const state = rigState();
+      drive(state, FAST, CONFIG.vehicleRecenterDelaySec + 8, { slipAngle: SLIDE });
+
+      // Behind the drift-blended heading: the camera looks partway along the slide.
+      expect(state.yaw).toBeCloseTo(Math.PI + SLIDE * CONFIG.driftLookBlend, 1);
+      expect(state.yaw).toBeGreaterThan(Math.PI);
+    });
+
+    it('settles sooner in a car than on foot — hands-off is the norm while driving', () => {
+      // The vehicle table's shorter recenter delay: at a time BETWEEN the two delays, only the car has
+      // started coming home.
+      const seconds = (CONFIG.vehicleRecenterDelaySec + CONFIG.recenterDelaySec) / 2;
+      const driven = rigState();
+      driven.yaw = Math.PI - 1;
+      drive(driven, FAST, seconds, { heading: 0 });
+
+      const onFoot = rigState();
+      onFoot.yaw = Math.PI - 1;
+      for (let elapsed = 0, z = 30; elapsed < seconds; elapsed += 1 / 60) {
+        z -= 7 / 60;
+        stepCamera(onFoot, snapshot({ focus: [10, 2, z], focusHeading: 0 }), CONFIG);
+      }
+
+      expect(Math.abs(driven.yaw - Math.PI)).toBeLessThan(Math.abs(onFoot.yaw - Math.PI));
+    });
+
+    it('crosses seat → drive → exit with no cut: every channel keeps its state', () => {
+      const state = rigState();
+      drive(state, FAST, 4, { slipAngle: SLIDE });
+      const before = { distance: state.distance, fov: state.fov, yaw: state.yaw };
+
+      // The step the player steps out on: same rig, foot tuning.
+      const camera = stepCamera(state, snapshot({ focus: [10, 2, 30] }), CONFIG);
+
+      expect(state.yaw).toBe(before.yaw); // nothing re-seeds the yaw
+      expect(Math.abs(state.fov - before.fov)).toBeLessThan(0.02); // the lens eases, it does not cut
+      expect(Math.abs(state.distance - before.distance)).toBeLessThan(0.5);
+      expect(camera.fovYRad).toBe(state.fov); // the frame is drawn with the channel's live value
     });
   });
 });

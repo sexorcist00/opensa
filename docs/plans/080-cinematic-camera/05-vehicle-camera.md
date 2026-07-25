@@ -63,13 +63,14 @@ for gameplay. Ships last, behind the field round.
 
 ## Subtasks
 
-- [ ] Snapshot: vehicle speed/velocityDir/heading assembly in the host (engine-space conversion).
-- [ ] `vehicle-rig.ts`: distance/FOV curves + yaw chase + drift blend + pitch/vertical tuning;
-      unit tests with scripted drive traces (corner entry lag then settle; slip dead-band; FOV
-      dead-band under 8 u/s; reverse).
-- [ ] Enter/exit blend + continuity test; `aimCamera` demoted to teleport cases.
-- [ ] Vehicle tuning table in `CameraConfig` + Camera-tab rows.
-- [ ] Look-behind key.
+- [x] Snapshot: vehicle speed/slip assembly in the host (from 081/01's shared `planarMotion`).
+- [x] `vehicle-camera.ts`: distance/FOV curves + drift blend + the vehicle tuning table;
+      unit tests with scripted drive traces (slip dead-band + its fade-in; FOV dead-band; reverse;
+      settle-behind-travel in a slide).
+- [x] Enter/exit blend + continuity test; `aimCamera` was ALREADY demoted (plan 02 routed it through
+      the damped `steerYaw`, so entry has swung rather than snapped since then).
+- [x] Vehicle tuning table in `CameraConfig` + Camera-tab rows (13 new sliders).
+- [ ] Look-behind key (§6 — this plan's own order: it ships after the field round).
 - [ ] **Field round** (drive-heavy): city corners at speed, handbrake drifts, highway top speed,
       tunnel (collision + FOV together), enter/exit repeatedly. The bench-road-cars scenes give a
       dense traffic backdrop. Freeze the two tuning tables in the ledger.
@@ -82,4 +83,63 @@ for gameplay. Ships last, behind the field round.
 
 ## Ledger
 
-_(append here)_
+### 2026-07-25 — code complete, AWAITING THE DRIVE FIELD ROUND
+
+**The shape: one rig, two tuning tables.** `vehicleTuning(config)` returns the authored config with the
+driving numbers substituted (`yawLagTime` → `vehicleYawLagTime`, `recenterDelaySec`, `verticalLagTime`,
+`collisionReleaseTime`); `stepCamera` picks the table by mode and every channel below reads it without
+knowing which one it got. Nothing branches on the mode except the two writers driving genuinely adds. That
+is what makes a transition cheap — and it is the same rule plan 08's presets stand on, so 08 inherits a
+working example instead of inventing one. A FRESH table per step is deliberate: the debugger mutates
+`config.camera` live, so a cached one would freeze whatever the tab held when the player got in.
+
+**What landed**
+
+- `vehicle-camera.ts` (pure): `vehicleDistanceForSpeed` (size-based distance + `vehicleDistanceGain`
+  smoothstepped to `vehicleDistanceSpeed`), `vehicleFovTarget` (base lens + `vehicleFovKick` between
+  `vehicleFovMinSpeed` and `vehicleFovMaxSpeed`), `driftHeading` and `vehicleTuning`.
+- Director: a live `fov` channel on the rig state (damped by `vehicleFovLambda`, target = the base lens on
+  foot, so leaving a car EASES the widening out instead of cutting it) — `resolveCamera` now draws with
+  `state.fov`, and cursor picking already unprojects through the rendered FOV, so the viewer follows it.
+- **Drift framing is expressed as a HEADING, not as a second yaw writer**: `driftHeading` leans the heading
+  fed to auto-center from the car's nose toward its travel by `driftLookBlend × slip`. Every existing rule —
+  the swing, the settle epsilon, the manual override, the grace window — then applies to it unchanged, and
+  there is no new channel to reconcile with the old ones.
+- Host snapshot gains `vehicle: { slipAngle, speed }` from **081/01's `planarMotion`** off the physics body.
+  Deriving it from the focus delta would measure the render loop, and a slide leaves no trace there at all.
+- 13 new `CameraConfig` fields, all on the Camera tab (`CAR DIST GAIN` … `DRIFT FROM SPEED`).
+
+**First-guess defaults (the drive round tunes them)**
+
+| field                         | value    | why this number                                                          |
+| ----------------------------- | -------- | ------------------------------------------------------------------------ |
+| `vehicleDistanceGain`         | 2 m      | The plan's own first guess: +2 m over the size-based distance at speed.  |
+| `vehicleDistanceSpeed`        | 40 u/s   | Roughly a fast car's cruise — the gain is full there, not at the limit.  |
+| `vehicleFovKick`              | 0.175 rad| ~10°, the plan's guess. The classic overshoot is 20°+.                    |
+| `vehicleFovMinSpeed` / `Max`  | 8 / 45   | The dead-band is what stops throttle blips from pumping the lens.        |
+| `vehicleFovLambda`            | 2.5 /s   | ~0.28 s half-life — deliberately slower than the zoom channel's 8.       |
+| `vehicleYawLagTime`           | 0.35 s   | 1.4× the on-foot swing: the corner-entry hang, without losing the car.   |
+| `vehicleRecenterDelaySec`     | 1.5 s    | Shorter than on foot's 2 s — hands-off is the norm while driving.        |
+| `vehicleVerticalLagTime`      | 0.15 s   | Roughly half the on-foot 0.28: suspension bounce must not pump the horizon. |
+| `vehicleCollisionReleaseTime` | 0.6 s    | 1.5× the on-foot release — a car clears an occluder fast enough that the on-foot ease reads as a snap. |
+| `driftLookBlend`              | 0.5      | The plan's guess: look HALF-way along the slide, never all the way.      |
+| `driftSlipDeadZone`           | 0.14 rad | ~8°, the plan's guess — straight driving carries a small permanent slip. |
+| `driftMinSpeed`               | 10 u/s   | Below it a slip angle is a parking manoeuvre, not a slide.               |
+
+**Deliberate deviation from §4.** The plan asked for a WIDER whisker angle in the vehicle table. It is not
+there: the 04 field round set `collisionWhiskerAngle` to **0** because the ±15° flanking casts fired on
+poles and walls BESIDE the car and pulled the camera in for nothing. Re-widening it here would reintroduce a
+behaviour the field already rejected, so the vehicle table changes only the release time; a whisker row is
+one line away if the drive round asks for it.
+
+**Measured** (`docs/benchmarks/opensa-engine/2026-07-25-headless-080-camera-director.json`, microbench row
+080/05): `stepCamera` **0.545 µs mean / 0.570 µs p95 in vehicle mode**, against a **0.385 / 0.410 foot
+control measured in the same run** — +0.16 µs (+42%), of which the per-step tuning-table spread is
+0.061 µs. Absolute 0.0005 ms/frame, ~100× under this plan's 0.05 ms budget. That foot control is NOT the
+0.203 µs row 03 recorded: this trace differs (it holds turn-follow armed every step) and pre-builds its
+snapshots, which is exactly why the foot control was measured alongside instead of comparing across rows.
+Camera suite 136 green (+27), full apps/web + packages/game 738 green; `tsc` + eslint clean.
+
+**Owed**: the DRIVE field round (city corners at speed, handbrake drifts, highway top speed, a tunnel for
+collision+FOV together, repeated enter/exit) — every default above is a first guess until the user drives
+it. The look-behind key (§6) ships after that round, per this plan's own order.

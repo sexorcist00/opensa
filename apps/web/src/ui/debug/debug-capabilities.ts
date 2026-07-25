@@ -190,8 +190,22 @@ const CAMERA_RIG_ROWS = [
   ['lookAheadDistance', 'LOOK AHEAD', 0, 3, 0.1],
   ['lookAheadTime', 'LOOK AHEAD TIME', 0.05, 1.5, 0.05],
   ['turnThreshold', 'TURN THRESHOLD', 0.2, 3, 0.1],
-  // 080/05-lite: a seated car frames out by its size × this.
+  // 080/05: the vehicle tuning table. The rig is shared — these are the numbers driving substitutes into
+  // it, plus the two writers driving adds (the speed curves and the drift lean).
   ['vehicleDistanceScale', 'CAR DIST x', 1, 4, 0.25],
+  ['vehicleDistanceGain', 'CAR DIST GAIN', 0, 6, 0.25],
+  ['vehicleDistanceSpeed', 'CAR DIST SPEED', 10, 80, 5],
+  ['vehicleFovKick', 'CAR FOV KICK', 0, 0.5, 0.01],
+  ['vehicleFovMinSpeed', 'CAR FOV FROM', 0, 30, 1],
+  ['vehicleFovMaxSpeed', 'CAR FOV FULL', 10, 90, 5],
+  ['vehicleFovLambda', 'CAR FOV EASE', 0.5, 8, 0.25],
+  ['vehicleYawLagTime', 'CAR YAW SWING', 0, 1.5, 0.05],
+  ['vehicleRecenterDelaySec', 'CAR RECENTER AFTER', 0, 6, 0.25],
+  ['vehicleVerticalLagTime', 'CAR LAG VERTICAL', 0, 1, 0.02],
+  ['vehicleCollisionReleaseTime', 'CAR COLLIDE RELEASE', 0, 1.5, 0.05],
+  ['driftLookBlend', 'DRIFT LEAN', 0, 1, 0.05],
+  ['driftSlipDeadZone', 'DRIFT DEAD ZONE', 0, 0.5, 0.02],
+  ['driftMinSpeed', 'DRIFT FROM SPEED', 0, 30, 1],
   // 080/04 collision (VEHICLE only): eye off walls, closest pull-in, release ease, whisker spread.
   ['collisionRadius', 'COLLIDE RADIUS', 0, 0.8, 0.05],
   ['collisionMinDistance', 'COLLIDE MIN', 0.5, 4, 0.1],

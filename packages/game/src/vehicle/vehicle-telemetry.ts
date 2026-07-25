@@ -22,6 +22,18 @@ const SLIP_SPEED_FLOOR = 0.5;
 
 const GRAVITY = 9.81;
 
+/** The car's planar motion against its own axes — see {@link planarMotion}. */
+export interface PlanarMotion {
+  /** Yaw about +Z (rad). */
+  readonly heading: number;
+  /** Where it travels vs where it points (rad), positive when the car points LEFT of its path. */
+  readonly slipAngle: number;
+  /** Signed forward speed (m/s). */
+  readonly speed: number;
+  /** Sideways speed (m/s), positive toward the car's right. */
+  readonly speedLateral: number;
+}
+
 /** One fixed step of the active vehicle, everything derived. */
 export interface TelemetryFrame {
   /** Total brake force applied this step (N), as `drive()` set it. */
@@ -202,12 +214,8 @@ export function computeFrame(
   const forward = rotate(sample.orientation, 0, 1, 0);
   const right = rotate(sample.orientation, 1, 0, 0);
   const up = rotate(sample.orientation, 0, 0, 1);
-  const [vx, vy] = sample.linvel;
-  const heading = Math.atan2(-forward[0], forward[1]);
-  // Planar velocity against the car's own axes: the two numbers every slip channel is built from.
-  const speed = vx * forward[0] + vy * forward[1];
-  const speedLateral = vx * right[0] + vy * right[1];
-  const planarSpeed = Math.hypot(vx, vy);
+  const motion = planarMotion(sample.orientation, sample.linvel);
+  const { speed } = motion;
   const wheels = sample.wheels.map((wheel, index) => wheelFrame(wheel, previous?.wheels[index] ?? null, speed, dt));
   const contacting = wheels.filter((wheel) => wheel.contact);
 
@@ -217,19 +225,47 @@ export function computeFrame(
     gLat: bodyAccel(sample, previous, dt, right),
     gLong: bodyAccel(sample, previous, dt, forward),
     gVert: bodyAccel(sample, previous, dt, up),
-    heading,
+    heading: motion.heading,
     pitch: Math.asin(clampUnit(forward[2])),
     // atan2 of the right axis against the up axis IS the roll about forward; negated so right-down is positive.
     roll: -Math.atan2(right[2], up[2]),
-    slipAngle: planarSpeed < SLIP_SPEED_FLOOR ? 0 : Math.atan2(speedLateral, Math.abs(speed)),
+    slipAngle: motion.slipAngle,
     slipRatio: contacting.length === 0 ? 0 : mean(contacting.map((wheel) => wheel.slipRatio)),
     speed,
-    speedLateral,
+    speedLateral: motion.speedLateral,
     steer: sample.steer,
     t,
     throttle: sample.throttle,
     wheels,
     yawRate: previous === null ? 0 : yawRate(previous.orientation, sample.orientation, dt),
+  };
+}
+
+/**
+ * Where the car POINTS against where it TRAVELS — the whole of the slip channel, and the only part of a frame
+ * a consumer outside a capture needs.
+ *
+ * Split out because the camera reads it every rendered frame (plan 080/05 drift framing) while a telemetry
+ * CAPTURE is off: the ring and the derived per-wheel channels are the expensive half, this is four dot
+ * products. One implementation means the camera and a capture can never disagree about which way a slide is
+ * pointing.
+ */
+export function planarMotion(
+  orientation: readonly [number, number, number, number],
+  linvel: readonly [number, number, number],
+): PlanarMotion {
+  const forward = rotate(orientation, 0, 1, 0);
+  const right = rotate(orientation, 1, 0, 0);
+  const [vx, vy] = linvel;
+  const speed = vx * forward[0] + vy * forward[1];
+  const speedLateral = vx * right[0] + vy * right[1];
+
+  return {
+    heading: Math.atan2(-forward[0], forward[1]),
+    // Below the floor a "slip angle" is just velocity noise being amplified by an atan2 near the origin.
+    slipAngle: Math.hypot(vx, vy) < SLIP_SPEED_FLOOR ? 0 : Math.atan2(speedLateral, Math.abs(speed)),
+    speed,
+    speedLateral,
   };
 }
 

@@ -32,6 +32,7 @@ import { CAMERA_FOV_Y, forwardFrom, resolveCamera } from './engine-camera';
 import { dollyStep, FLY_SPEED, flyStep, panStep, TOP_DOWN_PITCH, topDownEye } from './fly-rig';
 import { createFollowPoint, type FollowPointState, resetFollowPoint, stepFollowPoint } from './follow-rig';
 import { createLookAhead, type LookAheadState, stepLookAhead } from './look-ahead';
+import { driftHeading, vehicleDistanceForSpeed, vehicleFovTarget, vehicleTuning } from './vehicle-camera';
 
 /** The rig's live state. A plain mutable record owned by the host and stepped in place — the same shape the
  *  character controller uses, so the frame loop allocates nothing per frame. */
@@ -48,6 +49,9 @@ export interface CameraRigState {
   flyEye: [number, number, number] | null;
   /** The smoothed point the rig frames (plan 02) — not the focus itself. */
   follow: FollowPointState;
+  /** The live vertical field of view (radians) — driving widens it with speed (plan 05), everything else
+   *  eases it back to {@link CAMERA_FOV_Y}. Picking unprojects through this same value. */
+  fov: number;
   /** The focus this rig framed last frame — the planar velocity every 03 channel reads is derived from it,
    *  so the director needs no velocity plumbing from the host and measures the FRAMED object (ped or car). */
   lastFocus: [number, number, number] | null;
@@ -86,6 +90,10 @@ export interface CameraSnapshot {
   /** A scripted enter/exit is mid-sequence: hold auto-center off (the steered swing to the target still
    *  plays) so the camera does not chase the ped's approach-run and climb twitches. */
   settling: boolean;
+  /** The driven car's speed and slip this frame, or null on foot — the physics channel (plan 081/01's
+   *  `planarMotion`) the speed curves and the drift lean read. Deriving it from the focus delta instead
+   *  would measure the RENDER loop, and a slide has no signature there at all. */
+  vehicle: null | { slipAngle: number; speed: number };
   /** The follow distance a seated car wants (its length × `vehicleDistanceScale`), or null on foot. The live
    *  distance eases to it, and collision caps it. */
   vehicleDistance: null | number;
@@ -111,6 +119,7 @@ export function createRigState(config: CameraConfig, yaw: number, pitch: number)
     distanceTarget: config.followDistance,
     flyEye: null,
     follow: createFollowPoint(),
+    fov: CAMERA_FOV_Y,
     lastFocus: null,
     look: createLookInput(),
     lookAhead: createLookAhead(),
@@ -156,20 +165,33 @@ export function steerYaw(state: CameraRigState, facing: number): void {
 export function stepCamera(
   state: CameraRigState,
   snapshot: CameraSnapshot,
-  config: CameraConfig,
+  authored: CameraConfig,
   probe: CameraProbe | null = null,
   groundProbe: GroundProbe | null = null,
 ): CameraState {
+  // ONE rig, two tuning tables (plan 05): driving substitutes its own lag/release numbers and every channel
+  // below reads them without knowing which table it got. Nothing branches on the mode except the two writers
+  // driving actually adds (the speed curves and the drift lean).
+  const config = snapshot.mode === 'vehicle' ? vehicleTuning(authored) : authored;
   // The debugger moves the zoom BOUNDS live (074/22), so the live target is re-clamped every frame.
   state.distanceTarget = clamp(state.distanceTarget, config.followZoomMin, config.followZoomMax);
   applyLook(state, snapshot, config);
   steerYawChannel(state, config, snapshot.dt);
   const forward = forwardFrom(state.yaw, state.pitch);
   applyZoom(state, snapshot, config, forward);
-  // In a car the distance follows the car's size (bigger car, further out); on foot it follows the wheel
-  // zoom. Either way the live distance eases toward it (a spun wheel or a fresh car both glide).
-  const distanceTarget = snapshot.vehicleDistance ?? state.distanceTarget;
+  // In a car the distance follows the car's SIZE, opened up by its SPEED (#5); on foot it follows the wheel
+  // zoom. Either way the live distance eases toward it — so a spun wheel, a fresh car and hard braking all
+  // glide rather than step.
+  const speed = snapshot.vehicle?.speed ?? 0;
+  const distanceTarget =
+    snapshot.vehicleDistance === null
+      ? state.distanceTarget
+      : vehicleDistanceForSpeed(snapshot.vehicleDistance, speed, config);
   state.distance = damp(state.distance, distanceTarget, config.zoomLambda, snapshot.dt);
+  // FOV is the other half of the speed sense (#5). On foot the target is the base lens, so leaving a car
+  // eases the widening out through the same channel instead of cutting it.
+  const fovTarget = snapshot.mode === 'vehicle' ? vehicleFovTarget(speed, config) : CAMERA_FOV_Y;
+  state.fov = damp(state.fov, fovTarget, config.vehicleFovLambda, snapshot.dt);
   if (snapshot.mode === 'fly') {
     stepFlyRig(state, snapshot, forward);
     // A detached eye owns its own position; the follow point must not fly across the map when it re-attaches.
@@ -184,10 +206,16 @@ export function stepCamera(
   // ignored.
   const centering = !snapshot.settling && (snapshot.mode === 'foot' || snapshot.mode === 'vehicle');
   if (centering) {
+    // Drift framing (#10) is expressed as a HEADING, not as a second yaw writer: the camera settles behind
+    // where the car is going rather than where its nose points, and every existing rule (the swing, the
+    // settle epsilon, the manual override) applies to it unchanged.
+    const heading = snapshot.vehicle
+      ? driftHeading(snapshot.focusHeading, snapshot.vehicle.slipAngle, snapshot.vehicle.speed, config)
+      : snapshot.focusHeading;
     const step = stepAutoCenter(
       state.autoCenter,
       state.yaw,
-      snapshot.focusHeading,
+      heading,
       Math.hypot(velocity.x, velocity.z),
       config,
       snapshot.dt,
@@ -237,7 +265,7 @@ export function stepCamera(
     distance: collideDistance,
     flyEye: state.flyEye,
     forward,
-    fovYRad: CAMERA_FOV_Y,
+    fovYRad: state.fov,
     // The offset moves eye AND target together (resolveCamera derives the eye from the target), so the
     // composition leans toward travel while the orbit geometry the collision layer defends is untouched.
     target: lookPoint,

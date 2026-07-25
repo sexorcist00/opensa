@@ -25,6 +25,15 @@ export interface CameraConfig {
   /** Focus movement under this (world units) does not pull the camera at all — idle jitter leaves the frame
    *  still. Blended back in over the next two dead-zone widths, so there is no kink at the edge. */
   deadZone: number;
+  /** How much of a slide the camera looks ALONG (0..1) while driving: the yaw target leans from the car's
+   *  heading toward its actual travel direction by this fraction of the slip angle, so a drift shows the
+   *  player where the car is going. 0 = always frame the car's nose. */
+  driftLookBlend: number;
+  /** Below this speed (units/s) a slip angle is parking-manoeuvre noise, not a slide — no drift lean. */
+  driftMinSpeed: number;
+  /** Slip under this (radians) contributes nothing: straight driving has a permanent small slip and must
+   *  not tilt the frame. Faded in over the next dead-band width, so there is no kink at the edge. */
+  driftSlipDeadZone: number;
   /** Initial distance from the player in follow mode (GTA/world units); wheel zoom moves it within the range. */
   followDistance: number;
   /** Height above the player the camera orbits + looks at (world units) — raises the framing off the feet. */
@@ -85,9 +94,37 @@ export interface CameraConfig {
   /** A heading change faster than this (radians/second) swings the camera behind the new direction. Walking
    *  straight never reaches it, so a framing the player chose survives a straight run. */
   turnThreshold: number;
+  /** How long the collision release takes in a CAR (seconds) — longer than on foot, because a car clears an
+   *  occluder at a speed that makes the on-foot ease read as a snap. */
+  vehicleCollisionReleaseTime: number;
+  /** How much further out the camera sits at {@link vehicleDistanceSpeed} (world units, added to the
+   *  size-based distance). The speed sense of #5: the frame opens up as the car gets quick, and visibly
+   *  glides back in under braking. */
+  vehicleDistanceGain: number;
   /** In a car the follow distance is the car's LENGTH × this (a bus frames further out than a hatchback).
    *  Collision then caps it, so a car against a wall doesn't push the camera through. */
   vehicleDistanceScale: number;
+  /** The speed (units/s) at which {@link vehicleDistanceGain} is fully applied (smoothstep from 0). */
+  vehicleDistanceSpeed: number;
+  /** How much the field of view widens at {@link vehicleFovMaxSpeed} (radians). The speed sense that
+   *  distance alone cannot give — but it PUMPS if it reacts to throttle blips, hence the dead-band below. */
+  vehicleFovKick: number;
+  /** How fast the FOV closes on its target (per second). Deliberately slower than the zoom channel. */
+  vehicleFovLambda: number;
+  /** Speed (units/s) at which the FOV kick is full. */
+  vehicleFovMaxSpeed: number;
+  /** Below this speed (units/s) the FOV does not move at all — the dead-band that stops city-speed noise
+   *  from pumping the lens. */
+  vehicleFovMinSpeed: number;
+  /** How long the look must stay idle before the camera eases behind a moving CAR (seconds). Shorter than
+   *  on foot: hands-off is the norm while driving. */
+  vehicleRecenterDelaySec: number;
+  /** The vertical look-point lag while seated (seconds). Faster than on foot — suspension bounce must not
+   *  pump the horizon, and a car's vertical motion is the road, not a jump arc. */
+  vehicleVerticalLagTime: number;
+  /** How long the camera takes to swing behind a turning CAR (seconds). Longer than the on-foot swing: this
+   *  IS the "camera hangs outside the corner, then swings through" weight. */
+  vehicleYawLagTime: number;
   /** How long the look point takes to follow the focus VERTICALLY (seconds). Slower than the planar channel
    *  on purpose — stairs, curbs and jump arcs must not jolt the horizon. */
   verticalLagTime: number;
