@@ -78,6 +78,27 @@ export interface Impact {
 }
 /** Rapier's raycast vehicle controller (engine/brake/steer, suspension, wheels). */
 export type VehicleController = ReturnType<RapierWorld['createVehicleController']>;
+
+/** One wheel's live state, as {@link PhysicsWorld.readVehicleWheels} reads it off the controller. */
+export interface VehicleWheelReading {
+  readonly contact: boolean;
+  /** Tyre force along the wheel this step (Rapier impulse) — drive/brake grip actually delivered. */
+  readonly forwardImpulse: number;
+  /** Max suspension travel (m) — the denominator when travel is expressed as a compression fraction. */
+  readonly maxTravel: number;
+  /** Rolling radius (m). */
+  readonly radius: number;
+  /** Spring rest length (m) — a wheel at rest length is fully extended. */
+  readonly restLength: number;
+  /** CUMULATIVE roll angle (rad). Rapier accumulates it without wrapping, so its delta is the wheel's spin. */
+  readonly rotation: number;
+  /** Tyre force across the wheel — cornering grip actually delivered. */
+  readonly sideImpulse: number;
+  /** Suspension force carried (N) — the corner's normal load. */
+  readonly suspensionForce: number;
+  /** Current spring length (m); shorter than {@link restLength} means compressed. */
+  readonly suspensionLength: number;
+}
 /** One raycast wheel: its hub position in vehicle space + rolling radius. */
 export interface VehicleWheelSpec {
   connection: Vec3;
@@ -537,6 +558,33 @@ export class PhysicsWorld {
     const r = body.rotation();
 
     return { position: [t.x, t.y, t.z], quaternion: [r.x, r.y, r.z, r.w] };
+  }
+
+  /**
+   * Read every wheel's live state off a raycast controller (plan 081/01 telemetry) — contact, spring travel,
+   * normal load, the tyre impulses actually delivered, and the CUMULATIVE roll angle whose delta is the wheel's
+   * spin. Read-only: this is the instrument, it changes nothing.
+   *
+   * Rapier returns `null` for an out-of-range wheel index; nothing here can be out of range (the count comes
+   * from the controller itself), so the nullish fallbacks are just the type boundary.
+   */
+  readVehicleWheels(controller: VehicleController): readonly VehicleWheelReading[] {
+    const readings: VehicleWheelReading[] = [];
+    for (let i = 0; i < controller.numWheels(); i += 1) {
+      readings.push({
+        contact: controller.wheelIsInContact(i),
+        forwardImpulse: controller.wheelForwardImpulse(i) ?? 0,
+        maxTravel: controller.wheelMaxSuspensionTravel(i) ?? 0,
+        radius: controller.wheelRadius(i) ?? 0,
+        restLength: controller.wheelSuspensionRestLength(i) ?? 0,
+        rotation: controller.wheelRotation(i) ?? 0,
+        sideImpulse: controller.wheelSideImpulse(i) ?? 0,
+        suspensionForce: controller.wheelSuspensionForce(i) ?? 0,
+        suspensionLength: controller.wheelSuspensionLength(i) ?? 0,
+      });
+    }
+
+    return readings;
   }
 
   /** Remove static bodies (and their colliders) by handle — e.g. when a cell unloads. */

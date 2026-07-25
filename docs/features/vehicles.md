@@ -91,6 +91,16 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   the wrong panel), with appear-on-top when boxed in.
   Door choreography: per-side angle tracking; the exit door stays open while the player stands in
   the doorway and shuts once he steps clear (the same footprint trigger that restores collision).
+- **Physics telemetry** (plan 081/01): `vehicle/vehicle-telemetry.ts` derives one frame per fixed step for
+  the DRIVEN car — signed speed, lateral speed, body slip angle, per-wheel longitudinal slip ratio, pitch
+  (**positive nose UP**, the sign the braking complaint is measured by), roll (positive right-side down),
+  yaw rate, body-frame g (net Δv/dt, gravity excluded), and per wheel: contact, suspension compression as a
+  fraction of travel, normal load, and the tyre impulses Rapier actually delivered. The math is pure — raw
+  readings come in as plain data from `PhysicsWorld.readVehicleWheels` + the body, so the same sample
+  sequence replays identically in a test. `EnterVehicleSystem.appliedControls()` supplies what `drive()`
+  really applied (ramped engine force, slewed steer), not the raw input. **Off by default and inert then**
+  (`vehicles.telemetry.enabled`); only the seated car is sampled, and its history resets when the player
+  changes cars. This is the slip/speed channel plan 080/05 will read for drift framing.
 - **LOD/streaming** (plan 021): HD/LOD/unload distances per vehicle, placements respawn.
 - **Headlights** (plan 033, ⚠️ MVP — redo later): glowing lamp glass + coronas at the lamp dummies; lamps
   found by position near the `headlights`/`taillights` dummies; no road beam yet. See night-and-time.md.
@@ -125,4 +135,8 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
 
 `vehicle/build-vehicle-model.test.ts` (markers, modulate, parts, extras — synthetic + real
 petro-6wheels.dff), `vehicle/textures.test.ts`, `adapters/vehicle-model-builder.test.ts`,
-vehicle systems tests (physics/lod/damage), adapter vehicle data tests.
+vehicle systems tests (physics/lod/damage), adapter vehicle data tests,
+`vehicle/vehicle-telemetry.test.ts` (channel signs and conventions, the rate channels reading 0 on the
+first step, slip floors, the ring's order and capacity) and `physics/physics-world.test.ts`
+(`readVehicleWheels` against real Rapier: airborne = no contact, resting = compressed springs whose loads
+sum to the car's weight).

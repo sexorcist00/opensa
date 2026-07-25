@@ -204,6 +204,62 @@ describe('PhysicsWorld.createDynamicVehicle', () => {
   });
 });
 
+describe('PhysicsWorld.readVehicleWheels', () => {
+  const HALF: [number, number, number] = [1.2, 2.5, 0.7];
+  const WHEELS = [
+    { connection: [-1, 1.6, -0.4] as Vec3, radius: 0.35 },
+    { connection: [1, 1.6, -0.4] as Vec3, radius: 0.35 },
+    { connection: [-1, -1.6, -0.4] as Vec3, radius: 0.35 },
+    { connection: [1, -1.6, -0.4] as Vec3, radius: 0.35 },
+  ];
+
+  describe('negative cases', () => {
+    it('reads no contact from a car dropped in mid-air, with the springs fully extended', async () => {
+      const physics = await makeWorld();
+      const { controller } = physics.createDynamicVehicle([0, 0, 50], 0, null, 1500, WHEELS, HALF);
+      physics.step(STEP);
+
+      const wheels = physics.readVehicleWheels(controller);
+
+      expect(wheels).toHaveLength(4);
+      expect(wheels.every((wheel) => !wheel.contact)).toBe(true);
+      expect(wheels[0].suspensionForce).toBe(0);
+      physics.dispose();
+    });
+
+    it('reports an empty reading for a controller with no wheels', async () => {
+      const physics = await makeWorld();
+      const { controller } = physics.createDynamicVehicle([0, 0, 5], 0, null, 1500, [], HALF);
+
+      expect(physics.readVehicleWheels(controller)).toEqual([]);
+      physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reads contact, a compressed spring and a real load off a car resting on the ground', async () => {
+      const physics = await makeWorld();
+      physics.createStaticBox([0, 0, 0], [40, 40, 0.5]);
+      const { controller } = physics.createDynamicVehicle([0, 0, 2], 0, null, 1500, WHEELS, HALF);
+      for (let i = 0; i < 240; i += 1) {
+        physics.step(STEP);
+      }
+
+      const wheels = physics.readVehicleWheels(controller);
+
+      expect(wheels.every((wheel) => wheel.contact)).toBe(true);
+      // Every corner carries part of the 1500 kg: the four loads must add up to roughly its weight.
+      const load = wheels.reduce((total, wheel) => total + wheel.suspensionForce, 0);
+      expect(load).toBeGreaterThan(1500 * 9.81 * 0.5);
+      // Resting means compressed: shorter than the rest length the wheels were built with.
+      expect(wheels[0].suspensionLength).toBeLessThan(wheels[0].restLength);
+      expect(wheels[0].radius).toBeCloseTo(0.35, 6);
+      expect(wheels[0].maxTravel).toBeGreaterThan(0);
+      physics.dispose();
+    });
+  });
+});
+
 describe('PhysicsWorld kinematic character controller', () => {
   describe('positive cases', () => {
     it('lands a kinematic capsule on a static ground and reports grounded', async () => {

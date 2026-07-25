@@ -67,8 +67,8 @@ Deterministic scenario runner, same philosophy as the render bench (`[bench]` pr
 
 ## Subtasks
 
-- [ ] `vehicle-telemetry.ts` sampler + ring buffer + unit tests (pure math on scripted inputs).
-- [ ] Slip proxy exported on the vehicles facade (typed, documented for 080/05).
+- [x] `vehicle-telemetry.ts` sampler + ring buffer + unit tests (pure math on scripted inputs).
+- [x] Slip proxy exported on the vehicles facade (typed, documented for 080/05).
 - [ ] F2 Physics tab: live telemetry strips; read-only constants group.
 - [ ] `ScriptedDriveSource` + scenario spec + the 7 scenes v1.
 - [ ] `[phys]` capture protocol + `phys-compare.ts` + headless harness lane.
@@ -83,4 +83,42 @@ Deterministic scenario runner, same philosophy as the render bench (`[bench]` pr
 
 ## Ledger
 
-_(baselines, scene specs, measured costs)_
+### 2026-07-25 — the sampler + the facade channel (subtasks 1 and 2)
+
+**What landed**
+
+- `packages/game/src/physics/physics-world.ts` — `readVehicleWheels(controller)`, the only new physics API:
+  per wheel contact, spring length/rest/max-travel, suspension force, the forward/side tyre impulses and the
+  cumulative roll angle. Read-only, no physics change.
+- `packages/game/src/vehicle/vehicle-telemetry.ts` — `computeFrame` (pure), `TelemetryRing` (fixed-capacity,
+  reads back oldest → newest) and `VehicleTelemetry` (the clock + previous sample + the ring, `enabled` off
+  by default). Conventions PINNED in the module doc and in tests: **pitch positive nose UP**, roll positive
+  right-side down, slip angle positive when the car points LEFT of its travel, g excludes gravity.
+- `EnterVehicleSystem.appliedControls()` — the values `drive()` handed the controller last step (ramped
+  engine force, slewed steer, the throttle behind them). A capture that recorded raw input instead could not
+  explain the response, since neither channel reaches the car unfiltered. Zeroed unless seated.
+- `EngineVehicles.telemetry` — the facade export 080/05 consumes. Only the SEATED car is sampled, its
+  history resets when the player changes cars, and the `enabled` check runs before any physics read, so a
+  shipped build pays nothing.
+
+**Correction to this plan's channel table.** The doc specified the longitudinal slip proxy as "wheel-roll
+speed (from `VehicleRig` distance) vs ground speed". That proxy is DEGENERATE: the rig's roll is itself
+derived from the car's planar displacement (`VehiclePhysicsSystem.rollWheels`), so it would have reported
+zero slip by construction — a wheelspin is exactly the case where the wheel's speed and the ground's differ.
+Rapier's controller exposes more than the plan assumed: `wheelRotation` (cumulative, unwrapped) gives the
+wheel's REAL angular speed, so the shipped `slipRatio` is a true `(surfaceSpeed − groundSpeed) / |groundSpeed|`
+— positive for wheelspin, −1 for a locked wheel. `wheelForwardImpulse` / `wheelSideImpulse` are recorded
+too: the tyre forces actually delivered, which plans 03–05 need per corner and the plan did not list.
+
+**Tests**: `vehicle-telemetry.test.ts` (21) — signs and conventions per channel, rates reading 0 on the
+first step (one sample cannot show a rate), the slip floor, the ring's order/capacity, a disabled sampler
+doing nothing at all. `physics-world.test.ts` gained 3 real-Rapier cases: an airborne car reads no contact,
+a car resting on ground reads compressed springs whose four loads sum past half its weight, and a wheel-less
+controller reads empty. Full vehicle + physics suites 171 green; `tsc` + eslint clean.
+
+**Not done here** (the rest of this plan): the F2 Physics tab, `ScriptedDriveSource` + the 7 scenes, the
+`[phys]` capture protocol + `phys-compare.ts`, and the BEFORE matrix (3 cars × 7 scenes) with the user's
+vanilla expectations. No numbers are recorded yet BECAUSE none have been measured — the baseline needs the
+scripted track, not a hand-driven session.
+
+_(baselines, scene specs, measured costs follow)_

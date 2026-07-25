@@ -26,6 +26,7 @@ import { VehicleLodSystem } from '@opensa/game/vehicle/vehicle-lod.system';
 import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.system';
 import { VehicleRig } from '@opensa/game/vehicle/vehicle-rig';
 import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
+import { VehicleTelemetry } from '@opensa/game/vehicle/vehicle-telemetry';
 
 import { parseParkedVehicles } from '../parked-vehicles';
 
@@ -52,6 +53,13 @@ export interface EngineVehicles {
   ridingVehicle(): EnterableVehicle | null;
   /** Spawn a car and register it with the LOD system (persists like a parked car) — used for test spawns. */
   spawn(placement: VehiclePlacement): Promise<void>;
+  /**
+   * The driven car's physics telemetry (plan 081/01): speed, slip, per-wheel load and travel, sampled every
+   * fixed step while `enabled`. **This is the slip/speed channel plan 080/05 reads for drift framing** —
+   * the camera must not re-derive it from poses, or it measures the render loop instead of the physics.
+   * Disabled by default and inert then.
+   */
+  readonly telemetry: VehicleTelemetry;
   /** Per-frame (variable dt): draw cars at the interpolated pose (`alpha` = fraction into the next fixed
    *  step), then input/approach/doors, damage, LOD streaming. */
   update(delta: number, alpha: number): void;
@@ -98,6 +106,38 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     deps.playerCollider,
     deps.logger,
   );
+
+  // Telemetry (plan 081/01): only the DRIVEN car is instrumented — a capture is about the car under the
+  // player, and sampling a street of parked cars would cost per step for nothing. Off by default: the
+  // `enabled` check comes first so a shipped build does not even read the body.
+  const telemetry = new VehicleTelemetry();
+  let instrumented: EnterableVehicle | null = null;
+  const stepTelemetry = (step: number): void => {
+    const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
+    if (!telemetry.enabled || car === null) {
+      instrumented = car;
+
+      return;
+    }
+    if (car !== instrumented) {
+      // A different car (or the first one this capture): its history belongs to the previous car.
+      telemetry.reset();
+      instrumented = car;
+    }
+    const controls = enterVehicle.appliedControls();
+    telemetry.step(
+      {
+        brake: controls.brake,
+        engineForce: controls.engineForce,
+        linvel: physics.getLinvel(car.body),
+        orientation: car.orientation,
+        steer: controls.steer,
+        throttle: controls.throttle,
+        wheels: physics.readVehicleWheels(car.controller),
+      },
+      step,
+    );
+  };
 
   // Lamps (step 5): the SAME decision logic the three path uses, wired to the engine's light pool and its
   // EXISTING corona pass — no second corona renderer.
@@ -328,6 +368,8 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       // BEFORE enter/exit reads car.position/heading for this step.
       vehiclePhysics.snapshot(step);
       enterVehicle.fixedUpdate(step);
+      // Telemetry LAST: it records the step as it ended, including the controls `drive()` just applied.
+      stepTelemetry(step);
     },
     isSettling: (): boolean => enterVehicle.isSettling(),
     register(placements: readonly VehiclePlacement[]): void {
@@ -339,6 +381,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     async spawn(placement: VehiclePlacement): Promise<void> {
       vehicleLod.add(placement, await spawnVehicle(placement));
     },
+    telemetry,
     update(delta: number, alpha: number): void {
       // Draw each car at the interpolated pose (smooth at any refresh), then the variable-rate systems:
       // damage reacts to this step's impacts, enter/exit handles input and doors, LOD streams last.

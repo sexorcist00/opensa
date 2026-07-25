@@ -20,6 +20,18 @@ import {
   CAR_SIT,
 } from './vehicle-clips';
 
+/** The driving values one fixed step handed the raycast controller (plan 081/01). */
+export interface AppliedControls {
+  /** Total brake force (N). */
+  readonly brake: number;
+  /** Total engine force (N), signed — negative is reverse. */
+  readonly engineForce: number;
+  /** Front-wheel steer angle (rad). */
+  readonly steer: number;
+  /** The raw throttle input behind it, −1..1. */
+  readonly throttle: number;
+}
+
 /** A car the player can interact with + sit in (driver side). It is a dynamic
  * physics body; `position`/`heading` are kept live by the vehicle-physics system. */
 export interface EnterableVehicle {
@@ -142,6 +154,9 @@ const APPROACH_CANCEL_HOLD = 0.18; // s of movement input during the run-to-door
 const APPROACH_STALL_TIMEOUT = 1.5; // s of no progress toward the door (blocked path) before auto-cancelling
 const APPROACH_STALL_EPSILON = 0.02; // planar distance (m) under which the player counts as not progressing per frame
 
+/** What {@link EnterVehicleSystem.appliedControls} reports while nobody is driving. */
+const NO_CONTROLS: AppliedControls = { brake: 0, engineForce: 0, steer: 0, throttle: 0 };
+
 type Phase =
   | 'approaching'
   | 'exiting'
@@ -177,6 +192,8 @@ export class EnterVehicleSystem implements System {
   private closeDoorWhenClear = false;
   private readonly config: Readonly<Config>;
   private readonly controller: CharacterControllerSystem;
+  /** The last step's applied driving values — see {@link appliedControls}. */
+  private controls: AppliedControls = { brake: 0, engineForce: 0, steer: 0, throttle: 0 };
   private readonly doors = new Map<EnterableVehicle, { lf: number; rf: number }>(); // per-side door angles
   private doorTarget = 0;
   private engine = 0; // current engine force (N), ramped toward the throttle target
@@ -242,6 +259,15 @@ export class EnterVehicleSystem implements System {
   add(vehicle: EnterableVehicle): void {
     this.vehicles.push(vehicle);
     this.doors.set(vehicle, { lf: 0, rf: 0 });
+  }
+
+  /**
+   * What {@link drive} actually handed the controller on the last fixed step (plan 081/01 telemetry): a
+   * capture must record the applied values, not the raw input — the engine force is ramped and the steer is
+   * slewed, so the input alone cannot explain the response. All zero while nobody is driving.
+   */
+  appliedControls(): AppliedControls {
+    return this.isSeated() ? this.controls : NO_CONTROLS;
   }
 
   /** Whether pressing enter/exit now would do something: seated → can exit, idle with a car in range → can
@@ -625,6 +651,7 @@ export class EnterVehicleSystem implements System {
     this.steerAngle += clamp(target - this.steerAngle, -rate * step, rate * step);
 
     this.physics.setVehicleControls(car.controller, car.wheels, this.engine, brake, this.steerAngle);
+    this.controls = { brake, engineForce: this.engine, steer: this.steerAngle, throttle };
     car.rig.setSteer(this.steerAngle); // front wheels turn with the physics steer
   }
 
