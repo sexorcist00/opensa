@@ -84,8 +84,7 @@ The simple **single sphere cast + near-plane cap** (commit `4316967`, the state 
 
 Accepted trade-offs it lives with: it reacts to thin poles on the sight line (complaint 1 unsolved), and a
 very close wall behind the player can clip the camera into the ped a touch. Both were judged better than the
-alternatives above. The **On Top** overhead fallback for a genuine full pin stays a live reserve idea in
-[`docs/performance/deferred-optimizations/camera-on-top-fallback.md`](../performance/deferred-optimizations/camera-on-top-fallback.md).
+alternatives above.
 
 ## When to revisit
 
@@ -94,3 +93,10 @@ alternatives above. The **On Top** overhead fallback for a genuine full pin stay
   the ease, the single cast is the answer.
 - **True wall-SLIDE framing (complaint 2)** only a physical body gives, with the sticking/jitter/tunnelling
   mitigation Approach 1 lists — a large investment, only if a field round wants it badly enough.
+- **The into-the-ped clip on a genuine full pin** (a wall hard behind the subject, no room) could be answered
+  by an **"On Top" fallback**: as the allowed distance collapses, ease the pitch up toward a top-down framing
+  so the subject stays visible from above instead of the eye clipping into the model. Cheap (a pitch/height
+  blend, no extra casts — and deliberately NO upward cast, so an indoor ceiling clips through, an accepted
+  edge case). The risk is feel, not cost: it must BLEND with hysteresis (or it flips between behind-view and
+  overhead in a tight alley) and ease back the moment open space returns. Only worth building if a field
+  round finds real full pins frequent enough that the clip annoys.

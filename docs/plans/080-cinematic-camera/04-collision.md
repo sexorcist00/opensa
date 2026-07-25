@@ -163,5 +163,5 @@ the camera JUMPED instead of sliding. Root cause: the boolean all-hit gate is di
 between "ignore" and "full pull-in" as the corner rays catch/lose a facade's edges/recesses. Full writeup +
 the "keep it a continuous function of approach, not a boolean gate" lesson in
 [`docs/postmortem/camera-collision-approaches.md`](../../postmortem/camera-collision-approaches.md). Back on
-the simple single sphere cast (`4316967`). The On Top overhead fallback is the remaining reserve lever
-([`docs/performance/deferred-optimizations/camera-on-top-fallback.md`](../../performance/deferred-optimizations/camera-on-top-fallback.md)).
+the simple single sphere cast (`4316967`). The "On Top" overhead fallback for a genuine full pin is kept as a
+revisit note in that same postmortem — a feel idea, not a perf lever, so it is not in the performance reserve.

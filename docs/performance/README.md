@@ -34,7 +34,6 @@ Entries live in [deferred-optimizations/](deferred-optimizations/), one file per
 | [Env-probe cadence and resolution](deferred-optimizations/env-probe-cadence.md) | GPU pass | 0.2–1.9 ms observed, ~5.8 ms worst seen | in reserve |
 | [Foliage fill](deferred-optimizations/foliage-fill.md) | GPU pass (fill) | the 07-21 case was 13.72 → 7.63 ms | parked by decision |
 | [Camera position render interpolation](deferred-optimizations/camera-position-render-interpolation.md) | correctness (camera feel) | unlocked the 080/02 position weight + killed the run "doubling" | **PULLED 2026-07-25** |
-| [Camera "On Top" fallback](deferred-optimizations/camera-on-top-fallback.md) | correctness (camera feel) | overhead framing on a genuine full pin instead of clipping the ped | in reserve — pitch/height blend, no extra casts |
 
 ## How to use it when the frame budget is blown
 
