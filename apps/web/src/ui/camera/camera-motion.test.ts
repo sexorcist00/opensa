@@ -179,7 +179,7 @@ describe('stepMotion', () => {
       expect(heavy.shakeAmplitude).toBeLessThanOrEqual(CONFIG.shakeScale);
     });
 
-    it('lets a stronger hit take over a shake already running', () => {
+    it('lets a stronger hit take over a shake already running, WITHOUT restarting the noise clock', () => {
       const state = createMotion();
       stepMotion(state, input({ impact: CONFIG.shakeImpactForce / 5 }), CONFIG);
       const weak = state.shakeAmplitude;
@@ -188,8 +188,31 @@ describe('stepMotion', () => {
       stepMotion(state, input({ impact: CONFIG.shakeImpactForce }), CONFIG);
 
       expect(state.shakeAmplitude).toBeGreaterThan(weak);
-      expect(state.shakeSeed).not.toBe(seed); // a fresh hit shakes differently, not louder-the-same
-      expect(state.shakeTime).toBe(0);
+      // The clock and the seed survive: a crash is a BURST of contacts, and restarting either on every one
+      // of them pinned the noise near its t=0 sample — a hard hit then shook LESS than a light tap.
+      expect(state.shakeSeed).toBe(seed);
+      expect(state.shakeTime).toBeGreaterThan(0);
+    });
+
+    it('actually jitters through a sustained crash instead of holding one offset', () => {
+      const burst = createMotion();
+      const single = createMotion();
+      const samples = (state: MotionState, sustained: boolean): number[] => {
+        const out: number[] = [];
+        for (let frame = 0; frame < 20; frame += 1) {
+          out.push(
+            stepMotion(state, input({ impact: sustained || frame === 0 ? CONFIG.shakeImpactForce : 0 }), CONFIG)
+              .lateral,
+          );
+        }
+
+        return out;
+      };
+      const spread = (values: number[]): number => Math.max(...values) - Math.min(...values);
+
+      // A multi-frame crash must move at least as much as a one-frame tap of the same strength.
+      expect(spread(samples(burst, true))).toBeGreaterThan(spread(samples(single, false)) / 2);
+      expect(spread(samples(burst, true))).toBeGreaterThan(0.01);
     });
 
     it('kicks the FOV as a run tips into a sprint, and not before', () => {

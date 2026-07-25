@@ -279,22 +279,23 @@ export function stepCamera(
   // Collision (plan 04): cap the distance so the eye clears geometry between the look point and the eye —
   // on foot AND in a car (the camera slides along walls, never through them). The eye sits at
   // `lookPoint − forward · distance`, so the cast runs from the look point along `−forward`. A detached fly
-  // eye flies through geometry by design, the bench is bypassed, and a scripted enter/exit skips the CAP (the
-  // pull-in read as a jump — just centre behind); the floor guard below still runs then, so the camera never
-  // sinks into the ground while getting in or out.
+  // eye flies through geometry by design and the bench is bypassed. A scripted enter/exit keeps the cap but
+  // EASES it in both directions: suspending it outright (the first cut) stopped the camera sliding along
+  // surfaces and let it sink through the ground mid-climb, while snapping it in read as a jump — which is
+  // what the 04 field round rejected.
   const attached = !state.flyEye && !snapshot.bench;
-  const collideDistance =
-    attached && !snapshot.settling
-      ? resolveCollision(
-          state.collision,
-          lookPoint,
-          [-forward[0], -forward[1], -forward[2]],
-          state.distance,
-          config,
-          probe,
-          snapshot.dt,
-        )
-      : state.distance;
+  const collideDistance = attached
+    ? resolveCollision(
+        state.collision,
+        lookPoint,
+        [-forward[0], -forward[1], -forward[2]],
+        state.distance,
+        config,
+        probe,
+        snapshot.dt,
+        snapshot.settling,
+      )
+    : state.distance;
 
   const camera = resolveCamera({
     aspect: snapshot.aspect,

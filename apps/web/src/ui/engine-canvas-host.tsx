@@ -109,6 +109,8 @@ const SLOW_FRAME_MS = 20;
 
 /** The GTA heading the player spawns facing — the camera seeds behind it, the pose falls back to it. */
 const SPAWN_FACING = Math.PI;
+/** How long the camera keeps EASING its collision response after a scripted enter/exit ends (seconds). */
+const EXIT_EASE_SECONDS = 0.8;
 /** Player capsule (metres, GTA Z-up): the setup-character defaults for a human. */
 const CAPSULE_RADIUS = 0.35;
 const CAPSULE_HALF_HEIGHT = 0.55;
@@ -984,6 +986,19 @@ async function boot(
   /** The locomotion state the previous frame drew, so a landing is read as an EDGE (plan 080/06). */
   let lastLocomotion = LOCOMOTION_GROUNDED;
   /**
+   * Seconds of eased-collision left after a scripted enter/exit ENDS.
+   *
+   * Climbing out hands the camera a new focus (the ped, standing beside the car) while the eye is still
+   * behind the car — so the very next cast finds the car between them and the normal INSTANT pull-in yanks
+   * the camera onto the ped's back, then releases. The field report was exactly that: "it jumps in close,
+   * then pulls away". Holding the eased response a moment longer turns that into the camera settling into
+   * its new framing.
+   */
+  let settleEase = 0;
+  /** Refresh the eased-collision window: full while a sequence plays, then counting down. */
+  const easeWindow = (left: number, dt: number): number =>
+    vehicles?.isSettling() === true ? EXIT_EASE_SECONDS : Math.max(0, left - dt);
+  /**
    * The vertical impact speed of a landing that STARTED this frame, else 0.
    *
    * 088 gave the controller real landing states and `fallSpeed`; the camera reads the transition INTO one
@@ -1195,6 +1210,7 @@ async function boot(
     // smoothed camera follows a continuous focus instead of the fixed-step saw (plan 080/03).
     const focus = seatedCar ? toEngine(seatedCar.renderPosition) : playerEngine;
     const motion = motionSignals(seatedCar);
+    settleEase = easeWindow(settleEase, dt);
     syncCameraConfig();
     // The rig is one pure step over a snapshot of this frame (plan 080/01): the handlers above only
     // ACCUMULATED input, so the smoothing that lands in plan 02 sees whole frames, dt included.
@@ -1214,7 +1230,7 @@ async function boot(
       look: pendingInput.look,
       mode: cameraModeOf(rig.flyEye !== null, seatedCar !== null),
       pan: pendingInput.pan,
-      settling: vehicles?.isSettling() ?? false,
+      settling: settleEase > 0,
       // The car's speed and slip come from the PHYSICS body (081/01's shared `planarMotion`), not from the
       // focus delta: the delta measures the render loop, and a slide leaves no trace in it at all.
       vehicle: vehicles?.drivenMotion() ?? null,

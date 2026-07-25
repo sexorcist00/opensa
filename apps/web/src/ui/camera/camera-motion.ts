@@ -32,7 +32,7 @@ const BOB_LATERAL_SHARE = 0.6;
 /** How long the landing dip takes to recover (seconds). */
 const DIP_TIME = 0.25;
 /** The deepest a landing may dip the eye (m), whatever the fall. */
-const DIP_CAP = 0.12;
+const DIP_CAP = 0.14;
 /** Shake amplitude half-life-ish decay (seconds). */
 const SHAKE_DECAY = 0.3;
 /** How fast the shake noise is sampled (Hz) — jitter, not a wobble. */
@@ -217,14 +217,15 @@ function stepShake(
   state.shakeTime += input.dt;
   if (input.impact > 0 && config.shakeImpactForce > 0 && config.shakeScale > 0) {
     const amplitude = Math.min(SHAKE_CAP, config.shakeScale * clamp(input.impact / config.shakeImpactForce, 0, 1));
-    if (amplitude >= state.shakeAmplitude) {
-      // A fresh, stronger hit gets its own seed and clock — two crashes must not shake identically.
+    // Re-seed only when starting from silence. A real crash is not one contact — it is a burst of them over
+    // several frames, and re-seeding (or restarting the noise clock) on each one pinned the sample near t=0,
+    // which turned the jitter into a nearly STATIC offset. That is why a hard hit shook LESS than a light
+    // one: the light tap was a single frame, so its clock actually ran.
+    if (state.shakeAmplitude <= 0) {
       state.shakeSeed = (Math.imul(state.shakeSeed, 1664525) + 1013904223) >>> 0;
       state.shakeTime = 0;
-      state.shakeAmplitude = amplitude;
-    } else {
-      state.shakeAmplitude = Math.min(SHAKE_CAP, state.shakeAmplitude + amplitude);
     }
+    state.shakeAmplitude = Math.min(SHAKE_CAP, Math.max(state.shakeAmplitude, amplitude));
   }
   if (state.shakeAmplitude <= 1e-5) {
     state.shakeAmplitude = 0;

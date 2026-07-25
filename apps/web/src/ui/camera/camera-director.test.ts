@@ -472,17 +472,24 @@ describe('stepCamera — composition (plan 080/03)', () => {
       expect(orbitOf(rigState(), { mode: 'vehicle', vehicleDistance: 12 })).toBeCloseTo(3, 1);
     });
 
-    it('does not cap during a scripted enter/exit (settling), only the floor guard runs', () => {
+    it('still caps during a scripted enter/exit, but EASES in instead of snapping', () => {
       const wall: CameraProbe = () => 3;
       const state = rigState();
-      let camera = stepCamera(state, snapshot({ settling: true }), CONFIG, wall);
-      for (let frame = 0; frame < 60; frame += 1) {
-        camera = stepCamera(state, snapshot({ settling: true }), CONFIG, wall);
-      }
-      const orbit =
+      const orbitOf = (camera: ReturnType<typeof stepCamera>): number =>
         Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]) / Math.cos(state.pitch);
 
-      expect(orbit).toBeCloseTo(7, 1); // the wall cap is suspended; the swing centres without a pull-in jump
+      // Frame one: the wall is there, but the pull-in must not be a snap (that read as a jump in the field).
+      const first = orbitOf(stepCamera(state, snapshot({ settling: true }), CONFIG, wall));
+      expect(first).toBeGreaterThan(5);
+
+      // Given a moment it does reach the wall — suspending the cap outright stopped the camera sliding
+      // along surfaces and let it sink through the ground mid-climb.
+      let camera = first as unknown as ReturnType<typeof stepCamera>;
+      for (let frame = 0; frame < 120; frame += 1) {
+        camera = stepCamera(state, snapshot({ settling: true }), CONFIG, wall);
+      }
+
+      expect(orbitOf(camera)).toBeCloseTo(3, 1);
     });
 
     it('holds the eye at the near-plane floor against a very close wall (clips the ped, not skybox)', () => {

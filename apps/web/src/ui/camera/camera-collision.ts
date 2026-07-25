@@ -82,6 +82,7 @@ export function resolveCollision(
   config: CameraConfig,
   probe: CameraProbe | null,
   dt: number,
+  eased = false,
 ): number {
   if (probe === null || config.collisionRadius <= 0) {
     state.shown = desiredDistance;
@@ -100,12 +101,18 @@ export function resolveCollision(
   }
   // Never closer than the near-plane radius (below it the near plane renders from inside geometry).
   allowed = Math.max(allowed, Math.min(desiredDistance, config.collisionMinDistance));
+  const lambdaOut = config.collisionReleaseTime > 0 ? 1 / config.collisionReleaseTime : Number.POSITIVE_INFINITY;
   // Snap IN (a wall is never shown a single frame); ease OUT so leaving a doorway glides.
+  //
+  // `eased` drops the snap for BOTH directions. It is what a scripted enter/exit runs: the cap has to stay
+  // on there (without it the camera stops sliding along surfaces and can sink through the ground — the eye
+  // is under the floor before the guard's downward probe can see it), but an instant pull-in mid-animation
+  // reads as a jump, which is what the 04 field round rejected. Easing in satisfies both: the camera keeps
+  // clearing geometry, and it never snaps while the sequence plays.
   if (allowed < state.shown) {
-    state.shown = allowed;
+    state.shown = eased ? damp(state.shown, allowed, lambdaOut, dt) : allowed;
   } else {
-    const lambda = config.collisionReleaseTime > 0 ? 1 / config.collisionReleaseTime : Number.POSITIVE_INFINITY;
-    state.shown = damp(state.shown, allowed, lambda, dt);
+    state.shown = damp(state.shown, allowed, lambdaOut, dt);
   }
 
   return state.shown;

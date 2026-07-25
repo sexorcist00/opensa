@@ -160,6 +160,40 @@ object travels TOWARD the camera** (`dot(camera forward, velocity) < 0`). Walkin
 deliberate act and the camera now holds still for it, which is also SA's behaviour; a reversing car gets the
 same protection for free. Regression tests cover both the loop and the continuous chase.
 
+### 2026-07-25 — FIELD ROUND 2: the retune ACCEPTED, four more findings
+
+User: the bob, the corner swing, the sprint kick and the backing-up fix all read right now. Four follow-ups,
+three of them bugs:
+
+**1. "The landing dip on foot — I see nothing."** Not a wiring fault (a normal jump does reach
+`LOCOMOTION_LAND`; the tier floor is a 1 u/s impact): the numbers were simply below perception. A 4.5 u/s
+jump against `landingDipFullSpeed` 8 earned 0.56 of a 0.06 m dip — **3.4 cm**, which at a 7 m framing is a
+third of a degree. Now `landingDipScale` **0.06 → 0.12** and `landingDipFullSpeed` **8 → 5**, so an ordinary
+jump takes very nearly the full dip (internal cap 0.12 → 0.14 so a hard landing still reads harder).
+
+**2. "A hard crash shakes LESS than a light one."** A real bug, and a good catch. A crash is not one contact
+— it is a BURST of them across several frames. Every contact re-triggered the shake, and the re-trigger
+restarted the noise clock (`shakeTime = 0`) and re-seeded, so the noise was sampled at almost the same point
+every frame: a nearly STATIC offset instead of a jitter. A light tap is a single contact, so its clock
+actually ran and it visibly shook. Fixed: the clock and the seed survive a re-trigger — a new hit only ever
+RAISES the amplitude; re-seeding happens on the first hit after silence. A regression test now compares the
+frame-to-frame spread of a sustained burst against a single tap.
+
+**3. "Getting out, the camera jumps in close to the ped and then pulls away."** The exit hands the rig a new
+focus — the ped, standing beside the car — while the eye is still behind the CAR, so the very next cast
+finds the car between them and the INSTANT pull-in yanks the camera in, then releases over
+`collisionReleaseTime`. Fixed by holding the eased collision response for `EXIT_EASE_SECONDS` (0.8 s) after
+a sequence ends, so the camera settles into the new framing instead of snapping into it.
+
+**4. "During entry the camera stops sliding along surfaces, and if it is low it can sink into the ground."**
+This was 04's own decision arriving with a bill: the cap was SUSPENDED for the whole scripted sequence
+because an instant pull-in mid-animation read as a jump. With no cap the camera neither slides nor clears
+the ground — and once the eye is under the floor the guard cannot rescue it, because its probe casts
+DOWNWARD from the eye and the floor is above. Fixed by keeping the cap on during a sequence but EASING it in
+both directions (`resolveCollision(..., eased)`): the camera keeps clearing geometry and still never snaps
+while the animation plays. The field verdict that rejected the snap is preserved; only the suspension is
+gone.
+
 **Owed**: a re-run of the COMFORT field round — a long walk (does the bob read as life or as wobble?), stair runs,
 rooftop jumps, curb-hopping in a car and a deliberate wall crash. The plan asks for a comfort verdict
 explicitly, not only a looks verdict, and to tune DOWN when in doubt. Every scale is live on the Camera tab
