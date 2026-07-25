@@ -372,12 +372,26 @@ describe('stepCamera — composition (plan 080/03)', () => {
       expect(state.yaw).toBeCloseTo(Math.PI / 2, 2); // yawBehind(−π/2)
     });
 
+    it('never recenters behind a player walking TOWARD the camera — the about-face loop', () => {
+      // Movement is camera-relative and the ped turns to face it, so recentring here would flip what "back"
+      // means and about-face the ped again, forever. Walk straight at the camera and it must sit still.
+      const state = rigState();
+      const before = state.yaw;
+      // Camera starts at yaw π (looking along −Z), so heading π walks the ped back toward +Z, at it.
+      walk(state, 7, CONFIG.recenterDelaySec + 6, Math.PI);
+
+      expect(state.yaw).toBe(before);
+      expect(state.autoCenter.following).toBe(false);
+    });
+
     it('restarts the idle clock the moment the player looks', () => {
       const state = rigState();
       walk(state, 7, 1.5);
       const before = state.autoCenter.idleFor;
 
-      stepCamera(state, snapshot({ look: { x: 3, y: 0 } }), CONFIG);
+      // Keep the focus where the walk left it: snapping it back to the start would read as a run TOWARD the
+      // camera, which suspends auto-center outright (the backing-up rule) and is not what this case is about.
+      stepCamera(state, snapshot({ focus: state.lastFocus ?? [10, 2, 30], look: { x: 3, y: 0 } }), CONFIG);
 
       expect(state.autoCenter.idleFor).toBeLessThan(before);
       expect(state.autoCenter.idleFor).toBeCloseTo(1 / 60, 6);

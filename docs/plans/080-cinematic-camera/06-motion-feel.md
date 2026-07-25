@@ -124,7 +124,43 @@ react to a kerb the bodywork shrugs off.
 `reducedMotion` on** — the layer costs **+0.17 µs (+42%)**, or +0.15 µs in a car. Absolute 0.0006 ms/frame.
 Camera suite 153 green (+17), apps/web + packages/game 755 green; `tsc` + eslint clean.
 
-**Owed**: the COMFORT field round — a long walk (does the bob read as life or as wobble?), stair runs,
+### 2026-07-25 — FIELD ROUND 1: REJECTED. Bob was a vibration, and the camera fought the player
+
+User's verdict, driving and on foot: **unsatisfactory**. Four reports, three of them real defects rather
+than taste:
+
+**1. "At a run the camera shakes so hard you cannot concentrate."** The bug was FREQUENCY, not amplitude.
+`bobCyclesPerMetre` 0.7 at the 7 u/s run gait is **4.9 Hz** — a vibration, not a stride. A stride is ~1.7
+per second. Fixed: **0.7 → 0.25** (1.75 Hz at a run) and `bobAmplitude` **0.05 → 0.025**, since an amplitude
+chosen for a fast wobble is far too much for a slow one.
+
+**2. "The corner swing is the only thing I saw, and it looks jerky."** A real discontinuity, and the same
+CLASS of bug as 04's rejected multi-ray gate — a boolean latch in a continuous channel. Turn-follow arms on
+a heading rate, then DISARMS the moment the camera is within `settleEpsilon`, which nulls the steered-yaw
+target and **zeroes the swing spring's velocity**; a frame later the still-turning car re-arms it and the
+swing restarts from a standstill. Through a long corner that is a series of hitches. Fixed: driving now
+chases the target CONTINUOUSLY (`stepAutoCenter(..., { continuous: true })`) — no arm, no settle, one
+uninterrupted spring. The latch stays on foot, where it is right: a framing the player chose must survive a
+straight run.
+
+**3. "The FOV kick and the drift lean — I never saw them."** Both were gated past what the game actually
+produces. The vehicle kick ramped between 8 and **45 u/s** while a car's real cruising speed sits far below
+that, so it delivered a couple of degrees and stopped; the drift lean needed **8° of slip** before it began,
+and this physics (uniform `frictionSlip` 10.5, 081 has not touched it yet) barely slides at all. Fixed:
+`vehicleFovMaxSpeed` **45 → 28**, `vehicleFovMinSpeed` 8 → 6, `driftSlipDeadZone` **0.14 → 0.05 rad** (~3°),
+`driftMinSpeed` 10 → 6. The sprint kick had the same disease — it ramped 7 → 9.8 u/s against a sprint gait
+of 10, so it only arrived at top speed: band 1.4 → 1.2 and `sprintFovKick` 0.04 → **0.07** (~4°).
+
+**4. NEW BUG — walking backward span the camera.** Holding "back" about-faced the ped, the camera recentred
+behind the new facing, which flipped what "back" MEANT, so the ped about-faced again: a loop the player
+cannot break. This is the risk 02's ledger flagged ("auto-center rotates the camera, which rotates forward,
+which curves a held strafe") arriving in its worst form, because movement is camera-relative and
+`Locomotion.heading` follows the input. Fixed in the director: **auto-center is suspended while the framed
+object travels TOWARD the camera** (`dot(camera forward, velocity) < 0`). Walking at the camera is a
+deliberate act and the camera now holds still for it, which is also SA's behaviour; a reversing car gets the
+same protection for free. Regression tests cover both the loop and the continuous chase.
+
+**Owed**: a re-run of the COMFORT field round — a long walk (does the bob read as life or as wobble?), stair runs,
 rooftop jumps, curb-hopping in a car and a deliberate wall crash. The plan asks for a comfort verdict
 explicitly, not only a looks verdict, and to tune DOWN when in doubt. Every scale is live on the Camera tab
 with `reducedMotion` as the A/B.

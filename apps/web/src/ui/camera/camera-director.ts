@@ -232,7 +232,14 @@ export function stepCamera(
   // heading), which is plan 05's, tuned against a car's speeds. A scripted enter/exit suspends it: the
   // steered swing (set at the start of the sequence) glides to the target while the ped's twitches are
   // ignored.
-  const centering = !snapshot.settling && (snapshot.mode === 'foot' || snapshot.mode === 'vehicle');
+  // ...and it must NOT run while the framed object is travelling TOWARD the camera. Movement input is
+  // camera-relative and the character turns to face it, so recentring behind a backing-up player feeds
+  // straight back into the input: hold "back" and the ped about-faces, the camera swings behind the new
+  // facing, which flips what "back" means, so the ped about-faces again — a spin the player cannot stop.
+  // Walking toward the camera is a deliberate act; the camera holds still for it (SA's behaviour), and a
+  // reversing car gets the same treatment for free.
+  const approaching = velocity.x * Math.sin(state.yaw) + velocity.z * Math.cos(state.yaw) < 0;
+  const centering = !snapshot.settling && !approaching && (snapshot.mode === 'foot' || snapshot.mode === 'vehicle');
   if (centering) {
     // Drift framing (#10) is expressed as a HEADING, not as a second yaw writer: the camera settles behind
     // where the car is going rather than where its nose points, and every existing rule (the swing, the
@@ -247,6 +254,8 @@ export function stepCamera(
       Math.hypot(velocity.x, velocity.z),
       config,
       snapshot.dt,
+      // Driving chases continuously; the on-foot turn-follow latch would hitch through a long corner.
+      { continuous: snapshot.mode === 'vehicle' && state.autoCenter.idleFor > config.recenterDelaySec },
     );
     state.yaw = step.yaw;
     if (step.steerTo !== null) {

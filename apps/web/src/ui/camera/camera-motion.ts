@@ -39,8 +39,10 @@ const SHAKE_DECAY = 0.3;
 const SHAKE_HZ = 15;
 /** The most a shake alone may offset the camera (m). */
 const SHAKE_CAP = 0.1;
-/** The speed band over which the sprint FOV kick comes in, as a multiple of the run gait. */
-const SPRINT_BAND = 1.4;
+/** The speed band over which the sprint FOV kick comes in, as a multiple of the run gait. The sprint gait is
+ *  10 u/s against a 7 u/s run, so a band that only completes at 1.4x would arrive exactly at top speed and
+ *  never read as anything. */
+const SPRINT_BAND = 1.2;
 
 /** What the host measured this frame. Everything the layer reacts to arrives as data — it observes nothing. */
 export interface MotionInput {

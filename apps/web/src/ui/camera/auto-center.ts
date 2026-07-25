@@ -16,6 +16,12 @@ import type { CameraConfig } from '@opensa/game';
 
 import { angleDelta, clamp, dampAngle } from '@opensa/math';
 
+/** Per-mode switches for one auto-center step. */
+export interface AutoCenterOptions {
+  /** Chase the target every frame instead of arming a turn-follow latch — the vehicle behaviour. */
+  continuous?: boolean;
+}
+
 /** What the rig remembers between frames to decide whether it should be steering. */
 export interface AutoCenterState {
   /** Turn-follow is engaged: the camera is swinging behind a direction change until it settles. */
@@ -56,6 +62,7 @@ export function stepAutoCenter(
   speed: number,
   config: CameraConfig,
   dt: number,
+  options: AutoCenterOptions = {},
 ): AutoCenterStep {
   state.idleFor += dt;
   const moving = speed > config.moveThreshold;
@@ -70,12 +77,20 @@ export function stepAutoCenter(
   if (!moving || dt <= 0) {
     return { steerTo: null, yaw };
   }
+  const behind = yawBehind(heading);
+  // Driving: the camera chases the car's rear CONTINUOUSLY, with no arm/settle latch. The latch is what
+  // made a long corner read as a series of jerks — it disarms the moment the camera is within
+  // `settleEpsilon`, which zeroes the swing spring's velocity, then re-arms a frame later and starts the
+  // swing again from a standstill. On foot the latch is right (a framing the player chose must survive a
+  // straight run); in a car, hands-off following IS the behaviour.
+  if (options.continuous) {
+    return { steerTo: behind, yaw };
+  }
   const turnRate = previous === null ? 0 : Math.abs(angleDelta(previous, heading)) / dt;
   const grace = state.idleFor < config.manualGraceSec;
   if (!grace && turnRate > config.turnThreshold) {
     state.following = true;
   }
-  const behind = yawBehind(heading);
   if (state.following) {
     if (Math.abs(angleDelta(yaw, behind)) < config.settleEpsilon) {
       state.following = false;

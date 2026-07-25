@@ -133,5 +133,20 @@ describe('stepAutoCenter', () => {
 
       expect(step.yaw).toBe(away);
     });
+
+    it('chases every frame in continuous mode, with no arm/settle latch to hitch on', () => {
+      const state = createAutoCenter();
+      const behind = yawBehind(0);
+      // Sitting ALREADY within the settle epsilon: the latched path would report nothing to steer to (and
+      // zero the swing spring on the way), which is exactly the hitch a long corner showed.
+      const near = behind + CONFIG.settleEpsilon / 2;
+
+      const latched = stepAutoCenter(createAutoCenter(), near, 0, RUN, CONFIG, DT);
+      const continuous = stepAutoCenter(state, near, 0, RUN, CONFIG, DT, { continuous: true });
+
+      expect(latched.steerTo).toBeNull();
+      expect(continuous.steerTo).toBeCloseTo(behind, 12);
+      expect(state.following).toBe(false); // the latch is not used at all on this path
+    });
   });
 });
