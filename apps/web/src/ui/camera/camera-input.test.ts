@@ -17,7 +17,7 @@ const drain = (state: ReturnType<typeof createLookInput>, frames: number, smooth
 
 describe('releaseLook', () => {
   describe('negative cases', () => {
-    it('applies the raw delta whole when smoothing is off (the legacy path)', () => {
+    it('applies the raw delta whole when smoothing is off (smoothTime 0)', () => {
       const state = createLookInput();
 
       expect(releaseLook(state, 40, -12, 0, DT)).toEqual({ x: 40, y: -12 });

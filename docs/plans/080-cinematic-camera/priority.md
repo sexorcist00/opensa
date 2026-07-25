@@ -17,8 +17,9 @@ one ships, and each ends with a field round so tuning debt never stacks more tha
 ## Checkpoint rhythm
 
 - **After 02, 03, 04, 05, 06, 08**: user field round; verdicts + frozen values go into that plan's
-  ledger before the next plan starts. A rejected round loops within its plan (the `?cam=legacy`
-  A/B keeps the game playable throughout).
+  ledger before the next plan starts. A rejected round loops within its plan (every tuned value is a
+  `CameraConfig` field on the debug Camera tab, so a bad channel can be zeroed live instead of blocking
+  play — that replaced the `?cam=legacy` A/B, deleted 2026-07-25).
 - **After 01 and 07**: ritual bench sweep (the two points where host wiring changes shape) —
   proof the bench bypass invariant holds, plus a map-viewer field check (01 moves the fly path,
   07 audits the viewer ⇄ gameplay blend).

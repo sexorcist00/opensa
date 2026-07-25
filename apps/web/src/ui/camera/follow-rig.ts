@@ -38,8 +38,8 @@ export function resetFollowPoint(state: FollowPointState): void {
 /**
  * Step the look point toward `target` (the focus already raised by `followHeight`) and return it.
  *
- * `smoothing = false` runs the pre-080 rigid rig: the point IS the target. That is the legacy A/B path, and
- * it is also what every mode that should not lag (the free-fly eye) gets.
+ * `smoothing = false` makes the point BE the target — what every mode that should not lag (the free-fly eye)
+ * gets.
  */
 export function stepFollowPoint(
   state: FollowPointState,

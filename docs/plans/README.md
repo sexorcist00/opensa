@@ -50,8 +50,10 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   7 sub-plans + priority chain. **01–04 DONE 2026-07-25** — the complete on-foot
   baseline + collision: damp/spring math + `CameraDirector` (`ui/camera/`), the smoothed rig with render
   interpolation (position weight), composition (turn-follow, idle recenter, look-ahead), and collision
-  (sphere/ray casts, whiskers, snap-in/ease-out, min distance, floor guard), behind a `?cam=legacy` A/B. The
-  02–04 field round is owed; 05 vehicle camera next. **08 (C-key view presets incl. first person) added.**
+  (sphere/ray casts, whiskers, snap-in/ease-out, min distance, floor guard). The 02–04 **field round is
+  accepted** — defaults frozen as shipped, and the `?cam=legacy` A/B is DELETED with it (2026-07-25, 07's
+  close-out task taken early). 05 vehicle camera next, after 081/01 telemetry. **08 (C-key view presets
+  incl. first person) added.**
 - **[079 — One canonical build source, the dev-surface unification, and its docs](./079-canonical-build-source/readme.md)**
   — every dev surface (lab, bench harness, viewers) reads ONE canonical build (`./build/original`), served in
   place (NOT copied into `public/`), via a new `http-dir` loader + the loading-MODE-selects-the-world fix +

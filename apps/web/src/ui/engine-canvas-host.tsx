@@ -395,11 +395,9 @@ async function boot(
   // capture (prod behaviour — the look uses movementX/Y continuously while pointer-locked, Esc releases),
   // drag-orbit stays as the unlocked fallback; wheel = zoom. The controller sees its forward through a
   // camera shim (the only three-shaped seam in CharacterControllerSystem).
-  // `?cam=legacy` runs the pre-080 rigid stick (the chain's A/B escape hatch — a field round compares feel
-  // one reload apart, and a rejected round never blocks play). Deleted at chain close-out (plan 07).
   // Seat the camera BEHIND the spawn facing (the ped spawns facing π; behind it is yawBehind(π) = 0). Seeding
   // it at π put the camera nose-to-nose with a stationary player until they first moved.
-  const rig = createRigState(config.camera, yawBehind(SPAWN_FACING), -0.25, params.get('cam') === 'legacy');
+  const rig = createRigState(config.camera, yawBehind(SPAWN_FACING), -0.25);
   /** This frame's raw camera input, drained by the loop: pointer deltas in pixels, drag pan in NDC, wheel
    *  notches. Accumulating instead of mutating the rig is what lets ONE pure step own the smoothing. */
   const pendingInput = { look: { x: 0, y: 0 }, pan: null as null | { x: number; y: number }, zoom: 0 };

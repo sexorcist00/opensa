@@ -37,8 +37,11 @@ resets). This plan proves it:
 
 ## 5. Close-out
 
-- Delete the `?cam=legacy` branch and the preserved pre-080 inline path (its parity test retires
-  with it); `?cam` stays reserved for future camera debug if needed.
+- ~~Delete the `?cam=legacy` branch and the preserved pre-080 inline path~~ **DONE EARLY 2026-07-25**
+  (the user accepted the rig as the default after 01–04, so the escape hatch had no job left). The flag,
+  the `legacy` rig-state field and its five branches are gone; the parity test STAYED — it now steps a
+  config with every smoothing channel zeroed, so the reduction to the pre-080 stick math is still pinned.
+  `?cam` stays reserved for future camera debug if needed.
 - `engine-camera.test.ts` and the director suite are the pinned behaviour record; docs sweep:
   this chain's ledgers complete, readme status flipped to DONE with the field-verdict quotes
   (paraphrased in English, per repo rule).
@@ -52,7 +55,7 @@ resets). This plan proves it:
 - [ ] Pitch-coupled framing (or a ledger line explaining why it was skipped).
 - [ ] Tuning freeze + tab prune.
 - [ ] Perf measurements + ritual sweep + soak leg (ledger).
-- [ ] Legacy-path deletion + docs sweep + idea stubs.
+- [x] Legacy-path deletion (early, 2026-07-25) — docs sweep + idea stubs still owed.
 
 ## Acceptance
 
@@ -62,4 +65,11 @@ resets). This plan proves it:
 
 ## Ledger
 
-_(append here)_
+**2026-07-25 — `?cam=legacy` deleted early (user's call: "the camera is fine now").** Removed: the host's
+`params.get('cam')` read, `CameraRigState.legacy`, and its five branches in `stepCamera` (instant zoom,
+centering gate, follow-point smoothing gate, `attached`, input smooth time) plus the `steerYawChannel` gate.
+The parity gate did NOT retire with it: `camera-director.test.ts` now steps a `RIGID` config
+(`inputSmoothTime: 0`, `zoomLambda: Infinity`) and still matches the pre-080 inline host math to 12 digits —
+the position channels need no zeroing there because a static focus keeps the look point exactly on target.
+Test count 110 → 109 (the "does not compose on the legacy path" case went with the path); the rest of the
+suite is untouched. `tsc --noEmit` + eslint clean.

@@ -34,8 +34,10 @@ instead of one global smoothing knob:
 - **Steered yaw**: when something other than the player aims the camera — vehicle entry today, auto-center
   in plan 03 — the yaw swings over `yawLagTime` instead of snapping, and any mouse movement takes it back.
 - **Zoom** damps toward a target the wheel (and later the mode/collision layers) writes, so it glides.
-- **`?cam=legacy`** turns every one of those channels off and runs the pre-080 rigid stick — the A/B a
-  field round compares one reload apart, pinned by the parity test.
+- Every one of those channels is a `CameraConfig` field live on the debug Camera tab, so a single channel can
+  be zeroed there for an A/B. Zero them all and the rig reduces to the pre-080 rigid stick — the parity test
+  pins that reduction. (The `?cam=legacy` flag that used to do it wholesale was deleted once the rig was
+  accepted as the default; plan 07's close-out task, taken early.)
 
 **Composition** (plan 080/03) — the camera doing its own work while the player's hands are busy, all of it
 ON FOOT only for now (the vehicle versions are plan 05):
@@ -145,8 +147,9 @@ floor at a 12 m/s sprint, teleport snap, 1/120-vs-1/20 agreement),
 `ui/camera/camera-collision.test.ts` (snap-in/ease-out asymmetry, min distance, whisker min, floor guard,
 GTA-space cast) and `physics/physics-world.test.ts` (raycast/sphereCast hit distance, exclusion, ball
 stop-short),
-`ui/camera/camera-director.test.ts` (the legacy-parity gate: the director reproduces the pre-080 stick
-camera over a scripted look+zoom sequence; mode clamps, zoom notches, fly walk/pan/dolly, top-down snap),
+`ui/camera/camera-director.test.ts` (the parity gate: with every smoothing channel zeroed the director
+reproduces the pre-080 stick camera over a scripted look+zoom sequence; mode clamps, zoom notches, fly
+walk/pan/dolly, top-down snap),
 `ui/camera/engine-camera.test.ts` (bench priority, cursor ray, forward convention), `ui/camera/fly-rig.test.ts`,
 `math/damping.test.ts` (convergence, no overshoot, ±π seam both directions, maxSpeed clamp, rate
 independence at 1/60 vs 1/10 vs 1 s).

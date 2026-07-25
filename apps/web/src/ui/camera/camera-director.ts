@@ -10,8 +10,8 @@
  * Collision runs BEFORE additive motion so a bob can never push the eye through a wall.
  *
  * Everything here is frame-rate independent by construction: the step takes `dt` and any smoothing goes
- * through `@opensa/math`'s damp/spring helpers (plan 02 onward). This plan ships the seams only — the rig
- * reproduces the pre-080 stick camera exactly, which `camera-director.test.ts` pins.
+ * through `@opensa/math`'s damp/spring helpers (plan 02 onward). With every smoothing channel zeroed the rig
+ * still reduces to the pre-080 stick camera exactly, which `camera-director.test.ts` pins.
  */
 import type { CameraState } from '@opensa/engine';
 import type { CameraConfig } from '@opensa/game';
@@ -51,9 +51,6 @@ export interface CameraRigState {
   /** The focus this rig framed last frame — the planar velocity every 03 channel reads is derived from it,
    *  so the director needs no velocity plumbing from the host and measures the FRAMED object (ped or car). */
   lastFocus: [number, number, number] | null;
-  /** `?cam=legacy`: run the pre-080 rigid stick instead of the smoothed rig. The A/B a field round compares
-   *  one keypress apart, and the escape hatch if a round is rejected. */
-  legacy: boolean;
   /** Unapplied pointer travel (plan 02's input damper). */
   look: LookInputState;
   /** The composition offset toward travel (plan 03). */
@@ -106,7 +103,7 @@ type CameraMode = 'fly' | 'foot' | 'vehicle';
  *  enough to average out the fixed-step saw, short enough that look-ahead still feels responsive. */
 const VELOCITY_LAMBDA = 14;
 
-export function createRigState(config: CameraConfig, yaw: number, pitch: number, legacy = false): CameraRigState {
+export function createRigState(config: CameraConfig, yaw: number, pitch: number): CameraRigState {
   return {
     autoCenter: createAutoCenter(),
     collision: createCollisionState(config.followDistance),
@@ -115,7 +112,6 @@ export function createRigState(config: CameraConfig, yaw: number, pitch: number,
     flyEye: null,
     follow: createFollowPoint(),
     lastFocus: null,
-    legacy,
     look: createLookInput(),
     lookAhead: createLookAhead(),
     pitch,
@@ -173,7 +169,7 @@ export function stepCamera(
   // In a car the distance follows the car's size (bigger car, further out); on foot it follows the wheel
   // zoom. Either way the live distance eases toward it (a spun wheel or a fresh car both glide).
   const distanceTarget = snapshot.vehicleDistance ?? state.distanceTarget;
-  state.distance = state.legacy ? distanceTarget : damp(state.distance, distanceTarget, config.zoomLambda, snapshot.dt);
+  state.distance = damp(state.distance, distanceTarget, config.zoomLambda, snapshot.dt);
   if (snapshot.mode === 'fly') {
     stepFlyRig(state, snapshot, forward);
     // A detached eye owns its own position; the follow point must not fly across the map when it re-attaches.
@@ -186,7 +182,7 @@ export function stepCamera(
   // heading), which is plan 05's, tuned against a car's speeds. A scripted enter/exit suspends it: the
   // steered swing (set at the start of the sequence) glides to the target while the ped's twitches are
   // ignored.
-  const centering = !state.legacy && !snapshot.settling && (snapshot.mode === 'foot' || snapshot.mode === 'vehicle');
+  const centering = !snapshot.settling && (snapshot.mode === 'foot' || snapshot.mode === 'vehicle');
   if (centering) {
     const step = stepAutoCenter(
       state.autoCenter,
@@ -208,7 +204,7 @@ export function stepCamera(
     [x, y + config.followHeight, z],
     config,
     snapshot.dt,
-    !state.legacy && snapshot.mode !== 'fly',
+    snapshot.mode !== 'fly',
   );
   const ahead =
     centering && snapshot.mode === 'foot'
@@ -221,7 +217,7 @@ export function stepCamera(
   // eye flies through geometry by design, the bench is bypassed, and a scripted enter/exit skips the CAP (the
   // pull-in read as a jump — just centre behind); the floor guard below still runs then, so the camera never
   // sinks into the ground while getting in or out.
-  const attached = !state.legacy && !state.flyEye && !snapshot.bench;
+  const attached = !state.flyEye && !snapshot.bench;
   const collideDistance =
     attached && !snapshot.settling
       ? resolveCollision(
@@ -254,8 +250,7 @@ export function stepCamera(
 
 /** Mouse look: raw pixel deltas → damped yaw/pitch, clamped per mode. Manual look always wins (036's rule). */
 function applyLook(state: CameraRigState, snapshot: CameraSnapshot, config: CameraConfig): void {
-  const smoothTime = state.legacy ? 0 : config.inputSmoothTime;
-  const look = releaseLook(state.look, snapshot.look.x, snapshot.look.y, smoothTime, snapshot.dt);
+  const look = releaseLook(state.look, snapshot.look.x, snapshot.look.y, config.inputSmoothTime, snapshot.dt);
   if (snapshot.look.x !== 0 || snapshot.look.y !== 0) {
     // The player took the camera back: the steered swing stops and the idle clock restarts.
     state.yawTarget = null;
@@ -333,7 +328,7 @@ function steerYawChannel(state: CameraRigState, config: CameraConfig, dt: number
 
     return;
   }
-  if (state.legacy || config.yawLagTime <= 0) {
+  if (config.yawLagTime <= 0) {
     state.yaw = state.yawTarget;
     state.yawTarget = null;
 

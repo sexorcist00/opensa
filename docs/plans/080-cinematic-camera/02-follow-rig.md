@@ -140,3 +140,15 @@ relief onto the spring rate instead of the goal — both one-line changes.
 **Not done here:** the `idleFor` timer the plan mentions is deferred to 03, the only consumer (a stamp
 nothing reads is not a seam). The FIELD ROUND itself is owed — feel is the user's verdict, and the defaults
 above are frozen only once they accept them.
+
+### 2026-07-25 — FIELD ROUND ACCEPTED
+
+User's verdict on the round: accepted (paraphrased in English — the camera reads right, move on). No value
+came back for retuning, so **every first-guess default in the table above is now frozen as shipped**,
+including the dead-zone residual flagged as "to judge in the field" — the rock-still idle frame was worth
+its ~0.08 m settle, and `deadZone: 0` stays unused.
+
+The round's real output was the four fixes already committed during it (rig seeding at `yawBehind`, the
+fixed-step/render-loop jitter → render interpolation, the enter/exit glide, the seated-rider judder), all
+recorded above and in 03's ledger. With the round accepted, the `?cam=legacy` A/B had no job left and was
+deleted — see 07's ledger.

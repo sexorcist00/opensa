@@ -215,3 +215,13 @@ time — so the ped drew on the raw stair-step while the car drew interpolated, 
 seat. The reset belongs only to a genuine warp: `placePlayer` no longer resets, and a new `teleportPlayer`
 (place + reset) is what the debugger's teleport uses. The per-step seating now interpolates the seat pose
 in lockstep with the car (the snapshot already captures Transform after the vehicle fixed step).
+
+### 2026-07-25 — FIELD ROUND ACCEPTED (with 02 and 04)
+
+User's verdict: accepted, no retune. **The first-guess defaults above are frozen as shipped** —
+`turnThreshold` 0.9, `recenterDelaySec` 2, `recenterRate` 1.6, `lookAheadDistance` 0.8, `lookAheadTime`
+0.45 all survive the round untouched.
+
+The two behaviours the plan asked a human to call: the strafe-curving concern (auto-center rotates the
+camera, which rotates "forward") did not come back as a complaint, and neither did the recenter rate. Both
+stay as they are; they remain live on the Camera tab if a later round disagrees.

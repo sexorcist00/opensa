@@ -22,7 +22,7 @@ export function createLookInput(): LookInputState {
  * Add this frame's raw deltas to the pool and release the damped share of it.
  *
  * `smoothTime` is the pool's half-life-ish constant in seconds (lambda = 1/smoothTime): 0 releases
- * everything immediately, which is the pre-080 behaviour and what the legacy A/B runs.
+ * everything immediately — raw pointer input, which is what the debug slider at 0 gives.
  */
 export function releaseLook(
   state: LookInputState,

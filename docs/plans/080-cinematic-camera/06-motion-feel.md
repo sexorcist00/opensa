@@ -68,7 +68,8 @@ to cause discomfort, so it ships with a master off-switch and conservative defau
 
 ## Acceptance
 
-- Effects visible in A/B (`?cam=legacy`) but individually deniable in the tab; comfort verdict OK.
+- Effects visible in A/B (zero the channel on the debug Camera tab) but individually deniable in the tab;
+  comfort verdict OK.
 - All caps proven by test; collision layer untouched (motion applied after, bounded below margin).
 
 ## Ledger

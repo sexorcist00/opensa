@@ -3,11 +3,13 @@
 **Status: IN PROGRESS.** Planned 2026-07-19. **01 (foundations), 02 (follow rig) and 03 (auto-center +
 look-ahead) shipped 2026-07-25** — the damp/spring math and the `CameraDirector` in
 `apps/web/src/ui/camera/`, the smoothed rig (input dampening, a trailing look point with a dead zone, the
-steered-yaw channel, gliding zoom), and the composition layer (turn-follow, idle recenter, look-ahead), all
-behind a `?cam=legacy` A/B, and **04 (collision)** — a `PhysicsWorld` sphere/ray-cast API, whisker rig,
+steered-yaw channel, gliding zoom), and the composition layer (turn-follow, idle recenter, look-ahead), and
+**04 (collision)** — a `PhysicsWorld` sphere/ray-cast API, whisker rig,
 asymmetric snap-in/ease-out, a min-distance floor and a ground floor guard. That is the **complete on-foot
-baseline plus collision**. **The 02+03+04 field round is owed**: the defaults are first guesses until the
-user judges the feel. Next: 05 vehicle camera.
+baseline plus collision**. **The 02+03+04 field round is DONE and ACCEPTED (2026-07-25)** — no value came
+back for retuning, so every default is frozen as shipped; the `?cam=legacy` A/B was deleted with the
+acceptance (07's close-out task, taken early). Next: 05 vehicle camera, after 081/01 telemetry (its drift
+framing consumes the slip/speed channel).
 
 **Goal: the camera feels "cinematic" the way GTA V's does — weighty, smooth, always composed — while
 staying responsive enough that nobody blames it for a missed turn.** Today the engine host camera is a
@@ -114,7 +116,8 @@ Requirements this adds to the chain:
   `environmentDriver.apply` — fog CULLS cells, it is what made the viewer look dead), the top-down
   snap on activation, and exactly ONE `requestPointerLock` in the whole host. All three are regressions
   waiting to happen the moment camera code moves; the fly-mode tests pin them.
-- **`?cam=legacy` covers the fly path too**, so a bad round never costs the debug tooling.
+- **The fly path is not smoothed at all** (the look point IS the target there), so no follow-rig round can
+  cost the debug tooling.
 
 Where it lands: `camera/fly-rig.ts` in plan 01's module layout, wired in plan 01 (parity first — the
 moved fly path reproduces today's viewer bit-for-bit), smoothed in plan 02 alongside the follow rig's
@@ -163,8 +166,11 @@ Execution order and the reasoning behind it: [priority.md](priority.md).
    N steps at dt and one step at N·dt land within tolerance (exponential-decay property).
 3. **Bench/photo bypass is an invariant** — `resolveCamera` priority stays; a bench run must produce
    draws/fps identical to pre-080 rows (ritual sweep is the proof).
-4. **A/B escape hatch**: `?cam=legacy` keeps the pre-080 stick camera for the whole chain (the
-   `?stoch=0` pattern) — field rounds compare feel one keypress apart, and a bad round never blocks play.
+4. **A/B escape hatch**: `?cam=legacy` kept the pre-080 stick camera for the whole chain (the
+   `?stoch=0` pattern) — field rounds compared feel one reload apart, and a bad round never blocked play.
+   **DELETED 2026-07-25** at the user's call once 01–04 were accepted as the default (plan 07's close-out
+   task, taken early). The A/B that remains is per-channel: zero a `CameraConfig` field on the debug Camera
+   tab; zero them all and the rig still reduces to the stick camera, which the parity test pins.
 5. **Config-driven tuning.** Every constant a field round might touch lives in `CameraConfig` (new
    fields, plan 01) and is surfaced in the debug Camera tab. No magic numbers buried in the rig.
 6. **Measurements ledger per sub-plan** (standing rule): tuning values that survive a field round get

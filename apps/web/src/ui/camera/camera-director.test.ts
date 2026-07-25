@@ -15,8 +15,12 @@ import { FLY_SPEED, TOP_DOWN_HEIGHT, TOP_DOWN_PITCH } from './fly-rig';
 
 const CONFIG = TEST_CAMERA_CONFIG;
 
-/** The rig as `?cam=legacy` runs it: every 080 channel off, so the pre-080 math is what steps. */
-const legacyState = (): ReturnType<typeof createRigState> => createRigState(CONFIG, Math.PI, -0.25, true);
+/** Every SMOOTHING channel off, so the rig reduces to its base orbit math: raw pointer input and an instant
+ *  zoom. What the parity gate steps, and the raw reference the input damper is measured against. (The
+ *  position channels need no zeroing here — a static focus keeps the look point exactly on target.) */
+const RIGID = { ...CONFIG, inputSmoothTime: 0, zoomLambda: Number.POSITIVE_INFINITY };
+
+const rigState = (): ReturnType<typeof createRigState> => createRigState(CONFIG, Math.PI, -0.25);
 
 const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
   aspect: 16 / 9,
@@ -35,7 +39,7 @@ const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
 });
 
 /** The pre-080 inline host math, verbatim: what the director must still produce (the plan-01 parity gate). */
-function legacyCamera(steps: readonly { look: [number, number]; wheel: number }[]): {
+function stickCamera(steps: readonly { look: [number, number]; wheel: number }[]): {
   eye: [number, number, number];
   target: [number, number, number];
 } {
@@ -65,7 +69,7 @@ function legacyCamera(steps: readonly { look: [number, number]; wheel: number }[
 describe('stepCamera', () => {
   describe('negative cases', () => {
     it('hands the frame to a running bench whatever the rig is doing', () => {
-      const state = legacyState();
+      const state = rigState();
       setFlyEye(state, [9, 9, 9]);
       const bench = { eye: [1, 1, 1] as [number, number, number], target: [2, 2, 2] as [number, number, number] };
 
@@ -76,25 +80,25 @@ describe('stepCamera', () => {
     });
 
     it('does not zoom while the wheel toggle is off', () => {
-      const state = legacyState();
+      const state = rigState();
 
       stepCamera(state, snapshot({ zoomSteps: 3 }), { ...CONFIG, followZoom: false });
 
-      expect(state.distance).toBe(7);
+      expect(state.distanceTarget).toBe(7);
     });
 
     it('keeps the gameplay pitch inside the config clamps', () => {
-      const state = legacyState();
+      const state = rigState();
 
-      stepCamera(state, snapshot({ look: { x: 0, y: 5000 } }), CONFIG);
+      stepCamera(state, snapshot({ look: { x: 0, y: 5000 } }), RIGID);
       expect(state.pitch).toBe(CONFIG.pitchMin);
 
-      stepCamera(state, snapshot({ look: { x: 0, y: -5000 } }), CONFIG);
+      stepCamera(state, snapshot({ look: { x: 0, y: -5000 } }), RIGID);
       expect(state.pitch).toBe(CONFIG.pitchMax);
     });
 
     it('leaves the follow rig alone in fly mode — the eye is detached, not trailing the focus', () => {
-      const state = legacyState();
+      const state = rigState();
       setFlyEye(state, [4, 5, 6]);
 
       const camera = stepCamera(state, snapshot({ mode: 'fly' }), CONFIG);
@@ -104,56 +108,56 @@ describe('stepCamera', () => {
   });
 
   describe('positive cases', () => {
-    it('reproduces the pre-080 stick camera over a scripted look + zoom sequence', () => {
+    it('reproduces the pre-080 stick camera over a scripted look + zoom sequence, every channel off', () => {
       const steps = [
         { look: [12, -4] as [number, number], wheel: 0 },
         { look: [-30, 9] as [number, number], wheel: 1 },
         { look: [0, 0] as [number, number], wheel: -1 },
         { look: [140, 260] as [number, number], wheel: 0 },
       ];
-      const state = legacyState();
-      let camera = stepCamera(state, snapshot(), CONFIG);
+      const state = rigState();
+      let camera = stepCamera(state, snapshot(), RIGID);
       for (const step of steps) {
         camera = stepCamera(
           state,
           snapshot({ look: { x: step.look[0], y: step.look[1] }, zoomSteps: step.wheel }),
-          CONFIG,
+          RIGID,
         );
       }
-      const legacy = legacyCamera(steps);
+      const stick = stickCamera(steps);
 
-      camera.eye.forEach((value, axis) => expect(value).toBeCloseTo(legacy.eye[axis], 12));
-      camera.target.forEach((value, axis) => expect(value).toBeCloseTo(legacy.target[axis], 12));
+      camera.eye.forEach((value, axis) => expect(value).toBeCloseTo(stick.eye[axis], 12));
+      camera.target.forEach((value, axis) => expect(value).toBeCloseTo(stick.target[axis], 12));
     });
 
     it('frames the focus at the config eye height', () => {
-      const camera = stepCamera(legacyState(), snapshot(), { ...CONFIG, followHeight: 2 });
+      const camera = stepCamera(rigState(), snapshot(), { ...CONFIG, followHeight: 2 });
 
       expect(camera.target).toEqual([10, 4, 30]);
     });
 
     it('applies every wheel notch of a frame, clamped to the zoom bounds', () => {
-      const state = legacyState();
+      const state = rigState();
 
       stepCamera(state, snapshot({ zoomSteps: 2 }), CONFIG);
-      expect(state.distance).toBeCloseTo(7 * 1.08 * 1.08, 12);
+      expect(state.distanceTarget).toBeCloseTo(7 * 1.08 * 1.08, 12);
 
       stepCamera(state, snapshot({ zoomSteps: 20 }), CONFIG);
-      expect(state.distance).toBe(CONFIG.followZoomMax);
+      expect(state.distanceTarget).toBe(CONFIG.followZoomMax);
     });
 
     it('lets the map viewer look further down than gameplay may', () => {
-      const state = legacyState();
+      const state = rigState();
       setFlyEye(state, [0, 100, 0]);
 
-      stepCamera(state, snapshot({ look: { x: 0, y: 5000 }, mode: 'fly' }), CONFIG);
+      stepCamera(state, snapshot({ look: { x: 0, y: 5000 }, mode: 'fly' }), RIGID);
 
       expect(state.pitch).toBe(TOP_DOWN_PITCH);
       expect(state.pitch).toBeLessThan(CONFIG.pitchMin);
     });
 
     it('walks, pans and dollies the detached eye in fly mode', () => {
-      const state = createRigState(CONFIG, 0, 0, true); // looking down +Z
+      const state = createRigState(CONFIG, 0, 0); // looking down +Z
       setFlyEye(state, [0, 100, 0]);
 
       stepCamera(state, snapshot({ mode: 'fly', walkKeys: new Set(['ArrowUp']) }), CONFIG);
@@ -170,7 +174,7 @@ describe('stepCamera', () => {
     });
 
     it('snaps overhead when the map viewer opens, and re-attaches on exit', () => {
-      const state = legacyState();
+      const state = rigState();
       snapTopDown(state, [10, 2, 30]);
 
       expect(state.flyEye).toEqual([10, 2 + TOP_DOWN_HEIGHT, 30]);
@@ -183,7 +187,7 @@ describe('stepCamera', () => {
     });
 
     it('re-seeds the zoom from an authored distance the debugger changed', () => {
-      const state = legacyState();
+      const state = rigState();
 
       reseedDistance(state, CONFIG, 9);
       expect(state.distance).toBe(9);
@@ -195,7 +199,6 @@ describe('stepCamera', () => {
 });
 
 describe('stepCamera — the smoothed rig (plan 080/02)', () => {
-  const smoothState = (): ReturnType<typeof createRigState> => createRigState(CONFIG, Math.PI, -0.25);
   /** Step `frames` idle frames and hand back the last camera. */
   const idle = (
     state: ReturnType<typeof createRigState>,
@@ -212,17 +215,17 @@ describe('stepCamera — the smoothed rig (plan 080/02)', () => {
 
   describe('negative cases', () => {
     it('does not turn the whole flick in the frame it arrives (input dampening)', () => {
-      const smooth = smoothState();
-      const legacy = legacyState();
+      const smooth = rigState();
+      const raw = rigState();
 
       stepCamera(smooth, snapshot({ look: { x: 200, y: 0 } }), CONFIG);
-      stepCamera(legacy, snapshot({ look: { x: 200, y: 0 } }), CONFIG);
+      stepCamera(raw, snapshot({ look: { x: 200, y: 0 } }), RIGID);
 
-      expect(Math.abs(smooth.yaw - Math.PI)).toBeLessThan(Math.abs(legacy.yaw - Math.PI));
+      expect(Math.abs(smooth.yaw - Math.PI)).toBeLessThan(Math.abs(raw.yaw - Math.PI));
     });
 
     it('does not snap the frame onto a focus that jumped a few metres', () => {
-      const state = smoothState();
+      const state = rigState();
       stepCamera(state, snapshot(), CONFIG);
       const camera = stepCamera(state, snapshot({ focus: [10, 2, 33] }), CONFIG);
 
@@ -231,14 +234,14 @@ describe('stepCamera — the smoothed rig (plan 080/02)', () => {
     });
 
     it('leaves a detached fly eye unsmoothed — a viewer must land where it is dragged', () => {
-      const state = smoothState();
+      const state = rigState();
       setFlyEye(state, [4, 50, 6]);
 
       expect(stepCamera(state, snapshot({ mode: 'fly' }), CONFIG).eye).toEqual([4, 50, 6]);
     });
 
     it('drops the steered yaw the moment the player touches the mouse', () => {
-      const state = smoothState();
+      const state = rigState();
       steerYaw(state, 0);
       stepCamera(state, snapshot(), CONFIG);
 
@@ -250,17 +253,17 @@ describe('stepCamera — the smoothed rig (plan 080/02)', () => {
 
   describe('positive cases', () => {
     it('conserves the gesture: the same total turn as the raw path, a few frames later', () => {
-      const smooth = smoothState();
-      const legacy = legacyState();
+      const smooth = rigState();
+      const raw = rigState();
       stepCamera(smooth, snapshot({ look: { x: 200, y: 0 } }), CONFIG);
       idle(smooth, 30);
-      stepCamera(legacy, snapshot({ look: { x: 200, y: 0 } }), CONFIG);
+      stepCamera(raw, snapshot({ look: { x: 200, y: 0 } }), RIGID);
 
-      expect(smooth.yaw).toBeCloseTo(legacy.yaw, 6);
+      expect(smooth.yaw).toBeCloseTo(raw.yaw, 6);
     });
 
     it('settles the look point on a focus that stopped moving', () => {
-      const state = smoothState();
+      const state = rigState();
       stepCamera(state, snapshot(), CONFIG);
       const camera = idle(state, 180, { focus: [10, 2, 33] });
 
@@ -268,7 +271,7 @@ describe('stepCamera — the smoothed rig (plan 080/02)', () => {
     });
 
     it('swings BEHIND a steered facing instead of snapping, then hands the camera back', () => {
-      const state = smoothState();
+      const state = rigState();
       // steerYaw takes a FACING; the rig settles at yawBehind of it (facing −π/2 → behind is π/2).
       steerYaw(state, -Math.PI / 2);
       expect(state.yawTarget).toBeCloseTo(Math.PI / 2, 12);
@@ -283,7 +286,7 @@ describe('stepCamera — the smoothed rig (plan 080/02)', () => {
     });
 
     it('glides the zoom toward its target instead of stepping', () => {
-      const state = smoothState();
+      const state = rigState();
       stepCamera(state, snapshot({ zoomSteps: 3 }), CONFIG);
 
       expect(state.distanceTarget).toBeGreaterThan(8);
@@ -294,7 +297,7 @@ describe('stepCamera — the smoothed rig (plan 080/02)', () => {
     });
 
     it('snaps everything on a teleport (respawn, debugger warp)', () => {
-      const state = smoothState();
+      const state = rigState();
       stepCamera(state, snapshot(), CONFIG);
       const camera = stepCamera(state, snapshot({ focus: [10, 2, 500] }), CONFIG);
 
@@ -304,7 +307,6 @@ describe('stepCamera — the smoothed rig (plan 080/02)', () => {
 });
 
 describe('stepCamera — composition (plan 080/03)', () => {
-  const smoothState = (): ReturnType<typeof createRigState> => createRigState(CONFIG, Math.PI, -0.25);
   /**
    * Walk the focus in the direction `heading` FACES, at `speed`, for `seconds`.
    *
@@ -334,29 +336,21 @@ describe('stepCamera — composition (plan 080/03)', () => {
 
   describe('negative cases', () => {
     it('leaves the yaw alone while the player stands still, however long', () => {
-      const state = smoothState();
+      const state = rigState();
       walk(state, 0, 6);
 
       expect(state.yaw).toBe(Math.PI);
     });
 
     it('does not LEAN in a vehicle — the look-ahead lean is drift framing, plan 05', () => {
-      const state = smoothState();
+      const state = rigState();
       walk(state, 12, 3, 0, 'vehicle');
 
       expect(state.lookAhead.z).toBe(0); // no look-ahead offset while driving
     });
 
-    it('does not compose on the legacy path', () => {
-      const state = legacyState();
-      walk(state, 7, 6);
-
-      expect(state.yaw).toBe(Math.PI);
-      expect(state.lookAhead.z).toBe(0);
-    });
-
     it('suspends auto-center while a scripted enter/exit settles, but keeps the steered swing', () => {
-      const state = smoothState();
+      const state = rigState();
       steerYaw(state, -Math.PI / 2); // the sequence aimed the camera behind the car
       const settling = (over = {}): CameraSnapshot => snapshot({ settling: true, ...over });
 
@@ -374,7 +368,7 @@ describe('stepCamera — composition (plan 080/03)', () => {
     });
 
     it('restarts the idle clock the moment the player looks', () => {
-      const state = smoothState();
+      const state = rigState();
       walk(state, 7, 1.5);
       const before = state.autoCenter.idleFor;
 
@@ -387,7 +381,7 @@ describe('stepCamera — composition (plan 080/03)', () => {
 
   describe('positive cases', () => {
     it('eases behind a player who runs off at an angle without touching the mouse', () => {
-      const state = smoothState();
+      const state = rigState();
       // Running the way the camera already looks needs no correction — that IS the invariant: heading 0 is
       // exactly what a camera at yaw π (the rig's start) sits behind.
       walk(state, 7, 1);
@@ -401,7 +395,7 @@ describe('stepCamera — composition (plan 080/03)', () => {
     });
 
     it('leans the frame toward travel while running', () => {
-      const state = smoothState();
+      const state = rigState();
       walk(state, 7, 3);
 
       expect(state.lookAhead.z).toBeLessThan(-0.5); // heading 0 runs toward −Z, so the frame leans that way
@@ -409,7 +403,7 @@ describe('stepCamera — composition (plan 080/03)', () => {
     });
 
     it('moves eye and target together, so the orbit geometry is unchanged', () => {
-      const state = smoothState();
+      const state = rigState();
       const camera = walk(state, 7, 3);
       const orbit = Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]);
 
@@ -419,7 +413,7 @@ describe('stepCamera — composition (plan 080/03)', () => {
     });
 
     it('settles behind a car the player drives on without touching the mouse', () => {
-      const state = smoothState();
+      const state = rigState();
       // Drive off 1 rad from where the camera looks and keep going past the recenter delay.
       walk(state, 12, CONFIG.recenterDelaySec + 6, 1, 'vehicle');
 
@@ -428,7 +422,7 @@ describe('stepCamera — composition (plan 080/03)', () => {
     });
 
     it('eases the distance to the car size while seated, and back on foot', () => {
-      const state = smoothState();
+      const state = rigState();
       // A car wanting distance 12 (bigger than the on-foot 7): the live distance glides up to it.
       for (let frame = 0; frame < 240; frame += 1) {
         stepCamera(state, snapshot({ mode: 'vehicle', vehicleDistance: 12 }), CONFIG);
@@ -454,14 +448,14 @@ describe('stepCamera — composition (plan 080/03)', () => {
       };
 
       // On foot the desired 7 is capped to the wall at 3.
-      expect(orbitOf(smoothState())).toBeCloseTo(3, 1);
+      expect(orbitOf(rigState())).toBeCloseTo(3, 1);
       // In a car the size-based 12 is capped to the same wall at 3.
-      expect(orbitOf(smoothState(), { mode: 'vehicle', vehicleDistance: 12 })).toBeCloseTo(3, 1);
+      expect(orbitOf(rigState(), { mode: 'vehicle', vehicleDistance: 12 })).toBeCloseTo(3, 1);
     });
 
     it('does not cap during a scripted enter/exit (settling), only the floor guard runs', () => {
       const wall: CameraProbe = () => 3;
-      const state = smoothState();
+      const state = rigState();
       let camera = stepCamera(state, snapshot({ settling: true }), CONFIG, wall);
       for (let frame = 0; frame < 60; frame += 1) {
         camera = stepCamera(state, snapshot({ settling: true }), CONFIG, wall);
@@ -474,7 +468,7 @@ describe('stepCamera — composition (plan 080/03)', () => {
 
     it('holds the eye at the near-plane floor against a very close wall (clips the ped, not skybox)', () => {
       const near: CameraProbe = () => 0.2; // a wall 0.2 m behind — inside the near plane
-      const state = smoothState();
+      const state = rigState();
       let camera = stepCamera(state, snapshot(), CONFIG, near);
       for (let frame = 0; frame < 60; frame += 1) {
         camera = stepCamera(state, snapshot(), CONFIG, near);

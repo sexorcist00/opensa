@@ -24,7 +24,7 @@ const follow = (
 
 describe('stepFollowPoint', () => {
   describe('negative cases', () => {
-    it('lands ON the target with smoothing off (the legacy stick)', () => {
+    it('lands ON the target with smoothing off (the free-fly eye)', () => {
       const state = createFollowPoint();
 
       expect(stepFollowPoint(state, [5, 2, -3], CONFIG, DT, false)).toEqual([5, 2, -3]);

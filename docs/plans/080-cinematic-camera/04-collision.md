@@ -167,3 +167,11 @@ the "keep it a continuous function of approach, not a boolean gate" lesson in
 [`collision-collider.md`](../../postmortem/080-cinematic-camera/collision-collider.md)). Back on the simple
 single sphere cast (`4316967`). The "On Top" overhead fallback for a genuine full pin is kept as a revisit
 note in the multi-ray postmortem — a feel idea, not a perf lever, so it is not in the performance reserve.
+
+### 2026-07-25 — FIELD ROUND ACCEPTED
+
+User's verdict on the simple single sphere cast (after the multi-ray fan was reverted): accepted. The
+shipped shape is the one that stays — primary cast + 2 whiskers, snap-in / ease-out, `collisionMinDistance`
+1.6, the ground floor guard, 4 casts/frame. **`collisionRadius` 0.35, `collisionReleaseTime` 0.4 and
+`collisionWhiskerAngle` 0.26 are frozen as shipped**; the acceptance criteria (no through-wall geometry, no
+oscillation against recenter, ≤5 casts, < 0.1 ms) are all met and now field-confirmed.
