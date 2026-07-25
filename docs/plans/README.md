@@ -47,16 +47,17 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   drivetrain identity, SA handbrake, a measured DRCVC-vs-own-controller gate. Promoted from ideas/0.4.0/07.
 - **[080 — Cinematic camera](./080-cinematic-camera/readme.md)** — GTA V-feel follow camera: per-channel
   springs/lag, auto-center + look-ahead, collision whiskers, vehicle speed/FOV/drift framing, bob/shake,
-  7 sub-plans + priority chain. **01–06 DONE 2026-07-25** — the on-foot baseline, collision and the
+  7 sub-plans + priority chain. **01–07 DONE 2026-07-25** — the on-foot baseline, collision and the
   vehicle camera: damp/spring math + `CameraDirector` (`ui/camera/`), the smoothed rig with render
   interpolation (position weight), composition (turn-follow, idle recenter, look-ahead), collision
   (sphere casts, snap-in/ease-out, min distance, floor guard), and driving — speed→distance/FOV curves plus
   drift framing off 081/01's physics slip channel, as a second TUNING TABLE rather than a second code path,
   plus the additive motion layer — bob, landing dip, impact shake, sprint FOV kick, bounded and behind a
   `reducedMotion` switch (06). The 02–04 **field round is accepted** — defaults frozen as shipped, and the
-  `?cam=legacy` A/B is DELETED with it (07's close-out task taken early). **05's drive round and 06's
-  comfort round are owed**; 07 transitions + polish next. **08 (C-key view presets incl. first person)
-  added.**
+  `?cam=legacy` A/B is DELETED with it. FOUR field rounds ran on the vehicle camera and the motion layer and
+  every report was fixed; the close-out (07) turned the transition matrix into a test, froze the tuning and
+  pruned the tab. **Owed: 07's acceptance — a full mixed session** — then **08 (C-key view presets incl.
+  first person)**.
 - **[079 — One canonical build source, the dev-surface unification, and its docs](./079-canonical-build-source/readme.md)**
   — every dev surface (lab, bench harness, viewers) reads ONE canonical build (`./build/original`), served in
   place (NOT copied into `public/`), via a new `http-dir` loader + the loading-MODE-selects-the-world fix +

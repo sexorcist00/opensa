@@ -200,6 +200,9 @@ reproduces the pre-080 stick camera over a scripted look+zoom sequence; mode cla
 walk/pan/dolly, top-down snap; and the vehicle group — the lens widening only in a car and easing back on
 foot, the distance opening with speed and gliding back, settling behind where the car TRAVELS in a slide,
 and seat → drive → exit crossing with no cut),
+`ui/camera/camera-transitions.test.ts` (the whole session as ONE snapshot sequence — walk → climb in →
+drive → climb out → map viewer → back → respawn — asserting the eye never moves against its focus by more
+than 1 u/frame except on three declared transitions),
 `ui/camera/camera-motion.test.ts` (the bob freezing at rest and never in a car or the air, walk→run
 continuity, the dip's depth/half-pitch/one-shot recovery, a shake replaying identically for its seed and a
 stronger hit taking over, every cap holding when all of it fires at once, rate independence, and

@@ -173,6 +173,9 @@ const CAMERA_ZOOM_ROWS = [
 
 /** The live-tuning rows a field round turns: framing height, look speed and the pitch clamps. Sliders are how
  *  the 036 rounds tuned without a rebuild, and 080's rounds work the same way. */
+// PRUNED at the chain's close-out (plan 07/3): the tab is a TUNING tool, not a settings screen, so the
+// reference points a round never touches (`landingDipFullSpeed`, `shakeImpactForce`, `vehicleFovLambda`)
+// went config-only. Every row below earned its place by being turned during an actual field round.
 const CAMERA_RIG_ROWS = [
   ['followHeight', 'HEIGHT', 0, 4, 0.1],
   ['sensitivity', 'LOOK SPEED', 0.001, 0.012, 0.0005],
@@ -198,7 +201,6 @@ const CAMERA_RIG_ROWS = [
   ['vehicleFovKick', 'CAR FOV KICK', 0, 0.5, 0.01],
   ['vehicleFovMinSpeed', 'CAR FOV FROM', 0, 30, 1],
   ['vehicleFovMaxSpeed', 'CAR FOV FULL', 10, 90, 5],
-  ['vehicleFovLambda', 'CAR FOV EASE', 0.5, 8, 0.25],
   ['vehicleYawLagTime', 'CAR YAW SWING', 0, 1.5, 0.05],
   ['vehicleRecenterDelaySec', 'CAR RECENTER AFTER', 0, 6, 0.25],
   ['vehicleVerticalLagTime', 'CAR LAG VERTICAL', 0, 1, 0.02],
@@ -212,9 +214,7 @@ const CAMERA_RIG_ROWS = [
   ['bobAmplitude', 'BOB', 0, 0.15, 0.005],
   ['bobCyclesPerMetre', 'BOB PER METRE', 0.2, 2, 0.05],
   ['landingDipScale', 'LANDING DIP', 0, 0.4, 0.02],
-  ['landingDipFullSpeed', 'LANDING FULL AT', 2, 20, 1],
   ['shakeScale', 'SHAKE', 0, 0.2, 0.01],
-  ['shakeImpactForce', 'SHAKE FULL AT', 50000, 600000, 25000],
   ['sprintFovKick', 'SPRINT FOV', 0, 0.2, 0.01],
   // 080/04 collision (VEHICLE only): eye off walls, closest pull-in, release ease, whisker spread.
   ['collisionRadius', 'COLLIDE RADIUS', 0, 0.8, 0.05],

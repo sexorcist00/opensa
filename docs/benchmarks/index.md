@@ -133,6 +133,20 @@ instead: **0.078 µs mean / 0.089 µs p95 per `stepCamera` call**, against plan 
 budget) and **0.203 µs / 0.214 µs with 080/03's auto-center + look-ahead on top**. Run:
 [`2026-07-25-headless-080-camera-director.json`](opensa-engine/2026-07-25-headless-080-camera-director.json).
 
+### 2026-07-25 — the 080 close-out sweep (the bench-bypass proof)
+
+The full ritual 8-scene `?bench=all` leg with the WHOLE camera chain live (rig + composition + collision +
+vehicle camera + additive motion), headless, on the dev machine. **`ls-noon` 8.333 ms avg / 1181 draws
+against the 080/01 headless row's 8.334 / 1181** — identical, which is the point: a running bench owns the
+frame outright (`resolveCamera` priority bench > fly eye > follow rig), so camera work cannot move these
+numbers, and now it is measured rather than argued. The other seven scenes had no headless predecessor and
+are recorded as the headless baseline (every leg is vsync-capped at 120 fps, so this sweep can prove the
+bypass but cannot resolve a small CPU regression — the user's in-game rows remain the pass-comparable
+series). The director itself costs **0.568 µs mean / 0.620 p95** per call with every layer live, and the
+camera issues **2 casts/frame** (one sphere cast — the whiskers are off since the 04 field round — plus one
+ground ray) against a budget of 5. Run:
+[`2026-07-25-headless-080-closeout-sweep.json`](opensa-engine/2026-07-25-headless-080-closeout-sweep.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

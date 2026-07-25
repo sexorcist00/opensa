@@ -41,6 +41,7 @@ const SHAKE_DECAY = 0.3;
 const SHAKE_HZ = 15;
 /** The most a shake alone may offset the camera (m). */
 const SHAKE_CAP = 0.1;
+const TAU = Math.PI * 2;
 /** The speed band over which the sprint FOV kick comes in, as a multiple of the run gait. The sprint gait is
  *  10 u/s against a 7 u/s run, so a band that only completes at 1.4x would arrive exactly at top speed and
  *  never read as anything. */
@@ -187,7 +188,10 @@ function stepBob(state: MotionState, input: MotionInput, config: CameraConfig): 
   const target = walking && config.lookAheadFullSpeed > 0 ? clamp(input.speed / config.lookAheadFullSpeed, 0, 1) : 0;
   state.bobLevel = damp(state.bobLevel, target, BOB_LAMBDA, input.dt);
   // Phase by DISTANCE, so the frequency tracks stride and a standing player's bob freezes rather than idling.
-  state.bobPhase += input.speed * input.dt * config.bobCyclesPerMetre * Math.PI * 2;
+  // WRAPPED to one turn: the phase would otherwise grow without bound over a long session (a sprint adds
+  // ~11 rad/s), and an ever-larger argument slowly costs `Math.sin` its precision. Wrapping is invisible —
+  // the sine is periodic — and it is what makes the channel safe to leave running for hours.
+  state.bobPhase = (state.bobPhase + input.speed * input.dt * config.bobCyclesPerMetre * Math.PI * 2) % TAU;
   const amplitude = config.bobAmplitude * state.bobLevel;
 
   return {
@@ -216,7 +220,10 @@ function stepShake(
   config: CameraConfig,
 ): { lateral: number; vertical: number } {
   state.shakeAmplitude *= Math.exp(-input.dt / SHAKE_DECAY);
-  state.shakeTime += input.dt;
+  // The noise clock only runs while there IS a shake; idling it would accumulate for the whole session.
+  if (state.shakeAmplitude > 0) {
+    state.shakeTime += input.dt;
+  }
   if (input.impact > 0 && config.shakeImpactForce > 0 && config.shakeScale > 0) {
     const amplitude = Math.min(SHAKE_CAP, config.shakeScale * clamp(input.impact / config.shakeImpactForce, 0, 1));
     // Re-seed only when starting from silence. A real crash is not one contact — it is a burst of them over

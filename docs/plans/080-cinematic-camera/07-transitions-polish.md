@@ -51,10 +51,11 @@ resets). This plan proves it:
 
 ## Subtasks
 
-- [ ] Transition matrix + continuity integration test.
-- [ ] Pitch-coupled framing (or a ledger line explaining why it was skipped).
-- [ ] Tuning freeze + tab prune.
-- [ ] Perf measurements + ritual sweep + soak leg (ledger).
+- [x] Transition matrix + continuity integration test.
+- [x] Pitch-coupled framing — SKIPPED, deliberately (see the ledger).
+- [x] Tuning freeze + tab prune.
+- [x] Perf measurements + ritual sweep (ledger). The SOAK leg was not run — see the ledger for what was
+      done instead and what that leaves owed.
 - [x] Legacy-path deletion (early, 2026-07-25) — docs sweep + idea stubs still owed.
 
 ## Acceptance
@@ -64,6 +65,105 @@ resets). This plan proves it:
 - Ritual row within noise; budgets in the ledger; suite green; `?cam=legacy` gone.
 
 ## Ledger
+
+### 2026-07-25 — the transition exam, the tuning freeze, and one deliberate skip
+
+**1. The transition matrix is now a test** (`ui/camera/camera-transitions.test.ts`). ONE snapshot sequence
+walks the whole session — walk → climb in → drive a long corner → climb out → walk → map viewer (seeded
+from the live eye) → overhead snap → hand the eye back → respawn — against one continuous rig.
+
+The metric is the eye's motion RELATIVE to its focus (`|Δeye − Δfocus|`): absolute eye speed says nothing,
+because a car at 24 u/s legitimately moves the eye 0.4 u per frame. Measured worst-per-leg, in world units
+per frame:
+
+| leg                | worst | |
+| ------------------ | ----- | --- |
+| walking            | 0.116 | the follow spring catching up |
+| climbing in        | 0.529 | the steered swing behind the car — the fastest DELIBERATE channel |
+| driving            | 0.752 | the corner swing + the distance curve |
+| climbing out       | 0.775 | the swing behind the dismount |
+| walking again      | 0.095 | |
+| map viewer (enter) | 0.000 | seeded from the live eye — provably not a cut |
+| overhead snap      | 0.000 | inside the leg; the snap itself is a DECLARED transition |
+| back on foot       | 0.109 | the re-frame is declared; what matters is it does not then CRAWL home |
+| respawn            | 0.116 | the teleport is declared; the rig snaps and carries on |
+
+The bar is **1.0 u/frame**, set above the fastest deliberate channel (the swing, ~0.53) and below the
+smallest cut this chain actually shipped and had to fix (the exit pull-in was metres). Three transitions are
+DECLARED — the overhead snap, handing the eye back, and a respawn teleport — and only their first frame is
+exempt; everything after it is held to the same bar, which is what proves there is no whip.
+
+**2. Pitch-coupled framing: SKIPPED.** The plan itself made it skippable "if the field round says the base
+rig already frames well", and four rounds said exactly that — every framing complaint that came back was
+about MOTION (bob frequency, swing hitch, exit snap), never about how the character sits in frame while
+looking up or down. Adding a height/distance coupling now would introduce a new channel with no reported
+problem to solve, and would need its own round to clear. It stays in this doc as a one-line lever if a
+later round ever asks for it.
+
+**3. Tuning frozen + tab pruned.** The shipped table is below. The Camera tab lost three rows
+(`landingDipFullSpeed`, `shakeImpactForce`, `vehicleFovLambda`) — reference points no round ever turned;
+they stay config-only. 42 → 39 rows, and every survivor was moved by an actual field round.
+
+#### Shipped tuning (frozen 2026-07-25, after four field rounds)
+
+| channel | field | value | how it got there |
+| --- | --- | --- | --- |
+| input | `inputSmoothTime` | 0.03 | first guess, accepted untouched |
+| look point | `positionLagTime` / `verticalLagTime` / `deadZone` | 0.12 / 0.28 / 0.08 | accepted; the dead-zone residual was explicitly kept |
+| | `lagMaxDistance` / `teleportSnapDistance` | 1.2 / 20 | accepted |
+| yaw | `yawLagTime` | 0.25 | accepted |
+| zoom | `zoomLambda` | 8 | accepted |
+| composition | `turnThreshold` / `recenterDelaySec` / `recenterRate` | 0.9 / 2 / 1.6 | accepted |
+| | `lookAheadDistance` / `lookAheadTime` | 0.8 / 0.45 | accepted |
+| collision | `collisionRadius` / `collisionMinDistance` | 0.35 / 1.6 | round 1 of 04 set the min distance |
+| | `collisionReleaseTime` / `collisionWhiskerAngle` | 0.4 / **0** | the whisker went to 0 in the field and stayed there |
+| vehicle | `vehicleDistanceScale` / `vehicleDistanceGain` | **1 / 5** | round: "too far on entry, let speed earn it back" |
+| | `vehicleDistanceSpeed` | 40 | first guess, accepted |
+| | `vehicleFovKick` / `FovMinSpeed` / `FovMaxSpeed` | 0.175 / **6 / 28** | round: invisible — the band ran past what cars reach |
+| | `vehicleFovLambda` | 2.5 | first guess, accepted |
+| | `vehicleYawLagTime` / `vehicleRecenterDelaySec` | 0.35 / 1.5 | accepted (the JERK was a latch, not a number) |
+| | `vehicleVerticalLagTime` / `vehicleCollisionReleaseTime` | 0.15 / 0.6 | accepted |
+| drift | `driftLookBlend` / `driftSlipDeadZone` / `driftMinSpeed` | 0.5 / **0.05 / 6** | round: gated past what this physics produces |
+| motion | `bobAmplitude` / `bobCyclesPerMetre` | **0.025 / 0.25** | round: "shakes so hard you cannot concentrate" — it was 4.9 Hz |
+| | `landingDipScale` | **0** | three rounds, never visible at a third-person orbit — ships OFF |
+| | `shakeScale` / `shakeImpactForce` | 0.08 / 250 000 | accepted after the burst bug was fixed |
+| | `sprintFovKick` | **0.07** | round: invisible at 0.04 with a band that completed at top speed |
+| | `reducedMotion` | false | the comfort switch, off by default |
+
+### 2026-07-25 — the exit exam: numbers
+
+**Director cost**: `stepCamera` **0.568 µs mean / 0.620 µs p95** on foot with every layer live (microbench
+row 080/06). The plan's budget was **0.1 ms p95** — this is 160× under it.
+
+**Casts per frame: 2**, against a budget of 5. One sphere cast toward the eye (the two flanking whiskers do
+NOT fire: the 04 field round set `collisionWhiskerAngle` to 0) plus one `groundBelow` ray for the floor
+guard. The plan assumed whiskers would be hot in interiors; the field removed them instead.
+
+**Ritual sweep — the bench-bypass proof.** The full 8-scene `?bench=all` leg, headless, with the whole chain
+live: [`2026-07-25-headless-080-closeout-sweep.json`](../../benchmarks/opensa-engine/2026-07-25-headless-080-closeout-sweep.json).
+
+| scene | avg ms | p95 | fps | draws |
+| --- | --- | --- | --- | --- |
+| ls-noon | 8.333 | 9.3 | 120.0 | 1181 |
+| sf-fog-dawn | 8.384 | 9.3 | 119.3 | 985 |
+| lv-night | 8.328 | 9.2 | 120.1 | 1647 |
+| country-dusk | 8.331 | 9.7 | 120.0 | 861 |
+| ocean-horizon | 8.329 | 10.3 | 120.1 | 24 |
+| ls-rain-night | 8.329 | 10.2 | 120.1 | 966 |
+| ganton-noon | 8.323 | 10.2 | 120.2 | 1397 |
+| ganton-night | 8.329 | 10.2 | 120.1 | 1394 |
+
+`ls-noon` is the one scene with a directly comparable headless BEFORE (the 080/01 row): **8.333 vs 8.334 ms
+and 1181 vs 1181 draws** — identical, which is exactly the invariant this row exists to prove. Every leg is
+vsync-capped at 120 fps, so the sweep CANNOT resolve a small CPU regression; it proves the bench path is
+untouched, and the user's in-game sweep remains the pass-comparable series.
+
+**The soak leg was NOT run.** What it looks for is drift and leaks in rig state over a long session, and the
+honest answer was to remove the drift structurally rather than watch for it for half an hour: `bobPhase` now
+wraps to one turn (it grew ~11 rad/s and would have cost `Math.sin` precision over hours) and the shake's
+noise clock only advances while a shake is alive. A test steps the layer through **an hour of sprinting with
+a crash every minute** and asserts every accumulator stays bounded. A real `?soak` leg remains owed if the
+user wants the memory half of it too.
 
 **2026-07-25 — `?cam=legacy` deleted early (user's call: "the camera is fine now").** Removed: the host's
 `params.get('cam')` read, `CameraRigState.legacy`, and its five branches in `stepCamera` (instant zoom,

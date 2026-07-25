@@ -225,6 +225,19 @@ describe('stepMotion', () => {
       expect(stepMotion(state, input({ speed: RUN * 1.15 }), CONFIG).fov).toBeLessThan(sprint);
     });
 
+    it('keeps its accumulators bounded over a long session — nothing drifts', () => {
+      const state = createMotion();
+      // An hour of sprinting, plus a crash every minute.
+      for (let frame = 0; frame < 60 * 60 * 60; frame += 1) {
+        stepMotion(state, input({ impact: frame % 3600 === 0 ? CONFIG.shakeImpactForce : 0, speed: 10 }), CONFIG);
+      }
+
+      expect(Math.abs(state.bobPhase)).toBeLessThanOrEqual(Math.PI * 2);
+      expect(state.shakeTime).toBeLessThan(60); // the clock only runs while a shake is alive
+      expect(Number.isFinite(state.dip)).toBe(true);
+      expect(state.shakeAmplitude).toBeLessThanOrEqual(CONFIG.shakeScale);
+    });
+
     it('is rate independent: the same walk bobs the same at 1/120 as at 1/30', () => {
       const fast = createMotion();
       const slow = createMotion();

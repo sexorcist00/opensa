@@ -1,18 +1,21 @@
 # 080 — Cinematic camera (GTA V-feel follow camera for the own engine)
 
-**Status: IN PROGRESS.** Planned 2026-07-19. **01–06 shipped 2026-07-25**: the damp/spring math and the
+**Status: IN PROGRESS.** Planned 2026-07-19. **01–07 shipped 2026-07-25**: the damp/spring math and the
 `CameraDirector` in `apps/web/src/ui/camera/` (01), the smoothed rig — input dampening, a trailing look
 point with a dead zone, the steered-yaw channel, gliding zoom (02), the composition layer — turn-follow,
 idle recenter, look-ahead (03), collision — a `PhysicsWorld` sphere/ray-cast API, snap-in/ease-out, a
 min-distance floor and a ground floor guard (04), and the vehicle camera — speed→distance and speed→FOV
 curves, drift framing off 081/01's physics slip channel, and the vehicle tuning table (05), and the additive
-motion layer — bob, landing dip, impact shake, sprint FOV kick, all bounded and behind `reducedMotion` (06).
+motion layer — bob, landing dip, impact shake, sprint FOV kick, all bounded and behind `reducedMotion` (06),
+and the close-out — the transition matrix as a test, the tuning freeze, the tab prune and the exit exam (07).
 
 **The 02+03+04 field round is DONE and ACCEPTED (2026-07-25)**: no value came back for retuning, so every
 on-foot default is frozen as shipped, and the `?cam=legacy` A/B was deleted with the acceptance (07's
 close-out task, taken early). **05's DRIVE field round is owed** — its defaults are first guesses, live on
-the Camera tab — and the look-behind key ships after it. **06's COMFORT round is owed too** (the plan asks
-for a comfort verdict, not only a looks verdict). Next: 07 transitions + polish, then 08 view presets.
+the Camera tab — and the look-behind key ships after it. **Four field rounds ran on 05+06** and every
+report was fixed (bob frequency, the corner-swing latch, the backing-up spin, the shake burst, the exit
+snap, entry sinking); the landing dip ships OFF because it never read at a third-person orbit. **What 07
+still owes is its ACCEPTANCE**: a full mixed session the user signs off on. Then 08 view presets.
 
 **Goal: the camera feels "cinematic" the way GTA V's does — weighty, smooth, always composed — while
 staying responsive enough that nobody blames it for a missed turn.** Today the engine host camera is a
