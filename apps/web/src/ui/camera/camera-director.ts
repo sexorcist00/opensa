@@ -28,7 +28,7 @@ import {
   resolveCollision,
 } from './camera-collision';
 import { createLookInput, type LookInputState, releaseLook } from './camera-input';
-import { CAMERA_FOV_Y, forwardFrom, resolveCamera, screenBasis } from './engine-camera';
+import { CAMERA_FOV_Y, forwardFrom, resolveCamera } from './engine-camera';
 import { dollyStep, FLY_SPEED, flyStep, panStep, TOP_DOWN_PITCH, topDownEye } from './fly-rig';
 import { createFollowPoint, type FollowPointState, resetFollowPoint, stepFollowPoint } from './follow-rig';
 import { createLookAhead, type LookAheadState, stepLookAhead } from './look-ahead';
@@ -89,10 +89,6 @@ export interface CameraSnapshot {
   /** A scripted enter/exit is mid-sequence: hold auto-center off (the steered swing to the target still
    *  plays) so the camera does not chase the ped's approach-run and climb twitches. */
   settling: boolean;
-  /** The framed subject's silhouette half-width (world units): the collision fan's 4 corners sit this far off
-   *  the eye line, so only an obstacle covering the WHOLE subject (a wall) pulls the camera in, not a pole.
-   *  A ped's framing radius on foot, the car's larger planar half-extent while seated. */
-  subjectRadius: number;
   /** The follow distance a seated car wants (its length × `vehicleDistanceScale`), or null on foot. The live
    *  distance eases to it, and collision caps it. */
   vehicleDistance: null | number;
@@ -226,9 +222,6 @@ export function stepCamera(
   // pull-in read as a jump — just centre behind); the floor guard below still runs then, so the camera never
   // sinks into the ground while getting in or out.
   const attached = !state.legacy && !state.flyEye && !snapshot.bench;
-  // The fan spreads across the subject silhouette in the eye's own screen plane (right/up), so the corners
-  // frame the whole width/height the wall would have to cover to justify a pull-in.
-  const basis = screenBasis(forward);
   const collideDistance =
     attached && !snapshot.settling
       ? resolveCollision(
@@ -239,9 +232,6 @@ export function stepCamera(
           config,
           probe,
           snapshot.dt,
-          basis.right,
-          basis.up,
-          snapshot.subjectRadius,
         )
       : state.distance;
 

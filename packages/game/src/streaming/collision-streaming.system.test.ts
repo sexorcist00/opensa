@@ -19,6 +19,7 @@ function config(collisionDrawDistance: number): Config {
       collisionMinDistance: 0.5,
       collisionRadius: 0.35,
       collisionReleaseTime: 0.4,
+      collisionWhiskerAngle: 0,
       deadZone: 0.08,
       followDistance: 12,
       followHeight: 1.5,

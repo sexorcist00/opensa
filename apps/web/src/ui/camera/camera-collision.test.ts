@@ -12,8 +12,6 @@ import { TEST_CAMERA_CONFIG as CONFIG } from './camera-test-config';
 
 const LOOK: [number, number, number] = [0, 2, 0]; // engine look point (head height)
 const BEHIND: [number, number, number] = [0, 0, -1]; // eye direction: straight back along −Z
-const RIGHT: [number, number, number] = [-1, 0, 0]; // screen basis for a −Z eye direction (from screenBasis)
-const UP: [number, number, number] = [0, 1, 0];
 const DT = 1 / 60;
 
 /** A probe that always reports the same free distance (null = clear). */
@@ -78,36 +76,18 @@ describe('resolveCollision', () => {
       expect(value).toBeCloseTo(7, 2);
     });
 
-    it('pulls IN when the whole fan is occluded (a wall spans the subject silhouette)', () => {
+    it('takes the MIN across the primary and the two whiskers when whiskers are on', () => {
       const state = createCollisionState(7);
-      // right/up for a −Z eye direction; a wall hits every ray at 3.
-      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(3), DT, RIGHT, UP, 0.5)).toBeCloseTo(3, 6);
-    });
+      let call = 0;
+      const probe: CameraProbe = () => {
+        call += 1;
 
-    it('IGNORES a pole thinner than the subject (a corner ray stays clear)', () => {
-      const state = createCollisionState(7);
-      // Occludes only the eye line (from.x === 0); the offset corner rays miss → not a full occlusion.
-      const pole: CameraProbe = (from) => (from[0] === 0 ? 3 : null);
-
-      expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, pole, DT, RIGHT, UP, 0.5)).toBeCloseTo(7, 6);
-    });
-
-    it('offsets the corner rays by the subject radius along right/up', () => {
-      const seen: number[][] = [];
-      const probe: CameraProbe = (from) => {
-        seen.push([...from]);
-
-        return 3; // every ray hits, so the whole fan is cast
+        return call === 1 ? null : 2.5; // primary clear, whiskers hit at 2.5
       };
-      resolveCollision(createCollisionState(7), LOOK, BEHIND, 7, CONFIG, probe, DT, RIGHT, UP, 0.5);
 
-      // Centre first, then 4 corners at ±right·0.5 ±up·0.5 (GTA: x from right, z from up).
-      expect(seen).toHaveLength(5);
-      expect(seen[0][0]).toBe(0); // centre = gtaFromEngine(LOOK): no right/up offset
-      expect(seen[0][2]).toBe(2);
-      const corners = seen.slice(1).map((f) => [f[0], f[2]]); // (x, GTA-z = engine y)
-      expect(corners).toContainEqual([-0.5, 2.5]);
-      expect(corners).toContainEqual([0.5, 1.5]);
+      expect(
+        resolveCollision(state, LOOK, BEHIND, 7, { ...CONFIG, collisionWhiskerAngle: 0.26 }, probe, DT),
+      ).toBeCloseTo(2.5, 6);
     });
 
     it('casts from the look point in GTA space, along −forward', () => {

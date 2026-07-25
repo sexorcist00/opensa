@@ -68,25 +68,20 @@ ON FOOT only for now (the vehicle versions are plan 05):
 out, not snaps), and eases back to the on-foot zoom on exit. Collision caps it.
 
 **Collision** (plan 080/04, behaviour #9): the eye never sits behind a wall directly behind the player/car,
-on foot AND in a car — the camera slides up the wall instead of passing through it. A **5-ray fan** (centre +
-4 corners, sphere casts of radius `collisionRadius`) sweeps from the look point along −forward; the corners
-sit off the eye line by the subject's silhouette half-width (ped framing radius on foot, the car's larger
-planar half-extent while seated) along the camera's screen basis. The camera pulls in ONLY when the WHOLE fan
-is occluded (a wall spanning the subject) → any clear ray (a pole/sign thinner than the subject) is ignored
-and the camera drives past it, killing the city-driving jitter the single cast caused. It caps the distance,
-snap IN / ease OUT over `collisionReleaseTime`; the chosen zoom / car distance restores after the occlusion.
-The floor is `collisionMinDistance` — the near-plane radius (0.5): a full-occlusion wall closer than that
-pulls the eye right up to the surface, so it may clip INTO the ped for a frame, but it never slides BEHIND
-the wall (which reads far worse) and it never stalls. A floor guard lifts the eye to `groundBelow(eye) + 0.3`,
+on foot AND in a car — the camera slides up the wall instead of passing through it. A single sphere cast
+(radius `collisionRadius`, near-plane cover) sweeps from the look point along −forward (whiskers OFF by
+default: the ±15° flanking casts fired on a pole/wall BESIDE you, not between you and the eye). It caps the
+distance, snap IN / ease OUT over `collisionReleaseTime`; the chosen zoom / car distance restores after the
+occlusion. The floor is `collisionMinDistance` — the near-plane radius (0.5): a wall closer than that pulls
+the eye right up to the surface, so it may clip INTO the ped for a frame, but it never slides BEHIND the wall
+(which reads far worse) and it never stalls. A floor guard lifts the eye to `groundBelow(eye) + 0.3`,
 running whenever the rig is attached (incl. a car enter/exit, so a low seat can't bury it); only the distance
-CAP is suspended during enter/exit. Casts run against the one Rapier world, excluding the subject; ≤5
-casts/frame + the ground guard (centre-first early-exit → ~1 in the open), free.
+CAP is suspended during enter/exit. Casts run against the one Rapier world, excluding the subject; ~1
+cast/frame + the ground guard, free.
 
-Known accepted trade-offs (field verdict): a wall covering only part of the silhouette (some rays clear) is
-ignored, so the camera can enter a partial wall a little; and a full-occlusion wall very close directly
-behind the player lets the camera clip into the ped a touch. Both are the deliberate cost of "react only to
-full occlusion". The overhead "On Top" fallback for a genuine full pin stays reserved in
-`docs/performance/deferred-optimizations/camera-multiray-collision.md`.
+Known accepted trade-off (field verdict, stop point): a wall very close directly behind the player lets the
+camera clip into the ped a little — the alternatives (a size-based floor, or freezing the eye in the world)
+either fell BEHIND the wall or stalled, both worse. Revisit if a real pull-in policy is wanted.
 
 **Modes**
 
@@ -147,8 +142,7 @@ stand-still exclusion, walk-vs-sprint recenter rates), `ui/camera/look-ahead.tes
 cap, the fade home, rate independence),
 `ui/camera/follow-rig.test.ts` (no overshoot, dead zone holds still, vertical slower than planar, the lag
 floor at a 12 m/s sprint, teleport snap, 1/120-vs-1/20 agreement),
-`ui/camera/camera-collision.test.ts` (snap-in/ease-out asymmetry, min distance, the multi-ray fan: full
-occlusion pulls in / a thin pole is ignored / corner offsets, floor guard,
+`ui/camera/camera-collision.test.ts` (snap-in/ease-out asymmetry, min distance, whisker min, floor guard,
 GTA-space cast) and `physics/physics-world.test.ts` (raycast/sphereCast hit distance, exclusion, ball
 stop-short),
 `ui/camera/camera-director.test.ts` (the legacy-parity gate: the director reproduces the pre-080 stick

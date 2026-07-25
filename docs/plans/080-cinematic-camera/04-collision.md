@@ -56,11 +56,9 @@ The rig is engine Y-up; casts run GTA Z-up. Convert at the probe boundary only:
 
 - [x] `raycast`/`sphereCast` on `PhysicsWorld` + tests; radius derivation comment.
 - [x] Probe wiring in the host (player capsule / seated car exclusion).
-- [x] `camera-collision.ts`: multi-ray fan (centre + 4 corners) + asymmetric response + floor
-      guard + cap semantics; unit tests with scripted probes. (Whiskers shipped then removed —
-      the fan subsumes them; see the 2026-07-25 multi-ray ledger entry.)
-- [x] Config + Camera tab: `collisionRadius`, `collisionMinDistance`, `collisionReleaseTime`
-      (whisker angle removed with the fan).
+- [x] `camera-collision.ts`: primary + whiskers + asymmetric response + floor guard + cap
+      semantics; unit tests with scripted probes.
+- [x] Config + Camera tab: `collisionRadius`, `collisionReleaseTime`, whisker angle.
 - [x] Measure: casts/frame and `director.update` p95 with collision on (ledger).
 - [ ] **Field round**: interiors/underpasses (LS parking garages), back-to-wall orbiting, doorway
       exit glide, alley sprint with 03's recenter active (the combination is where jitter hides —
@@ -155,30 +153,3 @@ for a frame) but never slides behind the wall and never stalls. Whiskers stay OF
 stayed. Suite 2654 green. Accepted trade-off recorded in `docs/features/camera.md`: a very close wall behind
 the player can clip the camera into the ped a touch — that's the stop point until a real pull-in policy is
 wanted.
-
-### 2026-07-25 — multi-ray fan (the city-driving jitter fix, pulled from reserve)
-
-The simple single cast reacted to every thin pole/sign/tree on the sight line, so city driving jittered.
-Replaced the single cast (and the dead whisker path) with a **5-ray fan** in `resolveCollision`:
-
-- **Centre + 4 corners** (5 sphere casts, radius `collisionRadius`), the corners offset by
-  `CameraSnapshot.subjectRadius` along the camera's `screenBasis` right/up. `subjectRadius` is
-  `PED_SUBJECT_RADIUS` (0.45) on foot, or the car's larger planar half-extent + `VEHICLE_SUBJECT_MARGIN`
-  (0.2) while seated (host `cameraSubjectRadius`). The director passes the basis + radius; a zero radius
-  degrades to the single eye-line ray (the tests' fallback).
-- **Pull in ONLY when every ray hits** something closer than the desired distance (a wall spanning the whole
-  silhouette) → distance = `min(hits)`, floored at `collisionMinDistance`. Any clear ray (a pole thinner than
-  the subject) → no pull-in; the camera drives past and the pole sweeps a slice of the frame. Centre is cast
-  first, so the fan early-exits (~1 cast) in the open.
-- Snap-in / ease-out and the `collisionMinDistance` (0.5) near-plane floor are unchanged. **Whiskers removed**
-  entirely — `collisionWhiskerAngle` is gone from the config, defaults, all fixtures, and the Camera tab (22
-  → 21 sliders); the fan subsumes the anticipation whiskers were meant to give.
-- **Accepted trade-off** (unchanged in spirit): a wall covering only part of the silhouette is ignored, so
-  the camera can enter a partial wall a little — the deliberate meaning of "react only to full occlusion".
-
-**Cost**: ≤5 sphere casts on the ONE render-frame camera step, **< 0.05 ms** (below bench noise; the bench
-owns the frame and the rig output is discarded, so soak/ritual numbers are untouched). Suite **2656 green**
-(three fan tests replaced one whisker test). The reserve lever
-`docs/performance/deferred-optimizations/camera-multiray-collision.md` is marked PULLED; On Top (overhead on
-a genuine full pin) stays reserved there. Owed: the field round (interiors/underpasses, back-to-wall orbit,
-alley sprint) now covers the fan behaviour too.

@@ -1180,7 +1180,6 @@ async function boot(
       mode: cameraModeOf(rig.flyEye !== null, seatedCar !== null),
       pan: pendingInput.pan,
       settling: vehicles?.isSettling() ?? false,
-      subjectRadius: cameraSubjectRadius(seatedCar),
       vehicleDistance: vehicleFollowDistance(seatedCar, config.camera.vehicleDistanceScale),
       walkKeys: flyKeys,
       zoomSteps: pendingInput.zoom,
@@ -1508,17 +1507,6 @@ function toEngine(gta: readonly [number, number, number]): [number, number, numb
  * Roll the occupied car 180° about its OWN forward axis and lift it 1.5 m (the debugger's "flip vehicle" —
  * prod's implementation, with the quaternion algebra written out so the host keeps its three-free math).
  */
-/** The ped's silhouette half-width for the collision fan (world units) — roughly the framed capsule radius. */
-const PED_SUBJECT_RADIUS = 0.45;
-/** Grown onto a car's planar half-extent so the fan clears the bodywork before it counts a wall as occluding. */
-const VEHICLE_SUBJECT_MARGIN = 0.2;
-
-/** The framed subject's silhouette half-width for the collision fan: the car's larger planar half-extent (plus
- *  a margin) while seated, else the ped's framing radius. */
-function cameraSubjectRadius(car: null | { halfExtents: readonly number[] }): number {
-  return car ? Math.max(car.halfExtents[0], car.halfExtents[1]) + VEHICLE_SUBJECT_MARGIN : PED_SUBJECT_RADIUS;
-}
-
 /** The follow distance a seated car wants: its LENGTH (2·halfExtent.y) × the config scale, or null on foot. */
 function vehicleFollowDistance(car: null | { halfExtents: readonly number[] }, scale: number): null | number {
   return car ? 2 * car.halfExtents[1] * scale : null;

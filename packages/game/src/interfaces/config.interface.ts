@@ -19,6 +19,9 @@ export interface CameraConfig {
   /** How fast the camera eases back OUT after an occlusion clears (seconds). Pulling IN is instant (a wall is
    *  never shown); releasing glides so leaving a doorway doesn't pop. */
   collisionReleaseTime: number;
+  /** Whisker cast spread (radians): two extra casts at ±this around the eye direction let the camera start
+   *  easing in BEFORE a wall edge crosses screen centre. 0 = primary cast only. */
+  collisionWhiskerAngle: number;
   /** Focus movement under this (world units) does not pull the camera at all — idle jitter leaves the frame
    *  still. Blended back in over the next two dead-zone widths, so there is no kink at the edge. */
   deadZone: number;
