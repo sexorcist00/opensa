@@ -162,6 +162,8 @@ same day in `e1541ec`** — the field verdict was the WORST behaviour of the cha
 the camera JUMPED instead of sliding. Root cause: the boolean all-hit gate is discontinuous, so it flickers
 between "ignore" and "full pull-in" as the corner rays catch/lose a facade's edges/recesses. Full writeup +
 the "keep it a continuous function of approach, not a boolean gate" lesson in
-[`docs/postmortem/camera-collision-approaches.md`](../../postmortem/camera-collision-approaches.md). Back on
-the simple single sphere cast (`4316967`). The "On Top" overhead fallback for a genuine full pin is kept as a
-revisit note in that same postmortem — a feel idea, not a perf lever, so it is not in the performance reserve.
+[`docs/postmortem/080-cinematic-camera/multiray-collision.md`](../../postmortem/080-cinematic-camera/multiray-collision.md)
+(the rejected sphere-collider model is in the sibling
+[`collision-collider.md`](../../postmortem/080-cinematic-camera/collision-collider.md)). Back on the simple
+single sphere cast (`4316967`). The "On Top" overhead fallback for a genuine full pin is kept as a revisit
+note in the multi-ray postmortem — a feel idea, not a perf lever, so it is not in the performance reserve.
