@@ -153,3 +153,15 @@ for a frame) but never slides behind the wall and never stalls. Whiskers stay OF
 stayed. Suite 2654 green. Accepted trade-off recorded in `docs/features/camera.md`: a very close wall behind
 the player can clip the camera into the ped a touch — that's the stop point until a real pull-in policy is
 wanted.
+
+### 2026-07-25 — multi-ray fan tried and REVERTED (field-rejected, → postmortem)
+
+A third richer model: a 5-ray fan (centre + 4 corners offset by `subjectRadius`) that pulls in ONLY when
+every ray hits (a wall spanning the whole silhouette), to ignore thin poles. Built in `811bca9`, **reverted
+same day in `e1541ec`** — the field verdict was the WORST behaviour of the chain: approaching a house on foot
+the camera JUMPED instead of sliding. Root cause: the boolean all-hit gate is discontinuous, so it flickers
+between "ignore" and "full pull-in" as the corner rays catch/lose a facade's edges/recesses. Full writeup +
+the "keep it a continuous function of approach, not a boolean gate" lesson in
+[`docs/postmortem/camera-collision-approaches.md`](../../postmortem/camera-collision-approaches.md). Back on
+the simple single sphere cast (`4316967`). The On Top overhead fallback is the remaining reserve lever
+([`docs/performance/deferred-optimizations/camera-on-top-fallback.md`](../../performance/deferred-optimizations/camera-on-top-fallback.md)).
