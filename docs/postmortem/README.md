@@ -19,3 +19,7 @@ observations that killed it, and the conditions under which it might be worth re
   batching/atlasing (plans 066 + opensa-lod-generator 005–010). No measurable perf/quality gain; code parked
   on `backup/tooling-experiment`. Produced the CPU-bound-on-draw-calls diagnosis that led to the own engine
   (074).
+- [camera-collision-approaches.md](./camera-collision-approaches.md) — a kinematic sphere COLLIDER
+  (move-and-slide) for camera collision (plan 080/04). Rejected by reasoning, never coded: character
+  controllers stick in the game's many narrow nooks, the classic reason spring-arm cameras use a cast, not a
+  body. Stayed on cast + multi-ray (stateless, no sticking).
