@@ -326,3 +326,30 @@ describe('wheelCornerLabels', () => {
     });
   });
 });
+
+describe('VehicleTelemetry aliasing', () => {
+  describe('negative cases', () => {
+    it('does not lose the rate channels when the caller reuses its arrays', () => {
+      // `EnterableVehicle.orientation` and its linvel are long-lived arrays the physics system overwrites in
+      // place; a sampler that kept the REFERENCE compared each step against itself and reported every
+      // orientation-derived rate as 0 (found by a real capture: a u-turn with turnedDeg 0.00).
+      const telemetry = new VehicleTelemetry(10);
+      telemetry.enabled = true;
+      const orientation: [number, number, number, number] = [0, 0, 0, 1];
+      const linvel: [number, number, number] = [0, 10, 0];
+      const reused = sample({ linvel, orientation });
+
+      telemetry.step(reused, DT);
+      const turned = quat('z', 0.1);
+      orientation[0] = turned[0];
+      orientation[1] = turned[1];
+      orientation[2] = turned[2];
+      orientation[3] = turned[3];
+      linvel[1] = 12;
+      const frame = telemetry.step(reused, DT);
+
+      expect(frame?.yawRate).not.toBe(0);
+      expect(frame?.gLong).not.toBe(0);
+    });
+  });
+});

@@ -251,6 +251,40 @@ describe('EnterVehicleSystem', () => {
       expect(h.system.isBraking()).toBe(false);
     });
 
+    it('keeps a car that is mid-sequence — unloading it would strand the climb', () => {
+      const h = setup();
+      const car = vehicleAt([2, 0, 0]);
+      h.system.add(car);
+      h.press(true);
+      h.system.update(0.016); // approaching — the sequence owns this car now
+
+      h.system.remove(car);
+      h.ctrl.arrived = true;
+      h.system.update(1);
+
+      expect(doorAngle(car)).not.toBeCloseTo(0); // the sequence carried on
+    });
+
+    it('lets go of the car it last used when that car is unloaded', () => {
+      // `active` outlives the ride (the door closes behind the player), so an unloaded car used to stay
+      // referenced while its rigid body was destroyed — every later door tick then read a dead body and
+      // killed the fixed step. Found by the 081/01 lap runner's per-scene teleports.
+      const h = setup();
+      const car = vehicleAt([2, 0, 0]);
+      seatPlayer(h, car);
+      h.press(true);
+      h.system.update(0.016); // seated → stopping
+      h.system.fixedUpdate(1); // stops, opens, climbs out
+      h.system.update(1);
+      h.system.fixedUpdate(2);
+      h.system.update(1); // back to idle, `active` still points at the car
+
+      h.system.remove(car);
+      h.system.update(1); // a tick that would have touched the removed car's body
+
+      expect(h.system.getActive()).toBeNull();
+    });
+
     it('canEnterExit is false when idle with no car in range', () => {
       const h = setup();
       expect(h.system.canEnterExit()).toBe(false); // no cars

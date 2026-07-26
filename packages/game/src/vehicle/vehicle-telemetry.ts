@@ -196,7 +196,11 @@ export class VehicleTelemetry {
     }
     this.elapsed += dt;
     const frame = computeFrame(sample, this.previous, dt, this.elapsed);
-    this.previous = sample;
+    // COPY the vectors, never keep the caller's arrays. `EnterableVehicle.orientation` is one long-lived
+    // array the physics system overwrites in place every step, so holding the reference made `previous` and
+    // `sample` the same numbers — and every rate derived from orientation read exactly 0. It cost a whole
+    // sweep to notice: a u-turn capture reported `turnedDeg` 0.00 while the car was visibly going round.
+    this.previous = { ...sample, linvel: [...sample.linvel], orientation: [...sample.orientation] };
     this.ring.push(frame);
 
     return frame;

@@ -338,10 +338,25 @@ export class EnterVehicleSystem implements System {
     return this.phase !== 'idle' && this.phase !== 'seated';
   }
 
-  /** Drop a (parked, unoccupied) car when it is unloaded. No-op if it is the active car. */
+  /**
+   * Drop a (parked, unoccupied) car when it is unloaded.
+   *
+   * `active` OUTLIVES the ride: the climb-out leaves it set so the door can finish closing behind the
+   * player. If the streaming then unloads that car — walk far enough, or teleport — the caller destroys its
+   * rigid body regardless of what this method decides, and a kept reference means the next door tick reads a
+   * dead body: `Cannot read properties of null (reading 'translation')`, every fixed step, for good. (Found
+   * by the 081/01 lap runner, whose per-scene teleports hit it on the second lap; on foot it needs a long
+   * enough walk to be rare, not impossible.) So an IDLE active car is let go here. A car mid-sequence still
+   * is not: dropping it would strand a climb — and the car being driven is at distance 0, so the
+   * distance-based unload never asks.
+   */
   remove(vehicle: EnterableVehicle): void {
     if (this.active === vehicle) {
-      return;
+      if (this.phase !== 'idle') {
+        return;
+      }
+      this.active = null;
+      this.closeDoorWhenClear = false;
     }
     const index = this.vehicles.indexOf(vehicle);
     if (index >= 0) {
