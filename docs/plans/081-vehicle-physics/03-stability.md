@@ -228,3 +228,35 @@ The old field is not wrong; it was answering a different question, and nobody no
 **Still owed in §1**: `fBrakeBias` is unread, and the deceleration is too high — both plan 04. Anti-dive
 (`fSuspensionAntiDiveMultiplier`) is NOT needed to produce dive, exactly as the authored zeros predicted; it
 remains available to SHAPE it once 04 makes the braking force honest.
+
+### 2026-07-26 — ride height, and what the dive is REALLY limited by
+
+**Field report**: *"the car is now very low — even at rest the wheels sink into the asphalt."* Correct, and it
+was the predicted cost of §1: softening the spring 3.5× moved static sag from 1.5 cm to 5-9 cm, and the wheel
+geometry still assumed the old sag, so every car settled that much lower than the model was drawn.
+
+**Fixed by raising the connection point by `restLength − sag` instead of `restLength`.** The wheel now sits
+at its MODEL HUB when the car is STANDING, not when it hangs in the air — which is the pose the artist drew,
+and it holds at any spring rate. The sag itself is `2 / stiffness`: the `1/k` shape is derived (Rapier's mass
+term cancels against the weight it carries), the constant is FITTED (2.0 against the analytic 1.72) because
+the load per wheel is not exactly a quarter of the weight. Measured across a 4× rate range: wheel bottom
+0.490 / 0.499 / 0.502 m against a ground at 0.500.
+
+**And then a surprise worth recording.** The comet's dive came out at **−8.1°** — far past the 1-3° band. The
+obvious suspect was the spring, so the reference rate was probed at 34 / 50 / 70:
+
+| Reference stiffness | Comet spring | Dive |
+| ------------------: | -----------: | ---: |
+|                  34 |         19.8 | −8.11° |
+|                  50 |         29.1 | −8.02° |
+|                  70 |         40.7 | −7.03° |
+
+**Doubling the spring rate barely moves it.** The dive is not spring-limited any more — it is limited by the
+BRAKE FORCE. At 2.3 g the transfer puts 94.6 % of the load on the front axle, the rear nearly lifts off and
+extends to full droop, and the pitch that follows is mostly rear droop rather than front compression. Raising
+the rate would only undo §1's improvement while treating a symptom.
+
+So the reference stays at 34, and **the dive magnitude is now plan 04's problem, not this plan's**: make the
+braking force honest (it has no mass term and no bias) and the transfer, and with it the dive, comes back
+into band on its own. This is the second time in the chain that a suspicious number turned out to be owned by
+the brake formula.

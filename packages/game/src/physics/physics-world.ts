@@ -51,6 +51,19 @@ const SUSPENSION_REFERENCE_MASS = 1500;
 const SUSPENSION_REFERENCE_FORCE = 1.1; // the mid-range `fSuspensionForceLevel` of the stock car table
 const SUSPENSION_FORCE_PER_KG = SUSPENSION_MAX_FORCE / SUSPENSION_REFERENCE_MASS;
 const SUSPENSION_DAMPING_REFERENCE = 0.15; // the mid-range `fSuspensionDampingLevel`
+/**
+ * Static sag = this / stiffness (m) — how far a car settles onto its springs under its own weight.
+ *
+ * The `1/stiffness` SHAPE is derived: Rapier's force is `stiffness × compression × mass × 1.43`, so the mass
+ * cancels against the weight it carries and the sag depends on the rate alone. The CONSTANT is fitted, not
+ * derived (2.0 against the analytic 1.72), because the load per wheel is not exactly a quarter of the weight
+ * — the centre of mass is offset and the axles do not share equally. Fitted across a 4× rate range, residual
+ * under 1 cm; measured with the ride-height probe, not reasoned about.
+ *
+ * It exists so the wheel sits at its MODEL HUB when the car is standing. Without it, softening the spring
+ * (081/03 §1) sank the cars into the asphalt — the field report that produced this constant.
+ */
+const SUSPENSION_SAG_PER_STIFFNESS = 2;
 const SUSPENSION_COMPRESSION_FLOOR = 2; // a floor on the DERIVED value, not a substitute for it
 const SUSPENSION_RELAXATION_FLOOR = 0.4;
 /**
@@ -385,9 +398,12 @@ export class PhysicsWorld {
     const spring = suspensionSetup(properties);
     wheels.forEach((wheel, i) => {
       const [x, y, z] = wheel.connection;
-      // Connection raised by the rest length so the fully-extended wheel sits at the model hub.
+      // Raised by the rest length MINUS the static sag, so the wheel sits at the model hub when the car is
+      // STANDING — not when it is hanging in the air (plan 081/03 §1, field report: after the spring was
+      // softened the cars sank into the asphalt, because the geometry still assumed a 15 mm sag).
+      // The artist drew the car at rest; this is what makes that pose the one the game shows, at any rate.
       controller.addWheel(
-        { x, y, z: z + spring.restLength },
+        { x, y, z: z + spring.restLength - spring.sag },
         { x: 0, y: 0, z: -1 },
         { x: 1, y: 0, z: 0 },
         spring.restLength,
@@ -1129,6 +1145,8 @@ function suspensionSetup(properties: VehicleMassProperties): {
   maxForce: number;
   relaxation: number;
   restLength: number;
+  /** How far the spring compresses under the car's own weight (m) — see {@link SUSPENSION_SAG_PER_STIFFNESS}. */
+  sag: number;
   stiffness: number;
   travel: number;
 } {
@@ -1146,6 +1164,7 @@ function suspensionSetup(properties: VehicleMassProperties): {
     maxForce: properties.mass * SUSPENSION_FORCE_PER_KG,
     relaxation: Math.max(SUSPENSION_RELAXATION_FLOOR, SUSPENSION_RELAXATION_RATIO * critical * dampingScale),
     restLength: restLength > 0 ? restLength : SUSPENSION_REST,
+    sag: SUSPENSION_SAG_PER_STIFFNESS / stiffness,
     stiffness,
     travel: travel > 0 ? travel : SUSPENSION_MAX_TRAVEL,
   };
