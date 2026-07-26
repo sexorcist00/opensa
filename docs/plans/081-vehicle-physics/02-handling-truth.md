@@ -74,11 +74,11 @@ free).
 ## Subtasks
 
 - [x] Typed mapping + conversions + 3 pinned-row tests; fallback row documented.
-- [ ] COM/inertia application + angular-damping retune + quirk-suite re-run.
-- [ ] Per-car suspension mapping + spawn/settle re-verification (bench road cars still sit right —
-      the 841-car sweep spots systemic suspension errors for free).
+- [x] COM/inertia application (+ the angular-damping retune MEASURED and deferred to plan 03 — see ledger).
+- [x] Per-car suspension mapping + spawn/settle re-verification (the `rest` scene is the settle check now;
+      a field report caught the first attempt and the clamp fixed it).
 - [ ] Pre-step control hook + latency test.
-- [ ] Replay A/B captures (3 cars × brake/slalom/u-turn/kerb) into the ledger.
+- [x] Replay A/B captures (4 cars × 9 scenes) into the ledger + the benchmark record.
 - [ ] **Field round**: the flip complaint specifically — aggressive city driving, the user tries to
       flip a sedan honestly; plus "do different cars feel different now".
 
@@ -270,3 +270,44 @@ brake differently because their springs differ — which is the point of §3.
    `scripts/debug/handling-diff.ts` now defaults its baseline to the built table for the same reason.
 2. **An A/B must be self-describing.** No amount of careful bisection beat one capture that stated its own
    configuration. Any future tuning surface gets read back into the capture before it is tuned.
+
+### 2026-07-26 — the A/B: 4 of 5 flips are gone
+
+Full matrix, 4 cars × 9 scenes, same pak and scenes as the BEFORE record
+(`after02-*` against `before-*`). What §2 (authored mass properties) and §3 (per-car springs) did together:
+
+| Scene / car             | Roll max BEFORE → AFTER | Flip |
+| ----------------------- | ----------------------: | ---- |
+| slalom, comet           |         **180° → 23.9°** | **gone** |
+| slalom, firetruk        |         **113.8° → 11.9°** | **gone** |
+| crest-jump, firetruk    |         **99.7° → 6.8°** | **gone** |
+| handbrake-turn, infernus |        **180° → 3.0°** | **gone** |
+| slalom, infernus        |           180° → 106.9° | still flips |
+| kerb-strike, comet      |             29.3° → 20.0° | — |
+| kerb-strike, firetruk   |              7.3° → 3.6° | — |
+| slalom, admiral         |             14.2° → 5.5° | — |
+
+**The flip complaint is largely answered, and by data rather than by damping.** The chassis angular damping
+is still the same 2 it always was; what changed is that the mass now sits where the car was designed to carry
+it and each car rides its own springs. The one survivor — the infernus slalom — is also the most violent
+scene in the set, and its roll halved.
+
+**The body finally moves under braking.** `pitchUnderBrakeDeg` was flat to a tenth of a degree across the
+whole BEFORE matrix; now it is per-car and visible: comet 0.25° → **0.45°** on the brake strip and 6.8° →
+**20.9°** in the handbrake turn, firetruck 0.21° → 0.06° (a heavy truck on soft springs dives LESS, which is
+right). The 081/01 finding that the suspension — not the damping — was suppressing the dive is confirmed by
+fixing the suspension.
+
+**Braking is now per-car in both directions**, which is what one shared spring made impossible: infernus
+59.9 → 54.0 m, comet 32.3 → 24.8 m, admiral 23.7 → **28.5 m** (longer — a soft sedan should stop later than
+a supercar), firetruck unchanged at 119.3 m.
+
+**Two numbers that are NOT wins and need reading before anyone quotes them**: `pull-away-reverse` braking
+distance moved from 2.1 → 40.3 m on the comet and 126.1 → 23.6 m on the firetruck. That scene brakes twice
+(coast-down, then the reverse), and the summary reports the FIRST run that reaches a stop — so a change in
+which of the two qualifies swings the number wildly. The metric needs to name which braking event it took,
+or the scene needs splitting. Recorded rather than quietly dropped.
+
+**Subtask status**: §1 typed mapping, §2 mass properties and §3 per-car suspension are done and measured.
+§4 (the pre-step control hook) and the field round remain; the angular-damping retirement is deferred to
+plan 03 with the reasons measured above.

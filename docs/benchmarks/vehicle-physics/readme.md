@@ -156,3 +156,17 @@ already-destabilised car.
 
 Runs: [`2026-07-26-headless-damping05-infernus.json`](2026-07-26-headless-damping05-infernus.json) ·
 [`2026-07-26-headless-damping05-comet.json`](2026-07-26-headless-damping05-comet.json).
+
+### 2026-07-26 — AFTER 081/02 (authored mass properties + per-car springs), all four cars
+
+The chain's first real improvement, measured against the BEFORE matrix on the same pak and scenes.
+**Four of the five flips in the record are gone** — comet and firetruck slalom, firetruck crest landing,
+infernus handbrake turn — with roll maxima collapsing from 180°/113.8°/99.7°/180° to 23.9°/11.9°/6.8°/3.0°.
+The one survivor (infernus slalom) halved. The chassis angular damping was NOT touched: what changed is that
+the mass sits where the car was designed to carry it and each car rides its own springs.
+
+The body also starts moving under braking (comet 0.25° → 0.45° of dive on the strip, 6.8° → 20.9° in the
+handbrake turn) and braking distance is finally per-car in both directions (admiral 23.7 → 28.5 m, comet
+32.3 → 24.8 m). Captures carry a `springs` block from this run on — what the run was configured with.
+
+Runs: `2026-07-26-headless-after02-{infernus,comet,admiral,firetruk}.json`.
