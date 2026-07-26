@@ -44,12 +44,17 @@ export interface TelemetryFrame {
   readonly brake: number;
   /** Total engine force applied this step (N), signed (negative = reverse). */
   readonly engineForce: number;
+  /** The gearbox's gear this step: 0 = reverse, 1…n forward. */
+  readonly gear: number;
   /** Net acceleration in the body frame, in g: lateral (+ = to the car's right). */
   readonly gLat: number;
   /** Longitudinal (+ = forward). */
   readonly gLong: number;
   /** Vertical (+ = up). Excludes gravity — see the module note. */
   readonly gVert: number;
+  /** The LEVER is up. Its own channel because the handbrake sends NO brake force — it locks the rear axle
+   *  inside the physics layer — so a reader watching `brake` alone cannot see it at all. */
+  readonly handbrake: boolean;
   /** Yaw about +Z (rad). */
   readonly heading: number;
   /** Nose-up angle (rad), positive UP. */
@@ -79,6 +84,8 @@ export interface TelemetryFrame {
 export interface VehicleSample {
   readonly brake: number;
   readonly engineForce: number;
+  readonly gear: number;
+  readonly handbrake: boolean;
   /** Linear velocity, world (GTA) space. */
   readonly linvel: readonly [number, number, number];
   /** Body orientation `[x, y, z, w]`. */
@@ -230,9 +237,11 @@ export function computeFrame(
   return {
     brake: sample.brake,
     engineForce: sample.engineForce,
+    gear: sample.gear,
     gLat: bodyAccel(sample, previous, dt, right),
     gLong: bodyAccel(sample, previous, dt, forward),
     gVert: bodyAccel(sample, previous, dt, up),
+    handbrake: sample.handbrake,
     heading: motion.heading,
     pitch: Math.asin(clampUnit(forward[2])),
     // atan2 of the right axis against the up axis IS the roll about forward; negated so right-down is positive.

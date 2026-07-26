@@ -37,6 +37,8 @@ export interface AppliedControls {
   readonly engineForce: number;
   /** The gear the drivetrain is in: 0 = reverse, 1…n forward. */
   readonly gear: number;
+  /** The LEVER is up — it applies NO brake force, so nothing else in this record shows it. */
+  readonly handbrake: boolean;
   /** Front-wheel steer angle (rad). */
   readonly steer: number;
   /** The raw throttle input behind it, −1..1. */
@@ -187,7 +189,7 @@ const APPROACH_STALL_TIMEOUT = 1.5; // s of no progress toward the door (blocked
 const APPROACH_STALL_EPSILON = 0.02; // planar distance (m) under which the player counts as not progressing per frame
 
 /** What {@link EnterVehicleSystem.appliedControls} reports while nobody is driving. */
-const NO_CONTROLS: AppliedControls = { brake: 0, engineForce: 0, gear: 1, steer: 0, throttle: 0 };
+const NO_CONTROLS: AppliedControls = { brake: 0, engineForce: 0, gear: 1, handbrake: false, steer: 0, throttle: 0 };
 
 type Phase =
   | 'approaching'
@@ -225,7 +227,7 @@ export class EnterVehicleSystem implements System {
   private readonly config: Readonly<Config>;
   private readonly controller: CharacterControllerSystem;
   /** The last step's applied driving values — see {@link appliedControls}. */
-  private controls: AppliedControls = { brake: 0, engineForce: 0, gear: 1, steer: 0, throttle: 0 };
+  private controls: AppliedControls = { brake: 0, engineForce: 0, gear: 1, handbrake: false, steer: 0, throttle: 0 };
   /** Whether {@link applyControls} already ran this fixed step (the pre-step hook, or fixedUpdate's fallback). */
   private controlsAppliedStep = false;
   private readonly doors = new Map<EnterableVehicle, { lf: number; rf: number }>(); // per-side door angles
@@ -795,7 +797,7 @@ export class EnterVehicleSystem implements System {
       step,
       traction: { bias: hnd.tractionBias, loss: hnd.tractionLoss, mult: hnd.tractionMult },
     });
-    this.controls = { brake, engineForce: this.engine, gear, steer: this.steerAngle, throttle };
+    this.controls = { brake, engineForce: this.engine, gear, handbrake, steer: this.steerAngle, throttle };
     car.rig.setSteer(this.steerAngle); // front wheels turn with the physics steer
   }
 

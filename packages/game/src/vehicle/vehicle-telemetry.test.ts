@@ -38,6 +38,8 @@ const wheel = (over: Partial<VehicleWheelReading> = {}): VehicleWheelReading => 
 const sample = (over: Partial<VehicleSample> = {}): VehicleSample => ({
   brake: 0,
   engineForce: 0,
+  gear: 1,
+  handbrake: false,
   linvel: [0, 0, 0],
   orientation: [0, 0, 0, 1], // level, facing +Y
   steer: 0,

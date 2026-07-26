@@ -18,9 +18,11 @@ const wheel = (contact = true): WheelFrame => ({
 const frame = (t: number, over: Partial<TelemetryFrame> = {}): TelemetryFrame => ({
   brake: 0,
   engineForce: 0,
+  gear: 1,
   gLat: 0,
   gLong: 0,
   gVert: 0,
+  handbrake: false,
   heading: 0,
   pitch: 0,
   roll: 0,

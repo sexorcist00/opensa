@@ -140,6 +140,9 @@ const SUSPENSION_DAMPING_SCALE_MAX = 2;
  * original applies to it, which is `fTractionBias` in the same `2 × bias` / `2 − 2 × bias` form as the
  * suspension's. The surface term is not modelled yet: every road is tarmac until surface types are wired.
  */
+/** What a LOCKED wheel keeps of its lateral stiffness. Not zero: a skidding tyre still scrubs, and a rear
+ *  axle with literally no side force makes the car spin on the spot instead of arcing. */
+const LOCKED_SIDE_FRICTION = 0.15;
 /** How close to its friction circle a wheel must be before it counts as having broken loose. Just under 1:
  *  the solver lands exactly ON the circle when it clamps, and floating-point equality is not a state test. */
 const SLIDE_THRESHOLD = 0.98;
@@ -1037,6 +1040,13 @@ export class PhysicsWorld {
       // that is the whole mechanism of a handbrake turn, and it needs no separate "grip cut" to model.
       const locked = handbrake && !wheel.front;
       controller.setWheelBrake(i, locked ? grip * step : Math.min(perBrake * axle, grip * step));
+      // **A locked tyre has almost no lateral bite** — it is skidding, not rolling, and a skidding tyre goes
+      // where the car's momentum sends it. That is the half of the handbrake this engine has to say out loud:
+      // the original gets it for free because its wheel states already cut adhesion, while Rapier resolves
+      // the side force through a separate stiffness and would otherwise keep the rear axle planted while its
+      // brakes are locked. Measured before this: a straight-line stop differed from the foot brake by 25 %
+      // and the field could not tell the two controls apart at all.
+      controller.setWheelSideFrictionStiffness(i, locked ? LOCKED_SIDE_FRICTION : 1);
       controller.setWheelSteering(i, wheel.front ? steer : 0);
     });
   }

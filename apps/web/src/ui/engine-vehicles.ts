@@ -164,6 +164,8 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       {
         brake: controls.brake,
         engineForce: controls.engineForce,
+        gear: controls.gear,
+        handbrake: controls.handbrake,
         linvel: physics.getLinvel(car.body),
         orientation: car.orientation,
         steer: controls.steer,

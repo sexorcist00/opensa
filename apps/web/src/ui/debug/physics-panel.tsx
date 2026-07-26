@@ -64,6 +64,9 @@ export function bodyRows(frame: TelemetryFrame): readonly (readonly [string, str
     ['throttle', frame.throttle.toFixed(2)],
     ['steer', `${(frame.steer * RAD_TO_DEG).toFixed(1)}°`],
     ['engine / brake', `${(frame.engineForce / 1000).toFixed(1)} / ${(frame.brake / 1000).toFixed(1)} kN`],
+    // The handbrake sends NO brake force — it locks the rear axle inside the physics layer — so watching the
+    // brake row alone cannot tell you whether the lever registered. This row can.
+    ['gear / handbrake', `${frame.gear === 0 ? 'R' : frame.gear} / ${frame.handbrake ? 'UP' : '—'}`],
   ];
 }
 
