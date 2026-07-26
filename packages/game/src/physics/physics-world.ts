@@ -15,24 +15,36 @@ const GROUND_EPSILON = 0.15;
 // so a soft/under-damped spring lets the hull sink into the road and bounce (rolling the wheels).
 const SUSPENSION_REST = 0.15; // spring rest length: wheel hangs this far below its connection
 /**
- * Spring rate — **retuned 2026-07-26 from 120 to 34, and the mass term removed** (plan 081/03 §1).
+ * The spring, expressed the way the ORIGINAL GAME expresses it (plan 081/03, from the reversed source):
  *
- * Two things were wrong with 120, both measured rather than argued:
+ * ```cpp
+ * springForce = (1 - springLength) * mass * fSuspensionForceLevel * 0.016f * timeStep * fSuspensionBias;
+ * ```
  *
- * 1. **Rapier already multiplies by chassis mass.** Its suspension force is `stiffness × compression × mass
- *    × 1.43` (probed across 1400 kg and 6500 kg, consistent to three figures), so 081/02's mass-normalised
- *    stiffness double-counted: the rate grew with mass² and a 6.5 t truck ended up on a spring that sagged
- *    **3.3 mm** under its own weight. With the mass term gone, static sag depends on stiffness ALONE —
- *    `sag = g / (5.72 × stiffness)` — which is what lets every car sit at its design height whatever it weighs.
- * 2. **It was about seven times too stiff.** At 120 the sag was 15 mm and the whole braking weight transfer
- *    (94.6 % of the load moving to the front axle — measured) moved a front spring 1.45 cm: **0.59° of
- *    pitch**, invisible. A road car sags 6-17 cm and would have pitched 4.4° on the same transfer. The same
- *    stiffness is why a second of held lock produced 0.05° of roll, and why a kerb's impulse became body
- *    rotation instead of suspension travel — one number behind three separate complaints.
+ * Two structural facts come out of that line, and both are now honoured here rather than approximated:
  *
- * 34 targets ~5 cm of static sag: softer than the game had by 3.3×, still firmer than a comfort car, and
- * chosen to leave the COL hull its clearance (the reason 120 was raised in the first place — a car that sinks
- * into the road bounces on its own collision).
+ * - The force is proportional to **mass** — Rapier multiplies by chassis mass internally too, so neither of
+ *   us needs a mass term in the rate.
+ * - The compression is **normalised to the car's own travel**. That is why a short-travel car is stiffer in
+ *   absolute terms at the same authored level, and it is what a car's STANCE is set by: sag as a FRACTION of
+ *   travel depends on the force level alone, never on the car's size or weight.
+ *
+ * So the rate handed to Rapier — which wants metres — is `SCALE × forceLevel / travel`. The scale absorbs
+ * SA's `0.016` and Rapier's own internal factor; it is the one bridging number left, and it is calibrated so
+ * a mid-range level (1.1) sits at ~30 % sag, which is where road-car setups live.
+ */
+const SUSPENSION_LEVEL_SCALE = 5.2;
+
+/**
+ * The rate a MID-RANGE car lands on — kept only as the reference the DAMPING ratios were tuned against
+ * (see {@link SUSPENSION_COMPRESSION_RATIO}). The rate itself now comes from SA's law above, not from here.
+ *
+ * History worth keeping: it was 120, and that was two errors at once. It carried a mass term that Rapier
+ * already applies (so the rate grew with mass² and a 6.5 t truck sagged 3.3 mm under its own weight), and it
+ * was ~7× a real spring — 15 mm of sag, so the braking transfer that moves 94.6 % of the load to the front
+ * axle produced 0.59° of pitch. Invisible. That one number sat behind three separate complaints: no dive
+ * under braking, 0.05° of roll under a second of held lock, and a kerb's impulse becoming body rotation
+ * because a spring that cannot deflect cannot absorb.
  */
 const SUSPENSION_STIFFNESS = 34;
 /**
@@ -1168,12 +1180,13 @@ function suspensionSetup(properties: VehicleMassProperties): {
   );
 
   const usableTravel = travel > 0 ? travel : SUSPENSION_MAX_TRAVEL;
-  // The authored force level, then a GEOMETRIC floor: a short-travel car cannot be allowed the sag a
-  // long-travel one gets, or it sits on its stops (see SUSPENSION_MAX_SAG_OF_TRAVEL).
-  const stiffness = Math.max(
-    SUSPENSION_STIFFNESS * (force > 0 ? force / SUSPENSION_REFERENCE_FORCE : 1),
-    SUSPENSION_SAG_PER_STIFFNESS / (usableTravel * SUSPENSION_MAX_SAG_OF_TRAVEL),
-  );
+  const level = force > 0 ? force : SUSPENSION_REFERENCE_FORCE;
+  // SA's own law, converted into Rapier's units — see SUSPENSION_LEVEL_SCALE. A car's stance comes from its
+  // authored force level alone; its geometry decides what that level means in metres.
+  const wanted = (SUSPENSION_LEVEL_SCALE * level) / usableTravel;
+  // …and a bump stop, because SA has one and we do not: a spring may not eat more than this share of the
+  // travel just standing still, or nothing is left to absorb a bump.
+  const stiffness = Math.max(wanted, SUSPENSION_SAG_PER_STIFFNESS / (usableTravel * SUSPENSION_MAX_SAG_OF_TRAVEL));
   const critical = 2 * Math.sqrt(stiffness); // Bullet's damping scale for a rate
 
   return {

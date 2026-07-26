@@ -170,3 +170,36 @@ handbrake turn) and braking distance is finally per-car in both directions (admi
 32.3 → 24.8 m). Captures carry a `springs` block from this run on — what the run was configured with.
 
 Runs: `2026-07-26-headless-after02-{infernus,comet,admiral,firetruk}.json`.
+
+### 2026-07-26 — the spring, re-expressed as the ORIGINAL writes it (081/03)
+
+A clean A/B on the same head, the same pak and the same scenes, changing ONE thing: how the spring rate is
+derived. Before, the rate was a fitted constant scaled by the authored force level, with a fitted sag target,
+a fitted sag-of-travel floor and two fitted damping clamps. After, it is SA's own law —
+`springForce = (1 − normalisedCompression) × mass × fSuspensionForceLevel × 0.016 × dt × bias` — which, once
+the normalisation to the car's own travel is carried through, says `rate ∝ forceLevel / travel`. One bridging
+constant survives (`SUSPENSION_LEVEL_SCALE = 5.2`, absorbing SA's `0.016` and Rapier's internal factor), plus
+a bump stop, because SA has one and this engine does not.
+
+The `pedalbase` runs are the baseline — the committed state, recaptured, because the older `softspring`
+numbers predate the foot-brake pedal and their braking distances are not comparable.
+
+| car      | rate         | static sag         | dive under brake   | brake distance |
+| -------- | ------------ | ------------------ | ------------------ | -------------- |
+| infernus | 37.1 → 25.0  | 5.4 → 8.0 cm (32 %) | −0.48° → **−0.71°** | 96.1 → 96.1 m  |
+| comet    | 57.1 → 57.1  | 3.5 cm (35 %, stop) | −1.05° → −1.05°    | 38.5 → 38.5 m  |
+| admiral  | 28.7 → 26.0  | 7.0 → 7.7 cm (35 %) | −0.95° → −1.01°    | 50.5 → 50.5 m  |
+| firetruk | 37.1 → 13.3  | 5.4 → 15.1 cm (32 %)| −0.50° → **−1.41°** | 90.7 → 90.7 m  |
+
+Two things to read here. **Braking is bit-identical** on every car — the spring does not touch grip, so the
+change is isolated to the body's motion, which is what makes this a trustworthy A/B. And the **firetruck** is
+where the old fitted rate was most wrong: it rode at 11 % of its authored travel and pitched half a degree
+under a full stop; on its own law it uses 32 % and dives 1.4°, nearly three times as much. The comet is
+unchanged because it was, and still is, held by the bump stop — its authored level (0.64) over its 10 cm of
+travel asks for 52 % sag.
+
+`rest` re-run on all four with the new law: zero airborne time, zero tremor, static attitude only
+(admiral −0.58° pitch / +0.11° roll is the road, not the car).
+
+Runs: `2026-07-26-headless-pedalbase-{infernus,comet,admiral,firetruk}.json` (baseline) ·
+`2026-07-26-headless-salaw-{infernus,comet,admiral,firetruk}.json` (after, `brake-strip` + `rest`).

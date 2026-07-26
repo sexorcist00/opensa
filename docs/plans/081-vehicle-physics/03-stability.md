@@ -345,3 +345,39 @@ authored fields being read.
 **Owed, in order**: express the spring as above and re-run the matrix (the numbers must not get worse — the
 current state is measured and committed, so this is a clean A/B); then `fMaxVelocity` ÷ 3.6 in plan 04, which
 also kills `MAXVEL_SCALE`; then `fSuspensionBias` into the axle split.
+
+### 2026-07-26 — the spring now IS SA's law, and it costs nothing to switch
+
+The debt above, paid. `suspensionSetup` derives the rate as `SUSPENSION_LEVEL_SCALE × forceLevel / travel`,
+which is what SA's `(1 − normalisedCompression) × mass × forceLevel × 0.016 × bias` reduces to once the
+normalisation is carried through and Rapier's own mass multiplication is accounted for. Gone: the fitted sag
+target as a RATE source, and the sag-of-travel expression as a first-class rule. Left standing: one bridging
+scale (5.2, calibrated so a mid-range level sits at ~30 % sag, where road-car setups live) and the same
+sag-of-travel line, now demoted to what it actually is — **a bump stop**, kept because SA has one and this
+engine does not.
+
+The A/B is as clean as this chain gets. Same head, same pak, same scenes, one derivation changed:
+
+| car      | rate         | static sag          | dive under brake    | brake distance |
+| -------- | ------------ | ------------------- | ------------------- | -------------- |
+| infernus | 37.1 → 25.0  | 5.4 → 8.0 cm (32 %) | −0.48° → **−0.71°** | 96.1 → 96.1 m  |
+| comet    | 57.1 → 57.1  | 3.5 cm (35 %, stop) | −1.05° → −1.05°     | 38.5 → 38.5 m  |
+| admiral  | 28.7 → 26.0  | 7.0 → 7.7 cm (35 %) | −0.95° → −1.01°     | 50.5 → 50.5 m  |
+| firetruk | 37.1 → 13.3  | 5.4 → 15.1 cm (32 %)| −0.50° → **−1.41°** | 90.7 → 90.7 m  |
+
+**Braking is bit-identical on all four** (distance, duration, entry speed, longitudinal g), which is the
+proof that the change is isolated: a spring does not touch grip, and nothing here says otherwise. Every dive
+grows or holds. The firetruck is where the fitted rate was most wrong — it was riding at 11 % of its authored
+travel, a 6.5 t truck on a go-kart spring, and now uses 32 % and dives nearly 3× as far.
+
+The comet is the honest caveat: unchanged, because it sits on the bump stop in both states. Its authored
+level (0.64) over its 10 cm of travel asks for **52 %** static sag, and no car can stand on half its travel
+and still absorb a kerb. That is a real property of that modded row, not a defect in the law — the field
+verdict after the ride-height fix was that the comet's wheels look right, and this run does not move them.
+
+`rest` re-captured on all four: no airborne time, no tremor, static attitude only. Numbers in
+`docs/benchmarks/vehicle-physics/readme.md` (`pedalbase` = baseline, `salaw` = after) — the older
+`softspring` captures are NOT the baseline for braking, they predate the foot-brake pedal.
+
+**Still owed**: `fMaxVelocity` ÷ 3.6 in plan 04 (kills `MAXVEL_SCALE`), then `fSuspensionBias` into the axle
+split — the two remaining authored fields this reading of the original exposed.
