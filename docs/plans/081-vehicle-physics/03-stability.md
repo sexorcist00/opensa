@@ -296,3 +296,52 @@ second half is **plan 05, and the mechanism is already visible in the data**: br
 on the front axle, and with one shared `WHEEL_FRICTION_SLIP = 10.5` and `tractionMultiplier` / `tractionLoss`
 / `tractionBias` unread, that load becomes unlimited front grip — so the car pivots about a front axle that
 cannot break away. Recorded here so plan 05 starts with the case already framed.
+
+### 2026-07-26 — THE ORIGINAL'S OWN FORMULAS (the answer to "stop fitting, dig for the truth")
+
+The user's rule, now in `CLAUDE.md`: never hardcode, and **dig out the original game's real mapping before
+fitting a constant of our own**. The reversed source (`docs/links.md` → gta-reversed) has both halves.
+
+**1. `cHandlingDataMgr::ConvertDataToGameUnits` — the units, settled.**
+
+```cpp
+ACCEL_CONST    = 1.f / sq(50.f);      m_EngineAcceleration *= ACCEL_CONST;  // ÷ 2 or 4 by drive type
+VELOCITY_CONST = 0.277778f / 50.f;    m_MaxVelocity        *= VELOCITY_CONST;
+                                      m_fBrakeDeceleration *= ACCEL_CONST;
+```
+
+The `50` is SA's physics rate and `0.277778` is 1/3.6, so the fields mean exactly what their names say:
+**`fMaxVelocity` is km/h**, **`fEngineAcceleration` and `fBrakeDeceleration` are m/s²**. That CONFIRMS the
+brake interpretation 081/04 arrived at empirically (reading `brakeDecel` as m/s² produced 1.02 g against an
+authored 11) — and it condemns `MAXVEL_SCALE = 0.25`, which lands near the right answer for a 240 km/h car
+by coincidence and is wrong everywhere else. The honest conversion is ÷ 3.6.
+
+**2. `CPhysical::ApplySpringCollision` — the spring, settled.**
+
+```cpp
+fSpringForceDampingLimit = fSpringStress * m_fMass * fSuspensionForceLevel * 0.016f * fTimeStep * fSuspensionBias;
+// fSpringStress = 1.0f - fSpringLength   (spring length NORMALISED, 1 = extended, 0 = fully compressed)
+```
+
+Three consequences, and two of them retroactively judge today's work:
+
+- **The force is proportional to MASS.** Rapier does the same internally, so removing the mass term from our
+  stiffness was right — now confirmed rather than inferred from a probe.
+- **The compression is NORMALISED to the car's own travel.** A short-travel car is therefore stiffer in
+  absolute terms at the same `forceLevel` — which is exactly the relationship the comet's bump-stop bug
+  forced us to add as a "sag may not exceed 35 % of travel" FLOOR. The original expresses it as a
+  consequence, not a clamp. **So our floor is the right relationship implemented as a patch**, and the fix
+  is to express the spring the way SA does: `∝ mass × forceLevel × (1 − normalisedCompression) × bias`.
+  `SUSPENSION_STIFFNESS` then stops being a tuning constant at all — it becomes SA's `0.016`.
+- **`fSuspensionBias` is part of the spring force**, front/rear. We do not read it. That is the axle balance
+  the anti-roll and anti-dive sections were going to approximate.
+
+**What this costs and buys.** It is a redesign of §1's implementation, not of its conclusion: the dive, the
+ride height and the flips all came out right, but they came out right through a fitted rate plus two floors,
+where the original needs neither. Doing it SA's way removes `SUSPENSION_STIFFNESS`, the sag constant, the
+sag-of-travel floor and the damping-scale clamps — four fitted numbers for one literal `0.016` and two more
+authored fields being read.
+
+**Owed, in order**: express the spring as above and re-run the matrix (the numbers must not get worse — the
+current state is measured and committed, so this is a clean A/B); then `fMaxVelocity` ÷ 3.6 in plan 04, which
+also kills `MAXVEL_SCALE`; then `fSuspensionBias` into the axle split.
