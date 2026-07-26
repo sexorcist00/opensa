@@ -168,7 +168,13 @@ describe('PhysicsWorld.sphereCast', () => {
 
 /** Authored mass properties for a test car (plan 081/02) — mass only unless a test cares about the rest. */
 function massProps(over: Partial<VehicleMassProperties> = {}): VehicleMassProperties {
-  return { centreOfMass: [0, 0, 0], mass: 1500, turnMass: 3000, ...over };
+  return {
+    centreOfMass: [0, 0, 0],
+    mass: 1500,
+    suspension: { damping: 0.15, force: 1.1, restLength: 0.15, travel: 0.25 },
+    turnMass: 3000,
+    ...over,
+  };
 }
 
 describe('PhysicsWorld.createDynamicVehicle', () => {

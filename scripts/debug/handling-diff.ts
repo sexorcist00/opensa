@@ -9,11 +9,17 @@
  *
  * Run: `npx tsx scripts/debug/handling-diff.ts <baseline.cfg> <candidate.cfg> [--rows] [--game original]`
  *   --rows  also list the per-car edits of the biggest-moving columns
- * With one path, the baseline defaults to the game's own `data/handling.cfg`.
+ * With one path, the baseline defaults to the **BUILT** table (`build/<game>/opensa/data/handling.cfg`) —
+ * what the game actually reads, mods merged. Comparing against `game-src/` instead cost a debugging session
+ * in plan 081/02: a modded ADMIRAL row (damping 0.81 against the stock 0.15) was invisible there.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { gameArg, gameDir, positionalArgs } from '../lib/game';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /** SA's standard (car) table, in column order after the id. Names as the community documents them. */
 const COLUMNS = [
@@ -76,7 +82,9 @@ if (!first) {
   console.error('usage: npx tsx scripts/debug/handling-diff.ts [baseline.cfg] <candidate.cfg> [--rows]');
   process.exit(1);
 }
-const baselinePath = second ? first : gameDir(gameArg(), 'data', 'handling.cfg');
+const game = gameArg();
+const built = join(ROOT, 'build', game, 'opensa', 'data', 'handling.cfg');
+const baselinePath = second ? first : existsSync(built) ? built : gameDir(game, 'data', 'handling.cfg');
 const candidatePath = second ?? first;
 const baseline = parse(baselinePath);
 const candidate = parse(candidatePath);

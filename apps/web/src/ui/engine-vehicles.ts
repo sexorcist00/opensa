@@ -14,7 +14,7 @@ import type { Logger } from '@opensa/game/diagnostics/logger';
 import type { InputState } from '@opensa/game/input';
 import type { Config } from '@opensa/game/interfaces/config.interface';
 import type { Vec3 } from '@opensa/game/interfaces/world-adapter.interface';
-import type { PhysicsWorld } from '@opensa/game/physics/physics-world';
+import type { PhysicsWorld, VehicleSpringReading } from '@opensa/game/physics/physics-world';
 import type { EnterableVehicle, VehicleAnimator } from '@opensa/game/vehicle/enter-vehicle.system';
 import type { SpawnedVehicle, VehiclePlacement } from '@opensa/game/vehicle/vehicle-lod.system';
 
@@ -73,6 +73,12 @@ export interface EngineVehicles {
   seatInstantly(): boolean;
   /** Spawn a car and register it with the LOD system (persists like a parked car) — used for test spawns. */
   spawn(placement: VehiclePlacement): Promise<void>;
+  /**
+   * The driven car's spring setup, or null on foot (plan 081/02). Constant per car, so a capture reads it
+   * once — and it exists so a run can SAY what it was configured with. An A/B where the runs cannot be told
+   * apart from their own record is not a measurement.
+   */
+  springs(): null | readonly VehicleSpringReading[];
   /**
    * The driven car's physics telemetry (plan 081/01): speed, slip, per-wheel load and travel, sampled every
    * fixed step while `enabled`. **This is the slip/speed channel plan 080/05 reads for drift framing** —
@@ -310,7 +316,17 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         position,
         heading,
         data.colliders?.shape ?? null,
-        { centreOfMass: data.handling.centreOfMass, mass: data.handling.mass, turnMass: data.handling.turnMass },
+        {
+          centreOfMass: data.handling.centreOfMass,
+          mass: data.handling.mass,
+          suspension: {
+            damping: data.handling.suspDamping,
+            force: data.handling.suspForce,
+            restLength: Math.abs(data.handling.suspLower),
+            travel: Math.abs(data.handling.suspUpper),
+          },
+          turnMass: data.handling.turnMass,
+        },
         wheels,
         data.halfExtents,
         pitch,
@@ -413,6 +429,11 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     seatInstantly: (): boolean => enterVehicle.seatInstantly(),
     async spawn(placement: VehiclePlacement): Promise<void> {
       vehicleLod.add(placement, await spawnVehicle(placement));
+    },
+    springs: (): null | readonly VehicleSpringReading[] => {
+      const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
+
+      return car === null ? null : physics.readVehicleSprings(car.controller);
     },
     telemetry,
     update(delta: number, alpha: number): void {

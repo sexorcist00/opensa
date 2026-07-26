@@ -19,6 +19,28 @@ const SUSPENSION_COMPRESSION = 12; // raised above Bullet-standard 4.4 to damp t
 const SUSPENSION_RELAXATION = 2.3; // Bullet-standard damping (rebound)
 const SUSPENSION_MAX_TRAVEL = 0.25;
 const SUSPENSION_MAX_FORCE = 40000; // carries the chassis at small compression without overshoot
+// The per-car derivation (plan 081/02 §3) scales the numbers above off the sedan they were tuned on.
+const SUSPENSION_REFERENCE_MASS = 1500;
+const SUSPENSION_REFERENCE_FORCE = 1.1; // the mid-range `fSuspensionForceLevel` of the stock car table
+const SUSPENSION_STIFFNESS_PER_KG = SUSPENSION_STIFFNESS / SUSPENSION_REFERENCE_MASS / SUSPENSION_REFERENCE_FORCE;
+const SUSPENSION_FORCE_PER_KG = SUSPENSION_MAX_FORCE / SUSPENSION_REFERENCE_MASS;
+const SUSPENSION_DAMPING_REFERENCE = 0.15; // the mid-range `fSuspensionDampingLevel`
+const SUSPENSION_COMPRESSION_FLOOR = 4.4; // Bullet standard — below it the launch hop returns
+const SUSPENSION_RELAXATION_FLOOR = 1;
+/**
+ * The damping scale is CLAMPED, and the ceiling is the half that was learned the hard way.
+ *
+ * SA's own `fSuspensionDampingLevel` runs 0.02…0.19 across the stock table, but a MOD can author anything —
+ * the admiral in this install ships 0.81. Scaled linearly that made compression 64.8 against a reference 12,
+ * and a wheel damped five times too hard cannot follow the road: it skips, the car shivers at rest and never
+ * puts its power down. The field report ("the admiral shivers and barely drives") was exactly this.
+ *
+ * A floor keeps a 0.02 tank off its pogo stick; the ceiling keeps an out-of-range row from freezing a wheel.
+ * Both are honest: the authored value still orders the cars, it just cannot leave the range the solver works
+ * in. See the 081/02 ledger — this is also the case that proved a capture must record what it ran with.
+ */
+const SUSPENSION_DAMPING_SCALE_MIN = 0.35;
+const SUSPENSION_DAMPING_SCALE_MAX = 2;
 const WHEEL_FRICTION_SLIP = 10.5; // tyre grip
 const PARKING_BRAKE = 80; // holds a parked car put (released by the driver when throttling)
 const CHASSIS_LINEAR_DAMPING = 0.1;
@@ -130,9 +152,51 @@ export interface VehicleMassProperties {
   readonly centreOfMass: readonly [number, number, number];
   /** `fMass` (kg). */
   readonly mass: number;
+  /** The car's own springs (`fSuspension*`) — every car shared one set until plan 081/02 §3. */
+  readonly suspension: VehicleSuspensionSpec;
   /** `fTurnMass` (kg·m²) — the yaw inertia, the only one SA authors. */
   readonly turnMass: number;
 }
+/**
+ * One wheel's SPRING SETUP, as the controller holds it (plan 081/02).
+ *
+ * Constant for the life of a car, so it is read once per capture rather than per frame — and it exists
+ * because a run that cannot say what it was configured with cannot be trusted to have applied a change. An
+ * in-game A/B of the suspension was abandoned for exactly that reason: single-variable probes disagreed with
+ * the whole set, and nothing in the record could tell which run had actually taken effect.
+ */
+export interface VehicleSpringReading {
+  /** Compression damping. */
+  readonly compression: number;
+  /** Force cap (N). */
+  readonly maxForce: number;
+  /** Rebound damping. */
+  readonly relaxation: number;
+  /** Spring rest length (m). */
+  readonly restLength: number;
+  /** Spring rate. */
+  readonly stiffness: number;
+  /** Maximum travel (m). */
+  readonly travel: number;
+}
+
+/**
+ * A car's authored suspension (plan 081/02 §3).
+ *
+ * The shared constants it replaces were tuned in-browser on a ~1500 kg sedan, so they stay as the REFERENCE
+ * POINT: a mid-range row lands on the numbers already proven to work, and everything else scales from there.
+ */
+export interface VehicleSuspensionSpec {
+  /** `fSuspensionDampingLevel` — scales both damping terms about their tuned reference. */
+  readonly damping: number;
+  /** `fSuspensionForceLevel` — the spring-rate scale, on top of the mass normalisation. */
+  readonly force: number;
+  /** How far the wheel hangs below its hub at full extension (m): SA's |lower limit|. */
+  readonly restLength: number;
+  /** How far the spring may compress from rest (m): SA's upper limit. */
+  readonly travel: number;
+}
+
 /** One wheel's live state, as {@link PhysicsWorld.readVehicleWheels} reads it off the controller. */
 export interface VehicleWheelReading {
   readonly contact: boolean;
@@ -292,21 +356,22 @@ export class PhysicsWorld {
     const controller = this.world.createVehicleController(body);
     controller.indexUpAxis = UP_AXIS;
     controller.setIndexForwardAxis = FORWARD_AXIS;
+    const spring = suspensionSetup(properties);
     wheels.forEach((wheel, i) => {
       const [x, y, z] = wheel.connection;
       // Connection raised by the rest length so the fully-extended wheel sits at the model hub.
       controller.addWheel(
-        { x, y, z: z + SUSPENSION_REST },
+        { x, y, z: z + spring.restLength },
         { x: 0, y: 0, z: -1 },
         { x: 1, y: 0, z: 0 },
-        SUSPENSION_REST,
+        spring.restLength,
         wheel.radius,
       );
-      controller.setWheelSuspensionStiffness(i, SUSPENSION_STIFFNESS);
-      controller.setWheelSuspensionCompression(i, SUSPENSION_COMPRESSION);
-      controller.setWheelSuspensionRelaxation(i, SUSPENSION_RELAXATION);
-      controller.setWheelMaxSuspensionTravel(i, SUSPENSION_MAX_TRAVEL);
-      controller.setWheelMaxSuspensionForce(i, SUSPENSION_MAX_FORCE);
+      controller.setWheelSuspensionStiffness(i, spring.stiffness);
+      controller.setWheelSuspensionCompression(i, spring.compression);
+      controller.setWheelSuspensionRelaxation(i, spring.relaxation);
+      controller.setWheelMaxSuspensionTravel(i, spring.travel);
+      controller.setWheelMaxSuspensionForce(i, spring.maxForce);
       controller.setWheelFrictionSlip(i, WHEEL_FRICTION_SLIP);
       controller.setWheelBrake(i, PARKING_BRAKE); // parked until a driver throttles
     });
@@ -651,6 +716,23 @@ export class PhysicsWorld {
    * Rapier returns `null` for an out-of-range wheel index; nothing here can be out of range (the count comes
    * from the controller itself), so the nullish fallbacks are just the type boundary.
    */
+  /** Every wheel's spring setup — what the controller was actually configured with. See the type. */
+  readVehicleSprings(controller: VehicleController): readonly VehicleSpringReading[] {
+    const springs: VehicleSpringReading[] = [];
+    for (let i = 0; i < controller.numWheels(); i += 1) {
+      springs.push({
+        compression: controller.wheelSuspensionCompression(i) ?? 0,
+        maxForce: controller.wheelMaxSuspensionForce(i) ?? 0,
+        relaxation: controller.wheelSuspensionRelaxation(i) ?? 0,
+        restLength: controller.wheelSuspensionRestLength(i) ?? 0,
+        stiffness: controller.wheelSuspensionStiffness(i) ?? 0,
+        travel: controller.wheelMaxSuspensionTravel(i) ?? 0,
+      });
+    }
+
+    return springs;
+  }
+
   readVehicleWheels(controller: VehicleController): readonly VehicleWheelReading[] {
     const readings: VehicleWheelReading[] = [];
     for (let i = 0; i < controller.numWheels(); i += 1) {
@@ -997,4 +1079,37 @@ function principalInertia(
   const scale = boxYaw > 0 ? properties.turnMass / boxYaw : 1;
 
   return { x: box(hy, hz) * scale, y: box(hx, hz) * scale, z: properties.turnMass };
+}
+
+/**
+ * A car's springs, derived from its authored suspension row (plan 081/02 §3).
+ *
+ * Stiffness and the force cap are MASS-NORMALISED: a rate that carries 1500 kg leaves a 6.5 t truck on its
+ * bump stops, which is what one shared spring meant. Damping keeps its tuned RATIO — compression sits far
+ * above the Bullet-standard rebound because it damps the launch hop (074 field lesson) — and both have a
+ * floor, because a tank authors 0.02 and honouring that literally makes it a pogo stick. Geometry is
+ * literal: the wheel hangs |lower limit| below its hub, the spring compresses by the upper limit.
+ */
+function suspensionSetup(properties: VehicleMassProperties): {
+  compression: number;
+  maxForce: number;
+  relaxation: number;
+  restLength: number;
+  stiffness: number;
+  travel: number;
+} {
+  const { damping, force, restLength, travel } = properties.suspension;
+  const dampingScale = Math.min(
+    SUSPENSION_DAMPING_SCALE_MAX,
+    Math.max(SUSPENSION_DAMPING_SCALE_MIN, damping / SUSPENSION_DAMPING_REFERENCE),
+  );
+
+  return {
+    compression: Math.max(SUSPENSION_COMPRESSION_FLOOR, SUSPENSION_COMPRESSION * dampingScale),
+    maxForce: properties.mass * SUSPENSION_FORCE_PER_KG,
+    relaxation: Math.max(SUSPENSION_RELAXATION_FLOOR, SUSPENSION_RELAXATION * dampingScale),
+    restLength: restLength > 0 ? restLength : SUSPENSION_REST,
+    stiffness: properties.mass * SUSPENSION_STIFFNESS_PER_KG * (force > 0 ? force : 1),
+    travel: travel > 0 ? travel : SUSPENSION_MAX_TRAVEL,
+  };
 }

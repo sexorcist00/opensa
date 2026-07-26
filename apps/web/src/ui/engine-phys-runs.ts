@@ -14,6 +14,7 @@
  * capture OFF, so a lap's frames are the drive and nothing else.
  */
 import { type StreamStats } from '@opensa/engine';
+import { type VehicleSpringReading } from '@opensa/game/physics/physics-world';
 import { summarisePhysFrames, thinFrames } from '@opensa/game/vehicle/phys-capture';
 import { type PhysScene, type ScriptedDriveSource } from '@opensa/game/vehicle/scripted-drive';
 import { type TelemetryFrame } from '@opensa/game/vehicle/vehicle-telemetry';
@@ -124,7 +125,12 @@ async function pressEnterExit(host: PhysRunsHost): Promise<void> {
   await until(() => host.drive.time > 0.3, 2000);
 }
 
-function report(scene: PhysScene, car: string, frames: readonly TelemetryFrame[]): void {
+function report(
+  scene: PhysScene,
+  car: string,
+  frames: readonly TelemetryFrame[],
+  springs: null | readonly VehicleSpringReading[],
+): void {
   const capture = {
     car,
     // Column-named so a reader (and phys-compare) never has to count positions.
@@ -146,6 +152,9 @@ function report(scene: PhysScene, car: string, frames: readonly TelemetryFrame[]
       ].map((value) => Number(value.toFixed(4))),
     ),
     seriesHz: SERIES_HZ,
+    // What the run was CONFIGURED with — the first wheel's spring stands for the set until the mapping
+    // gives the axles different ones. A capture that cannot say this cannot prove a change took effect.
+    springs: springs?.[0] ?? null,
     summary: summarisePhysFrames(frames),
     what: scene.what,
   };
@@ -197,9 +206,10 @@ async function runScene(host: PhysRunsHost, scene: PhysScene, car: string): Prom
   await until(() => host.drive.time >= scene.durationS, (scene.durationS + 10) * 1000);
   host.drive.stop();
   const frames = vehicles.telemetry.frames();
+  const springs = vehicles.springs();
   vehicles.telemetry.enabled = false;
 
-  report(scene, car, frames);
+  report(scene, car, frames, springs);
   await leaveCar(host, vehicles);
 }
 

@@ -229,3 +229,44 @@ held back, not the reading of them.
 
 **What survives**: the `rest` scene (a car at rest must be still — the cheapest regression test in the set),
 and the knowledge that the shared spring is what suppresses the braking dive, which §3 still has to fix.
+
+### 2026-07-26 — §3 lands, and the instrument found the bug in one line
+
+The revert above blocked on an instrument gap, so the instrument came first: `PhysicsWorld.readVehicleSprings`
+reads a controller's per-wheel setup back, the vehicles facade exposes it, and every `[phys]` capture now
+carries a `springs` block — **what the run was actually configured with**.
+
+It paid off immediately. The re-applied mapping was re-measured, and the capture reported:
+
+```
+compression 64.8   relaxation 12.42   stiffness 94.7   rest 0.15   travel 0.22   maxForce 37333
+```
+
+Nothing matched what the mapping should have produced for an admiral (12 / 2.3 / 120 / 0.19 / 0.27 / 44000).
+Solving backwards from `maxForce 37333` gave mass 1400, and from `compression 64.8` a damping level of 0.81 —
+which is not the admiral's row. **It was being read from the wrong file all along.**
+
+| Source                                          | mass | force | damping  | upper | lower |
+| ----------------------------------------------- | ---: | ----: | -------: | ----: | ----: |
+| `game-src/original/data/handling.cfg` (diagnosed against) | 1650 |   1.0 |     0.15 |  0.27 | −0.19 |
+| **`build/original/opensa/data/handling.cfg` (the game reads THIS)** | **1400** | **0.93** | **0.81** | **0.22** | **−0.15** |
+
+The install has a mod that replaces the admiral, and its row authors `fSuspensionDampingLevel = 0.81` against
+a stock range of 0.02…0.19. The mapping scaled it linearly — `12 × (0.81 / 0.15) = 64.8` — and a wheel damped
+five times too hard cannot follow the road: it skips, the car shivers at rest, and it never puts its power
+down. **Both halves of the field report, from one number.**
+
+**The fix is a CEILING on the damping scale**, the half that was missing: a floor already kept a 0.02 tank off
+its pogo stick, and now `[0.35 … 2.0]` keeps an out-of-range row from freezing a wheel. The authored value
+still orders the cars; it just cannot leave the range the solver works in. After it, at rest: vertical g
+**0.000…0.000**, airborne **0.00 s**, and driving is intact — the admiral still tops 77.3 km/h, the comet 130.
+
+**Braking moved, per car and in opposite directions**: the admiral 23.7 → 28.5 m (softer, longer) and the
+comet 32.3 → 24.8 m, with the comet's brake-dive pitch nearly doubling (0.25° → 0.45°). Different cars now
+brake differently because their springs differ — which is the point of §3.
+
+**Two rules out of this**, both now written down where they will be met again:
+1. **A field run reads `build/<game>/opensa` and NOTHING else, its `data/` included** — saved to memory, and
+   `scripts/debug/handling-diff.ts` now defaults its baseline to the built table for the same reason.
+2. **An A/B must be self-describing.** No amount of careful bisection beat one capture that stated its own
+   configuration. Any future tuning surface gets read back into the capture before it is tuned.
