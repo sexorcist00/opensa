@@ -134,6 +134,25 @@ Never edit generated code manually.
 - After a BIG rework (a migration, a subsystem rewrite, a major feature chain), run an audit AND a benchmark
   before calling it done: write the audit to `docs/audit/` (what changed, what it cost, what it bought) and
   the before/after numbers to `docs/benchmarks/`. A large change without both is unfinished
+- **A field run reads `build/<game>/opensa` and NOTHING else — its `data/` included.** Not just the models:
+  the built `data/*` is the MERGED result with mods installed, and it can differ from `game-src/<game>/data/*`
+  completely. Diagnosing against the source tree cost a whole session in plan 081/02 — a field report about a
+  shivering car was chased against a `handling.cfg` row the game was not running (the built one carried a
+  mod's suspension damping 5× out of range). `scripts/debug/handling-diff.ts` defaults its baseline to the
+  built table for the same reason
+- **An A/B must be SELF-DESCRIBING: the capture records what the run was configured with.** Careful
+  single-variable bisection lost to one capture that stated its own spring values. Before tuning a new
+  surface, read it back into the capture (`[phys]`'s `springs` block is the pattern)
+- **NEVER hardcode a value for a specific car/model/asset.** Every slot in this game is a mod target — today
+  a model sits on `comet`, tomorrow on `admiral`. A rule must DERIVE from what the asset itself carries (its
+  handling row, its geometry, its collision), so it applies to whatever is in the slot. When a car stood on
+  its bump stops the fix was not "stiffen that car" but "static sag may not exceed a share of the travel the
+  car actually has" — a rule that touched only the car violating it
+- **Dig out the original game's real formula before fitting a constant of our own.** The reversed SA source
+  (`docs/links.md` → gta-reversed) carries the actual data→physics mapping. A fitted constant is acceptable
+  only as a MEASURED, documented bridge — state what was fitted, over what range, and its residual — and it
+  is a debt, not an answer. The same goes for global tuning constants: each one is a place where the game's
+  own numbers are not being read yet
 
 ---
 
