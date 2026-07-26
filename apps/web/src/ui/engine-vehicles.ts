@@ -65,6 +65,12 @@ export interface EngineVehicles {
    * (ground snap, locomotion heading), else the rider floats above the roof through the whole climb-in.
    */
   ridingVehicle(): EnterableVehicle | null;
+  /**
+   * Put the player straight into the nearest car, skipping the walk/door/climb-in (plan 081/01). False when
+   * nothing is in range or a sequence is already running. For automation that measures DRIVING — a scripted
+   * lap must not lose its baseline to a walk-in that cancelled itself.
+   */
+  seatInstantly(): boolean;
   /** Spawn a car and register it with the LOD system (persists like a parked car) — used for test spawns. */
   spawn(placement: VehiclePlacement): Promise<void>;
   /**
@@ -404,6 +410,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       }
     },
     ridingVehicle: (): EnterableVehicle | null => (enterVehicle.isRiding() ? enterVehicle.getActive() : null),
+    seatInstantly: (): boolean => enterVehicle.seatInstantly(),
     async spawn(placement: VehiclePlacement): Promise<void> {
       vehicleLod.add(placement, await spawnVehicle(placement));
     },

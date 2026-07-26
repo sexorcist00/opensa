@@ -51,9 +51,11 @@ export const PHYS_SCENES: readonly PhysScene[] = [
     // LS east straight: 294 m, Δz 0.00.
     position: [2413.8, -1822.3, 12.4],
     timeline: [
+      // 2.5 s of WOT, not 4: the first capture entered the turn at 100 km/h, swung wide off the road and
+      // took two ~80 g hits — a crash log, not a cornering measurement.
       { move: { x: 0, y: 1 }, t: 0 },
-      { move: { x: -1, y: 0.4 }, t: 4 }, // full lock left, off the power
-      { move: { x: 0, y: 0.6 }, t: 9 },
+      { move: { x: -1, y: 0.3 }, t: 2.5 }, // full lock left, off the power
+      { move: { x: 0, y: 0.5 }, t: 8 },
     ],
     what: 'A 180 at moderate speed: steady-state cornering — slip angle, lateral g and the load the outer wheels carry.',
   },
@@ -61,9 +63,12 @@ export const PHYS_SCENES: readonly PhysScene[] = [
     durationS: 14,
     heading: 1.571,
     key: 'kerb-strike',
-    // Same LV straight as the slalom — a city street with a pavement either side. UNCONFIRMED: whether the
-    // angle below actually mounts the kerb is a question for the first capture (a vertical g spike or none).
-    position: [2392.1, 1193.1, 9.6],
+    // The LV straight the slalom uses, but 120 m along it: sharing a spot meant seating the player in the
+    // WRECK the slalom leaves behind (it flips), and the capture came back with a car that never moved and
+    // was "airborne" for its whole lap. Scenes on one road must not stand on each other's leftovers.
+    // UNCONFIRMED: whether the angle below actually mounts the kerb — the first clean capture answers it
+    // (a vertical g spike or none).
+    position: [2272.1, 1193.1, 9.6],
     timeline: [
       { move: { x: 0, y: 1 }, t: 0 },
       { move: { x: 0.25, y: 0.6 }, t: 4 }, // drift into the kerb at a shallow angle

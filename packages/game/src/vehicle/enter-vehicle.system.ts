@@ -365,6 +365,36 @@ export class EnterVehicleSystem implements System {
     this.doors.delete(vehicle);
   }
 
+  /** Settle into the seat: hold the driving pose and shut the door. */
+  /**
+   * Put the player straight into a car's driver seat — no walk, no door, no climb-in clip.
+   *
+   * Takes the same nearest-car-in-range choice a press would, so it seats the player in the car he is
+   * standing next to. For automation that wants to measure DRIVING (the 081/01 lap runner) or to script a
+   * character into a car later: the walk-in is a stateful sequence that depends on pathing and cancels
+   * itself when the approach stalls, and making a capture depend on it meant losing laps on spots where the
+   * identical walk had worked moments before — a lost lap is a hole in a baseline.
+   *
+   * Returns false (and changes nothing) when a sequence is already running or no car is in range.
+   */
+  seatInstantly(): boolean {
+    const vehicle = this.phase === 'idle' ? this.nearestEnterable() : null;
+    if (!vehicle) {
+      return false;
+    }
+    this.active = vehicle;
+    this.side = 'lf';
+    this.closeDoorWhenClear = false;
+    this.seatWorld = this.seatWorldOf(vehicle, 'driver');
+    this.controller.setEnabled(false);
+    this.physics.setColliderSensor(this.playerCollider, true); // rider = sensor → can't shove the car
+    this.physics.ignoreVehicles(this.playerCollider, true);
+    this.restoreWhenClear = false;
+    this.startSeated();
+
+    return true;
+  }
+
   update(delta: number): void {
     const pressed = this.input.isActive('enterExit');
     const edge = pressed && !this.enterHeld;
@@ -926,7 +956,6 @@ export class EnterVehicleSystem implements System {
     });
   }
 
-  /** Settle into the seat: hold the driving pose and shut the door. */
   private startSeated(): void {
     if (!this.active) {
       return;

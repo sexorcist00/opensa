@@ -1,12 +1,16 @@
 /**
  * Scripted physics laps (plan 081/01) — `?phys=<scene|all>&car=<model>`, the `[bench]` runner's twin.
  *
- * A lap drives the car the way a player does: it teleports next to the spot, spawns the model, presses
- * enter/exit and WALKS the ped in through the real sequence, lets the springs settle, then hands the wheel to
- * a {@link ScriptedDriveSource} timeline while the telemetry ring records every fixed step. What comes out is
- * one `[phys] {json}` line per lap — the protocol the headless harness collects and `phys-compare` diffs.
+ * A lap teleports next to the spot, spawns the model, seats the player, lets the springs settle, then hands
+ * the wheel to a {@link ScriptedDriveSource} timeline while the telemetry ring records every fixed step. What
+ * comes out is one `[phys] {json}` line per lap — the protocol the headless harness collects and
+ * `phys-compare` diffs.
  *
- * Everything outside the timed window (streaming settle, the climb-in, the spring settle) happens with the
+ * The DRIVING is the real thing (the timeline goes through the same `InputState` and the same `drive()` the
+ * player uses); the getting-in is not. Three sweeps were lost to the walk-in cancelling itself on a stalled
+ * path, so a lap seats the player directly — 081 tunes how a car drives, not how a ped opens a door.
+ *
+ * Everything outside the timed window (streaming settle, seating, the spring settle) happens with the
  * capture OFF, so a lap's frames are the drive and nothing else.
  */
 import { type StreamStats } from '@opensa/engine';
@@ -37,8 +41,12 @@ export interface PhysRunsHost {
 
 /** Midday: physics does not read the clock, but a capture that also gets screenshotted should be legible. */
 const CAPTURE_HOUR = 12;
-/** How far to the side of the spot the ped is dropped — clear of the car, close enough to walk in. */
-const PED_OFFSET = 4;
+/**
+ * How far to the side of the spot the ped stands. Inside the enter system's own 4 m range WITH margin: the
+ * ground-snap slides a blocked spawn up to 3 m along the heading, and at a 4 m offset that put the car out of
+ * range — two laps failed with a car sitting right there.
+ */
+const PED_OFFSET = 2.5;
 /** Springs settle before the capture opens: a ground-snapped car is still moving on its suspension. */
 const SETTLE_SECONDS = 2;
 /** Grace after a teleport before `pendingCells` means anything — it answers for the ring you just left. */
@@ -157,7 +165,12 @@ async function runScene(host: PhysRunsHost, scene: PhysScene, car: string): Prom
   await leaveCar(host, vehicles);
   // The ped stands to the car's RIGHT of the road heading, so the spawn never lands on top of him.
   const [x, y, z] = scene.position;
-  host.teleportPlayer([x + Math.cos(scene.heading) * PED_OFFSET, y + Math.sin(scene.heading) * PED_OFFSET, z + 1]);
+  const beside: [number, number, number] = [
+    x + Math.cos(scene.heading) * PED_OFFSET,
+    y + Math.sin(scene.heading) * PED_OFFSET,
+    z + 1,
+  ];
+  host.teleportPlayer(beside);
   // Settle, in three parts, all of them learned from the first sweep (5 of 7 laps failed without them):
   // the driver needs a moment to even NOTICE the teleport (`pendingCells` still reads the old ring and
   // answers 0 immediately), then the ring drains, then the collision parse behind it drains too.
@@ -166,13 +179,15 @@ async function runScene(host: PhysRunsHost, scene: PhysScene, car: string): Prom
   await waitSeconds(WARMUP_SECONDS);
   await spawnWithRetry(host, scene, car);
 
-  await pressEnterExit(host);
-  // Seated in THIS scene's car, not merely in a car: the identity check is what catches a lap that quietly
-  // captured the previous scene's vehicle from the previous spot.
+  // Seat the player DIRECTLY. Three sweeps were spent on the walk-in: it cancels itself when the approach
+  // path stalls, nothing retries it, and pressing again after a partial success made the ped climb back OUT.
+  // A capture measures DRIVING — the climb-in is not part of what 081 tunes, so it is not part of a lap.
+  // The `seatedAt` check still runs: it is what catches a lap that got into the wrong car.
+  host.teleportPlayer(beside); // back beside the spot: the ped may have slid or fallen while the car built
+  vehicles.seatInstantly();
   const seated = await until(() => seatedAt(vehicles, scene), ENTER_TIMEOUT_S * 1000);
-  host.drive.stop();
   if (!seated) {
-    throw new Error(`the ped never got into the ${car} — the car spawned but the walk-in never finished`);
+    throw new Error(`could not seat the player in the ${car} at ${scene.key}'s spot`);
   }
   await waitSeconds(SETTLE_SECONDS); // let the suspension stop moving
 
