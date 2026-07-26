@@ -17,6 +17,11 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
   render behaviour (vehicle env-map, prelit handling).
 - <https://github.com/Kiminaze/VehicleDeformation> — vehicle deformation reference (ideas 0.6.0/01
   vehdeform).
+- <https://libertycity.ru/files/gta-san-andreas/237577-san-andreas-advanced-handling-s-a-a-h.html> —
+  **S.A.A.H (San Andreas Advanced Handling)**: a 210-car realism re-tune of `handling.cfg`. Used as a
+  MEASURING CORPUS, not a target (plan 081/01): `scripts/debug/handling-diff.ts` against it showed that
+  **58 % of a calibrated table's edits never reach our physics** — the author moves the centre of mass on
+  65 % of the fleet and the suspension on 61 %, and the engine reads neither.
 
 ## Assets
 

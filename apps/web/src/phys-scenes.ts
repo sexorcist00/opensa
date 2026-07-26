@@ -38,6 +38,27 @@ export const PHYS_SCENES: readonly PhysScene[] = [
   {
     durationS: 24,
     heading: 1.571,
+    key: 'step-steer',
+    // Its own LV straight (325 m, Δz 0.00) with open ground to the turn side — a settled corner leaves the
+    // road by design, and must not meet a wall while it does.
+    position: [2417.3, 1773.1, 9.6],
+    timeline: [
+      // A GENTLE constant input at a modest speed. Every other scene is either straight or at full lock, and
+      // neither can show a transient: this one asks for a corner and watches how long the car takes to give
+      // it. v1 stepped 0.35 after 5 s of throttle (117 km/h on the infernus) and NONE of the four cars
+      // settled — every lap broke away, and the firetruck rolled to 91.8°. A response needs a steady state
+      // to rise toward, so the run-up is 3 s and the step is 0.15.
+      { move: { x: 0, y: 1 }, t: 0 },
+      { move: { x: 0.15, y: 0.25 }, t: 3 },
+      { move: { x: 0, y: 0.25 }, t: 10 }, // released — the return is half the answer
+      { move: { x: -0.15, y: 0.25 }, t: 14 }, // the same step the other way: symmetry
+      { move: { x: 0, y: 0.25 }, t: 21 },
+    ],
+    what: 'Step steer at speed: how long the yaw takes to answer a held moderate input, and whether it settles. The throttle holds ~speed rather than pinning it — the capture records the speed at the step.',
+  },
+  {
+    durationS: 24,
+    heading: 1.571,
     key: 'slalom',
     // LV straight: 336 m, Δz 0.00.
     position: [2392.1, 1193.1, 9.6],

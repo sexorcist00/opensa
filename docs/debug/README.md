@@ -109,6 +109,9 @@ usually the lap seating into a WRECK a previous scene left at a shared spot.
 
 Companion scanner: `road-straights.ts` (above) — where to put a new scene without guessing coordinates.
 
+**Full guide: [`docs/development/physics-laps.md`](../development/physics-laps.md)** — the scene format, how
+to add one, the capture schema, how to read a failed lap, and the gotchas five sweeps produced.
+
 ## Approaches beyond scripts
 
 - **`report.json` ledgers first** — `textures.missing` (name → models that asked) and

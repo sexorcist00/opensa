@@ -18,6 +18,17 @@ const STOPPED_SPEED = 0.4;
 /** Past this roll (deg) the car is on its side or its roof; the chain's flip complaint made measurable. */
 const FLIP_ROLL_DEG = 90;
 
+/** Steer (rad) above which the wheel counts as turned — under this it is slew noise around centre. */
+const STEER_ON = 0.02;
+/** A step must be held at least this long to have a settled value worth measuring. */
+const MIN_HOLD_S = 1.5;
+/** The steady window opens this long after the step — past the transient of any car worth measuring. */
+const SETTLE_FROM_S = 0.3;
+/** …and closes here. Short on purpose: a held corner leaves a two-lane street in about two seconds. */
+const SETTLE_TO_S = 1;
+/** How far the yaw may swing across that window, as a share of its median, and still count as steady. */
+const STEADY_SPREAD = 0.35;
+
 /** A signed channel's extremes over the capture. */
 export interface PhysRange {
   readonly max: number;
@@ -45,6 +56,8 @@ export interface PhysSummary {
   readonly rollDeg: PhysRange;
   /** Largest body slip angle reached (deg, absolute) — how sideways the lap ever got. */
   readonly slipMaxDeg: number;
+  /** The first held steering step in the lap, if it had one — see {@link StepResponse}. */
+  readonly step: null | StepResponse;
   /** Seconds from the first moving frame to 100 km/h; null when the car never got there. */
   readonly timeTo100S: null | number;
   /** Top forward speed (km/h). */
@@ -52,6 +65,40 @@ export interface PhysSummary {
   /** Net heading change over the lap (deg, signed) — a u-turn should read ~180, a handbrake turn its
    *  rotation. Integrated from yaw rate, so it counts the whole spin rather than the shortest way round. */
   readonly turnedDeg: number;
+}
+
+/**
+ * The transient after a STEERING STEP — the channel the loudest complaint is about.
+ *
+ * "The car turns instantly, it just changes its direction vector" is a statement about the time between
+ * asking for a corner and getting one, and no peak or total can express it. A real car answers a step of
+ * lock in a few tenths of a second, overshooting slightly and settling; a car with no transient answers
+ * within a frame or two and has no settling to describe.
+ */
+export interface StepResponse {
+  /** When the wheel was turned (s into the capture) — where to look in the series. */
+  readonly atS: number;
+  /**
+   * Whether the car actually HELD a steady corner: the settle window has to be a real fraction of the peak.
+   *
+   * False means the manoeuvre broke away — it spun, stopped or went over during the hold — and then
+   * `yawRiseS`, `yawSettledDegS` and `yawOvershoot` describe a crash, not a response. The four BEFORE cars
+   * all reported false on a 0.35 step, which is the complaint restated: there is no steady state to reach.
+   */
+  readonly settled: boolean;
+  /** Body slip angle once settled (deg, absolute). A car that never slips reports ≈0 here. */
+  readonly slipSettledDeg: number;
+  /** Forward speed at the step (km/h). A transient at 40 km/h is not the same manoeuvre as one at 120. */
+  readonly speedAtStepKmh: number;
+  /** Peak yaw rate over the hold, as a multiple of the settled one. 1.0 = it never overshot. */
+  readonly yawOvershoot: number;
+  /**
+   * Seconds from the step to 90 % of the settled yaw rate — **the number the complaint is about**. Near
+   * zero means the car simply rotated; a road car takes a few tenths.
+   */
+  readonly yawRiseS: number;
+  /** Settled yaw rate (deg/s, absolute) — what the car eventually does with that much lock. */
+  readonly yawSettledDegS: number;
 }
 
 /** Derive the lap's numbers. An empty capture summarises to zeros rather than throwing — a scene that
@@ -77,6 +124,7 @@ export function summarisePhysFrames(frames: readonly TelemetryFrame[]): PhysSumm
       braked.length === 0 ? null : round(Math.max(...braked.map((frame) => frame.pitch * RAD_TO_DEG))),
     rollDeg: range(frames.map((frame) => frame.roll * RAD_TO_DEG)),
     slipMaxDeg: round(Math.max(...frames.map((frame) => Math.abs(frame.slipAngle * RAD_TO_DEG)))),
+    step: stepResponse(frames),
     timeTo100S: timeToSpeed(frames, 100),
     topSpeedKmh: round(Math.max(...frames.map((frame) => frame.speed * MS_TO_KMH))),
     turnedDeg: round(integrate(frames, (frame) => frame.yawRate * RAD_TO_DEG)),
@@ -116,6 +164,64 @@ function integrate(frames: readonly TelemetryFrame[], value: (frame: TelemetryFr
   return total;
 }
 
+/**
+ * The first HELD steering step in the lap, measured.
+ *
+ * The step is found in the data, not taken from the scene: the first frame where the wheel goes from centred
+ * to turned and STAYS turned for {@link MIN_HOLD_S}. The settled values are the mean over the last
+ * {@link SETTLE_FROM_S}..{@link SETTLE_TO_S} after it. Null when the lap has no such step (a straight-line or
+ * full-lock scene), because an unmeasurable transient is not a zero.
+ */
+function stepResponse(frames: readonly TelemetryFrame[]): null | StepResponse {
+  const turned = (index: number): boolean => Math.abs(frames[index].steer) > STEER_ON;
+  let start = -1;
+  for (let index = 1; index < frames.length; index += 1) {
+    if (turned(index) && !turned(index - 1)) {
+      start = index;
+      break;
+    }
+  }
+  if (start === -1) {
+    return null;
+  }
+  let end = start;
+  while (end + 1 < frames.length && turned(end + 1)) {
+    end += 1;
+  }
+  const holdS = frames[end].t - frames[start].t;
+  if (holdS < MIN_HOLD_S) {
+    return null;
+  }
+  const stepAt = frames[start].t;
+  // The window is JUST AFTER the step, not at the end of the hold. A sustained corner drives the car off a
+  // two-lane street within a couple of seconds, and the first capture proved it: the response was clean and
+  // the tail of the hold was a kerb strike, a spin and a bounce backwards. The response is what this
+  // measures, so it is read where the response lives.
+  const window = frames.filter((frame) => frame.t >= stepAt + SETTLE_FROM_S && frame.t <= stepAt + SETTLE_TO_S);
+  if (window.length < 3) {
+    return null;
+  }
+  const yaws = window.map((frame) => Math.abs(frame.yawRate * RAD_TO_DEG));
+  // MEDIAN, not mean: one collision sample inside the window would drag a mean anywhere.
+  const yawSettled = median(yaws);
+  const spread = yawSettled === 0 ? Infinity : (Math.max(...yaws) - Math.min(...yaws)) / yawSettled;
+  const transient = frames.filter((frame) => frame.t >= stepAt && frame.t <= stepAt + SETTLE_TO_S);
+  const peak = Math.max(...transient.map((frame) => Math.abs(frame.yawRate * RAD_TO_DEG)));
+  const reached = transient.find((frame) => Math.abs(frame.yawRate * RAD_TO_DEG) >= yawSettled * 0.9);
+
+  return {
+    atS: round(stepAt),
+    // A steady corner holds its yaw rate. A window that swings by more than this around its own median is a
+    // car that hit something, spun or went over, and every other field here then describes that.
+    settled: spread <= STEADY_SPREAD,
+    slipSettledDeg: round(median(window.map((frame) => Math.abs(frame.slipAngle * RAD_TO_DEG)))),
+    speedAtStepKmh: round(frames[start].speed * MS_TO_KMH),
+    yawOvershoot: yawSettled === 0 ? 0 : round(peak / yawSettled),
+    yawRiseS: round((reached?.t ?? window[window.length - 1].t) - stepAt),
+    yawSettledDegS: round(yawSettled),
+  };
+}
+
 /** Seconds from the first MOVING frame to `kmh`; null when the lap never got there. Measured from the
  *  moment the car actually starts rolling, so a lap that idles before its launch is not penalised. */
 function timeToSpeed(frames: readonly TelemetryFrame[], kmh: number): null | number {
@@ -140,6 +246,7 @@ const EMPTY: PhysSummary = {
   pitchUnderBrakeDeg: null,
   rollDeg: ZERO_RANGE,
   slipMaxDeg: 0,
+  step: null,
   timeTo100S: null,
   topSpeedKmh: 0,
   turnedDeg: 0,
@@ -165,6 +272,17 @@ function brakingRun(frames: readonly TelemetryFrame[]): null | { distanceM: numb
   }
 
   return null; // braked but never stopped inside the capture — not a distance anyone can compare
+}
+
+/** Middle value; 0 for an empty window. Used over the mean where one collision sample could drag it. */
+function median(values: readonly number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }
 
 function range(values: readonly number[]): PhysRange {

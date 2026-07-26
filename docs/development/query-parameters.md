@@ -38,10 +38,11 @@ Read in `src/ui/engine-canvas-host.tsx` unless noted.
 `src/bench-scenes.ts`: `ls-noon` · `sf-fog-dawn` · `lv-night` · `country-dusk` · `ocean-horizon` ·
 `ls-rain-night`.
 
-`phys` / `car` are read in `src/ui/engine-phys-runs.ts`; the scenes live in `src/phys-scenes.ts`:
-`brake-strip` · `slalom` · `u-turn` · `kerb-strike` · `crest-jump` · `handbrake-turn` ·
-`pull-away-reverse`. A lap teleports next to a real road spot, spawns the car, walks the ped in through
-the normal enter sequence, then plays a keyframe timeline through the SAME `InputState` the player uses.
+`phys` / `car` are read in `src/ui/engine-phys-runs.ts` (full guide: [physics-laps.md](physics-laps.md));
+the scenes live in `src/phys-scenes.ts`:
+`brake-strip` · `step-steer` · `slalom` · `u-turn` · `kerb-strike` · `crest-jump` · `handbrake-turn` ·
+`pull-away-reverse`. A lap teleports next to a real road spot, spawns the car, seats the player, then plays
+a keyframe timeline through the SAME `InputState` the player uses.
 
 > **These are HARNESS CONTRACTS.** `tools-debug/bench-harness/drive.js` scrapes the console
 > protocol (`[bench]` / `[soak]` / `[phys]` with `TAG=`, plus `sweep complete`) and the URLs in

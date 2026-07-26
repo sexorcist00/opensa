@@ -133,3 +133,90 @@ describe('thinFrames', () => {
     });
   });
 });
+
+/** A lap that steers: `count` frames, with a step of `steer` rad held between `from` and `to` seconds, and a
+ *  yaw rate that answers it as a first-order lag with time constant `tau`. */
+const stepLap = (steer: number, from: number, to: number, tau: number, settled: number): TelemetryFrame[] =>
+  lap(900, (index) => {
+    const t = index * DT;
+    const held = t >= from && t < to;
+    const since = t - from;
+
+    return {
+      speed: 20,
+      steer: held ? steer : 0,
+      yawRate: held ? settled * (1 - Math.exp(-since / tau)) : 0,
+    };
+  });
+
+describe('summarisePhysFrames step response', () => {
+  describe('negative cases', () => {
+    it('reports no step for a lap that never turned the wheel', () => {
+      expect(summarisePhysFrames(lap(600, () => ({ speed: 20 }))).step).toBeNull();
+    });
+
+    it('reports no step for a flick too short to have settled', () => {
+      expect(summarisePhysFrames(stepLap(0.2, 2, 2.8, 0.3, 0.5)).step).toBeNull();
+    });
+
+    it('reports a hold that broke away as NOT settled — its other fields describe a crash', () => {
+      // Yaw peaks, then collapses to nothing: a spin, a stop or a roll inside the hold.
+      const frames = lap(900, (index) => {
+        const t = index * DT;
+        const held = t >= 2 && t < 9;
+
+        return { speed: 20, steer: held ? 0.2 : 0, yawRate: held && t < 3 ? 1.2 : 0.001 };
+      });
+
+      expect(summarisePhysFrames(frames).step?.settled).toBe(false);
+    });
+
+    it('gives an instant car a rise time at the floor — the complaint made measurable', () => {
+      // tau tiny: the yaw is at its settled value within a frame or two, which is "it just changes vector".
+      const step = summarisePhysFrames(stepLap(0.2, 2, 8, 0.001, 0.5)).step;
+
+      expect(step?.yawRiseS).toBeLessThan(0.05);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('measures the rise to 90 % of the settled yaw', () => {
+      // A first-order lag reaches 90 % at t = tau × ln(10) ≈ 2.30 tau; tau 0.1 s → ~0.23 s, inside the
+      // steady window so the settled value it is measured against is the real plateau.
+      const step = summarisePhysFrames(stepLap(0.2, 2, 9, 0.1, 0.5)).step;
+
+      expect(step?.settled).toBe(true);
+      expect(step?.yawRiseS).toBeCloseTo(0.23, 1);
+      expect(step?.yawSettledDegS).toBeCloseTo(0.5 * (180 / Math.PI), 0);
+      expect(step?.atS).toBeCloseTo(2, 1);
+      expect(step?.speedAtStepKmh).toBeCloseTo(72, 0);
+    });
+
+    it('reports no overshoot for a response that only approaches its settled value', () => {
+      const step = summarisePhysFrames(stepLap(0.2, 2, 9, 0.1, 0.5)).step;
+
+      expect(step?.yawOvershoot).toBeLessThanOrEqual(1.01);
+    });
+
+    it('UNDER-reports the rise of a car slower than the steady window, and says so by not settling', () => {
+      // The window is 0.3-1.0 s after the step because a held corner leaves a two-lane street in about two
+      // seconds. A car whose own transient is that long has not plateaued inside it, so the median it is
+      // compared against is low and the spread check catches it. Measuring such a car properly needs an
+      // open-ground scene — recorded as owed in the 081/01 ledger.
+      const step = summarisePhysFrames(stepLap(0.2, 2, 9, 0.6, 0.5)).step;
+
+      expect(step?.settled).toBe(false);
+      expect(step?.yawRiseS).toBeLessThan(0.6 * Math.log(10)); // the true 90 % time is 1.38 s
+    });
+
+    it('takes the FIRST step of a lap that steers both ways', () => {
+      const frames = lap(900, (index) => {
+        const t = index * DT;
+
+        return { speed: 20, steer: t >= 2 && t < 8 ? 0.2 : t >= 10 ? -0.2 : 0, yawRate: 0.4 };
+      });
+
+      expect(summarisePhysFrames(frames).step?.atS).toBeCloseTo(2, 1);
+    });
+  });
+});

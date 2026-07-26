@@ -293,8 +293,40 @@ plan closes, and plans 02-07 all compare against these files with `scripts/phys-
 **Determinism.** `brake-strip` reproduced to the second decimal across an isolated run and a full sweep
 (165.7 km/h, 3.98 s, 59.94 m). `timeTo100S` matched exactly (3.98 s) across two more independent runs.
 
-**Owed before plan 05 is judged**: the step-steer scene (see the gap above) — the transient the loudest
-complaint is about is the one thing this matrix cannot see.
+### 2026-07-26 — step-steer: the loudest complaint, measured (the matrix's gap, closed)
+
+The eighth scene, built for the one thing the other seven cannot see. A gentle held input (0.15 after a 3 s
+run-up) on its own LV straight; runs in
+[`docs/benchmarks/vehicle-physics/`](../../benchmarks/vehicle-physics/2026-07-26-headless-step-steer-four-cars.json).
+
+| Car      | Step at   | **Yaw rise** | Settled yaw | Overshoot | Settled slip |
+| -------- | --------: | -----------: | ----------: | --------: | -----------: |
+| infernus |  77 km/h  |  **0.08 s**  |  13.91 °/s  |     1.05  |      0.91°   |
+| admiral  |  36 km/h  |  **0.17 s**  |   7.48 °/s  |     1.06  |      1.01°   |
+| firetruk |  69 km/h  |  **0.07 s**  |   8.10 °/s  |     1.04  |      0.75°   |
+| comet    |  60 km/h  |  **0.15 s**  |  16.95 °/s  |     1.06  |      0.86°   |
+
+**1. There is no transient.** 0.07-0.17 s to 90 % of the settled yaw, where a road car takes 0.3-0.5. The raw
+series says it without arithmetic: the yaw rate goes **0.00 → 11.38 °/s in one 50 ms sample**, and then only
+creeps as speed builds. The user's words were "steering turns instantly — it just changes its direction
+vector"; this is that sentence as a number.
+
+**2. A 6.5-tonne fire truck answers FASTER than a 1.4-tonne supercar** (0.07 vs 0.08 s). Nothing about a
+vehicle allows that. Yaw inertia is not modelled at all — `turnmass` 36 671 vs 2 725 is exactly the field
+that would forbid it, and it is one of the unread ones (plan 02).
+
+**3. Nothing slips and nothing oscillates.** Settled body slip ~0.75-1.01° across all four (a real car runs
+2-5° in a steady corner) and overshoot 1.04-1.06 — no damped return, no character. The slip angle after the
+step does not build, it DECAYS (0.98° → 0.87°): the body is not sliding, it is being rotated by the wheels.
+"There are no slides" is not about grip being high; it is about there being no state between pointing and
+sliding.
+
+**Method note, and a debt.** The steady window is 0.3-1.0 s AFTER the step rather than the tail of the hold:
+a held corner leaves a two-lane street in about two seconds, and the first version's tail was a kerb strike,
+a spin and a bounce backwards — measured, then read in the series rather than guessed. **A car slower than
+~0.3 s cannot be measured properly in that window**; it needs a scene on open flat ground, which the road
+graph cannot find. Owed before plan 05's AFTER round, and flagged in code (`settled: false`) rather than
+silently under-reported. Also owed: this scene has no run in the per-car matrix files (it postdates them).
 
 ### 2026-07-26 — comet: the control experiment the user handed us
 

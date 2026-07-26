@@ -94,7 +94,8 @@ TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js
 npx tsx scripts/phys-compare.ts before.log after.log [--determinism]
 ```
 
-Guide: [development/benchmarks.md](./development/benchmarks.md).
+Guides: [development/benchmarks.md](./development/benchmarks.md) (perf) ·
+[development/physics-laps.md](./development/physics-laps.md) (`?phys=` laps).
 
 ## Debug & repro
 

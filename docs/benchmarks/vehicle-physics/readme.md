@@ -11,13 +11,15 @@ These are the captures plans 081/02-07 are judged against. `scripts/phys-compare
 
 `?phys=<scene|all>&car=<model>` drives a scripted lap and prints one `[phys] {json}` line per scene — the
 `[bench]` protocol's twin. Headless: `TAG='[phys]'` makes `tools-debug/bench-harness/drive.js` collect it.
-Full commands: [`../../commands.md`](../../commands.md) · the toolchain:
-[`../../debug/README.md`](../../debug/README.md).
+**Full guide: [`../../development/physics-laps.md`](../../development/physics-laps.md)** · commands:
+[`../../commands.md`](../../commands.md) · toolbox: [`../../debug/README.md`](../../debug/README.md).
 
 ## File naming
 
 `YYYY-MM-DD-<surface>-<what>-<car>.json` — e.g. `2026-07-26-headless-before-infernus.json`. `surface` is
-`headless` (the harness) or `ingame`. One file per CAR, holding an array of that car's scene captures.
+`headless` (the harness) or `ingame`. A full sweep is **one file per CAR** (an array of that car's scene
+captures); a single-scene sweep across cars is one file named for the SCENE
+(`2026-07-26-headless-step-steer-four-cars.json`).
 
 ## Format
 
@@ -101,3 +103,28 @@ It also goes over in the slalom (like the infernus) and takes the kerb far worse
 ±3.5°), while doing a CLEAN 135° handbrake turn the infernus cannot (that one flips instead).
 
 Run: [`2026-07-26-headless-before-comet.json`](2026-07-26-headless-before-comet.json).
+
+### 2026-07-26 — step-steer: the missing transient, measured
+
+The scene the matrix could not see (every other one is straight or at full lock). A gentle held input —
+0.15 after a 3 s run-up — on its own LV straight, across all four cars. Same pak and commit as above.
+
+| Car      | Step at   | **Yaw rise** | Settled yaw | Overshoot | Settled slip |
+| -------- | --------: | -----------: | ----------: | --------: | -----------: |
+| infernus |  77 km/h  |  **0.08 s**  |  13.91 °/s  |     1.05  |      0.91°   |
+| admiral  |  36 km/h  |  **0.17 s**  |   7.48 °/s  |     1.06  |      1.01°   |
+| firetruk |  69 km/h  |  **0.07 s**  |   8.10 °/s  |     1.04  |      0.75°   |
+| comet    |  60 km/h  |  **0.15 s**  |  16.95 °/s  |     1.06  |      0.86°   |
+
+Three findings in one table. **The response is 0.07-0.17 s** where a road car takes 0.3-0.5. **A 6.5-tonne
+fire truck answers FASTER (0.07 s) than a 1.4-tonne supercar** — yaw inertia is not modelled, and the
+authored `turnmass` (36 671 vs 2 725) is the field that would say so. **Settled slip is ~1° and overshoot
+~1.05 for every car**: no slip builds, nothing oscillates, and all four differ only in magnitude, never in
+shape. The raw series is blunter still — the yaw goes 0.00 → 11.38 °/s in ONE 50 ms sample.
+
+Run: [`2026-07-26-headless-step-steer-four-cars.json`](2026-07-26-headless-step-steer-four-cars.json).
+
+**Method note.** The steady window is 0.3-1.0 s after the step, not the tail of the hold: a held corner
+leaves a two-lane street in about two seconds, and the v1 scene's tail was a kerb strike, a spin and a bounce
+backwards. Measuring a car SLOWER than ~0.3 s properly needs an open-ground scene — owed, and flagged in
+code by `settled: false` rather than silently under-reported.
