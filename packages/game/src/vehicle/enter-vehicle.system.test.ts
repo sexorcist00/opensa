@@ -295,6 +295,36 @@ describe('EnterVehicleSystem', () => {
   });
 
   describe('positive cases', () => {
+    it('applies the controls BEFORE the step consumes them, not after (081/02 §4)', () => {
+      // The raycast controller reads engine/brake/steer at the top of `physics.step`. Driving used to run
+      // after it, so every press reached the wheels one step late. `applyControls` is what a host calls
+      // pre-step; the same press must be visible without a `fixedUpdate` having run at all.
+      const h = setup();
+      seatPlayer(h, vehicleAt([2, 0, 0]));
+      h.hold('KeyW', true);
+
+      h.system.applyControls(0.1);
+
+      expect(h.phys.engine).toBeGreaterThan(0);
+    });
+
+    it('does not apply the same step twice, and drives on its own when no host hook exists', () => {
+      // Idempotence within a step (a host that wired the hook must not get a double dose from fixedUpdate),
+      // and the fallback that keeps an un-migrated host working — one step late, exactly as before.
+      const h = setup();
+      seatPlayer(h, vehicleAt([2, 0, 0]));
+      h.hold('KeyW', true);
+
+      h.system.applyControls(0.1);
+      const afterHook = h.phys.engine;
+      h.system.fixedUpdate(0.1); // would re-drive if it were not idempotent
+      expect(h.phys.engine).toBe(afterHook);
+
+      h.hold('KeyW', false);
+      h.system.fixedUpdate(0.1); // no hook this step — fixedUpdate drives instead
+      expect(h.phys.engine).toBeLessThan(afterHook);
+    });
+
     it('canEnterExit reports a car in range while idle', () => {
       const h = setup();
       h.system.add(vehicleAt([2, 0, 0]));

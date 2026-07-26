@@ -34,6 +34,11 @@ export interface EngineVehicles {
   /** The car the player is seated in, or null — the host follows it with the camera. */
   activeVehicle(): EnterableVehicle | null;
   /**
+   * Apply the driven car's controls — call BEFORE the physics step (plan 081/02 §4). Without it the systems
+   * still drive, one step late; with it a press reaches the wheels in the step it was made.
+   */
+  applyControls(step: number): void;
+  /**
    * The driven car's speed and slip RIGHT NOW, or null on foot (plan 080/05's drift framing reads it every
    * rendered frame). Deliberately not behind {@link EngineVehicles.telemetry}'s capture gate: this is four
    * dot products off the body, while a capture is the ring plus the per-wheel channels. Same
@@ -401,6 +406,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
 
   return {
     activeVehicle: (): EnterableVehicle | null => seated,
+    applyControls: (step: number): void => enterVehicle.applyControls(step),
     drivenMotion(): null | PlanarMotion {
       const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
 

@@ -858,8 +858,16 @@ export class PhysicsWorld {
     return hit === null ? null : { dist: hit.time_of_impact };
   }
 
-  step(dt: number): void {
+  /**
+   * Advance the world one fixed step.
+   *
+   * `beforeVehicles` runs at the very top, BEFORE the raycast controllers consume their engine/brake/steer
+   * (plan 081/02 §4). Driving applied after this point lands one step late — the press and the answer 16 ms
+   * apart — and every plan after this one would have tuned against that delay as if it were the car.
+   */
+  step(dt: number, beforeVehicles?: () => void): void {
     this.world.timestep = dt;
+    beforeVehicles?.();
     for (const vehicle of this.vehicles) {
       // The suspension RAYS must respect collision groups too, or the wheels ride on things the chassis
       // passes through — a felled lamppost is invisible to the car's body but the wheels climbed it.

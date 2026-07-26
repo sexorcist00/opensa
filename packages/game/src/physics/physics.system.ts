@@ -13,6 +13,12 @@ import { RigidBody, Transform } from '../ecs/components';
  * render-sync system later copies to the mesh). Z-up throughout.
  */
 export class PhysicsSystem implements System {
+  /**
+   * Runs at the very top of the step, before the raycast vehicles consume their controls (plan 081/02 §4).
+   * Optional: a host that never sets it still drives, one step late — the behaviour before the hook existed.
+   */
+  beforeVehicles?: () => void;
+
   readonly name = 'physics';
 
   private readonly config: Readonly<Config>;
@@ -29,7 +35,7 @@ export class PhysicsSystem implements System {
     if (this.config.gameState !== 'play') {
       return;
     }
-    this.physics.step(step);
+    this.physics.step(step, this.beforeVehicles);
     for (const eid of query(this.world, [RigidBody, Transform])) {
       const { position, quaternion } = this.physics.readBody(RigidBody.handle[eid]);
       Transform.x[eid] = position[0];

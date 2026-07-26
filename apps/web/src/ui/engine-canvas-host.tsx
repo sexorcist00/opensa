@@ -621,6 +621,10 @@ async function boot(
 
   const controllerSystem = new CharacterControllerSystem(world, physics, input, config, controller, cameraShim);
   const physicsSystem = new PhysicsSystem(world, physics, config);
+  // Driving is applied at the TOP of the physics step, not after it (plan 081/02 §4): the raycast
+  // controllers consume engine/brake/steer inside `updateVehicle`, so controls written afterwards arrive
+  // one step late — 16 ms between the player's press and the car's answer, on every input.
+  physicsSystem.beforeVehicles = (): void => vehicles?.applyControls(FIXED_STEP);
   const collision = new CollisionStreamingSystem(adapter, physics, viewOf, config);
 
   const player = loadEnginePlayer(engine, fs, GAME_CONFIG[gameId].mainCharacter, config.movement);

@@ -77,7 +77,7 @@ free).
 - [x] COM/inertia application (+ the angular-damping retune MEASURED and deferred to plan 03 — see ledger).
 - [x] Per-car suspension mapping + spawn/settle re-verification (the `rest` scene is the settle check now;
       a field report caught the first attempt and the clamp fixed it).
-- [ ] Pre-step control hook + latency test.
+- [x] Pre-step control hook + latency test.
 - [x] Replay A/B captures (4 cars × 9 scenes) into the ledger + the benchmark record.
 - [ ] **Field round**: the flip complaint specifically — aggressive city driving, the user tries to
       flip a sedan honestly; plus "do different cars feel different now".
@@ -345,3 +345,30 @@ Two separate defects sit in that table, and neither belongs to this plan:
 
 So the user's "many factors" reading is right, and the factors are now named rather than guessed. 081/02 is
 **field-accepted**; the braking complaint moves on with its own two owners.
+
+### 2026-07-26 — §4 the pre-step control hook: the latency was a FAKE transient
+
+`physics.step` gained a `beforeVehicles` hook that runs before the raycast controllers consume their
+engine/brake/steer; `EnterVehicleSystem.applyControls` computes and applies the driving there, and
+`fixedUpdate` keeps the phase machine and the rider. The host wires the hook; a host that does not still
+drives, one step late, exactly as before — the method is idempotent within a step, and both halves are
+pinned by tests.
+
+One behaviour had to move with it: the car's POSE is now read at the top of `applyControls` rather than
+inside the seated branch. A test caught the reason within a minute — an overturned car chose its crawl-out
+side from a stale orientation, because the exit decision lives inside `drive()` and was suddenly running
+before the read. Controls are computed from the state the car is in NOW; so is the decision to climb out.
+
+**Measured** (step-steer, against the pre-§3 run, so the suspension changed too — attribution is not clean):
+
+| Car      | Yaw rise |
+| -------- | -------: |
+| infernus | 0.080 → **0.000 s** |
+| comet    | 0.150 → 0.170 s     |
+
+**And that is not an improvement in FEEL — it is the opposite.** The one-step latency was accidentally
+supplying the only transient the car had: a 16 ms delay between the press and the answer reads a little like
+a car taking a moment to load its tyres. Removing it is right (the delay was an artefact, it scaled with
+nothing, and plans 03-05 would have tuned against it as if it were physics) and it makes the missing tyre
+model MORE exposed, not less. The user's "the car just changes its direction vector" gets slightly worse
+before plan 05 makes it better, and that is the honest order: remove the fake, then build the real one.

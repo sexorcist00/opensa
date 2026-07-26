@@ -194,6 +194,8 @@ export class EnterVehicleSystem implements System {
   private readonly controller: CharacterControllerSystem;
   /** The last step's applied driving values — see {@link appliedControls}. */
   private controls: AppliedControls = { brake: 0, engineForce: 0, steer: 0, throttle: 0 };
+  /** Whether {@link applyControls} already ran this fixed step (the pre-step hook, or fixedUpdate's fallback). */
+  private controlsAppliedStep = false;
   private readonly doors = new Map<EnterableVehicle, { lf: number; rf: number }>(); // per-side door angles
   private doorTarget = 0;
   private engine = 0; // current engine force (N), ramped toward the throttle target
@@ -270,6 +272,37 @@ export class EnterVehicleSystem implements System {
     return this.isSeated() ? this.controls : NO_CONTROLS;
   }
 
+  /**
+   * Driving + the seated rider run on the fixed step (lockstep with physics, after
+   * the physics step and before render-sync) so the rider doesn't lag/jitter behind
+   * the car: WSAD → engine/brake/steer, then snap the player onto the seat.
+   */
+  /**
+   * Compute and APPLY this step's driving controls — called BEFORE the physics step (plan 081/02 §4).
+   *
+   * The raycast controller consumes engine/brake/steer inside `updateVehicle`, which runs at the top of
+   * `physics.step`. Applying them afterwards, as `fixedUpdate` used to, meant every input reached the car
+   * one step late: the player's press and the car's answer were always 16 ms apart, and plans 03-05 would
+   * have tuned against that delay as if it were the car's behaviour.
+   *
+   * Idempotent within a step: {@link fixedUpdate} calls it if the host has no pre-step hook wired, so a host
+   * that has not adopted the hook keeps working — one step late, exactly as before.
+   */
+  applyControls(step: number): void {
+    if (this.controlsAppliedStep) {
+      return;
+    }
+    this.controlsAppliedStep = true;
+    if ((this.phase === 'seated' || this.phase === 'stopping') && this.active) {
+      // Read the car's pose FIRST: controls are computed from the state the car is in right now, and the
+      // stopping phase decides from that same state whether it may start the climb-out. Reading it after
+      // driving would judge both on the previous step (a test caught exactly that — an overturned car chose
+      // its crawl side from a stale orientation).
+      this.readCarPose(this.active);
+      this.drive(this.active, step);
+    }
+  }
+
   /** Whether pressing enter/exit now would do something: seated → can exit, idle with a car in range → can
    *  enter (mid-sequence the edge is a no-op). Drives the mobile Enter button's visibility (plan 055). */
   canEnterExit(): boolean {
@@ -280,12 +313,10 @@ export class EnterVehicleSystem implements System {
     return this.phase === 'idle' && this.nearestEnterable() !== null;
   }
 
-  /**
-   * Driving + the seated rider run on the fixed step (lockstep with physics, after
-   * the physics step and before render-sync) so the rider doesn't lag/jitter behind
-   * the car: WSAD → engine/brake/steer, then snap the player onto the seat.
-   */
   fixedUpdate(step: number): void {
+    // Controls FIRST if the host did not apply them pre-step; then the phase machine, which reads results.
+    this.applyControls(step);
+    this.controlsAppliedStep = false; // the step is over — the next one applies its own
     // All rider placement runs here (after the physics step, before render-sync) so render-sync
     // sees it the same frame AND the kinematic body is never teleported into the car (moveBody:
     // false) — a body inside the car shoves it (the entry/exit "pop").
@@ -296,7 +327,7 @@ export class EnterVehicleSystem implements System {
     } else if (this.phase === 'exiting') {
       this.advanceGetout(step);
     } else if ((this.phase === 'seated' || this.phase === 'stopping') && this.active) {
-      this.driveSeated(this.active, step);
+      this.driveSeated(this.active);
     }
   }
 
@@ -700,14 +731,12 @@ export class EnterVehicleSystem implements System {
     car.rig.setSteer(this.steerAngle); // front wheels turn with the physics steer
   }
 
-  /** Drive the seated car and snap the rider onto its (full-transform) seat. */
-  private driveSeated(car: EnterableVehicle, step: number): void {
+  /** Snap the rider onto the driven car's (full-transform) seat, after the step moved it. */
+  private driveSeated(car: EnterableVehicle): void {
     const { position, quaternion } = this.physics.readBody(car.body);
-    car.position[0] = position[0];
-    car.position[1] = position[1];
-    car.position[2] = position[2];
-    car.heading = headingFromQuat(quaternion);
-    this.drive(car, step);
+    this.readCarPose(car);
+    // Driving already happened this step — see `applyControls`. What is left here is the RESULT: the car's
+    // live pose and the rider that rides it.
     if (this.phase === 'exiting' || this.phase === 'idle') {
       // The exit consumed this step (a crawl-out began / the roof fallback placed the player) —
       // re-seating now would clobber the crawl clip. `exitopen` still seats: the door is only opening.
@@ -832,6 +861,15 @@ export class EnterVehicleSystem implements System {
     const sin = Math.sin(vehicle.heading);
 
     return [dx * cos + dy * sin, -dx * sin + dy * cos];
+  }
+
+  /** Copy the chassis pose off the rigid body onto the car — the gameplay state everything else reads. */
+  private readCarPose(car: EnterableVehicle): void {
+    const { position, quaternion } = this.physics.readBody(car.body);
+    car.position[0] = position[0];
+    car.position[1] = position[1];
+    car.position[2] = position[2];
+    car.heading = headingFromQuat(quaternion);
   }
 
   /** World seat position (Z-up): seat dummy in vehicle space → world, raised onto the capsule centre.
