@@ -128,3 +128,19 @@ Run: [`2026-07-26-headless-step-steer-four-cars.json`](2026-07-26-headless-step-
 leaves a two-lane street in about two seconds, and the v1 scene's tail was a kerb strike, a spin and a bounce
 backwards. Measuring a car SLOWER than ~0.3 s properly needs an open-ground scene — owed, and flagged in
 code by `settled: false` rather than silently under-reported.
+
+### 2026-07-26 — AFTER the authored centre of mass (081/02, infernus + comet)
+
+Same pak, same scenes, the only change being that the body takes its mass, centre of mass and inertia from
+`handling.cfg` instead of from an equal share per collision primitive. Two decisive wins and two regressions
+— the analysis is in the plan's ledger
+([`../../plans/081-vehicle-physics/02-handling-truth.md`](../../plans/081-vehicle-physics/02-handling-truth.md)).
+
+The comet's braking spin — the bug the user reported for that car — goes from **50.9° of unasked-for rotation
+to 1.6°**, and the infernus u-turn from a 3.65 s flight with ±55° of roll to a corner (0.35 s, ±7°). The
+flips do NOT go away: the slalom and the handbrake turn still roll through ±180°, and airborne cases got
+worse. Braking also got sharper (1.6 → 2.0 g), which is a regression against the complaint and makes plan
+04's brake formula more urgent.
+
+Runs: [`2026-07-26-headless-com-infernus.json`](2026-07-26-headless-com-infernus.json) ·
+[`2026-07-26-headless-com-comet.json`](2026-07-26-headless-com-comet.json).

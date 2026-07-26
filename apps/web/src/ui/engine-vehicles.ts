@@ -310,7 +310,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         position,
         heading,
         data.colliders?.shape ?? null,
-        data.handling.mass,
+        { centreOfMass: data.handling.centreOfMass, mass: data.handling.mass, turnMass: data.handling.turnMass },
         wheels,
         data.halfExtents,
         pitch,

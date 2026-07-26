@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ColliderShape, ModelColliders } from '../interfaces/collider.interface';
 import type { Vec3 } from '../interfaces/world-adapter.interface';
-import type { VehicleController } from './physics-world';
+import type { VehicleController, VehicleMassProperties } from './physics-world';
 
 import { PhysicsWorld } from './physics-world';
 import { initRapier } from './rapier';
@@ -166,24 +166,70 @@ describe('PhysicsWorld.sphereCast', () => {
   });
 });
 
+/** Authored mass properties for a test car (plan 081/02) — mass only unless a test cares about the rest. */
+function massProps(over: Partial<VehicleMassProperties> = {}): VehicleMassProperties {
+  return { centreOfMass: [0, 0, 0], mass: 1500, turnMass: 3000, ...over };
+}
+
 describe('PhysicsWorld.createDynamicVehicle', () => {
   const HALF: [number, number, number] = [1.2, 2.5, 0.7];
 
   describe('negative cases', () => {
     it('does not crash when the model has no COL (null shape) — falls back to the halfExtents box', async () => {
       const physics = await makeWorld();
-      expect(() => physics.createDynamicVehicle([0, 0, 5], 0, null, 1500, [], HALF)).not.toThrow();
+      expect(() => physics.createDynamicVehicle([0, 0, 5], 0, null, massProps(), [], HALF)).not.toThrow();
       physics.dispose();
     });
 
     it('does not crash for a shape with no primitives and no vertices', async () => {
       const physics = await makeWorld();
-      expect(() => physics.createDynamicVehicle([0, 0, 5], 0, shape(), 1500, [], HALF)).not.toThrow();
+      expect(() => physics.createDynamicVehicle([0, 0, 5], 0, shape(), massProps(), [], HALF)).not.toThrow();
       physics.dispose();
     });
   });
 
   describe('positive cases', () => {
+    it('takes its centre of mass from the AUTHORED value, not from where the COL boxes sit (081/02)', async () => {
+      // A car whose collision is a low floor pan plus a HIGH cabin box. The old rule shared the mass equally
+      // per primitive, so the centre of mass came out at the mean of their centres — high, and wherever the
+      // modeller happened to leave it. The same shape must now hang from whatever handling.cfg authored.
+      const physics = await makeWorld();
+      const cabin = shape({
+        boxes: [
+          { max: [1, 2, -0.2], min: [-1, -2, -0.6] }, // floor pan, low
+          { max: [0.9, 0.5, 1.4], min: [-0.9, -1, 0.2] }, // cabin, high — this used to dominate
+        ],
+      });
+      const low = physics.createDynamicVehicle(
+        [0, 0, 5],
+        0,
+        cabin,
+        massProps({ centreOfMass: [0, 0, -0.4] }),
+        [],
+        HALF,
+      );
+      const high = physics.createDynamicVehicle(
+        [9, 0, 5],
+        0,
+        cabin,
+        massProps({ centreOfMass: [0, 0, 1.2] }),
+        [],
+        HALF,
+      );
+
+      // A step first: Rapier folds authored mass properties in during the step, so before one every body
+      // reads mass 0 at its own origin — indistinguishable from the properties never having applied.
+      physics.step(1 / 60);
+
+      // World COM = spawn position + the authored offset (no rotation at heading 0), minus the little the
+      // step itself moved it under gravity.
+      expect(physics.readMassProperties(low.body).centreOfMass[2]).toBeCloseTo(4.6, 2);
+      expect(physics.readMassProperties(high.body).centreOfMass[2]).toBeCloseTo(6.2, 2);
+      // And the mass is the authored total, not the sum of what the primitives implied.
+      expect(physics.readMassProperties(low.body).mass).toBeCloseTo(1500, 5);
+      physics.dispose();
+    });
+
     it('builds a convex hull from a vertices-only shape and rests it on the ground', async () => {
       const physics = await makeWorld();
       physics.createStaticBox([0, 0, 0], [20, 20, 0.5]); // top surface at z = 0.5
@@ -192,7 +238,7 @@ describe('PhysicsWorld.createDynamicVehicle', () => {
         -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, 0.5,
         0.5, 0.5, 0.5, 0.5,
       ]);
-      const { body } = physics.createDynamicVehicle([0, 0, 5], 0, shape({ vertices: cube }), 1500, [], HALF);
+      const { body } = physics.createDynamicVehicle([0, 0, 5], 0, shape({ vertices: cube }), massProps(), [], HALF);
 
       for (let i = 0; i < 240; i += 1) {
         physics.step(STEP);
@@ -250,7 +296,7 @@ describe('PhysicsWorld.readVehicleWheels', () => {
   describe('negative cases', () => {
     it('reads no contact from a car dropped in mid-air, with the springs fully extended', async () => {
       const physics = await makeWorld();
-      const { controller } = physics.createDynamicVehicle([0, 0, 50], 0, null, 1500, WHEELS, HALF);
+      const { controller } = physics.createDynamicVehicle([0, 0, 50], 0, null, massProps(), WHEELS, HALF);
       physics.step(STEP);
 
       const wheels = physics.readVehicleWheels(controller);
@@ -263,7 +309,7 @@ describe('PhysicsWorld.readVehicleWheels', () => {
 
     it('reports an empty reading for a controller with no wheels', async () => {
       const physics = await makeWorld();
-      const { controller } = physics.createDynamicVehicle([0, 0, 5], 0, null, 1500, [], HALF);
+      const { controller } = physics.createDynamicVehicle([0, 0, 5], 0, null, massProps(), [], HALF);
 
       expect(physics.readVehicleWheels(controller)).toEqual([]);
       physics.dispose();
@@ -274,7 +320,7 @@ describe('PhysicsWorld.readVehicleWheels', () => {
     it('reads contact, a compressed spring and a real load off a car resting on the ground', async () => {
       const physics = await makeWorld();
       physics.createStaticBox([0, 0, 0], [40, 40, 0.5]);
-      const { controller } = physics.createDynamicVehicle([0, 0, 2], 0, null, 1500, WHEELS, HALF);
+      const { controller } = physics.createDynamicVehicle([0, 0, 2], 0, null, massProps(), WHEELS, HALF);
       for (let i = 0; i < 240; i += 1) {
         physics.step(STEP);
       }
@@ -629,7 +675,7 @@ describe('PhysicsWorld raycast vehicle', () => {
     const physics = await makeWorld();
     physics.createStaticBox([0, 0, -0.5], [200, 200, 0.5]); // top surface at z = 0
     const chassis = shape({ boxes: [{ max: [1.2, 2.5, 0.7], min: [-1.2, -2.5, -0.7] }] });
-    const { body, controller } = physics.createDynamicVehicle([0, 0, 1.2], 0, chassis, 1500, WHEELS, HALF);
+    const { body, controller } = physics.createDynamicVehicle([0, 0, 1.2], 0, chassis, massProps(), WHEELS, HALF);
     for (let i = 0; i < 120; i += 1) {
       physics.step(STEP);
     }
@@ -705,7 +751,7 @@ describe('PhysicsWorld impacts', () => {
     const physics = await makeWorld();
     physics.createStaticBox([0, 0, -0.5], [50, 50, 0.5]);
     const chassis = shape({ boxes: [{ max: [1, 1, 1], min: [-1, -1, -1] }] });
-    const { body } = physics.createDynamicVehicle([0, 0, 1.2], 0, chassis, 1500, [], [1, 1, 1]);
+    const { body } = physics.createDynamicVehicle([0, 0, 1.2], 0, chassis, massProps(), [], [1, 1, 1]);
     physics.createStaticBox([0, 6, 1], [5, 0.5, 3]); // wall ahead
     physics.setLinvel(body, [0, 15, 0]); // 1500 kg at 15 m/s — well past the 400 N event threshold
     for (let i = 0; i < 120; i += 1) {
@@ -804,7 +850,7 @@ describe('PhysicsWorld.createFalling', () => {
       const physics = await makeWorld();
       physics.createStaticBox([0, 0, -0.5], [50, 50, 0.5]); // top at z = 0
       const chassis = shape({ boxes: [{ max: [1.2, 2.5, 0.7], min: [-1.2, -2.5, -0.7] }] });
-      physics.createDynamicVehicle([0, 0, 0.7], 0, chassis, 1500, [], [1.2, 2.5, 0.7]);
+      physics.createDynamicVehicle([0, 0, 0.7], 0, chassis, massProps(), [], [1.2, 2.5, 0.7]);
       // Dropped straight onto the car's roof: if it collided with the chassis it would rest at ~1.9.
       const prop = physics.createFalling([0, 0, 5], [0, 0, 0, 1], 50, CUBE, BOX);
 
@@ -840,7 +886,7 @@ describe('PhysicsWorld.ignoreVehicles', () => {
     const capsule = physics.createKinematicCapsule([0, 0, 0.9], 0.4, 0.5);
     physics.ignoreVehicles(capsule.collider, ignore);
     const chassisShape = shape({ boxes: [{ max: [1.2, 2.5, 0.7], min: [-1.2, -2.5, -0.7] }] });
-    const { body } = physics.createDynamicVehicle([0, 0, 5], 0, chassisShape, 1500, [], [1.2, 2.5, 0.7]);
+    const { body } = physics.createDynamicVehicle([0, 0, 5], 0, chassisShape, massProps(), [], [1.2, 2.5, 0.7]);
 
     for (let i = 0; i < 300; i += 1) {
       physics.step(STEP);
@@ -870,7 +916,7 @@ describe('PhysicsWorld kinematic character on a car', () => {
       const physics = await makeWorld();
       physics.createStaticBox([0, 0, -0.5], [50, 50, 0.5]); // top at z = 0
       const chassisShape = shape({ boxes: [{ max: [1.2, 2.5, 0.7], min: [-1.2, -2.5, -0.7] }] });
-      physics.createDynamicVehicle([0, 0, 0.7], 0, chassisShape, 1500, [], [1.2, 2.5, 0.7]);
+      physics.createDynamicVehicle([0, 0, 0.7], 0, chassisShape, massProps(), [], [1.2, 2.5, 0.7]);
       const controller = physics.createCharacterController();
       const capsule = physics.createKinematicCapsule([0, 0, 3], 0.3, 0.6);
 

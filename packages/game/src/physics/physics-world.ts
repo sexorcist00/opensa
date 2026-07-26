@@ -102,6 +102,22 @@ export interface Impact {
 /** Rapier's raycast vehicle controller (engine/brake/steer, suspension, wheels). */
 export type VehicleController = ReturnType<RapierWorld['createVehicleController']>;
 
+/**
+ * A vehicle body's AUTHORED mass properties (plan 081/02) — `handling.cfg`'s, not the collision hull's.
+ *
+ * Until this existed the body took an equal share of its mass per COL primitive, so its centre of mass came
+ * out wherever the modeller happened to put the cabin box — high, and different per model. 081/01 measured
+ * what that costs: the infernus and the firetruck go over in scenes the admiral drives through, and a 6.5 t
+ * truck answers the wheel FASTER than a 1.4 t supercar because its yaw inertia is whatever the hull implies.
+ */
+export interface VehicleMassProperties {
+  /** `CentreOfMass` in MODEL space (m): x right, y forward, z up — the frame the chassis already uses. */
+  readonly centreOfMass: readonly [number, number, number];
+  /** `fMass` (kg). */
+  readonly mass: number;
+  /** `fTurnMass` (kg·m²) — the yaw inertia, the only one SA authors. */
+  readonly turnMass: number;
+}
 /** One wheel's live state, as {@link PhysicsWorld.readVehicleWheels} reads it off the controller. */
 export interface VehicleWheelReading {
   readonly contact: boolean;
@@ -122,6 +138,7 @@ export interface VehicleWheelReading {
   /** Current spring length (m); shorter than {@link restLength} means compressed. */
   readonly suspensionLength: number;
 }
+
 /** One raycast wheel: its hub position in vehicle space + rolling radius. */
 export interface VehicleWheelSpec {
   connection: Vec3;
@@ -220,7 +237,7 @@ export class PhysicsWorld {
     position: Vec3,
     heading: number,
     shape: ModelColliders['shape'] | null,
-    mass: number,
+    properties: VehicleMassProperties,
     wheels: readonly VehicleWheelSpec[],
     halfExtents: [number, number, number],
     pitch = 0,
@@ -240,12 +257,22 @@ export class PhysicsWorld {
         .setRotation({ w: q.w, x: q.x, y: q.y, z: q.z })
         .setLinearDamping(CHASSIS_LINEAR_DAMPING)
         .setAngularDamping(CHASSIS_ANGULAR_DAMPING)
+        // The AUTHORED mass properties (plan 081/02), set on the DESCRIPTOR. On the body it is a no-op that
+        // leaves the car massless — with zero-mass colliders the total came out 0 and nothing fell. So the
+        // body is BORN with `handling.cfg`'s mass, its designed centre of mass, and an inertia tensor whose
+        // yaw term is `fTurnMass`; the colliders that follow carry shape only.
+        .setAdditionalMassProperties(
+          properties.mass,
+          { x: properties.centreOfMass[0], y: properties.centreOfMass[1], z: properties.centreOfMass[2] },
+          principalInertia(properties, halfExtents),
+          { w: 1, x: 0, y: 0, z: 0 }, // the principal axes ARE the model axes: a car is symmetric about them
+        )
         // Never sleep: a sleeping chassis stops getting suspension forces and slowly sinks into
         // the collision; the first throttle then wakes it and the penetration ejects it ("launch
         // pop" only on the first drive after parking). Keeping it awake holds it on its wheels.
         .setCanSleep(false),
     );
-    this.addVehicleHull(body, shape, mass, halfExtents);
+    this.addVehicleHull(body, shape, halfExtents);
 
     const controller = this.world.createVehicleController(body);
     controller.indexUpAxis = UP_AXIS;
@@ -584,6 +611,24 @@ export class PhysicsWorld {
   }
 
   /**
+   * A body's live mass properties: total mass and the WORLD-space centre of mass (plan 081/02).
+   *
+   * Read-only, and the only way to see from outside whether the authored centre of mass actually reached
+   * the body — which is the whole of this plan. The F2 Physics tab shows it next to the telemetry so a
+   * field round can tell "the car feels planted" from "the number moved".
+   *
+   * **Reads what the last step computed.** Rapier folds a body's authored mass properties in during
+   * `world.step()`, so a body queried before its first step reports mass 0 and a centre of mass at its
+   * origin — which looks exactly like the properties having failed to apply, and cost an hour of chasing it.
+   */
+  readMassProperties(handle: number): { centreOfMass: Vec3; mass: number } {
+    const body = this.world.getRigidBody(handle);
+    const com = body.worldCom();
+
+    return { centreOfMass: [com.x, com.y, com.z], mass: body.mass() };
+  }
+
+  /**
    * Read every wheel's live state off a raycast controller (plan 081/01 telemetry) — contact, spring travel,
    * normal load, the tyre impulses actually delivered, and the CUMULATIVE roll angle whose delta is the wheel's
    * spin. Read-only: this is the instrument, it changes nothing.
@@ -799,14 +844,9 @@ export class PhysicsWorld {
    * attempt it with enough points and box-fall-back if it still rejects (a no-COL modded DFF, e.g.
    * the cheetah/yosemite "locked" vehicles, otherwise crashes the spawn).
    */
-  private addConvexChassis(
-    body: RapierBody,
-    vertices: Float32Array,
-    mass: number,
-    halfExtents: [number, number, number],
-  ): void {
+  private addConvexChassis(body: RapierBody, vertices: Float32Array, halfExtents: [number, number, number]): void {
     const finish = (desc: ReturnType<Rapier['ColliderDesc']['cuboid']>): ReturnType<Rapier['ColliderDesc']['cuboid']> =>
-      desc.setMass(mass).setFriction(CHASSIS_FRICTION).setCollisionGroups(VEHICLE_GROUPS);
+      desc.setMass(0).setFriction(CHASSIS_FRICTION).setCollisionGroups(VEHICLE_GROUPS);
 
     const hull = vertices.length >= 12 ? this.rapier.ColliderDesc.convexHull(vertices) : null;
     if (hull) {
@@ -870,7 +910,6 @@ export class PhysicsWorld {
   private addVehicleHull(
     body: RapierBody,
     shape: ModelColliders['shape'] | null,
-    mass: number,
     halfExtents: [number, number, number],
   ): void {
     const spheres = (shape?.spheres ?? []).filter((sphere) => sphere.radius > 0);
@@ -878,16 +917,15 @@ export class PhysicsWorld {
       (box) => box.max[0] > box.min[0] && box.max[1] > box.min[1] && box.max[2] > box.min[2],
     );
     if (spheres.length + boxes.length === 0) {
-      this.addConvexChassis(body, shape?.vertices ?? new Float32Array(), mass, halfExtents);
+      this.addConvexChassis(body, shape?.vertices ?? new Float32Array(), halfExtents);
 
       return;
     }
 
-    const perShape = mass / (spheres.length + boxes.length); // equal share → COM = mean of centres
     for (const sphere of spheres) {
       const [x, y, z] = sphere.center;
       const desc = this.rapier.ColliderDesc.ball(sphere.radius).setTranslation(x, y, z);
-      this.world.createCollider(this.vehicleCollider(desc, perShape), body);
+      this.world.createCollider(this.vehicleCollider(desc), body);
     }
     for (const box of boxes) {
       const hx = (box.max[0] - box.min[0]) / 2;
@@ -897,20 +935,23 @@ export class PhysicsWorld {
       const cy = (box.max[1] + box.min[1]) / 2;
       const cz = (box.max[2] + box.min[2]) / 2;
       const desc = this.rapier.ColliderDesc.cuboid(hx, hy, hz).setTranslation(cx, cy, cz);
-      this.world.createCollider(this.vehicleCollider(desc, perShape), body);
+      this.world.createCollider(this.vehicleCollider(desc), body);
     }
   }
 
   /**
-   * A chassis collider desc: mass + friction + vehicle collision group, a little restitution
-   * (bounce off walls), and contact-force events (so collisions report impacts for damage).
+   * A chassis collider desc: friction + vehicle collision group, a little restitution (bounce off walls),
+   * and contact-force events (so collisions report impacts for damage).
+   *
+   * **Mass ZERO on purpose** (plan 081/02): the primitives are the car's SHAPE, and shape alone. Its mass,
+   * its centre of mass and its inertia come from `handling.cfg` via `setAdditionalMassProperties`. Letting
+   * the colliders carry mass again would put the centre of mass back wherever the cabin box happens to sit.
    */
   private vehicleCollider(
     desc: ReturnType<Rapier['ColliderDesc']['ball']>,
-    mass: number,
   ): ReturnType<Rapier['ColliderDesc']['ball']> {
     return desc
-      .setMass(mass)
+      .setMass(0)
       .setFriction(CHASSIS_FRICTION)
       .setCollisionGroups(VEHICLE_GROUPS)
       .setRestitution(CHASSIS_RESTITUTION)
@@ -918,4 +959,27 @@ export class PhysicsWorld {
       .setActiveEvents(this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS)
       .setContactForceEventThreshold(CONTACT_FORCE_THRESHOLD);
   }
+}
+
+/**
+ * The inertia tensor a car gets from its authored numbers (plan 081/02).
+ *
+ * SA authors ONE rotational number, `fTurnMass`, and it is the YAW inertia — the axis a car actually turns
+ * about. Pitch and roll come from a solid-box model on the chassis half-extents, scaled so the model's own
+ * yaw term equals the authored one. That keeps the three axes in a physically consistent ratio instead of
+ * inventing two more numbers, and the scale lands near 1 on real cars: the stock infernus authors 2725
+ * against a box model's 2637.
+ *
+ * Axes are the model frame — x right (pitch), y forward (roll), z up (yaw).
+ */
+function principalInertia(
+  properties: VehicleMassProperties,
+  halfExtents: readonly [number, number, number],
+): { x: number; y: number; z: number } {
+  const [hx, hy, hz] = halfExtents;
+  const box = (a: number, b: number): number => (properties.mass / 3) * (a * a + b * b);
+  const boxYaw = box(hx, hy);
+  const scale = boxYaw > 0 ? properties.turnMass / boxYaw : 1;
+
+  return { x: box(hy, hz) * scale, y: box(hx, hz) * scale, z: properties.turnMass };
 }

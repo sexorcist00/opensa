@@ -73,7 +73,7 @@ free).
 
 ## Subtasks
 
-- [ ] Typed mapping + conversions + 3 pinned-row tests; fallback row documented.
+- [x] Typed mapping + conversions + 3 pinned-row tests; fallback row documented.
 - [ ] COM/inertia application + angular-damping retune + quirk-suite re-run.
 - [ ] Per-car suspension mapping + spawn/settle re-verification (bench road cars still sit right —
       the 841-car sweep spots systemic suspension errors for free).
@@ -91,4 +91,64 @@ free).
 
 ## Ledger
 
-_(mapping decisions, conversion factors, A/B numbers, field verdict)_
+### 2026-07-26 — the typed row (subtask 1)
+
+`VehicleHandling` went from 5 fields to the whole row; `parseHandling` was already keeping every column as a
+raw string, so this is purely the adapter's mapping plus a documented fallback row. Values pass through AS
+AUTHORED — what a number becomes is the consuming plan's decision, made with its own evidence.
+
+**The column indices are pinned by the DATA, not by the file's legend.** `handling.cfg`'s own FIELD
+DESCRIPTIONS block lists an `(E) (not used)` column between `fDragMult` and `CentreOfMass.x` that the shipped
+rows do not carry; trusting it would have shifted every field after `dragMult` by one. Cross-checked both
+ways before writing anything: `nPercentSubmerged` 70 lands at index 6 and `fMaxVelocity` 240 at index 11 on
+the stock infernus, and its `CentreOfMass.z` reads −0.25 — the value 081/01 had already tied to the flip.
+The legend's RANGES are stale too (it claims `fMaxVelocity [5..150]`), which is a good reminder that the
+comment block is documentation, not data.
+
+A new integration test pins the entire ADMIRAL row against the stock fixture. `vehicle-handling.fake.ts`
+gives other tests a full row without spelling out 24 fields.
+
+### 2026-07-26 — authored COM + inertia (subtask 2, first half), MEASURED
+
+`createDynamicVehicle` takes `VehicleMassProperties` instead of a bare mass. Colliders now carry **zero
+mass** — they are the car's shape and nothing else — and the body is born with `handling.cfg`'s mass, its
+authored centre of mass and an inertia tensor whose yaw term IS `fTurnMass`. Pitch and roll come from a
+solid-box model on the chassis half-extents scaled so its own yaw term matches the authored one: that keeps
+the three axes in a consistent ratio rather than inventing two numbers, and the scale lands near 1 on real
+cars (the stock infernus authors 2725 against a box model's 2637 — SA computed it much the same way).
+
+**A Rapier trap, documented in the API and the test.** `setAdditionalMassProperties` is folded in during
+`world.step()`. Before a body's first step it reports **mass 0 with its centre of mass at the origin**, which
+looks exactly like the properties having failed to apply — a probe over four API variants was needed to tell
+the two apart. (`setAdditionalMass` alone never applies at all.)
+
+**A/B, same pak and scenes, `before-*` vs `com-*` in the benchmark record:**
+
+| Scene / car                | Before                          | After                          | Verdict |
+| -------------------------- | ------------------------------- | ------------------------------ | ------- |
+| **comet brake-strip**      | turned **50.9°**, slip 61.4°    | turned **1.6°**, slip 2.9°     | **the user's reported bug, gone** |
+| **infernus u-turn**        | roll −55…16°, pitch −38…31°, 3.65 s air | roll −1…7°, pitch 0…9°, 0.35 s air | **a crash became a corner** |
+| infernus kerb-strike       | slip 89.9°                      | slip 53.3°                     | better  |
+| infernus slalom            | roll ±180°, FLIP                | roll ±180°, FLIP (slip 74→45)  | **unchanged** |
+| infernus handbrake-turn    | roll ±180°, FLIP                | roll ±180°, FLIP               | **unchanged** |
+| comet slalom               | roll −177…180°, FLIP            | roll −14…159°, FLIP            | less extreme, still over |
+| infernus crest-jump        | slip 25°, roll −8…10°           | slip 89°, roll −7…25°          | **worse** |
+| comet kerb-strike          | slip 56°, 0.75 s air            | slip 86°, 1.62 s air           | **worse** |
+| infernus brake-strip       | 59.9 m / 2.92 s (1.6 g)         | 45.2 m / 2.33 s (2.0 g)        | shorter — see below |
+| comet brake-strip          | 32.3 m / 1.90 s                 | 26.6 m / 1.78 s                | shorter |
+
+**What this says.** The authored centre of mass fixes what it was supposed to fix — a car that braked
+straight now brakes straight, and a u-turn that ended in a 3.65 s flight is a corner. It does **not** stop
+the flips: the slalom and the handbrake turn still go over, and airborne cases got worse. That is consistent
+with the plan's own reading — the COM is half of it and roll stiffness is the other half (plan 03) — but it
+must be said plainly rather than filed as a win.
+
+**And braking got SHARPER, which is a regression against the user's complaint** (1.6 → 2.0 g on the
+infernus). The mechanism is straightforward: a lower, better-placed centre of mass puts more load through the
+front tyres, and the tyre force the raycast controller can deliver scales with suspension load. It makes plan
+04's brake-formula fix more urgent, not less — `brakeForce` still has no mass term at all (081/01's mod-corpus
+finding), so heavier cars remain hopeless while light ones get sharper.
+
+**Next**: `CHASSIS_ANGULAR_DAMPING` 2 → ≤0.5 (the band-aid this plan is supposed to retire), measured the
+same way. Expect the flips to get WORSE before plan 03's anti-roll puts stability back honestly — that
+sequence is the point of measuring each step separately.
