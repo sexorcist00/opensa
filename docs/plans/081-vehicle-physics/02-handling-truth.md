@@ -192,3 +192,40 @@ work may belong before it rather than after.
 
 The band-aid therefore stays at 2 until plan 03 ships a real answer to a vertical impact — removing it early
 costs stability and buys nothing measurable.
+
+### 2026-07-26 — per-car suspension: WRITTEN, MEASURED, REVERTED (§3 is not done)
+
+The derivation was written as the plan describes — rest length and travel from the authored limits, stiffness
+mass-normalised off the sedan the shared constants were tuned on, damping scaled about its reference with
+floors that keep the launch-hop lesson, force cap following weight. It shipped for about an hour and then a
+FIELD REPORT killed it: *"the admiral that spawns at Ganton shivers, right at load — and it barely drives.
+A second one I spawned does the same. The comet has no such problem."*
+
+**Reproduced, then reverted.** A new `rest` scene (the car is asked to do nothing for ten seconds; anything
+non-zero is a tremor) showed it deterministically at an EMPTY spot, so it was not a car-on-car collision:
+
+| Build                          | Vertical g at rest | Airborne of 10 s |
+| ------------------------------ | -----------------: | ---------------: |
+| shared constants (before/after) |    **0.000…0.000** |         **0.00** |
+| per-car suspension, admiral     |      −1.010…**7.15** |       **6.35** |
+| per-car suspension, firetruck   |        0.000…0.000 |             0.00 |
+
+Airborne 6.35 s of 10 also explains the second half of the report: a car whose wheels are off the ground two
+thirds of the time cannot pull away. Two symptoms, one cause. After the revert the admiral matches its
+baseline to the centimetre (77.3 km/h, 23.68 m of braking against 23.67).
+
+**Why it is reverted rather than fixed.** The only per-car differences for the admiral are rest 0.15 → 0.19 m,
+travel 0.25 → 0.27 m and a force cap 40 → 44 kN; stiffness, compression and rebound come out identical to the
+shared values (verified by reading them back off the Rapier controller, not by arithmetic). **None of those
+reproduces the tremor in an isolated Rapier test** that copies the real spawn rule, a realistic chassis and
+the parking brake — and in-game single-variable probes came back clean while the whole set jittered, which is
+a contradiction. At least one measurement in that bisection is untrustworthy.
+
+**The instrument gap that blocked it, and the next step.** A `[phys]` capture does not record the spring
+values the run actually used, so an in-game probe cannot be shown to have taken effect — exactly the class of
+doubt this chain exists to remove. §3 resumes only after the capture reports its own per-wheel suspension
+parameters. The mapping itself is kept in this ledger and in the reverted diff; it is the VALUES that are
+held back, not the reading of them.
+
+**What survives**: the `rest` scene (a car at rest must be still — the cheapest regression test in the set),
+and the knowledge that the shared spring is what suppresses the braking dive, which §3 still has to fix.

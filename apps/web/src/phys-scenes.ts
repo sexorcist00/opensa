@@ -22,6 +22,17 @@ function metronome(from: number, beats: number, period: number, steer: number, t
 
 export const PHYS_SCENES: readonly PhysScene[] = [
   {
+    durationS: 10,
+    heading: 0,
+    key: 'rest',
+    // The SF west-shore straight, NOT Ganton. The first version stood at Ganton, where the user saw parked
+    // cars shivering — and measured nothing reliable, because a lap seats the player in the NEAREST car and
+    // that street is full of parked ones. A scene about one car's stillness has to stand where it is alone.
+    position: [-2809, 180, 6],
+    timeline: [{ move: { x: 0, y: 0 }, t: 0 }],
+    what: 'The car sits at rest for ten seconds. Everything here should read zero; anything that does not is a tremor.',
+  },
+  {
     durationS: 16,
     heading: -3.132,
     key: 'brake-strip',
