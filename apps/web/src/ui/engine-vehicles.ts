@@ -331,6 +331,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
             restLength: Math.abs(data.handling.suspLower),
             travel: Math.abs(data.handling.suspUpper),
           },
+          traction: { bias: data.handling.tractionBias, mult: data.handling.tractionMult },
           turnMass: data.handling.turnMass,
         },
         wheels,

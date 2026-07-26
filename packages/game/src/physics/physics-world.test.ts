@@ -172,6 +172,7 @@ function massProps(over: Partial<VehicleMassProperties> = {}): VehicleMassProper
     centreOfMass: [0, 0, 0],
     mass: 1500,
     suspension: { bias: 0.5, damping: 0.15, force: 1.1, restLength: 0.15, travel: 0.25 },
+    traction: { bias: 0.5, mult: 0.7 },
     turnMass: 3000,
     ...over,
   };
@@ -776,7 +777,7 @@ describe('PhysicsWorld raycast vehicle', () => {
     it('engine force drives it forward, and parkVehicle brings it back to a stop', async () => {
       const { controller, physics } = await car();
 
-      physics.setVehicleControls(controller, FRONT, 12000, 0, 0);
+      physics.setVehicleControls(controller, FRONT, { brake: 0, drive: '4', engine: 12000, steer: 0, step: STEP });
       for (let i = 0; i < 180; i += 1) {
         physics.step(STEP);
       }

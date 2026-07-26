@@ -99,6 +99,13 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   the point where drag balances the engine, not as a cap someone clamps to. Before this the whole longitudinal
   model was one constant force and a hard speed limit: every car pulled as hard at 140 km/h as at walking
   pace. Only the DRIVEN car gets drag today — nothing else in the world drives itself.
+- **Tyres** (plan 081/05): grip per wheel is `fTractionMultiplier` — which IS a friction coefficient, and the
+  table's 0.55…0.75 is what a real tyre does — split across the axles by `fTractionBias`. It replaced a
+  shared 10.5 inherited from Bullet's demo, i.e. a tyre fifteen times grippier than any tyre, which is why
+  cars used to turn in instantly, never slide and trip over kerbs. The longitudinal clamp is applied on OUR
+  side in `setVehicleControls`, because Rapier applies its own friction limit only when a wheel already has a
+  side impulse — a car accelerating or braking dead ahead is otherwise unlimited. Engine force reaches driven
+  wheels only (`nDriveType`).
 - **Physics telemetry** (plan 081/01): `vehicle/vehicle-telemetry.ts` derives one frame per fixed step for
   the DRIVEN car — signed speed, lateral speed, body slip angle, per-wheel longitudinal slip ratio, pitch
   (**positive nose UP**, the sign the braking complaint is measured by), roll (positive right-side down),

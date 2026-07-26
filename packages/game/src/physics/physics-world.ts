@@ -103,7 +103,26 @@ const SUSPENSION_RELAXATION_FLOOR = 0.4;
  */
 const SUSPENSION_DAMPING_SCALE_MIN = 0.35;
 const SUSPENSION_DAMPING_SCALE_MAX = 2;
-const WHEEL_FRICTION_SLIP = 10.5; // tyre grip
+/**
+ * The tyre, as the original authors it (plan 081/05, brought forward by 04's field verdict).
+ *
+ * `fTractionMultiplier` IS a friction coefficient: the shipped table gives cars 0.55…0.75, which is exactly
+ * the range a real tyre works in, and Rapier's `frictionSlip` is the same quantity (its friction impulse is
+ * capped at `frictionSlip × suspensionForce × dt`, so the parameter is μ and nothing else).
+ *
+ * It stood at **10.5** — a tyre fifteen times grippier than any tyre — inherited from Bullet's raycast-vehicle
+ * demo. Everything that number touched was wrong in the same direction: a car turned in the instant the wheel
+ * moved, never slid, put every newton of engine straight into the road, and tripped over kerbs instead of
+ * sliding along them. It was invisible while the engine was one small constant; the moment 081/04 gave first
+ * gear its real thrust, the whole fleet became undriveable and the field said so.
+ *
+ * The original clamps each wheel's force to `adhesiveLimit(surface) × fTractionMultiplier × load` in
+ * `CVehicle::ProcessWheel`. Rapier applies the load term itself (its cap is proportional to the suspension
+ * force the corner actually carries), so what is left to hand it is the coefficient — and the axle split the
+ * original applies to it, which is `fTractionBias` in the same `2 × bias` / `2 − 2 × bias` form as the
+ * suspension's. The surface term is not modelled yet: every road is tarmac until surface types are wired.
+ */
+const TYRE_GRIP_FLOOR = 0.2; // a row authoring 0 (there are 19) would weld the wheels; keep them steerable
 const PARKING_BRAKE = 80; // holds a parked car put (released by the driver when throttling)
 const CHASSIS_LINEAR_DAMPING = 0.1;
 /**
@@ -140,7 +159,7 @@ export const VEHICLE_PHYSICS_CONSTANTS: readonly (readonly [string, number])[] =
   ['susp rebound ratio', SUSPENSION_RELAXATION_RATIO],
   ['susp max travel (m)', SUSPENSION_MAX_TRAVEL],
   ['susp max force (N)', SUSPENSION_MAX_FORCE],
-  ['wheel friction slip', WHEEL_FRICTION_SLIP],
+  ['tyre grip floor', TYRE_GRIP_FLOOR],
   ['parking brake (N)', PARKING_BRAKE],
   ['chassis lin damping', CHASSIS_LINEAR_DAMPING],
   ['chassis ang damping', CHASSIS_ANGULAR_DAMPING],
@@ -201,6 +220,8 @@ export interface Impact {
 /** Rapier's raycast vehicle controller (engine/brake/steer, suspension, wheels). */
 export type VehicleController = ReturnType<RapierWorld['createVehicleController']>;
 
+/** Which wheels the engine drives (`nDriveType`). */
+export type VehicleDriveType = '4' | 'F' | 'R';
 /**
  * A vehicle body's AUTHORED mass properties (plan 081/02) — `handling.cfg`'s, not the collision hull's.
  *
@@ -216,9 +237,12 @@ export interface VehicleMassProperties {
   readonly mass: number;
   /** The car's own springs (`fSuspension*`) — every car shared one set until plan 081/02 §3. */
   readonly suspension: VehicleSuspensionSpec;
+  /** The car's own tyres (`fTraction*`) — every car shared one grip constant until plan 081/05. */
+  readonly traction: VehicleTractionSpec;
   /** `fTurnMass` (kg·m²) — the yaw inertia, the only one SA authors. */
   readonly turnMass: number;
 }
+
 /**
  * One wheel's SPRING SETUP, as the controller holds it (plan 081/02).
  *
@@ -261,6 +285,14 @@ export interface VehicleSuspensionSpec {
   readonly restLength: number;
   /** How far the spring may compress from rest (m): SA's upper limit. */
   readonly travel: number;
+}
+
+/** A car's authored tyre grip (plan 081/05). */
+export interface VehicleTractionSpec {
+  /** `fTractionBias`, 0..1 — the front axle's share, applied as `2 × bias` front and `2 − 2 × bias` rear. */
+  readonly bias: number;
+  /** `fTractionMultiplier` — the friction coefficient itself. */
+  readonly mult: number;
 }
 
 /** One wheel's live state, as {@link PhysicsWorld.readVehicleWheels} reads it off the controller. */
@@ -445,7 +477,7 @@ export class PhysicsWorld {
       controller.setWheelSuspensionRelaxation(i, spring.relaxation);
       controller.setWheelMaxSuspensionTravel(i, spring.travel);
       controller.setWheelMaxSuspensionForce(i, spring.maxForce);
-      controller.setWheelFrictionSlip(i, WHEEL_FRICTION_SLIP);
+      controller.setWheelFrictionSlip(i, tyreGrip(properties.traction, wheel.front));
       controller.setWheelBrake(i, PARKING_BRAKE); // parked until a driver throttles
     });
     this.vehicles.push(controller);
@@ -880,19 +912,41 @@ export class PhysicsWorld {
    * Apply per-frame driving controls: total `engineForce` and total `brake` each
    * split across all wheels (4WD), and `steer` (rad) on the front wheels.
    */
+  /**
+   * Hand the controller this step's driving values, each wheel clamped to what its tyre can actually deliver.
+   *
+   * `engine` is the force ONE DRIVEN WHEEL gets, not a total to share out — that is how the original does it
+   * (`CAutomobile::ProcessCarWheelPair` gives every driven wheel the full `acceleration`), and it is why the
+   * drive-type divisor exists: dividing the engine by 4 and then pushing with four wheels, or by 2 and
+   * pushing with two, comes to the same total. Which wheels push is `drive`, so a rear-drive car launches on
+   * the load its REAR axle carries.
+   *
+   * **The clamp is ours to apply, because Rapier skips it in a straight line.** Its controller computes the
+   * friction limit `μ × suspensionForce × dt` and a `skid_info` factor, then applies that factor only
+   * `if wheel.side_impulse != 0.0` — so a car accelerating or braking dead ahead has NO longitudinal grip
+   * limit at all, and will put any force you hand it into the road. That is a Bullet inheritance, and it is
+   * why the fleet launched at 5 g when 081/04 gave first gear its real thrust. The original clamps in exactly
+   * this place (`CVehicle::ProcessWheel`: the wheel's force is limited by its adhesion), so this is the
+   * original's model, applied where this engine needs it.
+   *
+   * The lateral half is left to Rapier: once a wheel has any side impulse, its own friction-circle check runs
+   * and scales both components together, which is the behaviour we want.
+   */
   setVehicleControls(
     controller: VehicleController,
     wheels: readonly { front: boolean }[],
-    engineForce: number,
-    brake: number,
-    steer: number,
+    controls: { brake: number; drive: VehicleDriveType; engine: number; steer: number; step: number },
   ): void {
-    const count = wheels.length || 1;
-    const perEngine = engineForce / count;
-    const perBrake = brake / count;
+    const { brake, drive, engine, steer, step } = controls;
+    const perBrake = brake / (wheels.length || 1);
     wheels.forEach((wheel, i) => {
-      controller.setWheelEngineForce(i, perEngine);
-      controller.setWheelBrake(i, perBrake);
+      const driven = drive === '4' || (drive === 'F') === wheel.front;
+      // What this corner's tyre can deliver right now: μ × the load its spring is carrying. A wheel in the
+      // air carries nothing, so it drives and brakes with nothing — which is what an airborne wheel does.
+      const grip = (controller.wheelFrictionSlip(i) ?? 0) * (controller.wheelSuspensionForce(i) ?? 0);
+      controller.setWheelEngineForce(i, driven ? clampMagnitude(engine, grip) : 0);
+      // Rapier's brake is an IMPULSE cap where its engine force is a FORCE, so the grip limit converts.
+      controller.setWheelBrake(i, Math.min(perBrake, grip * step));
       controller.setWheelSteering(i, wheel.front ? steer : 0);
     });
   }
@@ -1162,6 +1216,20 @@ export class PhysicsWorld {
 }
 
 /**
+ * A car's springs, derived from its authored suspension row (plan 081/02 §3).
+ *
+ * Stiffness and the force cap are MASS-NORMALISED: a rate that carries 1500 kg leaves a 6.5 t truck on its
+ * bump stops, which is what one shared spring meant. Damping keeps its tuned RATIO — compression sits far
+ * above the Bullet-standard rebound because it damps the launch hop (074 field lesson) — and both have a
+ * floor, because a tank authors 0.02 and honouring that literally makes it a pogo stick. Geometry is
+ * literal: the wheel hangs |lower limit| below its hub, the spring compresses by the upper limit.
+ */
+/** Clamp to ±limit. */
+function clampMagnitude(value: number, limit: number): number {
+  return Math.min(Math.max(value, -limit), limit);
+}
+
+/**
  * The inertia tensor a car gets from its authored numbers (plan 081/02).
  *
  * SA authors ONE rotational number, `fTurnMass`, and it is the YAW inertia — the axis a car actually turns
@@ -1184,15 +1252,6 @@ function principalInertia(
   return { x: box(hy, hz) * scale, y: box(hx, hz) * scale, z: properties.turnMass };
 }
 
-/**
- * A car's springs, derived from its authored suspension row (plan 081/02 §3).
- *
- * Stiffness and the force cap are MASS-NORMALISED: a rate that carries 1500 kg leaves a 6.5 t truck on its
- * bump stops, which is what one shared spring meant. Damping keeps its tuned RATIO — compression sits far
- * above the Bullet-standard rebound because it damps the launch hop (074 field lesson) — and both have a
- * floor, because a tank authors 0.02 and honouring that literally makes it a pogo stick. Geometry is
- * literal: the wheel hangs |lower limit| below its hub, the spring compresses by the upper limit.
- */
 function suspensionSetup(
   properties: VehicleMassProperties,
   front: boolean,
@@ -1233,4 +1292,11 @@ function suspensionSetup(
     stiffness,
     travel: usableTravel,
   };
+}
+
+/** The wheel's friction coefficient: the authored multiplier, split across the axles the way SA splits it. */
+function tyreGrip(traction: VehicleTractionSpec, front: boolean): number {
+  const axle = front ? 2 * traction.bias : 2 - 2 * traction.bias;
+
+  return Math.max(TYRE_GRIP_FLOOR, traction.mult * axle);
 }

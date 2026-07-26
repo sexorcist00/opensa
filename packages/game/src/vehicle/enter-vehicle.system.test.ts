@@ -112,10 +112,14 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
     }),
     seedReverse: (): undefined => undefined,
     setColliderSensor: (): undefined => undefined,
-    setVehicleControls: (_c: VehicleController, _w: unknown, engine: number, brake: number, steer: number): void => {
-      phys.engine = engine;
-      phys.brake = brake;
-      phys.steer = steer;
+    setVehicleControls: (
+      _c: VehicleController,
+      _w: unknown,
+      controls: { brake: number; engine: number; steer: number },
+    ): void => {
+      phys.engine = controls.engine;
+      phys.brake = controls.brake;
+      phys.steer = controls.steer;
     },
     vehicleGrounded: (): boolean => phys.grounded,
     vehicleSpeed: (): number => phys.speed,

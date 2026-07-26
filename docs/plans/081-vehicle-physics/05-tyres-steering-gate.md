@@ -76,3 +76,52 @@ seedReverse/phantom-speed die with it; parking brake + spawn lessons stay.
 ## Ledger
 
 _(traction formulas, steering factors, gate captures, THE VERDICT)_
+
+## Ledger
+
+### 2026-07-26 — the tyre gets its authored grip (brought forward: 04's field round demanded it)
+
+This plan was scheduled after the drivetrain. The drivetrain's field round moved it: with a real gearbox
+behind them, the cars became undriveable, and the user's three complaints — violent launches, "they fly like
+aeroplanes", kerbs launching flips — were one number.
+
+**`WHEEL_FRICTION_SLIP = 10.5`**, Bullet's demo default, is a friction coefficient fifteen times a real
+tyre's. `fTractionMultiplier` IS that coefficient (the table gives cars 0.55…0.75) and Rapier's
+`frictionSlip` is the same quantity — its friction impulse is capped at `frictionSlip × suspensionForce × dt`.
+So the fix is to hand each wheel its authored number, split across the axles by `fTractionBias` in the
+original's `2 × bias` / `2 − 2 × bias` form.
+
+**The trap, and it is worth remembering.** Handing over the right coefficient changed nothing at first: the
+fleet still launched at 5 g. Rapier computes the friction limit and a `skid_info` factor, then applies it
+only `if wheel.side_impulse != 0.0` — so a car accelerating or braking dead ahead has **no longitudinal grip
+limit at all**. The original clamps in exactly this place (`CVehicle::ProcessWheel` limits the wheel's force
+by its adhesion), so the clamp now happens on our side, per wheel, against `μ × the load that corner carries`.
+The lateral half is left to Rapier, whose friction circle does run once a wheel has any side impulse.
+
+Engine force also reaches DRIVEN wheels only now. That is what the drive-type divisor was always for: ÷4
+pushed by four wheels and ÷2 pushed by two come to the same total, which is why 04's "4WD cars are weaker"
+reading was wrong.
+
+| car      | drive | μ    | launch g        | brake g     |
+| -------- | ----- | ---- | --------------- | ----------- |
+| infernus | 4     | 0.70 | 1.07 → **0.70** | 1.33 → 1.14 |
+| comet    | R     | 0.67 | 1.65 → **0.43** | 2.39 → 0.92 |
+| admiral  | R     | 0.70 | 1.00 → **0.37** | 0.71 → 0.58 |
+| firetruk | R     | 0.55 | 1.86 → **0.35** | 1.36 → 0.80 |
+
+The 4WD car lands on its coefficient exactly; the rear-drive cars land near half of theirs, because a rear
+axle carries about half the car. Cross-checked against the original rather than against taste: SA's own
+adhesion formula by hand for the admiral gives ≈ 0.4 g against our measured 0.37.
+
+**Field verdict**: *"significantly better — you feel the weight of the car, you feel the power. The best
+result so far. One flaw: hard to turn into a corner at speed, as if the car has been made too heavy."*
+
+**Next, from that verdict**: the steering still carries two constants fitted when grip was infinite —
+`STEER_LOCK_SCALE = 0.6` (use only 60 % of the authored lock) and `STEER_SPEED_FALLOFF = 0.6` (shrink it by
+another 60 % toward top speed). They now stack on top of a real tyre, which is its own limiter. The original
+has a limiter here too (`steerAngle = asin(min(adhesive × traction × 16 / v², 1)) / lock`) — it is grip-based
+rather than fitted, and it is MORE restrictive than what the field already called too heavy, so it must be
+measured against simply letting the tyres do the limiting before either is adopted.
+
+**Still open in this plan**: `fTractionLoss` (the sliding regime), surface types (`ROAD_ADHESION = 1` stands
+in for `g_surfaceInfos`), and the own-controller gate.

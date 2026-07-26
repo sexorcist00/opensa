@@ -767,7 +767,13 @@ export class EnterVehicleSystem implements System {
     const rate = steerInput === 0 ? STEER_RECENTER_RATE : STEER_RATE;
     this.steerAngle += clamp(target - this.steerAngle, -rate * step, rate * step);
 
-    this.physics.setVehicleControls(car.controller, car.wheels, this.engine, brake, this.steerAngle);
+    this.physics.setVehicleControls(car.controller, car.wheels, {
+      brake,
+      drive: hnd.drive,
+      engine: this.engine,
+      steer: this.steerAngle,
+      step,
+    });
     this.controls = { brake, engineForce: this.engine, gear, steer: this.steerAngle, throttle };
     car.rig.setSteer(this.steerAngle); // front wheels turn with the physics steer
   }

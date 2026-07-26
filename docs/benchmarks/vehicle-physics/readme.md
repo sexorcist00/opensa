@@ -268,3 +268,50 @@ that is backwards, and the suspect is the brake split, which is still equal acro
 `fBrakeBias` sits unread (plan 04 §3).
 
 Runs: `2026-07-26-headless-bias-savanna.json` (+ the infernus null-result alongside it).
+
+### 2026-07-26 — the tyre gets its authored grip, and the fleet stops being a slot car (081/05, early)
+
+**Field verdict that forced this** (user, on the drivetrain build): *"launches are very violent on both cars —
+a 1976 Mercedes should be heavy and smooth and instead it rips away, barely slower than the sports car; the
+cars have become hard to control from the speed and the lightness, they fly like aeroplanes; a kerb at speed
+launches us into a flip. It feels like something is missing."* All three are one missing number.
+
+`WHEEL_FRICTION_SLIP` was **10.5** — Bullet's raycast-vehicle demo default, and a friction coefficient
+fifteen times a real tyre's. `fTractionMultiplier` is that same coefficient and the shipped table gives cars
+**0.55…0.75**, which is what a tyre actually does. Everything the 10.5 touched was wrong in one direction: a
+car turned in the instant the wheel moved, never slid, put every newton of engine straight into the road, and
+tripped over kerbs instead of sliding along them.
+
+Two things had to land together:
+
+1. **Grip per wheel from `fTractionMultiplier`**, split across the axles by `fTractionBias` in the original's
+   own `2 × bias` / `2 − 2 × bias` form.
+2. **The clamp itself, applied on our side.** Rapier computes the friction limit `μ × suspensionForce × dt`
+   and a `skid_info` factor — and then applies it only `if wheel.side_impulse != 0.0`. A car accelerating or
+   braking DEAD AHEAD therefore has no longitudinal grip limit whatsoever, and eats any force it is handed.
+   That is a Bullet inheritance and it is why the fleet launched at 5 g. The original clamps in exactly this
+   place (`CVehicle::ProcessWheel`), so the model is SA's; only the location is ours.
+
+Engine force also reaches DRIVEN wheels only now (`nDriveType`), which is what the drive-type divisor was
+always for: engine ÷ 4 pushed by four wheels and engine ÷ 2 pushed by two come to the same total.
+
+| car      | drive | μ    | launch g      | brake g       | 0-100 km/h    |
+| -------- | ----- | ---- | ------------- | ------------- | ------------- |
+| infernus | 4     | 0.70 | 1.07 → **0.70** | 1.33 → 1.14 | 4.05 → 5.40 s |
+| comet    | R     | 0.67 | 1.65 → **0.43** | 2.39 → 0.92 | 2.30 → never  |
+| admiral  | R     | 0.70 | 1.00 → **0.37** | 0.71 → 0.58 | 5.27 → never  |
+| firetruk | R     | 0.55 | 1.86 → **0.35** | 1.36 → 0.80 | 3.12 → never  |
+
+The infernus lands exactly on its coefficient (4WD, all four wheels pushing, 0.70 g = μ); the rear-drive cars
+land near half of theirs, because a rear axle only carries about half the car. **These are real cars' numbers**
+— and they agree with the original: running SA's own adhesion formula by hand for the admiral
+(`adhesiveLimit × fTractionMultiplier × 2.5 × suspension term`, two driven wheels) gives ≈ 0.4 g against our
+measured 0.37.
+
+**Field verdict on THIS build** (user): *"significantly better — we pull away well at low speed, gather speed,
+you feel the weight of the car, you feel the power. The best result so far. One flaw: it is now hard to turn
+into a corner at speed — as if the car has been made too heavy."* That last one is the next item: the
+steering still carries two FITTED constants (0.6 of the authored lock, falling by another 0.6 toward top
+speed) that were tuned when grip was infinite, and they now stack on top of a real tyre.
+
+Runs: `2026-07-26-headless-tyregrip-{infernus,comet,admiral,firetruk}.json`.
