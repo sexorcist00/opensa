@@ -155,7 +155,19 @@ const SEAT_RAISE = 0;
  * 0.53 it managed on a mass-blind constant.
  */
 const BRAKE_UNITS_PER_DECEL_PER_KG = 1 / 73.6;
-const IDLE_BRAKE_FRACTION = 0.08; // light brake when off throttle, so the car coasts to a stop
+/**
+ * The off-throttle brake, from the original's own constant (081/04 §3).
+ *
+ * `CVehicle::ProcessWheel`: with no brake pressed and the pedal at rest, each wheel gets
+ * `gHandlingDataMgr.fWheelFriction / mass` — and `fWheelFriction` is **0.9**. Carried through SA's units that
+ * is a mass-INDEPENDENT impulse of 37.5 per wheel here, i.e. a constant retarding FORCE rather than a
+ * constant deceleration: a light car slows sharply off the throttle and a 6.5 t truck barely notices, which
+ * is the right way round.
+ *
+ * It replaces a flat 8 % of the car's own brake, which came to 0.27 m/s² on an admiral against the original's
+ * 6.4 — **24× too weak**. That is most of why a car with the throttle released kept sailing.
+ */
+const COAST_BRAKE_PER_WHEEL = 37.5;
 /**
  * Seconds for the FOOT brake to reach full force. A pedal is not a switch — but it is not a dial either:
  * 0.45 read as "an unnaturally smooth dive" in the field, because a driver stabbing the brake reaches the
@@ -735,7 +747,7 @@ export class EnterVehicleSystem implements System {
     const brakeForce = hnd.brakeDecel * hnd.mass * BRAKE_UNITS_PER_DECEL_PER_KG;
     this.applyDrag(car, step);
 
-    const { brake, gear, targetEngine } = this.longitudinal(car, {
+    const { brake, driverBraking, gear, targetEngine } = this.longitudinal(car, {
       box,
       brakeForce,
       footBrake,
@@ -745,10 +757,10 @@ export class EnterVehicleSystem implements System {
       step,
       throttle,
     });
-    // Brake lights come on when the DRIVER brakes, not when the pedal reaches the floor: with the foot brake
-    // ramping in (081/04) a `brake === brakeForce` test kept them dark for the first half-second of every
-    // stop. Anything above the idle coast-brake is the driver's doing.
-    this.braking = brake > brakeForce * IDLE_BRAKE_FRACTION;
+    // Brake lights come on when the DRIVER brakes — read off the INTENT, not off the force. Testing the force
+    // meant they stayed dark while the pedal ramped in, and then (once coasting got the original's much
+    // stronger wheel friction) that they could not be told from a coast at all.
+    this.braking = driverBraking;
 
     // No ramp: the drivetrain does its own shaping now (the gear's thrust factor eases in over ~0.1 s and
     // dips on every shift), and a second smoothing on top of it would flatten the shifts back out.
@@ -870,20 +882,21 @@ export class EnterVehicleSystem implements System {
       step: number;
       throttle: number;
     },
-  ): { brake: number; gear: number; targetEngine: number } {
+  ): { brake: number; driverBraking: boolean; gear: number; targetEngine: number } {
     const { box, brakeForce, footBrake, grounded, handbrake, speed, step, throttle } = input;
     const gear = this.drivetrain.gear;
     if (handbrake) {
       this.footBrakeRamp = 0; // the lever does not leave the pedal half-pressed behind it
 
-      return { brake: brakeForce, gear, targetEngine: 0 };
+      return { brake: brakeForce, driverBraking: true, gear, targetEngine: 0 };
     }
     if (footBrake || (throttle < 0 && speed > REVERSE_SPEED_EPS)) {
-      return { brake: brakeForce * this.rampFootBrake(step), gear, targetEngine: 0 };
+      return { brake: brakeForce * this.rampFootBrake(step), driverBraking: true, gear, targetEngine: 0 };
     }
     this.footBrakeRamp = 0;
     if (throttle === 0) {
-      return { brake: brakeForce * IDLE_BRAKE_FRACTION, gear, targetEngine: 0 }; // coast to a stop off-throttle
+      // Coasting: the original's wheel friction, not a share of the car's own brakes.
+      return { brake: COAST_BRAKE_PER_WHEEL * car.wheels.length, driverBraking: false, gear, targetEngine: 0 };
     }
     if (throttle < 0 && speed > -REVERSE_SEED_SPEED) {
       // The raycast controller won't start reverse from a dead stop; seed a small backward velocity until
@@ -895,7 +908,7 @@ export class EnterVehicleSystem implements System {
     const drive = driveAcceleration(box, car.handling, this.drivetrain, { grounded, speed, step, throttle });
     this.drivetrain.gear = drive.gear;
 
-    return { brake: 0, gear: drive.gear, targetEngine: car.handling.mass * drive.accel };
+    return { brake: 0, driverBraking: false, gear: drive.gear, targetEngine: car.handling.mass * drive.accel };
   }
 
   /** The nearest upright car within enter range, or null — the car Enter would target from idle. */
