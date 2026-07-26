@@ -67,6 +67,27 @@ describe('summarisePhysFrames', () => {
   });
 
   describe('positive cases', () => {
+    it('reports the DIVE as the mean pitch while decelerating, where the peak reads the wrong sign', () => {
+      // The instant the brake goes on the nose has not come down yet, so the PEAK nose-up is positive on a
+      // car that then dives 2° — the field verdict "the nose lifts" was partly this metric. The mean over
+      // the frames that are actually slowing answers the question that was being asked.
+      const frames = [
+        ...lap(6, () => ({ brake: 8000, gLong: -1.5, pitch: 0.03, speed: 20 })), // brake bites, nose still up
+        ...lap(60, () => ({ brake: 8000, gLong: -1.5, pitch: -0.03, speed: 10 })).map((f) => ({
+          ...f,
+          t: f.t + 0.1,
+        })),
+      ];
+      const summary = summarisePhysFrames(frames);
+
+      expect(summary.pitchUnderBrakeDeg).toBeCloseTo(1.72, 1); // the peak says NOSE UP
+      expect(summary.diveDeg).toBeLessThan(-1); // the mean says it dived
+    });
+
+    it('reports no dive for a lap that never braked hard', () => {
+      expect(summarisePhysFrames(lap(60, () => ({ speed: 20 }))).diveDeg).toBeNull();
+    });
+
     it('keeps the peak nose-up angle reached while the brakes were on, not the lap maximum', () => {
       const frames = [
         ...lap(30, () => ({ pitch: 0.5 })), // a big nose-up BEFORE the brakes: a crest, not the complaint

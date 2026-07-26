@@ -190,3 +190,41 @@ the brake-strip capture are the instruments, and the whole matrix is the regress
 
 **Estimated size of the change**: one constant, one damping ratio, and a very careful measured walk down —
 because the last time this chain changed a suspension number by 10 % a parked car started shivering.
+
+### 2026-07-26 — §1 SHIPPED: the nose dives, on every car
+
+Two changes, both derived from §0's measurement rather than tuned:
+
+1. **The mass term is gone from the stiffness.** Rapier already multiplies by chassis mass (`force =
+   stiffness × compression × mass × 1.43`, probed across 1400 kg and 6500 kg), so 081/02's mass normalisation
+   double-counted and the rate grew with mass² — the firetruck was riding a spring that sagged **3.3 mm**
+   under its own weight. Without it, static sag is a function of stiffness alone, so every car sits at its
+   design height whatever it weighs.
+2. **The reference rate went 120 → 34**, targeting ~5 cm of static sag against the old 1.5 cm, and **damping
+   is now DERIVED from the rate** (`ratio × 2√stiffness`, Bullet's relation) with the ratios taken from the
+   pair tuned in-browser at 112. Softening a spring without rescaling its damping would have left every car
+   damped for a seven-times-stiffer spring — and the high compression ratio preserves the 074 launch-hop
+   lesson as a RATIO, so it survives the next rate change too.
+
+**The result, measured on the brake strip — negative is NOSE DOWN:**
+
+| Car      | Dive (mean pitch while decelerating) | Deceleration | Stiffness |
+| -------- | -----------------------------------: | -----------: | --------: |
+| infernus |                          **−0.97°** |       2.04 g |      37.1 |
+| comet    |                          **−1.08°** |       2.32 g |      19.8 |
+| admiral  |                          **−1.49°** |       0.94 g |      28.7 |
+| firetruk |                          **−0.28°** |       0.53 g |      37.1 |
+
+**The sign is right on all four**, and the heavy truck dives least — which is what a heavy truck on soft
+springs does. The magnitudes sit at the low end of the plan's 1-3° band; the deceleration being 2 g on the
+sports cars (plan 04) is part of why, since a shorter stop spends less time in the transfer.
+
+**A metric had to be fixed to see it.** `pitchUnderBrakeDeg` is the PEAK nose-up while braking, and it fires
+at the instant the brake bites — before the nose has come down. The comet reports **+1.65°** there while
+actually diving to −2.58°. The whole BEFORE record was measured with it, so it stays for comparability, and a
+new `diveDeg` (mean pitch over the frames that are really slowing) answers the question that was being asked.
+The old field is not wrong; it was answering a different question, and nobody noticed for two plans.
+
+**Still owed in §1**: `fBrakeBias` is unread, and the deceleration is too high — both plan 04. Anti-dive
+(`fSuspensionAntiDiveMultiplier`) is NOT needed to produce dive, exactly as the authored zeros predicted; it
+remains available to SHAPE it once 04 makes the braking force honest.

@@ -14,19 +14,45 @@ const GROUND_EPSILON = 0.15;
 // rests at a small compression — the COL hull bottom sits only ~0.13 m above the wheel contact,
 // so a soft/under-damped spring lets the hull sink into the road and bounce (rolling the wheels).
 const SUSPENSION_REST = 0.15; // spring rest length: wheel hangs this far below its connection
-const SUSPENSION_STIFFNESS = 120;
-const SUSPENSION_COMPRESSION = 12; // raised above Bullet-standard 4.4 to damp the launch hop
-const SUSPENSION_RELAXATION = 2.3; // Bullet-standard damping (rebound)
+/**
+ * Spring rate — **retuned 2026-07-26 from 120 to 34, and the mass term removed** (plan 081/03 §1).
+ *
+ * Two things were wrong with 120, both measured rather than argued:
+ *
+ * 1. **Rapier already multiplies by chassis mass.** Its suspension force is `stiffness × compression × mass
+ *    × 1.43` (probed across 1400 kg and 6500 kg, consistent to three figures), so 081/02's mass-normalised
+ *    stiffness double-counted: the rate grew with mass² and a 6.5 t truck ended up on a spring that sagged
+ *    **3.3 mm** under its own weight. With the mass term gone, static sag depends on stiffness ALONE —
+ *    `sag = g / (5.72 × stiffness)` — which is what lets every car sit at its design height whatever it weighs.
+ * 2. **It was about seven times too stiff.** At 120 the sag was 15 mm and the whole braking weight transfer
+ *    (94.6 % of the load moving to the front axle — measured) moved a front spring 1.45 cm: **0.59° of
+ *    pitch**, invisible. A road car sags 6-17 cm and would have pitched 4.4° on the same transfer. The same
+ *    stiffness is why a second of held lock produced 0.05° of roll, and why a kerb's impulse became body
+ *    rotation instead of suspension travel — one number behind three separate complaints.
+ *
+ * 34 targets ~5 cm of static sag: softer than the game had by 3.3×, still firmer than a comfort car, and
+ * chosen to leave the COL hull its clearance (the reason 120 was raised in the first place — a car that sinks
+ * into the road bounces on its own collision).
+ */
+const SUSPENSION_STIFFNESS = 34;
+/**
+ * Damping is DERIVED from the rate, not set beside it: Bullet's `damping = ratio × 2√stiffness`, with the
+ * ratios taken from the pair that was tuned in-browser at stiffness 112 (compression 0.567, rebound 0.109).
+ * Anything else and softening the spring would leave the damping where a seven-times-stiffer spring needed
+ * it. The compression ratio is deliberately high — that is the 074 launch-hop lesson, preserved as a RATIO
+ * so it survives every future rate change.
+ */
+const SUSPENSION_COMPRESSION_RATIO = 0.567;
+const SUSPENSION_RELAXATION_RATIO = 0.109;
 const SUSPENSION_MAX_TRAVEL = 0.25;
 const SUSPENSION_MAX_FORCE = 40000; // carries the chassis at small compression without overshoot
 // The per-car derivation (plan 081/02 §3) scales the numbers above off the sedan they were tuned on.
 const SUSPENSION_REFERENCE_MASS = 1500;
 const SUSPENSION_REFERENCE_FORCE = 1.1; // the mid-range `fSuspensionForceLevel` of the stock car table
-const SUSPENSION_STIFFNESS_PER_KG = SUSPENSION_STIFFNESS / SUSPENSION_REFERENCE_MASS / SUSPENSION_REFERENCE_FORCE;
 const SUSPENSION_FORCE_PER_KG = SUSPENSION_MAX_FORCE / SUSPENSION_REFERENCE_MASS;
 const SUSPENSION_DAMPING_REFERENCE = 0.15; // the mid-range `fSuspensionDampingLevel`
-const SUSPENSION_COMPRESSION_FLOOR = 4.4; // Bullet standard — below it the launch hop returns
-const SUSPENSION_RELAXATION_FLOOR = 1;
+const SUSPENSION_COMPRESSION_FLOOR = 2; // a floor on the DERIVED value, not a substitute for it
+const SUSPENSION_RELAXATION_FLOOR = 0.4;
 /**
  * The damping scale is CLAMPED, and the ceiling is the half that was learned the hard way.
  *
@@ -74,8 +100,8 @@ const CONTACT_FORCE_THRESHOLD = 400; // min contact force (N) before an impact e
 export const VEHICLE_PHYSICS_CONSTANTS: readonly (readonly [string, number])[] = [
   ['susp rest (m)', SUSPENSION_REST],
   ['susp stiffness', SUSPENSION_STIFFNESS],
-  ['susp compression', SUSPENSION_COMPRESSION],
-  ['susp relaxation', SUSPENSION_RELAXATION],
+  ['susp compression ratio', SUSPENSION_COMPRESSION_RATIO],
+  ['susp rebound ratio', SUSPENSION_RELAXATION_RATIO],
   ['susp max travel (m)', SUSPENSION_MAX_TRAVEL],
   ['susp max force (N)', SUSPENSION_MAX_FORCE],
   ['wheel friction slip', WHEEL_FRICTION_SLIP],
@@ -1112,12 +1138,15 @@ function suspensionSetup(properties: VehicleMassProperties): {
     Math.max(SUSPENSION_DAMPING_SCALE_MIN, damping / SUSPENSION_DAMPING_REFERENCE),
   );
 
+  const stiffness = SUSPENSION_STIFFNESS * (force > 0 ? force / SUSPENSION_REFERENCE_FORCE : 1);
+  const critical = 2 * Math.sqrt(stiffness); // Bullet's damping scale for a rate
+
   return {
-    compression: Math.max(SUSPENSION_COMPRESSION_FLOOR, SUSPENSION_COMPRESSION * dampingScale),
+    compression: Math.max(SUSPENSION_COMPRESSION_FLOOR, SUSPENSION_COMPRESSION_RATIO * critical * dampingScale),
     maxForce: properties.mass * SUSPENSION_FORCE_PER_KG,
-    relaxation: Math.max(SUSPENSION_RELAXATION_FLOOR, SUSPENSION_RELAXATION * dampingScale),
+    relaxation: Math.max(SUSPENSION_RELAXATION_FLOOR, SUSPENSION_RELAXATION_RATIO * critical * dampingScale),
     restLength: restLength > 0 ? restLength : SUSPENSION_REST,
-    stiffness: properties.mass * SUSPENSION_STIFFNESS_PER_KG * (force > 0 ? force : 1),
+    stiffness,
     travel: travel > 0 ? travel : SUSPENSION_MAX_TRAVEL,
   };
 }

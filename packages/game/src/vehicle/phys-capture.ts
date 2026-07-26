@@ -41,6 +41,16 @@ export interface PhysSummary {
   /** Braking: distance and time from the first braked frame to a stop. Null when the lap never braked to
    *  a halt (nothing to measure is not the same as a zero). */
   readonly brake: null | { distanceM: number; fromKmh: number; seconds: number };
+  /**
+   * MEAN body pitch while the car is actually decelerating (deg) — **negative is the nose DOWN**, which is
+   * what "does it dive" asks. Null when the lap never braked hard.
+   *
+   * `pitchUnderBrakeDeg` beside it is the PEAK nose-up, and it answers a different question badly: it fires
+   * at the instant the brake goes on, before the nose has had time to come down, so a car that dives 2.6°
+   * can still report +1.65° there. Both are kept — the peak is what the whole BEFORE record was measured
+   * with, and comparability matters more than tidiness.
+   */
+  readonly diveDeg: null | number;
   /** Captured length (s) and frame count — a lap that ended early is not comparable to one that did not. */
   readonly durationS: number;
   /** Whether the car ever passed {@link FLIP_ROLL_DEG}, and how fast it was going when it first did. */
@@ -113,6 +123,7 @@ export function summarisePhysFrames(frames: readonly TelemetryFrame[]): PhysSumm
   return {
     airborneS: round(integrate(frames, (frame) => (frame.wheels.some((wheel) => wheel.contact) ? 0 : 1))),
     brake: brakingRun(frames),
+    diveDeg: dive(frames),
     durationS: round(frames[frames.length - 1].t - frames[0].t),
     flip: flip === null ? null : { atKmh: round(flip.speed * MS_TO_KMH), atS: round(flip.t) },
     frames: frames.length,
@@ -236,6 +247,7 @@ const ZERO_RANGE: PhysRange = { max: 0, min: 0 };
 const EMPTY: PhysSummary = {
   airborneS: 0,
   brake: null,
+  diveDeg: null,
   durationS: 0,
   flip: null,
   frames: 0,
@@ -251,6 +263,16 @@ const EMPTY: PhysSummary = {
   topSpeedKmh: 0,
   turnedDeg: 0,
 };
+
+/** Mean pitch over the frames where the car is really slowing (below {@link BRAKING_G}), or null. */
+function dive(frames: readonly TelemetryFrame[]): null | number {
+  const braking = frames.filter((frame) => frame.gLong < BRAKING_G && frame.brake > 0);
+
+  return braking.length === 0 ? null : round(mean(braking.map((frame) => frame.pitch * RAD_TO_DEG)));
+}
+
+/** Longitudinal g below which the car counts as braking hard enough for its attitude to mean something. */
+const BRAKING_G = -0.3;
 
 /** The first braking run that actually reaches a stop: its distance, its time, and the speed it started at. */
 function brakingRun(frames: readonly TelemetryFrame[]): null | { distanceM: number; fromKmh: number; seconds: number } {
@@ -272,6 +294,11 @@ function brakingRun(frames: readonly TelemetryFrame[]): null | { distanceM: numb
   }
 
   return null; // braked but never stopped inside the capture — not a distance anyone can compare
+}
+
+/** Arithmetic mean; 0 for an empty window. */
+function mean(values: readonly number[]): number {
+  return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 /** Middle value; 0 for an empty window. Used over the mean where one collision sample could drag it. */
