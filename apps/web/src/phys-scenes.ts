@@ -134,6 +134,24 @@ export const PHYS_SCENES: readonly PhysScene[] = [
     what: 'Handbrake turn: how far the car rotates and whether the slide is held — the feel target the user gives in vanilla-SA words.',
   },
   {
+    durationS: 14,
+    heading: -3.142,
+    key: 'handbrake-flick',
+    // SF west-shore straight, between the handbrake-turn spot and the pull-away one.
+    position: [-2808.9, 26, 6],
+    timeline: [
+      { move: { x: 0, y: 1 }, t: 0 },
+      // How a player ACTUALLY uses the lever: already turning, moderately, at speed — not standing on full
+      // lock. The full-lock `handbrake-turn` scene cannot show the difference between the pedal and the lever
+      // because at full lock the car is sliding either way (081/05, two field rounds spent on it).
+      { move: { x: 0.4, y: 0.3 }, t: 5 },
+      { actions: ['handbrake'], move: { x: 0.4, y: 0 }, t: 6.5 },
+      { move: { x: 0.4, y: 0 }, t: 8 },
+      { move: { x: 0, y: 0 }, t: 10 },
+    ],
+    what: 'A flick of the lever mid-corner at moderate speed and steering: does the back step out, and can it be held? The pedal-vs-lever discriminator.',
+  },
+  {
     durationS: 18,
     heading: -3.142,
     key: 'pull-away-reverse',

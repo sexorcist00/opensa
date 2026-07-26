@@ -466,3 +466,27 @@ engine; worth knowing before testing handbrake feel on it. (SA's `abs` flag is t
 lock, and it is still unread — noted in 04 §3.)
 
 Runs: `2026-07-26-headless-tractionloss-lever-vs-pedal.json`.
+
+### 2026-07-26 — the handbrake finally lets go (and the scene that can see it)
+
+**Field verdict, three times**: *"Space and H work the same."* The F2 tab settled the first question — the
+lever registers (`gear / handbrake` reads `UP`), so this was never input plumbing. Two real causes remained.
+
+**1. No scene could see it.** `handbrake-turn` stands on FULL lock, where the car slides whatever you press.
+The new **`handbrake-flick`** scene is how a player actually uses a lever: 60 km/h, 0.4 of steering held, then
+H for 1.5 s. It is the pedal-vs-lever discriminator the record was missing.
+
+**2. Rapier weighs the friction circle UNEVENLY.** In `update_friction` the check is
+`(forward × 0.5)² + (side × 1.0)² > (μ × load × dt)²`. A wheel braking at its full grip has therefore spent
+only half of its circle, and keeps up to **87 %** of its lateral capacity — a "locked" rear axle stays
+planted. The lateral cut has to be explicit and nearly total:
+
+| locked wheel keeps | body slip before the lever → after | rotation |
+| ------------------ | ---------------------------------- | -------- |
+| 15 % of side grip  | 2.3° → **5.7°** (imperceptible)    | 98°      |
+| **3 %**            | 2.3° → **33.0°**                   | **134°** |
+
+At 3 % the flick works on every car tested, with no flips: admiral 2.3° → 33.0°, comet 0.9° → 17.1°, savanna
+0.1° → **87.9°**. It applies only while the lever is up, so nothing else in the fleet's behaviour moves.
+
+Runs: `2026-07-26-headless-handbrake-flick.json`.

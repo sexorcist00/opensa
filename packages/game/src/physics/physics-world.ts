@@ -140,9 +140,26 @@ const SUSPENSION_DAMPING_SCALE_MAX = 2;
  * original applies to it, which is `fTractionBias` in the same `2 × bias` / `2 − 2 × bias` form as the
  * suspension's. The surface term is not modelled yet: every road is tarmac until surface types are wired.
  */
-/** What a LOCKED wheel keeps of its lateral stiffness. Not zero: a skidding tyre still scrubs, and a rear
- *  axle with literally no side force makes the car spin on the spot instead of arcing. */
-const LOCKED_SIDE_FRICTION = 0.15;
+/**
+ * What a LOCKED wheel keeps of its lateral stiffness — 3 %, and it has to be that low for a reason worth
+ * knowing.
+ *
+ * Rapier weighs the two impulses UNEVENLY when it checks the friction circle: `fwd_factor = 0.5`,
+ * `side_factor = 1.0`. So a wheel braking at its full grip has spent only half of its circle on the check,
+ * and keeps up to 87 % of its lateral capacity — a "locked" rear axle stays planted, which is exactly what
+ * the field kept reporting ("Space and H work the same"). The lateral cut therefore has to be explicit, and
+ * it has to be nearly total before a skidding tyre behaves like one.
+ *
+ * Measured on the `handbrake-flick` replay (moderate steering held, lever pulled mid-corner) — body slip
+ * before the lever → after it, on an admiral:
+ *
+ * - 0.15 → **5.7°**: nothing a driver could feel.
+ * - 0.03 → **33.0°**, and the car comes round 134° instead of 98°.
+ *
+ * Not zero: a skidding tyre still scrubs sideways, and an axle with literally no side force spins the car on
+ * the spot instead of arcing. Applies ONLY while the lever is up.
+ */
+const LOCKED_SIDE_FRICTION = 0.03;
 /** How close to its friction circle a wheel must be before it counts as having broken loose. Just under 1:
  *  the solver lands exactly ON the circle when it clamps, and floating-point equality is not a state test. */
 const SLIDE_THRESHOLD = 0.98;

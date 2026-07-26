@@ -200,3 +200,30 @@ coasting this strong the force alone can no longer tell a coast from a pedal.
 
 **Still open in §3**: engine braking that varies with the GEAR (the original's coast brake does not, so this
 would be an addition rather than a translation) and `abs`.
+
+### 2026-07-26 — §4 closed: the handbrake lets go, and why it took three field rounds
+
+Three rounds of *"Space and H work the same"* on a mechanism that measured different every time. What each
+round actually found, in order, because the sequence is the lesson:
+
+1. **The scene was pressing the wrong key.** `handbrake-turn` still sent `jump`; it predates the split.
+2. **The F2 tab could not show the lever.** The handbrake sends NO brake force — it locks the rear axle inside
+   the physics layer — so the brake row read 0.0 kN with the lever up. `gear / handbrake` is a row now, and it
+   answered the only question that mattered at that point: the key registers.
+3. **No scene could see the effect.** `handbrake-turn` stands on FULL lock, where the car slides whatever you
+   press. `handbrake-flick` (60 km/h, 0.4 of steering held, lever for 1.5 s) is how a lever is actually used.
+4. **And the real cause**: Rapier weighs the friction circle unevenly — `fwd_factor = 0.5`, `side_factor =
+   1.0`. A wheel braking at its full grip has spent only half its circle and keeps up to **87 %** of its
+   lateral capacity. Locking the brakes therefore does NOT unstick the rear axle in this solver, however
+   faithfully the lock itself is modelled.
+
+| locked wheel keeps | slip before → after | rotation |
+| ------------------ | ------------------- | -------- |
+| 15 %               | 2.3° → 5.7°         | 98°      |
+| **3 %**            | 2.3° → **33.0°**    | **134°** |
+
+Every car tested flicks and none flips: admiral 33.0°, comet 17.1°, savanna 87.9° of body slip.
+
+**The transferable lesson**: when a faithful translation produces no effect, the next question is not "is the
+translation right" but "does the host solver express this quantity at all". SA's handbrake is a brake; in
+Rapier a brake cannot unstick a tyre, so the same intent needs a different parameter.
