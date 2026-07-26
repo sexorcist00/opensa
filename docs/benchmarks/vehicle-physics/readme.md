@@ -315,3 +315,35 @@ steering still carries two FITTED constants (0.6 of the authored lock, falling b
 speed) that were tuned when grip was infinite, and they now stack on top of a real tyre.
 
 Runs: `2026-07-26-headless-tyregrip-{infernus,comet,admiral,firetruk}.json`.
+
+### 2026-07-26 — the steering stops throwing away 40 % of the authored lock (081/05)
+
+**Field verdict that forced this** (user, on the tyre-grip build): *"significantly better… one flaw: it is now
+hard to turn into a corner at speed, as if the car has been made too heavy."*
+
+The steering carried two constants fitted when grip was infinite: use `0.6` of the authored lock, then shrink
+that by up to `0.6` more toward top speed. At 90 km/h an admiral could reach 14.7° of its authored 35°. With a
+real tyre underneath, that reads exactly as the user described.
+
+Both are gone. What replaces them is the original's own limiter
+(`steerAngle = asin(min(adhesive × traction × 16 / v², 1)) / lock`, `CAutomobile::ProcessControl`) applied on
+top of the FULL authored lock — plus its two exemptions, which matter: countersteering into a slide and the
+handbrake both restore full lock, because that is how a driver saves a car and how a handbrake turn works.
+
+The important property is where it bites. At 50 km/h it allows 8.3° — more than the 5.25° an ordinary corner
+asks for, so normal driving never meets it — and it tightens with the square of speed, so it only refuses the
+demands no tyre could answer anyway.
+
+| scene / car          | fitted 0.6 × lock | full lock + the original's limiter |
+| -------------------- | ----------------- | ---------------------------------- |
+| u-turn, comet        | 18.0° → yaw 0.932 | **30.0° → yaw 1.302**              |
+| u-turn, admiral      | 16.8° → yaw 1.135 | 28.0° → yaw 0.611                  |
+| step-steer, both     | (limiter inactive — the 0.15 input asks for less than it allows) |
+
+Read honestly: the comet turns better, the admiral turns WORSE at full lock. The u-turn is a full-lock scene —
+the pathological input — and the admiral's fitted run is not a clean comparison (35 g of impact and 2.33 s
+airborne in it: it crashed, and some of that yaw is the crash). A rear-drive sedan asked for full lock at
+40 km/h scrubbing its front tyres wide is also what a real one does. The case the field complained about is
+the ordinary one, and there the change can only help: the angle is no longer capped below what a corner asks.
+
+Runs: `2026-07-26-headless-steering-{admiral,comet}.json`.

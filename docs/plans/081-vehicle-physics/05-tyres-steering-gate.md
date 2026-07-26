@@ -125,3 +125,33 @@ measured against simply letting the tyres do the limiting before either is adopt
 
 **Still open in this plan**: `fTractionLoss` (the sliding regime), surface types (`ROAD_ADHESION = 1` stands
 in for `g_surfaceInfos`), and the own-controller gate.
+
+### 2026-07-26 — the steering gets the whole authored lock back, and the original's limiter on top
+
+**Field verdict**: *"hard to turn into a corner at speed, as if the car has been made too heavy."*
+
+Two fitted constants were the cause, both tuned when grip was 10.5: `STEER_LOCK_SCALE = 0.6` (use 60 % of the
+authored lock, unconditionally) and `STEER_SPEED_FALLOFF = 0.6` (shrink that by up to 60 % more toward top
+speed). At 90 km/h an admiral could reach 14.7° of its authored 35°. Under a real tyre they read as weight.
+
+`vehicle/steering.ts` replaces them with the original's law —
+`asin(min(adhesive × traction × 16 / v², 1)) / lock` (`CAutomobile::ProcessControl`) — over the FULL authored
+lock, with the original's two exemptions: countersteering into a slide and the handbrake both restore full
+lock. Where it bites is the point: at 50 km/h it allows 8.3° against the 5.25° an ordinary corner asks for, so
+normal driving never meets it, and it tightens with v², refusing only what no tyre could answer.
+
+**A wrong turn worth recording.** The first reading of the field verdict was "saturated front tyre, so LESS
+angle would turn better" — true of a real tyre's falling curve, false here: Rapier's tyre is a flat cap at
+`μ × load`, so below the cap more angle is more force and above it the extra angle only scrubs. The
+measurement said so before any of it shipped.
+
+| scene / car     | fitted 0.6 × lock | full lock + the limiter |
+| --------------- | ----------------- | ----------------------- |
+| u-turn, comet   | 18.0° → yaw 0.932 | **30.0° → yaw 1.302**   |
+| u-turn, admiral | 16.8° → yaw 1.135 | 28.0° → yaw 0.611       |
+
+The admiral turns worse — at FULL LOCK, which is the pathological input, and against a fitted run that was
+itself crashing (35 g, 2.33 s airborne). A rear-drive sedan given full lock at 40 km/h scrubs its front tyres
+wide in reality too. The complained-about case is the ordinary corner, where the angle is simply no longer
+capped below what the corner asks. **Needs the field to judge** — this is the one item in this chain whose
+replay evidence is genuinely split.

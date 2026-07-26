@@ -18,6 +18,7 @@ import {
   type DrivetrainState,
   type Gearbox,
 } from './drivetrain';
+import { steerLimit } from './steering';
 import {
   CAR_CRAWLOUT,
   CAR_GETIN,
@@ -161,14 +162,11 @@ const IDLE_BRAKE_FRACTION = 0.08; // light brake when off throttle, so the car c
  * floor in a couple of tenths and the weight should transfer at that pace (plan 081/04, two field verdicts).
  */
 const FOOT_BRAKE_RAMP_TIME = 0.2;
-const MIN_TOP_SPEED = 8; // floor under the steering falloff's reference speed (m/s)
 const DRAG_MIN_SPEED = 0.01; // below this, drag is noise and its direction is undefined (m/s)
 const REVERSE_SPEED_EPS = 0.6; // below this forward speed, S means reverse (else brake)
 const REVERSE_SEED_SPEED = 1; // m/s backward to kick reverse off a dead stop
 const STEER_RATE = 1.2; // steering slew (rad/s) — eased so the car doesn't snap into turns
 const STEER_RECENTER_RATE = 2.4; // faster return to centre when the wheel is released
-const STEER_SPEED_FALLOFF = 0.6; // fraction the steering lock shrinks toward top speed
-const STEER_LOCK_SCALE = 0.6; // use only this fraction of the handling lock (gentler turn radius)
 const UPRIGHT_MIN = 0.6; // car-up·world-up above this = upright enough for the normal door entry
 const STOP_THRESHOLD = 0.8; // forward speed (m/s) below which the car counts as stopped (for exit)
 const VEHICLE_CLEARANCE = 0.6; // how far outside the car footprint the player must be to re-collide
@@ -734,9 +732,6 @@ export class EnterVehicleSystem implements System {
       return;
     }
     const box = this.gearboxOf(car);
-    // What the car ACTUALLY tops out at (drag against top-gear thrust), not what its row claims — the
-    // steering falloff is the only consumer left, and it wants the real number.
-    const topSpeed = Math.max(MIN_TOP_SPEED, box.flatTop);
     const brakeForce = hnd.brakeDecel * hnd.mass * BRAKE_UNITS_PER_DECEL_PER_KG;
     this.applyDrag(car, step);
 
@@ -759,10 +754,19 @@ export class EnterVehicleSystem implements System {
     // dips on every shift), and a second smoothing on top of it would flatten the shifts back out.
     this.engine = targetEngine;
 
-    // Ease the steering toward the input (gentle turn-in, quicker return to centre);
-    // the usable lock shrinks toward top speed so it doesn't twitch at speed.
-    const speedFactor = Math.min(Math.abs(speed) / topSpeed, 1);
-    const lock = ((hnd.steeringLock * Math.PI) / 180) * STEER_LOCK_SCALE * (1 - speedFactor * STEER_SPEED_FALLOFF);
+    // Ease the steering toward the input (gentle turn-in, quicker return to centre); how much of the
+    // authored lock is usable at this speed comes from the tyres — see `steering.ts`.
+    const sway = vx * Math.cos(car.heading) + vy * Math.sin(car.heading);
+    const lock =
+      ((hnd.steeringLock * Math.PI) / 180) *
+      steerLimit({
+        handbrake,
+        lockDeg: hnd.steeringLock,
+        speed,
+        steerAngle: this.steerAngle,
+        swaySpeed: sway,
+        traction: hnd.tractionMult,
+      });
     const target = -steerInput * lock; // D (right) turns the car right
     const rate = steerInput === 0 ? STEER_RECENTER_RATE : STEER_RATE;
     this.steerAngle += clamp(target - this.steerAngle, -rate * step, rate * step);
