@@ -87,6 +87,11 @@ NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
 # WebGPU boot gate: 'canvas' reports the context type, 'sorry' expects the no-WebGPU screen
 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/gate-check.js canvas \
   "http://localhost:5173/?loader=http-dir&src=$SRC" <outPrefix>
+# Scripted physics laps (081/01) — TAG switches the protocol the harness collects
+TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
+  "http://localhost:5173/?loader=http-dir&src=$SRC&phys=all&car=infernus" phys 900000 7
+# Diff two capture sets (raw harness logs are accepted as-is); --determinism gates a replay check
+npx tsx scripts/phys-compare.ts before.log after.log [--determinism]
 ```
 
 Guide: [development/benchmarks.md](./development/benchmarks.md).

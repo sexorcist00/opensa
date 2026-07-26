@@ -41,8 +41,20 @@ const CAPTURE_HOUR = 12;
 const PED_OFFSET = 4;
 /** Springs settle before the capture opens: a ground-snapped car is still moving on its suspension. */
 const SETTLE_SECONDS = 2;
+/** Grace after a teleport before `pendingCells` means anything — it answers for the ring you just left. */
+const TELEPORT_NOTICE_SECONDS = 1;
+/** After the ring drains: the collision parse behind it is what a spawn actually needs (the bench warmup). */
+const WARMUP_SECONDS = 2;
+/** How long a spawn keeps retrying while the ground under the spot streams in. */
+const SPAWN_RETRY_SECONDS = 15;
 /** A climb-in that has not finished by now is a broken spot, not a slow one. */
 const ENTER_TIMEOUT_S = 20;
+/** How long a lap's car gets to coast to a halt before the climb-out is asked for. */
+const COAST_TIMEOUT_S = 20;
+/** Below this speed (m/s) the car counts as stopped — the exit will not start above it. */
+const STOPPED_SPEED = 0.5;
+/** How far from the scene's spot the seated car may be and still be THIS lap's car. */
+const SPOT_RADIUS = 20;
 /** Series rate in the printed JSON. Peaks are taken over EVERY frame (see `summarisePhysFrames`), so
  *  thinning costs the curve resolution, never a number. */
 const SERIES_HZ = 20;
@@ -76,6 +88,27 @@ export function setupPhysRuns(host: PhysRunsHost): void {
 }
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+/**
+ * Get the ped out of whatever he is in, and confirm it.
+ *
+ * The exit refuses to start until the car has STOPPED (`stopping` brakes to a halt first), and a lap can end
+ * at speed — the u-turn's timeline still has throttle on its last keyframe. So the car is left to coast down
+ * before the press, or the climb-out silently outlasts the wait.
+ */
+async function leaveCar(host: PhysRunsHost, vehicles: EngineVehicles): Promise<void> {
+  if (vehicles.activeVehicle() === null) {
+    return;
+  }
+  host.drive.stop(); // no input: the car coasts down on its idle brake
+  await until(() => Math.abs(vehicles.drivenMotion()?.speed ?? 0) < STOPPED_SPEED, COAST_TIMEOUT_S * 1000);
+  await pressEnterExit(host);
+  const left = await until(() => vehicles.activeVehicle() === null, ENTER_TIMEOUT_S * 1000);
+  host.drive.stop();
+  if (!left) {
+    throw new Error('the ped never got out of the car — the next lap would have driven this one');
+  }
+}
 
 /** Hold enter/exit for a moment: the system takes the PRESS edge, so it must also be released. */
 async function pressEnterExit(host: PhysRunsHost): Promise<void> {
@@ -118,21 +151,30 @@ async function runScene(host: PhysRunsHost, scene: PhysScene, car: string): Prom
     throw new Error('no vehicle system on this host');
   }
   host.setHour(CAPTURE_HOUR);
+  // On foot BEFORE the teleport, always. A seated rider is re-placed on his seat every fixed step, so
+  // teleporting one drags him straight back to the car he is in — the second sweep lost four laps to it,
+  // each reporting the honest but downstream symptom "the ped never got into the car".
+  await leaveCar(host, vehicles);
   // The ped stands to the car's RIGHT of the road heading, so the spawn never lands on top of him.
   const [x, y, z] = scene.position;
   host.teleportPlayer([x + Math.cos(scene.heading) * PED_OFFSET, y + Math.sin(scene.heading) * PED_OFFSET, z + 1]);
-  // Settle: the collision cell under the spot must exist before a car is dropped into it (the bench
-  // teleport contract — a car spawned into an unstreamed cell falls through the world).
+  // Settle, in three parts, all of them learned from the first sweep (5 of 7 laps failed without them):
+  // the driver needs a moment to even NOTICE the teleport (`pendingCells` still reads the old ring and
+  // answers 0 immediately), then the ring drains, then the collision parse behind it drains too.
+  await waitSeconds(TELEPORT_NOTICE_SECONDS);
   await until(() => host.getStream()?.pendingCells === 0, host.settleTimeoutMs);
-  await host.spawnCar(car, scene.position, scene.heading);
+  await waitSeconds(WARMUP_SECONDS);
+  await spawnWithRetry(host, scene, car);
 
   await pressEnterExit(host);
-  const seated = await until(() => vehicles.activeVehicle() !== null && !vehicles.isSettling(), ENTER_TIMEOUT_S * 1000);
+  // Seated in THIS scene's car, not merely in a car: the identity check is what catches a lap that quietly
+  // captured the previous scene's vehicle from the previous spot.
+  const seated = await until(() => seatedAt(vehicles, scene), ENTER_TIMEOUT_S * 1000);
   host.drive.stop();
   if (!seated) {
-    throw new Error(`the ped never got into the ${car} (bad spawn spot?)`);
+    throw new Error(`the ped never got into the ${car} — the car spawned but the walk-in never finished`);
   }
-  await until(() => false, SETTLE_SECONDS * 1000); // let the suspension stop moving
+  await waitSeconds(SETTLE_SECONDS); // let the suspension stop moving
 
   vehicles.telemetry.reset();
   vehicles.telemetry.enabled = true;
@@ -143,11 +185,40 @@ async function runScene(host: PhysRunsHost, scene: PhysScene, car: string): Prom
   vehicles.telemetry.enabled = false;
 
   report(scene, car, frames);
+  await leaveCar(host, vehicles);
+}
 
-  // Climb back out, so the next lap's teleport moves a ped and not a seated rider.
-  await pressEnterExit(host);
-  await until(() => vehicles.activeVehicle() === null, ENTER_TIMEOUT_S * 1000);
-  host.drive.stop();
+/** Seated, settled, and in a car standing at THIS scene's spot. */
+function seatedAt(vehicles: EngineVehicles, scene: PhysScene): boolean {
+  const car = vehicles.activeVehicle();
+  if (car === null || vehicles.isSettling()) {
+    return false;
+  }
+
+  return Math.hypot(car.position[0] - scene.position[0], car.position[1] - scene.position[1]) < SPOT_RADIUS;
+}
+
+/**
+ * Spawn, retrying while the ground under the spot is still streaming.
+ *
+ * `seatVehicleOnGround` DEFERS by throwing when the collision has not arrived (the vehicle-lod stream
+ * normally retries every frame). A one-shot spawn turns that into a dead lap, which is what the first sweep
+ * produced: four scenes reported "no ground at …" and captured nothing.
+ */
+async function spawnWithRetry(host: PhysRunsHost, scene: PhysScene, car: string): Promise<void> {
+  const deadline = performance.now() + SPAWN_RETRY_SECONDS * 1000;
+  for (;;) {
+    try {
+      await host.spawnCar(car, scene.position, scene.heading);
+
+      return;
+    } catch (error) {
+      if (performance.now() >= deadline) {
+        throw error;
+      }
+      await waitSeconds(0.5);
+    }
+  }
 }
 
 /** Wait until `ready()` or the deadline; returns whether it became ready. */
@@ -161,4 +232,9 @@ async function until(ready: () => boolean, timeoutMs: number): Promise<boolean> 
   }
 
   return ready();
+}
+
+/** Let the game run for a while — frames, not a timer, so nothing advances while the tab is throttled. */
+async function waitSeconds(seconds: number): Promise<void> {
+  await until(() => false, seconds * 1000);
 }
