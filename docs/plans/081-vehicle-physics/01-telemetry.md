@@ -73,7 +73,7 @@ Deterministic scenario runner, same philosophy as the render bench (`[bench]` pr
 - [x] `ScriptedDriveSource` + scenario spec + the 7 scenes v1.
 - [ ] `[phys]` capture protocol + `phys-compare.ts` + headless harness lane. (Protocol + runner + harness
       lane SHIPPED and proven on a real lap; `phys-compare.ts` still owed.)
-- [ ] BEFORE matrix captured (3 cars × 7 scenes) + ledger summary + user expectation notes.
+- [x] BEFORE matrix captured (3 cars × 7 scenes) + ledger summary + user expectation notes.
 
 ## Acceptance
 
@@ -210,4 +210,113 @@ the obvious suspect, and the number to beat is now on record.
 **Still owed by this plan**: `phys-compare.ts` (determinism check + tolerance bands), and the BEFORE matrix
 (3 cars × 7 scenes) with the user's vanilla-SA expectations in words.
 
-_(the BEFORE matrix follows)_
+### 2026-07-26 — the user's complaints, in their words (subtask 6, first half)
+
+Given while the BEFORE sweeps ran; paraphrased into English, meaning preserved. **These are the feel targets
+plans 02-06 are judged against** — the chain does not get to declare itself done against its own numbers.
+
+> The car does not feel real.
+>
+> - **Steering turns instantly** — the car simply changes its direction vector. Corner entry is immediate:
+>   there is no transition into a turn.
+> - **There are no slides.**
+> - **Braking is instantaneous.** At high speed either the tail lifts, or the rear goes, or the car spins
+>   through 180°.
+> - **Acceleration is fast and so is stopping.**
+> - **Small obstacles — a kerb — can flip the car. It behaves like cardboard.**
+
+**Complaint → the number that shows it → the plan that owes the fix.**
+
+| Complaint                     | What the BEFORE data says                                                                                 | Owner |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------- | ----- |
+| Instant corner entry, no slide | The tyre model is effectively binary: `WHEEL_FRICTION_SLIP` 10.5 for every car, so the velocity vector snaps to the heading — until grip breaks and the lap ends in a crash or a flip. No scene yet measures the TRANSIENT (see the gap below). | 05    |
+| Braking is instant             | 165 → 0 km/h in **59.9 m / 2.92 s** (≈1.6 g average, **−3.17 g** peak). Road cars manage ~1 g.            | 04    |
+| Tail lifts / rear goes / 180°  | On a straight brake the body pitches **+0.07°** — it does not dive AT ALL, so every visible motion under braking comes from somewhere other than weight transfer. `CHASSIS_ANGULAR_DAMPING = 2` is the suspect. | 03    |
+| Acceleration is fast           | infernus 0-100 in **3.98 s**. Whether that is the CAR or the shared constants is what the admiral/firetruck sweeps answer — all three read the same five handling fields today. | 02/04 |
+| A kerb flips it, like cardboard | `kerb-strike` spins the car **−89.5°** with 0.28 s of air at 125 km/h; `slalom` and `handbrake-turn` both go **fully over** (roll ±180°, 18.3 s and 10.5 s of tumbling). | 02/03 |
+
+**Scene gap this exposes.** Every current scene either stays straight or goes to full lock. The loudest
+complaint — the MISSING TRANSIENT into a corner — needs a scene that neither of those can show: a constant
+moderate steering input at constant speed, where the numbers to watch are how long the slip angle takes to
+build and whether it ever settles instead of snapping. That scene is owed before plan 05 is judged.
+
+### 2026-07-26 — THE BEFORE MATRIX (subtask 6): 3 cars × 7 scenes, 21 of 21 laps
+
+Captured headless on build `./build/original/opensa` through `?phys=all&car=<model>`; the full captures
+(summary + a 20 Hz series per lap) are `before/infernus.json`, `before/admiral.json`, `before/firetruk.json`.
+Every later 081 plan compares against these files with `scripts/phys-compare.ts`.
+
+| Scene             | Car      | Top km/h | 0-100 s | Brake m / s | Roll min…max °  | Slip ° | Turned ° | Air s | Flip |
+| ----------------- | -------- | -------: | ------: | ----------: | --------------: | -----: | -------: | ----: | :--: |
+| brake-strip       | infernus |    165.7 |    3.98 |    60 / 2.9 |     0.0 … 0.0   |    0.0 |      0.0 |  0.00 |      |
+| brake-strip       | admiral  |     77.3 |       — |    24 / 2.3 |     0.1 … 0.1   |    0.1 |     -0.0 |  0.00 |      |
+| brake-strip       | firetruk |    149.1 |    4.53 |   119 / 8.0 |     0.0 … 0.0   |    0.0 |      0.0 |  0.00 |      |
+| slalom            | infernus |    116.8 |    4.22 |           — | **-180 … 180**  |   74.4 |     62.1 | 18.25 |  ●   |
+| slalom            | admiral  |     57.3 |       — |           — |   -39.3 … 14.2  |   59.5 |    -98.0 |  1.35 |      |
+| slalom            | firetruk |    108.1 |    4.78 |           — |   -4.7 … 113.8  |   49.4 |     -6.0 | 17.83 |  ●   |
+| u-turn            | infernus |     82.4 |       — |           — |   -54.7 … 16.1  |   45.0 |     43.1 |  3.65 |      |
+| u-turn            | admiral  |     38.6 |       — |           — |    -2.3 … 7.0   |   58.6 |     43.6 |  0.28 |      |
+| u-turn            | firetruk |     71.2 |       — |           — |    -4.5 … 7.1   |   40.6 |     57.8 |  0.17 |      |
+| kerb-strike       | infernus |    124.8 |    4.17 |           — |    -1.0 … 3.5   |   89.9 |    -89.5 |  0.28 |      |
+| kerb-strike       | admiral  |     59.5 |       — |           — |    -3.7 … 4.7   |   48.5 |    -41.8 |  0.30 |      |
+| kerb-strike       | firetruk |    102.0 |    4.77 |           — |   -37.5 … 7.3   |   63.4 |    -22.8 |  2.45 |      |
+| crest-jump        | infernus |    132.9 |    7.42 |           — |    -8.4 … 9.9   |   25.2 |    -14.1 |  1.23 |      |
+| crest-jump        | admiral  |    100.0 |   13.27 |           — |   -14.3 … 1.0   |   11.0 |     10.8 |  0.83 |      |
+| crest-jump        | firetruk |    136.8 |    8.63 |           — |    -4.0 … 99.7  |   14.3 |      4.6 |  5.22 |  ●   |
+| handbrake-turn    | infernus |    117.8 |    3.98 |    28 / 2.8 | **-180 … 180**  |   90.0 |     69.5 | 10.50 |  ●   |
+| handbrake-turn    | admiral  |     55.0 |       — |    13 / 1.8 |    -0.1 … 0.3   |    8.3 |     50.1 |  0.00 |      |
+| handbrake-turn    | firetruk |    106.0 |    4.53 |    15 / 0.6 |    -6.2 … 29.0  |   27.6 |     26.0 |  1.02 |      |
+| pull-away-reverse | infernus |    118.2 |    3.98 |   103 / 5.1 |     0.0 … 0.0   |    0.0 |      0.0 |  0.00 |      |
+| pull-away-reverse | admiral  |     55.2 |       — |    49 / 4.9 |     0.1 … 0.1   |    0.0 |      0.0 |  0.00 |      |
+| pull-away-reverse | firetruk |    106.4 |    4.53 |   126 / 8.6 |     0.0 … 0.0   |    0.0 |      0.0 |  0.00 |      |
+
+**What the matrix says, before a line of 02 is written.**
+
+1. **A FIRE TRUCK REACHES 149 km/h AND DOES 0-100 IN 4.53 s.** The infernus does it in 3.98. That single row
+   is the chain's headline: the truck is a supercar with a ladder on it. Meanwhile the ADMIRAL — a sedan —
+   never reaches 100 km/h at all in eight seconds of throttle. The five consumed handling fields are not
+   "all cars the same"; they are a spread pointing the wrong way, and `MAXVEL_SCALE` / `ENGINE_ACCEL_SCALE`
+   are raw multipliers over authored values with no drivetrain or mass reality behind them (plan 02/04).
+2. **The flip is not universal — it is per-car, and it tracks the body, not the tuning.** The admiral never
+   goes over in any scene; the infernus goes over in the slalom AND the handbrake turn; the firetruck goes
+   over in the slalom and lands on its side off the crest (5.22 s of air). One shared suspension set produces
+   three different stability outcomes, which is exactly what an emergent COM does — it comes out of the COL
+   primitives, so it depends on the geometry (plan 02's authored COM).
+3. **A kerb throws a ten-tonne truck 2.45 seconds into the air.** The user's word for it was "cardboard".
+   The infernus takes the same kerb as a **−89.5° spin** at 125 km/h. Plan 06's kerb work has its before.
+4. **Braking spans 0.53 g to 1.6 g across three cars** (firetruck 119 m from 149 km/h, admiral 24 m from
+   77 km/h, infernus 60 m from 165 km/h). The complaint "braking is instantaneous" belongs to the fast cars.
+5. **The body does not pitch under braking on any of them** (brake-strip roll and pitch are flat to the
+   first decimal). Whatever the player sees when the nose "lifts" is not the chassis rotating (plan 03).
+
+**Determinism.** `brake-strip` reproduced to the second decimal across an isolated run and a full sweep
+(165.7 km/h, 3.98 s, 59.94 m). `timeTo100S` matched exactly (3.98 s) across two more independent runs.
+
+**Owed before plan 05 is judged**: the step-steer scene (see the gap above) — the transient the loudest
+complaint is about is the one thing this matrix cannot see.
+
+### 2026-07-26 — which handling fields are actually read (the user's reading, confirmed)
+
+The user's field note: *"handling does get read — the cars all drive differently — but it feels like only a
+small part of the settings is used; I have driven very well calibrated cars."* Exactly right, and now exact:
+`gta-sa-world.adapter.ts` maps **five columns** (`mass` 0, `maxVelocity` 11, `engineAccel` 12, `brakeDecel` 16,
+`steeringLock` 19). `parseHandling` keeps every other column as a raw string that nothing ever reads.
+
+What the trio actually authors in those unread columns — and what ignoring each one costs:
+
+| Unread field       | infernus | admiral | firetruk | What it would do                                                          | Complaint it answers |
+| ------------------ | -------: | ------: | -------: | ------------------------------------------------------------------------- | -------------------- |
+| **COM z** (col 3-5) |  **-0.25** |   -0.05 |      0.0 | The authored centre of mass. Today it EMERGES from an equal mass share per COL primitive, so it sits high. | flips / "cardboard"  |
+| **turnmass**       |   2 725 |   3 851 | **36 671** | Yaw inertia — a 13× spread the engine never applies.                      | instant direction change |
+| **tractionMultiplier** | 0.70 |    0.65 |     0.55 | Per-car grip. Every car runs one shared `WHEEL_FRICTION_SLIP = 10.5`.     | no slides, instant grip |
+| tractionLoss / bias |   0.8 / 0.50 | 0.90 / 0.51 | 0.8 / 0.50 | How grip breaks away, and front-vs-rear.                              | no slides            |
+| **driveType**      |   4 (4WD) | F (front) | R (rear) | Every car is driven on all four wheels today.                            | no slides, no character |
+| brakeBias          |    0.51 |    0.52 |     0.45 | Front/rear brake split — the 180° spin under braking lives here.          | spins under braking  |
+| numberOfGears      |       5 |       5 |        5 | No gearing at all: one continuous ramp to top speed.                      | acceleration feel    |
+| dragMult, engineInertia, engineType, ABS, suspension force/damping/limits/bias, anti-dive, damage mult, flags | | | | The rest of the table. | 02-06 |
+
+**The COM row is the flip explanation, in the data.** The infernus authors the LOWEST centre of mass of the
+three (−0.25 m) — it is the car that most depends on that correction — and it is the one that goes over in
+two scenes. The firetruck authors none but is tall, and it goes over too. The admiral, a low sedan whose
+authored offset is nearly zero, never goes over in any scene. One shared suspension set, three outcomes,
+each matching what the authored COM would have corrected.
