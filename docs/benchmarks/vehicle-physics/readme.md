@@ -84,3 +84,20 @@ it does not dive at all.
 Runs: [`2026-07-26-headless-before-infernus.json`](2026-07-26-headless-before-infernus.json) ·
 [`2026-07-26-headless-before-admiral.json`](2026-07-26-headless-before-admiral.json) ·
 [`2026-07-26-headless-before-firetruk.json`](2026-07-26-headless-before-firetruk.json).
+
+### 2026-07-26 — comet, the car the user reported (a fourth set, same conditions)
+
+Added at the user's request: *"measure the comet — constant flips and very fast."* Same pak, same commit,
+same seven scenes. It earns its place in the record because it isolates the diagnosis: by the five fields the
+engine READS, the comet is almost exactly an infernus (mass 1400, engineAccel 30, brakeDecel 11 — identical;
+only maxVelocity differs, 200 vs 240). Everything it should differ by is unread.
+
+**It spins under braking on a dead-straight road, with no steering input at all.** Slip is 0.00° for the
+whole eight-second run-up; the brake goes on, and 1.7 s later the yaw rate is 48.5°/s and the slip angle 48°.
+The lap ends **50.9° off its heading**, stopped sideways, having braked 32.3 m from 129.6 km/h (**1.93 g**,
+the hardest of the four). The other three cars finish the same scene with slip 0.0 and turned 0.0.
+
+It also goes over in the slalom (like the infernus) and takes the kerb far worse (roll −14.7…29.3° against
+±3.5°), while doing a CLEAN 135° handbrake turn the infernus cannot (that one flips instead).
+
+Run: [`2026-07-26-headless-before-comet.json`](2026-07-26-headless-before-comet.json).

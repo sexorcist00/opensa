@@ -296,6 +296,35 @@ plan closes, and plans 02-07 all compare against these files with `scripts/phys-
 **Owed before plan 05 is judged**: the step-steer scene (see the gap above) — the transient the loudest
 complaint is about is the one thing this matrix cannot see.
 
+### 2026-07-26 — comet: the control experiment the user handed us
+
+The user asked for a fourth car — *"the comet, a problem model: constant flips, very fast"* — and it turned
+into the chain's cleanest control. **By the five fields the engine reads, a comet IS an infernus**: mass 1400,
+engineAccel 30, brakeDecel 11, all identical; only `maxVelocity` differs (200 vs 240). Everything that should
+distinguish them is unread — the comet has the lowest yaw inertia of any car measured (`turnmass` 2200) and
+is the only one whose authored centre of mass is offset LONGITUDINALLY (`COM y = +0.1`, with z −0.2).
+
+**It spins under braking on a straight road with no steering input.** From
+`2026-07-26-headless-before-comet.json`, `brake-strip`:
+
+| t (s)      | speed (m/s) | slip angle | yaw rate |
+| ---------- | ----------: | ---------: | -------: |
+| 0 → 8      |     0 → 35  |  **0.00°** | −0.02°/s |
+| 8.4 (brake on) |      27.8 |      0.09° |  1.2°/s  |
+| 9.1        |        12.5 |      5.8°  | **48.5°/s** |
+| 9.8        |         0.8 | **48.5°**  | 40.2°/s  |
+
+The lap finishes **50.9° off its heading**, stopped sideways, after braking 32.3 m from 129.6 km/h — **1.93 g,
+the hardest of the four cars**. The infernus, admiral and firetruck all finish that same scene with slip 0.0
+and turned 0.0. It also flips in the slalom (like the infernus) and takes the kerb far worse (roll
+−14.7…29.3° against ±3.5°), yet performs a CLEAN 135° handbrake turn where the infernus goes over instead.
+
+**Why this settles the diagnosis.** Two cars with the same read inputs cannot behave differently because of
+the inputs. The difference can only come from what the engine INVENTS from geometry — the emergent centre of
+mass and inertia derived from the COL primitives — which is precisely what the authored `COM`/`turnmass`
+columns exist to override. The user's report that this car *drives excellently in the original game with this
+same handling* closes it: the model is not the problem, and neither is its data.
+
 ### 2026-07-26 — which handling fields are actually read (the user's reading, confirmed)
 
 The user's field note: *"handling does get read — the cars all drive differently — but it feels like only a
@@ -315,6 +344,14 @@ What the trio actually authors in those unread columns — and what ignoring eac
 | brakeBias          |    0.51 |    0.52 |     0.45 | Front/rear brake split — the 180° spin under braking lives here.          | spins under braking  |
 | numberOfGears      |       5 |       5 |        5 | No gearing at all: one continuous ramp to top speed.                      | acceleration feel    |
 | dragMult, engineInertia, engineType, ABS, suspension force/damping/limits/bias, anti-dive, damage mult, flags | | | | The rest of the table. | 02-06 |
+
+**The data is not suspect — we are.** The user's point, and it sets the bar for the whole chain: *"in the
+original game this model with this handling drives excellently."* The same rows, on the same cars, produce a
+good car in vanilla SA. So plan 02-05's job is NOT to invent tuning that feels right — it is to **consume
+what is already authored and already validated**, and the shared constants that stand in for it today
+(`WHEEL_FRICTION_SLIP`, `CHASSIS_ANGULAR_DAMPING`, `MAXVEL_SCALE`, `ENGINE_ACCEL_SCALE`, the suspension four)
+should mostly DISAPPEAR rather than be re-tuned. A field round that says "better" while those constants are
+still doing the work has moved the symptom, not the cause.
 
 **The COM row is the flip explanation, in the data.** The infernus authors the LOWEST centre of mass of the
 three (−0.25 m) — it is the car that most depends on that correction — and it is the one that goes over in
