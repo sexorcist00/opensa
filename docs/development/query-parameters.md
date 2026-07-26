@@ -31,13 +31,20 @@ Read in `src/ui/engine-canvas-host.tsx` unless noted.
 | `bench`     | off                    | `all` or one scene key         | Bench sweep; emits the `[bench]` JSON protocol                                                                                                                  |
 | `soak`      | off                    | minutes                        | Soak stability run; emits `[soak]`                                                                                                                              |
 | `benchcar`  | mixed models           | vehicle model name             | Pin every bench road car to one model                                                                                                                           |
+| `phys`      | off                    | `all` or one scene key         | Scripted physics lap (081/01); emits the `[phys]` JSON protocol                                                                                                 |
+| `car`       | `infernus`             | vehicle model name             | Which car the `phys` laps drive                                                                                                                                 |
 
 `bench` / `soak` / `benchcar` are read in `src/ui/engine-perf-runs.ts`. Scene keys live in
 `src/bench-scenes.ts`: `ls-noon` · `sf-fog-dawn` · `lv-night` · `country-dusk` · `ocean-horizon` ·
 `ls-rain-night`.
 
-> **These three are HARNESS CONTRACTS.** `tools-debug/bench-harness/drive.js` scrapes the console
-> protocol (`[bench]` / `[soak]` / `sweep complete`) and the URLs in
+`phys` / `car` are read in `src/ui/engine-phys-runs.ts`; the scenes live in `src/phys-scenes.ts`:
+`brake-strip` · `slalom` · `u-turn` · `kerb-strike` · `crest-jump` · `handbrake-turn` ·
+`pull-away-reverse`. A lap teleports next to a real road spot, spawns the car, walks the ped in through
+the normal enter sequence, then plays a keyframe timeline through the SAME `InputState` the player uses.
+
+> **These are HARNESS CONTRACTS.** `tools-debug/bench-harness/drive.js` scrapes the console
+> protocol (`[bench]` / `[soak]` / `[phys]` with `TAG=`, plus `sweep complete`) and the URLs in
 > [benchmarks.md](benchmarks.md) use these names. Renaming one silently breaks the perf ritual.
 
 ## Engine lab — `apps/engine-lab`

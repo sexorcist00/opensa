@@ -70,8 +70,9 @@ Deterministic scenario runner, same philosophy as the render bench (`[bench]` pr
 - [x] `vehicle-telemetry.ts` sampler + ring buffer + unit tests (pure math on scripted inputs).
 - [x] Slip proxy exported on the vehicles facade (typed, documented for 080/05).
 - [x] F2 Physics tab: live telemetry strips; read-only constants group.
-- [ ] `ScriptedDriveSource` + scenario spec + the 7 scenes v1.
-- [ ] `[phys]` capture protocol + `phys-compare.ts` + headless harness lane.
+- [x] `ScriptedDriveSource` + scenario spec + the 7 scenes v1.
+- [ ] `[phys]` capture protocol + `phys-compare.ts` + headless harness lane. (Protocol + runner + harness
+      lane SHIPPED and proven on a real lap; `phys-compare.ts` still owed.)
 - [ ] BEFORE matrix captured (3 cars × 7 scenes) + ledger summary + user expectation notes.
 
 ## Acceptance
@@ -157,4 +158,56 @@ formatting/meter cases, 2 corner-label cases (four-corner car, straddled bike hu
 **Still owed by this plan**: `ScriptedDriveSource` + the 7 scenes, the `[phys]` capture protocol +
 `phys-compare.ts`, and the BEFORE matrix (3 cars × 7 scenes) with the user's vanilla-SA expectations in words.
 
-_(baselines, scene specs, measured costs follow)_
+### 2026-07-26 — the scripted track and the `[phys]` protocol (subtask 4, most of 5)
+
+**What landed**
+
+- `packages/game/src/vehicle/scripted-drive.ts` — `ScriptedDriveSource` IS an `InputState`, so a lap drives
+  through `drive()`'s own ramps, steer slew and reverse seeding. A capture that bypassed them would measure a
+  car the player never drives. Keyframes HOLD (no interpolation): a slalom is "full left, then full right",
+  and a scene has to be describable in words to be reproducible. Its clock runs on the FIXED step — a
+  timeline advanced by the render rate replays differently on a different machine. Idle it contributes
+  nothing to the `CombinedInput` sum, so it lives in the host permanently and only speaks during a lap.
+- `apps/web/src/phys-scenes.ts` — the 7 scenes. **Every spot is REAL**: `scripts/debug/road-straights.ts`
+  (promoted from a throwaway, row added to `docs/debug/README.md`) walks the game's own `NODES*.DAT` vehicle
+  graph for chains that hold one heading, and reports each run's length and Δz. The straights used are the SF
+  west shore (450 m, **Δz 0.00**), an LV avenue (336 m, Δz 0.00) and an LS east straight (294 m, Δz 0.00);
+  the crest is a Red County rise of +4.3 m then −3.3 m within 50 m of the peak. Guessing "the airport runway
+  is about here" would have put the whole BEFORE matrix on unverifiable ground.
+- `apps/web/src/ui/engine-phys-runs.ts` — `?phys=<scene|all>&car=<model>`, the `[bench]` runner's twin.
+  A lap teleports beside the spot, waits for the streaming ring to drain (the collision cell must exist
+  before a car is dropped into it), spawns the model, presses enter/exit and **walks the ped in through the
+  real sequence**, lets the springs settle, then plays the timeline with the capture ON and prints
+  `[phys] {json}`. Everything outside the timed window happens with the capture OFF.
+- `packages/game/src/vehicle/phys-capture.ts` — the summary every later plan is judged by (peak nose-up
+  angle WHILE braked, braking distance/time from its start speed, roll range, first flip + the speed it
+  happened at, air time, integrated rotation, time to 100). Peaks come from EVERY frame; the printed series
+  is thinned to 20 Hz, so a spike survives as a number even when its sample is dropped from the curve.
+- The telemetry ring went 600 → 3600 frames: the longest scene is 24 s and a ring that wrapped mid-lap would
+  silently drop the launch and report the tail as the run.
+
+**Numbers — the first real capture (infernus, `brake-strip`, headless, build `./build/original/opensa`)**
+
+The first run held WOT to 12 s and the car **ran out of straight at 190 km/h** — an 18.8 g lateral spike and
+0.13 s of air that had nothing to do with braking. That is the harness working: a bad scene showed up as data,
+not as a plausible number. Brake moved to 8 s (~200 m in); the clean lap:
+
+| channel                     | value                                       |
+| --------------------------- | ------------------------------------------- |
+| time to 100 km/h            | **3.98 s**                                  |
+| speed at brake              | **165.2 km/h**                              |
+| braking distance / time     | **59.9 m / 2.92 s** (≈1.6 g average)        |
+| peak longitudinal g         | **−3.17 g**                                 |
+| **pitch while braking**     | **+0.07° (nose UP)**, whole-lap range −0.53…+0.07° |
+| roll / slip / lateral g     | 0 / 0 / 0 (a dead-straight lap)             |
+| frames                      | 960 @ 60 Hz, 401 rows printed at 20 Hz      |
+
+**The braking complaint, quantified.** The nose does not dive: at 1.6 g of deceleration the body pitches
+**+0.07°, and the sign is UP**. It is not that the car pitches up a lot — it is that it does not pitch at all,
+and what little there is goes the wrong way. `CHASSIS_ANGULAR_DAMPING = 2` (the band-aid plan 03 retires) is
+the obvious suspect, and the number to beat is now on record.
+
+**Still owed by this plan**: `phys-compare.ts` (determinism check + tolerance bands), and the BEFORE matrix
+(3 cars × 7 scenes) with the user's vanilla-SA expectations in words.
+
+_(the BEFORE matrix follows)_

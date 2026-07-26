@@ -43,6 +43,7 @@ import { PhysicsSystem } from '@opensa/game/physics/physics.system';
 import { initRapier } from '@opensa/game/physics/rapier';
 import { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
 import { cellsWithin } from '@opensa/game/streaming/grid';
+import { ScriptedDriveSource } from '@opensa/game/vehicle/scripted-drive';
 import { wheelCornerLabels } from '@opensa/game/vehicle/vehicle-telemetry';
 import { WeatherTransition } from '@opensa/game/weather/weather-transition';
 import { weatherForCity } from '@opensa/game/weather/weather-zones';
@@ -84,6 +85,7 @@ import { setupEngineClutter } from './engine-clutter';
 import { createEngineDebugActions, type EnginePerfSnapshot } from './engine-debug-actions';
 import { loadCoronaSprites, setupEngineParticles } from './engine-particles';
 import { ledgerBreakdown, type LegSample, setupPerfRuns } from './engine-perf-runs';
+import { setupPhysRuns } from './engine-phys-runs';
 import { loadEnginePlayer } from './engine-player';
 import { setupEngineProps } from './engine-props';
 import { type EngineVehicles, setupEngineVehicles } from './engine-vehicles';
@@ -421,7 +423,10 @@ async function boot(
   // Input (REUSED): keyboard for movement; the camera look is host-owned (drag), like the game's pointer.
   const keyboard = new Keyboard();
   keyboard.start();
-  const input = new CombinedInput([new KeyboardSource(keyboard, config.controls)]);
+  // A scripted lap (081/01, `?phys=`) drives through the SAME InputState the player uses — a capture that
+  // bypassed `drive()`'s ramps would measure a different car. Idle it contributes nothing to the sum.
+  const scriptedDrive = new ScriptedDriveSource();
+  const input = new CombinedInput([new KeyboardSource(keyboard, config.controls), scriptedDrive]);
 
   // Camera (plan 080/01): the rig state lives in the director, the host only reports input. Click = mouse
   // capture (prod behaviour — the look uses movementX/Y continuously while pointer-locked, Esc releases),
@@ -1094,6 +1099,9 @@ async function boot(
         prevPlayerGta[0] = curPlayerGta[0];
         prevPlayerGta[1] = curPlayerGta[1];
         prevPlayerGta[2] = curPlayerGta[2];
+        // The scripted lap's clock runs on the FIXED step, before anything reads its input — a timeline that
+        // advanced with the render rate would replay differently on a different machine.
+        scriptedDrive.advance(FIXED_STEP);
         const controllerStarted = performance.now();
         controllerSystem.fixedUpdate(FIXED_STEP);
         const physicsStarted = performance.now();
@@ -1422,6 +1430,29 @@ async function boot(
       Transform.z[playerEid] = anchor[2];
     },
     toEngine,
+  });
+
+  // Scripted physics laps (081/01): the same teleport contract as a bench leg, then a driven capture.
+  setupPhysRuns({
+    drive: scriptedDrive,
+    getStream: (): null | StreamStats => lastStream,
+    getVehicles: (): EngineVehicles | null => vehicles,
+    params,
+    setHour: (value): void => {
+      hour = value;
+    },
+    settleTimeoutMs: WORLD_READY_TIMEOUT_MS,
+    spawnCar: async (model, position, heading): Promise<void> => {
+      await vehicles?.spawn({
+        groundSnap: true,
+        heading,
+        model,
+        position: [position[0], position[1], position[2]],
+      });
+    },
+    teleportPlayer: (anchor): void => {
+      teleportPlayer([anchor[0], anchor[1], anchor[2]]);
+    },
   });
 }
 

@@ -124,7 +124,9 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
   // Telemetry (plan 081/01): only the DRIVEN car is instrumented — a capture is about the car under the
   // player, and sampling a street of parked cars would cost per step for nothing. Off by default: the
   // `enabled` check comes first so a shipped build does not even read the body.
-  const telemetry = new VehicleTelemetry();
+  // 60 s of fixed steps: the longest scripted scene is 24 s and a capture must hold the WHOLE lap — a ring
+  // that wrapped mid-lap would silently drop the launch and report the tail as the run.
+  const telemetry = new VehicleTelemetry(3600);
   let instrumented: EnterableVehicle | null = null;
   const stepTelemetry = (step: number): void => {
     const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;

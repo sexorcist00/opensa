@@ -33,6 +33,7 @@ Run any of them as `npx tsx scripts/debug/<name>.ts …`; `--game <id>` picks th
 | --- | --- |
 | `find-instances.ts <model\|id>…` | every placement of a model across ALL map IPLs (text + binary streams), with source file — "ghost text placement vs real streamed placement" |
 | `inspect-area.ts <x> <y> [radius]` | every instance near a point and WHY it would (not) render: def, LOD class, interior, DFF/TXD presence, parse result |
+| `road-straights.ts [minLength]` | REAL flat straights + crests from the game's own vehicle path graph (`NODES*.DAT`): each run's length, its Δz, its heading, and crests as rise/drop within a launch length — where a scripted drive scene can be put without guessing coordinates (081/01) |
 | `dump-texture.ts <txd> <name> [out.png] [alpha]` | one TXD texture as PNG (software DXT decode). **Gotcha:** transparent texels take the viewer's background colour — always check the `alpha` dump too; for DXT1a ground truth decode blocks (3-colour mode ⇒ index 3 is transparent black) |
 | `dump-chunks.ts <file> [filterHex]` | a RenderWare file's chunk tree — WHERE a plugin chunk lives |
 | `model-bbox.ts <model>…` | render extents (DFF) vs collision extents (COL) — partial mesh vs transform/culling bug |
