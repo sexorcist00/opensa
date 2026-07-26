@@ -148,8 +148,12 @@ const BRAKE_UNITS_PER_DECEL_PER_KG = 1 / 73.6;
 const REVERSE_FRACTION = 0.4; // reverse force/top-speed as a fraction of forward
 const IDLE_BRAKE_FRACTION = 0.08; // light brake when off throttle, so the car coasts to a stop
 const ENGINE_RAMP_TIME = 0.2; // seconds for the engine force to reach full (snappy but no force spike)
-/** Seconds for the FOOT brake to reach full force. A pedal is not a switch (plan 081/04, field verdict). */
-const FOOT_BRAKE_RAMP_TIME = 0.45;
+/**
+ * Seconds for the FOOT brake to reach full force. A pedal is not a switch — but it is not a dial either:
+ * 0.45 read as "an unnaturally smooth dive" in the field, because a driver stabbing the brake reaches the
+ * floor in a couple of tenths and the weight should transfer at that pace (plan 081/04, two field verdicts).
+ */
+const FOOT_BRAKE_RAMP_TIME = 0.2;
 const MAXVEL_SCALE = 0.25; // handling.maxVelocity → top speed (m/s)
 const MIN_TOP_SPEED = 8; // floor for top speed (m/s)
 const REVERSE_SPEED_EPS = 0.6; // below this forward speed, S means reverse (else brake)

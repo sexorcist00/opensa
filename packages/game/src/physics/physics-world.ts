@@ -64,6 +64,17 @@ const SUSPENSION_DAMPING_REFERENCE = 0.15; // the mid-range `fSuspensionDampingL
  * (081/03 §1) sank the cars into the asphalt — the field report that produced this constant.
  */
 const SUSPENSION_SAG_PER_STIFFNESS = 2;
+/**
+ * A spring may not sag further than this share of the travel the car actually HAS.
+ *
+ * Real setups run 25-35 % static sag, and the reason is geometric: a car with 10 cm of travel needs a stiff
+ * spring, a car with 47 cm needs a soft one, whatever their authored "force level" says — that number is
+ * relative to the car's own geometry, not an absolute rate. The comet proved it in the field: a lowered
+ * race Porsche authoring the SOFTEST force (0.64) and the SHORTEST travel (10 cm) came out sagging 10.1 cm,
+ * so it stood on its bump stops with its wheels through the road. This floor rescues exactly that case and
+ * leaves every car with generous travel untouched.
+ */
+const SUSPENSION_MAX_SAG_OF_TRAVEL = 0.35;
 const SUSPENSION_COMPRESSION_FLOOR = 2; // a floor on the DERIVED value, not a substitute for it
 const SUSPENSION_RELAXATION_FLOOR = 0.4;
 /**
@@ -1156,7 +1167,13 @@ function suspensionSetup(properties: VehicleMassProperties): {
     Math.max(SUSPENSION_DAMPING_SCALE_MIN, damping / SUSPENSION_DAMPING_REFERENCE),
   );
 
-  const stiffness = SUSPENSION_STIFFNESS * (force > 0 ? force / SUSPENSION_REFERENCE_FORCE : 1);
+  const usableTravel = travel > 0 ? travel : SUSPENSION_MAX_TRAVEL;
+  // The authored force level, then a GEOMETRIC floor: a short-travel car cannot be allowed the sag a
+  // long-travel one gets, or it sits on its stops (see SUSPENSION_MAX_SAG_OF_TRAVEL).
+  const stiffness = Math.max(
+    SUSPENSION_STIFFNESS * (force > 0 ? force / SUSPENSION_REFERENCE_FORCE : 1),
+    SUSPENSION_SAG_PER_STIFFNESS / (usableTravel * SUSPENSION_MAX_SAG_OF_TRAVEL),
+  );
   const critical = 2 * Math.sqrt(stiffness); // Bullet's damping scale for a rate
 
   return {
@@ -1166,6 +1183,6 @@ function suspensionSetup(properties: VehicleMassProperties): {
     restLength: restLength > 0 ? restLength : SUSPENSION_REST,
     sag: SUSPENSION_SAG_PER_STIFFNESS / stiffness,
     stiffness,
-    travel: travel > 0 ? travel : SUSPENSION_MAX_TRAVEL,
+    travel: usableTravel,
   };
 }

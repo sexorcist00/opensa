@@ -260,3 +260,39 @@ So the reference stays at 34, and **the dive magnitude is now plan 04's problem,
 braking force honest (it has no mass term and no bias) and the transfer, and with it the dive, comes back
 into band on its own. This is the second time in the chain that a suspicious number turned out to be owned by
 the brake formula.
+
+### 2026-07-26 — a geometric floor on sag: the comet stops standing on its stops
+
+**Field report**: the comet's wheels were still through the road when every other car sat right, and its dive
+had become "unnaturally smooth" rather than a dip.
+
+The first half was geometry. The comet's modded row authors the **softest force level (0.64) and the shortest
+travel (10 cm)** of the fleet — a lowered race Porsche. Our reference rate read "soft force" as "soft spring"
+and produced **10.1 cm of sag against 10 cm of travel**: the car stood on its bump stops, and no wheel
+geometry can be right from there.
+
+The authored force level is **relative to the car's own suspension, not an absolute rate**. So the spring now
+takes a geometric floor: static sag may not exceed 35 % of the travel the car actually has (real setups run
+25-35 %, for exactly this reason). Measured after:
+
+| Car     | Stiffness   | Sag              | Share of travel | At rest |
+| ------- | ----------: | ---------------: | --------------: | ------- |
+| comet   | 19.8 → **57.1** | 10.1 → **3.5 cm** |          35 % | vertical g 0.000 |
+| admiral |        28.7 |           7.0 cm |          32 % | vertical g 0.000 |
+
+Only the comet moves; every car with generous travel is untouched, which is what a floor should do.
+
+The second half was the pedal: `FOOT_BRAKE_RAMP_TIME` went 0.45 s → **0.2 s**. A pedal is not a switch, but
+it is not a dial either — a driver stabbing the brake reaches the floor in a couple of tenths, and the weight
+should transfer at that pace. Dives now read −1.05° (comet) and −0.95° (admiral): present, sharp, in band.
+
+### 2026-07-26 — field verdict on cornering
+
+> *"Cornering is noticeably better — the entry is smoother at low and medium speed. At high speed, braking
+> and turning together still snaps the car round."*
+
+The first half is 081/02-03 doing their job (mass properties, per-car springs, real weight transfer). The
+second half is **plan 05, and the mechanism is already visible in the data**: braking puts 94.6 % of the load
+on the front axle, and with one shared `WHEEL_FRICTION_SLIP = 10.5` and `tractionMultiplier` / `tractionLoss`
+/ `tractionBias` unread, that load becomes unlimited front grip — so the car pivots about a front axle that
+cannot break away. Recorded here so plan 05 starts with the case already framed.
