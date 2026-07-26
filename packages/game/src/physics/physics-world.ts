@@ -75,7 +75,25 @@ const SUSPENSION_DAMPING_REFERENCE = 0.15; // the mid-range `fSuspensionDampingL
  * It exists so the wheel sits at its MODEL HUB when the car is standing. Without it, softening the spring
  * (081/03 §1) sank the cars into the asphalt — the field report that produced this constant.
  */
-const SUSPENSION_SAG_PER_STIFFNESS = 2;
+/**
+ * Rapier's suspension force per unit of rate, compression and chassis mass, inverted: how far a corner sinks
+ * under the weight it carries is `sag = load / (THIS × stiffness × mass)`.
+ *
+ * **A measured bridge, not a derivation.** A force probe gave 1.43 for the force law, but predicting SAG with
+ * it left every car sitting low: solving the same relation from four settled cars (romero front and rear,
+ * infernus, admiral — loads 3.4-8.7 kN, rates 12-25) gives **1.06 … 1.21**, and the value below is the middle
+ * of that. The residual is ±7 %, i.e. under a centimetre of ride height on these cars. The gap is real
+ * (Rapier's settled length is not purely the spring — its damping and relaxation terms are in there too) and
+ * closing it properly means solving the controller's own equilibrium rather than probing it.
+ *
+ * It replaces a constant that assumed **every corner carries a quarter of the car**. That assumption is
+ * wrong for any car whose authored centre of mass is off-centre, and spectacularly wrong for the ones that
+ * say so loudest: the romero hearse authors its centre 0.8 m back, its rear corners carry 71 % of a 2.5 t
+ * body, and with a quarter-mass lift under them the car stood 7 cm low at the back and 5 cm high at the
+ * front — 12 cm of rake, which is exactly what the field saw ("the romero is tipped backwards"). Its rear
+ * springs had been driven to a NEGATIVE length: compressed past their own rest point and through the stop.
+ */
+const SUSPENSION_FORCE_PER_STIFFNESS = 1.15;
 /**
  * A spring may not sag further than this share of the travel the car actually HAS.
  *
@@ -122,6 +140,11 @@ const SUSPENSION_DAMPING_SCALE_MAX = 2;
  * original applies to it, which is `fTractionBias` in the same `2 × bias` / `2 − 2 × bias` form as the
  * suspension's. The surface term is not modelled yet: every road is tarmac until surface types are wired.
  */
+/** Standard gravity — the static load a corner carries is its share of `mass × g`. */
+const GRAVITY = 9.81;
+/** No axle may be given the whole car: a centre of mass authored outside the wheelbase would otherwise put a
+ *  negative load on the other end, and a few modded rows do exactly that. */
+const MAX_AXLE_SHARE = 0.9;
 const TYRE_GRIP_FLOOR = 0.2; // a row authoring 0 (there are 19) would weld the wheels; keep them steerable
 const PARKING_BRAKE = 80; // holds a parked car put (released by the driver when throttling)
 const CHASSIS_LINEAR_DAMPING = 0.1;
@@ -222,6 +245,7 @@ export type VehicleController = ReturnType<RapierWorld['createVehicleController'
 
 /** Which wheels the engine drives (`nDriveType`). */
 export type VehicleDriveType = '4' | 'F' | 'R';
+
 /**
  * A vehicle body's AUTHORED mass properties (plan 081/02) — `handling.cfg`'s, not the collision hull's.
  *
@@ -242,7 +266,6 @@ export interface VehicleMassProperties {
   /** `fTurnMass` (kg·m²) — the yaw inertia, the only one SA authors. */
   readonly turnMass: number;
 }
-
 /**
  * One wheel's SPRING SETUP, as the controller holds it (plan 081/02).
  *
@@ -264,6 +287,29 @@ export interface VehicleSpringReading {
   readonly stiffness: number;
   /** Maximum travel (m). */
   readonly travel: number;
+}
+
+/**
+ * What a car is STANDING on, read once after it has settled (plan 081/05).
+ *
+ * It exists because of a failure mode nothing else in a capture reveals: a car resting partly on its own
+ * COLLISION HULL instead of on its wheels. Its springs simply read light, and since tyre grip is `μ × the
+ * load the corner carries`, its wheels quietly stop steering, driving and braking — the car reads as "heavy"
+ * and refuses to turn, at any speed, with every other channel looking normal.
+ */
+export interface VehicleStance {
+  /** Chassis mass (kg), as the solver holds it. */
+  readonly mass: number;
+  /** The share of the car's weight its springs carry. **Below 1 means something else is holding it up.** */
+  readonly weightOnGround: number;
+  readonly wheels: readonly {
+    readonly contact: boolean;
+    /** Suspension force this corner carries (N). */
+    readonly load: number;
+    readonly radius: number;
+    readonly restLength: number;
+    readonly suspensionLength: number;
+  }[];
 }
 
 /**
@@ -456,10 +502,10 @@ export class PhysicsWorld {
     const controller = this.world.createVehicleController(body);
     controller.indexUpAxis = UP_AXIS;
     controller.setIndexForwardAxis = FORWARD_AXIS;
-    const front = suspensionSetup(properties, true);
-    const rear = suspensionSetup(properties, false);
+    const loads = staticWheelLoads(wheels, properties);
+    const springs = wheels.map((wheel, i) => suspensionSetup(properties, wheel.front, loads[i]));
     wheels.forEach((wheel, i) => {
-      const spring = wheel.front ? front : rear;
+      const spring = springs[i];
       const [x, y, z] = wheel.connection;
       // Raised by the rest length MINUS the static sag, so the wheel sits at the model hub when the car is
       // STANDING — not when it is hanging in the air (plan 081/03 §1, field report: after the spring was
@@ -1215,15 +1261,6 @@ export class PhysicsWorld {
   }
 }
 
-/**
- * A car's springs, derived from its authored suspension row (plan 081/02 §3).
- *
- * Stiffness and the force cap are MASS-NORMALISED: a rate that carries 1500 kg leaves a 6.5 t truck on its
- * bump stops, which is what one shared spring meant. Damping keeps its tuned RATIO — compression sits far
- * above the Bullet-standard rebound because it damps the launch hop (074 field lesson) — and both have a
- * floor, because a tank authors 0.02 and honouring that literally makes it a pogo stick. Geometry is
- * literal: the wheel hangs |lower limit| below its hub, the spring compresses by the upper limit.
- */
 /** Clamp to ±limit. */
 function clampMagnitude(value: number, limit: number): number {
   return Math.min(Math.max(value, -limit), limit);
@@ -1252,15 +1289,60 @@ function principalInertia(
   return { x: box(hy, hz) * scale, y: box(hx, hz) * scale, z: properties.turnMass };
 }
 
+/**
+ * A car's springs, derived from its authored suspension row (plan 081/02 §3).
+ *
+ * Stiffness and the force cap are MASS-NORMALISED: a rate that carries 1500 kg leaves a 6.5 t truck on its
+ * bump stops, which is what one shared spring meant. Damping keeps its tuned RATIO — compression sits far
+ * above the Bullet-standard rebound because it damps the launch hop (074 field lesson) — and both have a
+ * floor, because a tank authors 0.02 and honouring that literally makes it a pogo stick. Geometry is
+ * literal: the wheel hangs |lower limit| below its hub, the spring compresses by the upper limit.
+ */
+/**
+ * How much of the car's weight each wheel carries when it is standing still (N).
+ *
+ * The lever rule about the AUTHORED centre of mass, which is the only honest source: a hearse is rear-heavy
+ * because its row says its mass sits 0.8 m back, not because anything was special-cased for hearses. Verified
+ * against the solver rather than assumed — the rule predicts the romero's 29 % front against a measured
+ * 29.4 %.
+ *
+ * Axles are grouped by the wheels' own `front` flag (which comes from the model's `wheel_?f` / `wheel_?b`
+ * dummy names), so a six-wheeler's middle axle rides with the rear. Left/right split evenly: SA authors a
+ * lateral centre offset almost nowhere, and where it does, the same lever rule applies about x.
+ */
+function staticWheelLoads(wheels: readonly VehicleWheelSpec[], properties: VehicleMassProperties): readonly number[] {
+  const weight = properties.mass * GRAVITY;
+  const front = wheels.filter((wheel) => wheel.front);
+  const rear = wheels.filter((wheel) => !wheel.front);
+  if (front.length === 0 || rear.length === 0) {
+    return wheels.map(() => weight / (wheels.length || 1));
+  }
+  const mean = (group: readonly VehicleWheelSpec[]): number =>
+    group.reduce((total, wheel) => total + wheel.connection[1], 0) / group.length;
+  const yFront = mean(front);
+  const yRear = mean(rear);
+  const span = yFront - yRear;
+  // A degenerate row (both axles at one y) gets an even split rather than a division by zero.
+  const frontShare =
+    span === 0
+      ? 0.5
+      : Math.min(MAX_AXLE_SHARE, Math.max(1 - MAX_AXLE_SHARE, (properties.centreOfMass[1] - yRear) / span));
+
+  return wheels.map((wheel) =>
+    wheel.front ? (weight * frontShare) / front.length : (weight * (1 - frontShare)) / rear.length,
+  );
+}
+
 function suspensionSetup(
   properties: VehicleMassProperties,
   front: boolean,
+  load: number,
 ): {
   compression: number;
   maxForce: number;
   relaxation: number;
   restLength: number;
-  /** How far the spring compresses under the car's own weight (m) — see {@link SUSPENSION_SAG_PER_STIFFNESS}. */
+  /** How far THIS corner's spring compresses under the weight it actually carries (m). */
   sag: number;
   stiffness: number;
   travel: number;
@@ -1279,8 +1361,11 @@ function suspensionSetup(
   // authored force level alone; its geometry decides what that level means in metres.
   const wanted = (SUSPENSION_LEVEL_SCALE * level * axle) / usableTravel;
   // …and a bump stop, because SA has one and we do not: a spring may not eat more than this share of the
-  // travel just standing still, or nothing is left to absorb a bump.
-  const stiffness = Math.max(wanted, SUSPENSION_SAG_PER_STIFFNESS / (usableTravel * SUSPENSION_MAX_SAG_OF_TRAVEL));
+  // travel just standing still, or nothing is left to absorb a bump. It is fed the load this corner ACTUALLY
+  // carries — a rear-heavy car's back springs have to be told they are holding up 71 % of a hearse.
+  const softest =
+    load / (SUSPENSION_FORCE_PER_STIFFNESS * properties.mass * usableTravel * SUSPENSION_MAX_SAG_OF_TRAVEL);
+  const stiffness = Math.max(wanted, softest);
   const critical = 2 * Math.sqrt(stiffness); // Bullet's damping scale for a rate
 
   return {
@@ -1288,7 +1373,7 @@ function suspensionSetup(
     maxForce: properties.mass * SUSPENSION_FORCE_PER_KG,
     relaxation: Math.max(SUSPENSION_RELAXATION_FLOOR, SUSPENSION_RELAXATION_RATIO * critical * dampingScale),
     restLength: restLength > 0 ? restLength : SUSPENSION_REST,
-    sag: SUSPENSION_SAG_PER_STIFFNESS / stiffness,
+    sag: load / (SUSPENSION_FORCE_PER_STIFFNESS * properties.mass * stiffness),
     stiffness,
     travel: usableTravel,
   };

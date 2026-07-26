@@ -402,3 +402,47 @@ because the order follows the model's frames.
 **Noted, not fixed**: the savanna dives +0.65° (nose UP) where the trio dives ≈ −0.7°, which is backwards for
 a car with the softer front. The suspect is the brake split — still equal across the axles with `fBrakeBias`
 unread (plan 04 §3). With this, 081/03 owes nothing further; the drivetrain debts moved to 04's ledger.
+
+### 2026-07-26 — the ride height was assuming every corner carries a quarter of the car
+
+**Field report** (screenshots): the romero stands tipped backwards, the turismo looks slammed.
+
+The capture could not answer either question, so it learned to: a `stance` block now records, once the car has
+settled, each wheel's spring length, the load it carries, its radius, and **the share of the car's weight the
+springs carry at all**. That last number exists for a failure mode nothing else reveals — a car resting partly
+on its collision hull reads normal everywhere while its tyres, whose grip is `μ × load`, quietly stop working.
+
+It answered both in one run. The turismo is fine: 99.9 % on its springs, four wheels in contact, 5 mm into a
+15 cm travel — its stance is the model's own (its wheels differ by axle, 0.7 front / 0.75 rear from
+`vehicles.ide`). The romero was broken:
+
+```
+rear  spring length -0.033 m   load 8654 N    <- NEGATIVE: compressed past its own rest point
+front spring length +0.073 m   load 3601 N
+=> rear 71 mm low, front 46 mm high: 12 cm of rake, +1.67 deg nose up
+```
+
+`suspensionSetup` raised each connection by `restLength − sag`, and `sag` was `2 / stiffness` — a constant
+that quietly assumes **a quarter of the mass on every corner**. The romero authors its centre of mass 0.8 m
+back (it is a hearse), so its rear carries 71 % of 2.5 t and sank straight through the assumption.
+
+Each corner's sag now comes from the load it actually carries, by the lever rule about the AUTHORED centre of
+mass — verified against the solver, not assumed: it predicts the romero's 29 % front share against a measured
+29.4 %. The same load feeds the bump stop, so a loaded axle is given the stiffer spring it needs.
+
+| car      | rake before | rake after | shortest spring          |
+| -------- | ----------- | ---------- | ------------------------ |
+| romero   | **+1.67°**  | **+0.09°** | **−0.033 → +0.018 m**    |
+| admiral  | −0.58°      | −0.34°     | +0.074 → +0.086 m        |
+| turismo  | −0.50°      | −0.63°     | +0.146 → +0.149 m        |
+| comet    | +0.03°      | +0.00°     | +0.015 → +0.018 m        |
+| infernus | 0           | 0          | +0.019 m (unchanged)     |
+
+**This is also the second time an assumption of "even quarters" has cost a session.** The first was the
+emergent centre of mass in 081/02 (an equal mass share per COL primitive). Anything that divides a car by
+four is now suspect by default.
+
+The sag-per-rate constant is a MEASURED BRIDGE and says so in the code: a force probe gave 1.43, solving the
+same relation from four settled cars gives 1.06…1.21, 1.15 is used, residual ±7 % (under a centimetre of ride
+height). Rapier's settled length carries its damping and relaxation terms too; closing it properly means
+solving the controller's equilibrium instead of probing it.

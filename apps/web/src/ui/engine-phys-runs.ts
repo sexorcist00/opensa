@@ -14,7 +14,7 @@
  * capture OFF, so a lap's frames are the drive and nothing else.
  */
 import { type StreamStats } from '@opensa/engine';
-import { type VehicleSpringReading } from '@opensa/game/physics/physics-world';
+import { type VehicleSpringReading, type VehicleStance } from '@opensa/game/physics/physics-world';
 import { summarisePhysFrames, thinFrames } from '@opensa/game/vehicle/phys-capture';
 import { type PhysScene, type ScriptedDriveSource } from '@opensa/game/vehicle/scripted-drive';
 import { type TelemetryFrame } from '@opensa/game/vehicle/vehicle-telemetry';
@@ -130,6 +130,7 @@ function report(
   car: string,
   frames: readonly TelemetryFrame[],
   springs: null | readonly VehicleSpringReading[],
+  stance: null | VehicleStance,
 ): void {
   const capture = {
     car,
@@ -157,6 +158,7 @@ function report(
     // capture proved wheel 0 is not even reliably the front one. A capture that cannot say what it was
     // configured with cannot prove a change took effect.
     springs: springs ?? null,
+    stance,
     summary: summarisePhysFrames(frames),
     what: scene.what,
   };
@@ -209,9 +211,10 @@ async function runScene(host: PhysRunsHost, scene: PhysScene, car: string): Prom
   host.drive.stop();
   const frames = vehicles.telemetry.frames();
   const springs = vehicles.springs();
+  const stance = vehicles.stance();
   vehicles.telemetry.enabled = false;
 
-  report(scene, car, frames, springs);
+  report(scene, car, frames, springs, stance);
   await leaveCar(host, vehicles);
 }
 

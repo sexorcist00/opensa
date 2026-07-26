@@ -347,3 +347,49 @@ airborne in it: it crashed, and some of that yaw is the crash). A rear-drive sed
 the ordinary one, and there the change can only help: the angle is no longer capped below what a corner asks.
 
 Runs: `2026-07-26-headless-steering-{admiral,comet}.json`.
+
+### 2026-07-26 — ride height from the AUTHORED centre of mass (081/03, a real defect)
+
+**Field report** (user, with screenshots): *"the stock turismo is very slammed"* and *"the romero is tipped
+backwards"*. The second one was a genuine bug and the capture found it in one run, once the capture learned to
+record what the car is STANDING on (a new `stance` block: per-wheel spring length, load, radius, and the share
+of the car's weight its springs carry).
+
+```
+romero, before:  rear spring length -0.033 m  load 8654 N     <- NEGATIVE: compressed past its own rest point
+                 front spring length +0.073 m  load 3601 N
+                 rear sits 71 mm low, front 46 mm high -> 12 cm of rake, +1.67° nose up
+```
+
+The ride-height compensation raises each wheel's connection by `restLength − sag` so the wheel sits at the
+model's hub when standing. Its `sag` assumed **every corner carries a quarter of the car**. The romero authors
+its centre of mass 0.8 m back — it is a hearse — so its rear corners carry **71 %** of a 2.5 t body and sank
+far past the assumption, while the front floated above it.
+
+Now each corner's sag comes from the load it actually carries, by the lever rule about the authored centre of
+mass. The rule was checked against the solver rather than assumed: it predicts the romero's 29 % front axle
+share against a measured 29.4 %. The same load also feeds the bump stop, so a heavily-loaded axle gets the
+stiffer spring it needs instead of being clamped by a rule that thought it was carrying a quarter of a car.
+
+| car      | rake before | rake after | shortest spring before → after |
+| -------- | ----------- | ---------- | ------------------------------ |
+| romero   | **+1.67°**  | **+0.09°** | **−0.033 m → +0.018 m**        |
+| admiral  | −0.58°      | −0.34°     | +0.074 → +0.086 m              |
+| turismo  | −0.50°      | −0.63°     | +0.146 → +0.149 m              |
+| comet    | +0.03°      | +0.00°     | +0.015 → +0.018 m              |
+| infernus | +0.00°      | +0.00°     | +0.019 m (unchanged)           |
+
+No spring is past its rest point on any car now, and every car stands within a few tenths of a degree of level.
+
+The turismo, measured, is **not** riding on its belly: 99.9 % of its weight is on its springs with four wheels
+in contact, and it settles 5 mm into a 15 cm travel. Its stance is the model's own — but note its wheels
+differ by axle (`vehicles.ide` gives it 0.7 front / 0.75 rear), which is what the screenshot's proportions
+show.
+
+One number in this is a MEASURED BRIDGE and is flagged as such in the code: the sag-per-rate constant. A force
+probe gave 1.43; solving the same relation from four settled cars gives 1.06…1.21, and 1.15 is used, with a
+±7 % residual (under a centimetre of ride height). Rapier's settled length is not purely its spring — the
+damping and relaxation terms are in it too — and closing that properly means solving the controller's
+equilibrium rather than probing it.
+
+Runs: `2026-07-26-headless-stance-{before,after}.json`.

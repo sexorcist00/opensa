@@ -14,7 +14,7 @@ import type { Logger } from '@opensa/game/diagnostics/logger';
 import type { InputState } from '@opensa/game/input';
 import type { Config } from '@opensa/game/interfaces/config.interface';
 import type { Vec3 } from '@opensa/game/interfaces/world-adapter.interface';
-import type { PhysicsWorld, VehicleSpringReading } from '@opensa/game/physics/physics-world';
+import type { PhysicsWorld, VehicleSpringReading, VehicleStance } from '@opensa/game/physics/physics-world';
 import type { EnterableVehicle, VehicleAnimator } from '@opensa/game/vehicle/enter-vehicle.system';
 import type { SpawnedVehicle, VehiclePlacement } from '@opensa/game/vehicle/vehicle-lod.system';
 
@@ -84,6 +84,8 @@ export interface EngineVehicles {
    * apart from their own record is not a measurement.
    */
   springs(): null | readonly VehicleSpringReading[];
+  /** What the car is STANDING on — see {@link VehicleStance}. Null on foot. */
+  stance(): null | VehicleStance;
   /**
    * The driven car's physics telemetry (plan 081/01): speed, slip, per-wheel load and travel, sampled every
    * fixed step while `enabled`. **This is the slip/speed channel plan 080/05 reads for drift framing** —
@@ -442,6 +444,29 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
 
       return car === null ? null : physics.readVehicleSprings(car.controller);
+    },
+    stance: (): null | VehicleStance => {
+      const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
+      if (car === null) {
+        return null;
+      }
+      const wheels = physics.readVehicleWheels(car.controller);
+      const { mass } = physics.readMassProperties(car.body);
+
+      return {
+        mass,
+        // The whole point of the block: a car standing on its own collision hull carries part of its weight
+        // on the hull, so its springs read light — and since tyre grip is `μ × load`, its wheels quietly
+        // stop steering, driving and braking. Nothing else in a capture shows that.
+        weightOnGround: Number((wheels.reduce((total, w) => total + w.suspensionForce, 0) / (mass * 9.81)).toFixed(3)),
+        wheels: wheels.map((wheel) => ({
+          contact: wheel.contact,
+          load: Number(wheel.suspensionForce.toFixed(1)),
+          radius: wheel.radius,
+          restLength: wheel.restLength,
+          suspensionLength: Number(wheel.suspensionLength.toFixed(4)),
+        })),
+      };
     },
     telemetry,
     update(delta: number, alpha: number): void {
