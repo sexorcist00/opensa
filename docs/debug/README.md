@@ -75,6 +75,39 @@ local and reversible by re-extraction; each is report-by-default, `--write` to a
 | --- | --- |
 | `strip-polygons-from-dff.ts --img <path> --tex <name[,name…]> [--models a,b,…] [--write]` | drops every submesh whose material references a given texture (its triangles) from DFF models inside an IMG — for cards that render as flat missing-texture quads because the texture is absent from the mod. Vertices + the material list are left untouched (the material just goes unused — no re-indexing), so the other cards on the same model survive; each edited DFF is re-parsed and verified before write. Default scans all DFFs; `--models` restricts. Fixed gostown's `LODEnsemble*` `Gp_feuillu1` magenta (`lodveg.txd` ships 6 of the 7 LOD-veg card textures; `Gp_feuillu1` is absent from the mod — not a recovery miss) |
 
+## Driving the game itself — the scripted physics lap (081/01)
+
+The most useful tool this repo has for a gameplay bug: **the real game, driven by a script, printing
+numbers**. Not a simulation of the game and not a unit test — the timeline goes through the same
+`InputState` and the same `drive()` a player's keyboard does, so what it measures is what ships.
+
+```bash
+npm run serve:static && npm run dev              # the build on :3001, the app on :5173
+SRC=http://localhost:3001/build/original/opensa
+# one scene, or `phys=all` for the seven; `car=` picks the model
+TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
+  "http://localhost:5173/?loader=http-dir&src=$SRC&phys=all&car=infernus" phys 1200000 7
+npx tsx scripts/phys-compare.ts before.log after.log [--determinism]   # diff two capture sets
+```
+
+A lap teleports beside a real road spot, waits for streaming AND the collision behind it, spawns the car,
+seats the player, settles the springs, then plays a keyframe timeline while the telemetry ring records every
+fixed step — and prints one `[phys] {json}` line (summary + a 20 Hz series). Scenes:
+`apps/web/src/phys-scenes.ts`. Captures belong in
+[`docs/benchmarks/vehicle-physics/`](../benchmarks/vehicle-physics/readme.md).
+
+**What it is good for beyond physics tuning:** it is a repeatable driver for anything that only happens while
+a car moves. Two engine bugs were found in its first day of use — telemetry reading every orientation-derived
+rate as zero (an aliased array), and a car unloaded after you left it killing the fixed step permanently —
+and both were invisible to the unit suites.
+
+**How to read a failed lap.** The runner names its own failures (`[phys] scene 'x' failed: …`), and the
+harness screenshots on exit — the on-screen HUD carries `FIXED-STEP ERROR: …`, which is how the despawn
+crash was identified in one look. A capture that came back absurd (a car "airborne" for its whole lap) is
+usually the lap seating into a WRECK a previous scene left at a shared spot.
+
+Companion scanner: `road-straights.ts` (above) — where to put a new scene without guessing coordinates.
+
 ## Approaches beyond scripts
 
 - **`report.json` ledgers first** — `textures.missing` (name → models that asked) and

@@ -242,9 +242,10 @@ build and whether it ever settles instead of snapping. That scene is owed before
 
 ### 2026-07-26 — THE BEFORE MATRIX (subtask 6): 3 cars × 7 scenes, 21 of 21 laps
 
-Captured headless on build `./build/original/opensa` through `?phys=all&car=<model>`; the full captures
-(summary + a 20 Hz series per lap) are `before/infernus.json`, `before/admiral.json`, `before/firetruk.json`.
-Every later 081 plan compares against these files with `scripts/phys-compare.ts`.
+Captured headless on build `./build/original/opensa` through `?phys=all&car=<model>`. **The captures live in
+the measurement record, not under this plan** — `docs/benchmarks/vehicle-physics/` (its readme carries the
+schema and the comparability rules): a baseline that only exists inside a plan folder is lost the day the
+plan closes, and plans 02-07 all compare against these files with `scripts/phys-compare.ts`.
 
 | Scene             | Car      | Top km/h | 0-100 s | Brake m / s | Roll min…max °  | Slip ° | Turned ° | Air s | Flip |
 | ----------------- | -------- | -------: | ------: | ----------: | --------------: | -----: | -------: | ----: | :--: |

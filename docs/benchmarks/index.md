@@ -1,5 +1,9 @@
 # The benchmark record, in chronological order
 
+**This index is the PERFORMANCE family.** The vehicle-physics captures keep their own chronology in
+[`vehicle-physics/readme.md`](vehicle-physics/readme.md) — a lap measures behaviour, not frame cost, and the
+two must not be read against each other.
+
 Every run in this folder, oldest first, with the conditions it was taken under. **Conditions are the whole
 point:** two runs are only comparable when the machine, the scene set, the pak and the flags match, and most
 of the confusion in this project's perf history came from comparing rows that did not.

@@ -1,11 +1,17 @@
-# Benchmarks — the performance record
+# Benchmarks — the measurement record
 
-**Standing rule: every performance number the user reports gets committed here, immediately, in this
-format.** Not summarised into a plan doc, not left in chat. A number that exists only in a conversation is
-gone the moment the session ends, and a regression cannot be diagnosed without the run it regressed from.
+**Standing rule: every measured number gets committed here, immediately, in the format of its family.** Not
+summarised into a plan doc, not left in chat. A number that exists only in a conversation is gone the moment
+the session ends, and a regression cannot be diagnosed without the run it regressed from.
 
-**Everything lives here** — the whole measurement history was consolidated into this folder on 2026-07-20,
-split by renderer:
+**Two families live here**, because the repo measures two different things and their schemas do not mix:
+
+- **Performance** — what a frame COSTS (fps, frame/GPU ms, draws, residency). Everything below is this
+  family; it was consolidated into this folder on 2026-07-20, split by renderer.
+- **Vehicle physics** — what a car DOES (stopping distance, roll, slip, flips). Its own schema and
+  chronology: [`vehicle-physics/`](vehicle-physics/) (plan 081, the `[phys]` capture protocol).
+
+The performance family, split by renderer:
 
 - [`opensa-engine/`](opensa-engine/) — the own WebGPU engine: the run JSONs plus four written analyses —
   [`2026-07-18-series.md`](opensa-engine/2026-07-18-series.md) (the annotated engine-vs-prod narrative,
