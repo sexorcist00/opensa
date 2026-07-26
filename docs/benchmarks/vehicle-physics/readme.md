@@ -431,3 +431,38 @@ line, which is what "the brake works like a handbrake" meant when the field firs
 stopped, not sideways.
 
 Runs: `2026-07-26-headless-handbrake-brakebias.json`.
+
+### 2026-07-26 — `fTractionLoss`: a wheel that has broken loose grips LESS (081/05)
+
+**Field verdict**: *"Space and H feel the same."* Two separate causes, and the first one is an instrument bug.
+
+**The `handbrake-turn` scene was pressing the wrong control.** It was written before the pedal and the lever
+were split (081/04) and still sent `jump`, so every "handbrake" number in this record before today was
+measured on the FOOT BRAKE. A scene that names one control and presses another cannot be caught by anything
+except reading it.
+
+**And the model was missing the half that makes a slide a slide.** `CVehicle::ProcessWheel` multiplies a
+wheel's adhesion by `fTractionLoss` (0.72…0.85 on cars) once that wheel's state is not NORMAL — past the limit
+a tyre does not merely stop giving MORE grip, it gives LESS, which is why the back steps out and stays out.
+Rapier does not expose its `skid_info`, but it exposes the impulses, and a wheel sitting on its own friction
+circle is the sliding one: last step's impulses drive this step's grip, the same one-frame feedback the
+original runs (`bAlreadySkidding`).
+
+Same manoeuvre, same build, only the control differs:
+
+| car     | control | rotation | **peak slip angle** | speed at 7 s |
+| ------- | ------- | -------- | ------------------- | ------------ |
+| admiral | Space   | 61.8°    | 11.5°               | 21.9 km/h    |
+| admiral | **H**   | 67.9°    | **40.9°**           | 17.2 km/h    |
+| comet   | Space   | 53.3°    | 10.8°               | 16.2 km/h    |
+| comet   | **H**   | 54.4°    | 10.6°               | 16.6 km/h    |
+
+The admiral now does what a handbrake does: the back comes round to 41° of slip where the pedal holds 11°.
+
+**The comet genuinely cannot tell them apart, and that is its own row.** It authors `fBrakeDeceleration =
+21.73` — 2.2 g of braking against a 0.67 tyre — so its FOOT brake already locks all four wheels every time it
+is touched. On that car the pedal IS a handbrake, because a mod asked for race brakes. Nothing to fix in the
+engine; worth knowing before testing handbrake feel on it. (SA's `abs` flag is the thing that would modulate a
+lock, and it is still unread — noted in 04 §3.)
+
+Runs: `2026-07-26-headless-tractionloss-lever-vs-pedal.json`.

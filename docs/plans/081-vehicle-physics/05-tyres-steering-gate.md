@@ -226,3 +226,37 @@ Measured on the same scenes (`turnedDeg`, how far round the lap actually got):
 on the kerb-strike replay without it (20.6° of roll becomes 179°). A raycast wheel cannot see a vertical kerb
 face until its centre crosses the edge — that is plan 06's kerb probe, and it is the fix. Raising this number
 again instead would be trading the whole fleet's cornering for one car's kerb.
+
+### 2026-07-26 — `fTractionLoss`, and the scene that was pressing the wrong key
+
+**Field verdict**: *"Space and H feel the same."* Two causes.
+
+**1. The instrument.** `handbrake-turn` still sent `jump` — it was written before the pedal and the lever were
+split (081/04), so every "handbrake" number in the record before today, including the one the previous entry
+used to declare §4 done, was measured on the FOOT BRAKE. Fixed, and worth stating as a class: a scene that
+names one control and presses another is invisible to every check except reading it.
+
+**2. The model.** Locking the rear wheels is only half of a handbrake turn. The other half is
+`fTractionLoss`: `CVehicle::ProcessWheel` multiplies a wheel's adhesion by it (0.72…0.85 on cars) once that
+wheel is no longer in the NORMAL state. Past the limit a tyre does not merely stop giving MORE grip — it gives
+LESS, and that is why a slide continues instead of self-correcting.
+
+Rapier exposes no `skid_info`, but it exposes the impulses, and a wheel sitting on its own friction circle IS
+the sliding one. So the grip handed to each wheel each step is `μ` or `μ × fTractionLoss` depending on last
+step's impulses — the same one-frame feedback the original runs on (`bAlreadySkidding`).
+
+| car     | control | rotation | **peak slip** | speed at 7 s |
+| ------- | ------- | -------- | ------------- | ------------ |
+| admiral | Space   | 61.8°    | 11.5°         | 21.9 km/h    |
+| admiral | **H**   | 67.9°    | **40.9°**     | 17.2 km/h    |
+| comet   | Space   | 53.3°    | 10.8°         | 16.2 km/h    |
+| comet   | **H**   | 54.4°    | 10.6°         | 16.6 km/h    |
+
+**The comet cannot tell the two controls apart, and that is its own row, not a defect.** It authors
+`fBrakeDeceleration = 21.73` — 2.2 g against a 0.67 tyre — so its foot brake locks all four wheels every time
+it is pressed. On that car the pedal already IS a handbrake because a mod fitted it with race brakes. The
+engine-side lever that would change it is `abs`, still unread (04 §3).
+
+This also lands the last of this plan's core: grip is per wheel, per axle, load-dependent, and now
+state-dependent. What remains here is surface types (`ROAD_ADHESION` still stands in for `g_surfaceInfos`) and
+the own-controller gate.

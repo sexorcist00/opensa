@@ -125,7 +125,10 @@ export const PHYS_SCENES: readonly PhysScene[] = [
     position: [-2808.9, 49.5, 6],
     timeline: [
       { move: { x: 0, y: 1 }, t: 0 },
-      { actions: ['jump'], move: { x: -1, y: 0 }, t: 5 }, // lock + handbrake
+      // The LEVER, not the pedal. This pressed `jump` until 2026-07-26 — written before the two controls were
+      // split (081/04), so every "handbrake" number in the record before that date was measured on the foot
+      // brake. A scene that names one control and presses another cannot be caught by anything but reading it.
+      { actions: ['handbrake'], move: { x: -1, y: 0 }, t: 5 },
       { move: { x: 0, y: 0 }, t: 7 },
     ],
     what: 'Handbrake turn: how far the car rotates and whether the slide is held — the feel target the user gives in vanilla-SA words.',

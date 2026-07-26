@@ -793,6 +793,7 @@ export class EnterVehicleSystem implements System {
       handbrake,
       steer: this.steerAngle,
       step,
+      traction: { bias: hnd.tractionBias, loss: hnd.tractionLoss, mult: hnd.tractionMult },
     });
     this.controls = { brake, engineForce: this.engine, gear, steer: this.steerAngle, throttle };
     car.rig.setSteer(this.steerAngle); // front wheels turn with the physics steer

@@ -140,6 +140,9 @@ const SUSPENSION_DAMPING_SCALE_MAX = 2;
  * original applies to it, which is `fTractionBias` in the same `2 × bias` / `2 − 2 × bias` form as the
  * suspension's. The surface term is not modelled yet: every road is tarmac until surface types are wired.
  */
+/** How close to its friction circle a wheel must be before it counts as having broken loose. Just under 1:
+ *  the solver lands exactly ON the circle when it clamps, and floating-point equality is not a state test. */
+const SLIDE_THRESHOLD = 0.98;
 /** Standard gravity — the static load a corner carries is its share of `mass × g`. */
 const GRAVITY = 9.81;
 /** No axle may be given the whole car: a centre of mass authored outside the wheelbase would otherwise put a
@@ -345,6 +348,8 @@ export interface VehicleSuspensionSpec {
 export interface VehicleTractionSpec {
   /** `fTractionBias`, 0..1 — the front axle's share, applied as `2 × bias` front and `2 − 2 × bias` rear. */
   readonly bias: number;
+  /** `fTractionLoss`, 0..1 — what a wheel's grip drops to ONCE IT HAS BROKEN LOOSE (0.72…0.85 on cars). */
+  readonly loss: number;
   /** `fTractionMultiplier` — the friction coefficient itself. */
   readonly mult: number;
 }
@@ -999,15 +1004,31 @@ export class PhysicsWorld {
       handbrake: boolean;
       steer: number;
       step: number;
+      /** The car's authored tyre grip — re-read each step because a SLIDING wheel gets less of it. */
+      traction: VehicleTractionSpec;
     },
   ): void {
-    const { brake, brakeBias, drive, engine, handbrake, steer, step } = controls;
+    const { brake, brakeBias, drive, engine, handbrake, steer, step, traction } = controls;
     const perBrake = brake / (wheels.length || 1);
     wheels.forEach((wheel, i) => {
       const driven = drive === '4' || (drive === 'F') === wheel.front;
+      const load = controller.wheelSuspensionForce(i) ?? 0;
+      // **A wheel that has broken loose grips less** (`fTractionLoss`, 0.72…0.85 on cars) — the original
+      // applies it in `CVehicle::ProcessWheel` to any wheel whose state is not NORMAL, and it is what makes a
+      // slide a slide rather than a slightly-too-fast corner: past the limit the tyre does not merely stop
+      // giving MORE, it gives LESS, so the back steps out and stays out until it hooks up again.
+      //
+      // Rapier does not expose its `skid_info`, but it exposes the impulses, and a wheel sitting on its own
+      // friction circle IS the sliding one. That is last step's state driving this step's grip — the same
+      // one-frame feedback the original runs on (`bAlreadySkidding`).
+      const base = tyreGrip(traction, wheel.front);
+      const used = Math.hypot(controller.wheelForwardImpulse(i) ?? 0, controller.wheelSideImpulse(i) ?? 0);
+      const sliding = load > 0 && used >= base * load * step * SLIDE_THRESHOLD;
+      const mu = sliding ? base * traction.loss : base;
+      controller.setWheelFrictionSlip(i, mu);
       // What this corner's tyre can deliver right now: μ × the load its spring is carrying. A wheel in the
       // air carries nothing, so it drives and brakes with nothing — which is what an airborne wheel does.
-      const grip = (controller.wheelFrictionSlip(i) ?? 0) * (controller.wheelSuspensionForce(i) ?? 0);
+      const grip = mu * load;
       // `fBrakeBias` splits the pedal across the axles exactly as the suspension and traction biases do.
       const axle = wheel.front ? 2 * brakeBias : 2 - 2 * brakeBias;
       controller.setWheelEngineForce(i, driven ? clampMagnitude(engine, grip) : 0);

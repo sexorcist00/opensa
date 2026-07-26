@@ -172,7 +172,7 @@ function massProps(over: Partial<VehicleMassProperties> = {}): VehicleMassProper
     centreOfMass: [0, 0, 0],
     mass: 1500,
     suspension: { bias: 0.5, damping: 0.15, force: 1.1, restLength: 0.15, travel: 0.25 },
-    traction: { bias: 0.5, mult: 0.7 },
+    traction: { bias: 0.5, loss: 0.8, mult: 0.7 },
     turnMass: 3000,
     ...over,
   };
@@ -785,6 +785,7 @@ describe('PhysicsWorld raycast vehicle', () => {
         handbrake: false,
         steer: 0,
         step: STEP,
+        traction: { bias: 0.5, loss: 0.8, mult: 0.7 },
       });
       for (let i = 0; i < 180; i += 1) {
         physics.step(STEP);
