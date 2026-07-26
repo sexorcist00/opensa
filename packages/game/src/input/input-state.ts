@@ -7,8 +7,10 @@
 
 /** Semantic player actions, mapped from a device by a source (e.g. {@link KeyboardSource}). `descend` (Ctrl) is
  *  the inverse of `jump`/up — used by the debug fly mode for vertical control. Gait (plan 088/03): the
- *  DEFAULT gait is run; `walk` and `sprint` are held modifiers, `run` reports the full-deflection touch gait. */
-export type Action = 'descend' | 'enterExit' | 'jump' | 'run' | 'sprint' | 'walk';
+ *  DEFAULT gait is run; `walk` and `sprint` are held modifiers, `run` reports the full-deflection touch gait.
+ *  `handbrake` is the CAR's handbrake (plan 081/04, user's control scheme): a separate control from the foot
+ *  brake, because one key doing both is what made braking feel like yanking a handbrake. */
+export type Action = 'descend' | 'enterExit' | 'handbrake' | 'jump' | 'run' | 'sprint' | 'walk';
 
 /** What the game reads: planar movement, held actions, and per-frame look/zoom deltas. */
 export interface InputState {

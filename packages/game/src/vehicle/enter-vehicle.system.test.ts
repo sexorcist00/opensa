@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { CharacterControllerSystem } from '../character/character-controller.system';
-import type { Config, ControlsConfig } from '../interfaces/config.interface';
+import type { Config } from '../interfaces/config.interface';
 import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { PhysicsWorld, VehicleController } from '../physics/physics-world';
 import type { EnterableVehicle, VehicleAnimator } from './enter-vehicle.system';
@@ -13,7 +13,7 @@ import { EnterVehicleSystem, warpAlongRootMotion } from './enter-vehicle.system'
 import { FakeVehicleHandle } from './vehicle-handle.fake';
 import { fakeHandling } from './vehicle-handling.fake';
 
-const CONTROLS = { back: 'KeyS', forward: 'KeyW', left: 'KeyA', right: 'KeyD' };
+const CONTROLS = { back: 'KeyS', forward: 'KeyW', jump: 'Space', left: 'KeyA', right: 'KeyD' };
 
 /** Silent logger (showLogs off → never emits) for systems under test. */
 const SILENT_LOGGER = new Logger({ emit: (): undefined => undefined }, { showLogs: false });
@@ -58,7 +58,7 @@ function seatPlayer(h: Harness, car: EnterableVehicle): void {
 function setup(player: Vec3 = [0, 0, 0]): Harness {
   const held = new Set<string>();
   const keyboard = { isDown: (code: string): boolean => held.has(code) };
-  const input = new KeyboardSource(keyboard, CONTROLS as unknown as ControlsConfig);
+  const input = new KeyboardSource(keyboard, CONTROLS);
 
   const ctrl = { arrived: false, enabled: true, path: null as null | Vec3[] };
   const controller = {
@@ -560,6 +560,32 @@ describe('EnterVehicleSystem', () => {
       h.phys.speed = 0; // now stopped
       h.system.fixedUpdate(0.016); // → startExit
       expect(h.phys.parked).toBeGreaterThan(0);
+    });
+
+    it('presses the foot brake IN over time, and yanks the handbrake instantly (081/04)', () => {
+      // The field verdict was "the brake works like a handbrake, not a gradual loss of speed" — and it was
+      // literally true: full force on the first frame. Space is now a pedal; H is the lever.
+      const h = setup();
+      seatPlayer(h, vehicleAt([2, 0, 0]));
+      h.phys.speed = 20;
+
+      h.hold(CONTROLS.jump, true); // Space — the pedal
+      h.system.applyControls(0.05);
+      const earlyPedal = h.phys.brake;
+      for (let step = 0; step < 20; step += 1) {
+        h.system.fixedUpdate(0.05);
+      }
+      const fullPedal = h.phys.brake;
+
+      expect(earlyPedal).toBeGreaterThan(0);
+      expect(earlyPedal).toBeLessThan(fullPedal * 0.5); // it started well short of the floor
+
+      h.hold(CONTROLS.jump, false);
+      h.system.fixedUpdate(0.05); // released: back to the idle coast brake
+      h.hold('KeyH', true); // the lever
+      h.system.fixedUpdate(0.05);
+
+      expect(h.phys.brake).toBeCloseTo(fullPedal, 5); // everything, on the first step
     });
 
     it('reports braking when pressing back while rolling forward (brake lights on)', () => {

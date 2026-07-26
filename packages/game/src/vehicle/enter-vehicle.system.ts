@@ -132,13 +132,24 @@ const SEAT_RAISE = 0;
 // handling.cfg → driving forces (tuned in-browser). Engine/brake are forces (N) scaled from the
 // car's mass + handling accel/decel; the controller (raycast wheels) integrates them.
 const ENGINE_ACCEL_SCALE = 0.28; // engineAccel → target accel (m/s²) the engine force aims for
-// Rapier's wheel brake is a small-scale value (NOT a Newton force like the engine): ~120/wheel
-// already gives ~12 m/s² of braking, while ≳400/wheel over-constrains and pitches the body hard.
-const BRAKE_FORCE = 480; // total brake split across wheels (≈120 each) at a reference brakeDecel
-const BRAKE_DECEL_REF = 8.5; // handling.brakeDecel that maps to BRAKE_FORCE (others scale from it)
+/**
+ * Rapier's wheel-brake parameter per unit of deceleration per kg (plan 081/04).
+ *
+ * The old model was `480 × brakeDecel / 8.5` — **no mass term at all**, which 081/01's mod corpus caught:
+ * a 4.7 t car braked 11.5× worse than a 1.4 t one and a 25 t tank 49× worse, while the light cars stopped at
+ * 2.3 g against a road car's ~1. The mapping was then MEASURED (brake value vs achieved deceleration, two
+ * masses × three values): **`decel ≈ 7.5 × brake / mass` in g**, linear until the tyres saturate near 2.4 g.
+ *
+ * Inverting it lets `fBrakeDeceleration` be read as what its name says — m/s² — so the authored 11 on an
+ * infernus asks for 1.12 g and gets it, and the firetruck's 10 finally reaches a truck's ~1 g instead of the
+ * 0.53 it managed on a mass-blind constant.
+ */
+const BRAKE_UNITS_PER_DECEL_PER_KG = 1 / 73.6;
 const REVERSE_FRACTION = 0.4; // reverse force/top-speed as a fraction of forward
 const IDLE_BRAKE_FRACTION = 0.08; // light brake when off throttle, so the car coasts to a stop
 const ENGINE_RAMP_TIME = 0.2; // seconds for the engine force to reach full (snappy but no force spike)
+/** Seconds for the FOOT brake to reach full force. A pedal is not a switch (plan 081/04, field verdict). */
+const FOOT_BRAKE_RAMP_TIME = 0.45;
 const MAXVEL_SCALE = 0.25; // handling.maxVelocity → top speed (m/s)
 const MIN_TOP_SPEED = 8; // floor for top speed (m/s)
 const REVERSE_SPEED_EPS = 0.6; // below this forward speed, S means reverse (else brake)
@@ -205,6 +216,8 @@ export class EnterVehicleSystem implements System {
   private exitTo: Vec3 = [0, 0, 0];
   /** Point the follow camera at the car while seated (null restores the player). */
   private readonly followTarget: (vehicle: EnterableVehicle | null) => void;
+  /** How far the foot brake is pressed, 0..1 — see {@link rampFootBrake}. */
+  private footBrakeRamp = 0;
   private getinElapsed = 0;
   private getinFrom: Vec3 = [0, 0, 0];
   /** The climb-in/out clips' authored root travel (null on a TC without them → linear slide). */
@@ -674,7 +687,11 @@ export class EnterVehicleSystem implements System {
     const move = this.input.move();
     const throttle = stopping ? 0 : move.y;
     const steerInput = stopping ? 0 : move.x;
-    const handbrake = stopping || this.input.isActive('jump'); // Space = brake / handbrake
+    // Two DIFFERENT controls (plan 081/04, the user's scheme). Space and back-while-rolling are the FOOT
+    // brake: it ramps in, the way a pedal does. H is the handbrake: instant and total, which is what a
+    // handbrake IS. One key doing both is what made every stop feel like yanking the lever.
+    const handbrake = stopping || this.input.isActive('handbrake');
+    const footBrake = !stopping && this.input.isActive('jump');
     const hnd = car.handling;
     // Real forward speed from the body's *horizontal* velocity (the controller's
     // currentVehicleSpeed carries a phantom ~0.95 at rest → would misread reverse).
@@ -687,31 +704,22 @@ export class EnterVehicleSystem implements System {
     }
     const topSpeed = Math.max(MIN_TOP_SPEED, hnd.maxVelocity * MAXVEL_SCALE);
     const engineForce = hnd.mass * hnd.engineAccel * ENGINE_ACCEL_SCALE;
-    const brakeForce = BRAKE_FORCE * (hnd.brakeDecel / BRAKE_DECEL_REF);
+    const brakeForce = hnd.brakeDecel * hnd.mass * BRAKE_UNITS_PER_DECEL_PER_KG;
 
-    let targetEngine = 0;
-    let brake = 0;
-    if (handbrake) {
-      brake = brakeForce; // Space overrides → brake to a stop / hold
-    } else if (throttle > 0) {
-      targetEngine = speed < topSpeed ? engineForce : 0;
-    } else if (throttle < 0) {
-      if (speed > REVERSE_SPEED_EPS) {
-        brake = brakeForce; // moving forward → brake
-      } else {
-        // The raycast controller won't start reverse from a dead stop; seed a small
-        // backward velocity until it's rolling, then the engine force sustains it.
-        if (speed > -REVERSE_SEED_SPEED) {
-          this.physics.seedReverse(car.body, car.heading, REVERSE_SEED_SPEED);
-        }
-        targetEngine = speed > -topSpeed * REVERSE_FRACTION ? -engineForce * REVERSE_FRACTION : 0;
-      }
-    } else {
-      brake = brakeForce * IDLE_BRAKE_FRACTION; // coast to a stop off-throttle
-    }
-    // Brake lights: full braking only (handbrake / braking forward motion sets brake = brakeForce), not the
-    // light idle-coast brake or reverse (which drives the engine, leaving brake at 0).
-    this.braking = brake === brakeForce;
+    const { brake, targetEngine } = this.longitudinal(car, {
+      brakeForce,
+      engineForce,
+      footBrake,
+      handbrake,
+      speed,
+      step,
+      throttle,
+      topSpeed,
+    });
+    // Brake lights come on when the DRIVER brakes, not when the pedal reaches the floor: with the foot brake
+    // ramping in (081/04) a `brake === brakeForce` test kept them dark for the first half-second of every
+    // stop. Anything above the idle coast-brake is the driver's doing.
+    this.braking = brake > brakeForce * IDLE_BRAKE_FRACTION;
 
     // Ramp the engine force toward its target so sudden throttle doesn't jolt the
     // suspension (a visible launch hop); braking stays instant.
@@ -790,6 +798,51 @@ export class EnterVehicleSystem implements System {
     return 1 - 2 * (x * x + y * y) > UPRIGHT_MIN; // world-Z component of the body's local up
   }
 
+  /**
+   * What the engine and the brakes are asked for this step — the whole longitudinal decision in one place.
+   *
+   * Order matters and is the driver's: the handbrake beats everything, the foot brake beats the throttle,
+   * and only then does the throttle decide between drive, reverse and coasting.
+   */
+  private longitudinal(
+    car: EnterableVehicle,
+    input: {
+      brakeForce: number;
+      engineForce: number;
+      footBrake: boolean;
+      handbrake: boolean;
+      speed: number;
+      step: number;
+      throttle: number;
+      topSpeed: number;
+    },
+  ): { brake: number; targetEngine: number } {
+    const { brakeForce, engineForce, footBrake, handbrake, speed, step, throttle, topSpeed } = input;
+    if (handbrake) {
+      this.footBrakeRamp = 0; // the lever does not leave the pedal half-pressed behind it
+
+      return { brake: brakeForce, targetEngine: 0 };
+    }
+    if (footBrake || (throttle < 0 && speed > REVERSE_SPEED_EPS)) {
+      return { brake: brakeForce * this.rampFootBrake(step), targetEngine: 0 };
+    }
+    this.footBrakeRamp = 0;
+    if (throttle > 0) {
+      return { brake: 0, targetEngine: speed < topSpeed ? engineForce : 0 };
+    }
+    if (throttle < 0) {
+      // The raycast controller won't start reverse from a dead stop; seed a small backward velocity until
+      // it's rolling, then the engine force sustains it.
+      if (speed > -REVERSE_SEED_SPEED) {
+        this.physics.seedReverse(car.body, car.heading, REVERSE_SEED_SPEED);
+      }
+
+      return { brake: 0, targetEngine: speed > -topSpeed * REVERSE_FRACTION ? -engineForce * REVERSE_FRACTION : 0 };
+    }
+
+    return { brake: brakeForce * IDLE_BRAKE_FRACTION, targetEngine: 0 }; // coast to a stop off-throttle
+  }
+
   /** The nearest upright car within enter range, or null — the car Enter would target from idle. */
   private nearestEnterable(): EnterableVehicle | null {
     const [px, py] = this.playerPosition();
@@ -861,6 +914,20 @@ export class EnterVehicleSystem implements System {
     const sin = Math.sin(vehicle.heading);
 
     return [dx * cos + dy * sin, -dx * sin + dy * cos];
+  }
+
+  /**
+   * The foot brake presses IN over {@link FOOT_BRAKE_RAMP_TIME}, and lets go instantly.
+   *
+   * The field verdict that produced this: *"the brake works like a handbrake, not a gradual loss of speed."*
+   * It was literally true — full brake force on the first frame of the press. A pedal takes a moment to
+   * reach the floor, and that moment is most of what braking FEELS like. Release is not ramped, because
+   * lifting off a real pedal releases it.
+   */
+  private rampFootBrake(step: number): number {
+    this.footBrakeRamp = Math.min(1, this.footBrakeRamp + step / FOOT_BRAKE_RAMP_TIME);
+
+    return this.footBrakeRamp;
   }
 
   /** Copy the chassis pose off the rigid body onto the car — the gameplay state everything else reads. */

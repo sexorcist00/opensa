@@ -76,3 +76,44 @@ handling-authored longitudinal identity.
 ## Ledger
 
 _(curve constants, city-scale decision, A/B numbers, field verdict)_
+
+## Ledger
+
+### 2026-07-26 — the brake gets a mass term, and the pedal stops being a switch
+
+**Field verdict that drove this** (user): *"the brake works like a handbrake, not a gradual loss of speed. I
+would put the handbrake on its own key H, and have Space / back-while-rolling shed speed smoothly like a real
+brake."* Both halves were literally true in the code, and both are fixed here.
+
+**1. The handbrake is its own control.** A new `handbrake` action on **H**; Space and back-while-rolling are
+the FOOT brake. One key doing both is what made every stop feel like yanking a lever.
+
+**2. The foot brake ramps in over 0.45 s; the handbrake is instant.** Full force on the first frame of a
+press is not a pedal. Release is NOT ramped — lifting off a real pedal releases it. The brake lamps had to
+move with it: `brake === brakeForce` kept them dark for the first half-second of every stop, so they now
+light on anything above the idle coast brake, which is what "the driver is braking" means.
+
+**3. The brake force finally has a mass term.** The old model was `480 × brakeDecel / 8.5` — mass-blind,
+which 081/01's mod corpus caught (a 4.7 t car braking 11.5× worse than a 1.4 t one). The mapping was MEASURED
+rather than assumed — brake value against achieved deceleration, two masses × three values: **`decel ≈ 7.5 ×
+brake / mass` in g**, linear until the tyres saturate around 2.4 g. Inverting it lets `fBrakeDeceleration` be
+read as what its name says.
+
+**Result — every car now brakes as its row asks:**
+
+| Car      | Authored `brakeDecel` | Target | Measured | Ratio |
+| -------- | --------------------: | -----: | -------: | ----: |
+| admiral  |                  4.30 | 0.44 g | **0.44 g** | **1.00** |
+| infernus |                 11.00 | 1.12 g |   1.02 g |  0.91 |
+| comet    |         21.73 (a mod) | 2.22 g |   1.56 g |  0.70 |
+| firetruk |                 10.00 | 1.02 g |   0.62 g |  0.61 |
+
+The admiral's weak brakes are **not a bug** — its modded row authors 4.30, and it is a 1976 Mercedes. The
+comet is grip-limited below its absurd 21.73 (a mod asking for race-car retardation). The firetruck's 0.61
+is the real residual: the measured constant ran 6.9 (light) to 9.8 (heavy) and 7.5 was fitted between them,
+so heavy vehicles under-deliver. Recorded rather than papered over — a mass-dependent correction on two data
+points would be over-fitting; it needs its own probe in this plan's tuning round.
+
+**And it collapsed the dive that plan 03 could not.** The comet went from **−7.56° to −1.30°** and the
+infernus to −0.47° — because the 8° was never a spring problem: it was the rear axle nearly lifting off under
+2.3 g. Two plans chased that number; the brake formula owned it, exactly as 081/03's ledger predicted.

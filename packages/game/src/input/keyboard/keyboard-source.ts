@@ -6,6 +6,8 @@ import type { KeyboardInput } from './keyboard';
 const ENTER_VEHICLE_KEY = 'Enter';
 /** Descend key (fly-mode down) — either Control; not a remappable binding (debug-only, like enter/exit). */
 const DESCEND_KEYS = ['ControlLeft', 'ControlRight'];
+/** Handbrake — H, the user's choice (plan 081/04). Space stays the FOOT brake; the two are different things. */
+const HANDBRAKE_KEY = 'KeyH';
 
 /**
  * Translates held keyboard keys into the device-agnostic {@link InputState} the game reads. The key-code
@@ -34,6 +36,8 @@ export class KeyboardSource implements InputState {
         return DESCEND_KEYS.some((key) => this.keyboard.isDown(key));
       case 'enterExit':
         return this.keyboard.isDown(ENTER_VEHICLE_KEY);
+      case 'handbrake':
+        return this.keyboard.isDown(HANDBRAKE_KEY);
       case 'jump':
         return this.keyboard.isDown(this.controls.jump);
       case 'run':
