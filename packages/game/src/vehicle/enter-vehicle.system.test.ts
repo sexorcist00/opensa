@@ -11,6 +11,7 @@ import { Logger } from '../diagnostics/logger';
 import { KeyboardSource } from '../input';
 import { EnterVehicleSystem, warpAlongRootMotion } from './enter-vehicle.system';
 import { FakeVehicleHandle } from './vehicle-handle.fake';
+import { fakeHandling } from './vehicle-handling.fake';
 
 const CONTROLS = { back: 'KeyS', forward: 'KeyW', left: 'KeyA', right: 'KeyD' };
 
@@ -165,7 +166,7 @@ function vehicleAt(position: Vec3): EnterableVehicle {
     controller: {} as unknown as VehicleController,
     halfExtents: [1, 2, 0.7],
     handle,
-    handling: { brakeDecel: 9, engineAccel: 20, mass: 1500, maxVelocity: 160, steeringLock: 30 },
+    handling: fakeHandling(),
     heading: 0,
     orientation: [0, 0, 0, 1] as [number, number, number, number],
     position,

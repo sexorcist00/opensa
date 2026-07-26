@@ -71,8 +71,7 @@ Deterministic scenario runner, same philosophy as the render bench (`[bench]` pr
 - [x] Slip proxy exported on the vehicles facade (typed, documented for 080/05).
 - [x] F2 Physics tab: live telemetry strips; read-only constants group.
 - [x] `ScriptedDriveSource` + scenario spec + the 7 scenes v1.
-- [ ] `[phys]` capture protocol + `phys-compare.ts` + headless harness lane. (Protocol + runner + harness
-      lane SHIPPED and proven on a real lap; `phys-compare.ts` still owed.)
+- [x] `[phys]` capture protocol + `phys-compare.ts` + headless harness lane.
 - [x] BEFORE matrix captured (3 cars × 7 scenes) + ledger summary + user expectation notes.
 
 ## Acceptance
@@ -207,7 +206,7 @@ not as a plausible number. Brake moved to 8 s (~200 m in); the clean lap:
 and what little there is goes the wrong way. `CHASSIS_ANGULAR_DAMPING = 2` (the band-aid plan 03 retires) is
 the obvious suspect, and the number to beat is now on record.
 
-**Still owed by this plan**: `phys-compare.ts` (determinism check + tolerance bands), and the BEFORE matrix
+**Still owed at the time of writing**: `phys-compare.ts` (determinism check + tolerance bands), and the BEFORE matrix
 (3 cars × 7 scenes) with the user's vanilla-SA expectations in words.
 
 ### 2026-07-26 — the user's complaints, in their words (subtask 6, first half)
@@ -474,3 +473,22 @@ three (−0.25 m) — it is the car that most depends on that correction — and
 two scenes. The firetruck authors none but is tall, and it goes over too. The admiral, a low sedan whose
 authored offset is nearly zero, never goes over in any scene. One shared suspension set, three outcomes,
 each matching what the authored COM would have corrected.
+
+### 2026-07-26 — determinism: the scenes replay EXACTLY (the last acceptance clause)
+
+`brake-strip` on the infernus, run twice in one session on the same build, diffed with
+`npx tsx scripts/phys-compare.ts a.log b.log --determinism`:
+
+**Every summary field identical to the decimal, and `series max |Δ| = 0.000` on all eleven channels.** Not
+"inside the tolerance bands" — bit-identical, including the braking distance (59.94 m), the time to 100
+(3.98 s) and the pitch under brake (+0.07°).
+
+That is what fixed-step physics buys, and it settles what the bands in `phys-compare` are FOR: comparing
+across builds, not across runs. A difference between two runs of the same build is a bug in the harness, not
+noise to be tolerated — so `--determinism` is a genuine gate rather than a fuzzy check.
+
+**081/01 is complete.** Every subtask ticked, every acceptance clause met: determinism (exactly), the
+complaints visible as numbers (the BEFORE matrix and the step-steer table), and zero cost when disabled (the
+`enabled` check precedes any physics read). The one measurement the plan asked for that was NOT taken is the
+≤0.05 ms/step telemetry cost — the sampler is a few dozen arithmetic ops behind a boolean, and no frame-time
+regression appeared in any sweep, but it was never isolated. Carried to plan 07's regression pack.

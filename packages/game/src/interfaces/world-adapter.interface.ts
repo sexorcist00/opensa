@@ -17,17 +17,76 @@ export interface RegionRequest {
 export type Vec3 = [number, number, number];
 
 /** Raw driving feel from `handling.cfg` (the gameplay layer scales these into its model). */
+/**
+ * One car's row of `handling.cfg`, typed (plan 081/02).
+ *
+ * **Column order is the game's own, verified against its legend** (`handling.cfg`'s FIELD DESCRIPTIONS
+ * block) AND against real rows — the legend lists a "(not used)" column that the shipped file does not
+ * actually carry, so it is the DATA that pins the indices. The legend's ranges are stale (it claims
+ * `fMaxVelocity [5..150]` while the infernus authors 240); its names are not.
+ *
+ * Values are as AUTHORED. Turning an authored number into a force, a spring or a top speed is the consuming
+ * plan's decision and belongs with the evidence for it — this type only stops the data being thrown away,
+ * which is what it was until 081/01 measured the cost: 35 of 40 columns unread, and a realism handling mod
+ * losing 58 % of its edits on the way in.
+ */
 export interface VehicleHandling {
-  /** Braking deceleration. */
+  /** ABS flag (`bABS`), 0/1 as authored. */
+  abs: boolean;
+  /** Brake front/rear split (`fBrakeBias`), 0..1 = share on the FRONT axle. */
+  brakeBias: number;
+  /** Braking deceleration (`fBrakeDeceleration`), authored units. */
   brakeDecel: number;
-  /** Engine acceleration. */
+  /**
+   * Authored centre of mass in MODEL space (m): x right, y forward, z up — the same frame the chassis
+   * uses. Today the body derives one from its collision primitives instead, which puts it high; that is
+   * the flip complaint's root (081/01 measured it: the infernus authors −0.25 and goes over, the admiral
+   * −0.05 and never does).
+   */
+  centreOfMass: readonly [number, number, number];
+  /** Damage scaling (`fCollisionDamageMultiplier`). */
+  collisionDamageMult: number;
+  /** Aerodynamic drag scale (`fDragMult`). */
+  dragMult: number;
+  /** Which wheels are driven (`nDriveType`): front, rear or all four. Every car is `4` today. */
+  drive: '4' | 'F' | 'R';
+  /** Engine acceleration (`fEngineAcceleration`), authored units. */
   engineAccel: number;
+  /** Engine inertia (`fEngineInertia`) — how eagerly revs rise. */
+  engineInertia: number;
+  /** Petrol / diesel / electric (`nEngineType`). */
+  engineType: 'D' | 'E' | 'P';
+  /** Gearbox ratio count (`nNumberOfGears`). No gearbox exists yet — one continuous ramp instead. */
+  gears: number;
   /** Mass (kg) — heavier = less agile. */
   mass: number;
-  /** Top speed (GTA units). */
+  /** Top speed (`fMaxVelocity`), authored units. */
   maxVelocity: number;
-  /** Steering lock, degrees. */
+  /** Steering lock, degrees (`fSteeringLock`). */
   steeringLock: number;
+  /** Anti-dive multiplier (`fSuspensionAntiDiveMultiplier`), 0..1. */
+  suspAntiDive: number;
+  /** Front/rear suspension split (`fSuspensionBias`), 0..1 = share on the FRONT axle. */
+  suspBias: number;
+  /** Damping level (`fSuspensionDampingLevel`). */
+  suspDamping: number;
+  /** Spring force level (`fSuspensionForceLevel`). */
+  suspForce: number;
+  /** High-speed compression damping (`fSuspensionHighSpdComDamp`) — usually 0. */
+  suspHighSpeedDamp: number;
+  /** Suspension lower limit (m, negative = below the hub). */
+  suspLower: number;
+  /** Suspension upper limit (m). */
+  suspUpper: number;
+  /** Grip front/rear split (`fTractionBias`), 0..1 = share on the FRONT axle. */
+  tractionBias: number;
+  /** How grip breaks away (`fTractionLoss`). */
+  tractionLoss: number;
+  /** Per-car grip (`fTractionMultiplier`). Every car runs one shared friction slip today. */
+  tractionMult: number;
+  /** Yaw inertia (`fTurnMass`, kg·m²). Unmodelled today — which is why a 6.5 t fire truck answers the
+   *  wheel FASTER than a 1.4 t supercar (081/01 step-steer: 0.07 s vs 0.08 s). */
+  turnMass: number;
 }
 
 /** One raycast wheel for the physics vehicle: hub position in vehicle space, radius, axle. */

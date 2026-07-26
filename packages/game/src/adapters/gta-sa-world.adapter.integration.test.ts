@@ -135,5 +135,44 @@ describe('GtaSaWorldAdapter integration', () => {
       expect(vehicle.colliders).not.toBeNull();
       expect(vehicle.handling.mass).toBe(9999); // merged ADMIRAL handling line, not the stock 1109
     });
+
+    it('maps the WHOLE handling row, not the five columns it used to (081/02)', async () => {
+      // Pinned against the stock fixture's real ADMIRAL line — the column order is verified by the DATA,
+      // because the file's own legend lists a "(not used)" column the shipped rows do not carry. Every
+      // value here is as authored: converting one into a force or a spring is the consuming plan's job.
+      //
+      // Three of these are what 081/01 blamed by name for the fleet driving alike: the authored
+      // `centreOfMass` (the flip), `turnMass` (a 6.5 t truck answering the wheel faster than a supercar)
+      // and `drive` — this car is FRONT-wheel drive and the engine drives all four of its wheels today.
+      const { handling } = await new GtaSaWorldAdapter(cfg()).loadVehicleData('admiral');
+
+      expect(handling).toEqual({
+        abs: false,
+        brakeBias: 0.52,
+        brakeDecel: 8.5,
+        centreOfMass: [0, 0, -0.05],
+        collisionDamageMult: 0.56,
+        dragMult: 2,
+        drive: 'F',
+        engineAccel: 22,
+        engineInertia: 8,
+        engineType: 'P',
+        gears: 5,
+        mass: 1650,
+        maxVelocity: 165,
+        steeringLock: 30,
+        suspAntiDive: 0.55,
+        suspBias: 0.5,
+        suspDamping: 0.15,
+        suspForce: 1,
+        suspHighSpeedDamp: 0,
+        suspLower: -0.19,
+        suspUpper: 0.27,
+        tractionBias: 0.51,
+        tractionLoss: 0.9,
+        tractionMult: 0.65,
+        turnMass: 3851.4,
+      });
+    });
   });
 });

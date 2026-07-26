@@ -704,7 +704,17 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     };
   }
 
-  /** Driving feel for a handling id (handling.cfg columns), with sane fallbacks. */
+  /**
+   * Driving feel for a handling id — the WHOLE row, typed (plan 081/02).
+   *
+   * Indices are the game's own column order, pinned by tests against real rows rather than by the file's
+   * legend (which lists a "(not used)" column the shipped data does not carry). Values pass through as
+   * authored: what a number becomes — a force, a spring rate, a top speed — is the consuming plan's
+   * decision, made with its own evidence.
+   *
+   * The fallback row is a mid-range sedan, used when a car has no handling entry at all. It is deliberately
+   * bland: a missing row should drive dully, never surprisingly.
+   */
   private vehicleHandling(handlingId: string): VehicleHandling {
     const fields = this.handling?.get(handlingId)?.fields;
     const num = (index: number, fallback: number): number => {
@@ -712,13 +722,36 @@ export class GtaSaWorldAdapter implements WorldAdapter {
 
       return Number.isFinite(value) ? value : fallback;
     };
+    const text = (index: number): string => (fields?.[index] ?? '').toUpperCase();
+    const drive = text(14);
+    const engine = text(15);
 
     return {
+      abs: num(18, 0) !== 0,
+      brakeBias: num(17, 0.5),
       brakeDecel: num(16, 8.5),
+      centreOfMass: [num(3, 0), num(4, 0), num(5, 0)],
+      collisionDamageMult: num(28, 1),
+      dragMult: num(2, 2),
+      drive: drive === 'F' || drive === 'R' ? drive : '4',
       engineAccel: num(12, 22),
+      engineInertia: num(13, 20),
+      engineType: engine === 'D' || engine === 'E' ? engine : 'P',
+      gears: num(10, 5),
       mass: num(0, 1500),
       maxVelocity: num(11, 160),
       steeringLock: num(19, 30),
+      suspAntiDive: num(26, 0),
+      suspBias: num(25, 0.5),
+      suspDamping: num(21, 0.1),
+      suspForce: num(20, 0.9),
+      suspHighSpeedDamp: num(22, 0),
+      suspLower: num(24, -0.15),
+      suspUpper: num(23, 0.3),
+      tractionBias: num(9, 0.5),
+      tractionLoss: num(8, 0.85),
+      tractionMult: num(7, 0.75),
+      turnMass: num(1, 3000),
     };
   }
 
