@@ -329,6 +329,72 @@ well, this one included. So there is no problem MODEL to chase and no per-car fu
 consumption produces a spinning comet, a flipping infernus and a 149 km/h fire truck. One correct reading of
 the table is the fix for the whole fleet, and plan 07's presets must not turn into per-car corrections for it.
 
+### 2026-07-26 — the mod corpus: what a heavy car meets in our two formulas
+
+The user supplied four study sets (mod cars + a realism handling table; kept out of the repo under
+`NO_COMMIT/`). They turn the "five fields" finding into something sharper than a missing-data problem: **our
+own two lines of arithmetic are inconsistent with each other about mass.**
+
+```ts
+const engineForce = hnd.mass * hnd.engineAccel * ENGINE_ACCEL_SCALE; // acceleration = engineAccel × 0.28 — MASS CANCELS
+const brakeForce = BRAKE_FORCE * (hnd.brakeDecel / BRAKE_DECEL_REF); // no mass term at all → decel ∝ 1/mass
+```
+
+So a heavier car accelerates **exactly as hard** as a light one with the same `engineAccel`, and brakes
+**proportionally worse**. Derived for the corpus (predictions from the formulas above, not captures; the two
+measured points calibrate them — the infernus's predicted 3.31 s reads 3.98 s measured, and the firetruck's
+predicted braking ratio 0.196 reads 0.33 measured, so the real effect is ~1.2-1.7× gentler than the raw
+arithmetic, and still enormous):
+
+| Car                        |   mass | commanded accel | 0-100 (predicted) | top km/h | braking vs infernus |
+| -------------------------- | -----: | --------------: | ----------------: | -------: | ------------------: |
+| infernus (stock)           |  1 400 |      8.4 m/s²   |          3.31 s   |    216   |            1.00×    |
+| firetruk (stock)           |  6 500 |      7.6 m/s²   |          3.67 s   |    153   |            0.20×    |
+| **feltzer (the user's "avant", mod)** | **4 700** | **15.4 m/s²** | **1.80 s** | 225 | **0.087× (11.5× worse)** |
+| **rhino (tank mod)**       | 25 000 |      5.6 m/s²   |          4.96 s   |     76   | **0.020× (49× worse)** |
+| **rdtrain (Kenworth W900)**| 17 000 |   **21.0 m/s²** |      **1.32 s**   |    144   |            0.060×   |
+| linerun (Peterbilt 379)    | 10 000 |      7.0 m/s²   |          3.97 s   |    144   |            0.10×    |
+| petro (Freightliner)       |  3 800 |      7.0 m/s²   |          3.97 s   |    108   |            0.17×    |
+| yankee (Mack B-61)         |  3 500 |      6.7 m/s²   |          4.13 s   |     81   |            0.19×    |
+| benson (Ford F-350)        |  2 500 |      5.9 m/s²   |          4.72 s   |    103   |            0.17×    |
+
+**This is the user's "it behaved like a tank" explained.** The avant's 4 700 kg is READ, and it lands on the
+one side of the pair that scales with mass: the brakes. Its `brakeDecel` is 3.2 — the lowest in the corpus,
+because in the original that field sits alongside `brakeBias`, ABS, the suspension set and a real drivetrain.
+We take the 3.2 raw, divide by a 3.4× heavier car, and hand the driver something that will not stop. And a
+17-tonne Kenworth whose author wrote `engineAccel 75` gets **0-100 in about 1.3 s**, because mass cancels.
+
+Plan 04 owns the inconsistency; it is not a missing field but a wrong formula, and it can be fixed before
+any of the unread columns are wired.
+
+### 2026-07-26 — a realism handling mod, measured against what we read (S.A.A.H, 210 cars)
+
+`scripts/debug/handling-diff.ts` (new, kept) compares two `handling.cfg` tables column by column and reports
+how much of the difference the engine can even see. Against the user's S.A.A.H table — *"a more realistic
+handling for the game's original cars"* — over the 210 shared rows:
+
+| Column           | Cars changed | Mean move | Engine  |
+| ---------------- | -----------: | --------: | ------- |
+| brakeDecel       |   145 (69 %) |      45 % | READS   |
+| engineInertia    |   139 (66 %) |     552 % | ignores |
+| **COM z**        |   137 (65 %) |     188 % | ignores |
+| suspForceLevel   |   129 (61 %) |      27 % | ignores |
+| steeringLock     |   123 (59 %) |      17 % | READS   |
+| engineAccel      |   114 (54 %) |      23 % | READS   |
+| COM y            |    37 (18 %) |     169 % | ignores |
+| driveType        |    23 (11 %) |         — | ignores |
+| maxVelocity      |    11 (5 %)  |      30 % | READS   |
+| mass             |     9 (4 %)  |      89 % | READS   |
+
+**952 column edits; 402 (42 %) reach the physics, 550 (58 %) are dropped.**
+
+And that split is worse than either extreme would be. The author lowered `brakeDecel` on 69 % of the fleet
+*because* they also moved the centre of mass on 65 % of it and re-tuned the suspension on 61 % — those edits
+balance each other. We apply the first group and discard the second, so an installed realism mod does not
+arrive half-improved; it arrives **incoherent**. That is the mechanism behind "I have driven very well
+calibrated cars and they still feel wrong", and it is an argument for wiring the unread columns as one
+change rather than a field at a time.
+
 ### 2026-07-26 — which handling fields are actually read (the user's reading, confirmed)
 
 The user's field note: *"handling does get read — the cars all drive differently — but it feels like only a
