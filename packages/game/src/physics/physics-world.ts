@@ -22,7 +22,22 @@ const SUSPENSION_MAX_FORCE = 40000; // carries the chassis at small compression 
 const WHEEL_FRICTION_SLIP = 10.5; // tyre grip
 const PARKING_BRAKE = 80; // holds a parked car put (released by the driver when throttling)
 const CHASSIS_LINEAR_DAMPING = 0.1;
-const CHASSIS_ANGULAR_DAMPING = 2; // resist pitch-dive / roll-flip / over-sharp yaw (tuned in-browser)
+/**
+ * Angular damping on the chassis. **STAYS at 2 until plan 03, and the reason is measured** (081/02).
+ *
+ * It is a band-aid: it was raised to resist the flips a high, emergent centre of mass was causing, and it
+ * deadens honest body motion along with them. Plan 02 was written to retire it once the authored centre of
+ * mass landed — so it was dropped to 0.5 and the whole scene matrix re-run on two cars. What that showed:
+ *
+ * - It is NOT what suppresses the braking dive. The infernus pitches 0.15° under braking at BOTH values —
+ *   the missing dive is the shared suspension (one spring rate, 0.25 m of travel), not this number.
+ * - Its removal makes IMPACT flips worse: a gentle step-steer that survived a kerb strike at 2.0 rolls to
+ *   −95° at 0.5, and the same pattern repeats on the slalom and the crest landing.
+ *
+ * So removing it costs stability and buys nothing measurable. It comes off in plan 03, in the same change
+ * that gives the car a real answer to a vertical impact — never before.
+ */
+const CHASSIS_ANGULAR_DAMPING = 2;
 const CHASSIS_FRICTION = 0.4;
 const CHASSIS_RESTITUTION = 0.35; // bounce off walls a little instead of sticking dead
 const CONTACT_FORCE_THRESHOLD = 400; // min contact force (N) before an impact event is emitted
