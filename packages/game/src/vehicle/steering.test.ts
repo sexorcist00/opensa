@@ -29,14 +29,13 @@ describe('steerLimit', () => {
   });
 
   describe('positive cases', () => {
-    it('leaves a normal cornering input alone: at 50 km/h it allows more than the step-steer scene asks', () => {
-      const usable = steerLimit({ ...CAR, speed: 50 / 3.6 });
+    it('does not touch town driving — the full authored lock is available up to ~53 km/h', () => {
+      expect(steerLimit({ ...CAR, speed: 50 / 3.6 })).toBe(1);
+      expect(steerLimit({ ...CAR, speed: 60 / 3.6 })).toBeLessThan(1);
+    });
 
-      // 8.3° of usable angle against the 5.25° the 0.15 step asks for — the limiter is not in the way of
-      // ordinary cornering. It bites past about a quarter lock, which at 50 km/h is already a demand no tyre
-      // can answer, and that is the whole point of it.
-      expect(usable * CAR.lockDeg).toBeGreaterThan(0.15 * CAR.lockDeg);
-      expect(usable * CAR.lockDeg).toBeLessThan(0.25 * CAR.lockDeg);
+    it('leaves a usable angle where a real car has one: ~9.4° of a 35° lock at 100 km/h', () => {
+      expect(steerLimit({ ...CAR, speed: 100 / 3.6 }) * CAR.lockDeg).toBeCloseTo(9.4, 0);
     });
 
     it('tightens as the square of speed — twice the speed, a quarter of the demand it will allow', () => {

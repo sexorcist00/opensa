@@ -30,9 +30,24 @@
 const LOCK_NUMERATOR = 16;
 /** Its physics rate: a "game unit" of speed is one metre per this many seconds. */
 const SA_STEP = 1 / 50;
-/** Surface adhesion, from `g_surfaceInfos.GetAdhesiveLimit`. Tarmac until surface types are wired — the one
- *  term of the original's formula this engine cannot look up yet, so it is named rather than folded away. */
-const ROAD_ADHESION = 1;
+/**
+ * Surface adhesion — a tyre on tarmac, straight out of the game's own data.
+ *
+ * `g_surfaceInfos.GetAdhesiveLimit` reads `data/surface.dat`, a 6×6 matrix of adhesion GROUPS, and
+ * `data/surfinfo.dat` says which group each surface belongs to. Both files ship in the build and both are
+ * unambiguous: `WHEELBASE` (the surface the tyres are, per surface.dat's own header note) is in group
+ * `RUBBER`, `TARMAC` is in group `ROAD`, and the Road×Rubber cell is **4.5**.
+ *
+ * It was **1.0** here for one build, because it was guessed rather than looked up — and since the limiter
+ * divides by the square of speed, guessing it 4.5× low left a car with 4.5× less steering than the original
+ * gives it. The field caught it immediately ("still hard to turn in at speed"). At 4.5 the limiter allows the
+ * FULL authored lock below about 65 km/h and 9.4° of a 35° lock at 100 km/h.
+ *
+ * **Owed**: read the two files instead of carrying this number. They are mod targets like every other data
+ * file, and the whole matrix is needed the moment wheels can tell tarmac from grass or sand — at which point
+ * this constant becomes a lookup and the off-road handling flags (`bOffroadAbility`) get something to modify.
+ */
+const ROAD_ADHESION = 4.5;
 /** Below this speed the limiter is meaningless (the formula divides by v²) and the car gets its full lock. */
 const MIN_LIMITED_SPEED = 0.01;
 /** Lateral speed (m/s) past which the car counts as sliding, for the countersteer exemption. */

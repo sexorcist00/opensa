@@ -155,3 +155,45 @@ itself crashing (35 g, 2.33 s airborne). A rear-drive sedan given full lock at 4
 wide in reality too. The complained-about case is the ordinary corner, where the angle is simply no longer
 capped below what the corner asks. **Needs the field to judge** — this is the one item in this chain whose
 replay evidence is genuinely split.
+
+### 2026-07-26 — the surface adhesion was GUESSED, and the game ships the number
+
+**Field verdict**: *"better, but still hard to turn into a corner at speed."*
+
+The original's steering limiter has three terms — `adhesive × traction × 16 / v²` — and two of them came from
+the car's own row. The third, `g_surfaceInfos.GetAdhesiveLimit`, was written here as **1.0 with a comment
+saying it stood in for a lookup this engine cannot do yet**. That was the mistake: the lookup is two data
+files that ship in the build and both are unambiguous.
+
+- `data/surfinfo.dat`: `WHEELBASE → RUBBER` and `TARMAC → ROAD`. (surface.dat's own header note says
+  *"Currently WheelBase is the surface used for the tyres"*.)
+- `data/surface.dat`: a 6×6 matrix of adhesion groups. Road × Rubber = **4.5**.
+
+Since the limiter divides by the square of speed, a guess 4.5× low left every car with 4.5× less steering
+than the original gives it:
+
+| speed    | usable angle at 1.0 (guessed) | at 4.5 (the game's own table) |
+| -------- | ----------------------------- | ----------------------------- |
+| 50 km/h  | 8.3° of 35°                   | **35° — the whole lock**      |
+| 100 km/h | 2.1°                          | **9.4°**                      |
+
+So town driving is no longer limited at all (full lock to ~53 km/h) and a car at 100 km/h can place itself in
+a lane instead of only nudging.
+
+**The scene set could not see this change**, and that is worth recording as an instrument gap: `u-turn` runs
+at full lock, where the countersteer exemption already returns 1, and `step-steer` asks for 0.15 of the lock,
+which is under the limit even at the old value. Nothing in the nine scenes holds a MODERATE steer at high
+speed — the exact case the field is complaining about. A sweeper scene is owed.
+
+**And an honest dead end, recorded so it is not walked again.** Trying to reconcile our grip magnitudes with
+the original's led into a chain that does not close: `thrust` per driven wheel and `adhesion` per wheel both
+turn into velocity deltas via `ApplyMoveForce`, and following it literally has a stock admiral launching at
+~1.8 g, which the real game plainly does not do. Something in that chain is still misread (candidates: the
+suspension-compression term's sense, `CTimer::GetTimeStep` at the game's real frame rate, or a division in
+`ProcessWheel` not yet traced). Our tyre model — `μ × the load the corner carries` — is calibrated
+differently and gives numbers the field has already accepted for launch and braking, so it stays. Closing
+that gap needs the original running side by side, not more reading.
+
+**Owed**: read `surface.dat` + `surfinfo.dat` instead of carrying 4.5 as a constant (both are mod targets,
+and the full matrix is what wheels need the moment they can tell tarmac from grass), and add the sweeper
+scene.
