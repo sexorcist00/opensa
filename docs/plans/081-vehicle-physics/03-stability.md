@@ -381,3 +381,24 @@ verdict after the ride-height fix was that the comet's wheels look right, and th
 
 **Still owed**: `fMaxVelocity` ÷ 3.6 in plan 04 (kills `MAXVEL_SCALE`), then `fSuspensionBias` into the axle
 split — the two remaining authored fields this reading of the original exposed.
+
+### 2026-07-26 — `fSuspensionBias` reaches the springs, and the last 03 debt is paid
+
+`CAutomobile::ProcessCarWheelPair` turns the column into `2 × bias` on the front springs and `2 − 2 × bias`
+on the rear. `suspensionSetup` now takes the axle and applies it; `VehicleWheelSpec` gained the `front` flag
+the caller was already passing (it comes from the model's own `wheel_?f` / `wheel_?b` dummy names, so it is
+authored data, not a guess about wheel order).
+
+**A null result on purpose**: all four reference cars author a neutral 0.5, and the infernus `brake-strip`
+came back bit-identical (stiffness 25.0, dive −0.67°, 124.1 km/h, 52.7 m). ~90 of the table's ~220 rows are
+not neutral, so the change speaks only when a row asks it to. The savanna (0.3, rear-leaning) is the
+demonstration: front 19.05, rear 24.27, with the front sitting on the **bump stop** — a strong bias is partly
+absorbed by the floor, which is exactly the floor's job.
+
+It also broke the capture protocol in a useful way: `springs` recorded ONE wheel, on the assumption that the
+set shared a spring. It records all four now — and the savanna proved wheel 0 is not reliably the front one,
+because the order follows the model's frames.
+
+**Noted, not fixed**: the savanna dives +0.65° (nose UP) where the trio dives ≈ −0.7°, which is backwards for
+a car with the softer front. The suspect is the brake split — still equal across the axles with `fBrakeBias`
+unread (plan 04 §3). With this, 081/03 owes nothing further; the drivetrain debts moved to 04's ledger.

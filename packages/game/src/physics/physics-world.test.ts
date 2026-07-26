@@ -171,7 +171,7 @@ function massProps(over: Partial<VehicleMassProperties> = {}): VehicleMassProper
   return {
     centreOfMass: [0, 0, 0],
     mass: 1500,
-    suspension: { damping: 0.15, force: 1.1, restLength: 0.15, travel: 0.25 },
+    suspension: { bias: 0.5, damping: 0.15, force: 1.1, restLength: 0.15, travel: 0.25 },
     turnMass: 3000,
     ...over,
   };
@@ -293,10 +293,10 @@ describe('PhysicsWorld.sphereCast — the second exclusion', () => {
 describe('PhysicsWorld.readVehicleWheels', () => {
   const HALF: [number, number, number] = [1.2, 2.5, 0.7];
   const WHEELS = [
-    { connection: [-1, 1.6, -0.4] as Vec3, radius: 0.35 },
-    { connection: [1, 1.6, -0.4] as Vec3, radius: 0.35 },
-    { connection: [-1, -1.6, -0.4] as Vec3, radius: 0.35 },
-    { connection: [1, -1.6, -0.4] as Vec3, radius: 0.35 },
+    { connection: [-1, 1.6, -0.4] as Vec3, front: true, radius: 0.35 },
+    { connection: [1, 1.6, -0.4] as Vec3, front: true, radius: 0.35 },
+    { connection: [-1, -1.6, -0.4] as Vec3, front: false, radius: 0.35 },
+    { connection: [1, -1.6, -0.4] as Vec3, front: false, radius: 0.35 },
   ];
 
   describe('negative cases', () => {
@@ -313,6 +313,17 @@ describe('PhysicsWorld.readVehicleWheels', () => {
       physics.dispose();
     });
 
+    it('gives both axles the same spring when the row authors a neutral bias', async () => {
+      const physics = await makeWorld();
+      const props = massProps({ suspension: { bias: 0.5, damping: 0.15, force: 1.1, restLength: 0.15, travel: 0.25 } });
+      const { controller } = physics.createDynamicVehicle([0, 0, 50], 0, null, props, WHEELS, HALF);
+
+      const springs = physics.readVehicleSprings(controller);
+
+      expect(springs[0].stiffness).toBeCloseTo(springs[2].stiffness, 6);
+      physics.dispose();
+    });
+
     it('reports an empty reading for a controller with no wheels', async () => {
       const physics = await makeWorld();
       const { controller } = physics.createDynamicVehicle([0, 0, 5], 0, null, massProps(), [], HALF);
@@ -323,6 +334,37 @@ describe('PhysicsWorld.readVehicleWheels', () => {
   });
 
   describe('positive cases', () => {
+    it('stiffens the axle its row leans on (fSuspensionBias)', async () => {
+      const physics = await makeWorld();
+      // 0.65 front: the original turns that into 2 × 0.65 on the front springs and 2 − 1.3 on the rear.
+      const props = massProps({ suspension: { bias: 0.65, damping: 0.15, force: 2, restLength: 0.15, travel: 0.25 } });
+      const { controller } = physics.createDynamicVehicle([0, 0, 50], 0, null, props, WHEELS, HALF);
+
+      const springs = physics.readVehicleSprings(controller);
+
+      expect(springs[0].stiffness).toBeCloseTo(springs[1].stiffness, 6); // same axle, same spring
+      expect(springs[2].stiffness).toBeCloseTo(springs[3].stiffness, 6);
+      expect(springs[0].stiffness / springs[2].stiffness).toBeCloseTo(1.3 / 0.7, 4);
+      physics.dispose();
+    });
+
+    it('lets the bump stop catch the light axle of a soft, strongly biased row', async () => {
+      const physics = await makeWorld();
+      // The same bias on a SOFT row: the rear's own rate would sag past its travel, so the bump stop holds
+      // it and the axles end up closer together than the bias asks. That is the floor doing its job, not the
+      // bias failing — and it is why a car cannot be biased into sitting on its stops.
+      const props = massProps({
+        suspension: { bias: 0.65, damping: 0.15, force: 1.1, restLength: 0.15, travel: 0.25 },
+      });
+      const { controller } = physics.createDynamicVehicle([0, 0, 50], 0, null, props, WHEELS, HALF);
+
+      const springs = physics.readVehicleSprings(controller);
+
+      expect(springs[0].stiffness).toBeGreaterThan(springs[2].stiffness);
+      expect(springs[0].stiffness / springs[2].stiffness).toBeLessThan(1.3 / 0.7);
+      physics.dispose();
+    });
+
     it('reads contact, a compressed spring and a real load off a car resting on the ground', async () => {
       const physics = await makeWorld();
       physics.createStaticBox([0, 0, 0], [40, 40, 0.5]);
@@ -665,10 +707,10 @@ describe('PhysicsWorld raycast vehicle', () => {
   const HALF: [number, number, number] = [1.2, 2.5, 0.7];
   const WHEELS = [
     // Hubs BELOW the hull bottom (−0.7), so the wheels carry the car instead of the chassis box grinding.
-    { connection: [-0.8, 1.4, -0.5] as Vec3, radius: 0.35 },
-    { connection: [0.8, 1.4, -0.5] as Vec3, radius: 0.35 },
-    { connection: [-0.8, -1.4, -0.5] as Vec3, radius: 0.35 },
-    { connection: [0.8, -1.4, -0.5] as Vec3, radius: 0.35 },
+    { connection: [-0.8, 1.4, -0.5] as Vec3, front: true, radius: 0.35 },
+    { connection: [0.8, 1.4, -0.5] as Vec3, front: true, radius: 0.35 },
+    { connection: [-0.8, -1.4, -0.5] as Vec3, front: false, radius: 0.35 },
+    { connection: [0.8, -1.4, -0.5] as Vec3, front: false, radius: 0.35 },
   ];
   const FRONT = [{ front: true }, { front: true }, { front: false }, { front: false }];
 

@@ -152,9 +152,11 @@ function report(
       ].map((value) => Number(value.toFixed(4))),
     ),
     seriesHz: SERIES_HZ,
-    // What the run was CONFIGURED with — the first wheel's spring stands for the set until the mapping
-    // gives the axles different ones. A capture that cannot say this cannot prove a change took effect.
-    springs: springs?.[0] ?? null,
+    // What the run was CONFIGURED with, per wheel. It used to record the first wheel alone, on the grounds
+    // that every corner shared one spring — the authored axle bias (081/03) ended that, and a savanna
+    // capture proved wheel 0 is not even reliably the front one. A capture that cannot say what it was
+    // configured with cannot prove a change took effect.
+    springs: springs ?? null,
     summary: summarisePhysFrames(frames),
     what: scene.what,
   };

@@ -249,6 +249,10 @@ export interface VehicleSpringReading {
  * POINT: a mid-range row lands on the numbers already proven to work, and everything else scales from there.
  */
 export interface VehicleSuspensionSpec {
+  /** `fSuspensionBiasBetweenFrontAndRear`, 0..1 — the front axle's share. The original turns it into a
+   *  factor of `2 × bias` on the front springs and `2 − 2 × bias` on the rear (`ProcessCarWheelPair`), so
+   *  0.5 is neutral and a car authored nose-heavy carries a stiffer front. */
+  readonly bias: number;
   /** `fSuspensionDampingLevel` — scales both damping terms about their tuned reference. */
   readonly damping: number;
   /** `fSuspensionForceLevel` — the spring-rate scale, on top of the mass normalisation. */
@@ -283,6 +287,8 @@ export interface VehicleWheelReading {
 /** One raycast wheel: its hub position in vehicle space + rolling radius. */
 export interface VehicleWheelSpec {
   connection: Vec3;
+  /** Front axle? The caller has always known; the springs are the first consumer (the authored axle bias). */
+  front: boolean;
   radius: number;
 }
 
@@ -418,8 +424,10 @@ export class PhysicsWorld {
     const controller = this.world.createVehicleController(body);
     controller.indexUpAxis = UP_AXIS;
     controller.setIndexForwardAxis = FORWARD_AXIS;
-    const spring = suspensionSetup(properties);
+    const front = suspensionSetup(properties, true);
+    const rear = suspensionSetup(properties, false);
     wheels.forEach((wheel, i) => {
+      const spring = wheel.front ? front : rear;
       const [x, y, z] = wheel.connection;
       // Raised by the rest length MINUS the static sag, so the wheel sits at the model hub when the car is
       // STANDING — not when it is hanging in the air (plan 081/03 §1, field report: after the spring was
@@ -1185,7 +1193,10 @@ function principalInertia(
  * floor, because a tank authors 0.02 and honouring that literally makes it a pogo stick. Geometry is
  * literal: the wheel hangs |lower limit| below its hub, the spring compresses by the upper limit.
  */
-function suspensionSetup(properties: VehicleMassProperties): {
+function suspensionSetup(
+  properties: VehicleMassProperties,
+  front: boolean,
+): {
   compression: number;
   maxForce: number;
   relaxation: number;
@@ -1195,7 +1206,9 @@ function suspensionSetup(properties: VehicleMassProperties): {
   stiffness: number;
   travel: number;
 } {
-  const { damping, force, restLength, travel } = properties.suspension;
+  const { bias, damping, force, restLength, travel } = properties.suspension;
+  // The axle split, exactly as the original writes it: front springs get 2 × bias, rear 2 − 2 × bias.
+  const axle = front ? 2 * bias : 2 - 2 * bias;
   const dampingScale = Math.min(
     SUSPENSION_DAMPING_SCALE_MAX,
     Math.max(SUSPENSION_DAMPING_SCALE_MIN, damping / SUSPENSION_DAMPING_REFERENCE),
@@ -1205,7 +1218,7 @@ function suspensionSetup(properties: VehicleMassProperties): {
   const level = force > 0 ? force : SUSPENSION_REFERENCE_FORCE;
   // SA's own law, converted into Rapier's units — see SUSPENSION_LEVEL_SCALE. A car's stance comes from its
   // authored force level alone; its geometry decides what that level means in metres.
-  const wanted = (SUSPENSION_LEVEL_SCALE * level) / usableTravel;
+  const wanted = (SUSPENSION_LEVEL_SCALE * level * axle) / usableTravel;
   // …and a bump stop, because SA has one and we do not: a spring may not eat more than this share of the
   // travel just standing still, or nothing is left to absorb a bump.
   const stiffness = Math.max(wanted, SUSPENSION_SAG_PER_STIFFNESS / (usableTravel * SUSPENSION_MAX_SAG_OF_TRAVEL));

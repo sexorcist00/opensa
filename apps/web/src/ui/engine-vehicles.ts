@@ -325,6 +325,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
           centreOfMass: data.handling.centreOfMass,
           mass: data.handling.mass,
           suspension: {
+            bias: data.handling.suspBias,
             damping: data.handling.suspDamping,
             force: data.handling.suspForce,
             restLength: Math.abs(data.handling.suspLower),

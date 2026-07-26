@@ -48,6 +48,11 @@ Each file is the array of `[phys]` lines, verbatim. One capture:
     "flip": null, // { atKmh, atS } the first time |roll| passed 90°
     "frames": 960, "durationS": 15.98,
   },
+  // What the run was CONFIGURED with, PER WHEEL (stiffness, damping, travel, rest length, force cap). It
+  // recorded one wheel until 2026-07-26, when the authored axle bias gave the two axles different springs —
+  // and a savanna capture showed wheel 0 is not reliably the front one either (the order follows the
+  // model's own dummy frames). A capture that cannot say what it was configured with proves nothing.
+  "springs": [{ "stiffness": 25, "travel": 0.25 /* … */ }],
 }
 ```
 
@@ -240,3 +245,26 @@ there. Nothing is clamped to `fMaxVelocity` anywhere.
 original's `−0.3 × top` limit, 1.28 s of air over the crest with no flip.
 
 Runs: `2026-07-26-headless-drivetrain-{infernus,comet,admiral,firetruk}.json`.
+
+### 2026-07-26 — the authored axle bias reaches the springs (081/03)
+
+`fSuspensionBias` was parsed and ignored. The original turns it into a factor of `2 × bias` on the front
+springs and `2 − 2 × bias` on the rear (`CAutomobile::ProcessCarWheelPair`), and that is now what happens.
+
+Nothing moved on the calibration trio, and that is the point: all four reference cars author a neutral 0.5,
+and the infernus `brake-strip` came back **bit-identical** to the run before the change (stiffness 25.0, dive
+−0.67°, top 124.1 km/h, brake 52.7 m). Of the shipped table's ~220 rows, 130 are neutral and about 90 are
+not, so this is a change that only speaks when a row asks it to.
+
+The savanna (bias 0.3, a rear-leaning lowrider) is the demonstration: front springs 19.05, rear 24.27 —
+and its front is at the **bump stop**, because 0.6 × its authored force over 0.30 m of travel would sag past
+what the floor allows. So a strong bias is partly absorbed by the stop, which is the floor doing its job: a
+car cannot be biased into standing on its stops. Both regimes are pinned by tests.
+
+Two things noted rather than fixed: the shipped table contains bias 0.0 and 2.0 rows (zero and NEGATIVE
+rates) — all of them boats and aircraft, none of which reach a raycast car, and the floor would catch them
+anyway. And the savanna's dive reads **+0.65° (nose UP)** where the trio reads ≈ −0.7°; with the softer front
+that is backwards, and the suspect is the brake split, which is still equal across the axles while
+`fBrakeBias` sits unread (plan 04 §3).
+
+Runs: `2026-07-26-headless-bias-savanna.json` (+ the infernus null-result alongside it).
