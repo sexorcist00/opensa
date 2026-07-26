@@ -144,3 +144,15 @@ worse. Braking also got sharper (1.6 → 2.0 g), which is a regression against t
 
 Runs: [`2026-07-26-headless-com-infernus.json`](2026-07-26-headless-com-infernus.json) ·
 [`2026-07-26-headless-com-comet.json`](2026-07-26-headless-com-comet.json).
+
+### 2026-07-26 — angular damping 2 → 0.5, and back (081/02)
+
+The band-aid dropped to 0.5 on both flipping cars, to decide from data whether plan 02's retirement of it
+should ship. It should not, and the runs are kept because the REASON is the interesting part: the braking
+dive does not change at all between the two values (0.15° either way — the suspension suppresses it, not the
+damping), while impact flips get worse. Checking every flip against the vertical g before it showed that none
+of them is a cornering flip: three follow impacts of 24-31 g, two happen at walking pace on an
+already-destabilised car.
+
+Runs: [`2026-07-26-headless-damping05-infernus.json`](2026-07-26-headless-damping05-infernus.json) ·
+[`2026-07-26-headless-damping05-comet.json`](2026-07-26-headless-damping05-comet.json).

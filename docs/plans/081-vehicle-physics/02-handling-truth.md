@@ -152,3 +152,43 @@ finding), so heavier cars remain hopeless while light ones get sharper.
 **Next**: `CHASSIS_ANGULAR_DAMPING` 2 → ≤0.5 (the band-aid this plan is supposed to retire), measured the
 same way. Expect the flips to get WORSE before plan 03's anti-roll puts stability back honestly — that
 sequence is the point of measuring each step separately.
+
+### 2026-07-26 — the angular-damping band-aid: measured, and KEPT (with a re-plan for 03)
+
+This plan says to retire `CHASSIS_ANGULAR_DAMPING` (2 → ≤0.5) once the authored centre of mass lands. It was
+dropped to 0.5 and the full matrix re-run on the two flipping cars (`damping05-*` in the benchmark record).
+The measurement says **do not**, for two reasons the plan could not have known:
+
+**1. It is not what suppresses the braking dive.** The infernus pitches **0.15° under braking at BOTH
+values** — identical. The plan assumed the damping was deadening the body; it is not. The missing dive is the
+SUSPENSION: one shared spring rate for every car, 0.25 m of travel, a 40 kN force cap. That moves the
+brake-dive complaint out of §2 and into §3 / plan 03.
+
+**2. Its removal makes impact flips worse.** At 0.5 the gentle step-steer rolls to **−95°** where 2.0 held it
+at −74; the slalom and the crest landing repeat the pattern. Body motion does return (slalom pitch −28° →
+−86°), but much of that motion is the car tumbling further after an impact, not living.
+
+**The bigger finding — and it re-plans 03.** Every flip in the matrix, checked against the vertical
+acceleration BEFORE it:
+
+| Flip                    | Happens at            | Biggest vertical g before it |
+| ----------------------- | --------------------: | ---------------------------: |
+| infernus handbrake-turn |                6.27 s | **−23.8 g**, 0.30 s earlier  |
+| comet slalom            |                7.50 s | **30.1 g**, 2.03 s earlier   |
+| comet crest-jump        |               15.37 s | **30.9 g**, 0.85 s earlier   |
+| infernus slalom         | 7.50 s at **−1 km/h** | 1.7 g                        |
+| comet u-turn            | 5.82 s at **−6 km/h** | 1.0 g                        |
+
+The first three follow a violent vertical impact. The last two happen at walking pace — a car already
+destabilised, tipping slowly, with the flag catching the moment it crosses 90°. **Not one flip in the matrix
+is a cornering flip.** The step-steer series makes it plainest: a full second of held lock produces 0.05° of
+roll, and the car only goes over 1.2 s AFTER a 7.6 g kerb strike.
+
+So the user's two complaints — "cars flip too easily" and "a kerb flips it, it behaves like cardboard" — are
+**one complaint**, and the lever is not anti-roll stiffness, which fights CORNERING roll that is not
+happening. It is what a wheel does when it meets a raised edge: the shared spring cannot absorb the impulse,
+so the impulse becomes body rotation. Plan 03's brief should be re-read with that in mind, and plan 06's kerb
+work may belong before it rather than after.
+
+The band-aid therefore stays at 2 until plan 03 ships a real answer to a vertical impact — removing it early
+costs stability and buys nothing measurable.
