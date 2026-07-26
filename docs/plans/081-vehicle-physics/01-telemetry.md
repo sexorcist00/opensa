@@ -322,8 +322,12 @@ and turned 0.0. It also flips in the slalom (like the infernus) and takes the ke
 **Why this settles the diagnosis.** Two cars with the same read inputs cannot behave differently because of
 the inputs. The difference can only come from what the engine INVENTS from geometry — the emergent centre of
 mass and inertia derived from the COL primitives — which is precisely what the authored `COM`/`turnmass`
-columns exist to override. The user's report that this car *drives excellently in the original game with this
-same handling* closes it: the model is not the problem, and neither is its data.
+columns exist to override.
+
+And the comet is not a special case — the user was explicit that in the original PC game **every** car drives
+well, this one included. So there is no problem MODEL to chase and no per-car fudge to find: the same missing
+consumption produces a spinning comet, a flipping infernus and a 149 km/h fire truck. One correct reading of
+the table is the fix for the whole fleet, and plan 07's presets must not turn into per-car corrections for it.
 
 ### 2026-07-26 — which handling fields are actually read (the user's reading, confirmed)
 
@@ -346,12 +350,19 @@ What the trio actually authors in those unread columns — and what ignoring eac
 | dragMult, engineInertia, engineType, ABS, suspension force/damping/limits/bias, anti-dive, damage mult, flags | | | | The rest of the table. | 02-06 |
 
 **The data is not suspect — we are.** The user's point, and it sets the bar for the whole chain: *"in the
-original game this model with this handling drives excellently."* The same rows, on the same cars, produce a
-good car in vanilla SA. So plan 02-05's job is NOT to invent tuning that feels right — it is to **consume
-what is already authored and already validated**, and the shared constants that stand in for it today
-(`WHEEL_FRICTION_SLIP`, `CHASSIS_ANGULAR_DAMPING`, `MAXVEL_SCALE`, `ENGINE_ACCEL_SCALE`, the suspension four)
-should mostly DISAPPEAR rather than be re-tuned. A field round that says "better" while those constants are
-still doing the work has moved the symptom, not the cause.
+original PC GTA San Andreas ALL the cars drive well — essentially every one of them."* Not one lucky model:
+the entire `handling.cfg` table is a **working, shipped, validated tuning** for the whole fleet, and a
+reference implementation of it has existed for twenty years. Every deviation we measure is ours.
+
+Two consequences the chain must not lose:
+
+- **Consume, don't invent.** Plans 02-05 exist to read what is already authored and already validated, and
+  the shared constants standing in for it today (`WHEEL_FRICTION_SLIP`, `CHASSIS_ANGULAR_DAMPING`,
+  `MAXVEL_SCALE`, `ENGINE_ACCEL_SCALE`, the suspension four) should mostly DISAPPEAR rather than be re-tuned.
+  A field round that says "better" while those constants are still doing the work has moved the symptom.
+- **No per-car corrections.** If every stock car drives well in the original on this same table, then any fix
+  that needs a per-model exception is the wrong fix — it is papering over a field still not being read.
+  Plan 07's presets are for CLASSES the data does not carry, never for making one car behave.
 
 **The COM row is the flip explanation, in the data.** The infernus authors the LOWEST centre of mass of the
 three (−0.25 m) — it is the car that most depends on that correction — and it is the one that goes over in
