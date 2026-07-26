@@ -311,3 +311,37 @@ or the scene needs splitting. Recorded rather than quietly dropped.
 **Subtask status**: §1 typed mapping, §2 mass properties and §3 per-car suspension are done and measured.
 §4 (the pre-step control hook) and the field round remain; the angular-damping retirement is deferred to
 plan 03 with the reasons measured above.
+
+### 2026-07-26 — FIELD VERDICT (user, after driving the A/B build)
+
+> *"Braking and the kerbs got better. Braking at speed is of course still sharp and unsettled, but a lot of
+> factors play into that — I think it will get better further on."*
+
+Accepted, and the numbers agree with every part of it, including the part that is not a win yet:
+
+**What the field felt as better is in the data.** Kerbs: roll on the `kerb-strike` scene fell on three of
+four cars (comet 29.3° → 20.0°, firetruck 7.3° → 3.6°, admiral 4.7° → 2.8°). Braking: distances became
+per-car in both directions and the body finally moves at all.
+
+**What is still wrong, precisely.** On a straight brake strip the nose STILL RISES instead of diving —
+`pitchUnderBrakeDeg` is positive on three of four cars, and 081/02 only made it larger, not correct:
+
+| Car      | Nose-up while braking | Deceleration |
+| -------- | --------------------: | -----------: |
+| infernus |     0.07° → **0.15°** | 1.60 → 1.72 g |
+| comet    |     0.25° → **0.45°** | 1.93 → **2.22 g** |
+| admiral  |       −0.21° → −0.22° | 0.94 → 0.76 g |
+| firetruk |         0.21° → 0.06° | 0.53 → 0.53 g |
+
+Two separate defects sit in that table, and neither belongs to this plan:
+
+1. **The deceleration is too high and got higher** (comet 2.22 g; a road car manages ~1). `brakeForce` has no
+   mass term at all and no bias — plan **04**, and the mod-corpus finding says the same.
+2. **The dive has the wrong SIGN**, which no amount of spring rate fixes. SA authors the lever for exactly
+   this and nothing reads it: `fSuspensionAntiDiveMultiplier` (infernus 0.4, comet 0.18, admiral 0.0,
+   firetruck 0.0) together with `fBrakeBias` (0.51 / 0.55 / 0.63 / 0.45). Anti-dive is a geometry term that
+   converts braking torque into a downward force at the front hub; without it, the only thing the front
+   suspension sees is weight transfer that the raycast controller does not generate on its own. Plan **03**.
+
+So the user's "many factors" reading is right, and the factors are now named rather than guessed. 081/02 is
+**field-accepted**; the braking complaint moves on with its own two owners.
