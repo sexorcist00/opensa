@@ -17,6 +17,12 @@ describe('menuFor', () => {
       expect(screens).not.toContain('map');
     });
 
+    it('drops the Physics screen on a host without vehicle telemetry', () => {
+      const screens = menuFor(ALL_DEBUG_CAPABILITIES, false).map((item) => item.screen);
+
+      expect(screens).not.toContain('physics');
+    });
+
     it('drops the dev-only screens in the deploy build', () => {
       const screens = menuFor(ALL_DEBUG_CAPABILITIES, true).map((item) => item.screen);
 
@@ -25,16 +31,18 @@ describe('menuFor', () => {
       expect(screens).not.toContain('graphics');
       expect(screens).not.toContain('procobj');
       expect(screens).not.toContain('map');
+      expect(screens).not.toContain('physics');
     });
   });
 
   describe('positive cases', () => {
     it('keeps every screen for a fully capable host in a dev build', () => {
-      const screens = menuFor(ALL_DEBUG_CAPABILITIES, false).map((item) => item.screen);
+      const screens = menuFor({ ...ALL_DEBUG_CAPABILITIES, physicsScreen: true }, false).map((item) => item.screen);
 
       expect(screens).toEqual([
         'player',
         'vehicles',
+        'physics',
         'time',
         'atmosphere',
         'camera',
@@ -53,6 +61,7 @@ describe('menuFor', () => {
       expect(screens).toEqual([
         'player',
         'vehicles',
+        'physics',
         'time',
         'atmosphere',
         'camera',

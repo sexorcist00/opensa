@@ -36,6 +36,14 @@
   calls named in the Map bullets below are the WebGL-era ones; the engine host reaches the same features
   through `mapGame` + engine flags. The engine's live equivalent of the draw-distance slider is `?draw=`
   ([query-parameters.md](../development/query-parameters.md)).
+- **Physics screen** (engine host only, `physicsScreen` capability; plan 081/01): the driven car's live
+  telemetry — speed/lateral, slip angle + slip ratio, yaw rate, **pitch (+ = nose up)** and roll, the three g
+  channels, the applied throttle/steer/engine/brake, then one line per wheel (contact · suspension-travel
+  meter · load · slip). Wheels are named by corner (`FL`/`RR`; a straddled hub reads just `F`/`R`). Below the
+  divider, the SHARED vehicle constants (`VEHICLE_PHYSICS_CONSTANTS`) read-only — every car in the world runs
+  that one set today, which is what 081/02 replaces with per-car handling. **The sampler runs only while the
+  screen is open** (mount enables the capture, leaving disables and resets it), and only the SEATED car is
+  sampled, so a closed debugger costs the physics step nothing.
 - **Show Normals** (Map screen): on the engine host a debug VIEW mode riding the `moonColor.w` frame lane
   (0 normal · 1 unlit · 2 normals), returned BEFORE fog so the normals read clean; the WebGL host used a
   scene-wide `MeshNormalMaterial` override (`game.setShowNormals`). Auto-resets when leaving the screen /

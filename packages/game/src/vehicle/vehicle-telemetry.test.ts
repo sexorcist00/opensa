@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { VehicleWheelReading } from '../physics/physics-world';
 
-import { computeFrame, planarMotion, TelemetryRing, type VehicleSample, VehicleTelemetry } from './vehicle-telemetry';
+import {
+  computeFrame,
+  planarMotion,
+  TelemetryRing,
+  type VehicleSample,
+  VehicleTelemetry,
+  wheelCornerLabels,
+} from './vehicle-telemetry';
 
 const DT = 1 / 60;
 const RADIUS = 0.3;
@@ -290,6 +297,32 @@ describe('VehicleTelemetry', () => {
       const frame = telemetry.step(sample({ linvel: [0, 21, 0] }), DT);
 
       expect(frame?.gLong).toBeCloseTo(1 / DT / 9.81, 9);
+    });
+  });
+});
+
+describe('wheelCornerLabels', () => {
+  describe('negative cases', () => {
+    it('gives a straddled hub no side to report (a bike is front and rear, not left and right)', () => {
+      const labels = wheelCornerLabels([
+        { connection: [0, 0.8, 0.3], front: true, radius: 0.3 },
+        { connection: [0, -0.8, 0.3], front: false, radius: 0.3 },
+      ]);
+
+      expect(labels).toEqual(['F', 'R']);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names each corner from the front flag and the hub side (the driver sits at -X)', () => {
+      const labels = wheelCornerLabels([
+        { connection: [-0.8, 1.2, 0.3], front: true, radius: 0.3 },
+        { connection: [0.8, 1.2, 0.3], front: true, radius: 0.3 },
+        { connection: [-0.8, -1.2, 0.3], front: false, radius: 0.3 },
+        { connection: [0.8, -1.2, 0.3], front: false, radius: 0.3 },
+      ]);
+
+      expect(labels).toEqual(['FL', 'FR', 'RL', 'RR']);
     });
   });
 });

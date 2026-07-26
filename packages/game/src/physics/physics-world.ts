@@ -26,6 +26,29 @@ const CHASSIS_ANGULAR_DAMPING = 2; // resist pitch-dive / roll-flip / over-sharp
 const CHASSIS_FRICTION = 0.4;
 const CHASSIS_RESTITUTION = 0.35; // bounce off walls a little instead of sticking dead
 const CONTACT_FORCE_THRESHOLD = 400; // min contact force (N) before an impact event is emitted
+
+/**
+ * The shared vehicle tuning as the F2 Physics tab prints it (plan 081/01), `[label, value]` rows.
+ *
+ * Read-only on purpose: every car in the world runs this one set today — an infernus and a firetruck get the
+ * same spring and the same grip — and that is exactly what plans 02-06 replace with per-car handling data.
+ * Showing the numbers next to the live telemetry is what makes the shared-set problem visible while driving.
+ */
+export const VEHICLE_PHYSICS_CONSTANTS: readonly (readonly [string, number])[] = [
+  ['susp rest (m)', SUSPENSION_REST],
+  ['susp stiffness', SUSPENSION_STIFFNESS],
+  ['susp compression', SUSPENSION_COMPRESSION],
+  ['susp relaxation', SUSPENSION_RELAXATION],
+  ['susp max travel (m)', SUSPENSION_MAX_TRAVEL],
+  ['susp max force (N)', SUSPENSION_MAX_FORCE],
+  ['wheel friction slip', WHEEL_FRICTION_SLIP],
+  ['parking brake (N)', PARKING_BRAKE],
+  ['chassis lin damping', CHASSIS_LINEAR_DAMPING],
+  ['chassis ang damping', CHASSIS_ANGULAR_DAMPING],
+  ['chassis friction', CHASSIS_FRICTION],
+  ['chassis restitution', CHASSIS_RESTITUTION],
+];
+
 /** GTA cars face +Y, are Z-up; axle is left-right (X). Indices for the raycast controller. */
 const FORWARD_AXIS = 1; // +Y
 const UP_AXIS = 2; // +Z

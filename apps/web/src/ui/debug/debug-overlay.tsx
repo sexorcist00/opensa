@@ -44,6 +44,7 @@ import {
 import { styles } from './debug-styles';
 import { MapInspector } from './map-inspector';
 import { DebugToggle, PerfPanel, PipelineToggle, SkyModelToggle, ToneMappingModeSelector } from './perf-panel';
+import { PhysicsPanel, type PhysicsReadout } from './physics-panel';
 
 /** Quick time-of-day presets for the debugger (label → minutes since midnight). */
 const TIME_PRESETS: [string, number][] = [
@@ -104,6 +105,10 @@ export interface DebugActions {
   perfLogs?(): boolean;
   /** Rolling perf stats; `null` until sampling produced a frame (see setPerfEnabled). */
   perfStats(): null | PerfStats;
+  /** The shared vehicle tuning as `[label, value]` rows (Physics screen; engine host only — plan 081/01). */
+  physicsConstants?(): readonly (readonly [string, number])[];
+  /** The driven car's latest telemetry frame; null on foot or before the capture produced a step. */
+  physicsReadout?(): null | PhysicsReadout;
   /** Live player position (native Z-up). */
   playerCoords(): Vec3;
   /** Current procedural-clutter tuning (per category; plan 042). */
@@ -146,6 +151,8 @@ export interface DebugActions {
   setPerfHud?(enabled: boolean): void;
   /** Enable/disable the own engine's slow-frame console breakdown (engine host only). */
   setPerfLogs?(enabled: boolean): void;
+  /** Run the vehicle telemetry sampler — the Physics screen turns it on only while open (plan 081/01). */
+  setPhysicsCapture?(enabled: boolean): void;
   /** Tune one procedural-clutter category (enabled/drawDistance/density). */
   setProcObj(category: ProcObjCategory, patch: Partial<ProcObjTypeConfig>): void;
   /** Toggle sun shadows. */
@@ -1270,6 +1277,8 @@ export function DebugOverlay({
           )}
 
           {screen === 'perf' && <PerfPanel actions={actions} />}
+
+          {screen === 'physics' && capabilities.physicsScreen && <PhysicsPanel actions={actions} />}
 
           {screen === 'weather' && (
             <div style={styles.group}>

@@ -14,9 +14,11 @@
 import type { City, Config, ProcObjCategory, Vec3 } from '@opensa/game';
 import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 
+import { VEHICLE_PHYSICS_CONSTANTS } from '@opensa/game/physics/physics-world';
 import { WEATHER_NAMES } from '@opensa/renderware';
 
 import type { DebugActions } from './debug/debug-overlay';
+import type { PhysicsReadout } from './debug/physics-panel';
 
 /** Selectable weathers for the Weather screen (same list prod shows). */
 const WEATHERS: readonly { index: number; label: string }[] = WEATHER_NAMES.map((label, index) => ({
@@ -54,6 +56,8 @@ export interface EngineDebugActionsDeps {
   perfSnapshot: () => EnginePerfSnapshot | null;
   /** Rolling frame stats; null until a frame was measured. */
   perfStats: () => null | PerfStats;
+  /** The driven car's latest telemetry frame + its corner labels (plan 081/01); null on foot. */
+  physicsReadout: () => null | PhysicsReadout;
   placePlayer: (position: Vec3, moveBody?: boolean) => void;
   playerCoords: () => Vec3;
   /** Re-scatter clutter after a procobj knob change (render + colliders share one scatter). */
@@ -67,6 +71,8 @@ export interface EngineDebugActionsDeps {
   setMissingTextureHighlight: (enabled: boolean) => void;
   setPerfHud: (enabled: boolean) => void;
   setPerfLogs: (enabled: boolean) => void;
+  /** Start/stop the telemetry sampler — only the open Physics tab (or a capture) turns it on. */
+  setPhysicsCapture: (enabled: boolean) => void;
   /** Start a weather transition (the shared WeatherTransition, 6 s blend). */
   setWeather: (index: number) => void;
   /** The player's start position — "To Ganton" on the original game. */
@@ -133,6 +139,8 @@ export function createEngineDebugActions(deps: EngineDebugActionsDeps): DebugAct
     perfHud: deps.perfHud,
     perfLogs: deps.perfLogs,
     perfStats: deps.perfStats,
+    physicsConstants: () => VEHICLE_PHYSICS_CONSTANTS,
+    physicsReadout: deps.physicsReadout,
     playerCoords: deps.playerCoords,
     procObj: () => graphics.procobj,
     respawnPlayer: (): void => {
@@ -165,6 +173,7 @@ export function createEngineDebugActions(deps: EngineDebugActionsDeps): DebugAct
     setPerfEnabled: (): void => undefined, // the engine samples every frame anyway — nothing to gate
     setPerfHud: deps.setPerfHud,
     setPerfLogs: deps.setPerfLogs,
+    setPhysicsCapture: deps.setPhysicsCapture,
     setProcObj: (category: ProcObjCategory, patch): void => {
       Object.assign(graphics.procobj[category], patch);
       if (patch.density !== undefined || patch.enabled !== undefined) {

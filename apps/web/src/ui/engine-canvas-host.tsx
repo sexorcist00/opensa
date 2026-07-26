@@ -43,6 +43,7 @@ import { PhysicsSystem } from '@opensa/game/physics/physics.system';
 import { initRapier } from '@opensa/game/physics/rapier';
 import { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
 import { cellsWithin } from '@opensa/game/streaming/grid';
+import { wheelCornerLabels } from '@opensa/game/vehicle/vehicle-telemetry';
 import { WeatherTransition } from '@opensa/game/weather/weather-transition';
 import { weatherForCity } from '@opensa/game/weather/weather-zones';
 import { type CityBox, isDesertZone } from '@opensa/game/zones/city';
@@ -883,6 +884,12 @@ async function boot(
           : null;
       },
       perfStats: () => frameStats(frames, lastStats),
+      physicsReadout: () => {
+        const car = vehicles?.activeVehicle() ?? null;
+        const frame = vehicles?.telemetry.latest() ?? null;
+
+        return car && frame ? { corners: wheelCornerLabels(car.wheels), frame } : null;
+      },
       placePlayer: teleportPlayer,
       playerCoords: viewOf,
       reloadClutter: (): void => {
@@ -909,6 +916,15 @@ async function boot(
       },
       setPerfLogs: (enabled): void => {
         perfLogs = enabled;
+      },
+      setPhysicsCapture: (enabled): void => {
+        if (!vehicles) {
+          return;
+        }
+        // Reset on BOTH edges: a capture that starts must not open with frames from the last time the tab was
+        // looked at, and a capture that stops has no reader left to hold history for.
+        vehicles.telemetry.reset();
+        vehicles.telemetry.enabled = enabled;
       },
       setWeather: (index): void => weatherTransition.begin(index, config.weatherTransitionSeconds),
       spawn,

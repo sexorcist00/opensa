@@ -15,10 +15,14 @@
  * - **g** is net acceleration (Δv/dt) in the body frame, in g. Gravity is NOT added: a car resting on its
  *   springs reads 0 vertical, a car in free fall reads −1.
  */
+import type { VehicleWheelPlacement } from '../interfaces/world-adapter.interface';
 import type { VehicleWheelReading } from '../physics/physics-world';
 
 /** How slow (m/s) counts as "not really moving": below this the slip channels report 0 rather than noise. */
 const SLIP_SPEED_FLOOR = 0.5;
+
+/** How close to the car's centre line (m) a hub must sit to count as straddled — see {@link wheelCornerLabels}. */
+const CENTRELINE_EPSILON = 0.05;
 
 const GRAVITY = 9.81;
 
@@ -267,6 +271,27 @@ export function planarMotion(
     speed,
     speedLateral,
   };
+}
+
+/**
+ * Which corner each wheel index is — `FL`, `RR`, and for a straddled wheel (a bike's) just `F`/`R`.
+ *
+ * A wheel index means nothing on its own: the order comes from the model's own hub dummies, so "wheel 2" is a
+ * different corner on a different car. Every reader of a capture — the F2 tab, the `[phys]` JSON, a ledger
+ * table — needs the same naming, so it is derived once here: the axle from the model's own front flag, the
+ * side from the hub's x sign (the driver's side is −X).
+ */
+export function wheelCornerLabels(wheels: readonly VehicleWheelPlacement[]): string[] {
+  return wheels.map((wheel) => {
+    const axle = wheel.front ? 'F' : 'R';
+    // A hub on the centre line (bike, quad's tail) has no side to report — pretending it does would print a
+    // right wheel that no one can find on the car.
+    if (Math.abs(wheel.connection[0]) < CENTRELINE_EPSILON) {
+      return axle;
+    }
+
+    return `${axle}${wheel.connection[0] < 0 ? 'L' : 'R'}`;
+  });
 }
 
 /** Net acceleration along a body axis, in g. */

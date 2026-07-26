@@ -188,6 +188,11 @@ export const styles: Record<string, CSSProperties> = {
     overflow: 'auto',
     padding: 4,
   },
+  /** A readout line: label left, value right (the Physics tab's telemetry + constant rows). */
+  statRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+  },
   swatch: {
     borderRadius: 2,
     display: 'inline-block',

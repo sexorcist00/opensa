@@ -34,6 +34,9 @@ export interface DebugCapabilities {
   /** Moon SIZE + ELEVATION — the engine builds its own moon arc and draws the disc from the sky model;
    *  `moon.brightness` is the one knob that reaches it. */
   readonly moonRig: boolean;
+  /** Physics screen: live vehicle telemetry + the shared tuning constants (plan 081/01). Needs the raycast
+   *  vehicle controller behind it, which only the engine host drives. */
+  readonly physicsScreen: boolean;
   /** Rendering-pipeline master switch classic/modern — the switch IS what C2 deletes. */
   readonly pipelineSwitch: boolean;
   /** Car-reflection PRESETS (enhanced/PC/PS2); off + intensity stay on both hosts. */
@@ -71,6 +74,7 @@ export type Screen =
   | 'graphics'
   | 'map'
   | 'perf'
+  | 'physics'
   | 'player'
   | 'position'
   | 'procobj'
@@ -91,6 +95,7 @@ export const ALL_DEBUG_CAPABILITIES: DebugCapabilities = {
   mapScreen: true,
   meshOverrides: true,
   moonRig: true,
+  physicsScreen: false, // no raycast-vehicle telemetry on the three host — 081 is engine-only
   pipelineSwitch: true,
   reflectionPresets: true,
   shadows: true,
@@ -119,6 +124,7 @@ export const ENGINE_DEBUG_CAPABILITIES: DebugCapabilities = {
   mapScreen: true, // restored 074/22 phase 7 — pinned cells + detached camera // restored 074/22 — a storage-buffer wireframe pass (no edge geometry needed)
   meshOverrides: true, // restored 074/22 — a debug VIEW mode on a spare frame lane, not a material override
   moonRig: false,
+  physicsScreen: true, // 081/01 — the telemetry sampler rides this host's fixed step
   pipelineSwitch: false,
   reflectionPresets: false,
   shadows: false,
@@ -138,6 +144,7 @@ export const ENGINE_DEBUG_CAPABILITIES: DebugCapabilities = {
 const ALL_MENU: readonly { label: string; screen: Screen }[] = [
   { label: 'Player', screen: 'player' },
   { label: 'Vehicles', screen: 'vehicles' },
+  { label: 'Physics', screen: 'physics' },
   { label: 'Time', screen: 'time' },
   { label: 'Atmosphere', screen: 'atmosphere' },
   { label: 'Camera', screen: 'camera' },
@@ -150,7 +157,20 @@ const ALL_MENU: readonly { label: string; screen: Screen }[] = [
 ];
 
 /** Authoring / live-tuning screens hidden only in the deploy build (`build:prod` sets `__DEBUGGER_HIDE__`). */
-const DEV_ONLY_SCREENS: ReadonlySet<Screen> = new Set<Screen>(['atmosphere', 'camera', 'graphics', 'map', 'procobj']);
+const DEV_ONLY_SCREENS: ReadonlySet<Screen> = new Set<Screen>([
+  'atmosphere',
+  'camera',
+  'graphics',
+  'map',
+  'physics',
+  'procobj',
+]);
+
+/** Screens that exist only where the host can drive them (the rest are renderer-agnostic). */
+const SCREEN_CAPABILITY: Partial<Record<Screen, keyof DebugCapabilities>> = {
+  map: 'mapScreen',
+  physics: 'physicsScreen',
+};
 
 /**
  * Menu items visible for this host: dev-only screens drop in the deploy build, unsupported screens drop by
@@ -158,9 +178,11 @@ const DEV_ONLY_SCREENS: ReadonlySet<Screen> = new Set<Screen>(['atmosphere', 'ca
  * the game defines none.
  */
 export function menuFor(capabilities: DebugCapabilities, hideDevOnly: boolean): { label: string; screen: Screen }[] {
-  return ALL_MENU.filter(
-    (item) => (!hideDevOnly || !DEV_ONLY_SCREENS.has(item.screen)) && (item.screen !== 'map' || capabilities.mapScreen),
-  ).map((item) => ({ ...item }));
+  return ALL_MENU.filter((item) => {
+    const gate = SCREEN_CAPABILITY[item.screen];
+
+    return (!hideDevOnly || !DEV_ONLY_SCREENS.has(item.screen)) && (gate === undefined || capabilities[gate]);
+  }).map((item) => ({ ...item }));
 }
 
 /** Camera-screen sliders: `[config key, label, min, max, step]`. The first three (distance + zoom bounds)

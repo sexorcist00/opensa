@@ -69,7 +69,7 @@ Deterministic scenario runner, same philosophy as the render bench (`[bench]` pr
 
 - [x] `vehicle-telemetry.ts` sampler + ring buffer + unit tests (pure math on scripted inputs).
 - [x] Slip proxy exported on the vehicles facade (typed, documented for 080/05).
-- [ ] F2 Physics tab: live telemetry strips; read-only constants group.
+- [x] F2 Physics tab: live telemetry strips; read-only constants group.
 - [ ] `ScriptedDriveSource` + scenario spec + the 7 scenes v1.
 - [ ] `[phys]` capture protocol + `phys-compare.ts` + headless harness lane.
 - [ ] BEFORE matrix captured (3 cars × 7 scenes) + ledger summary + user expectation notes.
@@ -120,5 +120,41 @@ controller reads empty. Full vehicle + physics suites 171 green; `tsc` + eslint 
 `[phys]` capture protocol + `phys-compare.ts`, and the BEFORE matrix (3 cars × 7 scenes) with the user's
 vanilla expectations. No numbers are recorded yet BECAUSE none have been measured — the baseline needs the
 scripted track, not a hand-driven session.
+
+### 2026-07-26 — the F2 Physics tab (subtask 3)
+
+**What landed**
+
+- `apps/web/src/ui/debug/physics-panel.tsx` — the screen. The body block prints the frame's channels in the
+  units a driver reads (km/h, degrees, g, kN); the wheel block prints one line per corner with a monospace
+  travel meter (`● ████░░░░░░ 4.2kN -0.25`). The row builders (`bar`, `bodyRows`, `wheelRows`) are pure and
+  unit-tested — a unit slip in the instrument would be indistinguishable from a physics bug in a field round.
+  `pitch (+ nose up)` and `roll (+ right down)` carry their sign convention IN the label, because the whole
+  braking complaint is a sign on that channel.
+- **The capture switch belongs to the screen.** Mounting calls `setPhysicsCapture(true)`, leaving calls it
+  with `false`; the host resets the ring on both edges, so an opened tab never shows a stale car's history.
+  This is the Perf panel's `setPerfEnabled` pattern, and it keeps the "zero cost when disabled" promise the
+  sampler was built with — a closed debugger reads nothing off the body.
+- `VEHICLE_PHYSICS_CONSTANTS` (`physics-world.ts`) — the twelve shared numbers exported as `[label, value]`
+  rows and printed read-only under the divider. Seeing "every car runs these" next to the live telemetry is
+  the plan-02 argument made visible while driving.
+- `wheelCornerLabels` (`vehicle-telemetry.ts`) — wheel INDEX order comes from the model's own hub dummies, so
+  it means nothing across cars. The axle comes from the model's front flag, the side from the hub's x sign
+  (the driver's side is −X), and a straddled hub (bike) reads `F`/`R` with no side invented. The `[phys]`
+  capture will name its corners with the same function.
+- Screen gating followed the existing capability system: a `physicsScreen` capability (engine host true,
+  three host false — there is no raycast-vehicle telemetry there) and the screen added to the dev-only set,
+  like every other live-tuning screen. `menuFor`'s per-screen gate is now a `SCREEN_CAPABILITY` map instead of
+  a growing chain of ternaries.
+
+**Numbers.** None measured here, and deliberately so: this subtask ships an INSTRUMENT, and every number this
+plan owes (telemetry cost per step, the BEFORE matrix) needs the scripted track from subtask 4 to be
+reproducible. A hand-driven reading would not survive its own re-run. What is verified: `tsc` clean, eslint
+clean, `npm run build` clean, and 63 green across the touched suites (`physics-panel` 10 ·
+`debug-capabilities` 14 · `vehicle-telemetry` 26 · `engine-debug-actions` 13), of which 13 are new: 10 panel
+formatting/meter cases, 2 corner-label cases (four-corner car, straddled bike hub), 1 menu-gating case.
+
+**Still owed by this plan**: `ScriptedDriveSource` + the 7 scenes, the `[phys]` capture protocol +
+`phys-compare.ts`, and the BEFORE matrix (3 cars × 7 scenes) with the user's vanilla-SA expectations in words.
 
 _(baselines, scene specs, measured costs follow)_
