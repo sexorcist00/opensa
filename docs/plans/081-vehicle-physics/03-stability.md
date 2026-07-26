@@ -1,77 +1,145 @@
-# 081/03 — Stability forces: anti-roll, anti-dive/squat, downforce, stabiliser
+# 081/03 — Weight transfer and impact response
 
-The plan that replaces the global `CHASSIS_ANGULAR_DAMPING` band-aid with the real mechanisms, and
-directly kills the remaining loud complaint: **braking must dip the nose, not lift it.**
+**Rewritten 2026-07-26, after 081/01-02 measured the things this plan was guessing about.** The original
+brief opened with anti-roll bars and treated the flips as a cornering problem. The matrix says otherwise, and
+two of its findings move the whole plan:
 
-All four systems are **chassis-level external forces** computed from telemetry-grade signals the
-controller already exposes (wheel compression, contact, load) and applied via
-`applyImpulseAtPoint`/`applyTorqueImpulse` per fixed step — controller-agnostic by construction
-(the readme's architecture rule). They live in a new `packages/game/src/vehicle/stability.ts`
-(pure force calculators, unit-tested) driven from the vehicle fixed update.
+1. **Not one flip in the record is a cornering flip.** Three of five follow a vertical impact of 24-31 g
+   (0.30 s, 0.85 s and 2.03 s later); the other two happen at **−1 and −6 km/h** — a car already
+   destabilised, tipping slowly. The step-steer series is plainest: a full second of held lock produces
+   **0.05° of roll**, and the car only goes over 1.2 s AFTER a 7.6 g kerb strike.
+2. **The braking dive is not suppressed by the chassis damping.** The infernus pitches **0.15° under braking
+   at damping 2.0 and at 0.5, identically** — and dropping the damping made impact flips worse while buying
+   nothing. So the band-aid stays until this plan ships something real.
 
-## 1. Anti-roll bars (per axle)
+So this plan is no longer "four stability forces". It is **two questions, in order**: where does the weight
+go when a car brakes, and what happens when a wheel meets an edge. Anti-roll and downforce survive as
+smaller, later items, justified by their own numbers rather than by the flip complaint.
 
-- Per axle: `F = k_arb × (compressionLeft − compressionRight)` applied down on the more-extended
-  side's connection point and up on the other (equal/opposite) — the textbook bar. Compression from
-  `wheelSuspensionLength` vs rest (plan-01 signal). Airborne wheel ⇒ that axle's bar contributes 0.
-- `k_arb` derived from handling: proportional to suspension force level × mass share per axle
-  (`suspBias`), with a front/rear ratio knob — front-biased bars understeer (safe default), tunable
-  per class in plan 07. Documented formula, live-tunable in the F2 Physics tab.
-- Acceptance signal: slalom roll amplitude at the plan-02 baseline speed drops to a target band
-  (set from the field round, recorded); flips require deliberate abuse (kerb + full lock at speed).
+## 0. First, ANSWER a question the chain cannot proceed without
 
-## 2. Anti-dive / anti-squat (the nose fix)
+**Does the raycast controller transfer load at all under braking?**
 
-- Physical cause of the reported nose-LIFT: brake force is applied by the controller at wheel
-  contact along −Y while the COM sits above → pitch-back torque; with the old high COM and soft
-  shared suspension the rear compressed MORE than the front → visual nose-up. Plans 02 (COM,
-  per-car suspension) reduce it; this system finishes it the way SA's own `fSuspensionAntiDiveMultiplier`
-  intends:
-- Pitch-compensation torque: `T = antiDive × brakeForceApplied × h_com` opposing the brake pitch
-  moment (and the mirrored `antiSquat × driveForce` for launch squat — keep a LITTLE squat, it
-  reads as power). `antiDive` from handling (0 for many cars — then plan-02 physics alone must
-  look right; the multiplier only ASSISTS).
-- Acceptance: brake-strip capture shows **pitch sign = nose DOWN** with a magnitude band (~1–3°
-  sedan, tighter for sports), settle without porpoising.
+Physics says it must: braking force acts at the contact patch, the centre of mass sits ~0.5 m above it, so a
+1400 kg car at 1.7 g generates ~12 kN·m of pitch moment and the front springs should compress. The measured
+answer is 0.15° of pitch, which is nearly nothing — and 081/02 proved it is not the damping and not the
+spring rate (per-car springs changed the number by tenths).
 
-## 3. Downforce
+That leaves one candidate: **Rapier's `DynamicRayCastVehicleController` may apply its engine/brake force at
+the chassis centre of mass rather than at the contact patch**, in which case the pitch moment never exists
+and NO anti-dive multiplier can ever produce a dive. This is cheap to settle and everything below depends on
+it:
 
-- `F_down = c × dragMult-agnostic area proxy × v²` applied at COM height, clamped; SA vanilla has a
-  per-vehicle down-force factor semantically inside its handling flags/engine — we use a simple
-  speed² term with a per-class constant (sports > sedan > truck), field-tuned. Purpose: highway
-  stability + jump attitude, NOT lap-time realism.
-- Guard: downforce must not crush per-car suspension onto the bump stops at top speed (check
-  compression fraction in the brake-strip capture's top-speed segment; `suspensionHighSpeedDamp`
-  from plan 02 is the companion knob).
+- An isolated Rapier test: a car at speed, full brake, read `wheelSuspensionForce` front vs rear across the
+  stop. Load transfers ⇒ the moment exists and §1 is a tuning job. Load does NOT transfer ⇒ §1 becomes
+  "apply the longitudinal tyre force ourselves, at the contact point", which is a different and larger task.
+- Extend the `[phys]` capture with per-wheel load while doing it (the instrument rule from 081/02: measure
+  what you are about to tune, and let the run say what it saw).
 
-## 4. Arcade roll stabiliser (the SA safety net)
+**Nothing else in this plan starts before this is answered in the ledger.**
 
-- Above a roll-RATE threshold: a small opposing roll torque (vanilla SA does this too). This is the
-  honest, scoped replacement for the global angular damping: it acts only on fast roll, leaves
-  pitch/yaw/slow body motion alive. Threshold + gain live-tunable; OFF below threshold so normal
-  cornering roll is untouched.
-- With 1–4 in place, drop `CHASSIS_ANGULAR_DAMPING` to its plan-02 target (≤0.5) and re-run the
-  whole scene matrix — this is the moment the band-aid actually comes off.
+## 1. Weight transfer under braking and power (the nose fix)
+
+The complaint, quantified after 081/02, on a straight brake strip — positive is NOSE UP:
+
+| Car      | Pitch while braking | Deceleration | Authored `antiDive` |
+| -------- | ------------------: | -----------: | ------------------: |
+| infernus |          **+0.15°** |      1.72 g  |                 0.4 |
+| comet    |          **+0.45°** |      2.22 g  |                0.18 |
+| admiral  |              −0.22° |      0.76 g  |             **0.0** |
+| firetruk |              +0.06° |      0.53 g  |             **0.0** |
+
+**Read the last column before designing anything.** Two of the four cars author `antiDive = 0.0` and they
+brake correctly in the original game — so anti-dive is an ASSIST that shapes an existing transfer, never the
+thing that creates it. A design that produces dive only where `antiDive > 0` is wrong on its face.
+
+- If §0 says the moment exists: apply SA's own term — a pitch-compensation torque
+  `T = antiDive × brakeForce × h_com` opposing the brake pitch moment, plus the mirrored
+  `antiSquat × driveForce` for launch (keep a LITTLE squat; it reads as power). Then the sign comes from
+  the physics and the multiplier only tempers it.
+- If §0 says it does not: the longitudinal tyre force gets applied by us at the contact point, and the
+  authored multiplier rides on top. Larger, and it is what makes the complaint fixable at all.
+- `fBrakeBias` (0.51 / 0.55 / 0.63 / 0.45 on the trio + comet) is unread today and belongs here or in plan
+  04 — a rear-biased brake is also what spins a car under braking, which the comet did before 081/02.
+
+**Acceptance**: nose-DOWN pitch on every reference car, magnitude in a band recorded from the field round
+(~1-3° for a sedan, tighter for a sports car), settling without porpoising. The `brake-strip` capture is the
+instrument, and the BEFORE numbers above are what it is measured against.
+
+## 2. Impact response (what the flips actually are)
+
+Every flip in the record traces to a wheel meeting something. The mechanism is not exotic: a raycast wheel
+sees the world through a downward ray, a kerb face is invisible to it until the wheel centre crosses the
+edge, and then the whole penetration resolves in one step as a vertical impulse the spring cannot absorb —
+24 to 31 g — which becomes body rotation because nothing else can take it.
+
+- **The measurement first, again**: from the existing captures, correlate `gVert` spikes with the roll that
+  follows (the ledger already has five cases). Then per case: was it a kerb, a landing, or a car-to-car hit?
+  The `kerb-strike` and `crest-jump` scenes are the two controlled instruments.
+- **Candidate mechanisms, in the order they should be tried** (each measured before the next):
+  1. **Let the spring absorb it.** Travel and force cap are now per-car (081/02 §3) but the IMPULSE still
+     arrives in one step. A contact-force clamp per wheel, or a sub-stepped suspension on large penetrations,
+     may be the whole fix.
+  2. **See the edge before hitting it.** A short forward probe per wheel converts a step ≤ ~0.25 m at low
+     speed into a ramp instead of a wall (this is plan 06 §2's kerb assist, promoted here because the data
+     says it is a STABILITY mechanism, not a polish one).
+  3. **Cap what an impact can do to attitude.** A roll-rate limiter that engages only above a threshold —
+     the honest, scoped replacement for the global damping (see §4).
+- **Acceptance**: the four flips 081/02 fixed stay fixed; the fifth (infernus slalom) stops; a deliberate
+  kerb strike at speed still hurts — SA punishes that and so should we.
+
+## 3. Anti-roll bars — demoted, and justified separately
+
+Still worth having, but NOT as the flip fix: the flips are impacts. What anti-roll bars are for is the roll
+that cornering DOES produce — the infernus slalom still reaches 106.9° of roll after 081/02, and that is a
+real number to reduce.
+
+- Per axle `F = k_arb × (compressionLeft − compressionRight)`, applied down on the extended side and up on
+  the other; an airborne wheel contributes 0. `k_arb` from `suspForce` × the axle's mass share (`suspBias`).
+- Front-biased by default (understeer is the safe road-car bias); the per-class knob belongs to plan 07.
+- **Do not tune this until §1 and §2 land** — a bar fights a symptom of both, and tuning it first would hide
+  what they are supposed to fix.
+
+## 4. Retiring the damping band-aid, with the evidence to do it
+
+`CHASSIS_ANGULAR_DAMPING = 2` is still live because 081/02 MEASURED that removing it costs stability and buys
+nothing: the dive does not change (0.15° either way) and impact flips get worse (step-steer roll −74° → −95°).
+
+It comes off here, in the same change that ships §1 and §2, and the acceptance is the full scene matrix at
+the new value against the 081/02 record — not an opinion. If a scoped roll-rate limiter (§2.3) is needed to
+hold the line, that is the honest replacement: it acts on fast roll only and leaves pitch, yaw and slow body
+motion alive, which is exactly what the global damping cannot do.
+
+## 5. Downforce — last, and only if the numbers ask for it
+
+A speed² term at the centre of mass, per class, for highway stability and jump attitude. **Deferred until
+§1-§3 are measured**: nothing in the record currently blames high-speed instability, and adding a force with
+no complaint behind it is how a chain acquires constants nobody can justify later. If the 03 field round
+reports float at speed, it comes back with that verdict attached.
 
 ## Subtasks
 
-- [ ] `stability.ts`: four pure calculators + application order (bars → anti-dive → downforce →
-      stabiliser) + unit tests on scripted wheel states (bar zero when airborne, torque signs,
-      clamps).
-- [ ] Wire into vehicle fixed update (post plan-02 pre-step hook, before `updateVehicle` consumes).
-- [ ] F2 Physics tab: live gains per system + per-system enable toggles (in-session A/B).
-- [ ] Replay A/B: slalom/u-turn/brake-strip/kerb/crest, trio of cars; ledger the roll/pitch bands.
-- [ ] **Field round**: brake feel ("nose dips"), flip resistance, highway stability, jump behaviour.
-      Freeze gains.
+- [ ] **§0** Load-transfer test (isolated Rapier) + per-wheel load in the `[phys]` capture. Answer in the
+      ledger BEFORE anything else starts.
+- [ ] §1 Weight transfer: whichever path §0 selects, + `brakeBias`, + tests on scripted wheel states.
+- [ ] §2 Impact response: correlate the record's spikes, then mechanisms 1→3, each measured before the next.
+- [ ] §3 Anti-roll bars, after §1-§2, with the slalom roll number as their justification.
+- [ ] §4 Damping to ≤0.5 + full matrix re-run against the 081/02 record.
+- [ ] §5 Downforce ONLY if the field round asks for it.
+- [ ] F2 Physics tab: live gains + per-system toggles (in-session A/B, the 080 pattern).
+- [ ] **Field round**: brake feel ("does the nose dip"), kerbs at low and high speed, flip resistance under
+      abuse, plus a regression drive of everything since 02.
 
 ## Acceptance
 
-- Brake-strip: nose-down pitch on all three reference cars (the 2026-07-12 complaint closed with a
-  number and a field verdict).
-- Slalom/u-turn at plan-01 speeds: zero flips; deliberate-abuse flip still possible (it's SA).
-- Angular damping at target; scene matrix regressions none (tolerance bands).
-- Fixed-step cost of all four systems ≤ 0.05 ms for the player car.
+- **Brake-strip: nose-DOWN on every reference car** — the sign flips, with a recorded band and a field
+  verdict. This is the complaint the user has raised twice.
+- **Zero flips in the matrix**, including the infernus slalom; a deliberate high-speed kerb strike still
+  punishes.
+- Angular damping at ≤0.5 with the matrix no worse than the 081/02 record.
+- Fixed-step cost of everything added ≤ 0.05 ms for the player car (and this time it is measured — 081/01's
+  equivalent clause was never isolated).
 
 ## Ledger
 
-_(gains, formulas as shipped, A/B numbers, field verdict)_
+_(§0's answer first — everything below depends on it)_
