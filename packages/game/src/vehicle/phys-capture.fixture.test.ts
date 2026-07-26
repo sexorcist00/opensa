@@ -33,9 +33,10 @@ const RECORD_DIR = join(import.meta.dirname, '../../../../docs/benchmarks/vehicl
 const COLUMNS = ['t', 'speed', 'slipAngle', 'pitch', 'roll', 'yawRate', 'gLong', 'gLat', 'gVert', 'throttle', 'steer'];
 
 const files = readdirSync(RECORD_DIR).filter((name) => name.endsWith('.json'));
-const captures: Capture[] = files.flatMap(
-  (name) => JSON.parse(readFileSync(join(RECORD_DIR, name), 'utf8')) as Capture[],
-);
+const read = (name: string): Capture[] => JSON.parse(readFileSync(join(RECORD_DIR, name), 'utf8')) as Capture[];
+const captures: Capture[] = files.flatMap(read);
+/** The BEFORE matrix alone — the complete four-car sweep every later plan is measured against. */
+const matrix: Capture[] = files.filter((name) => name.includes('-before-')).flatMap(read);
 const column = (capture: Capture, name: string): number[] => {
   const index = capture.columns.indexOf(name);
 
@@ -140,9 +141,12 @@ describe('the [phys] capture record', () => {
       expect(strip.summary.brake).not.toBeNull();
     });
 
-    it('reproduces the same lap across cars — the scene set is the same seven for every one', () => {
+    it('reproduces the same lap across cars — the BEFORE matrix is the same scene set for every one', () => {
+      // Scoped to the matrix on purpose. The record also holds targeted A/B captures (one scene, two cars,
+      // to isolate one change), and demanding a full matrix of those would make every focused measurement
+      // an illegal one. What must hold is that the baseline every later plan is judged against is complete.
       const byCar = new Map<string, Set<string>>();
-      for (const capture of captures) {
+      for (const capture of matrix) {
         byCar.set(capture.car, (byCar.get(capture.car) ?? new Set()).add(capture.key));
       }
       const scenes = [...byCar.values()].map((keys) => [...keys].sort().join(','));
