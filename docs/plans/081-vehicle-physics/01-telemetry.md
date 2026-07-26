@@ -370,8 +370,15 @@ any of the unread columns are wired.
 ### 2026-07-26 — a realism handling mod, measured against what we read (S.A.A.H, 210 cars)
 
 `scripts/debug/handling-diff.ts` (new, kept) compares two `handling.cfg` tables column by column and reports
-how much of the difference the engine can even see. Against the user's S.A.A.H table — *"a more realistic
-handling for the game's original cars"* — over the 210 shared rows:
+how much of the difference the engine can even see.
+
+**S.A.A.H is an INSTRUMENT here, not a target.** The user was explicit that we are unlikely to ship it — it
+is a 210-car third-party realism table, useful precisely because someone else tuned the whole fleet with an
+intent we can measure against our reader. **The target remains stock parity with the original game.** What
+this comparison buys is a number for how much of ANY calibrated table survives our five columns; the same
+command answers it for the next one.
+
+Over the 210 shared rows:
 
 | Column           | Cars changed | Mean move | Engine  |
 | ---------------- | -----------: | --------: | ------- |
