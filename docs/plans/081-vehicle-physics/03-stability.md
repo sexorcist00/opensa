@@ -143,3 +143,50 @@ reports float at speed, it comes back with that verdict attached.
 ## Ledger
 
 _(§0's answer first — everything below depends on it)_
+
+### 2026-07-26 — §0 ANSWERED: the load transfers. The spring is 7× too stiff to show it.
+
+An isolated Rapier test (a car at 42 m/s, full brake, per-wheel `suspensionForce` read across the stop):
+
+| State           | Front load | Rear load | Front share |
+| --------------- | ---------: | --------: | ----------: |
+| at rest         |     6863 N |    6863 N |       50 %  |
+| under power     |     4644 N |    9081 N | 34 % (squat — correct) |
+| **under brake** | **13480 N** | **765 N** |  **94.6 %** |
+
+**So the controller transfers weight, and hard.** The feared answer — that Rapier applies the brake force at
+the centre of mass and no pitch moment exists — is WRONG, and the larger task it implied is not needed. The
+transfer is even physically consistent with the deceleration we have (2 g × 0.5 m of COM height over a 2.8 m
+wheelbase predicts ~4.9 kN of transfer; the measurement shows more because the deceleration is higher still).
+
+**The dive is invisible for a different reason: the springs are far too stiff to move.**
+
+| | Measured | A real road car |
+| --- | ---: | ---: |
+| Spring rate per wheel | **229 kN/m** | 20-55 kN/m (1.2-2.0 Hz) |
+| Static deflection under its own weight | **1.5 cm** | 6-17 cm |
+| Front-spring travel added by the braking transfer | **1.45 cm** | 10.7 cm |
+| Resulting pitch over a 2.8 m wheelbase | **0.59°** | **4.36°** |
+
+Doubling the load on a spring that deflects 15 mm under the whole car's weight moves it another 15 mm, and
+15 mm across a wheelbase is half a degree. The car IS diving — by a distance no one can see.
+
+**This redirects §1 completely.** Anti-dive REDUCES dive; the car has none to reduce. The lever is the
+reference spring rate that everything scales off — `SUSPENSION_STIFFNESS = 120`, tuned in-browser for a car
+that must not sink into the road, and about **7× a real one**. `fSuspensionForceLevel` multiplies that
+reference, so every car in the game inherits the error.
+
+It also explains three complaints at once, all of which have been treated separately until now:
+- **no dive under braking** (this measurement),
+- **0.05° of roll under a second of held lock** (081/01's step-steer — same stiffness, same reason),
+- **"a kerb flips it, like cardboard"** — a spring that cannot deflect cannot absorb an impulse, so the
+  impulse becomes body rotation. §2's first candidate mechanism was "let the spring absorb it"; it now has a
+  number attached.
+
+**What §1 becomes**: soften the reference rate toward a real one, and re-verify what it was raised to prevent
+— the launch hop and the chassis sinking into the road on soft, under-damped springs (the 074 field lesson
+the constant's comment records). Damping scales with the rate, so the two move together; the `rest` scene and
+the brake-strip capture are the instruments, and the whole matrix is the regression net.
+
+**Estimated size of the change**: one constant, one damping ratio, and a very careful measured walk down —
+because the last time this chain changed a suspension number by 10 % a parked car started shivering.
