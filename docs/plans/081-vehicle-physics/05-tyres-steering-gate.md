@@ -197,3 +197,32 @@ that gap needs the original running side by side, not more reading.
 **Owed**: read `surface.dat` + `surfinfo.dat` instead of carrying 4.5 as a constant (both are mod targets,
 and the full matrix is what wheels need the moment they can tell tarmac from grass), and add the sweeper
 scene.
+
+### 2026-07-26 — the chassis angular damping was eating the turn (and the original's value is 0.5)
+
+Three field rounds in a row said the same thing: *"hard to get into a corner at speed"*, and each time the
+answer looked like grip or lock. It was neither. `CHASSIS_ANGULAR_DAMPING = 2` leaves **14 % of a car's yaw
+rate after one second** — a car that will not turn however much grip or steering angle it is given, at any
+speed, which is exactly the shape of the complaint (it never depended on speed).
+
+It was a band-aid from 081/02, raised against the flips a high emergent centre of mass caused, with its own
+comment saying it comes off "in the same change that gives the car a real answer to a vertical impact".
+That change has landed twice over since — authored mass properties, real springs, real tyres.
+
+And it has a truth-based value: SA damps rotation in `CPhysical::ApplyAirResistance` as `m_vecTurnSpeed *=
+0.99f` per frame, which at its 50 Hz is 0.605 of the yaw left after a second — a Rapier damping of **0.5** at
+our fixed step.
+
+Measured on the same scenes (`turnedDeg`, how far round the lap actually got):
+
+| scene / car     | damping 2 | damping 0.5 |
+| --------------- | --------- | ----------- |
+| u-turn, admiral | 36.9°     | **49.2°**   |
+| u-turn, comet   | 18.9°     | **26.3°**   |
+| slalom, admiral | 25.9°     | **59.6°**   |
+| slalom, comet   | −22.0°    | **58.4°**   |
+
+**The cost is real and is not hidden**: at 2 the band-aid was also masking an instability, and the comet flips
+on the kerb-strike replay without it (20.6° of roll becomes 179°). A raycast wheel cannot see a vertical kerb
+face until its centre crosses the edge — that is plan 06's kerb probe, and it is the fix. Raising this number
+again instead would be trading the whole fleet's cornering for one car's kerb.

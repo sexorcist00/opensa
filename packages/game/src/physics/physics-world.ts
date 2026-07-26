@@ -149,21 +149,29 @@ const TYRE_GRIP_FLOOR = 0.2; // a row authoring 0 (there are 19) would weld the 
 const PARKING_BRAKE = 80; // holds a parked car put (released by the driver when throttling)
 const CHASSIS_LINEAR_DAMPING = 0.1;
 /**
- * Angular damping on the chassis. **STAYS at 2 until plan 03, and the reason is measured** (081/02).
+ * Angular damping on the chassis — **0.5, which is the original's own value** (081/05).
  *
- * It is a band-aid: it was raised to resist the flips a high, emergent centre of mass was causing, and it
- * deadens honest body motion along with them. Plan 02 was written to retire it once the authored centre of
- * mass landed — so it was dropped to 0.5 and the whole scene matrix re-run on two cars. What that showed:
+ * SA damps a car's rotation once per frame in `CPhysical::ApplyAirResistance`: `m_vecTurnSpeed *= 0.99f`. At
+ * its 50 Hz that is 0.605 of the yaw left after a second, and the Rapier damping that matches it at our fixed
+ * step is 0.5. So this is a translated number, not a taste.
  *
- * - It is NOT what suppresses the braking dive. The infernus pitches 0.15° under braking at BOTH values —
- *   the missing dive is the shared suspension (one spring rate, 0.25 m of travel), not this number.
- * - Its removal makes IMPACT flips worse: a gentle step-steer that survived a kerb strike at 2.0 rolls to
- *   −95° at 0.5, and the same pattern repeats on the slalom and the crest landing.
+ * It stood at **2** — a band-aid raised to resist the flips a high, emergent centre of mass used to cause,
+ * and it deadened honest body rotation along with them: it leaves 14 % of a car's yaw after a second, which
+ * is a car that will not turn in however much grip or lock you give it. Three field rounds in a row said
+ * "hard to get into a corner" while it was in place.
  *
- * So removing it costs stability and buys nothing measurable. It comes off in plan 03, in the same change
- * that gives the car a real answer to a vertical impact — never before.
+ * Measured, with the authored mass properties and real tyres underneath (admiral / comet, `turnedDeg` = how
+ * far round the lap actually got):
+ *
+ * - u-turn: 36.9° → **49.2°** and 18.9° → **26.3°**
+ * - slalom: 25.9° → **59.6°** and −22.0° → **58.4°**
+ *
+ * **The cost, stated rather than hidden**: at 2 the band-aid was also masking a real instability, and the
+ * comet flips on the kerb-strike replay without it (20.6° of roll → a full 179°). That is not this constant's
+ * job to fix — a raycast wheel cannot see a vertical kerb face until its centre crosses the edge, which is
+ * plan 06's kerb probe. Recorded here so nobody re-raises this number instead of fixing the kerb.
  */
-const CHASSIS_ANGULAR_DAMPING = 2;
+const CHASSIS_ANGULAR_DAMPING = 0.5;
 const CHASSIS_FRICTION = 0.4;
 const CHASSIS_RESTITUTION = 0.35; // bounce off walls a little instead of sticking dead
 const CONTACT_FORCE_THRESHOLD = 400; // min contact force (N) before an impact event is emitted
