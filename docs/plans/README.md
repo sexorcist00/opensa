@@ -42,9 +42,13 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 - **[082 — Vehicle license plates](./082-vehicle-plates/readme.md)** — per-instance city-correct plates on
   the array-based engine: plate atlas array + per-instance slot, converter-flagged plate submeshes,
   mask DSL + placement-seeded determinism, damage-riding. Promoted from ideas/0.4.0/01.
-- **[081 — Vehicle driving physics](./081-vehicle-physics/readme.md)** — feel overhaul on the own engine:
-  telemetry-first, handling.cfg as truth (COM fixes flips), anti-roll/anti-dive (nose-down braking),
-  drivetrain identity, SA handbrake, a measured DRCVC-vs-own-controller gate. Promoted from ideas/0.4.0/07.
+- **[081 — Vehicle driving physics](./081-vehicle-physics/readme.md)** — feel overhaul on the own engine.
+  **01–05 DONE 2026-07-26, field-accepted**: `handling.cfg` went from 5 fields consumed to 21, every one a
+  translation of the original's own code (spring law, `cTransmission` gearbox, air drag, tyre grip and
+  traction loss, the steering limiter, the rear-lock handbrake); six fitted constants died; the gate is
+  answered — STAY on DRCVC, its three asymmetries documented. Audit:
+  [`audit/vehicle-physics-081.md`](../audit/vehicle-physics-081.md). **06 (kerb probe + visible suspension)
+  and 07 (presets + physics CI) remain.** Promoted from ideas/0.4.0/07.
 - **[080 — Cinematic camera](./080-cinematic-camera/readme.md)** — GTA V-feel follow camera: per-channel
   springs/lag, auto-center + look-ahead, collision whiskers, vehicle speed/FOV/drift framing, bob/shake,
   7 sub-plans + priority chain. **01–07 DONE 2026-07-25** — the on-foot baseline, collision and the

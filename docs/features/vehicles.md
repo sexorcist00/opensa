@@ -99,13 +99,28 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   the point where drag balances the engine, not as a cap someone clamps to. Before this the whole longitudinal
   model was one constant force and a hard speed limit: every car pulled as hard at 140 km/h as at walking
   pace. Only the DRIVEN car gets drag today — nothing else in the world drives itself.
+- **Driving controls** (plan 081/04): Space and back-while-rolling are the FOOT brake — it ramps in over 0.2 s
+  and splits across the axles by `fBrakeBias`; **H is the handbrake**, and it is a REAR-AXLE LOCK, not a
+  bigger brake (`CAutomobile::ProcessCarWheelPair` gives the rear wheels 20 000 and leaves the front alone).
+  A locked wheel brakes with everything its tyre has and keeps only 3 % of its lateral stiffness, so the back
+  steps out and the car rotates about a front axle that still grips — the SA handbrake turn. Off the throttle
+  a car coasts on the original's own wheel friction (`fWheelFriction / mass`, a mass-independent retarding
+  force), not on a share of its own brakes.
+- **Steering** (plan 081/05): the full authored `fSteeringLock` is available, limited only by what the tyres
+  can answer — the original's own limiter, `asin(min(adhesive × traction × 16 / v², 1)) / lock`, where
+  `adhesive` is the rubber-on-road cell of `data/surface.dat` (4.5). It does not touch town driving (full lock
+  to ~53 km/h) and tightens with the square of speed. Countersteering into a slide and the handbrake both
+  restore full lock, as they do in the original.
 - **Tyres** (plan 081/05): grip per wheel is `fTractionMultiplier` — which IS a friction coefficient, and the
   table's 0.55…0.75 is what a real tyre does — split across the axles by `fTractionBias`. It replaced a
   shared 10.5 inherited from Bullet's demo, i.e. a tyre fifteen times grippier than any tyre, which is why
   cars used to turn in instantly, never slide and trip over kerbs. The longitudinal clamp is applied on OUR
   side in `setVehicleControls`, because Rapier applies its own friction limit only when a wheel already has a
   side impulse — a car accelerating or braking dead ahead is otherwise unlimited. Engine force reaches driven
-  wheels only (`nDriveType`).
+  wheels only (`nDriveType`). A wheel that has **broken loose grips less** (`fTractionLoss`, 0.72…0.85): past
+  the limit a tyre does not merely stop giving more, it gives less, which is what makes a slide continue
+  instead of self-correcting. Sliding is detected from the wheel's own impulses against its friction circle,
+  because Rapier does not expose its `skid_info`.
 - **Physics telemetry** (plan 081/01): `vehicle/vehicle-telemetry.ts` derives one frame per fixed step for
   the DRIVEN car — signed speed, lateral speed, body slip angle, per-wheel longitudinal slip ratio, pitch
   (**positive nose UP**, the sign the braking complaint is measured by), roll (positive right-side down),

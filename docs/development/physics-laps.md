@@ -53,13 +53,16 @@ Everything except step 6 happens with the capture OFF, so a lap's frames are the
 ## Scenes
 
 Data, in [`apps/web/src/phys-scenes.ts`](../../apps/web/src/phys-scenes.ts): a spot, a heading, a keyframe
-timeline and a duration. Eight today — `brake-strip` · `step-steer` · `slalom` · `u-turn` · `kerb-strike` ·
-`crest-jump` · `handbrake-turn` · `pull-away-reverse`.
+timeline and a duration. Ten today — `rest` · `brake-strip` · `step-steer` · `slalom` · `u-turn` · `kerb-strike` · `crest-jump` ·
+`handbrake-turn` · `handbrake-flick` · `pull-away-reverse`.
 
 Keyframes **HOLD**: each one's `move`/`actions` stay in force until the next, and nothing is interpolated. A
 slalom is "full left, then full right" — an interpolated version is a different manoeuvre, and a scene has to
 be describable in words to be reproducible. `move.x` is steer (+ = right), `move.y` throttle (− = brake or
-reverse), `actions: ['jump']` is the brake/handbrake.
+reverse), `actions: ['jump']` is the FOOT brake and `actions: ['handbrake']` is the lever. Those two were one
+control until 2026-07-26, and `handbrake-turn` went on pressing `jump` afterwards — so every "handbrake"
+number in the record before that date was measured on the pedal. **A scene that names one control and presses
+another is invisible to every check except reading it.**
 
 ### Adding one
 

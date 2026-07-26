@@ -1,7 +1,17 @@
 # 081 — Vehicle driving physics (feel overhaul on the own engine)
 
-**Status: PLANNED 2026-07-19.** Supersedes the idea at `docs/ideas/0.4.0/plans/07-vehicle-physics/`
-(2026-07-12, "THE priority gameplay task") — rethought against what the engine actually is now.
+**Status: 01–05 SHIPPED and field-accepted (2026-07-26); 06 and 07 open.** Supersedes the idea at
+`docs/ideas/0.4.0/plans/07-vehicle-physics/` (2026-07-12, "THE priority gameplay task") — rethought against
+what the engine actually is now. The audit of what the chain cost and bought:
+[`docs/audit/vehicle-physics-081.md`](../../audit/vehicle-physics-081.md).
+
+**The gate (05) is answered: STAY on `DynamicRayCastVehicleController`.** Every complaint the field raised
+turned out to be a number this engine had guessed where the game ships the answer, not a ceiling in the
+controller — and each of those numbers was reachable through DRCVC's own per-wheel API. What the controller
+DOES cost is written down as three known asymmetries, all worked around in `setVehicleControls` and all
+documented at the call site: its friction clamp is skipped when a wheel has no side impulse, its friction
+circle weighs braking at half and cornering at full, and it exposes no skid state (so sliding is inferred
+from the impulses). An own controller remains a later option, not a blocker.
 
 **Goal: driving feels GREAT — SA-arcade responsive but physically grounded.** The original complaints
 (user, 2026-07-12): steering responds instantly with no feel, braking pitches the nose UP instead of
@@ -63,11 +73,11 @@ positive gate verdict swaps the controller without invalidating the chain.
 
 | #   | Plan                                                     | One-liner                                                                                                                            |
 | --- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 01  | [Telemetry + test track](01-telemetry.md)                | Physics HUD, scripted-input replays over real map locations, `[phys]` JSON capture, BEFORE baselines.                                |
-| 02  | [handling.cfg as truth](02-handling-truth.md)            | Full typed unit-mapping; COM + inertia applied (THE flip fix); per-car suspension; control-latency fix.                              |
-| 03  | [Stability forces](03-stability.md)                      | Anti-roll bars, anti-dive/anti-squat (THE nose fix), speed downforce, arcade roll stabiliser — replaces the global damping band-aid. |
-| 04  | [Drivetrain + brakes](04-drivetrain-brakes.md)           | Gears + drive type F/R/4, engine braking, brake bias, handbrake = rear grip cut (the SA slide), reverse rework.                      |
-| 05  | [Tyres + steering + THE GATE](05-tyres-steering-gate.md) | Traction mapping, steering feel v2, counter-steer assist; gate verdict: DRCVC tyre ceiling → own controller go/no-go.                |
+| 01  | [Telemetry + test track](01-telemetry.md) **SHIPPED** | Physics HUD, scripted-input replays over real map locations, `[phys]` JSON capture, BEFORE baselines.                                |
+| 02  | [handling.cfg as truth](02-handling-truth.md) **SHIPPED** | Full typed unit-mapping; COM + inertia applied (THE flip fix); per-car suspension; control-latency fix.                              |
+| 03  | [Stability forces](03-stability.md)                      | **SHIPPED, differently than planned**: the fix was the SPRING (SA's own law), the authored axle bias, and ride height from the authored centre of mass — not added stabiliser forces. |
+| 04  | [Drivetrain + brakes](04-drivetrain-brakes.md) **SHIPPED** | Gears + drive type F/R/4, engine braking, brake bias, handbrake = rear grip cut (the SA slide), reverse rework.                      |
+| 05  | [Tyres + steering + THE GATE](05-tyres-steering-gate.md) **SHIPPED** | Traction mapping, steering feel v2, counter-steer assist; gate verdict: DRCVC tyre ceiling → own controller go/no-go.                |
 | 05b | Damageable tyres (see below)                              | Burst a tyre: grip drops on that corner, the car pulls, the wheel sits on its rim. The detection half already shipped.               |
 | 06  | [Air, kerbs, visual suspension](06-air-kerbs-visual.md)  | In-air attitude control, kerb contact smoothing, VISIBLE suspension travel through the rig.                                          |
 | 07  | [Presets + physics CI](07-presets-regression.md)         | Per-class field sweep (sports/truck/bus), replay regression pack with tolerance bands, close-out.                                    |
