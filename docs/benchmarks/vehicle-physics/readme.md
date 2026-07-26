@@ -393,3 +393,41 @@ damping and relaxation terms are in it too — and closing that properly means s
 equilibrium rather than probing it.
 
 Runs: `2026-07-26-headless-stance-{before,after}.json`.
+
+### 2026-07-26 — the handbrake is a REAR-AXLE LOCK, and `fBrakeBias` (for real this time)
+
+**A correction first.** The commit before this one claimed `fBrakeBias` had shipped. It had not — the edit to
+`physics-world.ts` was lost when the script that made it aborted half way, so that commit carried only the
+coast brake. The savanna's improvement recorded there (`+0.65° nose-up → −1.48° nose-down under braking`) was
+therefore produced by the OTHER changes of the day (tyre grip, ride height, damping), not by the bias. With
+the bias genuinely applied the numbers barely move again — see below — so its real verdict is a **null result
+on these cars**, which is what their near-neutral rows (0.52…0.63) should produce.
+
+| car     | `fBrakeBias` | dive   | brake distance | decel  |
+| ------- | ------------ | ------ | -------------- | ------ |
+| admiral | 0.63         | −0.73° | 39.9 m         | 0.58 g |
+| comet   | 0.55         | −0.39° | 32.0 m         | 0.91 g |
+| savanna | 0.52         | −1.45° | 48.9 m         | 1.00 g |
+
+**The handbrake.** The original does not give the lever a bigger brake — `CAutomobile::ProcessCarWheelPair`
+replaces the REAR wheels' brake with 20 000 and leaves the front alone. Locked rear wheels spend their whole
+friction circle on braking, so they have nothing left for cornering, and the car rotates about a front axle
+that still grips. That is the handbrake turn, and it needs no separate "grip cut" to model: our per-wheel grip
+clamp already means a locked wheel brakes with exactly what its tyre has.
+
+Ours now does the same: H locks the rears, takes the service brake off entirely, and the steering limiter's
+handbrake exemption hands the driver full lock to hold and catch the slide with.
+
+| car     | rotation through the turn | peak slip angle | peak yaw rate | flip |
+| ------- | ------------------------- | --------------- | ------------- | ---- |
+| admiral | **76.2°**                 | 12.8°           | 0.81 rad/s    | no   |
+| comet   | 36.3°                     | 14.7°           | 0.48 rad/s    | no   |
+| savanna | (spun)                    | **50.7°**       | 3.31 rad/s    | no   |
+
+Before this, the lever applied the full service brake to all four wheels — it stopped the car in a straight
+line, which is what "the brake works like a handbrake" meant when the field first complained about it.
+
+`stopping` (the automatic halt before the player climbs out) moved onto the FOOT brake: it wants the car
+stopped, not sideways.
+
+Runs: `2026-07-26-headless-handbrake-brakebias.json`.

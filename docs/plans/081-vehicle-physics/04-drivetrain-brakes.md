@@ -165,3 +165,38 @@ anywhere clamps to `fMaxVelocity`.
 shared tyre-grip constant is limiting it — plan 05. Drag applies only to the DRIVEN car (nothing else drives
 itself yet). §3's brake bias and engine braking, and §4's handbrake rear-grip cut, are still open; the
 `fSuspensionBias` axle split still owes from 081/03.
+
+### 2026-07-26 — §3 and §4: brake bias, the coast brake, and the handbrake as a rear-axle lock
+
+**A correction to the entry this one follows.** It claimed `fBrakeBias` had shipped; it had not. The edit to
+`physics-world.ts` was lost when the script writing it aborted half way, and only the coast brake went in. The
+savanna dive it credits to the bias (`+0.65° → −1.48°`) came from the other changes of the day. With the bias
+genuinely applied the numbers move by hundredths (savanna −1.45°, admiral −0.73°, comet −0.39°), which is the
+**null result** three near-neutral rows (0.52…0.63) should give. The lesson is procedural and worth keeping:
+a multi-file edit that fails half way leaves a half-applied change that still measures plausibly.
+
+**§3, the coast brake.** `CVehicle::ProcessWheel` gives each wheel `gHandlingDataMgr.fWheelFriction / mass`
+off-throttle, and `fWheelFriction` is 0.9 — a mass-INDEPENDENT retarding force once carried through, so light
+cars slow sharply off the pedal and a 6.5 t truck barely notices. It replaced a flat 8 % of the car's own
+brakes: 0.27 m/s² on an admiral against the original's 6.4, **24× too weak**, and most of why a car with the
+throttle released kept sailing. An admiral now sheds 51 km/h to a standstill in 4 s.
+
+**§4, the handbrake.** The original gives the lever no extra braking power — it replaces the REAR wheels'
+brake with 20 000 and leaves the front untouched. Locked rear wheels spend their entire friction circle on
+braking and have nothing left for cornering, so the car rotates about a front axle that still grips. **No
+separate "grip cut" is needed**, which is what §4 of this plan assumed would be: the per-wheel grip clamp from
+081/05 already means a locked wheel brakes with exactly what its tyre has, and the friction circle does the
+rest. The steering limiter's handbrake exemption (081/05) hands the driver full lock to hold and catch it.
+
+| car     | rotation through the turn | peak slip | peak yaw rate | flip |
+| ------- | ------------------------- | --------- | ------------- | ---- |
+| admiral | **76.2°**                 | 12.8°     | 0.81 rad/s    | no   |
+| comet   | 36.3°                     | 14.7°     | 0.48 rad/s    | no   |
+| savanna | (spun)                    | **50.7°** | 3.31 rad/s    | no   |
+
+`stopping` — the automatic halt before the player climbs out — moved onto the FOOT brake: it wants the car
+stopped, not sideways. Brake lights now read the driver's INTENT rather than the brake force, because with
+coasting this strong the force alone can no longer tell a coast from a pedal.
+
+**Still open in §3**: engine braking that varies with the GEAR (the original's coast brake does not, so this
+would be an addition rather than a translation) and `abs`.

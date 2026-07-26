@@ -989,18 +989,33 @@ export class PhysicsWorld {
   setVehicleControls(
     controller: VehicleController,
     wheels: readonly { front: boolean }[],
-    controls: { brake: number; drive: VehicleDriveType; engine: number; steer: number; step: number },
+    controls: {
+      brake: number;
+      /** `fBrakeBias`, 0..1 — the front axle's share, applied the original's way (`2 × bias` front). */
+      brakeBias: number;
+      drive: VehicleDriveType;
+      engine: number;
+      /** The lever is up: the REAR wheels lock, the front keeps whatever `brake` asks of it. */
+      handbrake: boolean;
+      steer: number;
+      step: number;
+    },
   ): void {
-    const { brake, drive, engine, steer, step } = controls;
+    const { brake, brakeBias, drive, engine, handbrake, steer, step } = controls;
     const perBrake = brake / (wheels.length || 1);
     wheels.forEach((wheel, i) => {
       const driven = drive === '4' || (drive === 'F') === wheel.front;
       // What this corner's tyre can deliver right now: μ × the load its spring is carrying. A wheel in the
       // air carries nothing, so it drives and brakes with nothing — which is what an airborne wheel does.
       const grip = (controller.wheelFrictionSlip(i) ?? 0) * (controller.wheelSuspensionForce(i) ?? 0);
+      // `fBrakeBias` splits the pedal across the axles exactly as the suspension and traction biases do.
+      const axle = wheel.front ? 2 * brakeBias : 2 - 2 * brakeBias;
       controller.setWheelEngineForce(i, driven ? clampMagnitude(engine, grip) : 0);
       // Rapier's brake is an IMPULSE cap where its engine force is a FORCE, so the grip limit converts.
-      controller.setWheelBrake(i, Math.min(perBrake, grip * step));
+      // A LOCKED wheel brakes with everything its tyre has, which leaves the tyre nothing for cornering —
+      // that is the whole mechanism of a handbrake turn, and it needs no separate "grip cut" to model.
+      const locked = handbrake && !wheel.front;
+      controller.setWheelBrake(i, locked ? grip * step : Math.min(perBrake * axle, grip * step));
       controller.setWheelSteering(i, wheel.front ? steer : 0);
     });
   }

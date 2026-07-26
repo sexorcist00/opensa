@@ -731,8 +731,10 @@ export class EnterVehicleSystem implements System {
     // Two DIFFERENT controls (plan 081/04, the user's scheme). Space and back-while-rolling are the FOOT
     // brake: it ramps in, the way a pedal does. H is the handbrake: instant and total, which is what a
     // handbrake IS. One key doing both is what made every stop feel like yanking the lever.
-    const handbrake = stopping || this.input.isActive('handbrake');
-    const footBrake = !stopping && this.input.isActive('jump');
+    // The LEVER (H) locks the rear axle and nothing else. `stopping` — the automatic halt before the player
+    // climbs out — goes on the FOOT brake instead: it wants the car stopped, not sideways.
+    const handbrake = this.input.isActive('handbrake');
+    const footBrake = stopping || this.input.isActive('jump');
     const hnd = car.handling;
     // Real forward speed from the body's *horizontal* velocity (the controller's
     // currentVehicleSpeed carries a phantom ~0.95 at rest → would misread reverse).
@@ -785,8 +787,10 @@ export class EnterVehicleSystem implements System {
 
     this.physics.setVehicleControls(car.controller, car.wheels, {
       brake,
+      brakeBias: hnd.brakeBias,
       drive: hnd.drive,
       engine: this.engine,
+      handbrake,
       steer: this.steerAngle,
       step,
     });
@@ -888,7 +892,11 @@ export class EnterVehicleSystem implements System {
     if (handbrake) {
       this.footBrakeRamp = 0; // the lever does not leave the pedal half-pressed behind it
 
-      return { brake: brakeForce, driverBraking: true, gear, targetEngine: 0 };
+      // The REAR wheels lock (`setVehicleControls` does that); the front gets nothing, so it keeps its full
+      // cornering grip and the car rotates about the front axle instead of merely stopping. This is the SA
+      // handbrake turn, and the steering limiter's own handbrake exemption hands the driver full lock to
+      // hold and to catch it with.
+      return { brake: 0, driverBraking: true, gear, targetEngine: 0 };
     }
     if (footBrake || (throttle < 0 && speed > REVERSE_SPEED_EPS)) {
       return { brake: brakeForce * this.rampFootBrake(step), driverBraking: true, gear, targetEngine: 0 };

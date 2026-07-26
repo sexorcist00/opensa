@@ -27,6 +27,7 @@ interface Harness {
     bodyPosition: Vec3;
     brake: number;
     engine: number;
+    handbrake: boolean;
     parked: number;
     quaternion: [number, number, number, number];
     speed: number;
@@ -80,6 +81,7 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
     drag: [0, 0, 0] as Vec3,
     engine: 0,
     grounded: true,
+    handbrake: false,
     parked: 0,
     quaternion: [0, 0, 0, 1] as [number, number, number, number],
     speed: 0,
@@ -115,10 +117,11 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
     setVehicleControls: (
       _c: VehicleController,
       _w: unknown,
-      controls: { brake: number; engine: number; steer: number },
+      controls: { brake: number; engine: number; handbrake: boolean; steer: number },
     ): void => {
       phys.engine = controls.engine;
       phys.brake = controls.brake;
+      phys.handbrake = controls.handbrake;
       phys.steer = controls.steer;
     },
     vehicleGrounded: (): boolean => phys.grounded,
@@ -595,7 +598,10 @@ describe('EnterVehicleSystem', () => {
       h.hold('KeyH', true); // the lever
       h.system.fixedUpdate(0.05);
 
-      expect(h.phys.brake).toBeCloseTo(fullPedal, 5); // everything, on the first step
+      // The lever is not a bigger pedal: it asks the physics layer to LOCK THE REAR AXLE and takes the
+      // service brake off entirely, so the front keeps its cornering grip and the car rotates (081/04 §4).
+      expect(h.phys.handbrake).toBe(true);
+      expect(h.phys.brake).toBe(0);
     });
 
     it('reports braking when pressing back while rolling forward (brake lights on)', () => {

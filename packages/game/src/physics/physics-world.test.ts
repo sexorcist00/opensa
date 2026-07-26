@@ -777,7 +777,15 @@ describe('PhysicsWorld raycast vehicle', () => {
     it('engine force drives it forward, and parkVehicle brings it back to a stop', async () => {
       const { controller, physics } = await car();
 
-      physics.setVehicleControls(controller, FRONT, { brake: 0, drive: '4', engine: 12000, steer: 0, step: STEP });
+      physics.setVehicleControls(controller, FRONT, {
+        brake: 0,
+        brakeBias: 0.5,
+        drive: '4',
+        engine: 12000,
+        handbrake: false,
+        steer: 0,
+        step: STEP,
+      });
       for (let i = 0; i < 180; i += 1) {
         physics.step(STEP);
       }
