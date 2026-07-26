@@ -203,3 +203,40 @@ travel asks for 52 % sag.
 
 Runs: `2026-07-26-headless-pedalbase-{infernus,comet,admiral,firetruk}.json` (baseline) ·
 `2026-07-26-headless-salaw-{infernus,comet,admiral,firetruk}.json` (after, `brake-strip` + `rest`).
+
+### 2026-07-26 — the drivetrain: gears, drive type and air drag (081/04)
+
+The longitudinal model was one constant force (`mass × engineAccel × 0.28`) against a hard speed cap. The
+original's is a gearbox plus air drag, and it is short enough to translate line for line
+(`cTransmission::InitGearRatios`, `CalculateDriveAcceleration`, `CPhysical::ApplyAirResistance`). Baseline is
+the `kmh` state — the SA-law spring with `fMaxVelocity` read as km/h, i.e. everything except the gearbox.
+
+| car      | 0-100 km/h    | speed at 8 s WOT | peak accel g |
+| -------- | ------------- | ---------------- | ------------ |
+| infernus | 3.98 → 4.05 s | 165.7 → 124.1    | 0.85 → 1.07  |
+| comet    | 5.43 → 2.30 s | 130.0 → 179.1    | 0.66 → 1.65  |
+| admiral  | never → 5.27 s | 77.3 → 104.8    | 0.40 → 1.00  |
+| firetruk | 4.53 → 3.12 s | 149.0 → 130.1    | 0.76 → 1.86  |
+
+Read it as the cars separating. Before, one number scaled by `engineAccel` gave four cars the same shape of
+acceleration; now first gear pulls four times what top gear pulls, so every car launches hard and tails off
+at its own rate. The **admiral** could not reach 100 km/h in the old model at all and now does it in 5.3 s.
+The **comet** (a mod with a 296 km/h row and the lowest drag in the set, 0.93) becomes the rocket its owner
+describes. The **infernus** loses top-end because it is 4WD and the original divides the engine by 4 for
+four-wheel drive against 2 for everything else — its 0-100 is unchanged, its 8-second speed is not.
+
+Braking distances in the same runs are not comparable across the A/B: the cars now arrive at the braking
+point at different speeds. Dive is unchanged (−0.71 → −0.67, −1.41 → −1.31 …), which is the expected
+non-result — the spring did not move.
+
+**The firetruck's 1.86 g launch is the honest reading of a row that authors 27 m/s² of engine, and it is
+also a warning**: nothing is limiting it but a shared tyre-grip constant. That is plan 05's subject.
+
+Top speed is now EMERGENT: drag rises with v² until it matches what the top gear pulls. The infernus balances
+at ~228 km/h against an authored 240; the comet's mod row balances above its own gear ceiling and is held
+there. Nothing is clamped to `fMaxVelocity` anywhere.
+
+`pull-away-reverse` and `crest-jump` re-run on infernus and firetruck: launch clean, reverse reaches the
+original's `−0.3 × top` limit, 1.28 s of air over the crest with no flip.
+
+Runs: `2026-07-26-headless-drivetrain-{infernus,comet,admiral,firetruk}.json`.

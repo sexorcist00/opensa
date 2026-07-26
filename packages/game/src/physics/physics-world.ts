@@ -702,6 +702,17 @@ export class PhysicsWorld {
   /** Set a body's linear velocity (Z-up). */
   /** Spin a dynamic body — a toppling prop is knocked over about a hinge rather than shoved sideways. */
   /**
+   * Push a body through its centre of mass — no torque, just a change of velocity.
+   *
+   * An impulse rather than a force because Rapier keeps added FORCES until they are explicitly reset, while
+   * impulses are consumed by the step that follows. A per-step aerodynamic drag written with `addForce` would
+   * therefore accumulate into an ever-growing headwind.
+   */
+  push(handle: number, impulse: Vec3): void {
+    this.world.getRigidBody(handle).applyImpulse({ x: impulse[0], y: impulse[1], z: impulse[2] }, true);
+  }
+
+  /**
    * Shove a dynamic body at a POINT (world space) — the honest way to knock a prop over.
    *
    * Spinning it about its own centre instead drives the bottom half of a tall body straight into the ground:
@@ -988,6 +999,17 @@ export class PhysicsWorld {
   }
 
   /** Signed forward speed (units/s) of a raycast vehicle (+ = forward). */
+  /** Whether ANY wheel is on the ground — the drivetrain asks this to know if the engine can push. */
+  vehicleGrounded(controller: VehicleController): boolean {
+    for (let i = 0; i < controller.numWheels(); i += 1) {
+      if (controller.wheelIsInContact(i)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   vehicleSpeed(controller: VehicleController): number {
     return controller.currentVehicleSpeed();
   }

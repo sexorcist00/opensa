@@ -77,7 +77,9 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
     blocked: new Set<string>(), // 'lf' | 'rf' | 'windscreen' — egress rays the world blocks (088/09d)
     bodyPosition: [0, 0, 0] as Vec3, // what readBody reports — driveSeated drags car.position to it
     brake: 0,
+    drag: [0, 0, 0] as Vec3,
     engine: 0,
+    grounded: true,
     parked: 0,
     quaternion: [0, 0, 0, 1] as [number, number, number, number],
     speed: 0,
@@ -101,6 +103,9 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
 
       return !phys.blocked.has(egress);
     },
+    push: (_handle: number, impulse: Vec3): void => {
+      phys.drag = impulse;
+    },
     readBody: (): { position: Vec3; quaternion: [number, number, number, number] } => ({
       position: phys.bodyPosition,
       quaternion: phys.quaternion,
@@ -112,6 +117,7 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
       phys.brake = brake;
       phys.steer = steer;
     },
+    vehicleGrounded: (): boolean => phys.grounded,
     vehicleSpeed: (): number => phys.speed,
   } as unknown as PhysicsWorld;
 

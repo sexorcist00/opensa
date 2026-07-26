@@ -11,6 +11,14 @@ import type { VehicleHandle } from './vehicle-handle';
 import type { VehicleRig } from './vehicle-rig';
 
 import {
+  buildGearbox,
+  createDrivetrainState,
+  dragDeceleration,
+  driveAcceleration,
+  type DrivetrainState,
+  type Gearbox,
+} from './drivetrain';
+import {
   CAR_CRAWLOUT,
   CAR_GETIN,
   CAR_GETIN_RHS,
@@ -26,6 +34,8 @@ export interface AppliedControls {
   readonly brake: number;
   /** Total engine force (N), signed — negative is reverse. */
   readonly engineForce: number;
+  /** The gear the drivetrain is in: 0 = reverse, 1…n forward. */
+  readonly gear: number;
   /** Front-wheel steer angle (rad). */
   readonly steer: number;
   /** The raw throttle input behind it, −1..1. */
@@ -131,7 +141,6 @@ const SEAT_RAISE = 0;
 
 // handling.cfg → driving forces (tuned in-browser). Engine/brake are forces (N) scaled from the
 // car's mass + handling accel/decel; the controller (raycast wheels) integrates them.
-const ENGINE_ACCEL_SCALE = 0.28; // engineAccel → target accel (m/s²) the engine force aims for
 /**
  * Rapier's wheel-brake parameter per unit of deceleration per kg (plan 081/04).
  *
@@ -145,17 +154,15 @@ const ENGINE_ACCEL_SCALE = 0.28; // engineAccel → target accel (m/s²) the eng
  * 0.53 it managed on a mass-blind constant.
  */
 const BRAKE_UNITS_PER_DECEL_PER_KG = 1 / 73.6;
-const REVERSE_FRACTION = 0.4; // reverse force/top-speed as a fraction of forward
 const IDLE_BRAKE_FRACTION = 0.08; // light brake when off throttle, so the car coasts to a stop
-const ENGINE_RAMP_TIME = 0.2; // seconds for the engine force to reach full (snappy but no force spike)
 /**
  * Seconds for the FOOT brake to reach full force. A pedal is not a switch — but it is not a dial either:
  * 0.45 read as "an unnaturally smooth dive" in the field, because a driver stabbing the brake reaches the
  * floor in a couple of tenths and the weight should transfer at that pace (plan 081/04, two field verdicts).
  */
 const FOOT_BRAKE_RAMP_TIME = 0.2;
-const MAXVEL_SCALE = 0.25; // handling.maxVelocity → top speed (m/s)
-const MIN_TOP_SPEED = 8; // floor for top speed (m/s)
+const MIN_TOP_SPEED = 8; // floor under the steering falloff's reference speed (m/s)
+const DRAG_MIN_SPEED = 0.01; // below this, drag is noise and its direction is undefined (m/s)
 const REVERSE_SPEED_EPS = 0.6; // below this forward speed, S means reverse (else brake)
 const REVERSE_SEED_SPEED = 1; // m/s backward to kick reverse off a dead stop
 const STEER_RATE = 1.2; // steering slew (rad/s) — eased so the car doesn't snap into turns
@@ -170,7 +177,7 @@ const APPROACH_STALL_TIMEOUT = 1.5; // s of no progress toward the door (blocked
 const APPROACH_STALL_EPSILON = 0.02; // planar distance (m) under which the player counts as not progressing per frame
 
 /** What {@link EnterVehicleSystem.appliedControls} reports while nobody is driving. */
-const NO_CONTROLS: AppliedControls = { brake: 0, engineForce: 0, steer: 0, throttle: 0 };
+const NO_CONTROLS: AppliedControls = { brake: 0, engineForce: 0, gear: 1, steer: 0, throttle: 0 };
 
 type Phase =
   | 'approaching'
@@ -208,12 +215,14 @@ export class EnterVehicleSystem implements System {
   private readonly config: Readonly<Config>;
   private readonly controller: CharacterControllerSystem;
   /** The last step's applied driving values — see {@link appliedControls}. */
-  private controls: AppliedControls = { brake: 0, engineForce: 0, steer: 0, throttle: 0 };
+  private controls: AppliedControls = { brake: 0, engineForce: 0, gear: 1, steer: 0, throttle: 0 };
   /** Whether {@link applyControls} already ran this fixed step (the pre-step hook, or fixedUpdate's fallback). */
   private controlsAppliedStep = false;
   private readonly doors = new Map<EnterableVehicle, { lf: number; rf: number }>(); // per-side door angles
   private doorTarget = 0;
-  private engine = 0; // current engine force (N), ramped toward the throttle target
+  /** The driven car's gearbox + its live shift state, rebuilt whenever the player changes car. */
+  private drivetrain: DrivetrainState = createDrivetrainState();
+  private engine = 0; // current engine force (N) the drivetrain asked for this step
   private enterHeld = false;
   private exitElapsed = 0;
   private exitFrom: Vec3 = [0, 0, 0];
@@ -222,6 +231,8 @@ export class EnterVehicleSystem implements System {
   private readonly followTarget: (vehicle: EnterableVehicle | null) => void;
   /** How far the foot brake is pressed, 0..1 — see {@link rampFootBrake}. */
   private footBrakeRamp = 0;
+  private gearbox: Gearbox | null = null;
+  private gearboxFor: EnterableVehicle | null = null;
   private getinElapsed = 0;
   private getinFrom: Vec3 = [0, 0, 0];
   /** The climb-in/out clips' authored root travel (null on a TC without them → linear slide). */
@@ -562,6 +573,22 @@ export class EnterVehicleSystem implements System {
     this.doors.set(this.active, angles);
   }
 
+  /**
+   * Air drag, the way the original applies it: a deceleration of `dragMult × v² / 2000` against the whole
+   * velocity vector (`CPhysical::ApplyAirResistance`). It is what makes a top speed EXIST — before this, the
+   * only thing that stopped a car accelerating was a hard cap, so every vehicle pulled as hard at 140 km/h as
+   * it did at walking pace. Only the driven car gets it today; nothing else in the world drives itself yet.
+   */
+  private applyDrag(car: EnterableVehicle, step: number): void {
+    const [vx, vy, vz] = this.physics.getLinvel(car.body);
+    const speed = Math.hypot(vx, vy, vz);
+    if (speed < DRAG_MIN_SPEED) {
+      return;
+    }
+    const impulse = (dragDeceleration(car.handling.dragMult, speed) * car.handling.mass * step) / speed;
+    this.physics.push(car.body, [-vx * impulse, -vy * impulse, -vz * impulse]);
+  }
+
   /** Lock onto the nearest in-range car and send the player to its driver door. */
   private beginApproach(): void {
     const nearest = this.nearestEnterable();
@@ -706,29 +733,31 @@ export class EnterVehicleSystem implements System {
 
       return;
     }
-    const topSpeed = Math.max(MIN_TOP_SPEED, hnd.maxVelocity * MAXVEL_SCALE);
-    const engineForce = hnd.mass * hnd.engineAccel * ENGINE_ACCEL_SCALE;
+    const box = this.gearboxOf(car);
+    // What the car ACTUALLY tops out at (drag against top-gear thrust), not what its row claims — the
+    // steering falloff is the only consumer left, and it wants the real number.
+    const topSpeed = Math.max(MIN_TOP_SPEED, box.flatTop);
     const brakeForce = hnd.brakeDecel * hnd.mass * BRAKE_UNITS_PER_DECEL_PER_KG;
+    this.applyDrag(car, step);
 
-    const { brake, targetEngine } = this.longitudinal(car, {
+    const { brake, gear, targetEngine } = this.longitudinal(car, {
+      box,
       brakeForce,
-      engineForce,
       footBrake,
+      grounded: this.physics.vehicleGrounded(car.controller),
       handbrake,
       speed,
       step,
       throttle,
-      topSpeed,
     });
     // Brake lights come on when the DRIVER brakes, not when the pedal reaches the floor: with the foot brake
     // ramping in (081/04) a `brake === brakeForce` test kept them dark for the first half-second of every
     // stop. Anything above the idle coast-brake is the driver's doing.
     this.braking = brake > brakeForce * IDLE_BRAKE_FRACTION;
 
-    // Ramp the engine force toward its target so sudden throttle doesn't jolt the
-    // suspension (a visible launch hop); braking stays instant.
-    const rampStep = (engineForce / ENGINE_RAMP_TIME) * step;
-    this.engine += clamp(targetEngine - this.engine, -rampStep, rampStep);
+    // No ramp: the drivetrain does its own shaping now (the gear's thrust factor eases in over ~0.1 s and
+    // dips on every shift), and a second smoothing on top of it would flatten the shifts back out.
+    this.engine = targetEngine;
 
     // Ease the steering toward the input (gentle turn-in, quicker return to centre);
     // the usable lock shrinks toward top speed so it doesn't twitch at speed.
@@ -739,7 +768,7 @@ export class EnterVehicleSystem implements System {
     this.steerAngle += clamp(target - this.steerAngle, -rate * step, rate * step);
 
     this.physics.setVehicleControls(car.controller, car.wheels, this.engine, brake, this.steerAngle);
-    this.controls = { brake, engineForce: this.engine, steer: this.steerAngle, throttle };
+    this.controls = { brake, engineForce: this.engine, gear, steer: this.steerAngle, throttle };
     car.rig.setSteer(this.steerAngle); // front wheels turn with the physics steer
   }
 
@@ -795,6 +824,17 @@ export class EnterVehicleSystem implements System {
     this.logger.log('enter-vehicle', 'exited');
   }
 
+  /** The driven car's gearbox, built on the first step in a new car and kept until the player leaves it. */
+  private gearboxOf(car: EnterableVehicle): Gearbox {
+    if (this.gearboxFor !== car || this.gearbox === null) {
+      this.gearbox = buildGearbox(car.handling);
+      this.drivetrain = createDrivetrainState();
+      this.gearboxFor = car;
+    }
+
+    return this.gearbox;
+  }
+
   /** True if the car is roughly the right way up (its local +Z still points mostly up). */
   private isUpright(vehicle: EnterableVehicle): boolean {
     const [x, y] = this.physics.readBody(vehicle.body).quaternion;
@@ -811,40 +851,41 @@ export class EnterVehicleSystem implements System {
   private longitudinal(
     car: EnterableVehicle,
     input: {
+      box: Gearbox;
       brakeForce: number;
-      engineForce: number;
       footBrake: boolean;
+      grounded: boolean;
       handbrake: boolean;
       speed: number;
       step: number;
       throttle: number;
-      topSpeed: number;
     },
-  ): { brake: number; targetEngine: number } {
-    const { brakeForce, engineForce, footBrake, handbrake, speed, step, throttle, topSpeed } = input;
+  ): { brake: number; gear: number; targetEngine: number } {
+    const { box, brakeForce, footBrake, grounded, handbrake, speed, step, throttle } = input;
+    const gear = this.drivetrain.gear;
     if (handbrake) {
       this.footBrakeRamp = 0; // the lever does not leave the pedal half-pressed behind it
 
-      return { brake: brakeForce, targetEngine: 0 };
+      return { brake: brakeForce, gear, targetEngine: 0 };
     }
     if (footBrake || (throttle < 0 && speed > REVERSE_SPEED_EPS)) {
-      return { brake: brakeForce * this.rampFootBrake(step), targetEngine: 0 };
+      return { brake: brakeForce * this.rampFootBrake(step), gear, targetEngine: 0 };
     }
     this.footBrakeRamp = 0;
-    if (throttle > 0) {
-      return { brake: 0, targetEngine: speed < topSpeed ? engineForce : 0 };
+    if (throttle === 0) {
+      return { brake: brakeForce * IDLE_BRAKE_FRACTION, gear, targetEngine: 0 }; // coast to a stop off-throttle
     }
-    if (throttle < 0) {
+    if (throttle < 0 && speed > -REVERSE_SEED_SPEED) {
       // The raycast controller won't start reverse from a dead stop; seed a small backward velocity until
-      // it's rolling, then the engine force sustains it.
-      if (speed > -REVERSE_SEED_SPEED) {
-        this.physics.seedReverse(car.body, car.heading, REVERSE_SEED_SPEED);
-      }
-
-      return { brake: 0, targetEngine: speed > -topSpeed * REVERSE_FRACTION ? -engineForce * REVERSE_FRACTION : 0 };
+      // it's rolling, then the reverse gear's own thrust sustains it.
+      this.physics.seedReverse(car.body, car.heading, REVERSE_SEED_SPEED);
     }
+    // Everything a car does under power now comes from the gearbox: the gear it is in, what that gear pulls,
+    // and where the gear ends. No top-speed test here — reaching a gear's ceiling IS the limiter.
+    const drive = driveAcceleration(box, car.handling, this.drivetrain, { grounded, speed, step, throttle });
+    this.drivetrain.gear = drive.gear;
 
-    return { brake: brakeForce * IDLE_BRAKE_FRACTION, targetEngine: 0 }; // coast to a stop off-throttle
+    return { brake: 0, gear: drive.gear, targetEngine: car.handling.mass * drive.accel };
   }
 
   /** The nearest upright car within enter range, or null — the car Enter would target from idle. */

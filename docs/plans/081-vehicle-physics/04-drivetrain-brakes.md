@@ -77,8 +77,6 @@ handling-authored longitudinal identity.
 
 _(curve constants, city-scale decision, A/B numbers, field verdict)_
 
-## Ledger
-
 ### 2026-07-26 — the brake gets a mass term, and the pedal stops being a switch
 
 **Field verdict that drove this** (user): *"the brake works like a handbrake, not a gradual loss of speed. I
@@ -117,3 +115,53 @@ points would be over-fitting; it needs its own probe in this plan's tuning round
 **And it collapsed the dive that plan 03 could not.** The comet went from **−7.56° to −1.30°** and the
 infernus to −0.47° — because the 8° was never a spring problem: it was the rear axle nearly lifting off under
 2.3 g. Two plans chased that number; the brake formula owned it, exactly as 081/03's ledger predicted.
+
+### 2026-07-26 — §1 and §2 done, and the top speed is no longer a number we clamp to
+
+`vehicle/drivetrain.ts` is the original's transmission, translated rather than approximated —
+`cTransmission::InitGearRatios` and `CalculateDriveAcceleration` from the reversed source, with
+`CPhysical::ApplyAirResistance` for drag. What that replaced: `engineForce = mass × engineAccel × 0.28`, one
+value, constant from a standing start to a hard cap, split equally over four wheels.
+
+**What the source actually says** (and each line killed a constant of ours):
+
+- `m_EngineAcceleration /= (driveType == '4') ? 4 : 2` — the F/R/4 column is a DIVISOR on the engine, not a
+  torque-placement detail. That is §2, and it lands for free.
+- `speedMultiplier = 1 + 3 × (1 − (gear−1)/(gears−1))²` — first gear pulls 4× top gear. This is the shape the
+  old flat force never had.
+- `driveAcceleration = speedMultiplier × engineAcceleration × 0.4 × gasPedal × timeStep`, and
+  `fEngineAcceleration` is m/s² per the file's own legend. `ENGINE_ACCEL_SCALE = 0.28` was a fit standing in
+  for `0.4 / driveDivisor`.
+- The `engineInertia` block damps thrust by the CHANGE in how far the car is through its gear's band, floored
+  at 0.1 and smoothed 0.85 — the shift dip, for free, from a field we parse and never read.
+  `ENGINE_RAMP_TIME = 0.2` is gone: a second smoothing on top of this one just flattens the shifts back out.
+- `GetDefaultAirResistance = dragMult / 2000`, applied to the whole velocity vector. **We had no drag at
+  all.** This is the item that mattered most: it is what makes a top speed exist.
+- `fMaxVelocity` is the START of a search, not a cap — the original walks down from it until drag has eaten a
+  sixth of the engine's pull and calls that the flat top. `MAXVEL_SCALE = 0.25` and `REVERSE_FRACTION = 0.4`
+  both die here (reverse is gear 0 with its own 4.5× multiplier and a `−0.3 × top` limit).
+
+**One honest note about fidelity.** The original also tapers thrust just above each gear's ceiling. It is
+translated, and it is unreachable: every gear's change-up point sits below its own ceiling, so the box always
+shifts first, and the reverse case is cut off by the same guard that ends the function. Kept as a translation
+rather than quietly dropped, and pinned by a test that states why.
+
+**Numbers** (baseline = the same head with the SA-law spring, everything but the gearbox):
+
+| car      | 0-100 km/h     | speed at 8 s WOT | peak accel g |
+| -------- | -------------- | ---------------- | ------------ |
+| infernus | 3.98 → 4.05 s  | 165.7 → 124.1    | 0.85 → 1.07  |
+| comet    | 5.43 → 2.30 s  | 130.0 → 179.1    | 0.66 → 1.65  |
+| admiral  | never → 5.27 s | 77.3 → 104.8     | 0.40 → 1.00  |
+| firetruk | 4.53 → 3.12 s  | 149.0 → 130.1    | 0.76 → 1.86  |
+
+The point is not any single row, it is that the four separate. The admiral could not reach 100 km/h before
+and now does it in 5.3 s; the comet's mod row makes it the rocket its owner describes; the infernus loses
+top-end purely because it is 4WD and the original halves 4WD engines relative to 2WD. Top speed is emergent
+now — the infernus balances drag against top-gear thrust at ~228 km/h with an authored 240, and nothing
+anywhere clamps to `fMaxVelocity`.
+
+**Owed from this entry**: the firetruck's **1.86 g launch** is what its row asks for and nothing but a single
+shared tyre-grip constant is limiting it — plan 05. Drag applies only to the DRIVEN car (nothing else drives
+itself yet). §3's brake bias and engine braking, and §4's handbrake rear-grip cut, are still open; the
+`fSuspensionBias` axle split still owes from 081/03.

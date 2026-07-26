@@ -91,6 +91,14 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   the wrong panel), with appear-on-top when boxed in.
   Door choreography: per-side angle tracking; the exit door stays open while the player stands in
   the doorway and shuts once he steps clear (the same footprint trigger that restores collision).
+- **Drivetrain** (plan 081/04, `vehicle/drivetrain.ts`): the original's own transmission, translated —
+  `cTransmission::InitGearRatios` + `CalculateDriveAcceleration`. Gears split the speed range into bands with
+  hysteresis, thrust falls with the gear (first pulls 4× top), `engineInertia` costs a beat of push on every
+  shift, and `drive` (F/R/4) divides the engine by 2 or 4. **Air drag is what limits top speed** — `dragMult ×
+  v² / 2000` against the whole velocity vector, so `fMaxVelocity` acts as the upper bound of the search for
+  the point where drag balances the engine, not as a cap someone clamps to. Before this the whole longitudinal
+  model was one constant force and a hard speed limit: every car pulled as hard at 140 km/h as at walking
+  pace. Only the DRIVEN car gets drag today — nothing else in the world drives itself.
 - **Physics telemetry** (plan 081/01): `vehicle/vehicle-telemetry.ts` derives one frame per fixed step for
   the DRIVEN car — signed speed, lateral speed, body slip angle, per-wheel longitudinal slip ratio, pitch
   (**positive nose UP**, the sign the braking complaint is measured by), roll (positive right-side down),
