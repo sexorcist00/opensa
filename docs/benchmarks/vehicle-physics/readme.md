@@ -723,3 +723,30 @@ the whole chain started at +0.07° nose-UP.
   "clean ground for the scenes that leave the road" is now owed twice.
 
 Runs: `2026-07-27-headless-classes-{landstal,sandking,bus,burrito,picador}.json`.
+
+### 2026-07-27 — camera slip survey (the 080 revision): what the drift channel now sees
+
+Plan 080/05's drift framing reads the SAME `planarMotion` slip the capture's `slipAngle` column records —
+radians, unit for unit — so these three infernus laps are direct readings of the camera's input under the
+CURRENT physics (after the SLIDE_SPEED fix, 081/09's speed-grip assist and 081/10's surface grip; all three
+landed AFTER the camera's drift gates were last tuned, when the physics "barely slid at all" and the dead
+zone was cut 0.14 → 0.05 rad to compensate). Slip stats over steered rows (|steer| > 0.05) above the
+camera's `driftMinSpeed` 6 u/s, against `driftSlipDeadZone` 0.05 rad (fade-in full at 2×, 0.10):
+
+| lap | domain | slip median | p90 | max | > dead zone | > 2× (full lean) |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `u-turn` | hard low-speed manoeuvring | 0.027* | 0.161* | 0.286 | 37 %* | — |
+| `sweeper` | 0.4 steer held at speed (top 31.4 u/s ≈ 113 km/h) | 0.011 | 0.040 | 0.494 | 7 % | 4 % |
+| `grass-corner` | off-road (surface grip 0.71) | 0.058 | 0.082 | 0.113 | 59 % | 1 % |
+
+\* u-turn stats are over ALL rows above 6 u/s (its full-lock lap steers throughout).
+
+**The distribution is exactly the shape the camera wants**: hard manoeuvring engages the lean fully (slip
+0.16–0.29 rad → lean up to ~8° at `driftLookBlend` 0.5); grass sits mostly in the fade-in band (lean
+~0–1.7° — engaged but subtle); held cornering at speed stays OUT (median 0.011, inside the dead zone) with
+only transient spikes (max 0.494 for a frame or two at a breakaway, filtered by the 0.35 s yaw damp). The
+channel that field round 06/1 reported as invisible is now ALIVE in its intended domain and quiet outside
+it — which is what makes 05's owed drive round finally able to judge `driftLookBlend`/`driftSlipDeadZone`
+as tuning rather than as dead code.
+
+Run: [`2026-07-27-headless-camera-slip-survey-infernus.json`](2026-07-27-headless-camera-slip-survey-infernus.json).

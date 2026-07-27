@@ -170,3 +170,31 @@ shipped, along with everything the round did not object to.
 **Owed**: the rest of the DRIVE field round (city corners at speed, handbrake drifts, highway top speed, a tunnel for
 collision+FOV together, repeated enter/exit) — every default above is a first guess until the user drives
 it. The look-behind key (§6) ships after that round, per this plan's own order.
+
+### 2026-07-27 — REVISION: the physics moved under the frozen defaults; measured, no code owed
+
+This plan closed against a physics that "barely slides at all" (06 round 1's own words — the drift gates
+were CUT to compensate: dead zone 0.14 → 0.05 rad, `driftMinSpeed` 10 → 6). Since then 081 changed the slip
+channel three times: the SLIDE_SPEED 50× unit-bug fix (the steering limiter works in corners again), 081/09's
+lateral speed-grip assist (suppresses slides at speed), and 081/10's per-surface grip (grass/dirt slide
+more). The revision measured what the drift channel NOW sees instead of guessing — three infernus laps,
+slip stats against the gates, in
+`docs/benchmarks/vehicle-physics/readme.md` § "camera slip survey" (run
+`2026-07-27-headless-camera-slip-survey-infernus.json`):
+
+- **Wiring verified end-to-end**: the camera's `vehicle.slipAngle` is the same `planarMotion` number the
+  capture's `slipAngle` column records, radians, unit for unit — the laps are direct readings of the
+  camera's input. No sign or unit drift; no code change needed.
+- **The channel is alive in its intended domain and quiet outside it**: hard manoeuvring (u-turn) engages
+  the lean fully (slip 0.16–0.29 rad → up to ~8° of lean); grass sits in the fade-in band (~0–1.7°); held
+  cornering at speed stays inside the dead zone (median 0.011 rad) with only breakaway spikes, which the
+  0.35 s yaw damp filters.
+- **What this means for the owed drive round**: `driftLookBlend`/`driftSlipDeadZone` are now judgeable as
+  TUNING (round 06/1 could not see the channel at all, so its defaults were unfalsifiable). The round's
+  question is no longer "where is the lean" but "is 0.5 of the slip the right amount in a hard corner".
+- 06's landing dip stays SHIPPED OFF — 081/06's air control changed jump attitude and airtime, but the
+  reason the dip shipped off (a 20 cm dip is invisible at a 7 m third-person orbit) is viewpoint, not
+  physics; its return remains plan 08's first-person preset.
+- New since the freeze, for the round to watch: mid-air yaw is now player-controllable (081/06 §1
+  `?airCtl`), and the camera swings with it through `vehicleYawLagTime` — jumps are a NEW judgement the
+  original round list did not have.

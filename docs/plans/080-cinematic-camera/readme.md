@@ -12,7 +12,9 @@ and the close-out — the transition matrix as a test, the tuning freeze, the ta
 **The 02+03+04 field round is DONE and ACCEPTED (2026-07-25)**: no value came back for retuning, so every
 on-foot default is frozen as shipped, and the `?cam=legacy` A/B was deleted with the acceptance (07's
 close-out task, taken early). **05's DRIVE field round is owed** — its defaults are first guesses, live on
-the Camera tab — and the look-behind key ships after it. **Four field rounds ran on 05+06** and every
+the Camera tab — and the look-behind key ships after it (2026-07-27 revision: the 081 physics moved under
+those defaults; the drift channel's input re-measured and the wiring verified, see 05's ledger — no code
+owed, the round is now judgeable). **Four field rounds ran on 05+06** and every
 report was fixed (bob frequency, the corner-swing latch, the backing-up spin, the shake burst, the exit
 snap, entry sinking); the landing dip ships OFF because it never read at a third-person orbit. **07 was
 ACCEPTED in the field on the same day** — the chain is closed for 0.5.0. **08 (view presets / first person)
