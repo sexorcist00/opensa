@@ -9,7 +9,7 @@ import type { VehicleRig } from './vehicle-rig';
 
 import { Logger } from '../diagnostics/logger';
 import { KeyboardSource } from '../input';
-import { EnterVehicleSystem, warpAlongRootMotion } from './enter-vehicle.system';
+import { EnterVehicleSystem, meanFrontAdhesion, warpAlongRootMotion } from './enter-vehicle.system';
 import { FakeVehicleHandle } from './vehicle-handle.fake';
 import { fakeHandling } from './vehicle-handling.fake';
 
@@ -791,6 +791,32 @@ describe('exit egress chain (plan 088/09d)', () => {
 
       const last = h.phys.teleports[h.phys.teleports.length - 1];
       expect(last[2]).toBeCloseTo(0.5 + 1, 6); // ground + capsule-centre lift, NOT the raw ground
+    });
+  });
+});
+
+describe('meanFrontAdhesion', () => {
+  const FOUR = [{ front: true }, { front: true }, { front: false }, { front: false }];
+
+  describe('negative cases', () => {
+    it('falls back to tarmac when the car reported no wheels at all', () => {
+      expect(meanFrontAdhesion([], [])).toBe(4.5);
+    });
+
+    it('uses every wheel when a model flags none as front (bikes, trailers)', () => {
+      const wheels = [{ front: false }, { front: false }];
+
+      expect(meanFrontAdhesion(wheels, [4.5, 3.2])).toBeCloseTo(3.85, 5);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('averages the FRONT axle only — the rear is not what steers', () => {
+      expect(meanFrontAdhesion(FOUR, [4.5, 4.5, 3.2, 3.2])).toBe(4.5);
+    });
+
+    it('takes the mean rather than the worst, so one wheel on the verge still steers', () => {
+      expect(meanFrontAdhesion(FOUR, [4.5, 3.2, 4.5, 4.5])).toBeCloseTo(3.85, 5);
     });
   });
 });

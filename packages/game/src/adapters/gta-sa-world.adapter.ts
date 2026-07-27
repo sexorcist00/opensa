@@ -818,6 +818,38 @@ export function toModelColliders({ col, name, transforms }: RegionColliders): Mo
   };
 }
 
+/** Tag a model's collider placements with breakable instance keys (plan 045); a pass-through for
+ *  non-breakable models. The key matches the render registry's (model + cm-rounded translation). */
+/**
+ * The tyre-adhesion lookup the physics uses (081/10): one absolute number per collision material — SA's
+ * `surface.dat` rubber row (road 4.5 · hard 3.6 · loose 3.2 · sand 3.0 · wet 2.8) resolved through each
+ * surface's adhesion group. Built ONCE here, where both files are already parsed, so the per-step path is a
+ * single array index with no strings and no map.
+ *
+ * Null when `surface.dat` is absent: a world that ships no matrix must not be handed a made-up one.
+ */
+export function tyreAdhesionPerMaterial(
+  surfaces: readonly SurfaceInfo[],
+  surfaceDat: null | string,
+): null | { perMaterial: Float32Array; road: number } {
+  if (surfaceDat === null) {
+    return null;
+  }
+  const matrix = parseSurfaceAdhesion(surfaceDat);
+  const road = matrix.get('rubber', 'road');
+  if (road === null) {
+    return null;
+  }
+  const perMaterial = new Float32Array(surfaces.length);
+  surfaces.forEach((surface, material) => {
+    // An unknown group falls back to ROAD — the surface a car normally drives on, so an unmapped material
+    // behaves exactly as it does today rather than becoming mysteriously slippery.
+    perMaterial[material] = matrix.get('rubber', surface.adhesionGroup) ?? road;
+  });
+
+  return { perMaterial, road };
+}
+
 /** Convert renderware collision (COL model + placements) to the engine's generic shape. */
 /** A `colour` override string (`"1,2"`) as carcols palette indices, or undefined for the model's default. */
 function colourIndices(colour?: string): number[] | undefined {
@@ -876,36 +908,4 @@ function tagBreakable(model: ModelColliders, isBreakable: boolean): ModelCollide
   );
 
   return { ...model, instanceKeys };
-}
-
-/** Tag a model's collider placements with breakable instance keys (plan 045); a pass-through for
- *  non-breakable models. The key matches the render registry's (model + cm-rounded translation). */
-/**
- * The tyre-adhesion lookup the physics uses (081/10): one absolute number per collision material — SA's
- * `surface.dat` rubber row (road 4.5 · hard 3.6 · loose 3.2 · sand 3.0 · wet 2.8) resolved through each
- * surface's adhesion group. Built ONCE here, where both files are already parsed, so the per-step path is a
- * single array index with no strings and no map.
- *
- * Null when `surface.dat` is absent: a world that ships no matrix must not be handed a made-up one.
- */
-function tyreAdhesionPerMaterial(
-  surfaces: readonly SurfaceInfo[],
-  surfaceDat: null | string,
-): null | { perMaterial: Float32Array; road: number } {
-  if (surfaceDat === null) {
-    return null;
-  }
-  const matrix = parseSurfaceAdhesion(surfaceDat);
-  const road = matrix.get('rubber', 'road');
-  if (road === null) {
-    return null;
-  }
-  const perMaterial = new Float32Array(surfaces.length);
-  surfaces.forEach((surface, material) => {
-    // An unknown group falls back to ROAD — the surface a car normally drives on, so an unmapped material
-    // behaves exactly as it does today rather than becoming mysteriously slippery.
-    perMaterial[material] = matrix.get('rubber', surface.adhesionGroup) ?? road;
-  });
-
-  return { perMaterial, road };
 }

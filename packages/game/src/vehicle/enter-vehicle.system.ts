@@ -1243,6 +1243,20 @@ export class EnterVehicleSystem implements System {
 }
 
 /**
+ * The adhesion the STEERING wheels have: the mean over the front axle (081/10 step 5).
+ *
+ * The mean rather than the worst, because a car with one front wheel on the verge still steers on the other,
+ * and the limiter's job is to grant what the axle can answer. Falls back to the whole set when a model has
+ * no wheel flagged front (bikes, trailers) — better a number than a special case.
+ */
+export function meanFrontAdhesion(wheels: readonly { front: boolean }[], adhesion: readonly number[]): number {
+  const front = adhesion.filter((_, index) => wheels[index]?.front);
+  const used = front.length > 0 ? front : adhesion;
+
+  return used.length === 0 ? ROAD_ADHESION_FALLBACK : used.reduce((sum, value) => sum + value, 0) / used.length;
+}
+
+/**
  * A point along a scripted move (plan 088/09a): the clip's authored root path carries the SHAPE
  * (the doorway dip, the drop into the seat) while a linear correction distributes the clip-vs-world
  * endpoint mismatch — the move still starts exactly at `from` and ends exactly at `to`. The clip's
@@ -1278,20 +1292,6 @@ export function warpAlongRootMotion(
     from[1] + path[1] + (to[1] - from[1] - total[1]) * t,
     from[2] + path[2] + (to[2] - from[2] - total[2]) * t,
   ];
-}
-
-/**
- * The adhesion the STEERING wheels have: the mean over the front axle (081/10 step 5).
- *
- * The mean rather than the worst, because a car with one front wheel on the verge still steers on the other,
- * and the limiter's job is to grant what the axle can answer. Falls back to the whole set when a model has
- * no wheel flagged front (bikes, trailers) — better a number than a special case.
- */
-function meanFrontAdhesion(wheels: readonly { front: boolean }[], adhesion: readonly number[]): number {
-  const front = adhesion.filter((_, index) => wheels[index]?.front);
-  const used = front.length > 0 ? front : adhesion;
-
-  return used.length === 0 ? ROAD_ADHESION_FALLBACK : used.reduce((sum, value) => sum + value, 0) / used.length;
 }
 
 /** Tarmac, for a car whose wheels reported nothing at all — the same value `steering.ts` falls back to. */

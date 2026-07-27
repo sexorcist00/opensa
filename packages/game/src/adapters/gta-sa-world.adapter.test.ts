@@ -3,7 +3,7 @@ import type * as Renderware from '@opensa/renderware';
 import { Matrix4 } from '@opensa/math';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { GtaSaWorldAdapter, toModelColliders } from './gta-sa-world.adapter';
+import { GtaSaWorldAdapter, toModelColliders, tyreAdhesionPerMaterial } from './gta-sa-world.adapter';
 
 /** The map `resolveMap` is stubbed to return — mutable so a test can place a different catalog. */
 const map = vi.hoisted(() => ({ current: null as null | Renderware.MapDefinitions }));
@@ -523,6 +523,37 @@ describe('GtaSaWorldAdapter.loadVehicleData', () => {
       const adapter = new GtaSaWorldAdapter(cfg());
 
       await expect(adapter.vehicleColourCombos('landstal')).rejects.toThrow('asset not found: data/vehicles.ide');
+    });
+  });
+});
+
+describe('tyreAdhesionPerMaterial', () => {
+  const SURFACE_DAT =
+    ';        Rubber  Hard  Road  Loose  Sand  Wet\nRubber 6.0\nHard 3.6 2.0\nRoad 4.5 3.0 6.0\nLoose 3.2 3.5 2.0 1.0\nSand 3.0 4.0 2.0 1.0 1.0\nWet 2.8 2.0 1.0 1.0 1.0 0.5\n';
+  const row = (adhesionGroup: string): Renderware.SurfaceInfo =>
+    ({ adhesionGroup, name: adhesionGroup, skidmark: 'default', tyreGrip: 1, wetGrip: 0 }) as Renderware.SurfaceInfo;
+
+  describe('negative cases', () => {
+    it('answers null when the world ships no adhesion matrix — never a made-up one', () => {
+      expect(tyreAdhesionPerMaterial([row('road')], null)).toBeNull();
+    });
+
+    it('falls back to ROAD for a surface whose group is not in the matrix', () => {
+      const table = tyreAdhesionPerMaterial([row('road'), row('quicksand')], SURFACE_DAT);
+
+      expect(table?.perMaterial[1]).toBe(4.5); // the unmapped surface drives exactly like tarmac
+    });
+  });
+
+  describe('positive cases', () => {
+    it('resolves SA rubber row per material id, and reports the road cell it is judged against', () => {
+      const table = tyreAdhesionPerMaterial([row('road'), row('loose'), row('sand'), row('wet')], SURFACE_DAT);
+
+      expect(table?.road).toBe(4.5);
+      // Float32Array, so the cells come back at float precision — the values are SA's, the rounding is ours.
+      const cells = Array.from(table?.perMaterial ?? []);
+      expect(cells).toHaveLength(4);
+      [4.5, 3.2, 3, 2.8].forEach((expected, index) => expect(cells[index]).toBeCloseTo(expected, 5));
     });
   });
 });

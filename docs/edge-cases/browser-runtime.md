@@ -20,6 +20,18 @@
   the model is silently absent in the browser (`getClump` returns empty, nothing renders) while offline Node
   probes, which read the whole archive, work fine.
 
+## Rapier queries: two traps that cost a session each (2026-07-27, plan 081/10)
+
+- **A ray sees NOTHING until the world has stepped once.** The query pipeline is built inside
+  `world.step()`, so a probe written against freshly-created colliders reports "no ground" and looks like a
+  data bug. Every physics test that casts must step first; the real game never notices because it steps
+  before anything asks.
+- **A trimesh hit on the BACK of a triangle comes back as `featureId + triangleCount`.** That is parry's own
+  encoding, and the game's roads are wound so a downward ray lands on exactly that side: a 106-triangle road
+  answered 127 and 133. Read straight, the id runs off the end of any per-triangle table and every lookup
+  silently reports "unknown" — take it modulo the triangle count. A hand-written test fixture naturally winds
+  its quad TOWARD the ray and passes while the game fails, so the regression test has to wind it away.
+
 ## Rapier's raycast vehicle: three asymmetries to design around (2026-07-26, plan 081)
 
 `DynamicRayCastVehicleController` is Bullet-lineage, and three of its properties are load-bearing for anyone
