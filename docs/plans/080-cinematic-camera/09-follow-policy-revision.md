@@ -96,7 +96,7 @@ only when the watchdog (or the user's repro) confirms the class.
       flagged at its source so the log is quiet on a healthy session.
 - [x] Dynamic-vs-static collision response (§4.2): probe reports body type; dynamic hits ease, static
       snap. Tests: scripted dynamic crosser eases; wall still snaps same-frame.
-- [ ] Field round: strafe/run/idle on foot, walk-at-camera into a wall, launches in a car, and a repro
+- [x] Field round: strafe/run/idle on foot, walk-at-camera into a wall, launches in a car, and a repro
       attempt on the jump with the watchdog live. Freeze the new numbers in this ledger.
 
 ## Ledger
@@ -161,6 +161,14 @@ a new test drives the exact entry trace and asserts the window's end has nothing
 **Watchdog scope, recorded**: it watches the look target and idle-mouse yaw; distance-channel moves are
 NOT watched, because designed occlusion snap-ins live there and would be noise. With this fix the distance
 channel has no non-occlusion snap left by construction.
+
+### 2026-07-27 — FIELD ROUND 2: entry re-checked, ACCEPTED. 09 is CLOSED, defaults FROZEN
+
+"Прыжок исчез, посадка плавная." Every first-guess default ships as authored, not one number came back
+for retuning: `footYawAuthorityStart/Full` **0.2 / 0.9** · `footRunDistanceGain` **0.6 m** full at
+**7 u/s** · `footIdleDelaySec` **5 s** / `footIdleDistanceEase` **0.4 m** · `vehicleAccelDistanceGain`
+**1 m** at ~0.6 g. The watchdog stays in (perf-logs only, quiet on a healthy session). Next per the
+chain's own order: the 05 §6 look-behind key, then plan 10's candidates one field verdict at a time.
 
 ## Acceptance
 
