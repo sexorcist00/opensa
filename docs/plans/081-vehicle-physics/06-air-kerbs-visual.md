@@ -156,13 +156,23 @@ record and the new regression pack are measured against it — but no kerb concl
 roll with no flip on any of the five cars (the 20.6° → 179° in `physics-world.ts` is now annotated as
 scene-dependent, so nobody reads it as evidence the mechanism was fixed).
 
-**The new `kerb-mount` scene drives SQUARE at a plain kerb** (SF west-shore, mid-block at y 260, the middle
-of the longest pole-free span — its first two versions each drove into a traffic light of their own, which is
-how the kerb line's ~12 m spacing of lampposts, trees and lights got written down). Off the power, ~25 km/h:
-**comet −62.1 g, stopped dead, bounced back, zero climb; admiral −61.3 g, front lifted 8 cm and stopped.**
+**The new `kerb-mount` scene drives SQUARE at a pavement edge**, off the power at ~25 km/h. Where it points
+took three tries and each one is a datum: a drifted approach on the SF street drove into a traffic light; a
+square approach there stopped every car dead (comet −62.1 g, admiral −61.3 g, infernus −68.0 g, **firetruk
+−47.8 g**) but SF's pavement is FLUSH in collision and the blocker there is a building wall; so the scene now
+stands on the LV plaza edge — a real pavement edge, proven by the `kerb-strike` comet climbing it (z +40 cm)
+at 57 km/h. Square at that edge: **comet −61.0 g and firetruk −47.1 g, both stopped, ~5-7 cm of climb.**
 
 So the mechanism is confirmed and its shape is worse than "snag or launch": at town speed a car **cannot get
-onto a pavement at all**. That is what §2's forward probe has to fix, and the numbers above are its baseline
-(`docs/benchmarks/vehicle-physics/2026-07-27-headless-kerbmount-baseline-{comet,admiral}.json`). The
-high-speed half of the acceptance ("a kerb at 80 km/h SHOULD punish") still has no clean instrument: the
-shallow-angle case needs a spot with clear ground behind the kerb, which `kerb-strike` is not.
+onto a pavement at all**, while the same edge is climbable at 57 km/h and a shallow angle — momentum is the
+only thing that gets a car over. A 10-tonne fire truck is stopped as flatly as a comet, which rules out ride
+height and mass; what is left is the mechanism §2 named, the downward ray that cannot see a step face.
+
+Baselines: `2026-07-27-headless-kerbmount-baseline-{comet,firetruk}.json` (the kerb) and
+`2026-07-27-headless-kerbwall-sf-{comet,admiral,infernus,firetruk}.json` (the four-car wall reproduction).
+
+**Not yet done, and the next step**: the probe + impulse ramp itself. Its shape is unchanged by any of the
+above — a forward probe per wheel, a downward probe beyond the hit to measure the step, an assist only when
+the step is ≤ the threshold and the speed is low, and an honest collision otherwise — and the same probe is
+what will finally report the step HEIGHT this scene could not (a wall and a kerb both read as "stopped").
+The high-speed half of the acceptance ("a kerb at 80 km/h SHOULD punish") still has no clean instrument.

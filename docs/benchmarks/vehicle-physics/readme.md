@@ -556,21 +556,29 @@ but it is a prop-collision lap, not evidence about kerbs. **The comet's flip tha
 (20.6° → 179° when the angular-damping band-aid came off) does not reproduce at head either**: 14.2° of roll,
 no flip, on any of the five cars — because the lap now ends on a pole, not because the mechanism was fixed.
 
-**Then it measured the real thing.** The new **`kerb-mount`** scene drives SQUARE at a plain kerb, mid-block
-on the SF west-shore street at y 260 — the middle of the longest span with no lamppost, tree or traffic
-light (its first two versions each drove into one, which is how the kerb line's ~12 m pole spacing got
-recorded). Off the power, at ~25 km/h:
+**Then it measured the real thing** — after three scenes that did not. The new **`kerb-mount`** drives SQUARE
+at a pavement edge off the power at ~25 km/h; where it points took three tries, and each try is a datum:
 
-| car     | speed at the kerb | what happened                                       | gLong  | gVert | climb |
-| ------- | ----------------- | --------------------------------------------------- | ------ | ----- | ----- |
-| comet   | 26.8 km/h         | stopped dead, bounced back, tried again, stayed put  | −62.1  | 6.3   | 0 cm  |
-| admiral | 25.6 km/h         | stopped dead, front lifted 8 cm and went no further  | −61.3  | 2.7   | 8 cm  |
+1. SF street, drifting into the kerb at 40 km/h → drove into the traffic light at (−2798.9, 293.4). The kerb
+   line carries a lamppost or tree every ~12 m and a light at every junction corner.
+2. SF street, square at the pavement, mid-block in the longest pole-free span → **every car stopped dead**:
+   comet −62.1 g, admiral −61.3 g, infernus −68.0 g, **firetruk −47.8 g**. But the SF pavement is FLUSH in
+   collision (z is dead constant as a car crosses it) and a spawn probe put the ground beyond it 1.7 m up:
+   what stops the lap there is a BUILDING WALL. A wall is not a kerb, so these are filed separately.
+3. LV, square at the plaza edge the `kerb-strike` comet demonstrably climbs at 57 km/h (z +40 cm) — a real
+   pavement edge, and the one this scene now stands on.
 
-**A car cannot get onto a pavement at all.** No climb, no launch, no flip — a bounce off a vertical face,
-which is the raycast-suspension weakness plan 06 §2 names: a downward ray cannot see a step face, so the
-chassis collider meets it as a wall. It reproduces on both cars and both directions of the record's own
-complaint ("a kerb flips it like cardboard" was the same mechanism when the flips were still there).
+| car (LV edge, square) | speed at the edge | what happened                     | gLong | gVert | climb |
+| --------------------- | ----------------- | --------------------------------- | ----- | ----- | ----- |
+| comet                 | 27.9 km/h         | stopped, bounced back, stayed put | −61.0 | 5.5   | ~7 cm |
+| firetruk              | 21.2 km/h         | stopped, no climb                 | −47.1 | 8.5   | ~5 cm |
 
-Runs: `2026-07-27-headless-kerbmount-baseline-{comet,admiral}.json` (the square mount) ·
-`2026-07-27-headless-kerbstrike-located-{infernus,comet,admiral}.json` (the located `kerb-strike` laps that
-identified the props).
+**A car cannot get onto a pavement at all at town speed — and the same edge is climbable at 57 km/h and a
+shallow angle.** That is the raycast-suspension weakness plan 06 §2 names: the downward ray cannot see a step
+face, so the chassis collider meets it as a wall, and only momentum gets a car over. It reproduces on a
+26 cm-clearance sports car and on a fire truck alike, which rules out ride height as the cause.
+
+Runs: `2026-07-27-headless-kerbmount-baseline-{comet,firetruk}.json` (the LV kerb, the §2 baseline) ·
+`2026-07-27-headless-kerbwall-sf-{comet,admiral,infernus,firetruk}.json` (the SF wall — a car meeting the
+edge of the drivable surface square-on, kept because it is the cleanest four-car reproduction of the block) ·
+`2026-07-27-headless-kerbstrike-located-{infernus,comet,admiral}.json` (the located `kerb-strike` laps).
