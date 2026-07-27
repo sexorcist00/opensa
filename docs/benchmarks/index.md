@@ -151,6 +151,17 @@ camera issues **2 casts/frame** (one sphere cast — the whiskers are off since 
 ground ray) against a budget of 5. Run:
 [`2026-07-25-headless-080-closeout-sweep.json`](opensa-engine/2026-07-25-headless-080-closeout-sweep.json).
 
+### 2026-07-27 — what the CARS cost per fixed step (081/07 §3)
+
+The first sweep to carry the `vehicles` field: the raycast controllers plus the vehicle system's fixed
+update, per fixed step, beside the live car count. Same canonical pak (buildTime `08:41 24-07-2026`),
+headless, M3 Pro. **The budget was written for 8 live cars; the bench world runs up to 80.** Per step:
+`ls-noon` **0.605 ms at 80 cars**, `sf-fog-dawn` 0.555 at 66, `lv-night` 0.484 at 58, `ls-rain-night` 0.547
+at 57, `country-dusk` 0.176 at 13, `ocean-horizon` **0.003 at 0** — so the slice is ~**7.6-9.5 µs per car**
+and costs nothing when there are no cars. Eight cars is therefore ~**0.07 ms**, about a seventh of the
+0.5 ms budget, and even the 80-car scene sits at 0.6 ms — a tenth of the fleet's worth of headroom.
+Run: [`2026-07-27-headless-vehicle-step-cost.json`](opensa-engine/2026-07-27-headless-vehicle-step-cost.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

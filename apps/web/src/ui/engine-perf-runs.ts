@@ -19,12 +19,19 @@ import { parseSoakMinutes, runSoak } from './soak';
 /** One frame's numbers pushed by the host's render loop while a leg flies. */
 export interface LegSample {
   draws: number;
+  /** Fixed steps this frame — `vehicleFixedMs` is summed over them, and the budget is PER STEP. */
+  fixedSteps: number;
   frameMs: number;
   gpuMs: number;
+  /** Raycast vehicles alive in the physics world — the vehicle cost means nothing without the count. */
+  liveVehicles: number;
   postMs: number;
   probeMs: number;
   submitMs: number;
   triangles: number;
+  /** The vehicle slice of this frame's fixed steps (081/07 §3): raycast controllers + the vehicle
+   *  system's fixed update, apart from the solver and from the per-frame visual tick. */
+  vehicleFixedMs: number;
 }
 
 /** What the runs need from the engine host — thin accessors over its loop state. */
@@ -141,6 +148,10 @@ export function setupPerfRuns(host: PerfRunsHost): void {
       p95Ms: Number((sortedMs[Math.floor(sortedMs.length * 0.95)] ?? 0).toFixed(3)),
       // Residency at scene end + its category breakdown — the sweep-accumulation diagnosis (074/21 P3).
       residency: ledgerBreakdown(host.engine),
+      // The vehicle slice against 081/07 §3's budget: mean and worst cost of ONE fixed step, beside the
+      // car count that produced it. Frames with no fixed step (the loop caught up) carry no vehicle work
+      // and would drag the mean toward zero, so they are left out rather than counted as free steps.
+      vehicles: vehicleStepCost(samples),
     };
     // eslint-disable-next-line no-console -- the bench deliverable IS this JSON line (plan 063 protocol)
     console.log('[bench]', JSON.stringify(report));
@@ -208,5 +219,27 @@ function ledgerSample(
     cells: stream?.loadedCells ?? 0,
     residencyMb: Math.round(totalBytes / 1048576),
     textureMb: Math.round((ledger.texture?.bytes ?? 0) / 1048576),
+  };
+}
+
+/**
+ * The vehicle slice PER FIXED STEP (081/07 §3's ≤ 0.5 ms budget), from the frames that actually stepped.
+ *
+ * A frame's `vehicleFixedMs` covers every step it ran, so the per-step cost is the ratio — averaging the
+ * frame numbers instead would read a catch-up frame (two steps) as if one step had cost double. `live` is
+ * the busiest car count seen, because the budget is stated for eight and a mean would hide the moment it
+ * was reached.
+ */
+function vehicleStepCost(samples: readonly LegSample[]): { live: number; maxMs: number; meanMs: number } {
+  const stepped = samples.filter((sample) => sample.fixedSteps > 0);
+  if (stepped.length === 0) {
+    return { live: 0, maxMs: 0, meanMs: 0 };
+  }
+  const perStep = stepped.map((sample) => sample.vehicleFixedMs / sample.fixedSteps);
+
+  return {
+    live: Math.max(...stepped.map((sample) => sample.liveVehicles)),
+    maxMs: Number(Math.max(...perStep).toFixed(3)),
+    meanMs: Number((perStep.reduce((sum, value) => sum + value, 0) / perStep.length).toFixed(3)),
   };
 }

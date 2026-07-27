@@ -49,6 +49,11 @@ Report line (the deliverable IS this console line):
 - `lateCreates` — streaming honesty (074/21): creates inside the fog cut during the measure window;
   0 in a healthy run.
 - `residency` — GPU ledger by category, MB; `texture` is the plan-21 accumulation watch.
+- `vehicles` — `{live, meanMs, maxMs}`: the vehicle slice of ONE fixed step (081/07 §3) — the raycast
+  controllers plus the vehicle system's own fixed update, apart from the solver (`physicsMs`) and from the
+  per-frame visual tick (`vehiclesMs` in the `[slow]` line). `live` is the busiest raycast-vehicle count the
+  leg saw, because a cost without its car count says nothing. Frames that ran no fixed step are excluded, or
+  a catch-up frame would read as a step that cost double.
 
 Full knob reference: [query-parameters.md](query-parameters.md). Useful A/B knobs while measuring: `?scale=0.75` (the ONE perf tier knob), `?aces=0`, `?bloom=0|N`,
 `?probe=0`, `?sky=preetham`, `?clouds=N`, `?draw=800..1600` (LOD ring; fog cap follows), `?hour=N`,

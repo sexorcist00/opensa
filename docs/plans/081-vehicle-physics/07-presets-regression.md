@@ -34,7 +34,11 @@ and close the bookkeeping.
   one-off profiled run.
 - Collision-damage coupling sanity: `collisionDamageMult` (plan-02 mapping) now scales the damage
   thresholds — verify the crash scene still classifies light/crash sensibly (damage system's
-  207k/377k N thresholds were tuned pre-chain).
+  207k/377k N thresholds were tuned pre-chain). **Corrected 2026-07-27: it does NOT. The field is parsed
+  into the handling row and read by nothing** — `vehicle-damage.system.ts` gates on a flat
+  `STRONG_HIT = 300000` for every car. So there is no coupling to sanity-check; what there is instead is an
+  unread authored column, and whether a paper-thin car should dent sooner than a truck is a feel change with
+  its own field verdict, not a close-out chore.
 
 ## 4. Close-out
 
@@ -52,7 +56,7 @@ and close the bookkeeping.
 - [ ] Class sweep + class-factor table + field verdicts per class.
 - [ ] 841-car spawn sanity run on final tuning.
 - [x] Regression pack committed + harness lane + bands from accepted captures (2026-07-27, ledger below).
-- [ ] Perf measurement + breakdown; damage-coupling check.
+- [x] Perf measurement + breakdown (2026-07-27); damage-coupling check — **there is no coupling to check**, see §3.
 - [ ] Docs/close-out items above.
 
 ## Acceptance
@@ -92,6 +96,38 @@ second decimal**, every summary field and every series column, collisions includ
 `kerb-strike` replayed but are the same shape of lap and carry the same widening. Everything else is held at
 "a driver would notice": 2 % of top speed, 3 % of a braking distance, a few degrees of roll or slip.
 Verification: the repeat sweep, checked against the committed pack, passes 11 of 11 laps in band.
+
+### 2026-07-27 — §3 the vehicle slice, measured: ~8 µs per car per step
+
+The budget (≤ 0.5 ms/step for the whole vehicle slice with 8 live cars) had never been isolated, because
+nothing timed it: `physicsMs` lumps the raycast controllers in with the solver, `vehiclesMs` is the per-FRAME
+visual tick, and the vehicle system's own `fixedUpdate` was inside the loop but outside every timer. So the
+step came first — `PhysicsWorld.takeVehicleStepMs()` (the controllers' loop, taken once so a step that never
+ran cannot report the previous one again) plus a timer around `vehicles.fixedUpdate`, summed per frame,
+divided by that frame's step count and reported by the bench as `vehicles {live, meanMs, maxMs}`. Frames that
+ran no fixed step are excluded, or a catch-up frame reads as one step costing double.
+
+**Measured, headless on the canonical pak** (`docs/benchmarks/opensa-engine/2026-07-27-headless-vehicle-step-cost.json`):
+
+| scene         | live cars | ms/step (mean) | ms/step (max) | µs per car |
+| ------------- | --------- | -------------- | ------------- | ---------- |
+| ls-noon       | **80**    | **0.605**      | 0.9           | 7.6        |
+| sf-fog-dawn   | 66        | 0.555          | 1.4           | 8.4        |
+| lv-night      | 58        | 0.484          | 0.8           | 8.3        |
+| ls-rain-night | 57        | 0.547          | 0.9           | 9.6        |
+| country-dusk  | 13        | 0.176          | 0.4           | 13.5       |
+| ocean-horizon | **0**     | **0.003**      | 0.1           | —          |
+
+**The budget is met with room to spare, and the budget's premise was wrong.** Eight cars cost ~**0.07 ms**,
+a seventh of the 0.5 ms allowance; the empty scene shows the slice has no fixed overhead worth naming
+(0.003 ms). What the plan did not anticipate is that the bench world runs **80** live raycast vehicles, not
+8 — and even there the slice is 0.6 ms, i.e. the fleet could grow ten-fold before the number written in this
+plan is reached. The per-car cost is flat across scenes (7.6-9.6 µs; `country-dusk`'s 13.5 is 13 cars sharing
+the small constant, not a heavier car), so it scales linearly and predictably.
+
+This also prices the two runtime probes this chain has considered: a per-wheel ray per step is the same order
+as the whole controller update, so a kerb or surface probe on the DRIVEN car alone is free, and one on all 80
+would roughly double the slice — still inside a frame, but no longer negligible.
 
 §2's unit-level half is in the same state: the retired brake-constant assertions the plan named are already
 gone (nothing in the vehicle or physics suites pins the 480 N figure), and the DRCVC quirks still carry their

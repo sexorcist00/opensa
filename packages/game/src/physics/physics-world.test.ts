@@ -513,7 +513,7 @@ describe('PhysicsWorld.census', () => {
   describe('negative cases', () => {
     it('counts nothing in a fresh world', async () => {
       const physics = await makeWorld();
-      expect(physics.census()).toEqual({ bodies: 0, colliders: 0 });
+      expect(physics.census()).toEqual({ bodies: 0, colliders: 0, vehicles: 0 });
       physics.dispose();
     });
   });
@@ -524,11 +524,11 @@ describe('PhysicsWorld.census', () => {
       const ground = physics.createStaticBox([0, 0, 0], [10, 10, 0.5]);
       physics.createBox([0, 0, 5], [0.5, 0.5, 0.5]);
 
-      expect(physics.census()).toEqual({ bodies: 2, colliders: 2 });
+      expect(physics.census()).toEqual({ bodies: 2, colliders: 2, vehicles: 0 });
 
       physics.removeBodies([ground]);
 
-      expect(physics.census()).toEqual({ bodies: 1, colliders: 1 }); // the collider goes with its body
+      expect(physics.census()).toEqual({ bodies: 1, colliders: 1, vehicles: 0 }); // the collider goes with its body
       physics.dispose();
     });
   });

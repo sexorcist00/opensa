@@ -474,6 +474,10 @@ export class PhysicsWorld {
   private speedGrip = { cap: SPEED_GRIP_CAP, reference: SPEED_GRIP_REFERENCE };
   /** Raycast vehicle controllers, advanced before each {@link step}. */
   private readonly vehicles: VehicleController[] = [];
+  /** What the raycast vehicle controllers cost in the last {@link step} (ms), READ ONCE: the vehicle half
+   *  of the fixed step, which `physicsMs` lumps in with the solver (081/07 §3). Taking it zeroes it, so a
+   *  step that never ran (paused, or a menu frame) cannot report the previous step's cost again. */
+  private vehicleStepMs = 0;
   private readonly world: RapierWorld;
 
   constructor(rapier: Rapier) {
@@ -483,8 +487,8 @@ export class PhysicsWorld {
   }
 
   /** What the solver is actually chewing on — a stall needs a count, not a guess. */
-  census(): { bodies: number; colliders: number } {
-    return { bodies: this.world.bodies.len(), colliders: this.world.colliders.len() };
+  census(): { bodies: number; colliders: number; vehicles: number } {
+    return { bodies: this.world.bodies.len(), colliders: this.world.colliders.len(), vehicles: this.vehicles.length };
   }
 
   /** A dynamic box (half-extents) at a Z-up position; returns its body handle. */
@@ -1191,11 +1195,15 @@ export class PhysicsWorld {
   step(dt: number, beforeVehicles?: () => void): void {
     this.world.timestep = dt;
     beforeVehicles?.();
+    const vehiclesStarted = performance.now();
     for (const vehicle of this.vehicles) {
       // The suspension RAYS must respect collision groups too, or the wheels ride on things the chassis
       // passes through — a felled lamppost is invisible to the car's body but the wheels climbed it.
       vehicle.updateVehicle(dt, undefined, VEHICLE_GROUPS); // chassis velocity from suspension/engine
     }
+    // The raycast controllers' own cost, separated from the solver's: 081/07 §3 budgets the VEHICLE slice
+    // (≤ 0.5 ms/step for eight cars) and `physicsMs` alone cannot say which half a regression landed in.
+    this.vehicleStepMs = performance.now() - vehiclesStarted;
     this.world.step(this.events);
     this.events.drainContactForceEvents((event) => {
       const c1 = this.world.getCollider(event.collider1());
@@ -1245,6 +1253,14 @@ export class PhysicsWorld {
     this.impacts = [];
 
     return impacts;
+  }
+
+  /** {@link vehicleStepMs}, and zero it — see the field. */
+  takeVehicleStepMs(): number {
+    const ms = this.vehicleStepMs;
+    this.vehicleStepMs = 0;
+
+    return ms;
   }
 
   /** Immediately move a body to a world position (Z-up) — e.g. seating the player in a car. */

@@ -48,6 +48,10 @@ paths) or `headless`; `what` is why the run was taken.
       "gpuMs": { "pass": 4.841, "post": 1.087, "probe": 1.154, "submit": 1.417 },
       "residency": "cellIndex 41 · cellVertex 172 · target 424 · texture 1181 · uniform 1",
       "lateCreates": 0,
+      // The VEHICLE slice of ONE fixed step (081/07 §3's budget), and the car count that produced it:
+      // the raycast controllers plus the vehicle system's fixed update, apart from the solver and from
+      // the per-frame visual tick. Present from 2026-07-27; older runs have no such field.
+      "vehicles": { "live": 80, "meanMs": 0.604, "maxMs": 1.1 },
     },
   ],
 }

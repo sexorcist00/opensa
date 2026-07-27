@@ -1033,6 +1033,10 @@ async function boot(
   let physicsMs = 0;
   let collisionMs = 0;
   let vehiclesMs = 0;
+  /** The VEHICLE slice of the fixed step (081/07 §3's ≤ 0.5 ms budget), summed over this frame's steps: the
+   *  raycast controllers inside the physics step plus the vehicle system's own fixed update. Separate from
+   *  `physicsMs` (which is the solver too) and from `vehiclesMs` (which is the per-FRAME visual tick). */
+  let vehicleFixedMs = 0;
   // In-game bench state (074/10 B3 tail): the loop consumes these; the runner below owns them.
   let benchCamera: null | { eye: [number, number, number]; target: [number, number, number] } = null;
   let benchSamples: LegSample[] | null = null;
@@ -1101,6 +1105,7 @@ async function boot(
     fixedSteps = 0;
     controllerMs = 0;
     physicsMs = 0;
+    vehicleFixedMs = 0;
     while (pending >= FIXED_STEP && steps < MAX_CATCHUP_STEPS) {
       try {
         // Snapshot the pose from BEFORE this step so the interpolation has both ends of the last interval
@@ -1119,7 +1124,9 @@ async function boot(
         physicsMs += performance.now() - physicsStarted;
         // Enter/exit places the rider and DRIVES here — after the physics step, exactly where prod's Game
         // runs it. Without this the climb-in freezes mid-phase (the whole sequence lives in fixedUpdate).
+        const vehicleFixedStarted = performance.now();
         vehicles?.fixedUpdate(FIXED_STEP);
+        vehicleFixedMs += performance.now() - vehicleFixedStarted + physics.takeVehicleStepMs();
         // Snapshot AFTER: the cars sampled their bodies in fixedUpdate, and the ped Transform is now current.
         [curPlayerGta[0], curPlayerGta[1], curPlayerGta[2]] = viewOf();
         // Contact-force impacts are produced BY the physics step, so drain them here — one step late and a
@@ -1344,7 +1351,7 @@ async function boot(
       // eslint-disable-next-line no-console
       console.log(
         `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · post ${stats.gpuPostMs.toFixed(2)} · probe ${stats.gpuProbeMs.toFixed(2)} · submit ${stats.submitMs.toFixed(2)} · ` +
-          `fixed ${fixedMs.toFixed(1)} (${fixedSteps} steps: controller ${controllerMs.toFixed(1)} + physics ${physicsMs.toFixed(1)}) · ` +
+          `fixed ${fixedMs.toFixed(1)} (${fixedSteps} steps: controller ${controllerMs.toFixed(1)} + physics ${physicsMs.toFixed(1)} · cars ${vehicleFixedMs.toFixed(2)}) · ` +
           `collision ${collisionMs.toFixed(1)} · vehicles ${vehiclesMs.toFixed(1)} · ` +
           `ped ${pedMs.toFixed(2)} · anim ${animMs.toFixed(2)} · draws ${stats.drawsRecorded} · cells ${streamStats.loadedCells} · ` +
           `bodies ${physics.census().bodies} colliders ${physics.census().colliders}`,
@@ -1352,12 +1359,15 @@ async function boot(
     }
     benchSamples?.push({
       draws: stats.drawsRecorded,
+      fixedSteps,
       frameMs: dt * 1000,
       gpuMs: stats.gpuPassMs,
+      liveVehicles: physics.census().vehicles,
       postMs: stats.gpuPostMs,
       probeMs: stats.gpuProbeMs,
       submitMs: stats.submitMs,
       triangles: stats.trianglesRecorded,
+      vehicleFixedMs,
     });
 
     if (
