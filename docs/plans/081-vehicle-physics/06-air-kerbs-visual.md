@@ -282,3 +282,22 @@ when wheels become detachable** (05b damageable tyres would do it).
 and the `[phys]` matrix is byte-identical by construction. Its acceptance is the FIELD one this plan already
 asks for: a solid-axle car (`savanna`, `picador`) and an independent one (`infernus`) through the same corner,
 distinguishable on screen.
+
+### 2026-07-27 — field bug: a wheel in the air did not turn (the other half of §3's drawn wheel)
+
+Reported the same evening the chain closed: hold the throttle with the wheels off the ground and nothing
+turns until they touch down. The cause was in this section's own code — the rig rolled EVERY wheel from the
+car's planar displacement, which is the right source for a wheel on the road and no source at all for one in
+the air.
+
+The original has the answer per wheel, at the end of `CAutomobile::ProcessCarWheelPair`: with no contact, a
+DRIVEN wheel under throttle winds up (`0.1` per frame forward, `0.05` back — **250 and 125 rad/s²**), and
+every other airborne wheel decays `×0.95` per 1/50 s. Its `±1.0` test is the same shape as §1's air-control
+gate: not a speed cap, a refusal to push a wheel already spinning hard the other way — so a held throttle
+keeps winding, which is what a blurred wheel is.
+
+Two details worth keeping: the roll RATE is per wheel now and survives the transition (a wheel spun up in the
+air is taken back over by the road on landing instead of snapping to it), and the spin signal is the
+DRIVETRAIN's output rather than the key — so a free wheel runs down on the brake and on the coast, and the
+front wheels of a rear-drive car never spin in the air. `nDriveType` decides which wheels the engine reaches,
+the same test `setVehicleControls` makes.

@@ -123,6 +123,12 @@ to add one, the capture schema, how to read a failed lap, and the gotchas five s
 - **Headless field check** — boot+screenshot+bench the real game without a window:
   `?loader=http-dir` + `npm run serve:static` (`tools-debug/bench-harness`); one-liners in
   [`docs/commands.md`](../commands.md). The served dir must be an opensa-pack `--out`.
+- **The `[slow]` frame breakdown** — the dev-mode console line (Perf screen toggle) for any frame over
+  20 ms: `render (submit) · stream (blob N worst M) · camera · fixed (steps: controller + physics · cars) ·
+  collision · vehicles · ped · anim · other`, plus draws / cells / bodies / colliders. **Read `other`
+  first** — it is what the loop did NOT account for, and a 2026-07-27 field report of 20-250 ms frames was
+  90-98 % `other` until `blob` (the pak worker's texture upload, which runs BETWEEN frames) was given its
+  own timer. A stall outside the loop cannot be found by reading the loop.
 - **Shader-term probe** — temporarily output a shader term as the fragment colour, shoot headless,
   compare against expectation. Reading the code had pointed at the wrong cause twice in 084.
 - **Spot rebake (no full pmb run)** — APFS-clone the build (`cp -Rc build/original build/.x`), rebake

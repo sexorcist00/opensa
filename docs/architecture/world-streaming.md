@@ -79,7 +79,11 @@ flowchart LR
   replayed while frustum-visible; also the debugger's ray `pick()` over the placement mapper (parsed only
   under `debugPicking`).
 - **`world/textures.ts`** — `TextureArrays`: `.ostex` upload + material bind groups; CPU payload released
-  after upload.
+  after upload. **The upload runs in the pak worker's `message` handler — between frames, outside every
+  budget the loop keeps** (cell CREATES are budgeted, the arrays they need are not). Measured 2026-07-27 at
+  15-85 ms for a single array, and it is the largest unexplained frame cost in the record; the driver now
+  reports it as `StreamStats.blobMs` / `worstBlobMs`, and the fix has a doc of its own
+  ([texture-upload-budget](../performance/deferred-optimizations/texture-upload-budget.md)).
 
 Dynamic models (`.osm`) load outside this path: vehicles/peds go through their own readers
 (`readModelOsm` / `readPedOsm`) and workers — see [features/vehicles.md](../features/vehicles.md) and

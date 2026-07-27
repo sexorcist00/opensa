@@ -45,6 +45,12 @@ function harness(
       load: (ref: number): void => {
         live.add(ref);
         loadedArrays.push(`array-${ref}`);
+        // A real array upload is a nested `writeTexture` loop measured at 15-85 ms (2026-07-27 field
+        // report). The fake burns a millisecond so the handler's cost is a NUMBER the test can hold.
+        const until = performance.now() + 1;
+        while (performance.now() < until) {
+          /* spin: the cost is the point */
+        }
       },
       unload: (ref: number): void => {
         live.delete(ref);
@@ -473,6 +479,28 @@ describe('StreamingDriver manual cells (the map inspector, 074/22)', () => {
         [3, 3],
         [4, 3],
       ]);
+    });
+  });
+});
+
+describe('StreamingDriver blob accounting (the between-frames cost, 2026-07-27)', () => {
+  describe('positive cases', () => {
+    it('attributes the worker handler to the frame that follows it, and clears it after', () => {
+      // The upload runs in a `message` handler — outside every timer the host frame keeps — so the driver
+      // has to carry the number itself, or a 20-250 ms frame has nothing to blame (see
+      // `docs/performance/deferred-optimizations/texture-upload-budget.md`).
+      const h = harness(['3,3,hd'], { hdRadius: 2000 }, 2400, { '3,3,hd': [7] });
+      h.driver.update([875, 0, -875]); // requests the cell, which requests its array
+
+      h.deliver('array-7'); // the upload lands between frames
+      const withUpload = h.driver.update([875, 0, -875]);
+      const next = h.driver.update([875, 0, -875]);
+
+      expect(withUpload.blobMs).toBeGreaterThan(0);
+      expect(withUpload.worstBlobMs).toBeGreaterThan(0);
+      expect(withUpload.worstBlobMs).toBeLessThanOrEqual(withUpload.blobMs);
+      expect(next.blobMs).toBe(0); // per-FRAME, like the host's own block timers
+      expect(next.worstBlobMs).toBe(0);
     });
   });
 });

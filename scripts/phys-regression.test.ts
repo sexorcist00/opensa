@@ -50,6 +50,13 @@ describe('phys-regression breaches', () => {
       expect(labels(before, after)).toEqual(['config.speedGrip.reference']);
     });
 
+    it('reports a sweep flown with different AIR CONTROL as a configuration difference', () => {
+      const before = { ...capture('crest-jump', {}), airControl: { scale: 1 } };
+      const after = { ...capture('crest-jump', {}), airControl: { scale: 0 } };
+
+      expect(labels(before, after)).toEqual(['config.airControl.scale']);
+    });
+
     it('reports a spring the fresh run set differently', () => {
       const before = { ...capture('rest', {}), springs: [{ stiffness: 24.96 }] };
       const after = { ...capture('rest', {}), springs: [{ stiffness: 30 }] };
