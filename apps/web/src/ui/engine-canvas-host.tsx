@@ -1063,6 +1063,16 @@ async function boot(
    *  raycast controllers inside the physics step plus the vehicle system's own fixed update. Separate from
    *  `physicsMs` (which is the solver too) and from `vehiclesMs` (which is the per-FRAME visual tick). */
   let vehicleFixedMs = 0;
+  /**
+   * The three blocks the stall log could not see (2026-07-27 field report: 20-250 ms frames whose named
+   * parts summed to 5). `stream` is the driver pump (cell loads, model builds, collider creation), `camera`
+   * is the rig step with its casts, `render` is the whole `engine.frame` call — `submit` is inside it. What
+   * is left after all of them is printed as `other`, and that residual is the honest name for GC, the
+   * browser's own work, and anything still untimed.
+   */
+  let streamMs = 0;
+  let cameraMs = 0;
+  let renderMs = 0;
   // In-game bench state (074/10 B3 tail): the loop consumes these; the runner below owns them.
   let benchCamera: null | { eye: [number, number, number]; target: [number, number, number] } = null;
   let benchSamples: LegSample[] | null = null;
@@ -1299,15 +1309,18 @@ async function boot(
     }
 
     // Streaming follows the PLAYER (the B3 contract), not the camera.
+    const streamStarted = performance.now();
     const streamStats: StreamStats = setup.driver.update(playerEngine);
     // Emitters follow the streamed cell set; the call self-gates on a signature, so this is not per-frame work.
     particles?.rebuild();
     void refreshCollision(); // self-gates on the camera's cell set — a no-op unless the overlay is on and moved
+    streamMs = performance.now() - streamStarted;
     lastStream = streamStats;
 
     // While seated the camera trails the CAR (the rider is teleported into the seat every frame — following
     // the ped would judder); on foot it trails the player. Both are the INTERPOLATED render pose, so the
     // smoothed camera follows a continuous focus instead of the fixed-step saw (plan 080/03).
+    const cameraStarted = performance.now();
     const focus = seatedCar ? toEngine(seatedCar.renderPosition) : playerEngine;
     const motion = motionSignals(seatedCar);
     settleEase = easeWindow(settleEase, dt);
@@ -1359,6 +1372,7 @@ async function boot(
     // Floor guard: the ground below the eye, so a steep down-pitch can't bury the camera under a slope/porch.
     const groundProbe: GroundProbe = (at) => physics.groundBelow([at[0], at[1], at[2]], 30, collisionExclude);
     const camera = stepCamera(rig, snapshot, config.camera, cameraProbe, groundProbe);
+    cameraMs = performance.now() - cameraStarted;
     pendingInput.look.x = 0;
     pendingInput.look.y = 0;
     pendingInput.pan = null;
@@ -1369,17 +1383,25 @@ async function boot(
     engine.probeView = probeViewEnabled;
     // Live tier knob (074/09): the config value drives the target size; the engine rebuilds on change.
     engine.renderScale = config.graphics.renderScale;
+    const renderStarted = performance.now();
     const stats = engine.frame(camera);
+    renderMs = performance.now() - renderStarted;
     lastStats = stats;
     // B7·b field stall: the CPU breakdown of the frames that actually hitch — a stall must arrive as a NUMBER,
     // not a theory. Quiet on a healthy frame. (The timings are last frame's; the stall is what matters.)
     if (perfLogs && dt * 1000 > SLOW_FRAME_MS) {
+      // What the frame did NOT spend in any block this loop times. It used to be most of a slow frame's
+      // length with nothing to name it (2026-07-27 field report), so it is printed rather than left implied.
+      const other =
+        dt * 1000 -
+        (fixedMs + collisionMs + animMs + vehiclesMs + pedMs + streamMs + cameraMs + renderMs + streamStats.blobMs);
       // eslint-disable-next-line no-console
       console.log(
-        `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · post ${stats.gpuPostMs.toFixed(2)} · probe ${stats.gpuProbeMs.toFixed(2)} · submit ${stats.submitMs.toFixed(2)} · ` +
+        `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · post ${stats.gpuPostMs.toFixed(2)} · probe ${stats.gpuProbeMs.toFixed(2)} · ` +
+          `render ${renderMs.toFixed(1)} (submit ${stats.submitMs.toFixed(2)}) · stream ${streamMs.toFixed(1)} (blob ${streamStats.blobMs.toFixed(1)} worst ${streamStats.worstBlobMs.toFixed(1)}) · camera ${cameraMs.toFixed(1)} · ` +
           `fixed ${fixedMs.toFixed(1)} (${fixedSteps} steps: controller ${controllerMs.toFixed(1)} + physics ${physicsMs.toFixed(1)} · cars ${vehicleFixedMs.toFixed(2)}) · ` +
           `collision ${collisionMs.toFixed(1)} · vehicles ${vehiclesMs.toFixed(1)} · ` +
-          `ped ${pedMs.toFixed(2)} · anim ${animMs.toFixed(2)} · draws ${stats.drawsRecorded} · cells ${streamStats.loadedCells} · ` +
+          `ped ${pedMs.toFixed(2)} · anim ${animMs.toFixed(2)} · other ${other.toFixed(1)} · draws ${stats.drawsRecorded} · cells ${streamStats.loadedCells} · ` +
           `bodies ${physics.census().bodies} colliders ${physics.census().colliders}`,
       );
     }

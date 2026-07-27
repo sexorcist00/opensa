@@ -35,6 +35,7 @@ Entries live in [deferred-optimizations/](deferred-optimizations/), one file per
 | [Foliage fill](deferred-optimizations/foliage-fill.md) | GPU pass (fill) | the 07-21 case was 13.72 → 7.63 ms | parked by decision |
 | [Per-wheel surface probe vs surface-tagged colliders](deferred-optimizations/surface-probe-per-wheel.md) | fixed-step CPU | ~free today (driven car only); ~0.6 ms/step if ever run on all 80 cars | in reserve |
 | [Camera position render interpolation](deferred-optimizations/camera-position-render-interpolation.md) | correctness (camera feel) | unlocked the 080/02 position weight + killed the run "doubling" | **PULLED 2026-07-25** |
+| [Budgeted texture-array uploads](deferred-optimizations/texture-upload-budget.md) | frame time (hitch) | one 85 ms stall → ~1.5 ms/frame | **measured and located 2026-07-27**, unfixed |
 
 ## How to use it when the frame budget is blown
 

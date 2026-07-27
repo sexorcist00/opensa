@@ -45,6 +45,15 @@ export interface StreamingRadii {
 }
 
 export interface StreamStats {
+  /**
+   * Milliseconds spent in the worker's `message` handler since the last {@link Streaming.update} — texture
+   * uploads and blob bookkeeping (see {@link Streaming.onBlob}).
+   *
+   * It is reported because it runs BETWEEN frames, where no in-loop timer can see it: a 2026-07-27 field
+   * report of 20-250 ms frames turned out to have 90-98 % of each slow frame outside every block the host
+   * times, and this is the first candidate for it. Reset every update, so it is per-frame like the rest.
+   */
+  blobMs: number;
   created: number;
   evicted: number;
   /** Creates whose cell already sat INSIDE the effective fog cut (074/21 P3) — each one is a pop the
@@ -53,6 +62,9 @@ export interface StreamStats {
   lateCreates: number;
   loadedCells: number;
   pendingCells: number;
+  /** The single most expensive handler call in that window — one huge texture-array upload and a pile-up of
+   *  small ones are different problems, and only this number tells them apart. */
+  worstBlobMs: number;
   worstCreateMs: number;
 }
 
@@ -90,11 +102,13 @@ export class StreamingDriver {
   private manual: null | { keys: Set<string>; level: Level } = null;
   private readonly requested = new Set<string>();
   private readonly stats: StreamStats = {
+    blobMs: 0,
     created: 0,
     evicted: 0,
     lateCreates: 0,
     loadedCells: 0,
     pendingCells: 0,
+    worstBlobMs: 0,
     worstCreateMs: 0,
   };
   /** Late-create grace: open at boot and after every teleport jump, closes once pending drains. */
@@ -160,7 +174,13 @@ export class StreamingDriver {
       );
     }
     worker.addEventListener('message', (event: MessageEvent<PakWorkerResponse>) => {
+      // Timed HERE and not inside `onBlob`: this handler runs between frames, so its cost is invisible to
+      // every timer the host frame keeps (see `StreamStats.blobMs`).
+      const started = performance.now();
       this.onBlob(event.data);
+      const spent = performance.now() - started;
+      this.stats.blobMs += spent;
+      this.stats.worstBlobMs = Math.max(this.stats.worstBlobMs, spent);
     });
   }
 
@@ -222,8 +242,11 @@ export class StreamingDriver {
       this.teleportGrace = false; // the boot/teleport queue drained — late creates count again
     }
     this.pruneStaleBlobs();
+    const stats = { ...this.stats };
+    this.stats.blobMs = 0; // per-FRAME, like the host's own block timers — the rest are running totals
+    this.stats.worstBlobMs = 0;
 
-    return this.stats;
+    return stats;
   }
 
   /** One slot's step: evict / request / create-swap. Requests test the BIASED focus (velocity prefetch),
