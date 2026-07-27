@@ -71,3 +71,9 @@ defect. The rubber row is road 4.5 · hard 3.6 · loose 3.2 · sand 3.0 · wet 2
 
 Instruments that already exist: the F2 readout above, the `grass-corner` scene (starts ON grass and never
 leaves it), and `?surfGrip=0` for a one-URL A/B that every capture records for itself.
+
+**The wet half of the same seam lives elsewhere**: `WET_GRIP` is parsed and reaches the physics, but there is
+no rain in the engine to be wet from, so the rule moved to
+[roadmap 0.5.0 / 05 rain, piece 9](../roadmap/0.5.0/plans/05-weather-rain/readme.md). Whoever implements it
+should read this page first — a wet road is the same shape of change and will meet the same verdict unless it
+arrives with the visuals and, if the field asks, the mechanisms above.

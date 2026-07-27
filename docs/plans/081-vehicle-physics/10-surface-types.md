@@ -74,8 +74,15 @@ which surface each wheel reported** — the same self-describing rule the spring
    matrix's rubber×group cell relative to road (so tarmac is exactly today's feel and only off-road moves),
    with the steering limiter reading the same adhesion. **This is the step that moves the pack** — a
    deliberate re-record after the field verdict, not a band widening.
-6. **Wet.** `WET_GRIP` applied while it rains, tied to the existing weather state.
-7. **Field round** on grass, dirt, sand and a wet road, plus the pack re-recorded on acceptance.
+6. ~~**Wet.** `WET_GRIP` applied while it rains~~ — **MOVED 2026-07-27 to
+   [roadmap 0.5.0 / 05 rain, piece 9](../../roadmap/0.5.0/plans/05-weather-rain/readme.md)**. There is no
+   rain in the engine to be wet from (`docs/features/weather-environment.md`: precipitation is deliberately
+   not selectable), so the rule would have had nothing to switch it on. Everything it needs is shipped —
+   `SurfaceRecord.wetGrip` is parsed and reaches the physics, the per-wheel adhesion path applies a scale
+   every step, and the limiter is fed the same number — and the rain plan states the rest: one wetness
+   scalar shared with the visual half, SA's own formula read before coding, and the dry world proven
+   unmoved by the 081/07 pack.
+7. **Field round** on grass, dirt and sand, plus the pack re-recorded on acceptance.
 
 ## Acceptance
 
@@ -84,6 +91,9 @@ which surface each wheel reported** — the same self-describing rule the spring
   off-road laps unless the field asks otherwise).
 - The vehicle slice stays inside 081/07 §3's budget with the probe live — measured, in this ledger.
 - Field: "the car finally behaves differently off the road", and no complaint that town driving changed.
+  **Answered 2026-07-27, and not the way this line assumed** — town driving is untouched (that half holds),
+  but off-road reads as "almost unnoticeable": see the ledger and
+  [`docs/open-issues/offroad-feels-like-tarmac.md`](../../open-issues/offroad-feels-like-tarmac.md).
 
 ## Risks
 
@@ -264,6 +274,9 @@ honest continuation, when it is picked up, is porting SA's own sand/roughness ha
 our factor. The F2 panel gained the per-wheel `surface ×factor` readout in the same round, so the next person
 to ask "does this do anything?" answers it in the game rather than from a capture.
 
-**Where this leaves the plan**: steps 1–5 shipped and field-reviewed; **step 6 (`WET_GRIP` under rain) and
-step 7 (the field round + pack re-record) are not done**, and the pack was NOT re-recorded — tarmac laps are
-unchanged, so it did not have to be.
+**Where this leaves the plan**: steps 1–5 shipped and field-reviewed; the pack was NOT re-recorded, because
+tarmac laps are unchanged and it did not have to be. **Step 6 (`WET_GRIP`) is MOVED to
+[roadmap 0.5.0 / 05 rain](../../roadmap/0.5.0/plans/05-weather-rain/readme.md)** — the engine has no rain to
+be wet from, and a wet-tyre rule with no wetness is a rule nobody can switch on. Step 7's field round has
+effectively happened (the verdict above); what remains of this plan is whatever the open issue's option 2
+turns into, if it is ever picked up.

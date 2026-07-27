@@ -1,7 +1,9 @@
 # 05 — Rain & weather phenomena (timecyc-driven)
 
 Full weather visuals driven by the timecyc/weather system the engine already samples (074/06 row 14):
-rain is the headliner; the rest of the SA weather set rides the same drive.
+rain is the headliner; the rest of the SA weather set rides the same drive. **And what the weather does to
+the CAR**: the wet-tyre rule moved here from [081/10](../../../../plans/081-vehicle-physics/10-surface-types.md)
+on 2026-07-27, because there is no rain to be wet from until this plan lands (piece 9).
 
 **Migration note:** targets the 074 engine (WebGPU) — the particle/billboard pass from 06 row 13 is the
 substrate for rain; the fog/sky/wind knobs already live in `Engine.environment`. The deferred
@@ -50,6 +52,59 @@ already samples (074/06 row 14):
 7. **Weather→wind** (the deferred 02 idea executes here): windStrength/clock from weather id with
    cross-faded transitions.
 8. **Interior/tunnel suppression**: reuse the rain-map occlusion; zones marked interior kill weather.
+9. **WET GRIP — what rain does to the tyres.** The physics half, moved here from
+   [081/10 step 6](../../../../plans/081-vehicle-physics/10-surface-types.md) on 2026-07-27 for the plain
+   reason that **there is no rain to be wet from yet**: the weather system stops short of precipitation
+   (`docs/features/weather-environment.md`: "rain/storm/sandstorm intentionally not selectable"), so a wet
+   tyre rule would have had nothing to switch it on. See below — the seam it needs is already shipped.
+
+## Wet grip (piece 9), in detail
+
+**Everything on the physics side already exists**; this piece is the missing STATE and one rule.
+
+What 081/10 shipped, and this plan consumes:
+
+- `surfinfo.dat` is fully parsed, and every row's **`WET_GRIP`** is on the engine-side `SurfaceRecord`
+  (`packages/game/src/interfaces/world-adapter.interface.ts`). The stock spread: **116 of 179 rows at 0.00,
+  38 at −0.40, 18 at −0.25, 6 at +0.50, 1 at +0.40** — so most surfaces do not care, and the ones that do
+  lose a quarter to a bit under half.
+- `surface.dat`'s adhesion matrix is parsed too, and its own **WET group is 2.8 against road's 4.5** (0.62)
+  — two different mechanisms in the data: a wet SURFACE (a puddle, a riverbed) versus a dry surface made
+  wet BY WEATHER, which is what `WET_GRIP` is for.
+- The wheel already knows what it stands on and is scaled by it every fixed step
+  (`PhysicsWorld.readVehicleWheelAdhesion` → `setVehicleControls`), and **the steering limiter is given the
+  same number** — that coupling must be preserved here, or the limiter promises lock the wet tyre cannot
+  answer (the 081/09 mechanism).
+- Instruments that will measure this one for free: `?surfGrip=0` for a one-URL A/B, the `[phys]` capture's
+  per-lap `surfaces` block, the F2 wheel rows (`surface ×factor`), and the `grass-corner` scene's method for
+  finding controlled ground.
+
+What this plan must add:
+
+1. **A wetness scalar the physics can read.** Piece 4 already needs a "wetness memory" that charges while it
+   rains and decays after — **one scalar for both**, so a road that LOOKS wet IS wet. Anything else and the
+   two halves drift apart on the same frame.
+2. **The rule, taken from the original rather than invented.** The legend calls `WET_GRIP` a "wet multiplier
+   on tyre grip" while the values are negative, so the shape is almost certainly
+   `adhesion × (1 + wetGrip × wetness)` — **verify in the reversed source before coding** (repo rule: the
+   game's own formula first; the same read settled `ROAD_ADHESION` and the `×0.001` in 081/05).
+3. **Interior/tunnel agreement**: a car under a roof must not be on a wet road — reuse piece 3's rain map or
+   the interior zones, whichever the visual half ends up using. One source of truth for "is this spot wet".
+4. **Puddles are their own case**: a puddle (piece 5) is a wet SURFACE, not merely weather; if a puddle mask
+   exists per-pixel it does not follow that the physics can sample it cheaply — decide explicitly whether
+   puddles affect grip at all, or whether wetness is uniform under rain. Do not let the visual imply a
+   physics that is not there.
+
+**Read this before tuning it** — [`docs/open-issues/offroad-feels-like-tarmac.md`](../../../../open-issues/offroad-feels-like-tarmac.md):
+the field verdict on the same class of change was "applied, verified, and almost unnoticeable", because a
+grip CEILING is invisible until the tyre is against it. Wet grip will land in exactly the same place unless
+it comes with what makes wet roads FEEL wet — the visual half (piece 4/5) plus, if the field asks for it,
+SA's own extra mechanisms. Budget the field round accordingly, and do not answer a "cannot feel it" verdict
+by scaling the constant.
+
+**Verification owed**: the dry world must not move — the 081/07 regression pack
+(`npx tsx scripts/phys-regression.ts`) is the gate, and it must pass untouched with rain off. Then an A/B of
+the same scenes with rain forced, recorded in `docs/benchmarks/vehicle-physics/`.
 
 ## Tasks
 
@@ -62,4 +117,9 @@ already samples (074/06 row 14):
       (target ≈ free — it is a per-pixel branch on wet frames only).
 - [ ] Lightning + thunder timing; smog/fog/sandstorm presets per the weather catalogue above.
 - [ ] Weather→wind rule (closes ideas 02).
+- [ ] **Wet grip (piece 9)**: the shared wetness scalar; SA's own `WET_GRIP` rule read out of the reversed
+      source and applied per wheel through the existing adhesion path (limiter fed the same number);
+      interior/tunnel agreement; an explicit decision on puddles-vs-grip.
+- [ ] **Wet grip verification**: the 081/07 pack green with rain OFF (the dry world must not move), then a
+      rain-on A/B of the same scenes recorded in `docs/benchmarks/vehicle-physics/` + a field round.
 - [ ] Field matrix: each SA weather id screenshotted at 3 times of day; series bench rows for rain on/off.

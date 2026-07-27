@@ -30,6 +30,8 @@ overhaul presets and the 074/08 dynamics layer. Full plan:
 
 The full 23-id SA weather catalogue mapped to effect classes: weather state machine with real FROM→TO
 timecyc blends, instanced rain with a top-down occlusion map (dry under roofs), wet-world uniforms,
+**WET GRIP** (the tyre half, moved from 081/10 — the surface path is already shipped, what is missing is the
+rain to be wet from),
 **after-rain PUDDLES** (surface name-list + world-noise mask + `skyColorFor`-reflection, drying from the
 edges inward), fog/smog presets, sandstorm (tinted particle wash + wind), lightning/thunder — and the
 deferred weather→wind rule executes here. Full plan:
