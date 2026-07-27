@@ -125,7 +125,7 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   as a friction coefficient, split across the axles by `fTractionBias` — the field-liked baseline after
   every SA-derived scale (and the whole 2 g world, 081/08) was field-rejected; the postmortem
   (`docs/postmortem/081-vehicle-physics/sa-faithful-feel.md`) carries that story. On top of it, **the
-  LATERAL grip grows with speed** (081/09): `frictionSlip × min(1 + (v/20 m/s)², 2.5)` — a deliberate,
+  LATERAL grip grows with speed** (081/09): `frictionSlip × min(1 + (v/12 m/s)², 3)` — a deliberate,
   documented assist with the inverse shape of the "helpless at 130 km/h" complaint. Virtual only: the
   engine clamp and the brake cap stay on the unboosted grip, so launches, acceleration, braking, weight and
   town-speed feel are the baseline's, byte for byte. Dials are session-tunable (`?gripVd`, `?gripCap`) and

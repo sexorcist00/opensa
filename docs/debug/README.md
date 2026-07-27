@@ -89,6 +89,7 @@ SRC=http://localhost:3001/build/original/opensa
 TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&phys=all&car=infernus" phys 1200000 7
 npx tsx scripts/phys-compare.ts before.log after.log [--determinism]   # diff two capture sets
+npx tsx scripts/phys-regression.ts sweep-*.log                        # gate a sweep on the shipped pack
 ```
 
 A lap teleports beside a real road spot, waits for streaming AND the collision behind it, spawns the car,

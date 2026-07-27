@@ -495,3 +495,48 @@ At 3 % the flick works on every car tested, with no flips: admiral 2.3° → 33.
 0.1° → **87.9°**. It applies only while the lever is up, so nothing else in the fleet's behaviour moves.
 
 Runs: `2026-07-26-headless-handbrake-flick.json`.
+
+### 2026-07-27 — THE REGRESSION PACK: the shipped feel, frozen (5 cars × 11 scenes, 55 of 55 laps)
+
+The accepted state, recorded so a later change has something to be measured against — 081/07 §2, and the
+capture matrix 081/09 shipped without (its ledger's coverage note). **Pak: the canonical
+`./build/original/opensa`, `pak/manifest.json` buildTime `08:41 24-07-2026`, cellSize 250, 1 272 901 632 B**
+— the same pak as the whole 07-26 record, so these laps are comparable with it. Code at commit `e50d913`
+(081/09 shipped: the lateral speed-grip assist and the `SLIDE_SPEED` unit fix). **Dials at their shipped
+defaults, `gripVd 12` / `gripCap 3`, and every capture says so itself** (`speedGrip` block). Headless via the
+bench harness (M3 Pro, ANGLE/Metal); infernus was swept alone, the other four in pairs — the physics is
+fixed-step, so machine load does not enter the numbers.
+
+Cars: infernus · admiral · firetruk · comet · turismo (sports · sedan · heavy · the reported flipper · the
+stance case). The gate that reads them: `npx tsx scripts/phys-regression.ts sweep-*.log`.
+
+| car      | brake-strip top | 0–100  | brake                | sweeper turned | u-turn                |
+| -------- | --------------- | ------ | -------------------- | -------------- | --------------------- |
+| infernus | 126.4 km/h      | 5.43 s | 65.5 m / 4.22 s      | −0.2° (hit)    | 275.7°, roll −72/+82° |
+| admiral  | 70.8 km/h       | never  | 40.1 m / 4.40 s      | −88.5°         | 48.3°                 |
+| firetruk | 64.0 km/h       | never  | 27.0 m / 4.82 s      | −15.3°         | 35.8°                 |
+| comet    | 80.6 km/h       | never  | 31.4 m / 3.08 s      | −65.7°         | **FLIPS** (roll ±180) |
+| turismo  | 135.7 km/h      | 4.78 s | 70.1 m / 4.23 s      | −0.2° (hit)    | 12.7°                 |
+
+**The replay was measured, not assumed.** The infernus sweep was run a second time, under three-way parallel
+load, and diffed against the first: **nine of the eleven scenes reproduced to the second decimal** (max |Δ|
+0.01 on every summary field AND every series column — rest, brake-strip, step-steer, sweeper, slalom,
+kerb-strike, handbrake-turn, handbrake-flick, pull-away-reverse). The two that did not are `u-turn`
+(topSpeed 79.8 → 70.8 km/h, roll −72.5 → −58.3°, airborne 4.13 → 3.45 s) and `crest-jump` (gLat 9.2 → 30.1,
+slip 30.1 → 67.1°, turned −16.3 → −37.3°) — the two laps where this car spends seconds in the air and comes
+down on ground the streamer decides. **That is what the pack's per-scene widening is sized from**, ~1.5× the
+measured spread, and it is why those scenes gate coarsely (`scripts/phys-regression.ts` carries the numbers
+at the constant).
+
+**Read before trusting a cornering number from this matrix: eight of the eleven scenes register impact-class
+spikes** (50–300 g longitudinal), the sweeper included — on the two fastest cars (infernus, turismo) the lap
+meets something ~1 s into the corner and never comes round at all, which is why their `turnedDeg` reads ≈ 0
+while the slower admiral and comet arc 88° and 66°. This is not new — every matrix in this record back to the
+BEFORE set has the same spikes — but it caps what the pack can prove on those laps, and it means a "turn-in
+at speed" verdict taken off the sweeper is partly a record of where the wall is. Cleaning the scene ground
+(or shortening the run-up) is owed; it would make those laps incomparable with everything above, so it is a
+deliberate step, not a fix to slip in.
+
+Runs: `2026-07-27-headless-shipped-{infernus,admiral,firetruk,comet,turismo}.json` — the pack itself. A
+re-record is a deliberate act: new captures, the new prefix in `scripts/phys-regression.ts`, a row here, and
+the field verdict that accepted the new feel.

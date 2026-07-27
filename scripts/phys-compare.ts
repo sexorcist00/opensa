@@ -12,15 +12,9 @@
  * - `--determinism` — the same build run twice: any signal outside {@link DETERMINISM_BANDS} is a failure,
  *   because a scene that does not replay cannot be a baseline for anything.
  */
-import { readFileSync } from 'node:fs';
+import type { Capture } from './lib/phys-captures';
 
-interface Capture {
-  car: string;
-  columns: string[];
-  key: string;
-  series: number[][];
-  summary: Record<string, unknown>;
-}
+import { loadCaptureMap } from './lib/phys-captures';
 
 /** How far a signal may move between two runs of the SAME build before the scene is not repeatable.
  *  Absolute, in each summary field's own unit. Everything not listed falls back to {@link DEFAULT_BAND}. */
@@ -73,24 +67,6 @@ function compareSummaries(baseline: Capture, candidate: Capture, determinism: bo
   return failed;
 }
 
-/** Read a harness log or a JSON array; key each capture by `car/key`. */
-function load(path: string): Map<string, Capture> {
-  const text = readFileSync(path, 'utf8');
-  const captures: Capture[] = [];
-  if (text.trimStart().startsWith('[')) {
-    captures.push(...(JSON.parse(text) as Capture[]));
-  } else {
-    for (const line of text.split('\n')) {
-      const at = line.indexOf('[phys] {');
-      if (at >= 0) {
-        captures.push(JSON.parse(line.slice(at + '[phys] '.length)) as Capture);
-      }
-    }
-  }
-
-  return new Map(captures.map((capture) => [`${capture.car}/${capture.key}`, capture]));
-}
-
 function main(): void {
   const args = process.argv.slice(2);
   const determinism = args.includes('--determinism');
@@ -101,8 +77,8 @@ function main(): void {
 
     return;
   }
-  const before = load(beforePath);
-  const after = load(afterPath);
+  const before = loadCaptureMap([beforePath]);
+  const after = loadCaptureMap([afterPath]);
   let failed = false;
 
   for (const [id, candidate] of after) {

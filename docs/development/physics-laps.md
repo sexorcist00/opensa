@@ -108,6 +108,26 @@ npx tsx scripts/phys-compare.ts run-a.log run-b.log --determinism # replay check
 Either input can be a raw harness log — the tool finds the `[phys]` lines itself — or a JSON array of
 captures. Captures pair by `car` + scene `key`.
 
+## The regression pack (the gate)
+
+The committed matrix of the ACCEPTED feel — 5 cars × 11 scenes, `docs/benchmarks/vehicle-physics/`
+`2026-07-27-headless-shipped-<car>.json` — is what a change to vehicle physics is measured against. Sweep the
+five cars, then check the fresh logs against the pack:
+
+```bash
+for car in infernus admiral firetruk comet turismo; do
+  TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
+    "http://localhost:5173/?loader=http-dir&src=$SRC&phys=all&car=$car" "shot-$car" 2700000 11 > "sweep-$car.log"
+done
+npx tsx scripts/phys-regression.ts sweep-*.log
+```
+
+Bands live in `scripts/phys-regression.ts` with the reason for each widening: they are NOT a determinism
+check but the width of "the feel did not move", floored on a measured repeat sweep. A breach is a finding —
+either the change moved something it should not have, or the pack is deliberately re-recorded (new captures,
+a new prefix in the script, a chronology row in the benchmarks readme, and the field verdict that accepted
+the new feel).
+
 ## Reading a failed lap
 
 - **The runner names its own failures**: `[phys] scene 'x' failed: …`. A missing line would read as a pass,

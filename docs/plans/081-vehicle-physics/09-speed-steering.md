@@ -97,7 +97,11 @@ feel is fleet-wide-frozen at the baseline; the accepted assists are lateral-only
 tyre-temperature mechanic (`m_fTireTemperature`, burnout heating), which scales per car by its own drive
 type and behaviour rather than by a shared dial. Parked, not queued.
 
-**Coverage note (close of session 2026-07-27):** the SHIPPED state (assist 12/3 + the SLIDE_SPEED fix) has
-no committed capture matrix yet — the mid-session after-sets were obsoleted by the bug fix landing between
-runs. Deliberately folded into 07's regression pack, which is queued FIRST in the remaining work precisely
-so the accepted feel gets frozen as tolerance-banded reference captures before anything else moves.
+**Coverage note (close of session 2026-07-27) — CLOSED the same day.** The SHIPPED state (assist 12/3 + the
+SLIDE_SPEED fix) had no committed capture matrix: the mid-session after-sets were obsoleted by the bug fix
+landing between runs. It was folded into 07's regression pack and that pack is now recorded —
+`docs/benchmarks/vehicle-physics/2026-07-27-headless-shipped-<car>.json`, 5 cars × 11 scenes on `e50d913`
+with the dials at 12/3, gated by `scripts/phys-regression.ts` (081/07 ledger). One caveat that belongs to
+THIS plan: on the sweeper, its headline instrument, the two fastest cars hit something about a second into
+the corner, so their `turnedDeg` is not a cornering number — the arc numbers in this ledger come from the
+cars that stayed on the road.

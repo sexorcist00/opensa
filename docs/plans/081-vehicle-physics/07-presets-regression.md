@@ -51,7 +51,7 @@ and close the bookkeeping.
 
 - [ ] Class sweep + class-factor table + field verdicts per class.
 - [ ] 841-car spawn sanity run on final tuning.
-- [ ] Regression pack committed + harness lane + bands from accepted captures.
+- [x] Regression pack committed + harness lane + bands from accepted captures (2026-07-27, ledger below).
 - [ ] Perf measurement + breakdown; damage-coupling check.
 - [ ] Docs/close-out items above.
 
@@ -63,3 +63,46 @@ and close the bookkeeping.
 ## Ledger
 
 _(class factors, pack bands, perf numbers, final verdicts)_
+
+### 2026-07-27 — §2 the regression pack: the shipped feel is frozen
+
+**5 cars × 11 scenes, 55 of 55 laps, on `e50d913` with the dials at their shipped defaults** (`gripVd 12` /
+`gripCap 3`, and every capture records them). Cars: infernus · admiral · firetruk · comet · turismo — the
+calibration trio plus the two the field named (the flipping comet, the slammed turismo). The captures ARE the
+reference: `docs/benchmarks/vehicle-physics/2026-07-27-headless-shipped-<car>.json`, with the conditions, the
+headline numbers and the caveats in that folder's readme. This also closes 081/09's coverage note — the
+shipped state had no committed matrix.
+
+**The gate**: `npx tsx scripts/phys-regression.ts sweep-*.log` (`scripts/phys-regression.ts`, unit-tested in
+`scripts/phys-regression.test.ts`; capture loading shared with `phys-compare.ts` via `scripts/lib/`). It
+fails on four different things, which is the point — a moved signal, a lap that never reported, a car nobody
+swept, and a categorical change (a flip that appeared or vanished, a lap that stopped braking or stopped
+reaching 100 km/h). It also gates what the run was CONFIGURED with: the `speedGrip` dials and the per-wheel
+springs at 0.1 %, so a sweep driven with different dials says so instead of arriving as a fleet of moved
+outcomes — and, on `rest` only, the settled stance (mass, weight on ground, per-wheel load and spring length
+at 1 %), because **no summary signal carries the standing pose**: the `rest` lap reads zero on every channel
+whether the car sits at its SA pose or on its bump stops, so the 2026-07-27 stance law would otherwise have
+shipped ungated.
+
+**The bands are measured, not guessed.** The infernus sweep was repeated (under three-way parallel load, to
+prove machine load does not enter a fixed-step lap) and diffed: **nine of eleven scenes reproduced to the
+second decimal**, every summary field and every series column, collisions included. The two exceptions —
+`u-turn` and `crest-jump` — are the laps where the car flies and lands on streamed ground; their spread
+(topSpeed 9 km/h, roll 14°, gLat 24, slip 37°) is what their widening is sized from at ~1.5×. `slalom` and
+`kerb-strike` replayed but are the same shape of lap and carry the same widening. Everything else is held at
+"a driver would notice": 2 % of top speed, 3 % of a braking distance, a few degrees of roll or slip.
+Verification: the repeat sweep, checked against the committed pack, passes 11 of 11 laps in band.
+
+§2's unit-level half is in the same state: the retired brake-constant assertions the plan named are already
+gone (nothing in the vehicle or physics suites pins the 480 N figure), and the DRCVC quirks still carry their
+own tests (`seedReverse` in `physics-world.test.ts`, the seat/parking-brake path in
+`enter-vehicle.system.test.ts`). A seam-by-seam coverage audit stays with the close-out, not with the pack.
+
+**A finding the pack cannot fix, recorded so nobody reads past it: eight of the eleven scenes register
+impact-class spikes** (50–300 g longitudinal). On the sweeper — the instrument 081/09 was accepted on — the
+two fastest cars meet something about a second into the corner and never come round (`turnedDeg` ≈ 0 for
+infernus and turismo, while the slower admiral and comet arc 88° and 66°). Every matrix in the record back to
+the BEFORE set has these spikes, so the pack freezes what the game does today honestly; but a cornering
+verdict taken off those laps is partly a record of where the wall is. **Owed: clean ground for the scenes
+that leave the road (or a shorter run-up).** It re-bases every historical number on those scenes, so it is
+its own step with the user's go-ahead — not a fix to slip into a tuning round.

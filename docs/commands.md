@@ -94,6 +94,8 @@ TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js
 #   ?gripVd=<m/s>  boost reference speed (default 12)  ·  ?gripCap=<x>  boost ceiling (default 3)
 # Diff two capture sets (raw harness logs are accepted as-is); --determinism gates a replay check
 npx tsx scripts/phys-compare.ts before.log after.log [--determinism]
+# The regression pack (081/07): a fresh 5-car sweep against the committed accepted-feel matrix
+npx tsx scripts/phys-regression.ts sweep-*.log
 ```
 
 Guides: [development/benchmarks.md](./development/benchmarks.md) (perf) ·
