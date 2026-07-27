@@ -1,7 +1,11 @@
 # 081/10 — Surface types: the wheel learns what it stands on
 
-**Status: QUEUED 2026-07-27** (scouted, not started). The last item of the agreed queue after the regression
-pack (07 §2), the kerb close-out (06 §2) and the step-cost measurement (07 §3).
+**Status: steps 1–5 SHIPPED and field-reviewed 2026-07-27** — the wheel reads its surface and the grip
+follows it; the field's verdict was "applied, verified, almost unnoticeable", shelved as
+[`docs/open-issues/offroad-feels-like-tarmac.md`](../../open-issues/offroad-feels-like-tarmac.md). **Step 6
+(wet grip) MOVED to [roadmap 0.5.0 / 05 rain](../../roadmap/0.5.0/plans/05-weather-rain/readme.md)** — the
+engine has no rain yet. It was the last item of the agreed queue after the regression pack (07 §2), the kerb
+close-out (06 §2) and the step-cost measurement (07 §3).
 
 Today every tyre in the world drives on tarmac. `ROAD_ADHESION = 4.5` in `vehicle/steering.ts` is the
 rubber×road cell of `data/surface.dat` hardcoded, and the per-wheel `frictionSlip` is the car's authored

@@ -86,7 +86,7 @@ positive gate verdict swaps the controller without invalidating the chain.
 | 07  | [Presets + physics CI](07-presets-regression.md)         | Per-class field sweep (sports/truck/bus), replay regression pack with tolerance bands, close-out.                                    |
 | 08  | [SA gravity](08-sa-gravity.md) **CLOSED-REJECTED**       | The 2g experiment — built, measured, field-rejected same day; postmortem carries the two findings. Do not reopen.                    |
 | 09  | [Responsive steering at speed](09-speed-steering.md) **SHIPPED** | Speed-growing lateral grip (virtual downforce) + the SLIDE_SPEED 50× unit-bug fix; longitudinal frozen at baseline; dials field-owned. |
-| 10  | [Surface types](10-surface-types.md) **QUEUED**           | The wheel learns what it stands on: COL materials through the seam, a per-wheel probe, grip from `surface.dat`'s group matrix instead of the tarmac-only 4.5, `WET_GRIP` in rain. |
+| 10  | [Surface types](10-surface-types.md) **1–5 SHIPPED** | The wheel learns what it stands on: COL materials through the seam, a per-wheel probe, grip from `surface.dat`'s group matrix instead of the tarmac-only 4.5. Field: applied and verified, but off-road reads as almost unnoticeable → [open issue](../../open-issues/offroad-feels-like-tarmac.md); wet grip → [roadmap 05 rain](../../roadmap/0.5.0/plans/05-weather-rain/readme.md). |
 
 Execution order + rationale: [priority.md](priority.md). What the physics LOOKS like — tyre smoke, skid
 marks, impact smoke, and the surface effects 10 unlocks — is its own plan:
