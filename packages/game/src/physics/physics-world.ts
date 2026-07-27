@@ -472,6 +472,9 @@ export class PhysicsWorld {
   private readonly rapier: Rapier;
   /** The live speed-grip dials (plan 081/09) — session-tunable, recorded by every capture. */
   private speedGrip = { cap: SPEED_GRIP_CAP, reference: SPEED_GRIP_REFERENCE };
+  /** What each collider is MADE OF (plan 081/10): the SA surface id per triangle for a trimesh, or one id
+   *  for a box/sphere. Keyed by collider handle, cleared with the body in {@link removeBodies}. */
+  private readonly surfaces = new Map<number, number | Uint8Array>();
   /** Raycast vehicle controllers, advanced before each {@link step}. */
   private readonly vehicles: VehicleController[] = [];
   /** What the raycast vehicle controllers cost in the last {@link step} (ms), READ ONCE: the vehicle half
@@ -1009,7 +1012,13 @@ export class PhysicsWorld {
   /** Remove static bodies (and their colliders) by handle — e.g. when a cell unloads. */
   removeBodies(handles: readonly number[]): void {
     for (const handle of handles) {
-      this.world.removeRigidBody(this.world.getRigidBody(handle));
+      const body = this.world.getRigidBody(handle);
+      // Drop the surface entries with the colliders themselves — Rapier reuses handles, so a stale entry
+      // would answer for whatever is created next, and a streaming world creates constantly.
+      for (let i = 0; i < body.numColliders(); i += 1) {
+        this.surfaces.delete(body.collider(i).handle);
+      }
+      this.world.removeRigidBody(body);
     }
   }
 
@@ -1228,6 +1237,33 @@ export class PhysicsWorld {
     });
   }
 
+  /**
+   * The SA surface id directly below `position` (within `maxDrop`), or null when nothing is hit or the
+   * collision that was hit carries no material — plan 081/10's "what is this wheel standing on".
+   *
+   * The triangle is identified by the ray hit's own `featureId`, which Rapier reports as the trimesh face
+   * index; a box or sphere has one material for the whole shape and no feature to read. **Null means
+   * UNKNOWN, never surface 0** (`default`): collision built from something without materials must not be
+   * read as if it were tarmac.
+   */
+  surfaceBelow(position: Vec3, maxDrop: number, excludeBody?: number): null | number {
+    const ray = new this.rapier.Ray({ x: position[0], y: position[1], z: position[2] }, { x: 0, y: 0, z: -1 });
+    const exclude = excludeBody === undefined ? undefined : this.world.getRigidBody(excludeBody);
+    const hit = this.world.castRayAndGetNormal(ray, maxDrop, true, undefined, undefined, undefined, exclude);
+    if (!hit) {
+      return null;
+    }
+    const surface = this.surfaces.get(hit.collider.handle);
+    if (surface === undefined) {
+      return null;
+    }
+    if (typeof surface === 'number') {
+      return surface;
+    }
+
+    return hit.featureId === undefined ? null : (surface[hit.featureId] ?? null);
+  }
+
   /** Per-wheel suspension lengths only — the drawn wheels follow them every fixed step (plan 081/06 §3),
    *  and the full {@link readVehicleWheels} reading would be nine fields of waste per wheel per frame. */
   suspensionLengths(controller: VehicleController): number[] {
@@ -1309,7 +1345,13 @@ export class PhysicsWorld {
     const cx = (box.max[0] + box.min[0]) / 2;
     const cy = (box.max[1] + box.min[1]) / 2;
     const cz = (box.max[2] + box.min[2]) / 2;
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(hx, hy, hz).setTranslation(cx, cy, cz), body);
+    const collider = this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(hx, hy, hz).setTranslation(cx, cy, cz),
+      body,
+    );
+    if (box.material !== undefined) {
+      this.surfaces.set(collider.handle, box.material);
+    }
 
     return 1;
   }
@@ -1340,7 +1382,7 @@ export class PhysicsWorld {
   }
 
   private addShapes(body: RapierBody, shape: ModelColliders['shape']): number {
-    let count = this.addTrimesh(body, shape.vertices, shape.indices);
+    let count = this.addTrimesh(body, shape.vertices, shape.indices, shape.materials);
     for (const box of shape.boxes) {
       count += this.addBox(body, box);
     }
@@ -1356,17 +1398,28 @@ export class PhysicsWorld {
       return 0;
     }
     const [x, y, z] = sphere.center;
-    this.world.createCollider(this.rapier.ColliderDesc.ball(sphere.radius).setTranslation(x, y, z), body);
+    const collider = this.world.createCollider(
+      this.rapier.ColliderDesc.ball(sphere.radius).setTranslation(x, y, z),
+      body,
+    );
+    if (sphere.material !== undefined) {
+      this.surfaces.set(collider.handle, sphere.material);
+    }
 
     return 1;
   }
 
-  private addTrimesh(body: RapierBody, vertices: Float32Array, indices: Uint32Array): number {
+  private addTrimesh(body: RapierBody, vertices: Float32Array, indices: Uint32Array, materials?: Uint8Array): number {
     if (vertices.length === 0 || indices.length === 0) {
       return 0;
     }
     try {
-      this.world.createCollider(this.rapier.ColliderDesc.trimesh(vertices, indices), body);
+      const collider = this.world.createCollider(this.rapier.ColliderDesc.trimesh(vertices, indices), body);
+      if (materials) {
+        // The SAME array for every placement of this model — a reference, never a copy: a cell can hold
+        // hundreds of instances of one wall.
+        this.surfaces.set(collider.handle, materials);
+      }
 
       return 1;
     } catch {

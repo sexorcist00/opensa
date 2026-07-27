@@ -12,6 +12,8 @@ import type { Vec3 } from './world-adapter.interface';
 
 /** A collision primitive box (object-aligned via min/max). */
 export interface ColliderBox {
+  /** SA surface id — see {@link ColliderShape.materials}. */
+  material?: number;
   max: Vec3;
   min: Vec3;
 }
@@ -21,6 +23,13 @@ export interface ColliderShape {
   boxes: ColliderBox[];
   /** Triangle indices into `vertices` (3 per triangle). */
   indices: Uint32Array;
+  /**
+   * The SA surface id of each TRIANGLE (one byte per triangle, so `indices.length / 3` long) — the row
+   * index into `surfinfo.dat`, which is what says whether this triangle is tarmac, grass or sand
+   * (plan 081/10). Optional: collision that came from somewhere without materials simply has none, and a
+   * reader must treat that as "unknown surface", never as surface 0.
+   */
+  materials?: Uint8Array;
   spheres: ColliderSphere[];
   /** Flattened vertex positions (n * 3). */
   vertices: Float32Array;
@@ -29,6 +38,8 @@ export interface ColliderShape {
 /** A collision primitive sphere. */
 export interface ColliderSphere {
   center: Vec3;
+  /** SA surface id — see {@link ColliderShape.materials}. */
+  material?: number;
   radius: number;
 }
 

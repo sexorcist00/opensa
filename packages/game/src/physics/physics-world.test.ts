@@ -428,6 +428,75 @@ describe('PhysicsWorld kinematic character controller', () => {
   });
 });
 
+describe('PhysicsWorld.surfaceBelow', () => {
+  /** Two triangles of ground, side by side in X, each with its own SA surface id. */
+  const twoSurfaces = (materials: Uint8Array): ColliderShape =>
+    shape({
+      indices: new Uint32Array([0, 1, 2, 1, 3, 2]),
+      materials,
+      // A 4 m × 4 m quad from (−2,−2) to (2,2) at z = 0, split into two triangles along x = 0… the split
+      // runs corner to corner, so the two halves are told apart by sampling well inside each.
+      vertices: new Float32Array([-2, -2, 0, 2, -2, 0, -2, 2, 0, 2, 2, 0]),
+    });
+
+  describe('negative cases', () => {
+    it('answers null where nothing is below', async () => {
+      const physics = await makeWorld();
+
+      expect(physics.surfaceBelow([0, 0, 5], 10)).toBeNull();
+      physics.dispose();
+    });
+
+    it('answers null — UNKNOWN, not surface 0 — for collision that carries no materials', async () => {
+      const physics = await makeWorld();
+      physics.createStaticColliders([
+        model(shape({ boxes: [{ max: [5, 5, 0.5], min: [-5, -5, -0.5] }] }), [new Matrix4()]),
+      ]);
+      physics.step(STEP); // a ray sees nothing until the world has stepped once
+
+      expect(physics.surfaceBelow([0, 0, 5], 10)).toBeNull();
+      physics.dispose();
+    });
+
+    it('forgets a cell surface when its body goes, so a recycled handle cannot answer for it', async () => {
+      const physics = await makeWorld();
+      const handles = physics.createStaticColliders([model(twoSurfaces(new Uint8Array([33, 33])), [new Matrix4()])]);
+      physics.step(STEP);
+
+      physics.removeBodies(handles);
+      physics.step(STEP);
+
+      expect(physics.surfaceBelow([0, 0, 5], 10)).toBeNull();
+      physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reads the surface of the TRIANGLE the ray hit, not of the model', async () => {
+      const physics = await makeWorld();
+      // 1 = tarmac, 33 = sand_beach in SA's table; the ids are opaque here, the point is they differ.
+      physics.createStaticColliders([model(twoSurfaces(new Uint8Array([1, 33])), [new Matrix4()])]);
+      physics.step(STEP);
+
+      expect(physics.surfaceBelow([-1.5, -1.5, 5], 10)).toBe(1);
+      expect(physics.surfaceBelow([1.5, 1.5, 5], 10)).toBe(33);
+      physics.dispose();
+    });
+
+    it('reads a box primitive own single surface', async () => {
+      const physics = await makeWorld();
+      const boxes = [
+        { material: 26, max: [5, 5, 0.5] as [number, number, number], min: [-5, -5, -0.5] as [number, number, number] },
+      ];
+      physics.createStaticColliders([model(shape({ boxes }), [new Matrix4()])]);
+      physics.step(STEP);
+
+      expect(physics.surfaceBelow([0, 0, 5], 10)).toBe(26);
+      physics.dispose();
+    });
+  });
+});
+
 describe('PhysicsWorld.createStaticColliders / removeBodies', () => {
   describe('negative cases', () => {
     it('creates no bodies for no models', async () => {

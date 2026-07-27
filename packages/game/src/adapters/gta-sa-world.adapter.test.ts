@@ -154,15 +154,30 @@ describe('toModelColliders', () => {
       expect(result.transforms).toHaveLength(1);
     });
 
-    it('maps box and sphere primitives (dropping surface data)', () => {
+    it('maps box and sphere primitives, each keeping its own surface id', () => {
       const col = colModel({
-        boxes: [{ max: [1, 1, 1], min: [-1, -1, -1], surface: SURFACE }],
-        spheres: [{ center: [0, 0, 2], radius: 0.5, surface: SURFACE }],
+        boxes: [{ max: [1, 1, 1], min: [-1, -1, -1], surface: { ...SURFACE, material: 26 } }],
+        spheres: [{ center: [0, 0, 2], radius: 0.5, surface: { ...SURFACE, material: 33 } }],
       });
 
       const result = toModelColliders({ col, name: 'prop', transforms: [] });
-      expect(result.shape.boxes).toEqual([{ max: [1, 1, 1], min: [-1, -1, -1] }]);
-      expect(result.shape.spheres).toEqual([{ center: [0, 0, 2], radius: 0.5 }]);
+      expect(result.shape.boxes).toEqual([{ material: 26, max: [1, 1, 1], min: [-1, -1, -1] }]);
+      expect(result.shape.spheres).toEqual([{ center: [0, 0, 2], material: 33, radius: 0.5 }]);
+    });
+
+    it('carries one surface id per TRIANGLE, in index order (plan 081/10)', () => {
+      const col = colModel({
+        faces: [
+          { a: 0, b: 1, c: 2, light: 0, material: 1 }, // tarmac
+          { a: 2, b: 3, c: 0, light: 0, material: 33 }, // sand_beach
+        ],
+        vertices: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0]),
+      });
+
+      const result = toModelColliders({ col, name: 'road', transforms: [] });
+
+      expect(Array.from(result.shape.materials ?? [])).toEqual([1, 33]);
+      expect(result.shape.materials).toHaveLength(result.shape.indices.length / 3);
     });
   });
 });

@@ -124,3 +124,30 @@ What the tests pin, because these are the numbers the rest of the plan is built 
 | adhesion census                                      | road 73 · loose 60 · hard 29 · sand 12 · rubber 3 · wet 2 |
 
 Suite 2840 → **2853 green**. Next: step 3, materials through the collider seam (still no behaviour change).
+
+### 2026-07-27 — step 3: the material reaches the physics world, and a point can be asked what it is
+
+Still no behaviour change — nothing reads the answer yet, and the regression pack is untouched.
+
+- **The seam carries it.** `ColliderShape` gained `materials?: Uint8Array` — **one byte per TRIANGLE**, in
+  index order — and `ColliderBox`/`ColliderSphere` an optional `material`. `toModelColliders` fills them from
+  the COL faces and primitives it was already reading and throwing away. A byte per triangle beside twelve
+  per vertex is free, and the old test that asserted the drop ("dropping surface data") is now the test that
+  asserts the carry.
+- **The physics world remembers it** per collider handle (the same array by REFERENCE for every placement of
+  a model — a cell holds hundreds of copies of one wall), and **forgets it with the body**: Rapier reuses
+  handles, so a stale entry would answer for whatever a streaming world creates next. That cleanup has its
+  own test.
+- **`PhysicsWorld.surfaceBelow(position, maxDrop, excludeBody?)`** answers the SA surface id under a point.
+  The triangle comes from the ray hit's own `featureId` — Rapier reports the trimesh face index, which is
+  what makes per-triangle resolution possible at all and settles the design question this plan's header
+  raised (no need to split colliders by group). A box or sphere has one id and no feature to read.
+- **Null means UNKNOWN, never surface 0.** `default` is a real row in the table; collision built without
+  materials must not read as tarmac. Tested both ways.
+
+Learned in passing, and worth a line because it cost the first two test runs: **a ray sees nothing until the
+world has stepped once** — the query pipeline is built during `step`, so a probe written against
+freshly-created colliders silently reports "no ground".
+
+Suite **2859 green**. Next: step 4, the per-wheel probe (still no behaviour change — the capture starts
+reporting the surface while the grip stays where it is).

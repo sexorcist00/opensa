@@ -767,18 +767,27 @@ export class GtaSaWorldAdapter implements WorldAdapter {
 
 export function toModelColliders({ col, name, transforms }: RegionColliders): ModelColliders {
   const indices = new Uint32Array(col.faces.length * 3);
+  // One surface byte per TRIANGLE, in the same order as the indices — this is what makes a wheel able to
+  // ask what it is standing on (plan 081/10). A byte per triangle beside twelve per vertex is free.
+  const materials = new Uint8Array(col.faces.length);
   col.faces.forEach((face, i) => {
     indices[i * 3] = face.a;
     indices[i * 3 + 1] = face.b;
     indices[i * 3 + 2] = face.c;
+    materials[i] = face.material;
   });
 
   return {
     name,
     shape: {
-      boxes: col.boxes.map((box) => ({ max: box.max, min: box.min })),
+      boxes: col.boxes.map((box) => ({ material: box.surface.material, max: box.max, min: box.min })),
       indices,
-      spheres: col.spheres.map((sphere) => ({ center: sphere.center, radius: sphere.radius })),
+      materials,
+      spheres: col.spheres.map((sphere) => ({
+        center: sphere.center,
+        material: sphere.surface.material,
+        radius: sphere.radius,
+      })),
       vertices: col.vertices,
     },
     transforms,
