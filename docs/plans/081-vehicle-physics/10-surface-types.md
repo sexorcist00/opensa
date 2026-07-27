@@ -234,3 +234,36 @@ reports exactly the two real rows: crest-jump's top speed and the sweeper's chao
 
 Suite **2872 green**. Not yet: the field verdict, the grass scene, `WET_GRIP` under rain (step 6), and the
 pack re-record that follows acceptance.
+
+### 2026-07-27 — the grass scene, and the FIELD VERDICT: kept, but it does not read as off-road
+
+The instrument step 5 lacked: **`grass-corner`** starts the car ON grass at (400, 200) in Red County and
+never leaves it — the lap reports `grass_medium_lush` 38 % · `p_sandbeach` 31 % · `grass_short_lush` 17 % ·
+`p_grassmid1` 14 %, no tarmac at all. The spot was found by scanning the map's own COL faces for ground that
+is ≥ 70 % LOOSE with no prop within 40 m, then sampling the ground Z for the flattest part (a slope
+confounds a corner with gravity). Two scene lessons went into the laps guide: pick the flattest grass, and
+`position.z` must be the MEASURED ground height — the first version sat 9 m above its own field because
+32.4 was the terrain model's ORIGIN, and the snap searches only `[z + 2, z − 4]`.
+
+**Measured there** (comet, `?surfGrip=0` vs default): top speed **71.9 → 52.7 km/h**, settled yaw
+**34.8 → 21.7 °/s**, heading come round −272° → −186°, slip peak 10.4 → 6.7°. Both directions move, because
+the tyre has less for the drive as well as the corner; the yaw falls further than the grip (−38 % vs −29 %)
+because the limiter is given the same adhesion — deliberate.
+
+**The field drove it and said no.** Paraphrased across two rounds: grass feels like tarmac, sand feels like
+tarmac on several cars, and with the readout open, "maybe a very small difference, almost unnoticeable" —
+while F2 correctly showed `p_grassmid1 ×0.71` under every wheel. So the mechanism is applied and verified,
+and the gap is that **a grip CEILING is invisible until you are against it**: normal driving on grass never
+asks for 0.71 of tarmac's budget. What makes soft ground feel soft in SA is what this engine still does not
+read — `SAND` ("tyres sink in and can get bogged down"), `ROUGHNESS`, and `bOffroadAbility`.
+
+**Decision (field): keep what is shipped, do not bend the number.** It is data-faithful, costs nothing, and
+shows up exactly where a ceiling should. The full write-up, the numbers and the three options live in
+[`docs/open-issues/offroad-feels-like-tarmac.md`](../../open-issues/offroad-feels-like-tarmac.md) — the
+honest continuation, when it is picked up, is porting SA's own sand/roughness handling rather than scaling
+our factor. The F2 panel gained the per-wheel `surface ×factor` readout in the same round, so the next person
+to ask "does this do anything?" answers it in the game rather than from a capture.
+
+**Where this leaves the plan**: steps 1–5 shipped and field-reviewed; **step 6 (`WET_GRIP` under rain) and
+step 7 (the field round + pack re-record) are not done**, and the pack was NOT re-recorded — tarmac laps are
+unchanged, so it did not have to be.
