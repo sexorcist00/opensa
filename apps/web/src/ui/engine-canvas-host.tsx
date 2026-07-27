@@ -389,6 +389,13 @@ async function boot(
     cap: Number(params.get('gripCap')) || undefined,
     reference: Number(params.get('gripVd')) || undefined,
   });
+  // 081/10: what a wheel is standing on decides its grip. `?surfGrip=0` puts every surface back on tarmac —
+  // the A/B the field judges the whole feature by.
+  const tyreAdhesion = adapter.tyreAdhesion();
+  if (tyreAdhesion) {
+    physics.setTyreAdhesion(tyreAdhesion.perMaterial, tyreAdhesion.road);
+  }
+  physics.tuneSurfaceGrip(params.get('surfGrip') !== '0');
   const controller = physics.createCharacterController();
   const capsule = physics.createKinematicCapsule(spawn, CAPSULE_RADIUS, CAPSULE_HALF_HEIGHT);
 
@@ -1470,6 +1477,7 @@ async function boot(
       });
     },
     speedGrip: (): { cap: number; reference: number } => physics.speedGripTuning(),
+    surfaceGrip: (): boolean => physics.surfaceGripActive(),
     surfaces: (): null | readonly { name: string }[] => adapter.surfaces(),
     teleportPlayer: (anchor): void => {
       teleportPlayer([anchor[0], anchor[1], anchor[2]]);

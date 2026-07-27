@@ -92,6 +92,7 @@ TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js
   "http://localhost:5173/?loader=http-dir&src=$SRC&phys=all&car=infernus" phys 900000 7
 # Speed-grip dials (081/09) — session overrides for the lateral assist; captures record the active values
 #   ?gripVd=<m/s>  boost reference speed (default 12)  ·  ?gripCap=<x>  boost ceiling (default 3)
+# Surface grip (081/10) — ?surfGrip=0 puts every wheel back on tarmac, the A/B for reading surface.dat
 # Diff two capture sets (raw harness logs are accepted as-is); --determinism gates a replay check
 npx tsx scripts/phys-compare.ts before.log after.log [--determinism]
 # The regression pack (081/07): a fresh 5-car sweep against the committed accepted-feel matrix

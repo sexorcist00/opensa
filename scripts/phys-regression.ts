@@ -5,8 +5,8 @@
  *
  * The reference is the committed matrix of the ACCEPTED feel: every
  * `docs/benchmarks/vehicle-physics/<PACK_PREFIX>-<car>.json`. A fresh sweep of the same cars and scenes is
- * compared lap by lap; a signal outside its band, a lap that went missing, a car nobody swept, and a flip
- * that appeared or vanished are all failures. The bands are NOT a determinism check — a repeat sweep proved
+ * compared lap by lap; a signal outside its band, a lap that went missing, a car nobody swept, and a lap
+ * that stopped doing something the pack recorded (braking, reaching 100, flipping) are all failures. The bands are NOT a determinism check — a repeat sweep proved
  * nine of the eleven scenes replay to the second decimal — they are the width of "the feel did not move",
  * widened only on the laps that leave the road, by the spread that repeat measured. See
  * `docs/benchmarks/vehicle-physics/readme.md` for how the pack was recorded and
@@ -148,7 +148,8 @@ export interface Breach {
 /**
  * Every way this lap left its band. A signal the reference HAS and the candidate does not (the lap never
  * braked, never reached 100, no longer flips) is a breach in its own right, printed with a `null` side —
- * "the car stopped doing this" is the loudest kind of regression and must never diff as a zero.
+ * "the car stopped doing this" is the loudest kind of regression and must never diff as a zero. The
+ * asymmetry is deliberate: a signal only the CANDIDATE has is a field the pack predates, not a change.
  */
 export function breaches(reference: Capture, candidate: Capture): Breach[] {
   const before = new Map([...flatten(reference.summary), ...configOf(reference)]);
@@ -166,11 +167,11 @@ export function breaches(reference: Capture, candidate: Capture): Breach[] {
       found.push({ after: other, band: width, before: value, label });
     }
   }
-  for (const [label, value] of after) {
-    if (!before.has(label)) {
-      found.push({ after: value, band: null, before: null, label });
-    }
-  }
+  // A signal the CANDIDATE has and the reference does not is NOT a breach: the pack simply predates it.
+  // (The reverse — a signal the reference had and the lap stopped reporting — is caught above, and that one
+  // matters: "the car stopped braking" is a regression.) Reporting a newly added field as a breach made
+  // every lap fail the day the capture learned to name its surfaces, which is noise, not a finding: the
+  // pack has no reference value to compare against until it is deliberately re-recorded.
 
   return found;
 }

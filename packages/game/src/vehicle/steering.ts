@@ -43,9 +43,9 @@ const SA_STEP = 1 / 50;
  * gives it. The field caught it immediately ("still hard to turn in at speed"). At 4.5 the limiter allows the
  * FULL authored lock below about 65 km/h and 9.4° of a 35° lock at 100 km/h.
  *
- * **Owed**: read the two files instead of carrying this number. They are mod targets like every other data
- * file, and the whole matrix is needed the moment wheels can tell tarmac from grass or sand — at which point
- * this constant becomes a lookup and the off-road handling flags (`bOffroadAbility`) get something to modify.
+ * **Now a fallback, not the answer** (081/10 step 5): the caller passes the adhesion its front wheels are
+ * actually standing on, read from `surface.dat` through the surface under each wheel. This constant is what
+ * a world without those files gets — and it is the same 4.5, so nothing moves when they are missing.
  */
 const ROAD_ADHESION = 4.5;
 /** Below this speed the limiter is meaningless (the formula divides by v²) and the car gets its full lock. */
@@ -67,6 +67,15 @@ const SLIDE_SPEED = 0.05 / SA_STEP;
 
 /** The share of its authored lock the car may use, 0..1. */
 export function steerLimit(input: {
+  /**
+   * The adhesion the FRONT wheels are standing on (`surface.dat`'s rubber row: 4.5 tarmac, 3.2 grass/dirt,
+   * 3.0 sand, 2.8 wet). Defaults to tarmac.
+   *
+   * It must be the SAME number the tyres are given, or the limiter hands out angles the grip cannot answer —
+   * which is the mechanism behind three field rounds of "it will not turn in" (081/09). On grass it now
+   * grants ~29 % less lock, because the tyre there has ~29 % less to give.
+   */
+  adhesion?: number;
   /** Handbrake up? A handbrake turn is a slide on purpose. */
   handbrake: boolean;
   /** Authored `fSteeringLock`, in DEGREES — the original divides by it, so a car with more lock keeps less. */
@@ -80,7 +89,7 @@ export function steerLimit(input: {
   /** `fTractionMultiplier` — the tyre's grip, the same number the wheels are given. */
   traction: number;
 }): number {
-  const { handbrake, lockDeg, speed, steerAngle, swaySpeed, traction } = input;
+  const { adhesion = ROAD_ADHESION, handbrake, lockDeg, speed, steerAngle, swaySpeed, traction } = input;
   if (Math.abs(speed) <= MIN_LIMITED_SPEED || lockDeg <= 0) {
     return 1;
   }
@@ -91,7 +100,7 @@ export function steerLimit(input: {
   // The original works in game units, where `traction` has already been scaled by 0.001; carrying that
   // through leaves the SI form below, in which nothing is hidden: grip over speed squared.
   const gameSpeed = speed * SA_STEP;
-  const limit = (ROAD_ADHESION * traction * 0.001 * LOCK_NUMERATOR) / (gameSpeed * gameSpeed);
+  const limit = (adhesion * traction * 0.001 * LOCK_NUMERATOR) / (gameSpeed * gameSpeed);
   if (limit >= 1) {
     return 1;
   }

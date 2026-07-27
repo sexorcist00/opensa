@@ -294,6 +294,9 @@ const PLAYER_GROUPS_IGNORE_VEHICLES = ((0xffff << 16) | (0xffff & ~VEHICLE_GROUP
 /** Kinematic character-controller tuning. */
 const CONTROLLER_OFFSET = 0.02; // gap kept between the capsule and obstacles
 const STEP_HEIGHT = 0.4; // auto-climb kerbs/stairs up to this
+/** SA's rubber-on-road adhesion (`surface.dat`) — the fallback whenever the world ships no matrix, and the
+ *  value every other surface is expressed as a share of. The same 4.5 the steering limiter carries. */
+const ROAD_ADHESION = 4.5;
 /** The wheel-surface probe (081/10): start this far ABOVE the reported contact point so the ray begins
  *  outside the ground it is about to hit, and reach only a little past it — a wheel is on what it touches,
  *  not on whatever lies a metre under a bridge deck. */
@@ -477,9 +480,14 @@ export class PhysicsWorld {
   private readonly rapier: Rapier;
   /** The live speed-grip dials (plan 081/09) — session-tunable, recorded by every capture. */
   private speedGrip = { cap: SPEED_GRIP_CAP, reference: SPEED_GRIP_REFERENCE };
+  private surfaceGrip = true;
   /** What each collider is MADE OF (plan 081/10): the SA surface id per triangle for a trimesh, or one id
    *  for a box/sphere. Keyed by collider handle, cleared with the body in {@link removeBodies}. */
   private readonly surfaces = new Map<number, number | Uint8Array>();
+  /** What a tyre grips on each collision material (plan 081/10 step 5), and the road cell everything is
+   *  expressed against. Null until the world hands them over — and then the tyre keeps its authored grip
+   *  everywhere, exactly as it did before this step. `surfaceGrip` is the field's on/off dial (`?surfGrip`). */
+  private tyreAdhesion: null | { perMaterial: Float32Array; road: number } = null;
   /** Raycast vehicle controllers, advanced before each {@link step}. */
   private readonly vehicles: VehicleController[] = [];
   /** What the raycast vehicle controllers cost in the last {@link step} (ms), READ ONCE: the vehicle half
@@ -995,6 +1003,23 @@ export class PhysicsWorld {
     return springs;
   }
 
+  /**
+   * The tyre adhesion under each wheel (plan 081/10 step 5) — SA's absolute cell: 4.5 on tarmac, 3.2 on
+   * grass and dirt, 3.0 on sand, 2.8 when wet. Falls back to the ROAD value for a wheel in the air, for
+   * ground with no material, and whenever the table or the dial is off, so a caller never has to branch: an
+   * unknown surface simply drives like tarmac, which is what it did before this step existed.
+   */
+  readVehicleWheelAdhesion(controller: VehicleController, chassisBody: number): readonly number[] {
+    const table = this.surfaceGrip ? this.tyreAdhesion : null;
+    if (table === null) {
+      return Array.from({ length: controller.numWheels() }, () => ROAD_ADHESION);
+    }
+
+    return this.readVehicleWheelSurfaces(controller, chassisBody).map((surface) =>
+      surface === null ? table.road : (table.perMaterial[surface] ?? table.road),
+    );
+  }
+
   readVehicleWheels(controller: VehicleController): readonly VehicleWheelReading[] {
     const readings: VehicleWheelReading[] = [];
     for (let i = 0; i < controller.numWheels(); i += 1) {
@@ -1081,6 +1106,12 @@ export class PhysicsWorld {
     this.world.getRigidBody(handle).setLinvel({ x: velocity[0], y: velocity[1], z: velocity[2] }, true);
   }
 
+  /** The world's tyre-adhesion table (081/10) — one absolute value per collision material, plus the road
+   *  cell every other surface is judged against. */
+  setTyreAdhesion(perMaterial: Float32Array, road: number): void {
+    this.tyreAdhesion = { perMaterial, road };
+  }
+
   /**
    * Apply per-frame driving controls: total `engineForce` and total `brake` each
    * split across all wheels (4WD), and `steer` (rad) on the front wheels.
@@ -1122,9 +1153,13 @@ export class PhysicsWorld {
       step: number;
       /** The car's authored tyre grip — re-read each step because a SLIDING wheel gets less of it. */
       traction: VehicleTractionSpec;
+      /** SA's absolute adhesion under each wheel (081/10) — from {@link readVehicleWheelAdhesion}. Omit and
+       *  every wheel is treated as tarmac, which is what every car did before surfaces were read. */
+      wheelAdhesion?: readonly number[];
     },
   ): void {
-    const { brake, brakeBias, drive, engine, handbrake, speed, steer, step, traction } = controls;
+    const { brake, brakeBias, drive, engine, handbrake, speed, steer, step, traction, wheelAdhesion } = controls;
+    const roadAdhesion = this.tyreAdhesion?.road ?? ROAD_ADHESION;
     const perBrake = brake / (wheels.length || 1);
     // The 081/09 assist: the LATERAL solver's grip grows with speed; everything longitudinal stays on the
     // unboosted base below, so launches, acceleration and braking never move with the dials.
@@ -1141,7 +1176,10 @@ export class PhysicsWorld {
       // Rapier does not expose its `skid_info`, but it exposes the impulses, and a wheel sitting on its own
       // friction circle IS the sliding one. That is last step's state driving this step's grip — the same
       // one-frame feedback the original runs on (`bAlreadySkidding`).
-      const base = tyreGrip(traction, wheel.front);
+      // WHAT the wheel is standing on, as a share of tarmac (081/10 step 5): 1.0 on road, 0.71 on grass and
+      // dirt, 0.67 on sand, 0.62 wet. Tarmac is exactly the old number, so only off-road moves.
+      const surface = (wheelAdhesion?.[i] ?? roadAdhesion) / roadAdhesion;
+      const base = tyreGrip(traction, wheel.front) * surface;
       const lateral = base * boost;
       const used = Math.hypot(controller.wheelForwardImpulse(i) ?? 0, controller.wheelSideImpulse(i) ?? 0);
       // Sliding is judged against the BOOSTED circle — it is the one Rapier actually enforces; judging
@@ -1299,6 +1337,11 @@ export class PhysicsWorld {
     return surface[triangle] ?? null;
   }
 
+  /** Whether the surface-grip lookup is live AND has a table — recorded by every capture. */
+  surfaceGripActive(): boolean {
+    return this.surfaceGrip && this.tyreAdhesion !== null;
+  }
+
   /** Per-wheel suspension lengths only — the drawn wheels follow them every fixed step (plan 081/06 §3),
    *  and the full {@link readVehicleWheels} reading would be nine fields of waste per wheel per frame. */
   suspensionLengths(controller: VehicleController): number[] {
@@ -1352,6 +1395,11 @@ export class PhysicsWorld {
     if (overrides.reference !== undefined && Number.isFinite(overrides.reference) && overrides.reference > 0) {
       this.speedGrip.reference = overrides.reference;
     }
+  }
+
+  /** Turn the surface-grip lookup off for a session (`?surfGrip=0`) — the A/B the field judges it by. */
+  tuneSurfaceGrip(enabled: boolean): void {
+    this.surfaceGrip = enabled;
   }
 
   /** Signed forward speed (units/s) of a raycast vehicle (+ = forward). */

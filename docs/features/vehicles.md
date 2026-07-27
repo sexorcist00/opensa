@@ -125,6 +125,12 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   as a friction coefficient, split across the axles by `fTractionBias` — the field-liked baseline after
   every SA-derived scale (and the whole 2 g world, 081/08) was field-rejected; the postmortem
   (`docs/postmortem/081-vehicle-physics/sa-faithful-feel.md`) carries that story. On top of it, **the
+  grip is scaled by WHAT THE WHEEL STANDS ON** (081/10): `surface.dat`'s rubber row through the surface under
+  each wheel — tarmac 4.5 (unchanged), grass and gravel 3.2, sand 3.0, wet 2.8, rock 3.6 — read per wheel
+  from the collision material, with the steering limiter given the SAME number so it never grants lock the
+  tyre cannot answer. Note SA's own classification: `dirt` and `dirttrack` are group ROAD, so a dirt road
+  grips like tarmac; what actually changes is grass, sand and rock. `?surfGrip=0` puts every wheel back on
+  tarmac, and every capture records which world it drove in. On top of that, **the
   LATERAL grip grows with speed** (081/09): `frictionSlip × min(1 + (v/12 m/s)², 3)` — a deliberate,
   documented assist with the inverse shape of the "helpless at 130 km/h" complaint. Virtual only: the
   engine clamp and the brake cap stay on the unboosted grip, so launches, acceleration, braking, weight and

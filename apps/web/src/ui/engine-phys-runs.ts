@@ -39,6 +39,9 @@ export interface PhysRunsHost {
   /** The ACTIVE speed-grip dials (plan 081/09) — recorded in every capture, because a tuning session's runs
    *  are incomparable unless each one states what it ran with. */
   speedGrip(): { cap: number; reference: number };
+  /** Whether the surface-grip lookup was live for this run (081/10, `?surfGrip=0` turns it off) — a capture
+   *  that cannot say which of the two worlds it drove in proves nothing about either. */
+  surfaceGrip(): boolean;
   /** The world's surface table (081/10), for naming what the wheels reported standing on — null for a world
    *  without one, and then a capture simply carries the raw ids. */
   surfaces(): null | readonly { name: string }[];
@@ -157,6 +160,7 @@ function report(
   stance: null | VehicleStance,
   speedGrip: { cap: number; reference: number },
   surfaceTable: null | readonly { name: string }[],
+  surfaceGrip: boolean,
 ): void {
   const capture = {
     car,
@@ -208,6 +212,8 @@ function report(
     springs: springs ?? null,
     stance,
     summary: named(summarisePhysFrames(frames), surfaceTable),
+    /** Whether grip came from the SURFACE under each wheel (081/10) or every wheel drove on tarmac. */
+    surfaceGrip,
     what: scene.what,
   };
   // eslint-disable-next-line no-console -- the capture deliverable IS this JSON line (the [bench] twin)
@@ -262,7 +268,7 @@ async function runScene(host: PhysRunsHost, scene: PhysScene, car: string): Prom
   const stance = vehicles.stance();
   vehicles.telemetry.enabled = false;
 
-  report(scene, car, frames, springs, stance, host.speedGrip(), host.surfaces());
+  report(scene, car, frames, springs, stance, host.speedGrip(), host.surfaces(), host.surfaceGrip());
   await leaveCar(host, vehicles);
 }
 

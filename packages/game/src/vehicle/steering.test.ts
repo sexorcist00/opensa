@@ -7,6 +7,19 @@ const CAR = { handbrake: false, lockDeg: 35, speed: 0, steerAngle: 0, swaySpeed:
 
 describe('steerLimit', () => {
   describe('negative cases', () => {
+    it('grants LESS lock on grass than on tarmac — the limiter must not promise what the tyre cannot pay', () => {
+      const tarmac = steerLimit({ ...CAR, adhesion: 4.5, speed: 30 });
+      const grass = steerLimit({ ...CAR, adhesion: 3.2, speed: 30 });
+
+      expect(grass).toBeLessThan(tarmac);
+      // The limiter is linear in adhesion below saturation, so the ratio is the surfaces' own.
+      expect(grass / tarmac).toBeCloseTo(3.2 / 4.5, 2);
+    });
+
+    it('falls back to tarmac when the caller says nothing about the surface', () => {
+      expect(steerLimit({ ...CAR, speed: 30 })).toBe(steerLimit({ ...CAR, adhesion: 4.5, speed: 30 }));
+    });
+
     it('gives the full lock at a standstill — the formula divides by speed squared', () => {
       expect(steerLimit({ ...CAR, speed: 0 })).toBe(1);
     });

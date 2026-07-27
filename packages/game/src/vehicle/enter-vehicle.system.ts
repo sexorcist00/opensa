@@ -775,9 +775,14 @@ export class EnterVehicleSystem implements System {
     // Ease the steering toward the input (gentle turn-in, quicker return to centre); how much of the
     // authored lock is usable at this speed comes from the tyres — see `steering.ts`.
     const sway = vx * Math.cos(car.heading) + vy * Math.sin(car.heading);
+    // What the wheels are standing on, read ONCE per step (081/10 step 5): the limiter and the tyres must be
+    // given the same number, and the probe is four rays — worth doing once, not twice.
+    const wheelAdhesion = this.physics.readVehicleWheelAdhesion(car.controller, car.body);
+    const frontAdhesion = meanFrontAdhesion(car.wheels, wheelAdhesion);
     const lock =
       ((hnd.steeringLock * Math.PI) / 180) *
       steerLimit({
+        adhesion: frontAdhesion,
         handbrake,
         lockDeg: hnd.steeringLock,
         speed,
@@ -799,6 +804,7 @@ export class EnterVehicleSystem implements System {
       steer: this.steerAngle,
       step,
       traction: { bias: hnd.tractionBias, loss: hnd.tractionLoss, mult: hnd.tractionMult },
+      wheelAdhesion,
     });
     this.controls = { brake, engineForce: this.engine, gear, handbrake, steer: this.steerAngle, throttle };
     car.rig.setSteer(this.steerAngle); // front wheels turn with the physics steer
@@ -1273,6 +1279,23 @@ export function warpAlongRootMotion(
     from[2] + path[2] + (to[2] - from[2] - total[2]) * t,
   ];
 }
+
+/**
+ * The adhesion the STEERING wheels have: the mean over the front axle (081/10 step 5).
+ *
+ * The mean rather than the worst, because a car with one front wheel on the verge still steers on the other,
+ * and the limiter's job is to grant what the axle can answer. Falls back to the whole set when a model has
+ * no wheel flagged front (bikes, trailers) — better a number than a special case.
+ */
+function meanFrontAdhesion(wheels: readonly { front: boolean }[], adhesion: readonly number[]): number {
+  const front = adhesion.filter((_, index) => wheels[index]?.front);
+  const used = front.length > 0 ? front : adhesion;
+
+  return used.length === 0 ? ROAD_ADHESION_FALLBACK : used.reduce((sum, value) => sum + value, 0) / used.length;
+}
+
+/** Tarmac, for a car whose wheels reported nothing at all — the same value `steering.ts` falls back to. */
+const ROAD_ADHESION_FALLBACK = 4.5;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);

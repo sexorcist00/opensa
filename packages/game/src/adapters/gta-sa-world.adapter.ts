@@ -27,6 +27,7 @@ import {
   parseObjectDat,
   parsePopcycle,
   parseProcObj,
+  parseSurfaceAdhesion,
   parseSurfaceInfo,
   parseSurfaceNames,
   parseTimecyc,
@@ -208,6 +209,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   /** Surface-name table from surfinfo.dat (index = COL material id); pairs with procObjRules. */
   private surfaceNames: null | string[] = null;
   private surfaceTable: null | SurfaceInfo[] = null;
+  private tyreAdhesionTable: null | { perMaterial: Float32Array; road: number } = null;
   private vehicleColours: null | VehicleColours = null;
   private vehicleDefs: Map<string, VehicleDef> | null = null;
   private readonly vehicleModelBuilder: null | VehicleModelBuilder;
@@ -481,6 +483,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     // to do with whether ground clutter scatters (plan 081/10).
     if (surfInfoText !== null) {
       this.surfaceTable = parseSurfaceInfo(surfInfoText);
+      this.tyreAdhesionTable = tyreAdhesionPerMaterial(this.surfaceTable, this.fs.getText('data/surface.dat'));
     }
     // Breakable-prop tuning (plan 045) — absent-tolerant: no file, props still break at the default
     // threshold (the break gate is the RW Breakable mesh, not this table).
@@ -504,6 +507,13 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   /** The model's TXD name — the own engine needs it to texture a smashed prop's shards (074/08 B7·a). */
   txdOf(modelName: string): string | undefined {
     return this.defByName?.get(modelName.toLowerCase())?.txdName;
+  }
+
+  /** What a TYRE grips on each collision material (plan 081/10): `surface.dat`'s rubber row resolved through
+   *  each surface's adhesion group, indexed by material id. Null when either data file is missing — and then
+   *  the physics keeps its road-only constant rather than guessing. */
+  tyreAdhesion(): null | { perMaterial: Float32Array; road: number } {
+    return this.tyreAdhesionTable;
   }
 
   /** Every carcol paint combo for a model (palette-index tuples) — 2-colour entries then 4-colour;
@@ -857,8 +867,6 @@ function scale255(rgb: readonly [number, number, number]): Rgb {
   return [rgb[0] / 255, rgb[1] / 255, rgb[2] / 255];
 }
 
-/** Tag a model's collider placements with breakable instance keys (plan 045); a pass-through for
- *  non-breakable models. The key matches the render registry's (model + cm-rounded translation). */
 function tagBreakable(model: ModelColliders, isBreakable: boolean): ModelColliders {
   if (!isBreakable) {
     return model;
@@ -868,4 +876,36 @@ function tagBreakable(model: ModelColliders, isBreakable: boolean): ModelCollide
   );
 
   return { ...model, instanceKeys };
+}
+
+/** Tag a model's collider placements with breakable instance keys (plan 045); a pass-through for
+ *  non-breakable models. The key matches the render registry's (model + cm-rounded translation). */
+/**
+ * The tyre-adhesion lookup the physics uses (081/10): one absolute number per collision material — SA's
+ * `surface.dat` rubber row (road 4.5 · hard 3.6 · loose 3.2 · sand 3.0 · wet 2.8) resolved through each
+ * surface's adhesion group. Built ONCE here, where both files are already parsed, so the per-step path is a
+ * single array index with no strings and no map.
+ *
+ * Null when `surface.dat` is absent: a world that ships no matrix must not be handed a made-up one.
+ */
+function tyreAdhesionPerMaterial(
+  surfaces: readonly SurfaceInfo[],
+  surfaceDat: null | string,
+): null | { perMaterial: Float32Array; road: number } {
+  if (surfaceDat === null) {
+    return null;
+  }
+  const matrix = parseSurfaceAdhesion(surfaceDat);
+  const road = matrix.get('rubber', 'road');
+  if (road === null) {
+    return null;
+  }
+  const perMaterial = new Float32Array(surfaces.length);
+  surfaces.forEach((surface, material) => {
+    // An unknown group falls back to ROAD — the surface a car normally drives on, so an unmapped material
+    // behaves exactly as it does today rather than becoming mysteriously slippery.
+    perMaterial[material] = matrix.get('rubber', surface.adhesionGroup) ?? road;
+  });
+
+  return { perMaterial, road };
 }

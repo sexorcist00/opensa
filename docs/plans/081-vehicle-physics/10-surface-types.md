@@ -190,3 +190,47 @@ a `console.log` diagnostic is invisible from a headless lap; and a probe that re
 verified against the map, not against a fixture that agrees with it by construction.
 
 Suite **2868 green**. Next: step 5 — grip from the matrix. That one MOVES the pack, deliberately.
+
+### 2026-07-27 — step 5: grip comes from the surface, and the limiter is told the same number
+
+The shape, end to end: the adapter builds **one `Float32Array` of absolute adhesion per collision material**
+(SA's rubber row through each surface's group) beside the road cell everything is expressed against — built
+once, where both files are parsed, so the per-step path is an array index with no strings and no map. The
+physics scales each wheel's `frictionSlip` by `adhesion / road`, and the drive path probes ONCE per step and
+hands the same numbers to **both** the tyres and `steerLimit` — the limiter's `ROAD_ADHESION` is now a
+fallback, not the answer. Giving the limiter a different number from the tyre is the exact mechanism behind
+three field rounds of "it will not turn in" (081/09), and it is now impossible by construction.
+
+Dial: **`?surfGrip=0`** puts every wheel back on tarmac, and every capture records which world it drove in
+(`surfaceGrip: true|false`) — the A/B is one URL apart and self-describing.
+
+**What SA's own data actually says, and it is not what "off-road" suggests:** `dirt` and `dirttrack` are
+group **ROAD** — a dirt road grips like tarmac. What changes is grass, gravel, hedges and meadow (LOOSE,
+0.71), sand (0.67), rock and metal (HARD, 0.80) and the two wet rows (0.62). Of 179 surfaces: 73 ROAD, 60
+LOOSE, 29 HARD, 12 SAND.
+
+**Measured A/B, comet, 12 scenes each, `?surfGrip=0` vs on**
+(`2026-07-27-headless-surfgrip-{off,on}-comet.json`):
+
+- **Every tarmac lap is IDENTICAL** — brake-strip, sweeper, slalom, kerb-strike, kerb-mount, rest,
+  pull-away-reverse: same top speed, same slip, same rotation, to the second decimal. That is the acceptance
+  criterion met by construction rather than by tuning: the road cell divides out.
+- **`crest-jump` — the only lap that spends real time off the road** (grass 6 %, dirt 11 %): top speed
+  **126.06 → 122.24 km/h**, slip 35.8 → 40.7°, lateral peak 25.3 → 19.4 g, roll 25.7 → 24.2°.
+- The rest of the deltas (step-steer −3.6° of rotation, u-turn −8.4°) are on laps that report ROAD-group
+  ground throughout and are the known cross-run divergence of collision laps (step 3's measurement), not
+  this change.
+
+**And the scene set cannot really see this feature yet.** `handbrake-flick` reports 54 % grass, but the grass
+arrives AFTER the manoeuvre — the car slides onto the verge once the flick is over — so its numbers barely
+move. There is no scene that corners ON grass or sand, which is exactly the instrument the field verdict
+should be taken with. **Owed: a grass/sand cornering scene** before this is judged as anything but "safe".
+
+**The gate needed a fix of its own, found by running it here.** The pack read the capture's new `surfaces`
+block as "a signal appeared" and failed all twelve laps on it. A field the reference PREDATES cannot be a
+regression — the pack has no value to compare against until it is deliberately re-recorded — so
+`phys-regression` now only fails on a signal the reference HAS and the fresh run lost. With that, the gate
+reports exactly the two real rows: crest-jump's top speed and the sweeper's chaos.
+
+Suite **2872 green**. Not yet: the field verdict, the grass scene, `WET_GRIP` under rain (step 6), and the
+pack re-record that follows acceptance.

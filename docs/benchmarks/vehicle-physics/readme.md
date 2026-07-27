@@ -35,7 +35,11 @@ Each file is the array of `[phys]` lines, verbatim. One capture:
   // still compares column-for-column with one taken after. Older captures simply carry the first eleven.
   "columns": ["t", "speed", "slipAngle", "pitch", "roll", "yawRate", "gLong", "gLat", "gVert", "throttle", "steer", "x", "y", "z"],
   "series": [[0.0167, 0, 0, -0.0022 /* … */]], // thinned to seriesHz; SI + radians
+  "surfaceGrip": true, // 081/10: did grip come from the surface under each wheel, or was everything tarmac?
   "summary": {
+    // What the lap DROVE on: the share of wheel-on-ground samples per surface, counted per WHEEL (a car with
+    // two wheels on grass is half off the road). Named, not numbered — ids are a lookup nobody performs.
+    "surfaces": { "tarmac": 0.79, "dirt": 0.1, "grass_medium_lush": 0.07, "pavement": 0.03 },
     "topSpeedKmh": 165.69,
     "timeTo100S": 3.98, // null when the car never gets there
     "brake": { "distanceM": 59.94, "fromKmh": 165.18, "seconds": 2.92 }, // null when the lap never braked to a stop
@@ -542,6 +546,35 @@ deliberate step, not a fix to slip in.
 Runs: `2026-07-27-headless-shipped-{infernus,admiral,firetruk,comet,turismo}.json` — the pack itself. A
 re-record is a deliberate act: new captures, the new prefix in `scripts/phys-regression.ts`, a row here, and
 the field verdict that accepted the new feel.
+
+### 2026-07-27 — grip from the SURFACE: the A/B, and why tarmac cannot move (081/10 step 5)
+
+Same pak and harness. Comet, 12 scenes, run twice: `?surfGrip=0` (every wheel on tarmac, the old world) and
+default (grip read from `surface.dat` through the material under each wheel). Every capture states which one
+it drove in — `surfaceGrip: true|false` — and what it drove on (`summary.surfaces`).
+
+**Seven of the twelve laps are identical to the decimal**: rest, brake-strip, sweeper, slalom, kerb-strike,
+kerb-mount, pull-away-reverse. They run on `default`, `tarmac` and `pavement`, all of which are adhesion
+group ROAD, and the road cell divides out of the scale — so tarmac feel is unchanged by construction.
+
+**`crest-jump` is the one lap that spends real time off the road** (grass 6 %, dirt 11 %):
+
+| signal      | tarmac-only | surface grip |
+| ----------- | ----------- | ------------ |
+| top speed   | 126.06 km/h | **122.24**   |
+| slip peak   | 35.8°       | **40.7°**    |
+| lateral peak| 25.3 g      | 19.4 g       |
+| roll peak   | 25.7°       | 24.2°        |
+
+**SA's own classification is worth knowing before reading any of this**: `dirt` and `dirttrack` are group
+ROAD — a dirt road grips like tarmac. LOOSE (0.71 of tarmac) is grass, gravel, hedges, meadow; SAND is 0.67;
+HARD (rock, metal) 0.80; wet 0.62. Of 179 surfaces: 73 ROAD, 60 LOOSE, 29 HARD, 12 SAND.
+
+**The record's own gap, stated plainly: no scene corners on grass or sand.** `handbrake-flick` reports 54 %
+grass, but the grass arrives after the manoeuvre is over. Until a grass/sand cornering scene exists, this
+A/B proves the change is SAFE (tarmac untouched) rather than that it feels right off-road.
+
+Runs: `2026-07-27-headless-surfgrip-off-comet.json` · `2026-07-27-headless-surfgrip-on-comet.json`.
 
 ### 2026-07-27 — a kerb stops a car dead, and the scene that was supposed to prove it never met one (081/06 §2)
 

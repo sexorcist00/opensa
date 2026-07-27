@@ -35,6 +35,7 @@ Read in `src/ui/engine-canvas-host.tsx` unless noted.
 | `car`       | `infernus`             | vehicle model name             | Which car the `phys` laps drive                                                                                                                                 |
 | `gripVd`    | `12`                   | m/s                            | 081/09 lateral speed-grip assist: boost reference speed (`boost = min(1 + (v/gripVd)², gripCap)`)                                                               |
 | `gripCap`   | `3`                    | ×                              | 081/09 assist ceiling; both dials are session overrides, shown in F2 and recorded by every `[phys]` capture                                                     |
+| `surfGrip`  | on                     | `0` = off                      | 081/10: grip (and the steering limiter) read the SURFACE under each wheel — `surface.dat`'s rubber row: tarmac 4.5, grass 3.2, sand 3.0, wet 2.8. `0` puts every wheel back on tarmac; every `[phys]` capture records which it ran |
 
 `bench` / `soak` / `benchcar` are read in `src/ui/engine-perf-runs.ts`. Scene keys live in
 `src/bench-scenes.ts`: `ls-noon` · `sf-fog-dawn` · `lv-night` · `country-dusk` · `ocean-horizon` ·

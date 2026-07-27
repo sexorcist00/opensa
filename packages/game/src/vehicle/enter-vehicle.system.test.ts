@@ -112,6 +112,9 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
       position: phys.bodyPosition,
       quaternion: phys.quaternion,
     }),
+    // 081/10 step 5: the drive path asks what the wheels stand on. The fake answers tarmac for all four, so
+    // these tests keep measuring the drivetrain rather than the ground.
+    readVehicleWheelAdhesion: (): readonly number[] => [4.5, 4.5, 4.5, 4.5],
     seedReverse: (): undefined => undefined,
     setColliderSensor: (): undefined => undefined,
     setVehicleControls: (

@@ -29,9 +29,9 @@ describe('phys-regression breaches', () => {
       expect(breaches(before, after)).toEqual([{ after: null, band: null, before: 60, label: 'brake.distanceM' }]);
     });
 
-    it('reports a flip that appeared where the reference had none', () => {
-      const before = capture('slalom', { flip: null });
-      const after = capture('slalom', { flip: { atKmh: 90, atS: 6.2 } });
+    it('reports a lap that stopped flipping — the reference had one and the fresh run does not', () => {
+      const before = capture('slalom', { flip: { atKmh: 90, atS: 6.2 } });
+      const after = capture('slalom', { flip: null });
 
       expect(labels(before, after)).toEqual(['flip.atKmh', 'flip.atS']);
     });
@@ -82,6 +82,13 @@ describe('phys-regression breaches', () => {
     it('scales a relative band with the reference value', () => {
       const before = capture('brake-strip', { topSpeedKmh: 296 });
       const after = capture('brake-strip', { topSpeedKmh: 301 }); // 5 km/h < 2 % of 296
+
+      expect(breaches(before, after)).toEqual([]);
+    });
+
+    it('says nothing about a field the pack predates — a new signal is not a regression', () => {
+      const before = capture('rest', { topSpeedKmh: 0 });
+      const after = capture('rest', { surfaces: { tarmac: 1 }, topSpeedKmh: 0 });
 
       expect(breaches(before, after)).toEqual([]);
     });

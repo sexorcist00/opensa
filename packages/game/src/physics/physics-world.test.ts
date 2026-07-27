@@ -954,6 +954,54 @@ describe('PhysicsWorld raycast vehicle', () => {
       physics.dispose();
     });
 
+    it('scales the tyre by the SURFACE under it, tarmac unchanged (081/10 step 5)', async () => {
+      const { body, controller, physics } = await car();
+      // Rubber-on-X from surface.dat: road 4.5, loose (grass, dirt) 3.2. Two materials, road first.
+      physics.setTyreAdhesion(new Float32Array([4.5, 3.2]), 4.5);
+
+      physics.setVehicleControls(controller, FRONT, {
+        brake: 0,
+        brakeBias: 0.5,
+        drive: '4',
+        engine: 0,
+        handbrake: false,
+        speed: 0,
+        steer: 0,
+        step: STEP,
+        traction: { bias: 0.5, loss: 0.8, mult: 0.7 },
+        wheelAdhesion: [4.5, 4.5, 4.5, 4.5],
+      });
+      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7, 5); // tarmac IS the old number
+
+      physics.setVehicleControls(controller, FRONT, {
+        brake: 0,
+        brakeBias: 0.5,
+        drive: '4',
+        engine: 0,
+        handbrake: false,
+        speed: 0,
+        steer: 0,
+        step: STEP,
+        traction: { bias: 0.5, loss: 0.8, mult: 0.7 },
+        wheelAdhesion: [3.2, 3.2, 3.2, 3.2],
+      });
+      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * (3.2 / 4.5), 5); // grass: 71 % of it
+
+      expect(physics.readVehicleWheelAdhesion(controller, body)).toHaveLength(4);
+      physics.dispose();
+    });
+
+    it('puts every wheel back on tarmac when the field turns the lookup off (?surfGrip=0)', async () => {
+      const { body, controller, physics } = await car();
+      physics.setTyreAdhesion(new Float32Array([4.5, 3.2]), 4.5);
+
+      physics.tuneSurfaceGrip(false);
+
+      expect(physics.surfaceGripActive()).toBe(false);
+      expect(physics.readVehicleWheelAdhesion(controller, body).every((value) => value === 4.5)).toBe(true);
+      physics.dispose();
+    });
+
     it('hands the tyre the baseline scale at rest — the assist must never move the low-speed feel (081/09)', async () => {
       const { controller, physics } = await car();
 
