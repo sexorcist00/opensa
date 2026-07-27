@@ -152,8 +152,10 @@ export const PHYS_SCENES: readonly PhysScene[] = [
      */
     position: [2256, 1193.1, 9.6],
     timeline: [
-      { move: { x: 0, y: 0.35 }, t: 0 }, // gentle: a kerb mount is a low-speed manoeuvre, ~25 km/h at the edge
-      { move: { x: 0, y: 0 }, t: 4 }, // off the power before the step — the car meets it coasting
+      // Gentle throttle, HELD: the edge arrives ~2 s in, so an "off the power before the step" keyframe was
+      // never reached — the first version had one and produced numbers identical to this. The car meets the
+      // kerb accelerating, which is also how a player meets one.
+      { move: { x: 0, y: 0.35 }, t: 0 },
     ],
     what: 'Driving square at a pavement edge at ~25 km/h: does the car climb the kerb, and at what cost — the vertical spike, the speed lost, the roll. Today every car tested is simply stopped by it.',
   },

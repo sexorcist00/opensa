@@ -171,8 +171,25 @@ height and mass; what is left is the mechanism §2 named, the downward ray that 
 Baselines: `2026-07-27-headless-kerbmount-baseline-{comet,firetruk}.json` (the kerb) and
 `2026-07-27-headless-kerbwall-sf-{comet,admiral,infernus,firetruk}.json` (the four-car wall reproduction).
 
-**Not yet done, and the next step**: the probe + impulse ramp itself. Its shape is unchanged by any of the
-above — a forward probe per wheel, a downward probe beyond the hit to measure the step, an assist only when
-the step is ≤ the threshold and the speed is low, and an honest collision otherwise — and the same probe is
-what will finally report the step HEIGHT this scene could not (a wall and a kerb both read as "stopped").
-The high-speed half of the acceptance ("a kerb at 80 km/h SHOULD punish") still has no clean instrument.
+### 2026-07-27 — §2 CLOSED by the field: there is no kerb problem to fix
+
+Before building the probe, the baseline went to the field. **Verdict: kerbs behave well in play — the user
+could not reproduce the block at all, including accelerating a comet over kerbs, which is smooth.** Two
+checks then explained the gap between that and the capture, and both point the same way:
+
+- **Not a throttle artifact.** The lap was re-run with the throttle HELD through the mount: numbers identical
+  to the first run (comet −60.99 g / gVert 5.5 / 27.9 km/h; firetruk −47.1 / 8.54 / 21.16). The edge arrives
+  ~2 s in, so the "off the power" keyframe was never reached — the car was already accelerating into it.
+- **Most pavements have no kerb to be blocked by.** The SF probe measured it directly: a car crosses that
+  pavement with z DEAD CONSTANT, flush in collision. What the scene found in LV is a plaza edge the same
+  comet climbs at 57 km/h with a **+40 cm** rise — a ledge, not a kerb, and a car stopped by a 40 cm ledge at
+  25 km/h is behaving, not failing.
+
+**So §2's kerb assist is PARKED as not-needed**, not deferred for later tuning: nothing in the field asks for
+it, and the mechanism it would fix turns out to bite only where being stopped is the right answer. What the
+work leaves behind is worth more than the assist would have been — the position channel, three located
+collision spots, and the fact that the flip that motivated this section had stopped reproducing months of
+tuning ago without anyone noticing. Reopen only on a field report that names a specific kerb.
+
+The other two §2 items stand unchanged and unmeasured: the high-speed shallow-angle case ("a kerb at
+80 km/h SHOULD punish") has no clean instrument, and §1's in-air attitude control is untouched.

@@ -578,6 +578,13 @@ shallow angle.** That is the raycast-suspension weakness plan 06 §2 names: the 
 face, so the chassis collider meets it as a wall, and only momentum gets a car over. It reproduces on a
 26 cm-clearance sports car and on a fire truck alike, which rules out ride height as the cause.
 
+**FIELD VERDICT, same day: no problem in play.** Paraphrased: kerbs work well, including accelerating a comet
+over one — the block could not be reproduced. Two follow-up checks explain the gap and close it: the lap
+re-run with the throttle HELD returns numbers identical to the first (the edge arrives ~2 s in, before any
+release — the car was always accelerating into it), and the SF probe showed most pavements are FLUSH in
+collision, so there is usually no step to be stopped by. What LV has is a **40 cm ledge**, and a car stopped
+by that at 25 km/h is behaving. **081/06 §2's kerb assist is parked as not-needed** — see the plan's ledger.
+
 Runs: `2026-07-27-headless-kerbmount-baseline-{comet,firetruk}.json` (the LV kerb, the §2 baseline) ·
 `2026-07-27-headless-kerbwall-sf-{comet,admiral,infernus,firetruk}.json` (the SF wall — a car meeting the
 edge of the drivable surface square-on, kept because it is the cleanest four-car reproduction of the block) ·
