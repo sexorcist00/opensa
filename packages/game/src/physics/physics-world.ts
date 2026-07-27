@@ -162,7 +162,7 @@ const SUSPENSION_DAMPING_SCALE_MAX = 2;
  *
  * **This is a deliberate assist the original does not have** (SA "solves" the same shape with ~3 g tyres in
  * a 2 g world — field-rejected wholesale in 08), and **the dials belong to the field**: `?gripVd=<m/s>` and
- * `?gripCap=<×>` override per session via {@link PhysicsWorld.tuneGripAssists}, every `[phys]` capture
+ * `?gripCap=<×>` override per session via {@link PhysicsWorld.tuneSpeedGrip}, every `[phys]` capture
  * records the active values, and the accepted numbers get committed as these defaults.
  */
 // Defaults re-aimed after the first tuning round (2026-07-27): the field's pain STARTS at 50 km/h — an
@@ -172,20 +172,6 @@ const SUSPENSION_DAMPING_SCALE_MAX = 2;
 // and its field test was additionally masked by the SLIDE_SPEED unit bug (full-lock plow drowned the dials).
 const SPEED_GRIP_REFERENCE = 12; // m/s — the speed where the boost reaches ×2
 const SPEED_GRIP_CAP = 3;
-/**
- * The longitudinal twin of the speed assist (plan 081/09 round 2): a boost on the DRIVE clamp alone.
- *
- * The engine clamp `min(request, μ × N_driven)` flattened the fleet's launches to near-equality: a race
- * car's authored 23.5 m/s² and a sedan's 14 both drowned in rear-axle grip caps of ~3.2-3.5 m/s² — the
- * racer was grip-clamped from standstill to ~250 km/h and its whole engine lived in the file, not in the
- * car ("the comet launches like an admiral", field 2026-07-27). ×2 lets the authored DIFFERENCES reach the
- * road: the racer pulls ~0.7 g continuously while the sedan's engine becomes its own limit above ~80 km/h
- * and fades exactly as its row says it should. Brakes and the handbrake stay on the unboosted grip.
- *
- * Not per-car, ever: one global factor — which car is fast comes from ITS handling row (engine × its own
- * tyre × its own axle load). Session dial: `?driveGrip=<×>`.
- */
-const DRIVE_GRIP_BOOST = 2;
 /**
  * What a LOCKED wheel keeps of its lateral stiffness — 3 %, and it has to be that low for a reason worth
  * knowing.
@@ -272,7 +258,6 @@ export const VEHICLE_PHYSICS_CONSTANTS: readonly (readonly [string, number])[] =
   ['tyre grip floor', TYRE_GRIP_FLOOR],
   ['speed grip ref (m/s)', SPEED_GRIP_REFERENCE],
   ['speed grip cap', SPEED_GRIP_CAP],
-  ['drive grip ×', DRIVE_GRIP_BOOST],
   ['parking brake (N)', PARKING_BRAKE],
   ['chassis lin damping', CHASSIS_LINEAR_DAMPING],
   ['chassis ang damping', CHASSIS_ANGULAR_DAMPING],
@@ -476,11 +461,11 @@ export class PhysicsWorld {
   /** Contact-force impacts for the breakable trigger (drained by {@link takeBreakableImpacts}). */
   private breakableImpacts: Impact[] = [];
   private readonly events: InstanceType<Rapier['EventQueue']>;
-  /** The live speed-grip dials (plan 081/09) — session-tunable, recorded by every capture. */
-  private gripAssist = { cap: SPEED_GRIP_CAP, drive: DRIVE_GRIP_BOOST, reference: SPEED_GRIP_REFERENCE };
   /** Contact-force impacts collected during the last {@link step} (drained by {@link takeImpacts}). */
   private impacts: Impact[] = [];
   private readonly rapier: Rapier;
+  /** The live speed-grip dials (plan 081/09) — session-tunable, recorded by every capture. */
+  private speedGrip = { cap: SPEED_GRIP_CAP, reference: SPEED_GRIP_REFERENCE };
   /** Raycast vehicle controllers, advanced before each {@link step}. */
   private readonly vehicles: VehicleController[] = [];
   private readonly world: RapierWorld;
@@ -752,11 +737,6 @@ export class PhysicsWorld {
     const v = this.world.getRigidBody(handle).linvel();
 
     return [v.x, v.y, v.z];
-  }
-
-  /** The active grip-assist dials — the F2 tab and every `[phys]` capture read them (self-description). */
-  gripAssists(): { cap: number; drive: number; reference: number } {
-    return { ...this.gripAssist };
   }
 
   /** Z of the nearest collision directly below `position` (within `maxDrop`), or null if none — for dropping the
@@ -1103,8 +1083,8 @@ export class PhysicsWorld {
     const perBrake = brake / (wheels.length || 1);
     // The 081/09 assist: the LATERAL solver's grip grows with speed; everything longitudinal stays on the
     // unboosted base below, so launches, acceleration and braking never move with the dials.
-    const ratio = Math.abs(speed) / this.gripAssist.reference;
-    const boost = Math.min(1 + ratio * ratio, this.gripAssist.cap);
+    const ratio = Math.abs(speed) / this.speedGrip.reference;
+    const boost = Math.min(1 + ratio * ratio, this.speedGrip.cap);
     wheels.forEach((wheel, i) => {
       const driven = drive === '4' || (drive === 'F') === wheel.front;
       const load = controller.wheelSuspensionForce(i) ?? 0;
@@ -1128,8 +1108,7 @@ export class PhysicsWorld {
       const grip = (sliding ? base * traction.loss : base) * load;
       // `fBrakeBias` splits the pedal across the axles exactly as the suspension and traction biases do.
       const axle = wheel.front ? 2 * brakeBias : 2 - 2 * brakeBias;
-      // The DRIVE clamp alone gets its boost (see DRIVE_GRIP_BOOST) — brakes and the handbrake stay honest.
-      controller.setWheelEngineForce(i, driven ? clampMagnitude(engine, grip * this.gripAssist.drive) : 0);
+      controller.setWheelEngineForce(i, driven ? clampMagnitude(engine, grip) : 0);
       // Rapier's brake is an IMPULSE cap where its engine force is a FORCE, so the grip limit converts.
       // A LOCKED wheel brakes with everything its tyre has, which leaves the tyre nothing for cornering —
       // that is the whole mechanism of a handbrake turn, and it needs no separate "grip cut" to model.
@@ -1144,6 +1123,11 @@ export class PhysicsWorld {
       controller.setWheelSideFrictionStiffness(i, locked ? LOCKED_SIDE_FRICTION : 1);
       controller.setWheelSteering(i, wheel.front ? steer : 0);
     });
+  }
+
+  /** The active speed-grip dials — the F2 tab and every `[phys]` capture read them (self-description). */
+  speedGripTuning(): { cap: number; reference: number } {
+    return { ...this.speedGrip };
   }
 
   /**
@@ -1266,17 +1250,14 @@ export class PhysicsWorld {
     body.setNextKinematicTranslation(p);
   }
 
-  /** Override the grip-assist dials for this session (plan 081/09: `?gripVd=<m/s>&gripCap=<×>&driveGrip=<×>`)
-   *  — the feel target is the field's, so the field holds the dials; accepted values become the defaults. */
-  tuneGripAssists(overrides: { cap?: number; drive?: number; reference?: number }): void {
+  /** Override the speed-grip dials for this session (plan 081/09: `?gripVd=<m/s>&gripCap=<×>`) — the feel
+   *  target is the field's, so the field holds the dials; accepted values get committed as the defaults. */
+  tuneSpeedGrip(overrides: { cap?: number; reference?: number }): void {
     if (overrides.cap !== undefined && Number.isFinite(overrides.cap) && overrides.cap >= 1) {
-      this.gripAssist.cap = overrides.cap;
-    }
-    if (overrides.drive !== undefined && Number.isFinite(overrides.drive) && overrides.drive >= 1) {
-      this.gripAssist.drive = overrides.drive;
+      this.speedGrip.cap = overrides.cap;
     }
     if (overrides.reference !== undefined && Number.isFinite(overrides.reference) && overrides.reference > 0) {
-      this.gripAssist.reference = overrides.reference;
+      this.speedGrip.reference = overrides.reference;
     }
   }
 

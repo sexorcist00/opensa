@@ -384,10 +384,9 @@ async function boot(
   });
   await adapter.prepare();
   const physics = new PhysicsWorld(await initRapier());
-  // 081/09: the grip-assist dials belong to the field — `?gripVd=<m/s>&gripCap=<×>&driveGrip=<×>` per session.
-  physics.tuneGripAssists({
+  // 081/09: the speed-grip dials belong to the field — `?gripVd=<m/s>&gripCap=<×>` tune them per session.
+  physics.tuneSpeedGrip({
     cap: Number(params.get('gripCap')) || undefined,
-    drive: Number(params.get('driveGrip')) || undefined,
     reference: Number(params.get('gripVd')) || undefined,
   });
   const controller = physics.createCharacterController();
@@ -1447,7 +1446,6 @@ async function boot(
     drive: scriptedDrive,
     getStream: (): null | StreamStats => lastStream,
     getVehicles: (): EngineVehicles | null => vehicles,
-    gripAssists: (): { cap: number; drive: number; reference: number } => physics.gripAssists(),
     params,
     setHour: (value): void => {
       hour = value;
@@ -1461,6 +1459,7 @@ async function boot(
         position: [position[0], position[1], position[2]],
       });
     },
+    speedGrip: (): { cap: number; reference: number } => physics.speedGripTuning(),
     teleportPlayer: (anchor): void => {
       teleportPlayer([anchor[0], anchor[1], anchor[2]]);
     },

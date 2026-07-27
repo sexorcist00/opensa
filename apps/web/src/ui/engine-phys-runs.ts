@@ -30,15 +30,15 @@ export interface PhysRunsHost {
   getStream(): null | StreamStats;
   /** Live accessor — the vehicle system arrives asynchronously after boot. */
   getVehicles(): EngineVehicles | null;
-  /** The ACTIVE grip-assist dials (plan 081/09) — recorded in every capture, because a tuning session's
-   *  runs are incomparable unless each one states what it ran with. */
-  gripAssists(): { cap: number; drive: number; reference: number };
   params: URLSearchParams;
   setHour(hour: number): void;
   /** The streaming-settle deadline after a teleport (the host's world-ready timeout). */
   settleTimeoutMs: number;
   /** Spawn a ground-snapped car of this model at a spot/heading (native GTA Z-up). */
   spawnCar(model: string, position: readonly [number, number, number], heading: number): Promise<void>;
+  /** The ACTIVE speed-grip dials (plan 081/09) — recorded in every capture, because a tuning session's runs
+   *  are incomparable unless each one states what it ran with. */
+  speedGrip(): { cap: number; reference: number };
   /** Teleport the player (streaming/collision anchor), GTA coords. */
   teleportPlayer(anchor: readonly [number, number, number]): void;
 }
@@ -134,14 +134,12 @@ function report(
   frames: readonly TelemetryFrame[],
   springs: null | readonly VehicleSpringReading[],
   stance: null | VehicleStance,
-  gripAssists: { cap: number; drive: number; reference: number },
+  speedGrip: { cap: number; reference: number },
 ): void {
   const capture = {
     car,
     // Column-named so a reader (and phys-compare) never has to count positions.
     columns: ['t', 'speed', 'slipAngle', 'pitch', 'roll', 'yawRate', 'gLong', 'gLat', 'gVert', 'throttle', 'steer'],
-    // The dials this run ACTUALLY ran with (081/09) — a tuning session's captures are useless without them.
-    gripAssists,
     key: scene.key,
     series: thinFrames(frames, SERIES_HZ).map((frame) =>
       [
@@ -159,6 +157,8 @@ function report(
       ].map((value) => Number(value.toFixed(4))),
     ),
     seriesHz: SERIES_HZ,
+    // The dials this run ACTUALLY ran with (081/09) — a tuning session's captures are useless without them.
+    speedGrip,
     // What the run was CONFIGURED with, per wheel. It used to record the first wheel alone, on the grounds
     // that every corner shared one spring — the authored axle bias (081/03) ended that, and a savanna
     // capture proved wheel 0 is not even reliably the front one. A capture that cannot say what it was
@@ -220,7 +220,7 @@ async function runScene(host: PhysRunsHost, scene: PhysScene, car: string): Prom
   const stance = vehicles.stance();
   vehicles.telemetry.enabled = false;
 
-  report(scene, car, frames, springs, stance, host.gripAssists());
+  report(scene, car, frames, springs, stance, host.speedGrip());
   await leaveCar(host, vehicles);
 }
 

@@ -812,39 +812,13 @@ describe('PhysicsWorld raycast vehicle', () => {
       physics.dispose();
     });
 
-    it('boosts the DRIVE clamp alone — a race row reaches the road, brakes stay honest (081/09 round 2)', async () => {
-      const { controller, physics } = await car();
-      const floorIt = (): void =>
-        physics.setVehicleControls(controller, FRONT, {
-          brake: 0,
-          brakeBias: 0.5,
-          drive: '4',
-          engine: 1e6, // far past any grip: what comes out IS the clamp
-          handbrake: false,
-          speed: 0,
-          steer: 0,
-          step: STEP,
-          traction: { bias: 0.5, loss: 0.8, mult: 0.7 },
-        });
-
-      floorIt();
-      const boosted = controller.wheelEngineForce(0) ?? 0;
-      physics.tuneGripAssists({ drive: 1 });
-      floorIt();
-      const honest = controller.wheelEngineForce(0) ?? 0;
-
-      expect(boosted / honest).toBeCloseTo(2, 3); // the default ×2, gone when the dial says 1
-      expect(honest).toBeGreaterThan(1000); // and the clamp itself is real load-borne grip, not zero
-      physics.dispose();
-    });
-
     it('the session dials move the boost — and reject nonsense values (081/09)', async () => {
       const { controller, physics } = await car();
 
-      physics.tuneGripAssists({ cap: 0, drive: 0.5, reference: Number.NaN }); // all invalid → dials unchanged
-      expect(physics.gripAssists()).toEqual({ cap: 3, drive: 2, reference: 12 });
+      physics.tuneSpeedGrip({ cap: 0, reference: Number.NaN }); // both invalid → dials unchanged
+      expect(physics.speedGripTuning()).toEqual({ cap: 3, reference: 12 });
 
-      physics.tuneGripAssists({ cap: 1.5 });
+      physics.tuneSpeedGrip({ cap: 1.5 });
       coastAt(physics, controller, 30);
       expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 1.5, 4);
       physics.dispose();
