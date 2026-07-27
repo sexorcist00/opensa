@@ -28,3 +28,8 @@ observations that killed it, and the conditions under which it might be worth re
   sphere COLLIDER (move-and-slide) for the same collision (plan 080/04). Rejected by reasoning, never coded:
   character controllers stick in the game's many narrow nooks, the classic reason spring-arm cameras use a
   cast, not a body. Kept the simple single sphere cast + near-plane cap.
+- [081-vehicle-physics/sa-faithful-feel.md](./081-vehicle-physics/sa-faithful-feel.md) — three SA-derived
+  tyre scales and the full 2g experiment (SA gravity + SA springs, branch `081-08-sa-gravity`, complete and
+  measured), all field-rejected in one day. Produced the two findings the next step stands on: the "weak at
+  speed" complaint is a SHAPE (μ·g vs v²), not a scale — and this project's feel target is the field's
+  verdict, not the original's numbers.
