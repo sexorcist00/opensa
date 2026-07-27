@@ -1,6 +1,6 @@
 # 081/08 — Vehicles under SA gravity (the 2g experiment)
 
-**Status: QUEUED — staged by the 2026-07-27 audit rounds; starts on user go.** The full evidence trail is
+**Status: REJECTED in the field (2026-07-27) — the full run, its A/B matrices and the verdict live on branch `081-08-sa-gravity`; main keeps the field-liked baseline.** What the rejection isolated: the persistent "weak turn-in at speed" complaint is not grip MAGNITUDE (it survived a 7x grip range, two gravities and two spring laws) — it is the SHAPE of lateral capability being speed-independent while demanded radius grows with v². The lever with the complaint's inverse shape is speed-dependent load (downforce-class), tried next on the liked baseline. The full evidence trail is
 `docs/audit/vehicle-physics-081.md` (addendum, rounds 1-3) and 05's ledger.
 
 ## Why this exists — the conflict no constant can solve
