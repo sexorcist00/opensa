@@ -160,6 +160,35 @@ export const PHYS_SCENES: readonly PhysScene[] = [
     what: 'Driving square at a pavement edge at ~25 km/h: does the car climb the kerb, and at what cost — the vertical spike, the speed lost, the roll. Today every car tested is simply stopped by it.',
   },
   {
+    durationS: 14,
+    heading: 0,
+    key: 'grass-corner',
+    /*
+     * A corner held entirely ON GRASS — the instrument 081/10 step 5 shipped WITHOUT, and the one the field
+     * verdict on surface grip has to be taken with. Every other scene runs on adhesion group ROAD, where the
+     * surface lookup divides out and nothing can move: `handbrake-flick` reports 54 % grass only because the
+     * car slides onto the verge AFTER the manoeuvre is over.
+     *
+     * The spot was found by scanning the map's own COL faces for a ground model that is ≥ 70 % LOOSE-group
+     * material with no prop within 40 m, then sampling the ground Z across it: this patch reads
+     * `p_grassmid1` (LOOSE) over a 10 m grid at 7.0-8.6 m, the flattest grass the scan turned up — the first
+     * candidate was 89 % grass but fell 9 m over 60 m, and a slope confounds a cornering measurement with
+     * gravity. **`position.z` here is the MEASURED ground height**, not the model origin: the ground snap
+     * searches only [z + 2, z − 4], and the first version of this scene failed every spawn with "no ground"
+     * because 32.4 was the terrain model's own origin, 9 m above the surface under that XY.
+     *
+     * The car starts ON the grass rather than driving onto it, so the whole lap is one surface and the A/B
+     * (`?surfGrip=0`) is a clean two-line comparison.
+     */
+    position: [400, 200, 7.8],
+    timeline: [
+      { move: { x: 0, y: 1 }, t: 0 }, // grass will not take full power cleanly — that IS the measurement
+      { move: { x: 0.4, y: 0.5 }, t: 4 }, // hold a moderate corner on it
+      { move: { x: 0, y: 0 }, t: 11 },
+    ],
+    what: 'A corner held entirely on grass: how much less the tyre gets off-road (adhesion group LOOSE is 0.71 of tarmac) and what that does to the line — the only scene the surface-grip change can be judged on.',
+  },
+  {
     durationS: 16,
     heading: 1.478,
     key: 'crest-jump',

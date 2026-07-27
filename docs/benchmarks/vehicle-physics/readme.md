@@ -547,6 +547,33 @@ Runs: `2026-07-27-headless-shipped-{infernus,admiral,firetruk,comet,turismo}.jso
 re-record is a deliberate act: new captures, the new prefix in `scripts/phys-regression.ts`, a row here, and
 the field verdict that accepted the new feel.
 
+### 2026-07-27 — the grass corner: what surface grip is actually worth (081/10)
+
+The instrument the step-5 A/B was missing. **`grass-corner`** starts the car ON grass — Red County at
+(400, 200), found by scanning the map's own COL faces for ground that is ≥ 70 % LOOSE-group with no prop
+within 40 m, then sampling the ground Z across the patch for the flattest part (the first candidate was 89 %
+grass but fell 9 m over 60 m, and a slope confounds a corner with gravity). The lap reports what it drove on
+and there is no tarmac in it: **grass_medium_lush 38 % · p_sandbeach 31 % · grass_short_lush 17 % ·
+p_grassmid1 14 %**.
+
+Comet, same lap, `?surfGrip=0` against the default:
+
+| signal              | every wheel on tarmac | grip from the surface |
+| ------------------- | --------------------- | --------------------- |
+| top speed           | 71.91 km/h            | **52.71** (−27 %)     |
+| settled yaw rate    | 34.83 °/s             | **21.67** (−38 %)     |
+| heading come round  | −272.4°               | **−186.2°**           |
+| slip peak           | 10.4°                 | 6.7°                  |
+| yaw rise            | 0.10 s                | 0.15 s                |
+
+**Both directions move, and that is the point**: LOOSE is 0.71 of tarmac and SAND 0.67, so the tyre has less
+to give the drive as well as the corner — the car cannot put its power down on grass and cannot carry the
+same speed through it. The yaw falls further than the grip does (−38 % against −29 %) because the steering
+limiter is now given the same adhesion the tyres are, so it grants proportionally less lock as well; that
+coupling is deliberate (a limiter promising what the tyre cannot pay is the 081/09 complaint's mechanism).
+
+Runs: `2026-07-27-headless-grasscorner-off-comet.json` · `2026-07-27-headless-grasscorner-on-comet.json`.
+
 ### 2026-07-27 — grip from the SURFACE: the A/B, and why tarmac cannot move (081/10 step 5)
 
 Same pak and harness. Comet, 12 scenes, run twice: `?surfGrip=0` (every wheel on tarmac, the old world) and
