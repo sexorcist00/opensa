@@ -7,6 +7,8 @@
 import { readFileSync } from 'node:fs';
 
 export interface Capture {
+  /** The in-air authority the driver had (081/06 §1) — the third dial a run states about itself. */
+  readonly airControl?: Readonly<Record<string, number>>;
   readonly car: string;
   readonly columns: readonly string[];
   readonly key: string;

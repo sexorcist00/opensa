@@ -68,6 +68,10 @@ describe('summarisePhysFrames', () => {
     it('reports no flip while the car stays on its wheels', () => {
       expect(summarisePhysFrames(lap(60, () => ({ roll: Math.PI / 4 }))).flip).toBeNull();
     });
+
+    it('reports no flight for a lap that never left the ground', () => {
+      expect(summarisePhysFrames(lap(60, () => ({ speed: 20 }))).air).toBeNull();
+    });
   });
 
   describe('positive cases', () => {
@@ -119,6 +123,21 @@ describe('summarisePhysFrames', () => {
       const frames = lap(120, (index) => ({ wheels: index >= 30 && index < 90 ? [wheel(false)] : [wheel()] }));
 
       expect(summarisePhysFrames(frames).airborneS).toBeCloseTo(1, 1);
+    });
+
+    it('separates one real flight from a lap that merely skipped, and says what the nose did (081/06 §1)', () => {
+      // A dozen 2-frame hops, then one half-second flight in which the nose comes up 10°. The TOTAL air of
+      // the hops is the larger number — which is why the total cannot answer whether the driver ever flew.
+      const hops = lap(60, (index) => ({ wheels: index % 5 < 2 ? [wheel(false)] : [wheel()] }));
+      const flight = lap(30, (index) => ({
+        pitch: (index / 29) * 0.1745,
+        wheels: index < 29 ? [wheel(false)] : [wheel()],
+      })).map((f) => ({ ...f, t: f.t + 1 }));
+      const summary = summarisePhysFrames([...hops, ...flight]);
+
+      expect(summary.air?.seconds).toBeCloseTo(0.47, 1);
+      expect(summary.air?.pitchDeg).toBeCloseTo(9.7, 0);
+      expect(summary.airborneS).toBeGreaterThan(summary.air?.seconds ?? 0);
     });
 
     it('integrates the whole rotation, not the shortest way round', () => {

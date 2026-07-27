@@ -113,8 +113,8 @@ becomes the next thing the eye rejects. The two land together or the improvement
 
 ## Subtasks
 
-- [ ] Airborne detector + attitude torques + clamps + tests (debounce, no-input = no torque,
-      crest-jump envelope).
+- [x] Airborne detector + attitude torques + clamps + tests (debounce, no-input = no torque,
+      crest-jump envelope). **Shipped 2026-07-27** — the original's own law, `?airCtl` dial, ledger below.
 - [ ] Kerb probe + impulse ramp + thresholds + tests; `kerb-strike` A/B captures.
 - [x] `animTranslation` + `setPartTranslation` on `RigidEntity` (the one primitive below the vehicle layer).
       **Landed early (2026-07-27)** as the stance fix's dependency — see the audit addendum.
@@ -193,3 +193,46 @@ tuning ago without anyone noticing. Reopen only on a field report that names a s
 
 The other two §2 items stand unchanged and unmeasured: the high-speed shallow-angle case ("a kerb at
 80 km/h SHOULD punish") has no clean instrument, and §1's in-air attitude control is untouched.
+
+### 2026-07-27 — §1 shipped: the original's air control, and the scene that could not see it
+
+**The law is the original's, not a feel constant.** `CAutomobile::ProcessControl` (gta-reversed) runs three
+`ApplyTurnForce` calls on the player's car once `m_nNumContactWheels` reaches zero, and `ApplyTurnForce` ends
+in `m_vecTurnSpeed += cross(point, force) / m_fTurnMass`. The lever arm is a unit body axis, so the whole
+block collapses to an angular-velocity change of `0.0007 × min(1, 3000/turnMass) × input × timeStep` —
+**1.75 rad/s² per unit of stick** once the game's 1/50 s time unit is divided out, the same for every car
+under 3000 turn mass and proportionally less above it (a fire truck's 20 000 gets 15 %). The `0.02` gate is
+1 rad/s: the driver may not push an axis that is already turning fast the other way. `air-control.ts` carries
+the source block, the derivation and the three deviations — the pitch axis is our throttle axis (this control
+scheme has no separate up/down, and the throttle is inert in the air anyway), there is no driving-skill stat,
+and gravity is 9.81 where SA's is 20, so the same jump lasts about twice as long and buys twice the rotation.
+That last one is why the strength is a session dial (`?airCtl=<×>`, 1 = the original) rather than a number
+fitted here: the field decides, and every `[phys]` capture records what it flew with.
+
+Controls in the air: **W/S pitch · A/D roll (off the throttle) · A/D + handbrake yaws**. The debounce is
+ours — 0.15 s of every wheel off the ground — because our four suspension RAYS blink off over a kerb or a
+driveway lip where SA's contact-wheel count does not, and without it the steering would roll the car in the
+middle of an ordinary corner.
+
+**The instrument had to be built before the measurement could be read.** `airborneS` is a TOTAL, and a lap
+that skips over a crest in a dozen 40 ms hops reports the same second of air as one that flies. The summary
+gained `air { atS, seconds, pitchDeg }` — the LONGEST unbroken flight, where it was, and what the nose did
+during it. The `atS` half earned itself immediately (see below).
+
+**Measured** (infernus, `?airCtl=0` vs `1`, captures + table in
+[`../../benchmarks/vehicle-physics/readme.md`](../../benchmarks/vehicle-physics/readme.md)):
+
+- **`u-turn` is the lap with real air** — both runs launch from the same event at 4.23 s. With the driver
+  holding W the nose comes up **+35.6° instead of +24.4°**, and the car is down **1.3 s sooner** (1.93 s of
+  flight against 3.27 s): a nose-up car meets the slope tail-first. Repeat run of the shipped config:
+  byte-identical.
+- **`crest-jump` is a crest, not a jump** — longest flight 0.2–0.5 s, and the two runs do not pick the same
+  flight (10.52 s vs 6.33 s). Its deltas are landing chaos, exactly the spread 07 §2 measured and widened for.
+  In the 0.2 s window it does allow, the traces are identical until the control engages and then diverge by
+  **+0.9° of nose-up** — the law working, at the size the window permits. Same class of finding as
+  "`kerb-strike` never met a kerb": recorded so nobody reads that scene's numbers as air-control evidence.
+
+**Owed, and named rather than done**: a scene that actually flies on purpose (a launch with a deliberate
+attitude input, not a u-turn that happens to leave the road). Until then §1's acceptance — "correctable in the
+air, landed without a nose-plant" — is a FIELD verdict on a real stunt jump, which is what this plan's field
+round asks for anyway.

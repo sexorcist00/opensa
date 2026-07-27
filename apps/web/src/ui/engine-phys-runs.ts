@@ -25,6 +25,9 @@ import { PHYS_CARS, PHYS_SCENES } from '../phys-scenes';
 
 /** What a lap needs from the engine host — thin accessors over its loop state, like `PerfRunsHost`. */
 export interface PhysRunsHost {
+  /** The ACTIVE air-control dial (plan 081/06 §1, `?airCtl`) — a jump capture that cannot say how much
+   *  authority the driver had cannot be compared with any other jump capture. */
+  airControl(): { scale: number };
   /** The scripted source installed in the host's CombinedInput; the fixed loop advances its clock. */
   drive: ScriptedDriveSource;
   getStream(): null | StreamStats;
@@ -161,8 +164,11 @@ function report(
   speedGrip: { cap: number; reference: number },
   surfaceTable: null | readonly { name: string }[],
   surfaceGrip: boolean,
+  airControl: { scale: number },
 ): void {
   const capture = {
+    // How much in-air authority the driver had (081/06 §1) — a jump lap says it, like every other dial.
+    airControl,
     car,
     // Column-named so a reader (and phys-compare) never has to count positions.
     // WHERE the car was goes at the END of the row, never in the middle: `phys-compare` walks two series by
@@ -268,7 +274,7 @@ async function runScene(host: PhysRunsHost, scene: PhysScene, car: string): Prom
   const stance = vehicles.stance();
   vehicles.telemetry.enabled = false;
 
-  report(scene, car, frames, springs, stance, host.speedGrip(), host.surfaces(), host.surfaceGrip());
+  report(scene, car, frames, springs, stance, host.speedGrip(), host.surfaces(), host.surfaceGrip(), host.airControl());
   await leaveCar(host, vehicles);
 }
 

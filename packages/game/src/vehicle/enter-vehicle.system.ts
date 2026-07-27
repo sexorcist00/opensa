@@ -10,6 +10,7 @@ import type { PhysicsWorld, VehicleController } from '../physics/physics-world';
 import type { VehicleHandle } from './vehicle-handle';
 import type { VehicleRig } from './vehicle-rig';
 
+import { airAttitudeDelta, carBasis } from './air-control';
 import {
   buildGearbox,
   createDrivetrainState,
@@ -189,6 +190,15 @@ const VEHICLE_CLEARANCE = 0.6; // how far outside the car footprint the player m
 const APPROACH_CANCEL_HOLD = 0.18; // s of movement input during the run-to-door before control returns (GTA-like lag)
 const APPROACH_STALL_TIMEOUT = 1.5; // s of no progress toward the door (blocked path) before auto-cancelling
 const APPROACH_STALL_EPSILON = 0.02; // planar distance (m) under which the player counts as not progressing per frame
+/**
+ * How long every wheel must be off the ground before the driver gets air control (s) — plan 081/06 §1.
+ *
+ * OURS, not the original's: SA gates on `m_nNumContactWheels`, which counts chassis collision contacts too
+ * and drops to zero only when the car is genuinely flying. Here the four suspension RAYS are the whole test,
+ * and they blink off over a kerb, a driveway lip or a crest for a frame or two. Without the debounce the
+ * steering would briefly roll the car in the middle of an ordinary street corner.
+ */
+const AIRBORNE_DEBOUNCE = 0.15;
 
 /** What {@link EnterVehicleSystem.appliedControls} reports while nobody is driving. */
 const NO_CONTROLS: AppliedControls = { brake: 0, engineForce: 0, gear: 1, handbrake: false, steer: 0, throttle: 0 };
@@ -217,6 +227,8 @@ export class EnterVehicleSystem implements System {
 
   private active: EnterableVehicle | null = null;
   private readonly aimCamera: (azimuth: number) => void;
+  /** How long every wheel has been off the ground (s) — the in-air control's debounce (plan 081/06 §1). */
+  private airborne = 0;
   private readonly animation: VehicleAnimator;
   private approachHeld = 0; // s of movement input held during 'approaching' → hand control back (GTA-like lag)
   private approachLast: Vec3 = [0, 0, 0]; // player position last 'approaching' frame (stall detection)
@@ -588,6 +600,38 @@ export class EnterVehicleSystem implements System {
   }
 
   /**
+   * The driver's hands in the air (plan 081/06 §1): once every wheel has been off the ground for
+   * {@link AIRBORNE_DEBOUNCE}, W/S pitch the car, A/D roll it (or yaw it with the handbrake up), at the
+   * original's own strength. See `air-control.ts` for the formula and the three documented deviations.
+   *
+   * Only the DRIVEN car gets it — the original gates the whole block on there being a pad.
+   */
+  private applyAirControl(
+    car: EnterableVehicle,
+    input: { grounded: boolean; handbrake: boolean; steer: number; step: number; throttle: number },
+  ): void {
+    const { grounded, handbrake, steer, step, throttle } = input;
+    this.airborne = grounded ? 0 : this.airborne + step;
+    if (this.airborne <= AIRBORNE_DEBOUNCE) {
+      return;
+    }
+    const delta = airAttitudeDelta({
+      accelerating: throttle > 0,
+      angular: this.physics.getAngvel(car.body),
+      basis: carBasis(this.physics.readBody(car.body).quaternion),
+      handbrake,
+      pitch: throttle,
+      scale: this.physics.airControlTuning().scale,
+      steer,
+      step,
+      turnMass: car.handling.turnMass,
+    });
+    if (delta) {
+      this.physics.spin(car.body, delta);
+    }
+  }
+
+  /**
    * Air drag, the way the original applies it: a deceleration of `dragMult × v² / 2000` against the whole
    * velocity vector (`CPhysical::ApplyAirResistance`). It is what makes a top speed EXIST — before this, the
    * only thing that stopped a car accelerating was a hard cap, so every vehicle pulled as hard at 140 km/h as
@@ -752,12 +796,14 @@ export class EnterVehicleSystem implements System {
     const box = this.gearboxOf(car);
     const brakeForce = hnd.brakeDecel * hnd.mass * BRAKE_UNITS_PER_DECEL_PER_KG;
     this.applyDrag(car, step);
+    const grounded = this.physics.vehicleGrounded(car.controller);
+    this.applyAirControl(car, { grounded, handbrake, steer: steerInput, step, throttle });
 
     const { brake, driverBraking, gear, targetEngine } = this.longitudinal(car, {
       box,
       brakeForce,
       footBrake,
-      grounded: this.physics.vehicleGrounded(car.controller),
+      grounded,
       handbrake,
       speed,
       step,
@@ -1156,6 +1202,7 @@ export class EnterVehicleSystem implements System {
     this.phase = 'seated';
     this.engine = 0; // start from idle; drive() ramps the throttle
     this.steerAngle = 0; // start straight; drive() takes over the wheels from here
+    this.airborne = 0; // a car climbed into mid-drop does not start with air control already earned
     this.placePlayer(this.seatWorld);
     this.animation.setScripted(CAR_SIT, { facing: this.active.heading, loop: true });
     this.followTarget(this.active); // track the car (smooth) — not the per-frame-teleported rider

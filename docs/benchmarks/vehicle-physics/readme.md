@@ -649,3 +649,33 @@ Runs: `2026-07-27-headless-kerbmount-baseline-{comet,firetruk}.json` (the LV ker
 `2026-07-27-headless-kerbwall-sf-{comet,admiral,infernus,firetruk}.json` (the SF wall — a car meeting the
 edge of the drivable surface square-on, kept because it is the cleanest four-car reproduction of the block) ·
 `2026-07-27-headless-kerbstrike-located-{infernus,comet,admiral}.json` (the located `kerb-strike` laps).
+
+### 2026-07-27 — air control (081/06 §1): the crest scene is a crest, the u-turn is the jump
+
+The A/B for the in-air attitude control, `?airCtl=0` against the shipped `1`. Infernus, same pak
+(`buildTime 08:41 24-07-2026`, cellSize 250), code at `7f8c592` + the §1 change, headless via the harness.
+Every capture states its own `airControl` dial, like the speed-grip pair beside it.
+
+| scene      | dial | longest flight | at    | nose over that flight | total air |
+| ---------- | ---: | -------------: | ----: | --------------------: | --------: |
+| u-turn     |    0 |     **3.27 s** | 4.23s |            **+24.4°** |    4.13 s |
+| u-turn     |    1 |       1.93 s   | 4.23s |            **+35.6°** |    2.03 s |
+| crest-jump |    0 |       0.45 s   | 10.52s|                −12.9° |    1.17 s |
+| crest-jump |    1 |       0.20 s   | 6.33s |                 −5.0° |    0.62 s |
+
+**Read the `at` column before the others.** On `u-turn` both runs launch from the same event at 4.23 s, so the
+two rows are the same jump flown two ways: with the driver holding W the nose comes up **11° further** and the
+car is back on the ground **1.3 s sooner** (a nose-up car meets the slope with its tail). That is the whole
+measurement of §1, and it repeats — a second run of the shipped config returned the identical capture.
+
+On `crest-jump` the two runs do not even pick the same flight (10.52 s against 6.33 s), because the scene is a
+CREST, not a jump: its longest unbroken flight is a fifth to a half of a second, and the debounce that keeps a
+kerb from rolling the car eats 0.15 s of it. Its 1.13 s of `airborneS` is a dozen hops, not a flight — which
+is why the summary gained `air { atS, seconds, pitchDeg }` in this change: a total cannot answer whether the
+driver was ever airborne long enough to have controls at all. **No air-control conclusion may be drawn from
+`crest-jump`**, the same way none may be drawn from `kerb-strike` about kerbs. In the window it does allow
+(0.2 s at the crest) the law measures exactly what it should: +0.9° of nose-up against the same lap flown with
+`airCtl=0`, traces identical to the millimetre until the control engages.
+
+Runs: [`2026-07-27-headless-aircontrol-off-infernus.json`](2026-07-27-headless-aircontrol-off-infernus.json) ·
+[`2026-07-27-headless-aircontrol-on-infernus.json`](2026-07-27-headless-aircontrol-on-infernus.json).

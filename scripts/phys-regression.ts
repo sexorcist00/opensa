@@ -191,7 +191,7 @@ function configBand(label: string): Band | undefined {
 
 /**
  * The capture's own statement of what it was configured with and how the car stood, as `config.…` rows: the
- * speed-grip dials, every wheel's spring, and — on `rest` ONLY — the stance. The stance belongs here because
+ * speed-grip dials, the air-control dial, every wheel's spring, and — on `rest` ONLY — the stance. The stance belongs here because
  * no summary signal carries it: the `rest` lap reads zero on every channel whether the car sits at its SA
  * pose or 10 cm into its bump stops, so the standing-pose law (2026-07-27) would otherwise be ungated. It is
  * read on no other scene because it is sampled when the lap REPORTS — on a crest lap that is mid-landing,
@@ -202,6 +202,11 @@ function configOf(capture: Capture): Map<string, number> {
   for (const [dial, value] of Object.entries(capture.speedGrip ?? {})) {
     if (typeof value === 'number') {
       rows.set(`config.speedGrip.${dial}`, value);
+    }
+  }
+  for (const [dial, value] of Object.entries(capture.airControl ?? {})) {
+    if (typeof value === 'number') {
+      rows.set(`config.airControl.${dial}`, value);
     }
   }
   (capture.springs ?? []).forEach((spring, wheel) => {

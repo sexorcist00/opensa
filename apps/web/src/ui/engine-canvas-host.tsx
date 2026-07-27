@@ -389,6 +389,9 @@ async function boot(
     cap: Number(params.get('gripCap')) || undefined,
     reference: Number(params.get('gripVd')) || undefined,
   });
+  // 081/06 §1: how much of the original's in-air authority the driver gets — `?airCtl=0` turns it off, which
+  // is the A/B for a jump. Written so `?airCtl=0` reads as zero rather than as "absent".
+  physics.tuneAirControl(params.has('airCtl') ? Number(params.get('airCtl')) : undefined);
   // 081/10: what a wheel is standing on decides its grip. `?surfGrip=0` puts every surface back on tarmac —
   // the A/B the field judges the whole feature by.
   const tyreAdhesion = adapter.tyreAdhesion();
@@ -1476,6 +1479,7 @@ async function boot(
 
   // Scripted physics laps (081/01): the same teleport contract as a bench leg, then a driven capture.
   setupPhysRuns({
+    airControl: (): { scale: number } => physics.airControlTuning(),
     drive: scriptedDrive,
     getStream: (): null | StreamStats => lastStream,
     getVehicles: (): EngineVehicles | null => vehicles,

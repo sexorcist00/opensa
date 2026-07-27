@@ -172,6 +172,10 @@ const SUSPENSION_DAMPING_SCALE_MAX = 2;
 // and its field test was additionally masked by the SLIDE_SPEED unit bug (full-lock plow drowned the dials).
 const SPEED_GRIP_REFERENCE = 12; // m/s — the speed where the boost reaches ×2
 const SPEED_GRIP_CAP = 3;
+/** How much of the original's in-air authority a car gets (plan 081/06 §1, `?airCtl=<×>`). 1 = SA's own
+ *  strength; the law itself lives in `vehicle/air-control.ts`, which explains what a jump under 9.81 does
+ *  with numbers authored for 20. */
+const AIR_CONTROL_SCALE = 1;
 /**
  * What a LOCKED wheel keeps of its lateral stiffness — 3 %, and it has to be that low for a reason worth
  * knowing.
@@ -472,6 +476,10 @@ type RapierWorld = InstanceType<Rapier['World']>;
  * integer handle, which the `RigidBody` component stores per entity.
  */
 export class PhysicsWorld {
+  /** The live air-control dial (plan 081/06 §1) — `?airCtl=<×>`, 1 being the original's own strength. It
+   *  lives beside the other two vehicle dials so a session tunes them in one place, and every capture reads
+   *  them from one place. */
+  private airControl = { scale: AIR_CONTROL_SCALE };
   /** Contact-force impacts for the breakable trigger (drained by {@link takeBreakableImpacts}). */
   private breakableImpacts: Impact[] = [];
   private readonly events: InstanceType<Rapier['EventQueue']>;
@@ -500,6 +508,11 @@ export class PhysicsWorld {
     this.rapier = rapier;
     this.world = new rapier.World({ x: 0, y: 0, z: GRAVITY_Z });
     this.events = new rapier.EventQueue(true);
+  }
+
+  /** The active air-control dial — read by the F2 tab and by every `[phys]` capture (self-description). */
+  airControlTuning(): { scale: number } {
+    return { ...this.airControl };
   }
 
   /** What the solver is actually chewing on — a stall needs a count, not a guess. */
@@ -756,6 +769,13 @@ export class PhysicsWorld {
 
   dispose(): void {
     this.world.free();
+  }
+
+  /** Angular velocity of a body (world, rad/s, Z-up). */
+  getAngvel(handle: number): Vec3 {
+    const w = this.world.getRigidBody(handle).angvel();
+
+    return [w.x, w.y, w.z];
   }
 
   /** Linear velocity of a body (Z-up). */
@@ -1259,6 +1279,21 @@ export class PhysicsWorld {
   }
 
   /**
+   * Add to a body's angular velocity (world, rad/s) — the in-air attitude control's one write (081/06 §1).
+   *
+   * Straight onto the velocity, not through a torque impulse, because that is what the original does
+   * (`CPhysical::ApplyTurnForce` ends in `m_vecTurnSpeed += cross(point, force) / m_fTurnMass`): it divides
+   * by the AUTHORED `fTurnMass`, a single scalar, where a Rapier torque would be divided by the collider's
+   * own inertia tensor — a different number per car and per axis, and nothing the handling file could aim.
+   * A car in the air has no contacts for the solver to reconcile it against, so there is nothing to fight.
+   */
+  spin(handle: number, delta: Vec3): void {
+    const body = this.world.getRigidBody(handle);
+    const w = body.angvel();
+    body.setAngvel({ x: w.x + delta[0], y: w.y + delta[1], z: w.z + delta[2] }, true);
+  }
+
+  /**
    * Advance the world one fixed step.
    *
    * `beforeVehicles` runs at the very top, BEFORE the raycast controllers consume their engine/brake/steer
@@ -1384,6 +1419,13 @@ export class PhysicsWorld {
     body.setTranslation(p, true);
     // Match the kinematic target so the next step doesn't pull the body back (no jitter).
     body.setNextKinematicTranslation(p);
+  }
+
+  /** Override the air-control strength for this session (plan 081/06 §1: `?airCtl=<×>`; 0 disables it). */
+  tuneAirControl(scale: number | undefined): void {
+    if (scale !== undefined && Number.isFinite(scale) && scale >= 0) {
+      this.airControl.scale = scale;
+    }
   }
 
   /** Override the speed-grip dials for this session (plan 081/09: `?gripVd=<m/s>&gripCap=<×>`) — the feel

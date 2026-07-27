@@ -36,6 +36,20 @@ export interface PhysRange {
 }
 
 export interface PhysSummary {
+  /**
+   * The LONGEST unbroken stretch with no wheel in contact (s), and how much the nose turned during it (deg,
+   * positive = up) — the pair that makes a jump readable (plan 081/06 §1).
+   *
+   * `airborneS` alone cannot: it is a TOTAL, so a lap that skipped over a crest in a dozen 40 ms hops reports
+   * the same second of air as one that flew. Air control is only handed over after a debounce, so the total
+   * says nothing about whether the driver ever had any — measured on the `crest-jump` lap, 1.13 s of total
+   * air was fragments, of which the longest single flight was a fifth of a second.
+   *
+   * Null when the lap never left the ground at all, so "no jump" cannot read as "a jump with no rotation".
+   * `atS` says WHERE in the lap it was: two runs of a chaotic scene can pick different flights, and comparing
+   * a crest launch against a landing bounce is how a jump A/B reads backwards.
+   */
+  readonly air: null | { atS: number; pitchDeg: number; seconds: number };
   /** Seconds with NO wheel in contact — the crest scene's air time. */
   readonly airborneS: number;
   /** Braking: distance and time from the first braked frame to a stop. Null when the lap never braked to
@@ -128,6 +142,7 @@ export function summarisePhysFrames(frames: readonly TelemetryFrame[]): PhysSumm
   const flip = frames.find((frame) => Math.abs(frame.roll * RAD_TO_DEG) >= FLIP_ROLL_DEG) ?? null;
 
   return {
+    air: longestFlight(frames),
     airborneS: round(integrate(frames, (frame) => (frame.wheels.some((wheel) => wheel.contact) ? 0 : 1))),
     brake: brakingRun(frames),
     diveDeg: dive(frames),
@@ -181,6 +196,41 @@ function integrate(frames: readonly TelemetryFrame[], value: (frame: TelemetryFr
   }
 
   return total;
+}
+
+/**
+ * The lap's longest single flight and what the nose did during it — see {@link PhysSummary.air}.
+ *
+ * The pitch delta is taken between the first and last airborne frame of that stretch, in the body's own
+ * pitch channel: a jump the driver never touched reads whatever the launch gave it, and holding W or S should
+ * move it by degrees. Wrapping is not a concern — a car that rotates past ±90° in one flight has a different
+ * problem, and the roll/flip channels report that one.
+ */
+function longestFlight(frames: readonly TelemetryFrame[]): null | { atS: number; pitchDeg: number; seconds: number } {
+  const flying = (frame: TelemetryFrame): boolean => !frame.wheels.some((wheel) => wheel.contact);
+  let best: null | { end: number; start: number } = null;
+  let start = -1;
+  for (let index = 0; index <= frames.length; index += 1) {
+    const airborne = index < frames.length && flying(frames[index]);
+    if (airborne && start < 0) {
+      start = index;
+    } else if (!airborne && start >= 0) {
+      const end = index - 1;
+      if (best === null || frames[end].t - frames[start].t > frames[best.end].t - frames[best.start].t) {
+        best = { end, start };
+      }
+      start = -1;
+    }
+  }
+  if (best === null) {
+    return null;
+  }
+
+  return {
+    atS: round(frames[best.start].t),
+    pitchDeg: round((frames[best.end].pitch - frames[best.start].pitch) * RAD_TO_DEG),
+    seconds: round(frames[best.end].t - frames[best.start].t),
+  };
 }
 
 /**
@@ -278,6 +328,7 @@ function timeToSpeed(frames: readonly TelemetryFrame[], kmh: number): null | num
 const ZERO_RANGE: PhysRange = { max: 0, min: 0 };
 
 const EMPTY: PhysSummary = {
+  air: null,
   airborneS: 0,
   brake: null,
   diveDeg: null,

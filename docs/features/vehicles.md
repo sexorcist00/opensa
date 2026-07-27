@@ -109,6 +109,13 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   loudest). The DRAWN wheel follows the physics spring length through `VehicleRig` → `setWheel({ lift, spin,
   steer })` → `RigidEntity.setPartTranslation`, smoothed at the fixed step so raycast jitter does not read as
   a vibrating wheel. Camber and the solid-axle rules remain plan 06's.
+- **Air control** (plan 081/06 §1): with every wheel off the ground for 0.15 s, W/S pitch the car, A/D roll
+  it and A/D with the handbrake yaws it — the original's own block (`CAutomobile::ProcessControl`), which
+  works out as `1.75 rad/s²` per unit of stick for any car up to 3000 `fTurnMass` and proportionally less
+  above it, with the original's 1 rad/s "do not fight a tumble" gate. The debounce is ours: four suspension
+  rays blink off over a kerb where SA's contact-wheel count does not. `?airCtl=<×>` scales it (0 = off) and
+  every `[phys]` capture records the value, because gravity here is 9.81 against SA's 20 — the same jump lasts
+  about twice as long, so the same law buys about twice the rotation.
 - **Driving controls** (plan 081/04): Space and back-while-rolling are the FOOT brake — it ramps in over 0.2 s
   and splits across the axles by `fBrakeBias`; **H is the handbrake**, and it is a REAR-AXLE LOCK, not a
   bigger brake (`CAutomobile::ProcessCarWheelPair` gives the rear wheels 20 000 and leaves the front alone).

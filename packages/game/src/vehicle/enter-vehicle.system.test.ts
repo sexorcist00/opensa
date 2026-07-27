@@ -27,10 +27,12 @@ interface Harness {
     bodyPosition: Vec3;
     brake: number;
     engine: number;
+    grounded: boolean;
     handbrake: boolean;
     parked: number;
     quaternion: [number, number, number, number];
     speed: number;
+    spins: Vec3[];
     steer: number;
     teleports: Vec3[];
   };
@@ -75,6 +77,7 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
   } as unknown as CharacterControllerSystem;
 
   const phys = {
+    angvel: [0, 0, 0] as Vec3,
     blocked: new Set<string>(), // 'lf' | 'rf' | 'windscreen' — egress rays the world blocks (088/09d)
     bodyPosition: [0, 0, 0] as Vec3, // what readBody reports — driveSeated drags car.position to it
     brake: 0,
@@ -85,6 +88,7 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
     parked: 0,
     quaternion: [0, 0, 0, 1] as [number, number, number, number],
     speed: 0,
+    spins: [] as Vec3[], // every in-air attitude write (081/06 §1)
     steer: 0,
     teleports: [] as Vec3[],
   };
@@ -92,6 +96,8 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
     phys.teleports.push(position);
   };
   const physics = {
+    airControlTuning: (): { scale: number } => ({ scale: 1 }),
+    getAngvel: (): Vec3 => phys.angvel,
     getLinvel: (): Vec3 => [0, phys.speed, 0], // heading 0 → forward speed = vy
     groundBelow: (): null | number => (phys as { ground?: number }).ground ?? null, // road top for crawl targets
     holdBody: (): undefined => undefined,
@@ -126,6 +132,9 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
       phys.brake = controls.brake;
       phys.handbrake = controls.handbrake;
       phys.steer = controls.steer;
+    },
+    spin: (_handle: number, delta: Vec3): void => {
+      phys.spins.push(delta);
     },
     vehicleGrounded: (): boolean => phys.grounded,
     vehicleSpeed: (): number => phys.speed,
@@ -303,6 +312,27 @@ describe('EnterVehicleSystem', () => {
       expect(h.system.getActive()).toBeNull();
     });
 
+    it('hands out no air control while a wheel is still on the ground', () => {
+      const h = setup();
+      seatPlayer(h, vehicleAt([2, 0, 0]));
+      h.hold('KeyW', true);
+      for (let i = 0; i < 20; i += 1) {
+        h.system.fixedUpdate(0.02);
+      }
+
+      expect(h.phys.spins).toHaveLength(0);
+    });
+
+    it('waits out the debounce, so a kerb-length hop cannot pitch the car (081/06 §1)', () => {
+      const h = setup();
+      seatPlayer(h, vehicleAt([2, 0, 0]));
+      h.hold('KeyW', true);
+      h.phys.grounded = false;
+      h.system.fixedUpdate(0.1); // 0.1 s of air — a driveway lip, not a jump
+
+      expect(h.phys.spins).toHaveLength(0);
+    });
+
     it('canEnterExit is false when idle with no car in range', () => {
       const h = setup();
       expect(h.system.canEnterExit()).toBe(false); // no cars
@@ -312,6 +342,34 @@ describe('EnterVehicleSystem', () => {
   });
 
   describe('positive cases', () => {
+    it('lets the driver pitch a car that is properly airborne (081/06 §1)', () => {
+      const h = setup();
+      seatPlayer(h, vehicleAt([2, 0, 0]));
+      h.hold('KeyW', true);
+      h.phys.grounded = false;
+      h.system.fixedUpdate(0.1);
+      h.system.fixedUpdate(0.1); // past the debounce — the car is flying
+
+      expect(h.phys.spins).toHaveLength(1);
+      expect(h.phys.spins[0][0]).toBeGreaterThan(0); // about the car's right axis = nose up
+    });
+
+    it('puts the air control away again the moment the car lands', () => {
+      const h = setup();
+      seatPlayer(h, vehicleAt([2, 0, 0]));
+      h.hold('KeyW', true);
+      h.phys.grounded = false;
+      h.system.fixedUpdate(0.1);
+      h.system.fixedUpdate(0.1);
+      h.phys.grounded = true;
+      h.system.fixedUpdate(0.1);
+      const onLanding = h.phys.spins.length;
+      h.phys.grounded = false;
+      h.system.fixedUpdate(0.1); // airborne again — but the debounce starts over
+
+      expect(h.phys.spins).toHaveLength(onLanding);
+    });
+
     it('applies the controls BEFORE the step consumes them, not after (081/02 §4)', () => {
       // The raycast controller reads engine/brake/steer at the top of `physics.step`. Driving used to run
       // after it, so every press reached the wheels one step late. `applyControls` is what a host calls
