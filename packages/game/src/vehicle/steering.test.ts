@@ -16,11 +16,20 @@ describe('steerLimit', () => {
     });
 
     it('gives the full lock back while countersteering a slide', () => {
-      // Sliding to the right with the wheel turned left is the driver catching it; the original exempts it.
-      const caught = steerLimit({ ...CAR, speed: 30, steerAngle: -0.3, swaySpeed: 2 });
+      // Sliding to the right at 3 m/s with the wheel turned left is the driver catching it; the original
+      // exempts it (its threshold is 0.05 GAME UNITS per frame = 2.5 m/s).
+      const caught = steerLimit({ ...CAR, speed: 30, steerAngle: -0.3, swaySpeed: 3 });
 
       expect(caught).toBe(1);
-      expect(steerLimit({ ...CAR, speed: 30, steerAngle: 0.3, swaySpeed: 2 })).toBeLessThan(1);
+      expect(steerLimit({ ...CAR, speed: 30, steerAngle: 0.3, swaySpeed: 3 })).toBeLessThan(1);
+    });
+
+    it('does NOT read ordinary cornering slip as a slide — the limiter stays on through a normal corner', () => {
+      // ~2° of body slip at 108 km/h is every corner ever driven, and it points OUTWARD — exactly the
+      // pattern the exemption watches for. At the mis-scaled 0.05 m/s threshold this returned 1 within a
+      // tenth of a second of any turn-in, handing a full keyboard press the whole lock at speed: the
+      // "barely steers at speed" plow. 1 m/s must stay LIMITED; only a real slide (> 2.5 m/s) is exempt.
+      expect(steerLimit({ ...CAR, speed: 30, steerAngle: -0.3, swaySpeed: 1 })).toBeLessThan(1);
     });
 
     it('gives the full lock back with the handbrake up — a handbrake turn is a slide on purpose', () => {

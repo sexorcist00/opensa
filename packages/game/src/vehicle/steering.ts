@@ -50,8 +50,20 @@ const SA_STEP = 1 / 50;
 const ROAD_ADHESION = 4.5;
 /** Below this speed the limiter is meaningless (the formula divides by v²) and the car gets its full lock. */
 const MIN_LIMITED_SPEED = 0.01;
-/** Lateral speed (m/s) past which the car counts as sliding, for the countersteer exemption. */
-const SLIDE_SPEED = 0.05;
+/**
+ * Lateral speed (m/s) past which the car counts as SLIDING, for the countersteer exemption.
+ *
+ * The original's `0.05f` is in GAME UNITS PER FRAME — × 50 = **2.5 m/s**, a genuine slide. This constant
+ * shipped as 0.05 in m/s: 50× too sensitive, so the ORDINARY outward body slip of any corner at speed
+ * (~0.5–1.5 m/s at 1–3° of slip) tripped the exemption within ~0.1 s and handed the driver FULL LOCK — the
+ * limiter was effectively disabled in every real corner. A full keyboard press at 100+ km/h then buried the
+ * front wheels at 30° (3–6× past saturation, with the `fTractionLoss` penalty and the scrub drag of a
+ * near-sideways tyre): the "barely steers at speed" plow that survived a 7× grip range, a 2× gravity change
+ * and the 081/09 assist — none of which could matter while the front was drowned in its own steering angle.
+ * The same unit-class bug as `ROAD_ADHESION = 1` and the `×0.001` before it; found by the `sweeper` capture
+ * showing `steer` at the FULL granted lock 0.2 s into a 1°-slip corner (081/09 ledger, 2026-07-27).
+ */
+const SLIDE_SPEED = 0.05 / SA_STEP;
 
 /** The share of its authored lock the car may use, 0..1. */
 export function steerLimit(input: {
