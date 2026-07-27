@@ -61,8 +61,7 @@ purple; the animated LED screen inside it is fine. "Prod is fine." The model is 
   grey under prelit — and vanilla SA draws the same, which is why the field read prod as "fine".
 - The marker was also USELESS for diagnosis: the failed name was recorded nowhere.
 
-**Fix (2026-07-22):** vanilla parity + loud ledger + a runtime dev highlight (user's call: "так проще
-дебажить").
+**Fix (2026-07-22):** vanilla parity + loud ledger + a runtime dev highlight (user's call, paraphrased: "easier to debug this way").
 
 - A miss falls back to the MATERIAL COLOUR (the `empty-txd` white-stand-in precedent generalized); every
   failed name lands in `report.json` `textures.missing` (`txd/texture` → count + the MODELS that asked for
@@ -168,7 +167,7 @@ plan (parser+oscell fields → shared blink function driving corona AND pool int
 "all three traffic-light colours glow at once" (showMode 7/8).
 
 **History:** a bare pool restore (smooth admission, no blink) was tried 2026-07-22 and REVERTED the same
-day (user: "не то что нам нужно") — the missing half was the blink sync; do not re-apply as-is.
+day (user, paraphrased: "not what we need") — the missing half was the blink sync; do not re-apply as-is.
 
 ---
 

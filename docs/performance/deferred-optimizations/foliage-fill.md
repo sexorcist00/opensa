@@ -14,7 +14,7 @@ The mechanism is the part worth keeping: triangles fell 18 % while the pass fell
 move at all**. Alpha-tested canopies cost per PIXEL, and they overdraw each other. On these scenes draw
 counts and triangle counts mislead.
 
-The mod was deleted and every other foliage lever was parked ("будем наблюдать" — the user, 2026-07-21).
+The mod was deleted and every other foliage lever was parked ("we will keep watching" — the user, paraphrased, 2026-07-21).
 
 ## The levers, if foliage ever hurts again
 

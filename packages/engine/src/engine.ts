@@ -499,7 +499,7 @@ const PROBE_FRAME_INTERVAL = 2;
 /** Light-pool capacity (074/06 row 7) — mirrored by the WGSL loop bound. Holds HOST DYNAMICS only since
  *  2026-07-17 (static 2dfx lamps removed — their binary pool admission read as "lamps igniting ahead of
  *  the car"; the redesign is plan 17's, the corona glow still marks every lamp). A smooth-admission
- *  restore was tried and REVERTED 2026-07-22 (085 row E: "не то что нам нужно" — the user owes the
+ *  restore was tried and REVERTED 2026-07-22 (085 row E: "not what we need", paraphrased — the user owes the
  *  precise description of the wanted ground-glow behaviour before this is touched again). */
 const LIGHT_POOL_CAP = 64;
 /** Floats per pooled light: position+radius, colour, direction+cone cosine (2 = point, no cone). */

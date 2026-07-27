@@ -36,8 +36,8 @@ Game ids: `original` (stock SA; renamed from `non-modified`) · `gostown` (demo)
 Filesystem (both roots are gitignored user data): `mv game-src/non-modified game-src/original`,
 `mv build/perfect build/original`, `mv mods-src/non-modified mods-src/original`.
 
-Repo sweep — every reference goes, none survive (user's explicit bar: "ПОЛНЫЙ аудит кода, тестов, всей
-документации"), historical plan texts included (git history remains the true record):
+Repo sweep — every reference goes, none survive (user's explicit bar, paraphrased: "a FULL audit of the code,
+the tests and ALL the documentation"), historical plan texts included (git history remains the true record):
 
 - code/test defaults: `scripts/test-fixtures.ts`, `scripts/build-viewer-assets.ts`, debug scripts'
   `--game` docs, `dump-cell.ts`/`crosstxd-fix.ts` pak defaults, pmb default `--out` (→

@@ -500,7 +500,7 @@ fn skyBaseFor(dir: vec3f) -> vec3f {
   // the warm URBAN skyglow band at the horizon (San Andreas is a metropolis — city nights are never
   // black; the deck reflects the city light, so overcast makes it BRIGHTER). Living in the shared base,
   // it feeds the world fog too — night fog matches the glowing horizon, the 068 invariant.
-  // FADE (sky round 3 — "включается резко"): the sink window is widened to the whole post-sunset margin
+  // FADE (sky round 3 — "it kicks in abruptly", the field report, paraphrased): the sink window is widened to the whole post-sunset margin
   // AND the glow rides dn (the hour-long dusk ramp) — the city light breathes in with the darkness
   // instead of snapping on in the ~40 s the sun needs to cross a narrow horizon band.
   let pbrNight = (1.0 - smoothstep(-0.22, -0.01, frame.sunDir.y)) * frame.params.x;

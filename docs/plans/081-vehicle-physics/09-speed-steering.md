@@ -78,7 +78,7 @@ the branch; `sweeper` entry window (6–8.5 s) yaw/gLat and the spin-vs-arc outc
 - Slalom/u-turn roll peaks not materially worse than baseline at the shipped `SPEED_GRIP_CAP`.
 - Launch / brake-strip / rest / crest summaries within noise of baseline (the untouched-longitudinal claim,
   verified rather than asserted).
-- **Field: "объезд препятствия на 100–130 км/ч" — possible, controllable, and the low-speed feel unchanged.
+- **Field: "obstacle evasion at 100-130 km/h" (paraphrased) — possible, controllable, and the low-speed feel unchanged.
   The user names the final dial values.**
 
 ## Ledger

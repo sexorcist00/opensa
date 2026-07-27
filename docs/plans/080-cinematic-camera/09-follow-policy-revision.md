@@ -62,7 +62,7 @@ The liked speed→distance curve stays. On top: `vehicleAccelDistanceGain` (+1.0
 the LOW-PASSED longitudinal acceleration, positive only (braking already glides the camera in through the
 speed curve; a two-sided kick would pump on gear noise — the same disease the FOV dead-band exists for).
 The smoothed accel signal derives from the speed channel the snapshot already carries; no new physics tap.
-Turn lag: untouched (explicitly liked "с небольшим запаздыванием" — it is `vehicleYawLagTime` 0.35 s).
+Turn lag: untouched (explicitly LIKED — the user asked for exactly the current slight lag behind the car; it is `vehicleYawLagTime` 0.35 s).
 
 ## 4. The seen-once jump: instrument first, then fix what it names
 
@@ -139,7 +139,7 @@ mean/p95, vehicle 0.68/0.79 — ~60-100× under the 0.05 ms budget):
 
 ### 2026-07-27 — FIELD ROUND 1: everything reads right; the jump CAUGHT, named and fixed
 
-User's verdict: **"в остальном все очень хорошо"** — and the seen-once jump turned out to reproduce
+User's verdict (paraphrased): **"everything else reads very well"** — and the seen-once jump turned out to reproduce
 CONSTANTLY on vehicle entry: the camera centres on the car, approaches, then SLAMS the rest of the way in,
 and driving from there is normal. The watchdog printed nothing — correctly, as it turned out: the jump
 lives in the DISTANCE channel, and it is not a one-frame discontinuity but the end of a lagging glide.
@@ -164,7 +164,7 @@ channel has no non-occlusion snap left by construction.
 
 ### 2026-07-27 — FIELD ROUND 2: entry re-checked, ACCEPTED. 09 is CLOSED, defaults FROZEN
 
-"Прыжок исчез, посадка плавная." Every first-guess default ships as authored, not one number came back
+"The jump is gone, the seat entry is smooth" (paraphrased). Every first-guess default ships as authored, not one number came back
 for retuning: `footYawAuthorityStart/Full` **0.2 / 0.9** · `footRunDistanceGain` **0.6 m** full at
 **7 u/s** · `footIdleDelaySec` **5 s** / `footIdleDistanceEase` **0.4 m** · `vehicleAccelDistanceGain`
 **1 m** at ~0.6 g. The watchdog stays in (perf-logs only, quiet on a healthy session). Next per the

@@ -109,8 +109,8 @@ Two wrong turns before it landed, both on the same knob:
 1. First cut shipped `collisionMinDistance` 1.6 → a wall closer than 1.6 m put the eye BEHIND it (the min
    floors the distance, so a near wall can't pull it in past the min). Read as "falling through the wall".
 2. Reading "bring back the slide" as "turn collision off on foot", I made it vehicle-only. That was wrong —
-   without it the on-foot camera sank through the ground and into buildings (the user: "раньше скользило по
-   земле/зданию, теперь проваливаемся"). Collision is what MAKES the slide.
+   without it the on-foot camera sank through the ground and into buildings (the user, paraphrased: "it used
+   to slide along the ground and buildings — now it falls through"). Collision is what MAKES the slide.
 
 The real fix is the min distance = the **near-plane radius (0.5)**. Below it the near plane renders from
 inside geometry (the skybox frame `min = 0` produced); above it a wall closer than the min pushes the eye
@@ -123,7 +123,7 @@ pull-in read as a jump — the entry just centres behind).
 Also landed: **size-based vehicle distance** — a seated car frames out by its length ×
 `vehicleDistanceScale` (default 2; a bus frames further than a hatchback), the live distance EASES to it and
 back to the on-foot zoom on exit, and collision caps it so a car parked against a wall can't reverse the
-camera through it (the user's "габариты × 2, but the wall limits it").
+camera through it (the user's "double the clearance, but the wall limits it", paraphrased).
 
 ### 2026-07-25 — per-subject floor + block-when-pinned (user field round, the model that stuck)
 
@@ -137,7 +137,7 @@ jobs. The user's framing separated them cleanly:
 - **When a wall is closer than the subject fits** — the eye pinned between subject and wall, no room — the
   distance is BLOCKED at the subject boundary. It holds steady (a touch of wall clip behind the camera)
   instead of diving into the ped/car, and eases back out once the player reaches open space. This is the
-  user's "заблокировать пока не отойдёт в более широкое пространство".
+  user's "lock it until the player backs out into wider space" (paraphrased).
 - **Whiskers OFF by default**: the ±15° flanking casts fired on a pole or wall BESIDE the player/car (a thin
   pole behind-and-to-the-side yanked the car camera in), so only the straight-back cast counts now.
 - `collisionMinDistance` demoted to the near-plane SAFETY floor (0.5) UNDER the subject floor.

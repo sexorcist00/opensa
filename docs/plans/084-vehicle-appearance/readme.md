@@ -323,5 +323,5 @@ admiral bonnet below-100 **733 (13.6 %) → 0**, bump_front **307 (20.8 %) → 0
 
 **Field-VERIFIED 2026-07-23** via the modloader overlay (the shared-builder property made the rebuild
 unnecessary — the DFFs dropped into `modloader/` rebuilt at spawn with the new bake): user verdict —
-"пятна ушли, салон и арки норм" (speckles gone, interior and wheel wells fine). The next full pmb
+"speckles gone, interior and wheel wells fine" (paraphrased). The next full pmb
 rebuild bakes it into every `.osm`.
