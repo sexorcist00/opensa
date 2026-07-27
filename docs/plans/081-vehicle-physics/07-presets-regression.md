@@ -53,8 +53,10 @@ and close the bookkeeping.
 
 ## Subtasks
 
-- [ ] Class sweep + class-factor table + field verdicts per class.
-- [ ] 841-car spawn sanity run on final tuning.
+- [x] Class sweep + class-factor table (**empty by measurement**, ledger below); the per-class field
+      verdicts stay with the user.
+- [x] 841-car spawn sanity run on final tuning — `lateCreates` 0 on all six bench scenes across three runs
+      (benchmarks index, 2026-07-27 close-out row).
 - [x] Regression pack committed + harness lane + bands from accepted captures (2026-07-27, ledger below).
 - [x] Perf measurement + breakdown (2026-07-27); damage-coupling check — **there is no coupling to check**, see §3.
 - [ ] Docs/close-out items above.
@@ -142,3 +144,60 @@ the BEFORE set has these spikes, so the pack freezes what the game does today ho
 verdict taken off those laps is partly a record of where the wall is. **Owed: clean ground for the scenes
 that leave the road (or a shorter run-up).** It re-bases every historical number on those scenes, so it is
 its own step with the user's go-ahead — not a fix to slip into a tuning round.
+
+### 2026-07-27 — §1 the class sweep: the tuning generalises and the class-factor table stays EMPTY
+
+Five cars the chain never tuned against, one per class the calibration trio does not cover — **landstal** and
+**sandking** (offroad, 4WD), **bus** (heavy, six wheels), **burrito** (van), **picador** (pickup, and a solid
+rear axle) — on `rest` · `brake-strip` · `step-steer` · `u-turn`. Full table and captures in the
+[benchmarks readme](../../benchmarks/vehicle-physics/readme.md); what it decides:
+
+**The stance law generalises.** Every car sits on all its wheels with 99.9 % of its weight on the ground, at
+13–42 % of its authored travel, none on its bump stops, per-corner loads summing to `mass × g`. The
+six-wheeled bus loads its front axle twice as hard as either rear one and its springs answer. This is the
+strongest result in the sweep, because it is the part that was NOT derivable — the SA law was calibrated on
+four cars and it holds on classes with three axles and with 47 cm of travel.
+
+**Longitudinally, three classes hit three DIFFERENT limits, and each is the car's own number.** The 4WD
+offroaders pull 4.2 m/s² (engine-limited); the van and the pickup author the same `fEngineAcceleration` as the
+landstalker and pull 2.2 because they are rear-drive and `μ × rear-axle load / mass` is 2.9 for them (the
+081/04 clamp, doing exactly its job); the bus is short of its 4.9 m/s² grip ceiling and is simply a 5.5-tonne
+vehicle with `fEngineAcceleration` 14. Braking spans 0.35 g (bus, the fleet's lowest authored
+`fBrakeDeceleration`) to 0.91 g (sandking), and **every class dives** (−0.6…−2.1°) where 081/01 measured
++0.07° nose-UP on the trio.
+
+**So no class factor is proposed, and that is a result rather than an omission**: the plan says a factor lands
+only where a class needs a SHARED correction, and every difference the sweep found is a difference the data
+authored. `docs/roadmap/0.5.0/plans/04-all-vehicle-types/` inherits an empty table and the reason for it.
+
+**What did NOT generalise is the instrument set — the honest half of this section:**
+
+- `brake-strip` brakes at ~8.5 s and every one of the five is still ACCELERATING there, so its `topSpeedKmh`
+  reads as a top speed for the trio and as "how far it got in 8.5 s" for a bus. The three low-power classes'
+  53–65 km/h is NOT a top-speed finding, and nothing may be concluded about `CHASSIS_LINEAR_DAMPING` from it.
+- `step-steer` and `u-turn` hit scenery with anything wider or taller than the trio: the bus turns **0.28°**
+  across its whole step-steer lap while registering ±20 g, and the burrito's u-turn ends on its roof at
+  0.3 km/h after a −80 g impact. **No cornering or flip verdict per class comes off these laps.** The owed
+  clean-ground work (07 §3's ledger) is now owed twice, and a class field round needs a spot a bus fits on.
+
+The field half of §1 — "each class feels like itself" — is a driving verdict and stays with the user; what
+this sweep hands it is the list of what to drive and the numbers to argue with.
+
+### 2026-07-27 — what §2's pack owes after plan 06, stated rather than silently re-recorded
+
+Air control changes what a lap does the moment a car is off the ground for more than the debounce, and two
+of the pack's eleven scenes are exactly that: on `u-turn` (infernus) the same launch now ends **1.93 s of
+flight instead of 3.27 s** with the nose 11° higher. `crest-jump` moves for the same reason, and both are the
+scenes 07 §2 measured the widest bands for.
+
+**The pack was NOT re-recorded**, deliberately. Its bands come from an ACCEPTED field round, and air control
+has not had one yet — re-recording now would freeze an unjudged feel as the reference and destroy the only
+baseline a verdict could be measured against. So the state is written down instead:
+
+- A fresh sweep at head is EXPECTED to breach `u-turn` and `crest-jump` on the air-time and rotation
+  channels for every car with a jump in its lap; nothing else in the pack should move (camber is drawn, not
+  simulated, and air control cannot fire with a wheel on the ground).
+- If the field ACCEPTS air control, re-record those laps (5 cars × the affected scenes) and note the dial the
+  sweep ran with — every capture now carries `airControl` for exactly this.
+- If the field rejects it, `?airCtl=0` restores the pack's world byte for byte, which is why the dial reaches
+  zero rather than stopping at a minimum.

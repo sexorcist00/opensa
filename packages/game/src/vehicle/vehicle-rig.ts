@@ -32,6 +32,18 @@ export interface VehicleRigSetup {
   wheels: readonly VehicleWheelPlacement[];
 }
 
+/** One wheel's camber geometry, resolved at build time — see {@link resolveAxles}. */
+interface ResolvedAxle {
+  /** The pair's LEFT wheel index (its −X side) and its right one: `lift[left] − lift[right]` is the rise. */
+  left: number;
+  right: number;
+  /** `REVERSE` on the authored axle — the model's wheel dummies are mirrored, so the lean flips. */
+  sign: number;
+  solid: boolean;
+  /** Track width (m) — the solid tilt divides by it. */
+  track: number;
+}
+
 /**
  * Animates a vehicle's wheels: rolls them from the travelled distance, steers the front pair, slides each
  * wheel with its suspension and LEANS it the way its axle is built (plan 081/06 §3).
@@ -42,6 +54,9 @@ export interface VehicleRigSetup {
  * quaternions/matrices is the renderer's business.
  */
 export class VehicleRig {
+  /** Per-wheel camber geometry, resolved ONCE (see {@link resolveAxles}) — this runs for every wheel of
+   *  every live car on every fixed step, and none of it can change while the car exists. */
+  private readonly axles: readonly (null | ResolvedAxle)[];
   private distance = 0;
   private readonly handle: VehicleHandle;
   /** Smoothed per-wheel hub offsets (m). Null until the first {@link setLift} SEEDS it — easing in from
@@ -49,13 +64,12 @@ export class VehicleRig {
   private lift: null | number[] = null;
   private liftTarget: number[] = [];
 
-  private readonly setup: null | VehicleRigSetup;
   private speed = 0;
   private steerAngle = 0;
 
   constructor(handle: VehicleHandle, setup: null | VehicleRigSetup = null) {
     this.handle = handle;
-    this.setup = setup;
+    this.axles = resolveAxles(handle, setup);
   }
 
   /** Per-wheel offset from the model hub (m, negative = dropped), from the physics suspension length. */
@@ -109,29 +123,13 @@ export class VehicleRig {
    * or a model whose dummies did not pair) — an unknown axle must not invent a lean.
    */
   private camberOf(index: number): number {
-    const setup = this.setup;
-    const wheel = setup?.wheels[index];
-    if (!setup || !wheel || this.lift === null) {
+    const axle = this.axles[index];
+    if (axle === null || this.lift === null) {
       return 0;
     }
-    const axle = this.handle.wheels[index].front ? setup.axles.front : setup.axles.rear;
-    if (axle.type === 'notilt') {
-      return 0;
-    }
-    const partner = this.partnerOf(index);
-    if (partner < 0) {
-      return 0;
-    }
-    const track = Math.abs(wheel.connection[0] - setup.wheels[partner].connection[0]);
-    if (track < MIN_TRACK) {
-      return 0;
-    }
-    // Signed so the maths below can be written once for both sides: `own − partner` measured toward +X.
-    const toRight = wheel.connection[0] > setup.wheels[partner].connection[0];
-    const [left, right] = toRight ? [partner, index] : [index, partner];
+    const { left, right, sign, solid, track } = axle;
     const rise = (this.lift[left] ?? 0) - (this.lift[right] ?? 0);
-    const sign = axle.reverse ? -1 : 1;
-    if (axle.type === 'solid') {
+    if (solid) {
       // One beam: both wheels stay square to it, so relative to the BODY they take the body's own roll back
       // out — `atan(Δ / track)` is exactly that angle. A pickup's rear wheels stay upright while its body
       // leans over them, which is the thing the field brief's screenshot shows.
@@ -144,27 +142,56 @@ export class VehicleRig {
 
     return sign * INDEPENDENT_CAMBER_GAIN * (rise / 2);
   }
+}
 
-  /** The other wheel on this wheel's axle: the nearest one on the same end of the car, on the other side. */
-  private partnerOf(index: number): number {
-    const setup = this.setup;
+/**
+ * Resolve every wheel's camber geometry ONCE: which pair it belongs to, how wide that pair is, and which of
+ * the two rules it takes. Null for a wheel that must not lean — no setup, a NOTILT axle, no partner on the
+ * other side (a three-wheeler, or dummies that did not pair), or a track too narrow to divide by.
+ *
+ * It lives here rather than in `camberOf` because none of it can change while the car exists, and `camberOf`
+ * runs for every wheel of every live car on every fixed step: the bench's 80 cars made that 0.4 µs per car
+ * per step of pure re-derivation (081/07 §1's bench comparison).
+ */
+function resolveAxles(handle: VehicleHandle, setup: null | VehicleRigSetup): readonly (null | ResolvedAxle)[] {
+  return handle.wheels.map((_, index) => {
     const wheel = setup?.wheels[index];
     if (!setup || !wheel) {
-      return -1;
+      return null;
     }
-    let best = -1;
-    let bestDistance = Infinity;
+    const axle = handle.wheels[index].front ? setup.axles.front : setup.axles.rear;
+    if (axle.type === 'notilt') {
+      return null;
+    }
+    // The partner is the nearest wheel on the OTHER side of the car — by |Δy|, so a tandem rear axle pairs
+    // with its own row rather than with the one behind it.
+    let partner = -1;
+    let nearest = Infinity;
     setup.wheels.forEach((candidate, other) => {
       if (other === index || Math.sign(candidate.connection[0]) === Math.sign(wheel.connection[0])) {
         return;
       }
       const distance = Math.abs(candidate.connection[1] - wheel.connection[1]);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        best = other;
+      if (distance < nearest) {
+        nearest = distance;
+        partner = other;
       }
     });
+    if (partner < 0) {
+      return null;
+    }
+    const track = Math.abs(wheel.connection[0] - setup.wheels[partner].connection[0]);
+    if (track < MIN_TRACK) {
+      return null;
+    }
+    const toRight = wheel.connection[0] > setup.wheels[partner].connection[0];
 
-    return best;
-  }
+    return {
+      left: toRight ? partner : index,
+      right: toRight ? index : partner,
+      sign: axle.reverse ? -1 : 1,
+      solid: axle.type === 'solid',
+      track,
+    };
+  });
 }

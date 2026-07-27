@@ -679,3 +679,47 @@ driver was ever airborne long enough to have controls at all. **No air-control c
 
 Runs: [`2026-07-27-headless-aircontrol-off-infernus.json`](2026-07-27-headless-aircontrol-off-infernus.json) ·
 [`2026-07-27-headless-aircontrol-on-infernus.json`](2026-07-27-headless-aircontrol-on-infernus.json).
+
+### 2026-07-27 — the class sweep (081/07 §1): the tuning generalises, the SCENES do not
+
+Five cars the chain never tuned against, one per class the calibration trio does not cover — **landstal**
+and **sandking** (offroad, 4WD), **bus** (heavy, 6 wheels), **burrito** (van) and **picador** (pickup, and a
+solid rear axle) — on four scenes each: `rest` · `brake-strip` · `step-steer` · `u-turn`. Same pak
+(`buildTime 08:41 24-07-2026`), code at `6b0ab82`, headless.
+
+| car      | mass | weight on ground | static sag (share of authored travel) | 8.5 s from rest | braking      | dive   |
+| -------- | ---: | ---------------: | ------------------------------------- | --------------: | ------------ | -----: |
+| landstal | 1700 |            0.999 | 18 % × 4                              |    128.1 km/h   | 80 m @ 0.80g | −0.66° |
+| sandking | 2000 |            0.999 | 42/43 %                               |    129.7 km/h   | 73 m @ 0.91g | −0.61° |
+| bus      | 5500 |            0.999 | 38 % front · 17 % · 13 %              |     53.0 km/h   | 32 m @ 0.35g | −1.11° |
+| burrito  | 1900 |            0.999 | 38 % front · 28 % rear                |     63.1 km/h   | 24 m @ 0.64g | −2.11° |
+| picador  | 1600 |            0.999 | 38 % front and rear                   |     65.4 km/h   | 24 m @ 0.70g | −1.78° |
+
+**The stance law generalises — that is the headline.** Every car of every class sits on all four (or six)
+wheels with 99.9 % of its weight on the ground, at 13–42 % of its authored travel, none on its bump stops,
+and the per-corner loads sum to `mass × g`. A six-wheeled bus loads its front axle twice as hard as either
+rear one and its springs answer accordingly.
+
+**Longitudinally the classes differ exactly the way their rows say they should**, so the class-factor table
+this section exists to fill is **empty by measurement**. The two 4WD offroaders pull **4.2 m/s²** and are
+engine-limited. The van and the pickup author the SAME `fEngineAcceleration` (25) and pull **2.2 m/s²** —
+because they are rear-drive, and `μ × rear-axle load / mass` is 2.9 m/s² for them: they run against the
+longitudinal clamp 081/04 ported from `CVehicle::ProcessWheel`, with drag taking the rest. The bus is neither:
+at 1.8 m/s² it is short of its own 4.9 m/s² grip ceiling and simply has `fEngineAcceleration` 14 to move
+5.5 tonnes with. Three classes, three different limits, all of them the car's own numbers. A bus stops at
+0.35 g on the fleet's lowest
+authored `fBrakeDeceleration` (4.17) and an offroader at 0.89 g. **Every class dives** (−0.6…−2.1°), where
+the whole chain started at +0.07° nose-UP.
+
+**What does NOT generalise is the instrument set, and the numbers say so plainly:**
+
+- `brake-strip` puts the brake on at ~8.5 s, and all five cars are still ACCELERATING there. For the
+  calibration trio that column reads as a top speed; for a bus it reads "how far it got in 8.5 s". No
+  top-speed conclusion may be drawn from these rows.
+- `step-steer` and `u-turn` hit scenery with a vehicle wider or taller than the trio: the bus turns **0.28°**
+  over its whole step-steer lap and registers ±20 g, the burrito's u-turn ends on its roof at 0.3 km/h after
+  a −80 g impact and 3 s of air. These are the impact spikes 07 §3 recorded, and on wide vehicles they arrive
+  early enough to eat the manoeuvre. **No cornering or flip verdict per class off these laps** — the owed
+  "clean ground for the scenes that leave the road" is now owed twice.
+
+Runs: `2026-07-27-headless-classes-{landstal,sandking,bus,burrito,picador}.json`.

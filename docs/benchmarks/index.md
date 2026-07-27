@@ -162,6 +162,29 @@ and costs nothing when there are no cars. Eight cars is therefore ~**0.07 ms**, 
 0.5 ms budget, and even the 80-car scene sits at 0.6 ms — a tenth of the fleet's worth of headroom.
 Run: [`2026-07-27-headless-vehicle-step-cost.json`](opensa-engine/2026-07-27-headless-vehicle-step-cost.json).
 
+### 2026-07-27 — the same slice, three times: it repeats to ±5 % (081/07 close-out)
+
+The 081 close-out re-ran the sweep twice more — after plan 06 landed air control and camber, and again after
+the camber geometry moved from per-step to per-car. Same pak, same harness, same machine, `vehicles.meanMs`
+per fixed step:
+
+| scene         | live | before 06 | after 06 | after the memo |
+| ------------- | ---: | --------: | -------: | -------------: |
+| ls-noon       |   80 |     0.605 |    0.639 |      **0.663** |
+| sf-fog-dawn   |   66 |     0.555 |    0.613 |      **0.554** |
+| lv-night      |   58 |     0.484 |    0.515 |          0.535 |
+| ls-rain-night |   57 |     0.547 |    0.583 |          0.579 |
+| country-dusk  |   13 |     0.176 |    0.186 |      **0.166** |
+| ocean-horizon |    0 |     0.003 |    0.004 |          0.006 |
+
+**Read the columns across, not down.** `sf-fog-dawn` and `country-dusk` end BELOW where they started while
+`ls-noon` ends above, so the ~5 % spread is the metric's own repeatability, not the change — the per-car
+camber arithmetic is under its noise floor, and so was the work removed from it. **A single vehicle-slice
+number is worth ±5 %**, which is what the next tuning round needs to know before reading two of them as a
+regression. `lateCreates` is **0** on all six scenes in all three runs: the 841 registered road cars stream in
+and spawn without a late model build, which is 07 §1's mass spawn-sanity check.
+Run: [`2026-07-27-headless-081-closeout-vehicle-step.json`](opensa-engine/2026-07-27-headless-081-closeout-vehicle-step.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
