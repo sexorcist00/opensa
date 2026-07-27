@@ -165,8 +165,13 @@ const SUSPENSION_DAMPING_SCALE_MAX = 2;
  * `?gripCap=<×>` override per session via {@link PhysicsWorld.tuneSpeedGrip}, every `[phys]` capture
  * records the active values, and the accepted numbers get committed as these defaults.
  */
-const SPEED_GRIP_REFERENCE = 20; // m/s — the speed where the boost reaches ×2
-const SPEED_GRIP_CAP = 2.5;
+// Defaults re-aimed after the first tuning round (2026-07-27): the field's pain STARTS at 50 km/h — an
+// ordinary street corner at 60 needs ~2 g of lateral, which demands the boost near-full by ~45 km/h, not by
+// 110. At 12 m/s reference / cap 3: 30 km/h ×1.5, 50 km/h ×2.3, 60+ km/h ×3 (≈ 0.7 g → 2.1 g — a 60 km/h
+// corner radius of ~14 m, streetable without braking). The first round's 20 / 2.5 only bit above ~90 km/h,
+// and its field test was additionally masked by the SLIDE_SPEED unit bug (full-lock plow drowned the dials).
+const SPEED_GRIP_REFERENCE = 12; // m/s — the speed where the boost reaches ×2
+const SPEED_GRIP_CAP = 3;
 /**
  * What a LOCKED wheel keeps of its lateral stiffness — 3 %, and it has to be that low for a reason worth
  * knowing.

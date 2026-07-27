@@ -803,12 +803,12 @@ describe('PhysicsWorld raycast vehicle', () => {
     it('grows the LATERAL grip with speed and caps it — and leaves town speeds nearly alone (081/09)', async () => {
       const { controller, physics } = await car();
 
-      coastAt(physics, controller, 10); // 36 km/h: 1 + (10/20)² = 1.25 — town feel within a quarter
+      coastAt(physics, controller, 6); // ~22 km/h: 1 + (6/12)² = 1.25 — town feel within a quarter
       expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 1.25, 4);
-      coastAt(physics, controller, 30); // 108 km/h: 1 + 2.25 = 3.25 → capped at 2.5 — the evasion case
-      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 2.5, 4);
+      coastAt(physics, controller, 30); // 108 km/h: 1 + 6.25 → capped at 3 — the corner/evasion case
+      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 3, 4);
       coastAt(physics, controller, -30); // reverse counts by magnitude
-      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 2.5, 4);
+      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 3, 4);
       physics.dispose();
     });
 
@@ -816,7 +816,7 @@ describe('PhysicsWorld raycast vehicle', () => {
       const { controller, physics } = await car();
 
       physics.tuneSpeedGrip({ cap: 0, reference: Number.NaN }); // both invalid → dials unchanged
-      expect(physics.speedGripTuning()).toEqual({ cap: 2.5, reference: 20 });
+      expect(physics.speedGripTuning()).toEqual({ cap: 3, reference: 12 });
 
       physics.tuneSpeedGrip({ cap: 1.5 });
       coastAt(physics, controller, 30);
