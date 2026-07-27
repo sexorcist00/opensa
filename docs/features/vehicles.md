@@ -128,8 +128,11 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   LATERAL grip grows with speed** (081/09): `frictionSlip × min(1 + (v/20 m/s)², 2.5)` — a deliberate,
   documented assist with the inverse shape of the "helpless at 130 km/h" complaint. Virtual only: the
   engine clamp and the brake cap stay on the unboosted grip, so launches, acceleration, braking, weight and
-  town-speed feel are the baseline's, byte for byte. Dials are session-tunable (`?gripVd`, `?gripCap`) and
-  every capture records the active values. The longitudinal clamp is applied on OUR side in
+  town-speed feel are the baseline's, byte for byte. Its longitudinal twin boosts the DRIVE clamp alone (`×2` default): the
+  engine clamp `min(request, μ×N)` had flattened every launch to the rear axle's near-identical grip cap —
+  a race row's 23.5 m/s² and a sedan's 14 both drowned at ~3.3 — so the authored differences now reach the
+  road while brakes and the handbrake stay on honest grip. Dials are session-tunable (`?gripVd`, `?gripCap`,
+  `?driveGrip`) and every capture records the active values. The longitudinal clamp is applied on OUR side in
   `setVehicleControls`, because Rapier applies its own friction limit only when a wheel already has a side
   impulse — a car accelerating or braking dead ahead is otherwise unlimited. Engine force reaches driven
   wheels only (`nDriveType`). A wheel that has **broken loose grips less** (`fTractionLoss`, 0.72…0.85): past

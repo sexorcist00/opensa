@@ -81,3 +81,26 @@ the branch; `sweeper` entry window (6–8.5 s) yaw/gLat and the spin-vs-arc outc
 ## Ledger
 
 _(A/B numbers, tuning rounds, field verdict)_
+
+### 2026-07-27 — round 2: the unit bug, the re-aimed dials, and the longitudinal twin
+
+Three findings from the first field rounds, in the order they fell:
+
+1. **`SLIDE_SPEED` was a 50× unit bug** (`5f11158`): the countersteer exemption compared metres-per-second
+   against the original's `0.05f` GAME UNITS per frame (= 2.5 m/s). Ordinary cornering slip tripped it in
+   ~0.1 s and handed a full keyboard press the WHOLE lock at speed — the front buried itself 3-6× past
+   saturation and the limiter was effectively disabled in every real corner. This masked every tuning round
+   before it, including this plan's own first field test. Found by the sweeper capture showing `steer` at
+   the full granted lock 0.2 s into a 1°-slip corner. Same class as `ROAD_ADHESION = 1`.
+2. **The dials were aimed at the wrong speed band** (`b14158a`): the field's pain starts at 50 km/h (street
+   corners without braking), where reference 20 m/s left the boost at ×1.3. Re-aimed to 12 m/s / cap 3:
+   ~2.1 g at 60 km/h (radius ~14 m). Field: "стало лучше" — the first accepted movement in six rounds.
+3. **The drive clamp flattened the fleet's launches** (this entry): `min(request, μ×N_driven)` gave a race
+   row (engine 23.5, light rear, tyre 0.67) ~3.5 m/s² and a sedan (engine 14) ~3.2 — the racer was
+   grip-clamped from standstill to ~250 km/h and "launches like an admiral". `DRIVE_GRIP_BOOST = 2` on the
+   drive clamp ONLY (brakes/handbrake honest): the racer pulls ~0.7 g continuously, the sedan's own engine
+   becomes its limit above ~80 km/h and the authored difference finally shows. `?driveGrip=` dial.
+
+All three are global — no car is named anywhere; which car is fast comes from its handling row. Still owed:
+the linear-damping retirement (hits the slippery race rows hardest — a 0.93-drag car loses ~70 km/h of its
+authored top end to the 0.1×v phantom), measured on a coast-down as its own step.
