@@ -81,3 +81,15 @@ the branch; `sweeper` entry window (6–8.5 s) yaw/gLat and the spin-vs-arc outc
 ## Ledger
 
 _(A/B numbers, tuning rounds, field verdict)_
+
+### 2026-07-27 — round 3: `driveGrip` tried and FIELD-REJECTED same hour (reverted, `aa1e0d4`)
+
+The longitudinal twin (`DRIVE_GRIP_BOOST = 2` on the drive clamp, `c38dd6c`) was built to let a race row's
+authored engine reach the road ("the comet launches like an admiral" — both were clamped to ~0.33 g by
+near-identical rear-axle grip caps). The field rejected it immediately: *"it affected every car and their
+speed in general"* — which is exactly what a GLOBAL clamp boost does, since most of the fleet's engine
+requests sit above the old clamp somewhere in their band. The verdict draws a useful line: **longitudinal
+feel is fleet-wide-frozen at the baseline; the accepted assists are lateral-only.** A future
+"race cars launch harder" would have to DIFFERENTIATE, not lift globally — e.g. the original's own RWD
+tyre-temperature mechanic (`m_fTireTemperature`, burnout heating), which scales per car by its own drive
+type and behaviour rather than by a shared dial. Parked, not queued.
