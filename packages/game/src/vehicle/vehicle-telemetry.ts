@@ -96,6 +96,9 @@ export interface VehicleSample {
   /** Body position, world (GTA) space. */
   readonly position: readonly [number, number, number];
   readonly steer: number;
+  /** The SA surface id under each wheel, aligned with {@link VehicleSample.wheels} — a PARALLEL array
+   *  because the wheel readings come back from Rapier verbatim and this one is ours (081/10). */
+  readonly surfaces?: readonly (null | number)[];
   readonly throttle: number;
   readonly wheels: readonly VehicleWheelReading[];
 }
@@ -117,6 +120,9 @@ export interface WheelFrame {
    * while the wheel is off the ground or the car is barely moving.
    */
   readonly slipRatio: number;
+  /** WHAT the wheel is standing on: the SA surface id (081/10), or null in the air / on collision that
+   *  carries no material. Reported only — nothing in the physics reads it yet. */
+  readonly surface: null | number;
 }
 
 /**
@@ -241,7 +247,9 @@ export function computeFrame(
   const up = rotate(sample.orientation, 0, 0, 1);
   const motion = planarMotion(sample.orientation, sample.linvel);
   const { speed } = motion;
-  const wheels = sample.wheels.map((wheel, index) => wheelFrame(wheel, previous?.wheels[index] ?? null, speed, dt));
+  const wheels = sample.wheels.map((wheel, index) =>
+    wheelFrame(wheel, previous?.wheels[index] ?? null, speed, dt, sample.surfaces?.[index] ?? null),
+  );
   const contacting = wheels.filter((wheel) => wheel.contact);
 
   return {
@@ -382,6 +390,7 @@ function wheelFrame(
   previous: null | VehicleWheelReading,
   groundSpeed: number,
   dt: number,
+  surface: null | number,
 ): WheelFrame {
   // Rest length is full extension; the spring can only compress from there, up to its max travel.
   const travel = wheel.maxTravel > 0 ? (wheel.restLength - wheel.suspensionLength) / wheel.maxTravel : 0;
@@ -393,6 +402,7 @@ function wheelFrame(
     load: wheel.suspensionForce,
     sideImpulse: wheel.sideImpulse,
     slipRatio: slipRatio(wheel, previous, groundSpeed, dt),
+    surface,
   };
 }
 

@@ -151,3 +151,42 @@ freshly-created colliders silently reports "no ground".
 
 Suite **2859 green**. Next: step 4, the per-wheel probe (still no behaviour change — the capture starts
 reporting the surface while the grip stays where it is).
+
+### 2026-07-27 — step 4: every wheel now says what it is standing on, and a lap says what it drove on
+
+Still no behaviour change; the grip is untouched and the pack is untouched. What moved is what a capture can
+tell you.
+
+- **`readVehicleWheelSurfaces(controller, chassisBody)`** — DRCVC never reports what its own suspension ray
+  hit, so the probe re-casts a short one (5 cm above the contact point it DOES report, 35 cm of reach)
+  through `surfaceBelow`. One ray per wheel **in contact**; an airborne wheel costs nothing. Wired for the
+  DRIVEN car only, and only while a capture runs.
+- **The table reaches the engine side**: `WorldAdapter.surfaces()` returns the parsed rows as
+  `SurfaceRecord` — deliberately structural, so the adapter's `surfinfo.dat` objects satisfy it with no copy
+  and the `game` layer still names no renderware type. The adapter now parses the table whenever the file is
+  there, not only when `procobj.dat` is too (what a wheel stands on has nothing to do with ground clutter).
+- **The capture reports it**: `WheelFrame.surface`, and a per-lap `summary.surfaces` — the share of
+  wheel-on-ground samples per surface, counted PER WHEEL (a car with two wheels on grass is half off the
+  road, and that is the state the grip change has to be read against), re-keyed from material ids to NAMES
+  when the capture is printed.
+
+**Verified in the game, which is the only place this could be verified:**
+
+| lap                     | reported                                                            |
+| ----------------------- | ------------------------------------------------------------------- |
+| `brake-strip` (SF road) | `{ default: 1 }`                                                     |
+| `crest-jump` (Red County) | `{ tarmac: 0.79, dirt: 0.10, grass_medium_lush: 0.07, pavement: 0.03 }` |
+
+**And it took a full in-game diagnosis, because the unit tests were green while the game reported nothing.**
+The probe returned null for every wheel of every lap. The chain was intact — 3 943 colliders carried
+materials, the ray hit a face, the lookup found the right 106-entry array — and the `featureId` came back as
+**127**, then **133**. Parry encodes a hit on a triangle's BACK side as `featureId + triangleCount`, and the
+game's roads are wound so a downward ray lands on exactly that side: 127 − 106 = 21, 133 − 106 = 27, both
+real triangles. Read straight, the id runs off the end of the table and every wheel reports "unknown". The
+fix is one modulo; the test that would have caught it (a quad wound away from the ray) is now in the suite,
+beside the one that would not have (a quad wound toward it, which is what a hand-written fixture naturally
+does). Two lessons worth carrying: **the harness only forwards `[phys]`, `[slow]` and console WARNINGS**, so
+a `console.log` diagnostic is invisible from a headless lap; and a probe that reads geometry has to be
+verified against the map, not against a fixture that agrees with it by construction.
+
+Suite **2868 green**. Next: step 5 — grip from the matrix. That one MOVES the pack, deliberately.

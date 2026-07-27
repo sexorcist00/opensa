@@ -170,6 +170,11 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         orientation: car.orientation,
         position: car.position,
         steer: controls.steer,
+        // What each wheel is standing on (081/10 step 4). Only the DRIVEN car is probed, and only while a
+        // capture is running — four rays are the same order as the whole controller update (081/07 §3).
+        // What each wheel is standing on (081/10 step 4). Only the DRIVEN car is probed, and only while a
+        // capture is running — four rays are the same order as the whole controller update (081/07 §3).
+        surfaces: physics.readVehicleWheelSurfaces(car.controller, car.body),
         throttle: controls.throttle,
         wheels: physics.readVehicleWheels(car.controller),
       },

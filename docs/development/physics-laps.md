@@ -140,6 +140,9 @@ the new feel).
 
 - **The runner names its own failures**: `[phys] scene 'x' failed: …`. A missing line would read as a pass,
   so every lap either prints a capture or says why not.
+- **A `console.log` from the game is invisible here.** The harness forwards only lines carrying the TAG,
+  `[slow]`, or console errors and WARNINGS (`drive.js`), so a debug print added mid-investigation must be a
+  `console.warn` or it will look like the code never ran (081/10 step 4 lost a run to exactly that).
 - **The harness screenshots on exit**, and the on-screen HUD carries `FIXED-STEP ERROR: …` — that is how a
   permanent fixed-step crash (a car unloaded after the player left it) was identified in one look.
 - **An absurd capture usually means the wrong car**: top speed 0 with the whole lap "airborne" is a lap that

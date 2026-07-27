@@ -27,6 +27,7 @@ import {
   parseObjectDat,
   parsePopcycle,
   parseProcObj,
+  parseSurfaceInfo,
   parseSurfaceNames,
   parseTimecyc,
   parseVehicleDefs,
@@ -40,6 +41,7 @@ import {
   type RegionColliders,
   resolveMap,
   scatterProcObjects,
+  type SurfaceInfo,
   type Timecyc,
   type VehicleColours,
   type VehicleDef,
@@ -52,7 +54,7 @@ import { breakableInstanceKey } from '@opensa/renderware/breakable/key';
 import { getBreakable } from '@opensa/renderware/breakable/mesh';
 
 import type { ModelColliders } from '../interfaces/collider.interface';
-import type { VehicleHandling, WorldAdapter } from '../interfaces/world-adapter.interface';
+import type { SurfaceRecord, VehicleHandling, WorldAdapter } from '../interfaces/world-adapter.interface';
 import type { WorldMod } from '../mods/mod.interface';
 import type { CellCoord } from '../streaming/grid';
 import type { VehiclePlacement } from '../vehicle/vehicle-lod.system';
@@ -205,6 +207,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   private procObjRules: Map<string, ProcObjRule[]> | null = null;
   /** Surface-name table from surfinfo.dat (index = COL material id); pairs with procObjRules. */
   private surfaceNames: null | string[] = null;
+  private surfaceTable: null | SurfaceInfo[] = null;
   private vehicleColours: null | VehicleColours = null;
   private vehicleDefs: Map<string, VehicleDef> | null = null;
   private readonly vehicleModelBuilder: null | VehicleModelBuilder;
@@ -332,48 +335,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
   }
 
-  // eslint-disable-next-line
-  async loadCellColliders(cx: number, cy: number): Promise<ModelColliders[]> {
-    if (!this.defs || !this.grid) {
-      throw new Error('GtaSaWorldAdapter.loadCellColliders called before prepare()');
-    }
-    const key = `${cx},${cy}`;
-    let colliders = this.colliderCache.get(key);
-    if (!colliders) {
-      const index = buildCollisionIndex(this.fs);
-      const archive = this.fs;
-      const breakableModels = this.breakableModels;
-      colliders = buildCellColliders(index, this.defs, this.grid, cx, cy).map((region) =>
-        // Tag breakable-prop placements with their instance keys (plan 045) so a smashed prop's one
-        // static body can be dropped — keyed the same way the render registry keys the prop. Matches
-        // the render gate: a RW Breakable atomic OR an object.dat smash effect (render-geometry shatter).
-        tagBreakable(
-          toModelColliders(region),
-          getBreakable(archive, region.name) !== undefined || breakableModels.has(region.name),
-        ),
-      );
-      // Clutter collision (plan 042): models that ship a COL collide (rocks/cacti/trees);
-      // grass and flower patches have none, so they stay walk-through — like vanilla. The
-      // collidable subset follows the live per-category density (no invisible obstacles) — and a renderer
-      // that draws no clutter at all asks for none of it.
-      const batches = this.config.clutterColliders === false ? null : this.cellProcObjBatches(cx, cy);
-      if (batches) {
-        const clutter = procObjColliders(index, batches, {
-          densityOf: this.config.procObjDensityOf,
-          lotteryCap: procObjLotteryCap(batches, this.config.procObjLimit),
-        });
-        // Breakable clutter (074/20): 6 of 56 procobj models shatter (cactus/rubble/rock) — tag their colliders
-        // with the SAME per-instance key the render carries, so a hit resolves to the instance to degenerate.
-        colliders.push(
-          ...clutter.map((region) => tagBreakable(toModelColliders(region), this.isClutterBreakable(region.name))),
-        );
-      }
-      this.colliderCache.set(key, colliders);
-    }
-
-    return colliders;
-  }
-
   /**
    * The renderer-agnostic vehicle load (074/08 B5 step 4): geometry the OWN ENGINE uploads as a model (one
    * per car type — instances share it), plus collision, handling and paint.
@@ -419,6 +380,48 @@ export class GtaSaWorldAdapter implements WorldAdapter {
         radius: wheel.radius,
       })),
     };
+  }
+
+  // eslint-disable-next-line
+  async loadCellColliders(cx: number, cy: number): Promise<ModelColliders[]> {
+    if (!this.defs || !this.grid) {
+      throw new Error('GtaSaWorldAdapter.loadCellColliders called before prepare()');
+    }
+    const key = `${cx},${cy}`;
+    let colliders = this.colliderCache.get(key);
+    if (!colliders) {
+      const index = buildCollisionIndex(this.fs);
+      const archive = this.fs;
+      const breakableModels = this.breakableModels;
+      colliders = buildCellColliders(index, this.defs, this.grid, cx, cy).map((region) =>
+        // Tag breakable-prop placements with their instance keys (plan 045) so a smashed prop's one
+        // static body can be dropped — keyed the same way the render registry keys the prop. Matches
+        // the render gate: a RW Breakable atomic OR an object.dat smash effect (render-geometry shatter).
+        tagBreakable(
+          toModelColliders(region),
+          getBreakable(archive, region.name) !== undefined || breakableModels.has(region.name),
+        ),
+      );
+      // Clutter collision (plan 042): models that ship a COL collide (rocks/cacti/trees);
+      // grass and flower patches have none, so they stay walk-through — like vanilla. The
+      // collidable subset follows the live per-category density (no invisible obstacles) — and a renderer
+      // that draws no clutter at all asks for none of it.
+      const batches = this.config.clutterColliders === false ? null : this.cellProcObjBatches(cx, cy);
+      if (batches) {
+        const clutter = procObjColliders(index, batches, {
+          densityOf: this.config.procObjDensityOf,
+          lotteryCap: procObjLotteryCap(batches, this.config.procObjLimit),
+        });
+        // Breakable clutter (074/20): 6 of 56 procobj models shatter (cactus/rubble/rock) — tag their colliders
+        // with the SAME per-instance key the render carries, so a hit resolves to the instance to degenerate.
+        colliders.push(
+          ...clutter.map((region) => tagBreakable(toModelColliders(region), this.isClutterBreakable(region.name))),
+        );
+      }
+      this.colliderCache.set(key, colliders);
+    }
+
+    return colliders;
   }
 
   /**
@@ -474,6 +477,11 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       this.procObjRules = groupRulesBySurface(parseProcObj(procObjText));
       this.surfaceNames = parseSurfaceNames(surfInfoText);
     }
+    // The full table is read whenever the file is there, procobj or not: what a WHEEL stands on has nothing
+    // to do with whether ground clutter scatters (plan 081/10).
+    if (surfInfoText !== null) {
+      this.surfaceTable = parseSurfaceInfo(surfInfoText);
+    }
     // Breakable-prop tuning (plan 045) — absent-tolerant: no file, props still break at the default
     // threshold (the break gate is the RW Breakable mesh, not this table).
     const objectDatText = this.fs.getText('data/object.dat');
@@ -485,6 +493,12 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       }
     }
     onProgress?.(1);
+  }
+
+  /** The `surfinfo.dat` table, indexed by collision material id (plan 081/10) — null before `prepare`, or
+   *  when the world ships no such file. The parsed rows already ARE the engine-side shape. */
+  surfaces(): null | readonly SurfaceRecord[] {
+    return this.surfaceTable;
   }
 
   /** The model's TXD name — the own engine needs it to texture a smashed prop's shards (074/08 B7·a). */

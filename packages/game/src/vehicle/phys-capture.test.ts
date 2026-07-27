@@ -6,13 +6,14 @@ import { summarisePhysFrames, thinFrames } from './phys-capture';
 
 const DT = 1 / 60;
 
-const wheel = (contact = true): WheelFrame => ({
+const wheel = (contact = true, surface: null | number = null): WheelFrame => ({
   compression: 0.5,
   contact,
   forwardImpulse: 0,
   load: 3000,
   sideImpulse: 0,
   slipRatio: 0,
+  surface,
 });
 
 const frame = (t: number, over: Partial<TelemetryFrame> = {}): TelemetryFrame => ({
@@ -133,6 +134,40 @@ describe('summarisePhysFrames', () => {
 
       expect(flip?.atS).toBeCloseTo(1, 1);
       expect(flip?.atKmh).toBeCloseTo(54, 0);
+    });
+  });
+});
+
+describe('summarisePhysFrames surfaces', () => {
+  describe('negative cases', () => {
+    it('reports no surfaces at all when nothing under the wheels was identified', () => {
+      expect(summarisePhysFrames(lap(10, () => ({}))).surfaces).toEqual({});
+    });
+
+    it('counts only the samples that KNOW their surface, so airborne frames do not dilute the shares', () => {
+      const grounded = frame(0, { wheels: [wheel(true, 1), wheel(true, 1)] });
+      const airborne = frame(DT, { wheels: [wheel(false), wheel(false)] });
+
+      expect(summarisePhysFrames([grounded, airborne]).surfaces).toEqual({ 1: 1 });
+    });
+  });
+
+  describe('positive cases', () => {
+    it('shares the lap out per WHEEL sample — two wheels on grass IS half the car off the road', () => {
+      const straddling = frame(0, { wheels: [wheel(true, 1), wheel(true, 27)] });
+
+      expect(
+        summarisePhysFrames([straddling, frame(DT, { wheels: [wheel(true, 1), wheel(true, 27)] })]).surfaces,
+      ).toEqual({ 1: 0.5, 27: 0.5 });
+    });
+
+    it('orders the shares by how much of the lap each surface took', () => {
+      const frames = [
+        frame(0, { wheels: [wheel(true, 1), wheel(true, 1)] }),
+        frame(DT, { wheels: [wheel(true, 1), wheel(true, 33)] }),
+      ];
+
+      expect(Object.keys(summarisePhysFrames(frames).surfaces)).toEqual(['1', '33']);
     });
   });
 });

@@ -291,6 +291,80 @@ describe('PhysicsWorld.sphereCast — the second exclusion', () => {
   });
 });
 
+describe('PhysicsWorld.readVehicleWheelSurfaces', () => {
+  const HALF: [number, number, number] = [1.2, 2.5, 0.7];
+  const WHEELS = [
+    { connection: [-0.8, 1.4, -0.5] as Vec3, front: true, radius: 0.35 },
+    { connection: [0.8, 1.4, -0.5] as Vec3, front: true, radius: 0.35 },
+    { connection: [-0.8, -1.4, -0.5] as Vec3, front: false, radius: 0.35 },
+    { connection: [0.8, -1.4, -0.5] as Vec3, front: false, radius: 0.35 },
+  ];
+  /** Ground of one material, wide enough for the whole car to stand on. */
+  const groundOf = (material: number): ColliderShape =>
+    shape({ boxes: [{ material, max: [20, 20, 0.5], min: [-20, -20, -0.5] }] });
+
+  describe('negative cases', () => {
+    it('reports null under every wheel of a car in mid-air', async () => {
+      const physics = await makeWorld();
+      const { body, controller } = physics.createDynamicVehicle([0, 0, 50], 0, null, massProps(), WHEELS, HALF);
+      physics.step(STEP);
+
+      expect(physics.readVehicleWheelSurfaces(controller, body)).toEqual([null, null, null, null]);
+      physics.dispose();
+    });
+
+    it('reports null on ground whose collision carries no material — unknown, not surface 0', async () => {
+      const physics = await makeWorld();
+      physics.createStaticColliders([
+        model(shape({ boxes: [{ max: [20, 20, 0.5], min: [-20, -20, -0.5] }] }), [new Matrix4()]),
+      ]);
+      const { body, controller } = physics.createDynamicVehicle([0, 0, 2], 0, null, massProps(), WHEELS, HALF);
+      for (let i = 0; i < 120; i += 1) {
+        physics.step(STEP);
+      }
+
+      expect(physics.readVehicleWheelSurfaces(controller, body).every((surface) => surface === null)).toBe(true);
+      physics.dispose();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reports the surface each wheel is resting on', async () => {
+      const physics = await makeWorld();
+      physics.createStaticColliders([model(groundOf(27), [new Matrix4()])]); // 27 = dirttrack
+      const { body, controller } = physics.createDynamicVehicle([0, 0, 2], 0, null, massProps(), WHEELS, HALF);
+      for (let i = 0; i < 120; i += 1) {
+        physics.step(STEP);
+      }
+
+      const surfaces = physics.readVehicleWheelSurfaces(controller, body);
+
+      expect(surfaces).toHaveLength(4);
+      expect(surfaces.every((surface) => surface === 27)).toBe(true);
+      physics.dispose();
+    });
+
+    it('tells the wheels apart when the car straddles two surfaces', async () => {
+      const physics = await makeWorld();
+      // Tarmac to the car's left (−X), sand to its right — the axle spans the join.
+      physics.createStaticColliders([
+        model(shape({ boxes: [{ material: 1, max: [0, 20, 0.5], min: [-20, -20, -0.5] }] }), [new Matrix4()]),
+        model(shape({ boxes: [{ material: 33, max: [20, 20, 0.5], min: [0, -20, -0.5] }] }), [new Matrix4()]),
+      ]);
+      const { body, controller } = physics.createDynamicVehicle([0, 0, 2], 0, null, massProps(), WHEELS, HALF);
+      for (let i = 0; i < 120; i += 1) {
+        physics.step(STEP);
+      }
+
+      const surfaces = physics.readVehicleWheelSurfaces(controller, body);
+
+      expect(surfaces[0]).toBe(1); // left front, x = −0.8
+      expect(surfaces[1]).toBe(33); // right front, x = +0.8
+      physics.dispose();
+    });
+  });
+});
+
 describe('PhysicsWorld.readVehicleWheels', () => {
   const HALF: [number, number, number] = [1.2, 2.5, 0.7];
   const WHEELS = [
@@ -476,6 +550,28 @@ describe('PhysicsWorld.surfaceBelow', () => {
       const physics = await makeWorld();
       // 1 = tarmac, 33 = sand_beach in SA's table; the ids are opaque here, the point is they differ.
       physics.createStaticColliders([model(twoSurfaces(new Uint8Array([1, 33])), [new Matrix4()])]);
+      physics.step(STEP);
+
+      expect(physics.surfaceBelow([-1.5, -1.5, 5], 10)).toBe(1);
+      expect(physics.surfaceBelow([1.5, 1.5, 5], 10)).toBe(33);
+      physics.dispose();
+    });
+
+    // parry reports a back-face hit as `featureId + triangleCount`, and that is how every road in the game
+    // is actually hit — measured in-game before this test existed.
+    it('reads the surface through a triangle wound AWAY from the ray', async () => {
+      const physics = await makeWorld();
+      // The same quad as `twoSurfaces`, with each triangle's winding reversed.
+      physics.createStaticColliders([
+        model(
+          shape({
+            indices: new Uint32Array([2, 1, 0, 2, 3, 1]),
+            materials: new Uint8Array([1, 33]),
+            vertices: new Float32Array([-2, -2, 0, 2, -2, 0, -2, 2, 0, 2, 2, 0]),
+          }),
+          [new Matrix4()],
+        ),
+      ]);
       physics.step(STEP);
 
       expect(physics.surfaceBelow([-1.5, -1.5, 5], 10)).toBe(1);

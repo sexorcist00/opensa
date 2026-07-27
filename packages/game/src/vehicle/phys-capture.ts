@@ -68,6 +68,13 @@ export interface PhysSummary {
   readonly slipMaxDeg: number;
   /** The first held steering step in the lap, if it had one — see {@link StepResponse}. */
   readonly step: null | StepResponse;
+  /**
+   * WHAT the lap drove on (plan 081/10): the share of wheel-on-ground samples per SA surface id, ids as
+   * keys. Empty when nothing reported a surface — a world without materials, or a lap spent entirely in the
+   * air. Shares are of the KNOWN samples, so `{ "1": 1 }` means "every wheel that touched anything touched
+   * tarmac", not "the car never left the ground".
+   */
+  readonly surfaces: Readonly<Record<number, number>>;
   /** Seconds from the first moving frame to 100 km/h; null when the car never got there. */
   readonly timeTo100S: null | number;
   /** Top forward speed (km/h). */
@@ -136,6 +143,7 @@ export function summarisePhysFrames(frames: readonly TelemetryFrame[]): PhysSumm
     rollDeg: range(frames.map((frame) => frame.roll * RAD_TO_DEG)),
     slipMaxDeg: round(Math.max(...frames.map((frame) => Math.abs(frame.slipAngle * RAD_TO_DEG)))),
     step: stepResponse(frames),
+    surfaces: surfaceShares(frames),
     timeTo100S: timeToSpeed(frames, 100),
     topSpeedKmh: round(Math.max(...frames.map((frame) => frame.speed * MS_TO_KMH))),
     turnedDeg: round(integrate(frames, (frame) => frame.yawRate * RAD_TO_DEG)),
@@ -233,6 +241,31 @@ function stepResponse(frames: readonly TelemetryFrame[]): null | StepResponse {
   };
 }
 
+/**
+ * The share of wheel-on-ground samples spent on each surface id. Counted per WHEEL per frame, not per frame:
+ * a car with two wheels on tarmac and two on grass is on both, and that is exactly the state an off-road
+ * grip change has to be read against.
+ */
+function surfaceShares(frames: readonly TelemetryFrame[]): Record<number, number> {
+  const counts = new Map<number, number>();
+  let total = 0;
+  for (const frame of frames) {
+    for (const wheel of frame.wheels) {
+      if (wheel.surface === null) {
+        continue;
+      }
+      counts.set(wheel.surface, (counts.get(wheel.surface) ?? 0) + 1);
+      total += 1;
+    }
+  }
+  const shares: Record<number, number> = {};
+  for (const [surface, count] of [...counts].sort((a, b) => b[1] - a[1])) {
+    shares[surface] = round(count / total);
+  }
+
+  return shares;
+}
+
 /** Seconds from the first MOVING frame to `kmh`; null when the lap never got there. Measured from the
  *  moment the car actually starts rolling, so a lap that idles before its launch is not penalised. */
 function timeToSpeed(frames: readonly TelemetryFrame[], kmh: number): null | number {
@@ -259,6 +292,7 @@ const EMPTY: PhysSummary = {
   rollDeg: ZERO_RANGE,
   slipMaxDeg: 0,
   step: null,
+  surfaces: {},
   timeTo100S: null,
   topSpeedKmh: 0,
   turnedDeg: 0,

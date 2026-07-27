@@ -11,6 +11,7 @@ const wheel = (over: Partial<WheelFrame> = {}): WheelFrame => ({
   load: 3000,
   sideImpulse: 0,
   slipRatio: 0,
+  surface: null,
   ...over,
 });
 

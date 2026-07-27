@@ -14,6 +14,30 @@ export interface RegionRequest {
   radius: number;
 }
 
+/**
+ * One row of the world's surface table (plan 081/10) — the engine-side shape of what a collision material
+ * MEANS. Deliberately structural: the GTA adapter's parsed `surfinfo.dat` rows satisfy it as they are, so
+ * nothing is copied or converted, and the `game` layer still names no renderware type.
+ */
+export interface SurfaceRecord {
+  /** `rubber` · `hard` · `road` · `loose` · `sand` · `wet` — the row into the adhesion matrix. */
+  readonly adhesionGroup: string;
+  readonly name: string;
+  /** `default` · `sandy` · `muddy` — which mark a sliding tyre leaves (plan 089). */
+  readonly skidmark: string;
+  /** Per-surface grip override; 1.0 everywhere in stock SA data. */
+  readonly tyreGrip: number;
+  /** Rain modifier on the tyre grip. */
+  readonly wetGrip: number;
+  /** Which wheel effect this surface throws up (plan 089). */
+  readonly wheelDust: boolean;
+  readonly wheelGrass: boolean;
+  readonly wheelGravel: boolean;
+  readonly wheelMud: boolean;
+  readonly wheelSand: boolean;
+  readonly wheelSpray: boolean;
+}
+
 export type Vec3 = [number, number, number];
 
 /** Raw driving feel from `handling.cfg` (the gameplay layer scales these into its model). */
@@ -117,6 +141,12 @@ export interface WorldAdapter {
    * first two indices become the primary/secondary paint. Omit to use the car's default carcol combo.
   /** Download/parse everything needed; reports progress 0..1. */
   prepare(onProgress?: (fraction: number) => void): Promise<void>;
+  /**
+   * The world's surface table, indexed by the material id collision carries — what a wheel is standing on
+   * (plan 081/10). Null until {@link WorldAdapter.prepare} has run, and null for a world that has no such
+   * table: a caller must treat "no table" as "unknown surface", never as a default one.
+   */
+  surfaces(): null | readonly SurfaceRecord[];
 }
 
 /** What a picked instance is (debug click-inspect). */

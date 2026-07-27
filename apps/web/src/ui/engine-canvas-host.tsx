@@ -1470,6 +1470,7 @@ async function boot(
       });
     },
     speedGrip: (): { cap: number; reference: number } => physics.speedGripTuning(),
+    surfaces: (): null | readonly { name: string }[] => adapter.surfaces(),
     teleportPlayer: (anchor): void => {
       teleportPlayer([anchor[0], anchor[1], anchor[2]]);
     },

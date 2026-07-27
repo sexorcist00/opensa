@@ -15,7 +15,7 @@
  */
 import { type StreamStats } from '@opensa/engine';
 import { type VehicleSpringReading, type VehicleStance } from '@opensa/game/physics/physics-world';
-import { summarisePhysFrames, thinFrames } from '@opensa/game/vehicle/phys-capture';
+import { type PhysSummary, summarisePhysFrames, thinFrames } from '@opensa/game/vehicle/phys-capture';
 import { type PhysScene, type ScriptedDriveSource } from '@opensa/game/vehicle/scripted-drive';
 import { type TelemetryFrame } from '@opensa/game/vehicle/vehicle-telemetry';
 
@@ -39,6 +39,9 @@ export interface PhysRunsHost {
   /** The ACTIVE speed-grip dials (plan 081/09) — recorded in every capture, because a tuning session's runs
    *  are incomparable unless each one states what it ran with. */
   speedGrip(): { cap: number; reference: number };
+  /** The world's surface table (081/10), for naming what the wheels reported standing on — null for a world
+   *  without one, and then a capture simply carries the raw ids. */
+  surfaces(): null | readonly { name: string }[];
   /** Teleport the player (streaming/collision anchor), GTA coords. */
   teleportPlayer(anchor: readonly [number, number, number]): void;
 }
@@ -122,6 +125,24 @@ async function leaveCar(host: PhysRunsHost, vehicles: EngineVehicles): Promise<v
   }
 }
 
+/**
+ * Re-key the summary's `surfaces` shares from SA material ids to NAMES (081/10). A capture that says
+ * `{ "27": 0.31 }` is a lookup away from being readable and nobody performs it; `{ "dirttrack": 0.31 }` is
+ * evidence. Ids with no row in the table keep their number, so a modded surface still shows up.
+ */
+function named(summary: PhysSummary, table: null | readonly { name: string }[]): PhysSummary {
+  const entries = Object.entries(summary.surfaces);
+  if (table === null || entries.length === 0) {
+    return summary;
+  }
+  const surfaces: Record<string, number> = {};
+  for (const [id, share] of entries) {
+    surfaces[table[Number(id)]?.name ?? id] = share;
+  }
+
+  return { ...summary, surfaces };
+}
+
 /** Hold enter/exit for a moment: the system takes the PRESS edge, so it must also be released. */
 async function pressEnterExit(host: PhysRunsHost): Promise<void> {
   host.drive.play([{ actions: ['enterExit'], t: 0 }, { t: 0.25 }]);
@@ -135,6 +156,7 @@ function report(
   springs: null | readonly VehicleSpringReading[],
   stance: null | VehicleStance,
   speedGrip: { cap: number; reference: number },
+  surfaceTable: null | readonly { name: string }[],
 ): void {
   const capture = {
     car,
@@ -185,7 +207,7 @@ function report(
     // configured with cannot prove a change took effect.
     springs: springs ?? null,
     stance,
-    summary: summarisePhysFrames(frames),
+    summary: named(summarisePhysFrames(frames), surfaceTable),
     what: scene.what,
   };
   // eslint-disable-next-line no-console -- the capture deliverable IS this JSON line (the [bench] twin)
@@ -240,7 +262,7 @@ async function runScene(host: PhysRunsHost, scene: PhysScene, car: string): Prom
   const stance = vehicles.stance();
   vehicles.telemetry.enabled = false;
 
-  report(scene, car, frames, springs, stance, host.speedGrip());
+  report(scene, car, frames, springs, stance, host.speedGrip(), host.surfaces());
   await leaveCar(host, vehicles);
 }
 

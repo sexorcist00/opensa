@@ -294,6 +294,11 @@ const PLAYER_GROUPS_IGNORE_VEHICLES = ((0xffff << 16) | (0xffff & ~VEHICLE_GROUP
 /** Kinematic character-controller tuning. */
 const CONTROLLER_OFFSET = 0.02; // gap kept between the capsule and obstacles
 const STEP_HEIGHT = 0.4; // auto-climb kerbs/stairs up to this
+/** The wheel-surface probe (081/10): start this far ABOVE the reported contact point so the ray begins
+ *  outside the ground it is about to hit, and reach only a little past it — a wheel is on what it touches,
+ *  not on whatever lies a metre under a bridge deck. */
+const PROBE_LIFT = 0.05;
+const PROBE_REACH = 0.35;
 const STEP_MIN_WIDTH = 0.1; // minimum landing width to step onto
 const SNAP_DISTANCE = 0.4; // stay glued to ground within this (slopes/stairs going down)
 const MAX_SLOPE_CLIMB = (50 * Math.PI) / 180; // can't walk up steeper than this
@@ -1009,6 +1014,27 @@ export class PhysicsWorld {
     return readings;
   }
 
+  /**
+   * The SA surface id under each wheel (plan 081/10 step 4) — `null` for a wheel in the air, or on ground
+   * whose collision carries no material.
+   *
+   * DRCVC does not report what its OWN suspension ray hit, so this re-casts a short one from just above the
+   * contact point it does report — the cheapest place to ask, since the point is already computed. One ray
+   * per wheel IN CONTACT: an airborne wheel costs nothing. Priced in 081/07 §3 — four rays are the same
+   * order as the whole controller update, so this belongs on the driven car, not on all eighty.
+   */
+  readVehicleWheelSurfaces(controller: VehicleController, chassisBody: number): readonly (null | number)[] {
+    const surfaces: (null | number)[] = [];
+    for (let i = 0; i < controller.numWheels(); i += 1) {
+      const point = controller.wheelIsInContact(i) ? controller.wheelContactPoint(i) : null;
+      surfaces.push(
+        point === null ? null : this.surfaceBelow([point.x, point.y, point.z + PROBE_LIFT], PROBE_REACH, chassisBody),
+      );
+    }
+
+    return surfaces;
+  }
+
   /** Remove static bodies (and their colliders) by handle — e.g. when a cell unloads. */
   removeBodies(handles: readonly number[]): void {
     for (const handle of handles) {
@@ -1261,7 +1287,16 @@ export class PhysicsWorld {
       return surface;
     }
 
-    return hit.featureId === undefined ? null : (surface[hit.featureId] ?? null);
+    if (hit.featureId === undefined) {
+      return null;
+    }
+    // A hit on the BACK of a triangle comes back as `featureId + triangleCount` — parry's own encoding, and
+    // the game's roads are wound so a downward ray lands on exactly that side. Read straight, the id runs
+    // off the end of the table and every wheel reports "unknown": measured in-game as featureId 127 and 133
+    // against a 106-triangle mesh (081/10 step 4).
+    const triangle = hit.featureId % surface.length;
+
+    return surface[triangle] ?? null;
   }
 
   /** Per-wheel suspension lengths only — the drawn wheels follow them every fixed step (plan 081/06 §3),
