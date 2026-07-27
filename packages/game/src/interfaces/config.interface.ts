@@ -94,6 +94,10 @@ export interface CameraConfig {
   /** How long the look-ahead offset takes to follow a change of direction (seconds, spring). Slow on purpose:
    *  it should read as composition, not as tracking. */
   lookAheadTime: number;
+  /** How fast the look-behind flip swings (seconds, smooth-damp time) — both ways: to the car's front on
+   *  hold and back behind it on release. Deliberately quicker than `vehicleYawLagTime`: a mirror check is
+   *  a glance, not a composition move. */
+  lookBehindLagTime: number;
   /** After a look input, auto-centering is held off for this long (seconds) — the 036 manual grace, so a
    *  small correction is not immediately undone by the camera. */
   manualGraceSec: number;
@@ -219,6 +223,9 @@ export interface ControlsConfig {
   forward: string;
   jump: string;
   left: string;
+  /** Hold to look BEHIND while driving (plan 080/05 §6) — the camera flips to the car's front through a
+   *  fast damp and swings back on release. Optional; unbound = the feature is off. */
+  lookBehind?: string;
   right: string;
   /** Legacy full-speed modifier (the default gait IS run since 088/03) — kept for touch parity. Optional. */
   run?: string;

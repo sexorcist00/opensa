@@ -70,7 +70,8 @@ for gameplay. Ships last, behind the field round.
 - [x] Enter/exit blend + continuity test; `aimCamera` was ALREADY demoted (plan 02 routed it through
       the damped `steerYaw`, so entry has swung rather than snapped since then).
 - [x] Vehicle tuning table in `CameraConfig` + Camera-tab rows (13 new sliders).
-- [ ] Look-behind key (§6 — this plan's own order: it ships after the field round).
+- [x] Look-behind key (§6 — this plan's own order: it ships after the field round; SHIPPED 2026-07-27
+      after 09's rounds closed, see the ledger).
 - [x] Field round 1: the seated distance halved, the speed ramp raised to carry it back — ACCEPTED.
 - [ ] **Field round** (drive-heavy): city corners at speed, handbrake drifts, highway top speed,
       tunnel (collision + FOV together), enter/exit repeatedly. The bench-road-cars scenes give a
@@ -198,3 +199,16 @@ slip stats against the gates, in
 - New since the freeze, for the round to watch: mid-air yaw is now player-controllable (081/06 §1
   `?airCtl`), and the camera swings with it through `vehicleYawLagTime` — jumps are a NEW judgement the
   original round list did not have.
+
+### 2026-07-27 — §6 look-behind SHIPPED (after 09's field rounds closed, per this plan's own order)
+
+Hold **C** (config `controls.lookBehind`; unbound = off) while driving: the yaw target flips to the car's
+FRONT — the camera sits ahead, looking back over it — through `lookBehindLagTime` (0.15 s, config; a
+mirror check is a glance, so it is deliberately quicker than `vehicleYawLagTime`). Release swings back
+BEHIND through the same fast lag, fired EXPLICITLY on the falling edge, because a standing car has no
+auto-center chase to bring the camera home. Exactly the planned shape: a pure writer on the existing
+steered-yaw channel (the channel gained a one-swing `yawLagOverride`, cleared with the target), re-asserted
+every frame so the mouse cannot wrestle the hold. On foot and in fly the key does nothing. **C is chosen
+over the plan's original "KeyC-class" hedge because GTA V uses C for exactly this; plan 08's view presets
+take V (SA's own camera key) when they come.** Pinned: foot no-op, mouse-wrestle, both swing directions at
+rest, and the fast-lag property. The key awaits its part of the next drive field round.

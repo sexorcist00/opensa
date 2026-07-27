@@ -47,6 +47,7 @@ const base = (over: Partial<CameraSnapshot>): CameraSnapshot => ({
   impactForce: 0,
   landingSpeed: 0,
   look: { x: 0, y: 0 },
+  lookBehind: false,
   mode: 'foot',
   pan: null,
   settling: false,

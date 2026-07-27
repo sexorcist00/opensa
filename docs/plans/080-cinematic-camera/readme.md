@@ -2,8 +2,9 @@
 
 **Status: 01–07 DONE and ACCEPTED (2026-07-25); 08 deferred by the user; REOPENED 2026-07-27 with 09
 (follow-policy revision, from the user's field brief) and 10 (AAA polish) — 09 DONE and ACCEPTED the same
-day (two field rounds; the entry-slam found and fixed; defaults frozen as authored); next per the chain's
-order: the 05 §6 look-behind key, then 10.** Planned 2026-07-19.: the damp/spring math and the
+day (two field rounds; the entry-slam found and fixed; defaults frozen as authored); the 05 §6 look-behind
+key SHIPPED right after it (hold C while driving); next: 10, one field verdict at a time.**
+Planned 2026-07-19.: the damp/spring math and the
 `CameraDirector` in `apps/web/src/ui/camera/` (01), the smoothed rig — input dampening, a trailing look
 point with a dead zone, the steered-yaw channel, gliding zoom (02), the composition layer — turn-follow,
 idle recenter, look-ahead (03), collision — a `PhysicsWorld` sphere/ray-cast API, snap-in/ease-out, a

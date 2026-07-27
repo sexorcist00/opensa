@@ -69,6 +69,9 @@ export interface CameraRigState {
   look: LookInputState;
   /** The composition offset toward travel (plan 03). */
   lookAhead: LookAheadState;
+  /** The look-behind hold was active last frame — the falling edge is what fires the swing back (plan
+   *  080/05 §6; a standing car has no chase to bring the camera home on its own). */
+  lookingBehind: boolean;
   /** Bob / landing dip / shake / sprint-kick state (plan 06). */
   motion: MotionState;
   pitch: number;
@@ -79,6 +82,9 @@ export interface CameraRigState {
   velX: number;
   velZ: number;
   yaw: number;
+  /** A one-swing lag override for the steered channel (seconds) — the look-behind flip uses its own fast
+   *  time. Cleared with the target (settle or mouse), so it never outlives the swing it was set for. */
+  yawLagOverride: null | number;
   /** A yaw something OTHER than the player asked for (vehicle entry today, auto-center in plan 03) — the rig
    *  swings toward it over `yawLagTime`. Null when the player owns the yaw, which any look input restores. */
   yawTarget: null | number;
@@ -107,6 +113,9 @@ export interface CameraSnapshot {
   landingSpeed: number;
   /** Raw pointer deltas this frame, in pixels (sensitivity is the director's business, not the host's). */
   look: { x: number; y: number };
+  /** The look-behind key is HELD this frame (plan 080/05 §6) — while driving, the camera flips to the
+   *  car's front through `lookBehindLagTime` and swings back on release. Ignored on foot and in fly. */
+  lookBehind: boolean;
   mode: CameraMode;
   /** Fly only: left-drag pan delta in NDC since the last frame; null when nothing is being dragged. */
   pan: null | { x: number; y: number };
@@ -161,12 +170,14 @@ export function createRigState(config: CameraConfig, yaw: number, pitch: number)
     lastVehicleSpeed: null,
     look: createLookInput(),
     lookAhead: createLookAhead(),
+    lookingBehind: false,
     motion: createMotion(),
     pitch,
     vehicleAccel: 0,
     velX: 0,
     velZ: 0,
     yaw,
+    yawLagOverride: null,
     yawTarget: null,
     yawVelocity: { velocity: 0 },
   };
@@ -216,6 +227,7 @@ export function stepCamera(
   // The debugger moves the zoom BOUNDS live (074/22), so the live target is re-clamped every frame.
   state.distanceTarget = clamp(state.distanceTarget, config.followZoomMin, config.followZoomMax);
   applyLook(state, snapshot, config);
+  stepLookBehind(state, snapshot, config);
   steerYawChannel(state, config, snapshot.dt);
   const forward = forwardFrom(state.yaw, state.pitch);
   applyZoom(state, snapshot, config, forward);
@@ -460,26 +472,23 @@ function focusVelocity(
 function steerYawChannel(state: CameraRigState, config: CameraConfig, dt: number): void {
   if (state.yawTarget === null) {
     state.yawVelocity.velocity = 0;
+    state.yawLagOverride = null;
 
     return;
   }
-  if (config.yawLagTime <= 0) {
+  const lagTime = state.yawLagOverride ?? config.yawLagTime;
+  if (lagTime <= 0) {
     state.yaw = state.yawTarget;
     state.yawTarget = null;
+    state.yawLagOverride = null;
 
     return;
   }
-  state.yaw = smoothDampAngle(
-    state.yaw,
-    state.yawTarget,
-    state.yawVelocity,
-    config.yawLagTime,
-    Number.POSITIVE_INFINITY,
-    dt,
-  );
+  state.yaw = smoothDampAngle(state.yaw, state.yawTarget, state.yawVelocity, lagTime, Number.POSITIVE_INFINITY, dt);
   if (Math.abs(angleDelta(state.yaw, state.yawTarget)) < 1e-3) {
     state.yaw = state.yawTarget;
     state.yawTarget = null;
+    state.yawLagOverride = null;
   }
 }
 
@@ -541,4 +550,25 @@ function stepFlyRig(state: CameraRigState, snapshot: CameraSnapshot, forward: re
     // Pan by the eye's HEIGHT so the gesture covers the same apparent distance at any altitude.
     state.flyEye = panStep(state.flyEye, forward, [snapshot.pan.x, snapshot.pan.y], Math.max(1, state.flyEye[1]));
   }
+}
+
+/**
+ * Look-behind (plan 080/05 §6): while the key is HELD in a car, the yaw target is the car's FRONT — the
+ * camera sits ahead of it, looking back over it — through `lookBehindLagTime`, a deliberately quicker
+ * swing than the composition channels (a mirror check is a glance). Re-asserted every frame, so the mouse
+ * cannot wrestle the hold; the falling edge fires the swing back BEHIND explicitly, because a standing car
+ * has no auto-center chase to bring the camera home on its own.
+ */
+function stepLookBehind(state: CameraRigState, snapshot: CameraSnapshot, config: CameraConfig): void {
+  const wants = snapshot.lookBehind && snapshot.mode === 'vehicle';
+  if (wants) {
+    // The camera looks along (sin yaw, −cos yaw) and a heading h points along (−sin h, cos h): yaw = h
+    // looks OPPOSITE the car's facing — the look-behind frame (yawBehind(h) = h + π is the normal one).
+    state.yawTarget = snapshot.focusHeading;
+    state.yawLagOverride = config.lookBehindLagTime;
+  } else if (state.lookingBehind) {
+    state.yawTarget = yawBehind(snapshot.focusHeading);
+    state.yawLagOverride = config.lookBehindLagTime;
+  }
+  state.lookingBehind = wants;
 }

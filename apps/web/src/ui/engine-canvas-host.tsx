@@ -587,6 +587,8 @@ async function boot(
    * ARROW keys move it (prod semantics), the mouse look is the shared yaw/pitch.
    */
   const flyKeys = new Set<string>();
+  /** The look-behind key is held (plan 080/05 §6) — reported to the director, which gates it to driving. */
+  let lookBehindHeld = false;
   /** Enter/leave the photo camera. Entering seeds the eye from the live camera (no jump); the player entity
    *  is untouched either way. The HUD hides itself on the shared `'fly-camera'` event, exactly as in prod. */
   const setFlyMode = (on: boolean, photo = false): void => {
@@ -633,10 +635,16 @@ async function boot(
       event.preventDefault();
       flyKeys.add(event.code);
     }
+    if (event.code === config.controls.lookBehind) {
+      lookBehindHeld = true; // hold-to-look-behind while driving (plan 080/05 §6); the director gates by mode
+    }
   });
   window.addEventListener('keyup', (event) => {
     photoChord.up(event.code);
     flyKeys.delete(event.code);
+    if (event.code === config.controls.lookBehind) {
+      lookBehindHeld = false;
+    }
   });
   const forwardOf = (): [number, number, number] => forwardFrom(rig.yaw, rig.pitch);
   // The controller only calls camera.getWorldDirection(v) — hand it the follow camera's forward.
@@ -1358,6 +1366,7 @@ async function boot(
       impactForce: motion.impact,
       landingSpeed: motion.landing,
       look: pendingInput.look,
+      lookBehind: lookBehindHeld,
       mode: cameraModeOf(rig.flyEye !== null, seatedCar !== null),
       pan: pendingInput.pan,
       settling: settleEase > 0,

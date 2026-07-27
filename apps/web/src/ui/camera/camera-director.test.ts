@@ -33,6 +33,7 @@ const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
   impactForce: 0,
   landingSpeed: 0,
   look: { x: 0, y: 0 },
+  lookBehind: false,
   mode: 'foot',
   pan: null,
   settling: false,
@@ -808,3 +809,72 @@ describe('stepCamera — follow policy (plan 080/09)', () => {
     });
   });
 });
+
+/**
+ * Look-behind (plan 080/05 §6): hold the key in a car and the camera flips to the car's FRONT (looking back
+ * over it) through `lookBehindLagTime`; release swings it back BEHIND — explicitly, because a standing car
+ * has no auto-center chase to bring it home. The rig starts at yaw π = behind a heading-0 car; the flip
+ * target is yaw 0.
+ */
+describe('stepCamera — look-behind (plan 080/05 §6)', () => {
+  const drive = (over: Partial<CameraSnapshot> = {}): CameraSnapshot =>
+    snapshot({ mode: 'vehicle', vehicle: { slipAngle: 0, speed: 0 }, vehicleDistance: 8, ...over });
+
+  describe('negative cases', () => {
+    it('does nothing on foot — the key is a driving control', () => {
+      const state = rigState();
+
+      for (let frame = 0; frame < 120; frame += 1) {
+        stepCamera(state, snapshot({ lookBehind: true }), CONFIG);
+      }
+
+      expect(Math.abs(state.yaw - Math.PI)).toBeLessThan(1e-6);
+    });
+
+    it('the mouse cannot wrestle the hold — the flip is re-asserted every frame', () => {
+      const state = rigState();
+
+      for (let frame = 0; frame < 240; frame += 1) {
+        stepCamera(state, drive({ look: { x: 3, y: 0 }, lookBehind: true }), CONFIG);
+      }
+
+      // A held mouse drag fights, loses a frame at a time, and the flip stays parked at the front.
+      expect(Math.abs(state.yaw)).toBeLessThan(0.3);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('swings to the car front while held, and back behind on release — standing still', () => {
+      const state = rigState();
+
+      for (let frame = 0; frame < 120; frame += 1) {
+        stepCamera(state, drive({ lookBehind: true }), CONFIG);
+      }
+      expect(Math.abs(state.yaw)).toBeLessThan(0.02); // parked at the FRONT (yaw 0)
+
+      for (let frame = 0; frame < 180; frame += 1) {
+        stepCamera(state, drive(), CONFIG);
+      }
+      expect(Math.abs(state.yaw - Math.PI)).toBeLessThan(0.02); // home again, with the car at rest
+    });
+
+    it('flips faster than the composition swing — the override lag applies both ways', () => {
+      const state = rigState();
+
+      // After 0.4 s of hold the fast (0.15 s) flip has crossed most of the half-turn; the composition
+      // channel's 0.25 s default would still be far behind at this point of a π swing.
+      for (let frame = 0; frame < 24; frame += 1) {
+        stepCamera(state, drive({ lookBehind: true }), CONFIG);
+      }
+
+      expect(Math.abs(angleDeltaAbs(state.yaw, 0))).toBeLessThan(Math.PI / 4);
+    });
+  });
+});
+
+/** |shortest angular difference| — local to the look-behind cases. */
+function angleDeltaAbs(a: number, b: number): number {
+  const wrapped = ((b - a + Math.PI) % (2 * Math.PI)) + (b - a + Math.PI < 0 ? 2 * Math.PI : 0);
+
+  return Math.abs(wrapped - Math.PI);
+}

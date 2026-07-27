@@ -48,6 +48,7 @@ function config(collisionDrawDistance: number): Config {
       lookAheadDistance: 0.8,
       lookAheadFullSpeed: 7,
       lookAheadTime: 0.45,
+      lookBehindLagTime: 0.15,
       manualGraceSec: 0.25,
       moveThreshold: 0.6,
       pitchMax: 0.9,

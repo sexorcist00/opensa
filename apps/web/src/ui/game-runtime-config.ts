@@ -68,6 +68,7 @@ export function createGameRuntimeConfig(): Config {
       lookAheadDistance: 0.8,
       lookAheadFullSpeed: 7,
       lookAheadTime: 0.45,
+      lookBehindLagTime: 0.15,
       manualGraceSec: 0.25,
       moveThreshold: 0.6,
       pitchMax: 0.9,
@@ -101,7 +102,15 @@ export function createGameRuntimeConfig(): Config {
     },
     // 088/03: RUN is the default gait (SA jogs); Shift sprints. `walk` is left unbound — the slow tier
     // is reachable by a partial touch-stick deflection, or bind a key here.
-    controls: { back: 'KeyS', forward: 'KeyW', jump: 'Space', left: 'KeyA', right: 'KeyD', sprint: 'ShiftLeft' },
+    controls: {
+      back: 'KeyS',
+      forward: 'KeyW',
+      jump: 'Space',
+      left: 'KeyA',
+      lookBehind: 'KeyC',
+      right: 'KeyD',
+      sprint: 'ShiftLeft',
+    },
     fog: { distance: 800, timecycScale: 1 },
     fonts: { hud: { clock: 'SixCaps-Regular', zone: 'SixCaps-Regular' } },
     gameState: 'play',
