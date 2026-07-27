@@ -110,5 +110,20 @@ describe('wheelRows', () => {
 
       expect(rows).toEqual([['RR', '● ████░░░░░░ 4.2kN -0.25']]);
     });
+
+    it('names the ground under the wheel and the grip share it gives (081/10)', () => {
+      const rows = wheelRows(frame({ wheels: [wheel({ surface: 27 })] }), ['FL'], () => ({
+        factor: 0.711,
+        name: 'grass_medium_lush',
+      }));
+
+      expect(rows[0][1].endsWith('grass_medium_lush ×0.71')).toBe(true);
+    });
+
+    it('says nothing about the ground when the world has no surface table', () => {
+      const rows = wheelRows(frame({ wheels: [wheel({ surface: 27 })] }), ['FL']);
+
+      expect(rows[0][1]).toBe('● █████░░░░░ 3.0kN 0.00');
+    });
   });
 });

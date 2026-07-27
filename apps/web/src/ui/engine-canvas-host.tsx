@@ -909,7 +909,23 @@ async function boot(
         const car = vehicles?.activeVehicle() ?? null;
         const frame = vehicles?.telemetry.latest() ?? null;
 
-        return car && frame ? { corners: wheelCornerLabels(car.wheels), frame } : null;
+        return car && frame
+          ? {
+              corners: wheelCornerLabels(car.wheels),
+              frame,
+              // 081/10: name the ground under each wheel and the grip share it gives, so the field can tell
+              // "the change does nothing" from "this ground is adhesion group ROAD, so ×1.00 is correct".
+              surfaceOf: (id: number): null | { factor: number; name: string } => {
+                const table = adapter.surfaces();
+                const grip = adapter.tyreAdhesion();
+                const surface = table?.[id];
+
+                return surface
+                  ? { factor: grip ? (grip.perMaterial[id] ?? grip.road) / grip.road : 1, name: surface.name }
+                  : null;
+              },
+            }
+          : null;
       },
       placePlayer: teleportPlayer,
       playerCoords: viewOf,

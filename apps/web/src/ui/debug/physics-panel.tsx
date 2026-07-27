@@ -29,6 +29,9 @@ export interface PhysicsReadout {
   /** Corner name per wheel index (`FL`, `RR`, …) — see `wheelCornerLabels`. */
   readonly corners: readonly string[];
   readonly frame: TelemetryFrame;
+  /** What an SA surface id MEANS (plan 081/10): its name and the share of tarmac grip it gives. Null for an
+   *  unknown id, and absent entirely for a world with no surface table. */
+  readonly surfaceOf?: (id: number) => null | { factor: number; name: string };
 }
 
 /** 10 Hz: fast enough to watch a dip build, slow enough not to flood React. */
@@ -94,7 +97,7 @@ export function PhysicsPanel({ actions }: { actions: PhysicsPanelActions }): Rea
         <>
           <StatRows rows={bodyRows(readout.frame)} />
           <div style={styles.groupLabel}>WHEELS — CONTACT · TRAVEL · LOAD · SLIP</div>
-          <StatRows rows={wheelRows(readout.frame, readout.corners)} />
+          <StatRows rows={wheelRows(readout.frame, readout.corners, readout.surfaceOf)} />
         </>
       )}
       <div style={styles.divider} />
@@ -104,15 +107,26 @@ export function PhysicsPanel({ actions }: { actions: PhysicsPanelActions }): Rea
   );
 }
 
-/** One line per wheel: contact, suspension travel, normal load, longitudinal slip. */
-export function wheelRows(frame: TelemetryFrame, corners: readonly string[]): readonly (readonly [string, string])[] {
+/**
+ * One line per wheel: contact, suspension travel, normal load, longitudinal slip — and WHAT IT IS STANDING ON
+ * (plan 081/10), because "grass feels the same as tarmac" is only answerable once the panel can say whether
+ * the wheel is on grass at all. Most green-looking SA ground is adhesion group ROAD (`dirt`, `dirttrack`),
+ * and then ×1.00 is the correct, deliberate answer rather than a bug.
+ */
+export function wheelRows(
+  frame: TelemetryFrame,
+  corners: readonly string[],
+  surfaceOf?: (id: number) => null | { factor: number; name: string },
+): readonly (readonly [string, string])[] {
   return frame.wheels.map((wheel, index) => {
     const load = `${(wheel.load / 1000).toFixed(1)}kN`;
+    const surface = wheel.surface === null ? null : (surfaceOf?.(wheel.surface) ?? null);
+    const ground = surface === null ? '' : ` ${surface.name} ×${surface.factor.toFixed(2)}`;
 
     return [
       // A car whose wheel placements never reached the panel still gets a stable name.
       corners[index] ?? `W${index}`,
-      `${wheel.contact ? '●' : '○'} ${bar(wheel.compression)} ${load} ${wheel.slipRatio.toFixed(2)}`,
+      `${wheel.contact ? '●' : '○'} ${bar(wheel.compression)} ${load} ${wheel.slipRatio.toFixed(2)}${ground}`,
     ] as const;
   });
 }
