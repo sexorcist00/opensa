@@ -732,6 +732,21 @@ describe('PhysicsWorld raycast vehicle', () => {
     return { body, controller, physics };
   }
 
+  /** Idle controls at a given forward speed — the 081/09 boost tests read frictionSlip after this. */
+  function coastAt(physics: PhysicsWorld, controller: VehicleController, speed: number): void {
+    physics.setVehicleControls(controller, FRONT, {
+      brake: 0,
+      brakeBias: 0.5,
+      drive: '4',
+      engine: 0,
+      handbrake: false,
+      speed,
+      steer: 0,
+      step: STEP,
+      traction: { bias: 0.5, loss: 0.8, mult: 0.7 },
+    });
+  }
+
   describe('negative cases', () => {
     it('a parked car stays put — the parking brake is on from creation', async () => {
       const { body, physics } = await car();
@@ -774,24 +789,38 @@ describe('PhysicsWorld raycast vehicle', () => {
       physics.dispose();
     });
 
-    it('hands the tyre the PARKED baseline scale — the raw multiplier — until the 2g experiment (081/08)', async () => {
+    it('hands the tyre the baseline scale at rest — the assist must never move the low-speed feel (081/09)', async () => {
       const { controller, physics } = await car();
 
-      physics.setVehicleControls(controller, FRONT, {
-        brake: 0,
-        brakeBias: 0.5,
-        drive: '4',
-        engine: 0,
-        handbrake: false,
-        steer: 0,
-        step: STEP,
-        traction: { bias: 0.5, loss: 0.8, mult: 0.7 },
-      });
+      coastAt(physics, controller, 0);
 
-      // The 2026-07-27 audit derived SA's own scale (2.25 × TM dimensionless, 4.59 × TM absolute) and the
-      // field rejected BOTH under 1 g — this pins the deliberate baseline so a re-scale cannot slip in as a
-      // side effect. The SA budget returns via doubled wheel loads when vehicles run under SA gravity.
+      // The field-liked baseline (both derived SA scales were rejected under 1 g — see the 081/08
+      // postmortem): at rest the boost is exactly 1 and the raw multiplier reaches Rapier untouched.
       expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7, 5);
+      physics.dispose();
+    });
+
+    it('grows the LATERAL grip with speed and caps it — and leaves town speeds nearly alone (081/09)', async () => {
+      const { controller, physics } = await car();
+
+      coastAt(physics, controller, 10); // 36 km/h: 1 + (10/20)² = 1.25 — town feel within a quarter
+      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 1.25, 4);
+      coastAt(physics, controller, 30); // 108 km/h: 1 + 2.25 = 3.25 → capped at 2.5 — the evasion case
+      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 2.5, 4);
+      coastAt(physics, controller, -30); // reverse counts by magnitude
+      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 2.5, 4);
+      physics.dispose();
+    });
+
+    it('the session dials move the boost — and reject nonsense values (081/09)', async () => {
+      const { controller, physics } = await car();
+
+      physics.tuneSpeedGrip({ cap: 0, reference: Number.NaN }); // both invalid → dials unchanged
+      expect(physics.speedGripTuning()).toEqual({ cap: 2.5, reference: 20 });
+
+      physics.tuneSpeedGrip({ cap: 1.5 });
+      coastAt(physics, controller, 30);
+      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 1.5, 4);
       physics.dispose();
     });
 
@@ -836,6 +865,7 @@ describe('PhysicsWorld raycast vehicle', () => {
         drive: '4',
         engine: 12000,
         handbrake: false,
+        speed: 0,
         steer: 0,
         step: STEP,
         traction: { bias: 0.5, loss: 0.8, mult: 0.7 },

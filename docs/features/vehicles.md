@@ -121,14 +121,15 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   `adhesive` is the rubber-on-road cell of `data/surface.dat` (4.5). It does not touch town driving (full lock
   to ~53 km/h) and tightens with the square of speed. Countersteering into a slide and the handbrake both
   restore full lock, as they do in the original.
-- **Tyres** (plan 081/05; scale PARKED at the baseline 2026-07-27 pending 081/08): grip per wheel is
-  `fTractionMultiplier` read as a friction coefficient, split across the axles by `fTractionBias`. The
-  audit derived SA's true budget (`45 × TM` m/s² absolute — `2.25 × TM` in units of SA's own 20 m/s²
-  gravity, load factor `4 × weight share` capped at 2) and the field rejected BOTH 1 g ports of it the same
-  day: the absolute one doubled grip-to-weight ("weightless"), the dimensionless one left at-speed evasion
-  at ~half the original's. The conflict is structural — at 1 g you cannot have SA's radii and SA's
-  weight-feel together — and is staged onto the 2g experiment (`081/08`), where this same baseline × doubled
-  wheel loads delivers SA's budget by construction. The longitudinal clamp is applied on OUR side in
+- **Tyres** (plan 081/05 baseline + the 081/09 speed assist): grip per wheel is `fTractionMultiplier` read
+  as a friction coefficient, split across the axles by `fTractionBias` — the field-liked baseline after
+  every SA-derived scale (and the whole 2 g world, 081/08) was field-rejected; the postmortem
+  (`docs/postmortem/081-vehicle-physics/sa-faithful-feel.md`) carries that story. On top of it, **the
+  LATERAL grip grows with speed** (081/09): `frictionSlip × min(1 + (v/20 m/s)², 2.5)` — a deliberate,
+  documented assist with the inverse shape of the "helpless at 130 km/h" complaint. Virtual only: the
+  engine clamp and the brake cap stay on the unboosted grip, so launches, acceleration, braking, weight and
+  town-speed feel are the baseline's, byte for byte. Dials are session-tunable (`?gripVd`, `?gripCap`) and
+  every capture records the active values. The longitudinal clamp is applied on OUR side in
   `setVehicleControls`, because Rapier applies its own friction limit only when a wheel already has a side
   impulse — a car accelerating or braking dead ahead is otherwise unlimited. Engine force reaches driven
   wheels only (`nDriveType`). A wheel that has **broken loose grips less** (`fTractionLoss`, 0.72…0.85): past

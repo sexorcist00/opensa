@@ -136,12 +136,37 @@ const SUSPENSION_DAMPING_SCALE_MAX = 2;
  *   the obstacle-avoidance-at-speed complaint stayed, because at 1 g you cannot have both SA's radii and
  *   SA's weight-feel.
  *
- * The decision (audit addendum, round 3): stay on the baseline the field likes, and resolve the conflict
- * structurally — **vehicles under SA gravity (the 081/08 2g experiment)**, where this constant times a
- * doubled wheel load delivers SA's absolute budget by construction (`2.25 × TM × N(2g) = 45 × TM × share ×
- * m`). Until then the derivation lives in the audit and in this comment, not in a constant that the field
- * has twice rejected. (10.5, Bullet's demo default, remains the third recorded wrong value.)
+ * The decision (audit addendum, round 3): stay on the baseline the field likes. The 2g experiment (081/08)
+ * then field-tested the original's WHOLE world and died the same day — the postmortem
+ * (`docs/postmortem/081-vehicle-physics/sa-faithful-feel.md`) carries what it proved: the "weak at speed"
+ * complaint is a SHAPE, not a scale, and this project's feel target is the field's verdict, not the
+ * original's numbers. (10.5, Bullet's demo default, remains the third recorded wrong value.)
  */
+/**
+ * Speed-growing lateral grip (plan 081/09) — the lever with the complaint's INVERSE shape.
+ *
+ * A tyre's lateral ceiling `μ × N` is speed-independent while the radius a swerve demands grows with v², so
+ * any honest tyre reads strong at 30 km/h and helpless at 130 — and the 081/08 postmortem proved no uniform
+ * scale can fix that without breaking the low-speed feel the field likes. So the grip the LATERAL solver
+ * sees grows with speed instead:
+ *
+ * ```
+ * boost(v) = min(1 + (v / reference)², cap)
+ * ```
+ *
+ * Downforce-form, but VIRTUAL — a factor on `frictionSlip` only, never a real force: rest weight, springs,
+ * stance and jumps see nothing. The engine clamp and the brake cap stay on the UNBOOSTED grip, so launches,
+ * acceleration and braking are byte-identical to the field-liked baseline. At the default dials: ≤ ×1.3
+ * below 40 km/h (town feel untouched), ×2.5 from ~110 km/h up — entry yaw at 110 goes ~13°/s → ~32°/s, a
+ * 3 m swerve needs ~13 m of road instead of ~29.
+ *
+ * **This is a deliberate assist the original does not have** (SA "solves" the same shape with ~3 g tyres in
+ * a 2 g world — field-rejected wholesale in 08), and **the dials belong to the field**: `?gripVd=<m/s>` and
+ * `?gripCap=<×>` override per session via {@link PhysicsWorld.tuneSpeedGrip}, every `[phys]` capture
+ * records the active values, and the accepted numbers get committed as these defaults.
+ */
+const SPEED_GRIP_REFERENCE = 20; // m/s — the speed where the boost reaches ×2
+const SPEED_GRIP_CAP = 2.5;
 /**
  * What a LOCKED wheel keeps of its lateral stiffness — 3 %, and it has to be that low for a reason worth
  * knowing.
@@ -226,6 +251,8 @@ export const VEHICLE_PHYSICS_CONSTANTS: readonly (readonly [string, number])[] =
   ['susp max travel (m)', SUSPENSION_MAX_TRAVEL],
   ['susp max force (N)', SUSPENSION_MAX_FORCE],
   ['tyre grip floor', TYRE_GRIP_FLOOR],
+  ['speed grip ref (m/s)', SPEED_GRIP_REFERENCE],
+  ['speed grip cap', SPEED_GRIP_CAP],
   ['parking brake (N)', PARKING_BRAKE],
   ['chassis lin damping', CHASSIS_LINEAR_DAMPING],
   ['chassis ang damping', CHASSIS_ANGULAR_DAMPING],
@@ -432,6 +459,8 @@ export class PhysicsWorld {
   /** Contact-force impacts collected during the last {@link step} (drained by {@link takeImpacts}). */
   private impacts: Impact[] = [];
   private readonly rapier: Rapier;
+  /** The live speed-grip dials (plan 081/09) — session-tunable, recorded by every capture. */
+  private speedGrip = { cap: SPEED_GRIP_CAP, reference: SPEED_GRIP_REFERENCE };
   /** Raycast vehicle controllers, advanced before each {@link step}. */
   private readonly vehicles: VehicleController[] = [];
   private readonly world: RapierWorld;
@@ -1037,14 +1066,20 @@ export class PhysicsWorld {
       engine: number;
       /** The lever is up: the REAR wheels lock, the front keeps whatever `brake` asks of it. */
       handbrake: boolean;
+      /** Forward speed (m/s, signed) — the lateral grip GROWS with it (plan 081/09, see the boost above). */
+      speed: number;
       steer: number;
       step: number;
       /** The car's authored tyre grip — re-read each step because a SLIDING wheel gets less of it. */
       traction: VehicleTractionSpec;
     },
   ): void {
-    const { brake, brakeBias, drive, engine, handbrake, steer, step, traction } = controls;
+    const { brake, brakeBias, drive, engine, handbrake, speed, steer, step, traction } = controls;
     const perBrake = brake / (wheels.length || 1);
+    // The 081/09 assist: the LATERAL solver's grip grows with speed; everything longitudinal stays on the
+    // unboosted base below, so launches, acceleration and braking never move with the dials.
+    const ratio = Math.abs(speed) / this.speedGrip.reference;
+    const boost = Math.min(1 + ratio * ratio, this.speedGrip.cap);
     wheels.forEach((wheel, i) => {
       const driven = drive === '4' || (drive === 'F') === wheel.front;
       const load = controller.wheelSuspensionForce(i) ?? 0;
@@ -1057,13 +1092,15 @@ export class PhysicsWorld {
       // friction circle IS the sliding one. That is last step's state driving this step's grip — the same
       // one-frame feedback the original runs on (`bAlreadySkidding`).
       const base = tyreGrip(traction, wheel.front);
+      const lateral = base * boost;
       const used = Math.hypot(controller.wheelForwardImpulse(i) ?? 0, controller.wheelSideImpulse(i) ?? 0);
-      const sliding = load > 0 && used >= base * load * step * SLIDE_THRESHOLD;
-      const mu = sliding ? base * traction.loss : base;
-      controller.setWheelFrictionSlip(i, mu);
-      // What this corner's tyre can deliver right now: μ × the load its spring is carrying. A wheel in the
-      // air carries nothing, so it drives and brakes with nothing — which is what an airborne wheel does.
-      const grip = mu * load;
+      // Sliding is judged against the BOOSTED circle — it is the one Rapier actually enforces; judging
+      // against the base would flag every wheel at speed and the loss factor would eat the assist.
+      const sliding = load > 0 && used >= lateral * load * step * SLIDE_THRESHOLD;
+      controller.setWheelFrictionSlip(i, sliding ? lateral * traction.loss : lateral);
+      // What this corner's tyre can deliver LONGITUDINALLY right now: the UNBOOSTED μ × the load its spring
+      // is carrying. A wheel in the air carries nothing, so it drives and brakes with nothing.
+      const grip = (sliding ? base * traction.loss : base) * load;
       // `fBrakeBias` splits the pedal across the axles exactly as the suspension and traction biases do.
       const axle = wheel.front ? 2 * brakeBias : 2 - 2 * brakeBias;
       controller.setWheelEngineForce(i, driven ? clampMagnitude(engine, grip) : 0);
@@ -1081,6 +1118,11 @@ export class PhysicsWorld {
       controller.setWheelSideFrictionStiffness(i, locked ? LOCKED_SIDE_FRICTION : 1);
       controller.setWheelSteering(i, wheel.front ? steer : 0);
     });
+  }
+
+  /** The active speed-grip dials — the F2 tab and every `[phys]` capture read them (self-description). */
+  speedGripTuning(): { cap: number; reference: number } {
+    return { ...this.speedGrip };
   }
 
   /**
@@ -1201,6 +1243,17 @@ export class PhysicsWorld {
     body.setTranslation(p, true);
     // Match the kinematic target so the next step doesn't pull the body back (no jitter).
     body.setNextKinematicTranslation(p);
+  }
+
+  /** Override the speed-grip dials for this session (plan 081/09: `?gripVd=<m/s>&gripCap=<×>`) — the feel
+   *  target is the field's, so the field holds the dials; accepted values get committed as the defaults. */
+  tuneSpeedGrip(overrides: { cap?: number; reference?: number }): void {
+    if (overrides.cap !== undefined && Number.isFinite(overrides.cap) && overrides.cap >= 1) {
+      this.speedGrip.cap = overrides.cap;
+    }
+    if (overrides.reference !== undefined && Number.isFinite(overrides.reference) && overrides.reference > 0) {
+      this.speedGrip.reference = overrides.reference;
+    }
   }
 
   /** Signed forward speed (units/s) of a raycast vehicle (+ = forward). */
