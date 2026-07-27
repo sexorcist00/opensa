@@ -139,3 +139,30 @@ becomes the next thing the eye rejects. The two land together or the improvement
 ## Ledger
 
 _(thresholds, torque clamps, capture numbers, field verdict)_
+
+### 2026-07-27 — §2, the instrument: the kerb scene never met a kerb, and the real one stops a car dead
+
+Before any assist: **the capture learned to say WHERE it was.** `TelemetryFrame.position` (copied, never
+aliased — the same trap that once made every orientation-derived rate read 0) and `x`/`y`/`z` appended to the
+series columns, at the END so `phys-compare` keeps comparing like with like. Everything below came out of
+that one channel in an afternoon.
+
+**`kerb-strike` is a prop-collision lap, not a kerb test.** The comet's lap ends against the traffic light at
+(2221.8, 1203.3) losing 57 → 20 km/h; the infernus meets something at 100 g at (2170.5, 1225.3), in a plaza
+of bollards, palms and ramps. Its own scene comment carried the doubt from the start ("UNCONFIRMED: whether
+the angle below actually mounts the kerb") and the answer is no. The scene is KEPT, unchanged — the whole
+record and the new regression pack are measured against it — but no kerb conclusion may be drawn from it.
+**The flip that motivated this section does not reproduce at head**: comet `kerb-strike` peaks at 14.2° of
+roll with no flip on any of the five cars (the 20.6° → 179° in `physics-world.ts` is now annotated as
+scene-dependent, so nobody reads it as evidence the mechanism was fixed).
+
+**The new `kerb-mount` scene drives SQUARE at a plain kerb** (SF west-shore, mid-block at y 260, the middle
+of the longest pole-free span — its first two versions each drove into a traffic light of their own, which is
+how the kerb line's ~12 m spacing of lampposts, trees and lights got written down). Off the power, ~25 km/h:
+**comet −62.1 g, stopped dead, bounced back, zero climb; admiral −61.3 g, front lifted 8 cm and stopped.**
+
+So the mechanism is confirmed and its shape is worse than "snag or launch": at town speed a car **cannot get
+onto a pavement at all**. That is what §2's forward probe has to fix, and the numbers above are its baseline
+(`docs/benchmarks/vehicle-physics/2026-07-27-headless-kerbmount-baseline-{comet,admiral}.json`). The
+high-speed half of the acceptance ("a kerb at 80 km/h SHOULD punish") still has no clean instrument: the
+shallow-angle case needs a spot with clear ground behind the kerb, which `kerb-strike` is not.

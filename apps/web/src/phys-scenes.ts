@@ -128,6 +128,33 @@ export const PHYS_SCENES: readonly PhysScene[] = [
     what: 'Mounting a kerb at a shallow angle: the vertical spike and how far the car is thrown off line.',
   },
   {
+    durationS: 10,
+    // Facing +X — square at the pavement. Heading 0 faces +Y and turns counter-clockwise, so −π/2 is +X.
+    heading: -1.571,
+    key: 'kerb-mount',
+    /*
+     * The CONTROLLED kerb, and it drives at it SQUARE rather than drifting into it: a steered approach
+     * confounds the step with everything the tyres are doing, and both of this scene's first two versions
+     * proved the point by measuring something else entirely.
+     *
+     * Why not `kerb-strike`: with the capture's new position channel (2026-07-27) that lap turned out never
+     * to test a kerb at all — its LV spot puts a traffic light at (2221.8, 1203.3) and a plaza of bollards
+     * and palms behind the pavement, and every car there records a prop collision (the comet loses
+     * 57 → 20 km/h on the light; the infernus meets something at 100 g). The scene is kept, unchanged, because
+     * the whole record is measured against it — it is simply not evidence about kerbs.
+     *
+     * Why HERE: the SF west-shore street, mid-block at y 260. Its kerb line carries a lamppost or a tree
+     * every ~12 m (y 247.5 and 272.5 are the neighbours), and a traffic light at every junction corner —
+     * which is what the first version of this scene drove into. This is the middle of the longest clear span.
+     */
+    position: [-2808.9, 260, 6],
+    timeline: [
+      { move: { x: 0, y: 0.35 }, t: 0 }, // gentle: a kerb mount is a low-speed manoeuvre, ~25 km/h at the edge
+      { move: { x: 0, y: 0 }, t: 4 }, // off the power before the step — the car meets it coasting
+    ],
+    what: 'Driving square onto a kerb at low speed: the vertical spike a raycast wheel takes from a step it cannot see until its centre crosses the edge, the speed the step costs, and whether the car climbs it or is stopped by it.',
+  },
+  {
     durationS: 16,
     heading: 1.478,
     key: 'crest-jump',

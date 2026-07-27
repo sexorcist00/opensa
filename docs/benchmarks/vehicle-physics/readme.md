@@ -31,7 +31,9 @@ Each file is the array of `[phys]` lines, verbatim. One capture:
   "key": "brake-strip", // scene id, from apps/web/src/phys-scenes.ts
   "what": "Time to speed, then a full-brake stop: …", // the scene's own statement of purpose
   "seriesHz": 20,
-  "columns": ["t", "speed", "slipAngle", "pitch", "roll", "yawRate", "gLong", "gLat", "gVert", "throttle", "steer"],
+  // `x`, `y`, `z` (world GTA space) were APPENDED on 2026-07-27 — at the end, so a capture taken before that
+  // still compares column-for-column with one taken after. Older captures simply carry the first eleven.
+  "columns": ["t", "speed", "slipAngle", "pitch", "roll", "yawRate", "gLong", "gLat", "gVert", "throttle", "steer", "x", "y", "z"],
   "series": [[0.0167, 0, 0, -0.0022 /* … */]], // thinned to seriesHz; SI + radians
   "summary": {
     "topSpeedKmh": 165.69,
@@ -540,3 +542,35 @@ deliberate step, not a fix to slip in.
 Runs: `2026-07-27-headless-shipped-{infernus,admiral,firetruk,comet,turismo}.json` — the pack itself. A
 re-record is a deliberate act: new captures, the new prefix in `scripts/phys-regression.ts`, a row here, and
 the field verdict that accepted the new feel.
+
+### 2026-07-27 — a kerb stops a car dead, and the scene that was supposed to prove it never met one (081/06 §2)
+
+Same pak, same commit as the pack, plus the capture's new **`x` / `y` / `z` columns** — a lap can finally say
+WHERE something happened, appended at the end of the row so every existing series stays index-comparable.
+
+**First it falsified its own instrument.** `kerb-strike` does not test a kerb. With positions in hand: the
+comet's lap ends against the traffic light at (2221.8, 1203.3) — 57 → 20 km/h — and the infernus meets
+something at 100 g at (2170.5, 1225.3), in a Las Venturas plaza of bollards, palms and ramps. Every "kerb"
+number in this record came off that lap. The scene stays as it is (the whole record is measured against it),
+but it is a prop-collision lap, not evidence about kerbs. **The comet's flip that justified plan 06 §2
+(20.6° → 179° when the angular-damping band-aid came off) does not reproduce at head either**: 14.2° of roll,
+no flip, on any of the five cars — because the lap now ends on a pole, not because the mechanism was fixed.
+
+**Then it measured the real thing.** The new **`kerb-mount`** scene drives SQUARE at a plain kerb, mid-block
+on the SF west-shore street at y 260 — the middle of the longest span with no lamppost, tree or traffic
+light (its first two versions each drove into one, which is how the kerb line's ~12 m pole spacing got
+recorded). Off the power, at ~25 km/h:
+
+| car     | speed at the kerb | what happened                                       | gLong  | gVert | climb |
+| ------- | ----------------- | --------------------------------------------------- | ------ | ----- | ----- |
+| comet   | 26.8 km/h         | stopped dead, bounced back, tried again, stayed put  | −62.1  | 6.3   | 0 cm  |
+| admiral | 25.6 km/h         | stopped dead, front lifted 8 cm and went no further  | −61.3  | 2.7   | 8 cm  |
+
+**A car cannot get onto a pavement at all.** No climb, no launch, no flip — a bounce off a vertical face,
+which is the raycast-suspension weakness plan 06 §2 names: a downward ray cannot see a step face, so the
+chassis collider meets it as a wall. It reproduces on both cars and both directions of the record's own
+complaint ("a kerb flips it like cardboard" was the same mechanism when the flips were still there).
+
+Runs: `2026-07-27-headless-kerbmount-baseline-{comet,admiral}.json` (the square mount) ·
+`2026-07-27-headless-kerbstrike-located-{infernus,comet,admiral}.json` (the located `kerb-strike` laps that
+identified the props).

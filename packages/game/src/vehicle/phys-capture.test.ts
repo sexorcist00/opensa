@@ -25,6 +25,7 @@ const frame = (t: number, over: Partial<TelemetryFrame> = {}): TelemetryFrame =>
   handbrake: false,
   heading: 0,
   pitch: 0,
+  position: [0, 0, 0],
   roll: 0,
   slipAngle: 0,
   slipRatio: 0,

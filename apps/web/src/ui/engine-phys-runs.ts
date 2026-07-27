@@ -139,7 +139,24 @@ function report(
   const capture = {
     car,
     // Column-named so a reader (and phys-compare) never has to count positions.
-    columns: ['t', 'speed', 'slipAngle', 'pitch', 'roll', 'yawRate', 'gLong', 'gLat', 'gVert', 'throttle', 'steer'],
+    // WHERE the car was goes at the END of the row, never in the middle: `phys-compare` walks two series by
+    // column index, and inserting a column would silently compare a capture's yaw against another's pitch.
+    columns: [
+      't',
+      'speed',
+      'slipAngle',
+      'pitch',
+      'roll',
+      'yawRate',
+      'gLong',
+      'gLat',
+      'gVert',
+      'throttle',
+      'steer',
+      'x',
+      'y',
+      'z',
+    ],
     key: scene.key,
     series: thinFrames(frames, SERIES_HZ).map((frame) =>
       [
@@ -154,6 +171,9 @@ function report(
         frame.gVert,
         frame.throttle,
         frame.steer,
+        frame.position[0],
+        frame.position[1],
+        frame.position[2],
       ].map((value) => Number(value.toFixed(4))),
     ),
     seriesHz: SERIES_HZ,

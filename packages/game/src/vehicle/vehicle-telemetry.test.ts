@@ -42,6 +42,7 @@ const sample = (over: Partial<VehicleSample> = {}): VehicleSample => ({
   handbrake: false,
   linvel: [0, 0, 0],
   orientation: [0, 0, 0, 1], // level, facing +Y
+  position: [0, 0, 0],
   steer: 0,
   throttle: 0,
   wheels: [wheel(), wheel()],
@@ -299,6 +300,18 @@ describe('VehicleTelemetry', () => {
       const frame = telemetry.step(sample({ linvel: [0, 21, 0] }), DT);
 
       expect(frame?.gLong).toBeCloseTo(1 / DT / 9.81, 9);
+    });
+
+    it('keeps each frame where the car WAS, even though the caller reuses one position array', () => {
+      const telemetry = new VehicleTelemetry(10);
+      telemetry.enabled = true;
+      const live: [number, number, number] = [2272, 1193, 9.6]; // the array the vehicle system overwrites
+
+      telemetry.step(sample({ position: live }), DT);
+      live[1] = 1293;
+      telemetry.step(sample({ position: live }), DT);
+
+      expect(telemetry.frames().map((frame) => frame.position[1])).toEqual([1193, 1293]);
     });
   });
 });

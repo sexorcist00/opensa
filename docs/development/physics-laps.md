@@ -53,8 +53,10 @@ Everything except step 6 happens with the capture OFF, so a lap's frames are the
 ## Scenes
 
 Data, in [`apps/web/src/phys-scenes.ts`](../../apps/web/src/phys-scenes.ts): a spot, a heading, a keyframe
-timeline and a duration. Eleven today — `rest` · `brake-strip` · `step-steer` · `sweeper` · `slalom` · `u-turn` ·
-`kerb-strike` · `crest-jump` · `handbrake-turn` · `handbrake-flick` · `pull-away-reverse`. (`sweeper` is the
+timeline and a duration. Twelve today — `rest` · `brake-strip` · `step-steer` · `sweeper` · `slalom` · `u-turn` ·
+`kerb-strike` · `kerb-mount` · `crest-jump` · `handbrake-turn` · `handbrake-flick` · `pull-away-reverse`.
+(`kerb-mount` is the square, low-speed kerb the 081/06 §2 probe is measured on; `kerb-strike` is kept for the
+record but was shown on 2026-07-27 to hit a traffic light rather than a kerb.) (`sweeper` is the
 moderate-steer-at-high-speed instrument 081/05 recorded as owed: WOT to ~140 km/h, then 0.4 of steer held.)
 
 Keyframes **HOLD**: each one's `move`/`actions` stay in force until the next, and nothing is interpolated. A
@@ -77,6 +79,12 @@ another is invisible to every check except reading it.**
    capture, and a scene that cannot say what it measures is not evidence.
 4. **Run it once and read the series**, not just the summary. The first `brake-strip` held throttle to 12 s
    and the infernus ran out of straight at 190 km/h; the 18.8 g lateral spike said so plainly.
+5. **Check the ground for POLES, then confirm with the `x`/`y`/`z` columns.** A city street's kerb line carries
+   a traffic light at every junction corner and a lamppost or tree every ~12 m, and a lap that drifts wide
+   finds one — `kerb-strike` turned out to be measuring a traffic light rather than a kerb, and the first two
+   versions of `kerb-mount` drove into poles of their own before the spot was scanned for a clear span
+   (`inspect-area.ts` around the intended line). The position channel is what settles it: a capture that
+   reports 100 g and cannot name the spot cannot say whether the car hit a kerb, a wall or a palm tree.
 
 ## The capture
 

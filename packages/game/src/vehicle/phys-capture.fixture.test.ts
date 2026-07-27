@@ -31,6 +31,9 @@ const RECORD_DIR = join(import.meta.dirname, '../../../../docs/benchmarks/vehicl
 
 /** The documented column order — the readme's schema, and what `phys-compare` indexes by. */
 const COLUMNS = ['t', 'speed', 'slipAngle', 'pitch', 'roll', 'yawRate', 'gLong', 'gLat', 'gVert', 'throttle', 'steer'];
+/** Where the car was, appended 2026-07-27 (081/06 §2) — at the END, so a capture taken before it still
+ *  compares column-for-column with one taken after. A capture carries all three or none. */
+const POSITION_COLUMNS = ['x', 'y', 'z'];
 
 const files = readdirSync(RECORD_DIR).filter((name) => name.endsWith('.json'));
 const read = (name: string): Capture[] => JSON.parse(readFileSync(join(RECORD_DIR, name), 'utf8')) as Capture[];
@@ -102,10 +105,11 @@ describe('the [phys] capture record', () => {
   describe('positive cases', () => {
     it('stores every lap in the documented shape', () => {
       for (const capture of captures) {
-        expect(capture.columns, `${capture.car}/${capture.key}`).toEqual(COLUMNS);
+        const expected = capture.columns.length === COLUMNS.length ? COLUMNS : [...COLUMNS, ...POSITION_COLUMNS];
+        expect(capture.columns, `${capture.car}/${capture.key}`).toEqual(expected);
         expect(capture.seriesHz).toBe(20);
         expect(capture.what.length).toBeGreaterThan(20); // a scene that cannot say what it is for is not evidence
-        expect(capture.series.every((row) => row.length === COLUMNS.length)).toBe(true);
+        expect(capture.series.every((row) => row.length === capture.columns.length)).toBe(true);
         expect(capture.summary.frames).toBeGreaterThan(capture.series.length); // the series IS thinned
       }
     });

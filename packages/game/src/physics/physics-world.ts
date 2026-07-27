@@ -232,9 +232,15 @@ const CHASSIS_LINEAR_DAMPING = 0.1;
  * - slalom: 25.9° → **59.6°** and −22.0° → **58.4°**
  *
  * **The cost, stated rather than hidden**: at 2 the band-aid was also masking a real instability, and the
- * comet flips on the kerb-strike replay without it (20.6° of roll → a full 179°). That is not this constant's
- * job to fix — a raycast wheel cannot see a vertical kerb face until its centre crosses the edge, which is
- * plan 06's kerb probe. Recorded here so nobody re-raises this number instead of fixing the kerb.
+ * comet flipped on the kerb-strike replay without it (20.6° of roll → a full 179°). That is not this
+ * constant's job to fix — a raycast wheel cannot see a vertical kerb face until its centre crosses the edge,
+ * which is plan 06's kerb probe. Recorded here so nobody re-raises this number instead of fixing the kerb.
+ *
+ * **That flip no longer reproduces at head** (2026-07-27 regression pack: comet `kerb-strike` peaks at 14.2°
+ * of roll, no flip, on any of the five cars). Do not read it as fixed: the capture's new position channel
+ * showed the lap never gets to test a kerb — it ends against a traffic light at (2221.8, 1203.3) — so the
+ * scene stopped being evidence, not the mechanism. The mechanism itself is still measurable, as the vertical
+ * spike a mount delivers (`kerb-mount`, 081/06 §2).
  */
 const CHASSIS_ANGULAR_DAMPING = 0.5;
 const CHASSIS_FRICTION = 0.4;

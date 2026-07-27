@@ -59,6 +59,9 @@ export interface TelemetryFrame {
   readonly heading: number;
   /** Nose-up angle (rad), positive UP. */
   readonly pitch: number;
+  /** Where the car WAS, world (GTA) space. Carried so a capture can say where something happened: a lap
+   *  that reports a 100 g spike and cannot name the spot cannot say whether it hit a kerb or a wall. */
+  readonly position: readonly [number, number, number];
   /** Right-side-down angle (rad). */
   readonly roll: number;
   /** Body slip angle (rad): where the car travels vs where it points. 0 under {@link SLIP_SPEED_FLOOR}. */
@@ -90,6 +93,8 @@ export interface VehicleSample {
   readonly linvel: readonly [number, number, number];
   /** Body orientation `[x, y, z, w]`. */
   readonly orientation: readonly [number, number, number, number];
+  /** Body position, world (GTA) space. */
+  readonly position: readonly [number, number, number];
   readonly steer: number;
   readonly throttle: number;
   readonly wheels: readonly VehicleWheelReading[];
@@ -207,7 +212,12 @@ export class VehicleTelemetry {
     // array the physics system overwrites in place every step, so holding the reference made `previous` and
     // `sample` the same numbers — and every rate derived from orientation read exactly 0. It cost a whole
     // sweep to notice: a u-turn capture reported `turnedDeg` 0.00 while the car was visibly going round.
-    this.previous = { ...sample, linvel: [...sample.linvel], orientation: [...sample.orientation] };
+    this.previous = {
+      ...sample,
+      linvel: [...sample.linvel],
+      orientation: [...sample.orientation],
+      position: [...sample.position],
+    };
     this.ring.push(frame);
 
     return frame;
@@ -244,6 +254,10 @@ export function computeFrame(
     handbrake: sample.handbrake,
     heading: motion.heading,
     pitch: Math.asin(clampUnit(forward[2])),
+    // COPIED, never aliased: the caller hands the car's live position array, and a frame that kept the
+    // reference would report the whole lap at wherever the car ended up (the same trap that made every
+    // orientation-derived rate read 0 — see `step`).
+    position: [sample.position[0], sample.position[1], sample.position[2]],
     // atan2 of the right axis against the up axis IS the roll about forward; negated so right-down is positive.
     roll: -Math.atan2(right[2], up[2]),
     slipAngle: motion.slipAngle,
