@@ -182,7 +182,11 @@ function setup(player: Vec3 = [0, 0, 0]): Harness {
 
 /** Car with hinge at the body origin, half-extents [1, 2], driver seat at [-0.4, 0, -0.16]. */
 function vehicleAt(position: Vec3): EnterableVehicle {
-  const rig = { setSpeed: (): undefined => undefined, setSteer: (): undefined => undefined } as unknown as VehicleRig;
+  const rig = {
+    setSpeed: (): undefined => undefined,
+    setSteer: (): undefined => undefined,
+    setThrust: (): undefined => undefined,
+  } as unknown as VehicleRig;
   const handle = new FakeVehicleHandle();
   handle.hinges.set('lf', [0, 0, 0]); // hinge at the body origin
 

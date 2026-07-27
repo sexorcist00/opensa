@@ -110,6 +110,8 @@ export class VehiclePhysicsSystem implements System {
       // the connection's lift minus the live spring length. The rig smooths it against raycast jitter.
       const lengths = this.physics.suspensionLengths(car.controller);
       car.rig.setLift(lengths.map((length, index) => (car.wheelLift[index] ?? 0) - length));
+      // …and WHETHER each wheel is on anything: a wheel in the air turns with the engine, not with the car.
+      car.rig.setContacts(this.physics.wheelContacts(car.controller));
 
       this.rollWheels(car, position, delta);
     }

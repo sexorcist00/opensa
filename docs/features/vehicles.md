@@ -118,6 +118,11 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   cambers about ITS OWN forward axis and a rolling one does not drag its lean round with it. 27 rows of the
   built `handling.cfg` author an axle, 19 of them a solid rear one (savanna, tornado, picador, sadler,
   blade, towtruck, tractor…).
+- **Wheels in the air** (plan 081/06, field report): a DRIVEN wheel with nothing under it spins with the
+  ENGINE, not with the car — the original's own rule (`CAutomobile::ProcessCarWheelPair`: 250 rad/s² forward,
+  125 backward, and its `±1.0` test is a refusal to fight a wheel already spinning the other way rather than
+  a speed cap). Every other airborne wheel runs down at 0.95 per 1/50 s. On the ground the wheel turns with
+  the car's real displacement, as before, so a parked car keeps its wheels still.
 - **Air control** (plan 081/06 §1): with every wheel off the ground for 0.15 s, W/S pitch the car, A/D roll
   it and A/D with the handbrake yaws it — the original's own block (`CAutomobile::ProcessControl`), which
   works out as `1.75 rad/s²` per unit of stick for any car up to 3000 `fTurnMass` and proportionally less

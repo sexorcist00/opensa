@@ -7,7 +7,11 @@ import { FakeVehicleHandle } from './vehicle-handle.fake';
 import { VehicleRig } from './vehicle-rig';
 
 /** A four-wheeled car 1.6 m across the track, both axles built the same way (plan 081/06 §3). */
-function carWith(type: AxleType, reverse = false): { handle: FakeVehicleHandle; rig: VehicleRig } {
+function carWith(
+  type: AxleType,
+  reverse = false,
+  drive: '4' | 'F' | 'R' = '4',
+): { handle: FakeVehicleHandle; rig: VehicleRig } {
   const wheels: VehicleWheelInfo[] = [
     { front: true, radius: 0.4 },
     { front: true, radius: 0.4 },
@@ -18,6 +22,7 @@ function carWith(type: AxleType, reverse = false): { handle: FakeVehicleHandle; 
   const axle = { reverse, type };
   const rig = new VehicleRig(handle, {
     axles: { front: axle, rear: axle },
+    drive,
     wheels: [
       { connection: [-0.8, 1.4, -0.3], front: true, radius: 0.4 }, // 0 = front LEFT (−X)
       { connection: [0.8, 1.4, -0.3], front: true, radius: 0.4 }, // 1 = front RIGHT
@@ -72,6 +77,27 @@ describe('VehicleRig', () => {
       rig.update(1);
 
       expect(handle.wheelState[0].lift).toBe(0);
+    });
+
+    it('does not spin an airborne wheel the engine cannot reach', () => {
+      // Rear-drive: the FRONT wheels have nothing turning them once they leave the ground.
+      const { handle, rig } = carWith('independent', false, 'R');
+      rig.setContacts([false, false, false, false]);
+      rig.setThrust(9000);
+
+      rig.update(0.25);
+
+      expect(handle.wheelState[0].spin).toBe(0); // front left
+      expect(handle.wheelState[2].spin).not.toBe(0); // rear left, driven
+    });
+
+    it('does not spin an airborne wheel while the driver is off the throttle', () => {
+      const { handle, rig } = carWith('independent');
+      rig.setContacts([false, false, false, false]);
+
+      rig.update(0.25);
+
+      expect(handle.wheelState[0].spin).toBe(0);
     });
 
     it('leans nothing on a car built without a suspension setup', () => {
@@ -187,6 +213,7 @@ describe('VehicleRig', () => {
       );
       const rig = new VehicleRig(handle, {
         axles: { front: { reverse: false, type: 'notilt' }, rear: { reverse: false, type: 'solid' } },
+        drive: '4',
         wheels: [
           { connection: [-0.8, 1.4, -0.3], front: true, radius: 0.4 },
           { connection: [0.8, 1.4, -0.3], front: true, radius: 0.4 },
@@ -199,6 +226,56 @@ describe('VehicleRig', () => {
 
       expect(handle.wheelState[0].camber).toBe(0); // frozen front axle
       expect(handle.wheelState[2].camber).toBeCloseTo(Math.atan2(-0.08, 1.6), 3);
+    });
+
+    it("spins a DRIVEN wheel in the air from the engine, at the original's rate", () => {
+      const { handle, rig } = carWith('independent');
+      rig.setContacts([false, false, false, false]);
+      rig.setThrust(9000); // any positive thrust: the original only reads its SIGN
+
+      for (let step = 0; step < 12; step += 1) {
+        rig.update(1 / 60); // 250 rad/s² for 0.2 s → 50 rad/s, ~5.4 rad of angle by then
+      }
+      const first = handle.wheelState[0].spin;
+      for (let step = 0; step < 12; step += 1) {
+        rig.update(1 / 60);
+      }
+
+      expect(first).toBeLessThan(-5); // negative = rolling forward
+      expect(first).toBeGreaterThan(-6);
+      // The original's ±1.0 test is not a speed cap, so a held throttle keeps winding the wheel up: the
+      // second window turns it further than the first, not the same amount.
+      expect(handle.wheelState[0].spin - first).toBeLessThan(first);
+    });
+
+    it('runs a free wheel down instead of stopping it dead', () => {
+      const { handle, rig } = carWith('independent');
+      rig.setSpeed(20);
+      rig.update(0.016); // rolling on the road at 20 m/s
+      const rolling = handle.wheelState[0].spin;
+
+      rig.setContacts([false, false, false, false]); // wheels leave the ground, no throttle
+      rig.update(0.1);
+      const justAfter = handle.wheelState[0].spin - rolling;
+      rig.update(0.4);
+      const later = handle.wheelState[0].spin - rolling - justAfter;
+
+      expect(justAfter).toBeLessThan(0); // still turning
+      expect(Math.abs(later / 4)).toBeLessThan(Math.abs(justAfter)); // …and slower every step
+    });
+
+    it('lets the road take a spun-up wheel back over when it lands', () => {
+      const { handle, rig } = carWith('independent');
+      rig.setContacts([false, false, false, false]);
+      rig.setThrust(9000);
+      rig.update(0.3); // wound up in the air
+      const before = handle.wheelState[0].spin;
+
+      rig.setContacts([true, true, true, true]);
+      rig.setSpeed(0); // touched down stopped: the wheel must stop with it, not keep spinning
+      rig.update(0.1);
+
+      expect(handle.wheelState[0].spin).toBeCloseTo(before, 6);
     });
 
     it('smooths later lift changes instead of snapping (raycast jitter must not read as a vibrating wheel)', () => {

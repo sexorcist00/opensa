@@ -21,6 +21,7 @@ function fakePhysics(transform: Transform): PhysicsWorld {
   return {
     readBody: (): Transform => transform,
     suspensionLengths: (): number[] => [],
+    wheelContacts: (): boolean[] => [],
   } as unknown as PhysicsWorld;
 }
 
@@ -28,6 +29,7 @@ function fakePhysics(transform: Transform): PhysicsWorld {
 function fakeRig(): { rig: VehicleRig; speed: number } {
   const state = { rig: null as unknown as VehicleRig, speed: 0 };
   state.rig = {
+    setContacts: (): void => undefined,
     setLift: (): void => undefined,
     setSpeed: (value: number): void => {
       state.speed = value;

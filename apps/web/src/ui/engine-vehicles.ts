@@ -330,6 +330,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       // `modelFlags`, the track width from the same hub placements the physics is given.
       const rig = new VehicleRig(handle, {
         axles: { front: data.handling.axleFront, rear: data.handling.axleRear },
+        drive: data.handling.drive,
         wheels,
       });
       const { body, controller, wheelLift } = physics.createDynamicVehicle(

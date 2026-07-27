@@ -854,6 +854,9 @@ export class EnterVehicleSystem implements System {
     });
     this.controls = { brake, engineForce: this.engine, gear, handbrake, steer: this.steerAngle, throttle };
     car.rig.setSteer(this.steerAngle); // front wheels turn with the physics steer
+    // The drivetrain's own output, not the key: it is what spins a DRIVEN wheel that has nothing under it
+    // (the original's `acceleration`), and it is zero while coasting or braking — so a free wheel runs down.
+    car.rig.setThrust(this.engine);
   }
 
   /** Snap the rider onto the driven car's (full-transform) seat, after the step moved it. */

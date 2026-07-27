@@ -1377,8 +1377,6 @@ export class PhysicsWorld {
     return this.surfaceGrip && this.tyreAdhesion !== null;
   }
 
-  /** Per-wheel suspension lengths only — the drawn wheels follow them every fixed step (plan 081/06 §3),
-   *  and the full {@link readVehicleWheels} reading would be nine fields of waste per wheel per frame. */
   suspensionLengths(controller: VehicleController): number[] {
     const lengths: number[] = [];
     for (let i = 0; i < controller.numWheels(); i += 1) {
@@ -1458,6 +1456,19 @@ export class PhysicsWorld {
 
   vehicleSpeed(controller: VehicleController): number {
     return controller.currentVehicleSpeed();
+  }
+
+  /** Per-wheel suspension lengths only — the drawn wheels follow them every fixed step (plan 081/06 §3),
+   *  and the full {@link readVehicleWheels} reading would be nine fields of waste per wheel per frame. */
+  /** Which wheels are touching anything, in wheel order — the drawn wheels read it to know whether they turn
+   *  with the road or with the engine (plan 081/06). */
+  wheelContacts(controller: VehicleController): boolean[] {
+    const contacts: boolean[] = [];
+    for (let i = 0; i < controller.numWheels(); i += 1) {
+      contacts.push(controller.wheelIsInContact(i));
+    }
+
+    return contacts;
   }
 
   private addBox(body: RapierBody, box: ColliderBox): number {
