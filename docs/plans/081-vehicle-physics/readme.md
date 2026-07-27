@@ -133,6 +133,23 @@ What it still needs, when the row is picked up:
 8. **Measurements ledger per sub-plan** (standing rule), including the fixed-step cost budget:
    vehicle physics for 8 live cars ≤ 0.5 ms per fixed step, measured at plan 07.
 
+## The DRCVC quirks ledger — final state (07 §4)
+
+Ground rule 4 says this list is load-bearing: each row is a place where Rapier's raycast controller does not
+behave the way the code above it would assume, and each one cost a session to find. **A change touching the
+adjacent code re-verifies the quirk's test.** As the chain closes, this is the whole set:
+
+| Quirk                                                                                                   | Where the workaround lives                       | Its test                             |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------ |
+| `currentVehicleSpeed` reports a **phantom ~0.95 at rest** → reverse reads as forward                     | `drive()` takes the speed from the BODY velocity  | `enter-vehicle.system.test.ts`       |
+| Reverse **cannot start from a dead stop**                                                                 | `seedReverse` kicks 1 m/s backward, once          | `physics-world.test.ts` (`seedReverse`) |
+| A parked car **creeps** with no brake on it                                                              | `PARKING_BRAKE = 80` at spawn, released by throttle | `enter-vehicle.system.test.ts` (seat/parking path) |
+| The **friction clamp is skipped in a straight line** (`skid_info` applies only with a side impulse)      | our own longitudinal clamp in `setVehicleControls` | `physics-world.test.ts`              |
+| The friction circle weighs **braking at half, cornering at full**, so a "locked" wheel still grips        | `LOCKED_SIDE_FRICTION = 0.03` while the lever is up | `physics-world.test.ts`             |
+| **No skid state is exposed**                                                                             | sliding inferred from last step's impulses         | `physics-world.test.ts`              |
+| A suspension **ray sees nothing until the world has stepped once** (the query pipeline is built in `step`) | the surface probe's own guard + its fixture       | `physics-world.test.ts` (081/10)     |
+| Wheel order is the **model's dummy order**, not FL/FR/RL/RR                                              | everything per-wheel is keyed by placement, never by index | `phys-capture` / stance tests |
+
 ## Cross-links
 
 - **080/05 vehicle camera** consumes `speed`, `velocityDir`, and (new here) a slip proxy — drift

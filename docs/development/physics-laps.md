@@ -109,7 +109,10 @@ Two rules worth repeating here:
 
 The summary's channels: `topSpeedKmh`, `timeTo100S`, `brake {distanceM, fromKmh, seconds}`,
 `pitchUnderBrakeDeg`, `pitchDeg`/`rollDeg` ranges, `slipMaxDeg`, `turnedDeg` (integrated — counts a whole
-spin), `gLong`/`gLat`/`gVert` ranges, `airborneS`, `flip {atKmh, atS}`, and `step` — the steering-step
+spin), `gLong`/`gLat`/`gVert` ranges, `airborneS`, `air {atS, seconds, pitchDeg}` — the LONGEST unbroken flight and
+what the nose did during it, which is the only channel a jump can be judged on (`airborneS` is a total, and a
+lap that skips over a crest in a dozen hops reports the same second of air as one that flies) —
+`flip {atKmh, atS}`, and `step` — the steering-step
 transient (`yawRiseS`, `yawSettledDegS`, `slipSettledDeg`, `yawOvershoot`, `speedAtStepKmh`), found in the
 data rather than taken from the scene.
 

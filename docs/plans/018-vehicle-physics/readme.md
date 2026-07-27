@@ -1,5 +1,13 @@
 # 018 — Real vehicle physics (GTA-style dynamic car)
 
+> **This plan is the FOUNDATION, not the current state of driving.** It put a dynamic chassis on Rapier's
+> raycast controller and made the car collide as its own COL — everything below still holds. What a car FEELS
+> like was rebuilt on top of it by
+> [081 — vehicle driving physics](../081-vehicle-physics/readme.md): `handling.cfg` read as truth (COM,
+> springs, gears, brakes, tyres), the SA standing pose, the steering limiter, surface grip, air control and
+> visible suspension. Read 081 first for anything about behaviour; read this one for how the body, the
+> collider and the controller came to be.
+
 ## Why
 
 The arcade-kinematic drive (plan 017) is the wrong base: the user needs the car to be a **dynamic
