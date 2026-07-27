@@ -1,12 +1,17 @@
 # 081 — Vehicle driving physics (feel overhaul on the own engine)
 
-**Status: 01–05 SHIPPED and field-accepted (2026-07-26); 06 and 07 open; 08 (SA gravity) CLOSED-REJECTED
-(2026-07-27, postmortem `../../postmortem/081-vehicle-physics/sa-faithful-feel.md` — do not reopen); 09
-(responsive steering at speed) SHIPPED 2026-07-27 — `09-speed-steering.md`. The stance law and
-visible suspension travel from the audit rounds are shipped on main.** Supersedes the idea at
+**Status: 01–07 SHIPPED — the chain is code-complete and AWAITING ONE FIELD ROUND** (2026-07-27; the three
+drives it needs are listed in the close-out audit). 01–05 field-accepted 2026-07-26; 06 shipped 2026-07-27
+(air control + camber; its §2 kerb assist CLOSED as not-needed by the field); 07 shipped the regression pack,
+the vehicle-slice price, the class sweep — whose class-factor table came out EMPTY by measurement — and the
+close-out; 08 (SA gravity) CLOSED-REJECTED (postmortem `../../postmortem/081-vehicle-physics/sa-faithful-feel.md`
+— do not reopen); 09 (responsive steering at speed) SHIPPED; 10 (surface types) steps 1–5 shipped and shelved
+as an [open issue](../../open-issues/offroad-feels-like-tarmac.md).** Supersedes the idea at
 `docs/ideas/0.4.0/plans/07-vehicle-physics/` (2026-07-12, "THE priority gameplay task") — rethought against
 what the engine actually is now. The audit of what the chain cost and bought:
-[`docs/audit/vehicle-physics-081.md`](../../audit/vehicle-physics-081.md).
+[`docs/audit/vehicle-physics-081.md`](../../audit/vehicle-physics-081.md), the instruments day's
+[`vehicle-physics-081-instruments.md`](../../audit/vehicle-physics-081-instruments.md), and the chain's
+[close-out](../../audit/vehicle-physics-081-closeout.md).
 
 **The gate (05) is answered: STAY on `DynamicRayCastVehicleController`.** Every complaint the field raised
 turned out to be a number this engine had guessed where the game ships the answer, not a ceiling in the
@@ -82,8 +87,8 @@ positive gate verdict swaps the controller without invalidating the chain.
 | 04  | [Drivetrain + brakes](04-drivetrain-brakes.md) **SHIPPED** | Gears + drive type F/R/4, engine braking, brake bias, handbrake = rear grip cut (the SA slide), reverse rework.                      |
 | 05  | [Tyres + steering + THE GATE](05-tyres-steering-gate.md) **SHIPPED** | Traction mapping, steering feel v2, counter-steer assist; gate verdict: DRCVC tyre ceiling → own controller go/no-go.                |
 | 05b | Damageable tyres (see below)                              | Burst a tyre: grip drops on that corner, the car pulls, the wheel sits on its rim. The detection half already shipped.               |
-| 06  | [Air, kerbs, visual suspension](06-air-kerbs-visual.md)  | In-air attitude control, kerb contact smoothing, VISIBLE suspension travel through the rig.                                          |
-| 07  | [Presets + physics CI](07-presets-regression.md)         | Per-class field sweep (sports/truck/bus), replay regression pack with tolerance bands, close-out.                                    |
+| 06  | [Air, kerbs, visual suspension](06-air-kerbs-visual.md) **SHIPPED** | §1 air control (the original's own turn forces, `?airCtl`), §3 visible travel + camber from the authored axle. §2's kerb assist is CLOSED as not-needed — the field could not reproduce the block. |
+| 07  | [Presets + physics CI](07-presets-regression.md) **SHIPPED** | The regression pack + its gate, the vehicle slice priced, the five-class sweep (no class factor needed), and the close-out. The pack owes a re-record on the two jump scenes IF the field accepts air control — see its ledger. |
 | 08  | [SA gravity](08-sa-gravity.md) **CLOSED-REJECTED**       | The 2g experiment — built, measured, field-rejected same day; postmortem carries the two findings. Do not reopen.                    |
 | 09  | [Responsive steering at speed](09-speed-steering.md) **SHIPPED** | Speed-growing lateral grip (virtual downforce) + the SLIDE_SPEED 50× unit-bug fix; longitudinal frozen at baseline; dials field-owned. |
 | 10  | [Surface types](10-surface-types.md) **1–5 SHIPPED** | The wheel learns what it stands on: COL materials through the seam, a per-wheel probe, grip from `surface.dat`'s group matrix instead of the tarmac-only 4.5. Field: applied and verified, but off-road reads as almost unnoticeable → [open issue](../../open-issues/offroad-feels-like-tarmac.md); wet grip → [roadmap 05 rain](../../roadmap/0.5.0/plans/05-weather-rain/readme.md). |

@@ -13,6 +13,11 @@ interpret them.
   four findings where the new instruments falsified the questions they were built for (the kerb scene never
   met a kerb; the flip that justified the work had stopped reproducing; `collisionDamageMult` scales
   nothing; the gate's own rule was wrong).
+- [`vehicle-physics-081-closeout.md`](./vehicle-physics-081-closeout.md) — the same chain's close-out: air
+  control ported from the original, wheels leaning the way their axle is authored, and a five-class sweep
+  that found the tuning generalises with **no class factor needed** — while three more scenes turned out to
+  measure something other than what they are named after. Also the number a tuning round needs: the vehicle
+  slice repeats to ±5 %.
 - [`ped-locomotion-feel.md`](./ped-locomotion-feel.md) — the plan-088 ped locomotion chain (both
   2026-07-24 rounds): a full modern locomotion + vehicle ingress/egress stack for ~zero runtime cost
   (blended sample 8.2 µs vs 6.0 µs; no render-side change) and +~100 unit tests.

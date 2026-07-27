@@ -59,7 +59,7 @@ and close the bookkeeping.
       (benchmarks index, 2026-07-27 close-out row).
 - [x] Regression pack committed + harness lane + bands from accepted captures (2026-07-27, ledger below).
 - [x] Perf measurement + breakdown (2026-07-27); damage-coupling check — **there is no coupling to check**, see §3.
-- [ ] Docs/close-out items above.
+- [x] Docs/close-out items above (2026-07-27) — see the close-out audit; the last one open is the FIELD round.
 
 ## Acceptance
 

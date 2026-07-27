@@ -55,8 +55,12 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   [`audit/vehicle-physics-081.md`](../audit/vehicle-physics-081.md). **08 (SA gravity) closed-rejected and
   09 (speed steering) SHIPPED 2026-07-27**; the same day 07's regression pack (5 cars × 11 scenes, gated by
   `scripts/phys-regression.ts`) and its step-cost measurement landed, and 06 §2's kerb assist was closed by
-  the field as not needed. **Open: 06 §1/§3, 07's class sweep and close-out, and 10 (surface types).**
-  Promoted from ideas/0.4.0/07.
+  the field as not needed. **CODE-COMPLETE 2026-07-27**: 06 §1 air control (the original's own turn forces,
+  `?airCtl`) and §3 camber from the authored axle, then 07's five-class sweep — which found the tuning
+  generalises and left the class-factor table EMPTY — and the close-out
+  ([audit](../audit/vehicle-physics-081-closeout.md)). **What is left is ONE field round** (jumps, a
+  solid-axle car through a corner, one drive per class); 10 (surface types) is shipped-and-shelved as an
+  open issue. Promoted from ideas/0.4.0/07.
 - **[080 — Cinematic camera](./080-cinematic-camera/readme.md)** — GTA V-feel follow camera: per-channel
   springs/lag, auto-center + look-ahead, collision whiskers, vehicle speed/FOV/drift framing, bob/shake,
   7 sub-plans + priority chain. **01–07 DONE 2026-07-25** — the on-foot baseline, collision and the
