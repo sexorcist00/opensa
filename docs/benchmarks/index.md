@@ -211,6 +211,15 @@ scene-teleport/spawn frames (`other` 76–225 ms — the vehicle-model-builder d
 `country-dusk`'s known GPU-bound pass.
 Run: [`2026-07-27-ingame-after-texture-upload-fix.json`](opensa-engine/2026-07-27-ingame-after-texture-upload-fix.json).
 
+### 2026-07-27 — 080/09 follow-policy microbench: the new writers cost nothing measurable
+
+The camera revision (directional yaw authority, run/idle distance breathing, the vehicle launch stretch)
+re-ran the 080-series stepCamera microbench with the new writers live every step: foot 0.51/0.60 µs
+mean/p95, vehicle 0.68/0.79 — ~60–100× under plan 080's 0.05 ms budget. A DIFFERENT trace from the
+2026-07-25 rows (the foot leg runs away so the authority works every step), so compare against the budget,
+not row-to-row.
+Run: [`2026-07-27-microbench-080-09-follow-policy.json`](opensa-engine/2026-07-27-microbench-080-09-follow-policy.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

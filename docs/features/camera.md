@@ -44,10 +44,11 @@ ON FOOT only for now (the vehicle versions are plan 05):
 
 - **Turn-follow**: a heading change faster than `turnThreshold` swings the camera behind the new direction
   through the steered-yaw channel and stops once it is within `settleEpsilon`. A straight run never engages
-  it — a framing the player chose survives the whole run.
+  it — a framing the player chose survives the whole run. (Since 09 it also demands near-full directional
+  authority, which on foot it almost never has — see the follow policy below.)
 - **Idle recenter**: after `recenterDelaySec` of untouched look, a MOVING player is eased behind at
-  `recenterRate` scaled by speed (a walk barely drifts home, a sprint commits). Standing still never
-  recenters — a parked camera is left alone.
+  `recenterRate` scaled by speed (a walk barely drifts home, a sprint commits) — and, since 09, scaled by
+  the directional authority too. Standing still never recenters — a parked camera is left alone.
 - **In a car too**: auto-center runs on foot AND while driving (the camera settles behind the car's rear).
   Only the look-ahead lean stays on foot — a car's lean is drift framing (plan 05).
 - **Enter/exit glide**: while a scripted enter/exit plays (`EnterVehicleSystem.isSettling()` → the snapshot's
@@ -90,6 +91,32 @@ transition a blend rather than a switch — and it is the rule plan 08's view pr
 - Enter/exit needs no special case: `aimCamera` already routes through the damped `steerYaw` (plan 02), the
   tables blend, and every channel keeps its state across the transition — the continuity test scripts
   seat → drive → exit and asserts no cut.
+- **Look-behind** (05 §6): hold `controls.lookBehind` (**C**; unbound = off) while driving and the yaw
+  target flips to the car's FRONT — the camera sits ahead, looking back over it — through
+  `lookBehindLagTime` (0.15 s, its own one-swing lag override on the steered channel; a mirror check is a
+  glance). Release swings back BEHIND through the same lag, fired explicitly on the falling edge (a
+  standing car has no chase to bring the camera home). Re-asserted every frame, so the mouse cannot wrestle
+  the hold; on foot and in fly the key does nothing. V stays reserved for plan 08's view presets.
+
+**The follow policy** (plan 080/09, from the user's field brief — both field rounds accepted same-day):
+
+- **Movement never turns the camera, except easing behind a walk AWAY.** One continuous rule — the
+  directional yaw authority, `smoothstep(footYawAuthorityStart, footYawAuthorityFull, away)` over the
+  normalized away-component of the smoothed focus velocity — scales the idle-recenter rate and gates the
+  turn-follow latch (near-full authority required) and the vehicle chase (any). A strafe holds the frame; a
+  steer the authority cuts short reports `released` and the director drops the in-flight target, so the
+  camera freezes rather than finishing an unjustified swing. The old backing-up suspension (the about-face
+  loop) is the authority's zero end; a reversing car gets the release for free.
+- **The distance breathes.** On foot a run opens it (`footRunDistanceGain`, faded in walk→`footRunFullSpeed`)
+  and REAL stillness (movement + look + zoom, its own clock — `autoCenter.idleFor` counts hands only) eases
+  it in by `footIdleDistanceEase` after `footIdleDelaySec` at a deliberately slow creep, returning at the
+  ordinary zoom pace on any input. In a car a LAUNCH stretches the framing: `vehicleAccelDistanceGain` × the
+  low-passed positive acceleration (derived from the snapshot's own signed speed — no new physics tap;
+  a one-frame gear blip moves the framing under 5 cm, pinned). Braking and reverse never stretch.
+- **The `[cam] jump` watchdog** (host, perf-logs flag): a look-target jump > 1.5 m or an idle-mouse yaw
+  jump > 20° outside the legitimate discontinuities (teleport, mode switch, scripted seat sequence, fly,
+  bench) prints one line with the step state. Distance-channel moves are deliberately NOT watched — the
+  designed occlusion snap-ins live there.
 
 **Motion feel** (plan 080/06, behaviours #7 and #8) — the additive layer, applied LAST, after collision and
 the floor guard:
@@ -122,7 +149,12 @@ on foot AND in a car — the camera slides up the wall instead of passing throug
 (radius `collisionRadius`, near-plane cover) sweeps from the look point along −forward (whiskers OFF by
 default: the ±15° flanking casts fired on a pole/wall BESIDE you, not between you and the eye). It caps the
 distance, snap IN / ease OUT over `collisionReleaseTime`; the chosen zoom / car distance restores after the
-occlusion. The floor is `collisionMinDistance` — the near-plane radius (0.5): a wall closer than that pulls
+occlusion. Two 09 refinements: a hit on a body that can MOVE (`sphereCast` reports `dynamic` — dynamic OR
+kinematic, so peds count) takes the eased path in BOTH directions, because a passer-by crossing the line is
+not a wall about to be shown and the instant yank read as an unexplained jump; and a FALLING desired
+distance is followed directly (`shown = min(shown, desired)`) — it is the zoom channel's own smoothed
+glide, and treating it as an arriving occluder made the end of the seat-entry ease window complete the
+lag as a slam (09 field round 1's constantly-reproducing entry jump). The floor is `collisionMinDistance` — the near-plane radius (0.5): a wall closer than that pulls
 the eye right up to the surface, so it may clip INTO the ped for a frame, but it never slides BEHIND the wall
 (which reads far worse) and it never stalls. A floor guard lifts the eye to `groundBelow(eye) + 0.3`,
 running whenever the rig is attached (incl. a car enter/exit, so a low seat can't bury it). During a
@@ -174,21 +206,27 @@ caller-owned velocity, eases IN as well as out, `maxSpeed` cap). Both take dt �
 VARIABLE-rate section of the host loop, so frame-rate independence is tested, not assumed.
 
 **Config + tuning** (`Config.camera`): framing (`followDistance`, `followHeight`, `followZoom` + zoom
-bounds), look (`sensitivity`, `pitchMin`, `pitchMax`) and the 02 feel channels (`inputSmoothTime`,
+bounds), look (`sensitivity`, `pitchMin`, `pitchMax`), the 02 feel channels (`inputSmoothTime`,
 `positionLagTime`, `verticalLagTime`, `deadZone`, `lagMaxDistance`, `teleportSnapDistance`, `yawLagTime`,
-`zoomLambda`). All of it is live on the debug **Camera** screen (`cameraRig` capability, on for the engine
-host since 080/01) — field rounds tune with sliders, not rebuilds.
+`zoomLambda`), the 09 follow policy (`footYawAuthorityStart`/`Full`, `footRunDistanceGain`/`FullSpeed`,
+`footIdleDelaySec`/`DistanceEase`, `vehicleAccelDistanceGain`) and `lookBehindLagTime` (config-only — a
+tab row is one line away if a round asks). The key itself is `Config.controls.lookBehind`. All the tuned
+values are live on the debug **Camera** screen (`cameraRig` capability, on for the engine host since
+080/01) — field rounds tune with sliders, not rebuilds; every 09 default shipped exactly as first-guessed
+(both rounds, 2026-07-27).
 
 ## Known gaps / candidates
 
-- The 080/02 and /03 defaults are FIRST GUESSES — they have not survived a field round yet, and the dead zone
-  leaves the frame settling ~8 cm behind a focus that stopped (the price of a rock-still idle frame).
-- No vehicle framing (speed distance/FOV curves, turn lag, drift framing) — plan 05.
-- No bob / landing dip / impact shake / sprint FOV kick, and no motion-reduction toggle — plan 06.
-- No mode-transition blending (foot ⇄ vehicle ⇄ viewer) — plan 07.
-- No switchable view presets yet (a C-key ring per mode, first person included) — plan 08. The seam is
-  already in place: every tuned value reaches the rig as one `CameraConfig`-shaped object, so a preset is a
-  different object handed to the same `stepCamera`, never a second code path.
+- The dead zone leaves the frame settling ~8 cm behind a focus that stopped — the price of a rock-still
+  idle frame, field-accepted with the 02–04 round.
+- 05's full DRIVE field round (city corners at speed, handbrake drifts, highway, tunnel, repeated
+  enter/exit) is still owed as a set — the 09 rounds covered entries, launches and general driving.
+- No switchable view presets yet (a **V**-key ring per mode, first person included — C went to
+  look-behind) — plan 08, deferred. The seam is already in place: every tuned value reaches the rig as one
+  `CameraConfig`-shaped object, so a preset is a different object handed to the same `stepCamera`, never a
+  second code path. The landing dip returns there.
+- Plan 10 (AAA polish) is authored and unstarted: corner peek, speed pose, fall stretch, directional impact
+  kick, wind shake — additive, individually deniable, one field verdict at a time.
 - No gamepad look — there is no gamepad input path at all.
 - `followLerp` / `followPolar` / `followMinPolar` / `followMaxPolar` are 036-era fields the own-engine rig
   does not read; they stay in `CameraConfig` until the chain closes and replaces them.
@@ -197,18 +235,23 @@ host since 080/01) — field rounds tune with sliders, not rebuilds.
 
 `ui/camera/camera-input.test.ts` (gesture conservation, settle time, rate independence),
 `ui/camera/auto-center.test.ts` (the behind-yaw convention, straight runs never engaging, the grace window,
-stand-still exclusion, walk-vs-sprint recenter rates), `ui/camera/look-ahead.test.ts` (speed scaling, the
-cap, the fade home, rate independence),
+stand-still exclusion, walk-vs-sprint recenter rates, and the 09 authority group — no arm without near-full
+authority, the mid-swing release, the suppressed chase, the rate scaling),
+`ui/camera/look-ahead.test.ts` (speed scaling, the cap, the fade home, rate independence),
 `ui/camera/follow-rig.test.ts` (no overshoot, dead zone holds still, vertical slower than planar, the lag
 floor at a 12 m/s sprint, teleport snap, 1/120-vs-1/20 agreement),
 `ui/camera/camera-collision.test.ts` (snap-in/ease-out asymmetry, min distance, whisker min, floor guard,
-GTA-space cast) and `physics/physics-world.test.ts` (raycast/sphereCast hit distance, exclusion, ball
-stop-short),
+GTA-space cast, the dynamic-hit ease vs the static snap, and the falling-desired glide with nothing left
+for an eased window's end to snap) and `physics/physics-world.test.ts` (raycast/sphereCast hit distance,
+exclusion, ball stop-short, the can-move flag),
 `ui/camera/camera-director.test.ts` (the parity gate: with every smoothing channel zeroed the director
 reproduces the pre-080 stick camera over a scripted look+zoom sequence; mode clamps, zoom notches, fly
-walk/pan/dolly, top-down snap; and the vehicle group — the lens widening only in a car and easing back on
+walk/pan/dolly, top-down snap; the vehicle group — the lens widening only in a car and easing back on
 foot, the distance opening with speed and gliding back, settling behind where the car TRAVELS in a slide,
-and seat → drive → exit crossing with no cut),
+and seat → drive → exit crossing with no cut; the 09 follow-policy group — a strafe and a run at the
+camera hold the yaw for good, the run/idle distance breathing, the gear-blip robustness and the
+launch-stretch-then-settle shape; and the look-behind group — the foot no-op, the mouse-wrestle, both
+swing directions at rest and the fast-lag property),
 `ui/camera/camera-transitions.test.ts` (the whole session as ONE snapshot sequence — walk → climb in →
 drive → climb out → map viewer → back → respawn — asserting the eye never moves against its focus by more
 than 1 u/frame except on three declared transitions),

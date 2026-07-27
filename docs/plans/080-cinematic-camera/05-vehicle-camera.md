@@ -211,4 +211,8 @@ steered-yaw channel (the channel gained a one-swing `yawLagOverride`, cleared wi
 every frame so the mouse cannot wrestle the hold. On foot and in fly the key does nothing. **C is chosen
 over the plan's original "KeyC-class" hedge because GTA V uses C for exactly this; plan 08's view presets
 take V (SA's own camera key) when they come.** Pinned: foot no-op, mouse-wrestle, both swing directions at
-rest, and the fast-lag property. The key awaits its part of the next drive field round.
+rest, and the fast-lag property.
+
+**FIELD-ACCEPTED same day** — the user drove it and confirmed it works exactly as intended (paraphrased:
+"everything works great"); `lookBehindLagTime` 0.15 ships as authored. §6 is closed. The drive-heavy field
+round above remains this plan's one open item.

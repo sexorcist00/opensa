@@ -124,11 +124,19 @@ to add one, the capture schema, how to read a failed lap, and the gotchas five s
   `?loader=http-dir` + `npm run serve:static` (`tools-debug/bench-harness`); one-liners in
   [`docs/commands.md`](../commands.md). The served dir must be an opensa-pack `--out`.
 - **The `[slow]` frame breakdown** — the dev-mode console line (Perf screen toggle) for any frame over
-  20 ms: `render (submit) · stream (blob N worst M) · camera · fixed (steps: controller + physics · cars) ·
-  collision · vehicles · ped · anim · other`, plus draws / cells / bodies / colliders. **Read `other`
-  first** — it is what the loop did NOT account for, and a 2026-07-27 field report of 20-250 ms frames was
-  90-98 % `other` until `blob` (the pak worker's texture upload, which runs BETWEEN frames) was given its
-  own timer. A stall outside the loop cannot be found by reading the loop.
+  20 ms: `render (submit) · stream (blob N worst M upload U) · camera · fixed (steps: controller + physics ·
+  cars) · collision · vehicles · ped · anim · other`, plus draws / cells / bodies / colliders. **Read
+  `other` first** — it is what the loop did NOT account for, and a 2026-07-27 field report of 20-250 ms
+  frames was 90-98 % `other` until `blob` (the pak worker's texture upload, which ran BETWEEN frames) was
+  given its own timer. A stall outside the loop cannot be found by reading the loop. `blob`/`worst` are the
+  handler's residue (decode + createTexture) and `upload` is the budgeted in-frame drain, after the fix
+  moved the writes into `StreamingDriver.update` (`docs/performance/applied/texture-upload-budget.md`).
+- **The `[cam] jump` watchdog** — same Perf toggle: one line when the camera's look target jumps > 1.5 m,
+  or the yaw jumps > 20° on an idle mouse, outside every legitimate discontinuity (teleport, mode switch,
+  scripted seat sequence, fly, bench) — with the step state (mode, dt, distance, collision shown). Quiet on
+  a healthy session. Distance-channel moves are deliberately not watched: the designed occlusion snap-ins
+  live there (plan 080/09 §4.1; the seat-entry slam it hunted turned out to be a distance-channel glide,
+  found by reading `resolveCollision` against the report).
 - **Shader-term probe** — temporarily output a shader term as the fragment colour, shoot headless,
   compare against expectation. Reading the code had pointed at the wrong cause twice in 084.
 - **Spot rebake (no full pmb run)** — APFS-clone the build (`cp -Rc build/original build/.x`), rebake
