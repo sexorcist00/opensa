@@ -1,6 +1,8 @@
 # 080 — Cinematic camera (GTA V-feel follow camera for the own engine)
 
-**Status: 01–07 DONE and ACCEPTED (2026-07-25); 08 deferred by the user.** Planned 2026-07-19.: the damp/spring math and the
+**Status: 01–07 DONE and ACCEPTED (2026-07-25); 08 deferred by the user; REOPENED 2026-07-27 with 09
+(follow-policy revision, from the user's field brief) and 10 (AAA polish) — 09 first, 10 after it.**
+Planned 2026-07-19.: the damp/spring math and the
 `CameraDirector` in `apps/web/src/ui/camera/` (01), the smoothed rig — input dampening, a trailing look
 point with a dead zone, the steered-yaw channel, gliding zoom (02), the composition layer — turn-follow,
 idle recenter, look-ahead (03), collision — a `PhysicsWorld` sphere/ray-cast API, snap-in/ease-out, a
@@ -164,6 +166,8 @@ offsets are amplitude-capped below the collision margin.
 | 06  | [Motion feel](06-motion-feel.md)                         | Bob, landing dip, impact shake, sprint FOV kick, motion-reduction toggle.                                           |
 | 07  | [Transitions + polish](07-transitions-polish.md)         | Mode blending, pitch-coupled framing, field-tuning rounds, bench guard, close-out.                                  |
 | 08  | [View presets](08-view-presets.md)                       | The C key cycles named view presets per mode (far/normal/close/**first-person**, bumper in cars).                   |
+| 09  | [Follow-policy revision](09-follow-policy-revision.md)   | Movement never turns the camera (directional yaw authority), run/idle distance breathing, vehicle accel pull, the jump watchdog + dynamic-collision ease. |
+| 10  | [AAA polish](10-aaa-polish.md)                           | Corner peek, speed pose, fall stretch, directional impact kick, wind shake — additive, individually deniable, after 09. |
 
 Execution order and the reasoning behind it: [priority.md](priority.md).
 
