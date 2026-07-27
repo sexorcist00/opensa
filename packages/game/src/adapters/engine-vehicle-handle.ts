@@ -19,6 +19,7 @@ import type {
   VehiclePose,
   VehicleQuat,
   VehicleWheelInfo,
+  VehicleWheelPose,
 } from '../vehicle/vehicle-handle';
 import type { VehicleLampState } from '../vehicle/vehicle-lamps';
 
@@ -173,13 +174,15 @@ export class EngineVehicleHandle implements VehicleHandle {
     writeWorld(WORLD, gtaToEngine(position), rotation);
     this.instance.entity.setRoot(WORLD);
   }
-  setWheel(index: number, spin: number, steer: number): void {
+  setWheel(index: number, pose: VehicleWheelPose): void {
     const wheel = this.data.wheels[index];
     if (!wheel) {
       return;
     }
     // Steer about the vehicle's up (Z), then spin about the axle (X) — prod's composition order.
-    this.instance.entity.setPartRotation(wheel.part, quatMul(axisAngle(2, steer), axisAngle(0, spin)));
+    this.instance.entity.setPartRotation(wheel.part, quatMul(axisAngle(2, pose.steer), axisAngle(0, pose.spin)));
+    // Suspension travel: the wheel part slides along the body's local Z (the model frame is Z-up like GTA).
+    this.instance.entity.setPartTranslation(wheel.part, [0, 0, pose.lift]);
   }
 
   private partIndex(name: string): null | number {

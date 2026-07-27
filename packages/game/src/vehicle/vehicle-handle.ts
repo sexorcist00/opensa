@@ -46,8 +46,9 @@ export interface VehicleHandle {
   setPartDamaged(name: string, damaged: boolean): void;
   /** Chassis pose from the rigid body (native Z-up). */
   setTransform(position: Vec3, rotation: VehicleQuat): void;
-  /** One wheel's spin (about the axle) and steer (about up), in radians. */
-  setWheel(index: number, spin: number, steer: number): void;
+  /** One wheel's pose — a shaped argument on purpose (plan 081/06 §3.3): positional numbers about
+   *  different axes are how a sign bug ships. Camber joins here when 06 lands its axle rules. */
+  setWheel(index: number, pose: VehicleWheelPose): void;
   readonly wheels: readonly VehicleWheelInfo[];
 }
 
@@ -71,4 +72,14 @@ export interface VehicleWheelInfo {
   front: boolean;
   /** Wheel radius in world units (roll = distance / radius). */
   radius: number;
+}
+
+/** One wheel's drawn pose. */
+export interface VehicleWheelPose {
+  /** Offset from the model hub along vehicle-local Z (m), negative = dropped — the suspension travel. */
+  lift: number;
+  /** Roll about the axle (rad). */
+  spin: number;
+  /** Steer about vehicle up (rad). */
+  steer: number;
 }

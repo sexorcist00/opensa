@@ -187,6 +187,7 @@ function vehicleAt(position: Vec3): EnterableVehicle {
     renderPosition: [...position],
     rig,
     seatLocal: [-0.4, 0, -0.16],
+    wheelLift: [0, 0, 0, 0],
     wheels: [
       { connection: [0.8, 1.5, -0.4], front: true, radius: 0.4 },
       { connection: [-0.8, 1.5, -0.4], front: true, radius: 0.4 },

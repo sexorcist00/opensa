@@ -31,6 +31,14 @@ describe('VehicleRig', () => {
 
       expect(handle.wheelState[0].steer).toBe(0);
     });
+
+    it('draws the wheel at the hub while no suspension has been fed in', () => {
+      const { handle, rig } = rigWith({ front: false, radius: 1 });
+
+      rig.update(1);
+
+      expect(handle.wheelState[0].lift).toBe(0);
+    });
   });
 
   describe('positive cases', () => {
@@ -61,6 +69,27 @@ describe('VehicleRig', () => {
       rig.update(1); // total distance = 2 → spin −2
 
       expect(handle.wheelState[0].spin).toBeCloseTo(-2);
+    });
+
+    it('SEEDS the lift from the first sample — a spawned car must not visibly drop onto its springs', () => {
+      const { handle, rig } = rigWith({ front: false, radius: 1 });
+
+      rig.setLift([-0.12]);
+      rig.update(0.016);
+
+      expect(handle.wheelState[0].lift).toBeCloseTo(-0.12);
+    });
+
+    it('smooths later lift changes instead of snapping (raycast jitter must not read as a vibrating wheel)', () => {
+      const { handle, rig } = rigWith({ front: false, radius: 1 });
+      rig.setLift([-0.1]);
+      rig.update(0.016);
+
+      rig.setLift([-0.2]);
+      rig.update(0.016); // one 60 Hz step at 25 1/s → 40 % of the way, not all of it
+
+      expect(handle.wheelState[0].lift).toBeGreaterThan(-0.2);
+      expect(handle.wheelState[0].lift).toBeLessThan(-0.1);
     });
   });
 });

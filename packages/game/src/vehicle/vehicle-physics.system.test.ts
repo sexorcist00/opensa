@@ -18,13 +18,17 @@ const CAR_BODY = 3;
 
 /** A physics world returning a settable body transform. */
 function fakePhysics(transform: Transform): PhysicsWorld {
-  return { readBody: (): Transform => transform } as unknown as PhysicsWorld;
+  return {
+    readBody: (): Transform => transform,
+    suspensionLengths: (): number[] => [],
+  } as unknown as PhysicsWorld;
 }
 
 /** A rig that records the last speed it was told to roll at. */
 function fakeRig(): { rig: VehicleRig; speed: number } {
   const state = { rig: null as unknown as VehicleRig, speed: 0 };
   state.rig = {
+    setLift: (): void => undefined,
     setSpeed: (value: number): void => {
       state.speed = value;
     },

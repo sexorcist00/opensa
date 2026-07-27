@@ -81,6 +81,8 @@ export interface EnterableVehicle {
   rig: VehicleRig;
   /** Driver seat position in vehicle space `[x, y, z]` (mirrored to the −X driver side). */
   seatLocal: [number, number, number];
+  /** Per-wheel connection lift above the model hub (m) — the drawn wheel's offset is `lift − springLength`. */
+  wheelLift: readonly number[];
   /** Raycast wheel placements (front flags for steering/drive). */
   wheels: VehicleWheelPlacement[];
 }
@@ -793,6 +795,7 @@ export class EnterVehicleSystem implements System {
       drive: hnd.drive,
       engine: this.engine,
       handbrake,
+      mass: hnd.mass,
       steer: this.steerAngle,
       step,
       traction: { bias: hnd.tractionBias, loss: hnd.tractionLoss, mult: hnd.tractionMult },

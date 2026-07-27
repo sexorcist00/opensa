@@ -120,6 +120,16 @@ describe('RigidEntity', () => {
       expect(apply(right.matrices, 0, [0, 0, 0])[1]).toBeCloseTo(-1, 5);
     });
 
+    it('an animation translation slides the part in its parent frame (081/06 suspension travel)', () => {
+      const entity = new RigidEntity([{ localRotation: [0, 0, 0, 1], localTranslation: [1, 2, 3], name: 'wheel_lf' }]);
+      entity.setPartTranslation(0, [0, 0, -0.12]);
+
+      entity.flatten();
+
+      expect(apply(entity.matrices, 0, [0, 0, 0])[2]).toBeCloseTo(2.88, 5); // 3 − 0.12, x/y untouched
+      expect(apply(entity.matrices, 0, [0, 0, 0])[0]).toBeCloseTo(1, 5);
+    });
+
     it('a uniform scale sizes the part without moving it (B5 wheelScale)', () => {
       const entity = new RigidEntity([
         { localRotation: [0, 0, 0, 1], localTranslation: [1, 2, 3], name: 'wheel', scale: 2 },

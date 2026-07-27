@@ -412,9 +412,13 @@ settled, each wheel's spring length, the load it carries, its radius, and **the 
 springs carry at all**. That last number exists for a failure mode nothing else reveals — a car resting partly
 on its collision hull reads normal everywhere while its tyres, whose grip is `μ × load`, quietly stop working.
 
-It answered both in one run. The turismo is fine: 99.9 % on its springs, four wheels in contact, 5 mm into a
-15 cm travel — its stance is the model's own (its wheels differ by axle, 0.7 front / 0.75 rear from
-`vehicles.ide`). The romero was broken:
+It answered both in one run — and the turismo half of the answer was WRONG, caught by the 2026-07-27 audit.
+What is true: 99.9 % on its springs, four wheels in contact. What this entry originally concluded from that —
+"5 mm into a 15 cm travel, its stance is the model's own" — compared the spring LENGTH (0.149 m) against the
+TRAVEL (0.150 m): the capture's own numbers give `restLength 0.200 − suspensionLength 0.149 = 5.1 cm` of
+sag, 34 % of the travel, sitting ON the 35 % clamp. The field complaint was dismissed on a number wrong by
+10×; the real cause (the wheel-at-hub standing pose vs the original's near-droop rest) is the audit
+addendum's second finding (`docs/audit/vehicle-physics-081.md`). The romero was broken:
 
 ```
 rear  spring length -0.033 m   load 8654 N    <- NEGATIVE: compressed past its own rest point
@@ -446,3 +450,21 @@ The sag-per-rate constant is a MEASURED BRIDGE and says so in the code: a force 
 same relation from four settled cars gives 1.06…1.21, 1.15 is used, residual ±7 % (under a centimetre of ride
 height). Rapier's settled length carries its damping and relaxation terms too; closing it properly means
 solving the controller's equilibrium instead of probing it.
+
+### 2026-07-27 — the standing pose follows the original's own rest law (the turismo verdict corrected)
+
+The 2026-07-26 entry above dismissed "the turismo looks slammed" on a mis-read number (corrected in place).
+The audit that reopened it (`docs/audit/vehicle-physics-081.md`, addendum) found the pose RULE wrong, not
+just the number: SA rests a car near full droop — `SetupSuspensionLines` computes the standing compression
+as `1 − 1/(4 × forceLevel)` of the span `upper − lower` (per corner `share/(forceLevel × axleBias)`,
+consistent with `ApplySpringCollision`'s `0.016` against gravity `0.008` at the raw bias) — so the wheel
+rests `|lower| − that deflection` BELOW its dummy, and the body correspondingly high. The wheel-at-hub rule
+this plan shipped sat every body low by exactly that, in proportion to `|lower|`: turismo (−0.20) ~12 cm,
+admiral (−0.15) ~10 cm, infernus (−0.10) ~5 cm, comet (−0.05) ~2 cm — the gradient that let the fleet pass
+seven field rounds while the turismo kept being called out.
+
+`suspensionSetup` now derives the per-corner rest offset from that law (`hubOffset`), the connection raise
+carries it, and the DRAWN wheel follows the physics spring length instead of the dummy (06 §3's travel
+channel, landed early as this fix's dependency: `RigidEntity.setPartTranslation` + the rig's smoothed lift).
+Pinned by a twin-car test: +0.10 m of |lower| stands the body 7.7 cm higher, where the old rule read 0.
+Field verdict: pending. Still owed: an absolute ride-height probe — no capture yet measures body-to-ground.

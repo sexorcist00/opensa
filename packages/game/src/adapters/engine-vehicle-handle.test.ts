@@ -12,6 +12,7 @@ function instance(): { matrices: Float32Array; probe: VehicleInstance; visible: 
   const entity = {
     matrices,
     setPartRotation: (): undefined => undefined,
+    setPartTranslation: (): undefined => undefined,
     setPartWorldMatrix: (part: number, matrix: Float32Array | null): void => {
       if (matrix) {
         matrices.set(matrix, part * 16);
@@ -268,7 +269,7 @@ describe('EngineVehicleHandle detached parts', () => {
       const { probe } = instance();
       const handle = new EngineVehicleHandle(probe, model(), () => undefined);
 
-      expect(() => handle.setWheel(7, 1, 0.2)).not.toThrow();
+      expect(() => handle.setWheel(7, { lift: 0, spin: 1, steer: 0.2 })).not.toThrow();
     });
 
     it('a door side the model does not have is ignored', () => {

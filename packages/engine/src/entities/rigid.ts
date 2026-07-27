@@ -34,6 +34,8 @@ export class RigidEntity {
     return this.parts.length;
   }
   private readonly animQuat: Float32Array;
+  /** Per-part animation translation (plan 081/06 §3.2) — suspension travel is the first rider. */
+  private readonly animTranslation: Float32Array;
   /** Per-part flag: 1 = the part carries its own world matrix (detached debris) and ignores root/locals. */
   private readonly detached: Uint8Array;
   private readonly detachedMatrix: Float32Array;
@@ -43,10 +45,12 @@ export class RigidEntity {
   private readonly root = new Float32Array(16);
 
   private readonly scratch = new Float32Array(16);
+  private readonly translation: [number, number, number] = [0, 0, 0];
 
   constructor(private readonly parts: readonly RigidPartInit[]) {
     this.matrices = new Float32Array(parts.length * 16);
     this.animQuat = new Float32Array(parts.length * 4);
+    this.animTranslation = new Float32Array(parts.length * 3);
     this.detached = new Uint8Array(parts.length);
     this.detachedMatrix = new Float32Array(parts.length * 16);
     for (let part = 0; part < parts.length; part += 1) {
@@ -56,8 +60,8 @@ export class RigidEntity {
   }
 
   /**
-   * Recompute every part's world matrix: root × T(t) × R(localQ ⊗ anim) × S × offset. Detached parts pass
-   * their own world matrix straight through instead.
+   * Recompute every part's world matrix: root × T(t + animT) × R(localQ ⊗ anim) × S × offset. Detached parts
+   * pass their own world matrix straight through instead.
    */
   flatten(): void {
     for (let part = 0; part < this.parts.length; part += 1) {
@@ -68,7 +72,11 @@ export class RigidEntity {
       }
       const definition = this.parts[part];
       quatMultiply(this.quat, definition.localRotation, this.animQuat.subarray(part * 4, part * 4 + 4));
-      composeTrs(this.local, this.quat, definition.localTranslation, definition.scale ?? 1);
+      const at = part * 3;
+      this.translation[0] = definition.localTranslation[0] + this.animTranslation[at];
+      this.translation[1] = definition.localTranslation[1] + this.animTranslation[at + 1];
+      this.translation[2] = definition.localTranslation[2] + this.animTranslation[at + 2];
+      composeTrs(this.local, this.quat, this.translation, definition.scale ?? 1);
       if (definition.offset) {
         this.scratch.set(this.local);
         this.offset.set(definition.offset);
@@ -85,6 +93,12 @@ export class RigidEntity {
   /** Per-part animation rotation (wheel spin/steer, door swing) — applied AFTER the bind-local rotation. */
   setPartRotation(part: number, quat: readonly [number, number, number, number]): void {
     this.animQuat.set(quat, part * 4);
+  }
+
+  /** Per-part animation translation (part-local frame, metres) — added to the bind-local translation.
+   *  Suspension travel rides here (plan 081/06 §3.2); any part needing a per-frame local offset can. */
+  setPartTranslation(part: number, translation: readonly [number, number, number]): void {
+    this.animTranslation.set(translation, part * 3);
   }
 
   /**

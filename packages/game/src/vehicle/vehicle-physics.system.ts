@@ -106,6 +106,11 @@ export class VehiclePhysicsSystem implements System {
       this.forward.copy(FORWARD).applyQuaternion(this.quaternion);
       car.heading = Math.atan2(-this.forward.x, this.forward.y);
 
+      // The drawn wheels follow the physics suspension (plan 081/06 §3): offset from the model hub =
+      // the connection's lift minus the live spring length. The rig smooths it against raycast jitter.
+      const lengths = this.physics.suspensionLengths(car.controller);
+      car.rig.setLift(lengths.map((length, index) => (car.wheelLift[index] ?? 0) - length));
+
       this.rollWheels(car, position, delta);
     }
   }

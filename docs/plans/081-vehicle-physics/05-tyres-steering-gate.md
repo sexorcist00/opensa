@@ -260,3 +260,36 @@ engine-side lever that would change it is `abs`, still unread (04 §3).
 This also lands the last of this plan's core: grip is per wheel, per axle, load-dependent, and now
 state-dependent. What remains here is surface types (`ROAD_ADHESION` still stands in for `g_surfaceInfos`) and
 the own-controller gate.
+
+### 2026-07-27 — the tyre gets the ORIGINAL's adhesion scale, and the dead end above closes
+
+**Field report** (one day after close-out): the car is hard to turn in AT SPEED and feels overweighted. The
+audit that answered it (`docs/audit/vehicle-physics-081.md`, addendum) found the grip scale — this plan's own
+§1 — read `fTractionMultiplier` as a real-world μ. It is not one. The original's per-wheel budget closes to
+`4.5 × TM × 0.001 × [4 × weightShare, cap 2]` game accel — in SI, **μ_eff ≈ 4.59 × TM** against our gravity,
+not TM itself. A 0.7 tyre now hands Rapier ~3.21 where it handed 0.7; the load-factor cap 2 (a wheel carrying
+more than half the car gains nothing further) is applied per step next to the sliding check.
+
+Two consequences worth naming:
+
+- **The limiter and the tyre finally agree.** The steering limiter was already a bit-exact translation
+  (its `×0.001` re-verified against `ProcessControl` this round: `/250 × 0.25`), so it granted angles sized
+  for the original's tyre — 4.6× the grip this plan had underneath it. Every "hard to turn in" report since
+  05 shipped was this mismatch.
+- **The launch-g dead end above is resolved.** The reconciliation failed because the load factor's static
+  value (`4 × share` = 1 at an even quarter, from the deflection `share/(forceLevel × axleBias)` cancelling
+  its own forceLevel) was not in the chain being compared. A stock admiral launches at ~0.8 g in the
+  original, not ~1.8.
+
+The `sweeper` scene (held 0.4 steer entered at ~140 km/h) is added — the instrument gap recorded above is
+closed. `LOCKED_SIDE_FRICTION = 0.03` was tuned in the weak-grip regime and is owed a re-measure on
+`handbrake-flick`; the kerb-flip risk RISES with lateral grip, so 06's kerb probe gained urgency. Field
+verdict on the whole change: pending.
+
+**Round 2 (same day)**: the field falsified the first normalisation — `μ = 4.59 × TM` ported SA's ABSOLUTE
+budget into half SA's gravity, doubling grip-to-weight ("weightless, uncontrollable, fast"). Corrected to
+the dimensionless ratio `μ = 45 × TM / g_SA(20) = 2.25 × TM`; the linear damping went back to 0.1 in the
+same correction (its removal + a 7× grip swing in one change made the verdict unreadable). And the round's
+most useful datum: **turn-in at speed did not respond to a 7× grip swing** — the at-speed gate is not the
+tyre. Next suspects, in order: the limiter's granted angle and the steer slew, measured on `sweeper`, one
+variable at a time. Full detail: the audit addendum.

@@ -382,9 +382,14 @@ stiffer spring it needs instead of being clamped by a rule that thought it was c
 No spring is past its rest point on any car now, and every car stands within a few tenths of a degree of level.
 
 The turismo, measured, is **not** riding on its belly: 99.9 % of its weight is on its springs with four wheels
-in contact, and it settles 5 mm into a 15 cm travel. Its stance is the model's own — but note its wheels
-differ by axle (`vehicles.ide` gives it 0.7 front / 0.75 rear), which is what the screenshot's proportions
-show.
+in contact. **The rest of this verdict was wrong and is corrected by the 2026-07-27 audit**: "it settles 5 mm
+into a 15 cm travel" compared the spring LENGTH (0.149 m) to the TRAVEL (0.150 m) — the capture's own numbers
+give `restLength 0.200 − suspensionLength 0.149 = 5.1 cm` of sag, 34 % of the travel, on the 35 % clamp. The
+field complaint was dismissed on a number wrong by 10×. The actual cause of the slammed look — the
+wheel-at-hub standing pose, which sits a car's body low by `|lowerLimit| − rest deflection` against the
+original's own `SetupSuspensionLines` law, worst exactly on the turismo's fleet-largest |lower| = 0.20 — is
+the audit addendum's second finding (`docs/audit/vehicle-physics-081.md`). Its wheels do also differ by axle
+(`vehicles.ide` gives it 0.7 front / 0.75 rear).
 
 One number in this is a MEASURED BRIDGE and is flagged as such in the code: the sag-per-rate constant. A force
 probe gave 1.43; solving the same relation from four settled cars gives 1.06…1.21, and 1.15 is used, with a

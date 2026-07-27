@@ -68,6 +68,25 @@ export const PHYS_SCENES: readonly PhysScene[] = [
     what: 'Step steer at speed: how long the yaw takes to answer a held moderate input, and whether it settles. The throttle holds ~speed rather than pinning it — the capture records the speed at the step.',
   },
   {
+    durationS: 18,
+    heading: 1.571,
+    key: 'sweeper',
+    // The step-steer straight (open ground to the turn side — a sweeper leaves the road by design). Sharing
+    // the START is safe where sharing the slalom's spot was not: step-steer ends its lap ~300 m down the
+    // road, nowhere near this spawn, while the slalom's wreck sat exactly on the kerb scene's seat.
+    position: [2417.3, 1773.1, 9.6],
+    timeline: [
+      // THE owed scene (081/05 instrument gap): every other scene is either full lock at ≤50 km/h (where the
+      // countersteer exemption returns 1) or 0.15 of lock (under the limit even 4.5× wrong). Three field
+      // rounds said "hard to turn in at speed" and no replay could see it — this one holds a MODERATE steer
+      // at the speed where the limiter and the tyre budget actually bite.
+      { move: { x: 0, y: 1 }, t: 0 }, // WOT — ~130-150 km/h on the sports cars by 6 s
+      { move: { x: 0.4, y: 0.5 }, t: 6 }, // held moderate steer at speed; the 7-13 s window is the number
+      { move: { x: 0, y: 0 }, t: 14 },
+    ],
+    what: 'A held 0.4 steer entered at high speed: sustained lateral g, yaw rate and how far the heading actually comes round — the moderate-steer-at-speed case the field complains about and no other scene can see.',
+  },
+  {
     durationS: 24,
     heading: 1.571,
     key: 'slalom',

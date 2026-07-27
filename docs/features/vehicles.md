@@ -98,7 +98,17 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   v² / 2000` against the whole velocity vector, so `fMaxVelocity` acts as the upper bound of the search for
   the point where drag balances the engine, not as a cap someone clamps to. Before this the whole longitudinal
   model was one constant force and a hard speed limit: every car pulled as hard at 140 km/h as at walking
-  pace. Only the DRIVEN car gets drag today — nothing else in the world drives itself.
+  pace. Only the DRIVEN car gets drag today — nothing else in the world drives itself. The chassis linear
+  damping (0.1) is a guessed constant the original does not have — it adds `0.1 × v` of phantom drag (~3× a
+  sports car's authored figure at speed) — kept on a field verdict for now; retiring it is owed as its own
+  single-variable step with a coast-down capture.
+- **Standing pose + visible travel** (2026-07-27 audit; plan 081/06 §3's travel half): a car RESTS near full
+  droop, by the original's own `SetupSuspensionLines` law — the wheel hangs `|suspLower| −
+  weightShare/(forceLevel × axleBias) × span` below its dummy, so the body rides correspondingly high (the
+  wheel-at-hub rule before it sat every car low in proportion to |lower|; the turismo's −0.20 made it the
+  loudest). The DRAWN wheel follows the physics spring length through `VehicleRig` → `setWheel({ lift, spin,
+  steer })` → `RigidEntity.setPartTranslation`, smoothed at the fixed step so raycast jitter does not read as
+  a vibrating wheel. Camber and the solid-axle rules remain plan 06's.
 - **Driving controls** (plan 081/04): Space and back-while-rolling are the FOOT brake — it ramps in over 0.2 s
   and splits across the axles by `fBrakeBias`; **H is the handbrake**, and it is a REAR-AXLE LOCK, not a
   bigger brake (`CAutomobile::ProcessCarWheelPair` gives the rear wheels 20 000 and leaves the front alone).
@@ -111,12 +121,17 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   `adhesive` is the rubber-on-road cell of `data/surface.dat` (4.5). It does not touch town driving (full lock
   to ~53 km/h) and tightens with the square of speed. Countersteering into a slide and the handbrake both
   restore full lock, as they do in the original.
-- **Tyres** (plan 081/05): grip per wheel is `fTractionMultiplier` — which IS a friction coefficient, and the
-  table's 0.55…0.75 is what a real tyre does — split across the axles by `fTractionBias`. It replaced a
-  shared 10.5 inherited from Bullet's demo, i.e. a tyre fifteen times grippier than any tyre, which is why
-  cars used to turn in instantly, never slide and trip over kerbs. The longitudinal clamp is applied on OUR
-  side in `setVehicleControls`, because Rapier applies its own friction limit only when a wheel already has a
-  side impulse — a car accelerating or braking dead ahead is otherwise unlimited. Engine force reaches driven
+- **Tyres** (plan 081/05, scale corrected twice 2026-07-27): grip per wheel is `fTractionMultiplier` on the
+  ORIGINAL's adhesion scale, normalised by the original's own gravity — `μ_eff = 45 × TM / g_SA(20) = 2.25 ×
+  TM` (the budget: `4.5 (surface.dat road×rubber) × 0.001 × 2500 × the load factor`, whose static value is
+  `4 × the wheel's weight share`, capped at 2) — split across the axles by `fTractionBias`. Three wrong
+  scales preceded it: a shared 10.5 from Bullet's demo (slot cars), the raw TM read as an earth μ (~2.3×
+  weaker than SA's grip-to-weight — "hard to turn in at speed"), and the ABSOLUTE budget `4.59 × TM` ported
+  into half SA's gravity (grip-to-weight doubled — "weightless, uncontrollable" within one field round).
+  The known cost of the dimensionless port: absolute cornering radii at speed are ~2× the original's — the
+  recorded gravity decision. The longitudinal clamp is applied on OUR side in `setVehicleControls`, because
+  Rapier applies its own friction limit only when a wheel already has a side impulse — a car accelerating
+  or braking dead ahead is otherwise unlimited. Engine force reaches driven
   wheels only (`nDriveType`). A wheel that has **broken loose grips less** (`fTractionLoss`, 0.72…0.85): past
   the limit a tyre does not merely stop giving more, it gives less, which is what makes a slide continue
   instead of self-correcting. Sliding is detected from the wheel's own impulses against its friction circle,

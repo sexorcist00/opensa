@@ -774,6 +774,61 @@ describe('PhysicsWorld raycast vehicle', () => {
       physics.dispose();
     });
 
+    it('hands the tyre the ORIGINAL adhesion scale, not the raw multiplier as an earth μ (2026-07-27 audit)', async () => {
+      const { controller, physics } = await car();
+
+      physics.setVehicleControls(controller, FRONT, {
+        brake: 0,
+        brakeBias: 0.5,
+        drive: '4',
+        engine: 0,
+        handbrake: false,
+        mass: 1500,
+        steer: 0,
+        step: STEP,
+        traction: { bias: 0.5, loss: 0.8, mult: 0.7 },
+      });
+
+      // 4.5 (road×rubber) × 0.001 × 2500 × 4 / g_SA(20) = 2.25 per unit of fTractionMultiplier: a 0.7 tyre
+      // on a neutral bias must read ~1.58, not 0.7. Normalised by the ORIGINAL's gravity — its grip-to-weight
+      // ratio — not ours: porting the absolute budget into half the gravity doubled it, and the field called
+      // the fleet "weightless" inside one round (2026-07-27, round 2).
+      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 2.25, 2);
+      physics.dispose();
+    });
+
+    it('stands a large-|lower| row HIGHER above the road — the original rests wheels near droop, not at the hub', async () => {
+      // Twin cars differing only in `fSuspensionLowerLimit`. SA's standing pose hangs the wheel
+      // `|lower| − share/(forceLevel×axleBias) × span` BELOW its dummy (`SetupSuspensionLines`), so the body
+      // of the 0.20 row must ride visibly higher than the 0.10 one — the turismo-vs-infernus gradient the
+      // 2026-07-27 audit traced ("the turismo is slammed" while the fleet looked right).
+      const physics = await makeWorld();
+      physics.createStaticBox([0, 0, -0.5], [200, 200, 0.5]);
+      const chassis = shape({ boxes: [{ max: [1.2, 2.5, 0.7], min: [-1.2, -2.5, -0.7] }] });
+      const twin = (x: number, restLength: number): number =>
+        physics.createDynamicVehicle(
+          [x, 0, 1.2],
+          0,
+          chassis,
+          massProps({ suspension: { bias: 0.5, damping: 0.15, force: 1.1, restLength, travel: 0.25 } }),
+          WHEELS,
+          HALF,
+        ).body;
+      const deepDroop = twin(0, 0.2);
+      const shallowDroop = twin(8, 0.1);
+      for (let i = 0; i < 240; i += 1) {
+        physics.step(STEP);
+      }
+
+      const risen = physics.readBody(deepDroop).position[2] - physics.readBody(shallowDroop).position[2];
+      // The wheel rests `lower + share/(force×axle) × span` from the hub, so the extra 0.10 m of |lower|
+      // lifts the body by 0.10 × (1 − 0.25/1.1) ≈ 7.7 cm. (Under the old wheel-at-hub rule this reads 0:
+      // both twins stood at the same height whatever their row said.)
+      expect(risen).toBeGreaterThan(0.06);
+      expect(risen).toBeLessThan(0.09);
+      physics.dispose();
+    });
+
     it('engine force drives it forward, and parkVehicle brings it back to a stop', async () => {
       const { controller, physics } = await car();
 
@@ -783,6 +838,7 @@ describe('PhysicsWorld raycast vehicle', () => {
         drive: '4',
         engine: 12000,
         handbrake: false,
+        mass: 1500,
         steer: 0,
         step: STEP,
         traction: { bias: 0.5, loss: 0.8, mult: 0.7 },

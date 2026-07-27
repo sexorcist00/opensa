@@ -321,7 +321,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         front: wheel.front,
         radius: wheel.radius,
       }));
-      const { body, controller } = physics.createDynamicVehicle(
+      const { body, controller, wheelLift } = physics.createDynamicVehicle(
         position,
         heading,
         data.colliders?.shape ?? null,
@@ -365,6 +365,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         renderPosition: [position[0], position[1], position[2]],
         rig,
         seatLocal,
+        wheelLift,
         wheels,
       };
       handle.setTransform(position, headingQuat(heading)); // pose it before the first frame draws it

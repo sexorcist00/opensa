@@ -11,6 +11,7 @@ import type {
   VehiclePose,
   VehicleQuat,
   VehicleWheelInfo,
+  VehicleWheelPose,
 } from './vehicle-handle';
 import type { VehicleLampState } from './vehicle-lamps';
 
@@ -33,7 +34,7 @@ export class FakeVehicleHandle implements VehicleHandle {
   readonly removed = new Set<string>();
   rotation: VehicleQuat = [0, 0, 0, 1];
   readonly wheels: VehicleWheelInfo[];
-  readonly wheelState: { spin: number; steer: number }[] = [];
+  readonly wheelState: VehicleWheelPose[] = [];
 
   constructor(parts: VehiclePartInfo[] = [], wheels: VehicleWheelInfo[] = [], hasLod = false) {
     this.parts = parts;
@@ -96,7 +97,7 @@ export class FakeVehicleHandle implements VehicleHandle {
     this.rotation = rotation;
   }
 
-  setWheel(index: number, spin: number, steer: number): void {
-    this.wheelState[index] = { spin, steer };
+  setWheel(index: number, pose: VehicleWheelPose): void {
+    this.wheelState[index] = { ...pose };
   }
 }

@@ -116,10 +116,13 @@ becomes the next thing the eye rejects. The two land together or the improvement
 - [ ] Airborne detector + attitude torques + clamps + tests (debounce, no-input = no torque,
       crest-jump envelope).
 - [ ] Kerb probe + impulse ramp + thresholds + tests; `kerb-strike` A/B captures.
-- [ ] `animTranslation` + `setPartTranslation` on `RigidEntity` (the one primitive below the vehicle layer).
+- [x] `animTranslation` + `setPartTranslation` on `RigidEntity` (the one primitive below the vehicle layer).
+      **Landed early (2026-07-27)** as the stance fix's dependency — see the audit addendum.
 - [ ] Axle-type mapping from `modelFlags` (front/rear digits) into the typed handling row.
 - [ ] `setWheel` reshaped to `{ camber, spin, steer, travel }`; rig computes + smooths both channels at the
       FIXED step; engine handle composes `steer(Z) ⊗ camber(Y) ⊗ spin(X)` and the local-Z offset.
+      **The travel half landed early** (shaped `{ lift, spin, steer }`, smoothed in the rig at the fixed
+      step, `lift = connection raise − live spring length`); camber joins with the axle rules above.
 - [ ] Clamps + no-ops: authored travel, LOD bands, detached parts. Fake-handle tests pin every one.
 - [ ] **Field round**: jumps (crest at varying speed), kerb mounts, cobbled/uneven streets ("do the
       wheels live?"), plus regression drive of everything since 02.

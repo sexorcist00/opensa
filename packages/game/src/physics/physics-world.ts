@@ -122,24 +122,58 @@ const SUSPENSION_RELAXATION_FLOOR = 0.4;
 const SUSPENSION_DAMPING_SCALE_MIN = 0.35;
 const SUSPENSION_DAMPING_SCALE_MAX = 2;
 /**
- * The tyre, as the original authors it (plan 081/05, brought forward by 04's field verdict).
+ * The tyre, as the original authors it (plan 081/05; the SCALE corrected by the 2026-07-27 audit).
  *
- * `fTractionMultiplier` IS a friction coefficient: the shipped table gives cars 0.55…0.75, which is exactly
- * the range a real tyre works in, and Rapier's `frictionSlip` is the same quantity (its friction impulse is
- * capped at `frictionSlip × suspensionForce × dt`, so the parameter is μ and nothing else).
+ * `fTractionMultiplier` is **not** an earth-physics μ. The original's grip is a per-wheel Δv budget
+ * (`CVehicle::ProcessWheel`, fed by `CAutomobile::ProcessCarWheelPair`):
  *
- * It stood at **10.5** — a tyre fifteen times grippier than any tyre — inherited from Bullet's raycast-vehicle
- * demo. Everything that number touched was wrong in the same direction: a car turned in the instant the wheel
- * moved, never slid, put every newton of engine straight into the road, and tripped over kerbs instead of
- * sliding along them. It was invisible while the engine was one small constant; the moment 081/04 gave first
- * gear its real thrust, the whole fleet became undriveable and the field said so.
+ * ```cpp
+ * adhesion = GetAdhesiveLimit(colPoint) * traction;                              // 4.5 road×rubber × TM×0.001
+ * adhesion *= min(suspensionBias * fSuspensionForceLevel * 4 * (1 - compression), 2);  // load factor
+ * ```
  *
- * The original clamps each wheel's force to `adhesiveLimit(surface) × fTractionMultiplier × load` in
- * `CVehicle::ProcessWheel`. Rapier applies the load term itself (its cap is proportional to the suspension
- * force the corner actually carries), so what is left to hand it is the coefficient — and the axle split the
- * original applies to it, which is `fTractionBias` in the same `2 × bias` / `2 − 2 × bias` form as the
- * suspension's. The surface term is not modelled yet: every road is tarmac until surface types are wired.
+ * The load factor closes to **4 × the share of the car's weight the wheel carries** (the static deflection is
+ * `share / (forceLevel × axleBias)` of the travel — `SetupSuspensionLines` writes the same equilibrium as
+ * `1 − 1/(4 × forceLevel)` — so forceLevel cancels), i.e. exactly 1 at an even quarter. In SI that makes one
+ * wheel's force cap `4.5 × TM × 0.001 × 2500 × 4 × N/(m·g_SA)` × m — proportional to its load N, which is
+ * the shape Rapier's own cap (`frictionSlip × N × dt`) already has.
+ *
+ * **The normalisation is by the ORIGINAL's gravity, and a field round is why.** SA is a 20 m/s² world
+ * (`CPhysical::ApplyGravity`, `0.008` gu/frame²): its rest budget of ~45 × TM m/s² of lateral acceleration
+ * is **2.25 × TM in units of its own gravity** — that dimensionless ratio is what SA handling FEELS like.
+ * The first fix normalised by OUR 9.81 instead, porting the absolute budget into half the gravity: grip to
+ * weight came out double the original's, and the field verdict was immediate — "the cars are weightless,
+ * uncontrollable, fast" (2026-07-27, round 2). So: `frictionSlip = 45 × TM / g_SA ≈ 2.25 × TM`. The known
+ * cost, stated: absolute cornering radii at speed are ~2× the original's, because matching BOTH SA's radii
+ * and SA's weight-feel in a 1 g world is impossible — that is the (recorded) gravity decision, and closing
+ * it for real would mean running vehicles under SA gravity with the springs recalibrated.
+ *
+ * History, because this number has now been wrong in three directions: **10.5** (Bullet's demo default —
+ * 15× any tyre, cars turned like slot cars), then **TM itself** (081/05, read as a real-world μ — ~2.3×
+ * weaker than the original's own ratio: "hard to turn in at speed"), then **4.59 × TM** (the absolute-budget
+ * port above — weightless). The derivation also resolved 05's recorded dead end (the ~1.8 g admiral launch):
+ * the missing piece was the load factor's static value.
+ *
+ * The `2.0` cap means a wheel carrying more than HALF the car's weight gains nothing further — applied
+ * per-step in `setVehicleControls`, where the load is read anyway. The axle split stays `fTractionBias` in
+ * the original's `2 × bias` / `2 − 2 × bias` form. Surface types are still not modelled: every road is
+ * tarmac until `surface.dat`/`surfinfo.dat` are read.
  */
+/** `data/surface.dat` Road × Rubber — the tarmac cell the steering limiter already uses. */
+const SURFACE_ADHESION_ROAD_RUBBER = 4.5;
+/** The original's use-site scale on `fTractionMultiplier` (`/250 × 0.25` in `ProcessControl`/`ProcessCarWheelPair`). */
+const SA_TRACTION_SCALE = 0.001;
+/** Game units per frame² → m/s² (50 Hz²). */
+const SA_ACCEL_TO_SI = 2500;
+/** The adhesion load factor per unit of weight share (`4 × (1 − compression) × forceLevel × axleBias` at rest). */
+const ADHESION_LOAD_FACTOR = 4;
+/** …and its ceiling: a wheel carrying more than half the car gains no further grip (`min(…, 2.0f)`). */
+const ADHESION_LOAD_CAP = 2;
+/** SA's own gravity (0.008 gu/frame² × 2500) — the budget is normalised against the world it was tuned in. */
+const SA_GRAVITY = 20;
+/** Rapier `frictionSlip` per unit of `fTractionMultiplier` — the whole derivation above, folded (≈ 2.25). */
+const TYRE_GRIP_PER_TRACTION =
+  (SURFACE_ADHESION_ROAD_RUBBER * SA_TRACTION_SCALE * SA_ACCEL_TO_SI * ADHESION_LOAD_FACTOR) / SA_GRAVITY;
 /**
  * What a LOCKED wheel keeps of its lateral stiffness — 3 %, and it has to be that low for a reason worth
  * knowing.
@@ -170,6 +204,16 @@ const GRAVITY = 9.81;
 const MAX_AXLE_SHARE = 0.9;
 const TYRE_GRIP_FLOOR = 0.2; // a row authoring 0 (there are 19) would weld the wheels; keep them steerable
 const PARKING_BRAKE = 80; // holds a parked car put (released by the driver when throttling)
+/**
+ * A GUESSED constant the original does not have — kept, for now, on a field verdict.
+ *
+ * SA's only flat speed losses on a car are air drag (`dragMult × v² / 2000`) and the wheels' own friction,
+ * so the honest value here is 0: this adds `0.1 × v` of phantom drag (~3 m/s² at 108 km/h, 3× a sports
+ * car's authored figure; the admiral tops ~153 of its authored 180 km/h). The 2026-07-27 audit zeroed it —
+ * in the same commit as a 7× grip change — and the round came back "the cars are fast, uncontrollable".
+ * Multi-variable change, unreadable verdict; it went back to the field-liked 0.1. Retiring it is owed as
+ * its OWN step, measured on a coast-down capture, nothing else moving.
+ */
 const CHASSIS_LINEAR_DAMPING = 0.1;
 /**
  * Angular damping on the chassis — **0.5, which is the original's own value** (081/05).
@@ -214,6 +258,7 @@ export const VEHICLE_PHYSICS_CONSTANTS: readonly (readonly [string, number])[] =
   ['susp max travel (m)', SUSPENSION_MAX_TRAVEL],
   ['susp max force (N)', SUSPENSION_MAX_FORCE],
   ['tyre grip floor', TYRE_GRIP_FLOOR],
+  ['tyre grip / traction', TYRE_GRIP_PER_TRACTION],
   ['parking brake (N)', PARKING_BRAKE],
   ['chassis lin damping', CHASSIS_LINEAR_DAMPING],
   ['chassis ang damping', CHASSIS_ANGULAR_DAMPING],
@@ -499,7 +544,7 @@ export class PhysicsWorld {
     wheels: readonly VehicleWheelSpec[],
     halfExtents: [number, number, number],
     pitch = 0,
-  ): { body: number; controller: VehicleController } {
+  ): { body: number; controller: VehicleController; wheelLift: readonly number[] } {
     // `pitch` (about the body's LOCAL right axis, nose-up positive) aligns a spawn to a sloped street —
     // a horizontal spawn at a slope break drops nose-first and the parking brake freezes it on its snout
     // (074 bench road cars). Applied AFTER the yaw, in the body frame.
@@ -537,15 +582,18 @@ export class PhysicsWorld {
     controller.setIndexForwardAxis = FORWARD_AXIS;
     const loads = staticWheelLoads(wheels, properties);
     const springs = wheels.map((wheel, i) => suspensionSetup(properties, wheel.front, loads[i]));
+    // How far each connection is raised above the model hub. The DRAWN wheel needs it too: its live offset
+    // from the hub is `lift − suspensionLength` (the rig's travel channel, plan 081/06 §3).
+    const wheelLift = springs.map((spring) => spring.restLength - spring.sag + spring.hubOffset);
     wheels.forEach((wheel, i) => {
       const spring = springs[i];
       const [x, y, z] = wheel.connection;
-      // Raised by the rest length MINUS the static sag, so the wheel sits at the model hub when the car is
-      // STANDING — not when it is hanging in the air (plan 081/03 §1, field report: after the spring was
-      // softened the cars sank into the asphalt, because the geometry still assumed a 15 mm sag).
-      // The artist drew the car at rest; this is what makes that pose the one the game shows, at any rate.
+      // Raised by the rest length MINUS the static sag, PLUS the standing pose the original computes: the
+      // wheel rests `hubOffset` from the model hub when the car is STANDING (081/03 §1 put it AT the hub —
+      // that pinned every car's body low by |hubOffset|, see `suspensionSetup`; the 2026-07-27 audit moved
+      // the pose to SA's own law, and the drawn wheel now follows the physics instead of the dummy).
       controller.addWheel(
-        { x, y, z: z + spring.restLength - spring.sag },
+        { x, y, z: z + wheelLift[i] },
         { x: 0, y: 0, z: -1 },
         { x: 1, y: 0, z: 0 },
         spring.restLength,
@@ -561,7 +609,7 @@ export class PhysicsWorld {
     });
     this.vehicles.push(controller);
 
-    return { body: body.handle, controller };
+    return { body: body.handle, controller, wheelLift };
   }
 
   /**
@@ -1022,14 +1070,20 @@ export class PhysicsWorld {
       engine: number;
       /** The lever is up: the REAR wheels lock, the front keeps whatever `brake` asks of it. */
       handbrake: boolean;
+      /** Chassis mass (kg) — the adhesion load cap is "half the car's weight", and that needs the car. */
+      mass: number;
       steer: number;
       step: number;
       /** The car's authored tyre grip — re-read each step because a SLIDING wheel gets less of it. */
       traction: VehicleTractionSpec;
     },
   ): void {
-    const { brake, brakeBias, drive, engine, handbrake, steer, step, traction } = controls;
+    const { brake, brakeBias, drive, engine, handbrake, mass, steer, step, traction } = controls;
     const perBrake = brake / (wheels.length || 1);
+    // The original's load-factor ceiling (`min(…, 2.0f)`): grip grows with the load a corner carries only up
+    // to HALF the car's weight on one wheel. Rapier's cap is `μ × N`, linear in N without limit, so past that
+    // point μ is scaled down to hold the product still.
+    const loadCeiling = (mass * GRAVITY) / ADHESION_LOAD_CAP;
     wheels.forEach((wheel, i) => {
       const driven = drive === '4' || (drive === 'F') === wheel.front;
       const load = controller.wheelSuspensionForce(i) ?? 0;
@@ -1041,7 +1095,9 @@ export class PhysicsWorld {
       // Rapier does not expose its `skid_info`, but it exposes the impulses, and a wheel sitting on its own
       // friction circle IS the sliding one. That is last step's state driving this step's grip — the same
       // one-frame feedback the original runs on (`bAlreadySkidding`).
-      const base = tyreGrip(traction, wheel.front);
+      // The load cap first: a corner past the ceiling keeps the ceiling's grip, not more.
+      const capScale = load > loadCeiling ? loadCeiling / load : 1;
+      const base = tyreGrip(traction, wheel.front) * capScale;
       const used = Math.hypot(controller.wheelForwardImpulse(i) ?? 0, controller.wheelSideImpulse(i) ?? 0);
       const sliding = load > 0 && used >= base * load * step * SLIDE_THRESHOLD;
       const mu = sliding ? base * traction.loss : base;
@@ -1150,6 +1206,17 @@ export class PhysicsWorld {
       this.impacts.push(impact);
       this.breakableImpacts.push(impact);
     });
+  }
+
+  /** Per-wheel suspension lengths only — the drawn wheels follow them every fixed step (plan 081/06 §3),
+   *  and the full {@link readVehicleWheels} reading would be nine fields of waste per wheel per frame. */
+  suspensionLengths(controller: VehicleController): number[] {
+    const lengths: number[] = [];
+    for (let i = 0; i < controller.numWheels(); i += 1) {
+      lengths.push(controller.wheelSuspensionLength(i) ?? 0);
+    }
+
+    return lengths;
   }
 
   /** Drain the impacts collected since the last call (breakable props read these — plan 045). */
@@ -1410,6 +1477,8 @@ function suspensionSetup(
   load: number,
 ): {
   compression: number;
+  /** Where the wheel RESTS relative to the model hub (m, ≤ 0 = below it) — the original's own standing pose. */
+  hubOffset: number;
   maxForce: number;
   relaxation: number;
   restLength: number;
@@ -1428,6 +1497,21 @@ function suspensionSetup(
 
   const usableTravel = travel > 0 ? travel : SUSPENSION_MAX_TRAVEL;
   const level = force > 0 ? force : SUSPENSION_REFERENCE_FORCE;
+  // **Where the wheel stands, by the original's own law (2026-07-27 audit).** SA rests a car near full
+  // droop: `SetupSuspensionLines` computes the standing compression as `1 − 1/(4 × forceLevel)` of the span
+  // `upper − lower` — per corner, `weightShare / (forceLevel × axleBias)` of it, measured from full
+  // extension. So the wheel rests `|lower| − thatDeflection` BELOW its dummy (SA models author wheels high
+  // in the arches; the game drops them). The old rule pinned the wheel AT the dummy, which slammed every
+  // car by exactly that distance — proportional to |lower|, so the turismo (−0.20, the stock table's
+  // largest) sat ~12 cm low while the infernus (−0.10) looked nearly right. That gradient is why seven
+  // field rounds passed the fleet and still called the turismo out.
+  const usableRest = restLength > 0 ? restLength : SUSPENSION_REST;
+  const span = usableRest + usableTravel;
+  const share = load / (properties.mass * GRAVITY);
+  const rawFraction = share / (level * axle);
+  // A degenerate row (axle bias 0 or 1) divides by zero; the pose falls back to the dummy, not to NaN.
+  const fraction = Number.isFinite(rawFraction) ? Math.min(1, Math.max(0, rawFraction)) : usableRest / span;
+  const hubOffset = fraction * span - usableRest;
   // SA's own law, converted into Rapier's units — see SUSPENSION_LEVEL_SCALE. A car's stance comes from its
   // authored force level alone; its geometry decides what that level means in metres.
   const wanted = (SUSPENSION_LEVEL_SCALE * level * axle) / usableTravel;
@@ -1441,18 +1525,20 @@ function suspensionSetup(
 
   return {
     compression: Math.max(SUSPENSION_COMPRESSION_FLOOR, SUSPENSION_COMPRESSION_RATIO * critical * dampingScale),
+    hubOffset,
     maxForce: properties.mass * SUSPENSION_FORCE_PER_KG,
     relaxation: Math.max(SUSPENSION_RELAXATION_FLOOR, SUSPENSION_RELAXATION_RATIO * critical * dampingScale),
-    restLength: restLength > 0 ? restLength : SUSPENSION_REST,
+    restLength: usableRest,
     sag: load / (SUSPENSION_FORCE_PER_STIFFNESS * properties.mass * stiffness),
     stiffness,
     travel: usableTravel,
   };
 }
 
-/** The wheel's friction coefficient: the authored multiplier, split across the axles the way SA splits it. */
+/** The wheel's friction coefficient: the authored multiplier on the ORIGINAL's adhesion scale
+ *  (see {@link TYRE_GRIP_PER_TRACTION}), split across the axles the way SA splits it. */
 function tyreGrip(traction: VehicleTractionSpec, front: boolean): number {
   const axle = front ? 2 * traction.bias : 2 - 2 * traction.bias;
 
-  return Math.max(TYRE_GRIP_FLOOR, traction.mult * axle);
+  return Math.max(TYRE_GRIP_FLOOR, traction.mult * axle * TYRE_GRIP_PER_TRACTION);
 }

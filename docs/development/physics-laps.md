@@ -53,8 +53,9 @@ Everything except step 6 happens with the capture OFF, so a lap's frames are the
 ## Scenes
 
 Data, in [`apps/web/src/phys-scenes.ts`](../../apps/web/src/phys-scenes.ts): a spot, a heading, a keyframe
-timeline and a duration. Ten today — `rest` · `brake-strip` · `step-steer` · `slalom` · `u-turn` · `kerb-strike` · `crest-jump` ·
-`handbrake-turn` · `handbrake-flick` · `pull-away-reverse`.
+timeline and a duration. Eleven today — `rest` · `brake-strip` · `step-steer` · `sweeper` · `slalom` · `u-turn` ·
+`kerb-strike` · `crest-jump` · `handbrake-turn` · `handbrake-flick` · `pull-away-reverse`. (`sweeper` is the
+moderate-steer-at-high-speed instrument 081/05 recorded as owed: WOT to ~140 km/h, then 0.4 of steer held.)
 
 Keyframes **HOLD**: each one's `move`/`actions` stay in force until the next, and nothing is interpolated. A
 slalom is "full left, then full right" — an interpolated version is a different manoeuvre, and a scene has to
