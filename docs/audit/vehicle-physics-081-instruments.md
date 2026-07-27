@@ -2,7 +2,7 @@
 
 The 081 chain's second big day. It began as bookkeeping (freeze the accepted feel, price the vehicle slice)
 and turned into an instrument arc: **four of the day's five findings were the instruments falsifying the
-questions they were built to answer.** Fifteen commits on `main`, 2828 → 2884 unit tests, nothing pushed.
+questions they were built to answer.** Sixteen commits on `main`, 2828 → 2882 unit tests, nothing pushed.
 
 The tuning half of the chain is audited separately: [`vehicle-physics-081.md`](./vehicle-physics-081.md).
 
@@ -80,7 +80,7 @@ Three field rounds, three different answers, and all three changed the plan rath
 
 ## Cost
 
-- **Tests**: 2828 → 2884, all green; coverage 90.15 % statements / 80.53 % branches / 91.86 % functions
+- **Tests**: 2828 → 2882, all green; coverage 90.15 % statements / 80.53 % branches / 91.86 % functions
   (floors 86/77/88).
 - **Runtime**: the surface probe is four rays a step on the DRIVEN car — inside the noise of a 0.07 ms
   eight-car slice. The lever if traffic ever needs it is priced in
