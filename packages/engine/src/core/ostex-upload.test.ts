@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Resources } from './resources';
 
 import { installFakeWebGpu } from '../test/fake-device';
-import { uploadOstexTexture } from './ostex-upload';
+import { beginOstexUpload, uploadOstexTexture } from './ostex-upload';
 
 // The recorder below stands in for the device, but the WebGPU CONSTANTS (`GPUTextureUsage`) are globals the
 // fake harness installs — the upload builds its descriptor from them.
@@ -136,6 +136,35 @@ describe('uploadOstexTexture', () => {
       uploadOstexTexture(device, resources, ostexOf(OstexFormat.BC3, 4), 'model-texture');
 
       expect(writes.map((write) => write.layer)).toEqual([0, 1, 2, 3]);
+    });
+  });
+});
+
+/** The resumable form (the 15-85 ms hitch fix): the texture exists from `begin`, each `step()` lands ONE
+ *  (layer, mip) write, and the payload reaches the GPU byte-for-byte as the eager loop sent it. */
+describe('beginOstexUpload', () => {
+  describe('negative cases', () => {
+    it('writes nothing before the first step — begin is the cheap half', () => {
+      const { descriptors, device, resources, writes } = recorder();
+
+      beginOstexUpload(device, resources, ostexOf(OstexFormat.BC3, 2), 'model-texture');
+
+      expect(descriptors).toHaveLength(1); // the texture is created up-front…
+      expect(writes).toHaveLength(0); // …but not a byte moves until the caller drains
+    });
+  });
+
+  describe('positive cases', () => {
+    it('steps one (layer, mip) write at a time and reports done with the last one', () => {
+      const { device, resources, writes } = recorder();
+      const task = beginOstexUpload(device, resources, ostexOf(OstexFormat.BC3, 2), 'model-texture');
+
+      expect(task.step()).toBe(false);
+      expect(writes.map((write) => write.layer)).toEqual([0]);
+
+      expect(task.step()).toBe(true);
+      expect(writes.map((write) => write.layer)).toEqual([0, 1]);
+      expect(writes.every((write) => write.bytes.byteLength === BC3_LAYER_BYTES)).toBe(true);
     });
   });
 });

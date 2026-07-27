@@ -108,6 +108,22 @@ describe('missing-texture highlight', () => {
       expect(texelOf(paint)).toEqual(MAGENTA);
     });
 
+    it('paints the stand-in when a budgeted (drained) upload completes with the highlight on', async () => {
+      const engine = await bootedEngine();
+      engine.textures.setMissingLayers([{ array: REF, color: GREY, layer: 1 }]);
+      engine.textures.setMissingHighlight(true);
+
+      gpu.reset();
+      engine.textures.beginLoad(REF, arrayBytes());
+      expect(repaints()).toHaveLength(0); // begin writes nothing — the drain pays for the writes
+
+      engine.textures.drainUploads(1000);
+
+      const paint = repaints()[repaints().length - 1];
+      expect(paint?.z).toBe(1);
+      expect(texelOf(paint)).toEqual(MAGENTA);
+    });
+
     it('repaints a RESIDENT array on toggle, and restores the packed colour on toggle-off', async () => {
       const engine = await bootedEngine();
       engine.textures.setMissingLayers([{ array: REF, color: GREY, layer: 1 }]);

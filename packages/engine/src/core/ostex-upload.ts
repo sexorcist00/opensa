@@ -28,13 +28,25 @@ export interface OstexUpload {
   texture: GPUTexture;
 }
 
-/** Decode `bytes` and upload every (layer, mip) as-is. The caller owns the bind group. */
-export function uploadOstexTexture(
+/**
+ * A resumable upload: the texture exists from `beginOstexUpload`, the (layer, mip) writes land one
+ * `step()` at a time. A single array measured 15–85 ms when written in one go (the between-frames hitch,
+ * 2026-07-27) — splitting the WRITES, not the arrays, is the only cut that helps, because the worst case
+ * was one array.
+ */
+export interface OstexUploadTask extends OstexUpload {
+  /** Perform the next `writeTexture`; returns true once the last (layer, mip) write has landed. */
+  step(): boolean;
+}
+
+/** Decode `bytes` and create the texture NOW (cheap); the caller drains `step()` until it returns true.
+ *  The payload stays referenced until the last write — the CPU copy's lifetime is the drain. */
+export function beginOstexUpload(
   device: GPUDevice,
   resources: Resources,
   bytes: Uint8Array,
   label: string,
-): OstexUpload {
+): OstexUploadTask {
   const tex = decodeOstex(bytes);
   const byteEstimate = tex.payload.byteLength;
   const texture = resources.createTexture(
@@ -50,9 +62,17 @@ export function uploadOstexTexture(
     byteEstimate,
   );
 
+  let layer = 0;
+  let level = 0;
   let offset = 0;
-  for (let layer = 0; layer < tex.layers.length; layer += 1) {
-    for (let level = 0; level < tex.mipCount; level += 1) {
+
+  return {
+    byteEstimate,
+    layers: tex.layers.length,
+    step(): boolean {
+      if (layer >= tex.layers.length) {
+        return true;
+      }
       const layout = ostexMipLayout(tex.format, tex.width, tex.height, level);
       device.queue.writeTexture(
         { mipLevel: level, origin: { x: 0, y: 0, z: layer }, texture },
@@ -61,8 +81,29 @@ export function uploadOstexTexture(
         { depthOrArrayLayers: 1, height: layout.mipHeight, width: layout.mipWidth },
       );
       offset += layout.totalBytes;
-    }
+      level += 1;
+      if (level >= tex.mipCount) {
+        level = 0;
+        layer += 1;
+      }
+
+      return layer >= tex.layers.length;
+    },
+    texture,
+  };
+}
+
+/** Decode `bytes` and upload every (layer, mip) as-is. The caller owns the bind group. */
+export function uploadOstexTexture(
+  device: GPUDevice,
+  resources: Resources,
+  bytes: Uint8Array,
+  label: string,
+): OstexUpload {
+  const task = beginOstexUpload(device, resources, bytes, label);
+  while (!task.step()) {
+    // drain in place — per-model dictionaries and the eager boot path pay up-front by design
   }
 
-  return { byteEstimate, layers: tex.layers.length, texture };
+  return { byteEstimate: task.byteEstimate, layers: task.layers, texture: task.texture };
 }

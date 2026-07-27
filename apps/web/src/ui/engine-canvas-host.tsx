@@ -1398,7 +1398,7 @@ async function boot(
       // eslint-disable-next-line no-console
       console.log(
         `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · post ${stats.gpuPostMs.toFixed(2)} · probe ${stats.gpuProbeMs.toFixed(2)} · ` +
-          `render ${renderMs.toFixed(1)} (submit ${stats.submitMs.toFixed(2)}) · stream ${streamMs.toFixed(1)} (blob ${streamStats.blobMs.toFixed(1)} worst ${streamStats.worstBlobMs.toFixed(1)}) · camera ${cameraMs.toFixed(1)} · ` +
+          `render ${renderMs.toFixed(1)} (submit ${stats.submitMs.toFixed(2)}) · stream ${streamMs.toFixed(1)} (blob ${streamStats.blobMs.toFixed(1)} worst ${streamStats.worstBlobMs.toFixed(1)} upload ${streamStats.uploadMs.toFixed(1)}) · camera ${cameraMs.toFixed(1)} · ` +
           `fixed ${fixedMs.toFixed(1)} (${fixedSteps} steps: controller ${controllerMs.toFixed(1)} + physics ${physicsMs.toFixed(1)} · cars ${vehicleFixedMs.toFixed(2)}) · ` +
           `collision ${collisionMs.toFixed(1)} · vehicles ${vehiclesMs.toFixed(1)} · ` +
           `ped ${pedMs.toFixed(2)} · anim ${animMs.toFixed(2)} · other ${other.toFixed(1)} · draws ${stats.drawsRecorded} · cells ${streamStats.loadedCells} · ` +

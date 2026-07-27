@@ -60,15 +60,20 @@ function mapObjectInit(): VehicleModelInit {
   };
 }
 
-function textureArrayBytes(): Uint8Array {
+function textureArrayBytes(layers = 1): Uint8Array {
   const size = 4;
 
   return encodeOstex({
     format: OstexFormat.RGBA8,
     height: size,
-    layers: [{ alphaClass: 0, cutoutRef: 0, nameHash: 1, wrap: 0 }],
+    layers: Array.from({ length: layers }, (_, index) => ({
+      alphaClass: 0,
+      cutoutRef: 0,
+      nameHash: index + 1,
+      wrap: 0,
+    })),
     mipCount: 1,
-    payload: new Uint8Array(ostexLayerBytes(OstexFormat.RGBA8, size, size, 1)),
+    payload: new Uint8Array(ostexLayerBytes(OstexFormat.RGBA8, size, size, 1) * layers),
     premultiplied: false,
     width: size,
   });
@@ -130,6 +135,74 @@ describe('a rigid model bound to the world texture plan', () => {
 
       expect(rigidDraws()).toBeGreaterThan(0);
       expect(gpu.liveTextures().length).toBe(beforeTextures + 1); // the ARRAY, not a per-model copy
+    });
+  });
+});
+
+/**
+ * The resumable upload path (the 15-85 ms between-frames hitch, 2026-07-27): `beginLoad` decodes and
+ * creates the texture, `drainUploads` lands the (layer, mip) writes under a budget, and `has` turns true
+ * only with the LAST write — the streaming driver gates cell creates on exactly that.
+ */
+describe('a budgeted (resumable) world-array upload', () => {
+  const arrayWrites = (): number => gpu.textureWrites.filter((write) => write.label === `array-${WORLD_ARRAY}`).length;
+
+  describe('negative cases', () => {
+    it('does not expose the array before its last write lands — a model waiting on it stays undrawn', async () => {
+      const engine = await bootedEngine();
+      const model = engine.createVehicleModel(mapObjectInit());
+      engine.createVehicle(model);
+
+      engine.textures.beginLoad(WORLD_ARRAY, textureArrayBytes(2));
+      engine.textures.drainUploads(0); // one write of two — always at least one per call
+
+      expect(engine.textures.has(WORLD_ARRAY)).toBe(false);
+      engine.frame(camera);
+      expect(rigidDraws()).toBe(0);
+    });
+
+    it('unloading a mid-drain array cancels it and frees the texture', async () => {
+      const engine = await bootedEngine();
+      const before = gpu.liveTextures().length;
+
+      engine.textures.beginLoad(WORLD_ARRAY, textureArrayBytes(2));
+      engine.textures.unload(WORLD_ARRAY);
+
+      expect(engine.textures.has(WORLD_ARRAY)).toBe(false);
+      expect(gpu.liveTextures().length).toBe(before);
+      expect(engine.textures.drainUploads(1000)).toBe(0); // nothing left to drain
+    });
+  });
+
+  describe('positive cases', () => {
+    it('completes under a generous budget, write-for-write with the eager path, and draws', async () => {
+      const engine = await bootedEngine();
+      const model = engine.createVehicleModel(mapObjectInit());
+      engine.createVehicle(model);
+      gpu.reset();
+
+      engine.textures.beginLoad(WORLD_ARRAY, textureArrayBytes(2));
+      engine.textures.drainUploads(1000);
+
+      expect(engine.textures.has(WORLD_ARRAY)).toBe(true);
+      expect(arrayWrites()).toBe(2); // one per (layer, mip), same as the eager loop
+      engine.frame(camera);
+      expect(rigidDraws()).toBeGreaterThan(0);
+    });
+
+    it('makes progress at a zero budget — one write per drain call until the array goes live', async () => {
+      const engine = await bootedEngine();
+      gpu.reset();
+
+      engine.textures.beginLoad(WORLD_ARRAY, textureArrayBytes(2));
+      engine.textures.drainUploads(0);
+      expect(arrayWrites()).toBe(1);
+      expect(engine.textures.has(WORLD_ARRAY)).toBe(false);
+
+      engine.textures.drainUploads(0);
+
+      expect(arrayWrites()).toBe(2);
+      expect(engine.textures.has(WORLD_ARRAY)).toBe(true);
     });
   });
 });

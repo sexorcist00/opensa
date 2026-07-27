@@ -14,6 +14,9 @@ function harness(
   cellTextures?: Record<string, number[]>,
   /** Per-cell TRUE geometry XZ AABBs (plan 087). Omit to model a pre-`aabb` pak (grid-rect fallback). */
   cellAabbs?: Record<string, [number, number, number, number]>,
+  /** Drain calls an array needs before its last write lands — >1 models an upload the budget splits
+   *  across frames (the 15-85 ms hitch fix). 1 keeps the pre-split single-frame behaviour. */
+  uploadSteps = 1,
 ): {
   deliver: (key: string) => void;
   driver: StreamingDriver;
@@ -30,6 +33,8 @@ function harness(
   const loadedArrays: string[] = [];
   const unloadedArrays: number[] = [];
   const live = new Set<number>();
+  /** Array ref → drain calls left before it goes live (the fake's resumable-upload cursor). */
+  const draining = new Map<number, number>();
   const engine = {
     cells: {
       load: (key: string): void => {
@@ -41,18 +46,42 @@ function harness(
     },
     environment: { fogCutDistance },
     textures: {
-      has: (ref: number): boolean => live.has(ref),
-      load: (ref: number): void => {
-        live.add(ref);
+      beginLoad: (ref: number): void => {
+        if (live.has(ref) || draining.has(ref)) {
+          return;
+        }
+        draining.set(ref, uploadSteps);
         loadedArrays.push(`array-${ref}`);
-        // A real array upload is a nested `writeTexture` loop measured at 15-85 ms (2026-07-27 field
-        // report). The fake burns a millisecond so the handler's cost is a NUMBER the test can hold.
+        // The handler's remaining share (decode + `createTexture`) still runs between frames. The fake
+        // burns a millisecond so that cost stays a NUMBER the accounting test can hold.
         const until = performance.now() + 1;
         while (performance.now() < until) {
           /* spin: the cost is the point */
         }
       },
+      drainUploads: (): number => {
+        if (draining.size === 0) {
+          return 0;
+        }
+        for (const [ref, left] of draining) {
+          if (left <= 1) {
+            draining.delete(ref);
+            live.add(ref);
+          } else {
+            draining.set(ref, left - 1);
+          }
+        }
+        // The drain writes texture data — burn a millisecond so `uploadMs` is a number too.
+        const started = performance.now();
+        while (performance.now() < started + 1) {
+          /* spin */
+        }
+
+        return performance.now() - started;
+      },
+      has: (ref: number): boolean => live.has(ref),
       unload: (ref: number): void => {
+        draining.delete(ref);
         live.delete(ref);
         unloadedArrays.push(ref);
       },
@@ -488,7 +517,7 @@ describe('StreamingDriver blob accounting (the between-frames cost, 2026-07-27)'
     it('attributes the worker handler to the frame that follows it, and clears it after', () => {
       // The upload runs in a `message` handler — outside every timer the host frame keeps — so the driver
       // has to carry the number itself, or a 20-250 ms frame has nothing to blame (see
-      // `docs/performance/deferred-optimizations/texture-upload-budget.md`).
+      // `docs/performance/applied/texture-upload-budget.md`).
       const h = harness(['3,3,hd'], { hdRadius: 2000 }, 2400, { '3,3,hd': [7] });
       h.driver.update([875, 0, -875]); // requests the cell, which requests its array
 
@@ -501,6 +530,57 @@ describe('StreamingDriver blob accounting (the between-frames cost, 2026-07-27)'
       expect(withUpload.worstBlobMs).toBeLessThanOrEqual(withUpload.blobMs);
       expect(next.blobMs).toBe(0); // per-FRAME, like the host's own block timers
       expect(next.worstBlobMs).toBe(0);
+    });
+
+    it('reports the in-frame drain as uploadMs, zero once nothing is draining', () => {
+      const h = harness(['3,3,hd'], { hdRadius: 2000 }, 2400, { '3,3,hd': [7] });
+      h.driver.update([875, 0, -875]);
+
+      h.deliver('array-7');
+      const withUpload = h.driver.update([875, 0, -875]);
+      const next = h.driver.update([875, 0, -875]);
+
+      expect(withUpload.uploadMs).toBeGreaterThan(0);
+      expect(next.uploadMs).toBe(0);
+    });
+  });
+});
+
+/**
+ * Budgeted texture-array uploads (the 15-85 ms between-frames hitch, 2026-07-27): the worker handler only
+ * BEGINS an upload; the (layer, mip) writes drain from `update` under UPLOAD_BUDGET_MS. The driver-side
+ * contract pinned here: a cell keeps waiting exactly as it does for an array that has not arrived, and
+ * creates the update whose drain lands the last write.
+ */
+describe('StreamingDriver budgeted texture uploads', () => {
+  describe('negative cases', () => {
+    it('does not create a cell while its array is still draining', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, { '3,3,lod': [7] }, undefined, 3);
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.deliver('array-7');
+
+      h.driver.update([0, 0, 0]); // write 1 of 3
+      h.driver.update([0, 0, 0]); // write 2 of 3
+
+      expect(h.loaded).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('creates the cell on the update whose drain lands the last write', () => {
+      const h = harness(['3,3,lod'], { lodRadius: 1200 }, 2400, { '3,3,lod': [7] }, undefined, 2);
+      h.driver.update([0, 0, 0]);
+      h.deliver('3,3,lod');
+      h.deliver('array-7');
+
+      h.driver.update([0, 0, 0]); // write 1 of 2 — still waiting
+      expect(h.loaded).toEqual([]);
+
+      h.driver.update([0, 0, 0]); // last write lands at the TOP of this update — the cell creates in it
+
+      expect(h.loaded).toEqual(['3,3,lod']);
+      expect(h.liveArrays()).toEqual([7]);
     });
   });
 });

@@ -27,6 +27,10 @@ const EVICT_MARGIN = 150;
 /** Adaptive create budget (074/21 P3): a second create in one frame only while total create time stays
  *  under this — bounds the worst frame instead of doubling it (M1 worst create ≈ 1.1 ms). */
 const CREATE_BUDGET_MS = 1.5;
+/** Budget for draining texture-array (layer, mip) writes inside `update` — the fix for the 15–85 ms
+ *  between-frames upload hitch (`docs/performance/applied/texture-upload-budget.md`): the
+ *  worker handler only decodes + creates the texture, the writes are paid HERE, like cell creates. */
+const UPLOAD_BUDGET_MS = 1.5;
 /** Velocity prefetch (074/21 P3): request rings test a focus biased AHEAD along the smoothed per-frame
  *  motion — cells are fetched before the true focus reaches them. Lead ≈ 1.25 s at 120 Hz, capped so a
  *  fast flyover can't drag the request ring a district ahead. Eviction always uses the TRUE focus. */
@@ -46,12 +50,14 @@ export interface StreamingRadii {
 
 export interface StreamStats {
   /**
-   * Milliseconds spent in the worker's `message` handler since the last {@link Streaming.update} — texture
-   * uploads and blob bookkeeping (see {@link Streaming.onBlob}).
+   * Milliseconds spent in the worker's `message` handler since the last {@link Streaming.update} — blob
+   * bookkeeping and the cheap start of a texture upload (decode + `createTexture`; the writes drain in
+   * `update` under {@link UPLOAD_BUDGET_MS} and show up as {@link uploadMs}).
    *
    * It is reported because it runs BETWEEN frames, where no in-loop timer can see it: a 2026-07-27 field
    * report of 20-250 ms frames turned out to have 90-98 % of each slow frame outside every block the host
-   * times, and this is the first candidate for it. Reset every update, so it is per-frame like the rest.
+   * times, and it was this — whole-array uploads at 15-85 ms a call. Reset every update, so it is
+   * per-frame like the rest.
    */
   blobMs: number;
   created: number;
@@ -62,6 +68,9 @@ export interface StreamStats {
   lateCreates: number;
   loadedCells: number;
   pendingCells: number;
+  /** Milliseconds this update spent draining texture-array writes (the budgeted, in-frame share of what
+   *  {@link blobMs} used to carry all at once). Sits INSIDE the host's stream block timer. */
+  uploadMs: number;
   /** The single most expensive handler call in that window — one huge texture-array upload and a pile-up of
    *  small ones are different problems, and only this number tells them apart. */
   worstBlobMs: number;
@@ -108,6 +117,7 @@ export class StreamingDriver {
     lateCreates: 0,
     loadedCells: 0,
     pendingCells: 0,
+    uploadMs: 0,
     worstBlobMs: 0,
     worstCreateMs: 0,
   };
@@ -216,6 +226,8 @@ export class StreamingDriver {
     // Velocity prefetch (074/21 P3): REQUESTS test a focus biased ahead along the smoothed motion;
     // EVICTION stays on the true focus (symmetric safety — the ring behind never thrashes).
     const [biasX, biasZ] = this.advanceVelocity(focus[0], focus[2]);
+    // Drain BEFORE the slot loop: an array whose last write lands here unblocks its cell the same frame.
+    this.stats.uploadMs = this.engine.textures.drainUploads(UPLOAD_BUDGET_MS);
     let pendingCells = 0;
     let loadedCells = 0;
     let createSpentMs = 0;
@@ -406,12 +418,13 @@ export class StreamingDriver {
     if (message.type !== 'blob') {
       return;
     }
-    // A texture array is uploaded the moment it lands and never enters `blobs`: it has no slot, so the
-    // stale-blob prune would throw it away, and holding the CPU copy is exactly the memory we came here to
-    // save.
+    // A texture array BEGINS its upload the moment it lands (decode + `createTexture` — cheap) and never
+    // enters `blobs`: it has no slot, so the stale-blob prune would throw it away. The expensive (layer,
+    // mip) writes drain from `update` under UPLOAD_BUDGET_MS — a whole-array upload here ran between
+    // frames at 15-85 ms a call, invisible to every in-loop timer.
     if (message.key.startsWith('array-')) {
       if (message.buffer) {
-        this.engine.textures.load(Number(message.key.slice('array-'.length)), new Uint8Array(message.buffer));
+        this.engine.textures.beginLoad(Number(message.key.slice('array-'.length)), new Uint8Array(message.buffer));
       } else {
         this.requested.delete(message.key); // failed: let the next cell that needs it re-request
       }
