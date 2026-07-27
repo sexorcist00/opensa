@@ -795,7 +795,6 @@ export class EnterVehicleSystem implements System {
       drive: hnd.drive,
       engine: this.engine,
       handbrake,
-      mass: hnd.mass,
       steer: this.steerAngle,
       step,
       traction: { bias: hnd.tractionBias, loss: hnd.tractionLoss, mult: hnd.tractionMult },

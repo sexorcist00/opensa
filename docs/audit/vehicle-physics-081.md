@@ -136,3 +136,16 @@ round bought:
 - **"Turn-in at speed unchanged" survived a 7× grip swing** — so the at-speed gate is NOT tyre grip. The
   remaining suspects are the steering limiter's granted angle and the steer slew; the `sweeper` capture
   exists now precisely to separate them, and that investigation is the next single-variable step.
+
+**Round 3, the decision — park the tyre at the baseline, bet the conflict on gravity.** The dimensionless
+port (2.25 × TM) restored the weight-feel but left the at-speed complaint ("swerving round an obstacle at
+speed barely moves the car — you must slow down"), and the arithmetic says why: obstacle avoidance is a pure
+test of ABSOLUTE lateral acceleration, ours tops at ~1.5 g where the original runs ~3 g, and no 1 g value of
+this constant can close that without re-breaking the weight-feel (round 2 proved it). So the tyre went BACK
+to the field-liked baseline (`μ = TM × axle`, the per-step load cap removed with it), the stance fix, the
+travel channel and the sweeper stayed, and the whole conflict is staged onto **081/08 — vehicles under SA
+gravity**: at 2 g the SAME dimensionless constant delivers SA's absolute budget through doubled wheel loads,
+the springs move to SA's own absolute rate law (which then produces the standing pose as a natural
+equilibrium), the steering limiter's granted angle matches what the tyres deliver, and falls/jumps/brakes
+land on the numbers their rows were authored against. The experiment's risk list and gates are in the
+sub-plan.

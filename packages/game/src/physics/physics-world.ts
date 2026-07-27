@@ -122,58 +122,26 @@ const SUSPENSION_RELAXATION_FLOOR = 0.4;
 const SUSPENSION_DAMPING_SCALE_MIN = 0.35;
 const SUSPENSION_DAMPING_SCALE_MAX = 2;
 /**
- * The tyre, as the original authors it (plan 081/05; the SCALE corrected by the 2026-07-27 audit).
+ * The tyre (plan 081/05) — **parked at the field-liked baseline, on purpose, pending the 2g experiment.**
  *
- * `fTractionMultiplier` is **not** an earth-physics μ. The original's grip is a per-wheel Δv budget
- * (`CVehicle::ProcessWheel`, fed by `CAutomobile::ProcessCarWheelPair`):
+ * `fTractionMultiplier` is read here as a friction coefficient (`frictionSlip = TM × axle split`). The
+ * 2026-07-27 audit proved that is NOT what the original does — SA's grip is a per-wheel Δv budget
+ * (`ProcessCarWheelPair` → `ProcessWheel`: `4.5 (surface.dat road×rubber) × TM × 0.001 × loadFactor`, the
+ * load factor = `4 × the wheel's weight share`, capped at 2), which closes to **45 × TM m/s² ≈ 2.25 × TM in
+ * units of SA's OWN 20 m/s² gravity**. Two ports of that budget were field-tested the same day:
  *
- * ```cpp
- * adhesion = GetAdhesiveLimit(colPoint) * traction;                              // 4.5 road×rubber × TM×0.001
- * adhesion *= min(suspensionBias * fSuspensionForceLevel * 4 * (1 - compression), 2);  // load factor
- * ```
+ * - absolute (`μ = 4.59 × TM` against our 9.81): grip-to-weight came out DOUBLE the original's —
+ *   "weightless, uncontrollable, fast" within one round;
+ * - dimensionless (`μ = 2.25 × TM`): weight-feel right, but absolute cornering radii ~2× the original's —
+ *   the obstacle-avoidance-at-speed complaint stayed, because at 1 g you cannot have both SA's radii and
+ *   SA's weight-feel.
  *
- * The load factor closes to **4 × the share of the car's weight the wheel carries** (the static deflection is
- * `share / (forceLevel × axleBias)` of the travel — `SetupSuspensionLines` writes the same equilibrium as
- * `1 − 1/(4 × forceLevel)` — so forceLevel cancels), i.e. exactly 1 at an even quarter. In SI that makes one
- * wheel's force cap `4.5 × TM × 0.001 × 2500 × 4 × N/(m·g_SA)` × m — proportional to its load N, which is
- * the shape Rapier's own cap (`frictionSlip × N × dt`) already has.
- *
- * **The normalisation is by the ORIGINAL's gravity, and a field round is why.** SA is a 20 m/s² world
- * (`CPhysical::ApplyGravity`, `0.008` gu/frame²): its rest budget of ~45 × TM m/s² of lateral acceleration
- * is **2.25 × TM in units of its own gravity** — that dimensionless ratio is what SA handling FEELS like.
- * The first fix normalised by OUR 9.81 instead, porting the absolute budget into half the gravity: grip to
- * weight came out double the original's, and the field verdict was immediate — "the cars are weightless,
- * uncontrollable, fast" (2026-07-27, round 2). So: `frictionSlip = 45 × TM / g_SA ≈ 2.25 × TM`. The known
- * cost, stated: absolute cornering radii at speed are ~2× the original's, because matching BOTH SA's radii
- * and SA's weight-feel in a 1 g world is impossible — that is the (recorded) gravity decision, and closing
- * it for real would mean running vehicles under SA gravity with the springs recalibrated.
- *
- * History, because this number has now been wrong in three directions: **10.5** (Bullet's demo default —
- * 15× any tyre, cars turned like slot cars), then **TM itself** (081/05, read as a real-world μ — ~2.3×
- * weaker than the original's own ratio: "hard to turn in at speed"), then **4.59 × TM** (the absolute-budget
- * port above — weightless). The derivation also resolved 05's recorded dead end (the ~1.8 g admiral launch):
- * the missing piece was the load factor's static value.
- *
- * The `2.0` cap means a wheel carrying more than HALF the car's weight gains nothing further — applied
- * per-step in `setVehicleControls`, where the load is read anyway. The axle split stays `fTractionBias` in
- * the original's `2 × bias` / `2 − 2 × bias` form. Surface types are still not modelled: every road is
- * tarmac until `surface.dat`/`surfinfo.dat` are read.
+ * The decision (audit addendum, round 3): stay on the baseline the field likes, and resolve the conflict
+ * structurally — **vehicles under SA gravity (the 081/08 2g experiment)**, where this constant times a
+ * doubled wheel load delivers SA's absolute budget by construction (`2.25 × TM × N(2g) = 45 × TM × share ×
+ * m`). Until then the derivation lives in the audit and in this comment, not in a constant that the field
+ * has twice rejected. (10.5, Bullet's demo default, remains the third recorded wrong value.)
  */
-/** `data/surface.dat` Road × Rubber — the tarmac cell the steering limiter already uses. */
-const SURFACE_ADHESION_ROAD_RUBBER = 4.5;
-/** The original's use-site scale on `fTractionMultiplier` (`/250 × 0.25` in `ProcessControl`/`ProcessCarWheelPair`). */
-const SA_TRACTION_SCALE = 0.001;
-/** Game units per frame² → m/s² (50 Hz²). */
-const SA_ACCEL_TO_SI = 2500;
-/** The adhesion load factor per unit of weight share (`4 × (1 − compression) × forceLevel × axleBias` at rest). */
-const ADHESION_LOAD_FACTOR = 4;
-/** …and its ceiling: a wheel carrying more than half the car gains no further grip (`min(…, 2.0f)`). */
-const ADHESION_LOAD_CAP = 2;
-/** SA's own gravity (0.008 gu/frame² × 2500) — the budget is normalised against the world it was tuned in. */
-const SA_GRAVITY = 20;
-/** Rapier `frictionSlip` per unit of `fTractionMultiplier` — the whole derivation above, folded (≈ 2.25). */
-const TYRE_GRIP_PER_TRACTION =
-  (SURFACE_ADHESION_ROAD_RUBBER * SA_TRACTION_SCALE * SA_ACCEL_TO_SI * ADHESION_LOAD_FACTOR) / SA_GRAVITY;
 /**
  * What a LOCKED wheel keeps of its lateral stiffness — 3 %, and it has to be that low for a reason worth
  * knowing.
@@ -258,7 +226,6 @@ export const VEHICLE_PHYSICS_CONSTANTS: readonly (readonly [string, number])[] =
   ['susp max travel (m)', SUSPENSION_MAX_TRAVEL],
   ['susp max force (N)', SUSPENSION_MAX_FORCE],
   ['tyre grip floor', TYRE_GRIP_FLOOR],
-  ['tyre grip / traction', TYRE_GRIP_PER_TRACTION],
   ['parking brake (N)', PARKING_BRAKE],
   ['chassis lin damping', CHASSIS_LINEAR_DAMPING],
   ['chassis ang damping', CHASSIS_ANGULAR_DAMPING],
@@ -1070,20 +1037,14 @@ export class PhysicsWorld {
       engine: number;
       /** The lever is up: the REAR wheels lock, the front keeps whatever `brake` asks of it. */
       handbrake: boolean;
-      /** Chassis mass (kg) — the adhesion load cap is "half the car's weight", and that needs the car. */
-      mass: number;
       steer: number;
       step: number;
       /** The car's authored tyre grip — re-read each step because a SLIDING wheel gets less of it. */
       traction: VehicleTractionSpec;
     },
   ): void {
-    const { brake, brakeBias, drive, engine, handbrake, mass, steer, step, traction } = controls;
+    const { brake, brakeBias, drive, engine, handbrake, steer, step, traction } = controls;
     const perBrake = brake / (wheels.length || 1);
-    // The original's load-factor ceiling (`min(…, 2.0f)`): grip grows with the load a corner carries only up
-    // to HALF the car's weight on one wheel. Rapier's cap is `μ × N`, linear in N without limit, so past that
-    // point μ is scaled down to hold the product still.
-    const loadCeiling = (mass * GRAVITY) / ADHESION_LOAD_CAP;
     wheels.forEach((wheel, i) => {
       const driven = drive === '4' || (drive === 'F') === wheel.front;
       const load = controller.wheelSuspensionForce(i) ?? 0;
@@ -1095,9 +1056,7 @@ export class PhysicsWorld {
       // Rapier does not expose its `skid_info`, but it exposes the impulses, and a wheel sitting on its own
       // friction circle IS the sliding one. That is last step's state driving this step's grip — the same
       // one-frame feedback the original runs on (`bAlreadySkidding`).
-      // The load cap first: a corner past the ceiling keeps the ceiling's grip, not more.
-      const capScale = load > loadCeiling ? loadCeiling / load : 1;
-      const base = tyreGrip(traction, wheel.front) * capScale;
+      const base = tyreGrip(traction, wheel.front);
       const used = Math.hypot(controller.wheelForwardImpulse(i) ?? 0, controller.wheelSideImpulse(i) ?? 0);
       const sliding = load > 0 && used >= base * load * step * SLIDE_THRESHOLD;
       const mu = sliding ? base * traction.loss : base;
@@ -1535,10 +1494,11 @@ function suspensionSetup(
   };
 }
 
-/** The wheel's friction coefficient: the authored multiplier on the ORIGINAL's adhesion scale
- *  (see {@link TYRE_GRIP_PER_TRACTION}), split across the axles the way SA splits it. */
+/** The wheel's friction coefficient: the authored multiplier, split across the axles the way SA splits it.
+ *  The BASELINE scale — the tyre-scale decision comment in the constants block explains why it is parked
+ *  here pending the 081/08 2g experiment. */
 function tyreGrip(traction: VehicleTractionSpec, front: boolean): number {
   const axle = front ? 2 * traction.bias : 2 - 2 * traction.bias;
 
-  return Math.max(TYRE_GRIP_FLOOR, traction.mult * axle * TYRE_GRIP_PER_TRACTION);
+  return Math.max(TYRE_GRIP_FLOOR, traction.mult * axle);
 }

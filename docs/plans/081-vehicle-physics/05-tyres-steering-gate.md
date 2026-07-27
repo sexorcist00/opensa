@@ -293,3 +293,9 @@ same correction (its removal + a 7× grip swing in one change made the verdict u
 most useful datum: **turn-in at speed did not respond to a 7× grip swing** — the at-speed gate is not the
 tyre. Next suspects, in order: the limiter's granted angle and the steer slew, measured on `sweeper`, one
 variable at a time. Full detail: the audit addendum.
+
+**Round 3 (decision)**: the tyre scale is PARKED at the baseline (`μ = TM × axle`) — both derived ports
+were field-rejected under 1 g (absolute: weightless; dimensionless: at-speed evasion still ~half the
+original's). The derivation is not wasted: under SA gravity the dimensionless constant delivers the absolute
+budget through doubled loads by construction, so the whole question moves to `08-sa-gravity.md`. This plan's
+grip section is complete as a BASELINE, and its two rejected scales are the experiment's motivation record.

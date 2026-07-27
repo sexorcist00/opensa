@@ -121,17 +121,16 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   `adhesive` is the rubber-on-road cell of `data/surface.dat` (4.5). It does not touch town driving (full lock
   to ~53 km/h) and tightens with the square of speed. Countersteering into a slide and the handbrake both
   restore full lock, as they do in the original.
-- **Tyres** (plan 081/05, scale corrected twice 2026-07-27): grip per wheel is `fTractionMultiplier` on the
-  ORIGINAL's adhesion scale, normalised by the original's own gravity — `μ_eff = 45 × TM / g_SA(20) = 2.25 ×
-  TM` (the budget: `4.5 (surface.dat road×rubber) × 0.001 × 2500 × the load factor`, whose static value is
-  `4 × the wheel's weight share`, capped at 2) — split across the axles by `fTractionBias`. Three wrong
-  scales preceded it: a shared 10.5 from Bullet's demo (slot cars), the raw TM read as an earth μ (~2.3×
-  weaker than SA's grip-to-weight — "hard to turn in at speed"), and the ABSOLUTE budget `4.59 × TM` ported
-  into half SA's gravity (grip-to-weight doubled — "weightless, uncontrollable" within one field round).
-  The known cost of the dimensionless port: absolute cornering radii at speed are ~2× the original's — the
-  recorded gravity decision. The longitudinal clamp is applied on OUR side in `setVehicleControls`, because
-  Rapier applies its own friction limit only when a wheel already has a side impulse — a car accelerating
-  or braking dead ahead is otherwise unlimited. Engine force reaches driven
+- **Tyres** (plan 081/05; scale PARKED at the baseline 2026-07-27 pending 081/08): grip per wheel is
+  `fTractionMultiplier` read as a friction coefficient, split across the axles by `fTractionBias`. The
+  audit derived SA's true budget (`45 × TM` m/s² absolute — `2.25 × TM` in units of SA's own 20 m/s²
+  gravity, load factor `4 × weight share` capped at 2) and the field rejected BOTH 1 g ports of it the same
+  day: the absolute one doubled grip-to-weight ("weightless"), the dimensionless one left at-speed evasion
+  at ~half the original's. The conflict is structural — at 1 g you cannot have SA's radii and SA's
+  weight-feel together — and is staged onto the 2g experiment (`081/08`), where this same baseline × doubled
+  wheel loads delivers SA's budget by construction. The longitudinal clamp is applied on OUR side in
+  `setVehicleControls`, because Rapier applies its own friction limit only when a wheel already has a side
+  impulse — a car accelerating or braking dead ahead is otherwise unlimited. Engine force reaches driven
   wheels only (`nDriveType`). A wheel that has **broken loose grips less** (`fTractionLoss`, 0.72…0.85): past
   the limit a tyre does not merely stop giving more, it gives less, which is what makes a slide continue
   instead of self-correcting. Sliding is detected from the wheel's own impulses against its friction circle,

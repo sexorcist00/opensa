@@ -1,6 +1,8 @@
 # 081 — Vehicle driving physics (feel overhaul on the own engine)
 
-**Status: 01–05 SHIPPED and field-accepted (2026-07-26); 06 and 07 open.** Supersedes the idea at
+**Status: 01–05 SHIPPED and field-accepted (2026-07-26); 06 and 07 open; 08 (SA gravity) QUEUED by the
+2026-07-27 audit rounds — see `08-sa-gravity.md`, the audit addendum, and 03/05's round entries (stance law
++ visible travel shipped early; the tyre scale is parked at baseline pending 08).** Supersedes the idea at
 `docs/ideas/0.4.0/plans/07-vehicle-physics/` (2026-07-12, "THE priority gameplay task") — rethought against
 what the engine actually is now. The audit of what the chain cost and bought:
 [`docs/audit/vehicle-physics-081.md`](../../audit/vehicle-physics-081.md).

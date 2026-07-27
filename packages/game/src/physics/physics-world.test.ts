@@ -774,7 +774,7 @@ describe('PhysicsWorld raycast vehicle', () => {
       physics.dispose();
     });
 
-    it('hands the tyre the ORIGINAL adhesion scale, not the raw multiplier as an earth μ (2026-07-27 audit)', async () => {
+    it('hands the tyre the PARKED baseline scale — the raw multiplier — until the 2g experiment (081/08)', async () => {
       const { controller, physics } = await car();
 
       physics.setVehicleControls(controller, FRONT, {
@@ -783,17 +783,15 @@ describe('PhysicsWorld raycast vehicle', () => {
         drive: '4',
         engine: 0,
         handbrake: false,
-        mass: 1500,
         steer: 0,
         step: STEP,
         traction: { bias: 0.5, loss: 0.8, mult: 0.7 },
       });
 
-      // 4.5 (road×rubber) × 0.001 × 2500 × 4 / g_SA(20) = 2.25 per unit of fTractionMultiplier: a 0.7 tyre
-      // on a neutral bias must read ~1.58, not 0.7. Normalised by the ORIGINAL's gravity — its grip-to-weight
-      // ratio — not ours: porting the absolute budget into half the gravity doubled it, and the field called
-      // the fleet "weightless" inside one round (2026-07-27, round 2).
-      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7 * 2.25, 2);
+      // The 2026-07-27 audit derived SA's own scale (2.25 × TM dimensionless, 4.59 × TM absolute) and the
+      // field rejected BOTH under 1 g — this pins the deliberate baseline so a re-scale cannot slip in as a
+      // side effect. The SA budget returns via doubled wheel loads when vehicles run under SA gravity.
+      expect(controller.wheelFrictionSlip(0)).toBeCloseTo(0.7, 5);
       physics.dispose();
     });
 
@@ -838,7 +836,6 @@ describe('PhysicsWorld raycast vehicle', () => {
         drive: '4',
         engine: 12000,
         handbrake: false,
-        mass: 1500,
         steer: 0,
         step: STEP,
         traction: { bias: 0.5, loss: 0.8, mult: 0.7 },
