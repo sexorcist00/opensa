@@ -11,8 +11,13 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`088`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+`001`–`089`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
 
+- **[089 — Vehicle particles](./089-vehicle-particles/readme.md)** — OPENED 2026-07-27: tyre smoke
+  (`collisionsmoke`) and skid marks (`particleskid`) driven by how hard a wheel actually slides, marks
+  darker with the slide and gone 5 REAL seconds later, plus impact smoke. Its foundation is the capability
+  the 044 FX path never had — a DYNAMIC emitter (today's particles are baked static map anchors) — and the
+  surface-driven wheel effects on top wait on [081/10](./081-vehicle-physics/10-surface-types.md).
 - **[088 — Ped locomotion feel](./088-ped-locomotion-feel/readme.md)** — SHIPPED 2026-07-24, both
   rounds: turn-rate heading + plant, crossfades with phase carry, walk/run/sprint tiers + cycle-speed
   sync, the jump/fall FSM (coyote/buffer/anticipation), impact-tiered landings, a real slope slide,
@@ -47,8 +52,11 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   translation of the original's own code (spring law, `cTransmission` gearbox, air drag, tyre grip and
   traction loss, the steering limiter, the rear-lock handbrake); six fitted constants died; the gate is
   answered — STAY on DRCVC, its three asymmetries documented. Audit:
-  [`audit/vehicle-physics-081.md`](../audit/vehicle-physics-081.md). **06 (kerb probe + visible suspension)
-  and 07 (presets + physics CI) remain.** Promoted from ideas/0.4.0/07.
+  [`audit/vehicle-physics-081.md`](../audit/vehicle-physics-081.md). **08 (SA gravity) closed-rejected and
+  09 (speed steering) SHIPPED 2026-07-27**; the same day 07's regression pack (5 cars × 11 scenes, gated by
+  `scripts/phys-regression.ts`) and its step-cost measurement landed, and 06 §2's kerb assist was closed by
+  the field as not needed. **Open: 06 §1/§3, 07's class sweep and close-out, and 10 (surface types).**
+  Promoted from ideas/0.4.0/07.
 - **[080 — Cinematic camera](./080-cinematic-camera/readme.md)** — GTA V-feel follow camera: per-channel
   springs/lag, auto-center + look-ahead, collision whiskers, vehicle speed/FOV/drift framing, bob/shake,
   7 sub-plans + priority chain. **01–07 DONE 2026-07-25** — the on-foot baseline, collision and the

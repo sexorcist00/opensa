@@ -86,8 +86,11 @@ positive gate verdict swaps the controller without invalidating the chain.
 | 07  | [Presets + physics CI](07-presets-regression.md)         | Per-class field sweep (sports/truck/bus), replay regression pack with tolerance bands, close-out.                                    |
 | 08  | [SA gravity](08-sa-gravity.md) **CLOSED-REJECTED**       | The 2g experiment — built, measured, field-rejected same day; postmortem carries the two findings. Do not reopen.                    |
 | 09  | [Responsive steering at speed](09-speed-steering.md) **SHIPPED** | Speed-growing lateral grip (virtual downforce) + the SLIDE_SPEED 50× unit-bug fix; longitudinal frozen at baseline; dials field-owned. |
+| 10  | [Surface types](10-surface-types.md) **QUEUED**           | The wheel learns what it stands on: COL materials through the seam, a per-wheel probe, grip from `surface.dat`'s group matrix instead of the tarmac-only 4.5, `WET_GRIP` in rain. |
 
-Execution order + rationale: [priority.md](priority.md).
+Execution order + rationale: [priority.md](priority.md). What the physics LOOKS like — tyre smoke, skid
+marks, impact smoke, and the surface effects 10 unlocks — is its own plan:
+[089 vehicle particles](../089-vehicle-particles/readme.md).
 
 ### 05b — damageable tyres (queued 2026-07-22, no code yet)
 
