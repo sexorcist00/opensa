@@ -1,9 +1,12 @@
 # 081/09 — Responsive steering at speed (the field-stated goal)
 
-**Status: OPEN — the user's stated goal after four rejected fidelity rounds (2026-07-27):** *"make steering
-at speed responsive enough to swerve round obstacles and enter corners properly — this is the goal for now."*
-Implementation on branch `081-09-speed-steering`; merges on field acceptance, dies into
-`docs/postmortem/081-vehicle-physics/` otherwise.
+**Status: SHIPPED — merged to `main` on field acceptance (2026-07-27).** The user's stated goal after four
+rejected fidelity rounds: *"make steering at speed responsive enough to swerve round obstacles and enter
+corners properly."* What shipped: the lateral speed-grip assist (dials 12 m/s / cap 3, field-tuned), the
+`SLIDE_SPEED` 50× unit-bug fix that had been masking every steering round, and the session dials
+(`?gripVd`, `?gripCap`) with capture self-description. The longitudinal twin (`driveGrip`) was tried and
+field-rejected the same day — longitudinal feel is fleet-wide-frozen at the baseline; assists are
+lateral-only (round 3 below).
 
 ## The insight this plan is built on (why the four rounds before it failed)
 
