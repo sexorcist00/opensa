@@ -1,0 +1,83 @@
+# 081/09 — Responsive steering at speed (the field-stated goal)
+
+**Status: OPEN — the user's stated goal after four rejected fidelity rounds (2026-07-27):** *"make steering
+at speed responsive enough to swerve round obstacles and enter corners properly — this is the goal for now."*
+Implementation on branch `081-09-speed-steering`; merges on field acceptance, dies into
+`docs/postmortem/081-vehicle-physics/` otherwise.
+
+## The insight this plan is built on (why the four rounds before it failed)
+
+**Steering angle does not turn a car — lateral force does.** At speed the front tyres are already SATURATED
+at the angle the limiter grants (110 km/h: the granted ~8° demands ~47 m/s², the baseline tyre supplies ~7).
+More angle (full lock, faster slew, a softer limiter) adds NOTHING past saturation — it deepens the slide
+and `fTractionLoss` then cuts the front a further 15 %: the plow. That is why "restore the full lock"
+(081/05) did not close the complaint, and why it survived a 7× grip-scale range and a 2× gravity change
+unchanged: uniform grip scaling moves LOW-speed feel (which the field likes as is) in lockstep with
+high-speed capability. The complaint's shape — strong at 30 km/h, helpless at 130 — needs a lever with the
+OPPOSITE shape: capability that grows with speed.
+
+## Design
+
+**One mechanism: lateral grip that grows with speed** (downforce-form, VIRTUAL — a factor in the tyre's
+friction coefficient, never a real force):
+
+```
+boost(v) = min(1 + (v / SPEED_GRIP_REFERENCE)², SPEED_GRIP_CAP)     // start: 20 m/s, 2.5
+```
+
+- Applied ONLY to the `frictionSlip` handed to Rapier (the lateral solver's cap). The engine clamp and the
+  brake cap stay on the UNBOOSTED grip: launches, acceleration, braking and top speed are byte-identical to
+  the field-liked baseline — the four rounds' verdicts on longitudinal feel are settled and respected.
+- The slide detector runs against the boosted circle (or every wheel at speed reads "sliding" and the loss
+  factor eats the boost).
+- The steering limiter is UNTOUCHED: its granted angle already roughly matches the boosted budget, and the
+  saturation analysis above says angle is not the bottleneck.
+- Expected numbers at the starting dials: entry yaw at 110 km/h **13°/s → ~32°/s**; a 3 m swerve at
+  110 km/h **~29 m of road → ~13 m**; ordinary corner entries (50–90 km/h) gain ×1.5–2; below 40 km/h the
+  factor is ≤1.3 — town driving and weight-feel stay the baseline's.
+
+**Tuning protocol — the dial belongs to the field.** `?gripVd=<m/s>&gripCap=<×>` override the two constants
+per session; the F2 Physics tab shows the ACTIVE values (self-description). The user drives, adjusts, and
+the accepted numbers get committed as the defaults. Feel targets come from field verdicts — the 08
+postmortem's second finding, operationalised.
+
+## Honesty ledger
+
+This is a deliberate assist the original does not have, and it is documented as one (here, in
+`features/vehicles.md`, and in the tyre-constant comment). The original "solves" the same shape with ~3 g
+arcade tyres and 2 g gravity — both field-rejected wholesale in 08. Physics stays the honest frame; the
+target numbers are the field's.
+
+## Risks
+
+1. **Roll at speed**: ×2.5 lateral is ×2.5 roll moment in fast manoeuvres — the slalom (which flips the
+   infernus at baseline already) and the sweeper are the watch instruments; `SPEED_GRIP_CAP` is the one
+   safety dial.
+2. **Handbrake-flick at speed** changes slightly (a locked axle keeps `LOCKED_SIDE_FRICTION` of a BOOSTED
+   side force) — re-measured on the flick scene, re-tuned only if the field notices.
+3. **Snap via the countersteer exemption**: once the boosted tyre finally lets a car reach real slip at
+   speed, the limiter's exemption hands FULL lock mid-slide (the baseline sweeper's spin mechanism). If the
+   field reports "responsive but snaps", smoothing that exemption is the ONE queued follow-up — its own
+   step, not part of this change.
+
+## A/B instruments
+
+The `2026-07-27-sa-gravity-baseline-*.json` matrices (5 cars × 11 scenes) ARE this plan's before-set: they
+were captured on physics identical to today's `main`, and since this change leaves the longitudinal path
+untouched, scene entry speeds match — the first clean cross-config comparison this chain gets. After-set on
+the branch; `sweeper` entry window (6–8.5 s) yaw/gLat and the spin-vs-arc outcome are the headline;
+`slalom`/`u-turn` roll peaks are the safety gate.
+
+## Acceptance
+
+- Sweeper entry (moderate steer, ~100 km/h): sustained yaw ≥ 2× baseline, and the car ARCS (slip bounded)
+  instead of plowing straight or spinning.
+- Slalom/u-turn roll peaks not materially worse than baseline at the shipped `SPEED_GRIP_CAP`.
+- Launch / brake-strip / rest / crest summaries within noise of baseline (the untouched-longitudinal claim,
+  verified rather than asserted).
+- **Field: "объезд препятствия на 100–130 км/ч" — possible, controllable, and the low-speed feel unchanged.
+  The user names the final dial values.**
+
+## Ledger
+
+_(A/B numbers, tuning rounds, field verdict)_

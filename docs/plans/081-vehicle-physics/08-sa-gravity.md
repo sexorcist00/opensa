@@ -1,6 +1,12 @@
 # 081/08 — Vehicles under SA gravity (the 2g experiment)
 
-**Status: REJECTED in the field (2026-07-27) — the full run, its A/B matrices and the verdict live on branch `081-08-sa-gravity`; main keeps the field-liked baseline.** What the rejection isolated: the persistent "weak turn-in at speed" complaint is not grip MAGNITUDE (it survived a 7x grip range, two gravities and two spring laws) — it is the SHAPE of lateral capability being speed-independent while demanded radius grows with v². The lever with the complaint's inverse shape is speed-dependent load (downforce-class), tried next on the liked baseline. The full evidence trail is
+**Status: CLOSED — REJECTED, do not reopen.** Field-rejected 2026-07-27 the day it was built; the complete
+run (pin, lever, A/B matrices, verdict) is preserved on branch `081-08-sa-gravity`, and the postmortem —
+with the two findings that ARE this experiment's product — is
+`docs/postmortem/081-vehicle-physics/sa-faithful-feel.md`. The findings: the "weak at speed" complaint is a
+SHAPE (lateral cap μ·g is speed-independent while demanded radius grows with v²), not a scale; and this
+project's feel target is the field's verdict, not the original's numbers. The successor carrying the goal:
+`09-speed-steering.md`.** What the rejection isolated: the persistent "weak turn-in at speed" complaint is not grip MAGNITUDE (it survived a 7x grip range, two gravities and two spring laws) — it is the SHAPE of lateral capability being speed-independent while demanded radius grows with v². The lever with the complaint's inverse shape is speed-dependent load (downforce-class), tried next on the liked baseline. The full evidence trail is
 `docs/audit/vehicle-physics-081.md` (addendum, rounds 1-3) and 05's ledger.
 
 ## Why this exists — the conflict no constant can solve

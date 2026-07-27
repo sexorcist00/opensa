@@ -1,8 +1,9 @@
 # 081 — Vehicle driving physics (feel overhaul on the own engine)
 
-**Status: 01–05 SHIPPED and field-accepted (2026-07-26); 06 and 07 open; 08 (SA gravity) QUEUED by the
-2026-07-27 audit rounds — see `08-sa-gravity.md`, the audit addendum, and 03/05's round entries (stance law
-+ visible travel shipped early; the tyre scale is parked at baseline pending 08).** Supersedes the idea at
+**Status: 01–05 SHIPPED and field-accepted (2026-07-26); 06 and 07 open; 08 (SA gravity) CLOSED-REJECTED
+(2026-07-27, postmortem `../../postmortem/081-vehicle-physics/sa-faithful-feel.md` — do not reopen); 09
+(responsive steering at speed) OPEN — the field-stated goal, `09-speed-steering.md`. The stance law and
+visible suspension travel from the audit rounds are shipped on main.** Supersedes the idea at
 `docs/ideas/0.4.0/plans/07-vehicle-physics/` (2026-07-12, "THE priority gameplay task") — rethought against
 what the engine actually is now. The audit of what the chain cost and bought:
 [`docs/audit/vehicle-physics-081.md`](../../audit/vehicle-physics-081.md).
@@ -83,6 +84,8 @@ positive gate verdict swaps the controller without invalidating the chain.
 | 05b | Damageable tyres (see below)                              | Burst a tyre: grip drops on that corner, the car pulls, the wheel sits on its rim. The detection half already shipped.               |
 | 06  | [Air, kerbs, visual suspension](06-air-kerbs-visual.md)  | In-air attitude control, kerb contact smoothing, VISIBLE suspension travel through the rig.                                          |
 | 07  | [Presets + physics CI](07-presets-regression.md)         | Per-class field sweep (sports/truck/bus), replay regression pack with tolerance bands, close-out.                                    |
+| 08  | [SA gravity](08-sa-gravity.md) **CLOSED-REJECTED**       | The 2g experiment — built, measured, field-rejected same day; postmortem carries the two findings. Do not reopen.                    |
+| 09  | [Responsive steering at speed](09-speed-steering.md) **OPEN** | The field-stated goal: speed-growing lateral grip (virtual downforce), longitudinal untouched, dials owned by the field.        |
 
 Execution order + rationale: [priority.md](priority.md).
 
