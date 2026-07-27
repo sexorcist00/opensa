@@ -63,6 +63,7 @@ const MANIFEST: readonly Fixture[] = [
   copy('data/object.dat', 'data/object.dat'),
   copy('data/procobj.dat', 'data/procobj.dat'),
   copy('data/surfinfo.dat', 'data/surfinfo.dat'),
+  copy('data/surface.dat', 'data/surface.dat'), // the 6×6 adhesion matrix surfinfo's groups index (081/10)
   copy('data/timecyc.dat', 'data/timecyc.dat'),
   copy('data/carcols.dat', 'data/carcols.dat'),
   copy('data/carmods.dat', 'data/carmods.dat'),

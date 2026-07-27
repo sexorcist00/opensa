@@ -95,3 +95,32 @@ which surface each wheel reported** — the same self-describing rule the spring
 ## Ledger
 
 _(surface counts, the chosen probe policy + its measured cost, before/after captures, field verdict)_
+
+### 2026-07-27 — steps 1-2: both data files are read, and the tests pin what they actually contain
+
+No behaviour change; this is the data half, and it ships green.
+
+- **`parseSurfaceInfo`** (`renderware/parsers/text/surfinfo.parser.ts`) turns each row into the full record —
+  adhesion group, tyre/wet grip, skidmark type, friction effect, and every flag the legend names, including
+  the `W_*` wheel effects plan 089 will read. The file's header is a **four-line stacked legend**, so the
+  token positions are spelled out in one `COLUMN` table rather than counted at each use. `parseSurfaceNames`
+  stays as its own entry point (procobj wants one string per row).
+  **A malformed row keeps its name and takes defaults instead of being dropped** — row index IS the COL
+  material id, and dropping one would silently shift every surface after it.
+- **`parseSurfaceAdhesion`** (`surface.parser.ts`) reads `surface.dat`'s lower triangle and **mirrors it**,
+  so `get(a, b) === get(b, a)` and no caller has to know which half the file stored. Comments there start
+  with `;`, not `#`, so it cannot use the shared `cleanLines` — noted at the top of the file.
+- **`data/surface.dat` is now a test fixture** (`scripts/test-fixtures.ts`), so both parsers are tested
+  against the real files rather than against snippets someone typed.
+
+What the tests pin, because these are the numbers the rest of the plan is built on:
+
+| fact                                                | value                                                   |
+| --------------------------------------------------- | ------------------------------------------------------- |
+| the rubber row (what a tyre actually gets)           | road **4.5** · hard 3.6 · loose 3.2 · sand 3.0 · wet 2.8 |
+| nothing drivable out-grips tarmac                    | asserted, not assumed                                    |
+| every cell of the 6×6 filled                         | asserted (a missing pair would read as no grip)          |
+| `TYRE_GRIP` across all 179 rows                      | **1.0 — the override is unused; the alarm if it changes** |
+| adhesion census                                      | road 73 · loose 60 · hard 29 · sand 12 · rubber 3 · wet 2 |
+
+Suite 2840 → **2853 green**. Next: step 3, materials through the collider seam (still no behaviour change).

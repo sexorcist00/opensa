@@ -22,7 +22,8 @@ export {
   type PopcycleZone,
 } from './popcycle.parser';
 export { parseProcObj, type ProcObjRule } from './procobj.parser';
-export { parseSurfaceNames } from './surfinfo.parser';
+export { ADHESION_GROUPS, type AdhesionGroup, type AdhesionMatrix, parseSurfaceAdhesion } from './surface.parser';
+export { parseSurfaceInfo, parseSurfaceNames, type SurfaceInfo } from './surfinfo.parser';
 export {
   buildTimecyc,
   type Rgb,
