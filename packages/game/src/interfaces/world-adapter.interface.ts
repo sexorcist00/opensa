@@ -1,6 +1,23 @@
 import type { CellCoord } from '../streaming/grid';
 import type { ModelColliders } from './collider.interface';
 
+/**
+ * How one axle is built, from `handling.cfg`'s `modelFlags` (plan 081/06 §3).
+ *
+ * The file's own legend gives the hex column two axle nibbles — the 5th digit for the FRONT axle, the 6th for
+ * the REAR — each carrying `1 NOTILT · 2 SOLID · 4 MCPHERSON · 8 REVERSE`. 26 of the 210 stock rows use them
+ * (11 with a solid rear axle: the pickups, the trucks, the tractor), and a row that names nothing gets
+ * `independent`, which is how a car without an authored axle has always been drawn.
+ */
+export interface AxleSetup {
+  /** SA's `AXLE_*_REVERSE`: the model's wheel dummies are mirrored, so the lean flips with them. It is a
+   *  MODIFIER, not a type — five stock rows carry it with no type beside it. */
+  readonly reverse: boolean;
+  readonly type: AxleType;
+}
+
+export type AxleType = 'independent' | 'mcpherson' | 'notilt' | 'solid';
+
 /** Request for one streamed grid cell's HD (`lod=false`) or LOD (`lod=true`) meshes. */
 export interface CellRequest {
   cx: number;
@@ -57,6 +74,10 @@ export type Vec3 = [number, number, number];
 export interface VehicleHandling {
   /** ABS flag (`bABS`), 0/1 as authored. */
   abs: boolean;
+  /** How the FRONT axle is built (`modelFlags`) — it decides how the drawn wheels lean (081/06 §3). */
+  axleFront: AxleSetup;
+  /** How the REAR axle is built — the loud one: a solid rear axle keeps both wheels parallel. */
+  axleRear: AxleSetup;
   /** Brake front/rear split (`fBrakeBias`), 0..1 = share on the FRONT axle. */
   brakeBias: number;
   /** Braking deceleration (`fBrakeDeceleration`), authored units. */

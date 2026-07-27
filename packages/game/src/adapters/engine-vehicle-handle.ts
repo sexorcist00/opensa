@@ -179,8 +179,14 @@ export class EngineVehicleHandle implements VehicleHandle {
     if (!wheel) {
       return;
     }
-    // Steer about the vehicle's up (Z), then spin about the axle (X) — prod's composition order.
-    this.instance.entity.setPartRotation(wheel.part, quatMul(axisAngle(2, pose.steer), axisAngle(0, pose.spin)));
+    // Steer about the vehicle's up (Z), then CAMBER about the wheel's own forward (Y), then spin about the
+    // axle (X). The order is the whole correctness of this line (plan 081/06 §3.3): a steered wheel must lean
+    // about ITS forward axis and not the body's, and the spin has to be innermost or it drags the lean round
+    // with it — a wheel that cambers while rolling would wobble like a bent rim.
+    this.instance.entity.setPartRotation(
+      wheel.part,
+      quatMul(quatMul(axisAngle(2, pose.steer), axisAngle(1, pose.camber)), axisAngle(0, pose.spin)),
+    );
     // Suspension travel: the wheel part slides along the body's local Z (the model frame is Z-up like GTA).
     this.instance.entity.setPartTranslation(wheel.part, [0, 0, pose.lift]);
   }

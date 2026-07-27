@@ -321,12 +321,17 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       const instance = engine.createVehicle(id);
       instance.setPaint(paint);
       const handle = new EngineVehicleHandle(instance, data.rig, () => engine.destroyVehicle(instance));
-      const rig = new VehicleRig(handle);
       const wheels = data.wheels.map((wheel) => ({
         connection: wheel.connection,
         front: wheel.front,
         radius: wheel.radius,
       }));
+      // The rig leans the drawn wheels the way the car was AUTHORED (081/06 §3): the axle build comes from
+      // `modelFlags`, the track width from the same hub placements the physics is given.
+      const rig = new VehicleRig(handle, {
+        axles: { front: data.handling.axleFront, rear: data.handling.axleRear },
+        wheels,
+      });
       const { body, controller, wheelLift } = physics.createDynamicVehicle(
         position,
         heading,

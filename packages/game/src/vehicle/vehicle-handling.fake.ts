@@ -10,6 +10,8 @@ import type { VehicleHandling } from '../interfaces/world-adapter.interface';
 export function fakeHandling(over: Partial<VehicleHandling> = {}): VehicleHandling {
   return {
     abs: false,
+    axleFront: { reverse: false, type: 'independent' },
+    axleRear: { reverse: false, type: 'independent' },
     brakeBias: 0.5,
     brakeDecel: 9,
     centreOfMass: [0, 0, 0],

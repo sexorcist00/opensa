@@ -134,6 +134,9 @@ describe('GtaSaWorldAdapter integration', () => {
       expect(vehicle.model.positions.length).toBeGreaterThan(0);
       expect(vehicle.colliders).not.toBeNull();
       expect(vehicle.handling.mass).toBe(9999); // merged ADMIRAL handling line, not the stock 1109
+      // …and the same row's `modelFlags` 242000 names both axles: McPherson front, solid rear (081/06 §3).
+      expect(vehicle.handling.axleFront).toEqual({ reverse: false, type: 'mcpherson' });
+      expect(vehicle.handling.axleRear).toEqual({ reverse: false, type: 'solid' });
     });
 
     it('maps the WHOLE handling row, not the five columns it used to (081/02)', async () => {
@@ -148,6 +151,10 @@ describe('GtaSaWorldAdapter integration', () => {
 
       expect(handling).toEqual({
         abs: false,
+        // The stock ADMIRAL authors no axle bits at all (`modelFlags` 0) — 26 of the 210 rows do, and this
+        // is not one of them, so both ends read as the default independent build (081/06 §3).
+        axleFront: { reverse: false, type: 'independent' },
+        axleRear: { reverse: false, type: 'independent' },
         brakeBias: 0.52,
         brakeDecel: 8.5,
         centreOfMass: [0, 0, -0.05],

@@ -108,7 +108,16 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   wheel-at-hub rule before it sat every car low in proportion to |lower|; the turismo's −0.20 made it the
   loudest). The DRAWN wheel follows the physics spring length through `VehicleRig` → `setWheel({ lift, spin,
   steer })` → `RigidEntity.setPartTranslation`, smoothed at the fixed step so raycast jitter does not read as
-  a vibrating wheel. Camber and the solid-axle rules remain plan 06's.
+  a vibrating wheel.
+- **Wheels lean the way the car was authored** (plan 081/06 §3): `handling.cfg`'s `modelFlags` names each
+  axle — `NOTILT · SOLID · MCPHERSON · REVERSE`, the 5th hex digit for the front and the 6th for the rear —
+  and the drawn wheels follow it. A **SOLID** axle is one beam, so both its wheels take `atan(Δlift / track)`
+  and stay upright while the body leans over them (a pickup's rear end in a corner); an **independent** or
+  McPherson axle leans a fraction of that with the compressed wheel taking its top inward; **NOTILT** stays
+  square. The engine handle composes `steer(Z) ⊗ camber(Y) ⊗ spin(X)`, in that order, so a steered wheel
+  cambers about ITS OWN forward axis and a rolling one does not drag its lean round with it. 27 rows of the
+  built `handling.cfg` author an axle, 19 of them a solid rear one (savanna, tornado, picador, sadler,
+  blade, towtruck, tractor…).
 - **Air control** (plan 081/06 §1): with every wheel off the ground for 0.15 s, W/S pitch the car, A/D roll
   it and A/D with the handbrake yaws it — the original's own block (`CAutomobile::ProcessControl`), which
   works out as `1.75 rad/s²` per unit of stick for any car up to 3000 `fTurnMass` and proportionally less

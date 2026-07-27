@@ -118,12 +118,15 @@ becomes the next thing the eye rejects. The two land together or the improvement
 - [ ] Kerb probe + impulse ramp + thresholds + tests; `kerb-strike` A/B captures.
 - [x] `animTranslation` + `setPartTranslation` on `RigidEntity` (the one primitive below the vehicle layer).
       **Landed early (2026-07-27)** as the stance fix's dependency — see the audit addendum.
-- [ ] Axle-type mapping from `modelFlags` (front/rear digits) into the typed handling row.
-- [ ] `setWheel` reshaped to `{ camber, spin, steer, travel }`; rig computes + smooths both channels at the
+- [x] Axle-type mapping from `modelFlags` (front/rear digits) into the typed handling row. **Shipped
+      2026-07-27** — `axleFront` / `axleRear` on the handling row.
+- [x] `setWheel` reshaped to `{ camber, spin, steer, travel }`; rig computes + smooths both channels at the
       FIXED step; engine handle composes `steer(Z) ⊗ camber(Y) ⊗ spin(X)` and the local-Z offset.
       **The travel half landed early** (shaped `{ lift, spin, steer }`, smoothed in the rig at the fixed
-      step, `lift = connection raise − live spring length`); camber joins with the axle rules above.
-- [ ] Clamps + no-ops: authored travel, LOD bands, detached parts. Fake-handle tests pin every one.
+      step, `lift = connection raise − live spring length`); **camber joined it 2026-07-27**, shaped
+      `{ camber, lift, spin, steer }` with the composition order pinned by its own test.
+- [x] Clamps + no-ops: authored travel, LOD bands, detached parts — see the ledger; two of the three are
+      structurally impossible today rather than guarded.
 - [ ] **Field round**: jumps (crest at varying speed), kerb mounts, cobbled/uneven streets ("do the
       wheels live?"), plus regression drive of everything since 02.
 
@@ -236,3 +239,46 @@ during it. The `atS` half earned itself immediately (see below).
 attitude input, not a u-turn that happens to leave the road). Until then §1's acceptance — "correctable in the
 air, landed without a nose-plant" — is a FIELD verdict on a real stunt jump, which is what this plan's field
 round asks for anyway.
+
+### 2026-07-27 — §3 camber shipped: the axle the car was authored with now reaches the screen
+
+`modelFlags`' two axle nibbles are read into the handling row (`axleFront` / `axleRear`, each a type plus the
+`REVERSE` modifier — five stock rows carry REVERSE with no type beside it, so it had to be a modifier rather
+than a fourth type). The rig turns them into a per-wheel lean, the handle composes it, and the order is the
+whole correctness of the line: **`steer(Z) ⊗ camber(Y) ⊗ spin(X)`**, pinned by a test that turns the wheel to
+full lock BOTH ways and checks the axle tips out of the horizontal by the same angle, and by a second one that
+spins the wheel 12.5 rad and checks the lean does not move.
+
+**The rules, and what each one costs:**
+
+- **SOLID** is free of constants: one beam, both wheels square to it, so relative to the body they take
+  `atan(Δlift / track)` — which is exactly the body's own roll, taken back out. A pickup's rear wheels stay
+  upright while its body leans over them, which is what the field brief's screenshot shows.
+- **INDEPENDENT / MCPHERSON** carries the one fitted number in the file, `0.44 rad/m`, and it is fitted to
+  real suspensions (about a degree of negative camber per 40 mm) rather than to a car. It is applied to a
+  wheel's travel **relative to its axle partner**, because the rig is fed hub offsets whose REST value
+  belongs to a standing pose it does not know. Stated price: a symmetric bump draws no camber here where a
+  real wishbone would gain some; in a corner the two are identical. **The original's own rule is not in the
+  reversed source** — nothing in gta-reversed reads `AXLE_*` — so this is ours until it is, and it is the
+  only piece of §3 that is.
+- **NOTILT** is zero, **REVERSE** flips the sign, and a wheel with no partner on its axle (a three-wheeler, a
+  model whose dummies did not pair) is zero: an unknown axle may not invent a lean.
+
+**The data, read from the BUILD rather than from the source tree** (the standing rule, and it paid again):
+27 of the built `handling.cfg`'s 210 rows author an axle, 19 of them a solid rear one — savanna, tornado,
+picador, sadler, blade, towtruck, tractor, quadbike… **and the COMET's row differs from stock**
+(`0x40000800` → `0x40442000`, McPherson front and rear): a mod authored an axle onto one of the two cars the
+field names by name. Stock `admiral`, `infernus` and `turismo` author none, so they draw the independent
+default — which is also the answer to "why does my sedan not lean its wheels": it is not authored to.
+
+**The three no-ops §3.5 asked for, honestly:** the authored TRAVEL clamp is already structural (the lift comes
+from the controller's own suspension length, which cannot exceed what it was configured with); a hidden LOD
+band leaves the part index valid, so the write lands on a part nobody draws and is inert; and a DETACHED wheel
+cannot happen — wheels are not in the damage system's part set, which owns `setPartWorldMatrix`. Guarding
+either of the last two today would be guarding against a mechanism that does not exist. **Reopen this line
+when wheels become detachable** (05b damageable tyres would do it).
+
+**Not measured, on purpose.** This changes nothing about how a car behaves — no capture channel can see it,
+and the `[phys]` matrix is byte-identical by construction. Its acceptance is the FIELD one this plan already
+asks for: a solid-axle car (`savanna`, `picador`) and an independent one (`infernus`) through the same corner,
+distinguishable on screen.

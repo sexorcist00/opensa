@@ -5,13 +5,30 @@ import { describe, expect, it } from 'vitest';
 
 import { EngineVehicleHandle } from './engine-vehicle-handle';
 
+/** How far a posed wheel's AXLE (its local +X) tips out of the horizontal — the camber, seen from outside
+ *  the composition. Steering rotates the axle within the ground plane and spin turns about it, so neither
+ *  may move this number. */
+function axleTilt(quat: readonly number[]): number {
+  const [x, y, z, w] = quat;
+
+  return 2 * (x * z - y * w); // the z component of the rotated +X axis
+}
+
 /** A recording engine instance: the handle's whole job is to poke exactly these. */
-function instance(): { matrices: Float32Array; probe: VehicleInstance; visible: Map<number, boolean> } {
+function instance(): {
+  matrices: Float32Array;
+  probe: VehicleInstance;
+  rotations: Map<number, readonly number[]>;
+  visible: Map<number, boolean>;
+} {
   const matrices = new Float32Array(4 * 16);
   const visible = new Map<number, boolean>();
+  const rotations = new Map<number, readonly number[]>();
   const entity = {
     matrices,
-    setPartRotation: (): undefined => undefined,
+    setPartRotation: (part: number, quat: readonly number[]): void => {
+      rotations.set(part, [...quat]);
+    },
     setPartTranslation: (): undefined => undefined,
     setPartWorldMatrix: (part: number, matrix: Float32Array | null): void => {
       if (matrix) {
@@ -34,6 +51,7 @@ function instance(): { matrices: Float32Array; probe: VehicleInstance; visible: 
         visible.set(submesh, on);
       },
     } as unknown as VehicleInstance,
+    rotations,
     visible,
   };
 }
@@ -269,7 +287,7 @@ describe('EngineVehicleHandle detached parts', () => {
       const { probe } = instance();
       const handle = new EngineVehicleHandle(probe, model(), () => undefined);
 
-      expect(() => handle.setWheel(7, { lift: 0, spin: 1, steer: 0.2 })).not.toThrow();
+      expect(() => handle.setWheel(7, { camber: 0, lift: 0, spin: 1, steer: 0.2 })).not.toThrow();
     });
 
     it('a door side the model does not have is ignored', () => {
@@ -281,6 +299,34 @@ describe('EngineVehicleHandle detached parts', () => {
   });
 
   describe('positive cases', () => {
+    it('cambers a STEERED wheel about its own forward axis, not the body’s (081/06 §3.3)', () => {
+      const { probe, rotations } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+      const camber = 0.2;
+
+      // Full lock one way, then the other: the axle must tip out of the horizontal by the SAME camber both
+      // times. Compose the camber outside the steer instead and the tilt swings with the steering angle.
+      const tilts = [0.9, -0.9].map((steer) => {
+        handle.setWheel(0, { camber, lift: 0, spin: 0, steer });
+
+        return axleTilt(rotations.get(0) ?? [0, 0, 0, 1]);
+      });
+
+      expect(tilts[0]).toBeCloseTo(-Math.sin(camber), 6);
+      expect(tilts[1]).toBeCloseTo(-Math.sin(camber), 6);
+    });
+
+    it('keeps the spin INNERMOST, so a rolling wheel does not drag its lean round with it', () => {
+      const { probe, rotations } = instance();
+      const handle = new EngineVehicleHandle(probe, model(), () => undefined);
+
+      handle.setWheel(0, { camber: 0.2, lift: 0, spin: 0, steer: 0.4 });
+      const still = axleTilt(rotations.get(0) ?? [0, 0, 0, 1]);
+      handle.setWheel(0, { camber: 0.2, lift: 0, spin: 12.5, steer: 0.4 });
+
+      expect(axleTilt(rotations.get(0) ?? [0, 0, 0, 1])).toBeCloseTo(still, 6);
+    });
+
     it('a detached panel reads its position off its CURRENT part matrix, converted back to GTA space', () => {
       const { matrices, probe } = instance();
       const handle = new EngineVehicleHandle(probe, model(), () => undefined);

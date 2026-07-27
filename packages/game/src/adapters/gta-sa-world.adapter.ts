@@ -55,7 +55,13 @@ import { breakableInstanceKey } from '@opensa/renderware/breakable/key';
 import { getBreakable } from '@opensa/renderware/breakable/mesh';
 
 import type { ModelColliders } from '../interfaces/collider.interface';
-import type { SurfaceRecord, VehicleHandling, WorldAdapter } from '../interfaces/world-adapter.interface';
+import type {
+  AxleSetup,
+  AxleType,
+  SurfaceRecord,
+  VehicleHandling,
+  WorldAdapter,
+} from '../interfaces/world-adapter.interface';
 import type { WorldMod } from '../mods/mod.interface';
 import type { CellCoord } from '../streaming/grid';
 import type { VehiclePlacement } from '../vehicle/vehicle-lod.system';
@@ -750,8 +756,13 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     const drive = text(14);
     const engine = text(15);
 
+    // `modelFlags` is HEX (the file's legend says so in capitals) and its 5th/6th digits are the two axles.
+    const modelFlags = Number.parseInt(text(30), 16);
+
     return {
       abs: num(18, 0) !== 0,
+      axleFront: axleSetup(modelFlags, 16),
+      axleRear: axleSetup(modelFlags, 20),
       brakeBias: num(17, 0.5),
       brakeDecel: num(16, 8.5),
       centreOfMass: [num(3, 0), num(4, 0), num(5, 0)],
@@ -848,6 +859,19 @@ export function tyreAdhesionPerMaterial(
   });
 
   return { perMaterial, road };
+}
+
+/**
+ * One axle's build out of the `modelFlags` nibble at `shift` (16 = front, 20 = rear) — see {@link AxleSetup}.
+ *
+ * A row that authors two types at once (none of the 210 stock ones do) is read in the order the game lists
+ * them, and an unreadable column reads as `independent`: a missing flag must never invent an axle.
+ */
+function axleSetup(modelFlags: number, shift: number): AxleSetup {
+  const nibble = Number.isFinite(modelFlags) ? (modelFlags >>> shift) & 0xf : 0;
+  const type: AxleType = nibble & 0x1 ? 'notilt' : nibble & 0x2 ? 'solid' : nibble & 0x4 ? 'mcpherson' : 'independent';
+
+  return { reverse: (nibble & 0x8) !== 0, type };
 }
 
 /** Convert renderware collision (COL model + placements) to the engine's generic shape. */

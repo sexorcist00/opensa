@@ -47,7 +47,7 @@ export interface VehicleHandle {
   /** Chassis pose from the rigid body (native Z-up). */
   setTransform(position: Vec3, rotation: VehicleQuat): void;
   /** One wheel's pose — a shaped argument on purpose (plan 081/06 §3.3): positional numbers about
-   *  different axes are how a sign bug ships. Camber joins here when 06 lands its axle rules. */
+   *  different axes are how a sign bug ships. */
   setWheel(index: number, pose: VehicleWheelPose): void;
   readonly wheels: readonly VehicleWheelInfo[];
 }
@@ -76,6 +76,9 @@ export interface VehicleWheelInfo {
 
 /** One wheel's drawn pose. */
 export interface VehicleWheelPose {
+  /** Lean about the wheel's own FORWARD axis (rad, positive = its top toward the car's +X side) — the axle
+   *  the car was authored with decides it (plan 081/06 §3.4). */
+  camber: number;
   /** Offset from the model hub along vehicle-local Z (m), negative = dropped — the suspension travel. */
   lift: number;
   /** Roll about the axle (rad). */
