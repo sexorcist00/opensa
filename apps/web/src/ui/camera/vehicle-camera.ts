@@ -10,7 +10,7 @@
  */
 import type { CameraConfig } from '@opensa/game';
 
-import { clamp } from '@opensa/math';
+import { smoothstep } from '@opensa/math';
 
 import { CAMERA_FOV_Y } from './engine-camera';
 
@@ -72,13 +72,7 @@ export function vehicleTuning(config: CameraConfig): CameraConfig {
   };
 }
 
-function smoothstep(edge0: number, edge1: number, value: number): number {
-  const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
-
-  return t * t * (3 - 2 * t);
-}
-
 /** How far into a speed band a speed sits, eased at both ends. Below `lo` it is 0, above `hi` it is 1. */
 function speedFactor(speed: number, lo: number, hi: number): number {
-  return hi <= lo ? (speed >= hi ? 1 : 0) : smoothstep(lo, hi, speed);
+  return smoothstep(lo, hi, speed);
 }

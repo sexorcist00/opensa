@@ -456,7 +456,7 @@ describe('stepCamera — composition (plan 080/03)', () => {
     });
 
     it('caps the distance at a wall (collision) on foot AND in a car', () => {
-      const wall: CameraProbe = () => 3; // a wall 3 m behind the look point
+      const wall: CameraProbe = () => ({ dist: 3, dynamic: false }); // a wall 3 m behind the look point
       const orbitOf = (state: ReturnType<typeof createRigState>, over = {}): number => {
         let camera = stepCamera(state, snapshot(over), CONFIG, wall);
         for (let frame = 0; frame < 120; frame += 1) {
@@ -473,7 +473,7 @@ describe('stepCamera — composition (plan 080/03)', () => {
     });
 
     it('still caps during a scripted enter/exit, but EASES in instead of snapping', () => {
-      const wall: CameraProbe = () => 3;
+      const wall: CameraProbe = () => ({ dist: 3, dynamic: false });
       const state = rigState();
       const orbitOf = (camera: ReturnType<typeof stepCamera>): number =>
         Math.hypot(camera.eye[0] - camera.target[0], camera.eye[2] - camera.target[2]) / Math.cos(state.pitch);
@@ -493,7 +493,7 @@ describe('stepCamera — composition (plan 080/03)', () => {
     });
 
     it('holds the eye at the near-plane floor against a very close wall (clips the ped, not skybox)', () => {
-      const near: CameraProbe = () => 0.2; // a wall 0.2 m behind — inside the near plane
+      const near: CameraProbe = () => ({ dist: 0.2, dynamic: false }); // a wall 0.2 m behind — inside the near plane
       const state = rigState();
       let camera = stepCamera(state, snapshot(), CONFIG, near);
       for (let frame = 0; frame < 60; frame += 1) {
@@ -694,6 +694,117 @@ describe('stepCamera — the vehicle camera (plan 080/05)', () => {
       const gap = Math.abs(before.distance - CONFIG.followDistance);
       expect(Math.abs(state.distance - before.distance)).toBeLessThan(gap * 0.25);
       expect(camera.fovYRad).toBe(state.fov); // the frame is drawn with the channel's live value
+    });
+  });
+});
+
+/**
+ * The follow policy (plan 080/09): movement never turns the camera except easing behind a walk AWAY; the
+ * distance breathes with the gait on foot and with a LAUNCH in a car. The rig starts at yaw π — the camera
+ * looks along −Z, so away = −Z, a strafe = ±X, toward = +Z.
+ */
+describe('stepCamera — follow policy (plan 080/09)', () => {
+  /** Walk the focus along `[dx, dz]` u/s for `seconds`, look idle, and return the last camera. */
+  const walk = (
+    state: ReturnType<typeof createRigState>,
+    dx: number,
+    dz: number,
+    seconds: number,
+    over: Partial<CameraSnapshot> = {},
+  ): ReturnType<typeof stepCamera> => {
+    let camera!: ReturnType<typeof stepCamera>;
+    let x = 10;
+    const y = 2;
+    let z = 30;
+    for (let elapsed = 0; elapsed < seconds; elapsed += 1 / 60) {
+      x += dx / 60;
+      z += dz / 60;
+      camera = stepCamera(state, snapshot({ focus: [x, y, z], ...over }), CONFIG);
+    }
+
+    return camera;
+  };
+
+  describe('negative cases', () => {
+    it('holds the yaw while the player strafes across the frame, however long', () => {
+      const state = rigState();
+
+      // 10 s of running along +X (heading −π/2 faces that way) with the mouse idle — far past the
+      // recenter delay. The old idle recenter would have dragged the camera behind the run.
+      walk(state, 7, 0, 10, { focusHeading: -Math.PI / 2 });
+
+      expect(Math.abs(state.yaw - Math.PI)).toBeLessThan(1e-3);
+    });
+
+    it('holds the yaw against a run TOWARD the camera too (one rule, every direction)', () => {
+      const state = rigState();
+
+      walk(state, 0, 7, 10, { focusHeading: Math.PI });
+
+      expect(Math.abs(state.yaw - Math.PI)).toBeLessThan(1e-3);
+    });
+
+    it('does not stretch the framing for a gear-blip acceleration', () => {
+      const state = rigState();
+      const drive = (speed: number): CameraSnapshot =>
+        snapshot({ mode: 'vehicle', vehicle: { slipAngle: 0, speed }, vehicleDistance: 8 });
+      for (let frame = 0; frame < 300; frame += 1) {
+        stepCamera(state, drive(10), CONFIG);
+      }
+      const settled = state.distance;
+
+      stepCamera(state, drive(11), CONFIG); // one-frame blip: +60 u/s² raw, which the low-pass must eat
+      let peak = 0;
+      for (let frame = 0; frame < 60; frame += 1) {
+        stepCamera(state, drive(10), CONFIG);
+        peak = Math.max(peak, Math.abs(state.distance - settled));
+      }
+
+      expect(peak).toBeLessThan(0.1);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('opens the distance at a run and gives it back at a stop', () => {
+      const state = rigState();
+
+      walk(state, 0, -7, 4); // away from the camera at the run gait
+      expect(state.distance).toBeGreaterThan(CONFIG.followDistance + 0.45);
+
+      walk(state, 0, 0, 4); // stopped
+      expect(state.distance).toBeLessThan(CONFIG.followDistance + 0.1);
+    });
+
+    it('eases the camera in after real stillness, and back out on any input', () => {
+      const state = rigState();
+
+      walk(state, 0, 0, 15); // 5 s idle delay + 10 s of the slow creep
+      expect(state.distance).toBeLessThan(CONFIG.followDistance - 0.25);
+
+      stepCamera(state, snapshot({ look: { x: 5, y: 0 } }), CONFIG); // any input wakes it
+      walk(state, 0, 0, 1);
+      expect(state.distance).toBeGreaterThan(CONFIG.followDistance - 0.05);
+    });
+
+    it('stretches the framing through a launch and settles it back at steady speed', () => {
+      const state = rigState();
+      const drive = (speed: number): CameraSnapshot =>
+        snapshot({ mode: 'vehicle', vehicle: { slipAngle: 0, speed }, vehicleDistance: 8 });
+
+      let speed = 0;
+      for (let frame = 0; frame < 120; frame += 1) {
+        speed += 6 / 60; // a sustained 6 m/s² launch — the accel that earns the full gain
+        stepCamera(state, drive(speed), CONFIG);
+      }
+      const launching = state.distance;
+      expect(state.vehicleAccel).toBeGreaterThan(0.8);
+
+      for (let frame = 0; frame < 240; frame += 1) {
+        stepCamera(state, drive(speed), CONFIG); // cruise: same speed, no accel
+      }
+
+      expect(state.vehicleAccel).toBeLessThan(0.05);
+      expect(launching - state.distance).toBeGreaterThan(0.5); // the stretch was the LAUNCH's, not the speed's
     });
   });
 });

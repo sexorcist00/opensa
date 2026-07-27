@@ -50,7 +50,7 @@ import { weatherForCity } from '@opensa/game/weather/weather-zones';
 import { type CityBox, isDesertZone } from '@opensa/game/zones/city';
 import { CityZoneSystem } from '@opensa/game/zones/city-zone.system';
 import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.system';
-import { lerp } from '@opensa/math';
+import { angleDelta, lerp } from '@opensa/math';
 import { type AssetFileSystem, gxtKeyHash, oceanFrame, parseTxd, WEATHER_NAMES } from '@opensa/renderware';
 import { parseWater } from '@opensa/renderware/parsers/text/water.parser';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';
@@ -65,6 +65,7 @@ import { vehicleModelsFromIde } from '../vehicle-models';
 import { yawBehind } from './camera/auto-center';
 import { type CameraProbe, type GroundProbe } from './camera/camera-collision';
 import {
+  type CameraRigState,
   type CameraSnapshot,
   createRigState,
   reseedDistance,
@@ -111,6 +112,11 @@ const MAX_CATCHUP_STEPS = 5;
 const WORLD_READY_TIMEOUT_MS = 12000;
 /** A frame slower than this gets its CPU breakdown logged (vsync is 8.3 ms at 120 Hz). */
 const SLOW_FRAME_MS = 20;
+/** [cam] jump watchdog thresholds (plan 080/09 §4.1): a look-target move (m) or an idle-mouse yaw move
+ *  (rad, ~20°) in ONE frame that no legitimate discontinuity explains. Generous on purpose — the watchdog
+ *  exists to catch the seen-once jump class, not to narrate ordinary motion. */
+const CAM_JUMP_TARGET = 1.5;
+const CAM_JUMP_YAW = 0.35;
 
 /** The GTA heading the player spawns facing — the camera seeds behind it, the pose falls back to it. */
 const SPAWN_FACING = Math.PI;
@@ -131,6 +137,14 @@ let booted: null | Promise<void> = null;
 let hudGameRef: HudGame | null = null;
 /** The F2 debugger's surfaces (074/22), built by the same boot closure. */
 let debugRef: null | { actions: DebugActions; buildTime?: string; game: DebugGame; mapGame: MapGame } = null;
+
+/** The [cam] jump watchdog's last frame (plan 080/09 §4.1) — null until the first watched frame. */
+interface CamWatch {
+  focus: [number, number, number] | null;
+  mode: string;
+  target: [number, number, number] | null;
+  yaw: number;
+}
 
 export function EngineCanvasHost({
   fs,
@@ -1128,6 +1142,8 @@ async function boot(
   // toggled live from the debugger's Perf screen.
   let perfHud = IS_DEV;
   let perfLogs = IS_DEV;
+  // The [cam] jump watchdog's last frame (plan 080/09 §4.1) — see `watchCameraJump`.
+  const camWatch: CamWatch = { focus: null, mode: '', target: null, yaw: 0 };
   // Missing-texture highlight (plan 085 row B): magenta stand-ins ON while developing, the quiet material
   // colour in a production build; toggled live from the debugger's Map screen. Applying the flag here is
   // early enough — arrays stream in later and paint on load.
@@ -1368,11 +1384,12 @@ async function boot(
         maxDist,
         collisionExclude,
         nearRidden,
-      )?.dist ?? null;
+      ) ?? null;
     // Floor guard: the ground below the eye, so a steep down-pitch can't bury the camera under a slope/porch.
     const groundProbe: GroundProbe = (at) => physics.groundBelow([at[0], at[1], at[2]], 30, collisionExclude);
     const camera = stepCamera(rig, snapshot, config.camera, cameraProbe, groundProbe);
     cameraMs = performance.now() - cameraStarted;
+    watchCameraJump(perfLogs, camWatch, camera.target, rig, snapshot, config.camera.teleportSnapDistance);
     pendingInput.look.x = 0;
     pendingInput.look.y = 0;
     pendingInput.pan = null;
@@ -1735,4 +1752,53 @@ function toEngine(gta: readonly [number, number, number]): [number, number, numb
 
 function vehicleFollowDistance(car: null | { halfExtents: readonly number[] }, scale: number): null | number {
   return car ? 2 * car.halfExtents[1] * scale : null;
+}
+
+/**
+ * The [cam] jump watchdog (plan 080/09 §4.1): a camera discontinuity must arrive as a LINE with its state,
+ * not as a memory of "it jumped once under strange circumstances". Composition signals only — the LOOK
+ * TARGET moves with the focus and the framing, never with the mouse (the mouse orbits the eye AROUND it),
+ * and the yaw moves fast only under the player's hand. A target jump, or a yaw jump on an idle mouse,
+ * outside the legitimate discontinuities (teleport, mode switch, scripted seat sequence, fly, bench) is a
+ * bug signature. Static collision snap-ins move the EYE by design and are deliberately not watched.
+ */
+function watchCameraJump(
+  enabled: boolean,
+  watch: CamWatch,
+  target: readonly [number, number, number],
+  rig: CameraRigState,
+  snapshot: CameraSnapshot,
+  teleportSnapDistance: number,
+): void {
+  if (!enabled) {
+    return;
+  }
+  const teleported =
+    watch.focus !== null &&
+    Math.hypot(snapshot.focus[0] - watch.focus[0], snapshot.focus[2] - watch.focus[2]) > teleportSnapDistance;
+  const legit =
+    watch.target === null ||
+    watch.mode !== snapshot.mode ||
+    snapshot.settling ||
+    rig.flyEye !== null ||
+    snapshot.bench !== null ||
+    teleported;
+  const targetJump =
+    watch.target === null
+      ? 0
+      : Math.hypot(target[0] - watch.target[0], target[1] - watch.target[1], target[2] - watch.target[2]);
+  const yawJump = Math.abs(angleDelta(watch.yaw, rig.yaw));
+  const looked = snapshot.look.x !== 0 || snapshot.look.y !== 0;
+  if (!legit && (targetJump > CAM_JUMP_TARGET || (!looked && yawJump > CAM_JUMP_YAW))) {
+    // eslint-disable-next-line no-console -- deliberate field diagnostic: the seen-once jump needs a name
+    console.log(
+      `[cam] jump target ${targetJump.toFixed(2)} · yaw ${((yawJump * 180) / Math.PI).toFixed(1)}° · ` +
+        `mode ${snapshot.mode} · dt ${(snapshot.dt * 1000).toFixed(1)} · dist ${rig.distance.toFixed(2)} ` +
+        `shown ${rig.collision.shown.toFixed(2)} · look ${looked}`,
+    );
+  }
+  watch.focus = [snapshot.focus[0], snapshot.focus[1], snapshot.focus[2]];
+  watch.mode = snapshot.mode;
+  watch.target = [target[0], target[1], target[2]];
+  watch.yaw = rig.yaw;
 }

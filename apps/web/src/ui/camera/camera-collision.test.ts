@@ -14,11 +14,11 @@ const LOOK: [number, number, number] = [0, 2, 0]; // engine look point (head hei
 const BEHIND: [number, number, number] = [0, 0, -1]; // eye direction: straight back along −Z
 const DT = 1 / 60;
 
-/** A probe that always reports the same free distance (null = clear). */
+/** A probe that always reports the same free distance (null = clear); `dynamic` marks a moving hit. */
 const fixed =
-  (dist: null | number): CameraProbe =>
+  (dist: null | number, dynamic = false): CameraProbe =>
   () =>
-    dist;
+    dist === null ? null : { dist, dynamic };
 
 describe('gtaFromEngine', () => {
   describe('positive cases', () => {
@@ -46,6 +46,27 @@ describe('resolveCollision', () => {
       const state = createCollisionState(7);
 
       expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(20), DT)).toBe(7);
+    });
+  });
+
+  describe('negative cases — a moving body is not a wall (plan 080/09 §4.2)', () => {
+    it('does not snap for a DYNAMIC hit — a passer-by crossing the line eases, never yanks', () => {
+      const state = createCollisionState(7);
+
+      const first = resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(3, true), DT);
+
+      expect(first).toBeLessThan(7); // it does respond…
+      expect(first).toBeGreaterThan(6); // …but as a glide, not the one-frame yank that read as a jump
+    });
+
+    it('still converges onto a dynamic occluder that stays — parked traffic ends up respected', () => {
+      const state = createCollisionState(7);
+      let value = 7;
+      for (let frame = 0; frame < 300; frame += 1) {
+        value = resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(3, true), DT);
+      }
+
+      expect(value).toBeCloseTo(3, 2);
     });
   });
 
@@ -82,7 +103,7 @@ describe('resolveCollision', () => {
       const probe: CameraProbe = () => {
         call += 1;
 
-        return call === 1 ? null : 2.5; // primary clear, whiskers hit at 2.5
+        return call === 1 ? null : { dist: 2.5, dynamic: false }; // primary clear, whiskers hit at 2.5
       };
 
       expect(

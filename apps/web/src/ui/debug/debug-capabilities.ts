@@ -215,11 +215,20 @@ const CAMERA_RIG_ROWS = [
   ['lookAheadDistance', 'LOOK AHEAD', 0, 3, 0.1],
   ['lookAheadTime', 'LOOK AHEAD TIME', 0.05, 1.5, 0.05],
   ['turnThreshold', 'TURN THRESHOLD', 0.2, 3, 0.1],
+  // 080/09 follow policy: how cleanly AWAY movement must be before it may rotate the camera, and the
+  // on-foot distance breathing (a run opens it, real stillness eases it in).
+  ['footYawAuthorityStart', 'YAW AUTH FROM', 0, 1, 0.05],
+  ['footYawAuthorityFull', 'YAW AUTH FULL', 0, 1, 0.05],
+  ['footRunDistanceGain', 'RUN DIST GAIN', 0, 2, 0.1],
+  ['footRunFullSpeed', 'RUN DIST FULL AT', 2, 12, 0.5],
+  ['footIdleDelaySec', 'IDLE ZOOM AFTER', 0, 15, 0.5],
+  ['footIdleDistanceEase', 'IDLE ZOOM IN', 0, 1.5, 0.05],
   // 080/05: the vehicle tuning table. The rig is shared — these are the numbers driving substitutes into
   // it, plus the two writers driving adds (the speed curves and the drift lean).
   ['vehicleDistanceScale', 'CAR DIST x', 1, 4, 0.25],
   ['vehicleDistanceGain', 'CAR DIST GAIN', 0, 6, 0.25],
   ['vehicleDistanceSpeed', 'CAR DIST SPEED', 10, 80, 5],
+  ['vehicleAccelDistanceGain', 'CAR ACCEL PULL', 0, 3, 0.25],
   ['vehicleFovKick', 'CAR FOV KICK', 0, 0.5, 0.01],
   ['vehicleFovMinSpeed', 'CAR FOV FROM', 0, 30, 1],
   ['vehicleFovMaxSpeed', 'CAR FOV FULL', 10, 90, 5],

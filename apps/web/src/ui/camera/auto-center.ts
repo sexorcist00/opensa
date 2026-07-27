@@ -16,8 +16,20 @@ import type { CameraConfig } from '@opensa/game';
 
 import { angleDelta, clamp, dampAngle } from '@opensa/math';
 
+/** The turn-follow latch needs near-full directional authority — a swing is only ever justified by movement
+ *  cleanly AWAY from the camera. Between this and zero the continuous channels fade; the latch is binary. */
+const LATCH_AUTHORITY = 0.95;
+
 /** Per-mode switches for one auto-center step. */
 export interface AutoCenterOptions {
+  /**
+   * Directional yaw authority (plan 080/09 §1), 0..1: how much MOVEMENT may rotate the camera this frame —
+   * full walking AWAY from it, zero on a strafe or walking toward it (the director derives it from
+   * dot(velocity, camera forward)). It scales the idle-recenter rate continuously and gates the latch /
+   * continuous chase; a suppressed steer reports `released` so the director drops the in-flight target
+   * instead of letting the camera finish a swing the player's direction no longer justifies. Default 1.
+   */
+  authority?: number;
   /** Chase the target every frame instead of arming a turn-follow latch — the vehicle behaviour. */
   continuous?: boolean;
 }
@@ -33,6 +45,10 @@ export interface AutoCenterState {
 
 /** What one auto-center step decided. `steerTo` writes the 02 spring; `yaw` is the eased idle recenter. */
 export interface AutoCenterStep {
+  /** The directional authority SUPPRESSED an in-flight steer this frame: the director must drop the steered
+   *  target too, or the camera finishes a swing the player's movement no longer justifies. Distinct from a
+   *  natural settle, which keeps the target so the fine end of the swing stays smooth. */
+  released?: boolean;
   /** A yaw for the steered channel, or null when nothing is steering this frame. */
   steerTo: null | number;
   /** The yaw after an idle recenter (unchanged when the recenter is not running). */
@@ -77,18 +93,29 @@ export function stepAutoCenter(
   if (!moving || dt <= 0) {
     return { steerTo: null, yaw };
   }
+  const authority = options.authority ?? 1;
   const behind = yawBehind(heading);
   // Driving: the camera chases the car's rear CONTINUOUSLY, with no arm/settle latch. The latch is what
   // made a long corner read as a series of jerks — it disarms the moment the camera is within
   // `settleEpsilon`, which zeroes the swing spring's velocity, then re-arms a frame later and starts the
   // swing again from a standstill. On foot the latch is right (a framing the player chose must survive a
-  // straight run); in a car, hands-off following IS the behaviour.
+  // straight run); in a car, hands-off following IS the behaviour. Zero authority (reversing — the framed
+  // object drives AT the camera) suppresses the chase and releases the in-flight target.
   if (options.continuous) {
-    return { steerTo: behind, yaw };
+    return authority <= 0 ? { released: true, steerTo: null, yaw } : { steerTo: behind, yaw };
+  }
+  // The latch demands near-full authority (moving cleanly AWAY): a sharp turn into a strafe must not start
+  // a swing, and one already swinging stops the moment the movement stops justifying it (plan 080/09 §1 —
+  // on foot "movement never turns the camera" except easing behind a walk away).
+  const suppressed = authority < LATCH_AUTHORITY;
+  if (state.following && suppressed) {
+    state.following = false;
+
+    return { released: true, steerTo: null, yaw };
   }
   const turnRate = previous === null ? 0 : Math.abs(angleDelta(previous, heading)) / dt;
   const grace = state.idleFor < config.manualGraceSec;
-  if (!grace && turnRate > config.turnThreshold) {
+  if (!grace && !suppressed && turnRate > config.turnThreshold) {
     state.following = true;
   }
   if (state.following) {
@@ -104,10 +131,11 @@ export function stepAutoCenter(
     return { steerTo: null, yaw };
   }
   // Idle recenter is a RATE, not a fixed-time spring: that is what lets a walk barely drift home while a
-  // sprint commits (the speed factor scales the rate directly).
+  // sprint commits (the speed factor scales the rate directly). The directional authority scales the same
+  // rate — full behind a walk away, zero on a strafe — so the rotation FADES with direction, never steps.
   const factor = clamp(speed / config.lookAheadFullSpeed, 0, 1);
 
-  return { steerTo: null, yaw: dampAngle(yaw, behind, config.recenterRate * factor, dt) };
+  return { steerTo: null, yaw: dampAngle(yaw, behind, config.recenterRate * factor * authority, dt) };
 }
 
 /**

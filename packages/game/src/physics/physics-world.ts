@@ -1244,6 +1244,10 @@ export class PhysicsWorld {
    * filter predicate. The camera needs two: what it frames, and the car the player just climbed out of —
    * otherwise stepping out puts the eye behind the car it is now framing the ped beside, and the cast pulls
    * the camera onto the ped's back (plan 080/06 field round 2).
+   *
+   * `dynamic` reports whether the hit belongs to a MOVING body (a traffic car, a ped) rather than the world
+   * — the camera snaps its pull-in only for static geometry and eases for a passer-by (plan 080/09 §4.2:
+   * an instant yank when a car crosses the focus→eye line reads as an unexplained jump).
    */
   sphereCast(
     origin: Vec3,
@@ -1252,7 +1256,7 @@ export class PhysicsWorld {
     maxDist: number,
     exclude?: number,
     alsoExclude?: number,
-  ): null | { dist: number } {
+  ): null | { dist: number; dynamic: boolean } {
     const length = Math.hypot(dir[0], dir[1], dir[2]);
     if (length === 0) {
       return null;
@@ -1275,7 +1279,11 @@ export class PhysicsWorld {
       alsoExclude === undefined ? undefined : (collider): boolean => collider.parent()?.handle !== alsoExclude,
     );
 
-    return hit === null ? null : { dist: hit.time_of_impact };
+    // "Dynamic" here means "can move": dynamic AND kinematic bodies both qualify (a ped is kinematic) —
+    // only fixed bodies and bare world colliders are the static geometry a camera may snap against.
+    const parent = hit === null ? null : hit.collider.parent();
+
+    return hit === null ? null : { dist: hit.time_of_impact, dynamic: parent !== null && !parent.isFixed() };
   }
 
   /**

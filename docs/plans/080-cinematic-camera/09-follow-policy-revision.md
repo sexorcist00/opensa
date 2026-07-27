@@ -85,19 +85,57 @@ only when the watchdog (or the user's repro) confirms the class.
 
 ## Subtasks
 
-- [ ] Directional authority in `auto-center.ts` (§1) + config (`authStart`/`authFull`) + Camera-tab rows;
+- [x] Directional authority in `auto-center.ts` (§1) + config (`authStart`/`authFull`) + Camera-tab rows;
       the dot<0 suspension folds into it. Tests: strafe holds yaw; forward run still recenters; the
       toward-camera loop regression stays green; N-steps-vs-one frame-rate independence.
-- [ ] On-foot distance writers (§2: run gain + idle ease) + the stillness clock + config + tab rows.
+- [x] On-foot distance writers (§2: run gain + idle ease) + the stillness clock + config + tab rows.
       Tests: walk↔run continuity through the zoom damp; idle ease-in and instant-input return; caps.
-- [ ] Vehicle accel pull (§3): low-passed positive gLong × gain onto the distance target + config + tab.
+- [x] Vehicle accel pull (§3): low-passed positive gLong × gain onto the distance target + config + tab.
       Tests: gear-noise robustness (a throttle blip must not pump), brake path unchanged.
-- [ ] The `[cam] jump` watchdog (§4.1) behind the existing perf-logs flag; every legitimate discontinuity
+- [x] The `[cam] jump` watchdog (§4.1) behind the existing perf-logs flag; every legitimate discontinuity
       flagged at its source so the log is quiet on a healthy session.
-- [ ] Dynamic-vs-static collision response (§4.2): probe reports body type; dynamic hits ease, static
+- [x] Dynamic-vs-static collision response (§4.2): probe reports body type; dynamic hits ease, static
       snap. Tests: scripted dynamic crosser eases; wall still snaps same-frame.
 - [ ] Field round: strafe/run/idle on foot, walk-at-camera into a wall, launches in a car, and a repro
       attempt on the jump with the watchdog live. Freeze the new numbers in this ledger.
+
+## Ledger
+
+### 2026-07-27 — code complete, AWAITING THE FIELD ROUND
+
+**What landed** (2945 green, tsc + eslint clean; microbench
+`docs/benchmarks/opensa-engine/2026-07-27-microbench-080-09-follow-policy.json`: foot 0.51/0.60 µs
+mean/p95, vehicle 0.68/0.79 — ~60-100× under the 0.05 ms budget):
+
+- **§1 authority**: `stepAutoCenter` takes `authority` (0..1). The idle-recenter RATE scales by it
+  continuously; the latch and the continuous chase are gated (`LATCH_AUTHORITY` 0.95 for the latch, >0 for
+  the chase) and report `released` when suppression cuts a steer short — the director then drops the
+  in-flight `yawTarget`, so the camera freezes instead of finishing a swing the movement no longer
+  justifies (a natural settle keeps the target — the fine end stays smooth). The director derives the
+  authority from the SMOOTHED VELOCITY, not the heading — the deliberate deviation from this plan's
+  own §1 text: the heading is rate-limited and lags a strafe, and the velocity dot is what the old
+  `approaching` boolean already used, which the authority now subsumes. Look-ahead keeps the raw
+  `!approaching` gate — its accepted behaviour is untouched by the yaw policy.
+- **§2**: `footRunDistanceGain` × smoothstep(2, `footRunFullSpeed`, speed) opens the distance;
+  a separate stillness clock (movement + look + zoom — unlike `autoCenter.idleFor`, which counts hands
+  only) eases `footIdleDistanceEase` in at 0.5/s after `footIdleDelaySec` and returns it through
+  `zoomLambda` on any input. Behaviour change noted: walking at the camera no longer RESETS the
+  auto-center idle clock (it used to, via the suspension's `cancelAutoCenter`) — the mouse still does.
+- **§3**: accel derived from the snapshot's signed speed (no new physics tap), low-passed at 2/s, positive
+  only, capped at 1.5× the 6 m/s² reference; `vehicleAccelDistanceGain` × that joins the distance target.
+  A one-frame +1 u/s blip moves the framing < 5 cm (pinned); braking and reverse never stretch.
+- **§4.1**: `watchCameraJump` in the host (perf-logs flag): look-target jump > 1.5 m, or an idle-mouse yaw
+  jump > 20°, outside teleport/mode-switch/settling/fly/bench → one `[cam] jump` line with the step state.
+  Static collision snap-ins are deliberately NOT watched — they move the eye by design.
+- **§4.2**: `PhysicsWorld.sphereCast` reports `dynamic` (anything not `isFixed` — a ped is kinematic, so
+  "can move" is the test, not "is dynamic-typed"); `resolveCollision` snaps only for static hits, a moving
+  body eases through `collisionReleaseTime` in BOTH directions and still converges on an occluder that
+  stays (parked traffic ends up respected — pinned).
+- `smoothstep` moved to `@opensa/math` (vehicle-camera's private copy replaced with the import).
+
+**First-guess defaults (the field round tunes them)**: `footYawAuthorityStart/Full` 0.2/0.9 ·
+`footRunDistanceGain` 0.6 m full at 7 u/s · `footIdleDelaySec` 5 s / `footIdleDistanceEase` 0.4 m ·
+`vehicleAccelDistanceGain` 1 m at ~0.6 g. All on the Camera tab (7 new rows, count pinned at 46).
 
 ## Acceptance
 

@@ -17,13 +17,14 @@ import type { CameraConfig } from '@opensa/game';
 
 import { damp } from '@opensa/math';
 
-/** One sphere cast from `fromGta` toward `dirGta` (both GTA Z-up), returning the free distance or null. */
+/** One sphere cast from `fromGta` toward `dirGta` (both GTA Z-up): the free distance and whether the hit
+ *  can MOVE (a car, a ped — anything not fixed world geometry), or null for a clear cast. */
 export type CameraProbe = (
   fromGta: readonly [number, number, number],
   dirGta: readonly [number, number, number],
   radius: number,
   maxDist: number,
-) => null | number;
+) => null | { dist: number; dynamic: boolean };
 
 /** The ground Z below a GTA point (or null) — the floor guard lifts the eye off it on a steep down-pitch. */
 export type GroundProbe = (atGta: readonly [number, number, number]) => null | number;
@@ -90,17 +91,18 @@ export function resolveCollision(
     return desiredDistance;
   }
   const fromGta = gtaFromEngine(lookPointEngine);
-  let allowed = castDistance(probe, fromGta, dirEngine, 0, config, desiredDistance);
+  let binding = castDistance(probe, fromGta, dirEngine, 0, config, desiredDistance);
   if (config.collisionWhiskerAngle > 0) {
     // Whiskers ease the pull-in in early: take the min of the primary and the two flanking casts.
-    allowed = Math.min(
-      allowed,
-      castDistance(probe, fromGta, dirEngine, config.collisionWhiskerAngle, config, desiredDistance),
-      castDistance(probe, fromGta, dirEngine, -config.collisionWhiskerAngle, config, desiredDistance),
-    );
+    for (const angle of [config.collisionWhiskerAngle, -config.collisionWhiskerAngle]) {
+      const whisker = castDistance(probe, fromGta, dirEngine, angle, config, desiredDistance);
+      if (whisker.allowed < binding.allowed) {
+        binding = whisker;
+      }
+    }
   }
   // Never closer than the near-plane radius (below it the near plane renders from inside geometry).
-  allowed = Math.max(allowed, Math.min(desiredDistance, config.collisionMinDistance));
+  const allowed = Math.max(binding.allowed, Math.min(desiredDistance, config.collisionMinDistance));
   const lambdaOut = config.collisionReleaseTime > 0 ? 1 / config.collisionReleaseTime : Number.POSITIVE_INFINITY;
   // Snap IN (a wall is never shown a single frame); ease OUT so leaving a doorway glides.
   //
@@ -109,8 +111,12 @@ export function resolveCollision(
   // is under the floor before the guard's downward probe can see it), but an instant pull-in mid-animation
   // reads as a jump, which is what the 04 field round rejected. Easing in satisfies both: the camera keeps
   // clearing geometry, and it never snaps while the sequence plays.
+  //
+  // A DYNAMIC hit takes the eased path too (plan 09 §4.2): a traffic car or ped crossing the focus→eye
+  // line is not a wall about to be shown — an instant yank there reads as an unexplained camera jump, the
+  // exact class the 09 brief reported. Static geometry keeps the snap; nothing shows a wall for a frame.
   if (allowed < state.shown) {
-    state.shown = eased ? damp(state.shown, allowed, lambdaOut, dt) : allowed;
+    state.shown = eased || binding.dynamic ? damp(state.shown, allowed, lambdaOut, dt) : allowed;
   } else {
     state.shown = damp(state.shown, allowed, lambdaOut, dt);
   }
@@ -126,12 +132,15 @@ function castDistance(
   yawOffset: number,
   config: CameraConfig,
   desired: number,
-): number {
+): { allowed: number; dynamic: boolean } {
   const dirGta = gtaFromEngine(rotateYaw(dirEngine, yawOffset));
   // Cast a touch past the desired eye so a wall exactly at the eye still registers.
   const hit = probe(fromGta, dirGta, config.collisionRadius, desired + config.collisionRadius);
+  if (hit === null || hit.dist >= desired) {
+    return { allowed: desired, dynamic: false };
+  }
 
-  return hit === null ? desired : Math.min(desired, hit);
+  return { allowed: hit.dist, dynamic: hit.dynamic };
 }
 
 /** Rotate an engine-space vector about the up (Y) axis by `angle` — the whisker spread lives in the yaw plane. */

@@ -163,6 +163,18 @@ describe('PhysicsWorld.sphereCast', () => {
       expect(physics.sphereCast([0, 0, 0], [1, 0, 0], 0.3, 20, capsule.body)?.dist).toBeCloseTo(9.2, 2);
       physics.dispose();
     });
+
+    it('reports whether the hit can MOVE — a kinematic body is dynamic, world geometry is not (080/09 §4.2)', async () => {
+      const physics = await makeWorld();
+      physics.createKinematicCapsule([5, 0, 0], 0.35, 0.55);
+      physics.createStaticBox([10, 0, 0], [0.5, 10, 10]);
+      physics.step(STEP);
+
+      // The capsule sits first along the cast (a ped crossing the camera line); the wall is the world.
+      expect(physics.sphereCast([0, 0, 0], [1, 0, 0], 0.3, 20)?.dynamic).toBe(true);
+      expect(physics.sphereCast([0, 2, 0], [1, 0, 0], 0.3, 20)?.dynamic).toBe(false);
+      physics.dispose();
+    });
   });
 });
 

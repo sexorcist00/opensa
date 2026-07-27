@@ -153,11 +153,20 @@ describe('cameraControlsFor', () => {
       for (const key of ['bobAmplitude', 'landingDipScale', 'shakeScale', 'sprintFovKick'] as const) {
         expect(keys).toContain(key); // 06 motion feel (its `reducedMotion` master switch is a toggle, not a slider)
       }
+      for (const key of [
+        'footYawAuthorityStart',
+        'footYawAuthorityFull',
+        'footRunDistanceGain',
+        'footIdleDistanceEase',
+        'vehicleAccelDistanceGain',
+      ] as const) {
+        expect(keys).toContain(key); // the 09 follow policy — its field round turns these live
+      }
       // The close-out prune (07/3) took the three reference points no round ever turned.
       for (const key of ['landingDipFullSpeed', 'shakeImpactForce', 'vehicleFovLambda'] as const) {
         expect(keys).not.toContain(key);
       }
-      expect(keys).toHaveLength(39);
+      expect(keys).toHaveLength(46);
     });
   });
 });

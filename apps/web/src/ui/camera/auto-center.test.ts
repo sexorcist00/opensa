@@ -150,3 +150,77 @@ describe('stepAutoCenter', () => {
     });
   });
 });
+
+/**
+ * Directional authority (plan 080/09 §1): movement may rotate the camera only in proportion to how cleanly
+ * it is AWAY from it. The latch demands near-full authority; the continuous channels fade with it; a steer
+ * cut short reports `released` so the director drops the in-flight target too.
+ */
+describe('stepAutoCenter — directional authority (plan 080/09)', () => {
+  describe('negative cases', () => {
+    it('arms no swing on a sharp turn without near-full authority (the strafe case)', () => {
+      const state = createAutoCenter();
+      settleGrace(state, 1.2);
+      hold(state, 1.2, 0, RUN, 0.5);
+
+      // The same heading jump that arms turn-follow at full authority (see the positive case above)...
+      const step = stepAutoCenter(state, 1.2, 1.4, RUN, CONFIG, DT, { authority: 0.5 });
+
+      expect(state.following).toBe(false);
+      expect(step.steerTo).toBeNull();
+    });
+
+    it('releases an in-flight swing the moment the authority collapses', () => {
+      const state = createAutoCenter();
+      settleGrace(state, 1.2);
+      hold(state, 1.2, 0, RUN, 0.5);
+      stepAutoCenter(state, 1.2, 1.4, RUN, CONFIG, DT, { authority: 1 }); // arms and steers
+      expect(state.following).toBe(true);
+
+      const step = stepAutoCenter(state, 1.2, 1.4, RUN, CONFIG, DT, { authority: 0.2 });
+
+      expect(state.following).toBe(false);
+      expect(step.steerTo).toBeNull();
+      expect(step.released).toBe(true);
+    });
+
+    it('suppresses the continuous chase at zero authority (a reversing car) and releases', () => {
+      const state = createAutoCenter();
+
+      const step = stepAutoCenter(state, 1.2, 0, RUN, CONFIG, DT, { authority: 0, continuous: true });
+
+      expect(step.steerTo).toBeNull();
+      expect(step.released).toBe(true);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('scales the idle recenter rate with the authority — a diagonal drifts home slower than a walk away', () => {
+      const full = createAutoCenter();
+      const half = createAutoCenter();
+      const start = yawBehind(0) + 0.8;
+      let fullStep = { steerTo: null as null | number, yaw: start };
+      let halfStep = { steerTo: null as null | number, yaw: start };
+      for (let elapsed = 0; elapsed < CONFIG.recenterDelaySec + 2; elapsed += DT) {
+        fullStep = stepAutoCenter(full, fullStep.yaw, 0, RUN, CONFIG, DT, { authority: 1 });
+        halfStep = stepAutoCenter(half, halfStep.yaw, 0, RUN, CONFIG, DT, { authority: 0.4 });
+      }
+      const behind = yawBehind(0);
+
+      expect(Math.abs(fullStep.yaw - behind)).toBeLessThan(Math.abs(halfStep.yaw - behind));
+      expect(Math.abs(halfStep.yaw - behind)).toBeLessThan(0.8); // scaled, not suppressed — it still moves
+    });
+
+    it('leaves a swing already in flight alone while the authority stays high', () => {
+      const state = createAutoCenter();
+      settleGrace(state, 1.2);
+      hold(state, 1.2, 0, RUN, 0.5);
+      stepAutoCenter(state, 1.2, 1.4, RUN, CONFIG, DT, { authority: 1 });
+
+      const step = stepAutoCenter(state, 1.2, 1.4, RUN, CONFIG, DT, { authority: 0.97 });
+
+      expect(state.following).toBe(true);
+      expect(step.steerTo).toBeCloseTo(yawBehind(1.4), 12);
+    });
+  });
+});

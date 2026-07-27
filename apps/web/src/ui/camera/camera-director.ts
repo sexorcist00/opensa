@@ -16,7 +16,7 @@
 import type { CameraState } from '@opensa/engine';
 import type { CameraConfig } from '@opensa/game';
 
-import { angleDelta, clamp, damp, smoothDampAngle, type SmoothDampRef } from '@opensa/math';
+import { angleDelta, clamp, damp, smoothDampAngle, type SmoothDampRef, smoothstep } from '@opensa/math';
 
 import { type AutoCenterState, cancelAutoCenter, createAutoCenter, stepAutoCenter, yawBehind } from './auto-center';
 import {
@@ -50,12 +50,21 @@ export interface CameraRigState {
   flyEye: [number, number, number] | null;
   /** The smoothed point the rig frames (plan 02) — not the focus itself. */
   follow: FollowPointState;
+  /** The eased idle distance offset (world units, ≥ 0) — creeps toward `footIdleDistanceEase` while still,
+   *  returns through the zoom damp on any input. */
+  footIdleEase: number;
+  /** How long the player has been fully STILL on foot (no movement, no look, no zoom) — the idle
+   *  distance-ease clock (plan 09 §2). Unlike `autoCenter.idleFor`, movement resets this one. */
+  footStillFor: number;
   /** The live vertical field of view (radians) — driving widens it with speed (plan 05), everything else
    *  eases it back to {@link CAMERA_FOV_Y}. Picking unprojects through this same value. */
   fov: number;
   /** The focus this rig framed last frame — the planar velocity every 03 channel reads is derived from it,
    *  so the director needs no velocity plumbing from the host and measures the FRAMED object (ped or car). */
   lastFocus: [number, number, number] | null;
+  /** The seated car's speed last frame (signed, u/s) — the acceleration source for plan 09 §3. Null on foot
+   *  so the first seated frame never reads an entry jump as a launch. */
+  lastVehicleSpeed: null | number;
   /** Unapplied pointer travel (plan 02's input damper). */
   look: LookInputState;
   /** The composition offset toward travel (plan 03). */
@@ -63,6 +72,9 @@ export interface CameraRigState {
   /** Bob / landing dip / shake / sprint-kick state (plan 06). */
   motion: MotionState;
   pitch: number;
+  /** Low-passed positive longitudinal acceleration, as a 0..{@link ACCEL_MAX_FACTOR} share of
+   *  {@link ACCEL_FULL_MS2} — a launch stretches the framing back, gear noise does not (plan 09 §3). */
+  vehicleAccel: number;
   /** The smoothed planar focus velocity (units/s) look-ahead and auto-center read — see {@link focusVelocity}. */
   velX: number;
   velZ: number;
@@ -121,6 +133,18 @@ type CameraMode = 'fly' | 'foot' | 'vehicle';
 /** How fast the measured focus velocity tracks its instantaneous value (per second). ~0.05 s half-life —
  *  enough to average out the fixed-step saw, short enough that look-ahead still feels responsive. */
 const VELOCITY_LAMBDA = 14;
+/** The longitudinal acceleration that earns the full `vehicleAccelDistanceGain` (m/s² ≈ 0.6 g) and the
+ *  cap above it — a launch harder than authored still stretches, but boundedly (plan 09 §3). */
+const ACCEL_FULL_MS2 = 6;
+const ACCEL_MAX_FACTOR = 1.5;
+/** Low-pass on the accel signal (per second, ~0.35 s half-life) — a gear shift is a blip, a launch is a
+ *  second-plus; the filter passes one and not the other. */
+const ACCEL_LAMBDA = 2;
+/** The walk speed where the run distance gain starts fading in (u/s) — full at `footRunFullSpeed`. */
+const FOOT_WALK_SPEED = 2;
+/** How fast the idle distance ease creeps IN (per second) — deliberately far under `zoomLambda`, which is
+ *  what carries it back OUT the moment any input arrives: settling is slow, waking is ordinary. */
+const IDLE_EASE_LAMBDA = 0.5;
 
 export function createRigState(config: CameraConfig, yaw: number, pitch: number): CameraRigState {
   return {
@@ -130,12 +154,16 @@ export function createRigState(config: CameraConfig, yaw: number, pitch: number)
     distanceTarget: config.followDistance,
     flyEye: null,
     follow: createFollowPoint(),
+    footIdleEase: 0,
+    footStillFor: 0,
     fov: CAMERA_FOV_Y,
     lastFocus: null,
+    lastVehicleSpeed: null,
     look: createLookInput(),
     lookAhead: createLookAhead(),
     motion: createMotion(),
     pitch,
+    vehicleAccel: 0,
     velX: 0,
     velZ: 0,
     yaw,
@@ -191,22 +219,26 @@ export function stepCamera(
   steerYawChannel(state, config, snapshot.dt);
   const forward = forwardFrom(state.yaw, state.pitch);
   applyZoom(state, snapshot, config, forward);
-  // In a car the distance follows the car's SIZE, opened up by its SPEED (#5); on foot it follows the wheel
-  // zoom. Either way the live distance eases toward it — so a spun wheel, a fresh car and hard braking all
-  // glide rather than step.
+  const [x, y, z] = snapshot.focus;
+  // Measured BEFORE the distance writers: the run gain and the directional authority read it this frame.
+  const velocity = focusVelocity(state, snapshot, config);
+  const planarSpeed = Math.hypot(velocity.x, velocity.z);
+  // In a car the distance follows the car's SIZE, opened up by its SPEED (#5) and stretched by a LAUNCH
+  // (plan 09 §3); on foot it follows the wheel zoom, breathing with the gait (plan 09 §2 — a run opens it,
+  // real stillness eases it in). Either way the live distance eases toward it — so a spun wheel, a fresh
+  // car and hard braking all glide rather than step.
   const speed = snapshot.vehicle?.speed ?? 0;
+  const offsets = stepDistanceOffsets(state, snapshot, config, planarSpeed);
   const distanceTarget =
     snapshot.vehicleDistance === null
-      ? state.distanceTarget
-      : vehicleDistanceForSpeed(snapshot.vehicleDistance, speed, config);
+      ? state.distanceTarget + offsets.foot
+      : vehicleDistanceForSpeed(snapshot.vehicleDistance, speed, config) + offsets.vehicle;
   state.distance = damp(state.distance, distanceTarget, config.zoomLambda, snapshot.dt);
   if (snapshot.mode === 'fly') {
     stepFlyRig(state, snapshot, forward);
     // A detached eye owns its own position; the follow point must not fly across the map when it re-attaches.
     resetFollowPoint(state.follow);
   }
-  const [x, y, z] = snapshot.focus;
-  const velocity = focusVelocity(state, snapshot, config);
   // Additive motion (plan 06): bob, the landing dip, impact shake and the sprint FOV kick. Stepped here so
   // it reads THIS frame's measured speed; its FOV contribution joins the target below and eases through the
   // same damp, while its OFFSETS are applied last of all — after collision, so a bob can never push the eye
@@ -219,7 +251,7 @@ export function stepCamera(
       impact: snapshot.impactForce,
       landing: snapshot.landingSpeed,
       mode: snapshot.mode,
-      speed: Math.hypot(velocity.x, velocity.z),
+      speed: planarSpeed,
     },
     config,
   );
@@ -232,14 +264,19 @@ export function stepCamera(
   // heading), which is plan 05's, tuned against a car's speeds. A scripted enter/exit suspends it: the
   // steered swing (set at the start of the sequence) glides to the target while the ped's twitches are
   // ignored.
-  // ...and it must NOT run while the framed object is travelling TOWARD the camera. Movement input is
-  // camera-relative and the character turns to face it, so recentring behind a backing-up player feeds
-  // straight back into the input: hold "back" and the ped about-faces, the camera swings behind the new
-  // facing, which flips what "back" means, so the ped about-faces again — a spin the player cannot stop.
-  // Walking toward the camera is a deliberate act; the camera holds still for it (SA's behaviour), and a
-  // reversing car gets the same treatment for free.
-  const approaching = velocity.x * Math.sin(state.yaw) + velocity.z * Math.cos(state.yaw) < 0;
-  const centering = !snapshot.settling && !approaching && (snapshot.mode === 'foot' || snapshot.mode === 'vehicle');
+  //
+  // How much movement may ROTATE the camera is the directional authority (plan 09 §1): the normalized
+  // away-component of the focus velocity along the camera forward, shaped by the config band — walking
+  // away is 1, a strafe ≈ 0, moving at the camera 0. That last case used to be a dedicated boolean (the
+  // about-face loop: movement input is camera-relative and recentring behind a backing-up player flips
+  // what "back" means, a spin the player cannot stop — SA holds the camera still for it too); the
+  // authority subsumes it and extends the same protection continuously to every direction, which is the
+  // 09 brief: movement never turns the camera, except easing behind a walk away.
+  const awayRate = velocity.x * Math.sin(state.yaw) + velocity.z * Math.cos(state.yaw);
+  const away = planarSpeed > 1e-3 ? awayRate / planarSpeed : 0;
+  const authority = smoothstep(config.footYawAuthorityStart, config.footYawAuthorityFull, away);
+  const approaching = awayRate < 0;
+  const centering = !snapshot.settling && (snapshot.mode === 'foot' || snapshot.mode === 'vehicle');
   if (centering) {
     // Drift framing (#10) is expressed as a HEADING, not as a second yaw writer: the camera settles behind
     // where the car is going rather than where its nose points, and every existing rule (the swing, the
@@ -247,19 +284,18 @@ export function stepCamera(
     const heading = snapshot.vehicle
       ? driftHeading(snapshot.focusHeading, snapshot.vehicle.slipAngle, snapshot.vehicle.speed, config)
       : snapshot.focusHeading;
-    const step = stepAutoCenter(
-      state.autoCenter,
-      state.yaw,
-      heading,
-      Math.hypot(velocity.x, velocity.z),
-      config,
-      snapshot.dt,
+    const step = stepAutoCenter(state.autoCenter, state.yaw, heading, planarSpeed, config, snapshot.dt, {
+      authority,
       // Driving chases continuously; the on-foot turn-follow latch would hitch through a long corner.
-      { continuous: snapshot.mode === 'vehicle' && state.autoCenter.idleFor > config.recenterDelaySec },
-    );
+      continuous: snapshot.mode === 'vehicle' && state.autoCenter.idleFor > config.recenterDelaySec,
+    });
     state.yaw = step.yaw;
     if (step.steerTo !== null) {
       state.yawTarget = step.steerTo;
+    } else if (step.released) {
+      // The authority cut a steer short: drop the in-flight target too, or the camera finishes a swing the
+      // player's movement no longer justifies. A natural settle keeps it — the fine end stays smooth.
+      state.yawTarget = null;
     }
   } else {
     cancelAutoCenter(state.autoCenter);
@@ -271,8 +307,10 @@ export function stepCamera(
     snapshot.dt,
     snapshot.mode !== 'fly',
   );
+  // Look-ahead keeps the pre-09 gate exactly (accepted in the 02-04 field round): on foot, not mid-sequence,
+  // and not while walking at the camera — the yaw's smooth authority does not apply to a look-point offset.
   const ahead =
-    centering && snapshot.mode === 'foot'
+    centering && !approaching && snapshot.mode === 'foot'
       ? stepLookAhead(state.lookAhead, velocity.x, velocity.z, config, snapshot.dt)
       : stepLookAhead(state.lookAhead, 0, 0, config, snapshot.dt);
   const lookPoint: [number, number, number] = [target[0] + ahead.x, target[1], target[2] + ahead.z];
@@ -443,6 +481,54 @@ function steerYawChannel(state: CameraRigState, config: CameraConfig, dt: number
     state.yaw = state.yawTarget;
     state.yawTarget = null;
   }
+}
+
+/**
+ * The plan-09 distance writers, stepped every frame: the on-foot gait breathing (§2) and the vehicle launch
+ * stretch (§3). Both return OFFSETS onto the mode's distance target — the smoothing stays with the one zoom
+ * damp, so nothing here adds a second easing channel to reconcile.
+ */
+function stepDistanceOffsets(
+  state: CameraRigState,
+  snapshot: CameraSnapshot,
+  config: CameraConfig,
+  planarSpeed: number,
+): { foot: number; vehicle: number } {
+  const dt = snapshot.dt;
+  // §2 idle ease: FULL stillness only — movement, look or zoom all reset the clock (unlike
+  // `autoCenter.idleFor`, which deliberately counts hands and ignores feet).
+  const still =
+    snapshot.mode === 'foot' &&
+    planarSpeed < config.moveThreshold &&
+    snapshot.look.x === 0 &&
+    snapshot.look.y === 0 &&
+    snapshot.zoomSteps === 0;
+  state.footStillFor = still ? state.footStillFor + dt : 0;
+  const idleTarget = state.footStillFor > config.footIdleDelaySec ? config.footIdleDistanceEase : 0;
+  // Creep IN slowly; return through the ordinary zoom pace the moment anything wakes the player up.
+  state.footIdleEase = damp(
+    state.footIdleEase,
+    idleTarget,
+    idleTarget > state.footIdleEase ? IDLE_EASE_LAMBDA : config.zoomLambda,
+    dt,
+  );
+  // §3 launch stretch: the accel is DERIVED from the signed speed the snapshot already carries (no new
+  // physics tap) and low-passed, so a gear blip is a ripple and a launch is a stretch. Positive only —
+  // braking already glides the camera in through the speed curve, and reverse never stretches.
+  if (snapshot.vehicle && dt > 0) {
+    const raw = state.lastVehicleSpeed === null ? 0 : (snapshot.vehicle.speed - state.lastVehicleSpeed) / dt;
+    state.lastVehicleSpeed = snapshot.vehicle.speed;
+    state.vehicleAccel = damp(state.vehicleAccel, clamp(raw / ACCEL_FULL_MS2, 0, ACCEL_MAX_FACTOR), ACCEL_LAMBDA, dt);
+  } else {
+    state.lastVehicleSpeed = null;
+    state.vehicleAccel = damp(state.vehicleAccel, 0, ACCEL_LAMBDA, dt);
+  }
+  const run =
+    snapshot.mode === 'foot'
+      ? config.footRunDistanceGain * smoothstep(FOOT_WALK_SPEED, config.footRunFullSpeed, planarSpeed)
+      : 0;
+
+  return { foot: run - state.footIdleEase, vehicle: config.vehicleAccelDistanceGain * state.vehicleAccel };
 }
 
 /** Free-fly: arrow walk, then the drag pan (both in the eye's own screen plane). */

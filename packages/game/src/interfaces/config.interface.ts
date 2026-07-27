@@ -59,6 +59,22 @@ export interface CameraConfig {
   followZoomMax: number;
   /** Nearest the wheel can zoom in (world units). */
   followZoomMin: number;
+  /** Full stillness (no movement, look or zoom) for this long eases the follow distance IN a little —
+   *  a resting camera settles closer; any input returns it at the ordinary zoom pace (plan 080/09 §2). */
+  footIdleDelaySec: number;
+  /** How far the idle ease closes the distance (world units). 0 = off. */
+  footIdleDistanceEase: number;
+  /** How far a run opens the on-foot follow distance (world units), faded in between walk pace and
+   *  `footRunFullSpeed` — the character gets room when moving fast, back when stopping (plan 080/09 §2). */
+  footRunDistanceGain: number;
+  /** The speed (u/s) where the run distance gain is fully open. */
+  footRunFullSpeed: number;
+  /** The directional yaw authority band (plan 080/09 §1): movement may rotate the camera in proportion to
+   *  how cleanly it is AWAY from it. `Start`..`Full` shape a smoothstep over the normalized away-component
+   *  of the velocity — below Start (a strafe, walking at the camera) movement never turns the camera, above
+   *  Full (walking away) the recenter has its whole rate. */
+  footYawAuthorityFull: number;
+  footYawAuthorityStart: number;
   /** How long a pointer flick is spread over (seconds). Total rotation is conserved — the movement is only
    *  redistributed across a few frames, which is what separates "dampened" from "laggy". 0 = raw. */
   inputSmoothTime: number;
@@ -116,6 +132,10 @@ export interface CameraConfig {
   /** A heading change faster than this (radians/second) swings the camera behind the new direction. Walking
    *  straight never reaches it, so a framing the player chose survives a straight run. */
   turnThreshold: number;
+  /** How far a full LAUNCH (~0.6 g, low-passed) stretches the follow distance beyond the speed curve
+   *  (world units) — acceleration reads as the camera hanging back, gear noise does not (plan 080/09 §3).
+   *  0 = off. */
+  vehicleAccelDistanceGain: number;
   /** How long the collision release takes in a CAR (seconds) — longer than on foot, because a car clears an
    *  occluder at a speed that makes the on-foot ease read as a snap. */
   vehicleCollisionReleaseTime: number;

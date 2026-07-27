@@ -1,8 +1,8 @@
 # 080 — Cinematic camera (GTA V-feel follow camera for the own engine)
 
 **Status: 01–07 DONE and ACCEPTED (2026-07-25); 08 deferred by the user; REOPENED 2026-07-27 with 09
-(follow-policy revision, from the user's field brief) and 10 (AAA polish) — 09 first, 10 after it.**
-Planned 2026-07-19.: the damp/spring math and the
+(follow-policy revision, from the user's field brief) and 10 (AAA polish) — 09 is CODE-COMPLETE the same
+day and awaits its field round; 10 goes after 09's verdict.** Planned 2026-07-19.: the damp/spring math and the
 `CameraDirector` in `apps/web/src/ui/camera/` (01), the smoothed rig — input dampening, a trailing look
 point with a dead zone, the steered-yaw channel, gliding zoom (02), the composition layer — turn-follow,
 idle recenter, look-ahead (03), collision — a `PhysicsWorld` sphere/ray-cast API, snap-in/ease-out, a
