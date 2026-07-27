@@ -33,6 +33,8 @@ Read in `src/ui/engine-canvas-host.tsx` unless noted.
 | `benchcar`  | mixed models           | vehicle model name             | Pin every bench road car to one model                                                                                                                           |
 | `phys`      | off                    | `all` or one scene key         | Scripted physics lap (081/01); emits the `[phys]` JSON protocol                                                                                                 |
 | `car`       | `infernus`             | vehicle model name             | Which car the `phys` laps drive                                                                                                                                 |
+| `gripVd`    | `12`                   | m/s                            | 081/09 lateral speed-grip assist: boost reference speed (`boost = min(1 + (v/gripVd)², gripCap)`)                                                               |
+| `gripCap`   | `3`                    | ×                              | 081/09 assist ceiling; both dials are session overrides, shown in F2 and recorded by every `[phys]` capture                                                     |
 
 `bench` / `soak` / `benchcar` are read in `src/ui/engine-perf-runs.ts`. Scene keys live in
 `src/bench-scenes.ts`: `ls-noon` · `sf-fog-dawn` · `lv-night` · `country-dusk` · `ocean-horizon` ·

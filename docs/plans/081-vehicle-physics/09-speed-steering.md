@@ -96,3 +96,8 @@ feel is fleet-wide-frozen at the baseline; the accepted assists are lateral-only
 "race cars launch harder" would have to DIFFERENTIATE, not lift globally — e.g. the original's own RWD
 tyre-temperature mechanic (`m_fTireTemperature`, burnout heating), which scales per car by its own drive
 type and behaviour rather than by a shared dial. Parked, not queued.
+
+**Coverage note (close of session 2026-07-27):** the SHIPPED state (assist 12/3 + the SLIDE_SPEED fix) has
+no committed capture matrix yet — the mid-session after-sets were obsoleted by the bug fix landing between
+runs. Deliberately folded into 07's regression pack, which is queued FIRST in the remaining work precisely
+so the accepted feel gets frozen as tolerance-banded reference captures before anything else moves.
