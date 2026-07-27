@@ -47,6 +47,24 @@ describe('resolveCollision', () => {
 
       expect(resolveCollision(state, LOOK, BEHIND, 7, CONFIG, fixed(20), DT)).toBe(7);
     });
+
+    it('follows a FALLING desired distance directly — the end of an eased window has nothing to snap', () => {
+      // The seat-entry jump (09 field round 1): desired glides 7 → 4.4 through the zoom damp with the
+      // eased window on and a CLEAR cast. The old pull-in branch treated the fall as an occluder, lagged
+      // the glide on the eased path, and the window's end completed the leftover difference as a slam.
+      const state = createCollisionState(7);
+      let desired = 7;
+      let shown = 7;
+      for (let frame = 0; frame < 60; frame += 1) {
+        desired = 4.4 + (desired - 4.4) * Math.exp(-8 / 60); // the zoom channel's own λ=8 glide
+        shown = resolveCollision(state, LOOK, BEHIND, desired, CONFIG, fixed(null), DT, true);
+        expect(Math.abs(shown - desired)).toBeLessThan(1e-6); // tracks the glide, never lags it
+      }
+
+      const after = resolveCollision(state, LOOK, BEHIND, desired, CONFIG, fixed(null), DT, false);
+
+      expect(Math.abs(after - shown)).toBeLessThan(0.05); // the window ends: no leftover, no snap
+    });
   });
 
   describe('negative cases — a moving body is not a wall (plan 080/09 §4.2)', () => {

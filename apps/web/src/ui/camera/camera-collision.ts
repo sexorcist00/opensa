@@ -104,6 +104,12 @@ export function resolveCollision(
   // Never closer than the near-plane radius (below it the near plane renders from inside geometry).
   const allowed = Math.max(binding.allowed, Math.min(desiredDistance, config.collisionMinDistance));
   const lambdaOut = config.collisionReleaseTime > 0 ? 1 / config.collisionReleaseTime : Number.POSITIVE_INFINITY;
+  // This layer only ever holds the eye CLOSER than desired (occlusion); a FALLING desired distance is the
+  // zoom channel's own glide, already smoothed, and is followed directly. Treating it as a pull-in sent it
+  // down the eased path during a seat sequence, where it lagged the glide — and the sequence's end then
+  // completed the leftover difference as a SNAP (the 09 field round's entry jump: approach, then the
+  // camera slams the rest of the way onto the car).
+  state.shown = Math.min(state.shown, desiredDistance);
   // Snap IN (a wall is never shown a single frame); ease OUT so leaving a doorway glides.
   //
   // `eased` drops the snap for BOTH directions. It is what a scripted enter/exit runs: the cap has to stay

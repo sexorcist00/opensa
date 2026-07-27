@@ -137,6 +137,31 @@ mean/p95, vehicle 0.68/0.79 — ~60-100× under the 0.05 ms budget):
 `footRunDistanceGain` 0.6 m full at 7 u/s · `footIdleDelaySec` 5 s / `footIdleDistanceEase` 0.4 m ·
 `vehicleAccelDistanceGain` 1 m at ~0.6 g. All on the Camera tab (7 new rows, count pinned at 46).
 
+### 2026-07-27 — FIELD ROUND 1: everything reads right; the jump CAUGHT, named and fixed
+
+User's verdict: **"в остальном все очень хорошо"** — and the seen-once jump turned out to reproduce
+CONSTANTLY on vehicle entry: the camera centres on the car, approaches, then SLAMS the rest of the way in,
+and driving from there is normal. The watchdog printed nothing — correctly, as it turned out: the jump
+lives in the DISTANCE channel, and it is not a one-frame discontinuity but the end of a lagging glide.
+
+**The mechanism** (found by reading `resolveCollision` against the report, no instrumentation needed): on
+seat the desired distance glides 7 → ~4.4 through the zoom damp (λ=8) — the designed approach. But the
+RENDERED distance is `collision.shown`, and the pull-in branch treated the falling desired as an arriving
+occluder: during the seat sequence that path is EASED (λ≈1.7–2.5), so `shown` lagged the glide, and when
+the 0.8 s settle window expired the eased flag dropped and the leftover difference completed as an instant
+snap. Pre-09 code, pre-09 behaviour — the 05 entry retune (rest distance halved to one car length) made
+the gap big enough to see, and the user's deliberate entry testing made it constant.
+
+**The fix**: the collision layer only ever holds the eye CLOSER than desired (occlusion is its whole job);
+a falling desired is the zoom channel's own, already-smoothed glide and is now followed directly
+(`shown = min(shown, desired)` before the hit logic). A real occluder inside the falling desired still
+snaps (static) or eases (dynamic/settling) exactly as before — every prior collision pin stays green, and
+a new test drives the exact entry trace and asserts the window's end has nothing left to snap. 2946 green.
+
+**Watchdog scope, recorded**: it watches the look target and idle-mouse yaw; distance-channel moves are
+NOT watched, because designed occlusion snap-ins live there and would be noise. With this fix the distance
+channel has no non-occlusion snap left by construction.
+
 ## Acceptance
 
 - On foot: no camera yaw from any movement direction except easing behind a walk AWAY; run/idle distance
