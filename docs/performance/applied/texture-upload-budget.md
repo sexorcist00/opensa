@@ -1,13 +1,28 @@
 # Budgeted texture-array uploads (the 15–85 ms hitch nobody could see)
 
-**Status:** MEASURED and located 2026-07-27, unfixed — the instrument that found it is shipped, the fix is
-not. Raised by a field report of 20–250 ms frames whose named parts summed to 5.
+**Status:** APPLIED 2026-07-27 (located and measured earlier the same day). The lever below was pulled
+exactly as written: `beginOstexUpload` decodes + creates the texture in the worker's `message` handler
+(cheap), the (layer, mip) writes drain from `StreamingDriver.update` under `UPLOAD_BUDGET_MS = 1.5` (at
+least one write per frame, so a single over-budget write still progresses), and `TextureArrays.has(ref)`
+turns true only with the LAST write — cells wait exactly as they do for an array that has not arrived. The
+drain is reported as `StreamStats.uploadMs` and printed in the `[slow]` line
+(`stream … (blob … worst … upload …)`); `lateCreates` stays the pop-in price gauge. The eager boot path
+(pre-`textures` paks) and per-model dictionaries still upload in one go by design. Raised by a field report
+of 20–250 ms frames whose named parts summed to 5.
 
-## What we do today
+**Field-confirmed same day**: the user drove the build and noticed no lags, then re-ran the in-game
+`?bench=all` sweep — performance-neutral on every scene vs the 07-24 baseline (the expected shape: the fix
+buys smoothness, not throughput), streaming slow frames all read `blob ≤0.6 worst ≤0.4 upload ≤2.4`, and
+`lateCreates` stayed 0 on all eight scenes — the pop-in price this doc said to watch did not materialize.
+Records: `docs/benchmarks/opensa-engine/2026-07-27-headless-texture-upload-hitch-fix.md` (headless A/B) and
+`2026-07-27-ingame-after-texture-upload-fix.json` (the user's sweep). Note the 2.4: the budget check runs
+AFTER a write, so a single frame can overshoot by at most one write — bounded and intended.
 
-A cell's texture array is decoded and uploaded **the instant its blob arrives**, inside the pak worker's
+## What we did before (the hitch)
+
+A cell's texture array was decoded and uploaded **the instant its blob arrived**, inside the pak worker's
 `message` handler (`stream/streaming.ts` → `onBlob` → `world/textures.ts` `load` →
-`core/ostex-upload.ts`). That upload is a nested loop of `device.queue.writeTexture` — one call per (layer,
+`core/ostex-upload.ts`). That upload was a nested loop of `device.queue.writeTexture` — one call per (layer,
 mip) — over the whole array.
 
 Two things make it a hitch:

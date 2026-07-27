@@ -9,7 +9,7 @@ close-out; 08 (SA gravity) CLOSED-REJECTED (postmortem `../../postmortem/081-veh
 as an [open issue](../../open-issues/offroad-feels-like-tarmac.md). Two field bugs came in the same evening
 and are answered: an airborne wheel now turns with the engine (06's ledger), and the FPS-drop report was
 traced out of the vehicle chain entirely — to an unbudgeted texture upload between frames
-([the lever](../../performance/deferred-optimizations/texture-upload-budget.md)).** Supersedes the idea at
+([the lever](../../performance/applied/texture-upload-budget.md)).** Supersedes the idea at
 `docs/ideas/0.4.0/plans/07-vehicle-physics/` (2026-07-12, "THE priority gameplay task") — rethought against
 what the engine actually is now. The audit of what the chain cost and bought:
 [`docs/audit/vehicle-physics-081.md`](../../audit/vehicle-physics-081.md), the instruments day's

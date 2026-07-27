@@ -185,6 +185,32 @@ regression. `lateCreates` is **0** on all six scenes in all three runs: the 841 
 and spawn without a late model build, which is 07 §1's mass spawn-sanity check.
 Run: [`2026-07-27-headless-081-closeout-vehicle-step.json`](opensa-engine/2026-07-27-headless-081-closeout-vehicle-step.json).
 
+### 2026-07-27 — the texture-upload hitch, before/after the budgeted drain
+
+The 15–85 ms between-frames stall located earlier the same day (a whole texture array uploaded in the pak
+worker's `message` handler) was fixed by making the upload resumable: decode + `createTexture` in the
+handler, the (layer, mip) writes drained from `StreamingDriver.update` at ≤1.5 ms/frame. Same `u-turn` lap,
+same pak (`08:41 24-07-2026`): the drive's streaming-driven slow frames went from `blob` 84.7/65.8/59.5/15.2
+ms to **zero slow frames during the drive**; worst single handler call 84.7 → 0.1 ms; the one boot-adjacent
+frame with stream cost reads `blob 0.4 worst 0.1 upload 1.5` — the drain sitting exactly on its budget. The
+remaining boot/spawn `other` 19–134 ms frames are the still-unmeasured second door (the vehicle-model build
+resolving from a worker `onmessage` continuation).
+Run: [`2026-07-27-headless-texture-upload-hitch-fix.md`](opensa-engine/2026-07-27-headless-texture-upload-hitch-fix.md).
+
+### 2026-07-27 — user's in-game re-baseline after the texture-upload fix
+
+The user drove first (field verdict: no lags noticed) and then ran `?bench=all` on the same session — same
+pak and host as the 07-24 `617556f` baseline, so the two sweeps compare directly. **Performance-neutral on
+every scene**: seven of eight within a tenth of a millisecond; `lv-night` moved 13.121 → 13.784 avgMs
+(76.2 → 72.5 fps) with an IDENTICAL gpu pass (8.692 vs 8.668) — a CPU-side wobble at the single-run ±5 %
+noise boundary, not a regression. Neutral averages are the fix's expected shape (it buys smoothness, not
+throughput); the smoothness itself shows in the same paste's `[slow]` lines — every streaming slow frame
+reads `blob ≤0.6 worst ≤0.4 upload ≤2.4` where the pre-fix shape was one 15–85 ms `blob` call, and
+`lateCreates` is 0 on all eight scenes, so the pop-in price did not materialize. What remains slow are
+scene-teleport/spawn frames (`other` 76–225 ms — the vehicle-model-builder door, still unmeasured) and
+`country-dusk`'s known GPU-bound pass.
+Run: [`2026-07-27-ingame-after-texture-upload-fix.json`](opensa-engine/2026-07-27-ingame-after-texture-upload-fix.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

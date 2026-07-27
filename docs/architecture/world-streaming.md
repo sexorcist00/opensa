@@ -79,11 +79,14 @@ flowchart LR
   replayed while frustum-visible; also the debugger's ray `pick()` over the placement mapper (parsed only
   under `debugPicking`).
 - **`world/textures.ts`** — `TextureArrays`: `.ostex` upload + material bind groups; CPU payload released
-  after upload. **The upload runs in the pak worker's `message` handler — between frames, outside every
-  budget the loop keeps** (cell CREATES are budgeted, the arrays they need are not). Measured 2026-07-27 at
-  15-85 ms for a single array, and it is the largest unexplained frame cost in the record; the driver now
-  reports it as `StreamStats.blobMs` / `worstBlobMs`, and the fix has a doc of its own
-  ([texture-upload-budget](../performance/deferred-optimizations/texture-upload-budget.md)).
+  after upload. **Streamed arrays upload RESUMABLY**: the worker's `message` handler only decodes and
+  creates the texture (`beginLoad`), and the (layer, mip) writes drain from `StreamingDriver.update` under
+  `UPLOAD_BUDGET_MS` (1.5 ms/frame, ≥1 write) — a whole-array upload in the handler ran between frames at
+  15-85 ms a call, outside every budget the loop keeps (2026-07-27). `has(ref)` turns true only with the
+  last write, so cells wait exactly as for an un-arrived array. The handler's residue is
+  `StreamStats.blobMs` / `worstBlobMs`, the drain is `uploadMs`; the record lives in
+  ([texture-upload-budget](../performance/applied/texture-upload-budget.md)). The eager boot path
+  (pre-`textures` paks) and per-model dictionaries still upload in one go.
 
 Dynamic models (`.osm`) load outside this path: vehicles/peds go through their own readers
 (`readModelOsm` / `readPedOsm`) and workers — see [features/vehicles.md](../features/vehicles.md) and
