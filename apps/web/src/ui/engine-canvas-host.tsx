@@ -88,7 +88,7 @@ import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
 import { setupEngineClutter } from './engine-clutter';
 import { createEngineDebugActions, type EnginePerfSnapshot } from './engine-debug-actions';
-import { type DynamicFxEmitter, loadCoronaSprites, setupEngineParticles } from './engine-particles';
+import { type DynamicFxEmitter, loadCoronaSprites, loadSkidSprite, setupEngineParticles } from './engine-particles';
 import { ledgerBreakdown, type LegSample, setupPerfRuns } from './engine-perf-runs';
 import { setupPhysRuns } from './engine-phys-runs';
 import { loadEnginePlayer } from './engine-player';
@@ -690,6 +690,11 @@ async function boot(
   // 2dfx particles (B6): the pak carries the emitter anchors, this reads effects.fxp + effectsPC.txd and
   // bakes them. Absent-tolerant — a profile without the FX files simply renders no particles.
   const particles = setupEngineParticles(engine, fs);
+  // Skid-mark decal lane (089/03): SA's particleskid sprite, installed once — absent-tolerant like the FX.
+  const skidSprite = loadSkidSprite(fs);
+  if (skidSprite) {
+    engine.initSkidMarks(skidSprite);
+  }
   // `?fxprobe=<system>` (089/01): park one dynamic one-shot emitter beside the player's first position —
   // the headless screenshot check for the lane (rate 1 = as authored). `undefined` = not created yet.
   const fxProbeName = params.get('fxprobe');

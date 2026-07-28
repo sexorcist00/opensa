@@ -274,6 +274,14 @@ fluctuating 950 → 1623 bodies plus the known cell-collision spikes — none of
 dynamic lane issues zero draws and zero writes; the user also noted other host processes may have interfered).
 Run: [`2026-07-28-headless-089-02-no-regression-sweep.json`](opensa-engine/2026-07-28-headless-089-02-no-regression-sweep.json).
 
+### 2026-07-28 — plan 089/03: the skid-mark decal lane on the brake-strip lap
+
+HUD-read from lap screenshots (not a sweep): ~280 laid segments — two full braking ribbons — with GPU
+submit in the same range as the day's lane-less runs; no measurable delta at gameplay-shaped mark counts.
+The lane's steady cost is structural: one ~168 B upload per laid segment, ranged draws over LIVE segments
+only (expired ones leave the window), one 344 KB buffer + a 32² texture at install.
+Run: [`2026-07-28-headless-089-03-skid-marks.json`](opensa-engine/2026-07-28-headless-089-03-skid-marks.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

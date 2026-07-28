@@ -1589,6 +1589,54 @@ fn fsRigidBlend(in: RigidVsOut, @builtin(front_facing) frontFacing: bool) -> @lo
   return vec4f(color, alpha);
 }
 `,
+  skid: /* wgsl */ `
+#include <frame>
+
+// Skid-mark decals (089/03): ground ribbon quads, premultiplied over the opaque world, fading on the
+// WALL clock — frame.params2.z is engine uptime in REAL seconds, so the brief's 5-second rule ignores the
+// day cycle by construction. SA's particleskid is WHITE with the tread in the alpha channel; the dark
+// rubber colour is applied here (the original tints it with a dark vertex colour the same way).
+@group(1) @binding(0) var skidTexture: texture_2d<f32>;
+@group(1) @binding(1) var skidSampler: sampler;
+
+struct SkidIn {
+  @location(0) position: vec3f,
+  @location(1) uv: vec2f,
+  // x = the laid alpha (slide severity x the grow-in ramp), y = birth seconds on the frame clock.
+  @location(2) params: vec2f,
+};
+
+struct SkidOut {
+  @builtin(position) clip: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) alpha: f32,
+};
+
+// MUST match SKID_LIFE_SECONDS in render/skid-marks.ts (the ring prunes on the same clock this fades on).
+const SKID_LIFE = 12.0;
+const RUBBER = vec3f(0.04, 0.04, 0.05);
+// particleskid's alpha averages ~0.4 — authored for SA's own compositing. Unboosted, a full-severity mark
+// darkens this engine's road by ~0.3 and vanishes into the asphalt; the boost keeps the tread PATTERN
+// (relative alpha) while making the mark read. An eye-fit — docs/hacks/skid-mark-look-fit.md.
+const TREAD_BOOST = 1.8;
+
+@vertex
+fn vsSkid(in: SkidIn) -> SkidOut {
+  var out: SkidOut;
+  out.clip = frame.viewProj * vec4f(in.position, 1.0);
+  out.uv = in.uv;
+  let fade = clamp(1.0 - (frame.params2.z - in.params.y) / SKID_LIFE, 0.0, 1.0);
+  out.alpha = in.params.x * fade;
+  return out;
+}
+
+@fragment
+fn fsSkid(in: SkidOut) -> @location(0) vec4f {
+  let texel = textureSample(skidTexture, skidSampler, in.uv);
+  let a = min(1.0, texel.a * TREAD_BOOST) * in.alpha;
+  return vec4f(texel.rgb * RUBBER * a, a);
+}
+`,
   sky: /* wgsl */ `
 #include <frame>
 

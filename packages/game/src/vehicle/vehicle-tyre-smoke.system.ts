@@ -25,7 +25,7 @@ import type { System } from '../core/system';
 import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { VehicleController, VehicleWheelReading, VehicleWheelSlip } from '../physics/physics-world';
 
-import { planarMotion } from './vehicle-telemetry';
+import { planarMotion, type PlanarMotion } from './vehicle-telemetry';
 
 /** The car slice the smoke reads — the driven car's live pose and its controller. */
 export interface TyreSmokeCar {
@@ -88,6 +88,19 @@ const SPIN_FADE_SPEED = 12;
 const BRAKE_DEADZONE = 0.25;
 const SPIN_DEADZONE = 0.4;
 
+/**
+ * The SHARED slide signal (089/02, reused by the skid marks 089/03): one equivalent slide speed (m/s) for
+ * a wheel, from the demand-over-cap record and the body's planar motion. Smoke rates and mark darkness
+ * both read this — the two effects may never disagree about whether a tyre is sliding.
+ */
+export function equivalentSlideSpeed(slip: undefined | VehicleWheelSlip, motion: PlanarMotion): number {
+  const locked = Math.min(1, Math.max(0, ((slip?.brakeExcess ?? 0) - BRAKE_DEADZONE) / (1 - BRAKE_DEADZONE)));
+  const spinFade = Math.max(0, 1 - Math.abs(motion.speed) / SPIN_FADE_SPEED);
+  const spinning = Math.min(1, Math.max(0, ((slip?.spinExcess ?? 0) - SPIN_DEADZONE) / (1 - SPIN_DEADZONE))) * spinFade;
+
+  return Math.max(Math.abs(motion.speedLateral), locked * Math.abs(motion.speed), spinning * SPIN_TO_SLIDE);
+}
+
 /** More wheels than any SA vehicle carries — the per-wheel state array is sized once. */
 const MAX_WHEELS = 8;
 
@@ -127,12 +140,7 @@ export class VehicleTyreSmokeSystem implements System {
         this.accumulators[index] = 0; // an airborne wheel touches nothing — nothing to smoke
         continue;
       }
-      const slip = slips[index];
-      const locked = Math.min(1, Math.max(0, ((slip?.brakeExcess ?? 0) - BRAKE_DEADZONE) / (1 - BRAKE_DEADZONE)));
-      const spinFade = Math.max(0, 1 - Math.abs(motion.speed) / SPIN_FADE_SPEED);
-      const spinning =
-        Math.min(1, Math.max(0, ((slip?.spinExcess ?? 0) - SPIN_DEADZONE) / (1 - SPIN_DEADZONE))) * spinFade;
-      const slide = Math.max(Math.abs(motion.speedLateral), locked * Math.abs(motion.speed), spinning * SPIN_TO_SLIDE);
+      const slide = equivalentSlideSpeed(slips[index], motion);
       const span = Math.max(0.001, this.dials.slideFull - this.dials.slideStart);
       const intensity = Math.min(1, Math.max(0, (slide - this.dials.slideStart) / span));
       if (intensity <= 0) {
