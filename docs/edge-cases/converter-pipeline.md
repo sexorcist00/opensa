@@ -67,6 +67,15 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   fridge loses its glass — in the shipped build. **The pak build already detects this** and writes it to
   `report.json` → `textures.missing` (**66 entries** as of 2026-07-28); nothing surfaces it, so nobody reads
   that far. `scripts/debug/txd-retune.ts --add` puts one back.
+- **Text mod data is read as UTF-8 everywhere except `vehicle-installer`.** A Windows editor writes `.txt`/
+  `.ide`/`.ipl`/`.dat` as UTF-16 as readily as UTF-8, and read as UTF-8 such a file is NUL-interleaved
+  garbage that parses to nothing — silently, because a mod contributing no lines looks exactly like a mod
+  that ships none. This cost 8 of gostown's 10 vehicle mods their entire `handling.cfg` / `vehicles.ide` /
+  `carcols.dat` contribution (they ran STOCK rows under mod models until 2026-07-28) and it showed up in the
+  field only because plan 081's stance law made a car's authored suspension visible. `vehicle-installer` now
+  decodes by BOM (and by NUL parity when there is none) and warns about every block it drops;
+  `tools/mod-installer` and `packages/modloader` still read `utf8` unconditionally, so a map mod's UTF-16
+  `.ide`/`.ipl` is still lost without a word.
 - **The installer recognises IMG folders only at the TOP level and only by exact name.** `apply-mod.ts`
   matches `cutscene_img` / `gta3_img` / `gta_int_img` against the mod's own top-level entries — anything else
   (`models/gta3img/`, a nested `models/gta3_img/`) is copied verbatim as loose files the game never reads, so

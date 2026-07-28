@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { mergeVehicleImg } from './img-merge';
 import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde } from './merge';
 import { addPaletteColors, resolveColorRefs } from './palette';
-import { parseVehicleSettings } from './settings';
+import { decodeSettings, parseVehicleSettings } from './settings';
 
 /** What one vehicle contributed — its gta3.img entries + the keys `--strip` keeps (model name, handling id). */
 export interface AppliedVehicle {
@@ -14,6 +14,8 @@ export interface AppliedVehicle {
   imgNames: string[];
   /** Model name (lowercased, the dff basename) — for vehicles.ide / carcols.dat / carmods.dat strip. */
   model?: string;
+  /** What the settings file lost on the way in — every one of these is data the car will run STOCK without. */
+  warnings: string[];
 }
 
 /**
@@ -27,9 +29,17 @@ export function applyVehicle(folderPath: string, outPath: string): AppliedVehicl
 
   const settingsFile = readdirSync(folderPath).find((name) => name.toLowerCase().endsWith('.txt'));
   if (!settingsFile) {
-    return { imgNames, model };
+    return { imgNames, model, warnings: [] };
   }
-  const settings = parseVehicleSettings(readFileSync(join(folderPath, settingsFile), 'utf8'));
+  const warnings: string[] = [];
+  const settings = parseVehicleSettings(decodeSettings(readFileSync(join(folderPath, settingsFile))), (message) =>
+    warnings.push(`${settingsFile}: ${message}`),
+  );
+  // Nothing at all recognised is the loud case: the file exists, the mod meant something by it, and the car is
+  // about to run stock data under a mod model.
+  if (Object.keys(settings).length === 0) {
+    warnings.push(`${settingsFile}: nothing recognised — the car keeps STOCK handling/ide/carcols`);
+  }
   const data = (name: string): string => join(outPath, 'data', name);
 
   if (settings.ideLine !== undefined) {
@@ -53,7 +63,7 @@ export function applyVehicle(folderPath: string, outPath: string): AppliedVehicl
     editFile(data('carmods.dat'), (text) => mergeCarmods(text, settings.carmodsLine!));
   }
 
-  return { handlingId: handlingId(settings, model), imgNames, model };
+  return { handlingId: handlingId(settings, model), imgNames, model, warnings };
 }
 
 function editFile(path: string, edit: (text: string) => string): void {

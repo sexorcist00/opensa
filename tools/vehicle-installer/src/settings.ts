@@ -31,11 +31,44 @@ const MIN_HANDLING_FIELDS = 20;
 type Kind = 'carcolsLine' | 'carmodsLine' | 'handlingLine' | 'ideLine';
 
 /**
+ * Decode a settings file's BYTES into text, honouring the encoding it was actually saved in.
+ *
+ * A Windows editor happily writes `*.settings.txt` as UTF-16 — 8 of the 10 gostown vehicle mods ship it that
+ * way — and read as UTF-8 every line comes out NUL-interleaved, matches no block shape, and the whole file is
+ * dropped: the car then runs STOCK handling/ide/carcols under a mod model. That is what stood the 1965
+ * Mustang ~12 cm too tall (it authors `suspension_lower_limit −0.045` and was running the stock −0.20).
+ *
+ * BOMs decide it when present; a BOM-less UTF-16 file is caught by the NUL bytes no text encoding puts in
+ * ASCII text — their parity says which endianness. Anything else is read as UTF-8, and whatever fails to
+ * classify then reaches {@link parseVehicleSettings}'s warning.
+ */
+export function decodeSettings(bytes: Uint8Array): string {
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return utf16(bytes.subarray(2), true);
+  }
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return utf16(bytes.subarray(2), false);
+  }
+  const head = bytes.subarray(0, 64);
+  const nul = head.indexOf(0);
+  if (nul >= 0) {
+    return utf16(bytes, nul % 2 === 1);
+  }
+  const utf8 = Buffer.from(bytes).toString('utf8');
+
+  return utf8.charCodeAt(0) === 0xfeff ? utf8.slice(1) : utf8;
+}
+
+/**
  * Parse a `*.settings.txt` (blank-line-separated blocks) into the lines it carries. Four single-line blocks
  * (ide/handling/carcols/carmods) are classified by **structure** + validated with the real engine parser; the
- * **palette** block is multi-line (`R,G,B  # newN …`). An unrecognised block is dropped.
+ * **palette** block is multi-line (`R,G,B  # newN …`).
+ *
+ * A block no parser recognises is dropped — but never in silence: `onWarn` gets it, because a dropped block
+ * is indistinguishable in the output from a mod that simply ships stock data, and the install carries on
+ * either way. An unknown ENCODING lands here as a wall of unrecognised blocks (see {@link decodeSettings}).
  */
-export function parseVehicleSettings(text: string): VehicleSettings {
+export function parseVehicleSettings(text: string, onWarn?: (message: string) => void): VehicleSettings {
   const out: VehicleSettings = {};
   for (const block of text.split(/\r?\n\s*\n/)) {
     const lines = block
@@ -53,6 +86,8 @@ export function parseVehicleSettings(text: string): VehicleSettings {
     const kind = classify(lines[0]);
     if (kind) {
       out[kind] = lines[0];
+    } else {
+      onWarn?.(`dropped an unrecognised block: ${preview(lines[0])}`);
     }
   }
 
@@ -118,4 +153,18 @@ function paletteName(line: string): string {
       .trim()
       .split(/\s+/)[0] ?? ''
   );
+}
+
+/** A dropped block quoted for a log line: one line, printable, short enough to read at a glance. */
+function preview(line: string): string {
+  const printable = [...line.slice(0, 60)].map((ch) => (ch < ' ' || ch === '\u007f' ? '·' : ch)).join('');
+
+  return `"${printable}${line.length > 60 ? '…' : ''}"`;
+}
+
+/** UTF-16 text from `bytes` (BOM already removed); a trailing odd byte cannot start a code unit and is cut. */
+function utf16(bytes: Uint8Array, littleEndian: boolean): string {
+  const even = Buffer.from(bytes.subarray(0, bytes.length - (bytes.length % 2)));
+
+  return (littleEndian ? even : even.swap16()).toString('utf16le');
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseVehicleSettings } from './settings';
+import { decodeSettings, parseVehicleSettings } from './settings';
 
 const IDE = '602, alpha, alpha, car, ALPHA, ALPHA, null, richfamily, 10, 0, 0, -1, 0.725, 0.725, 1';
 const HANDLING =
@@ -21,6 +21,23 @@ describe('parseVehicleSettings', () => {
 
     it('drops a block no parser recognises (prose)', () => {
       expect(parseVehicleSettings('the uphill gardener, by mad driver')).toEqual({});
+    });
+
+    it('warns about every block it drops, quoting it', () => {
+      const warnings: string[] = [];
+
+      parseVehicleSettings(['the uphill gardener, by mad driver', HANDLING].join('\n\n'), (m) => warnings.push(m));
+
+      expect(warnings).toEqual(['dropped an unrecognised block: "the uphill gardener, by mad driver"']);
+    });
+
+    it('warns when a mis-decoded file yields nothing at all, so the loss is never quiet', () => {
+      const warnings: string[] = [];
+      // A UTF-16 file read as UTF-8 \u2014 the shape that silently stripped 8 of gostown's 10 vehicle mods.
+      const misdecoded = Buffer.from(`\ufeff${[IDE, HANDLING].join('\r\n\r\n')}`, 'utf16le').toString('utf8');
+
+      expect(parseVehicleSettings(misdecoded, (message) => warnings.push(message))).toEqual({});
+      expect(warnings).not.toHaveLength(0);
     });
   });
 
@@ -53,6 +70,54 @@ describe('parseVehicleSettings', () => {
         { line: '186,208,125  # new2 light green cab   green', name: 'new2' },
       ]);
       expect(result.carcolsLine).toBe(CARCOLS_REFS); // not mis-classified as carmods despite the `newN` cells
+    });
+  });
+});
+
+const FULL = [IDE, HANDLING, CARCOLS, CARMODS].join('\r\n\r\n');
+const utf16be = (text: string): Buffer => Buffer.from(`﻿${text}`, 'utf16le').swap16();
+
+describe('decodeSettings', () => {
+  describe('negative cases', () => {
+    it('keeps a plain ASCII file byte for byte', () => {
+      expect(decodeSettings(Buffer.from(FULL, 'utf8'))).toBe(FULL);
+    });
+
+    it('survives a truncated UTF-16 file (an odd trailing byte starts no code unit)', () => {
+      const bytes = Buffer.from(`﻿${HANDLING}`, 'utf16le');
+
+      expect(decodeSettings(bytes.subarray(0, bytes.length - 1))).toBe(HANDLING.slice(0, -1));
+    });
+  });
+
+  describe('positive cases', () => {
+    it('decodes UTF-16LE with a BOM — the encoding 8 of gostown 10 vehicle mods ship', () => {
+      expect(decodeSettings(Buffer.from(`﻿${FULL}`, 'utf16le'))).toBe(FULL);
+    });
+
+    it('decodes UTF-16BE with a BOM', () => {
+      expect(decodeSettings(utf16be(FULL))).toBe(FULL);
+    });
+
+    it('decodes BOM-less UTF-16 by the parity of its NUL bytes', () => {
+      expect(decodeSettings(Buffer.from(FULL, 'utf16le'))).toBe(FULL);
+      expect(decodeSettings(Buffer.from(FULL, 'utf16le').swap16())).toBe(FULL);
+    });
+
+    it('strips a UTF-8 BOM, which would otherwise break the first block classification', () => {
+      const bytes = Buffer.from(`﻿${FULL}`, 'utf8');
+
+      expect(decodeSettings(bytes)).toBe(FULL);
+      expect(parseVehicleSettings(decodeSettings(bytes)).ideLine).toBe(IDE);
+    });
+
+    it('feeds a UTF-16 file straight into the parser: all four blocks land', () => {
+      expect(parseVehicleSettings(decodeSettings(Buffer.from(`﻿${FULL}`, 'utf16le')))).toEqual({
+        carcolsLine: CARCOLS,
+        carmodsLine: CARMODS,
+        handlingLine: HANDLING,
+        ideLine: IDE,
+      });
     });
   });
 });

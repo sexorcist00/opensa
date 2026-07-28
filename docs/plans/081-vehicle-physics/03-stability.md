@@ -468,3 +468,33 @@ carries it, and the DRAWN wheel follows the physics spring length instead of the
 channel, landed early as this fix's dependency: `RigidEntity.setPartTranslation` + the rig's smoothed lift).
 Pinned by a twin-car test: +0.10 m of |lower| stands the body 7.7 cm higher, where the old rule read 0.
 Field verdict: pending. Still owed: an absolute ride-height probe — no capture yet measures body-to-ground.
+
+### 2026-07-28 — the pose law is only as good as the handling row under it (field: "the cars are jacked up")
+
+The first field verdict on this law came back as **wrong stance on many gostown cars** — a 1965 Mustang
+standing on stilts, its wheels hanging clear of the arches. The law was not at fault and neither was the
+physics: those cars were running **stock handling rows**. Their mods ship the modloader-style
+`*.settings.txt`, 8 of the 10 saved as UTF-16, and `vehicle-installer` read every one as UTF-8 — every block
+came out NUL-interleaved, classified as nothing and was dropped in silence, so `handling.cfg`,
+`vehicles.ide` and `carcols.dat` all kept stock values under a mod model (fixed: `decodeSettings`).
+
+Because the pose is `fraction × (|lower| + upper) − |lower|`, a wrong row lands directly on ride height.
+Per car, the rest offset the mod authors vs the stock row it was actually running (share 0.25, its own
+axle bias — how much higher the body stood than the author drew):
+
+| car | mod row (force / upper / lower) | rest offset | stock row it ran | rest offset | body too high |
+| --- | --- | --- | --- | --- | --- |
+| stallion | 0.917 / 0.195 / −0.045 | +2.0 cm | 1.2 / 0.30 / −0.20 | −9.6 cm | **11.6 cm** |
+| hermes | 0.79 / 0.26 / −0.08 | +2.8 cm | 1.0 / 0.35 / −0.20 | −8.1 cm | 10.9 cm |
+| yosemite | 0.903 / 0.20 / −0.10 | −1.7 cm | 1.0 / 0.24 / −0.20 | −9.0 cm | 7.3 cm |
+| banshee | 0.92 / 0.10 / −0.05 | −0.9 cm | 1.6 / 0.30 / −0.15 | −8.0 cm | 7.0 cm |
+| alpha | 0.85 / 0.15 / −0.05 | +0.4 cm | 1.2 / 0.30 / −0.15 | −5.6 cm | 6.1 cm |
+| comet | 0.90 / 0.20 / −0.10 | −1.7 cm | 1.4 / 0.28 / −0.15 | −7.3 cm | 5.7 cm |
+| stratum | 0.60 / 0.15 / −0.08 | +0.6 cm | 1.0 / 0.28 / −0.16 | −5.0 cm | 5.6 cm |
+| supergt | 0.64 / 0.10 / −0.05 | +0.9 cm | 1.0 / 0.25 / −0.10 | −1.3 cm | 2.1 cm |
+
+The two mods whose settings files are plain ASCII (admiral, petrol) merged all along and were never
+reported. **Method note**: the stance law makes a car's authored suspension row VISIBLE at a glance — a car
+standing wrong is now a first-class signal that its data never arrived. Whether the law itself is right for
+mod GEOMETRY is still open: the mustang's own dummies sit at `z −0.485` with a 0.362 m wheel, so its
+authored row puts the wheel 2 cm above the dummy — that is the prediction the next field look tests.

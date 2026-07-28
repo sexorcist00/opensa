@@ -86,6 +86,40 @@ describe.skipIf(!hasFixtures)('install (end-to-end, real data fixtures)', () => 
       expect(carmods.mods.get('admiral')).toEqual(['exh_b_l']);
     });
 
+    it('merges a UTF-16 settings file — the encoding most vehicle mods are saved in', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'in');
+      const out = join(root, 'out');
+
+      mkdirSync(join(game, 'data'), { recursive: true });
+      for (const file of DATA_FILES) {
+        cpSync(join(DATA, file), join(game, 'data', file));
+      }
+      mkdirSync(join(game, 'models'), { recursive: true });
+      const baseImg = createImg();
+      baseImg.set('admiral.dff', Uint8Array.of(9));
+      writeFileSync(join(game, 'models', 'gta3.img'), baseImg.build());
+
+      const folder = join(mods, 'admiral - 1976 Mercedes-Benz 230');
+      mkdirSync(folder, { recursive: true });
+      writeFileSync(join(folder, 'admiral.dff'), Uint8Array.of(1));
+      // Byte for byte what a Windows editor writes: a UTF-16LE BOM and CRLF.
+      writeFileSync(
+        join(folder, 'admiral.settings.txt'),
+        Buffer.from(`﻿${[IDE, HANDLING].join('\r\n\r\n')}`, 'utf16le'),
+      );
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      // Read as UTF-8 both blocks are dropped and the car silently keeps the stock 1650 kg row.
+      expect(parseHandling(readFileSync(join(out, 'data', 'handling.cfg'), 'utf8')).get('ADMIRAL')?.fields[0]).toBe(
+        '9999.0',
+      );
+      expect(parseVehicleDefs(readFileSync(join(out, 'data', 'vehicles.ide'), 'utf8')).get('admiral')?.txd).toBe(
+        'admtxdmod',
+      );
+    });
+
     it('appends custom palette colours and resolves the carcols newN refs (cabbie-style)', () => {
       const game = join(root, 'game');
       const mods = join(root, 'in');

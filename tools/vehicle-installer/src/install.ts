@@ -48,6 +48,7 @@ export function install(options: InstallOptions): void {
   const handlingIds = new Set<string>();
   for (const vehicle of vehicles) {
     const applied = applyVehicle(join(inPath, vehicle), outPath);
+    applied.warnings.forEach((warning) => console.warn(`vehicle-installer: ${vehicle}: ${warning}`));
     applied.imgNames.forEach((name) => imgNames.add(name));
     if (applied.model) {
       models.add(applied.model);
