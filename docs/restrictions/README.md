@@ -44,7 +44,7 @@ costs a session.
 
 | File | Subject |
 | --- | --- |
-| [architecture.md](architecture.md) | Layer boundaries, what may import what, the one-build rule, the grid every tool must agree on |
+| [architecture.md](architecture.md) | Layer boundaries, what may import what, the one-build rule, the grid every tool must agree on, what a frame-time span may wrap |
 | [build-vs-runtime.md](build-vs-runtime.md) | What is decided while the game is BUILT and cannot be recovered while it runs |
 | [engine-lighting.md](engine-lighting.md) | The light pool's two halves and who is allowed to read them |
 | [gpu-and-shaders.md](gpu-and-shaders.md) | WGSL and inter-stage rules that no test in this repo can see |
