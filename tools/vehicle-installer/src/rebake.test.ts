@@ -143,6 +143,17 @@ describe.skipIf(!hasFixtures)('rebakeVehicles (real zr350 fixture)', () => {
       expect(entry(target, 'moonbeam2.osm')).toBeNull();
     });
 
+    it('never puts the raw dff/txd back into a CONVERTED archive', () => {
+      // The pack deleted the pair when it baked the car; re-adding them would leave entries the game does
+      // not read and an archive nobody can tell from a half-converted one.
+      const target = builtGame();
+
+      rebakeVehicles({ inPath: modFolder(), targetPath: target });
+
+      expect(entry(target, 'zr350.dff')).toBeNull();
+      expect(entry(target, 'zr350.txd')).toBeNull();
+    });
+
     it('leaves the models `--only` did not name exactly as they were', () => {
       const target = builtGame();
       const before = head(target, 'somethingelse.osm', 4);

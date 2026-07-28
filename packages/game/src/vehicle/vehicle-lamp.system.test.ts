@@ -203,6 +203,24 @@ describe('VehicleLampSystem', () => {
       expect(heads[0].cone!.direction[2]).toBeLessThan(0);
     });
 
+    it('a car with NO pod lights at once — it must never wait for an arc it does not have', () => {
+      // Every other case here happens to use a pod-less car, but this is the guarantee itself: a regression
+      // would put every car in the game in the dark at night, and nothing else would say so.
+      const { lights, run } = harness(
+        (sinks) =>
+          new VehicleLampSystem(
+            enter(car(false), true),
+            () => true,
+            () => CONFIG,
+            sinks,
+          ),
+      );
+
+      run();
+
+      expect(lights.filter((light) => light.cone !== undefined)).toHaveLength(2);
+    });
+
     it('a pod car lights the moment its pods finish opening', () => {
       const vehicle = car(true);
       const handle = vehicle.handle as FakeVehicleHandle;

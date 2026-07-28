@@ -41,8 +41,8 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   The pod rides the same signal that lights the lamps and travels over 0.7 s (`VehicleRig`, fixed step), and
   the LAMPS wait for it: a pod car's beam, glow and coronas only come on once the pods stand fully open, and
   die the moment they start folding back (field 2026-07-28 — a lamp still parked in the nose lit the bodywork).
-  Cars without a pod are not gated at all. A mod
-  whose pod uses its own texture instead of `vehiclelights` (so it carries no marker) can DECLARE itself: a
+  Cars without a pod are not gated at all. A mod whose pod uses its own texture instead of `vehiclelights`
+  (so it carries no marker) can DECLARE itself: a
   `features.txt` in the mod folder holding `UP/DOWN_LIGHTS` — the Modloader/IVF convention. `vehicle-installer`
   copies each mod's declaration into `data/vehicle-features.txt`, and opensa-pack reads it while baking that
   car. That path is BUILD-time only; the runtime modloader path gets the geometry-derived detection alone.

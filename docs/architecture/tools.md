@@ -15,6 +15,12 @@ never the app. The dependency picture is the tools cluster of
   `carcols.dat` / `carmods.dat`. A mod's settings file is decoded by its own encoding (UTF-16 is what most
   authors ship) and every block it cannot classify is reported. A mod's `features.txt` (Modloader/IVF) is
   copied into `data/vehicle-features.txt`, which opensa-pack reads while baking that car.
+  **`--rebake <game>`** runs the same work against a game that is ALREADY BUILT, in place — merging settings
+  into the built `data/*` and re-converting each model into the archive's `<model>.osm` through opensa-pack's
+  own `buildVehicleOsm`. It is the one place a tool reaches ACROSS the pipeline (installer → converter) and it
+  exists because a vehicle round is otherwise a full build to see one row: one car 3.6 s, twelve 26 s. It can
+  add a car too, on the id the mod declares for itself
+  ([plan 006](../../tools/vehicle-installer/docs/plans/006-rebake.md)).
 - **ped-installer** — ped mod folders → `gta3.img` + merged `peds.ide`.
 - **map-optimizer** — lossless DFF/TXD conditioning (smooth-group normals, prelit sync, dedupe, mips) that
   yields a drop-in game dir; refuses geometry it can't provably remap. Lib `src/run.ts`.
