@@ -37,10 +37,6 @@ Read it as a set of rules:
   a data row a tool writes) → record it in [`docs/contracts/`](./contracts/), one file per subject. A name
   contract is invisible from the code that consumes it: nobody greps for a filename they do not know exists,
   and a mod that spells one wrong contributes nothing, silently.
-- **We knowingly took a shortcut** (a constant fitted by eye, a heuristic standing in for a formula nobody
-  has recovered, an effect faked because the real one is not there) → write it up in
-  [`docs/hacks/`](./hacks/README.md) in the SAME change, and move it to `hacks/retired/` when the honest
-  version replaces it. A hack nobody recorded is indistinguishable from a decision.
 - **After a big rework** → run an audit and a benchmark, and record both: the audit under
   [`docs/audit/`](./audit/), the numbers under [`docs/benchmarks/`](./benchmarks/) (per its schema). A large
   change without its audit + before/after numbers is unfinished.
@@ -58,7 +54,6 @@ Read it as a set of rules:
 | [`features/`](./features/README.md) | Per-feature state (one file per feature). |
 | [`contracts/`](./contracts/) | Names that carry behaviour (files, frames, materials, data rows). |
 | [`edge-cases/`](./edge-cases/README.md) | CURRENT limitations/constraints only, no legacy. |
-| [`hacks/`](./hacks/README.md) | Expedients we knowingly took: fitted constants, stand-in rules, faked effects. Replaced ones move to [`hacks/retired/`](./hacks/retired/). |
 | [`performance/`](./performance/) | Deferred-optimization levers (a price tag, not a plan). |
 | [`benchmarks/`](./benchmarks/) | Every reported perf figure, recorded before it is analysed. |
 | [`audit/`](./audit/) | Post-rework audits (what changed, what it cost, what it bought). |

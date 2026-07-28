@@ -69,32 +69,9 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   (no extra buffer). The `_vlo` LOD and `_dam` twins receive it but never cast, which is what keeps a
   convertible's cabin open. The engine's dynamic indirect term is `params.y × DYNAMIC_INDIRECT ×
   skyVisibility(normal) × occlusion` — the map's `prelit × params.y × ao`, with a constant standing in for
-  the prelit a car has no data for. **The same occlusion also gates the REFLECTION and the sun/moon
-  specular** (both car paths, 2026-07-28): a surface may not mirror more sky than it can see. It is what a
-  MOD's cabin needs — their exporters stamp an env map on every material they ship, so the previon's dash
-  trim came out class CHROME with coefficient 0.5 and mirrored the sun through the windscreen in full sun
-  while reading normal in shade (field report). Measured on that car: cabin vertices sit at sky 0.32–0.69
-  (dash trim 0.63, gauges 0.56, seats 0.55) against 0.9–1.0 on outer bodywork and 0.95–1.0 on the glass, so
-  the gate bites where the artefact was and nowhere else. Inspect any BUILT car with
-  `scripts/debug/dump-vehicle-materials.ts`. `skyVisibility` / `DYNAMIC_INDIRECT` live in the shared `<frame>` shader
+  the prelit a car has no data for. `skyVisibility` / `DYNAMIC_INDIRECT` live in the shared `<frame>` shader
   module (next to `localLightStatic`) so the ped path reuses the exact same weight, minus the per-instance
   occlusion a ped has no bake for (plan 087 ped — see character.md).
-- **The cabin at night** (plan 090, 2026-07-28): a modelled interior used to go black after dark, because
-  the sky-occlusion above kept dividing the light once the sky had stopped being the source. Two halves.
-  **(1)** The occlusion RELAXES toward open with the day/night factor (`skyShareNow`, 60 %): measured on the
-  previon at midnight, gauges and seats gain ×1.47, the interior ×1.38, doors ×1.20–1.22, the chassis ×1.12
-  and the glass ×1.00 — the lift lands where the geometry is enclosed, and nothing moves by day.
-  **(2)** A **dash light**: ONE soft source under the steering wheel, the way an instrument panel spills into
-  a cabin. `vehicle/cabin.ts` finds the interior from the model itself — the greenhouse from the GLASS
-  materials' own bounds, the floor from the wheel hubs, "actually enclosed" from the occlusion, wheels and
-  the `_vlo` LOD excluded, a neighbour fill closing the bake's speckle (1 261 → 572 speckled vertices) — then
-  hangs the lamp in that cabin's own box on the DRIVER's side (`ped_frontseat` mirrored to −X, the rule the
-  game seats the player by) and bakes each vertex's DISTANCE from it into `meta.w`'s low nibble, 13 levels.
-  The shader owns the falloff, so the reach and the curve are reload-tunable while only the placement needs a
-  re-pack. It burns **while that car's headlights are on** and only at night, scaled by
-  `graphics.headlights.intensity` — per instance, so a parked car with its lights off stays dark. Measured on
-  the previon: gauges peak 0.74, dash and wheel 1.00, the driver's door 0.52 against the passenger's 0.09.
-  A bike gets nothing — no glass, no cabin, which is a supported answer.
 - **Tyre detection** (plan 084, 2026-07-22): `wheel-tyre.ts` finds the RUBBER of a wheel by geometry, never
   by texture name (the field set says `tire`, `tyre`, `tread`, `wheel`, `vehicletyres128`, `generic_tire_01`
   — it disagrees with itself). A wheel is a disc about its axle and the tyre is its outer band: measured

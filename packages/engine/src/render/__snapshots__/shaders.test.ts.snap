@@ -5372,14 +5372,9 @@ struct RigidVsOut {
   // locations, and this one was per-instance state with a spare component — the same reason local.w
   // carries sky occlusion.
   @location(7) @interpolate(flat) lamps: vec4f,
-  // The DASH LIGHT's baked strength at this vertex, 0..1 (renderware/vehicle/cabin.ts) — and SMOOTH on
-  // purpose. It is decoded from the lamp nibble, which rides in lampTag as @interpolate(flat): reading it
-  // there switched a whole TRIANGLE at a time and painted hard polygonal patches across the previon's seats
-  // (field 2026-07-28). Interpolated, the falloff is per pixel.
-  @location(8) cabin: f32,
   // [env coefficient, SA reflection intensity, SA specular level] — all 0..1, all authored per material.
   // There is no env LAYER beside them: the DFF names an env texture, but this pipe reflects the live probe
-  // (rigidEnv), so the name only ever acted as a flag.
+  // (rigidEnv), so the name only ever acted as a flag. Location 8 is free again.
   @location(9) @interpolate(flat) reflect: vec3f,
   // MODEL-space position (xyz): the flake hash is anchored to the CAR, so the sparkle rides with it. A
   // world-space hash would make the flakes crawl across the paint as the car drives.
@@ -5457,12 +5452,6 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   out.layer = in.slots.x;
   out.nightLayer = in.slots.y;
   out.lampTag = in.slots.w & 0xFu;
-  // Tag values 3…15 are the DASH LIGHT's quantized DISTANCE from the lamp (renderware/vehicle/cabin.ts),
-  // decoded into a 0..1 varying the rasterizer interpolates — the tag itself is flat, and reading the light
-  // off it switched whole triangles at a time (the hard patches, field 2026-07-28). A vertex outside the
-  // cabin goes out as FAR rather than as a flag, so a triangle straddling the boundary only ever fades.
-  let cabinTag = in.slots.w & 0xFu;
-  out.cabin = select(CABIN_OUTSIDE, f32(cabinTag - 3u) / f32(CABIN_STEPS), cabinTag >= 3u);
   out.matClass = in.slots.w >> 4u;
   // The plate row is read HERE, where the instance index still exists, and only the one layer this submesh
   // needs is forwarded: its material class already says which of the two arrays that layer belongs to.
@@ -5525,9 +5514,7 @@ fn rigidTexel(in: RigidVsOut) -> vec4f {
 // A lit lamp SELF-ILLUMINATES: shading it like painted metal leaves it a dull grey patch at night. Tails run
 // dim and go bright on the brakes — the one cue that reads as a car stopping ahead of you.
 fn rigidLampGlow(in: RigidVsOut) -> f32 {
-  // Tags other than the two LAMPS fall straight through — the cabin tag is a lit surface, not a source,
-  // and must never take the head-lamp branch below.
-  if ((in.lampTag != 1u && in.lampTag != 2u) || in.lamps.x <= 0.5) {
+  if (in.lampTag == 0u || in.lamps.x <= 0.5) {
     return 0.0;
   }
   if (in.lampTag == 2u) {
@@ -5539,41 +5526,6 @@ fn rigidLampGlow(in: RigidVsOut) -> f32 {
 const LAMP_HEAD_GLOW = 2.4;
 const LAMP_TAIL_RUN = 1.0;
 const LAMP_TAIL_BRAKE = 4.0;
-
-/**
- * The dash light (plan 090/02).
- *
- * ONE soft source under the steering wheel, the way a real instrument panel spills into a cabin — not a fill
- * over the whole interior. Its FALLOFF is baked per vertex by the builder, which finds the cabin from the
- * model's own glass, wheel hubs and occlusion and places the lamp in that cabin's own box
- * (renderware/vehicle/cabin.ts); all that is left here is the colour, the level and the two switches.
- *
- * It burns only while THIS car's headlights are on — per instance, off the same lamp state that swaps the
- * lamp texture, so a parked car stays dark — and only at NIGHT, by the day/night factor. Scaled by the car's
- * own headlight intensity, which is graphics.headlights.intensity: turn the lamps down and the dash follows.
- * The level and the tint are LOOK constants, tunable on a reload; the falloff needs a re-pack.
- */
-const CABIN_GLOW = 0.55;
-const CABIN_TINT = vec3f(1.0, 0.82, 0.55);
-/** How far the lamp reaches, as a fraction of the cabin's own depth. The DISTANCE is what the builder bakes
- *  (in.cabin, 0 at the lamp … 1 at CABIN_SPAN of the cabin depth); the reach and the curve live here so a
- *  look round costs a reload instead of a re-pack of every car. CABIN_SPAN must match the builder's. */
-const CABIN_SPAN = 0.75;
-const CABIN_REACH = 0.45;
-/** Steps between the 13 baked levels, and what a vertex OUTSIDE the cabin carries: a distance far past any
- *  reach, so the boundary interpolates to dark instead of crossing zero (which would light a seam). */
-const CABIN_STEPS = 12.0;
-const CABIN_OUTSIDE = 2.0;
-
-fn rigidCabinGlow(in: RigidVsOut) -> vec3f {
-  if (in.lamps.x <= 0.5) {
-    return vec3f(0.0);
-  }
-  // Linear-squared rather than inverse-square, which would spike at the source and be gone a hand's width
-  // away; zero past the reach, so a dash lights its instruments and the rest of the cabin stays night.
-  let reach = max(0.0, 1.0 - (in.cabin * CABIN_SPAN) / CABIN_REACH);
-  return CABIN_TINT * (CABIN_GLOW * in.lamps.z * frame.params.x * reach * reach);
-}
 
 // Vehicle reflections (B5r). SA's env maps are BAKED DAYTIME IMAGES — a painted horizon (xvehicleenv128) for
 // paint, a sunset photograph (vehicleenvmap128) for glass. Sampling them raw means a car reflects a sunset at
@@ -5697,29 +5649,6 @@ fn rigidSpecular(in: RigidVsOut, normal: vec3f, level: f32) -> vec3f {
 
 
 
-/**
- * How much sky this vertex sees RIGHT NOW, from the value the builder baked (plan 090/01).
- *
- * The bake answers "how much of the sky can this vertex see past the car's own body" — the right question
- * while the sky IS the source. After dark it is not: what reaches a cabin comes off the street, sideways,
- * through the glass, and the height field the bake marches (8 azimuths, horizontal-and-up, over the car's
- * own roof) never modelled that direction. Left as it is, the term keeps dividing the light when the thing
- * it measures has stopped lighting anything, and a modelled interior goes black — measured on the previon,
- * cabin vertices sit at 0.32-0.69 against 0.90-1.00 on the bodywork (field 2026-07-28).
- *
- * So it relaxes toward open with the night factor, and only PARTWAY: 084 introduced this term precisely
- * because a car at night collapsed into one flat colour with no readable edges, and taking it out entirely
- * brings that back. NIGHT_SKY_RELAX is FITTED — SA has no modelled interiors at all, so there is no original
- * formula to reproduce here. At 0.6 a cabin vertex at 0.50 shades as 0.80 at midnight while the bodywork
- * moves 0.95 -> 0.98, i.e. the lift lands where the geometry is enclosed and nowhere else. It is a shader
- * constant on purpose: tuning it costs a reload, not a pack rebuild.
- */
-const NIGHT_SKY_RELAX = 0.6;
-
-fn skyShareNow(baked: f32) -> f32 {
-  return mix(baked, mix(baked, 1.0, NIGHT_SKY_RELAX), frame.params.x);
-}
-
 fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   let normal = normalize(in.normal);
   if (debugShowNormals()) {
@@ -5733,15 +5662,15 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   // swings ~90° across the lens, and a nearby street lamp painted that swing straight onto the glass as a
   // hard gradient broken at the triangle edge. Prod never showed it because its lamp glass is emissive-
   // dominant (emissiveMap × 1..4), which drowns the diffuse term. Ambient keeps the unlit texel detail alive.
-  let ambient = frame.params.y * DYNAMIC_INDIRECT * skyVisibility(normal) * skyShareNow(in.local.w);
+  let ambient = frame.params.y * DYNAMIC_INDIRECT * skyVisibility(normal) * in.local.w;
   let glow = rigidLampGlow(in);
   if (glow > 0.0) {
     return base * (ambient + glow);
   }
   // STATIC lamps only, computed per VERTEX (round 5). A car must not be lit by its OWN headlights (the
   // tail lamp sits a metre behind its own lens); prod has the same rule by construction.
-  let lit = vec3f(ambient) + rigidCabinGlow(in) + frame.sunColor.rgb * (sunNdl * frame.params.z) +
-    frame.moonColor.rgb * moonNdl + in.poolDiffuse;
+  let lit = vec3f(ambient) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
+    in.poolDiffuse;
   return base * (debugLit(lit) + in.glow);
 }
 
@@ -5769,18 +5698,9 @@ fn fsRigid(in: RigidVsOut) -> @location(0) vec4f {
   let shadingNormal = normalize(mix(normal, flakeNormal(normal, in.local.xyz), isPaint));
   let toEye = normalize(frame.camera.xyz - in.world);
   let coefficient = mix(in.reflect.x, max(in.reflect.x, CHROME_COEFFICIENT_FLOOR), isChrome);
-  // A reflection of the SKY may not outrun the share of sky the surface can SEE, and the same goes for a
-  // highlight of the sun: in.local.w is the builder's own per-vertex occlusion (vehicle/sky-occlusion.ts),
-  // already riding the night set's alpha for the indirect term. Without it a MOD's cabin mirrors the sun —
-  // their exporters stamp an env map on every material they ship, so a dashboard, a seat and a door card all
-  // come out reflective, and the previon's dash trim (class CHROME, coefficient 0.5, sky 0.63) lit up like
-  // polished metal through the windscreen in full sun and went normal in shade (field 2026-07-28). Outer
-  // bodywork sits at 0.9-1.0 and is untouched; nothing here knows which car it is. After dark the same
-  // number relaxes (see skyShareNow), so a street lamp still catches the cabin trim.
-  let skyShare = skyShareNow(in.local.w);
-  let amount = neoReflAmount(dot(shadingNormal, toEye), coefficient) * (isPaint + isChrome) * skyShare;
+  let amount = neoReflAmount(dot(shadingNormal, toEye), coefficient) * (isPaint + isChrome);
   let env = rigidEnv(in, normal, shadingNormal, mix(PROBE_PAINT_LOD, PROBE_CHROME_LOD, isChrome));
-  let specular = rigidSpecular(in, shadingNormal, in.reflect.z * frame.params4.z) * skyShare + in.poolSpec;
+  let specular = rigidSpecular(in, shadingNormal, in.reflect.z * frame.params4.z) + in.poolSpec;
   let shaded = mix(rigidShade(in, rigidTexel(in)), env, amount) + specular;
   let color = mix(shaded, fogColorFor(viewDir, fog), fog);
   return vec4f(color, 1.0);
@@ -5804,13 +5724,10 @@ fn fsRigidBlend(in: RigidVsOut, @builtin(front_facing) frontFacing: bool) -> @lo
   // GLASS on the neo curve: plain normal (no flakes), a near-sharp probe mip. The neo amount drives BOTH
   // the mirrored colour and the opacity swell — glass turns mirror at grazing angles, and a windscreen you
   // can see straight through from every angle looks like a hole in the car.
-  // Sky-gated exactly like the opaque path: a pane deep in a cabin (a rear-seat divider, an interior light
-  // cover) reflects the roof over it, not the open sky. A windscreen sits at 0.95-1.0 and is untouched.
-  let skyShare = skyShareNow(in.local.w);
-  let amount = neoReflAmount(dot(normal, toEye), in.reflect.x) * GLASS_REFLECT * outside * skyShare;
+  let amount = neoReflAmount(dot(normal, toEye), in.reflect.x) * GLASS_REFLECT * outside;
   let alpha = clamp(texel.a * in.color.a + amount, 0.0, 1.0);
   let env = rigidEnv(in, normal, normal, PROBE_GLASS_LOD);
-  let specular = (rigidSpecular(in, normal, in.reflect.z * frame.params4.z) * skyShare + in.poolSpec) * outside;
+  let specular = (rigidSpecular(in, normal, in.reflect.z * frame.params4.z) + in.poolSpec) * outside;
   // Premultiplied compositing: the reflected env replaces the tinted glass by its amount, then fog takes
   // the finished pair (068 semantics).
   let glass = mix(rigidShade(in, texel) * alpha, env, amount) + specular;
