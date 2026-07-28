@@ -92,17 +92,19 @@ function rebake(
   for (const { error, model } of report.failed) {
     console.error(`vehicle-installer: ${model}: conversion FAILED — ${error}`);
   }
+  for (const { model, reason } of report.refused) {
+    console.error(`vehicle-installer: ${model}: REFUSED — ${reason}`);
+  }
   for (const model of report.unplaced) {
-    console.error(
-      `vehicle-installer: ${model}: no archive in ${targetPath} holds it — a model the built game does not ` +
-        'have needs a full build, not a rebake',
-    );
+    console.error(`vehicle-installer: ${model}: no archive in ${targetPath} took it`);
   }
   const bytes = report.rebaked.reduce((sum, entry) => sum + entry.bytes, 0);
   console.log(
     `vehicle-installer: rebaked ${report.rebaked.length} vehicle(s) into ${targetPath} ` +
       `(${(bytes / 1048576).toFixed(1)} MB of .osm)` +
+      (report.added.length > 0 ? `, ${report.added.length} NEW (${report.added.join(', ')})` : '') +
       (report.skipped.length > 0 ? `, ${report.skipped.length} skipped` : '') +
+      (report.refused.length > 0 ? `, ${report.refused.length} refused` : '') +
       (report.failed.length > 0 ? `, ${report.failed.length} FAILED` : ''),
   );
 }

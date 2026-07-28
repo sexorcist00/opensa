@@ -1,5 +1,6 @@
 import { readVehicleOsm } from '@opensa/game/adapters/vehicle-osm';
 import { parseHandling } from '@opensa/renderware/parsers/text/handling.parser';
+import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 import { createImg, openImg } from '@opensa/tool-kit/archive/img';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -67,6 +68,21 @@ function modFolder(): string {
   return inPath;
 }
 
+/** A mod for a model the built game has never heard of — the real zr350 geometry under a new name. */
+function newCarFolder(ideLine: null | string): string {
+  const inPath = join(root, 'newmods');
+  const folder = join(inPath, 'moonbeam2 - something nobody shipped');
+  mkdirSync(folder, { recursive: true });
+  cpSync(join(CAR, 'zr350.dff'), join(folder, 'moonbeam2.dff'));
+  cpSync(join(CAR, 'zr350.txd'), join(folder, 'moonbeam2.txd'));
+  writeFileSync(
+    join(folder, 'moonbeam2.settings.txt'),
+    `${HANDLING.replace('ZR350', 'MOONBEAM2')}\n${ideLine === null ? '' : `\n${ideLine}\n`}`,
+  );
+
+  return inPath;
+}
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'vehicle-rebake-'));
 });
@@ -95,6 +111,36 @@ describe.skipIf(!hasFixtures)('rebakeVehicles (real zr350 fixture)', () => {
       expect(parseHandling(readFileSync(join(target, 'data', 'handling.cfg'), 'utf8')).get('ZR350')?.fields[0]).toBe(
         '4321.0',
       );
+    });
+
+    it('refuses a model the built game does not have when the mod declares no ide row', () => {
+      const target = builtGame();
+      const before = readFileSync(join(target, 'data', 'vehicles.ide'), 'utf8');
+
+      const report = rebakeVehicles({ inPath: newCarFolder(null), targetPath: target });
+
+      expect(report.refused.map((car) => car.model)).toEqual(['moonbeam2']);
+      expect(report.refused[0].reason).toContain('declares no ide row');
+      expect(report.added).toEqual([]);
+      // Refused BEFORE anything of its own was written — the data files are untouched.
+      expect(readFileSync(join(target, 'data', 'vehicles.ide'), 'utf8')).toBe(before);
+      expect(entry(target, 'moonbeam2.osm')).toBeNull();
+    });
+
+    it('refuses an ide id another model already owns — two models on one id spawn the wrong car', () => {
+      const target = builtGame();
+      // 562 is the stock elegy's id — taking it would make a car generator spawn one car where the other stands.
+      const report = rebakeVehicles({
+        inPath: newCarFolder(
+          '562, moonbeam2, moonbeam2, car, MOONBEAM2, MOONBEAM2, null, normal, 4, 0, 0, -1, 0.7, 0.7, 0',
+        ),
+        targetPath: target,
+      });
+
+      expect(report.refused).toEqual([
+        { model: 'moonbeam2', reason: "vehicles.ide id 562 already belongs to 'elegy'" },
+      ]);
+      expect(entry(target, 'moonbeam2.osm')).toBeNull();
     });
 
     it('leaves the models `--only` did not name exactly as they were', () => {
@@ -140,6 +186,23 @@ describe.skipIf(!hasFixtures)('rebakeVehicles (real zr350 fixture)', () => {
       // And the declaration reached the bake: the zr350's pod is its `misc_a`.
       const built = readVehicleOsm('zr350', entry(target, 'zr350.osm')!);
       expect(built.rig.parts[built.rig.popUpLights!.part].name).toBe('misc_a');
+    });
+
+    it('ADDS a car the built game never had, on the id the mod declares for itself', () => {
+      const target = builtGame();
+      const ide = '20001, moonbeam2, moonbeam2, car, MOONBEAM2, MOONBEAM2, null, normal, 4, 0, 0, -1, 0.7, 0.7, 0';
+
+      const report = rebakeVehicles({ inPath: newCarFolder(ide), targetPath: target });
+
+      expect(report.refused).toEqual([]);
+      expect(report.added).toEqual(['moonbeam2']);
+      expect(report.rebaked.map((car) => car.model)).toEqual(['moonbeam2']);
+      // The roster the runtime parses at boot now names it, and the archive holds a model it can read.
+      const defs = parseVehicleDefs(readFileSync(join(target, 'data', 'vehicles.ide'), 'utf8'));
+      expect(defs.get('moonbeam2')?.id).toBe(20001);
+      expect(readVehicleOsm('moonbeam2', entry(target, 'moonbeam2.osm')!).rig.submeshes.length).toBeGreaterThan(0);
+      // And it says what an addition does NOT get, so silence is never mistaken for placement.
+      expect(report.warnings.join('\n')).toContain('traffic');
     });
 
     it('is idempotent — a second run writes the same bytes', () => {

@@ -28,8 +28,11 @@ Defaults: `--target build/<game>/opensa` · `--in mods-src/<game>/vehicles` (bot
 merges its `*.settings.txt` into the BUILT `data/*`, merges its `features.txt` line into
 `data/vehicle-features.txt`, re-converts its `dff`/`txd` and REPLACES `<model>.osm` in whichever
 `models/*.img` holds it. Idempotent, and it touches nothing else in the tree.
-**It cannot ADD a car the built game never had** — that needs the ids the full build writes, and such a car
-is reported rather than half-installed ([plan 006](../tools/vehicle-installer/docs/plans/006-rebake.md)).
+It can also **ADD a car the built game never had**, when the mod declares its own `vehicles.ide` row: the
+roster is text and a spawn resolves `<model>.osm` by name, so nothing about a car is baked into the pak. The
+tool never allocates an id (it must match what a full build would write) and refuses one that already belongs
+to another model. An added car has no traffic or parked presence until a full build writes the placements —
+spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans/006-rebake.md)).
 
 ## Serving & running
 

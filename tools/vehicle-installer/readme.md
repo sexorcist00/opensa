@@ -27,8 +27,9 @@ tsx tools/vehicle-installer/src/cli.ts --rebake gostown --only previon
 Re-merges each mod's settings into the BUILT `data/*` and re-converts its model into the archive's
 `<model>.osm`, **in place** — the vehicle half of the pipeline without the pipeline (one car ≈ 3.6 s).
 Defaults `--target build/<game>/opensa` and `--in mods-src/<game>/vehicles`; `--only a,b` narrows it.
-It cannot add a car the built game never had (that needs a full build) and says so instead of half-installing
-one. See [plan 006](./docs/plans/006-rebake.md).
+It can also **add** a car the built game never had, when the mod ships its own `vehicles.ide` row — the tool
+never invents an id and refuses one another model owns. An added car has no traffic/parked presence until a
+full build writes the placements. See [plan 006](./docs/plans/006-rebake.md).
 
 ## How it applies
 

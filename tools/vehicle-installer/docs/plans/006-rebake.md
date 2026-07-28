@@ -28,12 +28,37 @@ pipeline. The turnaround is the feature.
 Order matters: every car's DATA lands before any car is CONVERTED, because the conversion reads the merged
 `vehicles.ide` (txd name, wheel scale) and `vehicle-features.txt` back out of the target.
 
+## Adding a car the built game never had
+
+It can, and nothing about it needs a pak rebuild. Verified in the code before it was built:
+
+- the roster is the TEXT `data/vehicles.ide`, parsed lazily at boot by `gta-sa-world.adapter.ts`;
+- a spawn resolves `<model>.osm` out of the archive **by name**;
+- `pak/manifest.json` carries `cells`, `textures`, `water` — **no vehicle table**, and `modelById` is a plain
+  `Map` with no id range check anywhere (`cargrp.dat` is by model name, and is not wired to traffic yet).
+
+So an addition needs only what a mod already ships: **its own `vehicles.ide` row, with an id**. The tool
+never allocates one. That is deliberate — the id must be identical in a rebake and in a full build, and the
+only way to guarantee that is for it to live in the mod folder. An id POOL reserved up front was considered
+and refused: it solves scarcity we do not have (no 400–611 ceiling here, nothing baked by id) and adds state
+that must stay in sync between two paths.
+
+Three checks instead, all before anything is written:
+
+| Case | What happens |
+| --- | --- |
+| model unknown, mod declares an ide row with a FREE id | added: the row merges, the `.osm` is inserted into `models/gta3.img`, and a warning says it has no traffic or parked presence until a full build writes the placements |
+| model unknown, no ide row | refused — a car needs an id, a txd and a type; nothing of its own is written |
+| the declared id belongs to ANOTHER model | refused — `modelById` keeps whichever came last, so a car generator would silently spawn the wrong car where that generator stands |
+
 ## What it deliberately does not do
 
 - **The raw `dff`/`txd` are NOT written into the archive.** In a converted tree a car is one `.osm` and the
   pack has already deleted the pair; putting it back adds entries the game does not read.
-- **It cannot add a car the built game never had.** A new model needs its `vehicles.ide` id in the pak's own
-  tables — that is a full build. Such a car is REPORTED (`unplaced`), never half-installed.
+- **It does not place a new car.** Traffic groups and parked placements come from a full build; the report
+  says so per added model rather than letting silence read as a failure.
+- **It does not touch the real-SA target.** `build/<game>/sa` still lives under the exe's own 400–611 vehicle
+  ceiling; a car added on a private id is opensa-only.
 - **It is not a transaction.** If a conversion throws, that car's data rows are already merged. They are the
   rows the next full build would write anyway, and the report says which model failed.
 
@@ -57,7 +82,9 @@ mods-src/<game>/vehicles`. Both are overridable for a tree that lives somewhere 
 falsifies what a synthetic one confirms): a target that is not a built game throws; a model no archive holds
 is reported instead of half-installed; `--only` leaves every other entry byte-identical; a rebaked entry
 parses back through `readVehicleOsm` with its pop-up pod detected from the mod's `features.txt`; and a second
-run writes the same bytes.
+run writes the same bytes. For additions: an unknown model with no ide row is refused with the data files
+byte-identical afterwards, a declared id that belongs to another model is refused by name (562 is the
+elegy's), and a new model on a free id lands in both the roster and the archive and reads back.
 
 Field-checked the same day on `build/gostown/opensa`: `--only previon` in **3.6 s**, all 12 mod cars
 (295.1 MB of `.osm`) in **26 s**, `data/handling.cfg` byte-identical (same md5) after both, and the rebaked
