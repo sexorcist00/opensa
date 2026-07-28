@@ -15,8 +15,12 @@ const RATE = 10;         // puffs per wheel per second at full intensity
 // class → look (alpha at full ~0.6–1.0× these, life as a share of the authored envelope):
 dust/grass/gravel/mud → prt_wheeldirt (alpha .12–.18, life .3–.4)
 sand → prt_sand (alpha .2, life .35, sizeScale 0.35 — authored as a BULLET plume, 8–13 m)
-spray → prt_splash (alpha .35, life .3, sizeScale 0.6)
 ```
+
+**Spray is deliberately absent.** `W_SPRAY` is set on `default` and every `tarmac*` surfinfo row: in SA it
+means "spray when the road is WET" (`CWeather` wetness gates it), and this game tracks no road wetness.
+Read unconditionally it sprayed every road — field round 1's "white snowflakes on asphalt". The rule is
+pinned by a test on `surfaceFxClassOf` and spray returns WITH a wet-roads state, not before.
 
 ## What it stands in for
 

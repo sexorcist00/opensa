@@ -16,9 +16,17 @@ last step, closing the plan's code work.
 - **Class → look** (`vehicle-surface-fx.system.ts` + the host table): dust/grass/gravel/mud ride
   `prt_wheeldirt` (the stock fxp ships no wheel-grass system — one earth family, told apart by
   opacity/life), sand rides `prt_sand` (a bullet plume by authorship — the lane's new per-system
-  `sizeScale` shrinks it 0.35×), spray rides `prt_splash` (0.6×). All numbers are an eye-fit →
-  `docs/hacks/surface-fx-fit.md`, including the honest gap: no ground-brightness tint (the lane has
-  per-spawn alpha, not per-spawn colour).
+  `sizeScale` shrinks it 0.35×). All numbers are an eye-fit → `docs/hacks/surface-fx-fit.md`, including
+  the honest gap: no ground-brightness tint (the lane has per-spawn alpha, not per-spawn colour).
+
+## Field round 1: the snowflakes on asphalt
+
+`W_SPRAY` turned out to be set on `default` and EVERY `tarmac*` row — in SA it means "spray when the road
+is WET" (`CWeather` wetness gates the read), and round 0 read it unconditionally: every road at speed
+threw additive white splashes ("white snowflakes on asphalt"). Fix: the classifier (`surfaceFxClassOf`,
+now a pure exported function) does not read `wheelSpray` at all — the game tracks no road wetness, so
+there is nothing honest to gate on. A test pins REAL tarmac's flags mapping to silence; spray returns
+with a wet-roads state.
 
 ## Verification
 
@@ -32,6 +40,7 @@ last step, closing the plan's code work.
 
 - Ground-brightness tint (the original's colour term) needs a per-spawn colour channel the lane does not
   have — a real layout cost, deferred until the look demands it.
+- Wheel SPRAY needs a wet-roads state (rain exists as weather ids only) — deferred with it.
 - Skid-mark TYPE by surface (`skidmark` column: DEFAULT/SANDY/MUDDY) is still open — the rubber ribbon
   currently lays on every surface; the sandy/muddy variants want their own textures and, ideally, the
   same shared per-step surface read.

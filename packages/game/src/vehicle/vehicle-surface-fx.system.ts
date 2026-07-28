@@ -14,14 +14,20 @@
  * driven car for exactly that reason (the readme's budget: the player's car is the target).
  */
 import type { System } from '../core/system';
+import type { SurfaceRecord } from '../interfaces/world-adapter.interface';
 import type { VehicleController } from '../physics/physics-world';
 import type { TyreSmokeCar, TyreSmokePhysics } from './vehicle-tyre-smoke.system';
 
 import { planarMotion } from './vehicle-telemetry';
 import { equivalentSlideSpeed } from './vehicle-tyre-smoke.system';
 
-/** The original's dispatch classes — one per `W_*` column of surfinfo.dat. */
-export type SurfaceFxClass = 'dust' | 'grass' | 'gravel' | 'mud' | 'sand' | 'spray';
+/**
+ * The original's dispatch classes — one per `W_*` column of surfinfo.dat, MINUS spray. `W_SPRAY` is set on
+ * `default` and every `tarmac*` row: in SA it means "spray WHEN THE ROAD IS WET" (`CWeather` wetness gates
+ * it), and this game tracks no road wetness yet — read unconditionally it sprayed every road (field
+ * round 1's "white snowflakes on asphalt"). Spray returns with a wet-roads state, not before.
+ */
+export type SurfaceFxClass = 'dust' | 'grass' | 'gravel' | 'mud' | 'sand';
 
 /** The physics slice — the tyre smoke's plus the per-wheel surface probe (081/10). */
 export interface SurfaceFxPhysics extends TyreSmokePhysics {
@@ -35,6 +41,30 @@ export interface SurfaceFxPuff {
   /** 0..1 — how hard the wheel works the surface; the sink scales opacity/life with it. */
   intensity: number;
   position: [number, number, number];
+}
+
+/**
+ * The surfinfo row → effect class. Pure and exported so the tarmac-stays-silent rule is PINNED by a test:
+ * `wheelSpray` alone must map to null (the field bug was reading it unconditionally).
+ */
+export function surfaceFxClassOf(record: SurfaceRecord | undefined): null | SurfaceFxClass {
+  if (!record) {
+    return null;
+  }
+  if (record.wheelSand) {
+    return 'sand';
+  }
+  if (record.wheelMud) {
+    return 'mud';
+  }
+  if (record.wheelGrass) {
+    return 'grass';
+  }
+  if (record.wheelGravel) {
+    return 'gravel';
+  }
+
+  return record.wheelDust ? 'dust' : null;
 }
 
 /** Ground speed (m/s) where a flagged surface starts throwing material, and where it throws hardest. */

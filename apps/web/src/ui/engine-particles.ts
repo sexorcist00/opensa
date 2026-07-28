@@ -41,7 +41,6 @@ const DYNAMIC_SYSTEMS: readonly { name: string; sizeScale?: number }[] = [
   { name: 'prt_smokeii_3_expand' },
   { name: 'prt_wheeldirt' },
   { name: 'prt_sand', sizeScale: 0.35 },
-  { name: 'prt_splash', sizeScale: 0.6 },
 ];
 
 /** A runtime spawner over one preloaded system: park it somewhere, burst it or stream it, step it. */

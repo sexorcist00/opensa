@@ -33,7 +33,11 @@ import { resolvePlate } from '@opensa/game/vehicle/vehicle-plates';
 import { VehicleRig } from '@opensa/game/vehicle/vehicle-rig';
 import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
 import { VehicleSkidMarkSystem } from '@opensa/game/vehicle/vehicle-skid-marks.system';
-import { type SurfaceFxClass, VehicleSurfaceFxSystem } from '@opensa/game/vehicle/vehicle-surface-fx.system';
+import {
+  type SurfaceFxClass,
+  surfaceFxClassOf,
+  VehicleSurfaceFxSystem,
+} from '@opensa/game/vehicle/vehicle-surface-fx.system';
 import { planarMotion, type PlanarMotion, VehicleTelemetry } from '@opensa/game/vehicle/vehicle-telemetry';
 import {
   TYRE_SMOKE_DEFAULTS,
@@ -339,36 +343,13 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     gravel: { alpha: 0.14, life: 0.3, system: 'prt_wheeldirt' },
     mud: { alpha: 0.18, life: 0.4, system: 'prt_wheeldirt' },
     sand: { alpha: 0.2, life: 0.35, system: 'prt_sand' },
-    spray: { alpha: 0.35, life: 0.3, system: 'prt_splash' },
   };
   const surfaceEmitters = new Map<string, DynamicFxEmitter | null>();
   const surfaceRecords = (): ReturnType<GtaSaWorldAdapter['surfaces']> => adapter.surfaces();
   const surfaceFx = new VehicleSurfaceFxSystem(
     () => (enterVehicle.isSeated() ? enterVehicle.getActive() : null),
     physics,
-    (surface): null | SurfaceFxClass => {
-      const record = surface === null ? undefined : surfaceRecords()?.[surface];
-      if (!record) {
-        return null;
-      }
-      if (record.wheelSpray) {
-        return 'spray';
-      }
-      if (record.wheelSand) {
-        return 'sand';
-      }
-      if (record.wheelMud) {
-        return 'mud';
-      }
-      if (record.wheelGrass) {
-        return 'grass';
-      }
-      if (record.wheelGravel) {
-        return 'gravel';
-      }
-
-      return record.wheelDust ? 'dust' : null;
-    },
+    (surface): null | SurfaceFxClass => surfaceFxClassOf(surface === null ? undefined : surfaceRecords()?.[surface]),
     (puff): void => {
       const look = SURFACE_FX_LOOK[puff.fx];
       if (!surfaceEmitters.has(look.system)) {

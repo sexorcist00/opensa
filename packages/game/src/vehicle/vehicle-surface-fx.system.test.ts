@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import type { SurfaceRecord } from '../interfaces/world-adapter.interface';
 import type { VehicleController, VehicleWheelReading, VehicleWheelSlip } from '../physics/physics-world';
 import type { SurfaceFxClass, SurfaceFxPuff } from './vehicle-surface-fx.system';
 import type { TyreSmokeCar } from './vehicle-tyre-smoke.system';
 
-import { VehicleSurfaceFxSystem } from './vehicle-surface-fx.system';
+import { surfaceFxClassOf, VehicleSurfaceFxSystem } from './vehicle-surface-fx.system';
 
 const STEP = 1 / 60;
 
@@ -12,16 +13,34 @@ const STEP = 1 / 60;
 const TARMAC = 0;
 const DIRT = 1;
 const BEACH = 2;
-const FORD = 3;
+const BOG = 3;
 
 const CLASSES: Record<number, null | SurfaceFxClass> = {
   [BEACH]: 'sand',
+  [BOG]: 'mud',
   [DIRT]: 'dust',
-  [FORD]: 'spray',
   [TARMAC]: null,
 };
 
 type MutableWheel = { -readonly [K in keyof VehicleWheelReading]: VehicleWheelReading[K] };
+
+/** A surfinfo row with every wheel flag off, overridable per test. */
+function record(overrides: Partial<SurfaceRecord> = {}): SurfaceRecord {
+  return {
+    adhesionGroup: 'road',
+    name: 'tarmac',
+    skidmark: 'default',
+    tyreGrip: 1,
+    wetGrip: 0,
+    wheelDust: false,
+    wheelGrass: false,
+    wheelGravel: false,
+    wheelMud: false,
+    wheelSand: false,
+    wheelSpray: false,
+    ...overrides,
+  };
+}
 
 function wheel(overrides: Partial<VehicleWheelReading> = {}): MutableWheel {
   return {
@@ -92,6 +111,34 @@ function harness(): {
 }
 
 const totalCount = (puffs: readonly SurfaceFxPuff[]): number => puffs.reduce((sum, puff) => sum + puff.count, 0);
+
+describe('surfaceFxClassOf', () => {
+  describe('negative cases', () => {
+    it('REAL tarmac maps to nothing — its wheelSpray flag is wetness-gated in SA, and we track no wetness', () => {
+      // The field bug: default and every tarmac* row carry W_SPRAY, and reading it unconditionally
+      // sprayed every road ("white snowflakes on asphalt").
+      expect(surfaceFxClassOf(record({ wheelSpray: true }))).toBeNull();
+    });
+
+    it('a missing row maps to nothing', () => {
+      expect(surfaceFxClassOf(undefined)).toBeNull();
+    });
+
+    it('a row with no wheel flags maps to nothing', () => {
+      expect(surfaceFxClassOf(record())).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('each W_ flag picks its class', () => {
+      expect(surfaceFxClassOf(record({ wheelDust: true }))).toBe('dust');
+      expect(surfaceFxClassOf(record({ wheelGrass: true }))).toBe('grass');
+      expect(surfaceFxClassOf(record({ wheelGravel: true }))).toBe('gravel');
+      expect(surfaceFxClassOf(record({ wheelMud: true }))).toBe('mud');
+      expect(surfaceFxClassOf(record({ wheelSand: true }))).toBe('sand');
+    });
+  });
+});
 
 describe('VehicleSurfaceFxSystem', () => {
   describe('negative cases', () => {
@@ -172,21 +219,21 @@ describe('VehicleSurfaceFxSystem', () => {
       }
     });
 
-    it('the surface picks the class: beach throws sand, a ford throws spray', () => {
+    it('the surface picks the class: beach throws sand, a bog throws mud', () => {
       const sand = harness();
       sand.state.surface = BEACH;
       sand.state.linvel = [0, 15, 0];
       sand.run(60);
 
-      const spray = harness();
-      spray.state.surface = FORD;
-      spray.state.linvel = [0, 15, 0];
-      spray.run(60);
+      const mud = harness();
+      mud.state.surface = BOG;
+      mud.state.linvel = [0, 15, 0];
+      mud.run(60);
 
       expect(sand.puffs.every((puff) => puff.fx === 'sand')).toBe(true);
-      expect(spray.puffs.every((puff) => puff.fx === 'spray')).toBe(true);
+      expect(mud.puffs.every((puff) => puff.fx === 'mud')).toBe(true);
       expect(sand.puffs.length).toBeGreaterThan(0);
-      expect(spray.puffs.length).toBeGreaterThan(0);
+      expect(mud.puffs.length).toBeGreaterThan(0);
     });
 
     it('a slide on the surface throws harder than rolling at the same speed', () => {
