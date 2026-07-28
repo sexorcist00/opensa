@@ -57,6 +57,12 @@ Impact smoke has its source too: the contact-force events the damage system alre
 2. **Tyre smoke.** `collisionsmoke`, spawned at the contact point of a wheel whose slip passes a threshold —
    rate and opacity from HOW MUCH it slips, so a locked-wheel stop smokes and a gentle corner does not. Ties
    into the same signal the handbrake slide uses. Field-tunable dials in the F2 physics tab, as with 081/09.
+   **SHIPPED + FIELD-APPROVED 2026-07-28 — [02-tyre-smoke.md](02-tyre-smoke.md)** (three tuning rounds; the
+   closing perf worry measured away — no-regression sweep in the step doc). Key finding: Rapier's
+   wheel rotation is cosmetic (a −1.1 g locked stop reads 0.05 m/s of rotation slide), so the signal is
+   DEMAND OVER CAP recorded where `setVehicleControls` clamps it (`readVehicleWheelSlip`), plus
+   `speedLateral`; the intensity mapping is an eye-fit → `docs/hacks/tyre-smoke-intensity-fit.md`. Dials are
+   URL-session ones (`?smokeStart/?smokeFull/?smokeRate`), the shipped 081/09 pattern.
 3. **Skid marks.** A decal ribbon per sliding wheel: quads extruded along the contact path, `particleskid`,
    **alpha from the slide's severity** (the brief's darker/lighter), **transparent at the ribbon's edges and
    at its start** so a mark grows in instead of appearing as a stripe, and a **5-second wall-clock fade** —

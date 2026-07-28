@@ -9,6 +9,7 @@
 import type { City } from '@opensa/game';
 import type { LookDirectionSource } from '@opensa/game/character/character-controller.system';
 import type { PerfStats } from '@opensa/game/perf/perf-monitor';
+import type { TyreSmokeDials } from '@opensa/game/vehicle/vehicle-tyre-smoke.system';
 import type { ReactElement } from 'react';
 
 import {
@@ -840,6 +841,9 @@ async function boot(
       playerCollider: capsule.collider,
       playerController: controllerSystem,
       playerPosition: viewOf,
+      // Tyre smoke (089/02): session dials ride the URL, like the 081/09 grip dials.
+      smokeDials: smokeDialOverrides(params),
+      smokeEmitter: particles?.createEmitter('prt_collisionsmoke') ?? null,
       viewOf,
     });
   } catch (error) {
@@ -1238,6 +1242,8 @@ async function boot(
         if (fxProbeName) {
           fxProbe ??= particles?.createEmitter(fxProbeName) ?? null;
           if (fxProbe) {
+            // Half-opacity: a 60/s probe column at full authored alpha stacks into solid white (089/02).
+            fxProbe.alphaScale = 0.5;
             // Beside the player, refreshed every step — a MOVING spawn point is the lane's whole point,
             // and parking once would freeze the pre-ground-snap boot position.
             const [ex, ey, ez] = toEngine(curPlayerGta);
@@ -1895,6 +1901,15 @@ function slowFrameLine(frame: {
     `other ${other.toFixed(1)} (${formatFrameSpans(spans, other - spans.totalMs)}) · draws ${past.stats.drawsRecorded} · cells ${stream.loadedCells} · ` +
     `bodies ${census.bodies} colliders ${census.colliders}`
   );
+}
+
+/** Tyre-smoke session dials (089/02) — `?smokeStart/?smokeFull/?smokeRate`, the 081/09 URL-dial pattern. */
+function smokeDialOverrides(params: URLSearchParams): Partial<TyreSmokeDials> {
+  return {
+    ...(params.has('smokeRate') ? { rate: Number(params.get('smokeRate')) } : {}),
+    ...(params.has('smokeFull') ? { slideFull: Number(params.get('smokeFull')) } : {}),
+    ...(params.has('smokeStart') ? { slideStart: Number(params.get('smokeStart')) } : {}),
+  };
 }
 
 /** GTA Z-up point → engine Y-up: (x, y, z) → (x, z, −y). */

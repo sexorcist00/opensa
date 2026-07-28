@@ -42,6 +42,17 @@ describe('DynamicParticlePool', () => {
       expect([...pool.data.subarray(0, 9)]).toEqual([1, 2, 3, 4, 5, 6, 2, -7.5, 3]);
     });
 
+    it('encodes per-spawn alpha in the system slot fraction (1 − alpha, clamped)', () => {
+      const pool = new DynamicParticlePool(4);
+      pool.spawn(0, 1, 3, 0, 0, 0, 0, 0, 0, 0.25);
+      pool.spawn(0, 1, 3, 0, 0, 0, 0, 0, 0, 0); // fully transparent still floors just under the next slot
+      pool.spawn(0, 1, 3, 0, 0, 0, 0, 0, 0, 2); // over-range reads as opaque
+
+      expect(pool.data[8]).toBeCloseTo(3.75, 5);
+      expect(pool.data[9 + 8]).toBeCloseTo(3.999, 5);
+      expect(pool.data[18 + 8]).toBe(3);
+    });
+
     it('swap-removes the dead and keeps the live range packed', () => {
       const pool = new DynamicParticlePool(4);
       pool.spawn(0, 1, 0, 11, 0, 0, 0, 0, 0); // dies at 1

@@ -928,7 +928,10 @@ fn vsParticle(in: ParticleIn) -> ParticleOut {
   let dist = length(world - frame.camera.xyz);
   let visible = f32(dist < system.size.w && size > 0.0 && !(oneShot && cycles >= 1.0));
   out.clip = select(vec4f(0.0, 0.0, -1.0, 1.0), out.clip, visible > 0.5);
-  out.color = vec4f(rgb, alpha * visible);
+  // Per-spawn opacity rides the FRACTION of the system slot (089/02): 1 - fract(z), so the baked lane's
+  // integer slots read fully opaque and the instance layout stays untouched.
+  let spawnAlpha = 1.0 - fract(in.params.z);
+  out.color = vec4f(rgb, alpha * visible * spawnAlpha);
   out.layer = u32(system.force.w);
   return out;
 }

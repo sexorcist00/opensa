@@ -36,9 +36,15 @@ const DYNAMIC_SYSTEMS = ['prt_collisionsmoke', 'prt_smokeii_3_expand'];
 
 /** A runtime spawner over one preloaded system: park it somewhere, burst it or stream it, step it. */
 export interface DynamicFxEmitter {
+  /** Per-spawn opacity multiplier over the authored alpha envelope (089/02 round 2): SA's envelopes assume
+   *  its own sparse spawns, and per-step bursts stack — callers scale the look with how hard the event is. */
+  alphaScale: number;
   /** Spawn `count` particles NOW from every layer — the shape SA's code-triggered `prt_*` systems use
    *  (no authored rate; the caller decides per call, e.g. per fixed step from slip). */
   burst(count: number): void;
+  /** Multiplier over the authored particle life for the NEXT spawns — a gentle slide's smoke wisps away,
+   *  a burnout's lingers (089/02). The per-particle life field is the one free per-spawn look knob. */
+  lifeScale: number;
   /** World position (engine space) the next spawns come from — mutate freely, particles keep flying. */
   readonly position: [number, number, number];
   /** Multiplier over the authored emission rate; 0 stops the stream (live particles finish their life).
@@ -118,10 +124,12 @@ export function setupEngineParticles(engine: Engine, fs: AssetFileSystem): Engin
           scratch[0],
           scratch[1],
           scratch[2],
-          scratch[3],
+          scratch[3] * emitter.lifeScale,
+          emitter.alphaScale,
         );
       };
       const emitter: DynamicFxEmitter = {
+        alphaScale: 1,
         burst(count: number): void {
           for (const entry of entries) {
             for (let index = 0; index < count; index += 1) {
@@ -129,6 +137,7 @@ export function setupEngineParticles(engine: Engine, fs: AssetFileSystem): Engin
             }
           }
         },
+        lifeScale: 1,
         position: [0, 0, 0],
         rate: 1,
         update(dt: number): void {

@@ -33,6 +33,13 @@ import { resolvePlate } from '@opensa/game/vehicle/vehicle-plates';
 import { VehicleRig } from '@opensa/game/vehicle/vehicle-rig';
 import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
 import { planarMotion, type PlanarMotion, VehicleTelemetry } from '@opensa/game/vehicle/vehicle-telemetry';
+import {
+  TYRE_SMOKE_DEFAULTS,
+  type TyreSmokeDials,
+  VehicleTyreSmokeSystem,
+} from '@opensa/game/vehicle/vehicle-tyre-smoke.system';
+
+import type { DynamicFxEmitter } from './engine-particles';
 
 import { parseParkedVehicles } from '../parked-vehicles';
 
@@ -125,6 +132,10 @@ export interface EngineVehiclesDeps {
   playerCollider: number;
   playerController: CharacterControllerSystem;
   playerPosition: () => Vec3;
+  /** Session overrides for the tyre-smoke dials (`?smokeStart/?smokeFull/?smokeRate` — 081/09 pattern). */
+  smokeDials?: Partial<TyreSmokeDials>;
+  /** The dynamic lane's collisionsmoke emitter (089/02); null = no FX library, smoke silently off. */
+  smokeEmitter?: DynamicFxEmitter | null;
   viewOf: () => Vec3;
 }
 
@@ -249,6 +260,32 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       engine.dynamicCoronas.length = 0;
     },
   });
+
+  // Tyre smoke (plan 089/02): the driven car's sliding wheels burst collisionsmoke into the dynamic lane
+  // (089/01). Signal = contact-patch slide speed (covers burnout, lockup and the handbrake slide with one
+  // number); the look mapping is an EYE-FIT — docs/hacks/tyre-smoke-intensity-fit.md. Deliberately not on
+  // the telemetry sampler: that is the F2/capture gate, and smoke must not need the debugger open.
+  const smokeEmitter = deps.smokeEmitter ?? null;
+  const tyreSmoke = new VehicleTyreSmokeSystem(
+    () => (enterVehicle.isSeated() ? enterVehicle.getActive() : null),
+    physics,
+    (puff): void => {
+      if (!smokeEmitter) {
+        return;
+      }
+      const [ex, ey, ez] = gtaPositionToEngine(puff.position);
+      smokeEmitter.position[0] = ex;
+      smokeEmitter.position[1] = ey;
+      smokeEmitter.position[2] = ez;
+      // Life from intensity: a gentle chirp wisps away (~1.25 s of the authored 5), a hard skid lingers
+      // (~2.5 s). Opacity from intensity SQUARED (field round 2): a launch reads ~12 %, a full slide 50 %.
+      smokeEmitter.lifeScale = 0.25 + 0.25 * puff.intensity;
+      smokeEmitter.alphaScale = 0.1 + 0.4 * puff.intensity * puff.intensity;
+      smokeEmitter.burst(puff.count);
+    },
+    { ...TYRE_SMOKE_DEFAULTS, ...deps.smokeDials },
+    () => config.graphics.effects.enabled,
+  );
 
   /**
    * One uploaded engine model per car TYPE — instances share geometry, textures and the pipeline. LRU-BOUNDED
@@ -494,6 +531,8 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       enterVehicle.fixedUpdate(step);
       // Telemetry LAST: it records the step as it ended, including the controls `drive()` just applied.
       stepTelemetry(step);
+      // Smoke after the snapshot for the same reason: it reads the wheel state this step produced.
+      tyreSmoke.fixedUpdate(step);
     },
     impactForce(): number {
       const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
