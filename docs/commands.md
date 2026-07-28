@@ -129,6 +129,8 @@ TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js
 # Speed-grip dials (081/09) — session overrides for the lateral assist; captures record the active values
 #   ?gripVd=<m/s>  boost reference speed (default 12)  ·  ?gripCap=<x>  boost ceiling (default 3)
 # Surface grip (081/10) — ?surfGrip=0 puts every wheel back on tarmac, the A/B for reading surface.dat
+# Dynamic particle probe (089/01) — ?fxprobe=<fxp system, e.g. prt_collisionsmoke> parks a one-shot
+#   emitter beside the player (burst 1/fixed step = 60/s); the system must be in DYNAMIC_SYSTEMS
 # Air control (081/06 §1) — ?airCtl=<x> scales the in-air pitch/roll/yaw authority; 0 = off (the jump A/B)
 # Diff two capture sets (raw harness logs are accepted as-is); --determinism gates a replay check
 npx tsx scripts/phys-compare.ts before.log after.log [--determinism]

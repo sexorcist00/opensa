@@ -51,6 +51,9 @@ Impact smoke has its source too: the contact-force events the damage system alre
    world point with a velocity/size/colour envelope, age on the fixed step, recycle. Budget-capped and
    config-gated (`graphics.effects`). Verification: unit tests on the pool (spawn/age/recycle/cap, no
    allocation per particle) + a headless screenshot of one emitter.
+   **SHIPPED 2026-07-28 — [01-dynamic-emitter-lane.md](01-dynamic-emitter-lane.md).** Key finding: the
+   `prt_*` family carries NO emrate track (code-triggered — the caller owns the count), so the emitter
+   API's honest primitive is `burst(count)` per fixed step, which is exactly the shape steps 2 and 4 want.
 2. **Tyre smoke.** `collisionsmoke`, spawned at the contact point of a wheel whose slip passes a threshold —
    rate and opacity from HOW MUCH it slips, so a locked-wheel stop smokes and a gentle corner does not. Ties
    into the same signal the handbrake slide uses. Field-tunable dials in the F2 physics tab, as with 081/09.
@@ -97,4 +100,8 @@ ledger as a number, with what it costs, measured on the bench sweep's `vehicles`
 
 ## Ledger
 
-_(pool sizes, thresholds, the measured frame cost, field verdicts)_
+- **089/01 (2026-07-28).** Pool cap **1024 per blend mode** (36 KB per instance buffer; a full pool DROPS
+  spawns). Probe worst case (~300 live one-shot particles at ~⅓ viewport coverage, Grove Street night):
+  **+2.3 ms GPU** (2.77 → 5.10 submit), +1 draw call, frame at the 120 Hz cap; CPU pool + the ~10.8 KB/frame
+  partial upload do not register. The delta is overdraw-bound — screen coverage, not particle count.
+  Run: [`2026-07-28-headless-089-dynamic-particle-probe.json`](../../benchmarks/opensa-engine/2026-07-28-headless-089-dynamic-particle-probe.json).

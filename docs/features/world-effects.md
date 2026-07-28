@@ -42,8 +42,12 @@ columns, steam vents, fountains — 113 entries across the shipped map, each nam
 - Heat-haze prims are skipped (screen-space refraction pass not implemented).
 - Tracks are baked at 3 sample points (age 0/0.5/1) — no full keyframe interpolation, no
   particle rotation (EMROTATION/ROTSPEED ignored), no texture animation frames.
-- Emission rate is approximated by a fixed particle budget (`rate × life`, capped), not a
-  spawn-rate simulation; EMSIZE/EMBOX emitter volumes ignored (point emission).
+- The PLACED (2dfx) lane approximates emission by a fixed particle budget (`rate × life`, capped), not a
+  spawn-rate simulation; EMSIZE/EMBOX emitter volumes ignored (point emission). Since 089/01 a separate
+  DYNAMIC one-shot lane exists (`Engine.spawnParticle` + `createEmitter` in `engine-particles.ts`): pooled
+  CPU spawns at runtime points, real rate accumulation / caller-driven `burst(count)`, same shader with an
+  age-clamping `oneShot` pipeline override. Its systems are a boot-time list (`DYNAMIC_SYSTEMS`) — the
+  lane's atlas cannot grow after install.
 - **Escalators (REVISIT)** — not rendered at all since the three teardown. When redone, also settle
   the old open item: no step colliders, so the player can't ride them (vanilla carries standing
   entities with the step). Likely shape: static ramp collider on the incline (check the host COL

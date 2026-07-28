@@ -3625,6 +3625,10 @@ struct ParticleSystem {
 @group(1) @binding(1) var fxTexture: texture_2d_array<f32>;
 @group(1) @binding(2) var fxSampler: sampler;
 
+// One-shot lane (089/01): the dynamic pipelines flip this override — the age CLAMPS instead of looping,
+// and a particle past its life collapses (its CPU pool prunes it on the same clock next frame).
+override oneShot: bool = false;
+
 struct ParticleIn {
   @location(0) corner: vec2f,
   @location(1) spawn: vec3f,
@@ -3654,7 +3658,9 @@ fn vsParticle(in: ParticleIn) -> ParticleOut {
   let system = systems[u32(in.params.z)];
   let life = max(in.params.x, 0.01);
   // The phase staggers the stream: every particle of a plume is at a different point of the SAME loop.
-  let age = fract((frame.params2.z + in.params.y) / life);
+  // One-shot instances instead carry phase = -spawnTime, so cycles is that particle's own age.
+  let cycles = (frame.params2.z + in.params.y) / life;
+  let age = select(fract(cycles), clamp(cycles, 0.0, 1.0), oneShot);
   let t = age * life;
   let world = in.spawn + in.velocity * t + system.force.xyz * (0.5 * t * t);
   let size = envelope3(system.size.x, system.size.y, system.size.z, age);
@@ -3676,7 +3682,7 @@ fn vsParticle(in: ParticleIn) -> ParticleOut {
   out.uv = in.corner * 0.5 + vec2f(0.5);
   // Distance cull: collapse the quad rather than branch (a degenerate triangle costs nothing).
   let dist = length(world - frame.camera.xyz);
-  let visible = f32(dist < system.size.w && size > 0.0);
+  let visible = f32(dist < system.size.w && size > 0.0 && !(oneShot && cycles >= 1.0));
   out.clip = select(vec4f(0.0, 0.0, -1.0, 1.0), out.clip, visible > 0.5);
   out.color = vec4f(rgb, alpha * visible);
   out.layer = u32(system.force.w);

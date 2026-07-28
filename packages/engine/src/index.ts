@@ -37,6 +37,7 @@ export {
   type VehicleSubmesh,
 } from './engine';
 export { quatMultiply, RigidEntity, type RigidPartInit } from './entities/rigid';
+export { DYNAMIC_PARTICLE_CAP, type DynamicParticleLibrary } from './render/dynamic-particles';
 export { compileAll, MSAA_SAMPLES, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';
 export { assertGuardrails, resolveShader, shaderModuleNames } from './render/shaders';
 export { type LocalPakSource, type PakSource, setupStreaming, type StreamSetup } from './stream/setup';

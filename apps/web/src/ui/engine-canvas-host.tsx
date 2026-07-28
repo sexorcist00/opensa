@@ -87,7 +87,7 @@ import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
 import { setupEngineClutter } from './engine-clutter';
 import { createEngineDebugActions, type EnginePerfSnapshot } from './engine-debug-actions';
-import { loadCoronaSprites, setupEngineParticles } from './engine-particles';
+import { type DynamicFxEmitter, loadCoronaSprites, setupEngineParticles } from './engine-particles';
 import { ledgerBreakdown, type LegSample, setupPerfRuns } from './engine-perf-runs';
 import { setupPhysRuns } from './engine-phys-runs';
 import { loadEnginePlayer } from './engine-player';
@@ -689,6 +689,10 @@ async function boot(
   // 2dfx particles (B6): the pak carries the emitter anchors, this reads effects.fxp + effectsPC.txd and
   // bakes them. Absent-tolerant — a profile without the FX files simply renders no particles.
   const particles = setupEngineParticles(engine, fs);
+  // `?fxprobe=<system>` (089/01): park one dynamic one-shot emitter beside the player's first position —
+  // the headless screenshot check for the lane (rate 1 = as authored). `undefined` = not created yet.
+  const fxProbeName = params.get('fxprobe');
+  let fxProbe: DynamicFxEmitter | null | undefined;
   // Smashable props (B7·a): the colliders are already tagged with their placement key by the shared adapter.
   // Uproot props (lampposts, meters) fall as real dynamic bodies; the rest shatter into analytic debris.
   const props = setupEngineProps(engine, fs, physics);
@@ -1228,6 +1232,22 @@ async function boot(
         // Contact-force impacts are produced BY the physics step, so drain them here — one step late and a
         // hard hit's forces are already gone.
         breakables.update();
+        // The fx probe ages on the FIXED step, like every future gameplay emitter (tyre smoke reads the
+        // per-wheel telemetry, which is a fixed-step product). prt_* systems are code-triggered (no
+        // authored rate), so the probe bursts one particle per step — 60/s, a steady visible plume.
+        if (fxProbeName) {
+          fxProbe ??= particles?.createEmitter(fxProbeName) ?? null;
+          if (fxProbe) {
+            // Beside the player, refreshed every step — a MOVING spawn point is the lane's whole point,
+            // and parking once would freeze the pre-ground-snap boot position.
+            const [ex, ey, ez] = toEngine(curPlayerGta);
+            fxProbe.position[0] = ex + 2;
+            fxProbe.position[1] = ey;
+            fxProbe.position[2] = ez;
+            fxProbe.burst(1);
+            fxProbe.update(FIXED_STEP);
+          }
+        }
       } catch (error) {
         debugError ??= error instanceof Error ? error.message : String(error);
       }
@@ -1488,6 +1508,8 @@ async function boot(
     engine.probeView = probeViewEnabled;
     // Live tier knob (074/09): the config value drives the target size; the engine rebuilds on change.
     engine.renderScale = config.graphics.renderScale;
+    // graphics.effects gate (089/01): kills both particle lanes' draws; dynamic spawns are dropped while off.
+    engine.particlesEnabled = config.graphics.effects.enabled;
     const renderStarted = performance.now();
     const stats = engine.frame(camera);
     renderMs = performance.now() - renderStarted;

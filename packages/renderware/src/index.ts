@@ -17,6 +17,7 @@ export {
   FX_SYSTEM_STRIDE,
   type FxBakedEmitter,
   type FxPlacement,
+  sampleFxParticle,
   writeFxSystemRecord,
 } from './fx/bake-fx';
 export { normalizeSpriteAlpha } from './fx/sprites';

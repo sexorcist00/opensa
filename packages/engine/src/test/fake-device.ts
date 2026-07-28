@@ -176,13 +176,25 @@ export function createFakeDevice(): FakeGpu {
     queue: {
       onSubmittedWorkDone: (): Promise<void> => Promise.resolve(),
       submit: (): void => {},
-      writeBuffer: (target: { label?: string }, offset: number, data: ArrayBuffer | ArrayBufferView): void => {
+      writeBuffer: (
+        target: { label?: string },
+        offset: number,
+        data: ArrayBuffer | ArrayBufferView,
+        dataOffset = 0,
+        size?: number,
+      ): void => {
+        // dataOffset/size are in ELEMENTS for typed-array views (the WebGPU spec) — partial uploads
+        // (coronas, the dynamic particle lane) must record what was actually written, not the whole scratch.
+        const stride = ArrayBuffer.isView(data) ? ((data as { BYTES_PER_ELEMENT?: number }).BYTES_PER_ELEMENT ?? 1) : 1;
         const view = ArrayBuffer.isView(data)
           ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
           : new Uint8Array(data);
+        const from = dataOffset * stride;
+        const to = size === undefined ? view.byteLength : from + size * stride;
+        const written = view.subarray(from, to);
         recorder.writes.push({
-          byteLength: data.byteLength,
-          data: new Uint8Array(view),
+          byteLength: written.byteLength,
+          data: new Uint8Array(written),
           label: target.label,
           offset,
         });

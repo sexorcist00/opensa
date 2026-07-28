@@ -22,6 +22,7 @@ import { uploadOstexTexture } from './core/ostex-upload';
 import { Resources } from './core/resources';
 import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
+import { type DynamicParticleLibrary, DynamicParticles } from './render/dynamic-particles';
 import {
   compileAll,
   MSAA_SAMPLES,
@@ -601,6 +602,9 @@ export class Engine {
     windStrength: 1,
   };
 
+  /** `graphics.effects.enabled` gate (089/01) — hosts sync it from config; gates BOTH particle lanes. */
+  particlesEnabled = true;
+
   /**
    * Env-probe centre (074/16 step 2), ENGINE space — the host feeds the followed car (or the player) every
    * frame; `null` skips the probe entirely (the lab, reflections off) and the rigid shader falls back to the
@@ -667,6 +671,8 @@ export class Engine {
   private readonly debris: DebrisEntry[] = [];
   private readonly debugLines = new Map<DebugLineSetId, DebugLineSet>();
   private depthView!: GPUTextureView;
+  /** Dynamic one-shot particle lane (089/01) — null until a host installs a library. */
+  private dynamicParticles: DynamicParticles | null = null;
   private engineDevice!: EngineDevice;
   private frameBindGroup!: GPUBindGroup;
   /** Triangles recorded by the out-of-bundle draw passes this frame; reset at the top of `frame`. A field
@@ -1201,6 +1207,7 @@ export class Engine {
     draws += this.drawVehicles(pass, true, camera.eye);
     // 2dfx coronas last (074/06 row 13): additive on top of everything, depth-read hides occluded ones.
     draws += this.drawParticles(pass);
+    draws += this.drawDynamicParticles(pass, seconds);
     draws += this.drawDebris(pass);
     draws += this.drawCoronas(pass, camera);
     draws += this.drawDebugLines(pass);
@@ -1419,6 +1426,19 @@ export class Engine {
     this.ensureTargets(canvas.width, canvas.height);
   }
 
+  /**
+   * Install (replacing) the dynamic one-shot lane's library (089/01): its sprite atlas, its baked system
+   * records and their blend routing. Called ONCE at boot by the host — per-frame work is `spawnParticle`
+   * plus at most one partial buffer write per blend mode inside `frame`.
+   */
+  initDynamicParticles(library: DynamicParticleLibrary): void {
+    this.removeDynamicParticles();
+    if (library.systems.length === 0) {
+      return;
+    }
+    this.dynamicParticles = new DynamicParticles(this.device, this.resources, this.pipelines.particleLayout, library);
+  }
+
   /** Residency ledger passthrough (HUD + leak assertions). */
   ledger(): ReturnType<Resources['ledger']> {
     return this.resources.ledger();
@@ -1437,6 +1457,11 @@ export class Engine {
       this.resources.destroyBuffer('uniform', draw.matrixBuffer);
     }
     this.clutterCells.delete(key);
+  }
+
+  removeDynamicParticles(): void {
+    this.dynamicParticles?.destroy();
+    this.dynamicParticles = null;
   }
 
   removeParticles(): void {
@@ -1794,6 +1819,29 @@ export class Engine {
    * skeleton or mesh edges — where re-creating the buffer every frame would churn GPU allocations.
    * The new data must not exceed the size the set was created with.
    */
+  /**
+   * Spawn one one-shot particle NOW at a world point (089/01). `systemIndex` addresses the installed
+   * dynamic library; velocity is engine-space units/second. Returns false — and DROPS the spawn — when no
+   * library is installed, the index is unknown, the pool is full, or the effects gate is off.
+   */
+  spawnParticle(
+    systemIndex: number,
+    x: number,
+    y: number,
+    z: number,
+    vx: number,
+    vy: number,
+    vz: number,
+    life: number,
+  ): boolean {
+    if (!this.dynamicParticles || !this.particlesEnabled) {
+      return false;
+    }
+    const now = (performance.now() - this.startedMs) / 1000;
+
+    return this.dynamicParticles.spawn(now, systemIndex, x, y, z, vx, vy, vz, life);
+  }
+
   updateDebugLines(id: DebugLineSetId, positions: Float32Array): void {
     const set = this.debugLines.get(id);
     if (!set) {
@@ -2294,6 +2342,17 @@ export class Engine {
     return draws;
   }
 
+  /** The dynamic one-shot lane (089/01): prune on the shader's clock, upload what changed, draw. */
+  private drawDynamicParticles(pass: GPURenderPassEncoder, now: number): number {
+    if (!this.dynamicParticles || !this.particlesEnabled) {
+      return 0;
+    }
+    const draws = this.dynamicParticles.draw(pass, this.pipelines, this.frameBindGroup, this.coronaQuad, now);
+    this.frameTriangles += 2 * this.dynamicParticles.count;
+
+    return draws;
+  }
+
   /** One out-of-bundle object's draws: kind-4/5 scrollers first refresh their live uvAnim uniform (offset
    *  16), then every object binds its own group 1 (the cell bind group for timed, the per-object one for
    *  scroll). Kind 5 packs its animation slot in the LOW 16 bits (the window rides the high ones). */
@@ -2352,7 +2411,7 @@ export class Engine {
   }
 
   private drawParticles(pass: GPURenderPassEncoder): number {
-    if (!this.particles) {
+    if (!this.particles || !this.particlesEnabled) {
       return 0;
     }
     let draws = 0;
