@@ -149,7 +149,8 @@ describe('VehicleTyreSmokeSystem', () => {
 
     it('a full-throttle pull-away that grips stays silent — low gears demand past the cap every launch', () => {
       const h = harness();
-      h.state.slips = h.state.slips!.map(() => ({ brakeExcess: 0, spinExcess: 0.6 })); // under the deadzone
+      // A modest surplus while already rolling: the ramp and the speed fade keep it under slideStart.
+      h.state.slips = h.state.slips!.map(() => ({ brakeExcess: 0, spinExcess: 0.6 }));
       h.state.linvel = [0, 5, 0];
 
       h.run(120);
@@ -216,9 +217,19 @@ describe('VehicleTyreSmokeSystem', () => {
 
       h.run(60);
 
-      // A FULL surplus at standstill (no spin fade): slide = SPIN_TO_SLIDE 6 → intensity (6 − 4)/8 = 0.25.
+      // A FULL surplus at standstill (no spin fade): slide = SPIN_TO_SLIDE 7 → intensity (7 − 4)/8 = 0.375.
       expect(totalCount(h.puffs)).toBeGreaterThan(0);
-      expect(h.puffs[0].intensity).toBeCloseTo(0.25, 2);
+      expect(h.puffs[0].intensity).toBeCloseTo(0.375, 2);
+    });
+
+    it('the launch keeps smoking while the car is still slow — the fade must not close the window at once', () => {
+      const h = harness();
+      h.state.slips = [gripping(), gripping(), { brakeExcess: 0, spinExcess: 1 }, { brakeExcess: 0, spinExcess: 1 }];
+      h.state.linvel = [0, 3, 0]; // already rolling at 3 m/s, wheels still lit
+
+      h.run(120);
+
+      expect(totalCount(h.puffs)).toBeGreaterThan(0);
     });
 
     it('a pure lateral slide (the drift) smokes with no longitudinal excess at all', () => {

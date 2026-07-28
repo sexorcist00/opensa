@@ -67,23 +67,26 @@ export const TYRE_SMOKE_DEFAULTS: TyreSmokeDials = { rate: 6, slideFull: 12, sli
  * Equivalent slide speed (m/s) of a full wheelspin surplus — the one channel with no physical speed to
  * read (Rapier has no tread overspeed), so the surplus ratio buys slide speed at this exchange rate.
  */
-const SPIN_TO_SLIDE = 6;
+const SPIN_TO_SLIDE = 7;
 
 /**
  * The wheelspin channel FADES OUT with ground speed (field round 2: puffs on every gear shift while just
  * driving straight — each upshift's demand spike crossed the deadzone). Tyre-lighting wheelspin is a
- * low-speed phenomenon (a launch, a burnout); past this speed the surplus is drivetrain noise.
+ * low-speed phenomenon (a launch, a burnout); past this speed the surplus is drivetrain noise. The fade —
+ * not the deadzone — is what silences the shifts: even a FULL surplus at 6+ m/s stays under `slideStart`.
  */
-const SPIN_FADE_SPEED = 10;
+const SPIN_FADE_SPEED = 12;
 
 /**
  * Demand-over-cap DEADZONES (field round 1, 2026-07-28: "smoke pours constantly while just driving").
  * Keyboard pedals are binary: a full-throttle pull-away in first and an ordinary full-pedal stop both
  * demand past the tyre's cap, and a demand that merely RIDES the cap is gripping (ABS-shaped), not
  * skidding. Only demand well PAST the cap reads as slide; the handbrake's exact 1 still maps to full.
+ * The spin deadzone was 0.75 until field round 3 ("launch smoke disappeared") — the speed fade above now
+ * owns the shift-spike problem, so the deadzone only decides WHICH launches light up.
  */
 const BRAKE_DEADZONE = 0.25;
-const SPIN_DEADZONE = 0.75;
+const SPIN_DEADZONE = 0.4;
 
 /** More wheels than any SA vehicle carries — the per-wheel state array is sized once. */
 const MAX_WHEELS = 8;

@@ -8,10 +8,10 @@
 
 ```ts
 export const TYRE_SMOKE_DEFAULTS: TyreSmokeDials = { rate: 6, slideFull: 12, slideStart: 4 };
-const SPIN_TO_SLIDE = 6; // m/s of "slide" bought by a full wheelspin surplus
-const SPIN_FADE_SPEED = 10; // wheelspin smoke fades to nothing by this ground speed (m/s)
+const SPIN_TO_SLIDE = 7; // m/s of "slide" bought by a full wheelspin surplus
+const SPIN_FADE_SPEED = 12; // wheelspin smoke fades to nothing by this ground speed (m/s)
 const BRAKE_DEADZONE = 0.25; // demand must exceed the cap by this before it reads as a lockup
-const SPIN_DEADZONE = 0.75; // and by this before it reads as wheelspin
+const SPIN_DEADZONE = 0.4; // and by this before it reads as wheelspin
 smokeEmitter.lifeScale = 0.25 + 0.25 * puff.intensity; // 1.25–2.5 s of the authored 5 s collisionsmoke life
 smokeEmitter.alphaScale = 0.1 + 0.4 * puff.intensity ** 2; // ~12 % at a launch, 50 % at a full slide
 ```
@@ -35,6 +35,13 @@ phenomenon), and replaced round 1's static 0.45 library alpha with PER-SPAWN opa
 squared — the user's numbers: ~10–15 % at a launch, 50 % at a hard slide/emergency stop. The per-spawn
 channel is encoded in the fraction of the instance's system slot (`1 − fract(z)` in the shader), so the
 baked lane's integer slots stay opaque and the 9-float layout is untouched.
+
+**Field round 3 (2026-07-28)** — "the launch smoke disappeared": round 2's three cuts stacked on the one
+channel (threshold 4 wants near-max spin, the fade closed the window by ~3.3 m/s, and rate 6 × intensity
+0.25 yields under one puff inside it). Since the SPEED FADE — not the deadzone — is what silences gear
+shifts (even a full surplus at 6+ m/s stays under `slideStart`), the deadzone dropped 0.75 → 0.4,
+`SPIN_TO_SLIDE` 6 → 7 and `SPIN_FADE_SPEED` 10 → 12: the launch window now reaches ~5 m/s at ~12–16 %
+opacity, and the straight stays silent.
 
 ## What it stands in for
 
