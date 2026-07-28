@@ -111,3 +111,16 @@ not a clock — replays and tests must not depend on wall time.
   with no `plate` flag their submeshes never take the plate material class and sample the model's own
   texture, exactly as now.
 - The bench guard (draws/GPU unchanged on the vehicle scene) needs a pak rebuild, which the user owns.
+  The rebuild landed 2026-07-28 but the guard was not run — the plan closed on the look verdict, and the
+  row lives on in the plan readme's "Left unmeasured".
+
+### Fixed on the first real boot (2026-07-28)
+
+The `rigid` module would not compile on a real device: `rigidTexel`'s new `matClass` branch put the two
+plate `textureSample` calls into non-uniform control flow, which WGSL forbids for implicit derivatives
+(`'textureSample' must only be called from uniform control flow` → `CreateRenderPipeline("rigid-opaque")`
+fails → no boot). The whole function is affected, not just the plate arms, because the early `return`s make
+everything below them non-uniform as well. Fix: `dpdx(uv)`/`dpdy(uv)` are taken at the top of the function,
+while the flow is still uniform, and all three paths sample with `textureSampleGrad` — same mip selection,
+no branch restructuring. Verified headless on `build/gostown` (canvas boots, `draws 11`, no shader/pipeline
+console error). Recorded in `docs/edge-cases/engine-rendering.md`.

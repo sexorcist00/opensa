@@ -88,9 +88,11 @@ cityBoxes) → { text, city }` — `cityAt(spawn position)` (NOT the player's ci
 
 ### Still owed
 
-- **The pak rebuild** (user's). Nothing here is visible until the `.osm` files carry the plate tag.
-- The field session: LS→SF→LV distribution, the countryside mix, ram a plated car for the deform/detach
-  behaviour. Slots used on a full-map drive and spawn overhead are measured then.
+- ~~**The pak rebuild**~~ — done 2026-07-28, and the plates are on the cars in the field. That verdict
+  closed the plan.
+- The field session's MEASURED half was not taken and the chain closed without it: LS→SF→LV distribution,
+  the countryside mix, ram a plated car for the deform/detach behaviour, slots used on a full-map drive,
+  spawn overhead. Carried in the plan readme's "Left unmeasured".
 - The F2 debug-spawner plate input, and the damage/detach integration tests. The damage BEHAVIOUR is
   structural (plan 02 measured 87 of 143 models carrying a plate on their `_dam` twin), but "structural"
   is a prediction until something drives into a wall.

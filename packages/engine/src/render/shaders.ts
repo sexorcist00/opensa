@@ -1337,17 +1337,23 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
 // Lamp materials carry a lamps-on TWIN layer (SA's vehiclelights → vehiclelightson swap): pick it when THIS
 // car's headlights are on — a per-vehicle state, not the global day/night blend.
 fn rigidTexel(in: RigidVsOut) -> vec4f {
+  // The plate branches below pick a DIFFERENT texture array, and a branch on a per-fragment value makes the
+  // rest of this function non-uniform control flow — where implicit-derivative sampling is illegal (WGSL
+  // uniformity rules). The derivatives are taken HERE, while the flow is still uniform, and every path
+  // samples with them explicitly: same mip selection as before, no divergence hazard.
+  let uvDdx = dpdx(in.uv);
+  let uvDdy = dpdy(in.uv);
   // A license plate samples an ENGINE-owned array at a PER-INSTANCE layer instead of the model's own — the
   // whole point of the feature: one uploaded model, a different plate on every car wearing it.
   if (in.matClass == MAT_PLATE_FACE) {
-    return textureSample(plateTexture, rigidSampler, in.uv, u32(in.lamps.w));
+    return textureSampleGrad(plateTexture, rigidSampler, in.uv, u32(in.lamps.w), uvDdx, uvDdy);
   }
   if (in.matClass == MAT_PLATE_BACK) {
-    return textureSample(plateBackTexture, rigidSampler, in.uv, u32(in.lamps.w));
+    return textureSampleGrad(plateBackTexture, rigidSampler, in.uv, u32(in.lamps.w), uvDdx, uvDdy);
   }
   let lampsOn = in.lamps.x > 0.5 && in.nightLayer != 0u;
   let layer = select(in.layer, in.nightLayer, lampsOn);
-  return textureSample(rigidTexture, rigidSampler, in.uv, layer);
+  return textureSampleGrad(rigidTexture, rigidSampler, in.uv, layer, uvDdx, uvDdy);
 }
 
 // A lit lamp SELF-ILLUMINATES: shading it like painted metal leaves it a dull grey patch at night. Tails run

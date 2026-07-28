@@ -1,9 +1,10 @@
 # Vehicle license plates
 
-**State: built, unverified in the field** (plan [082](../plans/082-vehicle-plates/readme.md), 2026-07-28).
+**State: shipped, field-confirmed 2026-07-28** (plan [082](../plans/082-vehicle-plates/readme.md)).
 Every spawned car wears a generated plate: text from a per-city mask, background by the city it SPAWNED in,
 deterministic per placement, and the plate rides deform / door swing / part detach because it lives inside
-the part geometry.
+the part geometry. The field verdict was the look one — plates are on the cars and read correctly; the
+distribution drive, the bench guard and a ram test are listed unmeasured in the plan's readme.
 
 **A pak rebuild is required** before any of this is visible — the plate tag is written at conversion time.
 Cars from an older `.osm` carry no tag, take no plate, and render exactly as before.

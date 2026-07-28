@@ -1,8 +1,9 @@
 # 082 — execution priority
 
-**STATUS 2026-07-28: 01–04 BUILT, no field verdict.** The chain ran in the planned order and each plan's
-ledger carries its numbers. Two checkpoints below are still open and both need the pak rebuilt first: the
-bench guard at 03 and the single field session at 04.
+**STATUS 2026-07-28: CLOSED.** The chain ran in the planned order, each plan's ledger carries its numbers,
+and the rebuilt pak was driven: plates are on the cars. The 03 bench guard and the measured half of 04's
+field session (distribution, slot count, spawn overhead, a ram test) were NOT taken — the feature was
+closed on the look verdict; the readme's "Left unmeasured" section keeps the list.
 
 Linear chain — each plan consumes the previous one's artifact:
 

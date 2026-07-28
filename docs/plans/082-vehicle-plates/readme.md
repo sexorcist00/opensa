@@ -1,6 +1,12 @@
 # 082 — Vehicle license plates (per-vehicle, city-correct, damage-riding)
 
-**Status: PLANNED 2026-07-19.** Supersedes the idea chain `docs/ideas/0.4.0/plans/01-plates/`
+**Status: CLOSED 2026-07-28** — 01–04 shipped, the pak was reconverted and the field verdict is in: the
+game boots and every car wears its plate. One defect surfaced on that first real boot and was fixed
+(a WGSL uniformity error in `rigidTexel`, see plan 03); it never reached the plate logic itself. What the
+session did NOT measure is written down under [Left unmeasured](#left-unmeasured) — it is small, cosmetic
+and reopenable, not silently dropped.
+
+Supersedes the idea chain `docs/ideas/0.4.0/plans/01-plates/`
 (2026-07-12) — rethought for the own WebGPU engine; the idea was written against the deleted
 three-WebGL path (`MeshStandardMaterial.map` swap in `buildVehicle`, `DataTexture`) and its central
 mechanism no longer exists.
@@ -111,3 +117,16 @@ Order + rationale: [priority.md](priority.md).
    spawn-time overhead, census numbers.
 5. Field verification uses the engine-lab vehicle look bench (`?vmodel`) for close-ups and a city
    drive for distribution; feel/look verdicts freeze defaults.
+
+## Left unmeasured
+
+Closed on a binary verdict (plates are there and look right), which is what this feature was gated on.
+These stayed open and are worth a single pass whenever a vehicle round comes up again:
+
+- The **city distribution** over a real LS→SF→LV drive and the countryside mix — the rule is unit-tested
+  at the car, but never watched across the map.
+- The **bench guard** of plan 03 (draws/GPU unchanged on the vehicle scene) and the atlas numbers plan 04
+  owes: slots used on a full-map drive, spawn overhead.
+- **Damage/detach in the field** — ram a plated car. Structural by construction (02 measured 87 of 143
+  models carrying a plate on their `_dam` twin), so this is a confirmation, not a risk.
+- The **F2 debug-spawner plate input** and the damage/detach integration tests.

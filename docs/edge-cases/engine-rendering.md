@@ -19,6 +19,13 @@ Limits and deliberate approximations of the own WebGPU engine.
 - **Shader-stage limits are invisible to tests.** The fake GPUDevice doesn't validate the 16-varying
   fragment-input cap or binding visibility — two shader defects shipped through 2,325 green tests. Check
   WGSL by eye (a static check is a noted follow-up in plan 084).
+- **A branch on a per-fragment value bans implicit-derivative sampling for the REST of the function.**
+  WGSL's uniformity rules only allow `textureSample`/`dpdx`/`dpdy` in uniform control flow, and a `return`
+  inside an `if` makes everything after it non-uniform too — so one branch poisons the whole function, not
+  just its own arm. `rigidTexel` hit this the moment plates gave it a `matClass` branch (it fails at
+  `createShaderModule`, i.e. at boot, and no test sees it). The fix: take `dpdx(uv)`/`dpdy(uv)` at the top,
+  where the flow is still uniform, and have EVERY path sample with `textureSampleGrad` — identical mip
+  selection, no restructuring.
 - **The rigid (vehicle/ped) vertex output stands at 15 of those 16 inter-stage locations.** There is room
   for ONE more and no test will tell you when it is gone. Anything per-vertex a new feature needs has to
   ride an existing location's spare components instead: sky occlusion sits in `local.w` (plan 084), the

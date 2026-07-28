@@ -47,10 +47,11 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
 - **[082 — Vehicle license plates](./082-vehicle-plates/readme.md)** — per-instance city-correct plates on
   the array-based engine: plate atlas array + per-instance slot, converter-flagged plate submeshes,
   mask DSL + placement-seeded determinism, damage-riding. Promoted from ideas/0.4.0/01.
-  **01–04 BUILT 2026-07-28, no field verdict yet**: the chain is code-complete and 3 016 tests green, but
-  nothing is visible until the pak is reconverted (the plate tag is written at conversion). Phase 0
-  corrected two of this plan's own assumptions — the city mapping was recorded backwards, and a plate is
-  two quads, not one. Still owed: the rebuild, the field session, the F2 plate input.
+  **CLOSED 2026-07-28**: 01–04 shipped, the pak was reconverted and the field verdict is in — every car
+  wears its plate. Phase 0 corrected two of this plan's own assumptions (the city mapping was recorded
+  backwards, and a plate is two quads, not one), and the first real boot cost one fix: a WGSL uniformity
+  error in `rigidTexel`, which no test can see. Closed on the look verdict — the distribution drive, the
+  bench guard and a ram test are listed unmeasured in the plan's readme.
 - **[081 — Vehicle driving physics](./081-vehicle-physics/readme.md)** — feel overhaul on the own engine.
   **01–05 DONE 2026-07-26, field-accepted**: `handling.cfg` went from 5 fields consumed to 21, every one a
   translation of the original's own code (spring law, `cTransmission` gearbox, air drag, tyre grip and
