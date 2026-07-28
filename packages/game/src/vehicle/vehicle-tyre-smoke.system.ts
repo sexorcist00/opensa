@@ -61,13 +61,20 @@ export interface TyreSmokePuff {
 }
 
 /** Defaults of the eye-fit (see the hack doc): grip noise stays silent, a real slide reads immediately. */
-export const TYRE_SMOKE_DEFAULTS: TyreSmokeDials = { rate: 12, slideFull: 12, slideStart: 3 };
+export const TYRE_SMOKE_DEFAULTS: TyreSmokeDials = { rate: 6, slideFull: 12, slideStart: 4 };
 
 /**
  * Equivalent slide speed (m/s) of a full wheelspin surplus — the one channel with no physical speed to
  * read (Rapier has no tread overspeed), so the surplus ratio buys slide speed at this exchange rate.
  */
 const SPIN_TO_SLIDE = 6;
+
+/**
+ * The wheelspin channel FADES OUT with ground speed (field round 2: puffs on every gear shift while just
+ * driving straight — each upshift's demand spike crossed the deadzone). Tyre-lighting wheelspin is a
+ * low-speed phenomenon (a launch, a burnout); past this speed the surplus is drivetrain noise.
+ */
+const SPIN_FADE_SPEED = 10;
 
 /**
  * Demand-over-cap DEADZONES (field round 1, 2026-07-28: "smoke pours constantly while just driving").
@@ -119,7 +126,9 @@ export class VehicleTyreSmokeSystem implements System {
       }
       const slip = slips[index];
       const locked = Math.min(1, Math.max(0, ((slip?.brakeExcess ?? 0) - BRAKE_DEADZONE) / (1 - BRAKE_DEADZONE)));
-      const spinning = Math.min(1, Math.max(0, ((slip?.spinExcess ?? 0) - SPIN_DEADZONE) / (1 - SPIN_DEADZONE)));
+      const spinFade = Math.max(0, 1 - Math.abs(motion.speed) / SPIN_FADE_SPEED);
+      const spinning =
+        Math.min(1, Math.max(0, ((slip?.spinExcess ?? 0) - SPIN_DEADZONE) / (1 - SPIN_DEADZONE))) * spinFade;
       const slide = Math.max(Math.abs(motion.speedLateral), locked * Math.abs(motion.speed), spinning * SPIN_TO_SLIDE);
       const span = Math.max(0.001, this.dials.slideFull - this.dials.slideStart);
       const intensity = Math.min(1, Math.max(0, (slide - this.dials.slideStart) / span));

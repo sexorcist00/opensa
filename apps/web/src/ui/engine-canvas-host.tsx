@@ -1242,6 +1242,8 @@ async function boot(
         if (fxProbeName) {
           fxProbe ??= particles?.createEmitter(fxProbeName) ?? null;
           if (fxProbe) {
+            // Half-opacity: a 60/s probe column at full authored alpha stacks into solid white (089/02).
+            fxProbe.alphaScale = 0.5;
             // Beside the player, refreshed every step — a MOVING spawn point is the lane's whole point,
             // and parking once would freeze the pre-ground-snap boot position.
             const [ex, ey, ez] = toEngine(curPlayerGta);

@@ -7,25 +7,34 @@
 `packages/game/src/vehicle/vehicle-tyre-smoke.system.ts` and the sink in `apps/web/src/ui/engine-vehicles.ts`:
 
 ```ts
-export const TYRE_SMOKE_DEFAULTS: TyreSmokeDials = { rate: 12, slideFull: 12, slideStart: 3 };
+export const TYRE_SMOKE_DEFAULTS: TyreSmokeDials = { rate: 6, slideFull: 12, slideStart: 4 };
 const SPIN_TO_SLIDE = 6; // m/s of "slide" bought by a full wheelspin surplus
+const SPIN_FADE_SPEED = 10; // wheelspin smoke fades to nothing by this ground speed (m/s)
 const BRAKE_DEADZONE = 0.25; // demand must exceed the cap by this before it reads as a lockup
 const SPIN_DEADZONE = 0.75; // and by this before it reads as wheelspin
 smokeEmitter.lifeScale = 0.25 + 0.25 * puff.intensity; // 1.25–2.5 s of the authored 5 s collisionsmoke life
-{ alpha: 0.45, name: 'prt_collisionsmoke' } // the lane scales the authored alpha envelope (engine-particles.ts)
+smokeEmitter.alphaScale = 0.1 + 0.4 * puff.intensity ** 2; // ~12 % at a launch, 50 % at a full slide
 ```
 
 Plus the shape of the signal itself: three channels reduced to one "equivalent slide speed" —
-`max(|speedLateral|, ramp(brakeExcess) × |speed|, ramp(spinExcess) × SPIN_TO_SLIDE)` where `ramp` is the
-deadzone-to-1 linear map — then a linear ramp between the two dials drives both the spawn rate and the
-particle life.
+`max(|speedLateral|, ramp(brakeExcess) × |speed|, ramp(spinExcess) × spinFade × SPIN_TO_SLIDE)` where
+`ramp` is the deadzone-to-1 linear map — then a linear ramp between the two dials drives the spawn rate,
+the particle life and (squared) the per-spawn opacity.
 
-**Field round 1 (2026-07-28)** produced the deadzones, the halved rate, the shorter life and the alpha
-scale: keyboard pedals are binary, so a full-throttle pull-away in first and an ordinary full-pedal stop
-both demand past the cap — the verdict was "smoke pours constantly while just driving", and the full
-authored alpha stacked per-step bursts into solid white ("is there no alpha channel?"). A demand that
-merely rides the cap is ABS-shaped gripping; only demand well past it reads as slide. The handbrake's
-recorded 1 still maps to full lock through the ramp.
+**Field round 1 (2026-07-28)** produced the deadzones, a halved rate and the shorter life: keyboard pedals
+are binary, so a full-throttle pull-away in first and an ordinary full-pedal stop both demand past the cap
+— the verdict was "smoke pours constantly while just driving", and the full authored alpha stacked
+per-step bursts into solid white ("is there no alpha channel?"). A demand that merely rides the cap is
+ABS-shaped gripping; only demand well past it reads as slide. The handbrake's recorded 1 still maps to
+full lock through the ramp.
+
+**Field round 2 (2026-07-28)** halved the rate again (12 → 6), raised `slideStart` 3 → 4 (ordinary
+corners puffed), added `SPIN_FADE_SPEED` (puffs from both driven wheels on every GEAR SHIFT down a
+straight — each upshift's demand spike crossed the deadzone; tyre-lighting wheelspin is a low-speed
+phenomenon), and replaced round 1's static 0.45 library alpha with PER-SPAWN opacity from intensity
+squared — the user's numbers: ~10–15 % at a launch, 50 % at a hard slide/emergency stop. The per-spawn
+channel is encoded in the fraction of the instance's system slot (`1 − fract(z)` in the shader), so the
+baked lane's integer slots stay opaque and the 9-float layout is untouched.
 
 ## What it stands in for
 

@@ -132,7 +132,7 @@ TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js
 # Dynamic particle probe (089/01) — ?fxprobe=<fxp system, e.g. prt_collisionsmoke> parks a one-shot
 #   emitter beside the player (burst 1/fixed step = 60/s); the system must be in DYNAMIC_SYSTEMS
 # Tyre smoke dials (089/02) — ?smokeStart=<m/s> ?smokeFull=<m/s> ?smokeRate=<n/wheel/s>
-#   equivalent-slide thresholds + spawn rate (defaults 3 / 12 / 12); the fit: docs/hacks/tyre-smoke-intensity-fit.md
+#   equivalent-slide thresholds + spawn rate (defaults 4 / 12 / 6); the fit: docs/hacks/tyre-smoke-intensity-fit.md
 # Air control (081/06 §1) — ?airCtl=<x> scales the in-air pitch/roll/yaw authority; 0 = off (the jump A/B)
 # Diff two capture sets (raw harness logs are accepted as-is); --determinism gates a replay check
 npx tsx scripts/phys-compare.ts before.log after.log [--determinism]

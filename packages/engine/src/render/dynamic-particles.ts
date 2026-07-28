@@ -91,6 +91,7 @@ export class DynamicParticlePool {
     vx: number,
     vy: number,
     vz: number,
+    alpha = 1,
   ): boolean {
     if (this.count >= this.capacity || life <= 0) {
       return false;
@@ -107,7 +108,10 @@ export class DynamicParticlePool {
     // The shader ages every instance as (clock + phase) / life — a phase of minus the spawn time makes
     // that THIS particle's own age, and the one-shot pipelines clamp it instead of looping.
     data[at + 7] = -now;
-    data[at + 8] = systemIndex;
+    // Per-spawn opacity rides the FRACTION of the system slot (089/02 round 2): the shader reads
+    // 1 − fract(z), so an integer slot — every baked instance, and the default here — stays fully opaque
+    // and the instance layout never changes. 0.999 floors the encodable alpha just above zero.
+    data[at + 8] = systemIndex + Math.min(0.999, Math.max(0, 1 - alpha));
     this.deaths[this.count] = now + life;
     this.count += 1;
 
@@ -240,12 +244,13 @@ export class DynamicParticles {
     vy: number,
     vz: number,
     life: number,
+    alpha = 1,
   ): boolean {
     if (!Number.isInteger(systemIndex) || systemIndex < 0 || systemIndex >= this.additive.length) {
       return false;
     }
     const half = this.additive[systemIndex] ? this.add : this.blend;
-    const spawned = half.pool.spawn(now, life, systemIndex, x, y, z, vx, vy, vz);
+    const spawned = half.pool.spawn(now, life, systemIndex, x, y, z, vx, vy, vz, alpha);
     half.dirty = half.dirty || spawned;
 
     return spawned;

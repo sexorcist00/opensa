@@ -1821,8 +1821,10 @@ export class Engine {
    */
   /**
    * Spawn one one-shot particle NOW at a world point (089/01). `systemIndex` addresses the installed
-   * dynamic library; velocity is engine-space units/second. Returns false — and DROPS the spawn — when no
-   * library is installed, the index is unknown, the pool is full, or the effects gate is off.
+   * dynamic library; velocity is engine-space units/second; `alpha` scales the system's authored alpha
+   * envelope for THIS particle (089/02 round 2 — a gentle slide's smoke is fainter, not just shorter).
+   * Returns false — and DROPS the spawn — when no library is installed, the index is unknown, the pool is
+   * full, or the effects gate is off.
    */
   spawnParticle(
     systemIndex: number,
@@ -1833,13 +1835,14 @@ export class Engine {
     vy: number,
     vz: number,
     life: number,
+    alpha = 1,
   ): boolean {
     if (!this.dynamicParticles || !this.particlesEnabled) {
       return false;
     }
     const now = (performance.now() - this.startedMs) / 1000;
 
-    return this.dynamicParticles.spawn(now, systemIndex, x, y, z, vx, vy, vz, life);
+    return this.dynamicParticles.spawn(now, systemIndex, x, y, z, vx, vy, vz, life, alpha);
   }
 
   updateDebugLines(id: DebugLineSetId, positions: Float32Array): void {

@@ -120,7 +120,17 @@ describe('VehicleTyreSmokeSystem', () => {
 
     it('a slide below the start dial stays silent', () => {
       const h = harness();
-      h.state.linvel = [2, 0, 0]; // 2 m/s of lateral drift — under slideStart 3
+      h.state.linvel = [3.5, 0, 0]; // 3.5 m/s of lateral drift — an ordinary corner, under slideStart 4
+
+      h.run(120);
+
+      expect(h.puffs).toEqual([]);
+    });
+
+    it('a wheelspin surplus at cruising speed stays silent — gear-shift demand spikes are not burnouts', () => {
+      const h = harness();
+      h.state.slips = h.state.slips!.map(() => ({ brakeExcess: 0, spinExcess: 1 })); // full surplus…
+      h.state.linvel = [0, 20, 0]; // …but at 72 km/h — past the spin fade
 
       h.run(120);
 
@@ -179,12 +189,12 @@ describe('VehicleTyreSmokeSystem', () => {
 
       h.run(60);
 
-      // Past the deadzone in full: slide = 10 → intensity (10 − 3)/9 ≈ 0.78 → 12 × 0.78 ≈ 9.3/s per wheel.
-      expect(totalCount(h.puffs)).toBeGreaterThanOrEqual(28);
-      expect(totalCount(h.puffs)).toBeLessThanOrEqual(40);
+      // Past the deadzone in full: slide = 10 → intensity (10 − 4)/8 = 0.75 → 6 × 0.75 = 4.5/s per wheel.
+      expect(totalCount(h.puffs)).toBeGreaterThanOrEqual(12);
+      expect(totalCount(h.puffs)).toBeLessThanOrEqual(20);
       for (const puff of h.puffs) {
         expect(puff.position).toEqual([10, 20, 30]);
-        expect(puff.intensity).toBeCloseTo(7 / 9, 2);
+        expect(puff.intensity).toBeCloseTo(0.75, 2);
       }
     });
 
@@ -206,9 +216,9 @@ describe('VehicleTyreSmokeSystem', () => {
 
       h.run(60);
 
-      // A FULL surplus (past the deadzone entirely): slide = SPIN_TO_SLIDE 6 → intensity (6 − 3)/9 = 1/3.
+      // A FULL surplus at standstill (no spin fade): slide = SPIN_TO_SLIDE 6 → intensity (6 − 4)/8 = 0.25.
       expect(totalCount(h.puffs)).toBeGreaterThan(0);
-      expect(h.puffs[0].intensity).toBeCloseTo(1 / 3, 2);
+      expect(h.puffs[0].intensity).toBeCloseTo(0.25, 2);
     });
 
     it('a pure lateral slide (the drift) smokes with no longitudinal excess at all', () => {
@@ -218,7 +228,7 @@ describe('VehicleTyreSmokeSystem', () => {
       h.run(60);
 
       expect(totalCount(h.puffs)).toBeGreaterThan(0);
-      expect(h.puffs[0].intensity).toBeCloseTo(5 / 9, 2);
+      expect(h.puffs[0].intensity).toBeCloseTo(0.5, 2); // slide 8 → (8 − 4)/8
     });
 
     it('harder slides make more particles — the rate follows the intensity', () => {

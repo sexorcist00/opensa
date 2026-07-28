@@ -57,6 +57,17 @@ ABS-shaped gripping, only well past it is a skid; the handbrake's exact 1 still 
 halved 25 → 12, life 1.25–2.5 s, and the lane now scales collisionsmoke's authored alpha envelope by 0.45
 (SA's envelope assumes its own sparse spawns; our per-step bursts stack — full alpha read as solid white).
 
+## Field round 2 (2026-07-28)
+
+Still puffing "on every gear shift down a straight" and in ordinary corners; wanted half the smoke again
+and opacity BY EVENT — ~10–15 % at a launch, 50 % at a hard slide/emergency stop. Fixes: the wheelspin
+channel now FADES with ground speed (`SPIN_FADE_SPEED` 10 — an upshift's demand spike at 20 m/s is
+drivetrain noise, not a burnout), `slideStart` 3 → 4, rate 12 → 6, and the lane gained a real PER-SPAWN
+opacity channel: encoded in the fraction of the instance's system slot (`1 − fract(z)` in the shader — the
+baked lane's integer slots stay opaque, the 9-float layout untouched), surfaced as
+`DynamicFxEmitter.alphaScale`, driven by intensity² (`0.1 + 0.4 × i²`). Round 1's static 0.45 library
+alpha scale is retired by it; the `?fxprobe` column sets its own 0.5.
+
 ## Open / next
 
 - Surface routing (smoke on tarmac vs dust on dirt) is step 5's job — today every surface smokes white.
