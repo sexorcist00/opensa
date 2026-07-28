@@ -24,16 +24,35 @@ export interface AppliedVehicle {
   warnings: string[];
 }
 
+export interface ApplyVehicleOptions {
+  /**
+   * Put the folder's `dff`/`txd` into `models/gta3.img`. Default true.
+   *
+   * A REBAKE turns it off: its target is a CONVERTED tree, where a car is one `.osm` and the pack has already
+   * deleted the `.dff`/`.txd` it was built from. Writing the raw pair back would add entries the game does not
+   * read and cannot be told apart from a half-converted archive.
+   */
+  img?: boolean;
+}
+
 /**
  * Install one vehicle over `--out`: put its `dff`/`txd` (+ extra txds) into `models/gta3.img` (replace by name),
  * then merge its `*.settings.txt` lines into `data/{vehicles.ide,handling.cfg,carcols.dat,carmods.dat}`. Returns
  * the archive entries written + the model name / handling id (so a `--strip` run knows what to keep).
  */
-export function applyVehicle(folderPath: string, outPath: string): AppliedVehicle {
-  const imgNames = mergeVehicleImg(folderPath, join(outPath, 'models', 'gta3.img'));
-  const model = imgNames.find((name) => name.endsWith('.dff'))?.replace(/\.dff$/, '');
-
+export function applyVehicle(folderPath: string, outPath: string, options: ApplyVehicleOptions = {}): AppliedVehicle {
   const entries = readdirSync(folderPath);
+  const imgNames = options.img === false ? [] : mergeVehicleImg(folderPath, join(outPath, 'models', 'gta3.img'));
+  // Without the archive step the model name comes from the folder itself — the same rule, one step earlier:
+  // the mod's `.dff` basename IS the model.
+  const model = (
+    options.img === false
+      ? entries.find((name) => name.toLowerCase().endsWith('.dff'))
+      : imgNames.find((name) => name.endsWith('.dff'))
+  )
+    ?.replace(/\.dff$/i, '')
+    .toLowerCase();
+
   // `features.txt` sits in the same folder and also ends in `.txt` — taking the FIRST `.txt` picked it over
   // `previon.settings.txt` (alphabetical order) and the car lost its whole settings file.
   const featuresFile = entries.find((name) => name.toLowerCase() === FEATURES_FILE);

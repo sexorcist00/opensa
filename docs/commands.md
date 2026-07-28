@@ -16,6 +16,21 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack|lod>`
 (inclusive, keeps `.work/`) · `--keep-work` · `--no-weld-seams` · `--no-textures` · `--allow-text-row-overflow`.
 
+### Vehicle round: rebake instead of rebuilding
+
+```bash
+# Re-install + re-convert the mod cars of an ALREADY BUILT game, in place (one car ≈ 3.6 s)
+npx tsx tools/vehicle-installer/src/cli.ts --rebake gostown --only previon
+npx tsx tools/vehicle-installer/src/cli.ts --rebake gostown            # every mod car of that game
+```
+
+Defaults: `--target build/<game>/opensa` · `--in mods-src/<game>/vehicles` (both overridable). Per car it
+merges its `*.settings.txt` into the BUILT `data/*`, merges its `features.txt` line into
+`data/vehicle-features.txt`, re-converts its `dff`/`txd` and REPLACES `<model>.osm` in whichever
+`models/*.img` holds it. Idempotent, and it touches nothing else in the tree.
+**It cannot ADD a car the built game never had** — that needs the ids the full build writes, and such a car
+is reported rather than half-installed ([plan 006](../tools/vehicle-installer/docs/plans/006-rebake.md)).
+
 ## Serving & running
 
 ```bash

@@ -18,6 +18,18 @@ tsx tools/vehicle-installer/src/cli.ts --game ./game-src/original --in ./1 --out
 - `--out` — output install dir (**wiped + rebuilt** each run)
 - `--strip` — _(optional, off by default)_ reduce the output to **only** the installed vehicles (see below)
 
+## Rebake — the same cars against a game that is already built
+
+```sh
+tsx tools/vehicle-installer/src/cli.ts --rebake gostown --only previon
+```
+
+Re-merges each mod's settings into the BUILT `data/*` and re-converts its model into the archive's
+`<model>.osm`, **in place** — the vehicle half of the pipeline without the pipeline (one car ≈ 3.6 s).
+Defaults `--target build/<game>/opensa` and `--in mods-src/<game>/vehicles`; `--only a,b` narrows it.
+It cannot add a car the built game never had (that needs a full build) and says so instead of half-installing
+one. See [plan 006](./docs/plans/006-rebake.md).
+
 ## How it applies
 
 1. `--out` is wiped, then the `--game` tree is copied in (the base). A guard refuses a dangerous `--out` (root, or
