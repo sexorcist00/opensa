@@ -59,3 +59,19 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   `data/maps/interior/stadint.ipl`. It was invisible in the mods-layer benchmark (stock trees then) and
   became **73 % of the whole trees-layer regression at Ganton** (6.09 of 8.36 ms) once the swap landed. When
   a stage multiplies per-instance cost, re-audit every earlier stage that added instances.
+
+- **A later mod silently DROPS what an earlier one added to a shared dictionary.** Mods apply in order and a
+  whole `.txd` overwrites its predecessor, so a texture an earlier mod *added* disappears and the model
+  needing it renders untextured. Live example: mod 3 ships `cj_thin_frige.dff` plus a `cj_commercial.txd`
+  carrying the `cj_frame_glass2` it needs; mod 4 overwrites that dictionary with a 10-texture version and the
+  fridge loses its glass — in the shipped build. **The pak build already detects this** and writes it to
+  `report.json` → `textures.missing` (**66 entries** as of 2026-07-28); nothing surfaces it, so nobody reads
+  that far. `scripts/debug/txd-retune.ts --add` puts one back.
+- **The installer recognises IMG folders only at the TOP level and only by exact name.** `apply-mod.ts`
+  matches `cutscene_img` / `gta3_img` / `gta_int_img` against the mod's own top-level entries — anything else
+  (`models/gta3img/`, a nested `models/gta3_img/`) is copied verbatim as loose files the game never reads, so
+  **the mod is silently inert**, with no error and no report line. A Modloader-style mod (one carrying a
+  loader file) escapes this because `bakeMod` routes by BARE NAME and ignores the path — but it injects every
+  `.dff`/`.txd`/`.col`/`.ifp` into `models/gta3.img` **only**, so an interior asset (whose stock home is
+  `gta_int.img`) lands in the wrong archive and shadows nothing. Correct placement is the stock residence:
+  check which archive holds the entry before choosing the folder.
