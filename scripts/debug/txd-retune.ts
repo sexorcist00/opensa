@@ -35,8 +35,9 @@ import { decodeToRgba } from '../lib/texture';
  *   --add "mods-src/original/mods/3. Global Textures Fixes/gta_int_img/cj_commercial.txd#CJ_FRAME_Glass2" --write
  * ```
  *
- * Flags: `--match <txd|entry>` reference sizes · `--add <txd>#<name>` (repeatable) · `--max <n>` cap every
- * side when there is no reference · `--no-mips` drop the mip chain · `--math gamma|linear` (default `gamma`
+ * Flags: `--match <txd|entry>` reference sizes, and a FLOOR nothing is shrunk below · `--halve <n>` shrink
+ * every texture n power-of-two steps (floored by `--match` when both are given) · `--add <txd>#<name>`
+ * (repeatable) · `--max <n>` cap every side · `--no-mips` drop the mip chain · `--math gamma|linear` (default `gamma`
  * — real SA filters in gamma space; use `linear` for a dictionary only OpenSA reads) · `--write`.
  */
 
@@ -124,6 +125,8 @@ if (!input || !existsSync(input)) {
 const math: MipColorMath = option('--math') === 'linear' ? 'linear' : 'gamma';
 const keepMips = !flag('--no-mips');
 const maxSide = option('--max') ? Number(option('--max')) : undefined;
+/** How many power-of-two steps to shrink by. `--match` still acts as a floor (see `targetSize`). */
+const halvings = option('--halve') ? Number(option('--halve')) : 0;
 
 const sourceBytes = readDictionary(input)!;
 const source = parseTxd(sourceBytes);
@@ -142,11 +145,36 @@ if (referenceArg) {
   }
 }
 
+/**
+ * The size a texture should end at. `--match` is a FLOOR as well as a target: a reference size is never
+ * undercut, so `--halve` on a mod that already carries some textures at stock size shrinks only the ones
+ * that are actually oversized instead of pushing the rest below what the game shipped.
+ */
+function targetSize(name: string, width: number, height: number): { height: number; width: number } {
+  const target = reference.get(name.toLowerCase());
+  let toWidth = target?.width ?? width;
+  let toHeight = target?.height ?? height;
+  for (let step = 0; step < halvings; step += 1) {
+    toWidth = Math.max(1, toWidth >> 1);
+    toHeight = Math.max(1, toHeight >> 1);
+  }
+  if (target) {
+    toWidth = Math.max(toWidth, target.width);
+    toHeight = Math.max(toHeight, target.height);
+  }
+  if (maxSide) {
+    while (toWidth > maxSide || toHeight > maxSide) {
+      toWidth = Math.max(1, toWidth >> 1);
+      toHeight = Math.max(1, toHeight >> 1);
+    }
+  }
+
+  return { height: Math.min(toHeight, height), width: Math.min(toWidth, width) };
+}
+
 const planned: Retuned[] = [];
 for (const texture of source.textures) {
-  const target = reference.get(texture.name.toLowerCase());
-  const toWidth = target?.width ?? (maxSide ? Math.min(texture.width, maxSide) : texture.width);
-  const toHeight = target?.height ?? (maxSide ? Math.min(texture.height, maxSide) : texture.height);
+  const { height: toHeight, width: toWidth } = targetSize(texture.name, texture.width, texture.height);
   const level = resize(decodeToRgba(texture), texture.width, texture.height, toWidth, toHeight, math);
   planned.push({
     format: formatOf(texture.format, texture.hasAlpha),
