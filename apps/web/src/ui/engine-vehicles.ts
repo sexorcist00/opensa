@@ -277,8 +277,9 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       smokeEmitter.position[0] = ex;
       smokeEmitter.position[1] = ey;
       smokeEmitter.position[2] = ez;
-      // Life from intensity: a gentle chirp wisps away (~1.5 s of the authored 5), a burnout lingers (~3 s).
-      smokeEmitter.lifeScale = 0.3 + 0.3 * puff.intensity;
+      // Life from intensity: a gentle chirp wisps away (~1.25 s of the authored 5), a hard skid lingers
+      // (~2.5 s) — shortened in field round 1 together with the rate and the lane's alpha scale.
+      smokeEmitter.lifeScale = 0.25 + 0.25 * puff.intensity;
       smokeEmitter.burst(puff.count);
     },
     { ...TYRE_SMOKE_DEFAULTS, ...deps.smokeDials },

@@ -127,6 +127,26 @@ describe('VehicleTyreSmokeSystem', () => {
       expect(h.puffs).toEqual([]);
     });
 
+    it('a full pedal that only RIDES the cap stays silent — ABS-shaped stops are not skids', () => {
+      const h = harness();
+      h.state.slips = h.state.slips!.map(() => ({ brakeExcess: 0.2, spinExcess: 0 })); // under the deadzone
+      h.state.linvel = [0, 30, 0];
+
+      h.run(120);
+
+      expect(h.puffs).toEqual([]);
+    });
+
+    it('a full-throttle pull-away that grips stays silent — low gears demand past the cap every launch', () => {
+      const h = harness();
+      h.state.slips = h.state.slips!.map(() => ({ brakeExcess: 0, spinExcess: 0.6 })); // under the deadzone
+      h.state.linvel = [0, 5, 0];
+
+      h.run(120);
+
+      expect(h.puffs).toEqual([]);
+    });
+
     it('locked brakes at STANDSTILL do not smoke — the patch is not moving over the road', () => {
       const h = harness();
       h.state.slips = [gripping(), gripping(), { brakeExcess: 1, spinExcess: 0 }, { brakeExcess: 1, spinExcess: 0 }];
@@ -159,9 +179,9 @@ describe('VehicleTyreSmokeSystem', () => {
 
       h.run(60);
 
-      // slide = min(1, 2) × 10 = 10 → intensity (10 − 3)/9 ≈ 0.78 → 25 × 0.78 ≈ 19.4/s per wheel.
-      expect(totalCount(h.puffs)).toBeGreaterThanOrEqual(60);
-      expect(totalCount(h.puffs)).toBeLessThanOrEqual(80);
+      // Past the deadzone in full: slide = 10 → intensity (10 − 3)/9 ≈ 0.78 → 12 × 0.78 ≈ 9.3/s per wheel.
+      expect(totalCount(h.puffs)).toBeGreaterThanOrEqual(28);
+      expect(totalCount(h.puffs)).toBeLessThanOrEqual(40);
       for (const puff of h.puffs) {
         expect(puff.position).toEqual([10, 20, 30]);
         expect(puff.intensity).toBeCloseTo(7 / 9, 2);
@@ -186,9 +206,9 @@ describe('VehicleTyreSmokeSystem', () => {
 
       h.run(60);
 
-      // slide = min(1, 1) × SPIN_TO_SLIDE 8 → intensity (8 − 3)/9 ≈ 0.56 on the two spinning wheels.
+      // A FULL surplus (past the deadzone entirely): slide = SPIN_TO_SLIDE 6 → intensity (6 − 3)/9 = 1/3.
       expect(totalCount(h.puffs)).toBeGreaterThan(0);
-      expect(h.puffs[0].intensity).toBeCloseTo(5 / 9, 2);
+      expect(h.puffs[0].intensity).toBeCloseTo(1 / 3, 2);
     });
 
     it('a pure lateral slide (the drift) smokes with no longitudinal excess at all', () => {

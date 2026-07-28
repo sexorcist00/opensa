@@ -31,8 +31,15 @@ const DRAW_DISTANCE = 300;
  * Systems preloaded into the DYNAMIC one-shot lane (089/01) — lowercased, as `parseFxp` keys them. The
  * lane's atlas and system records are built ONCE at boot, so an effect must be listed here before a
  * runtime emitter can spawn it. Extend as effects ship: tyre smoke (089/02), impact smoke (089/04).
+ *
+ * `alpha` scales the system's authored alpha envelope in the lane's record: SA's envelopes assume its own
+ * sparse spawn counts, and our per-step bursts overlap more — full authored alpha stacked into solid white
+ * (field round 1). An eye-fit, recorded in `docs/hacks/tyre-smoke-intensity-fit.md`.
  */
-const DYNAMIC_SYSTEMS = ['prt_collisionsmoke', 'prt_smokeii_3_expand'];
+const DYNAMIC_SYSTEMS: readonly { alpha: number; name: string }[] = [
+  { alpha: 0.45, name: 'prt_collisionsmoke' },
+  { alpha: 1, name: 'prt_smokeii_3_expand' },
+];
 
 /** A runtime spawner over one preloaded system: park it somewhere, burst it or stream it, step it. */
 export interface DynamicFxEmitter {
@@ -197,7 +204,7 @@ function buildDynamicLibrary(
 ): { index: Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>; library: DynamicParticleLibrary } {
   const baked: FxBakedEmitter[] = [];
   const index = new Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>();
-  for (const name of DYNAMIC_SYSTEMS) {
+  for (const { alpha, name } of DYNAMIC_SYSTEMS) {
     const system = systems.get(name);
     if (!system) {
       continue; // this profile does not ship the system — createEmitter(name) then returns null
@@ -206,6 +213,12 @@ function buildDynamicLibrary(
     // includeTriggered: the prt_* family carries NO emrate track — the runtime caller owns the count.
     for (const emitter of bakeFxSystem(system, { includeTriggered: true })) {
       const engineEmitter = toEngineSpace(emitter);
+      engineEmitter.colors = engineEmitter.colors.map(([r, g, b, a]): [number, number, number, number] => [
+        r,
+        g,
+        b,
+        a * alpha,
+      ]);
       entries.push({ baked: engineEmitter, systemIndex: baked.length });
       baked.push(engineEmitter);
     }

@@ -47,6 +47,16 @@ sits at a third of the circle and never flags.
   stays the 089/01 measurement, overdraw-bound).
   Run note: [`2026-07-28-headless-089-02-brake-strip-smoke.json`](../../benchmarks/opensa-engine/2026-07-28-headless-089-02-brake-strip-smoke.json).
 
+## Field round 1 (2026-07-28)
+
+Verdict: too intense, "smoke pours constantly from under the wheels while just driving", and it read as
+having no alpha. Root cause of the constant smoke: keyboard pedals are BINARY — a full-throttle pull-away
+in a low gear and an ordinary full-pedal stop both demand past the tyre's cap, and round 0 counted any
+excess as slide. Fixes, all in the hack doc: demand DEADZONES (brake 0.25, spin 0.75 — riding the cap is
+ABS-shaped gripping, only well past it is a skid; the handbrake's exact 1 still ramps to full), rate
+halved 25 → 12, life 1.25–2.5 s, and the lane now scales collisionsmoke's authored alpha envelope by 0.45
+(SA's envelope assumes its own sparse spawns; our per-step bursts stack — full alpha read as solid white).
+
 ## Open / next
 
 - Surface routing (smoke on tarmac vs dust on dirt) is step 5's job — today every surface smokes white.

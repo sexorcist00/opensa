@@ -7,14 +7,25 @@
 `packages/game/src/vehicle/vehicle-tyre-smoke.system.ts` and the sink in `apps/web/src/ui/engine-vehicles.ts`:
 
 ```ts
-export const TYRE_SMOKE_DEFAULTS: TyreSmokeDials = { rate: 25, slideFull: 12, slideStart: 3 };
-const SPIN_TO_SLIDE = 8; // m/s of "slide" bought by a 100 % wheelspin surplus
-smokeEmitter.lifeScale = 0.3 + 0.3 * puff.intensity; // 1.5–3 s of the authored 5 s collisionsmoke life
+export const TYRE_SMOKE_DEFAULTS: TyreSmokeDials = { rate: 12, slideFull: 12, slideStart: 3 };
+const SPIN_TO_SLIDE = 6; // m/s of "slide" bought by a full wheelspin surplus
+const BRAKE_DEADZONE = 0.25; // demand must exceed the cap by this before it reads as a lockup
+const SPIN_DEADZONE = 0.75; // and by this before it reads as wheelspin
+smokeEmitter.lifeScale = 0.25 + 0.25 * puff.intensity; // 1.25–2.5 s of the authored 5 s collisionsmoke life
+{ alpha: 0.45, name: 'prt_collisionsmoke' } // the lane scales the authored alpha envelope (engine-particles.ts)
 ```
 
 Plus the shape of the signal itself: three channels reduced to one "equivalent slide speed" —
-`max(|speedLateral|, min(1, brakeExcess) × |speed|, min(1, spinExcess) × SPIN_TO_SLIDE)` — then a linear
-ramp between the two dials drives both the spawn rate and the particle life.
+`max(|speedLateral|, ramp(brakeExcess) × |speed|, ramp(spinExcess) × SPIN_TO_SLIDE)` where `ramp` is the
+deadzone-to-1 linear map — then a linear ramp between the two dials drives both the spawn rate and the
+particle life.
+
+**Field round 1 (2026-07-28)** produced the deadzones, the halved rate, the shorter life and the alpha
+scale: keyboard pedals are binary, so a full-throttle pull-away in first and an ordinary full-pedal stop
+both demand past the cap — the verdict was "smoke pours constantly while just driving", and the full
+authored alpha stacked per-step bursts into solid white ("is there no alpha channel?"). A demand that
+merely rides the cap is ABS-shaped gripping; only demand well past it reads as slide. The handbrake's
+recorded 1 still maps to full lock through the ramp.
 
 ## What it stands in for
 

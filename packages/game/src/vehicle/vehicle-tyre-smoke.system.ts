@@ -61,13 +61,22 @@ export interface TyreSmokePuff {
 }
 
 /** Defaults of the eye-fit (see the hack doc): grip noise stays silent, a real slide reads immediately. */
-export const TYRE_SMOKE_DEFAULTS: TyreSmokeDials = { rate: 25, slideFull: 12, slideStart: 3 };
+export const TYRE_SMOKE_DEFAULTS: TyreSmokeDials = { rate: 12, slideFull: 12, slideStart: 3 };
 
 /**
- * Equivalent slide speed (m/s) of a wheelspin surplus of 100 % — the one channel with no physical speed
- * to read (Rapier has no tread overspeed), so the surplus ratio buys slide speed at this exchange rate.
+ * Equivalent slide speed (m/s) of a full wheelspin surplus — the one channel with no physical speed to
+ * read (Rapier has no tread overspeed), so the surplus ratio buys slide speed at this exchange rate.
  */
-const SPIN_TO_SLIDE = 8;
+const SPIN_TO_SLIDE = 6;
+
+/**
+ * Demand-over-cap DEADZONES (field round 1, 2026-07-28: "smoke pours constantly while just driving").
+ * Keyboard pedals are binary: a full-throttle pull-away in first and an ordinary full-pedal stop both
+ * demand past the tyre's cap, and a demand that merely RIDES the cap is gripping (ABS-shaped), not
+ * skidding. Only demand well PAST the cap reads as slide; the handbrake's exact 1 still maps to full.
+ */
+const BRAKE_DEADZONE = 0.25;
+const SPIN_DEADZONE = 0.75;
 
 /** More wheels than any SA vehicle carries — the per-wheel state array is sized once. */
 const MAX_WHEELS = 8;
@@ -109,8 +118,8 @@ export class VehicleTyreSmokeSystem implements System {
         continue;
       }
       const slip = slips[index];
-      const locked = Math.min(1, slip?.brakeExcess ?? 0);
-      const spinning = Math.min(1, slip?.spinExcess ?? 0);
+      const locked = Math.min(1, Math.max(0, ((slip?.brakeExcess ?? 0) - BRAKE_DEADZONE) / (1 - BRAKE_DEADZONE)));
+      const spinning = Math.min(1, Math.max(0, ((slip?.spinExcess ?? 0) - SPIN_DEADZONE) / (1 - SPIN_DEADZONE)));
       const slide = Math.max(Math.abs(motion.speedLateral), locked * Math.abs(motion.speed), spinning * SPIN_TO_SLIDE);
       const span = Math.max(0.001, this.dials.slideFull - this.dials.slideStart);
       const intensity = Math.min(1, Math.max(0, (slide - this.dials.slideStart) / span));
