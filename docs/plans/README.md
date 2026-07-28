@@ -11,8 +11,13 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`089`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+`001`–`090`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
 
+- **[090 — A car's cabin at night](./090-vehicle-cabin-at-night/readme.md)** — OPENED 2026-07-28 from a field
+  report: the previon's interior is almost black at dusk. Measured cause — 084's per-vertex SKY occlusion
+  (cabin 0.32–0.69 against 0.90–1.00 on the bodywork) keeps dividing the light after the sky stops being the
+  source. Two steps: `01` relax that factor at night, `02` a dash glow baked into the night set and switched
+  by the car's own headlights, with the cabin found from the model's glass and wheel hubs, never a car list.
 - **[089 — Vehicle particles](./089-vehicle-particles/readme.md)** — OPENED 2026-07-27: tyre smoke
   (`collisionsmoke`) and skid marks (`particleskid`) driven by how hard a wheel actually slides, marks
   darker with the slide and gone 5 REAL seconds later, plus impact smoke. Its foundation is the capability

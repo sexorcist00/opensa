@@ -30,6 +30,7 @@ stays, pointing at the new home).
 | Lever | Axis | Est. win | Status |
 | --- | --- | --- | --- |
 | [Bake vehicle sky-occlusion in opensa-pack](deferred-optimizations/vehicle-ao-baking.md) | spawn hitch | 8–78 ms per model, once per model, spawn path only | in reserve — not needed |
+| [Drop the cabin-glow switch and leave the bake](deferred-optimizations/vehicle-cabin-glow-switch.md) | GPU pass (vehicle fragment) | unmeasured; one compare + one mix per vehicle fragment | in reserve — not needed |
 | [Automatic render-scale / quality-tier ladder](deferred-optimizations/render-scale-tier.md) | GPU pass | 0.4–1.4 ms (measured ceiling), targets 345 → 88 MB | measured and refused |
 | [Per-ring texture laziness](deferred-optimizations/per-ring-texture-laziness.md) | memory | under the ~767 MB world-array floor | in reserve |
 | [One draw per visible vehicle submesh](deferred-optimizations/vehicle-submesh-draw-batching.md) | draw count | unmeasured; the axis the pass floor lives on | in reserve |
