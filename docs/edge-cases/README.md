@@ -7,6 +7,11 @@ fixed bugs does not belong here (a fixed bug's surviving _constraint_ does).
 **Maintenance rule** (also in `CLAUDE.md`): when a new limitation is discovered, add it to the matching
 file; when one is lifted, remove it in the same change.
 
+**Read this folder while DEBUGGING** — it answers "why does it behave like this?". The rules a NEW design has
+to satisfy are next door in [`restrictions/`](../restrictions/README.md), which is read BEFORE an idea,
+concept or plan is written. A fact may appear in both, but only once as detail: the measurement lives here,
+the one-line rule and its blast radius live there.
+
 | File                                             | Scope                                                            |
 | ------------------------------------------------ | ---------------------------------------------------------------- |
 | [sa-formats.md](./sa-formats.md)                 | Strict RenderWare/SA asset-format requirements (DFF/TXD/COL/IMG) |

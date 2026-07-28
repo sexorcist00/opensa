@@ -5,6 +5,11 @@ direction: research + an honest go/no-go *before any code*. It is the second sta
 lifecycle (see [docs/README.md](../README.md)) — an [idea](../ideas/README.md) becomes a concept when we
 start to seriously vet it.
 
+> **Before writing one, check [`docs/restrictions/`](../restrictions/README.md).** It holds the rules a
+> design has to satisfy — layer boundaries, format ceilings, engine splits, what is decided at build time and
+> cannot be re-taken at runtime — and says for each whether a violation is caught or is SILENT. A doc that
+> violates one is not ambitious; it is a doc that gets rewritten after the first build.
+
 Every concept has exactly two exits:
 
 ```

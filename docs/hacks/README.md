@@ -26,6 +26,8 @@ folder is the debt ledger.
 
 - `docs/edge-cases/` — a LIMIT we live with (a format ceiling, a missing feature). A hack is something we
   actively DO; an edge case is something we cannot do.
+- `docs/restrictions/` — a rule a new plan must not violate. A restriction constrains what may be BUILT; a
+  hack is something already built, in place of the honest thing.
 - `docs/performance/` — a lever we chose not to pull, with its price. A hack has already been pulled.
 - `docs/postmortem/` — a direction that DIED. A hack is alive and shipping.
 - Anything measured out of the game's own data. A number read from `handling.cfg`, a rule taken from the
@@ -56,10 +58,20 @@ the number.
 | --- | --- | --- |
 | [Pop-up headlight travel time](popup-travel-time.md) | `game/vehicle/vehicle-rig.ts` | SA's own pop-up animation, which does not exist |
 | [Independent-axle camber gain](independent-camber-gain.md) | `game/vehicle/vehicle-rig.ts` | the original's rule for the `AXLE_*` model flags, absent from the reversed source |
+| [Car-paint reflection](car-paint-reflection.md) | `engine/render/shaders.ts` | an HDR environment, a real ground, and curved normal-mapped panels |
+| [Dynamic-indirect weight](dynamic-indirect-weight.md) | `engine/render/shaders.ts` | the baked prelit + per-instance AO a dynamic model has no data for |
+| [Night-emissive heuristic](night-emissive-heuristic.md) | `engine/render/shaders.ts` | an authored "this is a light source" flag SA never shipped (half-retired by the baked mask) |
+| [Suspension sag bridge](suspension-sag-bridge.md) | `game/physics/physics-world.ts` | solving Rapier's controller equilibrium instead of probing it |
+| [Sky-occlusion despeckle](sky-occlusion-despeckle.md) | `renderware/vehicle/sky-occlusion.ts` | marching against the mesh rather than a height field that reads a wiper as a wall |
+| [Sun-disc angular size](sun-disc-angular-size.md) | `engine/engine.ts` | the original's own sun billboard sizing, never dug out |
 
-Older fitted numbers elsewhere in the tree (the sky-occlusion despeckle slack, the reflection HDR gain, the
-dynamic-indirect weight) are candidates for this list and get written up as they are next touched — this
-folder was opened 2026-07-28 and is not back-filled wholesale.
+**Back-filled 2026-07-28**, sweeping the engine, shaders, physics, converter and tools. What the sweep
+deliberately did NOT open a file for, so the next reader does not go looking: numbers that are **read** from
+the game's data (`handling.cfg` fields, wheel diameters, timecyc columns), numbers with a **stated derivation**
+(the godray decay from measured HDR ranges, the pod angle from a mean normal), and the two 090 entries that
+went out with the code they described — the reflection gate and the dash lamp — which are neither live nor
+retired but withdrawn, and live on in
+[the postmortem](../postmortem/090-vehicle-cabin-at-night.md).
 
 Two entries opened with this folder — the night relax of the sky term, and a car's dash light — went out with
 the code they described when [plan 090 was reverted](../postmortem/090-vehicle-cabin-at-night.md) the same

@@ -5,6 +5,11 @@
 motivation, the approach that would fit our current architecture, the dead-ends already ruled out, and the
 open questions — so when we pick it up we don't re-derive the discussion.
 
+> **Before writing one, check [`docs/restrictions/`](../restrictions/README.md).** It holds the rules a
+> design has to satisfy — layer boundaries, format ceilings, engine splits, what is decided at build time and
+> cannot be re-taken at runtime — and says for each whether a violation is caught or is SILENT. A doc that
+> violates one is not ambitious; it is a doc that gets rewritten after the first build.
+
 An idea is the FIRST stage of the documentation lifecycle (see [docs/README.md](../README.md)):
 
 ```

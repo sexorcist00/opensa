@@ -35,11 +35,17 @@ All of it from `npx tsx scripts/debug/dump-vehicle-materials.ts gostown previon`
   washing red over what is near it in screen space. Unverified.
 - Two of that model's REAR lamps carry the FRONT-lamp marker colour (probably reverse lights marked wrong by
   the author) — cosmetic, listed here so it is not mistaken for an engine bug.
-- **The STATIC light pool is the one light term the car's own occlusion does not gate.** `out.poolDiffuse =
-  localLightStatic(world, normal)` carries no `in.local.w`, where the indirect term beside it does — so a
-  street lamp lights a dashboard as if the roof were not there, while the same cabin has nothing at all where
-  no lamp reaches. Read out of the shader, not measured in a scene: how much it accounts for is exactly the
-  kind of question the in-engine capture above is for.
+- **The STATIC light pool is the one light term the car's own occlusion does not gate — but it is LATENT, not
+  live.** `out.poolDiffuse = localLightStatic(world, normal)` carries no `in.local.w`, where the indirect term
+  beside it does, so a street lamp would light a dashboard as if the roof were not there. It accounts for
+  nothing today: `fillLightPool` has pushed host dynamics ONLY since the 2026-07-17 static-2dfx removal, so
+  `params3.x === params4.x` and `localLightStatic`'s range is empty every frame — a vehicle currently takes
+  nothing at all from the pool. The bug fires the moment static lamps are readmitted (085 row E), with no
+  warning. Read out of the shader, not measured in a scene.
+- **A car cannot be lit by its own lamps, by construction.** The pool is ordered dynamic-first, and the
+  vehicle path (`vsRigid`) reads only the STATIC range while a car's headlights are pushed as DYNAMIC — so
+  "feed the cabin from the headlight source" is not a tuning question but a split that would have to be
+  changed. See [`restrictions/engine-lighting.md`](../restrictions/engine-lighting.md).
 - Whatever a rebaked car shows, it is not the reverted work: the rebaked previon carries only head (127) and
   tail (105) lamp tags — no cabin tag exists in the build, and no cabin code exists in the engine.
 

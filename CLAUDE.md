@@ -125,6 +125,12 @@ Never edit generated code manually.
 
 ## Standing Workflow Rules
 
+- **CHECK `docs/restrictions/` BEFORE writing an idea, a concept or a plan** — it holds the rules a design
+  has to satisfy (layer boundaries, format ceilings, engine splits, what is decided at build time and cannot
+  be re-taken at runtime). A plan that violates one is not ambitious, it is a plan that gets rewritten after
+  the first build. When a new restriction is discovered, it goes there in the SAME change, and every entry
+  must say whether a violation is caught by a test/guard/lint or is SILENT — the silent ones are why the
+  folder exists
 - English only, repo-wide: no Cyrillic in any doc, comment, or committed file — paraphrase field verdicts
   in English (chat language stays whatever the user speaks)
 - Record measured numbers into the plan doc after EVERY phase/step (before/after, representative log lines);
@@ -197,10 +203,15 @@ Keep these in sync with the code — update them in the same change, not later:
   what happens when it is spelled wrong
 - `docs/edge-cases/` — when a new limitation/constraint is discovered, add it to the matching file; when one
   is lifted, remove it. Only CURRENT limitations live there, no legacy
+- `docs/restrictions/` — the rules a NEW design has to satisfy, **read before ideas/concepts/plans are
+  written** (see the Standing Workflow rule above) + a row in `docs/restrictions/README.md`. A fact may also
+  appear in `docs/edge-cases/`, but only ONCE as detail: edge-cases carries the measurement, restrictions
+  carries the one-line rule, a link, and what edge-cases does not say — what breaks when it is violated and
+  whether anything CATCHES you
 - `docs/hacks/` — one file per expedient we knowingly took (see the Standing Workflow rule above), plus a row
   in `docs/hacks/README.md`; a replaced hack MOVES to `docs/hacks/retired/` with what replaced it. Distinct
-  from its neighbours: an edge case is what we CANNOT do, a performance lever is what we chose NOT to do, a
-  hack is what we DID instead of the honest thing
+  from its neighbours: an edge case is what we CANNOT do, a restriction is what we MAY NOT design against, a
+  performance lever is what we chose NOT to do, a hack is what we DID instead of the honest thing
 - `docs/performance/` — when a change picks the RUNTIME path over a precomputed/baked one, or takes any
   deliberate cost for correctness, simplicity or moddability, record the alternative here in the same change:
   what it would save, what it would cost, what would have to be true to pull it. This is the plan-B list read

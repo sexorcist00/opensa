@@ -16,7 +16,7 @@ change, with what it would save, what it would cost, and what would have to be t
 An entry is not a plan and not a promise. It is a lever with a measured price, so the decision at 30 fps is
 a lookup rather than a redesign.
 
-Distinct from the neighbouring rubrics:
+Distinct from the neighbouring rubrics (a restriction is what a design MAY NOT do — [`../restrictions/`](../restrictions/README.md)):
 
 - `docs/benchmarks/*` — measured runs, the evidence any of this would be judged against.
 - `docs/improvements/*` — nice-to-have enhancements, parked; about features, not about cost.

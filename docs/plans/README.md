@@ -5,6 +5,11 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 **offline tools** keep their own `docs/plans/` next to their code. Open questions and parked ideas live in
 [`../open-issues/`](../open-issues/) and [`../ideas/`](../ideas/).
 
+> **Before writing one, check [`docs/restrictions/`](../restrictions/README.md).** It holds the rules a
+> design has to satisfy — layer boundaries, format ceilings, engine splits, what is decided at build time and
+> cannot be re-taken at runtime — and says for each whether a violation is caught or is SILENT. A doc that
+> violates one is not ambitious; it is a doc that gets rewritten after the first build.
+
 > The [Nx monorepo migration (plan 057)](./057-nx-monorepo-migration/readme.md) will move each tool's `docs/` under
 > `tools/<name>/docs/` — update the links below when it lands.
 

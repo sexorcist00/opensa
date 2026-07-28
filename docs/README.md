@@ -31,6 +31,10 @@ Read it as a set of rules:
   individually-implementable steps, each ending with verification + measured numbers).
 - **We know what to do but want it in a later version** → [`docs/roadmap/`](./roadmap/) (e.g. `0.5.0/`, `0.6.0/`
   — scheduled cycles, same plan-chain shape as `docs/plans/`, just not this version).
+- **Before ANY of the three above are written** → check [`docs/restrictions/`](./restrictions/README.md).
+  It holds the rules a design has to satisfy — layer boundaries, format ceilings, engine splits, decisions
+  taken at build time that cannot be re-taken at runtime — and says for each whether a violation is caught by
+  a test/guard/lint or is SILENT. A new restriction is recorded there in the SAME change that finds it.
 - **A change alters the architecture** → add/adjust notes (and the diagram) in
   [`docs/architecture/`](./architecture/README.md) in the SAME change.
 - **A NAME starts carrying behaviour** (a file the pipeline looks for, a frame/material the converter reads,
@@ -57,7 +61,8 @@ Read it as a set of rules:
 | [`architecture/`](./architecture/README.md) | Module/flow/format docs + rendered mermaid diagrams. |
 | [`features/`](./features/README.md) | Per-feature state (one file per feature). |
 | [`contracts/`](./contracts/) | Names that carry behaviour (files, frames, materials, data rows). |
-| [`edge-cases/`](./edge-cases/README.md) | CURRENT limitations/constraints only, no legacy. |
+| [`edge-cases/`](./edge-cases/README.md) | CURRENT limitations/constraints only, no legacy. Read while DEBUGGING. |
+| [`restrictions/`](./restrictions/README.md) | Rules a new design must satisfy. Read BEFORE an idea/concept/plan. |
 | [`hacks/`](./hacks/README.md) | Expedients we knowingly took: fitted constants, stand-in rules, faked effects. Replaced ones move to [`hacks/retired/`](./hacks/retired/). |
 | [`performance/`](./performance/) | Deferred-optimization levers (a price tag, not a plan). |
 | [`benchmarks/`](./benchmarks/) | Every reported perf figure, recorded before it is analysed. |
