@@ -43,6 +43,7 @@ export type PipelineId =
   | 'probe-view'
   | 'rigid-blend'
   | 'rigid-opaque'
+  | 'skid'
   | 'sky'
   | 'water'
   | 'world-additive-double'
@@ -88,6 +89,8 @@ export interface PipelineSet {
   probeViewLayout: GPUBindGroupLayout;
   /** group(1) of the rigid-entity pipelines: part matrices + texture ARRAY + sampler (074/08 B2). */
   rigidLayout: GPUBindGroupLayout;
+  /** group(1) of the skid-mark pipeline (089/03): the particleskid texture + sampler. */
+  skidLayout: GPUBindGroupLayout;
   /** group(1) of the water pipeline: the ripple texture + sampler (074/06 row 12 v1). */
   waterLayout: GPUBindGroupLayout;
 }
@@ -416,6 +419,43 @@ export function compileAll(
     );
   }
 
+  // Skid-mark decals (089/03): ground ribbon quads over the finished opaque world — premultiplied, depth
+  // READ only (the road occludes them normally, they never occlude anything), no cull (a mark must read
+  // from a low chase camera whatever the winding the ribbon's turn produced).
+  const skidLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, texture: {}, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 1, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+    ],
+    label: 'skid',
+  });
+  const skidModule = device.createShaderModule({ code: resolveShader('skid'), label: 'skid' });
+  pipelines.set(
+    'skid',
+    device.createRenderPipeline({
+      depthStencil: { depthCompare: 'greater', depthWriteEnabled: false, format: depthFormat },
+      fragment: { entryPoint: 'fsSkid', module: skidModule, targets: [{ blend: premultBlend, format: colorFormat }] },
+      label: 'skid',
+      layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, skidLayout], label: 'skid' }),
+      multisample: { count: MSAA_SAMPLES },
+      primitive: { cullMode: 'none', topology: 'triangle-list' },
+      vertex: {
+        buffers: [
+          {
+            arrayStride: 28,
+            attributes: [
+              { format: 'float32x3', offset: 0, shaderLocation: 0 }, // position
+              { format: 'float32x2', offset: 12, shaderLocation: 1 }, // uv
+              { format: 'float32x2', offset: 20, shaderLocation: 2 }, // alpha, birth
+            ],
+          },
+        ],
+        entryPoint: 'vsSkid',
+        module: skidModule,
+      },
+    }),
+  );
+
   // Prop debris (B7·a): one draw per break. Every vertex carries its shard's whole flight, so the pass is
   // pure geometry + a 16-byte uniform; the shards are alpha-blended and write no depth (they overlap).
   const debrisLayout = device.createBindGroupLayout({
@@ -688,6 +728,7 @@ export function compileAll(
     probeMipLayout,
     probeViewLayout,
     rigidLayout,
+    skidLayout,
     waterLayout,
   };
 }

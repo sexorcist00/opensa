@@ -32,6 +32,7 @@ import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.syste
 import { resolvePlate } from '@opensa/game/vehicle/vehicle-plates';
 import { VehicleRig } from '@opensa/game/vehicle/vehicle-rig';
 import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
+import { VehicleSkidMarkSystem } from '@opensa/game/vehicle/vehicle-skid-marks.system';
 import { planarMotion, type PlanarMotion, VehicleTelemetry } from '@opensa/game/vehicle/vehicle-telemetry';
 import {
   TYRE_SMOKE_DEFAULTS,
@@ -287,6 +288,27 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     () => config.graphics.effects.enabled,
   );
 
+  // Skid marks (plan 089/03): the same slide signal, laid down as decal-ribbon segments. The sink converts
+  // each corner to engine space; the engine's ring recycles the oldest mark when full and fades on the
+  // WALL clock (the brief's 5 real seconds).
+  const skidMarks = new VehicleSkidMarkSystem(
+    () => (enterVehicle.isSeated() ? enterVehicle.getActive() : null),
+    physics,
+    (segment): void => {
+      engine.addSkidSegment({
+        alpha0: segment.alpha0,
+        alpha1: segment.alpha1,
+        l0: gtaPositionToEngine(segment.left0),
+        l1: gtaPositionToEngine(segment.left1),
+        r0: gtaPositionToEngine(segment.right0),
+        r1: gtaPositionToEngine(segment.right1),
+        v0: segment.v0,
+        v1: segment.v1,
+      });
+    },
+    () => config.graphics.effects.enabled,
+  );
+
   /**
    * One uploaded engine model per car TYPE — instances share geometry, textures and the pipeline. LRU-BOUNDED
    * (074/21 follow-up, pre-flip fix): types accumulated forever (+950 MB of texture arrays over one bench
@@ -531,8 +553,9 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       enterVehicle.fixedUpdate(step);
       // Telemetry LAST: it records the step as it ended, including the controls `drive()` just applied.
       stepTelemetry(step);
-      // Smoke after the snapshot for the same reason: it reads the wheel state this step produced.
+      // Smoke and marks after the snapshot for the same reason: they read the wheel state this step produced.
       tyreSmoke.fixedUpdate(step);
+      skidMarks.fixedUpdate();
     },
     impactForce(): number {
       const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;

@@ -93,6 +93,20 @@ export function loadCoronaSprites(fs: AssetFileSystem): CoronaSprites | undefine
   return { height, layers: 2, rgba, width };
 }
 
+/**
+ * SA's skid-mark decal sprite from `particle.txd` (089/03) — white with the tread pattern in the alpha
+ * channel; the engine's skid shader applies the dark rubber tint. Undefined when the profile ships no
+ * particle.txd (the marks are then simply absent, like the coronas' fallback).
+ */
+export function loadSkidSprite(fs: AssetFileSystem): undefined | { height: number; rgba: Uint8Array; width: number } {
+  const bytes = fs.get('models/particle.txd');
+  if (!bytes) {
+    return undefined;
+  }
+
+  return decodeSprites(bytes).get('particleskid');
+}
+
 export function setupEngineParticles(engine: Engine, fs: AssetFileSystem): EngineParticles | null {
   const fxpText = fs.getText('models/effects.fxp');
   const txdBytes = fs.get('models/effectspc.txd') ?? fs.get('models/effectsPC.txd');

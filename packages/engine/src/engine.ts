@@ -32,6 +32,7 @@ import {
   SCENE_FORMAT,
 } from './render/pipelines';
 import { EnvProbe, PROBE_RANGE } from './render/probe';
+import { SkidMarks, type SkidSegment } from './render/skid-marks';
 import { buildSkyLut, SKY_LUT_HEIGHT, SKY_LUT_WIDTH, skyLutKey } from './render/sky-lut';
 import { type CellHandle, CellStore } from './world/cells';
 import { TextureArrays } from './world/textures';
@@ -733,6 +734,8 @@ export class Engine {
   /** Scene targets (msaa colour + resolve + depth) with byte estimates — destroyed on rebuild: the
    *  renderScale knob rebuilds targets LIVE, so leaking a 4×MSAA target per change is real. */
   private readonly sceneTargets: { bytes: number; texture: GPUTexture }[] = [];
+  /** Skid-mark decal lane (089/03) — null until a host installs the particleskid sprite. */
+  private skidMarks: null | SkidMarks = null;
   private skyLutCurrentKey = '';
   private skyLutTexture!: GPUTexture;
   private readonly startedMs = performance.now();
@@ -777,6 +780,17 @@ export class Engine {
    * rendering, without touching the draw's instance count. Returns false when the key is unknown (its cell
    * streamed out, or it was already broken). The host removes the collider and spawns debris alongside.
    */
+  /**
+   * Lay one skid-mark segment NOW (089/03), engine space, corners pre-lifted off the road. Dropped when no
+   * lane is installed or the effects gate is off; the ring recycles the oldest mark when full.
+   */
+  addSkidSegment(segment: SkidSegment): void {
+    if (!this.skidMarks || !this.particlesEnabled) {
+      return;
+    }
+    this.skidMarks.add(segment, (performance.now() - this.startedMs) / 1000);
+  }
+
   breakClutterInstance(keyHash: number): boolean {
     const entry = this.clutterBreakables.get(keyHash);
     if (!entry) {
@@ -1200,6 +1214,10 @@ export class Engine {
     // Water v1 (074/06 row 12): after the sky (fresnel reflects the finished dome direction-wise), before
     // the blends (foliage/glass then sort over the surface); depth READ hides it under land.
     draws += this.drawWater(pass);
+    // Skid marks (089/03): ground decals over the finished opaque world, BEFORE the blends — foliage and
+    // glass sort over a mark exactly as they sort over the road it lies on. No new pass (the plan's
+    // alpha-sorting risk): this is a draw inside the phase that already exists.
+    draws += this.drawSkidMarks(pass, seconds);
     if (blendBundles.length > 0) {
       pass.executeBundles(blendBundles);
     }
@@ -1439,6 +1457,12 @@ export class Engine {
     this.dynamicParticles = new DynamicParticles(this.device, this.resources, this.pipelines.particleLayout, library);
   }
 
+  /** Install (replacing) the skid-mark decal lane (089/03): SA's particleskid sprite, once at boot. */
+  initSkidMarks(sprite: { height: number; rgba: Uint8Array; width: number }): void {
+    this.removeSkidMarks();
+    this.skidMarks = new SkidMarks(this.device, this.resources, this.pipelines.skidLayout, sprite);
+  }
+
   /** Residency ledger passthrough (HUD + leak assertions). */
   ledger(): ReturnType<Resources['ledger']> {
     return this.resources.ledger();
@@ -1489,6 +1513,11 @@ export class Engine {
     }
     this.pedTextures = [];
     this.ped = null;
+  }
+
+  removeSkidMarks(): void {
+    this.skidMarks?.destroy();
+    this.skidMarks = null;
   }
 
   /**
@@ -2458,6 +2487,17 @@ export class Engine {
   /** One model's live instances. Binds the shared geometry once, then draws each visible submesh per car.
    *  The TRANSLUCENT phase draws back-to-front by each submesh's part-transformed centroid (074/16 round 6 —
    *  unsorted, the steering wheel drew OVER the windscreen whenever it followed it in model order). */
+  /** The skid-mark decal lane (089/03): prune on the wall clock, draw the live ring window. */
+  private drawSkidMarks(pass: GPURenderPassEncoder, now: number): number {
+    if (!this.skidMarks || !this.particlesEnabled) {
+      return 0;
+    }
+    const draws = this.skidMarks.draw(pass, this.pipelines.get('skid'), this.frameBindGroup, now);
+    this.frameTriangles += 2 * this.skidMarks.ring.count;
+
+    return draws;
+  }
+
   private drawVehicleModel(pass: GPURenderPassEncoder, model: VehicleModel, translucent: boolean, eye: Vec3): number {
     let draws = 0;
     let bound = false;

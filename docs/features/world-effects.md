@@ -47,7 +47,9 @@ columns, steam vents, fountains — 113 entries across the shipped map, each nam
   DYNAMIC one-shot lane exists (`Engine.spawnParticle` + `createEmitter` in `engine-particles.ts`): pooled
   CPU spawns at runtime points, real rate accumulation / caller-driven `burst(count)`, same shader with an
   age-clamping `oneShot` pipeline override. Its systems are a boot-time list (`DYNAMIC_SYSTEMS`) — the
-  lane's atlas cannot grow after install.
+  lane's atlas cannot grow after install. 089/03 added the engine's first DECAL lane beside it
+  (`Engine.initSkidMarks`/`addSkidSegment`): ground ribbon quads in a world-wide ring, fading on the wall
+  clock — today's only writer is the vehicle skid marks.
 - **Escalators (REVISIT)** — not rendered at all since the three teardown. When redone, also settle
   the old open item: no step colliders, so the player can't ride them (vanilla carries standing
   entities with the step). Likely shape: static ramp collider on the incline (check the host COL

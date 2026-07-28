@@ -40,6 +40,7 @@ export { quatMultiply, RigidEntity, type RigidPartInit } from './entities/rigid'
 export { DYNAMIC_PARTICLE_CAP, type DynamicParticleLibrary } from './render/dynamic-particles';
 export { compileAll, MSAA_SAMPLES, type PipelineId, pipelineIdFor, type PipelineSet } from './render/pipelines';
 export { assertGuardrails, resolveShader, shaderModuleNames } from './render/shaders';
+export { SKID_LIFE_SECONDS, SKID_SEGMENT_CAP, type SkidSegment } from './render/skid-marks';
 export { type LocalPakSource, type PakSource, setupStreaming, type StreamSetup } from './stream/setup';
 export { StreamingDriver, type StreamingRadii, type StreamStats } from './stream/streaming';
 export { type CellHandle, CellStore } from './world/cells';

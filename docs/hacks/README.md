@@ -65,6 +65,7 @@ the number.
 | [Sky-occlusion despeckle](sky-occlusion-despeckle.md) | `renderware/vehicle/sky-occlusion.ts` | marching against the mesh rather than a height field that reads a wiper as a wall |
 | [Sun-disc angular size](sun-disc-angular-size.md) | `engine/engine.ts` | the original's own sun billboard sizing, never dug out |
 | [Tyre-smoke intensity fit](tyre-smoke-intensity-fit.md) | `game/vehicle/vehicle-tyre-smoke.system.ts` | `CFx::AddWheel*` parameters — stubs in gta-reversed, nothing to port |
+| [Skid-mark look fit](skid-mark-look-fit.md) | `game/vehicle/vehicle-skid-marks.system.ts` | SA's `CSkidmarks` width/opacity constants, same unrecoverable code paths |
 
 **Back-filled 2026-07-28**, sweeping the engine, shaders, physics, converter and tools. What the sweep
 deliberately did NOT open a file for, so the next reader does not go looking: numbers that are **read** from
