@@ -33,7 +33,14 @@ const TAG = process.env.TAG ?? '[bench]';
   console.log(`goto ${APP_URL}`);
   await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
   // http-dir loads straight from ?src — click the game and wait; no "Choose game folder" step.
+  // WAIT for the button first: `domcontentloaded` fires before React has rendered the menu, so an
+  // immediate `count()` reads 0, the click is silently skipped and the run then times out on a canvas
+  // that was never asked for.
   const runButton = page.getByText('RUN SAN ANDREAS', { exact: false });
+  await runButton
+    .first()
+    .waitFor({ state: 'visible', timeout: 30000 })
+    .catch(() => console.log('run button never appeared'));
   if (await runButton.count()) {
     await runButton.first().click();
   }

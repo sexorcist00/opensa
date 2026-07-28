@@ -1,3 +1,7 @@
+// The deep path, not the package index: this is the game layer's first RUNTIME import of the engine (the
+// others are type-only), and the index would drag the whole renderer — shaders included — into its tests.
+import { frameSpans } from '@opensa/engine/debug/frame-spans';
+
 import type { System } from '../core/system';
 import type { Config } from '../interfaces/config.interface';
 import type { Vec3, WorldAdapter } from '../interfaces/world-adapter.interface';
@@ -167,18 +171,22 @@ export class CollisionStreamingSystem implements System {
       .then((models) => {
         this.loading.delete(key);
         if (this.current.has(key) && !this.loaded.has(key)) {
-          this.loaded.set(
-            key,
-            this.physics.createStaticColliders(models, (instanceKey, handle) => {
-              this.breakable.set(instanceKey, { cellKey: key, handle });
-              this.breakableByHandle.set(handle, instanceKey);
-            }),
-          );
-          for (const model of models) {
-            model.instanceKeys?.forEach((instanceKey, index) => {
-              this.breakableTransforms.set(instanceKey, [...model.transforms[index].elements]);
-            });
-          }
+          // A cell's colliders are built in this continuation — BETWEEN frames, where no loop timer reaches.
+          // It reports itself so the frame that paid gets the number (plan 091 phase 2).
+          frameSpans.measure('cell-collision-bodies', () => {
+            this.loaded.set(
+              key,
+              this.physics.createStaticColliders(models, (instanceKey, handle) => {
+                this.breakable.set(instanceKey, { cellKey: key, handle });
+                this.breakableByHandle.set(handle, instanceKey);
+              }),
+            );
+            for (const model of models) {
+              model.instanceKeys?.forEach((instanceKey, index) => {
+                this.breakableTransforms.set(instanceKey, [...model.transforms[index].elements]);
+              });
+            }
+          });
         }
       })
       .catch(() => this.loading.delete(key));

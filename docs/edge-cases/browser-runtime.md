@@ -20,6 +20,19 @@
   the model is silently absent in the browser (`getClump` returns empty, nothing renders) while offline Node
   probes, which read the whole archive, work fine.
 
+## A frame's length includes work no in-loop timer can reach (2026-07-28, plan 091)
+
+`dt` is wall-clock between the STARTS of consecutive rAF callbacks, so a frame's measured length covers
+everything the browser did after the previous loop returned: promise continuations, worker `onmessage`
+handlers, upload callbacks, GC. **No timer placed inside the loop body spans that region** — it is outside
+the region any of them covers — and it is where a resolved vehicle spawn or a cell's collider build is paid.
+
+The consequence for anything that measures a frame: the CPU blocks a loop times can sum to 5 ms on a 250 ms
+frame and still be a complete account of the loop. The half that is missing is named by the frame-span
+recorder (`packages/engine/src/debug/frame-spans.ts`), which async work reports itself into and the loop
+drains at the top of the next frame — measured on 2026-07-28: a 250 ms boot frame whose `other` residual was
+223.6 ms, of which the loop could see nothing at all.
+
 ## Rapier queries: two traps that cost a session each (2026-07-27, plan 081/10)
 
 - **A ray sees NOTHING until the world has stepped once.** The query pipeline is built inside

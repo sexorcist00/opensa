@@ -45,6 +45,20 @@ must not be "unified" with this one.
 
 **Caught:** no — nothing compares the four. The symptom is missing geometry in the field.
 
+## A frame-time span may only wrap synchronous work that runs BETWEEN frames
+
+The recorder is `packages/engine/src/debug/frame-spans.ts` (`type:engine`, so the app, the game layer and the
+engine may all report into it). Two rules bound what may open a span:
+
+- **Synchronous segments only.** Timing across an `await` measures the wait too, and two overlapping waits
+  each claim the same milliseconds — the totals then exceed the gap they are attributed to.
+- **Never wrap work the frame loop already times.** The loop subtracts both its own block timers and the
+  drained spans from `dt`; a span inside a timed block is subtracted twice.
+
+**Caught:** no. Both failures produce a plausible-looking breakdown — a negative or shrinking `unattributed`
+rather than an error. The check is structural: a span belongs in a promise continuation, a worker handler or
+a callback, never in the loop body. Detail + the measured shape: [`edge-cases/browser-runtime.md`](../edge-cases/browser-runtime.md).
+
 ## A field run reads the built game dir and nothing else
 
 `build/<game>/opensa` — its `data/` included. The built `data/*` is the MERGED result with mods installed and

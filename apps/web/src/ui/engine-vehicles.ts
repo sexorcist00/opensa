@@ -20,7 +20,7 @@ import type { SpawnedVehicle, VehiclePlacement } from '@opensa/game/vehicle/vehi
 import type { PlatePlacement } from '@opensa/game/vehicle/vehicle-plates';
 import type { CityBox } from '@opensa/game/zones/city';
 
-import { PLATE_CAPACITY } from '@opensa/engine';
+import { frameSpans, PLATE_CAPACITY } from '@opensa/engine';
 import { EngineVehicleHandle, gtaPositionToEngine } from '@opensa/game/adapters/engine-vehicle-handle';
 import { EnterVehicleSystem } from '@opensa/game/vehicle/enter-vehicle.system';
 import { composePlateText, plateBackgroundIndex } from '@opensa/game/vehicle/plate-raster';
@@ -292,7 +292,10 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       data,
       // The adapter hands over an already engine-ready model — both the optimized (`.osm`/`.ostex`) and the
       // unoptimized (DFF/TXD) path converge on it, so nothing here needs to know which one ran.
-      id: engine.createVehicleModel(data.model),
+      //
+      // This runs in a promise continuation, BETWEEN frames, so no timer the loop keeps can see it — it
+      // reports itself instead (plan 091 phase 2), and the next frame is charged for it.
+      id: frameSpans.measure(`vehicle-model:${name}`, () => engine.createVehicleModel(data.model)),
       instances: 0,
       lastUsed: performance.now(),
       textureBytes: textureBytesOf(data.model.textures),
@@ -345,6 +348,10 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     };
     try {
       const paint = await adapter.vehiclePaint(model, placement.colour); // the model is shared; the paint is not
+      // From here down the spawn is synchronous, and it runs between frames like the build above — so it
+      // times itself (plan 091 phase 2). A spawn that THROWS is not attributed; that path is rare and it
+      // already names itself in the console.
+      const spawnStarted = performance.now();
 
       let position: Vec3 = placement.position;
       let pitch = 0;
@@ -428,6 +435,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       vehiclePhysics.add(vehicle);
       enterVehicle.add(vehicle);
       vehicleDamage.add({ body, handle });
+      frameSpans.add(`vehicle-spawn:${model}`, performance.now() - spawnStarted);
 
       return {
         despawn: (): void => {

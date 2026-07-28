@@ -11,6 +11,7 @@ export {
   type Vec3,
 } from './core/math';
 export { type ResidencyCategory, Resources } from './core/resources';
+export { formatFrameSpans, FrameSpans, frameSpans, type FrameSpanTotals } from './debug/frame-spans';
 export { GpuTimers } from './debug/gpu-timers';
 export {
   type CameraState,

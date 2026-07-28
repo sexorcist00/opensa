@@ -1,5 +1,7 @@
 import type { parsePedDefs } from '@opensa/renderware';
 
+// The deep path rather than the package index — see the note in streaming/collision-streaming.system.ts.
+import { frameSpans } from '@opensa/engine/debug/frame-spans';
 // game/adapters/** (and game/mods/**) are the only places allowed to import renderware.
 import { Matrix4 } from '@opensa/math';
 import {
@@ -349,7 +351,9 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     if (!osm) {
       throw new Error(`No converted model for '${name}' — '${name}.osm' is missing from this build`);
     }
-    const vehicle = readVehicleOsm(name, new Uint8Array(osm));
+    // Everything past the await runs between frames (plan 091 phase 2) — the section read and the parse
+    // report themselves, or a spawn's cost shows up only as the frame that got longer.
+    const vehicle = frameSpans.measure(`vehicle-osm:${name}`, () => readVehicleOsm(name, new Uint8Array(osm)));
 
     return {
       colliders: vehicle.colliders,
@@ -403,6 +407,8 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     const key = `${cx},${cy}`;
     let colliders = this.colliderCache.get(key);
     if (!colliders) {
+      // A cache miss parses the cell's COLs here, in a continuation the frame loop cannot time (plan 091).
+      const readStarted = performance.now();
       const index = buildCollisionIndex(this.fs);
       const archive = this.fs;
       const breakableModels = this.breakableModels;
@@ -432,6 +438,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
         );
       }
       this.colliderCache.set(key, colliders);
+      frameSpans.add('cell-collision-read', performance.now() - readStarted);
     }
 
     return colliders;

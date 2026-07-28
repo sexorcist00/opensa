@@ -18,14 +18,17 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
 `001`–`091`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
 
-- **[091 — Frame-time attribution](./091-frame-time-attribution/readme.md)** — AUTHORED 2026-07-28, unstarted:
-  give the `[slow]` line's `other` bucket a name. It is a RESIDUAL, not a measurement, and it holds two
-  different things — untimed in-loop work, and everything the browser did BETWEEN frames (GC, worker
-  `onmessage`, promise continuations). **No in-loop timer can see the second**, which is where a resolved
-  spawn is paid, so the plan is in-loop groups first and a named-span recorder for out-of-loop work second.
-  Its old suspect (`vehicle-model-builder`) was deleted with the runtime DFF fallback, for correctness rather
-  than measurement — so the 19–225 ms spikes may or may not remain, and nothing has ever been measured.
-  **Phase 3 decides whether there is anything to fix, with numbers in hand; the fix is not pre-written.**
+- **[091 — Frame-time attribution](./091-frame-time-attribution/readme.md)** — SHIPPED 2026-07-28, all three
+  phases, no fix written. The `[slow]` line's `other` was a RESIDUAL holding two different things: untimed
+  in-loop work, and everything the browser did BETWEEN frames — which **no in-loop timer can see**, and where
+  a resolved spawn is paid. Phase 1 timed the four remaining in-loop groups (all ≤0.2 ms) and fixed two
+  defects in the line itself: it mixed two intervals (a 25.1 ms block inside a 21.6 ms frame, residual −7.2)
+  and it printed the 250 ms `dt` CLAMP, so the worst frame in the record read 250.0 when it was **576.1**.
+  Phase 2 added a frame-span recorder (`packages/engine/src/debug/frame-spans.ts`) that between-frame work
+  reports itself into. **Result: the spikes survived the `vehicle-model-builder` deletion, and the
+  gameplay-relevant cost is per NEW car type — `.osm` parse worst 20.5 ms (`bus`) + GPU upload worst 18.2 ms
+  (`tahoma`), ~25 ms in one frame; `unattributed` still holds 40–55 % of a spike and is GC-shaped.** Phase 3
+  names the levers and waits on a field verdict.
 - **[089 — Vehicle particles](./089-vehicle-particles/readme.md)** — OPENED 2026-07-27: tyre smoke
   (`collisionsmoke`) and skid marks (`particleskid`) driven by how hard a wheel actually slides, marks
   darker with the slide and gone 5 REAL seconds later, plus impact smoke. Its foundation is the capability

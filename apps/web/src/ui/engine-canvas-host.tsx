@@ -14,6 +14,9 @@ import type { ReactElement } from 'react';
 import {
   type DebugLineSetId,
   Engine,
+  formatFrameSpans,
+  frameSpans,
+  type FrameSpanTotals,
   type LocalPakSource,
   type PakSource,
   setupStreaming,
@@ -144,6 +147,28 @@ interface CamWatch {
   mode: string;
   target: [number, number, number] | null;
   yaw: number;
+}
+
+/** One frame BODY's block timers plus the engine stats it produced — the snapshot the slow-frame line
+ *  describes (see `past` in the loop: the interval `dt` measured ended before this frame's body ran). */
+interface FrameBlocks {
+  anim: number;
+  camera: number;
+  cars: number;
+  collision: number;
+  controller: number;
+  fixed: number;
+  paused: number;
+  ped: number;
+  physics: number;
+  pose: number;
+  props: number;
+  render: number;
+  stats: ReturnType<Engine['frame']>;
+  steps: number;
+  stream: number;
+  vehicles: number;
+  world: number;
 }
 
 export function EngineCanvasHost({
@@ -1096,6 +1121,16 @@ async function boot(
   let streamMs = 0;
   let cameraMs = 0;
   let renderMs = 0;
+  /**
+   * The four blocks the loop still ran untimed (plan 091 phase 1) — `props` (felled props following their
+   * bodies), `world` (weather/environment/zones/city/the time emit), `pose` (the view + the render-pose lerp)
+   * and `paused` (the pause housekeeping). Expected to be small; they exist so `other` can mean exactly ONE
+   * thing — the time between frames — instead of "either that, or something in here nobody timed".
+   */
+  let propsMs = 0;
+  let worldMs = 0;
+  let poseMs = 0;
+  let pausedMs = 0;
   // In-game bench state (074/10 B3 tail): the loop consumes these; the runner below owns them.
   let benchCamera: null | { eye: [number, number, number]; target: [number, number, number] } = null;
   let benchSamples: LegSample[] | null = null;
@@ -1270,12 +1305,47 @@ async function boot(
 
   const loop = (): void => {
     const now = performance.now();
-    const dt = Math.min(0.25, (now - previous) / 1000);
+    /** The interval that actually elapsed, before the simulation clamp — what the breakdown must add up to:
+     *  a 400 ms hitch reported as 250 would hide 150 ms of it in a residual that looks merely large. */
+    const elapsedMs = now - previous;
+    const dt = Math.min(0.25, elapsedMs / 1000);
     previous = now;
     frames.push(dt * 1000);
     if (frames.length > 120) {
       frames.shift();
     }
+    // Everything that ran BETWEEN the last frame and this one and timed itself (plan 091 phase 2): a resolved
+    // vehicle spawn, a cell's colliders. Drained here because `dt` measures rAF-start to rAF-start, so this
+    // frame is the one that PAID for it — no in-loop timer can span that gap.
+    const spans = frameSpans.drain();
+    /**
+     * The interval `dt` measures ENDED at this frame's start, so it is the PREVIOUS frame's body plus the gap
+     * after it — and the block timers still hold that body's numbers here, before this frame overwrites them.
+     * The slow-frame breakdown below is built from this snapshot, from the spans drained above (that gap's own
+     * work) and from this frame's blob time (the worker handler ran in that same gap).
+     *
+     * Charging `dt` for THIS frame's body instead is what once printed a 25.1 ms stream block inside a 21.6 ms
+     * frame — and a negative residual with it (plan 091 phase 1).
+     */
+    const past = {
+      anim: animMs,
+      camera: cameraMs,
+      cars: vehicleFixedMs,
+      collision: collisionMs,
+      controller: controllerMs,
+      fixed: fixedMs,
+      paused: pausedMs,
+      ped: pedMs,
+      physics: physicsMs,
+      pose: poseMs,
+      props: propsMs,
+      render: renderMs,
+      stats: lastStats,
+      steps: fixedSteps,
+      stream: streamMs,
+      vehicles: vehiclesMs,
+      world: worldMs,
+    };
 
     if (!hostState.paused) {
       const fixedStarted = performance.now();
@@ -1288,13 +1358,16 @@ async function boot(
       updateClutter();
       collisionMs = performance.now() - collisionStarted;
       // Felled props follow their physics bodies (B7·a) — after the step, like every other body-driven visual.
+      const propsStarted = performance.now();
       props.update();
+      propsMs = performance.now() - propsStarted;
       const animStarted = performance.now();
       animObjects.update(animStarted / 1000, [Transform.x[playerEid], Transform.y[playerEid], Transform.z[playerEid]]);
       animMs = performance.now() - animStarted;
       const vehiclesStarted = performance.now();
       tickVehicles(dt, renderAlpha);
       vehiclesMs = performance.now() - vehiclesStarted;
+      const worldStarted = performance.now();
       const previousHour = hour;
       hour = (hour + dt / (config.time.secondsPerGameMinute * 60)) % 24;
       if (hour < previousHour) {
@@ -1310,10 +1383,14 @@ async function boot(
         lastMinutes = minutesNow();
         events.emit('time', { minutes: lastMinutes });
       }
+      worldMs = performance.now() - worldStarted;
     } else {
+      const pausedStarted = performance.now();
       onPaused();
+      pausedMs = performance.now() - pausedStarted;
     }
 
+    const poseStarted = performance.now();
     const gta = viewOf();
     const seatedCar = vehicles?.activeVehicle() ?? null;
     // Pose follows the RIDING car (climb-in included); the camera follows only the SEATED one.
@@ -1327,6 +1404,7 @@ async function boot(
       lerp(prevPlayerGta[2], curPlayerGta[2], renderAlpha),
     ];
     const playerEngine = toEngine(renderGta);
+    poseMs = performance.now() - poseStarted;
     if (!hostState.paused) {
       const pedStarted = performance.now();
       posePlayer(gta, playerEngine, ridingCar, dt);
@@ -1415,21 +1493,19 @@ async function boot(
     renderMs = performance.now() - renderStarted;
     lastStats = stats;
     // B7·b field stall: the CPU breakdown of the frames that actually hitch — a stall must arrive as a NUMBER,
-    // not a theory. Quiet on a healthy frame. (The timings are last frame's; the stall is what matters.)
-    if (perfLogs && dt * 1000 > SLOW_FRAME_MS) {
-      // What the frame did NOT spend in any block this loop times. It used to be most of a slow frame's
-      // length with nothing to name it (2026-07-27 field report), so it is printed rather than left implied.
-      const other =
-        dt * 1000 -
-        (fixedMs + collisionMs + animMs + vehiclesMs + pedMs + streamMs + cameraMs + renderMs + streamStats.blobMs);
+    // not a theory. Quiet on a healthy frame. Everything below describes the interval `dt` measured: the
+    // PREVIOUS frame's body (the `past` snapshot) plus the gap after it (the spans, the blob handler, GC).
+    if (perfLogs && elapsedMs > SLOW_FRAME_MS && past.stats !== null) {
       // eslint-disable-next-line no-console
       console.log(
-        `[slow] frame ${(dt * 1000).toFixed(1)} · gpu ${stats.gpuPassMs.toFixed(2)} · post ${stats.gpuPostMs.toFixed(2)} · probe ${stats.gpuProbeMs.toFixed(2)} · ` +
-          `render ${renderMs.toFixed(1)} (submit ${stats.submitMs.toFixed(2)}) · stream ${streamMs.toFixed(1)} (blob ${streamStats.blobMs.toFixed(1)} worst ${streamStats.worstBlobMs.toFixed(1)} upload ${streamStats.uploadMs.toFixed(1)}) · camera ${cameraMs.toFixed(1)} · ` +
-          `fixed ${fixedMs.toFixed(1)} (${fixedSteps} steps: controller ${controllerMs.toFixed(1)} + physics ${physicsMs.toFixed(1)} · cars ${vehicleFixedMs.toFixed(2)}) · ` +
-          `collision ${collisionMs.toFixed(1)} · vehicles ${vehiclesMs.toFixed(1)} · ` +
-          `ped ${pedMs.toFixed(2)} · anim ${animMs.toFixed(2)} · other ${other.toFixed(1)} · draws ${stats.drawsRecorded} · cells ${streamStats.loadedCells} · ` +
-          `bodies ${physics.census().bodies} colliders ${physics.census().colliders}`,
+        slowFrameLine({
+          census: physics.census(),
+          elapsedMs,
+          past: { ...past, stats: past.stats },
+          simDtMs: dt * 1000,
+          spans,
+          stream: streamStats,
+        }),
       );
     }
     benchSamples?.push({
@@ -1753,6 +1829,50 @@ function planarDistance(a: readonly number[], b: readonly number[]): number {
  */
 function probeCenterOf(enabled: boolean, focus: readonly [number, number, number]): [number, number, number] | null {
   return enabled ? [focus[0], focus[1] + 1.0, focus[2]] : null;
+}
+
+/**
+ * The `[slow]` breakdown of ONE elapsed interval: the previous frame's body (`past`), the gap after it
+ * (`spans` + the blob handler) and, as `other`, whatever the two together do not account for.
+ *
+ * `elapsedMs` is the REAL interval, not the simulation's clamped `dt` — a 400 ms hitch reported as 250 would
+ * bury 150 ms of itself in the residual. When the two differ the clamp is named.
+ */
+function slowFrameLine(frame: {
+  census: { bodies: number; colliders: number };
+  elapsedMs: number;
+  past: FrameBlocks;
+  simDtMs: number;
+  spans: FrameSpanTotals;
+  stream: StreamStats;
+}): string {
+  const { census, elapsedMs, past, spans, stream } = frame;
+  const other =
+    elapsedMs -
+    (past.fixed +
+      past.collision +
+      past.anim +
+      past.vehicles +
+      past.ped +
+      past.stream +
+      past.camera +
+      past.render +
+      past.props +
+      past.world +
+      past.pose +
+      past.paused +
+      stream.blobMs);
+  const clamped = elapsedMs > frame.simDtMs + 0.5 ? ` (sim dt ${frame.simDtMs.toFixed(0)})` : '';
+
+  return (
+    `[slow] frame ${elapsedMs.toFixed(1)}${clamped} · gpu ${past.stats.gpuPassMs.toFixed(2)} · post ${past.stats.gpuPostMs.toFixed(2)} · probe ${past.stats.gpuProbeMs.toFixed(2)} · ` +
+    `render ${past.render.toFixed(1)} (submit ${past.stats.submitMs.toFixed(2)}) · stream ${past.stream.toFixed(1)} (blob ${stream.blobMs.toFixed(1)} worst ${stream.worstBlobMs.toFixed(1)} upload ${stream.uploadMs.toFixed(1)}) · camera ${past.camera.toFixed(1)} · ` +
+    `fixed ${past.fixed.toFixed(1)} (${past.steps} steps: controller ${past.controller.toFixed(1)} + physics ${past.physics.toFixed(1)} · cars ${past.cars.toFixed(2)}) · ` +
+    `collision ${past.collision.toFixed(1)} · vehicles ${past.vehicles.toFixed(1)} · ` +
+    `ped ${past.ped.toFixed(2)} · anim ${past.anim.toFixed(2)} · props ${past.props.toFixed(2)} · world ${past.world.toFixed(2)} · pose ${past.pose.toFixed(2)} · paused ${past.paused.toFixed(2)} · ` +
+    `other ${other.toFixed(1)} (${formatFrameSpans(spans, other - spans.totalMs)}) · draws ${past.stats.drawsRecorded} · cells ${stream.loadedCells} · ` +
+    `bodies ${census.bodies} colliders ${census.colliders}`
+  );
 }
 
 /** GTA Z-up point → engine Y-up: (x, y, z) → (x, z, −y). */

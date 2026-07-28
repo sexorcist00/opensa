@@ -55,6 +55,27 @@ Report line (the deliverable IS this console line):
   leg saw, because a cost without its car count says nothing. Frames that ran no fixed step are excluded, or
   a catch-up frame would read as a step that cost double.
 
+## The `[slow]` line (frames over 20 ms)
+
+A frame longer than `SLOW_FRAME_MS` prints its CPU breakdown — the stall arrives as a NUMBER, not a theory.
+Every block the loop runs is timed (`fixed` · `collision` · `vehicles` · `ped` · `anim` · `props` · `world` ·
+`pose` · `paused` · `stream` · `camera` · `render`), and what `dt` still holds after all of them is `other`.
+
+`other` is **not** untimed loop work — since plan 091 the loop times all of it. It is the time BETWEEN
+frames: `dt` runs rAF-start to rAF-start, so a frame's length includes every promise continuation, worker
+handler and GC pause since the last loop returned. That half reports itself through named spans, drained at
+the top of the frame that paid for it, and the line prints the breakdown in brackets:
+
+```
+other 223.6 (cell-collision-read 20.3 · vehicle-model:tampa 4.9 · vehicle-osm:tampa 1.2 · unattributed 163.8)
+```
+
+Spans today: `vehicle-osm:<model>` (the `.osm` section read + parse) · `vehicle-model:<model>` (the GPU
+upload) · `vehicle-spawn:<model>` (the physics body, rig and plate) · `cell-collision-read` (COL parse) ·
+`cell-collision-bodies` (Rapier static colliders). **`unattributed` is always printed** — it is GC plus
+anything nobody wrapped, and a run that hides it is reporting only the half it can see. To add a span, read
+the two rules in [`restrictions/architecture.md`](../restrictions/architecture.md) first.
+
 Full knob reference: [query-parameters.md](query-parameters.md). Useful A/B knobs while measuring: `?scale=0.75` (the ONE perf tier knob), `?aces=0`, `?bloom=0|N`,
 `?probe=0`, `?sky=preetham`, `?clouds=N`, `?draw=800..1600` (LOD ring; fog cap follows), `?hour=N`,
 `?soak=` (below). The prod host honours the same `?bench=` protocol for side-by-side baselines.

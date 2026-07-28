@@ -220,6 +220,26 @@ mean/p95, vehicle 0.68/0.79 — ~60–100× under plan 080's 0.05 ms budget. A D
 not row-to-row.
 Run: [`2026-07-27-microbench-080-09-follow-policy.json`](opensa-engine/2026-07-27-microbench-080-09-follow-policy.json).
 
+### 2026-07-28 — plan 091: the spike frames, finally decomposed
+
+A headless `?bench=all` sweep taken FOR the `[slow]` lines rather than for the averages (which are all at
+the 120 Hz headless cap: 8.33 avgMs, p95 9.2–9.3, `lateCreates` 0 on every scene, gpu pass at or below the
+07-27 row). Three findings, all from the same run:
+
+- **The boot frame is 576.1 ms, not 250.** `dt` is clamped at 250 ms for the simulation and the line used to
+  print the clamp, so a third of the worst frame in the record had never been visible.
+- **Roughly half of a teleport spike is now named**, and both named costs are **per NEW car type**: the
+  `.osm` read + parse (worst single 20.5 ms — `bus`) and the GPU upload (worst single 18.2 ms — `tahoma`);
+  typical types are 0.5–2 ms. A bench teleport pays 27–43 of them in one frame, which is a bench shape — in
+  play a type arrives alone. Cell collision is the other named cost (COL parse 9.6–78.3 ms, Rapier bodies
+  5.6–28.1 ms).
+- **`unattributed` still holds 40–55 % of a spike**, and 100 % of the two frames that FOLLOW a teleport
+  (68.2 and 38.9 ms with no span open at all) — GC-shaped, and the honest next question.
+
+The pre-091 comparison run on the same pak/host is in the same file's note: `other` was one anonymous number
+(223.6 ms on the boot frame) with nothing under it.
+Run: [`2026-07-28-headless-091-frame-attribution.json`](opensa-engine/2026-07-28-headless-091-frame-attribution.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
