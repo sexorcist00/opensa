@@ -5,14 +5,13 @@ fully modelled interior (`previon`, the 1986 Starion in `gostown`). One round of
 withdrawn the same day; what was tried and why it failed is in
 [`postmortem/090-vehicle-cabin-at-night.md`](../postmortem/090-vehicle-cabin-at-night.md).
 
-## The symptoms, in the field's words
+## The symptoms, paraphrased from the field
 
-1. **"через стекло выглядывает приборная панель"** — from outside, the dash reads bright, "as if lit", and
+1. **The dashboard shows through the windscreen wrong** — from outside, the dash reads bright, "as if lit", and
    only under certain sunlight. In shade the effect is gone. (Paraphrased: it looks like it has a backlight
    and shows up very brightly on the glass, while the steering wheel still occludes it correctly.)
 2. **The cabin is almost black at night**, from the interior camera — the seats are silhouettes.
-3. **"когда авто тормозит они окрашиваются в красный цвет"** — interior parts go red under braking.
-   Unverified and never chased.
+3. **Interior parts turn red under braking.** Unverified and never chased.
 
 ## What is measured, so nobody re-derives it
 

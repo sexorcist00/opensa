@@ -1,7 +1,7 @@
 # 090 — A car's cabin at night, and the reflection gate before it
 
 **Died 2026-07-28, the day it was born.** Four commits over one afternoon, all reverted in one block
-(`ae6548e`) on the field's verdict: *"нет, выглядит плохо"*. The problems they were aimed at are still open —
+(`ae6548e`) on the field's verdict: it looks bad. The problems they were aimed at are still open —
 [`open-issues/vehicle-cabin-and-glass.md`](../open-issues/vehicle-cabin-and-glass.md).
 
 The code is recoverable: `3e37d10` (reflection gate), `b8a49d8` (the plan), `ce6cd1a` (090/01 night relax),
@@ -36,7 +36,7 @@ a direction the height-field bake never marches. So it relaxed toward open with 
 Measured at midnight on the built previon: gauges/seats ×1.47, interior ×1.38, doors ×1.20, chassis ×1.12,
 glass ×1.00.
 
-**The field said this one HELPED** ("стало лучше"). It died only because it went out in the same block.
+**The field said this one HELPED** — the cabin read better. It died only because it went out in the same block.
 
 ## Attempt 3 — a lit cabin (`a577a69`), then one dash lamp (`f05eb6d`)
 

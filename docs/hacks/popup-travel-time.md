@@ -24,7 +24,7 @@ has nothing to derive from.
 ## What it was judged on
 
 A real pop-up motor takes about a second; 0.7 s is inside that and reads as mechanical rather than as a snap.
-Accepted in the field 2026-07-28 ("фары открываются отлично"), together with the follow-up that keeps the
+Accepted in the field 2026-07-28 — the pods read as working perfectly — together with the follow-up that keeps the
 lamps dark until the arc finishes.
 
 The motion is also linear — no ease in or out — which is the same expedient at a smaller scale.
