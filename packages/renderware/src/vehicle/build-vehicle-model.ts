@@ -56,6 +56,8 @@ const PAINT_MARKERS = new Map<string, number>([
 ]);
 
 const DOOR_RE = /^door_(lf|rf|lr|rr)_ok$/;
+/** A damage twin: `<component>_ok` / `<component>_dam` — see {@link componentFrame}. */
+const COMPONENT_RE = /^(.+)_(?:ok|dam)$/;
 const EXTRA_RE = /^extra\d+$/;
 const WHEEL_CONTAINER_RE = /^f_wheel/;
 /** Per-corner wheel atomics — SA's "different front/rear wheels" convention; `m` = 3-axle trucks. */
@@ -191,9 +193,8 @@ function addBodyAtomic(
 ): void {
   const lod = name.endsWith('_vlo');
   const door = DOOR_RE.exec(name);
-  const part = door
-    ? addDoorPart(scratch, clump, frameIndex, `door_${door[1]}`)
-    : addPart(scratch, clump, frameIndex, name);
+  const placement = componentFrame(clump, frameIndex, name);
+  const part = addPart(scratch, clump, placement, door ? `door_${door[1]}` : name);
   if (door) {
     doors.push({ name: `door_${door[1]}`, part, side: door[1] });
   }
@@ -213,21 +214,6 @@ function addBodyAtomic(
       }
     }
   }
-}
-
-/** A door part pivots on its HINGE frame (the parent), with the door mesh offset inside it — see rigid.ts. */
-function addDoorPart(scratch: Scratch, clump: RWClump, frameIndex: number, name: string): number {
-  const frame = clump.frames[frameIndex];
-  const hinge = frame.parentIndex >= 0 ? frameWorldTransform(clump.frames, frame.parentIndex) : null;
-  const part = scratch.parts.length;
-  scratch.parts.push({
-    localRotation: hinge ? rotationToQuat(hinge.rot) : [0, 0, 0, 1],
-    localTranslation: hinge ? hinge.pos : [0, 0, 0],
-    name,
-    offset: frameMatrix(frame.rotation, frame.position),
-  });
-
-  return part;
 }
 
 function addPart(scratch: Scratch, clump: RWClump, frameIndex: number, name: string, scale?: number): number {
@@ -538,6 +524,46 @@ function collectDummies(clump: RWClump): VehicleDummy[] {
 }
 
 /**
+ * Where a DAMAGEABLE component's mesh actually hangs: on the component's `*_dummy` frame, never on the
+ * `_ok`/`_dam` frame the exporter wrapped it in.
+ *
+ * This is the original's own rule, not a convenience. `CVehicleModelInfo::PreprocessHierarchy` runs
+ * `RwFrameForAllChildren(frame, CollapseFramesCB, frame)` over every damageable component, and
+ * `CollapseFramesCB` reparents each child's atomics onto that frame (`MoveObjectsCB` → `RpAtomicSetFrame`)
+ * and then **destroys the child frame** — its position and rotation with it. A door therefore pivots on
+ * `door_lf_dummy` and carries no offset inside it.
+ *
+ * Stock SA never showed the difference: measured over the whole stock archive, 160 models carry door
+ * components (756 `_ok`/`_dam` frames) and only 62 of those frames hold a non-identity transform, the
+ * largest being **6 mm / 2.6°** — exporter rounding. A MOD can put anything there, and the 1995 Diablo puts
+ * **1.518 m** on both doors: honouring it hung the closed door below the nose and threw it clear of the car
+ * on opening (field 2026-07-28). Its scissor hinge lives where SA reads it — in the ROTATED frame ABOVE the
+ * dummy, which our swing (a rotation about the pivot's local Z) already follows.
+ *
+ * Falls back to the atomic's own frame when no matching `*_dummy` ancestor exists — an unknown layout must
+ * not silently relocate a mesh.
+ */
+function componentFrame(clump: RWClump, frameIndex: number, name: string): number {
+  const base = COMPONENT_RE.exec(name)?.[1];
+  if (!base) {
+    return frameIndex;
+  }
+  const dummy = `${base}_dummy`;
+  let at = clump.frames[frameIndex]?.parentIndex ?? -1;
+  for (let hops = 0; at >= 0 && at < clump.frames.length && hops <= clump.frames.length; hops += 1) {
+    if (frameName(clump, at) === dummy) {
+      return at;
+    }
+    if (clump.frames[at].parentIndex === at) {
+      break;
+    }
+    at = clump.frames[at].parentIndex;
+  }
+
+  return frameIndex;
+}
+
+/**
  * Turn a wheel to the side it is MOUNTED on, given a mesh authored for the other one: `q ⊗ [0, 0, 1, 0]`, a
  * 180° spin about the hub's up axis composed after the frame's own rotation.
  *
@@ -550,13 +576,6 @@ function collectDummies(clump: RWClump): VehicleDummy[] {
  */
 function flipWheelSide(q: readonly [number, number, number, number]): [number, number, number, number] {
   return [q[1], -q[0] || 0, q[3], -q[2] || 0];
-}
-
-/** RW frame rotation (column-major basis) + position → a column-major mat4. */
-function frameMatrix(rotation: readonly number[], position: readonly number[]): number[] {
-  const [r0, r1, r2, r3, r4, r5, r6, r7, r8] = rotation;
-
-  return [r0, r1, r2, 0, r3, r4, r5, 0, r6, r7, r8, 0, position[0], position[1], position[2], 1];
 }
 
 function frameName(clump: RWClump, frameIndex: number): string {

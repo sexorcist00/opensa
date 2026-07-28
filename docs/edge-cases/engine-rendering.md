@@ -59,6 +59,12 @@ Limits and deliberate approximations of the own WebGPU engine.
   exception (088/09a): their root travel IS replayed, endpoint-warped between the real doorway and
   seat. Air/land clips shorter than their state HOLD their last frame (the ~0.4 s `JUMP_glide` vs a
   ~0.9 s flight — looping it jerked mid-air, field 2026-07-24).
+- **The enter/exit choreography assumes a door that swings OUT, not UP.** The swing itself is generic (a
+  rotation about the hinge frame's own local Z, so a mod's scissor door rises correctly), but the sequence
+  around it — the 1.2 m standoff ring, the swept-arc clearance behind the hinge, the step-in path — is laid
+  out for a panel sweeping horizontally. On a scissor door the player still walks a horizontal arc around a
+  panel that is going vertical: correct, just more cautious than it needs to be. Nothing is measured for it
+  yet.
 - **The one perf knob is `?scale=`** (render scale, try 0.75 first on perf problems); there is no quality
   tier ladder on the engine.
 - **Street-level foliage is fill-bound, and the cost is per-PIXEL, not per-triangle or per-draw.** Measured

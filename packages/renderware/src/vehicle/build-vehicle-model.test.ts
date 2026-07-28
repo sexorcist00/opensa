@@ -361,7 +361,7 @@ describe('buildVehicleModel', () => {
       expect(built.submeshes.filter((submesh) => submesh.kind === 'body')).toHaveLength(1);
     });
 
-    it('a door pivots on its HINGE frame, with the door mesh carried as an offset inside it', () => {
+    it('a door sits on its HINGE frame and the _ok frame own transform is DISCARDED (SA collapses it)', () => {
       const built = buildVehicleModel(
         clump(
           [frame('chassis'), frame('door_lf_dummy', -1, [1, 0, 0]), frame('door_lf_ok', 1, [0.5, 0, 0])],
@@ -377,7 +377,31 @@ describe('buildVehicleModel', () => {
       expect(built.doors).toEqual([{ name: 'door_lf', part: 1, side: 'lf' }]);
       const door = built.parts[1];
       expect(door.localTranslation).toEqual([1, 0, 0]); // the hinge dummy — NOT the door's own frame
-      expect(door.offset?.slice(12, 15)).toEqual([0.5, 0, 0]); // the door, relative to the hinge
+      expect(door.offset).toBeUndefined(); // the 0.5 m on `door_lf_ok` is the frame SA destroys
+    });
+
+    it('a scissor door keeps the ROTATED hinge above the dummy — the swing axis comes from it', () => {
+      // The 1995 Diablo's layout: a rotated `door_lf` above the dummy (its local Z points along world +X,
+      // which is what makes the door swing UP), and 1.5 m parked on the `_ok` frame that SA throws away.
+      const hinge = frame('door_lf', 0, [-0.9, 1.2, 0.1]);
+      hinge.rotation = [0, -1, 0, 0, 0, -1, 1, 0, 0];
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis'), hinge, frame('door_lf_dummy', 1), frame('door_lf_ok', 2, [-1.24, 0.87, 0])],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 3, geometry: 0 },
+          ],
+          [geometry()],
+        ),
+        textures(),
+      );
+
+      const door = built.parts[1];
+      expect(door.localTranslation.map((v) => Number(v.toFixed(3)))).toEqual([-0.9, 1.2, 0.1]);
+      expect(door.offset).toBeUndefined();
+      // The pivot keeps the rotated basis, so a rotation about its local Z is a VERTICAL swing.
+      expect(door.localRotation.some((v) => Math.abs(v) > 1e-6)).toBe(true);
     });
 
     it('carries the DFF reflection settings per vertex (coefficient, intensity, specular)', () => {

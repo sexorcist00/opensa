@@ -8,12 +8,17 @@ import { composePosQuat, mulMat4 } from '../anim/ifp-sampler';
 
 /**
  * A part is its PIVOT transform (the frame the animation rotates about) plus an optional mesh `offset`
- * inside that pivot. For a plain body part or a wheel the pivot IS the mesh frame (offset absent). For a
- * DOOR the pivot is the parent `door_*_dummy` hinge and the offset is the door's transform relative to it —
- * so the swing happens about the HINGE, in the HINGE's own axes. That last part matters: prod composes
- * `pivot.quaternion = closed ⊗ swing`, so a right-side door whose hinge frame is turned 180° swings the
- * opposite world way — outward, on its own side. Rotating about the hinge POINT in world axes would open
- * both doors the same way, which looks wrong on exactly half the car.
+ * inside that pivot. For a DOOR the pivot is the `door_*_dummy` hinge and the door's vertices are already
+ * hinge-local — the vehicle builder puts them there because the original does (`PreprocessHierarchy`
+ * collapses a damageable component's child frames onto it), so no vehicle part sets `offset` today; it
+ * stays as the generic capability the flatten below implements.
+ *
+ * The swing therefore happens about the HINGE, in the HINGE's own axes, and that matters twice over:
+ * `pivot.quaternion = closed ⊗ swing` means a right-side door whose hinge frame is turned 180° swings the
+ * opposite world way — outward, on its own side — and a SCISSOR door (a mod that turns the hinge frame so
+ * its local Z lies along the car's X) rises instead of swinging out, with no special case here. Rotating
+ * about the hinge POINT in world axes would open both doors the same way, which looks wrong on exactly
+ * half the car.
  */
 export interface RigidPartInit {
   localRotation: readonly [number, number, number, number];

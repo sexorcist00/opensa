@@ -18,6 +18,16 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   so it renders four wheels instead of one. A third, wheel-mod convention is also handled: an
   `f_wheel_<mask>` container frame (e.g. `f_wheel_1111`, cheetah) whose child atomics are the wheel
   sub-model — its geometry is instanced at every dummy instead of rendered once as body.
+- **Damage components sit on their `*_dummy` frame, not on their own.** A `<part>_ok` / `<part>_dam`
+  atomic is placed at the nearest matching `<part>_dummy` ancestor and the transform of its own frame is
+  DISCARDED — the original's rule: `CVehicleModelInfo::PreprocessHierarchy` runs `CollapseFramesCB` over
+  every damageable component, which reparents the child atomics onto the component frame and then destroys
+  the child frame. Stock SA hides the difference (of 756 `_ok`/`_dam` frames across 160 stock models, only
+  62 carry a non-identity transform and the largest is 6 mm), but a mod can put anything there. Because the
+  frame the swing uses is the DUMMY, **scissor / lambo doors work with no special case**: a mod that turns
+  a hinge frame ABOVE the dummy so its local Z lies along the car's X gets a vertical opening for free
+  (the 1995 Diablo does exactly this — and parks 1.518 m on the `_ok` frame, which used to throw its doors
+  clear of the car, field 2026-07-28).
 - **Paint**: carcols.dat palettes (`car` = 2-colour, `car4` = 4-colour sections); SA editable-material
   markers — primary (60,255,0), secondary (255,0,175), tertiary (0,255,255 cyan), quaternary
   (255,255,0 yellow). NB (255,175,0)/(255,60,0) are per-lamp ids on the `vehiclelights` atlas, **not**
