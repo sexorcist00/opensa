@@ -1,7 +1,9 @@
 # 089/02 — Tyre smoke
 
-**Status: SHIPPED 2026-07-28** (branch `089-02-tyre-smoke`), awaiting the field verdict — this plan's
-acceptance is by eye, and all four fitted numbers are session-dialable for that drive.
+**Status: SHIPPED + FIELD-APPROVED 2026-07-28** after three tuning rounds (below); the closing perf
+impression ("dropped a little, in general") was answered with a full sweep — no regression, every scene at
+the cap, gpu pass within jitter of the 091 reference
+([`2026-07-28-headless-089-02-no-regression-sweep.json`](../../benchmarks/opensa-engine/2026-07-28-headless-089-02-no-regression-sweep.json)).
 
 ## The finding that shaped it: Rapier's wheel rotation is cosmetic
 

@@ -264,6 +264,16 @@ during the sustained −1.1 g locked stop), so rotation-based slip can never see
 shipped signal is demand-over-cap recorded by `setVehicleControls`.
 Run: [`2026-07-28-headless-089-02-brake-strip-smoke.json`](opensa-engine/2026-07-28-headless-089-02-brake-strip-smoke.json).
 
+### 2026-07-28 — plan 089/02 close-out: the "performance dropped" impression, answered with a sweep
+
+A field impression after three smoke-tuning rounds ("perf dropped a little, in general, not during braking")
+against a full `?bench=all` sweep on the branch: **no regression** — every scene at the 120 Hz cap, gpu pass
+within ±0.04–0.16 ms of the same-day 091 reference in both directions, draw counts equal within units. The
+impression's own `[slow]` lines showed a GPU-bound frame at display resolution with the car population
+fluctuating 950 → 1623 bodies plus the known cell-collision spikes — none of it branch-attributable (an idle
+dynamic lane issues zero draws and zero writes; the user also noted other host processes may have interfered).
+Run: [`2026-07-28-headless-089-02-no-regression-sweep.json`](opensa-engine/2026-07-28-headless-089-02-no-regression-sweep.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
