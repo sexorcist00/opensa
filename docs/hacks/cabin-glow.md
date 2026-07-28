@@ -1,11 +1,12 @@
-# The cabin glow, and how a cabin is found
+# The dash light, and how a cabin is found
 
 **Live.** Taken 2026-07-28, [plan 090/02](../plans/090-vehicle-cabin-at-night/02-dash-glow.md),
-commit `a577a69`.
+commit `a577a69`; reshaped the same day after the field round — one lamp under the wheel instead of a fill
+over the whole interior, its distance baked and its falloff left to the shader.
 
 ## What it is
 
-Three expedients that ship together.
+Four expedients that ship together.
 
 **1. A cabin is found by a volume test** (`packages/renderware/src/vehicle/cabin.ts`): a vertex is "inside
 the car" when it sits within the bounds of the model's own GLASS materials, above the wheel hubs, and its
@@ -19,12 +20,18 @@ const CABIN_SKY_MAX = 0.78; // cabin 0.32-0.69 vs shell 0.90-1.00, measured on t
 are: the top half of a rear wheel stands above the hub line, inside the greenhouse footprint, enclosed by its
 own arch — every clause passes, and 17 % of each rear wheel came out tagged before the exclusion.
 
-**3. The glow is a flat warm add** (`packages/engine/src/render/shaders.ts`), on tagged vertices, while that
+**3. The lamp is placed by fractions of the cabin's own box** (`cabin.ts`) — 18 % back from its front, 45 %
+up from its floor, on the driver's side — and each vertex's DISTANCE from it is quantized into the lamp
+nibble. Three look constants, and the placement is a stand-in for a steering-wheel position no model states.
+
+**4. The falloff is a curve chosen by eye** (`packages/engine/src/render/shaders.ts`), applied while that
 car's headlights are on:
 
 ```wgsl
-const CABIN_GLOW = 0.35;
+const CABIN_GLOW = 0.55;   // level
 const CABIN_TINT = vec3f(1.0, 0.82, 0.55);
+const CABIN_REACH = 0.45;  // of the cabin's depth
+// linear-squared falloff — inverse-square spikes at the source and is gone a hand's width away
 ```
 
 ## What it stands in for
@@ -64,8 +71,14 @@ as a filled box. Field verdict: owed.
 
 ## Blast radius
 
-- The tag is **baked** into `meta.w`'s low nibble, so changing the detection needs a re-pack; the glow level
-  and tint are shader constants and change on a reload.
+- **What is baked and what is not, on purpose:** the DISTANCE from the lamp rides in `meta.w`'s low nibble
+  (13 levels), so moving the lamp or changing the detection needs a re-pack; the reach, the curve, the level
+  and the tint are shader constants and change on a reload. That split is the one thing here chosen for
+  iteration speed rather than for looks.
+- The tag is read through a SMOOTH varying, not through `lampTag`, which is `@interpolate(flat)`: reading it
+  flat switched a whole triangle at a time and painted hard polygonal patches across a car's seats. A vertex
+  outside the cabin carries "far" rather than a flag, so a boundary triangle can only fade — never light a
+  seam by interpolating through zero.
 - The nibble is shared with the lamp tags. A real lamp inside the cabin keeps its own tag, and
   `rigidLampGlow` must keep falling through for any tag that is not head or tail — without that guard the
   cabin burns at the head-lamp level (2.4).

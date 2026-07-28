@@ -1217,9 +1217,14 @@ struct RigidVsOut {
   // locations, and this one was per-instance state with a spare component — the same reason local.w
   // carries sky occlusion.
   @location(7) @interpolate(flat) lamps: vec4f,
+  // The DASH LIGHT's baked strength at this vertex, 0..1 (renderware/vehicle/cabin.ts) — and SMOOTH on
+  // purpose. It is decoded from the lamp nibble, which rides in lampTag as @interpolate(flat): reading it
+  // there switched a whole TRIANGLE at a time and painted hard polygonal patches across the previon's seats
+  // (field 2026-07-28). Interpolated, the falloff is per pixel.
+  @location(8) cabin: f32,
   // [env coefficient, SA reflection intensity, SA specular level] — all 0..1, all authored per material.
   // There is no env LAYER beside them: the DFF names an env texture, but this pipe reflects the live probe
-  // (rigidEnv), so the name only ever acted as a flag. Location 8 is free again.
+  // (rigidEnv), so the name only ever acted as a flag.
   @location(9) @interpolate(flat) reflect: vec3f,
   // MODEL-space position (xyz): the flake hash is anchored to the CAR, so the sparkle rides with it. A
   // world-space hash would make the flakes crawl across the paint as the car drives.
@@ -1297,6 +1302,12 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   out.layer = in.slots.x;
   out.nightLayer = in.slots.y;
   out.lampTag = in.slots.w & 0xFu;
+  // Tag values 3…15 are the DASH LIGHT's quantized DISTANCE from the lamp (renderware/vehicle/cabin.ts),
+  // decoded into a 0..1 varying the rasterizer interpolates — the tag itself is flat, and reading the light
+  // off it switched whole triangles at a time (the hard patches, field 2026-07-28). A vertex outside the
+  // cabin goes out as FAR rather than as a flag, so a triangle straddling the boundary only ever fades.
+  let cabinTag = in.slots.w & 0xFu;
+  out.cabin = select(CABIN_OUTSIDE, f32(cabinTag - 3u) / f32(CABIN_STEPS), cabinTag >= 3u);
   out.matClass = in.slots.w >> 4u;
   // The plate row is read HERE, where the instance index still exists, and only the one layer this submesh
   // needs is forwarded: its material class already says which of the two arrays that layer belongs to.
@@ -1375,25 +1386,38 @@ const LAMP_TAIL_RUN = 1.0;
 const LAMP_TAIL_BRAKE = 4.0;
 
 /**
- * The cabin a dashboard lights (plan 090/02).
+ * The dash light (plan 090/02).
  *
- * The builder tags the geometry INSIDE a car — found from the model's own glass, wheel hubs and occlusion,
- * never from a car list (renderware/vehicle/cabin.ts) — and this is what that tag buys: while this car's
- * headlights are on, its interior gains a small warm fill. Per instance, off the same lamp state that swaps
- * the lamp texture, so a parked car with its lights off stays dark and the one you drive does not.
+ * ONE soft source under the steering wheel, the way a real instrument panel spills into a cabin — not a fill
+ * over the whole interior. Its FALLOFF is baked per vertex by the builder, which finds the cabin from the
+ * model's own glass, wheel hubs and occlusion and places the lamp in that cabin's own box
+ * (renderware/vehicle/cabin.ts); all that is left here is the colour, the level and the two switches.
  *
- * Gated to night by the day/night factor (by day the sun owns the cabin anyway) and scaled by the car's own
- * headlight intensity, which is graphics.headlights.intensity — turn the lamps down and the cabin follows.
- * Both the level and the tint are LOOK constants, tunable on a reload rather than a pack rebuild.
+ * It burns only while THIS car's headlights are on — per instance, off the same lamp state that swaps the
+ * lamp texture, so a parked car stays dark — and only at NIGHT, by the day/night factor. Scaled by the car's
+ * own headlight intensity, which is graphics.headlights.intensity: turn the lamps down and the dash follows.
+ * The level and the tint are LOOK constants, tunable on a reload; the falloff needs a re-pack.
  */
-const CABIN_GLOW = 0.35;
+const CABIN_GLOW = 0.55;
 const CABIN_TINT = vec3f(1.0, 0.82, 0.55);
+/** How far the lamp reaches, as a fraction of the cabin's own depth. The DISTANCE is what the builder bakes
+ *  (in.cabin, 0 at the lamp … 1 at CABIN_SPAN of the cabin depth); the reach and the curve live here so a
+ *  look round costs a reload instead of a re-pack of every car. CABIN_SPAN must match the builder's. */
+const CABIN_SPAN = 0.75;
+const CABIN_REACH = 0.45;
+/** Steps between the 13 baked levels, and what a vertex OUTSIDE the cabin carries: a distance far past any
+ *  reach, so the boundary interpolates to dark instead of crossing zero (which would light a seam). */
+const CABIN_STEPS = 12.0;
+const CABIN_OUTSIDE = 2.0;
 
 fn rigidCabinGlow(in: RigidVsOut) -> vec3f {
-  if (in.lampTag != 3u || in.lamps.x <= 0.5) {
+  if (in.lamps.x <= 0.5) {
     return vec3f(0.0);
   }
-  return CABIN_TINT * (CABIN_GLOW * in.lamps.z * frame.params.x);
+  // Linear-squared rather than inverse-square, which would spike at the source and be gone a hand's width
+  // away; zero past the reach, so a dash lights its instruments and the rest of the cabin stays night.
+  let reach = max(0.0, 1.0 - (in.cabin * CABIN_SPAN) / CABIN_REACH);
+  return CABIN_TINT * (CABIN_GLOW * in.lamps.z * frame.params.x * reach * reach);
 }
 
 // Vehicle reflections (B5r). SA's env maps are BAKED DAYTIME IMAGES — a painted horizon (xvehicleenv128) for

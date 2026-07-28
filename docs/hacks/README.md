@@ -55,7 +55,7 @@ the number.
 | Hack | Where | Stands in for |
 | --- | --- | --- |
 | [Night relax of the sky-occlusion term](night-sky-relax.md) | `engine/render/shaders.ts` | a night light model that knows light arrives from the street, not the sky |
-| [The cabin glow and how a cabin is found](cabin-glow.md) | `renderware/vehicle/cabin.ts`, `engine/render/shaders.ts` | interior lighting with an actual source, and an authored interior tag |
+| [The dash light and how a cabin is found](cabin-glow.md) | `renderware/vehicle/cabin.ts`, `engine/render/shaders.ts` | interior lighting with an actual source, and an authored interior tag |
 | [Pop-up headlight travel time](popup-travel-time.md) | `game/vehicle/vehicle-rig.ts` | SA's own pop-up animation, which does not exist |
 | [Independent-axle camber gain](independent-camber-gain.md) | `game/vehicle/vehicle-rig.ts` | the original's rule for the `AXLE_*` model flags, absent from the reversed source |
 

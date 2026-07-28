@@ -24,7 +24,7 @@ import type {
 
 import { frameWorldTransform, rotationToQuat } from '../mesh/frame-transform';
 import { groupTrianglesByMaterial, NIGHT_AMBIENT } from '../mesh/prepare-clump';
-import { cabinVertices } from './cabin';
+import { cabinLight } from './cabin';
 import { skyOcclusion } from './sky-occlusion';
 import { LampTag, MaterialClass, PaintSlot } from './types';
 import { tyreMaterials } from './wheel-tyre';
@@ -166,20 +166,24 @@ export function buildVehicleModel(
   for (let vertex = 0; vertex < occlusion.length; vertex += 1) {
     night[vertex * 4 + 3] = occlusion[vertex];
   }
-  // The cabin is tagged AFTER the materials are classified and the occlusion is known, because it is a
-  // property of where a vertex SITS rather than of the material it wears (plan 090/02). A vertex that
-  // already carries a real lamp tag keeps it — a lamp inside the cabin is still a lamp.
+  // The dash light is baked AFTER the materials are classified and the occlusion is known, because how
+  // brightly a vertex is lit is a property of where it SITS rather than of the material it wears (plan
+  // 090/02). Its strength rides in the lamp nibble as levels 3…15; a vertex that already carries a real lamp
+  // tag keeps it — a lamp inside the cabin is still a lamp.
+  const dummies = collectDummies(clump);
   const meta = new Uint8Array(scratch.meta);
-  const cabin = cabinVertices(
+  const cabin = cabinLight(
     placed.positions,
     occlusion,
     glassVertices(scratch),
     hubHeight(scratch, wheels),
     notCabin(scratch, wheels),
+    scratch.indices,
+    driverSideX(dummies),
   );
   for (let vertex = 0; vertex < cabin.length; vertex += 1) {
-    if (cabin[vertex] === 1 && (meta[vertex * 4 + 3] & 0xf) === LampTag.none) {
-      meta[vertex * 4 + 3] |= LampTag.cabin;
+    if (cabin[vertex] > 0 && (meta[vertex * 4 + 3] & 0xf) === LampTag.none) {
+      meta[vertex * 4 + 3] |= LampTag.cabin + cabin[vertex] - 1;
     }
   }
 
@@ -188,7 +192,7 @@ export function buildVehicleModel(
   return {
     colors: new Uint8Array(scratch.colors),
     doors,
-    dummies: collectDummies(clump),
+    dummies,
     // Index width follows the model: uint16 while it fits, uint32 past the ceiling. Stock SA never comes
     // near it, but hi-poly mod cars do (the field pair was 86 511 and 82 991 verts), and this used to THROW
     // — which took the whole vehicle system down with it, because the throw landed in the fixed step.
@@ -590,6 +594,15 @@ function componentFrame(clump: RWClump, frameIndex: number, name: string): numbe
   return frameIndex;
 }
 
+/** Where the steering wheel is, across the car: `ped_frontseat` is SA's front-seat dummy and the driver is
+ *  the same point MIRRORED to −X — the identical rule `engine-vehicles.ts` seats the player by. Null when a
+ *  model has no seat dummy, which centres the dash lamp. */
+function driverSideX(dummies: readonly VehicleDummy[]): null | number {
+  const seat = dummies.find((dummy) => dummy.name === 'ped_frontseat');
+
+  return seat ? -Math.abs(seat.position[0]) : null;
+}
+
 /**
  * Turn a wheel to the side it is MOUNTED on, given a mesh authored for the other one: `q ⊗ [0, 0, 1, 0]`, a
  * 180° spin about the hub's up axis composed after the frame's own rotation.
@@ -619,14 +632,14 @@ function glassVertices(scratch: Scratch): Uint8Array {
   return glass;
 }
 
-function hasWheelDummies(clump: RWClump): boolean {
-  return clump.frames.some((frame) => WHEEL_DUMMY_RE.test(frame.name.trim().toLowerCase()));
-}
-
 /**
  * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
  * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
  */
+
+function hasWheelDummies(clump: RWClump): boolean {
+  return clump.frames.some((frame) => WHEEL_DUMMY_RE.test(frame.name.trim().toLowerCase()));
+}
 
 /** The wheel hubs' model-space height — the cabin's floor, below which a car is underbody and wheel well.
  *  Zero (the model origin) for something with no wheels at all, which then has no floor to speak of. */

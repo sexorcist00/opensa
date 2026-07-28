@@ -902,7 +902,7 @@ describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleMod
         continue;
       }
       seen.add(vertex);
-      cabin += (built.meta[vertex * 4 + 3] & 0xf) === LampTag.cabin ? 1 : 0;
+      cabin += (built.meta[vertex * 4 + 3] & 0xf) >= LampTag.cabin ? 1 : 0;
     }
 
     return cabin;
@@ -937,7 +937,7 @@ describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleMod
       // infernus, landstal and zr350 — a stock interior is a shallow shell, and a bike (no glass) gets none.
       let cabin = 0;
       for (let vertex = 0; vertex < built.positions.length / 3; vertex += 1) {
-        cabin += (built.meta[vertex * 4 + 3] & 0xf) === LampTag.cabin ? 1 : 0;
+        cabin += (built.meta[vertex * 4 + 3] & 0xf) >= LampTag.cabin ? 1 : 0;
       }
 
       expect(cabin).toBeGreaterThan(50);

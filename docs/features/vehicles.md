@@ -84,13 +84,17 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   **(1)** The occlusion RELAXES toward open with the day/night factor (`skyShareNow`, 60 %): measured on the
   previon at midnight, gauges and seats gain ×1.47, the interior ×1.38, doors ×1.20–1.22, the chassis ×1.12
   and the glass ×1.00 — the lift lands where the geometry is enclosed, and nothing moves by day.
-  **(2)** A **cabin glow**: `vehicle/cabin.ts` tags the vertices INSIDE a car — the greenhouse from the GLASS
+  **(2)** A **dash light**: ONE soft source under the steering wheel, the way an instrument panel spills into
+  a cabin. `vehicle/cabin.ts` finds the interior from the model itself — the greenhouse from the GLASS
   materials' own bounds, the floor from the wheel hubs, "actually enclosed" from the occlusion, wheels and
-  the `_vlo` LOD excluded — and the shader gives those vertices a small warm fill **while that car's
-  headlights are on**, gated to night and scaled by `graphics.headlights.intensity`. Per instance: a parked
-  car with its lights off stays dark. Measured share of a model's vertices: previon 38 %, stock cars
-  3.6–5.7 % (they model only a dash and seats), a bike 0 % — no glass, no cabin, which is a supported answer.
-  The tag is BAKED into `meta.w`'s low nibble, so a converted car needs a re-pack before it shows.
+  the `_vlo` LOD excluded, a neighbour fill closing the bake's speckle (1 261 → 572 speckled vertices) — then
+  hangs the lamp in that cabin's own box on the DRIVER's side (`ped_frontseat` mirrored to −X, the rule the
+  game seats the player by) and bakes each vertex's DISTANCE from it into `meta.w`'s low nibble, 13 levels.
+  The shader owns the falloff, so the reach and the curve are reload-tunable while only the placement needs a
+  re-pack. It burns **while that car's headlights are on** and only at night, scaled by
+  `graphics.headlights.intensity` — per instance, so a parked car with its lights off stays dark. Measured on
+  the previon: gauges peak 0.74, dash and wheel 1.00, the driver's door 0.52 against the passenger's 0.09.
+  A bike gets nothing — no glass, no cabin, which is a supported answer.
 - **Tyre detection** (plan 084, 2026-07-22): `wheel-tyre.ts` finds the RUBBER of a wheel by geometry, never
   by texture name (the field set says `tire`, `tyre`, `tread`, `wheel`, `vehicletyres128`, `generic_tire_01`
   — it disagrees with itself). A wheel is a disc about its axle and the tyre is its outer band: measured

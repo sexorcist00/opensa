@@ -61,6 +61,27 @@ dashboard comes from the geometry's own normals, textures and occlusion, which a
 flat fill turns out to look like a filled box in the field, the next lever is a coarse gradient encoded in
 the same nibble (values 3…6 as strength buckets) — cheap, and it needs no new vertex channel.
 
+## Round 2 — the field killed the flat fill (2026-07-28)
+
+The first shape was a flat warm fill over every tagged vertex. Two things came back from the field:
+
+1. **Hard polygonal patches across the seats.** The cause is not the tag but how it was READ: the lamp
+   nibble rides in `lampTag`, which is `@interpolate(flat)`, so the glow switched a whole TRIANGLE at a time.
+   The value now goes out as its own SMOOTH varying (location 8, which was free), and a vertex outside the
+   cabin carries "far" rather than a flag — so a triangle straddling the boundary only ever fades.
+2. **The user's own call: light the dash, not the cabin.** One soft source under the steering wheel instead
+   of a fill. So the builder now bakes the DISTANCE from that lamp and the shader owns the falloff.
+
+The lamp is placed in the cabin's own box — 18 % back from its front, 45 % up from its floor — and on the
+DRIVER's side, taken from `ped_frontseat` mirrored to −X, the same rule `engine-vehicles.ts` seats the player
+by. (The first cut used the dummy's own x and lit the passenger door: measured `door_rf` peak 0.77 against
+`door_lf` 0.38, i.e. exactly backwards.)
+
+A third fix came out of measuring rather than looking: the membership test is a threshold on a bake that is
+NOISY over organic geometry — 23 % of the previon's seat vertices sit at sky 0.8–1.0 while the rest are at
+0.2–0.5, scattered. Thresholded, that noise IS the speckle. A neighbour fill now closes holes and clears
+stranded vertices: **1 261 → 572 speckled vertices** (−55 %) for 5 % fewer cabin vertices.
+
 ## Measured
 
 **Shipped 2026-07-28.**
@@ -89,13 +110,33 @@ clause passed, and 17 % of each rear wheel's vertices came out tagged. Wheels (a
 excluded explicitly, which is honest: a wheel is a part the builder placed itself, so it says so rather than
 having a geometric rule invented for it.
 
-Runtime — `rigidCabinGlow` in the vehicle fragment path: `CABIN_TINT (1.0, 0.82, 0.55) × CABIN_GLOW (0.35) ×
-lamps.z × dn`, added to the diffuse sum (NOT through the lamp early-return, which would have dropped the
-moonlight and the street-lamp pool from the cabin). `rigidLampGlow` now falls through for any tag that is not
-head or tail — without that guard the cabin tag would have taken the head-lamp branch and burned at 2.4.
+Runtime — `rigidCabinGlow` in the vehicle fragment path: the baked distance decodes to 0…1 (0 at the lamp,
+1 at `CABIN_SPAN` = 0.75 of the cabin's depth), the falloff is `max(0, 1 − d/CABIN_REACH)²` with
+`CABIN_REACH` = 0.45, and what survives is `CABIN_TINT (1.0, 0.82, 0.55) × CABIN_GLOW (0.55) × lamps.z × dn`.
+Added to the diffuse sum, NOT through the lamp early-return, which would have dropped the moonlight and the
+street-lamp pool from the cabin. `rigidLampGlow` falls through for any tag that is not head or tail —
+without that guard the cabin tag takes the head-lamp branch and burns at 2.4.
 
-Both the level and the tint are LOOK constants, tunable on a reload. The switch's cost is written up as a
-performance lever (`deferred-optimizations/vehicle-cabin-glow-switch.md`).
+**The split is deliberate: the DISTANCE is baked, the CURVE is not.** The reach and the shape are exactly
+what a look round wants to try, and a shader constant costs a reload where a baked one costs a re-pack of
+every car in the game.
+
+Resulting light on the previon (`brightness = falloff × CABIN_GLOW`, per part, over lit vertices):
+
+| part | lit | mean | peak |
+| --- | --- | --- | --- |
+| `starion88_gauges` | 86 % | 0.61 | 0.74 |
+| `starion88_interior` (dash, wheel, trim) | 66 % | 0.49 | **1.00** |
+| `starion88_seats` | 76 % | 0.39 | 1.00 |
+| `door_lf` (driver's) | 46 % | 0.38 | 0.52 |
+| `door_rf` (passenger's) | 40 % | 0.04 | 0.09 |
+| `chassis` (inner side) | 2 % | 0.13 | 0.52 |
+
+32 % of the model's vertices take any light at all, and the driver's side outshines the passenger's by an
+order of magnitude — which is what one lamp under one steering wheel should do.
+
+The switch's cost is written up as a performance lever
+(`deferred-optimizations/vehicle-cabin-glow-switch.md`).
 
 **Still owed** — the tag is BAKED, so it needs a re-pack before it shows on a converted car; the night
 captures (lights off vs on) and the field verdict come with the user's rebuild.
