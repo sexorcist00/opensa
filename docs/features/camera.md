@@ -225,8 +225,13 @@ values are live on the debug **Camera** screen (`cameraRig` capability, on for t
   look-behind) — plan 08, deferred. The seam is already in place: every tuned value reaches the rig as one
   `CameraConfig`-shaped object, so a preset is a different object handed to the same `stepCamera`, never a
   second code path. The landing dip returns there.
-- Plan 10 (AAA polish) is authored and unstarted: corner peek, speed pose, fall stretch, directional impact
-  kick, wind shake — additive, individually deniable, one field verdict at a time.
+- The AAA-polish step (corner peek, speed pose, fall stretch, directional impact kick, wind shake) was
+  DROPPED 2026-07-28: the corner peek was built twice — through the auto-center heading (invisible: the 09
+  directional authority mutes that chase exactly mid-corner, the only place a steer-driven writer is ever
+  non-zero) and as a look-point shift — and the field rejected both ("sticks and jumps in big corners,
+  near-invisible in small ones"). Rolled back off `main`; the archive of both attempts is branch
+  `080-10-corner-peek`. No postmortem by the user's call — the direction may return with a better design,
+  and the remaining four candidates were never built.
 - No gamepad look — there is no gamepad input path at all.
 - `followLerp` / `followPolar` / `followMinPolar` / `followMaxPolar` are 036-era fields the own-engine rig
   does not read; they stay in `CameraConfig` until the chain closes and replaces them.

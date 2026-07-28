@@ -1,9 +1,14 @@
 # 080 — Cinematic camera (GTA V-feel follow camera for the own engine)
 
 **Status: 01–07 DONE and ACCEPTED (2026-07-25); 08 deferred by the user; REOPENED 2026-07-27 with 09
-(follow-policy revision, from the user's field brief) and 10 (AAA polish) — 09 DONE and ACCEPTED the same
-day (two field rounds; the entry-slam found and fixed; defaults frozen as authored); the 05 §6 look-behind
-key SHIPPED right after it (hold C while driving); next: 10, one field verdict at a time.**
+(follow-policy revision, from the user's field brief) and a 10th step (AAA polish) — 09 DONE and ACCEPTED
+the same day (two field rounds; the entry-slam found and fixed; defaults frozen as authored); the 05 §6
+look-behind key SHIPPED right after it (hold C while driving). The 10th step was DROPPED 2026-07-28: its
+first feature (corner peek) was built twice — through the auto-center heading (invisible: the 09 authority
+mutes that chase exactly mid-corner) and through the look point — and the field rejected both ("sticks and
+jumps in big corners, near-invisible in small ones"); the whole feature was rolled back off `main`, the
+plan doc deleted at the user's call (no postmortem — may be revisited with a better design). The archive
+of both attempts lives on branch `080-10-corner-peek`.**
 Planned 2026-07-19.: the damp/spring math and the
 `CameraDirector` in `apps/web/src/ui/camera/` (01), the smoothed rig — input dampening, a trailing look
 point with a dead zone, the steered-yaw channel, gliding zoom (02), the composition layer — turn-follow,
@@ -169,7 +174,7 @@ offsets are amplitude-capped below the collision margin.
 | 07  | [Transitions + polish](07-transitions-polish.md)         | Mode blending, pitch-coupled framing, field-tuning rounds, bench guard, close-out.                                  |
 | 08  | [View presets](08-view-presets.md)                       | The C key cycles named view presets per mode (far/normal/close/**first-person**, bumper in cars).                   |
 | 09  | [Follow-policy revision](09-follow-policy-revision.md)   | Movement never turns the camera (directional yaw authority), run/idle distance breathing, vehicle accel pull, the jump watchdog + dynamic-collision ease. |
-| 10  | [AAA polish](10-aaa-polish.md)                           | Corner peek, speed pose, fall stretch, directional impact kick, wind shake — additive, individually deniable, after 09. |
+| 10  | AAA polish (doc deleted)                                 | DROPPED 2026-07-28 — corner peek field-rejected twice (heading route and look-point route); archive on branch `080-10-corner-peek`, see the status note above. |
 
 Execution order and the reasoning behind it: [priority.md](priority.md).
 
