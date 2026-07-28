@@ -5514,7 +5514,9 @@ fn rigidTexel(in: RigidVsOut) -> vec4f {
 // A lit lamp SELF-ILLUMINATES: shading it like painted metal leaves it a dull grey patch at night. Tails run
 // dim and go bright on the brakes — the one cue that reads as a car stopping ahead of you.
 fn rigidLampGlow(in: RigidVsOut) -> f32 {
-  if (in.lampTag == 0u || in.lamps.x <= 0.5) {
+  // Tags other than the two LAMPS fall straight through — the cabin tag is a lit surface, not a source,
+  // and must never take the head-lamp branch below.
+  if ((in.lampTag != 1u && in.lampTag != 2u) || in.lamps.x <= 0.5) {
     return 0.0;
   }
   if (in.lampTag == 2u) {
@@ -5526,6 +5528,28 @@ fn rigidLampGlow(in: RigidVsOut) -> f32 {
 const LAMP_HEAD_GLOW = 2.4;
 const LAMP_TAIL_RUN = 1.0;
 const LAMP_TAIL_BRAKE = 4.0;
+
+/**
+ * The cabin a dashboard lights (plan 090/02).
+ *
+ * The builder tags the geometry INSIDE a car — found from the model's own glass, wheel hubs and occlusion,
+ * never from a car list (renderware/vehicle/cabin.ts) — and this is what that tag buys: while this car's
+ * headlights are on, its interior gains a small warm fill. Per instance, off the same lamp state that swaps
+ * the lamp texture, so a parked car with its lights off stays dark and the one you drive does not.
+ *
+ * Gated to night by the day/night factor (by day the sun owns the cabin anyway) and scaled by the car's own
+ * headlight intensity, which is graphics.headlights.intensity — turn the lamps down and the cabin follows.
+ * Both the level and the tint are LOOK constants, tunable on a reload rather than a pack rebuild.
+ */
+const CABIN_GLOW = 0.35;
+const CABIN_TINT = vec3f(1.0, 0.82, 0.55);
+
+fn rigidCabinGlow(in: RigidVsOut) -> vec3f {
+  if (in.lampTag != 3u || in.lamps.x <= 0.5) {
+    return vec3f(0.0);
+  }
+  return CABIN_TINT * (CABIN_GLOW * in.lamps.z * frame.params.x);
+}
 
 // Vehicle reflections (B5r). SA's env maps are BAKED DAYTIME IMAGES — a painted horizon (xvehicleenv128) for
 // paint, a sunset photograph (vehicleenvmap128) for glass. Sampling them raw means a car reflects a sunset at
@@ -5692,8 +5716,8 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   }
   // STATIC lamps only, computed per VERTEX (round 5). A car must not be lit by its OWN headlights (the
   // tail lamp sits a metre behind its own lens); prod has the same rule by construction.
-  let lit = vec3f(ambient) + frame.sunColor.rgb * (sunNdl * frame.params.z) + frame.moonColor.rgb * moonNdl +
-    in.poolDiffuse;
+  let lit = vec3f(ambient) + rigidCabinGlow(in) + frame.sunColor.rgb * (sunNdl * frame.params.z) +
+    frame.moonColor.rgb * moonNdl + in.poolDiffuse;
   return base * (debugLit(lit) + in.glow);
 }
 

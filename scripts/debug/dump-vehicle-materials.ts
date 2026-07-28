@@ -35,7 +35,7 @@ const { parts, submeshes } = read.rig;
 
 /** Material classes and lamp tags by value — see `renderware/vehicle/types.ts`. */
 const CLASS = ['matte', 'paint', 'chrome', 'glass', 'plate-back', 'plate-face'];
-const LAMP = ['-', 'head', 'tail'];
+const LAMP = ['-', 'head', 'tail', 'cabin'];
 
 console.log(`\n=== ${model} (build/${game}) — ${submeshes.length} submeshes`);
 for (const [index, submesh] of submeshes.entries()) {

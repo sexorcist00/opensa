@@ -24,6 +24,7 @@ import type {
 
 import { frameWorldTransform, rotationToQuat } from '../mesh/frame-transform';
 import { groupTrianglesByMaterial, NIGHT_AMBIENT } from '../mesh/prepare-clump';
+import { cabinVertices } from './cabin';
 import { skyOcclusion } from './sky-occlusion';
 import { LampTag, MaterialClass, PaintSlot } from './types';
 import { tyreMaterials } from './wheel-tyre';
@@ -165,6 +166,22 @@ export function buildVehicleModel(
   for (let vertex = 0; vertex < occlusion.length; vertex += 1) {
     night[vertex * 4 + 3] = occlusion[vertex];
   }
+  // The cabin is tagged AFTER the materials are classified and the occlusion is known, because it is a
+  // property of where a vertex SITS rather than of the material it wears (plan 090/02). A vertex that
+  // already carries a real lamp tag keeps it — a lamp inside the cabin is still a lamp.
+  const meta = new Uint8Array(scratch.meta);
+  const cabin = cabinVertices(
+    placed.positions,
+    occlusion,
+    glassVertices(scratch),
+    hubHeight(scratch, wheels),
+    notCabin(scratch, wheels),
+  );
+  for (let vertex = 0; vertex < cabin.length; vertex += 1) {
+    if (cabin[vertex] === 1 && (meta[vertex * 4 + 3] & 0xf) === LampTag.none) {
+      meta[vertex * 4 + 3] |= LampTag.cabin;
+    }
+  }
 
   const popUp = popUpLights(scratch, options.popUpLights === true);
 
@@ -176,7 +193,7 @@ export function buildVehicleModel(
     // near it, but hi-poly mod cars do (the field pair was 86 511 and 82 991 verts), and this used to THROW
     // — which took the whole vehicle system down with it, because the throw landed in the fixed step.
     indices: indicesFor(scratch.positions.length / 3, scratch.indices),
-    meta: new Uint8Array(scratch.meta),
+    meta,
     night,
     normals: new Float32Array(scratch.normals),
     parts: scratch.parts,
@@ -592,8 +609,31 @@ function frameName(clump: RWClump, frameIndex: number): string {
   return clump.frames[frameIndex]?.name.trim().toLowerCase() ?? '';
 }
 
+/** Which vertices wear a GLASS material — the greenhouse the cabin is found inside (plan 090/02). */
+function glassVertices(scratch: Scratch): Uint8Array {
+  const glass = new Uint8Array(scratch.positions.length / 3);
+  for (let vertex = 0; vertex < glass.length; vertex += 1) {
+    glass[vertex] = scratch.meta[vertex * 4 + 3] >> 4 === MaterialClass.glass ? 1 : 0;
+  }
+
+  return glass;
+}
+
 function hasWheelDummies(clump: RWClump): boolean {
   return clump.frames.some((frame) => WHEEL_DUMMY_RE.test(frame.name.trim().toLowerCase()));
+}
+
+/**
+ * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
+ * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
+ */
+
+/** The wheel hubs' model-space height — the cabin's floor, below which a car is underbody and wheel well.
+ *  Zero (the model origin) for something with no wheels at all, which then has no floor to speak of. */
+function hubHeight(scratch: Scratch, wheels: readonly VehicleWheel[]): number {
+  const heights = wheels.map((wheel) => scratch.parts[wheel.part]?.localTranslation[2] ?? 0);
+
+  return heights.length === 0 ? 0 : heights.reduce((sum, height) => sum + height, 0) / heights.length;
 }
 
 /** Narrowest index array the vertex count allows: uint16 holds indices 0..65535, so up to 65536 vertices
@@ -601,11 +641,6 @@ function hasWheelDummies(clump: RWClump): boolean {
 function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint32Array {
   return vertexCount > 65536 ? new Uint32Array(indices) : new Uint16Array(indices);
 }
-
-/**
- * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
- * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
- */
 
 /**
  * The shared wheel atomic, instanced at every `wheel_*_dummy`, each dummy's own orientation honoured and the
@@ -774,6 +809,23 @@ function meanNormal(scratch: Scratch, part: number, headOnly: boolean): [number,
 /** One channel of a material colour, modulated by a prelit set when the geometry carries one. */
 function modulate(channel: number, prelit: null | Uint8Array, vertex: number, offset: number): number {
   return prelit ? Math.round((channel * prelit[vertex * 4 + offset]) / 255) : channel;
+}
+
+/** Vertices no cabin test may claim: the WHEELS (their top half stands above the hub line, inside the
+ *  greenhouse footprint and enclosed by its own arch) and the `_vlo` LOD, which is a closed blob. */
+function notCabin(scratch: Scratch, wheels: readonly VehicleWheel[]): Uint8Array {
+  const blocked = new Uint8Array(scratch.positions.length / 3);
+  const wheelParts = new Set(wheels.map((wheel) => wheel.part));
+  for (const submesh of scratch.submeshes) {
+    if (submesh.kind !== 'lod' && !wheelParts.has(submesh.part)) {
+      continue;
+    }
+    for (let at = 0; at < submesh.indexCount; at += 1) {
+      blocked[scratch.indices[submesh.indexOffset + at]] = 1;
+    }
+  }
+
+  return blocked;
 }
 
 function paintSlot(material: RWMaterial): number {

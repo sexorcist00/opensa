@@ -47,6 +47,55 @@ and the whole thing gated to night by the day/night factor.
 - in-engine: headless night capture, interior camera, lights off vs lights on;
 - field: the user's verdict.
 
+## What the build actually measured, and what it changed in the design
+
+**The night-colour carrier is unusable, and that is a measured finding, not a preference.** The plan above
+assumed the warm gradient could ride the NIGHT vertex colours and turn into emission through the engine's
+existing `night − day` delta. Read out of the built previon: its night set EQUALS its day set, and both are
+`255,255,255` on most of the cabin. Two consequences — the delta can never be positive (a channel cannot
+exceed 255, so the emissive path can never fire for a car authored white), and a "warm tint" could only be
+written by taking channels DOWN, i.e. by darkening the very geometry the step is meant to light.
+
+So the gradient was dropped and the glow became one flat warm term on the tagged vertices. What reads as a
+dashboard comes from the geometry's own normals, textures and occlusion, which are all still in play. If the
+flat fill turns out to look like a filled box in the field, the next lever is a coarse gradient encoded in
+the same nibble (values 3…6 as strength buckets) — cheap, and it needs no new vertex channel.
+
 ## Measured
 
-_(to be filled in when the step ships)_
+**Shipped 2026-07-28.**
+
+Build side — `packages/renderware/src/vehicle/cabin.ts`, called from `buildVehicleModel` after the occlusion
+bake; the tag goes into `meta.w`'s low nibble (`LampTag.cabin = 3`) only where no real lamp tag sits.
+
+**Share of a model's vertices tagged as cabin:**
+
+| model | verts | cabin | share |
+| --- | --- | --- | --- |
+| previon (mod, a fully modelled interior) | 91 837 | 35 152 | **38.3 %** |
+| landstal | 5 130 | 292 | 5.7 % |
+| zr350 | 3 749 | 206 | 5.5 % |
+| comet | 4 241 | 169 | 4.0 % |
+| infernus | 4 467 | 161 | 3.6 % |
+| bus | 5 275 | 22 | 0.4 % |
+| pcj600 (a bike — no glass) | 2 946 | **0** | 0 % |
+
+Per part on the previon: gauges 86 %, seats 75 %, interior 68 %, the `extraN` cabin trim 63–77 %, door cards
+41–46 %, the chassis's inner side 11 %, boot lid inner 5 %.
+
+**The one trap the volume test has, found by measuring rather than by reading:** the TOP HALF of a rear
+wheel stands above the hub line, inside the greenhouse footprint, and is enclosed by its own arch — every
+clause passed, and 17 % of each rear wheel's vertices came out tagged. Wheels (and the `_vlo` LOD) are now
+excluded explicitly, which is honest: a wheel is a part the builder placed itself, so it says so rather than
+having a geometric rule invented for it.
+
+Runtime — `rigidCabinGlow` in the vehicle fragment path: `CABIN_TINT (1.0, 0.82, 0.55) × CABIN_GLOW (0.35) ×
+lamps.z × dn`, added to the diffuse sum (NOT through the lamp early-return, which would have dropped the
+moonlight and the street-lamp pool from the cabin). `rigidLampGlow` now falls through for any tag that is not
+head or tail — without that guard the cabin tag would have taken the head-lamp branch and burned at 2.4.
+
+Both the level and the tint are LOOK constants, tunable on a reload. The switch's cost is written up as a
+performance lever (`deferred-optimizations/vehicle-cabin-glow-switch.md`).
+
+**Still owed** — the tag is BAKED, so it needs a re-pack before it shows on a converted car; the night
+captures (lights off vs on) and the field verdict come with the user's rebuild.

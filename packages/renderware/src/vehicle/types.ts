@@ -10,8 +10,16 @@
  * into vertex colours — with geometry now shared across instances that would force one geometry copy per
  * colour combination, and every parked car on a block would come out the same colour.)
  */
-/** Per-vertex lamp tag (`meta.w` LOW nibble): the shader needs to know a lamp texel from a body texel. */
+/**
+ * Per-vertex lamp tag (`meta.w` LOW nibble): the shader needs to know a lamp texel from a body texel.
+ *
+ * `cabin` is not a lamp but a lit SURFACE — geometry inside the car (see `cabin.ts`), which the shader
+ * brightens while that car's headlights are on, the way a dashboard lights an interior (plan 090/02). It is
+ * written per VERTEX after the materials are classified, so it can never turn a material matte the way a
+ * real lamp tag does, and a genuine lamp inside the cabin keeps its own tag.
+ */
 export const LampTag = {
+  cabin: 3,
   head: 1,
   none: 0,
   tail: 2,

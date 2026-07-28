@@ -8,6 +8,7 @@ import { parseDff } from '../parsers/binary/dff';
 import { toArrayBuffer } from '../test-utils';
 import { buildVehicleModel } from './build-vehicle-model';
 import { VehicleTextures } from './textures';
+import { LampTag } from './types';
 import { MaterialClass, PaintSlot } from './types';
 
 const PRIMARY_MARKER: [number, number, number, number] = [60, 255, 0, 255];
@@ -892,12 +893,55 @@ describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleMod
     { wheelScale: [0.7, 0.7] },
   );
 
+  const cabinOf = (submesh: { indexCount: number; indexOffset: number }): number => {
+    let cabin = 0;
+    const seen = new Set<number>();
+    for (let at = 0; at < submesh.indexCount; at += 1) {
+      const vertex = built.indices[submesh.indexOffset + at];
+      if (seen.has(vertex)) {
+        continue;
+      }
+      seen.add(vertex);
+      cabin += (built.meta[vertex * 4 + 3] & 0xf) === LampTag.cabin ? 1 : 0;
+    }
+
+    return cabin;
+  };
+
+  describe('negative cases', () => {
+    it('tags no WHEEL vertex as cabin — a wheel top stands above the hub line, inside the greenhouse', () => {
+      const wheelParts = new Set(built.wheels.map((wheel) => wheel.part));
+      const wheelSubmeshes = built.submeshes.filter((submesh) => wheelParts.has(submesh.part));
+
+      expect(wheelSubmeshes.length).toBeGreaterThan(0);
+      expect(wheelSubmeshes.map(cabinOf)).toEqual(wheelSubmeshes.map(() => 0));
+    });
+
+    it('leaves the pop-up pod outside the cabin — it is bodywork at the far end of the nose', () => {
+      const pod = built.submeshes.filter((submesh) => submesh.part === built.popUpLights!.part);
+
+      expect(pod.map(cabinOf)).toEqual(pod.map(() => 0));
+    });
+  });
+
   describe('positive cases', () => {
     it('finds the ONE stock pop-up pod and reads its parked pitch as the open angle', () => {
       // The zr350 is the only car in the stock fleet whose `misc_*` holds head-lamp faces; the pod is
       // authored looking 40° down into the nose, which is exactly how far it has to swing.
       expect(built.parts[built.popUpLights!.part].name).toBe('misc_a');
       expect((built.popUpLights!.angle * 180) / Math.PI).toBeCloseTo(40.4, 1);
+    });
+
+    it('finds a cabin inside a STOCK car, which models only a dash and seats', () => {
+      // 206 of 3 749 vertices (5.5 %) on this car, and the same sweep gives 3.6-5.7 % across comet,
+      // infernus, landstal and zr350 — a stock interior is a shallow shell, and a bike (no glass) gets none.
+      let cabin = 0;
+      for (let vertex = 0; vertex < built.positions.length / 3; vertex += 1) {
+        cabin += (built.meta[vertex * 4 + 3] & 0xf) === LampTag.cabin ? 1 : 0;
+      }
+
+      expect(cabin).toBeGreaterThan(50);
+      expect(cabin / (built.positions.length / 3)).toBeLessThan(0.15);
     });
   });
 });
