@@ -5649,6 +5649,29 @@ fn rigidSpecular(in: RigidVsOut, normal: vec3f, level: f32) -> vec3f {
 
 
 
+/**
+ * How much sky this vertex sees RIGHT NOW, from the value the builder baked (plan 090/01).
+ *
+ * The bake answers "how much of the sky can this vertex see past the car's own body" — the right question
+ * while the sky IS the source. After dark it is not: what reaches a cabin comes off the street, sideways,
+ * through the glass, and the height field the bake marches (8 azimuths, horizontal-and-up, over the car's
+ * own roof) never modelled that direction. Left as it is, the term keeps dividing the light when the thing
+ * it measures has stopped lighting anything, and a modelled interior goes black — measured on the previon,
+ * cabin vertices sit at 0.32-0.69 against 0.90-1.00 on the bodywork (field 2026-07-28).
+ *
+ * So it relaxes toward open with the night factor, and only PARTWAY: 084 introduced this term precisely
+ * because a car at night collapsed into one flat colour with no readable edges, and taking it out entirely
+ * brings that back. NIGHT_SKY_RELAX is FITTED — SA has no modelled interiors at all, so there is no original
+ * formula to reproduce here. At 0.6 a cabin vertex at 0.50 shades as 0.80 at midnight while the bodywork
+ * moves 0.95 -> 0.98, i.e. the lift lands where the geometry is enclosed and nowhere else. It is a shader
+ * constant on purpose: tuning it costs a reload, not a pack rebuild.
+ */
+const NIGHT_SKY_RELAX = 0.6;
+
+fn skyShareNow(baked: f32) -> f32 {
+  return mix(baked, mix(baked, 1.0, NIGHT_SKY_RELAX), frame.params.x);
+}
+
 fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   let normal = normalize(in.normal);
   if (debugShowNormals()) {
@@ -5662,7 +5685,7 @@ fn rigidShade(in: RigidVsOut, texel: vec4f) -> vec3f {
   // swings ~90° across the lens, and a nearby street lamp painted that swing straight onto the glass as a
   // hard gradient broken at the triangle edge. Prod never showed it because its lamp glass is emissive-
   // dominant (emissiveMap × 1..4), which drowns the diffuse term. Ambient keeps the unlit texel detail alive.
-  let ambient = frame.params.y * DYNAMIC_INDIRECT * skyVisibility(normal) * in.local.w;
+  let ambient = frame.params.y * DYNAMIC_INDIRECT * skyVisibility(normal) * skyShareNow(in.local.w);
   let glow = rigidLampGlow(in);
   if (glow > 0.0) {
     return base * (ambient + glow);
@@ -5704,8 +5727,9 @@ fn fsRigid(in: RigidVsOut) -> @location(0) vec4f {
   // their exporters stamp an env map on every material they ship, so a dashboard, a seat and a door card all
   // come out reflective, and the previon's dash trim (class CHROME, coefficient 0.5, sky 0.63) lit up like
   // polished metal through the windscreen in full sun and went normal in shade (field 2026-07-28). Outer
-  // bodywork sits at 0.9-1.0 and is untouched; nothing here knows which car it is.
-  let skyShare = in.local.w;
+  // bodywork sits at 0.9-1.0 and is untouched; nothing here knows which car it is. After dark the same
+  // number relaxes (see skyShareNow), so a street lamp still catches the cabin trim.
+  let skyShare = skyShareNow(in.local.w);
   let amount = neoReflAmount(dot(shadingNormal, toEye), coefficient) * (isPaint + isChrome) * skyShare;
   let env = rigidEnv(in, normal, shadingNormal, mix(PROBE_PAINT_LOD, PROBE_CHROME_LOD, isChrome));
   let specular = rigidSpecular(in, shadingNormal, in.reflect.z * frame.params4.z) * skyShare + in.poolSpec;
@@ -5734,7 +5758,7 @@ fn fsRigidBlend(in: RigidVsOut, @builtin(front_facing) frontFacing: bool) -> @lo
   // can see straight through from every angle looks like a hole in the car.
   // Sky-gated exactly like the opaque path: a pane deep in a cabin (a rear-seat divider, an interior light
   // cover) reflects the roof over it, not the open sky. A windscreen sits at 0.95-1.0 and is untouched.
-  let skyShare = in.local.w;
+  let skyShare = skyShareNow(in.local.w);
   let amount = neoReflAmount(dot(normal, toEye), in.reflect.x) * GLASS_REFLECT * outside * skyShare;
   let alpha = clamp(texel.a * in.color.a + amount, 0.0, 1.0);
   let env = rigidEnv(in, normal, normal, PROBE_GLASS_LOD);
