@@ -75,6 +75,9 @@ Impact smoke has its source too: the contact-force events the damage system alre
    stretched to **12 REAL seconds** (the wall-clock rule itself unchanged).
 4. **Impact smoke.** A puff at the contact point when a hit passes the strong-hit threshold, sized by the
    force, reusing step 1's lane and the damage system's existing event drain.
+   **SHIPPED 2026-07-28 — [04-impact-smoke.md](04-impact-smoke.md), field verdict owed.** The damage system
+   grew `onStrongHit` (it owns the draining `takeImpacts`); the kerb-tap immunity is inherited from the
+   calibrated 300 kN gate, only the puff ramps are fitted → `docs/hacks/impact-smoke-fit.md`.
 5. **Surface-driven wheel effects** — dust, grass, sand, gravel, mud, spray. **Depends on
    [081/10](../081-vehicle-physics/10-surface-types.md)**, which is what teaches a wheel its surface.
    The original's dispatch is known (`CVehicle::AddWheelDirtAndWater`: the surface's `W_*` flags choose

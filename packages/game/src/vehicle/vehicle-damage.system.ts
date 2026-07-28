@@ -6,8 +6,9 @@ import type { Vec3 } from '../interfaces/world-adapter.interface';
 import type { Impact, PhysicsWorld } from '../physics/physics-world';
 import type { VehicleHandle, VehiclePartInfo } from './vehicle-handle';
 
-/** Contact force (N) above which a hit damages a panel (calibrated in-browser: light≈207k, crash≈377k). */
-const STRONG_HIT = 300000;
+/** Contact force (N) above which a hit damages a panel (calibrated in-browser: light≈207k, crash≈377k).
+ *  Exported since 089/04: the impact-smoke sink scales its puff off the same gate. */
+export const STRONG_HIT = 300000;
 /** Seconds a detached part falls before it disappears. */
 const FALL_TTL = 1.5;
 /** Gravity for falling parts (GTA Z-up). */
@@ -52,6 +53,13 @@ interface FallingPart {
  */
 export class VehicleDamageSystem implements System {
   readonly name = 'vehicle-damage';
+
+  /**
+   * Fired for every impact that passes the strong-hit gate on a REGISTERED vehicle — the same event that
+   * deforms a panel, so a kerb tap can never reach it. The impact smoke rides this (089/04): it lives here
+   * because `takeImpacts` DRAINS and this system is its sole consumer — a second listener would race it.
+   */
+  onStrongHit: ((force: number, point: Vec3) => void) | null = null;
 
   private readonly dir = new Vector3();
   private readonly falling: FallingPart[] = [];
@@ -163,6 +171,7 @@ export class VehicleDamageSystem implements System {
     if (!car) {
       return;
     }
+    this.onStrongHit?.(impact.force, impact.point);
     const part = this.hitPart(car, impact.point);
     if (!part || touched.has(part)) {
       return;
