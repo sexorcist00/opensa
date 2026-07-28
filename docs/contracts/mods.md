@@ -1,0 +1,125 @@
+# Mod folder name contracts
+
+What `mod-installer` looks for when it layers `mods-src/<game>/mods/*` onto a base game. Every name here
+decides behaviour, and a name spelled otherwise is not an error — the file is simply copied somewhere the
+game never reads, and **the mod does nothing, silently**. That has already cost one whole install
+(`models/gta3img/` instead of `gta3_img/`).
+
+Vehicle mods have their own folder shape: [vehicles.md](./vehicles.md).
+
+---
+
+## 1. The `--in` tree
+
+One folder per mod, each an immediate subfolder of `--in`. The folder NAME is free text with one job:
+**ordering**. Mods apply in numeric-aware alphabetical order (`1. Foo` < `2. Bar` < `10. Baz`), and **later
+mods win** — the last one to write a file owns it.
+
+A mod is applied in one of two shapes, decided by its contents, not by its name:
+
+| Shape | Decided by | What happens |
+| --- | --- | --- |
+| **Path overlay** (default) | anything else | The mod mirrors the game tree from its own root; files overwrite by path. |
+| **Modloader-style bake** | it carries a **loader `.txt`** — any `.txt` whose contents declare `IDE` / `IPL` / `COLFILE` paths | The folder LAYOUT is ignored entirely and every file is bucketed by its BARE NAME (below). |
+
+---
+
+## 2. Path-overlay conventions
+
+### `gta3_img/`, `gta_int_img/`, `cutscene_img/`
+
+A binary archive cannot be patched file-by-file, so a mod ships a folder instead: these merge into
+`models/gta3.img`, `models/gta_int.img` and `models/cutscene.img`.
+
+- **Top level of the mod only, and the name must match exactly.** `models/gta3img/` or a nested
+  `models/gta3_img/` is copied verbatim as loose files the game never reads.
+- **Place an asset in the archive its STOCK copy lives in.** An interior model belongs in `gta_int_img/`; put
+  it in `gta3_img/` and it shadows nothing.
+- Loose files inside become entries by name — added if new, replacing an existing entry otherwise.
+- **`Remove original/`** (also `Remove originals`, `remove-original`, …): the file NAMES inside are DELETED
+  from the archive. The contents are irrelevant — mods ship the retired originals for reference.
+- A subfolder holding PNGs is a **texture folder for an archive-internal `<folder>.txd`** (below).
+- Any other subfolder is organisational and is recursed — real packs ship `gta3_img/LV/…` layouts.
+- `<name>.ipl.merge` inside an IMG folder EDITS the named binary stream entry instead of replacing it; those
+  run last, after every data merge has rebased the streams.
+
+### Texture folders: a folder named like a `.txd`, holding PNGs
+
+**A directory whose sibling `<dir>.txd` exists in the install is a texture folder**: its PNGs merge INTO that
+dictionary instead of being copied as files.
+
+```
+models/generic/vehicle/carplate.png   →  merges into models/generic/vehicle.txd
+gta3_img/previon/remap.png            →  merges into the previon.txd ENTRY inside gta3.img
+```
+
+- The texture NAME is the PNG's basename, matched case-insensitively: an existing texture of that name is
+  **replaced**, a new one is **added**. Every other texture in the dictionary is left untouched — this is a
+  merge, never a rewrite.
+- Format is chosen from the image: **DXT5 when it carries real alpha, DXT1 when it does not**. PNGs must be
+  8-bit RGB/RGBA and non-interlaced.
+- Within a mod, files are copied BEFORE subfolders, so a `.txd` the same mod also ships is in place first and
+  gets patched rather than lost.
+- Inside an IMG folder, a texture folder whose `.txd` entry is missing is a **loud warning**, not a silent
+  skip.
+
+### `<target>.merge` — edit a data file instead of replacing it
+
+A mod ships `multiobj.ide.merge` next to the game path it wants to change. Directives apply to the CURRENT
+state of the target, so merge-mods stack with each other and with earlier whole-file replacements:
+
+```
+remove from "objs":
+1682, ap_radar1_01, ap_misc1bit, 100, 2097152
+
+add to "anim":
+1682, ap_radar1_01, ap_misc1bit, radar, 600, 0
+
+replace in "inst":
+- 710, vgs_palm01, 0, 2110.67, -977.73, 66.13, 0, 0, 0, 1, -1
++ 710, vgs_palm01, 0, 2110.67, -977.73, -300.0, 0, 0, 0, 1, -1
+```
+
+- `.ide` targets: `remove` deletes by ID, `add` appends (creating the section when absent) and replaces a
+  same-ID entry.
+- `.ipl` targets: index-safe only, because row ORDER is data (binary streams and `lod` columns address rows
+  by index). `add` appends before the section's `end`, `replace` swaps in place, `remove` matches the whole
+  whitespace-normalised line and — for `inst` — rebases every surviving `lod` link and reports the removed
+  indexes so the area's binary streams are patched the same way.
+- A `.merge` whose target does not exist in the install is a hard error, not a skip.
+- `#` and `//` comments are ignored.
+
+---
+
+## 3. Modloader-style bake
+
+Triggered by a loader `.txt` (a `Loader.txt`-style file declaring `IDE`/`IPL`/`COLFILE` paths). The mod's own
+folder layout stops mattering; every file is bucketed by bare name:
+
+| Bare name | Where it goes |
+| --- | --- |
+| `.dff` `.txd` `.col` `.ifp`, `*_stream<N>.ipl` | Injected into `models/gta3.img` **only** — an asset whose stock home is `gta_int.img` lands in the wrong archive and shadows nothing. |
+| `object.dat`, `procobj.dat` | Merged ADDITIVELY, row by row (keyed by model / by surface+model). |
+| `.ide`, text `.ipl`, other `.dat` | Written to disk: over the stock file with that bare name, else to the path the loader declared. |
+| the loader `.txt` itself | Its `IDE`/`IPL` lines are appended to `data/gta.dat` (canonicalised to the stock `DATA\MAPS\…` spelling); `COLFILE` is dropped — col rides in the archive. |
+| `Remove original/` (any depth) | The file NAMES retire `gta3.img` entries; contents are never injected. |
+| `*.settings.txt`, CLEO `.cs`, prose `.txt` | Ignored by the map baker. Vehicle settings belong to a vehicle mod — see [vehicles.md](./vehicles.md). |
+
+Loader and data files are read **BOM-aware** (UTF-16 is what Notepad writes); the `.merge` and IPL/IDE
+readers on the overlay path still assume UTF-8.
+
+---
+
+## 4. What is NOT a contract
+
+- **The mod folder's name** — ordering only. Renaming a mod cannot change what it does.
+- **The path a Modloader-style mod uses internally** — bare names decide everything there.
+- **A texture's format in the PNG folder** — it comes from the image's own alpha, not from a naming scheme.
+
+---
+
+## 5. Adding a convention
+
+When a new folder/file name starts meaning something, it goes here in the same change, with what happens when
+it is misspelled. That last part is the point: nearly every rule on this page exists because some spelling of
+it once passed silently. Anything that reports itself needs a line here far less than something that does not.

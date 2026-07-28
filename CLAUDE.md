@@ -183,8 +183,11 @@ Keep these in sync with the code — update them in the same change, not later:
 - `docs/features/` — when developing a feature, update its file's state; a new feature gets its own new file
   (+ a row in `docs/features/README.md`)
 - `docs/contracts/` — when a NAME starts carrying behaviour (a file the pipeline looks for, a frame/material
-  the converter reads, a data row a tool writes), record it in the matching subject file. These are the rules
-  a mod author cannot guess and a reader cannot grep for
+  the converter reads, a data row a tool writes), record it in the matching subject file (`vehicles.md`,
+  `mods.md`; a new SUBJECT gets its own file). These are the rules a mod author cannot guess and a reader
+  cannot grep for. **Every later convention of this kind EXTENDS these docs in the same change** — a name
+  rule that lives only in code is one nobody can follow, and misspelling one is silent by nature, so say
+  what happens when it is spelled wrong
 - `docs/edge-cases/` — when a new limitation/constraint is discovered, add it to the matching file; when one
   is lifted, remove it. Only CURRENT limitations live there, no legacy
 - `docs/performance/` — when a change picks the RUNTIME path over a precomputed/baked one, or takes any
