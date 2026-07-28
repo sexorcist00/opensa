@@ -7,6 +7,7 @@ import type { LampCorona, LampLight } from './vehicle-lamp.system';
 
 import { FakeVehicleHandle } from './vehicle-handle.fake';
 import { VehicleLampSystem } from './vehicle-lamp.system';
+import { VehicleRig } from './vehicle-rig';
 
 const CONFIG: HeadlightConfig = {
   beamIntensity: 2.2,
@@ -17,7 +18,8 @@ const CONFIG: HeadlightConfig = {
   intensity: 1,
 };
 
-/** A car at the origin facing +Y, with authored lamp dummies. */
+/** A car at the origin facing +Y, with authored lamp dummies. Its rig is real — the lamps drive the
+ *  retractable-headlight travel through it. */
 function car(): EnterableVehicle {
   const handle = new FakeVehicleHandle();
   handle.lampAnchors.set('head', [0.8, 1.8, 0]);
@@ -29,6 +31,7 @@ function car(): EnterableVehicle {
     heading: 0,
     orientation: [0, 0, 0, 1],
     position: [0, 0, 0],
+    rig: new VehicleRig(handle),
   } as unknown as EnterableVehicle;
 }
 
@@ -106,6 +109,36 @@ describe('VehicleLampSystem', () => {
       run();
 
       expect(handle.lamps?.headlights).toBe(false);
+    });
+
+    it('lowers the retractable headlights of the car the driver just left', () => {
+      const vehicle = car();
+      const handle = vehicle.handle as FakeVehicleHandle;
+      const seated = { value: true };
+      const { run } = harness(
+        (sinks) =>
+          new VehicleLampSystem(
+            {
+              getActive: () => (seated.value ? vehicle : null),
+              isBraking: () => false,
+              isSeated: () => seated.value,
+            } as unknown as EnterVehicleSystem,
+            () => true,
+            () => CONFIG,
+            sinks,
+          ),
+      );
+
+      run();
+      vehicle.rig.update(1); // past the 0.7 s arc
+
+      expect(handle.popUpLights).toBe(1);
+
+      seated.value = false;
+      run();
+      vehicle.rig.update(1);
+
+      expect(handle.popUpLights).toBe(0);
     });
 
     it('a corona seen from BEHIND its lamp is dropped (a headlight must not glow through the boot)', () => {

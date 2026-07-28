@@ -13,6 +13,7 @@
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
+import { parseVehicleFeatures, UP_DOWN_LIGHTS } from '@opensa/renderware/parsers/text/vehicle-features.parser';
 
 import type { ModelBundles } from './model-bundle';
 
@@ -52,6 +53,9 @@ export function packVehicles(
     throw new Error('data/vehicles.ide not found — cannot enumerate vehicles');
   }
   const defs = [...parseVehicleDefs(text).values()];
+  // What the mods declared about their own models (vehicle-installer wrote it) — absent on a stock game dir,
+  // and then every car is judged by its geometry alone.
+  const features = parseVehicleFeatures(fs.getText('data/vehicle-features.txt') ?? '');
 
   const deletes: string[] = [];
   const failed: { error: string; model: string }[] = [];
@@ -65,7 +69,12 @@ export function packVehicles(
     const model = def.model.toLowerCase();
     const dff = `${model}.dff`;
     try {
-      const built = buildVehicleOsm(fs, model, { txd: def.txd.toLowerCase(), wheelScale: def.wheelScale });
+      const declared = features.get(model) ?? [];
+      const built = buildVehicleOsm(fs, model, {
+        ...(declared.includes(UP_DOWN_LIGHTS) ? { popUpLights: true } : {}),
+        txd: def.txd.toLowerCase(),
+        wheelScale: def.wheelScale,
+      });
       // The `.ostex` is the MODEL's baked dictionary (its own TXD plus the shared vehicle sets, merged by
       // the builder), so it belongs to the model, not to the TXD it came from.
       bundles.add(model, { sections: built.sections });

@@ -18,6 +18,7 @@ import type {
   VehicleModelData,
   VehicleModelPart,
   VehicleModelSubmesh,
+  VehiclePopUpLights,
   VehicleWheel,
 } from './types';
 
@@ -58,6 +59,12 @@ const PAINT_MARKERS = new Map<string, number>([
 const DOOR_RE = /^door_(lf|rf|lr|rr)_ok$/;
 /** A damage twin: `<component>_ok` / `<component>_dam` — see {@link componentFrame}. */
 const COMPONENT_RE = /^(.+)_(?:ok|dam)$/;
+/** SA's generic moving components. One of them is a pop-up headlight pod — see {@link popUpLights}. */
+const MISC_RE = /^misc_[a-h]$/;
+/** A pop-up pod is parked FACING DOWN and swings up; these bound the pitch that counts as "parked". Below
+ *  the floor is a lamp that already looks where it lights (a light bar), above the ceiling is not a lamp. */
+const POPUP_MIN_ANGLE = Math.PI / 36; // 5°
+const POPUP_MAX_ANGLE = (Math.PI * 5) / 9; // 100°
 const EXTRA_RE = /^extra\d+$/;
 const WHEEL_CONTAINER_RE = /^f_wheel/;
 /** Per-corner wheel atomics — SA's "different front/rear wheels" convention; `m` = 3-axle trucks. */
@@ -159,6 +166,8 @@ export function buildVehicleModel(
     night[vertex * 4 + 3] = occlusion[vertex];
   }
 
+  const popUp = popUpLights(scratch, options.popUpLights === true);
+
   return {
     colors: new Uint8Array(scratch.colors),
     doors,
@@ -171,6 +180,7 @@ export function buildVehicleModel(
     night,
     normals: new Float32Array(scratch.normals),
     parts: scratch.parts,
+    ...(popUp ? { popUpLights: popUp } : {}),
     positions: new Float32Array(scratch.positions),
     reflect: new Uint8Array(scratch.reflect),
     submeshes: scratch.submeshes,
@@ -582,11 +592,6 @@ function frameName(clump: RWClump, frameIndex: number): string {
   return clump.frames[frameIndex]?.name.trim().toLowerCase() ?? '';
 }
 
-/**
- * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
- * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
- */
-
 function hasWheelDummies(clump: RWClump): boolean {
   return clump.frames.some((frame) => WHEEL_DUMMY_RE.test(frame.name.trim().toLowerCase()));
 }
@@ -596,6 +601,11 @@ function hasWheelDummies(clump: RWClump): boolean {
 function indicesFor(vertexCount: number, indices: number[]): Uint16Array | Uint32Array {
   return vertexCount > 65536 ? new Uint32Array(indices) : new Uint16Array(indices);
 }
+
+/**
+ * SA shows at most ONE `extraN` component — they are mutually-exclusive alternatives modelled at the same
+ * spot (the Benson's swappable ad boards). Rendering them all overlaps into a jumble.
+ */
 
 /**
  * The shared wheel atomic, instanced at every `wheel_*_dummy`, each dummy's own orientation honoured and the
@@ -749,6 +759,30 @@ function materialSurface(
   };
 }
 
+/** Mean vertex normal over a part's SHOWN faces, or only its head-lamp ones. Null when it has none. */
+function meanNormal(scratch: Scratch, part: number, headOnly: boolean): [number, number, number] | null {
+  const sum: [number, number, number] = [0, 0, 0];
+  let count = 0;
+  for (const submesh of scratch.submeshes) {
+    if (submesh.part !== part || submesh.kind !== 'body') {
+      continue;
+    }
+    for (let at = 0; at < submesh.indexCount; at += 1) {
+      const vertex = scratch.indices[submesh.indexOffset + at];
+      if (headOnly && (scratch.meta[vertex * 4 + 3] & 0xf) !== LampTag.head) {
+        continue;
+      }
+      sum[0] += scratch.normals[vertex * 3];
+      sum[1] += scratch.normals[vertex * 3 + 1];
+      sum[2] += scratch.normals[vertex * 3 + 2];
+      count += 1;
+    }
+  }
+  const length = Math.hypot(sum[0], sum[1], sum[2]);
+
+  return count === 0 || length === 0 ? null : [sum[0] / length, sum[1] / length, sum[2] / length];
+}
+
 /** One channel of a material colour, modulated by a prelit set when the geometry carries one. */
 function modulate(channel: number, prelit: null | Uint8Array, vertex: number, offset: number): number {
   return prelit ? Math.round((channel * prelit[vertex * 4 + offset]) / 255) : channel;
@@ -761,6 +795,41 @@ function paintSlot(material: RWMaterial): number {
 /** Which plate face a material paints, or null for ordinary body geometry. See {@link PLATE_TEXTURES}. */
 function plateFace(material: RWMaterial): 'back' | 'face' | null {
   return PLATE_TEXTURES.get(material.texture?.name.toLowerCase() ?? '') ?? null;
+}
+
+/**
+ * The retractable-headlight component, READ OFF THE MODEL — no per-car list anywhere.
+ *
+ * A pop-up pod is a `misc_*` component (SA's generic moving-component slot) that holds HEAD-LAMP faces, and
+ * it is authored PARKED: those faces look forward and DOWN into the nose. That pitch is the whole feature —
+ * the angle the pod must swing UP for its lamps to face where they light. So the open angle is
+ * `atan2(-n.z, n.y)` of the mean lamp normal, per model, derived. Measured: the stock ZR-350 comes out at
+ * 40°, the 1986 Starion mod at 53°, and every other stock `misc_*` (dozer blade, forklift mast, tow crane,
+ * lowrider hydraulics — 41 models carry one) holds no lamp face at all.
+ *
+ * The angle band is the guard against a false positive: a lamp that already looks where it lights is a light
+ * BAR, not a pod, and anything past {@link POPUP_MAX_ANGLE} is not a headlight assembly.
+ *
+ * `forced` is the build-time `features.txt` → `UP/DOWN_LIGHTS` declaration, for a mod whose pod carries no
+ * marker (its own texture instead of `vehiclelights`): the pod is then measured by its whole face set rather
+ * than by its lamps. Nothing about this reaches the runtime modloader path — it is resolved at build time.
+ */
+function popUpLights(scratch: Scratch, forced: boolean): null | VehiclePopUpLights {
+  for (const [part, definition] of scratch.parts.entries()) {
+    if (!MISC_RE.test(definition.name)) {
+      continue;
+    }
+    const normal = meanNormal(scratch, part, true) ?? (forced ? meanNormal(scratch, part, false) : null);
+    if (!normal) {
+      continue;
+    }
+    const angle = Math.atan2(-normal[2], normal[1]);
+    if (angle > POPUP_MIN_ANGLE && angle < POPUP_MAX_ANGLE) {
+      return { angle, part };
+    }
+  }
+
+  return null;
 }
 
 /**

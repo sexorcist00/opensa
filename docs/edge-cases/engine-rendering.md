@@ -59,6 +59,13 @@ Limits and deliberate approximations of the own WebGPU engine.
   exception (088/09a): their root travel IS replayed, endpoint-warped between the real doorway and
   seat. Air/land clips shorter than their state HOLD their last frame (the ~0.4 s `JUMP_glide` vs a
   ~0.9 s flight — looping it jerked mid-air, field 2026-07-24).
+- **Only the DRIVEN car lights up** — headlights, tail lamps, their pool lights and coronas are per-vehicle
+  state and the lamp system drives exactly one car, the one the player is in. Parked and traffic cars stay
+  dark at midnight, and since retractable headlights follow the same signal, their pods stay parked too.
+- **A `features.txt` declaration only reaches a car through the BUILD.** `UP/DOWN_LIGHTS` (and anything else
+  a mod declares) is copied into `data/vehicle-features.txt` by `vehicle-installer` and consumed by
+  opensa-pack; a car loaded through the runtime modloader path is judged by its geometry alone, which finds a
+  pop-up pod only when its lamp faces carry SA's head-lamp markers.
 - **The enter/exit choreography assumes a door that swings OUT, not UP.** The swing itself is generic (a
   rotation about the hinge frame's own local Z, so a mod's scissor door rises correctly), but the sequence
   around it — the 1.2 m standoff ring, the swept-arc clearance behind the hinge, the step-in path — is laid

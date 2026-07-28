@@ -50,6 +50,14 @@ const AIR_SPIN_UP = 0.1 / (SA_STEP * SA_STEP);
 const AIR_SPIN_UP_REVERSE = 0.05 / (SA_STEP * SA_STEP);
 const AIR_SPIN_GATE = 1 / SA_STEP;
 const AIR_SPIN_DECAY = 0.95;
+/**
+ * How fast retractable headlights travel, in fractions of their arc per second — 0.7 s from parked to up.
+ *
+ * The one number here the game does not supply: SA has no pop-up animation at all (the ZR-350's pod is a
+ * plain `misc_a` component the original never moves), so there is no timing to reproduce, only a real motor
+ * to be plausible against — those take about a second. Stated as a visual choice, not a measurement.
+ */
+const POPUP_SPEED = 1 / 0.7;
 
 /** What the rig needs to know about the car's suspension to LEAN its wheels (plan 081/06 §3). */
 export interface VehicleRigSetup {
@@ -101,6 +109,9 @@ export class VehicleRig {
   private lift: null | number[] = null;
   private liftTarget: number[] = [];
 
+  /** Drawn pop-up-headlight travel, 0 (parked) … 1 (up), and where it is heading. */
+  private popUp = 0;
+  private popUpTarget = 0;
   private speed = 0;
   private steerAngle = 0;
   /** What the engine is pulling with (N, signed) — SA's `acceleration`, and the only thing that spins a
@@ -129,6 +140,11 @@ export class VehicleRig {
     this.lift ??= [...values];
   }
 
+  /** Whether this car's retractable headlights should be up — the same signal that lights its lamps. */
+  setPopUpLights(open: boolean): void {
+    this.popUpTarget = open ? 1 : 0;
+  }
+
   /** Forward speed (units/s) that rolls the wheels. */
   setSpeed(speed: number): void {
     this.speed = speed;
@@ -151,6 +167,7 @@ export class VehicleRig {
         (this.lift as number[])[index] = current + ((this.liftTarget[index] ?? current) - current) * blend;
       });
     }
+    this.movePopUpLights(delta);
     this.handle.wheels.forEach((wheel, index) => {
       this.rollWheel(index, wheel.radius, delta);
       this.handle.setWheel(index, {
@@ -194,6 +211,20 @@ export class VehicleRig {
     // a rolling body, where a solid axle answers it entirely.
 
     return sign * INDEPENDENT_CAMBER_GAIN * (rise / 2);
+  }
+
+  /** Ease the pop-up pods toward their target, and only speak to the handle when the pose actually moved —
+   *  every car runs this every step, and most of them have no pods at all. */
+  private movePopUpLights(delta: number): void {
+    if (this.popUp === this.popUpTarget) {
+      return;
+    }
+    const step = POPUP_SPEED * delta;
+    this.popUp =
+      this.popUpTarget > this.popUp
+        ? Math.min(this.popUpTarget, this.popUp + step)
+        : Math.max(this.popUpTarget, this.popUp - step);
+    this.handle.setPopUpLights(this.popUp);
   }
 
   /**

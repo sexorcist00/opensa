@@ -1,13 +1,19 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { parseFeatures } from './features';
 import { mergeVehicleImg } from './img-merge';
 import { mergeCarcols, mergeCarmods, mergeHandling, mergeIde } from './merge';
 import { addPaletteColors, resolveColorRefs } from './palette';
 import { decodeSettings, parseVehicleSettings } from './settings';
 
+/** The mod's own feature declaration, by the Modloader/IVF name. */
+const FEATURES_FILE = 'features.txt';
+
 /** What one vehicle contributed — its gta3.img entries + the keys `--strip` keeps (model name, handling id). */
 export interface AppliedVehicle {
+  /** What the mod's `features.txt` declares (uppercased tokens) — empty when it ships none. */
+  features: string[];
   /** Handling id (uppercase) from the ide line's col 4 / the handling line / the model — for handling.cfg strip. */
   handlingId?: string;
   /** gta3.img entry names written (lowercased dff/txd). */
@@ -27,9 +33,16 @@ export function applyVehicle(folderPath: string, outPath: string): AppliedVehicl
   const imgNames = mergeVehicleImg(folderPath, join(outPath, 'models', 'gta3.img'));
   const model = imgNames.find((name) => name.endsWith('.dff'))?.replace(/\.dff$/, '');
 
-  const settingsFile = readdirSync(folderPath).find((name) => name.toLowerCase().endsWith('.txt'));
+  const entries = readdirSync(folderPath);
+  // `features.txt` sits in the same folder and also ends in `.txt` — taking the FIRST `.txt` picked it over
+  // `previon.settings.txt` (alphabetical order) and the car lost its whole settings file.
+  const featuresFile = entries.find((name) => name.toLowerCase() === FEATURES_FILE);
+  const features = featuresFile ? parseFeatures(readFileSync(join(folderPath, featuresFile), 'utf8')) : [];
+  const settingsFile =
+    entries.find((name) => name.toLowerCase().endsWith('.settings.txt')) ??
+    entries.find((name) => name.toLowerCase().endsWith('.txt') && name.toLowerCase() !== FEATURES_FILE);
   if (!settingsFile) {
-    return { imgNames, model, warnings: [] };
+    return { features, imgNames, model, warnings: [] };
   }
   const warnings: string[] = [];
   const settings = parseVehicleSettings(decodeSettings(readFileSync(join(folderPath, settingsFile))), (message) =>
@@ -63,7 +76,7 @@ export function applyVehicle(folderPath: string, outPath: string): AppliedVehicl
     editFile(data('carmods.dat'), (text) => mergeCarmods(text, settings.carmodsLine!));
   }
 
-  return { handlingId: handlingId(settings, model), imgNames, model, warnings };
+  return { features, handlingId: handlingId(settings, model), imgNames, model, warnings };
 }
 
 function editFile(path: string, edit: (text: string) => string): void {

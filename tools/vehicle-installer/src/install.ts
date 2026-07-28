@@ -1,8 +1,12 @@
-import { cpSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, parse, resolve, sep } from 'node:path';
 
 import { applyVehicle } from './apply-vehicle';
+import { formatFeatureTable } from './features';
 import { stripOutput } from './strip';
+
+/** Where the per-model feature declarations land in the built game dir (read by opensa-pack). */
+export const FEATURES_TABLE = join('data', 'vehicle-features.txt');
 
 export interface InstallOptions {
   gamePath: string;
@@ -46,6 +50,7 @@ export function install(options: InstallOptions): void {
   const imgNames = new Set<string>();
   const models = new Set<string>();
   const handlingIds = new Set<string>();
+  const features = new Map<string, readonly string[]>();
   for (const vehicle of vehicles) {
     const applied = applyVehicle(join(inPath, vehicle), outPath);
     applied.warnings.forEach((warning) => console.warn(`vehicle-installer: ${vehicle}: ${warning}`));
@@ -56,6 +61,15 @@ export function install(options: InstallOptions): void {
     if (applied.handlingId) {
       handlingIds.add(applied.handlingId);
     }
+    if (applied.model && applied.features.length > 0) {
+      features.set(applied.model, applied.features);
+    }
+  }
+  // The declarations travel as DATA in the built game dir, because the converter runs later and in another
+  // process; `opensa-pack` reads this file when it bakes each car. Written only when a mod declared
+  // something, so a plain install leaves no stray file.
+  if (features.size > 0) {
+    writeFileSync(join(outPath, FEATURES_TABLE), formatFeatureTable(features));
   }
 
   if (options.strip) {
@@ -63,7 +77,9 @@ export function install(options: InstallOptions): void {
   }
 
   console.log(
-    `vehicle-installer: ${vehicles.length} vehicle(s) → ${outPath} (${imgNames.size} img entries)` +
+    `vehicle-installer: ${vehicles.length} vehicle(s) → ${outPath} (${imgNames.size} img entries` +
+      (features.size > 0 ? `, ${features.size} with declared features` : '') +
+      ')' +
       (options.strip ? ' [stripped to installed]' : ''),
   );
 }

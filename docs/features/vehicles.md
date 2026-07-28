@@ -28,6 +28,18 @@ host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033
   a hinge frame ABOVE the dummy so its local Z lies along the car's X gets a vertical opening for free
   (the 1995 Diablo does exactly this — and parks 1.518 m on the `_ok` frame, which used to throw its doors
   clear of the car, field 2026-07-28).
+- **Retractable ("pop-up") headlights**, read off the model — there is no per-car list anywhere. A pop-up pod
+  is a `misc_*` component (SA's generic moving-component slot) holding HEAD-LAMP faces, and it is authored
+  PARKED: those faces look forward and DOWN into the nose. That pitch IS the feature, so the open angle is
+  `atan2(-n.z, n.y)` of the pod's mean lamp normal — measured: stock **ZR-350 = 40.4°**, the 1986 Starion mod
+  (`previon`) **= 52.6°**. Swept over the whole stock archive, 49 models carry a `misc_*` component and
+  exactly ONE is detected (the zr350) — the dozer blade, forklift mast, tow crane and lowrider hydraulics hold
+  no lamp face, and a lamp that already looks where it lights is a light BAR, which the 5°…100° band rejects.
+  The pod rides the same signal that lights the lamps and travels over 0.7 s (`VehicleRig`, fixed step). A mod
+  whose pod uses its own texture instead of `vehiclelights` (so it carries no marker) can DECLARE itself: a
+  `features.txt` in the mod folder holding `UP/DOWN_LIGHTS` — the Modloader/IVF convention. `vehicle-installer`
+  copies each mod's declaration into `data/vehicle-features.txt`, and opensa-pack reads it while baking that
+  car. That path is BUILD-time only; the runtime modloader path gets the geometry-derived detection alone.
 - **Paint**: carcols.dat palettes (`car` = 2-colour, `car4` = 4-colour sections); SA editable-material
   markers — primary (60,255,0), secondary (255,0,175), tertiary (0,255,255 cyan), quaternary
   (255,255,0 yellow). NB (255,175,0)/(255,60,0) are per-lamp ids on the `vehiclelights` atlas, **not**

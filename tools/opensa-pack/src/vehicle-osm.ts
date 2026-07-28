@@ -34,6 +34,9 @@ export interface VehicleOsm {
 }
 
 export interface VehicleOsmOptions {
+  /** `features.txt` → `UP/DOWN_LIGHTS`: force the retractable-headlight component on a pod whose faces
+   *  carry no head-lamp marker. */
+  popUpLights?: boolean;
   /** `vehicles.ide` txd name — defaults to the model name, which is what stock SA uses for every car. */
   txd?: string;
   /** `vehicles.ide` wheelScale as [front, rear]. */
@@ -52,6 +55,7 @@ export function buildVehicleOsm(fs: AssetFileSystem, model: string, options: Veh
     },
     sharedTxds: SHARED_VEHICLE_TXDS,
     ...(options.txd ? { txd: options.txd } : {}),
+    ...(options.popUpLights ? { popUpLights: true } : {}),
     ...(options.wheelScale ? { wheelScale: options.wheelScale } : {}),
   });
 

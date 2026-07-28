@@ -28,6 +28,8 @@ export class FakeVehicleHandle implements VehicleHandle {
   readonly lampAnchors = new Map<'head' | 'tail', Vec3>();
   lamps: null | VehicleLampState = null;
   readonly parts: VehiclePartInfo[];
+  /** Last {@link setPopUpLights} value, 0 (parked) … 1 (up). */
+  popUpLights = 0;
   /** Last pose pushed per detached part. */
   readonly poses = new Map<string, VehiclePose>();
   position: Vec3 = [0, 0, 0];
@@ -90,6 +92,10 @@ export class FakeVehicleHandle implements VehicleHandle {
     } else {
       this.damaged.delete(name);
     }
+  }
+
+  setPopUpLights(open: number): void {
+    this.popUpLights = open;
   }
 
   setTransform(position: Vec3, rotation: VehicleQuat): void {

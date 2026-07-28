@@ -118,12 +118,16 @@ export class VehicleLampSystem implements System {
     this.sinks.reset();
     if (this.lit && this.lit !== car) {
       this.lit.handle.setLamps({ brakes: false, headlights: false, intensity: cfg.intensity });
+      this.lit.rig.setPopUpLights(false);
     }
     this.lit = car;
     if (!car) {
       return;
     }
     car.handle.setLamps(state);
+    // Retractable headlights follow the same signal that lights the lamps — the pods are only up because the
+    // lights are on. The RIG owns the travel (it runs in the fixed step, where a smooth arc can be timed).
+    car.rig.setPopUpLights(state.headlights);
 
     const eye = this.sinks.eye();
     for (const lamp of lampsOf(car)) {

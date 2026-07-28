@@ -28,7 +28,10 @@ import type { VehicleLampState } from '../vehicle/vehicle-lamps';
  * how the model reached the GPU. Both spawn paths satisfy it structurally: the unoptimized path's
  * `VehicleModelData` and the optimized path's `.osm` `DESC` fixture (opensa-pack 003).
  */
-export type VehicleRigData = Pick<VehicleModelData, 'doors' | 'dummies' | 'parts' | 'submeshes' | 'wheels'>;
+export type VehicleRigData = Pick<
+  VehicleModelData,
+  'doors' | 'dummies' | 'parts' | 'popUpLights' | 'submeshes' | 'wheels'
+>;
 
 /** Column-major mat4 scratch for the detached-part world matrix. */
 const WORLD = new Float32Array(16);
@@ -168,6 +171,15 @@ export class EngineVehicleHandle implements VehicleHandle {
       this.damaged.delete(name);
     }
     this.setLodBand(this.band); // one place decides visibility — damage and LOD compose
+  }
+
+  setPopUpLights(open: number): void {
+    const popUp = this.data.popUpLights;
+    if (popUp) {
+      // About the pod's own X — the lateral axis it hinges on. The ANGLE came from the model (the pitch its
+      // lamps are parked at), so nothing here knows which car it is.
+      this.instance.entity.setPartRotation(popUp.part, axisAngle(0, open * popUp.angle));
+    }
   }
   setTransform(position: Vec3, rotation: VehicleQuat): void {
     this.rotation = rotation;

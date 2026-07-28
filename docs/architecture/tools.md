@@ -12,7 +12,9 @@ never the app. The dependency picture is the tools cluster of
 - **mod-installer** — layers GTA-SA mod folders onto a base game: plain file overlays plus a Modloader
   `loader.txt` bake into `gta.dat`/`gta3.img`; cumulative, alphabetical. Lib `src/install.ts`.
 - **vehicle-installer** — vehicle mod folders → `gta3.img` + merged `handling.cfg` / `vehicles.ide` /
-  `carcols.dat` / `carmods.dat`.
+  `carcols.dat` / `carmods.dat`. A mod's settings file is decoded by its own encoding (UTF-16 is what most
+  authors ship) and every block it cannot classify is reported. A mod's `features.txt` (Modloader/IVF) is
+  copied into `data/vehicle-features.txt`, which opensa-pack reads while baking that car.
 - **ped-installer** — ped mod folders → `gta3.img` + merged `peds.ide`.
 - **map-optimizer** — lossless DFF/TXD conditioning (smooth-group normals, prelit sync, dedupe, mips) that
   yields a drop-in game dir; refuses geometry it can't provably remap. Lib `src/run.ts`.

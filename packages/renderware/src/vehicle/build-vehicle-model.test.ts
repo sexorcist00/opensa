@@ -40,6 +40,21 @@ function geometry(materials: RWMaterial[] = [material()]): RWGeometry {
   };
 }
 
+/** A `misc_*` pod: one triangle whose normal is `normal`, on a head-lamp material unless `marked` is false. */
+function lampPod(normal: [number, number, number], marked = true): RWGeometry {
+  const lamp = material({
+    color: marked ? HEAD_LAMP_MARKER : [200, 200, 200, 255],
+    texture: { name: marked ? 'vehiclelights128' : 'bodywork' } as RWMaterial['texture'],
+    textured: true,
+  });
+
+  return {
+    ...geometry([lamp]),
+    flags: GeometryFlag.POSITIONS | GeometryFlag.NORMALS,
+    normals: new Float32Array([...normal, ...normal, ...normal]),
+  };
+}
+
 function material(partial: Partial<RWMaterial> = {}): RWMaterial {
   return { color: [200, 200, 200, 255], texture: null, textured: false, ...partial };
 }
@@ -56,6 +71,38 @@ describe('buildVehicleModel', () => {
 
       expect(built.wheels).toHaveLength(0);
       expect(built.parts).toHaveLength(1);
+    });
+
+    it('a misc component whose lamps already face the road is a light BAR, not a pop-up pod', () => {
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis'), frame('misc_a', 0, [0, 2, 0.2])],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 1, geometry: 1 },
+          ],
+          [geometry(), lampPod([0, 1, 0])],
+        ),
+        textures(),
+      );
+
+      expect(built.popUpLights).toBeUndefined();
+    });
+
+    it('a misc component with no lamp faces at all is machinery (a dozer blade), not headlights', () => {
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis'), frame('misc_a', 0, [0, 2, 0.2])],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 1, geometry: 1 },
+          ],
+          [geometry(), lampPod([0, 0.7, -0.7], false)],
+        ),
+        textures(),
+      );
+
+      expect(built.popUpLights).toBeUndefined();
     });
 
     it("every `extraN` alternative ships TAGGED — the pick is the spawn's, not the build's", () => {
@@ -81,6 +128,41 @@ describe('buildVehicleModel', () => {
   });
 
   describe('positive cases', () => {
+    it('reads pop-up headlights off the model: the pod, and the pitch it is parked at', () => {
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis'), frame('misc_a', 0, [0, 2, 0.2])],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 1, geometry: 1 },
+          ],
+          // Parked looking 45° down into the nose — so it has 45° to swing before its lamps face the road.
+          [geometry(), lampPod([0, Math.SQRT1_2, -Math.SQRT1_2])],
+        ),
+        textures(),
+      );
+
+      expect(built.parts[built.popUpLights!.part].name).toBe('misc_a');
+      expect((built.popUpLights!.angle * 180) / Math.PI).toBeCloseTo(45, 4);
+    });
+
+    it("`features.txt` can declare a pod whose faces carry no lamp marker (a mod's own texture)", () => {
+      const parked = clump(
+        [frame('chassis'), frame('misc_a', 0, [0, 2, 0.2])],
+        [
+          { frame: 0, geometry: 0 },
+          { frame: 1, geometry: 1 },
+        ],
+        [geometry(), lampPod([0, Math.SQRT1_2, -Math.SQRT1_2], false)],
+      );
+
+      expect(buildVehicleModel(parked, textures()).popUpLights).toBeUndefined();
+      expect(buildVehicleModel(parked, textures(), { popUpLights: true })?.popUpLights?.angle).toBeCloseTo(
+        Math.PI / 4,
+        4,
+      );
+    });
+
     it('indexes a model past 65 536 vertices as uint32 instead of wrapping it', () => {
       // This used to THROW, and the throw landed in the fixed step — two hi-poly mod cars (86 511 and
       // 82 991 verts) took the whole vehicle system down with them, so NOTHING spawned.

@@ -43,6 +43,9 @@ export interface ModelOsmOptions {
    * wherever the builder bakes a frame transform.
    */
   extraSections?: (built: VehicleModelData, dff: ArrayBuffer, clump: RWClump) => OsmSection[];
+  /** `features.txt` → `UP/DOWN_LIGHTS`: force the retractable-headlight component on a pod whose faces
+   *  carry no head-lamp marker. */
+  popUpLights?: boolean;
   /**
    * Plan the dictionary from the RAW TXD rather than from the builder's decoded array — what a MAP OBJECT
    * needs, because the builder dropped its mip chain (95 % of the modded map textures carry one). The result
@@ -87,6 +90,7 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
   const clump = parseDff(dff);
   const dictionary = new VehicleTextures(txds);
   const built = buildVehicleModel(clump, dictionary, {
+    ...(options.popUpLights ? { popUpLights: true } : {}),
     ...(options.wheelScale ? { wheelScale: options.wheelScale } : {}),
   });
   // The raw-TXD dictionary rewrites the per-vertex layers, so it must run BEFORE the fixture is packed —
@@ -197,6 +201,7 @@ export function packVehicleFixture(
       layout,
       name,
       parts: [...built.parts],
+      ...(built.popUpLights ? { popUpLights: built.popUpLights } : {}),
       submeshes: [...built.submeshes],
       textures: {
         height: built.texture.height,

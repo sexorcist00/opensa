@@ -51,6 +51,9 @@ export const PaintSlot = {
 } as const;
 
 export interface VehicleBuildOptions {
+  /** Force {@link VehiclePopUpLights} on a `misc_*` component whose faces carry no head-lamp marker — the
+   *  build-time `features.txt` → `UP/DOWN_LIGHTS` declaration. Absent = derive from the model alone. */
+  popUpLights?: boolean;
   /** `vehicles.ide` wheelScale as [front, rear] — SA scales the axles separately. Absent = [1, 1]. */
   wheelScale?: readonly [number, number];
 }
@@ -93,6 +96,8 @@ export interface VehicleFixture {
   };
   name: string;
   parts: VehicleModelPart[];
+  /** Absent on models without a retractable-headlight component, and on paks built before it existed. */
+  popUpLights?: VehiclePopUpLights;
   submeshes: VehicleModelSubmesh[];
   textures: { height: number; names: string[]; offset: number; width: number };
   /** `'world'` = the submeshes' `array` fields are refs into the SHARED world plan and the file carries no
@@ -123,6 +128,8 @@ export interface VehicleModelData {
   night: Uint8Array;
   normals: Float32Array;
   parts: readonly VehicleModelPart[];
+  /** The retractable-headlight component, if this model has one. */
+  popUpLights?: VehiclePopUpLights;
   positions: Float32Array;
   /**
    * Per-vertex REFLECTION slots (B5r), straight from the DFF's material-effect plugins:
@@ -193,6 +200,18 @@ export interface VehicleModelSubmesh {
   /** True when this submesh is the WHEEL's rubber (`wheel-tyre.ts` — a geometric test, not a name). Rubber
    *  never reflects, and a damageable tyre will want to find itself later. Absent = not a tyre. */
   tyre?: boolean;
+}
+
+/**
+ * A retractable headlight assembly (the ZR-350's, and every mod that copies the convention): the `misc_*`
+ * component the car parks its lamps in, plus how far it has to pitch UP for those lamps to face where they
+ * light. Absent when the model has no such component.
+ */
+export interface VehiclePopUpLights {
+  /** Open angle (rad) about the part's own X axis, DERIVED — see `popUpLights` in the builder. */
+  angle: number;
+  /** The `misc_*` part index. */
+  part: number;
 }
 
 export interface VehicleTextureArray {

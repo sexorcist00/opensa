@@ -289,5 +289,28 @@ describe('VehicleRig', () => {
       expect(handle.wheelState[0].lift).toBeGreaterThan(-0.2);
       expect(handle.wheelState[0].lift).toBeLessThan(-0.1);
     });
+
+    it('retractable headlights TRAVEL to their target instead of snapping, and stop there', () => {
+      const { handle, rig } = rigWith({ front: true, radius: 0.4 });
+
+      rig.setPopUpLights(true);
+      rig.update(0.1); // 0.7 s of travel → a tenth of it per 0.1 s step
+
+      expect(handle.popUpLights).toBeGreaterThan(0);
+      expect(handle.popUpLights).toBeLessThan(1);
+
+      for (let step = 0; step < 10; step += 1) {
+        rig.update(0.1);
+      }
+
+      expect(handle.popUpLights).toBe(1); // clamped at the top, never past it
+
+      rig.setPopUpLights(false);
+      for (let step = 0; step < 10; step += 1) {
+        rig.update(0.1);
+      }
+
+      expect(handle.popUpLights).toBe(0);
+    });
   });
 });

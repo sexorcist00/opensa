@@ -120,6 +120,35 @@ describe.skipIf(!hasFixtures)('install (end-to-end, real data fixtures)', () => 
       );
     });
 
+    it("a mod's features.txt lands in the table and does NOT shadow its settings file", () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'in');
+      const out = join(root, 'out');
+
+      mkdirSync(join(game, 'data'), { recursive: true });
+      for (const file of DATA_FILES) {
+        cpSync(join(DATA, file), join(game, 'data', file));
+      }
+      mkdirSync(join(game, 'models'), { recursive: true });
+      const baseImg = createImg();
+      baseImg.set('admiral.dff', Uint8Array.of(9));
+      writeFileSync(join(game, 'models', 'gta3.img'), baseImg.build());
+
+      const folder = join(mods, 'admiral - 1976 Mercedes-Benz 230');
+      mkdirSync(folder, { recursive: true });
+      writeFileSync(join(folder, 'admiral.dff'), Uint8Array.of(1));
+      // `features.txt` sorts BEFORE `admiral.settings.txt`, which is how it used to swallow the settings.
+      writeFileSync(join(folder, 'features.txt'), 'UP/DOWN_LIGHTS\n');
+      writeFileSync(join(folder, 'admiral.settings.txt'), HANDLING);
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      expect(readFileSync(join(out, 'data', 'vehicle-features.txt'), 'utf8')).toContain('admiral UP/DOWN_LIGHTS');
+      expect(parseHandling(readFileSync(join(out, 'data', 'handling.cfg'), 'utf8')).get('ADMIRAL')?.fields[0]).toBe(
+        '9999.0',
+      );
+    });
+
     it('appends custom palette colours and resolves the carcols newN refs (cabbie-style)', () => {
       const game = join(root, 'game');
       const mods = join(root, 'in');

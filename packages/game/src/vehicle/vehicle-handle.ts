@@ -44,6 +44,11 @@ export interface VehicleHandle {
   setLodBand(band: VehicleBand): void;
   /** Swap a part between its intact and damaged meshes. */
   setPartDamaged(name: string, damaged: boolean): void;
+  /**
+   * How far this car's retractable headlights stand open, 0 (parked in the nose) … 1 (facing the road).
+   * A model without a pop-up component ignores it, so callers never have to ask whether this car has them.
+   */
+  setPopUpLights(open: number): void;
   /** Chassis pose from the rigid body (native Z-up). */
   setTransform(position: Vec3, rotation: VehicleQuat): void;
   /** One wheel's pose — a shaped argument on purpose (plan 081/06 §3.3): positional numbers about
