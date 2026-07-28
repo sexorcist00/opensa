@@ -457,6 +457,14 @@ export interface VehicleWheelReading {
   readonly suspensionLength: number;
 }
 
+/** One wheel's demand-over-cap record (089/02) — see {@link PhysicsWorld.readVehicleWheelSlip}. */
+export interface VehicleWheelSlip {
+  /** How far the brake demand exceeded the tyre's cap (0 = gripping; the handbrake reads exactly 1). */
+  readonly brakeExcess: number;
+  /** How far the engine's force exceeded the tyre's cap — wheelspin surplus (0 = gripping). */
+  readonly spinExcess: number;
+}
+
 /** One raycast wheel: its hub position in vehicle space + rolling radius. */
 export interface VehicleWheelSpec {
   connection: Vec3;
@@ -502,6 +510,8 @@ export class PhysicsWorld {
    *  of the fixed step, which `physicsMs` lumps in with the solver (081/07 §3). Taking it zeroes it, so a
    *  step that never ran (paused, or a menu frame) cannot report the previous step's cost again. */
   private vehicleStepMs = 0;
+  /** Per-controller demand-over-cap records (089/02), written by {@link setVehicleControls} each step. */
+  private readonly wheelSlip = new WeakMap<VehicleController, Float32Array>();
   private readonly world: RapierWorld;
 
   constructor(rapier: Rapier) {
@@ -1060,6 +1070,26 @@ export class PhysicsWorld {
   }
 
   /**
+   * How far past its tyre this step's DEMAND went, per wheel (089/02 tyre smoke) — recorded by
+   * {@link setVehicleControls} at the only moment the caps are known. `brakeExcess` > 0 means the pedal (or
+   * the handbrake, which reads exactly 1) asked for more impulse than the tyre could give — SA's locked
+   * wheel; `spinExcess` > 0 means the engine force was clamped by the tyre — wheelspin. Null before the
+   * first controls application (a parked, never-driven car).
+   */
+  readVehicleWheelSlip(controller: VehicleController): null | readonly VehicleWheelSlip[] {
+    const stored = this.wheelSlip.get(controller);
+    if (!stored) {
+      return null;
+    }
+    const slips: VehicleWheelSlip[] = [];
+    for (let i = 0; i * 2 < stored.length; i += 1) {
+      slips.push({ brakeExcess: stored[i * 2], spinExcess: stored[i * 2 + 1] });
+    }
+
+    return slips;
+  }
+
+  /**
    * The SA surface id under each wheel (plan 081/10 step 4) — `null` for a wheel in the air, or on ground
    * whose collision carries no material.
    *
@@ -1185,6 +1215,11 @@ export class PhysicsWorld {
     // unboosted base below, so launches, acceleration and braking never move with the dials.
     const ratio = Math.abs(speed) / this.speedGrip.reference;
     const boost = Math.min(1 + ratio * ratio, this.speedGrip.cap);
+    let slip = this.wheelSlip.get(controller);
+    if (!slip || slip.length !== wheels.length * 2) {
+      slip = new Float32Array(wheels.length * 2);
+      this.wheelSlip.set(controller, slip);
+    }
     wheels.forEach((wheel, i) => {
       const driven = drive === '4' || (drive === 'F') === wheel.front;
       const load = controller.wheelSuspensionForce(i) ?? 0;
@@ -1217,6 +1252,12 @@ export class PhysicsWorld {
       // that is the whole mechanism of a handbrake turn, and it needs no separate "grip cut" to model.
       const locked = handbrake && !wheel.front;
       controller.setWheelBrake(i, locked ? grip * step : Math.min(perBrake * axle, grip * step));
+      // The demand-over-cap record the tyre smoke reads (089/02): only HERE are demand and cap both known.
+      // Excess, not saturation: Rapier caps a straight-line brake at the grip, so "the wheel is at its cap"
+      // says nothing — "the driver asked for MORE than the cap" is what a locked wheel means.
+      const cap = grip * step;
+      slip[i * 2] = locked ? 1 : cap > 0 ? Math.max(0, (perBrake * axle) / cap - 1) : 0;
+      slip[i * 2 + 1] = driven && grip > 0 ? Math.max(0, Math.abs(engine) / grip - 1) : 0;
       // **A locked tyre has almost no lateral bite** — it is skidding, not rolling, and a skidding tyre goes
       // where the car's momentum sends it. That is the half of the handbrake this engine has to say out loud:
       // the original gets it for free because its wheel states already cut adhesion, while Rapier resolves
@@ -1468,6 +1509,17 @@ export class PhysicsWorld {
 
   /** Per-wheel suspension lengths only — the drawn wheels follow them every fixed step (plan 081/06 §3),
    *  and the full {@link readVehicleWheels} reading would be nine fields of waste per wheel per frame. */
+  /** One wheel's contact point (native world space), or null while airborne — the tyre-smoke spawn origin
+   *  (089/02). The controller already computed the point this step; this is a read, not a cast. */
+  wheelContactPoint(controller: VehicleController, wheel: number): [number, number, number] | null {
+    if (!controller.wheelIsInContact(wheel)) {
+      return null;
+    }
+    const point = controller.wheelContactPoint(wheel);
+
+    return point ? [point.x, point.y, point.z] : null;
+  }
+
   /** Which wheels are touching anything, in wheel order — the drawn wheels read it to know whether they turn
    *  with the road or with the engine (plan 081/06). */
   wheelContacts(controller: VehicleController): boolean[] {

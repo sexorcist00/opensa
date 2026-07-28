@@ -1,0 +1,216 @@
+import { describe, expect, it } from 'vitest';
+
+import type { VehicleController, VehicleWheelReading, VehicleWheelSlip } from '../physics/physics-world';
+import type { TyreSmokeCar, TyreSmokePuff } from './vehicle-tyre-smoke.system';
+
+import { TYRE_SMOKE_DEFAULTS, VehicleTyreSmokeSystem } from './vehicle-tyre-smoke.system';
+
+const STEP = 1 / 60;
+
+/** The reading with its readonly stripped — the fake road mutates contact between steps. */
+type MutableWheel = { -readonly [K in keyof VehicleWheelReading]: VehicleWheelReading[K] };
+
+function wheel(overrides: Partial<VehicleWheelReading> = {}): MutableWheel {
+  return {
+    contact: true,
+    forwardImpulse: 0,
+    maxTravel: 0.2,
+    radius: 0.3,
+    restLength: 0.3,
+    rotation: 0,
+    sideImpulse: 0,
+    suspensionForce: 4000,
+    suspensionLength: 0.25,
+    ...overrides,
+  };
+}
+
+const gripping = (): { brakeExcess: number; spinExcess: number } => ({ brakeExcess: 0, spinExcess: 0 });
+
+/** A driveable stand-in: identity orientation, so forward = +Y and lateral = +X in the linvel. */
+function harness(dials = TYRE_SMOKE_DEFAULTS): {
+  puffs: TyreSmokePuff[];
+  run: (steps: number) => void;
+  state: {
+    car: null | TyreSmokeCar;
+    enabled: boolean;
+    linvel: [number, number, number];
+    slips: null | { brakeExcess: number; spinExcess: number }[];
+    wheels: MutableWheel[];
+  };
+} {
+  const state = {
+    car: {
+      body: 1,
+      controller: {} as VehicleController,
+      orientation: [0, 0, 0, 1] as [number, number, number, number],
+    } as null | TyreSmokeCar,
+    enabled: true,
+    linvel: [0, 0, 0] as [number, number, number],
+    slips: [gripping(), gripping(), gripping(), gripping()] as null | { brakeExcess: number; spinExcess: number }[],
+    wheels: [wheel(), wheel(), wheel(), wheel()],
+  };
+  const puffs: TyreSmokePuff[] = [];
+  const system = new VehicleTyreSmokeSystem(
+    () => state.car,
+    {
+      getLinvel: (): [number, number, number] => state.linvel,
+      readVehicleWheels: (): readonly VehicleWheelReading[] => state.wheels,
+      readVehicleWheelSlip: (): null | readonly VehicleWheelSlip[] => state.slips,
+      wheelContactPoint: (): [number, number, number] => [10, 20, 30],
+    },
+    (puff) => puffs.push(puff),
+    dials,
+    () => state.enabled,
+  );
+
+  return {
+    puffs,
+    run: (steps: number): void => {
+      for (let index = 0; index < steps; index += 1) {
+        system.fixedUpdate(STEP);
+      }
+    },
+    state,
+  };
+}
+
+const totalCount = (puffs: readonly TyreSmokePuff[]): number => puffs.reduce((sum, puff) => sum + puff.count, 0);
+
+describe('VehicleTyreSmokeSystem', () => {
+  describe('negative cases', () => {
+    it('does nothing on foot', () => {
+      const h = harness();
+      h.state.car = null;
+      h.state.linvel = [30, 0, 0];
+
+      h.run(120);
+
+      expect(h.puffs).toEqual([]);
+    });
+
+    it('does nothing while the effects gate is off', () => {
+      const h = harness();
+      h.state.enabled = false;
+      h.state.linvel = [30, 0, 0]; // a huge lateral slide, gate closed
+
+      h.run(120);
+
+      expect(h.puffs).toEqual([]);
+    });
+
+    it('does nothing before any controls were ever applied (no slip record)', () => {
+      const h = harness();
+      h.state.slips = null;
+      h.state.linvel = [30, 0, 0];
+
+      h.run(120);
+
+      expect(h.puffs).toEqual([]);
+    });
+
+    it('a gripping tyre rolling fast never smokes — speed alone is not slide', () => {
+      const h = harness();
+      h.state.linvel = [0, 40, 0]; // 144 km/h dead ahead, every wheel inside its cap
+
+      h.run(120);
+
+      expect(h.puffs).toEqual([]);
+    });
+
+    it('a slide below the start dial stays silent', () => {
+      const h = harness();
+      h.state.linvel = [2, 0, 0]; // 2 m/s of lateral drift — under slideStart 3
+
+      h.run(120);
+
+      expect(h.puffs).toEqual([]);
+    });
+
+    it('locked brakes at STANDSTILL do not smoke — the patch is not moving over the road', () => {
+      const h = harness();
+      h.state.slips = [gripping(), gripping(), { brakeExcess: 1, spinExcess: 0 }, { brakeExcess: 1, spinExcess: 0 }];
+      h.state.linvel = [0, 0, 0]; // parked with the lever up
+
+      h.run(120);
+
+      expect(h.puffs).toEqual([]);
+    });
+
+    it('an airborne wheel never smokes, whatever its slip record says', () => {
+      const h = harness();
+      h.state.slips = h.state.slips!.map(() => ({ brakeExcess: 1, spinExcess: 1 }));
+      h.state.linvel = [0, 30, 0];
+      for (const w of h.state.wheels) {
+        w.contact = false;
+      }
+
+      h.run(120);
+
+      expect(h.puffs).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('brake demand past the cap at speed smokes at the contact point', () => {
+      const h = harness();
+      h.state.slips = h.state.slips!.map(() => ({ brakeExcess: 2, spinExcess: 0 })); // pedal well past the tyre
+      h.state.linvel = [0, 10, 0];
+
+      h.run(60);
+
+      // slide = min(1, 2) × 10 = 10 → intensity (10 − 3)/9 ≈ 0.78 → 25 × 0.78 ≈ 19.4/s per wheel.
+      expect(totalCount(h.puffs)).toBeGreaterThanOrEqual(60);
+      expect(totalCount(h.puffs)).toBeLessThanOrEqual(80);
+      for (const puff of h.puffs) {
+        expect(puff.position).toEqual([10, 20, 30]);
+        expect(puff.intensity).toBeCloseTo(7 / 9, 2);
+      }
+    });
+
+    it('the handbrake (brakeExcess 1) smokes the rear while the car still moves', () => {
+      const h = harness();
+      h.state.slips = [gripping(), gripping(), { brakeExcess: 1, spinExcess: 0 }, { brakeExcess: 1, spinExcess: 0 }];
+      h.state.linvel = [0, 15, 0];
+
+      h.run(60);
+
+      expect(totalCount(h.puffs)).toBeGreaterThan(0);
+      expect(h.puffs.every((puff) => puff.intensity === 1)).toBe(true); // slide 15 ≥ slideFull 12
+    });
+
+    it('a standstill burnout smokes through the wheelspin surplus', () => {
+      const h = harness();
+      h.state.slips = [gripping(), gripping(), { brakeExcess: 0, spinExcess: 1 }, { brakeExcess: 0, spinExcess: 1 }];
+      h.state.linvel = [0, 0, 0];
+
+      h.run(60);
+
+      // slide = min(1, 1) × SPIN_TO_SLIDE 8 → intensity (8 − 3)/9 ≈ 0.56 on the two spinning wheels.
+      expect(totalCount(h.puffs)).toBeGreaterThan(0);
+      expect(h.puffs[0].intensity).toBeCloseTo(5 / 9, 2);
+    });
+
+    it('a pure lateral slide (the drift) smokes with no longitudinal excess at all', () => {
+      const h = harness();
+      h.state.linvel = [8, 0, 0];
+
+      h.run(60);
+
+      expect(totalCount(h.puffs)).toBeGreaterThan(0);
+      expect(h.puffs[0].intensity).toBeCloseTo(5 / 9, 2);
+    });
+
+    it('harder slides make more particles — the rate follows the intensity', () => {
+      const gentle = harness();
+      gentle.state.linvel = [6, 0, 0];
+      gentle.run(120);
+
+      const hard = harness();
+      hard.state.linvel = [12, 0, 0];
+      hard.run(120);
+
+      expect(totalCount(hard.puffs)).toBeGreaterThan(totalCount(gentle.puffs));
+    });
+  });
+});

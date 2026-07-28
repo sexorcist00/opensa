@@ -254,6 +254,16 @@ spawn/prune + one ~10.8 KB partial `writeBuffer` per frame) does not register. T
 it scales with the plume's SCREEN COVERAGE, not with the particle count.
 Run: [`2026-07-28-headless-089-dynamic-particle-probe.json`](opensa-engine/2026-07-28-headless-089-dynamic-particle-probe.json).
 
+### 2026-07-28 — plan 089/02: tyre smoke on the brake-strip lap (and the dead rotation channel)
+
+HUD-read from screenshots of the scripted brake-strip lap with tyre smoke live: at gameplay-shaped coverage
+(two wheel plumes trailing a braking infernus) the frame stays at the 120 Hz cap, GPU 1.87 ms — the smoke
+does not register; 089/01's +2.3 ms worst-case fill stays the lane's cost story. The run also recorded the
+SIGNAL finding: Rapier's `wheelRotation` follows the ground exactly (max 0.05 m/s of rotation-derived slide
+during the sustained −1.1 g locked stop), so rotation-based slip can never see a lockup or burnout — the
+shipped signal is demand-over-cap recorded by `setVehicleControls`.
+Run: [`2026-07-28-headless-089-02-brake-strip-smoke.json`](opensa-engine/2026-07-28-headless-089-02-brake-strip-smoke.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
