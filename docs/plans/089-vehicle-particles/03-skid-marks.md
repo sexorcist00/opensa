@@ -8,14 +8,16 @@ decals eventually.
 ## Shape
 
 - **Engine lane** (`packages/engine/src/render/skid-marks.ts`): a RING of quad segments
-  (`SKID_SEGMENT_CAP` 2048 world-wide — the brief's "oldest recycled first" is the write cursor
-  wrapping), one persistent 344 KB vertex buffer at install, one ~168 B positional `writeBuffer` per laid
+  (`SKID_SEGMENT_CAP` 4096 world-wide — the brief's "oldest recycled first" is the write cursor
+  wrapping), one persistent 688 KB vertex buffer at install, one ~168 B positional `writeBuffer` per laid
   segment, and a live window that advances past expired segments (FIFO — births are monotonic) so dead
   quads are never rasterised; the window crosses the ring seam as at most two ranged draws.
   `Engine.initSkidMarks(sprite)` once at boot · `Engine.addSkidSegment(seg)` per laid quad.
-- **The 5 REAL seconds** (the brief's one correctness trap): the `skid` shader fades on
+- **The REAL-seconds lifetime** (the brief's one correctness trap): the `skid` shader fades on
   `frame.params2.z` — engine uptime in WALL-CLOCK seconds — so the day cycle (60 real seconds per game
-  hour) cannot touch the lifetime by construction.
+  hour) cannot touch the lifetime by construction. The brief said 5 s; **field round 1 stretched it to
+  12 s** ("they vanish too fast — 2–3× longer"), and the ring cap doubled with it so a sustained
+  4-wheel slide cannot recycle live marks.
 - **No new pass** (the plan's alpha-sorting risk): one `skid` pipeline (premultiplied, depth READ,
   no cull), drawn inside the existing world pass after the water and BEFORE the blend bundles — foliage
   and glass sort over a mark exactly as they sort over the road it lies on. Corners ride 2 cm above the

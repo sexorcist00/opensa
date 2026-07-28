@@ -18,12 +18,14 @@ export const SKID_VERTEX_FLOATS = 7;
 /** Vertices per segment: two triangles, unindexed (segments are written independently into a ring). */
 export const SKID_SEGMENT_VERTS = 6;
 
-/** World-wide segment cap. At ~0.3–0.7 m per segment this is several hundred metres of live marks —
- *  far past what 5 real seconds can accumulate; the ring wrap is the "oldest recycled first" backstop. */
-export const SKID_SEGMENT_CAP = 2048;
+/** World-wide segment cap. Sized for the lifetime below: a sustained 4-wheel slide at speed lays
+ *  ~240 segments/s, so 4096 holds the full lifetime without recycling live marks; the ring wrap is the
+ *  "oldest recycled first" backstop beyond that. */
+export const SKID_SEGMENT_CAP = 4096;
 
-/** The brief's lifetime: marks are gone ~5 REAL seconds after they were laid. */
-export const SKID_LIFE_SECONDS = 5;
+/** Mark lifetime, REAL seconds (wall clock, never game time). The brief said 5; field round 1 wanted
+ *  marks to linger 2–3× longer. MUST match `SKID_LIFE` in the `skid` shader. */
+export const SKID_LIFE_SECONDS = 12;
 
 /** One laid quad, engine space. `l0/r0` must repeat the previous segment's `l1/r1` for a seamless ribbon. */
 export interface SkidSegment {

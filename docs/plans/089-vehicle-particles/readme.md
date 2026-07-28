@@ -68,10 +68,11 @@ Impact smoke has its source too: the contact-force events the damage system alre
    at its start** so a mark grows in instead of appearing as a stripe, and a **5-second wall-clock fade** —
    the lifetime runs off the real clock, NOT the day cycle (a game hour is 60 real seconds here, so a
    game-time fade would be ~7× too fast). Ribbons are capped per car and per world, oldest recycled first.
-   **SHIPPED 2026-07-28 — [03-skid-marks.md](03-skid-marks.md), field verdict owed.** The engine's first
-   DECAL lane (ring of 2048 segments, wall-clock fade in the shader, no new render pass); the slide signal
-   is the SHARED `equivalentSlideSpeed` extracted from step 2. Look numbers are an eye-fit →
-   `docs/hacks/skid-mark-look-fit.md`.
+   **SHIPPED 2026-07-28 — [03-skid-marks.md](03-skid-marks.md).** The engine's first DECAL lane (ring of
+   4096 segments, wall-clock fade in the shader, no new render pass); the slide signal is the SHARED
+   `equivalentSlideSpeed` extracted from step 2. Look numbers are an eye-fit →
+   `docs/hacks/skid-mark-look-fit.md`. Field round 1: the 5 s lifetime read as vanishing too fast —
+   stretched to **12 REAL seconds** (the wall-clock rule itself unchanged).
 4. **Impact smoke.** A puff at the contact point when a hit passes the strong-hit threshold, sized by the
    force, reusing step 1's lane and the damage system's existing event drain.
 5. **Surface-driven wheel effects** — dust, grass, sand, gravel, mud, spray. **Depends on
@@ -110,8 +111,9 @@ ledger as a number, with what it costs, measured on the bench sweep's `vehicles`
 
 ## Ledger
 
-- **089/03 (2026-07-28).** Skid ring cap **2048 segments world-wide** (one 344 KB buffer + a 32² texture
-  at install; ~168 B upload per laid segment; expired segments leave the draw window). Brake-strip lap:
+- **089/03 (2026-07-28).** Skid ring cap **4096 segments world-wide**, lifetime **12 real seconds**
+  (field round 1; the brief's 5 s read as vanishing too fast). One 688 KB buffer + a 32² texture at
+  install; ~168 B upload per laid segment; expired segments leave the draw window. Brake-strip lap:
   ~280 segments, GPU in the baseline range — no measurable delta.
   Run: [`2026-07-28-headless-089-03-skid-marks.json`](../../benchmarks/opensa-engine/2026-07-28-headless-089-03-skid-marks.json).
 - **089/01 (2026-07-28).** Pool cap **1024 per blend mode** (36 KB per instance buffer; a full pool DROPS

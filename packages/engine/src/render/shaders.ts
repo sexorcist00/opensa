@@ -1612,7 +1612,8 @@ struct SkidOut {
   @location(1) alpha: f32,
 };
 
-const SKID_LIFE = 5.0;
+// MUST match SKID_LIFE_SECONDS in render/skid-marks.ts (the ring prunes on the same clock this fades on).
+const SKID_LIFE = 12.0;
 const RUBBER = vec3f(0.04, 0.04, 0.05);
 // particleskid's alpha averages ~0.4 — authored for SA's own compositing. Unboosted, a full-severity mark
 // darkens this engine's road by ~0.3 and vanishes into the asphalt; the boost keeps the tread PATTERN
