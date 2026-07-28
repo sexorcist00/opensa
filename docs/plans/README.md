@@ -132,7 +132,9 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   parked cars in gta3.img): parser + specific-model + random (popcycle/cargrp, B1 city approximation) all done
   (lazy LOD register, ground-snap on spawn), in-game verified; B2 per-zone fidelity + random colour pending.
 - [058 — Modloader](./058-modloader/readme.md) — `modloader/` overlay (`AssetFileSystem` decorator): override vehicle
-  dff/txd + merge their settings into vehicles.ide/handling.cfg/carcols.dat, no engine changes.
+  dff/txd + merge their settings into vehicles.ide/handling.cfg/carcols.dat, no engine changes. **REMOVED
+  2026-07-28** — mods install at build time now; see
+  [postmortem/runtime-modloader-overlay.md](../postmortem/runtime-modloader-overlay.md).
 - [057 — Nx monorepo migration](./057-nx-monorepo-migration/readme.md)
 - [056 — Multi-game config](./056-multi-game-config/readme.md)
 - [055 — Input sources / mobile controls](./055-input-sources-mobile-controls/readme.md) · [054 — Asset cache revoke](./054-asset-cache-revoke/readme.md) · [053 — Asset local loader](./053-asset-local-loader/readme.md)

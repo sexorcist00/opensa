@@ -1,6 +1,5 @@
 import type * as Renderware from '@opensa/renderware';
 
-import { withModloader } from '@opensa/modloader';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -31,10 +30,7 @@ vi.mock('@opensa/renderware', async (importActual) => {
 /** The fixture-backed file map: bare model/txd names + loose data paths, as the build packs them. */
 function baseFiles(): Map<string, ArrayBuffer | string> {
   return new Map<string, ArrayBuffer | string>([
-    // Vehicle assets keyed by their BARE names only (no loose `vehicles/` folder) — exactly how the build packs
-    // them and how `loadVehicle` reads them (`requireBuffer('<model>.dff'|'<txd>.txd')`).
-    ['admiral.dff', buffer('tests/original/vehicles/admiral.dff')],
-    ['admiral.txd', buffer('tests/original/vehicles/admiral.txd')],
+    // Assets keyed by their BARE names only (no loose folders) — exactly how the build packs them.
     ['anim/ped.ifp', buffer('tests/original/dff/anim-clump/counxref.ifp')],
     ['bmypol1.dff', buffer('tests/original/character/bmypol1.dff')],
     ['bmypol1.txd', buffer('tests/original/character/bmypol1.txd')],
@@ -102,84 +98,6 @@ describe('GtaSaWorldAdapter integration', () => {
 
       expect(authored.weathers[0].hours).toHaveLength(24);
       expect(authored.weathers[0].hours).toEqual(converted.weathers[0].hours);
-    });
-
-    it('loads a vehicle end-to-end by its bare gta3.img name (admiral via vehicles.ide)', async () => {
-      // fakeFs holds only bare keys (admiral.dff/.txd) — a pass proves the loader reads them directly,
-      // with no loose `vehicles/` path. Resolved through vehicles.ide (model + txd both `admiral`).
-      const vehicle = await new GtaSaWorldAdapter(cfg()).loadVehicleData('admiral');
-      expect(vehicle.model.positions.length).toBeGreaterThan(0);
-      expect(vehicle.colliders).not.toBeNull(); // embedded COL parsed from the same DFF
-      expect(vehicle.handling).toBeDefined(); // from handling.cfg
-    });
-
-    it('loadVehicleData reads a modloader override end-to-end (overridden dff + merged handling)', async () => {
-      // Drop the stock admiral.dff entirely: the load can ONLY succeed if `withModloader` serves the
-      // mod's `admiral.dff` under its bare name. The mod's settings.txt bumps ADMIRAL's mass (1109 → 9999),
-      // proving the merged handling.cfg reaches the loader through the same decorator.
-      const moddedHandling =
-        'ADMIRAL 9999.0 2550.7 1.41 0.0 0.1 -0.15 77 0.65 0.74 0.52 4 198.0 17.2 12.9 R P 5 0.558 0 30.0 ' +
-        '0.917 0.783 0.0 0.195 -0.045 0.50 0.10 0.45 0.43 35000 242000 1000002 1 1 0';
-      const files = baseFiles();
-      files.delete('admiral.dff'); // no stock model — only the override can satisfy the load
-      // The loader lowercases every VFS key, so the descriptive folder name is lowercased here too.
-      const dir = 'modloader/admiral - 1976 mercedes-benz 230 - k1real24';
-      files.set(`${dir}/admiral.dff`, buffer('tests/original/vehicles/admiral.dff'));
-      files.set(`${dir}/admiral.settings.txt`, moddedHandling);
-
-      const fs = withModloader(fsFrom(files));
-      const vehicle = await new GtaSaWorldAdapter({ cellSize: 250, fs }).loadVehicleData('admiral');
-
-      // built from the overridden dff (stock admiral.dff is absent)
-      expect(vehicle.model.positions.length).toBeGreaterThan(0);
-      expect(vehicle.colliders).not.toBeNull();
-      expect(vehicle.handling.mass).toBe(9999); // merged ADMIRAL handling line, not the stock 1109
-      // …and the same row's `modelFlags` 242000 names both axles: McPherson front, solid rear (081/06 §3).
-      expect(vehicle.handling.axleFront).toEqual({ reverse: false, type: 'mcpherson' });
-      expect(vehicle.handling.axleRear).toEqual({ reverse: false, type: 'solid' });
-    });
-
-    it('maps the WHOLE handling row, not the five columns it used to (081/02)', async () => {
-      // Pinned against the stock fixture's real ADMIRAL line — the column order is verified by the DATA,
-      // because the file's own legend lists a "(not used)" column the shipped rows do not carry. Every
-      // value here is as authored: converting one into a force or a spring is the consuming plan's job.
-      //
-      // Three of these are what 081/01 blamed by name for the fleet driving alike: the authored
-      // `centreOfMass` (the flip), `turnMass` (a 6.5 t truck answering the wheel faster than a supercar)
-      // and `drive` — this car is FRONT-wheel drive and the engine drives all four of its wheels today.
-      const { handling } = await new GtaSaWorldAdapter(cfg()).loadVehicleData('admiral');
-
-      expect(handling).toEqual({
-        abs: false,
-        // The stock ADMIRAL authors no axle bits at all (`modelFlags` 0) — 26 of the 210 rows do, and this
-        // is not one of them, so both ends read as the default independent build (081/06 §3).
-        axleFront: { reverse: false, type: 'independent' },
-        axleRear: { reverse: false, type: 'independent' },
-        brakeBias: 0.52,
-        brakeDecel: 8.5,
-        centreOfMass: [0, 0, -0.05],
-        collisionDamageMult: 0.56,
-        dragMult: 2,
-        drive: 'F',
-        engineAccel: 22,
-        engineInertia: 8,
-        engineType: 'P',
-        gears: 5,
-        mass: 1650,
-        maxVelocity: 165,
-        steeringLock: 30,
-        suspAntiDive: 0.55,
-        suspBias: 0.5,
-        suspDamping: 0.15,
-        suspForce: 1,
-        suspHighSpeedDamp: 0,
-        suspLower: -0.19,
-        suspUpper: 0.27,
-        tractionBias: 0.51,
-        tractionLoss: 0.9,
-        tractionMult: 0.65,
-        turnMass: 3851.4,
-      });
     });
   });
 });

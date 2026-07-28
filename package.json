@@ -43,7 +43,6 @@
     "packages/game-build",
     "packages/loaders",
     "packages/vfs",
-    "packages/modloader",
     "packages/game",
     "packages/engine-formats",
     "packages/engine",

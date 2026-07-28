@@ -5,9 +5,9 @@ is the plan-B list: when a build comes back too slow, read this before inventing
 cheapest wins are usually already written down here with their price attached.
 
 Most entries have the same shape — **the same result, computed earlier**. We keep choosing the runtime side
-of that trade for good reasons (one code path for converted and modloader assets, no format churn, no
-re-convert to see a change), and every one of those choices leaves a precomputation on the table. That is
-what this rubric collects.
+of that trade for good reasons (one code path across asset classes, no format churn, no re-convert to see a
+change), and every one of those choices leaves a precomputation on the table. That is what this rubric
+collects.
 
 **Maintenance rule** (also in `CLAUDE.md`): when a change picks the runtime path over a precomputed one — or
 takes any deliberate cost for correctness, simplicity or moddability — add the alternative here in the same

@@ -459,7 +459,7 @@ function authoredWheelRight(clump: RWClump, fromFrame?: number): boolean {
 
 /** SA scales the axles separately (vehicles.ide gives [front, rear]); the in-engine boost rides on top. */
 /**
- * Fit an authored wheel mesh to the size the data asks for. `vehicles.ide`'s wheel field (the modloader
+ * Fit an authored wheel mesh to the size the data asks for. `vehicles.ide`'s wheel field (a mod's
  * `.settings.txt` line carries the same one) is the wheel DIAMETER IN METRES, not a multiplier — measured
  * against the stock meshes it names: admiral 0.68 vs a 0.700 m mesh, cheetah 0.68 vs 0.688, infernus 0.70 vs
  * 0.700, petro 1.106 vs 1.182. Ratios of 0.94–1.00, i.e. every stock mesh is already modelled at its target.
@@ -800,7 +800,7 @@ function plateFace(material: RWMaterial): 'back' | 'face' | null {
  *
  * `forced` is the build-time `features.txt` → `UP/DOWN_LIGHTS` declaration, for a mod whose pod carries no
  * marker (its own texture instead of `vehiclelights`): the pod is then measured by its whole face set rather
- * than by its lamps. Nothing about this reaches the runtime modloader path — it is resolved at build time.
+ * than by its lamps. It is resolved at BUILD time and baked into the `.osm`.
  */
 function popUpLights(scratch: Scratch, forced: boolean): null | VehiclePopUpLights {
   for (const [part, definition] of scratch.parts.entries()) {

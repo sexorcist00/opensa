@@ -32,7 +32,6 @@ packages/                          (tag type:engine)
   math/           @opensa/math            dependency-free 3D math
   renderware/     @opensa/renderware      parsers (DFF/TXD/COL, IDE/IPL/DAT/GXT) + archive + map + mesh prep
   game/           @opensa/game            ECS, systems, adapters — renderer-agnostic
-  modloader/      @opensa/modloader       modloader/ overlay over AssetFileSystem
   loaders/        @opensa/loaders         asset loaders (fetch / local folder / http-dir) — framework-agnostic
   vfs/            @opensa/vfs             unzip → AssetFileSystem
   game-build/     @opensa/game-build      partitioning shared by the loaders + build scripts

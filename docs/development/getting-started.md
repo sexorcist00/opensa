@@ -34,8 +34,8 @@ game-src/original/
 - `models/gta3.img` is the primary archive; `models/gta_int.img` is overlaid as a fallback for the
   few interior props `gta3.img` lacks (the same override the build and dev scripts use).
 - There is **no `player/` or `vehicles/` folder** — the full ped/car roster comes from `data/peds.ide` /
-  `data/vehicles.ide`, with the model/txd bytes read straight from the `.img` archives (per-asset overrides go
-  through the runtime `modloader/`).
+  `data/vehicles.ide`, with the model/txd bytes read straight from the `.img` archives (per-asset overrides
+  are installed into the build by `mod-installer` / `vehicle-installer`, never at runtime).
 - The build reads model/texture bytes **straight from the `.img` archives** — you do not extract them.
 - Optional `data/timecyc_24h.dat` is used as-is when present; otherwise the vanilla `data/timecyc.dat`
   is converted to 24h at runtime.

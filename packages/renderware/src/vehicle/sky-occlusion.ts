@@ -3,10 +3,9 @@
  * the car's OWN body. The dynamic indirect term had none — a cabin floor, an underbody and an exhaust were
  * lit as if they hung in open sky, which is why a 0.2-albedo exhaust reads light grey.
  *
- * It is computed HERE, in the shared builder, and never authored offline: opensa-pack and the spawn-time
- * worker both call `buildVehicleModel`, so a converted car and a modloader car get the same numbers by
- * construction. Baking it in the converter instead would make the two paths disagree the moment someone
- * drops a DFF into modloader.
+ * It is computed in the shared builder rather than authored per asset, so every caller of
+ * `buildVehicleModel` — the converter for cars, the runtime for props and clutter — gets the same numbers
+ * by construction.
  *
  * The method is HORIZON MAPPING over a height field, not ray casting against the mesh. SA cars are closed
  * shells and everything the flat term got wrong is under a roof or under a floor pan, which a "highest

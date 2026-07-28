@@ -17,9 +17,9 @@ world. Feature detail: [features/asset-loader.md](../features/asset-loader.md),
 
 All three fill the same `Vfs` (`packages/vfs`) through the `AssetSink` interface (`addChunk` unzips fetch
 chunks via fflate; `addFiles` ingests raw files), and `Vfs` implements `AssetFileSystem` — everything
-downstream is loader-agnostic. After loading, `withModloader` (`packages/modloader`) wraps the VFS with the
-`modloader/` overlay (merges `vehicles.ide` / `handling.cfg` / `carcols.dat` / `gta.dat`, serves mod assets
-by bare name).
+downstream is loader-agnostic. The VFS reaches the game unwrapped: **mods are installed at BUILD time**, by
+`mod-installer` / `vehicle-installer` into the game dir the loaders then read
+([postmortem](../postmortem/runtime-modloader-overlay.md)).
 
 ![Loader chain](./assets/loader-chain.svg)
 
@@ -38,7 +38,6 @@ flowchart LR
   base["InstallSourceLoader (base)<br/>selectInstallEntries → groups"]:::infra
 
   vfs["Vfs<br/>AssetSink → AssetFileSystem"]:::infra
-  mod["withModloader<br/>modloader/ overlay"]:::infra
   game[["game + engine"]]:::engine
   pak["openWorld(name) →<br/>opensa/&lt;name&gt; from the SAME source"]:::data
 
@@ -46,7 +45,7 @@ flowchart LR
   folder --> local --> base
   served --> httpdir --> base
   base --> vfs
-  vfs --> mod --> game
+  vfs --> game
   base -.-> pak -.->|LocalPakSource| game
 
   classDef infra fill:#e8e0ff,stroke:#6b4fbb,color:#111

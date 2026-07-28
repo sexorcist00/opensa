@@ -268,7 +268,7 @@ export interface Environment {
  *
  * - `ostex` — our offline `.ostex`, uploaded verbatim. BC1/BC3 stays COMPRESSED all the way into video
  *   memory; nothing expands it. This is the optimized path.
- * - `rgba` — RGBA8 layers a runtime TXD parse produced (a `modloader/` mod, or anything not yet converted).
+ * - `rgba` — RGBA8 layers a runtime TXD parse produced (props, clutter and anything not yet converted).
  */
 export type ModelTextureInit =
   | { bytes: Uint8Array; kind: 'ostex' }

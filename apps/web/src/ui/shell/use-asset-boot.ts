@@ -3,7 +3,6 @@ import type { AssetLoader, AssetLoaderKind, ProgressSnapshot } from '@opensa/loa
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { createAssetLoader } from '@opensa/loaders';
-import { withModloader } from '@opensa/modloader';
 import { Vfs } from '@opensa/vfs';
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
@@ -94,14 +93,8 @@ export function useAssetBoot(): AssetBoot {
     return { loader, vfs };
   }, [state.game, httpDirBase, loaderKind]);
 
-  // Wrap the VFS with the modloader overlay once it's fully loaded (phase `warmup`+) — the game canvas only
-  // mounts then, and the scan needs the complete `modloader/` tree. Computed once per loaded session (stable ref).
   const loaded = state.phase === 'warmup' || state.phase === 'playing' || state.phase === 'paused';
-  const fs = useMemo<AssetFileSystem>(() => {
-    const vfs = session?.vfs ?? fallbackVfs;
-
-    return loaded ? withModloader(vfs) : vfs;
-  }, [session, fallbackVfs, loaded]);
+  const fs = useMemo<AssetFileSystem>(() => session?.vfs ?? fallbackVfs, [session, fallbackVfs]);
 
   // The loading MODE selects the world: any loader that can open its install's `opensa/` pak becomes the
   // world source — folder/http-dir from the install, and since 086 phase 3 the FETCH loader too (its

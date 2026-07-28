@@ -1,11 +1,11 @@
-import { ADDITIVE_DAT, mergeDataFile } from '@opensa/modloader/data-merge';
-import { parseLoader } from '@opensa/modloader/loader';
-import { mergeGtaDat } from '@opensa/modloader/merge';
 import { normalizeDatPath } from '@opensa/renderware/archive';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
+import { ADDITIVE_DAT, mergeDataFile } from './data-merge';
+import { mergeGtaDat } from './gta-dat-merge';
 import { injectImgEntries, isRemoveOriginalDir } from './img-merge';
+import { parseLoader } from './loader';
 
 /** A binary IPL stream (`<area>_streamN.ipl`) — bytes injected into gta3.img, unlike a text (placement) IPL. */
 const STREAM_IPL = /_stream\d+\.ipl$/;
@@ -27,9 +27,9 @@ export interface ModScan {
 }
 
 /**
- * Bake a Modloader-style mod into `outPath` (the accumulated game tree) — the on-disk, persisted equivalent of
- * `@opensa/modloader`'s runtime overlay: patch `gta.dat` with the loader's `IDE`/`IPL` lines, write each `.ide`/
- * `.ipl`/`.dat` to disk (overwrite the stock file by bare name, else the loader-declared path), additively merge
+ * Bake a Modloader-style mod into `outPath` (the accumulated game tree): patch `gta.dat` with the loader's
+ * `IDE`/`IPL` lines, write each `.ide`/`.ipl`/`.dat` to disk (overwrite the stock file by bare name, else the
+ * loader-declared path), additively merge
  * `object.dat`/`procobj.dat`, and inject the scattered `.dff`/`.txd`/`.col`/`.ifp` into `models/gta3.img` by name.
  * Returns `{ baked:false }` when the mod has no loader file (caller should use the plain path-overlay instead).
  */
@@ -106,8 +106,8 @@ export function bakeMod(modPath: string, outPath: string): { assets: number; bak
 }
 
 /**
- * Scan a `--in` mod subtree (any depth, folder layout irrelevant) and bucket every file by **bare name** the same
- * way `@opensa/modloader` buckets a runtime overlay. `loaderFound` tells {@link bakeMod}/`install` whether to bake
+ * Scan a `--in` mod subtree (any depth, folder layout irrelevant) and bucket every file by **bare name**, the way
+ * SA's Modloader resolves one. `loaderFound` tells {@link bakeMod}/`install` whether to bake
  * (a Modloader mod) or fall back to the plain path-overlay. Vehicle `*.settings.txt`, CLEO `.cs`, and prose `.txt`
  * are ignored.
  */

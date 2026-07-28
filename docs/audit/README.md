@@ -23,3 +23,7 @@ interpret them.
   (blended sample 8.2 µs vs 6.0 µs; no render-side change) and +~100 unit tests.
 - [`three-to-own-engine.md`](./three-to-own-engine.md) — the three.js → own WebGPU engine migration:
   runtime (~7× fps, same machine/content) and bundle (−12.8 % gzip despite adding a whole engine).
+- [`modloader-removal.md`](./modloader-removal.md) — deleting the runtime `modloader/` overlay and the
+  vehicle DFF fallback it fed: one package and a whole second vehicle pipeline gone (−1816 lines, the
+  `vehicle-model.worker` chunk with them), coverage up on every metric, and roadmap item 2 closed by deletion
+  instead of by measurement. Reasoning: [`postmortem/runtime-modloader-overlay.md`](../postmortem/runtime-modloader-overlay.md).

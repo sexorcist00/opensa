@@ -75,8 +75,8 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   field only because plan 081's stance law made a car's authored suspension visible. `vehicle-installer` now
   decodes by BOM (and by NUL parity when there is none) and warns about every block it drops, and
   `mod-installer`'s Modloader BAKE path reads its loader/data text BOM-aware. What is still UTF-8-only: the
-  path-overlay's `.merge` / `.ide` / `.ipl` readers and `packages/modloader`'s runtime overlay — a map mod
-  shipping one of those as UTF-16 is still lost without a word.
+  path-overlay's `.merge` / `.ide` / `.ipl` readers — a map mod shipping one of those as UTF-16 is still lost
+  without a word.
 - **The installer recognises IMG folders only at the TOP level and only by exact name.** (Every mod-folder
   name that carries behaviour is collected in `docs/contracts/mods.md`.) `apply-mod.ts`
   matches `cutscene_img` / `gta3_img` / `gta_int_img` against the mod's own top-level entries — anything else

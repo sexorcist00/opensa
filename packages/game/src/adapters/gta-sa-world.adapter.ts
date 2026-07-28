@@ -2,7 +2,6 @@ import type { parsePedDefs } from '@opensa/renderware';
 
 // game/adapters/** (and game/mods/**) are the only places allowed to import renderware.
 import { Matrix4 } from '@opensa/math';
-import { isModdedAsset } from '@opensa/modloader';
 import {
   type AssetFileSystem,
   breakableKeyHash,
@@ -10,7 +9,6 @@ import {
   buildCellColliders,
   buildCollisionIndex,
   buildTimecyc,
-  buildVehicleModel,
   buildWorldGrid,
   type CarGroup,
   convertTo24h,
@@ -21,8 +19,6 @@ import {
   type ObjectDatEntry,
   parseCarcols,
   parseCarGroups,
-  parseDff,
-  parseDffCollision,
   parseHandling,
   parseObjectDat,
   parsePopcycle,
@@ -46,11 +42,9 @@ import {
   type Timecyc,
   type VehicleColours,
   type VehicleDef,
-  type VehicleDummy,
-  VehicleTextures,
   type WorldGrid,
 } from '@opensa/renderware';
-import { getTxdChain, setTxdParents } from '@opensa/renderware/archive/asset-cache';
+import { setTxdParents } from '@opensa/renderware/archive/asset-cache';
 import { breakableInstanceKey } from '@opensa/renderware/breakable/key';
 import { getBreakable } from '@opensa/renderware/breakable/mesh';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
@@ -73,9 +67,8 @@ import type { VehicleRigData } from './engine-vehicle-handle';
 import { carGeneratorPlacements } from './car-generators';
 import { extractPlateSources } from './plate-sources';
 import { randomCarPlacements } from './popcycle-cars';
-import { createVehicleModelBuilder, type VehicleModelBuilder } from './vehicle-model-builder';
-import { type RigidModelInit, toRigidModelInit } from './vehicle-model-init';
-import { readVehicleOsm, SEAT_DUMMY_NAME } from './vehicle-osm';
+import { type RigidModelInit } from './vehicle-model-init';
+import { readVehicleOsm } from './vehicle-osm';
 
 /** Sea level (Z) + a large background plane half-size so the ocean reaches the horizon. */
 
@@ -149,10 +142,6 @@ export interface GtaSaWorldConfig {
    *  074/13; the engine welds cells offline, so nothing reads this yet. Kept as the declared extension
    *  point — passing mods here has no effect until one is re-wired. */
   mods?: readonly WorldMod[];
-  /** Asset-resolution warnings (opensa-pack 003): a mod that cannot be honoured, a name nothing answers.
-   *  Already de-duplicated per message here, because these fire on a SPAWN path. Omit to stay silent —
-   *  this package routes diagnostics out rather than printing (nothing in it touches `console`). */
-  onAssetWarning?: (message: string) => void;
   /** Effective clutter density per category (0 when disabled) — keeps clutter COLLISION in sync
    *  with the rendered set. On a knob change, call {@link GtaSaWorldAdapter.invalidateColliderCache}
    *  and re-stream physics. Default: vanilla density 1 for every category. */
@@ -162,10 +151,6 @@ export interface GtaSaWorldConfig {
    *  lotteries win). The vanilla CProcObjectMan pools at ~300 for the same perf reason.
    *  Default: unlimited. */
   procObjLimit?: number;
-  /** Off-thread vehicle model builds for {@link GtaSaWorldAdapter.loadVehicleData} (074/21 field fix):
-   *  parse + TXD decode + weld is ~100–200 ms per car TYPE and froze the frame whenever a new type first
-   *  streamed in. Defaults to the real build worker where Workers exist; null = synchronous (node tests). */
-  vehicleModelBuilder?: null | VehicleModelBuilder;
 }
 
 type Rgb = [number, number, number];
@@ -223,16 +208,11 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   private tyreAdhesionTable: null | { perMaterial: Float32Array; road: number } = null;
   private vehicleColours: null | VehicleColours = null;
   private vehicleDefs: Map<string, VehicleDef> | null = null;
-  private readonly vehicleModelBuilder: null | VehicleModelBuilder;
-  /** Asset warnings already emitted — see {@link GtaSaWorldAdapter.warnAsset}. */
-  private readonly warnedAssets = new Set<string>();
 
   constructor(config: GtaSaWorldConfig) {
     this.config = config;
     this.fs = config.fs;
     this.cellSize = config.cellSize;
-    this.vehicleModelBuilder =
-      config.vehicleModelBuilder === undefined ? createVehicleModelBuilder() : config.vehicleModelBuilder;
   }
 
   /**
@@ -348,43 +328,38 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
   }
 
+  /**
+   * Spawn data for one car, read straight out of its converted `<model>.osm` (opensa-pack 003 phase 3) — a
+   * section read, no RW parser entered.
+   *
+   * There is no runtime `.dff` path. It existed for a `modloader/` override, and everything a car now needs
+   * beyond its raw geometry is decided at BUILD time — its `features.txt` pod declaration, its plate slots,
+   * its baked occlusion — none of which can be recovered from a DFF the engine parses for itself. A car with
+   * no `.osm` would therefore not be a slower spawn but a WRONG one, so it is an error instead: opensa-pack
+   * names every car it failed to convert in its report, and `vehicle-installer --rebake` re-converts one.
+   */
   async loadVehicleData(modelName: string, colour?: string): Promise<EngineVehicleData> {
-    const optimized = await this.loadOptimizedVehicle(modelName, colour);
-    if (optimized) {
-      return optimized;
+    await this.ensureVehicleData();
+    const name = modelName.toLowerCase();
+    const def = this.vehicleDefs?.get(name);
+    if (!def) {
+      throw new Error(`No vehicle definition for '${modelName}' in vehicles.ide`);
     }
-    const { def, dffBuffer, paint, ...common } = await this.vehicleCommon(modelName, colour);
-    // The car's own dictionary AND its `txdp` ancestors, then the shared generic set — highest priority
-    // first, which is exactly how `VehicleTextures` merges.
-    const generic = this.fs.get('models/generic/vehicle.txd');
-    const txds = [...getTxdChain(this.fs, def.txd), ...(generic ? [generic] : [])];
-    // Off-thread build when the worker exists (074/21 field fix — a new car type froze the frame ~170 ms):
-    // buffers are COPIED before the transfer so the VFS keeps its originals.
-    const model = this.vehicleModelBuilder
-      ? await this.vehicleModelBuilder.build(
-          dffBuffer.slice(0),
-          txds.map((bytes) => bytes.slice(0)),
-          def.wheelScale,
-        )
-      : buildVehicleModel(parseDff(dffBuffer), new VehicleTextures(txds), {
-          wheelScale: def.wheelScale,
-        });
-    const seat = model.dummies.find((dummy: VehicleDummy) => dummy.name === SEAT_DUMMY_NAME) ?? null;
+    const osm = this.fs.get(`${name}.osm`);
+    if (!osm) {
+      throw new Error(`No converted model for '${name}' — '${name}.osm' is missing from this build`);
+    }
+    const vehicle = readVehicleOsm(name, new Uint8Array(osm));
 
     return {
-      colliders: common.colliders,
-      halfExtents: common.halfExtents,
-      handling: common.handling,
-      model: toRigidModelInit(model),
-      paint: enginePaint(paint),
-      rig: model,
-      seat: seat ? seat.position : null,
-      wheels: model.wheels.map((wheel, index) => ({
-        connection: [...model.parts[wheel.part].localTranslation] as [number, number, number],
-        front: wheel.front,
-        index,
-        radius: wheel.radius,
-      })),
+      colliders: vehicle.colliders,
+      halfExtents: vehicle.halfExtents,
+      handling: this.vehicleHandling(def.handlingId),
+      model: vehicle.model,
+      paint: enginePaint(this.resolveVehicleColours(name, colourIndices(colour))),
+      rig: vehicle.rig,
+      seat: vehicle.seat,
+      wheels: vehicle.wheels,
     };
   }
 
@@ -627,57 +602,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return getBreakable(this.fs, name) !== undefined || this.breakableModels.has(name);
   }
 
-  /** Everything both vehicle load paths need: the IDE def, the DFF bytes, its collision and its paint. */
-  /**
-   * The OPTIMIZED spawn (opensa-pack 003 phase 3): `<model>.osm` + `<model>.ostex`, no RW parser entered.
-   * Returns null when this car is not converted, and the caller falls through to the unoptimized path.
-   *
-   * **Resolution order** — the plan's rule, implemented by asking for the `.dff` FIRST. That looks
-   * backwards until you see what conversion does: opensa-pack DELETES `<model>.dff` from the archives, so
-   * after a convert the only thing that can still answer with one is a `modloader/` override. Hence a
-   * present `.dff` means either "a mod is overriding this car" or "this build was never converted", and
-   * both must take the unoptimized path. There is no way to ask the VFS *where* a name came from, so this
-   * ordering IS the modloader-wins rule rather than an approximation of it.
-   */
-  private async loadOptimizedVehicle(modelName: string, colour?: string): Promise<EngineVehicleData | null> {
-    await this.ensureVehicleData();
-    const name = modelName.toLowerCase();
-    const def = this.vehicleDefs?.get(name);
-    if (!def) {
-      throw new Error(`No vehicle definition for '${modelName}' in vehicles.ide`);
-    }
-    if (this.fs.get(`${name}.dff`)) {
-      return null; // a modloader override, or an unconverted build
-    }
-    const osm = this.fs.get(`${name}.osm`);
-    if (!osm) {
-      return null; // nothing at all — the unoptimized path raises the "asset not found" error
-    }
-    // The mixing rule (user decision 2026-07-18): a mod that ships only the TXD of a converted car cannot
-    // be honoured — our `.osm` carries its own baked atlas, indexed by layer rather than by texture name —
-    // so the optimized model wins and the ignored file is named. Retexture-only car mods do nothing.
-    //
-    // It must ask the MODLOADER OVERLAY, not the merged VFS (field check, 2026-07-19): a converted build
-    // legitimately keeps the stock TXDs that unconverted models still need, and asking `fs.get` called
-    // every one of those a mod — the warning fired for cars nobody had touched.
-    if (isModdedAsset(this.fs, `${def.txd.toLowerCase()}.txd`)) {
-      this.warnAsset(`ignoring modded ${def.txd.toLowerCase()}.txd — '${name}' is an optimized model`);
-    }
-
-    const vehicle = readVehicleOsm(name, new Uint8Array(osm));
-
-    return {
-      colliders: vehicle.colliders,
-      halfExtents: vehicle.halfExtents,
-      handling: this.vehicleHandling(def.handlingId),
-      model: vehicle.model,
-      paint: enginePaint(this.resolveVehicleColours(name, colourIndices(colour))),
-      rig: vehicle.rig,
-      seat: vehicle.seat,
-      wheels: vehicle.wheels,
-    };
-  }
-
   /** First carcol combo for a model → primary/secondary RGB (falls back to white).
    *  Missing 3rd/4th colours default to palette index 0 (black), like SA does for 2-colour cars. */
   private resolveVehicleColours(name: string, indices?: number[]): VehiclePaint {
@@ -705,52 +629,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     }
 
     return { primary: white, secondary: white };
-  }
-
-  private async vehicleCommon(
-    modelName: string,
-    colour?: string,
-  ): Promise<{
-    colliders: ModelColliders | null;
-    def: VehicleDef;
-    dffBuffer: ArrayBuffer;
-    halfExtents: [number, number, number];
-    handling: VehicleHandling;
-    paint: VehiclePaint;
-  }> {
-    await this.ensureVehicleData();
-    const name = modelName.toLowerCase();
-    const def = this.vehicleDefs?.get(name);
-    if (!def) {
-      throw new Error(`No vehicle definition for '${modelName}' in vehicles.ide`);
-    }
-    // Bare archive names — straight from gta3.img (or shadowed by a modloader override). No loose `vehicles/`
-    // folder: the roster comes from vehicles.ide, so models live under their plain `<model>.dff` key.
-    const dffBuffer = requireBuffer(this.fs, `${def.model.toLowerCase()}.dff`);
-    const indices = colour
-      ? colour
-          .split(',')
-          .map((cell) => Number(cell.trim()))
-          .filter((value) => Number.isFinite(value))
-      : undefined;
-    const col = parseDffCollision(dffBuffer);
-
-    return {
-      colliders: col ? toModelColliders({ col, name: col.name, transforms: [] }) : null,
-      def,
-      dffBuffer,
-      // Half-extents from the collision bounds — robust to stray vertices in modded DFFs
-      // (a mesh bbox can blow up); the COL is authored clean.
-      halfExtents: col
-        ? [
-            Math.max(Math.abs(col.bounds.min[0]), Math.abs(col.bounds.max[0])),
-            Math.max(Math.abs(col.bounds.min[1]), Math.abs(col.bounds.max[1])),
-            Math.max(Math.abs(col.bounds.min[2]), Math.abs(col.bounds.max[2])),
-          ]
-        : [1.2, 2.5, 0.7],
-      handling: this.vehicleHandling(def.handlingId),
-      paint: this.resolveVehicleColours(name, indices),
-    };
   }
 
   /**
@@ -807,15 +685,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       tractionMult: num(7, 0.75),
       turnMass: num(1, 3000),
     };
-  }
-
-  /** One line per distinct message — an asset warning fires on a spawn path, so it must never spam. */
-  private warnAsset(message: string): void {
-    if (this.warnedAssets.has(message)) {
-      return;
-    }
-    this.warnedAssets.add(message);
-    this.config.onAssetWarning?.(message);
   }
 }
 
@@ -915,15 +784,6 @@ function enginePaint(paint: VehiclePaint): EngineVehicleData['paint'] {
     secondary: scale255(paint.secondary),
     tertiary: scale255(paint.tertiary ?? paint.primary),
   };
-}
-
-function requireBuffer(fs: AssetFileSystem, name: string): ArrayBuffer {
-  const buffer = fs.get(name);
-  if (!buffer) {
-    throw new Error(`asset not found: ${name}`);
-  }
-
-  return buffer;
 }
 
 /** Read a required text asset from the file system (throws if absent). */

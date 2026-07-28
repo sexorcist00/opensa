@@ -513,10 +513,10 @@ describe('GtaSaWorldAdapter.loadVehicleData', () => {
       await expect(adapter.loadVehicleData('delorean')).rejects.toThrow(/No vehicle definition/);
     });
 
-    it('reports the missing DFF by name when the roster lists a car the archive lacks', async () => {
+    it('names the model when the roster lists a car this build never converted', async () => {
       const adapter = new GtaSaWorldAdapter({ cellSize: 250, fs: dataFs() });
 
-      await expect(adapter.loadVehicleData('landstal')).rejects.toThrow('asset not found: landstal.dff');
+      await expect(adapter.loadVehicleData('landstal')).rejects.toThrow("'landstal.osm' is missing");
     });
 
     it('throws a named error when a required data file is missing entirely', async () => {

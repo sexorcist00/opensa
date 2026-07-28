@@ -8,7 +8,6 @@ import type { AssetFileSystem } from '@opensa/renderware';
 
 import { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { readVehicleOsm } from '@opensa/game/adapters/vehicle-osm';
-import { withModloader } from '@opensa/modloader';
 import { parseDff, parseVehicleDefs } from '@opensa/renderware';
 import { parseDffCollision } from '@opensa/renderware/parsers/binary/col';
 import { readFileSync } from 'node:fs';
@@ -137,69 +136,91 @@ describe('readVehicleOsm', () => {
 
 /**
  * The phase-3 GATE, end-to-end through the real adapter: a converted build spawns a car with NO `.dff`
- * anywhere, and the two paths agree on everything the game consumes.
+ * anywhere, and an UNCONVERTED one is refused rather than parsed at spawn.
  *
  * This lives in opensa-pack rather than in `packages/game`'s own integration test because the test needs
  * the WRITER, and the nx boundary (`type:engine` may not depend on `type:tool`) forbids that direction —
  * correctly: the runtime must never reach for the converter.
  */
 describe('a converted vehicle through GtaSaWorldAdapter', () => {
+  describe('negative cases', () => {
+    it('refuses a car that was never converted instead of parsing its DFF at spawn', async () => {
+      // The runtime DFF path is gone. What a car carries beyond raw geometry — its pop-up-light
+      // declaration, its plate slots, its baked occlusion — is decided at BUILD time, so a car spawned
+      // from a `.dff` would not be a slower car but a WRONG one.
+      const adapter = new GtaSaWorldAdapter({ cellSize: 250, fs: fsFrom(baseFiles()) });
+
+      await expect(adapter.loadVehicleData('admiral')).rejects.toThrow(/admiral\.osm/);
+    });
+  });
+
   describe('positive cases', () => {
-    it('spawns from .osm/.ostex with no DFF present at all, matching the unoptimized load', async () => {
-      const stock = await new GtaSaWorldAdapter({ cellSize: 250, fs: adapterFs() }).loadVehicleData('admiral');
-      const converted = await new GtaSaWorldAdapter({ cellSize: 250, fs: adapterFs(true) }).loadVehicleData('admiral');
-
-      expect(adapterFs(true).get('admiral.dff')).toBeNull(); // nothing a DFF parser could be handed
-      expect(converted.model.textures[0].kind).toBe('ostex');
-      expect(stock.model.textures[0].kind).toBe('rgba');
-      // What the game actually consumes must be identical across the two paths.
-      expect(converted.model.vertexCount).toBe(stock.model.vertexCount);
-      expect(converted.model.indexCount).toBe(stock.model.indexCount);
-      expect(converted.model.positions).toEqual(stock.model.positions);
-      expect(converted.model.submeshes).toEqual(stock.model.submeshes);
-      expect(converted.halfExtents).toEqual(stock.halfExtents);
-      expect(converted.handling).toEqual(stock.handling);
-      expect(converted.seat).toEqual(stock.seat);
-      expect(converted.wheels).toEqual(stock.wheels);
-      expect(converted.colliders?.shape.vertices).toEqual(stock.colliders?.shape.vertices);
-    });
-
-    it('lets a modloader DFF beat our .osm — the mod wins, as UNOPTIMIZED', async () => {
+    it('spawns from .osm/.ostex with no DFF present at all', async () => {
       const files = convertedFiles();
-      files.set('modloader/mycar/admiral.dff', fileOf('vehicles/admiral.dff'));
+      const vehicle = await new GtaSaWorldAdapter({ cellSize: 250, fs: fsFrom(files) }).loadVehicleData('admiral');
+      const written = readVehicleOsm('admiral', new Uint8Array(files.get('admiral.osm')!));
 
-      const fs = withModloader(fsFrom(files));
-      const vehicle = await new GtaSaWorldAdapter({ cellSize: 250, fs }).loadVehicleData('admiral');
-
-      expect(vehicle.model.textures[0].kind).toBe('rgba'); // parsed at runtime, not our baked atlas
-    });
-
-    it('takes the optimized side of a half-modded car and names the file it ignored', async () => {
-      // The mixing rule: a retexture-only mod cannot be honoured, because `.osm` indexes its atlas by
-      // baked layer index rather than by texture name.
-      const files = convertedFiles();
-      files.set('modloader/retexture/admiral.txd', fileOf('vehicles/admiral.txd'));
-      const warnings: string[] = [];
-
-      const fs = withModloader(fsFrom(files));
-      const vehicle = await new GtaSaWorldAdapter({
-        cellSize: 250,
-        fs,
-        onAssetWarning: (message): void => {
-          warnings.push(message);
-        },
-      }).loadVehicleData('admiral');
-
+      expect(files.has('admiral.dff')).toBe(false); // nothing a DFF parser could be handed
       expect(vehicle.model.textures[0].kind).toBe('ostex');
-      expect(warnings).toEqual(["ignoring modded admiral.txd — 'admiral' is an optimized model"]);
+      // Everything the game consumes comes out of the container the writer produced...
+      expect(vehicle.model.vertexCount).toBe(written.model.vertexCount);
+      expect(vehicle.model.indexCount).toBe(written.model.indexCount);
+      expect(vehicle.model.positions).toEqual(written.model.positions);
+      expect(vehicle.model.submeshes).toEqual(written.model.submeshes);
+      expect(vehicle.halfExtents).toEqual(written.halfExtents);
+      expect(vehicle.seat).toEqual(written.seat);
+      expect(vehicle.wheels).toEqual(written.wheels);
+      expect(vehicle.colliders?.shape.vertices).toEqual(written.colliders?.shape.vertices);
+      // ...except the data rows, which the adapter still reads from the text files at spawn.
+      expect(vehicle.handling.mass).toBeGreaterThan(0);
+    });
+
+    it('maps the WHOLE handling row, not the five columns it used to (081/02)', async () => {
+      // Pinned against the stock fixture's real ADMIRAL line — the column order is verified by the DATA,
+      // because the file's own legend lists a "(not used)" column the shipped rows do not carry. Every
+      // value here is as authored: converting one into a force or a spring is the consuming plan's job.
+      //
+      // Three of these are what 081/01 blamed by name for the fleet driving alike: the authored
+      // `centreOfMass` (the flip), `turnMass` (a 6.5 t truck answering the wheel faster than a supercar)
+      // and `drive` — this car is FRONT-wheel drive and the engine drives all four of its wheels today.
+      const adapter = new GtaSaWorldAdapter({ cellSize: 250, fs: fsFrom(convertedFiles()) });
+
+      const { handling } = await adapter.loadVehicleData('admiral');
+
+      expect(handling).toEqual({
+        abs: false,
+        // The stock ADMIRAL authors no axle bits at all (`modelFlags` 0) — 26 of the 210 rows do, and this
+        // is not one of them, so both ends read as the default independent build (081/06 §3).
+        axleFront: { reverse: false, type: 'independent' },
+        axleRear: { reverse: false, type: 'independent' },
+        brakeBias: 0.52,
+        brakeDecel: 8.5,
+        centreOfMass: [0, 0, -0.05],
+        collisionDamageMult: 0.56,
+        dragMult: 2,
+        drive: 'F',
+        engineAccel: 22,
+        engineInertia: 8,
+        engineType: 'P',
+        gears: 5,
+        mass: 1650,
+        maxVelocity: 165,
+        steeringLock: 30,
+        suspAntiDive: 0.55,
+        suspBias: 0.5,
+        suspDamping: 0.15,
+        suspForce: 1,
+        suspHighSpeedDamp: 0,
+        suspLower: -0.19,
+        suspUpper: 0.27,
+        tractionBias: 0.51,
+        tractionLoss: 0.9,
+        tractionMult: 0.65,
+        turnMass: 3851.4,
+      });
     });
   });
 });
-
-/** An adapter-ready file system: the stock fixture set, or the same set after conversion. */
-function adapterFs(converted = false): AssetFileSystem {
-  return fsFrom(converted ? convertedFiles() : baseFiles());
-}
 
 function baseFiles(): Map<string, ArrayBuffer> {
   return new Map<string, ArrayBuffer>([

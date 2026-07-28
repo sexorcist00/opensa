@@ -64,9 +64,10 @@ Limits and deliberate approximations of the own WebGPU engine.
   dark at midnight, and since retractable headlights follow the same signal, their pods stay parked too.
 - **A `features.txt` declaration only reaches a car through the BUILD.** `UP/DOWN_LIGHTS` (and anything else
   a mod declares) is copied into `data/vehicle-features.txt` by `vehicle-installer` and consumed by
-  opensa-pack; a car loaded through the runtime modloader path is judged by its geometry alone, which finds a
-  pop-up pod only when its lamp faces carry SA's head-lamp markers. The declaration's spelling and the rest
-  of the vehicle name contracts: `docs/contracts/vehicles.md`.
+  opensa-pack. There is no runtime path that could pick it up later — a car with no `.osm` is refused at
+  spawn rather than parsed from its DFF, precisely because such a car would silently lose this. Re-run
+  `vehicle-installer --rebake` after editing a `features.txt`. The declaration's spelling and the rest of the
+  vehicle name contracts: `docs/contracts/vehicles.md`.
 - **The enter/exit choreography assumes a door that swings OUT, not UP.** The swing itself is generic (a
   rotation about the hinge frame's own local Z, so a mod's scissor door rises correctly), but the sequence
   around it — the 1.2 m standoff ring, the swept-arc clearance behind the hinge, the step-in path — is laid

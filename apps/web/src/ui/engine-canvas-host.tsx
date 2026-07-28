@@ -384,10 +384,6 @@ async function boot(
     clutterColliders: true,
     extraIpl: ['truthsfarm'],
     fs,
-    // Asset-resolution warnings (opensa-pack 003) — a mod we could not honour, or a name nothing answers.
-    // Already once-per-message in the adapter; printing is the host's job.
-    // eslint-disable-next-line no-console -- an unhonoured mod or a missing model must be visible
-    onAssetWarning: (message): void => console.warn(`[assets] ${message}`),
     // Clutter follows the live per-category debug knobs (0 when disabled) — see the debugger's setProcObj.
     procObjDensityOf: (category): number => {
       const setting = config.graphics.procobj[category];

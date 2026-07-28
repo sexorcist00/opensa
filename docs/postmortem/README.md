@@ -15,6 +15,12 @@ observations that killed it, and the conditions under which it might be worth re
 
 ## Postmortems
 
+- [runtime-modloader-overlay.md](./runtime-modloader-overlay.md) — the boot-time `modloader/` overlay
+  (`@opensa/modloader`, plan 058) and the runtime DFF fallback it fed, both removed 2026-07-28. Not measured
+  away but ARGUED away: what a car carries beyond geometry — its `features.txt` pop-up declaration, its plate
+  slots, its baked occlusion — is decided at BUILD time now, so a car served from a runtime `.dff` spawned
+  silently WRONG rather than merely slower. Mods install into the game dir instead (`mod-installer` /
+  `vehicle-installer --rebake`). Carries the condition for revisiting in-browser modding.
 - [090-vehicle-cabin-at-night.md](./090-vehicle-cabin-at-night.md) — the sky-gated reflection (`3e37d10`) and
   the whole 090 cabin chain (night relax + a lit cabin + one dash lamp), built and REVERTED the same day
   (`ae6548e`) on the field's verdict. The measured data was never wrong; it just never answered what the eye
