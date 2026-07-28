@@ -337,12 +337,14 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
   // Surface effects (plan 089/05): dust/grass/gravel/mud/sand/spray by the surfinfo W_* flag under each
   // wheel — the original's AddWheelDirtAndWater dispatch. Rolling on a flagged surface at speed throws
   // material with no slide at all; the class → look table is an eye-fit (docs/hacks/surface-fx-fit.md).
+  // The systems are lane ALIASES: the same white-authored prt_wheeldirt registered per class with an
+  // earthy tint — the stand-in for SA's per-spawn ground colour (see DYNAMIC_SYSTEMS in engine-particles).
   const SURFACE_FX_LOOK: Record<SurfaceFxClass, { alpha: number; life: number; system: string }> = {
-    dust: { alpha: 0.14, life: 0.35, system: 'prt_wheeldirt' },
-    grass: { alpha: 0.12, life: 0.3, system: 'prt_wheeldirt' },
-    gravel: { alpha: 0.14, life: 0.3, system: 'prt_wheeldirt' },
-    mud: { alpha: 0.18, life: 0.4, system: 'prt_wheeldirt' },
-    sand: { alpha: 0.2, life: 0.35, system: 'prt_sand' },
+    dust: { alpha: 0.18, life: 0.35, system: 'wheeldirt-dust' },
+    grass: { alpha: 0.16, life: 0.3, system: 'wheeldirt-grass' },
+    gravel: { alpha: 0.18, life: 0.3, system: 'wheeldirt-dust' },
+    mud: { alpha: 0.22, life: 0.4, system: 'wheeldirt-mud' },
+    sand: { alpha: 0.22, life: 0.35, system: 'prt_sand' },
   };
   const surfaceEmitters = new Map<string, DynamicFxEmitter | null>();
   const surfaceRecords = (): ReturnType<GtaSaWorldAdapter['surfaces']> => adapter.surfaces();

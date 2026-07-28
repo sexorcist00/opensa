@@ -19,6 +19,15 @@ last step, closing the plan's code work.
   `sizeScale` shrinks it 0.35×). All numbers are an eye-fit → `docs/hacks/surface-fx-fit.md`, including
   the honest gap: no ground-brightness tint (the lane has per-spawn alpha, not per-spawn colour).
 
+## Field round 2: white smoke on grass
+
+The puffs rendered WHITE because that is what the data says: prt_wheeldirt's authored colour envelope is
+pure white and its texture neutral grey — in SA the earth colour arrives PER SPAWN (`FxPrtMult_c`'s
+colour, derived from the ground), a channel the lane does not have. The stand-in: the lane's library
+entries grew `tint` (and `alias`, so one fxp system registers per class) — `wheeldirt-dust/-grass/-mud`
+carry earthy per-class tints, prt_sand a sandy one. Per class, not per ground — the residual gap and the
+retirement path (a per-spawn colour channel) are in the hack doc.
+
 ## Field round 1: the snowflakes on asphalt
 
 `W_SPRAY` turned out to be set on `default` and EVERY `tarmac*` row — in SA it means "spray when the road
