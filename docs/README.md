@@ -33,6 +33,10 @@ Read it as a set of rules:
   — scheduled cycles, same plan-chain shape as `docs/plans/`, just not this version).
 - **A change alters the architecture** → add/adjust notes (and the diagram) in
   [`docs/architecture/`](./architecture/README.md) in the SAME change.
+- **A NAME starts carrying behaviour** (a file the pipeline looks for, a frame/material the converter reads,
+  a data row a tool writes) → record it in [`docs/contracts/`](./contracts/), one file per subject. A name
+  contract is invisible from the code that consumes it: nobody greps for a filename they do not know exists,
+  and a mod that spells one wrong contributes nothing, silently.
 - **After a big rework** → run an audit and a benchmark, and record both: the audit under
   [`docs/audit/`](./audit/), the numbers under [`docs/benchmarks/`](./benchmarks/) (per its schema). A large
   change without its audit + before/after numbers is unfinished.
@@ -48,6 +52,7 @@ Read it as a set of rules:
 | [`plans/`](./plans/README.md) | Committed work: numbered plan chains with measured verification. |
 | [`architecture/`](./architecture/README.md) | Module/flow/format docs + rendered mermaid diagrams. |
 | [`features/`](./features/README.md) | Per-feature state (one file per feature). |
+| [`contracts/`](./contracts/) | Names that carry behaviour (files, frames, materials, data rows). |
 | [`edge-cases/`](./edge-cases/README.md) | CURRENT limitations/constraints only, no legacy. |
 | [`performance/`](./performance/) | Deferred-optimization levers (a price tag, not a plan). |
 | [`benchmarks/`](./benchmarks/) | Every reported perf figure, recorded before it is analysed. |

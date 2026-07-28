@@ -656,18 +656,6 @@ function lampTag(material: RWMaterial): 'head' | 'tail' | null {
 }
 
 /**
- * Material CLASS (074/16 field round 2 — see {@link MaterialClass}): which reflection model a texel gets.
- * Signals, in priority order:
- *   - `_vlo` LOD meshes, lamps, non-reflective materials (env coefficient 0 — SA's own "not reflective"
- *     marker on tyres/rubber/trim) → MATTE, excluded from reflections entirely;
- *   - translucency → GLASS (sharp mirror, no flakes; the blend pipeline);
- *   - a chrome base texture or the `vehicleenvmap*` env map (SA's chrome/glass sphere photo) → CHROME;
- *   - carcols paint slots and the `xvehicleenv*` env map (SA's painted-horizon sphere map) → PAINT.
- * Custom cars ship their OWN chrome/env textures — the texture-name check catches the common `chrome`
- * naming, and anything env-mapped that matches nothing else stays PAINT (its own sphere map still supplies
- * the pattern).
- */
-/**
  * Material CLASS (074/16 rounds 2–4 — see {@link MaterialClass}): which reflection model a texel gets.
  * Priority: lod/lamps/non-reflective (env coefficient 0 — SA's "not reflective" marker on tyres/trim) →
  * MATTE; translucent → GLASS; carcols slots → PAINT; UNTEXTURED neutral-grey env-mapped → CHROME; any

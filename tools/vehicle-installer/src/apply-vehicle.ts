@@ -37,7 +37,8 @@ export function applyVehicle(folderPath: string, outPath: string): AppliedVehicl
   // `features.txt` sits in the same folder and also ends in `.txt` — taking the FIRST `.txt` picked it over
   // `previon.settings.txt` (alphabetical order) and the car lost its whole settings file.
   const featuresFile = entries.find((name) => name.toLowerCase() === FEATURES_FILE);
-  const features = featuresFile ? parseFeatures(readFileSync(join(folderPath, featuresFile), 'utf8')) : [];
+  // Same decode as the settings file: a features file saved as UTF-16 must not read as a wall of NULs.
+  const features = featuresFile ? parseFeatures(decodeSettings(readFileSync(join(folderPath, featuresFile)))) : [];
   const settingsFile =
     entries.find((name) => name.toLowerCase().endsWith('.settings.txt')) ??
     entries.find((name) => name.toLowerCase().endsWith('.txt') && name.toLowerCase() !== FEATURES_FILE);

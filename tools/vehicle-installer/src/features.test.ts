@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { formatFeatureTable, parseFeatures } from './features';
+import { decodeSettings } from './settings';
 
 describe('parseFeatures', () => {
   describe('negative cases', () => {
@@ -17,6 +18,16 @@ describe('parseFeatures', () => {
 
     it('takes several tokens off one line and ignores a trailing comment', () => {
       expect(parseFeatures('UP/DOWN_LIGHTS, SPOILER  # what this model can do')).toEqual(['UP/DOWN_LIGHTS', 'SPOILER']);
+    });
+  });
+});
+
+describe('parseFeatures + decodeSettings', () => {
+  describe('positive cases', () => {
+    it('reads a features file saved as UTF-16, like the settings file beside it', () => {
+      const bytes = Buffer.from(`\ufeffUP/DOWN_LIGHTS\r\n`, 'utf16le');
+
+      expect(parseFeatures(decodeSettings(bytes))).toEqual(['UP/DOWN_LIGHTS']);
     });
   });
 });

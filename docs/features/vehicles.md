@@ -5,6 +5,9 @@ build, run off the main thread by `packages/game/src/adapters/vehicle-model.work
 `packages/game/src/vehicle/` (systems), `packages/engine/src/render/probe.ts` (the reflection probe),
 host wiring in `apps/web/src/ui/engine-vehicles.ts`, plans 015–021/025/030/033 + 074/16.
 
+Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/plate materials, the data rows
+— are collected in [contracts/vehicles.md](../contracts/vehicles.md).
+
 ## Implemented
 
 - **Loading**: vehicles.ide defs, DFF with frame hierarchy KEPT (doors/wheels as named parts),

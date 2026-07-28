@@ -182,6 +182,9 @@ Keep these in sync with the code — update them in the same change, not later:
   rendered to `docs/architecture/assets/` by `npm run arch:render` — edit the block, re-render, commit both
 - `docs/features/` — when developing a feature, update its file's state; a new feature gets its own new file
   (+ a row in `docs/features/README.md`)
+- `docs/contracts/` — when a NAME starts carrying behaviour (a file the pipeline looks for, a frame/material
+  the converter reads, a data row a tool writes), record it in the matching subject file. These are the rules
+  a mod author cannot guess and a reader cannot grep for
 - `docs/edge-cases/` — when a new limitation/constraint is discovered, add it to the matching file; when one
   is lifted, remove it. Only CURRENT limitations live there, no legacy
 - `docs/performance/` — when a change picks the RUNTIME path over a precomputed/baked one, or takes any
