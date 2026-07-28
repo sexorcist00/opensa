@@ -42,12 +42,33 @@ export const STAGE_NAMES = [
   'pack',
   'lod',
 ] as const;
+
+/**
+ * The stages `--exclude` accepts — every real one. `lod` is not a stage but an `--until` alias for "run both
+ * targets", so excluding it would name nothing.
+ */
+export const EXCLUDABLE_STAGES = STAGE_NAMES.filter((name): name is ExcludableStage => name !== 'lod');
+
 export interface BuildPerfectMapOptions {
   /** Downgrade the int16 text-ROW budget from a build-stopping error to a warning — the 03-asi ghost-barriers
    *  repro path (an intentionally over-2^15 full build). The 39-slot guard stays hard so the other structures
    *  remain in-bounds. Never set for a shipping build. */
   allowTextRowOverflow?: boolean;
   config?: Partial<BuilderConfig>;
+  /**
+   * Stages to SKIP, whatever else the run asks for — the target-split directive. Unlike `--until` (which cuts
+   * the pipeline at a point) this removes named stages and keeps everything after them, so one source tree can
+   * produce a target that needs only part of the chain:
+   *
+   * - `sa` — no real-game LOD build, and no `checkImgIdBudgets` with it (that guard reads the `sa/` tree).
+   * - `opensa` — no cell-LOD build and no convert; `pack` goes with it, being that target's tail.
+   * - `pack` alone — build `opensa/` and leave it in GAME format (same result as `--until opensa`).
+   * - any common-chain stage (`mods`/`vehicles`/`peds`/`optimize`/`trees`/`procobj`) — dropped from the chain.
+   *
+   * An excluded stage leaves whatever a previous run wrote in its place: the builder only clears `<out>/.work`,
+   * so an opensa-only run does not touch a `sa/` built earlier.
+   */
+  exclude?: readonly ExcludableStage[];
   /** Clean base game dir (`gta.dat` + `data/` + `models/`). */
   gamePath: string;
   /** mods-src root — one subfolder per stage (`mods/`, `vehicles/`, `peds/`, `vegetation/`, `procobj/`). */
@@ -67,6 +88,9 @@ export interface BuildResult {
   stoppedEarly: boolean;
 }
 
+/** Every stage name except the `lod` alias — see {@link EXCLUDABLE_STAGES}. */
+export type ExcludableStage = Exclude<StageName, 'lod'>;
+
 export type StageName = (typeof STAGE_NAMES)[number];
 
 /** Run the pipeline (optionally up to `until`). Returns each produced stage build. */
@@ -75,6 +99,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const { gamePath, inPath, outPath, until } = options;
   const { subfolders } = config;
   const keepWork = options.keepWork || until !== undefined;
+  const excluded: ReadonlySet<ExcludableStage> = new Set(options.exclude ?? []);
 
   const work = join(outPath, '.work');
   rmSync(work, { force: true, recursive: true });
@@ -84,7 +109,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   const populated = (sub: string): boolean => existsSync(source(sub)) && readdirSync(source(sub)).length > 0;
 
   // The common chain (installers → optimizer → LODs). Conditional stages are skipped when their source is empty.
-  const chain: { name: StageName; run: (game: string, out: string) => Promise<unknown> | void }[] = [];
+  const chain: { name: ExcludableStage; run: (game: string, out: string) => Promise<unknown> | void }[] = [];
   if (populated(subfolders.mods)) {
     chain.push({
       name: 'mods',
@@ -145,23 +170,17 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
       }),
   });
 
-  const staged = new Set(chain.map((stage) => stage.name));
-  const stageSource = {
+  const runnable = planChain(chain, excluded, {
     mods: subfolders.mods,
     peds: subfolders.peds,
     trees: subfolders.vegetation,
     vehicles: subfolders.vehicles,
-  } as const;
-  for (const name of ['mods', 'vehicles', 'peds', 'trees'] as const) {
-    if (!staged.has(name)) {
-      log(`${name} — skipped (${stageSource[name]}/ empty)`);
-    }
-  }
+  });
 
   const produced: { dir: string; name: string }[] = [];
   const untilIndex = until === undefined ? Infinity : STAGE_NAMES.indexOf(until);
   let game = gamePath;
-  for (const [index, stage] of chain.entries()) {
+  for (const [index, stage] of runnable.entries()) {
     if (STAGE_NAMES.indexOf(stage.name) > untilIndex) {
       return { produced, stoppedEarly: true }; // `until` names a skipped stage — everything before it has run
     }
@@ -199,14 +218,14 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
   // real geometry behind its lod link — gostown's LODEnsemble* forests). The strip keeps them and the
   // pak welds them into BOTH levels; the cell bake still skips them (it bakes HD, i.e. the stub).
   const alwaysOnLods = loadLodAlways(inPath, source(subfolders.mods));
-  if (runsStage('sa', until)) {
+  if (runsStage('sa', until, excluded)) {
     const sa = join(outPath, 'sa');
     log('sa → sa/');
     buildSaLods({ config: { excludeItems, holeFillModels }, gameDir: game, outDir: sa });
     checkImgIdBudgets(sa);
     produced.push({ dir: sa, name: 'sa' });
   }
-  if (runsStage('opensa', until)) {
+  if (runsStage('opensa', until, excluded)) {
     produced.push(
       ...(await buildOpensaTarget({
         alwaysOnLods,
@@ -217,7 +236,7 @@ export async function buildPerfectMap(options: BuildPerfectMapOptions): Promise<
         holeFillModels,
         log,
         outPath,
-        until,
+        packing: until !== 'opensa' && !excluded.has('pack'),
         work,
       })),
     );
@@ -287,12 +306,40 @@ export function collectGeneratedModels(gameDir: string): string[] {
 }
 
 /**
- * Whether a post-split target (`sa`/`opensa`) runs under the given `--until`. `STAGE_NAMES` is the pipeline
- * ORDER, so `--until <stage>` means "run everything up to and including it" — `--until pack` builds `sa`
- * too, because `sa` precedes `pack`. (It used to be an explicit name list, which silently dropped the whole
- * `sa` target from `--until pack`/`--until opensa` runs: no log line, no error, just a missing build.)
+ * Every `--exclude` value on a command line, comma-separated and/or repeated, validated against
+ * {@link EXCLUDABLE_STAGES}. A typo has to fail LOUDLY: silently ignoring one would produce a build missing
+ * the target it was meant to keep, and nothing downstream can tell that from a target nobody asked for.
  */
-export function runsStage(stage: 'opensa' | 'sa', until: StageName | undefined): boolean {
+export function parseExcludedStages(argv: readonly string[]): ExcludableStage[] {
+  const names = argv
+    .flatMap((arg, index) => (arg === '--exclude' ? (argv[index + 1] ?? '').split(',') : []))
+    .map((name) => name.trim())
+    .filter((name) => name !== '');
+  for (const name of names) {
+    if (!EXCLUDABLE_STAGES.includes(name as ExcludableStage)) {
+      throw new Error(`--exclude must name one of: ${EXCLUDABLE_STAGES.join(' | ')} (got '${name}')`);
+    }
+  }
+
+  return [...new Set(names as ExcludableStage[])];
+}
+
+/**
+ * Whether a post-split target (`sa`/`opensa`) runs under the given `--until` and `--exclude`. `STAGE_NAMES` is
+ * the pipeline ORDER, so `--until <stage>` means "run everything up to and including it" — `--until pack`
+ * builds `sa` too, because `sa` precedes `pack`. (It used to be an explicit name list, which silently dropped
+ * the whole `sa` target from `--until pack`/`--until opensa` runs: no log line, no error, just a missing
+ * build.) `--exclude` overrides that ordering: an excluded target never runs, whatever `--until` says.
+ */
+export function runsStage(
+  stage: 'opensa' | 'sa',
+  until: StageName | undefined,
+  exclude: ReadonlySet<ExcludableStage> = new Set(),
+): boolean {
+  if (exclude.has(stage)) {
+    return false;
+  }
+
   return until === undefined || until === 'lod' || STAGE_NAMES.indexOf(stage) <= STAGE_NAMES.indexOf(until);
 }
 
@@ -325,9 +372,10 @@ export function swapLinearTxds(commonDir: string, opensaDir: string): void {
 /**
  * The `opensa` target: the cell-LOD build, then OUR conversion of it.
  *
- * `--until opensa` asks for the LOD build itself, so it lands in the final directory and stops there.
- * Otherwise the pack stage is the last thing to touch this target, so the LOD build is an intermediate and
- * the CONVERTED dir takes the `opensa/` name — every stage still hands the next a complete game tree.
+ * `--until opensa` (or `--exclude pack`) asks for the LOD build itself, so it lands in the final directory and
+ * stops there. Otherwise the pack stage is the last thing to touch this target, so the LOD build is an
+ * intermediate and the CONVERTED dir takes the `opensa/` name — every stage still hands the next a complete
+ * game tree.
  */
 async function buildOpensaTarget(step: {
   /** Per-game always-on lod-target list (`lod-always.json`) — kept by the strip, welded into both levels. */
@@ -341,11 +389,11 @@ async function buildOpensaTarget(step: {
   holeFillModels: string[];
   log: (message: string) => void;
   outPath: string;
-  until: StageName | undefined;
+  /** Whether the convert runs. False (`--until opensa` / `--exclude pack`) leaves `opensa/` in GAME format. */
+  packing: boolean;
   work: string;
 }): Promise<{ dir: string; name: string }[]> {
-  const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, until, work } = step;
-  const packing = until !== 'opensa';
+  const { alwaysOnLods, config, excludeItems, game, holeFillModels, log, outPath, packing, work } = step;
   const opensa = join(outPath, 'opensa');
   const lodDir = packing ? join(work, 'opensa-lod') : opensa;
   log(`opensa → ${packing ? '.work/opensa-lod' : 'opensa/'} (baking cells — can take several minutes)`);
@@ -576,4 +624,29 @@ function loadPrelitOnly(...dirs: string[]): null | ReturnType<typeof parseOnlyLi
 
 function log(message: string): void {
   console.log(`· ${message}`);
+}
+
+/**
+ * Drop the `--exclude`d stages from the assembled chain, first REPORTING everything this run will not do —
+ * both reasons, separately: a stage whose source folder is empty, and a stage the run excluded on purpose. A
+ * silently missing stage reads as a broken build, and the two causes need different fixes.
+ */
+function planChain<T extends { name: ExcludableStage }>(
+  chain: readonly T[],
+  excluded: ReadonlySet<ExcludableStage>,
+  stageSource: Readonly<Record<'mods' | 'peds' | 'trees' | 'vehicles', string>>,
+): T[] {
+  const staged = new Set(chain.map((stage) => stage.name));
+  for (const name of ['mods', 'vehicles', 'peds', 'trees'] as const) {
+    if (!staged.has(name) && !excluded.has(name)) {
+      log(`${name} — skipped (${stageSource[name]}/ empty)`);
+    }
+  }
+  for (const name of EXCLUDABLE_STAGES) {
+    if (excluded.has(name)) {
+      log(`${name} — excluded (--exclude)`);
+    }
+  }
+
+  return chain.filter((stage) => !excluded.has(stage.name));
 }

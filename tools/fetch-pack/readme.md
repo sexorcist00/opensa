@@ -4,11 +4,11 @@ The plan-086 finishing tool: pack a pmb build's SELF-CONTAINED `opensa/` game di
 `pak/` — phase 8) into the second, independent FETCH build: content-hashed zip chunks + a download
 `manifest.json` under `<build>/opensa-pack/<game>-<version>/`. Two builds of the SAME bytes — local play
 opens `build/<id>/opensa` directly (folder / http-dir), hosted fetch downloads the chunks (deploy = upload
-the `<game>-<version>/` folder as `games/<game>-<version>/`). Every `build:game:*` alias chains this tool
-after pmb.
+the `<game>-<version>/` folder as `games/<game>-<version>/`). Every `build:game:<id>:opensa` alias chains this tool
+after pmb (the `:sa` target builds no fetch chunks — the real game is not downloaded).
 
 ```bash
-npx tsx tools/fetch-pack/src/cli.ts   # defaults: --build ./build/original --out <build>/opensa-pack (chained in build:game:*)
+npx tsx tools/fetch-pack/src/cli.ts   # defaults: --build ./build/original --out <build>/opensa-pack (chained in build:game:<id>:opensa)
 npx tsx tools/fetch-pack/src/cli.ts --build ./build/gostown --out ./static/games   # stage a local fetch test
 ```
 

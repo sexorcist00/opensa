@@ -16,6 +16,13 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  *                      `--until opensa` stops at the LOD build, leaving `opensa/` in GAME format; a full run
  *                      (or `--until pack`) converts it, and `opensa/` is then our own format — bootable by
  *                      the own engine, not by the real game.
+ *     --exclude <a,b>  SKIP the named stages and run everything else (repeatable; comma-separated). This is
+ *                      the TARGET directive, where `--until` is the stop point: `--exclude sa` builds only
+ *                      our target (the `build:game:<id>:opensa` scripts), `--exclude vehicles,peds,opensa`
+ *                      builds only the real game's (`build:game:original:sa`). Excluding `opensa` drops
+ *                      `pack` with it; excluding `pack` alone leaves `opensa/` in GAME format. An excluded
+ *                      stage leaves whatever an earlier run wrote in its place — only `<out>/.work` is
+ *                      cleared — so the two targets can be rebuilt independently in the same `--out`.
  *     --keep-work      keep the intermediate `.work` builds even on a full run.
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
  *     --allow-text-row-overflow  build past the int16 30k text-row budget (the 03-asi ghost-barriers repro —
@@ -32,7 +39,7 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  */
 import { statSync } from 'node:fs';
 
-import { buildPerfectMap, STAGE_NAMES, type StageName } from './pipeline';
+import { buildPerfectMap, parseExcludedStages, STAGE_NAMES, type StageName } from './pipeline';
 
 /** The canonical build dir when `--out` is omitted — the single source every dev surface reads (plan 079). */
 const DEFAULT_OUT = './build/original';
@@ -43,7 +50,8 @@ async function main(): Promise<void> {
   const outArg = argValue('--out') ?? DEFAULT_OUT;
   if (!gameArg || !inArg) {
     throw new Error(
-      'usage: tsx tools/perfect-map-builder/src/cli.ts --game <path> --in <mods-src> [--out <path>] [--until <stage>] [--keep-work] [--no-<pass>]',
+      'usage: tsx tools/perfect-map-builder/src/cli.ts --game <path> --in <mods-src> [--out <path>] ' +
+        '[--until <stage>] [--exclude <stage,stage>] [--keep-work] [--no-<pass>]',
     );
   }
 
@@ -71,6 +79,7 @@ async function main(): Promise<void> {
   const { produced, stoppedEarly } = await buildPerfectMap({
     allowTextRowOverflow: process.argv.includes('--allow-text-row-overflow'),
     config: { optimizerPasses },
+    exclude: parseExcludedStages(process.argv),
     gamePath,
     inPath,
     keepWork: process.argv.includes('--keep-work'),

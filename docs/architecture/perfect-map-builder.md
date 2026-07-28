@@ -13,6 +13,16 @@ Each stage is another tool's Node API; every stage hands the next a **complete g
 stop anywhere (`--until <stage>`, inclusive, keeps intermediates). Intermediates live under
 `<out>/.work/<n>-<stage>` and are deleted as consumed unless `--keep-work`/`--until`.
 
+**A run asks for a TARGET, not for the whole pipeline** (`--exclude <stage,stage>`, repeatable): the named
+stages are dropped and everything after them still runs. That is what the two `build:game:<id>:*` script
+families are — `:opensa` is `--exclude sa`, `:sa` is `--exclude vehicles,peds,opensa` — and it exists because
+the opensa target is rebuilt far more often than the real game's. The two write disjoint subtrees of the same
+`--out` (`opensa/` + `opensa-pack/` vs `sa/`) and only `<out>/.work` is ever cleared, so an excluded target
+keeps whatever an earlier run left. Excluding `opensa` drops `pack` with it; excluding `pack` alone leaves
+`opensa/` in GAME format (the `--until opensa` result); excluding `sa` drops its `checkImgIdBudgets` guard,
+which reads the `sa/` tree. An unknown `--exclude` name is an error — a typo must not silently produce a build
+missing the target it was meant to keep.
+
 ![pmb pipeline](./assets/pmb-pipeline.svg)
 
 <details><summary>diagram source</summary>
@@ -33,7 +43,7 @@ flowchart TB
   pack["pack · opensa-pack packGameDir<br/>weld cells · .osm per model · pak"]:::stage
   outsa[("&lt;out&gt;/sa<br/>real-SA build")]:::data
   outos[("&lt;out&gt;/opensa<br/>SELF-CONTAINED game dir<br/>(pak/ inside: world.ospak · manifest · water.bin)")]:::data
-  fetch["fetch-pack (chained by build:game:*)<br/>content-hashed zip chunks + manifest"]:::stage
+  fetch["fetch-pack (chained by build:game:&lt;id&gt;:opensa)<br/>content-hashed zip chunks + manifest"]:::stage
   outpak[("&lt;out&gt;/opensa-pack/&lt;game&gt;-&lt;version&gt;<br/>the FETCH build — deploy as games/&lt;game&gt;-&lt;version&gt;")]:::data
 
   src --> mods --> veh --> peds --> opt --> trees --> proc --> guard
@@ -58,14 +68,14 @@ flowchart TB
 | 4   | `optimize` | `runOptimizer` (map-optimizer)                | lossless conditioning; `broken-prelight.json` force-list         |
 | 5   | `trees`    | `buildTreeLods`                               | skipped when `vegetation/` is empty; `--tex` 512 atlas, `prelight.json` |
 | 6   | `procobj`  | `buildProcobjLods`                            | always (original ships no `procobj/` — bakes the built-in roster, no-op on a TC); `--tex` 128 |
-| —   | guards     | `checkTextIplSlotBudget`, `checkImgIdBudgets` | the SA runtime ceilings — see [edge-cases](../edge-cases/)       |
-| 7   | `sa`       | `buildSaLods` → `<out>/sa`                    | the real-game (RenderWare) target                                |
+| —   | guard      | `checkTextIplSlotBudget`                      | an SA runtime ceiling read off the COMMON chain, so it runs whatever target was asked for — see [edge-cases](../edge-cases/) |
+| 7   | `sa`       | `buildSaLods` → `<out>/sa`, then `checkImgIdBudgets` | the real-game (RenderWare) target; its ID-pool guard reads the built `sa/` tree and goes with it |
 | 8   | `opensa`   | `buildOpensaLods` + `swapLinearTxds`          | cell 250 bake (= the render grid, plan 087), `stripLods`, linear-convention TXD swap |
 | 9   | `pack`     | `packGameDir` (opensa-pack) → `<out>/opensa`  | the OpenSA target, self-contained (pak → `<out>/opensa/pak`, 086 phase 8); convert rect = the game's `PACK_RECTS.full` (auto-fit when unpinned, plan 087); report mirrored to `<out>/report.json` |
-| 10  | `lod`      | —                                             | special `--until` value: run everything, keep every intermediate |
+| 10  | `lod`      | —                                             | special `--until` value: run everything, keep every intermediate. **Not an `--exclude` value** — it names no stage to skip |
 
-Between stages 6 and 7 the pipeline collects generated models + `lod-exclude.json` into `excludeItems` for
-both final LOD generators.
+Every row but `lod` is an `--exclude` value (`EXCLUDABLE_STAGES`). Between stages 6 and 7 the pipeline
+collects generated models + `lod-exclude.json` into `excludeItems` for both final LOD generators.
 
 ## Per-game data files (`mods-src/<game>/`, also honoured at the mods-src root)
 
@@ -104,7 +114,7 @@ and a build-root pick): `?loader=http-dir&src=http://localhost:3001/build/origin
 
 ## fetch-pack (the SECOND build, plan 086 phase 8)
 
-`tools/fetch-pack` (chained after pmb by every `build:game:*` alias) consumes the
+`tools/fetch-pack` (chained after pmb by every `build:game:<id>:opensa` alias) consumes the
 self-contained `<out>/opensa` game dir and produces the independent FETCH build:
 `<out>/opensa-pack/<game>-<version>/` — ~50 MB content-hashed zip chunks + a download `manifest.json`
 (identity from the pak manifest's `game`/`appVersion`). Deploy = upload that folder to the static host as

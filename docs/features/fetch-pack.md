@@ -10,7 +10,7 @@ chunks + a download `manifest.json` under `build/<id>/opensa-pack/<game>-<versio
 the second, independent build; deploy = upload that folder to the host as `games/<game>-<version>/`,
 `--out ./static/games` stages a local fetch test). Same layout the `asset-fetch-loader` already
 downloads/caches. Identity (`game`, `appVersion`) rides the pak manifest (086 phase 1).
-chained into every `npm run build:game:<id>` alias (standalone: `npx tsx tools/fetch-pack/src/cli.ts`).
+chained into every `npm run build:game:<id>:opensa` alias (standalone: `npx tsx tools/fetch-pack/src/cli.ts`).
 
 Replaced: `scripts/build-game.ts` (raw-game partitioning) — deleted; `original-extend` npm target —
 deleted. Details: `tools/fetch-pack/docs/plans/001-architecture.md`.

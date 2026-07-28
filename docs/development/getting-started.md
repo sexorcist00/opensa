@@ -46,8 +46,9 @@ the matching alias (see below) or call the pmb CLI with `--game/--in/--out` dire
 ## 3. Build the archives
 
 ```sh
-npm run build:game:original              # pmb + fetch-pack → ./build/original (sa/ + opensa/ + opensa-pack/)
-# other games: npm run build:game:gostown|carcer|anderius
+npm run build:game:original:opensa       # pmb + fetch-pack → ./build/original (opensa/ + opensa-pack/)
+npm run build:game:original:sa           # the real-game target instead → ./build/original/sa
+# other games (opensa only): npm run build:game:gostown|carcer|anderius:opensa
 ```
 
 One command, TWO independent builds (plan 086 phase 8): `opensa/` — the SELF-CONTAINED game dir

@@ -52,8 +52,8 @@ Paste the output into a ` ```mermaid ` block (GitHub renders it) or <https://mer
 ## Build / asset pipeline
 
 Game builds moved out of `scripts/` (plan 086): `tools/perfect-map-builder` builds a game
-(`npm run build:game:original`, also `:gostown` `:carcer` `:anderius`), `tools/fetch-pack`
-(chained in `build:game:*`) packs the built `opensa/` game dir into the hosted fetch chunks — see
+(`npm run build:game:original:opensa`, also `:gostown` `:carcer` `:anderius`; `build:game:original:sa`
+builds the real-game target instead), `tools/fetch-pack` (chained in every `:opensa` alias) packs the built `opensa/` game dir into the hosted fetch chunks — see
 [docs/commands.md](../commands.md) and [fetch-pack.md](../features/fetch-pack.md).
 
 ### gen-wind-list.ts

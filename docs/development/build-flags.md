@@ -36,7 +36,7 @@ teleports, …) live in the runtime catalogue **`apps/web/src/game-config.tsx`**
 
 **Removed (plan 086):** the deleted `scripts/build-game.ts` used to read per-game `mainCharacter` +
 `vehicles` from `GAME_CONFIG` to pack the dynamically-spawned models. The pmb build converts the full
-`peds.ide`/`vehicles.ide` roster and the fetch-pack tool (chained in `build:game:*`) ships the whole
+`peds.ide`/`vehicles.ide` roster and the fetch-pack tool (chained in every `:opensa` alias) ships the whole
 build, so character/vehicle choice is runtime-only (`GAME_CONFIG`) — no rebuild needed after changing them.
 
 ## Client constants (`define` — statically replaced)

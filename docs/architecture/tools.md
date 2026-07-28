@@ -36,7 +36,7 @@ never the app. The dependency picture is the tools cluster of
   see [perfect-map-builder.md](./perfect-map-builder.md#opensa-pack-the-pack-stage-also-standalone).
 - **fetch-pack** — the build finisher (plan 086): re-homes a build into the fetch-serveable
   `build/<id>/opensa-pack/<game>-<version>/` layout the fetch-mode loader streams by range. Chained after the
-  pack in every `build:game:*` (`npm run build:game:<id>`); see
+  pack in every `build:game:<id>:opensa`; see
   [perfect-map-builder.md](./perfect-map-builder.md).
 
 ## Standalone tools

@@ -18,7 +18,7 @@ archives the app loads. Full steps: **[docs/development/getting-started.md](./do
 
 ```bash
 npm install
-npm run build:game:original   # pack your game-src/original into static/<version>/ (one-time / on asset change)
+npm run build:game:original:opensa   # build your game-src/original into ./build/original (one-time / on asset change)
 npm run serve:static          # serve the built archives (required by the app)
 npm run dev                   # Vite dev server — open the printed URL
 ```

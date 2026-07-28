@@ -15,8 +15,8 @@
   - `getIfp` — IFP animation packages (zone object clips), absent → empty list.
 - URL helpers (`datChildUrl`, `iplBasename`, `streamIplUrl`, `standaloneIplUrl`,
   `normalizeDatPath`).
-- Build tooling: the pmb pipeline (`npm run build:game:original`) reads the stock `gta3.img`/`gta_int.img`
-  via `openArchive`; `tools/fetch-pack` (chained in `build:game:*`) then packs the built game dir into the staged
+- Build tooling: the pmb pipeline (`npm run build:game:original:opensa`) reads the stock `gta3.img`/`gta_int.img`
+  via `openArchive`; `tools/fetch-pack` (chained in every `:opensa` alias) then packs the built game dir into the staged
   data/models/others chunk archives (plan 086).
 
 ## Known gaps / candidates

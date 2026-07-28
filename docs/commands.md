@@ -5,16 +5,34 @@ The everyday commands with all their params, in one place. Canonical folders:
 (see [architecture/perfect-map-builder.md](./architecture/perfect-map-builder.md)).
 Rule (also in `CLAUDE.md`): when a command or param is added/changed, update this file.
 
-## The one build
+## The one build, per TARGET
+
+A build is asked for by target, not as a whole — the two are independent and the opensa one is rebuilt far
+more often, so it does not pay for the real game's LOD pass:
 
 ```bash
-# Full perfect-map build → ./build/original (sa/ + opensa/ targets)
+npm run build:game:original:opensa     # our target only  (pmb --exclude sa) + fetch-pack
+npm run build:game:original:sa         # the real game    (pmb --exclude vehicles,peds,opensa)
+npm run build:game:gostown:opensa      # TCs are opensa-only (also :carcer :anderius)
+```
+
+Both write into the same `./build/<id>`: `:opensa` fills `opensa/` + `opensa-pack/`, `:sa` fills `sa/`, and
+neither touches the other's directory (the builder only clears `<out>/.work`). Standalone:
+
+```bash
 NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cli.ts \
-  --game ./game-src/original --in ./mods-src
+  --game ./game-src/original --in ./mods-src --exclude sa
 ```
 
 Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack|lod>`
-(inclusive, keeps `.work/`) · `--keep-work` · `--no-weld-seams` · `--no-textures` · `--allow-text-row-overflow`.
+(inclusive, keeps `.work/`) · **`--exclude <stage,stage>`** · `--keep-work` · `--no-weld-seams` ·
+`--no-textures` · `--allow-text-row-overflow`.
+
+`--exclude` is the TARGET directive where `--until` is the stop point: it drops the named stages and keeps
+everything after them (repeatable, comma-separated, same names as `--until` minus the `lod` alias; an unknown
+name is an error, never a silent skip). Excluding `opensa` drops `pack` with it; excluding `pack` alone leaves
+`opensa/` in GAME format; excluding `sa` also drops its `checkImgIdBudgets` guard, which reads the `sa/` tree.
+**`:sa` builds no mod vehicles or peds** — that is what `--exclude vehicles,peds` means.
 
 ### Vehicle round: rebake instead of rebuilding
 
@@ -142,7 +160,8 @@ npm run test:fixtures                # real-GTA fixtures + viewer e2e assets
 npm run e2e / e2e:ui / e2e:update    # playwright
 npm run lint / format                # tsc --noEmit + eslint / prettier+eslint --fix
 npm run arch / arch:render           # package graph to stdout / regenerate docs/architecture/assets
-npm run build:game:original          # pmb build + fetch-pack chained → the TWO builds of a game id (also :gostown :carcer :anderius — plan 086)
+npm run build:game:original:opensa   # pmb (--exclude sa) + fetch-pack → the opensa game dir + the fetch build (also :gostown :carcer :anderius)
+npm run build:game:original:sa       # pmb (--exclude vehicles,peds,opensa) → the real-game sa/ target only
 npx tsx tools/fetch-pack/src/cli.ts     # fetch build standalone (chained in build:game:*; --build ./build/<id>; --out ./static/games stages a local fetch test)
 npm run timecyc                      # precompute timecyc data
 ```
