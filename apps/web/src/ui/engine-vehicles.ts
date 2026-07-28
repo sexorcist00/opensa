@@ -25,7 +25,7 @@ import { EngineVehicleHandle, gtaPositionToEngine } from '@opensa/game/adapters/
 import { EnterVehicleSystem } from '@opensa/game/vehicle/enter-vehicle.system';
 import { composePlateText, plateBackgroundIndex } from '@opensa/game/vehicle/plate-raster';
 import { BLANK_PLATE_SLOT, PlateSlots } from '@opensa/game/vehicle/plate-slots';
-import { VehicleDamageSystem } from '@opensa/game/vehicle/vehicle-damage.system';
+import { STRONG_HIT, VehicleDamageSystem } from '@opensa/game/vehicle/vehicle-damage.system';
 import { VehicleLampSystem } from '@opensa/game/vehicle/vehicle-lamp.system';
 import { VehicleLodSystem } from '@opensa/game/vehicle/vehicle-lod.system';
 import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.system';
@@ -287,6 +287,24 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     { ...TYRE_SMOKE_DEFAULTS, ...deps.smokeDials },
     () => config.graphics.effects.enabled,
   );
+
+  // Impact smoke (plan 089/04): a puff at the contact point when a hit passes the damage system's
+  // strong-hit gate — the same event that deforms a panel, so a kerb tap never puffs. Sized by how far
+  // past the gate the force went (an eye-fit — docs/hacks/impact-smoke-fit.md). Reuses the collisionsmoke
+  // emitter; a burst is instantaneous, so repositioning the shared emitter per event is safe.
+  vehicleDamage.onStrongHit = (force, point): void => {
+    if (!smokeEmitter || !config.graphics.effects.enabled) {
+      return;
+    }
+    const [ex, ey, ez] = gtaPositionToEngine([point[0], point[1], point[2]]);
+    smokeEmitter.position[0] = ex;
+    smokeEmitter.position[1] = ey;
+    smokeEmitter.position[2] = ez;
+    const severity = Math.min(1, (force - STRONG_HIT) / (3 * STRONG_HIT)); // 1 at ~4× the damage gate
+    smokeEmitter.lifeScale = 0.4 + 0.3 * severity;
+    smokeEmitter.alphaScale = 0.25 + 0.25 * severity;
+    smokeEmitter.burst(3 + Math.round(5 * severity));
+  };
 
   // Skid marks (plan 089/03): the same slide signal, laid down as decal-ribbon segments. The sink converts
   // each corner to engine space; the engine's ring recycles the oldest mark when full and fades on the

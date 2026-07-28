@@ -62,6 +62,22 @@ describe('VehicleDamageSystem', () => {
       system.update(0.016);
       expect(handle.damaged.size).toBe(0);
     });
+
+    it('never fires the strong-hit sink for weak, pointless or foreign impacts (089/04)', () => {
+      const hits: number[] = [];
+      system.onStrongHit = (force): void => {
+        hits.push(force);
+      };
+      physics.impacts.push(
+        impact(STRONG - 1, [0, 2, 0]), // a kerb tap
+        impact(STRONG * 2, null), // no contact point to puff at
+        { bodyA: 999, bodyB: 998, force: STRONG * 2, point: [0, 2, 0] }, // somebody else's crash
+      );
+
+      system.update(0.016);
+
+      expect(hits).toEqual([]);
+    });
   });
 
   describe('positive cases', () => {
@@ -81,6 +97,18 @@ describe('VehicleDamageSystem', () => {
       expect(handle.detached.has('bonnet')).toBe(true);
       // It falls as WORLD-space data now: the system poses it through the handle every frame.
       expect(handle.poses.get('bonnet')).toBeDefined();
+    });
+
+    it('fires the strong-hit sink with the force and the contact point (089/04)', () => {
+      const hits: { force: number; point: readonly number[] }[] = [];
+      system.onStrongHit = (force, point): void => {
+        hits.push({ force, point: [...point] });
+      };
+      physics.impacts.push(impact(STRONG * 2, [0, 2, 0]));
+
+      system.update(0.016);
+
+      expect(hits).toEqual([{ force: STRONG * 2, point: [0, 2, 0] }]);
     });
 
     it('changes a part state at most once per frame (deform XOR detach)', () => {
