@@ -30,9 +30,19 @@ const DRAW_DISTANCE = 300;
 /**
  * Systems preloaded into the DYNAMIC one-shot lane (089/01) — lowercased, as `parseFxp` keys them. The
  * lane's atlas and system records are built ONCE at boot, so an effect must be listed here before a
- * runtime emitter can spawn it. Extend as effects ship: tyre smoke (089/02), impact smoke (089/04).
+ * runtime emitter can spawn it.
+ *
+ * `sizeScale` shrinks a system's authored size envelope in the lane's record: some SA systems are authored
+ * for a different trigger (prt_sand is a BULLET-hit plume, 8–13 m) and would dwarf a wheel puff. An
+ * eye-fit, recorded with the surface-fx numbers (089/05).
  */
-const DYNAMIC_SYSTEMS = ['prt_collisionsmoke', 'prt_smokeii_3_expand'];
+const DYNAMIC_SYSTEMS: readonly { name: string; sizeScale?: number }[] = [
+  { name: 'prt_collisionsmoke' },
+  { name: 'prt_smokeii_3_expand' },
+  { name: 'prt_wheeldirt' },
+  { name: 'prt_sand', sizeScale: 0.35 },
+  { name: 'prt_splash', sizeScale: 0.6 },
+];
 
 /** A runtime spawner over one preloaded system: park it somewhere, burst it or stream it, step it. */
 export interface DynamicFxEmitter {
@@ -216,7 +226,7 @@ function buildDynamicLibrary(
 ): { index: Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>; library: DynamicParticleLibrary } {
   const baked: FxBakedEmitter[] = [];
   const index = new Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>();
-  for (const name of DYNAMIC_SYSTEMS) {
+  for (const { name, sizeScale } of DYNAMIC_SYSTEMS) {
     const system = systems.get(name);
     if (!system) {
       continue; // this profile does not ship the system — createEmitter(name) then returns null
@@ -225,6 +235,9 @@ function buildDynamicLibrary(
     // includeTriggered: the prt_* family carries NO emrate track — the runtime caller owns the count.
     for (const emitter of bakeFxSystem(system, { includeTriggered: true })) {
       const engineEmitter = toEngineSpace(emitter);
+      if (sizeScale !== undefined) {
+        engineEmitter.sizes = engineEmitter.sizes.map((size) => size * sizeScale) as [number, number, number];
+      }
       entries.push({ baked: engineEmitter, systemIndex: baked.length });
       baked.push(engineEmitter);
     }

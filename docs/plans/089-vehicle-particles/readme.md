@@ -87,6 +87,11 @@ Impact smoke has its source too: the contact-force events the damage system alre
    tuned by eye against footage, and that is a documented fit, not a port. The data is ready: of 179
    surfaces, **W_GRASS 23 · W_SAND 17 · W_MUD 13 · W_SPRAY 4 · W_GRAVEL 2 · W_DUST 2**, and the skid-mark
    type column is DEFAULT/SANDY/MUDDY (18 sandy, 34 muddy) — step 3's ribbon should read it once it can.
+   **SHIPPED 2026-07-28 — [05-surface-effects.md](05-surface-effects.md), field verdict owed.** The
+   dispatch IS the `W_*` flags (mods inherit it); earth classes share `prt_wheeldirt` (no wheel-grass
+   system ships in the fxp), sand/spray get their own systems via the lane's new per-system `sizeScale`;
+   no ground-brightness tint yet (the lane has per-spawn alpha, not colour) →
+   `docs/hacks/surface-fx-fit.md`. The sandy/muddy skid-mark textures stay open.
 
 ## Budget
 

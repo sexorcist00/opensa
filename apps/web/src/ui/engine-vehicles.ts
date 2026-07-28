@@ -33,6 +33,7 @@ import { resolvePlate } from '@opensa/game/vehicle/vehicle-plates';
 import { VehicleRig } from '@opensa/game/vehicle/vehicle-rig';
 import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
 import { VehicleSkidMarkSystem } from '@opensa/game/vehicle/vehicle-skid-marks.system';
+import { type SurfaceFxClass, VehicleSurfaceFxSystem } from '@opensa/game/vehicle/vehicle-surface-fx.system';
 import { planarMotion, type PlanarMotion, VehicleTelemetry } from '@opensa/game/vehicle/vehicle-telemetry';
 import {
   TYRE_SMOKE_DEFAULTS,
@@ -137,6 +138,8 @@ export interface EngineVehiclesDeps {
   smokeDials?: Partial<TyreSmokeDials>;
   /** The dynamic lane's collisionsmoke emitter (089/02); null = no FX library, smoke silently off. */
   smokeEmitter?: DynamicFxEmitter | null;
+  /** Emitter factory for the surface effects (089/05) — `EngineParticles.createEmitter`, absent-tolerant. */
+  surfaceEmitter?: (name: string) => DynamicFxEmitter | null;
   viewOf: () => Vec3;
 }
 
@@ -323,6 +326,65 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         v0: segment.v0,
         v1: segment.v1,
       });
+    },
+    () => config.graphics.effects.enabled,
+  );
+
+  // Surface effects (plan 089/05): dust/grass/gravel/mud/sand/spray by the surfinfo W_* flag under each
+  // wheel — the original's AddWheelDirtAndWater dispatch. Rolling on a flagged surface at speed throws
+  // material with no slide at all; the class → look table is an eye-fit (docs/hacks/surface-fx-fit.md).
+  const SURFACE_FX_LOOK: Record<SurfaceFxClass, { alpha: number; life: number; system: string }> = {
+    dust: { alpha: 0.14, life: 0.35, system: 'prt_wheeldirt' },
+    grass: { alpha: 0.12, life: 0.3, system: 'prt_wheeldirt' },
+    gravel: { alpha: 0.14, life: 0.3, system: 'prt_wheeldirt' },
+    mud: { alpha: 0.18, life: 0.4, system: 'prt_wheeldirt' },
+    sand: { alpha: 0.2, life: 0.35, system: 'prt_sand' },
+    spray: { alpha: 0.35, life: 0.3, system: 'prt_splash' },
+  };
+  const surfaceEmitters = new Map<string, DynamicFxEmitter | null>();
+  const surfaceRecords = (): ReturnType<GtaSaWorldAdapter['surfaces']> => adapter.surfaces();
+  const surfaceFx = new VehicleSurfaceFxSystem(
+    () => (enterVehicle.isSeated() ? enterVehicle.getActive() : null),
+    physics,
+    (surface): null | SurfaceFxClass => {
+      const record = surface === null ? undefined : surfaceRecords()?.[surface];
+      if (!record) {
+        return null;
+      }
+      if (record.wheelSpray) {
+        return 'spray';
+      }
+      if (record.wheelSand) {
+        return 'sand';
+      }
+      if (record.wheelMud) {
+        return 'mud';
+      }
+      if (record.wheelGrass) {
+        return 'grass';
+      }
+      if (record.wheelGravel) {
+        return 'gravel';
+      }
+
+      return record.wheelDust ? 'dust' : null;
+    },
+    (puff): void => {
+      const look = SURFACE_FX_LOOK[puff.fx];
+      if (!surfaceEmitters.has(look.system)) {
+        surfaceEmitters.set(look.system, deps.surfaceEmitter?.(look.system) ?? null);
+      }
+      const emitter = surfaceEmitters.get(look.system);
+      if (!emitter) {
+        return;
+      }
+      const [ex, ey, ez] = gtaPositionToEngine(puff.position);
+      emitter.position[0] = ex;
+      emitter.position[1] = ey;
+      emitter.position[2] = ez;
+      emitter.lifeScale = look.life;
+      emitter.alphaScale = look.alpha * (0.6 + 0.4 * puff.intensity);
+      emitter.burst(puff.count);
     },
     () => config.graphics.effects.enabled,
   );
@@ -571,9 +633,10 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       enterVehicle.fixedUpdate(step);
       // Telemetry LAST: it records the step as it ended, including the controls `drive()` just applied.
       stepTelemetry(step);
-      // Smoke and marks after the snapshot for the same reason: they read the wheel state this step produced.
+      // Smoke, marks and surface puffs after the snapshot: they read the wheel state this step produced.
       tyreSmoke.fixedUpdate(step);
       skidMarks.fixedUpdate();
+      surfaceFx.fixedUpdate(step);
     },
     impactForce(): number {
       const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
