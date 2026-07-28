@@ -54,6 +54,18 @@ describe('bake-fx', () => {
   });
 
   describe('positive cases', () => {
+    it('includeTriggered keeps a rate-less emitter but still drops heat haze (089/01)', () => {
+      // The prt_* family (tyre/collision smoke) carries NO emrate track: SA spawns those from code with an
+      // explicit count. The dynamic lane bakes them; a placed 2dfx anchor must keep skipping them.
+      const haze = emitter({ 'emlife.life': 4 }, { dstBlendId: 1, name: 'heathaze' });
+
+      const baked = bakeFxSystem(system([emitter({ 'emlife.life': 5 }), haze]), { includeTriggered: true });
+
+      expect(baked).toHaveLength(1);
+      expect(baked[0].rate).toBe(0);
+      expect(baked[0].life.seconds).toBe(5);
+    });
+
     it('particle count keeps the plume continuous: rate x lifetime', () => {
       const [baked] = bakeFxSystem(system([emitter(SMOKE)]));
 

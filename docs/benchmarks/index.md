@@ -243,6 +243,17 @@ the baseline's `250.0` boot frame and this run's `576.1` are the SAME frame**, n
 printed the clamp.
 Run: [`2026-07-28-headless-091-frame-attribution.json`](opensa-engine/2026-07-28-headless-091-frame-attribution.json).
 
+### 2026-07-28 — plan 089/01: the dynamic one-shot particle lane, priced at its probe worst case
+
+HUD-read numbers from three `gate-check.js` boot screenshots (NOT a sweep — single Grove Street night boot,
+player idle, DPR=1). The probe (`?fxprobe=prt_collisionsmoke`, 60 spawns/s × 5 s life ≈ 300 live one-shot
+particles) parks a plume beside the player that fills about a third of the 1440×900 viewport — a denser
+fill than any single gameplay effect will produce. Cost: **+2.3 ms GPU at that worst-case coverage**
+(2.77 → 5.10 ms submit), +1 draw call, frame pinned at the 120 Hz cap throughout; the CPU side (pool
+spawn/prune + one ~10.8 KB partial `writeBuffer` per frame) does not register. The delta is overdraw-bound —
+it scales with the plume's SCREEN COVERAGE, not with the particle count.
+Run: [`2026-07-28-headless-089-dynamic-particle-probe.json`](opensa-engine/2026-07-28-headless-089-dynamic-particle-probe.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

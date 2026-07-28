@@ -33,7 +33,9 @@ export type PipelineId =
   | 'debug-line'
   | 'debug-line-through'
   | 'particle-add'
+  | 'particle-add-once'
   | 'particle-blend'
+  | 'particle-blend-once'
   | 'ped'
   | 'post'
   | 'probe-blit'
@@ -370,9 +372,13 @@ export function compileAll(
       stepMode: 'instance',
     },
   ];
+  // The `-once` pair is the DYNAMIC lane (089/01): same shader, but the `oneShot` override clamps the
+  // age instead of looping it — a spawned particle plays once and collapses.
   for (const variant of [
-    { add: true, id: 'particle-add' as const },
-    { add: false, id: 'particle-blend' as const },
+    { add: true, constants: { oneShot: 0 }, id: 'particle-add' as const },
+    { add: false, constants: { oneShot: 0 }, id: 'particle-blend' as const },
+    { add: true, constants: { oneShot: 1 }, id: 'particle-add-once' as const },
+    { add: false, constants: { oneShot: 1 }, id: 'particle-blend-once' as const },
   ]) {
     pipelines.set(
       variant.id,
@@ -400,7 +406,12 @@ export function compileAll(
         }),
         multisample: { count: MSAA_SAMPLES },
         primitive: { topology: 'triangle-list' },
-        vertex: { buffers: particleBuffers, entryPoint: 'vsParticle', module: particleModule },
+        vertex: {
+          buffers: particleBuffers,
+          constants: variant.constants,
+          entryPoint: 'vsParticle',
+          module: particleModule,
+        },
       }),
     );
   }

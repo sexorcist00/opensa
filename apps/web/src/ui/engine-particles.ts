@@ -6,7 +6,7 @@
  *
  * Both files are absent-tolerant: no library, no particles, and the map still streams.
  */
-import type { CoronaSprites, Engine, ParticleUpload } from '@opensa/engine';
+import type { CoronaSprites, DynamicParticleLibrary, Engine, ParticleUpload } from '@opensa/engine';
 import type { FxBakedEmitter, FxPlacement, FxSystem } from '@opensa/renderware';
 import type { AssetFileSystem } from '@opensa/renderware';
 
@@ -16,6 +16,7 @@ import {
   FX_SYSTEM_STRIDE,
   normalizeSpriteAlpha,
   parseFxp,
+  sampleFxParticle,
   writeFxSystemRecord,
 } from '@opensa/renderware';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
@@ -26,7 +27,30 @@ const FALLBACK_ATLAS_SIZE = 64;
 /** Config draw distance for emitters (world units) — beyond this the vertex shader collapses the quad. */
 const DRAW_DISTANCE = 300;
 
+/**
+ * Systems preloaded into the DYNAMIC one-shot lane (089/01) — lowercased, as `parseFxp` keys them. The
+ * lane's atlas and system records are built ONCE at boot, so an effect must be listed here before a
+ * runtime emitter can spawn it. Extend as effects ship: tyre smoke (089/02), impact smoke (089/04).
+ */
+const DYNAMIC_SYSTEMS = ['prt_collisionsmoke', 'prt_smokeii_3_expand'];
+
+/** A runtime spawner over one preloaded system: park it somewhere, burst it or stream it, step it. */
+export interface DynamicFxEmitter {
+  /** Spawn `count` particles NOW from every layer — the shape SA's code-triggered `prt_*` systems use
+   *  (no authored rate; the caller decides per call, e.g. per fixed step from slip). */
+  burst(count: number): void;
+  /** World position (engine space) the next spawns come from — mutate freely, particles keep flying. */
+  readonly position: [number, number, number];
+  /** Multiplier over the authored emission rate; 0 stops the stream (live particles finish their life).
+   *  Layers with NO authored rate (code-triggered) ignore this and respond to `burst` only. */
+  rate: number;
+  /** Advance on the FIXED step: accumulates rate × dt and spawns whole particles into the engine pool. */
+  update(dt: number): void;
+}
+
 export interface EngineParticles {
+  /** A dynamic emitter for one preloaded system (089/01) — null when this profile does not ship it. */
+  createEmitter(name: string): DynamicFxEmitter | null;
   /** Rebuild the GPU buffers from the currently STREAMED cells. Cheap and rare — call on a cell-set change. */
   rebuild(): void;
 }
@@ -71,10 +95,55 @@ export function setupEngineParticles(engine: Engine, fs: AssetFileSystem): Engin
   }
   const systems = parseFxp(fxpText);
   const sprites = decodeSprites(txdBytes);
+  const dynamic = buildDynamicLibrary(systems, sprites);
+  engine.initDynamicParticles(dynamic.library);
 
   let signature = '';
 
   return {
+    createEmitter(name: string): DynamicFxEmitter | null {
+      const entries = dynamic.index.get(name.toLowerCase());
+      if (!entries) {
+        return null;
+      }
+      const accumulators = new Float64Array(entries.length);
+      const scratch = new Float32Array(4); // vx, vy, vz, life — reused, no allocation per particle
+      const spawnOne = (entry: (typeof entries)[number], position: readonly [number, number, number]): void => {
+        sampleFxParticle(entry.baked, Math.random, scratch, 0);
+        engine.spawnParticle(
+          entry.systemIndex,
+          position[0],
+          position[1],
+          position[2],
+          scratch[0],
+          scratch[1],
+          scratch[2],
+          scratch[3],
+        );
+      };
+      const emitter: DynamicFxEmitter = {
+        burst(count: number): void {
+          for (const entry of entries) {
+            for (let index = 0; index < count; index += 1) {
+              spawnOne(entry, emitter.position);
+            }
+          }
+        },
+        position: [0, 0, 0],
+        rate: 1,
+        update(dt: number): void {
+          entries.forEach((entry, at) => {
+            accumulators[at] += entry.baked.rate * emitter.rate * dt;
+            while (accumulators[at] >= 1) {
+              accumulators[at] -= 1;
+              spawnOne(entry, emitter.position);
+            }
+          });
+        },
+      };
+
+      return emitter;
+    },
     rebuild(): void {
       // The cell set changes only when streaming crosses a ring, so a signature check keeps this off the
       // per-frame path entirely.
@@ -111,6 +180,50 @@ export function toEngineSpace(emitter: FxBakedEmitter): FxBakedEmitter {
     cone: { angle: emitter.cone.angle, direction: swap(emitter.cone.direction) },
     force: swap(emitter.force),
   };
+}
+
+/**
+ * Bake the DYNAMIC lane's library (089/01): system records + atlas for the preloaded systems, plus a
+ * name → baked-emitters index runtime emitters spawn through. Built once at boot — the lane's atlas
+ * cannot grow later, which is why `DYNAMIC_SYSTEMS` is a boot-time list.
+ */
+function buildDynamicLibrary(
+  systems: Map<string, FxSystem>,
+  sprites: Map<string, Sprite>,
+): { index: Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>; library: DynamicParticleLibrary } {
+  const baked: FxBakedEmitter[] = [];
+  const index = new Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>();
+  for (const name of DYNAMIC_SYSTEMS) {
+    const system = systems.get(name);
+    if (!system) {
+      continue; // this profile does not ship the system — createEmitter(name) then returns null
+    }
+    const entries: { baked: FxBakedEmitter; systemIndex: number }[] = [];
+    // includeTriggered: the prt_* family carries NO emrate track — the runtime caller owns the count.
+    for (const emitter of bakeFxSystem(system, { includeTriggered: true })) {
+      const engineEmitter = toEngineSpace(emitter);
+      entries.push({ baked: engineEmitter, systemIndex: baked.length });
+      baked.push(engineEmitter);
+    }
+    if (entries.length > 0) {
+      index.set(name, entries);
+    }
+  }
+
+  const additive: boolean[] = [];
+  const layers: string[] = [];
+  const records = new Float32Array(baked.length * FX_SYSTEM_STRIDE);
+  baked.forEach((emitter, at) => {
+    let layer = layers.indexOf(emitter.texture);
+    if (layer < 0) {
+      layers.push(emitter.texture);
+      layer = layers.length - 1;
+    }
+    writeFxSystemRecord(records, at, emitter, layer, DRAW_DISTANCE);
+    additive.push(emitter.additive);
+  });
+
+  return { index, library: { additive, atlas: packAtlas(layers, sprites), systems: records } };
 }
 
 /** Assemble the systems, the instances and the sprite array actually used by the loaded cells. */

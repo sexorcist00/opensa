@@ -17,6 +17,7 @@ function fountain(): FxBakedEmitter {
     force: [0, 0, -9.81],
     life: { bias: 0, seconds: 2 },
     perEmitter: 8,
+    rate: 4,
     sizes: [0.2, 0.4, 0.6],
     speed: { bias: 0, magnitude: 5 },
     texture: 'wjet2',
