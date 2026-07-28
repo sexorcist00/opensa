@@ -69,7 +69,14 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   (no extra buffer). The `_vlo` LOD and `_dam` twins receive it but never cast, which is what keeps a
   convertible's cabin open. The engine's dynamic indirect term is `params.y × DYNAMIC_INDIRECT ×
   skyVisibility(normal) × occlusion` — the map's `prelit × params.y × ao`, with a constant standing in for
-  the prelit a car has no data for. `skyVisibility` / `DYNAMIC_INDIRECT` live in the shared `<frame>` shader
+  the prelit a car has no data for. **The same occlusion also gates the REFLECTION and the sun/moon
+  specular** (both car paths, 2026-07-28): a surface may not mirror more sky than it can see. It is what a
+  MOD's cabin needs — their exporters stamp an env map on every material they ship, so the previon's dash
+  trim came out class CHROME with coefficient 0.5 and mirrored the sun through the windscreen in full sun
+  while reading normal in shade (field report). Measured on that car: cabin vertices sit at sky 0.32–0.69
+  (dash trim 0.63, gauges 0.56, seats 0.55) against 0.9–1.0 on outer bodywork and 0.95–1.0 on the glass, so
+  the gate bites where the artefact was and nowhere else. Inspect any BUILT car with
+  `scripts/debug/dump-vehicle-materials.ts`. `skyVisibility` / `DYNAMIC_INDIRECT` live in the shared `<frame>` shader
   module (next to `localLightStatic`) so the ped path reuses the exact same weight, minus the per-instance
   occlusion a ped has no bake for (plan 087 ped — see character.md).
 - **Tyre detection** (plan 084, 2026-07-22): `wheel-tyre.ts` finds the RUBBER of a wheel by geometry, never

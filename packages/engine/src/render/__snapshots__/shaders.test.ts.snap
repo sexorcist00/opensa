@@ -5698,9 +5698,17 @@ fn fsRigid(in: RigidVsOut) -> @location(0) vec4f {
   let shadingNormal = normalize(mix(normal, flakeNormal(normal, in.local.xyz), isPaint));
   let toEye = normalize(frame.camera.xyz - in.world);
   let coefficient = mix(in.reflect.x, max(in.reflect.x, CHROME_COEFFICIENT_FLOOR), isChrome);
-  let amount = neoReflAmount(dot(shadingNormal, toEye), coefficient) * (isPaint + isChrome);
+  // A reflection of the SKY may not outrun the share of sky the surface can SEE, and the same goes for a
+  // highlight of the sun: in.local.w is the builder's own per-vertex occlusion (vehicle/sky-occlusion.ts),
+  // already riding the night set's alpha for the indirect term. Without it a MOD's cabin mirrors the sun —
+  // their exporters stamp an env map on every material they ship, so a dashboard, a seat and a door card all
+  // come out reflective, and the previon's dash trim (class CHROME, coefficient 0.5, sky 0.63) lit up like
+  // polished metal through the windscreen in full sun and went normal in shade (field 2026-07-28). Outer
+  // bodywork sits at 0.9-1.0 and is untouched; nothing here knows which car it is.
+  let skyShare = in.local.w;
+  let amount = neoReflAmount(dot(shadingNormal, toEye), coefficient) * (isPaint + isChrome) * skyShare;
   let env = rigidEnv(in, normal, shadingNormal, mix(PROBE_PAINT_LOD, PROBE_CHROME_LOD, isChrome));
-  let specular = rigidSpecular(in, shadingNormal, in.reflect.z * frame.params4.z) + in.poolSpec;
+  let specular = rigidSpecular(in, shadingNormal, in.reflect.z * frame.params4.z) * skyShare + in.poolSpec;
   let shaded = mix(rigidShade(in, rigidTexel(in)), env, amount) + specular;
   let color = mix(shaded, fogColorFor(viewDir, fog), fog);
   return vec4f(color, 1.0);
@@ -5724,10 +5732,13 @@ fn fsRigidBlend(in: RigidVsOut, @builtin(front_facing) frontFacing: bool) -> @lo
   // GLASS on the neo curve: plain normal (no flakes), a near-sharp probe mip. The neo amount drives BOTH
   // the mirrored colour and the opacity swell — glass turns mirror at grazing angles, and a windscreen you
   // can see straight through from every angle looks like a hole in the car.
-  let amount = neoReflAmount(dot(normal, toEye), in.reflect.x) * GLASS_REFLECT * outside;
+  // Sky-gated exactly like the opaque path: a pane deep in a cabin (a rear-seat divider, an interior light
+  // cover) reflects the roof over it, not the open sky. A windscreen sits at 0.95-1.0 and is untouched.
+  let skyShare = in.local.w;
+  let amount = neoReflAmount(dot(normal, toEye), in.reflect.x) * GLASS_REFLECT * outside * skyShare;
   let alpha = clamp(texel.a * in.color.a + amount, 0.0, 1.0);
   let env = rigidEnv(in, normal, normal, PROBE_GLASS_LOD);
-  let specular = (rigidSpecular(in, normal, in.reflect.z * frame.params4.z) + in.poolSpec) * outside;
+  let specular = (rigidSpecular(in, normal, in.reflect.z * frame.params4.z) * skyShare + in.poolSpec) * outside;
   // Premultiplied compositing: the reflected env replaces the tinted glass by its amount, then fog takes
   // the finished pair (068 semantics).
   let glass = mix(rigidShade(in, texel) * alpha, env, amount) + specular;
