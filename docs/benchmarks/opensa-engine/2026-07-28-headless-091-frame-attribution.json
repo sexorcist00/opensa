@@ -3,6 +3,89 @@
   "host": "headless Chromium / M3 Pro @DPR=2 (NOT display-comparable to the user's retina rows)",
   "note": "HEADLESS ?bench=all sweep taken by Claude on 2026-07-28 (M3 Pro, DPR=2, Chromium/ANGLE-Metal, tools-debug/bench-harness/drive.js over ?loader=http-dir). Run FOR plan 091 (frame-time attribution) \u2014 its purpose is the [slow] lines, not the averages; the eight scene rows are here because the sweep produced them and every number gets recorded. Code = 865ba50 + the 091 instrumentation (in-loop props/world/pose/paused groups, the frame-span recorder, and the fix that makes the breakdown describe the interval dt actually measured). pak = build/original/opensa/pak, buildTime 08:41 24-07-2026 \u2014 the SAME pak as the 07-24 and 07-27 rows. road cars registered: 1126. VERDICT on the averages: every scene sits at the 120 Hz vsync cap (avgMs 8.33, p95 9.2-9.3, lateCreates 0 on all eight) \u2014 headless caps, so these rows judge nothing but 'no regression'; gpu pass is the only comparable column and it is at or below the 07-27 row on every scene. The instrumentation costs nothing measurable: two performance.now() calls per span, spans opened only by work that already costs milliseconds.",
   "pak": "build/original/opensa/pak (087-ring rebuild, buildTime 08:41 24-07-2026)",
+  "priorRuns": {
+    "runs": [
+      {
+        "avgDrawCalls": 1183,
+        "avgMs": 8.31,
+        "fps": 120.3,
+        "frames": 1806,
+        "gpuMs": {
+          "pass": 2.679,
+          "post": 0.847,
+          "probe": 0.964,
+          "submit": 0.349
+        },
+        "label": "BEFORE 091 (code = 865ba50, no instrumentation)",
+        "lateCreates": 0,
+        "p95Ms": 10,
+        "reading": "The boot frame read 250.0 because the line printed the clamped sim dt; the same frame in the after-run is 576.1. So this row's 250.0 and the after-run's 576.1 are the SAME frame \u2014 not a regression.",
+        "residency": "cellIndex 41 \u00b7 cellVertex 184 \u00b7 target 345 \u00b7 texture 1167 \u00b7 uniform 2",
+        "scene": "ls-noon",
+        "slowFrames": [
+          {
+            "frame": 250.0,
+            "other": 228.2,
+            "spans": "none \u2014 `other` was one anonymous number"
+          },
+          {
+            "frame": 33.5,
+            "other": 13.2
+          },
+          {
+            "frame": 21.9,
+            "other": 15.1
+          },
+          {
+            "frame": 21.0,
+            "other": 7.9
+          }
+        ],
+        "vehicles": {
+          "live": 80,
+          "maxMs": 0.9,
+          "meanMs": 0.606
+        }
+      },
+      {
+        "avgDrawCalls": 1180,
+        "avgMs": 8.334,
+        "fps": 120,
+        "frames": 1801,
+        "gpuMs": {
+          "pass": 2.881,
+          "post": 0.889,
+          "probe": 0.972,
+          "submit": 0.344
+        },
+        "label": "INTERMEDIATE (three spans: vehicle-model, vehicle-spawn, cell-collision-bodies)",
+        "lateCreates": 0,
+        "p95Ms": 10,
+        "reading": "163.8 ms unattributed on the boot frame is what sent the next two spans into the ADAPTER (vehicle-osm, cell-collision-read): on the equivalent frame of the final run they took it to 49.0.",
+        "scene": "ls-noon",
+        "slowFrames": [
+          {
+            "frame": 250.0,
+            "other": 223.6,
+            "spans": {
+              "cell-collision(bodies)": 20.3,
+              "vehicle-model": 39.5
+            },
+            "unattributed": 163.8
+          },
+          {
+            "frame": 43.0,
+            "other": 14.7,
+            "spans": {
+              "vehicle-spawn": 8.7
+            },
+            "unattributed": 6.0
+          }
+        ]
+      }
+    ],
+    "what": "The two runs this one is the 'after' of \u2014 same pak, same host, same harness, same day. Recorded because the standing rule is that every measured number lands here, and because the whole method of plan 091 is visible in the three of them: each span was written where the previous run said the hole was."
+  },
   "roadCars": 1126,
   "runs": [
     {

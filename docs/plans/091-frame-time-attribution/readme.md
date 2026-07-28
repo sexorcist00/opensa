@@ -111,6 +111,16 @@ The intermediate run with only three spans left **163.8 ms unattributed** on the
 adapter-side spans (`vehicle-osm`, `cell-collision-read`) took it to 49.0 on the equivalent frame. That is the
 whole method in one line: every span was written because the previous run said where the hole was.
 
+All three runs — before, intermediate, after — are recorded in the benchmark file (`priorRuns` carries the
+first two), same pak and host, so the progression is checkable rather than narrated. **`250.0` in the before
+row and `576.1` in the after row are the SAME frame**: the first printed the clamp.
+
+| Run | boot-frame `other` | named | `unattributed` |
+| --- | --- | --- | --- |
+| before (no spans) | 223.6 (of a frame reported as 250.0) | — | all of it |
+| three spans | 223.6 | 59.8 | 163.8 |
+| five spans (final) | 482.8 (of the real 576.1) | 260.6 | 222.2 |
+
 **The averages of the same sweep**: all eight scenes at the headless 120 Hz cap (8.33 avgMs, p95 9.2–9.3,
 `lateCreates` 0), gpu pass at or below the 07-27 row — the instrumentation costs nothing measurable.
 

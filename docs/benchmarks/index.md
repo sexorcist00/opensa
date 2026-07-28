@@ -236,8 +236,11 @@ the 120 Hz headless cap: 8.33 avgMs, p95 9.2–9.3, `lateCreates` 0 on every sce
 - **`unattributed` still holds 40–55 % of a spike**, and 100 % of the two frames that FOLLOW a teleport
   (68.2 and 38.9 ms with no span open at all) — GC-shaped, and the honest next question.
 
-The pre-091 comparison run on the same pak/host is in the same file's note: `other` was one anonymous number
-(223.6 ms on the boot frame) with nothing under it.
+The two earlier runs of the same day are in the file's `priorRuns`: the pre-091 baseline, where `other` was
+one anonymous number (223.6 ms on the boot frame) with nothing under it, and the intermediate three-span run
+that still left 163.8 ms unattributed — which is what sent the last two spans into the adapter. **Careful:
+the baseline's `250.0` boot frame and this run's `576.1` are the SAME frame**, not a regression; the first
+printed the clamp.
 Run: [`2026-07-28-headless-091-frame-attribution.json`](opensa-engine/2026-07-28-headless-091-frame-attribution.json).
 
 ## The gap this record has
