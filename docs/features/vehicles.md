@@ -45,7 +45,8 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   (so it carries no marker) can DECLARE itself: a
   `features.txt` in the mod folder holding `UP/DOWN_LIGHTS` — the Modloader/IVF convention. `vehicle-installer`
   copies each mod's declaration into `data/vehicle-features.txt`, and opensa-pack reads it while baking that
-  car. That path is BUILD-time only; the runtime modloader path gets the geometry-derived detection alone.
+  car. That path is BUILD-time only, and there is no runtime path that could pick a declaration up later —
+  which is why an unconverted car is refused at spawn rather than parsed from its DFF.
 - **Paint**: carcols.dat palettes (`car` = 2-colour, `car4` = 4-colour sections); SA editable-material
   markers — primary (60,255,0), secondary (255,0,175), tertiary (0,255,255 cyan), quaternary
   (255,255,0 yellow). NB (255,175,0)/(255,60,0) are per-lamp ids on the `vehiclelights` atlas, **not**
@@ -65,7 +66,7 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
 - **Self-occlusion** (plan 084, 2026-07-22): `sky-occlusion.ts` gives every vertex a sky-visibility value
   from a height field over the car's own shown shell — horizon mapping, 8 azimuths, weighted by the vertex
   normal so a roof darkens the cabin under it and not the door skin beside it. It is computed in the shared
-  BUILDER, so a converted car and a modloader car agree by construction, and rides in the night set's alpha
+  BUILDER, so every caller of `buildVehicleModel` agrees by construction, and rides in the night set's alpha
   (no extra buffer). The `_vlo` LOD and `_dam` twins receive it but never cast, which is what keeps a
   convertible's cabin open. The engine's dynamic indirect term is `params.y × DYNAMIC_INDIRECT ×
   skyVisibility(normal) × occlusion` — the map's `prelit × params.y × ao`, with a constant standing in for
@@ -208,9 +209,10 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   the list comes from `vehicleModelsFromIde` (apps/web) — no hardcoded car set.
 - Parked cars come from the game's **`parked.json`** in the VFS (a `VehiclePlacement[]` shipped per game; read by
   `parseParkedVehicles` in apps/web). Absent → no parked cars. (Replaced the old hardcoded `GAME_CONFIG.vehiclesSpawn`.)
-- Mods: a vehicle's model/texture/data can be overridden at runtime by dropping files under `modloader/` — no
-  rebuild. The loader reads each model/txd by its **bare** name (from gta3.img, or shadowed by the overlay), so
-  there's no loose `vehicles/` folder. See [mods.md](mods.md).
+- Mods: a vehicle's model/texture/data is installed by `vehicle-installer` at BUILD time (`--rebake <game>
+  [--only <model>]` re-does one car in ~3.6 s against an already-built game). There is no runtime overlay —
+  see [postmortem/runtime-modloader-overlay.md](../postmortem/runtime-modloader-overlay.md). Assets resolve by
+  their **bare** name, so there is no loose `vehicles/` folder. See [mods.md](mods.md).
 
 ## Known gaps / candidates
 

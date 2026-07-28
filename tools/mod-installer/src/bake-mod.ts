@@ -141,7 +141,7 @@ export function scanModloaderMod(modPath: string): ModScan {
     } else if (lower.endsWith('.ipl') || lower.endsWith('.ide') || lower.endsWith('.dat')) {
       scan.texts.set(base, path);
     } else if (lower.endsWith('.settings.txt')) {
-      // vehicle settings — out of scope for the map baker (handled at runtime by withModloader)
+      // vehicle settings — out of scope for the map baker (vehicle-installer owns them)
     } else if (lower.endsWith('.txt')) {
       const refs = parseLoader(readText(path));
       if (refs.ide.length > 0 || refs.ipl.length > 0 || refs.col.length > 0) {
