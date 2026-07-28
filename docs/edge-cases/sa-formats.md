@@ -39,3 +39,11 @@ stories: `tools/lod-trees-generator/docs/plans/005-sa-asset-format.md`,
   byte reads triangles out of UV float data (garbage that masquerades as a lock). Handled in the parsers;
   keep honouring the flags in new code.
 - **COL v1 unsupported** (none shipped in SA); don't emit it.
+- **`surfinfo.dat`'s `W_SPRAY` is set on `default` and every `tarmac*` row** — it means "throw water spray
+  when the road is WET" (`CWeather` wetness gates the read in the original), NOT "this surface sprays".
+  Read unconditionally it turns every road into a sprinkler (plan 089/05 field round 1). This game tracks
+  no road wetness yet, so the flag is deliberately unread (`surfaceFxClassOf`, pinned by a test).
+- **SA's `prt_*` particle systems are authored colourless** — `prt_wheeldirt`'s colour envelope is pure
+  white and its sprites (smokeii_3, bullethitsmoke) neutral grey; the earth colour arrives PER SPAWN
+  (`FxPrtMult_c`, ground-derived). Rendering them unpainted gives white smoke; the dynamic lane bakes
+  per-class tints as the stand-in (see `docs/hacks/surface-fx-fit.md`).

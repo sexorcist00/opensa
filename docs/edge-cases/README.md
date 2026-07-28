@@ -20,3 +20,4 @@ the one-line rule and its blast radius live there.
 | [engine-rendering.md](./engine-rendering.md)     | Own WebGPU engine rendering limits and approximations            |
 | [streaming-formats.md](./streaming-formats.md)   | Native-format versioning + streaming memory model invariants     |
 | [browser-runtime.md](./browser-runtime.md)       | Browser/platform constraints (FSA, Cache Storage, e2e)           |
+| [physics-runtime.md](./physics-runtime.md)       | Rapier vehicle-controller boundaries (cosmetic wheel rotation…)   |

@@ -282,6 +282,16 @@ The lane's steady cost is structural: one ~168 B upload per laid segment, ranged
 only (expired ones leave the window), one 344 KB buffer + a 32² texture at install.
 Run: [`2026-07-28-headless-089-03-skid-marks.json`](opensa-engine/2026-07-28-headless-089-03-skid-marks.json).
 
+### 2026-07-28 — plan 089 close-out: the vehicle-effects chain prices at zero on the sweep
+
+All five steps merged, full `?bench=all` vs the same-day 091 reference: every scene at the 120 Hz cap,
+gpu pass within ±0.05–0.25 ms in both directions (bench car populations differ run to run), draws equal
+within units. The chain's real prices are per-event, recorded in the step runs: +2.3 ms GPU at the probe's
+worst-case ⅓-viewport plume (overdraw-bound), ~10.8 KB/frame particle upload at full smoke, ~168 B per
+laid skid segment, one surface ray per contacting wheel per fixed step (driven car only).
+Run: [`2026-07-28-headless-089-closeout-sweep.json`](opensa-engine/2026-07-28-headless-089-closeout-sweep.json).
+Audit: [`../audit/vehicle-effects-089.md`](../audit/vehicle-effects-089.md).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

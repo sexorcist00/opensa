@@ -29,11 +29,12 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   gameplay-relevant cost is per NEW car type — `.osm` parse worst 20.5 ms (`bus`) + GPU upload worst 18.2 ms
   (`tahoma`), ~25 ms in one frame; `unattributed` still holds 40–55 % of a spike and is GC-shaped.** Phase 3
   names the levers and waits on a field verdict.
-- **[089 — Vehicle particles](./089-vehicle-particles/readme.md)** — OPENED 2026-07-27: tyre smoke
-  (`collisionsmoke`) and skid marks (`particleskid`) driven by how hard a wheel actually slides, marks
-  darker with the slide and gone 5 REAL seconds later, plus impact smoke. Its foundation is the capability
-  the 044 FX path never had — a DYNAMIC emitter (today's particles are baked static map anchors) — and the
-  surface-driven wheel effects on top wait on [081/10](./081-vehicle-physics/10-surface-types.md).
+- **[089 — Vehicle particles](./089-vehicle-particles/readme.md)** — CLOSED 2026-07-28, all five steps in
+  one day (six field rounds): the dynamic one-shot particle lane + the engine's first DECAL lane, then
+  tyre smoke, severity-darkened 12-real-second skid marks, impact smoke off the damage gate, and surface
+  dust/sand by surfinfo's own `W_*` flags. Zero measurable sweep cost; every look number a documented
+  eye-fit (`CFx` is stubs in gta-reversed). Audit:
+  [`docs/audit/vehicle-effects-089.md`](../audit/vehicle-effects-089.md).
 - **[088 — Ped locomotion feel](./088-ped-locomotion-feel/readme.md)** — SHIPPED 2026-07-24, both
   rounds: turn-rate heading + plant, crossfades with phase carry, walk/run/sprint tiers + cycle-speed
   sync, the jump/fall FSM (coyote/buffer/anticipation), impact-tiered landings, a real slope slide,

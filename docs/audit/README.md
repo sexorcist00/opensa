@@ -23,6 +23,11 @@ interpret them.
   (blended sample 8.2 µs vs 6.0 µs; no render-side change) and +~100 unit tests.
 - [`three-to-own-engine.md`](./three-to-own-engine.md) — the three.js → own WebGPU engine migration:
   runtime (~7× fps, same machine/content) and bundle (−12.8 % gzip despite adding a whole engine).
+- [`vehicle-effects-089.md`](./vehicle-effects-089.md) — the plan-089 vehicle-effects chain (one day,
+  five steps, six field rounds): two new engine capabilities (the dynamic one-shot particle lane and the
+  first decal lane), four effects on SA's own assets, one new physics read born of a dead channel
+  (Rapier's wheel rotation is cosmetic) — at zero measurable sweep cost, with every look number a
+  documented eye-fit.
 - [`modloader-removal.md`](./modloader-removal.md) — deleting the runtime `modloader/` overlay and the
   vehicle DFF fallback it fed: one package and a whole second vehicle pipeline gone (−1816 lines, the
   `vehicle-model.worker` chunk with them), coverage up on every metric, and roadmap item 2 closed by deletion

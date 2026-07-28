@@ -23,6 +23,7 @@ implemented ones, and assembling the release changelog.
 | Procedural ground clutter (procobj)           | [procobj.md](procobj.md)                           |
 | Road-sign text (2dfx type 7)                  | [roadsign-text.md](roadsign-text.md)               |
 | World effects (2dfx particles)                | [world-effects.md](world-effects.md)               |
+| Vehicle effects (smoke, skids, dust — 089)    | [vehicle-effects.md](vehicle-effects.md)           |
 | Breakable objects                             | [breakable-objects.md](breakable-objects.md)       |
 | Game mods (WorldMod, vegetation wind)         | [mods.md](mods.md)                                 |
 | Fetch pack (pmb build → hosted fetch chunks)  | [fetch-pack.md](fetch-pack.md)                     |

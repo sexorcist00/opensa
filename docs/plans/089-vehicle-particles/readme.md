@@ -1,6 +1,14 @@
 # 089 — Vehicle particles: tyre smoke, skid marks, impact smoke
 
-**Status: OPENED 2026-07-27** by the user's brief, after the 081 physics chain reached the point where the
+**Status: CLOSED 2026-07-28** — all five steps shipped and field-approved in one day (six field-tuning
+rounds); close-out audit in [`docs/audit/vehicle-effects-089.md`](../../audit/vehicle-effects-089.md),
+close-out sweep in
+[`docs/benchmarks/opensa-engine/2026-07-28-headless-089-closeout-sweep.json`](../../benchmarks/opensa-engine/2026-07-28-headless-089-closeout-sweep.json)
+(no measurable cost at gameplay shapes). The feature's living doc is
+[`docs/features/vehicle-effects.md`](../../features/vehicle-effects.md); open leftovers are listed there
+and in the audit.
+
+**Opened 2026-07-27** by the user's brief, after the 081 physics chain reached the point where the
 car does things the eye has no evidence of: it locks its wheels, it slides, it hits things — and nothing
 appears on screen. Vehicle _physics_ is [081](../081-vehicle-physics/); this plan is what the physics LOOKS
 like.
@@ -100,14 +108,16 @@ vehicle slice is ~8 µs per car per fixed step and 0.605 ms at 80 live cars. Par
 cars are not the target — the player's car and its near neighbours are. The cap belongs in this plan's
 ledger as a number, with what it costs, measured on the bench sweep's `vehicles` field and the frame time.
 
-## Acceptance
+## Acceptance — ALL MET 2026-07-28 (field, six rounds)
 
-- Lock the brakes: smoke under the wheels and marks on the road, both proportional to the slide.
-- Handbrake-flick a corner: the marks curve with the car and are darker than a gentle corner's.
-- The marks are gone ~5 real seconds later, and a stationary game clock does not change that.
-- A hard crash puffs smoke; a kerb tap does not.
-- Frame cost inside the recorded budget, measured, in the ledger.
-- Field: the user recognises the game's own look — this is a visual plan, so the verdict is by eye.
+- ✓ Lock the brakes: smoke under the wheels and marks on the road, both proportional to the slide.
+- ✓ Handbrake-flick a corner: the marks curve with the car and are darker than a gentle corner's.
+- ✓ The marks fade on the REAL clock, game time untouched — the field stretched the brief's 5 s to
+  **12 s** ("they vanish too fast"), the wall-clock rule itself unchanged.
+- ✓ A hard crash puffs smoke; a kerb tap does not (inherited from the damage system's calibrated gate).
+- ✓ Frame cost measured, in the ledger below and the close-out sweep — zero at gameplay shapes.
+- ✓ Field verdict: approved after tuning; the extra acceptance the rounds added — asphalt stays SILENT
+  (no spray, no smoke while merely driving) — is pinned by tests.
 
 ## Risks
 
