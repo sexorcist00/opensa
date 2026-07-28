@@ -30,9 +30,31 @@ const DRAW_DISTANCE = 300;
 /**
  * Systems preloaded into the DYNAMIC one-shot lane (089/01) — lowercased, as `parseFxp` keys them. The
  * lane's atlas and system records are built ONCE at boot, so an effect must be listed here before a
- * runtime emitter can spawn it. Extend as effects ship: tyre smoke (089/02), impact smoke (089/04).
+ * runtime emitter can spawn it.
+ *
+ * `sizeScale` shrinks a system's authored size envelope in the lane's record: some SA systems are authored
+ * for a different trigger (prt_sand is a BULLET-hit plume, 8–13 m) and would dwarf a wheel puff.
+ *
+ * `tint` multiplies the authored colour envelope, and `alias` registers the SAME fxp system as another
+ * lane entry — together they stand in for the original's PER-SPAWN colour: SA passes a ground-derived
+ * colour into every `prt_*` spawn (`FxPrtMult_c`), which is why its wheel dust matches the surface while
+ * the systems themselves are authored pure WHITE (measured: prt_wheeldirt's envelope is 255/255/255 and
+ * smokeii_3/bullethitsmoke are neutral grey). The lane has per-spawn alpha but no per-spawn colour, so
+ * the tint is per CLASS, not per ground — an eye-fit, recorded in `docs/hacks/surface-fx-fit.md`.
  */
-const DYNAMIC_SYSTEMS = ['prt_collisionsmoke', 'prt_smokeii_3_expand'];
+const DYNAMIC_SYSTEMS: readonly {
+  alias?: string;
+  name: string;
+  sizeScale?: number;
+  tint?: [number, number, number];
+}[] = [
+  { name: 'prt_collisionsmoke' },
+  { name: 'prt_smokeii_3_expand' },
+  { alias: 'wheeldirt-dust', name: 'prt_wheeldirt', tint: [0.62, 0.54, 0.42] },
+  { alias: 'wheeldirt-grass', name: 'prt_wheeldirt', tint: [0.45, 0.5, 0.3] },
+  { alias: 'wheeldirt-mud', name: 'prt_wheeldirt', tint: [0.4, 0.32, 0.22] },
+  { name: 'prt_sand', sizeScale: 0.35, tint: [0.82, 0.72, 0.52] },
+];
 
 /** A runtime spawner over one preloaded system: park it somewhere, burst it or stream it, step it. */
 export interface DynamicFxEmitter {
@@ -216,7 +238,7 @@ function buildDynamicLibrary(
 ): { index: Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>; library: DynamicParticleLibrary } {
   const baked: FxBakedEmitter[] = [];
   const index = new Map<string, { baked: FxBakedEmitter; systemIndex: number }[]>();
-  for (const name of DYNAMIC_SYSTEMS) {
+  for (const { alias, name, sizeScale, tint } of DYNAMIC_SYSTEMS) {
     const system = systems.get(name);
     if (!system) {
       continue; // this profile does not ship the system — createEmitter(name) then returns null
@@ -225,11 +247,22 @@ function buildDynamicLibrary(
     // includeTriggered: the prt_* family carries NO emrate track — the runtime caller owns the count.
     for (const emitter of bakeFxSystem(system, { includeTriggered: true })) {
       const engineEmitter = toEngineSpace(emitter);
+      if (sizeScale !== undefined) {
+        engineEmitter.sizes = engineEmitter.sizes.map((size) => size * sizeScale) as [number, number, number];
+      }
+      if (tint !== undefined) {
+        engineEmitter.colors = engineEmitter.colors.map(([r, g, b, a]): [number, number, number, number] => [
+          r * tint[0],
+          g * tint[1],
+          b * tint[2],
+          a,
+        ]);
+      }
       entries.push({ baked: engineEmitter, systemIndex: baked.length });
       baked.push(engineEmitter);
     }
     if (entries.length > 0) {
-      index.set(name, entries);
+      index.set(alias ?? name, entries);
     }
   }
 

@@ -33,6 +33,11 @@ import { resolvePlate } from '@opensa/game/vehicle/vehicle-plates';
 import { VehicleRig } from '@opensa/game/vehicle/vehicle-rig';
 import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
 import { VehicleSkidMarkSystem } from '@opensa/game/vehicle/vehicle-skid-marks.system';
+import {
+  type SurfaceFxClass,
+  surfaceFxClassOf,
+  VehicleSurfaceFxSystem,
+} from '@opensa/game/vehicle/vehicle-surface-fx.system';
 import { planarMotion, type PlanarMotion, VehicleTelemetry } from '@opensa/game/vehicle/vehicle-telemetry';
 import {
   TYRE_SMOKE_DEFAULTS,
@@ -137,6 +142,8 @@ export interface EngineVehiclesDeps {
   smokeDials?: Partial<TyreSmokeDials>;
   /** The dynamic lane's collisionsmoke emitter (089/02); null = no FX library, smoke silently off. */
   smokeEmitter?: DynamicFxEmitter | null;
+  /** Emitter factory for the surface effects (089/05) — `EngineParticles.createEmitter`, absent-tolerant. */
+  surfaceEmitter?: (name: string) => DynamicFxEmitter | null;
   viewOf: () => Vec3;
 }
 
@@ -323,6 +330,44 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         v0: segment.v0,
         v1: segment.v1,
       });
+    },
+    () => config.graphics.effects.enabled,
+  );
+
+  // Surface effects (plan 089/05): dust/grass/gravel/mud/sand/spray by the surfinfo W_* flag under each
+  // wheel — the original's AddWheelDirtAndWater dispatch. Rolling on a flagged surface at speed throws
+  // material with no slide at all; the class → look table is an eye-fit (docs/hacks/surface-fx-fit.md).
+  // The systems are lane ALIASES: the same white-authored prt_wheeldirt registered per class with an
+  // earthy tint — the stand-in for SA's per-spawn ground colour (see DYNAMIC_SYSTEMS in engine-particles).
+  const SURFACE_FX_LOOK: Record<SurfaceFxClass, { alpha: number; life: number; system: string }> = {
+    dust: { alpha: 0.18, life: 0.35, system: 'wheeldirt-dust' },
+    grass: { alpha: 0.16, life: 0.3, system: 'wheeldirt-grass' },
+    gravel: { alpha: 0.18, life: 0.3, system: 'wheeldirt-dust' },
+    mud: { alpha: 0.22, life: 0.4, system: 'wheeldirt-mud' },
+    sand: { alpha: 0.22, life: 0.35, system: 'prt_sand' },
+  };
+  const surfaceEmitters = new Map<string, DynamicFxEmitter | null>();
+  const surfaceRecords = (): ReturnType<GtaSaWorldAdapter['surfaces']> => adapter.surfaces();
+  const surfaceFx = new VehicleSurfaceFxSystem(
+    () => (enterVehicle.isSeated() ? enterVehicle.getActive() : null),
+    physics,
+    (surface): null | SurfaceFxClass => surfaceFxClassOf(surface === null ? undefined : surfaceRecords()?.[surface]),
+    (puff): void => {
+      const look = SURFACE_FX_LOOK[puff.fx];
+      if (!surfaceEmitters.has(look.system)) {
+        surfaceEmitters.set(look.system, deps.surfaceEmitter?.(look.system) ?? null);
+      }
+      const emitter = surfaceEmitters.get(look.system);
+      if (!emitter) {
+        return;
+      }
+      const [ex, ey, ez] = gtaPositionToEngine(puff.position);
+      emitter.position[0] = ex;
+      emitter.position[1] = ey;
+      emitter.position[2] = ez;
+      emitter.lifeScale = look.life;
+      emitter.alphaScale = look.alpha * (0.6 + 0.4 * puff.intensity);
+      emitter.burst(puff.count);
     },
     () => config.graphics.effects.enabled,
   );
@@ -571,9 +616,10 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       enterVehicle.fixedUpdate(step);
       // Telemetry LAST: it records the step as it ended, including the controls `drive()` just applied.
       stepTelemetry(step);
-      // Smoke and marks after the snapshot for the same reason: they read the wheel state this step produced.
+      // Smoke, marks and surface puffs after the snapshot: they read the wheel state this step produced.
       tyreSmoke.fixedUpdate(step);
       skidMarks.fixedUpdate();
+      surfaceFx.fixedUpdate(step);
     },
     impactForce(): number {
       const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;

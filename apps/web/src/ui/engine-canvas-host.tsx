@@ -849,6 +849,8 @@ async function boot(
       // Tyre smoke (089/02): session dials ride the URL, like the 081/09 grip dials.
       smokeDials: smokeDialOverrides(params),
       smokeEmitter: particles?.createEmitter('prt_collisionsmoke') ?? null,
+      // Surface effects (089/05) create their per-class emitters lazily — a factory, not five deps.
+      surfaceEmitter: (name: string): DynamicFxEmitter | null => particles?.createEmitter(name) ?? null,
       viewOf,
     });
   } catch (error) {
