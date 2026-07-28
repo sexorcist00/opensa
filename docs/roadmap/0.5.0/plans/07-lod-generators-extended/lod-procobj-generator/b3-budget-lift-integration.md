@@ -1,6 +1,13 @@
 # B3 — Budget lift & integration (post-asi)
 
-Part of [07 — LOD generators, extended](readme.md), Part B. Depends on [B1](b1-procobj-density-model.md)/[B2](b2-biome-zone-density.md) (the density model) AND **Task 3** ([03-asi Phase 1](../../../../../asi/perfect-map/docs/plans/readme.md): the int16 limit lift) + [03-asi/006](../../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects" — raising the int16-era caps now that the engine no longer corrupts past them.
+> **PREMISE UNDER REVIEW — do not start this plan before [B0](b0-limit-lift-need-review.md) closes.**
+> Everything below is written as "gated on our own ASI (Task 3)". Measured 2026-07-28, the build sits at
+> 25 461/32 767 text rows but **37/40 IPL slots** — the constraint that actually binds is the 40-slot
+> `IplEntityIndexArrays` limit, which our ASI does **not** lift (fixes #2/#3 are unbuilt) and which FLA
+> does. If B0 concludes the slot lift is what density needs, this plan's target-gating, its guard and its
+> "requires the asi" fallback all change shape.
+
+Part of [07 — LOD generators, extended](../readme.md), Part B. Depends on [B1](b1-procobj-density-model.md)/[B2](b2-biome-zone-density.md) (the density model) AND **Task 3** ([03-asi Phase 1](../../../../../../asi/perfect-map/docs/plans/readme.md): the int16 limit lift) + [03-asi/006](../../../../../../asi/perfect-map/docs/plans/006-pipeline-integration.md) (the stock-vs-opensa-asi target modes). Delivers the actual "MORE objects" — raising the int16-era caps now that the engine no longer corrupts past them.
 
 ## Context
 

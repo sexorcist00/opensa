@@ -1,6 +1,6 @@
 # B1 — Procobj density model (build-time, configurable)
 
-Part of [07 — LOD generators, extended](readme.md), Part B. The foundation for "more procobj": turn density from a hardcoded vanilla constant into a configurable, per-category/per-surface model. Depends on nothing to BUILD, but shipping raised density needs [B3](b3-budget-lift-integration.md)'s budget lift (Task 3).
+Part of [07 — LOD generators, extended](../readme.md), Part B. The foundation for "more procobj": turn density from a hardcoded vanilla constant into a configurable, per-category/per-surface model. Depends on nothing to BUILD, but shipping raised density needs [B3](b3-budget-lift-integration.md)'s budget lift (Task 3).
 
 ## Context
 
@@ -11,6 +11,19 @@ Procobj scatter (`packages/renderware/src/map/procobj-scatter.ts`, reused at bui
 - Category is already derived per placement: `procObjCategory(model, surface) → bushes/cacti/flowers/grass/rocks/trees` (`procobj-categories.ts`). Surface name is available (`surfinfo.dat`).
 
 So the machinery to place 3× vanilla already exists (candidates are generated at `MAX_DENSITY`); the build just throws most away at `lottery < 1`. Raising density is mostly "raise the cutoff", but doing it uniformly would over-scatter everything — the point is CONTROL (denser bushes, not denser everything).
+
+### Which number is "the 300"
+
+Asked for as "a multiplier, or change 300 to another number" — worth naming precisely, because there are four caps and they are not interchangeable:
+
+| Knob | Where | Meaning |
+| ---- | ----- | ------- |
+| `lottery < 1` | `map-placement/src/procobj/convert.ts` | the build-time density cutoff — **this is the multiplier this plan makes configurable** |
+| `PROC_OBJ_MAX_DENSITY = 3` | `procobj-scatter.ts` | how many CANDIDATES are generated at all; a cutoff above 3 needs this raised too |
+| `procObjMax = 20000` | `lod-procobj-generator/config.ts` | global safety cap on placed objects |
+| `procObjLimit` (~300, vanilla `CProcObjectMan`) | the OpenSA runtime adapter, per cell | a runtime preview/perf cap, **not** a build knob |
+
+The multiplier belongs on the first two. The per-cell ~300 is the engine's own budget and is a different lever; it is also the site of the fairness defect in [B4](b4-species-representation.md) — raising either cap without B4 changes how many objects survive but not WHICH species do.
 
 ## Decisions
 

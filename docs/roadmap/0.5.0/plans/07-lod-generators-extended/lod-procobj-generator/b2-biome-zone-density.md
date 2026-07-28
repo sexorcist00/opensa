@@ -1,6 +1,6 @@
 # B2 — Biome/zone-aware density (desert, forest, mountain)
 
-Part of [07 — LOD generators, extended](readme.md), Part B. Depends on [B1](b1-procobj-density-model.md) (the density model). Delivers the user's actual ask: density that KNOWS the terrain — more cacti in the desert, more bushes in forest, more rocks on mountain slopes.
+Part of [07 — LOD generators, extended](../readme.md), Part B. Depends on [B1](b1-procobj-density-model.md) (the density model). Delivers the user's actual ask: density that KNOWS the terrain — more cacti in the desert, more bushes in forest, more rocks on mountain slopes.
 
 ## Context
 
