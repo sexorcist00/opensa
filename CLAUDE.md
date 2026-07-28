@@ -153,6 +153,13 @@ Never edit generated code manually.
   only as a MEASURED, documented bridge — state what was fitted, over what range, and its residual — and it
   is a debt, not an answer. The same goes for global tuning constants: each one is a place where the game's
   own numbers are not being read yet
+- **Every hack we knowingly take gets a file in `docs/hacks/`, in the same change** — a fitted constant, a
+  heuristic standing in for a formula nobody has recovered, a faked effect, an exclusion the general rule
+  cannot express. Say what it stands in for, what it was judged on ("it looked right" is a legitimate answer
+  as long as it says so), what would retire it, and what else moves if it changes. **When a hack is replaced
+  by the honest approach, MOVE its file to `docs/hacks/retired/`** with a closing block naming what replaced
+  it and linking the commit/plan — never delete it; the row in the README stays and points at the new home.
+  A hack nobody recorded is indistinguishable from a decision
 
 ---
 
@@ -190,6 +197,10 @@ Keep these in sync with the code — update them in the same change, not later:
   what happens when it is spelled wrong
 - `docs/edge-cases/` — when a new limitation/constraint is discovered, add it to the matching file; when one
   is lifted, remove it. Only CURRENT limitations live there, no legacy
+- `docs/hacks/` — one file per expedient we knowingly took (see the Standing Workflow rule above), plus a row
+  in `docs/hacks/README.md`; a replaced hack MOVES to `docs/hacks/retired/` with what replaced it. Distinct
+  from its neighbours: an edge case is what we CANNOT do, a performance lever is what we chose NOT to do, a
+  hack is what we DID instead of the honest thing
 - `docs/performance/` — when a change picks the RUNTIME path over a precomputed/baked one, or takes any
   deliberate cost for correctness, simplicity or moddability, record the alternative here in the same change:
   what it would save, what it would cost, what would have to be true to pull it. This is the plan-B list read

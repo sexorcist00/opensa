@@ -15,6 +15,13 @@ observations that killed it, and the conditions under which it might be worth re
 
 ## Postmortems
 
+- [090-vehicle-cabin-at-night.md](./090-vehicle-cabin-at-night.md) — the sky-gated reflection (`3e37d10`) and
+  the whole 090 cabin chain (night relax + a lit cabin + one dash lamp), built and REVERTED the same day
+  (`ae6548e`) on the field's verdict. The measured data was never wrong; it just never answered what the eye
+  was asking, because **not one in-engine capture was taken in three rounds of look-work**. Carries the
+  flat-varying artefact (a per-vertex flag drawn through `@interpolate(flat)` = hard triangular patches) and
+  the noisy-bake-threshold speckle. The symptoms stay open in
+  [`open-issues/vehicle-cabin-and-glass.md`](../open-issues/vehicle-cabin-and-glass.md).
 - [modern-cell-tooling.md](./modern-cell-tooling.md) — custom `.cell` format + baked channels + static
   batching/atlasing (plans 066 + opensa-lod-generator 005–010). No measurable perf/quality gain; code parked
   on `backup/tooling-experiment`. Produced the CPU-bound-on-draw-calls diagnosis that led to the own engine
