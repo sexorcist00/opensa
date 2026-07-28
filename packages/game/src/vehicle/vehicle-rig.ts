@@ -92,6 +92,11 @@ interface ResolvedAxle {
  * quaternions/matrices is the renderer's business.
  */
 export class VehicleRig {
+  /** How far the pop-up pods stand open, 0 (parked in the nose) … 1 (facing the road). The lamps read it:
+   *  a pod car may not light until the pods are all the way up. */
+  get popUpTravel(): number {
+    return this.popUp;
+  }
   /** Per-wheel drawn roll (rad) — per WHEEL since 081/06, because a wheel in the air no longer turns with
    *  the car (see {@link AIR_SPIN_UP}). */
   private readonly angle: number[];

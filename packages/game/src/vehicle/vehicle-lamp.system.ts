@@ -124,13 +124,21 @@ export class VehicleLampSystem implements System {
     if (!car) {
       return;
     }
-    car.handle.setLamps(state);
     // Retractable headlights follow the same signal that lights the lamps — the pods are only up because the
     // lights are on. The RIG owns the travel (it runs in the fixed step, where a smooth arc can be timed).
     car.rig.setPopUpLights(state.headlights);
+    // …but a pod car does not LIGHT until the pods are all the way up: a lamp still parked in the nose aims
+    // its beam into the bodywork, and its corona glows out of a closed panel. Going the other way the light
+    // dies the moment the pods start folding, which is the same switch a real car's. Everything without a pod
+    // lights the instant the state says so — the gate must never delay a car that has no arc to wait for.
+    const headlights = state.headlights && (!car.handle.hasPopUpLights || car.rig.popUpTravel >= 1);
+    car.handle.setLamps({ ...state, headlights });
 
     const eye = this.sinks.eye();
     for (const lamp of lampsOf(car)) {
+      if (lamp.kind === 'head' && !headlights) {
+        continue; // no pool light and no corona from a lamp that is still buried in the nose
+      }
       this.emit(lamp, cfg, braking, eye);
     }
   }

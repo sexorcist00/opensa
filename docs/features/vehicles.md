@@ -38,7 +38,10 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   (`previon`) **= 52.6°**. Swept over the whole stock archive, 49 models carry a `misc_*` component and
   exactly ONE is detected (the zr350) — the dozer blade, forklift mast, tow crane and lowrider hydraulics hold
   no lamp face, and a lamp that already looks where it lights is a light BAR, which the 5°…100° band rejects.
-  The pod rides the same signal that lights the lamps and travels over 0.7 s (`VehicleRig`, fixed step). A mod
+  The pod rides the same signal that lights the lamps and travels over 0.7 s (`VehicleRig`, fixed step), and
+  the LAMPS wait for it: a pod car's beam, glow and coronas only come on once the pods stand fully open, and
+  die the moment they start folding back (field 2026-07-28 — a lamp still parked in the nose lit the bodywork).
+  Cars without a pod are not gated at all. A mod
   whose pod uses its own texture instead of `vehiclelights` (so it carries no marker) can DECLARE itself: a
   `features.txt` in the mod folder holding `UP/DOWN_LIGHTS` — the Modloader/IVF convention. `vehicle-installer`
   copies each mod's declaration into `data/vehicle-features.txt`, and opensa-pack reads it while baking that

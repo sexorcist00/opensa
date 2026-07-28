@@ -20,10 +20,11 @@ const CONFIG: HeadlightConfig = {
 
 /** A car at the origin facing +Y, with authored lamp dummies. Its rig is real — the lamps drive the
  *  retractable-headlight travel through it. */
-function car(): EnterableVehicle {
+function car(popUps = false): EnterableVehicle {
   const handle = new FakeVehicleHandle();
   handle.lampAnchors.set('head', [0.8, 1.8, 0]);
   handle.lampAnchors.set('tail', [0.6, -2.4, 0]);
+  handle.hasPopUpLights = popUps;
 
   return {
     halfExtents: [1, 2, 0.7],
@@ -141,6 +142,27 @@ describe('VehicleLampSystem', () => {
       expect(handle.popUpLights).toBe(0);
     });
 
+    it('a pod car stays dark while its pods are still rising', () => {
+      const vehicle = car(true);
+      const handle = vehicle.handle as FakeVehicleHandle;
+      const { lights, run } = harness(
+        (sinks) =>
+          new VehicleLampSystem(
+            enter(vehicle, true),
+            () => true,
+            () => CONFIG,
+            sinks,
+          ),
+      );
+
+      run();
+      vehicle.rig.update(0.35); // halfway up the 0.7 s arc
+
+      expect(handle.lamps?.headlights).toBe(false);
+      expect(lights.filter((light) => light.cone !== undefined)).toHaveLength(0); // no beam out of the nose
+      expect(lights.filter((light) => light.cone === undefined)).toHaveLength(2); // the tails burn regardless
+    });
+
     it('a corona seen from BEHIND its lamp is dropped (a headlight must not glow through the boot)', () => {
       const { coronas, run } = harness(
         (sinks) =>
@@ -179,6 +201,28 @@ describe('VehicleLampSystem', () => {
       // The beam aims forward (+Y) and DOWN, so the pool lands on the asphalt ahead.
       expect(heads[0].cone!.direction[1]).toBeGreaterThan(0.9);
       expect(heads[0].cone!.direction[2]).toBeLessThan(0);
+    });
+
+    it('a pod car lights the moment its pods finish opening', () => {
+      const vehicle = car(true);
+      const handle = vehicle.handle as FakeVehicleHandle;
+      const { lights, run } = harness(
+        (sinks) =>
+          new VehicleLampSystem(
+            enter(vehicle, true),
+            () => true,
+            () => CONFIG,
+            sinks,
+          ),
+      );
+
+      run();
+      vehicle.rig.update(1); // past the arc
+      run();
+
+      expect(handle.popUpLights).toBe(1);
+      expect(handle.lamps?.headlights).toBe(true);
+      expect(lights.filter((light) => light.cone !== undefined)).toHaveLength(2);
     });
 
     it('the pool light sits AT the lamp — not shoved metres ahead of the bumper', () => {

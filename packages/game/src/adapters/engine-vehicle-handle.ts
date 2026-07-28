@@ -38,6 +38,7 @@ const WORLD = new Float32Array(16);
 
 export class EngineVehicleHandle implements VehicleHandle {
   readonly hasLod: boolean;
+  readonly hasPopUpLights: boolean;
   readonly parts: VehiclePartInfo[];
   readonly wheels: VehicleWheelInfo[];
   private band: VehicleBand = 'hd';
@@ -64,6 +65,7 @@ export class EngineVehicleHandle implements VehicleHandle {
     this.data = data;
     this.onDispose = onDispose;
     this.hasLod = data.submeshes.some((submesh) => submesh.kind === 'lod');
+    this.hasPopUpLights = data.popUpLights !== undefined;
     this.wheels = data.wheels.map((wheel) => ({ front: wheel.front, radius: wheel.radius }));
     // Damageable parts = those with a `_dam` twin, keyed by the damage group the builder paired them under.
     const groups = new Map<string, number>();

@@ -24,6 +24,8 @@ export class FakeVehicleHandle implements VehicleHandle {
   disposed = false;
   readonly doorAngles = new Map<string, number>();
   readonly hasLod: boolean;
+  /** Whether this car's model has a pop-up pod — the lamps gate on it. */
+  hasPopUpLights = false;
   readonly hinges = new Map<string, Vec3>();
   readonly lampAnchors = new Map<'head' | 'tail', Vec3>();
   lamps: null | VehicleLampState = null;

@@ -24,6 +24,12 @@ export interface VehicleHandle {
   /** True when the model carries a `_vlo` low-detail mesh (else the LOD band stays HD). */
   readonly hasLod: boolean;
   /**
+   * True when the model carries a retractable-headlight pod. The lamps ask because a pod car may not LIGHT
+   * until its pods stand open — see {@link setPopUpLights} — and every other car must not wait for an arc it
+   * does not have.
+   */
+  readonly hasPopUpLights: boolean;
+  /**
    * The `headlights` / `taillights` dummy in vehicle space (SA authors ONE per end and mirrors it), or null
    * when the model has none — the caller then falls back to the half-extents.
    */
