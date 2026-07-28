@@ -35,6 +35,13 @@ All of it from `npx tsx scripts/debug/dump-vehicle-materials.ts gostown previon`
   washing red over what is near it in screen space. Unverified.
 - Two of that model's REAR lamps carry the FRONT-lamp marker colour (probably reverse lights marked wrong by
   the author) — cosmetic, listed here so it is not mistaken for an engine bug.
+- **The STATIC light pool is the one light term the car's own occlusion does not gate.** `out.poolDiffuse =
+  localLightStatic(world, normal)` carries no `in.local.w`, where the indirect term beside it does — so a
+  street lamp lights a dashboard as if the roof were not there, while the same cabin has nothing at all where
+  no lamp reaches. Read out of the shader, not measured in a scene: how much it accounts for is exactly the
+  kind of question the in-engine capture above is for.
+- Whatever a rebaked car shows, it is not the reverted work: the rebaked previon carries only head (127) and
+  tail (105) lamp tags — no cabin tag exists in the build, and no cabin code exists in the engine.
 
 ## What has NOT been done, and should be first
 
