@@ -1,5 +1,9 @@
 # 082 — execution priority
 
+**STATUS 2026-07-28: 01–04 BUILT, no field verdict.** The chain ran in the planned order and each plan's
+ledger carries its numbers. Two checkpoints below are still open and both need the pak rebuilt first: the
+bench guard at 03 and the single field session at 04.
+
 Linear chain — each plan consumes the previous one's artifact:
 
 | Order | Plan                       | Why                                                                                                                                                                                                          |

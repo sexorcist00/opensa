@@ -226,7 +226,13 @@ export function createGameRuntimeConfig(): Config {
     // fogged, so the distant skyline isn't rendered as pale ghosts (and it's cheaper).
     streaming: { cellSize: GAME_CELL_SIZE, collisionDrawDistance: 150, hdDrawDistance: 300, lodDrawDistance: 1000 },
     time: { secondsPerGameMinute: 1.5 },
-    vehicle: { hdDistance: 80, lodDistance: 250, unloadDistance: 500 },
+    vehicle: {
+      hdDistance: 80,
+      lodDistance: 250,
+      // Empty masks take the game's own shape (LLDD DLL). Per-city so a mod can give each state its style.
+      plates: { la: '', sf: '', vegas: '' },
+      unloadDistance: 500,
+    },
     weatherTransitionSeconds: 6,
   };
 }

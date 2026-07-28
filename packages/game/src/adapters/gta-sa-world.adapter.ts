@@ -53,6 +53,7 @@ import {
 import { getTxdChain, setTxdParents } from '@opensa/renderware/archive/asset-cache';
 import { breakableInstanceKey } from '@opensa/renderware/breakable/key';
 import { getBreakable } from '@opensa/renderware/breakable/mesh';
+import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 
 import type { ModelColliders } from '../interfaces/collider.interface';
 import type {
@@ -64,11 +65,13 @@ import type {
 } from '../interfaces/world-adapter.interface';
 import type { WorldMod } from '../mods/mod.interface';
 import type { CellCoord } from '../streaming/grid';
+import type { PlateSources } from '../vehicle/plate-raster';
 import type { VehiclePlacement } from '../vehicle/vehicle-lod.system';
 import type { City } from '../zones/city';
 import type { VehicleRigData } from './engine-vehicle-handle';
 
 import { carGeneratorPlacements } from './car-generators';
+import { extractPlateSources } from './plate-sources';
 import { randomCarPlacements } from './popcycle-cars';
 import { createVehicleModelBuilder, type VehicleModelBuilder } from './vehicle-model-builder';
 import { type RigidModelInit, toRigidModelInit } from './vehicle-model-init';
@@ -203,6 +206,8 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   private objectDat: Map<string, ObjectDatEntry> | null = null;
   /** Parsed `peds.ide` defs by lowercased model name (TEMP: resolves the env-picked main character). */
   private peds: null | ReturnType<typeof parsePedDefs> = null;
+  /** undefined = not parsed yet; null = no usable plate rasters in this game's dictionary. */
+  private plateSourcesCache: null | PlateSources | undefined = undefined;
   /** `popcycle.dat` zone-types for random map-car resolution (plan 059); null when absent. */
   private popcycle: Map<string, PopcycleZone> | null = null;
   /** Whether {@link ensurePopulationData} has run (popcycle/cargrp may legitimately be absent → null). */
@@ -343,13 +348,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return buildTimecyc(convertTo24h(parseTimecyc(requireText(this.fs, 'data/timecyc.dat'))));
   }
 
-  /**
-   * The renderer-agnostic vehicle load (074/08 B5 step 4): geometry the OWN ENGINE uploads as a model (one
-   * per car type — instances share it), plus collision, handling and paint.
-   *
-   * Two paths converge here (opensa-pack 003): the OPTIMIZED `.osm`/`.ostex` read, and the UNOPTIMIZED
-   * DFF/TXD parse below it. The caller cannot tell which ran, and must not need to.
-   */
   async loadVehicleData(modelName: string, colour?: string): Promise<EngineVehicleData> {
     const optimized = await this.loadOptimizedVehicle(modelName, colour);
     if (optimized) {
@@ -388,6 +386,38 @@ export class GtaSaWorldAdapter implements WorldAdapter {
         radius: wheel.radius,
       })),
     };
+  }
+
+  /**
+   * The map's specific-model car generators (binary IPL `CARS` sections in gta3.img) as parked-car placements
+   * for the vehicle LOD system. `id → model` is resolved from `vehicles.ide`; random (`id = -1`) generators are
+   * skipped (cargrp/popcycle resolution is a later phase — plan 059). Empty until {@link prepare} resolved the map.
+   */
+  async mapCarGenerators(options: {
+    cityAt: (x: number, y: number) => City;
+    hour: number;
+  }): Promise<VehiclePlacement[]> {
+    await this.ensureVehicleData();
+    await this.ensurePopulationData();
+    const generators = this.defs?.carGenerators ?? [];
+    const modelById = new Map<number, string>();
+    for (const def of this.vehicleDefs?.values() ?? []) {
+      modelById.set(def.id, def.model.toLowerCase());
+    }
+    const specific = carGeneratorPlacements(generators, modelById);
+    if (this.popcycle === null || this.carGroups === null) {
+      return specific; // no popcycle/cargrp shipped → only the specific-model generators
+    }
+    // Random (id = -1) generators: resolve via the zone-type popcycle weights → a cargrp model (B1, plan 059).
+    const popcycle = this.popcycle;
+    const random = randomCarPlacements(generators, {
+      accept: (model) => this.vehicleDefs?.has(model) ?? false,
+      cargrp: this.carGroups,
+      hour: options.hour,
+      popcycleFor: (position) => popcycle.get(CITY_POPCYCLE_ZONE[options.cityAt(position[0], position[1])]) ?? null,
+    });
+
+    return [...specific, ...random];
   }
 
   // eslint-disable-next-line
@@ -433,35 +463,24 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   }
 
   /**
-   * The map's specific-model car generators (binary IPL `CARS` sections in gta3.img) as parked-car placements
-   * for the vehicle LOD system. `id → model` is resolved from `vehicles.ide`; random (`id = -1`) generators are
-   * skipped (cargrp/popcycle resolution is a later phase — plan 059). Empty until {@link prepare} resolved the map.
+   * The renderer-agnostic vehicle load (074/08 B5 step 4): geometry the OWN ENGINE uploads as a model (one
+   * per car type — instances share it), plus collision, handling and paint.
+   *
+   * Two paths converge here (opensa-pack 003): the OPTIMIZED `.osm`/`.ostex` read, and the UNOPTIMIZED
+   * DFF/TXD parse below it. The caller cannot tell which ran, and must not need to.
    */
-  async mapCarGenerators(options: {
-    cityAt: (x: number, y: number) => City;
-    hour: number;
-  }): Promise<VehiclePlacement[]> {
-    await this.ensureVehicleData();
-    await this.ensurePopulationData();
-    const generators = this.defs?.carGenerators ?? [];
-    const modelById = new Map<number, string>();
-    for (const def of this.vehicleDefs?.values() ?? []) {
-      modelById.set(def.id, def.model.toLowerCase());
+  /**
+   * The license-plate rasters (plan 082), parsed ONCE from the same `models/generic/vehicle.txd` this
+   * adapter already merges into every car's texture chain. Null when the dictionary is missing or a mod
+   * replaced it past recognition — plates then stay stock rather than taking the boot down.
+   */
+  plateSources(): null | PlateSources {
+    if (this.plateSourcesCache === undefined) {
+      const generic = this.fs.get('models/generic/vehicle.txd');
+      this.plateSourcesCache = generic ? extractPlateSources(parseTxd(generic)) : null;
     }
-    const specific = carGeneratorPlacements(generators, modelById);
-    if (this.popcycle === null || this.carGroups === null) {
-      return specific; // no popcycle/cargrp shipped → only the specific-model generators
-    }
-    // Random (id = -1) generators: resolve via the zone-type popcycle weights → a cargrp model (B1, plan 059).
-    const popcycle = this.popcycle;
-    const random = randomCarPlacements(generators, {
-      accept: (model) => this.vehicleDefs?.has(model) ?? false,
-      cargrp: this.carGroups,
-      hour: options.hour,
-      popcycleFor: (position) => popcycle.get(CITY_POPCYCLE_ZONE[options.cityAt(position[0], position[1])]) ?? null,
-    });
 
-    return [...specific, ...random];
+    return this.plateSourcesCache;
   }
 
   async prepare(onProgress?: (fraction: number) => void): Promise<void> {

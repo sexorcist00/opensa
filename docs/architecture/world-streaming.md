@@ -21,8 +21,11 @@ unknown **major** versions loudly, minors only add optional sections.
 **alpha** is the model's own sky occlusion — a car has no prelit set, so that byte was a constant 255 and now
 holds the AO the builder computes — and `reflect.x` is SPARE, because the reflection pipe reflects the live
 probe rather than the DFF's env texture. `DESC` submeshes also gained an optional `extra` (which `extraN`
-alternative a submesh belongs to; the spawn picks one) and `tyre` (rubber, found by geometry, never
-reflective). All are additive: a pak built before them still reads.
+alternative a submesh belongs to; the spawn picks one), `tyre` (rubber, found by geometry, never
+reflective) and `plate` (plan 082 — `'face'` = the `carplate` text strip, `'back'` = the `carpback` city
+background, taken from the material's texture NAME, which conversion otherwise discards; never set on a
+`_vlo` LOD mesh). All are additive: a pak built before them still reads, and its cars simply wear the stock
+placeholder plate.
 
 **Private vs world textures.** By-name classes (vehicles, peds, clutter, props, breakables) carry their own
 dictionary in the `.osm` `TEXS` section — self-contained, viewable standalone. **Map objects** are planned

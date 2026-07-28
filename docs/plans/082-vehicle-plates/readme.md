@@ -6,10 +6,11 @@ three-WebGL path (`MeshStandardMaterial.map` swap in `buildVehicle`, `DataTextur
 mechanism no longer exists.
 
 **Goal:** every spawned vehicle wears a generated license plate — text from a mask DSL in config,
-background by the city it SPAWNED in (`plateback1/2/3` = LS/SF/LV), deterministic per placement
-(same parked car → same plate across LOD respawns and reloads), and the plate rides damage: deform
-swap, door swing, part detach. Vanilla SA does exactly this (`CCustomCarPlateMgr`); stock assets
-ship the glyph atlas (`platecharset`) and the three backgrounds in `models/generic/vehicle.txd`.
+background by the city it SPAWNED in (`plateback1/2/3` = **SF/LV/LS**, measured — see phase 0),
+deterministic per placement (same parked car → same plate across LOD respawns and reloads), and the
+plate rides damage: deform swap, door swing, part detach. Vanilla SA does exactly this
+(`CCustomCarPlateMgr`); stock assets ship the glyph atlas (`platecharset`) and the three backgrounds
+in `models/generic/vehicle.txd`.
 
 ## What survives from the idea, and what had to be rethought
 
@@ -43,6 +44,49 @@ attachment code.
 5. **Spawn choke points multiplied**: parked/`carGeneratorPlacements`, popcycle road cars, the 841
    bench road cars, the F2 debug spawner — all flow through the host's `spawnVehicle`
    (`engine-vehicles.ts:211-293`), which stays the single wiring point.
+
+## Phase 0 — measured before a line of code (2026-07-28)
+
+Every number below is measured, not assumed; the throwaways that produced them are named per item.
+Two of them CORRECT this readme's original design text.
+
+1. **The keep-rule check PASSES — no converter exception needed.**
+   `build/original/opensa/models/generic/vehicle.txd` survives packing and still holds all six
+   plate rasters (`platecharset`, `plateback1..3`, `carplate`, `carpback`). The built file is
+   10 559 788 B against the stock 1 360 296 B — a mod replaced its contents wholesale, which is
+   exactly why this was read out of `build/`, not `game-src/`.
+2. **`plateback1/2/3` = SF / LV / LS** — the readme's original "LS/SF/LV" was wrong. Measured by
+   reading the stock rasters as images (`plateback1` = SAN FIERRO, `2` = LAS VENTURAS, `3` = LOS
+   SANTOS) and confirmed by the reversed source's `eCarPlateType { SF = 0, LV = 1, LA = 2 }`. The
+   installed mod keeps the same semantics (`1` = CALIFORNIA, `2` = NEVADA, `3` = CALIFORNIA, a
+   second design), so a city rule written against the INDEX stays correct under mods.
+3. **`carplate` and `carpback` are two DIFFERENT quads, not one plate face.** Measured on
+   `admiral`: `carpback` is the whole plate (0.3090 × 0.1738 model units), `carplate` a smaller
+   text strip (0.2836 × 0.0793) inset into it and sitting 0.0057 proud, both mapped over the FULL
+   0..1 UV rect. This kills plan 01's original "background + glyph blit into one raster" compose —
+   one composed raster drawn on both quads would double-draw the design. The game's split is the
+   correct one and the cheaper one: **`carpback` ← one of three STATIC backgrounds (a city index,
+   no per-instance raster at all); `carplate` ← a generated text-only raster with alpha.**
+4. **Plate faces ride the damage parts for free**, as the readme predicted — now confirmed:
+   `admiral`'s rear plate sits on the chassis geometry, the front plate on BOTH `bump_front_ok`
+   and `bump_front_dam`. No attachment code is owed.
+5. **Census** (`.tmp-plate-census.ts` over the whole stock archive): 14 865 DFFs scanned, 0
+   unparseable, **143 carry a plate material, 139 carry both**; 4 carry only one (`fbmp_c_st`,
+   `wheel_gn5` and two bumper mod parts). Every plate face is a 2-triangle quad.
+6. **The submesh SPLIT is already done by construction; only the FLAG is owed.** `appendGeometry`
+   emits one submesh per material group, so a plate face is already its own submesh — verified in
+   the built `admiral.osm`: 0 of 171 submeshes carry more than one texture layer, and the plate
+   pairs sit alone (`carpback` → layer 12, 36 indices; `carplate` → layer 13, 6 indices; three
+   pairs, on `bump_front_ok` and `numb`). What a converted model still cannot say is WHICH submesh
+   is a plate: the material name is gone and the layer index is model-local. A reconvert is
+   therefore still required, but for a DESC flag rather than a geometry regroup.
+
+   This corrects a first reading of the same file that reported the plates merged into 510-vertex
+   submeshes. That came from a **bug in `dump-osm-meta.ts`**, now fixed: it read the index buffer as
+   `uint16` unconditionally, while `buildVehicleModel` writes `uint32` past 65 536 vertices. Reading
+   a wide model narrow does not throw — it pairs up halves of real indices and invents submeshes
+   straddling several layers. The built `admiral` is a mod car with **91 746 vertices**, so it was
+   over the ceiling. Any past reading of a mod car through that script is suspect.
 
 ## Sub-plans
 

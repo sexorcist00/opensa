@@ -468,6 +468,60 @@ describe('buildVehicleModel', () => {
       // Instanced at BOTH dummies rather than rendered once at its own corner.
       expect(built.wheels).toHaveLength(2);
     });
+
+    it('tags the two license-plate faces by their placeholder textures (082/02)', () => {
+      const plated = geometry([
+        material({ texture: { maskName: '', name: 'carpback' }, textured: true }),
+        material({ texture: { maskName: '', name: 'carplate' }, textured: true }),
+        material({ texture: { maskName: '', name: 'chassis' }, textured: true }),
+      ]);
+      plated.triangles = [
+        { a: 0, b: 1, c: 2, materialIndex: 0 },
+        { a: 0, b: 1, c: 2, materialIndex: 1 },
+        { a: 0, b: 1, c: 2, materialIndex: 2 },
+      ];
+      const built = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [plated]), textures());
+
+      // One submesh per material already — the tag is all that was missing, not a regroup.
+      expect(built.submeshes.map((submesh) => submesh.plate)).toEqual(['back', 'face', undefined]);
+    });
+
+    it('does NOT tag a plate on the `_vlo` LOD mesh — nobody can read it past the swap', () => {
+      const plated = geometry([material({ texture: { maskName: '', name: 'carplate' }, textured: true })]);
+      const built = buildVehicleModel(clump([frame('chassis_vlo')], [{ frame: 0, geometry: 0 }], [plated]), textures());
+
+      // Tagging it would buy a per-instance texture binding for a quad that is a fraction of a pixel.
+      // The builder already de-features LOD the same way by forcing it MATTE.
+      expect(built.submeshes[0].kind).toBe('lod');
+      expect(built.submeshes[0].plate).toBeUndefined();
+      expect(built.meta[3] >> 4).toBe(MaterialClass.matte);
+    });
+
+    it('writes the plate material CLASS into meta.w — the only channel the shader can read it from', () => {
+      const plated = geometry([
+        material({ texture: { maskName: '', name: 'carpback' }, textured: true }),
+        material({ texture: { maskName: '', name: 'carplate' }, textured: true }),
+      ]);
+      plated.triangles = [
+        { a: 0, b: 1, c: 2, materialIndex: 0 },
+        { a: 0, b: 1, c: 2, materialIndex: 1 },
+      ];
+      const built = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [plated]), textures());
+
+      // The rigid vertex output stands at 15 of WebGPU's 16 inter-stage locations, so a plate could not
+      // have a signal of its own — the high nibble of meta.w IS the contract with `rigidTexel` (082/03).
+      const classOf = (submesh: number): number =>
+        built.meta[built.indices[built.submeshes[submesh].indexOffset] * 4 + 3] >> 4;
+      expect(classOf(0)).toBe(MaterialClass.plateBack);
+      expect(classOf(1)).toBe(MaterialClass.plateFace);
+    });
+
+    it('matches the plate textures case-insensitively, as the DFF names them either way', () => {
+      const plated = geometry([material({ texture: { maskName: '', name: 'CarPlate' }, textured: true })]);
+      const built = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [plated]), textures());
+
+      expect(built.submeshes[0].plate).toBe('face');
+    });
   });
 });
 
@@ -579,6 +633,33 @@ describe.skipIf(!existsSync(ADMIRAL) || !existsSync(GENERIC_TXD))('buildVehicleM
         expect(index).toBeLessThan(vertices);
       }
       expect([...built.positions].every(Number.isFinite)).toBe(true);
+    });
+
+    it('tags both plate faces, on the intact body AND on the damaged twin (082/02)', () => {
+      const plates = built.submeshes.filter((submesh) => submesh.plate);
+
+      // The stock admiral wears a rear plate on the chassis and a front one on the bumper, and the bumper
+      // ships an `_ok`/`_dam` pair — so the damage twin carries its own plate and the feature rides part
+      // deformation with no attachment code. Every plate face is a 2-triangle quad.
+      expect(plates.length).toBeGreaterThanOrEqual(4);
+      expect(new Set(plates.map((submesh) => submesh.plate))).toEqual(new Set(['back', 'face']));
+      expect(new Set(plates.map((submesh) => submesh.indexCount))).toEqual(new Set([6]));
+      expect(plates.some((submesh) => submesh.kind === 'dam')).toBe(true);
+      expect(plates.every((submesh) => submesh.translucent === false)).toBe(true);
+    });
+
+    it('pairs each plate face with a background on the same part', () => {
+      const byPart = new Map<number, Set<string>>();
+      for (const submesh of built.submeshes) {
+        if (submesh.plate) {
+          byPart.set(submesh.part, (byPart.get(submesh.part) ?? new Set()).add(submesh.plate));
+        }
+      }
+
+      expect(byPart.size).toBeGreaterThan(0);
+      for (const [, faces] of byPart) {
+        expect(faces).toEqual(new Set(['back', 'face']));
+      }
     });
   });
 });

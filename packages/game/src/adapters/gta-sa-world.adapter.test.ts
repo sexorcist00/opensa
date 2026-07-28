@@ -557,3 +557,32 @@ describe('tyreAdhesionPerMaterial', () => {
     });
   });
 });
+
+describe('GtaSaWorldAdapter.plateSources', () => {
+  describe('negative cases', () => {
+    it('returns null when the game ships no generic vehicle dictionary', () => {
+      expect(new GtaSaWorldAdapter({ cellSize: 250, fs: fakeFs() }).plateSources()).toBeNull();
+    });
+
+    it('does not re-read the dictionary on every call — plates resolve on a SPAWN path', () => {
+      let reads = 0;
+      const fs: Renderware.AssetFileSystem = {
+        get: (): null => {
+          reads += 1;
+
+          return null;
+        },
+        getText: () => null,
+        has: () => false,
+        names: [],
+      };
+      const adapter = new GtaSaWorldAdapter({ cellSize: 250, fs });
+
+      adapter.plateSources();
+      adapter.plateSources();
+
+      // A null result must be cached too, or a game without the dictionary pays the lookup per car.
+      expect(reads).toBe(1);
+    });
+  });
+});

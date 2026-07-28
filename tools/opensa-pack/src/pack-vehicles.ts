@@ -19,7 +19,9 @@ import type { ModelBundles } from './model-bundle';
 import { createProgress } from './progress';
 import { buildVehicleOsm } from './vehicle-osm';
 
-/** Dictionaries the runtime still reaches for by name, whoever else references them. Never deleted. */
+/** Dictionaries the runtime still reaches for by name, whoever else references them. Never deleted.
+ *  `vehicle` also carries the license-plate rasters the runtime parses at boot (plan 082/01) — dropping it
+ *  would leave every car wearing the stock placeholder plate. */
 const SHARED_TXDS = new Set(['generic', 'particle', 'vehicle']);
 
 export interface VehiclePackReport {

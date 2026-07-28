@@ -37,11 +37,16 @@ function main(): void {
   const geom = osmSection(sections, OsmSectionTag.GEOM)!;
   const meta = geom.subarray(fixture.layout.meta, fixture.layout.meta + fixture.vertexCount * 4);
   const colors = geom.subarray(fixture.layout.colors, fixture.layout.colors + fixture.vertexCount * 4);
-  const indices = new Uint16Array(
-    geom.buffer,
-    geom.byteOffset + fixture.layout.indices,
-    fixture.submeshes.reduce((total, submesh) => total + submesh.indexCount, 0),
-  );
+  // Index width follows the model, exactly as `buildVehicleModel` wrote it: uint16 while it fits, uint32
+  // past 65 536 vertices. Reading a wide model as uint16 does not throw — it silently pairs up halves of
+  // real indices and reports submeshes straddling several texture layers, which is a lie a one-material
+  // submesh cannot tell. Mod cars cross the ceiling routinely (the built admiral carries 91 746 verts).
+  const totalIndices = fixture.submeshes.reduce((total, submesh) => total + submesh.indexCount, 0);
+  const indexBase = geom.byteOffset + fixture.layout.indices;
+  const indices =
+    fixture.vertexCount > 65536
+      ? new Uint32Array(geom.buffer, indexBase, totalIndices)
+      : new Uint16Array(geom.buffer, indexBase, totalIndices);
 
   for (const submesh of fixture.submeshes) {
     const layers = new Map<number, number>();

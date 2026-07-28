@@ -7,7 +7,7 @@
  * A street of Landstalkers shares its geometry and its texture array, and differs only by part matrices and
  * a four-colour paint slot.
  */
-import type { Engine, VehicleModelId } from '@opensa/engine';
+import type { Engine, VehicleInstance, VehicleModelId } from '@opensa/engine';
 import type { EngineVehicleData, GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapter';
 import type { CharacterControllerSystem } from '@opensa/game/character/character-controller.system';
 import type { Logger } from '@opensa/game/diagnostics/logger';
@@ -17,13 +17,19 @@ import type { Vec3 } from '@opensa/game/interfaces/world-adapter.interface';
 import type { PhysicsWorld, VehicleSpringReading, VehicleStance } from '@opensa/game/physics/physics-world';
 import type { EnterableVehicle, VehicleAnimator } from '@opensa/game/vehicle/enter-vehicle.system';
 import type { SpawnedVehicle, VehiclePlacement } from '@opensa/game/vehicle/vehicle-lod.system';
+import type { PlatePlacement } from '@opensa/game/vehicle/vehicle-plates';
+import type { CityBox } from '@opensa/game/zones/city';
 
+import { PLATE_CAPACITY } from '@opensa/engine';
 import { EngineVehicleHandle, gtaPositionToEngine } from '@opensa/game/adapters/engine-vehicle-handle';
 import { EnterVehicleSystem } from '@opensa/game/vehicle/enter-vehicle.system';
+import { composePlateText, plateBackgroundIndex } from '@opensa/game/vehicle/plate-raster';
+import { BLANK_PLATE_SLOT, PlateSlots } from '@opensa/game/vehicle/plate-slots';
 import { VehicleDamageSystem } from '@opensa/game/vehicle/vehicle-damage.system';
 import { VehicleLampSystem } from '@opensa/game/vehicle/vehicle-lamp.system';
 import { VehicleLodSystem } from '@opensa/game/vehicle/vehicle-lod.system';
 import { VehiclePhysicsSystem } from '@opensa/game/vehicle/vehicle-physics.system';
+import { resolvePlate } from '@opensa/game/vehicle/vehicle-plates';
 import { VehicleRig } from '@opensa/game/vehicle/vehicle-rig';
 import { seatVehicleOnGround } from '@opensa/game/vehicle/vehicle-seating';
 import { planarMotion, type PlanarMotion, VehicleTelemetry } from '@opensa/game/vehicle/vehicle-telemetry';
@@ -103,6 +109,8 @@ export interface EngineVehiclesDeps {
   /** Turn the follow camera to an azimuth (enter-vehicle centres it behind the car once). */
   aimCamera: (azimuth: number) => void;
   animator: VehicleAnimator;
+  /** The city boxes plates read (desert first) — a thunk because they load after this setup runs. */
+  cityBoxes: () => readonly CityBox[];
   config: Readonly<Config>;
   engine: Engine;
   /** Camera position (native Z-up) — the lamp coronas fade by how squarely a lamp faces it. */
@@ -122,6 +130,32 @@ export interface EngineVehiclesDeps {
 
 export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<EngineVehicles> {
   const { adapter, config, engine, physics } = deps;
+
+  // --- License plates (plan 082/04) -------------------------------------------------------------------
+  // The rasters come from the game's own `generic/vehicle.txd` via the adapter (the layer that may read
+  // renderware). A dictionary we cannot read leaves `plateSources` null and every car keeps the stock
+  // placeholder — plates are cosmetic and must never be a reason a car fails to spawn.
+  const plateSources = adapter.plateSources();
+  const plateSlots = plateSources ? new PlateSlots(engine, PLATE_CAPACITY) : null;
+  if (plateSources) {
+    engine.uploadPlateBackgrounds(plateSources.backgrounds);
+    // Layer 0 is reserved and never handed out — an unassigned car reads it, so it must hold a BLANK
+    // plate rather than the uninitialised black the array starts as. Empty text composes eight blank cells.
+    engine.uploadPlateText(BLANK_PLATE_SLOT, composePlateText('', plateSources.charset));
+  }
+
+  /** Give one spawned car its plate; returns the atlas layer it claimed, so despawn can release it. */
+  const dressPlate = (instance: VehicleInstance, placement: PlatePlacement): null | number => {
+    if (!plateSources || !plateSlots) {
+      return null;
+    }
+    const plate = resolvePlate(placement, config.vehicle.plates, deps.cityBoxes());
+    const slot = plateSlots.claim(plate.text, () => composePlateText(plate.text, plateSources.charset));
+    instance.setPlate(slot, plateBackgroundIndex(plate.city));
+
+    return slot;
+  };
+
   const vehiclePhysics = new VehiclePhysicsSystem(physics);
   const vehicleDamage = new VehicleDamageSystem(physics, deps.logger);
   let seated: EnterableVehicle | null = null;
@@ -299,9 +333,14 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     const { heading, model } = placement;
     const entry = await acquireModel(model);
     const { data, id } = entry;
+    let plateSlot: null | number = null;
     const release = (): void => {
       entry.instances = Math.max(0, entry.instances - 1);
       entry.lastUsed = performance.now();
+      if (plateSlot !== null) {
+        plateSlots?.release(plateSlot); // one fewer car wearing this plate; the raster stays resident
+        plateSlot = null;
+      }
       evictModels();
     };
     try {
@@ -320,6 +359,11 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
 
       const instance = engine.createVehicle(id);
       instance.setPaint(paint);
+      // The plate is resolved from the PLACEMENT, not from where the player is standing (plan 082/04), so a
+      // far-streamed San Fierro car wears SF plates and a parked car keeps its number across LOD respawns.
+      // This is the single wiring point every spawn path flows through: parked cars, map car generators,
+      // popcycle road cars, the bench fleet and the debug spawner.
+      plateSlot = dressPlate(instance, { ...placement, position });
       const handle = new EngineVehicleHandle(instance, data.rig, () => engine.destroyVehicle(instance));
       const wheels = data.wheels.map((wheel) => ({
         connection: wheel.connection,

@@ -28,6 +28,7 @@ export {
   type ParticleUpload,
   type PedProbe,
   type PedProbeInit,
+  PLATE_CAPACITY,
   type VehicleInstance,
   type VehicleModelId,
   type VehicleModelInit,

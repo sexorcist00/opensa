@@ -19,6 +19,13 @@ Limits and deliberate approximations of the own WebGPU engine.
 - **Shader-stage limits are invisible to tests.** The fake GPUDevice doesn't validate the 16-varying
   fragment-input cap or binding visibility — two shader defects shipped through 2,325 green tests. Check
   WGSL by eye (a static check is a noted follow-up in plan 084).
+- **The rigid (vehicle/ped) vertex output stands at 15 of those 16 inter-stage locations.** There is room
+  for ONE more and no test will tell you when it is gone. Anything per-vertex a new feature needs has to
+  ride an existing location's spare components instead: sky occlusion sits in `local.w` (plan 084), the
+  license-plate atlas layer in `lamps.w`, and a plate's very IDENTITY is a `MaterialClass` value because
+  the high nibble of `meta.w` was the only per-vertex channel left (plan 082/03). Note the knock-on: a
+  fragment shader cannot be handed the instance index, so anything per-INSTANCE must be resolved in the
+  vertex stage and forwarded as a single number.
 - **Two-sided world rendering.** SA's static world renders without backface culling (mirrored coplanar
   pairs, `0x200000 DISABLE_BACKFACE_CULLING` honoured); glass is double-sided gated by
   `@builtin(front_facing)`. Roadsign glyphs render twice at ±0.05 m; sign text does not dim at night.

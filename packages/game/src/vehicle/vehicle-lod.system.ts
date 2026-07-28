@@ -21,6 +21,9 @@ export interface VehiclePlacement {
   groundSnap?: boolean;
   heading: number;
   model: string;
+  /** An explicit license plate (debug spawner, a mission car) — beats the deterministic hash (plan 082/04).
+   *  Stored with the placement, so a LOD respawn re-applies the same override. */
+  plate?: string;
   position: Vec3;
 }
 

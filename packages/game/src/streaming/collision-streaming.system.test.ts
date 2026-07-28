@@ -176,7 +176,7 @@ function config(collisionDrawDistance: number): Config {
     staticUrl: '',
     streaming: { cellSize: 250, collisionDrawDistance, hdDrawDistance: 300, lodDrawDistance: 1500 },
     time: { secondsPerGameMinute: 3 },
-    vehicle: { hdDistance: 80, lodDistance: 250, unloadDistance: 500 },
+    vehicle: { hdDistance: 80, lodDistance: 250, plates: { la: '', sf: '', vegas: '' }, unloadDistance: 500 },
     weatherTransitionSeconds: 0,
   };
 }

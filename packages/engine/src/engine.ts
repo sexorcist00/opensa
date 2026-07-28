@@ -312,6 +312,12 @@ export interface VehicleInstance {
   setLamps(headlights: boolean, brakes: boolean, intensity: number): void;
   /** Carcols colours (linear 0..1) the vertex paint slots resolve to — this car's own paint job. */
   setPaint(paint: VehiclePaint): void;
+  /**
+   * This car's license plate (plan 082/03): which layer of the engine's generated TEXT atlas its
+   * `carplate` quads sample, and which of the three city backgrounds its `carpback` quads wear. Both
+   * default to 0 — the stock placeholder look every unassigned car keeps.
+   */
+  setPlate(textSlot: number, city: number): void;
   setSubmeshVisible(submesh: number, visible: boolean): void;
 }
 
@@ -365,6 +371,9 @@ export interface VehicleSubmesh {
   indexCount: number;
   indexOffset: number;
   part: number;
+  /** Which face of a license plate this submesh is (plan 082): `face` = the generated text strip,
+   *  `back` = the city-background quad behind it. Absent = not a plate. */
+  plate?: 'back' | 'face';
   /** Bounding radius about the centroid — the sort counts a submesh by its NEAREST extent (centroid
    *  distance − radius), so a raked windscreen beats the wheel under its overhang (074/16 field fix). */
   radius?: number;
@@ -400,8 +409,22 @@ const VEHICLE_CAPACITY = 8;
 const PAINT_ROW_BYTES = 64;
 /** Floats per particle instance: spawn(3) + velocity(3) + life/phase/system(3). */
 const PARTICLE_STRIDE = 9;
-/** One vec4f of lamp state per matrix row (headlights, brakes, spare, spare). */
+/** One vec4f of lamp state per matrix row (headlights, brakes, intensity, spare). */
 const LAMP_ROW_BYTES = 16;
+
+/** One vec4f of plate state per matrix row (text slot, city background, spare, spare) — plan 082/03. */
+const PLATE_ROW_BYTES = 16;
+/** The generated plate raster: what SA's own `CreatePlateTexture` allocates, `RwRasterCreate(64, 16, 32)`. */
+const PLATE_SLOT_HEIGHT = 16;
+const PLATE_SLOT_WIDTH = 64;
+/**
+ * How many DISTINCT plates can exist at once. A CAP constant like the probe and the LUTs, not a growing
+ * pool: the array's view is baked into every model's cached bind group, so resizing it would mean
+ * rebuilding all of them. 256 × 64 × 16 × 4 B = 1 MB, and the host recycles slots by refcount below that.
+ */
+export const PLATE_CAPACITY = 256;
+/** The three city backgrounds — `plateback1..3` = SF / LV / LS (`eCarPlateType`). */
+const PLATE_BACKGROUNDS = 3;
 
 /** Unpainted default — a car that never calls `setPaint` renders its marker slots plain white. */
 const DEFAULT_PAINT: VehiclePaint = {
@@ -455,6 +478,8 @@ interface VehicleInstanceState {
   lamps: { brakes: boolean; headlights: boolean; intensity: number };
   /** Kept so a capacity grow (which reallocates the buffer) can restore it — paint is not re-sent per frame. */
   paint: VehiclePaint;
+  /** This car's plate, kept for the same reason as `paint`: a capacity grow must restore it (082/03). */
+  plate: { city: number; textSlot: number };
   slot: number;
   submeshVisible: Uint8Array;
 }
@@ -473,6 +498,8 @@ interface VehicleModel {
   matrixBuffer: GPUBuffer;
   paintBuffer: GPUBuffer;
   partCount: number;
+  /** One plate vec4 per matrix row (plan 082/03) — text slot + city background, per instance. */
+  plateBuffer: GPUBuffer;
   submeshes: readonly VehicleSubmesh[];
   /** Residency estimate per array, parallel to `textures` — each is destroyed with its own share. */
   textureBytes: number[];
@@ -675,12 +702,16 @@ export class Engine {
   private pedTextureBytes = 0;
   private pedTextures: GPUTexture[] = [];
   private pipelines!: PipelineSet;
+  /** Scene env probe (074/16 step 2) + its per-frame scratch (zero steady-state allocations). */
+  /** The three city backgrounds a `carpback` quad samples — replaced once the game's TXD is parsed. */
+  private plateBackTexture!: GPUTexture;
+  /** The generated plate TEXT rasters, one layer per distinct plate the world is wearing. */
+  private plateTexture!: GPUTexture;
   /** Resolved scene (16f) + the godrays composite resources (074/09 stage 1); bind group is rebuilt on
    *  resize — it is NOT referenced by any bundle, so this is safe (unlike the frame bind group). */
   private postBindGroup!: GPUBindGroup;
   private postSampler!: GPUSampler;
   private postUniform!: GPUBuffer;
-  /** Scene env probe (074/16 step 2) + its per-frame scratch (zero steady-state allocations). */
   private probe!: EnvProbe;
   private readonly probeFrameData = new Float32Array(100);
   private readonly probeFrustum = new Float32Array(24);
@@ -855,6 +886,8 @@ export class Engine {
       entity: new RigidEntity(parts),
       lamps: { brakes: false, headlights: false, intensity: 1 },
       paint: DEFAULT_PAINT,
+      // Slot 0 of each array until the host assigns one: an unplated car shows the stock placeholder.
+      plate: { city: 0, textSlot: 0 },
       slot,
       submeshVisible: new Uint8Array(model.submeshes.length).fill(1),
     };
@@ -874,6 +907,13 @@ export class Engine {
       },
       setPaint: (paint: VehiclePaint): void => {
         this.writeVehiclePaint(model, state.slot, paint);
+      },
+      setPlate: (textSlot: number, city: number): void => {
+        if (state.plate.city === city && state.plate.textSlot === textSlot) {
+          return; // like lamps, written on CHANGE — a parked car re-requests the same plate every respawn
+        }
+        state.plate = { city, textSlot };
+        this.writeVehiclePlate(model, state.slot, textSlot, city);
       },
       setSubmeshVisible: (submesh: number, visible: boolean): void => {
         state.submeshVisible[submesh] = visible ? 1 : 0;
@@ -915,6 +955,7 @@ export class Engine {
     const matrixBuffer = this.createVehicleMatrixBuffer(init.parts.length, VEHICLE_CAPACITY);
     const paintBuffer = this.createVehiclePaintBuffer(init.parts.length, VEHICLE_CAPACITY);
     const lampBuffer = this.createVehicleLampBuffer(init.parts.length, VEHICLE_CAPACITY);
+    const plateBuffer = this.createVehiclePlateBuffer(init.parts.length, VEHICLE_CAPACITY);
     const uploads = init.textures.map((texture) => this.createModelTexture(texture, 'vehicle-texture'));
     const textures = uploads.map((upload) => upload.texture);
     const textureBytes = uploads.map((upload) => upload.byteEstimate);
@@ -931,6 +972,7 @@ export class Engine {
       matrixBuffer,
       paintBuffer,
       partCount: init.parts.length,
+      plateBuffer,
       submeshes: init.submeshes,
       textureBytes,
       textures,
@@ -989,6 +1031,7 @@ export class Engine {
     this.resources.destroyBuffer('uniform', model.matrixBuffer);
     this.resources.destroyBuffer('uniform', model.paintBuffer);
     this.resources.destroyBuffer('uniform', model.lampBuffer);
+    this.resources.destroyBuffer('uniform', model.plateBuffer);
     model.textures.forEach((texture, array) => {
       this.resources.destroyTexture('texture', texture, model.textureBytes[array] ?? 0);
     });
@@ -1243,6 +1286,12 @@ export class Engine {
     this.pipelines = compileAll(this.device, SCENE_FORMAT, DEPTH_FORMAT, this.engineDevice.colorFormat);
     // Scene env probe (074/16 step 2) — fixed-size, allocated once, BEFORE any vehicle model binds its cube.
     this.probe = new EnvProbe(this.device, this.resources, this.pipelines);
+    // License-plate arrays (plan 082/03), allocated here for the same reason as the probe: their views go
+    // into every vehicle bind group, so they must exist before the first car binds one. The text atlas is
+    // final at its CAP size; the backgrounds start as a placeholder because their real size is whatever the
+    // game's `generic/vehicle.txd` ships (64×32 stock, 512×256 in the pack that is installed).
+    this.plateTexture = this.createPlateTexture(PLATE_SLOT_WIDTH, PLATE_SLOT_HEIGHT, PLATE_CAPACITY, 'plate-text');
+    this.plateBackTexture = this.createPlateTexture(1, 1, PLATE_BACKGROUNDS, 'plate-backgrounds');
     this.probeViewBindGroup = this.device.createBindGroup({
       entries: [
         { binding: 0, resource: this.probe.cubeView },
@@ -1775,6 +1824,46 @@ export class Engine {
     }
   }
 
+  /**
+   * Install the three city backgrounds a `carpback` quad samples (plan 082/03). Called ONCE at boot, from
+   * whatever `models/generic/vehicle.txd` the running game ships — the rasters are re-created at the size
+   * that TXD carries, because a mod may replace them wholesale (64×32 stock, 512×256 in the installed
+   * pack), and any model bind group built before this point is dropped so it re-binds the real array.
+   *
+   * Backgrounds live apart from the text atlas rather than as fixed slots inside it: a texture array is one
+   * size for every layer, and 512×256 backgrounds would make each 64×16 text slot cost 512 KB.
+   */
+  uploadPlateBackgrounds(rasters: readonly { height: number; rgba: Uint8Array; width: number }[]): void {
+    const first = rasters[0];
+    if (!first || rasters.length !== PLATE_BACKGROUNDS) {
+      return; // a dictionary we could not read: every plate keeps the stock placeholder
+    }
+    this.plateBackTexture.destroy();
+    this.plateBackTexture = this.createPlateTexture(first.width, first.height, PLATE_BACKGROUNDS, 'plate-backgrounds');
+    rasters.forEach((raster, layer) => {
+      // A mod that ships the three at DIFFERENT sizes gets the first one's; writing a mismatched raster
+      // would be a validation error, and a missing background is worse than a resampled one.
+      if (raster.width === first.width && raster.height === first.height) {
+        this.writePlateLayer(this.plateBackTexture, layer, raster.rgba, raster.width, raster.height);
+      }
+    });
+    for (const model of this.vehicleModels.values()) {
+      model.bindGroups.clear();
+    }
+  }
+
+  /**
+   * Put one generated plate raster into the shared text atlas (plan 082/03). The slot is the host's to
+   * choose and to recycle — the engine only owns the array. Out-of-range slots are ignored rather than
+   * throwing: a plate is cosmetic, and the alternative is taking the frame down over a number.
+   */
+  uploadPlateText(slot: number, rgba: Uint8Array): void {
+    if (slot < 0 || slot >= PLATE_CAPACITY || rgba.byteLength !== PLATE_SLOT_WIDTH * PLATE_SLOT_HEIGHT * 4) {
+      return;
+    }
+    this.writePlateLayer(this.plateTexture, slot, rgba, PLATE_SLOT_WIDTH, PLATE_SLOT_HEIGHT);
+  }
+
   /** ObjectTable draws for visible cells (074/06 row 9). Timed: render when `hour` is inside [on, off). */
   /** Advance every UV-scroll animation to wall-clock `seconds` (B7·c / plan 074/18). The prod lerp: equal-time
    *  keyframe pairs snap (DolSign's stepped flipbook), the rest lerp. A handful of entries — cheap per frame. */
@@ -1954,10 +2043,25 @@ export class Engine {
     return { byteEstimate: init.rgba.byteLength, texture };
   }
 
+  /**
+   * An RGBA8 texture ARRAY for the plate rasters. No mips: a plate is 64×16 and SA samples its own with
+   * `rwFILTERNEAREST`, so there is no chain to build and nothing to lose by not having one.
+   */
+  private createPlateTexture(width: number, height: number, layers: number, label: string): GPUTexture {
+    return this.device.createTexture({
+      dimension: '2d',
+      format: 'rgba8unorm',
+      label,
+      size: { depthOrArrayLayers: layers, height, width },
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+  }
+
   private createVehicleBindGroup(model: {
     lampBuffer: GPUBuffer;
     matrixBuffer: GPUBuffer;
     paintBuffer: GPUBuffer;
+    plateBuffer: GPUBuffer;
     texture: GPUTexture;
   }): GPUBindGroup {
     return this.device.createBindGroup({
@@ -1984,6 +2088,9 @@ export class Engine {
         // only its CONTENTS refresh, so per-model bind groups can hold it safely.
         { binding: 5, resource: this.probe.cubeView },
         { binding: 6, resource: this.probe.sampler },
+        { binding: 7, resource: { buffer: model.plateBuffer } },
+        { binding: 8, resource: this.plateTexture.createView({ dimension: '2d-array' }) },
+        { binding: 9, resource: this.plateBackTexture.createView({ dimension: '2d-array' }) },
       ],
       label: 'vehicle',
       layout: this.pipelines.rigidLayout,
@@ -2016,23 +2123,20 @@ export class Engine {
     });
   }
 
+  /** One plate vec4 per matrix row — indexed by the same `instance_index` as the matrices (082/03). */
+  private createVehiclePlateBuffer(partCount: number, capacity: number): GPUBuffer {
+    return this.resources.createBuffer('uniform', {
+      label: 'vehicle-plates',
+      size: partCount * capacity * PLATE_ROW_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+  }
+
   private destroyDebris(entry: DebrisEntry): void {
     this.resources.destroyBuffer('debris', entry.vertexBuffer);
     this.resources.destroyBuffer('uniform', entry.uniform);
     this.resources.destroyTexture('texture', entry.texture, entry.textureBytes);
   }
-
-  /**
-   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
-   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
-   * the known cost knob if a street full of parked cars ever pushes the draw budget.
-   */
-  /**
-   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
-   * so this is genuinely all there is to it per frame.
-   */
-  /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
-  /** Debug wireframes (074/13 phase 4) — one draw per registered set, skipped entirely when there are none. */
 
   private drawClutter(pass: GPURenderPassEncoder): number {
     let draws = 0;
@@ -2066,6 +2170,18 @@ export class Engine {
 
     return draws;
   }
+
+  /**
+   * Draw every live instance of every model. `firstInstance` carries the matrix row — slot × partCount +
+   * part — so the WGSL side is unchanged from the single-probe days. One draw per visible submesh per car:
+   * the known cost knob if a street full of parked cars ever pushes the draw budget.
+   */
+  /**
+   * Two draws for every 2dfx emitter on the map (one per blend mode). The vertex shader owns the lifecycle,
+   * so this is genuinely all there is to it per frame.
+   */
+  /** Draw the live breaks and retire the finished ones (their GPU resources go back immediately). */
+  /** Debug wireframes (074/13 phase 4) — one draw per registered set, skipped entirely when there are none. */
 
   /** 2dfx corona billboards of visible cells (074/06 row 13): CPU-gated by night + farClip, one
    *  instanced draw. Colour is premultiplied by the dn gate — coronas are a NIGHT phenomenon (v1). */
@@ -2507,9 +2623,11 @@ export class Engine {
     this.resources.destroyBuffer('uniform', model.matrixBuffer);
     this.resources.destroyBuffer('uniform', model.paintBuffer);
     this.resources.destroyBuffer('uniform', model.lampBuffer);
+    this.resources.destroyBuffer('uniform', model.plateBuffer);
     model.matrixBuffer = this.createVehicleMatrixBuffer(model.partCount, capacity);
     model.paintBuffer = this.createVehiclePaintBuffer(model.partCount, capacity);
     model.lampBuffer = this.createVehicleLampBuffer(model.partCount, capacity);
+    model.plateBuffer = this.createVehiclePlateBuffer(model.partCount, capacity);
     // The groups hold the OLD buffers; drop them and let the draw path rebuild against the new ones.
     model.bindGroups.clear();
     model.instances.length = capacity;
@@ -2524,6 +2642,7 @@ export class Engine {
         this.device.queue.writeBuffer(model.matrixBuffer, state.slot * rowBytes, state.entity.matrices);
         this.writeVehiclePaint(model, state.slot, state.paint);
         this.writeVehicleLamps(model, state.slot, state.lamps);
+        this.writeVehiclePlate(model, state.slot, state.plate.textSlot, state.plate.city);
       }
     }
   }
@@ -2714,6 +2833,16 @@ export class Engine {
     return Math.hypot(x - eye[0], y - eye[1], z - eye[2]) - (submesh.radius ?? 0);
   }
 
+  /** One RGBA layer into a plate array. */
+  private writePlateLayer(texture: GPUTexture, layer: number, rgba: Uint8Array, width: number, height: number): void {
+    this.device.queue.writeTexture(
+      { origin: { x: 0, y: 0, z: layer }, texture },
+      rgba,
+      { bytesPerRow: width * 4, rowsPerImage: height },
+      { depthOrArrayLayers: 1, height, width },
+    );
+  }
+
   private writeVehicleLamps(
     model: VehicleModel,
     slot: number,
@@ -2748,6 +2877,21 @@ export class Engine {
       row.set(paint.quaternary, at + 12);
     }
     this.device.queue.writeBuffer(model.paintBuffer, slot * model.partCount * PAINT_ROW_BYTES, row);
+  }
+
+  /**
+   * Write one instance's plate reference. REPLICATED across the instance's part rows for the same reason
+   * paint is: the shader indexes by `instance_index`, which already folds in the part, so replication buys
+   * the absence of a partCount uniform and an integer division in the vertex shader. Written on
+   * spawn/change, never per frame.
+   */
+  private writeVehiclePlate(model: VehicleModel, slot: number, textSlot: number, city: number): void {
+    const row = new Float32Array(model.partCount * 4);
+    for (let part = 0; part < model.partCount; part += 1) {
+      row[part * 4] = textSlot;
+      row[part * 4 + 1] = city;
+    }
+    this.device.queue.writeBuffer(model.plateBuffer, slot * model.partCount * PLATE_ROW_BYTES, row);
   }
 }
 

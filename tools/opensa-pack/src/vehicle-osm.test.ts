@@ -105,6 +105,16 @@ describe('readVehicleOsm', () => {
       expect(read.model.parts.length).toBe(source.fixture.parts.length);
       expect(read.model.submeshes.length).toBe(source.fixture.submeshes.length);
     });
+
+    it('carries the license-plate tags through the format (082/02)', () => {
+      const read = readVehicleOsm('admiral', built().bytes);
+      const plates = read.model.submeshes.filter((submesh) => submesh.plate);
+
+      // After conversion the material NAME is gone and the texture layer is model-local, so this tag is
+      // the only thing that can still say "this quad is a plate" — it has to survive the DESC round trip.
+      expect(new Set(plates.map((submesh) => submesh.plate))).toEqual(new Set(['back', 'face']));
+      expect(new Set(plates.map((submesh) => submesh.indexCount))).toEqual(new Set([6]));
+    });
   });
 });
 

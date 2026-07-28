@@ -36,6 +36,17 @@ const LAMP_MARKERS = new Map<string, 'head' | 'tail'>([
   ['255,175,0', 'head'], // front left
 ]);
 
+/**
+ * The two license-plate faces, named by the placeholder texture their material carries (plan 082/02):
+ * `carplate` is the small text strip, `carpback` the city-background quad it is inset into. They are
+ * separate quads in every plated DFF, and the reversed `CCustomCarPlateMgr` keys on exactly these names —
+ * after conversion the name is gone, so the tag has to be taken here.
+ */
+const PLATE_TEXTURES = new Map<string, 'back' | 'face'>([
+  ['carpback', 'back'],
+  ['carplate', 'face'],
+]);
+
 /** Kam's/ZModeler carcols paint markers → the per-vertex paint slot. */
 const PAINT_MARKERS = new Map<string, number>([
   ['0,255,255', PaintSlot.tertiary],
@@ -318,8 +329,13 @@ function appendGeometry(
       return;
     }
     const material = rw.materials[materialIndex];
+    // NOT on the `_vlo` LOD mesh: it only shows past the vehicle LOD swap, where the plate quad is a
+    // fraction of a pixel, and tagging it would buy a per-instance texture binding for something nobody
+    // can read. The builder already de-features LOD the same way — `materialClass` forces it MATTE.
+    // 5 of the 143 plated models author a plate face on their `_vlo` at all; they keep the stock look.
+    const plate = kind === 'lod' ? null : plateFace(material);
     const tyre = tyres.has(materialIndex);
-    const surface = materialSurface(material, textures, kind, tyre);
+    const surface = materialSurface(material, textures, kind, tyre, plate);
     const { color, klass, lamp, layer, nightLayer, paint, reflect } = surface;
     const indexOffset = scratch.indices.length;
     const center: [number, number, number] = [0, 0, 0];
@@ -400,6 +416,7 @@ function appendGeometry(
     scratch.submeshes.push({
       center: centroid,
       damageGroup,
+      ...(plate ? { plate } : {}),
       ...(tyre ? { tyre: true } : {}),
       indexCount: tris.length * 3,
       indexOffset,
@@ -639,10 +656,16 @@ function materialClass(
     kind: VehicleModelSubmesh['kind'];
     lamp: null | string;
     paint: number;
+    plate: 'back' | 'face' | null;
     reflective: boolean;
     translucent: boolean;
   },
 ): number {
+  // A plate face wins over every other signal: the class is what redirects its texture sample, and it
+  // shades matte anyway (the reflection switch tests `paint`/`chrome` by value).
+  if (flags.plate) {
+    return flags.plate === 'face' ? MaterialClass.plateFace : MaterialClass.plateBack;
+  }
   if (flags.kind === 'lod' || flags.lamp !== null || !flags.reflective) {
     return MaterialClass.matte;
   }
@@ -670,6 +693,7 @@ function materialSurface(
   textures: VehicleTextures,
   kind: VehicleModelSubmesh['kind'],
   tyre = false,
+  plate: 'back' | 'face' | null = null,
 ): {
   color: [number, number, number, number];
   klass: number;
@@ -696,7 +720,7 @@ function materialSurface(
 
   return {
     color,
-    klass: materialClass(material, { kind, lamp, paint, reflective: reflect[1] > 0, translucent }),
+    klass: materialClass(material, { kind, lamp, paint, plate, reflective: reflect[1] > 0, translucent }),
     lamp,
     layer,
     nightLayer,
@@ -713,6 +737,11 @@ function modulate(channel: number, prelit: null | Uint8Array, vertex: number, of
 
 function paintSlot(material: RWMaterial): number {
   return PAINT_MARKERS.get(`${material.color[0]},${material.color[1]},${material.color[2]}`) ?? PaintSlot.none;
+}
+
+/** Which plate face a material paints, or null for ordinary body geometry. See {@link PLATE_TEXTURES}. */
+function plateFace(material: RWMaterial): 'back' | 'face' | null {
+  return PLATE_TEXTURES.get(material.texture?.name.toLowerCase() ?? '') ?? null;
 }
 
 /**

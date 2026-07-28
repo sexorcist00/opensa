@@ -786,6 +786,9 @@ async function boot(
     placePlayer(position, moveBody);
     resetPlayerInterpolation();
   };
+  // Plates read the city at each car's OWN spawn point (plan 082/04). The boxes are built further down
+  // (they need info.zon), so vehicles take a thunk rather than forcing a load-order change here.
+  let cityBoxes: readonly CityBox[] = [];
   let vehicles: EngineVehicles | null = null;
   try {
     vehicles = await setupEngineVehicles({
@@ -794,6 +797,7 @@ async function boot(
       // mouse movement takes it straight back.
       aimCamera: (azimuth: number): void => steerYaw(rig, azimuth),
       animator: player,
+      cityBoxes: (): readonly CityBox[] => cityBoxes,
       config,
       engine,
       // The camera in NATIVE (Z-up) space — the lamp coronas fade by how squarely each lamp faces it.
@@ -848,7 +852,8 @@ async function boot(
     isDesertZone(zone.label) ? [{ city: 'DESERT' as const, max: zone.max, min: zone.min }] : [],
   );
   let city: City = 'COUNTRYSIDE';
-  const citySystem = new CityZoneSystem([...desertBoxes, ...loadCityBoxes(fs, 'data/map.zon')], viewOf, (next) => {
+  cityBoxes = [...desertBoxes, ...loadCityBoxes(fs, 'data/map.zon')];
+  const citySystem = new CityZoneSystem(cityBoxes, viewOf, (next) => {
     city = next;
     events.emit('city', { city: next });
     // SA authors every weather TYPE per region (CLOUDY_LA / CLOUDY_COUNTRYSIDE / …) and each column carries

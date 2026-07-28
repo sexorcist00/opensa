@@ -453,6 +453,13 @@ export interface NightConfig {
   windowGlow: number;
 }
 
+/** License-plate mask per city (plan 082/04) — the background is chosen by where the car SPAWNED. */
+export interface PlateMaskConfig {
+  la: string;
+  sf: string;
+  vegas: string;
+}
+
 /** Semantic groups of procobj.dat clutter models — each tuned independently (plan 042). */
 export type ProcObjCategory = 'bushes' | 'cacti' | 'flowers' | 'grass' | 'rocks' | 'trees' | 'underwater';
 
@@ -549,6 +556,12 @@ export interface VehicleConfig {
   hdDistance: number;
   /** Between `hdDistance` and this the low-detail `_vlo` is shown; beyond it the car is culled. */
   lodDistance: number;
+  /**
+   * License-plate text masks per city (plan 082): `L` → a letter, `D` → a digit, `*` → either, anything
+   * else passes through. Empty falls back to the game's own shape, `LLDD DLL`. Eight characters max — a
+   * plate has eight cells. Applies to NEW spawns; the fleet already on the street keeps its plates.
+   */
+  plates: PlateMaskConfig;
   /** Beyond this the car is unloaded from memory; it respawns when back within `lodDistance`. */
   unloadDistance: number;
 }

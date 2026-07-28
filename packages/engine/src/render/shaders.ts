@@ -1211,7 +1211,12 @@ struct RigidVsOut {
   @location(5) @interpolate(flat) nightLayer: u32,
   // slots.w LOW nibble: 0 = body, 1 = head lamp, 2 = tail lamp; lamps = [headlights, brakes, intensity].
   @location(6) @interpolate(flat) lampTag: u32,
-  @location(7) @interpolate(flat) lamps: vec3f,
+  // xyz = lamp state. w = the LICENSE-PLATE layer this submesh samples (plan 082/03) — the text-atlas slot
+  // on a plateFace, the city background index on a plateBack, 0 on everything else. It rides here
+  // rather than in a location of its own because the struct already stands at 15 of the 16 inter-stage
+  // locations, and this one was per-instance state with a spare component — the same reason local.w
+  // carries sky occlusion.
+  @location(7) @interpolate(flat) lamps: vec4f,
   // [env coefficient, SA reflection intensity, SA specular level] — all 0..1, all authored per material.
   // There is no env LAYER beside them: the DFF names an env texture, but this pipe reflects the live probe
   // (rigidEnv), so the name only ever acted as a flag. Location 8 is free again.
@@ -1251,6 +1256,19 @@ struct RigidVsOut {
 // analytic sky reflection stays the fallback for the lab and the first frames after a teleport.
 @group(1) @binding(5) var probeTexture: texture_cube<f32>;
 @group(1) @binding(6) var probeSampler: sampler;
+// Per-instance license plate (plan 082/03), indexed by instance_index exactly like the matrices: x = the
+// layer this car's generated text raster sits at in plateTexture, y = which of the three city
+// backgrounds it wears. A car that was never given a plate keeps [0, 0] and its plate submeshes sample
+// slot 0 of each array — the stock placeholder look, which is also what an unassigned car shows today.
+@group(1) @binding(7) var<storage, read> rigidPlate: array<vec4f>;
+// The generated plate TEXT rasters (64×16 each), one layer per distinct plate in the world.
+@group(1) @binding(8) var plateTexture: texture_2d_array<f32>;
+// The three city backgrounds (plateback1..3 = SF / LV / LS), at whatever size the game's TXD ships.
+@group(1) @binding(9) var plateBackTexture: texture_2d_array<f32>;
+
+// MaterialClass — the high nibble of slots.w. Kept in sync with renderware/vehicle/types.ts.
+const MAT_PLATE_BACK: u32 = 4u;
+const MAT_PLATE_FACE: u32 = 5u;
 
 // skyVisibility / AMBIENT_GROUND / DYNAMIC_INDIRECT are shared dynamic-model lighting helpers — they live in
 // <frame> now (next to localLightStatic) so the ped path reuses the exact same indirect term (plan 087 ped).
@@ -1280,7 +1298,17 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   out.nightLayer = in.slots.y;
   out.lampTag = in.slots.w & 0xFu;
   out.matClass = in.slots.w >> 4u;
-  out.lamps = rigidLamp[in.instance].xyz;
+  // The plate row is read HERE, where the instance index still exists, and only the one layer this submesh
+  // needs is forwarded: its material class already says which of the two arrays that layer belongs to.
+  let matClass = in.slots.w >> 4u;
+  let plate = rigidPlate[in.instance];
+  var plateLayer = 0.0;
+  if (matClass == MAT_PLATE_FACE) {
+    plateLayer = plate.x;
+  } else if (matClass == MAT_PLATE_BACK) {
+    plateLayer = plate.y;
+  }
+  out.lamps = vec4f(rigidLamp[in.instance].xyz, plateLayer);
   out.reflect = vec3f(in.reflect.yzw) / 255.0;
   // The night set's ALPHA is the self-occlusion the builder wrote (vehicle/sky-occlusion.ts). A fixture
   // from before it simply carries the material alpha there, which is 1 on everything opaque - no change.
@@ -1309,6 +1337,14 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
 // Lamp materials carry a lamps-on TWIN layer (SA's vehiclelights → vehiclelightson swap): pick it when THIS
 // car's headlights are on — a per-vehicle state, not the global day/night blend.
 fn rigidTexel(in: RigidVsOut) -> vec4f {
+  // A license plate samples an ENGINE-owned array at a PER-INSTANCE layer instead of the model's own — the
+  // whole point of the feature: one uploaded model, a different plate on every car wearing it.
+  if (in.matClass == MAT_PLATE_FACE) {
+    return textureSample(plateTexture, rigidSampler, in.uv, u32(in.lamps.w));
+  }
+  if (in.matClass == MAT_PLATE_BACK) {
+    return textureSample(plateBackTexture, rigidSampler, in.uv, u32(in.lamps.w));
+  }
   let lampsOn = in.lamps.x > 0.5 && in.nightLayer != 0u;
   let layer = select(in.layer, in.nightLayer, lampsOn);
   return textureSample(rigidTexture, rigidSampler, in.uv, layer);

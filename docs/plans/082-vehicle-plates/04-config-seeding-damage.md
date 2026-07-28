@@ -48,12 +48,15 @@ cityBoxes) → { text, city }` — `cityAt(spawn position)` (NOT the player's ci
 
 ## Subtasks
 
-- [ ] Config + fixtures + setter + docs.
-- [ ] `vehicle-plates.ts` + tests (city boxes → mask; countryside stable pick; override wins;
-      hash determinism).
-- [ ] Host wiring + LOD-respawn determinism test + debug-spawner input.
+- [x] Config `vehicle.plates = { la, sf, vegas }` + defaults + the 4 fixtures + a feature doc. No live
+      setter was needed: the mask is read from `config` at each spawn, so a config change already reaches
+      every car spawned after it — which is exactly the "new spawns only" rule this plan asked for.
+- [x] `vehicle-plates.ts` + tests (9): city boxes → mask, countryside stable pick, override wins, hash
+      determinism, model and position both in the seed.
+- [x] Host wiring — ONE call site in `spawnVehicle`, and the release path frees the layer.
+- [ ] Debug-spawner plate input (the placement field exists; the F2 control is not wired).
 - [ ] Damage/detach integration tests + refcount-through-detach check.
-- [ ] Field session + measurements + close-out sweep.
+- [ ] Field session + measurements + close-out sweep. **Blocked on the pak rebuild** (user's).
 
 ## Acceptance
 
@@ -62,4 +65,32 @@ cityBoxes) → { text, city }` — `cityAt(spawn position)` (NOT the player's ci
 
 ## Ledger
 
-_(distribution screenshots note, slots/overhead numbers, verdict)_
+**Wired 2026-07-28.** Suite **3 016 green** (+9), `tsc` and `eslint` clean.
+
+- **One wiring point, as designed.** `spawnVehicle` in `engine-vehicles.ts` resolves → claims a layer →
+  `setPlate`; the model-release path frees the layer. Parked cars, map car generators, popcycle road cars,
+  the bench fleet and the debug spawner all flow through it, so there was no second site to patch.
+- **The seed quantises the position to centimetres.** A car generator's stored coordinate round-trips
+  exactly, but a ground-snapped spawn lands a float's breadth away — an unquantised hash would hand the
+  same parked car a new plate on every LOD respawn. This is the determinism the plan asked for, taken at
+  the seed rather than by caching the result.
+- **The city is read at the CAR, not the player.** Pinned by a test: two placements of the same model in
+  different city boxes resolve to different backgrounds.
+- **Plate sources hang off the adapter** (`GtaSaWorldAdapter.plateSources()`), parsed once from the same
+  `generic/vehicle.txd` it already merges into every car's texture chain — no second read, and the layer
+  rule (only `adapters/` may touch renderware) is kept.
+- **Layer 0 is filled with a blank plate at boot**, closing what plan 03 left owed. A dictionary that
+  cannot be read leaves plate support off entirely and every car keeps the stock placeholder; plates are
+  cosmetic and must never be a reason a spawn fails.
+- Config vocabulary follows the game's own region tokens (`la` / `sf` / `vegas`), not the plan's draft
+  `ls`/`lv` — `City` in `zones/city.ts` and the reversed `eCarPlateType` both name LA, and a second
+  vocabulary would only invite a mismatch.
+
+### Still owed
+
+- **The pak rebuild** (user's). Nothing here is visible until the `.osm` files carry the plate tag.
+- The field session: LS→SF→LV distribution, the countryside mix, ram a plated car for the deform/detach
+  behaviour. Slots used on a full-map drive and spawn overhead are measured then.
+- The F2 debug-spawner plate input, and the damage/detach integration tests. The damage BEHAVIOUR is
+  structural (plan 02 measured 87 of 143 models carrying a plate on their `_dam` twin), but "structural"
+  is a prediction until something drives into a wall.

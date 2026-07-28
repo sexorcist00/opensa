@@ -16,6 +16,7 @@ implemented ones, and assembling the release changelog.
 | Time, night content, light sources            | [night-and-time.md](night-and-time.md)             |
 | Weather + environment (sky/water/fog)         | [weather-environment.md](weather-environment.md)   |
 | Vehicles                                      | [vehicles.md](vehicles.md)                         |
+| Vehicle license plates                        | [vehicle-plates.md](vehicle-plates.md)             |
 | Character                                     | [character.md](character.md)                       |
 | Camera (follow rig, photo/map free-fly)       | [camera.md](camera.md)                             |
 | Animated map objects (UV + IFP)               | [animated-map-objects.md](animated-map-objects.md) |

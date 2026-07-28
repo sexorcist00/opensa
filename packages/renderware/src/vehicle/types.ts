@@ -30,6 +30,16 @@ export const MaterialClass = {
   glass: 3,
   matte: 0,
   paint: 1,
+  /**
+   * The two license-plate faces (plan 082/03). They are a material CLASS rather than a flag of their own
+   * because this nibble is the only per-vertex channel with room left: the rigid vertex output already
+   * stands at 15 of WebGPU's 16 inter-stage locations, so a plate could not have one. Both shade as MATTE
+   * — the reflection switch tests `paint`/`chrome` by value, so anything else falls through with amount 0
+   * — and both redirect the texture sample: `plateFace` to the generated text atlas, `plateBack` to the
+   * three city backgrounds, each at the layer the instance's plate row names.
+   */
+  plateBack: 4,
+  plateFace: 5,
 } as const;
 
 export const PaintSlot = {
@@ -167,6 +177,14 @@ export interface VehicleModelSubmesh {
   /** Head/tail lamp tag from the SA marker colours — lamp materials render WHITE and carry this instead. */
   lamp: 'head' | 'tail' | null;
   part: number;
+  /**
+   * Which face of a license plate this submesh is, from the material's placeholder texture (plan 082/02):
+   * `face` = the `carplate` text strip, `back` = the `carpback` city-background quad it is inset into.
+   * The two are separate quads in the DFF, and the reversed `CCustomCarPlateMgr` keys on exactly these
+   * names. Absent = not a plate, which is also what every `.osm` converted before 082 says — those cars
+   * keep the stock placeholder look rather than breaking.
+   */
+  plate?: 'back' | 'face';
   /** Bounding radius about `center` (074/16 sort fix) — the translucent sort subtracts it so a raked
    *  windscreen counts by its NEAREST extent, not its centre (the wheel drew over the glass overhang).
    *  Optional: old fixtures sort by the centre alone. */

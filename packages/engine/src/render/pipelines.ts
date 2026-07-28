@@ -256,6 +256,15 @@ export function compileAll(
       // view here is bundle-safe even though its CONTENTS refresh one face per frame.
       { binding: 5, texture: { viewDimension: 'cube' }, visibility: GPUShaderStage.FRAGMENT },
       { binding: 6, sampler: {}, visibility: GPUShaderStage.FRAGMENT },
+      // License plates (plan 082/03). One vec4 per matrix row naming this instance's plate: x = its layer
+      // in the generated TEXT atlas, y = which of the three city backgrounds it wears. Read in the VERTEX
+      // stage, which forwards the one layer this submesh needs — the fragment output struct has no free
+      // inter-stage location left to carry the instance index itself.
+      { binding: 7, buffer: { type: 'read-only-storage' }, visibility: GPUShaderStage.VERTEX },
+      // The two plate texture arrays are ENGINE-owned and shared by every model: generated 64×16 text
+      // rasters, and the three city backgrounds at whatever size the game's TXD ships them.
+      { binding: 8, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
+      { binding: 9, texture: { viewDimension: '2d-array' }, visibility: GPUShaderStage.FRAGMENT },
     ],
     label: 'rigid',
   });
