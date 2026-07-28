@@ -106,6 +106,23 @@ describe('readVehicleOsm', () => {
       expect(read.model.submeshes.length).toBe(source.fixture.submeshes.length);
     });
 
+    it('carries the pop-up headlight pod through the format — the DESC is where it survives', () => {
+      const zr350 = fsFrom(
+        new Map<string, ArrayBuffer>([
+          ['models/generic/vehicle.txd', fileOf('models/generic/vehicle.txd')],
+          ['zr350.dff', fileOf('vehicles/zr350.dff')],
+          ['zr350.txd', fileOf('vehicles/zr350.txd')],
+        ]),
+      );
+      const source = buildVehicleOsm(zr350, 'zr350', { wheelScale: [0.7, 0.7] });
+
+      const read = readVehicleOsm('zr350', source.bytes);
+
+      expect(source.fixture.popUpLights).toBeDefined();
+      expect(read.rig.popUpLights).toEqual(source.fixture.popUpLights);
+      expect(read.rig.parts[read.rig.popUpLights!.part].name).toBe('misc_a');
+    });
+
     it('carries the license-plate tags through the format (082/02)', () => {
       const read = readVehicleOsm('admiral', built().bytes);
       const plates = read.model.submeshes.filter((submesh) => submesh.plate);

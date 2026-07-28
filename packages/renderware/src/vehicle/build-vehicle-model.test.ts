@@ -881,3 +881,23 @@ describe('buildVehicleModel (wheel side, real models)', () => {
     });
   });
 });
+
+const ZR350 = 'tests/original/vehicles/zr350.dff';
+const ZR350_TXD = 'tests/original/vehicles/zr350.txd';
+
+describe.skipIf(!existsSync(ZR350) || !existsSync(GENERIC_TXD))('buildVehicleModel (real zr350.dff)', () => {
+  const built = buildVehicleModel(
+    parseDff(toArrayBuffer(readFileSync(ZR350))),
+    new VehicleTextures([toArrayBuffer(readFileSync(ZR350_TXD)), toArrayBuffer(readFileSync(GENERIC_TXD))]),
+    { wheelScale: [0.7, 0.7] },
+  );
+
+  describe('positive cases', () => {
+    it('finds the ONE stock pop-up pod and reads its parked pitch as the open angle', () => {
+      // The zr350 is the only car in the stock fleet whose `misc_*` holds head-lamp faces; the pod is
+      // authored looking 40° down into the nose, which is exactly how far it has to swing.
+      expect(built.parts[built.popUpLights!.part].name).toBe('misc_a');
+      expect((built.popUpLights!.angle * 180) / Math.PI).toBeCloseTo(40.4, 1);
+    });
+  });
+});

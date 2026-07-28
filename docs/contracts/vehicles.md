@@ -12,6 +12,9 @@ Two rules run through all of it:
    by what any of them are called. A name contract is what is left when the asset cannot say it itself.
 2. **Names are matched lowercased and trimmed.** Case and stray whitespace never decide anything.
 
+To see what a given car actually gives the builder — frames, parts, hinges, the pop-up pod, and the two
+traps below flagged by name — run `npx tsx scripts/debug/dump-vehicle-rig.ts <model|path/to.dff>`.
+
 ---
 
 ## 1. A vehicle mod folder (read by `vehicle-installer` at build time)

@@ -145,6 +145,10 @@ const MANIFEST: readonly Fixture[] = [
   // infernus: the vehicle-optimizer scale test fixture — a hierarchical rig (dummies) + embedded COL3 collision.
   extract('infernus.dff', 'dff/vehicle/infernus.dff'),
   extract('admiral.dff', 'vehicles/admiral.dff'),
+  // zr350: the ONE stock car with a pop-up headlight pod (`misc_a` holding head-lamp faces) — the
+  // real-asset guard for the retractable-headlight derivation.
+  extract('zr350.dff', 'vehicles/zr350.dff'),
+  extract('zr350.txd', 'vehicles/zr350.txd'),
   // A SECOND car, so a modloader test can prove the mod's GEOMETRY won rather than just its texture kind.
   extract('cheetah.dff', 'vehicles/cheetah.dff'),
   extract('cheetah.txd', 'vehicles/cheetah.txd'),
