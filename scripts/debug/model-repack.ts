@@ -58,8 +58,14 @@ interface Args {
   crease: number | undefined;
   game: string;
   margin: number;
+  /** With --no-mods: models that STILL resolve from mods (file-level bisection). */
+  modOnly: Set<string>;
+  /** Resolve DFF/TXD from VANILLA only, ignoring mods (bisection lever). */
+  noMods: boolean;
   out: string;
   prelitFloor: number | undefined;
+  /** Bypass the optimizer chain entirely (bisection lever): weld the RESOLVED source bytes. */
+  raw: boolean;
   stripNormals: boolean;
   targets: string[];
 }
@@ -73,7 +79,7 @@ function assembleLab(args: Args, builtDir: string, manifest: OspakManifest, pak:
   writeFileSync(join(pakDir, 'world.ospak'), pak);
   // Water comes from the main pak verbatim — the lab weld skips the bake.
   const mainManifest = JSON.parse(readFileSync(join(builtDir, 'pak', 'manifest.json'), 'utf8')) as OspakManifest;
-  if (mainManifest.water) {
+  if (mainManifest.water && process.env.LAB_NO_WATER !== '1') {
     manifest.water = mainManifest.water;
     symlinkSync(resolve(builtDir, 'pak', mainManifest.water.file), join(pakDir, mainManifest.water.file));
   }
@@ -105,7 +111,10 @@ function buildOverlay(
     const options = isTarget
       ? { crease: args.crease, prelitFloor: args.prelitFloor, stripNormals: args.stripNormals }
       : {};
-    writeFileSync(join(overlayDir, `${model}.dff`), runGeometryChain(model, source.bytes, options));
+    writeFileSync(
+      join(overlayDir, `${model}.dff`),
+      args.raw ? source.bytes : runGeometryChain(model, source.bytes, options),
+    );
     if (isTarget) console.log(`· target ${model}: ${describeTarget(args, source.from)}`);
   }
   if (missing.length > 0) {
@@ -220,7 +229,16 @@ async function main(): Promise<void> {
   console.log(`· rect holds ${rectModels.size} distinct models`);
 
   console.log(`· indexing ${modsDir} …`);
-  const mods = indexModAssets(modsDir);
+  const allMods = indexModAssets(modsDir);
+  const mods =
+    args.noMods && args.modOnly.size === 0
+      ? { dff: new Map<string, string>(), txd: new Map<string, { kind: 'file' | 'png'; path: string }[]>() }
+      : args.noMods
+        ? {
+            dff: new Map([...allMods.dff].filter(([k]) => args.modOnly.has(k))),
+            txd: allMods.txd, // txds stay modded — the dff is the bisection unit here
+          }
+        : allMods;
 
   // Synthetic convert input: built data/ + built IMGs (streams/collision) + regenerated model overlay.
   const labRoot = join('build', args.game, '.opensa-lab');
@@ -282,6 +300,9 @@ function parseArgs(): Args {
   let out = '';
   let ao = true;
   let stripNormals = false;
+  let raw = false;
+  let noMods = false;
+  const modOnly = new Set<string>();
   let prelitFloor: number | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -291,6 +312,9 @@ function parseArgs(): Args {
     else if (arg === '--out') out = argv[++i];
     else if (arg === '--no-ao') ao = false;
     else if (arg === '--strip-normals') stripNormals = true;
+    else if (arg === '--raw') raw = true;
+    else if (arg === '--no-mods') noMods = true;
+    else if (arg === '--mod-only') for (const m of argv[++i].split(',')) modOnly.add(m.toLowerCase());
     else if (arg === '--prelit-floor') prelitFloor = Number(argv[++i]);
     else if (arg.startsWith('--')) throw new Error(`unknown flag ${arg}`);
     else targets.push(arg.toLowerCase());
@@ -298,7 +322,7 @@ function parseArgs(): Args {
   if (targets.length === 0) throw new Error('usage: model-repack.ts <model...> [--strip-normals] [--crease N]');
   if (!out) out = join('build', game, 'opensa-lab');
 
-  return { ao, crease, game, margin, out, prelitFloor, stripNormals, targets };
+  return { ao, crease, game, margin, modOnly, noMods, out, prelitFloor, raw, stripNormals, targets };
 }
 
 /** Run the map-optimizer geometry chain on one DFF; returns re-encoded bytes (or source on failure). */

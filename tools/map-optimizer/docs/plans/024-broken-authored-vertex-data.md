@@ -294,6 +294,23 @@ Family B all along, see Corrections).
 `build:game:original:opensa`, re-teleport the Phase 2 list, record before/after per spot. Numbers in
 this plan; anything perf-visible goes to `docs/benchmarks/` per its schema.
 
+**RAN 2026-07-29 (the rebuild also carried 12 new vehicle mods — noted as the second variable; they
+cannot touch world cells).** The gate's first full-map run:
+
+| verdict | vanilla probe (020) | this build (024 gate, modded tree) |
+|---|---|---|
+| preserved | 83 | 98 |
+| point-repaired | 15 meshes / 369 verts | 48 meshes / 1 194 verts |
+| recomputed | 5 | **56** |
+| created | — | 11 311 |
+
+Field verdict (user): the 024 spots "все в порядке". Two NEW field reports from the tour turned out
+to be an UNRELATED pre-existing class — flat light-blue ground patches at Santa Maria / SF-west —
+investigated the same day to a stalemate (pak data exonerated piece by piece; a mod-resolved asset
+triggers it; the 024 gate provably didn't touch those cells — all their models ship no normals):
+**live investigation + resume levers in `docs/open-issues/beach-blue-strip.md`**. `model-repack.ts`
+gained the bisection levers built for it (`--raw`, `--no-mods`, `--mod-only`, `LAB_NO_WATER=1`).
+
 ## Corrections to earlier records (do in the same change as Phase 3b)
 
 - Plan 022's parked note "sphinx facets → dig pak-side" is superseded: the facets are Family B
