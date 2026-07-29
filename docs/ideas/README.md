@@ -30,6 +30,12 @@ go/no-go). Something already understood and scheduled does NOT live here — it 
 
 ## Camera
 
+- [aaa-camera-polish/](./aaa-camera-polish/readme.md) — **AAA camera polish v2**: the shelved successor of
+  the deleted plan 080/10 (corner peek built twice 2026-07-28, field-rejected twice, rolled back). Carries
+  the diagnosis — the 09 yaw authority mutes the vehicle chase exactly mid-corner, so corner-gated writers
+  never reach the frame — and reorders the work: fix the camera first (per-mode authority, one composition
+  channel, the hard-corner exam as a test), then the five effects (corner peek, speed pose, fall stretch,
+  directional impact kick, wind shake). Code archive: branch `080-10-corner-peek`.
 - [first-person-camera/](./first-person-camera/readme.md) — **first person**: the head IS findable (HAnim
   bone id 5 / `Head`, dumped from a stock ped) and its live world matrix is already computed every rendered
   frame by `IfpSampler`; hiding it is a zero-scale palette slot, which takes hats and hair with it. Written

@@ -226,12 +226,13 @@ values are live on the debug **Camera** screen (`cameraRig` capability, on for t
   `CameraConfig`-shaped object, so a preset is a different object handed to the same `stepCamera`, never a
   second code path. The landing dip returns there.
 - The AAA-polish step (corner peek, speed pose, fall stretch, directional impact kick, wind shake) was
-  DROPPED 2026-07-28: the corner peek was built twice — through the auto-center heading (invisible: the 09
+  SHELVED 2026-07-28: the corner peek was built twice — through the auto-center heading (invisible: the 09
   directional authority mutes that chase exactly mid-corner, the only place a steer-driven writer is ever
   non-zero) and as a look-point shift — and the field rejected both ("sticks and jumps in big corners,
-  near-invisible in small ones"). Rolled back off `main`; the archive of both attempts is branch
-  `080-10-corner-peek`. No postmortem by the user's call — the direction may return with a better design,
-  and the remaining four candidates were never built.
+  near-invisible in small ones"). Rolled back off `main`; the reworked direction lives in
+  [`docs/ideas/aaa-camera-polish/`](../ideas/aaa-camera-polish/readme.md) — camera rework FIRST (per-mode
+  yaw authority, one composition channel, the hard-corner exam as a test), effects after. The archive of
+  both attempts is branch `080-10-corner-peek`; the remaining four candidates were never built.
 - No gamepad look — there is no gamepad input path at all.
 - `followLerp` / `followPolar` / `followMinPolar` / `followMaxPolar` are 036-era fields the own-engine rig
   does not read; they stay in `CameraConfig` until the chain closes and replaces them.
