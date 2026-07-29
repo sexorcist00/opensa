@@ -13,36 +13,18 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  * [--crease <file.json>] [--no-<pass>…]`. Paths are relative to the current working directory (absolute
  * paths pass through).
  */
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, statSync } from 'node:fs';
 
 import { parseOnlyList } from './adapters/gta-sa/prelit-context';
 import { printReport, writeReport } from './core';
+import { loadCreaseOverrides } from './crease-overrides';
 import { type OptimizerPasses, runOptimizer } from './run';
 
-/** Load the `--crease` JSON (or the curated default): lowercased model name → crease degrees (plan 023A). */
-function loadCreaseOverrides(): ReadonlyMap<string, number> | undefined {
+/** The explicit `--crease` JSON; absent → `runOptimizer` loads the curated default itself. */
+function cliCreaseOverrides(): ReadonlyMap<string, number> | undefined {
   const creaseArg = argValue('--crease');
-  const path = creaseArg
-    ? fromCwd(creaseArg)
-    : join(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'crease-overrides.json');
-  if (!existsSync(path)) {
-    return undefined;
-  }
-  const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
-  const overrides = new Map<string, number>();
-  for (const [model, degrees] of Object.entries(raw)) {
-    if (model.startsWith('_')) {
-      continue; // comment keys
-    }
-    if (typeof degrees !== 'number' || !Number.isFinite(degrees) || degrees <= 0 || degrees >= 180) {
-      throw new Error(`crease override '${model}' must be an angle in (0, 180) degrees, got ${String(degrees)}`);
-    }
-    overrides.set(model.toLowerCase(), degrees);
-  }
 
-  return overrides.size > 0 ? overrides : undefined;
+  return creaseArg ? loadCreaseOverrides(fromCwd(creaseArg)) : undefined;
 }
 
 async function main(): Promise<void> {
@@ -68,7 +50,7 @@ async function main(): Promise<void> {
   const forceArg = argValue('--prelit-force');
   const only = onlyArg ? parseOnlyList(JSON.parse(readFileSync(fromCwd(onlyArg), 'utf8'))) : undefined;
   const force = forceArg ? parseOnlyList(JSON.parse(readFileSync(fromCwd(forceArg), 'utf8'))) : undefined;
-  const creaseOverrides = loadCreaseOverrides();
+  const creaseOverrides = cliCreaseOverrides();
   const report = await runOptimizer({
     gameDir,
     outDir: fromCwd(outArg),

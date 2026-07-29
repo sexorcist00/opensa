@@ -261,12 +261,33 @@ Run the Phase 1 Family A metric map-wide on (a) hardened-gate output, (b) recomp
 Compare bad face counts + eyeball the disagreement set through the Phase 0 loop. Keep the winner as
 default; record both numbers here.
 
+**MEASURED 2026-07-29 — recompute-all REJECTED by its own numbers.** All 164 placed models carrying
+authored normals, both paths through the full geometry chain, dark-face metric on the OUTPUT:
+
+| path | dark faces | dark area | verts |
+|---|---|---|---|
+| hardened gate (024 default) | **673** | **2 330 u²** | 205 886 |
+| recompute-all | 823 | 3 069 u² | 210 800 |
+
+The blanket rebuild is WORSE map-wide (the smooth-group rebuild produces some legitimately
+steep-slope dark faces the metric counts, and it discards valid authored intent) plus ~5 k split
+verts of bloat. The gate loses on only 12 models, all micro-area (worst 80 u² total vs roads17's
+572 u² pre-fix; `sw_trailer*` 51–68 faces at 5–7 u² are slivers). Preserve-with-teeth stays the
+default; no flag flip.
+
 ### Phase 5 — close the crease-override wiring gap (found during diagnosis)
 
 `perfect-map-builder` never passes `creaseOverrides` to `runOptimizer` (`pipeline.ts:131-146`), and
 `data/crease-overrides.json` ships empty (the `sphinx01_lvs: 80` entry plan 023 claims was never
 committed) — per-model crease is unreachable in pmb builds. Wire the default-JSON load into the pmb
 call site. Populate entries only when the field asks.
+
+**CLOSED 2026-07-29, one level deeper than planned:** the default load moved INTO `runOptimizer`
+(`src/crease-overrides.ts`, `options.creaseOverrides ?? loadCreaseOverrides()`) so EVERY entry point
+gets the curated JSON — pmb needed no change at all, and the CLI now only handles its explicit
+`--crease` path. Loader unit-tested (range validation, comment keys, missing file). The JSON itself
+stays comment-only until the field asks for an entry (sphinx remains parked — its facets were
+Family B all along, see Corrections).
 
 ### Phase 6 — full rebuild + field AFTER round
 

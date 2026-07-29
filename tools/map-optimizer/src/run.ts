@@ -12,6 +12,7 @@ import type { RunReport } from './core';
 
 import { createGtaSaAdapter } from './adapters/gta-sa';
 import { runPipeline } from './core';
+import { loadCreaseOverrides } from './crease-overrides';
 import { config } from './optimizer.config';
 import { createApplyPrelitLevel } from './plugins/apply-prelit-level';
 import { createBakeVertexAo } from './plugins/bake-vertex-ao';
@@ -68,7 +69,9 @@ export async function runOptimizer(options: RunOptimizerOptions): Promise<RunRep
   // Recreate smooth-normals with run-owned counters (plan 020) and, for OpenSA builds, normals creation
   // enabled (SSAO wants them, plan 015).
   const normalsStats = emptySmoothNormalsStats();
-  const creaseOverrides = options.creaseOverrides;
+  // Default to the curated JSON (plan 024 phase 5): pmb never passed overrides, so per-model
+  // crease curation was unreachable in real builds — the default belongs HERE, not in the CLI.
+  const creaseOverrides = options.creaseOverrides ?? loadCreaseOverrides();
   plugins[plugins.findIndex((plugin) => plugin.name === 'smooth-normals')] = createSmoothNormals(
     {
       addWhereAbsent: passes.addNormals,
