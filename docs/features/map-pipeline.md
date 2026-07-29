@@ -19,10 +19,12 @@
   is an alpha mask, so a coplanar decal cannot lose its own depth test (plan 092).
 - **A material's ALPHA CLASS decides its pass, and it is read from the texels** (`alpha.ts`): opaque,
   `cutout` (alpha-tested, writes depth, A2C renders the edge) or `softBlend` (composites, no depth write).
-  `classifyAlpha` reads the histogram against 0/255; `isAlphaMask` reads it against the ~128 alpha TEST
-  vanilla applies — both sides populated, at most a tenth of the sheet ON the reference — and upgrades a
-  mask out of the blend pass whoever draws it. Vegetation additionally requests the upgrade for canopies
-  authored semi-transparent throughout, and those (only those) get their alpha sharpened.
+  `classifyAlpha` reads the histogram against 0/255; `isAlphaMask` reads it against our A2C reference 128 —
+  both sides populated, at most a tenth of the sheet ON it — and upgrades a mask out of the blend pass
+  whoever draws it. Vegetation additionally requests the upgrade for canopies authored semi-transparent
+  throughout, and those (only those) get their alpha sharpened. Vanilla has no classes at all: one pass,
+  reference 140/100/0 per entity per frame — the split and its two fitted floors are a documented debt
+  ([`hacks/alpha-mask-thresholds.md`](../hacks/alpha-mask-thresholds.md)).
 - IPL `inst` (11 columns), interior **area codes** (`interior & 0xFF`, world ids {0, 13}).
 - Binary `bnry` IPL streams (full-detail placement) + **standalone script-gated groups**
   (`resolveMap({ extraIpl })`, default `['truthsfarm']`; barriers/carter/crack deliberately

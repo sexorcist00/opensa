@@ -295,7 +295,10 @@ verdicts.**
 | **True-blend control** — glass must still composite | **clean**: "стекло на месте, все через него хорошо видно" |
 
 Shipped classes, read out of the pak's 43 RGBA8 arrays rather than predicted: **1 422 cutout / 661
-soft-blend / 380 opaque**.
+soft-blend / 380 opaque**. These count a DIFFERENT population from phase 1's 599 → 2 201 and the two are not
+subtractable: the census counts every texture of every TXD in the archive (the same sheet in ten
+dictionaries is ten rows), while the pak holds deduped LAYERS — `report.json` records 260 036 dedup hits
+against 2 444 processed. What carries over is the ratio: 68 % of the shipped alpha layers now write depth.
 
 Perf: the 8-scene sweep is [`2026-07-29-headless-092-alpha-cutout-sweep.json`](../../benchmarks/opensa-engine/2026-07-29-headless-092-alpha-cutout-sweep.json)
 — every scene at the 120 Hz cap (8.33–8.36 avg, p95 9.2–9.3, `lateCreates` 0), unchanged. **The
@@ -343,10 +346,11 @@ recorded row; everything into `docs/benchmarks/` before it is analysed.
 **The standing rule paid off last, not first: the game's real formula was recovered while writing this
 phase**, and it changed what the docs say.
 
-From the reversed source (`Renderer.cpp`, `VisibilityPlugins.cpp:558-578`): SA has **no cutout/blend
-classes at all**. It runs ONE pass with blending always enabled and an alpha-test REFERENCE that moves per
-entity per frame — **140** outdoors, **100** for an ordinary entity, and **0** for a `bDontWriteZBuffer`
-model, an interior, or an entity that is distance-fading.
+From the reversed source: SA has **no cutout/blend classes at all**. It runs ONE pass with blending always
+enabled and an alpha-test REFERENCE that moves per entity per frame — `CRenderer::RenderEverythingBarRoads`
+opens the pass at **140**, and `CVisibilityPlugins::RenderEntity` (`VisibilityPlugins.cpp:555-578`) then sets
+**100** per ordinary entity, or **0** for a `bDontWriteZBuffer` model, an interior, or an entity that is
+distance-fading.
 
 Three things follow, all now written down:
 

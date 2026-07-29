@@ -9,9 +9,9 @@ passes and must choose one per TEXTURE, offline, forever.
 From the reversed source (`docs/links.md` → gta-reversed), which is the reason this file can be honest about
 what it approximates:
 
-- `CRenderer::RenderEverythingBarRoads` (`Renderer.cpp`) sets the world's alpha-test reference to **140**
-  outdoors (`if (!CGame::currArea)`).
-- `CVisibilityPlugins` (`VisibilityPlugins.cpp:558-578`), per entity, then overrides it:
+- `CRenderer::RenderEverythingBarRoads` (`Renderer.cpp`) opens the world pass with the alpha-test reference
+  at **140** (`if (!CGame::currArea)`).
+- `CVisibilityPlugins::RenderEntity` (`VisibilityPlugins.cpp:555-578`) then sets it PER ENTITY:
   - the model has `bDontWriteZBuffer` (the `0x40` IDE flag) → **z-write OFF and reference 0**,
   - the entity is distance-FADING → **reference 0**,
   - inside an interior area → **reference 0**,

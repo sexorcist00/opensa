@@ -46,9 +46,10 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
 - **A texture's PASS is decided once, offline, from its texels — and the decision cannot follow the frame.**
   The pack classifies every texture opaque / cutout / soft-blend (`alpha.ts`); cutout draws with A2C and
   WRITES depth, soft-blend composites and does not. SA has no such classes: it runs one pass with blending
-  always on and an alpha-test reference that moves per entity per frame — **140** outdoors, **100** for an
-  ordinary entity, **0** for a no-z-write model, an interior, or an entity that is distance-FADING
-  (`Renderer.cpp` / `VisibilityPlugins.cpp`, recovered 2026-07-29). Consequences we live with: a cutout does
+  always on and an alpha-test reference that moves per entity per frame: the world pass opens at **140**
+  (`CRenderer::RenderEverythingBarRoads`) and `CVisibilityPlugins::RenderEntity` then sets **100** per
+  ordinary entity, or **0** for a no-z-write model, an interior, or an entity that is distance-FADING
+  (recovered from the reversed source 2026-07-29). Consequences we live with: a cutout does
   not soften as it fades out, and one reference (128) serves every masked texture. The `0x40` case matches
   vanilla exactly — such defs stay in the compositing class. Thresholds + their residual:
   [`hacks/alpha-mask-thresholds.md`](../hacks/alpha-mask-thresholds.md).
