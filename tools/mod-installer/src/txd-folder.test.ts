@@ -1,4 +1,5 @@
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
+import { readRw, RW_STRUCT, RW_TEXTURE_DICTIONARY } from '@opensa/rw-codec/chunk';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { pngToTextureNative } from './png-texture';
 import { buildTxd, encodePng, solidRgba } from './test-utils';
-import { mergeTxdFolder } from './txd-folder';
+import { emptyTxd, mergeTxdBytes, mergeTxdFolder } from './txd-folder';
 
 const VERSION = 0x1803ffff;
 const png = (size: number, color: [number, number, number, number]): Uint8Array =>
@@ -66,6 +67,64 @@ describe('mergeTxdFolder', () => {
       expect(byName.get('texa')?.width).toBe(8); // untouched
       expect(byName.get('texb')?.width).toBe(16); // replaced (was 8)
       expect(byName.get('texc')?.format).toBe('dxt5'); // added, alpha
+      // The dictionary's own numTextures must follow. Our parser walks the CHILDREN, so a stale count is
+      // invisible to every tool in this repo — and the real game reads exactly this u16.
+      expect(declaredTextureCount(readFileSync(txdPath))).toBe(3);
+    });
+
+    it('matches an existing texture case-insensitively, and the PNG spelling becomes the name', () => {
+      // The contract rule (`docs/contracts/mods.md`): a PNG replaces a same-named texture whatever the case.
+      // A mod author writes `ReMap.png`; the dictionary calls it `remap`. Getting the match wrong ADDS a
+      // second texture instead of replacing one, and the model keeps sampling the old pixels. The stored
+      // name is the PNG's — RW itself looks textures up case-insensitively, so the spelling is cosmetic.
+      const txdPath = join(dir, 'case.txd');
+      writeFileSync(txdPath, buildTxd([pngToTextureNative('remap', png(8, [1, 2, 3, 255]), VERSION)], VERSION));
+      const folder = mkdtempSync(join(dir, 'case-'));
+      writeFileSync(join(folder, 'ReMap.png'), png(16, [9, 9, 9, 255]));
+
+      expect(mergeTxdFolder(folder, txdPath)).toBe(1);
+
+      const textures = parseTxd(Uint8Array.from(readFileSync(txdPath)).buffer).textures;
+      expect(textures.length).toBe(1); // replaced, not added
+      expect(textures[0].width).toBe(16);
+      expect(textures[0].name).toBe('ReMap');
+      expect(declaredTextureCount(readFileSync(txdPath))).toBe(1);
+    });
+
+    it('builds a whole dictionary from an empty seed (a PNG folder that IS the .txd)', () => {
+      // "52. Abandoned Cars" shipped `gta3_img/philss/` — 22 PNGs that were the complete dictionary
+      // `cuntwjunk04` names. A texture folder only PATCHES, so all 22 were dropped with a warning.
+      const folder = mkdtempSync(join(dir, 'whole-'));
+      writeFileSync(join(folder, 'body.png'), png(16, [10, 20, 30, 255]));
+      writeFileSync(join(folder, 'glass.png'), png(8, [40, 50, 60, 128]));
+      writeFileSync(join(folder, 'notes.txt'), 'ignored');
+
+      const { bytes, merged } = mergeTxdBytes(folder, emptyTxd(VERSION), 'philss.txd');
+      expect(merged).toBe(2);
+
+      const textures = parseTxd(Uint8Array.from(bytes).buffer).textures;
+      expect(textures.map((texture) => texture.name).sort()).toEqual(['body', 'glass']);
+      expect(textures.find((texture) => texture.name === 'glass')?.format).toBe('dxt5');
+      expect(textures.find((texture) => texture.name === 'body')?.format).toBe('dxt1');
+      expect(declaredTextureCount(bytes)).toBe(2);
+    });
+
+    it('emptyTxd alone is a valid, EMPTY dictionary (stock SA ships 11 of them)', () => {
+      const bytes = emptyTxd(VERSION);
+
+      expect(parseTxd(Uint8Array.from(bytes).buffer).textures).toEqual([]);
+      expect(declaredTextureCount(bytes)).toBe(0);
     });
   });
 });
+
+/** The dictionary STRUCT's leading u16 — what the GAME counts, as opposed to what our parser walks. */
+function declaredTextureCount(bytes: Uint8Array): number {
+  const dict = readRw(Uint8Array.from(bytes)).chunks.find((chunk) => chunk.type === RW_TEXTURE_DICTIONARY);
+  const struct = dict?.children?.find((chunk) => chunk.type === RW_STRUCT)?.data;
+  if (!struct) {
+    throw new Error('no dictionary struct');
+  }
+
+  return new DataView(struct.buffer, struct.byteOffset, struct.byteLength).getUint16(0, true);
+}

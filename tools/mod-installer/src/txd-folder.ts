@@ -1,11 +1,41 @@
 import type { RwChunk } from '@opensa/rw-codec/chunk';
 
-import { readRw, RW_STRUCT, RW_TEXTURE_DICTIONARY, RW_TEXTURE_NATIVE, writeRw } from '@opensa/rw-codec/chunk';
+import {
+  readRw,
+  RW_EXTENSION,
+  RW_STRUCT,
+  RW_TEXTURE_DICTIONARY,
+  RW_TEXTURE_NATIVE,
+  writeRw,
+} from '@opensa/rw-codec/chunk';
 import { readTextureName } from '@opensa/rw-codec/texture-native';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { pngToTextureNative } from './png-texture';
+
+/**
+ * An EMPTY texture dictionary at `version` — the seed {@link mergeTxdBytes} needs when a folder of PNGs is a
+ * whole dictionary rather than a patch on one. Stock SA ships 11 dictionaries of exactly this shape, so this
+ * is a valid `.txd` on its own; take `version` from a dictionary the same mod ships rather than assuming one.
+ */
+export function emptyTxd(version: number): Uint8Array {
+  const struct = new Uint8Array(4); // textureCount 0, deviceId 0
+
+  return writeRw({
+    chunks: [
+      {
+        children: [
+          { data: struct, type: RW_STRUCT, version },
+          { children: [], type: RW_EXTENSION, version },
+        ],
+        type: RW_TEXTURE_DICTIONARY,
+        version,
+      },
+    ],
+    trailing: new Uint8Array(0),
+  });
+}
 
 /**
  * The in-memory core of {@link mergeTxdFolder} — also used for `.txd` ENTRIES inside an IMG archive

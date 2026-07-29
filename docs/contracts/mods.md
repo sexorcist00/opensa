@@ -66,11 +66,18 @@ gta3_img/previon/remap.png              →  merges into the previon.txd ENTRY i
   missed the `<dir>.txd` test (it looked for `particle.txd.txd`), fell through to `mkdir`, and hit the stock
   file with a bare `EEXIST: file already exists, mkdir …/models/particle.txd` that named neither the mod nor
   the rule.
+- The texture NAME stored is the PNG's own spelling; the MATCH against the dictionary is case-insensitive.
 - Inside an IMG folder, a texture folder whose `.txd` entry is missing is a **loud warning**, not a silent
-  skip. The dictionary is never CREATED from the PNGs — the folder patches what is already there. A mod that
-  ships the PNGs of a NEW dictionary must ship the `.txd` too, or every one of its textures is dropped with
-  that warning (real case: "52. Abandoned Cars" carries `gta3_img/philss/` while "0. Map Fixes Pack" repoints
-  `cuntwjunk04` at a `philss` dictionary neither of them ships — the model ends up untextured).
+  skip. **The dictionary is never CREATED from the PNGs** — the folder patches what is already there, so a
+  mod that ships the PNGs of a WHOLE dictionary must ship the `.txd` too or lose every one of its textures.
+  When that happens, build the file from the folder with `scripts/debug/txd-from-pngs.ts` (see
+  [`docs/debug/README.md`](../debug/README.md)) — that is what the warning is telling you to do. It is a real
+  shape: "52. Abandoned Cars" shipped `gta3_img/philss/` as 22 loose PNGs while "0. Map Fixes Pack" repointed
+  `cuntwjunk04` at a `philss` dictionary nobody shipped, and those 22 PNGs were exactly that model's 22
+  textures.
+- On the LOOSE side there is no such warning: a folder whose `<dir>.txd` does not exist is simply copied as a
+  directory, PNGs and all. Harmless (the game ignores them) but silent — the asymmetry is deliberate only in
+  the sense that nobody has needed the warning there yet.
 
 ### `<target>.merge` — edit a data file instead of replacing it
 
