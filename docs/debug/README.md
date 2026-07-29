@@ -12,7 +12,9 @@ Field bugs are traced to data BEFORE any code is touched (plans 084/085 proved t
 
 1. **Symptom** — the user's in-game report, with a position and a model name if possible (F2 helps).
 2. **Source asset** — is the DFF/TXD/IDE itself what we think it is? (`dump-texture`, `dump-chunks`,
-   `find-instances`, `model-bbox`, IDE flags.)
+   `find-instances`, `model-bbox`, IDE flags.) **Ask the MATERIALS, not the dictionary**: a TXD serves many
+   models, so "this txd has a glass texture" does not mean this model draws it — plan 092 picked a field
+   control that way and its windows turned out to be opaque (`dump-dff-materials.ts` is the answer).
 3. **Pipeline stage** — which converter stage owns the transformation; its report/ledger first
    (`report.json` → `textures.missing` / `textures.crossTxd`, the pack log's ⚠/ℹ lines).
 4. **Pak bytes** — what actually shipped (`dump-osm`, `dump-osm-meta`, `dump-texel-avg`). Byte-faithful

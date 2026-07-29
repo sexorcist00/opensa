@@ -68,6 +68,7 @@ the number.
 | [Skid-mark look fit](skid-mark-look-fit.md) | `game/vehicle/vehicle-skid-marks.system.ts` | SA's `CSkidmarks` width/opacity constants, same unrecoverable code paths |
 | [Impact-smoke fit](impact-smoke-fit.md) | `web/ui/engine-vehicles.ts` | SA's `CFx` collision-effect counts/lifetimes; the trigger itself is the calibrated damage gate |
 | [Surface-FX fit](surface-fx-fit.md) | `game/vehicle/vehicle-surface-fx.system.ts` | `CFx::AddWheel*` per-surface counts/colours; the dispatch itself is surfinfo's own `W_*` flags |
+| [Alpha-mask thresholds](alpha-mask-thresholds.md) | `opensa-pack/alpha.ts` | SA's ONE alpha pass with a per-entity reference (140/100/0, recovered) — we bake a two-class split instead, and two side floors are fitted |
 
 **Back-filled 2026-07-28**, sweeping the engine, shaders, physics, converter and tools. What the sweep
 deliberately did NOT open a file for, so the next reader does not go looking: numbers that are **read** from

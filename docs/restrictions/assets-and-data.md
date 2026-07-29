@@ -16,6 +16,28 @@ opening angle from the mean normal), not from a per-car list. 49 stock misc mode
 
 **Caught:** no. A hardcoded name works perfectly until someone swaps the mod.
 
+## A per-asset decision cached by CONTENT may not depend on its caller
+
+`TexturePlanner` dedups textures by content hash and plans each one on FIRST use. Any decision the caller
+supplies — plan 092's vegetation `preferCutout` was the live case — is therefore taken by whichever caller
+the build happened to reach first, and every later caller silently inherits it. 38 of the map's TXDs are
+shared between vegetation and non-vegetation defs, so this was not theoretical.
+
+The rule for a new design: a cached per-asset verdict is either a pure function of the asset's bytes, or the
+caller's preference is part of the CACHE KEY. Never a third thing.
+
+**Caught:** no — the output is a plausible class, just the other one, and only on the machines where the
+build order differs.
+
+## A dictionary is not a material list
+
+A model's TXD serves several models. "This dictionary contains a glass texture" says nothing about whether
+THIS model draws it — plan 092's first glass field-control was picked that way and turned out to have
+painted-on OPAQUE windows (`marinawindow1_256`, no alpha channel at all). Read the DFF's materials
+(`scripts/debug/dump-dff-materials.ts`), not the dictionary's contents.
+
+**Caught:** no — you get a real model, a real texture and a wrong conclusion.
+
 ## Texture sizes are asset-driven
 
 Never hardcode a size that belongs to a source asset. Texture arrays derive their size from `max(assets)`;

@@ -24,12 +24,14 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   bound, so they class `softBlend` → pipelineClass 2 → `world-blend-*`, which writes no depth. Identical to
   the trees-through-trees bug 074 fixed — except the fix upgrades softBlend → cutout for **vegetation defs
   only**, a rule that reads the slot instead of the asset. Census: 40 230 textures → 2 541 softBlend, of
-  which 350 are true glass that must not move. **Phases 0–1 DONE (nothing packed yet)**: the rule reads the
-  histogram against vanilla's ~128 alpha TEST (`below ≥ 5 % ∧ above ≥ 5 % ∧ near ≤ 10 %`, the knee of the
-  measured distribution) and moves **1 602** textures out of the blend pass — 599 → 2 201 cutouts. The
-  overlay class the texture cannot see is gated by `NO_ZBUFFER_WRITE`, **not** `DRAW_LAST`: the join found
-  1 359 DRAW_LAST defs on flipping txds and they are the TREES, so that gate would have re-broken exactly
-  what 074 fixed.
+  which 350 are true glass that must not move. **CLOSED, all four phases in one day.** The rule reads the
+  histogram against the alpha TEST vanilla applies (`below ≥ 5 % ∧ above ≥ 5 % ∧ near ≤ 10 %`, the knee of
+  the measured distribution) and moved **1 602** textures out of the blend pass; the pak ships 1 422 cutout
+  / 661 soft-blend. The overlay class the texture cannot see is gated by `NO_ZBUFFER_WRITE`, **not**
+  `DRAW_LAST` — the join found 1 359 DRAW_LAST defs on flipping txds and they are the TREES — and the
+  reversed source later CONFIRMED that gate: SA answers a no-z-write model with alpha reference 0. Field:
+  towers fixed, canopies and glass clean, sweep unchanged. Debt:
+  [`hacks/alpha-mask-thresholds.md`](../hacks/alpha-mask-thresholds.md).
 - **[091 — Frame-time attribution](./091-frame-time-attribution/readme.md)** — SHIPPED 2026-07-28, all three
   phases, no fix written. The `[slow]` line's `other` was a RESIDUAL holding two different things: untimed
   in-loop work, and everything the browser did BETWEEN frames — which **no in-loop timer can see**, and where

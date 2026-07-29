@@ -1,8 +1,9 @@
 # 092 — Alpha classification: the cutouts that are not vegetation
 
-**Status: phases 0–2 DONE 2026-07-29 — measured, implemented, packed and field-confirmed on all three
-controls; phase 3 (the doc sweep) is what remains.** The class is baked, so every iteration that reaches the
-field costs a re-pack — the rule was fitted offline first, and it took one build to reach the field.
+**Status: CLOSED 2026-07-29 — all four phases in one day.** Measured offline, implemented, packed,
+field-confirmed on all three controls, and closed with the game's own formula recovered (which turned one
+inferred design choice into a confirmed one). The class is baked, so every iteration that reaches the field
+costs a re-pack — the rule was fitted offline first, and it took ONE build to reach the field.
 
 ## Symptom (field, 2026-07-29)
 
@@ -337,19 +338,45 @@ Perf is a real question in both directions and gets measured, not assumed: cutou
 HELP a fill-bound scene) but adds A2C work. The 6-scene ritual sweep, `gpuMs.pass` compared against the last
 recorded row; everything into `docs/benchmarks/` before it is analysed.
 
-## Phase 3 — close the loop
+## Phase 3 — close the loop ✅ DONE 2026-07-29
 
-- `docs/edge-cases/converter-pipeline.md` — the classification rule and what it cannot see.
-- `docs/restrictions/assets-and-data.md` — if the content-cache order dependency survives in any form, it is
-  a new SILENT restriction and gets its row.
-- `docs/features/map-pipeline.md` — the alpha pipeline's description updated.
-- The measured numbers land in this doc after every phase; the benchmark rows in `docs/benchmarks/`.
-- If any constant in the rule ends up FITTED rather than derived, it gets a file in `docs/hacks/` in the
-  same change, saying what it was fitted over and what would retire it.
+**The standing rule paid off last, not first: the game's real formula was recovered while writing this
+phase**, and it changed what the docs say.
 
-## Open question for the field, not for the code
+From the reversed source (`Renderer.cpp`, `VisibilityPlugins.cpp:558-578`): SA has **no cutout/blend
+classes at all**. It runs ONE pass with blending always enabled and an alpha-test REFERENCE that moves per
+entity per frame — **140** outdoors, **100** for an ordinary entity, and **0** for a `bDontWriteZBuffer`
+model, an interior, or an entity that is distance-fading.
 
-Whether the correct end state is "cutout" for this class at all, or a third path (alpha-tested WITH depth
-write but blended edges — SA's own dual-pass). Vanilla alpha-TESTS these materials, which is what the cutout
-class models, so cutout is the null hypothesis; the field verdict on phase 2 decides whether anything more
-is needed.
+Three things follow, all now written down:
+
+1. **The `NO_ZBUFFER_WRITE` gate is vanilla behaviour, not a guess.** SA answers such a model with reference
+   0 — no alpha test, pure compositing — which is exactly the blend class `classOf` keeps those defs in. The
+   join in phase 1 inferred it from the flag's meaning; the source confirms it.
+2. **Our reference 128 sits inside SA's own 100–140 band** — derived, not invented.
+3. **What we do NOT model is now stated**: a cutout does not soften as it distance-fades (SA drops the
+   reference to 0 for that), and one reference serves every masked texture where SA uses two.
+
+Docs updated in this change:
+
+- [`hacks/alpha-mask-thresholds.md`](../../hacks/alpha-mask-thresholds.md) (+ its README row) — the debt
+  ledger for the rule: what SA really does, which of the three constants is FITTED (the 5 % side floors —
+  swept and eye-judged; the 10 % edge bound is a measured knee, the 128 is derived), the residual (1 602
+  flips, one known false negative), and what would retire it (carry SA's model — one pass, reference as a
+  per-draw uniform — which means solving the fringe without A2C).
+- [`edge-cases/converter-pipeline.md`](../../edge-cases/converter-pipeline.md) — the class is decided once,
+  offline, from the texels, and cannot follow the frame; plus what a per-texture rule cannot see.
+- [`restrictions/assets-and-data.md`](../../restrictions/assets-and-data.md) — two new SILENT rows: a cached
+  per-asset verdict is a pure function of the bytes or the preference is in the KEY (the planner's
+  order-dependence, 38 shared TXDs), and **a dictionary is not a material list** (the field control that
+  turned out to have opaque windows).
+- [`features/map-pipeline.md`](../../features/map-pipeline.md) — the alpha-class description (phase 1).
+- [`debug/README.md`](../../debug/README.md) — the triage step now says to ask the materials, not the
+  dictionary; plus the two tools this plan produced (`alpha-class-census.ts`, `teleport-spot.ts`).
+
+## The open question, answered
+
+Whether the end state is "cutout" for this class at all, or a third path (alpha-tested with depth write but
+blended edges — SA's own dual-pass). **The field said cutout is enough**: all three controls came back clean
+on the first packed build. The dual-pass idea stays available in the hack file's "what would retire it",
+where it belongs — as the honest model we are approximating, not as unfinished work.

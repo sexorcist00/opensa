@@ -43,6 +43,19 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   z ≤ 4 (`Z_CAP`, sized for SA's sea), so a TC reservoir far above it takes the shore-distance
   pseudo-depth path (plan 087 row C). Fine for the look; anything needing the real lakebed (underwater
   rendering, buoyancy) will need the cap rethought per water level.
+- **A texture's PASS is decided once, offline, from its texels — and the decision cannot follow the frame.**
+  The pack classifies every texture opaque / cutout / soft-blend (`alpha.ts`); cutout draws with A2C and
+  WRITES depth, soft-blend composites and does not. SA has no such classes: it runs one pass with blending
+  always on and an alpha-test reference that moves per entity per frame — **140** outdoors, **100** for an
+  ordinary entity, **0** for a no-z-write model, an interior, or an entity that is distance-FADING
+  (`Renderer.cpp` / `VisibilityPlugins.cpp`, recovered 2026-07-29). Consequences we live with: a cutout does
+  not soften as it fades out, and one reference (128) serves every masked texture. The `0x40` case matches
+  vanilla exactly — such defs stay in the compositing class. Thresholds + their residual:
+  [`hacks/alpha-mask-thresholds.md`](../hacks/alpha-mask-thresholds.md).
+- **The classification is per TEXTURE, so it cannot see placement.** A texture that is a mask everywhere but
+  coplanar in one spot has no way to say so; the only signal is the def's own `NO_ZBUFFER_WRITE`, which the
+  welder honours for alpha materials. Known residual after plan 092: `Desrtmetal` (a diamond mesh whose
+  low-res edge puts it at 13 % ON the reference) stays in the blend pass — a miss, not a regression.
 - **Texture sizes are asset-driven.** Never hardcode a size that belongs to a source asset — texture arrays
   derive one size from `max(assets)`, fixed slots resample instead of throwing. Only shadow maps / probes /
   LUTs stay constants.
