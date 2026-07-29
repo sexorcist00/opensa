@@ -23,6 +23,12 @@ go/no-go). Something already understood and scheduled does NOT live here — it 
 
 ## Ideas
 
+- [world-glass-material/](./world-glass-material/readme.md) — **world glass as a material class**: cars
+  already classify glass and reflect it differently; the static world has no such class, so a shop window
+  shades like concrete. The signal is Rockstar's own — `surfinfo.dat` carries a **GLASS column** (already
+  parsed) and every COL face names its surface, so "is this glass" is authored per face rather than guessed
+  from a texture name. The unsolved half is the JOIN (collision faces are coarser than render triangles),
+  and it is measurable offline before a line is written.
 - [vehdeform/](./vehdeform/readme.md) — **VehDeform**: GTA4-style dynamic impact deformation for vehicles
   (dents proportional to impact force/direction, accumulating), coexisting with SA's ok/dam part swaps.
   Feasibility looks high on our own vertex pipeline; needs a spike to confirm the look + tuning before it can

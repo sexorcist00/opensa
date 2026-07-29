@@ -1,8 +1,8 @@
 # 092 — Alpha classification: the cutouts that are not vegetation
 
-**Status: phases 0–1 DONE 2026-07-29 — the rule is measured, implemented and tested, but NOTHING has been
-packed yet; phases 2–3 open.** The class is baked, so every iteration that reaches the field costs a
-re-pack — the rule was fitted offline first.
+**Status: phases 0–2 DONE 2026-07-29 — measured, implemented, packed and field-confirmed on all three
+controls; phase 3 (the doc sweep) is what remains.** The class is baked, so every iteration that reaches the
+field costs a re-pack — the rule was fitted offline first, and it took one build to reach the field.
 
 ## Symptom (field, 2026-07-29)
 
@@ -282,7 +282,46 @@ Suite: `tools/opensa-pack` 186 tests green (24 files), `tsc` + `eslint` clean.
 `report.json` deltas and pack wall-clock are phase 2's — they need the re-pack, and nothing in this phase
 has reached a pak yet.
 
-## Phase 2 — repack and the field round
+## Phase 2 — repack and the field round ✅ DONE 2026-07-29
+
+**The user rebuilt (`build:game:original:opensa`, pak buildTime 10:53 29-07-2026) and gave all three
+verdicts.**
+
+| Check | Verdict |
+| --- | --- |
+| **The towers** — the reported symptom | **fixed**: "проблема с башнями ушла" |
+| **Vegetation control** — the 2026-07-13 screen-door must not return | **clean**: first pass "ничего не заметил", then explicitly re-checked at a named spot — "точно все хорошо" |
+| **True-blend control** — glass must still composite | **clean**: "стекло на месте, все через него хорошо видно" |
+
+Shipped classes, read out of the pak's 43 RGBA8 arrays rather than predicted: **1 422 cutout / 661
+soft-blend / 380 opaque**.
+
+Perf: the 8-scene sweep is [`2026-07-29-headless-092-alpha-cutout-sweep.json`](../../benchmarks/opensa-engine/2026-07-29-headless-092-alpha-cutout-sweep.json)
+— every scene at the 120 Hz cap (8.33–8.36 avg, p95 9.2–9.3, `lateCreates` 0), unchanged. **The
+`gpuMs.pass` column is NOT an A/B** and is recorded as such: the 07-28 baseline read a pak from 07-24, and
+the largest deltas land where the rule cannot reach (ocean-horizon 1.961 → 0.915 at 27 draws).
+
+### Two things the field round cost, both kept
+
+- **The glass control was picked wrong the first time.** The LV airport terminal was chosen because its
+  DICTIONARY (`vgssairport02`) carries a stay-blend `glass_64` — but the model's own materials use
+  `marinawindow1_256`, which has **no alpha channel at all**. A dictionary serves several models; only the
+  MATERIALS say what a model draws. The replacement control is a bus shelter (`bustopm` ×48,
+  `cj_frame_glass`, 91 % of texels below the alpha test — alpha-testing it would erase the pane).
+  Both field spots are now `SA_TELEPORTS` entries with their numbers in the comment.
+- **Hand-picking a viewing spot put the camera inside a building**, which produced
+  `scripts/debug/teleport-spot.ts` — ring the target, ray-cast onto every neighbour's collision for the z
+  you would land on, reject spots inside anything, name what crosses the view.
+
+### What the round found that is not this plan's business
+
+The exterior world has **47 placed models** carrying a stay-blend texture at all, and the classic glass
+textures (`a51_glass`, `keypad_glass`, `cof_wind1`) are INTERIOR assets the engine filters out; most city
+"windows" are painted onto opaque textures. That population survey became
+[`ideas/world-glass-material/`](../../ideas/world-glass-material/readme.md) — SA's `surfinfo.dat` has a
+GLASS column and every COL face names its surface, so glass is knowable from the asset.
+
+## Phase 2 — the original plan
 
 One `opensa` build (turnaround: a full pmb run is > 1 h; a targeted `opensa-pack` re-run is the cheaper
 path if it can be scoped — measure and record which was used, per the standing rule that a field run reads
