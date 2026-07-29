@@ -687,12 +687,26 @@ function buildPlacementTable(
  *  alpha render pass; a submesh whose texture has NO alpha channel draws in the opaque pass regardless
  *  (085 row H — casinoblock3_nt: every `casinolights*` is DXT1 no-alpha and renders as the SOLID black
  *  fascia in vanilla; classing them additive made the black texels vanish — a see-through facade). */
-function classOf(beam: boolean, additive: boolean, alphaClass: 'cutout' | 'opaque' | 'softBlend'): number {
+function classOf(
+  beam: boolean,
+  additive: boolean,
+  alphaClass: 'cutout' | 'opaque' | 'softBlend',
+  noDepthWrite = false,
+): number {
   if (additive && alphaClass !== 'opaque') {
     return 4;
   }
   if (beam) {
     return 3;
+  }
+  // `NO_ZBUFFER_WRITE` (0x40) is SA saying "I am an overlay — composite me, do not occlude with me": ground
+  // alpha decals (`grnd_alpha*`), graffiti, road lines, the `alphbrk*` sheets — 250 defs. The cutout pipeline
+  // WRITES depth and compares `greater`, so a coplanar overlay would lose its own depth test; the blend class
+  // is the one that reads `greater-equal` and composites (`pipelines.ts`). Honoured for ALPHA materials only,
+  // which is plan 039's precise lesson: bare-0x40 opaque TERRAIN (`VegasSland40`) must keep occluding, and
+  // vanilla only routes a model through blended states on its alpha pass.
+  if (noDepthWrite && alphaClass !== 'opaque') {
+    return 2;
   }
 
   return alphaClass === 'cutout' ? 1 : alphaClass === 'softBlend' ? 2 : 0;
@@ -956,6 +970,7 @@ function weldGroup(
   const breakable = breakables !== undefined && isBreakable(fs, def, breakableModels);
   const doubleSided = (def.flags & IdeFlag.DISABLE_BACKFACE_CULLING) !== 0 ? 1 : 0;
   const additive = (def.flags & IdeFlag.ADDITIVE) !== 0;
+  const noDepthWrite = (def.flags & IdeFlag.NO_ZBUFFER_WRITE) !== 0;
   const swayKind = swayKindFor(def);
   const timed = def.time !== undefined ? { off: def.time.off, on: def.time.on } : null;
   for (const atomic of atomics) {
@@ -990,7 +1005,7 @@ function weldGroup(
       const bucket = bucketFor(
         buckets,
         resolved.arrayRef,
-        classOf(beam, additive, resolved.alphaClass),
+        classOf(beam, additive, resolved.alphaClass, noDepthWrite),
         doubleSided,
         timed,
         uvAnim,

@@ -24,10 +24,12 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   bound, so they class `softBlend` → pipelineClass 2 → `world-blend-*`, which writes no depth. Identical to
   the trees-through-trees bug 074 fixed — except the fix upgrades softBlend → cutout for **vegetation defs
   only**, a rule that reads the slot instead of the asset. Census: 40 230 textures → 2 541 softBlend, of
-  which 350 are true glass that must not move. **Phase 0 DONE**: the rule reads the histogram against
-  vanilla's ~128 alpha TEST (`below ≥ 5 % ∧ above ≥ 5 % ∧ near ≤ 10 %`, the knee of the measured
-  distribution), flips **1 602** textures, and the eye review found the one thing a texture-only rule cannot
-  see — coplanar overlays (night windows, wall decals), which the blend pass exists to composite.
+  which 350 are true glass that must not move. **Phases 0–1 DONE (nothing packed yet)**: the rule reads the
+  histogram against vanilla's ~128 alpha TEST (`below ≥ 5 % ∧ above ≥ 5 % ∧ near ≤ 10 %`, the knee of the
+  measured distribution) and moves **1 602** textures out of the blend pass — 599 → 2 201 cutouts. The
+  overlay class the texture cannot see is gated by `NO_ZBUFFER_WRITE`, **not** `DRAW_LAST`: the join found
+  1 359 DRAW_LAST defs on flipping txds and they are the TREES, so that gate would have re-broken exactly
+  what 074 fixed.
 - **[091 — Frame-time attribution](./091-frame-time-attribution/readme.md)** — SHIPPED 2026-07-28, all three
   phases, no fix written. The `[slow]` line's `other` was a RESIDUAL holding two different things: untimed
   in-loop work, and everything the browser did BETWEEN frames — which **no in-loop timer can see**, and where

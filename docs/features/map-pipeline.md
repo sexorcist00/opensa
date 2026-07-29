@@ -14,7 +14,15 @@
   IS_TREE/IS_PALM, DISABLE_BACKFACE_CULLING — full render-relevant set per the flag histogram.
   NO_ZBUFFER_WRITE (0x40) is applied only to **transparent** materials (decals/shadows/glass, which
   always also carry DRAW_LAST) — opaque geometry keeps depth writes, else bare-0x40 countryside
-  terrain tiles show through under a free camera (plan 039 follow-up).
+  terrain tiles show through under a free camera (plan 039 follow-up). In the own-engine pack it is the
+  welder's overlay gate (`classOf`): a 0x40 def keeps the compositing BLEND class even when its texture
+  is an alpha mask, so a coplanar decal cannot lose its own depth test (plan 092).
+- **A material's ALPHA CLASS decides its pass, and it is read from the texels** (`alpha.ts`): opaque,
+  `cutout` (alpha-tested, writes depth, A2C renders the edge) or `softBlend` (composites, no depth write).
+  `classifyAlpha` reads the histogram against 0/255; `isAlphaMask` reads it against the ~128 alpha TEST
+  vanilla applies — both sides populated, at most a tenth of the sheet ON the reference — and upgrades a
+  mask out of the blend pass whoever draws it. Vegetation additionally requests the upgrade for canopies
+  authored semi-transparent throughout, and those (only those) get their alpha sharpened.
 - IPL `inst` (11 columns), interior **area codes** (`interior & 0xFF`, world ids {0, 13}).
 - Binary `bnry` IPL streams (full-detail placement) + **standalone script-gated groups**
   (`resolveMap({ extraIpl })`, default `['truthsfarm']`; barriers/carter/crack deliberately

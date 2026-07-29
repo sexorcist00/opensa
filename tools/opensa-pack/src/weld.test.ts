@@ -4,6 +4,7 @@ import type { GridCell } from '@opensa/renderware/map/world-grid';
 import { decodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
 import { buildArchiveBuffer, openArchive } from '@opensa/renderware';
 import { frameWorldTransform } from '@opensa/renderware/mesh/frame-transform';
+import { IdeFlag } from '@opensa/renderware/parsers/text/index';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -452,6 +453,42 @@ describe('weldCell', () => {
         [0, 0, 0],
       );
       expect(decodeOscell(opaque!.bytes).groups.some((group) => group.pipelineClass === 4)).toBe(false);
+    });
+
+    it('routes an alpha MASK to the depth-writing cutout class, and an overlay def back to blend (092)', () => {
+      // `bins2_LAe2` is a DXT3 mask whose edge is far wider than the 2 % cutout bound, so it used to weld as
+      // pipelineClass 2 — no depth write, and whatever is behind paints over it. That is the Watts Towers bug.
+      const fs = binFs();
+      const masked = weldCell(fs, binDefs(), binCell(), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+      const maskClasses = new Set(decodeOscell(masked!.bytes).groups.map((group) => group.pipelineClass));
+      expect(maskClasses.has(1)).toBe(true);
+      expect(maskClasses.has(2)).toBe(false);
+
+      // NO_ZBUFFER_WRITE (0x40) is SA declaring an OVERLAY — ground decals, graffiti, road lines. A cutout
+      // writes depth and compares `greater`, so a coplanar overlay would lose its own test: it stays blend.
+      const overlay = weldCell(
+        fs,
+        binDefs({ flags: IdeFlag.NO_ZBUFFER_WRITE }),
+        binCell(),
+        false,
+        new TexturePlanner(fs, new Map()),
+        [0, 0, 0],
+      );
+      const overlayClasses = new Set(decodeOscell(overlay!.bytes).groups.map((group) => group.pipelineClass));
+      expect(overlayClasses.has(2)).toBe(true);
+      expect(overlayClasses.has(1)).toBe(false);
+
+      // …but only for ALPHA materials (plan 039): bare-0x40 opaque terrain must keep occluding.
+      const opaqueFs = fixtureFs();
+      const terrain = weldCell(
+        opaqueFs,
+        fixtureDefs({ flags: IdeFlag.NO_ZBUFFER_WRITE }),
+        fixtureCell(1),
+        false,
+        new TexturePlanner(opaqueFs, new Map()),
+        [0, 0, 0],
+      );
+      expect(decodeOscell(terrain!.bytes).groups.every((group) => group.pipelineClass === 0)).toBe(true);
     });
 
     it('welds animated defs statically and counts them (field fix: anim skip left building-sized holes)', () => {

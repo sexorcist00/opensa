@@ -1,7 +1,8 @@
 # 092 — Alpha classification: the cutouts that are not vegetation
 
-**Status: phase 0 DONE 2026-07-29 (measurement only, no pack); phases 1–3 open.** The class is baked, so
-every iteration that reaches the field costs a re-pack — the rule is fitted offline first.
+**Status: phases 0–1 DONE 2026-07-29 — the rule is measured, implemented and tested, but NOTHING has been
+packed yet; phases 2–3 open.** The class is baked, so every iteration that reaches the field costs a
+re-pack — the rule was fitted offline first.
 
 ## Symptom (field, 2026-07-29)
 
@@ -215,23 +216,71 @@ one overlay from the class above.
 **Exit: met.** The flip list is defensible without opening the game, and the one thing that is NOT decidable
 offline is named.
 
-## Phase 1 — the rule in the pipeline
+## Phase 1 — the rule in the pipeline ✅ DONE 2026-07-29 (no pack yet)
 
-`classifyAlpha` (or a sibling it delegates to) returns the phase-0 verdict from the texels alone.
-`effectiveAlphaClass`'s caller preference is then reduced to what the histogram genuinely cannot see — which
-phase 0 measured to be exactly one thing, the coplanar-overlay class — or retired. Whatever survives of
-`preferCutout` must be justified in the same change, since the content cache makes a caller preference
-order-dependent, and the vegetation gate it replaces is a slot rule.
+Four changes, each with the measurement that chose it.
 
-The sharpening gate follows the rule, not the caller: a texture upgraded by the new rule is sharpened on the
-same terms the vegetation upgrade already uses (that is the 2026-07-13 lesson — otherwise a broadly
-semi-transparent lattice becomes a screen door).
+**1. `isAlphaMask` (`alpha.ts`) — the rule, as a pure function of the texels.** No caller, no name, no def.
+`effectiveAlphaClass(classified, preferCutout, mask)` now takes two independent upgrades of a softBlend
+verdict, and `TexturePlanner.plan` passes the mask verdict. The census reports the SHIPPED function by
+default (its threshold flags stay, for re-fitting offline): **1 602 flips**, the same list phase 0 reviewed.
 
-All five packers benefit at once (`pack-map-objects`, `pack-props`, `pack-clutter`, `pack-anim-objects`,
-`vehicle-osm` — only the first ever passed the preference), and the welder shares the same planner.
+**2. The vegetation preference SURVIVES, and that is a measurement, not a compromise.** It covers the one
+case the histogram cannot reach: a mod canopy authored at alpha ≈ 0.5 EVERYWHERE spends its texels ON the
+reference, so it is not mask-shaped — yet vanilla alpha-tests foliage regardless. Retiring it would revive
+the 2026-07-13 `tree_hipoly07` report from the other side. Consequently **sharpening now keys on the caller
+upgrade only** (`preferCutout && alphaClass !== classified`): a mask has a thin edge by definition, and
+steepening it would throw away the antialiasing A2C is there to resolve.
 
-Verification: unit tests on the histogram cases + the real-asset fixtures from phase 0. Numbers recorded:
-class counts before/after over the same archive, and the pack `report.json` deltas.
+**3. The planner's content cache keys the preference in.** 38 of the map's TXDs are referenced by BOTH
+vegetation and non-vegetation defs (measured over the 14 258 defs: 87 vegetation TXDs, 2 424 other), and a
+content-only key handed all of them whichever class arrived FIRST — silent and build-order-dependent. Pinned
+by a test: the same texture resolved with and without the preference now comes back softBlend and cutout.
+
+**4. The overlay gate is `NO_ZBUFFER_WRITE`, not `DRAW_LAST` — and the join says why.** Of the defs whose
+txd carries a flipping texture, **1 359 carry DRAW_LAST — and they are the TREES** (`veg_palm04`,
+`veg_tree3`: flags 2097284 = backface-culling-off + DRAW_LAST). SA marks anything alpha DRAW_LAST; it means
+"draw me in the alpha pass", not "I am coplanar". Gating on it would have re-broken exactly the class 074
+fixed. `NO_ZBUFFER_WRITE` (0x40) is the honest declaration — 250 defs map-wide, 94 on a flipping txd, and
+they read like the list they are: `grnd_alpha*`, `graffiti_lan01`, `des_ntwn_lines*`, the `alphbrk*` sheets.
+`classOf` keeps those in the compositing blend class, **for alpha materials only** — plan 039's precise
+lesson, since bare-0x40 opaque terrain (`VegasSland40`) must keep occluding. The own engine had never read
+this flag at all, so this also closes a latent gap: a decal whose texture already classed `cutout` has been
+writing depth against SA's explicit instruction.
+
+The night-window worry from phase 0 turned out to be answered by the data too: `lanitewin*` carry flags 12
+(DRAW_LAST + **ADDITIVE**), and additive already wins in `classOf` — they never took the alpha-class route.
+
+**What was deliberately NOT touched.** `model-ostex.ts` (the per-model dictionary path: vehicles, props,
+clutter, anim objects) still classifies with `classifyAlpha` alone. Traced: those draws pick their pipeline
+from the submesh material class (`build-vehicle-model.ts:736` → `rigid-blend`), the `.ostex` layer's
+`alphaClass`/`cutoutRef` are written but read by nothing, and that path emits ONE mip level, so coverage
+preservation has nothing to preserve. Changing it would move bytes and no pixels.
+
+### Tests
+
+- `alpha.test.ts` — the histogram cases, negative first: a uniform film (one-sided) and a ramp and a soft
+  blob are NOT masks; a chain-link authored at alpha 10/200 IS one **and `classifyAlpha` calls it softBlend**
+  (the `Upt_Fence_Mesh` false negative, in miniature); an antialiased edge up to a tenth of the sheet passes.
+- `alpha-class.test.ts` (new) — the rule end to end on REAL texels: the Watts Towers' own dictionary
+  (`lae2tempshit`) classes `wattsstax1/4_LAe` cutout with no caller preference and leaves `BLOCK2` opaque;
+  `kmb_keypadx`'s glass film stays softBlend; the cache test above. Two fixture lines added to
+  `scripts/test-fixtures.ts` (`dff/alpha-class/`).
+- `weld.test.ts` — the welded pipelineClass on a real breakable: `bins2_LAe2` (a DXT3 mask) now welds as
+  class 1 instead of 2, the same def with `NO_ZBUFFER_WRITE` welds back to 2, and an opaque model with the
+  same flag stays 0.
+
+Suite: `tools/opensa-pack` 186 tests green (24 files), `tsc` + `eslint` clean.
+
+### Numbers, and what is still unmeasured
+
+| | Before | After the rule |
+| --- | --- | --- |
+| textures classed cutout (of 40 230) | 599 | **2 201** |
+| classed softBlend | 2 541 | 939 |
+
+`report.json` deltas and pack wall-clock are phase 2's — they need the re-pack, and nothing in this phase
+has reached a pak yet.
 
 ## Phase 2 — repack and the field round
 

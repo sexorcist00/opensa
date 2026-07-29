@@ -107,6 +107,11 @@ const MANIFEST: readonly Fixture[] = [
   extract('lamppost1.dff', 'dff/topple/lamppost1.dff'), // object.dat uprootLimit 240 — the topple prop
   extract('dynsigns.txd', 'dff/topple/dynsigns.txd'),
   extract('labins01_la.txd', 'dff/breakable/labins01_la.txd'), // binnt08_la's dictionary
+  // The two ends of the alpha-CLASS rule (plan 092), as real texels rather than generated histograms:
+  // `lae2tempshit` carries the Watts Towers' lattice (a mask with a 23.6 % mid-alpha edge — the field bug)
+  // beside an opaque wall texture, and `kmb_keypadx` carries a uniform glass film that must never upgrade.
+  extract('lae2tempshit.txd', 'dff/alpha-class/lae2tempshit.txd'),
+  extract('kmb_keypadx.txd', 'dff/alpha-class/kmb_keypadx.txd'),
   extract('sjmcacti2.dff', 'dff/clutter/sjmcacti2.dff'), // a procobj.dat species (and a topple prop)
   extract('gta_cactus.txd', 'dff/clutter/gta_cactus.txd'),
   extract('binnt08_la.dff', 'dff/breakable/binnt08_la.dff'),

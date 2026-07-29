@@ -31,6 +31,12 @@ export function classifyAlpha(rgba: Uint8Array, hasAlphaFlag: boolean): AlphaCla
   return mid / texels <= 0.02 ? 'cutout' : 'softBlend';
 }
 
+/** Half-width of the transition band around the alpha-test reference — texels inside it are the EDGE. */
+const MASK_BAND = 48;
+/** A mask must populate both sides of the test, and spend at most this share of its texels ON it. */
+const MASK_SIDE = 0.05;
+const MASK_EDGE = 0.1;
+
 /** Fraction of texels whose alpha passes `reference` (the A2C coverage metric). */
 export function coverage(rgba: Uint8Array, reference: number): number {
   let passing = 0;
@@ -112,12 +118,46 @@ export function downsample(rgba: Uint8Array, width: number, height: number): Uin
 }
 
 /**
- * The final class after the caller's preference: vegetation welds request cutout (vanilla SA alpha-tests
- * foliage; soft-classed canopies wrote no depth → trees showed through trees). Only softBlend upgrades —
- * opaque/cutout classifications are already correct.
+ * The final class, from two independent upgrades of a softBlend verdict (opaque/cutout are already right):
+ *
+ * - `mask` — the texture itself is alpha-tested geometry ({@link isAlphaMask}), whoever draws it. This is
+ *   the general rule; it needs no caller and no name.
+ * - `preferCutout` — the VEGETATION welds' request, which survives the general rule because it covers the
+ *   case the histogram cannot reach: a mod canopy authored at alpha ≈ 0.5 EVERYWHERE is not mask-shaped, yet
+ *   vanilla alpha-tests foliage regardless (074, trees showed through trees). Those textures are the ones
+ *   that then need {@link sharpenAlpha}; a mask has a thin edge already and keeps its authored alpha.
  */
-export function effectiveAlphaClass(classified: AlphaClass, preferCutout: boolean): AlphaClass {
-  return preferCutout && classified === 'softBlend' ? 'cutout' : classified;
+export function effectiveAlphaClass(classified: AlphaClass, preferCutout: boolean, mask = false): AlphaClass {
+  return (preferCutout || mask) && classified === 'softBlend' ? 'cutout' : classified;
+}
+
+/**
+ * Is this texture an alpha MASK — geometry the game alpha-TESTS — rather than a translucent surface?
+ * (plan 092, the field bug: the Watts Towers' lattice showed its own far side through the near one.)
+ *
+ * {@link classifyAlpha} reads the histogram against 0 and 255, which asks the wrong question: a chain-link
+ * mesh whose holes sit at alpha ≈ 10 has no FULLY transparent texel, while a soft shadow is mostly fully
+ * transparent around its blob. What decides the look is the alpha TEST vanilla applies at `reference`: a
+ * mask commits its texels to one SIDE of it and spends only a thin antialiased edge on it — and that edge is
+ * what alpha-to-coverage exists to render. A true blend either washes across the reference (glass, a shadow
+ * ramp) or lives entirely on one side of it (a uniform film).
+ *
+ * The 10 % edge bound is the KNEE of the measured distribution over the map's 2 201 two-sided soft-blend
+ * textures (bins fall 564 → 553 → 340 → 145 and then flatten), not a fit to any one texture.
+ */
+export function isAlphaMask(rgba: Uint8Array, reference = 128): boolean {
+  let above = 0;
+  let below = 0;
+  const texels = rgba.length / 4;
+  for (let index = 3; index < rgba.length; index += 4) {
+    if (rgba[index] < reference - MASK_BAND) {
+      below += 1;
+    } else if (rgba[index] > reference + MASK_BAND) {
+      above += 1;
+    }
+  }
+
+  return below / texels >= MASK_SIDE && above / texels >= MASK_SIDE && (texels - above - below) / texels <= MASK_EDGE;
 }
 
 /** Alpha-test-style remap gain for UPGRADED cutouts: band 128 ± 128/gain stays a gradient (A2C antialiases

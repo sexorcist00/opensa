@@ -18,7 +18,14 @@ import {
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';
 
-import { type AlphaClass, classifyAlpha, effectiveAlphaClass, processAlphaTexture, resampleToPow2 } from './alpha';
+import {
+  type AlphaClass,
+  classifyAlpha,
+  effectiveAlphaClass,
+  isAlphaMask,
+  processAlphaTexture,
+  resampleToPow2,
+} from './alpha';
 import { packOstexPayload } from './ostex-payload';
 
 const MAX_LAYERS = 256;
@@ -133,9 +140,10 @@ export class TexturePlanner {
     return out.sort((a, b) => a.ref - b.ref);
   }
 
-  /** Resolve a material's texture (or its flat colour) to an array layer, planning it on first use.
-   *  `preferCutout` (vegetation callers) upgrades a soft-blend classification to cutout — vanilla SA
-   *  alpha-tests foliage; blend-classed canopies wrote no depth (trees showed through trees). */
+  /** Resolve a material's texture (or its flat colour) to an array layer, planning it on first use. A
+   *  soft-blend classification is upgraded to cutout when the texels themselves are an alpha MASK (plan 092)
+   *  or when a VEGETATION caller asks for it — both because a blend-classed cutout writes no depth, which is
+   *  how trees showed through trees and how the Watts Towers showed through themselves. */
   resolve(
     txdName: string,
     textureName: null | string,
@@ -187,7 +195,7 @@ export class TexturePlanner {
 
       return this.resolveColor(color, true);
     }
-    const contentKey = fnv1a(rw.mipmaps[0]?.data ?? new Uint8Array()) ^ (rw.width << 8) ^ rw.height;
+    const contentKey = plannedKey(rw, preferCutout);
     const existing = this.byContent.get(contentKey);
     if (existing) {
       this.report.dedup += 1;
@@ -281,12 +289,14 @@ export class TexturePlanner {
     const decoded =
       rw.format === 'rgba8888' ? new Uint8Array(base.data) : decodeDxt(rw.format, base.data, base.width, base.height);
     const sized = resampleToPow2(decoded, base.width, base.height);
-    // Foliage scans carry a soft alpha skirt that mis-classes them softBlend; the caller knows better.
+    // Foliage scans carry a soft alpha skirt that mis-classes them softBlend; so does any masked texture
+    // whose edge is wider than 2 % of the sheet (plan 092 — the Watts Towers' lattice).
     const classified = classifyAlpha(sized.rgba, rw.hasAlpha);
-    const alphaClass = effectiveAlphaClass(classified, preferCutout);
-    // Upgraded textures can be broadly semi-transparent (hipoly mod canopies) — sharpen their alpha or A2C
-    // renders the whole crown as a screen-door stipple; natural cutouts keep their authored alpha.
-    const sharpen = alphaClass !== classified;
+    const alphaClass = effectiveAlphaClass(classified, preferCutout, isAlphaMask(sized.rgba, CUTOUT_REF));
+    // Only a CALLER-upgraded texture is sharpened: it can be broadly semi-transparent (hipoly mod canopies)
+    // and A2C would render the whole crown as a screen-door stipple. A texture the mask rule upgraded already
+    // has a thin edge — steepening it would throw away the antialiasing A2C is there to resolve.
+    const sharpen = preferCutout && alphaClass !== classified;
     const mipCount = ostexMaxMips(OstexFormat.RGBA8, sized.width, sized.height);
     const mips = processAlphaTexture(sized.rgba, sized.width, sized.height, alphaClass, CUTOUT_REF, mipCount, sharpen);
     let width = sized.width;
@@ -398,4 +408,14 @@ function encodeArray(bucket: Bucket, layers: PlannedLayer[]): Uint8Array {
   };
 
   return encodeOstex(tex);
+}
+
+/** The planner's dedup key. The caller's cutout preference is PART of it, not just of the plan: 38 of the
+ *  map's TXDs are referenced by both vegetation and non-vegetation defs, and a content-only key handed all
+ *  of them whichever class the FIRST caller happened to ask for — a silent, build-order-dependent look.
+ *  Sharing survives wherever the callers agree, which is every texture the mask rule already settles. */
+function plannedKey(rw: RWTexture, preferCutout: boolean): number {
+  return (
+    fnv1a(rw.mipmaps[0]?.data ?? new Uint8Array()) ^ (rw.width << 8) ^ rw.height ^ (preferCutout ? 0x8000_0000 : 0)
+  );
 }

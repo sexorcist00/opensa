@@ -6,12 +6,23 @@ import {
   dilateEdges,
   downsample,
   effectiveAlphaClass,
+  isAlphaMask,
   premultiply,
   preserveCoverage,
   processAlphaTexture,
   resampleToPow2,
   sharpenAlpha,
 } from './alpha';
+
+/** A sheet of one alpha value — a uniform film, the shape a translucent surface takes. */
+function flatAlpha(alpha: number): Uint8Array {
+  const rgba = new Uint8Array(256 * 4);
+  for (let texel = 0; texel < 256; texel += 1) {
+    rgba.set([120, 120, 120, alpha], texel * 4);
+  }
+
+  return rgba;
+}
 
 /** 4×4 RGBA8: three columns opaque green, one transparent BLACK — the boundary straddles a mip texel
  *  (the alpha-edge disease in miniature). */
@@ -60,6 +71,31 @@ describe('alpha pipeline', () => {
       expect(effectiveAlphaClass('opaque', true)).toBe('opaque');
       expect(effectiveAlphaClass('cutout', true)).toBe('cutout');
       expect(effectiveAlphaClass('softBlend', false)).toBe('softBlend');
+      expect(effectiveAlphaClass('softBlend', false, false)).toBe('softBlend');
+    });
+
+    it('isAlphaMask rejects a uniform translucent film — it is one-sided (a51_glass)', () => {
+      expect(isAlphaMask(flatAlpha(190))).toBe(false);
+      expect(isAlphaMask(flatAlpha(40))).toBe(false);
+    });
+
+    it('isAlphaMask rejects a ramp — its texels LIVE on the test (a shadow gradient)', () => {
+      const rgba = new Uint8Array(256 * 4);
+      for (let texel = 0; texel < 256; texel += 1) {
+        rgba.set([80, 80, 80, texel], texel * 4);
+      }
+
+      expect(isAlphaMask(rgba)).toBe(false);
+    });
+
+    it('isAlphaMask rejects a soft blob on a transparent field (des_fanshadow)', () => {
+      // Mostly clear, and what is drawn never rises past the reference — alpha-testing it yields a blank.
+      const rgba = new Uint8Array(256 * 4);
+      for (let texel = 0; texel < 256; texel += 1) {
+        rgba.set([0, 0, 0, texel < 200 ? 0 : 60], texel * 4);
+      }
+
+      expect(isAlphaMask(rgba)).toBe(false);
     });
 
     it('sharpenAlpha leaves fully transparent and fully opaque texels untouched', () => {
@@ -84,6 +120,34 @@ describe('alpha pipeline', () => {
   describe('positive cases', () => {
     it('effectiveAlphaClass upgrades softBlend to cutout for vegetation callers (trees-through-trees fix)', () => {
       expect(effectiveAlphaClass('softBlend', true)).toBe('cutout');
+    });
+
+    it('effectiveAlphaClass upgrades a MASK with no caller preference at all (plan 092)', () => {
+      expect(effectiveAlphaClass('softBlend', false, true)).toBe('cutout');
+    });
+
+    it('isAlphaMask reads a mask whose HOLES never reach zero (Upt_Fence_Mesh)', () => {
+      // Chain-link authored at alpha 10 / 200: every texel is "mid" to classifyAlpha, so it lands softBlend
+      // and draws in the blend pass — while the game alpha-TESTS it and it needs to write depth.
+      const rgba = new Uint8Array(256 * 4);
+      for (let texel = 0; texel < 256; texel += 1) {
+        rgba.set([90, 90, 90, texel % 4 === 0 ? 10 : 200], texel * 4);
+      }
+
+      expect(classifyAlpha(rgba, true)).toBe('softBlend');
+      expect(isAlphaMask(rgba)).toBe(true);
+    });
+
+    it('isAlphaMask allows an antialiased edge up to a tenth of the sheet', () => {
+      // 16×16, left seven columns clear, one column ON the reference, the rest solid: a mask with an edge.
+      const rgba = new Uint8Array(16 * 16 * 4);
+      for (let y = 0; y < 16; y += 1) {
+        for (let x = 0; x < 16; x += 1) {
+          rgba.set([120, 120, 120, x < 7 ? 0 : x === 7 ? 128 : 255], (y * 16 + x) * 4);
+        }
+      }
+
+      expect(isAlphaMask(rgba)).toBe(true);
     });
 
     it('classifies a hard-edged leaf texture as cutout', () => {

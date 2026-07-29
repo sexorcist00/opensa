@@ -1,4 +1,4 @@
-import { classifyAlpha } from '@opensa/opensa-pack/alpha';
+import { classifyAlpha, isAlphaMask } from '@opensa/opensa-pack/alpha';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';
@@ -8,16 +8,16 @@ import { join } from 'node:path';
 import { gameArg, gameDir, readBytes } from '../lib/game';
 
 /**
- * The alpha-class census (plan 092 phase 0): what class the PACK gives every texture of an archive, and
- * what a candidate cutout rule would give it instead. Answers "which textures render in the depth-writing
- * cutout pass and which land in the blend pass, where the background paints over the foreground".
+ * The alpha-class census (plan 092): what class every texture of an archive gets, and which ones the mask
+ * rule moves out of the blend pass. Answers "which textures render in the depth-writing cutout pass and
+ * which land in the blend pass, where the background paints over the foreground".
  *
- * Two readings of the same histogram. The CURRENT one is absolute: `transparent` = alpha ≤ 5, `opaque` =
- * alpha ≥ 250, `mid` = the rest — `classifyAlpha` calls a texture cutout when mid ≤ 2 %. The CANDIDATE one
- * is relative to the alpha TEST vanilla applies (~128): `below` = alpha < 80, `above` = alpha > 176, `near`
- * = the band around the reference. A mask commits its texels to one SIDE of the test and spends only a thin
- * antialiased edge near it (that edge is what A2C renders); a true blend — glass, a shadow ramp, dirty
- * water — either washes the whole sheet across the reference or lives entirely on one side of it.
+ * Two readings of the same histogram. `classifyAlpha`'s is absolute: `transparent` = alpha ≤ 5, `opaque` =
+ * alpha ≥ 250, `mid` = the rest — cutout when mid ≤ 2 %. The MASK rule's is relative to the alpha TEST
+ * vanilla applies (~128): `below` = alpha < 80, `above` = alpha > 176, `near` = the band around the
+ * reference. A mask commits its texels to one SIDE of the test and spends only a thin antialiased edge near
+ * it (that edge is what A2C renders); a true blend — glass, a shadow ramp, dirty water — either washes the
+ * whole sheet across the reference or lives entirely on one side of it.
  *
  * Run: `npx tsx scripts/debug/alpha-class-census.ts [--game original] [--img <path>] [--json <out>]
  *       [--flips] [--below 0.05] [--above 0.05] [--near 0.10] [--txd <substring>]`
@@ -26,8 +26,10 @@ import { gameArg, gameDir, readBytes } from '../lib/game';
  * closest standing stand-in for what the pack actually reads (`.work/opensa-lod`, kept only under `--until`).
  */
 
-/** Candidate thresholds — CLI-tunable so the rule is fitted on the census, never on a re-pack. */
+/** With no threshold flag the census reports the rule the PACK SHIPS ({@link isAlphaMask}); passing one
+ *  re-fits it offline instead, which is how the shipped constants were chosen in the first place. */
 const DEFAULTS = { above: 0.05, below: 0.05, near: 0.1 };
+const TUNED = ['--above', '--below', '--near'].some((name) => process.argv.includes(name));
 /** The alpha-test reference the classes are read against, and the half-width of its transition band. */
 const REFERENCE = 128;
 const BAND = 48;
@@ -38,6 +40,7 @@ interface Row {
   readonly current: 'cutout' | 'opaque' | 'softBlend';
   readonly format: string;
   readonly height: number;
+  readonly mask: boolean;
   readonly mid: number;
   readonly near: number;
   readonly opaque: number;
@@ -47,9 +50,11 @@ interface Row {
   readonly width: number;
 }
 
-/** The candidate rule: a MASK populates both sides of the alpha test and spends only a thin edge on it. */
+/** A MASK populates both sides of the alpha test and spends only a thin edge on it. */
 function candidateCutout(row: Row, thresholds: typeof DEFAULTS): boolean {
-  return row.below >= thresholds.below && row.above >= thresholds.above && row.near <= thresholds.near;
+  return TUNED
+    ? row.below >= thresholds.below && row.above >= thresholds.above && row.near <= thresholds.near
+    : row.mask;
 }
 
 function flag(name: string, fallback: number): number {
@@ -153,6 +158,7 @@ for (const name of archive.names) {
       current,
       format: texture.format,
       height: texture.height,
+      mask: isAlphaMask(rgba, REFERENCE),
       texture: texture.name,
       txd: name,
       width: texture.width,
@@ -166,7 +172,11 @@ const unreached = rows.filter((row) => row.current === 'cutout' && !candidateCut
 const percent = (value: number): string => `${(value * 100).toFixed(1)}%`;
 
 console.log(`archive ${imgPath}`);
-console.log(`rule: below ≥ ${thresholds.below}, above ≥ ${thresholds.above}, near ≤ ${thresholds.near}`);
+console.log(
+  TUNED
+    ? `re-fit: below ≥ ${thresholds.below}, above ≥ ${thresholds.above}, near ≤ ${thresholds.near}`
+    : 'rule: the shipped isAlphaMask',
+);
 console.log(
   `current: opaque ${counts.opaque}, cutout ${counts.cutout}, softBlend ${counts.softBlend}` +
     (counts.unreadable > 0 ? `, unreadable ${counts.unreadable}` : ''),
