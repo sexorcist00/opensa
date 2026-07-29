@@ -1,8 +1,7 @@
 # 092 — Alpha classification: the cutouts that are not vegetation
 
-**Status: PLANNED 2026-07-29, not started.** Phase 0 is a MEASUREMENT phase and produces no pack — the
-class is baked, so every iteration that reaches the field costs a re-pack, and the rule is fitted offline
-first.
+**Status: phase 0 DONE 2026-07-29 (measurement only, no pack); phases 1–3 open.** The class is baked, so
+every iteration that reaches the field costs a re-pack — the rule is fitted offline first.
 
 ## Symptom (field, 2026-07-29)
 
@@ -112,33 +111,117 @@ the design below, not just a bug to note.
 - **No per-def flag list, no model names.** See the restriction above.
 - **No change to `classOf` / the pipeline set.** The classes are right; the assignment is wrong.
 
-## Phase 0 — fit the rule offline, pack nothing
+## Phase 0 — fit the rule offline, pack nothing ✅ DONE 2026-07-29
 
-The census script becomes a kept inspector (`scripts/debug/alpha-class-census.ts` + a row in
-`docs/debug/README.md` — the standing convention), reporting per texture: format, the four alpha shares, the
-current class, and the class a CANDIDATE rule would give it.
+Kept inspector: **`scripts/debug/alpha-class-census.ts`** (+ its row in `docs/debug/README.md`). Thresholds
+are CLI flags on purpose — the rule is fitted on the census, never on a re-pack.
 
-Deliverables:
+### The first candidate was wrong, and the eye review is what said so
 
-- the candidate rule stated as a formula over the histogram, with its constants and the reason each exists;
-- **the flip list** — every texture that changes class, grouped by TXD, with counts;
-- an eye review of the two risky buckets (the 1 203 no-opaque group and the 350 true blends), by dumping a
-  sample as PNG (`dump-texture.ts`, alpha channel included) — a rule that moves `a51_glass` is wrong before
-  it is ever packed;
-- the numbers recorded here (before/after counts per class).
+The obvious signal — "a mask COMMITS its texels", `decided` = share fully transparent (α ≤ 5) + fully opaque
+(α ≥ 250) — flips 2 023 of the 2 541 at `decided ≥ 0.5`, and it is wrong in both directions:
 
-Verification: `npm run test:fixtures`-style REAL assets, not synthetic ones — the fixtures lane exists for
-exactly this (a real TXD entry is one manifest line). Pin at least: a lattice (`wattsstax1_LAe`), a stock
-fence, a canopy that already upgrades via vegetation, and a true glass.
+- **False positives**: a soft shadow or a glow card is mostly FULLY transparent around a soft blob, so it
+  scores high. `des_fanshadow`, `blackshadow4`, `mast_shadow_t`, `cropdustprop4bit64` (a propeller disc),
+  `jlneon`, `circirctex4_neon` all flipped. Hardening a soft shadow into a stamped shape is a worse bug than
+  the one being fixed.
+- **False negatives**: `Upt_Fence_Mesh` — a chain-link mesh, the textbook cutout — has **no fully
+  transparent texel at all** (its holes sit at α ≈ 6–20), so it scored 0.29 and stayed blend. `wire2`, a
+  wire cross, has no fully OPAQUE texel and stayed too.
 
-Exit: the flip list is defensible without opening the game.
+The absolute bins ask the wrong question. What decides the look is the ALPHA TEST vanilla applies at ~128:
+a texel is either kept or dropped, and only the texels NEAR the reference are the antialiased edge (which is
+exactly what A2C exists to render).
+
+### The rule
+
+Read the histogram against the reference, not against 0 and 255 — `below` = α < 80, `above` = α > 176,
+`near` = the 128 ± 48 band:
+
+```
+cutout  ⇔  classifyAlpha() === 'cutout'                  (unchanged, the union's first leg)
+        ∨  (below ≥ 5 % ∧ above ≥ 5 % ∧ near ≤ 10 %)     (the new leg)
+```
+
+Why each constant exists:
+
+- **`below ≥ 5 %` and `above ≥ 5 %` — the texture must populate BOTH sides of the test.** This is the clause
+  that rejects true translucency without ever looking at gradients: `a51_glass` is 93.7 % below and 0 %
+  above (a uniform film), `glass_fence_64hv` is 92.5 % above and 4.4 % below, `des_fanshadow` is 85.8 %
+  below and 0 % above. None of them can be alpha-tested into anything but a blank or a solid.
+- **`near ≤ 10 %` — the transition must be an EDGE, not a ramp.** A mask spends a thin border on the
+  reference; a shadow ramp lives on it. Measured over the 2 201 two-sided softBlend textures, the `near`
+  distribution falls 564 → 553 → 340 → 145 across the first four 2.5 % bins and then FLATTENS into a tail of
+  50–100 per bin. The knee is at ~10 %; the constant is that knee, not a fit to any one texture. (For scale:
+  `wattsstax1_LAe` 5.0 %, `Upt_Fence_Mesh` 5.1 %, `wire2` 0 %, `ws_grilleshade` 0 % — against
+  `railshadowdif` 17.2 %, `mp_torenoshadA` 21.8 %, `blackshadow4` 23.5 %, `jlneon` 25.3 %, `keypad_glass`
+  87.9 %.)
+- **The union is required**: 57 textures that `classifyAlpha` already calls cutout do NOT satisfy the new
+  leg (a mask with almost nothing on one side). The rule only ever ADDS.
+
+### Numbers
+
+| | Count |
+| --- | --- |
+| textures decoded (`build/original/sa/models/gta3.img`) | 40 230 |
+| opaque / cutout / softBlend today | 37 090 / 599 / 2 541 |
+| **softBlend → cutout under the rule** | **1 602** |
+| stays blend | 939 |
+
+`wattsstax1/4_LAe` — the reported bug — flip: below 19.8 %, near 5.0 %, above 75.3 %.
+
+### The eye review (alpha channels dumped with `dump-texture.ts … alpha`)
+
+Verified as MASKS and correctly flipped: the tower lattice, `ws_grilleshade` (a hard vertical grille despite
+the "shade" in its name), `Upt_Fence_Mesh`, `wire2`, cutlery silhouettes, `spruce1` / `cedar1` branches,
+`ws_telwiresnew1` telephone wires, `golden_palms` and `nevada92decal128` sign lettering.
+
+Verified as TRUE BLENDS and correctly kept: `a51_glass` (uniform film), `railshadowdif` and `des_fanshadow`
+(soft ramps), `keypad_glass`, `cs_rockdetail`, `CJ_W_GRAD` (a gradient), `ws_corr_plastic`.
+
+**Residual false negative, accepted**: `Desrtmetal` — a diamond mesh whose low-res edges put it at
+near = 13.0 %, just past the knee. It stays exactly as it is today, so this is a miss, not a regression.
+Widening `near` to 15 % would take it and 193 others, including gradients — not worth it without a field
+verdict.
+
+### The finding that phase 1 has to answer
+
+**Some of the flips are coplanar OVERLAYS, and a texture-only rule cannot see it.** `sl_dtwinlights1/2`
+(night window sheets, near = 7.0 %) and hard-edged decals like `mp_torenoshadA` and `nevada92decal128` are
+mask-shaped by texture and correctly identified as such — but the blend pipeline is also what lets an
+overlay composite onto the surface it sits on: `pipelines.ts:686` gives blended classes `depthCompare:
+'greater-equal'` and no depth write precisely so that "coplanar overlays (night windows, wall signs)
+composite stably instead of shimmering". The cutout pipeline compares `greater` and WRITES — a truly
+coplanar overlay would lose its own depth test.
+
+So the class cannot be decided by the texture alone. What the ASSET carries that names this case is the
+def's own declaration — `IdeFlag.DRAW_LAST` (0x4, 2 419 defs), `ADDITIVE` (0x8) and `NO_ZBUFFER_WRITE`
+(0x40) are exactly SA saying "I am an overlay, composite me" — and that is a property of the def, not of the
+slot, so it satisfies the assets restriction. Phase 1 decides where that gate belongs, which is not free:
+the texture PROCESSING (sharpening, coverage-preserving mips) is per texture and cached by CONTENT, while
+the overlay declaration is per def. The two cannot both be honoured by the current single-decision-per-
+texture shape — that is the design question, and it is now stated with its evidence rather than guessed.
+
+Scope note found while tracing it: a vehicle's translucency comes from its submesh material class
+(`engine.ts:2515` picks `rigid-blend`), not from the texture's alpha class, so a flip on a livery decal
+changes its offline PROCESSING only, never its depth behaviour.
+
+### Phase 1's verification, unchanged
+
+`npm run test:fixtures`-style REAL assets, not synthetic ones — a real TXD entry is one manifest line. Pin
+at least: the tower lattice, a stock fence, a canopy that already upgrades via vegetation, a true glass, and
+one overlay from the class above.
+
+**Exit: met.** The flip list is defensible without opening the game, and the one thing that is NOT decidable
+offline is named.
 
 ## Phase 1 — the rule in the pipeline
 
-`classifyAlpha` (or a sibling it delegates to) returns the cutout verdict from the texels alone;
-`effectiveAlphaClass`'s caller preference is reduced to whatever the histogram genuinely cannot see, or
-retired. Whatever survives of `preferCutout` must be justified in the same change, since the content cache
-makes a caller preference order-dependent.
+`classifyAlpha` (or a sibling it delegates to) returns the phase-0 verdict from the texels alone.
+`effectiveAlphaClass`'s caller preference is then reduced to what the histogram genuinely cannot see — which
+phase 0 measured to be exactly one thing, the coplanar-overlay class — or retired. Whatever survives of
+`preferCutout` must be justified in the same change, since the content cache makes a caller preference
+order-dependent, and the vegetation gate it replaces is a slot rule.
 
 The sharpening gate follows the rule, not the caller: a texture upgraded by the new rule is sharpened on the
 same terms the vegetation upgrade already uses (that is the 2026-07-13 lesson — otherwise a broadly
