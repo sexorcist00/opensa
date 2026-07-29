@@ -16,15 +16,18 @@ const serveStatic = sirv('static', { dev: true });
 const serveTests = sirv('tests', { dev: true }); // `/viewer/objects/x` → `tests/viewer/objects/x`
 const serveBuild = sirv('build', { dev: true }); // `/build/original/opensa/x` → `build/original/opensa/x`
 
-/** A flat `{ path, size }[]` walk of a served dir — the http-dir loader's file index (its `__index` endpoint). */
+/** A flat `{ path, size }[]` walk of a served dir — the http-dir loader's file index (its `__index` endpoint).
+ *  Classified via statSync (NOT the Dirent) so symlinked files/dirs are followed — the model-repack lab dir
+ *  (`build/<game>/opensa-lab`, plan 024 phase 0) is a per-file-symlink mirror and sirv already serves them. */
 function dirIndex(dir: string, base = ''): { path: string; size: number }[] {
   const out: { path: string; size: number }[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const rel = base ? `${base}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) {
+    const stats = statSync(join(dir, entry.name));
+    if (stats.isDirectory()) {
       out.push(...dirIndex(join(dir, entry.name), rel));
-    } else if (entry.isFile()) {
-      out.push({ path: rel, size: statSync(join(dir, entry.name)).size });
+    } else if (stats.isFile()) {
+      out.push({ path: rel, size: stats.size });
     }
   }
 
