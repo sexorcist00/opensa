@@ -42,6 +42,10 @@ mostly burned down; do not re-run the exonerated probes).**
 
 ## Where to resume
 
+- **Plan [094 — sa-map-viewer](../plans/094-sa-map-viewer/readme.md) (PLANNED 2026-07-29) exists
+  because of this issue**: a standalone viewer over ORIGINAL files with a fixed top-down camera —
+  folder-swappable vanilla-vs-merged A/B with no repack and no orbit drift. Its Phase 6 is this
+  bisect.
 - **Kill the orbit for A/B**: fixed camera (orbit=0 / a static `at`+look param, or add one to the
   lab) so pixel diffs are valid; then re-run the file-level bisect (`model-repack --no-mods
   --mod-only …`, halving over the ~6 mod-shipped DFFs + txd events of cells 0,-7 / 0,-8 / -1,-7).
