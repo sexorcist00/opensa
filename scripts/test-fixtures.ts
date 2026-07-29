@@ -55,6 +55,10 @@ const MOD_MANIFEST: readonly Fixture[] = [
   // A Chinatown building + its dictionary: 19 material textures, several 512² DXT1 with 10 mip levels.
   modFile('17. Chinatown Project v2 + Chinese Lamps/gta3_img/chinatown_sfe1.dff', 'mods/chinatown_sfe1.dff'),
   modFile('17. Chinatown Project v2 + Chinese Lamps/gta3_img/chinatownsfe.txd', 'mods/chinatownsfe.txd'),
+  // The Map Fixes Pack road tile whose authored normals are winding-CONSISTENT yet face the ground on
+  // visible top faces (35 down / 61 sideways of 168 — dark Gouraud wedges in the field): the plan 024
+  // Family A real-asset guard for the `badShading` gate check.
+  modFile('0. Map Fixes Pack/gta3_img/lae2_roads17.dff', 'mods/lae2_roads17.dff'),
 ];
 
 const MANIFEST: readonly Fixture[] = [
@@ -219,7 +223,9 @@ function produce(fixture: Fixture): null | Uint8Array {
       return extractEntry(fixture.entry);
     }
     case 'mod': {
-      return new Uint8Array(readFileSync(join('mods-src', 'mods', fixture.from)));
+      // `mods-src/<game>/mods` — the per-game layout (plan 079); the old flat `mods-src/mods` path made
+      // every mod fixture report MISSING while stale copies from the previous layout masked it.
+      return new Uint8Array(readFileSync(join('mods-src', GAME, 'mods', fixture.from)));
     }
   }
 }

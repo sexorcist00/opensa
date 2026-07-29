@@ -20,7 +20,9 @@ import type { SubMesh } from '../core/ir';
  *
  * **Plan 020: meshes that SHIP normals are sanity-gated instead of blindly rebuilt** — authored normals are the
  * only place an author expressed curvature intent (surfaces smooth across >45° dihedrals). Per-vertex checks
- * (unit-ish length, winding agreement; two-sided cancellation = unverifiable → trusted) yield a per-mesh verdict:
+ * (unit-ish length, winding agreement, and plan 024's `badShading` — a normal facing the GROUND markedly more
+ * than its most sky-facing incident face, the mirror-side-onto-shared-vertex class winding cannot see;
+ * two-sided cancellation without a shading failure = unverifiable → trusted) yield a per-mesh verdict:
  * all pass → **preserved** byte-identical; isolated failures (≤ `repairFraction`) → **point-repaired** (only the
  * failing vertices get their smooth-group normal, no splits); mass failure → full **recompute** as before.
  *

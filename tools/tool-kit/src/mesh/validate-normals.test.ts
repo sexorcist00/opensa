@@ -38,13 +38,64 @@ describe('validateNormals', () => {
       expect(failing).toEqual([0]);
       expect(stats.badWinding).toBe(1);
     });
+
+    it('fails a mirror-side normal shared with a top face as badShading (the roads17 class, 024)', () => {
+      // The quad doubled two-sided on SHARED vertices: winding evidence cancels (the 020 gate trusted
+      // this), but a DOWN normal still darkens the visible top face it participates in.
+      const indices = [...QUAD_INDICES, 0, 2, 1, 0, 3, 2];
+      const normals = upNormals(4);
+      normals[2] = -1;
+      normals[0] = 0; // vertex 0 → straight down
+      const { failing, stats } = validateNormals(QUAD_POSITIONS, indices, normals);
+      expect(failing).toEqual([0]);
+      expect(stats.badShading).toBe(1);
+      expect(stats.badWinding).toBe(0); // cancelled evidence — winding could not see it
+    });
+
+    it('fails a sideways normal on a flat top face (orthogonal dot passes winding, shading catches it)', () => {
+      const normals = upNormals(4);
+      normals[0] = 1;
+      normals[2] = 0; // vertex 0 → horizontal +X on a +Z quad
+      const { failing, stats } = validateNormals(QUAD_POSITIONS, QUAD_INDICES, normals);
+      expect(failing).toEqual([0]);
+      expect(stats.badShading).toBe(1);
+    });
+
+    it('respects a custom shadeDz (Infinity disables the shading check)', () => {
+      const normals = upNormals(4);
+      normals[0] = 1;
+      normals[2] = 0;
+      const { failing, stats } = validateNormals(QUAD_POSITIONS, QUAD_INDICES, normals, {
+        shadeDz: Number.POSITIVE_INFINITY,
+      });
+      expect(failing).toEqual([]);
+      expect(stats.badShading).toBe(0);
+    });
   });
 
   describe('positive cases', () => {
     it('passes clean unit normals that agree with winding', () => {
       const { failing, stats } = validateNormals(QUAD_POSITIONS, QUAD_INDICES, upNormals(4));
       expect(failing).toEqual([]);
-      expect(stats).toEqual({ badUnit: 0, badWinding: 0, unverifiable: 0, vertexCount: 4 });
+      expect(stats).toEqual({ badShading: 0, badUnit: 0, badWinding: 0, unverifiable: 0, vertexCount: 4 });
+    });
+
+    it('passes an UP normal on a VERTICAL face (the grass-card trick — brightening is legal, 024)', () => {
+      // A quad standing in the XZ plane (face normal −Y) with straight-up normals: the field-validated
+      // standard01_lawn case — the asymmetric test must not flag sky-rotated normals.
+      const positions = new Float32Array([0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1]);
+      const { failing, stats } = validateNormals(positions, QUAD_INDICES, upNormals(4));
+      expect(failing).toEqual([]);
+      expect(stats.badShading).toBe(0);
+    });
+
+    it('passes a mirror-side DOWN normal on a vertex used only by the bottom side', () => {
+      // A bottom-facing quad (winding → −Z) with down normals — its own side, correct shading.
+      const normals = new Float32Array(12);
+      for (let v = 0; v < 4; v += 1) normals[v * 3 + 2] = -1;
+      const { failing, stats } = validateNormals(QUAD_POSITIONS, [0, 2, 1, 0, 3, 2], normals);
+      expect(failing).toEqual([]);
+      expect(stats.badShading).toBe(0);
     });
 
     it('keeps a two-sided (cancelling) vertex as unverifiable instead of failing it', () => {

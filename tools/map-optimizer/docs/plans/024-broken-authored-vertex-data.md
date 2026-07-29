@@ -196,6 +196,25 @@ control — expect a re-check to pass), `xoverlaymap09` 1558u² / 4 faces (Map F
   `scripts/test-fixtures.ts`). tool-kit core is SHARED with opensa-lod-generator — re-run the LOD
   harness; the two tools ship in tandem.
 
+**BUILT 2026-07-29. What shipped and what it measured:**
+
+- `validateNormals` gained the **`badShading`** check: `max(nzFace of incident faces) − nzVertex >
+  shadeDz` (default 0.5 ≈ 60°, `shadeDz: Infinity` disables) — the field-derived asymmetric metric,
+  not the plan's original "per-side evidence angle" sketch (Phase 2 falsified symmetric tests twice;
+  judging against the vertex's most sky-facing face needs no side bookkeeping at all). Check order
+  badUnit → badWinding (evidence present) → badShading keeps every 020 test green unchanged.
+- `lae2_roads17` gate verdict flips exactly as designed: 020 said `failing 0 → preserved`; 024 says
+  `badShading 31, unverifiable 16 → failing 31 > cap 8 → full recompute`. A lab rebuild WITHOUT
+  `--strip-normals` now produces byte-identical clean cells to the manual experiment (209 verts,
+  100 straight up, dark copies only on their own mirror/curb splits — `verify-cell-normals.ts`).
+- Real-asset guard: `tests/original/mods/lae2_roads17.dff` fixture +
+  `smooth-normals.integration.test.ts` (source has >10 dark top faces; gate recomputes; rebuilt
+  surface has 0). Fixing the fixture path exposed a latent bug: `test-fixtures.ts` read mod fixtures
+  from the pre-079 flat `mods-src/mods/` — every mod fixture silently reported MISSING while stale
+  copies masked it; now `mods-src/<game>/mods`, 83/83 fixtures write.
+- Suites: tool-kit 49 ✓, full consumer sweep (map-optimizer + all four LOD generators + lod-common)
+  444 tests / 81 files ✓ — no snapshot re-baselines needed.
+
 ### Phase 3b — Family B fix: recover SA's real formula first, then choose the layer
 
 1. Recover from gta-reversed (`docs/links.md`) the exact fixed-function vertex-lighting formula SA
