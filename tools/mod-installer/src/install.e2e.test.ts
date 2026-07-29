@@ -289,6 +289,28 @@ describe('install (end-to-end)', () => {
       expect(textures.map((texture) => texture.name).sort()).toEqual(['particleskid', 'stock']);
     });
 
+    it('warns about a PNG folder with no dictionary to patch, and still copies it', () => {
+      // The IMG side has always warned here; the loose side used to copy in silence. Copying stays the
+      // behaviour (the game ignores stray PNGs) — the warning is what points at `txd-from-pngs.ts`.
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+      write(join(game, 'data', 'gta.dat'), 'IDE data/x.ide\n');
+      write(join(mods, 'unpacked', 'models', 'philss', 'body.png'), png(8, [1, 2, 3, 255]));
+
+      const warnings: string[] = [];
+      const warn = console.warn;
+      console.warn = (message: string): void => void warnings.push(message);
+      try {
+        install({ gamePath: game, inPath: mods, outPath: out });
+      } finally {
+        console.warn = warn;
+      }
+
+      expect(warnings.some((line) => /texture folder .*philss.* no .*philss\.txd/.test(line))).toBe(true);
+      expect(existsSync(join(out, 'models', 'philss', 'body.png'))).toBe(true);
+    });
+
     it('routes each mod by kind: a loader mod is baked (gta.dat + gta3.img), a plain mod overlays', () => {
       const game = join(root, 'game');
       const mods = join(root, 'mods');

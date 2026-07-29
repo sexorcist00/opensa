@@ -75,9 +75,9 @@ gta3_img/previon/remap.png              →  merges into the previon.txd ENTRY i
   shape: "52. Abandoned Cars" shipped `gta3_img/philss/` as 22 loose PNGs while "0. Map Fixes Pack" repointed
   `cuntwjunk04` at a `philss` dictionary nobody shipped, and those 22 PNGs were exactly that model's 22
   textures.
-- On the LOOSE side there is no such warning: a folder whose `<dir>.txd` does not exist is simply copied as a
-  directory, PNGs and all. Harmless (the game ignores them) but silent — the asymmetry is deliberate only in
-  the sense that nobody has needed the warning there yet.
+- On the LOOSE side the folder is **warned about and still copied** as a directory, PNGs and all: nothing
+  there can create the dictionary, the stray files are harmless (the game ignores them), and a later rule may
+  well make the folder itself valid. The warning is the part that matters — it names the missing `.txd`.
 
 ### `<target>.merge` — edit a data file instead of replacing it
 

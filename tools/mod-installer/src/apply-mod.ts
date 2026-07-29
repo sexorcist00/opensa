@@ -100,6 +100,12 @@ function applyEntry(
 
   mkdirSync(dstPath, { recursive: true });
   const entries = readdirSync(srcPath, { withFileTypes: true });
+  // A folder of PNGs with no dictionary to patch is the shape the IMG side already warns about: the mod
+  // ships a WHOLE dictionary unpacked, and nothing here can create it (`scripts/debug/txd-from-pngs.ts`
+  // does). The files are still copied — harmless, and a future rule may make the folder itself valid.
+  if (entries.some((entry) => entry.isFile() && /\.png$/i.test(entry.name))) {
+    console.warn(`mod-installer: texture folder ${srcPath} — no ${txdPath} to merge into; copying as files`);
+  }
   let copied = 0;
   let merged = 0;
   for (const wantDir of [false, true]) {
