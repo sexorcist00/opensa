@@ -302,6 +302,21 @@ moves land where the rule cannot reach (ocean-horizon 1.961 → 0.915 at 27 draw
 tree with only the rule flipped is the run nobody has taken.
 Run: [`2026-07-29-headless-092-alpha-cutout-sweep.json`](opensa-engine/2026-07-29-headless-092-alpha-cutout-sweep.json).
 
+### 2026-07-29 — plan 093: the world ambient term costs nothing (and this one IS a clean A/B)
+
+The engine gained SA's additive ambient term + the deliberate day floor
+(`max(lin(timecyc Amb) × knob, 0.13 × (1 − dn))`) in `worldShade`/clutter; frame uniform 100 → 104
+floats. Same pak as the 092 row (buildTime 10:53 29-07-2026 — the change is engine-side only), same
+harness: all NINE scenes at the 120 Hz cap, p95 9.2–9.3, `lateCreates` 0, `gpuMs.pass` 1.50–2.69
+within the 092 band. One MAD per fragment is noise-level, as expected. The sweep also debuts
+**`strip-noon`** (south Strip street level at the Flamingo block, added after the 093 field round):
+119.9 fps steady-state — proving the field-reported hitches at that spawn are the COLD-LOAD
+transient (first-frame `cell-collision-read` 235 ms, then ~20 frames of 110–170 ms mostly
+UNATTRIBUTED while cells stream 0 → 95, plus the known per-type vehicle build), not a regression.
+The unattributed transient and a `[slow]`-line double-count (collision counted in both `collision`
+and `other` → `unattributed -226.1`) are the queued 091 follow-up inputs.
+Run: [`2026-07-29-headless-093-world-ambient-sweep.json`](opensa-engine/2026-07-29-headless-093-world-ambient-sweep.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

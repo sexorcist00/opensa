@@ -109,6 +109,24 @@ export const BENCH_SCENES: readonly BenchScene[] = [
     weather: 1, // SUNNY_LA
   },
   {
+    // South Strip at street level, noon (the Flamingo/Pirate block). Added 2026-07-29: the 093 field
+    // round teleported here (`&spawn=1934,1177`) and hit the heaviest cold-load transient seen so far
+    // (~20 frames of 110-170 ms, mostly UNATTRIBUTED, plus the known per-type vehicle hitch) — the
+    // casino district's density deserves a standing steady-state row like ganton-noon's, and the
+    // teleport transient itself is the queued 091 follow-up.
+    anchor: [1934, 1177, 14],
+    cars: { radius: 500, spacing: 30 },
+    durationS: 15,
+    hour: 12,
+    key: 'strip-noon',
+    path: [
+      { look: [2010, 1300, 25], pos: [1850, 1060, 28] },
+      { look: [2010, 1250, 20], pos: [1934, 1140, 22] },
+      { look: [2100, 1300, 25], pos: [2010, 1080, 30] },
+    ],
+    weather: 11, // EXTRASUNNY_VEGAS
+  },
+  {
     // The same Ganton path at night — isolates the day/night delta on identical geometry, which is what
     // the field reported as the loudest difference. Same weather as the noon row on purpose.
     anchor: [2374, -1660, 13],
