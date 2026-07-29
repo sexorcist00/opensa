@@ -177,6 +177,10 @@ export interface EngineStats {
 }
 
 export interface Environment {
+  /** World ambient floor, linear (timecyc `Amb` — plan 093): SA's building formula ADDS this on top
+   *  of the blended prelight, normal-independent, so black-authored shadow verts still read as
+   *  shadow instead of a hole. The world/clutter shaders add it; rigid keeps its own indirect. */
+  ambientColor: readonly [number, number, number];
   /** Baked AO/skyVis strength on the indirect term (074/07): 0 = off, 1 = raw bake. */
   aoStrength: number;
   /** Bloom strength on the composite (074/09): 0 = off (the chain passes are skipped entirely). */
@@ -560,6 +564,8 @@ export class Engine {
 
   /** Live environment — host mutates freely; written into the frame UBO every frame. Noon defaults. */
   readonly environment: Environment = {
+    // Midday LA timecyc `Amb` (78,83,89)/255 linearized — the drivers overwrite it per hour/weather.
+    ambientColor: [0.074, 0.084, 0.098],
     // Modest by default: SA prelit already carries baked darkening — full-strength AO double-darkens.
     aoStrength: 0.6,
     bloomIntensity: 0.7,
@@ -720,7 +726,7 @@ export class Engine {
   private postSampler!: GPUSampler;
   private postUniform!: GPUBuffer;
   private probe!: EnvProbe;
-  private readonly probeFrameData = new Float32Array(100);
+  private readonly probeFrameData = new Float32Array(104);
   private readonly probeFrustum = new Float32Array(24);
   private readonly probeInvViewProj: Mat4 = mat4Identity();
   /** Face-render cadence counter (renders when it wraps to 0 — see PROBE_FRAME_INTERVAL). */
@@ -1070,7 +1076,7 @@ export class Engine {
     mat4LookAt(this.view, camera.eye, camera.target, camera.up);
     mat4Multiply(this.viewProj, this.proj, this.view);
     mat4Invert(this.invViewProj, this.viewProj);
-    const frameData = new Float32Array(100);
+    const frameData = new Float32Array(104);
     frameData.set(this.viewProj, 0);
     frameData.set(this.invViewProj, 16);
     // camera.w = spare (held the retired cloud-panorama crossfade blend).
@@ -1119,6 +1125,9 @@ export class Engine {
     // cloudTop.w = the cumulus clump-size multiplier (sky v2 weather identity).
     frameData.set([...env.cloudTopColor, env.cloudScale], 92);
     frameData.set([...env.cloudBottomColor, 1], 96);
+    // World ambient floor (plan 093): SA's building formula adds timecyc ambient ON TOP of prelit —
+    // normal-independent, so black-authored shadow verts stay shadow instead of holes. .w spare.
+    frameData.set([...env.ambientColor, 0], 100);
     this.refreshSkyLut(); // before the probe submit — the probe's sky pass samples the LUT too
     this.scheduleProbe(frameData);
     this.device.queue.writeBuffer(this.frameUniform, 0, frameData);
@@ -1327,7 +1336,7 @@ export class Engine {
     });
     this.frameUniform = this.resources.createBuffer('uniform', {
       label: 'frame',
-      size: 400, // viewProj + invViewProj (128) + 17 × vec4 (camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona/water/params4/cloudTop/cloudBottom)
+      size: 416, // viewProj + invViewProj (128) + 18 × vec4 (camera/sun/params/sky×2/fog/params2/moon×2/params3/sunCore/sunCorona/water/params4/cloudTop/cloudBottom/ambient)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     // Local light pool (074/06 row 7): CPU-filled point lights, shared by every frame-layout pipeline.

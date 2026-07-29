@@ -175,6 +175,8 @@ export function createGameRuntimeConfig(): Config {
       },
       // SA prelit world (plan 038) calibration — live-tunable in debug → Atmosphere.
       worldLight: {
+        ambient: 1,
+        ambientFloor: 0.13,
         dayBrightness: 0.85,
         duskBrightness: 0.45,
         lodNightAmbScale: 1.6,

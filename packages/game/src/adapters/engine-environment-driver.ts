@@ -45,7 +45,7 @@ export interface EngineEnvConfig {
     /** SA prelit calibration (plan 038): day/night factors on the baked vertex light. The night value is
      *  what keeps the world READABLE after sunset (074/09 sky round 2 — the engine ran night at 0.4 vs
      *  prod's 0.7 and went pitch-black the moment the sun sank). */
-    worldLight: { dayBrightness: number; nightPrelitBrightness: number };
+    worldLight: { ambient: number; ambientFloor: number; dayBrightness: number; nightPrelitBrightness: number };
   };
 }
 
@@ -62,7 +62,7 @@ export const DEFAULT_ENGINE_ENV_CONFIG: EngineEnvConfig = {
     toneMapping: true,
     toneMappingMode: 'aces',
     vehicleReflection: { intensity: 0.25, preset: 'default' },
-    worldLight: { dayBrightness: 0.85, nightPrelitBrightness: 0.7 },
+    worldLight: { ambient: 1, ambientFloor: 0.13, dayBrightness: 0.85, nightPrelitBrightness: 0.7 },
   },
 };
 
@@ -176,6 +176,10 @@ export function createEngineEnvironmentDriver(
       environment.reflectionStrength = reflection.preset === 'off' ? 0 : reflection.intensity * 4;
       if (timecyc) {
         const sample = sampleTimecycBlend(timecyc, blend.from, blend.to, hour, blend.t);
+        // World ambient floor (plan 093): the timecyc `Amb` column IS SA's additive building-ambient
+        // term (ps2BuildingVS `Color.rgb += ambient*surfAmb`) — hour/weather-authored, so the floor
+        // breathes with the clock on its own. `worldLight.ambient` is the calibration scale.
+        environment.ambientColor = scale3(lin3(sample.amb), worldLight.ambient);
         environment.sunColor = scale3(lin3(sample.dir), dayGate);
         environment.sunCoreColor = scale3(lin3(sample.sunCore), dayGate);
         environment.sunCoronaColor = scale3(lin3(sample.sunCorona), dayGate);
@@ -198,6 +202,7 @@ export function createEngineEnvironmentDriver(
       } else {
         // Parametric fallback (old paks without timecyc): warm-shifting disc, fixed day/night gradients.
         const warm = clamp01(1 - sun.elevationRatio);
+        environment.ambientColor = scale3(mix3([0.074, 0.084, 0.098], [0.012, 0.014, 0.02], dn), worldLight.ambient);
         environment.sunColor = [dayGate, (0.96 - warm * 0.15) * dayGate, (0.88 - warm * 0.3) * dayGate];
         environment.sunCoreColor = [dayGate, (0.95 - warm * 0.25) * dayGate, (0.68 - warm * 0.4) * dayGate];
         environment.sunCoronaColor = [dayGate, (0.8 - warm * 0.25) * dayGate, (0.4 - warm * 0.3) * dayGate];
@@ -206,6 +211,18 @@ export function createEngineEnvironmentDriver(
         environment.cloudTopColor = mul3(mix3([0.78, 0.8, 0.85], [0.06, 0.07, 0.1], dn), clouds.tint);
         environment.cloudBottomColor = mul3(mix3([0.45, 0.48, 0.55], [0.03, 0.035, 0.05], dn), clouds.tint);
       }
+      // The DELIBERATE day floor under the timecyc term (`docs/hacks/world-ambient-floor.md`): vanilla SA
+      // authors daytime `Amb` at ~zero (EXTRASUNNY_LA noon = 11,0,0 — verified against the 2004 PS2
+      // timecycp and a third-party original), so real SA renders black-prelit walls BLACK at noon and the
+      // formula alone cannot lift the 024 Family B holes. `max()` keeps the timecyc's authority whenever it
+      // authors MORE than the floor (nights, fog weathers), and `× (1 − dn)` retires the floor at night so
+      // authored darkness survives. 0 = strict SA parity.
+      const floor = worldLight.ambientFloor * (1 - dn);
+      environment.ambientColor = [
+        Math.max(environment.ambientColor[0], floor),
+        Math.max(environment.ambientColor[1], floor),
+        Math.max(environment.ambientColor[2], floor),
+      ];
       // The fog ⊂ LOD-ring invariant (074/21): whatever the weather authored, the cut never crosses the
       // streaming ring's margin — everything past the cap is loaded-but-fogged, so pops are impossible.
       // Start is kept under the (possibly clamped) cut so the exp² ramp never degenerates.

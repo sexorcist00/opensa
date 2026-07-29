@@ -7,6 +7,7 @@ import { createEngineEnvironmentDriver, DEFAULT_ENGINE_ENV_CONFIG } from './engi
 /** Minimal mutable Environment (only the fields the driver writes matter; extras don't). */
 function makeEnvironment(): Environment {
   return {
+    ambientColor: [0.074, 0.084, 0.098],
     aoStrength: 0.6,
     bloomIntensity: 0.7,
     bloomThreshold: 0.7,
@@ -278,6 +279,48 @@ describe('createEngineEnvironmentDriver', () => {
       for (const channel of [...environment.cloudTopColor, ...environment.cloudBottomColor]) {
         expect(Number.isFinite(channel)).toBe(true);
       }
+    });
+
+    it('drives the world ambient floor from the timecyc amb column, scaled by the worldLight knob (093)', () => {
+      const row = [
+        '78 83 89', // amb — midday LA
+        '170 170 170', // ambObj
+        '255 255 255', // dir
+        '40 40 40', // skyTop
+        '60 60 60', // skyBot
+        '0 0 0', // sunCore
+        '0 0 0', // sunCorona
+        '1 1 0.6', // sunSize spriteSize spriteBright
+        '200 100 0', // shadow lightShadow poleShadow
+        '412 0 1', // farClip fogStart lightOnGround
+        '80 80 80', // lowClouds
+        '50 50 50', // bottomClouds
+        '240 255 38 64', // water RGBA
+        '98 255 0 64', // alpha1 rgb1
+        '20 90 55 0', // alpha2 rgb2
+        '0 0 0 1', // cloudAlpha intensityLimit waterFogAlpha dirMult
+      ].join(' ');
+      const text = Array.from({ length: 24 }, () => row).join('\n');
+      const environment = makeEnvironment();
+      const config = structuredClone(DEFAULT_ENGINE_ENV_CONFIG);
+      config.graphics.worldLight.ambient = 0.5;
+      config.graphics.worldLight.ambientFloor = 0; // isolate the timecyc term from the deliberate floor
+      createEngineEnvironmentDriver(environment, { config, timecyc: { is24h: true, text }, weather: 0 }).apply(12);
+
+      expect(environment.ambientColor[0]).toBeCloseTo((78 / 255) ** 2.2 * 0.5, 5);
+      expect(environment.ambientColor[1]).toBeCloseTo((83 / 255) ** 2.2 * 0.5, 5);
+      expect(environment.ambientColor[2]).toBeCloseTo((89 / 255) ** 2.2 * 0.5, 5);
+    });
+
+    it('floors a near-zero day amb via max() but retires the floor at night (093 deliberate floor)', () => {
+      const environment = makeEnvironment();
+      const config = structuredClone(DEFAULT_ENGINE_ENV_CONFIG);
+      config.graphics.worldLight.ambientFloor = 0.13;
+      const driver = createEngineEnvironmentDriver(environment, { config });
+      driver.apply(12); // parametric day amb ≈ 0.074..0.098 — all under the 0.13 floor
+      expect(environment.ambientColor).toEqual([0.13, 0.13, 0.13]);
+      driver.apply(2); // deep night: dn = 1 retires the floor entirely — authored darkness survives
+      expect(environment.ambientColor[0]).toBeCloseTo(0.012, 5);
     });
 
     it('drives the water tint from the timecyc columns', () => {

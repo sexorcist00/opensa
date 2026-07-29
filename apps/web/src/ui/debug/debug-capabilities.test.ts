@@ -183,15 +183,17 @@ describe('worldLightControlsFor', () => {
   });
 
   describe('positive cases', () => {
-    it('keeps the two brightnesses the environment driver actually applies', () => {
+    it('keeps the knobs the environment driver actually applies (day/night + the 093 ambient)', () => {
       expect(worldLightControlsFor(ENGINE_DEBUG_CAPABILITIES).map(([key]) => key)).toEqual([
         'dayBrightness',
         'nightPrelitBrightness',
+        'ambient',
+        'ambientFloor',
       ]);
     });
 
-    it('shows all seven for a fully capable host', () => {
-      expect(worldLightControlsFor(ALL_DEBUG_CAPABILITIES)).toHaveLength(7);
+    it('shows all nine for a fully capable host', () => {
+      expect(worldLightControlsFor(ALL_DEBUG_CAPABILITIES)).toHaveLength(9);
     });
   });
 });

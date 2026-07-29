@@ -64,6 +64,7 @@ the number.
 | [Suspension sag bridge](suspension-sag-bridge.md) | `game/physics/physics-world.ts` | solving Rapier's controller equilibrium instead of probing it |
 | [Sky-occlusion despeckle](sky-occlusion-despeckle.md) | `renderware/vehicle/sky-occlusion.ts` | marching against the mesh rather than a height field that reads a wiper as a wall |
 | [Sun-disc angular size](sun-disc-angular-size.md) | `engine/engine.ts` | the original's own sun billboard sizing, never dug out |
+| [World ambient floor](world-ambient-floor.md) | `game/adapters/engine-environment-driver.ts` | nothing — a deliberate deviation: vanilla day `Amb` ≈ 0 and real SA shows black-prelit walls black; the floor (max(), day-only, fitted 0.13) is the look the field chose over parity |
 | [Tyre-smoke intensity fit](tyre-smoke-intensity-fit.md) | `game/vehicle/vehicle-tyre-smoke.system.ts` | `CFx::AddWheel*` parameters — stubs in gta-reversed, nothing to port |
 | [Skid-mark look fit](skid-mark-look-fit.md) | `game/vehicle/vehicle-skid-marks.system.ts` | SA's `CSkidmarks` width/opacity constants, same unrecoverable code paths |
 | [Impact-smoke fit](impact-smoke-fit.md) | `web/ui/engine-vehicles.ts` | SA's `CFx` collision-effect counts/lifetimes; the trigger itself is the calibrated damage gate |

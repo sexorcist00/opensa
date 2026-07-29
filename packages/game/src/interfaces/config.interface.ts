@@ -601,6 +601,14 @@ export interface WaterConfig {
  * tint` — and these scalars calibrate the tints. All read live each frame (debug → Atmosphere).
  */
 export interface WorldLightConfig {
+  /** Scale on the additive timecyc-ambient term (plan 093 — SA's `Color.rgb += ambient*surfAmb`
+   *  building term): 1 = the game's own column, 0 = off. */
+  ambient: number;
+  /** DELIBERATE day-time lower bound (linear) under the timecyc ambient — `max()`, day-shaped, our
+   *  deviation from SA (vanilla authors day `Amb` ≈ 0 and shows black-prelit walls black). Fitted to
+   *  the field-approved prelit-floor-40 experiment (`docs/hacks/world-ambient-floor.md`); 0 = strict
+   *  SA parity. */
+  ambientFloor: number;
   /** Noon world brightness (× prelit). Sub-white compensates the always-on ACES tone curve. */
   dayBrightness: number;
   /** Dawn/dusk dim level the sun-height day arc sinks to near the horizon (warm hue is fixed). */

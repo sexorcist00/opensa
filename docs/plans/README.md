@@ -16,7 +16,15 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`092`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+`001`–`093`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+
+- **[093 — The world ambient term](./093-world-ambient-term/readme.md)** — IN PROGRESS 2026-07-29.
+  SA's own building formula (recovered from SkyGfx's PS2 pipe + gta-reversed) adds
+  `timecycle ambient × surfAmb` ON TOP of the day/night-blended prelight — an additive,
+  normal-independent floor our `worldShade` never had. Without it every black-prelit vertex renders
+  pure black, and the class is vanilla-wide (2 243 models, 125 of the worst 186 are stock SA — shadow
+  was AUTHORED as black, trusting the renderer's floor). Engine half of map-optimizer plan 024;
+  field-proven per-model with `model-repack.ts --prelit-floor` before a line of engine code changed.
 
 - **[092 — Alpha classification: the cutouts that are not vegetation](./092-alpha-cutout-classification/readme.md)** —
   PLANNED 2026-07-29. The Watts Towers (`wattspark1_LAe2`) show their far side and the towers behind through

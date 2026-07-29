@@ -140,6 +140,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -633,6 +637,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -1110,7 +1118,9 @@ fn clutterShade(in: ClutterOut, cutout: bool) -> vec4f {
     // does not turn into a uniform A2C screen-door.
     texel.a = clamp((texel.a - 0.5) / max(fwidth(texel.a), 0.0001) + 0.5, 0.0, 1.0);
   }
-  let lit = in.prelit * frame.params.y +
+  // frame.ambient (plan 093): the same additive SA ambient floor the world shader carries (no AO
+  // channel on clutter).
+  let lit = in.prelit * frame.params.y + frame.ambient.rgb +
     frame.sunColor.rgb * (in.sunNdl * frame.params.z) +
     frame.moonColor.rgb * in.moonNdl;
   var color = texel.rgb * lit;
@@ -1185,6 +1195,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -1695,6 +1709,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -2224,6 +2242,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -2714,6 +2736,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -3183,6 +3209,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -3748,6 +3778,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -4423,6 +4457,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -4922,6 +4960,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -5792,6 +5834,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -6307,6 +6353,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -6842,6 +6892,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -7526,6 +7580,10 @@ struct Frame {
   // the sun side (prod applyClouds colours its deck from exactly these columns).
   cloudTop: vec4f,
   cloudBottom: vec4f,
+  // World ambient floor (plan 093): linear timecyc Amb. SA's building pipe ADDS this on top of the
+  // blended prelight (ps2BuildingVS: Color.rgb += ambient*surfAmb) — normal-independent, which is
+  // why vanilla ships pure-black shadow prelit and still reads as shadow. .w spare.
+  ambient: vec4f,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var skyLut: texture_2d<f32>;
@@ -8096,7 +8154,11 @@ fn worldShade(in: VsOut, cutout: bool) -> vec4f {
   // Hybrid lighting (074/06 row 3, the shipped 064 model): prelit is the INDIRECT term, the sun adds a real
   // direct term on the raw albedo. indirect/direct ride frame params — day arcs are a CPU concern.
   // Baked AO modulates ONLY the indirect term (074/07) — sun shadowing is the separate sunVis bake.
-  let lit = debugPrelit(in.prelit) * (frame.params.y * in.ao) +
+  // frame.ambient (plan 093) is SA's own additive ambient floor on top of prelit (ps2BuildingVS
+  // Color.rgb += ambient*surfAmb) — normal-independent; vanilla authors shadow prelit as pure
+  // black TRUSTING this term, so without it those verts render as holes. AO occludes it like the
+  // rest of the indirect light.
+  let lit = (debugPrelit(in.prelit) * frame.params.y + frame.ambient.rgb) * in.ao +
     frame.sunColor.rgb * (in.sunNdl * frame.params.z) +
     frame.moonColor.rgb * in.moonNdl +
     in.localLight +

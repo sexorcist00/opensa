@@ -3,6 +3,26 @@
 The local light pool has two halves, and **who may read which half is a structural split, not a tuning
 knob**. Any plan about lighting a car, a ped or a cabin runs into this before it runs into anything else.
 
+## The world indirect term has TWO parts, and the additive half is not optional
+
+Since plan 093 the world/clutter indirect light is `prelit × sunIndirect + ambientColor` where
+`ambientColor = max(lin(timecyc Amb) × worldLight.ambient, ambientFloor × (1 − dn))` (AO-occluded
+on the world path). Two facts a later change must not lose:
+
+- The timecyc half is **SA's own building formula** (SkyGfx `ps2BuildingVS`:
+  `Color.rgb += ambient*surfAmb`) — but vanilla authors day `Amb` at ~ZERO (noon `11 0 0`), so by
+  day the formula alone lifts nothing; it carries the nights and authored weathers.
+- The `ambientFloor` half (default 0.13, day-shaped) is a DELIBERATE deviation
+  (`docs/hacks/world-ambient-floor.md`): black-day-prelit walls (`gaz27_law`/`sphinx01_lvs` class,
+  plan 024 — 2 243 models map-wide) render black in real SA too, and the field chose readability
+  over parity. `max()` semantics are load-bearing — a custom timecyc that authors MORE than the
+  floor keeps full authority; do not turn the floor into an addition.
+- Do not fold either half into `sunIndirect`: prelit×k can never lift a ZERO prelit vertex — the
+  term must stay additive.
+
+**Caught:** no — nothing fails; the map just grows black holes again (`ambientFloor = 0` reproduces
+them on demand, which is also the strict-SA-parity lever).
+
 ## The pool is ordered dynamic-first, and vehicles read only the static half
 
 ```

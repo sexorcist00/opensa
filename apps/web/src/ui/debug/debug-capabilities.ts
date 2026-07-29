@@ -266,6 +266,8 @@ export function cameraControlsFor(capabilities: DebugCapabilities): readonly Cam
 const WORLD_LIGHT_ROWS = [
   ['dayBrightness', 'WORLD DAY', 0.3, 1.2, 0.05],
   ['nightPrelitBrightness', 'WORLD NIGHT PRELIT', 0.2, 1.5, 0.05],
+  ['ambient', 'WORLD AMBIENT (093)', 0, 2, 0.05],
+  ['ambientFloor', 'WORLD AMB FLOOR (093)', 0, 0.3, 0.01],
 ] as const;
 
 const WORLD_LIGHT_EXTRA_ROWS = [
