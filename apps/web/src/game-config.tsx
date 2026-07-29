@@ -82,6 +82,19 @@ const SA_TELEPORTS: readonly Teleport[] = [
   { coords: [2493.0, -1667.0, 16.0], label: 'LS - Ganton junction (normals 021)' },
   { coords: [-1348.0, -15.0, 12.0], label: 'SF - Airport car park ramp (normals 022)' },
   { coords: [2165.0, 1275.0, 12.0], label: 'LV - Sphinx (normals 022)' },
+  // Alpha-class controls (plan 092 — a texture that is an alpha MASK now draws in the depth-writing cutout
+  // pass instead of the blend pass). Both spots were picked from the census + the built map, not by eye:
+  //   GLASS, the class that must NOT move: a bus shelter's panes are `cj_frame_glass`, and **91 % of its
+  //   texels sit BELOW the alpha test** with nothing above it — a one-sided film, soft-blend by the rule.
+  //   Alpha-testing it would erase almost the whole pane, so "the shelter still has glass" is the check.
+  //   Pick a shelter, not a facade: SA's airport/office windows are painted onto OPAQUE textures (the LV
+  //   terminal's `marinawindow1_256` has no alpha channel at all) and cannot exercise the rule.
+  { coords: [-2284.0, 557.3, 34.7], label: 'SF - Bus stop glass (alpha class 092)' },
+  //   CANOPIES, the class the vegetation rule already sharpens: the densest cluster of hi-poly MOD canopies
+  //   in the built map — 45 within 60 m, 18 of them `veg_palm04` (105× the triangles of the stock model),
+  //   plus sm_bevhiltree/sm_veg_tree4/6. Look for the 2026-07-13 symptom: a uniform screen-door stipple over
+  //   a crown, worst at range. Local ground z 51.1–52.3.
+  { coords: [235.5, -1380.3, 53.0], label: 'LS - Verdant hillside canopies (alpha class 092)' },
 ];
 
 /** A launchable game id. */

@@ -46,8 +46,16 @@ export function gameDir(game: string, ...parts: string[]): string {
  * archive** (`gta3.img` — no more `ipl_binary/` files).
  */
 export function loadMapDefs(game: string, archive: ImgArchive): MapData {
-  const dat = readGtaDat(game);
-  const base = gameDir(game);
+  return loadMapDefsAt(gameDir(game), archive);
+}
+
+/**
+ * The same resolve against an ARBITRARY game root — point it at `build/<game>/opensa` to read the tree a
+ * field run actually loads, whose `data/` is the MERGED result with mods installed and can differ from
+ * `game-src/` completely (the standing rule in `CLAUDE.md`).
+ */
+export function loadMapDefsAt(base: string, archive: ImgArchive): MapData {
+  const dat = parseGtaDat(readFileSync(join(base, 'data', 'gta.dat'), 'utf8'));
 
   return {
     catalog: loadCatalog(base, dat.ide),
