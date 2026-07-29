@@ -4,6 +4,8 @@
   "private": true,
   "description": "OpenSA browser app: React UI + game-config + standalone viewers (the runtime that drives the engine).",
   "exports": {
+    "./ui/camera/engine-camera": "./src/ui/camera/engine-camera.ts",
+    "./ui/camera/fly-rig": "./src/ui/camera/fly-rig.ts",
     "./ui/debug/debug-styles": "./src/ui/debug/debug-styles.ts"
   },
   "nx": {

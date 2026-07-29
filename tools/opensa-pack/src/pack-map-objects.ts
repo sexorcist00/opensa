@@ -1,3 +1,4 @@
+import type { TexturePlanner } from '@opensa/cell-weld/textures';
 /**
  * Map objects → `.osm` against the SHARED world dictionary (plan opensa-pack/003 phase 5g).
  *
@@ -21,7 +22,6 @@ import type { IdeObjectDef } from '@opensa/renderware/parsers/text/types';
 import { OsmSectionTag } from '@opensa/engine-formats';
 
 import type { ModelBundles } from './model-bundle';
-import type { TexturePlanner } from './textures';
 
 import { buildModelOsm } from './model-osm';
 import { createProgress } from './progress';

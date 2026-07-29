@@ -1,8 +1,8 @@
+import { WELD_ROW, WELD_SUNVIS, type WeldBucket, type WeldedCell } from '@opensa/cell-weld/weld';
 import { describe, expect, it } from 'vitest';
 
 import { buildOccluderBvh } from './ao';
 import { bakeSunVis } from './sunvis';
-import { WELD_ROW, WELD_SUNVIS, type WeldBucket, type WeldedCell } from './weld';
 
 function bucket(vertices: number[], indices: number[], pipelineClass = 0): WeldBucket {
   return {

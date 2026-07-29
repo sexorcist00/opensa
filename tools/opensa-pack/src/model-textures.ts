@@ -19,7 +19,7 @@
  */
 import type { AssetFileSystem } from '@opensa/renderware';
 
-import { TexturePlanner } from './textures';
+import { TexturePlanner } from '@opensa/cell-weld/textures';
 
 export interface ModelDictionary {
   /** One `.ostex` per array, indexed by the `array` field of a slot. */

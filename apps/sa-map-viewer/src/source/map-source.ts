@@ -1,24 +1,39 @@
 /**
- * Opening a MAP SOURCE (plan 094, phase 0): a folder of ORIGINAL SA files → the resolved map + its cell grid.
+ * Opening a MAP SOURCE (plan 094): a folder of ORIGINAL SA files → the resolved map + its cell grid.
  *
- * Two ways in, both reusing the game's own install loaders so what the viewer reads is what the game reads:
- * a user-picked folder (File System Access) or a served dir (`?src=`, the headless-drivable one). Only the
- * `data` + `others` groups are ingested — gta.dat/IDE/IPL is everything {@link resolveMap} needs, so opening a
- * source costs no model or texture bytes (geometry arrives per-cell from phase 1 on).
+ * Two ways in, both over the game's own {@link InstallSource} so what the viewer reads is what the game reads:
+ * a user-picked folder (File System Access) or a served dir (`?src=`, the headless-drivable one).
+ *
+ * **Only the world files are ingested up front** — gta.dat, the IDEs and the IPLs, which is everything
+ * `resolveMap` needs. Models and textures are pulled per cell by {@link AssetStore}: welding one cell wants a
+ * couple of hundred DFFs, and reading the whole placed set (≈13 000 models over Range requests) would put
+ * minutes between picking a folder and seeing it — the exact loop this tool exists to shorten.
  *
  * Every load carries a {@link LoadedMap.label} saying WHERE the bytes came from — a capture out of this tool
  * must never be silent about its source (the A/B rule in CLAUDE.md).
  */
-import type { GroupName } from '@opensa/loaders';
+import type { InstallPlan, InstallSource } from '@opensa/loaders';
 import type { AssetFileSystem, MapDefinitions, WorldGrid } from '@opensa/renderware';
 
-import { AssetHttpDirLoader, AssetLocalLoader } from '@opensa/loaders';
+import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
+import { looseGroup } from '@opensa/game-build/partition';
+import {
+  browserInstallSource,
+  fetchDirIndex,
+  fetchInstallSource,
+  readEntry,
+  selectInstallEntries,
+} from '@opensa/loaders';
 import { buildWorldGrid } from '@opensa/renderware';
 import { OPEN_SCRIPT_IPL, resolveMap } from '@opensa/renderware/map/resolve-map';
 import { Vfs } from '@opensa/vfs';
 
+import { AssetStore } from './asset-store';
+
 /** A map source opened into memory. */
 export interface LoadedMap {
+  /** Per-cell model/texture ingest — the welder reads through `fs`, this is what fills it. */
+  assets: AssetStore;
   defs: MapDefinitions;
   fs: AssetFileSystem;
   grid: WorldGrid;
@@ -42,32 +57,27 @@ export interface MapStats {
   models: number;
 }
 
-/**
- * The RENDER grid cell size — the one opensa-pack welds `.oscell` blobs on. It MUST stay 250: bucket the map
- * on anything else and this viewer's cell coordinates stop naming the same cells as the pack, the debugger and
- * the LOD generator, which nothing catches (`docs/restrictions/architecture.md`). Held here because the shared
- * constant lives in a `type:tool` package an app may not import; phase 1 moves the weld core to an
- * engine-tagged home and this becomes an import from it.
- */
-export const RENDER_CELL_SIZE = 250;
-
-/** The asset groups a map resolve needs: loose `data/**` (gta.dat, IDE, text IPL) + the archive's world files. */
-const MAP_GROUPS: readonly GroupName[] = ['data', 'others'];
-
 /** Per-tool "last folder" memory for the picker — deliberately not the game's remembered install. */
 const PICKER_ID = 'opensa-map-viewer';
 
 /** Open a source and resolve its whole map: parse gta.dat/IDE/IPL, then bucket the instances into cells. */
 export async function loadMapSource(source: MapSource): Promise<LoadedMap> {
+  const { install, label } = await openInstall(source);
+  const plan = await selectInstallEntries(install);
   const fs = new Vfs();
-  const { label, loader } = await openLoader(source, fs);
-  await loader.load(MAP_GROUPS);
+  await ingestWorldFiles(fs, install, plan);
   const defs = resolveMap(fs, { extraIpl: OPEN_SCRIPT_IPL });
 
-  return { defs, fs, grid: buildWorldGrid(defs, RENDER_CELL_SIZE), label };
+  return {
+    assets: new AssetStore(install, plan, fs, defs),
+    defs,
+    fs,
+    grid: buildWorldGrid(defs, CELL_SIZE),
+    label,
+  };
 }
 
-/** Count what was resolved — the phase-0 readout (and the number an A/B compares first). */
+/** Count what was resolved — the panel readout (and the number an A/B compares first). */
 export function mapStats(map: LoadedMap): MapStats {
   let hd = 0;
   let lod = 0;
@@ -86,23 +96,29 @@ export function sourceFromQuery(search: string): MapSource | null {
   return base ? { base: base.replace(/\/$/, ''), kind: 'http-dir' } : null;
 }
 
-/** Build the loader for a source. For a folder the picker is the FIRST await, so the click's activation lives. */
-async function openLoader(
-  source: MapSource,
-  sink: Vfs,
-): Promise<{ label: string; loader: AssetHttpDirLoader | AssetLocalLoader }> {
-  const config = { game: 'sa-map-viewer', sink, version: __APP_VERSION__ };
+/** gta.dat + every IDE/IPL: the loose `data/**` files plus the archives' placement entries. */
+async function ingestWorldFiles(fs: Vfs, install: InstallSource, plan: InstallPlan): Promise<void> {
+  const entries: [string, Uint8Array][] = [];
+  for (const path of plan.loose) {
+    if (looseGroup(path) === 'data' || looseGroup(path) === 'others') {
+      entries.push([path, await install.readLoose(path)]);
+    }
+  }
+  for (const entry of plan.others) {
+    entries.push([entry.name, await readEntry(install, entry)]);
+  }
+  fs.addFiles('world', entries);
+}
+
+/** For a folder the picker is the FIRST await, so the click's user activation survives. */
+async function openInstall(source: MapSource): Promise<{ install: InstallSource; label: string }> {
   if (source.kind === 'http-dir') {
-    return { label: source.base, loader: new AssetHttpDirLoader(config, source.base) };
+    const index = await fetchDirIndex(source.base);
+
+    return { install: await fetchInstallSource(source.base, index), label: source.base };
   }
 
   const dir = await window.showDirectoryPicker({ id: PICKER_ID, mode: 'read' });
-  const loader = new AssetLocalLoader(config, {
-    acquireDir: (): Promise<FileSystemDirectoryHandle> => Promise.resolve(dir),
-    // No handle store: this tool swaps sources constantly and must not repoint the game's remembered install.
-    restoreDir: (): Promise<{ handle: null; ready: false }> => Promise.resolve({ handle: null, ready: false }),
-  });
-  await loader.prepare();
 
-  return { label: `folder: ${dir.name}`, loader };
+  return { install: await browserInstallSource(dir), label: `folder: ${dir.name}` };
 }

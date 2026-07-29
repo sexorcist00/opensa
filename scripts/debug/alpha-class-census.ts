@@ -1,4 +1,4 @@
-import { classifyAlpha, isAlphaMask } from '@opensa/opensa-pack/alpha';
+import { classifyAlpha, isAlphaMask } from '@opensa/cell-weld/alpha';
 import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseTxd } from '@opensa/renderware/parsers/binary/txd';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';

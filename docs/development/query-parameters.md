@@ -94,6 +94,21 @@ The minimal boot kept as a repro harness (074/13 phase 3.4): `src` (default `pak
 
 > `tab` is an **e2e contract** — `e2e/viewer-tabs.spec.ts` navigates by it.
 
+## Map viewer — `apps/sa-map-viewer` (`/sa-map-viewer.html`, plan 094)
+
+| Param   | Default             | Values                | What it does                                                     |
+| ------- | ------------------- | --------------------- | ---------------------------------------------------------------- |
+| `src`   | —                   | served game-dir URL   | Load that dir (no picker). Absent ⇒ the folder picker screen      |
+| `at`    | the map's centre    | GTA `x,y`             | Ground point under the view; names the cell that renders          |
+| `h`     | `400`               | engine units          | Eye height above that point                                      |
+| `pitch` | `-89.4`             | degrees, negative     | Down-tilt; clamped to `[-89.4, -3.4]`                            |
+| `yaw`   | `180`               | degrees               | `180` is the map's usual orientation (north up); `0` flips it     |
+| `panel` | shown               | `0`                   | Capture mode: hide the panel, keep the source caption            |
+| `wind`  | `0` (frozen)        | number                | Vegetation sway. OFF by default — it is the only thing that moves |
+
+> `at`/`h`/`pitch`/`yaw` fully specify the pose and **the camera never moves on its own**: the same URL is
+> the same pixels (verified byte-identical across runs). `wind` defaults to 0 for exactly that reason.
+
 ## Two known inconsistencies
 
 Documented rather than silently fixed; both are load-bearing for existing bookmarks and bench URLs:

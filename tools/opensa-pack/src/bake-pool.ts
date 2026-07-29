@@ -1,3 +1,6 @@
+import type { WeldedCell } from '@opensa/cell-weld/weld';
+
+import { WELD_AO, WELD_ROW, WELD_SUNSOFT, WELD_SUNVIS } from '@opensa/cell-weld/weld';
 /**
  * Bake worker pool (074/14 A2): the 074/07 bakes are ~90 % of convert wall-time and perfectly per-cell
  * parallel. The district BVH is copied ONCE into SharedArrayBuffers; each worker bakes whole cells (flat
@@ -11,11 +14,9 @@ import { Worker } from 'node:worker_threads';
 import type { BakeAoReport } from './ao';
 import type { Bvh } from './bvh';
 import type { BakeSunVisReport } from './sunvis';
-import type { WeldedCell } from './weld';
 
 import { type FlatBakeResult } from './bake-flat';
 import { SUNSOFT_FILL } from './sunvis';
-import { WELD_AO, WELD_ROW, WELD_SUNSOFT, WELD_SUNVIS } from './weld';
 
 export interface PooledBakeOptions {
   ao: boolean;

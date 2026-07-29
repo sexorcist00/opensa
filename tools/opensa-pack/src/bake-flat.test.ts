@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import type { WeldedCell } from '@opensa/cell-weld/weld';
 
-import type { WeldedCell } from './weld';
+import { WELD_AO, WELD_ROW, WELD_SUNVIS } from '@opensa/cell-weld/weld';
+import { describe, expect, it } from 'vitest';
 
 import { bakeAo, buildOccluderBvh } from './ao';
 import { bakeFlat } from './bake-flat';
 import { bakeSunVis } from './sunvis';
-import { WELD_AO, WELD_ROW, WELD_SUNVIS } from './weld';
 
 function bakedColumn(cell: WeldedCell, column: number): number[] {
   const out: number[] = [];

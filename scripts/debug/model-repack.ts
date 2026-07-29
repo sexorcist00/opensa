@@ -1,8 +1,9 @@
 import type { OspakManifest } from '@opensa/engine-formats';
 
+import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
 import { convertDistrict } from '@opensa/opensa-pack/convert';
 import { openGameDir } from '@opensa/opensa-pack/game-fs';
-import { CELL_SIZE, formatBuildTime } from '@opensa/opensa-pack/pack';
+import { formatBuildTime } from '@opensa/opensa-pack/pack';
 import { type ImgArchive, openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';

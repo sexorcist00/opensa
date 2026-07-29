@@ -13,10 +13,14 @@ export {
   AssetHttpDirLoader,
   AssetLocalLoader,
   type AssetLocalLoaderConfig,
+  browserInstallSource,
   type DirIndexEntry,
   fetchDirIndex,
   fetchInstallSource,
+  type InstallPlan,
   type InstallSource,
+  readEntry,
+  selectInstallEntries,
 } from './asset-local-loader';
 export { Emitter, type Listener } from './emitter';
 export { allChunks, chunkUrl, chunkUrls, CORE_GROUPS, GROUP_NAMES, manifestDir, parseManifest } from './manifest';

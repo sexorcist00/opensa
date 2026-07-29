@@ -9,15 +9,16 @@
  * the shared texture plan the weld produced (the ONE moment that plan is complete and still open), copy the
  * game dir, then rewrite the archives so each `.osm` replaces the `.dff` it was built from.
  */
+import type { TexturePlanner } from '@opensa/cell-weld/textures';
 import type { MapDefinitions } from '@opensa/renderware';
 
+import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
+import { isVegetationDef } from '@opensa/cell-weld/weld';
 import { breakableModelsFromText } from '@opensa/renderware/breakable/models';
 import { copyGameDir, guardOut } from '@opensa/tool-kit/game-dir';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-import type { TexturePlanner } from './textures';
 
 import { rewriteModelArchives } from './archive-edit';
 import { convertDistrict } from './convert';
@@ -32,17 +33,6 @@ import { packPeds } from './pack-peds';
 import { packProps } from './pack-props';
 import { packVehicles } from './pack-vehicles';
 import { bakeWater } from './water';
-import { isVegetationDef } from './weld';
-
-/**
- * The RENDER cell size: the grid the district is welded into and the manifest ships to the engine, which
- * streams and draws `.oscell` blobs on it. NOT an option — the pak and the runtime must agree, and nothing
- * checked that when it was a flag.
- *
- * Distinct from the GAME-side grid (`GAME_CELL_SIZE`, 256) that collision streaming, procobj scatter and the
- * LOD-impostor bake use. The two have never been equal and need not be.
- */
-export const CELL_SIZE = 250;
 
 export interface PackOptions {
   /** lod-TARGET models welded into BOTH levels (plan 087 `lod-always.json` — the stub-HD/real-LOD TC

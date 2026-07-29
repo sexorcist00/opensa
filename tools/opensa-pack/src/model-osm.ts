@@ -13,6 +13,7 @@ import type { AssetFileSystem } from '@opensa/renderware/archive/asset-fs';
 import type { RWClump } from '@opensa/renderware/parsers/binary/types';
 import type { VehicleFixture, VehicleModelData } from '@opensa/renderware/vehicle/types';
 
+import { type TexturePlanner } from '@opensa/cell-weld/textures';
 import { encodeOsm, encodeOsmTextures, type OsmSection, OsmSectionTag } from '@opensa/engine-formats';
 import { parseDff } from '@opensa/renderware';
 import { getTxdChain } from '@opensa/renderware/archive/asset-cache';
@@ -21,7 +22,6 @@ import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
 
 import { packModelOstex } from './model-ostex';
 import { planModelSlots, planModelTextures, remapModelLayers } from './model-textures';
-import { type TexturePlanner } from './textures';
 
 export interface ModelOsm {
   built: VehicleModelData;

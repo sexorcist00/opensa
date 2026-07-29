@@ -1,5 +1,16 @@
 import type { AssetFileSystem, MapDefinitions } from '@opensa/renderware';
 
+import { TexturePlanner } from '@opensa/cell-weld/textures';
+import {
+  assembleCell,
+  createUvAnimRegistry,
+  uvAnimList,
+  type UvAnimRegistry,
+  WELD_ROW,
+  weldCellParts,
+  type WeldedCell,
+  type WeldStats,
+} from '@opensa/cell-weld/weld';
 import {
   buildOspak,
   encodeOswire,
@@ -26,17 +37,6 @@ import type { WaterHeightGrid } from './height-grid';
 import { AO_MAX_DISTANCE, bakeAo, type BakeAoReport, buildOccluderBvh } from './ao';
 import { bakeCellsPooled, defaultBakeWorkers } from './bake-pool';
 import { bakeSunVis, type BakeSunVisReport, SUNVIS_MAX_DISTANCE } from './sunvis';
-import { TexturePlanner } from './textures';
-import {
-  assembleCell,
-  createUvAnimRegistry,
-  uvAnimList,
-  type UvAnimRegistry,
-  WELD_ROW,
-  weldCellParts,
-  type WeldedCell,
-  type WeldStats,
-} from './weld';
 
 export interface ConvertOptions {
   /** lod-TARGET models (lowercased) welded into BOTH levels (plan 087, `lod-always.json`): a TC's

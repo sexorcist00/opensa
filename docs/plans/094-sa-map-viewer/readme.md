@@ -160,6 +160,67 @@ This one is React (debugger UI reuse), folder-fed, world-scale. User decision: a
   modules into an engine-tagged package (or an `engine-formats` sibling) is part of THIS phase, as
   a move-only refactor with opensa-pack re-importing from the new home. *Verify:* screenshot of a
   known cell vs the same cell in-game; weld time + texture bytes for one cell recorded here.
+
+  **DONE 2026-07-29.** The cell under the camera renders, welded in the browser.
+
+  **The move.** `weld.ts`, `textures.ts`, `alpha.ts`, `ostex-payload.ts` + their four test files went
+  from `tools/opensa-pack/src/` to the new **`packages/cell-weld`** (`type:engine`, code unchanged);
+  opensa-pack imports them back through `@opensa/cell-weld/*`. `CELL_SIZE` moved with them into
+  `cell-size.ts` — it now has ONE declaration that both the tool and the app import, which is what the
+  restriction asked for (`docs/restrictions/architecture.md` updated). Nothing else changed: 375 test
+  files / 3 137 tests pass, and coverage came out **90.97 / 81.81 / 92.42 / 90.94** against floors of
+  86 / 77 / 88 / 86 — it ROSE, because 2 000 lines of well-tested code joined the `packages/**`
+  coverage set.
+
+  **The loading design changed under the phase, and it matters.** Phase 0 ingested only the world
+  files; welding needs the actual DFFs and TXDs, and reading the whole placed set (≈13 000 models over
+  Range requests) would have put minutes between picking a folder and seeing it. So `AssetStore`
+  resolves a cell's model names (`cellModelNames`) → the install's archive entries → reads only those,
+  plus each model's TXD **and its whole `txdp` parent chain**. One cell costs ~11 MB, not a gigabyte.
+  This needed four exports opened up on `@opensa/loaders` (`browserInstallSource`,
+  `selectInstallEntries`, `readEntry`, `InstallPlan`) — no logic moved.
+
+  **Measured** (headless Chromium 1440×900, `game-src/original`, cell **9,−7** = Grove Street):
+
+  | step | number |
+  | --- | --- |
+  | model + texture bytes read for the cell | **11.5 MB in 82 ms** |
+  | weld (browser) | **179–201 ms** |
+  | texture arrays built + uploaded | **21 arrays / 11.5 MB in 8 ms** |
+  | cell geometry | 92 194 verts / **58 118 tris**, `.oscell` 3 970 KB |
+  | steady frame rate | 120 fps (vsync) |
+
+  **The browser weld IS the converter's weld** — the same cell welded offline through
+  `openGameDir` + `weldCell` gives **58 118 tris / 21 arrays / 11.5 MB / 226 ms**, matching the
+  browser exactly. That is the phase's real verification: not "it looks right", but "this tool's
+  geometry is the converter's geometry, on the same inputs".
+
+  **Determinism, proven not asserted.** Two runs of the same URL were first compared and did NOT
+  match — mean Δ 0.02/255, but max Δ 114/255, and the difference map showed the deltas sitting
+  exactly on the trees. Vegetation **wind sway** is the only thing in a noon frame that moves on its
+  own. Wind is now **off by default** (`?wind=N` brings it back), and two runs of the same URL are
+  now **byte-identical PNGs**. `?panel=0` hides the live-fps chrome for captures while keeping the
+  source caption, so the A/B compares pixels, not a frame counter.
+
+  **Two deviations from the written plan, both deliberate:**
+  - **Default `?at` is the loaded map's own occupied-cell centre, not GTA `0,0`.** GTA 0,0 is open
+    water; more importantly a total conversion's world need not sit near the origin, and a hardcoded
+    centre is exactly the kind of asset-specific constant the standing rules forbid.
+  - **The camera orbits the ground point, not the eye.** Verbatim eye-centric fly-rig tilt swings a
+    400 u eye to the horizon and drops the inspected cell off screen, which would have made
+    selection (phase 3) unusable — the user's stated reason for wanting the tilt at all. Pan, dolly
+    and the top-down opening pose are still fly-rig's own functions. Default yaw is 180°, which is
+    what puts north up and east right; at yaw 0 the top-down basis reads as a half-turn of every map
+    anyone would compare against.
+
+  **A finding phase 6 has to plan around: the built tree cannot be welded.**
+  `build/original/opensa`'s archives carry **8 779 `.osm` and only 538 `.dff`** (vanilla:
+  **12 964 `.dff`**, 0 `.osm`) — the converter replaced the geometry. This viewer welds from
+  RenderWare DFFs, so a converted game dir resolves its map fine (phase 0's 84 344 instances) but
+  welds empty. The vanilla-vs-merged A/B therefore needs a **merged-but-unconverted** tree as its
+  second half — `mod-installer` alone produces exactly that
+  (`npx tsx tools/mod-installer/src/cli.ts --in ./mods-src/original/mods --game ./game-src/original
+  --out <dir>`), and that is what phase 6 must compare against, not `build/<game>/opensa`.
 - **Phase 2 — the permanent panel.** `MapGame` driver (manual cells, weld cache, unload);
   `MapInspector` mounted as the fixed left panel; whole-map toggle and LOD mode working. Whole-map
   HD is allowed to be slow/heavy — it logs progress and its cost gets measured, not hidden.

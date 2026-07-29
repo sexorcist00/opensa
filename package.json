@@ -38,6 +38,7 @@
     "apps/viewer",
     "apps/engine-lab",
     "apps/sa-map-viewer",
+    "packages/cell-weld",
     "tools/rw-codec",
     "tools/tool-kit",
     "packages/renderware",

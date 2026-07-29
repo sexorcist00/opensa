@@ -1,3 +1,5 @@
+import { WELD_ROW, WELD_SUNSOFT, WELD_SUNVIS, type WeldedCell } from '@opensa/cell-weld/weld';
+
 /**
  * Baked sun visibility — SCALAR v1 (plan 074/07, spec 066/03 v1): per HD/LOD vertex, the elevation-weighted
  * average visibility over the day arc. Kills the double-lit direct term where the sun rarely/never reaches
@@ -14,7 +16,6 @@ import type { Bvh } from './bvh';
 
 import { quantKey } from './ao';
 import { occluded } from './bvh';
-import { WELD_ROW, WELD_SUNSOFT, WELD_SUNVIS, type WeldedCell } from './weld';
 
 export interface BakeSunVisOptions {
   /** Sun-disc jitter half-width applied to the elevation (penumbra sampling). */

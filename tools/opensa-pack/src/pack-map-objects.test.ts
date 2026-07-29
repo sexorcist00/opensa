@@ -12,6 +12,7 @@
 import type { AssetFileSystem } from '@opensa/renderware';
 import type { IdeObjectDef } from '@opensa/renderware/parsers/text/types';
 
+import { TexturePlanner } from '@opensa/cell-weld/textures';
 import { OsmSectionTag } from '@opensa/engine-formats';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,7 +20,6 @@ import { describe, expect, it } from 'vitest';
 
 import { createModelBundles } from './model-bundle';
 import { packMapObjects } from './pack-map-objects';
-import { TexturePlanner } from './textures';
 
 const FIXTURES = join(process.cwd(), 'tests', 'original');
 const MODEL = 'chinatown_sfe1';

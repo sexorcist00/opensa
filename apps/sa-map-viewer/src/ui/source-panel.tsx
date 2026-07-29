@@ -1,16 +1,24 @@
+import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
 import { styles } from '@opensa/web/ui/debug/debug-styles';
 import { type ReactElement, useMemo } from 'react';
 
 import type { MapSourceController } from '../source/use-map-source';
+import type { ViewerReadout } from '../world/viewer-host';
 
-import { mapStats, RENDER_CELL_SIZE } from '../source/map-source';
+import { mapStats } from '../source/map-source';
 
 /**
- * The permanent left panel's SOURCE section (plan 094, phase 0): pick the folder to read, then read back what
- * was resolved. The source line is the important one — it is what makes a capture from this tool self-describing.
- * Phase 2 mounts the cell grid (`MapInspector`) underneath it.
+ * The permanent left panel (plan 094): pick the source, then read back what was resolved and what the camera
+ * is looking at. The SOURCE line is the important one — it is what makes a capture from this tool
+ * self-describing. Phase 2 mounts the cell grid (`MapInspector`) underneath it.
  */
-export function SourcePanel({ controller }: { controller: MapSourceController }): ReactElement {
+export function SourcePanel({
+  controller,
+  readout,
+}: {
+  controller: MapSourceController;
+  readout: null | ViewerReadout;
+}): ReactElement {
   const { open, state } = controller;
   const stats = useMemo(() => (state.kind === 'ready' ? mapStats(state.map) : null), [state]);
 
@@ -46,15 +54,39 @@ export function SourcePanel({ controller }: { controller: MapSourceController })
           <div style={styles.hint}>SOURCE</div>
           <div style={styles.info}>{state.map.label}</div>
           <div style={styles.divider} />
-          <Stat label="cells" value={`${stats.cells} @ ${RENDER_CELL_SIZE}`} />
+          <Stat label="cells" value={`${stats.cells} @ ${CELL_SIZE}`} />
           <Stat label="instances" value={stats.instances} />
           <Stat label="hd / lod" value={`${stats.hd} / ${stats.lod}`} />
           <Stat label="models" value={stats.models} />
           <Stat label="resolve" value={`${state.ms} ms`} />
         </>
       )}
+
+      {readout && (
+        <>
+          <div style={styles.divider} />
+          <div style={styles.hint}>VIEW</div>
+          <Stat label="cell" value={`${readout.cell.cx},${readout.cell.cy}`} />
+          <Stat
+            label="at"
+            value={`${readout.pose.at[0].toFixed(0)},${readout.pose.at[1].toFixed(0)} · h ${readout.pose.height.toFixed(0)}`}
+          />
+          <Stat label="pitch / yaw" value={`${degrees(readout.pose.pitch)}° / ${degrees(readout.pose.yaw)}°`} />
+          <Stat label="weld" value={`${readout.load.weldMs} ms`} />
+          <Stat
+            label="textures"
+            value={`${readout.load.arrays} × ${(readout.load.textures / 1024 / 1024).toFixed(1)} MB`}
+          />
+          <Stat label="tris" value={readout.load.indices / 3} />
+          <Stat label="fps" value={readout.fps} />
+        </>
+      )}
     </div>
   );
+}
+
+function degrees(radians: number): string {
+  return ((radians * 180) / Math.PI).toFixed(0);
 }
 
 function Stat({ label, value }: { label: string; value: number | string }): ReactElement {

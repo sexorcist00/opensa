@@ -34,7 +34,8 @@ complexity at 20. `commitlint` accepts `ci · chore · docs · feat · fix · pe
 
 The cell-LOD bake, the pack's render grid, the engine's streaming grid and the runtime config must all be
 **250**. `tools/perfect-map-builder/src/config.ts` (`lodCellSize`), `tools/opensa-lod-generator/src/lod.config.ts`
-(`cellSize`), opensa-pack's `CELL_SIZE`, `apps/web/src/ui/game-runtime-config.ts`.
+(`cellSize`), `packages/cell-weld/src/cell-size.ts` (`CELL_SIZE` — the one declaration, imported by
+opensa-pack and by sa-map-viewer), `apps/web/src/ui/game-runtime-config.ts`.
 
 A mismatch puts an object's HD and its LOD in **different streaming slots**, and at spawn neither loads. This
 is not hypothetical: the pre-087 bake ran at 256 and gostown's bridge main span had HD in slot 5,−7 and LOD

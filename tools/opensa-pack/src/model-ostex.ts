@@ -9,6 +9,8 @@
  */
 import type { VehicleTextureArray } from '@opensa/renderware/vehicle/types';
 
+import { type AlphaClass, classifyAlpha, processAlphaTexture } from '@opensa/cell-weld/alpha';
+import { packOstexPayload } from '@opensa/cell-weld/ostex-payload';
 import {
   encodeOstex,
   fnv1a,
@@ -18,9 +20,6 @@ import {
   type OstexFormatId,
 } from '@opensa/engine-formats';
 import { encodeDxt } from '@opensa/rw-codec/dxt-encode';
-
-import { type AlphaClass, classifyAlpha, processAlphaTexture } from './alpha';
-import { packOstexPayload } from './ostex-payload';
 
 /** Alpha-to-coverage reference for cutouts — the world planner's value, kept identical on purpose. */
 const CUTOUT_REF = 128;

@@ -1,3 +1,5 @@
+import { WELD_AO, WELD_ROW, type WeldedCell } from '@opensa/cell-weld/weld';
+
 /**
  * Baked AO/skyVis (plan 074/07): between weld and assemble, hemisphere-raycast every HD vertex against a
  * district BVH and write the visibility fraction into the scratch rows (→ the `.oscell` aoSkyVis byte).
@@ -11,7 +13,6 @@
  *   rays are the cost, and identical (pos, normal) pairs get identical answers by construction.
  */
 import { buildBvh, type Bvh, occluded } from './bvh';
-import { WELD_AO, WELD_ROW, type WeldedCell } from './weld';
 
 export interface BakeAoOptions {
   /** Prebuilt district BVH (shared with the sun-vis bake); built from `cells` when absent. */

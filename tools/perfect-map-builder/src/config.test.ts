@@ -1,5 +1,5 @@
+import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
 import { config as lodDefaults } from '@opensa/opensa-lod-generator/lod.config';
-import { CELL_SIZE } from '@opensa/opensa-pack/pack';
 import { describe, expect, it } from 'vitest';
 
 import { config, PACK_RECTS } from './config';

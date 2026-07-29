@@ -1,8 +1,7 @@
+import type { WeldedCell } from '@opensa/cell-weld/weld';
 import type { WorldGrid } from '@opensa/renderware/map/world-grid';
 
 import { describe, expect, it } from 'vitest';
-
-import type { WeldedCell } from './weld';
 
 import { cellAabbXZ, occupiedRect } from './convert';
 
