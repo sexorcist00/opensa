@@ -82,3 +82,13 @@ Limits and deliberate approximations of the own WebGPU engine.
   not move at all (1255 → 1258). Foliage also lands in the probe pass (2.45 → 1.57 ms on the same change).
   When a scene is slow, measure `gpuMs.pass` against leaf/canopy screen coverage — draws and triangle counts
   will mislead you.
+- **The fog cut is a CULL, so a high camera sees nothing.** A cell lying entirely at or past
+  `environment.fogCutDistance` (2 400 by default) is skipped, not drawn faded: at 100 % fog it is pixel-equal
+  to the sky, so the frame graph drops it (074/21 P1). Correct in play, where the eye is at head height —
+  but from a map-viewer altitude of ~4 km EVERY cell is past the cut, and the canvas comes back empty with
+  the readout still reporting 562 resident cells. Found 2026-07-29 in plan 094 phase 2; the viewer now
+  pushes fog to its far plane by default. Any camera far above the world has to move the fog with it.
+- **Vegetation wind sway is the only thing an otherwise static noon frame animates.** Two runs of one
+  scripted pose in sa-map-viewer came back pixel-identical everywhere EXCEPT the trees (mean Δ 0.02/255, max
+  Δ 114/255, the difference map sitting exactly on the canopies). Anything doing a pixel A/B must set
+  `environment.windStrength = 0` first, or the noise floor is the foliage.

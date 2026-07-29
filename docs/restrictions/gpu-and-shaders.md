@@ -33,6 +33,21 @@ WebGPU offers no arbitrary MSAA ladder, and alpha-to-coverage needs 4.
 
 **Caught:** no — by the browser.
 
+## A texture array that GROWS invalidates every render bundle recorded against it
+
+`TextureArrays.load(ref, bytes)` returns the EXISTING handle when `ref` is already resident — it never
+replaces. To change an array you must `unload(ref)` then `load(ref, …)`, and that mints a new `GPUTexture` +
+`GPUBindGroup`. Every cell bundle recorded earlier still holds the OLD bind group, whose texture is destroyed.
+
+So **any design that welds incrementally must re-create the cells that sample a changed array**, not just
+re-upload the array. The pak path never meets this (its plan is sealed at build time and arrays are static);
+anything welding at runtime does, because `TexturePlanner`'s plan grows as more cells weld.
+`apps/sa-map-viewer/src/world/cell-renderer.ts` handles it by tracking each ref's uploaded layer count and
+re-creating every resident cell **from cached `.oscell` bytes** when one changed — the upload, not the weld.
+
+**Caught:** NO, and worse than silent — a stale bind group is a use-after-destroy, so the symptom is
+whatever the driver does next (garbage texels, a validation error, or nothing at all on one machine).
+
 ## The one perf knob is `?scale=`
 
 Render scale. There is no quality tier ladder and there will not be one: the 2026-07-21 ladder run proved a

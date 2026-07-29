@@ -333,6 +333,27 @@ This one is React (debugger UI reuse), folder-fed, world-scale. User decision: a
   exists for. Docs in the same change: `docs/commands.md` (launch), `docs/architecture` module map
   (new app), this plan's numbers complete.
 
+## Test coverage of the app (state after phase 3)
+
+`apps/sa-map-viewer/**/*.test.ts` is now in the vitest `include` (it was not — tests written there would
+simply never have run). **30 tests over the app's pure logic**, all passing:
+
+| File | What is pinned |
+| --- | --- |
+| `camera/viewer-camera.test.ts` | `poseFromQuery` defaults + degree parsing + every malformed input falling back instead of yielding NaN; the pitch clamp at BOTH ends; the pose round-trip; and the three gestures as behaviour — orbit leaves the looked-at point still, pan moves it and keeps the height, dolly changes height and not the point |
+| `world/cell-renderer.test.ts` | `cellAt` FLOORS negatives (truncation would shift the whole south/west map one cell and silently disagree with the pack); `mapCenterGta` centres on the occupied extent and answers the origin for an empty grid |
+| `source/map-source.test.ts` | `sourceFromQuery` (trailing slash, absent ⇒ picker); `isConverted` on the real measured censuses; `mapStats` incl. the hd+lod < instances invariant |
+| `source/asset-store.test.ts` | the whole txdp parent chain is pulled; a **cycle does not hang**; `.dff` wins over `.osm`; a missing model is skipped not thrown; a second `ensure` for the same model reads nothing; the bytes land under the name the welder looks up (case-insensitively) |
+
+**What is NOT unit-tested, and why:** everything that needs a GPU or the DOM — `CellRenderer.setCells`,
+`ViewerMapGame`, `viewer-host`, and the three `.tsx` files. The repo has the tools for the first two (the
+recording fake `GPUDevice` from plan 077 boots the whole engine in a test), and the array-growth /
+re-create-from-cache rule is exactly the kind of DECISION that fake is meant to assert — that is the
+next worthwhile test batch, owed before phase 6 signs the tool off. The UI half stays where `apps/web`'s
+UI stays: excluded from unit coverage, exercised on the real thing (here: `map-viewer-shot.ts`).
+`apps/sa-map-viewer` is deliberately NOT in `coverage.include`, matching `apps/viewer` and
+`apps/engine-lab` — adding it would count the untested host/UI without adding any signal.
+
 ## Scope cuts (deliberate)
 
 - No water, no vehicles/peds, no collision overlay, no timed/night variants at first — static noon

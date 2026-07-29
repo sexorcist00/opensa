@@ -47,6 +47,6 @@ costs a session.
 | [architecture.md](architecture.md) | Layer boundaries, what may import what, the one-build rule, the grid every tool must agree on, what a frame-time span may wrap |
 | [build-vs-runtime.md](build-vs-runtime.md) | What is decided while the game is BUILT and cannot be recovered while it runs |
 | [engine-lighting.md](engine-lighting.md) | The light pool's two halves and who is allowed to read them |
-| [gpu-and-shaders.md](gpu-and-shaders.md) | WGSL and inter-stage rules that no test in this repo can see |
+| [gpu-and-shaders.md](gpu-and-shaders.md) | WGSL and inter-stage rules that no test in this repo can see, plus the resource-lifetime rule a runtime welder must obey (a grown texture array kills the bundles recorded against it) |
 | [sa-target.md](sa-target.md) | What the `sa/` target must budget for before a plan adds anything to the map |
 | [assets-and-data.md](assets-and-data.md) | A rule must derive from what the asset carries — never from the slot it sits in |
