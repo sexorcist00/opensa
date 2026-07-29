@@ -1,0 +1,184 @@
+# 092 — Alpha classification: the cutouts that are not vegetation
+
+**Status: PLANNED 2026-07-29, not started.** Phase 0 is a MEASUREMENT phase and produces no pack — the
+class is baked, so every iteration that reaches the field costs a re-pack, and the rule is fitted offline
+first.
+
+## Symptom (field, 2026-07-29)
+
+`wattspark1_LAe2` (txd `lae2tempshit`) at GTA (2309.4, −1433.0, 38.5) — the Watts Towers in LA-east. The
+lattice cones read as a mess: the FAR side of a cone and the towers BEHIND paint over the near side. The
+user's words: the background model comes out in front.
+
+This is not a new class of bug. It is the same one the own-engine flip already fixed once, for trees only.
+
+## The precedent
+
+[074 readme](../074-opensa-engine/readme.md), 2026-07-12, item (3):
+
+> **FOLIAGE → CUTOUT — trees-through-trees was blend-classed canopies writing no depth**: `classifyAlpha`'s
+> 2 % mid-alpha bound mis-classes scanned foliage skirts; the welder now passes `preferCutout` for sway-kind
+> (vegetation) defs, upgrading softBlend → cutout.
+
+The follow-up a day later matters as much: upgrading a BROADLY semi-transparent canopy (α≈0.5 everywhere)
+turns A2C into a uniform screen door, so upgraded textures are additionally SHARPENED (`SHARPEN_GAIN = 8`
+around ref 128, `alpha.ts`) while natural cutouts are left alone. Any widening of the rule inherits that
+trap.
+
+The chain, in code:
+
+| Step | Where |
+| --- | --- |
+| histogram → class (`opaque` / `cutout` / `softBlend`, cutout bound = mid ≤ 2 %) | `tools/opensa-pack/src/alpha.ts:11` |
+| caller preference: `softBlend → cutout` **for vegetation only** | `alpha.ts:119`, `weld.ts:986` (`swayKind !== null`), `pack-map-objects.ts:99` (`isVegetation(def)`) |
+| class → `.oscell` pipelineClass (`cutout` 1, `softBlend` 2) | `weld.ts:698` |
+| pipelineClass 2 → `world-blend-*`, **`depthWriteEnabled: false`** | `packages/engine/src/render/pipelines.ts:690` |
+
+So a soft-classed material writes no depth, and inside the blend bundle the triangles composite in
+submission order. That IS the symptom.
+
+## Measured before any code (2026-07-29)
+
+**The object.** Its two lattice textures are DXT3 with a wide alpha gradient — nowhere near the cutout bound
+(read out of the built archive, `build/original/sa/models/gta3.img`; identical in `game-src/original`):
+
+| Texture | Format | mid-alpha | transparent | opaque | class |
+| --- | --- | --- | --- | --- | --- |
+| `wattsstax1_LAe` | dxt3 | **23.55 %** | 10.27 % | 66.17 % | softBlend |
+| `wattsstax4_LAe` | dxt3 | **23.55 %** | 10.27 % | 66.17 % | softBlend |
+| `wattsstax2/3_LAe`, `BLOCK2` | dxt1 | 0 % | 0 % | 100 % | opaque |
+
+The cutout bound is 2 %; these sit 12× above it. They are materials 3 and 5 of the DFF (bbox z 2.4–19.9 and
+2.3–31.3 — the cones themselves), so the whole visible tower is in the blend pass.
+
+The def is not vegetation (`LAe2.ide` flags 0), so nothing upgrades it.
+
+**Everything else was excluded first.** The stock far-LOD `LOD1wattspark1_LAe` is stripped from the built
+IPL (392 rows vs the source's 409), and the welded HD cell at that point holds only `wattspark1_lae2`
+(`dump-cell 2309.4 -1433`) — there is no second copy of the geometry. The class of the alpha is the whole
+story.
+
+**The map-wide census** (throwaway script over every TXD of `build/original/sa/models/gta3.img`,
+40 230 textures decoded, 2026-07-29):
+
+| Class | Count |
+| --- | --- |
+| opaque | 37 090 |
+| cutout (already) | 599 |
+| **softBlend** | **2 541** |
+
+And the shape of those 2 541, which is what a rule has to separate (shares of texels; "opaque" = α ≥ 250,
+"transparent" = α ≤ 5):
+
+| Bucket | Count | What is in it |
+| --- | --- | --- |
+| transparent ≥ 5 % **and** opaque ≥ 30 % | **805** | the bug's class — `wattsstax*`, `chainlinkac1_128`, `kb_ivy2_256`, `Aascaff128`, `747_cage`, `railhi_64V` |
+| transparent ≥ 5 %, opaque < 30 %, mid ≤ 50 % | 1 203 | mostly cutout-shaped too (`wire2`, `blackdirt`, `Cutlery`) but with NO fully-opaque texel — the sharpening trap lives here |
+| transparent ≥ 5 %, opaque < 30 %, mid > 50 % | 183 | genuinely washed (`cs_rockdetail`, `railshadowdif`) |
+| transparent < 5 % | 350 | true blends — `a51_glass`, `keypad_glass`, `cof_wind1`, `stanwind_nt`, `waterdirty256` — **must not move** |
+
+`wattsstax*` lands in the first bucket (transparent 10.3 %, opaque 66.2 %). A rule reading the histogram can
+reach it without naming anything.
+
+**One hazard found while reading the planner.** `TexturePlanner.resolve` caches by texture CONTENT
+(`textures.ts:190`) and plans on FIRST use — so `preferCutout` is decided by whichever caller happens to
+arrive first. A texture shared between a vegetation model and a non-vegetation one is classified by build
+order, silently. Making the class a pure function of the texels removes this outright; it is an argument for
+the design below, not just a bug to note.
+
+## Restrictions checked (per `CLAUDE.md`)
+
+- [`assets-and-data.md`](../../restrictions/assets-and-data.md) — **a rule must derive from what the asset
+  carries, never from the slot**. The current vegetation gate is exactly a slot rule (it reads the DEF, not
+  the texture). This plan therefore does not add "and also towers" to a list; it moves the decision onto the
+  texture's own alpha histogram. Violation is SILENT, which is why the bug survived a whole map.
+- [`build-vs-runtime.md`](../../restrictions/build-vs-runtime.md) — **the look is baked**: the class decides
+  both the offline texture processing (coverage-preserving mips + sharpening) and the welded pipelineClass.
+  Every threshold iteration that reaches the field costs a re-pack, so phase 0 iterates on the CENSUS, not
+  on builds, and only a settled rule is packed. That page also says an iterated look value belongs in the
+  shader — here the value is not a look knob but a per-texture classification consumed by the mip pipeline,
+  so it stays offline (user's call, 2026-07-29: keep it in `opensa-pack`, the build stage). No runtime cost
+  is added.
+- [`gpu-and-shaders.md`](../../restrictions/gpu-and-shaders.md) — cutout means alpha-to-coverage, which needs
+  `sampleCount 4`; the world pass already runs MSAA 4. No new varying, no shader change at all.
+- [`architecture.md`](../../restrictions/architecture.md) — everything in this plan is inside
+  `tools/opensa-pack`; `packages/engine` is untouched.
+
+## What this plan does NOT do
+
+- **No runtime sorting or depth pre-pass for the blend bundle.** It would cost frame time on every blended
+  surface to fix a class that should not be blended at all, and glass/water would still need the blend path.
+  Recorded as the alternative, not taken.
+- **No per-def flag list, no model names.** See the restriction above.
+- **No change to `classOf` / the pipeline set.** The classes are right; the assignment is wrong.
+
+## Phase 0 — fit the rule offline, pack nothing
+
+The census script becomes a kept inspector (`scripts/debug/alpha-class-census.ts` + a row in
+`docs/debug/README.md` — the standing convention), reporting per texture: format, the four alpha shares, the
+current class, and the class a CANDIDATE rule would give it.
+
+Deliverables:
+
+- the candidate rule stated as a formula over the histogram, with its constants and the reason each exists;
+- **the flip list** — every texture that changes class, grouped by TXD, with counts;
+- an eye review of the two risky buckets (the 1 203 no-opaque group and the 350 true blends), by dumping a
+  sample as PNG (`dump-texture.ts`, alpha channel included) — a rule that moves `a51_glass` is wrong before
+  it is ever packed;
+- the numbers recorded here (before/after counts per class).
+
+Verification: `npm run test:fixtures`-style REAL assets, not synthetic ones — the fixtures lane exists for
+exactly this (a real TXD entry is one manifest line). Pin at least: a lattice (`wattsstax1_LAe`), a stock
+fence, a canopy that already upgrades via vegetation, and a true glass.
+
+Exit: the flip list is defensible without opening the game.
+
+## Phase 1 — the rule in the pipeline
+
+`classifyAlpha` (or a sibling it delegates to) returns the cutout verdict from the texels alone;
+`effectiveAlphaClass`'s caller preference is reduced to whatever the histogram genuinely cannot see, or
+retired. Whatever survives of `preferCutout` must be justified in the same change, since the content cache
+makes a caller preference order-dependent.
+
+The sharpening gate follows the rule, not the caller: a texture upgraded by the new rule is sharpened on the
+same terms the vegetation upgrade already uses (that is the 2026-07-13 lesson — otherwise a broadly
+semi-transparent lattice becomes a screen door).
+
+All five packers benefit at once (`pack-map-objects`, `pack-props`, `pack-clutter`, `pack-anim-objects`,
+`vehicle-osm` — only the first ever passed the preference), and the welder shares the same planner.
+
+Verification: unit tests on the histogram cases + the real-asset fixtures from phase 0. Numbers recorded:
+class counts before/after over the same archive, and the pack `report.json` deltas.
+
+## Phase 2 — repack and the field round
+
+One `opensa` build (turnaround: a full pmb run is > 1 h; a targeted `opensa-pack` re-run is the cheaper
+path if it can be scoped — measure and record which was used, per the standing rule that a field run reads
+`build/<game>/opensa` and nothing else).
+
+Field checks, all at night and by day:
+
+1. **The towers**, GTA (2309.4, −1433.0) — the reported symptom, before/after from the same camera.
+2. **The vegetation control** — a `tree_hipoly*` area: the 2026-07-13 stipple must NOT return.
+3. **A true-blend control** — glass (`a51_glass` class) and water edges must look unchanged.
+
+Perf is a real question in both directions and gets measured, not assumed: cutout writes depth (early-z may
+HELP a fill-bound scene) but adds A2C work. The 6-scene ritual sweep, `gpuMs.pass` compared against the last
+recorded row; everything into `docs/benchmarks/` before it is analysed.
+
+## Phase 3 — close the loop
+
+- `docs/edge-cases/converter-pipeline.md` — the classification rule and what it cannot see.
+- `docs/restrictions/assets-and-data.md` — if the content-cache order dependency survives in any form, it is
+  a new SILENT restriction and gets its row.
+- `docs/features/map-pipeline.md` — the alpha pipeline's description updated.
+- The measured numbers land in this doc after every phase; the benchmark rows in `docs/benchmarks/`.
+- If any constant in the rule ends up FITTED rather than derived, it gets a file in `docs/hacks/` in the
+  same change, saying what it was fitted over and what would retire it.
+
+## Open question for the field, not for the code
+
+Whether the correct end state is "cutout" for this class at all, or a third path (alpha-tested WITH depth
+write but blended edges — SA's own dual-pass). Vanilla alpha-TESTS these materials, which is what the cutout
+class models, so cutout is the null hypothesis; the field verdict on phase 2 decides whether anything more
+is needed.

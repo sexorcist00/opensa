@@ -16,8 +16,16 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`091`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+`001`–`092`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
 
+- **[092 — Alpha classification: the cutouts that are not vegetation](./092-alpha-cutout-classification/readme.md)** —
+  PLANNED 2026-07-29. The Watts Towers (`wattspark1_LAe2`) show their far side and the towers behind through
+  the near one: their lattice textures carry **23.55 % mid-alpha** against `classifyAlpha`'s 2 % cutout
+  bound, so they class `softBlend` → pipelineClass 2 → `world-blend-*`, which writes no depth. Identical to
+  the trees-through-trees bug 074 fixed — except the fix upgrades softBlend → cutout for **vegetation defs
+  only**, a rule that reads the slot instead of the asset. Census: 40 230 textures → 2 541 softBlend, of
+  which 805 are cutout-shaped (transparent ≥ 5 % **and** opaque ≥ 30 %) and 350 are true glass that must not
+  move. Phase 0 fits the histogram rule OFFLINE (the class is baked — every iteration costs a re-pack).
 - **[091 — Frame-time attribution](./091-frame-time-attribution/readme.md)** — SHIPPED 2026-07-28, all three
   phases, no fix written. The `[slow]` line's `other` was a RESIDUAL holding two different things: untimed
   in-loop work, and everything the browser did BETWEEN frames — which **no in-loop timer can see**, and where
