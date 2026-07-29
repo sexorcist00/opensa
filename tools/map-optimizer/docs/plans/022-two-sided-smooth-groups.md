@@ -64,4 +64,6 @@ that outcome goes in this doc.
       T-junction (new test) stay hard; flat doubles are the trivial case of the curved test.
 - [x] Field A/B: `aircarpark_02_sfse` ramp confirmed clean (2026-07-15). `sphinx01_lvs` in the user's
       mods is an 11,588-vert HD remaster whose facets are NOT this plan's artifact (optimizer output normals
-      verified smooth; parked — resume pak-side).
+      verified smooth; ~~parked — resume pak-side~~ **RESOLVED 2026-07-29, plan 024: the facets were never
+      normals or pak — the remaster's DAY PRELIT has 4 465 black vertices / 6 033 all-black triangles, the
+      Family B class; fixed engine-side by the 093 world ambient term + floor, field-confirmed**).

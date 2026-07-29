@@ -18,7 +18,7 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
 `001`–`093`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
 
-- **[093 — The world ambient term](./093-world-ambient-term/readme.md)** — IN PROGRESS 2026-07-29.
+- **[093 — The world ambient term](./093-world-ambient-term/readme.md)** — SHIPPED + FIELD-CONFIRMED (day) 2026-07-29; night control owed.
   SA's own building formula (recovered from SkyGfx's PS2 pipe + gta-reversed) adds
   `timecycle ambient × surfAmb` ON TOP of the day/night-blended prelight — an additive,
   normal-independent floor our `worldShade` never had. Without it every black-prelit vertex renders

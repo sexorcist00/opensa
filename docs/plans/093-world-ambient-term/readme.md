@@ -1,6 +1,6 @@
 # 093 — The world ambient term: the piece of SA's own formula the engine skipped
 
-**Status: IN PROGRESS 2026-07-29.**
+**Status: SHIPPED + FIELD-CONFIRMED (day) 2026-07-29. Owed: the NIGHT control pass (the floor retires at night by design — verify nothing shifted after dark).**
 Spun out of map-optimizer plan 024 Phase 3b
 ([`tools/map-optimizer/docs/plans/024-broken-authored-vertex-data.md`](../../../tools/map-optimizer/docs/plans/024-broken-authored-vertex-data.md))
 — read its diagnosis first; this plan only carries the ENGINE half.
@@ -91,28 +91,29 @@ Owed: bench sweep + field round below.
 
 - `gaz27_law` noon, main build, floor active: **"стена теперь выглядит нормально"** (user) — the
   Family B mechanism closed engine-side, no data touched.
-- Bench ritual: all six scenes at the 120 Hz cap, `gpuMs.pass` 1.33–2.83 ms, p95 9.3–9.4,
-  `lateCreates` 0 — a clean A/B against the 092 sweep (same pak, engine-only change), no cost.
+- Bench ritual: all NINE scenes at the 120 Hz cap (incl. the new `strip-noon` debut at 119.9 fps),
+  `gpuMs.pass` 1.50–2.69 ms, p95 9.2–9.3, `lateCreates` 0 — a clean A/B against the 092 sweep
+  (same pak, engine-only change), no cost.
   Row: `docs/benchmarks/opensa-engine/2026-07-29-headless-093-world-ambient-sweep.json`.
-- Still owed: eyeball round on `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` + healthy
-  controls (Ganton, SF) at noon AND at night (the floor retires at night by design — check nothing
-  else moved).
+- Day eyeball round: `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` — "все три выглядят
+  хорошо" (user, same day). The NIGHT pass is the one owed item (see Status).
 
 ## Verification
 
 - Unit: engine suites stay green (fake-GPUDevice floors); driver test asserts `ambientColor` follows
   timecyc `amb` and the knob.
 - Bench ritual (`?engine=opensa&bench=all`) — shader change = frame-cost mechanism (074 series row).
-- Field: the 024 spots — `gaz27_law` (919.8, -1812.5), `exclbr_hotl02_lvs`, `sphinx01_lvs`,
-  `flamingo01_lvs` — plus healthy control districts (Ganton, SF downtown) at noon and at night;
-  night checks that the timecyc night `amb` does not wash the authored night design (the amb column
-  is itself hour-authored, so the floor breathes with the clock).
+- Field: DONE for day (2026-07-29): `gaz27_law` ("стена теперь выглядит нормально"),
+  `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` "все три выглядят хорошо", healthy
+  districts unchanged. OWED: the night pass — check the timecyc night `amb` does not wash the
+  authored night design (the amb column is hour-authored; the floor is day-gated by `(1 − dn)`).
 - Numbers land here per phase; anything perf-visible additionally in `docs/benchmarks/`.
 
-## Docs to touch in the same change
+## Docs touched in the same change
 
-- `docs/architecture/` rendering/lighting doc — the world lighting formula gains a term.
-- `docs/restrictions/engine-lighting.md` — record that the world indirect now has TWO parts
-  (prelit × sunIndirect + timecyc ambient), and that removing the ambient term re-exposes the
-  vanilla black-prelit class (silent — nothing catches it).
-- 024 Phase 3b closes its decision with a link here.
+- `docs/architecture/` has NO rendering/lighting doc to update (checked — the world formula lives
+  in `docs/restrictions/engine-lighting.md` + the shader comments; if a lighting architecture doc
+  is ever written, this term belongs in it).
+- `docs/restrictions/engine-lighting.md` — DONE: the two-part indirect rule (formula term + the
+  deliberate floor), the max() semantics warning, and `ambientFloor = 0` as the parity lever.
+- 024 Phase 3b closed with a link here — DONE. Debt file: `docs/hacks/world-ambient-floor.md`.
