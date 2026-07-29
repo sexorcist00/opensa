@@ -4,10 +4,12 @@
  * straight into `engine.cells.load` / `engine.textures.load` — no pak, no `.oswire`, no bakes. What the viewer
  * draws is therefore what the game would draw for these files.
  *
- * **The whole set is re-welded on every change**, and deliberately so: the texture plan GROWS as cells weld,
- * and a texture array that is already on the GPU cannot gain layers under the render bundles that were
- * recorded against it. Rebuilding is the one honest way to keep the plan and the bundles in step; making it
- * incremental is a phase-2 problem to solve with numbers in hand, not an assumption to bake in now.
+ * **One planner for the session, and welded bytes are cached** (phase 2). The plan is append-only and
+ * deterministic — a texture keeps the layer index its first use gave it — so a cell welded earlier stays
+ * valid as later cells extend the plan. What is NOT stable is the GPU side: a texture array that gains layers
+ * has to be re-uploaded, and every render bundle recorded against the old one dies with it. So when an array
+ * changes, every resident cell is re-created — from the cache, not re-welded. Welding is the ~200 ms per
+ * cell; re-creating from bytes is not.
  */
 import type { Engine } from '@opensa/engine';
 
@@ -21,31 +23,58 @@ export interface CellCoord {
   cy: number;
 }
 
-/** What one `setCells` cost and produced — the phase-1 measurement. */
+/** What one `setCells` cost and produced — the phase-1/2 measurement. */
 export interface CellLoadStats {
-  /** Arrays uploaded. */
+  /** Arrays resident after this call. */
   arrays: number;
   /** Source bytes read for the models/textures this call needed (0 once they are resident). */
   assetBytes: number;
+  /** Cells resident after this call. */
   cells: number;
+  /** Cells welded by this call (the rest came from the cache). */
+  cellsWelded: number;
   /** Wall time of the per-cell model/texture reads. */
   fetchMs: number;
   indices: number;
+  /** Wall time of `engine.cells.load` for everything (re)created. */
+  loadMs: number;
+  /** Median single-cell weld in this call, ms — the typical cost, which a mean hides on a mixed batch. */
+  medianWeldMs: number;
+  /** Slowest single cell weld in this call, ms. */
+  slowestWeldMs: number;
   /** Wall time of `TexturePlanner.build()` + the uploads. */
   textureMs: number;
-  /** Total `.ostex` bytes uploaded. */
+  /** Total `.ostex` bytes resident. */
   textures: number;
   vertices: number;
-  /** Wall time of the welds alone. */
+  /** Wall time of the welds in this call. */
   weldMs: number;
+}
+
+/** A welded cell held for re-creation; `.oscell` bytes stay valid as the texture plan grows. */
+interface CachedCell {
+  bytes: Uint8Array;
+  indices: number;
+  vertices: number;
+}
+
+/** One cell of the target set, with the engine key it is loaded under. */
+interface WantedCell {
+  cx: number;
+  cy: number;
+  key: string;
 }
 
 const EMPTY: CellLoadStats = {
   arrays: 0,
   assetBytes: 0,
   cells: 0,
+  cellsWelded: 0,
   fetchMs: 0,
   indices: 0,
+  loadMs: 0,
+  medianWeldMs: 0,
+  slowestWeldMs: 0,
   textureMs: 0,
   textures: 0,
   vertices: 0,
@@ -53,75 +82,159 @@ const EMPTY: CellLoadStats = {
 };
 
 export class CellRenderer {
-  private readonly loadedArrays = new Set<number>();
-  private readonly loadedCells = new Set<string>();
+  private readonly cache = new Map<string, CachedCell>();
+  private readonly planner: TexturePlanner;
+  private readonly resident = new Set<string>();
+  /** ref → the layer count last uploaded, so a grown array is detected. */
+  private readonly uploaded = new Map<number, number>();
 
   constructor(
     private readonly engine: Engine,
     private readonly map: LoadedMap,
-  ) {}
-
-  /** Drop everything currently resident (cells first — their bundles reference the arrays). */
-  clear(): void {
-    for (const key of this.loadedCells) {
-      this.engine.cells.unload(key);
-    }
-    this.loadedCells.clear();
-    for (const ref of this.loadedArrays) {
-      this.engine.textures.unload(ref);
-    }
-    this.loadedArrays.clear();
+  ) {
+    this.planner = new TexturePlanner(this.map.fs, this.map.defs.txdParents ?? new Map<string, string>());
   }
 
-  /** Make exactly `coords` resident at one level. Returns what it cost. */
-  async setCells(coords: readonly CellCoord[], lod: boolean): Promise<CellLoadStats> {
+  /** Unload every resident cell (the texture plan and the weld cache survive). */
+  clear(): void {
+    for (const key of this.resident) {
+      this.engine.cells.unload(key);
+    }
+    this.resident.clear();
+  }
+
+  /**
+   * Drop and re-create every resident cell from the cache. This is how hiding is UNDONE: `hidePlacement`
+   * degenerates indices in the GPU buffer in place and has no inverse, so the only way back is a fresh load
+   * of the same bytes — which costs the upload, not the weld.
+   */
+  reload(): void {
+    const keys = [...this.resident];
     this.clear();
-    const planner = new TexturePlanner(this.map.fs, this.map.defs.txdParents ?? new Map<string, string>());
+    for (const key of keys) {
+      const cached = this.cache.get(key);
+      if (cached) {
+        this.engine.cells.load(key, cached.bytes);
+        this.resident.add(key);
+      }
+    }
+  }
+
+  /**
+   * Make exactly `coords` resident at one level. Cells already welded come from the cache; new ones weld.
+   * `onProgress` is called per welded cell — the whole-map toggle must show its cost, not hide it.
+   */
+  async setCells(
+    coords: readonly CellCoord[],
+    lod: boolean,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<CellLoadStats> {
     const stats = { ...EMPTY };
+    const wanted = coords.map(({ cx, cy }) => ({ cx, cy, key: `${cx},${cy},${lod ? 'lod' : 'hd'}` }));
 
-    // The welder reads synchronously — every model a cell places has to be in the VFS before it runs.
-    const fetchStarted = performance.now();
-    for (const { cx, cy } of coords) {
-      stats.assetBytes += await this.map.assets.ensure(cellModelNames(this.map.defs, this.map.grid, cx, cy, lod));
-    }
-    stats.fetchMs = Math.round(performance.now() - fetchStarted);
-
-    const weldStarted = performance.now();
-    const welded: { bytes: Uint8Array; key: string }[] = [];
-    for (const { cx, cy } of coords) {
-      const cell = this.map.grid.get(cellKey(cx, cy));
-      if (!cell) {
-        continue;
+    // Drop what is no longer wanted before welding, so the peak GPU residency is the target set, not the sum.
+    const keep = new Set(wanted.map((cell) => cell.key));
+    for (const key of [...this.resident]) {
+      if (!keep.has(key)) {
+        this.engine.cells.unload(key);
+        this.resident.delete(key);
       }
-      // Cell origin in ENGINE coords: GTA cell centre (x, y) → engine (x, 0, −y) — the converter's own line.
-      const origin: [number, number, number] = [(cx + 0.5) * CELL_SIZE, 0, -(cy + 0.5) * CELL_SIZE];
-      const result = weldCell(this.map.fs, this.map.defs, cell, lod, planner, origin);
-      if (!result) {
-        continue;
-      }
-      welded.push({ bytes: result.bytes, key: `${cx},${cy},${lod ? 'lod' : 'hd'}` });
-      stats.indices += result.stats.indices;
-      stats.vertices += result.stats.vertices;
     }
-    stats.weldMs = Math.round(performance.now() - weldStarted);
 
-    // Arrays BEFORE cells: a cell's render bundle bakes in the bind groups of the arrays its draws sample.
-    const textureStarted = performance.now();
-    for (const array of planner.build()) {
-      this.engine.textures.load(array.ref, array.bytes);
-      this.loadedArrays.add(array.ref);
-      stats.arrays += 1;
-      stats.textures += array.bytes.byteLength;
+    let done = 0;
+    const weldTimes: number[] = [];
+    for (const cell of wanted) {
+      done += 1;
+      await this.weldOne(cell, lod, stats, weldTimes);
+      onProgress?.(done, wanted.length);
     }
-    stats.textureMs = Math.round(performance.now() - textureStarted);
+    stats.medianWeldMs = median(weldTimes);
 
-    for (const { bytes, key } of welded) {
-      this.engine.cells.load(key, bytes);
-      this.loadedCells.add(key);
+    const arraysChanged = this.syncTextures(stats);
+    this.loadCells(wanted, arraysChanged, stats);
+
+    for (const key of this.resident) {
+      const cached = this.cache.get(key);
       stats.cells += 1;
+      stats.indices += cached?.indices ?? 0;
+      stats.vertices += cached?.vertices ?? 0;
     }
 
     return stats;
+  }
+
+  /** (Re)create the wanted cells from cache. A grown array invalidated every bundle, so start over then. */
+  private loadCells(wanted: readonly WantedCell[], arraysChanged: boolean, stats: CellLoadStats): void {
+    const started = performance.now();
+    if (arraysChanged) {
+      for (const key of this.resident) {
+        this.engine.cells.unload(key);
+      }
+      this.resident.clear();
+    }
+    for (const { key } of wanted) {
+      const cached = this.cache.get(key);
+      if (cached && !this.resident.has(key)) {
+        this.engine.cells.load(key, cached.bytes);
+        this.resident.add(key);
+      }
+    }
+    stats.loadMs = Math.round(performance.now() - started);
+  }
+
+  /**
+   * Upload every array the plan now holds, replacing the ones that GREW. Returns whether anything changed —
+   * a replaced array's GPU texture is a new object, and the render bundles that sampled the old one are dead.
+   */
+  private syncTextures(stats: CellLoadStats): boolean {
+    const started = performance.now();
+    let changed = false;
+    for (const array of this.planner.build()) {
+      stats.arrays += 1;
+      stats.textures += array.bytes.byteLength;
+      if (this.uploaded.get(array.ref) === array.meta.layers) {
+        continue;
+      }
+      if (this.uploaded.has(array.ref)) {
+        this.engine.textures.unload(array.ref);
+      }
+      this.engine.textures.load(array.ref, array.bytes);
+      this.uploaded.set(array.ref, array.meta.layers);
+      changed = true;
+    }
+    stats.textureMs = Math.round(performance.now() - started);
+
+    return changed;
+  }
+
+  /** Weld one cell into the cache, reading the models it places first. A cached or empty cell is a no-op. */
+  private async weldOne(
+    { cx, cy, key }: WantedCell,
+    lod: boolean,
+    stats: CellLoadStats,
+    weldTimes: number[],
+  ): Promise<void> {
+    const cell = this.map.grid.get(cellKey(cx, cy));
+    if (this.cache.has(key) || !cell) {
+      return;
+    }
+    // The welder reads synchronously — every model this cell places has to be in the VFS before it runs.
+    const fetchStarted = performance.now();
+    stats.assetBytes += await this.map.assets.ensure(cellModelNames(this.map.defs, this.map.grid, cx, cy, lod));
+    stats.fetchMs += Math.round(performance.now() - fetchStarted);
+
+    const weldStarted = performance.now();
+    // Cell origin in ENGINE coords: GTA cell centre (x, y) → engine (x, 0, −y) — the converter's own line.
+    const origin: [number, number, number] = [(cx + 0.5) * CELL_SIZE, 0, -(cy + 0.5) * CELL_SIZE];
+    const result = weldCell(this.map.fs, this.map.defs, cell, lod, this.planner, origin);
+    const elapsed = Math.round(performance.now() - weldStarted);
+    stats.weldMs += elapsed;
+    stats.slowestWeldMs = Math.max(stats.slowestWeldMs, elapsed);
+    weldTimes.push(elapsed);
+    stats.cellsWelded += 1;
+    if (result) {
+      this.cache.set(key, { bytes: result.bytes, indices: result.stats.indices, vertices: result.stats.vertices });
+    }
   }
 }
 
@@ -147,4 +260,14 @@ export function mapCenterGta(map: LoadedMap): [number, number] {
   }
 
   return [((x0 + x1) / 2 + 0.5) * CELL_SIZE, ((y0 + y1) / 2 + 0.5) * CELL_SIZE];
+}
+
+/** Median of a sample (0 when empty). */
+function median(values: readonly number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+
+  return sorted[Math.floor(sorted.length / 2)] ?? 0;
 }

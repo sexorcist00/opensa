@@ -6,7 +6,8 @@
   "exports": {
     "./ui/camera/engine-camera": "./src/ui/camera/engine-camera.ts",
     "./ui/camera/fly-rig": "./src/ui/camera/fly-rig.ts",
-    "./ui/debug/debug-styles": "./src/ui/debug/debug-styles.ts"
+    "./ui/debug/debug-styles": "./src/ui/debug/debug-styles.ts",
+    "./ui/debug/map-inspector": "./src/ui/debug/map-inspector.tsx"
   },
   "nx": {
     "tags": [

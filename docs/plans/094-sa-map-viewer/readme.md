@@ -213,22 +213,114 @@ This one is React (debugger UI reuse), folder-fed, world-scale. User decision: a
     what puts north up and east right; at yaw 0 the top-down basis reads as a half-turn of every map
     anyone would compare against.
 
-  **A finding phase 6 has to plan around: the built tree cannot be welded.**
-  `build/original/opensa`'s archives carry **8 779 `.osm` and only 538 `.dff`** (vanilla:
-  **12 964 `.dff`**, 0 `.osm`) — the converter replaced the geometry. This viewer welds from
-  RenderWare DFFs, so a converted game dir resolves its map fine (phase 0's 84 344 instances) but
-  welds empty. The vanilla-vs-merged A/B therefore needs a **merged-but-unconverted** tree as its
-  second half — `mod-installer` alone produces exactly that
-  (`npx tsx tools/mod-installer/src/cli.ts --in ./mods-src/original/mods --game ./game-src/original
-  --out <dir>`), and that is what phase 6 must compare against, not `build/<game>/opensa`.
+  **Which trees this viewer is FOR (user directive, confirmed here by measurement).** It reads
+  **SA-native** dirs — `game-src/<game>`, pmb's `sa` target (`build/<game>/sa`, `pipeline.ts:221`),
+  `build/salod` — because the OpenSA target already has a map viewer: the in-game debugger's.
+  Measured: `build/original/opensa` carries **8 779 `.osm` and only 538 `.dff`** (vanilla:
+  **12 964 `.dff`**, 0 `.osm`), so a converted dir resolves its map fine (phase 0's 84 344
+  instances) and then welds empty — the geometry the welder reads is not there any more. That is
+  scope, not a defect; the app now SAYS so instead of showing an empty screen.
+
+  So the A/B pairs are SA-format against SA-format. `build/<game>/sa` does not exist on this machine
+  yet (`npm run build:game:original:sa` produces it); what does exist is **`build/salod`** —
+  vanilla plus the generated cell LODs (`lods.img`/`lodsn.img`, `lods.ide`/`lods.ipl` appended to
+  `gta.dat`) with map-optimizer's `smooth-normals` applied. It welds: 51 412 instances, and cell
+  9,−7 comes out **114 395 verts / 56 744 tris** against vanilla's **92 194 / 58 118** — a real
+  content difference the tool surfaced on its first A/B, worth a look of its own.
+
+  The pairing also sharpens what a bisect can conclude, because the viewer runs the pack's own weld
+  but NOT its bakes:
+  - strip visible from `game-src/original` ⇒ it is in vanilla data, the weld, or the engine;
+  - visible from the merged SA tree but not vanilla ⇒ a mod or a map-optimizer pass put it there;
+  - visible in the game but in NEITHER viewer source ⇒ it comes from what the viewer skips — the
+    AO / sun-vis bakes, the `.oswire` layer, or streaming — which is itself a strong narrowing.
 - **Phase 2 — the permanent panel.** `MapGame` driver (manual cells, weld cache, unload);
   `MapInspector` mounted as the fixed left panel; whole-map toggle and LOD mode working. Whole-map
   HD is allowed to be slow/heavy — it logs progress and its cost gets measured, not hidden.
   *Verify:* toggling cells loads/unloads; numbers: per-cell weld ms (median/worst), whole-map
   LOD-mode total time + memory.
+
+  **DONE 2026-07-29.** `MapInspector` is imported from `apps/web` and mounted as one always-open
+  section of the panel — the cell grid with its region colours, "Whole map", "Show LODs" and the
+  SELECTED block, none of it re-written. `ViewerMapGame` implements the `MapGame` interface
+  (`cellSize`/`listCells`/`setManualCells`/`setMapViewer`/`viewCell` + an `EventBus`) and queues
+  sets so one arriving mid-weld replaces the queued one instead of interleaving.
+
+  **The inspector OWNS the cell set — phase 1's camera-follow is gone.** It seeds itself from
+  `viewCell()` at mount, so the viewer still opens on exactly the cell `?at` names, and after that
+  the grid is the control. Two owners of one cell set is how a debug tool starts lying about what it
+  is showing.
+
+  **Weld cache + the array-growth rule.** One `TexturePlanner` lives for the session, and welded
+  `.oscell` bytes are cached per cell: the plan is append-only and deterministic, so a texture keeps
+  the layer index its first use gave it and older bytes stay valid as later cells extend the plan.
+  What is NOT stable is the GPU side — a texture array that gains layers must be re-uploaded, and
+  every render bundle recorded against the old one dies with it. So `syncTextures` reports whether
+  any array grew and, when one did, every resident cell is re-created **from the cache, not
+  re-welded**. That is the difference between a 10 ms re-upload and a 200 ms re-weld per cell.
+
+  **Measured** (headless Chromium 1440×900, `game-src/original`, `?at=0,0&h=4000`):
+
+  | action | wall | welds | source read | textures | geometry |
+  | --- | --- | --- | --- | --- | --- |
+  | Whole map, **LOD** | **3.0 s** | 561 in 539 ms — median **1 ms**, worst **17 ms** | 55.2 MB in 2.2 s | 59 arrays / 21.0 MB | 559 cells · 622 926 tris |
+  | Whole map, **HD** | **15.3 s** | 561 in 8 327 ms — median **10 ms**, worst **149 ms** | 648.0 MB in 6.5 s | 81 arrays / 227.4 MB | 562 cells · 8 264 544 tris |
+  | Whole map **off** | 0.0–0.2 s | — | — | arrays stay resident | **0 cells** |
+  | one cell (9,−7) HD | 0.3 s | 1 — 188 ms | 11.5 MB in 124 ms | 21 arrays / 11.5 MB | 58 118 tris |
+
+  So the whole of San Andreas welds in the browser in **15 s** and draws at 57–62 fps; the median
+  cell is 10 ms and the worst is 149 ms, i.e. the 188 ms Grove Street cell of phase 1 is near the top
+  of the distribution, not typical. Unloading returns residency to zero (the texture plan and the
+  weld cache deliberately survive — re-selecting a cell is then instant). **`performance.memory` is
+  useless here**: it read a flat 386 MB before, during and after the whole-map load in every run, so
+  the residency numbers above (source bytes, `.ostex` bytes, vertex counts) are the memory record.
+
+  **A fog finding, and the second knob turned off by default.** The first whole-map capture came back
+  as an EMPTY canvas at 53 fps. The engine culls any cell lying entirely past `fogCutDistance`
+  (2 400 by default) — and a whole-map pose puts the eye ~4 km up, so every cell was culled. Fog is
+  now pushed out to the far plane by default (`?fog=1` restores the game's noon fog). Same principle
+  as wind: an inspector may not hide its subject.
+
+  `scripts/debug/map-viewer-shot.ts` is now a KEPT script (row in `docs/debug/README.md`): one
+  scripted pose captured headless, `panel=0` added automatically, the viewer's own load lines echoed.
 - **Phase 3 — picking.** Weld writes the placement table; `debugPicking` on; click → `select` →
   the existing info panel (model/txd/pos); hide/restore via `CellStore.hidePlacement` if free.
   *Verify:* clicking a named blue-strip neighbour (`bealantr02_law2`) reports the right name.
+
+  **DONE 2026-07-29, and the verification landed on the nose.** `engine.cells.debugPicking` is on
+  from boot — in the game it is viewer-only because the mapper plus retained index bytes cost tens of
+  MB on a full map, but this app IS that viewer, and the flag only takes effect on the NEXT cell
+  load, so it has to be set before the first one. `ViewerMapGame` gained `pickAt(ndc, aspect)`
+  (cursor ray → `CellStore.pick` → `select` with the position converted back to GTA coords),
+  `hideSelectedObject` and `restoreHiddenObjects`; the inspector's SELECTED block and its two buttons
+  were already wired to exactly those, so no UI was written.
+
+  Two details that decide whether it feels right:
+  - **The cursor is the aim, not the view forward.** `cursorRay` (the debugger's own) is fed the NDC
+    of the click. A forward-vector pick would report whatever sits at screen centre — wrong in a
+    tool where you point at things.
+  - **The same left button pans AND picks**, so a press is a click only if it travelled ≤ 4 px
+    (`CLICK_SLOP`). Without that, every pan would end by deselecting.
+
+  Restoring is a `CellRenderer.reload()`: `hidePlacement` degenerates indices in the GPU buffer in
+  place and has no inverse, so the way back is a fresh load of the same cached bytes — the upload,
+  not the weld.
+
+  **Measured** (headless, `game-src/original`, `?at=136,-1715&h=120` — the blue-strip spot; cell
+  0,−7 welds in 51 ms, 11 543 tris):
+
+  | click | reported |
+  | --- | --- |
+  | centre | **`bealantr02_law2`** · txd `beacliff_law2` · pos **136.0, −1714.6, 10.9** |
+  | +0.05, −0.05 | `tree_hipoly11` · `gtatreesh` · 155.6, −1717.3, 21.0 |
+  | −0.1, −0.1 | `tree_hipoly19` · `gtatreesh` · 111.6, −1719.1, 24.8 |
+  | −0, −0.15 | `veg_palm04` · `gta_tree_palm` · 131.9, −1698.9, 37.1 |
+
+  The plan asked for `bealantr02_law2` at that spot and that is what the centre click reports, with a
+  position 0.4 m off the requested `at` — i.e. the ray, the mapper bounds and the GTA↔engine
+  conversion all agree. `Hide object` then removed the palm's crown (trunk still standing in the
+  capture — the placement's triangles, nothing else), the panel showed `hidden: 1`, and
+  `Restore all` brought it back.
 - **Phase 4 — model search in sa-map-viewer.** Search field + autocomplete + centre&activate
   (decision 5); the search UI built as a shared component ready for the debugger half.
   *Verify:* searching `bealantr02` centres on (136,-1715) and activates its cell.

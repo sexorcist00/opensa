@@ -33,7 +33,9 @@ export interface ViewerPose {
  */
 export const MAP_YAW = Math.PI;
 
-const FAR = 12000;
+/** View far plane. A whole-map pose sits ~6 km from the far corner of SA's grid, so 12 km covers any of it. */
+export const CAMERA_FAR = 12000;
+
 const MIN_DISTANCE = 5;
 const NEAR = 0.5;
 /** Radians per pixel of right-drag — a full screen width is a bit over a half turn. */
@@ -60,6 +62,11 @@ export class ViewerCamera {
     const forward = forwardFrom(this.yaw, this.pitch);
     const [x, y, z] = dollyStep(this.eye(), forward, notch);
     this.distance = Math.max(MIN_DISTANCE, Math.hypot(x - this.focus[0], y - this.focus[1], z - this.focus[2]));
+  }
+
+  /** Where the eye is and which way it looks — what a cursor ray is built from (phase 3 picking). */
+  eyeAndForward(): { eye: [number, number, number]; forward: [number, number, number] } {
+    return { eye: this.eye(), forward: forwardFrom(this.yaw, this.pitch) };
   }
 
   /** Right-drag: turn and tilt around the focus. */
@@ -90,7 +97,7 @@ export class ViewerCamera {
     return {
       aspect,
       eye: this.eye(),
-      far: FAR,
+      far: CAMERA_FAR,
       fovYRad: CAMERA_FOV_Y,
       near: NEAR,
       target: [...this.focus],

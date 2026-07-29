@@ -39,6 +39,8 @@ export interface LoadedMap {
   grid: WorldGrid;
   /** Human-readable origin of these bytes — shown on screen and in every capture. */
   label: string;
+  /** Geometry format census of the install. `osm > dff` ⇒ an OpenSA-converted dir (see {@link isConverted}). */
+  models: { dff: number; osm: number };
 }
 
 /** Where to read the game files from. */
@@ -60,6 +62,16 @@ export interface MapStats {
 /** Per-tool "last folder" memory for the picker — deliberately not the game's remembered install. */
 const PICKER_ID = 'opensa-map-viewer';
 
+/**
+ * Whether this dir is an OpenSA-CONVERTED game (its geometry is `.osm`, not `.dff`). This viewer welds from
+ * RenderWare DFFs, so such a dir resolves its map and then welds nothing — and it does not need this tool
+ * anyway: the OpenSA build has a map viewer already, in the in-game debugger. Say so rather than render
+ * an empty screen.
+ */
+export function isConverted(map: LoadedMap): boolean {
+  return map.models.osm > map.models.dff;
+}
+
 /** Open a source and resolve its whole map: parse gta.dat/IDE/IPL, then bucket the instances into cells. */
 export async function loadMapSource(source: MapSource): Promise<LoadedMap> {
   const { install, label } = await openInstall(source);
@@ -74,6 +86,10 @@ export async function loadMapSource(source: MapSource): Promise<LoadedMap> {
     fs,
     grid: buildWorldGrid(defs, CELL_SIZE),
     label,
+    models: {
+      dff: plan.models.filter((entry) => entry.name.endsWith('.dff')).length,
+      osm: plan.models.filter((entry) => entry.name.endsWith('.osm')).length,
+    },
   };
 }
 

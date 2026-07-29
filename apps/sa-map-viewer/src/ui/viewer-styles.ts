@@ -24,4 +24,10 @@ export const viewerStyles: Record<string, CSSProperties> = {
     right: 12,
     zIndex: 1000,
   },
+  /** The "this dir is already converted" notice — the accent colour the debugger warns in. */
+  warning: {
+    color: '#fd8709',
+    fontSize: 11,
+    lineHeight: 1.4,
+  },
 };

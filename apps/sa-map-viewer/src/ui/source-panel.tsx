@@ -1,26 +1,31 @@
 import { CELL_SIZE } from '@opensa/cell-weld/cell-size';
 import { styles } from '@opensa/web/ui/debug/debug-styles';
+import { MapInspector } from '@opensa/web/ui/debug/map-inspector';
 import { type ReactElement, useMemo } from 'react';
 
 import type { MapSourceController } from '../source/use-map-source';
-import type { ViewerReadout } from '../world/viewer-host';
+import type { ViewerHandle, ViewerReadout } from '../world/viewer-host';
 
-import { mapStats } from '../source/map-source';
+import { isConverted, mapStats } from '../source/map-source';
+import { viewerStyles } from './viewer-styles';
 
 /**
- * The permanent left panel (plan 094): pick the source, then read back what was resolved and what the camera
- * is looking at. The SOURCE line is the important one — it is what makes a capture from this tool
- * self-describing. Phase 2 mounts the cell grid (`MapInspector`) underneath it.
+ * The permanent left panel (plan 094): pick the source, read back what was resolved, and — once the engine is
+ * up — the debugger's OWN `MapInspector` as one always-open section (cell grid, whole map, LOD mode). The
+ * SOURCE line is the important one: it is what makes a capture from this tool self-describing.
  */
 export function SourcePanel({
   controller,
   readout,
+  viewer,
 }: {
   controller: MapSourceController;
   readout: null | ViewerReadout;
+  viewer: null | ViewerHandle;
 }): ReactElement {
   const { open, state } = controller;
-  const stats = useMemo(() => (state.kind === 'ready' ? mapStats(state.map) : null), [state]);
+  const map = state.kind === 'ready' ? state.map : null;
+  const stats = useMemo(() => (map ? mapStats(map) : null), [map]);
 
   return (
     <div style={styles.panel}>
@@ -32,7 +37,7 @@ export function SourcePanel({
             OPEN GAME FOLDER
           </button>
           <div style={styles.hint}>
-            A raw GTA SA install (or a built game dir). Chromium only. A served dir loads without the picker:{' '}
+            A raw GTA SA install (or an SA-format build dir). Chromium only. A served dir loads without the picker:{' '}
             <code>?src=http://localhost:3001/game-src/original</code>
           </div>
         </>
@@ -49,16 +54,23 @@ export function SourcePanel({
         </>
       )}
 
-      {state.kind === 'ready' && stats && (
+      {map && stats && (
         <>
           <div style={styles.hint}>SOURCE</div>
-          <div style={styles.info}>{state.map.label}</div>
+          <div style={styles.info}>{map.label}</div>
+          {isConverted(map) && (
+            <div style={viewerStyles.warning}>
+              This is an OpenSA-CONVERTED dir ({map.models.osm} .osm vs {map.models.dff} .dff). Its geometry is no
+              longer RenderWare, so nothing will weld. Point this tool at an SA-format tree — an OpenSA build already
+              has a map viewer, in the in-game debugger.
+            </div>
+          )}
           <div style={styles.divider} />
           <Stat label="cells" value={`${stats.cells} @ ${CELL_SIZE}`} />
           <Stat label="instances" value={stats.instances} />
           <Stat label="hd / lod" value={`${stats.hd} / ${stats.lod}`} />
           <Stat label="models" value={stats.models} />
-          <Stat label="resolve" value={`${state.ms} ms`} />
+          <Stat label="resolve" value={state.kind === 'ready' ? `${state.ms} ms` : '—'} />
         </>
       )}
 
@@ -66,19 +78,34 @@ export function SourcePanel({
         <>
           <div style={styles.divider} />
           <div style={styles.hint}>VIEW</div>
-          <Stat label="cell" value={`${readout.cell.cx},${readout.cell.cy}`} />
           <Stat
             label="at"
             value={`${readout.pose.at[0].toFixed(0)},${readout.pose.at[1].toFixed(0)} · h ${readout.pose.height.toFixed(0)}`}
           />
           <Stat label="pitch / yaw" value={`${degrees(readout.pose.pitch)}° / ${degrees(readout.pose.yaw)}°`} />
-          <Stat label="weld" value={`${readout.load.weldMs} ms`} />
+          <Stat label={`cells ${readout.lod ? 'LOD' : 'HD'}`} value={readout.load.cells} />
+          <Stat
+            label="weld"
+            value={`${readout.load.weldMs} ms · med ${readout.load.medianWeldMs} · max ${readout.load.slowestWeldMs}`}
+          />
           <Stat
             label="textures"
             value={`${readout.load.arrays} × ${(readout.load.textures / 1024 / 1024).toFixed(1)} MB`}
           />
           <Stat label="tris" value={readout.load.indices / 3} />
           <Stat label="fps" value={readout.fps} />
+          {readout.progress && (
+            <div style={styles.hint}>
+              welding {readout.progress.done}/{readout.progress.total}…
+            </div>
+          )}
+        </>
+      )}
+
+      {viewer && (
+        <>
+          <div style={styles.divider} />
+          <MapInspector game={viewer.game} />
         </>
       )}
     </div>

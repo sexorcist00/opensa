@@ -1,6 +1,6 @@
 import { type ReactElement, useState } from 'react';
 
-import type { ViewerReadout } from './world/viewer-host';
+import type { ViewerHandle, ViewerReadout } from './world/viewer-host';
 
 import { useMapSource } from './source/use-map-source';
 import { SourcePanel } from './ui/source-panel';
@@ -10,12 +10,13 @@ import { ViewerCanvas } from './ui/viewer-canvas';
 export function App(): ReactElement {
   const controller = useMapSource();
   const [readout, setReadout] = useState<null | ViewerReadout>(null);
+  const [viewer, setViewer] = useState<null | ViewerHandle>(null);
   const map = controller.state.kind === 'ready' ? controller.state.map : null;
 
   return (
     <>
-      {map && <ViewerCanvas map={map} onReadout={setReadout} />}
-      {!panelHidden() && <SourcePanel controller={controller} readout={readout} />}
+      {map && <ViewerCanvas map={map} onReadout={setReadout} onReady={setViewer} />}
+      {!panelHidden() && <SourcePanel controller={controller} readout={readout} viewer={viewer} />}
     </>
   );
 }

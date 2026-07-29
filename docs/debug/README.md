@@ -89,6 +89,27 @@ local and reversible by re-extraction; each is report-by-default, `--write` to a
 | `txd-from-pngs.ts <folder> [out.txd] [--version-from <t.txd>] [--replace]` | builds a `.txd` FROM a folder of PNGs — the missing half of the texture-folder convention (`docs/contracts/mods.md`), which only ever PATCHES a dictionary that already exists. Use it when the installer says `texture folder … — no entry <name>.txd`: a mod that ships the PNGs of a whole dictionary has nothing to patch, so every texture is dropped and the models naming it render untextured. Writes `<folder>.txd` beside the folder; `--replace` then deletes the folder (the PNGs were its unpacked form). The RW version is READ from a sibling dictionary, never assumed, and each texture's format follows its own image (DXT5 with real alpha, DXT1 without) — the same rule the merge applies. Real case: `52. Abandoned Cars`'s `gta3_img/philss/`, 22 PNGs that were exactly `cuntwjunk04`'s 22 textures. **Writes into `mods-src/`**, unlike the row below |
 | `strip-polygons-from-dff.ts --img <path> --tex <name[,name…]> [--models a,b,…] [--write]` | drops every submesh whose material references a given texture (its triangles) from DFF models inside an IMG — for cards that render as flat missing-texture quads because the texture is absent from the mod. Vertices + the material list are left untouched (the material just goes unused — no re-indexing), so the other cards on the same model survive; each edited DFF is re-parsed and verified before write. Default scans all DFFs; `--models` restricts. Fixed gostown's `LODEnsemble*` `Gp_feuillu1` magenta (`lodveg.txd` ships 6 of the 7 LOD-veg card textures; `Gp_feuillu1` is absent from the mod — not a recovery miss) |
 
+## Driving the map viewer — the folder-to-folder A/B (094)
+
+`sa-map-viewer` renders the map straight from a folder of **SA-format** files (`game-src/<game>`,
+`build/<game>/sa`, `build/salod`) — no repack in the loop, and a pose fully specified by query params. For an
+OpenSA-converted dir (`build/<game>/opensa`, geometry is `.osm`) use the in-game debugger's map viewer
+instead; this one says so and welds nothing.
+
+Interactively it is the debugger's map panel: the cell grid, whole map, LOD mode, and **click-to-pick** —
+a click reports the placement's model/txd/GTA position and can hide it (`Restore all` brings it back). That
+is the fastest way to put a NAME on something odd in a screenshot before any bisecting starts.
+
+| Script | Answers |
+| --- | --- |
+| `map-viewer-shot.ts <appUrl> <outPng> [timeoutMs]` | one scripted pose of a source, captured headless. Adds `panel=0` unless the URL sets it (the panel carries a live fps line, and a pixel diff must not compare a frame counter) and echoes the viewer's own `[sa-map-viewer]` load lines, which NAME the source. **Two runs of one URL are byte-identical PNGs** (wind is off by default — it was the only thing animating a noon frame), so two sources at one pose diff directly: `magick a.png b.png -compose difference -composite -colorspace Gray -format '%[fx:maxima*255]' info:` |
+
+```bash
+npm run serve:static && npm run dev   # /build + /game-src on :3001, the app on :5173
+npx tsx scripts/debug/map-viewer-shot.ts \
+  'http://localhost:5173/sa-map-viewer.html?src=http://localhost:3001/game-src/original&at=150,-1700' a.png
+```
+
 ## Driving the game itself — the scripted physics lap (081/01)
 
 The most useful tool this repo has for a gameplay bug: **the real game, driven by a script, printing
