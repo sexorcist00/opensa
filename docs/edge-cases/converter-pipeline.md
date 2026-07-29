@@ -46,6 +46,14 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
 - **Texture sizes are asset-driven.** Never hardcode a size that belongs to a source asset — texture arrays
   derive one size from `max(assets)`, fixed slots resample instead of throwing. Only shadow maps / probes /
   LUTs stay constants.
+- **A model's dictionary is ONE array, so its LARGEST texture sizes every layer and its only alpha texture
+  formats every layer** — and on mod cars that costs up to 8×. `banshee.osm` is 27.6 MB against a 2.8 MB
+  source `.txd`: three 1024² sheets pull all 23 layers to 1024², two alpha textures of 22 put all 23 in BC3
+  (23 × 1024 × 1024 × 1 B = 24.1 MB of TEXS; GEOM is only 3.4 MB). Twelve gostown mod cars = 297 MB of
+  `.osm`, where 212 STOCK dictionaries cost 8 MB in total. The upscale is nearest-neighbour, so it adds no
+  detail — only bytes, VRAM and per-type spawn cost. Lever with the full accounting, and the measured
+  negative result for a shared per-size dictionary (car textures do not repeat — 8 %):
+  [`performance/deferred-optimizations/vehicle-texture-array-buckets.md`](../performance/deferred-optimizations/vehicle-texture-array-buckets.md).
 - **Mod vegetation is ~48× stock density, and almost none of it buys coverage.** `mods-src/vegetation`
   models run 1451–5813 triangles against SA's 48–132; in draw range of the Ganton path that is 13 524 →
   645 433 triangles (×47.7) for a leaf-area growth of only ×1.66 — **~96 % of the added triangles add no
