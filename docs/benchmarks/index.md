@@ -292,6 +292,16 @@ laid skid segment, one surface ray per contacting wheel per fixed step (driven c
 Run: [`2026-07-28-headless-089-closeout-sweep.json`](opensa-engine/2026-07-28-headless-089-closeout-sweep.json).
 Audit: [`../audit/vehicle-effects-089.md`](../audit/vehicle-effects-089.md).
 
+### 2026-07-29 — plan 092: the alpha-mask rule costs nothing on the sweep (but the pass column is not an A/B)
+
+The first pak carrying the mask classification — 1 602 textures out of the blend pass into the depth-writing
+cutout pass (shipped layers: 1 422 cutout / 661 soft-blend / 380 opaque across the pak's 43 RGBA8 arrays).
+All eight scenes at the 120 Hz cap, p95 9.2–9.3, `lateCreates` 0, unchanged. **The `gpuMs.pass` deltas are
+NOT attributable**: the 07-28 baseline read a different pak (buildTime 08:41 24-07-2026), and the largest
+moves land where the rule cannot reach (ocean-horizon 1.961 → 0.915 at 27 draws). Two paks from the same
+tree with only the rule flipped is the run nobody has taken.
+Run: [`2026-07-29-headless-092-alpha-cutout-sweep.json`](opensa-engine/2026-07-29-headless-092-alpha-cutout-sweep.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
