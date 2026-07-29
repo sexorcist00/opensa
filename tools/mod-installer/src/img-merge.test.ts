@@ -131,6 +131,23 @@ describe('mergeImgDir', () => {
       expect(txdNames(imgPath, 'philss.txd')).toEqual(['existing', 'cap_up']);
     });
 
+    it('accepts a PNG folder named WITH the extension (previon.txd/), same as previon/', () => {
+      const imgPath = join(dir, 'gta3.img');
+      const base = createImg();
+      base.set(
+        'previon.txd',
+        buildTxd([pngToTextureNative('existing', encodePng(solidRgba(8, 8, [9, 9, 9, 255]), 8, 8), VERSION)], VERSION),
+      );
+      writeFileSync(imgPath, base.build());
+
+      const path = imgDir({});
+      mkdirSync(join(path, 'previon.txd'));
+      writeFileSync(join(path, 'previon.txd', 'remap.png'), encodePng(solidRgba(8, 8, [70, 80, 90, 255]), 8, 8));
+
+      expect(mergeImgDir(path, imgPath)).toBe(1);
+      expect(txdNames(imgPath, 'previon.txd')).toEqual(['existing', 'remap']);
+    });
+
     it('merges the PNG subfolder into the .txd the SAME mod ships, not the stock entry', () => {
       // A mod may carry BOTH `<txd>.txd` and a `<txd>/` PNG folder: the mod's file lands first, then the
       // PNGs patch THAT dictionary — the stock entry (and its textures) must be fully superseded.

@@ -268,6 +268,27 @@ describe('install (end-to-end)', () => {
       expect(byName.get('decal')?.format).toBe('dxt5'); // added, alpha
     });
 
+    it('merges a PNG folder the author named WITH the extension (particle.txd/) into that same file', () => {
+      // Real mod: "55. Tiers faces on the asphalt from GTA 4" ships `models/particle.txd/particleskid.png`.
+      // The folder used to miss the `<dir>.txd` test (it looked for `particle.txd.txd`), fall through to
+      // mkdir, and kill the whole build on `EEXIST` against the stock `particle.txd` FILE.
+      const version = 0x1803ffff;
+      const game = join(root, 'game');
+      const mods = join(root, 'mods');
+      const out = join(root, 'out');
+
+      write(
+        join(game, 'models', 'particle.txd'),
+        buildTxd([pngToTextureNative('stock', png(8, [10, 10, 10, 255]), version)], version),
+      );
+      write(join(mods, 'skid', 'models', 'particle.txd', 'particleskid.png'), png(16, [20, 20, 20, 255]));
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      const textures = parseTxd(Uint8Array.from(readFileSync(join(out, 'models', 'particle.txd'))).buffer).textures;
+      expect(textures.map((texture) => texture.name).sort()).toEqual(['particleskid', 'stock']);
+    });
+
     it('routes each mod by kind: a loader mod is baked (gta.dat + gta3.img), a plain mod overlays', () => {
       const game = join(root, 'game');
       const mods = join(root, 'mods');

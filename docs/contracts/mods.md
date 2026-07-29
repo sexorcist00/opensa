@@ -49,8 +49,9 @@ A binary archive cannot be patched file-by-file, so a mod ships a folder instead
 dictionary instead of being copied as files.
 
 ```
-models/generic/vehicle/carplate.png   →  merges into models/generic/vehicle.txd
-gta3_img/previon/remap.png            →  merges into the previon.txd ENTRY inside gta3.img
+models/generic/vehicle/carplate.png     →  merges into models/generic/vehicle.txd
+models/particle.txd/particleskid.png    →  the same file — the extension on the FOLDER is accepted too
+gta3_img/previon/remap.png              →  merges into the previon.txd ENTRY inside gta3.img
 ```
 
 - The texture NAME is the PNG's basename, matched case-insensitively: an existing texture of that name is
@@ -60,8 +61,16 @@ gta3_img/previon/remap.png            →  merges into the previon.txd ENTRY ins
   8-bit RGB/RGBA and non-interlaced.
 - Within a mod, files are copied BEFORE subfolders, so a `.txd` the same mod also ships is in place first and
   gets patched rather than lost.
+- **Both spellings of the folder name work** — `vehicle/` and `vehicle.txd/` target `vehicle.txd`. Authors
+  write both, and until 2026-07-29 the second one was not a wrong-target bug but a BUILD KILLER: the folder
+  missed the `<dir>.txd` test (it looked for `particle.txd.txd`), fell through to `mkdir`, and hit the stock
+  file with a bare `EEXIST: file already exists, mkdir …/models/particle.txd` that named neither the mod nor
+  the rule.
 - Inside an IMG folder, a texture folder whose `.txd` entry is missing is a **loud warning**, not a silent
-  skip.
+  skip. The dictionary is never CREATED from the PNGs — the folder patches what is already there. A mod that
+  ships the PNGs of a NEW dictionary must ship the `.txd` too, or every one of its textures is dropped with
+  that warning (real case: "52. Abandoned Cars" carries `gta3_img/philss/` while "0. Map Fixes Pack" repoints
+  `cuntwjunk04` at a `philss` dictionary neither of them ships — the model ends up untextured).
 
 ### `<target>.merge` — edit a data file instead of replacing it
 

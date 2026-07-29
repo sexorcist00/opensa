@@ -71,7 +71,7 @@ export function applyMod(modPath: string, outPath: string): { copied: number; me
  * post-overlay merge pass instead (it EDITS its suffix-less target — see `ide-merge.ts`). A **directory** whose
  * sibling `<dir>.txd` already exists as a loose file in `--out` is a **texture folder** — its PNGs merge into
  * that `.txd` (add / replace by name) instead of being copied (e.g. `models/generic/vehicle/` →
- * `models/generic/vehicle.txd`). Otherwise it is a plain folder: recurse, copying **files first then
+ * `models/generic/vehicle.txd`); a folder the author named `vehicle.txd/` targets the same file. Otherwise it is a plain folder: recurse, copying **files first then
  * subfolders** so a `.txd` this mod also ships is in place before a sibling folder merges into it.
  */
 function applyEntry(
@@ -90,7 +90,10 @@ function applyEntry(
     return { copied: 1, merged: 0 };
   }
 
-  const txdPath = `${dstPath}.txd`;
+  // The folder may be named `vehicle` (the documented form) or `vehicle.txd` — authors write both, and the
+  // second one used to reach `mkdirSync` over the REAL `vehicle.txd` file and die on a bare EEXIST that named
+  // neither the mod nor the rule (mod "55. Tiers faces on the asphalt from GTA 4" ships `models/particle.txd/`).
+  const txdPath = /\.txd$/i.test(dstPath) ? dstPath : `${dstPath}.txd`;
   if (existsSync(txdPath) && statSync(txdPath).isFile()) {
     return { copied: 0, merged: mergeTxdFolder(srcPath, txdPath) };
   }

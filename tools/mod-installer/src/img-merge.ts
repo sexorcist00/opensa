@@ -138,7 +138,8 @@ export function mergeImgDir(imgDir: string, imgPath: string): number {
   }
   let merged = 0;
   for (const folder of textureFolders) {
-    const entryName = `${folder.name}.txd`;
+    // Same tolerance as the loose-file path: `previon/` and `previon.txd/` both target the `previon.txd` entry.
+    const entryName = /\.txd$/i.test(folder.name) ? folder.name : `${folder.name}.txd`;
     const existing = img.get(entryName);
     if (!existing) {
       console.warn(`mod-installer: texture folder ${folder.path} — no entry ${entryName} in ${imgPath}`);
