@@ -56,7 +56,7 @@ spawn it by name to look at it ([plan 006](../tools/vehicle-installer/docs/plans
 
 ```bash
 npm run dev                 # Vite dev server → http://localhost:5173
-npm run serve:static        # static origin :3001 — mounts /build (Range + /__index), static/ archives
+npm run serve:static        # static origin :3001 — mounts /build + /game-src (Range + /__index), static/ archives
 ```
 
 | Surface                  | URL                                                                                                                |
@@ -69,6 +69,7 @@ npm run serve:static        # static origin :3001 — mounts /build (Range + /__
 | Lab: streaming LS        | `http://localhost:4300/?pak=1&src=http://localhost:3001/build/original/opensa&at=2495,-1687,13&orbit=300&draw=1500` |
 | Lab: vehicle probe       | `http://localhost:4300/?pak=1&stream=1&src=…&vehicle=1&vmodel=vehicle-comet&at=2495,-1675,13.3&orbit=26&hour=12`   |
 | Viewers                  | `npm run dev` → `http://localhost:5173/viewer.html?tab=<object,vehicle,character,compare>`                         |
+| sa-map-viewer (094)      | `http://localhost:5173/sa-map-viewer.html?src=http://localhost:3001/game-src/original` (no `?src=` → folder picker) |
 
 Full query-param reference: [development/query-parameters.md](./development/query-parameters.md).
 

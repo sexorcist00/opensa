@@ -1,6 +1,6 @@
 # 094 — sa-map-viewer: a standalone map viewer over ORIGINAL SA files + model search in the debugger
 
-**Status: PLANNED 2026-07-29. No code yet.**
+**Status: IN PROGRESS — phase 0 SHIPPED 2026-07-29, phases 1–6 open.**
 
 Born from the beach blue-strip investigation
 ([`docs/open-issues/beach-blue-strip.md`](../../open-issues/beach-blue-strip.md)): the lab loop there
@@ -115,11 +115,43 @@ This one is React (debugger UI reuse), folder-fed, world-scale. User decision: a
 
 ## Phases (each lands with its measured numbers written back here)
 
-- **Phase 0 — scaffold + resolve.** App skeleton (root-vite input `sa-map-viewer.html`, excluded
-  from `build:prod` like `viewer.html`; `nx.tags: ['type:app']`); source screen: FSA folder picker
-  + `?src=` served-dir; assemble the `AssetFileSystem`; run `resolveMap` + `buildWorldGrid(250)`.
-  On screen: source name, instance/cell counts. *Verify:* counts for `game-src/original` logged
-  here; boundary lint green.
+- **Phase 0 — scaffold + resolve. DONE 2026-07-29.** App skeleton (root-vite input
+  `sa-map-viewer.html`, excluded from `build:prod` like `viewer.html`; `nx.tags: ['type:app']`);
+  source screen: FSA folder picker + `?src=` served-dir; assemble the `AssetFileSystem`; run
+  `resolveMap` + `buildWorldGrid(250)`. On screen: source name, instance/cell counts. *Verify:*
+  counts for `game-src/original` logged here; boundary lint green.
+
+  **What shipped.** `apps/sa-map-viewer/` (4 source files): `source/map-source.ts` opens a source
+  and resolves it, `source/use-map-source.ts` drives the phases, `ui/source-panel.tsx` +
+  `app.tsx` render the readout. Both ways in reuse the GAME's own install loaders — so what the
+  viewer reads is what the game reads: `AssetHttpDirLoader` for `?src=`, `AssetLocalLoader` for the
+  picker (with `acquireDir`/`restoreDir` injected, so the picker never touches the game's
+  remembered-install store — this tool swaps sources constantly). Only the `data` + `others` groups
+  are ingested: gta.dat/IDE/IPL is all `resolveMap` needs, so opening a source costs **no model or
+  texture bytes**. The panel is the debugger's own `styles` (a one-line `exports` entry added to
+  `apps/web/package.json` — the sanctioned "tiny export tweak"), so phase 2's `MapInspector` will
+  drop in under it unchanged. `scripts/serve-static.ts` gained a **`/game-src` mount** next to
+  `/build` (both now table-driven, both with `__index`) — without it the vanilla half of the A/B was
+  not reachable over `?src=` at all.
+
+  **Measured (2026-07-29, headless Chromium 1440×900, dev server; `?src=` path):**
+
+  | source | instances | cells @250 | hd / lod | models | resolve |
+  | --- | --- | --- | --- | --- | --- |
+  | `game-src/original` (vanilla) | 50 849 | 562 | 39 128 / 6 187 | 14 098 | **1 144 ms** |
+  | `build/original/opensa` (merged build) | 84 344 | 570 | 62 616 / 16 159 | 14 908 | **2 806 ms** |
+
+  The two columns ARE the blue-strip A/B pair, and they already say something: the merged tree
+  carries +33 495 instances (+66 %) and 2.6× the LOD layer (the generated `lods.ipl` cell-LODs),
+  over 8 more cells. `hd + lod < instances` in both rows — the remainder is interiors plus
+  instances with no catalog def, which `buildWorldGrid` drops by design.
+  *Not a benchmarks-folder entry:* these are tool load times, not frame cost — neither family in
+  `docs/benchmarks/README.md` takes them, so the plan doc is their home.
+
+  **Verified:** `tsc --noEmit` clean, `eslint` clean on the new app (boundary lint included — the
+  app imports `type:engine` packages + `@opensa/web` only), both sources loaded end-to-end headless.
+  **NOT verified:** the FSA folder-picker path — the native picker cannot be driven headlessly. Its
+  loader is the game's own, but the click needs one manual run.
 - **Phase 1 — first cell renders.** Browser weld of one cell (planner → `encodeOstex`, weld →
   `encodeOscell`) → `engine.cells.load`; the map-viewer camera (decision 4: `snapTopDown` opening
   pose, pan/orbit/dolly by hand, `?at`/`?h`/`?pitch`/`?yaw` for scripted poses; the source-folder

@@ -26,6 +26,7 @@ apps/
   web/         @opensa/web         React shell + game surface + game-config + controls-harness  (tag type:app)
   viewer/      @opensa/viewer      object/vehicle/character/compare viewer tabs in /viewer.html  (type:app)
   engine-lab/  @opensa/engine-lab  the renderer proving ground (isolated engine scenes)          (type:app)
+  sa-map-viewer/ @opensa/sa-map-viewer  the map inspector fed by a FOLDER of original SA files   (type:app)
 packages/                          (tag type:engine)
   engine/         @opensa/engine          the WebGPU renderer — device/pipelines, frame graph, world cells
   engine-formats/ @opensa/engine-formats  native .osm/.ostex/.oscell/.ospak/.oswire layouts, shared with tools

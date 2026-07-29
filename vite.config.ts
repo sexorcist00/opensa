@@ -86,6 +86,7 @@ const isProdDeploy = excludeViewers && hideDebugger;
 // phase 3 — their findings live in docs/plans/073-webgpu-migration-threejs/concept/.
 const viewerInputs = {
   controlsHarness: resolve(__dirname, 'controls-harness.html'),
+  saMapViewer: resolve(__dirname, 'sa-map-viewer.html'), // the folder-fed map inspector (plan 094)
   viewer: resolve(__dirname, 'viewer.html'), // object/vehicle/character as ?tab= in one app
 };
 

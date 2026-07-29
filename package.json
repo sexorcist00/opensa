@@ -37,6 +37,7 @@
     "apps/web",
     "apps/viewer",
     "apps/engine-lab",
+    "apps/sa-map-viewer",
     "tools/rw-codec",
     "tools/tool-kit",
     "packages/renderware",

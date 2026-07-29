@@ -2,8 +2,10 @@
  * Local + E2E static origin (port 3001, matches VITE_STATIC_URL / playwright.config). Serves the built game
  * archives from `static/` (`static/games/<game>-<version>/*`, gitignored), maps `/viewer/*` →
  * `tests/viewer/*` — the object-viewer's e2e fixtures (`npm run test:fixtures`, gitignored, only loaded in
- * `--mode e2e`) — AND maps `/build/*` → `build/*`, the canonical dev source (plan 079): every dev surface
- * points `?src=/build/original/opensa` here instead of copying the ~1.4 GB build into a Vite `public/`. sirv
+ * `--mode e2e`) — AND serves the two dev source trees ({@link DIR_MOUNTS}): `/build/*` → `build/*`, the
+ * canonical dev source (plan 079), so every dev surface points `?src=/build/original/opensa` here instead of
+ * copying the ~1.4 GB build into a Vite `public/`; and `/game-src/*` → `game-src/*`, the untouched vanilla
+ * installs sa-map-viewer loads directly (plan 094 — `?src=http://localhost:3001/game-src/original`). sirv
  * honours Range, so the pak streams. CORS on; dev mode reads files fresh and tolerates a missing root.
  */
 import { readdirSync, statSync } from 'node:fs';
@@ -14,7 +16,13 @@ import sirv from 'sirv';
 const PORT = Number(process.env.PORT) || 3001;
 const serveStatic = sirv('static', { dev: true });
 const serveTests = sirv('tests', { dev: true }); // `/viewer/objects/x` → `tests/viewer/objects/x`
-const serveBuild = sirv('build', { dev: true }); // `/build/original/opensa/x` → `build/original/opensa/x`
+
+/** The source trees served with a `__index` listing — everything the http-dir loader (`?src=`) can read:
+ *  the build outputs (`/build/original/opensa/x`) and the raw installs (`/game-src/original/x`). */
+const DIR_MOUNTS = [
+  { root: 'build', serve: sirv('build', { dev: true }) },
+  { root: 'game-src', serve: sirv('game-src', { dev: true }) },
+];
 
 /** A flat `{ path, size }[]` walk of a served dir — the http-dir loader's file index (its `__index` endpoint).
  *  Classified via statSync (NOT the Dirent) so symlinked files/dirs are followed — the model-repack lab dir
@@ -40,12 +48,14 @@ createServer((req, res) => {
     res.statusCode = 404;
     res.end('Not found');
   };
-  if (req.url?.startsWith('/build/')) {
-    const path = req.url.slice('/build'.length).split('?')[0]; // drop the mount prefix + query
+  const url = req.url ?? '';
+  const mount = DIR_MOUNTS.find((entry) => url.startsWith(`/${entry.root}/`));
+  if (mount) {
+    const path = url.slice(mount.root.length + 1).split('?')[0]; // drop the mount prefix + query
     // `${base}/__index` → the flat file listing the http-dir loader (fetchInstallSource) needs.
     if (path.endsWith('/__index')) {
       try {
-        const body = JSON.stringify(dirIndex(join('build', path.slice(1, -'/__index'.length))));
+        const body = JSON.stringify(dirIndex(join(mount.root, path.slice(1, -'/__index'.length))));
         res.setHeader('Content-Type', 'application/json');
         res.end(body);
       } catch {
@@ -55,12 +65,13 @@ createServer((req, res) => {
       return;
     }
     req.url = path;
-    serveBuild(req, res, notFound);
+    mount.serve(req, res, notFound);
 
     return;
   }
-  const serve = req.url?.startsWith('/viewer/') ? serveTests : serveStatic;
+  const serve = url.startsWith('/viewer/') ? serveTests : serveStatic;
   serve(req, res, notFound);
 }).listen(PORT, '0.0.0.0', () => {
-  console.log(`static server on http://localhost:${PORT} (static/ + /viewer → tests/viewer + /build → build)`);
+  const mounts = DIR_MOUNTS.map((entry) => `/${entry.root} → ${entry.root}`).join(' + ');
+  console.log(`static server on http://localhost:${PORT} (static/ + /viewer → tests/viewer + ${mounts})`);
 });

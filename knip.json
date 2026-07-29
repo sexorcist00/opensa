@@ -10,6 +10,9 @@
     },
     "apps/viewer": {
       "entry": ["src/shell.ts"]
+    },
+    "apps/sa-map-viewer": {
+      "entry": ["src/main.tsx"]
     }
   }
 }
