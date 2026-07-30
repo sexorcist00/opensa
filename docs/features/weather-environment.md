@@ -26,7 +26,12 @@
   probe — a T-junction seam between same-level quads is NOT a shore (plan 087 row C: false seams striped
   every gostown lake with static shallow bands). Runtime: Gerstner displacement damped by the field,
   fresnel/sky reflection, sun glint, foam + swash on the depth bands; fog in the same shader so the far
-  ocean dissolves into the horizon like terrain.
+  ocean dissolves into the horizon like terrain. **Without a bake** (a pak converted before 074/06 row 12,
+  or a source FOLDER, which never has one) the flat build stands in: `flatWaterMesh`
+  (`renderware/map/water-mesh.ts`) tessellates the quads plus the ocean frame with a constant "deep" field
+  — no foam, no beach damping — and it is shared by the game host and sa-map-viewer, so both draw one sea.
+  `Engine.waterEnabled` gates the DRAW (plan 094/07) without dropping the mesh: an inspector switches the
+  sheet off to look under it, and a pixel A/B has to, because the waves ride the frame clock.
 - **Fog**: distance fog blended into the sky horizon colour from the same LUT, driven by timecyc
   (`engine-environment-driver.ts`). Since plan 074/21 fog is a strict SUBSET of the LOD ring — the cap
   follows `?draw=` so the cull edge can never be exposed — and clouds composite into the fog colour at
@@ -41,4 +46,6 @@
 ## Test coverage anchors
 
 `timecyc` parser/convert/sample tests, `weather-zones` tests, `opensa-pack/water.test.ts` (tessellation,
-depth field, T-junction seam vs dam-lip shoreline, SEA/INLAND classes).
+depth field, T-junction seam vs dam-lip shoreline, SEA/INLAND classes), `renderware/map/water-mesh.test.ts`
+(the flat build: triangles per polygon, GTA layout, SEA/INLAND from height, the frame around the extent),
+and the `water` block in `engine.frame.test.ts` (the draw gate, on the fake device).

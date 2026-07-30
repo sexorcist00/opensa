@@ -1,7 +1,32 @@
 # The Santa Maria / SF-west "blue strip" — LIVE investigation
 
-**Status: OPEN 2026-07-29 (one long session, root cause NOT yet found — but the suspect space is
-mostly burned down; do not re-run the exonerated probes).**
+**Status: 2026-07-30 — the SURFACE is identified and the user reports the case resolved on their side;
+their explanation of the cause is still to be written in here.** Everything below the 07-30 block is the
+07-29 record, still valid: do not re-run the exonerated probes.
+
+## 2026-07-30 — what sa-map-viewer proved (plan 094 phase 6)
+
+The A/B the tool was built for, run at last: vanilla `game-src/original` against a mod-merged SA-format
+tree (`pmb --until mods` → `build/strip-ab/mods`, 59 mods), both at `?at=150,-1700&h=150`, one cell each.
+
+- **The strip is `roads32_law2` (txd `law2_roadsb`, instance 245.2, −1736.7, 3.6) failing to draw.**
+  Clicking it in the vanilla tree and pressing `Hide object` reproduces the merged picture EXACTLY — the
+  same flat light-blue area, the same sharp polygon edge along the grass, the same props left floating
+  over it. In the merged tree, hiding it changes the crop by **mean 0.013/255**: it was already
+  contributing no pixels. So the blue is not a surface painted blue — it is the background where a road
+  slab should be.
+- **Every piece of data behind it is equivalent between the trees**: the IPL instance (id 6428, HD, same
+  position) and IDE row (draw 150, flags 1, same txd); the DFF (146 verts / 93 tris / same bbox / same two
+  textures — the Map Fixes Pack copy only adds normals); the node-side weld of cell 0,−7 (93 tris, bucket
+  array 0 / opaque / single-sided, welded box equal to 2 decimals); the assembled `.oscell` group (#0,
+  offset 0, count 2106, identical bounds; the road's 65 triangles identical, none degenerate); and the
+  textures through `TexturePlanner` (opaque, same array/layer, mean pixel within 2/255).
+- Two side findings from the same probes: a mod sinks `sm_bushvbig` to **z = −300**, which blows the
+  merged cell's bounds out to `59.6, −115.5, −0.1, 290.9` (vanilla `59.6, 9.7, −0.1, 232.4`); and 11 props
+  (palms, benches, a bush) are removed from that cell by mod IPLs.
+
+Full tables + the instruments: [`plans/094-sa-map-viewer/readme.md`](../plans/094-sa-map-viewer/readme.md)
+phase 6.
 
 ## Field reports (user, after the 024/093 rebuild — build 10:53+vehicles)
 

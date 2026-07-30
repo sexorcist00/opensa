@@ -92,3 +92,8 @@ Limits and deliberate approximations of the own WebGPU engine.
   scripted pose in sa-map-viewer came back pixel-identical everywhere EXCEPT the trees (mean Δ 0.02/255, max
   Δ 114/255, the difference map sitting exactly on the canopies). Anything doing a pixel A/B must set
   `environment.windStrength = 0` first, or the noise floor is the foliage.
+- **…and the SEA is the second one.** The water pass runs its Gerstner trains off the frame clock, with no
+  amplitude knob to still it, so any frame containing water is time-dependent: two runs of one scripted
+  sa-map-viewer pose with the sea in view differ by mean Δ 0.006/255, max Δ 14.6/255 (094 phase 7). The gate
+  is `Engine.waterEnabled` — switch the surface OFF for a pixel A/B (the viewer's `?water=0`, which
+  `map-viewer-shot.ts` now sets by default); with it off, two runs are byte-identical again.

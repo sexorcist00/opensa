@@ -472,11 +472,12 @@ This one is React (debugger UI reuse), folder-fed, world-scale. User decision: a
   way it adds `panel=0`. With that, two runs are **byte-identical again (mean 0, max 0)**;
   interactively the sea is on, and `water=1` shoots it deliberately.
 
-## Test coverage of the app (state after phase 4)
+## Test coverage of the app (state at close, phase 7)
 
-`apps/sa-map-viewer/**/*.test.ts` is now in the vitest `include` (it was not — tests written there would
-simply never have run). **31 tests over the app's pure logic** plus the 13 in `@opensa/renderware` that
-phase 4's shared half lives in, all passing:
+`apps/sa-map-viewer/**/*.test.ts` is in the vitest `include` (it was not — tests written there would simply
+never have run). **51 tests in the app** — 31 over its pure logic and 20 against the recording fake
+`GPUDevice` — plus 13 (`ModelIndex`), 6 (`flatWaterMesh`), 4 (`lookAtStep`), 3 (the water draw gate) and 2
+(`GtaSaWorldAdapter.modelIndex`) where the shared halves live. Repo total: **3 216**.
 
 | File | What is pinned |
 | --- | --- |
@@ -486,18 +487,41 @@ phase 4's shared half lives in, all passing:
 | `source/map-source.test.ts` | `sourceFromQuery` (trailing slash, absent ⇒ picker); `isConverted` on the real measured censuses; `mapStats` incl. the hd+lod < instances invariant |
 | `source/asset-store.test.ts` | the whole txdp parent chain is pulled; a **cycle does not hang**; `.dff` wins over `.osm`; a missing model is skipped not thrown; a second `ensure` for the same model reads nothing; the bytes land under the name the welder looks up (case-insensitively) |
 
-**What is NOT unit-tested, and why:** everything that needs a GPU or the DOM — `CellRenderer.setCells`,
-`ViewerMapGame`, `viewer-host`, and the three `.tsx` files. The repo has the tools for the first two (the
-recording fake `GPUDevice` from plan 077 boots the whole engine in a test), and the array-growth /
-re-create-from-cache rule is exactly the kind of DECISION that fake is meant to assert — that is the
-next worthwhile test batch, owed before phase 6 signs the tool off. The UI half stays where `apps/web`'s
-UI stays: excluded from unit coverage, exercised on the real thing (here: `map-viewer-shot.ts`).
+| `world/cell-renderer.device.test.ts` | residency DECISIONS on the recording fake `GPUDevice`: a missing grid cell welds nothing; a cached cell is not re-welded; a deselected cell is unloaded (residency is the TARGET set, not the union); **a grown texture array re-creates the resident cells FROM CACHE and never re-welds**; `reload()` (the undo of hiding) and `clear()` are the upload, not the weld |
+| `world/map-game.device.test.ts` | `ViewerMapGame` on the same fake: a click picks the placement under the CURSOR and reports it in GTA coords; a miss clears the panel; hide/restore (restore costs no weld); a set arriving mid-weld REPLACES the queued one, so two sets never interleave; the search jump centres and answers the cell without touching the pose; the water gate; `viewCell` |
+| `world/viewer-host.test.ts` | `captureCells`: nothing is seeded while the panel is up (its inspector owns the set), the cell under `?at` is the capture default, `?cells=all` / `?lod=1` |
+
+**What is NOT unit-tested, and why:** the three `.tsx` files and `bootViewer` itself — DOM glue
+(`ResizeObserver`, `requestAnimationFrame`, pointer events) that the fake device does not stand in for. Its
+one real decision, what a capture pins, is extracted as `captureCells` and tested. The UI half stays where
+`apps/web`'s UI stays: excluded from unit coverage, exercised on the real thing (`map-viewer-shot.ts`).
 `apps/sa-map-viewer` is deliberately NOT in `coverage.include`, matching `apps/viewer` and
 `apps/engine-lab` — adding it would count the untested host/UI without adding any signal.
 
 ## Scope cuts (deliberate)
 
-- No water, no vehicles/peds, no collision overlay, no timed/night variants at first — static noon
-  lighting, deterministic. Each is a later phase if the tool earns it.
+- ~~No water~~ — **reversed in phase 7** (user request): the sea is drawn, with a toggle.
+- No vehicles/peds, no collision overlay, no timed/night variants — static noon lighting, deterministic.
+  Each is a later phase if the tool earns it.
 - Interiors dropped (world-grid drops them already).
 - No streaming rings — manual cells only; this is an inspector, not a game.
+
+## Close-out (2026-07-30)
+
+**SHIPPED, phases 0–7.** Commits: `3d2d1c8` (plan) · `03a4673` (0) · `f228536` (1) · `195d789` (2–3) ·
+`ddb2053` (the first test/docs pass) · `57ddb12` (4) · `d371b9d` (5) · `429f747` (6–7) · plus this
+close-out. Both owed items are done: the fake-`GPUDevice` batch over `CellRenderer` / `ViewerMapGame` /
+the host's capture decision (20 tests), and the audit —
+[`docs/audit/sa-map-viewer-094.md`](../../audit/sa-map-viewer-094.md), which carries the cost/gain summary
+and the rules the chain taught.
+
+Docs kept in sync in the same changes: `commands.md` (launch + the sea), `development/query-parameters.md`
+(the full param table), `development/in-game-tools.md` (FIND MODEL in the debugger), `debug/README.md`
+(driving the viewer + the capture rules), `features/weather-environment.md` (the flat water build + the
+gate), `edge-cases/engine-rendering.md` (the fog cull, wind, and now the sea as the second moving thing),
+`restrictions/gpu-and-shaders.md` (the texture-array growth rule), `architecture/README.md` (the app + the
+`cell-weld` package), `open-issues/beach-blue-strip.md` (what the bisect proved).
+
+**Left open on purpose:** the blue strip's own root CAUSE — the user reports it resolved on their side and
+will record it in the open-issues doc. `build/strip-ab/mods` (1.8 GB) is the merged tree phase 6 built; it
+is disposable, and re-creatable with the `pmb --until mods` line in phase 6.

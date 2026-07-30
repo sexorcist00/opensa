@@ -4,6 +4,8 @@
  * Plain DOM + engine — no React inside the loop, which is what lets the whole thing be driven by a URL and
  * captured headlessly.
  */
+import type { CellCoord } from '@opensa/game';
+
 import { Engine } from '@opensa/engine';
 
 import type { ViewerPose } from '../camera/viewer-camera';
@@ -151,6 +153,29 @@ const EMPTY_LOAD: CellLoadStats = {
 };
 
 /**
+ * What a capture URL pins, or `null` when the panel is up and its inspector owns the set (two owners of one
+ * cell set is how a debug tool starts lying about what it is showing).
+ *
+ * Capture mode has NO panel — and since phase 2 the inspector is the owner, so `?panel=0` rendered an EMPTY
+ * world until phase 6's first real A/B found it. `?cells=1` (the default) pins the cell under `?at`,
+ * `?cells=all` pins the whole map, and `?lod=1` pins the LOD layer instead of HD.
+ */
+export function captureCells(
+  params: URLSearchParams,
+  view: CellCoord | null,
+  all: () => CellCoord[],
+): null | { cells: CellCoord[]; lod: boolean } {
+  if (params.get('panel') !== '0') {
+    return null;
+  }
+
+  return {
+    cells: params.get('cells') === 'all' ? all() : view ? [view] : [],
+    lod: params.get('lod') === '1',
+  };
+}
+
+/**
  * Left-drag pans, right-drag orbits/tilts, the wheel dollies — the debugger map viewer's gestures. A left
  * press that travels less than {@link CLICK_SLOP} pixels is a CLICK, and clicks pick: the same button has to
  * serve both, or panning would deselect on every drag.
@@ -211,18 +236,9 @@ function report(map: LoadedMap, load: CellLoadStats, lod: boolean): void {
   );
 }
 
-/**
- * Capture mode has NO panel — and since phase 2 the panel's inspector owns the cell set, so `?panel=0`
- * rendered an empty world (found by phase 6's first real A/B). With no UI to seed it, the host does:
- * `?cells=1` (the default) pins the cell under `?at`, `?cells=all` pins the whole map, and `?lod=1` pins
- * the LOD layer instead of HD. Nothing is seeded when the panel is up — two owners of one cell set is how
- * a debug tool starts lying about what it is showing.
- */
 function seedCaptureCells(params: URLSearchParams, game: ViewerMapGame): void {
-  if (params.get('panel') !== '0') {
-    return;
+  const seed = captureCells(params, game.viewCell(), () => game.listCells());
+  if (seed) {
+    game.setManualCells(seed.cells, seed.lod);
   }
-  const lod = params.get('lod') === '1';
-  const view = game.viewCell();
-  game.setManualCells(params.get('cells') === 'all' ? game.listCells() : view ? [view] : [], lod);
 }

@@ -28,6 +28,11 @@ interpret them.
   first decal lane), four effects on SA's own assets, one new physics read born of a dead channel
   (Rapier's wheel rotation is cosmetic) — at zero measurable sweep cost, with every look number a
   documented eye-fit.
+- [`sa-map-viewer-094.md`](./sa-map-viewer-094.md) — the plan-094 chain (eight phases, two days): the
+  blue-strip hunt's A/B loop went from a **repack** to a **60 ms** browser weld with pixel-identical
+  reruns, the whole map welds in 15.3 s, and the tool's first field use found both a defect in itself
+  (`?panel=0` drew an empty world) and the strip itself — one placement, `roads32_law2`, whose every byte
+  matches vanilla.
 - [`modloader-removal.md`](./modloader-removal.md) — deleting the runtime `modloader/` overlay and the
   vehicle DFF fallback it fed: one package and a whole second vehicle pipeline gone (−1816 lines, the
   `vehicle-model.worker` chunk with them), coverage up on every metric, and roadmap item 2 closed by deletion

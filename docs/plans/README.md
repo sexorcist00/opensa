@@ -18,13 +18,15 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
 `001`–`094`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
 
-- **[094 — sa-map-viewer](./094-sa-map-viewer/readme.md)** — PLANNED 2026-07-29. A standalone app
-  rendering the map straight from a folder of ORIGINAL SA files (FSA picker or served dir): browser
-  weld → the engine's own cell path, the debugger's `MapInspector` as a permanent panel, the
-  map-viewer hand camera (pan/orbit/dolly) with fully param-specified scripted poses (no
-  self-moving orbit — the blue-strip lesson), model search with autocomplete that centres +
-  activates the cell; the same search added to the in-game debugger via the `MapGame` contract.
-  Born from [`open-issues/beach-blue-strip.md`](../open-issues/beach-blue-strip.md).
+- **[094 — sa-map-viewer](./094-sa-map-viewer/readme.md)** — SHIPPED 2026-07-30 (phases 0–7; audit in
+  [`audit/sa-map-viewer-094.md`](../audit/sa-map-viewer-094.md)). A standalone app rendering the map
+  straight from a folder of ORIGINAL SA files (FSA picker or served dir): browser weld → the engine's
+  own cell path, the debugger's `MapInspector` as a permanent panel, the map-viewer hand camera
+  (pan/orbit/dolly) with fully param-specified scripted poses (no self-moving orbit — the blue-strip
+  lesson), click-to-pick, model search with autocomplete that centres + activates the cell (the same
+  search added to the in-game debugger via the `MapGame` contract), and the sea with a toggle. Its
+  first field use bisected [`open-issues/beach-blue-strip.md`](../open-issues/beach-blue-strip.md),
+  the issue it was born from, down to one placement.
 
 - **[093 — The world ambient term](./093-world-ambient-term/readme.md)** — SHIPPED + FIELD-CONFIRMED (day) 2026-07-29; night control owed.
   SA's own building formula (recovered from SkyGfx's PS2 pipe + gta-reversed) adds
