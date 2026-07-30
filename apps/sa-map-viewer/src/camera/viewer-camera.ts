@@ -69,6 +69,16 @@ export class ViewerCamera {
     return { eye: this.eye(), forward: forwardFrom(this.yaw, this.pitch) };
   }
 
+  /**
+   * Put the view over a GTA ground point, keeping the pose (height, pitch, yaw) exactly as it was — what the
+   * model search jumps with. The focus stays on the y = 0 plane even when the model sits on a rooftop: the
+   * readout's `at`/`h` pair has to round-trip back through `?at`/`?h` as the same pixels, and a focus lifted
+   * to the object's z would silently mean a different height than the one printed.
+   */
+  lookAtGta(at: readonly [number, number]): void {
+    this.focus = [at[0], 0, -at[1]];
+  }
+
   /** Right-drag: turn and tilt around the focus. */
   orbit(dxPixels: number, dyPixels: number): void {
     this.yaw -= dxPixels * ORBIT_PER_PIXEL;

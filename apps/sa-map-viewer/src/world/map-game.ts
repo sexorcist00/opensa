@@ -14,10 +14,12 @@
  */
 import type { Engine } from '@opensa/engine';
 import type { CellCoord, GameEvents } from '@opensa/game';
+import type { ModelSearchHit } from '@opensa/renderware';
 import type { MapGame } from '@opensa/web/ui/debug/map-inspector';
 
 import { CELL_SIZE } from '@opensa/cell-weld';
 import { EventBus } from '@opensa/game/events/event-bus';
+import { ModelIndex } from '@opensa/renderware';
 import { CAMERA_FOV_Y, cursorRay } from '@opensa/web/ui/camera/engine-camera';
 
 import type { ViewerCamera } from '../camera/viewer-camera';
@@ -42,6 +44,8 @@ export class ViewerMapGame implements MapGame {
   readonly events = new EventBus<GameEvents>();
 
   private hidden = 0;
+  /** Built on the first search: walking every instance is wasted on a session that never searches. */
+  private index: ModelIndex | null = null;
   private pending: null | { cells: CellCoord[]; lod: boolean } = null;
   private readonly renderer: CellRenderer;
   private running = false;
@@ -60,6 +64,23 @@ export class ViewerMapGame implements MapGame {
 
   cellSize(): number {
     return CELL_SIZE;
+  }
+
+  /**
+   * Centre the view on the next placement of `name` and answer its cell, which the inspector then makes
+   * resident. The pose is untouched — a search from the whole-map height stays at that height, so the jump
+   * cannot silently change what a capture is showing.
+   */
+  focusModel(name: string): CellCoord | null {
+    const position = this.models().focusNext(name, this.camera.positionGta());
+    if (!position) {
+      return null;
+    }
+    const at: [number, number] = [position[0], position[1]];
+    this.camera.lookAtGta(at);
+    const { cx, cy } = cellAt(at);
+
+    return [cx, cy];
   }
 
   /** Hide the picked placement (degenerate its indices). Returns how many are hidden now. */
@@ -108,6 +129,11 @@ export class ViewerMapGame implements MapGame {
     return 0;
   }
 
+  /** Autocomplete over the names this map actually places. */
+  searchModels(query: string): ModelSearchHit[] {
+    return this.models().search(query);
+  }
+
   /** The inspector's writes land here. A set arriving mid-weld replaces the queued one, never interleaves. */
   setManualCells(cells: CellCoord[] | null, lod = false): void {
     this.pending = { cells: cells ?? [], lod };
@@ -146,5 +172,12 @@ export class ViewerMapGame implements MapGame {
     } finally {
       this.running = false;
     }
+  }
+
+  /** The search index, built once — it also carries the per-name placement cursor the cycling reads. */
+  private models(): ModelIndex {
+    this.index ??= new ModelIndex(this.map.defs);
+
+    return this.index;
   }
 }

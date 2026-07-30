@@ -1,9 +1,11 @@
 import type { CellCoord, GameEvents, WorldObjectInfo } from '@opensa/game';
 import type { EventBus } from '@opensa/game/events/event-bus';
+import type { ModelSearchHit } from '@opensa/renderware';
 
-import { type ReactElement, useEffect, useMemo, useState } from 'react';
+import { type ReactElement, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { CELL_PX, styles } from './debug-styles';
+import { ModelSearch } from './model-search';
 
 /**
  * The map inspector's view of the host (074/22). The three-owned `Game` class this used to take died with
@@ -16,12 +18,21 @@ export interface MapGame {
   /** The pak's cell grid pitch (world units). */
   cellSize: () => number;
   readonly events: Pick<EventBus<GameEvents>, 'on'>;
+  /**
+   * Centre the camera on the next placement of `name` and answer the cell it sits in, so the inspector can
+   * make that cell resident. Repeated calls for one name cycle its placements (nearest first). `null` when
+   * the map places nothing under that name. Paired with {@link MapGame.searchModels} — a host implements
+   * both or neither, and the FIND MODEL block only renders when it does.
+   */
+  focusModel?: (name: string) => CellCoord | null;
   /** Hide the picked object; returns how many are hidden now. */
   hideSelectedObject?: () => number;
   /** Every cell the map offers, resident or not. */
   listCells: () => CellCoord[];
   /** Un-hide everything; returns the remaining hidden count (0). */
   restoreHiddenObjects?: () => number;
+  /** Autocomplete over the PLACED model names (see `ModelIndex`); an empty query answers nothing. */
+  searchModels?: (query: string) => ModelSearchHit[];
   /** Pin an explicit cell set at one level, or `null` to resume normal streaming. */
   setManualCells: (cells: CellCoord[] | null, lod?: boolean) => void;
   /** Enter/leave map-viewer mode (detached camera + pinned cells). */
@@ -88,6 +99,23 @@ export function MapInspector({ game }: { game: MapGame }): ReactElement {
     game.setManualCells(cells, showLods);
   }, [game, selected, showLods]);
 
+  // Wrapped rather than passed through: the members are optional AND methods, so an unbound reference would
+  // lose its host. Memoised on the game so a 4 Hz readout re-render does not re-run the name scan.
+  const searchModels = useCallback((query: string) => game.searchModels?.(query) ?? [], [game]);
+  /** Centre on the model, then make its cell resident — a jump that shows nothing is not a jump. */
+  const focusModel = useCallback(
+    (name: string): null | string => {
+      const cell = game.focusModel?.(name) ?? null;
+      if (!cell) {
+        return 'not placed on this map';
+      }
+      setSelected((previous) => new Set(previous).add(cellKey(cell)));
+
+      return `centred · cell ${cell[0]}, ${cell[1]}`;
+    },
+    [game],
+  );
+
   function toggleCell(coord: CellCoord): void {
     const key = cellKey(coord);
     setSelected((previous) => {
@@ -122,6 +150,13 @@ export function MapInspector({ game }: { game: MapGame }): ReactElement {
 
   return (
     <>
+      {game.searchModels && game.focusModel ? (
+        <>
+          <ModelSearch onFocus={focusModel} search={searchModels} />
+          <div style={styles.divider} />
+        </>
+      ) : null}
+
       <div style={styles.group}>
         <div style={styles.groupLabel}>SECTIONS {center ? `(${center[0]}, ${center[1]})` : ''}</div>
         <Checkbox checked={allSelected} label="Whole map" onToggle={toggleAll} />

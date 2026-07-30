@@ -324,6 +324,51 @@ This one is React (debugger UI reuse), folder-fed, world-scale. User decision: a
 - **Phase 4 — model search in sa-map-viewer.** Search field + autocomplete + centre&activate
   (decision 5); the search UI built as a shared component ready for the debugger half.
   *Verify:* searching `bealantr02` centres on (136,-1715) and activates its cell.
+
+  **DONE 2026-07-30.** Three pieces, split exactly along the line phase 5 will need:
+  `ModelIndex` (`packages/renderware/src/map/model-search.ts`) is the pure half — build over the map's
+  PLACED instances, substring search, and the focus cursor; `ModelSearch`
+  (`apps/web/src/ui/debug/model-search.tsx`) is the shared UI; `MapGame` gained the two optional members
+  from decision 6 (`searchModels` / `focusModel`), and `MapInspector` renders the FIND MODEL block only
+  when a host implements both — so the in-game debugger is unchanged until phase 5 fills them in. The
+  viewer host implements them over `map.defs` (index built lazily on the first search) plus one new
+  camera method, `lookAtGta`.
+
+  Three decisions the field run settled:
+  - **The index is built over PLACED instances, not the IDE catalog.** A catalog name with no instance
+    cannot be centred on, so offering it would fill the autocomplete with rows that do nothing. Counts
+    come free from the same map (`tree_hipoly11 · 30`), and the row shows the CATALOG's spelling —
+    typing `bealantr02` answers `BeaLanTr02_LAw2`, which is how the IDE writes it and how every other
+    tool will print it.
+  - **A jump does not touch the pose.** Only the looked-at point moves; height, pitch and yaw stay. A
+    search from the whole-map height therefore lands you 4 km above the model rather than diving —
+    deliberate: the alternative (descend to a "good" height) is a magic constant, and this tool's whole
+    contract is that `?at`/`?h` describe the pixels. The focus also stays on the y = 0 plane rather than
+    lifting to the placement's z, or the printed `h` would stop meaning the height it round-trips as.
+  - **Repeated Enter cycles the placements, and the order is FROZEN at the first jump.** Ordering by
+    distance from the camera on every press would rank the placement you just flew to as nearest and
+    never move again.
+
+  **Measured** (headless Chromium 1440×900, `game-src/original` — 50 849 instances, 14 098 catalog
+  names, resolve 851–945 ms):
+
+  | action | result |
+  | --- | --- |
+  | type `bealantr02` | **22 ms** keystroke→rows, 1 row: `BeaLanTr02_LAw2 · 1` |
+  | Enter | camera **137, −1712**, note `centred · cell 0, −7`, that cell welded in **54 ms** |
+  | type `a` / `lod_` | **30 / 24 ms** keystroke→rows, 20 rows + the `first 20 matches — refine` line |
+  | `tree_hipoly11` (30 placements) ×3 Enter | 350,−772 (cell 1,−4) → 355,−827 (same cell, no weld) → 587,−1300 (cell 2,−6, welded 73 ms) |
+
+  So the plan's verify lands: `bealantr02` centres on the placement the blue-strip work names (137, −1712
+  — the instance's own position, 0.4 m from the `?at` phase 3 used) and activates cell 0,−7. A plain scan
+  over 14 098 names costs **under 30 ms including the React render and the first-search index build**,
+  which is decision 5's "no index structure" answered with a number. Cells ACCUMULATE across jumps (the
+  inspector's checkbox set is still the owner — the third jump left 3 cells resident); unchecking is how
+  they go, and that is the same rule the grid has always had.
+
+  Tests: 13 over `ModelIndex` (both empty-query and unplaced-name paths, the cap, prefix-before-substring
+  ranking, catalog spelling, cycling incl. the frozen order and the wrap) + one over `lookAtGta` (the
+  pose is untouched).
 - **Phase 5 — model search in the opensa debugger.** `MapGame.searchModels`/`focusModel` host
   implementation over `GtaSaWorldAdapter`'s defs; the shared search field rendered in the Map
   screen when the viewer is active. *Verify:* in-game F2 → Map → search a model → camera centres,
@@ -333,14 +378,16 @@ This one is React (debugger UI reuse), folder-fed, world-scale. User decision: a
   exists for. Docs in the same change: `docs/commands.md` (launch), `docs/architecture` module map
   (new app), this plan's numbers complete.
 
-## Test coverage of the app (state after phase 3)
+## Test coverage of the app (state after phase 4)
 
 `apps/sa-map-viewer/**/*.test.ts` is now in the vitest `include` (it was not — tests written there would
-simply never have run). **30 tests over the app's pure logic**, all passing:
+simply never have run). **31 tests over the app's pure logic** plus the 13 in `@opensa/renderware` that
+phase 4's shared half lives in, all passing:
 
 | File | What is pinned |
 | --- | --- |
-| `camera/viewer-camera.test.ts` | `poseFromQuery` defaults + degree parsing + every malformed input falling back instead of yielding NaN; the pitch clamp at BOTH ends; the pose round-trip; and the three gestures as behaviour — orbit leaves the looked-at point still, pan moves it and keeps the height, dolly changes height and not the point |
+| `packages/renderware/src/map/model-search.test.ts` | the model index: an empty/blank query answers nothing, an unplaced name answers nothing (catalog-only names are not offered at all), the row cap, case-insensitive substring with prefix matches first, the catalog's spelling in the row, and the focus cursor — nearest first, cycling outwards, WRAPPING, order frozen while cycling, re-ordered when the name changes |
+| `camera/viewer-camera.test.ts` | `poseFromQuery` defaults + degree parsing + every malformed input falling back instead of yielding NaN; the pitch clamp at BOTH ends; the pose round-trip; and the four gestures as behaviour — orbit leaves the looked-at point still, pan moves it and keeps the height, dolly changes height and not the point, `lookAtGta` (the search jump) moves the point and changes nothing else |
 | `world/cell-renderer.test.ts` | `cellAt` FLOORS negatives (truncation would shift the whole south/west map one cell and silently disagree with the pack); `mapCenterGta` centres on the occupied extent and answers the origin for an empty grid |
 | `source/map-source.test.ts` | `sourceFromQuery` (trailing slash, absent ⇒ picker); `isConverted` on the real measured censuses; `mapStats` incl. the hd+lod < instances invariant |
 | `source/asset-store.test.ts` | the whole txdp parent chain is pulled; a **cycle does not hang**; `.dff` wins over `.osm`; a missing model is skipped not thrown; a second `ensure` for the same model reads nothing; the bytes land under the name the welder looks up (case-insensitively) |

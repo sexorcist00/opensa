@@ -1,5 +1,6 @@
 // Framework-agnostic GTA map resolution + streamed cell instancing.
 export { addToGroup, cellGroups, cellModelNames, type RegionMeshData } from './cell-groups';
+export { MODEL_SEARCH_LIMIT, ModelIndex, type ModelSearchHit } from './model-search';
 export { oceanFrame } from './ocean-frame';
 export { procObjCategory, type ProcObjCategoryName } from './procobj-categories';
 export { type ProcObjColliderOptions, procObjColliders } from './procobj-colliders';

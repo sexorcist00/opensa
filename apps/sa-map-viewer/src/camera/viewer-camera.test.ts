@@ -96,6 +96,17 @@ describe('ViewerCamera', () => {
       expect(pose.height).toBeCloseTo(300);
     });
 
+    it('jumps the looked-at point and leaves the pose alone (the model search)', () => {
+      const camera = new ViewerCamera({ at: [0, 0], height: 300, pitch: -Math.PI / 3, yaw: MAP_YAW });
+      camera.lookAtGta([136, -1715]);
+      const pose = camera.pose();
+      expect(pose.at[0]).toBeCloseTo(136);
+      expect(pose.at[1]).toBeCloseTo(-1715);
+      expect(pose.height).toBeCloseTo(300);
+      expect(pose.pitch).toBeCloseTo(-Math.PI / 3);
+      expect(pose.yaw).toBeCloseTo(MAP_YAW);
+    });
+
     it('dollies the eye without moving what it looks at', () => {
       const camera = new ViewerCamera({ at: [0, 0], height: 300, pitch: TOP_DOWN_PITCH, yaw: MAP_YAW });
       camera.dolly(1); // wheel away = pull back

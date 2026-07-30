@@ -100,6 +100,13 @@ Interactively it is the debugger's map panel: the cell grid, whole map, LOD mode
 a click reports the placement's model/txd/GTA position and can hide it (`Restore all` brings it back). That
 is the fastest way to put a NAME on something odd in a screenshot before any bisecting starts.
 
+The other direction — you have the NAME and want the place — is **FIND MODEL**: type a substring, the rows
+list every PLACED name with its placement count, Enter (or the row) centres the view on the nearest
+placement and makes its cell resident. Pressing Enter again walks the same name's other placements outwards,
+so a model placed 30 times is reachable past the first one. The pose (height, pitch, yaw) is deliberately
+NOT changed by a jump — a search from a whole-map height stays there, so it cannot silently alter what a
+capture is showing; dolly in afterwards.
+
 | Script | Answers |
 | --- | --- |
 | `map-viewer-shot.ts <appUrl> <outPng> [timeoutMs]` | one scripted pose of a source, captured headless. Adds `panel=0` unless the URL sets it (the panel carries a live fps line, and a pixel diff must not compare a frame counter) and echoes the viewer's own `[sa-map-viewer]` load lines, which NAME the source. **Two runs of one URL are byte-identical PNGs** (wind is off by default — it was the only thing animating a noon frame), so two sources at one pose diff directly: `magick a.png b.png -compose difference -composite -colorspace Gray -format '%[fx:maxima*255]' info:` |
