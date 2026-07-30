@@ -22,6 +22,11 @@ multi-level menu:
   **Show Collision / Show Normals**. Fog is forced OFF while the viewer is open, so a
   district reads cleanly from 400 u up. A picked object can be **hidden** (Hide object) to peek behind it — hides
   are debug-only and everything is restored on Restore all / leaving the map viewer / closing the debugger.
+  **FIND MODEL** goes the other way: type part of a model name, the rows list every PLACED name with its
+  placement count, and Enter (or a row) centres the camera on the nearest placement and pins its section.
+  Pressing Enter again walks that name's other placements outwards — `tree_hipoly11` is placed 30 times.
+  The jump keeps the current height and tilt (only the looked-at point moves), so it never re-frames what
+  you were looking at; if the view is tilted too flat to aim at all, it falls back to the top-down framing.
   Leaving the screen, closing (×), or pressing F2 exits it cleanly.
 - Plus live tuning of atmosphere/graphics/camera/weather/procobj/time (dev builds).
 

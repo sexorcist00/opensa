@@ -18,6 +18,7 @@ import {
   type HandlingEntry,
   type IdeObjectDef,
   type MapDefinitions,
+  ModelIndex,
   type ObjectDatEntry,
   parseCarcols,
   parseCarGroups,
@@ -189,6 +190,8 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   private grid: null | WorldGrid = null;
   /** Parsed `handling.cfg`, kept for the later vehicle-physics phase. */
   private handling: Map<string, HandlingEntry> | null = null;
+  /** Model-name search index (plan 094/05), built on the first debug search — the game never asks for it. */
+  private modelIndexCache: ModelIndex | null = null;
   /** Parsed `object.dat` collision-damage tuning by lowercased model (plan 045); null when absent. */
   private objectDat: Map<string, ObjectDatEntry> | null = null;
   /** Parsed `peds.ide` defs by lowercased model name (TEMP: resolves the env-picked main character). */
@@ -397,6 +400,20 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     });
 
     return [...specific, ...random];
+  }
+
+  /**
+   * The debugger's model-name search index (plan 094/05) over the SAME `MapDefinitions` the map was built
+   * from, so a name it finds is a name the world places. Built on first use and kept: it is a debug-only
+   * path, and the game asks for it exactly never. Null before {@link GtaSaWorldAdapter.prepare}.
+   */
+  modelIndex(): ModelIndex | null {
+    if (!this.defs) {
+      return null;
+    }
+    this.modelIndexCache ??= new ModelIndex(this.defs);
+
+    return this.modelIndexCache;
   }
 
   // eslint-disable-next-line

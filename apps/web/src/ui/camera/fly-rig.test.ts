@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { dollyStep, flyStep, panStep, TOP_DOWN_HEIGHT, topDownEye } from './fly-rig';
+import { dollyStep, flyStep, lookAtStep, panStep, TOP_DOWN_HEIGHT, topDownEye } from './fly-rig';
 
 const FORWARD = [0, 0, -1] as const; // looking down −Z
 
@@ -88,6 +88,37 @@ describe('dollyStep', () => {
       const high = dollyStep([0, 500, 0], [0, 0, 1], -1);
 
       expect(high[2]).toBeGreaterThan(low[2] * 10);
+    });
+  });
+});
+
+describe('lookAtStep', () => {
+  const DOWN = [0, -1, 0] as const;
+
+  describe('negative cases', () => {
+    it('refuses a level or upward view — there is no ground point to aim at', () => {
+      expect(lookAtStep([0, 100, 0], [0, 0, -1], [50, 0, -50])).toBeNull();
+      expect(lookAtStep([0, 100, 0], [0, 0.5, -0.87], [50, 0, -50])).toBeNull();
+    });
+
+    it('refuses a target above the eye', () => {
+      expect(lookAtStep([0, 10, 0], DOWN, [0, 40, 0])).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('puts a straight-down view exactly over the target, keeping the height', () => {
+      expect(lookAtStep([0, 400, 0], DOWN, [120, 8, -300])).toEqual([120, 400, -300]);
+    });
+
+    it('slides by the MISS, so a tilted view still centres the target', () => {
+      // 45° down along −Z: from 100 u up the view meets y = 0 a hundred units ahead.
+      const forward = [0, -Math.SQRT1_2, -Math.SQRT1_2] as const;
+      const moved = lookAtStep([0, 100, 0], forward, [10, 0, -400]);
+
+      expect(moved?.[0]).toBeCloseTo(10);
+      expect(moved?.[1]).toBeCloseTo(100); // height untouched — a jump never re-frames
+      expect(moved?.[2]).toBeCloseTo(-300); // 100 u short of the target, which is where the view lands
     });
   });
 });

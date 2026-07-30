@@ -182,6 +182,25 @@ describe('toModelColliders', () => {
   });
 });
 
+describe('GtaSaWorldAdapter.modelIndex', () => {
+  describe('negative cases', () => {
+    it('is null before prepare — there are no definitions to search yet', () => {
+      expect(new GtaSaWorldAdapter(cfg()).modelIndex()).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('searches the same definitions the map was built from, and is built once', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+
+      const index = adapter.modelIndex();
+      expect(index?.search('hou')).toEqual([{ count: 1, name: 'house' }]);
+      expect(adapter.modelIndex()).toBe(index);
+    });
+  });
+});
+
 describe('GtaSaWorldAdapter cell streaming', () => {
   describe('negative cases', () => {
     it('throws when loadCellColliders is called before prepare', async () => {

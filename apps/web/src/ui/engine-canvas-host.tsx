@@ -6,10 +6,11 @@
  * camera (follow orbit producing a CameraState), the player body (the B1 ped probe driven by gameplay
  * state). Three and the own engine never share a canvas — this host IS the capability branch.
  */
-import type { City } from '@opensa/game';
+import type { CellCoord, City } from '@opensa/game';
 import type { LookDirectionSource } from '@opensa/game/character/character-controller.system';
 import type { PerfStats } from '@opensa/game/perf/perf-monitor';
 import type { TyreSmokeDials } from '@opensa/game/vehicle/vehicle-tyre-smoke.system';
+import type { ModelSearchHit } from '@opensa/renderware';
 import type { ReactElement } from 'react';
 
 import {
@@ -79,7 +80,7 @@ import {
   stepCamera,
 } from './camera/camera-director';
 import { CAMERA_FOV_Y, createChordWatcher, cursorRay, forwardFrom } from './camera/engine-camera';
-import { FLY_KEYS } from './camera/fly-rig';
+import { FLY_KEYS, lookAtStep } from './camera/fly-rig';
 import { buildCollisionLines } from './collision-wireframe';
 import { ENGINE_DEBUG_CAPABILITIES } from './debug/debug-capabilities';
 import { type DebugActions, type DebugGame, DebugOverlay } from './debug/debug-overlay';
@@ -1058,6 +1059,29 @@ async function boot(
     mapGame: {
       cellSize: (): number => setup.cellSize,
       events,
+      /**
+       * Centre the detached eye on the next placement of `name` and answer its cell, which the inspector
+       * pins (plan 094/05). The pose is kept — only the looked-at point moves, the same rule the standalone
+       * viewer follows — except when the tilt is too shallow to aim at all, where the viewer's own top-down
+       * framing takes over rather than sliding the eye kilometres away.
+       */
+      focusModel: (name): CellCoord | null => {
+        const index = adapter.modelIndex();
+        const [ex, , ez] = rig.flyEye ?? toEngine(viewOf());
+        const position = index?.focusNext(name, [ex, -ez]) ?? null;
+        if (!position) {
+          return null;
+        }
+        const target = toEngine(position);
+        const moved = rig.flyEye && lookAtStep(rig.flyEye, forwardOf(), target);
+        if (moved) {
+          rig.flyEye = moved;
+        } else {
+          snapTopDown(rig, target);
+        }
+
+        return [Math.floor(position[0] / setup.cellSize), Math.floor(position[1] / setup.cellSize)];
+      },
       hideSelectedObject: (): number => {
         if (selectedPlacement !== null && engine.cells.hidePlacement(selectedPlacement) > 0) {
           hiddenPlacements += 1;
@@ -1077,6 +1101,7 @@ async function boot(
 
         return 0;
       },
+      searchModels: (query): ModelSearchHit[] => adapter.modelIndex()?.search(query) ?? [],
       setManualCells: (cells, lod): void => setup.driver.setManualCells(cells, lod),
       setMapViewer: (enabled): void => {
         // The viewer detaches the camera (the existing photo camera) and hands the cell set to the

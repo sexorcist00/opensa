@@ -373,6 +373,45 @@ This one is React (debugger UI reuse), folder-fed, world-scale. User decision: a
   implementation over `GtaSaWorldAdapter`'s defs; the shared search field rendered in the Map
   screen when the viewer is active. *Verify:* in-game F2 → Map → search a model → camera centres,
   cell activates. Docs: `docs/development/in-game-tools.md` updated in the same change.
+
+  **DONE 2026-07-30, and it cost three edits.** `GtaSaWorldAdapter.modelIndex()` builds the SAME
+  `ModelIndex` phase 4 defined, over the `MapDefinitions` the adapter already resolved — so a name the
+  debugger finds is a name this world places, mods included. The host implements the two `MapGame`
+  members over it, and no UI was written: `MapInspector` already renders FIND MODEL for any host that
+  has both. **The engine build carries the full IDE/IPL defs at runtime** (the pak did not have to be
+  taught anything), which is the only reason this phase is small.
+
+  **The jump had to be re-expressed for the game's rig.** The standalone viewer orbits a focus POINT, so
+  centring is one assignment; the game's map camera is a detached EYE with a yaw/pitch. `lookAtStep`
+  (in `fly-rig.ts`, next to `panStep`/`dollyStep`) intersects the view with the target's height plane and
+  slides the eye by exactly the miss — height and orientation untouched, which is the same rule phase 4
+  set. It returns `null` for a level or upward view, where the caller falls back to `snapTopDown`: there
+  is no sane sideways slide then, and the alternative would fling the eye kilometres away to satisfy a
+  nearly-parallel ray.
+
+  **Measured** (headless Chromium 1440×900, the real game on `build/original/opensa`, `?loader=http-dir`,
+  player at Ganton 2492,−1678, night 22:14):
+
+  | action | result |
+  | --- | --- |
+  | type `bealantr02` | **8–34 ms** keystroke→rows over four runs (one 447 ms outlier while cells were still streaming), 1 row `BeaLanTr02_LAw2 · 1` |
+  | Enter | `centred · cell 0, −7`, that section pinned and rendered |
+  | **centre pick after the jump** | **`bealantr02_law2`** · txd `beacliff_law2` · pos **136.0, −1714.6, 10.9** |
+  | `tree_hipoly11` (30 placements) | rows `tree_hipoly11 · 30` + `lodtree_hipoly11 · 30`; Enter → cell 8,−1 (the nearest to Ganton), Enter again → cell 3,−5, centre pick reports `tree_hipoly11` at 777.1, −1207.3, 37.7 (cell 3,−5 ✓) |
+
+  The centre pick is the proof, and it is the same triple phase 3 recorded in the standalone viewer:
+  after the jump the object under the crosshair IS the searched model, so the eye slide, the GTA↔engine
+  conversion and the cell arithmetic all agree in the game too. Ordering is by distance from the CAMERA
+  (the fly eye when detached), which is why a search for a countryside tree from Ganton opens on cell
+  8,−1 rather than on the first one in the file.
+
+  Verification trap worth keeping: the pointer-lock prompt ("CLICK TO PLAY") sits on the centre pixel and
+  React puts it straight back when removed, so a scripted centre click can never reach the canvas — the
+  check had to dispatch synthetic pointer events at the canvas instead.
+
+  Tests: `lookAtStep` (refuses level/upward views and a target above the eye; a straight-down view lands
+  exactly over the target; a 45° view slides by the miss and keeps its height) + `modelIndex()` (null
+  before `prepare`, searches the resolved defs after, and is built once).
 - **Phase 6 — field use + close-out.** Apply to the blue strip: load vanilla `game-src` vs the
   merged tree at `?at=150,-1700` and pixel-A/B the strip area — the first real bisect this tool
   exists for. Docs in the same change: `docs/commands.md` (launch), `docs/architecture` module map

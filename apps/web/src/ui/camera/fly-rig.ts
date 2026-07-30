@@ -33,6 +33,8 @@ export const TOP_DOWN_HEIGHT = 400;
 const DOLLY_STEP = 0.12;
 /** The dolly never pushes the eye below this — the viewer must not fall into the terrain it inspects. */
 const DOLLY_MIN_HEIGHT = 2;
+/** Shallower than this (radians of downward forward) there is no usable ground intersection to aim at. */
+const MIN_LOOK_DOWN = 0.02;
 
 /**
  * One wheel notch of dolly along the view (the follow rig's zoom config does not apply to a free eye): the
@@ -88,6 +90,34 @@ export function flyStep(
   }
 
   return moved;
+}
+
+/**
+ * Slide the detached eye sideways until `target` sits under the crosshair, keeping its height and its
+ * orientation — the model-search jump (plan 094/05). Only the looked-at point moves, so a search never
+ * silently re-frames what the viewer is showing; the caller dollies in afterwards.
+ *
+ * `null` when the view cannot reach the target's height plane in FRONT of the eye — level or upward, or the
+ * target above the eye. There is no sane sideways slide then, and the caller falls back to the viewer's own
+ * top-down framing.
+ */
+export function lookAtStep(
+  eye: readonly [number, number, number],
+  forward: readonly [number, number, number],
+  target: readonly [number, number, number],
+): [number, number, number] | null {
+  if (forward[1] >= -MIN_LOOK_DOWN) {
+    return null;
+  }
+  const distance = (target[1] - eye[1]) / forward[1];
+  if (distance <= 0) {
+    return null;
+  }
+  // Where the view meets the target's height today; the eye slides by exactly the miss.
+  const atX = eye[0] + forward[0] * distance;
+  const atZ = eye[2] + forward[2] * distance;
+
+  return [eye[0] + (target[0] - atX), eye[1], eye[2] + (target[2] - atZ)];
 }
 
 /**
