@@ -2,6 +2,9 @@
 
 /** Chunk section type IDs. */
 export const RwSection = {
+  // ADC plugin — a PS2 tristrip's per-index parity/restart bits. Only two SA models carry it (the STOCK
+  // `bloodrb` and `rccam`, PS2 leftovers), and their strips cannot be unwound by the plain PC rule.
+  ADC_PLG: 0x134,
   // RtAnim animation (one UV animation inside a UV_ANIM_DICT)
   ANIM_ANIMATION: 0x1b,
   ATOMIC: 0x14,

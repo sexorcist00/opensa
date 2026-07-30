@@ -308,7 +308,7 @@ Field verdict (user): the 024 spots "все в порядке". Two NEW field re
 to be an UNRELATED pre-existing class — flat light-blue ground patches at Santa Maria / SF-west —
 investigated the same day to a stalemate (pak data exonerated piece by piece; a mod-resolved asset
 triggers it; the 024 gate provably didn't touch those cells — all their models ship no normals):
-**live investigation + resume levers in `docs/open-issues/beach-blue-strip.md`**. `model-repack.ts`
+**live investigation + resume levers in `docs/open-issues/fixed/mod-dff-winding-and-atomic-frame.md`**. `model-repack.ts`
 gained the bisection levers built for it (`--raw`, `--no-mods`, `--mod-only`, `LAB_NO_WATER=1`).
 
 ## Corrections to earlier records (do in the same change as Phase 3b)

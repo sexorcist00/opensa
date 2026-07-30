@@ -37,15 +37,30 @@ describe('encodeDff', () => {
       expect(() => encodeDff(bytes, ir)).toThrow(/skinned/);
     });
 
-    it('routes a triangle reorder (counts unchanged, topology changed) to rebuild, not the attribute overlay', () => {
-      // The trap: equal vertex/triangle counts but different triangle indices. The attribute overlay would write
-      // stale indices and corrupt the mesh; the topology check must force rebuild (which here refuses skin).
+    it('routes a RE-INDEXED triangle (counts unchanged, topology changed) to rebuild, not the overlay', () => {
+      // The trap: equal vertex/triangle counts but a triangle pointing at different vertices. The attribute
+      // overlay would write stale indices and corrupt the mesh; the topology check must force rebuild (which
+      // here refuses skin). A mere PERMUTATION of the list is deliberately not a change — the overlay never
+      // writes the index array, and since plan 095 the parser reads triangles in BinMesh order, which is a
+      // permutation of this Struct's array in most files.
       const { arrayBuffer, bytes } = load(FIXTURES[0]);
+      const ir = clumpToIr(parseDff(arrayBuffer));
+      const mesh = ir.meshes.find((candidate) => candidate.triangles.length >= 2)!;
+      const vertices = mesh.positions.length / 3;
+      const moved = (mesh.triangles[0].a + 1) % vertices;
+      mesh.triangles[0] = { ...mesh.triangles[0], a: moved === mesh.triangles[0].b ? (moved + 1) % vertices : moved };
+
+      expect(() => encodeDff(bytes, ir)).toThrow(/skinned/);
+    });
+
+    it('keeps the overlay path when the triangle list is only PERMUTED', () => {
+      // Skinned on purpose: rebuild would THROW, so re-encoding identically proves the overlay path ran.
+      const { arrayBuffer, bytes } = load(FIXTURES[1]);
       const ir = clumpToIr(parseDff(arrayBuffer));
       const mesh = ir.meshes.find((candidate) => candidate.triangles.length >= 2)!;
       [mesh.triangles[0], mesh.triangles[1]] = [mesh.triangles[1], mesh.triangles[0]];
 
-      expect(() => encodeDff(bytes, ir)).toThrow(/skinned/);
+      expect(equal(encodeDff(bytes, ir), bytes)).toBe(true);
     });
   });
 

@@ -16,7 +16,18 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`094`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+`001`–`095`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+
+- **[095 — DFF geometry parity](./095-dff-geometry-parity/readme.md)** — SHIPPED 2026-07-30. Two converter
+  bugs behind one field report ([forensics](../open-issues/fixed/mod-dff-winding-and-atomic-frame.md)): we
+  built triangles from the Geometry Struct FACE ARRAY while RenderWare draws the BinMeshPLG index data (a
+  mod's `roads32_law2` wound the two oppositely → the beach slab faced down and back-face culling deleted it,
+  collision intact — the "blue strip"), and we applied the atomic's own frame transform, which
+  `LoadAtomicFile` throws away for a simple map model (a mod's `land_42_sfw` rotated 90°, and 165 vanilla
+  `aw_streettree1` had been sunk 3.1 m all along). Blast radius measured over all 13 003 archive DFFs: 5
+  geometries change winding, 16 lose face-array faces the game never drew, 24 shift a few triangles between
+  materials. Kept: `scan-geometry-parity.ts`, two new restriction entries, the stock-ADC (`bloodrb`/`rccam`)
+  guard.
 
 - **[094 — sa-map-viewer](./094-sa-map-viewer/readme.md)** — SHIPPED 2026-07-30 (phases 0–7; audit in
   [`audit/sa-map-viewer-094.md`](../audit/sa-map-viewer-094.md)). A standalone app rendering the map
@@ -25,7 +36,7 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   (pan/orbit/dolly) with fully param-specified scripted poses (no self-moving orbit — the blue-strip
   lesson), click-to-pick, model search with autocomplete that centres + activates the cell (the same
   search added to the in-game debugger via the `MapGame` contract), and the sea with a toggle. Its
-  first field use bisected [`open-issues/beach-blue-strip.md`](../open-issues/beach-blue-strip.md),
+  first field use bisected [`open-issues/fixed/mod-dff-winding-and-atomic-frame.md`](../open-issues/fixed/mod-dff-winding-and-atomic-frame.md),
   the issue it was born from, down to one placement.
 
 - **[093 — The world ambient term](./093-world-ambient-term/readme.md)** — SHIPPED + FIELD-CONFIRMED (day) 2026-07-29; night control owed.

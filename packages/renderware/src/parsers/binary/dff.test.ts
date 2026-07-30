@@ -236,11 +236,18 @@ describe('parseDff (synthetic)', () => {
 });
 
 /**
- * A two-material, two-triangle clump. Some exporters leave every face's material
- * index 0 and store the real split in BinMeshPLG; `faceMaterials` sets the indices
- * written into the triangle list, `binMesh` toggles the recovery plugin.
+ * A two-material, two-triangle clump. `faceMaterials` sets the indices written into the Struct face
+ * array, `binMesh` toggles the BinMeshPLG (the data RenderWare actually draws), and `splitIndices`
+ * overrides the winding the splits use — the face array and the splits can legally disagree.
  */
-function buildBinMeshClump(faceMaterials: [number, number], binMesh: boolean): ArrayBuffer {
+function buildBinMeshClump(
+  faceMaterials: [number, number],
+  binMesh: boolean,
+  splitIndices: [number[], number[]] = [
+    [0, 1, 2],
+    [3, 4, 5],
+  ],
+): ArrayBuffer {
   const geometryStruct = chunk(
     RwSection.STRUCT,
     concat(
@@ -278,8 +285,8 @@ function buildBinMeshClump(faceMaterials: [number, number], binMesh: boolean): A
         u32(0), // flags (0 = trilist)
         u32(2), // numMeshes
         u32(6), // total indices
-        concat(u32(3), u32(0), u32(0), u32(1), u32(2)),
-        concat(u32(3), u32(1), u32(3), u32(4), u32(5)),
+        concat(u32(3), u32(0), ...splitIndices[0].map((i) => u32(i))),
+        concat(u32(3), u32(1), ...splitIndices[1].map((i) => u32(i))),
       ),
     ),
   );
@@ -300,23 +307,39 @@ function buildBinMeshClump(faceMaterials: [number, number], binMesh: boolean): A
   );
 }
 
-describe('parseDff BinMeshPLG material recovery', () => {
+describe('parseDff triangles come from the DRAWN index data', () => {
   describe('negative cases', () => {
-    it('keeps the triangle list material indices when they are already set', () => {
-      const tris = parseDff(buildBinMeshClump([1, 0], true)).geometries[0].triangles;
-      expect(tris.map((t) => t.materialIndex)).toEqual([1, 0]); // not overridden by the split
-    });
-
-    it('leaves indices at zero when there is no BinMeshPLG', () => {
-      const tris = parseDff(buildBinMeshClump([0, 0], false)).geometries[0].triangles;
-      expect(tris.map((t) => t.materialIndex)).toEqual([0, 0]);
+    it('falls back to the face array when there is no BinMeshPLG', () => {
+      const tris = parseDff(buildBinMeshClump([1, 0], false)).geometries[0].triangles;
+      expect(tris.map((t) => t.materialIndex)).toEqual([1, 0]);
+      expect(tris.map((t) => [t.a, t.b, t.c])).toEqual([
+        [0, 1, 2],
+        [3, 4, 5],
+      ]);
     });
   });
 
   describe('positive cases', () => {
-    it('recovers per-face material from the split when the list is all zero', () => {
-      const tris = parseDff(buildBinMeshClump([0, 0], true)).geometries[0].triangles;
+    it("takes the split's material even when the face array already set one", () => {
+      // The face array says [1, 0]; the BinMesh splits say [0, 1]. RenderWare draws the splits (plan 095).
+      const tris = parseDff(buildBinMeshClump([1, 0], true)).geometries[0].triangles;
       expect(tris.map((t) => t.materialIndex)).toEqual([0, 1]);
+    });
+
+    it('takes the WINDING from the split, not from the face array', () => {
+      // Both fixtures describe the same two triangles; the face array winds them (0,1,2)/(3,4,5) and the
+      // BinMesh reverses the first split. `roads32_law2` is this case for all 65 of its road faces, and
+      // reading the face array put the slab face-down where back-face culling deleted it.
+      const tris = parseDff(
+        buildBinMeshClump([0, 0], true, [
+          [2, 1, 0],
+          [3, 4, 5],
+        ]),
+      ).geometries[0].triangles;
+      expect(tris.map((t) => [t.a, t.b, t.c])).toEqual([
+        [2, 1, 0],
+        [3, 4, 5],
+      ]);
     });
   });
 });

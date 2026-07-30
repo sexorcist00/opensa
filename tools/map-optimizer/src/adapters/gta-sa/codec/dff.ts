@@ -44,18 +44,45 @@ export function encodeDff(source: Uint8Array, ir: MeshIR): Uint8Array {
   return writeRw(file);
 }
 
-/** True when the Struct's vertex count + triangle indices exactly match the mesh (an attribute-only edit). */
+/**
+ * True when the Struct's vertex count + triangle set exactly match the mesh (an attribute-only edit).
+ *
+ * Compared as an unordered MULTISET of wound triples, not positionally: since plan 095 the parser reads a
+ * geometry's triangles from its BinMeshPLG (the data RenderWare draws) rather than from this Struct array,
+ * and the two are stored in different ORDER even in files where they agree — a positional compare sent
+ * every untouched round-trip down the rebuild path. Order does not matter to the overlay, which writes
+ * attributes and leaves the index array alone; re-INDEXING (the weld/prune trap this guard exists for)
+ * still changes the multiset, and so does a flipped winding.
+ */
 function sameTopology(struct: GeometryStruct, mesh: MeshIR['meshes'][number]): boolean {
   if (struct.numVertices !== mesh.positions.length / 3 || struct.triangles.length !== mesh.triangles.length) {
     return false;
   }
-  for (let i = 0; i < struct.triangles.length; i += 1) {
-    const a = struct.triangles[i];
-    const b = mesh.triangles[i];
-    if (a.a !== b.a || a.b !== b.b || a.c !== b.c) {
+  const counts = new Map<number, number>();
+  for (const t of struct.triangles) {
+    const key = woundKey(t.a, t.b, t.c);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  for (const t of mesh.triangles) {
+    const key = woundKey(t.a, t.b, t.c);
+    const left = counts.get(key);
+    if (left === undefined) {
       return false;
+    }
+    if (left === 1) {
+      counts.delete(key);
+    } else {
+      counts.set(key, left - 1);
     }
   }
 
-  return true;
+  return counts.size === 0;
+}
+
+/** Winding-preserving triangle key: the rotation starting at the smallest index (a→b→c is b→c→a is c→a→b,
+ *  and none of those is a→c→b). Indices are u16, so the packed value stays an exact double. */
+function woundKey(a: number, b: number, c: number): number {
+  const [x, y, z] = a <= b && a <= c ? [a, b, c] : b <= c ? [b, c, a] : [c, a, b];
+
+  return x * 0x1_0000_0000 + y * 0x1_0000 + z;
 }

@@ -15,8 +15,13 @@ why the same parser serves the browser runtime and the offline `opensa-pack` con
   per-face material index, day prelit RGBA, **SA night prelit RGBA** (Extra Vert Colour plugin
   `0x253F2F9`), bounding data.
 - Atomics (frame ↔ geometry links).
-- BinMeshPLG fallback: when every face has material index 0 but BinMesh carries the real
-  per-material split, the assignment is recovered from it.
+- **Triangles come from BinMeshPLG — the data RenderWare DRAWS — with the Struct face array as the
+  fallback** (plan 095). The two are stored independently and mods do ship them wound oppositely; reading
+  the face array rendered such a mesh inside-out, and a single-sided road slab then vanished
+  (`roads32_law2`, the Santa Maria "blue strip"). Each split's material index comes with it, which retired
+  the old "recover material indices when the face array left them all zero" special case. One exclusion:
+  an **ADC** (`0x134`) strip falls back to the face array, since its parity bits are undecoded — 2 stock
+  models ([hack](../hacks/adc-strip-fallback.md)).
 - Skin plugin: bone indices/weights, inverse bind matrices, used-bone remap (peds).
 - Leading **UVAnimDict** (`0x2B`/RtAnim `0x1B`, keyframe type `0x1C1`): named UV animations
   with `{time, (rot, sx, sy, skew, tx, ty)}` keyframes.
@@ -54,7 +59,12 @@ why the same parser serves the browser runtime and the offline `opensa-pack` con
 - `sanitizeDegenerateNormals` (build side): zero-length/NaN stored OR computed normals replaced
   with face normals (PF casroyale black-faces case).
 - Frame transforms are deliberately ignored for map models (SA re-frames atomic model infos);
-  kept for vehicles/characters/`anim`-section clump objects.
+  kept for vehicles/characters/`anim`-section clump objects. **The parser only reports them
+  (`frameWorldTransform`) — whether they are APPLIED is the consumer's call, and the cell welder got it
+  wrong until plan 095**: it applied them to every model, which rotated a mod's `land_42_sfw` 90° and had
+  been sinking 165 vanilla `aw_streettree1` 3.1 m. The gate is the IDE section (`def.anim !== undefined`),
+  because that is which of SA's two loaders (`LoadClumpFile` vs `LoadAtomicFile`) the model would have
+  gone through.
 
 ## Coverage (audit 2026-06-12, `scripts/debug/audit-rw-coverage.ts`)
 
@@ -77,7 +87,9 @@ layer.
 
 ## Test coverage anchors
 
-Real-asset fixtures under `tests/dff/`: trafficlight (backface/no normals + raw-pointer-magic
+Real-asset fixtures under `tests/dff/`: **geometry-parity** (stock `roads32_law2` + the Map Fixes Pack
+copy that winds its face array the other way — the 095 guard; `bloodrb` for the ADC fallback),
+trafficlight (backface/no normals + raw-pointer-magic
 breakable), casroyale (zero normals), frame-offset-ignored (junk frame), uv-anim
 (visagesign04), anim-clump (nt_noddonkbase + counxref.ifp), roadsign (vegasnroad19 — also the
 zero-magic breakable marker, se_bit_17), particle (skullpillar01_lvs), escalator (escl_la +

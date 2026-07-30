@@ -3,7 +3,7 @@
 **Status: IN PROGRESS — phase 0 SHIPPED 2026-07-29, phases 1–6 open.**
 
 Born from the beach blue-strip investigation
-([`docs/open-issues/beach-blue-strip.md`](../../open-issues/beach-blue-strip.md)): the lab loop there
+([`docs/open-issues/fixed/mod-dff-winding-and-atomic-frame.md`](../../open-issues/fixed/mod-dff-winding-and-atomic-frame.md)): the lab loop there
 A/Bs *pak builds*, which means every probe costs a repack and every camera was an orbit whose phase
 drifted per run (one whole bisect was invalidated by that). What the investigation actually needs is
 a viewer that renders the map **straight from a folder of original GTA SA files** — point it at
@@ -447,7 +447,7 @@ This one is React (debugger UI reuse), folder-fed, world-scale. User decision: a
   the same probes: a mod moved `sm_bushvbig` to **z = −300**, which blows the merged cell's bounds out
   to `59.6, −115.5, −0.1, 290.9` (vanilla: `59.6, 9.7, −0.1, 232.4`), and 11 props (palms, benches)
   were removed from the cell. **The user then reported the case as resolved on their side** — their
-  own explanation lands in `docs/open-issues/beach-blue-strip.md` when it arrives; the measurements
+  own explanation lands in `docs/open-issues/fixed/mod-dff-winding-and-atomic-frame.md` when it arrives; the measurements
   above stay as the record of what the tool could prove on its own.
 - **Phase 7 — water (user request, 2026-07-30).** The scope cut ("no water pass at first") reversed:
   the viewer draws the sea, with a toggle to hide it.
@@ -520,7 +520,7 @@ Docs kept in sync in the same changes: `commands.md` (launch + the sea), `develo
 (driving the viewer + the capture rules), `features/weather-environment.md` (the flat water build + the
 gate), `edge-cases/engine-rendering.md` (the fog cull, wind, and now the sea as the second moving thing),
 `restrictions/gpu-and-shaders.md` (the texture-array growth rule), `architecture/README.md` (the app + the
-`cell-weld` package), `open-issues/beach-blue-strip.md` (what the bisect proved).
+`cell-weld` package), `open-issues/fixed/mod-dff-winding-and-atomic-frame.md` (what the bisect proved).
 
 **Left open on purpose:** the blue strip's own root CAUSE — the user reports it resolved on their side and
 will record it in the open-issues doc. `build/strip-ab/mods` (1.8 GB) is the merged tree phase 6 built; it

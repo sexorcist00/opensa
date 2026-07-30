@@ -45,7 +45,11 @@
   (HD only), animated `anim`-section objects (per-instance groups), road-sign text meshes,
   procobj clutter. The convert covers the game's `PACK_RECTS.full` rect (per-game since plan 087 — one
   hardcoded ±12 dropped gostown's far islands), auto-fitting to content when a game has no pinned rect.
-- Map meshes ignore DFF frame transforms (SA re-frames atomic model infos — junk-frame proof).
+- Map meshes ignore DFF frame transforms (SA re-frames atomic model infos — junk-frame proof). **True since
+  plan 095, not before:** the welder applied the frame chain to every model, and the gate that fixes it is
+  the IDE section — `def.anim !== undefined` keeps the chain (an `anim` entry is a CLUMP, which is how a
+  windmill's blades sit on their tower), everything else drops it. It has to live in the weld rather than in
+  `prepareClumpAtomics`, whose results are cached by model name.
 - **Floodlight beams** (`ws_floodbeams`, Vegas site lights): a `white` placeholder texture whose soft cone is
   baked into the per-vertex prelit ALPHA (the only transparency signal). `world-material.isVertexAlphaBeam`
   detects them and `build-clump` keeps the alpha as a vec4 `color` attribute; `buildWorldMaterial` renders them

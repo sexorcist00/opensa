@@ -29,6 +29,40 @@ caller's preference is part of the CACHE KEY. Never a third thing.
 **Caught:** no — the output is a plausible class, just the other one, and only on the machines where the
 build order differs.
 
+## A geometry's DRAWN topology is its BinMesh index data, not its face array
+
+A DFF stores its triangles twice: the Geometry Struct's face array (authoring input) and the BinMeshPLG
+index data (what RenderWare submits). **They are allowed to disagree**, and when they do, only the second
+one is what the game shows. Any new code that reads or rewrites geometry — a converter stage, an exporter, a
+mesh tool — must treat the index data as the truth and the face array as a hint.
+
+`0. Map Fixes Pack`'s `roads32_law2` has its 65 road triangles up-facing in the index data and down-facing
+in the face array. Reading the array turned the beach lane's slab inside-out, single-sided culling deleted
+it, and the result read as a flat light-blue hole with working collision — three sessions of probes that all
+came back "the data is equivalent", because it is. Scale: 4 models in the merged original map
+(`scripts/debug/scan-geometry-parity.ts`, Family C). Details in
+[`plans/095-dff-geometry-parity`](../plans/095-dff-geometry-parity/readme.md); the ADC (`0x134`) strips of
+stock `bloodrb`/`rccam` are the one exception, since their parity bits are undecoded.
+
+**Caught:** no. The model renders, faces the wrong way, and vanishes only where culling is on — and both
+arrays describe the same triangle SET, so every count, bbox and checksum agrees.
+
+## A simple map model's own frame transform is dead data
+
+`CFileLoader::LoadAtomicFile` → `SetRelatedModelInfoCB` ends with `RpAtomicSetFrame(atomic, RwFrameCreate())`:
+every atomic of an `objs`/`tobj` model gets a FRESH identity frame, so whatever transform the DFF's frame
+carried is discarded before anything renders. Only a CLUMP model (`anim` IDE entries, peds, vehicles —
+`LoadClumpFile`) keeps its hierarchy. A new design may not "just apply the frame chain": it has to know
+which of the two loaders SA would have used.
+
+We applied it to everything, which rotated a mod's `land_42_sfw` 90° and had been sinking 165 vanilla
+`aw_streettree1` 3.1 m into the ground since the welder was written. The oracle when in doubt is the **COL**:
+it is authored in the space SA renders, so the version whose bounds match it is the truth (8 models, residual
+6.8–43.5 with the frame vs 0.00–0.82 without).
+
+**Caught:** no — and worse than silent: for a near-square asset like a terrain tile the bbox barely moves, so
+`model-bbox` and the pak's own bounds check both pass while the geometry is turned.
+
 ## A dictionary is not a material list
 
 A model's TXD serves several models. "This dictionary contains a glass texture" says nothing about whether

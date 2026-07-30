@@ -59,6 +59,11 @@ const MOD_MANIFEST: readonly Fixture[] = [
   // visible top faces (35 down / 61 sideways of 168 — dark Gouraud wedges in the field): the plan 024
   // Family A real-asset guard for the `badShading` gate check.
   modFile('0. Map Fixes Pack/gta3_img/lae2_roads17.dff', 'mods/lae2_roads17.dff'),
+  // The Map Fixes Pack copy of the Santa Maria beach slab: a re-export whose Struct FACE ARRAY winds all 65
+  // road triangles opposite to its BinMeshPLG index data. RenderWare draws the index data, so reading the
+  // face array put the slab face-down and single-sided culling deleted it — the "blue strip" (plan 095).
+  // A synthetic clump cannot prove this: the whole point is what a real exporter actually writes.
+  modFile('0. Map Fixes Pack/gta3_img/roads32_law2.dff', 'mods/roads32_law2.dff'),
 ];
 
 const MANIFEST: readonly Fixture[] = [
@@ -104,6 +109,14 @@ const MANIFEST: readonly Fixture[] = [
   extract('countrye_stream1.ipl', 'ipl_binary/countrye_stream1.ipl'),
   extract('counxref.ifp', 'dff/anim-clump/counxref.ifp'),
   extract('nt_noddonkbase.dff', 'dff/anim-clump/nt_noddonkbase.dff'),
+  // Plan 095's two geometry-parity fixtures, both STOCK:
+  //   roads32_law2 — the vanilla beach slab, whose face array AGREES with its drawn index data. It is the
+  //     control for the mod copy above: same model, same 93 triangles, and the winding must not move.
+  //   bloodrb      — one of exactly two SA models carrying the ADC plugin (0x134), a PS2 tristrip whose
+  //     parity bits we do not decode. Unwinding it with the PC rule invents triangles (geom 18: 1050 →
+  //     1487), so the parser falls back to the face array; without a fixture that guard is untested.
+  extract('roads32_law2.dff', 'dff/geometry-parity/roads32_law2.dff'),
+  extract('bloodrb.dff', 'dff/geometry-parity/bloodrb.dff'),
   // The opensa-pack `.osm` conversion tests (plan 003 phase 5) run on REAL models, one per asset class, each
   // with the TXD its IDE row names — a converted model must lose nothing against the DFF/TXD build, and a
   // hand-built clump cannot prove that.

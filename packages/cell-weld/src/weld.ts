@@ -14,7 +14,7 @@ import type {
   OscellParticle,
   OscellPlacement,
 } from '@opensa/engine-formats';
-import type { AssetFileSystem, IplInstance, MapDefinitions, RWUvAnimation } from '@opensa/renderware';
+import type { AssetFileSystem, IplInstance, MapDefinitions, RWClump, RWUvAnimation } from '@opensa/renderware';
 
 import { encodeOscell, OSCELL_VERTEX_STRIDE, OscellChannel } from '@opensa/engine-formats';
 import { WIND_MODELS } from '@opensa/game/mods/wind-mode';
@@ -523,6 +523,26 @@ function assemble(
   return encodeOscell(cell);
 }
 
+/**
+ * The atomic's model-space transform, or null when SA would not apply one.
+ *
+ * SA parity (plan 095): only a CLUMP model keeps its frame hierarchy. An `anim` IDE entry loads through
+ * `LoadClumpFile`, which is how a windmill's blades sit on their tower — but a plain objs/tobj model loads
+ * through `LoadAtomicFile`, and that hands every atomic a FRESH identity frame
+ * (`RpAtomicSetFrame(atomic, RwFrameCreate())`), so the DFF's own frame transform is dead data. We used to
+ * apply it regardless: it rotated a mod's `land_42_sfw` 90° and sank 165 vanilla `aw_streettree1` 3.1 m into
+ * the ground. The COL — authored in the space SA renders — agrees with the reversed source on every affected
+ * model. The gate is `def`, not the clump, because `prepareClumpAtomics` is cached by model name and may not
+ * depend on who asked for it.
+ */
+function atomicFrame(
+  def: NonNullable<ReturnType<MapDefinitions['catalog']['get']>>,
+  clump: RWClump,
+  frameIndex: number,
+): null | { pos: [number, number, number]; rot: number[] } {
+  return def.anim !== undefined ? frameWorldTransform(clump.frames, frameIndex) : null;
+}
+
 /** Local-space AABB of the weld rows in `[startRow, endRow)` — the first three floats of each row. */
 function boundsOfRows(
   vertices: readonly number[],
@@ -981,7 +1001,7 @@ function weldGroup(
     if (animated?.has(atomic.frameIndex)) {
       continue; // a moving part: the host draws it as a live entity, so welding it would double it
     }
-    const frame = frameWorldTransform(clump.frames, atomic.frameIndex);
+    const frame = atomicFrame(def, clump, atomic.frameIndex);
     for (const part of atomic.parts) {
       const material = geometry.materials[part.materialIndex] ?? {
         color: [255, 255, 255, 255] as const,

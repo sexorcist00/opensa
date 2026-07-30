@@ -18,6 +18,18 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   (it warns when >10% of world models take it; synthesis is map-optimizer's job).
 - **map-optimizer refuses geometry it can't provably remap** — skinned, multi-UV, or multi-morph geometry
   is skipped per-asset on any count-changing pass rather than corrupted.
+- **We weld EVERY atomic of a simple map model; SA keeps one.** `CFileLoader::SetRelatedModelInfoCB` calls
+  `mi->SetAtomic(atomic)` for each atomic of the clump into the same single slot (a `_dam`-suffixed frame goes
+  to the damaged slot instead), so an `objs`/`tobj` model ends up with only the LAST atomic and the rest are
+  dropped. Measured over the merged original map: **41 multi-atomic placed models, 47 894 welded triangles
+  across 82 instances the real game never draws** — leftover xref helpers such as `sprasfw`'s stray
+  `xenonsign_SFw` (1772 tris), `desn2_stripsigs1`'s `des_cowtail` (17 163) and `des_bigbull`'s `des_bulltail`
+  (4226). In 29 of the 41 the surviving atomic is the one whose frame is named like the model, which is why
+  the picture still reads right. **Not fixable by "keep the last atomic":** the same set holds the animated
+  props (`nt_windmill`, `derrick01`, `nt_noddonkbase`, `a51_radar_scan`), which are `anim` IDE entries that
+  SA loads as CLUMPS and whose extra atomics are the moving parts — so any fix needs the IDE-section gate
+  that [plan 095](../plans/095-dff-geometry-parity/readme.md) added for the frame transform. Forensics:
+  [`open-issues/fixed/mod-dff-winding-and-atomic-frame.md`](../open-issues/fixed/mod-dff-winding-and-atomic-frame.md).
 - **Two-sided world geometry breaks smooth-group normals.** SA's world is heavily two-sided (mirrored
   coplanar pairs); where incident faces cancel, faces degrade to flat shading and
   `sanitizeDegenerateNormals` substitutes an arbitrary face — sometimes pointing down.

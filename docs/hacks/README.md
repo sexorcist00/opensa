@@ -70,6 +70,7 @@ the number.
 | [Impact-smoke fit](impact-smoke-fit.md) | `web/ui/engine-vehicles.ts` | SA's `CFx` collision-effect counts/lifetimes; the trigger itself is the calibrated damage gate |
 | [Surface-FX fit](surface-fx-fit.md) | `game/vehicle/vehicle-surface-fx.system.ts` | `CFx::AddWheel*` per-surface counts/colours; the dispatch itself is surfinfo's own `W_*` flags |
 | [Alpha-mask thresholds](alpha-mask-thresholds.md) | `opensa-pack/alpha.ts` | SA's ONE alpha pass with a per-entity reference (140/100/0, recovered) — we bake a two-class split instead, and two side floors are fitted |
+| [ADC-strip fallback](adc-strip-fallback.md) | `renderware/parsers/binary/dff.ts` | ADC (`0x134`) itself — a PS2 strip's parity/restart bits, undecoded; for its two STOCK carriers (`bloodrb`, `rccam`) we read the face array we otherwise call the wrong one, because unwinding them invents triangles (1050 → 1487) |
 
 **Back-filled 2026-07-28**, sweeping the engine, shaders, physics, converter and tools. What the sweep
 deliberately did NOT open a file for, so the next reader does not go looking: numbers that are **read** from

@@ -122,6 +122,23 @@ function fountainFs(): AssetFileSystem {
   } as unknown as AssetFileSystem;
 }
 
+/** Summed extent of a welded cell's vertex positions — a placement fingerprint the vertex count cannot see. */
+function spread(bytes: Uint8Array): number {
+  const cell = decodeOscell(bytes);
+  const view = new DataView(cell.vertexData.buffer, cell.vertexData.byteOffset, cell.vertexData.byteLength);
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (let vertex = 0; vertex < cell.vertexCount; vertex += 1) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      const value = view.getFloat32(vertex * OSCELL_VERTEX_STRIDE + axis * 4, true);
+      min[axis] = Math.min(min[axis], value);
+      max[axis] = Math.max(max[axis], value);
+    }
+  }
+
+  return max[0] - min[0] + (max[1] - min[1]) + (max[2] - min[2]);
+}
+
 describe('weldCell 2dfx particles', () => {
   describe('negative cases', () => {
     it('welds NO particles into a LOD cell — the anchors would double every emitter', () => {
@@ -243,6 +260,30 @@ describe('weldCell animated objects (B7·b)', () => {
   });
 
   describe('positive cases', () => {
+    it('applies the atomic frame chain for a CLUMP def and drops it for a simple one (SA parity, 095)', () => {
+      // `LoadAtomicFile` hands every atomic a fresh identity frame, so a plain objs/tobj model's own frame
+      // transform is dead data; only `anim` entries load as clumps and keep their hierarchy. `nt_noddonkbase`
+      // is a 5-atomic pump whose parts hang off offset frames, so the two paths cannot land on the same box.
+      const fs = animFs();
+
+      // A missing IFP keeps the CLUMP path (no frame is excluded) — the difference is the transform alone.
+      const asClump = weldCell(
+        fs,
+        animDefs('no_such_ifp'),
+        animCell(),
+        false,
+        new TexturePlanner(fs, new Map()),
+        [0, 0, 0],
+      );
+      const asSimple = weldCell(fs, animDefs(null), animCell(), false, new TexturePlanner(fs, new Map()), [0, 0, 0]);
+
+      expect(decodeOscell(asSimple!.bytes).vertexCount).toBe(decodeOscell(asClump!.bytes).vertexCount);
+      // The same vertices land in a different place. Measured for this pump: 75.79 simple vs 66.82 as a
+      // clump — direction is not the point (its frames pull parts together as often as apart), the point is
+      // that a simple def must not be moved by data SA throws away.
+      expect(spread(asSimple!.bytes)).not.toBeCloseTo(spread(asClump!.bytes), 1);
+    });
+
     it('leaves the MOVING frames out of the bundle and welds the rest (the host draws the moving part live)', () => {
       const fs = animFs();
 

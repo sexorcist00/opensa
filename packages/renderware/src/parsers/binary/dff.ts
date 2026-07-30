@@ -96,45 +96,6 @@ const GEOMETRY_CHILDREN: ReadonlySet<number> = new Set([
   RwSection.STRUCT,
 ]);
 
-/**
- * Recover per-face material indices from the geometry's BinMeshPLG split when the
- * triangle list left them all zero. Each triangle is keyed by its (order-
- * independent) vertex triple and assigned the material of the split it belongs to.
- */
-function applyBinMeshMaterials(stream: BinaryStream, header: ChunkHeader, triangles: RWTriangle[]): void {
-  const extension = findChild(stream, header.dataStart, header.end, RwSection.EXTENSION);
-  if (!extension) {
-    return;
-  }
-  const bin = findChild(stream, extension.dataStart, extension.end, RwSection.BIN_MESH_PLG);
-  if (!bin) {
-    return;
-  }
-
-  stream.seek(bin.dataStart);
-  const tristrip = (stream.u32() & 1) !== 0;
-  const numMeshes = stream.u32();
-  stream.u32(); // total index count (unused)
-
-  const materialByTriple = new Map<string, number>();
-  for (let mesh = 0; mesh < numMeshes; mesh += 1) {
-    const numIndices = stream.u32();
-    const materialIndex = stream.u32();
-    const indices: number[] = [];
-    for (let i = 0; i < numIndices; i += 1) {
-      indices.push(stream.u32());
-    }
-    forEachSplitTriangle(indices, tristrip, (a, b, c) => materialByTriple.set(tripleKey(a, b, c), materialIndex));
-  }
-
-  for (const tri of triangles) {
-    const material = materialByTriple.get(tripleKey(tri.a, tri.b, tri.c));
-    if (material !== undefined) {
-      tri.materialIndex = material;
-    }
-  }
-}
-
 /** Visit each triangle of one BinMesh split (trilist triples, or an unwound tristrip). */
 function forEachSplitTriangle(
   indices: number[],
@@ -148,10 +109,17 @@ function forEachSplitTriangle(
 
     return;
   }
+  // A strip alternates winding every step, and the degenerate joins that stitch several strips into one
+  // index run exist to KEEP that parity — so parity is the absolute index, never a count of what we kept.
   for (let i = 0; i + 2 < indices.length; i += 1) {
     const [a, b, c] = [indices[i], indices[i + 1], indices[i + 2]];
-    if (a !== b && b !== c && a !== c) {
-      visit(a, b, c); // winding is irrelevant — we only key the triple
+    if (a === b || b === c || a === c) {
+      continue;
+    }
+    if (i % 2 === 0) {
+      visit(a, b, c);
+    } else {
+      visit(b, a, c);
     }
   }
 }
@@ -239,18 +207,16 @@ function parseGeometry(stream: BinaryStream, header: ChunkHeader): RWGeometry {
 
   const prelitColors = flags & GeometryFlag.PRELIT ? stream.bytes(numVertices * 4) : null;
   const uvLayers = readUVLayers(stream, numUVLayers, numVertices);
-  const triangles = readTriangles(stream, numTriangles);
+  const faceArrayTriangles = readTriangles(stream, numTriangles);
   const { normals, positions } = readMorphTargets(stream, numMorphTargets, numVertices);
 
   const matList = findChild(stream, header.dataStart, header.end, RwSection.MATERIAL_LIST);
   const materials = matList ? parseMaterialList(stream, matList) : [];
   const skin = parseSkinExtension(stream, header, numVertices);
 
-  // Some exporters leave every face's material index 0 and store the real
-  // per-material split in BinMeshPLG; recover the assignment from it.
-  if (materials.length > 1 && triangles.every((t) => t.materialIndex === 0)) {
-    applyBinMeshMaterials(stream, header, triangles);
-  }
+  // The DRAWN index data wins over the authoring face array — same triangles, but the winding (and the
+  // material split) are the ones RenderWare submits. See {@link readBinMeshTriangles}.
+  const triangles = readBinMeshTriangles(stream, header, numVertices) ?? faceArrayTriangles;
 
   const { escalators, lights, particles, roadsigns } = parse2dEffects(stream, header);
   const nightColors = parseNightColors(stream, header, numVertices);
@@ -356,6 +322,66 @@ function parseUvAnimDict(stream: BinaryStream, header: ChunkHeader): RWUvAnimati
   });
 
   return animations;
+}
+
+/**
+ * The geometry's triangles AS RENDERWARE DRAWS THEM — the BinMeshPLG index data. Null when the geometry
+ * carries no usable BinMesh (then the Struct face array is all there is).
+ *
+ * A DFF stores its topology twice: the Struct face array (authoring input) and this index data (what the
+ * renderer submits). Exporters can and do write the two with **opposite winding**, and then the array we
+ * pick decides which way the mesh faces: `0. Map Fixes Pack`'s `roads32_law2` has all 65 of its road
+ * triangles up-facing in the BinMesh order and down-facing in the face array, so building from the face
+ * array put the beach lane's slab face-down, where single-sided back-face culling deleted it — visible in
+ * the game as a light-blue hole with working collision (plan 095, `open-issues/mod-dff-winding-and-atomic-frame.md`).
+ *
+ * The material index comes free here (one per split), which also retires the old "recover material
+ * indices from BinMesh when the face array left them all zero" special case.
+ */
+function readBinMeshTriangles(stream: BinaryStream, header: ChunkHeader, numVertices: number): null | RWTriangle[] {
+  const extension = findChild(stream, header.dataStart, header.end, RwSection.EXTENSION);
+  if (!extension) {
+    return null;
+  }
+  const bin = findChild(stream, extension.dataStart, extension.end, RwSection.BIN_MESH_PLG);
+  if (!bin) {
+    return null;
+  }
+
+  // An ADC strip carries its parity/restart decisions in per-index bits we do not decode, so unwinding it
+  // with the plain PC rule INVENTS triangles (stock `bloodrb`: every geometry grew 10–40 %, e.g. 1050 →
+  // 1487). Two models in the whole game ship it; the face array is the honest read for them. Probed BEFORE
+  // the seek below — `findChild` scans with the shared cursor.
+  const adc = findChild(stream, extension.dataStart, extension.end, RwSection.ADC_PLG) !== null;
+
+  stream.seek(bin.dataStart);
+  const tristrip = (stream.u32() & 1) !== 0;
+  const numMeshes = stream.u32();
+  stream.u32(); // total index count (unused)
+  if (tristrip && adc) {
+    return null;
+  }
+
+  const triangles: RWTriangle[] = [];
+  let outOfRange = false;
+  for (let mesh = 0; mesh < numMeshes; mesh += 1) {
+    const numIndices = stream.u32();
+    const materialIndex = stream.u32();
+    const indices: number[] = [];
+    for (let i = 0; i < numIndices; i += 1) {
+      const index = stream.u32();
+      outOfRange ||= index >= numVertices;
+      indices.push(index);
+    }
+    forEachSplitTriangle(indices, tristrip, (a, b, c) => triangles.push({ a, b, c, materialIndex }));
+  }
+  // A locked/corrupt DFF can carry index data that does not belong to this vertex set; the face array is
+  // the safer read then (it is bounds-checked downstream the same way it always was).
+  if (outOfRange || triangles.length === 0) {
+    return null;
+  }
+
+  return triangles;
 }
 
 /** Re-read a geometry list by its declared count, RW-style ({@link recoverLockedList}), past the bloated
@@ -783,9 +809,4 @@ function readUVLayers(stream: BinaryStream, numUVLayers: number, numVertices: nu
   }
 
   return uvLayers;
-}
-
-/** Order-independent key for a triangle's vertex triple. */
-function tripleKey(a: number, b: number, c: number): string {
-  return [a, b, c].sort((x, y) => x - y).join(',');
 }
