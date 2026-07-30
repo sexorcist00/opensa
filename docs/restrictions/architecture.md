@@ -83,3 +83,21 @@ content: the `:sa` script excludes `vehicles` and `peds`, so the real-game build
 indistinguishable from a fresh one.
 
 Detail: [`architecture/perfect-map-builder.md`](../architecture/perfect-map-builder.md).
+
+## A debug view has exactly ONE owner of what it shows
+
+A tool that renders a chosen subset — the map inspector's cell set, a layer list, a filtered entity list —
+must have a single writer of that subset. Plan 094 broke this twice, in opposite directions:
+
+- phase 1's camera-follow and phase 2's panel both wrote the cell set, so the grid's checkboxes and the
+  camera disagreed about what was on screen (fixed by giving the panel sole ownership);
+- phase 6 then found the other half: with `?panel=0` there IS no panel, so nothing wrote the set at all and
+  **every scripted capture rendered an empty world** — for four phases, while the tool looked like it worked
+  (the phase 2/3 numbers happened to be taken with the panel up). The host now seeds the set itself in
+  capture mode, and only there.
+
+The rule for a new design: name the owner for every mode the tool has, including the headless one, and make
+the ownerless mode impossible rather than merely unlikely.
+
+**Caught:** no, and it is the worst kind of silent — the failure renders. A tool whose subset can be empty
+must SAY it is empty (the viewer prints its resident cell count on every set change).
