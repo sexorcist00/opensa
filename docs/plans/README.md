@@ -16,7 +16,18 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`095`, one folder each (066, 073, 074, 078–083 carry multi-part sub-plans). Newest first:
+`001`–`096`, one folder each (066, 073, 074, 078–083, 096 carry multi-part sub-plans). Newest first:
+
+- **[096 — Video mode](./096-video-mode/readme.md)** — PLANNED 2026-07-30 (researched + all user
+  decisions frozen the same day; graduated from `docs/ideas/video-mode/`). `?video=1` boots an endless
+  seeded self-directed showcase for trailer recording: a random car (mod cars first, via a new
+  build-time `vehicle-installer` ledger) cruises a route generated from the game's own `NODES*.DAT`
+  graph while cameras cut between occlusion-checked tripod stations and chase/front/rear/wing shots;
+  walk and flythrough scenes; region cycle LS→LV→SF→Country→Desert; region-native weather, debugger
+  time slots, black overlay between scenes, UI hidden. Eight phases, P0 = path graph + a closed-loop
+  `PathFollowSource` autopilot on the shipped `InputState` path (the `?phys=` runner is the skeleton);
+  the two field risks are autopilot cornering and cut flicker (the 080 multiray lesson). Deliberately
+  NOT named "cinematic" — that is plan 080's word.
 
 - **[095 — DFF geometry parity](./095-dff-geometry-parity/readme.md)** — SHIPPED 2026-07-30. Two converter
   bugs behind one field report ([forensics](../open-issues/fixed/mod-dff-winding-and-atomic-frame.md)): we

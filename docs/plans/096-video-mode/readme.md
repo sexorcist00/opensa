@@ -1,0 +1,160 @@
+# 096 — Video mode (self-directed showcase runs for trailer footage)
+
+**Status: PLANNED 2026-07-30.** Graduated from `docs/ideas/video-mode/` the same day it was researched —
+the four-way repo sweep (paths/driving, camera, streaming/host, player/vehicles) and every user decision
+moved into this doc, per the lifecycle rule that a validated idea's research record MOVES into the plan.
+
+**Goal: `?video=1` boots the game into an endless, seeded, self-directed showcase.** A random car — mod
+cars first — spawns on a road, the player gets in and cruises a route generated from the game's own
+`NODES*.DAT` graph while cameras cut between occlusion-checked tripod stations and chase/front/rear/wing
+views; other scenes walk the player or fly the camera. Every fragment runs 10–25 real seconds on a fully
+streamed world, UI hidden, black overlay between scenes. The user screen-records with OS tools and edits
+the cuts out by hand.
+
+**NOT named "cinematic"** — that word belongs to the shipped 080 follow-camera chain in every doc, test
+and ledger. This feature is a *director* over that camera, plus an autopilot under the car.
+
+## Decisions (user, 2026-07-30 — frozen for v1)
+
+| # | Decision |
+| --- | --- |
+| D1 | Entry `?video=1`; fragment length `&from=10&to=25` (REAL seconds; defaults 10/25); `&seed=N` |
+| D2 | Region cycle LS → LV → SF → Country → Desert, endless until the tab closes |
+| D3 | Program per cycle: drive scenes in ALL 5 regions → camera flythrough in 2 → on-foot walk in 1 |
+| D4 | Shot ≥ 5 s; length adapts to car distance/speed; a drive-past is fine but the camera must not linger on an empty frame after the subject passes |
+| D5 | Routes favour long straights with gentle curves; length ≈ fragment duration × cruise speed; random from the node graph (curated routes maybe later) |
+| D6 | Time of day snaps to the debugger's preset slots: 00:00 / 06:00 / 12:00 / 18:00 / 21:00 (`debug-overlay.tsx:50`) |
+| D7 | Weather random WITHIN the current region's own timecyc set (LS scene → LA weathers only) |
+| D8 | Driving style: calm cruise, speed capped by route curvature; no drift/stunts |
+| D9 | `?seed=` determinises car, weather, hour, route and shot list; active seed printed `[video] seed=…` |
+| D10 | Custom cars first via a build-time ledger (vehicle-installer) — approved |
+| D11 | Between scenes: plain black DOM overlay owned by the module (user cuts it in the editor) |
+| D12 | UI hidden via the existing `'fly-camera'` event; no on-screen status during a scene (console `[video]` tag only) |
+| D13 | Clock drift accepted (~16 game minutes over a 25 s fragment); no time freeze |
+| D14 | Out of scope v1: interior/cabin camera, in-page recording, traffic, drift driving |
+| D15 | Routes stay INSIDE one region (sidesteps `CityZoneSystem`'s 6 s weather rewrite on crossing, `engine-canvas-host.tsx:913`) |
+| D16 | `vehicle-enter-null-body` recheck 2026-08-30: video mode IS the stress test; if the crash returns, the defensive `readBody` guard ships in the same change |
+
+## What the engine study established (constraints — every phase obeys these)
+
+1. **The attach pattern is fixed.** A module in its own file with a narrow host interface of thin
+   accessors, self-gating on the URL (absent → immediate return), called once at the end of `boot()`
+   (`engine-canvas-host.tsx:1633-1697`). `setupPerfRuns` / `setupPhysRuns` are the two shipped examples;
+   the host-side footprint of an entire subsystem is one ~20-line block. Video mode adds a third block and
+   NOTHING else to the host beyond the accessors it composes (most already exist for bench/phys).
+2. **`packages/engine` is untouched.** The camera lives in `apps/web` (app layer); autopilot and route
+   logic go in `packages/game` (engine-tagged, no renderware imports outside `adapters/`). Layer tags:
+   `app → engine`, never the reverse (`eslint.config.ts:284`).
+3. **Camera authority is a priority chain** in `resolveCamera` (`apps/web/src/ui/camera/engine-camera.ts:87-110`),
+   currently `bench > flyEye > follow`, pinned by `engine-camera.test.ts`. Video inserts DIRECTLY BELOW
+   bench: `bench > video > flyEye > follow` — bench numbers stay untouchable by construction (080 ground
+   rule), and video, being a scripted run like bench, outranks the interactive modes while active. The
+   precedent is `benchCamera` itself: an external module owning the frame via a plain `{eye, target}`
+   (`engine-canvas-host.tsx:1182`, honoured at `camera-director.ts:99-101`).
+4. **Scene start gate — copy the phys recipe, never invent a third** (`engine-phys-runs.ts:64-70`):
+   `pendingCells === 0` LIES for ~1 s after a teleport (still reads the old ring) → wait
+   `TELEPORT_NOTICE_SECONDS = 1`, then drain `pendingCells`, then ~2 s warmup for collision/clutter (no
+   pending counter of their own). The unfixed cold-teleport spike (plan 091: ~20 frames of 110–170 ms)
+   is waited out behind the black overlay. All timing on the frame clock (`until()`/`waitSeconds()`
+   pattern), never `setTimeout`.
+5. **Synthetic driving input is a solved path.** `ScriptedDriveSource implements InputState` is
+   permanently installed in `CombinedInput` (`engine-canvas-host.tsx:487-488`) and reaches the Rapier
+   raycast controller through the exact player path (`enter-vehicle.system.ts:774-856`). The autopilot is
+   a closed-loop SIBLING, not a change to that path. Caveats: `CombinedInput` SUMS move vectors
+   (`combine-input.ts:45-55`) — keyboard input during a scene adds to the autopilot's (accepted v1
+   limitation: hands off the controls while recording); steering slews at `STEER_RATE = 1.2 rad/s`
+   (`enter-vehicle.system.ts:185`) through a speed-dependent limit (`steering.ts`), so the controller
+   must anticipate, never react.
+6. **Driving state is a singleton** on `EnterVehicleSystem` — exactly ONE car can drive. Enough for v1;
+   traffic is roadmap 0.5.0 material.
+7. **Occlusion queries exist and are cheap**: `pathClear` (line-of-sight boolean,
+   `physics-world.ts:901`), `sphereCast` (`:1293`), `raycast` (`:962`), all GTA Z-up. Budget ≤ 5
+   casts/frame total (080 ground rule; today's rig spends 2).
+8. **The discrete-gate trap is documented**: a hard boolean over rays "has no continuous middle, so it
+   cannot ease" (`docs/postmortem/080-cinematic-camera/multiray-collision.md`). Station choice is exactly
+   that shape → hysteresis + minimum dwell (D4's 5 s floor helps) + amortised surveys, and every cut
+   DECLARED to the `[cam] jump` watchdog (`engine-canvas-host.tsx:1961`) and to
+   `camera-transitions.test.ts`'s 1 u/frame continuity exam.
+9. **Weather is instant when asked**: `WeatherTransition.begin(index, 0)` (how the bench sets it,
+   `engine-canvas-host.tsx:1653`); the 6 s default fade (`game-runtime-config.ts:238`) is for in-scene
+   artistic changes only (none in v1).
+10. **Mod provenance does not survive the build** (verified against a built `carcols.dat`) — but
+    `vehicle-installer`'s `install.ts:52` already collects the `Set<string>` of mod-installed slots and
+    never writes it. The ledger phase emits it the way `vehicle-features.txt` is emitted.
+11. **Two coordinate spaces**: gameplay/physics GTA Z-up, camera output engine Y-up,
+    `toEngine(gta) = (x, z, −y)`. Director math runs in ONE space and converts at the physics boundary
+    (the 080 rule).
+12. **The ownerless mode must be impossible** (`docs/restrictions/architecture.md`, the 094 lesson): the
+    module is the single owner of the overlay and the camera in every mode INCLUDING headless, and it
+    logs what it staged (`[video] scene 3/5 lv drive seed=…`).
+
+## Architecture
+
+```
+apps/web/src/ui/engine-video-runs.ts     setupVideoRuns(host: VideoRunsHost) — gate, sequencer loop,
+                                         overlay, UI hide, settle, spawn/seat, scene teardown
+apps/web/src/ui/video/                   director.ts (shot scheduler + cuts), shots.ts (shot presets +
+                                         framing math), stations.ts (tripod survey/occlusion), fly.ts
+                                         (flythrough path), rng.ts (seeded PRNG)
+apps/web/src/video-presets.ts            region presets (weather pools, time slots, cycle order),
+                                         program table (D3), tuning constants in one config object
+packages/game/src/paths/route-graph.ts   pure graph ops over nodes+links (no renderware import)
+packages/game/src/adapters/path-graph.ts loads NODES*.DAT → RouteGraph (renderware allowed: adapters/)
+packages/game/src/vehicle/path-follow.ts PathFollowSource implements InputState (pure-pursuit autopilot)
+packages/renderware/src/parsers/binary/paths.ts   + links adjacency (today discarded at parse)
+tools/vehicle-installer/…                emits data/vehicle-mods.txt (the ledger)
+scripts/debug/video-routes.ts            offline route-builder validation (kept, debug README row)
+```
+
+Host additions (one block at `engine-canvas-host.tsx:~1697` + accessors): `setVideoCamera` (mirrors
+`setBenchCamera`), `runPath`/`arrived` threading from `controllerSystem` (phase 07), everything else
+composed from accessors already wired for bench/phys (teleport, hour, weather, stream, vehicles, samples,
+`toEngine`, `params`, `events`).
+
+Doc obligations (same-change rule): rows in `docs/development/query-parameters.md` (`video`, `from`,
+`to`, `seed` — and this param family is the doc's stated trigger to consider the typed reader),
+`docs/contracts/vehicles.md` (ledger name + misspelling behaviour), `docs/features/video-mode.md` (+ README
+row), `docs/debug/README.md` (new script), `docs/commands.md` if a CLI knob is added. Close-out owes the
+audit + benchmark per the big-rework rule.
+
+## Phases and priority
+
+Priority meaning: **P0** — the feature exists and is field-checkable (a car drives a route on camera);
+**P1** — the trailer look (director, variety, mod cars); **P2** — breadth and close-out. Order is the
+dependency order; 06 is independent and can run any time before 05.
+
+| Phase | Title | Priority | Depends on |
+| --- | --- | --- | --- |
+| [01](01-path-graph-and-routes.md) | Path graph + seeded route builder (offline-first) | **P0** | — |
+| [02](02-module-skeleton-and-autopilot.md) | Module skeleton + autopilot drive scene v0 (chase cam) | **P0** | 01 |
+| [03](03-camera-authority-and-shots.md) | Video camera authority + shot presets + framing | **P1** | 02 |
+| [04](04-stations-and-occlusion.md) | Tripod stations: survey, occlusion, cuts without flicker | **P1** | 03 |
+| [05](05-sequencer-regions-presets.md) | Sequencer: region cycle, weather/time presets, car pick | **P1** | 02 (04 for full look) |
+| [06](06-mod-car-ledger.md) | Build-time mod-car ledger (tool + pack + runtime read) | **P1** | — (feeds 05) |
+| [07](07-walk-and-fly-scenes.md) | Walk + flythrough scenes | **P2** | 03, 05 |
+| [08](08-polish-and-closeout.md) | Polish, empty-frame guard, docs, benchmark, audit | **P2** | all |
+
+After 02 the feature is REAL (one region, chase camera, seeded route — recordable footage, ugly cuts).
+After 05 it matches the user's brief minus walk/fly. After 08 it is done by the workflow rules.
+
+## The two field risks (validated the 081 way — short rounds against a HARD case)
+
+1. **Autopilot cornering** (02): validated on telemetry first (cross-track error, lateral-g band), then a
+   field look at a route with a real corner — never a gentle one.
+2. **Cut flicker** (04): the discrete station gate against facade recesses/columns; hysteresis + dwell +
+   amortised survey, judged in the field on a colonnade street, with the `[cam] jump` watchdog as the
+   objective tripwire.
+
+## Measured-numbers ledger
+
+Per the standing rule, every phase records its numbers here (and perf figures go to `docs/benchmarks/`
+before analysis). Empty until phases run:
+
+- 01: —
+- 02: —
+- 03: —
+- 04: —
+- 05: —
+- 06: —
+- 07: —
+- 08: —

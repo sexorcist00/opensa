@@ -3,6 +3,12 @@
 **Status: shelved, NOT currently reproducing (2026-07-24).** Investigated; root cause narrowed to a
 streaming/physics handle-pool race but not pinned to an exact line (needs a one-shot runtime trace). No fix
 applied yet, kept OPEN — but it has not been seen recently, so it is not a current-priority merge blocker.
+
+**Recheck 2026-08-30 (set 2026-07-30): close if still unseen.** Per the user, the crash has not appeared
+once on the own engine — both sightings date back to the three.js era, so the handle-pool race may have died
+with that stack. The planned video mode (teleport → spawn → enter every scene) is exactly the reproduction
+recipe, so it will serve as the stress test: if it ships and runs clean until the recheck date, close this
+issue; if the crash returns, apply defensive fix option 1 below in the same change.
 The stack trace below is the ORIGINAL capture (its line numbers are as-of-crash, not current source — don't
 "refresh" them; a pasted trace is a record). Note: commit `a16930e` ("resolve vehicle enter/sit clips") is an
 ANIMATION fix (the driver rode standing) — it did NOT touch this physics null-body crash; `readBody` is still
