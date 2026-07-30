@@ -31,3 +31,14 @@ is in flight, and an offset decaying on its own clock while the yaw channel swin
 JUMP ("sticks and jumps in big corners"). Constraint on any future look-point writer: express the offset
 in the CAR's heading frame, give it a spring slower than the yaw channel, and hold its target while a
 steered swing (`yawTarget`) is active. Detail in the idea doc §3.
+
+## The `[cam] jump` watchdog does not normalise by `dt` — a stalled frame while driving prints
+
+The threshold is 1.5 m of look-target movement per FRAME, whatever that frame cost. A car at 13 m/s moves
+1.6 m in a 120 ms frame, so every hitch that long while driving prints a line the rig did nothing wrong for.
+Measured 2026-07-30 (096/03's first headless run): 11 lines in one 5-scene session, every one paired with a
+`[slow] frame 120-224` and every jump equal to the car's own travel over that frame; a later, smoother
+session of 25 scenes printed none. **Reading the log: pair each `[cam] jump` with the `[slow]` line beside
+it before believing it** — jump ÷ (dt × speed) ≈ 1 means the focus moved, not the camera. Not fixed because
+the normalisation would also mask a real cut that happens to land on a slow frame, which is when the
+expensive ones happen.

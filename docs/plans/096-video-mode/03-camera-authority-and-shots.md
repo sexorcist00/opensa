@@ -3,6 +3,26 @@
 **Priority P1. Ships alone: the drive scene from 02 is now filmed — car-anchored shots (chase, front,
 rear, wing) with rule-of-thirds framing and declared cuts. Tripod stations (world-anchored) follow in 04.**
 
+**SHIPPED 2026-07-30.** Numbers in the plan readme's ledger. What the phase did differently from this doc,
+and why:
+
+- **Shot names are the CAMERA's placement, not the car's face.** This doc's `rear` ("camera ahead looking
+  back") and `front` ("camera behind-high") read backwards to each other in a log line, so they shipped as
+  `nose` (ahead, looking back) and `high` (behind and above). Same two shots, a name a field report can use.
+- **The example multipliers were too tight to clear the car.** `1.4 × halfExtents.x` puts a wing camera
+  0.36 m off the bodywork of a saloon; the shipped wing is `5 ×` (4.5 m) and the flyby `6 ×` (5.4 m). The
+  half-extent SCALING is the rule that mattered and it is intact — only the constants moved, and they moved
+  against a measurement (see the ledger's flyby note).
+- **The pan cap is enforced by an exact rotation** (Rodrigues about the axis the two directions span), not by
+  the normalized lerp the first cut used: nlerp overshoots the cap by a hair on a fast pass, and a cap a test
+  cannot pin to its own value is not a cap.
+- **`ALSO=<tag>` was added to `tools-debug/bench-harness/drive.js`** — the acceptance needed the `[cam]`
+  watchdog echoed while `[video]` reports were being counted, and the harness could only follow one protocol.
+- **Not built: task 6's early-cut for a subject that has left the frame is the 1.5 s clock, nothing more.**
+  A shorter window for "the car is BEHIND the camera" was written, measured and REVERTED: a tripod pans with
+  the car, so it is almost never behind the eye — the condition was a misdiagnosis of what the pan-cap lag
+  had done to the flyby.
+
 ## What exists
 
 - `resolveCamera` priority chain `bench > flyEye > follow` (`apps/web/src/ui/camera/engine-camera.ts:87-110`),

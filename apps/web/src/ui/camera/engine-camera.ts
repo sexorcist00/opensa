@@ -12,6 +12,16 @@ import type { CameraState } from '@opensa/engine';
 export const CAMERA_FOV_Y = Math.PI / 3;
 
 /**
+ * A frame owned by video mode's director (096/03) — engine Y-up, like the bench's. `fovYRad` is optional: a
+ * shot that does not choose a lens keeps the rig's live one, so an omitted field is never a hidden 60°.
+ */
+export interface VideoCamera {
+  eye: [number, number, number];
+  fovYRad?: number;
+  target: [number, number, number];
+}
+
+/**
  * Prod's K+M chord (`canvas-host`, verbatim semantics): the toggle fires ONCE while both keys are held —
  * key repeat cannot re-fire it — and re-arms only after one of them is released.
  */
@@ -82,7 +92,11 @@ export function forwardFrom(yaw: number, pitch: number): [number, number, number
 
 /**
  * Whose camera this frame is, in priority order: a running BENCH owns it outright (the prod BenchPlugin
- * contract — deterministic path, player parked), then the photo camera (074/22), else the follow rig.
+ * contract — deterministic path, player parked), then video mode's director (096/03), then the photo camera
+ * (074/22), else the follow rig.
+ *
+ * Video sits directly BELOW the bench so bench numbers stay untouchable by construction (the 080 ground
+ * rule), and ABOVE fly because a recording must not lose its frame to an accidental K+M.
  */
 export function resolveCamera(state: {
   aspect: number;
@@ -92,11 +106,15 @@ export function resolveCamera(state: {
   forward: readonly [number, number, number];
   fovYRad: number;
   target: readonly [number, number, number];
+  video: null | VideoCamera;
 }): CameraState {
-  const { aspect, bench, distance, flyEye, forward, fovYRad, target } = state;
+  const { aspect, bench, distance, flyEye, forward, fovYRad, target, video } = state;
   const rig = { aspect, far: 10000, fovYRad, near: 0.5, up: [0, 1, 0] as [number, number, number] };
   if (bench) {
     return { ...rig, eye: bench.eye, target: bench.target };
+  }
+  if (video) {
+    return { ...rig, eye: video.eye, fovYRad: video.fovYRad ?? fovYRad, target: video.target };
   }
   if (flyEye) {
     return { ...rig, eye: flyEye, target: [flyEye[0] + forward[0], flyEye[1] + forward[1], flyEye[2] + forward[2]] };

@@ -132,7 +132,8 @@ NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/gate-check.js canvas 
 TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&phys=all&car=infernus" phys 900000 7
 # Video mode (096/02) — endless, so the run ends when <expectReports> scenes have reported
-TAG='[video]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
+# ALSO='[cam]' echoes a second protocol without counting it as a report (096/03 reads the jump watchdog)
+TAG='[video]' ALSO='[cam]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&video=1&seed=47" video 600000 8
 # Pick a corner-heavy route to look at first (offline, no boot): scripts/debug/video-routes.ts --worst
 # Speed-grip dials (081/09) — session overrides for the lateral assist; captures record the active values

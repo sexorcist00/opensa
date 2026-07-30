@@ -129,7 +129,7 @@ dependency order; 06 is independent and can run any time before 05.
 | --- | --- | --- | --- |
 | [01](01-path-graph-and-routes.md) | Path graph + seeded route builder (offline-first) — **SHIPPED** | **P0** | — |
 | [02](02-module-skeleton-and-autopilot.md) | Module skeleton + autopilot drive scene v0 (chase cam) — **SHIPPED** | **P0** | 01 |
-| [03](03-camera-authority-and-shots.md) | Video camera authority + shot presets + framing | **P1** | 02 |
+| [03](03-camera-authority-and-shots.md) | Video camera authority + shot presets + framing — **SHIPPED** | **P1** | 02 |
 | [04](04-stations-and-occlusion.md) | Tripod stations: survey, occlusion, cuts without flicker | **P1** | 03 |
 | [05](05-sequencer-regions-presets.md) | Sequencer: region cycle, weather/time presets, car pick | **P1** | 02 (04 for full look) |
 | [06](06-mod-car-ledger.md) | Build-time mod-car ledger (tool + pack + runtime read) | **P1** | — (feeds 05) |
@@ -182,7 +182,21 @@ before analysis). Empty until phases run:
   controller. Determinism: seed 47 re-run after the stuck rule changed reproduced all 8 routes, hours,
   weathers and cross-track percentiles **to 3 decimal places**. Autopilot unit tests: 10, on a kinematic
   bicycle carrying the real 1.2 rad/s slew.
-- 03: —
+- 03: **DONE 2026-07-30.** Authority `bench > video > flyEye > follow`; six presets (`chase` yields the frame,
+  `nose`/`high`/`wing-l`/`wing-r` track, `flyby` plants). **Headless 5 seeds × 5 scenes (47 · 3 · 11 · 202 ·
+  88), `build/original/opensa`, DPR 1: 36 951 directed frames, car inside the safe frame 99.09 %** (per-seed
+  97.24-100 %) against the plan's 95 % floor; **0 `[cam] jump` lines in all five runs**; 59 cuts; pan-rate cap
+  bit on 2.7 % of directed frames; shortest dealt shot 5.2 s against the 5 s floor; every scene ended
+  `ran-out` (no stuck, no early guard cut of a shot that was still framing its car). Autopilot unchanged and
+  still inside its band (cross-track p95 0.11-0.31 m); settle gate 248-252 ms, i.e. 02's number. **The one
+  outlier is the `flyby`**: in seed 11 scene 3, where it is the only placed shot, its own safe share is
+  75.8 %, because the pass sweeps the car out of frame over the last stretch. The first geometry (a 2.7 m
+  standoff, taken from this doc's own example multiplier) was worse — 88.7 % and 266 clipped frames in one
+  scene — and moving it to 5.4 m aside / 23 m ahead cut the peak angular rate roughly in half: the plan's
+  "the guard cut, never a higher cap" held, the fix was the STANDOFF. Two measurement notes: the first run's
+  11 `[cam] jump` lines were all paired with `[slow] frame 120-224` and each equalled the car's own travel
+  over that frame — the watchdog does not normalise by `dt`, now in `docs/edge-cases/camera-rig.md`; and a
+  cut is a discontinuity, so a pan-rate assertion that measures across one is measuring the cut.
 - 04: —
 - 05: —
 - 06: —

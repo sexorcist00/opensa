@@ -13,6 +13,10 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import type { DirectorState, ShotPlan } from '../video/director';
+
+import { createDirector, stepDirector } from '../video/director';
+import { forwardFromHeading, SHOTS } from '../video/shots';
 import { type CameraSnapshot, createRigState, setFlyEye, snapTopDown, steerYaw, stepCamera } from './camera-director';
 import { TEST_CAMERA_CONFIG as CONFIG } from './camera-test-config';
 
@@ -53,6 +57,7 @@ const base = (over: Partial<CameraSnapshot>): CameraSnapshot => ({
   settling: false,
   vehicle: null,
   vehicleDistance: null,
+  video: null,
   walkKeys: new Set(),
   zoomSteps: 0,
   ...over,
@@ -65,10 +70,15 @@ const advance = (previous: readonly [number, number, number], speed: number): [n
   previous[2] - speed * DT,
 ];
 
-/**
- * The full matrix, in the order a session actually produces it: walk → get in → drive → get out → walk →
- * map viewer → back → respawn.
- */
+/** The car video mode films in the legs below — a saloon's own half-extents, nothing model-specific. */
+const VIDEO_CAR = [0.9, 2.3, 0.7] as const;
+const DRIVE_SPEED = 24;
+
+/** A shot list long enough that no leg below reaches a cut of the director's own making. */
+const shotPlan = (name: string): ShotPlan[] => [
+  { preset: SHOTS.find((shot) => shot.name === name) ?? SHOTS[0], seconds: 30 },
+];
+
 const LEGS: readonly Leg[] = [
   {
     frames: 120,
@@ -133,6 +143,64 @@ const LEGS: readonly Leg[] = [
   },
 ];
 
+/**
+ * The full matrix, in the order a session actually produces it: walk → get in → drive → get out → walk →
+ * map viewer → back → respawn → video mode takes the frame, cuts, and gives it back.
+ *
+ * Built per walk rather than held as a module const: the video legs step a real director, and a director
+ * carried between walks would make the determinism check below meaningless.
+ */
+const buildLegs = (): readonly Leg[] => {
+  // Each video leg ENTERS on a fresh director, which is a cut by construction — the same declared cut the
+  // host's watchdog is handed. Inside a leg the pose must then be continuous, which is what is examined.
+  let video: DirectorState = createDirector(shotPlan('wing-l'));
+  const filmed = (previous: readonly [number, number, number]): Partial<CameraSnapshot> => {
+    const focus = advance(previous, DRIVE_SPEED);
+    const step = stepDirector(
+      video,
+      { forward: forwardFromHeading(0), halfExtents: VIDEO_CAR, position: focus, speed: DRIVE_SPEED },
+      DT,
+      16 / 9,
+    );
+
+    return {
+      focus,
+      mode: 'vehicle',
+      vehicle: { slipAngle: 0, speed: DRIVE_SPEED },
+      vehicleDistance: 9,
+      video: step.pose,
+    };
+  };
+
+  return [
+    ...LEGS,
+    {
+      declared: true, // the director taking the frame IS a cut — it is what the black overlay hides
+      frames: 180,
+      label: 'video: a placed shot',
+      snapshot: (_frame, previous) => filmed(previous),
+    },
+    {
+      declared: true,
+      enter: (): void => {
+        video = createDirector(shotPlan('high'));
+      },
+      frames: 180,
+      label: 'video: cut to the next shot',
+      snapshot: (_frame, previous) => filmed(previous),
+    },
+    {
+      declared: true, // handing the frame back to the shipped rig is the other declared discontinuity
+      enter: (): void => {
+        video = createDirector(shotPlan('chase'));
+      },
+      frames: 180,
+      label: 'video: chase gives the frame back to the rig',
+      snapshot: (_frame, previous) => filmed(previous),
+    },
+  ];
+};
+
 describe('the camera across every mode transition (plan 080/07)', () => {
   /** Walk the whole matrix, reporting the worst focus-relative eye jump inside each leg. */
   const walkMatrix = (): { jumps: { label: string; worst: number }[] } => {
@@ -143,7 +211,7 @@ describe('the camera across every mode transition (plan 080/07)', () => {
     let lastEye: null | readonly [number, number, number] = null;
     let lastFocus: readonly [number, number, number] = focus;
 
-    for (const leg of LEGS) {
+    for (const leg of buildLegs()) {
       leg.enter?.(state, camera);
       let worst = 0;
       for (let frame = 0; frame < leg.frames; frame += 1) {
@@ -191,7 +259,7 @@ describe('the camera across every mode transition (plan 080/07)', () => {
       const state = createRigState(CONFIG, Math.PI, -0.25);
       let focus: [number, number, number] = [0, 2, 0];
       let camera: null | ReturnType<typeof stepCamera> = null;
-      for (const leg of LEGS) {
+      for (const leg of buildLegs()) {
         leg.enter?.(state, camera);
         for (let frame = 0; frame < leg.frames; frame += 1) {
           const over = leg.snapshot(frame, focus);
@@ -203,7 +271,9 @@ describe('the camera across every mode transition (plan 080/07)', () => {
       // Every channel that carries feel is still live and finite at the end of the session.
       expect(Number.isFinite(state.yaw)).toBe(true);
       expect(Number.isFinite(state.distance)).toBe(true);
-      expect(state.fov).toBeCloseTo(Math.PI / 3, 2); // eased back to the base lens on foot
+      // The session now ends under video mode's camera, mid-drive: the rig's own lens is the speed-widened
+      // one, which is the point — the rig kept stepping while the director owned the frame.
+      expect(state.fov).toBeGreaterThan(Math.PI / 3);
       expect(state.follow.point).not.toBeNull();
       expect(state.flyEye).toBeNull();
     });

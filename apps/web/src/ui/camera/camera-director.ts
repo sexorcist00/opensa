@@ -29,7 +29,7 @@ import {
 } from './camera-collision';
 import { createLookInput, type LookInputState, releaseLook } from './camera-input';
 import { createMotion, type MotionOffset, type MotionState, stepMotion } from './camera-motion';
-import { CAMERA_FOV_Y, forwardFrom, resolveCamera, screenBasis } from './engine-camera';
+import { CAMERA_FOV_Y, forwardFrom, resolveCamera, screenBasis, type VideoCamera } from './engine-camera';
 import { dollyStep, FLY_SPEED, flyStep, panStep, TOP_DOWN_PITCH, topDownEye } from './fly-rig';
 import { createFollowPoint, type FollowPointState, resetFollowPoint, stepFollowPoint } from './follow-rig';
 import { createLookAhead, type LookAheadState, stepLookAhead } from './look-ahead';
@@ -129,6 +129,12 @@ export interface CameraSnapshot {
   /** The follow distance a seated car wants (its length × `vehicleDistanceScale`), or null on foot. The live
    *  distance eases to it, and collision caps it. */
   vehicleDistance: null | number;
+  /**
+   * Video mode's director owns the frame (096/03) — the rig still steps, its output is discarded, exactly
+   * as under a bench. Null whenever video mode is off OR the shot in play is `chase`, which yields the frame
+   * back to the rig rather than re-deriving it.
+   */
+  video: null | VideoCamera;
   /** Fly only: the movement keys held this frame ({@link FLY_KEYS}). */
   walkKeys: ReadonlySet<string>;
   /** Wheel notches this frame: + away from the user (zoom out / dolly back), − toward it. */
@@ -333,7 +339,7 @@ export function stepCamera(
   // EASES it in both directions: suspending it outright (the first cut) stopped the camera sliding along
   // surfaces and let it sink through the ground mid-climb, while snapping it in read as a jump — which is
   // what the 04 field round rejected.
-  const attached = !state.flyEye && !snapshot.bench;
+  const attached = !state.flyEye && !snapshot.bench && !snapshot.video;
   const collideDistance = attached
     ? resolveCollision(
         state.collision,
@@ -357,6 +363,7 @@ export function stepCamera(
     // The offset moves eye AND target together (resolveCamera derives the eye from the target), so the
     // composition leans toward travel while the orbit geometry the collision layer defends is untouched.
     target: lookPoint,
+    video: snapshot.video,
   });
 
   // Floor guard runs whenever the rig is attached (incl. during a car enter/exit) so a steep down-pitch on a

@@ -28,12 +28,19 @@ import { randomNode, type RouteGraph } from '@opensa/game/paths/route-graph';
 import { summarisePhysFrames, thinFrames } from '@opensa/game/vehicle/phys-capture';
 import { cityAt } from '@opensa/game/zones/city';
 
+import type { VideoCamera } from './camera/engine-camera';
 import type { EngineVehicles } from './engine-vehicles';
+import type { DirectorState } from './video/director';
+import type { Subject } from './video/shots';
 
 import { nextFrame, until, waitSeconds } from './frame-clock';
+import { createDirector, planShots, stepDirector } from './video/director';
+import { forwardFromHeading } from './video/shots';
 
 /** What video mode needs from the engine host — thin accessors over its loop state, like `PhysRunsHost`. */
 export interface VideoRunsHost {
+  /** The canvas aspect this frame — the framing math needs it, and a resize must reach it live. */
+  aspect(): number;
   /** The autopilot installed in the host's `CombinedInput`; the fixed loop advances it. */
   autopilot: PathFollowSource;
   /** The city boxes the region predicate reads (desert first) — a thunk, because they load after boot. */
@@ -50,12 +57,20 @@ export interface VideoRunsHost {
   /** Hide every piece of chrome (the shared photo-camera path). Video mode never asks for it back: the run
    *  is endless by design (D2), so the only teardown is closing the tab. */
   setUiHidden(hidden: boolean): void;
+  /**
+   * Hand the host the frame this shot wants, or null to give it back to the shipped follow rig (the `chase`
+   * shot). `cut` DECLARES the discontinuity to the `[cam] jump` watchdog for exactly one frame — an
+   * undeclared jump still prints, which is the whole point of declaring the declared ones.
+   */
+  setVideoCamera(pose: null | VideoCamera, cut: boolean): void;
   /** Set the weather INSTANTLY — the 6 s artistic fade must never play inside a fragment. */
   setWeather(index: number): void;
   /** Spawn a scene-owned car (not LOD-registered) and hand back its despawn. */
   spawnCar(model: string, position: readonly [number, number, number], heading: number): Promise<() => void>;
   /** Teleport the player (streaming/collision anchor), GTA coords. */
   teleportPlayer(anchor: readonly [number, number, number]): void;
+  /** GTA Z-up → engine Y-up. The director works in ONE space (engine) and converts here, at the boundary. */
+  toEngine(gta: readonly [number, number, number]): [number, number, number];
   /** The timecyc weather row names — the region's own weather set is FILTERED out of these (D7). */
   weatherNames: readonly string[];
 }
@@ -94,6 +109,8 @@ const STABLE_FRAME_MS = 25;
 const STABLE_TIMEOUT_S = 20;
 /** Overlay fade (ms) — long enough not to flash, short enough that the user's cut is unambiguous. */
 const FADE_MS = 300;
+/** The longest frame the director is allowed to integrate (s) — a hitch must not snap the damping. */
+const MAX_FRAME_SECONDS = 0.1;
 /** Series rate in the printed JSON (Hz). Half the phys laps': this instrument judges a LINE, not a step. */
 const SERIES_HZ = 10;
 /** Default fragment bounds (real seconds, D1). */
@@ -268,6 +285,62 @@ function pickWeather(weatherNames: readonly string[], random: Random): null | nu
   return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
 }
 
+/**
+ * The fragment itself: run the director once per rendered frame until the autopilot stops following or the
+ * scene's seconds are up, and hand back WHY it ended.
+ *
+ * The director steps on the render clock (not the fixed one) because a camera is a per-frame thing — and it
+ * reads the car AFTER the host's own loop ran, so the host consumes the pose one frame later. That is the
+ * same staleness the autopilot drives on, and 0.2 m at a cruise.
+ */
+async function playFragment(
+  host: VideoRunsHost,
+  vehicles: EngineVehicles,
+  director: DirectorState,
+  seconds: number,
+): Promise<string> {
+  const started = performance.now();
+  let previous = started;
+  for (;;) {
+    await nextFrame();
+    const now = performance.now();
+    // A hitch must not teleport the damping: a 400 ms frame would land the eye on its target in one step.
+    const dt = Math.min(MAX_FRAME_SECONDS, (now - previous) / 1000);
+    previous = now;
+    poseFrame(host, vehicles, director, dt);
+    const state = host.autopilot.state();
+    if (state !== 'following') {
+      return state;
+    }
+    if (now - started >= seconds * 1000) {
+      return 'ran-out';
+    }
+  }
+}
+
+/**
+ * One rendered frame of the director: pose the shot, hand it to the host, and say nothing when there is no
+ * car to film (a despawn mid-teardown) — the last pose then simply stands, which is what a held frame looks
+ * like behind the overlay that is already coming down.
+ */
+function poseFrame(host: VideoRunsHost, vehicles: EngineVehicles, director: DirectorState, dt: number): void {
+  const car = vehicles.activeVehicle();
+  if (!car) {
+    return;
+  }
+  const subject: Subject = {
+    // The DRAWN position with the GAMEPLAY heading — the pairing the shipped rig already follows a car with
+    // (`focus`/`focusHeading` in the host): the heading is at most one fixed step old, which at a cruise yaw
+    // rate is a fraction of a degree, while the position must be the interpolated one or the shot judders.
+    forward: forwardFromHeading(car.heading),
+    halfExtents: car.halfExtents,
+    position: host.toEngine([car.renderPosition[0], car.renderPosition[1], car.renderPosition[2]]),
+    speed: Math.abs(vehicles.drivenMotion()?.speed ?? 0),
+  };
+  const frame = stepDirector(director, subject, dt, host.aspect());
+  host.setVideoCamera(frame.pose, frame.cut);
+}
+
 /** One `[video] {json}` line per scene — the phys protocol's twin, plus what only an autopilot can report. */
 function report(
   host: VideoRunsHost,
@@ -276,6 +349,7 @@ function report(
   frames: readonly TelemetryFrame[],
   settleMs: number,
   ended: string,
+  director: DirectorState,
 ): void {
   const errors = host.autopilot
     .errorSamples()
@@ -342,6 +416,16 @@ function report(
     seriesHz: SERIES_HZ,
     /** How long the fps stability gate held the overlay down (ms) — the cold-teleport cost, measured. */
     settleMs: Number(settleMs.toFixed(0)),
+    /** What the director did (096/03): the dealt list, the cuts it fired, and the acceptance number —
+     *  `safe` is the share of DIRECTED frames the car sat inside the safe frame (chase frames are the rig's
+     *  framing, so they are not judged here). */
+    shots: {
+      cuts: director.cuts,
+      judged: director.framesJudged,
+      list: director.plan.map((entry) => `${entry.preset.name}:${entry.seconds.toFixed(1)}`),
+      panClips: director.panClips,
+      safe: Number((director.framesJudged === 0 ? 0 : director.safeFrames / director.framesJudged).toFixed(3)),
+    },
     summary: summarisePhysFrames(frames),
   };
   // eslint-disable-next-line no-console -- the capture deliverable IS this JSON line (the [phys] twin)
@@ -408,17 +492,23 @@ async function runScene(host: VideoRunsHost, context: SceneContext, overlay: Vid
     vehicles.telemetry.reset();
     vehicles.telemetry.enabled = true;
     host.autopilot.follow(route);
+    const director = createDirector(planShots(context.random, context.seconds));
+    log(`scene ${context.scene} shots ${director.plan.map((entry) => entry.preset.name).join(' → ')}`);
+    // Compose the opening shot BEFORE the overlay lifts. Staged after it, the fragment would open on the
+    // chase rig and cut one frame later — a cut INSIDE the footage, which is exactly what the user's manual
+    // edit is not supposed to have to find.
+    poseFrame(host, vehicles, director, 0);
     await overlay.hide();
-    const endedEarly = await until(() => host.autopilot.state() !== 'following', context.seconds * 1000);
-    // WHY it ended is read HERE, before the stop. Reading it after made every early end report `idle`, and a
-    // real `stuck` — a scene that started on an 18° hill the car could not climb — hid behind that for a
-    // whole headless run.
-    const ended = endedEarly ? host.autopilot.state() : 'ran-out';
+    // WHY it ended is read INSIDE the loop, before the stop. Reading it after `stop()` made every early end
+    // report `idle`, and a real `stuck` — a scene that started on an 18° hill the car could not climb — hid
+    // behind that for a whole headless run.
+    const ended = await playFragment(host, vehicles, director, context.seconds);
     overlay.show();
+    host.setVideoCamera(null, true); // the rig takes its frame back, and that hand-over is a declared cut
     host.autopilot.stop();
     vehicles.telemetry.enabled = false;
-    report(host, context, route, vehicles.telemetry.frames(), settleMs, ended);
-    if (endedEarly) {
+    report(host, context, route, vehicles.telemetry.frames(), settleMs, ended, director);
+    if (ended !== 'ran-out') {
       log(
         `scene ${context.scene} ended early: ${ended} at ${(host.autopilot.progress() * 100).toFixed(0)}% of the route`,
       );

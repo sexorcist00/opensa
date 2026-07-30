@@ -15,6 +15,11 @@ describe('resolveCamera', () => {
     forward: FORWARD,
     fovYRad: CAMERA_FOV_Y,
     target: TARGET,
+    video: null,
+  };
+  const video = {
+    eye: [3, 3, 3] as [number, number, number],
+    target: [4, 4, 4] as [number, number, number],
   };
 
   describe('negative cases', () => {
@@ -24,6 +29,19 @@ describe('resolveCamera', () => {
 
       expect(camera.eye).toEqual([1, 1, 1]);
       expect(camera.target).toEqual([2, 2, 2]);
+    });
+
+    it('ignores video mode while a bench owns the frame — bench numbers stay untouchable', () => {
+      const bench = { eye: [1, 1, 1] as [number, number, number], target: [2, 2, 2] as [number, number, number] };
+      const camera = resolveCamera({ ...base, bench, video });
+
+      expect(camera.eye).toEqual([1, 1, 1]);
+    });
+
+    it('does not invent a lens for a shot that chose none — the rig keeps its live FOV', () => {
+      const camera = resolveCamera({ ...base, fovYRad: 1.1, video });
+
+      expect(camera.fovYRad).toBe(1.1);
     });
   });
 
@@ -45,6 +63,19 @@ describe('resolveCamera', () => {
 
     it('carries the field of view it was handed (picking unprojects through the SAME value)', () => {
       expect(resolveCamera({ ...base, fovYRad: 1.1 }).fovYRad).toBe(1.1);
+    });
+
+    it('gives video mode the frame over the photo camera and the follow rig', () => {
+      const camera = resolveCamera({ ...base, flyEye: [9, 9, 9], video });
+
+      expect(camera.eye).toEqual([3, 3, 3]);
+      expect(camera.target).toEqual([4, 4, 4]);
+    });
+
+    it('shoots a video shot on its own lens', () => {
+      const camera = resolveCamera({ ...base, video: { ...video, fovYRad: 0.7 } });
+
+      expect(camera.fovYRad).toBe(0.7);
     });
   });
 });

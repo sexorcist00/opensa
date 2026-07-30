@@ -39,6 +39,7 @@ const snapshot = (over: Partial<CameraSnapshot> = {}): CameraSnapshot => ({
   settling: false,
   vehicle: null,
   vehicleDistance: null,
+  video: null,
   walkKeys: new Set(),
   zoomSteps: 0,
   ...over,

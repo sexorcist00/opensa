@@ -19,6 +19,7 @@ implemented ones, and assembling the release changelog.
 | Vehicle license plates                        | [vehicle-plates.md](vehicle-plates.md)             |
 | Character                                     | [character.md](character.md)                       |
 | Camera (follow rig, photo/map free-fly)       | [camera.md](camera.md)                             |
+| Video mode (seeded showcase runs, 096)        | [video-mode.md](video-mode.md)                     |
 | Animated map objects (UV + IFP)               | [animated-map-objects.md](animated-map-objects.md) |
 | Procedural ground clutter (procobj)           | [procobj.md](procobj.md)                           |
 | Road-sign text (2dfx type 7)                  | [roadsign-text.md](roadsign-text.md)               |

@@ -16,8 +16,13 @@ and 080 (the own-engine cinematic chain).
 - Layer order is fixed: **look → zoom → mode rig (foot | vehicle | fly) → collision (plan 04) → additive
   motion (plan 06) → resolve**. Collision resolves BEFORE additive motion so a bob can never push the eye
   through a wall.
-- **The bench bypass is an invariant**: `resolveCamera`'s priority is bench > fly eye > follow rig, so a
-  running bench owns the frame whatever the rig did. Camera work cannot move ritual/soak numbers.
+- **The bench bypass is an invariant**: `resolveCamera`'s priority is bench > **video** > fly eye > follow
+  rig, so a running bench owns the frame whatever the rig did. Camera work cannot move ritual/soak numbers.
+  Video mode's director (plan 096/03) sits directly below the bench — a scripted showcase run outranks the
+  interactive modes while it plays, so an accidental K+M cannot steal a recording's frame, and it carries an
+  OPTIONAL `fovYRad`: a shot that chooses no lens keeps the rig's live one. The rig keeps stepping underneath
+  in both cases; its output is simply discarded, which is also why the collision, floor-guard and additive
+  layers are skipped for those frames (they defend an orbit that is not being drawn).
 
 **The smoothed rig** (plan 080/02) — the "cinematic" part, split into channels that damp at different rates
 instead of one global smoothing knob:
@@ -115,8 +120,10 @@ transition a blend rather than a switch — and it is the rule plan 08's view pr
   a one-frame gear blip moves the framing under 5 cm, pinned). Braking and reverse never stretch.
 - **The `[cam] jump` watchdog** (host, perf-logs flag): a look-target jump > 1.5 m or an idle-mouse yaw
   jump > 20° outside the legitimate discontinuities (teleport, mode switch, scripted seat sequence, fly,
-  bench) prints one line with the step state. Distance-channel moves are deliberately NOT watched — the
-  designed occlusion snap-ins live there.
+  bench, **a DECLARED video cut**) prints one line with the step state. Distance-channel moves are
+  deliberately NOT watched — the designed occlusion snap-ins live there. Video mode is whitelisted only for
+  the single frame it declares a cut on, never for the whole mode: between its cuts the director's pose is
+  continuous by construction, so the watchdog stays a real tripwire over it.
 
 **Motion feel** (plan 080/06, behaviours #7 and #8) — the additive layer, applied LAST, after collision and
 the floor guard:

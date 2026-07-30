@@ -88,7 +88,7 @@ import {
   steerYaw,
   stepCamera,
 } from './camera/camera-director';
-import { CAMERA_FOV_Y, createChordWatcher, cursorRay, forwardFrom } from './camera/engine-camera';
+import { CAMERA_FOV_Y, createChordWatcher, cursorRay, forwardFrom, type VideoCamera } from './camera/engine-camera';
 import { FLY_KEYS, lookAtStep } from './camera/fly-rig';
 import { buildCollisionLines } from './collision-wireframe';
 import { ENGINE_DEBUG_CAPABILITIES } from './debug/debug-capabilities';
@@ -1202,6 +1202,14 @@ async function boot(
   // In-game bench state (074/10 B3 tail): the loop consumes these; the runner below owns them.
   let benchCamera: null | { eye: [number, number, number]; target: [number, number, number] } = null;
   let benchSamples: LegSample[] | null = null;
+  /**
+   * Video mode's frame (096/03) and its cut flag. The flag is what keeps the `[cam] jump` watchdog honest: a
+   * DECLARED cut is whitelisted for exactly one frame, and a jump the director did not declare still prints.
+   * Both are written from the director's own rAF pass, so the loop reads them one frame later — the same
+   * staleness the autopilot drives on, and it is why the pose is composed from the car's RENDER pose.
+   */
+  let videoCamera: null | VideoCamera = null;
+  let videoCut = false;
   let lastStream: null | StreamStats = null;
   /** Last frame's engine stats — the debugger's Perf screen and the HUD read them. */
   let lastStats: null | ReturnType<Engine['frame']> = null;
@@ -1543,6 +1551,7 @@ async function boot(
       // focus delta: the delta measures the render loop, and a slide leaves no trace in it at all.
       vehicle: vehicles?.drivenMotion() ?? null,
       vehicleDistance: vehicleFollowDistance(seatedCar, config.camera.vehicleDistanceScale),
+      video: videoCamera,
       walkKeys: flyKeys,
       zoomSteps: pendingInput.zoom,
     };
@@ -1567,7 +1576,8 @@ async function boot(
     const groundProbe: GroundProbe = (at) => physics.groundBelow([at[0], at[1], at[2]], 30, collisionExclude);
     const camera = stepCamera(rig, snapshot, config.camera, cameraProbe, groundProbe);
     cameraMs = performance.now() - cameraStarted;
-    watchCameraJump(perfLogs, camWatch, camera.target, rig, snapshot, config.camera.teleportSnapDistance);
+    watchCameraJump(perfLogs, camWatch, camera.target, rig, snapshot, config.camera.teleportSnapDistance, videoCut);
+    videoCut = false; // a declared cut is worth exactly one frame of amnesty
     pendingInput.look.x = 0;
     pendingInput.look.y = 0;
     pendingInput.pan = null;
@@ -1724,6 +1734,7 @@ async function boot(
   // Video mode (096/02): the same staging contract as a phys lap, driven by the autopilot instead of a
   // timeline, with the module owning its own black overlay and the UI hide.
   setupVideoRuns({
+    aspect: (): number => canvas.width / Math.max(1, canvas.height),
     autopilot: pathFollow,
     cityBoxes: (): readonly CityBox[] => cityBoxes,
     fs,
@@ -1737,6 +1748,10 @@ async function boot(
     setUiHidden: (hidden): void => {
       photoCamera = hidden; // the dev readout hides behind the same gate the photo camera uses
       events.emit('fly-camera', { enabled: hidden, photo: hidden });
+    },
+    setVideoCamera: (pose, cut): void => {
+      videoCamera = pose;
+      videoCut ||= cut; // never clear a cut the loop has not consumed yet
     },
     setWeather: (value): void => {
       weatherTransition.begin(value, 0);
@@ -1757,6 +1772,7 @@ async function boot(
     teleportPlayer: (anchor): void => {
       teleportPlayer([anchor[0], anchor[1], anchor[2]]);
     },
+    toEngine,
     weatherNames: WEATHER_NAMES,
   });
 }
@@ -2030,6 +2046,7 @@ function watchCameraJump(
   rig: CameraRigState,
   snapshot: CameraSnapshot,
   teleportSnapDistance: number,
+  videoCut: boolean,
 ): void {
   if (!enabled) {
     return;
@@ -2043,6 +2060,9 @@ function watchCameraJump(
     snapshot.settling ||
     rig.flyEye !== null ||
     snapshot.bench !== null ||
+    // A video CUT is whitelisted; video mode itself is NOT. Between its cuts the director's pose is
+    // continuous by construction, so the watchdog stays the tripwire it was built to be (096/03 A2).
+    videoCut ||
     teleported;
   const targetJump =
     watch.target === null

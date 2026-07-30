@@ -4,6 +4,8 @@
 // Usage: NODE_PATH=$REPO/node_modules node drive.js <appUrl> <outPrefix> <timeoutMs> <expectReports>
 //   appUrl MUST carry ?loader=http-dir&src=<serve-static build URL> (+ ?bench=/?soak=).
 // Env: DPR=2 (retina-equivalent render targets) · TAG='[soak]' (default '[bench]') · DRAG=<dy> (pitch camera)
+//   ALSO='[cam]' echoes a SECOND protocol without counting it as a report — a run whose acceptance depends
+//   on another subsystem's diagnostics (096/03 reads the `[cam] jump` watchdog while collecting `[video]`).
 const { chromium } = require('playwright');
 
 const APP_URL = process.argv[2];
@@ -11,6 +13,7 @@ const OUT = process.argv[3] ?? 'shot';
 const TIMEOUT_MS = Number(process.argv[4] ?? 300000);
 const EXPECT_REPORTS = Number(process.argv[5] ?? 1);
 const TAG = process.env.TAG ?? '[bench]';
+const ALSO = process.env.ALSO ?? '';
 
 (async () => {
   const browser = await chromium.launch({
@@ -23,7 +26,13 @@ const TAG = process.env.TAG ?? '[bench]';
   const benchLines = [];
   page.on('console', (msg) => {
     const text = msg.text();
-    if (text.includes(TAG) || text.includes('[slow]') || msg.type() === 'error' || msg.type() === 'warning') {
+    if (
+      text.includes(TAG) ||
+      (ALSO && text.includes(ALSO)) ||
+      text.includes('[slow]') ||
+      msg.type() === 'error' ||
+      msg.type() === 'warning'
+    ) {
       console.log(`console[${msg.type()}] ${text}`);
     }
     if (text.startsWith(TAG)) benchLines.push(text);
