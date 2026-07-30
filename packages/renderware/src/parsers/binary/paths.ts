@@ -7,6 +7,12 @@
  * intersections) are ignored.
  */
 
+/** A link target: the node `id` inside area file `area` (links cross area files). */
+export interface VehiclePathLink {
+  area: number;
+  node: number;
+}
+
 /** One VEHICLE path node, world-resolved: position, road width, and the heading toward its first link. */
 export interface VehiclePathNode {
   area: number;
@@ -16,6 +22,10 @@ export interface VehiclePathNode {
   heading: number;
   id: number;
   linkCount: number;
+  /** This node's `linkCount` entries of the area's link table — the graph's adjacency. Targets in an area
+   *  file that was not supplied are KEPT verbatim (they are real links, just unloadable here); a graph
+   *  builder drops what it cannot resolve. Shorter than `linkCount` only on a truncated table. */
+  links: readonly VehiclePathLink[];
   /** Native GTA coordinates (Z-up), already divided by the format's ×8 fixed point. */
   position: [number, number, number];
 }
@@ -52,10 +62,10 @@ export function vehiclePathNodes(areas: ReadonlyMap<number, ArrayBuffer>): Vehic
   const resolved: VehiclePathNode[] = [];
   for (const file of files.values()) {
     for (const node of file.nodes) {
+      const links = file.links.slice(node.baseLink, node.baseLink + node.linkCount).filter(Boolean);
       let heading = 0;
-      if (node.linkCount > 0) {
-        const link = file.links[node.baseLink];
-        const target = link ? nodeAt(link.area, link.node) : undefined;
+      if (links.length > 0) {
+        const target = nodeAt(links[0].area, links[0].node);
         if (target) {
           // GTA heading: 0 = facing +Y, counter-clockwise about +Z (the car-generator convention).
           heading = Math.atan2(-(target.position[0] - node.position[0]), target.position[1] - node.position[1]);
@@ -67,6 +77,7 @@ export function vehiclePathNodes(areas: ReadonlyMap<number, ArrayBuffer>): Vehic
         heading,
         id: node.id,
         linkCount: node.linkCount,
+        links,
         position: node.position,
       });
     }

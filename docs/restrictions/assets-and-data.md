@@ -119,3 +119,17 @@ exact name — `models/gta3img/` is copied as loose files the game never reads, 
 inert**, with no error and no report line.
 
 **Caught:** no, by construction.
+
+## A feature built on `data/Paths` exists only for `original`
+
+The vehicle path graph (`NODES0..63.DAT`) is stock-SA content: `game-src/original` ships 73 files, and
+`anderius`, `gostown` and `carcer` ship **none**. Anything derived from it — road traffic, the 096 video
+mode's autopilot, any "drive somewhere" scripting — has no data at all on a total conversion, and the build
+faithfully mirrors that absence (`copyGameDir` copies the tree as-is, it does not invent one).
+
+A design that needs the graph must state what it does when the variant has none, and that path must be
+reachable — `loadRouteGraph` returns `null`, and the caller decides whether the feature disables itself or
+falls back. Measured 2026-07-30 (096/01).
+
+**Caught:** no — the loader simply finds zero areas, and a feature that does not check reads an empty world
+as "no roads here" rather than "this game has no road graph".

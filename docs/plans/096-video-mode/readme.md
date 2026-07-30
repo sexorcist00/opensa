@@ -98,10 +98,12 @@ apps/web/src/ui/video/                   director.ts (shot scheduler + cuts), sh
                                          (flythrough path), rng.ts (seeded PRNG)
 apps/web/src/video-presets.ts            region presets (weather pools, time slots, cycle order),
                                          program table (D3), tuning constants in one config object
-packages/game/src/paths/route-graph.ts   pure graph ops over nodes+links (no renderware import)
-packages/game/src/adapters/path-graph.ts loads NODES*.DAT → RouteGraph (renderware allowed: adapters/)
+packages/game/src/paths/route-graph.ts   pure graph ops over nodes+links (no renderware import) — DONE 01
+packages/game/src/paths/route-builder.ts seeded walk + the drivable line (offset, smoothing, speeds) — 01
+packages/game/src/paths/rng.ts           mulberry32 + weighted pick, the one random source — DONE 01
+packages/game/src/adapters/path-graph.ts loads NODES*.DAT → RouteGraph (renderware allowed: adapters/) — 01
 packages/game/src/vehicle/path-follow.ts PathFollowSource implements InputState (pure-pursuit autopilot)
-packages/renderware/src/parsers/binary/paths.ts   + links adjacency (today discarded at parse)
+packages/renderware/src/parsers/binary/paths.ts   + links adjacency (was discarded at parse) — DONE 01
 tools/vehicle-installer/…                emits data/vehicle-mods.txt (the ledger)
 scripts/debug/video-routes.ts            offline route-builder validation (kept, debug README row)
 ```
@@ -150,7 +152,20 @@ After 05 it matches the user's brief minus walk/fly. After 08 it is done by the 
 Per the standing rule, every phase records its numbers here (and perf figures go to `docs/benchmarks/`
 before analysis). Empty until phases run:
 
-- 01: —
+- 01: **DONE 2026-07-30.** Graph: 30 587 vehicle nodes over 73 area files, **0 unresolved links, 0 links
+  without a reverse edge** (the table is fully mutual — travel direction is NOT expressible from it, see the
+  phase doc's note for 02). Routes, 5 seeds × 40 tries per region, target 390 m (25 s × 12 m/s × 1.3),
+  measured against `game-src/original` (no `build/original` on the machine; re-check on the built tree in 02):
+  accepted **LA 52 · VEGAS 62 · SF 65 · COUNTRYSIDE 45 · DESERT 69** (plan floor: ≥ 20) — mean length
+  397–403 m against the 390 m target, **max turn 20.1–32.1° (ceiling 35)**, tightest smoothed corner
+  9.8–19.2 m, **0 driven points outside the region in every region**, straightness 71–88 % of junction turns
+  under 5° and ≤ 2 % over 25°. Rejects are almost entirely `too-tight` (112–136 per region) against 2–6
+  `dead-end` and 6–17 `region` — the accumulated-turn budget is the binding constraint, and it is the knob
+  05 loosens if variety suffers. Two constraint bugs the offline run caught before any frame: curvature read
+  off unevenly spaced points reported 2.0 m "hairpins" on a road whose sharpest junction was 32°, and the
+  per-junction ceiling let five legal turns bend 125° inside ten metres. Both fixed (uniform 2 m resample +
+  8 m curvature baseline; a 45°-per-25 m turn budget), which is what moved the tightest corner from 2.0 m to
+  ~19 m and the slowest target speed from 2.2 m/s to 6.9 m/s.
 - 02: —
 - 03: —
 - 04: —

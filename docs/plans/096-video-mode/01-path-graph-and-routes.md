@@ -67,6 +67,46 @@ single in-game frame — the same measure-first method that paid for itself in 0
 - Record in the readme ledger: routes accepted/rejected per region, mean length vs target, worst min
   curve radius.
 
+## Close-out (2026-07-30)
+
+**Shipped**, all seven tasks, acceptance met — the numbers are in the [readme ledger](readme.md). What the
+plan did not foresee:
+
+- **The builder was split in two.** `paths/route-graph.ts` (build, lookups, `randomNode`) and
+  `paths/route-builder.ts` (`walkRoute` + the drivable line) — one file carrying both ran past what the
+  project's "small focused files" rule tolerates. `paths/rng.ts` holds the seeded RNG, as planned.
+- **Two constraints had to be ADDED to make D5 true**, both found by the offline run and neither in the
+  original task list:
+  - _curvature over a fixed arc length._ SA nodes sit 2.7–23 m apart; reading the radius off adjacent
+    smoothed points called a 32°-max road a 2.0 m hairpin and asked the car to take it at 2.2 m/s. The line
+    is now resampled at a uniform 2 m (which the phase-02 follower wants anyway — its lookahead becomes an
+    index) and the radius is read over an 8 m baseline.
+  - _an accumulated-turn budget_ (`maxWindowTurnDeg` 45° over `turnWindow` 25 m). A per-junction ceiling
+    does not make a route gentle: five legal 25° turns in a row bend 125° inside ten metres. This is now the
+    binding constraint on acceptance — 112–136 of the ~150 rejects per region are `too-tight`.
+- **Region containment moved to the DRIVEN line.** Checking the nodes is not enough twice over: a segment
+  between two San Fierro nodes runs through the countryside for a quarter of the route, and a road hugging
+  the `y = −742.306` box edge stays inside by its nodes while the 2.5 m lane offset sits 10 cm outside. Both
+  would have fired `CityZoneSystem`'s 6 s weather rewrite mid-scene. The walk now samples each segment every
+  5 m, and the finished line is cut where it first leaves the region.
+- **`RouteStop` gained `too-tight`**, so "the graph ran out" and "road was there, we refused the turn" stop
+  being one number. That distinction is what tells 05 which knob to turn.
+- **The turn/speed defaults are stated knobs, not fitted constants** — they encode what the footage should
+  look like (D5/D8), not a game formula being approximated, so no `docs/hacks/` entry is owed. The one
+  number borrowed from the game's own conventions is the 2.5 m lane offset (`road-cars.ts`).
+- **`pathAreaFiles` was extracted** from `road-cars.ts` into the new adapter — both readers of `NODES*.DAT`
+  now share one loop and one pair of spellings.
+
+Carried into 02:
+
+- **The link table is fully mutual** (0 one-way links in 30 587 nodes), so travel direction cannot be read
+  from it — SA keeps lanes in the navi nodes we do not parse. The autopilot may therefore drive a one-way
+  street against its traffic direction; nothing in the data catches it. First field round should look for it.
+- **Re-run the validator against `build/original/opensa`.** These numbers came from `game-src/original`
+  because no built tree existed on the machine, and the standing rule is that a field run reads the build.
+- Only `original` ships a path graph at all — written up in
+  [`restrictions/assets-and-data.md`](../../restrictions/assets-and-data.md).
+
 ## Risks / notes
 
 - Link table crosses NODES area boundaries — the synthetic test must cover a cross-area link explicitly

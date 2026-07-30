@@ -7,7 +7,7 @@ import type { BenchScene } from '../perf/bench';
 import { benchRoadCarPlacements, roadCarPlacements } from './road-cars';
 
 function node(x: number, y: number, extra: Partial<VehiclePathNode> = {}): VehiclePathNode {
-  return { area: 0, boats: false, heading: 0, id: 0, linkCount: 1, position: [x, y, 5], ...extra };
+  return { area: 0, boats: false, heading: 0, id: 0, linkCount: 1, links: [], position: [x, y, 5], ...extra };
 }
 
 const REGION = { position: [0, 0, 5] as const, radius: 200, spacing: 50 };

@@ -11,6 +11,7 @@ import { parseVehicleDefs, vehiclePathNodes } from '@opensa/renderware';
 import type { BenchScene } from '../perf/bench';
 import type { VehiclePlacement } from '../vehicle/vehicle-lod.system';
 
+import { pathAreaFiles } from './path-graph';
 import { positionSeed } from './popcycle-cars';
 
 export interface RoadCarOptions {
@@ -52,13 +53,7 @@ export function benchRoadCarPlacements(
   if (regions.length === 0) {
     return [];
   }
-  const areas = new Map<number, ArrayBuffer>();
-  for (let area = 0; area < 64; area += 1) {
-    const bytes = fs.get(`data/paths/nodes${area}.dat`) ?? fs.get(`data/Paths/NODES${area}.DAT`);
-    if (bytes) {
-      areas.set(area, bytes);
-    }
-  }
+  const areas = pathAreaFiles(fs);
   const defs = parseVehicleDefs(fs.getText('data/vehicles.ide') ?? '');
   const models = pinnedModel
     ? [pinnedModel.toLowerCase()]
