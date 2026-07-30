@@ -121,7 +121,8 @@ npx tsx tools/map-optimizer/src/compare-serve.ts --before ./game-src/original --
 
 ```bash
 SRC=http://localhost:3001/build/original/opensa
-# Boot + bench/soak, screenshots on exit. Env: DPR=2 · TAG='[soak]' · DRAG=<dy>
+# Boot + bench/soak. Env: DPR=2 · TAG='[soak]' · DRAG=<dy>. A screenshot lands at ./<outPrefix>.png in the
+# REPO ROOT on exit — delete it before committing, nothing ignores it
 NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&bench=all" <outPrefix> <timeoutMs> <expectReports>
 # WebGPU boot gate: 'canvas' reports the context type, 'sorry' expects the no-WebGPU screen

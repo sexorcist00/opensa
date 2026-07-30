@@ -9,6 +9,13 @@ once on the own engine — both sightings date back to the three.js era, so the 
 with that stack. The planned video mode (teleport → spawn → enter every scene) is exactly the reproduction
 recipe, so it will serve as the stress test: if it ships and runs clean until the recheck date, close this
 issue; if the crash returns, apply defensive fix option 1 below in the same change.
+
+**First evidence, 2026-07-30 (096/02 shipped):** ~37 headless video scenes ran the exact recipe — teleport,
+stream-settle, `spawnCar`, `seatInstantly` — and it did **not** fire once. Not proof (the sightings were
+intermittent at ~2× ever), but it is the first time the recipe has been run at volume on the own engine.
+One `Cannot read properties of null (reading 'linvel')` DID appear in that run and is NOT this issue: it was
+096/02's own bug, a scene despawning its car while the player was still seated in it, fixed by
+`EnterVehicleSystem.leaveInstantly()`. Do not read that trace as this crash returning.
 The stack trace below is the ORIGINAL capture (its line numbers are as-of-crash, not current source — don't
 "refresh" them; a pasted trace is a record). Note: commit `a16930e` ("resolve vehicle enter/sit clips") is an
 ANIMATION fix (the driver rode standing) — it did NOT touch this physics null-body crash; `readBody` is still
