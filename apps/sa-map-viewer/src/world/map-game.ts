@@ -147,6 +147,11 @@ export class ViewerMapGame implements MapGame {
     // nothing to do
   }
 
+  /** Draw the sea or not (plan 094/07) — the mesh stays uploaded either way, only the draw is gated. */
+  setShowWater(enabled: boolean): void {
+    this.engine.waterEnabled = enabled;
+  }
+
   viewCell(): CellCoord | null {
     const { cx, cy } = cellAt(this.camera.positionGta());
 

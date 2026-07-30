@@ -100,6 +100,11 @@ Interactively it is the debugger's map panel: the cell grid, whole map, LOD mode
 a click reports the placement's model/txd/GTA position and can hide it (`Restore all` brings it back). That
 is the fastest way to put a NAME on something odd in a screenshot before any bisecting starts.
 
+The **sea** is drawn too (the flat `water.dat` build — no bake exists for a source folder), with a
+**Show water** checkbox: an inspector has to be able to look UNDER the sheet at a sunken road or a
+mis-levelled pool. It is the one thing in the viewer that moves on its own, so `map-viewer-shot.ts` shoots
+with `water=0` unless the URL says `water=1` — with the sea in frame two runs are no longer byte-identical.
+
 The other direction — you have the NAME and want the place — is **FIND MODEL**: type a substring, the rows
 list every PLACED name with its placement count, Enter (or the row) centres the view on the nearest
 placement and makes its cell resident. Pressing Enter again walks the same name's other placements outwards,

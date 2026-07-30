@@ -104,10 +104,19 @@ The minimal boot kept as a repro harness (074/13 phase 3.4): `src` (default `pak
 | `pitch` | `-89.4`             | degrees, negative     | Down-tilt; clamped to `[-89.4, -3.4]`                            |
 | `yaw`   | `180`               | degrees               | `180` is the map's usual orientation (north up); `0` flips it     |
 | `panel` | shown               | `0`                   | Capture mode: hide the panel, keep the source caption            |
+| `cells` | `1` (capture mode)  | `1` \| `all`          | What `panel=0` pins: the cell under `at`, or the whole map        |
+| `lod`   | HD                  | `1`                   | Capture mode: pin the LOD layer instead of HD                     |
 | `wind`  | `0` (frozen)        | number                | Vegetation sway. OFF by default — it is the only thing that moves |
+| `fog`   | off (far plane)     | `1`                   | Restore the game's noon fog (its cut CULLS distant cells)         |
+| `water` | on (`0` in capture) | `0` \| `1`            | Draw the sea. `map-viewer-shot.ts` sets `0` — the waves animate   |
 
 > `at`/`h`/`pitch`/`yaw` fully specify the pose and **the camera never moves on its own**: the same URL is
-> the same pixels (verified byte-identical across runs). `wind` defaults to 0 for exactly that reason.
+> the same pixels (verified byte-identical across runs). `wind` defaults to 0 for exactly that reason, and
+> `map-viewer-shot.ts` adds `water=0` for the same one — interactively the sea is ON, a scripted shot leaves
+> it out unless you pass `water=1`.
+>
+> `cells`/`lod` exist because the panel's inspector OWNS the cell set: with `panel=0` there is no inspector,
+> so the host seeds the set itself.
 
 ## Two known inconsistencies
 

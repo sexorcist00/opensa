@@ -38,6 +38,8 @@ export interface MapGame {
   /** Enter/leave map-viewer mode (detached camera + pinned cells). */
   setMapViewer: (enabled: boolean) => void;
   setShowCollision?: (enabled: boolean) => void;
+  /** Draw the water surface or not — an inspector has to be able to look UNDER the sea sheet. */
+  setShowWater?: (enabled: boolean) => void;
   /** The cell the player currently stands in. */
   viewCell: () => CellCoord | null;
 }
@@ -68,6 +70,7 @@ export function MapInspector({ game }: { game: MapGame }): ReactElement {
   const [allCells, setAllCells] = useState<CellCoord[]>([]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [showLods, setShowLods] = useState(false);
+  const [showWater, setShowWater] = useState(true);
 
   const cellSize = game.cellSize();
 
@@ -203,6 +206,17 @@ export function MapInspector({ game }: { game: MapGame }): ReactElement {
           ))}
         </div>
         <Checkbox checked={showLods} label="Show LODs" onToggle={() => setShowLods((previous) => !previous)} />
+        {game.setShowWater ? (
+          <Checkbox
+            checked={showWater}
+            label="Show water"
+            onToggle={() => {
+              const next = !showWater;
+              setShowWater(next);
+              game.setShowWater?.(next);
+            }}
+          />
+        ) : null}
       </div>
 
       {game.setShowCollision ? (

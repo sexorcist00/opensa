@@ -56,7 +56,14 @@ import { type CityBox, isDesertZone } from '@opensa/game/zones/city';
 import { CityZoneSystem } from '@opensa/game/zones/city-zone.system';
 import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.system';
 import { angleDelta, lerp } from '@opensa/math';
-import { type AssetFileSystem, gxtKeyHash, oceanFrame, parseTxd, WEATHER_NAMES } from '@opensa/renderware';
+import {
+  type AssetFileSystem,
+  flatWaterMesh,
+  gxtKeyHash,
+  parseTxd,
+  WATER_VERTEX_FLOATS,
+  WEATHER_NAMES,
+} from '@opensa/renderware';
 import { parseWater } from '@opensa/renderware/parsers/text/water.parser';
 import { decodeDxt } from '@opensa/renderware/textures/dxt';
 import { addComponent, addEntity } from 'bitecs';
@@ -1699,6 +1706,20 @@ function cameraModeOf(flying: boolean, seated: boolean): CameraSnapshot['mode'] 
   return seated ? 'vehicle' : 'foot';
 }
 
+/** GTA Z-up → engine Y-up; the shore field + water class ride along untouched. */
+function engineWaterVertices(gta: Float32Array): Float32Array {
+  const vertices = new Float32Array(gta.length);
+  for (let v = 0; v < gta.length; v += WATER_VERTEX_FLOATS) {
+    vertices[v] = gta[v];
+    vertices[v + 1] = gta[v + 2];
+    vertices[v + 2] = -gta[v + 1];
+    vertices[v + 3] = gta[v + 3];
+    vertices[v + 4] = gta[v + 4];
+  }
+
+  return vertices;
+}
+
 function flipActiveVehicle(physics: PhysicsWorld, active: null | { body: number }): void {
   if (!active) {
     return;
@@ -1811,16 +1832,7 @@ async function installWater(
       // Vertex = [x, y, z, depth, class] (plan 075: class 0 = sea, 1 = inland) — stride 20.
       const gta = new Float32Array(bin.buffer, bin.byteOffset + 8, vertexCount * 5);
       const indices = new Uint32Array(bin.buffer.slice(bin.byteOffset + 8 + vertexCount * 20), 0, indexCount);
-      // GTA Z-up → engine Y-up in place; the shore field + water class ride along untouched.
-      const vertices = new Float32Array(vertexCount * 5);
-      for (let v = 0; v < vertexCount; v += 1) {
-        vertices[v * 5] = gta[v * 5];
-        vertices[v * 5 + 1] = gta[v * 5 + 2];
-        vertices[v * 5 + 2] = -gta[v * 5 + 1];
-        vertices[v * 5 + 3] = gta[v * 5 + 3];
-        vertices[v * 5 + 4] = gta[v * 5 + 4];
-      }
-      engine.setWater(vertices, indices, ripple, foam);
+      engine.setWater(engineWaterVertices(gta), indices, ripple, foam);
 
       return;
     }
@@ -1829,23 +1841,9 @@ async function installWater(
   if (text === null) {
     return;
   }
-  const quads = parseWater(text);
-  const positions: number[] = [];
-  const indices: number[] = [];
-  for (const quad of [...quads, ...oceanFrame(quads, 6000, 0)]) {
-    const base = positions.length / 5;
-    // Class from height (plan 075): elevated pools/reservoirs = inland (calm); the flat fallback has no bake.
-    const waterClass = quad.vertices[0][2] > 1 ? 1 : 0;
-    for (const [x, y, z] of quad.vertices) {
-      positions.push(x, z, -y, 120, waterClass); // constant "deep" field — no foam/damping without the bake
-    }
-    if (quad.vertices.length >= 4) {
-      indices.push(base, base + 1, base + 2, base + 2, base + 1, base + 3);
-    } else {
-      indices.push(base, base + 1, base + 2);
-    }
-  }
-  engine.setWater(new Float32Array(positions), new Uint32Array(indices), ripple, foam);
+  // No bake: the flat build from water.dat — the same one sa-map-viewer runs, so both render one sea.
+  const flat = flatWaterMesh(parseWater(text));
+  engine.setWater(engineWaterVertices(flat.positions), flat.indices, ripple, foam);
 }
 
 /** Decode one particle.txd texture to RGBA (null when the archive/texture is absent). */

@@ -319,3 +319,54 @@ describe('kind-5 timed UV-scroll (085 row D / minor 7)', () => {
     });
   });
 });
+
+/**
+ * The water gate (plan 094/07). The sea is the only surface a map inspector needs to look UNDER, so the
+ * toggle is a DRAW gate: the mesh stays uploaded and switching it back on costs nothing.
+ */
+describe('water', () => {
+  /** One quad at sea level, the layout `setWater` takes: [x, y, z, shoreDistance, class] per vertex. */
+  const seaQuad = (): Float32Array =>
+    new Float32Array([-50, 0, -50, 120, 0, 50, 0, -50, 120, 0, -50, 0, 50, 120, 0, 50, 0, 50, 120, 0]);
+  const seaIndices = (): Uint32Array => new Uint32Array([0, 1, 2, 2, 1, 3]);
+  const waterDraws = (): number => gpu.draws.filter((draw) => draw.pipeline === 'water').length;
+
+  describe('negative cases', () => {
+    it('draws nothing before a surface is installed', async () => {
+      const engine = await bootedEngine();
+
+      gpu.reset();
+      engine.frame(camera());
+
+      expect(waterDraws()).toBe(0);
+    });
+
+    it('stops drawing when the gate is off, without dropping the mesh', async () => {
+      const engine = await bootedEngine();
+      engine.setWater(seaQuad(), seaIndices(), null, null);
+      engine.waterEnabled = false;
+
+      gpu.reset();
+      engine.frame(camera());
+      expect(waterDraws()).toBe(0);
+
+      // Back on: no re-upload, the same buffers draw again — that is what makes it a live toggle.
+      engine.waterEnabled = true;
+      gpu.reset();
+      engine.frame(camera());
+      expect(waterDraws()).toBe(1);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('draws the installed surface once per frame', async () => {
+      const engine = await bootedEngine();
+      engine.setWater(seaQuad(), seaIndices(), null, null);
+
+      gpu.reset();
+      engine.frame(camera());
+
+      expect(waterDraws()).toBe(1);
+    });
+  });
+});

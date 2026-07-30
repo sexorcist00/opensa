@@ -14,6 +14,7 @@ import type { CellProgress } from './map-game';
 import { CAMERA_FAR, poseFromQuery, ViewerCamera } from '../camera/viewer-camera';
 import { CellRenderer, mapCenterGta } from './cell-renderer';
 import { ViewerMapGame } from './map-game';
+import { installWater } from './water';
 
 /** The running viewer, handed back so React can mount the inspector against it. */
 export interface ViewerHandle {
@@ -91,7 +92,18 @@ export async function bootViewer(
     },
   );
 
+  // The sea is installed ONCE, from `data/water.dat` (already in the VFS) — it is not per-cell, so it shows
+  // even where no cell is resident, which is exactly what tells you a hole in the map from a hole in the sea.
+  // `?water=0` opens with it hidden; the panel's "Show water" toggles it live.
+  const waterTris = installWater(engine, map);
+  engine.waterEnabled = params.get('water') !== '0';
+  if (waterTris > 0) {
+    // eslint-disable-next-line no-console -- the load record, next to the cell lines
+    console.log(`[sa-map-viewer] water ${waterTris} tris from ${map.label} (${engine.waterEnabled ? 'on' : 'off'})`);
+  }
+
   bindInput(canvas, camera, game);
+  seedCaptureCells(params, game);
 
   const frames: number[] = [];
   let lastReadout = 0;
@@ -197,4 +209,20 @@ function report(map: LoadedMap, load: CellLoadStats, lod: boolean): void {
       `${load.arrays} arrays / ${(load.textures / 1024 / 1024).toFixed(1)} MB in ${load.textureMs} ms, ` +
       `upload ${load.loadMs} ms, ${load.vertices} verts / ${load.indices / 3} tris`,
   );
+}
+
+/**
+ * Capture mode has NO panel — and since phase 2 the panel's inspector owns the cell set, so `?panel=0`
+ * rendered an empty world (found by phase 6's first real A/B). With no UI to seed it, the host does:
+ * `?cells=1` (the default) pins the cell under `?at`, `?cells=all` pins the whole map, and `?lod=1` pins
+ * the LOD layer instead of HD. Nothing is seeded when the panel is up — two owners of one cell set is how
+ * a debug tool starts lying about what it is showing.
+ */
+function seedCaptureCells(params: URLSearchParams, game: ViewerMapGame): void {
+  if (params.get('panel') !== '0') {
+    return;
+  }
+  const lod = params.get('lod') === '1';
+  const view = game.viewCell();
+  game.setManualCells(params.get('cells') === 'all' ? game.listCells() : view ? [view] : [], lod);
 }

@@ -20,11 +20,19 @@ const APP_URL = process.argv[2] ?? '';
 const OUT = process.argv[3] ?? 'map-viewer.png';
 const TIMEOUT_MS = Number(process.argv[4] ?? 120000);
 
-/** Add `panel=0` unless the caller asked for the panel explicitly. */
+/**
+ * Add `panel=0` unless the caller asked for the panel explicitly, and `water=0` unless they asked for water:
+ * the sea is the one thing in the viewer that MOVES on its own (Gerstner waves off the frame clock), so a
+ * scripted shot leaves it out for the same reason wind is off — measured, two runs of a watery URL differ.
+ * Pass `water=1` to shoot the sea deliberately.
+ */
 function captureUrl(raw: string): string {
   const url = new URL(raw);
   if (!url.searchParams.has('panel')) {
     url.searchParams.set('panel', '0');
+  }
+  if (!url.searchParams.has('water')) {
+    url.searchParams.set('water', '0');
   }
 
   return url.toString();

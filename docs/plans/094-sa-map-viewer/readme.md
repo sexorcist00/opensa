@@ -417,6 +417,61 @@ This one is React (debugger UI reuse), folder-fed, world-scale. User decision: a
   exists for. Docs in the same change: `docs/commands.md` (launch), `docs/architecture` module map
   (new app), this plan's numbers complete.
 
+  **DONE 2026-07-30.** The A/B needed a merged tree in SA format, which no build on this machine had
+  (`build/original/opensa` is converted, `build/salod` is `game: non-modified`), so one was made with
+  `pmb --game ./game-src/original --in ./mods-src/original --out ./build/strip-ab --until mods` — the
+  mods stage alone, 59 mods, ~4 min, 1.8 GB, moved out of `.work/1-mods` to `build/strip-ab/mods`
+  because sirv will not serve a dot-directory.
+
+  **The first thing the field use found was a defect in the tool.** `?panel=0` hides the panel, and
+  since phase 2 the panel's inspector OWNS the cell set — so every scripted capture rendered an EMPTY
+  world (the phase 2/3 numbers were taken with the panel up, which is why it had not shown). Capture
+  mode now seeds the set itself: `?cells=1` (default, the cell under `?at`), `?cells=all`, `?lod=1`.
+
+  **The bisect** (both trees, `?at=150,-1700&h=150`, one cell each — vanilla 11 543 tris / merged
+  10 019):
+
+  | probe | result |
+  | --- | --- |
+  | click on the strip area, vanilla | `roads32_law2` · `law2_roadsb` · 245.2, −1736.7, 3.6 |
+  | **`Hide object` on it, vanilla** | the picture becomes the MERGED one — same flat blue, same sharp polygon edge, props still floating |
+  | `Hide object` on it, merged | crop diff **mean 0.013** — it was contributing no pixels at all |
+  | instance/def both trees | id 6428, HD, same position, draw 150, flags 1, txd `law2_roadsb` |
+  | DFF both trees | 146 verts / 93 tris / same bbox / same 2 textures (the mod file adds normals) |
+  | node-side weld of cell 0,−7 | both: 93 tris, bucket `0000\|0\|0` (array 0, opaque), welded box identical to 2 decimals |
+  | its `.oscell` group | both: #0 offset 0 count 2106, identical bounds; the road's 65 triangles identical, 0 degenerate |
+  | its textures through the planner | both: opaque, array 0/1, layer 0, mean pixel within 2/255 |
+
+  So the strip IS `roads32_law2` failing to draw, and every piece of DATA behind it — instance,
+  definition, geometry, texture, weld, group — is equivalent between the trees. Two side findings from
+  the same probes: a mod moved `sm_bushvbig` to **z = −300**, which blows the merged cell's bounds out
+  to `59.6, −115.5, −0.1, 290.9` (vanilla: `59.6, 9.7, −0.1, 232.4`), and 11 props (palms, benches)
+  were removed from the cell. **The user then reported the case as resolved on their side** — their
+  own explanation lands in `docs/open-issues/beach-blue-strip.md` when it arrives; the measurements
+  above stay as the record of what the tool could prove on its own.
+- **Phase 7 — water (user request, 2026-07-30).** The scope cut ("no water pass at first") reversed:
+  the viewer draws the sea, with a toggle to hide it.
+
+  **DONE 2026-07-30.** The flat `water.dat` build the game already falls back to (no bake exists for a
+  source folder) moved into `@opensa/renderware/map/water-mesh` as `flatWaterMesh`, so both apps build
+  their sea from ONE function; the game host kept its axis flip, now shared by both of its paths.
+  The viewer installs it once at boot — `data/water.dat` is already in the VFS with gta.dat and the
+  IPLs, so it costs one parse and one upload, and it renders where no cell is resident, which is what
+  separates a hole in the map from a hole in the sea. Ripple/foam come from `models/particle.txd`,
+  which this app does not ingest; the engine's 1×1 stubs stand in (flat normal, no foam).
+
+  The toggle is a DRAW gate on the engine (`waterEnabled`, next to `particlesEnabled`) rather than an
+  unload: an inspector looks under the sheet and back a dozen times, and re-uploading the mesh each
+  time would be the wrong price. `MapGame.setShowWater` is optional exactly like `setShowCollision`,
+  so the in-game debugger gains the checkbox the day its host implements it.
+
+  **Measured** (`game-src/original`, `?at=150,-1700&h=150`): the sea welds to **616 triangles**, no
+  measurable frame cost at this pose. Water on vs off: crop diff mean **13.8**. And the determinism
+  check that decided the default: two runs of one URL with water are **not** identical (mean 0.006,
+  max 14.6 — the Gerstner waves ride the frame clock), so `map-viewer-shot.ts` now adds `water=0` the
+  way it adds `panel=0`. With that, two runs are **byte-identical again (mean 0, max 0)**;
+  interactively the sea is on, and `water=1` shoots it deliberately.
+
 ## Test coverage of the app (state after phase 4)
 
 `apps/sa-map-viewer/**/*.test.ts` is now in the vitest `include` (it was not — tests written there would

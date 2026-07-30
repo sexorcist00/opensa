@@ -14,4 +14,5 @@ export {
   scatterProcObjects,
 } from './procobj-scatter';
 export { resolveMap, type ResolveMapOptions } from './resolve-map';
+export { flatWaterMesh, WATER_DEEP, WATER_VERTEX_FLOATS } from './water-mesh';
 export { buildWorldGrid, cellKey, type GridCell, instanceCell, type WorldGrid } from './world-grid';

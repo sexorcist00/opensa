@@ -632,6 +632,13 @@ export class Engine {
 
   textures!: TextureArrays;
 
+  /**
+   * Draw the installed water surface at all (plan 094/07). A debug toggle, not a config: an inspector has to
+   * be able to look at what is UNDER the sea sheet (a sunken road, a mis-levelled pool) without unloading
+   * the mesh, so this gates the draw and leaves the buffers alone.
+   */
+  waterEnabled = true;
+
   get adapterInfo(): string {
     return this.engineDevice.adapterInfo;
   }
@@ -2555,7 +2562,7 @@ export class Engine {
   }
 
   private drawWater(pass: GPURenderPassEncoder): number {
-    if (!this.water) {
+    if (!this.water || !this.waterEnabled) {
       return 0;
     }
     pass.setPipeline(this.pipelines.get('water'));
