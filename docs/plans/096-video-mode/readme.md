@@ -127,7 +127,7 @@ dependency order; 06 is independent and can run any time before 05.
 
 | Phase | Title | Priority | Depends on |
 | --- | --- | --- | --- |
-| [01](01-path-graph-and-routes.md) | Path graph + seeded route builder (offline-first) | **P0** | — |
+| [01](01-path-graph-and-routes.md) | Path graph + seeded route builder (offline-first) — **SHIPPED** | **P0** | — |
 | [02](02-module-skeleton-and-autopilot.md) | Module skeleton + autopilot drive scene v0 (chase cam) | **P0** | 01 |
 | [03](03-camera-authority-and-shots.md) | Video camera authority + shot presets + framing | **P1** | 02 |
 | [04](04-stations-and-occlusion.md) | Tripod stations: survey, occlusion, cuts without flicker | **P1** | 03 |

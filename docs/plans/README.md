@@ -18,8 +18,11 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
 `001`–`096`, one folder each (066, 073, 074, 078–083, 096 carry multi-part sub-plans). Newest first:
 
-- **[096 — Video mode](./096-video-mode/readme.md)** — PLANNED 2026-07-30 (researched + all user
-  decisions frozen the same day; graduated from `docs/ideas/video-mode/`). `?video=1` boots an endless
+- **[096 — Video mode](./096-video-mode/readme.md)** — IN PROGRESS 2026-07-30, **phase 01 SHIPPED**
+  (path graph + seeded route builder + the offline validator `scripts/debug/video-routes.ts`; 45–69 routes
+  accepted per region against a floor of 20, and the offline run caught two constraint bugs before a single
+  frame). Planned the same day it was researched; all user decisions frozen in the readme's D-table;
+  graduated from `docs/ideas/video-mode/`. `?video=1` boots an endless
   seeded self-directed showcase for trailer recording: a random car (mod cars first, via a new
   build-time `vehicle-installer` ledger) cruises a route generated from the game's own `NODES*.DAT`
   graph while cameras cut between occlusion-checked tripod stations and chase/front/rear/wing shots;
