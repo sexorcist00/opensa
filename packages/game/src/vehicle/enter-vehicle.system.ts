@@ -7,6 +7,7 @@ import type { InputState } from '../input';
 import type { Config } from '../interfaces/config.interface';
 import type { Vec3, VehicleHandling, VehicleWheelPlacement } from '../interfaces/world-adapter.interface';
 import type { PhysicsWorld, VehicleController } from '../physics/physics-world';
+import type { SteeringModel } from './steering';
 import type { VehicleHandle } from './vehicle-handle';
 import type { VehicleRig } from './vehicle-rig';
 
@@ -284,6 +285,8 @@ export class EnterVehicleSystem implements System {
   /** Which front door this sequence uses — picked by the player's side at approach (088/09b). */
   private side: DoorSide = 'lf';
   private steerAngle = 0; // current front-wheel steering (rad), slewed toward the input
+  /** The lock the limiter granted on the last driven step (rad) — reported by {@link steeringModel}. */
+  private steerLock = 0;
   private readonly vehicles: EnterableVehicle[] = [];
 
   constructor(
@@ -424,6 +427,41 @@ export class EnterVehicleSystem implements System {
   }
 
   /**
+   * Put the player straight OUT of the car — no brake to a halt, no door, no climb-out clip. False (and
+   * nothing changed) when nobody is seated.
+   *
+   * The twin of {@link seatInstantly}, taken for the same reason one step later: a scripted scene that must
+   * hand its car back cannot depend on a sequence the WORLD is allowed to stall. The press-and-wait exit ran
+   * five video scenes and then hung on the sixth — a route that ended on a freeway overpass — and because the
+   * scene despawns its car afterwards, the player was left seated in a destroyed one: `Cannot read properties
+   * of null (reading 'linvel')` every fixed step from then on, exactly the dead-body read {@link remove}
+   * warns about. A climb-out that plays entirely behind a black overlay is not part of what a showcase shows.
+   *
+   * The player still leaves through a CLEAR door when there is one, and appears on the roof when there is
+   * not — the same last resort {@link startExit} falls back to, so nothing here can be blocked.
+   */
+  leaveInstantly(): boolean {
+    const car = this.isSeated() ? this.active : null;
+    if (car === null) {
+      return false;
+    }
+    this.physics.parkVehicle(car.controller); // handed back stationary, like every other exit
+    this.steerAngle = 0;
+    car.rig.setSteer(0);
+    const side = this.isUpright(car) ? this.clearDoorSide(car) : null;
+    if (side) {
+      this.side = side;
+      this.exitTo = this.doorwayWorld(car);
+    } else {
+      const [, , hz] = car.halfExtents;
+      this.exitTo = [car.position[0], car.position[1], car.position[2] + hz + 1];
+    }
+    this.finishExit();
+
+    return true;
+  }
+
+  /**
    * Drop a (parked, unoccupied) car when it is unloaded.
    *
    * `active` OUTLIVES the ride: the climb-out leaves it set so the door can finish closing behind the
@@ -478,6 +516,27 @@ export class EnterVehicleSystem implements System {
     this.startSeated();
 
     return true;
+  }
+
+  /**
+   * The driven car's live steering model (096/02) — null on foot.
+   *
+   * Before the first driven step the granted lock is reported as the AUTHORED one, which is exactly what
+   * {@link steerLimit} returns at a standstill — so a controller reading it on the step it takes the wheel
+   * is not reading a zero.
+   */
+  steeringModel(): null | SteeringModel {
+    const car = this.isSeated() ? this.active : null;
+    if (car === null) {
+      return null;
+    }
+
+    return {
+      lockRad: this.steerLock > 0 ? this.steerLock : (car.handling.steeringLock * Math.PI) / 180,
+      slewRate: STEER_RATE,
+      steerAngle: this.steerAngle,
+      wheelbase: wheelSpan(car.wheels),
+    };
   }
 
   update(delta: number): void {
@@ -836,6 +895,7 @@ export class EnterVehicleSystem implements System {
         swaySpeed: sway,
         traction: hnd.tractionMult,
       });
+    this.steerLock = lock; // what an autopilot's `move.x` is a share OF this step (096/02)
     const target = -steerInput * lock; // D (right) turns the car right
     const rate = steerInput === 0 ? STEER_RECENTER_RATE : STEER_RATE;
     this.steerAngle += clamp(target - this.steerAngle, -rate * step, rate * step);
@@ -1358,4 +1418,22 @@ function headingFromQuat(q: readonly number[]): number {
   const forwardY = 1 - 2 * (x * x + z * z);
 
   return Math.atan2(-forwardX, forwardY);
+}
+
+/**
+ * Front-to-rear hub span of the car's OWN wheel placements (m) — the wheelbase {@link SteeringModel} reports.
+ *
+ * Derived from the asset, never a constant per model: a bike, a bus and a Comet each answer for themselves,
+ * and a modded slot answers for whatever geometry is in it. 0 for a car with no wheels at all (the caller
+ * treats that as "no steering model to command").
+ */
+function wheelSpan(wheels: readonly VehicleWheelPlacement[]): number {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const wheel of wheels) {
+    min = Math.min(min, wheel.connection[1]);
+    max = Math.max(max, wheel.connection[1]);
+  }
+
+  return max > min ? max - min : 0;
 }

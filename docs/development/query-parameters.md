@@ -32,7 +32,11 @@ Read in `src/ui/engine-canvas-host.tsx` unless noted.
 | `soak`      | off                    | minutes                        | Soak stability run; emits `[soak]`                                                                                                                              |
 | `benchcar`  | mixed models           | vehicle model name             | Pin every bench road car to one model                                                                                                                           |
 | `phys`      | off                    | `all` or one scene key         | Scripted physics lap (081/01); emits the `[phys]` JSON protocol                                                                                                 |
-| `car`       | `infernus`             | vehicle model name             | Which car the `phys` laps drive                                                                                                                                 |
+| `car`       | `infernus` / `admiral` | vehicle model name             | Which car the `phys` laps drive — and which car a `video` scene spawns (default `admiral` there)                                                                |
+| `video`     | off                    | `1` = on, `0` = off            | Video mode (096/02): endless seeded showcase drives; emits the `[video]` JSON protocol                                                                          |
+| `from`      | `10`                   | real seconds                   | Shortest fragment a `video` scene plays for                                                                                                                     |
+| `to`        | `25`                   | real seconds                   | Longest fragment; each scene draws its length from `[from, to]` (clamped up to `from`)                                                                          |
+| `seed`      | derived from the clock | integer                        | Determinises a `video` run's routes, car, hour and weather (D9). The ACTIVE seed is always printed as `[video] seed=…`, so a derived one is still replayable    |
 | `gripVd`    | `12`                   | m/s                            | 081/09 lateral speed-grip assist: boost reference speed (`boost = min(1 + (v/gripVd)², gripCap)`)                                                               |
 | `gripCap`   | `3`                    | ×                              | 081/09 assist ceiling; both dials are session overrides, shown in F2 and recorded by every `[phys]` capture                                                     |
 | `airCtl`    | `1`                    | ×                              | 081/06 §1 in-air attitude control at the original's strength (`0.0007 × min(1, 3000/turnMass)` per frame = 1.75 rad/s² per unit of stick). `0` turns it off — the A/B for a jump; every `[phys]` capture records the active value |
@@ -48,8 +52,13 @@ the scenes live in `src/phys-scenes.ts`:
 `pull-away-reverse`. A lap teleports next to a real road spot, spawns the car, seats the player, then plays
 a keyframe timeline through the SAME `InputState` the player uses.
 
+`video` / `from` / `to` / `seed` are read in `src/ui/engine-video-runs.ts`. A scene picks a route out of the
+game's own `NODES*.DAT` graph, stages a car on it behind a black overlay the module owns, and hands the wheel
+to the autopilot (`packages/game/src/vehicle/path-follow.ts`) — the chase camera and the UI hide are the
+shipped ones. A game with no `data/paths/nodes*.dat` (the total conversions) says so and does nothing.
+
 > **These are HARNESS CONTRACTS.** `tools-debug/bench-harness/drive.js` scrapes the console
-> protocol (`[bench]` / `[soak]` / `[phys]` with `TAG=`, plus `sweep complete`) and the URLs in
+> protocol (`[bench]` / `[soak]` / `[phys]` / `[video]` with `TAG=`, plus `sweep complete`) and the URLs in
 > [benchmarks.md](benchmarks.md) use these names. Renaming one silently breaks the perf ritual.
 
 ## Engine lab — `apps/engine-lab`
@@ -148,7 +157,7 @@ Deleted with the three-WebGL renderer in [074/13](../plans/074-opensa-engine/13-
 ## Why there is still no `flags.ts`
 
 Phase 2.4 asked whether the survivors should move behind one typed reader. They should not — yet. The
-count fell from ~60 to **22 distinct names**, most of them read exactly once, and the two hosts read
+count fell from ~60 to **26 distinct names** (096/02 added four at once — `video`, `from`, `to`, `seed`), most of them read exactly once, and the two hosts read
 overlapping-but-differently-defaulted sets (see the inconsistencies above), so a shared reader would
 have to model the difference rather than remove it. The zoo grew because nothing was written down, not
 because reads were inline. **This document is the fix; revisit a reader if the count climbs again.**

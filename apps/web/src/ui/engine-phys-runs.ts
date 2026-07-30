@@ -22,6 +22,7 @@ import { type TelemetryFrame } from '@opensa/game/vehicle/vehicle-telemetry';
 import type { EngineVehicles } from './engine-vehicles';
 
 import { PHYS_CARS, PHYS_SCENES } from '../phys-scenes';
+import { until, waitSeconds } from './frame-clock';
 
 /** What a lap needs from the engine host — thin accessors over its loop state, like `PerfRunsHost`. */
 export interface PhysRunsHost {
@@ -107,8 +108,6 @@ export function setupPhysRuns(host: PhysRunsHost): void {
     console.log('[phys] sweep complete');
   })();
 }
-
-const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
 /**
  * Get the ped out of whatever he is in, and confirm it.
@@ -309,22 +308,4 @@ async function spawnWithRetry(host: PhysRunsHost, scene: PhysScene, car: string)
       await waitSeconds(0.5);
     }
   }
-}
-
-/** Wait until `ready()` or the deadline; returns whether it became ready. */
-async function until(ready: () => boolean, timeoutMs: number): Promise<boolean> {
-  const started = performance.now();
-  while (performance.now() - started < timeoutMs) {
-    if (ready()) {
-      return true;
-    }
-    await nextFrame();
-  }
-
-  return ready();
-}
-
-/** Let the game run for a while — frames, not a timer, so nothing advances while the tab is throttled. */
-async function waitSeconds(seconds: number): Promise<void> {
-  await until(() => false, seconds * 1000);
 }

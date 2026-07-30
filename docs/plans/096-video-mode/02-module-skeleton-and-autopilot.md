@@ -85,6 +85,65 @@ exists.**
 - Ledger numbers: error percentiles per seed, the stability-gate wait time, cold-teleport spike duration
   behind the overlay.
 
+## Close-out (2026-07-30)
+
+**Shipped**, both task groups, acceptance met on telemetry — the numbers are in the
+[readme ledger](readme.md). What the plan could not say in advance:
+
+- **The design decision the phase opened with went to the ACCESSOR, not to a yaw-rate loop.**
+  `EnterVehicleSystem.steeringModel()` now reports the granted lock, the current wheel angle, the slew rate
+  and the wheelbase (read off the car's own hub placements, so a bike, a bus and a modded slot each answer
+  for themselves). Closing the loop on yaw rate instead would have meant an integrator against a slewed
+  actuator — the one thing the 080/081 chain says not to build — and a second copy of `steerLimit`, which is
+  a second chance to disagree with the tyres. The rule is now in
+  [`restrictions/architecture.md`](../../restrictions/architecture.md).
+- **The slew is compensated by PREDICTION, not by gain.** Pure pursuit runs twice per step: once on the
+  current pose to learn what the wheel is being asked for, then again on the pose the car will hold after the
+  wheels finish slewing there (`lead = |δ − steerAngle| / slewRate`, capped at 0.4 s). Self-scheduling — no
+  lead when the command is already met, most when it is furthest away.
+- **The press-and-wait exit had to go.** The scene tears down behind the overlay and then despawns its car,
+  and the phys-style "press Enter, wait for the climb-out" hung on a route that ended on a freeway overpass —
+  after which every later scene read a destroyed body (`Cannot read properties of null (reading 'linvel')`,
+  the exact failure `EnterVehicleSystem.remove()` warns about). `leaveInstantly()` is the twin of
+  `seatInstantly()` and the same argument one step later: a climb-out that is never on camera is not part of
+  what a showcase owes. It still leaves through a clear door when there is one, and falls back to the roof —
+  `startExit`'s own last resort — so it cannot be blocked.
+- **A scene's car must not be LOD-registered.** `EngineVehicles.spawn` adds a permanent, respawnable
+  placement; an endless session doing that leaves a car at the start of every route it ever drove, each ready
+  to reappear when a later route passes. `spawnOnce()` hands back a despawn instead.
+- **`until()` / `waitSeconds()` were extracted** to `apps/web/src/ui/frame-clock.ts` rather than copied — two
+  runners now share one frame-clock, and `engine-phys-runs.ts` lost its private copies.
+- **The fps gate measures its own frames.** The plan said `beginSamples()`; that is the bench's leg
+  collector and `takeSamples()` clears `benchCamera`, so using it would step on a bench run. The module
+  counts `requestAnimationFrame` deltas itself — 30 consecutive frames under 25 ms — and reports the wait as
+  `settleMs` in every capture.
+- **The weather pool is FILTERED, not listed.** A scene takes a seeded index from the timecyc names ending
+  in `_LA` (D7), so a modded timecyc cannot be wrong in a second place. 05 generalises the suffix.
+- **`stop()` keeps the run's record.** The first version cleared the route, so every capture reported
+  `progress: 0` for a run that had just driven 400 m — a scene stops the autopilot and THEN reports it. Now
+  pinned by a test.
+
+- **The stuck test asks about PROGRESS, not speed.** The first version tripped on "slow under throttle", and
+  the scene that started on the 18° hill rolled BACKWARDS at 1-2 m/s under full throttle for 13.35 s before
+  it fired — thirteen seconds of a car failing to climb, on camera, which is exactly what the guard exists to
+  prevent. It now watches the furthest route vertex reached (the cursor only ever walks forward), which
+  covers rolling back, spinning on the spot and sitting against a wall with one signal: 5.03 s on the same
+  scene. The measured failure is now a unit test.
+- **The end reason was read one line too late.** `state()` after `stop()` is always `idle`, so every early
+  end reported `idle` and a real `stuck` hid inside it for a whole headless run. Read before the stop, and
+  an early end now also logs itself with the route percentage it reached.
+
+Carried into 03/05:
+
+- **The one-way-street blindness 01 warned about was not observed** in 21 headless scenes, and it also cannot
+  be: nothing in the data or in the capture says which way a lane runs. It stays an open watch item for a
+  human field look, not a number.
+- **Keyboard sums with the autopilot** (`CombinedInput`) — untouched, accepted for v1, and now stated in the
+  restriction; the feature doc (08) is where a user-facing "hands off the controls" note belongs.
+- **No route the sequencer picked was hard.** The tightest corner it produced across three seeds was 40.1 m,
+  while the builder is willing to hand out 19.2 m in LA (`video-routes.ts --worst`). A deliberate hard-route
+  field round is still owed — 03 or 05 should add a way to pin a scene to a chosen start node.
+
 ## Risks / notes
 
 - Keyboard sums with the autopilot (`combine-input.ts:45-55`) — accepted v1 limitation, documented in the

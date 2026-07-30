@@ -128,7 +128,7 @@ dependency order; 06 is independent and can run any time before 05.
 | Phase | Title | Priority | Depends on |
 | --- | --- | --- | --- |
 | [01](01-path-graph-and-routes.md) | Path graph + seeded route builder (offline-first) — **SHIPPED** | **P0** | — |
-| [02](02-module-skeleton-and-autopilot.md) | Module skeleton + autopilot drive scene v0 (chase cam) | **P0** | 01 |
+| [02](02-module-skeleton-and-autopilot.md) | Module skeleton + autopilot drive scene v0 (chase cam) — **SHIPPED** | **P0** | 01 |
 | [03](03-camera-authority-and-shots.md) | Video camera authority + shot presets + framing | **P1** | 02 |
 | [04](04-stations-and-occlusion.md) | Tripod stations: survey, occlusion, cuts without flicker | **P1** | 03 |
 | [05](05-sequencer-regions-presets.md) | Sequencer: region cycle, weather/time presets, car pick | **P1** | 02 (04 for full look) |
@@ -166,7 +166,22 @@ before analysis). Empty until phases run:
   per-junction ceiling let five legal turns bend 125° inside ten metres. Both fixed (uniform 2 m resample +
   8 m curvature baseline; a 45°-per-25 m turn budget), which is what moved the tightest corner from 2.0 m to
   ~19 m and the slowest target speed from 2.2 m/s to 6.9 m/s.
-- 02: —
+- 02: **DONE 2026-07-30.** Routes re-validated on the BUILT tree (`build/original/opensa`,
+  `scripts/debug/video-routes.ts`): identical to 01's `game-src/original` numbers to the digit — 30 587 nodes,
+  0 unresolved links, 0 one-way links, LA 52 · VEGAS 62 · SF 65 · COUNTRYSIDE 45 · DESERT 69 accepted, LA's
+  tightest accepted corner 19.2 m. So the built `data/paths` is the source tree's.
+  **Headless field run** (`TAG='[video]' tools-debug/bench-harness/drive.js … '&video=1&seed=N'`, DPR 1,
+  4 seeds, 29 LS drive scenes, 10-25 s each): corners driven **20.8-568 m** (tightest 20.8 m at a 20.6°
+  junction — near the builder's 19.2 m LA floor); **cross-track error p95 ≤ 0.331 m, max ≤ 0.503 m** against
+  the plan's 1.5 m / 3 m floors; **|gLat| p95 ≤ 0.293 g** against the 0.35 g calm band (single-frame maxima
+  reach 1.32 g — kerbs and drain lips, not cornering); mean speed **10.2 m/s** against a 12 m/s cruise
+  (−15 %, inside ±20 %, and the standing start is inside every window). **fps stability gate 242-251 ms** —
+  i.e. the 30-frame minimum every time: the cold-teleport spike (plan 091) was always over before the gate
+  started, so the overlay costs a quarter second, not the ~2 s the spike would have. **1 stuck flag in 29**
+  (3.4 %): a scene that started on an 18° Los Santos hill the `admiral` could not climb — the guard, not the
+  controller. Determinism: seed 47 re-run after the stuck rule changed reproduced all 8 routes, hours,
+  weathers and cross-track percentiles **to 3 decimal places**. Autopilot unit tests: 10, on a kinematic
+  bicycle carrying the real 1.2 rad/s slew.
 - 03: —
 - 04: —
 - 05: —

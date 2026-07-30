@@ -65,6 +65,26 @@ const MIN_LIMITED_SPEED = 0.01;
  */
 const SLIDE_SPEED = 0.05 / SA_STEP;
 
+/**
+ * The live steering model of the driven car (096/02) — what a controller needs to turn a wanted wheel angle
+ * into the `move.x` a player would hold.
+ *
+ * It has to be REPORTED rather than recomputed: `move.x` is not an angle. `drive()` multiplies it by the
+ * authored `fSteeringLock` **and** by {@link steerLimit}, which needs the adhesion under the front wheels
+ * (four rays, once per step), the traction, the speed and the sway. A second copy of that outside the enter/
+ * exit system would be a second adhesion probe and a second chance to disagree with the tyres.
+ */
+export interface SteeringModel {
+  /** The lock the limiter granted on the last driven step (rad): `move.x = −1` asks for exactly this, LEFT. */
+  readonly lockRad: number;
+  /** How fast the front wheels slew toward the commanded angle (rad/s) — the lag a controller must lead. */
+  readonly slewRate: number;
+  /** Current front-wheel angle (rad); POSITIVE steers the car LEFT (`drive()` negates `move.x` into it). */
+  readonly steerAngle: number;
+  /** Front-to-rear hub span (m) — the bicycle model's wheelbase, off the car's own wheel placements. */
+  readonly wheelbase: number;
+}
+
 /** The share of its authored lock the car may use, 0..1. */
 export function steerLimit(input: {
   /**

@@ -215,6 +215,14 @@ function vehicleAt(position: Vec3): EnterableVehicle {
 
 describe('EnterVehicleSystem', () => {
   describe('negative cases', () => {
+    it('leaveInstantly does nothing when nobody is seated (096/02)', () => {
+      const h = setup();
+      h.system.add(vehicleAt([2, 0, 0]));
+
+      expect(h.system.leaveInstantly()).toBe(false);
+      expect(h.ctrl.enabled).toBe(true); // never gated, so never restored
+    });
+
     it('does nothing without an Enter press', () => {
       const h = setup();
       h.system.add(vehicleAt([2, 0, 0]));
@@ -616,6 +624,22 @@ describe('EnterVehicleSystem', () => {
       h.system.fixedUpdate(0.2);
       h.system.fixedUpdate(0.2);
       expect(h.phys.steer).not.toBe(0);
+    });
+
+    it('leaves the car instantly at speed, out a clear door, with control restored (096/02)', () => {
+      const h = setup();
+      const car = vehicleAt([2, 0, 0]);
+      seatPlayer(h, car);
+      h.phys.speed = 12; // mid-drive: the instant exit does NOT wait for a coast-down
+
+      expect(h.system.leaveInstantly()).toBe(true);
+      // Out the same call — no phase to run out, which is the whole point. `getActive` still names the car
+      // (the door has yet to shut), so a caller asking "is he in it" must ask `isSeated`, as the host does.
+      expect(h.system.isSeated()).toBe(false);
+      expect(h.ctrl.enabled).toBe(true); // walking again
+      expect(h.phys.parked).toBeGreaterThan(0); // handed back stationary, like every other exit
+      // Beside the car, not on its roof — the driver door was clear.
+      expect(h.phys.teleports[h.phys.teleports.length - 1][2]).toBeLessThan(car.position[2] + 1);
     });
 
     it('parks the car (brakes to a stop) when the player begins exiting', () => {

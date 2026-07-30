@@ -16,6 +16,7 @@ import type { Config } from '@opensa/game/interfaces/config.interface';
 import type { Vec3 } from '@opensa/game/interfaces/world-adapter.interface';
 import type { PhysicsWorld, VehicleSpringReading, VehicleStance } from '@opensa/game/physics/physics-world';
 import type { EnterableVehicle, VehicleAnimator } from '@opensa/game/vehicle/enter-vehicle.system';
+import type { SteeringModel } from '@opensa/game/vehicle/steering';
 import type { SpawnedVehicle, VehiclePlacement } from '@opensa/game/vehicle/vehicle-lod.system';
 import type { PlatePlacement } from '@opensa/game/vehicle/vehicle-plates';
 import type { CityBox } from '@opensa/game/zones/city';
@@ -81,6 +82,11 @@ export interface EngineVehicles {
   /** True while a scripted enter/exit is mid-sequence — the camera glides to its target instead of
    *  auto-centering on the ped's approach/climb twitches. */
   isSettling(): boolean;
+  /**
+   * Put the player straight OUT of the car, no climb-out (096/02) — the twin of
+   * {@link EngineVehicles.seatInstantly}. False when nobody is seated.
+   */
+  leaveInstantly(): boolean;
   /** Register placements to spawn LAZILY by distance (the LOD system streams them) — the bench road cars. */
   register(placements: readonly VehiclePlacement[]): void;
   /**
@@ -98,6 +104,14 @@ export interface EngineVehicles {
   /** Spawn a car and register it with the LOD system (persists like a parked car) — used for test spawns. */
   spawn(placement: VehiclePlacement): Promise<void>;
   /**
+   * Spawn a car that belongs to ONE scripted scene and hand back its despawn (096/02).
+   *
+   * Deliberately NOT registered with the LOD streamer: {@link EngineVehicles.spawn} adds a permanent,
+   * respawnable placement, and an endless video session doing that would leave a car standing at the start of
+   * every route it ever drove — each one ready to reappear the moment a later route passes within LOD range.
+   */
+  spawnOnce(placement: VehiclePlacement): Promise<() => void>;
+  /**
    * The driven car's spring setup, or null on foot (plan 081/02). Constant per car, so a capture reads it
    * once — and it exists so a run can SAY what it was configured with. An A/B where the runs cannot be told
    * apart from their own record is not a measurement.
@@ -105,6 +119,11 @@ export interface EngineVehicles {
   springs(): null | readonly VehicleSpringReading[];
   /** What the car is STANDING on — see {@link VehicleStance}. Null on foot. */
   stance(): null | VehicleStance;
+  /**
+   * The driven car's live steering model (096/02) — null on foot. What an autopilot needs to turn a wanted
+   * wheel angle into `move.x`, which is a SHARE of a lock that changes every step, not an angle.
+   */
+  steering(): null | SteeringModel;
   /**
    * The driven car's physics telemetry (plan 081/01): speed, slip, per-wheel load and travel, sampled every
    * fixed step while `enabled`. **This is the slip/speed channel plan 080/05 reads for drift framing** —
@@ -627,6 +646,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
       return car === null ? 0 : vehicleDamage.peakImpact(car.body);
     },
     isSettling: (): boolean => enterVehicle.isSettling(),
+    leaveInstantly: (): boolean => enterVehicle.leaveInstantly(),
     register(placements: readonly VehiclePlacement[]): void {
       for (const placement of placements) {
         vehicleLod.register(placement);
@@ -636,6 +656,11 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     seatInstantly: (): boolean => enterVehicle.seatInstantly(),
     async spawn(placement: VehiclePlacement): Promise<void> {
       vehicleLod.add(placement, await spawnVehicle(placement));
+    },
+    async spawnOnce(placement: VehiclePlacement): Promise<() => void> {
+      const { despawn } = await spawnVehicle(placement);
+
+      return despawn;
     },
     springs: (): null | readonly VehicleSpringReading[] => {
       const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
@@ -665,6 +690,7 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
         })),
       };
     },
+    steering: (): null | SteeringModel => enterVehicle.steeringModel(),
     telemetry,
     update(delta: number, alpha: number): void {
       // Draw each car at the interpolated pose (smooth at any refresh), then the variable-rate systems:

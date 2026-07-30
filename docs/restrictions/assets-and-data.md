@@ -133,3 +133,23 @@ falls back. Measured 2026-07-30 (096/01).
 
 **Caught:** no — the loader simply finds zero areas, and a feature that does not check reads an empty world
 as "no roads here" rather than "this game has no road graph".
+
+## The node graph says WHERE roads are, not how they may be driven
+
+Two things a design over `NODES*.DAT` may not assume it can read out of the graph, both measured in 096:
+
+- **Travel direction.** The link table is 100 % mutual — **0 one-way links in 30 587 vehicle nodes** — because
+  SA keeps lanes in the navi nodes we do not parse. A route walked from this data can run a one-way street
+  backwards, and no check anywhere will object (096/01).
+- **Gradient.** A node carries a position, not a grade, and the route builder's constraints are all planar
+  (turn angle, corner radius, region). A route may therefore start on, or climb, a slope the chosen car
+  cannot take: 096/02's headless run started a scene on an **18° Los Santos hill** where the `admiral` slid
+  backwards under full throttle for the whole fragment.
+
+A design that drives these routes must carry its own answer — a progress watchdog, a grade check off the
+collision, or a car chosen for the route rather than for the region. 096/02's autopilot ships the first
+(`PathFollowSource`'s `stuck` state, on route progress rather than speed).
+
+**Caught:** the gradient one, now — a wedged run reports `ended: stuck` in its capture and logs the route
+percentage it reached. The direction one, no: nothing in the data or in a capture can tell you which way the
+lane runs, so it needs a human looking at the footage.

@@ -44,9 +44,9 @@ costs a session.
 
 | File | Subject |
 | --- | --- |
-| [architecture.md](architecture.md) | Layer boundaries, what may import what, the one-build rule, the grid every tool must agree on, what a frame-time span may wrap, the single owner a debug view's subset must have |
+| [architecture.md](architecture.md) | Layer boundaries, what may import what, the one-build rule, the grid every tool must agree on, what a frame-time span may wrap, the single owner a debug view's subset must have, and that scripted control speaks a player's input rather than recomputing a system's numbers |
 | [build-vs-runtime.md](build-vs-runtime.md) | What is decided while the game is BUILT and cannot be recovered while it runs |
 | [engine-lighting.md](engine-lighting.md) | The light pool's two halves and who is allowed to read them |
 | [gpu-and-shaders.md](gpu-and-shaders.md) | WGSL and inter-stage rules that no test in this repo can see, plus the resource-lifetime rule a runtime welder must obey (a grown texture array kills the bundles recorded against it) |
 | [sa-target.md](sa-target.md) | What the `sa/` target must budget for before a plan adds anything to the map |
-| [assets-and-data.md](assets-and-data.md) | A rule must derive from what the asset carries — never from the slot it sits in; plus the two halves of RenderWare geometry a reader may not mix up (the DRAWN index data vs the authoring face array, and the frame transform SA discards for a simple map model); and which stock data a total conversion simply does not ship (the vehicle path graph is `original`-only) |
+| [assets-and-data.md](assets-and-data.md) | A rule must derive from what the asset carries — never from the slot it sits in; plus the two halves of RenderWare geometry a reader may not mix up (the DRAWN index data vs the authoring face array, and the frame transform SA discards for a simple map model); and which stock data a total conversion simply does not ship (the vehicle path graph is `original`-only), and what that graph does NOT say about the roads it maps (travel direction, gradient) |

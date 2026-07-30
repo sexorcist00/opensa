@@ -101,3 +101,24 @@ the ownerless mode impossible rather than merely unlikely.
 
 **Caught:** no, and it is the worst kind of silent — the failure renders. A tool whose subset can be empty
 must SAY it is empty (the viewer prints its resident cell count on every set change).
+
+## Scripted control commands what a PLAYER commands, never what the systems compute
+
+Anything that drives the game from outside — a scripted timeline, an autopilot, a future CLEO opcode — speaks
+the `InputState` a player speaks, and reads the derived numbers back through an accessor the owning system
+publishes. It may not recompute them.
+
+Steering is where this bites. `move.x` is not an angle: `drive()` multiplies it by the authored
+`fSteeringLock` **and** by `steerLimit()`, which needs the adhesion under the front wheels (four rays, once
+per step), the traction, the speed and the sway (`enter-vehicle.system.ts`'s `drive`). A controller that
+reconstructs that has a second adhesion probe and a second chance to disagree with the tyres — which is the
+same class of bug as the 081/09 limiter running on a different number than the wheels. 096/02 therefore added
+`EnterVehicleSystem.steeringModel()` (granted lock, current angle, slew rate, wheelbase off the car's own hub
+placements) rather than a copy of the limiter.
+
+The corollary: a new control input is a SIBLING source in `CombinedInput`, not a change to the driving path.
+Note that `CombinedInput` **sums** move vectors, so a live keyboard adds to a scripted source's command.
+
+**Caught:** no. A recomputed lock is silent — the car simply steers a fraction of what was asked, and looks
+like an under-tuned controller. The limiter itself, with the reversed-source derivation, is documented in
+`packages/game/src/vehicle/steering.ts`.

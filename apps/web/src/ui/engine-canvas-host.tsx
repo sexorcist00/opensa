@@ -48,7 +48,9 @@ import { PhysicsSystem } from '@opensa/game/physics/physics.system';
 import { initRapier } from '@opensa/game/physics/rapier';
 import { CollisionStreamingSystem } from '@opensa/game/streaming/collision-streaming.system';
 import { cellsWithin } from '@opensa/game/streaming/grid';
+import { PathFollowSource, type VehiclePose } from '@opensa/game/vehicle/path-follow';
 import { ScriptedDriveSource } from '@opensa/game/vehicle/scripted-drive';
+import { type SteeringModel } from '@opensa/game/vehicle/steering';
 import { wheelCornerLabels } from '@opensa/game/vehicle/vehicle-telemetry';
 import { WeatherTransition } from '@opensa/game/weather/weather-transition';
 import { weatherForCity } from '@opensa/game/weather/weather-zones';
@@ -102,6 +104,7 @@ import { setupPhysRuns } from './engine-phys-runs';
 import { loadEnginePlayer } from './engine-player';
 import { setupEngineProps } from './engine-props';
 import { type EngineVehicles, setupEngineVehicles } from './engine-vehicles';
+import { setupVideoRuns } from './engine-video-runs';
 import { createGameRuntimeConfig, GAME_CELL_SIZE } from './game-runtime-config';
 import { Hud, type HudGame } from './hud/hud';
 import { loadFonts } from './hud/load-fonts';
@@ -485,7 +488,25 @@ async function boot(
   // A scripted lap (081/01, `?phys=`) drives through the SAME InputState the player uses — a capture that
   // bypassed `drive()`'s ramps would measure a different car. Idle it contributes nothing to the sum.
   const scriptedDrive = new ScriptedDriveSource();
-  const input = new CombinedInput([new KeyboardSource(keyboard, config.controls), scriptedDrive]);
+  // Video mode's autopilot (096/02) — a closed-loop sibling of the scripted timeline, installed for good and
+  // silent until a scene hands it a route. It reads the car through the same live `vehicles` accessor the
+  // runners use, so nothing here depends on the vehicle system existing yet.
+  const pathFollow = new PathFollowSource({
+    pose: (): null | VehiclePose => {
+      const car = vehicles?.activeVehicle() ?? null;
+      const motion = vehicles?.drivenMotion() ?? null;
+
+      return car === null || motion === null
+        ? null
+        : {
+            heading: motion.heading,
+            position: [car.position[0], car.position[1], car.position[2]],
+            speed: motion.speed,
+          };
+    },
+    steering: (): null | SteeringModel => vehicles?.steering() ?? null,
+  });
+  const input = new CombinedInput([new KeyboardSource(keyboard, config.controls), scriptedDrive, pathFollow]);
 
   // Camera (plan 080/01): the rig state lives in the director, the host only reports input. Click = mouse
   // capture (prod behaviour — the look uses movementX/Y continuously while pointer-locked, Esc releases),
@@ -1259,6 +1280,10 @@ async function boot(
         // The scripted lap's clock runs on the FIXED step, before anything reads its input — a timeline that
         // advanced with the render rate would replay differently on a different machine.
         scriptedDrive.advance(FIXED_STEP);
+        // …and the autopilot computes ITS command here too, one call before `applyControls` reads the input
+        // (`physicsSystem.beforeVehicles`). It sees the pose the last step ended on — 0.2 m at a cruise, and
+        // the same staleness the player's own eyes have.
+        pathFollow.advance(FIXED_STEP);
         const controllerStarted = performance.now();
         controllerSystem.fixedUpdate(FIXED_STEP);
         const physicsStarted = performance.now();
@@ -1694,6 +1719,45 @@ async function boot(
     teleportPlayer: (anchor): void => {
       teleportPlayer([anchor[0], anchor[1], anchor[2]]);
     },
+  });
+
+  // Video mode (096/02): the same staging contract as a phys lap, driven by the autopilot instead of a
+  // timeline, with the module owning its own black overlay and the UI hide.
+  setupVideoRuns({
+    autopilot: pathFollow,
+    cityBoxes: (): readonly CityBox[] => cityBoxes,
+    fs,
+    getStream: (): null | StreamStats => lastStream,
+    getVehicles: (): EngineVehicles | null => vehicles,
+    params,
+    setHour: (value): void => {
+      hour = value;
+    },
+    settleTimeoutMs: WORLD_READY_TIMEOUT_MS,
+    setUiHidden: (hidden): void => {
+      photoCamera = hidden; // the dev readout hides behind the same gate the photo camera uses
+      events.emit('fly-camera', { enabled: hidden, photo: hidden });
+    },
+    setWeather: (value): void => {
+      weatherTransition.begin(value, 0);
+    },
+    spawnCar: async (model, position, heading): Promise<() => void> => {
+      const vehicleSystem = vehicles;
+      if (!vehicleSystem) {
+        throw new Error('no vehicle system on this host');
+      }
+
+      return vehicleSystem.spawnOnce({
+        groundSnap: true,
+        heading,
+        model,
+        position: [position[0], position[1], position[2]],
+      });
+    },
+    teleportPlayer: (anchor): void => {
+      teleportPlayer([anchor[0], anchor[1], anchor[2]]);
+    },
+    weatherNames: WEATHER_NAMES,
   });
 }
 
