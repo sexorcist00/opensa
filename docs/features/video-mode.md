@@ -40,18 +40,42 @@ design (D11/D14).
 - **Cuts**: the scene's shot list is dealt up front from the seeded stream — weighted picks, no preset twice
   in a row, every shot ≥ 5 s, `chase` guaranteed at least once. Every cut is DECLARED for exactly one frame,
   which is the only thing the `[cam] jump` watchdog whitelists.
-- **Empty-frame guard**: a clock, not a gate — the car has to be outside the safe frame (|s − 0.5| > 0.45)
-  for 1.5 s before the shot is cut short, so one frame behind a lamppost changes nothing.
+- **Empty-frame guard**: a clock, not a gate — the car has to be outside the safe frame (|s − 0.5| > 0.45),
+  beyond the shot's distance ceiling, or behind the eye for 1.5 s before the shot is cut short, so one frame
+  behind a lamppost changes nothing.
 
-Measured over 25 headless scenes / 5 seeds: the car is inside the safe frame on **99.1 %** of directed
-frames, **0** undeclared `[cam] jump` lines, 59 cuts, shortest dealt shot 5.2 s.
+**Tripod stations** (096/04) — `station` is the sixth shot, and the only one whose eye comes from the world:
+
+- **Candidates are derived from the road**: 8/11/14/18 m off the driven line, both sides, at a low kerb
+  height, eye level or up on a roof — each ground-snapped by one cast. Order and heights come from the
+  scene's seeded stream, so `?seed=` reproduces the survey too.
+- **The survey is amortised**, ≤ 3 casts per frame during the shot BEFORE the tripod's: one ground snap plus
+  a line-of-sight probe against each of five predicted car positions across the shot's window. A candidate
+  passes on a soft COVERAGE score (4 of 5 clear — a lamppost may not veto a usable stand) plus a dwell test
+  (the car must be within reading distance for the window), never an all-rays gate — that shape was built,
+  field-rejected and rolled back in 080 (`docs/postmortem/080-cinematic-camera/multiray-collision.md`).
+- **A slot the survey cannot fill plays a car-anchored stand-in** drawn at plan time from the same seed. A
+  missing station costs variety, never a scene.
+- **The live check is one probe per second, and two blocked answers in a row cut away.** Occlusion never
+  MOVES the camera — it only picks a stand before the shot and ends the shot after it. Hysteresis lives in
+  the cadence, the debounce and D4's 5 s floor.
+- **Prediction is scaled by the speed the car is actually keeping**, and a survey waits until the car is up
+  to speed before predicting from it (a launching car's speed describes the launch, not the road ahead).
+- `?at=x,y` pins every scene's route to the node nearest a point, so a hard street can be looked at
+  deliberately — `scripts/debug/video-routes.ts --worst` prints the coordinates to paste in. A pin the route
+  builder cannot walk out of is LOGGED and the scene takes a seeded route instead
+  (`docs/edge-cases/route-graph.md` — a city grid is one such place).
+
+Measured over 25 headless scenes / 5 seeds (plus 4 scenes pinned to the hardest LA start): the car is inside
+the safe frame on **99.2 %** of directed frames, **0** undeclared `[cam] jump` lines, 56 cuts, shortest dealt shot
+5.2 s; **12 of 12 tripod slots played from a surveyed station**, ≤ 3 casts in every frame, survey verdict
+within 14 frames, station prediction error median 1 m.
 
 ## Not implemented yet
 
-- Tripod stations with occlusion surveys (04), the region cycle and preset table (05), the build-time mod-car
-  ledger (06), walk and flythrough scenes (07).
-- **A placed shot does no occlusion check** — a `flyby` eye stands 5.4 m off the road and can be planted
-  inside a wall. 04's `pathClear` survey is the fix; until then it is the shot most likely to look wrong.
+- The region cycle and preset table (05), the build-time mod-car ledger (06), walk and flythrough scenes (07).
+- **Only the tripod is surveyed.** A `flyby` eye is derived from the car and gets no occlusion check at all,
+  so it can still be planted inside a wall; the same machinery would cover it, but nothing asks it to yet.
 - Interior/cabin camera, in-page recording, traffic and drift driving are out of scope for v1 (D14).
 - Routes stay inside one region (D15) and the clock drifts ~16 game minutes over a fragment (D13).
 
@@ -62,5 +86,8 @@ frames, **0** undeclared `[cam] jump` lines, 59 cuts, shortest dealt shot 5.2 s.
   safe-frame share measured 76 % (the car sweeps out of frame over the last stretch of the pass). Averaged
   over a run it is under 1 %. Standoff and lead are the levers, and the next round on it is a FIELD look at
   footage, not another number.
+- **The station prediction is only as good as the car's obedience to its own target speeds.** Median 1 m,
+  worst 6.6 m over 12 takes — every large one is a window that still covers part of the car's acceleration.
+  A resample at cut time is the plan's own lever if it ever matters.
 - The road graph is `original`-only: a total conversion without `data/paths/nodes*.dat` gets a logged refusal,
   not a drive scene.

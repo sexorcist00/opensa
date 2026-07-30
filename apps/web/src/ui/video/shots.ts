@@ -24,13 +24,14 @@ export interface ScreenAnchor {
   y: number;
 }
 
-export type ShotName = 'chase' | 'flyby' | 'high' | 'nose' | 'wing-l' | 'wing-r';
+export type ShotName = 'chase' | 'flyby' | 'high' | 'nose' | 'station' | 'wing-l' | 'wing-r';
 
 /**
  * One shot. `chase` carries no geometry on purpose: the shipped follow rig IS that shot, so the director
- * writes `null` for those segments and inherits its collision and motion layers for free.
+ * writes `null` for those segments and inherits its collision and motion layers for free. `station` carries
+ * none either, for the opposite reason: its eye comes from 04's survey of the world, not from the car.
  */
-export type ShotPreset = ChaseShot | PlacedShot;
+export type ShotPreset = ChaseShot | PosedShot | StationShot;
 
 /** The car being filmed, engine Y-up, as of the frame being composed. */
 export interface Subject {
@@ -59,6 +60,7 @@ export const SHOTS: readonly ShotPreset[] = [
     eyeSmooth: 0.22,
     fovYRad: (50 * Math.PI) / 180,
     kind: 'tracking',
+    maxDist: 40,
     maxSeconds: 8,
     minSeconds: 5,
     name: 'nose',
@@ -72,6 +74,7 @@ export const SHOTS: readonly ShotPreset[] = [
     eyeSmooth: 0.3,
     fovYRad: (55 * Math.PI) / 180,
     kind: 'tracking',
+    maxDist: 40,
     maxSeconds: 9,
     minSeconds: 5,
     name: 'high',
@@ -84,6 +87,7 @@ export const SHOTS: readonly ShotPreset[] = [
     eyeSmooth: 0.18,
     fovYRad: (45 * Math.PI) / 180,
     kind: 'tracking',
+    maxDist: 40,
     maxSeconds: 7,
     minSeconds: 5,
     name: 'wing-l',
@@ -96,6 +100,7 @@ export const SHOTS: readonly ShotPreset[] = [
     eyeSmooth: 0.18,
     fovYRad: (45 * Math.PI) / 180,
     kind: 'tracking',
+    maxDist: 40,
     maxSeconds: 7,
     minSeconds: 5,
     name: 'wing-r',
@@ -109,6 +114,7 @@ export const SHOTS: readonly ShotPreset[] = [
     eyeSmooth: 0.2,
     fovYRad: (40 * Math.PI) / 180,
     kind: 'static',
+    maxDist: 60,
     maxSeconds: 7,
     minSeconds: 5,
     name: 'flyby',
@@ -119,22 +125,44 @@ export const SHOTS: readonly ShotPreset[] = [
     targetSmooth: 0.16,
     weight: 1,
   },
+  {
+    // The tripod (096/04): a camera on a stand at the roadside, surveyed for a clear line before the shot
+    // starts. Its standoff is the survey's business — this row only says how the car is framed from there.
+    anchor: { x: 0.4, y: 0.55 },
+    eyeSmooth: 0.2,
+    fovYRad: (38 * Math.PI) / 180,
+    kind: 'station',
+    maxDist: 70,
+    maxSeconds: 8,
+    minSeconds: 5,
+    name: 'station',
+    targetSmooth: 0.18,
+    weight: 3,
+  },
 ];
 
-/** A shot the director poses itself: `tracking` re-places the eye every frame, `static` plants it once. */
-export type PlacedShot = {
+/** Any shot the director poses itself — everything needed to FRAME a car, whatever put the eye where it is. */
+export type PlacedShot = PosedShot | StationShot;
+
+/** A shot whose eye comes from the CAR: `tracking` re-places it every frame, `static` plants it once. */
+export type PosedShot = FramedShot & {
+  readonly kind: 'static' | 'tracking';
+  /** Camera offset in the CAR's heading frame, as multiples of its half-extents (forward/lateral/height). */
+  readonly offset: { readonly forward: number; readonly height: number; readonly lateral: number };
+};
+
+type ChaseShot = ShotBase & { readonly kind: 'chase' };
+
+type FramedShot = {
   /** Where the car sits on screen before lead room mirrors it ({@link anchorFor}). */
   readonly anchor: ScreenAnchor;
   /** `smoothDamp` time constants (s) for the eye and the look point — the shot's whole feel. */
   readonly eyeSmooth: number;
   readonly fovYRad: number;
-  readonly kind: 'static' | 'tracking';
-  /** Camera offset in the CAR's heading frame, as multiples of its half-extents (forward/lateral/height). */
-  readonly offset: { readonly forward: number; readonly height: number; readonly lateral: number };
+  /** Beyond this the car is too far to read and the guard treats the frame as empty (m). */
+  readonly maxDist: number;
   readonly targetSmooth: number;
 } & ShotBase;
-
-type ChaseShot = ShotBase & { readonly kind: 'chase' };
 
 interface ShotBase {
   readonly maxSeconds: number;
@@ -144,6 +172,9 @@ interface ShotBase {
   /** Relative weight in the seeded pick. */
   readonly weight: number;
 }
+
+/** A tripod: the eye comes from 096/04's surveyed station, so the preset carries only the framing. */
+type StationShot = FramedShot & { readonly kind: 'station' };
 
 /**
  * The look point that puts `subject` at `anchor` on screen, given where the camera stands.
@@ -236,7 +267,7 @@ export function projectToScreen(
  * The car's right is `forward × up` exactly — the same right the ped-offset spawn uses, so "lateral +1" is
  * the passenger side in every module that talks about this car.
  */
-export function shotEye(shot: PlacedShot, subject: Subject): [number, number, number] {
+export function shotEye(shot: PosedShot, subject: Subject): [number, number, number] {
   const forward = normalize(subject.forward);
   const right = cross(forward, UP);
   const [hx, hy, hz] = subject.halfExtents;

@@ -4,6 +4,26 @@
 films the car driving past" look that carries most trailer language. This phase owns the plan's second
 field risk.**
 
+**SHIPPED 2026-07-30.** Numbers in the plan readme's ledger. What the phase did differently from this doc,
+and why:
+
+- **Station offsets are 8-18 m, not 4-12.** 03 measured what a close pass does to the pan cap (the angular
+  rate at closest approach is speed ÷ standoff), and 4 m at a cruise is 3 rad/s against a 1.05 rad/s cap.
+  The range still comes from the road and nothing is written against a place.
+- **The survey waits for the car to be up to speed.** Not in this doc, and the single biggest number the
+  phase moved: predicting from a launching car put stations 13.5 m off. The plan's own remedy (resample at
+  cut) is still unspent and stays the lever if the residual ever matters.
+- **A scene that OPENS on a tripod is surveyed behind the black overlay.** This doc assumed a preceding shot
+  to amortise over; four of twelve slots had none and played fallbacks.
+- **The `[cam] jump` watchdog needed a second protocol in the harness** — `ALSO='[cam]'` (added in 03) is how
+  the acceptance reads it while collecting `[video]`.
+- **The colonnade street the acceptance asks for does not exist as a ROUTE.** Downtown LS is a grid the
+  route builder rejects outright, so the hard case was driven at the tightest accepted LA start instead. The
+  finding is `docs/edge-cases/route-graph.md`, and it is the reason a pin is always logged when it fails.
+- **Not built: `sphereCast` sightlines.** The risks section offers them if thin rays thread visual occluders.
+  Thin `pathClear` rejected 10 candidates in 25 scenes and cost half as much; there is no field evidence yet
+  that a threaded fence ever survived one, so the cheaper probe stays until footage says otherwise.
+
 ## The trap this phase is built around
 
 Station choice is a DISCRETE gate over raycasts, and the 080 postmortem

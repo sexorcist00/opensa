@@ -37,6 +37,7 @@ Read in `src/ui/engine-canvas-host.tsx` unless noted.
 | `from`      | `10`                   | real seconds                   | Shortest fragment a `video` scene plays for                                                                                                                     |
 | `to`        | `25`                   | real seconds                   | Longest fragment; each scene draws its length from `[from, to]` (clamped up to `from`)                                                                          |
 | `seed`      | derived from the clock | integer                        | Determinises a `video` run's routes, car, hour and weather (D9). The ACTIVE seed is always printed as `[video] seed=…`, so a derived one is still replayable    |
+| `at`        | off                    | `x,y` (GTA)                    | Pins every `video` scene to the graph node nearest this point — how a HARD street is looked at deliberately (`scripts/debug/video-routes.ts --worst` prints the coordinates) |
 | `gripVd`    | `12`                   | m/s                            | 081/09 lateral speed-grip assist: boost reference speed (`boost = min(1 + (v/gripVd)², gripCap)`)                                                               |
 | `gripCap`   | `3`                    | ×                              | 081/09 assist ceiling; both dials are session overrides, shown in F2 and recorded by every `[phys]` capture                                                     |
 | `airCtl`    | `1`                    | ×                              | 081/06 §1 in-air attitude control at the original's strength (`0.0007 × min(1, 3000/turnMass)` per frame = 1.75 rad/s² per unit of stick). `0` turns it off — the A/B for a jump; every `[phys]` capture records the active value |
@@ -52,10 +53,11 @@ the scenes live in `src/phys-scenes.ts`:
 `pull-away-reverse`. A lap teleports next to a real road spot, spawns the car, seats the player, then plays
 a keyframe timeline through the SAME `InputState` the player uses.
 
-`video` / `from` / `to` / `seed` are read in `src/ui/engine-video-runs.ts`. A scene picks a route out of the
+`video` / `from` / `to` / `seed` / `at` are read in `src/ui/engine-video-runs.ts`. A scene picks a route out of the
 game's own `NODES*.DAT` graph, stages a car on it behind a black overlay the module owns, and hands the wheel
-to the autopilot (`packages/game/src/vehicle/path-follow.ts`) — the chase camera and the UI hide are the
-shipped ones. A game with no `data/paths/nodes*.dat` (the total conversions) says so and does nothing.
+to the autopilot (`packages/game/src/vehicle/path-follow.ts`), and a director (`src/ui/video/`) cuts between
+car-anchored shots and surveyed roadside tripods. A game with no `data/paths/nodes*.dat` (the total
+conversions) says so and does nothing.
 
 > **These are HARNESS CONTRACTS.** `tools-debug/bench-harness/drive.js` scrapes the console
 > protocol (`[bench]` / `[soak]` / `[phys]` / `[video]` with `TAG=`, plus `sweep complete`) and the URLs in

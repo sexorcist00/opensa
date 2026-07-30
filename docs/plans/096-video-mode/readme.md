@@ -130,7 +130,7 @@ dependency order; 06 is independent and can run any time before 05.
 | [01](01-path-graph-and-routes.md) | Path graph + seeded route builder (offline-first) — **SHIPPED** | **P0** | — |
 | [02](02-module-skeleton-and-autopilot.md) | Module skeleton + autopilot drive scene v0 (chase cam) — **SHIPPED** | **P0** | 01 |
 | [03](03-camera-authority-and-shots.md) | Video camera authority + shot presets + framing — **SHIPPED** | **P1** | 02 |
-| [04](04-stations-and-occlusion.md) | Tripod stations: survey, occlusion, cuts without flicker | **P1** | 03 |
+| [04](04-stations-and-occlusion.md) | Tripod stations: survey, occlusion, cuts without flicker — **SHIPPED** | **P1** | 03 |
 | [05](05-sequencer-regions-presets.md) | Sequencer: region cycle, weather/time presets, car pick | **P1** | 02 (04 for full look) |
 | [06](06-mod-car-ledger.md) | Build-time mod-car ledger (tool + pack + runtime read) | **P1** | — (feeds 05) |
 | [07](07-walk-and-fly-scenes.md) | Walk + flythrough scenes | **P2** | 03, 05 |
@@ -197,7 +197,28 @@ before analysis). Empty until phases run:
   11 `[cam] jump` lines were all paired with `[slow] frame 120-224` and each equalled the car's own travel
   over that frame — the watchdog does not normalise by `dt`, now in `docs/edge-cases/camera-rig.md`; and a
   cut is a discontinuity, so a pan-rate assertion that measures across one is measuring the cut.
-- 04: —
+- 04: **DONE 2026-07-30.** The `station` shot, an amortised survey behind it, and `?at=x,y` to pin a scene.
+  **Headless 5 seeds × 5 scenes, `build/original/opensa`, DPR 1: 35 710 directed frames, safe frame
+  99.18 %** (worst scene 93.5 %), **0 `[cam] jump` lines in every run**. **12 of 12 tripod slots played from a surveyed station (100 % against the plan's
+  ≥ 60 % floor), 0 fallbacks**; 14 surveys, all filled, rejecting 10 candidates on sightline and 2 for having
+  no ground — a real street does reject, which is what makes the fill rate mean something. **≤ 3 casts in
+  EVERY frame** (205 total, the whole budget the module was given), verdict within 14 frames (0.23 s). Cut
+  causes over the run: 55 scheduled, **1 occluded** (the live tripod check firing in the field, once), 0
+  empty. Pan cap bit on 6.2 % of directed frames (03: 2.7 %) — tripods pan, and none of it cost a frame.
+  **The prediction was the phase's real work, in three measured rounds**: predicting off the route's target
+  speeds alone put a station **19.5 m** from the car (the autopilot cruises ~15 % under target, 096/02);
+  scaling by the car's live speed took it to **13.5 m**; waiting for the car to be UP TO SPEED before
+  predicting from it took it to **6.6 m max, median 1 m** (pinned run: 0.7 m). Every remaining large one is a
+  window that still covers part of the launch. The other thing the field found: a scene OPENING on a tripod
+  had nowhere to amortise its casts and played a fallback four times out of twelve — the survey now runs
+  behind the black overlay, and fallbacks went to zero.
+  **The pin, and what it found**: `&at=847,-1772` (the hardest accepted LA start `video-routes.ts --worst`
+  prints, a 19.2 m corner) drove that street in all 4 scenes — safe frame 100 %, 3 stations filled, 0 jumps,
+  ≤ 3 casts/frame, prediction error ≤ 6.3 m. The FIRST pin tried was downtown LS (`&at=1450,-1500`) and it
+  produced **no route at all** — 40 rejected walks per scene, five scenes running: the builder's 45°-per-25 m
+  turn budget cannot cross a right-angle grid whose blocks are shorter than the window. The runner logged the
+  fallback each time, which is the only reason the run was not read as a downtown capture. Written up in
+  `docs/edge-cases/route-graph.md`; loosening the budget is 05's variety knob.
 - 05: —
 - 06: —
 - 07: —

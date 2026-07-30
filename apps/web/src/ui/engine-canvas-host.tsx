@@ -1740,7 +1740,10 @@ async function boot(
     fs,
     getStream: (): null | StreamStats => lastStream,
     getVehicles: (): EngineVehicles | null => vehicles,
+    groundBelow: (at, maxDrop): null | number => physics.groundBelow([at[0], at[1], at[2]], maxDrop),
     params,
+    pathClear: (from, to, excludeBody): boolean =>
+      physics.pathClear([from[0], from[1], from[2]], [to[0], to[1], to[2]], excludeBody),
     setHour: (value): void => {
       hour = value;
     },

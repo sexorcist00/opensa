@@ -4,7 +4,7 @@ import {
   aimShot,
   anchorFor,
   forwardFromHeading,
-  type PlacedShot,
+  type PosedShot,
   projectToScreen,
   shotEye,
   SHOTS,
@@ -15,11 +15,12 @@ const ASPECT = 16 / 9;
 /** A saloon's own numbers (`admiral`-sized): half width, half length, half height. */
 const HALF_EXTENTS = [0.9, 2.3, 0.7] as const;
 
-const WING: PlacedShot = {
+const WING: PosedShot = {
   anchor: { x: 0.38, y: 0.58 },
   eyeSmooth: 0.18,
   fovYRad: Math.PI / 4,
   kind: 'tracking',
+  maxDist: 40,
   maxSeconds: 7,
   minSeconds: 5,
   name: 'wing-l',
@@ -179,7 +180,8 @@ describe('SHOTS (the preset table)', () => {
     });
 
     it('places no camera inside the car it films', () => {
-      const placed = SHOTS.filter((shot) => shot.kind !== 'chase');
+      // A tripod's eye comes from 04's survey, not from the car — only the car-anchored rows are asked here.
+      const placed = SHOTS.filter((shot): shot is PosedShot => shot.kind === 'static' || shot.kind === 'tracking');
       const inside = placed.filter((shot) => {
         const eye = shotEye(shot, subjectAt(0, 12));
 

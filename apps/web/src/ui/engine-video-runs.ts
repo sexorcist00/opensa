@@ -32,10 +32,12 @@ import type { VideoCamera } from './camera/engine-camera';
 import type { EngineVehicles } from './engine-vehicles';
 import type { DirectorState } from './video/director';
 import type { Subject } from './video/shots';
+import type { StationSupply } from './video/station-supply';
 
 import { nextFrame, until, waitSeconds } from './frame-clock';
-import { createDirector, planShots, stepDirector } from './video/director';
+import { createDirector, nextStationSlot, planShots, stepDirector } from './video/director';
 import { forwardFromHeading } from './video/shots';
+import { createStationSupply } from './video/station-supply';
 
 /** What video mode needs from the engine host — thin accessors over its loop state, like `PhysRunsHost`. */
 export interface VideoRunsHost {
@@ -50,7 +52,15 @@ export interface VideoRunsHost {
   getStream(): null | StreamStats;
   /** Live accessor — the vehicle system arrives asynchronously after boot. */
   getVehicles(): EngineVehicles | null;
+  /** Ground Z under a GTA point (searching `maxDrop` down), or null — the station survey's ground snap. */
+  groundBelow(at: readonly [number, number, number], maxDrop: number): null | number;
   params: URLSearchParams;
+  /** Line of sight between two GTA points, one body excluded — the survey and the live tripod check. */
+  pathClear(
+    from: readonly [number, number, number],
+    to: readonly [number, number, number],
+    excludeBody?: number,
+  ): boolean;
   setHour(hour: number): void;
   /** The streaming-settle deadline after a teleport (the host's world-ready timeout). */
   settleTimeoutMs: number;
@@ -111,6 +121,8 @@ const STABLE_TIMEOUT_S = 20;
 const FADE_MS = 300;
 /** The longest frame the director is allowed to integrate (s) — a hitch must not snap the damping. */
 const MAX_FRAME_SECONDS = 0.1;
+/** Frames spent surveying an OPENING tripod behind the overlay — an open street settles in 2-4 of them. */
+const PRIME_FRAMES = 40;
 /** Series rate in the printed JSON (Hz). Half the phys laps': this instrument judges a LINE, not a step. */
 const SERIES_HZ = 10;
 /** Default fragment bounds (real seconds, D1). */
@@ -121,6 +133,9 @@ const DEFAULT_TO = 25;
 interface SceneContext {
   car: string;
   graph: RouteGraph;
+  /** `?at=x,y`: every scene starts at the graph node nearest this point, so a field round can look at the
+   *  SAME hard street repeatedly. Null when the sequencer picks freely. */
+  pinned: null | readonly [number, number];
   random: Random;
   scene: number;
   seconds: number;
@@ -158,7 +173,11 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   const asked = host.params.get('seed');
   const seed = asked === null || Number.isNaN(Number(asked)) ? Date.now() >>> 0 : Number(asked);
   const car = host.params.get('car') ?? DEFAULT_CAR;
-  log(`seed=${seed} region=${REGION} car=${car} fragments ${from}-${to}s`);
+  const pinned = parsePin(host.params.get('at'));
+  log(
+    `seed=${seed} region=${REGION} car=${car} fragments ${from}-${to}s` +
+      (pinned ? ` pinned at ${pinned[0]},${pinned[1]}` : ''),
+  );
 
   const overlay = createOverlay();
   host.setUiHidden(true);
@@ -171,6 +190,7 @@ export function setupVideoRuns(host: VideoRunsHost): void {
           {
             car,
             graph,
+            pinned,
             random,
             scene,
             seconds: from + random() * (to - from),
@@ -222,6 +242,21 @@ function leaveCar(host: VideoRunsHost, vehicles: EngineVehicles): void {
   vehicles.leaveInstantly();
 }
 
+/** `?at=x,y` → the point every scene's route starts nearest to, or null when the pair is absent/unreadable. */
+function parsePin(value: null | string): null | readonly [number, number] {
+  if (value === null) {
+    return null;
+  }
+  const [x, y] = value.split(',').map(Number);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    log(`ignoring ?at=${value} — expected two numbers, "x,y"`);
+
+    return null;
+  }
+
+  return [x, y];
+}
+
 // eslint-disable-next-line no-console -- the runner's whole progress protocol is this tag (D12: no on-screen status)
 const log = (message: string): void => console.log(`[video] ${message}`);
 
@@ -246,7 +281,22 @@ function pickRoute(
   random: Random,
   inRegion: (x: number, y: number) => boolean,
   targetLength: number,
+  pinned: null | readonly [number, number],
 ): null | Route {
+  // A PINNED start (`?at=x,y`, 096/04) is how a hard case gets looked at deliberately: `video-routes.ts
+  // --worst` prints the coordinates of the tightest routes, and this is what takes one of them. The walk is
+  // still seeded, so the same pin plus the same seed is the same drive, every time.
+  if (pinned) {
+    const start = graph.nearest(pinned[0], pinned[1]);
+    for (let attempt = 0; start !== undefined && attempt < ROUTE_TRIES; attempt += 1) {
+      const route = walkRoute(graph, start, random, { cruiseSpeed: CRUISE_SPEED, inRegion, targetLength });
+      if (route && route.stop === 'target') {
+        return route;
+      }
+    }
+    // Saying so matters: a field round that quietly drove somewhere else would be measuring the wrong street.
+    log(`no route out of the pinned start in ${ROUTE_TRIES} tries — this scene takes a seeded one`);
+  }
   for (let attempt = 0; attempt < ROUTE_TRIES; attempt += 1) {
     const start = randomNode(
       graph,
@@ -297,6 +347,7 @@ async function playFragment(
   host: VideoRunsHost,
   vehicles: EngineVehicles,
   director: DirectorState,
+  supply: StationSupply,
   seconds: number,
 ): Promise<string> {
   const started = performance.now();
@@ -307,7 +358,7 @@ async function playFragment(
     // A hitch must not teleport the damping: a 400 ms frame would land the eye on its target in one step.
     const dt = Math.min(MAX_FRAME_SECONDS, (now - previous) / 1000);
     previous = now;
-    poseFrame(host, vehicles, director, dt);
+    poseFrame(host, vehicles, director, supply, dt);
     const state = host.autopilot.state();
     if (state !== 'following') {
       return state;
@@ -323,11 +374,18 @@ async function playFragment(
  * car to film (a despawn mid-teardown) — the last pose then simply stands, which is what a held frame looks
  * like behind the overlay that is already coming down.
  */
-function poseFrame(host: VideoRunsHost, vehicles: EngineVehicles, director: DirectorState, dt: number): void {
+function poseFrame(
+  host: VideoRunsHost,
+  vehicles: EngineVehicles,
+  director: DirectorState,
+  supply: StationSupply,
+  dt: number,
+): void {
   const car = vehicles.activeVehicle();
   if (!car) {
     return;
   }
+  supply.beginFrame();
   const subject: Subject = {
     // The DRAWN position with the GAMEPLAY heading — the pairing the shipped rig already follows a car with
     // (`focus`/`focusHeading` in the host): the heading is at most one fixed step old, which at a cruise yaw
@@ -337,8 +395,27 @@ function poseFrame(host: VideoRunsHost, vehicles: EngineVehicles, director: Dire
     position: host.toEngine([car.renderPosition[0], car.renderPosition[1], car.renderPosition[2]]),
     speed: Math.abs(vehicles.drivenMotion()?.speed ?? 0),
   };
-  const frame = stepDirector(director, subject, dt, host.aspect());
+  const frame = stepDirector(director, subject, dt, host.aspect(), supply);
   host.setVideoCamera(frame.pose, frame.cut);
+  // The survey runs AFTER the pose, on what is left of the budget: a live sightline is the frame's first
+  // claim on it, and a survey is the thing that can always wait one more frame.
+  supply.step();
+}
+
+/**
+ * Give the survey its frames before the fragment starts, for a scene whose FIRST shot is a tripod.
+ *
+ * Bounded by frames, not by an answer: a survey that finds nothing simply stops asking, and the slot plays
+ * its fallback exactly as it would have.
+ */
+async function primeStations(supply: StationSupply): Promise<void> {
+  for (let frame = 0; frame < PRIME_FRAMES; frame += 1) {
+    supply.beginFrame();
+    if (supply.step() === 0) {
+      return;
+    }
+    await nextFrame();
+  }
 }
 
 /** One `[video] {json}` line per scene — the phys protocol's twin, plus what only an autopilot can report. */
@@ -350,6 +427,7 @@ function report(
   settleMs: number,
   ended: string,
   director: DirectorState,
+  supply: StationSupply,
 ): void {
   const errors = host.autopilot
     .errorSamples()
@@ -420,11 +498,20 @@ function report(
      *  `safe` is the share of DIRECTED frames the car sat inside the safe frame (chase frames are the rig's
      *  framing, so they are not judged here). */
     shots: {
+      /** What ended each shot — `scheduled` is its own clock, the rest are the guard (096/04). */
+      causes: director.causes,
       cuts: director.cuts,
       judged: director.framesJudged,
       list: director.plan.map((entry) => `${entry.preset.name}:${entry.seconds.toFixed(1)}`),
       panClips: director.panClips,
       safe: Number((director.framesJudged === 0 ? 0 : director.safeFrames / director.framesJudged).toFixed(3)),
+    },
+    /** The tripod survey (096/04): what it filled, what it rejected, and what it cost per frame. */
+    stations: {
+      ...supply.ledger(),
+      /** Tripod slots that played a car-anchored stand-in because no candidate passed. */
+      fallbacks: director.fallbacks,
+      predictionErrorMax: Number(supply.ledger().predictionErrorMax.toFixed(1)),
     },
     summary: summarisePhysFrames(frames),
   };
@@ -441,7 +528,7 @@ async function runScene(host: VideoRunsHost, context: SceneContext, overlay: Vid
   overlay.show();
   const boxes = host.cityBoxes();
   const inRegion = (x: number, y: number): boolean => cityAt(x, y, boxes) === REGION;
-  const route = pickRoute(context.graph, context.random, inRegion, context.targetLength);
+  const route = pickRoute(context.graph, context.random, inRegion, context.targetLength, context.pinned);
   if (!route) {
     throw new Error(`no route inside ${REGION} in ${ROUTE_TRIES} tries`);
   }
@@ -493,21 +580,39 @@ async function runScene(host: VideoRunsHost, context: SceneContext, overlay: Vid
     vehicles.telemetry.enabled = true;
     host.autopilot.follow(route);
     const director = createDirector(planShots(context.random, context.seconds));
+    // The survey reads the SAME seeded stream as the shot list, so a replay picks the same candidate order.
+    const supply = createStationSupply({
+      carGta: (): readonly [number, number, number] => vehicles.activeVehicle()?.position ?? start,
+      carSpeed: (): number => Math.abs(vehicles.drivenMotion()?.speed ?? 0),
+      cursor: (): number => host.autopilot.progress() * (route.points.length - 1),
+      excludeBody: (): number | undefined => vehicles.activeVehicle()?.body,
+      probes: {
+        groundBelow: (at, maxDrop): null | number => host.groundBelow(at, maxDrop),
+        pathClear: (from, to, exclude): boolean => host.pathClear(from, to, exclude),
+      },
+      random: context.random,
+      route,
+      toEngine: (gta): [number, number, number] => host.toEngine(gta),
+      upcoming: () => nextStationSlot(director),
+    });
     log(`scene ${context.scene} shots ${director.plan.map((entry) => entry.preset.name).join(' → ')}`);
+    // If the scene OPENS on a tripod, its survey happens here — behind the overlay, where casts are free and
+    // there is no preceding shot to amortise them over.
+    await primeStations(supply);
     // Compose the opening shot BEFORE the overlay lifts. Staged after it, the fragment would open on the
     // chase rig and cut one frame later — a cut INSIDE the footage, which is exactly what the user's manual
     // edit is not supposed to have to find.
-    poseFrame(host, vehicles, director, 0);
+    poseFrame(host, vehicles, director, supply, 0);
     await overlay.hide();
     // WHY it ended is read INSIDE the loop, before the stop. Reading it after `stop()` made every early end
     // report `idle`, and a real `stuck` — a scene that started on an 18° hill the car could not climb — hid
     // behind that for a whole headless run.
-    const ended = await playFragment(host, vehicles, director, context.seconds);
+    const ended = await playFragment(host, vehicles, director, supply, context.seconds);
     overlay.show();
     host.setVideoCamera(null, true); // the rig takes its frame back, and that hand-over is a declared cut
     host.autopilot.stop();
     vehicles.telemetry.enabled = false;
-    report(host, context, route, vehicles.telemetry.frames(), settleMs, ended, director);
+    report(host, context, route, vehicles.telemetry.frames(), settleMs, ended, director, supply);
     if (ended !== 'ran-out') {
       log(
         `scene ${context.scene} ended early: ${ended} at ${(host.autopilot.progress() * 100).toFixed(0)}% of the route`,

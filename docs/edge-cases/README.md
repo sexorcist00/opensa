@@ -22,3 +22,4 @@ the one-line rule and its blast radius live there.
 | [browser-runtime.md](./browser-runtime.md)       | Browser/platform constraints (FSA, Cache Storage, e2e)           |
 | [physics-runtime.md](./physics-runtime.md)       | Rapier vehicle-controller boundaries (cosmetic wheel rotation…)   |
 | [camera-rig.md](./camera-rig.md)                 | Follow-camera (080 director) limits — the mid-corner muted chase  |
+| [route-graph.md](./route-graph.md)               | Drivable-route limits (096) — a city grid yields no route at all  |
