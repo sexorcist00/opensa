@@ -54,7 +54,7 @@ import {
   weatherPool,
 } from './video/presets';
 import { createShiverDiag, yawOfQuat } from './video/shiver-diag';
-import { forwardFromHeading } from './video/shots';
+import { forwardFromHeading, SHOT_ROAD_SECONDS, SHOTS_PER_SCENE } from './video/shots';
 import { createStationSupply } from './video/station-supply';
 
 /** What video mode needs from the engine host — thin accessors over its loop state, like `PhysRunsHost`. */
@@ -128,8 +128,16 @@ const DEFAULT_CAR = 'admiral';
 const CRUISE_SPEED = 12;
 /** Road gathered per route, as a multiple of what the longest fragment can drive — margin, never a shortfall. */
 const ROUTE_MARGIN = 1.3;
-/** Seeded start nodes tried before a scene gives up on the region and takes the next seed. */
-const ROUTE_TRIES = 40;
+/**
+ * Seeded start nodes tried before a scene gives up on the region.
+ *
+ * Raised from 40 with the 2026-07-31 timing model: a five-shot scene needs roughly 936 m of road where the
+ * old fragment needed 390, and long routes are rarer — measured over 120 walks per region on the built tree,
+ * San Fierro accepts 10 (Los Santos 19, Countryside 13, Desert 17, Las Venturas 33). At the worst of those,
+ * 40 tries would fail a scene about 3 times in 100; 120 puts it under 1 in 10 000, and a walk is a graph
+ * traversal behind the black overlay.
+ */
+const ROUTE_TRIES = 120;
 /** How far to the side of the spawn the ped waits (m) — the phys laps' number, inside the 4 m enter range. */
 const PED_OFFSET = 2.5;
 /** Grace after a teleport before `pendingCells` means anything — it answers for the ring you just left. */
@@ -158,9 +166,14 @@ const MAX_FRAME_SECONDS = 0.1;
 const PRIME_FRAMES = 40;
 /** Series rate in the printed JSON (Hz). Half the phys laps': this instrument judges a LINE, not a step. */
 const SERIES_HZ = 10;
-/** Default fragment bounds (real seconds, D1). */
-const DEFAULT_FROM = 10;
-const DEFAULT_TO = 25;
+/**
+ * Road a scene may need (s of driving), for sizing its route before it is walked.
+ *
+ * Every shot is charged the same {@link SHOT_ROAD_SECONDS}: a riding shot drives its whole clip, and a
+ * planted one is charged its PASS rather than its watchdog, because a car that trips the watchdog has
+ * stopped moving and is not consuming road either.
+ */
+const SCENE_ROAD_SECONDS = SHOTS_PER_SCENE * SHOT_ROAD_SECONDS;
 
 /** Everything one scene was seeded with — assembled once, so the report can state what it ran. */
 interface SceneContext {
@@ -175,12 +188,8 @@ interface SceneContext {
   /** The region this scene plays in (D2's cycle) — the route filter and the weather pool read the same token. */
   region: City;
   scene: number;
-  seconds: number;
   /** The RUN's master seed, so a staged-scene line can print the scene's own derived one. */
   seed: number;
-  /** Road to gather for this scene (m) — derived from the LONGEST fragment the run may play, not from the
-   *  default one: `?to=40` must not hand a 25 s route to a 40 s scene and run out of road on camera. */
-  targetLength: number;
 }
 
 /** The black DOM element between scenes, and the only thing that owns it (the 094 single-owner rule). */
@@ -207,8 +216,6 @@ export function setupVideoRuns(host: VideoRunsHost): void {
 
     return;
   }
-  const from = Number(host.params.get('from') ?? DEFAULT_FROM) || DEFAULT_FROM;
-  const to = Math.max(from, Number(host.params.get('to') ?? DEFAULT_TO) || DEFAULT_TO);
   // A derived seed is still a REPLAYABLE seed — as long as it is printed, which is the whole of D9. Read
   // for PRESENCE, not truthiness: `?seed=0` is a seed like any other and must not fall through to the clock.
   const asked = host.params.get('seed');
@@ -221,7 +228,7 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   const pinned = parsePin(host.params.get('at'));
   const scenes = parseSceneLimit(host.params.get('scenes'));
   log(
-    `seed=${seed} scenes 1-${scenes} cycle ${REGION_CYCLE.join('→')} fragments ${from}-${to}s · ` +
+    `seed=${seed} scenes 1-${scenes} cycle ${REGION_CYCLE.join('→')} ${SHOTS_PER_SCENE} shots/scene · ` +
       `${roster.length} road cars, ${modCars.size} mod slots` +
       (pinnedCar ? ` · car pinned to ${pinnedCar}` : '') +
       (pinned ? ` · pinned at ${pinned[0]},${pinned[1]}` : ''),
@@ -264,9 +271,7 @@ export function setupVideoRuns(host: VideoRunsHost): void {
             random,
             region: entry.region,
             scene,
-            seconds: from + random() * (to - from),
             seed,
-            targetLength: to * CRUISE_SPEED * ROUTE_MARGIN,
           },
           overlay,
           diag,
@@ -423,21 +428,22 @@ async function playFragment(
   vehicles: EngineVehicles,
   director: DirectorState,
   supply: StationSupply,
-  seconds: number,
   diag: ShiverDiag,
 ): Promise<string> {
-  const started = performance.now();
   // A hitch must not teleport the damping: a 400 ms frame would land the eye on its target in one step.
   host.setVideoStep((dt) => poseFrame(host, vehicles, director, supply, Math.min(MAX_FRAME_SECONDS, dt), diag));
   try {
     for (;;) {
       await nextFrame();
+      // The SHOT LIST ends the scene now, not a clock: the fifth shot finishing is what `done` says. A scene
+      // therefore runs for as long as its five cameras take, which is the point of the 2026-07-31 model —
+      // nothing here, and nothing in a URL, decides a fragment's length any more.
+      if (director.done) {
+        return 'shots-done';
+      }
       const state = host.autopilot.state();
       if (state !== 'following') {
         return state;
-      }
-      if (performance.now() - started >= seconds * 1000) {
-        return 'ran-out';
       }
     }
   } finally {
@@ -518,6 +524,7 @@ function report(
   ended: string,
   director: DirectorState,
   supply: StationSupply,
+  seconds: number,
 ): void {
   const errors = host.autopilot
     .errorSamples()
@@ -564,7 +571,8 @@ function report(
       start: route.points[0].position.map((value) => Number(value.toFixed(1))),
     },
     scene: context.scene,
-    seconds: Number(context.seconds.toFixed(2)),
+    /** How long the scene actually RAN (s) — an outcome now, not an input: the five shots decide it. */
+    seconds: Number(seconds.toFixed(2)),
     series: thinFrames(frames, SERIES_HZ).map((frame) =>
       [
         frame.t,
@@ -625,7 +633,17 @@ async function runScene(
   overlay.show();
   const boxes = host.cityBoxes();
   const inRegion = (x: number, y: number): boolean => cityAt(x, y, boxes) === context.region;
-  const route = pickRoute(context.graph, context.random, inRegion, context.targetLength, context.pinned);
+  // The shot list is dealt BEFORE the route, because it is what says how much road the scene needs: five
+  // cameras, each worth its own stretch of driving. A scene is as long as its shots (user, 2026-07-31), so
+  // nothing here knows its duration until it has played.
+  const plan = planShots(context.random);
+  const route = pickRoute(
+    context.graph,
+    context.random,
+    inRegion,
+    SCENE_ROAD_SECONDS * CRUISE_SPEED * ROUTE_MARGIN,
+    context.pinned,
+  );
   if (!route) {
     throw new Error(`no route inside ${context.region} in ${ROUTE_TRIES} tries`);
   }
@@ -637,7 +655,8 @@ async function runScene(
     `scene ${context.scene} seed=${sceneSeed(context.seed, context.scene)} region=${context.region} kind=drive ` +
       `car=${context.car}${context.modCar ? '(mod)' : ''} hour=${hour} ` +
       `weather=${weather === null ? 'unchanged' : host.weatherNames[weather]} ` +
-      `route=${route.length.toFixed(0)}m corner=${route.minCurveRadius.toFixed(1)}m ${context.seconds.toFixed(1)}s`,
+      `route=${route.length.toFixed(0)}m corner=${route.minCurveRadius.toFixed(1)}m ` +
+      `shots ${plan.map((entry) => entry.preset.name).join('→')}`,
   );
 
   // On foot BEFORE the teleport, always: a seated rider is re-placed on his seat every fixed step, so
@@ -686,7 +705,7 @@ async function runScene(
     vehicles.telemetry.reset();
     vehicles.telemetry.enabled = true;
     host.autopilot.follow(route);
-    const director = createDirector(planShots(context.random, context.seconds));
+    const director = createDirector(plan);
     // The survey reads the SAME seeded stream as the shot list, so a replay picks the same candidate order.
     const supply = createStationSupply({
       carGta: (): readonly [number, number, number] => vehicles.activeVehicle()?.position ?? start,
@@ -702,7 +721,6 @@ async function runScene(
       toEngine: (gta): [number, number, number] => host.toEngine(gta),
       upcoming: () => nextStationSlot(director),
     });
-    log(`scene ${context.scene} shots ${director.plan.map((entry) => entry.preset.name).join(' → ')}`);
     // If the scene OPENS on a tripod, its survey happens here — behind the overlay, where casts are free and
     // there is no preceding shot to amortise them over.
     await primeStations(supply);
@@ -714,12 +732,14 @@ async function runScene(
     // WHY it ended is read INSIDE the loop, before the stop. Reading it after `stop()` made every early end
     // report `idle`, and a real `stuck` — a scene that started on an 18° hill the car could not climb — hid
     // behind that for a whole headless run.
-    const ended = await playFragment(host, vehicles, director, supply, context.seconds, diag);
+    const started = performance.now();
+    const ended = await playFragment(host, vehicles, director, supply, diag);
+    const seconds = (performance.now() - started) / 1000;
     overlay.show();
     host.setVideoCamera(null, true); // the rig takes its frame back, and that hand-over is a declared cut
     host.autopilot.stop();
     vehicles.telemetry.enabled = false;
-    report(host, context, route, vehicles.telemetry.frames(), settleMs, ended, director, supply);
+    report(host, context, route, vehicles.telemetry.frames(), settleMs, ended, director, supply, seconds);
     diag.dump(context.scene);
     // D15's tripwire: a route is built inside ONE region precisely so `CityZoneSystem` never fires its 6 s
     // weather rewrite on camera. If the target moved anyway, the route leaked across a boundary — say which

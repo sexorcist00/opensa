@@ -34,8 +34,6 @@ Read in `src/ui/engine-canvas-host.tsx` unless noted.
 | `phys`      | off                    | `all` or one scene key         | Scripted physics lap (081/01); emits the `[phys]` JSON protocol                                                                                                 |
 | `car`       | `infernus` / `admiral` | vehicle model name             | Which car the `phys` laps drive — and which car a `video` scene spawns (default `admiral` there)                                                                |
 | `video`     | off                    | `1` = on, `0` = off            | Video mode (096): a seeded SEQUENCE of showcase drives, one per region; emits the `[video]` JSON protocol and stops on an end card                              |
-| `from`      | `10`                   | real seconds                   | Shortest fragment a `video` scene plays for                                                                                                                     |
-| `to`        | `25`                   | real seconds                   | Longest fragment; each scene draws its length from `[from, to]` (clamped up to `from`)                                                                          |
 | `seed`      | derived from the clock | integer                        | Determinises a `video` run's routes, car, hour and weather (D9). The ACTIVE seed is always printed as `[video] seed=…`, so a derived one is still replayable    |
 | `at`        | off                    | `x,y` (GTA)                    | Pins every `video` scene to the graph node nearest this point — how a HARD street is looked at deliberately (`scripts/debug/video-routes.ts --worst` prints the coordinates) |
 | `scenes`    | `100`                  | 1…100                          | How many scenes the sequence plays before it stops (096/05a). 100 is the CEILING, not just the default; an unreadable value takes the full run. A skipped `fly`/`walk` entry still consumes an index, so a scene's identity survives 07 |
@@ -55,7 +53,7 @@ the scenes live in `src/phys-scenes.ts`:
 `pull-away-reverse`. A lap teleports next to a real road spot, spawns the car, seats the player, then plays
 a keyframe timeline through the SAME `InputState` the player uses.
 
-`video` / `from` / `to` / `seed` / `at` / `scenes` / `diag` are read in `src/ui/engine-video-runs.ts`. A scene picks a route out of the
+`video` / `seed` / `at` / `scenes` / `car` / `diag` are read in `src/ui/engine-video-runs.ts`. A scene picks a route out of the
 game's own `NODES*.DAT` graph, stages a car on it behind a black overlay the module owns, and hands the wheel
 to the autopilot (`packages/game/src/vehicle/path-follow.ts`), and a director (`src/ui/video/`) cuts between
 car-anchored shots and surveyed roadside tripods. A game with no `data/paths/nodes*.dat` (the total
@@ -161,7 +159,7 @@ Deleted with the three-WebGL renderer in [074/13](../plans/074-opensa-engine/13-
 ## Why there is still no `flags.ts`
 
 Phase 2.4 asked whether the survivors should move behind one typed reader. They should not — yet. The
-count fell from ~60 to **27 distinct names** (096 added seven — `video`, `from`, `to`, `seed` in 02, `at` in 04, `diag` and `scenes` in the 05 round), most of them read exactly once, and the two hosts read
+count fell from ~60 to **27 distinct names** (096 added five — `video`, `seed` in 02, `at` in 04, `diag` and `scenes` in the 05 round; `from`/`to` were removed when a scene stopped having a chosen length), most of them read exactly once, and the two hosts read
 overlapping-but-differently-defaulted sets (see the inconsistencies above), so a shared reader would
 have to model the difference rather than remove it. The zoo grew because nothing was written down, not
 because reads were inline. **This document is the fix; revisit a reader if the count climbs again.**

@@ -24,7 +24,7 @@ export interface ScreenAnchor {
   y: number;
 }
 
-export type ShotName = 'chase' | 'flyby' | 'high' | 'nose' | 'station' | 'wing-l' | 'wing-r';
+export type ShotName = 'chase' | 'crane' | 'flyby' | 'high' | 'nose' | 'station' | 'top' | 'wing-l' | 'wing-r';
 
 /**
  * One shot. `chase` carries no geometry on purpose: the shipped follow rig IS that shot, so the director
@@ -60,9 +60,40 @@ export type Vec3 = readonly [number, number, number];
  */
 const LEAD_SPEED_FULL = 2;
 
+/**
+ * How long a shot that RIDES the car plays (s).
+ *
+ * A length, not a range: these shots have no natural end — the car never leaves their frame — so what ends
+ * them is an editorial decision, and the user made it. A drawn duration only made two identical wing shots
+ * feel arbitrarily different lengths.
+ */
+export const TRACKING_SECONDS = 10;
+
+/**
+ * The watchdog on a PLANTED shot (s): what ends one is the car leaving its frame, not a clock, so this is
+ * only here for the car that never arrives — a wedged autopilot, a route that turned away.
+ *
+ * Derived rather than picked: the car has to cross from beyond the shot's distance ceiling, past the stand,
+ * and out the far side — at most `2 × maxDist` ≈ 140 m for the widest preset, which is ~12 s at a cruise. 15
+ * clears that honestly while still bounding a scene that has stopped happening.
+ */
+export const PLANTED_CEILING_SECONDS = 15;
+
+/**
+ * What a shot costs in ROAD (s), for sizing the route before it is walked.
+ *
+ * A planted shot is charged its pass, not its watchdog: a car that triggers the watchdog is not moving, so it
+ * is not consuming road either. Sizing on the watchdog would ask for a third more road than any scene drives
+ * and cost real routes — at a 936 m target San Fierro already accepts only 10 walks in 120.
+ */
+export const SHOT_ROAD_SECONDS = 12;
+
+/** Shots dealt per scene (the user's decision, 2026-07-31): five cameras, and the scene is as long as they are. */
+export const SHOTS_PER_SCENE = 5;
+
 /** The presets, in the order a reader wants them: the free one first, then the placed ones. */
 export const SHOTS: readonly ShotPreset[] = [
-  { kind: 'chase', maxSeconds: 9, minSeconds: 5, name: 'chase', weight: 3 },
+  { kind: 'chase', name: 'chase', weight: 3 },
   {
     // The car's face, from a little above the bonnet line and off its axis — the shot that shows a mod car.
     anchor: { x: 0.42, y: 0.56 },
@@ -70,8 +101,6 @@ export const SHOTS: readonly ShotPreset[] = [
     fovYRad: (50 * Math.PI) / 180,
     kind: 'tracking',
     maxDist: 40,
-    maxSeconds: 8,
-    minSeconds: 5,
     name: 'nose',
     offset: { forward: 3.4, height: 1.4, lateral: 0.9 },
     targetSmooth: 0.18,
@@ -84,11 +113,40 @@ export const SHOTS: readonly ShotPreset[] = [
     fovYRad: (55 * Math.PI) / 180,
     kind: 'tracking',
     maxDist: 40,
-    maxSeconds: 9,
-    minSeconds: 5,
     name: 'high',
     offset: { forward: -3.5, height: 4, lateral: -0.6 },
     targetSmooth: 0.25,
+    weight: 2,
+  },
+  {
+    // Overhead, riding the car's heading: the road's own drawing, and the line the car takes through it.
+    // Anchored a little BELOW centre so the road ahead takes the top half — the same rule as every other
+    // preset, applied to a view with no horizon to hang it on.
+    anchor: { x: 0.5, y: 0.56 },
+    eyeSmooth: 0.28,
+    fovYRad: (55 * Math.PI) / 180,
+    kind: 'tracking',
+    maxDist: 40,
+    name: 'top',
+    // ~12.6 m up and ~4.9 m ahead on a saloon: high enough to read a junction, and deliberately NOT straight
+    // down. `screenBasis` derives its roll from the view direction's HORIZONTAL component
+    // (`engine-camera.ts`), which vanishes at a perfectly vertical view — a preset that sat on that
+    // singularity would have no defined roll and would shiver for exactly the reason field round 1 did. This
+    // one holds ~21° off vertical, which reads as overhead and leaves the basis well conditioned.
+    offset: { forward: 1.5, height: 18, lateral: 0 },
+    targetSmooth: 0.22,
+    weight: 2,
+  },
+  {
+    // The crane: `high` taken further up and further back, so the car sits small in a wide plate of city.
+    anchor: { x: 0.44, y: 0.6 },
+    eyeSmooth: 0.34,
+    fovYRad: (50 * Math.PI) / 180,
+    kind: 'tracking',
+    maxDist: 50,
+    name: 'crane',
+    offset: { forward: -6, height: 7, lateral: -1.2 },
+    targetSmooth: 0.28,
     weight: 2,
   },
   {
@@ -97,8 +155,6 @@ export const SHOTS: readonly ShotPreset[] = [
     fovYRad: (45 * Math.PI) / 180,
     kind: 'tracking',
     maxDist: 40,
-    maxSeconds: 7,
-    minSeconds: 5,
     name: 'wing-l',
     offset: { forward: 0.4, height: 1.6, lateral: -5 },
     targetSmooth: 0.14,
@@ -110,8 +166,6 @@ export const SHOTS: readonly ShotPreset[] = [
     fovYRad: (45 * Math.PI) / 180,
     kind: 'tracking',
     maxDist: 40,
-    maxSeconds: 7,
-    minSeconds: 5,
     name: 'wing-r',
     offset: { forward: 0.4, height: 1.6, lateral: 5 },
     targetSmooth: 0.14,
@@ -124,8 +178,6 @@ export const SHOTS: readonly ShotPreset[] = [
     fovYRad: (40 * Math.PI) / 180,
     kind: 'static',
     maxDist: 60,
-    maxSeconds: 7,
-    minSeconds: 5,
     name: 'flyby',
     // Planted far enough ahead and out that the pass itself stays under the pan cap: at a cruise the angular
     // rate at closest approach is speed/standoff, and the first headless round measured what a 2.7 m standoff
@@ -142,8 +194,6 @@ export const SHOTS: readonly ShotPreset[] = [
     fovYRad: (38 * Math.PI) / 180,
     kind: 'station',
     maxDist: 70,
-    maxSeconds: 8,
-    minSeconds: 5,
     name: 'station',
     targetSmooth: 0.18,
     weight: 3,
@@ -174,9 +224,6 @@ type FramedShot = {
 } & ShotBase;
 
 interface ShotBase {
-  readonly maxSeconds: number;
-  /** D4's floor lives in the data: no preset may run shorter than 5 s (`director.test.ts` pins it). */
-  readonly minSeconds: number;
   readonly name: ShotName;
   /** Relative weight in the seeded pick. */
   readonly weight: number;
@@ -291,6 +338,18 @@ export function shotEye(shot: PosedShot, subject: Subject): [number, number, num
     subject.position[1] + height,
     subject.position[2] + right[2] * lateral + forward[2] * ahead,
   ];
+}
+
+/**
+ * How long this shot is SCHEDULED for (s) — {@link TRACKING_SECONDS} for a shot that rides the car, the
+ * watchdog for one that is planted.
+ *
+ * The two kinds end for different reasons, and the difference is the whole of the user's 2026-07-31 model: a
+ * riding shot has no natural end, so it runs a fixed clip; a planted shot ends when the car has left its
+ * frame, and its number here is only the ceiling that stops a scene which has stopped happening.
+ */
+export function shotSeconds(shot: ShotPreset): number {
+  return shot.kind === 'static' || shot.kind === 'station' ? PLANTED_CEILING_SECONDS : TRACKING_SECONDS;
 }
 
 const UP: Vec3 = [0, 1, 0];

@@ -4,11 +4,15 @@ import {
   aimShot,
   anchorFor,
   forwardFromHeading,
+  PLANTED_CEILING_SECONDS,
   type PosedShot,
   projectToScreen,
+  SHOT_ROAD_SECONDS,
   shotEye,
   SHOTS,
+  shotSeconds,
   type Subject,
+  TRACKING_SECONDS,
 } from './shots';
 
 const ASPECT = 16 / 9;
@@ -21,8 +25,6 @@ const WING: PosedShot = {
   fovYRad: Math.PI / 4,
   kind: 'tracking',
   maxDist: 40,
-  maxSeconds: 7,
-  minSeconds: 5,
   name: 'wing-l',
   offset: { forward: 0.4, height: 1.6, lateral: -5 },
   targetSmooth: 0.14,
@@ -195,10 +197,17 @@ describe('projectToScreen', () => {
 
 describe('SHOTS (the preset table)', () => {
   describe('negative cases', () => {
-    it('holds no shot under the five-second floor of D4, and none that ends before it starts', () => {
-      const bad = SHOTS.filter((shot) => shot.minSeconds < 5 || shot.maxSeconds < shot.minSeconds);
+    it('gives every riding shot the same clip and never charges a planted one its watchdog for road', () => {
+      // The lengths are a property of the KIND, not of the row — the table cannot express a shot that runs
+      // for some other number, which is what keeps a scene exactly five cameras long.
+      const riding = SHOTS.filter((shot) => shot.kind === 'chase' || shot.kind === 'tracking');
+      const planted = SHOTS.filter((shot) => shot.kind === 'static' || shot.kind === 'station');
 
-      expect(bad.map((shot) => shot.name)).toEqual([]);
+      expect(riding.map(shotSeconds)).toEqual(riding.map(() => TRACKING_SECONDS));
+      expect(planted.map(shotSeconds)).toEqual(planted.map(() => PLANTED_CEILING_SECONDS));
+      // Road is sized on the PASS, which is shorter than the watchdog: a car that trips the watchdog has
+      // stopped moving and is not eating route.
+      expect(SHOT_ROAD_SECONDS).toBeLessThan(PLANTED_CEILING_SECONDS);
     });
 
     it('places no camera inside the car it films', () => {

@@ -9,6 +9,7 @@ import {
   EMPTY_FRAME_SECONDS,
   nextStationSlot,
   PAN_RATE_MAX,
+  PASSED_SECONDS,
   planShots,
   SAFE_FRAME,
   type ShotPlan,
@@ -16,7 +17,15 @@ import {
   SIGHTLINE_SECONDS,
   stepDirector,
 } from './director';
-import { forwardFromHeading, type PosedShot, SHOTS, type Subject } from './shots';
+import {
+  forwardFromHeading,
+  PLANTED_CEILING_SECONDS,
+  type PosedShot,
+  SHOTS,
+  SHOTS_PER_SCENE,
+  type Subject,
+  TRACKING_SECONDS,
+} from './shots';
 
 const ASPECT = 16 / 9;
 const DT = 1 / 60;
@@ -28,8 +37,6 @@ const WING: PosedShot = {
   fovYRad: Math.PI / 4,
   kind: 'tracking',
   maxDist: 40,
-  maxSeconds: 7,
-  minSeconds: 5,
   name: 'wing-l',
   offset: { forward: 0.4, height: 1.6, lateral: -5 },
   targetSmooth: 0.14,
@@ -79,43 +86,47 @@ const cruise = (plan: readonly ShotPlan[], seconds: number, speed = 12): Directo
 
 describe('planShots', () => {
   describe('negative cases', () => {
-    it('never deals a shot under the five-second floor (D4)', () => {
+    it('never deals more or fewer than the five cameras a scene is made of', () => {
       for (let seed = 0; seed < 40; seed += 1) {
-        const plan = planShots(mulberry32(seed), 25);
-
-        expect(plan.filter((entry) => entry.seconds < 5)).toEqual([]);
+        expect(planShots(mulberry32(seed)).length).toBe(SHOTS_PER_SCENE);
       }
     });
 
-    it('never repeats a preset back to back — a "cut" to the same shot is not a cut', () => {
+    it("never spends two of a scene's five slots on the same camera", () => {
+      // "Five cameras" means five DIFFERENT ones: a repeat inside one scene shows the same angle twice and
+      // costs a slot, which with nine presets to draw from is never necessary.
       for (let seed = 0; seed < 40; seed += 1) {
-        const names = planShots(mulberry32(seed), 60).map((entry) => entry.preset.name);
-        const repeats = names.filter((name, at) => at > 0 && name === names[at - 1]);
+        const names = planShots(mulberry32(seed)).map((entry) => entry.preset.name);
 
-        expect(repeats).toEqual([]);
+        expect(new Set(names).size).toBe(names.length);
       }
     });
   });
 
   describe('positive cases', () => {
-    it('covers the whole fragment', () => {
-      for (const seconds of [10, 18, 25, 40]) {
-        const total = planShots(mulberry32(7), seconds).reduce((sum, entry) => sum + entry.seconds, 0);
+    it('gives a riding shot its fixed clip and a planted one only its watchdog', () => {
+      // The two kinds end for different reasons: a shot that rides the car has no natural end, so it runs
+      // TRACKING_SECONDS; a planted one ends when the car has left its frame, and its number is the ceiling
+      // that stops a scene which has stopped happening.
+      for (let seed = 0; seed < 40; seed += 1) {
+        for (const entry of planShots(mulberry32(seed))) {
+          const planted = entry.preset.kind === 'static' || entry.preset.kind === 'station';
 
-        expect(total).toBeGreaterThanOrEqual(seconds);
+          expect(entry.seconds).toBe(planted ? PLANTED_CEILING_SECONDS : TRACKING_SECONDS);
+        }
       }
     });
 
     it('always shows the game as it is played — chase appears at least once', () => {
       for (let seed = 0; seed < 40; seed += 1) {
-        const plan = planShots(mulberry32(seed), 12);
+        const plan = planShots(mulberry32(seed));
 
         expect(plan.some((entry) => entry.preset.kind === 'chase')).toBe(true);
       }
     });
 
     it('reproduces itself from the seed, shot for shot and second for second', () => {
-      expect(planShots(mulberry32(47), 25)).toEqual(planShots(mulberry32(47), 25));
+      expect(planShots(mulberry32(47))).toEqual(planShots(mulberry32(47)));
     });
   });
 });
@@ -346,20 +357,50 @@ describe('stepDirector', () => {
       expect(cutAt).toBeLessThan(3.5 + EMPTY_FRAME_SECONDS + 0.5);
     });
 
-    it('wraps to the front of the list rather than running out of director', () => {
-      const frames = cruise(
-        [
-          { preset: WING, seconds: 5 },
-          { preset: FLYBY, seconds: 5 },
-        ],
-        12,
-      );
+    it('ends a planted shot when the car has GONE, long before its watchdog', () => {
+      // The user's 2026-07-31 rule for a camera filming a passing car: it runs "until the car has driven out
+      // of view". So the watchdog must not be what ends it — and a car that is past the distance ceiling is
+      // GONE rather than possibly-behind-a-lamppost, which is the shorter of the two clocks.
+      const state = createDirector([{ preset: FLYBY, seconds: PLANTED_CEILING_SECONDS }]);
+      let at = 0;
+      let goneAt = 0;
+      for (let frame = 0; frame < 3000 && !state.done; frame += 1) {
+        at += DT;
+        stepDirector(state, drivingSubject(at, 20), DT, ASPECT);
+        if (goneAt === 0 && state.passed) {
+          goneAt = at;
+        }
+      }
 
-      expect(frames[frames.length - 1].shot).toBe('wing-l');
+      expect(state.causes.empty).toBe(1); // the car leaving ended it…
+      expect(state.causes.scheduled).toBe(0); // …not the clock
+      expect(at).toBeLessThan(PLANTED_CEILING_SECONDS);
+      // And PROMPTLY: within the short clock of the car going, not the patient one a lamppost earns. The
+      // difference is a second of empty road at the tail of every drive-past — footage to trim by hand.
+      expect(at - goneAt).toBeLessThan(PASSED_SECONDS + 2 * DT);
+      expect(PASSED_SECONDS).toBeLessThan(EMPTY_FRAME_SECONDS);
+    });
+
+    it('ENDS on the last shot instead of wrapping — the list is the scene', () => {
+      // The 2026-07-31 model: five cameras, and the scene is over when they are. Wrapping (what this used to
+      // do, so a fragment could outlive its list) would make a scene run until some other clock stopped it.
+      const state = createDirector([
+        { preset: WING, seconds: 5 },
+        { preset: FLYBY, seconds: 5 },
+      ]);
+      let at = 0;
+      for (let frame = 0; frame < 900 && !state.done; frame += 1) {
+        at += DT;
+        stepDirector(state, drivingSubject(at), DT, ASPECT);
+      }
+
+      expect(state.done).toBe(true);
+      expect(state.index).toBe(1); // stopped ON the last shot, never rolled back to the first
+      expect(at).toBeLessThan(12); // and it did not wait out a second lap of the list
     });
 
     it('reproduces itself exactly from the same plan and the same drive', () => {
-      const plan = planShots(mulberry32(11), 20);
+      const plan = planShots(mulberry32(11));
 
       expect(cruise(plan, 15)).toEqual(cruise(plan, 15));
     });

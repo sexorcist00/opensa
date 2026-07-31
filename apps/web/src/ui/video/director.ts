@@ -21,7 +21,7 @@ import { smoothDamp, type SmoothDampRef } from '@opensa/math';
 import type { VideoCamera } from '../camera/engine-camera';
 import type { PosedShot, ShotName, ShotPreset, Subject, Vec3 } from './shots';
 
-import { aimShot, anchorFor, projectToScreen, shotEye, SHOTS } from './shots';
+import { aimShot, anchorFor, projectToScreen, shotEye, SHOTS, SHOTS_PER_SCENE, shotSeconds } from './shots';
 
 /** What one stepped frame produced — the pose plus everything the scene's report has to state. */
 export interface DirectorFrame {
@@ -46,6 +46,8 @@ export interface DirectorState {
   /** Shot changes so far. The scene's OPENING is not one of them — it is counted in `causes.opening`,
    *  because it changes the frame's owner rather than one shot for another. */
   cuts: number;
+  /** True once the last shot of the list has ended: the scene is over, and the runner reads this. */
+  done: boolean;
   /** Seconds into the current shot. */
   elapsed: number;
   eye: [number, number, number] | null;
@@ -64,6 +66,9 @@ export interface DirectorState {
   panClips: number;
   /** Last frame's view direction — the pan-rate cap measures against it. */
   panDirection: [number, number, number] | null;
+  /** The car is GONE rather than hidden (behind the eye or past the distance ceiling), as of the last judged
+   *  frame — which of the two empty-frame clocks the next cut decision uses. */
+  passed: boolean;
   readonly plan: readonly ShotPlan[];
   /** Frames the car was inside the safe frame — `safeFrames / framesJudged` is 03's acceptance number. */
   safeFrames: number;
@@ -103,8 +108,19 @@ export interface StationSource {
 /** Why a shot ended — one word for the ledger, and the priority order the guard resolves in. */
 type CutCause = 'empty' | 'occluded' | 'opening' | 'scheduled';
 
-/** How long the car may sit outside the safe frame before the shot is cut short (s, D4). */
+/** How long the car may sit outside the safe frame before the shot is cut short (s, D4) — the patient clock,
+ *  for a car that may simply be behind something. */
 export const EMPTY_FRAME_SECONDS = 1.5;
+/**
+ * The same clock for a car that has definitively GONE — behind the eye, or past the shot's distance ceiling
+ * (s).
+ *
+ * A planted shot is SUPPOSED to end here: it films the car arriving, passing and leaving, and what the user
+ * asked for is that it ends when the car is out of view. Waiting the patient 1.5 s would put a second and a
+ * half of empty road at the tail of every such shot — footage to trim by hand. Nothing an obstacle can do
+ * puts the car behind the camera, so this verdict needs no patience, only enough to outlast a frame hitch.
+ */
+export const PASSED_SECONDS = 0.4;
 /** The fastest the view direction may swing (rad/s ≈ 60°/s) — above it a drive-past reads as a whip, not a
  *  pan. The answer to a shot that keeps hitting this is the guard cut, never a higher cap (the plan's note). */
 export const PAN_RATE_MAX = Math.PI / 3;
@@ -123,6 +139,7 @@ export function createDirector(plan: readonly ShotPlan[]): DirectorState {
     cause: 'opening',
     causes: { empty: 0, occluded: 0, opening: 1, scheduled: 0 },
     cuts: 0,
+    done: false,
     elapsed: 0,
     eye: null,
     eyeVelocity: [{ velocity: 0 }, { velocity: 0 }, { velocity: 0 }],
@@ -134,6 +151,7 @@ export function createDirector(plan: readonly ShotPlan[]): DirectorState {
     offFrame: 0,
     panClips: 0,
     panDirection: null,
+    passed: false,
     plan,
     safeFrames: 0,
     sightlineIn: SIGHTLINE_SECONDS,
@@ -175,36 +193,37 @@ export function nextStationSlot(state: DirectorState): null | { index: number; s
 }
 
 /**
- * The scene's shot list, drawn from the seeded stream: weighted picks, never the same preset twice in a row,
- * every duration inside its preset's own bounds (so D4's 5 s floor is a property of the table), and `chase`
- * guaranteed at least once — a scene of nothing but placed shots never shows the game as it is played.
+ * The scene's shot list: exactly {@link SHOTS_PER_SCENE} DISTINCT shots drawn from the seeded stream —
+ * weighted picks, no preset twice in one scene, and `chase` guaranteed at least once, because a scene of
+ * nothing but placed shots never shows the game as it is played.
  *
- * Dealt to cover `seconds` with one shot's worth of margin: a scene that outlives its list wraps to the front
- * rather than running out of director, which the fragment length (`?to=`) makes possible on purpose.
+ * The list IS the scene (user, 2026-07-31): five cameras, and the scene lasts exactly as long as they do. A
+ * duration is no longer drawn — it is a property of the KIND ({@link shotSeconds}), because the two kinds end
+ * for different reasons. Nothing wraps: the fifth shot ending ends the scene.
  */
-export function planShots(random: Random, seconds: number, presets: readonly ShotPreset[] = SHOTS): ShotPlan[] {
+export function planShots(random: Random, presets: readonly ShotPreset[] = SHOTS): ShotPlan[] {
   const plan: ShotPlan[] = [];
-  let total = 0;
-  let previous: null | ShotName = null;
-  while (total < seconds) {
-    const weights = presets.map((preset) => (preset.name === previous ? 0 : preset.weight));
+  const used = new Set<ShotName>();
+  for (let slot = 0; slot < SHOTS_PER_SCENE; slot += 1) {
+    // FIVE CAMERAS, not five shots: a preset already in this scene is out of the draw, so a scene shows the
+    // drive from five different angles instead of spending a slot on a second helping of one. (With nine
+    // presets and five slots this always has something left to pick; the max() below is the defensive floor.)
+    const weights = presets.map((preset) => (used.has(preset.name) ? 0 : preset.weight));
     const pick = presets[Math.max(0, pickWeighted(random, weights))];
-    const length = pick.minSeconds + random() * (pick.maxSeconds - pick.minSeconds);
     // A tripod slot draws its stand-in NOW, from the same stream: a scene whose survey finds nothing still
     // plays the scene the seed describes, and the fallback is never a runtime coin flip.
     plan.push(
       pick.kind === 'station'
-        ? { fallback: posedFallback(random, presets), preset: pick, seconds: length }
-        : { preset: pick, seconds: length },
+        ? { fallback: posedFallback(random, presets), preset: pick, seconds: shotSeconds(pick) }
+        : { preset: pick, seconds: shotSeconds(pick) },
     );
-    previous = pick.name;
-    total += length;
+    used.add(pick.name);
   }
   if (!plan.some((entry) => entry.preset.kind === 'chase')) {
     const chase = presets.find((preset) => preset.kind === 'chase');
     if (chase) {
       const at = Math.min(plan.length - 1, Math.floor(random() * plan.length));
-      plan[at] = { preset: chase, seconds: chase.minSeconds + random() * (chase.maxSeconds - chase.minSeconds) };
+      plan[at] = { preset: chase, seconds: shotSeconds(chase) };
     }
   }
 
@@ -225,13 +244,9 @@ export function stepDirector(
   stations?: StationSource,
 ): DirectorFrame {
   state.elapsed += dt;
-  // The early-cut policy, in ONE place and in priority order (096/04 task 4): a blocked tripod outranks an
-  // empty frame (it is the more certain verdict), and both outrank the shot's own clock — which in turn
-  // outranks D4's 5 s floor, because a shot that lost its subject has stopped being a shot.
-  const blocked = state.misses >= SIGHTLINE_MISSES;
-  const emptied = state.offFrame > EMPTY_FRAME_SECONDS;
-  if (blocked || emptied || state.elapsed >= state.plan[state.index].seconds) {
-    advance(state, blocked ? 'occluded' : emptied ? 'empty' : 'scheduled');
+  const ending = shotEnding(state);
+  if (ending !== null) {
+    advance(state, ending);
   }
   const cut = state.fresh;
   const cause = cut ? state.cause : null;
@@ -286,14 +301,15 @@ export function stepDirector(
   const range = Math.hypot(subject.position[0] - eye[0], subject.position[1] - eye[1], subject.position[2] - eye[2]);
   // "Readable" is one predicate over three ways of losing the car: behind the eye, out at the frame edge,
   // or simply too far away to be a subject at all.
-  const safe =
-    !screen.behind &&
-    range <= shot.maxDist &&
-    Math.abs(screen.x - 0.5) <= SAFE_FRAME &&
-    Math.abs(screen.y - 0.5) <= SAFE_FRAME;
+  const gone = screen.behind || range > shot.maxDist;
+  const safe = !gone && Math.abs(screen.x - 0.5) <= SAFE_FRAME && Math.abs(screen.y - 0.5) <= SAFE_FRAME;
   state.framesJudged += 1;
   state.safeFrames += safe ? 1 : 0;
   state.offFrame = safe ? 0 : state.offFrame + dt;
+  // GONE, not merely off-frame: the car is behind the eye or past the distance ceiling. Kept for the next
+  // step's cut decision, which is patient with a car that might be behind a lamppost and not with one that
+  // has driven away.
+  state.passed = !safe && gone;
   state.panClips += panClipped ? 1 : 0;
   stepSightline(state, shot.kind === 'station' ? stations : undefined, eye, subject.position, dt);
 
@@ -307,12 +323,25 @@ export function stepDirector(
   };
 }
 
-/** Move to the next shot, wrapping, and reset everything a shot owns. A cut declares itself through
- *  {@link DirectorState.fresh}, which the next step reports and the host's watchdog reads. */
+/**
+ * End the current shot: count WHY it ended, then either move to the next one or finish the scene. A cut
+ * declares itself through {@link DirectorState.fresh}, which the next step reports and the host's watchdog
+ * reads.
+ *
+ * The cause is recorded before the finish check, always — the last shot of a scene ends for a reason like any
+ * other, and a ledger that stopped counting at the fifth would under-report one cut per scene.
+ */
 function advance(state: DirectorState, cause: CutCause): void {
-  state.index = (state.index + 1) % state.plan.length;
-  state.cause = cause;
   state.causes[cause] += 1;
+  if (state.index + 1 >= state.plan.length) {
+    // The list IS the scene: the last shot ending ends the scene rather than wrapping to the first. The
+    // runner sees `done` on this frame and brings the overlay down.
+    state.done = true;
+
+    return;
+  }
+  state.index += 1;
+  state.cause = cause;
   state.elapsed = 0;
   state.fresh = true;
   state.misses = 0;
@@ -438,6 +467,30 @@ function rotateAbout(
     v[1] * cos + perpendicular[1] * sin,
     v[2] * cos + perpendicular[2] * sin,
   ];
+}
+
+/**
+ * Why the current shot ends this frame, or null to keep playing — the early-cut policy in ONE place and in
+ * priority order (096/04 task 4).
+ *
+ * A blocked tripod outranks a frame the car has left (it is the more certain verdict), and both outrank the
+ * shot's own clock. For a PLANTED shot that clock is only a watchdog: what is supposed to end one is exactly
+ * the car driving out of its frame (the user's 2026-07-31 model).
+ *
+ * Which is why GONE and HIDDEN are two different clocks. A car behind the eye or past the distance ceiling
+ * has passed, and nothing an obstacle can do produces that reading, so it needs no patience — waiting the
+ * full {@link EMPTY_FRAME_SECONDS} would leave a second of empty road at the tail of every drive-past. A car
+ * merely off to the side of the frame might be behind something, and that one is given the patient clock.
+ */
+function shotEnding(state: DirectorState): CutCause | null {
+  if (state.misses >= SIGHTLINE_MISSES) {
+    return 'occluded';
+  }
+  if (state.offFrame > (state.passed ? PASSED_SECONDS : EMPTY_FRAME_SECONDS)) {
+    return 'empty';
+  }
+
+  return state.elapsed >= state.plan[state.index].seconds ? 'scheduled' : null;
 }
 
 /**

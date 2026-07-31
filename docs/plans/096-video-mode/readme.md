@@ -7,8 +7,8 @@ moved into this doc, per the lifecycle rule that a validated idea's research rec
 **Goal: `?video=1` boots the game into a bounded, seeded, self-directed showcase** — scenes 1…100 of the
 seed, then an end card (D2 as revised). A random car — mod cars first — spawns on a road, the player gets in and cruises a route generated from the game's own
 `NODES*.DAT` graph while cameras cut between occlusion-checked tripod stations and chase/front/rear/wing
-views; other scenes walk the player or fly the camera. Every fragment runs 10–25 real seconds on a fully
-streamed world, UI hidden, black overlay between scenes. The user screen-records with OS tools and edits
+views; other scenes walk the player or fly the camera. Every scene is five cameras on a fully streamed
+world, UI hidden, black overlay between scenes. The user screen-records with OS tools and edits
 the cuts out by hand.
 
 **NOT named "cinematic"** — that word belongs to the shipped 080 follow-camera chain in every doc, test
@@ -21,10 +21,10 @@ rewritten: a phase doc that quietly matches today's code cannot be read against 
 
 | # | Decision |
 | --- | --- |
-| D1 | Entry `?video=1`; fragment length `&from=10&to=25` (REAL seconds; defaults 10/25); `&seed=N` |
+| D1 | Entry `?video=1`; `&seed=N`. **Revised 2026-07-31: a scene's length is not an input at all.** A scene is FIVE cameras (`SHOTS_PER_SCENE`); a shot that rides the car runs a fixed 10 s clip, a planted one runs until the car has driven out of its view. The scene is as long as its five shots take, and nothing chooses that. (Was: `&from=10&to=25`, a drawn fragment length) |
 | D2 | Region cycle LS → LV → SF → Country → Desert. **Revised 2026-07-31: a run is a BOUNDED SEQUENCE — scenes 1…100 of the seed, then it stops on an end card.** `&scenes=N` takes a shorter one; 100 is the ceiling, not just the default. (Was: endless until the tab closes) |
 | D3 | Program per cycle: drive scenes in ALL 5 regions → camera flythrough in 2 → on-foot walk in 1 |
-| D4 | Shot ≥ 5 s; length adapts to car distance/speed; a drive-past is fine but the camera must not linger on an empty frame after the subject passes |
+| D4 | A drive-past is fine but the camera must not linger on an empty frame after the subject passes. **Revised 2026-07-31 with D1**: the 5 s floor and the adaptive length are gone — a riding shot is exactly 10 s and a planted one ends when the car goes, which is what the guard now enforces on its own short clock |
 | D5 | Routes favour long straights with gentle curves; length ≈ fragment duration × cruise speed; random from the node graph (curated routes maybe later) |
 | D6 | Time of day snaps to the debugger's preset slots: 00:00 / 06:00 / 12:00 / 18:00 / 21:00 (`debug-overlay.tsx:50`) |
 | D7 | Weather random WITHIN the current region's own timecyc set (LS scene → LA weathers only) |
@@ -347,5 +347,31 @@ before analysis). Empty until phases run:
   **The risk the phase named is pinned by a test**: `--rebake --only zr350` MERGES into the ledger. A rebake
   rewriting it from its own selection would tell video mode that every other mod car in the build is stock,
   and nothing else in the game would notice.
+- **05b: D1/D4 revised (user, 2026-07-31) — a scene is FIVE CAMERAS, and it is as long as they are.**
+  `&from`/`&to` are gone: nothing chooses a scene's length any more. A shot that rides the car runs a fixed
+  10 s clip (it has no natural end — the car never leaves its frame — so where it ends is an editorial
+  decision, not a measurement); a PLANTED shot runs until the car has driven out of its view, with a 15 s
+  watchdog for the car that never arrives. Two new presets: `top` (overhead) and `crane` (higher and further
+  back than `high`), taking the table to nine.
+  **The five are DISTINCT.** The first cut kept the old "not twice in a row" rule and the very first field
+  scene came back `chase→flyby→crane→wing-l→chase` — four cameras in five slots. With nine presets there is
+  never a reason to spend a slot on a second helping of one.
+  **`top` is overhead but deliberately NOT straight down** (~21° off vertical): `screenBasis` takes its roll
+  from the view direction's HORIZONTAL component, which vanishes at a perfectly vertical view, so a preset
+  sitting on that singularity would have no defined roll — and would shiver for exactly the reason field
+  round 1 did. The constraint was already written in `engine-camera.ts`; this is the first preset it binds.
+  **Route sizing is the consequence that needed measuring first**, before any of it was built: five shots at
+  12 s of road each is ~936 m against the old 390. Measured on the built tree, 120 walks per region:
+  **LA 19 · VEGAS 33 · SF 10 · COUNTRYSIDE 13 · DESERT 17 accepted** (at 390 m it was 35/40/40/33/42). At San
+  Fierro's rate, 40 tries would have failed about 3 scenes in 100, so `ROUTE_TRIES` went 40 → 120, which puts
+  it under 1 in 10 000; a walk is a graph traversal behind the black overlay and costs nothing on camera.
+  **Headless, seed 47, five drive scenes** (the sixth index is a `fly` skip, and the run said so —
+  `run complete: 5 scenes played of 6`): scenes ran **40.4 / 43.7 / 47.4 / 50.0 / 52.4 s**, every one ending
+  `shots-done` rather than on a clock; routes 937-967 m; **22 064 directed frames, safe frame 98.21 %**,
+  **0 `[cam] jump` lines**, 20 cuts of which **4 were the empty-frame guard ending a planted shot** — that
+  cause used to be 0, and it is now the mechanism the user asked for rather than a failure. Scene length is
+  an OUTCOME in the capture now, not an input.
+  One bug this round's own test caught before the field did: the early `advance` return that ends a scene
+  skipped counting the last shot's cut cause, so every scene would have under-reported one cut.
 - 07: —
 - 08: —

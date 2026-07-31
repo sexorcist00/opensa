@@ -4,8 +4,8 @@
 `packages/game/src/vehicle/path-follow.ts`. Plan [096](../plans/096-video-mode/readme.md).
 
 `?video=1` boots the game into a bounded, seeded, self-directed showcase: a car is staged on a route out of
-the game's own road graph behind a black overlay, an autopilot drives it for 10-25 real seconds while a
-director cuts between shots, then the overlay comes back down and the next scene stages behind it. **The user
+the game's own road graph behind a black overlay, an autopilot drives it while a director cuts between five
+cameras, then the overlay comes back down and the next scene stages behind it. **The user
 screen-records with OS tools and cuts the black gaps out by hand — nothing here captures anything**, by
 design (D11/D14).
 
@@ -13,7 +13,7 @@ design (D11/D14).
 
 **Scenes and staging** (096/02):
 
-- `?video=1&seed=N&scenes=100&from=10&to=25&car=<model>` — `seed` determinises the car, weather, hour, route
+- `?video=1&seed=N&scenes=100&car=<model>` — `seed` determinises the car, weather, hour, route
   AND the shot list; it is printed as `[video] seed=…` so a run that was not asked for one can still be
   replayed. What a seed does NOT fix is the frame clock: the shot LIST is reproducible, while an early guard
   cut (an empty frame, a blocked tripod) depends on how the frames actually fell, so two runs of one seed can
@@ -75,9 +75,24 @@ design (D11/D14).
   for that frame — 0.33° of shiver at a cruise, the field bug of round 1b. The module keeps its own clock for
   everything that is not per-frame: staging, the fragment's seconds, the survey.
 - **Shots are a table**, never a code path (`shots.ts`): `chase` (yields the frame to the rig — the shipped
-  camera IS that shot), `nose`, `high`, `wing-l`, `wing-r` (tracking: the eye rides the car's heading frame)
-  and `flyby` (static: the eye is planted once and the car drives past it). Every offset is a multiple of the
-  car's OWN half-extents, so the table fits whatever model is in the slot.
+  camera IS that shot), `nose`, `high`, `crane`, `top`, `wing-l`, `wing-r` (tracking: the eye rides the car's
+  heading frame) and `flyby` (static: the eye is planted once and the car drives past it). Every offset is a
+  multiple of the car's OWN half-extents, so the table fits whatever model is in the slot.
+  `top` is overhead but deliberately **not** straight down: `screenBasis` takes its roll from the view
+  direction's horizontal component, which vanishes at a perfectly vertical view, so a preset sitting on that
+  singularity would have no defined roll — and would shiver for the same reason field round 1 did. It holds
+  ~21° off vertical.
+- **A scene is FIVE CAMERAS, and it is as long as they are** (D1/D4 as revised 2026-07-31). Nothing chooses a
+  scene's length any more — `&from`/`&to` are gone:
+  - a shot that RIDES the car runs a fixed **10 s** clip. It has no natural end (the car never leaves its
+    frame), so where it ends is an editorial decision rather than a measurement;
+  - a PLANTED shot (`flyby`, `station`) runs **until the car has driven out of its view**. Its number in the
+    table is a watchdog (15 s) for the car that never arrives — a wedged autopilot, a route that turned away.
+  - The five are DISTINCT: with nine presets to draw from, spending two of a scene's five slots on one camera
+    only shows the same angle twice.
+  - The route is sized from the list before it is walked (~936 m against the old 390), which is why long
+    routes are now the common case and `ROUTE_TRIES` is 120: at that target San Fierro accepts only 10 walks
+    in 120, and 40 tries would have failed ~3 scenes in 100.
 - **Framing**: the look point is solved so the car lands on the shot's screen anchor, with **lead room** — the
   car sits on the side opposite its screen-space travel, so it drives into open frame. The table's `anchor.x`
   says how MUCH room the shot wants; the motion decides which side it goes on, by a share proportional to the
@@ -94,9 +109,11 @@ design (D11/D14).
 - **Cuts**: the scene's shot list is dealt up front from the seeded stream — weighted picks, no preset twice
   in a row, every shot ≥ 5 s, `chase` guaranteed at least once. Every cut is DECLARED for exactly one frame,
   which is the only thing the `[cam] jump` watchdog whitelists.
-- **Empty-frame guard**: a clock, not a gate — the car has to be outside the safe frame (|s − 0.5| > 0.45),
-  beyond the shot's distance ceiling, or behind the eye for 1.5 s before the shot is cut short, so one frame
-  behind a lamppost changes nothing.
+- **Empty-frame guard**: a clock, not a gate — and now TWO clocks, because "gone" and "hidden" are different
+  verdicts. A car outside the safe frame (|s − 0.5| > 0.45) may simply be behind something and gets the
+  patient 1.5 s; a car behind the eye or past the shot's distance ceiling has PASSED, which nothing an
+  obstacle can fake, and gets 0.4 s. The short one is what ends a planted shot when the car drives away —
+  waiting the patient clock would leave a second of empty road at the tail of every drive-past.
 
 **Tripod stations** (096/04) — `station` is the sixth shot, and the only one whose eye comes from the world:
 
