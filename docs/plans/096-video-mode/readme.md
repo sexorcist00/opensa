@@ -131,7 +131,7 @@ dependency order; 06 is independent and can run any time before 05.
 | [02](02-module-skeleton-and-autopilot.md) | Module skeleton + autopilot drive scene v0 (chase cam) — **SHIPPED** | **P0** | 01 |
 | [03](03-camera-authority-and-shots.md) | Video camera authority + shot presets + framing — **SHIPPED** | **P1** | 02 |
 | [04](04-stations-and-occlusion.md) | Tripod stations: survey, occlusion, cuts without flicker — **SHIPPED** | **P1** | 03 |
-| [05](05-sequencer-regions-presets.md) | Sequencer: region cycle, weather/time presets, car pick | **P1** | 02 (04 for full look) |
+| [05](05-sequencer-regions-presets.md) | Sequencer: region cycle, weather/time presets, car pick — **SHIPPED** | **P1** | 02 (04 for full look) |
 | [06](06-mod-car-ledger.md) | Build-time mod-car ledger (tool + pack + runtime read) | **P1** | — (feeds 05) |
 | [07](07-walk-and-fly-scenes.md) | Walk + flythrough scenes | **P2** | 03, 05 |
 | [08](08-polish-and-closeout.md) | Polish, empty-frame guard, docs, benchmark, audit | **P2** | all |
@@ -288,7 +288,29 @@ before analysis). Empty until phases run:
   move, which is exactly the point: these numbers were never able to see the defect and still cannot. They
   are here to prove nothing ELSE broke. **The verdict that closed the round was the user's own second look:
   "the camera has stopped shivering at every angle I saw."**
-- 05: —
+- 05: **DONE 2026-07-31.** The cycle, the presets and the car pick — `apps/web/src/ui/video/presets.ts` is the
+  table, `engine-video-runs.ts` stays about staging. **Headless, seed 47, `build/original/opensa`, DPR 1, two
+  full cycles (17 scenes, 10 of them drives):** every region visited **in D2's order, twice** (LA → VEGAS →
+  SF → COUNTRYSIDE → DESERT), **12 680 directed frames at 100.00 % safe frame**, **0 `[cam] jump` lines**,
+  20 cuts, pan cap on 1.56 % of frames, every scene ended `ran-out` — 0 stuck, 0 empty-frame cuts, 0 throws.
+  **0 mid-scene weather changes** (D15's tripwire never fired: no route left its region). Ten drives, **ten
+  different cars** off a 144-model road-car roster (`broadway`, `fbiranch`, `packer`, `patriot`, `copcarla`,
+  `previon`, `benson`, `mule`, `tampa`, `picador`), each in one of its region's own weathers and one of the
+  five hour slots. The `fly`/`walk` entries logged their skip and their regions DIFFERED between the two laps,
+  which is the program being rebuilt per lap rather than one fixed eight.
+  **Two things the phase doc did not say, decided here.** The sequencer's pure half lives in
+  `ui/video/presets.ts` beside the director rather than at `apps/web/src/video-presets.ts` — the module layout
+  03/04 settled on. And the mod-car preference draws its two branches from DISJOINT pools: the first cut let
+  the stock branch fall back on the whole roster, which a unit test caught as a realised share of 0.90 against
+  a configured 0.80. That is not a rounding difference — the share would drift with how many slots a game has
+  modded, and a heavily modded install would stop showing stock classics at all, which is the half of D10 that
+  is easy to lose. Disjoint pools make the realised share BE the configured one, which is also the only way
+  the phase's own acceptance ("mod-car share ≈ the configured preference") means anything.
+  **Not measurable yet:** the mod-car share itself (0 % — `data/vehicle-mods.txt` is 06's to write; the
+  runtime reader ships here, tolerant, and an absent ledger is an empty set). The ledger's FORMAT stays 06's
+  to confirm and to record in `docs/contracts/vehicles.md`.
+  New tool: `scripts/debug/video-accept.ts` rolls the exam up off a harness log, so the next phase re-sits it
+  against the same question rather than re-reading JSON by hand.
 - 06: —
 - 07: —
 - 08: —

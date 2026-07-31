@@ -15,8 +15,8 @@ design (D11/D14).
 
 - `?video=1&seed=N&from=10&to=25&car=<model>` — `seed` determinises the car, weather, hour, route AND the
   shot list; it is printed as `[video] seed=…` so a run that was not asked for one can still be replayed.
-- One scene = a seeded route inside Los Santos (region cycle is 05), a debugger hour slot (00/06/12/18/21),
-  a weather from that region's own timecyc set, a spawn, an instant seating, and a fragment.
+- One scene = a seeded route inside ONE region, a debugger hour slot (00/06/12/18/21), a weather from that
+  region's own timecyc set, a spawn, an instant seating, and a fragment.
 - The staging recipe is the phys laps' verbatim: `TELEPORT_NOTICE_SECONDS` before `pendingCells` means
   anything, then the ring drains, then a collision warmup, then the suspension settles — and last an fps
   stability gate (30 consecutive frames under 25 ms) so the cold-teleport spike is over before the overlay
@@ -28,6 +28,27 @@ design (D11/D14).
   camera complaint is a per-frame thing and is invisible at that rate. Read it with
   `scripts/debug/video-shiver.ts`, which reports each channel's high-frequency energy — that is how round 1's
   shiver was pinned on the damper rather than on the physics. Off by default.
+
+**The sequencer** (096/05) — `apps/web/src/ui/video/presets.ts`, a table the runner reads:
+
+- **The cycle** (D2): a drive scene in Los Santos → Las Venturas → San Fierro → Countryside → Desert, then
+  two flythroughs and a walk (D3). The kinds 07 owns are SKIPPED with a `[video]` notice — no placeholder ever
+  reaches the footage, and a silently shortened cycle would read as a lost region. Endless: the program is
+  rebuilt each lap from that lap's seed, so a long run is not the same eight scenes over and over.
+- **The region token is the game's own**: `City` is what the zone data classifies a point into AND the suffix
+  the timecyc weather rows carry, so one token drives the route filter and the weather pool. The pool is
+  FILTERED out of the shipped names (`weatherPool`), never listed — a modded timecyc is followed.
+- **Per-scene seeds** derived from the master seed and the scene index, so scene 7 is the same scene however
+  the run reached it. Each staged scene prints one self-describing line:
+  `[video] scene 7 seed=… region=VEGAS kind=drive car=infernus(mod) hour=21 weather=SUNNY_VEGAS route=412m …`.
+- **The car** (D10): the roster is `vehicles.ide`'s `car`-type rows whose `.osm` the build actually carries
+  (`roadCarModels` — a slot with no model throws at spawn). A mod car is preferred 4 times in 5 when 096/06's
+  ledger offers any; the two branches draw from disjoint pools, so the realised mod share IS the configured
+  preference and stock classics keep appearing whatever a game has modded. Paint comes from the car's own
+  `carcols` combos, seeded, so the same model twice in a run is not the same colour twice.
+- **D15's tripwire**: a route is built inside one region precisely so `CityZoneSystem` never fires its 6 s
+  weather rewrite on camera. A scene whose weather target moved anyway logs which scene and which region —
+  the leak names itself instead of becoming a mystery fade in the footage.
 
 **The director** (096/03) — `apps/web/src/ui/video/`:
 

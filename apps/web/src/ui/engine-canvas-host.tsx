@@ -1754,9 +1754,11 @@ async function boot(
     aspect: (): number => canvas.width / Math.max(1, canvas.height),
     autopilot: pathFollow,
     cityBoxes: (): readonly CityBox[] => cityBoxes,
+    colourCombos: async (model): Promise<number[][]> => adapter.vehicleColourCombos(model),
     fs,
     getStream: (): null | StreamStats => lastStream,
     getVehicles: (): EngineVehicles | null => vehicles,
+    getWeather: (): number => weatherTransition.target,
     groundBelow: (at, maxDrop): null | number => physics.groundBelow([at[0], at[1], at[2]], maxDrop),
     params,
     pathClear: (from, to, excludeBody): boolean =>
@@ -1779,13 +1781,14 @@ async function boot(
     setWeather: (value): void => {
       weatherTransition.begin(value, 0);
     },
-    spawnCar: async (model, position, heading): Promise<() => void> => {
+    spawnCar: async (model, position, heading, colour): Promise<() => void> => {
       const vehicleSystem = vehicles;
       if (!vehicleSystem) {
         throw new Error('no vehicle system on this host');
       }
 
       return vehicleSystem.spawnOnce({
+        colour,
         groundSnap: true,
         heading,
         model,

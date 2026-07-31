@@ -7,8 +7,10 @@
  * stages behind it, endlessly, until the tab closes. The user screen-records the canvas and cuts the black
  * gaps out by hand — nothing here captures anything.
  *
- * This phase is the feature's skeleton, not its look: ONE region (Los Santos), the SHIPPED vehicle follow
- * camera, no shot list. 03 takes the camera, 05 brings the region cycle and the presets.
+ * The sequencer (05) is what turns that into a run: a cycle plays a drive scene in every region of
+ * `REGION_CYCLE`, each in that region's own weather and one of the debugger's hours, in a car picked mod-first
+ * out of the game's road-car roster. What a cycle contains is a TABLE (`video/presets.ts`), so this file stays
+ * about staging; the walk and flythrough kinds are skipped with a notice until 07 gives them scenes.
  *
  * The staging recipe is the phys laps' (`engine-phys-runs.ts`), verbatim and for the same reasons — a
  * teleport's `pendingCells` lies for about a second, and a ground-snapped car is still moving on its springs
@@ -18,7 +20,7 @@ import type { StreamStats } from '@opensa/engine';
 import type { Route } from '@opensa/game/paths/route-builder';
 import type { PathFollowSource } from '@opensa/game/vehicle/path-follow';
 import type { TelemetryFrame } from '@opensa/game/vehicle/vehicle-telemetry';
-import type { CityBox } from '@opensa/game/zones/city';
+import type { City, CityBox } from '@opensa/game/zones/city';
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { loadRouteGraph } from '@opensa/game/adapters/path-graph';
@@ -31,12 +33,15 @@ import { cityAt } from '@opensa/game/zones/city';
 import type { VideoCamera } from './camera/engine-camera';
 import type { EngineVehicles } from './engine-vehicles';
 import type { DirectorState } from './video/director';
+import type { ProgramEntry } from './video/presets';
 import type { ShiverDiag } from './video/shiver-diag';
 import type { Subject } from './video/shots';
 import type { StationSupply } from './video/station-supply';
 
+import { modCarSlots, roadCarModels } from '../vehicle-models';
 import { nextFrame, until, waitSeconds } from './frame-clock';
 import { createDirector, nextStationSlot, planShots, stepDirector } from './video/director';
+import { buildProgram, HOUR_SLOTS, pickCar, REGION_CYCLE, sceneSeed, weatherPool } from './video/presets';
 import { createShiverDiag, yawOfQuat } from './video/shiver-diag';
 import { forwardFromHeading } from './video/shots';
 import { createStationSupply } from './video/station-supply';
@@ -49,11 +54,16 @@ export interface VideoRunsHost {
   autopilot: PathFollowSource;
   /** The city boxes the region predicate reads (desert first) — a thunk, because they load after boot. */
   cityBoxes(): readonly CityBox[];
+  /** The paint combos `carcols` authors for a model (empty when it authors none) — the scene picks one. */
+  colourCombos(model: string): Promise<number[][]>;
   /** The game filesystem — the road graph is read from its own `data/paths/nodes*.dat`. */
   fs: AssetFileSystem;
   getStream(): null | StreamStats;
   /** Live accessor — the vehicle system arrives asynchronously after boot. */
   getVehicles(): EngineVehicles | null;
+  /** The weather the world is heading for. Read at a scene's end to catch a route that leaked across a city
+   *  boundary and let `CityZoneSystem` rewrite the weather mid-shot (D15's tripwire). */
+  getWeather(): number;
   /** Ground Z under a GTA point (searching `maxDrop` down), or null — the station survey's ground snap. */
   groundBelow(at: readonly [number, number, number], maxDrop: number): null | number;
   params: URLSearchParams;
@@ -87,7 +97,12 @@ export interface VideoRunsHost {
   /** Set the weather INSTANTLY — the 6 s artistic fade must never play inside a fragment. */
   setWeather(index: number): void;
   /** Spawn a scene-owned car (not LOD-registered) and hand back its despawn. */
-  spawnCar(model: string, position: readonly [number, number, number], heading: number): Promise<() => void>;
+  spawnCar(
+    model: string,
+    position: readonly [number, number, number],
+    heading: number,
+    colour?: string,
+  ): Promise<() => void>;
   /** Teleport the player (streaming/collision anchor), GTA coords. */
   teleportPlayer(anchor: readonly [number, number, number]): void;
   /** GTA Z-up → engine Y-up. The director works in ONE space (engine) and converts here, at the boundary. */
@@ -96,12 +111,8 @@ export interface VideoRunsHost {
   weatherNames: readonly string[];
 }
 
-/** The one region phase 02 drives; 05 replaces this with D2's endless cycle. */
-const REGION = 'LA';
-/** The car every scene drives until the mod-car ledger lands (06) and the sequencer picks from it (05). */
+/** What a scene drives when the roster is empty — a game with no readable `vehicles.ide` still gets a try. */
 const DEFAULT_CAR = 'admiral';
-/** The debugger's own preset slots (D6) — a showcase run stands in the light the game was authored for. */
-const HOUR_SLOTS = [0, 6, 12, 18, 21] as const;
 /** The builder's calm cruise (m/s, D8) — also what a route's length is derived from. */
 const CRUISE_SPEED = 12;
 /** Road gathered per route, as a multiple of what the longest fragment can drive — margin, never a shortfall. */
@@ -144,12 +155,18 @@ const DEFAULT_TO = 25;
 interface SceneContext {
   car: string;
   graph: RouteGraph;
+  /** Whether {@link car} came from 096/06's mod ledger — the log says so, and the ledger's share is measured. */
+  modCar: boolean;
   /** `?at=x,y`: every scene starts at the graph node nearest this point, so a field round can look at the
    *  SAME hard street repeatedly. Null when the sequencer picks freely. */
   pinned: null | readonly [number, number];
   random: Random;
+  /** The region this scene plays in (D2's cycle) — the route filter and the weather pool read the same token. */
+  region: City;
   scene: number;
   seconds: number;
+  /** The RUN's master seed, so a staged-scene line can print the scene's own derived one. */
+  seed: number;
   /** Road to gather for this scene (m) — derived from the LONGEST fragment the run may play, not from the
    *  default one: `?to=40` must not hand a 25 s route to a 40 s scene and run out of road on camera. */
   targetLength: number;
@@ -183,32 +200,57 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   // for PRESENCE, not truthiness: `?seed=0` is a seed like any other and must not fall through to the clock.
   const asked = host.params.get('seed');
   const seed = asked === null || Number.isNaN(Number(asked)) ? Date.now() >>> 0 : Number(asked);
-  const car = host.params.get('car') ?? DEFAULT_CAR;
+  // `?car=` pins the car for every scene (a field round comparing streets must not also change the subject);
+  // absent, each scene picks one — mod cars first (D10).
+  const pinnedCar = host.params.get('car');
+  const roster = roadCarModels(host.fs);
+  const modCars = modCarSlots(host.fs);
   const pinned = parsePin(host.params.get('at'));
   log(
-    `seed=${seed} region=${REGION} car=${car} fragments ${from}-${to}s` +
-      (pinned ? ` pinned at ${pinned[0]},${pinned[1]}` : ''),
+    `seed=${seed} cycle ${REGION_CYCLE.join('→')} fragments ${from}-${to}s · ` +
+      `${roster.length} road cars, ${modCars.size} mod slots` +
+      (pinnedCar ? ` · car pinned to ${pinnedCar}` : '') +
+      (pinned ? ` · pinned at ${pinned[0]},${pinned[1]}` : ''),
   );
 
   const overlay = createOverlay();
   host.setUiHidden(true);
-  const random = mulberry32(seed);
   // `&diag=1`: one full-rate `[diag]` line per scene, for a field report about camera MOTION (the scene
   // report's 10 Hz series cannot see a per-frame one). Off by default — it is a console line per frame's
   // worth of numbers, not something a showcase run should carry.
   const diag = createShiverDiag(host.params.get('diag') === '1');
   void (async (): Promise<void> => {
+    // The program is rebuilt each lap from the lap's own seed, so a long run is not the same eight scenes
+    // over and over — and `?seed=` still names every one of them.
+    let program: ProgramEntry[] = [];
     for (let scene = 1; ; scene += 1) {
+      // Per-scene seed off the master (D9), so scene N is the same scene however the run reached it.
+      const random = mulberry32(sceneSeed(seed, scene));
+      const at = (scene - 1) % Math.max(1, program.length);
+      if (at === 0) {
+        program = buildProgram(mulberry32(sceneSeed(seed, -scene)));
+      }
+      const entry = program[at];
+      if (entry.kind !== 'drive') {
+        // 07 owns the walk and flythrough scenes. Skipping them SAYS so: a silently shortened cycle reads as
+        // a sequencer that lost a region, and no placeholder ever reaches the footage.
+        log(`scene ${scene} ${entry.region} ${entry.kind} — not implemented yet (096/07), skipping`);
+        continue;
+      }
+      const car = pinnedCar ?? pickCar(random, roster, modCars) ?? DEFAULT_CAR;
       try {
         await runScene(
           host,
           {
             car,
             graph,
+            modCar: modCars.has(car),
             pinned,
             random,
+            region: entry.region,
             scene,
             seconds: from + random() * (to - from),
+            seed,
             targetLength: to * CRUISE_SPEED * ROUTE_MARGIN,
           },
           overlay,
@@ -331,19 +373,9 @@ function pickRoute(
   return null;
 }
 
-/**
- * A weather index from the REGION's own timecyc set (D7), or null when this game authors none for it.
- *
- * The set is FILTERED out of the shipped names rather than listed here: SA authors every type per region
- * (`CLOUDY_LA`, `RAINY_SF`, …) and a hardcoded pool would be a second place for a modded timecyc to be wrong.
- */
-function pickWeather(weatherNames: readonly string[], random: Random): null | number {
-  const pool: number[] = [];
-  weatherNames.forEach((name, index) => {
-    if (name.endsWith(`_${REGION}`)) {
-      pool.push(index);
-    }
-  });
+/** A weather index from the scene region's own timecyc set (D7), or null when the game authors none for it. */
+function pickWeather(weatherNames: readonly string[], region: City, random: Random): null | number {
+  const pool = weatherPool(weatherNames, region);
   if (pool.length === 0) {
     return null;
   }
@@ -492,7 +524,9 @@ function report(
     },
     /** Why the fragment ended: it ran its seconds out, arrived, or the car wedged. */
     ended,
-    region: REGION,
+    /** Whether the car came from the mod ledger — the ledger's realised share is counted off these. */
+    modCar: context.modCar,
+    region: context.region,
     route: {
       length: Number(route.length.toFixed(1)),
       maxTurnDeg: Number(route.maxTurnDeg.toFixed(1)),
@@ -562,17 +596,20 @@ async function runScene(
   }
   overlay.show();
   const boxes = host.cityBoxes();
-  const inRegion = (x: number, y: number): boolean => cityAt(x, y, boxes) === REGION;
+  const inRegion = (x: number, y: number): boolean => cityAt(x, y, boxes) === context.region;
   const route = pickRoute(context.graph, context.random, inRegion, context.targetLength, context.pinned);
   if (!route) {
-    throw new Error(`no route inside ${REGION} in ${ROUTE_TRIES} tries`);
+    throw new Error(`no route inside ${context.region} in ${ROUTE_TRIES} tries`);
   }
-  const hour = HOUR_SLOTS[Math.floor(context.random() * HOUR_SLOTS.length)];
-  const weather = pickWeather(host.weatherNames, context.random);
+  const hour = HOUR_SLOTS[Math.min(HOUR_SLOTS.length - 1, Math.floor(context.random() * HOUR_SLOTS.length))];
+  const weather = pickWeather(host.weatherNames, context.region, context.random);
+  // One self-describing line per staged scene (the self-describing-capture rule applied to scenes): everything
+  // the seed decided, before anything is driven, so a field note names a scene the next run can reproduce.
   log(
-    `scene ${context.scene} ${REGION} drive ${context.seconds.toFixed(1)}s hour=${hour} ` +
-      `weather=${weather === null ? 'unchanged' : host.weatherNames[weather]} route ${route.length.toFixed(0)}m ` +
-      `corner ${route.minCurveRadius.toFixed(1)}m`,
+    `scene ${context.scene} seed=${sceneSeed(context.seed, context.scene)} region=${context.region} kind=drive ` +
+      `car=${context.car}${context.modCar ? '(mod)' : ''} hour=${hour} ` +
+      `weather=${weather === null ? 'unchanged' : host.weatherNames[weather]} ` +
+      `route=${route.length.toFixed(0)}m corner=${route.minCurveRadius.toFixed(1)}m ${context.seconds.toFixed(1)}s`,
   );
 
   // On foot BEFORE the teleport, always: a seated rider is re-placed on his seat every fixed step, so
@@ -596,7 +633,14 @@ async function runScene(
   await waitSeconds(TELEPORT_NOTICE_SECONDS);
   await until(() => host.getStream()?.pendingCells === 0, host.settleTimeoutMs);
   await waitSeconds(WARMUP_SECONDS);
-  const despawn = await spawnWithRetry(host, context.car, start, heading);
+  // A seeded paint from the car's OWN `carcols` combos: a stock car that appears twice in a run should not be
+  // the same colour twice. A model that authors none spawns in its default (the combos list is empty).
+  const combos = await host.colourCombos(context.car);
+  const colour =
+    combos.length === 0
+      ? undefined
+      : combos[Math.min(combos.length - 1, Math.floor(context.random() * combos.length))].join(',');
+  const despawn = await spawnWithRetry(host, context.car, start, heading, colour);
   try {
     host.teleportPlayer(beside); // back beside the spot: the ped may have slid while the car built
     vehicles.seatInstantly();
@@ -649,6 +693,15 @@ async function runScene(
     vehicles.telemetry.enabled = false;
     report(host, context, route, vehicles.telemetry.frames(), settleMs, ended, director, supply);
     diag.dump(context.scene);
+    // D15's tripwire: a route is built inside ONE region precisely so `CityZoneSystem` never fires its 6 s
+    // weather rewrite on camera. If the target moved anyway, the route leaked across a boundary — say which
+    // scene, or a fade nobody expected becomes a mystery in the footage.
+    if (weather !== null && host.getWeather() !== weather) {
+      log(
+        `scene ${context.scene} weather changed mid-scene: ${host.weatherNames[weather]} → ` +
+          `${host.weatherNames[host.getWeather()]} — the route left ${context.region}`,
+      );
+    }
     if (ended !== 'ran-out') {
       log(
         `scene ${context.scene} ended early: ${ended} at ${(host.autopilot.progress() * 100).toFixed(0)}% of the route`,
@@ -676,11 +729,12 @@ async function spawnWithRetry(
   car: string,
   position: readonly [number, number, number],
   heading: number,
+  colour?: string,
 ): Promise<() => void> {
   const deadline = performance.now() + SPAWN_RETRY_SECONDS * 1000;
   for (;;) {
     try {
-      return await host.spawnCar(car, position, heading);
+      return await host.spawnCar(car, position, heading, colour);
     } catch (error) {
       if (performance.now() >= deadline) {
         throw error;

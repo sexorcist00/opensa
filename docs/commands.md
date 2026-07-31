@@ -65,7 +65,7 @@ npm run serve:static        # static origin :3001 — mounts /build + /game-src 
 | Bench sweep (8 scenes)   | `http://localhost:5173/?bench=all` (one scene: `?bench=country-dusk`)                                              |
 | Soak (minutes)           | `http://localhost:5173/?soak=30`                                                                                   |
 | Physics lap (081/01)     | `http://localhost:5173/?phys=all&car=infernus` (one scene: `?phys=brake-strip`) → `[phys]` JSON per lap            |
-| Video mode (096)         | `http://localhost:5173/?video=1&seed=47` (`&from=10&to=25` fragment seconds, `&car=`, `&at=x,y` pins the start, `&diag=1` adds the per-frame camera capture) → endless seeded drive scenes, `[video]` JSON per scene |
+| Video mode (096)         | `http://localhost:5173/?video=1&seed=47` (`&from=10&to=25` fragment seconds, `&car=`, `&at=x,y` pins the start, `&diag=1` adds the per-frame camera capture) → an endless seeded cycle of drive scenes, one per region (LA→VEGAS→SF→COUNTRYSIDE→DESERT), `[video]` JSON per scene. `&car=` pins the car, else each scene picks one mod-first off the road-car roster |
 | Lab                      | `npx vite --config apps/engine-lab/vite.config.ts` → `http://localhost:4300/`                                      |
 | Lab: streaming LS        | `http://localhost:4300/?pak=1&src=http://localhost:3001/build/original/opensa&at=2495,-1687,13&orbit=300&draw=1500` |
 | Lab: vehicle probe       | `http://localhost:4300/?pak=1&stream=1&src=…&vehicle=1&vmodel=vehicle-comet&at=2495,-1675,13.3&orbit=26&hour=12`   |
@@ -139,6 +139,7 @@ TAG='[video]' ALSO='[cam]' NODE_PATH=$PWD/node_modules node tools-debug/bench-ha
 #   …then drive THAT street: append &at=<x>,<y> from the line it printed
 # Camera-motion diagnosis (096, field round 1) — &diag=1 adds a [diag] line per scene, one row per FRAME;
 #   ALSO='[diag]' to collect it, then: npx tsx scripts/debug/video-shiver.ts <harness.log>
+# The acceptance exam off the same log: npx tsx scripts/debug/video-accept.ts <harness.log>…
 # Speed-grip dials (081/09) — session overrides for the lateral assist; captures record the active values
 #   ?gripVd=<m/s>  boost reference speed (default 12)  ·  ?gripCap=<x>  boost ceiling (default 3)
 # Surface grip (081/10) — ?surfGrip=0 puts every wheel back on tarmac, the A/B for reading surface.dat
