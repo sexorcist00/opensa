@@ -1811,6 +1811,12 @@ async function boot(
         position: [position[0], position[1], position[2]],
       });
     },
+    sphereClear: (from, to, radius): boolean => {
+      const dir: [number, number, number] = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+      const distance = Math.hypot(dir[0], dir[1], dir[2]);
+
+      return distance === 0 || physics.sphereCast([from[0], from[1], from[2]], dir, radius, distance) === null;
+    },
     teleportPlayer: (anchor): void => {
       teleportPlayer([anchor[0], anchor[1], anchor[2]]);
     },

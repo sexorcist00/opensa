@@ -37,6 +37,7 @@ import { cityAt } from '@opensa/game/zones/city';
 import type { VideoCamera } from './camera/engine-camera';
 import type { EngineVehicles } from './engine-vehicles';
 import type { DirectorState } from './video/director';
+import type { FlyPass, FlyState } from './video/fly';
 import type { ProgramEntry } from './video/presets';
 import type { ShiverDiag } from './video/shiver-diag';
 import type { Subject } from './video/shots';
@@ -46,6 +47,7 @@ import type { WalkPath } from './video/walk';
 import { modCarSlots, roadCarModels } from '../vehicle-models';
 import { nextFrame, until, waitSeconds } from './frame-clock';
 import { createDirector, nextStationSlot, planShots, stepDirector } from './video/director';
+import { CLEARANCE_RADIUS, clearFlight, createFlight, FLY_MAX_EXTENT, planFlight, stepFlight } from './video/fly';
 import {
   buildProgram,
   HOUR_SLOTS,
@@ -140,6 +142,11 @@ export interface VideoRunsHost {
     heading: number,
     colour?: string,
   ): Promise<() => void>;
+  /** Whether a SPHERE of `radius` can travel between two GTA points without hitting anything.
+   *
+   *  The flight's clearance check, and a sphere rather than a ray on purpose: a ray threads a gap between two
+   *  balconies and calls a pass clear that a drone would clip. */
+  sphereClear(from: readonly [number, number, number], to: readonly [number, number, number], radius: number): boolean;
   /** Teleport the player (streaming/collision anchor), GTA coords. */
   teleportPlayer(anchor: readonly [number, number, number]): void;
   /** GTA Z-up → engine Y-up. The director works in ONE space (engine) and converts here, at the boundary. */
@@ -222,6 +229,24 @@ const WALK_ROUTE: Partial<RouteConstraints> = {
   maxWindowTurnDeg: 200,
   preferTurnDeg: 40,
 };
+
+/**
+ * What a fly route asks of the graph, over the driving defaults.
+ *
+ * `laneOffset` 0 because a flight is planned over the road's CENTRE — the lane offset exists to put a car in
+ * its lane, and a camera 30 m up has no lane. The turn caps go for the walk scene's reason: nothing about a
+ * junction is hard for something that is not touching the ground.
+ */
+const FLY_ROUTE: Partial<RouteConstraints> = {
+  laneOffset: 0,
+  maxTurnDeg: 100,
+  maxWindowTurnDeg: 200,
+  preferTurnDeg: 40,
+};
+
+/** A flight that has not finished its five passes by now is not going to (ms) — five 10 s passes plus a
+ *  generous margin for a stalled tab, so this is a hang guard and never the thing that ends a scene. */
+const FLY_SCENE_TIMEOUT_MS = 90000;
 
 /** Seeded routes a walk scene tries before it gives up — each one costs a teleport and a settle, because the
  *  ground under it can only be probed once the world around it has streamed. */
@@ -313,12 +338,6 @@ export function setupVideoRuns(host: VideoRunsHost): void {
         program = buildProgram(mulberry32(sceneSeed(seed, -(scene - at))));
       }
       const entry = program[at];
-      if (entry.kind === 'fly') {
-        // The flythrough is the one kind still unbuilt (096/07 task B). Skipping SAYS so: a silently
-        // shortened cycle reads as a sequencer that lost a region, and no placeholder reaches the footage.
-        log(`scene ${scene} ${entry.region} fly — not implemented yet (096/07 B), skipping`);
-        continue;
-      }
       const car = pinnedCar ?? pickCar(random, roster, modCars) ?? DEFAULT_CAR;
       const context: SceneContext = {
         car,
@@ -538,6 +557,22 @@ async function playWalk(
   }
 }
 
+/** One rendered frame of a flight: sample the pass, hand the host the pose, declare the cut. */
+function poseFlyFrame(host: VideoRunsHost, flight: FlyState, dt: number): void {
+  const frame = stepFlight(flight, dt, (from, to) => host.sphereClear(from, to, CLEARANCE_RADIUS));
+  if (!frame) {
+    return; // the last pass ended on the previous frame; the pose simply stands until the overlay drops
+  }
+  host.setVideoCamera(
+    {
+      eye: host.toEngine(frame.eye),
+      fovYRad: frame.fovYRad,
+      target: host.toEngine(frame.target),
+    },
+    frame.cut,
+  );
+}
+
 /**
  * One rendered frame of the director: pose the shot, hand it to the host, and say nothing when there is no
  * car to film (a despawn mid-teardown) — the last pose then simply stands, which is what a held frame looks
@@ -742,6 +777,46 @@ function report(
   console.log('[video]', JSON.stringify(capture));
 }
 
+/** A fly scene's `[video] {json}` line: what was planned, what flew, and what it cost to find out. */
+function reportFly(
+  context: SceneContext,
+  route: Route,
+  passes: readonly FlyPass[],
+  planned: number,
+  casts: number,
+  settleMs: number,
+  seconds: number,
+  flight: FlyState,
+): void {
+  const capture = {
+    /** The LIVE guard (096/07 B task 6): probes fired at 1 Hz, and how many found something to climb over.
+     *  The acceptance number is `hits` — a staged flight that was cleared properly should not need the
+     *  guard at all, so a non-zero count is the staging check being wrong about something. */
+    guard: { hits: flight.guardHits, probes: flight.guardProbes },
+    kind: 'fly',
+    passes: {
+      /** Clearance casts spent at staging — all of them behind the overlay. */
+      casts,
+      /** What each pass had to be lifted by to clear the city (m) — 0 is a pass that was clear as planned. */
+      lifts: passes.map((pass) => pass.lifted),
+      list: passes.map((pass) => pass.preset.name),
+      planned,
+      rejected: planned - passes.length,
+    },
+    region: context.region,
+    route: {
+      length: Number(route.length.toFixed(1)),
+      points: route.points.length,
+      start: route.points[0].position.map((value) => Number(value.toFixed(1))),
+    },
+    scene: context.scene,
+    seconds: Number(seconds.toFixed(2)),
+    settleMs: Number(settleMs.toFixed(0)),
+  };
+  // eslint-disable-next-line no-console -- the capture deliverable IS this JSON line (the [phys] twin)
+  console.log('[video]', JSON.stringify(capture));
+}
+
 /** A walk scene's `[video] {json}` line — the drive report without the half of it that needs a car. */
 function reportWalk(
   context: SceneContext,
@@ -784,6 +859,69 @@ function reportWalk(
   };
   // eslint-disable-next-line no-console -- the capture deliverable IS this JSON line (the [phys] twin)
   console.log('[video]', JSON.stringify(capture));
+}
+
+/**
+ * A flythrough scene: five aerial passes over one neighbourhood, and nobody on screen (096/07 B, D3).
+ *
+ * The player is teleported to the route start and left standing there, out of every frame — he is the
+ * streaming anchor, and that is his whole job in this scene. Which is also why `fly.ts` caps the flight's
+ * extent: the ring is around HIM, and a camera that outran it would film the empty world.
+ *
+ * There is no director here. The director frames a SUBJECT — anchors, lead room, an empty-frame guard — and
+ * a flight has none: its eye is a spline sample and its look point travels the ground line ahead of it. Bolt
+ * the flight onto the director and every one of those instruments would be measuring a car that is not there.
+ */
+async function runFlyScene(host: VideoRunsHost, context: SceneContext, overlay: VideoOverlay): Promise<void> {
+  overlay.show();
+  const boxes = host.cityBoxes();
+  const inRegion = (x: number, y: number): boolean => cityAt(x, y, boxes) === context.region;
+  const hour = HOUR_SLOTS[Math.min(HOUR_SLOTS.length - 1, Math.floor(context.random() * HOUR_SLOTS.length))];
+  const weather = pickWeather(host.weatherNames, context.region, context.random);
+  host.setHour(hour);
+  if (weather !== null) {
+    host.setWeather(weather);
+  }
+  // A flight needs a LINE through the city, not a drive: the route is only the ground the passes are planned
+  // over, so it is asked for the extent cap's worth of road and never more.
+  const route = pickRoute(context.graph, context.random, inRegion, FLY_MAX_EXTENT, context.pinned, FLY_ROUTE);
+  if (!route) {
+    throw new Error(`no fly route inside ${context.region} in ${ROUTE_TRIES} tries`);
+  }
+  const anchor = route.points[0].position;
+  host.teleportPlayer([anchor[0], anchor[1], anchor[2] + 1]);
+  await waitSeconds(TELEPORT_NOTICE_SECONDS);
+  await until(() => host.getStream()?.pendingCells === 0, host.settleTimeoutMs);
+  await waitSeconds(WARMUP_SECONDS);
+
+  const planned = planFlight(route, context.random, anchor);
+  // Clearance runs behind the overlay, where casts are free — the live guard below is one probe a second.
+  const { casts, passes } = clearFlight(planned, (from, to) => host.pathClear(from, to, undefined));
+  log(
+    `scene ${context.scene} seed=${sceneSeed(context.seed, context.scene)} region=${context.region} kind=fly ` +
+      `hour=${hour} weather=${weather === null ? 'unchanged' : host.weatherNames[weather]} ` +
+      `route=${route.length.toFixed(0)}m passes ${passes.map((pass) => pass.preset.name).join('→')} ` +
+      `(${planned.length - passes.length} rejected, ${casts} clearance casts)`,
+  );
+  if (passes.length === 0) {
+    throw new Error(`every aerial pass over ${context.region} was blocked`);
+  }
+
+  const settleMs = await waitForStableFrames();
+  const flight = createFlight(passes);
+  try {
+    poseFlyFrame(host, flight, 0);
+    await overlay.hide();
+    const started = performance.now();
+    host.setVideoStep((dt) => poseFlyFrame(host, flight, Math.min(MAX_FRAME_SECONDS, dt)));
+    await until(() => flight.done, FLY_SCENE_TIMEOUT_MS);
+    const seconds = (performance.now() - started) / 1000;
+    overlay.show();
+    host.setVideoCamera(null, true);
+    reportFly(context, route, passes, planned.length, casts, settleMs, seconds, flight);
+  } finally {
+    host.setVideoStep(null);
+  }
 }
 
 /** One fragment: stage it black, play it, report it. */
@@ -1049,7 +1187,7 @@ async function runWalkScene(
   }
 }
 
-/** The scene kinds that have a scene, dispatched. `fly` is 096/07 task B; the caller still skips it. */
+/** The three scene kinds D3 names, dispatched — the sequencer no longer skips any of them (096/07). */
 async function sceneOfKind(
   kind: ProgramEntry['kind'],
   host: VideoRunsHost,
@@ -1057,6 +1195,9 @@ async function sceneOfKind(
   overlay: VideoOverlay,
   diag: ShiverDiag,
 ): Promise<void> {
+  if (kind === 'fly') {
+    return runFlyScene(host, context, overlay);
+  }
   if (kind === 'walk') {
     return runWalkScene(host, context, overlay, diag);
   }

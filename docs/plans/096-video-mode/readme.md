@@ -1,6 +1,6 @@
 # 096 — Video mode (self-directed showcase runs for trailer footage)
 
-**Status: IN PROGRESS. Phases 01-06 SHIPPED (2026-07-30/31), 07-08 open.** Planned 2026-07-30 and
+**Status: IN PROGRESS. Phases 01-07 SHIPPED (2026-07-30/31), 08 open.** Planned 2026-07-30 and
 graduated from `docs/ideas/video-mode/` the same day it was researched —
 the four-way repo sweep (paths/driving, camera, streaming/host, player/vehicles) and every user decision
 moved into this doc, per the lifecycle rule that a validated idea's research record MOVES into the plan.

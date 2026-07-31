@@ -35,10 +35,9 @@ design (D11/D14).
 **The sequencer** (096/05) — `apps/web/src/ui/video/presets.ts`, a table the runner reads:
 
 - **The cycle** (D2): a drive scene in Los Santos → Las Venturas → San Fierro → Countryside → Desert, then
-  two flythroughs and a walk (D3). **The walk scene ships (096/07 A)**; `fly` is still skipped with a `[video]`
-  notice — no placeholder ever reaches the footage, and a silently shortened cycle would read as a lost
-  region. The program is rebuilt each lap from that lap's seed, so a long run is not the same eight scenes
-  over and over.
+  two flythroughs and a walk (D3) — **all three kinds run since 096/07**; `sceneOfKind` dispatches them and
+  nothing is skipped any more. The program is rebuilt each lap from that lap's seed, so a long run is not the
+  same eight scenes over and over.
 - **A run is a BOUNDED SEQUENCE, not an endless mode** (D2 as revised 2026-07-31): `?seed=47` means scenes
   1…100 of seed 47, and then the run stops on a black end card reading `sequence complete · seed 47 · N
   scenes`. `&scenes=N` takes a shorter one; 100 is the ceiling, not merely the default, so a longer sequence
@@ -53,9 +52,9 @@ design (D11/D14).
   those three) — 167 differing scenes over the 100 possible starts of seed 47, measured. Invisible until 07
   stops skipping them, which is exactly why it is worth being right about now. `PROGRAM_LENGTH` is a constant
   because the key has to be computable before a program exists; a test ties it to what `buildProgram` returns.
-  **A skipped `fly`/`walk` entry still consumes a scene index.** That is deliberate: a scene's identity is
-  `(seed, index)`, so scene 57 of seed 47 has to stay the same scene when 07 fills those entries in. Letting
-  skips be free would re-seed every scene after them the day that phase lands.
+  **Every program entry consumes a scene index**, which is what let 07 fill the `fly`/`walk` entries without
+  re-seeding a single scene after them: a scene's identity is `(seed, index)`, so scene 57 of seed 47 is the
+  same scene it was when those entries were still being skipped.
 - **The region token is the game's own**: `City` is what the zone data classifies a point into AND the suffix
   the timecyc weather rows carry, so one token drives the route filter and the weather pool. The pool is
   FILTERED out of the shipped names (`weatherPool`), never listed — a modded timecyc is followed.
@@ -175,9 +174,26 @@ prediction error median 1 m. Those station numbers have not been re-taken since 
 - Measured (SF, seed 47 scene 8): 160 m route, 62 of 82 waypoints probed, `safe: 1.000` over 3 844 judged
   frames, 4 cuts, 0 pan clips, 42 s.
 
+**Flythrough scenes** (096/07) — five aerial passes over ONE neighbourhood:
+
+- A fly scene is five cameras like every other scene: `low-pass`, `high-crane`, `descend`, `side-track`,
+  `climb-out`, dealt without replacement, 10 s each, all over the same bounded stretch of city.
+- **It does NOT use the director**, and that is deliberate: the director frames a SUBJECT (anchors, lead room,
+  an empty-frame guard) and a flight has none — its eye is a spline sample and its look point travels the
+  ground line ahead of it. `fly.ts` owns its own stepper.
+- **The extent cap is the load-bearing rule.** Streaming follows the PLAYER, who stands at the route start
+  out of frame for the whole scene, so the route is trimmed to 350 m before a pass is planned — the HD ring
+  is 380 u, and a camera that outran it would film the empty world 094 exists to make impossible.
+- **Clearance is a sphere, not a ray** (2 m): a ray threads a gap between two balconies and calls a pass clear
+  that a drone would clip. Blocked at staging → the WHOLE pass lifts 10 m and is re-probed twice, then it is
+  rejected rather than flown at "nearly clear". A local bulge around one tower would be the discrete dodge
+  the multiray postmortem is about.
+- Live, a probe fires once a second and its answer eases in at 8 m/s — discrete verdict, continuous response.
+- Measured (COUNTRYSIDE + LA, seed 47 scenes 6-7): 5 of 5 passes flown in both, 35 staging casts each, **0 m
+  of lift and 0 guard hits over 90 live probes**, 50 s a scene.
+
 ## Not implemented yet
 
-- Flythrough scenes (096/07 task B).
 - **Only the tripod is surveyed.** A `flyby` eye is derived from the car and gets no occlusion check at all,
   so it can still be planted inside a wall; the same machinery would cover it, but nothing asks it to yet.
 - Interior/cabin camera, in-page recording, traffic and drift driving are out of scope for v1 (D14).

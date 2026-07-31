@@ -79,3 +79,98 @@ completing D3. Depends on 03 (camera authority) and 05 (sequencer).**
 - HD ring radius is 380 u (`streaming.ts:23-43`) — the 350 m cap keeps the fly eye inside it with
   margin; if a field round wants higher/wider flights, the answer is a different anchor point mid-path
   (teleport the player under the flight behind a cut), not a bigger cap.
+
+---
+
+## SHIPPED 2026-07-31
+
+Both halves. The sequencer no longer skips anything: `sceneOfKind` dispatches `drive` / `walk` / `fly`, and
+D3's program table executes end to end.
+
+### What shipped differently
+
+- **A fly scene is FIVE PASSES, not one flight.** This doc was written before the user's same-day D1/D4
+  revision and still said "duration-fitted"; there is no fragment duration any more. Asked which way to take
+  it, the user chose five distinct aerial passes of 10 s over ONE neighbourhood (`AERIAL_PRESETS`:
+  `low-pass`, `high-crane`, `descend`, `side-track`, `climb-out`), dealt without replacement like a shot
+  list. Five 10 s passes at a continuous 12 m/s would be 600 m of travel, which is why they are passes over
+  the same bounded route rather than one journey — and that is also what keeps the streaming cap satisfiable.
+- **The flythrough does NOT use the director.** The director frames a SUBJECT — anchors, lead room, an
+  empty-frame guard — and a flight has none. Bolted on, every one of those instruments would be measuring a
+  car that is not there, so `fly.ts` owns its own three-function stepper and the scene reports its own line.
+- **The walk scene DOES use the director, whole.** `planShots` already took a preset table (05 built it that
+  way), so the pedestrian table is a second table and not a second code path. `stationCandidates` and
+  `createSurvey` gained optional `laterals` / `survey` parameters — absent, the drive scene is byte-identical.
+- **The ground-snap rule from task A3 is not what it says.** `moveToward` steers on the PLANAR delta only, so
+  a waypoint's Z is never read: the probe is not a snap the walk needs, it is the only test of whether the
+  route is walkable. And it can only judge the stretch inside the STREAMED COLLISION — a 160 m route reaches
+  past the 150 m ring, and probing the far end would reject every long route for the world not being loaded
+  yet. 62 of 82 waypoints were judged in the field run; the rest are walked on the controller's own ground
+  handling, exactly as a player walking there would be.
+- **`sphereCast` needed a host accessor** (`sphereClear`) — it existed in `PhysicsWorld` but nothing in the
+  video host reached it. Radius 2 m, as the task asked, and for its stated reason: a ray threads a gap
+  between two balconies and calls a pass clear that a drone would clip.
+- **A walk route must be built at the PED's speed.** See below — this was a real bug, and only the field run
+  found it.
+- **`?scene=N` (added earlier the same day) is what made this phase testable at all.** The program's fly and
+  walk entries are at lap positions 6, 7 and 8; without a start index, checking them meant playing five drive
+  scenes first — four minutes of car before the first frame of the thing under test.
+
+### The bug the headless run found
+
+The walk route was built with `pickRoute`'s driving default of `cruiseSpeed: 12` while the ped walked at 2.
+The route's per-vertex speeds are what the station survey predicts the subject's position from, so a 15 s
+tripod window was predicted to cover ~180 m of pavement instead of ~30 — and every candidate failed the dwell
+test. The scene played, looked plausible in the log, and its tripod slot silently played a fallback.
+
+| Walk scene, SF, seed 47 scene 8 | driving cruise (bug) | ped cruise (fixed) |
+| --- | --- | --- |
+| `stations.filled` | 0 | **2** |
+| `stations.empty` / `fallbacks` | 1 / 1 | **0 / 0** |
+| `rejected.dwell` | 8 | **0** |
+| survey casts | 48 | **14** |
+| survey latency (worst) | 16 frames | **2 frames** |
+| scene length | 55.0 s | 42.0 s |
+| `shots.safe` | 1.000 | 1.000 |
+
+Recorded in `docs/edge-cases/route-graph.md` — nothing catches it in a test, because the survey is behaving
+correctly on the numbers it was given.
+
+### Measured (headless, `build/original/opensa`, seed 47, 2026-07-31)
+
+**Fly scenes** — `&scene=6&scenes=2`, COUNTRYSIDE and LA:
+
+| | scene 6 (COUNTRYSIDE) | scene 7 (LA) |
+| --- | --- | --- |
+| passes planned / flown | 5 / 5 | 5 / 5 |
+| staging clearance casts | 35 | 35 |
+| staging lifts (m, per pass) | 0,0,0,0,0 | 0,0,0,0,0 |
+| **live guard probes / hits** | 45 / **0** | 45 / **0** |
+| route gathered | 355.9 m | 362.3 m |
+| scene length | 50.02 s | 50.02 s |
+| settle | 250 ms | 249 ms |
+
+The acceptance number is the guard's **0 hits over 90 probes**: the staging check cleared the flights
+properly, and the live guard never had to climb. Both routes came in under the 350 m extent cap with the
+trim doing its job (356 m and 362 m of route gathered, flown within the cap).
+
+**Walk scene** — `&scene=8&scenes=1`, San Francisco: 160.3 m route, 82 waypoints, 62 probed, 0 route
+rejections, `gait=walk@2m/s`, shots `station→high→chase→wing-l→crane`, 4 cuts, **`safe: 1.000` over 3 844
+judged frames**, 0 pan clips, 42.0 s, 248 ms settle. One shot ended on a live sightline cut (`occluded: 1`) —
+the tripod machinery working on a pedestrian.
+
+**Drive scene, unchanged by the dispatch** — `&scene=1&scenes=1`, LA, `alpha(mod)`: 946 m route, 21.6 m
+tightest corner, `safe: 0.989`, cross-track p95 0.16 m, 47.4 s.
+
+**Tests**: 3 411 (from 3 379) — `fly.test.ts` 14, `walk.test.ts` 7, `WALK_SHOTS` 5, the gait tier 2, plus
+`PROGRAM_LENGTH`/`parseSceneStart` from the same day's `?scene=` work. tsc + eslint clean.
+
+### Still owed to 08
+
+- **Nobody has WATCHED either scene.** Every number above is an instrument. The walk's pavement offset, the
+  aerial passes' framing, and whether five 10 s passes read as editing are all human questions.
+- `engine-video-runs.ts` is now ~1 100 lines with three scene kinds in it. It is still one coherent module
+  (staging is genuinely shared), but 08 should look at whether the three `runXScene` functions want their own
+  files.
+- The walk scene has no `?at=` equivalent field check — `pinned` is threaded through and works, but no field
+  round has used it on a walk.
