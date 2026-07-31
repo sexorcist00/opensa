@@ -129,7 +129,7 @@ design (D11/D14).
   missing station costs variety, never a scene.
 - **The live check is one probe per second, and two blocked answers in a row cut away.** Occlusion never
   MOVES the camera — it only picks a stand before the shot and ends the shot after it. Hysteresis lives in
-  the cadence, the debounce and D4's 5 s floor.
+  the cadence and the debounce, never in a moving camera.
 - **Prediction is scaled by the speed the car is actually keeping**, and a survey waits until the car is up
   to speed before predicting from it (a launching car's speed describes the launch, not the road ahead).
 - `?at=x,y` pins every scene's route to the node nearest a point, so a hard street can be looked at
@@ -137,10 +137,15 @@ design (D11/D14).
   builder cannot walk out of is LOGGED and the scene takes a seeded route instead
   (`docs/edge-cases/route-graph.md` — a city grid is one such place).
 
-Measured over 25 headless scenes / 5 seeds (plus 4 scenes pinned to the hardest LA start): the car is inside
-the safe frame on **99.2 %** of directed frames, **0** undeclared `[cam] jump` lines, 56 cuts, shortest dealt shot
-5.2 s; **12 of 12 tripod slots played from a surveyed station**, ≤ 3 casts in every frame, survey verdict
-within 14 frames, station prediction error median 1 m.
+**Measured.** Under the five-camera model (seed 47, five drive scenes, 2026-07-31): scenes ran **40.4-52.4 s**
+and every one ended `shots-done` rather than on a clock; routes 937-967 m; **22 064 directed frames, safe
+frame 98.21 %**, **0** undeclared `[cam] jump` lines, 20 cuts of which **4 were the empty-frame guard ending a
+planted shot** — the mechanism, not a failure.
+
+Under the model before it (25 scenes / 5 seeds, plus 4 pinned to the hardest LA start), which is what the
+tripod and framing numbers were taken on: safe frame **99.2 %**, 0 jumps, 56 cuts; **12 of 12 tripod slots
+played from a surveyed station**, ≤ 3 casts in every frame, survey verdict within 14 frames, station
+prediction error median 1 m. Those station numbers have not been re-taken since scenes got longer.
 
 ## Not implemented yet
 

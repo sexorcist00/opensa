@@ -37,8 +37,9 @@ would let a scene run several tripods at once (a multi-camera scene, roadmap mat
 - **A new pak product** to version, invalidate and keep in step with the map — for a feature that is not
   shipped in the game.
 - **The dwell and framing tests are per-SHOT, not per-place**: the window a station is judged over depends on
-  the fragment length, the car's speed and where the scene happens to start, none of which exist at build
-  time. A baked table could only pre-filter geometry, so the runtime would still need the window pass.
+  the car's speed, where the scene happens to start, and how long the shot before it ran — none of which
+  exist at build time. (Since 05b a tripod's own window is bounded by its watchdog rather than a chosen
+  fragment length, which changes the arithmetic and not the argument.) A baked table could only pre-filter geometry, so the runtime would still need the window pass.
 
 ## What would have to be true to pull it
 

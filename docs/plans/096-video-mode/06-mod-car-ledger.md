@@ -49,3 +49,17 @@ never writes it. Write it.
   test pins it.
 - Do not put the ledger in the pak manifest — "nothing about a vehicle lives in the pak" is a standing
   restriction (`docs/restrictions/build-vs-runtime.md`); the TEXT `data/` route is the sanctioned one.
+
+## What shipped differently (2026-07-31)
+
+- **The runtime reader (task 3) had already shipped with 05**, so this phase was the tool, the format and
+  the contract row. Nothing about it changed on arrival.
+- **The ledger is written on EVERY install run, including one that installed nothing** — task 1 asked for
+  that and it is worth restating why it survived review: present-and-empty says "this build looked and found
+  no mod cars", absent says "this build predates the ledger". Downstream the two mean the same; to a
+  diagnosis they do not.
+- **Task 2 (the pack) needed no change at all**: the built tree copies `data/` whole, which
+  `vehicle-features.txt` already proves. It was confirmed rather than implemented.
+- The formatter lives in its own `tools/vehicle-installer/src/mods-table.ts` rather than beside
+  `formatFeatureTable` — that file is about a MOD's `features.txt`, and a ledger of slots is a different
+  subject.

@@ -18,12 +18,12 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
 `001`–`096`, one folder each (066, 073, 074, 078–083, 096 carry multi-part sub-plans). Newest first:
 
-- **[096 — Video mode](./096-video-mode/readme.md)** — IN PROGRESS 2026-07-30, **phase 01 SHIPPED**
-  (path graph + seeded route builder + the offline validator `scripts/debug/video-routes.ts`; 45–69 routes
-  accepted per region against a floor of 20, and the offline run caught two constraint bugs before a single
-  frame). Planned the same day it was researched; all user decisions frozen in the readme's D-table;
-  graduated from `docs/ideas/video-mode/`. `?video=1` boots an endless
-  seeded self-directed showcase for trailer recording: a random car (mod cars first, via a new
+- **[096 — Video mode](./096-video-mode/readme.md)** — IN PROGRESS 2026-07-30/31, **phases 01-06 SHIPPED**
+  (road graph + seeded routes, autopilot, director + shot table, surveyed tripod stations, the region
+  sequencer, and the build-time mod-car ledger). Planned the same day it was researched and graduated from
+  `docs/ideas/video-mode/`; the user's decisions live in the readme's D-table, with three of them REVISED
+  on 2026-07-31 — each revision written into its own row rather than over it. `?video=1` boots a bounded
+  seeded self-directed showcase for trailer recording (scenes 1…100 of the seed, five cameras each): a random car (mod cars first, via a new
   build-time `vehicle-installer` ledger) cruises a route generated from the game's own `NODES*.DAT`
   graph while cameras cut between occlusion-checked tripod stations and chase/front/rear/wing shots;
   walk and flythrough scenes; region cycle LS→LV→SF→Country→Desert; region-native weather, debugger

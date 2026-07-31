@@ -16,8 +16,8 @@ audit + benchmark is unfinished (CLAUDE.md standing rule).**
    judge already measures; the module must not accumulate DOM nodes, listeners, spawned cars (teardown
    audit), or route-graph garbage per scene.
 4. **Error paths on camera**: every `[video]` failure (no route, spawn retry exhausted, stuck) ends
-   behind the overlay with a console line and ADVANCES the program — an endless mode must be unkillable
-   by one bad scene. Verify by fault injection in tests (deny spawn, empty region).
+   behind the overlay with a console line and ADVANCES the program — a hundred-scene sequence must be
+   unkillable by one bad scene (D2 as revised: bounded, but still far longer than anyone watches live). Verify by fault injection in tests (deny spawn, empty region).
 5. **`vehicle-enter-null-body` disposition** (D16): if it never fired through 02–07's runs, close the
    issue at its 2026-08-30 recheck citing this chain as the stress evidence; if it fired, the guard
    already shipped (02's rule) — either way the issue file gets its closing block.

@@ -70,3 +70,21 @@ on 03's shots if 04 lags).**
   093's owed verification surfacing, not a video-mode bug; route the report there.
 - The region predicate from zone data must be cheap (route builder calls it per node) — precompute the
   region per NODES area once at graph load if the per-node lookup shows up in the staging time.
+
+## What shipped differently (2026-07-31)
+
+- **The pure half lives at `apps/web/src/ui/video/presets.ts`**, beside the director, not at
+  `apps/web/src/video-presets.ts` as task 1 wrote it — the module layout 03/04 settled on.
+- **The mod-car preference draws its two branches from DISJOINT pools.** The first cut let the stock branch
+  fall back on the whole roster, which a unit test caught as a realised share of 0.90 against a configured
+  0.80. The share would have drifted with how many slots a game has modded, and a heavily modded install
+  would have stopped showing stock classics — the half of D10 that is easy to lose. Disjoint pools make the
+  realised share BE the configured one, which is also the only reading under which this phase's own
+  acceptance ("share ≈ the configured preference") means anything.
+- **`data/vehicle-mods.txt`'s runtime READER shipped here**, ahead of 06, so the pick had a source to test
+  against; 06 wrote the tool and owns the format.
+- **D2 and then D1/D4 were revised by the user the same day** (see the plan readme's 05a and 05b ledger
+  entries): a run became a bounded 100-scene sequence, and a scene became five distinct cameras whose own
+  lengths decide it — so this doc's "fragment" language, and `&from`/`&to` with it, no longer exist.
+- **`ROUTE_TRIES` 40 → 120** as a consequence of 05b: five shots need ~936 m of road against the old 390,
+  and long routes are rarer (San Fierro accepts 10 walks in 120).

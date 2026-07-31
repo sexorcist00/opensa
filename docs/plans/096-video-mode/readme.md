@@ -1,13 +1,15 @@
 # 096 — Video mode (self-directed showcase runs for trailer footage)
 
-**Status: PLANNED 2026-07-30.** Graduated from `docs/ideas/video-mode/` the same day it was researched —
+**Status: IN PROGRESS. Phases 01-06 SHIPPED (2026-07-30/31), 07-08 open.** Planned 2026-07-30 and
+graduated from `docs/ideas/video-mode/` the same day it was researched —
 the four-way repo sweep (paths/driving, camera, streaming/host, player/vehicles) and every user decision
 moved into this doc, per the lifecycle rule that a validated idea's research record MOVES into the plan.
 
 **Goal: `?video=1` boots the game into a bounded, seeded, self-directed showcase** — scenes 1…100 of the
-seed, then an end card (D2 as revised). A random car — mod cars first — spawns on a road, the player gets in and cruises a route generated from the game's own
-`NODES*.DAT` graph while cameras cut between occlusion-checked tripod stations and chase/front/rear/wing
-views; other scenes walk the player or fly the camera. Every scene is five cameras on a fully streamed
+seed, then an end card (D2 as revised). A random car — mod cars first — spawns on a road, the player gets in
+and cruises a route generated from the game's own `NODES*.DAT` graph while cameras cut between
+occlusion-checked tripod stations and chase/front/rear/wing/overhead views; other scenes walk the player or
+fly the camera. Every scene is five cameras on a fully streamed
 world, UI hidden, black overlay between scenes. The user screen-records with OS tools and edits
 the cuts out by hand.
 
@@ -75,7 +77,8 @@ rewritten: a phase doc that quietly matches today's code cannot be read against 
    casts/frame total (080 ground rule; today's rig spends 2).
 8. **The discrete-gate trap is documented**: a hard boolean over rays "has no continuous middle, so it
    cannot ease" (`docs/postmortem/080-cinematic-camera/multiray-collision.md`). Station choice is exactly
-   that shape → hysteresis + minimum dwell (D4's 5 s floor helps) + amortised surveys, and every cut
+   that shape → hysteresis + minimum dwell (D4's 5 s floor helped, until D4's 2026-07-31 revision removed
+   it; the dwell now comes from a riding shot's fixed clip) + amortised surveys, and every cut
    DECLARED to the `[cam] jump` watchdog (`engine-canvas-host.tsx:1961`) and to
    `camera-transitions.test.ts`'s 1 u/frame continuity exam.
 9. **Weather is instant when asked**: `WeatherTransition.begin(index, 0)` (how the bench sets it,
