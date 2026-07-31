@@ -53,8 +53,11 @@ design (D11/D14).
   the run reached it. Each staged scene prints one self-describing line:
   `[video] scene 7 seed=… region=VEGAS kind=drive car=infernus(mod) hour=21 weather=SUNNY_VEGAS route=412m …`.
 - **The car** (D10): the roster is `vehicles.ide`'s `car`-type rows whose `.osm` the build actually carries
-  (`roadCarModels` — a slot with no model throws at spawn). A mod car is preferred 4 times in 5 when 096/06's
-  ledger offers any; the two branches draw from disjoint pools, so the realised mod share IS the configured
+  (`roadCarModels` — a slot with no model throws at spawn). A mod car is preferred 4 times in 5 when the
+  build's ledger (`data/vehicle-mods.txt`, 096/06 — the only vehicle data file read at RUNTIME, written by
+  `vehicle-installer` because nothing about a mod survives the merge) offers any; an absent ledger is an empty
+  set and every scene takes a stock car. The two branches draw from disjoint pools, so the realised mod share
+  IS the configured
   preference and stock classics keep appearing whatever a game has modded. Paint comes from the car's own
   `carcols` combos, seeded, so the same model twice in a run is not the same colour twice.
 - **D15's tripwire**: a route is built inside one region precisely so `CityZoneSystem` never fires its 6 s

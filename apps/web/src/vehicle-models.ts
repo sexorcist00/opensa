@@ -1,29 +1,19 @@
 import type { AssetFileSystem } from '@opensa/renderware';
 
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
+import { parseVehicleMods } from '@opensa/renderware/parsers/text/vehicle-mods.parser';
 
 /**
- * The slots a mod installed a car into, from the build-time ledger `data/vehicle-mods.txt` — video mode's
- * "mod cars first" pick (096 D10).
+ * The slots a mod installed a car into, from the build-time ledger `data/vehicle-mods.txt` (096/06) — video
+ * mode's "mod cars first" pick (D10).
  *
- * An ABSENT ledger is an empty set, never an error: a game built before 096/06's tool existed, or one with no
- * vehicle mods at all, simply has every scene take a stock car. One lowercased slot name per line, `#` starts
- * a comment — the tolerant reading, because the file is written by a tool and read by a showcase run, and a
- * malformed line must cost that line rather than the run. 096/06 owns the format and records it in
- * `docs/contracts/vehicles.md`.
+ * An ABSENT ledger is an empty set, never an error: a game built before the installer wrote one, or one with
+ * no vehicle mods at all, simply has every scene take a stock car. The format lives with the other data-file
+ * parsers (`@opensa/renderware`'s `vehicle-mods.parser`) and in `docs/contracts/vehicles.md`; this is only
+ * the read.
  */
 export function modCarSlots(fs: Pick<AssetFileSystem, 'getText'>): Set<string> {
-  const text = fs.getText('data/vehicle-mods.txt');
-  if (!text) {
-    return new Set();
-  }
-
-  return new Set(
-    text
-      .split('\n')
-      .map((line) => line.split('#')[0].trim().toLowerCase())
-      .filter((line) => line.length > 0),
-  );
+  return parseVehicleMods(fs.getText('data/vehicle-mods.txt') ?? '');
 }
 
 /**

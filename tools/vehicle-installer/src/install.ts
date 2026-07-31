@@ -3,6 +3,7 @@ import { join, parse, resolve, sep } from 'node:path';
 
 import { applyVehicle } from './apply-vehicle';
 import { formatFeatureTable } from './features';
+import { formatModTable, MODS_TABLE } from './mods-table';
 import { stripOutput } from './strip';
 
 /** Where the per-model feature declarations land in the built game dir (read by opensa-pack). */
@@ -71,6 +72,10 @@ export function install(options: InstallOptions): void {
   if (features.size > 0) {
     writeFileSync(join(outPath, FEATURES_TABLE), formatFeatureTable(features));
   }
+  // The mod-car ledger (096/06), written on EVERY run including one that installed nothing: after this point
+  // the build cannot tell a mod car from a stock one, and an empty ledger says "looked, found none" where an
+  // absent one says "this build predates the ledger". Only one of those is a fact worth having.
+  writeFileSync(join(outPath, MODS_TABLE), formatModTable(models));
 
   if (options.strip) {
     stripOutput(outPath, { handlingIds, imgNames, models });
@@ -79,7 +84,7 @@ export function install(options: InstallOptions): void {
   console.log(
     `vehicle-installer: ${vehicles.length} vehicle(s) → ${outPath} (${imgNames.size} img entries` +
       (features.size > 0 ? `, ${features.size} with declared features` : '') +
-      ')' +
+      `, ${models.size} slot(s) in the mod ledger)` +
       (options.strip ? ' [stripped to installed]' : ''),
   );
 }

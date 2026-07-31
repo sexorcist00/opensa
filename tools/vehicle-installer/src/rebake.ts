@@ -30,6 +30,7 @@ import { openGameDir } from '@opensa/opensa-pack/game-fs';
 import { buildVehicleOsm } from '@opensa/opensa-pack/vehicle-osm';
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 import { parseVehicleFeatures, UP_DOWN_LIGHTS } from '@opensa/renderware/parsers/text/vehicle-features.parser';
+import { parseVehicleMods } from '@opensa/renderware/parsers/text/vehicle-mods.parser';
 import { openImg } from '@opensa/tool-kit/archive/img';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
@@ -37,6 +38,7 @@ import { basename, join, resolve } from 'node:path';
 import { applyVehicle } from './apply-vehicle';
 import { formatFeatureTable } from './features';
 import { FEATURES_TABLE } from './install';
+import { formatModTable, MODS_TABLE } from './mods-table';
 import { decodeSettings, parseVehicleSettings } from './settings';
 
 export interface RebakeOptions {
@@ -96,6 +98,13 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
     }
   }
   mergeFeatureTable(targetPath, declared);
+  // The ledger is MERGED, never rewritten from this run's selection: `--only previon` rebakes one car, and a
+  // ledger truncated to it would tell video mode that every other mod car in the build is stock. What a
+  // rebake knows is "these slots are also mod slots", which is an addition.
+  mergeModTable(
+    targetPath,
+    selected.map(({ model }) => model),
+  );
 
   // Pass 2 — the MODELS. One composite filesystem per car: the mod folder shadows the built tree, so the
   // converter reads the mod's own `.dff`/`.txd` and everything else (the shared `vehicle.txd`, the plate
@@ -194,6 +203,17 @@ function mergeFeatureTable(targetPath: string, declared: ReadonlyMap<string, rea
     merged.set(model, features);
   }
   writeFileSync(path, formatFeatureTable(merged));
+}
+
+/** Add the rebaked slots to the target's mod ledger, keeping every slot already in it (096/06). */
+function mergeModTable(targetPath: string, models: readonly string[]): void {
+  if (models.length === 0) {
+    return;
+  }
+  const path = join(targetPath, MODS_TABLE);
+  const merged = parseVehicleMods(readText(path) ?? '');
+  models.forEach((model) => merged.add(model.toLowerCase()));
+  writeFileSync(path, formatModTable(merged));
 }
 
 /** The model a folder is for: its `.dff` basename, the same rule the install uses. */

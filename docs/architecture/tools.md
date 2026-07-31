@@ -14,7 +14,11 @@ never the app. The dependency picture is the tools cluster of
 - **vehicle-installer** — vehicle mod folders → `gta3.img` + merged `handling.cfg` / `vehicles.ide` /
   `carcols.dat` / `carmods.dat`. A mod's settings file is decoded by its own encoding (UTF-16 is what most
   authors ship) and every block it cannot classify is reported. A mod's `features.txt` (Modloader/IVF) is
-  copied into `data/vehicle-features.txt`, which opensa-pack reads while baking that car.
+  copied into `data/vehicle-features.txt`, which opensa-pack reads while baking that car. It also writes
+  `data/vehicle-mods.txt`, the mod-car ledger (096/06): once the rows are merged, a mod car is
+  indistinguishable from a stock one anywhere downstream, so the set the installer knows while it works is
+  written down — the ONE vehicle data file read at runtime, by video mode's "mod cars first" pick. A
+  `--rebake` merges into it rather than rewriting it from its own selection.
   **`--rebake <game>`** runs the same work against a game that is ALREADY BUILT, in place — merging settings
   into the built `data/*` and re-converting each model into the archive's `<model>.osm` through opensa-pack's
   own `buildVehicleOsm`. It is the one place a tool reaches ACROSS the pipeline (installer → converter) and it

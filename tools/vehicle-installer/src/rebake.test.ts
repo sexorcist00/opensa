@@ -1,6 +1,7 @@
 import { readVehicleOsm } from '@opensa/game/adapters/vehicle-osm';
 import { parseHandling } from '@opensa/renderware/parsers/text/handling.parser';
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
+import { parseVehicleMods } from '@opensa/renderware/parsers/text/vehicle-mods.parser';
 import { createImg, openImg } from '@opensa/tool-kit/archive/img';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -152,6 +153,20 @@ describe.skipIf(!hasFixtures)('rebakeVehicles (real zr350 fixture)', () => {
 
       expect(entry(target, 'zr350.dff')).toBeNull();
       expect(entry(target, 'zr350.txd')).toBeNull();
+    });
+
+    it('does not truncate the mod ledger to the cars this run rebaked', () => {
+      // The 096/06 risk: `--only zr350` knows about ONE slot, and a ledger rewritten from that would tell
+      // video mode that every other mod car in the build is stock. What a partial rebake knows is an
+      // ADDITION to the ledger, never the whole of it.
+      const target = builtGame();
+      writeFileSync(join(target, 'data', 'vehicle-mods.txt'), 'previon\ninfernus\n');
+
+      rebakeVehicles({ inPath: modFolder(), only: ['zr350'], targetPath: target });
+
+      expect(parseVehicleMods(readFileSync(join(target, 'data', 'vehicle-mods.txt'), 'utf8'))).toEqual(
+        new Set(['infernus', 'previon', 'zr350']),
+      );
     });
 
     it('leaves the models `--only` did not name exactly as they were', () => {

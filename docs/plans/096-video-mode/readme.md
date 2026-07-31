@@ -135,7 +135,7 @@ dependency order; 06 is independent and can run any time before 05.
 | [03](03-camera-authority-and-shots.md) | Video camera authority + shot presets + framing — **SHIPPED** | **P1** | 02 |
 | [04](04-stations-and-occlusion.md) | Tripod stations: survey, occlusion, cuts without flicker — **SHIPPED** | **P1** | 03 |
 | [05](05-sequencer-regions-presets.md) | Sequencer: region cycle, weather/time presets, car pick — **SHIPPED** | **P1** | 02 (04 for full look) |
-| [06](06-mod-car-ledger.md) | Build-time mod-car ledger (tool + pack + runtime read) | **P1** | — (feeds 05) |
+| [06](06-mod-car-ledger.md) | Build-time mod-car ledger (tool + pack + runtime read) — **SHIPPED** | **P1** | — (feeds 05) |
 | [07](07-walk-and-fly-scenes.md) | Walk + flythrough scenes | **P2** | 03, 05 |
 | [08](08-polish-and-closeout.md) | Polish, empty-frame guard, docs, benchmark, audit | **P2** | all |
 
@@ -327,6 +327,25 @@ before analysis). Empty until phases run:
   seed 47 matched its manifest byte for byte. Frame-by-frame camera MOTION does not, and cannot: the director
   integrates real `dt`, so an early guard cut (empty frame, blocked tripod) depends on how the frames fell.
   Two runs of one seed are the same scenes, shot for shot, and may differ in where a shot was cut short.
-- 06: —
+- 06: **DONE 2026-07-31.** The mod-car ledger: `vehicle-installer` writes `data/vehicle-mods.txt`, the
+  renderware text parsers read it back (`vehicle-mods.parser`, beside `vehicle-features.parser`), and the app
+  layer feeds it to 05's car pick. **`--in mods-src/original/vehicles` → 12 slots**, exactly the corpus the
+  research counted (`admiral alpha banshee comet elegy hermes petro previon stallion stratum supergt
+  yosemite`); gostown, carcer and anderius carry 2 mod cars each. The `data/` route needed no change — the
+  built tree copies the whole directory, which `vehicle-features.txt` already proves.
+  **Field check on the BUILT game** (`--rebake original`, 12 cars, 295.1 MB of `.osm`, the sanctioned in-place
+  route rather than hand-copying a file into a build): `build/original/opensa/data/vehicle-mods.txt` carries
+  the 12, video mode logs `144 road cars, 12 mod slots` and marks its picks `(mod)` —
+  `alpha → comet → petro → previon → banshee` over the first five scenes of seed 47.
+  **The invariant, confirmed in the field rather than only in a test:** those five scenes kept the SAME scene
+  seeds, hours, weathers and routes as the pre-ledger run (scene 1 is still `hour=0 SUNNY_LA route=392m
+  corner=48.5m`) and changed only the car. That is 05's "the ledger must not change how far the seeded stream
+  advances" holding on real data — a seed names the same scenes whatever mods are installed.
+  **Realised mod share**, computed off the real roster and ledger through the same pure `pickCar` (100 scenes
+  × 5 seeds — the pick is deterministic in `(seed, index)`, so this needs no boot): **0.77-0.84 against the
+  configured 0.80** (σ ≈ 0.04 at n = 100), 27-32 distinct cars per 100 scenes.
+  **The risk the phase named is pinned by a test**: `--rebake --only zr350` MERGES into the ledger. A rebake
+  rewriting it from its own selection would tell video mode that every other mod car in the build is stock,
+  and nothing else in the game would notice.
 - 07: —
 - 08: —

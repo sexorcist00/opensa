@@ -3,6 +3,7 @@ import { parseCarGroups } from '@opensa/renderware/parsers/text/cargrp.parser';
 import { parseCarmods } from '@opensa/renderware/parsers/text/carmods.parser';
 import { parseHandling } from '@opensa/renderware/parsers/text/handling.parser';
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
+import { parseVehicleMods } from '@opensa/renderware/parsers/text/vehicle-mods.parser';
 import { createImg, openImg } from '@opensa/tool-kit/archive/img';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -147,6 +148,28 @@ describe.skipIf(!hasFixtures)('install (end-to-end, real data fixtures)', () => 
       expect(parseHandling(readFileSync(join(out, 'data', 'handling.cfg'), 'utf8')).get('ADMIRAL')?.fields[0]).toBe(
         '9999.0',
       );
+      // The mod-car ledger (096/06): after this point nothing downstream can tell this admiral from a stock
+      // one, so the slot has to be written down while the installer still knows.
+      expect(parseVehicleMods(readFileSync(join(out, 'data', 'vehicle-mods.txt'), 'utf8'))).toEqual(
+        new Set(['admiral']),
+      );
+    });
+
+    it('writes an EMPTY ledger for an install with no vehicle mods at all', () => {
+      const game = join(root, 'game');
+      const mods = join(root, 'in');
+      const out = join(root, 'out');
+      mkdirSync(join(game, 'data'), { recursive: true });
+      for (const file of DATA_FILES) {
+        cpSync(join(DATA, file), join(game, 'data', file));
+      }
+      mkdirSync(mods, { recursive: true });
+
+      install({ gamePath: game, inPath: mods, outPath: out });
+
+      // Present-and-empty is a different fact from absent: one says the build looked, the other says the
+      // build predates the ledger. Downstream they mean the same thing; to a diagnosis they do not.
+      expect(parseVehicleMods(readFileSync(join(out, 'data', 'vehicle-mods.txt'), 'utf8'))).toEqual(new Set());
     });
 
     it('appends custom palette colours and resolves the carcols newN refs (cabbie-style)', () => {
