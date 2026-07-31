@@ -72,6 +72,7 @@ import { addComponent, addEntity } from 'bitecs';
 import { useEffect, useRef, useState } from 'react';
 
 import type { GameId } from '../game-config';
+import type { PlayerPose } from './engine-video-runs';
 
 import { IS_DEV } from '../dev-mode';
 import { GAME_CONFIG } from '../game-config';
@@ -1165,6 +1166,10 @@ async function boot(
   let accumulator = 0;
   let readySent = false;
   let groundDelta = 0;
+  /** The DRAWN player (engine Y-up) as of the last posed frame. Video mode's walk scene (096/07) frames the
+   *  ped exactly as it frames a car, and for the same reason it must be the drawn pose rather than the
+   *  fixed-step one: composed from anything else, the shot carries a frame of the ped's travel (round 1). */
+  const playerDrawn: [number, number, number] = [0, 0, 0];
   let renderAlpha = 1;
   let pedMs = 0;
   /** Per-frame block timers (B7·b field stall): a stall must have a NUMBER, not a theory. */
@@ -1375,6 +1380,7 @@ async function boot(
       heading = Locomotion.heading[playerEid] ?? heading;
     }
     const render: [number, number, number] = [playerEngine[0], playerEngine[1] + groundDelta, playerEngine[2]];
+    [playerDrawn[0], playerDrawn[1], playerDrawn[2]] = render;
     // Riding forces the grounded state (0) — the seat pose must never pick a jump/fall clip.
     player.update(
       render,
@@ -1754,6 +1760,7 @@ async function boot(
     aspect: (): number => canvas.width / Math.max(1, canvas.height),
     autopilot: pathFollow,
     cityBoxes: (): readonly CityBox[] => cityBoxes,
+    collisionRadius: (): number => config.streaming.collisionDrawDistance,
     colourCombos: async (model): Promise<number[][]> => adapter.vehicleColourCombos(model),
     fs,
     getStream: (): null | StreamStats => lastStream,
@@ -1763,6 +1770,15 @@ async function boot(
     params,
     pathClear: (from, to, excludeBody): boolean =>
       physics.pathClear([from[0], from[1], from[2]], [to[0], to[1], to[2]], excludeBody),
+    playerPose: (): PlayerPose => ({
+      gta: viewOf(),
+      // The ped's own capsule, in the vehicle convention the shot table multiplies against
+      // ([lateral, longitudinal, vertical]) — so one pedestrian preset frames whatever character is loaded.
+      halfExtents: [CAPSULE_RADIUS, CAPSULE_RADIUS, CAPSULE_HALF_HEIGHT + CAPSULE_RADIUS],
+      heading,
+      position: [playerDrawn[0], playerDrawn[1], playerDrawn[2]],
+      speed: Math.hypot(Velocity.x[playerEid], Velocity.y[playerEid]),
+    }),
     setHour: (value): void => {
       hour = value;
     },
@@ -1799,6 +1815,17 @@ async function boot(
       teleportPlayer([anchor[0], anchor[1], anchor[2]]);
     },
     toEngine,
+    walkArrived: (): boolean => controllerSystem.arrived,
+    walkPath: (points, gait): void => {
+      controllerSystem.runPath(
+        points.map((point): [number, number, number] => [point[0], point[1], point[2]]),
+        gait,
+      );
+    },
+    walkSpeed: (): number => config.movement.walkSpeed,
+    walkStop: (): void => {
+      controllerSystem.runPath([]); // an empty path hands control back, exactly as enter-vehicle does
+    },
     weatherNames: WEATHER_NAMES,
   });
 }

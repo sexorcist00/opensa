@@ -45,3 +45,34 @@ CHOICE was made against the prediction.
 The graph's links are 100 % mutual (096/01 measured: 0 links without a reverse edge over 30 587 vehicle
 nodes), so a route may be walked the wrong way up a one-way street. SA keeps lane direction in the navi
 nodes, which are not parsed. Nothing catches this — it needs a human watching the footage.
+
+## The graph we parse carries VEHICLE nodes only — there is no pavement in it
+
+`adapters/path-graph.ts` reads the vehicle half of `NODES*.DAT`. SA's ped nodes are in the same files and are
+not parsed, so nothing in the engine knows where a pavement runs, where a crossing is, or which side of a
+street a person may walk down.
+
+The walk scene (096/07) therefore walks a DRIVING route offset 6.5 m to the right of the carriageway, and
+that offset is the entire pavement model. Where a road has no pavement — a tunnel mouth, a freeway shoulder,
+a desert verge — the walker is on dirt, against a wall, or heading for a drop.
+
+What catches it: only the drop. Each waypoint inside the streamed collision ring is ground-probed and a miss
+rejects the whole route (`video/walk.ts`). Furniture — benches, lampposts, building steps — passes every
+check we have, and is **silent**: the ped's own capsule slides along it and the scene keeps playing.
+
+The lift is small and known: parse the ped nodes. See `docs/hacks/pedestrian-route-on-a-vehicle-graph.md`.
+
+## A route's per-vertex speeds are what the station survey predicts from — including for a WALKER
+
+`walkRoute`'s `cruiseSpeed` writes the target speed at every vertex, and `predictAlong` walks those speeds to
+decide where the subject will be during a shot. So a route built for a subject that does not travel at that
+speed produces a prediction that is wrong by the ratio of the two.
+
+Measured 2026-07-31 (096/07's first headless walk scene, seed 47 scene 8): a walk route left at the driving
+default of 12 m/s while the ped walked at 2 predicted a 15 s tripod window covering ~180 m of pavement
+instead of ~30, and **every one of the 8 candidates was rejected on dwell** — the tripod never filled, the
+slot played its fallback, and 48 casts were spent finding that out. Passing the ped's own speed: 2 stations
+filled, 0 rejected, 14 casts.
+
+Nothing catches this in a test — the survey is behaving correctly on the numbers it was given. It shows up
+only in a scene report's `stations.rejected.dwell`, which is why that field is in the ledger.

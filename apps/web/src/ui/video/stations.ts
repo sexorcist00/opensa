@@ -19,6 +19,14 @@
 /** How far from the driven line a station may stand (m, both sides). */
 export const STATION_LATERALS = [8, 11, 14, 18] as const;
 
+/** …and the walk scene's own set (096/07): a person filmed from 8 m of pavement is already a wide shot, and
+ *  the far offsets would put the tripod through the buildings the pavement runs along. */
+export const WALK_STATION_LATERALS = [2.5, 4, 6, 8] as const;
+
+/** The survey thresholds a WALK scene is judged on — the defaults with the distance ceiling brought in to
+ *  what a person actually reads at (the `station` preset's own `maxDist` in {@link WALK_SHOTS}). */
+export const WALK_SURVEY_DEFAULTS: SurveyOptions = { maxDist: 26, minCoverage: 0.8, minDwell: 0.8 };
+
 /** One place a tripod could stand, before anything has been probed. */
 export interface StationCandidate {
   /** Height above the ground under it (m) — applied once the ground snap has answered. */
@@ -199,6 +207,7 @@ export function stationCandidates(
   points: readonly { position: readonly [number, number, number] }[],
   atIndex: number,
   random: () => number,
+  laterals: readonly number[] = STATION_LATERALS,
 ): StationCandidate[] {
   const last = points.length - 1;
   if (last < 1) {
@@ -216,7 +225,7 @@ export function stationCandidates(
   const right: [number, number] = [dy / length, -dx / length];
 
   const candidates: StationCandidate[] = [];
-  for (const lateral of STATION_LATERALS) {
+  for (const lateral of laterals) {
     for (const side of [1, -1]) {
       const kind = pickKind(random);
       const heights = STATION_HEIGHTS[kind];

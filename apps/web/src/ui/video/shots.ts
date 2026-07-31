@@ -200,6 +200,119 @@ export const SHOTS: readonly ShotPreset[] = [
   },
 ];
 
+/**
+ * The pedestrian table (096/07) — the same nine roles, sized for a person instead of a car.
+ *
+ * It is a SECOND TABLE rather than a scale factor on the first, because the two subjects differ in more than
+ * size. A ped's half-extents are ~0.35 m across against a saloon's ~1.0, so a shared table would put every
+ * lateral shot inside the walker; and the distances that read for a car (40-70 m) make a person a speck, so
+ * every `maxDist` here is roughly a third of its driving twin. The OFFSETS are still multiples of the
+ * subject's own half-extents — the rule does not change, only what it multiplies.
+ *
+ * The framing is deliberately closer and lower than the car table's: at 2 m/s there is no motion to leave
+ * lead room for, and a shot that would read as "following a car through a city" reads as "lost the person"
+ * at the same distance.
+ */
+export const WALK_SHOTS: readonly ShotPreset[] = [
+  { kind: 'chase', name: 'chase', weight: 3 },
+  {
+    // Ahead of the walker at head height, a little off his axis — the face, and the street coming at him.
+    anchor: { x: 0.42, y: 0.5 },
+    eyeSmooth: 0.24,
+    fovYRad: (45 * Math.PI) / 180,
+    kind: 'tracking',
+    maxDist: 16,
+    name: 'nose',
+    // ~1.6 m ahead, ~1.4 m up, ~0.5 m to the side on a stock ped.
+    offset: { forward: 4.6, height: 1.55, lateral: 1.4 },
+    targetSmooth: 0.2,
+    weight: 2,
+  },
+  {
+    // Over the shoulder and above: the walk reads against the pavement ahead of him.
+    anchor: { x: 0.44, y: 0.58 },
+    eyeSmooth: 0.3,
+    fovYRad: (50 * Math.PI) / 180,
+    kind: 'tracking',
+    maxDist: 16,
+    name: 'high',
+    offset: { forward: -5.7, height: 3.3, lateral: -1.7 },
+    targetSmooth: 0.26,
+    weight: 2,
+  },
+  {
+    // Overhead, and off vertical for the SAME reason the car's `top` is (`screenBasis`'s roll singularity):
+    // ~6.3 m up, ~1.1 m ahead holds it about 10° off the pole — enough for a defined roll at this height.
+    anchor: { x: 0.5, y: 0.54 },
+    eyeSmooth: 0.28,
+    fovYRad: (55 * Math.PI) / 180,
+    kind: 'tracking',
+    maxDist: 18,
+    name: 'top',
+    offset: { forward: 3.2, height: 7, lateral: 0 },
+    targetSmooth: 0.24,
+    weight: 1,
+  },
+  {
+    // The crane: back and well up, the walker small against the block he is crossing.
+    anchor: { x: 0.46, y: 0.62 },
+    eyeSmooth: 0.34,
+    fovYRad: (45 * Math.PI) / 180,
+    kind: 'tracking',
+    maxDist: 24,
+    name: 'crane',
+    offset: { forward: -10, height: 5.5, lateral: -2.9 },
+    targetSmooth: 0.3,
+    weight: 2,
+  },
+  {
+    anchor: { x: 0.4, y: 0.52 },
+    eyeSmooth: 0.2,
+    fovYRad: (40 * Math.PI) / 180,
+    kind: 'tracking',
+    maxDist: 14,
+    name: 'wing-l',
+    offset: { forward: 1.1, height: 1.7, lateral: -7.1 },
+    targetSmooth: 0.16,
+    weight: 2,
+  },
+  {
+    anchor: { x: 0.4, y: 0.52 },
+    eyeSmooth: 0.2,
+    fovYRad: (40 * Math.PI) / 180,
+    kind: 'tracking',
+    maxDist: 14,
+    name: 'wing-r',
+    offset: { forward: 1.1, height: 1.7, lateral: 7.1 },
+    targetSmooth: 0.16,
+    weight: 2,
+  },
+  {
+    // Planted ahead and to one side; he walks into it and out of it. The standoff is wider than the walker
+    // needs, because the pan rate at closest approach is speed/standoff and a tight plant whips even at 2 m/s.
+    anchor: { x: 0.42, y: 0.52 },
+    eyeSmooth: 0.22,
+    fovYRad: (38 * Math.PI) / 180,
+    kind: 'static',
+    maxDist: 22,
+    name: 'flyby',
+    offset: { forward: 11.4, height: 1.9, lateral: 8.6 },
+    targetSmooth: 0.18,
+    weight: 1,
+  },
+  {
+    // The tripod, surveyed against the world exactly as the driving one is — only the framing lives here.
+    anchor: { x: 0.42, y: 0.5 },
+    eyeSmooth: 0.2,
+    fovYRad: (36 * Math.PI) / 180,
+    kind: 'station',
+    maxDist: 26,
+    name: 'station',
+    targetSmooth: 0.2,
+    weight: 3,
+  },
+];
+
 /** Any shot the director poses itself — everything needed to FRAME a car, whatever put the eye where it is. */
 export type PlacedShot = PosedShot | StationShot;
 

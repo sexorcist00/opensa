@@ -32,6 +32,10 @@ export interface LookDirectionSource {
   getWorldDirection(target: Vector3): Vector3;
 }
 
+/** The tiers a SCRIPTED path may be followed at ({@link CharacterControllerSystem.runPath}) — the manual
+ *  gait ladder (sprint/run/walk) is the input's business and is untouched by this. */
+export type ScriptedGait = 'run' | 'walk';
+
 /** What the air FSM hands the move step: the one-shot launch impulse + the grounded control scale. */
 interface AirStep {
   controlFactor: number;
@@ -80,6 +84,8 @@ export class CharacterControllerSystem implements System {
   /** Per-player jump-buffer/coyote clocks (seconds remaining) for the 088/04 FSM. */
   private readonly airTimers = new Map<number, { buffer: number; coyote: number }>();
   private autoArrived = false;
+  /** The gait a scripted path is followed at — `runPath`'s argument, default `run` (see {@link runPath}). */
+  private autoGait: ScriptedGait = 'run';
   private autoIndex = 0;
   private autoPath: Vec3[] = [];
   private readonly camera: LookDirectionSource;
@@ -144,11 +150,17 @@ export class CharacterControllerSystem implements System {
   /**
    * Drive the player along a world-space path (Z-up), ignoring the keyboard until
    * the last point is reached. Pass `[]` to restore manual control.
+   *
+   * `gait` picks the tier the path is followed at. It defaults to `run` because the shipped caller is the
+   * enter-vehicle approach, where a ped that strolls to the door reads as a stall; a scripted showcase walk
+   * (096/07) passes `walk`. It is the SCRIPTED tier only — manual movement still reads the gait modifier
+   * keys through {@link tierSpeed}, which this does not touch.
    */
-  runPath(points: readonly Vec3[]): void {
+  runPath(points: readonly Vec3[], gait: ScriptedGait = 'run'): void {
     this.autoPath = [...points];
     this.autoIndex = 0;
     this.autoArrived = points.length === 0;
+    this.autoGait = gait;
   }
 
   /** Enable/disable manual + scripted control (e.g. while the player is seated in a car). */
@@ -267,7 +279,9 @@ export class CharacterControllerSystem implements System {
     const { movement } = this.config;
     if (this.autoIndex < this.autoPath.length && players.length > 0) {
       // Scripted auto-run (e.g. around to a car door) — ignore manual input until arrival.
-      return { jump: false, target: this.moveToward(players[0], movement.runSpeed) };
+      const speed = this.autoGait === 'walk' ? movement.walkSpeed : movement.runSpeed;
+
+      return { jump: false, target: this.moveToward(players[0], speed) };
     }
     const move = this.input.move();
     const target = this.cameraRelativeMove(move.y, move.x, this.tierSpeed());

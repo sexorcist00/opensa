@@ -547,6 +547,32 @@ describe('CharacterControllerSystem.runPath', () => {
       expect(Velocity.y[player.eid]).toBeLessThan(0); // pivoted and heading to the SECOND waypoint
       player.physics.dispose();
     });
+
+    it('the default gait is RUN — the shipped enter-vehicle approach is unchanged by the gait argument', async () => {
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys());
+      system.runPath([[0, 400, 1.4]]); // no gait argument: exactly how enter-vehicle calls it
+
+      for (let i = 0; i < 180; i += 1) {
+        system.fixedUpdate(STEP);
+      }
+
+      expect(Velocity.y[player.eid]).toBeCloseTo(26, 0); // config runSpeed
+      player.physics.dispose();
+    });
+
+    it('a path asked for at WALK tier is followed at the walk speed (096/07)', async () => {
+      const player = await placedPlayer(0, 0);
+      const system = systemFor(player, keys());
+      system.runPath([[0, 400, 1.4]], 'walk');
+
+      for (let i = 0; i < 180; i += 1) {
+        system.fixedUpdate(STEP);
+      }
+
+      expect(Velocity.y[player.eid]).toBeCloseTo(10, 0); // config walkSpeed, not runSpeed
+      player.physics.dispose();
+    });
   });
 });
 

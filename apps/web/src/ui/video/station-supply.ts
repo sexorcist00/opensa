@@ -11,7 +11,7 @@ import type { Random } from '@opensa/game/paths/rng';
 import type { Route } from '@opensa/game/paths/route-builder';
 
 import type { StationSource } from './director';
-import type { StationProbes, StationSurvey } from './stations';
+import type { StationProbes, StationSurvey, SurveyOptions } from './stations';
 
 import { gtaFromEngine } from '../camera/camera-collision';
 import {
@@ -45,10 +45,15 @@ export interface StationSupplyDeps {
   cursor(): number;
   /** The car's rigid body, excluded from the sightline (the ray ends INSIDE the car it is aimed at). */
   excludeBody(): number | undefined;
+  /** Offsets from the driven line a tripod may stand at (m). Absent → the driving set; the walk scene
+   *  (096/07) passes its own, because 8-18 m of pavement is a different shot on a person. */
+  laterals?: readonly number[];
   probes: StationProbes;
   /** The scene's seeded stream — candidate order and heights are part of what `?seed=` reproduces (D9). */
   random: Random;
   route: Route;
+  /** The thresholds a candidate is judged on. Absent → {@link SURVEY_DEFAULTS}. */
+  survey?: SurveyOptions;
   /** GTA Z-up → engine Y-up, the host's own conversion. */
   toEngine(gta: readonly [number, number, number]): [number, number, number];
   /** The next tripod slot in the shot list, or null when none is coming. */
@@ -144,7 +149,7 @@ export function createStationSupply(deps: StationSupplyDeps): StationSupply {
         const midpoint = slot.startsIn + slot.seconds / 2;
         const samples = windowSamples(points, cursor, slot.startsIn, slot.seconds, scale);
         const { index: at } = predictAlong(points, cursor, midpoint, scale);
-        survey = createSurvey(stationCandidates(points, at, deps.random), samples);
+        survey = createSurvey(stationCandidates(points, at, deps.random, deps.laterals), samples, deps.survey);
         surveyedSlot = slot.index;
         latency = 0;
       }

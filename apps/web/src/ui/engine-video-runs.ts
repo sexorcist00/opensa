@@ -20,7 +20,8 @@
  * for two more. Everything outside the fragment happens behind the overlay, so none of it is ever recorded.
  */
 import type { StreamStats } from '@opensa/engine';
-import type { Route } from '@opensa/game/paths/route-builder';
+import type { ScriptedGait } from '@opensa/game/character/character-controller.system';
+import type { Route, RouteConstraints } from '@opensa/game/paths/route-builder';
 import type { PathFollowSource } from '@opensa/game/vehicle/path-follow';
 import type { TelemetryFrame } from '@opensa/game/vehicle/vehicle-telemetry';
 import type { City, CityBox } from '@opensa/game/zones/city';
@@ -40,6 +41,7 @@ import type { ProgramEntry } from './video/presets';
 import type { ShiverDiag } from './video/shiver-diag';
 import type { Subject } from './video/shots';
 import type { StationSupply } from './video/station-supply';
+import type { WalkPath } from './video/walk';
 
 import { modCarSlots, roadCarModels } from '../vehicle-models';
 import { nextFrame, until, waitSeconds } from './frame-clock';
@@ -57,8 +59,24 @@ import {
   weatherPool,
 } from './video/presets';
 import { createShiverDiag, yawOfQuat } from './video/shiver-diag';
-import { forwardFromHeading, SHOT_ROAD_SECONDS, SHOTS_PER_SCENE } from './video/shots';
+import { forwardFromHeading, SHOT_ROAD_SECONDS, SHOTS_PER_SCENE, WALK_SHOTS } from './video/shots';
 import { createStationSupply } from './video/station-supply';
+import { WALK_STATION_LATERALS, WALK_SURVEY_DEFAULTS } from './video/stations';
+import { createWalkCursor, WALK_LANE_OFFSET, walkWaypoints } from './video/walk';
+
+/** The player, as {@link VideoRunsHost.playerPose} hands him over. */
+export interface PlayerPose {
+  /** GTA Z-up, the gameplay position — what the probes cast from and what the route is measured against. */
+  gta: [number, number, number];
+  /** The ped capsule's half-extents in the shot table's convention `[lateral, longitudinal, vertical]`. */
+  halfExtents: [number, number, number];
+  /** GTA heading (the locomotion facing) — one fixed step old at worst, like the car's. */
+  heading: number;
+  /** The DRAWN position, engine Y-up. */
+  position: [number, number, number];
+  /** Planar speed (m/s). */
+  speed: number;
+}
 
 /** What video mode needs from the engine host — thin accessors over its loop state, like `PhysRunsHost`. */
 export interface VideoRunsHost {
@@ -68,6 +86,8 @@ export interface VideoRunsHost {
   autopilot: PathFollowSource;
   /** The city boxes the region predicate reads (desert first) — a thunk, because they load after boot. */
   cityBoxes(): readonly CityBox[];
+  /** How far from the player collision is streamed (m) — the walk scene may only probe ground inside it. */
+  collisionRadius(): number;
   /** The paint combos `carcols` authors for a model (empty when it authors none) — the scene picks one. */
   colourCombos(model: string): Promise<number[][]>;
   /** The game filesystem — the road graph is read from its own `data/paths/nodes*.dat`. */
@@ -87,6 +107,9 @@ export interface VideoRunsHost {
     to: readonly [number, number, number],
     excludeBody?: number,
   ): boolean;
+  /** The player as the walk scene has to film him: the DRAWN pose (engine Y-up) with the gameplay heading,
+   *  the same pairing the car shots use, plus the GTA position the probes and the route work in. */
+  playerPose(): PlayerPose;
   setHour(hour: number): void;
   /** The streaming-settle deadline after a teleport (the host's world-ready timeout). */
   settleTimeoutMs: number;
@@ -121,6 +144,14 @@ export interface VideoRunsHost {
   teleportPlayer(anchor: readonly [number, number, number]): void;
   /** GTA Z-up → engine Y-up. The director works in ONE space (engine) and converts here, at the boundary. */
   toEngine(gta: readonly [number, number, number]): [number, number, number];
+  /** The scripted walk has reached its last waypoint (the controller's own `arrived`). */
+  walkArrived(): boolean;
+  /** Walk the player along GTA Z-up waypoints at the given gait — `CharacterControllerSystem.runPath`. */
+  walkPath(points: readonly (readonly [number, number, number])[], gait: ScriptedGait): void;
+  /** The ped's configured walking speed (m/s) — the walk route's length is derived from it, never guessed. */
+  walkSpeed(): number;
+  /** Hand movement back to the keyboard (an empty path) — the scene's teardown. */
+  walkStop(): void;
   /** The timecyc weather row names — the region's own weather set is FILTERED out of these (D7). */
   weatherNames: readonly string[];
 }
@@ -177,6 +208,24 @@ const SERIES_HZ = 10;
  * stopped moving and is not consuming road either.
  */
 const SCENE_ROAD_SECONDS = SHOTS_PER_SCENE * SHOT_ROAD_SECONDS;
+
+/**
+ * What a walk route asks of the road graph, over the driving defaults (096/07).
+ *
+ * The turn caps go because they exist for a CAR: `maxTurnDeg` 35 is what a saloon can take at a cruise, and
+ * a person turns a street corner on the spot. Left at the driving numbers, a walk route would refuse every
+ * junction and only ever walk straight lines — the one shape a city walk should not be.
+ */
+const WALK_ROUTE: Partial<RouteConstraints> = {
+  laneOffset: WALK_LANE_OFFSET,
+  maxTurnDeg: 100,
+  maxWindowTurnDeg: 200,
+  preferTurnDeg: 40,
+};
+
+/** Seeded routes a walk scene tries before it gives up — each one costs a teleport and a settle, because the
+ *  ground under it can only be probed once the world around it has streamed. */
+const WALK_ROUTE_TRIES = 3;
 
 /** Everything one scene was seeded with — assembled once, so the report can state what it ran. */
 interface SceneContext {
@@ -264,29 +313,25 @@ export function setupVideoRuns(host: VideoRunsHost): void {
         program = buildProgram(mulberry32(sceneSeed(seed, -(scene - at))));
       }
       const entry = program[at];
-      if (entry.kind !== 'drive') {
-        // 07 owns the walk and flythrough scenes. Skipping them SAYS so: a silently shortened cycle reads as
-        // a sequencer that lost a region, and no placeholder ever reaches the footage.
-        log(`scene ${scene} ${entry.region} ${entry.kind} — not implemented yet (096/07), skipping`);
+      if (entry.kind === 'fly') {
+        // The flythrough is the one kind still unbuilt (096/07 task B). Skipping SAYS so: a silently
+        // shortened cycle reads as a sequencer that lost a region, and no placeholder reaches the footage.
+        log(`scene ${scene} ${entry.region} fly — not implemented yet (096/07 B), skipping`);
         continue;
       }
       const car = pinnedCar ?? pickCar(random, roster, modCars) ?? DEFAULT_CAR;
+      const context: SceneContext = {
+        car,
+        graph,
+        modCar: modCars.has(car),
+        pinned,
+        random,
+        region: entry.region,
+        scene,
+        seed,
+      };
       try {
-        await runScene(
-          host,
-          {
-            car,
-            graph,
-            modCar: modCars.has(car),
-            pinned,
-            random,
-            region: entry.region,
-            scene,
-            seed,
-          },
-          overlay,
-          diag,
-        );
+        await sceneOfKind(entry.kind, host, context, overlay, diag);
         played += 1;
       } catch (error) {
         // A scene that failed must SAY so behind its own overlay; a missing line reads as a scene that played.
@@ -384,6 +429,7 @@ function pickRoute(
   inRegion: (x: number, y: number) => boolean,
   targetLength: number,
   pinned: null | readonly [number, number],
+  extra?: Partial<RouteConstraints>,
 ): null | Route {
   // A PINNED start (`?at=x,y`, 096/04) is how a hard case gets looked at deliberately: `video-routes.ts
   // --worst` prints the coordinates of the tightest routes, and this is what takes one of them. The walk is
@@ -391,7 +437,7 @@ function pickRoute(
   if (pinned) {
     const start = graph.nearest(pinned[0], pinned[1]);
     for (let attempt = 0; start !== undefined && attempt < ROUTE_TRIES; attempt += 1) {
-      const route = walkRoute(graph, start, random, { cruiseSpeed: CRUISE_SPEED, inRegion, targetLength });
+      const route = walkRoute(graph, start, random, { cruiseSpeed: CRUISE_SPEED, inRegion, targetLength, ...extra });
       if (route && route.stop === 'target') {
         return route;
       }
@@ -408,7 +454,7 @@ function pickRoute(
     if (start === undefined) {
       return null;
     }
-    const route = walkRoute(graph, start, random, { cruiseSpeed: CRUISE_SPEED, inRegion, targetLength });
+    const route = walkRoute(graph, start, random, { cruiseSpeed: CRUISE_SPEED, inRegion, targetLength, ...extra });
     if (route && route.stop === 'target') {
       return route;
     }
@@ -463,6 +509,36 @@ async function playFragment(
 }
 
 /**
+ * The walk scene's clock: the shot list ends it, or the walker running out of route does.
+ *
+ * `walkArrived` is the second end condition and it is NOT a failure — a route sized for five shots is walked
+ * in about the time five shots take, and which of the two lands first is a matter of seconds. What it must
+ * not do is leave the ped standing still on camera, which is why it ends the scene rather than being waited
+ * out.
+ */
+async function playWalk(
+  host: VideoRunsHost,
+  director: DirectorState,
+  supply: StationSupply,
+  diag: ShiverDiag,
+): Promise<string> {
+  host.setVideoStep((dt) => poseWalkFrame(host, director, supply, Math.min(MAX_FRAME_SECONDS, dt), diag));
+  try {
+    for (;;) {
+      await nextFrame();
+      if (director.done) {
+        return 'shots-done';
+      }
+      if (host.walkArrived()) {
+        return 'arrived';
+      }
+    }
+  } finally {
+    host.setVideoStep(null);
+  }
+}
+
+/**
  * One rendered frame of the director: pose the shot, hand it to the host, and say nothing when there is no
  * car to film (a despawn mid-teardown) — the last pose then simply stands, which is what a held frame looks
  * like behind the overlay that is already coming down.
@@ -506,6 +582,42 @@ function poseFrame(
   }
   // The survey runs AFTER the pose, on what is left of the budget: a live sightline is the frame's first
   // claim on it, and a survey is the thing that can always wait one more frame.
+  supply.step();
+}
+
+/** One rendered frame of a walk scene — the car's {@link poseFrame} with the ped as the subject. */
+function poseWalkFrame(
+  host: VideoRunsHost,
+  director: DirectorState,
+  supply: StationSupply,
+  dt: number,
+  diag?: ShiverDiag,
+): void {
+  const pose = host.playerPose();
+  supply.beginFrame();
+  const subject: Subject = {
+    forward: forwardFromHeading(pose.heading),
+    halfExtents: pose.halfExtents,
+    position: pose.position,
+    speed: pose.speed,
+  };
+  const frame = stepDirector(director, subject, dt, host.aspect(), supply);
+  host.setVideoCamera(frame.pose, frame.cut);
+  if (diag?.enabled && frame.pose && frame.screen) {
+    diag.record({
+      car: subject.position,
+      cut: frame.cut,
+      eye: frame.pose.eye,
+      heading: pose.heading,
+      // A ped has no render orientation of its own to compare against — the drawn facing IS the locomotion
+      // heading (`posePlayer`), so the shiver tool's two heading columns are the same signal here.
+      renderYaw: pose.heading,
+      screen: [frame.screen.x, frame.screen.y],
+      shot: frame.shot,
+      t: performance.now(),
+      target: frame.pose.target,
+    });
+  }
   supply.step();
 }
 
@@ -625,6 +737,50 @@ function report(
       predictionErrorMax: Number(supply.ledger().predictionErrorMax.toFixed(1)),
     },
     summary: summarisePhysFrames(frames),
+  };
+  // eslint-disable-next-line no-console -- the capture deliverable IS this JSON line (the [phys] twin)
+  console.log('[video]', JSON.stringify(capture));
+}
+
+/** A walk scene's `[video] {json}` line — the drive report without the half of it that needs a car. */
+function reportWalk(
+  context: SceneContext,
+  route: Route,
+  path: WalkPath,
+  settleMs: number,
+  ended: string,
+  director: DirectorState,
+  supply: StationSupply,
+  seconds: number,
+): void {
+  const capture = {
+    ended,
+    kind: 'walk',
+    region: context.region,
+    route: {
+      length: Number(route.length.toFixed(1)),
+      maxTurnDeg: Number(route.maxTurnDeg.toFixed(1)),
+      points: route.points.length,
+      /** How much of the route the ground probe could actually judge (the streamed collision's reach). */
+      probed: path.checked,
+      start: route.points[0].position.map((value) => Number(value.toFixed(1))),
+    },
+    scene: context.scene,
+    seconds: Number(seconds.toFixed(2)),
+    settleMs: Number(settleMs.toFixed(0)),
+    shots: {
+      causes: director.causes,
+      cuts: director.cuts,
+      judged: director.framesJudged,
+      list: director.plan.map((entry) => `${entry.preset.name}:${entry.seconds.toFixed(1)}`),
+      panClips: director.panClips,
+      safe: Number((director.framesJudged === 0 ? 0 : director.safeFrames / director.framesJudged).toFixed(3)),
+    },
+    stations: {
+      ...supply.ledger(),
+      fallbacks: director.fallbacks,
+      predictionErrorMax: Number(supply.ledger().predictionErrorMax.toFixed(1)),
+    },
   };
   // eslint-disable-next-line no-console -- the capture deliverable IS this JSON line (the [phys] twin)
   console.log('[video]', JSON.stringify(capture));
@@ -770,6 +926,142 @@ async function runScene(
   } finally {
     despawn(); // the scene owns this car; nothing respawns it and nothing inherits it
   }
+}
+
+/**
+ * A walk scene: the same staging, the same director, a person instead of a car (096/07, D3).
+ *
+ * What it does NOT do is as deliberate as what it does. There is no vehicle anywhere in it — no spawn, no
+ * seating, no telemetry — so the whole car half of the drive scene simply is not here; and the route's own
+ * per-vertex speeds still matter, because they are what the station survey predicts the SUBJECT's position
+ * from, which is why the route is built at the ped's real walking speed rather than a driving one.
+ *
+ * The route is picked, staged and probed up to {@link WALK_ROUTE_TRIES} times: whether a route is walkable
+ * can only be asked of streamed collision, and collision streams around the player, so the question costs a
+ * teleport and a settle every time it is asked.
+ */
+async function runWalkScene(
+  host: VideoRunsHost,
+  context: SceneContext,
+  overlay: VideoOverlay,
+  diag: ShiverDiag,
+): Promise<void> {
+  overlay.show();
+  const boxes = host.cityBoxes();
+  const inRegion = (x: number, y: number): boolean => cityAt(x, y, boxes) === context.region;
+  const plan = planShots(context.random, WALK_SHOTS);
+  const hour = HOUR_SLOTS[Math.min(HOUR_SLOTS.length - 1, Math.floor(context.random() * HOUR_SLOTS.length))];
+  const weather = pickWeather(host.weatherNames, context.region, context.random);
+  const speed = host.walkSpeed();
+  host.setHour(hour);
+  if (weather !== null) {
+    host.setWeather(weather);
+  }
+
+  let route: null | Route = null;
+  let path: null | WalkPath = null;
+  for (let attempt = 0; attempt < WALK_ROUTE_TRIES && path === null; attempt += 1) {
+    const candidate = pickRoute(
+      context.graph,
+      context.random,
+      inRegion,
+      SCENE_ROAD_SECONDS * speed * ROUTE_MARGIN,
+      context.pinned,
+      // `cruiseSpeed` is the ped's, and it is NOT cosmetic: the route's per-vertex speeds are what the
+      // station survey predicts the subject's position from. Left at the driving default, the survey expects
+      // a 15 s window to cover 180 m of pavement instead of 30 and rejects every candidate on dwell — which
+      // is exactly what the first headless run measured (8 of 8 rejected, the tripod never filled).
+      { ...WALK_ROUTE, cruiseSpeed: speed },
+    );
+    if (!candidate) {
+      throw new Error(`no walk route inside ${context.region} in ${ROUTE_TRIES} tries`);
+    }
+    const start = candidate.points[0].position;
+    host.teleportPlayer([start[0], start[1], start[2] + 1]);
+    await waitSeconds(TELEPORT_NOTICE_SECONDS);
+    await until(() => host.getStream()?.pendingCells === 0, host.settleTimeoutMs);
+    await waitSeconds(WARMUP_SECONDS);
+    const probed = walkWaypoints(candidate, (at, maxDrop) => host.groundBelow(at, maxDrop), host.collisionRadius());
+    if (probed.points.length === 0) {
+      // The rejection SAYS which point and how much of the route was judged: a walk scene that quietly took
+      // its third route would hide a region where every pavement probe misses.
+      log(
+        `scene ${context.scene} walk route rejected: no ground under waypoint ${probed.miss} ` +
+          `of ${probed.checked} probed (attempt ${attempt + 1}/${WALK_ROUTE_TRIES})`,
+      );
+      continue;
+    }
+    route = candidate;
+    path = probed;
+  }
+  if (!route || !path) {
+    throw new Error(`no walkable route inside ${context.region} in ${WALK_ROUTE_TRIES} staged tries`);
+  }
+
+  log(
+    `scene ${context.scene} seed=${sceneSeed(context.seed, context.scene)} region=${context.region} kind=walk ` +
+      `hour=${hour} weather=${weather === null ? 'unchanged' : host.weatherNames[weather]} ` +
+      `route=${route.length.toFixed(0)}m gait=walk@${speed}m/s probed=${path.checked}/${route.points.length} ` +
+      `shots ${plan.map((entry) => entry.preset.name).join('→')}`,
+  );
+
+  const settleMs = await waitForStableFrames();
+  const director = createDirector(plan);
+  const cursorAt = createWalkCursor(route.points);
+  const supply = createStationSupply({
+    carGta: (): readonly [number, number, number] => host.playerPose().gta,
+    carSpeed: (): number => host.playerPose().speed,
+    cursor: (): number => cursorAt(host.playerPose().gta),
+    // Nothing to exclude: the sightline aims at the PED, and the ped is not a body the world casts against
+    // the way a spawned car is — the capsule is kinematic and the probe already starts outside it.
+    excludeBody: (): number | undefined => undefined,
+    laterals: WALK_STATION_LATERALS,
+    probes: {
+      groundBelow: (at, maxDrop): null | number => host.groundBelow(at, maxDrop),
+      pathClear: (from, to, exclude): boolean => host.pathClear(from, to, exclude),
+    },
+    random: context.random,
+    route,
+    survey: WALK_SURVEY_DEFAULTS,
+    toEngine: (gta): [number, number, number] => host.toEngine(gta),
+    upcoming: () => nextStationSlot(director),
+  });
+  try {
+    host.walkPath(path.points, 'walk');
+    await primeStations(supply);
+    poseWalkFrame(host, director, supply, 0, diag);
+    await overlay.hide();
+    const started = performance.now();
+    const ended = await playWalk(host, director, supply, diag);
+    const seconds = (performance.now() - started) / 1000;
+    overlay.show();
+    host.setVideoCamera(null, true);
+    reportWalk(context, route, path, settleMs, ended, director, supply, seconds);
+    diag.dump(context.scene);
+    if (weather !== null && host.getWeather() !== weather) {
+      log(
+        `scene ${context.scene} weather changed mid-scene: ${host.weatherNames[weather]} → ` +
+          `${host.weatherNames[host.getWeather()]} — the route left ${context.region}`,
+      );
+    }
+  } finally {
+    host.walkStop(); // the keyboard gets its ped back whatever happened
+  }
+}
+
+/** The scene kinds that have a scene, dispatched. `fly` is 096/07 task B; the caller still skips it. */
+async function sceneOfKind(
+  kind: ProgramEntry['kind'],
+  host: VideoRunsHost,
+  context: SceneContext,
+  overlay: VideoOverlay,
+  diag: ShiverDiag,
+): Promise<void> {
+  if (kind === 'walk') {
+    return runWalkScene(host, context, overlay, diag);
+  }
+
+  return runScene(host, context, overlay, diag);
 }
 
 /** Seated, settled, and in a car standing at THIS scene's route start. */

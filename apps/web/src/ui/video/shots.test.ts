@@ -13,6 +13,7 @@ import {
   shotSeconds,
   type Subject,
   TRACKING_SECONDS,
+  WALK_SHOTS,
 } from './shots';
 
 const ASPECT = 16 / 9;
@@ -230,6 +231,61 @@ describe('SHOTS (the preset table)', () => {
 
     it('names every shot once', () => {
       expect(new Set(SHOTS.map((shot) => shot.name)).size).toBe(SHOTS.length);
+    });
+  });
+});
+
+describe('WALK_SHOTS (the pedestrian table)', () => {
+  /** A stock ped capsule, the host's own numbers: radius 0.35, half-height 0.55 + the cap. */
+  const PED = [0.35, 0.35, 0.9] as const;
+  const pedAt = (heading: number, speed: number): Subject => ({
+    forward: forwardFromHeading(heading),
+    halfExtents: PED,
+    position: [0, 0, 0],
+    speed,
+  });
+
+  describe('negative cases', () => {
+    it('places no camera inside the person it films', () => {
+      const placed = WALK_SHOTS.filter((shot): shot is PosedShot => shot.kind === 'static' || shot.kind === 'tracking');
+      const inside = placed.filter((shot) => {
+        const eye = shotEye(shot, pedAt(0, 2));
+
+        return Math.abs(eye[0]) < PED[0] && Math.abs(eye[2]) < PED[1] && eye[1] < PED[2];
+      });
+
+      expect(inside.map((shot) => shot.name)).toEqual([]);
+    });
+
+    it('never frames a person at a driving distance — a walker at 40 m is a speck', () => {
+      const driving = SHOTS.filter((shot) => shot.kind !== 'chase').map((shot) => shot.maxDist);
+      const walking = WALK_SHOTS.filter((shot) => shot.kind !== 'chase').map((shot) => shot.maxDist);
+
+      expect(Math.max(...walking)).toBeLessThan(Math.min(...driving));
+    });
+
+    it('keeps the overhead shot OFF the vertical, where screenBasis has no defined roll', () => {
+      const top = WALK_SHOTS.find((shot) => shot.name === 'top');
+      const eye = shotEye(top as PosedShot, pedAt(0, 2));
+      // The angle between the view direction and straight down: 0 would be the singularity itself.
+      const offVertical = (Math.atan2(Math.hypot(eye[0], eye[2]), eye[1]) * 180) / Math.PI;
+
+      expect(offVertical).toBeGreaterThan(5);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('covers the same roles as the driving table, once each', () => {
+      expect(new Set(WALK_SHOTS.map((shot) => shot.name))).toEqual(new Set(SHOTS.map((shot) => shot.name)));
+      expect(new Set(WALK_SHOTS.map((shot) => shot.name)).size).toBe(WALK_SHOTS.length);
+    });
+
+    it('obeys the same clip lengths — a scene is five cameras whoever it is about', () => {
+      const riding = WALK_SHOTS.filter((shot) => shot.kind === 'chase' || shot.kind === 'tracking');
+      const planted = WALK_SHOTS.filter((shot) => shot.kind === 'static' || shot.kind === 'station');
+
+      expect(riding.map(shotSeconds)).toEqual(riding.map(() => TRACKING_SECONDS));
+      expect(planted.map(shotSeconds)).toEqual(planted.map(() => PLANTED_CEILING_SECONDS));
     });
   });
 });

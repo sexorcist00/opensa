@@ -35,9 +35,10 @@ design (D11/D14).
 **The sequencer** (096/05) — `apps/web/src/ui/video/presets.ts`, a table the runner reads:
 
 - **The cycle** (D2): a drive scene in Los Santos → Las Venturas → San Fierro → Countryside → Desert, then
-  two flythroughs and a walk (D3). The kinds 07 owns are SKIPPED with a `[video]` notice — no placeholder ever
-  reaches the footage, and a silently shortened cycle would read as a lost region. The program is rebuilt
-  each lap from that lap's seed, so a long run is not the same eight scenes over and over.
+  two flythroughs and a walk (D3). **The walk scene ships (096/07 A)**; `fly` is still skipped with a `[video]`
+  notice — no placeholder ever reaches the footage, and a silently shortened cycle would read as a lost
+  region. The program is rebuilt each lap from that lap's seed, so a long run is not the same eight scenes
+  over and over.
 - **A run is a BOUNDED SEQUENCE, not an endless mode** (D2 as revised 2026-07-31): `?seed=47` means scenes
   1…100 of seed 47, and then the run stops on a black end card reading `sequence complete · seed 47 · N
   scenes`. `&scenes=N` takes a shorter one; 100 is the ceiling, not merely the default, so a longer sequence
@@ -156,13 +157,33 @@ tripod and framing numbers were taken on: safe frame **99.2 %**, 0 jumps, 56 cut
 played from a surveyed station**, ≤ 3 casts in every frame, survey verdict within 14 frames, station
 prediction error median 1 m. Those station numbers have not been re-taken since scenes got longer.
 
+**Walk scenes** (096/07) — a person, filmed by the same machinery:
+
+- **The whole director is reused, with a SECOND preset table** (`WALK_SHOTS`): nine roles sized for a ped
+  instead of a car — every `maxDist` about a third of its driving twin, because a walker at 40 m is a speck.
+  The offsets are still multiples of the SUBJECT's own half-extents, so the rule did not change, only what it
+  multiplies. `planShots` already took a table (05 built it that way), so this is not a second code path.
+- **The gait**: `CharacterControllerSystem.runPath(points, gait)` gained a scripted tier — the shipped
+  enter-vehicle approach keeps RUN by default, the video scene passes `walk`. The route's length is derived
+  from the ped's own configured `walkSpeed`, never a number written here.
+- **The route is a driving route pushed 6.5 m sideways.** SA's ped nodes are in `NODES*.DAT` and we do not
+  parse them, so there is no pavement in the engine — see
+  [`docs/hacks/pedestrian-route-on-a-vehicle-graph.md`](../hacks/pedestrian-route-on-a-vehicle-graph.md).
+  Each waypoint inside the streamed collision ring is ground-probed and a miss rejects the whole route;
+  furniture (benches, steps, lampposts) passes every check we have.
+- Tripods use their own laterals (2.5-8 m, against the driving 8-18) and their own 26 m ceiling.
+- Measured (SF, seed 47 scene 8): 160 m route, 62 of 82 waypoints probed, `safe: 1.000` over 3 844 judged
+  frames, 4 cuts, 0 pan clips, 42 s.
+
 ## Not implemented yet
 
-- The region cycle and preset table (05), the build-time mod-car ledger (06), walk and flythrough scenes (07).
+- Flythrough scenes (096/07 task B).
 - **Only the tripod is surveyed.** A `flyby` eye is derived from the car and gets no occlusion check at all,
   so it can still be planted inside a wall; the same machinery would cover it, but nothing asks it to yet.
 - Interior/cabin camera, in-page recording, traffic and drift driving are out of scope for v1 (D14).
 - Routes stay inside one region (D15) and the clock drifts ~16 game minutes over a fragment (D13).
+- **Pedestrian paths.** The walk scene runs on the vehicle graph offset sideways; SA's own ped nodes are in
+  `NODES*.DAT` and unparsed ([hack](../hacks/pedestrian-route-on-a-vehicle-graph.md)).
 
 ## Known gaps
 
