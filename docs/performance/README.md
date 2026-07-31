@@ -37,6 +37,7 @@ stays, pointing at the new home).
 | [Env-probe cadence and resolution](deferred-optimizations/env-probe-cadence.md) | GPU pass | 0.2–1.9 ms observed, ~5.8 ms worst seen | in reserve |
 | [Foliage fill](deferred-optimizations/foliage-fill.md) | GPU pass (fill) | the 07-21 case was 13.72 → 7.63 ms | parked by decision |
 | [Per-wheel surface probe vs surface-tagged colliders](deferred-optimizations/surface-probe-per-wheel.md) | fixed-step CPU | ~free today (driven car only); ~0.6 ms/step if ever run on all 80 cars | in reserve |
+| [Bake video-mode camera stations instead of surveying them live](deferred-optimizations/video-station-survey.md) | per-frame casts | ~free today (≤ 3 casts/frame, one shot in four); the win is HEADROOM for several tripods at once | in reserve |
 | [Camera position render interpolation](deferred-optimizations/camera-position-render-interpolation.md) | correctness (camera feel) | unlocked the 080/02 position weight + killed the run "doubling" | **PULLED 2026-07-25** |
 | [Budgeted texture-array uploads](applied/texture-upload-budget.md) | frame time (hitch) | one 85 ms stall → ~1.5 ms/frame | **PULLED 2026-07-27** — applied |
 

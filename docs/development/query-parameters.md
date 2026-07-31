@@ -159,7 +159,7 @@ Deleted with the three-WebGL renderer in [074/13](../plans/074-opensa-engine/13-
 ## Why there is still no `flags.ts`
 
 Phase 2.4 asked whether the survivors should move behind one typed reader. They should not — yet. The
-count fell from ~60 to **26 distinct names** (096/02 added four at once — `video`, `from`, `to`, `seed`), most of them read exactly once, and the two hosts read
+count fell from ~60 to **27 distinct names** (096 added five — `video`, `from`, `to`, `seed` in 02, `at` in 04), most of them read exactly once, and the two hosts read
 overlapping-but-differently-defaulted sets (see the inconsistencies above), so a shared reader would
 have to model the difference rather than remove it. The zoo grew because nothing was written down, not
 because reads were inline. **This document is the fix; revisit a reader if the count climbs again.**

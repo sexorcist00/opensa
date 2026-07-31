@@ -1,4 +1,3 @@
-import type { Random } from '@opensa/game/paths/rng';
 /**
  * The station supply (plan 096/04): the live half of the tripod survey — it watches the shot list for the
  * next tripod slot, surveys candidates against the REAL world a few casts at a time while the preceding shot
@@ -8,6 +7,7 @@ import type { Random } from '@opensa/game/paths/rng';
  * interface) and this one owns the wiring — when to start, what the budget is, and the two space conversions.
  * The director never sees GTA coordinates and never sees a cast.
  */
+import type { Random } from '@opensa/game/paths/rng';
 import type { Route } from '@opensa/game/paths/route-builder';
 
 import type { StationSource } from './director';

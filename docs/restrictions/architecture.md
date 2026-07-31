@@ -122,3 +122,23 @@ Note that `CombinedInput` **sums** move vectors, so a live keyboard adds to a sc
 **Caught:** no. A recomputed lock is silent — the car simply steers a fraction of what was asked, and looks
 like an under-tuned controller. The limiter itself, with the reversed-source derivation, is documented in
 `packages/game/src/vehicle/steering.ts`.
+
+## A diagnostic tripwire is whitelisted per DECLARED event, never per mode
+
+A watchdog exists to report the discontinuity nobody planned. The moment a new owner of the watched channel
+is exempted wholesale — "the camera jump watchdog ignores video mode" — the tripwire is gone for everything
+that owner does, including the jumps it did not mean to make. The exemption has to be as narrow as the event
+that justifies it: the OWNER declares the frame, and the watchdog forgives that frame only.
+
+096/03 is the shape to copy. Video mode's director owns the camera for whole scenes and cuts between shots
+several times a scene; `watchCameraJump` accepts a one-frame `videoCut` flag the module raises and the host
+loop clears after reading it, so a cut is legitimate and everything between cuts is still watched. The same
+discipline is what makes the module's own tests able to assert continuity BETWEEN cuts (`director.test.ts`'s
+pan-rate exam) — the flag is a contract, not a suppression.
+
+The corollary for the test side: a per-frame continuity assertion that measures ACROSS a declared cut is
+measuring the cut. Both 096/03 and 096/04 lost a round to exactly that.
+
+**Caught:** no, and worse than silent — a muted watchdog looks like a clean run. The only signal is the
+absence of lines you were not going to get anyway. Grep for what a whitelist covers before trusting a
+"0 warnings" field report.
