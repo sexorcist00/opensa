@@ -65,7 +65,7 @@ npm run serve:static        # static origin :3001 — mounts /build + /game-src 
 | Bench sweep (8 scenes)   | `http://localhost:5173/?bench=all` (one scene: `?bench=country-dusk`)                                              |
 | Soak (minutes)           | `http://localhost:5173/?soak=30`                                                                                   |
 | Physics lap (081/01)     | `http://localhost:5173/?phys=all&car=infernus` (one scene: `?phys=brake-strip`) → `[phys]` JSON per lap            |
-| Video mode (096)         | `http://localhost:5173/?video=1&seed=47` (`&from=10&to=25` fragment seconds, `&car=`, `&at=x,y` pins the start, `&diag=1` adds the per-frame camera capture) → an endless seeded cycle of drive scenes, one per region (LA→VEGAS→SF→COUNTRYSIDE→DESERT), `[video]` JSON per scene. `&car=` pins the car, else each scene picks one mod-first off the road-car roster |
+| Video mode (096)         | `http://localhost:5173/?video=1&seed=47` (`&from=10&to=25` fragment seconds, `&car=`, `&at=x,y` pins the start, `&scenes=N` shortens the sequence, `&diag=1` adds the per-frame camera capture) → a seeded SEQUENCE of drive scenes, scenes 1…100 of the seed (`&scenes=N` for a shorter one), one per region (LA→VEGAS→SF→COUNTRYSIDE→DESERT), `[video]` JSON per scene. `&car=` pins the car, else each scene picks one mod-first off the road-car roster |
 | Lab                      | `npx vite --config apps/engine-lab/vite.config.ts` → `http://localhost:4300/`                                      |
 | Lab: streaming LS        | `http://localhost:4300/?pak=1&src=http://localhost:3001/build/original/opensa&at=2495,-1687,13&orbit=300&draw=1500` |
 | Lab: vehicle probe       | `http://localhost:4300/?pak=1&stream=1&src=…&vehicle=1&vmodel=vehicle-comet&at=2495,-1675,13.3&orbit=26&hour=12`   |
@@ -131,7 +131,7 @@ NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/gate-check.js canvas 
 # Scripted physics laps (081/01) — TAG switches the protocol the harness collects
 TAG='[phys]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&phys=all&car=infernus" phys 900000 7
-# Video mode (096/02) — endless, so the run ends when <expectReports> scenes have reported
+# Video mode (096/02) — the run ends after <expectReports> scenes have reported, or at the sequence's own end
 # ALSO='[cam]' echoes a second protocol without counting it as a report (096/03 reads the jump watchdog)
 TAG='[video]' ALSO='[cam]' NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/drive.js \
   "http://localhost:5173/?loader=http-dir&src=$SRC&video=1&seed=47" video 600000 8

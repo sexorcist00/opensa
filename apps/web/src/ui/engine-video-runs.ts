@@ -4,8 +4,11 @@
  * A scene picks a seeded route out of the game's own road graph, stages a car on it behind a black overlay,
  * lifts the overlay once the world is streamed AND the frame rate has settled, and hands the wheel to the
  * autopilot for a fragment's worth of real seconds. Then the overlay comes back down and the next scene
- * stages behind it, endlessly, until the tab closes. The user screen-records the canvas and cuts the black
- * gaps out by hand — nothing here captures anything.
+ * stages behind it — for scenes 1 to `SCENE_LIMIT` of the seed, then the run STOPS on an end card. The user
+ * screen-records the canvas and cuts the black gaps out by hand; nothing here captures anything.
+ *
+ * A run being a bounded SEQUENCE is what makes it nameable: `?seed=47` is a specific 100 scenes, and every
+ * one of them is reproducible down to its car, hour, weather, route and shot list.
  *
  * The sequencer (05) is what turns that into a run: a cycle plays a drive scene in every region of
  * `REGION_CYCLE`, each in that region's own weather and one of the debugger's hours, in a car picked mod-first
@@ -41,7 +44,15 @@ import type { StationSupply } from './video/station-supply';
 import { modCarSlots, roadCarModels } from '../vehicle-models';
 import { nextFrame, until, waitSeconds } from './frame-clock';
 import { createDirector, nextStationSlot, planShots, stepDirector } from './video/director';
-import { buildProgram, HOUR_SLOTS, pickCar, REGION_CYCLE, sceneSeed, weatherPool } from './video/presets';
+import {
+  buildProgram,
+  HOUR_SLOTS,
+  parseSceneLimit,
+  pickCar,
+  REGION_CYCLE,
+  sceneSeed,
+  weatherPool,
+} from './video/presets';
 import { createShiverDiag, yawOfQuat } from './video/shiver-diag';
 import { forwardFromHeading } from './video/shots';
 import { createStationSupply } from './video/station-supply';
@@ -76,8 +87,8 @@ export interface VideoRunsHost {
   setHour(hour: number): void;
   /** The streaming-settle deadline after a teleport (the host's world-ready timeout). */
   settleTimeoutMs: number;
-  /** Hide every piece of chrome (the shared photo-camera path). Video mode never asks for it back: the run
-   *  is endless by design (D2), so the only teardown is closing the tab. */
+  /** Hide every piece of chrome (the shared photo-camera path). Video mode never asks for it back: a run
+   *  ends on its own end card, and handing the chrome back would put the HUD into the last frame recorded. */
   setUiHidden(hidden: boolean): void;
   /**
    * Hand the host the frame this shot wants, or null to give it back to the shipped follow rig (the `chase`
@@ -174,6 +185,8 @@ interface SceneContext {
 
 /** The black DOM element between scenes, and the only thing that owns it (the 094 single-owner rule). */
 interface VideoOverlay {
+  /** The run is over: black, with a caption saying so. Nothing lifts this one. */
+  end(caption: string): void;
   /** Fade to transparent and resolve once the fade has played out. */
   hide(): Promise<void>;
   /** Instantly black — a scene tears down behind it, never in front of it. */
@@ -206,8 +219,9 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   const roster = roadCarModels(host.fs);
   const modCars = modCarSlots(host.fs);
   const pinned = parsePin(host.params.get('at'));
+  const scenes = parseSceneLimit(host.params.get('scenes'));
   log(
-    `seed=${seed} cycle ${REGION_CYCLE.join('→')} fragments ${from}-${to}s · ` +
+    `seed=${seed} scenes 1-${scenes} cycle ${REGION_CYCLE.join('→')} fragments ${from}-${to}s · ` +
       `${roster.length} road cars, ${modCars.size} mod slots` +
       (pinnedCar ? ` · car pinned to ${pinnedCar}` : '') +
       (pinned ? ` · pinned at ${pinned[0]},${pinned[1]}` : ''),
@@ -223,7 +237,8 @@ export function setupVideoRuns(host: VideoRunsHost): void {
     // The program is rebuilt each lap from the lap's own seed, so a long run is not the same eight scenes
     // over and over — and `?seed=` still names every one of them.
     let program: ProgramEntry[] = [];
-    for (let scene = 1; ; scene += 1) {
+    let played = 0;
+    for (let scene = 1; scene <= scenes; scene += 1) {
       // Per-scene seed off the master (D9), so scene N is the same scene however the run reached it.
       const random = mulberry32(sceneSeed(seed, scene));
       const at = (scene - 1) % Math.max(1, program.length);
@@ -256,24 +271,37 @@ export function setupVideoRuns(host: VideoRunsHost): void {
           overlay,
           diag,
         );
+        played += 1;
       } catch (error) {
         // A scene that failed must SAY so behind its own overlay; a missing line reads as a scene that played.
         overlay.show();
         log(`scene ${scene} failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
+    // The run ENDS, and says so on screen as well as in the log: a recording's tail must state what it was,
+    // and a black frame that simply never changes again is indistinguishable from a hang.
+    log(`run complete: ${played} scenes played of ${scenes} from seed ${seed}`);
+    overlay.end(`sequence complete · seed ${seed} · ${played} scenes`);
   })();
 }
 
 function createOverlay(): VideoOverlay {
   const style = document.createElement('style');
-  style.textContent = `.opensa-video-overlay{position:fixed;inset:0;background:#000;pointer-events:none;z-index:2147483647;opacity:1;transition:opacity ${FADE_MS}ms linear}.opensa-video-overlay.is-clear{opacity:0}`;
+  style.textContent =
+    `.opensa-video-overlay{position:fixed;inset:0;background:#000;pointer-events:none;z-index:2147483647;` +
+    `opacity:1;transition:opacity ${FADE_MS}ms linear;display:flex;align-items:center;justify-content:center;` +
+    `color:#8a8a8a;font:400 14px/1.4 system-ui,sans-serif;letter-spacing:0.08em;text-transform:uppercase}` +
+    `.opensa-video-overlay.is-clear{opacity:0}`;
   const element = document.createElement('div');
   element.className = 'opensa-video-overlay';
   document.head.append(style);
   document.body.append(element);
 
   return {
+    end: (caption): void => {
+      element.classList.remove('is-clear');
+      element.textContent = caption;
+    },
     hide: async (): Promise<void> => {
       element.classList.add('is-clear');
       await waitSeconds(FADE_MS / 1000);

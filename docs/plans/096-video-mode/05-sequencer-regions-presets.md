@@ -1,6 +1,6 @@
 # 096/05 — Sequencer: region cycle, weather/time presets, car pick
 
-**Priority P1. Ships alone: the full brief minus walk/fly — endless LS → LV → SF → Country → Desert
+**Priority P1. Ships alone: the full brief minus walk/fly — a bounded LS → LV → SF → Country → Desert
 cycle, region-native weather, time slots, mod-cars-first. Depends on 02 (04 for the full look; runs fine
 on 03's shots if 04 lags).**
 
@@ -45,7 +45,8 @@ on 03's shots if 04 lags).**
    changes mid-scene anyway (the tripwire for a route that leaked across a boundary).
 6. **Cycle continuation**: on scene end (duration reached, `arrived`, or `stuck`) — overlay down,
    teardown (autopilot stop, leave car, despawn, restore nothing else: hour/weather roll into the next
-   scene's staging), next program entry. Endless (D2); tab close is the only exit. `stuck` scenes are
+   scene's staging), next program entry. Bounded by D2's revision: the run stops after scene 100 (or
+   `&scenes=N`) on an end card. `stuck` scenes are
    logged with their seed — they are the route-builder's regression feed.
 7. Tests: program advancement, seed derivation stability, car-pick preference math, weather-pool
    filtering. Negative cases first (empty ledger, region with no accepted route → scene skipped with

@@ -4,8 +4,8 @@
 the four-way repo sweep (paths/driving, camera, streaming/host, player/vehicles) and every user decision
 moved into this doc, per the lifecycle rule that a validated idea's research record MOVES into the plan.
 
-**Goal: `?video=1` boots the game into an endless, seeded, self-directed showcase.** A random car — mod
-cars first — spawns on a road, the player gets in and cruises a route generated from the game's own
+**Goal: `?video=1` boots the game into a bounded, seeded, self-directed showcase** — scenes 1…100 of the
+seed, then an end card (D2 as revised). A random car — mod cars first — spawns on a road, the player gets in and cruises a route generated from the game's own
 `NODES*.DAT` graph while cameras cut between occlusion-checked tripod stations and chase/front/rear/wing
 views; other scenes walk the player or fly the camera. Every fragment runs 10–25 real seconds on a fully
 streamed world, UI hidden, black overlay between scenes. The user screen-records with OS tools and edits
@@ -14,12 +14,15 @@ the cuts out by hand.
 **NOT named "cinematic"** — that word belongs to the shipped 080 follow-camera chain in every doc, test
 and ledger. This feature is a *director* over that camera, plus an autopilot under the car.
 
-## Decisions (user, 2026-07-30 — frozen for v1)
+## Decisions (user, 2026-07-30 — frozen for v1, D2 revised 2026-07-31)
+
+A revision is written INTO the row it changes, with its date and what it replaced, rather than the row being
+rewritten: a phase doc that quietly matches today's code cannot be read against the code it was built from.
 
 | # | Decision |
 | --- | --- |
 | D1 | Entry `?video=1`; fragment length `&from=10&to=25` (REAL seconds; defaults 10/25); `&seed=N` |
-| D2 | Region cycle LS → LV → SF → Country → Desert, endless until the tab closes |
+| D2 | Region cycle LS → LV → SF → Country → Desert. **Revised 2026-07-31: a run is a BOUNDED SEQUENCE — scenes 1…100 of the seed, then it stops on an end card.** `&scenes=N` takes a shorter one; 100 is the ceiling, not just the default. (Was: endless until the tab closes) |
 | D3 | Program per cycle: drive scenes in ALL 5 regions → camera flythrough in 2 → on-foot walk in 1 |
 | D4 | Shot ≥ 5 s; length adapts to car distance/speed; a drive-past is fine but the camera must not linger on an empty frame after the subject passes |
 | D5 | Routes favour long straights with gentle curves; length ≈ fragment duration × cruise speed; random from the node graph (curated routes maybe later) |
@@ -311,6 +314,19 @@ before analysis). Empty until phases run:
   to confirm and to record in `docs/contracts/vehicles.md`.
   New tool: `scripts/debug/video-accept.ts` rolls the exam up off a harness log, so the next phase re-sits it
   against the same question rather than re-reading JSON by hand.
+- **05a: D2 revised (user, 2026-07-31) — a run is a bounded SEQUENCE.** `?seed=47` now means scenes 1…100 of
+  seed 47 and then a stop, on a black end card reading `sequence complete · seed 47 · N scenes`; `&scenes=N`
+  takes a shorter one and 100 is the CEILING, so a longer sequence stays a decision. The chrome is not handed
+  back — it would put the HUD into the last frame recorded.
+  **The one judgement call inside the change: a skipped `fly`/`walk` entry still consumes a scene index.** A
+  scene's identity is `(seed, index)`, and it has to survive 07: if skips were free, the day the walk and
+  flythrough scenes land every later scene would re-seed, and every field note naming "scene 57 of seed 47"
+  would point at a different scene. The cost is that a 100-scene run plays ~62 drives until 07 fills the rest.
+  **What a seed does NOT fix, stated because the request was "strictly reproducible":** time, weather, route,
+  car, paint and the SHOT LIST all derive from `sceneSeed(master, index)` and reproduce exactly — a re-run of
+  seed 47 matched its manifest byte for byte. Frame-by-frame camera MOTION does not, and cannot: the director
+  integrates real `dt`, so an early guard cut (empty frame, blocked tripod) depends on how the frames fell.
+  Two runs of one seed are the same scenes, shot for shot, and may differ in where a shot was cut short.
 - 06: —
 - 07: —
 - 08: —

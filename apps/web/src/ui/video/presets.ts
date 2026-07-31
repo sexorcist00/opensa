@@ -40,6 +40,15 @@ const WALK_SCENES = 1;
 export const MOD_CAR_PREFERENCE = 0.8;
 
 /**
+ * How many scenes a run plays before it stops (D2, revised 2026-07-31 — the cycle was endless in v1).
+ *
+ * A run is a SEQUENCE with a name: `?seed=47` is scenes 1 to {@link SCENE_LIMIT} of seed 47, and it ends. The
+ * ceiling is the ceiling, not just the default — a longer sequence is a future decision, not a URL a field
+ * round can talk itself into.
+ */
+export const SCENE_LIMIT = 100;
+
+/**
  * The scenes of one cycle: a drive in every region in {@link REGION_CYCLE} order, then the flythroughs and
  * the walk, each in a seeded region.
  *
@@ -57,6 +66,23 @@ export function buildProgram(random: Random): ProgramEntry[] {
   }
 
   return program;
+}
+
+/**
+ * How many scenes `?scenes=` asks for, clamped into `1 … SCENE_LIMIT`.
+ *
+ * Anything unreadable takes the full run rather than refusing to start: a showcase run is something a user
+ * points a screen recorder at, and a typo in a URL must cost the typo, not the session.
+ */
+export function parseSceneLimit(value: null | string): number {
+  // `?scenes=` with nothing after it is `''`, and `Number('')` is 0 — a bare flag would otherwise ask for a
+  // one-scene run, which is the opposite of what someone typing it means.
+  const asked = Number(value?.trim());
+  if (value === null || value.trim() === '' || !Number.isFinite(asked)) {
+    return SCENE_LIMIT;
+  }
+
+  return Math.min(SCENE_LIMIT, Math.max(1, Math.floor(asked)));
 }
 
 /**

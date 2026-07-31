@@ -3,7 +3,7 @@
 `apps/web/src/ui/engine-video-runs.ts`, `apps/web/src/ui/video/`, `packages/game/src/paths/`,
 `packages/game/src/vehicle/path-follow.ts`. Plan [096](../plans/096-video-mode/readme.md).
 
-`?video=1` boots the game into an endless, seeded, self-directed showcase: a car is staged on a route out of
+`?video=1` boots the game into a bounded, seeded, self-directed showcase: a car is staged on a route out of
 the game's own road graph behind a black overlay, an autopilot drives it for 10-25 real seconds while a
 director cuts between shots, then the overlay comes back down and the next scene stages behind it. **The user
 screen-records with OS tools and cuts the black gaps out by hand — nothing here captures anything**, by
@@ -13,8 +13,11 @@ design (D11/D14).
 
 **Scenes and staging** (096/02):
 
-- `?video=1&seed=N&from=10&to=25&car=<model>` — `seed` determinises the car, weather, hour, route AND the
-  shot list; it is printed as `[video] seed=…` so a run that was not asked for one can still be replayed.
+- `?video=1&seed=N&scenes=100&from=10&to=25&car=<model>` — `seed` determinises the car, weather, hour, route
+  AND the shot list; it is printed as `[video] seed=…` so a run that was not asked for one can still be
+  replayed. What a seed does NOT fix is the frame clock: the shot LIST is reproducible, while an early guard
+  cut (an empty frame, a blocked tripod) depends on how the frames actually fell, so two runs of one seed can
+  differ in where a shot was cut short. That is a real-time property, not something a seed can own.
 - One scene = a seeded route inside ONE region, a debugger hour slot (00/06/12/18/21), a weather from that
   region's own timecyc set, a spawn, an instant seating, and a fragment.
 - The staging recipe is the phys laps' verbatim: `TELEPORT_NOTICE_SECONDS` before `pendingCells` means
@@ -33,8 +36,16 @@ design (D11/D14).
 
 - **The cycle** (D2): a drive scene in Los Santos → Las Venturas → San Fierro → Countryside → Desert, then
   two flythroughs and a walk (D3). The kinds 07 owns are SKIPPED with a `[video]` notice — no placeholder ever
-  reaches the footage, and a silently shortened cycle would read as a lost region. Endless: the program is
-  rebuilt each lap from that lap's seed, so a long run is not the same eight scenes over and over.
+  reaches the footage, and a silently shortened cycle would read as a lost region. The program is rebuilt
+  each lap from that lap's seed, so a long run is not the same eight scenes over and over.
+- **A run is a BOUNDED SEQUENCE, not an endless mode** (D2 as revised 2026-07-31): `?seed=47` means scenes
+  1…100 of seed 47, and then the run stops on a black end card reading `sequence complete · seed 47 · N
+  scenes`. `&scenes=N` takes a shorter one; 100 is the ceiling, not merely the default, so a longer sequence
+  stays a decision rather than a URL. The chrome does NOT come back — handing it over would put the HUD into
+  the last frame recorded.
+  **A skipped `fly`/`walk` entry still consumes a scene index.** That is deliberate: a scene's identity is
+  `(seed, index)`, so scene 57 of seed 47 has to stay the same scene when 07 fills those entries in. Letting
+  skips be free would re-seed every scene after them the day that phase lands.
 - **The region token is the game's own**: `City` is what the zone data classifies a point into AND the suffix
   the timecyc weather rows carry, so one token drives the route filter and the weather pool. The pool is
   FILTERED out of the shipped names (`weatherPool`), never listed — a modded timecyc is followed.

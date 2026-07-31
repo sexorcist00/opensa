@@ -2,7 +2,17 @@ import { mulberry32 } from '@opensa/game/paths/rng';
 import { WEATHER_NAMES } from '@opensa/renderware';
 import { describe, expect, it } from 'vitest';
 
-import { buildProgram, HOUR_SLOTS, MOD_CAR_PREFERENCE, pickCar, REGION_CYCLE, sceneSeed, weatherPool } from './presets';
+import {
+  buildProgram,
+  HOUR_SLOTS,
+  MOD_CAR_PREFERENCE,
+  parseSceneLimit,
+  pickCar,
+  REGION_CYCLE,
+  SCENE_LIMIT,
+  sceneSeed,
+  weatherPool,
+} from './presets';
 
 /** A stock roster shape: a handful of road cars, two of which a mod has taken over. */
 const ROSTER = ['admiral', 'banshee', 'comet', 'infernus', 'sultan', 'taxi'];
@@ -130,6 +140,31 @@ describe('pickCar', () => {
 
     it('takes a stock car when the ledger is empty', () => {
       expect(ROSTER).toContain(pickCar(mulberry32(5), ROSTER, new Set()));
+    });
+  });
+});
+
+describe('parseSceneLimit', () => {
+  describe('negative cases', () => {
+    it('takes the full run rather than refusing to start on a typo', () => {
+      // A showcase run is something a screen recorder is already pointed at: a bad `?scenes=` costs the typo,
+      // never the session.
+      expect(parseSceneLimit('lots')).toBe(SCENE_LIMIT);
+      expect(parseSceneLimit(null)).toBe(SCENE_LIMIT);
+      expect(parseSceneLimit('')).toBe(SCENE_LIMIT);
+    });
+
+    it('never plays fewer than one scene, or more than the ceiling', () => {
+      expect(parseSceneLimit('0')).toBe(1);
+      expect(parseSceneLimit('-5')).toBe(1);
+      expect(parseSceneLimit('1000')).toBe(SCENE_LIMIT);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('takes a short run for a quick field look', () => {
+      expect(parseSceneLimit('8')).toBe(8);
+      expect(parseSceneLimit('12.7')).toBe(12);
     });
   });
 });
