@@ -49,14 +49,13 @@ import { nextFrame, until, waitSeconds } from './frame-clock';
 import { createDirector, nextStationSlot, planShots, stepDirector } from './video/director';
 import { CLEARANCE_RADIUS, clearFlight, createFlight, FLY_MAX_EXTENT, planFlight, stepFlight } from './video/fly';
 import {
-  buildProgram,
   HOUR_SLOTS,
   parseSceneLimit,
   parseSceneStart,
   pickCar,
-  PROGRAM_LENGTH,
   REGION_CYCLE,
   SCENE_LIMIT,
+  sceneProgramEntry,
   sceneSeed,
   weatherPool,
 } from './video/presets';
@@ -324,20 +323,13 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   void (async (): Promise<void> => {
     // The program is rebuilt each lap from the lap's own seed, so a long run is not the same eight scenes
     // over and over — and `?seed=` still names every one of them.
-    let program: ProgramEntry[] = [];
     let played = 0;
     for (let scene = from; scene <= last; scene += 1) {
-      // Per-scene seed off the master (D9), so scene N is the same scene however the run reached it.
+      // Per-scene seed off the master (D9), so scene N is the same scene however the run reached it — and
+      // `sceneProgramEntry` is a pure function of `(seed, scene)` for the same reason, which is what lets a
+      // run start in the middle of the sequence and still play the scene the full run would have.
       const random = mulberry32(sceneSeed(seed, scene));
-      const at = (scene - 1) % PROGRAM_LENGTH;
-      // Keyed on the LAP's first scene, not on this one, so a run that starts mid-lap (`?scene=58`) builds
-      // the same program the full run would have been playing there — `scene - at` is that lap's start. What
-      // hangs on it is only where the fly and walk scenes land (the drive spine is fixed order, region and
-      // all): keyed on `scene`, a mid-start would put them in other regions than the full run, silently.
-      if (at === 0 || program.length === 0) {
-        program = buildProgram(mulberry32(sceneSeed(seed, -(scene - at))));
-      }
-      const entry = program[at];
+      const entry = sceneProgramEntry(seed, scene);
       const car = pinnedCar ?? pickCar(random, roster, modCars) ?? DEFAULT_CAR;
       const context: SceneContext = {
         car,

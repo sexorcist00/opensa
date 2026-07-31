@@ -17,13 +17,16 @@ is the whole of the "pavement": there is no pavement in the data, only a number 
 
 ## What it stands in for
 
-SA's own pedestrian paths. The game ships them — the `NODES*.DAT` files carry ped node types alongside the
-vehicle ones, and SA's peds walk a genuine pavement network with crossings — and **we do not parse them**.
-`packages/game/src/adapters/path-graph.ts` reads the vehicle graph only, which is what plan 096/01 needed and
-all any scene has had since.
+SA's own pedestrian paths. The game ships them and **we skip them on purpose, having already counted them**:
+`packages/renderware/src/parsers/binary/paths.ts` reads the area header as
+`[nodes, vehNodes, pedNodes, naviNodes, links]`, notes that the file stores "vehicle nodes first, ped nodes
+after", and then loops `for (index < vehicleNodes)` — the ped nodes are bytes the parser walks past to reach
+the link table (`:89`, "ped nodes skipped"). SA's peds walk a real pavement network with crossings, and it is
+sitting in a file we open.
 
-The honest fix is to parse the ped nodes and build the walk route on the network the game itself walks peds
-along. Nothing about that is hard; it simply was not what 096 was about.
+The honest fix is therefore smaller than "parse the ped paths": the offset is already computed and the count
+is already read. What is missing is a second node list on `RouteGraph` and a link table for it — plus whatever
+the ped links mean, which nobody here has looked at yet. It simply was not what 096 was about.
 
 ## What it was judged on
 
@@ -42,9 +45,9 @@ Two things it is known NOT to handle:
 
 ## What would retire it
 
-Parsing the ped nodes out of `NODES*.DAT` and giving `route-graph.ts` a pedestrian graph to walk. The walk
-scene would then ask for a route the same way it does now, and this file's three constants would go with it —
-`laneOffset` included, because a ped node already IS on the pavement.
+Reading the ped nodes the parser already skips over and giving `route-graph.ts` a pedestrian graph to walk.
+The walk scene would then ask for a route the same way it does now, and this file's three constants would go
+with it — `laneOffset` included, because a ped node already IS on the pavement.
 
 ## What else moves if it changes
 

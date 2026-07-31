@@ -9,8 +9,9 @@
  * or adds a row is followed rather than contradicted (the derive-from-the-asset rule in CLAUDE.md).
  */
 
-import type { Random } from '@opensa/game/paths/rng';
 import type { City } from '@opensa/game/zones/city';
+
+import { mulberry32, type Random } from '@opensa/game/paths/rng';
 
 /** One entry of the program: what kind of scene, and the region it plays in. */
 export interface ProgramEntry {
@@ -135,6 +136,25 @@ export function pickCar(random: Random, candidates: readonly string[], modCars: 
   const pool = (preferMod ? mods : stock).length > 0 ? (preferMod ? mods : stock) : candidates;
 
   return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
+}
+
+/**
+ * The program entry scene `scene` of `seed` plays — the sequencer's whole lookup.
+ *
+ * A PURE function of `(seed, scene)`, which is what makes a run startable in the middle (`?scene=N`): the
+ * entry cannot depend on where the run began because nothing about where it began is an argument. The lap's
+ * program is keyed on that lap's FIRST scene (`scene - at`), never on this one — keyed on this one, scene 58
+ * would build a program off its own seed and land the flythroughs and the walk in regions the full run did
+ * not put them in (the drive spine is a fixed order of fixed regions, so it is only ever those three).
+ *
+ * Rebuilding the lap per scene rather than caching it across eight is deliberate: a program is eight entries
+ * and a handful of `random()` calls, once per 40-second scene, and the cached version was a variable whose
+ * correctness depended on the loop that owned it.
+ */
+export function sceneProgramEntry(seed: number, scene: number): ProgramEntry {
+  const at = (scene - 1) % PROGRAM_LENGTH;
+
+  return buildProgram(mulberry32(sceneSeed(seed, -(scene - at))))[at];
 }
 
 /**

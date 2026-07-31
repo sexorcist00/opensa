@@ -48,9 +48,11 @@ nodes, which are not parsed. Nothing catches this — it needs a human watching 
 
 ## The graph we parse carries VEHICLE nodes only — there is no pavement in it
 
-`adapters/path-graph.ts` reads the vehicle half of `NODES*.DAT`. SA's ped nodes are in the same files and are
-not parsed, so nothing in the engine knows where a pavement runs, where a crossing is, or which side of a
-street a person may walk down.
+`parsers/binary/paths.ts` reads the vehicle half of `NODES*.DAT`. The ped nodes are in the same files, stored
+directly after the vehicle ones, and their count is READ from the header (`[nodes, vehNodes, pedNodes,
+naviNodes, links]`) purely to skip past them to the link table (`:89`). So nothing in the engine knows where a
+pavement runs, where a crossing is, or which side of a street a person may walk down — not for want of the
+data, but for want of a second node list to put it in.
 
 The walk scene (096/07) therefore walks a DRIVING route offset 6.5 m to the right of the carriageway, and
 that offset is the entire pavement model. Where a road has no pavement — a tunnel mouth, a freeway shoulder,

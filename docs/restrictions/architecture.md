@@ -211,3 +211,49 @@ SILENT before that: every headless acceptance number 096/03 and /04 collected (9
 jump` lines) was blind to it, because a mount that buzzes 6 px still frames its car perfectly and never jumps
 far enough to trip a watchdog. It took a human watching the footage. `scripts/debug/video-shiver.ts` over a
 `?video=1&diag=1` capture is the instrument that names the guilty channel.
+
+## A camera the STREAMING does not follow must cap its own travel against the anchor that is followed
+
+Streaming runs off the PLAYER, not the camera: `driver.update(playerEngine)` in the host loop is the only
+thing that grows the HD ring, and the ring is 380 u (`streaming.ts`). Every design that moves a camera away
+from the player — a flythrough, a cutscene, a replay, an establishing shot over a skyline — is therefore
+travelling through a world that is only loaded near somebody else.
+
+The rule: a camera-only scene states its extent as a NUMBER against the anchor's position and is built to
+respect it, rather than trusting a path to stay local. 096/07's flythrough trims its ground route to 350 m of
+the anchor **before it plans a pass**, so no pass can be planned outside the ring in the first place; the five
+passes then overlap one neighbourhood instead of walking the city. Sizing the other way — pick the flight,
+then hope — is what puts the camera over unloaded ground.
+
+The corollary that decides the shape of such a scene: **at a normal speed the cap is quickly binding.** Five
+10 s passes at a cinematic 12 m/s is 600 m of travel, which no ring holds. That is not a tuning problem, it is
+the reason a flythrough is passes over one place rather than a journey between two, and any future design that
+wants a long traverse needs a moving anchor (teleport the player under the flight, behind a cut), not a bigger
+cap.
+
+**Caught:** partly. `fly.test.ts` holds the planner to the cap ("never plans a pass beyond the streaming cap,
+however long the route is"), so this particular design cannot regress. Nothing catches the general case: a new
+camera path that ignores the anchor produces an EMPTY WORLD ON CAMERA, which no acceptance number in the
+`[video]` ledger measures — the shot is perfectly framed, perfectly smooth, and shows nothing. It is the
+failure mode plan 094 exists to make impossible and the reason this is a restriction rather than a note.
+
+## A path's per-vertex speeds belong to the SUBJECT that travels it, not to the builder's default
+
+`walkRoute` writes a target speed at every vertex from its `cruiseSpeed`, and those numbers are not decoration:
+anything predicting where the subject will be later walks THEM (`predictAlong` — the station survey's whole
+horizon). A route built for a subject that does not travel at that speed produces a prediction wrong by the
+ratio of the two, and every consumer of the prediction inherits the error silently.
+
+Measured 2026-07-31 (096/07, the walk scene's first headless run): a walk route left at the driving default of
+12 m/s while the ped walked at 2 predicted a 15 s tripod window covering ~180 m of pavement instead of ~30.
+All 8 station candidates were rejected on dwell, the tripod never filled, the slot played its fallback, and 48
+casts were spent finding that out. Passing the ped's own `walkSpeed`: 2 filled, 0 rejected, 14 casts.
+
+The rule for a new subject (a boat, a bike, a chased ped): give the builder that subject's own speed, taken
+from the config or the data that owns it, and never let the route's speeds and the thing walking them come
+from two different places.
+
+**Caught:** no, and it cannot be by a unit test — the survey behaves correctly on the numbers it is handed, and
+the route builder is correct about the speeds it was asked for. The only signal is a scene report's
+`stations.rejected.dwell` against `stations.filled`, which is why both fields are in the ledger. Detail and
+before/after in `docs/edge-cases/route-graph.md`.

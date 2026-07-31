@@ -10,6 +10,8 @@ import {
   stationCandidates,
   stepSurvey,
   SURVEY_DEFAULTS,
+  WALK_STATION_LATERALS,
+  WALK_SURVEY_DEFAULTS,
   windowSamples,
 } from './stations';
 
@@ -100,6 +102,19 @@ describe('stationCandidates', () => {
       expect(offsets).toEqual([...STATION_LATERALS]);
       expect(candidates.some((candidate) => candidate.lateral > 0)).toBe(true);
       expect(candidates.some((candidate) => candidate.lateral < 0)).toBe(true);
+    });
+
+    it("takes the caller's own offsets when it is given a set — the walk scene's tripods (096/07)", () => {
+      // A person filmed from 8-18 m of pavement is already a wide shot, and the far offsets would put the
+      // tripod through the buildings the pavement runs along.
+      const candidates = stationCandidates(straightRoute(), 20, mulberry32(3), WALK_STATION_LATERALS);
+      const offsets = [...new Set(candidates.map((candidate) => Math.abs(candidate.lateral)))].sort((a, b) => a - b);
+
+      expect(offsets).toEqual([...WALK_STATION_LATERALS]);
+      // The two sets meet at 8 m and go opposite ways from it: the walk set's WIDEST stand is the driving
+      // set's closest, and it reaches in to 2.5 m where a car never would.
+      expect(Math.max(...offsets)).toBeLessThanOrEqual(Math.min(...STATION_LATERALS));
+      expect(Math.min(...offsets)).toBeLessThan(Math.min(...STATION_LATERALS));
     });
 
     it('measures the offset off the ROAD, whichever way the road runs', () => {
@@ -229,6 +244,18 @@ describe('windowSamples', () => {
       expect(samples[0][1]).toBeCloseTo(200 + 24, 6); // 2 s in at 12 m/s
       expect(samples[4][1]).toBeCloseTo(200 + 96, 6); // 8 s in
       expect(samples[0][2]).toBeGreaterThan(10);
+    });
+  });
+});
+
+describe('WALK_SURVEY_DEFAULTS', () => {
+  describe('positive cases', () => {
+    it('brings the distance ceiling in to what a PERSON reads at, and changes nothing else', () => {
+      expect(WALK_SURVEY_DEFAULTS.maxDist).toBeLessThan(SURVEY_DEFAULTS.maxDist);
+      // Coverage and dwell are judgements about the WORLD, not about the subject's size: a station that can
+      // only see the subject for half its window is a bad station whoever is walking past it.
+      expect(WALK_SURVEY_DEFAULTS.minCoverage).toBe(SURVEY_DEFAULTS.minCoverage);
+      expect(WALK_SURVEY_DEFAULTS.minDwell).toBe(SURVEY_DEFAULTS.minDwell);
     });
   });
 });

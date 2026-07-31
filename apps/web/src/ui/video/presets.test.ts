@@ -12,6 +12,7 @@ import {
   PROGRAM_LENGTH,
   REGION_CYCLE,
   SCENE_LIMIT,
+  sceneProgramEntry,
   sceneSeed,
   weatherPool,
 } from './presets';
@@ -190,6 +191,66 @@ describe('parseSceneStart', () => {
     it('starts at the scene a field note named', () => {
       expect(parseSceneStart('57')).toBe(57);
       expect(parseSceneStart('57.9')).toBe(57);
+    });
+  });
+});
+
+describe('sceneProgramEntry', () => {
+  describe('negative cases', () => {
+    it('does not re-seed the lap from the scene itself — the trap a mid-run start would fall into', () => {
+      // The wrong key: build the lap from THIS scene rather than from the lap's first. It agrees on every
+      // lap boundary (where the two are the same scene) and diverges in between, which is exactly why it
+      // would have shipped unnoticed.
+      const wrong = (seed: number, scene: number): string => {
+        const at = (scene - 1) % PROGRAM_LENGTH;
+
+        return `${buildProgram(mulberry32(sceneSeed(seed, -scene)))[at].kind}/${
+          buildProgram(mulberry32(sceneSeed(seed, -scene)))[at].region
+        }`;
+      };
+      const right = (scene: number): string => {
+        const entry = sceneProgramEntry(47, scene);
+
+        return `${entry.kind}/${entry.region}`;
+      };
+      const differing = Array.from({ length: SCENE_LIMIT }, (_, index) => index + 1).filter(
+        (scene) => wrong(47, scene) !== right(scene),
+      );
+
+      // Every disagreement is a fly or a walk: the drive spine is a fixed order of fixed regions, so the
+      // wrong key can only move the three scenes whose region comes off the seeded stream.
+      expect(differing.length).toBeGreaterThan(0);
+      expect(differing.every((scene) => sceneProgramEntry(47, scene).kind !== 'drive')).toBe(true);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is a pure function of (seed, scene) — so scene N is scene N wherever the run started', () => {
+      // `?scene=57` plays what the full run plays at 57. The property is structural: where the run began is
+      // not an argument, so it cannot be an influence.
+      for (let scene = 1; scene <= SCENE_LIMIT; scene += 1) {
+        expect(sceneProgramEntry(47, scene)).toEqual(sceneProgramEntry(47, scene));
+      }
+      // The SEED moves only the fly/walk slots — the drive spine is fixed regions in a fixed order, so two
+      // seeds agree on every drive scene by construction and can only differ over the other three.
+      const slots = [6, 7, 8];
+      expect(slots.map((scene) => sceneProgramEntry(47, scene))).not.toEqual(
+        slots.map((scene) => sceneProgramEntry(48, scene)),
+      );
+      expect(sceneProgramEntry(47, 57)).toEqual(sceneProgramEntry(48, 57)); // a drive: seed-independent
+    });
+
+    it('walks the lap in order and plays every entry of the program across one', () => {
+      const lap = Array.from({ length: PROGRAM_LENGTH }, (_, index) => sceneProgramEntry(47, index + 1));
+
+      expect(lap).toEqual(buildProgram(mulberry32(sceneSeed(47, -1))));
+    });
+
+    it('plays the drive spine in the cycle order, whatever the seed', () => {
+      const drives = Array.from({ length: REGION_CYCLE.length }, (_, index) => sceneProgramEntry(9, index + 1));
+
+      expect(drives.map((entry) => entry.kind)).toEqual(REGION_CYCLE.map(() => 'drive'));
+      expect(drives.map((entry) => entry.region)).toEqual([...REGION_CYCLE]);
     });
   });
 });
