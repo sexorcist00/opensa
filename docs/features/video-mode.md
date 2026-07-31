@@ -23,20 +23,39 @@ design (D11/D14).
   lifts. Measured cost: 248-252 ms.
 - All UI hides through the existing `'fly-camera'` event; the only progress protocol is the `[video]` console
   tag, one JSON line per scene (the `[phys]` protocol's twin, plus cross-track error and the shot ledger).
+- `&diag=1` adds a second line per scene, `[diag]`, holding ONE ROW PER RENDERED FRAME (drawn car, both
+  headings, eye, aim, screen position, cut flag). The `[video]` series is 10 Hz and judges a driven line; a
+  camera complaint is a per-frame thing and is invisible at that rate. Read it with
+  `scripts/debug/video-shiver.ts`, which reports each channel's high-frequency energy — that is how round 1's
+  shiver was pinned on the damper rather than on the physics. Off by default.
 
 **The director** (096/03) — `apps/web/src/ui/video/`:
 
 - **Authority**: `resolveCamera`'s chain is `bench > video > flyEye > follow`. The director writes a
   `{eye, target, fovYRad?}` pose (engine Y-up) through `setVideoCamera(pose, cut)`, or `null` to give the
   frame back to the shipped follow rig.
+- **The director is stepped BY THE HOST LOOP** (`setVideoStep`), between the car's render pose and the camera
+  snapshot, so a car-mounted shot is composed from the frame it is drawn in. Stepped from the module's own
+  rAF pass instead, the pose reached the screen a frame late and the pairing carried the car's whole travel
+  for that frame — 0.33° of shiver at a cruise, the field bug of round 1b. The module keeps its own clock for
+  everything that is not per-frame: staging, the fragment's seconds, the survey.
 - **Shots are a table**, never a code path (`shots.ts`): `chase` (yields the frame to the rig — the shipped
   camera IS that shot), `nose`, `high`, `wing-l`, `wing-r` (tracking: the eye rides the car's heading frame)
   and `flyby` (static: the eye is planted once and the car drives past it). Every offset is a multiple of the
   car's OWN half-extents, so the table fits whatever model is in the slot.
 - **Framing**: the look point is solved so the car lands on the shot's screen anchor, with **lead room** — the
-  anchor mirrors to the side opposite the car's screen-space travel, so it drives into open frame. The aim
-  and the eye are `smoothDamp`ed on per-shot time constants and the view direction's swing is capped at
-  60°/s (a whip pan reads as an error).
+  car sits on the side opposite its screen-space travel, so it drives into open frame. The table's `anchor.x`
+  says how MUCH room the shot wants; the motion decides which side it goes on, by a share proportional to the
+  crossing speed (full at 2 m/s, centred when the car is not crossing at all). It was a threshold once, and a
+  threshold on a signal that hovers near it snaps the frame — see the restriction below. The aim and the eye
+  are `smoothDamp`ed on per-shot time constants and the view direction's swing is capped at 60°/s (a whip pan
+  reads as an error).
+- **A tracking shot damps its MOUNT, not its world position**: the damper is re-based against the car each
+  frame, so the car's own travel passes straight through and the smoothing eases only the heading the mount
+  hangs off and the framing. Damped in world space it carried a ~1.1 m lag whose per-frame catch-up scaled
+  with `dt`, and an uneven frame clock shook it — the field bug of round 1, now a restriction
+  (`docs/restrictions/architecture.md`) and a director test. A PLANTED eye (`flyby`, `station`) is damped in
+  the world, because it is not mounted on anything.
 - **Cuts**: the scene's shot list is dealt up front from the seeded stream — weighted picks, no preset twice
   in a row, every shot ≥ 5 s, `chase` guaranteed at least once. Every cut is DECLARED for exactly one frame,
   which is the only thing the `[cam] jump` watchdog whitelists.

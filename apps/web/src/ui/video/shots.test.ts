@@ -130,10 +130,32 @@ describe('aimShot', () => {
 
 describe('anchorFor (lead room)', () => {
   describe('negative cases', () => {
-    it('keeps the authored side for a car that is barely moving — no coin flip at a standstill', () => {
+    it('does not flip a barely moving car across the frame — no coin toss at a standstill', () => {
       const eye: [number, number, number] = [0, 2, 12];
+      // The same crawl, crossing each way: a rule that read the SIGN of a near-zero signal would put these on
+      // opposite sides of the frame, and a car rocking on its springs would flip between them.
+      const left = anchorFor(WING, eye, subjectAt(Math.PI / 2, 0.2));
+      const right = anchorFor(WING, eye, subjectAt(-Math.PI / 2, 0.2));
 
-      expect(anchorFor(WING, eye, subjectAt(-Math.PI / 2, 0.5))).toEqual(WING.anchor);
+      expect(Math.abs(left.x - right.x)).toBeLessThan(0.01);
+      expect(left.y).toBe(WING.anchor.y);
+    });
+
+    it('never steps the anchor across a crossing speed — lead room is a ramp, not a threshold', () => {
+      // The bug this pins (096 field round 1): lead room used to switch on at 2 m/s, so a shot whose crossing
+      // signal hovered there — `nose` sits at ~0.11 × speed, i.e. right on it at a cruise — snapped 0.24 of
+      // the frame's width whenever the speed drifted over the line. Sweep the whole range, both directions.
+      const eye: [number, number, number] = [0, 2, 12];
+      const anchors: number[] = [];
+      for (let step = 0; step <= 400; step += 1) {
+        const speed = -8 + step * 0.04;
+        anchors.push(anchorFor(WING, eye, subjectAt(speed < 0 ? Math.PI / 2 : -Math.PI / 2, Math.abs(speed))).x);
+      }
+      const worst = Math.max(...anchors.slice(1).map((x, at) => Math.abs(x - anchors[at])));
+
+      // The ramp's steepest slope is `room × 1.5 / LEAD_SPEED_FULL` = 0.09 of the frame per m/s, so a
+      // 0.04 m/s step can move the anchor by at most 0.0036. The threshold it replaced moved 0.24 in ONE step.
+      expect(worst).toBeLessThan(0.005);
     });
   });
 

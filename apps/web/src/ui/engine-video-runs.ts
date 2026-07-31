@@ -31,11 +31,13 @@ import { cityAt } from '@opensa/game/zones/city';
 import type { VideoCamera } from './camera/engine-camera';
 import type { EngineVehicles } from './engine-vehicles';
 import type { DirectorState } from './video/director';
+import type { ShiverDiag } from './video/shiver-diag';
 import type { Subject } from './video/shots';
 import type { StationSupply } from './video/station-supply';
 
 import { nextFrame, until, waitSeconds } from './frame-clock';
 import { createDirector, nextStationSlot, planShots, stepDirector } from './video/director';
+import { createShiverDiag, yawOfQuat } from './video/shiver-diag';
 import { forwardFromHeading } from './video/shots';
 import { createStationSupply } from './video/station-supply';
 
@@ -73,6 +75,15 @@ export interface VideoRunsHost {
    * undeclared jump still prints, which is the whole point of declaring the declared ones.
    */
   setVideoCamera(pose: null | VideoCamera, cut: boolean): void;
+  /**
+   * Install the director's per-frame step, or `null` to take it out again.
+   *
+   * The host calls it INSIDE its loop, after the car's render pose is written and before the camera snapshot
+   * is built, handing over that frame's `dt`. A camera mounted on the car has to be composed from the frame
+   * the car is drawn in — stepped from the module's own rAF instead, the pose reaches the screen one frame
+   * late and the pairing carries the car's whole travel for that frame.
+   */
+  setVideoStep(step: ((dt: number) => void) | null): void;
   /** Set the weather INSTANTLY — the 6 s artistic fade must never play inside a fragment. */
   setWeather(index: number): void;
   /** Spawn a scene-owned car (not LOD-registered) and hand back its despawn. */
@@ -182,6 +193,10 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   const overlay = createOverlay();
   host.setUiHidden(true);
   const random = mulberry32(seed);
+  // `&diag=1`: one full-rate `[diag]` line per scene, for a field report about camera MOTION (the scene
+  // report's 10 Hz series cannot see a per-frame one). Off by default — it is a console line per frame's
+  // worth of numbers, not something a showcase run should carry.
+  const diag = createShiverDiag(host.params.get('diag') === '1');
   void (async (): Promise<void> => {
     for (let scene = 1; ; scene += 1) {
       try {
@@ -197,6 +212,7 @@ export function setupVideoRuns(host: VideoRunsHost): void {
             targetLength: to * CRUISE_SPEED * ROUTE_MARGIN,
           },
           overlay,
+          diag,
         );
       } catch (error) {
         // A scene that failed must SAY so behind its own overlay; a missing line reads as a scene that played.
@@ -336,12 +352,11 @@ function pickWeather(weatherNames: readonly string[], random: Random): null | nu
 }
 
 /**
- * The fragment itself: run the director once per rendered frame until the autopilot stops following or the
- * scene's seconds are up, and hand back WHY it ended.
+ * The fragment itself: hand the director to the host's own loop, then watch for the end of the scene.
  *
- * The director steps on the render clock (not the fixed one) because a camera is a per-frame thing — and it
- * reads the car AFTER the host's own loop ran, so the host consumes the pose one frame later. That is the
- * same staleness the autopilot drives on, and 0.2 m at a cruise.
+ * The pose is NOT stepped from here. A camera mounted on the car has to be composed from the frame the car is
+ * drawn in, and only the host's loop is inside that frame ({@link VideoRunsHost.setVideoStep}); this function
+ * owns the fragment's clock and its end conditions, nothing per-frame.
  */
 async function playFragment(
   host: VideoRunsHost,
@@ -349,23 +364,24 @@ async function playFragment(
   director: DirectorState,
   supply: StationSupply,
   seconds: number,
+  diag: ShiverDiag,
 ): Promise<string> {
   const started = performance.now();
-  let previous = started;
-  for (;;) {
-    await nextFrame();
-    const now = performance.now();
-    // A hitch must not teleport the damping: a 400 ms frame would land the eye on its target in one step.
-    const dt = Math.min(MAX_FRAME_SECONDS, (now - previous) / 1000);
-    previous = now;
-    poseFrame(host, vehicles, director, supply, dt);
-    const state = host.autopilot.state();
-    if (state !== 'following') {
-      return state;
+  // A hitch must not teleport the damping: a 400 ms frame would land the eye on its target in one step.
+  host.setVideoStep((dt) => poseFrame(host, vehicles, director, supply, Math.min(MAX_FRAME_SECONDS, dt), diag));
+  try {
+    for (;;) {
+      await nextFrame();
+      const state = host.autopilot.state();
+      if (state !== 'following') {
+        return state;
+      }
+      if (performance.now() - started >= seconds * 1000) {
+        return 'ran-out';
+      }
     }
-    if (now - started >= seconds * 1000) {
-      return 'ran-out';
-    }
+  } finally {
+    host.setVideoStep(null);
   }
 }
 
@@ -380,6 +396,7 @@ function poseFrame(
   director: DirectorState,
   supply: StationSupply,
   dt: number,
+  diag?: ShiverDiag,
 ): void {
   const car = vehicles.activeVehicle();
   if (!car) {
@@ -397,6 +414,19 @@ function poseFrame(
   };
   const frame = stepDirector(director, subject, dt, host.aspect(), supply);
   host.setVideoCamera(frame.pose, frame.cut);
+  if (diag?.enabled && frame.pose && frame.screen) {
+    diag.record({
+      car: subject.position,
+      cut: frame.cut,
+      eye: frame.pose.eye,
+      heading: car.heading,
+      renderYaw: yawOfQuat(car.renderOrientation),
+      screen: [frame.screen.x, frame.screen.y],
+      shot: frame.shot,
+      t: performance.now(),
+      target: frame.pose.target,
+    });
+  }
   // The survey runs AFTER the pose, on what is left of the budget: a live sightline is the frame's first
   // claim on it, and a survey is the thing that can always wait one more frame.
   supply.step();
@@ -520,7 +550,12 @@ function report(
 }
 
 /** One fragment: stage it black, play it, report it. */
-async function runScene(host: VideoRunsHost, context: SceneContext, overlay: VideoOverlay): Promise<void> {
+async function runScene(
+  host: VideoRunsHost,
+  context: SceneContext,
+  overlay: VideoOverlay,
+  diag: ShiverDiag,
+): Promise<void> {
   const vehicles = host.getVehicles();
   if (!vehicles) {
     throw new Error('no vehicle system on this host');
@@ -602,17 +637,18 @@ async function runScene(host: VideoRunsHost, context: SceneContext, overlay: Vid
     // Compose the opening shot BEFORE the overlay lifts. Staged after it, the fragment would open on the
     // chase rig and cut one frame later — a cut INSIDE the footage, which is exactly what the user's manual
     // edit is not supposed to have to find.
-    poseFrame(host, vehicles, director, supply, 0);
+    poseFrame(host, vehicles, director, supply, 0, diag);
     await overlay.hide();
     // WHY it ended is read INSIDE the loop, before the stop. Reading it after `stop()` made every early end
     // report `idle`, and a real `stuck` — a scene that started on an 18° hill the car could not climb — hid
     // behind that for a whole headless run.
-    const ended = await playFragment(host, vehicles, director, supply, context.seconds);
+    const ended = await playFragment(host, vehicles, director, supply, context.seconds, diag);
     overlay.show();
     host.setVideoCamera(null, true); // the rig takes its frame back, and that hand-over is a declared cut
     host.autopilot.stop();
     vehicles.telemetry.enabled = false;
     report(host, context, route, vehicles.telemetry.frames(), settleMs, ended, director, supply);
+    diag.dump(context.scene);
     if (ended !== 'ran-out') {
       log(
         `scene ${context.scene} ended early: ${ended} at ${(host.autopilot.progress() * 100).toFixed(0)}% of the route`,

@@ -44,7 +44,7 @@ costs a session.
 
 | File | Subject |
 | --- | --- |
-| [architecture.md](architecture.md) | Layer boundaries, what may import what, the one-build rule, the grid every tool must agree on, what a frame-time span may wrap, the single owner a debug view's subset must have, that scripted control speaks a player's input rather than recomputing a system's numbers, and that a diagnostic tripwire is whitelisted per declared event rather than per mode |
+| [architecture.md](architecture.md) | Layer boundaries, what may import what, the one-build rule, the grid every tool must agree on, what a frame-time span may wrap, the single owner a debug view's subset must have, that scripted control speaks a player's input rather than recomputing a system's numbers, that a diagnostic tripwire is whitelisted per declared event rather than per mode, that a framing decision taken on a threshold gets retaken every frame, that a camera pose is composed in the frame it is drawn in and measured against the pairing that renders, and that a camera mounted on a moving subject is damped in that subject's frame rather than the world's |
 | [build-vs-runtime.md](build-vs-runtime.md) | What is decided while the game is BUILT and cannot be recovered while it runs |
 | [engine-lighting.md](engine-lighting.md) | The light pool's two halves and who is allowed to read them |
 | [gpu-and-shaders.md](gpu-and-shaders.md) | WGSL and inter-stage rules that no test in this repo can see, plus the resource-lifetime rule a runtime welder must obey (a grown texture array kills the bundles recorded against it) |

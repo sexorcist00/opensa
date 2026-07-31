@@ -72,6 +72,9 @@ export interface DirectorState {
   sightlineIn: number;
   /** A `static` or `station` shot's planted eye, held for the whole shot; null for every other kind. */
   staticEye: [number, number, number] | null;
+  /** Where the car stood when the last pose was written. A car-mounted shot damps its MOUNT rather than its
+   *  world position ({@link stepDirector}), and re-basing the damper needs the frame it was written in. */
+  subject: [number, number, number] | null;
   /** The preset actually playing when it is NOT the planned one — a station slot the survey could not fill. */
   substitute: null | ShotPreset;
   target: [number, number, number] | null;
@@ -112,6 +115,9 @@ export const SAFE_FRAME = 0.45;
 export const SIGHTLINE_SECONDS = 1;
 export const SIGHTLINE_MISSES = 2;
 
+/** The frame a PLANTED eye is damped in: the world, which does not move. */
+const ORIGIN: Vec3 = [0, 0, 0];
+
 export function createDirector(plan: readonly ShotPlan[]): DirectorState {
   return {
     cause: 'opening',
@@ -132,6 +138,7 @@ export function createDirector(plan: readonly ShotPlan[]): DirectorState {
     safeFrames: 0,
     sightlineIn: SIGHTLINE_SECONDS,
     staticEye: null,
+    subject: null,
     substitute: null,
     target: null,
     targetVelocity: [{ velocity: 0 }, { velocity: 0 }, { velocity: 0 }],
@@ -234,6 +241,7 @@ export function stepDirector(
     // own geometry instead of easing out of wherever the last one stood.
     state.eye = null;
     state.target = null;
+    state.subject = null;
     state.panDirection = null;
     state.fresh = false;
 
@@ -251,15 +259,27 @@ export function stepDirector(
       : (state.staticEye ?? [subject.position[0], subject.position[1], subject.position[2]]);
   const anchor = anchorFor(shot, wantedEye, subject);
   const wantedTarget = aimShot(wantedEye, subject.position, anchor, shot.fovYRad, aspect);
+  // A car-mounted shot damps its MOUNT, never its world position. Damped in world space against a car at a
+  // cruise, the eye carries a permanent lag (measured ~1.1 m at 12 m/s) whose per-frame catch-up step is
+  // proportional to `dt` — so an irregular frame moves the eye by a different amount and the mount buzzes
+  // ALONG THE TRAVEL AXIS. On a wing shot that axis is perpendicular to the view, which is the 6.0 px/frame²
+  // of horizontal shiver the first field round reported (the diagnosis is in the 096 ledger).
+  //
+  // Re-based against the car, a constant-speed drive leaves the damper nothing to do: the smoothing then eases
+  // only what genuinely changes — the heading the mount hangs off, and the anchor. A PLANTED eye (`static`,
+  // `station`) re-bases against the world and so is untouched by this: it is not mounted on anything.
+  const from = shot.kind === 'tracking' ? (state.subject ?? subject.position) : ORIGIN;
+  const to = shot.kind === 'tracking' ? subject.position : ORIGIN;
   const eye = state.fresh
     ? wantedEye
-    : dampVec(state.eye ?? wantedEye, wantedEye, state.eyeVelocity, shot.eyeSmooth, dt);
+    : dampVec(state.eye ?? wantedEye, wantedEye, from, to, state.eyeVelocity, shot.eyeSmooth, dt);
   const damped = state.fresh
     ? wantedTarget
-    : dampVec(state.target ?? wantedTarget, wantedTarget, state.targetVelocity, shot.targetSmooth, dt);
+    : dampVec(state.target ?? wantedTarget, wantedTarget, from, to, state.targetVelocity, shot.targetSmooth, dt);
   const { panClipped, target } = capPan(state, eye, damped, dt);
   state.eye = eye;
   state.target = target;
+  state.subject = [subject.position[0], subject.position[1], subject.position[2]];
   state.fresh = false;
 
   const screen = projectToScreen(eye, target, shot.fovYRad, aspect, subject.position);
@@ -299,6 +319,7 @@ function advance(state: DirectorState, cause: CutCause): void {
   state.offFrame = 0;
   state.sightlineIn = SIGHTLINE_SECONDS;
   state.staticEye = null;
+  state.subject = null;
   state.substitute = null;
   state.panDirection = null;
   state.cuts += 1;
@@ -354,19 +375,36 @@ function cross(a: readonly [number, number, number], b: readonly [number, number
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
-/** `smoothDamp` per axis with one velocity ref each — the same caller-owned-state shape the rig uses. */
+/**
+ * `smoothDamp` per axis with one velocity ref each — the same caller-owned-state shape the rig uses — done in
+ * a frame that MOVES: `current` is read relative to `from` (where that frame stood when it was written) and
+ * the result is handed back relative to `to` (where it stands now).
+ *
+ * With `from`/`to` both the origin this is a plain world-space damp. With both the car's position it is the
+ * same filter applied to the shot's MOUNT, which is what a rigid shot needs: the car's own travel passes
+ * straight through instead of becoming a lag for the frame clock to modulate.
+ */
 function dampVec(
   current: readonly [number, number, number],
   wanted: readonly [number, number, number],
+  from: readonly [number, number, number],
+  to: readonly [number, number, number],
   velocity: SmoothDampRef[],
   smoothTime: number,
   dt: number,
 ): [number, number, number] {
-  return [
-    smoothDamp(current[0], wanted[0], velocity[0], smoothTime, Number.POSITIVE_INFINITY, dt),
-    smoothDamp(current[1], wanted[1], velocity[1], smoothTime, Number.POSITIVE_INFINITY, dt),
-    smoothDamp(current[2], wanted[2], velocity[2], smoothTime, Number.POSITIVE_INFINITY, dt),
-  ];
+  const axis = (index: number): number =>
+    to[index] +
+    smoothDamp(
+      current[index] - from[index],
+      wanted[index] - to[index],
+      velocity[index],
+      smoothTime,
+      Number.POSITIVE_INFINITY,
+      dt,
+    );
+
+  return [axis(0), axis(1), axis(2)];
 }
 
 function normalize(v: readonly [number, number, number]): [number, number, number] {

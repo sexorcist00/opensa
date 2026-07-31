@@ -48,8 +48,17 @@ export interface Subject {
 
 export type Vec3 = readonly [number, number, number];
 
-/** Below this the car is not really travelling, so lead room keeps the authored side (D9: no coin flips). */
-const LEAD_SPEED_MIN = 2;
+/**
+ * The screen-space crossing speed at which lead room is FULL (m/s) — below it the room is PROPORTIONAL, not
+ * absent.
+ *
+ * This was a threshold once, and a threshold on a signal that hovers near it is a jump: `nose` puts the
+ * crossing signal at roughly `0.11 × speed` (its eye rides a few degrees off the car's own axis), so a cruise
+ * sat right on 2 m/s and the anchor snapped across 0.24 of the frame's width whenever the speed drifted over
+ * it (096 field round 1). The same lesson as the empty-frame guard and the tripod's sightline: a boolean over
+ * a continuous signal has no middle, and the middle is where the shot lives.
+ */
+const LEAD_SPEED_FULL = 2;
 
 /** The presets, in the order a reader wants them: the free one first, then the placed ones. */
 export const SHOTS: readonly ShotPreset[] = [
@@ -214,19 +223,21 @@ export function aimShot(
 }
 
 /**
- * The anchor a shot actually uses this frame: the authored one, mirrored so the car sits on the side OPPOSITE
- * its screen-space travel (D4's "drives into the frame"). A car crossing to the right is framed left, with
- * the road it is heading into taking the open half.
+ * The anchor a shot actually uses this frame: the car sits on the side OPPOSITE its screen-space travel (D4's
+ * "drives into the frame"), by an amount PROPORTIONAL to how fast it is crossing the frame. A car crossing to
+ * the right is framed left, with the road it is heading into taking the open half.
+ *
+ * The authored `anchor.x` says how much room the shot wants (its distance from centre); which SIDE that room
+ * goes on is the motion's business, never the table's — a side authored against the motion would fight it.
+ * With no crossing motion there is no lead to give and the car sits centred; the authored `y` is never
+ * mirrored, so it still holds the car low in frame with the city over it.
  */
 export function anchorFor(shot: PlacedShot, eye: Vec3, subject: Subject): ScreenAnchor {
   const { right } = screenBasis(normalize(sub(subject.position, eye)));
   const screenMotion = dot(subject.forward, right) * subject.speed;
-  const { x } = shot.anchor;
-  if (Math.abs(screenMotion) < LEAD_SPEED_MIN) {
-    return shot.anchor;
-  }
+  const room = Math.abs(shot.anchor.x - 0.5);
 
-  return { x: screenMotion > 0 ? Math.min(x, 1 - x) : Math.max(x, 1 - x), y: shot.anchor.y };
+  return { x: 0.5 - room * leadShare(screenMotion / LEAD_SPEED_FULL), y: shot.anchor.y };
 }
 
 /** Unit forward in ENGINE space for a GTA heading (0 faces +Y, counter-clockwise about +Z). */
@@ -290,6 +301,17 @@ function cross(a: Vec3, b: Vec3): [number, number, number] {
 
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+/**
+ * How much of a shot's lead room this crossing speed earns, signed: 0 at a standstill, ±1 once the car is
+ * crossing at {@link LEAD_SPEED_FULL}. Smoothstepped rather than clamped linearly so SATURATION is not a kink
+ * either — the shot most likely to sit near the top of the ramp is the one that sat on the old threshold.
+ */
+function leadShare(ratio: number): number {
+  const share = Math.min(1, Math.abs(ratio));
+
+  return Math.sign(ratio) * share * share * (3 - 2 * share);
 }
 
 function normalize(v: Vec3): [number, number, number] {

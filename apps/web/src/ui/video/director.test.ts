@@ -157,6 +157,33 @@ describe('stepDirector', () => {
       expect(worst).toBeLessThanOrEqual(PAN_RATE_MAX + 1e-6);
     });
 
+    it('does not let an irregular frame clock shake a car-mounted shot', () => {
+      // The field bug this pins (096 field round 1): a `tracking` eye damped in WORLD space against a car at
+      // a cruise carries a permanent lag, and the per-frame catch-up step scales with `dt` — so an uneven
+      // frame clock modulates it and the mount buzzes along the travel axis. A headless run measured 3.1 ms
+      // RMS of frame-clock jitter on a healthy 120 fps scene; these steps are that, rounded to the coarse.
+      const steps = [1 / 120, 1 / 40, 1 / 120, 1 / 120, 1 / 60, 1 / 120, 1 / 90, 1 / 120];
+      const state = createDirector([{ preset: WING, seconds: 30 }]);
+      const mounts: number[] = [];
+      let at = 0;
+      for (let frame = 0; frame < 400; frame += 1) {
+        const dt = steps[frame % steps.length];
+        at += dt;
+        const subject = drivingSubject(at);
+        const { pose } = stepDirector(state, subject, dt, ASPECT);
+        // The opening frame SNAPS by design, and the frames after it are the damper settling — neither is
+        // what this measures. Everything from a second in is the shot as a viewer sees it.
+        if (pose && at > 1) {
+          mounts.push(pose.eye[2] - subject.position[2]); // the mount along the travel axis (heading 0 = −Z)
+        }
+      }
+      const spread = Math.max(...mounts) - Math.min(...mounts);
+
+      // Rigid means rigid: a constant-speed drive must leave the mount NOTHING to damp, whatever the clock
+      // does. Damped in world space this same drive wandered by ~0.2 m and read as a 6 px/frame² shiver.
+      expect(spread).toBeLessThan(0.001);
+    });
+
     it('does not cut a tripod on ONE blocked probe — a lamppost is not a lost shot', () => {
       const state = createDirector([{ preset: STATION, seconds: 20 }]);
       const source = stationSource([14, 2, -20], () => false);

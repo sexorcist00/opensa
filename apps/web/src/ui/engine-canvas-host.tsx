@@ -1205,11 +1205,17 @@ async function boot(
   /**
    * Video mode's frame (096/03) and its cut flag. The flag is what keeps the `[cam] jump` watchdog honest: a
    * DECLARED cut is whitelisted for exactly one frame, and a jump the director did not declare still prints.
-   * Both are written from the director's own rAF pass, so the loop reads them one frame later — the same
-   * staleness the autopilot drives on, and it is why the pose is composed from the car's RENDER pose.
+   *
+   * The director steps through {@link videoStep}, IN this loop, between the car's render pose and the camera
+   * snapshot — never from its own rAF pass. A camera mounted on the car must be composed from the same frame
+   * the car is drawn in: posed a frame earlier, the pairing carries the car's whole travel for that frame
+   * (`speed × dt`), and frame-clock jitter turns that into 0.3° of shiver whatever the director does
+   * (096 field round 1 — the mount fix alone did not touch it).
    */
   let videoCamera: null | VideoCamera = null;
   let videoCut = false;
+  /** The director's per-frame step while a fragment plays; null between scenes. */
+  let videoStep: ((dt: number) => void) | null = null;
   let lastStream: null | StreamStats = null;
   /** Last frame's engine stats — the debugger's Perf screen and the HUD read them. */
   let lastStats: null | ReturnType<Engine['frame']> = null;
@@ -1388,6 +1394,16 @@ async function boot(
       debugError ??= error instanceof Error ? error.message : String(error);
     }
   };
+  /**
+   * Video mode's director, stepped from the loop between the car's render pose and the camera snapshot, so a
+   * car-mounted shot is composed from the frame the car is drawn in. A pause holds the last pose rather than
+   * integrating time nobody is watching.
+   */
+  const stepVideo = (delta: number): void => {
+    if (!hostState.paused) {
+      videoStep?.(delta);
+    }
+  };
   /** Pausing frees the cursor for the pause menu and drops the photo camera (as F2 and the debugger do). */
   const onPaused = (): void => {
     if (document.pointerLockElement) {
@@ -1527,6 +1543,7 @@ async function boot(
     settleEase = easeWindow(settleEase, dt);
     lastRidden = vehicles?.ridingVehicle() ?? lastRidden;
     syncCameraConfig();
+    stepVideo(dt);
     // The rig is one pure step over a snapshot of this frame (plan 080/01): the handlers above only
     // ACCUMULATED input, so the smoothing that lands in plan 02 sees whole frames, dt included.
     const snapshot: CameraSnapshot = {
@@ -1755,6 +1772,9 @@ async function boot(
     setVideoCamera: (pose, cut): void => {
       videoCamera = pose;
       videoCut ||= cut; // never clear a cut the loop has not consumed yet
+    },
+    setVideoStep: (step): void => {
+      videoStep = step;
     },
     setWeather: (value): void => {
       weatherTransition.begin(value, 0);

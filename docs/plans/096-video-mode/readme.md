@@ -219,6 +219,75 @@ before analysis). Empty until phases run:
   turn budget cannot cross a right-angle grid whose blocks are shorter than the window. The runner logged the
   fallback each time, which is the only reason the run was not read as a downtown capture. Written up in
   `docs/edge-cases/route-graph.md`; loosening the budget is 05's variety knob.
+- **Field round 1 (2026-07-31) — the first human look at the footage, and the one thing every headless number
+  had been blind to.** The report was "the camera shivers at these angles", with a side-on `wing` frame and a
+  `nose` frame. The instrument built for it: `?video=1&diag=1` writes one `[diag]` line per SCENE holding one
+  row per rendered frame (drawn car, both headings, eye, aim, screen position, cut flag), and
+  `scripts/debug/video-shiver.ts` reports each channel's high-frequency energy — the RMS second difference,
+  which is small for smooth motion however fast, and large for a buzz. Seed 47, `build/original/opensa`,
+  DPR 1, 120 fps headless, measured per shot BETWEEN cuts.
+  **Where the energy was** (scene 1, per frame²): `wing-l` screen x **6.0 px** against `nose` 0.5 px and a
+  planted `station` 0.6 px — while the DRAWN car moved smoothly in all three (0.006-0.009 m) and a planted
+  eye did not move at all (0.0000 m). So neither the physics nor the frame interpolation was the noisy party:
+  the eye was (0.023 m), and its jitter was **along the travel axis** (`fwd 0.034` against `lat 0.0016`).
+  **The mechanism**: a `tracking` shot damped its eye in WORLD space against a car at a cruise, so the damper
+  carried a permanent lag — the mount sat **1.1 m behind its authored offset** — and closed it by a step
+  proportional to `dt`. Frame-clock jitter (3.1 ms RMS, 16-19 ms spread) modulated that step directly. It only
+  reached the screen on the wing shots because there the lag axis is perpendicular to the view; on `nose` the
+  eye rides 10 m ahead and the same jitter only changes the distance. That is why four headless rounds and two
+  phase acceptances never saw it, and why the two field frames were the two they were.
+  **The fix** (`director.ts`): a car-mounted shot damps its MOUNT — the damper is re-based against the
+  subject, reading its state relative to where the car stood last frame and writing it back relative to where
+  it stands now. A planted eye re-bases against the world and is untouched. **After, same seed, same scenes:**
+  `wing-l` **6.0 → 0.61 px**, `wing-r` 4.8 → **0.0020 px**, `nose` 0.54 → **0.0011 px**; the eye's jitter now
+  equals the car's to the third decimal (0.0127 vs 0.0137 m — a rigid mount, by definition), and the mount
+  holds its authored offset (−0.21 m → +1.30 m, i.e. `0.4 × hy` exactly) instead of trailing it. A scene that
+  took a **5.3 s stall** mid-shot went from 17.3 px to 0.0019 px: a hitch no longer throws the framing at all.
+  Planted shots unchanged (`station` 0.57 → 0.44 px, eye jitter still 0.0000).
+  **Also measured, and left alone:** the mount is built on the fixed-step gameplay heading while the car is
+  DRAWN with the interpolated one — the disagreement is **mean 0.01-0.04°, max 0.16°**, an order below the
+  fixed residual, so the pairing 096/02 chose stands and now has a number behind it.
+  **Round 1b — the same report came back: "the shiver has not gone, maybe it got worse."** It had not gone,
+  and the measurement above is why: it judged the pose against the car it was COMPUTED from, which measures
+  the director's intent and is blind to WHICH FRAME the pose lands in. The director was stepped from the
+  module's own rAF pass, so the host consumed it a frame later and the screen paired this frame's car with
+  last frame's camera — the pairing carries the car's whole travel for that frame, and frame-clock jitter
+  modulates it. Re-read off the SAME captures, both pairings, `wing-l` horizontal off-axis jitter:
+
+  | build | pairing rendered | as rendered | intent |
+  | --- | --- | --- | --- |
+  | as shipped by 096/04 | frame-late | **0.332°** (≈ 7 px) | 0.311° |
+  | + the mount fix | frame-late | **0.305°** | 0.032° |
+  | + the director stepped IN the host loop | same-frame | **0.0050°** (≈ 0.1 px) | 0.0050° |
+
+  So the mount fix was real and necessary — it is what takes the same-frame number from 0.311° to 0.032° —
+  but on its own it moved what the viewer sees by 8 %. The fix that mattered to the eye is the wiring:
+  `setVideoStep` installs the director's step and the host calls it inside its loop, between the car's render
+  pose and the camera snapshot, so the shot is composed from the frame it is drawn in. Both together are
+  **66× less shiver than the code the user first watched**. A side effect worth recording: with the module's
+  extra rAF pass gone the frame clock itself steadied, dt jitter 3.1 → 2.2 ms RMS and its spread 16 → 5 ms.
+  `video-shiver.ts` now prints both pairings side by side and the `frame-late` column is a regression
+  tripwire. The lesson — a metric taken against the input rather than against what renders — is in
+  `docs/restrictions/architecture.md` next to the rule itself, because it is what let a reported bug survive
+  a measurement that called it fixed.
+  **The second defect the same measurement found**, fixed in the same change: `anchorFor` mirrored the
+  lead-room anchor on a hard threshold (`|screenMotion| < 2 m/s`), so the anchor stepped **0.24 of the frame's
+  width** in one frame when the signal drifted over the line — and `nose` is the shot that sits on it, because
+  its eye rides a few degrees off the car's axis and puts the crossing signal at ~0.11 × speed. Lead room is
+  now PROPORTIONAL to the crossing speed (smoothstepped to ±1 at 2 m/s, which every wing and tripod shot
+  saturates anyway), so the table's `anchor.x` states how MUCH room the shot wants and the motion decides
+  which side it goes on. Two consequences worth knowing: a car that is not crossing the frame is now framed
+  centred rather than on the authored side (there is no lead to give), and `nose` at a cruise gets ~66 % of
+  its room instead of an arbitrary full-or-nothing. Swept over ±8 m/s the anchor now moves at most **0.0036
+  per 0.04 m/s** against the old 0.24 step; both the mount and the anchor tripwires are `negative cases` in
+  `shots.test.ts` / `director.test.ts` and both were confirmed to FAIL against the code they replaced.
+  **Acceptance for the whole round**, the 03/04 exam re-run on the same 5 seeds × 5 scenes:
+  **35 733 directed frames, safe frame 99.18 %** (per-seed 97.86-100 %), **0 `[cam] jump` lines**, 56 cuts,
+  **0 empty-frame cuts**, 1 occluded, all 25 scenes ended `ran-out`. That is 04's number to the digit, with
+  the pan cap bitting slightly less often (5.9 % against 6.2 %) — three framing changes and the exam did not
+  move, which is exactly the point: these numbers were never able to see the defect and still cannot. They
+  are here to prove nothing ELSE broke. **The verdict that closed the round was the user's own second look:
+  "the camera has stopped shivering at every angle I saw."**
 - 05: —
 - 06: —
 - 07: —

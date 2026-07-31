@@ -142,3 +142,72 @@ measuring the cut. Both 096/03 and 096/04 lost a round to exactly that.
 **Caught:** no, and worse than silent — a muted watchdog looks like a clean run. The only signal is the
 absence of lines you were not going to get anyway. Grep for what a whitelist covers before trusting a
 "0 warnings" field report.
+
+## A framing decision taken on a THRESHOLD will be taken again next frame
+
+Any rule of the shape "if the signal exceeds X, compose it this way" is a step function, and the shots that
+sit near X are the ones it ruins. It has bitten the camera three times now: 080's all-rays collision gate
+(built, field-rejected, `docs/postmortem/080-cinematic-camera/multiray-collision.md`); 096's empty-frame
+guard, which was designed around the lesson and is a CLOCK rather than a gate; and 096's lead room, which
+mirrored the framing anchor at `|screenMotion| ≥ 2 m/s` and so stepped **0.24 of the frame's width** in one
+frame — on `nose`, the one shot whose geometry parks that signal right on the line (~0.11 × speed).
+
+The three answers, in order of preference: make the quantity CONTINUOUS in the signal (lead room is now a
+smoothstepped share, so no speed is a cliff); make the decision DISCRETE but rate-limited (the tripod's
+sightline: one probe a second, two blocked answers to cut); or put the hysteresis in the CLOCK (the
+empty-frame guard's 1.5 s). Never in a moving camera.
+
+**Caught:** now yes for this one — `shots.test.ts`'s "never steps the anchor across a crossing speed" sweeps
+the range and holds the per-step move under the ramp's own slope. In general no: a threshold renders fine in
+every screenshot and only shows in motion, at the speeds nobody happened to drive.
+
+## A camera pose is composed IN the frame it is drawn in, and measured against the pairing that renders
+
+A pose written from a module's own `requestAnimationFrame` pass reaches the host's loop one frame later, so
+the screen pairs THIS frame's subject with the PREVIOUS frame's camera. For a camera that stands still that is
+a shrug. For one MOUNTED on the subject it is the whole defect: the pairing carries the subject's entire
+travel for that frame (`speed × dt`), and frame-clock jitter modulates it — **0.33° of horizontal wobble on a
+5 m side-on shot at a 12 m/s cruise, about 7 px**, which is what 096 shipped and a human saw immediately.
+
+The rule: anything composed against a per-frame render pose is stepped FROM the loop that draws it, between
+the subject's render pose and the camera snapshot (`engine-canvas-host.tsx`'s `stepVideo`). The module still
+owns its own clock for everything that is not per-frame — staging, the fragment's seconds, the survey.
+
+**The measurement half of the rule, which is the part that actually cost a round:** a metric that judges the
+pose against the subject it was COMPUTED from measures the intent, and is blind to the pairing by
+construction. 096's mount fix moved that intent metric 0.311° → 0.032° and the shiver on screen did not
+change at all (0.332° → 0.305°) — the reported bug survived a measurement that said it was fixed, and only a
+second field report caught it. `scripts/debug/video-shiver.ts` now reports BOTH pairings side by side, and
+the `frame-late` column is a regression tripwire rather than history.
+
+**Caught:** no. Nothing in the type system or the tests can see which frame a pose lands in; the director's
+own unit tests are pure and correct either way, and every headless acceptance number stayed green through it.
+The only signals are the `frame-late`/`same-frame` split above and a human watching motion.
+
+## A camera MOUNTED on a moving subject is damped in the SUBJECT's frame, never the world's
+
+`smoothDamp` (and any spring, any lag filter) tracks a moving target with a steady-state error proportional
+to the target's speed. Point one at a car's world position and the camera inherits a permanent lag — measured
+**~1.1 m at a 12 m/s cruise** with the shot table's own 0.18 s constant — and closes it a little each frame by
+an amount proportional to `dt`. The frame clock is not uniform (a healthy 120 fps headless scene measured
+**3.1 ms RMS of jitter, 16-19 ms spread**), so every irregular frame moves the eye by a different distance and
+the mount BUZZES along the direction of travel.
+
+The rule: damp what actually changes. Re-base the damper against the subject — read the current pose relative
+to where the subject stood last frame, write it back relative to where it stands now — and a constant-speed
+drive leaves it nothing to do. The smoothing then eases only the heading the mount hangs off and the framing,
+which is what it was put there for. A PLANTED camera (a tripod, a flyby) re-bases against the world, because
+it is not mounted on anything and its lag behind a passing car is the shot.
+
+The corollary a screenshot cannot show: **this only reaches the screen where the lag axis is perpendicular to
+the view.** In 096 the same 0.034 m of eye jitter was 6.0 px/frame² of shiver on the side-on `wing` shots and
+0.5 px on `nose`, whose eye rides 10 m ahead and whose lag merely changes the distance. Judging a mount from
+the shot that happens to hide the defect is how this shipped.
+
+**Caught:** now yes, by `apps/web/src/ui/video/director.test.ts` ("does not let an irregular frame clock shake
+a car-mounted shot") — it drives a constant cruise on a deliberately uneven clock and holds the mount's spread
+under a millimetre; the world-damped version wanders 2.2 mm on that same test and ~0.2 m in the field. It was
+SILENT before that: every headless acceptance number 096/03 and /04 collected (99.1 % safe frame, 0 `[cam]
+jump` lines) was blind to it, because a mount that buzzes 6 px still frames its car perfectly and never jumps
+far enough to trip a watchdog. It took a human watching the footage. `scripts/debug/video-shiver.ts` over a
+`?video=1&diag=1` capture is the instrument that names the guilty channel.
