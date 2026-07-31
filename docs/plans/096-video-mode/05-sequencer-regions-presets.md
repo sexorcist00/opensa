@@ -88,3 +88,15 @@ on 03's shots if 04 lags).**
   lengths decide it — so this doc's "fragment" language, and `&from`/`&to` with it, no longer exist.
 - **`ROUTE_TRIES` 40 → 120** as a consequence of 05b: five shots need ~936 m of road against the old 390,
   and long routes are rarer (San Fierro accepts 10 walks in 120).
+- **`&scene=N` — a start index, added 2026-07-31** after the user asked how to get back to a scene. The
+  bounded sequence made a scene addressable in principle (`(seed, index)`), but nothing could ADDRESS one: at
+  40-52 s a scene, reaching 57 meant playing 56. `scenes` stays a count, so `?scene=57&scenes=1` is that one
+  scene. The trap it walks past: the lap's program must be keyed on the lap's FIRST scene (`scene - at`), not
+  on the scene the run started at. Keyed on the latter, `?scene=58` builds a fresh program off its own seed —
+  and since the drive spine is a fixed order of fixed regions, what moves is precisely the two flythroughs and
+  the walk, into regions the full run did not put them in. Measured over seed 47's 100 possible starts: **167
+  differing scenes, every one of them a fly or walk region swap, zero drives.** Today those entries are
+  skipped, so the bug would have been invisible until 07 lands and then unattributable. `PROGRAM_LENGTH` is a
+  constant because that key has to be computable BEFORE a program exists; a test ties it to what
+  `buildProgram` returns. (Both numbers from a scratch harness over the real `presets.ts`, not a reading of
+  the code.)

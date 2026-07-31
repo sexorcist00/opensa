@@ -7,7 +7,9 @@ import {
   HOUR_SLOTS,
   MOD_CAR_PREFERENCE,
   parseSceneLimit,
+  parseSceneStart,
   pickCar,
+  PROGRAM_LENGTH,
   REGION_CYCLE,
   SCENE_LIMIT,
   sceneSeed,
@@ -165,6 +167,40 @@ describe('parseSceneLimit', () => {
     it('takes a short run for a quick field look', () => {
       expect(parseSceneLimit('8')).toBe(8);
       expect(parseSceneLimit('12.7')).toBe(12);
+    });
+  });
+});
+
+describe('parseSceneStart', () => {
+  describe('negative cases', () => {
+    it('starts at the first scene when nothing readable was asked for', () => {
+      expect(parseSceneStart(null)).toBe(1);
+      expect(parseSceneStart('')).toBe(1);
+      expect(parseSceneStart('the good one')).toBe(1);
+    });
+
+    it('never starts before the first scene or past the ceiling', () => {
+      expect(parseSceneStart('0')).toBe(1);
+      expect(parseSceneStart('-3')).toBe(1);
+      expect(parseSceneStart('1000')).toBe(SCENE_LIMIT);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('starts at the scene a field note named', () => {
+      expect(parseSceneStart('57')).toBe(57);
+      expect(parseSceneStart('57.9')).toBe(57);
+    });
+  });
+});
+
+describe('PROGRAM_LENGTH', () => {
+  describe('positive cases', () => {
+    it('is what buildProgram actually returns — the runner picks a lap with it before it can build one', () => {
+      // A drift here would hand a mid-sequence start (`?scene=58`) a program from the wrong lap, and the
+      // scene would silently differ from the same scene of a full run.
+      expect(buildProgram(mulberry32(1))).toHaveLength(PROGRAM_LENGTH);
+      expect(buildProgram(mulberry32(999))).toHaveLength(PROGRAM_LENGTH);
     });
   });
 });

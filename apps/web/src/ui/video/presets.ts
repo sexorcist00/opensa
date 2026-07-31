@@ -49,6 +49,15 @@ export const MOD_CAR_PREFERENCE = 0.8;
 export const SCENE_LIMIT = 100;
 
 /**
+ * Scenes in one cycle — the length {@link buildProgram} always returns.
+ *
+ * It is a constant rather than a measurement of the returned array because the runner needs it BEFORE it can
+ * build anything: a run that starts at `?scene=58` has to know which lap that scene belongs to in order to
+ * build that lap's program, and a program built from the wrong lap would hand scene 58 a different region.
+ */
+export const PROGRAM_LENGTH = REGION_CYCLE.length + FLY_SCENES + WALK_SCENES;
+
+/**
  * The scenes of one cycle: a drive in every region in {@link REGION_CYCLE} order, then the flythroughs and
  * the walk, each in a seeded region.
  *
@@ -80,6 +89,23 @@ export function parseSceneLimit(value: null | string): number {
   const asked = Number(value?.trim());
   if (value === null || value.trim() === '' || !Number.isFinite(asked)) {
     return SCENE_LIMIT;
+  }
+
+  return Math.min(SCENE_LIMIT, Math.max(1, Math.floor(asked)));
+}
+
+/**
+ * Which scene of the sequence `?scene=` starts at, clamped into `1 … SCENE_LIMIT`. Absent → the first.
+ *
+ * A run of 100 scenes is over an hour long, so the scene a field note names has to be reachable without
+ * playing everything before it: `?seed=47&scene=57&scenes=1` is exactly scene 57 of seed 47, and it is the
+ * SAME scene it would have been in the full run — the identity is `(seed, index)` and neither depends on
+ * where the run began. Unreadable input starts at the beginning, for `parseSceneLimit`'s reason.
+ */
+export function parseSceneStart(value: null | string): number {
+  const asked = Number(value?.trim());
+  if (value === null || value.trim() === '' || !Number.isFinite(asked)) {
+    return 1;
   }
 
   return Math.min(SCENE_LIMIT, Math.max(1, Math.floor(asked)));

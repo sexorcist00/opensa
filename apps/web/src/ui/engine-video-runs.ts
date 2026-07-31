@@ -48,8 +48,11 @@ import {
   buildProgram,
   HOUR_SLOTS,
   parseSceneLimit,
+  parseSceneStart,
   pickCar,
+  PROGRAM_LENGTH,
   REGION_CYCLE,
+  SCENE_LIMIT,
   sceneSeed,
   weatherPool,
 } from './video/presets';
@@ -227,8 +230,12 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   const modCars = modCarSlots(host.fs);
   const pinned = parsePin(host.params.get('at'));
   const scenes = parseSceneLimit(host.params.get('scenes'));
+  // `?scene=N` starts the sequence at N instead of 1 — the only way to reach a scene a field note named
+  // without playing the hour in front of it. `scenes` stays a COUNT, and the run still stops at the ceiling.
+  const from = parseSceneStart(host.params.get('scene'));
+  const last = Math.min(SCENE_LIMIT, from + scenes - 1);
   log(
-    `seed=${seed} scenes 1-${scenes} cycle ${REGION_CYCLE.join('→')} ${SHOTS_PER_SCENE} shots/scene · ` +
+    `seed=${seed} scenes ${from}-${last} cycle ${REGION_CYCLE.join('→')} ${SHOTS_PER_SCENE} shots/scene · ` +
       `${roster.length} road cars, ${modCars.size} mod slots` +
       (pinnedCar ? ` · car pinned to ${pinnedCar}` : '') +
       (pinned ? ` · pinned at ${pinned[0]},${pinned[1]}` : ''),
@@ -245,12 +252,16 @@ export function setupVideoRuns(host: VideoRunsHost): void {
     // over and over — and `?seed=` still names every one of them.
     let program: ProgramEntry[] = [];
     let played = 0;
-    for (let scene = 1; scene <= scenes; scene += 1) {
+    for (let scene = from; scene <= last; scene += 1) {
       // Per-scene seed off the master (D9), so scene N is the same scene however the run reached it.
       const random = mulberry32(sceneSeed(seed, scene));
-      const at = (scene - 1) % Math.max(1, program.length);
-      if (at === 0) {
-        program = buildProgram(mulberry32(sceneSeed(seed, -scene)));
+      const at = (scene - 1) % PROGRAM_LENGTH;
+      // Keyed on the LAP's first scene, not on this one, so a run that starts mid-lap (`?scene=58`) builds
+      // the same program the full run would have been playing there — `scene - at` is that lap's start. What
+      // hangs on it is only where the fly and walk scenes land (the drive spine is fixed order, region and
+      // all): keyed on `scene`, a mid-start would put them in other regions than the full run, silently.
+      if (at === 0 || program.length === 0) {
+        program = buildProgram(mulberry32(sceneSeed(seed, -(scene - at))));
       }
       const entry = program[at];
       if (entry.kind !== 'drive') {
@@ -285,7 +296,7 @@ export function setupVideoRuns(host: VideoRunsHost): void {
     }
     // The run ENDS, and says so on screen as well as in the log: a recording's tail must state what it was,
     // and a black frame that simply never changes again is indistinguishable from a hang.
-    log(`run complete: ${played} scenes played of ${scenes} from seed ${seed}`);
+    log(`run complete: ${played} scenes played of ${last - from + 1} (${from}-${last}) from seed ${seed}`);
     overlay.end(`sequence complete · seed ${seed} · ${played} scenes`);
   })();
 }

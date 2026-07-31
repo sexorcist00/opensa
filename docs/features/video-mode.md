@@ -43,6 +43,15 @@ design (D11/D14).
   scenes`. `&scenes=N` takes a shorter one; 100 is the ceiling, not merely the default, so a longer sequence
   stays a decision rather than a URL. The chrome does NOT come back — handing it over would put the HUD into
   the last frame recorded.
+  **`&scene=N` starts the sequence at N** rather than at 1, and `&scenes=` stays a COUNT, so
+  `?seed=47&scene=57&scenes=1` is exactly scene 57 of seed 47 — the only way to reach the scene a field note
+  named without playing the hour in front of it. It is the SAME scene the full run would have played: the
+  identity is `(seed, index)`, and the lap's program is keyed on that lap's FIRST scene (`scene - at`), not on
+  wherever the run happened to begin. Keyed on the latter, a mid-start would put the two flythroughs and the
+  walk in different regions than the full run gives them (the drive spine is fixed order, so it is only ever
+  those three) — 167 differing scenes over the 100 possible starts of seed 47, measured. Invisible until 07
+  stops skipping them, which is exactly why it is worth being right about now. `PROGRAM_LENGTH` is a constant
+  because the key has to be computable before a program exists; a test ties it to what `buildProgram` returns.
   **A skipped `fly`/`walk` entry still consumes a scene index.** That is deliberate: a scene's identity is
   `(seed, index)`, so scene 57 of seed 47 has to stay the same scene when 07 fills those entries in. Letting
   skips be free would re-seed every scene after them the day that phase lands.
