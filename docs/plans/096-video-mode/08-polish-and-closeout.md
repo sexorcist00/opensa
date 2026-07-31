@@ -18,7 +18,16 @@ audit + benchmark is unfinished (CLAUDE.md standing rule).**
 4. **Error paths on camera**: every `[video]` failure (no route, spawn retry exhausted, stuck) ends
    behind the overlay with a console line and ADVANCES the program — a hundred-scene sequence must be
    unkillable by one bad scene (D2 as revised: bounded, but still far longer than anyone watches live). Verify by fault injection in tests (deny spawn, empty region).
-5. **`vehicle-enter-null-body` disposition** (D16): if it never fired through 02–07's runs, close the
+5. **The chrome hide, which never reached React** — DONE 2026-07-31, field-reported: video mode's
+   `setUiHidden(true)` runs inside `boot()`, and the shell subscribes to `'fly-camera'` only after boot
+   resolves, so the event was emitted to an empty bus. Every recorded frame kept the HUD clock, the "Click to
+   play" prompt and the Fullscreen button; only the perf readout (a closure flag, not an event) obeyed. Fixed
+   by holding the last emitted state and READING it on mount — `HudGame.getFlyCamera()`, the shape
+   `getTime`/`getZone` already had. Verified by a DOM probe with the overlay clear (seed 47, scene 1):
+   `{capture:false, clock:false, fullscreen:false, perfHud:false}` against a no-video control run of the same
+   probe reading `true` on all four. Now a restriction (`docs/restrictions/architecture.md`) — nothing catches
+   it: `apps/web/src/ui/**` is off the unit lane by design.
+6. **`vehicle-enter-null-body` disposition** (D16): if it never fired through 02–07's runs, close the
    issue at its 2026-08-30 recheck citing this chain as the stress evidence; if it fired, the guard
    already shipped (02's rule) — either way the issue file gets its closing block.
 

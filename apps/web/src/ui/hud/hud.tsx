@@ -11,6 +11,8 @@ import { type CSSProperties, type ReactElement, useEffect, useRef, useState } fr
 export interface HudGame {
   events: EventBus<GameEvents>;
   getConfig(): Config;
+  /** The live `'fly-camera'` state — the HUD mounts after boot, and video mode hides the chrome DURING it. */
+  getFlyCamera(): { enabled: boolean; photo?: boolean };
   getTime(): number;
   getZone(): string;
 }
@@ -29,7 +31,7 @@ export function Hud({ game }: { game: HudGame }): null | ReactElement {
   const [zone, setZone] = useState(() => game.getZone());
   const [zoneShown, setZoneShown] = useState(() => game.getZone() !== '');
   const [mapViewer, setMapViewer] = useState(false);
-  const [flyCamera, setFlyCamera] = useState(false);
+  const [flyCamera, setFlyCamera] = useState(() => game.getFlyCamera().enabled);
   const zoneTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {

@@ -257,3 +257,23 @@ from two different places.
 the route builder is correct about the speeds it was asked for. The only signal is a scene report's
 `stations.rejected.dwell` against `stations.filled`, which is why both fields are in the ledger. Detail and
 before/after in `docs/edge-cases/route-graph.md`.
+
+## State the chrome must READ is state, not an event — the UI mounts after boot
+
+The React shell subscribes to the game's `EventBus` only once `boot()` has RESOLVED (`hudGameRef` reaches
+React through `booted.then`, and `<Hud>` mounts after that). Anything the boot closure announces WHILE it is
+still booting is emitted to an empty bus: the event is not queued, not replayed, and nothing later asks.
+
+So a mode that changes the chrome from inside boot must expose its state on the `HudGame` surface and be
+READ on mount, with the event carrying only what changes afterwards. `getFlyCamera()` is that read;
+`getTime()` and `getZone()` were already the same shape, which is what makes this a convention rather than a
+special case.
+
+Measured 2026-07-31 (096/08): video mode calls `setUiHidden(true)` inside `setupVideoRuns`, which runs in
+boot — so every recorded frame kept the HUD clock, the "Click to play" prompt and the Fullscreen button,
+while the perf readout (a plain closure flag, not an event) correctly went away. The photo camera (K+M) was
+never affected: a keypress happens long after the subscription exists.
+
+**Caught:** no, and not by this repo's unit lane — `apps/web/src/ui/**` is excluded from coverage by design
+(DOM glue lives on the Playwright lane). The check is a DOM probe inside a fragment: with the overlay clear,
+`.sa-capture`, `.sa-fullscreen-btn`, a `HH:MM` clock div and a visible `#engine-hud` must all be absent.

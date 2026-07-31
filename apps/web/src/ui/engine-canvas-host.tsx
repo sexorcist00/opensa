@@ -215,13 +215,19 @@ export function EngineCanvasHost({
     if (!hudGame) {
       return;
     }
-
-    return hudGame.events.on('fly-camera', (e) => {
+    const apply = (e: { enabled: boolean; photo?: boolean }): void => {
       // Leaving ALWAYS restores the chrome, whichever way it was left (K+M again, F2, or a pause).
       const hide = e.enabled && e.photo === true;
+      // `apply` is an event handler; its ONE synchronous call is the mount-time read below.
+      // eslint-disable-next-line @eslint-react/set-state-in-effect -- reads a state the host already holds
       setPhotoMode(hide);
       onPhotoMode?.(hide);
-    });
+    };
+    // Video mode hides the chrome while boot is still running — this effect exists only afterwards, so the
+    // state is READ on mount and the subscription carries only what changes after it (096/08).
+    apply(hudGame.getFlyCamera());
+
+    return hudGame.events.on('fly-camera', apply);
   }, [hudGame, onPhotoMode]);
 
   useEffect(() => {
@@ -528,6 +534,14 @@ async function boot(
   let mapViewer = false;
   /** The photo gesture (K+M) is on — the loop hides the perf readout with the rest of the chrome. */
   let photoCamera = false;
+  /** The last `'fly-camera'` state emitted, READABLE through {@link HudGame} — the chrome mounts long after
+   *  boot, so an event alone cannot reach it. Video mode hides the UI while boot is still running (096/08). */
+  let flyCameraState: { enabled: boolean; photo: boolean } = { enabled: false, photo: false };
+  /** The one place the chrome's hide/show is announced: record it, then emit. */
+  const emitFlyCamera = (enabled: boolean, photo: boolean): void => {
+    flyCameraState = { enabled, photo };
+    events.emit('fly-camera', flyCameraState);
+  };
   let selectedPlacement: null | number = null;
   let hiddenPlacements = 0;
   /**
@@ -647,7 +661,7 @@ async function boot(
     photoCamera = on && photo;
     setFlyEye(rig, on ? [cameraEye[0], cameraEye[1], cameraEye[2]] : null);
     flyKeys.clear();
-    events.emit('fly-camera', { enabled: on, photo });
+    emitFlyCamera(on, photo);
   };
   /**
    * The map viewer renders WITHOUT fog (field check, 2026-07-20).
@@ -942,6 +956,7 @@ async function boot(
   hudGameRef = {
     events,
     getConfig: (): typeof config => config,
+    getFlyCamera: (): { enabled: boolean; photo: boolean } => flyCameraState,
     getTime: minutesNow,
     getZone: (): string => zoneName,
   };
@@ -1785,7 +1800,7 @@ async function boot(
     settleTimeoutMs: WORLD_READY_TIMEOUT_MS,
     setUiHidden: (hidden): void => {
       photoCamera = hidden; // the dev readout hides behind the same gate the photo camera uses
-      events.emit('fly-camera', { enabled: hidden, photo: hidden });
+      emitFlyCamera(hidden, hidden);
     },
     setVideoCamera: (pose, cut): void => {
       videoCamera = pose;

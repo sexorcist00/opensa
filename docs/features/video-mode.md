@@ -24,7 +24,11 @@ design (D11/D14).
   anything, then the ring drains, then a collision warmup, then the suspension settles — and last an fps
   stability gate (30 consecutive frames under 25 ms) so the cold-teleport spike is over before the overlay
   lifts. Measured cost: 248-252 ms.
-- All UI hides through the existing `'fly-camera'` event; the only progress protocol is the `[video]` console
+- All UI hides through the photo camera's own path — the HUD clock and district label, the "Click to play"
+  prompt, the Fullscreen button, the F2 overlay and the perf readout — exactly what K+M hides. The hide is
+  announced on the `'fly-camera'` event AND held as state the chrome reads on mount (`HudGame.getFlyCamera`):
+  video mode hides the UI from inside `boot()`, and React is not listening yet at that point (096/08; the
+  rule is in `docs/restrictions/architecture.md`). The only progress protocol is the `[video]` console
   tag, one JSON line per scene (the `[phys]` protocol's twin, plus cross-track error and the shot ledger).
 - `&diag=1` adds a second line per scene, `[diag]`, holding ONE ROW PER RENDERED FRAME (drawn car, both
   headings, eye, aim, screen position, cut flag). The `[video]` series is 10 Hz and judges a driven line; a

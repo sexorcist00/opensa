@@ -377,4 +377,20 @@ before analysis). Empty until phases run:
   One bug this round's own test caught before the field did: the early `advance` return that ends a scene
   skipped counting the last shot's cut cause, so every scene would have under-reported one cut.
 - 07: —
-- 08: —
+- 08: in progress.
+  - **Field round 3 (2026-07-31) — the chrome was in every frame, and no headless number could say so.** The
+    report was "video mode should hide the UI like K+M does". It was BUILT that way: `setUiHidden(true)` at
+    the top of the run emits `'fly-camera'` exactly as the photo gesture does. But it runs inside `boot()`,
+    and the shell reaches the bus only through `booted.then(...)` — `<Hud>` and the host's own listener both
+    mount after boot RESOLVES, so the one emit went to an empty bus and nothing ever asked again. The perf
+    readout obeyed because it reads a closure flag (`photoCamera`), not the event, which is exactly why the
+    console-only checks looked right: `[video]`'s scene reports know nothing about the DOM, and the harness
+    screenshots the end card, which is black.
+    **The fix**: the last emitted state is held and exposed as `HudGame.getFlyCamera()`, read on mount and
+    then kept in step by the subscription — the shape `getTime`/`getZone` already had, so the HUD's `flyCamera`
+    seeds from it too. K+M is untouched (a keypress happens long after the subscription exists).
+    **Verified** by a DOM probe with the overlay clear (seed 47, scene 1, drive, `build/original/opensa`):
+    `{capture:false, clock:false, fullscreen:false, perfHud:false}`, against a control run of the same probe
+    with no `?video=` reading `true` on all four — i.e. the probe would have caught the bug.
+    Now a restriction (`docs/restrictions/architecture.md`): state the chrome must read is state, not an event.
+    **Caught by nothing** — `apps/web/src/ui/**` is off the unit lane by design (DOM glue is the e2e lane's).
