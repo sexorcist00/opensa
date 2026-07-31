@@ -140,6 +140,11 @@ TAG='[video]' ALSO='[cam]' NODE_PATH=$PWD/node_modules node tools-debug/bench-ha
 # Camera-motion diagnosis (096, field round 1) — &diag=1 adds a [diag] line per scene, one row per FRAME;
 #   ALSO='[diag]' to collect it, then: npx tsx scripts/debug/video-shiver.ts <harness.log>
 # The acceptance exam off the same log: npx tsx scripts/debug/video-accept.ts <harness.log>…
+# Is the CHROME out of the shot (096/08)? A DOM probe INSIDE a fragment — the one thing no log can answer.
+#   Run the control first (no ?video=), or all-false proves nothing but a wrong selector:
+npx tsx scripts/debug/video-chrome.ts "http://localhost:5173/?loader=http-dir&src=$SRC" 90000 --control
+npx tsx scripts/debug/video-chrome.ts \
+  "http://localhost:5173/?loader=http-dir&src=$SRC&video=1&seed=47&scene=1&scenes=1" 180000
 # Speed-grip dials (081/09) — session overrides for the lateral assist; captures record the active values
 #   ?gripVd=<m/s>  boost reference speed (default 12)  ·  ?gripCap=<x>  boost ceiling (default 3)
 # Surface grip (081/10) — ?surfGrip=0 puts every wheel back on tarmac, the A/B for reading surface.dat

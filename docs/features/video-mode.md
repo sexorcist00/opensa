@@ -28,7 +28,8 @@ design (D11/D14).
   prompt, the Fullscreen button, the F2 overlay and the perf readout — exactly what K+M hides. The hide is
   announced on the `'fly-camera'` event AND held as state the chrome reads on mount (`HudGame.getFlyCamera`):
   video mode hides the UI from inside `boot()`, and React is not listening yet at that point (096/08; the
-  rule is in `docs/restrictions/architecture.md`). The only progress protocol is the `[video]` console
+  rule is in `docs/restrictions/architecture.md`, the probe that checks it is `scripts/debug/video-chrome.ts`).
+  The only progress protocol is the `[video]` console
   tag, one JSON line per scene (the `[phys]` protocol's twin, plus cross-track error and the shot ledger).
 - `&diag=1` adds a second line per scene, `[diag]`, holding ONE ROW PER RENDERED FRAME (drawn car, both
   headings, eye, aim, screen position, cut flag). The `[video]` series is 10 Hz and judges a driven line; a

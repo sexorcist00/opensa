@@ -124,6 +124,17 @@ flowchart TB
 
 </details>
 
+### What boot may tell the UI, and when
+
+The React chrome reaches the game's `EventBus` only once `boot()` has RESOLVED: `EngineCanvasHost` publishes
+`hudGameRef` through `booted.then(...)`, and `<Hud>` mounts after that. Anything the boot closure emits while
+it is still booting therefore goes to an empty bus — events are not queued or replayed.
+
+So a mode that changes the chrome from inside boot (video mode's UI hide is the one that exists) must expose
+its state on the `HudGame` surface and let the chrome READ it on mount, with the event carrying only later
+changes. `getFlyCamera()` joins `getTime()`/`getZone()` in being exactly that. The rule and the probe that
+checks it: `docs/restrictions/architecture.md`.
+
 ### Version guard
 
 `opensa-pack` stamps `buildTime` into the pak's `manifest.json`; `setupStreaming` surfaces it and the F2

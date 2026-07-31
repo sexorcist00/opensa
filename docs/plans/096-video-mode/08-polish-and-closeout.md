@@ -26,7 +26,8 @@ audit + benchmark is unfinished (CLAUDE.md standing rule).**
    `getTime`/`getZone` already had. Verified by a DOM probe with the overlay clear (seed 47, scene 1):
    `{capture:false, clock:false, fullscreen:false, perfHud:false}` against a no-video control run of the same
    probe reading `true` on all four. Now a restriction (`docs/restrictions/architecture.md`) — nothing catches
-   it: `apps/web/src/ui/**` is off the unit lane by design.
+   it: `apps/web/src/ui/**` is off the unit lane by design, so the probe is kept as
+   `scripts/debug/video-chrome.ts` (+ its `docs/debug/` row).
 6. **`vehicle-enter-null-body` disposition** (D16): if it never fired through 02–07's runs, close the
    issue at its 2026-08-30 recheck citing this chain as the stress evidence; if it fired, the guard
    already shipped (02's rule) — either way the issue file gets its closing block.

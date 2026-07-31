@@ -275,5 +275,6 @@ while the perf readout (a plain closure flag, not an event) correctly went away.
 never affected: a keypress happens long after the subscription exists.
 
 **Caught:** no, and not by this repo's unit lane — `apps/web/src/ui/**` is excluded from coverage by design
-(DOM glue lives on the Playwright lane). The check is a DOM probe inside a fragment: with the overlay clear,
-`.sa-capture`, `.sa-fullscreen-btn`, a `HH:MM` clock div and a visible `#engine-hud` must all be absent.
+(DOM glue lives on the Playwright lane). The check is `scripts/debug/video-chrome.ts`, a DOM probe that
+samples inside a fragment; run its `--control` lane too, or an all-hidden reading is equally consistent with
+a probe looking for the wrong selectors.

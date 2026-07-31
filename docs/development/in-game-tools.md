@@ -40,7 +40,13 @@ debugger is SUPPRESSED, not closed, so it comes back on the same screen with the
 exceptions: a running `?soak` keeps its status line (a soak must never be silently unobserved), and the
 debugger's OWN fly toggle and the map inspector keep the panel visible, because a tool you fly with is
 useless once its panel is gone. Only the K+M gesture is treated as "photo" (the `fly-camera` event carries
-the flag).
+the flag). The HUD clock and district label go with it — the HUD listens on the same event.
+
+Video mode (`?video=1`) asks for the SAME hide, and this is why the event is not the whole story: it asks from
+inside `boot()`, where React has not subscribed yet. The state is therefore held and exposed as
+`HudGame.getFlyCamera()`, which the chrome READS on mount; the event only carries what changes afterwards
+(096/08 — `docs/restrictions/architecture.md`). A K+M press was never affected, since a keypress happens long
+after the subscription exists.
 
 Diagnostics logging is off by default; set `showLogs` in the `canvas-host.tsx` config to
 `'debug' | 'log' | 'warn' | 'error'` to stream gated, typed `log` events to the console.

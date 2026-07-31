@@ -393,4 +393,6 @@ before analysis). Empty until phases run:
     `{capture:false, clock:false, fullscreen:false, perfHud:false}`, against a control run of the same probe
     with no `?video=` reading `true` on all four — i.e. the probe would have caught the bug.
     Now a restriction (`docs/restrictions/architecture.md`): state the chrome must read is state, not an event.
-    **Caught by nothing** — `apps/web/src/ui/**` is off the unit lane by design (DOM glue is the e2e lane's).
+    **Caught by nothing** — `apps/web/src/ui/**` is off the unit lane by design (DOM glue is the e2e lane's), so
+    the probe is KEPT as `scripts/debug/video-chrome.ts`, control lane included: the point of the control is
+    that an all-hidden reading and a probe with the wrong selectors look identical.
