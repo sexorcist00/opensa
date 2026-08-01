@@ -171,6 +171,10 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
 - **`expectReports` must equal the number of protocol lines the run will actually emit.** Set it higher
   and the harness waits out its whole timeout after the run has finished; a `[video]` run emits one line
   per scene AND repeats them all in the end-of-run dump, so dedupe by scene when reading.
+- **macOS has no `timeout(1)`.** Wrapping a run in it — `timeout 900 node …/drive.js …` — does not cap
+  anything: the shell fails with `command not found` and exit 127 before the harness ever starts, which
+  reads exactly like the harness dying at launch. Use `drive.js`'s own budget argument (the millisecond
+  value after the tag) instead; there is nothing to wrap.
 
 ## Unit / e2e lanes
 
