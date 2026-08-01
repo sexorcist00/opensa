@@ -59,7 +59,8 @@ its folder moved to `roadmap/0.5.0/`). Newest first:
   first field use bisected [`open-issues/fixed/mod-dff-winding-and-atomic-frame.md`](../open-issues/fixed/mod-dff-winding-and-atomic-frame.md),
   the issue it was born from, down to one placement.
 
-- **[093 — The world ambient term](./093-world-ambient-term/readme.md)** — SHIPPED + FIELD-CONFIRMED (day) 2026-07-29; night control owed.
+- **[093 — The world ambient term](./093-world-ambient-term/readme.md)** — **CLOSED 2026-08-01**, field-confirmed
+  for BOTH day (07-29) and night (08-01); nothing owed.
   SA's own building formula (recovered from SkyGfx's PS2 pipe + gta-reversed) adds
   `timecycle ambient × surfAmb` ON TOP of the day/night-blended prelight — an additive,
   normal-independent floor our `worldShade` never had. Without it every black-prelit vertex renders

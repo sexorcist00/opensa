@@ -1,6 +1,11 @@
 # 093 — The world ambient term: the piece of SA's own formula the engine skipped
 
-**Status: SHIPPED + FIELD-CONFIRMED (day) 2026-07-29. Owed: the NIGHT control pass (the floor retires at night by design — verify nothing shifted after dark).**
+**Status: CLOSED 2026-08-01 — SHIPPED and FIELD-CONFIRMED for BOTH day and night. Nothing is owed.**
+Day: 2026-07-29 ("стена теперь выглядит нормально", and the three Vegas controls "все три выглядят хорошо").
+Night: 2026-08-01 — the user looked at the four frames below and the verdict was that they look adequate.
+The night pass was answered in two halves: the arithmetic one PROVES our deliberate floor contributes
+exactly 0 after dark (so a night frame is one this plan never touched), and the look one confirms the
+authored night design survives the timecyc term that is left.
 Spun out of map-optimizer plan 024 Phase 3b
 ([`tools/map-optimizer/docs/plans/024-broken-authored-vertex-data.md`](../../../tools/map-optimizer/docs/plans/024-broken-authored-vertex-data.md))
 — read its diagnosis first; this plan only carries the ENGINE half.
@@ -96,14 +101,20 @@ Owed: bench sweep + field round below.
   (same pak, engine-only change), no cost.
   Row: `docs/benchmarks/opensa-engine/2026-07-29-headless-093-world-ambient-sweep.json`.
 - Day eyeball round: `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` — "все три выглядят
-  хорошо" (user, same day). The NIGHT pass is the one owed item (see Status).
+  хорошо" (user, same day). The NIGHT pass was answered on 2026-08-01 — see the section below.
 
 ## Verification
 
 - Unit: engine suites stay green (fake-GPUDevice floors); driver test asserts `ambientColor` follows
   timecyc `amb` and the knob.
 - Bench ritual (`?engine=opensa&bench=all`) — shader change = frame-cost mechanism (074 series row).
-### Night control pass — the arithmetic half is DONE (2026-08-01), the look is still owed
+- Field: DONE for day (2026-07-29): `gaz27_law` ("стена теперь выглядит нормально"),
+  `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` "все три выглядят хорошо", healthy
+  districts unchanged. Night: DONE (2026-08-01) — the floor is provably 0 after dark and the four
+  night frames were looked at and judged adequate. Both halves are in the night section below.
+- Numbers land here per phase; anything perf-visible additionally in `docs/benchmarks/`.
+
+### Night control pass — ANSWERED 2026-08-01, both halves
 
 Read out of the shipped adapter with `scripts/debug/world-ambient-hours.ts`, which boots nothing:
 
@@ -118,11 +129,12 @@ contributes exactly 0** — every night frame is the same frame this plan's devi
 fractional hours (6.1, 6.25, 6.5, 6.75, 6.9 and the dusk mirror) shows the retirement is a smooth ramp, not
 a step, so there is no ambient pop at the boundary either.
 
-**What is still owed is a LOOK, and it is a narrower question than it was**: since our term is zero at night,
-the only thing that can wash the authored night design is SA's own `Amb` (0.012, 0.014, 0.020) — vanilla
-parity, not this plan's doing. Someone still has to look; the frames for it are below.
+**That narrowed what a look could even be about**: since our term is zero at night, the only thing that can
+wash the authored night design is SA's own `Amb` (0.012, 0.014, 0.020) — vanilla parity, not this plan's
+doing. The look still had to happen, and it did.
 
-**The night frames exist now (2026-08-01).** Four districts, day and night from the same spot:
+**The night frames, and the verdict (2026-08-01).** Four districts, day and night from the same spot. **The
+user looked at all four and the verdict was that they look adequate — 093 is closed on it.**
 
 | spot | day | night | day/night |
 | --- | --- | --- | --- |
@@ -135,7 +147,7 @@ parity, not this plan's doing. Someone still has to look; the frames for it are 
 Vegas spots contrast least, which is what a street full of neon and lamps is supposed to do. What the frames
 show: LS is genuinely dark with lamp pools and moonlit water; the Strip reads as neon against dark road and
 dark sky; the Luxor's lit windows and the beam sit in a dark frame. **Nothing is washed out and nothing that
-should be lit is missing** — but the verdict word is the user's, not the meter's.
+should be lit is missing**, and the user's own word on the four frames was that they look adequate.
 
 **How to take a night frame — the trap that cost the first attempt.** `?spawn=x,y,z` on a MODEL's own
 coordinates fails three ways: the player falls through collision that has not streamed yet (`grounded 0`, 12
@@ -146,11 +158,6 @@ which already exists for this (built for 092's field controls): it rings the tar
 collision, rejects any spot a player-sized box intersects, and says which spots can see the target. Every
 frame above is one of its spots, and every one reports `grounded 1` with 300-900 draws.
 
-- Field: DONE for day (2026-07-29): `gaz27_law` ("стена теперь выглядит нормально"),
-  `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` "все три выглядят хорошо", healthy
-  districts unchanged. OWED: the night pass — check the timecyc night `amb` does not wash the
-  authored night design (the amb column is hour-authored; the floor is day-gated by `(1 − dn)`).
-- Numbers land here per phase; anything perf-visible additionally in `docs/benchmarks/`.
 
 ## Docs touched in the same change
 
