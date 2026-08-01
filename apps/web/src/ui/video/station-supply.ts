@@ -154,7 +154,10 @@ export function createStationSupply(deps: StationSupplyDeps): StationSupply {
         latency = 0;
       }
       latency += 1;
-      const casts = stepSurvey(survey, deps.probes, SURVEY_CASTS_PER_FRAME);
+      // What is LEFT of the frame's budget, not the whole of it. A planted shot's occlusion check (096/09)
+      // spends from the same allowance on the frame it starts, and the survey is the thing that can always
+      // wait one more frame — so it yields, and the module's per-frame ceiling stays a real ceiling.
+      const casts = stepSurvey(survey, deps.probes, Math.max(0, SURVEY_CASTS_PER_FRAME - frameCasts));
       spend(casts);
       const done = survey.station !== null || survey.at >= survey.candidates.length;
       if (!done) {

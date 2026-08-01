@@ -782,7 +782,11 @@ function report(
     /** The tripod survey (096/04): what it filled, what it rejected, and what it cost per frame. */
     stations: {
       ...supply.ledger(),
-      /** Tripod slots that played a car-anchored stand-in because no candidate passed. */
+      /** Candidate spots a PLANTED shot stepped over because the line to the car was blocked (096/09).
+       *  0 means every authored spot was clear — the assumption 09 exists to stop making. */
+      blockedPlants: director.blockedPlants,
+      /** Tripod slots that played a car-anchored stand-in because no candidate passed — and, since 096/09,
+       *  planted shots given up because every spot they could reach was inside something. */
       fallbacks: director.fallbacks,
       predictionErrorMax: Number(supply.ledger().predictionErrorMax.toFixed(1)),
     },
@@ -881,6 +885,7 @@ function reportWalk(
     },
     stations: {
       ...supply.ledger(),
+      blockedPlants: director.blockedPlants,
       fallbacks: director.fallbacks,
       predictionErrorMax: Number(supply.ledger().predictionErrorMax.toFixed(1)),
     },

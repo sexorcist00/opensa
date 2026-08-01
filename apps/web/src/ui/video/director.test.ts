@@ -20,7 +20,9 @@ import {
 import {
   forwardFromHeading,
   PLANTED_CEILING_SECONDS,
+  plantedEyeCandidates,
   type PosedShot,
+  shotEye,
   SHOTS,
   SHOTS_PER_SCENE,
   type Subject,
@@ -484,6 +486,71 @@ describe('nextStationSlot', () => {
       expect(slot?.index).toBe(2);
       expect(slot?.seconds).toBe(7);
       expect(slot?.startsIn).toBeCloseTo(4 + 5, 6);
+    });
+  });
+});
+
+describe('stepDirector — where a planted shot stands (096/09)', () => {
+  describe('negative cases', () => {
+    it('gives the shot up when every spot it can reach is inside something', () => {
+      const state = createDirector([{ preset: FLYBY, seconds: 6 }]);
+      const source = stationSource(null, () => false);
+      const frame = stepDirector(state, drivingSubject(0), DT, ASPECT, source);
+
+      // Filming from inside a wall is worse than not filming: the slot plays its fallback, exactly as a
+      // tripod slot does when the survey finds nowhere to stand.
+      expect(frame.shot).not.toBe('flyby');
+      expect(state.fallbacks).toBe(1);
+      expect(state.blockedPlants).toBe(plantedEyeCandidates(FLYBY as PosedShot, drivingSubject(0)).length);
+    });
+
+    it('plants unchecked when there is no probe to ask', () => {
+      const state = createDirector([{ preset: FLYBY, seconds: 6 }]);
+      stepDirector(state, drivingSubject(0), DT, ASPECT);
+
+      // The director has to stay usable without a physics world — that is what every other test here runs on.
+      expect(state.staticEye).toEqual(shotEye(FLYBY as PosedShot, drivingSubject(0)));
+      expect(state.blockedPlants).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('keeps the authored spot when it is clear', () => {
+      const state = createDirector([{ preset: FLYBY, seconds: 6 }]);
+      const source = stationSource(null);
+      const frame = stepDirector(state, drivingSubject(0), DT, ASPECT, source);
+
+      expect(frame.shot).toBe('flyby');
+      expect(state.staticEye).toEqual(shotEye(FLYBY as PosedShot, drivingSubject(0)));
+      expect(state.blockedPlants).toBe(0);
+    });
+
+    it('steps to the next spot when the authored one is blocked', () => {
+      const state = createDirector([{ preset: FLYBY, seconds: 6 }]);
+      let asked = 0;
+      const source = stationSource(null, () => {
+        asked += 1;
+
+        return asked > 1;
+      });
+      const frame = stepDirector(state, drivingSubject(0), DT, ASPECT, source);
+      const candidates = plantedEyeCandidates(FLYBY as PosedShot, drivingSubject(0));
+
+      // The shot survives; only its spot moved, and to the NEXT candidate — the far side of the road.
+      expect(frame.shot).toBe('flyby');
+      expect(state.staticEye).toEqual(candidates[1]);
+      expect(state.blockedPlants).toBe(1);
+    });
+
+    it('checks the plant ONCE per shot — a planted eye never moves again', () => {
+      const state = createDirector([{ preset: FLYBY, seconds: 6 }]);
+      const source = stationSource(null);
+      for (let frame = 0; frame < 180; frame += 1) {
+        stepDirector(state, drivingSubject(frame * DT), DT, ASPECT, source);
+      }
+
+      // One probe for the plant. A tripod's live sightline is a separate budget and this shot has none.
+      expect(source.asked).toBe(1);
     });
   });
 });

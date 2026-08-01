@@ -140,6 +140,20 @@ describe('createStationSupply', () => {
       expect(eye?.[2]).toBeLessThan(-200);
     });
 
+    it('yields the rest of the frame budget to a plant that already spent it (096/09)', () => {
+      const supply = createStationSupply(deps());
+      supply.beginFrame();
+      // Three sightline probes is what a planted shot's occlusion check costs on the frame it starts. The
+      // survey must take what is LEFT, not its own full allowance, or the frame goes over 080's ≤ 5 rule.
+      supply.sightline([0, 1, 0], [0, 1, -10]);
+      supply.sightline([0, 1, 0], [0, 1, -10]);
+      supply.sightline([0, 1, 0], [0, 1, -10]);
+
+      expect(supply.step()).toBe(0);
+      expect(supply.frameCasts()).toBe(3);
+      expect(supply.ledger().castsMax).toBeLessThanOrEqual(3);
+    });
+
     it('reports what the survey cost and how far off its prediction was', () => {
       const supply = createStationSupply(deps({ carGta: () => [100, 215, 10] }));
       runSurvey(supply);

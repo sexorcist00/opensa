@@ -328,9 +328,15 @@ export type PlacedShot = PosedShot | StationShot;
 /** A shot whose eye comes from the CAR: `tracking` re-places it every frame, `static` plants it once. */
 export type PosedShot = FramedShot & {
   readonly kind: 'static' | 'tracking';
-  /** Camera offset in the CAR's heading frame, as multiples of its half-extents (forward/lateral/height). */
-  readonly offset: { readonly forward: number; readonly height: number; readonly lateral: number };
+  readonly offset: ShotOffset;
 };
+
+/** Camera offset in the CAR's heading frame, as multiples of its half-extents (forward/lateral/height). */
+export interface ShotOffset {
+  readonly forward: number;
+  readonly height: number;
+  readonly lateral: number;
+}
 
 type ChaseShot = ShotBase & { readonly kind: 'chase' };
 
@@ -425,6 +431,35 @@ export function isPlanted(shot: ShotPreset): boolean {
 }
 
 /**
+ * The spots a PLANTED shot may stand at, best first (096/09).
+ *
+ * A `static` shot derives its spot from the car's geometry and NOTHING else, so nothing has ever stopped it
+ * landing inside a wall — 096 shipped and was field-accepted with that hole open, and not being planted in a
+ * wall in the scenes watched was never evidence that it could not be. The fix is not a different spot but a
+ * CHOICE of spots: the director walks this list and takes the first with a clear line to the car
+ * ({@link stepDirector}), the same answer the tripod already gets from its survey.
+ *
+ * Every variant is the authored offset re-signed or scaled, never a constant of its own, so it stays a
+ * multiple of the subject's own half-extents — a mod car of a different size gets a differently-sized ladder
+ * for free, and a shot whose authored spot is already clear never moves.
+ *
+ * The order encodes what a camera operator would try: the other side of the road first (a street is usually
+ * blocked from one side only), then higher — over whatever is in the way.
+ *
+ * **The length is a BUDGET, not a taste.** Each candidate costs one cast, they are all spent on the single
+ * frame the shot starts, and 080's standing rule is ≤ 5 casts/frame for the whole game with the follow rig
+ * already spending 2. Three is what fits. A longer ladder would find a spot slightly more often and blow the
+ * frame it found it on, which is the trade 080 already settled once.
+ */
+export function plantedEyeCandidates(shot: PosedShot, subject: Subject): [number, number, number][] {
+  const { forward, height, lateral } = shot.offset;
+
+  return [shot.offset, { forward, height, lateral: -lateral }, { forward, height: height * 2, lateral }].map((offset) =>
+    eyeAt(offset, subject),
+  );
+}
+
+/**
  * Where a world point lands on screen (0..1 from the left and the top), and whether it is BEHIND the camera —
  * which the empty-frame guard has to tell apart from "off to the side", because a point behind the eye
  * projects to a perfectly plausible pair of numbers.
@@ -458,18 +493,7 @@ export function projectToScreen(
  * the passenger side in every module that talks about this car.
  */
 export function shotEye(shot: PosedShot, subject: Subject): [number, number, number] {
-  const forward = normalize(subject.forward);
-  const right = cross(forward, UP);
-  const [hx, hy, hz] = subject.halfExtents;
-  const lateral = shot.offset.lateral * hx;
-  const ahead = shot.offset.forward * hy;
-  const height = shot.offset.height * hz;
-
-  return [
-    subject.position[0] + right[0] * lateral + forward[0] * ahead,
-    subject.position[1] + height,
-    subject.position[2] + right[2] * lateral + forward[2] * ahead,
-  ];
+  return eyeAt(shot.offset, subject);
 }
 
 /**
@@ -482,6 +506,21 @@ export function shotEye(shot: PosedShot, subject: Subject): [number, number, num
  */
 export function shotSeconds(shot: ShotPreset): number {
   return isPlanted(shot) ? PLANTED_CEILING_SECONDS : TRACKING_SECONDS;
+}
+
+function eyeAt(offset: ShotOffset, subject: Subject): [number, number, number] {
+  const forward = normalize(subject.forward);
+  const right = cross(forward, UP);
+  const [hx, hy, hz] = subject.halfExtents;
+  const lateral = offset.lateral * hx;
+  const ahead = offset.forward * hy;
+  const height = offset.height * hz;
+
+  return [
+    subject.position[0] + right[0] * lateral + forward[0] * ahead,
+    subject.position[1] + height,
+    subject.position[2] + right[2] * lateral + forward[2] * ahead,
+  ];
 }
 
 const UP: Vec3 = [0, 1, 0];

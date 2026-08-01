@@ -141,6 +141,14 @@ design (D11/D14).
   field-rejected and rolled back in 080 (`docs/postmortem/080-cinematic-camera/multiray-collision.md`).
 - **A slot the survey cannot fill plays a car-anchored stand-in** drawn at plan time from the same seed. A
   missing station costs variety, never a scene.
+- **A `flyby` checks where it stands too** (096/09). It is the only other PLANTED shot, and until that phase
+  its eye came from the car's geometry and nothing else — it could be planted inside a wall. It now walks
+  three spots, best first (the authored one, the same one mirrored across the car, the authored one at twice
+  the height) and takes the first with a clear line, using the tripod's own probe. Every rung is the shot's
+  own offset re-signed or scaled, so it stays a multiple of the car's half-extents and a clear authored spot
+  never moves. All three blocked gives the shot up to the fallback: filming from inside a wall is worse than
+  not filming. **Three rungs is a budget, not a taste** — one cast each, all on the frame the shot starts,
+  against 080's ≤ 5 casts/frame with the follow rig already spending 2.
 - **The live check is one probe per second, and two blocked answers in a row cut away.** Occlusion never
   MOVES the camera — it only picks a stand before the shot and ends the shot after it. Hysteresis lives in
   the cadence and the debounce, never in a moving camera.
@@ -204,8 +212,6 @@ prediction error median 1 m. Those station numbers have not been re-taken since 
 
 ## Not implemented yet
 
-- **Only the tripod is surveyed.** A `flyby` eye is derived from the car and gets no occlusion check at all,
-  so it can still be planted inside a wall; the same machinery would cover it, but nothing asks it to yet.
 - Interior/cabin camera, in-page recording, traffic and drift driving are out of scope for v1 (D14).
 - Routes stay inside one region (D15) and the clock drifts ~16 game minutes over a fragment (D13).
 - **Pedestrian paths.** The walk scene runs on the vehicle graph offset sideways; SA's own ped nodes are in

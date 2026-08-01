@@ -21,7 +21,17 @@ import { smoothDamp, type SmoothDampRef } from '@opensa/math';
 import type { VideoCamera } from '../camera/engine-camera';
 import type { PosedShot, ShotName, ShotPreset, Subject, Vec3 } from './shots';
 
-import { aimShot, anchorFor, isPlanted, projectToScreen, shotEye, SHOTS, SHOTS_PER_SCENE, shotSeconds } from './shots';
+import {
+  aimShot,
+  anchorFor,
+  isPlanted,
+  plantedEyeCandidates,
+  projectToScreen,
+  shotEye,
+  SHOTS,
+  SHOTS_PER_SCENE,
+  shotSeconds,
+} from './shots';
 
 /** What one stepped frame produced — the pose plus everything the scene's report has to state. */
 export interface DirectorFrame {
@@ -39,12 +49,16 @@ export interface DirectorFrame {
 }
 
 export interface DirectorState {
+  /** Shot changes so far. The scene's OPENING is not one of them — it is counted in `causes.opening`,
+   *  because it changes the frame's owner rather than one shot for another. */
+  /** Blocked candidate spots a `static` shot had to step over when planting (096/09). One per rejected
+   *  candidate, so a run that never plants into anything reports 0 and a run that gives a shot up entirely
+   *  is charged the whole ladder. It measures how often the world is in the way, not a failure. */
+  blockedPlants: number;
   /** Set on the frame a cut fires, read back out by the step that reports it. */
   cause: CutCause | null;
   /** What ended each shot so far, counted by cause — the ledger's early-cut breakdown. */
   readonly causes: Record<CutCause, number>;
-  /** Shot changes so far. The scene's OPENING is not one of them — it is counted in `causes.opening`,
-   *  because it changes the frame's owner rather than one shot for another. */
   cuts: number;
   /** True once the last shot of the list has ended: the scene is over, and the runner reads this. */
   done: boolean;
@@ -145,6 +159,7 @@ const ORIGIN: Vec3 = [0, 0, 0];
 
 export function createDirector(plan: readonly ShotPlan[]): DirectorState {
   return {
+    blockedPlants: 0,
     cause: 'opening',
     causes: { empty: 0, occluded: 0, opening: 1, scheduled: 0, watchdog: 0 },
     cuts: 0,
@@ -259,7 +274,7 @@ export function stepDirector(
   }
   const cut = state.fresh;
   const cause = cut ? state.cause : null;
-  const shot = shotPlaying(state, stations);
+  const shot = shotPlaying(state, subject, stations);
   if (shot.kind === 'chase') {
     // Hand the frame back to the rig — and forget the damped pose, so the next placed shot starts from its
     // own geometry instead of easing out of wherever the last one stood.
@@ -451,6 +466,34 @@ function normalize(v: readonly [number, number, number]): [number, number, numbe
   return [v[0] / length, v[1] / length, v[2] / length];
 }
 
+/**
+ * Where a `static` shot plants, checked (096/09).
+ *
+ * Until this existed the eye went wherever the car's geometry said and could be planted inside a wall — the
+ * one gap 096 shipped with. The check is the SAME probe the tripod uses, asked a handful of times ONCE, at
+ * the moment the shot starts; a planted eye never moves afterwards, so there is nothing to re-check and no
+ * per-frame cost.
+ *
+ * With no probe available (a test, or a run with no station supply) the behaviour is exactly what it was:
+ * the authored spot, unchecked. That keeps the director usable without a physics world.
+ *
+ * A shot whose every candidate is blocked does NOT film a wall — it hands back null and the caller
+ * substitutes, which is what the tripod already does when its survey finds nothing.
+ */
+function plantEye(state: DirectorState, shot: PosedShot, subject: Subject, stations: StationSource): boolean {
+  const candidates = plantedEyeCandidates(shot, subject);
+  const clear = candidates.findIndex((eye) => stations.sightline(eye, subject.position));
+  if (clear < 0) {
+    state.blockedPlants += candidates.length;
+
+    return false;
+  }
+  state.blockedPlants += clear;
+  state.staticEye = candidates[clear];
+
+  return true;
+}
+
 /** A car-anchored stand-in for a tripod slot the survey could not fill, drawn from the seeded stream. */
 function posedFallback(random: () => number, presets: readonly ShotPreset[]): PosedShot {
   const posed = presets.filter((preset): preset is PosedShot => preset.kind === 'static' || preset.kind === 'tracking');
@@ -513,24 +556,31 @@ function shotEnding(state: DirectorState): CutCause | null {
  * whole shot by design (the occlusion verdict may cut away from it, it may never move it). A slot the survey
  * could not fill plays the plan's own fallback instead: a missing station costs variety, never a scene.
  */
-function shotPlaying(state: DirectorState, stations?: StationSource): ShotPreset {
+function shotPlaying(state: DirectorState, subject: Subject, stations?: StationSource): ShotPreset {
   if (state.substitute) {
     return state.substitute;
   }
   const planned = state.plan[state.index].preset;
-  if (!state.fresh || planned.kind !== 'station') {
+  if (!state.fresh) {
     return planned;
   }
-  const eye = stations?.take() ?? null;
-  if (eye) {
-    state.staticEye = [eye[0], eye[1], eye[2]];
+  if (planned.kind === 'station') {
+    const eye = stations?.take() ?? null;
+    if (eye) {
+      state.staticEye = [eye[0], eye[1], eye[2]];
 
-    return planned;
+      return planned;
+    }
+
+    return substituteFor(state);
   }
-  state.fallbacks += 1;
-  state.substitute = state.plan[state.index].fallback ?? posedFallback(() => 0, SHOTS);
+  // A planted car-anchored shot (096/09): the same question the tripod's survey answers, asked of the spots
+  // this shot can reach. Without a probe it plants unchecked, exactly as it did before the check existed.
+  if (planned.kind === 'static' && stations && !plantEye(state, planned, subject, stations)) {
+    return substituteFor(state);
+  }
 
-  return state.substitute;
+  return planned;
 }
 
 /**
@@ -556,4 +606,11 @@ function stepSightline(
   }
   state.sightlineIn = SIGHTLINE_SECONDS;
   state.misses = stations.sightline(eye, subject) ? 0 : state.misses + 1;
+}
+
+function substituteFor(state: DirectorState): ShotPreset {
+  state.fallbacks += 1;
+  state.substitute = state.plan[state.index].fallback ?? posedFallback(() => 0, SHOTS);
+
+  return state.substitute;
 }

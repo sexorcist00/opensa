@@ -329,6 +329,16 @@ coarsened to 0.1 ms headless, so only the mean is a measurement. The same run ca
 staging timeline. Run:
 [`2026-08-01-headless-video-mode.json`](opensa-engine/2026-08-01-headless-video-mode.json).
 
+### 096/09 — what the planted-shot occlusion check costs (2026-08-01)
+
+A `flyby` now checks the line to the car before it plants, walking three candidate spots. Over two runs
+(seed 47 scenes 1-4, seed 911 scenes 1-10; 14 captures, 77 024 directed frames) the worst per-frame cast
+count anywhere was **3**, inside 080's ≤ 5 rule with the follow rig's 2, and `stepMs` stayed at
+**0.0153-0.0180 ms** against 08's drive-only 0.0172 — the check is free at this resolution. **`blockedPlants`
+was 0 in both**: three plants, three clear authored spots, so the ladder has never actually been walked in a
+measured run. That bounds how common the problem is; it is not evidence it cannot happen. Run:
+[`2026-08-01-headless-planted-occlusion.json`](opensa-engine/2026-08-01-headless-planted-occlusion.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

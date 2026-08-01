@@ -1,6 +1,7 @@
 # 096 — Video mode (self-directed showcase runs for trailer footage)
 
-**Status: SHIPPED — all eight phases (2026-07-30/08-01).** Close-out audit:
+**Status: SHIPPED — all eight phases (2026-07-30/08-01), plus [09](09-planted-occlusion.md) BUILT 2026-08-01
+(the planted-shot occlusion check, field verdict owed).** Close-out audit:
 [`docs/audit/video-mode-096.md`](../../audit/video-mode-096.md); measurement record:
 [`docs/benchmarks/opensa-engine/2026-08-01-headless-video-mode.json`](../../benchmarks/opensa-engine/2026-08-01-headless-video-mode.json).
 **FIELD-ACCEPTED 2026-08-01**: the user watched the walk and flythrough scenes and the verdict was that they
@@ -148,6 +149,7 @@ dependency order; 06 is independent and can run any time before 05.
 | [06](06-mod-car-ledger.md) | Build-time mod-car ledger (tool + pack + runtime read) — **SHIPPED** | **P1** | — (feeds 05) |
 | [07](07-walk-and-fly-scenes.md) | Walk + flythrough scenes — **SHIPPED** | **P2** | 03, 05 |
 | [08](08-polish-and-closeout.md) | Polish, empty-frame guard, docs, benchmark, audit — **SHIPPED** | **P2** | all |
+| [09](09-planted-occlusion.md) | A planted shot checks where it stands — **BUILT, field owed** | **P2** | 03, 04 |
 
 After 02 the feature is REAL (one region, chase camera, seeded route — recordable footage, ugly cuts).
 After 05 it matches the user's brief minus walk/fly. After 08 it is done by the workflow rules.
@@ -445,7 +447,9 @@ before analysis). Empty until phases run:
   own numbers say 5/5 passes flown and `safe 1.000` over 3 844 walk frames, and neither can tell you whether
   a pavement offset lands on a pavement or whether five 10 s passes read as editing. It did not retire
   `flyby`'s missing occlusion check: not being planted inside a wall in the scenes watched is not evidence
-  that it cannot be.
+  that it cannot be. **That gap is what [09](09-planted-occlusion.md) closes** — a planted shot now walks a
+  three-rung ladder of spots and takes the first with a clear line, the same probe the tripod has used since
+  04, and gives the shot up rather than film a wall.
   **Two runs were thrown away and are named in the benchmark's `note`**: one truncated by a Vite reload (a
   source file saved mid-run — the harness ends the run with exit code 0 and no `run complete` line, so the log
   reads as short rather than broken), one that straddled a machine sleep. Both are now gotchas in
