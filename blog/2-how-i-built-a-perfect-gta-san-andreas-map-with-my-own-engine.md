@@ -1,8 +1,8 @@
 # How I built a perfect GTA San Andreas map with my own engine
 
-![Main Cover](./assets/2026-07-08/2026-07-08-main-cover.jpg)
+![Main Cover](./assets/2/2026-07-08-main-cover.jpg)
 
-This is a follow-up to my article on building an engine compatible with GTA San Andreas that runs in the browser — I'd recommend reading [that one](https://github.com/AlexSergey/opensa/blob/main/blog/2026-06-18-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md) first. Here I'll cover how I prepared a perfect map and fixed the game's legacy bugs.
+This is a follow-up to my article on building an engine compatible with GTA San Andreas that runs in the browser — I'd recommend reading [that one](https://github.com/AlexSergey/opensa/blob/main/blog/1-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md) first. Here I'll cover how I prepared a perfect map and fixed the game's legacy bugs.
 
 > **What this is — and what it isn't.** OpenSA is an **experiment** and a learning project. The goal is the
 > _engine_: a browser-based runtime built to be **compatible with the RenderWare formats** that GTA San
@@ -15,7 +15,7 @@ This is a follow-up to my article on building an engine compatible with GTA San 
 
 If you can't be bothered to read — here are the important links right away:
 
-- [Previous article](https://github.com/AlexSergey/opensa/blob/main/blog/2026-06-18-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md)
+- [Previous article](https://github.com/AlexSergey/opensa/blob/main/blog/1-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md)
 - [Repo](https://github.com/AlexSergey/opensa)
 - [Trailer](https://www.youtube.com/watch?v=pdplknPkhAQ)
 
@@ -53,21 +53,21 @@ The original map has several classes of big, fundamental bugs:
 
 Broken models. Some models in the game are broken (stray or unwelded polygons) and can have duplicate polygons — which can cause z-fighting: up close, the player sees flickering surfaces, sharp edges standing out, and so on.
 
-![Broken Polygons](./assets/2026-07-08/2026-07-08-broken-polygons.jpg)
+![Broken Polygons](./assets/2/2026-07-08-broken-polygons.jpg)
 
 Broken normals. The original game doesn't work with real lighting — it only emulates it via Prelight and Night Vertex colors — so for the original this isn't a problem, but for my custom renderer in the browser it's not just a problem, it's a blocker.
 
-![Broken Normals](./assets/2026-07-08/2026-07-08-broken-normals.jpg)
+![Broken Normals](./assets/2/2026-07-08-broken-normals.jpg)
 
-![Broken Normals 2](./assets/2026-07-08/2026-07-08-broken-normals2.jpg)
+![Broken Normals 2](./assets/2/2026-07-08-broken-normals2.jpg)
 
 Holes in the map. Many objects join badly and have visible gaps.
 
-![Map Holes](./assets/2026-07-08/2026-07-08-map-holes.jpg)
+![Map Holes](./assets/2/2026-07-08-map-holes.jpg)
 
 Prelight. One of the most obvious problems. What is prelight? It's lighting baked into a model's texture (effectively the model's shading), and many original objects look either far darker than everything around them or, the other way around, glow in the dark.
 
-![Broken Prelight](./assets/2026-07-08/2026-07-08-broken-prelight.jpg)
+![Broken Prelight](./assets/2/2026-07-08-broken-prelight.jpg)
 
 And many more.
 
@@ -75,17 +75,17 @@ I also had personal gripes with some of the original behaviour:
 
 The tree, bush and other models are dated. I wanted to use modern mods like BSOR for vegetation. The problem was that the trees have no LOD level, so as the player drives, a tree can pop up right in your face.
 
-![Vegetation Problems](./assets/2026-07-08/2026-07-08-vegetation-problems.jpg)
+![Vegetation Problems](./assets/2/2026-07-08-vegetation-problems.jpg)
 
 Draw distance in the game is awful overall — the original uses an approach where every building, surface and road has its own low-poly copy. The game doesn't always manage to load the HD model before the player sees this horror up close. These LOD models don't match the original, so the player can fall right through them.
 
-![Draw Distance Problems](./assets/2026-07-08/2026-07-08-draw-distance-problems.jpg)
+![Draw Distance Problems](./assets/2/2026-07-08-draw-distance-problems.jpg)
 
 Draw distance for small objects, like rocks and such.
 
 Streaming — sometimes the game can't render objects in time, especially high-quality ones.
 
-![Streaming Problems](./assets/2026-07-08/2026-07-08-streaming-problems.jpg)
+![Streaming Problems](./assets/2/2026-07-08-streaming-problems.jpg)
 
 In short, the scope of work was clear. It called for massive edits to thousands of map objects — so the idea of a pipeline came to me right away.
 
@@ -99,7 +99,7 @@ These pipelines chain together.
 
 The architecture of this solution looked something like this at first:
 
-![Architecture](./assets/2026-07-08/2026-07-08-architecture.jpg)
+![Architecture](./assets/2/2026-07-08-architecture.jpg)
 
 It would change later, but more on that below.
 
@@ -113,7 +113,7 @@ But my engine didn't yet have a mechanism for layering mods on top of the base m
 
 A quick aside: there are two ways to install mods — the legacy approach, where we patch the game's resources by "baking" the mod straight into the sources, and the more advanced one via modloader, where the mod is installed into a separate folder and mixed into the game at launch.
 
-The modloader approach fit my engine architecture very nicely — I wrote about it in detail [here](https://github.com/AlexSergey/opensa/blob/main/blog/2026-06-18-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md#optimization). All I had to do was add an extra module between the assets loader and the VFS.
+The modloader approach fit my engine architecture very nicely — I wrote about it in detail [here](https://github.com/AlexSergey/opensa/blob/main/blog/1-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md#optimization). All I had to do was add an extra module between the assets loader and the VFS.
 
 But I also needed the legacy approach — I'll explain why later.
 
@@ -125,7 +125,7 @@ The most interesting part. Once we've baked the mods into the game and mod-insta
 
 Since this is a big automated job, manual review is essential. For that I built a separate tool that loads a model before and after processing so we can validate that everything's fine.
 
-![Fixed Objects Viewer](./assets/2026-07-08/2026-07-08-fixed-objects-viewer.jpg)
+![Fixed Objects Viewer](./assets/2/2026-07-08-fixed-objects-viewer.jpg)
 
 This tool has a plugin architecture, and I extended it with 20 plugins that do a full cleanup of every model in the game, a full prelight retune, and auto-fix other bugs. I also added an override: if the result is wrong for particular cases, you can pass parameters by hand, which is very handy.
 
@@ -135,7 +135,7 @@ After fully processing the map through map-optimizer, we mix in whichever vegeta
 
 I took the very popular BSOR mod.
 
-![BSOR](./assets/2026-07-08/2026-07-08-bsor.jpg)
+![BSOR](./assets/2/2026-07-08-bsor.jpg)
 
 Like all similar mods, it has no LOD objects — meaning the trees don't render at a distance. This tool's job was to add that, and I also added transferring prelight from the original trees onto the modded ones, so the trees blend nicely into the game's overall look.
 
@@ -145,15 +145,15 @@ Take the tree model.
 
 Render it to a texture from 4 sides:
 
-![Vegetation LOD Generator 0](./assets/2026-07-08/2026-07-08-vegetation-lod-generator-0.jpg)
+![Vegetation LOD Generator 0](./assets/2/2026-07-08-vegetation-lod-generator-0.jpg)
 
 Take the dimensions of the source tree:
 
-![Vegetation LOD Generator 1](./assets/2026-07-08/2026-07-08-vegetation-lod-generator-1.jpg)
+![Vegetation LOD Generator 1](./assets/2/2026-07-08-vegetation-lod-generator-1.jpg)
 
 Build 6 crossed planes from those dimensions:
 
-![Vegetation LOD Generator 2](./assets/2026-07-08/2026-07-08-vegetation-lod-generator-2.jpg)
+![Vegetation LOD Generator 2](./assets/2/2026-07-08-vegetation-lod-generator-2.jpg)
 
 You get a simplified copy of the original, but a thousand times cheaper.
 
@@ -161,7 +161,7 @@ Now the tool's job is to place them around the map and make GTA draw them.
 
 At this stage we got nice, realistic vegetation.
 
-![Trees](./assets/2026-07-08/2026-07-08-trees.jpg)
+![Trees](./assets/2/2026-07-08-trees.jpg)
 
 As you can see, the trees are in place and the draw distance is up. In the screenshot there's still a problem with the map's own LODs. Moving on.
 
@@ -173,13 +173,13 @@ My engine already generated this kind of object in the right zones.
 
 All that was left was to use the tool to strip the live generation out of the game's streaming and place the models at the right positions. The process is more or less the same as in lod-trees.
 
-![Procobj](./assets/2026-07-08/2026-07-08-procobj.jpg)
+![Procobj](./assets/2/2026-07-08-procobj.jpg)
 
 I could have left this tool out of the write-up entirely, if not for one interesting bug:
 
 After I generated the LODs for procobj, I was flying over the map in the real game and ran into a strange anomaly.
 
-![Barrier Bug](./assets/2026-07-08/2026-07-08-barrier-bug.jpg)
+![Barrier Bug](./assets/2/2026-07-08-barrier-bug.jpg)
 
 In one spot on the map a mysterious barrier appeared on a bridge. It's supposed to be there — but only at the very start of the game, whereas my save has the game already 100% completed.
 
@@ -193,11 +193,11 @@ For now this isn't fully fixed; I just lowered the generation density.
 
 lod-generator is a tool that generates higher-quality LOD objects for the game, so there's no "blur" in the graphics.
 
-![LOD Problems](./assets/2026-07-08/2026-07-08-lod-problems.jpg)
+![LOD Problems](./assets/2/2026-07-08-lod-problems.jpg)
 
 Up to this tool, everything before it generated the map in full compatibility with the original game.
 
-But since I built a more advanced rendering system in my engine — you can read about it [here](https://github.com/AlexSergey/opensa/blob/main/blog/2026-06-18-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md#rendering) —
+But since I built a more advanced rendering system in my engine — you can read about it [here](https://github.com/AlexSergey/opensa/blob/main/blog/1-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md#rendering) —
 
 I had to create two different LOD-generation tools:
 
@@ -206,25 +206,25 @@ I had to create two different LOD-generation tools:
 
 The difference is that the original game has one LOD object per HD object.
 
-![SA LOD](./assets/2026-07-08/2026-07-08-sa-lod.jpg)
+![SA LOD](./assets/2/2026-07-08-sa-lod.jpg)
 
 In OpenSA I have composite LODs — one big LOD per district, which avoids object-loading problems altogether.
 
-![OpenSA LOD](./assets/2026-07-08/2026-07-08-opensa-lod.jpg)
+![OpenSA LOD](./assets/2/2026-07-08-opensa-lod.jpg)
 
 How the LOD-generation algorithm works:
 
 At first I tried simply decimating the mesh:
 
-![LOD Problems 2](./assets/2026-07-08/2026-07-08-lod-problems-2.jpg)
+![LOD Problems 2](./assets/2/2026-07-08-lod-problems-2.jpg)
 
 but that led to broken models, holes in surfaces, and so on.
 
 Some results were downright horrifying:
 
-![LOD Problems 3](./assets/2026-07-08/2026-07-08-lod-problems-3.jpg)
+![LOD Problems 3](./assets/2/2026-07-08-lod-problems-3.jpg)
 
-![LOD Problems 4](./assets/2026-07-08/2026-07-08-lod-problems-4.jpg)
+![LOD Problems 4](./assets/2/2026-07-08-lod-problems-4.jpg)
 
 What I ended up with: the whole map is loaded, and 10 "cameras" are created — plain sources that shoot rays at the model we're generating a LOD for. If a ray doesn't hit any polygons, they're invisible from that angle and can be removed.
 
@@ -234,19 +234,19 @@ For OpenSA these models are then merged into a district. This is where the two a
 
 LOD generation and merging is the longest, most resource-heavy operation. On my MacBook Pro M3 it takes about 10–15 minutes on 6 threads.
 
-![Highload Task](./assets/2026-07-08/2026-07-08-highload-task.jpg)
+![Highload Task](./assets/2/2026-07-08-highload-task.jpg)
 
 ### perfect-map-builder
 
 This is an orchestrator that runs all the tools in the chain in sequence.
 
-![Perfect Map Builder](./assets/2026-07-08/2026-07-08-perfect-map-builder.jpg)
+![Perfect Map Builder](./assets/2/2026-07-08-perfect-map-builder.jpg)
 
 This is what the project's architecture looks like right now. It assembles one of the most optimized maps you can get.
 
-![Final 1](./assets/2026-07-08/2026-07-08-final-1.jpg)
+![Final 1](./assets/2/2026-07-08-final-1.jpg)
 
-![Final 2](./assets/2026-07-08/2026-07-08-final-2.jpg)
+![Final 2](./assets/2/2026-07-08-final-2.jpg)
 
 And here's a video of the result:
 
@@ -260,7 +260,7 @@ Since the map got significantly heavier because of the mods and hi-poly LODs, th
 
 So a completely new streaming system was built:
 
-When the game has loaded and the player has spawned at the given coordinates, we build a grid of hi-poly cells with a LOD border around them, as described [here](https://github.com/AlexSergey/opensa/blob/main/blog/2026-06-18-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md#rendering).
+When the game has loaded and the player has spawned at the given coordinates, we build a grid of hi-poly cells with a LOD border around them, as described [here](https://github.com/AlexSergey/opensa/blob/main/blog/1-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md#rendering).
 
 The player starts moving — the game casts a ray in that direction — and cells within view radius load. Since the cells are heavy, they're warmed up in a 1px hidden canvas.
 
@@ -274,9 +274,9 @@ The result: even with a hi-poly map, the game runs without performance drops.
 
 Over the course of building all these tools I ran into a huge number of bugs and problems. This last week I worked only with Fable, since Opus performed worse. Fable behaves like a real developer: while hunting a bug, it immediately suggests simplifications to pin down the line between "bug" and "no bug," so it's clear what caused it.
 
-![Fable 1](./assets/2026-07-08/2026-07-08-fable-1.jpg)
+![Fable 1](./assets/2/2026-07-08-fable-1.jpg)
 
-![Fable 2](./assets/2026-07-08/2026-07-08-fable-2.jpg)
+![Fable 2](./assets/2/2026-07-08-fable-2.jpg)
 
 Token usage is incredibly high, but the quality of the result is many times better.
 
