@@ -153,3 +153,20 @@ collision, or a car chosen for the route rather than for the region. 096/02's au
 **Caught:** the gradient one, now — a wedged run reports `ended: stuck` in its capture and logs the route
 percentage it reached. The direction one, no: nothing in the data or in a capture can tell you which way the
 lane runs, so it needs a human looking at the footage.
+
+## A map's extent or centre may not be a raw min/max bounding box
+
+Mods remove objects by EXILING them — a placement moved thousands of metres out of the world instead of
+deleted. One such row is enough to make a min/max box lie about where the map is: a merged `original` build
+carried a single lamppost 17 km south, and the box grew from 24 × 24 cells to 24 × 93, putting its midpoint
+in open sea (`docs/edge-cases/converter-pipeline.md` has the measurement and the file it came from).
+
+The rule for a new design: anything that answers *where is this map* — a default camera, an auto-fitted
+convert rect, a district guess, a streaming bound — derives from an **outlier-robust** statistic over the
+occupied cells (a median, a density peak), and if the answer names a cell, it names one that is actually
+occupied. `mapCenterGta` (sa-map-viewer) is the worked example: the median occupied cell, snapped to a cell
+with content, because the inspector seeds its resident set from that cell and an empty answer welds nothing.
+
+**Caught:** no, twice over. The min/max is correct arithmetic on correct data — nothing throws, nothing
+warns, and the tool renders a perfectly good empty frame. `scripts/debug/grid-extent.ts` reports the
+stragglers, but only if someone runs it.

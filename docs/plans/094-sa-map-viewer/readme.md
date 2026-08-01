@@ -483,7 +483,7 @@ never have run). **51 tests in the app** — 31 over its pure logic and 20 again
 | --- | --- |
 | `packages/renderware/src/map/model-search.test.ts` | the model index: an empty/blank query answers nothing, an unplaced name answers nothing (catalog-only names are not offered at all), the row cap, case-insensitive substring with prefix matches first, the catalog's spelling in the row, and the focus cursor — nearest first, cycling outwards, WRAPPING, order frozen while cycling, re-ordered when the name changes |
 | `camera/viewer-camera.test.ts` | `poseFromQuery` defaults + degree parsing + every malformed input falling back instead of yielding NaN; the pitch clamp at BOTH ends; the pose round-trip; and the four gestures as behaviour — orbit leaves the looked-at point still, pan moves it and keeps the height, dolly changes height and not the point, `lookAtGta` (the search jump) moves the point and changes nothing else |
-| `world/cell-renderer.test.ts` | `cellAt` FLOORS negatives (truncation would shift the whole south/west map one cell and silently disagree with the pack); `mapCenterGta` centres on the occupied extent and answers the origin for an empty grid |
+| `world/cell-renderer.test.ts` | `cellAt` FLOORS negatives (truncation would shift the whole south/west map one cell and silently disagree with the pack); `mapCenterGta` centres on the occupied cells, answers the origin for an empty grid, does not follow ONE exiled placement, and never answers a cell with nothing in it |
 | `source/map-source.test.ts` | `sourceFromQuery` (trailing slash, absent ⇒ picker); `isConverted` on the real measured censuses; `mapStats` incl. the hd+lod < instances invariant |
 | `source/asset-store.test.ts` | the whole txdp parent chain is pulled; a **cycle does not hang**; `.dff` wins over `.osm`; a missing model is skipped not thrown; a second `ensure` for the same model reads nothing; the bytes land under the name the welder looks up (case-insensitively) |
 
@@ -525,3 +525,31 @@ gate), `edge-cases/engine-rendering.md` (the fog cull, wind, and now the sea as 
 **Left open on purpose:** the blue strip's own root CAUSE — the user reports it resolved on their side and
 will record it in the open-issues doc. `build/strip-ab/mods` (1.8 GB) is the merged tree phase 6 built; it
 is disposable, and re-creatable with the `pmb --until mods` line in phase 6.
+
+## Field fix — the blank open on a modded tree (2026-08-01)
+
+Field report: on a merged SA-format build the viewer opened on an empty canvas, and ticking **Whole map**
+did not change it. Reproduced headlessly against the same tree; the panel told the whole story once it was
+read as numbers rather than looked at:
+
+| | vanilla `game-src/original` | the merged build |
+| --- | --- | --- |
+| instances / cells | 50 849 / 562 | 89 649 / **570** |
+| occupied extent | `[-12,-12,11,11]` | `[-12,`**`-81`**`,11,11]` |
+| default `at` | `0,0` — cell (0,0) | `0,-8625` — cell **(0,-35)**, open sea |
+| cells resident at open | 1 | **0** |
+| SECTIONS grid | 24 × 24 | 24 × **93** |
+
+Cause, in the DATA: one mod removed a lamppost by moving it to `y = -20 101` instead of deleting its row
+(id 1226, in the binary `las2_stream1.ipl` — 326 of its 362 rows differ from vanilla). Cause, in the TOOL:
+`mapCenterGta` was the midpoint of the min/max cell box, so that one placement moved the default camera
+17 km off the map. "Whole map" then welded all 570 cells (28.2 s, 52.6 M tris, 609.7 MB of textures) into a
+frame the camera was nowhere near — the blank screen was correct, and silent.
+
+Fixed by making the default the **median occupied cell, snapped to a cell that has content** — outlier-proof
+and, since the inspector seeds its resident set from that cell, guaranteed to weld something. After: the
+merged build and vanilla both open at `-125,125` (cell −1, 0); the merged build welds 43 495 tris there,
+vanilla 13 189. The rule is now `docs/restrictions/assets-and-data.md`; the data fact and what it does to a
+`--rect`-less convert are in `docs/edge-cases/converter-pipeline.md`; `scripts/debug/grid-extent.ts` names
+the stragglers so the next such tree is one command away. Nothing catches this class in CI — `apps/**/ui` is
+off the unit lane and the arithmetic was never wrong.

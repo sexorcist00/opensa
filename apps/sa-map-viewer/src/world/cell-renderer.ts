@@ -243,23 +243,38 @@ export function cellAt(gta: readonly [number, number]): CellCoord {
   return { cx: Math.floor(gta[0] / CELL_SIZE), cy: Math.floor(gta[1] / CELL_SIZE) };
 }
 
-/** The centre of the map's occupied cells, in GTA coords — where the viewer opens without an `?at`. */
+/**
+ * The centre of the map's occupied cells, in GTA coords — where the viewer opens without an `?at`.
+ *
+ * The MEDIAN occupied cell, snapped to a cell that really is occupied — not the midpoint of the extent.
+ * Two reasons, both measured on a merged build:
+ * - A single placement far outside the map moves the midpoint off the world. Exiling an object instead of
+ *   deleting it is standard SA modding, and one such lamppost (`las2_stream1.ipl`, 17 km south) dragged the
+ *   midpoint from Los Santos into open sea: the viewer opened on 0 cells and stayed blank even with "Whole
+ *   map" ticked, because the camera was nowhere near the map. A median does not move for one outlier.
+ * - The midpoint of a sparse extent can be an EMPTY cell, and the inspector seeds itself from this cell — a
+ *   default view that welds nothing is the same blank screen by another route. Snapping to the nearest
+ *   occupied cell is what makes the default guaranteed to show something.
+ */
 export function mapCenterGta(map: LoadedMap): [number, number] {
-  let x0 = Infinity;
-  let x1 = -Infinity;
-  let y0 = Infinity;
-  let y1 = -Infinity;
-  for (const cell of map.grid.values()) {
-    x0 = Math.min(x0, cell.cx);
-    x1 = Math.max(x1, cell.cx);
-    y0 = Math.min(y0, cell.cy);
-    y1 = Math.max(y1, cell.cy);
-  }
-  if (!Number.isFinite(x0)) {
+  const cells = [...map.grid.values()].sort((a, b) => a.cx - b.cx || a.cy - b.cy); // deterministic tie-break
+  const [first] = cells;
+  if (!first) {
     return [0, 0];
   }
+  const mx = median(cells.map((cell) => cell.cx));
+  const my = median(cells.map((cell) => cell.cy));
+  let best = first;
+  let bestDistance = Infinity;
+  for (const cell of cells) {
+    const distance = (cell.cx - mx) ** 2 + (cell.cy - my) ** 2;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = cell;
+    }
+  }
 
-  return [((x0 + x1) / 2 + 0.5) * CELL_SIZE, ((y0 + y1) / 2 + 0.5) * CELL_SIZE];
+  return [(best.cx + 0.5) * CELL_SIZE, (best.cy + 0.5) * CELL_SIZE];
 }
 
 /** Median of a sample (0 when empty). */

@@ -120,3 +120,12 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   `.dff`/`.txd`/`.col`/`.ifp` into `models/gta3.img` **only**, so an interior asset (whose stock home is
   `gta_int.img`) lands in the wrong archive and shadows nothing. Correct placement is the stock residence:
   check which archive holds the entry before choosing the folder.
+- **A merged map's occupied extent can be stretched by ONE placement, and the convert's auto-fit follows
+  it.** Removing an object by moving it thousands of metres out of the world — rather than deleting its IPL
+  row — is standard SA modding. Measured on a merged `original` build (2026-08-01): a single lamppost at
+  `y = -20 101` (id 1226, one row rewritten in the binary `las2_stream1.ipl`) made the occupied 250-grid
+  extent `[-12, -81, 11, 11]` — **93 cell rows instead of the map's 24, one of them holding one instance**.
+  A pinned `PACK_RECTS.full` clips it away (`original` is pinned at `±12`, so no pak was ever affected), but
+  a game WITHOUT a pinned rect auto-fits to content (`occupiedRect`, `opensa-pack --rect` absent) and would
+  chunk a mostly-empty map four times too tall. `scripts/debug/grid-extent.ts` now names the stragglers next
+  to the extent so the number can be read before it is pinned.

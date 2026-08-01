@@ -40,18 +40,47 @@ describe('mapCenterGta', () => {
     it('answers the origin for an empty grid rather than NaN or Infinity', () => {
       expect(mapCenterGta(gridOf([]))).toEqual([0, 0]);
     });
-  });
 
-  describe('positive cases', () => {
-    it('centres on the OCCUPIED extent, not on GTA 0,0', () => {
-      // A total conversion's world need not sit near the origin; opening on 0,0 would stare at nothing.
+    it('does not follow ONE placement exiled far outside the map', () => {
+      // Measured on a merged build: a mod removed a lamppost by moving it 17 km south rather than deleting
+      // it, and the extent midpoint took the default camera into open sea — the viewer opened on 0 cells and
+      // stayed blank even with "Whole map" ticked. A median does not move for one outlier.
+      const map: [number, number][] = [];
+      for (let cy = -3; cy <= 3; cy += 1) {
+        map.push([0, cy]);
+      }
+      map.push([0, -80]);
+      expect(mapCenterGta(gridOf(map))).toEqual([0.5 * CELL_SIZE, 0.5 * CELL_SIZE]);
+    });
+
+    it('never answers a cell with nothing in it', () => {
+      // The inspector seeds its resident set from this cell, so an empty answer welds nothing — the same
+      // blank screen the outlier caused, by another route. The midpoint here (11, 12) holds no instances.
       const centre = mapCenterGta(
         gridOf([
           [10, 10],
           [12, 14],
         ]),
       );
-      expect(centre).toEqual([11.5 * CELL_SIZE, 12.5 * CELL_SIZE]);
+      expect([
+        [10.5 * CELL_SIZE, 10.5 * CELL_SIZE],
+        [12.5 * CELL_SIZE, 14.5 * CELL_SIZE],
+      ]).toContainEqual(centre);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('centres on the OCCUPIED cells, not on GTA 0,0', () => {
+      // A total conversion's world need not sit near the origin; opening on 0,0 would stare at nothing.
+      expect(
+        mapCenterGta(
+          gridOf([
+            [10, 10],
+            [11, 10],
+            [12, 10],
+          ]),
+        ),
+      ).toEqual([11.5 * CELL_SIZE, 10.5 * CELL_SIZE]);
     });
 
     it('lands mid-cell for a single-cell map', () => {
