@@ -49,6 +49,15 @@ ASI twin (suppresses the vanilla population, reads our format, adds kilometre-ra
 
 Full chain: [plans/06-city-life/readme.md](plans/06-city-life/readme.md).
 
+## Basic CLEO support (moved from 0.4.0, 2026-08-01)
+
+Run compiled GTA:SA CLEO `.cs` scripts in the engine: a Sanny-DB SCM decoder (lifting the 0x014B car-gen
+reader already in the tree), an engine-agnostic thread VM, a `CleoHost` on the rigid `.osm` path, a
+`packages/cleo` module, tracer + coverage. Planned in full on 2026-07-19 as `docs/plans/083-cleo-basic/` and
+moved here **unstarted** — nothing about the plan changed, only its cycle.
+
+Full chain: [plans/08-cleo-basic/readme.md](plans/08-cleo-basic/readme.md).
+
 ## LOD generators, extended (moved from 0.4.0, 2026-07-19)
 
 Two independent generator upgrades for the REAL-GAME pipeline, each unlocked by an ASI engine fix from

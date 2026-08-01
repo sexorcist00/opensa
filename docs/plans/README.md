@@ -16,7 +16,8 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`096`, one folder each (066, 073, 074, 078–083, 096 carry multi-part sub-plans). Newest first:
+`001`–`096`, one folder each (066, 073, 074, 078–082, 096 carry multi-part sub-plans; 083 kept its row but
+its folder moved to `roadmap/0.5.0/`). Newest first:
 
 - **[096 — Video mode](./096-video-mode/readme.md)** — **SHIPPED 2026-07-30/08-01, all eight phases**
   (road graph + seeded routes, autopilot, director + shot table, surveyed tripod stations, the region
@@ -120,9 +121,10 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   dynamics. The perf row is CLOSED (2026-07-21: it was mod vegetation, not vehicles). Peds share the
   row-B root.
 
-- **[083 — Basic CLEO support](./083-cleo-basic/readme.md)** — run compiled `.cs` scripts: Sanny-DB SCM
-  decoder (lifts the 0x014B car-gen reader), engine-agnostic thread VM, CleoHost on the rigid `.osm`
-  path, `packages/cleo` module, tracer + coverage. Promoted from ideas/0.4.0/04.
+- **083 — Basic CLEO support** — **MOVED to 0.5.0 on 2026-08-01, unstarted**:
+  [`roadmap/0.5.0/plans/08-cleo-basic/`](../roadmap/0.5.0/plans/08-cleo-basic/readme.md). Run compiled `.cs`
+  scripts: Sanny-DB SCM decoder (lifts the 0x014B car-gen reader), engine-agnostic thread VM, CleoHost on the
+  rigid `.osm` path, `packages/cleo` module, tracer + coverage. Promoted from ideas/0.4.0/04.
 - **[082 — Vehicle license plates](./082-vehicle-plates/readme.md)** — per-instance city-correct plates on
   the array-based engine: plate atlas array + per-instance slot, converter-flagged plate submeshes,
   mask DSL + placement-seeded determinism, damage-riding. Promoted from ideas/0.4.0/01.
@@ -130,7 +132,8 @@ Core runtime + RenderWare parsing, world streaming, rendering, characters, vehic
   wears its plate. Phase 0 corrected two of this plan's own assumptions (the city mapping was recorded
   backwards, and a plate is two quads, not one), and the first real boot cost one fix: a WGSL uniformity
   error in `rigidTexel`, which no test can see. Closed on the look verdict — the distribution drive, the
-  bench guard and a ram test are listed unmeasured in the plan's readme.
+  bench guard and a ram test are listed unmeasured in the plan's readme; **that unmeasured tail was deferred
+  to 0.5.0 on 2026-08-01** (the plan itself stays here — it shipped in 0.4.0).
 - **[081 — Vehicle driving physics](./081-vehicle-physics/readme.md)** — feel overhaul on the own engine.
   **01–05 DONE 2026-07-26, field-accepted**: `handling.cfg` went from 5 fields consumed to 21, every one a
   translation of the original's own code (spring law, `cTransmission` gearbox, air drag, tyre grip and

@@ -1,4 +1,4 @@
-# 083/03 — Engine host bridge: CleoHost on the rigid-model path
+# 0.5.0/08/03 — Engine host bridge: CleoHost on the rigid-model path
 
 The fully-rethought plan: "CLEO can act inside OpenSA" against the own engine. The three-era
 version added `loadModelByName → Object3D under streamingRoot`; none of that exists. The new

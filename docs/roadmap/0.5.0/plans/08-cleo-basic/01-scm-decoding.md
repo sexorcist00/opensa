@@ -1,4 +1,4 @@
-# 083/01 — SCM/CLEO decoding & opcode model
+# 0.5.0/08/01 — SCM/CLEO decoding & opcode model
 
 No execution — turn a `.cs` buffer into a typed instruction stream and produce the concrete opcode
 whitelist plan 02/03 implement, derived from the two real target scripts.

@@ -1,4 +1,4 @@
-# 083 — execution priority
+# 0.5.0/08 — execution priority
 
 Linear 01 → 05, with one spike pulled forward:
 

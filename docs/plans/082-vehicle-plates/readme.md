@@ -120,6 +120,10 @@ Order + rationale: [priority.md](priority.md).
 
 ## Left unmeasured
 
+**Deferred to 0.5.0 on 2026-08-01** by the user's call while closing out 0.4.0 — they belong to the next
+vehicle round ([`roadmap/0.5.0/plans/04-all-vehicle-types/`](../../roadmap/0.5.0/plans/04-all-vehicle-types/readme.md)),
+not to a pass of their own. The plan itself stays closed and shipped in 0.4.0.
+
 Closed on a binary verdict (plates are there and look right), which is what this feature was gated on.
 These stayed open and are worth a single pass whenever a vehicle round comes up again:
 

@@ -1,6 +1,8 @@
-# 083 — Basic CLEO support (run compiled `.cs` scripts in the engine)
+# 0.5.0/08 — Basic CLEO support (run compiled `.cs` scripts in the engine)
 
-**Status: PLANNED 2026-07-19.** Supersedes the idea chain `docs/ideas/0.4.0/plans/04-cleo-basic/`
+**Status: DEFERRED to 0.5.0 on 2026-08-01** — moved here from `docs/plans/083-cleo-basic/` unstarted, by the
+user's call while closing out 0.4.0. Nothing about the plan changed; only its cycle did. It was
+**PLANNED 2026-07-19** and supersedes the idea chain `docs/ideas/0.4.0/plans/04-cleo-basic/`
 (2026-07-12) — rethought for the own engine. The idea's language core (decoder + VM) was
 engine-agnostic by design and survives nearly verbatim; the world bridge and packaging were written
 against the deleted three path (`Object3D`, `streamingRoot`, `buildClump`, `canvas-host`) and are

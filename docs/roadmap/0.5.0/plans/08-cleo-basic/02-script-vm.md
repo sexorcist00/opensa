@@ -1,4 +1,4 @@
-# 083/02 — Script VM & thread scheduler (engine-agnostic core)
+# 0.5.0/08/02 — Script VM & thread scheduler (engine-agnostic core)
 
 The execution core: a cooperative SCM thread engine with an opcode-handler registry. Knows nothing
 about the engine — the extensibility keystone. This plan survives from the idea essentially

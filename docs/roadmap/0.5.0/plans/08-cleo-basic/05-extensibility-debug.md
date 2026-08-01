@@ -1,4 +1,4 @@
-# 083/05 — Extensibility, debugging & maintenance
+# 0.5.0/08/05 — Extensibility, debugging & maintenance
 
 Makes GROWING opcode coverage cheap and safe — the difference between "two scripts run" and "we
 support CLEO". Carried from the idea with the tooling re-homed onto the F2 debugger.

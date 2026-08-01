@@ -1,4 +1,4 @@
-# 083/04 — Packaging, config & wiring: the two mods run end-to-end
+# 0.5.0/08/04 — Packaging, config & wiring: the two mods run end-to-end
 
 Answers "engine part or separate module" concretely (separate module — the `game/mods` precedent)
 and makes the two mods actually run in the browser. Rewired from the idea: the hub is
