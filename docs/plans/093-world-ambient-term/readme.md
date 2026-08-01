@@ -103,6 +103,32 @@ Owed: bench sweep + field round below.
 - Unit: engine suites stay green (fake-GPUDevice floors); driver test asserts `ambientColor` follows
   timecyc `amb` and the knob.
 - Bench ritual (`?engine=opensa&bench=all`) — shader change = frame-cost mechanism (074 series row).
+### Night control pass — the arithmetic half is DONE (2026-08-01), the look is still owed
+
+Read out of the shipped adapter with `scripts/debug/world-ambient-hours.ts`, which boots nothing:
+
+| hours | `dn` | ambient | floor term | whose number |
+| --- | --- | --- | --- | --- |
+| 20:00–06:00 | 1.000 | 0.0120, 0.0140, 0.0200 | **0** | timecyc — strict SA parity |
+| 07:00–19:00 | 0.000 | 0.1300, 0.1300, 0.1300 | 0.1300 | **ours** — the deliberate floor |
+| 06:00→07:00, 19:00→20:00 | ramps | — | ramps | a continuous one-hour hand-over |
+
+**So "nothing shifted after dark" is proven for OUR term, not merely asserted: after dark the floor
+contributes exactly 0** — every night frame is the same frame this plan's deviation never touched. Probing
+fractional hours (6.1, 6.25, 6.5, 6.75, 6.9 and the dusk mirror) shows the retirement is a smooth ramp, not
+a step, so there is no ambient pop at the boundary either.
+
+**What is still owed is a LOOK, and it is a narrower question than it was**: since our term is zero at night,
+the only thing that can wash the authored night design is SA's own `Amb` (0.012, 0.014, 0.020) — vanilla
+parity, not this plan's doing. Someone still has to look.
+
+**The attempt that did not produce a verdict, recorded so it is not repeated blindly**: shooting the four
+day-round models headless via `?spawn=x,y,z&hour=22` gave three unusable frames — the player falls through
+collision that has not streamed yet (`grounded 0`, 12 draws, z −1697), and a spawn on a model's own origin
+puts the camera INSIDE its geometry (the sphinx metered *brighter* at night than at noon purely because both
+frames were a close-up of a wall). A night round needs a camera placed after collision has settled, not a
+spawn point.
+
 - Field: DONE for day (2026-07-29): `gaz27_law` ("стена теперь выглядит нормально"),
   `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` "все три выглядят хорошо", healthy
   districts unchanged. OWED: the night pass — check the timecyc night `amb` does not wash the
