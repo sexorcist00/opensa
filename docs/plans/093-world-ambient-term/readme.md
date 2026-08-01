@@ -120,14 +120,31 @@ a step, so there is no ambient pop at the boundary either.
 
 **What is still owed is a LOOK, and it is a narrower question than it was**: since our term is zero at night,
 the only thing that can wash the authored night design is SA's own `Amb` (0.012, 0.014, 0.020) — vanilla
-parity, not this plan's doing. Someone still has to look.
+parity, not this plan's doing. Someone still has to look; the frames for it are below.
 
-**The attempt that did not produce a verdict, recorded so it is not repeated blindly**: shooting the four
-day-round models headless via `?spawn=x,y,z&hour=22` gave three unusable frames — the player falls through
-collision that has not streamed yet (`grounded 0`, 12 draws, z −1697), and a spawn on a model's own origin
-puts the camera INSIDE its geometry (the sphinx metered *brighter* at night than at noon purely because both
-frames were a close-up of a wall). A night round needs a camera placed after collision has settled, not a
-spawn point.
+**The night frames exist now (2026-08-01).** Four districts, day and night from the same spot:
+
+| spot | day | night | day/night |
+| --- | --- | --- | --- |
+| `gaz27_LAW` — LS beachfront | 105 | 17 | **6.2×** |
+| `flamingo01_lvs` — the Strip | 128 | 35 | **3.7×** |
+| `sphinx01_lvs` — Luxor | 192 | 82 | 2.3× |
+| `exclbr_hotl02_lvS` — Excalibur street | 137 | 84 | 1.6× |
+
+(mean luma of the lower 1440×600 of the frame, ImageMagick 1×1 resize.) Night is darker everywhere; the two
+Vegas spots contrast least, which is what a street full of neon and lamps is supposed to do. What the frames
+show: LS is genuinely dark with lamp pools and moonlit water; the Strip reads as neon against dark road and
+dark sky; the Luxor's lit windows and the beam sit in a dark frame. **Nothing is washed out and nothing that
+should be lit is missing** — but the verdict word is the user's, not the meter's.
+
+**How to take a night frame — the trap that cost the first attempt.** `?spawn=x,y,z` on a MODEL's own
+coordinates fails three ways: the player falls through collision that has not streamed yet (`grounded 0`, 12
+draws, z −1697 and still falling), and a spawn on a model origin puts the camera INSIDE its geometry — the
+sphinx metered *brighter* at night than at noon purely because both frames were a close-up of a wall, which
+is exactly the shape of number that gets reported as a finding. The fix is `scripts/debug/teleport-spot.ts`,
+which already exists for this (built for 092's field controls): it rings the target, casts down onto real
+collision, rejects any spot a player-sized box intersects, and says which spots can see the target. Every
+frame above is one of its spots, and every one reports `grounded 1` with 300-900 draws.
 
 - Field: DONE for day (2026-07-29): `gaz27_law` ("стена теперь выглядит нормально"),
   `exclbr_hotl02_lvs` / `sphinx01_lvs` / `flamingo01_lvs` "все три выглядят хорошо", healthy
