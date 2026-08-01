@@ -8,6 +8,7 @@
 import type { Entry, ModelRef } from '@opensa/game-build/partition';
 
 import { ideRefs, partitionEntries, placedModels } from '@opensa/game-build/partition';
+import { parseTxdParents } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
 import { parseIpl } from '@opensa/renderware/parsers/text/ipl.parser';
 import { parsePedDefs } from '@opensa/renderware/parsers/text/ped-defs.parser';
@@ -62,12 +63,13 @@ export async function readEntry(source: InstallSource, entry: Entry): Promise<Ui
  * dynamically, not placed on the map, so the partition would otherwise miss them.
  */
 export async function selectInstallEntries(source: InstallSource): Promise<InstallPlan> {
-  const placed = placedModels(await placedInstanceIds(source), await ideById(source));
+  const ide = await ideData(source);
+  const placed = placedModels(await placedInstanceIds(source), ide.byId);
   const extra = await dynamicModelRefs(source);
   const clutter = await procObjModelRefs(source);
   const refs = {
     models: [...placed.models, ...extra.models, ...clutter.models],
-    txds: [...placed.txds, ...extra.txds, ...clutter.txds],
+    txds: withTxdParents([...placed.txds, ...extra.txds, ...clutter.txds], ide.txdParents),
   };
   const { models, others, textures } = partitionEntries(
     refs,
@@ -104,18 +106,30 @@ async function dynamicModelRefs(source: InstallSource): Promise<{ models: string
   return { models, txds };
 }
 
-/** `id → {model, txd}` from every IDE under `data/` (matches the build's `ideIdMap`). */
-async function ideById(source: InstallSource): Promise<Map<number, ModelRef>> {
-  const map = new Map<number, ModelRef>();
+/**
+ * What one pass over every IDE under `data/` yields: `id → {model, txd}` (the build's `ideIdMap`) and the
+ * `txdp` child → parent links. The parents are read here because they are named NOWHERE else — a dictionary
+ * only ever appears as some other dictionary's ancestor, never as an IDE row's txd — so a partition built
+ * from IDE rows alone cannot know it is needed.
+ */
+async function ideData(
+  source: InstallSource,
+): Promise<{ byId: Map<number, ModelRef>; txdParents: Map<string, string> }> {
+  const byId = new Map<number, ModelRef>();
+  const txdParents = new Map<string, string>();
   for (const path of await source.looseFiles()) {
     if (path.startsWith('data/') && path.endsWith('.ide')) {
-      for (const [id, ref] of ideRefs(await source.readLooseText(path))) {
-        map.set(id, ref);
+      const text = await source.readLooseText(path);
+      for (const [id, ref] of ideRefs(text)) {
+        byId.set(id, ref);
+      }
+      for (const [child, parent] of parseTxdParents(text)) {
+        txdParents.set(child, parent); // later IDEs win, like resolveMap's catalog
       }
     }
   }
 
-  return map;
+  return { byId, txdParents };
 }
 
 /** Exterior-placed instance ids: text IPLs under `data/` (not `interior/`) + binary IPL streams in gta3.img. */
@@ -153,7 +167,7 @@ async function procObjModelRefs(source: InstallSource): Promise<{ models: string
   }
   // procobj.dat carries only model NAMES; the TXD lives in the model's IDE row — build a name → txd map.
   const txdByModel = new Map<string, string>();
-  for (const ref of (await ideById(source)).values()) {
+  for (const ref of (await ideData(source)).byId.values()) {
     txdByModel.set(ref.model.toLowerCase(), ref.txd.toLowerCase());
   }
   const models: string[] = [];
@@ -177,4 +191,28 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   }
 
   return bytes.slice().buffer;
+}
+
+/**
+ * The referenced dictionaries plus every `txdp` ANCESTOR of each — a child TXD inherits the textures it
+ * lacks from its parent chain, and the texture resolvers (`asset-cache`, `TexturePlanner`) walk that chain
+ * at read time. A parent left out of the install is therefore not an error anywhere: the lookup simply falls
+ * off the end and the material renders in its flat colour. Measured on a merged build: `salodpar.txd`
+ * (2.7 MB, 1 087 textures) is the shared parent of 995 `salod*` LOD dictionaries and is named by no IDE row,
+ * so every LOD texture that lived only in it came out white.
+ *
+ * Only the ancestors of dictionaries already wanted are added — pulling every parent in the file would drag
+ * in dictionaries nothing on this map references. Cycle-safe.
+ */
+function withTxdParents(txds: readonly string[], parents: ReadonlyMap<string, string>): string[] {
+  const out = new Set<string>();
+  for (const txd of txds) {
+    let current: string | undefined = txd.toLowerCase();
+    while (current && !out.has(current)) {
+      out.add(current);
+      current = parents.get(current);
+    }
+  }
+
+  return [...out];
 }

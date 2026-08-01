@@ -553,3 +553,32 @@ vanilla 13 189. The rule is now `docs/restrictions/assets-and-data.md`; the data
 `--rect`-less convert are in `docs/edge-cases/converter-pipeline.md`; `scripts/debug/grid-extent.ts` names
 the stragglers so the next such tree is one command away. Nothing catches this class in CI — `apps/**/ui` is
 off the unit lane and the arithmetic was never wrong.
+
+## Field fix — LODs rendering white, though their textures are in the tree (2026-08-01)
+
+Field report, with two named examples (`lodntry_law2` / `salod0189`, `lodntclub01_law2` / `salod0164`):
+many LODs draw untextured. Both dictionaries are present in the tree, and both models resolve completely —
+`lodntry_law2` wants 10 textures, 6 sit in `salod0189` and **4 only in `salodpar`**; `lodntclub01_law2`
+wants 7, 5 own and 2 in the parent. Nothing was missing from the DATA.
+
+`salodpar` is a `txdp` PARENT (`data/maps/salod-txdp.ide`, 995 rows, all pointing at it). A parent is named
+by no IDE row, and `selectInstallEntries` built its texture list from IDE rows alone — so the file was never
+read into the VFS, `TexturePlanner.rawTexture` walked the chain to a dictionary that was not there, and the
+material fell back to its flat colour. White material ⇒ white building. The runtime walk and the offline
+weld had both been made to follow `txdp` (opensa-pack plan 003); the SELECTION had not.
+
+Fixed in `packages/loaders/.../build-vfs.ts`: the install plan now takes each referenced dictionary's whole
+ancestor chain (`withTxdParents`, cycle-safe) — ancestors of the wanted set only, not every parent in the
+file.
+
+| | vanilla `game-src/original` | the merged build |
+| --- | --- | --- |
+| `txdp` links | 37 | 1 053 |
+| parents named by no IDE row | **0** | **2** — `salodpar`, `neonobj` |
+| bytes the fix adds | 0.00 MB | **6.72 MB** |
+
+That first column is why nobody saw this: every stock `txdp` parent is also some placed model's own
+dictionary, so vanilla was already complete by accident. Field-verified at `at=703,-1278&h=220&lod=1` on the
+merged build — the cell reads 80.5 → 83.1 MB (`salodpar.txd` is 2.72 MB), pixel diff mean 11.4 / max 226.9,
+and the white blocks come back as concrete and terracotta. The rule is now in
+`docs/restrictions/assets-and-data.md`; three tests pin the chain, the cycle and the unreferenced parent.

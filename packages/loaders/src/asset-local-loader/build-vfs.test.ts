@@ -38,12 +38,46 @@ function source(overrides: Partial<InstallSource> = {}): InstallSource {
   };
 }
 
+/** A source whose one placed model (`cj`) uses `cjtxd`, with the `txdp` links the test wants. */
+function txdpSource(txdp: readonly string[]): InstallSource {
+  const loose: Record<string, string> = {
+    'data/maps/test.ide': ['objs', '100, cj, cjtxd, 100, 0', 'end', 'txdp', ...txdp, 'end'].join('\n'),
+    'data/maps/test.ipl': IPL,
+  };
+
+  return source({
+    gta3: fakeArchive({
+      'cj.dff': new Uint8Array([1]),
+      'cjtxd.txd': new Uint8Array([1]),
+      'midtxd.txd': new Uint8Array([1]),
+      'orphanparent.txd': new Uint8Array([1]),
+      'roottxd.txd': new Uint8Array([1]),
+    }),
+    looseFiles: () => Promise.resolve(Object.keys(loose)),
+    readLooseText: (path) => Promise.resolve(loose[path] ?? ''),
+  });
+}
+
 describe('selectInstallEntries', () => {
   describe('negative cases', () => {
     it('drops models that are referenced but not placed in the exterior map', async () => {
       const plan = await selectInstallEntries(source());
 
       expect(plan.models.map((e) => e.name)).not.toContain('tree.dff');
+    });
+
+    it('does not pull a txdp parent whose CHILD dictionary nothing on this map references', async () => {
+      // Parents are followed from the wanted set outwards, not read wholesale: a stock `txdp` section links
+      // hundreds of dictionaries, and pulling every parent would drag in ones this map never asks for.
+      const plan = await selectInstallEntries(txdpSource(['unplaced, orphanparent']));
+
+      expect(plan.textures.map((e) => e.name)).not.toContain('orphanparent.txd');
+    });
+
+    it('does not hang on a txdp CYCLE', async () => {
+      const plan = await selectInstallEntries(txdpSource(['cjtxd, midtxd', 'midtxd, cjtxd']));
+
+      expect(plan.textures.map((e) => e.name).sort()).toEqual(['cjtxd.txd', 'midtxd.txd']);
     });
   });
 
@@ -114,6 +148,15 @@ describe('selectInstallEntries', () => {
       // rockbrkq is scattered from procobj.dat, never IPL-placed — its DFF+TXD must still be selected.
       expect(plan.models.map((e) => e.name)).toContain('rockbrkq.dff');
       expect(plan.textures.map((e) => e.name)).toContain('gta_rockcuntry.txd');
+    });
+
+    it('pulls the whole txdp PARENT chain of a referenced dictionary', async () => {
+      // A parent is named by no IDE row — it exists only as another dictionary's ancestor — so a selection
+      // built from IDE rows alone leaves it out, and every texture that lives ONLY in it renders as the
+      // material's flat colour. Measured: `salodpar.txd` is the parent of 995 `salod*` LOD dictionaries.
+      const plan = await selectInstallEntries(txdpSource(['cjtxd, midtxd', 'midtxd, roottxd']));
+
+      expect(plan.textures.map((e) => e.name).sort()).toEqual(['cjtxd.txd', 'midtxd.txd', 'roottxd.txd']);
     });
   });
 });

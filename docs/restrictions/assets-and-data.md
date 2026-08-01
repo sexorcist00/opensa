@@ -170,3 +170,22 @@ with content, because the inspector seeds its resident set from that cell and an
 **Caught:** no, twice over. The min/max is correct arithmetic on correct data — nothing throws, nothing
 warns, and the tool renders a perfectly good empty frame. `scripts/debug/grid-extent.ts` reports the
 stragglers, but only if someone runs it.
+
+## An asset SELECTION built from IDE rows must follow the `txdp` parent chain
+
+A `txdp` parent dictionary is named by no IDE row — it exists only as another dictionary's ancestor. So any
+list of "what this map needs" assembled from `objs`/`tobj`/ped/vehicle rows leaves it out, and the texture
+resolvers (`asset-cache`, `TexturePlanner`) that DO walk the chain then walk it to a file nobody read.
+
+The two halves are separately correct, which is why it survived: plan 003 restored the runtime walk and the
+converter has always resolved the chain at weld time — but `selectInstallEntries` (the in-browser install
+partition) still derived its `txds` from IDE rows alone. Measured 2026-08-01: stock SA hides this
+completely (37 `txdp` links, and every parent is ALSO a placed model's dictionary — 0 files missing), while
+a merged build with generated LODs missed **2 dictionaries, 6.72 MB** — `salodpar` (the shared parent of 995
+`salod*` LOD dictionaries) and `neonobj`.
+
+The rule for a new design: a selection derives from the SAME graph the resolver traverses. If a resolver
+follows a link at read time, whatever assembles its inputs follows the same link.
+
+**Caught:** no. A missing dictionary is not an error at any layer — the lookup falls off the end of the
+chain and the material renders in its flat colour, which on a white LOD material is a white building.
