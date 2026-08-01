@@ -278,3 +278,27 @@ never affected: a keypress happens long after the subscription exists.
 (DOM glue lives on the Playwright lane). The check is `scripts/debug/video-chrome.ts`, a DOM probe that
 samples inside a fragment; run its `--control` lane too, or an all-hidden reading is equally consistent with
 a probe looking for the wrong selectors.
+
+## The per-frame collision-cast budget is ONE allowance, shared by every consumer
+
+080 fixed the ceiling at **≤ 5 casts per rendered frame for the whole game**, and the follow rig already
+spends 2. Everything else — a station survey, a planted shot's occlusion check, anything a future camera or
+AI wants to ask the physics world — divides the remaining 3 between them.
+
+The rule a new consumer has to satisfy is therefore not "am I cheap" but **"what is left after the others"**.
+Concretely: take what remains of the frame's allowance rather than your own nominal share, and be the thing
+that yields if you can wait a frame. A survey can always wait; a shot that is starting THIS frame cannot,
+because its eye has to exist before it is drawn.
+
+Measured 2026-08-01 (096/09): `stepSurvey` was called with the module's full `SURVEY_CASTS_PER_FRAME` (3)
+regardless of what the frame had already spent, so adding a 3-cast plant check to the frame a shot starts on
+would have cost 3 + 3 + the rig's 2 = **8**. It now takes `max(0, SURVEY_CASTS_PER_FRAME − frameCasts)`. The
+same arithmetic is why a planted shot's candidate ladder is three rungs and not five: the rungs are casts,
+they are all spent on one frame, and three is what fits.
+
+**Caught:** partly, and only after the fact. Nothing refuses a cast — `frameCasts()` and the ledger's
+`castsMax` merely RECORD what was spent, so an over-budget frame ships and is visible only if somebody reads
+a scene capture afterwards. `station-supply.test.ts` now pins the yield ("yields the rest of the frame budget
+to a plant that already spent it"), but that is one consumer pair, not a guard: a third consumer added
+tomorrow would go over budget silently again. Read `stations.castsMax` in a `[video]` capture before
+believing a new probe is free.

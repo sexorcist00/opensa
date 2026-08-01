@@ -5,6 +5,7 @@ import {
   anchorFor,
   forwardFromHeading,
   PLANTED_CEILING_SECONDS,
+  plantedEyeCandidates,
   type PosedShot,
   projectToScreen,
   SHOT_ROAD_SECONDS,
@@ -85,6 +86,56 @@ describe('shotEye', () => {
 
     it('lifts by the height the car itself has', () => {
       expect(shotEye(WING, subjectAt(0, 12))[1]).toBeCloseTo(1.6 * HALF_EXTENTS[2], 6);
+    });
+  });
+});
+
+describe('plantedEyeCandidates', () => {
+  describe('negative cases', () => {
+    it('writes no metre of its own — every rung scales with the car it films', () => {
+      // The same rule `shotEye` obeys, and it has to hold for the LADDER too: a rung that carried a metre of
+      // its own would put a bus's fallback spot where a Bandito's belongs (CLAUDE.md's no-hardcoded-asset
+      // rule). Doubling the car doubles every candidate's distance, rung for rung.
+      const small = plantedEyeCandidates(WING, subjectAt(0, 12));
+      const large = plantedEyeCandidates(WING, { ...subjectAt(0, 12), halfExtents: [1.8, 4.6, 1.4] });
+
+      expect(large.length).toBe(small.length);
+      for (const [at, eye] of large.entries()) {
+        expect(Math.hypot(eye[0], eye[2])).toBeCloseTo(2 * Math.hypot(small[at][0], small[at][2]), 6);
+        expect(eye[1]).toBeCloseTo(2 * small[at][1], 6);
+      }
+    });
+
+    it('never offers more rungs than the frame can pay for', () => {
+      // Each rung is one cast and they are all spent on the frame the shot starts. 080's ground rule is
+      // <= 5 casts/frame for the whole game and the follow rig already spends 2
+      // (`docs/restrictions/architecture.md`). Three is the ceiling, not a preference.
+      expect(plantedEyeCandidates(WING, subjectAt(0, 12)).length).toBeLessThanOrEqual(3);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('offers the authored spot first, so a clear one never moves the camera', () => {
+      expect(plantedEyeCandidates(WING, subjectAt(0, 12))[0]).toEqual(shotEye(WING, subjectAt(0, 12)));
+    });
+
+    it('puts the second rung on the far side of the car and the third overhead', () => {
+      const subject = subjectAt(0, 12);
+      const [authored, mirrored, raised] = plantedEyeCandidates(WING, subject);
+
+      // Mirrored: same height, lateral reflected through the car — a street blocked from one side only.
+      expect(mirrored[1]).toBeCloseTo(authored[1], 6);
+      expect(mirrored[0] - subject.position[0]).toBeCloseTo(-(authored[0] - subject.position[0]), 6);
+      // Raised: same ground position, twice the lift — over whatever is in the way.
+      expect(raised[0]).toBeCloseTo(authored[0], 6);
+      expect(raised[2]).toBeCloseTo(authored[2], 6);
+      expect(raised[1] - subject.position[1]).toBeCloseTo(2 * (authored[1] - subject.position[1]), 6);
+    });
+
+    it('gives every rung a DISTINCT spot — a repeat would spend a cast on the same answer', () => {
+      const keys = plantedEyeCandidates(WING, subjectAt(0, 12)).map((eye) => eye.map((c) => c.toFixed(4)).join());
+
+      expect(new Set(keys).size).toBe(keys.length);
     });
   });
 });

@@ -41,8 +41,23 @@ would let a scene run several tripods at once (a multi-camera scene, roadmap mat
   exist at build time. (Since 05b a tripod's own window is bounded by its watchdog rather than a chosen
   fragment length, which changes the arithmetic and not the argument.) A baked table could only pre-filter geometry, so the runtime would still need the window pass.
 
+## The second consumer, added 2026-08-01 (096/09)
+
+A PLANTED car-anchored shot (`flyby`) now asks the same question of the spots it can reach: three candidates,
+one `pathClear` each, all spent on the single frame the shot starts. It shares this lever — a baked table of
+pre-validated stands would serve it too — but it shares the objection more strongly, because its candidates
+are derived from where the CAR is at that moment and a build cannot know that.
+
+What it changed here is the arithmetic rather than the argument: two consumers now divide the same 3-cast
+allowance, which is why the survey was made to take what is LEFT of the frame rather than its own share
+(`docs/restrictions/architecture.md`, the cast-budget rule). Measured over 14 scenes: worst `castsMax` still
+**3**, `stepMs` 0.0153-0.0180 against 096/08's drive-only 0.0172 — no measurable cost.
+
 ## What would have to be true to pull it
 
 - A scene wanting **several simultaneous tripods**, or the survey running for every shot rather than one in
   four, pushing past the 3-cast budget.
-- Or a measured frame-time cost: today's survey has never appeared in a `[slow]` line.
+- Or a THIRD cast consumer arriving: two already divide the allowance, and the next one has nowhere to take
+  its casts from without one of them yielding further.
+- Or a measured frame-time cost: today's survey has never appeared in a `[slow]` line, and neither has the
+  plant check.
