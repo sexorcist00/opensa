@@ -42,6 +42,7 @@ import type { ProgramEntry } from './video/presets';
 import type { ShiverDiag } from './video/shiver-diag';
 import type { Subject } from './video/shots';
 import type { StationSupply } from './video/station-supply';
+import type { StepCost, StepTimer } from './video/step-cost';
 import type { WalkPath } from './video/walk';
 
 import { modCarSlots, roadCarModels } from '../vehicle-models';
@@ -59,10 +60,12 @@ import {
   sceneSeed,
   weatherPool,
 } from './video/presets';
+import { playSequence } from './video/sequence';
 import { createShiverDiag, yawOfQuat } from './video/shiver-diag';
 import { forwardFromHeading, SHOT_ROAD_SECONDS, SHOTS_PER_SCENE, WALK_SHOTS } from './video/shots';
 import { createStationSupply } from './video/station-supply';
 import { WALK_STATION_LATERALS, WALK_SURVEY_DEFAULTS } from './video/stations';
+import { createStepTimer } from './video/step-cost';
 import { createWalkCursor, WALK_LANE_OFFSET, walkWaypoints } from './video/walk';
 
 /** The player, as {@link VideoRunsHost.playerPose} hands him over. */
@@ -268,6 +271,19 @@ interface SceneContext {
   seed: number;
 }
 
+/**
+ * The world settings a scene STAGED, carried into its capture.
+ *
+ * They were only ever in the log prose, which meant a `[video]` report could not say what world it was shot
+ * in — and the scene-variety question (does the seeded stream ever deal two neighbours the same car, hour and
+ * weather?) is unanswerable from a capture that omits two of the three. The self-describing-capture rule.
+ */
+interface StagedWorld {
+  hour: number;
+  /** The weather NAME, or null for a scene that left the weather alone. */
+  weather: null | string;
+}
+
 /** The black DOM element between scenes, and the only thing that owns it (the 094 single-owner rule). */
 interface VideoOverlay {
   /** The run is over: black, with a caption saying so. Nothing lifts this one. */
@@ -323,33 +339,32 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   void (async (): Promise<void> => {
     // The program is rebuilt each lap from the lap's own seed, so a long run is not the same eight scenes
     // over and over — and `?seed=` still names every one of them.
-    let played = 0;
-    for (let scene = from; scene <= last; scene += 1) {
-      // Per-scene seed off the master (D9), so scene N is the same scene however the run reached it — and
-      // `sceneProgramEntry` is a pure function of `(seed, scene)` for the same reason, which is what lets a
-      // run start in the middle of the sequence and still play the scene the full run would have.
-      const random = mulberry32(sceneSeed(seed, scene));
-      const entry = sceneProgramEntry(seed, scene);
-      const car = pinnedCar ?? pickCar(random, roster, modCars) ?? DEFAULT_CAR;
-      const context: SceneContext = {
-        car,
-        graph,
-        modCar: modCars.has(car),
-        pinned,
-        random,
-        region: entry.region,
-        scene,
-        seed,
-      };
-      try {
-        await sceneOfKind(entry.kind, host, context, overlay, diag);
-        played += 1;
-      } catch (error) {
+    const played = await playSequence(from, last, {
+      onFailure: (scene, message) => {
         // A scene that failed must SAY so behind its own overlay; a missing line reads as a scene that played.
         overlay.show();
-        log(`scene ${scene} failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
+        log(`scene ${scene} failed: ${message}`);
+      },
+      play: async (scene) => {
+        // Per-scene seed off the master (D9), so scene N is the same scene however the run reached it — and
+        // `sceneProgramEntry` is a pure function of `(seed, scene)` for the same reason, which is what lets a
+        // run start in the middle of the sequence and still play the scene the full run would have.
+        const random = mulberry32(sceneSeed(seed, scene));
+        const entry = sceneProgramEntry(seed, scene);
+        const car = pinnedCar ?? pickCar(random, roster, modCars) ?? DEFAULT_CAR;
+        const context: SceneContext = {
+          car,
+          graph,
+          modCar: modCars.has(car),
+          pinned,
+          random,
+          region: entry.region,
+          scene,
+          seed,
+        };
+        await sceneOfKind(entry.kind, host, context, overlay, diag);
+      },
+    });
     // The run ENDS, and says so on screen as well as in the log: a recording's tail must state what it was,
     // and a black frame that simply never changes again is indistinguishable from a hang.
     log(`run complete: ${played} scenes played of ${last - from + 1} (${from}-${last}) from seed ${seed}`);
@@ -497,9 +512,12 @@ async function playFragment(
   director: DirectorState,
   supply: StationSupply,
   diag: ShiverDiag,
+  timer: StepTimer,
 ): Promise<string> {
   // A hitch must not teleport the damping: a 400 ms frame would land the eye on its target in one step.
-  host.setVideoStep((dt) => poseFrame(host, vehicles, director, supply, Math.min(MAX_FRAME_SECONDS, dt), diag));
+  host.setVideoStep(
+    timer.wrap((dt) => poseFrame(host, vehicles, director, supply, Math.min(MAX_FRAME_SECONDS, dt), diag)),
+  );
   try {
     for (;;) {
       await nextFrame();
@@ -532,8 +550,9 @@ async function playWalk(
   director: DirectorState,
   supply: StationSupply,
   diag: ShiverDiag,
+  timer: StepTimer,
 ): Promise<string> {
-  host.setVideoStep((dt) => poseWalkFrame(host, director, supply, Math.min(MAX_FRAME_SECONDS, dt), diag));
+  host.setVideoStep(timer.wrap((dt) => poseWalkFrame(host, director, supply, Math.min(MAX_FRAME_SECONDS, dt), diag)));
   try {
     for (;;) {
       await nextFrame();
@@ -675,6 +694,8 @@ function report(
   director: DirectorState,
   supply: StationSupply,
   seconds: number,
+  stepMs: StepCost,
+  staged: StagedWorld,
 ): void {
   const errors = host.autopilot
     .errorSamples()
@@ -709,6 +730,8 @@ function report(
     },
     /** Why the fragment ended: it ran its seconds out, arrived, or the car wedged. */
     ended,
+    /** The hour slot this scene was staged in (D6). */
+    hour: staged.hour,
     /** Whether the car came from the mod ledger — the ledger's realised share is counted off these. */
     modCar: context.modCar,
     region: context.region,
@@ -763,7 +786,11 @@ function report(
       fallbacks: director.fallbacks,
       predictionErrorMax: Number(supply.ledger().predictionErrorMax.toFixed(1)),
     },
+    /** What the module's own per-frame work cost inside the host loop (ms) — 096/08's benchmark. */
+    stepMs,
     summary: summarisePhysFrames(frames),
+    /** The weather this scene was staged in (D7), or null when it left the weather alone. */
+    weather: staged.weather,
   };
   // eslint-disable-next-line no-console -- the capture deliverable IS this JSON line (the [phys] twin)
   console.log('[video]', JSON.stringify(capture));
@@ -779,12 +806,15 @@ function reportFly(
   settleMs: number,
   seconds: number,
   flight: FlyState,
+  stepMs: StepCost,
+  staged: StagedWorld,
 ): void {
   const capture = {
     /** The LIVE guard (096/07 B task 6): probes fired at 1 Hz, and how many found something to climb over.
      *  The acceptance number is `hits` — a staged flight that was cleared properly should not need the
      *  guard at all, so a non-zero count is the staging check being wrong about something. */
     guard: { hits: flight.guardHits, probes: flight.guardProbes },
+    hour: staged.hour,
     kind: 'fly',
     passes: {
       /** Clearance casts spent at staging — all of them behind the overlay. */
@@ -804,6 +834,9 @@ function reportFly(
     scene: context.scene,
     seconds: Number(seconds.toFixed(2)),
     settleMs: Number(settleMs.toFixed(0)),
+    /** What the module's own per-frame work cost inside the host loop (ms) — 096/08's benchmark. */
+    stepMs,
+    weather: staged.weather,
   };
   // eslint-disable-next-line no-console -- the capture deliverable IS this JSON line (the [phys] twin)
   console.log('[video]', JSON.stringify(capture));
@@ -819,9 +852,12 @@ function reportWalk(
   director: DirectorState,
   supply: StationSupply,
   seconds: number,
+  stepMs: StepCost,
+  staged: StagedWorld,
 ): void {
   const capture = {
     ended,
+    hour: staged.hour,
     kind: 'walk',
     region: context.region,
     route: {
@@ -848,6 +884,9 @@ function reportWalk(
       fallbacks: director.fallbacks,
       predictionErrorMax: Number(supply.ledger().predictionErrorMax.toFixed(1)),
     },
+    /** What the module's own per-frame work cost inside the host loop (ms) — 096/08's benchmark. */
+    stepMs,
+    weather: staged.weather,
   };
   // eslint-disable-next-line no-console -- the capture deliverable IS this JSON line (the [phys] twin)
   console.log('[video]', JSON.stringify(capture));
@@ -901,16 +940,20 @@ async function runFlyScene(host: VideoRunsHost, context: SceneContext, overlay: 
 
   const settleMs = await waitForStableFrames();
   const flight = createFlight(passes);
+  const timer = createStepTimer();
   try {
     poseFlyFrame(host, flight, 0);
     await overlay.hide();
     const started = performance.now();
-    host.setVideoStep((dt) => poseFlyFrame(host, flight, Math.min(MAX_FRAME_SECONDS, dt)));
+    host.setVideoStep(timer.wrap((dt) => poseFlyFrame(host, flight, Math.min(MAX_FRAME_SECONDS, dt))));
     await until(() => flight.done, FLY_SCENE_TIMEOUT_MS);
     const seconds = (performance.now() - started) / 1000;
     overlay.show();
     host.setVideoCamera(null, true);
-    reportFly(context, route, passes, planned.length, casts, settleMs, seconds, flight);
+    reportFly(context, route, passes, planned.length, casts, settleMs, seconds, flight, timer.cost(), {
+      hour,
+      weather: weather === null ? null : host.weatherNames[weather],
+    });
   } finally {
     host.setVideoStep(null);
   }
@@ -1030,13 +1073,29 @@ async function runScene(
     // report `idle`, and a real `stuck` — a scene that started on an 18° hill the car could not climb — hid
     // behind that for a whole headless run.
     const started = performance.now();
-    const ended = await playFragment(host, vehicles, director, supply, diag);
+    const timer = createStepTimer();
+    const ended = await playFragment(host, vehicles, director, supply, diag, timer);
     const seconds = (performance.now() - started) / 1000;
     overlay.show();
     host.setVideoCamera(null, true); // the rig takes its frame back, and that hand-over is a declared cut
     host.autopilot.stop();
     vehicles.telemetry.enabled = false;
-    report(host, context, route, vehicles.telemetry.frames(), settleMs, ended, director, supply, seconds);
+    report(
+      host,
+      context,
+      route,
+      vehicles.telemetry.frames(),
+      settleMs,
+      ended,
+      director,
+      supply,
+      seconds,
+      timer.cost(),
+      {
+        hour,
+        weather: weather === null ? null : host.weatherNames[weather],
+      },
+    );
     diag.dump(context.scene);
     // D15's tripwire: a route is built inside ONE region precisely so `CityZoneSystem` never fires its 6 s
     // weather rewrite on camera. If the target moved anyway, the route leaked across a boundary — say which
@@ -1047,7 +1106,11 @@ async function runScene(
           `${host.weatherNames[host.getWeather()]} — the route left ${context.region}`,
       );
     }
-    if (ended !== 'ran-out') {
+    // A scene's normal end is its SHOT LIST finishing (D1/D4 as revised 2026-07-31). This line is for the
+    // other ends — a wedged car, an autopilot that went idle — and it said `ran-out`, the clock-driven end
+    // condition the revision deleted, so every healthy scene since has logged itself as ending early. Caught
+    // by reading 08's own benchmark log, which is the only place it showed: nothing asserts on log prose.
+    if (ended !== 'shots-done') {
       log(
         `scene ${context.scene} ended early: ${ended} at ${(host.autopilot.progress() * 100).toFixed(0)}% of the route`,
       );
@@ -1162,11 +1225,15 @@ async function runWalkScene(
     poseWalkFrame(host, director, supply, 0, diag);
     await overlay.hide();
     const started = performance.now();
-    const ended = await playWalk(host, director, supply, diag);
+    const timer = createStepTimer();
+    const ended = await playWalk(host, director, supply, diag, timer);
     const seconds = (performance.now() - started) / 1000;
     overlay.show();
     host.setVideoCamera(null, true);
-    reportWalk(context, route, path, settleMs, ended, director, supply, seconds);
+    reportWalk(context, route, path, settleMs, ended, director, supply, seconds, timer.cost(), {
+      hour,
+      weather: weather === null ? null : host.weatherNames[weather],
+    });
     diag.dump(context.scene);
     if (weather !== null && host.getWeather() !== weather) {
       log(

@@ -21,7 +21,7 @@ import { smoothDamp, type SmoothDampRef } from '@opensa/math';
 import type { VideoCamera } from '../camera/engine-camera';
 import type { PosedShot, ShotName, ShotPreset, Subject, Vec3 } from './shots';
 
-import { aimShot, anchorFor, projectToScreen, shotEye, SHOTS, SHOTS_PER_SCENE, shotSeconds } from './shots';
+import { aimShot, anchorFor, isPlanted, projectToScreen, shotEye, SHOTS, SHOTS_PER_SCENE, shotSeconds } from './shots';
 
 /** What one stepped frame produced — the pose plus everything the scene's report has to state. */
 export interface DirectorFrame {
@@ -106,7 +106,16 @@ export interface StationSource {
 }
 
 /** Why a shot ended — one word for the ledger, and the priority order the guard resolves in. */
-type CutCause = 'empty' | 'occluded' | 'opening' | 'scheduled';
+/**
+ * Why a shot ended. `scheduled` is a RIDING shot's own 10 s clip running out — the editorial length. A
+ * PLANTED shot has no clip: what is supposed to end it is the car leaving its frame (`empty`) or the
+ * sightline breaking (`occluded`), so its clock is a WATCHDOG and gets its own name.
+ *
+ * They were one cause until 096/08, and that hid the question D4 exists to answer. The soak could only bound
+ * it: 30 planted shots, 20 of them ended by the guard, so up to 10 MIGHT have run their watchdog out — which
+ * is the difference between a safety net and a length nobody chose.
+ */
+type CutCause = 'empty' | 'occluded' | 'opening' | 'scheduled' | 'watchdog';
 
 /** How long the car may sit outside the safe frame before the shot is cut short (s, D4) — the patient clock,
  *  for a car that may simply be behind something. */
@@ -137,7 +146,7 @@ const ORIGIN: Vec3 = [0, 0, 0];
 export function createDirector(plan: readonly ShotPlan[]): DirectorState {
   return {
     cause: 'opening',
-    causes: { empty: 0, occluded: 0, opening: 1, scheduled: 0 },
+    causes: { empty: 0, occluded: 0, opening: 1, scheduled: 0, watchdog: 0 },
     cuts: 0,
     done: false,
     elapsed: 0,
@@ -490,7 +499,11 @@ function shotEnding(state: DirectorState): CutCause | null {
     return 'empty';
   }
 
-  return state.elapsed >= state.plan[state.index].seconds ? 'scheduled' : null;
+  if (state.elapsed < state.plan[state.index].seconds) {
+    return null;
+  }
+
+  return isPlanted(state.plan[state.index].preset) ? 'watchdog' : 'scheduled';
 }
 
 /**

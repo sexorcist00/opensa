@@ -317,6 +317,18 @@ The unattributed transient and a `[slow]`-line double-count (collision counted i
 and `other` → `unattributed -226.1`) are the queued 091 follow-up inputs.
 Run: [`2026-07-29-headless-093-world-ambient-sweep.json`](opensa-engine/2026-07-29-headless-093-world-ambient-sweep.json).
 
+### 2026-08-01 — video mode's own per-frame cost (096/08)
+
+Not a sweep: what the VIDEO MODE module adds to a frame, measured directly rather than by an on/off
+comparison (with video off nothing drives, nothing streams and the camera does not move, so the difference
+would be the scene, not the module). Its whole per-frame footprint is one call, and over **235 348 frames of
+a 32.7-minute unattended run** it averages **0.0096 ms** — under a fiftieth of a millisecond, i.e. under
+0.2 % of a 120 Hz frame; drive-only scenes, the expensive kind, average 0.0172 ms. `performance.now()` is
+coarsened to 0.1 ms headless, so only the mean is a measurement. The same run carries the soak evidence
+(settle flat at 249-250 ms across all 40 scenes, no drift in step cost or safe frame, 0 throws) and the
+staging timeline. Run:
+[`2026-08-01-headless-video-mode.json`](opensa-engine/2026-08-01-headless-video-mode.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

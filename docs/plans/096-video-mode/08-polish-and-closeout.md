@@ -64,3 +64,48 @@ audit + benchmark is unfinished (CLAUDE.md standing rule).**
 - Every doc row above exists in the closing commit(s); the plans README row flips to SHIPPED with the
   one-paragraph story.
 - The user has recorded at least one real clip they kept — the only acceptance that actually matters.
+
+## SHIPPED 2026-08-01
+
+Every task above is done; the numbers live in the plan readme's ledger and in
+[`docs/benchmarks/opensa-engine/2026-08-01-headless-video-mode.json`](../../benchmarks/opensa-engine/2026-08-01-headless-video-mode.json).
+What this doc records is what the phase had to CHANGE to answer its own questions — three of its tasks turned
+out to be unanswerable against the code as it stood.
+
+### The three instruments this phase had to build
+
+1. **A per-frame cost that means something.** Task 10 asked for "video ON vs OFF". That comparison is not
+   available: with video off nothing drives, nothing streams and the camera does not move, so its difference
+   is the scene. The module's whole per-frame footprint is one call (`setVideoStep`), so that call is timed
+   instead (`video/step-cost.ts`), per scene, reported as `stepMs` in every capture. **Read it knowing
+   `performance.now()` is coarsened to 0.1 ms headless** — a single frame reads 0 or 0.1, and only the mean
+   over thousands of frames is a measurement.
+2. **`hour` and `weather` in the capture.** Task 2 (variety) compares car, hour and weather between
+   neighbouring scenes, and a scene report carried only the car — the other two were in the log prose. A
+   capture that cannot say what world it was shot in also breaks the self-describing-capture rule, so this was
+   owed anyway.
+3. **A cut cause for the planted watchdog.** Task 1 (freeze D4's table) asks whether a planted shot's 15 s
+   clock is a safety net or a length. It could not be answered: `scheduled` covered both a riding shot's
+   chosen clip and a planted shot's watchdog. The soak could only BOUND it (≤ 10 of 30 planted shots). With
+   the causes split, the answer is **1 of 9** — a safety net. `isPlanted` came out of the same change; the
+   predicate had been written inline in four places.
+
+### The two defects the phase found in its own outputs
+
+- **Every healthy scene logged itself as "ended early".** The runner still tested `ended !== 'ran-out'`, the
+  clock-driven end condition D1/D4 deleted on 2026-07-31; the normal end has been `shots-done` since. It
+  survived two phases because nothing asserts on log prose — it surfaced from READING the benchmark log.
+- The capture gap in (2) above.
+
+### What could not be done, and is not code
+
+**Nobody has watched a walk or a fly scene.** Acceptance line three ("the user has recorded at least one real
+clip they kept") is the one that actually matters and it is still open, along with the 07 field checklist: the
+walk's pavement offset (a driving route pushed sideways), whether five 10 s aerial passes read as editing,
+`flyby`'s unchecked eye, `top`/`crane`, and the cuts in and out of `chase`.
+
+### Not done, deliberately
+
+The 07 note suggesting `engine-video-runs.ts`'s three `runXScene` functions might want their own files was
+looked at and left alone: the staging around them is genuinely shared, and splitting it would trade one
+coherent module for three files plus a shared fourth. Revisit if a fourth scene kind lands.

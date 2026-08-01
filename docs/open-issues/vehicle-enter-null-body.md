@@ -16,6 +16,16 @@ intermittent at ~2× ever), but it is the first time the recipe has been run at 
 One `Cannot read properties of null (reading 'linvel')` DID appear in that run and is NOT this issue: it was
 096/02's own bug, a scene despawning its car while the player was still seated in it, fixed by
 `EnterVehicleSystem.leaveInstantly()`. Do not read that trace as this crash returning.
+
+**Second evidence, 2026-08-01 (096/08 close-out):** an unattended **32.7-minute run of 40 scenes** —
+25 of them drives, i.e. 25 more teleport → stream-settle → `spawnCar` → `seatInstantly` cycles, plus 15
+teleports without a spawn — completed with **0 throws of any kind** and no `readBody` trace. Added to the
+02 evidence and the phases in between, the plan-096 ledger now records **at least 180 staged scenes** on
+this recipe (02: 29 · 03: 25 · 04: 25 · field round 1: 25 · 05: 17 · 05b/06: 10 · 07: 4 · 08: 4 + 40) with
+**no sighting**. Both original sightings remain three.js-era. The recheck below stands as set; this is the
+stress evidence it asked for, and unless the crash appears before then, close on the date citing this line.
+Run record: [`docs/benchmarks/opensa-engine/2026-08-01-headless-video-mode.json`](../benchmarks/opensa-engine/2026-08-01-headless-video-mode.json).
+
 The stack trace below is the ORIGINAL capture (its line numbers are as-of-crash, not current source — don't
 "refresh" them; a pasted trace is a record). Note: commit `a16930e` ("resolve vehicle enter/sit clips") is an
 ANIMATION fix (the driver rode standing) — it did NOT touch this physics null-body crash; `readBody` is still

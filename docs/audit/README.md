@@ -37,3 +37,10 @@ interpret them.
   vehicle DFF fallback it fed: one package and a whole second vehicle pipeline gone (−1816 lines, the
   `vehicle-model.worker` chunk with them), coverage up on every metric, and roadmap item 2 closed by deletion
   instead of by measurement. Reasoning: [`postmortem/runtime-modloader-overlay.md`](../postmortem/runtime-modloader-overlay.md).
+- [`video-mode-096.md`](./video-mode-096.md) — the plan-096 chain (eight phases, two days, three field
+  rounds): `?video=1&seed=N` as a bounded, seeded, self-directed showcase, built on a road-route capability
+  the game's own `NODES*.DAT` always carried and nothing read. **9 036 lines added, `packages/engine`
+  untouched, and the host's whole footprint is 185 lines** — the shipped attach pattern holding for a third
+  subsystem. Its per-frame cost is **under the timer's resolution** (mean 0.0172 ms over 22 817 frames). The
+  lesson worth carrying: three of the four defects that mattered were found by a HUMAN watching footage after
+  headless numbers had accepted the build, and each became a rule about what a metric cannot see.

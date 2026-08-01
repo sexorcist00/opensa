@@ -1,9 +1,14 @@
 # 096 — Video mode (self-directed showcase runs for trailer footage)
 
-**Status: IN PROGRESS. Phases 01-07 SHIPPED (2026-07-30/31), 08 open.** Planned 2026-07-30 and
-graduated from `docs/ideas/video-mode/` the same day it was researched —
-the four-way repo sweep (paths/driving, camera, streaming/host, player/vehicles) and every user decision
-moved into this doc, per the lifecycle rule that a validated idea's research record MOVES into the plan.
+**Status: SHIPPED — all eight phases (2026-07-30/08-01).** Close-out audit:
+[`docs/audit/video-mode-096.md`](../../audit/video-mode-096.md); measurement record:
+[`docs/benchmarks/opensa-engine/2026-08-01-headless-video-mode.json`](../../benchmarks/opensa-engine/2026-08-01-headless-video-mode.json).
+**What is still owed is not code: nobody has WATCHED a walk or a fly scene** — every 07 number is an
+instrument, and the pavement offset, the aerial framing and `flyby`'s unchecked eye are human questions.
+
+Planned 2026-07-30 and graduated from `docs/ideas/video-mode/` the same day it was researched — the four-way
+repo sweep (paths/driving, camera, streaming/host, player/vehicles) and every user decision moved into this
+doc, per the lifecycle rule that a validated idea's research record MOVES into the plan.
 
 **Goal: `?video=1` boots the game into a bounded, seeded, self-directed showcase** — scenes 1…100 of the
 seed, then an end card (D2 as revised). A random car — mod cars first — spawns on a road, the player gets in
@@ -139,8 +144,8 @@ dependency order; 06 is independent and can run any time before 05.
 | [04](04-stations-and-occlusion.md) | Tripod stations: survey, occlusion, cuts without flicker — **SHIPPED** | **P1** | 03 |
 | [05](05-sequencer-regions-presets.md) | Sequencer: region cycle, weather/time presets, car pick — **SHIPPED** | **P1** | 02 (04 for full look) |
 | [06](06-mod-car-ledger.md) | Build-time mod-car ledger (tool + pack + runtime read) — **SHIPPED** | **P1** | — (feeds 05) |
-| [07](07-walk-and-fly-scenes.md) | Walk + flythrough scenes | **P2** | 03, 05 |
-| [08](08-polish-and-closeout.md) | Polish, empty-frame guard, docs, benchmark, audit | **P2** | all |
+| [07](07-walk-and-fly-scenes.md) | Walk + flythrough scenes — **SHIPPED** | **P2** | 03, 05 |
+| [08](08-polish-and-closeout.md) | Polish, empty-frame guard, docs, benchmark, audit — **SHIPPED** | **P2** | all |
 
 After 02 the feature is REAL (one region, chase camera, seeded route — recordable footage, ugly cuts).
 After 05 it matches the user's brief minus walk/fly. After 08 it is done by the workflow rules.
@@ -376,8 +381,67 @@ before analysis). Empty until phases run:
   an OUTCOME in the capture now, not an input.
   One bug this round's own test caught before the field did: the early `advance` return that ends a scene
   skipped counting the last shot's cut cause, so every scene would have under-reported one cut.
-- 07: —
-- 08: in progress.
+- 07: **DONE 2026-07-31** (numbers transcribed here 2026-08-01 — the row was left empty on the day, which is
+  the ledger rule being missed, not a phase without measurements; the phase doc carried them all along).
+  Walk and fly scenes, dispatched by `sceneOfKind`. **Headless, `build/original/opensa`, seed 47.**
+  **Fly** (`&scene=6&scenes=2`, COUNTRYSIDE then LA): **5/5 passes flown** in both, 35 staging clearance casts
+  each, **every lift 0 m**, and the acceptance number — the live guard's **0 hits over 90 probes**, i.e. the
+  staging check cleared the flights properly and the guard never had to climb. Routes 355.9 m / 362.3 m under
+  the 350 m extent cap with the trim doing its job; 50.02 s each; settle 250/249 ms.
+  **Walk** (`&scene=8&scenes=1`, SF): 160.3 m route, 82 waypoints of which **62 probed**, 0 route rejections,
+  `gait=walk@2m/s`, shots `station→high→chase→wing-l→crane`, 4 cuts, **safe 1.000 over 3 844 judged frames**,
+  0 pan clips, 42.0 s, 248 ms settle — and one shot ended on a live sightline cut, the tripod machinery
+  working on a pedestrian.
+  **Drive, unchanged by the dispatch** (`&scene=1&scenes=1`, LA, `alpha(mod)`): 946 m route, 21.6 m tightest
+  corner, safe 0.989, cross-track p95 0.16 m, 47.4 s.
+  **The bug only the field run found**: a walk route was built at the DRIVING cruise (12 m/s) while the ped
+  walks at 2, so the station survey predicted a ~15 s window over ~180 m instead of ~30 — all 8 candidates
+  rejected on dwell, the tripod never filled, and a fallback played silently. The only signal is
+  `stations.rejected.dwell` against `stations.filled` in a scene report; now a restriction and an edge case.
+  Tests 3 379 → 3 411.
+- 08: **DONE 2026-08-01.** The close-out: the benchmark, the audit, the soak, D4's frozen table, the variety
+  audit, fault injection and D16's evidence.
+  **The benchmark, and why it is not an on/off A/B** (`docs/benchmarks/opensa-engine/2026-08-01-headless-video-mode.json`):
+  with video OFF nothing drives, nothing streams and the camera does not move, so the difference between the
+  two runs would be the scene, not the module. What is measured instead is the module's ENTIRE per-frame
+  footprint — the one `setVideoStep` call, which holds the director, the framing, the autopilot solve and the
+  live probes. **Drive-only (4 scenes, 22 817 frames): mean 0.0172 ms. The whole soak (235 348 frames, all
+  three kinds): mean 0.0096 ms**, worst-scene p95 0.1 ms. `performance.now()` is coarsened to 0.1 ms headless,
+  so a single frame reads 0 or 0.1 and only the mean over thousands is a measurement — the honest sentence is
+  *under 0.2 % of a 120 Hz frame*.
+  **The soak — 40 scenes, 32.7 minutes unattended, 0 throws, 40/40 played.** 139 524 directed frames, safe
+  98.98 %, **0 `[cam] jump` lines**, 117 cuts, 1 `stuck` in 30 (02 measured 3.4 %; this is 3.3 %). No drift of
+  any kind over the run — by ten-scene block, settle **249 · 249 · 250 · 250 ms**, step mean **0.0117 · 0.0091
+  · 0.0096 · 0.0084 ms**, safe **0.9874 · 0.9869 · 0.9973 · 0.9881**. The staging timeline is flat to the
+  millisecond: all 40 settles inside **241-252 ms**.
+  **Variety (task A2): no de-dup needed, and it was measured before deciding.** Over 39 neighbouring pairs,
+  **0 shared car AND hour AND weather**; hour repeats 11/39, weather 2/39, car 2 of the 20 pairs where both
+  scenes even have a car. 12 distinct cars over 25 drives. The exam's first cut of this counted a fly next to
+  a walk as "the same car" (both have none) and reported 12 car repeats — a metric that can score a repeat the
+  viewer cannot see is not measuring variety.
+  **D4 frozen on a measurement, after the measurement turned out impossible.** `scheduled` covered two
+  different facts: a riding shot's chosen 10 s clip running out, and a PLANTED shot sitting out its 15 s
+  watchdog — a length nobody chose. The soak could only bound the second (≤ 10 of 30 planted shots). Splitting
+  the cause (`watchdog`, and the four-times-inlined `isPlanted` predicate with it) turned the bound into a
+  number: seed 47 scenes 1-12, **9 planted shots, 8 ended on the guard** (7 the car leaving frame, 1 the
+  sightline) **and 1 on the watchdog**; all **41 riding shots** ended on their clip. So 15 s is behaving as the
+  safety net it is documented as. Both constants now carry that verdict in `shots.ts`.
+  **Fault injection (task A4)**: the run loop's one real decision — a failed scene costs one scene and is
+  REPORTED — is now `video/sequence.ts` with 7 tests (one bad scene of four, every failure logged, all scenes
+  failing still resolves, a non-Error throw, an empty range, strictly one at a time). The rest of that loop is
+  host glue and stays in the field lane.
+  **D16**: 0 `readBody` traces, 0 throws; the issue now records **≥ 180 staged scenes** across the chain on the
+  teleport → spawn → seat recipe with no sighting. The 2026-08-30 recheck date stands.
+  **Two defects 08 found in its own outputs.** The runner still tested `ended !== 'ran-out'` — the clock-driven
+  end D1/D4 deleted on 2026-07-31 — so **every healthy scene had been logging itself as "ended early"** for two
+  phases; nothing asserts on log prose, and it surfaced only from reading the benchmark log. And a scene report
+  carried neither `hour` nor `weather`, so a capture could not say what world it was shot in (the
+  self-describing-capture rule) — which is also why the variety audit could not be run until 08 added them.
+  Tests **3 411 → 3 431**; tsc + eslint clean.
+  **Two runs were thrown away and are named in the benchmark's `note`**: one truncated by a Vite reload (a
+  source file saved mid-run — the harness ends the run with exit code 0 and no `run complete` line, so the log
+  reads as short rather than broken), one that straddled a machine sleep. Both are now gotchas in
+  `docs/development/benchmarks.md`.
   - **Field round 3 (2026-07-31) — the chrome was in every frame, and no headless number could say so.** The
     report was "video mode should hide the UI like K+M does". It was BUILT that way: `setUiHidden(true)` at
     the top of the run emits `'fly-camera'` exactly as the photo gesture does. But it runs inside `boot()`,

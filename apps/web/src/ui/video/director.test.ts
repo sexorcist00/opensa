@@ -373,12 +373,42 @@ describe('stepDirector', () => {
       }
 
       expect(state.causes.empty).toBe(1); // the car leaving ended it…
-      expect(state.causes.scheduled).toBe(0); // …not the clock
+      expect(state.causes.scheduled).toBe(0); // …not the clock…
+      expect(state.causes.watchdog).toBe(0); // …and not the watchdog either
       expect(at).toBeLessThan(PLANTED_CEILING_SECONDS);
       // And PROMPTLY: within the short clock of the car going, not the patient one a lamppost earns. The
       // difference is a second of empty road at the tail of every drive-past — footage to trim by hand.
       expect(at - goneAt).toBeLessThan(PASSED_SECONDS + 2 * DT);
       expect(PASSED_SECONDS).toBeLessThan(EMPTY_FRAME_SECONDS);
+    });
+
+    it('names a PLANTED shot ending on its clock `watchdog`, not `scheduled`', () => {
+      // The two are one event in the code and two different facts about the footage (096/08): `scheduled` is
+      // a riding shot's chosen 10 s clip running out, `watchdog` is a planted shot the car never left — a
+      // shot whose length nobody chose. While they shared a name the soak could only BOUND how often the
+      // second happens (up to 10 of 30 planted shots), which is the question D4 exists to answer.
+      const state = createDirector([{ preset: FLYBY, seconds: PLANTED_CEILING_SECONDS }]);
+      let at = 0;
+      for (let frame = 0; frame < 3000 && !state.done; frame += 1) {
+        at += DT;
+        stepDirector(state, drivingSubject(0, 0), DT, ASPECT); // a car that stands still never leaves the frame
+      }
+
+      expect(state.causes.watchdog).toBe(1);
+      expect(state.causes.scheduled).toBe(0);
+      expect(at).toBeGreaterThanOrEqual(PLANTED_CEILING_SECONDS);
+    });
+
+    it('still names a RIDING shot ending on its clip `scheduled`', () => {
+      const state = createDirector([{ preset: WING, seconds: TRACKING_SECONDS }]);
+      let at = 0;
+      for (let frame = 0; frame < 3000 && !state.done; frame += 1) {
+        at += DT;
+        stepDirector(state, drivingSubject(at), DT, ASPECT);
+      }
+
+      expect(state.causes.scheduled).toBe(1);
+      expect(state.causes.watchdog).toBe(0);
     });
 
     it('ENDS on the last shot instead of wrapping — the list is the scene', () => {

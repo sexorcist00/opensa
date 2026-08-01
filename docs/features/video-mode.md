@@ -196,6 +196,11 @@ prediction error median 1 m. Those station numbers have not been re-taken since 
 - Live, a probe fires once a second and its answer eases in at 8 m/s — discrete verdict, continuous response.
 - Measured (COUNTRYSIDE + LA, seed 47 scenes 6-7): 5 of 5 passes flown in both, 35 staging casts each, **0 m
   of lift and 0 guard hits over 90 live probes**, 50 s a scene.
+- **Over a longer sample the live guard DOES fire** (096/08's 40-scene soak: 10 flights, **50/50 passes flown,
+  still 0 m of staging lift, but 6 guard hits over 450 probes** — 1.3 %). 07's zero was a two-flight sample,
+  not a property: staging clears a pass against the city as PLANNED, and the guard is what covers the rest.
+  A hit is the guard working, not the staging failing; what would mean the staging is wrong is lift at
+  staging plus hits in the air, and the lift is still zero.
 
 ## Not implemented yet
 

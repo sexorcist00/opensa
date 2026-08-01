@@ -18,9 +18,13 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
 `001`–`096`, one folder each (066, 073, 074, 078–083, 096 carry multi-part sub-plans). Newest first:
 
-- **[096 — Video mode](./096-video-mode/readme.md)** — IN PROGRESS 2026-07-30/31, **phases 01-07 SHIPPED**
+- **[096 — Video mode](./096-video-mode/readme.md)** — **SHIPPED 2026-07-30/08-01, all eight phases**
   (road graph + seeded routes, autopilot, director + shot table, surveyed tripod stations, the region
-  sequencer, the build-time mod-car ledger, and the walk + flythrough scenes that complete D3's program). Planned the same day it was researched and graduated from
+  sequencer, the build-time mod-car ledger, the walk + flythrough scenes that complete D3's program, and the
+  close-out: [audit](../audit/video-mode-096.md) + [benchmark](../benchmarks/opensa-engine/2026-08-01-headless-video-mode.json),
+  a 32.7-minute unattended soak of 40 scenes with **0 throws and no drift**, and a per-frame cost of
+  **0.0096 ms** — under 0.2 % of a 120 Hz frame. Still owed, and not code: **nobody has watched a walk or a
+  fly scene**). Planned the same day it was researched and graduated from
   `docs/ideas/video-mode/`; the user's decisions live in the readme's D-table, with three of them REVISED
   on 2026-07-31 — each revision written into its own row rather than over it. `?video=1` boots a bounded
   seeded self-directed showcase for trailer recording (scenes 1…100 of the seed, five cameras each): a random car (mod cars first, via a new

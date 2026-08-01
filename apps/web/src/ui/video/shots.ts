@@ -66,6 +66,10 @@ const LEAD_SPEED_FULL = 2;
  * A length, not a range: these shots have no natural end — the car never leaves their frame — so what ends
  * them is an editorial decision, and the user made it. A drawn duration only made two identical wing shots
  * feel arbitrarily different lengths.
+ *
+ * **FROZEN 2026-08-01**, and the measurement says nothing else can end one: all **41 riding shots** of seed
+ * 47 scenes 1-12 ended on this clip, none on the guard. Which is the point — the car cannot leave a frame
+ * mounted on it, so this number is the whole of a riding shot's length.
  */
 export const TRACKING_SECONDS = 10;
 
@@ -76,6 +80,11 @@ export const TRACKING_SECONDS = 10;
  * Derived rather than picked: the car has to cross from beyond the shot's distance ceiling, past the stand,
  * and out the far side — at most `2 × maxDist` ≈ 140 m for the widest preset, which is ~12 s at a cruise. 15
  * clears that honestly while still bounding a scene that has stopped happening.
+ *
+ * **FROZEN 2026-08-01 (D4's close-out) on a measurement, not on the derivation.** Once the watchdog got its
+ * own cut cause, seed 47 scenes 1-12 ended **8 of 9 planted shots on the guard** (7 the car leaving frame,
+ * 1 the sightline) and **1 on this watchdog** — so it is behaving as the safety net it is described as, not
+ * as a length. The 40-scene soak could only bound that at ≤ 10 of 30 while the two causes shared a name.
  */
 export const PLANTED_CEILING_SECONDS = 15;
 
@@ -406,6 +415,16 @@ export function forwardFromHeading(heading: number): [number, number, number] {
 }
 
 /**
+ * Whether this shot is PLANTED — a fixed eye the car drives through, rather than one that rides it.
+ *
+ * The one predicate the two kinds are told apart by, and it was written out inline in four places before
+ * 096/08 gave the planted watchdog its own cut cause.
+ */
+export function isPlanted(shot: ShotPreset): boolean {
+  return shot.kind === 'static' || shot.kind === 'station';
+}
+
+/**
  * Where a world point lands on screen (0..1 from the left and the top), and whether it is BEHIND the camera —
  * which the empty-frame guard has to tell apart from "off to the side", because a point behind the eye
  * projects to a perfectly plausible pair of numbers.
@@ -462,7 +481,7 @@ export function shotEye(shot: PosedShot, subject: Subject): [number, number, num
  * frame, and its number here is only the ceiling that stops a scene which has stopped happening.
  */
 export function shotSeconds(shot: ShotPreset): number {
-  return shot.kind === 'static' || shot.kind === 'station' ? PLANTED_CEILING_SECONDS : TRACKING_SECONDS;
+  return isPlanted(shot) ? PLANTED_CEILING_SECONDS : TRACKING_SECONDS;
 }
 
 const UP: Vec3 = [0, 1, 0];

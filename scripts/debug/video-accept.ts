@@ -12,16 +12,25 @@
  * drive. The counters below are therefore SPLIT: a fly scene contributes no directed frames, and averaging it
  * into the safe-frame share would quietly dilute the one number 03's acceptance rests on.
  *
+ * **Two more questions since 096/08**, both read off fields the capture only started carrying then: what the
+ * module's own per-frame work COST (`stepMs`, the benchmark number — see `docs/benchmarks/`), and whether the
+ * seeded stream ever deals two NEIGHBOURING scenes the same car, hour and weather, which is the variety
+ * audit. Older logs simply report neither.
+ *
  * Usage: npx tsx scripts/debug/video-accept.ts <harness.log>…
  */
 import { readFileSync } from 'node:fs';
 
 /** The half of a `[video]` scene report this exam reads (the capture carries much more). */
 interface SceneReport {
+  /** The car this scene staged — absent before 096/05. */
+  car?: string;
   /** A fly scene has no end condition to report — it plays its five passes out. */
   ended?: string;
   /** The live altitude guard (fly only): probes fired, and how many found something to climb over. */
   guard?: { hits: number; probes: number };
+  /** The staged hour slot — absent before 096/08. */
+  hour?: number;
   /** Absent in captures taken before 096/07 — those runs were all drives. */
   kind?: 'drive' | 'fly' | 'walk';
   /** Absent in captures taken before 096/05 — those runs had one hardcoded car. */
@@ -39,6 +48,10 @@ interface SceneReport {
     /** The SHARE of judged frames inside the safe frame, not a count — weight it before summing logs. */
     safe: number;
   };
+  /** The module's per-frame cost inside the host loop — absent before 096/08. */
+  stepMs?: { frames: number; maxMs: number; meanMs: number; p95Ms: number };
+  /** The staged weather name, null for a scene that left it alone — absent before 096/08. */
+  weather?: null | string;
 }
 
 interface Totals {
@@ -56,7 +69,14 @@ interface Totals {
   regions: string[];
   safe: number;
   scenes: number;
+  /** One row per scene, in play order, for the variety audit. */
+  staged: { car: string; hour: number; scene: number; weather: string }[];
+  /** Per-frame cost, weighted by the frames each scene contributed. */
+  step: { frames: number; maxMs: number; p95Worst: number; weightedMean: number };
 }
+
+/** Stand-in car for the scene kinds that have none (fly, walk) — they must not count as a repeat. */
+const NO_CAR = '—';
 
 const paths = process.argv.slice(2);
 if (paths.length === 0) {
@@ -93,6 +113,20 @@ function accumulate(scene: SceneReport, into: Totals): void {
     into.fly.guardHits += scene.guard.hits;
     into.fly.guardProbes += scene.guard.probes;
   }
+  if (scene.stepMs) {
+    into.step.frames += scene.stepMs.frames;
+    into.step.weightedMean += scene.stepMs.frames * scene.stepMs.meanMs;
+    into.step.p95Worst = Math.max(into.step.p95Worst, scene.stepMs.p95Ms);
+    into.step.maxMs = Math.max(into.step.maxMs, scene.stepMs.maxMs);
+  }
+  if (scene.hour !== undefined) {
+    into.staged.push({
+      car: scene.car ?? NO_CAR,
+      hour: scene.hour,
+      scene: scene.scene,
+      weather: scene.weather ?? 'unchanged',
+    });
+  }
 }
 
 function blank(): Totals {
@@ -109,6 +143,8 @@ function blank(): Totals {
     regions: [],
     safe: 0,
     scenes: 0,
+    staged: [],
+    step: { frames: 0, maxMs: 0, p95Worst: 0, weightedMean: 0 },
   };
 }
 
@@ -142,6 +178,14 @@ function report(label: string, totals: Totals): void {
       `${totals.cuts} cuts · pan clipped ${share(totals.clips)} · ${totals.jumps} [cam] jump lines · ` +
       `mod cars ${totals.scenes === 0 ? 0 : ((100 * totals.modCars) / totals.scenes).toFixed(0)}%`,
   );
+  if (totals.step.frames > 0) {
+    // Note when reading this: `performance.now()` is coarsened (0.1 ms in headless Chrome), so a single
+    // frame's reading is 0 or 0.1 and only the MEAN over thousands of frames is a measurement.
+    console.log(
+      `  step cost: mean ${(totals.step.weightedMean / totals.step.frames).toFixed(4)} ms over ` +
+        `${totals.step.frames} frames · worst scene p95 ${totals.step.p95Worst} ms · max ${totals.step.maxMs} ms`,
+    );
+  }
   if (totals.fly.planned > 0) {
     // The flight's own acceptance (096/07 B): every pass flown, nothing lifted at staging, and a live guard
     // that never had to intervene. A non-zero `guard hits` means the staging clearance was wrong about something.
@@ -168,3 +212,44 @@ if (paths.length > 1) {
   report('TOTAL', all);
 }
 console.log(`cut causes ${JSON.stringify(all.causes)}\nscene ends ${JSON.stringify(all.ends)}`);
+variety(all);
+
+/**
+ * The variety audit (096/08 task A2): does the seeded stream ever put two NEIGHBOURING scenes in the same car,
+ * hour AND weather? All three matching is the case that reads as a repeat on screen; any two is coincidence.
+ * Reported rather than asserted — the fix (reroll once) is only worth adding if the rate says so.
+ */
+function variety(totals: Totals): void {
+  const rows = [...totals.staged].sort((a, b) => a.scene - b.scene);
+  if (rows.length < 2) {
+    return;
+  }
+  const repeats: string[] = [];
+  let sameCar = 0;
+  let sameHour = 0;
+  let sameWeather = 0;
+  let carPairs = 0;
+  for (let index = 1; index < rows.length; index += 1) {
+    const previous = rows[index - 1];
+    const current = rows[index];
+    sameHour += previous.hour === current.hour ? 1 : 0;
+    sameWeather += previous.weather === current.weather ? 1 : 0;
+    // A fly or a walk scene has no car, and counting two of them in a row as "the same car" would report a
+    // repeat the viewer cannot see — and would let a pair of them satisfy ALL THREE by having no car at all.
+    if (previous.car === NO_CAR || current.car === NO_CAR) {
+      continue;
+    }
+    carPairs += 1;
+    sameCar += previous.car === current.car ? 1 : 0;
+    if (previous.car === current.car && previous.hour === current.hour && previous.weather === current.weather) {
+      repeats.push(`${previous.scene}→${current.scene} (${current.car} ${current.hour}h ${current.weather})`);
+    }
+  }
+  const cars = new Set(rows.map((row) => row.car).filter((car) => car !== NO_CAR));
+  console.log(
+    `variety over ${rows.length} staged scenes: hour repeats ${sameHour}/${rows.length - 1} pairs, ` +
+      `weather ${sameWeather}/${rows.length - 1} · car ${sameCar}/${carPairs} car-carrying pairs · ` +
+      `ALL THREE ${repeats.length}${repeats.length > 0 ? ` — ${repeats.join(', ')}` : ''} · ` +
+      `distinct cars ${cars.size}`,
+  );
+}

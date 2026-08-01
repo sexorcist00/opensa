@@ -159,6 +159,18 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
   the known settle pattern, not a regression.
 - Screenshot metering: no PIL/numpy on the Mac python — use ImageMagick (`magick` in /opt/homebrew/bin)
   crop + `-resize 1x1!` grid averages; compare channels, not just luma.
+- **Do not edit anything in the Vite module graph while a run is in flight.** Saving a file under
+  `apps/` (a `.test.ts` counts) reloads the page, and the harness ends the run wherever it got to — with
+  exit code 0 and no `run complete` line, so the log looks like a short run rather than a broken one. Cost
+  a 12-scene 096/08 measurement that stopped at 4. Edit between runs, or read the log for `run complete`
+  before trusting a count.
+- **A run that straddles a machine SLEEP is void.** Every frame time across the gap is wall clock, not
+  work, and the run continues afterwards as if nothing happened. Kill it (`pkill -f bench-harness/drive.js`)
+  and start again — there is no way to repair the numbers, and the served/dev servers do survive, so only
+  the run has to be restarted.
+- **`expectReports` must equal the number of protocol lines the run will actually emit.** Set it higher
+  and the harness waits out its whole timeout after the run has finished; a `[video]` run emits one line
+  per scene AND repeats them all in the end-of-run dump, so dedupe by scene when reading.
 
 ## Unit / e2e lanes
 
