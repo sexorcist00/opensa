@@ -3,8 +3,10 @@
 **Status: SHIPPED — all eight phases (2026-07-30/08-01).** Close-out audit:
 [`docs/audit/video-mode-096.md`](../../audit/video-mode-096.md); measurement record:
 [`docs/benchmarks/opensa-engine/2026-08-01-headless-video-mode.json`](../../benchmarks/opensa-engine/2026-08-01-headless-video-mode.json).
-**What is still owed is not code: nobody has WATCHED a walk or a fly scene** — every 07 number is an
-instrument, and the pavement offset, the aerial framing and `flyby`'s unchecked eye are human questions.
+**FIELD-ACCEPTED 2026-08-01**: the user watched the walk and flythrough scenes and the verdict was that they
+look good. That closes the one acceptance line that mattered — every 07 number is an instrument, and the
+pavement offset, the aerial framing and `flyby`'s unchecked eye were human questions no run could answer.
+Nothing is owed.
 
 Planned 2026-07-30 and graduated from `docs/ideas/video-mode/` the same day it was researched — the four-way
 repo sweep (paths/driving, camera, streaming/host, player/vehicles) and every user decision moved into this
@@ -438,6 +440,12 @@ before analysis). Empty until phases run:
   carried neither `hour` nor `weather`, so a capture could not say what world it was shot in (the
   self-describing-capture rule) — which is also why the variety audit could not be run until 08 added them.
   Tests **3 411 → 3 431**; tsc + eslint clean.
+  **The field round that closed the chain (user, 2026-08-01): the walk and flythrough scenes were WATCHED,
+  and the verdict was that they look good.** Two whole scene kinds had shipped on instruments alone — 07's
+  own numbers say 5/5 passes flown and `safe 1.000` over 3 844 walk frames, and neither can tell you whether
+  a pavement offset lands on a pavement or whether five 10 s passes read as editing. It did not retire
+  `flyby`'s missing occlusion check: not being planted inside a wall in the scenes watched is not evidence
+  that it cannot be.
   **Two runs were thrown away and are named in the benchmark's `note`**: one truncated by a Vite reload (a
   source file saved mid-run — the harness ends the run with exit code 0 and no `run complete` line, so the log
   reads as short rather than broken), one that straddled a machine sleep. Both are now gotchas in

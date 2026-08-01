@@ -97,12 +97,17 @@ out to be unanswerable against the code as it stood.
   survived two phases because nothing asserts on log prose — it surfaced from READING the benchmark log.
 - The capture gap in (2) above.
 
-### What could not be done, and is not code
+### The acceptance no run could give — closed the same day
 
-**Nobody has watched a walk or a fly scene.** Acceptance line three ("the user has recorded at least one real
-clip they kept") is the one that actually matters and it is still open, along with the 07 field checklist: the
-walk's pavement offset (a driving route pushed sideways), whether five 10 s aerial passes read as editing,
-`flyby`'s unchecked eye, `top`/`crane`, and the cuts in and out of `chase`.
+**Field verdict (user, 2026-08-01): the walk and flythrough scenes were watched, and they look good.** That
+is acceptance line three, the one that actually matters, and it is the only one a headless run could never
+answer. The 07 checklist it closes: the walk's pavement offset (a DRIVING route pushed sideways — the hack
+holds in the field), whether five 10 s aerial passes read as editing, `top`/`crane`, and the cuts in and out
+of `chase`.
+
+What the verdict does NOT retire is `flyby`'s missing occlusion check (`docs/features/video-mode.md`, "Not
+implemented yet"): it can still plant an eye inside a wall, and a run that did not happen to do so is not
+evidence that it cannot. That stays a known gap with standoff and lead as its levers.
 
 ### Not done, deliberately
 

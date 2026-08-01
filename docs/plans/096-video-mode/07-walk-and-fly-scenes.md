@@ -165,12 +165,15 @@ tightest corner, `safe: 0.989`, cross-track p95 0.16 m, 47.4 s.
 **Tests**: 3 411 (from 3 379) — `fly.test.ts` 14, `walk.test.ts` 7, `WALK_SHOTS` 5, the gait tier 2, plus
 `PROGRAM_LENGTH`/`parseSceneStart` from the same day's `?scene=` work. tsc + eslint clean.
 
-### Still owed to 08
+### Owed to 08 — all settled
 
-- **Nobody has WATCHED either scene.** Every number above is an instrument. The walk's pavement offset, the
-  aerial passes' framing, and whether five 10 s passes read as editing are all human questions.
-- `engine-video-runs.ts` is now ~1 100 lines with three scene kinds in it. It is still one coherent module
-  (staging is genuinely shared), but 08 should look at whether the three `runXScene` functions want their own
-  files.
+- ~~**Nobody has WATCHED either scene.**~~ **Watched 2026-08-01: the user's verdict is that both look good.**
+  Every number above was an instrument; the walk's pavement offset, the aerial framing and whether five 10 s
+  passes read as editing were human questions, and this is the answer. It does not retire `flyby`'s missing
+  occlusion check — that is a gap in what is CHECKED, not in what was seen.
+- ~~`engine-video-runs.ts` is ~1 100 lines with three scene kinds in it — should the three `runXScene`
+  functions have their own files?~~ Looked at in 08 and deliberately left alone: the staging around them is
+  genuinely shared, so splitting would trade one coherent module for three files plus a shared fourth.
+  Revisit if a fourth scene kind lands.
 - The walk scene has no `?at=` equivalent field check — `pinned` is threaded through and works, but no field
-  round has used it on a walk.
+  round has used it on a walk. Still true, and now a small one: the kind itself has been seen.

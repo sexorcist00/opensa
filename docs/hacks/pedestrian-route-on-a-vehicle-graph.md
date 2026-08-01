@@ -33,8 +33,9 @@ the ped links mean, which nobody here has looked at yet. It simply was not what 
 A headless walk scene in San Francisco (seed 47, scene 8, 2026-07-31): a 160 m route, 62 of 82 waypoints
 ground-probed (the rest outside the streamed collision ring), 0 rejections, the ped walked the whole thing
 and the five cameras all framed him — `safe: 1.000` over 3 844 judged frames. That is the instrument saying
-"a person walked down a street and was in shot". **It is not a human saying the route looked like a
-pavement**, and nobody has watched a walk scene yet.
+"a person walked down a street and was in shot". It is not a human saying the route looked like a pavement —
+so it was watched: **field verdict 2026-08-01, the walk scene looks good.** That is what the hack is now
+judged on, and it is an eye on the scenes that played, not a proof about the ones that have not.
 
 Two things it is known NOT to handle:
 

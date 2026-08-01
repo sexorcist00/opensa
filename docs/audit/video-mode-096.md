@@ -106,9 +106,13 @@ any frame existed, and caught two constraint bugs (a curvature read off unevenly
 "hairpins", and a per-junction ceiling that let five legal turns bend 125° in ten metres) that would have been
 read as autopilot faults in the field.
 
-## Still open at close
+## The last acceptance, and what it does not cover
 
-**Nobody has watched a walk or a fly scene.** Every number in 07 is an instrument; the pavement offset on a
-walk (a DRIVING route pushed sideways — `docs/hacks/pedestrian-route-on-a-vehicle-graph.md`), whether five
-10 s aerial passes read as editing, and `flyby` (the one shot with no occlusion check) are human questions
-this audit cannot answer.
+Every number in 07 is an instrument, and the questions that remained were human ones: does the walk's 6.5 m
+offset land on a pavement (it is a DRIVING route pushed sideways —
+`docs/hacks/pedestrian-route-on-a-vehicle-graph.md`), and do five 10 s aerial passes read as editing.
+**Answered 2026-08-01 by the user watching them: they look good.** The chain is closed.
+
+What that verdict does not cover, and what stays a known gap: **`flyby` has no occlusion check at all**. Its
+eye is derived from the car and can be planted inside a wall; a run in which it happened not to be is not
+evidence that it cannot be. Standoff and lead in `shots.ts` are the levers if it ever shows.
