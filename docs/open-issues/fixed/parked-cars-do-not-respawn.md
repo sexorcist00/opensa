@@ -67,17 +67,18 @@ confirmed to FAIL against the old code before the fix was kept:
 - *does not spawn a car that is inside lodDistance but outside the collision radius*
 - *counts consecutive spawn rejections and starts over after one succeeds*
 
-## What this does NOT fix, and it is the bigger half
+## The bigger half, found in the same hour and also fixed
 
-The world is still nearly empty of cars, for a reason that has nothing to do with this bug:
-**plan 059's map car generators are wired to nothing.** `GtaSaWorldAdapter.mapCarGenerators()` — ~1043
-generators, ~740 of them random via `popcycle`/`cargrp` — is implemented and unit tested, and its only caller
-in the repo is its own test. `vehicles.register()` is called from `engine-perf-runs.ts` (the bench road-car
-population) and nowhere else. 059's readme states the runtime wiring as done; it is not.
+The world was nearly empty of cars for a reason that has nothing to do with this bug: **plan 059's map car
+generators were wired to nothing.** `GtaSaWorldAdapter.mapCarGenerators()` was implemented and unit tested,
+and its only caller in the repo was its own test — the runtime loop had gone out with the three.js host in
+`a312f0d` (074/13, 2026-07-18) and the own-engine host never received it. That is what left the map with
+`parked.json`'s 212 placements and 24 models, and why the 091 drive could not meet a new car type.
 
-That is what leaves the map with `parked.json`'s 212 placements and 24 models, and it is why the 091 drive
-could not meet a new car type. Wiring it is a separate piece of work with its own cost (1043 entries in the
-LOD list, random resolution per generator) and its own field round.
+Restored the same day, after `cityBoxes` is built. Counted offline against the built archive: **1043
+generators — 742 random, 301 specific across 83 distinct model ids.** The host prints
+`[vehicles] map car generators registered: N` at boot. A field round is owed for what ~1255 lazily-registered
+entries cost while driving. See [plan 059](../../plans/059-map-car-generators/readme.md).
 
 ## The lesson worth keeping
 

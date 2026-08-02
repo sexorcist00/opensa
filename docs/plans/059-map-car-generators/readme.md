@@ -49,26 +49,30 @@ LOD/spawn system, same as `parked.json`):
    tight/clipping places (parking lots under freeways, against curbs) penetrate static collision on spawn and the
    dynamic chassis is **ejected → tips vertical**. `parked.json`/CLEO placements don't set the flag (unchanged).
 
-> ## ⚠️ THE WIRING IS GONE — discovered 2026-08-02
+> ## ⚠️ THE WIRING WAS GONE for six weeks — found and RESTORED 2026-08-02
 >
-> Everything below phase 1 is still true of the LIBRARY code and false of the running game.
-> `GtaSaWorldAdapter.mapCarGenerators()` is implemented, unit tested, and **called by nothing but its own
-> test**; `VehicleLodSystem.register()` has exactly one caller in the repo, the bench road-car population in
-> `engine-perf-runs.ts`.
+> Everything below phase 1 was true of the LIBRARY code and false of the running game.
+> `GtaSaWorldAdapter.mapCarGenerators()` was implemented, unit tested, and **called by nothing but its own
+> test**; `VehicleLodSystem.register()` had exactly one caller in the repo, the bench road-car population.
 >
 > **It was never removed on purpose.** The `for (const placement of await adapter.mapCarGenerators(...))` loop
 > lived in the three.js host and went out with it in `a312f0d` (074/13 phase 5a+5b, 2026-07-18) — the
-> own-engine host never received it. So phases 2 and 3 were genuinely "in-game verified" at the time, on a
-> host that no longer exists, and the feature was lost silently in a renderer migration. Nothing failed;
-> ~1043 map cars simply stopped being asked for.
+> own-engine host never received it. Phases 2 and 3 were genuinely "in-game verified" at the time, on a host
+> that no longer exists. Nothing failed; ~1043 map cars simply stopped being asked for, and an empty map looks
+> exactly like a full one.
 >
-> The cost was measured by accident on 2026-08-02: the 091 field drive crossed four popcycle zones from LS to
-> Las Venturas and met parked cars **once**, because `parked.json`'s 212 placements and 24 models are the only
-> car population the game has. See [091's field verdict](../091-frame-time-attribution/readme.md#the-field-verdict--2026-08-02).
+> The cost was measured by accident: the 091 field drive crossed four popcycle zones from LS to Las Venturas
+> and met parked cars **once**, because `parked.json`'s 212 placements and 24 models were the only car
+> population the game had. See [091's field verdict](../091-frame-time-attribution/readme.md#the-field-verdict--2026-08-02).
 >
-> Restoring it is ~10 lines against the own-engine host (`cityBoxes`, `cityAt` and the game clock all still
-> exist) plus a field round for what 1043 lazily-registered entries cost. **Not done yet — it is a decision,
-> not a typo.**
+> **Restored** in `engine-canvas-host`, after `cityBoxes` is built (the random resolution asks which city a
+> spot is in, so it cannot live inside `setupEngineVehicles`). Counted offline against the BUILT archive:
+> **1043 generators — 742 random, 301 specific across 83 distinct model ids**, on top of `parked.json`'s 212.
+> The host now prints `[vehicles] map car generators registered: N` at boot, because the one thing this whole
+> episode lacked was a number saying whether the map had cars at all.
+>
+> **A field round is owed** for what ~1255 lazily-registered entries cost while driving — and it is the same
+> drive that finally tests 091's untested per-type branch.
 
 ## Where it plugs in — **chosen: B (runtime, implemented)**
 

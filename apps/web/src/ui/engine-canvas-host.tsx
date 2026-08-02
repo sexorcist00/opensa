@@ -54,7 +54,7 @@ import { type SteeringModel } from '@opensa/game/vehicle/steering';
 import { wheelCornerLabels } from '@opensa/game/vehicle/vehicle-telemetry';
 import { WeatherTransition } from '@opensa/game/weather/weather-transition';
 import { weatherForCity } from '@opensa/game/weather/weather-zones';
-import { type CityBox, isDesertZone } from '@opensa/game/zones/city';
+import { cityAt, type CityBox, isDesertZone } from '@opensa/game/zones/city';
 import { CityZoneSystem } from '@opensa/game/zones/city-zone.system';
 import { type NamedZone, ZoneNameSystem } from '@opensa/game/zones/zone-name.system';
 import { angleDelta, lerp } from '@opensa/math';
@@ -933,6 +933,23 @@ async function boot(
   );
   let city: City = 'COUNTRYSIDE';
   cityBoxes = [...desertBoxes, ...loadCityBoxes(fs, 'data/map.zon')];
+  // Map-baked car generators (the binary IPL CARS section, plan 059): the specific-model ones plus the random
+  // (`id = -1`) ones resolved through the zone-type popcycle. Registered LAZILY — the LOD stream materialises
+  // each only when the view nears it and its collision cell exists, so ~1043 placements cost nothing until
+  // they are reached. This has to run after `cityBoxes` (the random resolution asks which city a spot is in),
+  // which is why it is not inside `setupEngineVehicles`.
+  //
+  // It lived in the three.js host and went out with it in `a312f0d` (074/13); nothing failed, and the map
+  // simply had no cars but `parked.json`'s 212 for six weeks. Restored 2026-08-02.
+  const mapCars = await adapter.mapCarGenerators({
+    cityAt: (x, y) => cityAt(x, y, cityBoxes),
+    hour: Math.floor(hour),
+  });
+  vehicles?.register(mapCars);
+  // Say the count out loud. The six weeks this took to notice were six weeks of an empty map looking exactly
+  // like a full one, and the drive that finally caught it read the number nowhere.
+  // eslint-disable-next-line no-console -- the one line that says whether the map has cars at all
+  console.log(`[vehicles] map car generators registered: ${vehicles === null ? 0 : mapCars.length}`);
   const citySystem = new CityZoneSystem(cityBoxes, viewOf, (next) => {
     city = next;
     events.emit('city', { city: next });

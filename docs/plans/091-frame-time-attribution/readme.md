@@ -186,8 +186,12 @@ sentence:
   caller in the repo: the BENCH runner.
 
 So the drive could not meet a new car type, and the count of zero measures the world's emptiness, not the
-cost of a spawn. **The per-type budget lever stays unbuilt but the question stays open**; it becomes testable
-only once 059's generators are wired, which is where the next attempt starts.
+cost of a spawn. **The per-type budget lever stays unbuilt and the question stays open.**
+
+Both defects were fixed on 2026-08-02 — the generators are wired again (1043 of them: 742 random, 301 specific
+across 83 model ids) and `parked.json` is registered lazily rather than spawned at boot. **The re-drive that
+this makes possible is what actually answers branch A**, and it is the one thing 091 still owes: the same
+route, now through a map with ~1255 cars and enough model variety to make a new type arrive at speed.
 
 **The method lesson, which is the transferable part:** a count of zero is only evidence if the thing being
 counted had a chance to happen. Nothing in the log said the world was empty — the drive looked clean, the
