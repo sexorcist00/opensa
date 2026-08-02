@@ -38,15 +38,6 @@ Dev notes and progress - in [`/blog`](./blog).
 - 2026-06-18 - [I ran GTA San Andreas on my own engine in the browser - solo with Claude, in 3 weeks](./blog/1-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md)
 - 2026-07-08 - [How I built a perfect GTA San Andreas map with my own engine](./blog/2-how-i-built-a-perfect-gta-san-andreas-map-with-my-own-engine.md)
 
-## What's inside
-
-A TypeScript / WebGPU engine for RenderWare assets (DFF/TXD models, COL collision, IMG archives, IPL/IDE
-world streaming) with a Rapier-physics player and vehicles — compatible with GTA San Andreas and its mods /
-total conversions. On top of that: our own world streaming, generated cell far-LODs, offline-classified
-texture alpha, modern lighting and weather, and a frame budget that is part of every feature's specification.
-See the [project goals](./docs/project-goals.md), the [architecture overview](./docs/architecture/README.md)
-and the per-feature reference in [docs/features/](./docs/features/).
-
 ## Contributing
 
 Contributions are welcome - see **[CONTRIBUTING.md](./CONTRIBUTING.md)** for setup, the dev workflow, and
