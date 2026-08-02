@@ -7,9 +7,17 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-2a7ae2" alt="License: AGPL-3.0" /></a>
 </p>
 
-An open-source, from-scratch **game engine, built compatible with RenderWare** — the engine behind GTA San
-Andreas. Bring your own game files (or a total-conversion mod) and it streams the real world, models and
-physics straight into the browser, with no install.
+An open-source, from-scratch, high-performance **game engine, built compatible with RenderWare** — the engine
+behind GTA San Andreas. Bring your own game files (or a total-conversion mod) and it streams the real world,
+models and physics straight into the browser, with no install.
+
+**It is not a reimplementation.** Compatibility is how your files get in, not the ceiling for what happens
+next. San Andreas shipped in 2004 against a 32 MB console budget; OpenSA reads its data honestly and then does
+the job the way modern hardware allows — its own streaming, generated far LODs the original never had, a
+WebGPU renderer, and none of the object-count limits that corrupt a large map. Where we can beat the original,
+we do; where we keep its behaviour, we say why. The target is an AAA-grade engine and a world worth driving
+through — the goals, and the rules that keep them honest, are in
+[docs/project-goals.md](./docs/project-goals.md).
 
 > Unofficial, non-commercial fan project. Not affiliated with Rockstar Games or Take-Two.
 
@@ -34,8 +42,10 @@ Dev notes and progress - in [`/blog`](./blog).
 
 A TypeScript / WebGPU engine for RenderWare assets (DFF/TXD models, COL collision, IMG archives, IPL/IDE
 world streaming) with a Rapier-physics player and vehicles — compatible with GTA San Andreas and its mods /
-total conversions. See the [architecture overview](./docs/architecture/README.md) and the per-feature reference in
-[docs/features/](./docs/features/).
+total conversions. On top of that: our own world streaming, generated cell far-LODs, offline-classified
+texture alpha, modern lighting and weather, and a frame budget that is part of every feature's specification.
+See the [project goals](./docs/project-goals.md), the [architecture overview](./docs/architecture/README.md)
+and the per-feature reference in [docs/features/](./docs/features/).
 
 ## Contributing
 

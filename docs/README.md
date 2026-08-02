@@ -31,7 +31,14 @@ Read it as a set of rules:
   individually-implementable steps, each ending with verification + measured numbers).
 - **We know what to do but want it in a later version** → [`docs/roadmap/`](./roadmap/) (e.g. `0.5.0/`, `0.6.0/`
   — scheduled cycles, same plan-chain shape as `docs/plans/`, just not this version).
-- **Before ANY of the three above are written** → check [`docs/restrictions/`](./restrictions/README.md).
+- **Before ANY of the three above are written** → read [`docs/project-goals.md`](./project-goals.md) first.
+  It is what the project is FOR, and it is directive: OpenSA is compatible with RenderWare and is **not** a
+  reimplementation of San Andreas. Honour the authored DATA (timecyc, handling, the IDE/popcycle tables — the
+  design every mod is written in); do not port the LOGIC. We have our own engine and our own formats, so a
+  legacy limit is not our limit, and where we can beat the original we are required to. It also carries what
+  keeps that honest — better must be demonstrated, performance is part of every feature's spec, and a mod
+  author's data must keep working. **Then** check
+  [`docs/restrictions/`](./restrictions/README.md).
   It holds the rules a design has to satisfy — layer boundaries, format ceilings, engine splits, decisions
   taken at build time that cannot be re-taken at runtime — and says for each whether a violation is caught by
   a test/guard/lint or is SILENT. A new restriction is recorded there in the SAME change that finds it.
@@ -53,6 +60,7 @@ Read it as a set of rules:
 
 | Folder | What lives here |
 | --- | --- |
+| [`project-goals.md`](./project-goals.md) | What the project is FOR — the directives a plan must aim at. Read FIRST, with `restrictions/`. |
 | [`ideas/`](./ideas/README.md) | Unproven, unscheduled high-level directions (stage 1). |
 | [`concepts/`](./concepts/README.md) | Live explorations under go/no-go review (stage 2). |
 | [`postmortem/`](./postmortem/README.md) | Dead directions + the reason they died. |

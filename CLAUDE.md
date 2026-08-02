@@ -125,6 +125,19 @@ Never edit generated code manually.
 
 ## Standing Workflow Rules
 
+- **CHECK `docs/project-goals.md` BEFORE writing an idea, a concept or a plan** — it is what the project is
+  FOR, and it is directive, not aspirational. OpenSA is compatible with RenderWare; it is NOT a
+  reimplementation of San Andreas. Two halves, and dropping either breaks it: **honour the authored DATA**
+  (timecyc moods, handling rows, IDE flags, popcycle/cargrp — read them as the author meant, or the world
+  stops behaving as designed and every mod written in those tables goes wrong in FEEL rather than in
+  loading), and **do not port the LOGIC** — its execution, its data structures and its ceilings are one 2004
+  machine's answer. We have our own engine and our own formats now, so a legacy limit is not our limit, and
+  where we can beat the original we are REQUIRED to: matching a 2004 compromise is the choice that needs an
+  argument, not improving on it. "That is what the original does" is the beginning of an argument, never the
+  end of one. The goals also carry what keeps this honest — better must be DEMONSTRATED (measured or
+  field-accepted, never assumed), performance is part of every feature's specification, and a mod author's
+  data must keep working.
+  **Read the goals first, then the restrictions**: one says what to aim at, the other what may not be done
 - **CHECK `docs/restrictions/` BEFORE writing an idea, a concept or a plan** — it holds the rules a design
   has to satisfy (layer boundaries, format ceilings, engine splits, what is decided at build time and cannot
   be re-taken at runtime). A plan that violates one is not ambitious, it is a plan that gets rewritten after
@@ -158,7 +171,9 @@ Never edit generated code manually.
   (`docs/links.md` → gta-reversed) carries the actual data→physics mapping. A fitted constant is acceptable
   only as a MEASURED, documented bridge — state what was fitted, over what range, and its residual — and it
   is a debt, not an answer. The same goes for global tuning constants: each one is a place where the game's
-  own numbers are not being read yet
+  own numbers are not being read yet. **This does NOT contradict "do not port the original's logic"**
+  (`docs/project-goals.md`): the original is the source of truth for what its DATA MEANS, and never the
+  ceiling for how that data is executed. Recover the formula; write our own implementation of it
 - **Every hack we knowingly take gets a file in `docs/hacks/`, in the same change** — a fitted constant, a
   heuristic standing in for a formula nobody has recovered, a faked effect, an exclusion the general rule
   cannot express. Say what it stands in for, what it was judged on ("it looked right" is a legitimate answer
