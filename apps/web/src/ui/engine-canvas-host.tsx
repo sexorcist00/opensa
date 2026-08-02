@@ -866,7 +866,7 @@ async function boot(
   let cityBoxes: readonly CityBox[] = [];
   let vehicles: EngineVehicles | null = null;
   try {
-    vehicles = await setupEngineVehicles({
+    vehicles = setupEngineVehicles({
       adapter,
       // The camera SWINGS behind the car instead of snapping (plan 080/02's steered-yaw channel); any
       // mouse movement takes it straight back.

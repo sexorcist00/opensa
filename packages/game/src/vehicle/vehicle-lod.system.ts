@@ -12,6 +12,11 @@ export interface SpawnedVehicle {
   position: Vec3;
 }
 
+/** Told about every rejected spawn, with the entry's consecutive-failure count. A car whose collision cell
+ *  has not streamed in yet is rejected on purpose and recovers by itself, so the count is what separates the
+ *  normal deferral from an entry that will never come back — this system does not log, the host decides. */
+export type SpawnFailureReporter = (placement: VehiclePlacement, error: unknown, attempts: number) => void;
+
 /** A parked-car placement (what {@link VehicleLodSystem} respawns from). */
 export interface VehiclePlacement {
   /** Optional carcols palette indices for the paint (e.g. `'34,34'`); omit for the car's default. */
@@ -28,9 +33,12 @@ export interface VehiclePlacement {
 }
 
 interface LodEntry {
+  /** Consecutive rejected spawns since the last success (reset on one). */
+  attempts: number;
   /** The spawned car, or null while unloaded. */
   current: null | SpawnedVehicle;
-  /** Last known position (distance source — kept live while loaded, frozen when unloaded). */
+  /** Distance source: the car's live position while loaded, **the placement while unloaded** — an unloaded
+   *  entry respawns AT its placement, so that is the only position its trigger may be measured from. */
   home: Vec3;
   /** A respawn is in flight (loadVehicle is async) — don't kick off another. */
   loading: boolean;
@@ -49,6 +57,7 @@ export class VehicleLodSystem implements System {
 
   private readonly config: Readonly<Config>;
   private readonly entries: LodEntry[] = [];
+  private readonly onSpawnFailed: SpawnFailureReporter | undefined;
   private readonly spawn: (placement: VehiclePlacement) => Promise<SpawnedVehicle>;
   private readonly viewOf: () => Vec3;
 
@@ -56,15 +65,17 @@ export class VehicleLodSystem implements System {
     viewOf: () => Vec3,
     config: Readonly<Config>,
     spawn: (placement: VehiclePlacement) => Promise<SpawnedVehicle>,
+    onSpawnFailed?: SpawnFailureReporter,
   ) {
     this.viewOf = viewOf;
     this.config = config;
     this.spawn = spawn;
+    this.onSpawnFailed = onSpawnFailed;
   }
 
   /** Register an already-spawned car against the placement it can be respawned from. */
   add(placement: VehiclePlacement, current: SpawnedVehicle): void {
-    this.entries.push({ current, home: [...current.position], loading: false, placement });
+    this.entries.push({ attempts: 0, current, home: [...current.position], loading: false, placement });
   }
 
   /**
@@ -73,12 +84,17 @@ export class VehicleLodSystem implements System {
    * map car generators (binary IPL CARS), where pre-spawning every one across the map would spike load.
    */
   register(placement: VehiclePlacement): void {
-    this.entries.push({ current: null, home: [...placement.position], loading: false, placement });
+    this.entries.push({ attempts: 0, current: null, home: [...placement.position], loading: false, placement });
   }
 
   update(): void {
     const [vx, vy, vz] = this.viewOf();
     const { hdDistance, lodDistance, unloadDistance } = this.config.vehicle;
+    // A car may only be CREATED where the world under it exists. Static collision streams to a shorter radius
+    // than the vehicle LOD ring, and a dynamic body spawned past it free-falls — and once it has fallen, its
+    // own live position is what the unload distance is measured from, so the spot never repopulates. Cars in
+    // the band between the two radii therefore do not exist yet; they appear when their ground does.
+    const spawnDistance = Math.min(lodDistance, this.config.streaming.collisionDrawDistance);
     for (const entry of this.entries) {
       if (entry.current) {
         [entry.home[0], entry.home[1], entry.home[2]] = entry.current.position; // track last known
@@ -87,26 +103,38 @@ export class VehicleLodSystem implements System {
       const dy = entry.home[1] - vy;
       const dz = entry.home[2] - vz;
       const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      this.stream(entry, distance, lodDistance, unloadDistance);
+      this.stream(entry, distance, spawnDistance, unloadDistance);
       if (entry.current) {
         entry.current.handle.setLodBand(bandFor(distance, hdDistance, lodDistance, entry.current.handle.hasLod));
       }
     }
   }
 
-  /** Unload past `unloadDistance`; respawn once back within `lodDistance` (hysteresis between). */
-  private stream(entry: LodEntry, distance: number, lodDistance: number, unloadDistance: number): void {
+  /** Unload past `unloadDistance`; respawn once back within `spawnDistance` (hysteresis between). */
+  private stream(entry: LodEntry, distance: number, spawnDistance: number, unloadDistance: number): void {
     if (distance >= unloadDistance) {
-      entry.current?.despawn();
-      entry.current = null;
+      if (entry.current) {
+        entry.current.despawn();
+        entry.current = null;
+        // The respawn puts the car back at its PLACEMENT, so that is where the trigger has to be measured
+        // from. Without this, a car that was shunted, ejected or driven off carries its spot's respawn
+        // trigger away with it, and the spot stays empty for the rest of the session.
+        [entry.home[0], entry.home[1], entry.home[2]] = entry.placement.position;
+      }
 
       return;
     }
-    if (!entry.current && !entry.loading && distance < lodDistance) {
+    if (!entry.current && !entry.loading && distance < spawnDistance) {
       entry.loading = true;
       this.spawn(entry.placement)
-        .then((spawned) => (entry.current = spawned))
-        .catch(() => undefined)
+        .then((spawned) => {
+          entry.current = spawned;
+          entry.attempts = 0;
+        })
+        .catch((error: unknown) => {
+          entry.attempts += 1;
+          this.onSpawnFailed?.(entry.placement, error, entry.attempts);
+        })
         .finally(() => (entry.loading = false));
     }
   }

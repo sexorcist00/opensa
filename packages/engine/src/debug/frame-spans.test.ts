@@ -93,10 +93,10 @@ describe('FrameSpans', () => {
       spans.add('vehicle-osm:majestic', 4);
       spans.add('vehicle-osm:sadler', 3.2);
       spans.add('vehicle-osm:tampa', 1);
-      spans.add('cell-collision-read', 87.9);
+      spans.add('cell-collision-bodies', 87.9);
 
       expect(formatFrameSpans(spans.drain(), 49)).toBe(
-        'cell-collision-read 87.9 · vehicle-osm ×3 8.2 (worst majestic 4.0) · unattributed 49.0',
+        'cell-collision-bodies 87.9 · vehicle-osm ×3 8.2 (worst majestic 4.0) · unattributed 49.0',
       );
     });
   });

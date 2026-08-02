@@ -424,8 +424,12 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     const key = `${cx},${cy}`;
     let colliders = this.colliderCache.get(key);
     if (!colliders) {
-      // A cache miss parses the cell's COLs here, in a continuation the frame loop cannot time (plan 091).
-      const readStarted = performance.now();
+      // NO SPAN HERE. This looks like out-of-loop work and is not: the body runs synchronously to the first
+      // `await` (there is none), and the only caller in a normal run is `CollisionStreamingSystem.load()`,
+      // inside `collision.update()` — which the frame loop already times as its `collision` block. A span
+      // would be subtracted from `dt` a second time; the field drive of 2026-08-02 read
+      // `collision 76.0 · other 30.0 (cell-collision-read 75.7 … unattributed -65.9)` for exactly that
+      // reason. See `docs/restrictions/architecture.md` and 091's field verdict.
       const index = buildCollisionIndex(this.fs);
       const archive = this.fs;
       const breakableModels = this.breakableModels;
@@ -455,7 +459,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
         );
       }
       this.colliderCache.set(key, colliders);
-      frameSpans.add('cell-collision-read', performance.now() - readStarted);
     }
 
     return colliders;

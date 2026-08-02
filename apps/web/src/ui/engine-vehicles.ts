@@ -166,7 +166,7 @@ export interface EngineVehiclesDeps {
   viewOf: () => Vec3;
 }
 
-export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<EngineVehicles> {
+export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
   const { adapter, config, engine, physics } = deps;
 
   // --- License plates (plan 082/04) -------------------------------------------------------------------
@@ -496,11 +496,13 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
 
       let position: Vec3 = placement.position;
       let pitch = 0;
-      // Map car generators (plan 059) + bench road cars (074): seat the body on the ground so it doesn't
-      // penetrate terrain/props and get launched (pitch with the street, slide off blocked spots, defer
-      // until the collision cell exists — the shared helper carries the bench field lessons).
+      // The probe runs for EVERY placement, because its throw is what defers a spawn until the collision cell
+      // exists — a dynamic body created over a hole free-falls, and the LOD system then measures its unload
+      // distance from wherever it fell. `groundSnap` decides only whether we also RE-SEAT the car on what the
+      // probe found (map car generators + bench road cars, whose IPL spots sit in tight/clipping places);
+      // `parked.json`'s hand-authored spots keep their own position and pitch, as they always have.
+      const seated = seatVehicleOnGround(physics, position, placement.heading, data.halfExtents);
       if (placement.groundSnap) {
-        const seated = seatVehicleOnGround(physics, position, placement.heading, data.halfExtents);
         position = seated.position;
         pitch = seated.pitch;
       }
@@ -597,27 +599,30 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
     }
   };
 
-  const vehicleLod = new VehicleLodSystem(deps.viewOf, config, spawnVehicle);
-  // Parked cars come from the game's `parked.json` in the VFS (shipped per game); absent → none.
-  //
-  // ONE placement must never cost the whole system. This loop used to let a build failure escape into
-  // `setupEngineVehicles`' caller, which catches and leaves `vehicles` NULL — so two unconvertible hi-poly
-  // mod cars killed spawning for all 201 models, from the debugger and the road-car registrar alike. A car
-  // that cannot be built is now skipped and NAMED; the rest of the street still parks.
+  // ONE placement must never cost the whole system, and a car that never appears must never do it in silence:
+  // two unconvertible hi-poly mod cars once killed spawning for all 201 models, and the whole map's parked
+  // cars once vanished for a session with nothing in the console at all. A spawn is allowed to be REJECTED —
+  // that is how it waits for its collision cell — so only an entry that keeps failing is worth a word, and
+  // only the first one per model.
   const failedModels = new Set<string>();
-  for (const placement of parseParkedVehicles(deps.fs.getText('parked.json'))) {
-    try {
-      vehicleLod.add(placement, await spawnVehicle(placement));
-    } catch (error) {
-      if (!failedModels.has(placement.model)) {
-        failedModels.add(placement.model);
-        // eslint-disable-next-line no-console -- a silently missing car is exactly what hid this for a day
-        console.warn(
-          `[vehicles] '${placement.model}' could not be built, skipping it: ` +
-            (error instanceof Error ? error.message : String(error)),
-        );
-      }
+  const reportSpawnFailure = (placement: VehiclePlacement, error: unknown, attempts: number): void => {
+    if (attempts < STUCK_SPAWN_ATTEMPTS || failedModels.has(placement.model)) {
+      return;
     }
+    failedModels.add(placement.model);
+    // eslint-disable-next-line no-console -- a silently missing car is exactly what hid this twice
+    console.warn(
+      `[vehicles] '${placement.model}' at ${placement.position.map((axis) => Math.round(axis)).join(',')} ` +
+        `has failed to spawn ${attempts} times in a row: ` +
+        (error instanceof Error ? error.message : String(error)),
+    );
+  };
+  const vehicleLod = new VehicleLodSystem(deps.viewOf, config, spawnVehicle, reportSpawnFailure);
+  // Parked cars come from the game's `parked.json` in the VFS (shipped per game); absent → none. They are
+  // REGISTERED, not spawned here: pre-spawning all of them put every car on the map into the world at boot,
+  // most of them far outside the collision radius, where they fell (docs/open-issues/, fixed 2026-08-02).
+  for (const placement of parseParkedVehicles(deps.fs.getText('parked.json'))) {
+    vehicleLod.register(placement);
   }
 
   return {
@@ -712,6 +717,13 @@ export async function setupEngineVehicles(deps: EngineVehiclesDeps): Promise<Eng
  * and rebuilds through the worker on the next encounter.
  */
 const MODEL_CACHE_TEXTURE_BYTES = 256 * 1024 * 1024;
+
+/**
+ * Consecutive rejected spawns before an entry is reported. A spawn is REJECTED while its collision cell is
+ * still streaming, which is normal and self-healing, so the threshold has to outlast that — a few seconds of
+ * frames. What it catches is the other kind: an entry that will retry silently until the tab closes.
+ */
+const STUCK_SPAWN_ATTEMPTS = 300;
 
 /** One cached car TYPE: the adapter data + the uploaded engine model + the LRU bookkeeping. */
 interface VehicleModelEntry {
