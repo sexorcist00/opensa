@@ -339,6 +339,21 @@ was 0 in both**: three plants, three clear authored spots, so the ladder has nev
 measured run. That bounds how common the problem is; it is not evidence it cannot happen. Run:
 [`2026-08-01-headless-planted-occlusion.json`](opensa-engine/2026-08-01-headless-planted-occlusion.json).
 
+### 091 — the field drive that closed the fork (2026-08-02)
+
+The first row in this record taken from a HUMAN DRIVE rather than a harness: one continuous session,
+Ganton → Downtown LS → the countryside → the desert → the whole of Las Venturas, in a `comet`, censused from
+the game's own `[slow]` lines (every frame over 20 ms). **223 slow frames, p50 21.9 ms, only four above
+30 ms** — and **zero of them carried a vehicle span**, so the per-type car cost 091 was written to bound
+(worst `bus` 20.5 + `tahoma` 18.2 ms) never landed on a slow frame across four popcycle zones. What the slow
+frames actually are: **GPU pass mean 13.73 ms (max 19.79) against a CPU render of 0.1–0.6 ms**, 204 of 223
+above 8 ms. `unattributed` on a real drive is the CPU waiting on the GPU, not the GC tail the bench shape
+suggested. Run:
+[`2026-08-02-drive-091-field-verdict.json`](opensa-engine/2026-08-02-drive-091-field-verdict.json).
+
+**Read the note before comparing it to anything**: it is a DEV build, it carries no pak buildTime (the
+console was opened after boot) and no timestamps, and it is a census, not a scripted sweep.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

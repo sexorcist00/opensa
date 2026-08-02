@@ -60,6 +60,35 @@ engine may all report into it). Two rules bound what may open a span:
 rather than an error. The check is structural: a span belongs in a promise continuation, a worker handler or
 a callback, never in the loop body. Detail + the measured shape: [`edge-cases/browser-runtime.md`](../edge-cases/browser-runtime.md).
 
+**The rule was VIOLATED for five days and it took a field drive to notice** (found and fixed 2026-08-02):
+`cell-collision-read` wrapped `loadCellColliders`, which is `async` but has no `await`, so its body ran
+synchronously inside `collision.update()` — already timed as the loop's `collision` block. Three frames of the
+drive printed a negative `unattributed`, worst **−65.9**, on a line reading
+`collision 76.0 · … (cell-collision-read 75.7 …)`. The span is gone; the reasoning is left at the site so it
+is not re-added. Note what "caught: no" costs: the defect shipped on 2026-07-28 and survived the close-out of
+the very plan that wrote this rule, because the only symptom is a minus sign in a diagnostic line.
+Write-up: [091's field verdict](../plans/091-frame-time-attribution/readme.md#the-field-verdict--2026-08-02).
+
+**`async` is not evidence of being out-of-loop** — that is the trap in one line. Check where the function is
+CALLED from, not how it is declared.
+
+## A dynamic body may only be CREATED where its static collision already exists
+
+`streaming.collisionDrawDistance` (150) is shorter than the vehicle LOD ring (`lodDistance` 250). A rigid body
+spawned in the band between them has nothing under it and free-falls — and if anything downstream then
+measures that body's distance from its LIVE position, the fall is permanent, because the position it is
+measured at and the position it would be recreated at have silently diverged.
+
+**Any streamer that materialises physics by distance must gate on the collision radius, not on its own.** The
+vehicle LOD system spawns within `min(lodDistance, collisionDrawDistance)`; the ground probe in
+`spawnVehicle` throws when its cell has not arrived, and that throw is a DEFERRAL, not an error.
+
+**Caught:** no — and the cost of that is on record. Parked cars fell out of the world for a whole session in a
+way that produced a plausible frame: the lot simply looked empty, the console said nothing, and a field drive
+across four zones met parked cars exactly once without anyone suspecting the world was broken. A spawn that is
+allowed to be rejected must also be able to REPORT that it keeps being rejected
+([`open-issues/fixed/parked-cars-do-not-respawn.md`](../open-issues/fixed/parked-cars-do-not-respawn.md)).
+
 ## A field run reads the built game dir and nothing else
 
 `build/<game>/opensa` — its `data/` included. The built `data/*` is the MERGED result with mods installed and

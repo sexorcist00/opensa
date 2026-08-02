@@ -49,6 +49,27 @@ LOD/spawn system, same as `parked.json`):
    tight/clipping places (parking lots under freeways, against curbs) penetrate static collision on spawn and the
    dynamic chassis is **ejected → tips vertical**. `parked.json`/CLEO placements don't set the flag (unchanged).
 
+> ## ⚠️ THE WIRING IS GONE — discovered 2026-08-02
+>
+> Everything below phase 1 is still true of the LIBRARY code and false of the running game.
+> `GtaSaWorldAdapter.mapCarGenerators()` is implemented, unit tested, and **called by nothing but its own
+> test**; `VehicleLodSystem.register()` has exactly one caller in the repo, the bench road-car population in
+> `engine-perf-runs.ts`.
+>
+> **It was never removed on purpose.** The `for (const placement of await adapter.mapCarGenerators(...))` loop
+> lived in the three.js host and went out with it in `a312f0d` (074/13 phase 5a+5b, 2026-07-18) — the
+> own-engine host never received it. So phases 2 and 3 were genuinely "in-game verified" at the time, on a
+> host that no longer exists, and the feature was lost silently in a renderer migration. Nothing failed;
+> ~1043 map cars simply stopped being asked for.
+>
+> The cost was measured by accident on 2026-08-02: the 091 field drive crossed four popcycle zones from LS to
+> Las Venturas and met parked cars **once**, because `parked.json`'s 212 placements and 24 models are the only
+> car population the game has. See [091's field verdict](../091-frame-time-attribution/readme.md#the-field-verdict--2026-08-02).
+>
+> Restoring it is ~10 lines against the own-engine host (`cityBoxes`, `cityAt` and the game clock all still
+> exist) plus a field round for what 1043 lazily-registered entries cost. **Not done yet — it is a decision,
+> not a typo.**
+
 ## Where it plugs in — **chosen: B (runtime, implemented)**
 
 - **B — runtime, in the map resolver ✅:** `resolveMap` collects CARS into `MapDefinitions.carGenerators`;

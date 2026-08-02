@@ -1,7 +1,11 @@
 # 091 — Frame-time attribution: giving `other` a name
 
-**Status: SHIPPED 2026-07-28 (all three phases).** No fix was written — the plan only makes the frame's
-unaccounted time say what it is, and phase 3 names the next step from the numbers rather than assuming it.
+**Status: SHIPPED 2026-07-28 (all three phases). HALF-ANSWERED 2026-08-02 by a field drive.** The GC branch is
+answered and dead; the per-type branch is **still open and could not be tested**, because the drive met no new
+car type at all — the world only ever contained 24. See [The field verdict](#the-field-verdict--2026-08-02).
+
+No fix was written — the plan only makes the frame's unaccounted time say what it is, and phase 3 names the
+next step from the numbers rather than assuming it.
 
 ## Why
 
@@ -83,7 +87,7 @@ The spans that exist, and where they had to be opened:
 | `vehicle-osm:<model>` | `GtaSaWorldAdapter.loadVehicleData` | the `.osm` section read + parse |
 | `vehicle-model:<model>` | `engine-vehicles.buildModel` | `createVehicleModel` — the GPU upload |
 | `vehicle-spawn:<model>` | `engine-vehicles.spawnVehicle` | the per-instance tail: physics body, rig, plate |
-| `cell-collision-read` | `GtaSaWorldAdapter.loadCellColliders` | the cell's COL parse + procobj colliders |
+| ~~`cell-collision-read`~~ | ~~`GtaSaWorldAdapter.loadCellColliders`~~ | **REMOVED 2026-08-02** — it double-counted the `collision` block (§3 of the field verdict) |
 | `cell-collision-bodies` | `CollisionStreamingSystem.load` | `createStaticColliders` in the `.then()` |
 
 Two entries from the plan's original list are **not** there, deliberately: `cell-create` and `texture-upload`
@@ -153,6 +157,79 @@ an answer, as the plan said it would be, not a failure.
   create allocate per unit — and it needs an allocation profile, not another span.
 - **Neither is worth doing on a bench frame alone.** The measured windows of all eight scenes are clean
   (p95 9.2–9.3 ms, `lateCreates` 0). The next input is a FIELD verdict on a drive that meets new car types.
+
+## The field verdict — 2026-08-02
+
+One continuous human drive, `comet`, Ganton → Downtown LS → city centre → the freeway overpass → the whole
+countryside → the desert → the whole of Las Venturas. The route was picked to cross the popcycle zone-types
+that actually differ: `CITY_POPCYCLE_ZONE` maps **LA, SF and VEGAS all to `RESIDENTIAL_AVERAGE`**, so only
+`COUNTRYSIDE` and `DESERT` reshuffle the random map cars — an LS→SF drive would have tested nothing new.
+Census of the game's own `[slow]` lines (every frame over 20 ms, `perfLogs = IS_DEV`):
+[`benchmarks/opensa-engine/2026-08-02-drive-091-field-verdict.json`](../../benchmarks/opensa-engine/2026-08-02-drive-091-field-verdict.json).
+
+**The driver felt no hitch.** 223 slow frames, p50 **21.9 ms**, p90 25.0, and only **four** frames above
+30 ms in the whole drive (two of them boot).
+
+### 1. Branch A is UNTESTED, not dead — and finding out why was the drive's real yield
+
+**Zero of the 223 slow frames carried `vehicle-osm`, `vehicle-model` or `vehicle-spawn`**, which reads like an
+answer and is not one. The driver's own account is what exposed it: *across the whole route they met parked
+cars exactly once*, on one lot in LS. The world was empty because of two defects, both found by chasing that
+sentence:
+
+- **`parked.json` is the only car population that exists** — 212 placements, **24 distinct models**, all
+  spawned at BOOT. Every type it can ever cost was therefore paid before the drive began.
+- **The map car generators are not wired.** `GtaSaWorldAdapter.mapCarGenerators()` — plan 059's ~1043
+  generators, including the ~740 random ones resolved through `popcycle`/`cargrp` — is implemented, unit
+  tested, and **called by nothing but its own test**. 059's readme claims the runtime wiring ("`canvas-host`
+  hands them to the vehicle LOD system") and that wiring does not exist. `vehicles.register()` has exactly one
+  caller in the repo: the BENCH runner.
+
+So the drive could not meet a new car type, and the count of zero measures the world's emptiness, not the
+cost of a spawn. **The per-type budget lever stays unbuilt but the question stays open**; it becomes testable
+only once 059's generators are wired, which is where the next attempt starts.
+
+**The method lesson, which is the transferable part:** a count of zero is only evidence if the thing being
+counted had a chance to happen. Nothing in the log said the world was empty — the drive looked clean, the
+census looked clean, and the verdict written from them was wrong. It took the driver saying *"I only saw cars
+once"* to turn a null result into two defects.
+
+### 2. Branch B is dead — `unattributed` on a real drive is the GPU, not the GC
+
+217 of 223 slow frames are dominated by `other`, with no span open at all, which is the signature phase 3
+read as GC. The drive says otherwise: on those same frames **the GPU pass averages 13.73 ms (max 19.79) while
+the CPU render block is 0.1–0.6 ms** — 204 of 223 are above 8 ms of GPU. The CPU has nothing to do; the frame
+interval stretches because the GPU has not finished, and rAF charges that stretch to the gap between frames,
+where no in-loop timer can see it. **`unattributed` is not one thing.** On the bench shape (teleports, 30+ car
+models allocated and freed in a frame) it was allocation. On a drive it is GPU backpressure. Anyone reading a
+future `unattributed` number must check `gpu` on the same line before naming it.
+
+The driver's own observation is the same finding from the other end: in LV with no other cars, **~50 fps at
+top speed and 70–80 fps under braking**. That is the speed camera, and it is a GPU cost — see
+[`performance/deferred-optimizations/vehicle-speed-camera-framing.md`](../../performance/deferred-optimizations/vehicle-speed-camera-framing.md).
+
+### 3. A defect in this plan's own instrumentation: `unattributed` can go NEGATIVE
+
+Three frames printed a negative `unattributed`, worst **−65.9**:
+
+```
+frame 118.7 · collision 76.0 · other 30.0 (cell-collision-read 75.7 · cell-collision-bodies 20.2 · unattributed -65.9)
+```
+
+`collision 76.0` and `cell-collision-read 75.7` are the same work. `loadCellColliders` is `async` but has no
+`await` in it, so its whole body runs **synchronously inside `collision.update()`**, which the loop already
+times as the `collision` block — and the span subtracted it a second time. Exactly the trap phase 2 avoided
+for `cell-create` and `texture-upload`, and a violation of the restriction this plan itself added (*a span may
+only wrap SYNCHRONOUS work that runs BETWEEN frames*). **Nothing catches it**: the only symptom is a minus
+sign in a line a human has to read, which is how it survived this plan's own close-out.
+
+**FIXED 2026-08-02 by deleting the span** (`GtaSaWorldAdapter.loadCellColliders`), with the reasoning left at
+the site so it is not re-added. The cost is not lost — the `collision` block already reports it, and on all
+three offending frames the block and the span were the same number to within 3 ms, so the span was telling
+nobody anything new. The plan's phase-2 span table loses `cell-collision-read`; `cell-collision-bodies` stays,
+because that one really does run in a `.then()`. The other caller (`refreshCollision`, the debug
+collision-lines viewer) is out-of-loop but off by default, and a span that exists only under a debug toggle is
+worse than none.
 
 ## Out of scope (held)
 
