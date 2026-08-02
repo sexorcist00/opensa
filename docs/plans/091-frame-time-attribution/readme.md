@@ -1,8 +1,9 @@
 # 091 — Frame-time attribution: giving `other` a name
 
-**Status: SHIPPED 2026-07-28 (all three phases). HALF-ANSWERED 2026-08-02 by a field drive.** The GC branch is
-answered and dead; the per-type branch is **still open and could not be tested**, because the drive met no new
-car type at all — the world only ever contained 24. See [The field verdict](#the-field-verdict--2026-08-02).
+**Status: SHIPPED 2026-07-28 (all three phases). CLOSED 2026-08-02 — both branches answered, neither built.**
+It took two field drives on the same day: the first found the world empty of cars, the second was run after
+that was fixed. See [The field verdict](#the-field-verdict--2026-08-02) and
+[the re-drive](#the-re-drive-on-a-populated-map--2026-08-02).
 
 No fix was written — the plan only makes the frame's unaccounted time say what it is, and phase 3 names the
 next step from the numbers rather than assuming it.
@@ -189,9 +190,8 @@ So the drive could not meet a new car type, and the count of zero measures the w
 cost of a spawn. **The per-type budget lever stays unbuilt and the question stays open.**
 
 Both defects were fixed on 2026-08-02 — the generators are wired again (1043 of them: 742 random, 301 specific
-across 83 model ids) and `parked.json` is registered lazily rather than spawned at boot. **The re-drive that
-this makes possible is what actually answers branch A**, and it is the one thing 091 still owes: the same
-route, now through a map with ~1255 cars and enough model variety to make a new type arrive at speed.
+across 83 model ids) and `parked.json` is registered lazily rather than spawned at boot. The re-drive that made
+possible is below, and it is what actually answers branch A.
 
 **The method lesson, which is the transferable part:** a count of zero is only evidence if the thing being
 counted had a chance to happen. Nothing in the log said the world was empty — the drive looked clean, the
@@ -234,6 +234,48 @@ nobody anything new. The plan's phase-2 span table loses `cell-collision-read`; 
 because that one really does run in a `.then()`. The other caller (`refreshCollision`, the debug
 collision-lines viewer) is out-of-loop but off by default, and a span that exists only under a debug toggle is
 worse than none.
+
+## The re-drive, on a populated map — 2026-08-02
+
+Same day, same host, after the map got its cars back. Route: LS → countryside → SF → the countryside near
+Mount Chilliad → back to LS → Las Venturas at dusk, in a `comet`. The world now holds ~1255 cars against the
+first drive's 212, and 100+ models against 24. Census:
+[`benchmarks/opensa-engine/2026-08-02-drive-091-populated-map.json`](../../benchmarks/opensa-engine/2026-08-02-drive-091-populated-map.json).
+
+**Branch A is answered, and the answer is: do not build the budget lever.**
+
+- **`vehicle-spawn` spans appeared for the first time** — 14 frames over 12 models (`elegant`, `peren`,
+  `bravura`, `solair`, `picador`, `sunrise`, `fortune`, `bf400`, `blade`, `vincent`, `clover`, `pcj600`) — at
+  **0.2–0.3 ms each**. The per-instance tail is free; those frames were slow for GPU reasons and a spawn merely
+  happened during them.
+- **`vehicle-osm` and `vehicle-model` are STILL zero** — and this time the zero is evidence, not an empty
+  world. Types were demonstrably arriving throughout the drive across four popcycle zones. The per-TYPE cost
+  simply never coincides with a frame the game calls slow.
+
+Why that does not contradict phase 3's ~25 ms ceiling: those figures came from a **teleport bench where 27–43
+types landed in a single frame**. Arriving one at a time, ahead of the player at the streaming radius, the same
+work never crosses 20 ms. The ceiling is real and the shape that produces it is not a play shape — which is
+exactly what phase 3 suspected and could not confirm.
+
+**The frame distribution got TIGHTER with five times the cars**: p50 21.3 ms and p90 24.1 against the empty
+map's 21.9 / 25.0. (The raw slow-frame count went 223 → 1004, but neither run recorded its duration, so only
+the distribution is comparable.) What the cars did cost is GPU: **pass mean 13.73 → 15.64 ms**, max 19.79 →
+21.89, draws p50 1049 → 1113 and max 1999 → 2193. Same GPU-bound shape as before, more of it.
+
+Two field notes worth keeping:
+
+- **The worst frame of the drive, 237.2 ms**, carried no span at all (gpu 11.53, `unattributed` 235.3) — the
+  GC/browser signature again, one event in a state-wide drive, and the one place the driver felt anything
+  (near `1089.7, -1848.6`). It also tripped the `[cam] jump` tripwire at `dt 237.2 · dist 5.90`, which is a
+  **consequence** of the stall: the car really did move 5.9 m in that frame. Do not read that line as a camera
+  defect.
+- **A lot full of taxis with three coaches on screen** (`1806.3, -1893.1`, LS airport) ran at **9.66 ms /
+  104 fps, 1502 draws**. Cars on screen are not the problem; a wide lens at speed is
+  ([the framing lever](../../performance/deferred-optimizations/vehicle-speed-camera-framing.md)).
+
+**Zero negative `unattributed` frames** — the double-counted span really is gone. **Zero
+`has failed to spawn` warnings** — no entry got stuck, which is the first time that could have been seen at
+all.
 
 ## Out of scope (held)
 

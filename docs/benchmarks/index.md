@@ -354,6 +354,20 @@ suggested. Run:
 **Read the note before comparing it to anything**: it is a DEV build, it carries no pak buildTime (the
 console was opened after boot) and no timestamps, and it is a census, not a scripted sweep.
 
+### 091 — the re-drive on a POPULATED map, which closed the fork (2026-08-02)
+
+The same day's second drive, after the map got its cars back (059's 1043 generators wired in, `parked.json`
+registered lazily): LS → countryside → SF → Chilliad → LS → Las Venturas at dusk. **1004 slow frames, p50
+21.3 ms, p90 24.1** — a *tighter* distribution than the empty-map run (21.9 / 25.0) with five times the cars,
+though the raw counts are not comparable (neither run recorded its duration).
+
+**`vehicle-spawn` spans appeared for the first time** — 14 frames over 12 models, at **0.2–0.3 ms each**, free.
+**`vehicle-osm` and `vehicle-model` stayed at zero**, and now that is evidence rather than an empty world: the
+per-TYPE cost never coincides with a frame the game calls slow when types arrive one at a time. GPU pass mean
+rose 13.73 → **15.64 ms** (max 21.89, draws p50 1049 → 1113) — that is what the cars cost, and it is the same
+GPU-bound shape the first drive found. Run:
+[`2026-08-02-drive-091-populated-map.json`](opensa-engine/2026-08-02-drive-091-populated-map.json).
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to

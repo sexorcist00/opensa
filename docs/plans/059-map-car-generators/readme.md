@@ -71,8 +71,12 @@ LOD/spawn system, same as `parked.json`):
 > The host now prints `[vehicles] map car generators registered: N` at boot, because the one thing this whole
 > episode lacked was a number saying whether the map had cars at all.
 >
-> **A field round is owed** for what ~1255 lazily-registered entries cost while driving — and it is the same
-> drive that finally tests 091's untested per-type branch.
+> **Field round done, same day** (LS → countryside → SF → Chilliad → LS → Las Venturas at dusk): cars spawn,
+> despawn and respawn correctly over repeated passes, no stuck entries, and the frame distribution got
+> *tighter* than the empty map's (p50 21.3 / p90 24.1 against 21.9 / 25.0) — what the cars cost is GPU, pass
+> mean 13.73 → 15.64 ms. Numbers:
+> [`2026-08-02-drive-091-populated-map.json`](../../benchmarks/opensa-engine/2026-08-02-drive-091-populated-map.json).
+> The same drive closed 091's per-type branch.
 
 ## Where it plugs in — **chosen: B (runtime, implemented)**
 
