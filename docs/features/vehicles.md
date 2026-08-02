@@ -202,13 +202,27 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   really applied (ramped engine force, slewed steer), not the raw input. **Off by default and inert then**
   (`vehicles.telemetry.enabled`); only the seated car is sampled, and its history resets when the player
   changes cars. This is the slip/speed channel plan 080/05 will read for drift framing.
-- **LOD/streaming** (plan 021): HD/LOD/unload distances per vehicle, placements respawn.
+- **LOD/streaming** (plan 021): HD/LOD/unload distances per vehicle (80 / 250 / 500), placements respawn. Two
+  rules the distances hide, both learned in the field on 2026-08-02
+  ([the fix](../open-issues/fixed/parked-cars-do-not-respawn.md)): a car is only **created** within
+  `min(lodDistance, streaming.collisionDrawDistance)` — 150, not 250 — because a body spawned past the
+  collision radius has no ground and free-falls; and an unloaded entry's respawn trigger is anchored to its
+  **placement**, not to wherever the car ended up, or a shunted car takes its spot's trigger away with it. A
+  spawn is allowed to be REJECTED (that is how it waits for its collision cell); an entry that keeps failing
+  is reported once per model.
 - **Headlights** (plan 033, ⚠️ MVP — redo later): glowing lamp glass + coronas at the lamp dummies; lamps
   found by position near the `headlights`/`taillights` dummies; no road beam yet. See night-and-time.md.
 - Spawn tooling: debug Vehicles screen lists **every** car from `vehicles.ide` (sorted, with a name filter);
   the list comes from `vehicleModelsFromIde` (apps/web) — no hardcoded car set.
-- Parked cars come from the game's **`parked.json`** in the VFS (a `VehiclePlacement[]` shipped per game; read by
-  `parseParkedVehicles` in apps/web). Absent → no parked cars. (Replaced the old hardcoded `GAME_CONFIG.vehiclesSpawn`.)
+- **Two populations of parked cars**, both registered lazily and streamed by the LOD system; the boot log
+  prints the size of each (`[vehicles] parked placements registered: N`, `map car generators registered: N`
+  — a census line is the only thing that distinguishes an empty map from a full one):
+  - **`parked.json`** in the VFS (a `VehiclePlacement[]` shipped per game; read by `parseParkedVehicles` in
+    apps/web). Absent → none. Stock `original` ships 212 placements over 24 models. (Replaced the old
+    hardcoded `GAME_CONFIG.vehiclesSpawn`.)
+  - **Map car generators** — the binary IPL `CARS` section (plan 059): 1043 in stock SA, 301 specific over 83
+    model ids plus 742 random resolved through `popcycle`/`cargrp` by city and hour. Registered by
+    `engine-canvas-host` after the city boxes exist, since the random draw asks which city a spot is in.
 - Mods: a vehicle's model/texture/data is installed by `vehicle-installer` at BUILD time (`--rebake <game>
   [--only <model>]` re-does one car in ~3.6 s against an already-built game). There is no runtime overlay —
   see [postmortem/runtime-modloader-overlay.md](../postmortem/runtime-modloader-overlay.md). Assets resolve by

@@ -621,9 +621,15 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
   // Parked cars come from the game's `parked.json` in the VFS (shipped per game); absent → none. They are
   // REGISTERED, not spawned here: pre-spawning all of them put every car on the map into the world at boot,
   // most of them far outside the collision radius, where they fell (docs/open-issues/, fixed 2026-08-02).
-  for (const placement of parseParkedVehicles(deps.fs.getText('parked.json'))) {
+  const parked = parseParkedVehicles(deps.fs.getText('parked.json'));
+  for (const placement of parked) {
     vehicleLod.register(placement);
   }
+  // Every population of the world says how big it is at boot. An empty map renders exactly like a full one,
+  // and that is how 1043 map car generators went unasked-for for six weeks with nothing in the console
+  // (`docs/restrictions/architecture.md`).
+  // eslint-disable-next-line no-console -- boot census, one line
+  console.log(`[vehicles] parked placements registered: ${parked.length}`);
 
   return {
     activeVehicle: (): EnterableVehicle | null => seated,

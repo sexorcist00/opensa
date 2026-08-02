@@ -20,6 +20,6 @@ the one-line rule and its blast radius live there.
 | [engine-rendering.md](./engine-rendering.md)     | Own WebGPU engine rendering limits and approximations            |
 | [streaming-formats.md](./streaming-formats.md)   | Native-format versioning + streaming memory model invariants     |
 | [browser-runtime.md](./browser-runtime.md)       | Browser/platform constraints (FSA, Cache Storage, e2e)           |
-| [physics-runtime.md](./physics-runtime.md)       | Rapier vehicle-controller boundaries (cosmetic wheel rotation…)   |
+| [physics-runtime.md](./physics-runtime.md)       | Rapier vehicle-controller boundaries (cosmetic wheel rotation…) + where a vehicle body may exist at all (no parked car between 150 m and 250 m) |
 | [camera-rig.md](./camera-rig.md)                 | Follow-camera (080 director) limits — the mid-corner muted chase  |
 | [route-graph.md](./route-graph.md)               | Drivable-route limits (096) — a city grid yields no route at all  |

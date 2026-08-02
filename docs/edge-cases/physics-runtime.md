@@ -1,8 +1,24 @@
 # Physics runtime (Rapier vehicle controller) — edge cases
 
-What Rapier's `DynamicRayCastVehicleController` does NOT model, discovered the hard way. The engine's
-vehicle feel is built on top of these boundaries (plan 081's clamps, plan 089's signals); anyone reading a
-wheel channel should check this list before trusting it.
+What Rapier's `DynamicRayCastVehicleController` does NOT model, discovered the hard way, plus where a vehicle
+body may exist at all. The engine's vehicle feel is built on top of these boundaries (plan 081's clamps, plan
+089's signals); anyone reading a wheel channel should check this list before trusting it.
+
+## No parked car exists between 150 m and 250 m
+
+A dynamic body needs static collision under it, and collision streams to a **shorter** radius than the vehicle
+LOD ring: `streaming.collisionDrawDistance` is **150**, `vehicle.lodDistance` is **250**. So the LOD system
+creates a car only within `min(150, 250)`, and the 100 m band between the two radii is empty of cars by
+construction. Approaching a lot, its cars appear at 150 m rather than at the LOD distance.
+
+This is the price of the alternative, which was measured in the field on 2026-08-02: cars spawned in that band
+free-fell through the world, and because the unload distance was measured from the fallen body's own position,
+the spot never repopulated — one lot in LS emptied for the rest of the session, silently
+([the fix](../open-issues/fixed/parked-cars-do-not-respawn.md), and the rule in
+[`restrictions/architecture.md`](../restrictions/architecture.md)).
+
+**If the pop-in ever reads badly, the lever is the collision radius, not the spawn radius.** Raising
+`lodDistance` alone puts the cars back over the hole.
 
 ## Wheel rotation is COSMETIC — it follows the ground exactly
 

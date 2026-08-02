@@ -89,6 +89,23 @@ across four zones met parked cars exactly once without anyone suspecting the wor
 allowed to be rejected must also be able to REPORT that it keeps being rejected
 ([`open-issues/fixed/parked-cars-do-not-respawn.md`](../open-issues/fixed/parked-cars-do-not-respawn.md)).
 
+## Every population of the world announces its size at boot
+
+A map with no cars, no clutter or no props renders exactly like a full one. Nothing in a frame time, a draw
+count or a screenshot distinguishes "the feature is off" from "the feature found nothing to place" — so any
+system that materialises world content from data must print how many placements it took, once, at boot.
+`[vehicles] parked placements registered: N` and `[vehicles] map car generators registered: N` are the shape.
+
+**Caught:** no, and this is the rule's whole reason for existing. Plan 059's 1043 map car generators were
+implemented, unit tested, and called by nothing for six weeks: the registration loop went out with the
+three.js host in `a312f0d` (074/13) and the own-engine host never received it. Nothing failed, no test could
+see it — a unit test proves the producer works, never that anyone consumes it, and `engine-canvas-host` has no
+test at all. It took a field drive across four popcycle zones, and a driver saying *"I only saw cars once"*,
+to notice. A census line would have said it in one second.
+
+**The consequence for a plan:** if a new population source is added, it prints its count. If a count is zero
+when it should not be, that is a bug report the log writes for you.
+
 ## A field run reads the built game dir and nothing else
 
 `build/<game>/opensa` — its `data/` included. The built `data/*` is the MERGED result with mods installed and

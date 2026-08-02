@@ -95,6 +95,16 @@ until a game is picked. `use-asset-boot.ts` owns the session (`loader + vfs`), r
 the engine, calls `setupStreaming(engine, pakSource, { lodRadius })`, and fires `WORLD_READY` once streaming
 settles (`pendingCells === 0 && created > 0`, or a timeout backstop).
 
+**Boot does not populate the world any more** (2026-08-02). `setupEngineVehicles` used to `await` a spawn for
+every `parked.json` placement — 212 cars for stock `original`, most of them far outside the collision radius,
+where they had nothing to stand on. Both car populations are now REGISTERED with the vehicle LOD system and
+materialise by distance, so the function is synchronous and boot builds no vehicles at all. Each population
+prints its size once (`[vehicles] parked placements registered: N`,
+`[vehicles] map car generators registered: N`) — see
+[`restrictions/architecture.md`](../restrictions/architecture.md). Map car generators are registered by
+`EngineCanvasHost` rather than inside `setupEngineVehicles`, because resolving a random generator needs the
+`map.zon` city boxes, which are built later in the boot closure.
+
 ![Boot flow](./assets/boot-flow.svg)
 
 <details><summary>diagram source</summary>

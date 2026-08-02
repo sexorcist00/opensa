@@ -67,18 +67,59 @@ handler and GC pause since the last loop returned. That half reports itself thro
 the top of the frame that paid for it, and the line prints the breakdown in brackets:
 
 ```
-other 223.6 (cell-collision-read 20.3 · vehicle-model:tampa 4.9 · vehicle-osm:tampa 1.2 · unattributed 163.8)
+other 223.6 (vehicle-model:tampa 4.9 · vehicle-osm:tampa 1.2 · cell-collision-bodies 8.4 · unattributed 163.8)
 ```
 
 Spans today: `vehicle-osm:<model>` (the `.osm` section read + parse) · `vehicle-model:<model>` (the GPU
-upload) · `vehicle-spawn:<model>` (the physics body, rig and plate) · `cell-collision-read` (COL parse) ·
-`cell-collision-bodies` (Rapier static colliders). **`unattributed` is always printed** — it is GC plus
-anything nobody wrapped, and a run that hides it is reporting only the half it can see. To add a span, read
-the two rules in [`restrictions/architecture.md`](../restrictions/architecture.md) first.
+upload) · `vehicle-spawn:<model>` (the physics body, rig and plate) · `cell-collision-bodies` (Rapier static
+colliders, built in a `.then()`). **`unattributed` is always printed** — a run that hides it is reporting only
+the half it can see. To add a span, read the two rules in
+[`restrictions/architecture.md`](../restrictions/architecture.md) first; `cell-collision-read` was deleted on
+2026-08-02 for breaking one of them.
+
+**`unattributed` is not one thing, and `gpu` on the same line is what tells them apart.** On a teleport bench
+— dozens of car models and a city of cells allocated and freed in one frame — it is the GC tail. On a drive it
+is usually the CPU waiting on the GPU: a frame whose `gpu` pass is 15 ms against a `render` block of 0.3 ms
+was not collecting garbage, it was idle. Name it before you act on it.
 
 Full knob reference: [query-parameters.md](query-parameters.md). Useful A/B knobs while measuring: `?scale=0.75` (the ONE perf tier knob), `?aces=0`, `?bloom=0|N`,
 `?probe=0`, `?sky=preetham`, `?clouds=N`, `?draw=800..1600` (LOD ring; fog cap follows), `?hour=N`,
 `?soak=` (below). The prod host honours the same `?bench=` protocol for side-by-side baselines.
+
+## Field drive (a human at the wheel, censused afterwards)
+
+The `[slow]` line needs no flag in a dev run (`perfLogs = IS_DEV`), so a drive measures itself. This is how
+the two 2026-08-02 runs were taken, and it is the only lane that can answer a question a scripted sweep cannot
+— whether a thing is FELT.
+
+```bash
+npm run serve:static     # :3001
+npm run dev              # READ the Vite line for the port; it is not always 5173
+```
+
+```
+http://localhost:5173/?loader=http-dir&src=http://localhost:3001/build/original/opensa&hour=12&weather=0
+```
+
+- **Open DevTools → Console BEFORE clicking "CLICK TO PLAY".** Both drives so far missed the boot lines by
+  opening it late, and so recorded neither the pak `buildTime` nor the world's car census — the numbers were
+  usable, the record was not.
+- `hour=12&weather=0` keeps night lighting and weather out of the frame cost. **No `?video=1`** — that is the
+  autopilot, a different load shape, and a live keypress adds to it.
+- One continuous session. Restarting resets every "already loaded" set and smears the picture.
+- Ignore the first ~30 s: that is the boot shape.
+- Export the whole console (right-click → *Save as…*), then:
+
+```bash
+npx tsx scripts/debug/slow-frame-census.ts <console-export.log> [--worst 8]
+```
+
+The census reports the frame-ms spread, which block owned each frame, the named spans that appeared, the GPU
+pass beside the CPU render (the pair that separates a GC tail from a GPU wait), and a NEGATIVE `unattributed`
+— which means a span is being double-subtracted and nothing else in the repo can see it.
+
+**A drive's raw slow-frame COUNT is not comparable between runs** unless both recorded their duration, and the
+console export has no timestamps. Compare the distribution.
 
 ## Soak mode (`?soak=`)
 
