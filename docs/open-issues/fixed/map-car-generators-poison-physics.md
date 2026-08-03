@@ -1,8 +1,9 @@
 # Map car generators poison the physics world (Rapier `unreachable`, then "recursive use")
 
 **Status: FIXED 2026-08-03 — root cause found and closed by a unit test, exactly as this doc's own "where to
-pick it up" section asked for.** One line in `PhysicsWorld.createDynamicVehicle`; the field bisection below
-turned out to have been chasing the symptom's *frequency*, not its cause.
+pick it up" section asked for; FIELD-CONFIRMED the same day.** One line in
+`PhysicsWorld.createDynamicVehicle`; the field bisection below turned out to have been chasing the symptom's
+*frequency*, not its cause.
 
 ## The root cause, in one sentence
 

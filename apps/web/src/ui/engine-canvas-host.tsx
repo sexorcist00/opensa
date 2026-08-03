@@ -2080,7 +2080,6 @@ function probeCenterOf(enabled: boolean, focus: readonly [number, number, number
   return enabled ? [focus[0], focus[1] + 1.0, focus[2]] : null;
 }
 
-/** Tyre-smoke session dials (089/02) — `?smokeStart/?smokeFull/?smokeRate`, the 081/09 URL-dial pattern. */
 /**
  * Register the map's car generators — or none, when `?cargen=0` bisects them out of a run.
  *
@@ -2148,6 +2147,7 @@ function slowFrameLine(frame: {
   );
 }
 
+/** Tyre-smoke session dials (089/02) — `?smokeStart/?smokeFull/?smokeRate`, the 081/09 URL-dial pattern. */
 function smokeDialOverrides(params: URLSearchParams): Partial<TyreSmokeDials> {
   return {
     ...(params.has('smokeRate') ? { rate: Number(params.get('smokeRate')) } : {}),
