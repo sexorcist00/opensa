@@ -17,7 +17,8 @@ never the app. The dependency picture is the tools cluster of
   copied into `data/vehicle-features.txt`, which opensa-pack reads while baking that car. It also writes
   `data/vehicle-mods.txt`, the mod-car ledger (096/06): once the rows are merged, a mod car is
   indistinguishable from a stock one anywhere downstream, so the set the installer knows while it works is
-  written down — the ONE vehicle data file read at runtime, by video mode's "mod cars first" pick. A
+  written down — the ONE vehicle data file read at runtime, and a SWITCH: name one drivable slot and every video-mode
+  scene drives a mod car, name none and every scene takes a stock one. A
   `--rebake` merges into it rather than rewriting it from its own selection.
   **`--rebake <game>`** runs the same work against a game that is ALREADY BUILT, in place — merging settings
   into the built `data/*` and re-converting each model into the archive's `<model>.osm` through opensa-pack's
@@ -42,6 +43,15 @@ never the app. The dependency picture is the tools cluster of
   `build/<id>/opensa-pack/<game>-<version>/` layout the fetch-mode loader streams by range. Chained after the
   pack in every `build:game:<id>:opensa`; see
   [perfect-map-builder.md](./perfect-map-builder.md).
+  **It EXPANDS `models/*.img` into their entries under bare names** rather than packing the archives as
+  files — the fetch loader pushes chunk bytes into the VFS verbatim and has no archive step, so a packed
+  container is one opaque key and every name inside it is unreachable (`expand-img.ts`). Entry precedence is
+  the local loader's: `gta3.img`, then `gta_int.img`, then the rest alphabetically, first owner winning.
+  **Every packed name is LOWERCASED** (the read keeps the on-disk spelling), matching the local loader — a
+  TC is free to ship `data/maps/Gostown6/Gp_City.IPL` and the runtime asks for it lowercased.
+  A parity test (`loader-parity.test.ts`) pins both rules against the local loader's own selection.
+  It also **prunes the chunks a re-pack replaced** — chunk names carry a content hash, so old files would
+  otherwise pile up in the deploy dir — and skips `*.bak` / `.DS_Store`.
 
 ## Standalone tools
 

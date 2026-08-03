@@ -188,3 +188,62 @@ Full docs+tests sweep of the plan's fragment. Measured:
   `docs/architecture/perfect-map-builder.md` (+ pmb-pipeline diagram) now carry the
   pmb → fetch-pack chain; `cli.ts` runners stay untested repo-wide by convention (only
   tool-kit has a cli test), and `tools/**` sits outside the coverage floors by config.
+
+## Field find, 2026-08-03 — fetch mode carried no archive contents at all
+
+`gostown` was switched to `assetLoader: 'fetch'`, uploaded, and died at boot on
+`player model bmycg.osm not found`. The ped installer had done its job (`bmycg.osm` is inside the built
+`models/gta3.img`, and `data/peds.ide` carries row 144) — the pack was the problem.
+
+**The runtime resolves by BARE name and the fetch VFS holds exactly the keys a chunk delivered.** The
+folder/http-dir loaders satisfy that by reading the IMG directory and ingesting each entry
+(`install-source-loader.ts`'s `filesForGroup`); the fetch loader pushes chunk bytes in verbatim. fetch-pack
+packed `models/gta3.img` as a FILE, so the whole archive landed as one opaque key (sliced `#0`/`#1`) and
+every name inside it was unreachable — the player ped first, but equally the vehicles and the collision
+libraries. Of the 77 entries in the gostown pack exactly ONE was a bare name, and it was `parked.json`.
+
+It shipped unnoticed because gostown was the only fetch-served game and it was DISABLED, and because the
+live `original-0.3.0` pack predates the ped moving into the archives (`engine-player.ts` still records that
+the player used to be fetched as `/ped/ped.json`). Now a restriction:
+[`restrictions/build-vs-runtime.md`](../../restrictions/build-vs-runtime.md) — whatever the loaders disagree
+about, the game disagrees about, and NOTHING catches it.
+
+**The fix** is `tools/fetch-pack/src/expand-img.ts`: expand every `models/*.img` into its entries under bare
+lowercased names, on the local loader's own precedence (gta3 → gta_int → the rest alphabetically, first owner
+wins), each entry bucketed by its extension so `.col` stays in the cacheable `models` group. The tool stays
+content-ignorant — an archive directory is a container index, not content. The pack ships every entry where
+the local loader ships the IDE-referenced selection; a superset is the safe direction and costs no bytes,
+since the container form already carried them. Entries keep the archive's 2 KiB sector padding, because a
+VER2 directory records a size in SECTORS and the exact byte length is not recoverable — the local loader
+hands over the same padded bytes.
+
+**Two more defects fell out of measuring it.**
+- `models/gostown6.img.bak` — 180 MB of the installer's own rollback copy — was being walked and uploaded.
+  `*.bak` and `.DS_Store` are now skipped.
+- **A re-pack never removed the chunks it replaced.** Chunk names carry a content hash, so a new set is
+  written BESIDE the old one; one gostown re-pack left 502 MB of dead chunks in the deploy dir, and it made
+  the first size comparison of this very change read as a regression (912 MB "after" against 526 MB
+  "before" — both figures counting two chunk sets). The output dir is now pruned to the manifest.
+
+**Then the same asymmetry a second time, in the LOOSE paths.** With the archives expanded the game booted,
+the map drew — and the player fell through it while every car reported `no ground ... yet`. The collision
+libraries were in the pack (54 `.col`, indexing to 930 models) and parsed fine, so the data was reachable;
+what was missing was the PLACEMENTS. `resolveMap` over the pack returned **384 instances / 503 catalog**
+against **3 970 / 1 352** over the built tree.
+The local loader lowercases every loose path (`install-source-core.ts`: "Loose file paths, lowercased") and
+the runtime looks a data file up by the lowercased path `gta.dat` names; fetch-pack kept the on-disk
+spelling. A total conversion names its files as it likes — gostown ships `data/maps/Gostown6/Gp_City.IPL` —
+and **32 of that build's 67 files carry an uppercase letter**, so most of its map was invisible in fetch mode
+while the world still RENDERED off the pak. The packed name is lowercased now; the read keeps the on-disk
+spelling, or a case-sensitive filesystem would fail to open it.
+**The lesson is that the restriction was written one case too narrow.** Expanding the archives lowercased the
+entry names because the archive directory already stores them that way; the loose paths were left as the
+filesystem spelled them, and nothing in the change said "the KEY SPACE has to match", only "the containers
+have to be opened". Same defect, same silence, one hour apart.
+
+**Measured, gostown, `build/gostown/opensa`:** 4 archives → **1 328 entries by name**; the pack is
+**410.0 MB in 12 chunks / 1 392 entries** against **526 MB in 14** before, with `bmycg.osm` and `bmycg.txd`
+present and no container or backup packed. After the case fix the pack resolves **3 970 instances / 1 352
+catalog — identical to the built tree** — with collision on 3 651 of them (the 319 without are props and
+`gp_seabed_lo`, which carry none by design). `.osm`/`.ostex` are STORED rather than deflated now that they ride
+as their own entries (they used to sit inside a stored `.img`, and they carry BC-compressed blocks).

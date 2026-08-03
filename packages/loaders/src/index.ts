@@ -10,6 +10,7 @@ import { AssetHttpDirLoader, AssetLocalLoader } from './asset-local-loader';
 
 export { AssetFetchLoader, type AssetFetchLoaderConfig } from './asset-fetch-loader';
 export {
+  assembleInstallSource,
   AssetHttpDirLoader,
   AssetLocalLoader,
   type AssetLocalLoaderConfig,
@@ -17,6 +18,7 @@ export {
   type DirIndexEntry,
   fetchDirIndex,
   fetchInstallSource,
+  type InstallIo,
   type InstallPlan,
   type InstallSource,
   readEntry,

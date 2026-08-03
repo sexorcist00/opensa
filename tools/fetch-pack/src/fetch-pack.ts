@@ -2,10 +2,11 @@ import type { Zippable } from 'fflate';
 
 import { zipSync } from 'fflate';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, resolve, sep } from 'node:path';
 
 import { chunkByHash, TARGET_CHUNK_BYTES } from './chunk';
+import { expandModelArchives, isModelArchive } from './expand-img';
 
 /**
  * The finishing tool of plan 086: pack a pmb build's `opensa/` GAME DIR into the fetch loader's
@@ -17,9 +18,11 @@ import { chunkByHash, TARGET_CHUNK_BYTES } from './chunk';
  *
  * Group mapping (the loader's fixed vocabulary `data|models|others|textures`):
  *   data     — `data/` + `text/` + the loose root files (stream.ini, parked.json, …)
- *   models   — `models/` (the IMG archives with the converted `.osm` inside) + the game dir's `pak/`
- *              (world.ospak, pak manifest, water.bin; older builds: nested `opensa/` or the
- *              `opensa-pack/` sibling) — the heavy geometry+texture payload
+ *   models   — `models/` + the game dir's `pak/` (world.ospak, pak manifest, water.bin; older builds:
+ *              nested `opensa/` or the `opensa-pack/` sibling) — the heavy geometry+texture payload.
+ *              The `models/*.img` archives are NOT packed as files: they are expanded into their entries
+ *              under bare names, which is the only form the runtime can resolve (see `expand-img.ts`),
+ *              and each entry is then bucketed by its own extension.
  *   others   — everything else (`anim/`, audio, dlls…)
  *   textures — EMPTY for a pak build (textures live inside world.ospak); kept so the manifest shape and
  *              the client's group iteration stay untouched
@@ -87,17 +90,46 @@ export function fetchPack(options: FetchPackOptions): FetchPackResult {
     textures: [],
   };
   let entryCount = 0;
+  const archives: string[] = [];
   // The game dir is self-contained (phase 8) — one walk covers everything; the pak ships by its
   // game-relative `pak/<name>` path, the VFS key the fetch loader's `openWorld` reads.
   for (const file of walk(gameDir)) {
     const path = relative(gameDir, file).split(sep).join('/');
+    // The packed NAME is lowercased, like the local loader's loose paths (`install-source-core.ts`), while
+    // the READ keeps the on-disk spelling — a case-sensitive filesystem would not find the other one. The
+    // runtime looks a data file up by the lowercased path `gta.dat` names, and a total conversion is free to
+    // call its files whatever it likes: gostown ships `data/maps/Gostown6/Gp_City.IPL`. Packed under the
+    // on-disk spelling, 32 of that build's 67 files were unreachable — `resolveMap` returned 384 placements
+    // instead of 3 970, so the map rendered off the pak and the player fell through a world with no collision.
+    const name = path.toLowerCase();
+    if (isSkipped(name)) {
+      continue;
+    }
+    // Model archives are held back and EXPANDED below — packed whole, every name inside them would be
+    // unreachable through the fetch loader (see `expand-img.ts`).
+    if (isModelArchive(name)) {
+      archives.push(path);
+      continue;
+    }
     const raw = readFileSync(file);
     const bytes = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
-    for (const entry of sliceEntries([{ bytes, name: path }])) {
-      groups[groupOf(path)].push(entry);
+    for (const entry of sliceEntries([{ bytes, name }])) {
+      groups[groupOf(name)].push(entry);
     }
     entryCount += 1;
   }
+  const expanded = expandModelArchives((path) => {
+    const raw = readFileSync(join(gameDir, path));
+
+    return new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+  }, archives);
+  for (const entry of expanded) {
+    for (const part of sliceEntries([{ bytes: entry.bytes, name: entry.name }])) {
+      groups[entry.group].push(part);
+    }
+    entryCount += 1;
+  }
+  log(`${archives.length} model archive(s) expanded → ${expanded.length} entries by name`);
 
   const chunks = {} as Record<
     GroupName,
@@ -120,7 +152,22 @@ export function fetchPack(options: FetchPackOptions): FetchPackResult {
   }
 
   writeFileSync(join(outDir, 'manifest.json'), `${JSON.stringify({ chunks, game, version }, null, 2)}\n`, 'utf8');
-  log(`→ ${outDir} (${entryCount} files, ${chunkCount} chunks)`);
+  // A chunk's NAME carries its content hash, so a re-pack writes new files beside the old ones and never
+  // overwrites them. Left alone, the output dir accumulates every chunk set ever built and the deploy uploads
+  // all of them — 502 MB of dead chunks after a single gostown re-pack, and the reason a size comparison of
+  // this very change first read as a regression.
+  const live = new Set(
+    Object.values(chunks)
+      .flat()
+      .map((chunk) => chunk.file),
+  );
+  const stale = readdirSync(outDir).filter((file) => file.endsWith('.zip') && !live.has(file));
+  for (const file of stale) {
+    rmSync(join(outDir, file));
+  }
+  log(
+    `→ ${outDir} (${entryCount} files, ${chunkCount} chunks${stale.length > 0 ? `, ${stale.length} stale removed` : ''})`,
+  );
 
   return { chunks: chunkCount, entries: entryCount, game, outDir, version };
 }
@@ -136,6 +183,20 @@ export function groupOf(path: string): GroupName {
   }
 
   return 'others';
+}
+
+/**
+ * Files the pack must never carry (posix-style path expected).
+ *
+ * `*.bak` is the installers' own rollback copy — `gostown6.img.bak` alone is 180 MB, and a pack that walks
+ * the tree with no filter uploaded it to the CDN in four slices. `.ds_store` is Finder's, and the local
+ * loader already drops it (`install-source-core.ts`); a name that means nothing to one loader and ships
+ * through the other is the asymmetry this whole change is about.
+ */
+export function isSkipped(path: string): boolean {
+  const lower = path.toLowerCase();
+
+  return lower.endsWith('.bak') || lower.endsWith('.ds_store');
 }
 
 /** Split oversized entries into `<name>#<index>` parts so no bucket exceeds the chunk target. */
@@ -160,8 +221,11 @@ export function sliceEntries(
 function buildZip(entries: readonly { bytes: Uint8Array; name: string }[]): Uint8Array {
   const data: Zippable = {};
   for (const entry of entries) {
-    // The pak payloads (`.ospak` slices, IMG-borne `.osm`) are deflate-compressed already — store them.
-    const level = /\.(?:ospak|img)(?:#\d+)?$/i.test(entry.name) ? 0 : 6;
+    // Our own formats are already compressed and must be STORED: `.ospak` wraps deflate-raw payloads, and
+    // `.osm`/`.ostex` carry BC-compressed texture blocks. They used to ride inside a stored `.img`, so
+    // expanding the archives is what makes this list matter — deflating ~300 MB of them at level 6 would
+    // cost the whole pack run and win back close to nothing. Stock `.dff`/`.txd` still compress well.
+    const level = /\.(?:ospak|osm|ostex)(?:#\d+)?$/i.test(entry.name) ? 0 : 6;
     data[entry.name] = [entry.bytes, { level: level, mtime: ZIP_MTIME }];
   }
 

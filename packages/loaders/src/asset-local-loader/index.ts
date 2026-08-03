@@ -4,3 +4,6 @@ export { AssetLocalLoader, type AssetLocalLoaderConfig } from './asset-local-loa
 export { type InstallPlan, type InstallSource, readEntry, selectInstallEntries } from './build-vfs';
 export { type DirIndexEntry, fetchDirIndex, fetchInstallSource } from './fetch-install-source';
 export { browserInstallSource } from './install-source';
+// The IO seam both backings are assembled over. Exported so a THIRD backing can be built over it — notably
+// the Node one `tools/fetch-pack`'s parity test uses to compare the two loaders' key spaces (086).
+export { assembleInstallSource, type InstallIo } from './install-source-core';

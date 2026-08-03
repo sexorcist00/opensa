@@ -61,3 +61,36 @@ the distance, let the shader own the falloff) got it right and was still rejecte
 
 Detail: [`postmortem/090-vehicle-cabin-at-night.md`](../postmortem/090-vehicle-cabin-at-night.md),
 [`contracts/vehicles.md`](../contracts/vehicles.md).
+
+## Whatever the loaders disagree about, the game disagrees about
+
+The runtime resolves assets by BARE name (`fs.get('bmycg.osm')`) and the VFS is a flat map of exactly the
+keys a loader delivered. The folder/http-dir loaders fill it by reading the IMG directory and ingesting each
+entry; the fetch loader pushes chunk bytes in verbatim and has no archive step of its own. Anything an
+offline packer leaves in a CONTAINER is therefore reachable in one mode and invisible in the other.
+
+A new delivery path may not assume it can ship a container the runtime is expected to open. Either the packer
+expands it (what `fetch-pack`'s `expand-img.ts` does, on the local loader's precedence) or the loader learns
+to — and if the two ever disagree about which archive wins a duplicated name, one mode silently renders
+different bytes than the other.
+
+**The rule is about the KEY SPACE, not just about containers**, and that is the half it is easy to write too
+narrow. Keys must be spelled the same way too: the local loader lowercases every loose path and the runtime
+looks a data file up by the lowercased path `gta.dat` names, so a packer that preserves the on-disk spelling
+hides every file a mod chose to capitalise. gostown ships `data/maps/Gostown6/Gp_City.IPL`, 32 of its 67
+files carry an uppercase letter, and in fetch mode the map still RENDERED (that comes off the pak) while
+`resolveMap` saw 384 placements instead of 3 970 — so the world looked right and the player fell through it.
+
+**Caught:** YES, since 2026-08-03 — `tools/fetch-pack/src/loader-parity.test.ts` packs a TC-shaped fixture
+(mixed-case map folder, an override archive, a model only the override carries) and asserts that no key the
+LOCAL loader would serve is missing from the pack, and that no key is packed in a spelling the runtime will
+never ask for. Containment, not equality: the pack ships a superset by design. The test was verified against
+both defects by reintroducing them — each probe fails it.
+
+Before that it was caught by NOTHING, and silently: the game boots and throws only when something asks for a
+missing name, which is why the container half surfaced as "player model not found" rather than "fetch mode
+carries no archive contents", and the case half surfaced as a world that rendered and could not be stood on.
+`gostown` was the only fetch-served game and it was disabled, so both shipped unnoticed.
+
+Detail: [`architecture/tools.md`](../architecture/tools.md#standalone-tools),
+`tools/fetch-pack/src/expand-img.ts`, and plan [086](../plans/086-unified-build-naming-fetch/readme.md).
