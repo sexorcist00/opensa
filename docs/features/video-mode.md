@@ -66,14 +66,23 @@ design (D11/D14).
 - **Per-scene seeds** derived from the master seed and the scene index, so scene 7 is the same scene however
   the run reached it. Each staged scene prints one self-describing line:
   `[video] scene 7 seed=… region=VEGAS kind=drive car=infernus(mod) hour=21 weather=SUNNY_VEGAS route=412m …`.
-- **The car** (D10): the roster is `vehicles.ide`'s `car`-type rows whose `.osm` the build actually carries
-  (`roadCarModels` — a slot with no model throws at spawn). A mod car is preferred 4 times in 5 when the
-  build's ledger (`data/vehicle-mods.txt`, 096/06 — the only vehicle data file read at RUNTIME, written by
-  `vehicle-installer` because nothing about a mod survives the merge) offers any; an absent ledger is an empty
-  set and every scene takes a stock car. The two branches draw from disjoint pools, so the realised mod share
-  IS the configured
-  preference and stock classics keep appearing whatever a game has modded. Paint comes from the car's own
-  `carcols` combos, seeded, so the same model twice in a run is not the same colour twice.
+- **The address bar names the scene now playing** (added 2026-08-03): each scene `replaceState`s `&seed=` and
+  `&scene=` into the URL as it starts, so `?video=1` becomes `?video=1&seed=1712…&scene=6` while the reel
+  runs. D12 keeps every piece of chrome out of the frame and the console line scrolls past, which left a live
+  run with nowhere to say where it was; the bar is outside the recording, so it costs the footage nothing.
+  **The seed is written with it** because a run given none derives it from the clock — a URL naming only the
+  scene would name a different scene on reload, which is worse than naming none. Written at the START of the
+  scene, so a scene that fails leaves the URL pointing at the one that failed. `&scenes=` is rewritten with it
+  (it is a COUNT, so carrying it over unchanged would lengthen a bounded run on reload) and only when it was
+  already in the URL. REPLACE, never push: a 100-scene run would otherwise bury the back button.
+- **The car** (D10, revised 2026-08-03 — mod cars ONLY): the roster is `vehicles.ide`'s `car`-type rows whose
+  `.osm` the build actually carries (`roadCarModels` — a slot with no model throws at spawn). If the build's
+  ledger (`data/vehicle-mods.txt`, 096/06 — the only vehicle data file read at RUNTIME, written by
+  `vehicle-installer` because nothing about a mod survives the merge) names even ONE slot in that roster,
+  every scene of the run drives a mod car and the stock pool is not drawn from at all; with no drivable
+  ledger slot, every scene takes a stock car. There is no share to tune. The boot line says which pool is in
+  force and names the drivable slots, so a run that drives stock cars states why. Paint comes from the car's
+  own `carcols` combos, seeded, so the same model twice in a run is not the same colour twice.
 - **D15's tripwire**: a route is built inside one region precisely so `CityZoneSystem` never fires its 6 s
   weather rewrite on camera. A scene whose weather target moved anyway logs which scene and which region —
   the leak names itself instead of becoming a mystery fade in the footage.

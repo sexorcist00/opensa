@@ -40,7 +40,7 @@ rewritten: a phase doc that quietly matches today's code cannot be read against 
 | D7 | Weather random WITHIN the current region's own timecyc set (LS scene → LA weathers only) |
 | D8 | Driving style: calm cruise, speed capped by route curvature; no drift/stunts |
 | D9 | `?seed=` determinises car, weather, hour, route and shot list; active seed printed `[video] seed=…` |
-| D10 | Custom cars first via a build-time ledger (vehicle-installer) — approved |
+| D10 | Custom cars first via a build-time ledger (vehicle-installer) — approved. **Revised 2026-08-03: custom cars ONLY.** One drivable ledger slot and every scene of the run drives a mod car; no ledger slot in the roster and every scene takes a stock one. The ledger is a switch, not a share. (Was: preferred 4 times in 5, with stock classics still appearing) |
 | D11 | Between scenes: plain black DOM overlay owned by the module (user cuts it in the editor) |
 | D12 | UI hidden via the existing `'fly-camera'` event; no on-screen status during a scene (console `[video]` tag only) |
 | D13 | Clock drift accepted (~16 game minutes over a 25 s fragment); no time freeze |
@@ -472,3 +472,35 @@ before analysis). Empty until phases run:
     **Caught by nothing** — `apps/web/src/ui/**` is off the unit lane by design (DOM glue is the e2e lane's), so
     the probe is KEPT as `scripts/debug/video-chrome.ts`, control lane included: the point of the control is
     that an all-hidden reading and a probe with the wrong selectors look identical.
+
+- **D10 revised (user, 2026-08-03) — mod cars ONLY, not merely first.** The field report was "my build has a
+  `vehicle-mods.txt` and the reels still drive stock cars". Nothing was broken: 05 shipped D10's
+  `MOD_CAR_PREFERENCE = 0.8`, so one scene in five drove a stock classic by design — and one scene in five is
+  frequent enough that a viewer reads it as the ledger not being picked up at all. The constant is gone.
+  `pickCar` now draws from the ledger∩roster pool whenever that pool is non-empty, and from the stock roster
+  only when it is empty; there is no share left to tune, and the disjoint-pool reasoning 05 needed (a share
+  that would drift with how many slots a game modded) has nothing left to protect.
+  **The fallback that stays is the roster one**, and it is the case that made the count in the log wrong to
+  begin with: a ledger row naming a slot this build carries no `.osm` for is not drivable, so the pool that
+  decides is the INTERSECTION, never the ledger's own size. The boot line now prints that intersection and
+  which pool is in force (`MOD CARS ONLY: 12 of 12 ledger slots drivable (…)` / `stock cars (no mod-car
+  ledger)`), because "12 mod slots" beside a stock car is precisely the reading that cost this round.
+  **One roll either way**, so the D9 invariant survives: a seed's scene list still cannot depend on which mods
+  are installed. The seeded stream does shift by one draw against runs recorded before this change — seed 47
+  is still seed 47, but it is no longer the same 100 scenes it was on 2026-08-01.
+
+- **The address bar names the scene (user, 2026-08-03).** The report, paraphrased: the scenes keep clicking
+  past and there is no telling which one is which — a live run could not say which scene was on screen. D12 puts every piece of chrome outside the
+  frame on purpose, and the `[video]` line scrolls past, so the answer had to land somewhere the recording
+  cannot see: the URL. Each scene `replaceState`s `seed` and `scene` before staging, `?video=1` becoming
+  `?video=1&seed=1712…&scene=6` as the reel advances. Written at the START, so a scene that FAILS leaves the
+  bar pointing at the one that failed rather than at the next one.
+  **The seed goes with it or the mark is a lie**: a run given no `?seed=` derives one from the clock, so a URL
+  carrying only `scene=6` reloads into a different scene 6. **`scenes` is rewritten too** — it is a COUNT, not
+  an end, so carrying it over unchanged would turn a reload at scene 5 of a 1-8 run into 5-12; it is rewritten
+  to `last - scene + 1`, and only when it was already in the URL (absent already means "to the ceiling").
+  **REPLACE, never push** — 100 scenes would otherwise leave 100 history entries and the back button would
+  walk the reel instead of leaving it.
+  The build is `sceneUrl` in `presets.ts`, beside `parseSceneStart`: the read and the write of the same
+  parameter belong in one file, and it keeps the whole of it in the unit lane (`apps/web/src/ui/**` is off
+  that lane by design, so the DOM half is the one `replaceState` call the runner makes).

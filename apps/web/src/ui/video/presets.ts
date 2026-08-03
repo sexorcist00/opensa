@@ -37,9 +37,6 @@ export const HOUR_SLOTS: readonly number[] = [0, 6, 12, 18, 21];
 const FLY_SCENES = 2;
 const WALK_SCENES = 1;
 
-/** How often the pick prefers a mod car when the ledger offers any (D10: mod cars FIRST, not ONLY). */
-export const MOD_CAR_PREFERENCE = 0.8;
-
 /**
  * How many scenes a run plays before it stops (D2, revised 2026-07-31 — the cycle was endless in v1).
  *
@@ -113,27 +110,28 @@ export function parseSceneStart(value: null | string): number {
 }
 
 /**
- * The car a scene drives: a mod car when the ledger offers one and the seeded roll says so, else any road car
- * the game ships. Null when there is nothing to drive at all.
+ * The car a scene drives: a mod car whenever the ledger offers ANY, else any road car the game ships. Null
+ * when there is nothing to drive at all.
+ *
+ * D10 as revised 2026-08-03 — mod cars ONLY, not merely first. A build that installed vehicle mods is a build
+ * whose owner wants to see them: one stock car in five was read in the field as the mods not being picked up
+ * at all. The ledger is the switch, and it is all-or-nothing — there is no share to tune and no stock
+ * fallback while a single mod slot is present.
  *
  * `candidates` is already the filtered roster (road cars whose model is actually present — a slot with no
- * `.osm` throws at spawn). `modCars` is 096/06's ledger; an absent ledger is an empty set and every scene
- * simply takes a stock car, which is the shipped behaviour until that phase lands.
+ * `.osm` throws at spawn), which is why an intersection that comes back EMPTY still falls through to stock: a
+ * ledger naming only slots this build has no model for offers nothing drivable. `modCars` is 096/06's ledger;
+ * an absent ledger is an empty set and every scene takes a stock car.
+ *
+ * Exactly ONE roll is taken either way, so the seeded stream advances identically whether or not this game
+ * has a ledger — a seed's scene list must not depend on which mods are installed.
  */
 export function pickCar(random: Random, candidates: readonly string[], modCars: ReadonlySet<string>): null | string {
   if (candidates.length === 0) {
     return null;
   }
   const mods = candidates.filter((model) => modCars.has(model));
-  const stock = candidates.filter((model) => !modCars.has(model));
-  // The roll is taken FIRST and unconditionally, so the stream advances the same way whether or not this
-  // game has a ledger — a seed's scene list must not depend on which mods are installed.
-  const preferMod = random() < MOD_CAR_PREFERENCE;
-  // The two branches draw from DISJOINT pools, so the realised mod share IS {@link MOD_CAR_PREFERENCE} —
-  // which is what the phase's acceptance compares against. Letting the stock branch fall back on the whole
-  // roster would make the share drift with how many slots a game has modded, and a heavily modded install
-  // would stop showing stock classics altogether, which is the half of D10 that is easy to lose.
-  const pool = (preferMod ? mods : stock).length > 0 ? (preferMod ? mods : stock) : candidates;
+  const pool = mods.length > 0 ? mods : candidates;
 
   return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
 }
@@ -167,6 +165,32 @@ export function sceneProgramEntry(seed: number, scene: number): ProgramEntry {
  */
 export function sceneSeed(master: number, index: number): number {
   return (Math.imul(index + 1, 0x9e3779b9) ^ (master >>> 0)) >>> 0;
+}
+
+/**
+ * The same URL with `seed` and `scene` naming the scene now playing — what the runner writes into the address
+ * bar as the sequence advances.
+ *
+ * A live run has NOWHERE else to say where it is: D12 keeps every piece of chrome out of the frame, and the
+ * console line scrolls past. The address bar is outside the recording, so it can carry the answer for free.
+ *
+ * `seed` is written alongside because a run that was not given one derives it from the clock — a URL naming
+ * only the scene would name a DIFFERENT scene on reload, which is worse than naming none. With both, the bar
+ * is a resumable pointer at every instant: copy it, and `(seed, scene)` reproduces exactly this scene.
+ *
+ * `scenes` is a COUNT, not an end, so it is rewritten to keep the run ending where it was going to end — and
+ * only when it was already there, since its absence already means "to the ceiling". Returned relative
+ * (`pathname + search + hash`), which is what `replaceState` wants and what keeps the origin out of it.
+ */
+export function sceneUrl(current: string, seed: number, scene: number, last: number): string {
+  const url = new URL(current);
+  url.searchParams.set('seed', String(seed));
+  url.searchParams.set('scene', String(scene));
+  if (url.searchParams.has('scenes')) {
+    url.searchParams.set('scenes', String(Math.max(1, last - scene + 1)));
+  }
+
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 /**

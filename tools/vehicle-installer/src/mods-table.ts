@@ -2,9 +2,9 @@
  * `data/vehicle-mods.txt` — the slots a mod took over, written down before the build forgets them.
  *
  * The installer knows the set while it works and used to discard it: once the rows are merged, a mod car is
- * indistinguishable from a stock one anywhere downstream. Video mode reads this at runtime to show a player's
- * own cars first (096/06); the format is documented by `@opensa/renderware`'s `vehicle-mods.parser`, which
- * reads it back, and in `docs/contracts/vehicles.md`.
+ * indistinguishable from a stock one anywhere downstream. Video mode reads this at runtime and drives a
+ * player's own cars ONLY (096/06, D10 as revised 2026-08-03); the format is documented by
+ * `@opensa/renderware`'s `vehicle-mods.parser`, which reads it back, and in `docs/contracts/vehicles.md`.
  */
 import { join } from 'node:path';
 
@@ -20,8 +20,8 @@ export const MODS_TABLE = join('data', 'vehicle-mods.txt');
 export function formatModTable(models: ReadonlySet<string>): string {
   return [
     '# OpenSA mod-car ledger — one vehicle slot per line, written by vehicle-installer for every slot a mod',
-    '# took over. Read at RUNTIME by video mode, to show a player’s own cars before the stock ones. Nothing',
-    '# else reads it: a missing or misspelled file costs that preference and nothing more.',
+    '# took over. Read at RUNTIME by video mode: name one drivable slot here and every scene drives a mod car,',
+    '# never a stock one. Nothing else reads it — a missing or misspelled file costs that and nothing more.',
     ...[...models].map((model) => model.toLowerCase()).sort((a, b) => a.localeCompare(b, 'en')),
     '',
   ].join('\n');

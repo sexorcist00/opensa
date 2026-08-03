@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildProgram,
   HOUR_SLOTS,
-  MOD_CAR_PREFERENCE,
   parseSceneLimit,
   parseSceneStart,
   pickCar,
@@ -14,6 +13,7 @@ import {
   SCENE_LIMIT,
   sceneProgramEntry,
   sceneSeed,
+  sceneUrl,
   weatherPool,
 } from './presets';
 
@@ -113,7 +113,8 @@ describe('pickCar', () => {
 
     it('never picks a ledger name the roster does not carry', () => {
       // A ledger listing a slot this build has no model for (a mod removed since it was written) must not put
-      // that name in a scene — the spawn would throw.
+      // that name in a scene — the spawn would throw. Nothing drivable in the intersection is the one case
+      // that still falls back to stock.
       const ledger = new Set(['alsomissing', 'nosuchcar']);
       for (let seed = 0; seed < 50; seed += 1) {
         expect(ROSTER).toContain(pickCar(mulberry32(seed), ROSTER, ledger));
@@ -121,8 +122,8 @@ describe('pickCar', () => {
     });
 
     it('does not let the ledger change how far the seeded stream advances', () => {
-      // A seed must name the same scene list whatever mods are installed, so the preference roll is taken
-      // unconditionally: two runs of the same seed differ in the CAR, never in everything after it.
+      // A seed must name the same scene list whatever mods are installed, so exactly one roll is taken on
+      // either path: two runs of the same seed differ in the CAR, never in everything after it.
       const withMods = mulberry32(9);
       const without = mulberry32(9);
       pickCar(withMods, ROSTER, MODS);
@@ -133,16 +134,28 @@ describe('pickCar', () => {
   });
 
   describe('positive cases', () => {
-    it('prefers mod cars without ever excluding the stock ones (D10)', () => {
+    it('drives ONLY mod cars once the ledger offers any (D10, revised 2026-08-03)', () => {
       const picks = Array.from({ length: 400 }, (unused, seed) => pickCar(mulberry32(seed), ROSTER, MODS));
-      const mods = picks.filter((model) => model !== null && MODS.has(model)).length;
 
-      expect(mods / picks.length).toBeCloseTo(MOD_CAR_PREFERENCE, 1);
-      expect(picks.some((model) => model !== null && !MODS.has(model))).toBe(true);
+      expect(picks.filter((model) => model === null || !MODS.has(model))).toEqual([]);
+    });
+
+    it('still spreads across the whole mod pool rather than pinning one car', () => {
+      const picks = new Set(Array.from({ length: 400 }, (unused, seed) => pickCar(mulberry32(seed), ROSTER, MODS)));
+
+      expect([...picks].sort((a, b) => String(a).localeCompare(String(b)))).toEqual(['comet', 'infernus']);
     });
 
     it('takes a stock car when the ledger is empty', () => {
       expect(ROSTER).toContain(pickCar(mulberry32(5), ROSTER, new Set()));
+    });
+
+    it('drives the one mod car every scene when the ledger offers exactly one', () => {
+      const picks = Array.from({ length: 20 }, (unused, seed) =>
+        pickCar(mulberry32(seed), ROSTER, new Set(['sultan'])),
+      );
+
+      expect(new Set(picks)).toEqual(new Set(['sultan']));
     });
   });
 });
@@ -191,6 +204,51 @@ describe('parseSceneStart', () => {
     it('starts at the scene a field note named', () => {
       expect(parseSceneStart('57')).toBe(57);
       expect(parseSceneStart('57.9')).toBe(57);
+    });
+  });
+});
+
+describe('sceneUrl', () => {
+  describe('negative cases', () => {
+    it('does not invent a scene count for a run that never bounded itself', () => {
+      // An absent `scenes` already means "to the ceiling"; writing one would turn a full run into a bounded
+      // one the moment it was reloaded.
+      expect(sceneUrl('http://localhost:5173/?video=1', 47, 6, SCENE_LIMIT)).toBe('/?video=1&seed=47&scene=6');
+    });
+
+    it('keeps a bounded run ending where it was going to end', () => {
+      // `scenes` is a COUNT, not an end: carried over unchanged, a reload at scene 5 of a 1-8 run would play
+      // 5-12. The count is rewritten so `last` survives the reload.
+      expect(sceneUrl('http://localhost:5173/?video=1&scenes=8', 47, 5, 8)).toBe('/?video=1&scenes=4&seed=47&scene=5');
+    });
+
+    it('never writes a count below one scene', () => {
+      expect(sceneUrl('http://localhost:5173/?video=1&scenes=8', 47, 12, 8)).toContain('scenes=1');
+    });
+
+    it('drops the origin rather than handing replaceState an absolute URL', () => {
+      expect(sceneUrl('http://localhost:5173/?video=1', 47, 3, SCENE_LIMIT).startsWith('/')).toBe(true);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names the scene now playing, and the seed that made it', () => {
+      const url = new URL(sceneUrl('http://localhost:5173/?video=1', 1234, 57, SCENE_LIMIT), 'http://x');
+
+      expect(url.searchParams.get('scene')).toBe('57');
+      expect(url.searchParams.get('seed')).toBe('1234');
+    });
+
+    it('replaces the seed and scene a previous mark left, rather than appending a second pair', () => {
+      const once = sceneUrl('http://localhost:5173/?video=1', 47, 6, SCENE_LIMIT);
+
+      expect(sceneUrl(`http://localhost:5173${once}`, 47, 7, SCENE_LIMIT)).toBe('/?video=1&seed=47&scene=7');
+    });
+
+    it('leaves every other parameter, the path and the hash alone', () => {
+      expect(sceneUrl('http://localhost:5173/play?video=1&car=infernus&diag=1#top', 47, 9, SCENE_LIMIT)).toBe(
+        '/play?video=1&car=infernus&diag=1&seed=47&scene=9#top',
+      );
     });
   });
 });

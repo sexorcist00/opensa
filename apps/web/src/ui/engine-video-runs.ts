@@ -58,6 +58,7 @@ import {
   SCENE_LIMIT,
   sceneProgramEntry,
   sceneSeed,
+  sceneUrl,
   weatherPool,
 } from './video/presets';
 import { playSequence } from './video/sequence';
@@ -317,6 +318,11 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   const pinnedCar = host.params.get('car');
   const roster = roadCarModels(host.fs);
   const modCars = modCarSlots(host.fs);
+  // What the pick will actually draw from (D10 as revised 2026-08-03: mod cars ONLY when the build has any).
+  // The count is of the INTERSECTION, not of the ledger: a ledger row whose model this build does not carry
+  // buys nothing, and a run that says "12 mod slots" while driving stock cars is exactly the report that sent
+  // this to the field. Say which pool is in force, so the log answers it without a second run.
+  const drivableMods = roster.filter((model) => modCars.has(model));
   const pinned = parsePin(host.params.get('at'));
   const scenes = parseSceneLimit(host.params.get('scenes'));
   // `?scene=N` starts the sequence at N instead of 1 — the only way to reach a scene a field note named
@@ -325,7 +331,10 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   const last = Math.min(SCENE_LIMIT, from + scenes - 1);
   log(
     `seed=${seed} scenes ${from}-${last} cycle ${REGION_CYCLE.join('→')} ${SHOTS_PER_SCENE} shots/scene · ` +
-      `${roster.length} road cars, ${modCars.size} mod slots` +
+      `${roster.length} road cars · ` +
+      (drivableMods.length > 0
+        ? `MOD CARS ONLY: ${drivableMods.length} of ${modCars.size} ledger slots drivable (${drivableMods.join(', ')})`
+        : `stock cars (${modCars.size === 0 ? 'no mod-car ledger' : `${modCars.size} ledger slots, none drivable in this build`})`) +
       (pinnedCar ? ` · car pinned to ${pinnedCar}` : '') +
       (pinned ? ` · pinned at ${pinned[0]},${pinned[1]}` : ''),
   );
@@ -346,6 +355,10 @@ export function setupVideoRuns(host: VideoRunsHost): void {
         log(`scene ${scene} failed: ${message}`);
       },
       play: async (scene) => {
+        // Name the scene in the address bar before staging it. REPLACE, never push: a 100-scene run would
+        // otherwise leave 100 history entries and the back button would walk the reel instead of leaving it.
+        // Marked at the START, so a scene that fails leaves the URL pointing at the scene that failed.
+        window.history.replaceState(null, '', sceneUrl(window.location.href, seed, scene, last));
         // Per-scene seed off the master (D9), so scene N is the same scene however the run reached it — and
         // `sceneProgramEntry` is a pure function of `(seed, scene)` for the same reason, which is what lets a
         // run start in the middle of the sequence and still play the scene the full run would have.
