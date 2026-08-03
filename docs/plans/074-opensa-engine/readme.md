@@ -225,7 +225,8 @@ graph per bench scene (city 30 u / country 90 u spacing, lazy vehicle-lod stream
 the user's real-display sweep with 841 cars kept every scene vsync-locked 120 Hz (series row
 11·bench-cars — draws ~2.4×, world pass +0.3–0.5 ms). Spawn robustness lessons live in
 [11 § bench road cars](11-performance-testing.md). Vehicle normals SKIPPED to ideas 0.6.0/03 (user call);
-a first-cut paths parser is noted in ideas 0.5.0/06-city-life plan 01 as its head start.
+a first-cut paths parser is noted in ideas 0.5.0/06-city-life (now `1-preparation/02-path-graph-import.md`
+after the 2026-08-02 rework) as its head start.
 
 **① DONE (2026-07-17): road cars WIRED into canvas-host + the WebGL-prod `?bench=all` BASELINE captured**
 — shared `benchRoadCarPlacements` + `seatVehicleOnGround` in `packages/game` (both hosts assemble the

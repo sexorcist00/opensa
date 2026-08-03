@@ -40,12 +40,15 @@ deferred weather→wind rule executes here. Full plan:
 ## City Life (THE flagship chain)
 
 The most important system of the cycle: a living city — traffic and pedestrians with persistent seeded
-routes, real scheduled trains, traffic lights and rail barriers, all visible to the horizon — built on the
+routes, real scheduled trains, traffic lights and rail barriers, all visible to the fog line — built on the
 AAA simulation-LOD-ring pattern (full physics near → kinematic graph-followers → far "rivers of headlights"
-as corona streams), with agent identity preserved across rings. Eight plans: the `.ospath` format (single
-source for engine AND real SA), a viewer-family path EDITOR app, the data-oriented sim core, light/barrier
-controllers, trains, peds with imposter LODs, the far-rendering tiers (vehicle_vlo + coronas), and the SA
-ASI twin (suppresses the vanilla population, reads our format, adds kilometre-range car/ped draw).
+as corona streams), with agent identity preserved across rings, **running in BOTH hosts: the OpenSA engine
+and real SA through a new `asi/city-life` plugin** (100 % mission/mod compatibility). Reworked 2026-08-02
+into five sub-chains: `1-preparation` (the ASI clears the vanilla streets FIRST; full path/population data
+import; a sidecar for what the original files can't express; an editor FOR the original `nodes*.dat`),
+`2-traffic` (sim core, a driver that is not an idiot, real light controllers, the new instanced far tiers,
+the ASI traffic twin), `3-peds` (crowd rendering, generated silhouette LODs, sidewalk sim, ASI twin),
+`4-trains`, `5-city` (density scaling + the acceptance program).
 
 Full chain: [plans/06-city-life/readme.md](plans/06-city-life/readme.md).
 
