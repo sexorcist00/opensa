@@ -145,6 +145,10 @@ TAG='[video]' ALSO='[cam]' NODE_PATH=$PWD/node_modules node tools-debug/bench-ha
 npx tsx scripts/debug/video-chrome.ts "http://localhost:5173/?loader=http-dir&src=$SRC" 90000 --control
 npx tsx scripts/debug/video-chrome.ts \
   "http://localhost:5173/?loader=http-dir&src=$SRC&video=1&seed=47&scene=1&scenes=1" 180000
+# Do the MOBILE on-screen controls reach the game (055)? Boots with hasTouch and drives the overlay's own
+#   pixels; needs `npm run dev` (it reads the dev HUD) and an OPEN spawn — a wall fails a healthy build
+npx tsx scripts/debug/touch-controls-check.ts \
+  "http://localhost:5173/?loader=http-dir&src=$SRC&hour=12&weather=0&spawn=342,-1803,4.8"
 # Speed-grip dials (081/09) — session overrides for the lateral assist; captures record the active values
 #   ?gripVd=<m/s>  boost reference speed (default 12)  ·  ?gripCap=<x>  boost ceiling (default 3)
 # Surface grip (081/10) — ?surfGrip=0 puts every wheel back on tarmac, the A/B for reading surface.dat

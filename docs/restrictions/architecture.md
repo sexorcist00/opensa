@@ -324,6 +324,29 @@ the route builder is correct about the speeds it was asked for. The only signal 
 `stations.rejected.dwell` against `stations.filled`, which is why both fields are in the ledger. Detail and
 before/after in `docs/edge-cases/route-graph.md`.
 
+## An input source reaches the game through TWO wires, and the camera one is separate
+
+`CombinedInput` is not the whole contract. A source's `move()` and `isActive()` reach the systems through the
+combiner, but its `consumeLook()` / `consumeZoom()` reach NOTHING on their own: in the engine host the camera
+is host-owned — the director steps over `pendingInput`, which the host's own DOM handlers fill — so look and
+zoom only arrive if the host drains that source into them as well (`foldTouchCamera`). The old three-host had
+one wire, because its `CameraController` read the InputState itself; the engine host has two.
+
+So a new source (a gamepad, a remote driver, a replay) is wired in two places or it is half-wired, and the
+half-wired shape is the confusing one: the player walks, jumps and gets in cars, and the view does not move.
+The zoom has a second trap on the same wire — the director counts WHOLE notches (`Math.trunc`), so a source
+that emits fractions must carry its remainder across frames or contribute nothing at all.
+
+Found 2026-08-03, restoring the touch overlay that plan 055 shipped: the mount and both wires went with
+`canvas-host.tsx` in the engine migration (074/13 phase 5a+5b, which listed four surfaces it knowingly
+dropped — this one it did not notice), and 0.4.0 released with no mobile controls at all.
+
+**Caught:** no. Nothing type-checks a source into either wire, `apps/web/src/ui/**` is off the unit lane by
+design, and the e2e lane drives the overlay against a standalone harness (`/controls-harness.html`) that has
+no game behind it — every touch test stayed green through a release with no controls in the product. The
+check is `scripts/debug/touch-controls-check.ts`, which boots the real game with `hasTouch` and drives the
+overlay's own pixels.
+
 ## State the chrome must READ is state, not an event — the UI mounts after boot
 
 The React shell subscribes to the game's `EventBus` only once `boot()` has RESOLVED (`hudGameRef` reaches

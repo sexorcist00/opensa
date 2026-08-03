@@ -1,5 +1,14 @@
 # 055 — Pluggable input sources + mobile on-screen controls
 
+> **Regressed and restored (2026-08-03).** Phase 2's wiring lived in `canvas-host.tsx`, which the engine
+> migration deleted (074/13 phase 5a+5b) — the overlay, the source and the e2e spec all survived, but nothing
+> mounted them, so **0.4.0 shipped with no mobile controls**. The engine host now does both halves
+> (`setupTouchControls` + `foldTouchCamera` — the camera is host-owned there, so look/zoom need their own
+> wire: `docs/restrictions/architecture.md`). Current state lives in
+> [`docs/features/mobile-controls.md`](../../features/mobile-controls.md); the field check that would have
+> caught it is `scripts/debug/touch-controls-check.ts`. Everything below describes the original 2026-06-22
+> work and its `src/…` paths, which the monorepo move has since renamed.
+
 **Status: ✅ DONE (2026-06-22).** Two phases — (1) a device-agnostic input layer the game reads
 (behaviour-preserving refactor), (2) the mobile on-screen controls + touch look as an additive UI module.
 Builds on the existing `src/game/input/` (`Keyboard`), the `ControlsConfig` keymap, the movement systems

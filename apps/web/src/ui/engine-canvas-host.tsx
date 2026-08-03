@@ -42,7 +42,7 @@ import { Locomotion, PlayerControlled, RigidBody, Transform, Velocity } from '@o
 import { createEcsWorld } from '@opensa/game/ecs/world';
 import { EventBus } from '@opensa/game/events/event-bus';
 import { type GameEvents } from '@opensa/game/events/events.global';
-import { CombinedInput, Keyboard, KeyboardSource } from '@opensa/game/input';
+import { CombinedInput, Keyboard, KeyboardSource, TouchInputSource } from '@opensa/game/input';
 import { PhysicsWorld } from '@opensa/game/physics/physics-world';
 import { PhysicsSystem } from '@opensa/game/physics/physics.system';
 import { initRapier } from '@opensa/game/physics/rapier';
@@ -92,6 +92,9 @@ import {
 import { CAMERA_FOV_Y, createChordWatcher, cursorRay, forwardFrom, type VideoCamera } from './camera/engine-camera';
 import { FLY_KEYS, lookAtStep } from './camera/fly-rig';
 import { buildCollisionLines } from './collision-wireframe';
+import { isTouchDevice } from './controls/is-touch-device';
+import { foldTouchCamera } from './controls/touch-camera';
+import { TouchControls } from './controls/touch-controls';
 import { ENGINE_DEBUG_CAPABILITIES } from './debug/debug-capabilities';
 import { type DebugActions, type DebugGame, DebugOverlay } from './debug/debug-overlay';
 import { type MapGame } from './debug/map-inspector';
@@ -153,6 +156,8 @@ let booted: null | Promise<void> = null;
 let hudGameRef: HudGame | null = null;
 /** The F2 debugger's surfaces (074/22), built by the same boot closure. */
 let debugRef: null | { actions: DebugActions; buildTime?: string; game: DebugGame; mapGame: MapGame } = null;
+/** The on-screen controls the boot closure built (plan 055) — null on a device that has no touch. */
+let touchRef: null | { canEnterExit: () => boolean; source: TouchInputSource } = null;
 
 /** The [cam] jump watchdog's last frame (plan 080/09 §4.1) — null until the first watched frame. */
 interface CamWatch {
@@ -195,6 +200,7 @@ export function EngineCanvasHost({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hudGame, setHudGame] = useState<HudGame | null>(hudGameRef);
   const [debug, setDebug] = useState(debugRef);
+  const [touch, setTouch] = useState(touchRef);
   const [locked, setLocked] = useState(false);
   /** The photo (fly) camera owns the screen: every piece of chrome hides for it and comes back on exit. */
   const [photoMode, setPhotoMode] = useState(false);
@@ -242,6 +248,7 @@ export function EngineCanvasHost({
     void booted.then(() => {
       setHudGame(hudGameRef);
       setDebug(debugRef);
+      setTouch(touchRef);
     });
   }, [fs, gameId, pakSource, onWorldReady]);
 
@@ -254,10 +261,14 @@ export function EngineCanvasHost({
   return (
     <>
       <canvas ref={canvasRef} style={{ display: 'block', height: '100%', width: '100%' }} />
-      {hudGame && !locked && !paused && !photoMode ? (
+      {hudGame && !locked && !paused && !photoMode && !touch ? (
         <button className="sa-capture" onClick={capture} type="button">
           Click to play
         </button>
+      ) : null}
+      {/* A touch device has no pointer to capture: the on-screen controls REPLACE the capture button (055). */}
+      {touch && !paused && !photoMode ? (
+        <TouchControls canEnterExit={touch.canEnterExit} source={touch.source} />
       ) : null}
       {hudGame ? <Hud game={hudGame} /> : null}
       {debug ? (
@@ -514,6 +525,11 @@ async function boot(
     steering: (): null | SteeringModel => vehicles?.steering() ?? null,
   });
   const input = new CombinedInput([new KeyboardSource(keyboard, config.controls), scriptedDrive, pathFollow]);
+  // The on-screen controls, on a touch device only (plan 055). `vehicles` is assigned later in this closure;
+  // the Enter-button thunk is only ever called from a rendered frame.
+  const touchInput = setupTouchControls(input, () => vehicles?.canEnterExit() ?? false);
+  /** Pinch travel not yet worth a whole zoom notch — see {@link foldTouchCamera}. */
+  let pinchResidual = 0;
 
   // Camera (plan 080/01): the rig state lives in the director, the host only reports input. Click = mouse
   // capture (prod behaviour — the look uses movementX/Y continuously while pointer-locked, Esc releases),
@@ -1602,6 +1618,7 @@ async function boot(
     lastRidden = vehicles?.ridingVehicle() ?? lastRidden;
     syncCameraConfig();
     stepVideo(dt);
+    pinchResidual = foldTouchCamera(touchInput, pendingInput, pinchResidual);
     // The rig is one pure step over a snapshot of this frame (plan 080/01): the handlers above only
     // ACCUMULATED input, so the smoothing that lands in plan 02 sees whole frames, dt included.
     const snapshot: CameraSnapshot = {
@@ -2101,6 +2118,22 @@ async function registerMapCarGenerators(
   const count = vehicles === null ? 0 : placements.length;
   // eslint-disable-next-line no-console -- the one line that says whether the map has cars at all
   console.log(`[vehicles] map car generators registered: ${count}${enabled ? '' : ' (DISABLED by ?cargen=0)'}`);
+}
+
+/**
+ * Build the on-screen controls (plan 055): another {@link TouchInputSource} in the SAME combiner the keyboard
+ * feeds, so a 2-in-1 keeps both, published to the React tree through {@link touchRef}. Null — and no overlay —
+ * on a device with no touch.
+ */
+function setupTouchControls(input: CombinedInput, canEnterExit: () => boolean): null | TouchInputSource {
+  if (!isTouchDevice()) {
+    return null;
+  }
+  const source = new TouchInputSource();
+  input.add(source);
+  touchRef = { canEnterExit, source };
+
+  return source;
 }
 
 /**

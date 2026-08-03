@@ -63,6 +63,8 @@ export interface EngineVehicles {
    * still drive, one step late; with it a press reaches the wheels in the step it was made.
    */
   applyControls(step: number): void;
+  /** Whether enter/exit is actionable right now — gates the on-screen Enter button (plan 055). */
+  canEnterExit(): boolean;
   /**
    * The driven car's speed and slip RIGHT NOW, or null on foot (plan 080/05's drift framing reads it every
    * rendered frame). Deliberately not behind {@link EngineVehicles.telemetry}'s capture gate: this is four
@@ -673,6 +675,7 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
   return {
     activeVehicle: (): EnterableVehicle | null => seated,
     applyControls: (step: number): void => enterVehicle.applyControls(step),
+    canEnterExit: (): boolean => enterVehicle.canEnterExit(),
     drivenMotion(): null | PlanarMotion {
       const car = enterVehicle.isSeated() ? enterVehicle.getActive() : null;
 

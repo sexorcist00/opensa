@@ -361,6 +361,15 @@
   color: #000;
 }
 
+/* The look joystick owns the bottom-right corner on a touch device (`.sa-touch__look`), and this button sits
+   above it (z-index 25 vs 20) — there it eats every downward look drag. Centre it between the two sticks. */
+@media (pointer: coarse) {
+  .sa-fullscreen-btn {
+    right: 50%;
+    transform: translateX(50%);
+  }
+}
+
 /* --- In-game notification (top-left info toast) --- */
 .sa-notif {
   position: fixed;

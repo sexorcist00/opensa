@@ -30,6 +30,7 @@ implemented ones, and assembling the release changelog.
 | Fetch pack (pmb build → hosted fetch chunks)  | [fetch-pack.md](fetch-pack.md)                     |
 | Zones, HUD, debug tooling                     | [zones-hud-debug.md](zones-hud-debug.md)           |
 | UI shell (boot/menu/loading/pause)            | [ui-shell.md](ui-shell.md)                         |
+| Mobile on-screen controls (touch)             | [mobile-controls.md](mobile-controls.md)           |
 
 Cross-cutting architecture (native `.osm`/`.ostex`/`.oscell`/`.oswire`/`.ospak` formats, engine world
 streaming, the boot/loader chain, the offline build pipeline) lives in
