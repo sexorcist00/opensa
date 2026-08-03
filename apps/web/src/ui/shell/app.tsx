@@ -122,11 +122,7 @@ export function App(): ReactElement {
       {phase === 'folder' ? (
         <div className="sa-stage sa-stage--col">
           <Logo className={SUBTITLED} />
-          <FolderPrompt
-            detail={boot.detail}
-            disclaimer={boot.disclaimerAccepted ? undefined : boot.disclaimer}
-            onChoose={boot.chooseFolder}
-          />
+          <FolderPrompt detail={boot.detail} disclaimer={boot.disclaimer} onChoose={boot.chooseFolder} />
         </div>
       ) : null}
 

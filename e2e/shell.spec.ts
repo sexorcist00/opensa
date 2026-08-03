@@ -11,7 +11,7 @@ const SAN_ANDREAS = 'Run San Andreas [local only]'; // a local game
 
 test.describe('ui shell', () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => localStorage.clear()); // fresh visit: disclaimer not yet accepted
+    await page.addInitScript(() => localStorage.clear()); // a clean profile; the disclaimer is shown regardless
   });
 
   test('the menu lists the games and external links', async ({ page }) => {

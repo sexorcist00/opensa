@@ -7,7 +7,7 @@ import type { AssetLoaderKind } from '@opensa/loaders';
 import type { GameId } from '../../game-config';
 
 export type BootEvent =
-  | { accepted: boolean; assetLoader: AssetLoaderKind; game: GameId; type: 'SELECT' }
+  | { assetLoader: AssetLoaderKind; game: GameId; type: 'SELECT' }
   | { type: 'DISCLAIMER_OK' }
   | { type: 'FAIL' }
   | { type: 'FOLDER_READY' }
@@ -18,9 +18,9 @@ export type BootEvent =
   | { type: 'WORLD_READY' };
 
 export type BootPhase =
-  | 'disclaimer' // fetch game picked, not yet accepted → disclaimer popup (OK)
+  | 'disclaimer' // fetch game picked → the notice, every launch (OK continues)
   | 'error' // the load failed; offer retry
-  | 'folder' // local game picked → bring-your-own-files prompt (+ disclaimer if not accepted)
+  | 'folder' // local game picked → bring-your-own-files prompt, which carries the notice
   | 'loading' // downloading / reading the selected game (one progress screen)
   | 'menu' // the game list (no game selected)
   | 'paused' // in-game, Esc → menu overlay
@@ -78,19 +78,15 @@ function onRetry(state: BootState): BootState {
   return state.retries >= MAX_RETRIES ? initialBootState() : { ...state, phase: 'loading', retries: state.retries + 1 };
 }
 
-/** Pick a game from the menu: local always routes through the folder prompt; http-dir (the dev/session
- *  override) loads straight from its served dir, no folder or disclaimer gate; fetch skips the disclaimer
- *  once it has been accepted. */
+/** Pick a game from the menu: local always routes through the folder prompt (which carries the disclaimer);
+ *  http-dir (the dev/session override) loads straight from its served dir, no folder or disclaimer gate;
+ *  fetch ALWAYS shows the disclaimer — it is a legal notice, not an onboarding step to get past once. */
 function onSelect(state: BootState, event: Extract<BootEvent, { type: 'SELECT' }>): BootState {
   if (state.phase !== 'menu') {
     return state;
   }
   const phase: BootPhase =
-    event.assetLoader === 'local'
-      ? 'folder'
-      : event.assetLoader === 'http-dir' || event.accepted
-        ? 'loading'
-        : 'disclaimer';
+    event.assetLoader === 'local' ? 'folder' : event.assetLoader === 'http-dir' ? 'loading' : 'disclaimer';
 
   return { game: event.game, phase, retries: 0 };
 }

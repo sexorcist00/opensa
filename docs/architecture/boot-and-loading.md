@@ -113,7 +113,7 @@ prints its size once (`[vehicles] parked placements registered: N`,
 %%| boot-flow
 flowchart TB
   a([main → App]):::ui --> m["MENU · lists GAME_CONFIG games<br/>(nothing downloads yet)"]:::ui
-  m -->|fetch game| d["disclaimer · once per game"]:::ui
+  m -->|fetch game| d["disclaimer · every launch"]:::ui
   m -->|local game| f["folder prompt · + disclaimer"]:::ui
   d --> l["loading · data → others → models → textures<br/>loader → vfs → verify"]:::infra
   f --> l

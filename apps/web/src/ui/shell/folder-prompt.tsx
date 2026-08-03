@@ -3,7 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 interface FolderPromptProps {
   /** Last error (e.g. permission denied) to show under the button. */
   detail?: string;
-  /** The game's disclaimer, shown above the prompt until it has been accepted. */
+  /** The game's disclaimer, shown above the prompt — every time, never gated on a remembered flag. */
   disclaimer?: ReactNode;
   onChoose: () => void;
 }

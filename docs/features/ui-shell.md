@@ -9,15 +9,18 @@ accent (from `logo.svg`).
 
 - **Boot state machine** (`boot-machine.ts`, pure): `menu → (disclaimer | folder) → loading → warmup →
 playing`, plus `paused` and `error`. State carries the selected `game`; `SELECT` routes a **fetch** game to
-  `disclaimer` (or straight to `loading` when its disclaimer was already accepted) and a **local** game to the
-  `folder` prompt. Retry up to `MAX_RETRIES` (3), then back to the menu. Nothing downloads until a game is
+  `disclaimer` — **always, every launch** — and a **local** game to the `folder` prompt, which carries the
+  same notice. Retry up to `MAX_RETRIES` (3), then back to the menu. Nothing downloads until a game is
   picked (no eager pre-menu load).
 - **Hook** (`use-asset-boot.ts`): a fresh `Vfs` + `AssetLoader` **per selected game** (via `createAssetLoader`
   with the game's `assetLoader`); manifest at `${VITE_STATIC_URL}/<game>-${__APP_VERSION__}/manifest.json`.
   On the `loading` phase it `init()`s then loads **all groups** in one screen → verify → warmup. Local
   `restore()`s the remembered folder and only reads after the folder gesture (`chooseFolder → prepare()`).
-  Runs once per attempt (retry/StrictMode-safe); reports progress + rotating status; remembers disclaimer
-  acceptance **per game** in localStorage.
+  Runs once per attempt (retry/StrictMode-safe); reports progress + rotating status. **Nothing about the
+  disclaimer is remembered** (2026-08-03): it is a legal notice, not an onboarding step to get past once, so
+  the `opensa.disclaimer.v2.<game>` localStorage flag and its module are gone. `restore()` still re-grants the
+  folder handle so the pick need not re-prompt — it no longer skips the folder screen, because that screen is
+  where the notice lives.
 - **Instant shell, lazy game:** the initial bundle is React + shell + asset-loader + vfs + fflate
   (~85 kB gz); `app.tsx` does `lazy(() => import('../engine-canvas-host'))`, so the engine + Rapier
   (~980 kB gz across the `engine-canvas-host` and `engine-environment-driver` chunks) load only past
@@ -42,7 +45,7 @@ playing`, plus `paused` and `error`. State carries the selected `game`; `SELECT`
 
 ## Test coverage anchors
 
-- Unit: `boot-machine.test.ts`, `boot-storage.test.ts`, `boot-status.test.ts`, `webgpu-gate.test.ts`.
+- Unit: `boot-machine.test.ts`, `boot-status.test.ts`, `webgpu-gate.test.ts`.
 - e2e: `e2e/shell.spec.ts` (menu lists games; fetch game → disclaimer → loading; manifest-failure →
   error/retry; local game → folder prompt). The presentational components + GL boot are covered here / in the
   object-viewer lane (no RTL infra in repo).

@@ -11,7 +11,6 @@ import type { BootState } from './boot-machine';
 import { GAME_CONFIG, type GameId } from '../../game-config';
 import { bootReducer, initialBootState } from './boot-machine';
 import { rotatingStatus, TEXTURE_STATUS, toPercent } from './boot-status';
-import { isDisclaimerAccepted, rememberDisclaimerAccepted } from './boot-storage';
 
 const BASE = import.meta.env.VITE_STATIC_URL;
 const NO_PROGRESS: ProgressSnapshot = { loadedBytes: 0, loadedChunks: 0, totalBytes: 0, totalChunks: 0 };
@@ -26,8 +25,6 @@ export interface AssetBoot {
   detail: string;
   /** The selected game's disclaimer (popup / folder prompt); null on the menu. */
   disclaimer: null | ReactNode;
-  /** Whether the selected game's disclaimer was already accepted (the folder prompt hides it then). */
-  disclaimerAccepted: boolean;
   /** The asset file system the game reads from (filled as the load completes). */
   fs: AssetFileSystem;
   /** Folder mode: the picked install's world-pak source (opensa/ inside it). null in HTTP/fetch mode, so the
@@ -112,26 +109,13 @@ export function useAssetBoot(): AssetBoot {
   // Stream active-load progress into state.
   useEffect(() => session?.loader.events.on('progress', setSnapshot), [session]);
 
-  // Local loader: boot-time restore (no gesture). If the remembered folder is still granted AND the disclaimer
-  // was accepted, skip the prompt and load straight away.
+  // Local loader: boot-time restore (no gesture). Re-grants the remembered folder handle so the pick below
+  // does not have to prompt again — it does NOT skip the folder screen, because that screen is where the
+  // disclaimer is shown and the disclaimer is shown every time.
   useEffect(() => {
-    if (!session?.loader.restore || state.phase !== 'folder' || !state.game) {
-      return;
+    if (session?.loader.restore && state.phase === 'folder' && state.game) {
+      void session.loader.restore().catch(() => undefined);
     }
-    const game = state.game;
-    let cancelled = false;
-    void session.loader
-      .restore()
-      .then(() => {
-        if (!cancelled && session.loader.ready?.() && isDisclaimerAccepted(game)) {
-          dispatch({ type: 'FOLDER_READY' });
-        }
-      })
-      .catch(() => undefined);
-
-    return (): void => {
-      cancelled = true;
-    };
   }, [session, state.phase, state.game]);
 
   // Run the load once per attempt: init (manifest / scan) → load every group (one screen) → verify.
@@ -173,12 +157,7 @@ export function useAssetBoot(): AssetBoot {
   }, [state.phase]);
 
   return {
-    acceptDisclaimer: useCallback((): void => {
-      if (state.game) {
-        rememberDisclaimerAccepted(state.game);
-      }
-      dispatch({ type: 'DISCLAIMER_OK' });
-    }, [state.game]),
+    acceptDisclaimer: useCallback((): void => dispatch({ type: 'DISCLAIMER_OK' }), []),
     // Local loader, from the folder screen: prompt for the install folder (the picker must run in this click —
     // its user gesture). On success the disclaimer counts as accepted and loading begins.
     chooseFolder: useCallback((): void => {
@@ -190,7 +169,6 @@ export function useAssetBoot(): AssetBoot {
       void (async (): Promise<void> => {
         try {
           await active.loader.prepare?.();
-          rememberDisclaimerAccepted(game);
           dispatch({ type: 'FOLDER_READY' });
         } catch (error) {
           if (!(error instanceof DOMException && error.name === 'AbortError')) {
@@ -201,19 +179,13 @@ export function useAssetBoot(): AssetBoot {
     }, [session, state.game]),
     detail,
     disclaimer: state.game ? GAME_CONFIG[state.game].disclaimer : null,
-    disclaimerAccepted: state.game ? isDisclaimerAccepted(state.game) : false,
     fs,
     pakSource,
     pause: useCallback((): void => dispatch({ type: 'PAUSE' }), []),
     percent: toPercent(snapshot),
     play: useCallback(
       (game: GameId): void => {
-        dispatch({
-          accepted: isDisclaimerAccepted(game),
-          assetLoader: loaderKind(game),
-          game,
-          type: 'SELECT',
-        });
+        dispatch({ assetLoader: loaderKind(game), game, type: 'SELECT' });
       },
       [loaderKind],
     ),
