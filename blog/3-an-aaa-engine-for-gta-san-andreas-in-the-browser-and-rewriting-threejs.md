@@ -9,7 +9,10 @@ This is the next chapter in the story of how I'm building an AAA-grade engine to
 If you can't be bothered to read — here are the important links right away:
 
 - [Demo](https://opensa.cc)
+- [Video](https://www.youtube.com/watch?v=eA1gVWzANRU)
 - [Repo](https://github.com/AlexSergey/opensa)
+
+
 - [Previous article: I ran GTA San Andreas on my own engine in the browser](https://github.com/AlexSergey/opensa/blob/main/blog/1-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md)
 - [Previous article: How I built a perfect GTA San Andreas map with my own engine](https://github.com/AlexSergey/opensa/blob/main/blog/2-how-i-built-a-perfect-gta-san-andreas-map-with-my-own-engine.md)
 

@@ -26,8 +26,8 @@ through — the goals, and the rules that keep them honest, are in
 </p>
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=J2P4gQd9NQo" title="Watch the OpenSA launch trailer">
-    <img src="https://img.youtube.com/vi/J2P4gQd9NQo/hqdefault.jpg" alt="OpenSA — an open-source game engine compatible with RenderWare, in the browser — launch trailer" width="640" />
+  <a href="https://www.youtube.com/watch?v=eA1gVWzANRU&amp;list=PLB21jFrZE9wA" title="Watch the OpenSA 0.4.0 trailer">
+    <img src="https://img.youtube.com/vi/eA1gVWzANRU/maxresdefault.jpg" alt="OpenSA — an open-source game engine compatible with RenderWare, in the browser — 0.4.0 trailer" width="640" />
   </a>
 </p>
 

@@ -6,6 +6,11 @@ How to put OpenSA online on a shared host with Apache and a bound domain. Two pa
 > **HTTPS is required.** The asset loader uses the Cache Storage API, which only works in a secure context.
 > Enable TLS (most hosts offer free Let's Encrypt). The bundled `.htaccess` also forces `http → https`.
 
+> **WebGPU is required, and there is no fallback** (0.4.0 onwards — the engine is WebGPU-only). A visitor
+> whose browser or device has no adapter gets the sorry screen from `webgpu-gate.ts`, not a degraded render.
+> Nothing about this is a hosting setting; it is worth knowing before reading a support report as a deploy
+> fault.
+
 ## 1. Configure the build
 
 `VITE_STATIC_URL`, `VITE_GAME_TYPE`, `VITE_GA_ID` are baked in at build time. Put the **production** values
@@ -104,7 +109,7 @@ serve `static/` from a CDN / object storage (Cloudflare R2, Backblaze B2, etc.) 
 
 ## Notes
 
-- **No COOP/COEP needed.** Rapier runs single-threaded WASM and three.js needs no `SharedArrayBuffer`, so
+- **No COOP/COEP needed.** Rapier runs single-threaded WASM and the engine needs no `SharedArrayBuffer`, so
   cross-origin-isolation headers are unnecessary.
 - Range requests (resumable / parallel chunk downloads) are served by Apache by default.
 - The chunk zips are already compressed — `.htaccess` only gzips text types, leaving them as-is.
