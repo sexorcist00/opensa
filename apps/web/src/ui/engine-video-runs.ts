@@ -11,9 +11,10 @@
  * one of them is reproducible down to its car, hour, weather, route and shot list.
  *
  * The sequencer (05) is what turns that into a run: a cycle plays a drive scene in every region of
- * `REGION_CYCLE`, each in that region's own weather and one of the debugger's hours, in a car picked mod-first
- * out of the game's road-car roster. What a cycle contains is a TABLE (`video/presets.ts`), so this file stays
- * about staging; the walk and flythrough kinds are skipped with a notice until 07 gives them scenes.
+ * `REGION_CYCLE`, each in that region's own weather and one of the debugger's hours, in a car picked out of the
+ * build's OWN mod cars when it ships any, else the game's road-car roster. What a cycle contains is a TABLE
+ * (`video/presets.ts`), so this file stays about staging; the walk and flythrough kinds are skipped with a
+ * notice until 07 gives them scenes.
  *
  * The staging recipe is the phys laps' (`engine-phys-runs.ts`), verbatim and for the same reasons — a
  * teleport's `pendingCells` lies for about a second, and a ground-snapped car is still moving on its springs
@@ -314,7 +315,7 @@ export function setupVideoRuns(host: VideoRunsHost): void {
   const asked = host.params.get('seed');
   const seed = asked === null || Number.isNaN(Number(asked)) ? Date.now() >>> 0 : Number(asked);
   // `?car=` pins the car for every scene (a field round comparing streets must not also change the subject);
-  // absent, each scene picks one — mod cars first (D10).
+  // absent, each scene picks one — the build's mod cars when it has any (D10 as revised).
   const pinnedCar = host.params.get('car');
   const roster = roadCarModels(host.fs);
   const modCars = modCarSlots(host.fs);

@@ -29,7 +29,7 @@ its folder moved to `roadmap/0.5.0/`). Newest first:
   Planned the same day it was researched and graduated from
   `docs/ideas/video-mode/`; the user's decisions live in the readme's D-table, with three of them REVISED
   on 2026-07-31 — each revision written into its own row rather than over it. `?video=1` boots a bounded
-  seeded self-directed showcase for trailer recording (scenes 1…100 of the seed, five cameras each): a random car (mod cars first, via a new
+  seeded self-directed showcase for trailer recording (scenes 1…100 of the seed, five cameras each): a random car (the build's OWN mod cars when it has any, via a new
   build-time `vehicle-installer` ledger) cruises a route generated from the game's own `NODES*.DAT`
   graph while cameras cut between occlusion-checked tripod stations and chase/front/rear/wing shots;
   walk and flythrough scenes; region cycle LS→LV→SF→Country→Desert; region-native weather, debugger

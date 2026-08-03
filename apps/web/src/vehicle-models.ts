@@ -5,7 +5,7 @@ import { parseVehicleMods } from '@opensa/renderware/parsers/text/vehicle-mods.p
 
 /**
  * The slots a mod installed a car into, from the build-time ledger `data/vehicle-mods.txt` (096/06) — video
- * mode's "mod cars first" pick (D10).
+ * mode's car pick (D10 as revised 2026-08-03: a build with mod cars drives ONLY those).
  *
  * An ABSENT ledger is an empty set, never an error: a game built before the installer wrote one, or one with
  * no vehicle mods at all, simply has every scene take a stock car. The format lives with the other data-file
