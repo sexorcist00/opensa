@@ -89,6 +89,26 @@ across four zones met parked cars exactly once without anyone suspecting the wor
 allowed to be rejected must also be able to REPORT that it keeps being rejected
 ([`open-issues/fixed/parked-cars-do-not-respawn.md`](../open-issues/fixed/parked-cars-do-not-respawn.md)).
 
+## Nothing may read or solve against a physics body before the world has stepped it
+
+A Rapier body's mass properties are not live at creation — they are computed at the next `world.step`, so a
+fresh body reads mass 0 and zero inertia no matter what its descriptor said
+([`edge-cases/physics-runtime.md`](../edge-cases/physics-runtime.md) carries the measurement). Our fixed step
+updates the raycast vehicle controllers BEFORE stepping the world, which puts every object created between two
+steps — in a streaming world, all of them — on the wrong side of that boundary.
+
+**Any system that creates a body mid-session and then touches it in the same frame must force the state it
+needs first** (`recomputeMassPropertiesFromColliders` for mass), or defer its first read to after a step. This
+applies to whatever is added next: a controller, a joint, a query that assumes an inertia tensor.
+
+**Caught:** now yes, and only now. `physics-world.test.ts` asserts a car is born with its authored mass, and
+`physics-world.car-generator-churn.test.ts` drives the streaming case. Before those existed the violation was
+silent in the worst way available: solving a suspension against a massless body returns NaN, the NaN panics
+Rapier inside wasm with a bare `unreachable`, and the panic never releases wasm-bindgen's borrow — so the
+session then dies in whichever innocent reader touches the body set next, arbitrarily far from the cause. It
+cost a full session of field rounds and produced a confident, wrong verdict about which car population was to
+blame ([`open-issues/fixed/map-car-generators-poison-physics.md`](../open-issues/fixed/map-car-generators-poison-physics.md)).
+
 ## Every population of the world announces its size at boot
 
 A map with no cars, no clutter or no props renders exactly like a full one. Nothing in a frame time, a draw

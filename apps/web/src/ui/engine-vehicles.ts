@@ -14,7 +14,12 @@ import type { Logger } from '@opensa/game/diagnostics/logger';
 import type { InputState } from '@opensa/game/input';
 import type { Config } from '@opensa/game/interfaces/config.interface';
 import type { Vec3 } from '@opensa/game/interfaces/world-adapter.interface';
-import type { PhysicsWorld, VehicleSpringReading, VehicleStance } from '@opensa/game/physics/physics-world';
+import type {
+  PhysicsWorld,
+  VehicleController,
+  VehicleSpringReading,
+  VehicleStance,
+} from '@opensa/game/physics/physics-world';
 import type { EnterableVehicle, VehicleAnimator } from '@opensa/game/vehicle/enter-vehicle.system';
 import type { SteeringModel } from '@opensa/game/vehicle/steering';
 import type { SpawnedVehicle, VehiclePlacement } from '@opensa/game/vehicle/vehicle-lod.system';
@@ -152,6 +157,10 @@ export interface EngineVehiclesDeps {
   /** Night gate for the lamps (the shared timecyc `dn`, like prod's `isNight`). */
   isNight: () => boolean;
   logger: Logger;
+  /** Register `parked.json` at all (default true). `?parked=0` leaves the streets empty of parked cars —
+   *  a BISECTION knob: they are the one population that spawns and unloads by itself while driving, so a
+   *  fault that only appears with them on is a fault in that churn, not in a car or a place. */
+  parkedCars?: boolean;
   physics: PhysicsWorld;
   placePlayer: (position: Vec3, moveBody?: boolean) => void;
   playerCollider: number;
@@ -478,6 +487,11 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
     const entry = await acquireModel(model);
     const { data, id } = entry;
     let plateSlot: null | number = null;
+    // What this spawn has already put into the world, so a throw part-way through can take it back out
+    // (see the catch below — an abandoned chassis is not a leak, it is a crash waiting for the next step).
+    let spawnedInstance: null | VehicleInstance = null;
+    let spawnedPhysics: null | { body: number; controller: VehicleController } = null;
+    let spawnedVehicle: EnterableVehicle | null = null;
     const release = (): void => {
       entry.instances = Math.max(0, entry.instances - 1);
       entry.lastUsed = performance.now();
@@ -508,6 +522,7 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
       }
 
       const instance = engine.createVehicle(id);
+      spawnedInstance = instance;
       instance.setPaint(paint);
       // The plate is resolved from the PLACEMENT, not from where the player is standing (plan 082/04), so a
       // far-streamed San Fierro car wears SF plates and a parked car keeps its number across LOD respawns.
@@ -552,6 +567,7 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
         data.halfExtents,
         pitch,
       );
+      spawnedPhysics = { body, controller };
       // Driver seat = the front-seat dummy mirrored to the −X (driver) side.
       const seatLocal: [number, number, number] = data.seat
         ? [-Math.abs(data.seat[0]), data.seat[1], data.seat[2]]
@@ -575,6 +591,7 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
         wheels,
       };
       handle.setTransform(position, headingQuat(heading)); // pose it before the first frame draws it
+      spawnedVehicle = vehicle;
       vehiclePhysics.add(vehicle);
       enterVehicle.add(vehicle);
       vehicleDamage.add({ body, handle });
@@ -594,6 +611,25 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
         position: live,
       };
     } catch (error) {
+      // A throw PAST `createDynamicVehicle` used to abandon the chassis body and its raycast controller in
+      // the physics world with nothing left holding a reference to either. That is not a mere leak: the
+      // orphaned controller keeps being stepped, and `updateVehicle` PANICS the moment its body goes
+      // (`PhysicsWorld.removeVehicle` documents the order). A panic inside wasm never releases Rapier's
+      // borrow, so the whole world is poisoned and every later read dies with "recursive use of an object"
+      // — pointing at whatever read it first, never at the spawn that caused it.
+      // Unwind in `despawn`'s exact order: registrations, controller, THEN the body.
+      if (spawnedVehicle !== null) {
+        vehiclePhysics.remove(spawnedVehicle);
+        enterVehicle.remove(spawnedVehicle);
+      }
+      if (spawnedPhysics !== null) {
+        vehicleDamage.remove(spawnedPhysics.body);
+        physics.removeVehicle(spawnedPhysics.controller);
+        physics.removeBodies([spawnedPhysics.body]);
+      }
+      if (spawnedInstance !== null) {
+        engine.destroyVehicle(spawnedInstance);
+      }
       release(); // a failed spawn must not pin the type in the cache forever
       throw error;
     }
@@ -621,7 +657,7 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
   // Parked cars come from the game's `parked.json` in the VFS (shipped per game); absent → none. They are
   // REGISTERED, not spawned here: pre-spawning all of them put every car on the map into the world at boot,
   // most of them far outside the collision radius, where they fell (docs/open-issues/, fixed 2026-08-02).
-  const parked = parseParkedVehicles(deps.fs.getText('parked.json'));
+  const parked = deps.parkedCars === false ? [] : parseParkedVehicles(deps.fs.getText('parked.json'));
   for (const placement of parked) {
     vehicleLod.register(placement);
   }
@@ -629,7 +665,10 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
   // and that is how 1043 map car generators went unasked-for for six weeks with nothing in the console
   // (`docs/restrictions/architecture.md`).
   // eslint-disable-next-line no-console -- boot census, one line
-  console.log(`[vehicles] parked placements registered: ${parked.length}`);
+  console.log(
+    `[vehicles] parked placements registered: ${parked.length}` +
+      (deps.parkedCars === false ? ' (DISABLED by ?parked=0)' : ''),
+  );
 
   return {
     activeVehicle: (): EnterableVehicle | null => seated,

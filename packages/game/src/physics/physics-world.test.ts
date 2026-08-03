@@ -236,8 +236,6 @@ describe('PhysicsWorld.createDynamicVehicle', () => {
         HALF,
       );
 
-      // A step first: Rapier folds authored mass properties in during the step, so before one every body
-      // reads mass 0 at its own origin — indistinguishable from the properties never having applied.
       physics.step(1 / 60);
 
       // World COM = spawn position + the authored offset (no rotation at heading 0), minus the little the
@@ -246,6 +244,25 @@ describe('PhysicsWorld.createDynamicVehicle', () => {
       expect(physics.readMassProperties(high.body).centreOfMass[2]).toBeCloseTo(6.2, 2);
       // And the mass is the authored total, not the sum of what the primitives implied.
       expect(physics.readMassProperties(low.body).mass).toBeCloseTo(1500, 5);
+      physics.dispose();
+    });
+
+    it('is born carrying its authored mass, so a car spawned BETWEEN steps is never solved massless', async () => {
+      // Rapier folds a descriptor's mass properties in at the next `world.step`, and our step updates the
+      // raycast controllers BEFORE stepping the world — so without the recompute at creation, every car
+      // spawned by streaming (which is every car in a moving world) had its first suspension solved against
+      // a body of mass 0 and zero inertia. That returns NaN, and the NaN panics Rapier's own tree walk with
+      // a bare wasm `unreachable` that poisons the world for the rest of the session
+      // (`docs/open-issues/fixed/map-car-generators-poison-physics.md`).
+      const physics = await makeWorld();
+      const born = physics.createDynamicVehicle([0, 0, 5], 0, null, massProps(), [], HALF);
+
+      expect(physics.readMassProperties(born.body).mass).toBeCloseTo(1500, 5);
+
+      physics.step(STEP);
+      const afterAStep = physics.createDynamicVehicle([9, 0, 5], 0, null, massProps(), [], HALF);
+
+      expect(physics.readMassProperties(afterAStep.body).mass).toBeCloseTo(1500, 5);
       physics.dispose();
     });
 

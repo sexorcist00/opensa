@@ -20,6 +20,26 @@ the spot never repopulated — one lot in LS emptied for the rest of the session
 **If the pop-in ever reads badly, the lever is the collision radius, not the spawn radius.** Raising
 `lodDistance` alone puts the cars back over the hole.
 
+## A rigid body is born MASSLESS — its mass properties arrive at the next `world.step`
+
+Rapier folds a descriptor's mass properties, and its colliders' own contributions, into the body only when the
+world steps. Read a fresh body before that and it answers `mass() = 0`, `principalInertia() = 0,0,0`,
+whatever the descriptor said. Measured on 0.19.3, with a descriptor of 1500 kg / 2000,2000,3000:
+
+| When the body is read | `mass()` | `principalInertia()` |
+| --------------------- | -------- | -------------------- |
+| at birth              | **0.0**  | **0, 0, 0**          |
+| after one `world.step`| 1500.0   | 2000, 2000, 3000     |
+
+Rapier says so itself on `setAdditionalMassProperties` — *"will be updated at the next physics step, or can be
+updated manually with `recomputeMassPropertiesFromColliders`"* — and `createDynamicVehicle` now does exactly
+that, because our step updates the raycast controllers BEFORE stepping the world. Solving a suspension against
+a massless body returns NaN, and a NaN reaching Rapier's tree walk panics wasm and poisons the world for the
+rest of the session ([the fix](../open-issues/fixed/map-car-generators-poison-physics.md)).
+
+**A chassis collider deliberately carries mass 0** (the body holds `handling.cfg`'s authored mass, 081/02), so
+there is nothing to fall back on: for a car the zero is total, not partial.
+
 ## Wheel rotation is COSMETIC — it follows the ground exactly
 
 `controller.wheelRotation(i)` integrates the CONTACT velocity, not a simulated wheel: under a sustained

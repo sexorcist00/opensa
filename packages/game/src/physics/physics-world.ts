@@ -493,7 +493,12 @@ export class PhysicsWorld {
   private readonly events: InstanceType<Rapier['EventQueue']>;
   /** Contact-force impacts collected during the last {@link step} (drained by {@link takeImpacts}). */
   private impacts: Impact[] = [];
+  /** Where {@link step} currently is. A Rapier panic aborts wasm with a bare `unreachable` — no message and
+   *  no JS frame — so without this a crash inside the step cannot be attributed to a phase at all. */
+  private phase = 'idle';
   private readonly rapier: Rapier;
+  /** Messages already said out loud (see {@link reportOnce}). */
+  private readonly reported = new Set<string>();
   /** The live speed-grip dials (plan 081/09) — session-tunable, recorded by every capture. */
   private speedGrip = { cap: SPEED_GRIP_CAP, reference: SPEED_GRIP_REFERENCE };
   private surfaceGrip = true;
@@ -504,6 +509,18 @@ export class PhysicsWorld {
    *  expressed against. Null until the world hands them over — and then the tyre keeps its authored grip
    *  everywhere, exactly as it did before this step. `surfaceGrip` is the field's on/off dial (`?surfGrip`). */
   private tyreAdhesion: null | { perMaterial: Float32Array; road: number } = null;
+  /** The chassis body handle of every LIVE raycast vehicle → its controller.
+   *
+   *  A car's chassis removed by a path that never touched its controller leaves that controller reading
+   *  FREED wasm memory. {@link removeBodies} checks this map for exactly that, because the corpse does not
+   *  announce itself: it reads back as all-NaN. (Rapier handles DO carry a generation — measured: remove a
+   *  body, create another, and the new one gets a different bit pattern — so a stale handle does not resolve
+   *  to a fresh body. That makes this guard about ORDER within one despawn, not about handle reuse.) */
+  private readonly vehicleChassis = new Map<number, VehicleController>();
+  /** Every LIVE controller, against the chassis handle it was created with. This is the liveness record
+   *  {@link removeVehicle} tests to stay idempotent — a controller missing from it has already been removed
+   *  and must never be freed a second time. */
+  private readonly vehicleChassisAtBirth = new Map<VehicleController, number>();
   /** Raycast vehicle controllers, advanced before each {@link step}. */
   private readonly vehicles: VehicleController[] = [];
   /** What the raycast vehicle controllers cost in the last {@link step} (ms), READ ONCE: the vehicle half
@@ -626,6 +643,16 @@ export class PhysicsWorld {
         .setCanSleep(false),
     );
     this.addVehicleHull(body, shape, halfExtents);
+    // **A car is born MASSLESS.** Rapier folds a descriptor's mass properties (and its colliders' own
+    // contributions) into the body only at the NEXT `world.step` — until then `mass()` reads 0 and the
+    // inertia tensor is all zeros. Our step runs `updateVehicle` BEFORE `world.step`, so a car spawned
+    // between two steps — which is every streamed car in a moving world — has its first suspension solved
+    // against a body with no mass and no inertia, and comes back all-NaN. The NaN then reaches Rapier's own
+    // tree walk and panics wasm with a bare `unreachable`, which leaves the body set borrowed for good and
+    // kills the session with "recursive use of an object" from whichever innocent reader touches it next
+    // (`docs/open-issues/fixed/map-car-generators-poison-physics.md`). Doing the recompute HERE is Rapier's own
+    // documented remedy, and it is the only moment where the car is not yet in the step list.
+    body.recomputeMassPropertiesFromColliders();
 
     const controller = this.world.createVehicleController(body);
     controller.indexUpAxis = UP_AXIS;
@@ -658,6 +685,8 @@ export class PhysicsWorld {
       controller.setWheelBrake(i, PARKING_BRAKE); // parked until a driver throttles
     });
     this.vehicles.push(controller);
+    this.vehicleChassis.set(body.handle, controller);
+    this.vehicleChassisAtBirth.set(controller, body.handle);
 
     return { body: body.handle, controller, wheelLift };
   }
@@ -821,6 +850,15 @@ export class PhysicsWorld {
    * car perfectly still while the player slides in/out, so the kinematic rider can't shove it.
    */
   holdBody(handle: number, position: Vec3, quaternion: Quat): void {
+    assertFinite('holdBody', {
+      'position.x': position[0],
+      'position.y': position[1],
+      'position.z': position[2],
+      'quaternion.w': quaternion[3],
+      'quaternion.x': quaternion[0],
+      'quaternion.y': quaternion[1],
+      'quaternion.z': quaternion[2],
+    });
     const body = this.world.getRigidBody(handle);
     body.setTranslation({ x: position[0], y: position[1], z: position[2] }, true);
     body.setRotation({ w: quaternion[3], x: quaternion[0], y: quaternion[1], z: quaternion[2] }, true);
@@ -933,6 +971,7 @@ export class PhysicsWorld {
    * therefore accumulate into an ever-growing headwind.
    */
   push(handle: number, impulse: Vec3): void {
+    assertFinite('push', { 'impulse.x': impulse[0], 'impulse.y': impulse[1], 'impulse.z': impulse[2] });
     this.world.getRigidBody(handle).applyImpulse({ x: impulse[0], y: impulse[1], z: impulse[2] }, true);
   }
 
@@ -944,6 +983,14 @@ export class PhysicsWorld {
    * A push high up lets the GROUND be the pivot, which is what topples a real post.
    */
   pushAt(handle: number, impulse: Vec3, point: Vec3): void {
+    assertFinite('pushAt', {
+      'impulse.x': impulse[0],
+      'impulse.y': impulse[1],
+      'impulse.z': impulse[2],
+      'point.x': point[0],
+      'point.y': point[1],
+      'point.z': point[2],
+    });
     this.world
       .getRigidBody(handle)
       .applyImpulseAtPoint(
@@ -1113,6 +1160,16 @@ export class PhysicsWorld {
   /** Remove static bodies (and their colliders) by handle — e.g. when a cell unloads. */
   removeBodies(handles: readonly number[]): void {
     for (const handle of handles) {
+      // Removing a LIVE car's chassis here is always a bug: the only legitimate route is `despawn`, which
+      // drops the controller first. Reached any other way (a stale handle Rapier has since re-issued to a
+      // car is the way it happens) the controller survives its body and reads freed wasm memory from then
+      // on — all-NaN, garbage handle, and a `unreachable` panic that poisons the whole world. Refusing the
+      // removal keeps the car and the world intact; the report carries the caller's stack.
+      if (this.vehicleChassis.has(handle)) {
+        // eslint-disable-next-line no-console -- a car deleted out from under its controller is unrecoverable
+        console.error(new Error(`physics: refused to remove body ${handle} — it is a LIVE vehicle chassis`));
+        continue;
+      }
       const body = this.world.getRigidBody(handle);
       // Drop the surface entries with the colliders themselves — Rapier reuses handles, so a stale entry
       // would answer for whatever is created next, and a streaming world creates constantly.
@@ -1129,10 +1186,23 @@ export class PhysicsWorld {
    * the orphaned controller.
    */
   removeVehicle(controller: VehicleController): void {
+    // IDEMPOTENT, and that is the point. The previous version skipped the array splice on a second call but
+    // still handed the controller to `removeVehicleController` — freeing an already-freed wasm object. A
+    // double free does not throw: it corrupts Rapier's own bookkeeping, after which OTHER controllers' JS
+    // wrappers start reading garbage (a stable denormal handle, all-NaN pose) and `world.step` eventually
+    // panics `unreachable` while walking a structure that no longer makes sense. Cause and crash are then
+    // arbitrarily far apart. The birth record IS the liveness record, so a controller missing from it has
+    // already been removed and must not be freed twice.
+    if (!this.vehicleChassisAtBirth.has(controller)) {
+      this.reportOnce('physics: removeVehicle called AGAIN for an already-removed controller — ignored');
+
+      return;
+    }
     const index = this.vehicles.indexOf(controller);
     if (index >= 0) {
       this.vehicles.splice(index, 1);
     }
+    this.forgetChassisOf(controller);
     this.world.removeVehicleController(controller);
   }
 
@@ -1142,6 +1212,7 @@ export class PhysicsWorld {
    * on its own. Keeps the current vertical velocity.
    */
   seedReverse(handle: number, heading: number, speed: number): void {
+    assertFinite('seedReverse', { heading, speed });
     const body = this.world.getRigidBody(handle);
     const v = body.linvel();
     body.setLinvel({ x: Math.sin(heading) * speed, y: -Math.cos(heading) * speed, z: v.z }, true);
@@ -1153,6 +1224,7 @@ export class PhysicsWorld {
   }
 
   setLinvel(handle: number, velocity: Vec3): void {
+    assertFinite('setLinvel', { 'velocity.x': velocity[0], 'velocity.y': velocity[1], 'velocity.z': velocity[2] });
     this.world.getRigidBody(handle).setLinvel({ x: velocity[0], y: velocity[1], z: velocity[2] }, true);
   }
 
@@ -1209,6 +1281,9 @@ export class PhysicsWorld {
     },
   ): void {
     const { brake, brakeBias, drive, engine, handbrake, speed, steer, step, traction, wheelAdhesion } = controls;
+    // Guarded ONCE per car, not per wheel: every per-wheel number below is derived from these, so a NaN here
+    // is the one the caller produced — and naming the caller's field is the whole point.
+    assertFinite('setVehicleControls', { brake, brakeBias, engine, speed, steer, step });
     const roadAdhesion = this.tyreAdhesion?.road ?? ROAD_ADHESION;
     const perBrake = brake / (wheels.length || 1);
     // The 081/09 assist: the LATERAL solver's grip grows with speed; everything longitudinal stays on the
@@ -1337,6 +1412,7 @@ export class PhysicsWorld {
    * A car in the air has no contacts for the solver to reconcile it against, so there is nothing to fight.
    */
   spin(handle: number, delta: Vec3): void {
+    assertFinite('spin', { 'delta.x': delta[0], 'delta.y': delta[1], 'delta.z': delta[2] });
     const body = this.world.getRigidBody(handle);
     const w = body.angvel();
     body.setAngvel({ x: w.x + delta[0], y: w.y + delta[1], z: w.z + delta[2] }, true);
@@ -1351,9 +1427,45 @@ export class PhysicsWorld {
    */
   step(dt: number, beforeVehicles?: () => void): void {
     this.world.timestep = dt;
+    this.phase = 'beforeVehicles';
     beforeVehicles?.();
     const vehiclesStarted = performance.now();
-    for (const vehicle of this.vehicles) {
+    for (const [index, vehicle] of this.vehicles.entries()) {
+      this.phase = `updateVehicle ${index + 1}/${this.vehicles.length}`;
+      // A non-finite pose or velocity makes Rapier's tree traversal panic deep inside wasm — a bare
+      // `unreachable`, no message, no JS frame — and that panic leaves the body set BORROWED for good
+      // (wasm does not unwind, so the guard never drops). Every later read then dies with "recursive use of
+      // an object", naming whichever innocent reader touched it first. Catch the bad number on OUR side of
+      // the boundary, where the car and the field can still be named and the world stays healthy.
+      const chassis = vehicle.chassis();
+      const bad = nonFiniteChassis(chassis);
+      if (bad !== null) {
+        // DROP it: leaving it in would throw here on every future step and physics would never advance
+        // again. One report per distinct message, then the world carries on without the corpse. The INDEX
+        // is not an identity (this array is reordered by every spawn and unload) — the handle is.
+        //
+        // The handle is quoted RAW because its shape is the diagnosis. `chassis()` returns a cached JS
+        // object whose `handle` is a plain field written once at creation, so a NON-INTEGER handle cannot
+        // come from a removed body — it means the wrapper ITSELF is wrong (a controller built on a body
+        // whose handle was already garbage). An INTEGER handle that no longer resolves is the other story:
+        // the body really was removed out from under a live controller. They need opposite fixes.
+        // NOT a shape test on the number. Rapier hands out handles as an opaque bit pattern (index packed
+        // with a generation, reinterpreted as a double), so a "non-integer" handle is the NORMAL case here —
+        // the unit suite proved it, after an earlier version of this message had read it as corruption for
+        // several debugging rounds. The only honest question is whether the body still resolves.
+        const { handle } = chassis;
+        const shape =
+          this.world.getRigidBody(handle) === undefined
+            ? 'the body does NOT resolve any more (it was removed)'
+            : 'the body still resolves (so the reads themselves are the problem)';
+        this.phase = `updateVehicle ${index + 1}/${this.vehicles.length} REJECTED`;
+        this.vehicles.splice(index, 1);
+        this.forgetChassisOf(vehicle);
+        throw new Error(
+          `physics: dropped a dead vehicle — ${shape}; handle=${String(handle)} ` +
+            `registered=${String(this.vehicleChassis.has(handle))} live vehicles=${this.vehicles.length}; ${bad}`,
+        );
+      }
       // The suspension RAYS must respect collision groups too, or the wheels ride on things the chassis
       // passes through — a felled lamppost is invisible to the car's body but the wheels climbed it.
       vehicle.updateVehicle(dt, undefined, VEHICLE_GROUPS); // chassis velocity from suspension/engine
@@ -1361,7 +1473,9 @@ export class PhysicsWorld {
     // The raycast controllers' own cost, separated from the solver's: 081/07 §3 budgets the VEHICLE slice
     // (≤ 0.5 ms/step for eight cars) and `physicsMs` alone cannot say which half a regression landed in.
     this.vehicleStepMs = performance.now() - vehiclesStarted;
+    this.phase = 'world.step';
     this.world.step(this.events);
+    this.phase = 'drainContactForceEvents';
     this.events.drainContactForceEvents((event) => {
       const c1 = this.world.getCollider(event.collider1());
       const c2 = this.world.getCollider(event.collider2());
@@ -1383,6 +1497,12 @@ export class PhysicsWorld {
       this.impacts.push(impact);
       this.breakableImpacts.push(impact);
     });
+    this.phase = 'idle';
+  }
+
+  /** Where {@link step} is, or was when it died — the only attribution a bare wasm `unreachable` leaves. */
+  stepPhase(): string {
+    return this.phase;
   }
 
   /**
@@ -1609,6 +1729,24 @@ export class PhysicsWorld {
     if (vertices.length === 0 || indices.length === 0) {
       return 0;
     }
+    // Rapier validates NEITHER of these. It builds its acceleration tree from whatever it is handed, and a
+    // NaN coordinate or an out-of-range index only shows up LATER, as an `unreachable` panic deep inside a
+    // tree traversal during `world.step` — no message, no JS frame, and the panic leaves the whole physics
+    // world permanently borrowed. The cause and the crash are then unrelatable by construction, which is
+    // exactly how this cost a debugging session. Refuse the mesh instead: one bad collider is a hole in the
+    // ground, a poisoned world is the end of the session.
+    const badVertex = firstNonFiniteIndex(vertices);
+    const vertexCount = vertices.length / 3;
+    const badIndex = firstIndexOutOfRange(indices, vertexCount);
+    if (badVertex >= 0 || badIndex >= 0) {
+      this.reportOnce(
+        badVertex >= 0
+          ? `physics: SKIPPED a trimesh collider — vertex ${badVertex} is ${String(vertices[badVertex])} (${vertexCount} verts)`
+          : `physics: SKIPPED a trimesh collider — index ${badIndex} is ${String(indices[badIndex])}, out of range for ${vertexCount} verts`,
+      );
+
+      return 0;
+    }
     try {
       const collider = this.world.createCollider(this.rapier.ColliderDesc.trimesh(vertices, indices), body);
       if (materials) {
@@ -1623,16 +1761,6 @@ export class PhysicsWorld {
     }
   }
 
-  /**
-   * Build the dynamic chassis collider from the COL's convex primitives (spheres +
-   * boxes), giving each shape an **equal** share of `mass` (not volume-weighted) so a
-   * single oversized COL sphere — e.g. the camper's big front sphere — can't drag the
-   * centre of mass high/forward and make the car wobble. Each shape keeps its own
-   * shape-based inertia (realistic, unlike a single box approximation). Falls back to a
-   * convex hull of the vertices when a COL has no primitives, then a `halfExtents` box
-   * when there's no usable hull either. The COL trimesh is omitted (it can't collide
-   * with the static world trimesh).
-   */
   private addVehicleHull(
     body: RapierBody,
     shape: ModelColliders['shape'] | null,
@@ -1665,6 +1793,39 @@ export class PhysicsWorld {
     }
   }
 
+  /** Drop a controller's chassis registration. Keyed by HANDLE, so it is found by value — the controller's
+   *  own `chassis()` cannot be trusted here: by removal time that body may already be freed. */
+  private forgetChassisOf(controller: VehicleController): void {
+    this.vehicleChassisAtBirth.delete(controller);
+    for (const [handle, owner] of this.vehicleChassis) {
+      if (owner === controller) {
+        this.vehicleChassis.delete(handle);
+
+        return;
+      }
+    }
+  }
+
+  /**
+   * Build the dynamic chassis collider from the COL's convex primitives (spheres +
+   * boxes), giving each shape an **equal** share of `mass` (not volume-weighted) so a
+   * single oversized COL sphere — e.g. the camper's big front sphere — can't drag the
+   * centre of mass high/forward and make the car wobble. Each shape keeps its own
+   * shape-based inertia (realistic, unlike a single box approximation). Falls back to a
+   * convex hull of the vertices when a COL has no primitives, then a `halfExtents` box
+   * when there's no usable hull either. The COL trimesh is omitted (it can't collide
+   * with the static world trimesh).
+   */
+  /** Say something ONCE per distinct message — a streaming world would repeat a bad collider every reload. */
+  private reportOnce(message: string): void {
+    if (this.reported.has(message)) {
+      return;
+    }
+    this.reported.add(message);
+    // eslint-disable-next-line no-console -- geometry Rapier cannot survive; silence here costs a session
+    console.error(message);
+  }
+
   /**
    * A chassis collider desc: friction + vehicle collision group, a little restitution (bounce off walls),
    * and contact-force events (so collisions report impacts for damage).
@@ -1687,9 +1848,89 @@ export class PhysicsWorld {
   }
 }
 
+/**
+ * Refuse a non-finite number BEFORE it reaches Rapier, naming the writer and the field.
+ *
+ * A NaN handed to the solver does not fail where it is written — it rides the body until some later step
+ * walks the spatial tree with it and Rust hits an `unreachable`. That panic carries no message, no JS frame,
+ * and it leaves the body set permanently borrowed, so the visible error ends up on whichever innocent reader
+ * touched the world next. These guards are what turn that into "who wrote it, and what".
+ */
+function assertFinite(where: string, values: Readonly<Record<string, number>>): void {
+  for (const name of Object.keys(values)) {
+    const value = values[name] ?? Number.NaN;
+    if (!Number.isFinite(value)) {
+      throw new Error(`physics: ${where} was given a non-finite ${name} (${String(value)})`);
+    }
+  }
+}
+
 /** Clamp to ±limit. */
 function clampMagnitude(value: number, limit: number): number {
   return Math.min(Math.max(value, -limit), limit);
+}
+
+/** Position of the first index that names a vertex the mesh does not have, or −1. */
+function firstIndexOutOfRange(indices: Uint32Array, vertexCount: number): number {
+  for (let i = 0; i < indices.length; i += 1) {
+    if ((indices[i] ?? 0) >= vertexCount) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+/** Position of the first non-finite value, or −1. One scan of a mesh at LOAD time, never per frame. */
+function firstNonFiniteIndex(values: Float32Array): number {
+  for (let i = 0; i < values.length; i += 1) {
+    if (!Number.isFinite(values[i])) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * Which of a chassis body's state is not a finite number, or null when all of it is — the guard
+ * {@link PhysicsWorld.step} runs before handing a car to Rapier.
+ *
+ * One NaN or Infinity anywhere in a pose or a velocity is enough: Rapier walks its spatial tree with those
+ * numbers, and a comparison against NaN sends the traversal down a branch the Rust code proves cannot
+ * happen, which compiles to a bare `unreachable`. The panic carries no message, no JS frame, and it leaves
+ * the body set permanently borrowed — so the FIRST honest report of it is this one.
+ */
+function nonFiniteChassis(chassis: {
+  angvel: () => { x: number; y: number; z: number };
+  linvel: () => { x: number; y: number; z: number };
+  rotation: () => { w: number; x: number; y: number; z: number };
+  translation: () => { x: number; y: number; z: number };
+}): null | string {
+  const t = chassis.translation();
+  const r = chassis.rotation();
+  const v = chassis.linvel();
+  const w = chassis.angvel();
+  const fields: readonly [string, number][] = [
+    ['position.x', t.x],
+    ['position.y', t.y],
+    ['position.z', t.z],
+    ['rotation.x', r.x],
+    ['rotation.y', r.y],
+    ['rotation.z', r.z],
+    ['rotation.w', r.w],
+    ['linvel.x', v.x],
+    ['linvel.y', v.y],
+    ['linvel.z', v.z],
+    ['angvel.x', w.x],
+    ['angvel.y', w.y],
+    ['angvel.z', w.z],
+  ];
+  // EVERY bad field, not the first: whether the velocities went with the position is what separates a bad
+  // WRITE (position alone) from a bad FORCE the solver then integrated (velocity too).
+  const bad = fields.filter(([, value]) => !Number.isFinite(value));
+
+  return bad.length === 0 ? null : bad.map(([name, value]) => `${name}=${String(value)}`).join(' ');
 }
 
 /**

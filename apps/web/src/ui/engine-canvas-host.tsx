@@ -827,6 +827,8 @@ async function boot(
     void refreshCollision(true);
   };
   let debugError: null | string = null;
+  /** Fixed-step throws already reported, BY MESSAGE — see the catch in `runFixedSteps`. */
+  const reportedFixedStepErrors = new Set<string>();
   /** Last frame's camera eye (engine space) — the lamp coronas need it, one frame stale is invisible. */
   const cameraEye: [number, number, number] = [0, 0, 0];
   const logger = new Logger({ emit: (): undefined => undefined }, { showLogs: false });
@@ -885,6 +887,9 @@ async function boot(
       input,
       isNight: (): boolean => engine.environment.dn > 0.35,
       logger,
+      // `?parked=0` empties the streets of parked cars — the bisection knob for anything that only shows up
+      // once they are streaming themselves in and out (see `EngineVehiclesDeps.parkedCars`).
+      parkedCars: params.get('parked') !== '0',
       physics,
       placePlayer,
       playerCollider: capsule.collider,
@@ -941,15 +946,12 @@ async function boot(
   //
   // It lived in the three.js host and went out with it in `a312f0d` (074/13); nothing failed, and the map
   // simply had no cars but `parked.json`'s 212 for six weeks. Restored 2026-08-02.
-  const mapCars = await adapter.mapCarGenerators({
-    cityAt: (x, y) => cityAt(x, y, cityBoxes),
-    hour: Math.floor(hour),
-  });
-  vehicles?.register(mapCars);
-  // Say the count out loud. The six weeks this took to notice were six weeks of an empty map looking exactly
-  // like a full one, and the drive that finally caught it read the number nowhere.
-  // eslint-disable-next-line no-console -- the one line that says whether the map has cars at all
-  console.log(`[vehicles] map car generators registered: ${vehicles === null ? 0 : mapCars.length}`);
+  await registerMapCarGenerators(
+    vehicles,
+    adapter,
+    { cityAt: (x, y) => cityAt(x, y, cityBoxes), hour: Math.floor(hour) },
+    params.get('cargen') !== '0',
+  );
   const citySystem = new CityZoneSystem(cityBoxes, viewOf, (next) => {
     city = next;
     events.emit('city', { city: next });
@@ -1370,7 +1372,25 @@ async function boot(
           }
         }
       } catch (error) {
-        debugError ??= error instanceof Error ? error.message : String(error);
+        // The HUD line alone is not enough to diagnose this one: a throw out of the physics step can leave
+        // Rapier's body set BORROWED (wasm never unwinds, so the guard is never dropped), and the next read
+        // of it — `drivenMotion` in the render half, outside this try — dies with "recursive use of an
+        // object". That second error is the one that reaches the console, and the frame carrying the FIRST
+        // one never renders, so `debugError` is never displayed. Say it out loud.
+        //
+        // Once per DISTINCT message, not once per session: reporting only the first hid a second, different
+        // throw behind the first for a whole debugging round — the world kept being poisoned with nothing in
+        // the log to say by what. A repeating message still logs once; a NEW one always gets through.
+        const message = error instanceof Error ? error.message : String(error);
+        if (!reportedFixedStepErrors.has(message)) {
+          reportedFixedStepErrors.add(message);
+          // eslint-disable-next-line no-console -- an unreported fixed-step throw is a blind debugging round
+          console.error(
+            `[fixed-step] threw (physics phase: ${physics.stepPhase()}) — anything after this frame may be reading a poisoned world`,
+            error,
+          );
+        }
+        debugError ??= message;
       }
       pending -= FIXED_STEP;
       steps += 1;
@@ -2060,6 +2080,30 @@ function probeCenterOf(enabled: boolean, focus: readonly [number, number, number
   return enabled ? [focus[0], focus[1] + 1.0, focus[2]] : null;
 }
 
+/** Tyre-smoke session dials (089/02) — `?smokeStart/?smokeFull/?smokeRate`, the 081/09 URL-dial pattern. */
+/**
+ * Register the map's car generators — or none, when `?cargen=0` bisects them out of a run.
+ *
+ * `?cargen=0` is the SECOND half of the `?parked=0` bisection: these ~962 placements stream themselves in
+ * and out exactly like the parked cars do, so turning off `parked.json` alone leaves the churn running — a
+ * field run that read as "without cars" still found them parked at the pirate ship (2026-08-03).
+ *
+ * The count is said out loud either way: the six weeks this took to notice were six weeks of an empty map
+ * looking exactly like a full one, and the drive that finally caught it read the number nowhere.
+ */
+async function registerMapCarGenerators(
+  vehicles: EngineVehicles | null,
+  adapter: GtaSaWorldAdapter,
+  options: Parameters<GtaSaWorldAdapter['mapCarGenerators']>[0],
+  enabled: boolean,
+): Promise<void> {
+  const placements = enabled ? await adapter.mapCarGenerators(options) : [];
+  vehicles?.register(placements);
+  const count = vehicles === null ? 0 : placements.length;
+  // eslint-disable-next-line no-console -- the one line that says whether the map has cars at all
+  console.log(`[vehicles] map car generators registered: ${count}${enabled ? '' : ' (DISABLED by ?cargen=0)'}`);
+}
+
 /**
  * The `[slow]` breakdown of ONE elapsed interval: the previous frame's body (`past`), the gap after it
  * (`spans` + the blob handler) and, as `other`, whatever the two together do not account for.
@@ -2104,7 +2148,6 @@ function slowFrameLine(frame: {
   );
 }
 
-/** Tyre-smoke session dials (089/02) — `?smokeStart/?smokeFull/?smokeRate`, the 081/09 URL-dial pattern. */
 function smokeDialOverrides(params: URLSearchParams): Partial<TyreSmokeDials> {
   return {
     ...(params.has('smokeRate') ? { rate: Number(params.get('smokeRate')) } : {}),
