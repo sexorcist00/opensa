@@ -62,6 +62,12 @@ export interface VehicleDoor {
   /** `door_lf` … — the hinge part's name. */
   name: string;
   part: number;
+  /**
+   * Every part whose frame lives under this door's hinge — the door atomic PLUS any separate glass/trim
+   * atomics a mod authors there (SA rotates the whole frame subtree, so they travel with the door). Present
+   * only when the subtree carries more than the door part itself; absent = just `part`.
+   */
+  parts?: readonly number[];
   side: string;
 }
 
@@ -161,6 +167,13 @@ export interface VehicleModelSubmesh {
   /** Which texture ARRAY this submesh samples (opensa-pack 003 phase 5g). Absent means 0 — the single-array
    *  case every runtime build is; only the offline converter, planning from raw TXDs, ever sets it. */
   array?: number;
+  /**
+   * Part-local AABB of the submesh's triangles. The translucent sort keys on the eye's distance to the
+   * NEAREST of its corners: `center − radius` counted a SCATTERED submesh (a mod's gauge cluster, pieces
+   * across the whole dash, radius 1.8) as nearer than the equally-distant window sheet in front of it, and
+   * the cabin drew OVER the glass. Absent on old fixtures — they fall back to `center`/`radius`.
+   */
+  bounds?: { max: [number, number, number]; min: [number, number, number] };
   /** Model-space centroid of the submesh's triangles (074/16 round 6) — the engine sorts TRANSLUCENT
    *  submeshes back-to-front by this each frame, or the steering wheel draws over the windscreen. */
   center: [number, number, number];

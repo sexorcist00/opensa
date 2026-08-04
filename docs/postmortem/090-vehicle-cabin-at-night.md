@@ -2,7 +2,7 @@
 
 **Died 2026-07-28, the day it was born.** Four commits over one afternoon, all reverted in one block
 (`ae6548e`) on the field's verdict: it looks bad. The problems they were aimed at are still open —
-[`open-issues/vehicle-cabin-and-glass.md`](../open-issues/vehicle-cabin-and-glass.md).
+[`open-issues/vehicle-cabin-lighting.md`](../open-issues/vehicle-cabin-lighting.md).
 
 The code is recoverable: `3e37d10` (reflection gate), `b8a49d8` (the plan), `ce6cd1a` (090/01 night relax),
 `a577a69` + `f05eb6d` (090/02, both shapes of the dash light).

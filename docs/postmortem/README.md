@@ -27,7 +27,7 @@ observations that killed it, and the conditions under which it might be worth re
   was asking, because **not one in-engine capture was taken in three rounds of look-work**. Carries the
   flat-varying artefact (a per-vertex flag drawn through `@interpolate(flat)` = hard triangular patches) and
   the noisy-bake-threshold speckle. The symptoms stay open in
-  [`open-issues/vehicle-cabin-and-glass.md`](../open-issues/vehicle-cabin-and-glass.md).
+  [`open-issues/vehicle-cabin-lighting.md`](../open-issues/vehicle-cabin-lighting.md).
 - [modern-cell-tooling.md](./modern-cell-tooling.md) — custom `.cell` format + baked channels + static
   batching/atlasing (plans 066 + opensa-lod-generator 005–010). No measurable perf/quality gain; code parked
   on `backup/tooling-experiment`. Produced the CPU-bound-on-draw-calls diagnosis that led to the own engine

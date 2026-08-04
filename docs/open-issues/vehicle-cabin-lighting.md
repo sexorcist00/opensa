@@ -1,9 +1,15 @@
-# A modelled car interior: wrong through the glass, black at night, red under braking
+# A modelled car interior: LIGHTING is wrong (bright dash, black cabin at night, red under braking)
 
 **Status: open, first attempt reverted 2026-07-28.** Three symptoms on the same geometry — a mod car with a
 fully modelled interior (`previon`, the 1986 Starion in `gostown`). One round of fixes shipped and was
 withdrawn the same day; what was tried and why it failed is in
 [`postmortem/090-vehicle-cabin-at-night.md`](../postmortem/090-vehicle-cabin-at-night.md).
+
+> This file used to also carry the SEE-THROUGH family (cabin elements drawing crisp OVER the glass); that
+> half was fixed 2026-08-04 on the comet — two defects, forensics in
+> [`fixed/vehicle-glass-see-through.md`](fixed/vehicle-glass-see-through.md). **Before chasing anything
+> below, re-shoot it on a REBAKED car**: both the blend roster and the blend order the measurements were
+> taken against have changed since.
 
 ## The symptoms, paraphrased from the field
 

@@ -63,6 +63,34 @@ it is authored in the space SA renders, so the version whose bounds match it is 
 **Caught:** no — and worse than silent: for a near-square asset like a terrain tile the bbox barely moves, so
 `model-bbox` and the pak's own bounds check both pass while the geometry is turned.
 
+## A clump ROOT frame's matrix is entity-owned — its authored values never render
+
+When SA attaches a clump to an entity, the root frame's matrix is REPLACED by the entity's world matrix
+(`CEntity::UpdateRW`), so whatever rotation/translation the DFF authored on the root is dead data — and
+anti-rip exporters poison exactly that slot, because it is the one matrix the real game never reads. The
+comet lock (2026-08-04) shipped `rotation[0][0] = −3.9e14` on the root: SA rendered the car whole, our
+composition flung every off-centre part (doors, wings, wheels, `f_steer`) to ±10¹⁴ — an invisible car with
+live collision, blocking the player mid-street. A new design that walks a frame chain must stop BELOW the
+root (`frameWorldTransform` does; the rule holds for vehicles, peds and anim clumps alike — stock roots are
+identity, so honouring it costs well-formed models nothing).
+
+**Caught:** partly — `weld.test.ts` pins the poisoned-root case and `build-vehicle-model.test.ts` rebuilds a
+poisoned admiral byte-identical, but only for code that goes through `frameWorldTransform`. A NEW hand-rolled
+chain walk that composes the root is silent: physics stays sound, so nothing crashes — the model just never
+appears.
+
+## A VER2 `.img` entry cannot exceed 65 535 sectors (~128 MB)
+
+The stock directory stores an entry's size as a u16 of 2048-byte sectors, so 134 215 680 bytes is a FORMAT
+ceiling. Writing past it does not fail — the sector count WRAPS (a 136.6 MB `comet.osm` read back as
+8.9 MB), and the reader then dies far from the cause (`.osm section TEXS overruns the file` at spawn). Any
+design that puts a payload into `models/*.img` has to fit it under the ceiling or choose another container
+— which is also why a model's texture dictionary buckets by native size instead of upscaling every layer to
+the largest (the single-array shape hit 128 MB on a 32-texture mod dictionary whose sources sum to ~10 MB).
+
+**Caught:** yes — `assertVer2EntrySize` throws in `EditableImg.set`, `buildVer2Buffer` and `writeImgFile`
+(the rebake reports it per car instead of aborting the run).
+
 ## A dictionary is not a material list
 
 A model's TXD serves several models. "This dictionary contains a glass texture" says nothing about whether

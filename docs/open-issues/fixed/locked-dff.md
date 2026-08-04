@@ -1,13 +1,19 @@
 # "Locked" (anti-rip protected) DFF models
 
-> **🟡 MOSTLY SOLVED (2026-06-19; Variant D added 2026-06-24) — cases remain.** The four known lock
-> variants are handled; `cheetah.dff` / `yosemite.dff` / `walton.dff` parse fully — geometry, frames,
-> atomics **and** the embedded COL — and gostown's `lodveg.txd` (TXD wrapper lock, variant C) recovers
-> its textures. **Remaining (2026-07-07): more locked-asset cases exist in the wild that the current
-> variants don't cover — to be finished later.** Also the byte-editing tools still need `unlockDff`
-> applied explicitly (the recovery lives in the engine parser, not in every tool path).
-> A would-be "Variant E" (2026-07-15) turned out to be a bug in OUR readers — see the false-alarm note
-> below before adding new variants.
+> **✅ CLOSED (2026-08-04; Variants A–D 2026-06-19..24, Variant E 2026-08-04).** Five lock variants are
+> handled; `cheetah.dff` / `yosemite.dff` / `walton.dff` parse fully — geometry, frames, atomics **and**
+> the embedded COL — gostown's `lodveg.txd` (TXD wrapper lock, variant C) recovers its textures, and the
+> last known case in the wild (the gostown comet, a poisoned clump-ROOT matrix — Variant E) renders whole.
+> The would-be "Variant E" of 2026-07-15 turned out to be a bug in OUR readers — see the false-alarm note
+> below; the REAL Variant E (2026-08-04) survived that same scrutiny. Still open, tracked as lower
+> priority: the byte-editing tools need `unlockDff` applied explicitly (the recovery lives in the engine
+> parser, not in every tool path).
+>
+> The comet investigation also surfaced two defects that were NOT locks and are fixed separately: the
+> vehicle `.osm` dictionary upscaled every layer to the largest texture's size (32 layers × 2048² = 128 MB
+> where the sources sum to ~10 MB — now bucketed by native size, comet.osm 136.6 → 20.3 MB), and the VER2
+> `.img` writer silently wrapped its u16 sector field past ~128 MB (now guarded loudly). Both rules live in
+> [`restrictions/assets-and-data.md`](../../restrictions/assets-and-data.md).
 
 ## FALSE ALARM logged for the record: "Variant E" (2026-07-15) was OUR parser bug, not a lock
 
@@ -113,6 +119,26 @@ bounded and the sibling walk lands on the next real chunk, so the geometry/atomi
 A-recovery) take over. Valid clumps never trigger it (the leading Struct ends within the clump). Covered by
 `tests/custom/locked-models/walton.dff` + tests in `dff.test.ts` (77 frames / 43 geometries / 43 atomics + COL).
 
+## Variant E — poisoned clump-ROOT matrix (`comet.dff`, gostown, 2026-08-04)
+
+The subtlest lock seen, and the last known case in the wild: **every chunk parses clean** (109 frames /
+61 atomics / 61 geometries, all triangle indices in range, healthy TXD) — the poison is one float:
+**the root frame's `rotation[0][0] = −3.9e14`** (the rest of the matrix identity, position zero). SA never
+reads that slot: on attach the engine REPLACES the clump root's matrix with the entity's world matrix
+(`CEntity::UpdateRW`), so the mod renders whole in the real game. Our frame composition honoured it, which
+multiplied the X of every off-centre part by −3.9e14 — doors, wings, bumpers, wheels and `f_steer` flew to
+±10¹⁴ (with perfect left/right symmetry, which is what gave the poison away as authored data under a broken
+transform rather than random corruption). Symptom history on this one car: the old direct-DFF path drew
+"triangles orbiting the player"; the `.osm` path drew nothing at all — while the COLLISION stayed live, so
+an invisible car blocked the street (that walk-into-it probe is what proved the spawn was succeeding).
+
+**Recovered:** `frameWorldTransform` stops composing BELOW the root — the SA-faithful rule, not a
+special case for this car: a root's authored matrix is entity-owned for every clump (vehicles, peds, anim
+models), and stock roots are identity so well-formed models are unchanged. Pinned by a poisoned-root case in
+`weld.test.ts` and a poisoned-admiral rebuild in `build-vehicle-model.test.ts`; the rule is recorded in
+[`restrictions/assets-and-data.md`](../../restrictions/assets-and-data.md). Field-verified 2026-08-04: the
+comet (a 2015 Porsche 911 Targa mod) spawns parked in gostown, whole and textured.
+
 ## Fix (2026-06-19)
 
 `parseDff` and `parseDffCollision` now iterate the clump via **`forEachClumpChild`** (in
@@ -149,8 +175,10 @@ Covered by `tests/custom/locked-models/yosemite.dff` (31 atomics / 31 geometries
 - **Fixed — Variant D parses (`forEachClumpChild` content-walk).** `walton.dff` (every container size
   bloated) now recovers 77 frames / 43 geometries / 43 atomics + the embedded COL — see the Variant D
   section above.
+- **Fixed — Variant E renders (`frameWorldTransform` root skip).** The gostown comet (poisoned clump-ROOT
+  matrix) builds and renders whole — see the Variant E section above.
 - **Remains — byte-editing tools don't recover locks yet.** The engine `parseDff` / `parseDffCollision`
-  handle all four variants, so in-game loading is fine. But the offline byte-editing tools (vehicle-optimizer
+  handle all five variants, so in-game loading is fine. But the offline byte-editing tools (vehicle-optimizer
   scale / copy-effects, via **map-optimizer's** own size-trusting `readRw` in `codec/chunk.ts`) re-serialize
   raw chunks and still trust declared sizes — `readRw(walton)` finds **0 geometries**, so using a locked DFF
   as a `--prototype`/target there fails. To support that, add an `unlockDff(bytes)` that re-serializes clean
@@ -166,5 +194,5 @@ Covered by `tests/custom/locked-models/yosemite.dff` (31 atomics / 31 geometries
   `16777228` while its real payload is 12 bytes; without `forEachClumpChild` `parseDff` returns an empty
   model and `parseDffCollision` returns `null` even though a `COL3` chunk is present near EOF.
 
-Related: [plan 015 — vehicle loading](../plans/015-vehicle-loading/readme.md),
-[plan 043 — DFF/TXD completeness](../plans/043-dff-txd-completeness/readme.md).
+Related: [plan 015 — vehicle loading](../../plans/015-vehicle-loading/readme.md),
+[plan 043 — DFF/TXD completeness](../../plans/043-dff-txd-completeness/readme.md).

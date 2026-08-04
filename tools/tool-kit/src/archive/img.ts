@@ -1,6 +1,6 @@
 import type { ImgArchive } from '@opensa/renderware/archive/img-archive';
 
-import { buildVer2Buffer, openArchive } from '@opensa/renderware/archive/img-archive';
+import { assertVer2EntrySize, buildVer2Buffer, openArchive } from '@opensa/renderware/archive/img-archive';
 import { closeSync, ftruncateSync, openSync, writeSync } from 'node:fs';
 
 /**
@@ -69,6 +69,9 @@ export function editArchive(archive: ImgArchive): EditableImg {
       return order.filter((name) => !deleted.has(key(name)));
     },
     set(name: string, data: Uint8Array): void {
+      // Refused HERE, before any rebuild starts: `writeImgFile` streams over the target in place, so an
+      // oversized entry discovered mid-write would leave a destroyed archive behind its error.
+      assertVer2EntrySize(name, data.length);
       deleted.delete(key(name));
       if (!order.some((existing) => key(existing) === key(name))) {
         order.push(name);
@@ -111,6 +114,7 @@ export function writeImgFile(img: EditableImg, path: string): void {
         throw new Error(`VER2 name too long (max 24 bytes): ${name}`);
       }
       const data = img.get(name) ?? new Uint8Array(0);
+      assertVer2EntrySize(name, data.length);
       const sectors = Math.max(1, Math.ceil(data.length / SECTOR));
       const base = 8 + i * 32;
       view.setUint32(base, cursor, true);

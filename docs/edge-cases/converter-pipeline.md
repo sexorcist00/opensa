@@ -69,17 +69,25 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   coplanar in one spot has no way to say so; the only signal is the def's own `NO_ZBUFFER_WRITE`, which the
   welder honours for alpha materials. Known residual after plan 092: `Desrtmetal` (a diamond mesh whose
   low-res edge puts it at 13 % ON the reference) stays in the blend pass — a miss, not a regression.
+- **A VEHICLE submesh's translucency is judged over its own UV region, not the whole texture**
+  (`hasAlphaIn`, 2026-08-04). Mod interiors share alpha ATLASES — the comet maps its parcel shelf, gauge
+  housings and lamp bodies onto `911_lights`, whose only transparent texels are the lamp glass — and the
+  whole-texture answer sent every one of those opaque parts into the no-depth blend phase (the world showed
+  through the shelf behind the rear glass; the gauges had holes behind the side glass). SA never asks: one
+  pass, z-write on, alpha ref — an opaque texel occludes whatever texture it is on. A submesh whose region
+  genuinely samples transparent texels (glass, decals, gauge needles) still blends; one material mixing
+  opaque and transparent texels stays blend — the narrowing is per submesh, not per texel.
 - **Texture sizes are asset-driven.** Never hardcode a size that belongs to a source asset — texture arrays
   derive one size from `max(assets)`, fixed slots resample instead of throwing. Only shadow maps / probes /
   LUTs stay constants.
-- **A model's dictionary is ONE array, so its LARGEST texture sizes every layer and its only alpha texture
-  formats every layer** — and on mod cars that costs up to 8×. `banshee.osm` is 27.6 MB against a 2.8 MB
-  source `.txd`: three 1024² sheets pull all 23 layers to 1024², two alpha textures of 22 put all 23 in BC3
-  (23 × 1024 × 1024 × 1 B = 24.1 MB of TEXS; GEOM is only 3.4 MB). Twelve gostown mod cars = 297 MB of
-  `.osm`, where 212 STOCK dictionaries cost 8 MB in total. The upscale is nearest-neighbour, so it adds no
-  detail — only bytes, VRAM and per-type spawn cost. Lever with the full accounting, and the measured
-  negative result for a shared per-size dictionary (car textures do not repeat — 8 %):
-  [`performance/deferred-optimizations/vehicle-texture-array-buckets.md`](../performance/deferred-optimizations/vehicle-texture-array-buckets.md).
+- **A model's private dictionary is bucketed by NATIVE size — one array per (w, h), BC1/BC3 chosen per
+  bucket** (2026-08-04; before that a single max-size array cost mod cars up to 8×, and the comet's 32
+  textures hit exactly 128 MB — over the VER2 entry ceiling). What still cannot vary WITHIN a bucket is the
+  format, and a submesh's vertices must all land in one bucket — a straddling submesh (SA geometries do
+  share vertices between material groups) or a lamps-on twin split from its base falls the model back to
+  the legacy single max-size array, with a logged warning. The measured negative result stands: a SHARED
+  per-size dictionary buys vehicles nothing (car textures do not repeat — 8 %):
+  [`performance/applied/vehicle-texture-array-buckets.md`](../performance/applied/vehicle-texture-array-buckets.md).
 - **Mod vegetation is ~48× stock density, and almost none of it buys coverage.** `mods-src/vegetation`
   models run 1451–5813 triangles against SA's 48–132; in draw range of the Ganton path that is 13 524 →
   645 433 triangles (×47.7) for a leaf-area growth of only ×1.66 — **~96 % of the added triangles add no

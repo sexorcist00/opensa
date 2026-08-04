@@ -95,6 +95,7 @@ export function packProps(
           ...(txdByModel.has(model) ? { txd: txdByModel.get(model) } : {}),
         });
         bundles.add(model, { sections: built.sections });
+        built.warnings.forEach((warning) => log(`props: ${warning}`));
       }
       converted.add(model);
     } catch (error) {

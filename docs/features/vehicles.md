@@ -21,6 +21,18 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   so it renders four wheels instead of one. A third, wheel-mod convention is also handled: an
   `f_wheel_<mask>` container frame (e.g. `f_wheel_1111`, cheetah) whose child atomics are the wheel
   sub-model — its geometry is instanced at every dummy instead of rendered once as body.
+- **The clump ROOT frame's authored matrix never contributes** (2026-08-04): SA replaces it with the
+  entity's world matrix on attach, and anti-rip exporters poison exactly that slot (the comet lock shipped
+  `rotation[0][0] = −3.9e14` there — composing it flung every off-centre part to ±10¹⁴ while the game
+  rendered the car whole). `frameWorldTransform` stops below the root; stock roots are identity, so
+  well-formed models are unchanged. Rule: [`restrictions/assets-and-data.md`](../restrictions/assets-and-data.md).
+- **The texture dictionary ships as SIZE BUCKETS** (2026-08-04): one `.ostex` array per native (w, h),
+  BC1/BC3 chosen per bucket, each submesh naming its array — nothing is upscaled to the largest sheet.
+  The single max-size array taxed every layer with the largest texture's footprint (a 32-texture mod
+  dictionary hit exactly 128 MB and overran the VER2 `.img` entry ceiling; comet.osm 136.6 → 20.3 MB).
+  Falls back to the legacy single array, with a logged warning, only when a submesh straddles size buckets
+  or a lamps-on twin splits from its base. The pulled lever with the full accounting:
+  [`performance/applied/vehicle-texture-array-buckets.md`](../performance/applied/vehicle-texture-array-buckets.md).
 - **Damage components sit on their `*_dummy` frame, not on their own.** A `<part>_ok` / `<part>_dam`
   atomic is placed at the nearest matching `<part>_dummy` ancestor and the transform of its own frame is
   DISCARDED — the original's rule: `CVehicleModelInfo::PreprocessHierarchy` runs `CollapseFramesCB` over
@@ -31,6 +43,12 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   a hinge frame ABOVE the dummy so its local Z lies along the car's X gets a vertical opening for free
   (the 1995 Diablo does exactly this — and parks 1.518 m on the `_ok` frame, which used to throw its doors
   clear of the car, field 2026-07-28).
+- **A door is its whole hinge SUBTREE** (2026-08-04): a mod that authors the door glass or trim as separate
+  atomics under `door_*_dummy` (the comet ships `glass_lf_ok` beside `door_lf_ok`) gets them SWUNG with the
+  door — the builder records every part under the hinge frame as the door's roster (`VehicleDoor.parts`)
+  and the handle rotates each member about the hinge, exactly as SA's frame rotation would. Stock cars
+  author one atomic per door and carry no roster. Contract note (what happens when the glass is parented
+  elsewhere): [`contracts/vehicles.md`](../contracts/vehicles.md).
 - **Retractable ("pop-up") headlights**, read off the model — there is no per-car list anywhere. A pop-up pod
   is a `misc_*` component (SA's generic moving-component slot) holding HEAD-LAMP faces, and it is authored
   PARKED: those faces look forward and DOWN into the nose. That pitch IS the feature, so the open angle is
@@ -84,6 +102,14 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   work that will want it.
 - **Glass** (plan 025): window materials detected and rendered transparent (double-sided,
   sorted).
+- **Translucency is judged per SUBMESH over its own UV region, not per texture** (2026-08-04,
+  `hasAlphaIn`): mod interiors share alpha atlases (the comet's shelf and gauge housings sit on
+  `911_lights`), and the whole-texture answer sent opaque parts into the no-depth blend phase — the world
+  showed through the shelf. A region that genuinely samples transparent texels (glass, decals, needles)
+  still blends. The translucent SORT keys on the eye's exact distance to the submesh's part-local AABB
+  (clamp-into-box; `VehicleModelSubmesh.bounds`) — the earlier `centroid − radius` sphere over-reached on
+  scattered submeshes and drew the dash crisp OVER the window sheet. Forensics:
+  [`open-issues/fixed/vehicle-glass-see-through.md`](../open-issues/fixed/vehicle-glass-see-through.md).
 - **Extras** (`extraN` components): SA's mutually-exclusive optional parts modelled at the same spot (e.g. the
   Benson's swappable advertising boards, the mod admiral's exhaust-and-mudflap set). All alternatives ship in
   the model, each submesh tagged with its `extraN` frame; **the pick is per SPAWN**, made by

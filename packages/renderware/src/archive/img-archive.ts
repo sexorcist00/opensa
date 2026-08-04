@@ -22,10 +22,27 @@ const HEADER_SIZE = 12;
 /** GTA `.img` sector size — VER2 offsets/sizes are counted in these. */
 const SECTOR = 2048;
 
+/**
+ * The largest entry a VER2 directory can describe: `streamingSize` is a u16 of sectors, so 65 535 × 2048 ≈
+ * 128 MB. A larger entry does not fail to write — the sector count WRAPS and the entry reads back silently
+ * truncated (a 136.6 MB `.osm` came back as 8.9 MB), so every VER2 writer must throw at this ceiling.
+ */
+export const VER2_MAX_ENTRY_BYTES = 0xffff * SECTOR;
+
 export interface ImgArchive {
   /** Raw bytes of a file by name (case-insensitive), or null if absent. */
   get(name: string): ArrayBuffer | null;
   readonly names: string[];
+}
+
+/** Throw when `bytes` cannot be described by a VER2 directory entry — see {@link VER2_MAX_ENTRY_BYTES}. */
+export function assertVer2EntrySize(name: string, bytes: number): void {
+  if (bytes > VER2_MAX_ENTRY_BYTES) {
+    throw new Error(
+      `VER2 entry '${name}' is ${(bytes / 1048576).toFixed(1)} MB — over the format's u16 sector ceiling ` +
+        `(${(VER2_MAX_ENTRY_BYTES / 1048576).toFixed(1)} MB); it would read back silently truncated`,
+    );
+  }
 }
 
 /** Build an archive in memory (for tests / small sets; the packer streams instead). */
@@ -65,6 +82,7 @@ export function buildVer2Buffer(entries: { data: Uint8Array; name: string }[]): 
     if (name.length > 24) {
       throw new Error(`VER2 name too long (max 24 bytes): ${entry.name}`);
     }
+    assertVer2EntrySize(entry.name, entry.data.length);
     const sectors = Math.max(1, Math.ceil(entry.data.length / SECTOR));
     const offset = cursor;
     cursor += sectors;

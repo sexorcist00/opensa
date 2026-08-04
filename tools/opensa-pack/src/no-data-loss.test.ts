@@ -12,7 +12,7 @@
  */
 import type { AssetFileSystem } from '@opensa/renderware';
 
-import { decodeOsm, decodeOsmSkeleton, decodeOstex, osmSection, OsmSectionTag } from '@opensa/engine-formats';
+import { decodeOsm, decodeOsmSkeleton, decodeOstex, fnv1a, osmSection, OsmSectionTag } from '@opensa/engine-formats';
 import { readPedOsm } from '@opensa/game/adapters/ped-osm';
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
 import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
@@ -128,10 +128,28 @@ describe('the .osm conversion loses nothing', () => {
       expect(model.normals).toEqual(stock.normals);
       expect(model.uvs).toEqual(stock.uvs);
       expect(model.colors).toEqual(stock.colors);
-      expect(model.meta).toEqual(stock.meta);
       expect(model.night).toEqual(stock.night);
       expect(model.reflect).toEqual(stock.reflect);
       expect(model.indices).toEqual(stock.indices);
+      // `meta.x`/`.y` are REMAPPED onto the size-bucketed dictionary (that is the fix that keeps a 2048²
+      // body texture from taxing every layer), so the bytes may differ — but each vertex must still land
+      // on the SAME texture, by name. `.z`/`.w` carry flags the remap must never touch.
+      const arrays = model.textures.map((texture) =>
+        decodeOstex(texture.kind === 'ostex' ? texture.bytes : new Uint8Array()),
+      );
+      const indexBytes = model.indices.slice().buffer;
+      const indices = model.index16 ? new Uint16Array(indexBytes) : new Uint32Array(indexBytes);
+      for (const submesh of model.submeshes) {
+        const array = arrays[submesh.array ?? 0];
+        for (let at = submesh.indexOffset; at < submesh.indexOffset + submesh.indexCount; at += 1) {
+          const vertex = indices[at];
+          expect(array.layers[model.meta[vertex * 4]].nameHash).toBe(
+            fnv1a(pair.stock.texture.names[stock.meta[vertex * 4]].toLowerCase()),
+          );
+          expect(model.meta[vertex * 4 + 2]).toBe(stock.meta[vertex * 4 + 2]);
+          expect(model.meta[vertex * 4 + 3]).toBe(stock.meta[vertex * 4 + 3]);
+        }
+      }
     });
 
     it.each(MODELS)(
@@ -143,7 +161,14 @@ describe('the .osm conversion loses nothing', () => {
         const { fixture } = readModelOsm(entry.model, pair.osm.bytes);
 
         expect(fixture.parts).toEqual(stock.parts);
-        expect(fixture.submeshes).toEqual(stock.submeshes);
+        // Submeshes gain the `array` field of the size-bucketed dictionary; everything else is verbatim
+        // (`toEqual` treats an explicit `array: undefined` and an absent key as equal on both sides).
+        expect(fixture.submeshes.map((submesh) => ({ ...submesh, array: undefined }))).toEqual(
+          stock.submeshes.map((submesh) => ({ ...submesh, array: undefined })),
+        );
+        fixture.submeshes.forEach((submesh) => {
+          expect(submesh.array ?? 0).toBeGreaterThanOrEqual(0);
+        });
         expect(fixture.doors).toEqual(stock.doors);
         expect(fixture.dummies).toEqual(stock.dummies);
         expect(fixture.wheels).toEqual(stock.wheels);
@@ -155,13 +180,15 @@ describe('the .osm conversion loses nothing', () => {
       const stock = pair.stock;
 
       const { model } = readModelOsm(entry.model, pair.osm.bytes);
-      const dictionary = decodeOstex(model.textures[0].kind === 'ostex' ? model.textures[0].bytes : new Uint8Array());
+      const arrays = model.textures.map((texture) =>
+        decodeOstex(texture.kind === 'ostex' ? texture.bytes : new Uint8Array()),
+      );
 
-      expect(dictionary.width).toBe(stock.texture.width);
-      expect(dictionary.height).toBe(stock.texture.height);
-      expect(dictionary.layers).toHaveLength(stock.texture.layers);
-      // The layer INDEX is what `meta.x` addresses — a reordered dictionary silently retextures the model.
-      expect(dictionary.layers).toHaveLength(stock.texture.names.length);
+      // Not one layer lost, however the buckets split them; the largest bucket is the largest source,
+      // which is the size the legacy single array carried.
+      expect(arrays.reduce((sum, array) => sum + array.layers.length, 0)).toBe(stock.texture.names.length);
+      expect(Math.max(...arrays.map((array) => array.width))).toBe(stock.texture.width);
+      expect(Math.max(...arrays.map((array) => array.height))).toBe(stock.texture.height);
     });
 
     it('an animated object keeps its whole frame tree, verbatim — through the real packer', () => {

@@ -135,9 +135,43 @@ export class EngineVehicleHandle implements VehicleHandle {
 
   setDoorAngle(side: string, angle: number): void {
     const door = this.data.doors.find((candidate) => candidate.side === side);
-    if (door) {
-      // The hinge frame IS the part's pivot (the builder put it there), so the swing is a plain Z rotation.
-      this.instance.entity.setPartRotation(door.part, axisAngle(2, angle));
+    if (!door) {
+      return;
+    }
+    // The hinge frame IS the part's pivot (the builder put it there), so the swing is a plain Z rotation.
+    const swing = axisAngle(2, angle);
+    this.instance.entity.setPartRotation(door.part, swing);
+    if (!door.parts) {
+      return;
+    }
+    // SA swings the hinge FRAME, so every part authored under it (a mod's separate glass/trim atomics)
+    // travels with the door. Each member rotates about the HINGE, not its own pivot: same rotation carried
+    // into body axes (conjugated by the hinge's bind rotation, so scissor doors keep their swing plane) and
+    // then into the member's own local frame, plus the translation that turns a rotation-about-own-pivot
+    // into a rotation-about-the-hinge. For the common export (member pivot ON the hinge, identity-rotated)
+    // both corrections are zero.
+    const hinge = this.data.parts[door.part];
+    const world = quatMul(quatMul(hinge.localRotation, swing), quatInvert(hinge.localRotation));
+    for (const member of door.parts) {
+      if (member === door.part) {
+        continue;
+      }
+      const part = this.data.parts[member];
+      this.instance.entity.setPartRotation(
+        member,
+        quatMul(quatMul(quatInvert(part.localRotation), world), part.localRotation),
+      );
+      const toHinge: [number, number, number] = [
+        hinge.localTranslation[0] - part.localTranslation[0],
+        hinge.localTranslation[1] - part.localTranslation[1],
+        hinge.localTranslation[2] - part.localTranslation[2],
+      ];
+      const rotated = quatRotate(world, toHinge);
+      this.instance.entity.setPartTranslation(member, [
+        toHinge[0] - rotated[0],
+        toHinge[1] - rotated[1],
+        toHinge[2] - rotated[2],
+      ]);
     }
   }
 
@@ -259,6 +293,11 @@ function gtaToEngine(position: Vec3): [number, number, number] {
   return [position[0], position[2], -position[1]];
 }
 
+/** Unit-quaternion inverse (conjugate) — bind rotations are unit by construction. */
+function quatInvert(q: readonly [number, number, number, number]): [number, number, number, number] {
+  return [-q[0], -q[1], -q[2], q[3]];
+}
+
 function quatMul(
   a: readonly [number, number, number, number],
   b: readonly [number, number, number, number],
@@ -269,6 +308,20 @@ function quatMul(
     a[3] * b[2] + a[2] * b[3] + a[0] * b[1] - a[1] * b[0],
     a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
   ];
+}
+
+/** Rotate a vector by a unit quaternion: v' = q v q⁻¹. */
+function quatRotate(
+  q: readonly [number, number, number, number],
+  v: readonly [number, number, number],
+): [number, number, number] {
+  const [qx, qy, qz, qw] = q;
+  // t = 2 (q.xyz × v); v' = v + qw t + q.xyz × t
+  const tx = 2 * (qy * v[2] - qz * v[1]);
+  const ty = 2 * (qz * v[0] - qx * v[2]);
+  const tz = 2 * (qx * v[1] - qy * v[0]);
+
+  return [v[0] + qw * tx + qy * tz - qz * ty, v[1] + qw * ty + qz * tx - qx * tz, v[2] + qw * tz + qx * ty - qy * tx];
 }
 
 function writeWorld(out: Float32Array, position: readonly [number, number, number], rotation: VehicleQuat): void {

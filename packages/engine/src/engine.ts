@@ -371,6 +371,10 @@ export interface VehicleSubmesh {
    *  the single-array case every runtime-built model (and every car) is. The LAYER stays per-vertex in
    *  `meta.x`, because the lamps-on twin is switched per vertex and per-submesh binding cannot say that. */
   array?: number;
+  /** Part-local AABB — the translucent sort clamps the eye into it for an exact nearest-extent key. The
+   *  `center − radius` sphere over-reached on scattered submeshes (a gauge cluster spanning the dash beat
+   *  the window sheet in front of it and the cabin drew over the glass). Absent on old fixtures. */
+  bounds?: { max: readonly [number, number, number]; min: readonly [number, number, number] };
   /** Model-space centroid (074/16 round 6) — translucent submeshes sort back-to-front by it per frame.
    *  Optional: fixtures built before the field carry none and sort at the origin. */
   center?: readonly [number, number, number];
@@ -2517,8 +2521,8 @@ export class Engine {
   private drawVehicleModel(pass: GPURenderPassEncoder, model: VehicleModel, translucent: boolean, eye: Vec3): number {
     let draws = 0;
     let bound = false;
-    // Which texture array is currently bound. A car keeps this at 0 for the whole model — the switch only
-    // costs anything on a multi-array map object, and even there the opaque order groups submeshes by array.
+    // Which texture array is currently bound. Cars and map objects both ship size-bucketed dictionaries
+    // now, and the opaque order groups submeshes by array, so the switch stays rare either way.
     let boundArray = -1;
     const indexFormat: GPUIndexFormat = model.index16 ? 'uint16' : 'uint32';
     for (const state of model.instances) {
@@ -2932,23 +2936,45 @@ export class Engine {
   }
 
   /**
-   * Translucent sort key: eye distance of the submesh's centroid (under its part's CURRENT world matrix)
-   * MINUS its bounding radius — the submesh counts by its nearest extent. A raked windscreen's centre sits
-   * behind the wheel at down-looking angles while its overhang is in front; the plain centroid distance
-   * drew the wheel OVER the glass there (074/16 field round). Subtracting the radius biases large sheets
-   * later in the back-to-front order, which is the correct side of every near-tie: glass composites over
-   * the interior it covers.
+   * Translucent sort key: the eye's distance to the submesh's NEAREST extent, under its part's CURRENT
+   * world matrix. A raked windscreen's centre sits behind the wheel at down-looking angles while its
+   * overhang is in front; the plain centroid distance drew the wheel OVER the glass there (074/16 field
+   * round). Where the fixture carries an AABB the key is the nearest of its 8 corners — the exact form of
+   * that idea: the earlier `centroid − radius` sphere over-reached on SCATTERED submeshes (a mod's gauge
+   * cluster spanning the whole dash, radius 1.8, counted as nearer than the equally-distant window SHEET
+   * in front of it, and the cabin drew over the glass). Old fixtures keep the sphere fallback.
    */
   private submeshSortDistance(state: VehicleInstanceState, model: VehicleModel, index: number, eye: Vec3): number {
     const submesh = model.submeshes[index];
-    const center = submesh.center ?? [0, 0, 0];
     const m = state.entity.matrices;
     const at = submesh.part * 16;
-    const x = m[at] * center[0] + m[at + 4] * center[1] + m[at + 8] * center[2] + m[at + 12];
-    const y = m[at + 1] * center[0] + m[at + 5] * center[1] + m[at + 9] * center[2] + m[at + 13];
-    const z = m[at + 2] * center[0] + m[at + 6] * center[1] + m[at + 10] * center[2] + m[at + 14];
+    const distanceTo = (px: number, py: number, pz: number): number => {
+      const x = m[at] * px + m[at + 4] * py + m[at + 8] * pz + m[at + 12];
+      const y = m[at + 1] * px + m[at + 5] * py + m[at + 9] * pz + m[at + 13];
+      const z = m[at + 2] * px + m[at + 6] * py + m[at + 10] * pz + m[at + 14];
 
-    return Math.hypot(x - eye[0], y - eye[1], z - eye[2]) - (submesh.radius ?? 0);
+      return Math.hypot(x - eye[0], y - eye[1], z - eye[2]);
+    };
+    const bounds = submesh.bounds;
+    if (!bounds) {
+      const center = submesh.center ?? [0, 0, 0];
+
+      return distanceTo(center[0], center[1], center[2]) - (submesh.radius ?? 0);
+    }
+    // Exact point-to-AABB: the eye into the part's LOCAL frame (affine inverse — parts carry a uniform
+    // scale at most), clamped into the box, back through the matrix. Nearest-corner alone over-reports
+    // for an eye facing the middle of a large sheet, which is exactly the close-up-at-the-window case.
+    const [ex, ey, ez] = [eye[0] - m[at + 12], eye[1] - m[at + 13], eye[2] - m[at + 14]];
+    const scaleSq = m[at] * m[at] + m[at + 1] * m[at + 1] + m[at + 2] * m[at + 2];
+    const inv = scaleSq > 0 ? 1 / scaleSq : 0;
+    const lx = (m[at] * ex + m[at + 1] * ey + m[at + 2] * ez) * inv;
+    const ly = (m[at + 4] * ex + m[at + 5] * ey + m[at + 6] * ez) * inv;
+    const lz = (m[at + 8] * ex + m[at + 9] * ey + m[at + 10] * ez) * inv;
+    const qx = Math.min(Math.max(lx, bounds.min[0]), bounds.max[0]);
+    const qy = Math.min(Math.max(ly, bounds.min[1]), bounds.max[1]);
+    const qz = Math.min(Math.max(lz, bounds.min[2]), bounds.max[2]);
+
+    return distanceTo(qx, qy, qz);
   }
 
   /** One RGBA layer into a plate array. */

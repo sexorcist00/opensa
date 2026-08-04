@@ -62,7 +62,7 @@ the static pool is the one light term a car's own sky occlusion does not gate. A
 dashboard as if the roof were not there. Latent while the half is empty; live the moment 085 row E ships.
 
 Whoever restores static lamps owns this gate. Detail:
-[`open-issues/vehicle-cabin-and-glass.md`](../open-issues/vehicle-cabin-and-glass.md).
+[`open-issues/vehicle-cabin-lighting.md`](../open-issues/vehicle-cabin-lighting.md).
 
 **Caught:** no.
 

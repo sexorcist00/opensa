@@ -107,6 +107,10 @@ export function buildVehicleModel(
     uvs: [],
   };
   const doors: VehicleDoor[] = [];
+  // Per-part SOURCE frame (body atomics only — wheels are instanced and never door members) and per-door
+  // hinge frame, so door membership can be derived from the frame tree after every atomic is placed.
+  const partFrames: number[] = [];
+  const doorHinges: number[] = [];
   const damGeometry = collectDamGeometry(clump);
   const containerFrames = collectContainerFrames(clump);
   const wheelScale = options.wheelScale ?? [1, 1];
@@ -139,7 +143,10 @@ export function buildVehicleModel(
       continue; // `_dam` rides with its `_ok` twin
     }
     const before = scratch.submeshes.length;
-    addBodyAtomic(scratch, clump, atomic.geometryIndex, name, atomic.frameIndex, textures, damGeometry, doors);
+    addBodyAtomic(scratch, clump, atomic.geometryIndex, name, atomic.frameIndex, textures, damGeometry, doors, {
+      doorHinges,
+      partFrames,
+    });
     // Every `extraN` alternative ships, tagged with its frame. SA shows at most one and the pick is per
     // SPAWN — a build-time choice would freeze one optional part into the pak for every car in the world.
     if (EXTRA_RE.test(name)) {
@@ -148,6 +155,22 @@ export function buildVehicleModel(
       }
     }
   }
+
+  // A door is its whole HINGE SUBTREE, not one named atomic: SA swings the dummy's frame, so a mod's
+  // separate glass/trim atomics under it travel with the door (the comet authors `glass_lf_ok` beside
+  // `door_lf_ok`; rotating only the named part left its glass hanging in the air). Membership is derived
+  // from the frame tree; stock cars author one atomic per door, so their doors carry no `parts`.
+  doors.forEach((door, index) => {
+    const members: number[] = [];
+    partFrames.forEach((frame, part) => {
+      if (frame !== undefined && frameDescendsFrom(clump, frame, doorHinges[index])) {
+        members.push(part);
+      }
+    });
+    if (members.length > 1) {
+      door.parts = members;
+    }
+  });
 
   const wheels = addWheels(scratch, clump, textures, wheelScale, { containerWheels, cornerWheels, sharedWheel });
   // Self-occlusion rides in the NIGHT set's alpha, which the builder had been filling with a constant 255:
@@ -200,13 +223,16 @@ function addBodyAtomic(
   textures: VehicleTextures,
   damGeometry: Map<string, RWGeometry>,
   doors: VehicleDoor[],
+  frameTracking: { doorHinges: number[]; partFrames: number[] },
 ): void {
   const lod = name.endsWith('_vlo');
   const door = DOOR_RE.exec(name);
   const placement = componentFrame(clump, frameIndex, name);
   const part = addPart(scratch, clump, placement, door ? `door_${door[1]}` : name);
+  frameTracking.partFrames[part] = frameIndex;
   if (door) {
     doors.push({ name: `door_${door[1]}`, part, side: door[1] });
+    frameTracking.doorHinges.push(placement);
   }
   const base = lod ? name.slice(0, -4) : name;
   appendGeometry(scratch, clump.geometries[geometryIndex], part, textures, lod ? 'lod' : 'body', null);
@@ -331,7 +357,17 @@ function appendGeometry(
     // 5 of the 143 plated models author a plate face on their `_vlo` at all; they keep the stock look.
     const plate = kind === 'lod' ? null : plateFace(material);
     const tyre = tyres.has(materialIndex);
-    const surface = materialSurface(material, textures, kind, tyre, plate);
+    // Texture transparency judged over THIS group's own UV region, not the whole texture — mod interiors
+    // share alpha atlases, and the whole-texture answer sent opaque shelves and gauge housings into the
+    // no-depth blend phase (see `hasAlphaIn`).
+    const surface = materialSurface(
+      material,
+      textures,
+      kind,
+      tyre,
+      plate,
+      textures.hasAlphaIn(material, rw.uvLayers[0], tris),
+    );
     const { color, klass, lamp, layer, nightLayer, paint, reflect } = surface;
     const indexOffset = scratch.indices.length;
     const center: [number, number, number] = [0, 0, 0];
@@ -397,8 +433,13 @@ function appendGeometry(
     const centroid: [number, number, number] = [center[0] / corners, center[1] / corners, center[2] / corners];
     // Bounding radius about the centroid (074/16 sort fix): the translucent sort subtracts it, so a LARGE
     // sheet (a raked windscreen) counts as nearer than its centre — a single centroid put the wheel OVER
-    // the glass overhang at down-looking angles.
+    // the glass overhang at down-looking angles. The AABB beside it is the exact form of the same idea:
+    // sorting by the sphere over-reached on SCATTERED submeshes (a gauge cluster spanning the dash, radius
+    // 1.8, counted as nearer than the window sheet in front of it), so the runtime keys on the nearest AABB
+    // corner where the bounds exist and falls back to `center − radius` on old fixtures.
     let radiusSq = 0;
+    const min: [number, number, number] = [Infinity, Infinity, Infinity];
+    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
     for (const tri of tris) {
       for (const corner of [tri.a, tri.b, tri.c]) {
         radiusSq = Math.max(
@@ -407,9 +448,14 @@ function appendGeometry(
             (rw.positions[corner * 3 + 1] - centroid[1]) ** 2 +
             (rw.positions[corner * 3 + 2] - centroid[2]) ** 2,
         );
+        for (let axis = 0; axis < 3; axis += 1) {
+          min[axis] = Math.min(min[axis], rw.positions[corner * 3 + axis]);
+          max[axis] = Math.max(max[axis], rw.positions[corner * 3 + axis]);
+        }
       }
     }
     scratch.submeshes.push({
+      bounds: { max, min },
       center: centroid,
       damageGroup,
       ...(plate ? { plate } : {}),
@@ -588,6 +634,21 @@ function flipWheelSide(q: readonly [number, number, number, number]): [number, n
   return [q[1], -q[0] || 0, q[3], -q[2] || 0];
 }
 
+/** Whether `frame` is `ancestor` or sits anywhere under it (hop-guarded, like every walk over mod trees). */
+function frameDescendsFrom(clump: RWClump, frame: number, ancestor: number): boolean {
+  for (let at = frame, hops = 0; at >= 0 && at < clump.frames.length && hops <= clump.frames.length; hops += 1) {
+    if (at === ancestor) {
+      return true;
+    }
+    if (clump.frames[at].parentIndex === at) {
+      break;
+    }
+    at = clump.frames[at].parentIndex;
+  }
+
+  return false;
+}
+
 function frameName(clump: RWClump, frameIndex: number): string {
   return clump.frames[frameIndex]?.name.trim().toLowerCase() ?? '';
 }
@@ -711,6 +772,7 @@ function materialSurface(
   kind: VehicleModelSubmesh['kind'],
   tyre = false,
   plate: 'back' | 'face' | null = null,
+  textureAlpha = false,
 ): {
   color: [number, number, number, number];
   klass: number;
@@ -733,7 +795,9 @@ function materialSurface(
   // says it instead (`wheel-tyre.ts`) and the tyre loses reflection AND specular here. The rim beside it is
   // untouched — that one is supposed to shine.
   const reflect = tyre ? ([0, 0, 0, 0] as [number, number, number, number]) : reflectionOf(material);
-  const translucent = color[3] < 250 || textures.hasAlpha(material);
+  // `textureAlpha` is the caller's per-UV-region verdict (`hasAlphaIn`) — a texture transparent somewhere
+  // does not make a submesh that never samples those texels translucent.
+  const translucent = color[3] < 250 || textureAlpha;
 
   return {
     color,

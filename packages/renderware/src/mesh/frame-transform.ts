@@ -20,6 +20,14 @@ export function frameWorldTransform(
   let hops = 0;
   for (let at = frameIndex; at >= 0 && at < frames.length && hops <= frames.length; at = frames[at].parentIndex) {
     const frame = frames[at];
+    if (frame.parentIndex < 0) {
+      // The clump ROOT's authored matrix never renders in SA: the engine overwrites it with the entity's
+      // world matrix on attach, so its local values are dead data — and anti-rip exporters poison exactly
+      // this slot (a comet mod shipped rotation[0][0] = −3.9e14 there; composing it flung every off-centre
+      // part to ±1e14 while the game rendered the car whole). Stock roots are identity, so skipping the
+      // root changes nothing for well-formed models.
+      break;
+    }
     const [r0, r1, r2, r3, r4, r5, r6, r7, r8] = frame.rotation;
     const local = [r0, r3, r6, r1, r4, r7, r2, r5, r8];
     // accumulated = local ∘ accumulated (walking leaf → root).

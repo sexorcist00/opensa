@@ -1,6 +1,19 @@
 # One texture array per vehicle, at the size of its LARGEST texture
 
-**Status:** in reserve — measured 2026-07-29 on the gostown mod cars, no field verdict yet.
+**Status:** APPLIED 2026-08-04 — pulled exactly as written below (per-(w,h) buckets AND per-bucket BC1/BC3,
+both steps of the lever's own table), pulled by a CORRECTNESS forcing function rather than a frame report:
+the gostown comet mod (32 textures, one of them 2048²) made the single-array shape hit **exactly 128 MB of
+TEXS** (32 layers × 2048×2048 × 1 B BC3 = 134 217 728), which overran the VER2 `.img` u16 sector ceiling
+and read back truncated — the car could not spawn at all (`restrictions/assets-and-data.md`, both entries). Implemented as
+`VehicleTextures.packBuckets()` + the `bucketDictionary` step in `buildModelOsm` (vehicles, clutter, props,
+anim objects; peds already bucketed, map objects stay on the world plan). The runtime needed NOTHING: the
+submesh `array` field and the per-array rebind already existed, exactly as the "already supports it" section
+below said. Falls back to the legacy single array (with a logged warning) only when a submesh straddles size
+buckets or a lamps-on twin splits from its base — both throw in validation, neither seen on the assets
+measured. Measured on the forcing car: **comet.osm 136.6 → 20.3 MB**; the no-data-loss gate now proves
+per-vertex texture identity through the remap, and `admiral` ships multi-array in the round-trip tests.
+The translucent bind-switch cost this doc flagged has NOT been re-measured — watch the bench sweep's draw
+column if a fleet scene regresses.
 
 ## What we do today
 

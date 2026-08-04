@@ -72,6 +72,7 @@ export function packAnimObjects(
           txd: def.txdName.toLowerCase(),
         });
         bundles.add(model, { sections: built.sections });
+        built.warnings.forEach((warning) => log(`anim objects: ${warning}`));
       }
       converted.add(model);
     } catch (error) {

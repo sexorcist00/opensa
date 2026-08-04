@@ -28,6 +28,7 @@ import { encodeOsm } from '@opensa/engine-formats';
 import { rewriteModelArchives } from '@opensa/opensa-pack/archive-edit';
 import { openGameDir } from '@opensa/opensa-pack/game-fs';
 import { buildVehicleOsm } from '@opensa/opensa-pack/vehicle-osm';
+import { assertVer2EntrySize } from '@opensa/renderware/archive/img-archive';
 import { parseVehicleDefs } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 import { parseVehicleFeatures, UP_DOWN_LIGHTS } from '@opensa/renderware/parsers/text/vehicle-features.parser';
 import { parseVehicleMods } from '@opensa/renderware/parsers/text/vehicle-mods.parser';
@@ -123,7 +124,7 @@ export function rebakeVehicles(options: RebakeOptions): RebakeReport {
     }
     try {
       inserts.push({
-        bytes: convert(openGameDir(targetPath, [folder]), model, defs, features.get(model) ?? []),
+        bytes: convert(openGameDir(targetPath, [folder]), model, defs, features.get(model) ?? [], warnings),
         name: `${model}.osm`,
         near,
       });
@@ -167,15 +168,22 @@ function convert(
   model: string,
   defs: ReturnType<typeof parseVehicleDefs>,
   declared: readonly string[],
+  warnings: string[],
 ): Uint8Array {
   const def = [...defs.values()].find((entry) => entry.model.toLowerCase() === model);
 
-  return encodeOsm(
-    buildVehicleOsm(fs, model, {
-      ...(declared.includes(UP_DOWN_LIGHTS) ? { popUpLights: true } : {}),
-      ...(def ? { txd: def.txd.toLowerCase(), wheelScale: def.wheelScale } : {}),
-    }).sections,
-  );
+  const osm = buildVehicleOsm(fs, model, {
+    ...(declared.includes(UP_DOWN_LIGHTS) ? { popUpLights: true } : {}),
+    ...(def ? { txd: def.txd.toLowerCase(), wheelScale: def.wheelScale } : {}),
+  });
+  warnings.push(...osm.warnings);
+
+  const bytes = encodeOsm(osm.sections);
+  // Checked per car so an oversized model lands in `failed` instead of aborting the whole run when the
+  // archive rewrite refuses it.
+  assertVer2EntrySize(`${model}.osm`, bytes.byteLength);
+
+  return bytes;
 }
 
 /** The `vehicles.ide` id this mod declares for itself (column 0 of its ide line), or null if it declares none. */

@@ -19,17 +19,21 @@ function instance(): {
   matrices: Float32Array;
   probe: VehicleInstance;
   rotations: Map<number, readonly number[]>;
+  translations: Map<number, readonly number[]>;
   visible: Map<number, boolean>;
 } {
   const matrices = new Float32Array(4 * 16);
   const visible = new Map<number, boolean>();
   const rotations = new Map<number, readonly number[]>();
+  const translations = new Map<number, readonly number[]>();
   const entity = {
     matrices,
     setPartRotation: (part: number, quat: readonly number[]): void => {
       rotations.set(part, [...quat]);
     },
-    setPartTranslation: (): undefined => undefined,
+    setPartTranslation: (part: number, translation: readonly number[]): void => {
+      translations.set(part, [...translation]);
+    },
     setPartWorldMatrix: (part: number, matrix: Float32Array | null): void => {
       if (matrix) {
         matrices.set(matrix, part * 16);
@@ -52,6 +56,7 @@ function instance(): {
       },
     } as unknown as VehicleInstance,
     rotations,
+    translations,
     visible,
   };
 }
@@ -227,6 +232,49 @@ describe('EngineVehicleHandle', () => {
 
       expect(handle.doorHinge('lf')).toEqual([-0.9, 0.5, 0]);
       expect(handle.doorHinge('rf')).toBeNull();
+    });
+
+    it('a door swing carries every part of its hinge subtree — a mod glass atomic must not hang in the air', () => {
+      // The comet authors `glass_lf_ok` as a separate atomic under `door_lf_dummy`; SA rotates the whole
+      // frame subtree. The glass pivot sits ON the hinge (the export the builder measured), so it gets the
+      // same rotation and a zero compensation translation.
+      const base = model();
+      const data = {
+        ...base,
+        doors: [{ name: 'door_lf', part: 2, parts: [2, 3], side: 'lf' }],
+        parts: [...base.parts, { localRotation: [0, 0, 0, 1], localTranslation: [-0.9, 0.5, 0], name: 'glass_lf' }],
+      } as unknown as VehicleModelData;
+      const { probe, rotations, translations } = instance();
+      const handle = new EngineVehicleHandle(probe, data, () => undefined);
+
+      handle.setDoorAngle('lf', Math.PI / 4);
+
+      expect(rotations.get(3)).toBeDefined();
+      expect(rotations.get(3)).toEqual(rotations.get(2));
+      const compensation = translations.get(3)!;
+      expect(Math.hypot(compensation[0], compensation[1], compensation[2])).toBeCloseTo(0);
+    });
+
+    it('a subtree member with a pivot OFF the hinge still orbits the hinge, not its own pivot', () => {
+      // Pivot 0.2 m outboard of the hinge along X, swing 90° about Z: the member's pivot must land where a
+      // hinge rotation puts it — the offset (−0.2, 0) turns into (0, −0.2) — so the compensation is
+      // (target − pivot) = (hinge + R·(pivot − hinge)) − pivot.
+      const base = model();
+      const data = {
+        ...base,
+        doors: [{ name: 'door_lf', part: 2, parts: [2, 3], side: 'lf' }],
+        parts: [...base.parts, { localRotation: [0, 0, 0, 1], localTranslation: [-1.1, 0.5, 0], name: 'glass_lf' }],
+      } as unknown as VehicleModelData;
+      const { probe, translations } = instance();
+      const handle = new EngineVehicleHandle(probe, data, () => undefined);
+
+      handle.setDoorAngle('lf', Math.PI / 2);
+
+      const compensation = translations.get(3)!;
+      // pivot − hinge = (−0.2, 0, 0); rotated 90° about Z → (0, −0.2, 0); compensation = rotated − offset.
+      expect(compensation[0]).toBeCloseTo(0.2);
+      expect(compensation[1]).toBeCloseTo(-0.2);
+      expect(compensation[2]).toBeCloseTo(0);
     });
   });
 });

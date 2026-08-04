@@ -106,6 +106,12 @@ each as a `<part>_dummy` frame carrying a `<part>_ok` mesh and its `<part>_dam` 
   in the stock fleet ever showed the difference.
 - A door swings about its `*_dummy` frame's **own local Z**. A mod that turns a hinge frame ABOVE the dummy
   gets a scissor door for free, with no special case anywhere.
+- **A door is its whole hinge SUBTREE, not one named mesh.** SA rotates the dummy's frame, so every atomic
+  a mod authors under `door_*_dummy` — separate glass (`glass_lf_ok`), trim, whatever the exporter split —
+  travels with the door. The builder records the subtree as the door's part roster (`VehicleDoor.parts`) and
+  the swing rotates each member about the hinge. Misspell the glass out of the subtree (parent it to the
+  chassis) and it silently stays behind when the door opens — the comet mod's authoring is what surfaced
+  this (2026-08-04). Stock cars author one atomic per door, so their doors carry no roster.
 - The damage system names parts **without** the suffix: `door_lf`, `bonnet`.
 
 ### Dummies (frames with no mesh)

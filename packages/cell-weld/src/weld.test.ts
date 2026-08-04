@@ -942,21 +942,48 @@ describe('frameWorldTransform', () => {
       expect(frameWorldTransform(frames, -1)).toBeNull();
       expect(frameWorldTransform([], 5)).toBeNull();
     });
+
+    it('ignores the clump ROOT frame — SA overwrites its matrix, and anti-rip mods poison exactly it', () => {
+      // The comet lock: rotation[0][0] = −3.9e14 on the root, everything else identity. Composing it flung
+      // every off-centre part to ±1e14 while the real game rendered the car whole.
+      const frames = [
+        {
+          name: 'comet',
+          parentIndex: -1,
+          position: [0, 0, 5] as [number, number, number],
+          rotation: [-3.9e14, 0, 0, 0, 1, 0, 0, 0, 1],
+        },
+        {
+          name: 'door_lf_dummy',
+          parentIndex: 0,
+          position: [-0.8, 0.5, 0] as [number, number, number],
+          rotation: IDENTITY,
+        },
+      ];
+      const transform = frameWorldTransform(frames, 1);
+
+      expect(transform).not.toBeNull();
+      expect(transform!.pos).toEqual([-0.8, 0.5, 0]); // the child's own translation, no root contribution
+      expect(transform!.rot).toEqual(IDENTITY);
+    });
   });
 
   describe('positive cases', () => {
-    it('composes the parent chain root→leaf (translation + RW column-basis rotation)', () => {
-      // Child rotates 90° about Z (RW columns: right=(0,1,0), up=(−1,0,0), at=(0,0,1)), root lifts by 5.
+    it('composes the parent chain below the root (translation + RW column-basis rotation)', () => {
+      // Leaf rotates 90° about Z (RW columns: right=(0,1,0), up=(−1,0,0), at=(0,0,1)), its parent lifts
+      // by 5. The root's own transform never renders in SA (the entity matrix replaces it), so the lift
+      // lives on a mid frame here.
       const frames = [
-        { name: 'root', parentIndex: -1, position: [0, 0, 5] as [number, number, number], rotation: IDENTITY },
+        { name: 'root', parentIndex: -1, position: [0, 0, 0] as [number, number, number], rotation: IDENTITY },
+        { name: 'chassis', parentIndex: 0, position: [0, 0, 5] as [number, number, number], rotation: IDENTITY },
         {
           name: 'part',
-          parentIndex: 0,
+          parentIndex: 1,
           position: [0, 0, 0] as [number, number, number],
           rotation: [0, 1, 0, -1, 0, 0, 0, 0, 1],
         },
       ];
-      const transform = frameWorldTransform(frames, 1);
+      const transform = frameWorldTransform(frames, 2);
 
       expect(transform).not.toBeNull();
       const { pos, rot } = transform!;

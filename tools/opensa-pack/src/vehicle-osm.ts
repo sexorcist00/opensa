@@ -26,11 +26,13 @@ export interface VehicleOsm {
   fixture: VehicleFixture;
   /** True when the source DFF carried collision (false = the fallback box was baked). */
   hasCollision: boolean;
-  /** The sibling `.ostex` — the model's texture dictionary as one `texture2d_array`. */
+  /** The model's dictionary — the `TEXS` section payload (one `.ostex` per texture size in use). */
   ostex: Uint8Array;
   /** The sections themselves, for merging with another class's contribution to the same model. */
   sections: OsmSection[];
   texture: VehicleModelData['texture'];
+  /** Non-fatal degradations from the bake, e.g. a dictionary that fell back to the single-array shape. */
+  warnings: string[];
 }
 
 export interface VehicleOsmOptions {
@@ -66,6 +68,7 @@ export function buildVehicleOsm(fs: AssetFileSystem, model: string, options: Veh
     ostex: osm.ostex,
     sections: osm.sections,
     texture: osm.built.texture,
+    warnings: osm.warnings,
   };
 }
 

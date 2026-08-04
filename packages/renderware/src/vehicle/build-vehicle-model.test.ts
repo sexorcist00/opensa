@@ -446,7 +446,9 @@ describe('buildVehicleModel', () => {
     it('a door sits on its HINGE frame and the _ok frame own transform is DISCARDED (SA collapses it)', () => {
       const built = buildVehicleModel(
         clump(
-          [frame('chassis'), frame('door_lf_dummy', -1, [1, 0, 0]), frame('door_lf_ok', 1, [0.5, 0, 0])],
+          // The dummy hangs under the root, as every real export authors it — a ROOT's own transform is
+          // SA-owned (the entity matrix replaces it) and never contributes.
+          [frame('chassis'), frame('door_lf_dummy', 0, [1, 0, 0]), frame('door_lf_ok', 1, [0.5, 0, 0])],
           [
             { frame: 0, geometry: 0 },
             { frame: 2, geometry: 0 },
@@ -457,9 +459,47 @@ describe('buildVehicleModel', () => {
       );
 
       expect(built.doors).toEqual([{ name: 'door_lf', part: 1, side: 'lf' }]);
+      expect(built.doors[0].parts).toBeUndefined(); // one atomic under the hinge = the stock shape, no roster
       const door = built.parts[1];
       expect(door.localTranslation).toEqual([1, 0, 0]); // the hinge dummy — NOT the door's own frame
       expect(door.offset).toBeUndefined(); // the 0.5 m on `door_lf_ok` is the frame SA destroys
+    });
+
+    it('every submesh carries its part-local AABB — the translucent sort keys on the nearest extent', () => {
+      // `center − radius` counted a scattered submesh as nearer than the window sheet in front of it and
+      // the cabin drew OVER the glass; the AABB is what the runtime clamps the eye into instead.
+      const built = buildVehicleModel(clump([frame('chassis')], [{ frame: 0, geometry: 0 }], [geometry()]), textures());
+
+      const submesh = built.submeshes[0];
+      expect(submesh.bounds).toBeDefined();
+      // The helper geometry's vertices: (0,0,0), (1,0,0), (0,1,0).
+      expect(submesh.bounds!.min).toEqual([0, 0, 0]);
+      expect(submesh.bounds!.max).toEqual([1, 1, 0]);
+    });
+
+    it('a door collects every part under its hinge frame — a mod glass atomic swings with it', () => {
+      // The comet authors `glass_lf_ok` as its own atomic beside `door_lf_ok`, both under `door_lf_dummy`.
+      // SA rotates the dummy's frame, so the whole subtree travels; the door therefore carries a part
+      // roster, and the chassis (outside the subtree) stays off it.
+      const built = buildVehicleModel(
+        clump(
+          [frame('chassis'), frame('door_lf_dummy', 0, [1, 0, 0]), frame('door_lf_ok', 1), frame('glass_lf_ok', 1)],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 2, geometry: 0 },
+            { frame: 3, geometry: 0 },
+          ],
+          [geometry()],
+        ),
+        textures(),
+      );
+
+      const door = built.doors[0];
+      const glass = built.parts.findIndex((part) => part.name === 'glass_lf_ok');
+      expect(door.parts).toBeDefined();
+      expect(door.parts).toContain(door.part);
+      expect(door.parts).toContain(glass);
+      expect(door.parts).not.toContain(0);
     });
 
     it('a scissor door keeps the ROTATED hinge above the dummy — the swing axis comes from it', () => {
@@ -645,6 +685,27 @@ describe.skipIf(!existsSync(ADMIRAL) || !existsSync(GENERIC_TXD))('buildVehicleM
   );
 
   describe('positive cases', () => {
+    it('builds identically when the clump ROOT matrix is poisoned (the comet anti-rip lock)', () => {
+      // The lock plants garbage in the one matrix SA never reads (the entity matrix replaces the root's on
+      // attach): rotation[0][0] = −3.9e14. Composing it flung every off-centre part to ±1e14 — invisible
+      // car, live collision. The builder must produce the same model with and without the poison.
+      const poisoned = parseDff(toArrayBuffer(readFileSync(ADMIRAL)));
+      const root = poisoned.frames.findIndex((frame) => frame.parentIndex === -1);
+      poisoned.frames[root].rotation = [-3.9e14, 0, 0, 0, 1, 0, 0, 0, 1];
+      poisoned.frames[root].position = [7e13, -1, 2];
+
+      const rebuilt = buildVehicleModel(
+        poisoned,
+        new VehicleTextures([toArrayBuffer(readFileSync(ADMIRAL_TXD)), toArrayBuffer(readFileSync(GENERIC_TXD))]),
+        { wheelScale: [0.7, 0.7] },
+      );
+
+      expect(rebuilt.positions).toEqual(built.positions);
+      expect(rebuilt.parts.map((part) => part.localTranslation)).toEqual(
+        built.parts.map((part) => part.localTranslation),
+      );
+    });
+
     it('builds the full stock rig: 4 wheels, 4 doors, and the lamp dummies', () => {
       expect(built.wheels).toHaveLength(4);
       expect(built.wheels.filter((wheel) => wheel.front)).toHaveLength(2);

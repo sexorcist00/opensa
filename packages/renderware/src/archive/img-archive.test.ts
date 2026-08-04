@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildArchiveBuffer, openArchive } from './img-archive';
+import { assertVer2EntrySize, buildArchiveBuffer, openArchive, VER2_MAX_ENTRY_BYTES } from './img-archive';
 
 describe('img-archive', () => {
   it('round-trips files looked up by lowercased name', () => {
@@ -46,6 +46,21 @@ describe('img-archive', () => {
     expect(new Uint8Array(archive.get('foo.TXD')!).subarray(0, txd.length)).toEqual(txd);
     expect(archive.get('missing.dff')).toBeNull();
     expect(archive.names.sort()).toEqual(['foo.txd', 'lamp.dff']);
+  });
+});
+
+describe('assertVer2EntrySize', () => {
+  describe('negative cases', () => {
+    it('throws past the u16 sector ceiling, naming the entry — a larger one reads back silently truncated', () => {
+      // The real case: a 136.6 MB comet.osm wrapped its sector count and came back as 8.9 MB at spawn.
+      expect(() => assertVer2EntrySize('comet.osm', VER2_MAX_ENTRY_BYTES + 1)).toThrow(/comet\.osm.*ceiling/);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('accepts an entry exactly at the ceiling', () => {
+      expect(() => assertVer2EntrySize('big.osm', VER2_MAX_ENTRY_BYTES)).not.toThrow();
+    });
   });
 });
 
