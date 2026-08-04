@@ -40,16 +40,16 @@ against rhino, and the isolation rule tied to the real frame loop.
 
 ## Subtasks
 
-- [ ] `CleoHost` interface stub (facet shapes declared; plans 04/05 implement).
-- [ ] Thread type (IP, locals+timers, condition flag, gosub stack, wait) over plan 01's `offsetIndex`.
-- [ ] Built-in control-flow handlers + per-handler unit tests (jump lands, condition consumed, gosub
+- [x] `CleoHost` interface stub (facet shapes declared; plans 04/05 implement).
+- [x] Thread type (IP, locals+timers, condition flag, gosub stack, wait) over plan 01's `offsetIndex`.
+- [x] Built-in control-flow handlers + per-handler unit tests (jump lands, condition consumed, gosub
       nesting, ANDOR combining, CLEO_CALL frames/returns, wait yields, negation).
-- [ ] Var read/write + operand→value resolution + tests (int/float reinterpret, global/local/array).
-- [ ] Stdlib domain + tests (lists, scratch buffers, struct params, string format, math incl. a
+- [x] Var read/write + operand→value resolution + tests (int/float reinterpret, global/local/array).
+- [x] Stdlib domain + tests (lists, scratch buffers, struct params, string format, math incl. a
       perlin fixture).
-- [ ] Registry + dispatch loop + instruction budget + unimplemented path + throw isolation.
-- [ ] `ScriptRunner`: thread lifecycle, `tick(deltaGameMs)`, dispose.
-- [ ] Headless integration: Ferris Wheel decoded (01) runs on a mock host and produces the exact
+- [x] Registry + dispatch loop + instruction budget + unimplemented path + throw isolation.
+- [x] `ScriptRunner`: thread lifecycle, `tick(deltaGameMs)`, dispose.
+- [x] Headless integration: Ferris Wheel decoded (01) runs on a mock host and produces the exact
       expected host-call trace over N ticks (via `cleo-run`, plan 02); a no-WAIT loop hits the budget
       and yields; a throwing handler kills one thread and the other keeps running.
 
@@ -62,4 +62,34 @@ against rhino, and the isolation rule tied to the real frame loop.
 
 ## Ledger
 
-_(budget chosen vs rhino's measured count, built-ins implemented, stdlib coverage)_
+_(filled 2026-08-04 — `packages/cleo/src/vm/`; 79 package tests green)_
+
+- **Budget: 10 000 instructions/thread/tick** (default, overridable). Measured against the corpus,
+  silent host, 60 fps deltas: the worst REAL tick is windfarm's one-time build phase at 3 450
+  instr/tick (32 turbines of CLEO_CALL work in one frame) — ~3x headroom under the budget; a
+  synthetic WAIT-less loop hits the budget, yields cleanly and resumes next tick with no lost
+  progress (tested). Steady state: ferris 257 instr / 0.051 ms per tick, windfarm 148 instr /
+  0.030 ms — comfortably inside the old 0.2 ms/frame target. **Rhino headless-empty runs only ~5
+  instr/tick** (its ~2 000/frame by-design load walks LIVE cars through plan 05's natives — the
+  budget re-check against the real thing happens at the plan 05 field checkpoint).
+- **Built-ins**: control flow (0000/0001/0002/004C/004D/004E/004F/0050/0051/00D6/03A4/0A93,
+  CLEO_CALL 0AB1 + CLEO_RETURN 0AB2 with fresh zeroed frames, raw-bit arg copy, outputs copied
+  back), the whitelist var/compare/arith grid (31 ids collapsed onto int/float x op combinators —
+  TIMED ops scale by delta/20 ms, the SA `ms_fTimeStep` unit from gta-reversed CTimer), world
+  handlers for every corpus opcode with engine meaning (thin calls onto `CleoHost` facets).
+- **Stdlib**: lists (0E72/74/77/78/79), scratch buffers behind tokens >=0x40000001 (0AC8/0AC9),
+  struct params 0D37/0D38/0D4E over those tokens (a NON-token pointer routes to `onUnimplemented`
+  and leaves the target untouched — plan 05's memory facet takes those over), STRING_FORMAT %d/%s/
+  %f/%x/%%, SIN/COS in degrees, injectable 0208 random, GTA heading 0604, deterministic classic
+  Perlin 0EF1 (fixed permutation; judged in the field on Wind Farm's sway at plan 05).
+- **Unimplemented policy** (tier-b default, plan 07 refines): `host.onUnimplemented` once per id;
+  conditionals get FINAL condition=false with negation NOT applied — "the check did not pass".
+- **Ferris headless is the whole class-A story**: request 14644-14647 -> poll -> base + wheel
+  HD/LOD (CONNECT_LODS) + lights HD/LOD + 16 seats -> per frame the wheel angle advances (~4.8
+  deg/s via 0079) while every seat rides the rim through SIN/COS setCoordinates (~16 calls/frame).
+  Windfarm reaches its model-request loop and its 0A8D reads surface as unimplemented, zero faults;
+  cardoor degrades cleanly (ped-task ops unimplemented, zero faults).
+- **0E01's two trailing flag operands ride along unread** (corpus always passes 0 0) — recorded
+  here so plan 04's CREATE_OBJECT facet does not silently re-discover them.
+- Census join is live: `cleo-census` now reports vm/todo per opcode — 90 of the 115 corpus ids are
+  VM-served; the 25 `todo` are exactly the plan 05 natives + the deferred class-C ped-task/ini set.

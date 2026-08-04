@@ -1,4 +1,4 @@
-import { decodeScript, opcodeDef } from '@opensa/cleo';
+import { createRecordingHost, decodeScript, opcodeDef, ScriptRunner } from '@opensa/cleo';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
@@ -56,8 +56,10 @@ for (const file of files) {
   }
 }
 
-/** The plan 03/05 join point: opcode → 'implemented' | 'tier-b' | … (null until the registries exist). */
-const status = (): null | string => null;
+/** The plan 03 handler registry join: which used opcodes the VM serves today. The tier registry
+ *  (plan 05/07) refines 'todo' into tiers; natives (0AA5-0AA8, 0A8C-0A8E…) land with plan 05. */
+const registered = new Set(new ScriptRunner({ host: createRecordingHost() }).registry.ids());
+const status = (id: number): string => (registered.has(id) ? 'vm' : 'todo');
 
 if (json) {
   const out = [...rows.entries()].map(([id, row]) => ({
@@ -66,19 +68,21 @@ if (json) {
     id: id.toString(16).toUpperCase().padStart(4, '0'),
     name: opcodeDef(id)?.name ?? '???',
     perScript: Object.fromEntries(row.perScript),
-    status: status() ?? '-',
+    status: status(id),
   }));
   console.log(JSON.stringify({ opcodes: out, scripts }, null, 2));
 } else {
   for (const script of scripts) {
     console.log(`${script.file.padEnd(20)} ${script.instructions} instructions`);
   }
-  console.log(`\n${rows.size} unique opcodes across ${scripts.length} scripts (status joins land with plan 03):\n`);
+  console.log(
+    `\n${rows.size} unique opcodes across ${scripts.length} scripts (status: vm = plan 03 registry serves it, todo = plans 04/05):\n`,
+  );
   console.log('  id    count  status  ext        name');
   for (const [id, row] of [...rows.entries()].sort(([, a], [, b]) => b.count - a.count)) {
     const def = opcodeDef(id);
     console.log(
-      `  ${id.toString(16).toUpperCase().padStart(4, '0')}  ${String(row.count).padStart(5)}  ${(status() ?? '-').padEnd(6)}  ${def?.extension.padEnd(10) ?? '?'} ${def?.name ?? '???'}`,
+      `  ${id.toString(16).toUpperCase().padStart(4, '0')}  ${String(row.count).padStart(5)}  ${status(id).padEnd(6)}  ${def?.extension.padEnd(10) ?? '?'} ${def?.name ?? '???'}`,
     );
   }
 }

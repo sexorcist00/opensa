@@ -30,8 +30,8 @@ stay `.tmp-*` and die before commit.
 
 - [x] `scm-disasm.ts` (+ `docs/debug/README.md` row) — same change as plan 01's decoder.
 - [x] `cleo-census.ts` (+ row) — degraded raw-census mode first.
-- [ ] `cleo-run.ts` (+ row) — same change as plan 03's VM; `--atlas` extension with plan 05.
-- [x] `docs/commands.md` entries (disasm + census; `cleo-run` line lands with plan 03).
+- [x] `cleo-run.ts` (+ row) — landed with plan 03's VM; `--atlas` extension with plan 05.
+- [x] `docs/commands.md` entries for the three tools.
 
 ## Verification
 
@@ -41,7 +41,7 @@ stay `.tmp-*` and die before commit.
 
 ## Ledger
 
-_(filled 2026-08-04 — disasm + census landed; `cleo-run` waits for plan 03's VM)_
+_(filled 2026-08-04; `cleo-run` + the census status join landed with plan 03)_
 
 - **Tool inventory**: `scripts/debug/scm-disasm.ts` (listing / `--census` / `--strings` / `--json` /
   `--out`), `scripts/debug/cleo-census.ts` (raw census, `status` column stubbed `-` until the plan 03
