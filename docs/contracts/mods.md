@@ -126,7 +126,21 @@ readers on the overlay path still assume UTF-8.
 
 ---
 
-## 4. What is NOT a contract
+## 4. CLEO scripts (`cleo/` — plan 097; the runtime reads these, not the baker)
+
+The RUNTIME discovers compiled scripts at boot from the VFS key prefix **`cleo/` + `.cs`** (keys are
+lowercased by every loader). Until plan 097/06 teaches the installers to place them, they are
+hand-placed into `build/<game>/opensa/cleo/` (`scripts/debug/cleo-place-mods.ts`).
+
+| Name | Meaning | Misspelled → |
+| --- | --- | --- |
+| `cleo/<name>.cs` | Decoded and run as a script thread at boot (capped by `config.cleo.maxScripts`; census line `[cleo] N script(s)`). The local/http-dir partition ALSO pre-decodes these to select script-referenced models into the VFS (`cleoModelRefs`). | **Silently not discovered** — wrong folder or extension means no census entry and no model selection. The census line is the check: count your scripts. |
+| a broken/foreign `.cs` | Skipped WITH a console line (`[cleo] … failed to decode`); the other scripts still run. | reports itself |
+| the mod's `.ide` | Must ALSO be LISTED in `data/gta.dat` (`IDE DATA\MAPS\….ide`) — the runtime id→name resolver follows gta.dat, while the partition scans every `data/**/*.ide`. | Models reach the VFS but ids resolve to nothing: `[cleo] model id N resolves to nothing` (the 04 field lesson — reports itself) |
+
+---
+
+## 5. What is NOT a contract
 
 - **The mod folder's name** — ordering only. Renaming a mod cannot change what it does.
 - **The path a Modloader-style mod uses internally** — bare names decide everything there.
@@ -134,7 +148,7 @@ readers on the overlay path still assume UTF-8.
 
 ---
 
-## 5. Adding a convention
+## 6. Adding a convention
 
 When a new folder/file name starts meaning something, it goes here in the same change, with what happens when
 it is misspelled. That last part is the point: nearly every rule on this page exists because some spelling of

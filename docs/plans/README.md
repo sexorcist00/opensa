@@ -33,7 +33,7 @@ row but its chain was superseded by 097). Newest first:
   `!` rows → rider animation → first joints/towing → abilities → per-class gameplay → audit close-out.
   Air/water/rail findings parked in `roadmap/0.6.0/plans/05-air-water-rail/`.
 
-- **[097 — CLEO basic](./097-cleo-basic/readme.md)** — **PLANNED 2026-08-04**, supersedes the deferred
+- **[097 — CLEO basic](./097-cleo-basic/readme.md)** — **IN PROGRESS 2026-08-04** (spike + 01-05 done incl. field checkpoints 1-2 — the wheel spins, zero atlas misses driving the rhino; 06 packaging + 07 next), supersedes the deferred
   `roadmap/0.5.0/plans/08-cleo-basic/` chain (deleted; it was the unstarted 083 rethink). Rewritten from a
   full recon: all seven target `.cs` scripts (`NO_COMMIT/cleo`) were disassembled — three mod classes
   (world objects / vehicle-part animation via native calls / ped-task orchestration), ~116 unique opcodes,

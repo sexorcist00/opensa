@@ -95,6 +95,15 @@ re-authoring the mods.
 | `misc_a` … `misc_h` | SA's generic moving components. A `misc_*` holding head-lamp faces is a **pop-up headlight pod**. |
 | `ug_*` | Upgrade attachment points. Present in models, consumed by nothing yet. |
 
+**CLEO scripts see these names too** (plan 097/05): `GetFrameFromName` resolves script part lookups
+against the rig's part names verbatim (`misc_a`, `dvan_l`, `dmbus_r`…), and the CAutomobile carNode
+reads (`CVehicle+0x648`) bind wheels to the **`wheel_*_dummy`** forms. A name the rig lacks yields a
+null frame token — the script's own guard skips, SILENTLY by design (real CLEO would crash there);
+the atlas-miss console lines report only UNKNOWN addresses, not missing frames. Two rig facts
+currently limit this surface: the vehicle-optimizer DROPS empty parent frames (rhino's `misc_e`
+track chain — `docs/hacks/cleo-frame-sibling-order.md`) and flattens parent links, so sibling walks
+run in rig order.
+
 ### Damageable components
 
 `bonnet`, `boot`, `bump_front`, `bump_rear`, `wing_lf`, `wing_rf`, `windscreen`, `door_{lf|rf|lr|rr}` —
