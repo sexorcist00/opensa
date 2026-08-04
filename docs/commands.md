@@ -157,6 +157,11 @@ npx tsx scripts/debug/touch-controls-check.ts \
 # Tyre smoke dials (089/02) — ?smokeStart=<m/s> ?smokeFull=<m/s> ?smokeRate=<n/wheel/s>
 #   equivalent-slide thresholds + spawn rate (defaults 4 / 12 / 6); the fit: docs/hacks/tyre-smoke-intensity-fit.md
 # Air control (081/06 §1) — ?airCtl=<x> scales the in-air pitch/roll/yaw authority; 0 = off (the jump A/B)
+# CLEO (097) — ?cleo=1 runs the cleo/*.cs scripts for the session (census line `[cleo] N script(s)`;
+#   atlas misses print as `[cleo] atlas miss:` lines) · ?osmspike=<model> renders one map-object .osm
+#   beside the player (the 04 phase-0 spike hook)
+# Vehicle field checks (097/05) — ?spawncar=model[,x,y,z[,heading]] spawns one car (retries until the
+#   ground streams in; default spot 8 m north of spawn) · ?autoseat=1 seats the player once it exists
 # Diff two capture sets (raw harness logs are accepted as-is); --determinism gates a replay check
 npx tsx scripts/phys-compare.ts before.log after.log [--determinism]
 # The regression pack (081/07): a fresh 5-car sweep against the committed accepted-feel matrix
