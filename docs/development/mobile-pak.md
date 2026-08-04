@@ -31,6 +31,29 @@ npx tsx tools/opensa-pack/src/cli.ts --game … --out … --rgba8 --platforms mo
 **both** halves (the pak's arrays and every model's dictionary). Without it the pack still reports the demand:
 one log line, and `platforms` in `report.json`.
 
+On the engine side the same question is answered twice more, and neither needs a phone in the room:
+
+- `packages/engine/src/core/device.test.ts` boots `initDevice` against a **simulated mobile adapter** (the
+  fake's `adapterFeatures` minus BC, rejecting a required-but-absent feature exactly as a browser does). This
+  is what pins the 2026-08-04 fix: asking for BC unconditionally makes `requestDevice` reject on every mobile
+  GPU, and before this test nothing could see it.
+- `packages/engine/src/stream/setup.test.ts` refuses a BC world on a no-BC device at MANIFEST time, so the
+  message names the world rather than one texture.
+
+## Capturing a run from a real phone
+
+The build checks say a world *can* load; only a device says what it costs. What a capture must record — and
+what it may not be used to claim — is in
+[`docs/benchmarks/readme.md`](../benchmarks/readme.md#mobile-runs-a-different-schema-and-never-a-comparable-one).
+Two things bite in practice:
+
+- **A flag is not reach.** The 2026-08-04 capture needed `#enable-unsafe-webgpu` plus a browser restart,
+  because Chromium's adapter **blocklist** returned a null adapter (not a missing Vulkan path —
+  `featureLevel: 'compatibility'` produced an adapter too). A run behind that flag measures hardware
+  capability. Say so in the row.
+- **Serve over https.** On a plain `http://` LAN IP, `caches` is undefined and every cache operation silently
+  no-ops, so the phone re-downloads the world each visit and the numbers include a download nobody intended.
+
 A texture over the cap is decoded rather than passed through — a DXT block cannot be resized while compressed —
 so `--max-texture` alone already implies re-encoding for the textures it touches.
 

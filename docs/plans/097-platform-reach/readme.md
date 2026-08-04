@@ -56,9 +56,9 @@ because the content will not load. **So the order is: make the world loadable, t
 | 1/01 the world's demand, read from the manifest | **SHIPPED 2026-08-04** — `ospakRequiredFeatures` + `requireWorldSupport` refuse a world before a cell streams, naming the world instead of one texture; the shell's gate stopped demanding BC, so a phone is no longer told its browser lacks WebGPU |
 | 1/01 the build declares its platforms | **SHIPPED 2026-08-04** — `platformDemand` over the pak's arrays **∪** every model's `TEXS`; reported on every run (log + `report.json` `platforms`), enforced by `--platforms desktop\|mobile` |
 | — the defect that gate found | **FIXED 2026-08-04** — `--rgba8` converted the WORLD only; a car is not in the pak, so every vehicle and ped stayed BC and a mobile district threw at the first spawn. Threaded to every class that ships its own dictionary |
-| 1/02 mobile bench schema | next |
-| 1/03 emulation gate + capture ritual | next |
-| 1/04 the device-derived budget | pending 1/02–1/03 |
+| 1/02 mobile bench schema | **SHIPPED 2026-08-04** — a mobile row records the adapter's features **and** what it is missing (no `timestamp-query` ⇒ no `gpuMs` column at all), `featureLevel`, DPR, and the pak's platform field; mobile and desktop rows are declared non-comparable |
+| 1/03 emulation gate + capture ritual | **SHIPPED 2026-08-04** — `device.test.ts` boots `initDevice` against a simulated mobile adapter whose `requestDevice` rejects an absent feature the way a browser does; **verified by reintroducing the defect** (2 of 6 fail). The capture ritual and the flag-is-not-reach rule are in [development/mobile-pak.md](../../development/mobile-pak.md) |
+| 1/04 the device-derived budget | next — and the first step here that needs a phone |
 | chains 2–5 | pending (2 and 5 wait on their concepts) |
 
 **Not yet measured, and owed:** every number in this plan so far is a build/CI fact. Nothing here has been
