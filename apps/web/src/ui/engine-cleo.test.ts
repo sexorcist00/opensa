@@ -46,6 +46,13 @@ function makeDeps(overrides: Partial<CleoHostDeps> = {}): CleoHostDeps & { spawn
 
   return {
     cameraGta: () => [389.773, -2028.55, 25],
+    cars: {
+      anyCar: () => null,
+      carInSphere: () => null,
+      carModel: () => 0,
+      isCarModel: () => false,
+      playerCar: () => null,
+    },
     ensureModel: () => true,
     flush: () => undefined,
     hour: () => 12,
@@ -65,7 +72,6 @@ function makeDeps(overrides: Partial<CleoHostDeps> = {}): CleoHostDeps & { spawn
     print: () => undefined,
     resolveById: (id) => FERRIS_IDS[id] ?? null,
     resolveByName: () => null,
-    ridingCar: () => false,
     spawn: (): FakeInstance => {
       const instance = fakeInstance();
       spawned.push(instance);

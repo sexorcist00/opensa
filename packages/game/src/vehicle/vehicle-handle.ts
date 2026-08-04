@@ -38,6 +38,18 @@ export interface VehicleHandle {
   readonly parts: readonly VehiclePartInfo[];
   /** Drop a detached part for good. */
   removeDetached(name: string): void;
+  /** CLEO natives (plan 097/05): total rig part count — the frame-order sibling walk's bound. */
+  scriptPartCount(): number;
+  /** CLEO natives: rig part index by frame name (`misc_a`, `dvan_l`…), or null when absent. */
+  scriptPartIndex(name: string): null | number;
+  /** CLEO natives: the part's CURRENT local rotation (script-absolute; starts at the bind pose). */
+  scriptPartLocalRotation(part: number): VehicleQuat;
+  /** CLEO natives: the part's CURRENT local translation (script-absolute; starts at the bind pose). */
+  scriptPartLocalTranslation(part: number): Vec3;
+  /** CLEO natives: REPLACE the part's local rotation (SA's SetRotate* writes the matrix absolutely). */
+  scriptSetPartLocalRotation(part: number, quat: VehicleQuat): void;
+  /** CLEO natives: REPLACE the part's local translation (the matrix pos writes). */
+  scriptSetPartLocalTranslation(part: number, translation: Vec3): void;
   /** Pose a detached part in world space (native Z-up). */
   setDetachedPose(name: string, pose: VehiclePose): void;
   /** Swing a door about its hinge (radians; 0 = closed). */

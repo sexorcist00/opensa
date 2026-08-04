@@ -953,7 +953,7 @@ async function boot(
     fs,
     hour: (): number => Math.floor(hour) % 24,
     playerGta: (): [number, number, number] => [Transform.x[playerEid], Transform.y[playerEid], Transform.z[playerEid]],
-    ridingCar: (): boolean => vehicles !== null && vehicles.ridingVehicle() !== null,
+    vehicles: (): EngineVehicles | null => vehicles,
   });
 
   // Prod HUD + district names (074/10 reuse-not-duplicate): the SAME DOM <Hud> component fed through the

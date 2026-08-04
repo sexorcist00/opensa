@@ -19,6 +19,15 @@ import { gtaPositionToEngine, writeGtaRoot } from '@opensa/game/adapters/engine-
  *  {@link setupEngineCleo}, recorded by a fake in the headless integration. */
 export interface CleoHostDeps {
   cameraGta(): readonly [number, number, number];
+  /** Live-car queries over the script fleet (plan 097/05 phase B) — the vehicles facet's world. */
+  readonly cars: {
+    anyCar(progress: number): null | { car: number; progress: number };
+    carInSphere(x: number, y: number, z: number, radius: number): null | number;
+    carModel(car: number): number;
+    isCarModel(model: number): boolean;
+    /** The car the player sits in (script handle), or null on foot. */
+    playerCar(): null | number;
+  };
   /** Build + register the model (osm-first, DFF/TXD fallback). False = not buildable. Idempotent. */
   ensureModel(modelName: string, txdName?: string): boolean;
   /** Upload the instance matrices — once per tick, after the transform writes. */
@@ -30,9 +39,6 @@ export interface CleoHostDeps {
   print(text: string, ms: number): void;
   resolveById(id: number): null | { drawDistance: number; modelName: string; txdName: string };
   resolveByName(name: string): null | number;
-  /** Whether the player currently sits in (or is entering) a car — the 04 slice of the vehicle
-   *  facet; the full pool-walking surface is plan 05's. */
-  ridingCar(): boolean;
   /** New instance of a previously ensured model, or null (not ensured / engine says no). */
   spawn(modelName: string): CleoObjectInstance | null;
 }
@@ -292,18 +298,16 @@ export function createCleoEngineHost(deps: CleoHostDeps): EngineCleoHost {
     },
 
     vehicles: {
-      // The 04 slice: seat-state only. Pool walking, models and driver handles are plan 05's —
-      // returning "nothing found" keeps the class-B scripts in their own retry loops meanwhile.
-      anyCar: (): null => null,
-      carInSphere: (): null => null,
-      carModel: (): number => 0,
+      anyCar: (progress): null | { car: number; progress: number } => deps.cars.anyCar(progress),
+      carInSphere: (x, y, z, radius): null | number => deps.cars.carInSphere(x, y, z, radius),
+      carModel: (car): number => deps.cars.carModel(car),
       doorAngleRatio: (car, door): null | number => deps.nativeWorld.doorAngleRatio(car, door),
-      driverOf: (): null => null,
-
-      isCarModel: (): boolean => false, // Phase B: the vehicle-def check lands with the class-B wiring
-      isCharInAnyCar: (): boolean => deps.ridingCar(),
-      isCharInCar: (): boolean => false,
-      storeCarCharIsIn: (): number => -1,
+      // The player is the only modelled driver — a script asking for another car's driver gets none.
+      driverOf: (car): null | number => (deps.cars.playerCar() === car ? 1 : null),
+      isCarModel: (model): boolean => deps.cars.isCarModel(model),
+      isCharInAnyCar: (): boolean => deps.cars.playerCar() !== null,
+      isCharInCar: (char, car): boolean => deps.cars.playerCar() === car,
+      storeCarCharIsIn: (): number => deps.cars.playerCar() ?? -1,
     },
 
     world: {

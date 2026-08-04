@@ -9,7 +9,7 @@ import type { GtaSaWorldAdapter } from '@opensa/game/adapters/gta-sa-world.adapt
 import type { Config } from '@opensa/game/interfaces/config.interface';
 import type { AssetFileSystem } from '@opensa/renderware';
 
-import { ScriptRunner } from '@opensa/cleo';
+import { type NativeWorld, quatAxes, ScriptRunner } from '@opensa/cleo';
 import { toRigidModelInit } from '@opensa/game/adapters/vehicle-model-init';
 import { readModelOsm } from '@opensa/game/adapters/vehicle-osm';
 import { getClump, getTxdChain } from '@opensa/renderware/archive/asset-cache';
@@ -17,6 +17,7 @@ import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-mode
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
 
 import type { CleoObjectInstance } from './engine-cleo';
+import type { EngineVehicles, ScriptVehicle } from './engine-vehicles';
 
 import { CleoRunnerSystem, createCleoEngineHost, discoverAndSpawn } from './engine-cleo';
 
@@ -29,7 +30,8 @@ export interface EngineCleoArgs {
   readonly fs: AssetFileSystem;
   readonly hour: () => number;
   readonly playerGta: () => readonly [number, number, number];
-  readonly ridingCar: () => boolean;
+  /** The vehicle module (null when it failed to boot) — the script fleet + door reads live on it. */
+  readonly vehicles: () => EngineVehicles | null;
 }
 
 interface BuiltModel {
@@ -91,25 +93,83 @@ export function setupEngineCleo(args: EngineCleoArgs): CleoRunnerSystem | null {
     };
   };
 
-  // The plan 05 Phase-A native world: honest defaults — lodDistMultiplier 1.0 (there is no
-  // draw-distance slider), wind 0 (no weather wind source yet), parts unresolved (the vehicle part
-  // registry accessors land with the class-B engine wiring). Every unserved access is RECORDED by
-  // the AtlasMemory misses ledger, never silently wrong.
-  const nativeWorld = {
-    doorAngleRatio: (): null => null,
+  // The plan 05 phase-B native world over the live script fleet. Two honest gaps, both recorded:
+  // lodDistMultiplier is 1.0 (we have no draw-distance slider), and wind is 0 — SA's per-weather
+  // wind table (CWeather::Update) is not in the reversed clone yet, so Wind Farm keeps its accepted
+  // zero-wind sway rather than a fabricated constant.
+  const fleet = (): readonly ScriptVehicle[] => args.vehicles()?.scriptVehicles() ?? [];
+  const byCar = (car: number): null | ScriptVehicle => fleet().find((entry) => entry.scriptHandle === car) ?? null;
+  const nativeWorld: NativeWorld = {
+    doorAngleRatio: (car, door): null | number => {
+      // SA eDoors: 2 = front-left, 3 = front-right; the walk-up animator swings no other doors.
+      const side = door === 2 ? 'lf' : door === 3 ? 'rf' : null;
+
+      return side ? (args.vehicles()?.scriptDoorRatio(car, side) ?? 0) : null;
+    },
     lodDistMultiplier: (): number => 1,
-    nextSiblingPart: (): null => null,
-    partForward: (): readonly [number, number, number] => [0, 1, 0],
-    partIndex: (): null => null,
-    partTranslation: (): readonly [number, number, number] => [0, 0, 0],
-    setPartRotation: (): void => undefined,
-    setPartTranslationComponent: (): void => undefined,
-    vehicleHandles: (): readonly number[] => [],
+    nextSiblingPart: (car, part): null | number => {
+      // FRAME-ORDER adjacency stands in for the dropped parent links —
+      // docs/hacks/cleo-frame-sibling-order.md.
+      const entry = byCar(car);
+
+      return entry && part + 1 < entry.vehicle.scriptPartCount() ? part + 1 : null;
+    },
+    partForward: (car, part): readonly [number, number, number] => {
+      const entry = byCar(car);
+
+      return entry ? quatAxes(entry.vehicle.scriptPartLocalRotation(part)).forward : [0, 1, 0];
+    },
+    partIndex: (car, name): null | number => byCar(car)?.vehicle.scriptPartIndex(name) ?? null,
+    partTranslation: (car, part): readonly [number, number, number] =>
+      byCar(car)?.vehicle.scriptPartLocalTranslation(part) ?? [0, 0, 0],
+    setPartRotation: (car, part, quat): void => {
+      byCar(car)?.vehicle.scriptSetPartLocalRotation(part, [quat[0], quat[1], quat[2], quat[3]]);
+    },
+    setPartTranslationComponent: (car, part, axis, value): void => {
+      const entry = byCar(car);
+      if (!entry) {
+        return;
+      }
+      const current = [...entry.vehicle.scriptPartLocalTranslation(part)] as [number, number, number];
+      current[axis] = value;
+      entry.vehicle.scriptSetPartLocalTranslation(part, current);
+    },
+    vehicleHandles: (): readonly number[] => fleet().map((entry) => entry.scriptHandle),
     wind: (): number => 0,
+  };
+
+  const playerCar = (): null | number => {
+    const riding = args.vehicles()?.ridingVehicle() ?? null;
+
+    return riding ? (fleet().find((entry) => entry.enterable === riding)?.scriptHandle ?? null) : null;
   };
 
   const host = createCleoEngineHost({
     cameraGta: args.cameraGta,
+    cars: {
+      anyCar: (progress): null | { car: number; progress: number } => {
+        const entry = fleet()[progress];
+
+        return entry ? { car: entry.scriptHandle, progress: progress + 1 } : null;
+      },
+      carInSphere: (x, y, z, radius): null | number => {
+        for (const entry of fleet()) {
+          const [px, py, pz] = entry.enterable.position;
+          if (Math.hypot(px - x, py - y, pz - z) <= radius) {
+            return entry.scriptHandle;
+          }
+        }
+
+        return null;
+      },
+      carModel: (car): number => {
+        const entry = byCar(car);
+
+        return entry ? (adapter.cleoModelIdByName(entry.model) ?? 0) : 0;
+      },
+      isCarModel: (model): boolean => adapter.cleoIsCarModelId(model),
+      playerCar,
+    },
     ensureModel,
     flush: (): void => engine.updateVehicles(),
     hour: args.hour,
@@ -118,7 +178,6 @@ export function setupEngineCleo(args: EngineCleoArgs): CleoRunnerSystem | null {
     print: showToast,
     resolveById: (id) => adapter.cleoModelById(id),
     resolveByName: (name) => adapter.cleoModelIdByName(name),
-    ridingCar: args.ridingCar,
     spawn,
   });
 

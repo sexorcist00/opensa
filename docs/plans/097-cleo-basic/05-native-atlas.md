@@ -75,12 +75,12 @@ recover-the-real-formula rule. No fitted constants: an offset we cannot name doe
 - [x] Atlas table format (functions/globals/struct offsets, each row: address, symbol name, handler
       ref) + the ~15 corpus entries; name `0xB6F118` and `0x59B120` from gta-reversed first.
 - [x] READ/WRITE/CALL resolution through the atlas + unit tests per row (mock host).
-- [ ] Frame tokens on the part registry + matrix-op mapping (+ conversion tests against the comet
+- [x] Frame tokens on the part registry + matrix-op mapping (+ conversion tests against the comet
       door conventions — axis/sign fixtures).
-- [ ] Wind global → weather system read (Wind Farm's sway now wind-driven — its class-A behaviour
-      completes here).
+- [x] Wind global → served through the atlas; the ENGINE value is an honest 0 (see the phase-B
+      ledger — SA's per-weather wind table is not in the reversed clone yet).
 - [x] Pool facade scoped to rhino's walk + tests.
-- [ ] Door-angle accessor + `095F`.
+- [x] Door-angle accessor + `095F`.
 - [x] `cleo-run --atlas` (landed as `--cars handle:model`): the headless trace shows resolved
       operations ("natives.setPartRotation car#257 misc_a#0 …"), never raw addresses.
 - [x] Headless integration: firela + van door decoded scripts drive the expected part
@@ -147,8 +147,32 @@ radius went non-zero and the farm built in the live game (mast visible at the si
 0A8D). Wind reads 0 -> zero-wind sway fallback, as accepted. Authored-z note from the 04 ledger
 stands for checkpoint 2.
 
-**Phase B (remaining):** the ENGINE `NativeWorld` — vehicle part-registry accessors
-(partIndex/setPartRotation/partTranslation/nextSibling over `VehicleHandle`), slot-minted script
-handles for live vehicles, the 095F accessor on the enter/exit animator, a weather wind source,
-`isCarModel` over vehicle defs — then field checkpoint 2 (firela/newsvan/rhino as installed vehicle
-mods) with rhino's per-frame cost through the frame-span ledger.
+### Phase B — 2026-08-04: the engine NativeWorld is live
+
+- **`VehicleHandle` script-part accessors** (interface + `EngineVehicleHandle` + fake):
+  `scriptPartIndex` resolves by FRAME name over the rig's parts (the pre-existing private
+  `partIndex` serves the damage-group space — a different namespace); rotation/translation writes
+  are SCRIPT-ABSOLUTE, mapped onto the engine's anim channels (`anim = conj(bind) x target`,
+  `animT = target - bindT` — the engine composes `R = bind x anim`, `T = bind + animT`), with the
+  current state tracked and lazily seeded from the bind pose.
+- **The script fleet** (`engine-vehicles`): every spawned car gets a slot-minted handle
+  (`slot*256 + counter`, counter 1-127 — slots REUSE on despawn, the counter is SA's own staleness
+  detector), published as `scriptVehicles()`; the pool facade's byte walk reconstructs exactly
+  these. `scriptDoorRatio` reads the enter/exit animator's door angles through a published accessor
+  (`EnterVehicleSystem.doorOpenRatio`, angle/DOOR_OPEN_ANGLE; front doors only — the animator
+  swings no others, rear-door 095F reads answer null).
+- **The vehicles facet is fleet-backed**: anyCar/carInSphere/carModel (model name -> id through the
+  adapter), `isCarModel` over `vehicles.ide` types (car/mtruck/quad), player-car seat state.
+- **Sibling walk = frame-order adjacency** — a recorded HACK
+  (`docs/hacks/cleo-frame-sibling-order.md`): the rig drops the DFF's parent links; retirement =
+  the optimizer carrying a `parent` per part.
+- **Wind stays an honest 0**: `CWeather::Update`'s per-weather wind table is NOT in the reversed
+  clone (only the cheat's `Wind = 1.0` is); a value would be a fabricated constant. Wind Farm keeps
+  the accepted zero-wind sway; bind the table when gta-reversed grows it.
+- 902 tests green across cleo/game/host after the wiring.
+
+**Remaining for checkpoint 2:** install firela/newsvan/rhino as vehicle mods (vehicle-installer,
+`--rebake`) into a build, hand-place their scripts, and judge each mod's OWN visible behaviour from
+the reporter's angle (firela = the ladder holds pinned, vandoor = the sliding door mirrors the
+swing, rhino = tracks roll while driving); record rhino's per-frame cost through the frame-span
+ledger against the plan 03 budget.

@@ -59,6 +59,8 @@ export class EngineVehicleHandle implements VehicleHandle {
 
   /** The body's last rotation — a detaching panel inherits it (see `detachPart`). */
   private rotation: VehicleQuat = [0, 0, 0, 1];
+  /** CLEO's script-absolute part poses (plan 097/05), lazily seeded from the bind pose. */
+  private readonly scriptParts = new Map<number, { quat: VehicleQuat; translation: Vec3 }>();
 
   constructor(instance: VehicleInstance, data: VehicleRigData, onDispose: () => void) {
     this.instance = instance;
@@ -124,6 +126,50 @@ export class EngineVehicleHandle implements VehicleHandle {
     }
   }
 
+  scriptPartCount(): number {
+    return this.data.parts.length;
+  }
+
+  /** By FRAME name (`misc_a`, `dvan_l`…) — the damage-group lookup below serves a different space. */
+  scriptPartIndex(name: string): null | number {
+    const wanted = name.trim().toLowerCase();
+    const index = this.data.parts.findIndex((part) => part.name.trim().toLowerCase() === wanted);
+
+    return index >= 0 ? index : null;
+  }
+
+  scriptPartLocalRotation(part: number): VehicleQuat {
+    return this.scriptState(part).quat;
+  }
+
+  scriptPartLocalTranslation(part: number): Vec3 {
+    return this.scriptState(part).translation;
+  }
+
+  /** ABSOLUTE local rotation (SA's SetRotate* replaces the matrix): the engine's anim channel is
+   *  applied AFTER the bind rotation (`R = bind ⊗ anim`), so anim = conj(bind) ⊗ target. */
+  scriptSetPartLocalRotation(part: number, quat: VehicleQuat): void {
+    const bind = this.data.parts[part]?.localRotation;
+    if (!bind) {
+      return;
+    }
+    this.scriptState(part).quat = [...quat];
+    this.instance.entity.setPartRotation(part, quatMul(quatInvert(bind), quat));
+  }
+
+  /** ABSOLUTE local translation: the engine's channel is a DELTA on the bind translation. */
+  scriptSetPartLocalTranslation(part: number, translation: Vec3): void {
+    const bind = this.data.parts[part]?.localTranslation;
+    if (!bind) {
+      return;
+    }
+    this.scriptState(part).translation = [...translation];
+    this.instance.entity.setPartTranslation(part, [
+      translation[0] - bind[0],
+      translation[1] - bind[1],
+      translation[2] - bind[2],
+    ]);
+  }
   setDetachedPose(name: string, pose: VehiclePose): void {
     const part = this.partIndex(name);
     if (part === null) {
@@ -132,7 +178,6 @@ export class EngineVehicleHandle implements VehicleHandle {
     writeWorld(WORLD, gtaToEngine(pose.position), pose.rotation);
     this.instance.entity.setPartWorldMatrix(part, WORLD);
   }
-
   setDoorAngle(side: string, angle: number): void {
     const door = this.data.doors.find((candidate) => candidate.side === side);
     if (!door) {
@@ -217,11 +262,13 @@ export class EngineVehicleHandle implements VehicleHandle {
       this.instance.entity.setPartRotation(popUp.part, axisAngle(0, open * popUp.angle));
     }
   }
+
   setTransform(position: Vec3, rotation: VehicleQuat): void {
     this.rotation = rotation;
     writeWorld(WORLD, gtaToEngine(position), rotation);
     this.instance.entity.setRoot(WORLD);
   }
+
   setWheel(index: number, pose: VehicleWheelPose): void {
     const wheel = this.data.wheels[index];
     if (!wheel) {
@@ -243,6 +290,21 @@ export class EngineVehicleHandle implements VehicleHandle {
     const submesh = this.data.submeshes.find((candidate) => candidate.damageGroup === name);
 
     return submesh ? submesh.part : null;
+  }
+
+  /** Script-absolute part state, lazily seeded from the bind pose. */
+  private scriptState(part: number): { quat: VehicleQuat; translation: Vec3 } {
+    let state = this.scriptParts.get(part);
+    if (!state) {
+      const bind = this.data.parts[part];
+      state = {
+        quat: bind ? [...bind.localRotation] : [0, 0, 0, 1],
+        translation: bind ? [...bind.localTranslation] : [0, 0, 0],
+      };
+      this.scriptParts.set(part, state);
+    }
+
+    return state;
   }
 
   private setPartSubmeshesVisible(part: number, visible: boolean): void {

@@ -303,6 +303,18 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return out;
   }
 
+  /** `0A01 IS_THIS_MODEL_A_CAR` (plan 097/05): the id names a car-class vehicle — the same
+   *  car/bike split SA draws (bikes, boats, planes and helis answer no). */
+  cleoIsCarModelId(id: number): boolean {
+    for (const vehicle of this.vehicleDefs?.values() ?? []) {
+      if (vehicle.id === id) {
+        return vehicle.type === 'car' || vehicle.type === 'mtruck' || vehicle.type === 'quad';
+      }
+    }
+
+    return false;
+  }
+
   /** CLEO model resolution, id-first (plan 097/04 decision 2): the IDE catalog composed with
    *  `vehicles.ide` — scripts request map objects AND vehicles by the same id space. Null before the
    *  map defs load, or when nothing carries the id. */

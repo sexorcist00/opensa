@@ -370,6 +370,14 @@ export class EnterVehicleSystem implements System {
     return this.phase === 'idle' && this.nearestEnterable() !== null;
   }
 
+  /** CLEO's `095F` read (plan 097/05): a door's current openness 0..1 — through the accessor the
+   *  owning system publishes. Only the front doors swing (the walk-up animator drives no others). */
+  doorOpenRatio(vehicle: EnterableVehicle, side: 'lf' | 'rf'): number {
+    const angles = this.doors.get(vehicle);
+
+    return angles ? Math.min(1, Math.abs(angles[side]) / Math.abs(DOOR_OPEN_ANGLE)) : 0;
+  }
+
   fixedUpdate(step: number): void {
     // Controls FIRST if the host did not apply them pre-step; then the phase machine, which reads results.
     this.applyControls(step);

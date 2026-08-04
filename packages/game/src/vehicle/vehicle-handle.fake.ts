@@ -37,9 +37,13 @@ export class FakeVehicleHandle implements VehicleHandle {
   position: Vec3 = [0, 0, 0];
   readonly removed = new Set<string>();
   rotation: VehicleQuat = [0, 0, 0, 1];
-  readonly wheels: VehicleWheelInfo[];
-  readonly wheelState: VehicleWheelPose[] = [];
+  /** Script-part writes recorded per part index (plan 097/05). */
+  readonly scriptRotations = new Map<number, VehicleQuat>();
+  readonly scriptTranslations = new Map<number, Vec3>();
 
+  readonly wheels: VehicleWheelInfo[];
+
+  readonly wheelState: VehicleWheelPose[] = [];
   constructor(parts: VehiclePartInfo[] = [], wheels: VehicleWheelInfo[] = [], hasLod = false) {
     this.parts = parts;
     this.wheels = wheels;
@@ -70,6 +74,32 @@ export class FakeVehicleHandle implements VehicleHandle {
   removeDetached(name: string): void {
     this.detached.delete(name);
     this.removed.add(name);
+  }
+
+  scriptPartCount(): number {
+    return this.parts.length;
+  }
+
+  scriptPartIndex(name: string): null | number {
+    const index = this.parts.findIndex((part) => part.name === name);
+
+    return index >= 0 ? index : null;
+  }
+
+  scriptPartLocalRotation(part: number): VehicleQuat {
+    return this.scriptRotations.get(part) ?? [0, 0, 0, 1];
+  }
+
+  scriptPartLocalTranslation(part: number): Vec3 {
+    return this.scriptTranslations.get(part) ?? [0, 0, 0];
+  }
+
+  scriptSetPartLocalRotation(part: number, quat: VehicleQuat): void {
+    this.scriptRotations.set(part, [...quat]);
+  }
+
+  scriptSetPartLocalTranslation(part: number, translation: Vec3): void {
+    this.scriptTranslations.set(part, [...translation]);
   }
 
   setDetachedPose(name: string, pose: VehiclePose): void {

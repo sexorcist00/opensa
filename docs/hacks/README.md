@@ -73,6 +73,7 @@ the number.
 | [Autopilot gains](autopilot-gains.md) | `game/vehicle/path-follow.ts` | SA's own `CCarAI`/`CCarCtrl` traffic steering, not ported (and tuned for cars the player is not in) |
 | [Pedestrian route on a vehicle graph](pedestrian-route-on-a-vehicle-graph.md) | `web/ui/video/walk.ts` | SA's own PED nodes in `NODES*.DAT` — the game ships a pavement network with crossings and we parse only the vehicle half, so a walk is a driving route pushed 6.5 m sideways |
 | [ADC-strip fallback](adc-strip-fallback.md) | `renderware/parsers/binary/dff.ts` | ADC (`0x134`) itself — a PS2 strip's parity/restart bits, undecoded; for its two STOCK carriers (`bloodrb`, `rccam`) we read the face array we otherwise call the wrong one, because unwinding them invents triangles (1050 → 1487) |
+| [CLEO frame-sibling order](cleo-frame-sibling-order.md) | `web/ui/engine-cleo-setup.ts` | the DFF frame tree's parent links — the rig drops them at conversion, so rhino's `RwFrame+0x9C` sibling walk is served by NEXT-PART-IN-RIG-ORDER adjacency; retired by the optimizer carrying a `parent` index per part |
 
 **Back-filled 2026-07-28**, sweeping the engine, shaders, physics, converter and tools. What the sweep
 deliberately did NOT open a file for, so the next reader does not go looking: numbers that are **read** from
