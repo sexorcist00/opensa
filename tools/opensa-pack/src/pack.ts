@@ -44,6 +44,9 @@ export interface PackOptions {
   bakes?: boolean;
   /** Bake worker pool size; the default is a quarter of the cores. */
   bakeWorkers?: number;
+  /** Emit every world texture as RGBA8 instead of passing SA's DXT through, so the pak loads on a GPU
+   *  without BC (every mobile one). 4-8x the texture memory — pair it with a district {@link rect}. */
+  forceRgba8?: boolean;
   /** The game dir to convert. */
   gameDir: string;
   /** Fetch game id stamped into the manifest (plan 086: `game-src/<id>` — folder name IS the id).
@@ -131,6 +134,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
           },
         }
       : {}),
+    ...(options.forceRgba8 ? { forceRgba8: true } : {}),
     ...(rect !== undefined ? { rect } : {}),
     stochasticNames,
     sunVis: bakes,

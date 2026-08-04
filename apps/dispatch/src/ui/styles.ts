@@ -70,6 +70,19 @@ export const styles = {
   // and page-zoom before a single `pointermove` reaches the gesture layer.
   canvas: { display: 'block', height: '100%', touchAction: 'none', width: '100%' },
   canvasWrap: { minHeight: 0, overflow: 'hidden', position: 'relative' },
+  degradedBanner: {
+    background: 'rgba(120, 72, 8, 0.92)',
+    border: '1px solid #d08b2c',
+    borderRadius: 5,
+    color: '#ffe8c4',
+    fontSize: 11,
+    left: 10,
+    padding: '5px 10px',
+    position: 'absolute',
+    right: 10,
+    top: 10,
+    zIndex: 4,
+  },
   detail: {
     background: 'rgba(11, 16, 23, 0.94)',
     border: `1px solid ${COLORS.border}`,

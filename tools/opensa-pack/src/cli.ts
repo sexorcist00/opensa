@@ -5,7 +5,7 @@
  * stage must not go through argv.
  *
  *   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> [--rect x0,y0,x1,y1]
- *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--stochastic <file>[,<file>…]]
+ *     [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--rgba8] [--stochastic <file>[,<file>…]]
  *
  * REMOVED FLAGS (2026-07-19, user): `--cell-size` (the pak and the runtime must agree on it and nothing
  * checked that — it is the `CELL_SIZE` constant now), `--chunk-cells` (a welding tuning knob from the A2
@@ -18,6 +18,10 @@
  * carry it; `--no-ao` skips it for fast iteration reconverts). `--bakes` gates the HEAVY shadow bake
  * (sun-vis, 074/07): production, bench-ritual and pre-flip converts MUST pass it — without it the direct
  * sun renders unshadowed (bridges/canyons) by design.
+ *
+ * `--rgba8` emits every world texture as RGBA8 instead of passing SA's DXT blocks through. BC is desktop-only,
+ * so this is what makes a pak loadable on a phone; it costs 4-8x the texture memory, so pair it with a
+ * district `--rect`.
  *
  * `--rect` is inclusive GTA CELL coordinates (cell = floor(worldXY / CELL_SIZE)). OPTIONAL since plan 087:
  * the default auto-fits every cell with content — a fixed rect silently dropped whatever a TC placed
@@ -44,7 +48,7 @@ async function main(): Promise<void> {
   if (!gameRaw || !outRaw) {
     console.error(
       'usage: opensa-pack --game <dir> --out <dir> [--rect x0,y0,x1,y1] ' +
-        '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] ' +
+        '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--rgba8] ' +
         '[--stochastic <file>[,<file>…]]',
     );
     process.exitCode = 2;
@@ -68,6 +72,7 @@ async function main(): Promise<void> {
     ao: !process.argv.includes('--no-ao'),
     ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
     bakes: process.argv.includes('--bakes'),
+    forceRgba8: process.argv.includes('--rgba8'),
     gameDir: requireDir('game', gameRaw),
     ...(gameId ? { gameId } : {}),
     models: !process.argv.includes('--no-models'),

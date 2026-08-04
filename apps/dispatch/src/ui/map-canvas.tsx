@@ -8,10 +8,11 @@ import { type ReactElement, useEffect, useRef, useState } from 'react';
 import type { GtaGround } from '../map/coords';
 import type { Operations, Selection } from '../ops/types';
 import type { DispatchActions } from '../ops/use-operations';
-import type { DispatchHandle, DispatchReadout } from '../world/boot';
+import type { BootOptions, DispatchHandle, DispatchReadout } from '../world/boot';
 
 import { bootDispatch } from '../world/boot';
-import { COLORS, styles } from './styles';
+import { bootPlanMode } from '../world/plan-mode';
+import { styles } from './styles';
 
 /** Module scope, so StrictMode's dev double-mount boots the engine on the canvas exactly once. */
 let booted: null | Promise<DispatchHandle | void> = null;
@@ -32,7 +33,8 @@ export function MapCanvas({
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
-  const [failed, setFailed] = useState('');
+  /** Why the 3D map is absent, when it is — shown as a banner over a WORKING plan-mode board. */
+  const [degraded, setDegraded] = useState('');
 
   // Callbacks reach the loop through a ref so the boot effect never re-runs: re-booting the engine on a
   // re-render would leak a device and a streaming worker per render.
@@ -45,7 +47,7 @@ export function MapCanvas({
     if (!canvas || !overlay) {
       return;
     }
-    booted ??= bootDispatch({
+    const boot: BootOptions = {
       canvas,
       onClick: (click) => {
         const { select } = liveRef.current.actions;
@@ -62,10 +64,15 @@ export function MapCanvas({
       ops: () => liveRef.current.read.ops(),
       overlay,
       selection: () => liveRef.current.read.selection(),
-    }).catch((error: unknown) => {
-      // eslint-disable-next-line no-console -- a dead canvas must say why, in the console as well as on it
-      console.error('[dispatch] boot failed', error);
-      setFailed(String(error));
+    };
+    // The 3D map is the preferred surface, not a requirement: a browser without WebGPU (or a world this GPU
+    // cannot read) falls back to the 2D plan, which keeps every unit, call and gesture working.
+    booted ??= bootDispatch(boot).catch((error: unknown) => {
+      // eslint-disable-next-line no-console -- a degraded map must say why, in the console as well as on it
+      console.warn('[dispatch] 3D map unavailable, falling back to plan mode:', error);
+      setDegraded(reason(error));
+
+      return bootPlanMode(boot, reason(error));
     });
     void booted.then((handle) => {
       if (handle) {
@@ -79,28 +86,32 @@ export function MapCanvas({
       <canvas ref={canvasRef} style={styles.canvas} />
       <canvas ref={overlayRef} style={{ ...styles.fill, pointerEvents: 'none', zIndex: 2 }} />
       {children}
-      {failed && <BootFailure message={failed} />}
+      {degraded && <DegradedBanner message={degraded} />}
     </div>
   );
 }
 
-/** A dead map explains itself: the two things that actually go wrong are no WebGPU and no built pak. */
-function BootFailure({ message }: { message: string }): ReactElement {
+/** The board still works; say what is missing and why, without covering it. */
+function DegradedBanner({ message }: { message: string }): ReactElement {
   return (
-    <div style={{ ...styles.fill, display: 'grid', placeItems: 'center', zIndex: 4 }}>
-      <div style={{ ...styles.detail, maxWidth: 560, position: 'static' }}>
-        <div style={{ color: COLORS.danger, fontSize: 13, fontWeight: 700, paddingBottom: 8 }}>Map unavailable</div>
-        <div style={{ ...styles.mono, fontSize: 11, lineHeight: 1.6, wordBreak: 'break-word' }}>{message}</div>
-        <div style={{ color: COLORS.muted, lineHeight: 1.7, paddingTop: 10 }}>
-          This surface needs a browser with <strong>WebGPU</strong> (there is no fallback renderer) and a{' '}
-          <strong>world</strong> to draw. Build one with <code>npm run build:game:original:opensa</code>, or point the
-          app at an existing build with <code>?src=build/&lt;game&gt;</code>.
-          <br />
-          On a <strong>phone</strong>, a pak built from SA assets will not load: its textures are BC-compressed, and
-          mobile GPUs ship ETC2/ASTC instead. Open <code>?demo=1</code> for the synthetic city — it uses textures every
-          GPU can read.
-        </div>
-      </div>
+    <div style={styles.degradedBanner}>
+      <strong>2D plan mode</strong> — no 3D world: {message}
     </div>
   );
+}
+
+/** The short version of a boot error, for a banner that has one line. */
+function reason(error: unknown): string {
+  const text = String(error);
+  if (text.includes('WebGPU is not available') || text.includes('adapter request failed')) {
+    return 'this browser has no WebGPU';
+  }
+  if (text.includes('texture-compression-bc')) {
+    return "this GPU cannot read the world's BC textures (rebuild the pak with --rgba8)";
+  }
+  if (text.includes('no pak manifest')) {
+    return 'no built game to stream (pass ?src=, or ?demo=1 for the synthetic city)';
+  }
+
+  return text.replace(/^Error:\s*/, '').slice(0, 160);
 }

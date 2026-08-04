@@ -157,6 +157,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
     projector.update(state, overlay.clientWidth, overlay.clientHeight);
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
     symbology.render(context, projector, ops, options.selection(), {
       height: overlay.clientHeight,
       width: overlay.clientWidth,

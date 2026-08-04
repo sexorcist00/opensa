@@ -43,7 +43,10 @@ export function configureCanvas(canvas: HTMLCanvasElement, engineDevice: EngineD
 }
 
 export async function initDevice(): Promise<EngineDevice> {
-  if (!('gpu' in navigator)) {
+  // The VALUE, not just the key: `'gpu' in navigator` is true whenever the property exists on the prototype,
+  // and a browser that ships the accessor while returning undefined (policy-disabled builds, some mobile
+  // browsers) then fell straight through to `.requestAdapter` and threw a bare TypeError instead of this.
+  if (!navigator.gpu) {
     throw new Error('WebGPU is not available in this browser (WebGPU is required — there is no fallback renderer)');
   }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });

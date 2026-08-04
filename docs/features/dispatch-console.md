@@ -25,6 +25,7 @@ Implemented and running. The world half is verified only on real GPU hardware �
 | Board (domain)         | `src/ops/*`                              | units, calls, assignment, a pure `stepOperations` tick — renderer-free and unit-tested       |
 | Chrome                 | `src/ui/*`, `src/app.tsx`                | call queue, roster, selection panel, status bar; desk and phone layouts                      |
 | Gestures               | `src/map/gestures.ts`                    | mouse and touch through one set of Pointer Events                                            |
+| No-WebGPU fallback     | `src/world/plan-mode.ts`                 | the same camera and symbology, 2D only — no engine, no GPU                                   |
 
 ## The two decisions worth reading
 
@@ -54,10 +55,16 @@ GPU, which no phone has.
   drag for scrolling before a single `pointermove` arrives.
 - **Chips clamp to the canvas** and calls drop their title below 620 px — on a phone most icons sit near an
   edge, and an unclamped chip hangs half off screen.
-- **The world it can show is `?demo=1`.** A pak built from SA assets is BC-compressed and mobile GPUs ship
-  ETC2/ASTC; the engine now boots without BC and fails on the first BC texture instead, by name. See
-  [edge-cases/browser-runtime.md](../edge-cases/browser-runtime.md) for what it would take to change that, and
-  [restrictions/assets-and-data.md](../restrictions/assets-and-data.md) for why it is a build-time decision.
+- **The worlds it can show** are `?demo=1` (synthetic, RGBA8) and any pak built with `opensa-pack --rgba8`.
+  A stock pak is BC-compressed and mobile GPUs ship ETC2/ASTC, so it will not load; the engine boots without
+  BC and fails on the first BC texture instead, by name. See
+  [edge-cases/browser-runtime.md](../edge-cases/browser-runtime.md) for the cost of `--rgba8` and what a
+  cheaper encoding would take, and [restrictions/assets-and-data.md](../restrictions/assets-and-data.md) for
+  why it is a build-time decision.
+- **Plan mode is the floor.** If WebGPU is missing entirely — an older phone, a locked-down browser, a
+  blocklisted GPU — the console does not die: `plan-mode.ts` runs the same camera, gestures, symbology and
+  board on a 2D canvas with a projected ground grid, and a banner says what is missing. The world is gone;
+  the dispatcher's job is not.
 
 ## Clicking
 
@@ -84,10 +91,16 @@ opens a call at the ground point under the cursor.
 - `apps/dispatch/src/ops/sim.test.ts`, `src/map/coords.test.ts` — the board and the coordinate conversion.
 - `packages/engine/src/core/ostex-upload.test.ts` — both directions of the BC rule: a BC payload is refused by
   name on a GPU without BC (and no texture is created), an RGBA8 one uploads.
+- `packages/cell-weld/src/textures.rgba8.test.ts` — both directions of `--rgba8`, on a SYNTHETIC DXT1
+  dictionary so it runs without a game tree (the planner's other tests need `npm run test:fixtures`).
 - Phone, emulated (Pixel 7, 412×839 CSS px, DPR 3, touch, 2026-08-04): the compact layout, the tabbed sheet,
-  the clamped chips and the demo world (576 recorded draws, 44/144 cells visible, 38 fps under SwiftShader).
+  the clamped chips and the demo world (576 recorded draws, 44/144 cells visible, 38-46 fps under SwiftShader).
   Re-run with `texture-compression-bc` filtered out of the adapter — **the console boots and builds its world
-  on a simulated mobile GPU**, which is the change's whole point.
+  on a simulated mobile GPU**, which is the change's whole point. Re-run again with `navigator.gpu` returning
+  undefined — **plan mode takes over**, banner and all.
+- Single-file build (the shareable artifact): the whole console inlines to ~490 kB of ASCII-escaped JS, adds
+  its own `<meta name=viewport>` at runtime (without it a phone lays out at ~980 px and the DESK layout wins
+  on a 412 px screen — found by publishing it), and opens on `?demo=1`.
 - In-browser (SwiftShader, 2026-08-04): engine boot, `.oscell`/`.ostex` load (576 recorded draws), the frame
   loop, frustum culling (53/144 cells visible), the projected symbology, the whole console and the
   pak-missing failure path all run. **The rendered world image was NOT verified** — the software WebGPU

@@ -53,6 +53,9 @@ export interface ConvertOptions {
   chunkCells?: number;
   /** Shared overlay TXDs (basenames, no extension) searched when a def's own txdp chain misses. */
   fallbackTxds?: readonly string[];
+  /** Emit every world texture as RGBA8 instead of passing SA's DXT through — the pak then loads on GPUs
+   *  without BC (every mobile one). Costs 4-8x texture memory; pair it with a district `rect`. */
+  forceRgba8?: boolean;
   /** Progress sink (chunk/bake/assembly lines with an ETA); silent when absent — tests stay quiet. */
   log?: (message: string) => void;
   /**
@@ -159,6 +162,7 @@ export async function convertDistrict(
     defs.txdParents ?? new Map<string, string>(),
     options.fallbackTxds ?? [],
     options.stochasticNames ?? new Set(),
+    { forceRgba8: options.forceRgba8 ?? false },
   );
 
   const inputs: OspakInput[] = [];

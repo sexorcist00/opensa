@@ -57,7 +57,8 @@ export class SymbologyLayer {
     return null;
   }
 
-  /** One frame of symbology. `projector` must already carry this frame's camera. */
+  /** One frame of symbology. `projector` must already carry this frame's camera, and the caller must have
+   *  cleared the canvas — plan mode draws a ground grid under the symbols, so the clear cannot live here. */
   render(
     ctx: CanvasRenderingContext2D,
     projector: ScreenProjector,
@@ -66,7 +67,6 @@ export class SymbologyLayer {
     size: { readonly height: number; readonly width: number },
   ): void {
     this.areas = [];
-    ctx.clearRect(0, 0, size.width, size.height);
     ctx.textBaseline = 'middle';
     for (const incident of ops.incidents) {
       this.drawIncident(ctx, projector, incident, selection, size);

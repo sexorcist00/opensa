@@ -83,7 +83,15 @@ export class TexturePlanner {
   /** Global fallback TXDs (074/06 row 10): overlay mods ship one shared TXD (e.g. `vegetation.txd`) that the
    *  installed game wires via txdp; offline we search it when the def's own chain misses. */
   private readonly fallbackTxds: readonly string[];
+  /**
+   * Emit RGBA8 for EVERYTHING, refusing the DXT passthrough (2026-08-04). BC is a desktop-only format, so a
+   * pak that keeps SA's DXT blocks cannot be displayed on a mobile GPU at all — this is the one switch that
+   * makes a build portable, and it costs 4-8x the texture memory, which is why it is per-build and off by
+   * default. A district-sized `--rect` is what makes that cost affordable.
+   */
+  private readonly forceRgba8: boolean;
   private readonly fs: AssetFileSystem;
+
   /** name → the first `.txd` (sorted archive order — deterministic) carrying it. Built LAZILY on the first
    *  chain miss (085 row F): the LAST-RESORT lookup behind the scoped def→txdp→fallback chain. Two real
    *  classes need it: a mod TXD that DROPPED names its stock predecessor carried (mod 32's triadcasino.txd
@@ -108,11 +116,13 @@ export class TexturePlanner {
     txdParents: Map<string, string>,
     fallbackTxds: readonly string[] = [],
     stochasticNames: ReadonlySet<string> = new Set(),
+    options: { forceRgba8?: boolean } = {},
   ) {
     this.fs = fs;
     this.txdParents = txdParents;
     this.fallbackTxds = fallbackTxds;
     this.stochasticNames = stochasticNames;
+    this.forceRgba8 = options.forceRgba8 ?? false;
   }
 
   /** Assemble every planned array into `.ostex` blobs (deterministic ref order). */
@@ -272,8 +282,9 @@ export class TexturePlanner {
     const blockAligned = rw.width % 4 === 0 && rw.height % 4 === 0;
     const pow2 = Number.isInteger(Math.log2(rw.width)) && Number.isInteger(Math.log2(rw.height));
     const dxtFormat = DXT_TO_FORMAT[rw.format];
-    // Opaque, well-formed DXT: pass through untouched (no recompress, no quality loss).
-    if (dxtFormat !== undefined && !rw.hasAlpha && blockAligned && pow2 && rw.mipmaps.length > 0) {
+    // Opaque, well-formed DXT: pass through untouched (no recompress, no quality loss) — unless the build
+    // asked for a portable pak, in which case even a perfect DXT block has to be decoded (see `forceRgba8`).
+    if (!this.forceRgba8 && dxtFormat !== undefined && !rw.hasAlpha && blockAligned && pow2 && rw.mipmaps.length > 0) {
       this.report.opaquePass += 1;
       const mipCount = Math.min(rw.mipmaps.length, ostexMaxMips(dxtFormat, rw.width, rw.height));
 

@@ -76,9 +76,10 @@ iOS 26 — the **content** is. The measured consequences:
   throw). Verified 2026-08-04 on an emulated Pixel 7 with the feature filtered out of the adapter.
 - A BC texture then fails at UPLOAD, naming itself, in `beginOstexUpload`. That is deliberate: the demand
   belongs to the content, not to the device, so content that was never BC runs on hardware that has no BC.
-- **RGBA8 `.ostex` uploads anywhere.** It is what the dispatch console's `?demo=1` city uses, and it is the
-  cheap route to a real phone measurement without writing an encoder — the converter already falls back to
-  RGBA8 whenever it cannot pass DXT through.
+- **RGBA8 `.ostex` uploads anywhere.** It is what the dispatch console's `?demo=1` city uses, and
+  `opensa-pack --rgba8` now builds a whole world that way: the switch refuses the DXT passthrough so every
+  world texture is decoded to RGBA8. It costs **4-8x the texture memory**, which is why it is per-build and
+  belongs with a district `--rect` rather than the whole map.
 
-Anything more than that needs an ASTC/ETC2 encode path (transcoding from DXT, so a second generation of loss)
-or Basis Universal / KTX2 in `.ostex` and a transcode at load. Neither exists today.
+Anything cheaper than that needs an ASTC/ETC2 encode path (transcoding from DXT, so a second generation of
+loss) or Basis Universal / KTX2 in `.ostex` and a transcode at load. Neither exists today.
