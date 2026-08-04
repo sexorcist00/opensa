@@ -1,0 +1,45 @@
+/**
+ * The one place the dispatch app converts between the two coordinate systems it has to speak.
+ *
+ * A mod author reads and writes GTA coordinates — they are what `IPL` rows, `.ide` entries, teleport scripts
+ * and every wiki page use — so every number this app SHOWS is GTA. The engine is Y-up with `z = −y`, so every
+ * number it FEEDS the engine goes through here. Mixing the two silently mirrors the map about its diagonal,
+ * which looks plausible enough on a top-down view to survive a whole session.
+ */
+
+/** Engine-space position (x, y-up, z). */
+export type EnginePoint = readonly [number, number, number];
+
+/** A ground position as a dispatcher reads it: GTA x (east) and y (north). */
+export type GtaGround = readonly [number, number];
+
+/** Engine point → the GTA ground point under it (the y-up height is dropped). */
+export function engineToGta(point: EnginePoint): [number, number] {
+  return [point[0], -point[2]];
+}
+
+/** Ground distance between two GTA points, in world units (≈ metres in SA). */
+export function gtaDistance(a: GtaGround, b: GtaGround): number {
+  return Math.hypot(b[0] - a[0], b[1] - a[1]);
+}
+
+/** GTA ground point → the engine ground point under it. `height` lifts it off y = 0. */
+export function gtaToEngine(at: GtaGround, height = 0): [number, number, number] {
+  return [at[0], height, -at[1]];
+}
+
+/** GTA heading (radians, 0 = +y/north) for a movement delta — what points a unit's chevron. */
+export function headingOf(from: GtaGround, to: GtaGround): number {
+  return Math.atan2(to[0] - from[0], to[1] - from[1]);
+}
+
+/** One step of length `distance` from `from` towards `to`, clamped so it never overshoots. */
+export function stepTowards(from: GtaGround, to: GtaGround, distance: number): [number, number] {
+  const remaining = gtaDistance(from, to);
+  if (remaining <= distance || remaining === 0) {
+    return [to[0], to[1]];
+  }
+  const t = distance / remaining;
+
+  return [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t];
+}

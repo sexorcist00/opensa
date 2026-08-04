@@ -73,6 +73,10 @@ npm run serve:static        # static origin :3001 — mounts /build + /game-src 
 | sa-map-viewer (094)      | `http://localhost:5173/sa-map-viewer.html?src=http://localhost:3001/game-src/original` (no `?src=` → folder picker) |
 | sa-map-viewer: a pose    | `…&at=2375,-1625&h=400&pitch=-89&yaw=180` (GTA x,y · height · degrees) · `&panel=0` capture mode · `&wind=1` unfreeze |
 | sa-map-viewer: the sea   | on by default; `&water=0` hides it (the panel has "Show water") — scripted shots add `water=0` themselves |
+| dispatch console         | `npm run dev` → `http://localhost:5173/dispatch.html` (defaults to `?src=build/original`) — the CAD surface: top-down map, live units, call queue, click-to-inspect |
+| dispatch: no build       | `…/dispatch.html?demo=1` — a synthetic block city, no pak needed (and no model names on click) |
+| dispatch: a pose         | `…&at=1700,-1500&h=900&pitch=-66&yaw=180` (GTA x,y · height · degrees) — same convention as sa-map-viewer |
+| dispatch: world knobs    | `&src=<built game>` · `&hd=450&lod=2200` streaming rings · `&hour=10` · `&weather=0` · `&fogscale=2.5` · `&fog=1` restores the game's fog (off by default, or a city view culls every cell) |
 
 Full query-param reference: [development/query-parameters.md](./development/query-parameters.md).
 
