@@ -103,8 +103,14 @@ function DegradedBanner({ message }: { message: string }): ReactElement {
 /** The short version of a boot error, for a banner that has one line. */
 function reason(error: unknown): string {
   const text = String(error);
-  if (text.includes('WebGPU is not available') || text.includes('adapter request failed')) {
-    return 'this browser has no WebGPU';
+  // These two look alike and are fixed differently, so they must not share a message: no `navigator.gpu` is a
+  // browser that never shipped WebGPU, while a null adapter is a browser that HAS it and refused this GPU
+  // (Android below 12, no Vulkan 1.1, or a blocklisted device — the last of which a flag can override).
+  if (text.includes('WebGPU is not available')) {
+    return 'this browser has no WebGPU at all';
+  }
+  if (text.includes('adapter request failed')) {
+    return 'this browser has WebGPU but no usable GPU adapter (blocklisted, or the OS/driver is too old)';
   }
   if (text.includes('texture-compression-bc')) {
     return "this GPU cannot read the world's BC textures (rebuild the pak with --rgba8)";
