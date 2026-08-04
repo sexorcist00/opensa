@@ -54,6 +54,8 @@ export interface PackOptions {
    *  work-stage intermediate. */
   gameId?: string;
   log?: (message: string) => void;
+  /** Largest texture edge the pak may carry (0 = uncapped) — the other half of making an RGBA8 pak fit. */
+  maxTextureSize?: number;
   /** Convert the per-model half (and rewrite the ~1 GB archives). ON by default. */
   models?: boolean;
   /** The output game dir — a COPY of `gameDir`; the pak products go to `pakDir`. */
@@ -135,6 +137,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
         }
       : {}),
     ...(options.forceRgba8 ? { forceRgba8: true } : {}),
+    ...(options.maxTextureSize ? { maxTextureSize: options.maxTextureSize } : {}),
     ...(rect !== undefined ? { rect } : {}),
     stochasticNames,
     sunVis: bakes,

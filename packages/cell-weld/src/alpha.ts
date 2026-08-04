@@ -243,14 +243,21 @@ export function resampleToPow2(
   rgba: Uint8Array,
   width: number,
   height: number,
+  maxSize = 0,
 ): {
   height: number;
   rgba: Uint8Array;
   width: number;
 } {
   const pow2 = (value: number): number => 2 ** Math.round(Math.log2(value));
-  const outWidth = Math.max(4, pow2(width));
-  const outHeight = Math.max(4, pow2(height));
+  let outWidth = Math.max(4, pow2(width));
+  let outHeight = Math.max(4, pow2(height));
+  // `maxSize` (0 = uncapped) halves BOTH axes together until each fits, so a capped texture keeps its aspect
+  // ratio — clamping the axes independently would squash every non-square sheet in the game.
+  while (maxSize > 0 && (outWidth > maxSize || outHeight > maxSize) && (outWidth > 4 || outHeight > 4)) {
+    outWidth = Math.max(4, outWidth >> 1);
+    outHeight = Math.max(4, outHeight >> 1);
+  }
   if (outWidth === width && outHeight === height) {
     return { height, rgba: new Uint8Array(rgba), width };
   }
