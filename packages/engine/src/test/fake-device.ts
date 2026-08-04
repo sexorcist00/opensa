@@ -238,16 +238,21 @@ export function createFakeDevice(): FakeGpu {
  * Installs the fake as `navigator.gpu` plus a canvas stub, so `Engine.init()` runs unmodified.
  * Returns the recorder and a `restore()` to put the globals back.
  */
-export function installFakeWebGpu(options: { timestamps?: boolean } = {}): {
+export function installFakeWebGpu(options: { adapterFeatures?: readonly string[]; timestamps?: boolean } = {}): {
   canvas: HTMLCanvasElement;
   gpu: FakeGpu;
+  /** What `initDevice` asked `requestDevice` for — the no-BC gate reads it (see `device.test.ts`). */
+  requestedFeatures: string[];
   restore(): void;
 } {
   const gpu = createFakeDevice();
-  const features = new Set<string>(['texture-compression-bc']);
+  // `adapterFeatures` is how a MOBILE adapter is simulated: the same fake, minus BC. A desktop-shaped
+  // default keeps every existing caller unchanged.
+  const features = new Set<string>(options.adapterFeatures ?? ['texture-compression-bc']);
   if (options.timestamps ?? true) {
     features.add('timestamp-query');
   }
+  const requestedFeatures: string[] = [];
 
   // `navigator` is a getter-only global in the node test env, so plain assignment throws — define over it
   // and restore the original descriptor afterwards.
@@ -299,7 +304,27 @@ export function installFakeWebGpu(options: { timestamps?: boolean } = {}): {
         Promise.resolve({
           features,
           info: { architecture: 'fake', vendor: 'opensa' },
-          requestDevice: () => Promise.resolve(gpu.device),
+          requestDevice: (descriptor?: { requiredFeatures?: readonly string[] }) => {
+            const required = [...(descriptor?.requiredFeatures ?? [])];
+            requestedFeatures.push(...required);
+            // What a REAL browser does, and the reason a phone used to be unbootable: `requestDevice`
+            // rejects outright when a required feature is not on the adapter. Faking it away would make
+            // the one mistake this fake exists to catch invisible.
+            const absent = required.filter((feature) => !features.has(feature));
+            if (absent.length > 0) {
+              return Promise.reject(new Error(`requestDevice: adapter does not support ${absent.join(', ')}`));
+            }
+            // The DEVICE carries what was granted, not what the adapter could have offered. Leaving the
+            // fake's default set here would let `requireFormatSupport` (and anything else reading
+            // `device.features`) pass on a simulated mobile GPU that has no BC at all.
+            const granted = gpu.device.features as unknown as Set<string>;
+            granted.clear();
+            for (const feature of required) {
+              granted.add(feature);
+            }
+
+            return Promise.resolve(gpu.device);
+          },
         }),
     },
   });
@@ -325,6 +350,7 @@ export function installFakeWebGpu(options: { timestamps?: boolean } = {}): {
   return {
     canvas,
     gpu,
+    requestedFeatures,
     restore(): void {
       for (const [name, descriptor] of previous) {
         if (descriptor) {
