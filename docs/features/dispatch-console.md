@@ -101,6 +101,10 @@ opens a call at the ground point under the cursor.
 - Single-file build (the shareable artifact): the whole console inlines to ~490 kB of ASCII-escaped JS, adds
   its own `<meta name=viewport>` at runtime (without it a phone lays out at ~980 px and the DESK layout wins
   on a 412 px screen — found by publishing it), and opens on `?demo=1`.
+  **It is single-file only for `?demo=1`.** The pak worker is emitted as a separate `assets/pak-worker-*.js`
+  chunk, and `?demo=1` never constructs it — so the gap stayed invisible until a real pak was streamed on a
+  phone and the console 404'd on the worker with the manifest already fetched. Serving a real `?src=` from the
+  single-file build means shipping that one chunk beside it, at the path its own bundle names.
 - In-browser (SwiftShader, 2026-08-04): engine boot, `.oscell`/`.ostex` load (576 recorded draws), the frame
   loop, frustum culling (53/144 cells visible), the projected symbology, the whole console and the
   pak-missing failure path all run. **The rendered world image was NOT verified** — the software WebGPU
