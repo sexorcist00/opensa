@@ -89,7 +89,7 @@ interface DispatchWorld {
 
 export async function bootDispatch(options: BootOptions): Promise<DispatchHandle> {
   const { canvas, overlay } = options;
-  const params = new URLSearchParams(window.location.search);
+  const params = dispatchParams();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const resize = (): void => {
     canvas.width = Math.max(2, Math.floor(canvas.clientWidth * dpr));
@@ -197,6 +197,20 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 }
 
 /**
+ * The console's query parameters.
+ *
+ * Normally the address bar, but a host that does not OWN its URL can set `window.__opensaDispatch` to the
+ * same string instead. That is not hypothetical: a page opened from Android's downloads provider
+ * (`content://…`) or from a `file://` path has an opaque origin where `history.replaceState` throws, so a
+ * wrapper cannot put `?demo=1` in the URL — and the console would default to streaming a build that is not
+ * there. Found in the field, on a phone, after the GPU side had finally started working.
+ */
+export function dispatchParams(): URLSearchParams {
+  const override = (window as { __opensaDispatch?: string }).__opensaDispatch;
+
+  return new URLSearchParams(override ?? window.location.search);
+}
+/**
  * Wire the map's gestures to the camera and to selection. The gesture layer decides WHAT happened (tap, pan,
  * orbit, pinch, long press); this decides what it MEANS: a tap selects, a long press opens a call there.
  */
@@ -246,6 +260,7 @@ function bindInput(input: {
     zoomBy: (factor) => camera.zoomBy(factor),
   });
 }
+
 /** The game's own timecyc when the build ships one, so the map is lit as the game lights it. */
 async function buildEnvironment(
   engine: Engine,
