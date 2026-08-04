@@ -172,7 +172,16 @@ export function setupPerfRuns(host: PerfRunsHost): void {
     // eslint-disable-next-line no-console -- bench CLI feedback (the record's context, same protocol)
     console.log(`[bench] road cars registered: ${vehicles ? placements.length : 0}`);
   };
+  // Printed ONCE per sweep, because it does not vary by scene: what the adapter offers, what it LACKS, its
+  // feature level, and the size the run was taken at. On a phone the missing half is the schema — no
+  // `timestamp-query` means the `gpuMs` column below is absent rather than zero, and a reader who cannot
+  // see that will compare the row to a desktop one (`docs/benchmarks/readme.md`, mobile schema).
+  const reportDevice = (): void => {
+    // eslint-disable-next-line no-console -- same `[bench]` protocol; this line IS part of the record
+    console.log('[bench] device', JSON.stringify(host.engine.deviceReport));
+  };
   if (benchKey) {
+    reportDevice();
     const scenes = benchKey === 'all' ? BENCH_SCENES : BENCH_SCENES.filter((scene) => scene.key === benchKey);
     if (scenes.length === 0) {
       // eslint-disable-next-line no-console -- bench CLI feedback, same as prod

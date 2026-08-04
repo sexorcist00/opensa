@@ -56,6 +56,12 @@ blocklisted. That proves the hardware and is **not a shipping path**, so it cann
 1805 MB on the soak; the one mobile row is a 37 MB synthetic city. Any number written before this step is
 measured is a fitted constant with no residual — the thing `CLAUDE.md` forbids.
 
+**Shipped so far: the inputs, not the ceiling.** `describeDevice` (`engine.deviceReport`) emits the adapter's
+features, what it lacks, its feature level, and the CSS size and DPR, as `[bench] device` once per sweep — so
+every capture from here on carries the facts a budget would be derived from. **The ceiling itself is
+deliberately absent**: WebGPU exposes no VRAM, so a number written before a device has been measured is a
+fitted constant with nothing to check it against, which is the thing `CLAUDE.md` forbids outright.
+
 - Derive the ceiling from what the device actually reports (`adapter.limits`, the feature set, DPR, viewport)
   plus a **measured pressure probe** — allocate until the device complains, once, and record where.
 - **The rule this step exists to protect:** no per-device table. "Mali → 0.6" is the hardware version of
