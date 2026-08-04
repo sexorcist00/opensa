@@ -83,3 +83,28 @@ iOS 26 — the **content** is. The measured consequences:
 
 Anything cheaper than that needs an ASTC/ETC2 encode path (transcoding from DXT, so a second generation of
 loss) or Basis Universal / KTX2 in `.ostex` and a transcode at load. Neither exists today.
+
+### Measured on a real phone (2026-08-04)
+
+Yandex Browser 26.6.2 (Chromium 148), **Mali-G51 / ARM Bifrost, Android 10**, 360x800 CSS px, DPR 2:
+
+| | |
+| --- | --- |
+| `navigator.gpu` | present |
+| adapter, default request | **null** until `#enable-unsafe-webgpu` was enabled and the browser RESTARTED; obtained afterwards |
+| adapter, `featureLevel: 'compatibility'` | also obtained — the Vulkan path was not the blocker here, the adapter BLOCKLIST was |
+| `texture-compression-bc` | **no** |
+| `texture-compression-astc` | **yes** (+ `-astc-sliced-3d`) |
+| `texture-compression-etc2` | **yes** |
+| `timestamp-query` | no — the HUD's GPU timings fall back to CPU, as designed |
+| features | 12, including `core-features-and-limits`, so CORE limits apply (not the reduced compatibility set) |
+
+Three things this pins down. **The BC/ASTC split is real hardware, not theory** — the same adapter that
+refuses BC offers both mobile formats. **Chromium's Android 12+ rule is about the DEFAULT**, not a hard
+ceiling: an Android 10 device reached a core adapter once the blocklist was lifted. And **the flag is a
+developer flag** — it carries a security warning and nobody else's phone has it on, so it proves the hardware
+is capable without being a shipping path.
+
+What it makes possible today: `?demo=1` and any `--rgba8` pak render in 3D on this phone. What it argues for
+next: ASTC is not a hypothetical target — this GPU has it, and an ASTC `.ostex` would cost roughly what BC
+costs instead of RGBA8's 4-8x.
