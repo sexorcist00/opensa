@@ -1,7 +1,7 @@
 # Concept — universal textures in `.ostex` (Basis/KTX2 + transcode at load)
 
 **Status: live, go/no-go pending.** Opened 2026-08-04 as the gate on
-[roadmap 0.5.0 / 09 / chain 2](../roadmap/0.5.0/plans/09-platform-reach/2-universal-textures/readme.md).
+[plan 097 / chain 2](../plans/097-platform-reach/2-universal-textures/readme.md).
 
 ## The question
 

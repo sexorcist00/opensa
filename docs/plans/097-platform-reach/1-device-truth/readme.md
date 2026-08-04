@@ -7,7 +7,7 @@ first texture, by name.
 
 > **Caught:** partly. `beginOstexUpload` throws by name — but *nothing in the build or in CI tells you a pak
 > is undisplayable on a platform you are targeting.*
-> — [restrictions/assets-and-data.md](../../../../../restrictions/assets-and-data.md#a-worlds-texture-format-decides-which-gpus-can-display-it)
+> — [restrictions/assets-and-data.md](../../../restrictions/assets-and-data.md#a-worlds-texture-format-decides-which-gpus-can-display-it)
 
 ## 01 — The pak declares which GPUs can display it
 
@@ -47,7 +47,7 @@ blocklisted. That proves the hardware and is **not a shipping path**, so it cann
   claim (a flagged browser is evidence about hardware, never about reach).
 - Note for the harness: over plain `http://` on a LAN IP, `caches` is undefined and every asset re-downloads
   silently — a phone run must be served over https or the run says it was not
-  ([browser-runtime.md](../../../../../edge-cases/browser-runtime.md)).
+  ([browser-runtime.md](../../../edge-cases/browser-runtime.md)).
 - **Same change:** a row in `docs/debug/README.md` if it produces a script.
 
 ## 04 — The budget, derived rather than declared
