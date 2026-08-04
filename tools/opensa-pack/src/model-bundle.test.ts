@@ -1,9 +1,31 @@
-import { OsmSectionTag } from '@opensa/engine-formats';
+import {
+  encodeOsmTextures,
+  encodeOstex,
+  OsmSectionTag,
+  OstexFormat,
+  type OstexFormatId,
+  ostexLayerBytes,
+} from '@opensa/engine-formats';
 import { describe, expect, it } from 'vitest';
 
 import { createModelBundles } from './model-bundle';
 
 const section = (tag: number, byte = 1): { bytes: Uint8Array; tag: number } => ({ bytes: Uint8Array.of(byte), tag });
+
+/** A `TEXS` section holding one 4×4 dictionary array in `format`. */
+function texs(format: OstexFormatId): { bytes: Uint8Array; tag: number } {
+  const array = encodeOstex({
+    format,
+    height: 4,
+    layers: [{ alphaClass: 0, cutoutRef: 0, nameHash: 0, wrap: 0 }],
+    mipCount: 1,
+    payload: new Uint8Array(ostexLayerBytes(format, 4, 4, 1)),
+    premultiplied: true,
+    width: 4,
+  });
+
+  return { bytes: encodeOsmTextures({ arrays: [array] }), tag: OsmSectionTag.TEXS };
+}
 
 describe('createModelBundles', () => {
   describe('negative cases', () => {
@@ -59,6 +81,23 @@ describe('createModelBundles', () => {
 
       expect(bundles.hasSection('lamppost1', OsmSectionTag.GEOM)).toBe(true);
       expect(bundles.inserts()[0].name).toBe('lamppost1.osm');
+    });
+
+    it('reports the dictionary formats the build wrote, across every model', () => {
+      // What the platform check reads: a car is not in the pak, so this is the only place the build can
+      // learn whether its MODELS can be spawned on the GPU family it claims.
+      const bundles = createModelBundles();
+      bundles.add('infernus', { sections: [texs(OstexFormat.BC3)] });
+      bundles.add('cj', { sections: [texs(OstexFormat.RGBA8)] });
+
+      expect(bundles.ostexFormats().sort()).toEqual([OstexFormat.BC3, OstexFormat.RGBA8].sort());
+    });
+
+    it('reports no formats for models that contributed no dictionary', () => {
+      const bundles = createModelBundles();
+      bundles.add('crate', { sections: [section(OsmSectionTag.SHAT)] });
+
+      expect(bundles.ostexFormats()).toEqual([]);
     });
 
     it('keeps models apart', () => {

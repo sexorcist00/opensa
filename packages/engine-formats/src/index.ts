@@ -41,7 +41,7 @@ export {
 export { decodeOsmHull, encodeOsmHull, type OsmHull } from './osm-hull';
 export { decodeOsmShatter, encodeOsmShatter, type OsmShatter, type OsmShatterMaterial } from './osm-shatter';
 export { decodeOsmSkeleton, encodeOsmSkeleton, type OsmFrame, type OsmSkeleton } from './osm-skeleton';
-export { decodeOsmTextures, encodeOsmTextures, type OsmTextures } from './osm-textures';
+export { decodeOsmTextures, encodeOsmTextures, osmTextureFormats, type OsmTextures } from './osm-textures';
 export {
   buildOspak,
   OSPAK_ALIGN,
@@ -70,6 +70,7 @@ export {
   ostexLayerBytes,
   ostexMaxMips,
   ostexMipLayout,
+  readOstexFormat,
 } from './ostex';
 export {
   decodeOswire,

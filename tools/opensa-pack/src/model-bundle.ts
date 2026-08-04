@@ -9,9 +9,9 @@
  * dedupes inserts by name, so the second contribution is silently dropped and the model loses half its
  * sections. This accumulator is what makes that impossible.
  */
-import type { OsmSection } from '@opensa/engine-formats';
+import type { OsmSection, OstexFormatId } from '@opensa/engine-formats';
 
-import { encodeOsm } from '@opensa/engine-formats';
+import { encodeOsm, OsmSectionTag, osmTextureFormats } from '@opensa/engine-formats';
 
 import type { ArchiveInsert } from './archive-edit';
 
@@ -22,6 +22,10 @@ export interface ModelBundles {
   hasSection(model: string, tag: number): boolean;
   /** Every accumulated model as archive inserts — ONE `.osm` each; the dictionary rides in `TEXS`. */
   inserts(): ArchiveInsert[];
+  /** The format of every dictionary array accumulated so far — the build's platform check reads it to learn
+   *  which GPUs can spawn these models. Headers only: {@link inserts} is what encodes, and calling it twice
+   *  to answer this would re-encode the whole game. */
+  ostexFormats(): OstexFormatId[];
   /** Number of distinct models accumulated. */
   size(): number;
 }
@@ -57,6 +61,18 @@ export function createModelBundles(): ModelBundles {
       }
 
       return out;
+    },
+    ostexFormats(): OstexFormatId[] {
+      const formats: OstexFormatId[] = [];
+      for (const bundle of bundles.values()) {
+        for (const section of bundle.sections) {
+          if (section.tag === OsmSectionTag.TEXS) {
+            formats.push(...osmTextureFormats(section.bytes));
+          }
+        }
+      }
+
+      return formats;
     },
     size(): number {
       return bundles.size;

@@ -32,6 +32,7 @@ import { packMapObjects } from './pack-map-objects';
 import { packPeds } from './pack-peds';
 import { packProps } from './pack-props';
 import { packVehicles } from './pack-vehicles';
+import { assertPlatformSupport, platformDemand, satisfiedTargets } from './platforms';
 import { bakeWater } from './water';
 
 export interface PackOptions {
@@ -64,6 +65,10 @@ export interface PackOptions {
    *  Defaults to `<outDir>/pak` (plan 086 phase 8: the game dir is SELF-CONTAINED — one folder pick
    *  serves the whole game; `pak/` replaced the confusing nested `opensa/` name). */
   pakDir?: string;
+  /** GPU families this build CLAIMS to run on (`desktop`, `mobile`). The pack fails when the textures it
+   *  wrote demand a feature the named family does not carry — the one moment that is still checkable, since
+   *  after this the answer belongs to someone else's device. Unset = claim nothing, only report. */
+  platforms?: readonly string[];
   /** Inclusive GTA CELL-coordinate rect [x0, y0, x1, y1]. Absent = auto-fit to every cell with content
    *  (plan 087: a fixed rect silently dropped gostown's far islands). */
   rect?: readonly [number, number, number, number];
@@ -178,11 +183,29 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   }
   writeFileSync(join(products, 'manifest.json'), JSON.stringify(manifest));
 
+  // Which GPUs can run what we just wrote. Computed from BOTH halves — the pak's arrays and every model's
+  // dictionary — because a car is not in the pak, so a world that loads on a phone can still fail at the
+  // first spawn. Reported always; enforced only when the caller claimed a platform.
+  const demand = platformDemand(manifest, bundles.ostexFormats());
+  const targets = satisfiedTargets(demand);
+  log(
+    `platforms: needs [${demand.features.join(', ') || 'nothing'}] ` +
+      `(world [${demand.world.join(', ') || 'nothing'}], models [${demand.models.join(', ') || 'nothing'}]) ` +
+      `→ runs on ${targets.join(', ') || 'no known GPU family'}`,
+  );
+  if (options.platforms !== undefined && options.platforms.length > 0) {
+    assertPlatformSupport(demand, options.platforms);
+  }
+
   // Convert the by-name assets INTO the copied archives — `<model>.dff`/`<txd>.txd` out, `<model>.osm` in.
   const written = packed ? rewriteOptimizedArchives(outDir, bundles, packed, log) : null;
   writeFileSync(
     join(products, 'report.json'),
-    JSON.stringify({ ...report, ...(written ? { models: written } : {}) }, null, 2),
+    JSON.stringify(
+      { ...report, platforms: { ...demand, satisfies: targets }, ...(written ? { models: written } : {}) },
+      null,
+      2,
+    ),
   );
   printReport(report, started, log);
 

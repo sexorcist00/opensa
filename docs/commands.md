@@ -108,11 +108,14 @@ NODE_OPTIONS=--max-old-space-size=8192 npx tsx tools/sa-lod-generator/src/cli.ts
 # Game dir → native pak (the pack stage standalone)
 NODE_OPTIONS=--max-old-space-size=12288 \
   npx tsx tools/opensa-pack/src/cli.ts --game <dir> --out <dir> --in ./mods-src
-#   [--rect x0,y0,x1,y1] [--pak-out <dir>] [--game-id <id>] [--no-ao] [--bakes --clouds mods-src/clouds] [--no-models] [--bake-workers N] [--stochastic <file…>]
+#   [--rect x0,y0,x1,y1] [--pak-out <dir>] [--game-id <id>] [--no-ao] [--bakes --clouds mods-src/clouds] [--no-models] [--bake-workers N] [--stochastic <file…>] [--platforms desktop|mobile[,…]]
 #   --rect: optional SUBSET override (bench districts); default auto-fits every cell with content — the old
 #     hardcoded ±12 silently dropped gostown's far islands (plan 087)
 #   --pak-out: where the pak products land (default: <out>/pak — the game dir is self-contained, 086 phase 8)
 #   --game-id: fetch game id stamped into the pak manifest (default: basename of --game; pmb passes its own)
+#   --platforms: ASSERT the build runs on the named GPU families, and fail the pack when it does not. Every
+#     run reports the demand anyway (report.json `platforms`, and one log line): world arrays ∪ model
+#     dictionaries, because a car is NOT in the pak — an --rgba8 world can still be unspawnable on a phone
 ```
 
 ## Viewers' compare server
