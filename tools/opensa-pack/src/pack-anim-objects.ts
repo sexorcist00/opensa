@@ -36,6 +36,7 @@ export function packAnimObjects(
   defs: { catalog: ReadonlyMap<number, IdeObjectDef> },
   bundles: ModelBundles,
   log: (message: string) => void,
+  options: { forceRgba8?: boolean } = {},
 ): AnimPackReport {
   const failed: { error: string; model: string }[] = [];
   const converted = new Set<string>();
@@ -69,6 +70,7 @@ export function packAnimObjects(
       } else {
         const built = buildModelOsm(fs, model, {
           extraSections: (_built, _dff, clump) => [skeleton(skeletonOf(clump.frames))],
+          ...(options.forceRgba8 ? { forceRgba8: true } : {}),
           txd: def.txdName.toLowerCase(),
         });
         bundles.add(model, { sections: built.sections });

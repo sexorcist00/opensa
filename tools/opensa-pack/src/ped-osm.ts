@@ -40,7 +40,13 @@ export interface PedOsm {
  * to the capsule bottom — so it depends on the pose. Measured on the BIND pose instead, the player sinks
  * into the ground to the knees, which is exactly what the first field check showed.
  */
-export function buildPedOsm(fs: AssetFileSystem, model: string, txdName: string, restClip?: IfpAnimation): PedOsm {
+export function buildPedOsm(
+  fs: AssetFileSystem,
+  model: string,
+  txdName: string,
+  restClip?: IfpAnimation,
+  forceRgba8 = false,
+): PedOsm {
   const name = model.toLowerCase();
   const dff = fs.get(`${name}.dff`);
   if (!dff) {
@@ -56,7 +62,7 @@ export function buildPedOsm(fs: AssetFileSystem, model: string, txdName: string,
   // measurement costs a second one. Offline, that is free.
   const built = restClip ? (buildPedModel(clump, txds, { poseWith: pedClip(restClip, bind.bones) }) ?? bind) : bind;
 
-  const { arrays, slotOf } = bucketTextures(built);
+  const { arrays, slotOf } = bucketTextures(built, forceRgba8);
   const { bin, fixture } = packPedFixture(name, built, slotOf);
 
   const sections: OsmSection[] = [
@@ -137,7 +143,10 @@ export function packPedFixture(
  * Group the ped's textures by SIZE — one `.ostex` per bucket — and return where each texture NAME landed.
  * Every texture the builder decoded is carried; none is dropped for disagreeing with the others.
  */
-function bucketTextures(built: PedModelData): {
+function bucketTextures(
+  built: PedModelData,
+  forceRgba8: boolean,
+): {
   arrays: Uint8Array[];
   slotOf: Map<string, { array: number; layer: number }>;
 } {
@@ -158,7 +167,10 @@ function bucketTextures(built: PedModelData): {
       slotOf.set(texture.name.toLowerCase(), { array, layer });
     });
     arrays.push(
-      packModelOstex({ height, layers: textures.length, names: textures.map((texture) => texture.name), rgba, width }),
+      packModelOstex(
+        { height, layers: textures.length, names: textures.map((texture) => texture.name), rgba, width },
+        { forceRgba8 },
+      ),
     );
   }
 

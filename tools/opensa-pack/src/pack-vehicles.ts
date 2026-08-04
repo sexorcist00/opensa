@@ -47,6 +47,7 @@ export function packVehicles(
   fs: AssetFileSystem,
   bundles: ModelBundles,
   log: (message: string) => void,
+  options: { forceRgba8?: boolean } = {},
 ): VehiclePackResult {
   const text = fs.getText('data/vehicles.ide');
   if (text === null) {
@@ -71,6 +72,7 @@ export function packVehicles(
     try {
       const declared = features.get(model) ?? [];
       const built = buildVehicleOsm(fs, model, {
+        ...(options.forceRgba8 ? { forceRgba8: true } : {}),
         ...(declared.includes(UP_DOWN_LIGHTS) ? { popUpLights: true } : {}),
         txd: def.txd.toLowerCase(),
         wheelScale: def.wheelScale,

@@ -33,6 +33,7 @@ export function packClutter(
   defs: MapDefinitions,
   bundles: ModelBundles,
   log: (message: string) => void,
+  options: { forceRgba8?: boolean } = {},
 ): ClutterPackReport {
   const text = fs.getText('data/procobj.dat');
   if (text === null) {
@@ -56,7 +57,10 @@ export function packClutter(
       continue; // several rules share a species
     }
     try {
-      const built = buildModelOsm(fs, model, { ...(txdByModel.has(model) ? { txd: txdByModel.get(model) } : {}) });
+      const built = buildModelOsm(fs, model, {
+        ...(options.forceRgba8 ? { forceRgba8: true } : {}),
+        ...(txdByModel.has(model) ? { txd: txdByModel.get(model) } : {}),
+      });
       bundles.add(model, { sections: built.sections });
       osmBytes += built.bytes.byteLength;
       ostexBytes += built.ostex.byteLength;

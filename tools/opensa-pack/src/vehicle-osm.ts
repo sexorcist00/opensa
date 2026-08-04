@@ -34,6 +34,8 @@ export interface VehicleOsm {
 }
 
 export interface VehicleOsmOptions {
+  /** Emit the car's dictionary as RGBA8 — the model half of `--rgba8` (a car is not in the pak). */
+  forceRgba8?: boolean;
   /** `features.txt` → `UP/DOWN_LIGHTS`: force the retractable-headlight component on a pod whose faces
    *  carry no head-lamp marker. */
   popUpLights?: boolean;
@@ -53,6 +55,7 @@ export function buildVehicleOsm(fs: AssetFileSystem, model: string, options: Veh
 
       return [{ bytes: encodeOsmCollision(collision.collision), tag: OsmSectionTag.COLL }];
     },
+    ...(options.forceRgba8 ? { forceRgba8: true } : {}),
     sharedTxds: SHARED_VEHICLE_TXDS,
     ...(options.txd ? { txd: options.txd } : {}),
     ...(options.popUpLights ? { popUpLights: true } : {}),

@@ -30,8 +30,14 @@ const ALPHA_TO_OSTEX: Record<AlphaClass, number> = {
   softBlend: OstexAlphaClass.SOFT_BLEND,
 };
 
-/** Encode a built model's texture array as a `.ostex` file. */
-export function packModelOstex(texture: VehicleTextureArray): Uint8Array {
+/**
+ * Encode a built model's texture array as a `.ostex` file.
+ *
+ * `forceRgba8` is the model half of `opensa-pack --rgba8`, and it is not optional for a mobile build: a car
+ * is not in the pak, so converting only the WORLD leaves every vehicle and ped BC — the world then loads on
+ * a phone and the first spawn throws.
+ */
+export function packModelOstex(texture: VehicleTextureArray, options: { forceRgba8?: boolean } = {}): Uint8Array {
   const { height, layers: layerCount, names, rgba, width } = texture;
   const texelBytes = width * height * 4;
   // ONE level, and opensa-pack must never generate more: MIPS BELONG TO map-optimizer. It is the stage
@@ -68,7 +74,7 @@ export function packModelOstex(texture: VehicleTextureArray): Uint8Array {
   // 85 % of vehicle TXDs mix formats or sizes within one dictionary.
   const blockAligned = width % 4 === 0 && height % 4 === 0;
   const needsAlpha = classes.some((alphaClass) => alphaClass !== 'opaque');
-  const compressed = blockAligned ? (needsAlpha ? 'dxt5' : 'dxt1') : null;
+  const compressed = blockAligned && !options.forceRgba8 ? (needsAlpha ? 'dxt5' : 'dxt1') : null;
   const format: OstexFormatId =
     compressed === null ? OstexFormat.RGBA8 : compressed === 'dxt1' ? OstexFormat.BC1 : OstexFormat.BC3;
   const layerMips = processed.map((data) => [
