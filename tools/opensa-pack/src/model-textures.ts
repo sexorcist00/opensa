@@ -90,8 +90,11 @@ export function planModelTextures(
   preferCutout = false,
   emptyDictionary = false,
   model?: string,
+  forceRgba8 = false,
 ): ModelDictionary {
-  const planner = new TexturePlanner(fs, txdParents);
+  // The planner owns the format choice, so `--rgba8` has to reach it here too: a map object planned from its
+  // raw TXD would otherwise stay BC while the world around it converted.
+  const planner = new TexturePlanner(fs, txdParents, [], new Set(), { forceRgba8 });
   const slots = planModelSlots(planner, names, txdName, preferCutout, emptyDictionary, model);
 
   // `build()` emits in ref order, but say so rather than assume it — a mis-ordered array silently

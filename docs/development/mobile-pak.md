@@ -9,11 +9,27 @@ available.
 
 | Flag | What it does | What it costs |
 | --- | --- | --- |
-| `--rgba8` | Refuses the DXT passthrough, so every world texture is decoded to RGBA8 — a format every GPU reads | **4-8x** the texture memory |
+| `--rgba8` | Refuses the DXT passthrough, so every texture is decoded to RGBA8 — a format every GPU reads | **4-8x** the texture memory |
 | `--max-texture N` | Caps every texture edge at N (power of two), halving both axes together so aspect survives | One halving takes back **three quarters** of what `--rgba8` costs |
 
 They are meant to be used together. `--rgba8` alone makes a district affordable only at a very small `--rect`;
 with `--max-texture 256` the same memory buys roughly sixteen times the area.
+
+**`--rgba8` covers the MODELS too, since 2026-08-04.** It used to convert only the world, and a car is not in
+the pak — `model-ostex.ts` picked BC for any block-aligned dictionary, so a phone loaded the district and threw
+on the first spawn. That is why every recipe here passed `--no-models`. With models converted the flag means
+what it says, and the cost lands where a car's dictionary already is (~20× its model, so a full vehicle roster
+in RGBA8 is not a district-sized decision — keep `--no-models` unless the run needs cars).
+
+## Verify it rather than trust the flag
+
+```bash
+npx tsx tools/opensa-pack/src/cli.ts --game … --out … --rgba8 --platforms mobile
+```
+
+`--platforms` fails the pack when what it wrote demands a feature that GPU family does not carry, reading
+**both** halves (the pak's arrays and every model's dictionary). Without it the pack still reports the demand:
+one log line, and `platforms` in `report.json`.
 
 A texture over the cap is decoded rather than passed through — a DXT block cannot be resized while compressed —
 so `--max-texture` alone already implies re-encoding for the textures it touches.

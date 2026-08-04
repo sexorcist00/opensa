@@ -43,6 +43,9 @@ export interface ModelOsmOptions {
    * wherever the builder bakes a frame transform.
    */
   extraSections?: (built: VehicleModelData, dff: ArrayBuffer, clump: RWClump) => OsmSection[];
+  /** Emit this model's dictionary as RGBA8 instead of BC — the model half of `--rgba8`, without which a
+   *  phone loads the world and then throws on the first spawn. */
+  forceRgba8?: boolean;
   /** `features.txt` → `UP/DOWN_LIGHTS`: force the retractable-headlight component on a pod whose faces
    *  carry no head-lamp marker. */
   popUpLights?: boolean;
@@ -104,6 +107,7 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
         options.rawDictionary.preferCutout,
         dictionary.empty,
         name,
+        options.forceRgba8,
       )
     : null;
   const shared = options.worldDictionary
@@ -132,7 +136,11 @@ export function buildModelOsm(fs: AssetFileSystem, model: string, options: Model
   }
   // Without a raw dictionary the builder bucketed everything into ONE array, so `TEXS` carries a single
   // entry; peds and map objects are the classes whose textures disagree on size and need more.
-  const ostex = shared ? new Uint8Array(0) : planned ? planned.arrays[0] : packModelOstex(built.texture);
+  const ostex = shared
+    ? new Uint8Array(0)
+    : planned
+      ? planned.arrays[0]
+      : packModelOstex(built.texture, { forceRgba8: options.forceRgba8 ?? false });
   const sections: OsmSection[] = [
     { bytes: new TextEncoder().encode(JSON.stringify(fixture)), tag: OsmSectionTag.DESC },
     { bytes: bin, tag: OsmSectionTag.GEOM },

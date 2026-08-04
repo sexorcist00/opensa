@@ -137,7 +137,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     ...(models
       ? {
           onWorldPlanned: (planner, mapDefs): void => {
-            packed = packModels(fs, mapDefs, planner, bundles, log);
+            packed = packModels(fs, mapDefs, planner, bundles, log, options.forceRgba8 ?? false);
           },
         }
       : {}),
@@ -273,19 +273,22 @@ function packModels(
   planner: TexturePlanner,
   bundles: ReturnType<typeof createModelBundles>,
   log: (message: string) => void,
+  // A car is not in the pak, so `--rgba8` has to reach every class that ships its OWN dictionary; the map
+  // objects plan into the world planner, which already has it.
+  forceRgba8: boolean,
 ): PackedModels {
-  const vehicles = packVehicles(fs, bundles, log);
+  const vehicles = packVehicles(fs, bundles, log, { forceRgba8 });
   // Smashable props (5b): only a `SHAT` section, so the model keeps its `.dff` — the shatter mesh is the
   // ONLY thing the runtime resolves by name for a prop, and it is what costs a main-thread DFF parse.
   const breakables = packBreakables(fs, breakableModelsFromText(fs.getText('data/object.dat')), bundles, log);
   // Clutter species (5c): the HOT by-name class — a species builds on cell stream-in, not on a rare event.
-  const clutter = packClutter(fs, defs, bundles, log);
+  const clutter = packClutter(fs, defs, bundles, log, { forceRgba8 });
   // Topple props (5d): the collider hull the host otherwise collects with a SECOND clump walk per prop.
   const props = packProps(fs, defs, bundles, log);
   // Animated map objects (5e): the frame tree the IFP matches by name — the clip stays a separate asset.
-  const animObjects = packAnimObjects(fs, defs, bundles, log);
+  const animObjects = packAnimObjects(fs, defs, bundles, log, { forceRgba8 });
   // Peds (5f): their own DESC/GEOM — no colours, no paint slots, but joints/weights and a real skeleton.
-  const peds = packPeds(fs, bundles, log);
+  const peds = packPeds(fs, bundles, log, { forceRgba8 });
   // Map objects (5g): everything else the IDEs name, against the shared dictionary.
   const mapObjects = packMapObjects(fs, defs, planner, bundles, isVegetationDef, log, defs.txdParents);
 

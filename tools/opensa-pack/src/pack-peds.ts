@@ -35,7 +35,12 @@ export interface PedPackResult {
 }
 
 /** Convert every ped. A missing model or an unskinned clump is reported, never fatal. */
-export function packPeds(fs: AssetFileSystem, bundles: ModelBundles, log: (message: string) => void): PedPackResult {
+export function packPeds(
+  fs: AssetFileSystem,
+  bundles: ModelBundles,
+  log: (message: string) => void,
+  options: { forceRgba8?: boolean } = {},
+): PedPackResult {
   const text = fs.getText('data/peds.ide');
   if (text === null) {
     log('peds: no data/peds.ide — skipped');
@@ -71,7 +76,7 @@ export function packPeds(fs: AssetFileSystem, bundles: ModelBundles, log: (messa
       continue;
     }
     try {
-      const built = buildPedOsm(fs, model, def.txd.toLowerCase(), restClip);
+      const built = buildPedOsm(fs, model, def.txd.toLowerCase(), restClip, options.forceRgba8 ?? false);
       bundles.add(model, { sections: built.sections });
       deletes.push(`${model}.dff`);
       bytes += built.bytes.byteLength;
