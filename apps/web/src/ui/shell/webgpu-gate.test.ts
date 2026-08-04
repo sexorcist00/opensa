@@ -29,15 +29,17 @@ describe('probeWebGpuSupport', () => {
     it('reports unsupported when the adapter request throws', async () => {
       expect(await probeWebGpuSupport(fakeGpu(null, true))).toBe(false);
     });
-
-    it('reports unsupported when the adapter lacks BC texture compression', async () => {
-      expect(await probeWebGpuSupport(fakeGpu({ features: new Set(['timestamp-query']) }))).toBe(false);
-    });
   });
 
   describe('positive cases', () => {
     it('reports supported for an adapter with BC texture compression', async () => {
       expect(await probeWebGpuSupport(fakeGpu({ features: new Set(['texture-compression-bc']) }))).toBe(true);
+    });
+
+    // The gate answers about the DEVICE only. A mobile adapter carries ASTC/ETC2 and no BC, and its browser
+    // runs WebGPU fine — whether the world it is about to load is displayable is the manifest's question.
+    it('reports supported for a mobile adapter without BC', async () => {
+      expect(await probeWebGpuSupport(fakeGpu({ features: new Set(['texture-compression-astc']) }))).toBe(true);
     });
   });
 });

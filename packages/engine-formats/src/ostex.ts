@@ -19,6 +19,21 @@ export const OstexFormat = {
 } as const;
 export type OstexFormatId = (typeof OstexFormat)[keyof typeof OstexFormat];
 
+/**
+ * The GPU feature a payload in this format DEMANDS, or undefined when it uploads anywhere.
+ *
+ * This is the whole of "which GPUs can display this world", and it is a property of the CONTENT: the
+ * converter picked the format at build time and no runtime choice can re-take it. Mobile GPUs ship
+ * ETC2/ASTC and never BC, so a BC payload is a desktop payload.
+ */
+export const OSTEX_FORMAT_FEATURE: Record<OstexFormatId, string | undefined> = {
+  [OstexFormat.BC1]: 'texture-compression-bc',
+  [OstexFormat.BC2]: 'texture-compression-bc',
+  [OstexFormat.BC3]: 'texture-compression-bc',
+  [OstexFormat.BC7]: 'texture-compression-bc',
+  [OstexFormat.RGBA8]: undefined,
+};
+
 export const OstexAlphaClass = {
   CUTOUT: 1,
   OPAQUE: 0,

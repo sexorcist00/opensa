@@ -4,6 +4,7 @@
  * hashes (FNV-1a) make converter re-runs incremental and delivery cache-friendly.
  */
 import { fnv1a } from './binary';
+import { OSTEX_FORMAT_FEATURE, type OstexFormatId } from './ostex';
 
 export const OSPAK_VERSION = 1;
 export const OSPAK_ALIGN = 4096;
@@ -164,6 +165,28 @@ export function buildOspak(
     },
     pak,
   };
+}
+
+/**
+ * The GPU features this world DEMANDS, derived from the formats its texture arrays are stored in.
+ *
+ * Derived, never stored: the manifest already records every array's format, so a declared field could only
+ * drift from the payload it describes. This reads on every pak ever built, including the ones from before the
+ * question was asked.
+ *
+ * It answers only for the WORLD. Vehicles and peds live outside the pak entirely (`<model>.osm` resolved by
+ * name), so a build's full demand is this ∪ the model dictionaries' — see the packer's build-time check.
+ */
+export function ospakRequiredFeatures(manifest: OspakManifest): string[] {
+  const features = new Set<string>();
+  for (const entry of Object.values(manifest.textures)) {
+    const feature = OSTEX_FORMAT_FEATURE[entry.format as OstexFormatId];
+    if (feature !== undefined) {
+      features.add(feature);
+    }
+  }
+
+  return [...features].sort();
 }
 
 /** Validate a manifest a runtime just fetched (shape + version + range sanity). Throws with specifics. */

@@ -1,6 +1,6 @@
 import type { OspakManifest } from '@opensa/engine-formats';
 
-import { validateOspakManifest } from '@opensa/engine-formats';
+import { ospakRequiredFeatures, validateOspakManifest } from '@opensa/engine-formats';
 
 /**
  * Streaming-mode bootstrap (plan 074/05): manifest → worker (pak lives worker-side) → texture arrays
@@ -37,6 +37,30 @@ export interface StreamSetup {
   water?: OspakManifest['water'];
 }
 
+/**
+ * Can this device display this world? Asked ONCE, from the manifest, before a single cell streams.
+ *
+ * The demand belongs to the content and is decided by the converter — a pak built from SA assets is BC
+ * throughout, and mobile GPUs ship ETC2/ASTC and never BC. `beginOstexUpload` catches that too, but only when
+ * the first array reaches the upload drain: by then the boot looks successful, the world is streaming, and
+ * the message arrives as one texture's name. Read from the manifest it is a property of the WORLD, stated
+ * before anything is loaded — which is also the difference between telling a phone "your browser cannot run
+ * this" (false) and "this world needs a BC-capable GPU" (true).
+ */
+export function requireWorldSupport(
+  device: { features: { has(name: string): boolean } },
+  manifest: OspakManifest,
+): void {
+  const missing = ospakRequiredFeatures(manifest).filter((feature) => !device.features.has(feature));
+  if (missing.length > 0) {
+    throw new Error(
+      `this world's textures need GPU feature(s) this device does not have: ${missing.join(', ')}. ` +
+        `The format was chosen when the pak was built and cannot be changed at runtime — build the world for ` +
+        `this device (opensa-pack --rgba8) or run it on a GPU that carries the feature.`,
+    );
+  }
+}
+
 export async function setupStreaming(
   engine: Engine,
   source: PakSource = '/pak',
@@ -44,6 +68,7 @@ export async function setupStreaming(
 ): Promise<StreamSetup> {
   const manifest = await loadManifest(source);
   validateOspakManifest(manifest);
+  requireWorldSupport(engine.device, manifest);
   // UV-scroll animations (B7·c / plan 074/18): global by dict name, advanced engine-side; kind-4 draws slot in.
   engine.setUvAnimations(manifest.uvAnimations ?? []);
   // Missing-texture stand-ins (plan 085 row B): the highlight repaints these layers magenta on demand.
