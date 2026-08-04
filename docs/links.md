@@ -7,6 +7,14 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 
 - <https://github.com/gta-reversed/gta-reversed> — reversed GTA SA source; the reference for engine
   internals (pools, `CIplStore`, streaming) behind our int16/pool guards and the `asi/perfect-map` work.
+- <https://github.com/gta-android/gta-reversed-android> — reverse of GTA:SA **2.10 Android**. Consulted
+  2026-08-04 for the mobile-asset question: the Android release stores its textures in the OpenGL/PVR
+  Texture Native layout (PVRTC/ETC), not the D3D8/D3D9 one, so its `.txd` files are NOT an input this
+  project can read (`packages/renderware/src/parsers/binary/txd.ts` handles D3D only and skips what it does
+  not understand). Useful if that ever needs to change.
+- <https://github.com/in0finite/SanAndreasUnity> — open reimplementation of the SA engine in Unity, with
+  Android builds; development halted. Like every project of its kind it READS a copy of the game and does
+  not ship one, which is the answer to "where do the assets come from" for all of them.
 - <https://github.com/JuniorDjjr/CLEOPlus> — CLEO extension reference (opcode surface for plan 083).
 - <https://github.com/JuniorDjjr/SA-MixSets> — per-feature SA tweaks reference.
 - <https://github.com/JuniorDjjr/VehFuncs> — vehicle function extensions (useful for vehicle features
