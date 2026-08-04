@@ -56,7 +56,7 @@ in the 2026-08-04 recon (file:line current as of that date).
 
 ## Subtasks
 
-- [ ] Phase-0 spike (decision 3); record the verdict + the path taken.
+- [x] Phase-0 spike (decision 3); record the verdict + the path taken.
 - [ ] id→name resolver (adapter-side) + tests.
 - [ ] `CleoHost` object facet: request/available cache, handle table, create/rotate/coords/delete,
       unit conversions, disposal on runner teardown; detach-safety + missing-model tests
@@ -80,4 +80,29 @@ in the 2026-08-04 recon (file:line current as of that date).
 
 ## Ledger
 
-_(spike verdict, worker vs on-thread decision + numbers, facet inventory, field checkpoint 1 record)_
+_(worker vs on-thread decision + numbers, facet inventory, field checkpoint 1 record)_
+
+### Phase-0 spike — 2026-08-04, verdict POSITIVE (direct lookup; discovery still required for non-placed models)
+
+Temporary `?osmspike=<model>` hook (`apps/web/src/ui/osm-spike.ts`, wired in `engine-canvas-host.tsx`):
+`fs.get('<name>.osm')` → `readModelOsm` → `engine.createVehicleModel` → `engine.createVehicle` →
+`setRoot` each frame — exactly the `engine-props.ts` template, against the Jul-30 `build/original/opensa`
+served over `?loader=http-dir&src=http://localhost:3001/build/original/opensa`, headless.
+
+- **Positive**: `ferris01_law2.osm` (344 064 B, exterior-IPL-placed, `textureSource: 'world'`) resolved
+  by bare name, built, and rendered WHOLE at a fixed transform 60 m south of the player
+  (`spawn=350,-1900,9`, anchor gta 350,-1960,27) — rim, A-frame and platform all textured, so the
+  engine's `worldArrays` path (`engine.ts` — empty `textures` => submesh `array` refs sample the world
+  plan) covers spawned instances too, not only anim-objects. The REAL pier wheel visible in the same
+  shot confirms the near one is ours.
+- **Negative (the subset boundary, measured)**: `ab_jetseat_hrest.osm` is IN the served `gta3.img`
+  (10 944 entries, 8 779 `.osm`) but `MISSING from the runtime VFS` — the local/http-dir partition
+  selects only exterior-placed + peds + vehicles + procobj (`build-vfs.ts`), and interior-placed
+  models fall outside it. A model referenced ONLY by a CLEO script therefore cannot be found by name.
+- **Consequence for 04/06**: direct name lookup is the primary path and works for every map-placed
+  exterior model; the `cleoModelRefs` discovery (enumerate `cleo/*.cs`, pre-decode, feed the names
+  into the partition — decision 3's fallback) is REQUIRED, not optional, for mod-carried and
+  interior/unplaced models. Plan 06's packaging must add CLEO-referenced models to the selection on
+  every loader path (the fetch pack shares the same partition logic).
+- Probe kit: drag-look pitch needs `.sa-capture` hidden FIRST (the overlay eats the mouse); drag dy
+  is INVERTED (negative dy = pitch up; -120 framed a target 25° up at 60 m).

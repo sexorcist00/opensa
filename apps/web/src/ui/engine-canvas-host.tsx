@@ -112,6 +112,7 @@ import { setupVideoRuns } from './engine-video-runs';
 import { createGameRuntimeConfig, GAME_CELL_SIZE } from './game-runtime-config';
 import { Hud, type HudGame } from './hud/hud';
 import { loadFonts } from './hud/load-fonts';
+import { setupOsmSpike } from './osm-spike';
 import { loadCityBoxes, loadGxt, loadInfoZones } from './zone-data';
 
 interface EngineCanvasHostProps {
@@ -762,6 +763,10 @@ async function boot(
   // Smashable props (B7·a): the colliders are already tagged with their placement key by the shared adapter.
   // Uproot props (lampposts, meters) fall as real dynamic bodies; the rest shatter into analytic debris.
   const props = setupEngineProps(engine, fs, physics);
+  // `?osmspike=<model>` (097/04 phase 0): one map-object `.osm` loaded by NAME and rendered beside the
+  // player — the CLEO host's model path, proven before the chain is built. Temporary.
+  const osmSpikeName = params.get('osmspike');
+  const osmSpike = osmSpikeName ? setupOsmSpike(engine, fs, osmSpikeName) : null;
   // Animated map objects (B7·b): the converter left their MOVING frames out of the bundle; these are them.
   const animObjects = setupEngineAnimObjects(engine, fs, adapter);
   const breakables = setupEngineBreakables(engine, physics, collision, adapter, fs, props);
@@ -1552,6 +1557,7 @@ async function boot(
       const animStarted = performance.now();
       animObjects.update(animStarted / 1000, [Transform.x[playerEid], Transform.y[playerEid], Transform.z[playerEid]]);
       animMs = performance.now() - animStarted;
+      osmSpike?.update([Transform.x[playerEid], Transform.y[playerEid], Transform.z[playerEid]]);
       const vehiclesStarted = performance.now();
       tickVehicles(dt, renderAlpha);
       vehiclesMs = performance.now() - vehiclesStarted;
