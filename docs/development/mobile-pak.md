@@ -46,8 +46,20 @@ oxlint, lightningcss) are dev tooling the conversion never touches, and their pr
 ```bash
 pkg install nodejs-lts git python
 git clone <your fork> && cd opensa
-npm install --omit=optional          # optional platform binaries are the flaky part, and are not needed
+
+npm pkg delete scripts.prepare       # the repo's `prepare` runs husky, which --omit=dev does not install
+npm install --omit=dev               # 173 packages instead of 1171 — the dev toolchain is never used here
+npm i tsx                            # the TS runner; it is a devDependency, so --omit=dev skipped it
 ```
+
+**Do NOT pass `--omit=optional`.** It looks right — the flaky prebuilt binaries (nx, rolldown, oxlint) are
+optional deps — but npm already filters those by `os`/`cpu`, so an arm64 phone never fetches the `linux-x64`
+ones anyway. What `--omit=optional` *would* skip is `@esbuild/android-arm64`, which is exactly the binary
+`tsx` needs to run a single line of TypeScript.
+
+And do not reach for `--ignore-scripts` to get past the husky failure either: esbuild installs its platform
+binary from a `postinstall`, so silencing scripts trades one break for a worse one. Deleting the one script
+that fails is the surgical fix, and a git hook is meaningless on a phone.
 
 Put the game's `data/` and `models/` under `game-src/original/`, then convert a SMALL area first:
 
