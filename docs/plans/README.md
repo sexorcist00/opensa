@@ -16,8 +16,22 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`097`, one folder each (066, 073, 074, 078–082, 096, 097 carry multi-part sub-plans; 083 kept its
+`001`–`098`, one folder each (066, 073, 074, 078–082, 096–098 carry multi-part sub-plans; 083 kept its
 row but its chain was superseded by 097). Newest first:
+
+- **[098 — All land vehicle types](./098-all-land-vehicles/readme.md)** — **PLANNED 2026-08-04**,
+  supersedes `roadmap/0.5.0/plans/04-all-vehicle-types/` (deleted). Rewritten from a four-way recon
+  (data pipeline / physics / animation / docs) + the `NO_COMMIT/all-veh` corpus (the VSA Editor's
+  15-class special-ability catalogue; a control mod car). The recon overturned the old chain's two
+  pillars: 081/07's class-preset seed shipped EMPTY by measurement, and bikes fail on NAMES and
+  PLUMBING before physics — `wheel_front`/`wheel_rear` match no regex (zero wheels baked), the 13 `!`
+  bike-handling rows and the 30 `^` anim-group rows are parsed away, the ride IFPs sit in the
+  deliberately-unexpanded `anim/anim.img`, and the repo contains ZERO Rapier joints (trailer hitch is
+  greenfield). Eight sub-plans, four field checkpoints (it rides → it looks ridden → it tows → it
+  bounces): data foundations → features module (pop-up lights generalised into a token registry —
+  hydraulics, hooks, moving `misc_*` parts become data) → two-wheel balance controller on the authored
+  `!` rows → rider animation → first joints/towing → abilities → per-class gameplay → audit close-out.
+  Air/water/rail findings parked in `roadmap/0.6.0/plans/05-air-water-rail/`.
 
 - **[097 — CLEO basic](./097-cleo-basic/readme.md)** — **PLANNED 2026-08-04**, supersedes the deferred
   `roadmap/0.5.0/plans/08-cleo-basic/` chain (deleted; it was the unstarted 083 rethink). Rewritten from a

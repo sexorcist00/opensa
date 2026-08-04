@@ -65,7 +65,7 @@ Ring 2  FLOW       0.5 – 2.4 km   agents are SoA data (segment, s, speed, seed
 | D4 | **Suppression via the game's own density seams** (the multipliers mission scripts already set through opcodes 01EB/03DE), re-asserted per frame; ambient-only — scripted/mission entities, police response, parked car generators and (v0) trains untouched | Early-outing spawn function bodies: more RE surface, and mission-safety would be OUR claim instead of the game's own proven semantics |
 | D5 | **Two sim implementations, one spec + shared fixtures** (TS for the engine, C++ in the ASI; both walk the same `(area, nodeId)` graph so parity is testable) | A shared WASM core: a toolchain the repo doesn't have, for array math small enough to write twice |
 | D6 | **Traffic-light state has one owner (our controller)** in both hosts; in SA the `CTrafficLights` query functions are hooked so SA's own bulbs and any remaining vanilla AI see OUR phases | Driving only our visuals: two clocks disagreeing at one junction is worse than vanilla |
-| D7 | **Traffic = land vehicles in 0.5.0** (cars first; bikes/buses arrive via chain 04-all-vehicle-types); boats/planes are out (that chain excludes air & water); trains are ours (4-trains) | — |
+| D7 | **Traffic = land vehicles in 0.5.0** (cars first; bikes/buses arrive via [docs/plans/098-all-land-vehicles](../../../../plans/098-all-land-vehicles/readme.md)); boats/planes are out (that chain excludes air & water); trains are ours (4-trains) | — |
 
 ## The tree
 

@@ -19,12 +19,14 @@ The second-attempt plan now lives in the 0.6.0 "graphic improvements" draft bund
 street-lamp lighting v2 idea:
 [../0.6.0/plans/04-graphic-improvements/01-baked-directional-shadows.md](../0.6.0/plans/04-graphic-improvements/01-baked-directional-shadows.md).
 
-## All land vehicle types
+## All land vehicle types — PULLED BACK into active work (2026-08-04)
 
-Motorbikes (two-wheel balance controller + rider), bicycles, trucks with trailers (hitch joints),
-buses, utility vehicles (forklift/combine/mower). Air & water explicitly out. Builds on the 0.4.0 physics
-overhaul presets and the 074/08 dynamics layer. Full plan:
-[plans/04-all-vehicle-types/readme.md](plans/04-all-vehicle-types/readme.md).
+Rewritten against a fresh four-way recon (data pipeline, physics, animation, docs) plus the
+`NO_COMMIT/all-veh` corpus (the VSA Editor ability catalogue + a control mod car) and moved to
+[`docs/plans/098-all-land-vehicles/`](../../plans/098-all-land-vehicles/readme.md); the single-file chain
+that lived here (`plans/04-all-vehicle-types/`) is superseded and deleted. Air & water stay out — the
+recon's findings on them are recorded in
+[../0.6.0/plans/05-air-water-rail/readme.md](../0.6.0/plans/05-air-water-rail/readme.md).
 
 ## Rain & weather phenomena (timecyc-driven)
 

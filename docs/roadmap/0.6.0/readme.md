@@ -19,6 +19,13 @@ deleted 0.5.0 water idea.
 
 Full plan: [plans/02-water-realism/readme.md](plans/02-water-realism/readme.md).
 
+## Air, water and rail vehicles (IDEA — parked recon facts)
+
+Not scheduled work: the fact sheet the 098 all-land-vehicles recon produced about the out-of-scope
+classes — boats' rows never parse (column-count guard), the `$`/`%` handling sub-tables are unread,
+`anim.img` ingestion and the features module (`PLANE_SMOKE`) give them a landing path, and boats wait on
+water realism. Full note: [plans/05-air-water-rail/readme.md](plans/05-air-water-rail/readme.md).
+
 ## Graphic improvements — shadows + street-lamp lighting (DRAFT)
 
 A draft bundle of three parked look questions, kept together because one thinking round (possibly the
