@@ -7,7 +7,7 @@ The one-line problem: **a phone can boot the engine and cannot open the world.**
 demanding BC on 2026-08-04, so a Mali-G51 gets a device and renders `?demo=1` at 41 fps — and then the first
 real world texture throws by name, because a pak built from SA assets is BC throughout and no mobile GPU has
 BC. That is not a performance problem and not a browser problem. It is a **build-time content decision**
-([restrictions/assets-and-data.md](../../../../restrictions/assets-and-data.md#a-worlds-texture-format-decides-which-gpus-can-display-it)),
+([restrictions/assets-and-data.md](../../restrictions/assets-and-data.md#a-worlds-texture-format-decides-which-gpus-can-display-it)),
 and no runtime relaxation can undo it.
 
 ## The four decisions this chain is built on
@@ -19,7 +19,7 @@ Taken 2026-08-04 with the user, and every step below inherits them:
 | **Mobile reach first** | The phone is the target that orders the work | Desktop-only polish leads the cycle |
 | **Universal textures** (Basis/KTX2 + transcode at load) | One pak, every GPU family | Per-target pak variants as the primary path |
 | **WebGL2 fallback in scope** | A second backend, concept-gated, last | "WebGPU or nothing" as the permanent floor |
-| **Boldness: workers + COOP/COEP + a pak-format break** | Moving heavy work off the main thread, changing `.ostex`/`.oscell` | Changing what a **mod author's** files must mean — that line stays where [project-goals](../../../../project-goals.md#the-line-we-do-not-cross) put it |
+| **Boldness: workers + COOP/COEP + a pak-format break** | Moving heavy work off the main thread, changing `.ostex`/`.oscell` | Changing what a **mod author's** files must mean — that line stays where [project-goals](../../project-goals.md#the-line-we-do-not-cross) put it |
 
 ## The evidence this chain is answering
 
@@ -27,11 +27,11 @@ Every number below is already in the record; none of it is new work to find.
 
 | What | Measured | Where |
 | --- | --- | --- |
-| Phone, synthetic world | 41 fps, 162 draws, 37 MB resident — Mali-G51, 360×800 @ DPR 2 | [benchmarks, mobile row](../../../../benchmarks/index.md#mobile) |
-| Phone, real world | **impossible** — no BC; `--rgba8` costs 4–8× texture memory | [edge-cases/browser-runtime.md](../../../../edge-cases/browser-runtime.md#mobile-gpus-no-bc-so-no-sa-built-pak) |
-| Desktop field drive, populated map | 1004 slow frames, p50 21.3 ms · **GPU pass mean 15.64 ms against a CPU render of 0.1–0.6 ms** | [091 populated drive](../../../../benchmarks/index.md) |
+| Phone, synthetic world | 41 fps, 162 draws, 37 MB resident — Mali-G51, 360×800 @ DPR 2 | [benchmarks, mobile row](../../benchmarks/index.md#mobile) |
+| Phone, real world | **impossible** — no BC; `--rgba8` costs 4–8× texture memory | [edge-cases/browser-runtime.md](../../edge-cases/browser-runtime.md#mobile-gpus-no-bc-so-no-sa-built-pak) |
+| Desktop field drive, populated map | 1004 slow frames, p50 21.3 ms · **GPU pass mean 15.64 ms against a CPU render of 0.1–0.6 ms** | [091 populated drive](../../benchmarks/index.md) |
 | Cold entry into a district | first frame `cell-collision-read` **235 ms**, then ~20 frames of 110–170 ms while cells stream 0 → 95 | 093 sweep |
-| Named spike costs | COL parse **9.6–78.3 ms**, Rapier bodies **5.6–28.1 ms**, `.osm` parse worst **20.5 ms** per new type | [plan 091](../../../../plans/091-frame-time-attribution/readme.md) |
+| Named spike costs | COL parse **9.6–78.3 ms**, Rapier bodies **5.6–28.1 ms**, `.osm` parse worst **20.5 ms** per new type | [plan 091](../../plans/091-frame-time-attribution/readme.md) |
 | Boot frame | **576.1 ms** | 091 |
 
 Read together they say two things. On the desktop the engine is **GPU-bound in steady state and
@@ -44,10 +44,25 @@ because the content will not load. **So the order is: make the world loadable, t
 | # | Chain | Why here | Gate |
 | --- | --- | --- | --- |
 | 1 | [Device truth](1-device-truth/readme.md) | Nothing may be optimised for a device we cannot measure. Also closes a restriction that is caught by **nothing** today | — |
-| 2 | [Universal textures](2-universal-textures/readme.md) | The single blocker between a phone and the real map | [concept](../../../../concepts/universal-texture-transcode.md) |
+| 2 | [Universal textures](2-universal-textures/readme.md) | The single blocker between a phone and the real map | [concept](../../concepts/universal-texture-transcode.md) |
 | 3 | [Off the main thread](3-off-main-thread/readme.md) | The hitches are all one shape: heavy work in the frame. A phone's CPU makes each of them 3–5× worse | — |
 | 4 | [Mobile runtime](4-mobile-runtime/readme.md) | Resolution, residency, fill, touch — the things that decide whether "it loads" becomes "it plays" | partly (see 4/01) |
-| 5 | [WebGL2 fallback](5-webgl2-fallback/readme.md) | Real reach, real permanent cost. Last, and only if the concept survives | [concept](../../../../concepts/webgl2-fallback-backend.md) |
+| 5 | [WebGL2 fallback](5-webgl2-fallback/readme.md) | Real reach, real permanent cost. Last, and only if the concept survives | [concept](../../concepts/webgl2-fallback-backend.md) |
+
+## Status
+
+| Step | State |
+| --- | --- |
+| 1/01 the world's demand, read from the manifest | **SHIPPED 2026-08-04** — `ospakRequiredFeatures` + `requireWorldSupport` refuse a world before a cell streams, naming the world instead of one texture; the shell's gate stopped demanding BC, so a phone is no longer told its browser lacks WebGPU |
+| 1/01 the build declares its platforms | **SHIPPED 2026-08-04** — `platformDemand` over the pak's arrays **∪** every model's `TEXS`; reported on every run (log + `report.json` `platforms`), enforced by `--platforms desktop\|mobile` |
+| — the defect that gate found | **FIXED 2026-08-04** — `--rgba8` converted the WORLD only; a car is not in the pak, so every vehicle and ped stayed BC and a mobile district threw at the first spawn. Threaded to every class that ships its own dictionary |
+| 1/02 mobile bench schema | next |
+| 1/03 emulation gate + capture ritual | next |
+| 1/04 the device-derived budget | pending 1/02–1/03 |
+| chains 2–5 | pending (2 and 5 wait on their concepts) |
+
+**Not yet measured, and owed:** every number in this plan so far is a build/CI fact. Nothing here has been
+run on the phone, and the bundle's headline claim stays unproven until chain 2/05.
 
 ## The rules this bundle imposes on its own steps
 
@@ -79,7 +94,7 @@ Named here so no step "forgets" the same-change rule:
   resolution-independent, the restriction is amended in the same change — it is not violated quietly.
 - **`docs/hacks/`** — the transcode chain will want at least one fitted quality knob. It gets a file.
 
-## The five questions ([project-goals](../../../../project-goals.md#the-check-when-a-plan-is-written))
+## The five questions ([project-goals](../../project-goals.md#the-check-when-a-plan-is-written))
 
 1. **Which authored data, read as the author meant it?** None of it changes meaning. Textures keep their
    authored pixels (the question the concept must answer is *how much of them survives a re-encode*), and

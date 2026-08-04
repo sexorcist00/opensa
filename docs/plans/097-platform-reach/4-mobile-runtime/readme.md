@@ -11,7 +11,7 @@ at 360×800 CSS px, DPR 2, on a Mali-G51. The real map will be an order of magni
 > The one perf knob is `?scale=`. There is no quality tier ladder and there will not be one: the 2026-07-21
 > ladder run proved a ~2 ms resolution-independent pass floor, so a tier below that buys nothing. A plan
 > proposing quality presets has to beat that measurement first.
-> — [restrictions/gpu-and-shaders.md](../../../../../restrictions/gpu-and-shaders.md#the-one-perf-knob-is-scale)
+> — [restrictions/gpu-and-shaders.md](../../../restrictions/gpu-and-shaders.md#the-one-perf-knob-is-scale)
 
 **That run was taken on an M3 Pro.** A 2 ms floor on a desktop GPU says nothing about a Mali-G51 rendering
 720×1600, where the frame is fill-bound by construction. So this step's first act is to **re-take the ladder
@@ -26,7 +26,7 @@ on the phone**, and only then to design.
 
 - Ring counts, LOD distances and fog cut derive from chain 1/04's ceiling and its pressure signal.
 - The parked lever that becomes relevant here:
-  [per-ring texture laziness](../../../../../performance/deferred-optimizations/per-ring-texture-laziness.md)
+  [per-ring texture laziness](../../../performance/deferred-optimizations/per-ring-texture-laziness.md)
   — held in reserve on desktop because the win sat under the ~767 MB world-array floor. On a phone that floor
   *is* the problem, so re-price it.
 - Fog is not cosmetic on this path: the engine culls a cell entirely past `fogCutDistance`, so the fog
@@ -34,7 +34,7 @@ on the phone**, and only then to design.
 
 ## 03 — Fill rate: the parked foliage lever, re-priced
 
-[Foliage fill](../../../../../performance/deferred-optimizations/foliage-fill.md) is *parked by decision* on
+[Foliage fill](../../../performance/deferred-optimizations/foliage-fill.md) is *parked by decision* on
 desktop — the 07-21 case was 13.72 → 7.63 ms, and 73 % of it traced to a single placement-only mod that was
 deleted instead. The finding underneath is what matters here: **the cost is per-pixel, not per-triangle** —
 triangles fell 18 % while the pass fell 44 %, and draw counts did not move at all.
@@ -44,7 +44,7 @@ verdict does not transfer, and neither does the desktop's reason for parking it.
 
 ## 04 — Touch, and a UI that fits 360 CSS px
 
-- The controls exist ([`docs/features/mobile-controls.md`](../../../../../features/mobile-controls.md)); what
+- The controls exist ([`docs/features/mobile-controls.md`](../../../features/mobile-controls.md)); what
   they have never had is a frame-time row on a real device with a real world behind them.
 - The shell, the HUD and the debug chrome are desktop-shaped. What survives on a phone, what collapses, and
   what is simply off.

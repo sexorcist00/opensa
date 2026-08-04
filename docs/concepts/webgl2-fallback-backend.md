@@ -1,7 +1,7 @@
 # Concept — a WebGL2 fallback backend
 
 **Status: live, go/no-go pending.** Opened 2026-08-04 as the gate on
-[roadmap 0.5.0 / 09 / chain 5](../roadmap/0.5.0/plans/09-platform-reach/5-webgl2-fallback/readme.md). The
+[plan 097 / chain 5](../plans/097-platform-reach/5-webgl2-fallback/readme.md). The
 decision to *consider* it is the user's (2026-08-04); the decision to *build* it belongs to this document's
 evidence.
 

@@ -1,6 +1,6 @@
 # 5 — WebGL2 fallback: maximum reach, permanent tax
 
-**Gate: [concepts/webgl2-fallback-backend.md](../../../../../concepts/webgl2-fallback-backend.md).** In scope
+**Gate: [concepts/webgl2-fallback-backend.md](../../../concepts/webgl2-fallback-backend.md).** In scope
 by decision (2026-08-04); last in the bundle, and the only chain here that may still be refused on its own
 evidence.
 

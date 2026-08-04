@@ -1,6 +1,6 @@
 # 2 — Universal textures: one pak, every GPU
 
-**Gate: [concepts/universal-texture-transcode.md](../../../../../concepts/universal-texture-transcode.md).**
+**Gate: [concepts/universal-texture-transcode.md](../../../concepts/universal-texture-transcode.md).**
 The direction is decided (Basis/KTX2 + transcode at load); what is *not* decided is whether the quality
 survives the trip, and that is a measurement, not an opinion. No step below starts before the concept's
 go/no-go.
@@ -46,7 +46,7 @@ by code that exists**. Bump `OSTEX_VERSION_MAJOR` 0 → 1.
   from the device's feature set — BC7/BC1 where BC exists, ASTC 4×4 where it does, ETC2 otherwise, RGBA8 as
   the last resort.
 - Output is the existing aligned layout, so the upload path is unchanged and keeps the applied
-  **≤1.5 ms/frame** drain ([texture-upload-budget](../../../../../performance/applied/texture-upload-budget.md)).
+  **≤1.5 ms/frame** drain ([texture-upload-budget](../../../performance/applied/texture-upload-budget.md)).
 - Budget: transcode is off-frame by construction, but it is not free — it must not starve the worker's
   streaming duty. Measure per-array transcode ms on desktop **and** on the phone; a per-array cost that
   exceeds the cell's streaming deadline is a finding, not a footnote.
@@ -61,7 +61,7 @@ decision, not just a size one, and vehicles are the assets a player looks at fro
 
 - Re-price mips for model dictionaries on the mobile target.
 - Cross-check the parked lever: [one texture array per vehicle, at its largest texture's
-  size](../../../../../performance/deferred-optimizations/vehicle-texture-array-buckets.md) — 220 → 34 MB by
+  size](../../../performance/deferred-optimizations/vehicle-texture-array-buckets.md) — 220 → 34 MB by
   buckets, ~24 → 3.5 MB VRAM per type. On a phone that lever is likely to stop being optional; if this chain
   pulls it, it moves to `performance/applied/` with its before/after.
 

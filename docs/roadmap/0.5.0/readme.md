@@ -4,7 +4,7 @@ Future-work plans for the 0.5.0 cycle. Same convention as the sibling [0.6.0](..
 feature is a chain of small, individually-implementable plans under [plans/](plans/), ending with
 verification + measurements.
 
-## Platform reach — THE LEAD CHAIN (priority set 2026-08-04)
+## Platform reach — STARTED, moved to `docs/plans/097-platform-reach/` (2026-08-04)
 
 The world on a phone, and the frame off the main thread. A phone boots the engine today and **cannot open the
 world**: a pak built from SA assets is BC throughout and no mobile GPU has BC, so the failure is content
@@ -14,7 +14,8 @@ collision into the pak; workers for cell colliders, `.osm` and — if the phone 
 runtime (resolution, residency, fill, touch), and a concept-gated WebGL2 fallback. Two of the five are gated
 on live concepts, because the direction is decided and the evidence is not.
 
-Full chain: [plans/09-platform-reach/readme.md](plans/09-platform-reach/readme.md).
+It is no longer deferred work, so it no longer lives here. Full chain:
+[../../plans/097-platform-reach/readme.md](../../plans/097-platform-reach/readme.md).
 
 ## Weather-driven wind (own engine)
 

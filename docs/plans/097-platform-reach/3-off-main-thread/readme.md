@@ -4,7 +4,7 @@ Every spike this project has named is the same story — **heavy work executed i
 drive proved the render loop is not where the time goes: GPU pass mean 15.64 ms against a CPU render of
 0.1–0.6 ms. There is nothing to win in the draw path and everything to win beside it.
 
-The measured contributors, from [plan 091](../../../../../plans/091-frame-time-attribution/readme.md) and the
+The measured contributors, from [plan 091](../../../plans/091-frame-time-attribution/readme.md) and the
 093 sweep:
 
 | Cost | Measured | Where it runs today |
@@ -28,7 +28,7 @@ reason a browser ever sees a COL.
   vertex/index buffers plus the per-triangle surface table.
 - **The data must survive intact.** A baked collider that loses the surface id is a data regression however
   fast it loads — `p_grassmid1 ×0.71` under the wheels is authored design, and `SAND`/`ROUGHNESS` are the
-  columns we still owe ([offroad-feels-like-tarmac](../../../../../open-issues/offroad-feels-like-tarmac.md)).
+  columns we still owe ([offroad-feels-like-tarmac](../../../open-issues/offroad-feels-like-tarmac.md)).
 - Keep the parry back-face encoding in mind when baking triangle ids: a hit on the back of a triangle comes
   back as `featureId + triangleCount`, and the game's roads are wound so a downward ray lands there. Whatever
   the bake writes, the runtime lookup still takes it modulo the triangle count — and the regression fixture
@@ -44,7 +44,7 @@ streaming worker and hand the main thread a finished descriptor.
   the allowance.
 - **The restriction to respect:** a dynamic body may only be *created* where its static collision already
   exists — a streamer gating on its own radius spawns cars into a hole
-  ([restrictions/architecture.md](../../../../../restrictions/architecture.md)). Deferring collider assembly
+  ([restrictions/architecture.md](../../../restrictions/architecture.md)). Deferring collider assembly
   moves that ordering constraint; the spawn gate follows it or parked cars free-fall again.
 
 ## 03 — `.osm` parse into the worker
@@ -69,7 +69,7 @@ The big one, and the one with a real chance of being refused.
 
 - Requires a fixed-step contract with the renderer and a transform ring buffer; the render side already
   interpolates camera position (the [camera-position-render-interpolation
-  lever](../../../../../performance/deferred-optimizations/camera-position-render-interpolation.md) was
+  lever](../../../performance/deferred-optimizations/camera-position-render-interpolation.md) was
   PULLED on 2026-07-25), which is the same problem solved once already.
 - The measured budget it has to beat: the vehicle slice is **7.6–9.5 µs per car**, 0.6 ms at 80 cars — i.e.
   the physics step is *not* currently a frame problem on desktop. So this step is justified by the phone or
@@ -77,7 +77,7 @@ The big one, and the one with a real chance of being refused.
   does not ship** — an improvement nobody can point at is an opinion.
 - Watch the known trap: a Rapier body is born **massless** and its mass properties fold in at the next
   `world.step`; anything that reorders stepping re-opens
-  [that crash](../../../../../open-issues/fixed/map-car-generators-poison-physics.md).
+  [that crash](../../../open-issues/fixed/map-car-generators-poison-physics.md).
 
 ## 06 — Re-run the census after every step
 

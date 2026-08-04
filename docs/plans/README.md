@@ -16,9 +16,18 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`096`, one folder each (066, 073, 074, 078–082, 096 carry multi-part sub-plans; 083 kept its row but
-its folder moved to `roadmap/0.5.0/`). Newest first:
+`001`–`097`, one folder each (066, 073, 074, 078–082, 096, 097 carry multi-part sub-plans; 083 kept its row
+but its folder moved to `roadmap/0.5.0/`). Newest first:
 
+- **[097 — Platform reach](./097-platform-reach/readme.md)** — IN PROGRESS, opened 2026-08-04. The world on a
+  phone, and the frame off the main thread. A phone boots the engine and cannot open the world, because a pak
+  built from SA assets is BC throughout and no mobile GPU has BC — a build-time content decision no runtime
+  relaxation can undo. Five chains: device truth, universal textures, off the main thread, mobile runtime, and
+  a concept-gated WebGL2 fallback; two of them wait on live concepts
+  ([universal transcode](../concepts/universal-texture-transcode.md),
+  [WebGL2 backend](../concepts/webgl2-fallback-backend.md)). Landed so far: the world's GPU demand read from
+  its manifest before anything streams, the build-time `--platforms` gate over BOTH halves (pak arrays ∪ model
+  dictionaries), and the `--rgba8` defect that gate found — it converted the world and left every car BC.
 - **[096 — Video mode](./096-video-mode/readme.md)** — **SHIPPED 2026-07-30/08-01, all eight phases**
   (road graph + seeded routes, autopilot, director + shot table, surveyed tripod stations, the region
   sequencer, the build-time mod-car ledger, the walk + flythrough scenes that complete D3's program, and the
