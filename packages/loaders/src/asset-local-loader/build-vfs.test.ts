@@ -150,6 +150,52 @@ describe('selectInstallEntries', () => {
       expect(plan.textures.map((e) => e.name)).toContain('gta_rockcuntry.txd');
     });
 
+    it('pulls in CLEO-scripted models (cleo/*.cs), by literal id and by name, even when unplaced', async () => {
+      // A real-encoded script: REQUEST_MODEL 200 (tree — in the IDE but NOT placed), then
+      // GET_MODEL_BY_NAME 'bush' out 3@, then TERMINATE_THIS_CUSTOM_SCRIPT.
+      const script = new Uint8Array([
+        0x47, 0x02, 0x01, 0xc8, 0x00, 0x00, 0x00, 0x9c, 0x0e, 0x0e, 0x04, 0x62, 0x75, 0x73, 0x68, 0x03, 0x03, 0x00,
+        0x93, 0x0a,
+      ]);
+      const loose: Record<string, string> = {
+        'data/maps/test.ide': ['objs', '200, tree, treetxd, 80, 0', '300, bush, bushtxd, 80, 0', 'end'].join('\n'),
+      };
+      const gta3 = fakeArchive({
+        'bush.dff': new Uint8Array([1]),
+        'bushtxd.txd': new Uint8Array([1]),
+        'tree.dff': new Uint8Array([1]),
+        'treetxd.txd': new Uint8Array([1]),
+      });
+      const plan = await selectInstallEntries(
+        source({
+          gta3,
+          looseFiles: () => Promise.resolve([...Object.keys(loose), 'cleo/spawner.cs']),
+          readLoose: (path) => Promise.resolve(path === 'cleo/spawner.cs' ? script : new Uint8Array(0)),
+          readLooseText: (p) => Promise.resolve(loose[p] ?? ''),
+        }),
+      );
+
+      // Neither model is IPL-placed; both are script-referenced — the spike's measured boundary.
+      expect(plan.models.map((e) => e.name)).toContain('tree.dff');
+      expect(plan.models.map((e) => e.name)).toContain('bush.dff');
+      expect(plan.textures.map((e) => e.name)).toContain('treetxd.txd');
+      expect(plan.textures.map((e) => e.name)).toContain('bushtxd.txd');
+      // The script itself rides the loose bucket into the VFS.
+      expect(plan.loose).toContain('cleo/spawner.cs');
+    });
+
+    it('skips a CLEO script that fails to decode without losing the selection', async () => {
+      const plan = await selectInstallEntries(
+        source({
+          looseFiles: () =>
+            Promise.resolve(['data/gta.dat', 'data/maps/test.ide', 'data/maps/test.ipl', 'cleo/broken.cs']),
+          readLoose: () => Promise.resolve(new Uint8Array([0xff, 0x7f, 0x01])),
+        }),
+      );
+
+      expect(plan.models.map((e) => e.name)).toContain('cj.dff');
+    });
+
     it('pulls the whole txdp PARENT chain of a referenced dictionary', async () => {
       // A parent is named by no IDE row — it exists only as another dictionary's ancestor — so a selection
       // built from IDE rows alone leaves it out, and every texture that lives ONLY in it renders as the

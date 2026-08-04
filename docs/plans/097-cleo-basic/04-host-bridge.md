@@ -57,17 +57,17 @@ in the 2026-08-04 recon (file:line current as of that date).
 ## Subtasks
 
 - [x] Phase-0 spike (decision 3); record the verdict + the path taken.
-- [ ] id→name resolver (adapter-side) + tests.
-- [ ] `CleoHost` object facet: request/available cache, handle table, create/rotate/coords/delete,
+- [x] id→name resolver (adapter-side) + tests.
+- [x] `CleoHost` object facet: request/available cache, handle table, create/rotate/coords/delete,
       unit conversions, disposal on runner teardown; detach-safety + missing-model tests
       (`isModelAvailable` stays false → the scripts' own not-installed guard runs, same as real CLEO).
-- [ ] Query facets (decision 6) + tests against mock game state.
-- [ ] `CONNECT_LODS` pairing + test.
-- [ ] `CleoRunnerSystem` + `Config.cleo` + boot discovery + explicit wiring + play gating + boot
+- [x] Query facets (decision 6) + tests against mock game state.
+- [x] `CONNECT_LODS` pairing + test.
+- [x] `CleoRunnerSystem` + `Config.cleo` + boot discovery + explicit wiring + play gating + boot
       census line.
-- [ ] Headless integration: decoded Ferris (01) on the VM (03) against the REAL host facets with a
+- [x] Headless integration: decoded Ferris (01) on the VM (03) against the REAL host facets with a
       fake engine — expected transform sequence asserted on the handle table.
-- [ ] **Field checkpoint 1**: Ferris Wheel + Wind Farm hand-placed into a gostown/original build,
+- [x] **Field checkpoint 1**: Ferris Wheel + Wind Farm hand-placed into a gostown/original build,
       `cleo.enabled` on — the wheel spins, the turbines turn (Wind Farm's two global reads land on
       plan 05's globals table; until then its not-installed/zero-wind fallback path is the accepted
       behaviour — record what the field actually shows). Screenshot + boot census + frame numbers
@@ -81,6 +81,42 @@ in the 2026-08-04 recon (file:line current as of that date).
 ## Ledger
 
 _(worker vs on-thread decision + numbers, facet inventory, field checkpoint 1 record)_
+
+### Field checkpoint 1 — 2026-08-04, THE WHEEL SPINS
+
+Hand-placement (decision 8, via `scripts/debug/cleo-place-mods.ts` — plan 06 retires it): `cleo/*.cs`
++ mod IDEs + `gta.dat` IDE lines + a `models/cleomods.img` override into `build/original/opensa`
+(the Jul-30 build), served over http-dir, booted with `?cleo=1&spawn=350,-1900,9`.
+
+- **Ferris: PASSES.** Boot census `[cleo] 2 script(s): ferris.cs, windfarm.cs`; zero thread faults;
+  two photo-camera frames 4 s apart show the wheel rotated (~19 deg at the authored ~4.8 deg/s) —
+  gondola positions and the light lattice are in a different phase, and the 16 seat objects moved
+  WITH the rim (they are separate script objects repositioned per frame). Frame HUD steady at
+  8.33 ms / 120 fps with the scripts running — no `[slow]` lines the whole session.
+- **The id-resolve chain needed `gta.dat`**: the adapter catalog reads IDEs via `resolveMap`
+  (gta.dat-listed), NOT the partition's scan-everything path — a hand-placed mod IDE must also be
+  LISTED, or `[cleo] model id 14644 resolves to nothing` (the diagnostic caught it on the first
+  boot). The placement script appends the lines now; plan 06's installer must do the same.
+- **Wind Farm: degraded exactly as designed, and now MEASURED.** Its visibility radius comes from
+  `0A8D READ_MEMORY 0xB6F118` (the draw-distance multiplier global — plan 05's atlas) multiplied
+  into the LOD model's struct-read draw distance (`0EF8 GET_MODEL_INFO` + `0D4E` at struct offset
+  24). Both are plan-05 natives; with them unimplemented the radius stays 0, `0EBE` never passes,
+  and the script WAITS forever — creating nothing, faulting nothing. (The headless run builds 68
+  objects + 34 LOD links only because the recording host forces `cameraWithin` true.) This is the
+  acceptance test plan 05 must flip: turbines appear the moment 0A8D/0EF8/0D4E resolve for real.
+  Note for the 05 field round: the mod authors its turbines at z 59-73 (the Panopticon hills);
+  THIS build's terrain at the site reads z~25 — judge turbine placement from the reporter's angle
+  then, not from the stock map's memory.
+- **PRINT_STRING_NOW surface**: a minimal DOM toast (`#cleo-toast`, `engine-cleo-setup.ts`) — the
+  HUD has no message lane; a real one can replace the toast without touching the host. Recorded as
+  the "or a minimal toast" branch of decision 6.
+- **Model build is on-thread** (decision 1's measure-first): both class-A mods build DFF/TXD-fallback
+  models in single-digit ms at request time; no spawn hitches, no `[slow]` lines — the worker copy
+  stays unbuilt until a profile demands it.
+- **drawCorona is deliberately dark in 04** (windfarm calls it once when its LOD swap fires) — the
+  wiring lands with plan 05's field polish.
+- The 04 vehicle facet is the seat-state slice only (`isCharInAnyCar` via `ridingVehicle`); pool
+  walking, car models and driver handles are plan 05's handle table.
 
 ### Phase-0 spike — 2026-08-04, verdict POSITIVE (direct lookup; discovery still required for non-placed models)
 

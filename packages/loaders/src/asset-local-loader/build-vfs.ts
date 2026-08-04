@@ -7,6 +7,7 @@
  */
 import type { Entry, ModelRef } from '@opensa/game-build/partition';
 
+import { decodeScript } from '@opensa/cleo';
 import { ideRefs, partitionEntries, placedModels } from '@opensa/game-build/partition';
 import { parseTxdParents } from '@opensa/renderware/parsers/text/ide.parser';
 import { parseBinaryIpl } from '@opensa/renderware/parsers/text/ipl-binary.parser';
@@ -67,9 +68,10 @@ export async function selectInstallEntries(source: InstallSource): Promise<Insta
   const placed = placedModels(await placedInstanceIds(source), ide.byId);
   const extra = await dynamicModelRefs(source);
   const clutter = await procObjModelRefs(source);
+  const scripted = await cleoModelRefs(source, ide.byId);
   const refs = {
-    models: [...placed.models, ...extra.models, ...clutter.models],
-    txds: withTxdParents([...placed.txds, ...extra.txds, ...clutter.txds], ide.txdParents),
+    models: [...placed.models, ...extra.models, ...clutter.models, ...scripted.models],
+    txds: withTxdParents([...placed.txds, ...extra.txds, ...clutter.txds, ...scripted.txds], ide.txdParents),
   };
   const { models, others, textures } = partitionEntries(
     refs,
@@ -78,6 +80,68 @@ export async function selectInstallEntries(source: InstallSource): Promise<Insta
   );
 
   return { loose: await source.looseFiles(), models, others, textures };
+}
+
+async function cleoModelRefs(
+  source: InstallSource,
+  ideById: ReadonlyMap<number, ModelRef>,
+): Promise<{ models: string[]; txds: string[] }> {
+  const txdByModel = new Map<string, string>();
+  for (const ref of ideById.values()) {
+    txdByModel.set(ref.model.toLowerCase(), ref.txd.toLowerCase());
+  }
+  const models = new Set<string>();
+  for (const path of await source.looseFiles()) {
+    if (!path.startsWith('cleo/') || !path.endsWith('.cs')) {
+      continue;
+    }
+    try {
+      collectScriptModels(decodeScript(await source.readLoose(path)), ideById, models);
+    } catch (error) {
+      // eslint-disable-next-line no-console -- a skipped script must be visible, not silent
+      console.warn(`[cleo] ${path} failed to decode — its models are not selected:`, error);
+    }
+  }
+  const txds: string[] = [];
+  for (const model of models) {
+    const txd = txdByModel.get(model);
+    if (txd) {
+      txds.push(txd);
+    }
+  }
+
+  return { models: [...models], txds };
+}
+
+/**
+ * Model + txd base names a CLEO script spawns (plan 097/04, the spike's measured subset boundary):
+ * script-created models are neither IPL-placed nor dynamic-spawned, so the partition would miss them
+ * and `fs.get('<name>.osm')` would come back null at runtime. Every loose `cleo/*.cs` is pre-decoded
+ * (plan 01's decoder — pure, browser-safe) and its literal model references collected: REQUEST_MODEL
+ * `0247` / CREATE_OBJECT_NO_SAVE `0E01` ids resolved through the IDE map, GET_MODEL_BY_NAME `0E9C`
+ * strings taken as names. A script that fails to decode is SKIPPED with a log — a broken mod script
+ * must not cost the whole install.
+ */
+/** One decoded script's literal model references into `models` (lowercased names). */
+function collectScriptModels(
+  script: ReturnType<typeof decodeScript>,
+  ideById: ReadonlyMap<number, ModelRef>,
+  models: Set<string>,
+): void {
+  for (const instruction of script.instructions) {
+    if (instruction.opcode === 0x0e9c && instruction.operands[0]?.kind === 'string') {
+      models.add(instruction.operands[0].value.toLowerCase());
+    }
+    if (instruction.opcode === 0x0247 || instruction.opcode === 0x0e01) {
+      const operand = instruction.operands[0];
+      if (operand?.kind === 'int') {
+        const ref = ideById.get(operand.value);
+        if (ref) {
+          models.add(ref.model.toLowerCase());
+        }
+      }
+    }
+  }
 }
 
 /** Model + txd base names for the dynamically-spawned set: **every** ped in `peds.ide` + **every** vehicle in

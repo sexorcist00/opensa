@@ -100,6 +100,12 @@ export function createGameRuntimeConfig(): Config {
       yawLagTime: 0.25,
       zoomLambda: 8,
     },
+    // CLEO scripts (plan 097/04): off by default — `?cleo=1` flips it for a session; live-read.
+    cleo: {
+      enabled: false,
+      maxScripts: 32,
+      trace: false,
+    },
     // 088/03: RUN is the default gait (SA jogs); Shift sprints. `walk` is left unbound — the slow tier
     // is reachable by a partial touch-stick deflection, or bind a key here.
     controls: {

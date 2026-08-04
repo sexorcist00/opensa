@@ -100,6 +100,7 @@ import { type DebugActions, type DebugGame, DebugOverlay } from './debug/debug-o
 import { type MapGame } from './debug/map-inspector';
 import { setupEngineAnimObjects } from './engine-anim-objects';
 import { setupEngineBreakables } from './engine-breakables';
+import { setupEngineCleo } from './engine-cleo-setup';
 import { setupEngineClutter } from './engine-clutter';
 import { createEngineDebugActions, type EnginePerfSnapshot } from './engine-debug-actions';
 import { type DynamicFxEmitter, loadCoronaSprites, loadSkidSprite, setupEngineParticles } from './engine-particles';
@@ -940,6 +941,21 @@ async function boot(
       : GAME_CONFIG[gameId].loadGame.startMinutes / 60;
   environmentDriver.apply(hour);
 
+  // CLEO scripts (plan 097/04): discovered from `cleo/*.cs` in the VFS, run on the fixed step below.
+  // `?cleo=1` enables for the session (config default is off — zero overhead disabled). Explicit
+  // wiring, not SystemRegistry (that registry is dead — recon fact).
+  config.cleo.enabled = config.cleo.enabled || params.get('cleo') === '1';
+  const cleo = setupEngineCleo({
+    adapter,
+    cameraGta: (): [number, number, number] => [cameraEye[0], -cameraEye[2], cameraEye[1]],
+    config,
+    engine,
+    fs,
+    hour: (): number => Math.floor(hour) % 24,
+    playerGta: (): [number, number, number] => [Transform.x[playerEid], Transform.y[playerEid], Transform.z[playerEid]],
+    ridingCar: (): boolean => vehicles !== null && vehicles.ridingVehicle() !== null,
+  });
+
   // Prod HUD + district names (074/10 reuse-not-duplicate): the SAME DOM <Hud> component fed through the
   // narrow HudGame surface; the lookup is the game's own ZoneNameSystem over info.zon + american.gxt.
   await loadFonts(config.fonts);
@@ -1369,6 +1385,9 @@ async function boot(
         const vehicleFixedStarted = performance.now();
         vehicles?.fixedUpdate(FIXED_STEP);
         vehicleFixedMs += performance.now() - vehicleFixedStarted + physics.takeVehicleStepMs();
+        // CLEO runs AFTER the vehicle step (plan 097/04 decision 7): scripts read seated-vehicle
+        // state the same step they animate. Gated inside on `cleo.enabled` + play state.
+        cleo?.fixedUpdate(FIXED_STEP);
         // Snapshot AFTER: the cars sampled their bodies in fixedUpdate, and the ped Transform is now current.
         [curPlayerGta[0], curPlayerGta[1], curPlayerGta[2]] = viewOf();
         // Contact-force impacts are produced BY the physics step, so drain them here — one step late and a

@@ -379,6 +379,35 @@ describe('GtaSaWorldAdapter.txdOf', () => {
   });
 });
 
+describe('GtaSaWorldAdapter cleo model resolution', () => {
+  describe('negative cases', () => {
+    it('is null before prepare and for an id nothing carries', async () => {
+      expect(new GtaSaWorldAdapter(cfg()).cleoModelById(1)).toBeNull();
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+
+      expect(adapter.cleoModelById(99999)).toBeNull();
+      expect(adapter.cleoModelIdByName('nosuchmodel')).toBeNull();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('resolves an IDE object id to its model + txd + draw distance', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+
+      expect(adapter.cleoModelById(1)).toEqual({ drawDistance: 300, modelName: 'house', txdName: 'txd' });
+    });
+
+    it('resolves a model NAME to its id case-insensitively (GET_MODEL_BY_NAME gives names)', async () => {
+      const adapter = new GtaSaWorldAdapter(cfg());
+      await adapter.prepare();
+
+      expect(adapter.cleoModelIdByName('HOUSE')).toBe(1);
+    });
+  });
+});
+
 describe('GtaSaWorldAdapter.breakableInfo', () => {
   const OBJECT_DAT = 'lamppost1, 200.0, 300.0, 0.99, 0.1, 20.0, 240.0, 0.5, 200, 0, 0';
 

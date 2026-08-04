@@ -182,6 +182,15 @@ export interface CameraConfig {
   zoomLambda: number;
 }
 
+/** CLEO script runtime (plan 097/04). `enabled: false` = zero per-frame overhead. */
+export interface CleoConfig {
+  enabled: boolean;
+  /** Boot-discovery cap: scripts beyond this many `cleo/*.cs` are skipped with a log. */
+  maxScripts: number;
+  /** Log every host call the scripts make (field debugging; plan 097/07 grows this). */
+  trace: boolean;
+}
+
 /** Procedural sky-dome cloud tuning. */
 export interface CloudsConfig {
   /** Cloud cover 0 (clear) → 1 (overcast). */
@@ -196,6 +205,8 @@ export interface CloudsConfig {
 /** Top-level game configuration. Mutated in place so `PluginContext.config` stays live. */
 export interface Config {
   camera: CameraConfig;
+  /** CLEO script runtime (plan 097/04) — live-read every fixed step. */
+  cleo: CleoConfig;
   controls: ControlsConfig;
   fog: FogConfig;
   fonts: FontsConfig;

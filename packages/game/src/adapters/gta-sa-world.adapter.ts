@@ -303,6 +303,34 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     return out;
   }
 
+  /** CLEO model resolution, id-first (plan 097/04 decision 2): the IDE catalog composed with
+   *  `vehicles.ide` — scripts request map objects AND vehicles by the same id space. Null before the
+   *  map defs load, or when nothing carries the id. */
+  cleoModelById(id: number): null | { drawDistance: number; modelName: string; txdName: string } {
+    const def = this.defs?.catalog.get(id);
+    if (def) {
+      return { drawDistance: def.drawDistance, modelName: def.modelName, txdName: def.txdName };
+    }
+    for (const vehicle of this.vehicleDefs?.values() ?? []) {
+      if (vehicle.id === id) {
+        return { drawDistance: 300, modelName: vehicle.model, txdName: vehicle.txd };
+      }
+    }
+
+    return null;
+  }
+
+  /** CLEO model resolution, name-first (`GET_MODEL_BY_NAME 0E9C` gives names — Wind Farm uses it). */
+  cleoModelIdByName(name: string): null | number {
+    const def = this.defByName?.get(name.toLowerCase());
+    if (def) {
+      return def.id;
+    }
+    const vehicle = this.vehicleDefs?.get(name.toLowerCase());
+
+    return vehicle ? vehicle.id : null;
+  }
+
   /** Drop the cached per-cell colliders (clutter knobs changed) — the collision streaming system
    *  then re-streams physics via {@link loadCellColliders}, rebuilding with the new density. */
   invalidateColliderCache(): void {
@@ -370,52 +398,6 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     };
   }
 
-  /**
-   * The map's specific-model car generators (binary IPL `CARS` sections in gta3.img) as parked-car placements
-   * for the vehicle LOD system. `id → model` is resolved from `vehicles.ide`; random (`id = -1`) generators are
-   * skipped (cargrp/popcycle resolution is a later phase — plan 059). Empty until {@link prepare} resolved the map.
-   */
-  async mapCarGenerators(options: {
-    cityAt: (x: number, y: number) => City;
-    hour: number;
-  }): Promise<VehiclePlacement[]> {
-    await this.ensureVehicleData();
-    await this.ensurePopulationData();
-    const generators = this.defs?.carGenerators ?? [];
-    const modelById = new Map<number, string>();
-    for (const def of this.vehicleDefs?.values() ?? []) {
-      modelById.set(def.id, def.model.toLowerCase());
-    }
-    const specific = carGeneratorPlacements(generators, modelById);
-    if (this.popcycle === null || this.carGroups === null) {
-      return specific; // no popcycle/cargrp shipped → only the specific-model generators
-    }
-    // Random (id = -1) generators: resolve via the zone-type popcycle weights → a cargrp model (B1, plan 059).
-    const popcycle = this.popcycle;
-    const random = randomCarPlacements(generators, {
-      accept: (model) => this.vehicleDefs?.has(model) ?? false,
-      cargrp: this.carGroups,
-      hour: options.hour,
-      popcycleFor: (position) => popcycle.get(CITY_POPCYCLE_ZONE[options.cityAt(position[0], position[1])]) ?? null,
-    });
-
-    return [...specific, ...random];
-  }
-
-  /**
-   * The debugger's model-name search index (plan 094/05) over the SAME `MapDefinitions` the map was built
-   * from, so a name it finds is a name the world places. Built on first use and kept: it is a debug-only
-   * path, and the game asks for it exactly never. Null before {@link GtaSaWorldAdapter.prepare}.
-   */
-  modelIndex(): ModelIndex | null {
-    if (!this.defs) {
-      return null;
-    }
-    this.modelIndexCache ??= new ModelIndex(this.defs);
-
-    return this.modelIndexCache;
-  }
-
   // eslint-disable-next-line
   async loadCellColliders(cx: number, cy: number): Promise<ModelColliders[]> {
     if (!this.defs || !this.grid) {
@@ -462,6 +444,52 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     }
 
     return colliders;
+  }
+
+  /**
+   * The map's specific-model car generators (binary IPL `CARS` sections in gta3.img) as parked-car placements
+   * for the vehicle LOD system. `id → model` is resolved from `vehicles.ide`; random (`id = -1`) generators are
+   * skipped (cargrp/popcycle resolution is a later phase — plan 059). Empty until {@link prepare} resolved the map.
+   */
+  async mapCarGenerators(options: {
+    cityAt: (x: number, y: number) => City;
+    hour: number;
+  }): Promise<VehiclePlacement[]> {
+    await this.ensureVehicleData();
+    await this.ensurePopulationData();
+    const generators = this.defs?.carGenerators ?? [];
+    const modelById = new Map<number, string>();
+    for (const def of this.vehicleDefs?.values() ?? []) {
+      modelById.set(def.id, def.model.toLowerCase());
+    }
+    const specific = carGeneratorPlacements(generators, modelById);
+    if (this.popcycle === null || this.carGroups === null) {
+      return specific; // no popcycle/cargrp shipped → only the specific-model generators
+    }
+    // Random (id = -1) generators: resolve via the zone-type popcycle weights → a cargrp model (B1, plan 059).
+    const popcycle = this.popcycle;
+    const random = randomCarPlacements(generators, {
+      accept: (model) => this.vehicleDefs?.has(model) ?? false,
+      cargrp: this.carGroups,
+      hour: options.hour,
+      popcycleFor: (position) => popcycle.get(CITY_POPCYCLE_ZONE[options.cityAt(position[0], position[1])]) ?? null,
+    });
+
+    return [...specific, ...random];
+  }
+
+  /**
+   * The debugger's model-name search index (plan 094/05) over the SAME `MapDefinitions` the map was built
+   * from, so a name it finds is a name the world places. Built on first use and kept: it is a debug-only
+   * path, and the game asks for it exactly never. Null before {@link GtaSaWorldAdapter.prepare}.
+   */
+  modelIndex(): ModelIndex | null {
+    if (!this.defs) {
+      return null;
+    }
+    this.modelIndexCache ??= new ModelIndex(this.defs);
+
+    return this.modelIndexCache;
   }
 
   /**
