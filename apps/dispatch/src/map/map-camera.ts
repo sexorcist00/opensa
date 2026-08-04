@@ -121,6 +121,15 @@ export class MapCamera {
     };
   }
 
+  /**
+   * Scale the view distance directly — what a pinch drives. The wheel's {@link dolly} steps by a notch, which
+   * a continuous gesture cannot express: a pinch reports a RATIO, and quantising it into notches is what makes
+   * touch zoom feel like it is fighting the finger.
+   */
+  zoomBy(factor: number): void {
+    this.distance = clampDistance(this.distance * factor);
+  }
+
   /** Frame a GTA point at a given eye height — "zoom to incident". */
   zoomTo(at: GtaGround, height: number): void {
     this.lookAtGta(at);

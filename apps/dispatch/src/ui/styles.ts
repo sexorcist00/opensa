@@ -29,6 +29,18 @@ export const styles = {
     height: '100%',
     width: '100%',
   },
+  /** Phone: one column — map fills the screen, the lists live in a sheet under it. */
+  appCompact: {
+    background: '#05070a',
+    color: COLORS.text,
+    display: 'grid',
+    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    fontSize: 12,
+    gridTemplateColumns: '1fr',
+    gridTemplateRows: '40px 1fr 44% 20px',
+    height: '100%',
+    width: '100%',
+  },
   badge: {
     borderRadius: 3,
     fontFamily: MONO,
@@ -54,7 +66,9 @@ export const styles = {
     fontSize: 11,
     padding: '4px 9px',
   },
-  canvas: { display: 'block', height: '100%', width: '100%' },
+  // `touchAction: none` is load-bearing on a phone: without it the browser claims the drag for scrolling
+  // and page-zoom before a single `pointermove` reaches the gesture layer.
+  canvas: { display: 'block', height: '100%', touchAction: 'none', width: '100%' },
   canvasWrap: { minHeight: 0, overflow: 'hidden', position: 'relative' },
   detail: {
     background: 'rgba(11, 16, 23, 0.94)',
@@ -65,6 +79,17 @@ export const styles = {
     maxWidth: 380,
     padding: '10px 12px',
     position: 'absolute',
+    zIndex: 3,
+  },
+  detailCompact: {
+    background: 'rgba(11, 16, 23, 0.96)',
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 6,
+    bottom: 8,
+    left: 8,
+    padding: '9px 11px',
+    position: 'absolute',
+    right: 8,
     zIndex: 3,
   },
   empty: { color: COLORS.muted, fontStyle: 'italic', padding: '10px 12px' },
@@ -116,6 +141,28 @@ export const styles = {
     paddingLeft: 10,
   },
   scroll: { flex: 1, minHeight: 0, overflowY: 'auto' },
+  /** The phone sheet's tab strip. */
+  sheetTab: {
+    background: 'transparent',
+    border: 'none',
+    borderBottom: `2px solid transparent`,
+    color: COLORS.muted,
+    cursor: 'pointer',
+    flex: 1,
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 1,
+    padding: '9px 0',
+  },
+  sheetTabActive: {
+    borderBottom: `2px solid ${COLORS.accent}`,
+    color: COLORS.text,
+  },
+  sheetTabs: {
+    background: COLORS.panel,
+    borderTop: `1px solid ${COLORS.border}`,
+    display: 'flex',
+  },
   statusBar: {
     alignItems: 'center',
     background: COLORS.panel,

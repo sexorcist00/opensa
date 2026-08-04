@@ -31,10 +31,14 @@ const ICON_LIFT = 4;
 /** How far above the anchor the chip floats, in screen pixels. */
 const CHIP_RISE = 26;
 const CHIP_HEIGHT = 18;
+/** Keep a clamped chip this far off the canvas edge. */
+const CHIP_MARGIN = 4;
 const FONT = '600 11px ui-sans-serif, system-ui, -apple-system, sans-serif';
 const FONT_SMALL = '500 10px ui-sans-serif, system-ui, -apple-system, sans-serif';
 /** Past this distance from the eye a chip is dropped — a city view would otherwise be a wall of text. */
 const CHIP_MAX_DEPTH = 2600;
+/** Below this canvas width a call chip drops its title and keeps the code — the list carries the rest. */
+const NARROW_CANVAS = 620;
 /** Round distances the scale bar is allowed to show. */
 const SCALE_STEPS = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000] as const;
 
@@ -65,10 +69,10 @@ export class SymbologyLayer {
     ctx.clearRect(0, 0, size.width, size.height);
     ctx.textBaseline = 'middle';
     for (const incident of ops.incidents) {
-      this.drawIncident(ctx, projector, incident, selection);
+      this.drawIncident(ctx, projector, incident, selection, size);
     }
     for (const unit of ops.units) {
-      this.drawUnit(ctx, projector, unit, selection);
+      this.drawUnit(ctx, projector, unit, selection, size);
     }
     drawScaleBar(ctx, projector, ops, size);
   }
@@ -78,6 +82,7 @@ export class SymbologyLayer {
     projector: ScreenProjector,
     incident: Incident,
     selection: Selection,
+    size: { readonly height: number; readonly width: number },
   ): void {
     const point = projector.project(gtaToEngine(incident.at, ICON_LIFT));
     if (!point) {
@@ -89,13 +94,19 @@ export class SymbologyLayer {
     if (point.depth > CHIP_MAX_DEPTH && !selected) {
       return;
     }
-    const label = `${incident.code} · ${incident.title}`;
-    const rect = chip(ctx, point.x, point.y - CHIP_RISE, label, color, selected);
+    const label = size.width < NARROW_CANVAS ? incident.code : `${incident.code} · ${incident.title}`;
+    const rect = chip(ctx, point.x, point.y - CHIP_RISE, label, color, selected, size.width);
     this.areas.push({ ...rect, id: incident.id, kind: 'incident' });
     this.areas.push({ height: 20, id: incident.id, kind: 'incident', width: 20, x: point.x - 10, y: point.y - 10 });
   }
 
-  private drawUnit(ctx: CanvasRenderingContext2D, projector: ScreenProjector, unit: Unit, selection: Selection): void {
+  private drawUnit(
+    ctx: CanvasRenderingContext2D,
+    projector: ScreenProjector,
+    unit: Unit,
+    selection: Selection,
+    size: { readonly height: number; readonly width: number },
+  ): void {
     const point = projector.project(gtaToEngine(unit.at, ICON_LIFT));
     if (!point) {
       return;
@@ -111,7 +122,7 @@ export class SymbologyLayer {
     if (point.depth > CHIP_MAX_DEPTH && !selected) {
       return;
     }
-    const rect = chip(ctx, point.x, point.y - CHIP_RISE, unit.callsign, color, selected);
+    const rect = chip(ctx, point.x, point.y - CHIP_RISE, unit.callsign, color, selected, size.width);
     this.areas.push({ ...rect, id: unit.id, kind: 'unit' });
     this.areas.push({ height: 20, id: unit.id, kind: 'unit', width: 20, x: point.x - 10, y: point.y - 10 });
   }
@@ -162,10 +173,17 @@ function chip(
   text: string,
   color: string,
   selected: boolean,
+  canvasWidth: number,
 ): { height: number; width: number; x: number; y: number } {
   ctx.font = FONT;
   const width = ctx.measureText(text).width + 14;
-  const left = x - width / 2;
+  // Clamp inside the canvas. A chip centred on an icon near the edge hangs half off screen, which on a phone
+  // is most of them; the leader line stays on the icon, so the chip may slide without becoming ambiguous.
+  const centre = Math.min(
+    Math.max(x, width / 2 + CHIP_MARGIN),
+    Math.max(width / 2 + CHIP_MARGIN, canvasWidth - width / 2 - CHIP_MARGIN),
+  );
+  const left = centre - width / 2;
   const top = y - CHIP_HEIGHT / 2;
 
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
@@ -184,7 +202,7 @@ function chip(
 
   ctx.fillStyle = '#e8eef6';
   ctx.textAlign = 'center';
-  ctx.fillText(text, x, y + 0.5);
+  ctx.fillText(text, centre, y + 0.5);
 
   return { height: CHIP_HEIGHT, width, x: left, y: top };
 }

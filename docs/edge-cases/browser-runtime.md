@@ -60,3 +60,25 @@ touching driving. All three are worked around in `PhysicsWorld.setVehicleControl
   way to express "this tyre is skidding".
 - **It exposes no skid state.** `skid_info` is internal; sliding has to be inferred from
   `wheelForwardImpulse` / `wheelSideImpulse` against the wheel's own friction circle.
+
+## Mobile GPUs: no BC, so no SA-built pak (2026-08-04)
+
+A pak built from SA assets is **BC-compressed throughout** — the converter passes SA's own DXT blocks through
+untouched (`packages/cell-weld/src/textures.ts`, "opaque, well-formed DXT: pass through"), and `.ostex` encodes
+only BC1/BC2/BC3/BC7 and RGBA8. Mobile GPUs (Adreno, Mali, PowerVR, Apple) ship **ETC2 and ASTC**, never BC,
+and WebGPU exposes each as a separate optional adapter feature.
+
+So on a phone the browser is not the problem — Chrome on Android has had WebGPU since 121, Safari since
+iOS 26 — the **content** is. The measured consequences:
+
+- The device now BOOTS on a phone: `initDevice` requests `texture-compression-bc` only when the adapter offers
+  it (requesting a feature the adapter lacks makes `requestDevice` reject outright, which is why it used to
+  throw). Verified 2026-08-04 on an emulated Pixel 7 with the feature filtered out of the adapter.
+- A BC texture then fails at UPLOAD, naming itself, in `beginOstexUpload`. That is deliberate: the demand
+  belongs to the content, not to the device, so content that was never BC runs on hardware that has no BC.
+- **RGBA8 `.ostex` uploads anywhere.** It is what the dispatch console's `?demo=1` city uses, and it is the
+  cheap route to a real phone measurement without writing an encoder — the converter already falls back to
+  RGBA8 whenever it cannot pass DXT through.
+
+Anything more than that needs an ASTC/ETC2 encode path (transcoding from DXT, so a second generation of loss)
+or Basis Universal / KTX2 in `.ostex` and a transcode at load. Neither exists today.

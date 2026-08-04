@@ -23,7 +23,8 @@ Implemented and running. The world half is verified only on real GPU hardware �
 | 2D symbology           | `src/map/overlay-2d.ts`                  | icons, chips, leader lines, scale bar — on a plain 2D canvas, and it owns hit-testing        |
 | World→screen           | `src/map/projection.ts`                  | `mat4LookAt`/`mat4PerspectiveZO`/`mat4Multiply` rebuilt per frame from the frame's camera     |
 | Board (domain)         | `src/ops/*`                              | units, calls, assignment, a pure `stepOperations` tick — renderer-free and unit-tested       |
-| Chrome                 | `src/ui/*`, `src/app.tsx`                | call queue, roster, selection panel, status bar                                              |
+| Chrome                 | `src/ui/*`, `src/app.tsx`                | call queue, roster, selection panel, status bar; desk and phone layouts                      |
+| Gestures               | `src/map/gestures.ts`                    | mouse and touch through one set of Pointer Events                                            |
 
 ## The two decisions worth reading
 
@@ -38,6 +39,25 @@ entirely past `fogCutDistance` (2400 by default), so from the kilometre-high eye
 is culled and the map comes back empty. `pushFogOut` ties the cut to `CAMERA_FAR`, and re-applies after every
 hour change because the environment driver rewrites both distances. `?fog=1` restores the game's own fog.
 (`sa-map-viewer` learned this the same way; the note there is the other half of this one.)
+
+## On a phone
+
+The console runs on a phone, and this is the one surface in the repo that does — the game needs a BC-capable
+GPU, which no phone has.
+
+- **Layout** flips below 860 px (`use-compact.ts`, a media query — a phone in landscape, a narrow window and a
+  split screen all need the same treatment and none is reliably identifiable any other way): the map fills the
+  screen, the two lists move into a tabbed sheet under it, and the top and status bars drop what does not fit.
+- **Gestures** (`gestures.ts`): one finger pans, two fingers pinch to zoom and drag to orbit, a long press
+  opens a call — touch has no wheel, no second button and no hover, so three of the five desk gestures had to
+  be re-cast rather than mapped. The canvas carries `touch-action: none`, without which the browser claims the
+  drag for scrolling before a single `pointermove` arrives.
+- **Chips clamp to the canvas** and calls drop their title below 620 px — on a phone most icons sit near an
+  edge, and an unclamped chip hangs half off screen.
+- **The world it can show is `?demo=1`.** A pak built from SA assets is BC-compressed and mobile GPUs ship
+  ETC2/ASTC; the engine now boots without BC and fails on the first BC texture instead, by name. See
+  [edge-cases/browser-runtime.md](../edge-cases/browser-runtime.md) for what it would take to change that, and
+  [restrictions/assets-and-data.md](../restrictions/assets-and-data.md) for why it is a build-time decision.
 
 ## Clicking
 
@@ -62,6 +82,12 @@ opens a call at the ground point under the cursor.
 ## Verification
 
 - `apps/dispatch/src/ops/sim.test.ts`, `src/map/coords.test.ts` — the board and the coordinate conversion.
+- `packages/engine/src/core/ostex-upload.test.ts` — both directions of the BC rule: a BC payload is refused by
+  name on a GPU without BC (and no texture is created), an RGBA8 one uploads.
+- Phone, emulated (Pixel 7, 412×839 CSS px, DPR 3, touch, 2026-08-04): the compact layout, the tabbed sheet,
+  the clamped chips and the demo world (576 recorded draws, 44/144 cells visible, 38 fps under SwiftShader).
+  Re-run with `texture-compression-bc` filtered out of the adapter — **the console boots and builds its world
+  on a simulated mobile GPU**, which is the change's whole point.
 - In-browser (SwiftShader, 2026-08-04): engine boot, `.oscell`/`.ostex` load (576 recorded draws), the frame
   loop, frustum culling (53/144 cells visible), the projected symbology, the whole console and the
   pak-missing failure path all run. **The rendered world image was NOT verified** — the software WebGPU

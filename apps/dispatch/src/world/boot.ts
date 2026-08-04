@@ -5,7 +5,7 @@ import {
 } from '@opensa/game/adapters/engine-environment-driver';
 
 import type { GtaGround } from '../map/coords';
-import type { MapPose } from '../map/map-camera';
+import type { CursorPick, MapPose } from '../map/map-camera';
 /**
  * The dispatch host: boot the engine on a canvas, stream the city, run the frame loop, and translate pointer
  * input into camera steps and selections. Plain DOM and engine — React never enters the loop, it only receives
@@ -18,6 +18,7 @@ import type { MapPose } from '../map/map-camera';
 import type { Operations, Selection } from '../ops/types';
 
 import { Beacons } from '../map/beacons';
+import { bindGestures } from '../map/gestures';
 import { CAMERA_FAR, groundPoint, MAP_YAW, MapCamera } from '../map/map-camera';
 import { SymbologyLayer } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
@@ -67,8 +68,6 @@ export type MapClick =
 const OPENING_POSE: MapPose = { at: [1700, -1500], height: 900, pitch: -1.15, yaw: MAP_YAW };
 /** Eye height "locate" drops to. */
 const LOCATE_HEIGHT = 260;
-/** Pixels of travel a press may accumulate and still count as a click rather than a drag. */
-const CLICK_SLOP = 4;
 /** Readout pushes per second. The loop must not re-render React. */
 const READOUT_HZ = 4;
 /** Streaming rings. Wider than the game's, because a map view looks at the city rather than at a street. */
@@ -197,8 +196,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 }
 
 /**
- * Left-drag pans, right-drag turns and tilts, the wheel dollies. A press that travels less than
- * {@link CLICK_SLOP} is a CLICK — the same button has to serve both, or panning would deselect every time.
+ * Wire the map's gestures to the camera and to selection. The gesture layer decides WHAT happened (tap, pan,
+ * orbit, pinch, long press); this decides what it MEANS: a tap selects, a long press opens a call there.
  */
 function bindInput(input: {
   camera: MapCamera;
@@ -208,91 +207,44 @@ function bindInput(input: {
   symbology: SymbologyLayer;
 }): () => void {
   const { camera, canvas, engine, options, symbology } = input;
-  let dragging: null | { button: number; travel: number; x: number; y: number } = null;
 
-  const onContextMenu = (event: Event): void => event.preventDefault();
-  const onPointerDown = (event: PointerEvent): void => {
-    dragging = { button: event.button, travel: 0, x: event.clientX, y: event.clientY };
-    canvas.setPointerCapture(event.pointerId);
-  };
-  const onPointerUp = (event: PointerEvent): void => {
-    if (dragging && dragging.travel <= CLICK_SLOP) {
-      resolveClick(event, dragging.button);
-    }
-    dragging = null;
-    canvas.releasePointerCapture(event.pointerId);
-  };
-  const onPointerMove = (event: PointerEvent): void => {
-    if (!dragging) {
-      return;
-    }
-    const dx = event.clientX - dragging.x;
-    const dy = event.clientY - dragging.y;
-    dragging = {
-      button: dragging.button,
-      travel: dragging.travel + Math.abs(dx) + Math.abs(dy),
-      x: event.clientX,
-      y: event.clientY,
-    };
-    if (dragging.button === 2) {
-      camera.orbit(dx, dy);
-    } else {
-      camera.pan([(2 * dx) / canvas.clientWidth, (-2 * dy) / canvas.clientHeight]);
-    }
-  };
-  const onWheel = (event: WheelEvent): void => {
-    event.preventDefault();
-    camera.dolly(Math.sign(event.deltaY));
-  };
-
-  /** Symbology first (the operator aimed at a chip), then the world under the cursor. */
-  const resolveClick = (event: PointerEvent, button: number): void => {
+  /** The world ray under a canvas-relative CSS position. */
+  const rayAt = (x: number, y: number): CursorPick => {
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
     const ndc: [number, number] = [(x / rect.width) * 2 - 1, 1 - (y / rect.height) * 2];
-    const ray = camera.rayAt(ndc, rect.width / Math.max(1, rect.height));
-    if (button === 2) {
-      const ground = groundPoint(ray);
+
+    return camera.rayAt(ndc, rect.width / Math.max(1, rect.height));
+  };
+
+  return bindGestures(canvas, {
+    dolly: (notch) => camera.dolly(notch),
+    longPress: (x, y) => {
+      const ground = groundPoint(rayAt(x, y));
       if (ground) {
         options.onGround(ground);
       }
+    },
+    orbit: (dx, dy) => camera.orbit(dx, dy),
+    pan: (delta) => camera.pan(delta),
+    // Symbology first — the operator aimed at a chip; then whatever the world puts under the cursor.
+    tap: (x, y) => {
+      const symbol = symbology.hitTest(x, y);
+      if (symbol) {
+        options.onClick(symbol);
 
-      return;
-    }
-    const symbol = symbology.hitTest(x, y);
-    if (symbol) {
-      options.onClick(symbol);
-
-      return;
-    }
-    options.onClick(worldClick(ray));
-  };
-
-  const worldClick = (ray: { direction: [number, number, number]; origin: [number, number, number] }): MapClick => {
-    const hit = engine.cells.pick(ray.origin, ray.direction);
-    if (hit) {
-      return { at: [hit.position[0], -hit.position[2]], kind: 'world', model: hit.model, txd: hit.txd };
-    }
-
-    return { at: groundPoint(ray) ?? [0, 0], kind: 'ground' };
-  };
-
-  canvas.addEventListener('contextmenu', onContextMenu);
-  canvas.addEventListener('pointerdown', onPointerDown);
-  canvas.addEventListener('pointermove', onPointerMove);
-  canvas.addEventListener('pointerup', onPointerUp);
-  canvas.addEventListener('wheel', onWheel, { passive: false });
-
-  return (): void => {
-    canvas.removeEventListener('contextmenu', onContextMenu);
-    canvas.removeEventListener('pointerdown', onPointerDown);
-    canvas.removeEventListener('pointermove', onPointerMove);
-    canvas.removeEventListener('pointerup', onPointerUp);
-    canvas.removeEventListener('wheel', onWheel);
-  };
+        return;
+      }
+      const ray = rayAt(x, y);
+      const hit = engine.cells.pick(ray.origin, ray.direction);
+      options.onClick(
+        hit
+          ? { at: [hit.position[0], -hit.position[2]], kind: 'world', model: hit.model, txd: hit.txd }
+          : { at: groundPoint(ray) ?? [0, 0], kind: 'ground' },
+      );
+    },
+    zoomBy: (factor) => camera.zoomBy(factor),
+  });
 }
-
 /** The game's own timecyc when the build ships one, so the map is lit as the game lights it. */
 async function buildEnvironment(
   engine: Engine,

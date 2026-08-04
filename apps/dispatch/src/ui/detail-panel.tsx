@@ -17,11 +17,14 @@ import { COLORS, styles } from './styles';
 
 export function DetailPanel({
   actions,
+  compact = false,
   onLocate,
   ops,
   selection,
 }: {
   actions: DispatchActions;
+  /** Phone layout: the card spans the map's width along the bottom instead of floating in a corner. */
+  compact?: boolean;
   onLocate: (at: GtaGround) => void;
   ops: Operations;
   selection: Selection;
@@ -29,9 +32,10 @@ export function DetailPanel({
   if (selection === null) {
     return null;
   }
+  const card = compact ? styles.detailCompact : styles.detail;
   if (selection.kind === 'world') {
     return (
-      <div style={styles.detail}>
+      <div style={card}>
         <Title text="Map object" />
         <Field label="model" value={selection.model} />
         <Field label="txd" value={selection.txd} />
@@ -55,7 +59,7 @@ export function DetailPanel({
   const incident = ops.incidents.find((entry) => entry.id === selection.id);
 
   return (
-    <div style={styles.detail}>
+    <div style={card}>
       {unit && <UnitDetail actions={actions} incidents={ops.incidents} onLocate={onLocate} unit={unit} />}
       {incident && <IncidentDetail actions={actions} incident={incident} onLocate={onLocate} ops={ops} />}
       {!unit && !incident && <Title text="Gone from the board" />}

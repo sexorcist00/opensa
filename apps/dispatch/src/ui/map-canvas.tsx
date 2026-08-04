@@ -92,9 +92,13 @@ function BootFailure({ message }: { message: string }): ReactElement {
         <div style={{ color: COLORS.danger, fontSize: 13, fontWeight: 700, paddingBottom: 8 }}>Map unavailable</div>
         <div style={{ ...styles.mono, fontSize: 11, lineHeight: 1.6, wordBreak: 'break-word' }}>{message}</div>
         <div style={{ color: COLORS.muted, lineHeight: 1.7, paddingTop: 10 }}>
-          This surface needs two things: a browser with <strong>WebGPU</strong> (there is no fallback renderer), and a{' '}
-          <strong>built game</strong> to stream. Build one with <code>npm run build:game:original:opensa</code>, or
-          point the app at an existing build with <code>?src=build/&lt;game&gt;</code>.
+          This surface needs a browser with <strong>WebGPU</strong> (there is no fallback renderer) and a{' '}
+          <strong>world</strong> to draw. Build one with <code>npm run build:game:original:opensa</code>, or point the
+          app at an existing build with <code>?src=build/&lt;game&gt;</code>.
+          <br />
+          On a <strong>phone</strong>, a pak built from SA assets will not load: its textures are BC-compressed, and
+          mobile GPUs ship ETC2/ASTC instead. Open <code>?demo=1</code> for the synthetic city — it uses textures every
+          GPU can read.
         </div>
       </div>
     </div>

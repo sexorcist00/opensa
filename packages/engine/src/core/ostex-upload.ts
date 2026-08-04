@@ -48,6 +48,7 @@ export function beginOstexUpload(
   label: string,
 ): OstexUploadTask {
   const tex = decodeOstex(bytes);
+  requireFormatSupport(device, tex.format, label);
   const byteEstimate = tex.payload.byteLength;
   const texture = resources.createTexture(
     'texture',
@@ -106,4 +107,21 @@ export function uploadOstexTexture(
   }
 
   return { byteEstimate: task.byteEstimate, layers: task.layers, texture: task.texture };
+}
+
+/**
+ * The BC demand, moved off the device and onto the CONTENT (see `device.ts`). A pak built from SA assets is
+ * BC throughout, so on a device without BC this throws on the first world array — early, and naming the
+ * texture, which is the difference between "this world needs a BC-capable GPU" and a driver-level validation
+ * error thousands of lines away. RGBA8 payloads upload anywhere, which is what lets a non-BC device run
+ * content that was never BC to begin with.
+ */
+function requireFormatSupport(device: GPUDevice, format: OstexFormatId, label: string): void {
+  const isBc = format !== OstexFormat.RGBA8;
+  if (isBc && !device.features.has('texture-compression-bc')) {
+    throw new Error(
+      `${label}: this texture is BC-compressed and the GPU has no texture-compression-bc ` +
+        `(mobile GPUs ship ETC2/ASTC instead). The world's pak must be built with textures this device can read.`,
+    );
+  }
 }

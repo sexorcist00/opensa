@@ -189,3 +189,23 @@ follows a link at read time, whatever assembles its inputs follows the same link
 
 **Caught:** no. A missing dictionary is not an error at any layer — the lookup falls off the end of the
 chain and the material renders in its flat colour, which on a white LOD material is a white building.
+
+## A world's texture format decides which GPUs can display it
+
+A pak built from SA assets is BC throughout, and **BC is desktop-only** — mobile GPUs ship ETC2/ASTC. So
+"which devices can run this world" is not a runtime question or a performance question: it is decided by the
+converter, at build time, and cannot be re-taken later.
+
+Design against it rather than around it: a plan that says "and then it also runs on phones" needs an
+ASTC/ETC2 encode path or a Basis/KTX2 transcode in `.ostex` in the SAME plan, or it needs to say that its
+world is RGBA8. Relaxing the device gate does not help — that was already done (a phone boots the engine
+now); it moves the failure to the first texture, it does not remove it.
+
+Detail and the measurement: [edge-cases/browser-runtime.md](../edge-cases/browser-runtime.md).
+
+**What breaks when violated:** the app boots, streams, and throws on the first world texture array — on the
+target device only, never on the desktop it was developed on.
+
+**Caught:** partly. `beginOstexUpload` throws by name (`ostex-upload.test.ts` covers both directions), so it
+is loud at runtime on the device — but nothing in the build or in CI tells you a pak is undisplayable on a
+platform you are targeting.

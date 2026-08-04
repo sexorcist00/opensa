@@ -57,8 +57,9 @@ function ostexOf(format: Ostex['format'], layers: number): Uint8Array {
   });
 }
 
-/** Records what reached the GPU: every texture descriptor and every `writeTexture` payload. */
-function recorder(): {
+/** Records what reached the GPU: every texture descriptor and every `writeTexture` payload.
+ *  `hasBc` models the adapter feature the upload now checks — false is a mobile GPU (ETC2/ASTC, never BC). */
+function recorder(hasBc = true): {
   descriptors: GPUTextureDescriptor[];
   device: GPUDevice;
   resources: Resources;
@@ -67,6 +68,7 @@ function recorder(): {
   const descriptors: GPUTextureDescriptor[] = [];
   const writes: RecordedWrite[] = [];
   const device = {
+    features: new Set<string>(hasBc ? ['texture-compression-bc'] : []),
     queue: {
       writeTexture: (
         destination: { origin?: { z?: number } },
@@ -90,6 +92,21 @@ function recorder(): {
 
 describe('uploadOstexTexture', () => {
   describe('negative cases', () => {
+    it('refuses a BC payload on a GPU without BC, naming the texture', () => {
+      const { device, resources } = recorder(false);
+
+      expect(() => uploadOstexTexture(device, resources, ostexOf(OstexFormat.BC3, 1), 'world-array-7')).toThrow(
+        /world-array-7.*texture-compression-bc/s,
+      );
+    });
+
+    it('creates no texture at all when the format is refused', () => {
+      const { descriptors, device, resources } = recorder(false);
+
+      expect(() => uploadOstexTexture(device, resources, ostexOf(OstexFormat.BC1, 1), 'world-array-7')).toThrow();
+      expect(descriptors).toEqual([]);
+    });
+
     it('never expands a compressed payload — BC3 reaches the GPU at a quarter of RGBA8', () => {
       const { device, resources, writes } = recorder();
 
@@ -119,6 +136,15 @@ describe('uploadOstexTexture', () => {
       uploadOstexTexture(device, resources, ostexOf(OstexFormat.BC1, 1), 'model-texture');
 
       expect(descriptors[0].format).toBe('bc1-rgba-unorm-srgb');
+    });
+
+    it('uploads an RGBA8 dictionary on a GPU without BC — only BC CONTENT needs the feature', () => {
+      const { descriptors, device, resources, writes } = recorder(false);
+
+      uploadOstexTexture(device, resources, ostexOf(OstexFormat.RGBA8, 1), 'demo-texture');
+
+      expect(descriptors[0].format).toBe('rgba8unorm-srgb');
+      expect(writes).toHaveLength(1);
     });
 
     it('still handles the RGBA8 fallback a non-block-aligned model lands on', () => {
