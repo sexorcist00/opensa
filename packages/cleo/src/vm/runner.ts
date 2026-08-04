@@ -12,6 +12,7 @@ import type { CleoHost } from './host.interface';
 
 import { opcodeDef } from '../core/opcode-table';
 import { registerControlFlow } from './handlers/control-flow';
+import { registerNatives } from './handlers/natives';
 import { createStdlibState, registerStdlib } from './handlers/stdlib';
 import { registerVars } from './handlers/vars';
 import { registerWorld } from './handlers/world';
@@ -67,6 +68,7 @@ export class ScriptRunner {
     registerVars(this.registry);
     registerStdlib(this.registry, createStdlibState());
     registerWorld(this.registry);
+    registerNatives(this.registry);
   }
 
   dispose(): void {

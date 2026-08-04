@@ -156,6 +156,12 @@ function registerPlayer(registry: HandlerRegistry): void {
 
     return 'continue';
   });
+  // 056D DOES_CHAR_EXIST char
+  registry.register(0x056d, (ctx, instruction) => {
+    ctx.thread.setCondition(ctx.host.player.exists(ctx.thread.readInt(instruction.operands[0])), instruction.negated);
+
+    return 'continue';
+  });
   // 00A0 GET_CHAR_COORDINATES char outX outY outZ
   registry.register(0x00a0, (ctx, instruction) => {
     const [x, y, z] = ctx.host.player.charCoordinates(ctx.thread.readInt(instruction.operands[0]));
@@ -244,6 +250,15 @@ function registerVehicles(registry: HandlerRegistry): void {
   registry.register(0x00df, (ctx, instruction) => {
     ctx.thread.setCondition(
       ctx.host.vehicles.isCharInAnyCar(ctx.thread.readInt(instruction.operands[0])),
+      instruction.negated,
+    );
+
+    return 'continue';
+  });
+  // 0A01 IS_THIS_MODEL_A_CAR model
+  registry.register(0x0a01, (ctx, instruction) => {
+    ctx.thread.setCondition(
+      ctx.host.vehicles.isCarModel(ctx.thread.readInt(instruction.operands[0])),
       instruction.negated,
     );
 

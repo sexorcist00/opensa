@@ -54,7 +54,7 @@ describe.skipIf(!existsSync(CORPUS))('corpus on the VM', () => {
       }
     });
 
-    it('Wind Farm runs to its model-request loop with stdlib + mocked facets only', () => {
+    it('Wind Farm BUILDS its turbines: the atlas serves its wind + LOD-multiplier globals (plan 05)', () => {
       const host = createRecordingHost();
       const runner = new ScriptRunner({ host });
       const thread = runner.spawn(load('windfarm'), 'windfarm');
@@ -63,12 +63,62 @@ describe.skipIf(!existsSync(CORPUS))('corpus on the VM', () => {
       }
       expect(runner.faults).toEqual([]);
       expect(thread.terminated).toBe(false);
-      // The four models the mod ships, resolved by NAME (0E9C) — each found (id ≥ 20000).
       for (const name of ['windturb_base', 'windturb_fan', 'lodwindturb_base', 'lodwindturb_fan']) {
         expect(namedId(host.calls, name)).toBeGreaterThanOrEqual(20000);
       }
-      // Its native READ_MEMORY reads surface as unimplemented (plan 05's domain), never as faults.
-      expect(host.calls.some((line) => line.startsWith('onUnimplemented 0A8D'))).toBe(true);
+      // The 04 field checkpoint's measured blocker, now served: 0A8D reads resolve, the visibility
+      // radius is non-zero, and the farm actually builds — turbines + LOD links + spinning fans.
+      expect(host.calls.some((line) => line.startsWith('onUnimplemented 0A8D'))).toBe(false);
+      expect(host.calls.filter((line) => line.startsWith('objects.create')).length).toBeGreaterThan(30);
+      expect(host.calls.filter((line) => line.startsWith('objects.connectLods')).length).toBeGreaterThan(10);
+      expect(host.atlas.misses.filter((miss) => miss.kind === 'read')).toEqual([]);
+    });
+
+    it('firela holds its ladder parts level: pool walk → frames by name → SetRotate*Only (class B)', () => {
+      const host = createRecordingHost({ cars: [{ handle: 257, model: 544 }] });
+      const runner = new ScriptRunner({ host });
+      runner.spawn(load('firela'), 'firela');
+      for (let frame = 0; frame < 60; frame += 1) {
+        runner.tick(1000 / 60);
+      }
+      expect(runner.faults).toEqual([]);
+      const rotations = host.calls.filter((line) => line.startsWith('natives.setPartRotation car#257'));
+      for (const part of ['misc_a', 'misc_b', 'misc_c']) {
+        expect(rotations.some((line) => line.includes(`${part}#`))).toBe(true);
+      }
+      // SetRotate*Only(0.0) → identity quats — the mod pins the ladder against SA's default sway.
+      expect(rotations[0]).toMatch(/quat\(0,0,0,1\)/);
+    });
+
+    it('vandoor probes door frames by name and SLIDES the door by the 095F ratio (class B)', () => {
+      const host = createRecordingHost({ cars: [{ handle: 513, model: 582 }], doorAngleRatio: 0.5 });
+      const runner = new ScriptRunner({ host });
+      runner.spawn(load('vandoor'), 'vandoor');
+      for (let frame = 0; frame < 60; frame += 1) {
+        runner.tick(1000 / 60);
+      }
+      expect(runner.faults).toEqual([]);
+      // dvan_l's matrix pos.y written with the door ratio — the slide itself.
+      const slides = host.calls.filter((line) => line.startsWith('natives.setPartTranslation car#513'));
+      expect(slides.some((line) => line.includes('dvan_l#') && line.includes('y=0.5'))).toBe(true);
+    });
+
+    it('rhino walks the REAL pool facade, finds the tank and drives its track frames (class B)', () => {
+      // Handle 257 = slot 1, counter 1 — exactly what the byte-map walk reconstructs.
+      const host = createRecordingHost({ cars: [{ handle: 257, model: 432 }] });
+      const runner = new ScriptRunner({ host });
+      const thread = runner.spawn(load('rhino'), 'rhino');
+      const counts: number[] = [];
+      for (let frame = 0; frame < 60; frame += 1) {
+        runner.tick(1000 / 60);
+        counts.push(runner.instructionsLastTick);
+      }
+      expect(runner.faults).toEqual([]);
+      expect(thread.terminated).toBe(false);
+      // The budget bound holds with the real walk running (the plan 03 re-measure).
+      expect(Math.max(...counts)).toBeLessThan(10_000);
+      // The walk found the tank through the byte map and rotated its track/wheel frames.
+      expect(host.calls.some((line) => line.startsWith('natives.setPartRotation car#257'))).toBe(true);
     });
 
     it('cardoor (class C) degrades cleanly: unimplemented ped-task ops, zero faults', () => {
@@ -79,20 +129,6 @@ describe.skipIf(!existsSync(CORPUS))('corpus on the VM', () => {
         runner.tick(1000 / 60);
       }
       expect(runner.faults).toEqual([]);
-    });
-
-    it('rhino ticks within budget headless (empty world — the full loop needs plan 05 natives)', () => {
-      const host = createRecordingHost();
-      const runner = new ScriptRunner({ host });
-      const thread = runner.spawn(load('rhino'), 'rhino');
-      const counts: number[] = [];
-      for (let frame = 0; frame < 60; frame += 1) {
-        runner.tick(1000 / 60);
-        counts.push(runner.instructionsLastTick);
-      }
-      expect(runner.faults).toEqual([]);
-      expect(thread.terminated).toBe(false);
-      expect(Math.max(...counts)).toBeLessThan(10_000);
     });
   });
 });

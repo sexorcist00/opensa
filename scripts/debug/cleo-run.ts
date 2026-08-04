@@ -8,11 +8,18 @@ import { basename } from 'node:path';
  * DECISIONS, not API calls (the fake-GPU philosophy). Grows `--atlas` with plan 05 (native calls
  * resolve against a recorded atlas stub and appear in the trace).
  *
- * Run: `npx tsx scripts/debug/cleo-run.ts <file.cs> [--ticks 60] [--fps 60] [--calls 60]`
+ * Run: `npx tsx scripts/debug/cleo-run.ts <file.cs> [--ticks 60] [--fps 60] [--calls 60]
+ *       [--cars 257:544,513:582] [--door 0.5]`
+ *
+ * `--cars` populates the fake world with live vehicles (scriptHandle:modelId) — the pool walk, the
+ * car finds and `GET_CAR_MODEL` all see them, which is how the class-B scripts (firela, vandoor,
+ * rhino) run their whole native path headless; the trace then shows RESOLVED operations
+ * ("natives.setPartRotation car#257 misc_a#0 …"), never raw addresses (plan 097/05).
  */
 
 const args = process.argv.slice(2);
-const file = args.find((a) => !a.startsWith('--'));
+const positional = args.filter((a, i) => !a.startsWith('--') && (i === 0 || !args[i - 1].startsWith('--')));
+const file = positional[0];
 if (!file) {
   console.error('usage: cleo-run.ts <file.cs> [--ticks 60] [--fps 60] [--calls 60]');
   process.exit(1);
@@ -25,8 +32,17 @@ const flag = (name: string, fallback: number): number => {
 const ticks = flag('ticks', 60);
 const fps = flag('fps', 60);
 const callLimit = flag('calls', 60);
+const carsIndex = args.indexOf('--cars');
+const cars =
+  carsIndex >= 0
+    ? args[carsIndex + 1].split(',').map((pair) => {
+        const [handle, model] = pair.split(':').map(Number);
 
-const host = createRecordingHost();
+        return { handle, model };
+      })
+    : [];
+
+const host = createRecordingHost({ cars, doorAngleRatio: flag('door', 0.5) });
 const runner = new ScriptRunner({ host });
 const script = decodeScript(new Uint8Array(readFileSync(file)));
 const thread = runner.spawn(script, basename(file, '.cs'));

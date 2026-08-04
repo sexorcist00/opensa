@@ -8,11 +8,11 @@
  * degrees→radians happens in ONE place — {@link gtaEulerToQuat} — and the engine basis change lives
  * entirely in `writeGtaRoot`. Script objects have NO physics (readme's out-of-scope).
  */
-import type { CleoHost, ScriptRunner } from '@opensa/cleo';
+import type { CleoHost, NativeWorld, ScriptRunner } from '@opensa/cleo';
 import type { System } from '@opensa/game/core/system';
 import type { Config } from '@opensa/game/interfaces/config.interface';
 
-import { decodeScript } from '@opensa/cleo';
+import { AtlasMemory, decodeScript } from '@opensa/cleo';
 import { gtaPositionToEngine, writeGtaRoot } from '@opensa/game/adapters/engine-vehicle-handle';
 
 /** Everything the host asks of the engine/world — implemented over the real seams in
@@ -24,6 +24,8 @@ export interface CleoHostDeps {
   /** Upload the instance matrices — once per tick, after the transform writes. */
   flush(): void;
   hour(): number;
+  /** The plan 05 native world the `AtlasMemory` facade resolves against (parts, pool, wind…). */
+  readonly nativeWorld: NativeWorld;
   playerGta(): readonly [number, number, number];
   print(text: string, ms: number): void;
   resolveById(id: number): null | { drawDistance: number; modelName: string; txdName: string };
@@ -95,6 +97,7 @@ export class CleoRunnerSystem implements System {
 
 /** The engine-agnostic host core over {@link CleoHostDeps} — everything testable lives here. */
 export function createCleoEngineHost(deps: CleoHostDeps): EngineCleoHost {
+  const memory = new AtlasMemory(deps.nativeWorld);
   const objects = new Map<number, ScriptObject>();
   const deadLogged = new Set<number>();
   const requestedUnresolvable = new Set<number>();
@@ -137,6 +140,8 @@ export function createCleoEngineHost(deps: CleoHostDeps): EngineCleoHost {
       }
       objects.clear();
     },
+
+    memory,
 
     models: {
       byName: (name): null | number => deps.resolveByName(name),
@@ -253,6 +258,7 @@ export function createCleoEngineHost(deps: CleoHostDeps): EngineCleoHost {
 
     player: {
       charCoordinates: (): readonly [number, number, number] => deps.playerGta(),
+      exists: (): boolean => true,
       isPlaying: (): boolean => true,
       playerChar: (): number => 1,
     },
@@ -291,7 +297,10 @@ export function createCleoEngineHost(deps: CleoHostDeps): EngineCleoHost {
       anyCar: (): null => null,
       carInSphere: (): null => null,
       carModel: (): number => 0,
+      doorAngleRatio: (car, door): null | number => deps.nativeWorld.doorAngleRatio(car, door),
       driverOf: (): null => null,
+
+      isCarModel: (): boolean => false, // Phase B: the vehicle-def check lands with the class-B wiring
       isCharInAnyCar: (): boolean => deps.ridingCar(),
       isCharInCar: (): boolean => false,
       storeCarCharIsIn: (): number => -1,

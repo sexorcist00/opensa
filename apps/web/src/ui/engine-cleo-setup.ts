@@ -91,11 +91,29 @@ export function setupEngineCleo(args: EngineCleoArgs): CleoRunnerSystem | null {
     };
   };
 
+  // The plan 05 Phase-A native world: honest defaults — lodDistMultiplier 1.0 (there is no
+  // draw-distance slider), wind 0 (no weather wind source yet), parts unresolved (the vehicle part
+  // registry accessors land with the class-B engine wiring). Every unserved access is RECORDED by
+  // the AtlasMemory misses ledger, never silently wrong.
+  const nativeWorld = {
+    doorAngleRatio: (): null => null,
+    lodDistMultiplier: (): number => 1,
+    nextSiblingPart: (): null => null,
+    partForward: (): readonly [number, number, number] => [0, 1, 0],
+    partIndex: (): null => null,
+    partTranslation: (): readonly [number, number, number] => [0, 0, 0],
+    setPartRotation: (): void => undefined,
+    setPartTranslationComponent: (): void => undefined,
+    vehicleHandles: (): readonly number[] => [],
+    wind: (): number => 0,
+  };
+
   const host = createCleoEngineHost({
     cameraGta: args.cameraGta,
     ensureModel,
     flush: (): void => engine.updateVehicles(),
     hour: args.hour,
+    nativeWorld,
     playerGta: args.playerGta,
     print: showToast,
     resolveById: (id) => adapter.cleoModelById(id),

@@ -3,20 +3,38 @@
  * calls): every facet call appends one readable line to `calls`, and canned answers make the corpus
  * scripts take their happy path headless. Tests and `cleo-run` (plan 02) share this one mock —
  * the trace IS the story ("create 14645 at x,y,z · rotate …").
+ *
+ * The `memory` facet is the REAL `AtlasMemory` (plan 05) over a recording fake world — the token
+ * and atlas logic under test is production code; only the world behind it is canned. Part indices
+ * are auto-assigned per (car, name) so traces read `part misc_a#0`.
  */
 import type { CleoHost } from './host.interface';
 
+import { AtlasMemory, type NativeWorld } from './native-atlas';
+
 export interface RecordingHost extends CleoHost {
+  readonly atlas: AtlasMemory;
   readonly calls: string[];
 }
 
 export interface RecordingHostOptions {
   /** Answer for camera-distance checks (default true — scripts near-gate their work on it). */
   readonly cameraWithin?: boolean;
+  /** Live vehicles: script handle (slot*256+counter, counter bit7 clear) + model id. Drives the
+   *  car finds, `carModel`, and the pool walk. */
+  readonly cars?: readonly { readonly handle: number; readonly model: number }[];
+  /** Door openness for `095F` (default 0.5 — vandoor copies it into the slide). */
+  readonly doorAngleRatio?: number;
   /** Game hour (default 12). */
   readonly hour?: number;
   /** Model name → id for `GET_MODEL_BY_NAME` (default: every name resolves, ids assigned 20000+). */
   readonly knownModels?: ReadonlyMap<string, number>;
+  /** Frame names each car's model carries (default: every asked name exists). */
+  readonly partNames?: readonly string[];
+  /** The car the player currently sits in (a `cars` handle). */
+  readonly playerInCar?: number;
+  /** CWeather::Wind (default 0.4). */
+  readonly wind?: number;
 }
 
 export function createRecordingHost(options: RecordingHostOptions = {}): RecordingHost {
@@ -30,8 +48,55 @@ export function createRecordingHost(options: RecordingHostOptions = {}): Recordi
   const objects = new Set<number>();
   const fixed = (value: number): string => (Number.isInteger(value) ? String(value) : value.toFixed(3));
 
+  // --- The plan 05 native world: parts auto-assigned per (car, name), everything recorded. ---
+  const partsByCar = new Map<number, Map<string, number>>();
+  const partName = (car: number, part: number): string => {
+    for (const [name, index] of partsByCar.get(car) ?? []) {
+      if (index === part) {
+        return `${name}#${part}`;
+      }
+    }
+
+    return `#${part}`;
+  };
+  const world: NativeWorld = {
+    doorAngleRatio: (): null | number => options.doorAngleRatio ?? 0.5,
+    lodDistMultiplier: (): number => 1,
+    nextSiblingPart: (car, part): null | number => {
+      // The fake frame tree is a flat chain: sibling = the next auto-assigned part, 3 links deep.
+      return part < 2 ? part + 1 : null;
+    },
+    partForward: (): readonly [number, number, number] => [0, 1, 0],
+    partIndex: (car, name): null | number => {
+      if (options.partNames && !options.partNames.includes(name)) {
+        record(`natives.partIndex car#${car} ${name} -> missing`);
+
+        return null;
+      }
+      const parts = partsByCar.get(car) ?? new Map<string, number>();
+      partsByCar.set(car, parts);
+      if (!parts.has(name)) {
+        parts.set(name, parts.size);
+      }
+
+      return parts.get(name) ?? null;
+    },
+    partTranslation: (): readonly [number, number, number] => [0, 0, 0],
+    setPartRotation: (car, part, quat): void => {
+      record(`natives.setPartRotation car#${car} ${partName(car, part)} quat(${quat.map(fixed).join(',')})`);
+    },
+    setPartTranslationComponent: (car, part, axis, value): void => {
+      record(`natives.setPartTranslation car#${car} ${partName(car, part)} ${'xyz'[axis]}=${fixed(value)}`);
+    },
+    vehicleHandles: (): readonly number[] => (options.cars ?? []).map((car) => car.handle),
+    wind: (): number => options.wind ?? 0.4,
+  };
+  const atlas = new AtlasMemory(world);
+
   return {
+    atlas,
     calls,
+    memory: atlas,
     models: {
       byName(name): null | number {
         if (!namedModels.has(name)) {
@@ -107,6 +172,9 @@ export function createRecordingHost(options: RecordingHostOptions = {}): Recordi
       charCoordinates(): readonly [number, number, number] {
         return [0, 0, 0];
       },
+      exists(): boolean {
+        return true;
+      },
       isPlaying(): boolean {
         return true;
       },
@@ -120,26 +188,37 @@ export function createRecordingHost(options: RecordingHostOptions = {}): Recordi
       },
     },
     vehicles: {
-      anyCar(): null {
-        return null;
+      anyCar(progress): null | { car: number; progress: number } {
+        const car = (options.cars ?? [])[progress];
+
+        return car ? { car: car.handle, progress: progress + 1 } : null;
       },
-      carInSphere(): null {
-        return null;
+      carInSphere(): null | number {
+        return (options.cars ?? [])[0]?.handle ?? null;
       },
-      carModel(): number {
-        return 0;
+      carModel(car): number {
+        return (options.cars ?? []).find((entry) => entry.handle === car)?.model ?? 0;
+      },
+      doorAngleRatio(car, door): null | number {
+        const ratio = options.doorAngleRatio ?? 0.5;
+        record(`vehicles.doorAngleRatio car#${car} door ${door} -> ${ratio}`);
+
+        return ratio;
       },
       driverOf(): null {
         return null;
       },
-      isCharInAnyCar(): boolean {
-        return false;
+      isCarModel(): boolean {
+        return true;
       },
-      isCharInCar(): boolean {
-        return false;
+      isCharInAnyCar(): boolean {
+        return options.playerInCar !== undefined;
+      },
+      isCharInCar(char, car): boolean {
+        return options.playerInCar === car;
       },
       storeCarCharIsIn(): number {
-        return -1;
+        return options.playerInCar ?? -1;
       },
     },
     world: {

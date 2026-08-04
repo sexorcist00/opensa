@@ -12,8 +12,19 @@ export type {
   CleoVehicleFacet,
   CleoWorldFacet,
 } from './vm/host.interface';
+export { AtlasMemory, type AtlasMiss, type NativeArg, type NativeValue, type NativeWorld, SA } from './vm/native-atlas';
+export { isNativeToken, tokenEntry, tokenOffset, TokenTable, type TokenTarget } from './vm/native-tokens';
 export { createRecordingHost, type RecordingHost, type RecordingHostOptions } from './vm/recording-host';
 export { type HandlerContext, HandlerRegistry, type OpcodeHandler, type OpcodeResult } from './vm/registry';
 export { ScriptRunner, type ScriptRunnerOptions, type ThreadFaultRecord } from './vm/runner';
+export {
+  type Quat,
+  quatAxes,
+  quatFromSaEuler,
+  quatMultiply,
+  quatRotateX,
+  quatRotateY,
+  quatRotateZ,
+} from './vm/sa-matrix';
 export { CleoThread, ThreadFault } from './vm/thread';
 export { VarSpace } from './vm/var-space';

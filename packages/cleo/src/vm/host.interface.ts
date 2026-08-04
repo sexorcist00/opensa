@@ -4,8 +4,10 @@
  * declared here from the corpus's demand (plan 04 decision 6 implements them over the real engine;
  * plan 05 adds the native-memory facet). Units are GTA-native throughout: metres, degrees, Z-up.
  */
+import type { NativeArg, NativeValue } from './native-atlas';
 
 export interface CleoHost {
+  readonly memory: CleoMemoryFacet;
   readonly models: CleoModelFacet;
   readonly objects: CleoObjectFacet;
   /** An opcode no handler serves — called ONCE per id per runner (the plan 07 tier policy's seam). */
@@ -14,6 +16,18 @@ export interface CleoHost {
   readonly text: CleoTextFacet;
   readonly vehicles: CleoVehicleFacet;
   readonly world: CleoWorldFacet;
+}
+
+/** The native memory/call facade (plan 097/05): tokens + the SA address atlas. `AtlasMemory`
+ *  implements it over a `NativeWorld`; the VM's 0A8C/0A8D/0A97/0AEB/0AA5-0AA8 handlers route here. */
+export interface CleoMemoryFacet {
+  call(address: number, struct: null | number, args: readonly NativeArg[]): NativeValue;
+  /** `0AEB` — token back to a script handle, or null. */
+  handleOf(value: number): null | number;
+  /** `0A97` — the token a script stores as a vehicle's "address". */
+  pointerOf(car: number): number;
+  read(address: number, size: number): NativeValue;
+  write(address: number, size: number, value: { float: number; int: number }): boolean;
 }
 
 /** Model identity as scripts use it: numeric ids (IDE/`GET_MODEL_BY_NAME` results). */
@@ -55,6 +69,8 @@ export interface CleoObjectFacet {
 export interface CleoPlayerFacet {
   /** `00A0 GET_CHAR_COORDINATES`. */
   charCoordinates(char: number): readonly [number, number, number];
+  /** `056D DOES_CHAR_EXIST`. */
+  exists(char: number): boolean;
   /** `0256 IS_PLAYER_PLAYING`. */
   isPlaying(player: number): boolean;
   /** `01F5 GET_PLAYER_CHAR` — the player's char handle. */
@@ -74,8 +90,12 @@ export interface CleoVehicleFacet {
   carInSphere(x: number, y: number, z: number, radius: number, findNext: boolean, skipWrecked: boolean): null | number;
   /** `0441 GET_CAR_MODEL`. */
   carModel(car: number): number;
+  /** `095F GET_DOOR_ANGLE_RATIO` — current openness 0..1 (door 2-5 = SA ids), null when unknown. */
+  doorAngleRatio(car: number, door: number): null | number;
   /** `046C GET_DRIVER_OF_CAR` — char handle, or null (condition false). */
   driverOf(car: number): null | number;
+  /** `0A01 IS_THIS_MODEL_A_CAR` — the model id names a car-class vehicle. */
+  isCarModel(model: number): boolean;
   /** `00DB`/`00DF` seat checks. */
   isCharInAnyCar(char: number): boolean;
   isCharInCar(char: number, car: number): boolean;

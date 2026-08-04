@@ -71,19 +71,19 @@ recover-the-real-formula rule. No fitted constants: an offset we cannot name doe
 
 ## Subtasks
 
-- [ ] Token model + INT_ADD/SUB derivation + storage-in-var round-trip tests.
-- [ ] Atlas table format (functions/globals/struct offsets, each row: address, symbol name, handler
+- [x] Token model + INT_ADD/SUB derivation + storage-in-var round-trip tests.
+- [x] Atlas table format (functions/globals/struct offsets, each row: address, symbol name, handler
       ref) + the ~15 corpus entries; name `0xB6F118` and `0x59B120` from gta-reversed first.
-- [ ] READ/WRITE/CALL resolution through the atlas + unit tests per row (mock host).
+- [x] READ/WRITE/CALL resolution through the atlas + unit tests per row (mock host).
 - [ ] Frame tokens on the part registry + matrix-op mapping (+ conversion tests against the comet
       door conventions — axis/sign fixtures).
 - [ ] Wind global → weather system read (Wind Farm's sway now wind-driven — its class-A behaviour
       completes here).
-- [ ] Pool facade scoped to rhino's walk + tests.
+- [x] Pool facade scoped to rhino's walk + tests.
 - [ ] Door-angle accessor + `095F`.
-- [ ] `cleo-run --atlas` (plan 02 extension): headless trace shows resolved symbol names, not raw
-      addresses ("GetFrameFromName('misc_a') → part 7").
-- [ ] Headless integration: firela + van door decoded scripts drive the expected part
+- [x] `cleo-run --atlas` (landed as `--cars handle:model`): the headless trace shows resolved
+      operations ("natives.setPartRotation car#257 misc_a#0 …"), never raw addresses.
+- [x] Headless integration: firela + van door decoded scripts drive the expected part
       rotations/translations on a fake vehicle; rhino's walk finds the fake pool's rhinos.
 - [ ] **Field checkpoint 2**: firela/newsvan/rhino installed as vehicle mods (vehicle-installer) +
       scripts hand-placed; ladder rises on the parked firela, van door slides open with the door,
@@ -100,5 +100,55 @@ recover-the-real-formula rule. No fitted constants: an offset we cannot name doe
 
 ## Ledger
 
-_(atlas rows landed, symbol names for the two unresolved addresses, axis-mapping fixtures, rhino cost,
-field checkpoint 2 record)_
+### Phase A — 2026-08-04: the whole facade, headless-proven; engine part-registry wiring pending
+
+**The two unresolved addresses, named from gta-reversed (the recover-the-formula rule):**
+
+- `0x59B120` = `CMatrix::SetRotate(float x, float y, float z)` — and the composition is
+  **Rz(z)·Rx(x)·Ry(y)**, verified term by term against `Core/Matrix.cpp` (NOT the guessable
+  Rz·Ry·Rx; a negative fixture pins the difference). This also CAUGHT A BUG in plan 04's
+  `gtaEulerToQuat` (it used Rz·Ry·Rx — harmless for the ferris's x=0 rotations, wrong in general;
+  fix it when the object path first needs a two-axis rotation).
+- `0xB6F118` = `TheCamera.m_fLODDistMultiplier` (TheCamera=0xB6F028, field +0xF0) — the
+  draw-distance slider multiplier; `VisibilityPlugins.cpp:286` computes visibility as
+  `multiplier x drawDistance`, exactly Wind Farm's radius formula. Served as 1.0 (we have no
+  slider); `0xC812F0` = `CWeather::Wind` verified in `Weather.h:44`.
+
+**Protocol facts recovered from the corpus disassembly (all now unit-fixtured):**
+
+- Tokens must survive PLAIN VM arithmetic, not just INT_ADD — firela does `frame += 16` with
+  `000A ADD_VAL_TO_INT_LVAR`. Encoding: `0x50000000 | (entry << 12) | byteOffset`.
+- Rhino's pool walk: `0xB74494` -> `+4` byteMap -> one BYTE per slot (counter, bit7 set = free),
+  `handle = byte + slot*256`, bounded at slot 139 (`28@ > 35584`). The facade mints handles as
+  `slot*256 + counter` and the walk reconstructs them exactly.
+- Rhino reads `CVehicle+0x658` = `m_aCarNodes[4]` = CAR_WHEEL_RB (spin source: the frame matrix
+  `m_forward` column) and `+0x6A8` = `m_aCarNodes[24]` = CAR_MISC_E, then WALKS THE FRAME TREE via
+  `RwFrame+0x9C` (`next` sibling) — the track links are a sibling chain. `SetRotate` is called with
+  `this = frame+16` after `-= 56` from the pos cursor, and the three pos WRITES after it restore
+  what SA's SetRotate zeroes (m_pos) — served as per-component absolute translation writes.
+- firela holds `misc_a/b/c` at identity (all nine SetRotate*Only calls pass 0.0) — the mod PINS the
+  ladder against default sway; judge the field from that, not from an imagined "ladder rises".
+- vandoor needs NO ini (that is cardoor): its gate is GetFrameFromName probing — any car whose
+  model carries `dvan_l/dvan_r/dmbus_*` frames gets the behaviour. The slide is matrix pos.y/x
+  writes driven by the honest `095F` door ratio.
+
+**Landed** (`packages/cleo/src/vm/`): `native-tokens` (TokenTable, arithmetic-surviving encoding),
+`sa-matrix` (quat forms of SetRotate*/SetRotate with reversed-source fixtures), `native-atlas`
+(`SA` rows + `AtlasMemory` facade over the narrow `NativeWorld`; unserved access -> ONE recorded
+miss, never a silent wrong read), `handlers/natives` (0A8C/0A8D/0A8E/0A97/0AEB/0AA5-0AA8/095F;
+WRITE preserves float bits; var args pass BOTH int and float readings — the row decides, nothing
+guessed). Missed-in-03 opcodes caught by the class-B runs: `0A01`, `056D`. Recording host runs the
+REAL AtlasMemory over a fake world. 108 package tests green; headless: windfarm BUILDS (68 objects,
+34 LOD links — the 04 blocker flipped), firela pins its ladder parts, vandoor slides `dvan_l` by
+the 095F ratio, rhino walks the real pool facade within budget (instructionsLastTick < 10k).
+
+**Field (partial, same day): the turbines APPEARED** — with `lodDistMultiplier` served, windfarm's
+radius went non-zero and the farm built in the live game (mast visible at the site; console clean of
+0A8D). Wind reads 0 -> zero-wind sway fallback, as accepted. Authored-z note from the 04 ledger
+stands for checkpoint 2.
+
+**Phase B (remaining):** the ENGINE `NativeWorld` — vehicle part-registry accessors
+(partIndex/setPartRotation/partTranslation/nextSibling over `VehicleHandle`), slot-minted script
+handles for live vehicles, the 095F accessor on the enter/exit animator, a weather wind source,
+`isCarModel` over vehicle defs — then field checkpoint 2 (firela/newsvan/rhino as installed vehicle
+mods) with rhino's per-frame cost through the frame-span ledger.
