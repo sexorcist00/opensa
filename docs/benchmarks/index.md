@@ -368,6 +368,18 @@ rose 13.73 → **15.64 ms** (max 21.89, draws p50 1049 → 1113) — that is wha
 GPU-bound shape the first drive found. Run:
 [`2026-08-02-drive-091-populated-map.json`](opensa-engine/2026-08-02-drive-091-populated-map.json).
 
+## Mobile
+
+One row, and it is a first-light record rather than a comparable one — see its `note`.
+
+| Date | File | Harness / scene | Conditions | Headline numbers |
+| --- | --- | --- | --- | --- |
+| 08-04 | [mobile-first-light](opensa-engine/2026-08-04-mobile-first-light.json) | dispatch console status bar, `?demo=1` | **Mali-G51 / Android 10**, Yandex Browser 26.6 (Chromium 148), 360x800 CSS px @ DPR 2. SYNTHETIC world (no pak — this GPU has no BC). Needed `#enable-unsafe-webgpu` + the same day's "BC optional at device creation" change. No `timestamp-query`, so no GPU timings. | **41 fps** · cells 38/144 · draws 162 · resident 37 MB |
+
+Not comparable with anything above it: different host, different world, no p95, no GPU timers. It closes the
+gap `docs/features/mobile-controls.md` names ("no touch-device frame-time row exists"), and it is owed a
+successor on a real `--rgba8` district.
+
 ## The gap this record has
 
 **The pak build was not recorded on the in-game rows**, and it turned out to be the whole answer to
