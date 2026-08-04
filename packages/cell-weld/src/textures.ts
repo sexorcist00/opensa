@@ -83,6 +83,14 @@ export class TexturePlanner {
   /** Global fallback TXDs (074/06 row 10): overlay mods ship one shared TXD (e.g. `vegetation.txd`) that the
    *  installed game wires via txdp; offline we search it when the def's own chain misses. */
   private readonly fallbackTxds: readonly string[];
+  /**
+   * Emit RGBA8 for EVERYTHING, refusing the DXT passthrough (2026-08-04). BC is a desktop-only format, so a
+   * pak that keeps SA's DXT blocks cannot be displayed on a mobile GPU at all — this is the one switch that
+   * makes a build portable, and it costs 4-8x the texture memory, which is why it is per-build and off by
+   * default. A district-sized `--rect` is what makes that cost affordable.
+   */
+  private readonly forceRgba8: boolean;
+
   private readonly fs: AssetFileSystem;
   /** name → the first `.txd` (sorted archive order — deterministic) carrying it. Built LAZILY on the first
    *  chain miss (085 row F): the LAST-RESORT lookup behind the scoped def→txdp→fallback chain. Two real
@@ -93,6 +101,14 @@ export class TexturePlanner {
    *  texture elsewhere); this index only decides between the real texels and a stand-in. Names only — the
    *  scan retains no pixel data (the lazy-TXD memory lesson), the winner re-parses through rawCache. */
   private globalIndex: Map<string, string> | null = null;
+
+  /**
+   * Largest texture edge the pak may carry, 0 = uncapped (2026-08-04). This is the lever that makes an
+   * RGBA8 pak affordable: uncompressed textures cost 4-8x their BC originals, and halving each edge takes
+   * a quarter of that back. A capped texture is also decoded rather than passed through, because there is
+   * no way to resize a DXT block without decoding it.
+   */
+  private readonly maxTextureSize: number;
 
   private nextArrayRef = 0;
 
@@ -108,11 +124,14 @@ export class TexturePlanner {
     txdParents: Map<string, string>,
     fallbackTxds: readonly string[] = [],
     stochasticNames: ReadonlySet<string> = new Set(),
+    options: { forceRgba8?: boolean; maxTextureSize?: number } = {},
   ) {
     this.fs = fs;
     this.txdParents = txdParents;
     this.fallbackTxds = fallbackTxds;
     this.stochasticNames = stochasticNames;
+    this.forceRgba8 = options.forceRgba8 ?? false;
+    this.maxTextureSize = Math.max(0, options.maxTextureSize ?? 0);
   }
 
   /** Assemble every planned array into `.ostex` blobs (deterministic ref order). */
@@ -272,8 +291,19 @@ export class TexturePlanner {
     const blockAligned = rw.width % 4 === 0 && rw.height % 4 === 0;
     const pow2 = Number.isInteger(Math.log2(rw.width)) && Number.isInteger(Math.log2(rw.height));
     const dxtFormat = DXT_TO_FORMAT[rw.format];
-    // Opaque, well-formed DXT: pass through untouched (no recompress, no quality loss).
-    if (dxtFormat !== undefined && !rw.hasAlpha && blockAligned && pow2 && rw.mipmaps.length > 0) {
+    const overCap = this.maxTextureSize > 0 && (rw.width > this.maxTextureSize || rw.height > this.maxTextureSize);
+    // Opaque, well-formed DXT: pass through untouched (no recompress, no quality loss) — unless the build
+    // asked for a portable pak (`forceRgba8`) or the texture is over the size cap, both of which need the
+    // pixels back before anything can be done with them.
+    if (
+      !this.forceRgba8 &&
+      !overCap &&
+      dxtFormat !== undefined &&
+      !rw.hasAlpha &&
+      blockAligned &&
+      pow2 &&
+      rw.mipmaps.length > 0
+    ) {
       this.report.opaquePass += 1;
       const mipCount = Math.min(rw.mipmaps.length, ostexMaxMips(dxtFormat, rw.width, rw.height));
 
@@ -288,7 +318,7 @@ export class TexturePlanner {
     const base = rw.mipmaps[0];
     const decoded =
       rw.format === 'rgba8888' ? new Uint8Array(base.data) : decodeDxt(rw.format, base.data, base.width, base.height);
-    const sized = resampleToPow2(decoded, base.width, base.height);
+    const sized = resampleToPow2(decoded, base.width, base.height, this.maxTextureSize);
     // Foliage scans carry a soft alpha skirt that mis-classes them softBlend; so does any masked texture
     // whose edge is wider than 2 % of the sheet (plan 092 — the Watts Towers' lattice).
     const classified = classifyAlpha(sized.rgba, rw.hasAlpha);

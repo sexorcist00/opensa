@@ -38,6 +38,7 @@ export default defineConfig({
     globals: false,
     include: [
       'apps/web/**/*.test.ts',
+      'apps/dispatch/**/*.test.ts',
       'apps/sa-map-viewer/**/*.test.ts',
       'packages/**/*.test.ts',
       'tools/opensa-pack/**/*.test.ts',

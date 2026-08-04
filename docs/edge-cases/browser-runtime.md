@@ -60,3 +60,51 @@ touching driving. All three are worked around in `PhysicsWorld.setVehicleControl
   way to express "this tyre is skidding".
 - **It exposes no skid state.** `skid_info` is internal; sliding has to be inferred from
   `wheelForwardImpulse` / `wheelSideImpulse` against the wheel's own friction circle.
+
+## Mobile GPUs: no BC, so no SA-built pak (2026-08-04)
+
+A pak built from SA assets is **BC-compressed throughout** — the converter passes SA's own DXT blocks through
+untouched (`packages/cell-weld/src/textures.ts`, "opaque, well-formed DXT: pass through"), and `.ostex` encodes
+only BC1/BC2/BC3/BC7 and RGBA8. Mobile GPUs (Adreno, Mali, PowerVR, Apple) ship **ETC2 and ASTC**, never BC,
+and WebGPU exposes each as a separate optional adapter feature.
+
+So on a phone the browser is not the problem — Chrome on Android has had WebGPU since 121, Safari since
+iOS 26 — the **content** is. The measured consequences:
+
+- The device now BOOTS on a phone: `initDevice` requests `texture-compression-bc` only when the adapter offers
+  it (requesting a feature the adapter lacks makes `requestDevice` reject outright, which is why it used to
+  throw). Verified 2026-08-04 on an emulated Pixel 7 with the feature filtered out of the adapter.
+- A BC texture then fails at UPLOAD, naming itself, in `beginOstexUpload`. That is deliberate: the demand
+  belongs to the content, not to the device, so content that was never BC runs on hardware that has no BC.
+- **RGBA8 `.ostex` uploads anywhere.** It is what the dispatch console's `?demo=1` city uses, and
+  `opensa-pack --rgba8` now builds a whole world that way: the switch refuses the DXT passthrough so every
+  world texture is decoded to RGBA8. It costs **4-8x the texture memory**, which is why it is per-build and
+  belongs with a district `--rect` rather than the whole map.
+
+Anything cheaper than that needs an ASTC/ETC2 encode path (transcoding from DXT, so a second generation of
+loss) or Basis Universal / KTX2 in `.ostex` and a transcode at load. Neither exists today.
+
+### Measured on a real phone (2026-08-04)
+
+Yandex Browser 26.6.2 (Chromium 148), **Mali-G51 / ARM Bifrost, Android 10**, 360x800 CSS px, DPR 2:
+
+| | |
+| --- | --- |
+| `navigator.gpu` | present |
+| adapter, default request | **null** until `#enable-unsafe-webgpu` was enabled and the browser RESTARTED; obtained afterwards |
+| adapter, `featureLevel: 'compatibility'` | also obtained — the Vulkan path was not the blocker here, the adapter BLOCKLIST was |
+| `texture-compression-bc` | **no** |
+| `texture-compression-astc` | **yes** (+ `-astc-sliced-3d`) |
+| `texture-compression-etc2` | **yes** |
+| `timestamp-query` | no — the HUD's GPU timings fall back to CPU, as designed |
+| features | 12, including `core-features-and-limits`, so CORE limits apply (not the reduced compatibility set) |
+
+Three things this pins down. **The BC/ASTC split is real hardware, not theory** — the same adapter that
+refuses BC offers both mobile formats. **Chromium's Android 12+ rule is about the DEFAULT**, not a hard
+ceiling: an Android 10 device reached a core adapter once the blocklist was lifted. And **the flag is a
+developer flag** — it carries a security warning and nobody else's phone has it on, so it proves the hardware
+is capable without being a shipping path.
+
+What it makes possible today: `?demo=1` and any `--rgba8` pak render in 3D on this phone. What it argues for
+next: ASTC is not a hypothetical target — this GPU has it, and an ASTC `.ostex` would cost roughly what BC
+costs instead of RGBA8's 4-8x.
