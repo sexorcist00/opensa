@@ -29,6 +29,8 @@ import { dirname, join } from 'node:path';
 type Fixture =
   | { readonly dest: string; readonly entry: string; readonly type: 'archive' }
   | { readonly dest: string; readonly entry: string; readonly type: 'extract' }
+  /** Copied from `NO_COMMIT/cleo/` — see {@link CLEO_MANIFEST}. */
+  | { readonly dest: string; readonly from: string; readonly type: 'cleo' }
   | { readonly dest: string; readonly from: string; readonly type: 'copy' }
   /** Copied from `mods-src/`, not from the game dir — see {@link MOD_MANIFEST}. */
   | { readonly dest: string; readonly from: string; readonly type: 'mod' };
@@ -64,6 +66,28 @@ const MOD_MANIFEST: readonly Fixture[] = [
   // face array put the slab face-down and single-sided culling deleted it — the "blue strip" (plan 095).
   // A synthetic clump cannot prove this: the whole point is what a real exporter actually writes.
   modFile('0. Map Fixes Pack/gta3_img/roads32_law2.dff', 'mods/roads32_law2.dff'),
+];
+
+/**
+ * The plan 097 CLEO corpus — seven real Sanny-compiled `.cs` mods, copied from `NO_COMMIT/cleo`
+ * until plan 097/06 moves the mods into `mods-src` (these lines then flip to `mod`). Real scripts
+ * falsify what synthetic ones confirm: the `__SBFTR` footer and the native-call encoding were both
+ * invisible to a synthetic corpus (097/01 decision 6). `cardoor-coach`/`cardoor-bus` are the same
+ * script shipped by two mods — both are fixtured so the decode census stays one line per mod.
+ */
+const cleoFile = (from: string, dest: string): Fixture => ({ dest: `${OUT}/${dest}`, from, type: 'cleo' });
+
+const CLEO_MANIFEST: readonly Fixture[] = [
+  cleoFile('46. Pacific Park Rotating Ferris Wheel/CLEO/Rotating Ferris Wheel (Junior_Djjr).cs', 'cleo/ferris.cs'),
+  cleoFile(
+    'bus - 1978 Motor Coach Industries MC-9 Crusader-II - stratumx/cleo/Car Left Door.cs',
+    'cleo/cardoor-bus.cs',
+  ),
+  cleoFile('coach - 1985 Motor Coach Industries 102A3 - stratumx/cleo/Car Left Door.cs', 'cleo/cardoor-coach.cs'),
+  cleoFile('firela - 1986 Sutphen 75 Mid-Mounted Ladder Truck - stratumx/cleo/firela.cs', 'cleo/firela.cs'),
+  cleoFile('newsvan - 1991 Ford Econoline 350 SA News Van - funky/cleo/van door [SA].cs', 'cleo/vandoor.cs'),
+  cleoFile('rhino - GTA 5 Rhino - _F_/cleo/rhino tracks.cs', 'cleo/rhino.cs'),
+  cleoFile('wind_farm/CLEO/Wind Farm (Junior_Djjr).cs', 'cleo/windfarm.cs'),
 ];
 
 const MANIFEST: readonly Fixture[] = [
@@ -229,6 +253,9 @@ function produce(fixture: Fixture): null | Uint8Array {
 
       return data ? buildVer2Buffer([{ data, name: fixture.entry }]) : null;
     }
+    case 'cleo': {
+      return new Uint8Array(readFileSync(join('NO_COMMIT', 'cleo', fixture.from)));
+    }
     case 'copy': {
       return new Uint8Array(readFileSync(join(ROOT, fixture.from)));
     }
@@ -246,7 +273,7 @@ function produce(fixture: Fixture): null | Uint8Array {
 let written = 0;
 const missing: string[] = [];
 
-for (const fixture of [...MANIFEST, ...MOD_MANIFEST]) {
+for (const fixture of [...MANIFEST, ...MOD_MANIFEST, ...CLEO_MANIFEST]) {
   let data: null | Uint8Array = null;
   try {
     data = produce(fixture);
@@ -274,7 +301,9 @@ try {
   missing.push(`${OUT}/data/timecyc_24h.dat`);
 }
 
-console.log(`test:fixtures (${GAME}): wrote ${written}/${MANIFEST.length + MOD_MANIFEST.length + 1} into ${OUT}/`);
+console.log(
+  `test:fixtures (${GAME}): wrote ${written}/${MANIFEST.length + MOD_MANIFEST.length + CLEO_MANIFEST.length + 1} into ${OUT}/`,
+);
 if (missing.length > 0) {
   console.error(`\n  MISSING ${missing.length} — source not found in ${ROOT}:`);
   for (const dest of missing) {

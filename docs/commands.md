@@ -183,7 +183,8 @@ npx tsx scripts/crosstxd-fix.ts   # → NO_COMMIT/crossTxdFix/<mod>/gta3_img/<tx
 
 ```bash
 npm test / npm run test:coverage     # vitest (+ coverage floors)
-npm run test:fixtures                # real-GTA fixtures + viewer e2e assets
+npm run test:fixtures                # real-GTA fixtures + viewer e2e assets (+ the CLEO corpus from NO_COMMIT/cleo)
+npm run cleo:opcodes                 # regenerate packages/cleo opcode table from the vendored Sanny sa.json (pin: packages/cleo/vendor/README.md)
 npm run e2e / e2e:ui / e2e:update    # playwright
 npm run lint / format                # tsc --noEmit + eslint / prettier+eslint --fix
 npm run arch / arch:render           # package graph to stdout / regenerate docs/architecture/assets
