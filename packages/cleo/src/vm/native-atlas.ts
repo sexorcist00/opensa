@@ -43,17 +43,18 @@ const FRAME_NEXT_SIBLING = 0x9c;
 const MATRIX_FORWARD = 0x10;
 const MATRIX_POS = 0x30;
 
-/** eCarNodes → our part names (gta-reversed eCarNodes.h). Only the wheel/door/misc nodes the corpus
- *  walks are mapped; the rest resolve to nothing and report. */
+/** eCarNodes → the FRAME names our rigs carry (gta-reversed eCarNodes.h order; wheels use SA's
+ *  `_dummy` pivot-frame convention — measured on the rebaked newsvan/rhino rigs, whose wheel frames
+ *  are `wheel_rb_dummy` etc). Only the wheel/door/misc nodes the corpus walks are mapped. */
 const CAR_NODE_NAMES: readonly (null | string)[] = [
   null, // 0 NONE
   'chassis',
-  'wheel_rf',
-  'wheel_rm',
-  'wheel_rb',
-  'wheel_lf',
-  'wheel_lm',
-  'wheel_lb',
+  'wheel_rf_dummy',
+  'wheel_rm_dummy',
+  'wheel_rb_dummy',
+  'wheel_lf_dummy',
+  'wheel_lm_dummy',
+  'wheel_lb_dummy',
   'door_rf',
   'door_rr',
   'door_lf',

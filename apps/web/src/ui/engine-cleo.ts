@@ -104,6 +104,7 @@ export class CleoRunnerSystem implements System {
 /** The engine-agnostic host core over {@link CleoHostDeps} — everything testable lives here. */
 export function createCleoEngineHost(deps: CleoHostDeps): EngineCleoHost {
   const memory = new AtlasMemory(deps.nativeWorld);
+  let reportedMisses = 0;
   const objects = new Map<number, ScriptObject>();
   const deadLogged = new Set<number>();
   const requestedUnresolvable = new Set<number>();
@@ -274,6 +275,14 @@ export function createCleoEngineHost(deps: CleoHostDeps): EngineCleoHost {
     },
 
     update(): void {
+      // Surface NEW atlas misses as console lines (the plan 07 F2 panel grows from this): an
+      // unserved native must have a NAMED cause in the field, never a silent wrong read.
+      while (reportedMisses < memory.misses.length) {
+        const miss = memory.misses[reportedMisses];
+        reportedMisses += 1;
+        // eslint-disable-next-line no-console
+        console.warn(`[cleo] atlas miss: ${miss.kind} 0x${miss.address.toString(16)} — ${miss.detail}`);
+      }
       const [cx, cy, cz] = deps.cameraGta();
       for (const object of objects.values()) {
         if (object.lodFar === null) {

@@ -128,6 +128,48 @@ interface EngineCanvasHostProps {
   paused?: boolean;
 }
 
+/** `?spawncar` retry loop (097/05): spawn keeps failing until collision streams in — retry from the
+ *  fixed loop, log the success coordinates and each DISTINCT failure once. */
+function createSpawnCarRetry(
+  spec: null | string,
+  spawnParam: readonly number[],
+  vehicles: EngineVehicles | null,
+  reported: Set<string>,
+): () => void {
+  let pending = spec !== null && vehicles !== null;
+  let busy = false;
+
+  return (): void => {
+    if (!pending || busy || !spec || !vehicles) {
+      return;
+    }
+    const [carModel, sx, sy, sz, sHeading] = spec.split(',');
+    const carAt: [number, number, number] =
+      sx !== undefined && sy !== undefined
+        ? [Number(sx), Number(sy), Number(sz ?? spawnParam[2] ?? 10)]
+        : [spawnParam[0] ?? 0, (spawnParam[1] ?? 0) + 8, (spawnParam[2] ?? 10) + 1];
+    busy = true;
+    vehicles
+      .spawn({ groundSnap: true, heading: Number(sHeading ?? 0), model: carModel, position: carAt })
+      .then(() => {
+        pending = false;
+        // eslint-disable-next-line no-console -- field probes read this to know the car exists
+        console.log(`[spawncar] ${carModel} spawned at ${carAt.join(',')}`);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!reported.has(`spawncar:${message}`)) {
+          reported.add(`spawncar:${message}`);
+          // eslint-disable-next-line no-console -- a silent retry loop costs a field round
+          console.warn(`[spawncar] ${carModel}:`, message);
+        }
+      })
+      .finally(() => {
+        busy = false;
+      });
+  };
+}
+
 const FIXED_STEP = 1 / 60;
 const MAX_CATCHUP_STEPS = 5;
 const WORLD_READY_TIMEOUT_MS = 12000;
@@ -941,6 +983,15 @@ async function boot(
       : GAME_CONFIG[gameId].loadGame.startMinutes / 60;
   environmentDriver.apply(hour);
 
+  // `?spawncar=model[,x,y,z[,heading]]` (097/05 field checks): one car spawned at the given GTA spot
+  // (default: 8 m north of the player's spawn) — how a specific vehicle mod is put in front of the
+  // camera without waiting for traffic to deal one. Retries until the ground has streamed in.
+  const trySpawnCar = createSpawnCarRetry(params.get('spawncar'), spawnParam, vehicles, reportedFixedStepErrors);
+
+  // `?autoseat=1` (097/05 field checks): seat the player into the nearest car once it exists —
+  // headless probes cannot walk the door approach reliably.
+  let autoSeatPending = params.get('autoseat') === '1';
+
   // CLEO scripts (plan 097/04): discovered from `cleo/*.cs` in the VFS, run on the fixed step below.
   // `?cleo=1` enables for the session (config default is off — zero overhead disabled). Explicit
   // wiring, not SystemRegistry (that registry is dead — recon fact).
@@ -1388,6 +1439,10 @@ async function boot(
         // CLEO runs AFTER the vehicle step (plan 097/04 decision 7): scripts read seated-vehicle
         // state the same step they animate. Gated inside on `cleo.enabled` + play state.
         cleo?.fixedUpdate(FIXED_STEP);
+        trySpawnCar();
+        if (autoSeatPending && vehicles?.seatInstantly()) {
+          autoSeatPending = false;
+        }
         // Snapshot AFTER: the cars sampled their bodies in fixedUpdate, and the ped Transform is now current.
         [curPlayerGta[0], curPlayerGta[1], curPlayerGta[2]] = viewOf();
         // Contact-force impacts are produced BY the physics step, so drain them here — one step late and a

@@ -17,7 +17,7 @@ function makeWorld(overrides: Partial<NativeWorld> = {}): NativeWorld & Recorded
   return {
     doorAngleRatio: () => 0.5,
     lodDistMultiplier: () => 1.25,
-    nextSiblingPart: (car, part) => (part < 10 ? part + 1 : null),
+    nextSiblingPart: (car, part) => (part < 16 ? part + 1 : null),
     partForward: () => [0, 0.8, 0.6],
     partIndex: (car, name) => (name === 'missing' ? null : name.length),
     partTranslation: () => [1, 2, 3],

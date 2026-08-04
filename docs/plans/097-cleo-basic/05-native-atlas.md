@@ -171,8 +171,45 @@ stands for checkpoint 2.
   the accepted zero-wind sway; bind the table when gta-reversed grows it.
 - 902 tests green across cleo/game/host after the wiring.
 
-**Remaining for checkpoint 2:** install firela/newsvan/rhino as vehicle mods (vehicle-installer,
-`--rebake`) into a build, hand-place their scripts, and judge each mod's OWN visible behaviour from
-the reporter's angle (firela = the ladder holds pinned, vandoor = the sliding door mirrors the
-swing, rhino = tracks roll while driving); record rhino's per-frame cost through the frame-span
-ledger against the plan 03 budget.
+### Field checkpoint 2 — 2026-08-04: natives SERVED in the field; the visual class-B closure has
+### three NAMED blockers (rig-shape facts, not host bugs)
+
+Setup: firela/newsvan/rhino rebaked into `build/original/opensa` (`vehicle-installer --rebake
+original --in NO_COMMIT/cleo-stage`, 44.7 MB of .osm), scripts hand-placed (5 total now), new field
+params `?spawncar=model[,x,y,z[,heading]]` (retries until ground streams) and `?autoseat=1`.
+
+**What PASSED:**
+
+- All 5 scripts boot (census line), zero thread faults across every run, frame steady 8.33 ms /
+  120 fps with the tank driven — no `[slow]` lines at any point (the rhino per-frame budget question
+  answers itself: its walk skips early on this rig, see below; re-measure when the track path runs).
+- **The rhino vehicle mod installs, spawns, seats (`autoseat`) and DRIVES** (60+ m runs on the
+  beach, camera following).
+- **ZERO atlas misses in the field** (new: the host surfaces every AtlasMemory miss as a console
+  line — the plan 07 F2 panel's seed). Every native READ/WRITE/CALL the three class-B scripts
+  performed resolved through the atlas against the REAL rigs — the "no unknown-address logs"
+  verification, met while driving.
+- vandoor enters through the REAL walk-up (held Enter): front door swings, player seats — its
+  GetFrameFromName probes all resolved (`dmbus_r` found on this model, the dvan/dmm probes
+  null-guarded exactly like real CLEO).
+
+**The three named blockers (measured off the rebaked rigs' DESC parts):**
+
+1. **carNodes wheel names**: our rigs keep SA's `wheel_rb_dummy` pivot-frame names; the atlas mapped
+   `wheel_rb` — FIXED in this change (the eCarNodes table now uses the `_dummy` forms).
+2. **rhino's `misc_e` was dropped by the vehicle-optimizer** (an EMPTY parent frame whose children
+   are the `track_1..12` links — no geometry, so the rig omitted it and flattened the chain). The
+   script's own null-guard skips the track branch: tracks do not animate on this rig. Same root as
+   `docs/hacks/cleo-frame-sibling-order.md` — retirement (optimizer keeps empty frames + parent
+   indices) unblocks BOTH.
+3. **This newsvan's only sliding part (`dmbus_r`) binds the REAR door ratios (095F ids 4/5)** — and
+   the walk-up animator swings only the front doors, so the ratio reads 0 and the slide stays shut
+   (in stock SA the rear-door ratio moves about as rarely). A dvan-carrying van (front-door 2/3
+   binding) would slide today.
+4. firela's visible effect is VACUOUS in this engine: the script pins `misc_a/b/c` at identity, and
+   our engine never sways misc parts in the first place. Writes land (zero misses); nothing changes
+   on screen, correctly.
+
+**Closure acceptance** (moves with the optimizer work, tracked here): the optimizer carries empty
+frames + `parent` per part -> rhino's misc_e chain resolves -> tracks roll on video; a rear-door
+ratio source (or a dvan-model corpus addition) shows the slide. The atlas/VM side is DONE.
