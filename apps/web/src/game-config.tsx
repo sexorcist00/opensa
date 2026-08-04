@@ -115,7 +115,7 @@ export const GAME_CONFIG: Record<GameId, GameConfig> = {
     teleports: [{ coords: [1531.15, -1271.89, 581.74], label: 'Downtown' }],
   },
   gostown: {
-    assetLoader: 'fetch',
+    assetLoader: 'local',
     disable: false,
     disabledNote: 'Demo is temporarily unavailable',
     disclaimer: (
