@@ -5,7 +5,7 @@
  */
 import type { OspakUvAnimation } from '@opensa/engine-formats';
 
-import { configureCanvas, type EngineDevice, initDevice } from './core/device';
+import { configureCanvas, describeDevice, type EngineDevice, initDevice } from './core/device';
 import {
   frustumFromViewProj,
   frustumIntersectsSphere,
@@ -645,6 +645,10 @@ export class Engine {
   get device(): GPUDevice {
     return this.engineDevice.device;
   }
+  /** The `device` block a mobile benchmark row is required to carry — see `describeDevice`. */
+  get deviceReport(): ReturnType<typeof describeDevice> {
+    return describeDevice(this.engineDevice, this.canvasElement);
+  }
   /**
    * Bloom chain resources (074/09): prefilter (full res) + `levels` downsample mips + `levels−1` upsample
    * mips, all 16f, rebuilt with the targets on resize (with the previous chain destroyed — unlike the
@@ -667,6 +671,8 @@ export class Engine {
   /** Prefilter params (threshold animates with the night profile) — written every bloom frame. */
   private bloomPrefilterUniform!: GPUBuffer;
   private canvasContext!: GPUCanvasContext;
+  /** Kept for `deviceReport` — a capture states the CSS size it was taken at. */
+  private canvasElement!: HTMLCanvasElement;
   private cloudFieldBindGroup!: GPUBindGroup;
   private cloudFieldTexture!: GPUTexture;
   private cloudFieldView!: GPUTextureView;
@@ -1319,6 +1325,7 @@ export class Engine {
    */
   async init(canvas: HTMLCanvasElement, coronaSprites?: CoronaSprites): Promise<void> {
     this.engineDevice = await initDevice();
+    this.canvasElement = canvas;
     this.canvasContext = configureCanvas(canvas, this.engineDevice);
     this.resources = new Resources(this.device);
     this.timers = new GpuTimers(this.device, this.engineDevice.hasTimestamps);

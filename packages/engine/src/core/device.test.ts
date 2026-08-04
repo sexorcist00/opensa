@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { installFakeWebGpu } from '../test/fake-device';
-import { initDevice } from './device';
+import { describeDevice, initDevice } from './device';
 
 /**
  * The no-BC emulation gate (plan 097/1-03).
@@ -83,6 +83,42 @@ describe('initDevice', () => {
 
       expect(device.presentationFormat).toBe('bgra8unorm');
       expect(device.colorFormat).toBe('bgra8unorm-srgb');
+    });
+  });
+});
+
+describe('describeDevice', () => {
+  describe('negative cases', () => {
+    it('names what a MOBILE adapter lacks, which is what decides the row schema', async () => {
+      install({ adapterFeatures: ['texture-compression-astc', 'texture-compression-etc2'], timestamps: false });
+      const engineDevice = await initDevice();
+
+      const report = describeDevice(engineDevice, { clientHeight: 800, clientWidth: 360 }, 2);
+
+      expect(report.missing).toEqual(['texture-compression-bc', 'timestamp-query']);
+      expect(report.featureLevel).toBe('compatibility');
+      expect(report.css).toBe('360x800');
+      expect(report.dpr).toBe(2);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reports a core adapter with nothing missing', async () => {
+      install({
+        adapterFeatures: [
+          'core-features-and-limits',
+          'texture-compression-astc',
+          'texture-compression-bc',
+          'texture-compression-etc2',
+        ],
+      });
+      const engineDevice = await initDevice();
+
+      const report = describeDevice(engineDevice, { clientHeight: 900, clientWidth: 1440 }, 2);
+
+      expect(report.missing).toEqual([]);
+      expect(report.featureLevel).toBe('core');
+      expect(report.features).toContain('timestamp-query');
     });
   });
 });

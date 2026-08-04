@@ -105,6 +105,11 @@ So a mobile run reports what it can actually observe, and states the rest:
 }
 ```
 
+**The `device` block is emitted, not typed by hand.** A `?bench=` sweep prints `[bench] device {json}` once
+at the start (it does not vary by scene) — `engine.deviceReport`, i.e. the adapter's own feature list, what it
+is missing, its feature level, and the CSS size and DPR the run was taken at. Copy it verbatim like the
+per-scene lines; `world` and `note` are still yours to fill in.
+
 Three rules, all learned from the one mobile row this record has:
 
 - **A mobile row and a desktop row are never compared** — the same rule that already separates the lab and

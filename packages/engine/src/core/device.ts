@@ -11,11 +11,17 @@
  */
 
 export interface EngineDevice {
+  /** Everything the ADAPTER offered, sorted — not what the device was granted. A mobile capture is read by
+   *  this list and by what is missing from it (`docs/benchmarks/readme.md`, mobile schema). */
+  adapterFeatures: string[];
   adapterInfo: string;
   /** The RENDER color format: the sRGB view of the swapchain — lighting is computed in linear space and the
    *  sRGB view encodes on write (without it the frame displays gamma-crushed / too dark). */
   colorFormat: GPUTextureFormat;
   device: GPUDevice;
+  /** Whether CORE limits apply, read from the adapter's own `core-features-and-limits`. A compatibility
+   *  adapter carries a REDUCED set, so a run taken on one is not comparable to a core one. */
+  featureLevel: 'compatibility' | 'core';
   /** BC (DXT/BC7) compressed textures. False on mobile GPUs — only BC *content* is then unusable. */
   hasBc: boolean;
   /** GPU timestamps for the per-pass HUD (optional — HUD falls back to CPU-only timings). */
@@ -40,6 +46,39 @@ export function configureCanvas(canvas: HTMLCanvasElement, engineDevice: EngineD
   });
 
   return context;
+}
+
+/**
+ * The `device` block a MOBILE benchmark row is required to carry
+ * ([`docs/benchmarks/readme.md`](../../../../docs/benchmarks/readme.md)).
+ *
+ * `missing` is not decoration: on the 2026-08-04 Mali row the absence of `timestamp-query` removes the
+ * `gpuMs` column the whole desktop series is read by, so what the adapter LACKS is what decides whether two
+ * rows may be compared at all. A capture that states only what it has cannot be read six months later.
+ */
+export function describeDevice(
+  engineDevice: EngineDevice,
+  canvas: { clientHeight: number; clientWidth: number },
+  dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio,
+): {
+  adapter: string;
+  css: string;
+  dpr: number;
+  featureLevel: string;
+  features: string[];
+  missing: string[];
+} {
+  // Named rather than "everything WebGPU defines": the point is the features THIS project's rows turn on.
+  const watched = ['texture-compression-astc', 'texture-compression-bc', 'texture-compression-etc2', 'timestamp-query'];
+
+  return {
+    adapter: engineDevice.adapterInfo,
+    css: `${canvas.clientWidth}x${canvas.clientHeight}`,
+    dpr,
+    featureLevel: engineDevice.featureLevel,
+    features: engineDevice.adapterFeatures,
+    missing: watched.filter((feature) => !engineDevice.adapterFeatures.includes(feature)),
+  };
 }
 
 export async function initDevice(): Promise<EngineDevice> {
@@ -69,10 +108,14 @@ export async function initDevice(): Promise<EngineDevice> {
 
   const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 
+  const adapterFeatures = [...adapter.features].sort();
+
   return {
+    adapterFeatures,
     adapterInfo: `${info?.vendor ?? '?'} ${info?.architecture ?? ''}`.trim(),
     colorFormat: `${presentationFormat}-srgb` as GPUTextureFormat,
     device,
+    featureLevel: adapterFeatures.includes('core-features-and-limits') ? 'core' : 'compatibility',
     hasBc,
     hasTimestamps,
     presentationFormat,
