@@ -72,6 +72,50 @@ A perf comparison is worthless without these held equal, so record them in `note
   until 2026-07-23 (plan 086) — rows recorded before that date read the same folder under its old name.
 - renderer flags (`?scale=`, `?draw=`, `?engine=`)
 
+## Mobile runs: a different schema, and never a comparable one
+
+A phone is not a small desktop for measuring purposes, and the difference is structural rather than a matter
+of degree.
+
+**`gpuMs` does not exist there.** The 2026-08-04 Mali-G51 adapter carries no `timestamp-query`, so the HUD
+falls back to CPU timings by design — which means the one column the desktop series is read by is simply
+absent. A mobile row that fabricates it, or that is compared against a desktop row on the strength of
+`avgMs` alone, is worse than no row.
+
+So a mobile run reports what it can actually observe, and states the rest:
+
+```jsonc
+{
+  "note": "Why, WHO ran it, and what could not be measured. Say if the browser needed a flag.",
+  "device": {
+    "adapter": "ARM Mali-G51 / Bifrost", // navigator.gpu adapter info, verbatim
+    "browser": "Yandex 26.6.2 (Chromium 148)",
+    "os": "Android 10",
+    "features": ["texture-compression-astc", "texture-compression-etc2"], // what it HAS
+    "missing": ["texture-compression-bc", "timestamp-query"], // what it does NOT — this decides the schema
+    "featureLevel": "core", // "core" | "compatibility" — a compatibility adapter has REDUCED limits
+    "css": "360x800",
+    "dpr": 2,
+  },
+  "world": {
+    "pak": "10:53 29-07-2026", // manifest buildTime — or "synthetic (?demo=1)" when there is no pak
+    "platforms": ["mobile"], // report.json's `platforms.satisfies` for that pak
+  },
+  "runs": [{ "key": "…", "avgMs": 24.1, "p95Ms": 41.0, "fps": 41, "avgDrawCalls": 162, "residency": "…" }],
+}
+```
+
+Three rules, all learned from the one mobile row this record has:
+
+- **A mobile row and a desktop row are never compared** — the same rule that already separates the lab and
+  in-game families, for a stronger reason.
+- **`device` is not optional.** The 08-04 row exists because a developer flag lifted Chromium's adapter
+  blocklist; without that stated, it reads as a shipping configuration and it is not one. A run taken behind
+  a flag measures HARDWARE CAPABILITY, never reach.
+- **`world.platforms` closes the loop with the build.** `opensa-pack` records which GPU families a build's
+  textures allow; a mobile row that does not name it cannot be reproduced, because the pak is the variable
+  that decides whether the world loads at all.
+
 ## Runs
 
 See [index.md](index.md) — the full chronological table with conditions.
