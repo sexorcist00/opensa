@@ -7,7 +7,9 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 
 - <https://github.com/gta-reversed/gta-reversed> — reversed GTA SA source; the reference for engine
   internals (pools, `CIplStore`, streaming) behind our int16/pool guards and the `asi/perfect-map` work.
-- <https://github.com/JuniorDjjr/CLEOPlus> — CLEO extension reference (opcode surface for plan 083).
+- <https://github.com/JuniorDjjr/CLEOPlus> — CLEO extension reference (opcode surface for plan 097).
+- <https://github.com/sannybuilder/library> — the Sanny Builder opcode DB (`sa/sa.json`, 3 739 commands
+  with arities) — vendored + pinned by plan 097/01; also the recon disassembler's source of truth.
 - <https://github.com/JuniorDjjr/SA-MixSets> — per-feature SA tweaks reference.
 - <https://github.com/JuniorDjjr/VehFuncs> — vehicle function extensions (useful for vehicle features
   parity: extras, wheels, steering parts).

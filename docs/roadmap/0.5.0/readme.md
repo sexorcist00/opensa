@@ -52,14 +52,11 @@ the ASI traffic twin), `3-peds` (crowd rendering, generated silhouette LODs, sid
 
 Full chain: [plans/06-city-life/readme.md](plans/06-city-life/readme.md).
 
-## Basic CLEO support (moved from 0.4.0, 2026-08-01)
+## Basic CLEO support — PULLED BACK into active work (2026-08-04)
 
-Run compiled GTA:SA CLEO `.cs` scripts in the engine: a Sanny-DB SCM decoder (lifting the 0x014B car-gen
-reader already in the tree), an engine-agnostic thread VM, a `CleoHost` on the rigid `.osm` path, a
-`packages/cleo` module, tracer + coverage. Planned in full on 2026-07-19 as `docs/plans/083-cleo-basic/` and
-moved here **unstarted** — nothing about the plan changed, only its cycle.
-
-Full chain: [plans/08-cleo-basic/readme.md](plans/08-cleo-basic/readme.md).
+Rewritten against a full recon of the 7-mod target corpus and moved to
+[`docs/plans/097-cleo-basic/`](../../plans/097-cleo-basic/readme.md); the chain that lived here
+(`plans/08-cleo-basic/`, the unstarted 083 rethink) is superseded and deleted.
 
 ## LOD generators, extended (moved from 0.4.0, 2026-07-19)
 

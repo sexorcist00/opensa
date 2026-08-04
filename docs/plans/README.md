@@ -16,8 +16,18 @@ The map of planning docs across the repo. **Engine plans** live here — one num
 ## Engine (`docs/plans/`)
 
 Core runtime + RenderWare parsing, world streaming, rendering, characters, vehicles, physics, UI — plans
-`001`–`096`, one folder each (066, 073, 074, 078–082, 096 carry multi-part sub-plans; 083 kept its row but
-its folder moved to `roadmap/0.5.0/`). Newest first:
+`001`–`097`, one folder each (066, 073, 074, 078–082, 096, 097 carry multi-part sub-plans; 083 kept its
+row but its chain was superseded by 097). Newest first:
+
+- **[097 — CLEO basic](./097-cleo-basic/readme.md)** — **PLANNED 2026-08-04**, supersedes the deferred
+  `roadmap/0.5.0/plans/08-cleo-basic/` chain (deleted; it was the unstarted 083 rethink). Rewritten from a
+  full recon: all seven target `.cs` scripts (`NO_COMMIT/cleo`) were disassembled — three mod classes
+  (world objects / vehicle-part animation via native calls / ped-task orchestration), ~116 unique opcodes,
+  and a native surface of only ~15 SA 1.0 addresses. CLEO becomes its own layer (`packages/cleo`:
+  core decoder / VM / host contract / **native atlas** — memory and exe calls served as an
+  object-capability facade over `VehicleHandle`, not byte emulation). Seven sub-plans with three field
+  checkpoints (wheel spins → ladder/door/tracks → full build); also fixes mod-installer's silent `.cs`
+  deletion on the bake path. Dedicated tooling sub-plan: `scm-disasm` / `cleo-census` / `cleo-run`.
 
 - **[096 — Video mode](./096-video-mode/readme.md)** — **SHIPPED 2026-07-30/08-01, all eight phases**
   (road graph + seeded routes, autopilot, director + shot table, surveyed tripod stations, the region
@@ -122,10 +132,9 @@ its folder moved to `roadmap/0.5.0/`). Newest first:
   dynamics. The perf row is CLOSED (2026-07-21: it was mod vegetation, not vehicles). Peds share the
   row-B root.
 
-- **083 — Basic CLEO support** — **MOVED to 0.5.0 on 2026-08-01, unstarted**:
-  [`roadmap/0.5.0/plans/08-cleo-basic/`](../roadmap/0.5.0/plans/08-cleo-basic/readme.md). Run compiled `.cs`
-  scripts: Sanny-DB SCM decoder (lifts the 0x014B car-gen reader), engine-agnostic thread VM, CleoHost on the
-  rigid `.osm` path, `packages/cleo` module, tracer + coverage. Promoted from ideas/0.4.0/04.
+- **083 — Basic CLEO support** — moved to 0.5.0 on 2026-08-01 unstarted, then **SUPERSEDED by
+  [097](./097-cleo-basic/readme.md) on 2026-08-04** (the roadmap chain was rewritten against a full
+  corpus recon and pulled back into active work; its folder is deleted). Promoted from ideas/0.4.0/04.
 - **[082 — Vehicle license plates](./082-vehicle-plates/readme.md)** — per-instance city-correct plates on
   the array-based engine: plate atlas array + per-instance slot, converter-flagged plate submeshes,
   mask DSL + placement-seeded determinism, damage-riding. Promoted from ideas/0.4.0/01.
