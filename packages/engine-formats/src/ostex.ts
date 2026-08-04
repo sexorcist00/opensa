@@ -178,3 +178,16 @@ export function ostexMipLayout(
 
   return { bytesPerRow, mipHeight, mipWidth, rows, totalBytes: bytesPerRow * rows };
 }
+
+/**
+ * Just the format byte, without decoding the payload — for build-time scans over a whole game's
+ * dictionaries, where copying every texel to learn one number is the difference between a check and a stage.
+ */
+export function readOstexFormat(bytes: Uint8Array, offset = 0): OstexFormatId {
+  const view = new DataView(bytes.buffer, bytes.byteOffset + offset, 9);
+  if (view.getUint32(0, true) !== OSTEX_MAGIC) {
+    throw new Error(`not an .ostex (magic 0x${view.getUint32(0, true).toString(16)})`);
+  }
+
+  return view.getUint8(8) as OstexFormatId;
+}

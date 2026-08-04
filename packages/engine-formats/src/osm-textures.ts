@@ -13,6 +13,7 @@
  * (array, layer), and a single-array model is simply the `arrays.length === 1` case.
  */
 import { ByteReader, ByteWriter } from './binary';
+import { type OstexFormatId, readOstexFormat } from './ostex';
 
 export interface OsmTextures {
   /** Each entry is a complete `.ostex` payload; index 0 is what a single-array model uses. */
@@ -42,4 +43,32 @@ export function encodeOsmTextures(textures: OsmTextures): Uint8Array {
   }
 
   return w.bytes();
+}
+
+/**
+ * The format of every array in a `TEXS` section, read from the headers alone.
+ *
+ * A model's dictionary decides which GPUs can spawn that model, exactly as the pak's arrays decide which can
+ * display the world — and a car is NOT in the pak, so a build-time platform check has to come here for the
+ * other half of the answer. Payloads are never copied: over a whole game this runs across every vehicle, ped
+ * and map object.
+ */
+export function osmTextureFormats(bytes: Uint8Array): OstexFormatId[] {
+  const r = new ByteReader(bytes);
+  const count = r.u32();
+  const lengths: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    lengths.push(r.u32());
+  }
+  const formats: OstexFormatId[] = [];
+  let offset = r.position;
+  for (const length of lengths) {
+    // A shared-dictionary model writes a zero-length placeholder — it binds the world's arrays instead.
+    if (length > 0) {
+      formats.push(readOstexFormat(bytes, offset));
+    }
+    offset += length;
+  }
+
+  return formats;
 }

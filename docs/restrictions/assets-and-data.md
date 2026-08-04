@@ -212,6 +212,11 @@ the manifest's own texture formats (`ospakRequiredFeatures`) and checked once ag
 `beginOstexUpload` still throws by name as the backstop for anything reaching the GPU by another route —
 model dictionaries do exactly that, since **vehicles and peds are not in the pak**.
 
-Still **not caught in the build or in CI**: nothing tells you a pak is undisplayable on a platform you are
-targeting until a device tries. That is the open half
-([roadmap 09/1-device-truth](../roadmap/0.5.0/plans/09-platform-reach/1-device-truth/readme.md)).
+**In the build, since 2026-08-04 as well** — `opensa-pack` computes the demand from what it just wrote
+(`platformDemand`: the pak's arrays ∪ every model's `TEXS` dictionary), logs it, records it in `report.json`
+under `platforms`, and `--platforms desktop|mobile` turns the report into a build failure.
+
+**The half a pak-only check cannot see:** `--rgba8` converts the WORLD, and a car is not in the pak — model
+dictionaries are BC whenever their arrays are block-aligned (`model-ostex.ts`), so an RGBA8 world can still
+be unspawnable on a phone. That is why the check reads both halves, and it is why naming a platform is worth
+doing rather than eyeballing the flag.
