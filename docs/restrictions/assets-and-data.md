@@ -203,9 +203,15 @@ now); it moves the failure to the first texture, it does not remove it.
 
 Detail and the measurement: [edge-cases/browser-runtime.md](../edge-cases/browser-runtime.md).
 
-**What breaks when violated:** the app boots, streams, and throws on the first world texture array — on the
-target device only, never on the desktop it was developed on.
+**What breaks when violated:** the world does not load on the target device — and only on the target device,
+never on the desktop it was developed on.
 
-**Caught:** partly. `beginOstexUpload` throws by name (`ostex-upload.test.ts` covers both directions), so it
-is loud at runtime on the device — but nothing in the build or in CI tells you a pak is undisplayable on a
-platform you are targeting.
+**Caught:** at runtime, yes, and now **before anything streams**. Since 2026-08-04 the demand is derived from
+the manifest's own texture formats (`ospakRequiredFeatures`) and checked once against the device in
+`setupStreaming` (`requireWorldSupport`), so the failure names the WORLD rather than one texture.
+`beginOstexUpload` still throws by name as the backstop for anything reaching the GPU by another route —
+model dictionaries do exactly that, since **vehicles and peds are not in the pak**.
+
+Still **not caught in the build or in CI**: nothing tells you a pak is undisplayable on a platform you are
+targeting until a device tries. That is the open half
+([roadmap 09/1-device-truth](../roadmap/0.5.0/plans/09-platform-reach/1-device-truth/readme.md)).

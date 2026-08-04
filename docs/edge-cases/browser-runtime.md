@@ -74,8 +74,14 @@ iOS 26 — the **content** is. The measured consequences:
 - The device now BOOTS on a phone: `initDevice` requests `texture-compression-bc` only when the adapter offers
   it (requesting a feature the adapter lacks makes `requestDevice` reject outright, which is why it used to
   throw). Verified 2026-08-04 on an emulated Pixel 7 with the feature filtered out of the adapter.
-- A BC texture then fails at UPLOAD, naming itself, in `beginOstexUpload`. That is deliberate: the demand
-  belongs to the content, not to the device, so content that was never BC runs on hardware that has no BC.
+- **The world is then refused at MANIFEST time**, not at the first texture: `ospakRequiredFeatures` derives the
+  demand from the formats the converter chose, and `requireWorldSupport` checks it once in `setupStreaming`
+  before a cell streams. The message names the world and the missing feature. `beginOstexUpload` still throws
+  by name as the backstop — model dictionaries (vehicles, peds) reach the GPU without passing the pak manifest
+  at all, because a car lives outside the pak.
+- **The shell's pre-boot gate no longer asks about BC.** It probes for an adapter and nothing else; a phone
+  used to be told its browser does not support WebGPU, which was false. Device and content are two questions
+  and are now answered in two places.
 - **RGBA8 `.ostex` uploads anywhere.** It is what the dispatch console's `?demo=1` city uses, and
   `opensa-pack --rgba8` now builds a whole world that way: the switch refuses the DXT passthrough so every
   world texture is decoded to RGBA8. It costs **4-8x the texture memory**, which is why it is per-build and

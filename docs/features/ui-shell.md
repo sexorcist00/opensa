@@ -34,6 +34,11 @@ playing`, plus `paused` and `error`. State carries the selected `game`; `SELECT`
 - **Game integration** (`engine-canvas-host.tsx`): `world-ready` — a system watches `Velocity.grounded[player]` and
   reveals the game only once the player has landed (12 s fallback); `paused` → `game.setGameState('pause')`
   (Esc pause menu with Continue). `Vfs.addChunk` is idempotent by chunk file (retry-safe).
+- **WebGPU gate** (`webgpu-gate.ts`): probed once on mount; `false` replaces the whole shell with the sorry
+  screen. It asks **one** question — is there an adapter — and deliberately not a second. It used to also
+  demand `texture-compression-bc`, which conflated the device with the content and told every phone that its
+  browser does not support WebGPU (it does; the WORLD was BC). Whether a given world is displayable is read
+  from that world's manifest at stream setup (`requireWorldSupport`), where the answer is true and specific.
 - **Analytics** (`analytics.ts`): gtag, `VITE_GA_ID`-gated — a no-op when unset (dev). See `.env.example`.
 - **Debugger** re-skinned to the same theme (`debug-styles.ts`).
 

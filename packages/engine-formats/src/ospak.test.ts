@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildOspak, OSPAK_ALIGN, type OspakInput, validateOspakManifest } from './ospak';
+import { buildOspak, OSPAK_ALIGN, type OspakInput, ospakRequiredFeatures, validateOspakManifest } from './ospak';
+import { OstexFormat } from './ostex';
 
 function inputs(): OspakInput[] {
   return [
@@ -84,6 +85,39 @@ describe('ospak', () => {
       expect(buildOspak(inputs(), { uvAnimations: animations }).manifest.uvAnimations).toEqual(animations);
       expect(buildOspak(inputs(), { uvAnimations: [] }).manifest).not.toHaveProperty('uvAnimations');
       expect(buildOspak(inputs()).manifest).not.toHaveProperty('uvAnimations');
+    });
+
+    it('derives the BC demand from the texture formats the converter chose', () => {
+      // The fixture's array is BC3 — a pak built from SA assets, i.e. a desktop-only world.
+      expect(ospakRequiredFeatures(buildOspak(inputs()).manifest)).toEqual(['texture-compression-bc']);
+    });
+
+    it('demands nothing of an RGBA8 world, so it uploads on a mobile GPU', () => {
+      const rgba8 = inputs().map((input) =>
+        input.kind === 'texture' ? { ...input, meta: { ...input.meta!, format: OstexFormat.RGBA8 } } : input,
+      );
+
+      expect(ospakRequiredFeatures(buildOspak(rgba8).manifest)).toEqual([]);
+    });
+
+    it('reports the demand once for a world mixing BC formats with RGBA8', () => {
+      const mixed: OspakInput[] = [
+        ...inputs(),
+        {
+          bytes: new Uint8Array([8]),
+          key: 'array-1',
+          kind: 'texture',
+          meta: { format: OstexFormat.BC1, height: 64, layers: 2, width: 64 },
+        },
+        {
+          bytes: new Uint8Array([9]),
+          key: 'array-2',
+          kind: 'texture',
+          meta: { format: OstexFormat.RGBA8, height: 4, layers: 1, width: 4 },
+        },
+      ];
+
+      expect(ospakRequiredFeatures(buildOspak(mixed).manifest)).toEqual(['texture-compression-bc']);
     });
 
     it('carries missing-texture stand-in layers into the manifest, and omits the key when the map resolved (085)', () => {
