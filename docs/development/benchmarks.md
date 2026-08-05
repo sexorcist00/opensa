@@ -190,6 +190,18 @@ load path — `fetchInstallSource` reads the served dir's `/__index` + files ove
 
 **Gotchas** (learned the hard way, keep them):
 
+- **A per-game-loader boot (no `?loader=http-dir`) shows a BEFORE-YOU-PLAY disclaimer** whose OK
+  button must be clicked, and **a fetch-loader boot needs a Cache Storage quota override** — the
+  ephemeral headless profile's default quota is smaller than the ~1.2 GB chunk set, and over-quota
+  downloads die as silent `net::ERR_ABORTED` with zero console errors. `drive.js` handles both
+  since 097/06 (an OK-click that no-ops on http-dir; CDP `Storage.overrideQuotaForOrigin` to 8 GB).
+- **`TAG` re-targets what counts as a report** — `TAG='[cleo]'` turns `drive.js` into a boot-census
+  checker (the 097/06 field checkpoint ran exactly that way); the run exits after `expectReports`
+  matching lines instead of a bench sweep.
+- **`VITE_STATIC_URL` in the local `.env` may point at the machine's LAN IP** (for phone tests) —
+  when a fetch boot hangs with no errors, verify that IP against `ifconfig` before blaming the
+  loader.
+
 - **Headless 1× is NOT pass-comparable to the user's 2× retina display rows** — and a 1× A/B once
   missed a 30–40 % display-only night cost (the plan-16 SSR lesson — that feature was rolled back). `DPR=2` closes the render-target
   gap (verify: screenshot is 2880×1800, HUD `target` ~345 MB vs 92 at 1×), but **user-display rows

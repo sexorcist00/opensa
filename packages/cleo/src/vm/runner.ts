@@ -9,6 +9,7 @@
  */
 import type { DecodedScript, Instruction } from '../core/decode';
 import type { CleoHost } from './host.interface';
+import type { TierResolution, UnimplementedTier } from './tiers';
 
 import { opcodeDef } from '../core/opcode-table';
 import { registerControlFlow } from './handlers/control-flow';
@@ -18,6 +19,7 @@ import { registerVars } from './handlers/vars';
 import { registerWorld } from './handlers/world';
 import { HandlerRegistry } from './registry';
 import { CleoThread } from './thread';
+import { tierOf } from './tiers';
 import { VarSpace } from './var-space';
 
 /** Global var slots ($n is u16 in the operand stream). */
@@ -34,11 +36,19 @@ export interface ScriptRunnerOptions {
   readonly maxInstructionsPerTick?: number;
   /** Deterministic random source for 0208 and friends (defaults to Math.random). */
   readonly random?: () => number;
+  /** Per-opcode tier overrides layered over {@link DECLARED_TIERS} (tests; a runtime policy later). */
+  readonly tiers?: ReadonlyMap<number, UnimplementedTier>;
 }
 
 export interface ThreadFaultRecord {
   readonly message: string;
   readonly thread: string;
+}
+
+/** One unimplemented opcode the run actually hit — the coverage surface (plan 097/07 decision 4). */
+export interface UnimplementedHit extends TierResolution {
+  readonly count: number;
+  readonly opcode: number;
 }
 
 export class ScriptRunner {
@@ -59,16 +69,26 @@ export class ScriptRunner {
   private readonly reportedUnimplemented = new Set<number>();
 
   private readonly threads: CleoThread[] = [];
+  private readonly tierOverrides: ReadonlyMap<number, UnimplementedTier> | undefined;
+  private readonly unimplementedHits = new Map<number, number>();
 
   constructor(options: ScriptRunnerOptions) {
     this.host = options.host;
     this.budget = options.maxInstructionsPerTick ?? DEFAULT_BUDGET;
     this.random = options.random ?? Math.random;
+    this.tierOverrides = options.tiers;
     registerControlFlow(this.registry);
     registerVars(this.registry);
     registerStdlib(this.registry, createStdlibState());
     registerWorld(this.registry);
     registerNatives(this.registry);
+  }
+
+  /** Every unimplemented opcode this run hit, worst first — the F2/CI coverage read (plan 07). */
+  coverage(): readonly UnimplementedHit[] {
+    return [...this.unimplementedHits.entries()]
+      .map(([opcode, count]) => ({ count, opcode, ...tierOf(opcode) }))
+      .sort((a, b) => b.count - a.count);
   }
 
   dispose(): void {
@@ -105,9 +125,7 @@ export class ScriptRunner {
   private dispatch(thread: CleoThread, instruction: Instruction, deltaMs: number): 'continue' | 'terminate' | 'yield' {
     const handler = this.registry.get(instruction.opcode);
     if (!handler) {
-      this.unimplemented(thread, instruction);
-
-      return 'continue';
+      return this.unimplemented(thread, instruction);
     }
 
     return handler(
@@ -169,15 +187,31 @@ export class ScriptRunner {
     // Budget exhausted: a WAIT-less loop yields here instead of hanging the tab (plan 03 decision 6).
   }
 
-  private unimplemented(thread: CleoThread, instruction: Instruction): void {
+  private unimplemented(thread: CleoThread, instruction: Instruction): 'continue' | 'terminate' {
+    this.unimplementedHits.set(instruction.opcode, (this.unimplementedHits.get(instruction.opcode) ?? 0) + 1);
     if (!this.reportedUnimplemented.has(instruction.opcode)) {
       this.reportedUnimplemented.add(instruction.opcode);
       this.host.onUnimplemented(instruction.opcode, thread.name);
     }
+    // The tier policy (plan 07 decision 4): override, else declared tier, else DB-condition → b, else noop.
+    const override = this.tierOverrides?.get(instruction.opcode);
+    const tier = override ?? tierOf(instruction.opcode).tier;
+    if (tier === 'kill-thread') {
+      this.faults.push({
+        message: `opcode ${instruction.opcode.toString(16)} is tier kill-thread`,
+        thread: thread.name,
+      });
+      // eslint-disable-next-line no-console -- a silently dead script is undiagnosable in the field
+      console.warn(`[cleo] thread '${thread.name}' killed at offset ${instruction.offset}: unrunnable opcode`);
+
+      return 'terminate';
+    }
     const def = opcodeDef(instruction.opcode);
-    if (def?.condition || instruction.negated) {
+    if (tier === 'conditional-false' || def?.condition || instruction.negated) {
       // FINAL false, negation NOT applied — "the check did not pass", the deterministic tier-b default.
       thread.setCondition(false, false);
     }
+
+    return 'continue';
   }
 }

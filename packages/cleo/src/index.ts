@@ -16,7 +16,7 @@ export { AtlasMemory, type AtlasMiss, type NativeArg, type NativeValue, type Nat
 export { isNativeToken, tokenEntry, tokenOffset, TokenTable, type TokenTarget } from './vm/native-tokens';
 export { createRecordingHost, type RecordingHost, type RecordingHostOptions } from './vm/recording-host';
 export { type HandlerContext, HandlerRegistry, type OpcodeHandler, type OpcodeResult } from './vm/registry';
-export { ScriptRunner, type ScriptRunnerOptions, type ThreadFaultRecord } from './vm/runner';
+export { ScriptRunner, type ScriptRunnerOptions, type ThreadFaultRecord, type UnimplementedHit } from './vm/runner';
 export {
   type Quat,
   quatAxes,
@@ -28,4 +28,5 @@ export {
 } from './vm/sa-matrix';
 export { resolveScriptFilePath } from './vm/script-path';
 export { CleoThread, ThreadFault } from './vm/thread';
+export { DECLARED_TIERS, tierOf, type TierResolution, type UnimplementedTier } from './vm/tiers';
 export { VarSpace } from './vm/var-space';

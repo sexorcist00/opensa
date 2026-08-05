@@ -188,7 +188,7 @@ npx tsx scripts/crosstxd-fix.ts   # → NO_COMMIT/crossTxdFix/<mod>/gta3_img/<tx
 
 ```bash
 npm test / npm run test:coverage     # vitest (+ coverage floors)
-npm run test:fixtures                # real-GTA fixtures + viewer e2e assets (+ the CLEO corpus from NO_COMMIT/cleo)
+npm run test:fixtures                # real-GTA fixtures + viewer e2e assets (+ the CLEO corpus from mods-src/original)
 npm run cleo:opcodes                 # regenerate packages/cleo opcode table from the vendored Sanny sa.json (pin: packages/cleo/vendor/README.md)
 npx tsx scripts/debug/scm-disasm.ts <file.cs|dir> [--census|--strings|--json] [--out <dir>]   # disassemble compiled CLEO scripts (097/02)
 npx tsx scripts/debug/cleo-census.ts [paths…] [--json]                                        # opcode frequency/coverage table over a CLEO corpus (097/02; status column = VM registry join)

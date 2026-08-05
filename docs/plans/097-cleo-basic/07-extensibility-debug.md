@@ -39,15 +39,32 @@ close-out.
 
 ## Subtasks
 
-- [ ] Census→registry join + CI step over shipped scripts.
+- [x] Census→registry join + CI step over shipped scripts. _(2026-08-05: `corpus-coverage.test.ts` —
+      fixture-gated vitest join over the regenerated corpus; an unserved opcode with no declared
+      tier fails the build sorted by frequency, and every declared row must have a real corpus
+      consumer. The census CLI keeps its vm/todo column; the CI gate is the test.)_
 - [ ] Tracer (symbolised atlas ops) + trace ring buffer sized for the F2 view.
 - [ ] F2 screen (decision 3) + capability plumbing.
-- [ ] Tier registries (opcode + atlas) + default-unknown path + warnings→coverage plumbing.
-- [ ] Class C tier assignment: Car Left Door runs, boarding opcodes answer tier-b, coverage names the
-      missing ped-task facet (pointer to city-life).
+- [x] Tier registries (OPCODE half) + default-unknown path + warnings→coverage plumbing.
+      _(2026-08-05: `vm/tiers.ts` — `DECLARED_TIERS` data + `tierOf` fallback (DB condition →
+      tier b, else noop); runner consults it, implements kill-thread (located fault, tick goes
+      on), counts per-opcode hits and exposes `coverage()` worst-first. Per-ATLAS-ROW tiers
+      remain: `AtlasMemory.misses` already records per-address — the tier attribute joins when
+      the F2 screen consumes both.)_
+- [x] Class C tier assignment: Car Left Door runs, boarding opcodes answer tier-b, coverage names
+      the missing ped-task facet (pointer to city-life). _(2026-08-05: the declared set = 12 class-C
+      rows (ini reads + task checks conditional-false; task performers noop) + 3 cosmetic text
+      rows; each row's comment names its consumer, the city-life pointer is in the file header.)_
 - [ ] Module README: architecture, add-an-opcode flow, add-an-atlas-row flow, debug-a-script flow.
 - [ ] Trace-snapshot fixtures for the corpus + regression test.
 - [ ] Docs + audit + benchmark close-out (decision 7).
+
+## Ledger — phase A (2026-08-05)
+
+`packages/cleo`: 14 files / 112 tests green (new: `tiers.test.ts` 5, `corpus-coverage.test.ts` 2 —
+the join runs over the real regenerated fixtures). Runner API additions: `coverage()`,
+`ScriptRunnerOptions.tiers` override (tests + a future runtime policy). Remaining for close-out:
+tracer + F2 screen + module README + trace-snapshot fixtures + docs/audit/benchmark.
 
 ## Verification
 

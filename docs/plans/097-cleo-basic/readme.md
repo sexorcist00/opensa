@@ -10,7 +10,7 @@ old chain's language-core design survives; its scope, its memory-model stance an
 architecture — CLEO as its OWN LAYER between mods and the engine (`packages/cleo`), never mixed into
 either. Coverage grows by data (opcode DB + atlas entries), not by rewrites.
 
-## The corpus (in `NO_COMMIT/cleo` — 7 supported mods decoded 100 % on 2026-08-04, +1 kept with its script SKIPPED)
+## The corpus (7 supported mods decoded 100 % on 2026-08-04, +1 kept with its script SKIPPED; moved `NO_COMMIT/cleo` → `mods-src/original/` by plan 06)
 
 | Mod | Script | Size / instr | Class |
 | --- | --- | --- | --- |
