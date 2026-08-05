@@ -24,6 +24,10 @@
  * so this is what makes a pak loadable on a phone; it costs 4-8x the texture memory, so pair it with a
  * district `--rect`.
  *
+ * `--bake-collision` writes every cell's collision into the pak (`.oscol`, GAME grid) so the browser never
+ * parses a COL — the largest named spike cost there is. Off by default while the runtime still reads the
+ * archives; it costs build time and nothing reads the entries yet.
+ *
  * `--platforms desktop|mobile[,…]` makes the build ASSERT it can run there. The pack always reports which GPU
  * families its textures allow (world arrays ∪ model dictionaries); naming one turns that report into a build
  * failure, which is the last moment the answer is ours rather than a stranger's phone.
@@ -59,7 +63,7 @@ async function main(): Promise<void> {
     console.error(
       'usage: opensa-pack --game <dir> --out <dir> [--rect x0,y0,x1,y1] ' +
         '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] [--rgba8] [--max-texture N] ' +
-        '[--platforms desktop|mobile[,…]] [--stochastic <file>[,<file>…]]',
+        '[--platforms desktop|mobile[,…]] [--bake-collision] [--stochastic <file>[,<file>…]]',
     );
     process.exitCode = 2;
 
@@ -89,6 +93,7 @@ async function main(): Promise<void> {
   await packGameDir({
     ao: !process.argv.includes('--no-ao'),
     ...(bakeWorkers !== undefined ? { bakeWorkers } : {}),
+    bakeCollision: process.argv.includes('--bake-collision'),
     bakes: process.argv.includes('--bakes'),
     forceRgba8: process.argv.includes('--rgba8'),
     ...(maxTexture ? { maxTextureSize: maxTexture } : {}),

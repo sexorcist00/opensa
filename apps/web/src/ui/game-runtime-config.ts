@@ -1,9 +1,11 @@
+import type { Config } from '@opensa/game/interfaces/config.interface';
+
 /**
  * The game's runtime `Config` (extracted from `canvas-host.tsx` 2026-07-13 so the own-engine host
  * (plan 074/10 B3, `?engine=opensa`) reuses the SAME controls/movement/streaming/graphics values as the
  * three-WebGL path — behavioural parity by construction, one source of truth).
  */
-import type { Config } from '@opensa/game/interfaces/config.interface';
+import { GAME_CELL_SIZE } from '@opensa/cell-weld/cell-size';
 
 const BASE = import.meta.env.VITE_STATIC_URL;
 
@@ -15,7 +17,7 @@ const BASE = import.meta.env.VITE_STATIC_URL;
  * Distinct from the RENDER grid — opensa-pack welds `.oscell` blobs on its own `CELL_SIZE` (250) and the
  * manifest carries that to the engine. The two have never matched and nothing requires them to.
  */
-export const GAME_CELL_SIZE = 256;
+export { GAME_CELL_SIZE };
 
 export function createGameRuntimeConfig(): Config {
   return {

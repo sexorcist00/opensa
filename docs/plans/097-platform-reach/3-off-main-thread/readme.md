@@ -29,8 +29,10 @@ reason a browser ever sees a COL.
 boxes and spheres, the world transforms of every placement, and the per-triangle surface table, with the
 writer refusing a surface table that is not exactly one id per triangle. `bakeCellCollision`
 (`tools/opensa-pack/src/pack-collision.ts`) produces it, and its test uses the runtime's own
-`toModelColliders` as the oracle so the bake cannot quietly disagree with the path it replaces. **Still to
-do:** the pak entry kind, the converter wiring, and the runtime read.
+`toModelColliders` as the oracle so the bake cannot quietly disagree with the path it replaces. The pak carries it too: a `collision`
+entry kind plus `collisionCellSize` in the manifest, and `opensa-pack --bake-collision` fills them (off by
+default — it costs build time and nothing reads the entries yet). **Still to do: the runtime read**, which
+is what actually removes the spike, and the before/after that proves it.
 
 **The grid is the trap, and it is recorded as a restriction**: collision streams on `GAME_CELL_SIZE` (256)
 while the pak's render cells are 250. A bake keyed on the render grid hands back the *wrong* cell's
