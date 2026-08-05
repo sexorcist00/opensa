@@ -15,6 +15,13 @@ observations that killed it, and the conditions under which it might be worth re
 
 ## Postmortems
 
+- [097-hotring-hotknife-intake.md](./097-hotring-hotknife-intake.md) — two CLEO vehicle mods
+  analysed and cut the SAME day (2026-08-05) by the user's call: hotknife (paintjobs) cut
+  entirely; hotring's CAR kept but `no_lights.cs` skipped — a polling loop for a one-shot effect
+  belongs engine-native. Keeps the verified natives (`SetLightStatus@0x6C2100`,
+  `CAutomobile+0x5A0`) and the fully recovered SA paintjob/remap mechanism (numbered TXDs,
+  `remap*` textures, first-texture swap, spawn roll) for the day liveries or light damage are
+  built engine-native — plus a live recording-host defect (`carInSphere` ignores `findNext`).
 - [runtime-modloader-overlay.md](./runtime-modloader-overlay.md) — the boot-time `modloader/` overlay
   (`@opensa/modloader`, plan 058) and the runtime DFF fallback it fed, both removed 2026-07-28. Not measured
   away but ARGUED away: what a car carries beyond geometry — its `features.txt` pop-up declaration, its plate

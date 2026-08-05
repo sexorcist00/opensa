@@ -10,7 +10,7 @@ old chain's language-core design survives; its scope, its memory-model stance an
 architecture — CLEO as its OWN LAYER between mods and the engine (`packages/cleo`), never mixed into
 either. Coverage grows by data (opcode DB + atlas entries), not by rewrites.
 
-## The corpus (in `NO_COMMIT/cleo`, 7 mods — decoded 100 % on 2026-08-04)
+## The corpus (in `NO_COMMIT/cleo` — 7 supported mods decoded 100 % on 2026-08-04, +1 kept with its script SKIPPED)
 
 | Mod | Script | Size / instr | Class |
 | --- | --- | --- | --- |
@@ -21,6 +21,7 @@ either. Coverage grows by data (opcode DB + atlas entries), not by rewrites.
 | rhino (GTA 5 Rhino, slot 432) | `cleo/rhino tracks.cs` | 34 114 B / ~2 085 | B |
 | coach (slot 437) | `cleo/Car Left Door.cs` + `.ini` | 3 522 B / ~64 | C |
 | bus (slot 431) | `cleo/Car Left Door.cs` + `.ini` (identical copy) | 3 522 B / ~64 | C |
+| hotring (slot 494) | `cleo/no_lights.cs` — **SKIPPED by user call 2026-08-05** (car kept, script unsupported; recon + the native alternative in [the postmortem](../../postmortem/097-hotring-hotknife-intake.md)) | 275 B / 27 | — |
 
 - **Class A — world objects**: spawn + per-frame rotate (`CREATE_OBJECT_NO_SAVE`, `SET_OBJECT_ROTATION`,
   `CONNECT_LODS`, camera-distance gates). Wind Farm ALSO reads two absolute game globals (one in the
@@ -111,6 +112,7 @@ Doctrine:
 | 05 | [Native atlas](05-native-atlas.md) | Virtual address space + SA 1.0 atlas; class B alive; **field checkpoint 2: ladder, door, tracks**. |
 | 06 | [Packaging + pipeline](06-packaging-pipeline.md) | mod-installer/vehicle-installer carry CLEO files; contracts rows; VFS discovery; **field checkpoint 3: full build**. |
 | 07 | [Extensibility + debug surface](07-extensibility-debug.md) | F2 CLEO screen, tracer, coverage in CI, tier registry, add-an-opcode flow, docs + audit close-out. |
+| 08 | [CLEO authoring SDK](08-authoring-sdk.md) | Root `cleo/sdk` subproject (the `asi/` pattern): author OUR scripts in TS → standard `.cs`, dual-target SA + OpenSA; city-life's future home. |
 
 Order and rationale: [priority.md](priority.md).
 

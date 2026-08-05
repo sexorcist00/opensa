@@ -13,6 +13,7 @@ started immediately.
 | 5 | **05 Native atlas** | The class-B unlock (5 of 7 mods) and Wind Farm's completion. Needs 04's part-registry facet live. **Field checkpoint 2: ladder, door, tracks.** |
 | 6 | **06 Packaging + pipeline** | Ends the hand-placing: installers carry CLEO files, contracts updated, corpus moves into `mods-src`. **Field checkpoint 3: full build + fetch pack.** Independent enough to interleave with 05 if a second track is idle — it touches tools, not the runtime. |
 | 7 | **07 Extensibility + debug** | Needs a running module to instrument. Converts "it works" into "it's maintainable and growable"; carries the chain's audit + benchmark close-out. |
+| — | **08 Authoring SDK** (added 2026-08-05) | Independent of 06/07 — a build-time subproject touching no runtime; may interleave whenever. The VM it targets exists since 05; city-life is the future consumer. |
 
 Checkpoints: headless suites per plan (01–03 need no browser at all); field sessions at 04
 (binary: the wheel spins or it doesn't), 05 (three vehicle behaviours, judged from each reporter's own
