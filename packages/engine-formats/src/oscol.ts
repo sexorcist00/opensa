@@ -21,7 +21,17 @@
 import { ByteReader, ByteWriter } from './binary';
 
 export const OSCOL_MAGIC = 0x4c43534f; // 'OSCL' little-endian
-export const OSCOL_VERSION = 1;
+/**
+ * 2 — the bake decides breakability.
+ *
+ * v1 carried no {@link OscolRegion.instanceKeys}, so a reader had to ask the ARCHIVE whether each model
+ * shatters, which meant parsing a DFF per model on the very path the bake exists to keep out of the archive.
+ * From v2 the writer resolves it and the keys ride along: **present = breakable, absent = not**, with no
+ * third meaning. A v1 file is therefore not "an older bake with less detail", it is a bake whose breakability
+ * is unknown — so it is refused rather than read as unbreakable, and the caller re-packs (or falls back to
+ * parsing COL, which is what the runtime does).
+ */
+export const OSCOL_VERSION = 2;
 
 /** No surface id for this primitive — distinct from surface 0, which is a real material. */
 export const OSCOL_NO_MATERIAL = 0xff;
@@ -43,7 +53,8 @@ export interface OscolRegion {
   /** Triangle indices into {@link vertices}, 3 per triangle. */
   indices: Uint32Array;
   /** Per-INSTANCE keys for a breakable model (plan 045), aligned with {@link transforms}. Absent when the
-   *  model cannot be smashed — its presence is what makes a region breakable. */
+   *  model cannot be smashed — its presence is what makes a region breakable, and from {@link OSCOL_VERSION}
+   *  2 the WRITER owns that decision so the reader never has to open the model's DFF to ask. */
   instanceKeys?: string[];
   /** SA surface id per TRIANGLE (`indices.length / 3` bytes), or undefined when the source had none. */
   materials?: Uint8Array;
@@ -70,7 +81,10 @@ export function decodeOscol(bytes: Uint8Array): Oscol {
   }
   const version = r.u32();
   if (version !== OSCOL_VERSION) {
-    throw new Error(`unsupported .oscol version ${version} (reader supports ${OSCOL_VERSION})`);
+    throw new Error(
+      `unsupported .oscol version ${version} (reader supports ${OSCOL_VERSION}) — re-pack with ` +
+        `opensa-pack --bake-collision`,
+    );
   }
   const regionCount = r.u32();
   const regions: OscolRegion[] = [];

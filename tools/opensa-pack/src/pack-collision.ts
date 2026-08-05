@@ -14,18 +14,35 @@
 import type { OscolRegion } from '@opensa/engine-formats';
 import type { RegionColliders } from '@opensa/renderware';
 
-/** Every region of one cell. An empty cell is a legitimate result and still gets an entry: "nothing here"
- *  and "not baked yet" must not look the same to the runtime. */
-export function bakeCellCollision(regions: readonly RegionColliders[]): { regions: OscolRegion[] } {
-  return { regions: regions.map(bakeRegion) };
+import { breakableInstanceKey } from '@opensa/renderware/breakable/key';
+
+/**
+ * Every region of one cell. An empty cell is a legitimate result and still gets an entry: "nothing here"
+ * and "not baked yet" must not look the same to the runtime.
+ *
+ * `isBreakable` is REQUIRED rather than optional, and the reason is that its absence would be silent: a
+ * region with no instance keys reads as "this model does not shatter", so a caller that forgot to pass the
+ * gate would bake a world whose bins and lamp posts simply stop breaking. It must be the SAME gate the
+ * runtime applies (a RW Breakable atomic OR an `object.dat` smash effect) — one definition, or the pak and
+ * the game disagree about what the player can smash.
+ */
+export function bakeCellCollision(
+  regions: readonly RegionColliders[],
+  isBreakable: (modelName: string) => boolean,
+): { regions: OscolRegion[] } {
+  return { regions: regions.map((region) => bakeRegion(region, isBreakable(region.name))) };
 }
 
 /**
  * One region per model, exactly as the runtime's `toModelColliders` builds it — same index order, same
  * per-TRIANGLE surface byte, same conjugated world transforms. The bake may not reinterpret the data; it
  * only moves when it is read.
+ *
+ * A breakable model additionally gets one instance key per placement, computed the way the render registry
+ * and the physics layer both compute it (model name + cm-rounded translation) — the key IS the contract
+ * pairing a hit to the prop that disappears.
  */
-export function bakeRegion(region: RegionColliders): OscolRegion {
+export function bakeRegion(region: RegionColliders, breakable: boolean): OscolRegion {
   const { col, name, transforms } = region;
   const indices = new Uint32Array(col.faces.length * 3);
   // One surface byte per TRIANGLE, in the same order as the indices — what lets a wheel ask what it is
@@ -45,6 +62,13 @@ export function bakeRegion(region: RegionColliders): OscolRegion {
       min: [...box.min],
     })),
     indices,
+    ...(breakable
+      ? {
+          instanceKeys: transforms.map((matrix) =>
+            breakableInstanceKey(name, [matrix.elements[12], matrix.elements[13], matrix.elements[14]]),
+          ),
+        }
+      : {}),
     materials,
     name,
     spheres: col.spheres.map((sphere) => ({

@@ -52,11 +52,23 @@ the restriction's "caught: no" becomes "caught, for the mismatch that has actual
 **Still to do: the before/after.** Nothing here has been run against a real pak — the claim is a CI fact
 until a field capture shows the census without `cell-collision-read`-shaped work on a cold district entry.
 
-**What the read does NOT remove, measured or not:** the procobj scatter still binds COL regions per cell (it
-is seeded from the cell's own collision surfaces and its density is a LIVE knob), and the breakable gate
-still opens a model's DFF per new model. Both keep `buildCollisionIndex` alive on a baked run, so a
-clutter-enabled cell is cheaper but not archive-free. The DFF half is next (02's neighbour: the bake can
-carry the breakable decision, since `.oscol` already has the field for it); the scatter is a step of its own.
+**The breakable gate followed the same day** (`.oscol` **v2**). The runtime's gate opens a model's DFF to
+look for a shatter mesh — an archive read on the one path this bake exists to keep out of the archive, and on
+a streamed run the LAST reason the collision path opened a DFF at all. So the writer resolves it, with the
+same expression the runtime uses over the same lowercased region names, and writes one instance key per
+placement: **present = breakable, absent = not**, no third meaning. That is also why v1 is refused rather than
+read — a v1 file's breakability is unknown, and reading it as "nothing shatters" would ship a world whose
+bins and lamp posts quietly stop breaking. An unreadable container falls back to COL, saying so once per
+distinct reason.
+
+The test that keeps it honest counts ARCHIVE reads: a baked cell must open nothing (verified by re-adding the
+runtime tagging — the test fails with `[ 'baked_road.osm' ]`).
+
+**What the read still does NOT remove:** the procobj scatter binds COL regions per cell (it is seeded from the
+cell's own collision surfaces and its density is a LIVE knob), so `buildCollisionIndex` stays alive on any run
+with clutter colliders on. That one is a step of its own and is parked as a
+[performance lever](../../../performance/deferred-optimizations/procobj-scatter-bake.md) until a capture asks
+for it.
 
 **The grid is the trap, and it is recorded as a restriction**: collision streams on `GAME_CELL_SIZE` (256)
 while the pak's render cells are 250. A bake keyed on the render grid hands back the *wrong* cell's

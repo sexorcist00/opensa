@@ -1,9 +1,9 @@
 import type { Oscol, OscolRegion } from '@opensa/engine-formats';
 
-import { decodeOscol, encodeOscol } from '@opensa/engine-formats';
-import { describe, expect, it } from 'vitest';
+import { decodeOscol, encodeOscol, OSCOL_VERSION } from '@opensa/engine-formats';
+import { describe, expect, it, vi } from 'vitest';
 
-import { bakedModelColliders } from './baked-collision';
+import { bakedModelColliders, readBakedCell } from './baked-collision';
 
 /** Through the container, the way the runtime meets it: pak bytes in, colliders out. */
 function decoded(cell: Oscol): ReturnType<typeof bakedModelColliders> {
@@ -48,7 +48,7 @@ describe('bakedModelColliders', () => {
       expect(model.shape.spheres[0].material).toBeUndefined();
     });
 
-    it('carries no instance keys for a model that does not shatter — the adapter tags those', () => {
+    it('carries no instance keys for a model the BAKE decided does not shatter', () => {
       expect(decoded({ regions: [region()] })[0].instanceKeys).toBeUndefined();
     });
   });
@@ -91,6 +91,48 @@ describe('bakedModelColliders', () => {
       const cell = { regions: [region({ name: 'first' }), region({ name: 'second' })] };
 
       expect(decoded(cell).map((model) => model.name)).toEqual(['first', 'second']);
+    });
+  });
+});
+
+describe('readBakedCell', () => {
+  describe('negative cases', () => {
+    it('returns null for a container this reader cannot read, so the caller parses COL instead', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      // A pak from an older `.oscol` writer: right magic, wrong version. Read as "unbreakable, fewer
+      // fields" it would quietly ship a world whose props stop smashing — so it is refused, loudly.
+      const stale = encodeOscol({ regions: [] });
+      new DataView(stale.buffer, stale.byteOffset).setUint32(4, OSCOL_VERSION - 1, true);
+
+      expect(readBakedCell(stale)).toBeNull();
+      expect(warn).toHaveBeenCalledOnce();
+      warn.mockRestore();
+    });
+
+    it('returns null for bytes that are not an .oscol at all', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      expect(readBakedCell(Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8]))).toBeNull();
+      warn.mockRestore();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reads a cell the writer and reader agree on', () => {
+      expect(readBakedCell(encodeOscol({ regions: [region()] }))?.map((model) => model.name)).toEqual(['roads32_law2']);
+    });
+
+    it('takes the instance keys from the BAKE — breakability is not re-derived at runtime', () => {
+      const keys = ['bin1|100|200|300', 'bin1|400|500|600'];
+      const smashable = region({
+        instanceKeys: keys,
+        transforms: [
+          Float32Array.from([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 2, 3, 1]),
+          Float32Array.from([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 4, 5, 6, 1]),
+        ],
+      });
+
+      expect(readBakedCell(encodeOscol({ regions: [smashable] }))?.[0].instanceKeys).toEqual(keys);
     });
   });
 });

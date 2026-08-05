@@ -1,6 +1,5 @@
 import type { parsePedDefs } from '@opensa/renderware';
 
-import { decodeOscol } from '@opensa/engine-formats';
 // The deep path rather than the package index — see the note in streaming/collision-streaming.system.ts.
 import { frameSpans } from '@opensa/engine/debug/frame-spans';
 // game/adapters/** (and game/mods/**) are the only places allowed to import renderware.
@@ -68,7 +67,7 @@ import type { VehiclePlacement } from '../vehicle/vehicle-lod.system';
 import type { City } from '../zones/city';
 import type { VehicleRigData } from './engine-vehicle-handle';
 
-import { type BakedCollisionSource, bakedModelColliders } from './baked-collision';
+import { type BakedCollisionSource, readBakedCell } from './baked-collision';
 import { carGeneratorPlacements } from './car-generators';
 import { extractPlateSources } from './plate-sources';
 import { randomCarPlacements } from './popcycle-cars';
@@ -581,14 +580,21 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     if (!defs || !grid) {
       throw new Error('GtaSaWorldAdapter.loadCellColliders called before prepare()');
     }
-    const baked = this.baked?.has(cx, cy) === true ? await this.baked.read(cx, cy) : null;
-    if (baked !== null) {
+    const bytes = this.baked?.has(cx, cy) === true ? await this.baked.read(cx, cy) : null;
+    if (bytes !== null) {
       // Everything from here runs in a promise CONTINUATION — between frames, where no loop timer reaches —
       // so it times itself into a span (plan 091 phase 2), exactly like `cell-collision-bodies` does.
-      return frameSpans.measure('cell-collision-decode', () => [
-        ...bakedModelColliders(decodeOscol(baked)).map((model) => this.withBreakableKeys(model)),
-        ...this.clutterColliders(cx, cy),
-      ]);
+      // The regions are used AS WRITTEN: the bake already decided which models shatter, and re-asking would
+      // open a DFF per model — the archive read this whole path exists to avoid.
+      const baked = frameSpans.measure('cell-collision-decode', () => {
+        const models = readBakedCell(bytes);
+
+        return models === null ? null : [...models, ...this.clutterColliders(cx, cy)];
+      });
+      if (baked !== null) {
+        return baked;
+      }
+      // A container this reader cannot read (a pak from an older writer): fall through to COL, having said so.
     }
     // NO SPAN HERE. This looks like out-of-loop work and is not: with no bake to await, the body runs
     // synchronously to the end, and the only caller in a normal run is `CollisionStreamingSystem.load()`,

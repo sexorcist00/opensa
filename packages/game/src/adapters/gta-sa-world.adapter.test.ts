@@ -302,6 +302,30 @@ describe('GtaSaWorldAdapter baked collision (097/3-01)', () => {
       expect(baked.reads).toEqual(['2,-3']);
     });
 
+    it('never opens the archive for a baked cell — the bake already decided what shatters', async () => {
+      // The breakable gate is the last archive read the collision path had (it parses a model's DFF looking
+      // for a shatter mesh). On a baked cell it must not happen at all, or the bake buys a parse and pays
+      // for it with another.
+      const opened: string[] = [];
+      const fs: Renderware.AssetFileSystem = {
+        get: (name) => {
+          opened.push(name);
+
+          return null;
+        },
+        getText: () => null,
+        has: () => false,
+        names: [],
+      };
+      const adapter = new GtaSaWorldAdapter({ bakedCollision: source(), cellSize: 250, fs });
+      await adapter.prepare();
+      opened.length = 0;
+
+      await adapter.loadCellColliders(0, 0);
+
+      expect(opened).toEqual([]);
+    });
+
     it('reads a cell ONCE even when two callers ask while the pak read is in flight', async () => {
       const baked = source();
       const adapter = new GtaSaWorldAdapter({ ...cfg(), bakedCollision: baked });

@@ -40,12 +40,13 @@ needs, which is exactly the number this entry is waiting for.
 
 - A capture showing the scatter (not the bind) on slow frames of a cold district entry, on a device that
   cares — i.e. the phone, once chain 2 lets it load a real district.
-- Or: the breakable-gate bake lands first and the COL index is otherwise unused on a streamed run, at which
-  point this entry is the only thing keeping an archive-wide COL parse alive.
+- The breakable-gate bake landed the same day (`.oscol` v2), so on a streamed run **this entry is already the
+  only thing keeping an archive-wide COL parse alive**. Turning clutter colliders off is the A/B that would
+  size it.
 
 ## Cheaper things to try first
 
 - Turn the clutter colliders off (`clutterColliders: false`) — the config already allows it, and a renderer
   that draws no clutter must not collide it.
-- Bake the BREAKABLE decision into `.oscol` (the container already has the field): it removes the per-model
-  DFF parse on the same path, without a new payload or a new grid key.
+- ~~Bake the BREAKABLE decision into `.oscol`~~ — **done 2026-08-05** (v2): it removed the per-model DFF
+  parse on the same path without a new payload or a new grid key. This lever is what is left.

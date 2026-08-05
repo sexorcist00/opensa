@@ -4,6 +4,7 @@ import { decodeOscol, encodeOscol } from '@opensa/engine-formats';
 import { bakedModelColliders } from '@opensa/game/adapters/baked-collision';
 import { toModelColliders } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { Matrix4 } from '@opensa/math';
+import { breakableInstanceKey } from '@opensa/renderware/breakable/key';
 import { describe, expect, it } from 'vitest';
 
 import { bakeCellCollision, bakeRegion, collisionCellRect } from './pack-collision';
@@ -46,11 +47,17 @@ function regionColliders(): RegionColliders {
 describe('bakeCellCollision', () => {
   describe('negative cases', () => {
     it('bakes an empty cell rather than nothing, so "no colliders" is distinguishable from "not baked"', () => {
-      expect(decodeOscol(encodeOscol(bakeCellCollision([]))).regions).toEqual([]);
+      expect(decodeOscol(encodeOscol(bakeCellCollision([], () => false))).regions).toEqual([]);
+    });
+
+    it('gives a model that does not shatter NO instance keys — presence is the whole breakable flag', () => {
+      const baked = decodeOscol(encodeOscol(bakeCellCollision([regionColliders()], () => false))).regions[0];
+
+      expect(baked.instanceKeys).toBeUndefined();
     });
 
     it('does not drop a surface id anywhere on the way through the container', () => {
-      const baked = decodeOscol(encodeOscol(bakeCellCollision([regionColliders()]))).regions[0];
+      const baked = decodeOscol(encodeOscol(bakeCellCollision([regionColliders()], () => false))).regions[0];
 
       expect(baked.materials).toEqual(Uint8Array.from([4, 17]));
       expect(baked.boxes[0].material).toBe(7);
@@ -62,7 +69,7 @@ describe('bakeCellCollision', () => {
     it('agrees with the runtime path it replaces, index for index', () => {
       const source = regionColliders();
 
-      const baked = bakeRegion(source);
+      const baked = bakeRegion(source, false);
       const runtime = toModelColliders(source);
 
       expect(baked.indices).toEqual(runtime.shape.indices);
@@ -76,7 +83,7 @@ describe('bakeCellCollision', () => {
       // disagree, the world the player collides with stops being the world the converter saw.
       const source = regionColliders();
 
-      const [baked] = bakedModelColliders(decodeOscol(encodeOscol(bakeCellCollision([source]))));
+      const [baked] = bakedModelColliders(decodeOscol(encodeOscol(bakeCellCollision([source], () => false))));
       const runtime = toModelColliders(source);
 
       expect(baked.name).toBe(runtime.name);
@@ -90,8 +97,18 @@ describe('bakeCellCollision', () => {
       );
     });
 
+    it('keys a breakable model’s placements the way the render registry and the physics layer do', () => {
+      // The key IS the contract that pairs a hit to the prop that disappears — baking it means the runtime
+      // never opens the model's DFF to ask whether it shatters, and a key spelled differently resolves to
+      // nothing at all.
+      const baked = decodeOscol(encodeOscol(bakeCellCollision([regionColliders()], () => true))).regions[0];
+
+      expect(baked.instanceKeys).toEqual([breakableInstanceKey('roads32_law2', [12.5, -3, 7])]);
+      expect(baked.instanceKeys).toHaveLength(baked.transforms.length);
+    });
+
     it('survives the round trip through .oscol with its placements intact', () => {
-      const baked = decodeOscol(encodeOscol(bakeCellCollision([regionColliders()]))).regions[0];
+      const baked = decodeOscol(encodeOscol(bakeCellCollision([regionColliders()], () => false))).regions[0];
 
       expect(baked.transforms).toHaveLength(1);
       // Column-major: the translation is the last row of `Matrix4.elements`.

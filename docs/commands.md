@@ -113,9 +113,10 @@ NODE_OPTIONS=--max-old-space-size=12288 \
 #     hardcoded ±12 silently dropped gostown's far islands (plan 087)
 #   --pak-out: where the pak products land (default: <out>/pak — the game dir is self-contained, 086 phase 8)
 #   --game-id: fetch game id stamped into the pak manifest (default: basename of --game; pmb passes its own)
-#   --bake-collision: write every cell's collision into the pak (.oscol, on the GAME grid 256 -- NOT the
-#     render grid 250) so the browser never parses a COL. Off by default: it costs build time and the
-#     runtime still reads the archives
+#   --bake-collision: write every cell's collision into the pak (.oscol v2, on the GAME grid 256 -- NOT the
+#     render grid 250) so the browser never parses a COL, and resolve the breakable gate here too (the
+#     per-placement instance keys ride along, so the runtime opens no DFF either). The runtime READS this
+#     since 097/3-01; a cell without an entry falls back to parsing COL. Off by default: it costs build time
 #   --platforms: ASSERT the build runs on the named GPU families, and fail the pack when it does not. Every
 #     run reports the demand anyway (report.json `platforms`, and one log line): world arrays ∪ model
 #     dictionaries, because a car is NOT in the pak — an --rgba8 world can still be unspawnable on a phone

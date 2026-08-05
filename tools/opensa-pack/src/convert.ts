@@ -23,6 +23,7 @@ import {
 } from '@opensa/engine-formats';
 import { buildCellColliders, buildCollisionIndex } from '@opensa/renderware';
 import { getClump } from '@opensa/renderware/archive/asset-cache';
+import { getBreakable } from '@opensa/renderware/breakable/mesh';
 import { breakableModelsFromText } from '@opensa/renderware/breakable/models';
 import { OPEN_SCRIPT_IPL, resolveMap } from '@opensa/renderware/map/resolve-map';
 import { buildWorldGrid, cellKey } from '@opensa/renderware/map/world-grid';
@@ -276,7 +277,9 @@ export async function convertDistrict(
   // this plan (003 phase 5g).
   options.onWorldPlanned?.(planner, defs);
 
-  const collisionCells = options.bakeCollision ? bakeCollision(fs, defs, [x0, y0, x1, y1], cellSize, inputs, log) : 0;
+  const collisionCells = options.bakeCollision
+    ? bakeCollision(fs, defs, [x0, y0, x1, y1], cellSize, breakableModels, inputs, log)
+    : 0;
 
   log('encoding texture arrays …');
   for (const array of planner.build()) {
@@ -366,12 +369,18 @@ async function bakeChunk(
  * streams on 256, so the cells are re-derived through the world extent rather than reused
  * (`collisionCellRect`). An empty cell contributes no entry — the runtime treats a missing key as "this pak
  * has no bake for that cell" and falls back, which is also what an older pak looks like.
+ *
+ * The breakable gate is resolved HERE for the same reason the collision is: the runtime's version of it opens
+ * a model's DFF to look for a shatter mesh, which is an archive read on the one path this bake exists to keep
+ * out of the archive. It is the same gate, expression for expression — a RW Breakable atomic (or a converted
+ * `.osm` SHAT section) OR an `object.dat` smash effect — over the same lowercased region names.
  */
 function bakeCollision(
   fs: AssetFileSystem,
   defs: MapDefinitions,
   renderRect: readonly [number, number, number, number],
   cellSize: number,
+  breakableModels: ReadonlySet<string>,
   inputs: OspakInput[],
   log: (message: string) => void,
 ): number {
@@ -380,19 +389,26 @@ function bakeCollision(
   const [gx0, gy0, gx1, gy1] = collisionCellRect(renderRect, cellSize, GAME_CELL_SIZE);
   let cells = 0;
   let triangles = 0;
+  let breakables = 0;
   for (let cy = gy0; cy <= gy1; cy += 1) {
     for (let cx = gx0; cx <= gx1; cx += 1) {
       const regions = buildCellColliders(index, defs, grid, cx, cy);
       if (regions.length === 0) {
         continue;
       }
-      const baked = bakeCellCollision(regions);
+      const baked = bakeCellCollision(
+        regions,
+        (modelName) => getBreakable(fs, modelName) !== undefined || breakableModels.has(modelName),
+      );
       triangles += baked.regions.reduce((total, region) => total + region.indices.length / 3, 0);
+      breakables += baked.regions.filter((region) => region.instanceKeys !== undefined).length;
       inputs.push(wireCompress({ bytes: encodeOscol(baked), key: `${cx},${cy}`, kind: 'collision' }));
       cells += 1;
     }
   }
-  log(`collision: baked ${cells} cells (${triangles} triangles) on the ${GAME_CELL_SIZE} game grid`);
+  log(
+    `collision: baked ${cells} cells (${triangles} triangles, ${breakables} breakable regions) on the ${GAME_CELL_SIZE} game grid`,
+  );
 
   return cells;
 }

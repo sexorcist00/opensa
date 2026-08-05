@@ -21,10 +21,11 @@
   knob changes (debounced cache invalidation).
 - **Baked cell collision** (plan 097/3-01): a pak built with `opensa-pack --bake-collision` carries one
   `.oscol` per GAME-grid (256) cell, and the runtime reads it instead of binding COL —
-  `PakCollisionSource` (engine, shares the pak worker) → `bakedModelColliders` (game) → the same
-  `ModelColliders` the COL path produces. A cell the bake does not cover, a pak without the bake and a
-  failed read all fall back to the COL path; the adapter refuses a bake keyed on a grid other than the one
-  collision streams on.
+  `PakCollisionSource` (engine, shares the pak worker) → `readBakedCell` (game) → the same `ModelColliders`
+  the COL path produces, **breakable instance keys included**: `.oscol` v2 resolves the shatter gate at build
+  time, so a baked cell opens no DFF and no COL. A cell the bake does not cover, a pak without the bake, a
+  failed read and a container this reader cannot read all fall back to the COL path; the adapter refuses a
+  bake keyed on a grid other than the one collision streams on.
 - Collision debug wireframe overlay (map-viewer).
 
 ## Known gaps / candidates
@@ -35,8 +36,12 @@
 - No moving/animated colliders (the IFP-animated map objects don't collide with their moving
   parts).
 - The bake covers map collision only: the **procobj scatter still binds COL regions** per cell (it is
-  seeded from the cell's own collision surfaces and its density is a live knob), and the breakable gate
-  still opens a model's DFF. Both keep the COL index alive on a baked run.
+  seeded from the cell's own collision surfaces and its density is a live knob), which keeps the COL index
+  alive on a baked run whenever clutter colliders are on
+  ([the lever](../performance/deferred-optimizations/procobj-scatter-bake.md)).
+- The baked breakable gate is resolved against the `object.dat` and DFFs **the pak was built from**. That is
+  the same tree a field run reads, so it matches — but a mod installed after the pak was built would need a
+  re-pack to change what smashes.
 
 ## Test coverage anchors
 
