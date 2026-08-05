@@ -1190,7 +1190,15 @@ async function boot(
         const [px, py, pz] = viewOf();
         // In FRONT of the camera, facing the same way. The camera's native forward is (sin yaw, −cos yaw);
         // a heading h points along (−sin h, cos h), so the matching heading is yaw + π.
-        const position: [number, number, number] = [px + Math.sin(rig.yaw) * 5, py - Math.cos(rig.yaw) * 5, pz + 1];
+        // The gap scales with the MODEL: clearance + half its length — a fixed 5 m put the CENTRE of a
+        // 11 m coach ahead, which wrapped the body around the player.
+        const half = (await vehicles?.modelHalfExtents(model)) ?? [1, 2.5, 1];
+        const distance = 2.5 + half[1];
+        const position: [number, number, number] = [
+          px + Math.sin(rig.yaw) * distance,
+          py - Math.cos(rig.yaw) * distance,
+          pz + 1,
+        ];
         await vehicles?.spawn({
           ...(combos.length > 0 ? { colour: combos[index % combos.length].join(',') } : {}),
           groundSnap: true,

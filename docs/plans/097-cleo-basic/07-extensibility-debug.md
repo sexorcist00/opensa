@@ -66,6 +66,56 @@ the join runs over the real regenerated fixtures). Runner API additions: `covera
 `ScriptRunnerOptions.tiers` override (tests + a future runtime policy). Remaining for close-out:
 tracer + F2 screen + module README + trace-snapshot fixtures + docs/audit/benchmark.
 
+## Ledger — field bug round (2026-08-05, between phase A and B; fixes verified headless)
+
+Four user reports against the post-06 build, all diagnosed against `build/original/opensa`:
+
+1. **"No ferris wheel, collision only"** — CLEO was simply off (`?cleo=1` restored it; the corpus
+   `Config.cleo.enabled` default-ON decision — 06 decision 6 — is still open).
+2. **Black screen near the wheel** (`Destroyed texture [array-22] used in a submit`) — streaming evicted
+   a world texture array while a live `worldArrays` rigid model (the CLEO wheel) still held a CACHED bind
+   group over it, and the cache stayed stale even after a reload. Fix: `Engine.releaseWorldArray(ref)` —
+   keeps an array a live instance draws with, else drops every cached world-array bind group and unloads
+   (engine.ts; streaming.ts `releaseTextures` routes through it). Tests: engine.world-arrays.test.ts
+   (keep-alive negative + release/reload positive). A 60 s headless walk to the wheel under eviction
+   pressure (texture 819 MB vs target 88): zero validation errors, wheel textured.
+3. **Coach/bus missing driver-side front wheel** — BOTH stratumx MCI mods ship one corrupt ORPHAN vertex
+   in `wheel_lf` (coach: ~5.8e25 m, bus: ~1.4e4 m; unreferenced by any triangle, so invisible in SA).
+   `wheelRadius` scanned raw positions, read it as the authored radius, and the diameter fit scaled the
+   wheel to ~0. Fix: measure over triangle-referenced vertices only (build-vehicle-model.ts + test);
+   coach + bus rebaked (`vehicle-installer --rebake original --only coach|bus`), driver-side wheel
+   verified present on both, headless.
+4. **Coach un-enterable (Enter dead)** — `ENTER_RANGE = 4 m` was measured from the vehicle CENTRE; an
+   11 m coach spent 5.6 m of it on its own body. Fix: range now measures to the oriented FOOTPRINT
+   rectangle (enter-vehicle.system.ts + test). Headless: Enter beside the bus → approach → `SEATED` in
+   the HUD. The `0D4E unimplemented (Car Left Door)` warn near the coach is the declared class-C tier
+   doing its job (raw CVehicle pointer reads) — cosmetic door script, NOT the enter blocker; our own
+   walk-up animator swings the door.
+
+Also this round: F2 debug spawn places a car at `2.5 m + halfExtents[1]` ahead instead of a fixed 5 m
+(an 11 m coach used to wrap around the player — `EngineVehicles.modelHalfExtents`), and the bug-round
+tool itself: `tools-debug/bench-harness/warnings.js` (see benchmarks.md) — headless warning/error
+collector with KEYS/TAGS, which verified every fix above without a human at the screen.
+
+**Round 2 (same day, after the user re-tested):**
+
+5. **Coach still entered through the NON-EXISTENT driver door** — the mod's `Car Left Door.cs` (decoded)
+   catches the player's enter-as-driver ped task (0E43 id 800), reads the task's stage + vehicle from raw
+   task memory (0D4E) and re-tasks entry as passenger + seat shuffle for ini-listed models (431/437).
+   That whole mechanism is class-C by design; the engine now reads the same intent from the MODEL: door
+   side selection prefers a side whose door PART exists (`doorSides` — the coach authors only `door_rf`,
+   the bus's real entry), for entry AND the egress chain, and `doorApproachPath` routes AROUND the bumper
+   when the only door is on the far flank (the straight line stalled against the body). Verified headless:
+   driver-side approach → walk around → rf door → shuffle → `SEATED`. Models with no front door parts at
+   all keep the old near-side behaviour.
+6. **Ferris wheel does not BLINK** (original does) — diagnosed, deferred: the blink is a UVAnimDict
+   (`f13d`) on `ferriswheel_lights.dff`'s film-strip texture; the script only rotates. The rigid/script
+   object path has no UV-anim lane — recorded in `docs/edge-cases/engine-rendering.md`, planned as
+   **[plan 099](../099-script-object-uv-anim/readme.md)** (2026-08-05).
+7. **Rhino tracks do not rotate** (road wheels behind them do) — the KNOWN class-B rig block (05 ledger:
+   the vehicle-optimizer drops empty parent frames + parent links; `docs/hacks/cleo-frame-sibling-order.md`).
+   User's call 2026-08-05: SKIP — 097/08 authors our own track script instead.
+
 ## Verification
 
 - Coverage report: classes A+B 100 % implemented; class C flags exactly the ped-task set with

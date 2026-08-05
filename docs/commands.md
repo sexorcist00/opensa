@@ -161,7 +161,14 @@ npx tsx scripts/debug/touch-controls-check.ts \
 #   atlas misses print as `[cleo] atlas miss:` lines) · ?osmspike=<model> renders one map-object .osm
 #   beside the player (the 04 phase-0 spike hook)
 # Vehicle field checks (097/05) — ?spawncar=model[,x,y,z[,heading]] spawns one car (retries until the
-#   ground streams in; default spot 8 m north of spawn) · ?autoseat=1 seats the player once it exists
+#   ground streams in; default spot 8 m north of spawn; heading is RADIANS — 0 faces north, the boot
+#   camera looks SOUTH, so put a car you want in frame at y − 10) · ?autoseat=1 seats the player once
+#   it exists
+# Warning catcher (bug rounds) — collects every console warning/error + WebGPU validation message from a
+#   live headless run into JSON (deduped, with counts) + screenshot; KEYS holds keys, TAGS echoes info
+#   lines like [spawncar]. See tools-debug/bench-harness/README.md
+NODE_PATH=$PWD/node_modules node tools-debug/bench-harness/warnings.js \
+  "http://localhost:5173/?loader=http-dir&src=http://localhost:3001/build/original/opensa&cleo=1&spawn=X,Y,Z" out 30000
 # Diff two capture sets (raw harness logs are accepted as-is); --determinism gates a replay check
 npx tsx scripts/phys-compare.ts before.log after.log [--determinism]
 # The regression pack (081/07): a fresh 5-car sweep against the committed accepted-feel matrix

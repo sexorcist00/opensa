@@ -406,6 +406,37 @@ describe('buildVehicleModel', () => {
       expect(left.localRotation).toEqual([0, 0, 1, 0]); // 180° about Z — a mirror would flip the winding
     });
 
+    it('an orphan vertex no triangle references cannot inflate the wheel radius (the coach wheel_lf case)', () => {
+      // Same triangle as `geometry()` plus one corrupt UNREFERENCED vertex — the real coach.dff ships one
+      // at ~5.8e25 on wheel_lf, which read as the authored radius and scaled that wheel to nothing.
+      const poisoned: RWGeometry = {
+        ...geometry(),
+        positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 5.8e25, 2.5e7, 0]),
+      };
+      const built = buildVehicleModel(
+        clump(
+          [
+            frame('chassis'),
+            frame('wheel'),
+            frame('wheel_lf_dummy', -1, [1, 2, 0]),
+            frame('wheel_rf_dummy', -1, [-1, 2, 0]),
+          ],
+          [
+            { frame: 0, geometry: 0 },
+            { frame: 1, geometry: 1 },
+          ],
+          [geometry(), poisoned],
+        ),
+        textures(),
+        { wheelScale: [0.8, 0.8] },
+      );
+
+      for (const wheel of built.wheels) {
+        expect(wheel.radius).toBeCloseTo(0.4, 5);
+        expect(built.parts[wheel.part].scale).toBeCloseTo(0.4, 5);
+      }
+    });
+
     it('`_dam` twins ride the same buffers as hidden submeshes, paired to their `_ok` by damage group', () => {
       const built = buildVehicleModel(
         clump(

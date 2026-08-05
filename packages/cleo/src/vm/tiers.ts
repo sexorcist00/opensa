@@ -21,7 +21,9 @@ export type UnimplementedTier = 'conditional-false' | 'kill-thread' | 'noop';
 /**
  * The declared gaps — every entry names its corpus consumer. Class C (Car Left Door on coach/bus)
  * is DEFERRED BY DESIGN until a ped-task surface exists (city-life territory): the script must
- * run, detect, do nothing and say why — never break the runner.
+ * run, detect, do nothing and say why — never break the runner. Since 2026-08-05 the ENGINE serves
+ * that script's intent anyway: door-side selection reads the model's door parts (enter-vehicle
+ * `doorSides` — a coach with only `door_rf` boards through it), so the inert script costs nothing.
  */
 export const DECLARED_TIERS: ReadonlyMap<number, UnimplementedTier> = new Map<number, UnimplementedTier>([
   // --- Cosmetic on-screen text (firela's ladder HUD readout) ---

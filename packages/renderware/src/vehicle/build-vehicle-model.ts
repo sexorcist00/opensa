@@ -994,13 +994,29 @@ function shownShell(scratch: Scratch): Uint8Array {
   return shown;
 }
 
+/**
+ * Measured over the vertices the TRIANGLES reference — the set RenderWare actually draws. An ORPHAN vertex
+ * is invisible in-game but poisons a positions scan: coach's `wheel_lf` ships one corrupt orphan at ~5.8e25,
+ * which read as the authored radius and scaled that wheel to nothing (axleScale fits to the diameter).
+ */
 function wheelRadius(geometry: RWGeometry | undefined): number {
   if (!geometry) {
     return 0.35;
   }
   let max = 0;
-  for (let vertex = 0; vertex < geometry.positions.length; vertex += 3) {
-    max = Math.max(max, Math.hypot(geometry.positions[vertex + 1], geometry.positions[vertex + 2]));
+  const measure = (vertex: number): void => {
+    max = Math.max(max, Math.hypot(geometry.positions[vertex * 3 + 1], geometry.positions[vertex * 3 + 2]));
+  };
+  if (geometry.triangles.length > 0) {
+    for (const tri of geometry.triangles) {
+      measure(tri.a);
+      measure(tri.b);
+      measure(tri.c);
+    }
+  } else {
+    for (let vertex = 0; vertex * 3 < geometry.positions.length; vertex += 1) {
+      measure(vertex);
+    }
   }
 
   return max;

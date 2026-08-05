@@ -1488,6 +1488,32 @@ export class Engine {
     return this.resources.ledger();
   }
 
+  /**
+   * Streaming's eviction seam for a WORLD texture array. A live rigid instance still drawing with `ref`
+   * KEEPS the array (its cached bind group references the shared texture — destroying it under a recorded
+   * bundle is "destroyed texture used in a submit", the black screen at the ferris wheel). Otherwise every
+   * cached world-array bind group over `ref` is dropped first — a later reload mints a NEW texture, and a
+   * stale cache would keep submitting the destroyed one — and the array is unloaded. True = unloaded.
+   */
+  releaseWorldArray(ref: number): boolean {
+    for (const model of this.vehicleModels.values()) {
+      if (!model.worldArrays || !model.instances.some((state) => state !== null)) {
+        continue;
+      }
+      if (model.submeshes.some((submesh) => (submesh.array ?? 0) === ref)) {
+        return false;
+      }
+    }
+    for (const model of this.vehicleModels.values()) {
+      if (model.worldArrays) {
+        model.bindGroups.delete(ref);
+      }
+    }
+    this.textures.unload(ref);
+
+    return true;
+  }
+
   /** Drop a streamed-out cell's clutter (074/19). */
   removeCellClutter(key: string): void {
     const draws = this.clutterCells.get(key);

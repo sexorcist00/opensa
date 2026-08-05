@@ -95,6 +95,9 @@ export interface EngineVehicles {
    * {@link EngineVehicles.seatInstantly}. False when nobody is seated.
    */
   leaveInstantly(): boolean;
+  /** The model's half-extents `[hx, hy, hz]` (vehicle space) — builds/caches the model as a side effect.
+   *  The debug spawner reads hy (half the LENGTH) so a bus lands in FRONT of the player, not around him. */
+  modelHalfExtents(model: string): Promise<readonly [number, number, number]>;
   /** Register placements to spawn LAZILY by distance (the LOD system streams them) — the bench road cars. */
   register(placements: readonly VehiclePlacement[]): void;
   /**
@@ -733,6 +736,13 @@ export function setupEngineVehicles(deps: EngineVehiclesDeps): EngineVehicles {
     },
     isSettling: (): boolean => enterVehicle.isSettling(),
     leaveInstantly: (): boolean => enterVehicle.leaveInstantly(),
+    async modelHalfExtents(model: string): Promise<readonly [number, number, number]> {
+      const entry = await acquireModel(model);
+      // acquireModel counts an instance that this read never spawns — hand it straight back.
+      entry.instances = Math.max(0, entry.instances - 1);
+
+      return entry.data.halfExtents;
+    },
     register(placements: readonly VehiclePlacement[]): void {
       for (const placement of placements) {
         vehicleLod.register(placement);

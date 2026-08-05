@@ -188,7 +188,8 @@ function vehicleAt(position: Vec3): EnterableVehicle {
     setThrust: (): undefined => undefined,
   } as unknown as VehicleRig;
   const handle = new FakeVehicleHandle();
-  handle.hinges.set('lf', [0, 0, 0]); // hinge at the body origin
+  handle.hinges.set('lf', [0, 0, 0]); // hinges at the body origin — real cars author BOTH front doors
+  handle.hinges.set('rf', [0, 0, 0]);
 
   return {
     body: 0,
@@ -418,6 +419,36 @@ describe('EnterVehicleSystem', () => {
       expect(h.system.canEnterExit()).toBe(true);
     });
 
+    it('a model with NO driver door boards through the door it HAS, from either side (the coach case)', () => {
+      const h = setup();
+      const coach = vehicleAt([2, 0, 0]); // player local x = -2: the DRIVER side approach
+      coach.handle.doorHinge = (side): [number, number, number] | null => (side === 'rf' ? [0, 0, 0] : null);
+      h.system.add(coach);
+      h.press(true);
+      h.system.update(0.016);
+      // Routed AROUND the bumper to the rf-door standoff (a straight line runs through the body):
+      // driver-flank corner → passenger-flank corner → the door.
+      expect(h.ctrl.path).toHaveLength(3);
+      expect(h.ctrl.path?.[0]).toEqual([2 - 2.2, 3.2, 0]);
+      expect(h.ctrl.path?.[1]).toEqual([2 + 2.2, 3.2, 0]);
+      expect(h.ctrl.path?.[2][0]).toBeCloseTo(2 + 0 + 1.2);
+
+      h.ctrl.arrived = true;
+      h.system.update(1); // arrived → the PASSENGER door swings
+      h.system.update(0.016); // doorway → climb in through the rf door
+      expect(h.anim.clip).toBe('car_getin_rhs');
+    });
+
+    it('a LONG vehicle is enterable from beside its body — range measures to the footprint, not the centre', () => {
+      const h = setup();
+      const coach = vehicleAt([0, 8, 0]);
+      // An ~11 m coach ahead of the player: the centre sits 8 m out (a centre rule refused it), the body
+      // ends 2.4 m away — well inside ENTER_RANGE.
+      coach.halfExtents = [1.2, 5.6, 1.5];
+      h.system.add(coach);
+      expect(h.system.canEnterExit()).toBe(true);
+    });
+
     it('canEnterExit stays true while seated (can exit)', () => {
       const h = setup();
       seatPlayer(h, vehicleAt([2, 0, 0]));
@@ -441,7 +472,7 @@ describe('EnterVehicleSystem', () => {
       h.system.update(0.016);
       // Straight to the rf-door standoff — no more hiking around the bumpers to the driver door.
       expect(h.ctrl.path).toHaveLength(1);
-      expect(h.ctrl.path?.[0][0]).toBeCloseTo(-0.8); // -3 + (1 + 1.2)
+      expect(h.ctrl.path?.[0][0]).toBeCloseTo(-1.8); // -3 + (0 + 1.2) — the rf hinge sits at the origin
 
       h.ctrl.arrived = true;
       h.system.update(1); // arrived → the PASSENGER door swings open (mirrored angle)

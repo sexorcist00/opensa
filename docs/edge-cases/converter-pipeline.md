@@ -137,3 +137,11 @@ Boundaries of opensa-pack / perfect-map-builder / map-optimizer / the LOD genera
   a game WITHOUT a pinned rect auto-fits to content (`occupiedRect`, `opensa-pack --rect` absent) and would
   chunk a mostly-empty map four times too tall. `scripts/debug/grid-extent.ts` now names the stragglers next
   to the extent so the number can be read before it is pinned.
+- **The VEHICLE build path does not sanitize corrupt vertices — the world path does, and its threshold
+  misses sub-1e6 strays anyway.** `sanitizeVertexPositions` (prepare-clump.ts, `MAX_VERTEX_COORD` 1e6)
+  collapses garbage vertices for WORLD meshes only; `buildVehicleModel` reads raw positions. Both
+  stratumx MCI mods ship one corrupt ORPHAN vertex (unreferenced by any triangle, invisible to
+  RenderWare) in `wheel_lf` — coach at ~5.8e25, bus at ~1.4e4, the latter under the world threshold
+  too. Any positions SCAN in the vehicle path must measure over triangle-referenced vertices, the set
+  RW draws (`wheelRadius` learned this 2026-08-05 — the wheel had scaled to nothing; `appendGeometry`
+  was already safe). New scans over `geometry.positions` inherit the trap SILENTLY.

@@ -97,3 +97,11 @@ Limits and deliberate approximations of the own WebGPU engine.
   sa-map-viewer pose with the sea in view differ by mean Δ 0.006/255, max Δ 14.6/255 (094 phase 7). The gate
   is `Engine.waterEnabled` — switch the surface OFF for a pixel A/B (the viewer's `?water=0`, which
   `map-viewer-shot.ts` now sets by default); with it off, two runs are byte-identical again.
+- **Script-spawned objects (the CLEO rigid-model path) play NO UV animations.** A world-placed kind-4/5
+  object scrolls its material through the ObjectTable's uvAnim uniform, but a model created by a script
+  rides the rigid-vehicle draw path, which has no UV-anim lane — the material renders its frame 0
+  forever. Found 2026-08-05: the Pacific Park ferris wheel's blinking bulbs are a UVAnimDict
+  (`f13d` in `ferriswheel_lights.dff`, a film-strip texture) and the wheel shows static lights; the
+  CLEO script only rotates objects, so the blink cannot come from scripting either. Lifting this means
+  a UV-transform lane in the rigid draw path (the vehicle shader serves every car — change carefully):
+  planned as [plan 099](../plans/099-script-object-uv-anim/readme.md).

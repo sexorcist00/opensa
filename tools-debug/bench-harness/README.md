@@ -13,6 +13,13 @@ scenes, report protocols, the recording ritual, DPR caveats. This README is just
 - `gate-check.js` — WebGPU boot-gate verification: `canvas` mode reports which context type the game
   canvas holds (WebGPU is the only one since 074/13 deleted the three path); `sorry` mode launches WITHOUT
   WebGPU and expects the sorry screen.
+- `warnings.js` — the WARNING CATCHER (bug-round tool, 2026-08-05): same boot as `drive.js`, then lives in
+  the world for `<durationMs>` collecting every console warning/error, pageerror and WebGPU validation
+  message — deduped with counts — into `<out>.json` (+ HUD text + screenshot). `TAGS` also records info
+  lines (`[spawncar]`, `[cleo]`, `[stream]`, `[osmspike]` by default); `KEYS='Wait:5000;KeyW:4000;Enter:700'`
+  holds keys in sequence (`Wait` = idle — let a `?spawncar` retry land first); `FAIL_ON=error` turns it
+  into a CI gate. Point it at a reported spot with `?spawn=x,y,z&spawncar=…` and read the JSON instead of
+  a human reading DevTools.
 
 The served build is `serve-static`'s `/build` mount (`npm run serve:static`, port 3001) — it exposes the
 `/__index` listing + Range files the http-dir loader reads. (Plan 079 phase 3 retired the bespoke

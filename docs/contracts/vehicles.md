@@ -123,6 +123,13 @@ each as a `<part>_dummy` frame carrying a `<part>_ok` mesh and its `<part>_dam` 
   chassis) and it silently stays behind when the door opens — the comet mod's authoring is what surfaced
   this (2026-08-04). Stock cars author one atomic per door, so their doors carry no roster.
 - The damage system names parts **without** the suffix: `door_lf`, `bonnet`.
+- **Which FRONT doors exist decides how the player boards (2026-08-05).** Entry and the exit chain pick
+  among the sides whose `door_{lf|rf}` part the model actually carries: a model authored with only
+  `door_rf` (the coach — a real bus boards through its one front door) is entered from EITHER side via
+  that door, with the approach routed around the bumper, then the seat shuffle. A model with NO front
+  door parts keeps the near-side behaviour (the hinge fallback). Misspelling a door name is SILENT and
+  now changes boarding: `door_If` (capital i) reads as "this side has no door" and the player walks
+  around to the other one — `dump-vehicle-rig.ts`'s articulation list is the check.
 
 ### Dummies (frames with no mesh)
 

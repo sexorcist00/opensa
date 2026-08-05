@@ -49,6 +49,12 @@ Names that carry behaviour — the mod folder's files, the DFF frames, the lamp/
   and the handle rotates each member about the hinge, exactly as SA's frame rotation would. Stock cars
   author one atomic per door and carry no roster. Contract note (what happens when the glass is parented
   elsewhere): [`contracts/vehicles.md`](../contracts/vehicles.md).
+- **Boarding reads the model's doors** (2026-08-05): entry and the exit chain pick among the FRONT door
+  parts the model actually carries — a coach authored with only `door_rf` (a real bus's one front door)
+  is boarded from either side through it, the approach routed around the bumper, then the seat shuffle;
+  the enter RANGE measures to the vehicle's oriented footprint, not its centre (an 11 m body used to
+  spend the whole range on itself). The bundled "Car Left Door" CLEO script that does this with ped
+  tasks under SA stays class-C-inert — the model already says everything the ini file said.
 - **Retractable ("pop-up") headlights**, read off the model — there is no per-car list anywhere. A pop-up pod
   is a `misc_*` component (SA's generic moving-component slot) holding HEAD-LAMP faces, and it is authored
   PARKED: those faces look forward and DOWN into the nose. That pitch IS the feature, so the open angle is

@@ -109,6 +109,20 @@ describe('a rigid model bound to the world texture plan', () => {
       expect(() => engine.frame(camera)).not.toThrow();
       expect(rigidDraws()).toBe(0);
     });
+
+    it('releaseWorldArray KEEPS an array a live instance still draws with (the ferris-wheel eviction crash)', async () => {
+      const engine = await bootedEngine();
+      engine.textures.load(WORLD_ARRAY, textureArrayBytes());
+      const model = engine.createVehicleModel(mapObjectInit());
+      engine.createVehicle(model);
+      engine.frame(camera);
+
+      expect(engine.releaseWorldArray(WORLD_ARRAY)).toBe(false);
+      expect(engine.textures.has(WORLD_ARRAY)).toBe(true);
+      gpu.draws.length = 0;
+      engine.frame(camera);
+      expect(rigidDraws()).toBeGreaterThan(0);
+    });
   });
 
   describe('positive cases', () => {
@@ -117,6 +131,25 @@ describe('a rigid model bound to the world texture plan', () => {
       engine.textures.load(WORLD_ARRAY, textureArrayBytes());
       const model = engine.createVehicleModel(mapObjectInit());
       engine.createVehicle(model);
+      engine.frame(camera);
+
+      expect(rigidDraws()).toBeGreaterThan(0);
+    });
+
+    it('draws again after its array was released and reloaded — the cached bind group must not go stale', async () => {
+      const engine = await bootedEngine();
+      engine.textures.load(WORLD_ARRAY, textureArrayBytes());
+      const model = engine.createVehicleModel(mapObjectInit());
+      const instance = engine.createVehicle(model);
+      engine.frame(camera); // caches the model's bind group over the shared array
+
+      engine.destroyVehicle(instance);
+      expect(engine.releaseWorldArray(WORLD_ARRAY)).toBe(true);
+      expect(engine.textures.has(WORLD_ARRAY)).toBe(false);
+
+      engine.textures.load(WORLD_ARRAY, textureArrayBytes());
+      engine.createVehicle(model);
+      gpu.draws.length = 0;
       engine.frame(camera);
 
       expect(rigidDraws()).toBeGreaterThan(0);
