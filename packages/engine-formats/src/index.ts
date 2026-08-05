@@ -18,6 +18,18 @@ export {
   type OscellPlacement,
 } from './oscell';
 export {
+  decodeOscol,
+  encodeOscol,
+  type Oscol,
+  OSCOL_MAGIC,
+  OSCOL_NO_MATERIAL,
+  OSCOL_VERSION,
+  type OscolBox,
+  type OscolRegion,
+  type OscolSphere,
+  oscolTriangleCount,
+} from './oscol';
+export {
   decodeOsm,
   encodeOsm,
   type Osm,
