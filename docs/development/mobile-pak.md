@@ -59,6 +59,26 @@ Two things bite in practice:
 A texture over the cap is decoded rather than passed through — a DXT block cannot be resized while compressed —
 so `--max-texture` alone already implies re-encoding for the textures it touches.
 
+## One command, on the phone itself
+
+Everything below is what `npm run phone` (`scripts/phone.sh`) does in one go — convert if there is no pak,
+print what the pak carries, start both servers, print the URL to open. It exists because a field run is a
+ritual repeated dozens of times on a device with no keyboard, and every step of it that has to be retyped is
+a step that gets skipped:
+
+```bash
+npm run phone                                   # first run: converts, then serves
+npm run phone                                   # every run after: servers up, here is the link
+REBUILD=1 npm run phone                         # re-convert
+BAKE=0 OUT=./build/phone-plain npm run phone    # the other side of the collision A/B
+MODELS=0 npm run phone                          # skip the model convert (dispatch only — no physics)
+RECT=8,-8,11,-5 SPAWN=2495,-1687,20 npm run phone
+```
+
+It refuses to start if `game-src/original/data/gta.dat` is missing, and it never re-converts silently — a
+phone convert is minutes to hours. The rest of this page is the same recipe by hand, and the reasons behind
+each flag.
+
 ## Bake the collision too (097/3-01)
 
 A phone's CPU makes every main-thread spike several times worse, and the largest named one is a COL parse per

@@ -88,6 +88,7 @@
     "lint:code": "eslint .",
     "lint:commit": "commitlint --config .commitlintrc.cjs --edit",
     "lint:ts": "tsc --noEmit",
+    "phone": "bash scripts/phone.sh",
     "pre-commit": "lint-staged --config .lintstagedrc.cjs",
     "prepare": "husky",
     "preview": "vite preview",
