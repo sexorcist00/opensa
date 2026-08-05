@@ -47,11 +47,14 @@ flowchart LR
   setup["setupStreaming<br/>validate manifest · buildTime ·<br/>water · uv-anims"]:::engine
   worker["pak worker<br/>Range reads · .oswire → .oscell<br/>(pak bytes never on main thread)"]:::infra
   driver["StreamingDriver<br/>rings + hysteresis · ≤1 create/frame ·<br/>atomic HD↔LOD swap · eviction"]:::engine
+  col["PakCollisionSource<br/>.oscol ranges on the GAME grid (256)<br/>→ the game's collision streamer"]:::engine
   cells["CellStore<br/>.oscell → GPU buffers +<br/>recorded render bundle · pick()"]:::engine
   tex["TextureArrays<br/>.ostex → texture_2d_array ·<br/>per-ring residency + ref-keying"]:::engine
   frame[["frame graph<br/>replay bundles while frustum-visible"]]:::engine
 
   pak --> setup --> driver
+  setup --> col
+  col <--> worker
   driver <--> worker
   worker --> cells
   driver --> tex
@@ -79,6 +82,13 @@ flowchart LR
   PIVOT, so meshes reach past the grid rect (gostown mean 141 u, max 799 u — plan 087) and a grid-rect
   ring skipped cells whose geometry already sat inside the fog. **Per-ring texture residency**: a shared
   array is fetched with the first cell that draws it and released with the last.
+- **`stream/collision-source.ts`** — `PakCollisionSource`: the baked-collision half of the pak (plan
+  097/3-01), present only when the manifest carries `collision`. Reads an entry's range through the SAME pak
+  worker (keys prefixed `collision-`, so the driver ignores replies that are not its cells), de-dupes
+  concurrent reads of one cell, and answers `null` for a cell with no bake or a failed read — the game layer
+  then parses COL exactly as before. It publishes `cellSize` (the GAME grid, 256) because a consumer
+  streaming on another grid would be handed a NEIGHBOURING cell's colliders; `GtaSaWorldAdapter` refuses such
+  a source in its constructor.
 - **`world/cells.ts`** — `CellStore`: one `.oscell` becomes GPU buffers + a recorded `GPURenderBundle`
   replayed while frustum-visible; also the debugger's ray `pick()` over the placement mapper (parsed only
   under `debugPicking`).

@@ -1,6 +1,7 @@
 import type { RegionColliders } from '@opensa/renderware';
 
 import { decodeOscol, encodeOscol } from '@opensa/engine-formats';
+import { bakedModelColliders } from '@opensa/game/adapters/baked-collision';
 import { toModelColliders } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { Matrix4 } from '@opensa/math';
 import { describe, expect, it } from 'vitest';
@@ -68,6 +69,25 @@ describe('bakeCellCollision', () => {
       expect(baked.materials).toEqual(runtime.shape.materials);
       expect(baked.vertices).toEqual(runtime.shape.vertices);
       expect(baked.name).toBe(runtime.name);
+    });
+
+    it('reads back through the RUNTIME path as the colliders the COL parse would have built', () => {
+      // The whole loop the plan buys: regions → bake → container → the runtime's read. If these two ever
+      // disagree, the world the player collides with stops being the world the converter saw.
+      const source = regionColliders();
+
+      const [baked] = bakedModelColliders(decodeOscol(encodeOscol(bakeCellCollision([source]))));
+      const runtime = toModelColliders(source);
+
+      expect(baked.name).toBe(runtime.name);
+      expect(baked.shape.indices).toEqual(runtime.shape.indices);
+      expect(baked.shape.materials).toEqual(runtime.shape.materials);
+      expect(baked.shape.vertices).toEqual(runtime.shape.vertices);
+      expect(baked.shape.boxes).toEqual(runtime.shape.boxes);
+      expect(baked.shape.spheres).toEqual(runtime.shape.spheres);
+      expect(baked.transforms.map((matrix) => matrix.elements)).toEqual(
+        runtime.transforms.map((matrix) => matrix.elements),
+      );
     });
 
     it('survives the round trip through .oscol with its placements intact', () => {

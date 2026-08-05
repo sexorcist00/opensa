@@ -430,6 +430,10 @@ async function boot(
   // COL cells around the player on the game's own 256-unit grid (independent of the pak's render grid).
   hud.textContent = 'own engine: preparing collision…';
   const adapter = new GtaSaWorldAdapter({
+    // Baked collision (097/3-01): present only when the pak was built with `--bake-collision`, and then the
+    // browser never parses that cell's COL. The adapter refuses a source keyed on a grid other than the one
+    // below — the mismatch is silent otherwise.
+    ...(setup.collision ? { bakedCollision: setup.collision } : {}),
     cellSize: GAME_CELL_SIZE,
     // Procedural clutter (074/19 B7·d): the engine now RENDERS the clutter (instanced), so it collides it too —
     // driven by ONE budget with the render (a per-category density lottery capped at 150/cell, lowest lotteries

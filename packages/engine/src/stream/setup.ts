@@ -9,6 +9,7 @@ import { ospakRequiredFeatures, validateOspakManifest } from '@opensa/engine-for
 import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
 
+import { PakCollisionSource } from './collision-source';
 import { StreamingDriver, type StreamingRadii } from './streaming';
 
 /**
@@ -31,6 +32,9 @@ export interface StreamSetup {
    *  runtime config's copy, which a pak converted at another size would contradict. */
   cellSize: number;
   center: [number, number, number];
+  /** Baked cell collision (097/3-01), when the pak carries it — the host hands this to whatever streams
+   *  collision, and a pak built without `--bake-collision` simply has none. */
+  collision?: PakCollisionSource;
   driver: StreamingDriver;
   radius: number;
   /** Baked water mesh pointer (074/06 row 12 v2) — a loose binary next to the manifest. */
@@ -154,6 +158,11 @@ export async function setupStreaming(
     ...(manifest.buildTime !== undefined ? { buildTime: manifest.buildTime } : {}),
     cellSize,
     center: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
+    // Both fields or neither: `buildOspak` writes `collisionCellSize` with the entries and
+    // `validateOspakManifest` rejects a manifest carrying one without the other.
+    ...(manifest.collision !== undefined && manifest.collisionCellSize !== undefined
+      ? { collision: new PakCollisionSource(manifest, worker) }
+      : {}),
     ...(manifest.water !== undefined ? { water: manifest.water } : {}),
     driver: new StreamingDriver(engine, manifest, worker, radii),
     radius: Math.max((maxX - minX) / 2, (maxZ - minZ) / 2, 400),

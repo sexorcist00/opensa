@@ -1,5 +1,6 @@
 import type { parsePedDefs } from '@opensa/renderware';
 
+import { decodeOscol } from '@opensa/engine-formats';
 // The deep path rather than the package index — see the note in streaming/collision-streaming.system.ts.
 import { frameSpans } from '@opensa/engine/debug/frame-spans';
 // game/adapters/** (and game/mods/**) are the only places allowed to import renderware.
@@ -67,6 +68,7 @@ import type { VehiclePlacement } from '../vehicle/vehicle-lod.system';
 import type { City } from '../zones/city';
 import type { VehicleRigData } from './engine-vehicle-handle';
 
+import { type BakedCollisionSource, bakedModelColliders } from './baked-collision';
 import { carGeneratorPlacements } from './car-generators';
 import { extractPlateSources } from './plate-sources';
 import { randomCarPlacements } from './popcycle-cars';
@@ -126,6 +128,11 @@ export interface EngineVehicleData {
 }
 
 export interface GtaSaWorldConfig {
+  /** The pak's baked cell collision (plan 097/3-01), when it carries one — the COL bind is skipped for every
+   *  cell the bake covers. Absent (or a pak built without `--bake-collision`) simply keeps the COL path.
+   *  Its grid must be {@link GtaSaWorldConfig.cellSize}: the constructor refuses a source keyed on another,
+   *  because the symptom of a mismatch is a neighbouring cell's colliders, not missing ones. */
+  bakedCollision?: BakedCollisionSource;
   cellSize: number;
   /**
    * Give the procedural clutter (grass, rocks, cacti) COLLIDERS at all.
@@ -176,12 +183,16 @@ interface VehiclePaint {
 export class GtaSaWorldAdapter implements WorldAdapter {
   readonly cellSize: number;
 
+  /** The pak's baked collision (plan 097/3-01), or null when this pak carries none. */
+  private readonly baked: BakedCollisionSource | null;
   /** Lowercased model names that "smash" per object.dat but carry no RW Breakable atomic (plan 045) —
    *  their shatter mesh is synthesized from the render geometry. Built in {@link prepare}. */
   private readonly breakableModels = new Set<string>();
   /** `cargrp.dat` groups for random map-car resolution (plan 059); null when absent. */
   private carGroups: CarGroup[] | null = null;
-  private readonly colliderCache = new Map<string, ModelColliders[]>();
+  /** Per-cell colliders, cached as the PROMISE so two callers asking for the same cell share one build
+   *  (the baked path awaits a pak read, so a second ask can arrive while the first is in flight). */
+  private readonly colliderCache = new Map<string, Promise<ModelColliders[]>>();
   private readonly config: GtaSaWorldConfig;
   /** Catalog defs by lowercased model name — resolves procobj clutter models to their TXDs. */
   private defByName: Map<string, IdeObjectDef> | null = null;
@@ -217,6 +228,18 @@ export class GtaSaWorldAdapter implements WorldAdapter {
   constructor(config: GtaSaWorldConfig) {
     this.config = config;
     this.fs = config.fs;
+    // The grid check is the whole guard against the trap this bake has: collision streams on the GAME grid
+    // (256) while the pak's render cells are 250, and a bake keyed on the other one hands back a
+    // NEIGHBOURING cell's colliders — the world renders correctly and the player falls through parts of it.
+    // See `docs/restrictions/architecture.md`.
+    if (config.bakedCollision !== undefined && config.bakedCollision.cellSize !== config.cellSize) {
+      throw new Error(
+        `baked collision is keyed on a ${config.bakedCollision.cellSize}-unit grid but collision streams on ` +
+          `${config.cellSize} — the pak was baked for a different grid, and using it would place every ` +
+          `collider in the wrong cell`,
+      );
+    }
+    this.baked = config.bakedCollision ?? null;
     this.cellSize = config.cellSize;
   }
 
@@ -274,7 +297,7 @@ export class GtaSaWorldAdapter implements WorldAdapter {
         continue;
       }
       const cutoff = Math.min(this.config.procObjDensityOf?.(batch.category) ?? 1, cap);
-      const breakable = this.isClutterBreakable(def.modelName);
+      const breakable = this.isBreakableModel(def.modelName);
       const floats: number[] = [];
       const hashes: number[] = [];
       for (const placement of batch.placements) {
@@ -418,50 +441,19 @@ export class GtaSaWorldAdapter implements WorldAdapter {
 
   // eslint-disable-next-line
   async loadCellColliders(cx: number, cy: number): Promise<ModelColliders[]> {
-    if (!this.defs || !this.grid) {
-      throw new Error('GtaSaWorldAdapter.loadCellColliders called before prepare()');
-    }
     const key = `${cx},${cy}`;
-    let colliders = this.colliderCache.get(key);
-    if (!colliders) {
-      // NO SPAN HERE. This looks like out-of-loop work and is not: the body runs synchronously to the first
-      // `await` (there is none), and the only caller in a normal run is `CollisionStreamingSystem.load()`,
-      // inside `collision.update()` — which the frame loop already times as its `collision` block. A span
-      // would be subtracted from `dt` a second time; the field drive of 2026-08-02 read
-      // `collision 76.0 · other 30.0 (cell-collision-read 75.7 … unattributed -65.9)` for exactly that
-      // reason. See `docs/restrictions/architecture.md` and 091's field verdict.
-      const index = buildCollisionIndex(this.fs);
-      const archive = this.fs;
-      const breakableModels = this.breakableModels;
-      colliders = buildCellColliders(index, this.defs, this.grid, cx, cy).map((region) =>
-        // Tag breakable-prop placements with their instance keys (plan 045) so a smashed prop's one
-        // static body can be dropped — keyed the same way the render registry keys the prop. Matches
-        // the render gate: a RW Breakable atomic OR an object.dat smash effect (render-geometry shatter).
-        tagBreakable(
-          toModelColliders(region),
-          getBreakable(archive, region.name) !== undefined || breakableModels.has(region.name),
-        ),
-      );
-      // Clutter collision (plan 042): models that ship a COL collide (rocks/cacti/trees);
-      // grass and flower patches have none, so they stay walk-through — like vanilla. The
-      // collidable subset follows the live per-category density (no invisible obstacles) — and a renderer
-      // that draws no clutter at all asks for none of it.
-      const batches = this.config.clutterColliders === false ? null : this.cellProcObjBatches(cx, cy);
-      if (batches) {
-        const clutter = procObjColliders(index, batches, {
-          densityOf: this.config.procObjDensityOf,
-          lotteryCap: procObjLotteryCap(batches, this.config.procObjLimit),
-        });
-        // Breakable clutter (074/20): 6 of 56 procobj models shatter (cactus/rubble/rock) — tag their colliders
-        // with the SAME per-instance key the render carries, so a hit resolves to the instance to degenerate.
-        colliders.push(
-          ...clutter.map((region) => tagBreakable(toModelColliders(region), this.isClutterBreakable(region.name))),
-        );
-      }
-      this.colliderCache.set(key, colliders);
+    let pending = this.colliderCache.get(key);
+    if (pending === undefined) {
+      // The cache holds the PROMISE, not the result: with a baked pak this path awaits a range read, so two
+      // callers wanting the same cell (the streamer and the debug wireframe) would otherwise build it twice.
+      // A rejected read is evicted — a poisoned key that can never be retried is a failure mode this project
+      // has already paid for once (the stuck-at-LOD blob mark).
+      pending = this.assembleColliders(cx, cy);
+      pending.catch(() => this.colliderCache.delete(key));
+      this.colliderCache.set(key, pending);
     }
 
-    return colliders;
+    return pending;
   }
 
   /**
@@ -576,6 +568,44 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     };
   }
 
+  /**
+   * One cell's colliders: the pak's BAKE when it carries one for this cell (plan 097/3-01), the COL bind
+   * otherwise — plus the procedural clutter, which both paths share.
+   *
+   * The two branches must agree shape for shape: `.oscol` was written by the converter from the same
+   * `RegionColliders` the COL branch builds here, with `toModelColliders` as the bake's test oracle
+   * (`tools/opensa-pack/src/pack-collision.test.ts`).
+   */
+  private async assembleColliders(cx: number, cy: number): Promise<ModelColliders[]> {
+    const { defs, grid } = this;
+    if (!defs || !grid) {
+      throw new Error('GtaSaWorldAdapter.loadCellColliders called before prepare()');
+    }
+    const baked = this.baked?.has(cx, cy) === true ? await this.baked.read(cx, cy) : null;
+    if (baked !== null) {
+      // Everything from here runs in a promise CONTINUATION — between frames, where no loop timer reaches —
+      // so it times itself into a span (plan 091 phase 2), exactly like `cell-collision-bodies` does.
+      return frameSpans.measure('cell-collision-decode', () => [
+        ...bakedModelColliders(decodeOscol(baked)).map((model) => this.withBreakableKeys(model)),
+        ...this.clutterColliders(cx, cy),
+      ]);
+    }
+    // NO SPAN HERE. This looks like out-of-loop work and is not: with no bake to await, the body runs
+    // synchronously to the end, and the only caller in a normal run is `CollisionStreamingSystem.load()`,
+    // inside `collision.update()` — which the frame loop already times as its `collision` block. A span
+    // would be subtracted from `dt` a second time; the field drive of 2026-08-02 read
+    // `collision 76.0 · other 30.0 (cell-collision-read 75.7 … unattributed -65.9)` for exactly that
+    // reason. See `docs/restrictions/architecture.md` and 091's field verdict.
+    const index = buildCollisionIndex(this.fs);
+
+    return [
+      ...buildCellColliders(index, defs, grid, cx, cy).map((region) =>
+        this.withBreakableKeys(toModelColliders(region)),
+      ),
+      ...this.clutterColliders(cx, cy),
+    ];
+  }
+
   /** Deterministic clutter batches for one cell (plan 042), or null when the procobj data files
    *  were absent. Shared by the render path (loadCell) and the collider path (loadCellColliders) —
    *  same inputs give byte-identical batches, so visuals and collision always agree. */
@@ -593,6 +623,30 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     this.procObjBatchCache.set(key, batches);
 
     return batches;
+  }
+
+  /**
+   * Clutter collision (plan 042): models that ship a COL collide (rocks/cacti/trees); grass and flower
+   * patches have none, so they stay walk-through — like vanilla. The collidable subset follows the live
+   * per-category density (no invisible obstacles) — and a renderer that draws no clutter at all asks for
+   * none of it.
+   *
+   * **The bake does not cover this**, and that is why a baked cell still touches the COL index: the scatter
+   * is seeded per cell from the cell's own collision surfaces, and its density cutoff is a LIVE knob.
+   */
+  private clutterColliders(cx: number, cy: number): ModelColliders[] {
+    const batches = this.config.clutterColliders === false ? null : this.cellProcObjBatches(cx, cy);
+    if (!batches) {
+      return [];
+    }
+    const clutter = procObjColliders(buildCollisionIndex(this.fs), batches, {
+      densityOf: this.config.procObjDensityOf,
+      lotteryCap: procObjLotteryCap(batches, this.config.procObjLimit),
+    });
+
+    // Breakable clutter (074/20): 6 of 56 procobj models shatter (cactus/rubble/rock) — tag their colliders
+    // with the SAME per-instance key the render carries, so a hit resolves to the instance to degenerate.
+    return clutter.map((region) => this.withBreakableKeys(toModelColliders(region)));
   }
 
   /** Lazily load popcycle.dat + cargrp.dat for random map-car resolution (plan 059) — absent-tolerant: either
@@ -623,9 +677,9 @@ export class GtaSaWorldAdapter implements WorldAdapter {
     this.handling = parseHandling(handling); // stored for the later vehicle-physics phase
   }
 
-  /** A clutter model that shatters (074/20): a DFF Breakable shatter mesh or an object.dat smash effect —
-   *  the SAME gate the static breakable props use. */
-  private isClutterBreakable(name: string): boolean {
+  /** A model that shatters (plan 045 / 074/20): a DFF Breakable shatter mesh or an object.dat smash effect.
+   *  ONE gate for map props and clutter alike — the render registry keys both the same way. */
+  private isBreakableModel(name: string): boolean {
     return getBreakable(this.fs, name) !== undefined || this.breakableModels.has(name);
   }
 
@@ -712,6 +766,13 @@ export class GtaSaWorldAdapter implements WorldAdapter {
       tractionMult: num(7, 0.75),
       turnMass: num(1, 3000),
     };
+  }
+
+  /** A model's colliders with the breakable-prop instance keys attached when the model shatters (plan 045),
+   *  so a smashed prop's one static body can be dropped — keyed exactly the way the render registry keys the
+   *  placement. A pass-through for everything else. */
+  private withBreakableKeys(model: ModelColliders): ModelColliders {
+    return tagBreakable(model, this.isBreakableModel(model.name));
   }
 }
 

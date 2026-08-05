@@ -20,6 +20,8 @@ import type { OspakManifest } from '@opensa/engine-formats';
 import type { Engine } from '../engine';
 import type { PakWorkerRequest, PakWorkerResponse } from './pak-worker';
 
+import { COLLISION_KEY_PREFIX } from './collision-source';
+
 const HD_RADIUS = 380;
 const LOD_RADIUS = 1000;
 const HYSTERESIS = 60;
@@ -422,6 +424,11 @@ export class StreamingDriver {
     // enters `blobs`: it has no slot, so the stale-blob prune would throw it away. The expensive (layer,
     // mip) writes drain from `update` under UPLOAD_BUDGET_MS — a whole-array upload here ran between
     // frames at 15-85 ms a call, invisible to every in-loop timer.
+    // Baked collision shares this worker (097/3-01) and its replies land here too — they belong to
+    // `PakCollisionSource`, and a blob with no cell slot would be pruned away a frame later anyway.
+    if (message.key.startsWith(COLLISION_KEY_PREFIX)) {
+      return;
+    }
     if (message.key.startsWith('array-')) {
       if (message.buffer) {
         this.engine.textures.beginLoad(Number(message.key.slice('array-'.length)), new Uint8Array(message.buffer));

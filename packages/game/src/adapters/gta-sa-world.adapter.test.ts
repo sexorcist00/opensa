@@ -1,7 +1,10 @@
 import type * as Renderware from '@opensa/renderware';
 
+import { encodeOscol } from '@opensa/engine-formats';
 import { Matrix4 } from '@opensa/math';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { BakedCollisionSource } from './baked-collision';
 
 import { GtaSaWorldAdapter, toModelColliders, tyreAdhesionPerMaterial } from './gta-sa-world.adapter';
 
@@ -221,6 +224,93 @@ describe('GtaSaWorldAdapter cell streaming', () => {
       const second = await adapter.loadCellColliders(0, 0);
 
       expect(second).toBe(first);
+    });
+  });
+});
+
+describe('GtaSaWorldAdapter baked collision (097/3-01)', () => {
+  /** One baked cell, as the pak would hand it over: a region no COL in this fixture could produce, so a
+   *  collider named `baked_road` proves the bytes came from the pak and not from a parse. */
+  const bakedCell = (): Uint8Array =>
+    encodeOscol({
+      regions: [
+        {
+          boxes: [],
+          indices: Uint32Array.from([0, 1, 2]),
+          materials: Uint8Array.from([13]),
+          name: 'baked_road',
+          spheres: [],
+          transforms: [Float32Array.from(new Matrix4().setPosition(4, 5, 6).elements)],
+          vertices: Float32Array.from([0, 0, 0, 1, 0, 0, 1, 1, 0]),
+        },
+      ],
+    });
+
+  function source(overrides: Partial<BakedCollisionSource> = {}): BakedCollisionSource & { reads: string[] } {
+    const reads: string[] = [];
+
+    return {
+      cellSize: 250,
+      has: (): boolean => true,
+      read: async (cx, cy): Promise<null | Uint8Array> => {
+        reads.push(`${cx},${cy}`);
+
+        return Promise.resolve(bakedCell());
+      },
+      reads,
+      ...overrides,
+    };
+  }
+
+  describe('negative cases', () => {
+    it('refuses a bake keyed on a different grid than collision streams on', () => {
+      // The silent trap: 250 vs 256 hands back a NEIGHBOURING cell's colliders, and the world still renders.
+      expect(() => new GtaSaWorldAdapter({ ...cfg(), bakedCollision: source({ cellSize: 256 }) })).toThrow(
+        /256-unit grid but collision streams on 250/,
+      );
+    });
+
+    it('never reads the pak for a cell the bake does not cover', async () => {
+      const baked = source({ has: (): boolean => false });
+      const adapter = new GtaSaWorldAdapter({ ...cfg(), bakedCollision: baked });
+      await adapter.prepare();
+
+      expect(await adapter.loadCellColliders(0, 0)).toEqual([]);
+      expect(baked.reads).toEqual([]);
+    });
+
+    it('falls back to parsing COL when the read fails, rather than leaving the cell without collision', async () => {
+      const baked = source({ read: async (): Promise<null> => Promise.resolve(null) });
+      const adapter = new GtaSaWorldAdapter({ ...cfg(), bakedCollision: baked });
+      await adapter.prepare();
+
+      expect(await adapter.loadCellColliders(0, 0)).toEqual([]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('builds the cell from the pak’s bake instead of the archive', async () => {
+      const baked = source();
+      const adapter = new GtaSaWorldAdapter({ ...cfg(), bakedCollision: baked });
+      await adapter.prepare();
+
+      const models = await adapter.loadCellColliders(2, -3);
+
+      expect(models.map((model) => model.name)).toEqual(['baked_road']);
+      expect(models[0].shape.materials).toEqual(Uint8Array.from([13]));
+      expect(models[0].transforms[0].elements.slice(12, 15)).toEqual([4, 5, 6]);
+      expect(baked.reads).toEqual(['2,-3']);
+    });
+
+    it('reads a cell ONCE even when two callers ask while the pak read is in flight', async () => {
+      const baked = source();
+      const adapter = new GtaSaWorldAdapter({ ...cfg(), bakedCollision: baked });
+      await adapter.prepare();
+
+      const [first, second] = await Promise.all([adapter.loadCellColliders(0, 0), adapter.loadCellColliders(0, 0)]);
+
+      expect(second).toBe(first);
+      expect(baked.reads).toEqual(['0,0']);
     });
   });
 });

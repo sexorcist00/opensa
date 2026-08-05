@@ -24,15 +24,39 @@ bundle rather than beside it.
 The single largest named cost is a **parse of a 2004 file at runtime**. We have our own formats; there is no
 reason a browser ever sees a COL.
 
-**Landed so far: the container and the bake, not the plumbing.** `.oscol`
+**Landed: the container, the bake and the runtime read.** `.oscol`
 (`packages/engine-formats/src/oscol.ts`) carries a cell's regions — flat vertex/index arrays, primitive
 boxes and spheres, the world transforms of every placement, and the per-triangle surface table, with the
 writer refusing a surface table that is not exactly one id per triangle. `bakeCellCollision`
 (`tools/opensa-pack/src/pack-collision.ts`) produces it, and its test uses the runtime's own
 `toModelColliders` as the oracle so the bake cannot quietly disagree with the path it replaces. The pak carries it too: a `collision`
 entry kind plus `collisionCellSize` in the manifest, and `opensa-pack --bake-collision` fills them (off by
-default — it costs build time and nothing reads the entries yet). **Still to do: the runtime read**, which
-is what actually removes the spike, and the before/after that proves it.
+default — it costs build time).
+
+The read (2026-08-05) is three pieces. `PakCollisionSource`
+(`packages/engine/src/stream/collision-source.ts`) fetches an entry's range through the SAME pak worker the
+cells use — keys prefixed `collision-` so the streaming driver ignores replies that are not its cells — and
+de-dupes concurrent reads of one cell. `bakedModelColliders`
+(`packages/game/src/adapters/baked-collision.ts`) re-wraps the decoded regions as the `ModelColliders` the
+physics layer already consumes, surface bytes carried straight through. `GtaSaWorldAdapter.loadCellColliders`
+asks `has(cx, cy)` FIRST, so a cell with no bake never introduces an `await`, and the COL branch stays
+byte-for-byte the path it always was — including its "no span here" reasoning, which only holds while that
+branch is synchronous. A baked cell's decode runs in a promise continuation and therefore times ITSELF, as
+`cell-collision-decode`.
+
+**Three fallbacks, all quiet by design**: a cell the bake does not cover, a pak built without the bake, and a
+failed range read (warned once per key) each parse COL exactly as before. The failure a run must NOT survive
+quietly is the grid one, so the adapter throws when the source's grid is not the grid collision streams on —
+the restriction's "caught: no" becomes "caught, for the mismatch that has actually happened".
+
+**Still to do: the before/after.** Nothing here has been run against a real pak — the claim is a CI fact
+until a field capture shows the census without `cell-collision-read`-shaped work on a cold district entry.
+
+**What the read does NOT remove, measured or not:** the procobj scatter still binds COL regions per cell (it
+is seeded from the cell's own collision surfaces and its density is a LIVE knob), and the breakable gate
+still opens a model's DFF per new model. Both keep `buildCollisionIndex` alive on a baked run, so a
+clutter-enabled cell is cheaper but not archive-free. The DFF half is next (02's neighbour: the bake can
+carry the breakable decision, since `.oscol` already has the field for it); the scatter is a step of its own.
 
 **The grid is the trap, and it is recorded as a restriction**: collision streams on `GAME_CELL_SIZE` (256)
 while the pak's render cells are 250. A bake keyed on the render grid hands back the *wrong* cell's

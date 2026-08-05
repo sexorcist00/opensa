@@ -72,7 +72,10 @@ other 223.6 (vehicle-model:tampa 4.9 · vehicle-osm:tampa 1.2 · cell-collision-
 
 Spans today: `vehicle-osm:<model>` (the `.osm` section read + parse) · `vehicle-model:<model>` (the GPU
 upload) · `vehicle-spawn:<model>` (the physics body, rig and plate) · `cell-collision-bodies` (Rapier static
-colliders, built in a `.then()`). **`unattributed` is always printed** — a run that hides it is reporting only
+colliders, built in a `.then()`) · `cell-collision-decode` (a BAKED cell's `.oscol` → colliders, plan
+097/3-01 — it exists only on a pak built with `--bake-collision`, and only there does the collider build run
+in a continuation at all; the COL path is synchronous inside the loop's `collision` block and must stay
+unwrapped). **`unattributed` is always printed** — a run that hides it is reporting only
 the half it can see. To add a span, read the two rules in
 [`restrictions/architecture.md`](../restrictions/architecture.md) first; `cell-collision-read` was deleted on
 2026-08-02 for breaking one of them.

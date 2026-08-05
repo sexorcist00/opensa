@@ -59,9 +59,16 @@ the origin. `bakeCellCollision` (`tools/opensa-pack/src/pack-collision.ts`) take
 already resolved for exactly this reason: the grid choice belongs to whoever called `buildCellColliders`,
 and it must be the same one the key is written with.
 
-**Caught:** no, and the symptom is worse than the LOD case above — the world renders correctly and the
-player falls through some of it while standing on nothing elsewhere, which reads as a physics bug rather
-than a bake bug.
+**Caught:** partly, since 2026-08-05. The pak states the grid its collision entries are keyed on
+(`collisionCellSize`, written beside the entries and required by `validateOspakManifest`), the engine's
+`PakCollisionSource` publishes it, and `GtaSaWorldAdapter` **throws** when it does not equal the grid
+collision streams on. That catches the mismatch that has actually happened — a bake keyed on the render
+grid handed to the game — at construction, not in the field.
+
+What is still **silent**: a bake written with the right cell SIZE but the wrong cell coordinates (an
+off-by-one rect, a converter reusing the render rect's numbers). Nothing compares a baked cell's contents
+with the world at that key, and the symptom is unchanged — the world renders correctly and the player falls
+through some of it while standing on nothing elsewhere, which reads as a physics bug rather than a bake bug.
 
 ## A frame-time span may only wrap synchronous work that runs BETWEEN frames
 

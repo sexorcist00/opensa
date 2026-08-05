@@ -39,6 +39,7 @@ stays, pointing at the new home).
 | [Per-wheel surface probe vs surface-tagged colliders](deferred-optimizations/surface-probe-per-wheel.md) | fixed-step CPU | ~free today (driven car only); ~0.6 ms/step if ever run on all 80 cars | in reserve |
 | [Bake video-mode camera stations instead of surveying them live](deferred-optimizations/video-station-survey.md) | per-frame casts | ~free today (≤ 3 casts/frame, one shot in four); the win is HEADROOM for several tripods at once | in reserve |
 | [The speed camera's framing cost (FOV kick + distance gain)](deferred-optimizations/vehicle-speed-camera-framing.md) | GPU pass (fill) | ~×1.47 screen-projected world area at top speed; the field reads 50 fps flat-out vs 70–80 braking. Floor of the ladder: a STATIC framing, config-only, gives it all back | in reserve |
+| [Bake the procobj scatter, the way collision is now baked](deferred-optimizations/procobj-scatter-bake.md) | cold-cell main thread | unmeasured in isolation; it is the last per-cell COL work left on the collision path (and what keeps a whole-archive COL parse alive) | in reserve — opened by 097/3-01 |
 | [Camera position render interpolation](deferred-optimizations/camera-position-render-interpolation.md) | correctness (camera feel) | unlocked the 080/02 position weight + killed the run "doubling" | **PULLED 2026-07-25** |
 | [Budgeted texture-array uploads](applied/texture-upload-budget.md) | frame time (hitch) | one 85 ms stall → ~1.5 ms/frame | **PULLED 2026-07-27** — applied |
 
