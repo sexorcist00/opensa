@@ -55,7 +55,10 @@ game, version }`; each chunk is `{ bytes, cached, entries, file, hash }`), `mani
   **Invalidation** in `invalidate.ts` (pure `staleKeys`); **`clear()`** drops the whole bucket (revoke).
   Cache Storage needs a **secure context** (https / localhost); over plain `http://` (e.g. a phone on a LAN
   IP) `caches` is undefined, so every op degrades to a no-op — nothing is cached and assets re-download each
-  visit (no crash).
+  visit (no crash). **And it SAYS so** (plan 097/4-06): `cacheStorageStatus()` reports availability plus the
+  reason — discriminating on `isSecureContext`, because "serve over https" is the wrong advice for a secure
+  context that simply has no Cache Storage — the loader logs one line before the first byte, and the shell's
+  preloader carries it as a standing note. A silent no-op costs the whole game again on the next visit.
 
 ## Local loader (`asset-local-loader/`, plan 053)
 

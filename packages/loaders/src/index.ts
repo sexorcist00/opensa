@@ -8,7 +8,7 @@ import type { AssetLoader, AssetLoaderKind, AssetSink } from './types';
 import { AssetFetchLoader } from './asset-fetch-loader';
 import { AssetHttpDirLoader, AssetLocalLoader } from './asset-local-loader';
 
-export { AssetFetchLoader, type AssetFetchLoaderConfig } from './asset-fetch-loader';
+export { AssetFetchLoader, type AssetFetchLoaderConfig, cacheStorageStatus } from './asset-fetch-loader';
 export {
   assembleInstallSource,
   AssetHttpDirLoader,

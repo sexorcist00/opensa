@@ -57,14 +57,30 @@ produced an adapter. Chromium's Android 12+ rule turned out to be about the defa
 
 - Support the compatibility adapter path explicitly, and know what its reduced limits cost us (the 08-04
   device reported `core-features-and-limits`, so core limits applied — do not assume that everywhere).
-- When no adapter comes back, the shell must say something true and specific. Today's message guesses
-  ("blocklisted GPU or disabled flag?") — with the platform field from 1/01 it can do better.
+  **Still open, deliberately**: the 08-04 record does not say a compatibility ask succeeds where the default
+  fails — both were taken behind the same enabled flag — so a fallback ask would be a guess dressed as reach.
+  It waits for a device that refuses the default request and answers the compatibility one.
+- **DONE 2026-08-05 — the shell says which of the two it is.** `probeWebGpu` reports `no-api` / `no-adapter`
+  / `ok` instead of a boolean, and the sorry screen picks the message from it. "This browser does not support
+  WebGPU" was FALSE on the one device we have measured: a Mali-G51 on Chromium 148 has WebGPU and is refused
+  an ADAPTER by the driver blocklist, and telling that reader to install a recent Chrome is both wrong and
+  unactionable. A thrown request counts as a refused adapter — the API answered, so it exists.
 
 ## 06 — Secure context, or the phone re-downloads the world every visit
 
 Over plain `http://` — which is exactly how a phone reaches a dev machine on a LAN IP — `caches` is
 undefined and **every cache operation silently no-ops**. Nothing breaks; the assets just download again.
 Either the phone path is served over https, or the shell says the cache is off.
+
+**DONE 2026-08-05 — the shell says it.** `cacheStorageStatus()` (loaders) reports availability *and the
+reason*, the fetch loader logs one line before the first byte, and the preloader carries a standing note
+under the rotating status: *"This download will not be kept — …"*. The reason discriminates on
+`isSecureContext`, because "serve it over https" is the wrong instruction for a secure context that simply
+has no Cache Storage API. Only the `fetch` loader says it — a picked folder and a served dir are read where
+they are and never wanted a cache.
+
+What this does NOT do is make the phone path secure. It makes the cost visible at the moment it is paid,
+which is the difference between a measurement that includes an unintended download and one that says so.
 
 ## Acceptance
 

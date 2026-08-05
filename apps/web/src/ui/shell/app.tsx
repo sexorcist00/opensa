@@ -12,7 +12,7 @@ import { Menu } from './menu';
 import { Preloader } from './preloader';
 import { useAssetBoot } from './use-asset-boot';
 import { useFullscreen } from './use-fullscreen';
-import { probeWebGpuSupport } from './webgpu-gate';
+import { probeWebGpu, webGpuGateMessage, type WebGpuProbe } from './webgpu-gate';
 import './shell.css';
 
 // The heavy game surface is code-split — fetched only past the menu.
@@ -29,7 +29,7 @@ export function App(): ReactElement {
   const { phase } = boot.state;
   const { pause, resume } = boot;
   // null = probe in flight (resolves in ms, well before the folder pick).
-  const [webGpuOk, setWebGpuOk] = useState<boolean | null>(null);
+  const [webGpu, setWebGpu] = useState<null | WebGpuProbe>(null);
   /** The photo (fly) camera takes the screen — the shell's own chrome steps out of the shot. */
   const [photoMode, setPhotoMode] = useState(false);
 
@@ -40,9 +40,9 @@ export function App(): ReactElement {
 
   useEffect(() => {
     let cancelled = false;
-    void probeWebGpuSupport().then((ok) => {
+    void probeWebGpu().then((probe) => {
       if (!cancelled) {
-        setWebGpuOk(ok);
+        setWebGpu(probe);
       }
     });
 
@@ -71,15 +71,12 @@ export function App(): ReactElement {
   const showGame = phase === 'warmup' || phase === 'playing' || phase === 'paused';
   const showLoadingScreen = phase === 'loading' || phase === 'warmup';
 
-  if (webGpuOk === false) {
+  if (webGpu !== null && webGpu !== 'ok') {
     return (
       <div className="sa-shell">
         <div className="sa-stage sa-stage--col">
           <Logo className={SUBTITLED} />
-          <p className="sa-tagline">
-            Sorry — OpenSA runs on WebGPU, and this browser or device does not support it. Please use a recent Chrome or
-            Edge, or Safari 26+ on macOS.
-          </p>
+          <p className="sa-tagline">{webGpuGateMessage(webGpu)}</p>
         </div>
       </div>
     );
@@ -126,7 +123,7 @@ export function App(): ReactElement {
         </div>
       ) : null}
 
-      {phase === 'loading' ? <Preloader percent={boot.percent} status={boot.status} /> : null}
+      {phase === 'loading' ? <Preloader note={boot.cacheNote} percent={boot.percent} status={boot.status} /> : null}
       {phase === 'disclaimer' ? <Disclaimer onAccept={boot.acceptDisclaimer}>{boot.disclaimer}</Disclaimer> : null}
       {phase === 'error' ? <ErrorPanel detail={boot.detail} onRetry={boot.retry} /> : null}
       {phase === 'paused' ? (

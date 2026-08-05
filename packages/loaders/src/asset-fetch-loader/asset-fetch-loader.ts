@@ -11,7 +11,7 @@ import type { AssetLoader, AssetLoaderEvents, AssetSink, GroupChunk, GroupName, 
 import { Emitter } from '../emitter';
 import { allChunks, chunkUrl, chunkUrls, GROUP_NAMES, manifestDir, parseManifest } from '../manifest';
 import { ProgressTracker } from '../progress';
-import { CacheStore } from './cache-store';
+import { cacheStorageStatus, CacheStore } from './cache-store';
 import { staleKeys } from './invalidate';
 
 export interface AssetFetchLoaderConfig {
@@ -38,6 +38,8 @@ export class AssetFetchLoader implements AssetLoader {
   private readonly config: AssetFetchLoaderConfig;
   private dir = '';
   private manifest: Manifest | null = null;
+  /** The cache-off line is per LOAD, not per retry — a retry re-runs `init` and would repeat it. */
+  private reportedCache = false;
 
   constructor(config: AssetFetchLoaderConfig) {
     this.config = config;
@@ -47,6 +49,7 @@ export class AssetFetchLoader implements AssetLoader {
 
   /** Fetch + parse the manifest (always fresh), then evict cached chunks it no longer references. */
   async init(): Promise<Manifest> {
+    this.reportCache();
     let manifest: Manifest;
     try {
       const response = await fetch(this.config.manifestUrl, { cache: 'no-store' });
@@ -169,6 +172,23 @@ export class AssetFetchLoader implements AssetLoader {
       this.events.emit('error', { error, file: chunk.file });
       throw error;
     }
+  }
+
+  /**
+   * Say ONCE, before the first byte, that this visit's download is disposable (plan 097/4-06).
+   *
+   * The no-op cache breaks nothing — which is the problem. A phone reaching a dev machine at
+   * `http://<lan-ip>:5173` has no secure context, so every visit re-downloads the whole game over someone's
+   * connection, and the only symptom is that the second boot is as slow as the first.
+   */
+  private reportCache(): void {
+    const status = cacheStorageStatus();
+    if (status.available || this.reportedCache) {
+      return;
+    }
+    this.reportedCache = true;
+    // eslint-disable-next-line no-console -- the whole point of the line: without it the cost is invisible
+    console.warn(`[loader] downloads are NOT cached — ${status.reason}`);
   }
 }
 

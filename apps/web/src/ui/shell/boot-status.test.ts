@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { rotatingStatus, toPercent } from './boot-status';
+import { cacheNote, rotatingStatus, toPercent } from './boot-status';
 
 describe('toPercent', () => {
   describe('negative cases', () => {
@@ -30,6 +30,51 @@ describe('rotatingStatus', () => {
       expect(rotatingStatus(messages, 0)).toBe('a');
       expect(rotatingStatus(messages, 4)).toBe('b');
       expect(rotatingStatus(messages, -1)).toBe('c');
+    });
+  });
+});
+
+describe('cacheNote', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  describe('negative cases', () => {
+    it('says nothing for a loader that does not download — a folder is read where it is', () => {
+      vi.stubGlobal('caches', undefined);
+      vi.stubGlobal('isSecureContext', false);
+
+      expect(cacheNote('local')).toBe('');
+      expect(cacheNote('http-dir')).toBe('');
+    });
+
+    it('says nothing when the download IS kept', () => {
+      vi.stubGlobal('caches', { open: (): void => undefined });
+
+      expect(cacheNote('fetch')).toBe('');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('names the insecure context, because https is the fix the reader can act on', () => {
+      vi.stubGlobal('caches', undefined);
+      vi.stubGlobal('isSecureContext', false);
+
+      const note = cacheNote('fetch');
+
+      expect(note).toMatch(/will not be kept/);
+      expect(note).toMatch(/secure context/);
+      expect(note).toMatch(/https/);
+    });
+
+    it('does not blame the protocol when the context IS secure — that instruction would be wrong', () => {
+      vi.stubGlobal('caches', undefined);
+      vi.stubGlobal('isSecureContext', true);
+
+      const note = cacheNote('fetch');
+
+      expect(note).toMatch(/no Cache Storage API/);
+      expect(note).not.toMatch(/https/);
     });
   });
 });

@@ -123,6 +123,17 @@
   text-transform: uppercase;
 }
 
+/* The standing note (097/4-06): a sentence, not a status — it wraps, keeps its case, and must stay
+   readable on the 360 CSS px this chain targets. */
+.sa-status--note {
+  max-width: 420px;
+  letter-spacing: 0;
+  font-size: 12px;
+  text-align: center;
+  text-transform: none;
+  opacity: 0.8;
+}
+
 /* Tagline under the logo (the logo's own subtitle reads "open world. open source."). */
 .sa-tagline {
   max-width: 360px;

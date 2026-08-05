@@ -10,7 +10,7 @@ import type { BootState } from './boot-machine';
 
 import { GAME_CONFIG, type GameId } from '../../game-config';
 import { bootReducer, initialBootState } from './boot-machine';
-import { rotatingStatus, TEXTURE_STATUS, toPercent } from './boot-status';
+import { cacheNote, rotatingStatus, TEXTURE_STATUS, toPercent } from './boot-status';
 
 const BASE = import.meta.env.VITE_STATIC_URL;
 const NO_PROGRESS: ProgressSnapshot = { loadedBytes: 0, loadedChunks: 0, totalBytes: 0, totalChunks: 0 };
@@ -19,6 +19,8 @@ const STATUS_INTERVAL_MS = 3600;
 /** The shell's boot controller: drives the per-game loader/VFS by phase and exposes state + actions. */
 export interface AssetBoot {
   acceptDisclaimer: () => void;
+  /** What this load will NOT do, shown under the preloader; empty when there is nothing to say (097/4-06). */
+  cacheNote: string;
   /** Prompt for the install folder (local loader, user gesture) — unblocks loading. */
   chooseFolder: () => void;
   /** Last error message (for the error panel). */
@@ -158,6 +160,7 @@ export function useAssetBoot(): AssetBoot {
 
   return {
     acceptDisclaimer: useCallback((): void => dispatch({ type: 'DISCLAIMER_OK' }), []),
+    cacheNote: state.game ? cacheNote(loaderKind(state.game)) : '',
     // Local loader, from the folder screen: prompt for the install folder (the picker must run in this click —
     // its user gesture). On success the disclaimer counts as accepted and loading begins.
     chooseFolder: useCallback((): void => {
