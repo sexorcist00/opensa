@@ -1,5 +1,6 @@
 import type { AssetFileSystem, MapDefinitions } from '@opensa/renderware';
 
+import { GAME_CELL_SIZE } from '@opensa/cell-weld/cell-size';
 import { TexturePlanner } from '@opensa/cell-weld/textures';
 import {
   assembleCell,
@@ -13,12 +14,14 @@ import {
 } from '@opensa/cell-weld/weld';
 import {
   buildOspak,
+  encodeOscol,
   encodeOswire,
   OSCELL_VERTEX_STRIDE,
   oscellSections,
   type OspakInput,
   type OspakManifest,
 } from '@opensa/engine-formats';
+import { buildCellColliders, buildCollisionIndex } from '@opensa/renderware';
 import { getClump } from '@opensa/renderware/archive/asset-cache';
 import { breakableModelsFromText } from '@opensa/renderware/breakable/models';
 import { OPEN_SCRIPT_IPL, resolveMap } from '@opensa/renderware/map/resolve-map';
@@ -36,6 +39,7 @@ import type { WaterHeightGrid } from './height-grid';
 
 import { AO_MAX_DISTANCE, bakeAo, type BakeAoReport, buildOccluderBvh } from './ao';
 import { bakeCellsPooled, defaultBakeWorkers } from './bake-pool';
+import { bakeCellCollision, collisionCellRect } from './pack-collision';
 import { bakeSunVis, type BakeSunVisReport, SUNVIS_MAX_DISTANCE } from './sunvis';
 
 export interface ConvertOptions {
@@ -46,6 +50,10 @@ export interface ConvertOptions {
   /** Bake per-vertex AO/skyVis (074/07); on by default, `--no-ao` skips it. */
   ao?: boolean;
 
+  /** Bake every cell's COLLISION into the pak (plan 097/3-01), so the browser never parses a COL. Off by
+   *  default while the runtime still reads the archives — the bake costs build time and nothing reads the
+   *  entries yet. Keyed on the GAME grid, never on the render one. */
+  bakeCollision?: boolean;
   /** Bake pool size (074/14 A2); 1 = the serial in-process path. Default: a quarter of the cores. */
   bakeWorkers?: number;
   cellSize?: number;
@@ -268,6 +276,8 @@ export async function convertDistrict(
   // this plan (003 phase 5g).
   options.onWorldPlanned?.(planner, defs);
 
+  const collisionCells = options.bakeCollision ? bakeCollision(fs, defs, [x0, y0, x1, y1], cellSize, inputs, log) : 0;
+
   log('encoding texture arrays …');
   for (const array of planner.build()) {
     inputs.push(wireCompress({ bytes: array.bytes, key: `array-${array.ref}`, kind: 'texture', meta: array.meta }));
@@ -280,6 +290,7 @@ export async function convertDistrict(
   report.uvAnimations = uvAnimations.length;
   const { manifest, pak } = buildOspak(inputs, {
     cellSize,
+    ...(collisionCells > 0 ? { collisionCellSize: GAME_CELL_SIZE } : {}),
     missingLayers: planner.missingLayers, // buildOspak drops the key when the list is empty
     uvAnimations, // buildOspak drops the key when the list is empty
   });
@@ -346,6 +357,44 @@ async function bakeChunk(
   const sunStarted = Date.now();
   const sunBake = options.sunVis ? bakeSunVis(cells, bvh) : null;
   mergeBakeReports(report, aoBake, sunBake, aoMs, Date.now() - sunStarted);
+}
+
+/**
+ * Bake the district's collision onto the GAME grid and push one `.oscol` entry per non-empty cell.
+ *
+ * The rect conversion is the whole of the care here: the convert rect is in RENDER cells (250) and collision
+ * streams on 256, so the cells are re-derived through the world extent rather than reused
+ * (`collisionCellRect`). An empty cell contributes no entry — the runtime treats a missing key as "this pak
+ * has no bake for that cell" and falls back, which is also what an older pak looks like.
+ */
+function bakeCollision(
+  fs: AssetFileSystem,
+  defs: MapDefinitions,
+  renderRect: readonly [number, number, number, number],
+  cellSize: number,
+  inputs: OspakInput[],
+  log: (message: string) => void,
+): number {
+  const index = buildCollisionIndex(fs);
+  const grid = buildWorldGrid(defs, GAME_CELL_SIZE);
+  const [gx0, gy0, gx1, gy1] = collisionCellRect(renderRect, cellSize, GAME_CELL_SIZE);
+  let cells = 0;
+  let triangles = 0;
+  for (let cy = gy0; cy <= gy1; cy += 1) {
+    for (let cx = gx0; cx <= gx1; cx += 1) {
+      const regions = buildCellColliders(index, defs, grid, cx, cy);
+      if (regions.length === 0) {
+        continue;
+      }
+      const baked = bakeCellCollision(regions);
+      triangles += baked.regions.reduce((total, region) => total + region.indices.length / 3, 0);
+      inputs.push(wireCompress({ bytes: encodeOscol(baked), key: `${cx},${cy}`, kind: 'collision' }));
+      cells += 1;
+    }
+  }
+  log(`collision: baked ${cells} cells (${triangles} triangles) on the ${GAME_CELL_SIZE} game grid`);
+
+  return cells;
 }
 
 /** Build one roadsign's glyph quads and file them under the cell containing its WORLD position. */

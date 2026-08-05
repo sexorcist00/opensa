@@ -41,6 +41,9 @@ export interface PackOptions {
   alwaysOnLods?: readonly string[];
   /** Bake per-vertex AO/skyVis. ON by default — it stands in for prod's SSAO, so a shipping pak needs it. */
   ao?: boolean;
+  /** Bake every cell's COLLISION into the pak (plan 097/3-01) so the browser never parses a COL. OFF by
+   *  default while the runtime still reads the archives: it costs build time and nothing reads it yet. */
+  bakeCollision?: boolean;
   /** Bake per-vertex SUN VISIBILITY — the heavy shadow bake. OFF by default; production converts need it. */
   bakes?: boolean;
   /** Bake worker pool size; the default is a quarter of the cores. */
@@ -129,6 +132,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
       ? { alwaysOnLods: new Set(options.alwaysOnLods.map((name) => name.toLowerCase())) }
       : {}),
     ao,
+    ...(options.bakeCollision ? { bakeCollision: true } : {}),
     ...(options.bakeWorkers !== undefined ? { bakeWorkers: options.bakeWorkers } : {}),
     cellSize: CELL_SIZE,
     log,

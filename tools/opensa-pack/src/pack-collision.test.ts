@@ -5,7 +5,7 @@ import { toModelColliders } from '@opensa/game/adapters/gta-sa-world.adapter';
 import { Matrix4 } from '@opensa/math';
 import { describe, expect, it } from 'vitest';
 
-import { bakeCellCollision, bakeRegion } from './pack-collision';
+import { bakeCellCollision, bakeRegion, collisionCellRect } from './pack-collision';
 
 /**
  * The bake is only correct if it agrees with the path it replaces, so the oracle is that path itself:
@@ -77,6 +77,40 @@ describe('bakeCellCollision', () => {
       // Column-major: the translation is the last row of `Matrix4.elements`.
       expect([...baked.transforms[0]].slice(12, 15)).toEqual([12.5, -3, 7]);
       expect(baked.vertices).toEqual(Float32Array.from([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]));
+    });
+  });
+});
+
+describe('collisionCellRect', () => {
+  describe('negative cases', () => {
+    it('does NOT return the render rect unchanged — the grids only meet every 32 000 units', () => {
+      // Ganton, the district every mobile recipe in the docs converts.
+      expect(collisionCellRect([8, -8, 11, -5], 250, 256)).not.toEqual([8, -8, 11, -5]);
+    });
+
+    it('covers the whole world extent, so no strip of a district is left without collision', () => {
+      const [gx0, gy0, gx1, gy1] = collisionCellRect([8, -8, 11, -5], 250, 256);
+
+      // The render rect spans world x 2000…2999.99 and y -2000…-1250.01 (inclusive cells, half-open ends).
+      expect(gx0 * 256).toBeLessThanOrEqual(8 * 250);
+      expect((gx1 + 1) * 256).toBeGreaterThanOrEqual((11 + 1) * 250);
+      expect(gy0 * 256).toBeLessThanOrEqual(-8 * 250);
+      expect((gy1 + 1) * 256).toBeGreaterThanOrEqual((-5 + 1) * 250);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('normalises a rect given corner-first', () => {
+      expect(collisionCellRect([11, -5, 8, -8], 250, 256)).toEqual(collisionCellRect([8, -8, 11, -5], 250, 256));
+    });
+
+    it('is the identity when the two grids are the same', () => {
+      expect(collisionCellRect([3, -4, 5, -1], 256, 256)).toEqual([3, -4, 5, -1]);
+    });
+
+    it('handles the negative side, where flooring and truncation disagree', () => {
+      // -1 render cell spans world -250…-0.01; on the 256 grid that is entirely cell -1.
+      expect(collisionCellRect([-1, -1, -1, -1], 250, 256)).toEqual([-1, -1, -1, -1]);
     });
   });
 });

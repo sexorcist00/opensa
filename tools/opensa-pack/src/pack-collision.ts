@@ -58,3 +58,33 @@ export function bakeRegion(region: RegionColliders): OscolRegion {
     vertices: col.vertices,
   };
 }
+
+/**
+ * The GAME-grid cell rect covering the same world area as a RENDER-grid rect.
+ *
+ * Both rects are INCLUSIVE cell coordinates, and the two grids do not line up: 250 and 256 share a boundary
+ * only every 32 000 units, so a district's collision rect is never simply its render rect. Getting this
+ * wrong is the silent failure the restriction describes — colliders land in a neighbouring cell and the
+ * player falls through a strip of world that renders perfectly.
+ */
+export function collisionCellRect(
+  renderRect: readonly [number, number, number, number],
+  renderCellSize: number,
+  gameCellSize: number,
+): [number, number, number, number] {
+  const [x0, y0, x1, y1] = [
+    Math.min(renderRect[0], renderRect[2]),
+    Math.min(renderRect[1], renderRect[3]),
+    Math.max(renderRect[0], renderRect[2]),
+    Math.max(renderRect[1], renderRect[3]),
+  ];
+  // The render rect's world extent, half-open: cell x1 ends where x1+1 begins.
+  const toCell = (worldValue: number): number => Math.floor(worldValue / gameCellSize);
+
+  return [
+    toCell(x0 * renderCellSize),
+    toCell(y0 * renderCellSize),
+    toCell((x1 + 1) * renderCellSize - 1),
+    toCell((y1 + 1) * renderCellSize - 1),
+  ];
+}

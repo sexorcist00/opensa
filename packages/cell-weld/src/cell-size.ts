@@ -11,3 +11,16 @@
  * a tool.
  */
 export const CELL_SIZE = 250;
+
+/**
+ * The GAME cell size: the grid COLLISION streaming, procobj scatter and the LOD-impostor bake work on.
+ *
+ * Beside {@link CELL_SIZE} on purpose. The two are different tessellations of one world and have never been
+ * equal, so "per cell" is ambiguous the moment anything is precomputed per cell — and picking the wrong one
+ * for a collision bake does not lose colliders, it returns the WRONG cell's, which reads in the field as a
+ * physics bug rather than a bake bug (`docs/restrictions/architecture.md`).
+ *
+ * Declared here rather than in the app that used to own it, because the collision bake runs in `opensa-pack`
+ * (a `type:tool`) and a tool may not import an app.
+ */
+export const GAME_CELL_SIZE = 256;
