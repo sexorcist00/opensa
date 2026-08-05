@@ -18,7 +18,16 @@ export interface BuilderConfig {
    * {@link PACK_RECTS} (and auto-fits when the game has none). The old single hardcoded ±12 covered SA but
    * silently dropped a TC's far islands (plan 087 — a quarter of gostown's LOD map fell outside it).
    */
-  pack: { ao: boolean; bakes: boolean; bakeWorkers?: number; rect?: readonly [number, number, number, number] };
+  pack: {
+    ao: boolean;
+    /** Bake every cell's COLLISION into the pak (plan 097/3-01). OFF by default: the runtime reads it when
+     *  it is there and parses COL when it is not, so this is the A/B switch — two paks from the same tree,
+     *  one flag apart — not a decision the builder should be making for a field run. `--bake-collision`. */
+    bakeCollision: boolean;
+    bakes: boolean;
+    bakeWorkers?: number;
+    rect?: readonly [number, number, number, number];
+  };
   /** LOD texture size for the procobj bake. */
   procobjTex: number;
   /** The `--in` (mods-src) subfolder names, one per stage. */
@@ -65,7 +74,7 @@ export const config: BuilderConfig = {
   // 2026-07-19) — the gating logic itself is due for a rework, and until then a pipeline run should not
   // pay for it. A shipping build wants it back: without sun-vis the direct sun renders unshadowed under
   // bridges and in canyons.
-  pack: { ao: true, bakes: false },
+  pack: { ao: true, bakeCollision: false, bakes: false },
   procobjTex: 128,
   subfolders: { mods: 'mods', peds: 'peds', procobj: 'procobj', vegetation: 'vegetation', vehicles: 'vehicles' },
   treeTex: 512,

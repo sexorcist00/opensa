@@ -53,9 +53,33 @@ Two things bite in practice:
   capability. Say so in the row.
 - **Serve over https.** On a plain `http://` LAN IP, `caches` is undefined and every cache operation silently
   no-ops, so the phone re-downloads the world each visit and the numbers include a download nobody intended.
+  Since 2026-08-05 the shell **says so** — a note under the preloader (*"This download will not be kept…"*) and
+  a `[loader] downloads are NOT cached` line in the console. If you see either, the run carries a download.
 
 A texture over the cap is decoded rather than passed through — a DXT block cannot be resized while compressed —
 so `--max-texture` alone already implies re-encoding for the textures it touches.
+
+## Bake the collision too (097/3-01)
+
+A phone's CPU makes every main-thread spike several times worse, and the largest named one is a COL parse per
+cell. `--bake-collision` moves it into the converter:
+
+```bash
+npx tsx tools/opensa-pack/src/cli.ts --game … --out … --rgba8 --max-texture 256 --bake-collision
+# or, through the canonical build:
+npx tsx tools/perfect-map-builder/src/cli.ts --game ./game-src/original --in ./mods-src --exclude sa --bake-collision
+```
+
+It is **off by default on purpose**: the runtime reads the bake when the pak carries one and parses COL when it
+does not, so the same tree built twice — one flag apart — is the A/B this is judged on, and neither side needs
+a code change. What to look for:
+
+- the pack log: `collision: baked N cells (M triangles, K breakable regions) on the 256 game grid`;
+- in the browser, on a cold district entry, `cell-collision-decode` in the frame's span breakdown where the
+  COL path used to spend its milliseconds inside the `collision` block.
+
+**Use the GAME, not `dispatch.html`.** The dispatch surface streams the world but runs no physics, so it never
+asks for a cell's colliders — the baked path is simply not on its route.
 
 ## On a desktop
 
@@ -65,8 +89,10 @@ npx tsx tools/opensa-pack/src/cli.ts \
   --rgba8 --max-texture 256 --rect 8,-8,11,-5 --no-ao --no-models
 
 npm run dev -- --host
-# phone, same Wi-Fi:
+# phone, same Wi-Fi — the map surface (no physics):
 # http://<host-ip>:5173/dispatch.html?src=build/district&at=2495,-1687
+# ...or the game itself, which is what exercises collision streaming:
+# http://<host-ip>:5173/?loader=http-dir&src=http://<host-ip>:3001/build/district
 ```
 
 `--rect` is inclusive GTA **cell** coordinates, cell = `floor(worldXY / 250)`. **Los Santos sits at negative

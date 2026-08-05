@@ -422,6 +422,9 @@ async function buildOpensaTarget(step: {
   const packed = await packGameDir({
     ...(alwaysOnLods.length > 0 ? { alwaysOnLods } : {}),
     ao: config.pack.ao,
+    // 097/3-01: when on, every cell's collision is written into the pak and the browser stops parsing COL
+    // for it. Passed through rather than defaulted here — the flag IS the A/B.
+    ...(config.pack.bakeCollision ? { bakeCollision: true } : {}),
     ...(config.pack.bakeWorkers !== undefined ? { bakeWorkers: config.pack.bakeWorkers } : {}),
     bakes: config.pack.bakes,
     gameDir: lodDir,

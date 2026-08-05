@@ -24,6 +24,10 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  *                      stage leaves whatever an earlier run wrote in its place — only `<out>/.work` is
  *                      cleared — so the two targets can be rebuilt independently in the same `--out`.
  *     --keep-work      keep the intermediate `.work` builds even on a full run.
+ *     --bake-collision write every cell's COLLISION into the pak (plan 097/3-01), so the browser never parses
+ *                      a COL for a cell the bake covers. Costs build time; OFF by default, because it is the
+ *                      A/B switch — the runtime reads the bake when it is there and parses COL when it is
+ *                      not, so the SAME tree built twice, one flag apart, is what the claim is measured on.
  *     --no-<pass>      disable a map-optimizer pass to bisect it: --no-weld-seams | --no-textures.
  *     --allow-text-row-overflow  build past the int16 30k text-row budget (the 03-asi ghost-barriers repro —
  *                      an intentionally over-2^15 full build); the 39-slot guard stays hard. Never for shipping.
@@ -39,6 +43,7 @@ import { argValue, fromCwd } from '@opensa/tool-kit/cli';
  */
 import { statSync } from 'node:fs';
 
+import { config as defaultConfig } from './config';
 import { buildPerfectMap, parseExcludedStages, STAGE_NAMES, type StageName } from './pipeline';
 
 /** The canonical build dir when `--out` is omitted — the single source every dev surface reads (plan 079). */
@@ -51,7 +56,7 @@ async function main(): Promise<void> {
   if (!gameArg || !inArg) {
     throw new Error(
       'usage: tsx tools/perfect-map-builder/src/cli.ts --game <path> --in <mods-src> [--out <path>] ' +
-        '[--until <stage>] [--exclude <stage,stage>] [--keep-work] [--no-<pass>]',
+        '[--until <stage>] [--exclude <stage,stage>] [--keep-work] [--no-<pass>] [--bake-collision]',
     );
   }
 
@@ -76,9 +81,13 @@ async function main(): Promise<void> {
     ...(process.argv.includes('--no-weld-seams') ? { weldSeams: false } : {}),
   };
 
+  // 097/3-01: bake the collision into the pak (the runtime reads it and falls back to COL without it), so
+  // the same tree can produce both sides of the A/B by flipping one flag.
+  const bakeCollision = process.argv.includes('--bake-collision');
+
   const { produced, stoppedEarly } = await buildPerfectMap({
     allowTextRowOverflow: process.argv.includes('--allow-text-row-overflow'),
-    config: { optimizerPasses },
+    config: { optimizerPasses, ...(bakeCollision ? { pack: { ...defaultConfig.pack, bakeCollision: true } } : {}) },
     exclude: parseExcludedStages(process.argv),
     gamePath,
     inPath,

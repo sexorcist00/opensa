@@ -49,8 +49,20 @@ failed range read (warned once per key) each parse COL exactly as before. The fa
 quietly is the grid one, so the adapter throws when the source's grid is not the grid collision streams on —
 the restriction's "caught: no" becomes "caught, for the mismatch that has actually happened".
 
+**Reachable from the canonical build, and checkable without one.** `perfect-map-builder --bake-collision`
+forwards the flag (off by default — the flag IS the A/B: the same tree built twice, one switch apart, with no
+code change on either side), the converter memoizes the shatter gate per model so a full-map bake does not
+re-parse the same DFF once per cell, and `scripts/debug/dump-cell-collision.ts` answers "did this pak get a
+bake, on which grid, and what is in a cell" from the pak bytes alone. The writer→runtime agreement is a test
+(`tools/opensa-pack/src/collision-round-trip.test.ts`): regions → bake → `.ospak` → byte-range read →
+adapter, against `toModelColliders`, with no game assets.
+
 **Still to do: the before/after.** Nothing here has been run against a real pak — the claim is a CI fact
 until a field capture shows the census without `cell-collision-read`-shaped work on a cold district entry.
+The field procedure is in [development/mobile-pak.md](../../../development/mobile-pak.md): build both paks,
+drive the same district, read `cell-collision-decode` and the `collision` block. **The map inspector's "Show
+collision" wireframe draws whatever `loadCellColliders` returned**, so on a baked pak it is a direct picture
+of the bake — the fastest way to see a wrong-grid bake, which lands the outlines beside the geometry.
 
 **The breakable gate followed the same day** (`.oscol` **v2**). The runtime's gate opens a model's DFF to
 look for a shatter mesh — an archive read on the one path this bake exists to keep out of the archive, and on

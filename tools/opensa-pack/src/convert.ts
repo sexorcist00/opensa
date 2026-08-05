@@ -387,6 +387,19 @@ function bakeCollision(
   const index = buildCollisionIndex(fs);
   const grid = buildWorldGrid(defs, GAME_CELL_SIZE);
   const [gx0, gy0, gx1, gy1] = collisionCellRect(renderRect, cellSize, GAME_CELL_SIZE);
+  // Memoized per RUN, not per cell: the shatter-mesh half of the gate parses the model's DFF, the same model
+  // stands in many cells, and `getClump`'s LRU is 512 against a map with thousands of models — without this
+  // the bake re-parses the same geometry until the flag is too slow to use on a full map.
+  const breakableByModel = new Map<string, boolean>();
+  const isBreakable = (modelName: string): boolean => {
+    let known = breakableByModel.get(modelName);
+    if (known === undefined) {
+      known = getBreakable(fs, modelName) !== undefined || breakableModels.has(modelName);
+      breakableByModel.set(modelName, known);
+    }
+
+    return known;
+  };
   let cells = 0;
   let triangles = 0;
   let breakables = 0;
@@ -396,10 +409,7 @@ function bakeCollision(
       if (regions.length === 0) {
         continue;
       }
-      const baked = bakeCellCollision(
-        regions,
-        (modelName) => getBreakable(fs, modelName) !== undefined || breakableModels.has(modelName),
-      );
+      const baked = bakeCellCollision(regions, isBreakable);
       triangles += baked.regions.reduce((total, region) => total + region.indices.length / 3, 0);
       breakables += baked.regions.filter((region) => region.instanceKeys !== undefined).length;
       inputs.push(wireCompress({ bytes: encodeOscol(baked), key: `${cx},${cy}`, kind: 'collision' }));

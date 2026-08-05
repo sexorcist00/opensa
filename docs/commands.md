@@ -26,7 +26,9 @@ NODE_OPTIONS=--max-old-space-size=12288 npx tsx tools/perfect-map-builder/src/cl
 
 Params: `--out <dir>` (default `./build/original`) · `--until <mods|vehicles|peds|optimize|trees|procobj|sa|opensa|pack|lod>`
 (inclusive, keeps `.work/`) · **`--exclude <stage,stage>`** · `--keep-work` · `--no-weld-seams` ·
-`--no-textures` · `--allow-text-row-overflow`.
+`--no-textures` · `--allow-text-row-overflow` · **`--bake-collision`** (write every cell's collision into the
+pak — plan 097/3-01; off by default, and the same tree built with and without it is the A/B the claim is read
+on: the runtime reads a bake when the pak has one and parses COL when it does not).
 
 `--exclude` is the TARGET directive where `--until` is the stop point: it drops the named stages and keeps
 everything after them (repeatable, comma-separated, same names as `--until` minus the `lod` alias; an unknown
